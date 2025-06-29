@@ -36,8 +36,20 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
                     result = a % b;
                 } else if (strcmp(op, "==") == 0) {
                     result = (a == b);
+                } else if (strcmp(op, "!=") == 0) {
+                    result = (a != b);
                 } else if (strcmp(op, "<") == 0) {
                     result = (a < b);
+                } else if (strcmp(op, ">") == 0) {
+                    result = (a > b);
+                } else if (strcmp(op, "<=") == 0) {
+                    result = (a <= b);
+                } else if (strcmp(op, ">=") == 0) {
+                    result = (a >= b);
+                } else if (strcmp(op, "and") == 0) {
+                    result = (a && b);
+                } else if (strcmp(op, "or") == 0) {
+                    result = (a || b);
                 } else {
                     return -1;
                 }
@@ -57,7 +69,12 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             uint8_t resultReg = leftTemp ? (uint8_t)leftReg : allocateRegister(compiler);
             const char* op = node->binary.op;
             if (strcmp(op, "+") == 0) {
-                emitByte(compiler, OP_ADD_I32_R);
+                if ((node->binary.left->type == NODE_LITERAL && IS_STRING(node->binary.left->literal.value)) ||
+                    (node->binary.right->type == NODE_LITERAL && IS_STRING(node->binary.right->literal.value))) {
+                    emitByte(compiler, OP_CONCAT_R);
+                } else {
+                    emitByte(compiler, OP_ADD_I32_R);
+                }
             } else if (strcmp(op, "-") == 0) {
                 emitByte(compiler, OP_SUB_I32_R);
             } else if (strcmp(op, "*") == 0) {
@@ -68,8 +85,20 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
                 emitByte(compiler, OP_MOD_I32_R);
             } else if (strcmp(op, "==") == 0) {
                 emitByte(compiler, OP_EQ_R);
+            } else if (strcmp(op, "!=") == 0) {
+                emitByte(compiler, OP_NE_R);
             } else if (strcmp(op, "<") == 0) {
                 emitByte(compiler, OP_LT_I32_R);
+            } else if (strcmp(op, ">") == 0) {
+                emitByte(compiler, OP_GT_I32_R);
+            } else if (strcmp(op, "<=") == 0) {
+                emitByte(compiler, OP_LE_I32_R);
+            } else if (strcmp(op, ">=") == 0) {
+                emitByte(compiler, OP_GE_I32_R);
+            } else if (strcmp(op, "and") == 0) {
+                emitByte(compiler, OP_AND_BOOL_R);
+            } else if (strcmp(op, "or") == 0) {
+                emitByte(compiler, OP_OR_BOOL_R);
             } else {
                 return -1;
             }
@@ -105,6 +134,24 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             compiler->locals[localIndex].reg = (uint8_t)initReg;
             compiler->locals[localIndex].isActive = true;
             return initReg;
+        }
+        case NODE_ASSIGN: {
+            const char* name = node->assign.name;
+            int localIndex = -1;
+            for (int i = compiler->localCount - 1; i >= 0; i--) {
+                if (compiler->locals[i].isActive && strcmp(compiler->locals[i].name, name) == 0) {
+                    localIndex = i;
+                    break;
+                }
+            }
+            if (localIndex < 0) return -1;
+            uint8_t valueReg = compileExpressionToRegister(node->assign.value, compiler);
+            if (valueReg < 0) return -1;
+            emitByte(compiler, OP_MOVE);
+            emitByte(compiler, compiler->locals[localIndex].reg);
+            emitByte(compiler, valueReg);
+            freeRegister(compiler, valueReg);
+            return compiler->locals[localIndex].reg;
         }
         default:
             return -1;

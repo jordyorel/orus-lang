@@ -454,7 +454,7 @@ typedef enum {
 #define U32_VAL(value) ((Value){VAL_U32, {.u32 = value}})
 #define U64_VAL(value) ((Value){VAL_U64, {.u64 = value}})
 #define F64_VAL(value) ((Value){VAL_F64, {.f64 = value}})
-#define STRING_VAL(obj) ((Value){VAL_STRING, {.obj = (Obj*)obj}})
+#define STRING_VAL(value) ((Value){VAL_STRING, {.obj = (Obj*)value}})
 #define ARRAY_VAL(obj) ((Value){VAL_ARRAY, {.obj = (Obj*)obj}})
 #define ERROR_VAL(object) ((Value){VAL_ERROR, {.obj = (Obj*)object}})
 
