@@ -311,7 +311,7 @@ def main():
                        help='Run quick benchmark (10 iterations)')
     parser.add_argument('--stress', action='store_true', 
                        help='Include stress testing')
-    parser.add_argument('--output', '-o', default='advanced_benchmark_results.json',
+    parser.add_argument('--output', '-o', default='benchmark_results_python.json',
                        help='Output file for results')
     
     args = parser.parse_args()

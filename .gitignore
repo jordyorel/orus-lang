@@ -59,4 +59,7 @@ docs/_build/
 *.tar.gz
 *.zip
 
+# Benchmark results (not tracked)
+benchmarks/benchmark_results_*.json
 benchmarks/advanced_benchmark_results.json
+benchmarks/orus_vs_js_benchmark_results.json

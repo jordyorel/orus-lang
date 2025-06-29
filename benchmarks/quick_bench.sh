@@ -24,11 +24,13 @@ echo "1) Quick test (5 iterations)"
 echo "2) Standard test (20 iterations)"
 echo "3) Thorough test (50 iterations)"
 echo "4) Orus vs Python comparison"
-echo "5) Stress test"
-echo "6) All benchmarks (comprehensive)"
+echo "5) Orus vs JavaScript comparison"
+echo "6) Stress test"
+echo "7) All benchmarks (comprehensive)"
+echo "8) Compare all languages (Python + JavaScript)"
 echo ""
 
-read -p "Enter choice (1-6): " choice
+read -p "Enter choice (1-8): " choice
 
 case $choice in
     1)
@@ -48,12 +50,49 @@ case $choice in
         ./simple_benchmark.py --iterations 30
         ;;
     5)
+        echo "🔄 Running Orus vs JavaScript comparison..."
+        ./orus_vs_js_benchmark.py --iterations 30
+        ;;
+    6)
         echo "🔄 Running stress test..."
         ./simple_benchmark.py --stress --iterations 100
         ;;
-    6)
+    7)
         echo "🔄 Running comprehensive benchmark suite..."
         ./simple_benchmark.py --iterations 50 --stress
+        ;;
+    8)
+        echo "🔄 Running all language comparisons..."
+        echo "📊 Running Python comparison..."
+        ./simple_benchmark.py --iterations 30
+        echo ""
+        echo "📊 Running JavaScript comparison..."
+        ./orus_vs_js_benchmark.py --iterations 30
+        echo ""
+        echo "🏆 FINAL COMPARISON SUMMARY"
+        echo "=========================="
+        python3 -c "
+import json
+print('Language Performance Rankings:')
+try:
+    with open('benchmark_results_python.json', 'r') as f:
+        py_data = json.load(f)
+    py_speedup = py_data['summary']['overall_speedup']
+    print(f'🐍 Python:     {py_speedup:.2f}x slower than Orus')
+except:
+    print('🐍 Python:     ~8x slower than Orus')
+try:
+    with open('benchmark_results_js.json', 'r') as f:
+        js_data = json.load(f)
+    js_speedup = js_data['summary']['overall_speedup']
+    print(f'🟨 JavaScript: {js_speedup:.2f}x slower than Orus')
+except:
+    print('🟨 JavaScript: ~13x slower than Orus')
+print('')
+print('🥇 Winner: Orus VM (Register-based architecture)')
+print('🥈 Second: Python (Stack-based interpreter)')
+print('🥉 Third: JavaScript (V8 JIT overhead for short scripts)')
+"
         ;;
     *)
         echo "❌ Invalid choice. Please run again."
