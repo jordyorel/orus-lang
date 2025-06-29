@@ -3,6 +3,7 @@
         "*.dbclient-js": "javascript",
         "*.orus": "orus",
         "lexer.h": "c",
-        "ast.h": "c"
+        "ast.h": "c",
+        "compiler.h": "c"
     }
 }

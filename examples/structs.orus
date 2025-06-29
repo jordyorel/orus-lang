@@ -1,0 +1,20 @@
+// Struct and generic example
+
+struct Point<T> {
+    x: T,
+    y: T
+}
+
+fn distance<T>(p1: Point<T>, p2: Point<T>) -> f64 {
+    let dx = p1.x - p2.x;
+    let dy = p1.y - p2.y;
+    return sqrt((dx * dx + dy * dy) as f64);
+}
+
+// Create points
+let point1 = Point { x: 0.0, y: 0.0 };
+let point2 = Point { x: 3.0, y: 4.0 };
+
+print("Point 1: (" + point1.x + ", " + point1.y + ")");
+print("Point 2: (" + point2.x + ", " + point2.y + ")");
+print("Distance: " + distance(point1, point2));

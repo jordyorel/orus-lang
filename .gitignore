@@ -1,3 +1,60 @@
-test_register
-/test_register.dSYM
+# Build artifacts
+/build/
 *.o
+*.a
+*.so
+*.dylib
+*.dll
+
+# Executables
+/orus
+/test-register
+/test-parser
+test_register
+test_parser
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Debug symbols
+*.dSYM/
+*.pdb
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+
+# CMake files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+!*/Makefile
+
+# Coverage files
+*.gcov
+*.gcda
+*.gcno
+
+# Valgrind files
+*.memcheck
+
+# Backup files
+*.bak
+*.orig
+
+# Documentation build
+docs/_build/
+
+# Package files
+*.tar.gz
+*.zip

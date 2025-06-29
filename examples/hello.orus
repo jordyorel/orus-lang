@@ -1,0 +1,11 @@
+// Hello World example
+print("Hello, World!");
+
+// Variables and types
+let name: string = "Orus";
+let version: i32 = 1;
+let pi: f64 = 3.14159;
+
+print("Language: " + name);
+print("Version: " + version);
+print("Pi: " + pi);
