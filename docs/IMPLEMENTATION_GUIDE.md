@@ -331,9 +331,12 @@ static void compileLogicalAnd(Compiler* compiler, ASTNode* node) {
 
 ### 1.2 Built-in Print Function & I/O System
 
-The current implementation provides a minimal `print(value)` statement that
-prints a single argument with a trailing newline. This serves as the foundation
-for a richer I/O system described below.
+The print system now supports variable arguments and simple string interpolation
+using `{}` placeholders. Multiple placeholders are expanded sequentially and the
+implementation prints every Orus value type through `printValue`. The `print()`
+builtin formats values and appends a newline by default, while
+`print_no_newline()` omits the trailing newline. Escape sequences like `\n` and
+`\t` are processed inside string literals.
 
 #### High-Performance Print Implementation
 ```c

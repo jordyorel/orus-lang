@@ -361,20 +361,34 @@ static ASTNode* parsePrimaryExpression(void) {
             node->dataType = NULL;
             return node;
         }
-        case TOKEN_PRINT: {
+        case TOKEN_PRINT:
+        case TOKEN_PRINT_NO_NL: {
+            bool newline = token.type == TOKEN_PRINT;
             Token next = nextToken();
             if (next.type != TOKEN_LEFT_PAREN) {
                 return NULL;
             }
-            ASTNode* expr = parseExpression();
-            if (!expr) return NULL;
+            ASTNode** args = NULL;
+            int count = 0;
+            int capacity = 0;
+            if (peekToken().type != TOKEN_RIGHT_PAREN) {
+                while (true) {
+                    ASTNode* expr = parseExpression();
+                    if (!expr) return NULL;
+                    addStatement(&args, &count, &capacity, expr);
+                    if (peekToken().type != TOKEN_COMMA) break;
+                    nextToken();
+                }
+            }
             Token close = nextToken();
             if (close.type != TOKEN_RIGHT_PAREN) {
                 return NULL;
             }
             ASTNode* node = new_node();
             node->type = NODE_PRINT;
-            node->print.value = expr;
+            node->print.values = args;
+            node->print.count = count;
+            node->print.newline = newline;
             node->location.line = token.line;
             node->location.column = token.column;
             node->dataType = NULL;

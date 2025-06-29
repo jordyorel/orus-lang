@@ -55,7 +55,9 @@ struct ASTNode {
             ASTNode* value;
         } assign;
         struct {
-            ASTNode* value;
+            ASTNode** values;
+            int count;
+            bool newline;
         } print;
         struct {
             char* name;
