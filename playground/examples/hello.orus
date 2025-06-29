@@ -1,0 +1,12 @@
+// Hello World Example
+// This is your first Orus program!
+
+print("Hello, World!");
+print("Welcome to Orus programming language!");
+
+// Variables and basic types
+let greeting = "Hello";
+let name = "Orus";
+let version = 1;
+
+print(greeting + ", " + name + " v" + version + "!");

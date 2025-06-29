@@ -211,12 +211,12 @@ static void runtimeError(ErrorType type, SrcLocation location,
 // Debug operations
 // Main execution engine
 static InterpretResult run(void) {
-#define READ_BYTE() (*vm.ip++)
-#define READ_SHORT() (vm.ip += 2, (uint16_t)((vm.ip[-2] << 8) | vm.ip[-1]))
-#define READ_CONSTANT(index) (vm.chunk->constants.values[index])
+    #define READ_BYTE() (*vm.ip++)
+    #define READ_SHORT() (vm.ip += 2, (uint16_t)((vm.ip[-2] << 8) | vm.ip[-1]))
+    #define READ_CONSTANT(index) (vm.chunk->constants.values[index])
 
-    double start_time = get_time_vm();
-#define RETURN(val) do { vm.lastExecutionTime = get_time_vm() - start_time; return (val); } while (0)
+        double start_time = get_time_vm();
+    #define RETURN(val) do { vm.lastExecutionTime = get_time_vm() - start_time; return (val); } while (0)
 
     for (;;) {
         if (vm.trace) {
@@ -416,37 +416,37 @@ static InterpretResult run(void) {
 
             case OP_INC_I32_R: {
                 uint8_t reg = READ_BYTE();
-#if USE_FAST_ARITH
-                vm.registers[reg] = I32_VAL(AS_I32(vm.registers[reg]) + 1);
-#else
-                int32_t val = AS_I32(vm.registers[reg]);
-                int32_t result;
-                if (__builtin_add_overflow(val, 1, &result)) {
-                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
-                                 "Integer overflow");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
+    #if USE_FAST_ARITH
+                    vm.registers[reg] = I32_VAL(AS_I32(vm.registers[reg]) + 1);
+    #else
+                    int32_t val = AS_I32(vm.registers[reg]);
+                    int32_t result;
+                    if (__builtin_add_overflow(val, 1, &result)) {
+                        runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                    "Integer overflow");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+                    vm.registers[reg] = I32_VAL(result);
+    #endif
+                    break;
                 }
-                vm.registers[reg] = I32_VAL(result);
-#endif
-                break;
-            }
 
             case OP_DEC_I32_R: {
                 uint8_t reg = READ_BYTE();
-#if USE_FAST_ARITH
-                vm.registers[reg] = I32_VAL(AS_I32(vm.registers[reg]) - 1);
-#else
-                int32_t val = AS_I32(vm.registers[reg]);
-                int32_t result;
-                if (__builtin_sub_overflow(val, 1, &result)) {
-                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
-                                 "Integer overflow");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
+    #if USE_FAST_ARITH
+                    vm.registers[reg] = I32_VAL(AS_I32(vm.registers[reg]) - 1);
+    #else
+                    int32_t val = AS_I32(vm.registers[reg]);
+                    int32_t result;
+                    if (__builtin_sub_overflow(val, 1, &result)) {
+                        runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                    "Integer overflow");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+                    vm.registers[reg] = I32_VAL(result);
+    #endif
+                    break;
                 }
-                vm.registers[reg] = I32_VAL(result);
-#endif
-                break;
-            }
 
             // Comparison operations
             case OP_LT_I32_R: {
@@ -578,10 +578,10 @@ static InterpretResult run(void) {
         }
     }
 
-#undef READ_BYTE
-#undef READ_SHORT
-#undef READ_CONSTANT
-#undef RETURN
+    #undef READ_BYTE
+    #undef READ_SHORT
+    #undef READ_CONSTANT
+    #undef RETURN
 }
 
 // Main interpretation functions

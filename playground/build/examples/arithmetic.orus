@@ -1,0 +1,72 @@
+// Arithmetic Operations Example
+// Comprehensive demonstration of mathematical operations in Orus
+
+print("=== Basic Arithmetic ===");
+
+// Simple operations
+let x = 15;
+let y = 4;
+
+print("x = " + x + ", y = " + y);
+print("Addition: " + x + " + " + y + " = " + (x + y));
+print("Subtraction: " + x + " - " + y + " = " + (x - y));
+print("Multiplication: " + x + " * " + y + " = " + (x * y));
+print("Division: " + x + " / " + y + " = " + (x / y));
+print("Modulo: " + x + " % " + y + " = " + (x % y));
+
+print("\n=== Complex Expressions ===");
+
+// Order of operations
+let result1 = 2 + 3 * 4;
+print("2 + 3 * 4 = " + result1);
+
+let result2 = (2 + 3) * 4;
+print("(2 + 3) * 4 = " + result2);
+
+let result3 = 10 + 5 * 2 - 3;
+print("10 + 5 * 2 - 3 = " + result3);
+
+// Nested expressions
+let a = 5;
+let b = 3;
+let c = 2;
+let complex = (a + b) * c - (a - b);
+print("(a + b) * c - (a - b) where a=" + a + ", b=" + b + ", c=" + c + " = " + complex);
+
+print("\n=== Mathematical Patterns ===");
+
+// Sequence calculations
+let n = 5;
+let square = n * n;
+let cube = n * n * n;
+print("n = " + n);
+print("n² = " + square);
+print("n³ = " + cube);
+
+// Fibonacci-like sequence (first few terms)
+let f1 = 1;
+let f2 = 1;
+let f3 = f1 + f2;
+let f4 = f2 + f3;
+let f5 = f3 + f4;
+
+print("\nFibonacci sequence:");
+print("F1 = " + f1);
+print("F2 = " + f2);
+print("F3 = " + f3);
+print("F4 = " + f4);
+print("F5 = " + f5);
+
+print("\n=== Performance Test ===");
+
+// Chain of operations for performance testing
+let chain = 1;
+chain = chain + 2;
+chain = chain * 3;
+chain = chain - 4;
+chain = chain / 2;
+chain = chain + 10;
+chain = chain * 2;
+chain = chain - 5;
+
+print("Chain result: " + chain);

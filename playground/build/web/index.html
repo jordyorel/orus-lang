@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Orus Playground</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: #2d2d30;
+            padding: 1rem;
+            border-bottom: 1px solid #3e3e42;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            color: #569cd6;
+            font-size: 1.5rem;
+        }
+
+        .header .controls {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        select, button {
+            background: #3c3c3c;
+            color: #d4d4d4;
+            border: 1px solid #5a5a5a;
+            padding: 0.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #4a4a4a;
+        }
+
+        .run-btn {
+            background: #0e639c;
+            border-color: #0e639c;
+        }
+
+        .run-btn:hover {
+            background: #1177bb;
+        }
+
+        .main-container {
+            flex: 1;
+            display: flex;
+            height: calc(100vh - 70px);
+        }
+
+        .editor-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid #3e3e42;
+        }
+
+        .editor-header {
+            background: #2d2d30;
+            padding: 0.5rem 1rem;
+            border-bottom: 1px solid #3e3e42;
+            font-size: 0.9rem;
+            color: #cccccc;
+        }
+
+        .editor {
+            flex: 1;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 14px;
+            padding: 1rem;
+            border: none;
+            outline: none;
+            resize: none;
+            line-height: 1.5;
+        }
+
+        .output-container {
+            width: 40%;
+            display: flex;
+            flex-direction: column;
+            background: #252526;
+        }
+
+        .output-header {
+            background: #2d2d30;
+            padding: 0.5rem 1rem;
+            border-bottom: 1px solid #3e3e42;
+            font-size: 0.9rem;
+            color: #cccccc;
+        }
+
+        .output {
+            flex: 1;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 13px;
+            padding: 1rem;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+
+        .status-bar {
+            background: #007acc;
+            color: white;
+            padding: 0.3rem 1rem;
+            font-size: 0.8rem;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .error {
+            color: #f48771;
+        }
+
+        .success {
+            color: #4ec9b0;
+        }
+
+        .loading {
+            opacity: 0.6;
+        }
+
+        .examples-panel {
+            position: absolute;
+            top: 70px;
+            right: 10px;
+            background: #2d2d30;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+            padding: 1rem;
+            max-width: 300px;
+            display: none;
+            z-index: 1000;
+        }
+
+        .examples-panel.show {
+            display: block;
+        }
+
+        .example-item {
+            padding: 0.5rem;
+            cursor: pointer;
+            border-radius: 3px;
+            margin-bottom: 0.5rem;
+        }
+
+        .example-item:hover {
+            background: #3c3c3c;
+        }
+
+        .example-title {
+            font-weight: bold;
+            color: #569cd6;
+        }
+
+        .example-desc {
+            font-size: 0.8rem;
+            color: #cccccc;
+            margin-top: 0.2rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🚀 Orus Playground</h1>
+        <div class="controls">
+            <select id="examples">
+                <option value="">Select Example</option>
+                <option value="hello">Hello World</option>
+                <option value="variables">Variables</option>
+                <option value="arithmetic">Arithmetic</option>
+                <option value="functions">Functions</option>
+            </select>
+            <button id="run-btn" class="run-btn">▶ Run</button>
+            <button id="clear-btn">Clear</button>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <div class="editor-container">
+            <div class="editor-header">
+                📝 Orus Code Editor
+            </div>
+            <textarea id="editor" class="editor" placeholder="// Write your Orus code here...
+// Example:
+let x = 42;
+let y = x * 2;
+print(y);"></textarea>
+        </div>
+
+        <div class="output-container">
+            <div class="output-header">
+                📊 Output
+            </div>
+            <div id="output" class="output">Welcome to Orus Playground!
+
+Click "Run" to execute your code or select an example from the dropdown.
+</div>
+        </div>
+    </div>
+
+    <div class="status-bar">
+        <span id="status">Ready</span>
+        <span id="execution-time"></span>
+    </div>
+
+    <script>
+        const editor = document.getElementById('editor');
+        const output = document.getElementById('output');
+        const runBtn = document.getElementById('run-btn');
+        const clearBtn = document.getElementById('clear-btn');
+        const examplesSelect = document.getElementById('examples');
+        const status = document.getElementById('status');
+        const executionTime = document.getElementById('execution-time');
+
+        const examples = {
+            hello: `// Hello World Example
+print("Hello, Orus!");
+print("Welcome to the playground!");`,
+            
+            variables: `// Variables Example
+let name = "Orus";
+let version = 1;
+let pi = 3.14159;
+let isActive = true;
+
+print("Language: " + name);
+print("Version: " + version);
+print("Pi: " + pi);
+print("Active: " + isActive);`,
+            
+            arithmetic: `// Arithmetic Operations
+let a = 10;
+let b = 5;
+
+print("Addition: " + (a + b));
+print("Subtraction: " + (a - b));
+print("Multiplication: " + (a * b));
+print("Division: " + (a / b));
+print("Modulo: " + (a % b));
+
+// Complex expression
+let result = (a + b) * 2 - (a / b);
+print("Complex result: " + result);`,
+            
+            functions: `// Functions Example
+fn greet(name) {
+    return "Hello, " + name + "!";
+}
+
+fn add(x, y) {
+    return x + y;
+}
+
+fn factorial(n) {
+    if (n <= 1) {
+        return 1;
+    }
+    return n * factorial(n - 1);
+}
+
+print(greet("World"));
+print("5 + 3 = " + add(5, 3));
+print("5! = " + factorial(5));`
+        };
+
+        examplesSelect.addEventListener('change', function() {
+            const selectedExample = this.value;
+            if (selectedExample && examples[selectedExample]) {
+                editor.value = examples[selectedExample];
+            }
+        });
+
+        runBtn.addEventListener('click', runCode);
+        clearBtn.addEventListener('click', clearOutput);
+
+        editor.addEventListener('keydown', function(e) {
+            if (e.ctrlKey && e.key === 'Enter') {
+                runCode();
+            }
+        });
+
+        async function runCode() {
+            const code = editor.value.trim();
+            if (!code) {
+                showError('Please enter some code to run.');
+                return;
+            }
+
+            setLoading(true);
+            const startTime = performance.now();
+
+            try {
+                const response = await fetch('/api/execute', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ code })
+                });
+
+                const result = await response.json();
+                const endTime = performance.now();
+                const executionTimeMs = (endTime - startTime).toFixed(2);
+
+                if (result.success) {
+                    showOutput(result.output, result.error);
+                    status.textContent = 'Execution completed';
+                    executionTime.textContent = `${executionTimeMs}ms`;
+                } else {
+                    showError(result.error || 'Execution failed');
+                    status.textContent = 'Execution failed';
+                    executionTime.textContent = '';
+                }
+            } catch (error) {
+                showError('Failed to connect to Orus runtime: ' + error.message);
+                status.textContent = 'Connection error';
+                executionTime.textContent = '';
+            }
+
+            setLoading(false);
+        }
+
+        function showOutput(stdout, stderr) {
+            output.innerHTML = '';
+            
+            if (stdout) {
+                const stdoutDiv = document.createElement('div');
+                stdoutDiv.className = 'success';
+                stdoutDiv.textContent = stdout;
+                output.appendChild(stdoutDiv);
+            }
+            
+            if (stderr) {
+                const stderrDiv = document.createElement('div');
+                stderrDiv.className = 'error';
+                stderrDiv.textContent = 'Error: ' + stderr;
+                output.appendChild(stderrDiv);
+            }
+            
+            if (!stdout && !stderr) {
+                output.textContent = 'Code executed successfully (no output)';
+            }
+        }
+
+        function showError(message) {
+            output.innerHTML = `<div class="error">Error: ${message}</div>`;
+        }
+
+        function clearOutput() {
+            output.textContent = 'Output cleared.';
+            status.textContent = 'Ready';
+            executionTime.textContent = '';
+        }
+
+        function setLoading(loading) {
+            if (loading) {
+                runBtn.textContent = '⏳ Running...';
+                runBtn.disabled = true;
+                status.textContent = 'Executing code...';
+                output.classList.add('loading');
+            } else {
+                runBtn.textContent = '▶ Run';
+                runBtn.disabled = false;
+                output.classList.remove('loading');
+            }
+        }
+
+        // Initialize with a simple example
+        editor.value = examples.hello;
+    </script>
+</body>
+</html>

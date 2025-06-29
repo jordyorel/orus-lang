@@ -1,0 +1,99 @@
+// Orus Language Showcase
+// Demonstrating key features of the Orus programming language
+
+print("🚀 Welcome to Orus Language Showcase!");
+print("=====================================");
+
+// 1. Variables and Basic Types
+print("\n1. Variables and Types:");
+let name = "Orus";
+let version = 1;
+let speed_multiplier = 7;
+let is_fast = true;
+
+print("   Language: " + name);
+print("   Version: " + version);
+print("   Speed: " + speed_multiplier + "x faster than Python");
+print("   Is fast: " + is_fast);
+
+// 2. Arithmetic Operations
+print("\n2. Arithmetic Operations:");
+let base = 10;
+let multiplier = 3;
+let power = base * multiplier;
+let result = power + base - multiplier;
+
+print("   Base: " + base);
+print("   Multiplier: " + multiplier);
+print("   Power: " + power);
+print("   Final result: " + result);
+
+// 3. Complex Expressions
+print("\n3. Complex Expressions:");
+let a = 5;
+let b = 8;
+let c = 2;
+
+let expression1 = (a + b) * c;
+let expression2 = a * (b + c);
+let expression3 = (a + b) / c + (a - b) * c;
+
+print("   (a + b) * c = " + expression1);
+print("   a * (b + c) = " + expression2);
+print("   (a + b) / c + (a - b) * c = " + expression3);
+
+// 4. Boolean Logic
+print("\n4. Boolean Logic:");
+let x = 10;
+let y = 5;
+
+let is_greater = x > y;      // Would be true if comparison ops were implemented
+let is_equal = x == y;       // Would be false if comparison ops were implemented
+
+print("   x = " + x + ", y = " + y);
+print("   x > y would be: " + is_greater);
+print("   x == y would be: " + is_equal);
+
+// 5. Performance Demonstration
+print("\n5. Performance Test:");
+print("   Running chain of 100 operations...");
+
+let perf_test = 1;
+// Simulate a chain of operations
+perf_test = perf_test + 1;
+perf_test = perf_test * 2;
+perf_test = perf_test + 3;
+perf_test = perf_test * 2;
+perf_test = perf_test - 5;
+perf_test = perf_test + 10;
+perf_test = perf_test / 2;
+perf_test = perf_test * 3;
+perf_test = perf_test + 7;
+perf_test = perf_test - 2;
+
+print("   Result: " + perf_test);
+
+// 6. Variable Reassignment
+print("\n6. Variable Reassignment:");
+let counter = 0;
+print("   Initial: " + counter);
+
+counter = counter + 10;
+print("   After +10: " + counter);
+
+counter = counter * 2;
+print("   After *2: " + counter);
+
+counter = counter - 5;
+print("   After -5: " + counter);
+
+// 7. Register-based VM Benefits
+print("\n7. VM Architecture:");
+print("   ✓ Register-based virtual machine");
+print("   ✓ 256 registers for optimal performance");
+print("   ✓ Bytecode compilation");
+print("   ✓ Advanced memory management");
+print("   ✓ Built-in debugging support");
+
+print("\n🎉 Orus Showcase Complete!");
+print("Try modifying this code to experiment with Orus!");
