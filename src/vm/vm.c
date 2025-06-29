@@ -287,7 +287,7 @@ static InterpretResult run(void) {
 
 LABEL_OP_LOAD_CONST: {
         uint8_t reg = READ_BYTE();
-        uint8_t constantIndex = READ_BYTE();
+        uint16_t constantIndex = READ_SHORT();
         vm.registers[reg] = READ_CONSTANT(constantIndex);
         DISPATCH();
     }
@@ -589,7 +589,7 @@ LABEL_UNKNOWN:
         switch (instruction) {
             case OP_LOAD_CONST: {
                 uint8_t reg = READ_BYTE();
-                uint8_t constantIndex = READ_BYTE();
+                uint16_t constantIndex = READ_SHORT();
                 vm.registers[reg] = READ_CONSTANT(constantIndex);
                 break;
             }
