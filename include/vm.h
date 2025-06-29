@@ -61,6 +61,8 @@ typedef enum {
     OBJ_RANGE_ITERATOR
 } ObjType;
 
+#define OBJ_TYPE_COUNT 4
+
 // Object header
 struct Obj {
     ObjType type;
@@ -256,6 +258,8 @@ typedef enum {
     OP_MUL_I32_R,
     OP_DIV_I32_R,
     OP_MOD_I32_R,
+    OP_INC_I32_R,
+    OP_DEC_I32_R,
 
     OP_ADD_I64_R,
     OP_SUB_I64_R,

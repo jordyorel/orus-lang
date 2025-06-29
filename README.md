@@ -83,8 +83,24 @@ echo "42" > test.orus
 For input `42`, the compiler generates:
 ```
 0000    LOAD_CONST    R0, #0 '42'
-0003    PRINT         R0  
+0003    PRINT         R0
 0005    HALT
+```
+
+## Performance Options
+
+The VM is compiled with several optimizations enabled by default:
+
+- **Computed Goto Dispatch** – eliminates the dispatch switch and uses a jump
+  table for faster instruction decoding.
+- **Fast Arithmetic** – skips overflow checks for integer math.
+- **Memory Pool** – reuses freed VM objects to reduce allocation overhead.
+
+Simply run `make` to build the optimized VM:
+
+```bash
+make clean
+make
 ```
 
 ## Next Steps for Improvement
