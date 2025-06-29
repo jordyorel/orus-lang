@@ -211,12 +211,362 @@ static void runtimeError(ErrorType type, SrcLocation location,
 // Debug operations
 // Main execution engine
 static InterpretResult run(void) {
-    #define READ_BYTE() (*vm.ip++)
-    #define READ_SHORT() (vm.ip += 2, (uint16_t)((vm.ip[-2] << 8) | vm.ip[-1]))
-    #define READ_CONSTANT(index) (vm.chunk->constants.values[index])
+#define READ_BYTE() (*vm.ip++)
+#define READ_SHORT() (vm.ip += 2, (uint16_t)((vm.ip[-2] << 8) | vm.ip[-1]))
+#define READ_CONSTANT(index) (vm.chunk->constants.values[index])
 
-        double start_time = get_time_vm();
-    #define RETURN(val) do { vm.lastExecutionTime = get_time_vm() - start_time; return (val); } while (0)
+    double start_time = get_time_vm();
+#define RETURN(val)                                                                          \
+    do {                                                                                     \
+        vm.lastExecutionTime = get_time_vm() - start_time;                                    \
+        return (val);                                                                         \
+    } while (0)
+
+#if USE_COMPUTED_GOTO
+    static void* dispatchTable[OP_HALT + 1] = {0};
+    if (!dispatchTable[OP_HALT]) {
+        dispatchTable[OP_LOAD_CONST] = &&LABEL_OP_LOAD_CONST;
+        dispatchTable[OP_LOAD_NIL] = &&LABEL_OP_LOAD_NIL;
+        dispatchTable[OP_LOAD_TRUE] = &&LABEL_OP_LOAD_TRUE;
+        dispatchTable[OP_LOAD_FALSE] = &&LABEL_OP_LOAD_FALSE;
+        dispatchTable[OP_MOVE] = &&LABEL_OP_MOVE;
+        dispatchTable[OP_LOAD_GLOBAL] = &&LABEL_OP_LOAD_GLOBAL;
+        dispatchTable[OP_STORE_GLOBAL] = &&LABEL_OP_STORE_GLOBAL;
+        dispatchTable[OP_ADD_I32_R] = &&LABEL_OP_ADD_I32_R;
+        dispatchTable[OP_SUB_I32_R] = &&LABEL_OP_SUB_I32_R;
+        dispatchTable[OP_MUL_I32_R] = &&LABEL_OP_MUL_I32_R;
+        dispatchTable[OP_DIV_I32_R] = &&LABEL_OP_DIV_I32_R;
+        dispatchTable[OP_MOD_I32_R] = &&LABEL_OP_MOD_I32_R;
+        dispatchTable[OP_INC_I32_R] = &&LABEL_OP_INC_I32_R;
+        dispatchTable[OP_DEC_I32_R] = &&LABEL_OP_DEC_I32_R;
+        dispatchTable[OP_LT_I32_R] = &&LABEL_OP_LT_I32_R;
+        dispatchTable[OP_EQ_R] = &&LABEL_OP_EQ_R;
+        dispatchTable[OP_JUMP] = &&LABEL_OP_JUMP;
+        dispatchTable[OP_JUMP_IF_NOT_R] = &&LABEL_OP_JUMP_IF_NOT_R;
+        dispatchTable[OP_LOOP] = &&LABEL_OP_LOOP;
+        dispatchTable[OP_PRINT_R] = &&LABEL_OP_PRINT_R;
+        dispatchTable[OP_PRINT_NO_NL_R] = &&LABEL_OP_PRINT_NO_NL_R;
+        dispatchTable[OP_RETURN_R] = &&LABEL_OP_RETURN_R;
+        dispatchTable[OP_RETURN_VOID] = &&LABEL_OP_RETURN_VOID;
+        dispatchTable[OP_HALT] = &&LABEL_OP_HALT;
+    }
+
+
+    uint8_t instruction;
+
+#define DISPATCH() \
+    do { \
+        if (IS_ERROR(vm.lastError)) { \
+            if (vm.tryFrameCount > 0) { \
+                TryFrame frame = vm.tryFrames[--vm.tryFrameCount]; \
+                vm.ip = frame.handler; \
+                vm.globals[frame.varIndex] = vm.lastError; \
+                vm.lastError = NIL_VAL; \
+            } else { \
+                RETURN(INTERPRET_RUNTIME_ERROR); \
+            } \
+        } \
+        if (vm.trace) { \
+            printf("        "); \
+            for (int i = 0; i < 8; i++) { \
+                printf("[ R%d: ", i); \
+                printValue(vm.registers[i]); \
+                printf(" ]"); \
+            } \
+            printf("\\n"); \
+            disassembleInstruction(vm.chunk, (int)(vm.ip - vm.chunk->code)); \
+        } \
+        vm.instruction_count++; \
+        instruction = READ_BYTE(); \
+        if (instruction > OP_HALT || dispatchTable[instruction] == NULL) { \
+            goto LABEL_UNKNOWN; \
+        } \
+        goto *dispatchTable[instruction]; \
+    } while (0)
+    DISPATCH();
+
+LABEL_OP_LOAD_CONST: {
+        uint8_t reg = READ_BYTE();
+        uint8_t constantIndex = READ_BYTE();
+        vm.registers[reg] = READ_CONSTANT(constantIndex);
+        DISPATCH();
+    }
+
+LABEL_OP_LOAD_NIL: {
+        uint8_t reg = READ_BYTE();
+        vm.registers[reg] = NIL_VAL;
+        DISPATCH();
+    }
+
+LABEL_OP_LOAD_TRUE: {
+        uint8_t reg = READ_BYTE();
+        vm.registers[reg] = BOOL_VAL(true);
+        DISPATCH();
+    }
+
+LABEL_OP_LOAD_FALSE: {
+        uint8_t reg = READ_BYTE();
+        vm.registers[reg] = BOOL_VAL(false);
+        DISPATCH();
+    }
+
+LABEL_OP_MOVE: {
+        uint8_t dst = READ_BYTE();
+        uint8_t src = READ_BYTE();
+        vm.registers[dst] = vm.registers[src];
+        DISPATCH();
+    }
+
+LABEL_OP_LOAD_GLOBAL: {
+        uint8_t reg = READ_BYTE();
+        uint8_t globalIndex = READ_BYTE();
+        if (globalIndex >= vm.variableCount || vm.globalTypes[globalIndex] == NULL) {
+            runtimeError(ERROR_NAME, (SrcLocation){NULL, 0, 0}, "Undefined variable");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        vm.registers[reg] = vm.globals[globalIndex];
+        DISPATCH();
+    }
+
+LABEL_OP_STORE_GLOBAL: {
+        uint8_t globalIndex = READ_BYTE();
+        uint8_t reg = READ_BYTE();
+        vm.globals[globalIndex] = vm.registers[reg];
+        DISPATCH();
+    }
+
+LABEL_OP_ADD_I32_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t src1 = READ_BYTE();
+        uint8_t src2 = READ_BYTE();
+        if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        int32_t a = AS_I32(vm.registers[src1]);
+        int32_t b = AS_I32(vm.registers[src2]);
+#if USE_FAST_ARITH
+        vm.registers[dst] = I32_VAL(a + b);
+#else
+        int32_t result;
+        if (__builtin_add_overflow(a, b, &result)) {
+            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Integer overflow");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        vm.registers[dst] = I32_VAL(result);
+#endif
+        DISPATCH();
+    }
+
+LABEL_OP_SUB_I32_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t src1 = READ_BYTE();
+        uint8_t src2 = READ_BYTE();
+        if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        int32_t a = AS_I32(vm.registers[src1]);
+        int32_t b = AS_I32(vm.registers[src2]);
+#if USE_FAST_ARITH
+        vm.registers[dst] = I32_VAL(a - b);
+#else
+        int32_t result;
+        if (__builtin_sub_overflow(a, b, &result)) {
+            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Integer overflow");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        vm.registers[dst] = I32_VAL(result);
+#endif
+        DISPATCH();
+    }
+
+LABEL_OP_MUL_I32_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t src1 = READ_BYTE();
+        uint8_t src2 = READ_BYTE();
+        if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        int32_t a = AS_I32(vm.registers[src1]);
+        int32_t b = AS_I32(vm.registers[src2]);
+#if USE_FAST_ARITH
+        vm.registers[dst] = I32_VAL(a * b);
+#else
+        int32_t result;
+        if (__builtin_mul_overflow(a, b, &result)) {
+            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Integer overflow");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        vm.registers[dst] = I32_VAL(result);
+#endif
+        DISPATCH();
+    }
+
+LABEL_OP_DIV_I32_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t src1 = READ_BYTE();
+        uint8_t src2 = READ_BYTE();
+        if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        int32_t b = AS_I32(vm.registers[src2]);
+        if (b == 0) {
+            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Division by zero");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) / b);
+        DISPATCH();
+    }
+
+LABEL_OP_MOD_I32_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t src1 = READ_BYTE();
+        uint8_t src2 = READ_BYTE();
+        if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        int32_t b = AS_I32(vm.registers[src2]);
+        if (b == 0) {
+            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Division by zero");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) % b);
+        DISPATCH();
+    }
+
+LABEL_OP_INC_I32_R: {
+        uint8_t reg = READ_BYTE();
+#if USE_FAST_ARITH
+        vm.registers[reg] = I32_VAL(AS_I32(vm.registers[reg]) + 1);
+#else
+        int32_t val = AS_I32(vm.registers[reg]);
+        int32_t result;
+        if (__builtin_add_overflow(val, 1, &result)) {
+            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Integer overflow");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        vm.registers[reg] = I32_VAL(result);
+#endif
+        DISPATCH();
+    }
+
+LABEL_OP_DEC_I32_R: {
+        uint8_t reg = READ_BYTE();
+#if USE_FAST_ARITH
+        vm.registers[reg] = I32_VAL(AS_I32(vm.registers[reg]) - 1);
+#else
+        int32_t val = AS_I32(vm.registers[reg]);
+        int32_t result;
+        if (__builtin_sub_overflow(val, 1, &result)) {
+            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Integer overflow");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        vm.registers[reg] = I32_VAL(result);
+#endif
+        DISPATCH();
+    }
+
+LABEL_OP_LT_I32_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t src1 = READ_BYTE();
+        uint8_t src2 = READ_BYTE();
+        if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        vm.registers[dst] = BOOL_VAL(AS_I32(vm.registers[src1]) < AS_I32(vm.registers[src2]));
+        DISPATCH();
+    }
+
+LABEL_OP_EQ_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t src1 = READ_BYTE();
+        uint8_t src2 = READ_BYTE();
+        vm.registers[dst] = BOOL_VAL(valuesEqual(vm.registers[src1], vm.registers[src2]));
+        DISPATCH();
+    }
+
+LABEL_OP_JUMP: {
+        uint16_t offset = READ_SHORT();
+        vm.ip += offset;
+        DISPATCH();
+    }
+
+LABEL_OP_JUMP_IF_NOT_R: {
+        uint8_t reg = READ_BYTE();
+        uint16_t offset = READ_SHORT();
+        if (!IS_BOOL(vm.registers[reg])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Condition must be boolean");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        if (!AS_BOOL(vm.registers[reg])) {
+            vm.ip += offset;
+        }
+        DISPATCH();
+    }
+
+LABEL_OP_LOOP: {
+        uint16_t offset = READ_SHORT();
+        vm.ip -= offset;
+        DISPATCH();
+    }
+
+LABEL_OP_PRINT_R: {
+        uint8_t reg = READ_BYTE();
+        printValue(vm.registers[reg]);
+        printf("\n");
+        fflush(stdout);
+        DISPATCH();
+    }
+
+LABEL_OP_PRINT_NO_NL_R: {
+        uint8_t reg = READ_BYTE();
+        printValue(vm.registers[reg]);
+        fflush(stdout);
+        DISPATCH();
+    }
+
+LABEL_OP_RETURN_R: {
+        uint8_t reg = READ_BYTE();
+        Value returnValue = vm.registers[reg];
+        if (vm.frameCount > 0) {
+            CallFrame* frame = &vm.frames[--vm.frameCount];
+            vm.chunk = frame->previousChunk;
+            vm.ip = frame->returnAddress;
+            vm.registers[frame->baseRegister] = returnValue;
+        } else {
+            vm.lastExecutionTime = get_time_vm() - start_time;
+            RETURN(INTERPRET_OK);
+        }
+        DISPATCH();
+    }
+
+LABEL_OP_RETURN_VOID: {
+        if (vm.frameCount > 0) {
+            CallFrame* frame = &vm.frames[--vm.frameCount];
+            vm.chunk = frame->previousChunk;
+            vm.ip = frame->returnAddress;
+        } else {
+            vm.lastExecutionTime = get_time_vm() - start_time;
+            RETURN(INTERPRET_OK);
+        }
+        DISPATCH();
+    }
+
+LABEL_OP_HALT:
+    vm.lastExecutionTime = get_time_vm() - start_time;
+    RETURN(INTERPRET_OK);
+
+LABEL_UNKNOWN:
+    runtimeError(ERROR_RUNTIME, (SrcLocation){NULL, 0, 0},
+                 "Unknown opcode: %d", instruction);
+    RETURN(INTERPRET_RUNTIME_ERROR);
+
+#else  // USE_COMPUTED_GOTO
 
     for (;;) {
         if (vm.trace) {
@@ -304,15 +654,17 @@ static InterpretResult run(void) {
 
                 int32_t a = AS_I32(vm.registers[src1]);
                 int32_t b = AS_I32(vm.registers[src2]);
+#if USE_FAST_ARITH
+                vm.registers[dst] = I32_VAL(a + b);
+#else
                 int32_t result;
-
                 if (__builtin_add_overflow(a, b, &result)) {
                     runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
                                  "Integer overflow");
                     RETURN(INTERPRET_RUNTIME_ERROR);
                 }
-
                 vm.registers[dst] = I32_VAL(result);
+#endif
                 break;
             }
 
@@ -330,15 +682,17 @@ static InterpretResult run(void) {
 
                 int32_t a = AS_I32(vm.registers[src1]);
                 int32_t b = AS_I32(vm.registers[src2]);
+#if USE_FAST_ARITH
+                vm.registers[dst] = I32_VAL(a - b);
+#else
                 int32_t result;
-
                 if (__builtin_sub_overflow(a, b, &result)) {
                     runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
                                  "Integer overflow");
                     RETURN(INTERPRET_RUNTIME_ERROR);
                 }
-
                 vm.registers[dst] = I32_VAL(result);
+#endif
                 break;
             }
 
@@ -356,15 +710,17 @@ static InterpretResult run(void) {
 
                 int32_t a = AS_I32(vm.registers[src1]);
                 int32_t b = AS_I32(vm.registers[src2]);
+#if USE_FAST_ARITH
+                vm.registers[dst] = I32_VAL(a * b);
+#else
                 int32_t result;
-
                 if (__builtin_mul_overflow(a, b, &result)) {
                     runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
                                  "Integer overflow");
                     RETURN(INTERPRET_RUNTIME_ERROR);
                 }
-
                 vm.registers[dst] = I32_VAL(result);
+#endif
                 break;
             }
 
@@ -416,37 +772,37 @@ static InterpretResult run(void) {
 
             case OP_INC_I32_R: {
                 uint8_t reg = READ_BYTE();
-    #if USE_FAST_ARITH
-                    vm.registers[reg] = I32_VAL(AS_I32(vm.registers[reg]) + 1);
-    #else
-                    int32_t val = AS_I32(vm.registers[reg]);
-                    int32_t result;
-                    if (__builtin_add_overflow(val, 1, &result)) {
-                        runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
-                                    "Integer overflow");
-                        RETURN(INTERPRET_RUNTIME_ERROR);
-                    }
-                    vm.registers[reg] = I32_VAL(result);
-    #endif
-                    break;
+#if USE_FAST_ARITH
+                vm.registers[reg] = I32_VAL(AS_I32(vm.registers[reg]) + 1);
+#else
+                int32_t val = AS_I32(vm.registers[reg]);
+                int32_t result;
+                if (__builtin_add_overflow(val, 1, &result)) {
+                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                 "Integer overflow");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
                 }
+                vm.registers[reg] = I32_VAL(result);
+#endif
+                break;
+            }
 
             case OP_DEC_I32_R: {
                 uint8_t reg = READ_BYTE();
-    #if USE_FAST_ARITH
-                    vm.registers[reg] = I32_VAL(AS_I32(vm.registers[reg]) - 1);
-    #else
-                    int32_t val = AS_I32(vm.registers[reg]);
-                    int32_t result;
-                    if (__builtin_sub_overflow(val, 1, &result)) {
-                        runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
-                                    "Integer overflow");
-                        RETURN(INTERPRET_RUNTIME_ERROR);
-                    }
-                    vm.registers[reg] = I32_VAL(result);
-    #endif
-                    break;
+#if USE_FAST_ARITH
+                vm.registers[reg] = I32_VAL(AS_I32(vm.registers[reg]) - 1);
+#else
+                int32_t val = AS_I32(vm.registers[reg]);
+                int32_t result;
+                if (__builtin_sub_overflow(val, 1, &result)) {
+                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                 "Integer overflow");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
                 }
+                vm.registers[reg] = I32_VAL(result);
+#endif
+                break;
+            }
 
             // Comparison operations
             case OP_LT_I32_R: {
@@ -577,11 +933,12 @@ static InterpretResult run(void) {
             }
         }
     }
+#endif  // USE_COMPUTED_GOTO
 
-    #undef READ_BYTE
-    #undef READ_SHORT
-    #undef READ_CONSTANT
-    #undef RETURN
+#undef READ_BYTE
+#undef READ_SHORT
+#undef READ_CONSTANT
+#undef RETURN
 }
 
 // Main interpretation functions

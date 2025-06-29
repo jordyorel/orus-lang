@@ -13,6 +13,39 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             return reg;
         }
         case NODE_BINARY: {
+            // Constant folding for binary operations on literals
+            if (node->binary.left->type == NODE_LITERAL &&
+                node->binary.right->type == NODE_LITERAL &&
+                IS_I32(node->binary.left->literal.value) &&
+                IS_I32(node->binary.right->literal.value)) {
+                int32_t a = AS_I32(node->binary.left->literal.value);
+                int32_t b = AS_I32(node->binary.right->literal.value);
+                int32_t result = 0;
+                const char* op = node->binary.op;
+                if (strcmp(op, "+") == 0) {
+                    result = a + b;
+                } else if (strcmp(op, "-") == 0) {
+                    result = a - b;
+                } else if (strcmp(op, "*") == 0) {
+                    result = a * b;
+                } else if (strcmp(op, "/") == 0) {
+                    if (b == 0) return -1;
+                    result = a / b;
+                } else if (strcmp(op, "%") == 0) {
+                    if (b == 0) return -1;
+                    result = a % b;
+                } else if (strcmp(op, "==") == 0) {
+                    result = (a == b);
+                } else if (strcmp(op, "<") == 0) {
+                    result = (a < b);
+                } else {
+                    return -1;
+                }
+                uint8_t reg = allocateRegister(compiler);
+                emitConstant(compiler, reg, I32_VAL(result));
+                return reg;
+            }
+
             int leftReg = compileExpressionToRegister(node->binary.left, compiler);
             if (leftReg < 0) return -1;
             int rightReg = compileExpressionToRegister(node->binary.right, compiler);
