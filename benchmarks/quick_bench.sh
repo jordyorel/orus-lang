@@ -33,27 +33,27 @@ read -p "Enter choice (1-6): " choice
 case $choice in
     1)
         echo "🔄 Running quick benchmark..."
-        ./advanced_benchmark.py --iterations 5 --all
+        ./simple_benchmark.py --quick
         ;;
     2)
         echo "🔄 Running standard benchmark..."
-        ./advanced_benchmark.py --iterations 20 --all
+        ./simple_benchmark.py --iterations 20
         ;;
     3)
         echo "🔄 Running thorough benchmark..."
-        ./advanced_benchmark.py --iterations 50 --all
+        ./simple_benchmark.py --iterations 50
         ;;
     4)
-        echo "🔄 Running comparison benchmark..."
-        ./advanced_benchmark.py --comparison
+        echo "🔄 Running Orus vs Python comparison..."
+        ./simple_benchmark.py --iterations 30
         ;;
     5)
         echo "🔄 Running stress test..."
-        ./advanced_benchmark.py --stress-test
+        ./simple_benchmark.py --stress --iterations 100
         ;;
     6)
         echo "🔄 Running comprehensive benchmark suite..."
-        ./run_benchmarks.sh all
+        ./simple_benchmark.py --iterations 50 --stress
         ;;
     *)
         echo "❌ Invalid choice. Please run again."
@@ -63,5 +63,5 @@ esac
 
 echo ""
 echo "✅ Benchmark completed!"
-echo "📁 Results saved in: ./results/"
-echo "📊 Check the generated reports for detailed analysis."
+echo "📁 Check the terminal output above for results."
+echo "📊 Detailed results are saved to the specified output file."
