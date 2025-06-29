@@ -96,6 +96,8 @@ typedef enum {
     TOKEN_NEWLINE,
 
     TOKEN_COLON,  // Add this for type annotations
+    TOKEN_INDENT,
+    TOKEN_DEDENT,
 } TokenType;
 
 typedef struct {
@@ -115,6 +117,10 @@ typedef struct {
     const char* lineStart;  // Track start of current line for precise column
                             // calculation
     bool inBlockComment;    // Track whether we are inside a block comment
+    int indentStack[64];
+    int indentTop;
+    int pendingDedents;
+    bool atLineStart;
 } Lexer;
 
 typedef struct {

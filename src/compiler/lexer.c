@@ -384,17 +384,76 @@ void init_scanner(const char* source) {
     lexer.column = 1;
     lexer.lineStart = source;
     lexer.inBlockComment = false;
+    lexer.indentStack[0] = 0;
+    lexer.indentTop = 0;
+    lexer.pendingDedents = 0;
+    lexer.atLineStart = true;
 }
 
 /**
  * Retrieve the next token.
  */
 Token scan_token() {
+    if (lexer.pendingDedents > 0) {
+        lexer.pendingDedents--;
+        lexer.start = lexer.current;
+        return make_token(TOKEN_DEDENT);
+    }
+
+    if (lexer.atLineStart) {
+        const char* p = lexer.current;
+        int indent = 0;
+        while (*p == ' ' || *p == '\t') {
+            indent += (*p == '\t') ? 4 : 1;
+            p++;
+        }
+        lexer.current = p;
+        lexer.column = indent + 1;
+
+        skip_whitespace();
+
+        if (PEEK() == '\n') {
+            advance();
+            lexer.atLineStart = true;
+            lexer.start = lexer.current - 1;
+            return make_token(TOKEN_NEWLINE);
+        }
+
+        int prevIndent = lexer.indentStack[lexer.indentTop];
+        if (indent > prevIndent) {
+            if (lexer.indentTop < 63) lexer.indentStack[++lexer.indentTop] = indent;
+            lexer.atLineStart = false;
+            lexer.start = lexer.current;
+            return make_token(TOKEN_INDENT);
+        } else if (indent < prevIndent) {
+            while (lexer.indentTop > 0 && indent < lexer.indentStack[lexer.indentTop]) {
+                lexer.indentTop--;
+                lexer.pendingDedents++;
+            }
+            if (indent != lexer.indentStack[lexer.indentTop]) {
+                lexer.start = lexer.current;
+                return error_token("Inconsistent indentation.",
+                                   ERR_LEN("Inconsistent indentation."));
+            }
+            lexer.atLineStart = false;
+            if (lexer.pendingDedents > 0) {
+                lexer.pendingDedents--;
+                lexer.start = lexer.current;
+                return make_token(TOKEN_DEDENT);
+            }
+        } else {
+            lexer.atLineStart = false;
+        }
+    }
+
     skip_whitespace();
     lexer.start = lexer.current;
-    lexer.column = lexer.column;
 
     if (is_at_end()) {
+        if (lexer.indentTop > 0) {
+            lexer.indentTop--;
+            return make_token(TOKEN_DEDENT);
+        }
         return make_token(TOKEN_EOF);
     }
 
@@ -403,6 +462,7 @@ Token scan_token() {
     /* Single‐char or 2‐char tokens */
     switch (c) {
         case '\n':
+            lexer.atLineStart = true;
             return make_token(TOKEN_NEWLINE);
         case '(':
             return make_token(TOKEN_LEFT_PAREN);
