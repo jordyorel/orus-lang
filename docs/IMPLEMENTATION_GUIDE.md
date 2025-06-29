@@ -331,6 +331,10 @@ static void compileLogicalAnd(Compiler* compiler, ASTNode* node) {
 
 ### 1.2 Built-in Print Function & I/O System
 
+The current implementation provides a minimal `print(value)` statement that
+prints a single argument with a trailing newline. This serves as the foundation
+for a richer I/O system described below.
+
 #### High-Performance Print Implementation
 ```c
 // Built-in function registry

@@ -361,6 +361,25 @@ static ASTNode* parsePrimaryExpression(void) {
             node->dataType = NULL;
             return node;
         }
+        case TOKEN_PRINT: {
+            Token next = nextToken();
+            if (next.type != TOKEN_LEFT_PAREN) {
+                return NULL;
+            }
+            ASTNode* expr = parseExpression();
+            if (!expr) return NULL;
+            Token close = nextToken();
+            if (close.type != TOKEN_RIGHT_PAREN) {
+                return NULL;
+            }
+            ASTNode* node = new_node();
+            node->type = NODE_PRINT;
+            node->print.value = expr;
+            node->location.line = token.line;
+            node->location.column = token.column;
+            node->dataType = NULL;
+            return node;
+        }
         case TOKEN_LEFT_PAREN: {
             ASTNode* expr = parseExpression();
             Token closeParen = nextToken();
