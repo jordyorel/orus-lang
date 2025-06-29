@@ -6,6 +6,7 @@
 #include "vm.h"
 #include "common.h"
 #include "compiler.h"
+#include "parser.h"
 
 // Global VM instance
 VM vm;
