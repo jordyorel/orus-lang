@@ -46,7 +46,7 @@ Build a language that combines Python's readability, Rust's safety, and Lua's pe
 
 ### 1.2 Built-in Functions (Print & I/O)
 **Priority: 🔥 Critical**
-- [ ] **TODO**: Implement essential built-in functions starting with print for basic program output.
+- [x] **DONE**: Basic `print(value)` statement implemented for program output.
 
 ```orus
 // Basic print function
@@ -70,6 +70,7 @@ print("continues here")
 ```
 
 **Implementation Requirements:**
+- [x] Basic `print(value)` statement with newline
 - [ ] Parse `print()` function calls with variable arguments
 - [ ] Support printing all basic types (i32, f64, bool, string)
 - [ ] Implement string interpolation with `{}` placeholders

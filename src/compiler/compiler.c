@@ -153,6 +153,13 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             freeRegister(compiler, valueReg);
             return compiler->locals[localIndex].reg;
         }
+        case NODE_PRINT: {
+            int reg = compileExpressionToRegister(node->print.value, compiler);
+            if (reg < 0) return -1;
+            emitByte(compiler, OP_PRINT_R);
+            emitByte(compiler, (uint8_t)reg);
+            return reg;
+        }
         default:
             return -1;
     }
@@ -239,7 +246,7 @@ bool compile(ASTNode* ast, Compiler* compiler, bool isModule) {
             ASTNode* stmt = ast->program.declarations[i];
             int reg = compileExpressionToRegister(stmt, compiler);
             if (reg < 0) return false;
-            if (!isModule && stmt->type != NODE_VAR_DECL) {
+            if (!isModule && stmt->type != NODE_VAR_DECL && stmt->type != NODE_PRINT) {
                 emitByte(compiler, OP_PRINT_R);
                 emitByte(compiler, (uint8_t)reg);
             }
@@ -249,7 +256,7 @@ bool compile(ASTNode* ast, Compiler* compiler, bool isModule) {
 
     int resultReg = compileExpressionToRegister(ast, compiler);
 
-    if (resultReg >= 0 && !isModule && ast->type != NODE_VAR_DECL) {
+    if (resultReg >= 0 && !isModule && ast->type != NODE_VAR_DECL && ast->type != NODE_PRINT) {
         emitByte(compiler, OP_PRINT_R);
         emitByte(compiler, (uint8_t)resultReg);
     }
