@@ -180,6 +180,7 @@ void collectGarbage() {
 
     markRoots();
     sweep();
+    vm.gcCount++;
 }
 
 static void freeObject(Obj* object) {

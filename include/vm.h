@@ -415,6 +415,7 @@ typedef struct {
     // Memory management
     Obj* objects;
     size_t bytesAllocated;
+    size_t gcCount;
     bool gcPaused;
 
     // Execution state
@@ -423,6 +424,8 @@ typedef struct {
     const char* filePath;
     int currentLine;
     int currentColumn;
+
+    double lastExecutionTime;
 
     // Configuration
     bool trace;
