@@ -24,11 +24,11 @@ int disassembleInstruction(Chunk* chunk, int offset) {
     switch (instruction) {
         case OP_LOAD_CONST: {
             uint8_t reg = chunk->code[offset + 1];
-            uint8_t constant = chunk->code[offset + 2];
+            uint16_t constant = (uint16_t)((chunk->code[offset + 2] << 8) | chunk->code[offset + 3]);
             printf("%-16s R%d, #%d '", "LOAD_CONST", reg, constant);
             printValue(chunk->constants.values[constant]);
             printf("'\n");
-            return offset + 3;
+            return offset + 4;
         }
 
         case OP_LOAD_NIL: {

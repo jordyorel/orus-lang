@@ -3,32 +3,57 @@
 #include <stdlib.h>
 #include <string.h>
 
-// Simple arena allocator used for AST nodes
-typedef struct {
+// Simple arena allocator used for AST nodes that never moves allocated blocks
+typedef struct ArenaBlock {
     char* buffer;
-    size_t capacity, used;
+    size_t capacity;
+    size_t used;
+    struct ArenaBlock* next;
+} ArenaBlock;
+
+typedef struct {
+    ArenaBlock* head;
 } Arena;
 
 static Arena parserArena;
 
 static void arena_init(Arena* a, size_t initial) {
-    a->buffer = malloc(initial);
-    a->capacity = initial;
-    a->used = 0;
+    a->head = malloc(sizeof(ArenaBlock));
+    a->head->buffer = malloc(initial);
+    a->head->capacity = initial;
+    a->head->used = 0;
+    a->head->next = NULL;
 }
 
 static void* arena_alloc(Arena* a, size_t size) {
-    if (a->used + size > a->capacity) {
-        size_t newCap = (a->capacity * 2) + size;
-        a->buffer = realloc(a->buffer, newCap);
-        a->capacity = newCap;
+    ArenaBlock* block = a->head;
+    if (block->used + size > block->capacity) {
+        size_t newCap = block->capacity * 2;
+        if (newCap < size) newCap = size;
+        ArenaBlock* newBlock = malloc(sizeof(ArenaBlock));
+        newBlock->buffer = malloc(newCap);
+        newBlock->capacity = newCap;
+        newBlock->used = 0;
+        newBlock->next = block;
+        a->head = newBlock;
+        block = newBlock;
     }
-    void* ptr = a->buffer + a->used;
-    a->used += size;
+    void* ptr = block->buffer + block->used;
+    block->used += size;
     return ptr;
 }
 
-static void arena_reset(Arena* a) { a->used = 0; }
+static void arena_reset(Arena* a) {
+    ArenaBlock* block = a->head->next;
+    while (block) {
+        ArenaBlock* next = block->next;
+        free(block->buffer);
+        free(block);
+        block = next;
+    }
+    a->head->used = 0;
+    a->head->next = NULL;
+}
 
 static ASTNode* new_node(void) { return arena_alloc(&parserArena, sizeof(ASTNode)); }
 

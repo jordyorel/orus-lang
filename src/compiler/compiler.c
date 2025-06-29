@@ -50,7 +50,11 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             if (leftReg < 0) return -1;
             int rightReg = compileExpressionToRegister(node->binary.right, compiler);
             if (rightReg < 0) return -1;
-            uint8_t resultReg = allocateRegister(compiler);
+
+            bool leftTemp = (node->binary.left->type == NODE_LITERAL ||
+                              node->binary.left->type == NODE_BINARY);
+
+            uint8_t resultReg = leftTemp ? (uint8_t)leftReg : allocateRegister(compiler);
             const char* op = node->binary.op;
             if (strcmp(op, "+") == 0) {
                 emitByte(compiler, OP_ADD_I32_R);
@@ -69,9 +73,13 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             } else {
                 return -1;
             }
-            emitByte(compiler, resultReg);
-            emitByte(compiler, (uint8_t)leftReg);
-            emitByte(compiler, (uint8_t)rightReg);
+            emitByte(compiler, resultReg);         // destination register
+            emitByte(compiler, (uint8_t)leftReg);  // left operand
+            emitByte(compiler, (uint8_t)rightReg); // right operand
+
+            freeRegister(compiler, (uint8_t)rightReg);
+            if (!leftTemp) freeRegister(compiler, (uint8_t)leftReg);
+
             return resultReg;
         }
         case NODE_IDENTIFIER: {
@@ -158,13 +166,14 @@ void emitBytes(Compiler* compiler, uint8_t byte1, uint8_t byte2) {
 
 void emitConstant(Compiler* compiler, uint8_t reg, Value value) {
     int constant = addConstant(compiler->chunk, value);
-    if (constant > UINT8_MAX) {
+    if (constant > UINT16_MAX) {
         compiler->hadError = true;
         return;
     }
     emitByte(compiler, OP_LOAD_CONST);
     emitByte(compiler, reg);
-    emitByte(compiler, (uint8_t)constant);
+    emitByte(compiler, (uint8_t)((constant >> 8) & 0xFF));
+    emitByte(compiler, (uint8_t)(constant & 0xFF));
 }
 
 // ---------------------------------------------------------------------------
