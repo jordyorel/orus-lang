@@ -7,6 +7,7 @@
 #include "common.h"
 #include "compiler.h"
 #include "parser.h"
+#include "memory.h"
 
 // Global VM instance
 VM vm;
@@ -15,83 +16,8 @@ VM vm;
 static InterpretResult run(void);
 static void runtimeError(ErrorType type, SrcLocation location,
                          const char* format, ...);
-bool compileExpression(ASTNode* node, Compiler* compiler);
-int compileExpressionToRegister(ASTNode* node, Compiler* compiler);
 
-// Memory allocation macros
-#define GROW_CAPACITY(capacity) ((capacity) < 8 ? 8 : (capacity) * 2)
-#define GROW_ARRAY(type, pointer, oldCount, newCount)     \
-    (type*)reallocate(pointer, sizeof(type) * (oldCount), \
-                      sizeof(type) * (newCount))
-#define FREE_ARRAY(type, pointer, oldCount) \
-    reallocate(pointer, sizeof(type) * (oldCount), 0)
-
-// Memory management
-static void* reallocate(void* pointer, size_t oldSize, size_t newSize) {
-    vm.bytesAllocated += newSize - oldSize;
-
-    if (newSize == 0) {
-        free(pointer);
-        return NULL;
-    }
-
-    void* result = realloc(pointer, newSize);
-    if (result == NULL) {
-        fprintf(stderr, "Memory allocation failed\n");
-        exit(1);
-    }
-
-    return result;
-}
-
-// Object allocation
-static Obj* allocateObject(size_t size) {
-    Obj* object = (Obj*)reallocate(NULL, 0, size);
-    object->next = vm.objects;
-    object->isMarked = false;
-    vm.objects = object;
-    return object;
-}
-
-ObjString* allocateString(const char* chars, int length) {
-    ObjString* string = (ObjString*)allocateObject(sizeof(ObjString));
-    string->obj.type = OBJ_STRING;
-    string->length = length;
-    string->chars = (char*)malloc(length + 1);
-    memcpy(string->chars, chars, length);
-    string->chars[length] = '\0';
-
-    // Simple hash
-    uint32_t hash = 2166136261u;
-    for (int i = 0; i < length; i++) {
-        hash ^= (uint8_t)chars[i];
-        hash *= 16777619;
-    }
-    string->hash = hash;
-
-    return string;
-}
-
-ObjArray* allocateArray(int capacity) {
-    ObjArray* array = (ObjArray*)allocateObject(sizeof(ObjArray));
-    array->obj.type = OBJ_ARRAY;
-    array->length = 0;
-    array->capacity = capacity;
-    array->elements = GROW_ARRAY(Value, NULL, 0, capacity);
-    return array;
-}
-
-ObjError* allocateError(ErrorType type, const char* message,
-                        SrcLocation location) {
-    ObjError* error = (ObjError*)allocateObject(sizeof(ObjError));
-    error->obj.type = OBJ_ERROR;
-    error->type = type;
-    error->message = allocateString(message, strlen(message));
-    error->location.file = location.file;
-    error->location.line = location.line;
-    error->location.column = location.column;
-    return error;
-}
+// Memory allocation handled in memory.c
 
 // Value operations
 void printValue(Value value) {
@@ -219,38 +145,6 @@ int addConstant(Chunk* chunk, Value value) {
 }
 
 // Compiler operations
-void initCompiler(Compiler* compiler, Chunk* chunk, const char* fileName,
-                  const char* source) {
-    compiler->chunk = chunk;
-    compiler->fileName = fileName;
-    compiler->source = source;
-    compiler->nextRegister = 0;
-    compiler->maxRegisters = 0;
-    compiler->localCount = 0;
-    compiler->hadError = false;
-}
-
-uint8_t allocateRegister(Compiler* compiler) {
-    if (compiler->nextRegister >= (REGISTER_COUNT - 1)) {
-        compiler->hadError = true;
-        return 0;
-    }
-
-    uint8_t reg = compiler->nextRegister++;
-    if (compiler->nextRegister > compiler->maxRegisters) {
-        compiler->maxRegisters = compiler->nextRegister;
-    }
-
-    return reg;
-}
-
-void freeRegister(Compiler* compiler, uint8_t reg) {
-    // In a simple allocator, we can just decrement if it's the last allocated
-    if (reg == compiler->nextRegister - 1) {
-        compiler->nextRegister--;
-    }
-}
-
 // Type system (simplified)
 static Type primitiveTypes[TYPE_ANY + 1];
 
@@ -271,6 +165,8 @@ Type* getPrimitiveType(TypeKind kind) {
 void initVM(void) {
     initTypeSystem();
 
+    initMemory();
+
     // Clear registers
     for (int i = 0; i < REGISTER_COUNT; i++) {
         vm.registers[i] = NIL_VAL;
@@ -290,9 +186,6 @@ void initVM(void) {
     vm.frameCount = 0;
     vm.tryFrameCount = 0;
     vm.lastError = NIL_VAL;
-    vm.objects = NULL;
-    vm.bytesAllocated = 0;
-    vm.gcPaused = false;
     vm.instruction_count = 0;
     vm.astRoot = NULL;
     vm.filePath = NULL;
@@ -325,39 +218,7 @@ void freeVM(void) {
     vm.ip = NULL;
 }
 
-// Memory management
-void freeObjects(void) {
-    Obj* object = vm.objects;
-    while (object != NULL) {
-        Obj* next = object->next;
-
-        switch (object->type) {
-            case OBJ_STRING:
-                free(((ObjString*)object)->chars);
-                break;
-            case OBJ_ARRAY:
-                FREE_ARRAY(Value, ((ObjArray*)object)->elements,
-                           ((ObjArray*)object)->capacity);
-                break;
-            case OBJ_ERROR:
-                // ObjError's message is freed when the string is freed
-                break;
-            case OBJ_RANGE_ITERATOR:
-                // No additional cleanup needed
-                break;
-        }
-
-        free(object);
-        object = next;
-    }
-
-    vm.objects = NULL;
-}
-
-void collectGarbage(void) {
-    // Simplified GC - mark all reachable objects
-    // TODO: Implement proper mark-and-sweep
-}
+// Memory management implemented in memory.c
 
 // Runtime error handling
 static void runtimeError(ErrorType type, SrcLocation location,
@@ -781,60 +642,6 @@ static InterpretResult run(void) {
 #undef READ_BYTE
 #undef READ_SHORT
 #undef READ_CONSTANT
-}
-
-// Simple compiler for testing
-void emitByte(Compiler* compiler, uint8_t byte) {
-    writeChunk(compiler->chunk, byte, 1, 1);
-}
-
-// For future use
-__attribute__((unused))
-void emitBytes(Compiler* compiler, uint8_t byte1, uint8_t byte2) {
-    emitByte(compiler, byte1);
-    emitByte(compiler, byte2);
-}
-
-void emitConstant(Compiler* compiler, uint8_t reg, Value value) {
-    int constant = addConstant(compiler->chunk, value);
-    if (constant > UINT8_MAX) {
-        compiler->hadError = true;
-        return;
-    }
-    emitByte(compiler, OP_LOAD_CONST);
-    emitByte(compiler, reg);
-    emitByte(compiler, (uint8_t)constant);
-}
-
-// Basic compilation (simplified for testing)
-bool compile(ASTNode* ast, Compiler* compiler, bool isModule) {
-    UNUSED(isModule);
-
-    if (!ast) {
-        return false;
-    }
-
-    if (ast->type == NODE_PROGRAM) {
-        for (int i = 0; i < ast->program.count; i++) {
-            ASTNode* stmt = ast->program.declarations[i];
-            int reg = compileExpressionToRegister(stmt, compiler);
-            if (reg < 0) return false;
-            if (!isModule && stmt->type != NODE_VAR_DECL) {
-                emitByte(compiler, OP_PRINT_R);
-                emitByte(compiler, (uint8_t)reg);
-            }
-        }
-        return true;
-    }
-
-    int resultReg = compileExpressionToRegister(ast, compiler);
-
-    if (resultReg >= 0 && !isModule && ast->type != NODE_VAR_DECL) {
-        emitByte(compiler, OP_PRINT_R);
-        emitByte(compiler, (uint8_t)resultReg);
-    }
-
-    return resultReg >= 0;
 }
 
 // Main interpretation functions

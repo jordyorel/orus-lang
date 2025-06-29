@@ -1,0 +1,199 @@
+#include "memory.h"
+#include "vm.h"
+#include <stdlib.h>
+#include <string.h>
+
+static size_t gcThreshold = 0;
+static const double GC_HEAP_GROW_FACTOR = 2.0;
+
+static void freeObject(Obj* object);
+
+void initMemory() {
+    vm.bytesAllocated = 0;
+    vm.objects = NULL;
+    vm.gcPaused = false;
+    gcThreshold = 1024 * 1024;
+}
+
+void freeObjects() {
+    Obj* object = vm.objects;
+    while (object) {
+        Obj* next = object->next;
+        freeObject(object);
+        object = next;
+    }
+    vm.objects = NULL;
+}
+
+void* reallocate(void* pointer, size_t oldSize, size_t newSize) {
+    if (newSize == 0) {
+        vm.bytesAllocated -= oldSize;
+        free(pointer);
+        return NULL;
+    }
+    if (newSize > oldSize) {
+        vm.bytesAllocated += newSize - oldSize;
+    } else {
+        vm.bytesAllocated -= oldSize - newSize;
+    }
+
+    void* result = realloc(pointer, newSize);
+    if (!result) exit(1);
+    return result;
+}
+
+static void* allocateObject(size_t size, ObjType type) {
+    vm.bytesAllocated += size;
+    if (!vm.gcPaused && vm.bytesAllocated > gcThreshold) {
+        collectGarbage();
+        gcThreshold = (size_t)(vm.bytesAllocated * GC_HEAP_GROW_FACTOR);
+    }
+
+    Obj* object = (Obj*)malloc(size);
+    if (!object) exit(1);
+    object->type = type;
+    object->isMarked = false;
+    object->next = vm.objects;
+    vm.objects = object;
+    return object;
+}
+
+ObjString* allocateString(const char* chars, int length) {
+    ObjString* string = (ObjString*)allocateObject(sizeof(ObjString), OBJ_STRING);
+    string->length = length;
+    string->chars = (char*)reallocate(NULL, 0, length + 1);
+    memcpy(string->chars, chars, length);
+    string->chars[length] = '\0';
+    string->hash = 0;
+    vm.bytesAllocated += length + 1;
+    return string;
+}
+
+ObjArray* allocateArray(int capacity) {
+    ObjArray* array = (ObjArray*)allocateObject(sizeof(ObjArray), OBJ_ARRAY);
+    array->length = 0;
+    array->capacity = capacity > 0 ? capacity : 8;
+    array->elements = (Value*)reallocate(NULL, 0, sizeof(Value) * array->capacity);
+    return array;
+}
+
+ObjError* allocateError(ErrorType type, const char* message, SrcLocation location) {
+    ObjError* error = (ObjError*)allocateObject(sizeof(ObjError), OBJ_ERROR);
+    error->type = type;
+    error->message = allocateString(message, (int)strlen(message));
+    error->location.file = location.file;
+    error->location.line = location.line;
+    error->location.column = location.column;
+    return error;
+}
+
+ObjRangeIterator* allocateRangeIterator(int64_t start, int64_t end) {
+    ObjRangeIterator* it = (ObjRangeIterator*)allocateObject(sizeof(ObjRangeIterator), OBJ_RANGE_ITERATOR);
+    it->current = start;
+    it->end = end;
+    return it;
+}
+
+void markValue(Value value);
+
+void markObject(Obj* object) {
+    if (!object || object->isMarked) return;
+    object->isMarked = true;
+
+    switch (object->type) {
+        case OBJ_STRING:
+            break;
+        case OBJ_ARRAY: {
+            ObjArray* arr = (ObjArray*)object;
+            for (int i = 0; i < arr->length; i++) markValue(arr->elements[i]);
+            break;
+        }
+        case OBJ_ERROR: {
+            ObjError* err = (ObjError*)object;
+            markObject((Obj*)err->message);
+            break;
+        }
+        case OBJ_RANGE_ITERATOR:
+            break;
+    }
+}
+
+void markValue(Value value) {
+    switch (value.type) {
+        case VAL_STRING:
+        case VAL_ARRAY:
+        case VAL_ERROR:
+        case VAL_RANGE_ITERATOR:
+            markObject(value.as.obj);
+            break;
+        default:
+            break;
+    }
+}
+
+static void markRoots() {
+    for (int i = 0; i < REGISTER_COUNT; i++) {
+        markValue(vm.registers[i]);
+    }
+    for (int i = 0; i < vm.variableCount; i++) {
+        markValue(vm.globals[i]);
+    }
+    markValue(vm.lastError);
+}
+
+static void sweep() {
+    Obj** object = &vm.objects;
+    while (*object) {
+        if (!(*object)->isMarked) {
+            Obj* unreached = *object;
+            *object = unreached->next;
+            freeObject(unreached);
+        } else {
+            (*object)->isMarked = false;
+            object = &(*object)->next;
+        }
+    }
+}
+
+void collectGarbage() {
+    if (vm.gcPaused) return;
+
+    markRoots();
+    sweep();
+}
+
+static void freeObject(Obj* object) {
+    switch (object->type) {
+        case OBJ_STRING: {
+            ObjString* s = (ObjString*)object;
+            vm.bytesAllocated -= sizeof(ObjString) + s->length + 1;
+            free(s->chars);
+            break;
+        }
+        case OBJ_ARRAY: {
+            ObjArray* a = (ObjArray*)object;
+            vm.bytesAllocated -= sizeof(ObjArray) + sizeof(Value) * a->capacity;
+            FREE_ARRAY(Value, a->elements, a->capacity);
+            break;
+        }
+        case OBJ_ERROR: {
+            vm.bytesAllocated -= sizeof(ObjError);
+            break;
+        }
+        case OBJ_RANGE_ITERATOR:
+            vm.bytesAllocated -= sizeof(ObjRangeIterator);
+            break;
+    }
+    free(object);
+}
+
+void pauseGC() { vm.gcPaused = true; }
+void resumeGC() { vm.gcPaused = false; }
+
+char* copyString(const char* chars, int length) {
+    char* copy = (char*)malloc(length + 1);
+    memcpy(copy, chars, length);
+    copy[length] = '\0';
+    return copy;
+}
+
