@@ -41,7 +41,7 @@ Build a language that combines Python's readability, Rust's safety, and Lua's pe
 - [x] Implement string object allocation in compiler
 - [x] Add string concatenation operator (`+`)
 - [x] Implement string comparison operators
- - [x] Add string interpolation support
+- [x] Add string interpolation support
 
 
 ### 1.2 Built-in Functions (Print & I/O)
