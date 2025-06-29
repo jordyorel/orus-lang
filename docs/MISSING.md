@@ -107,9 +107,9 @@ print("Array has {} items", len(items))
 
 **Features to Implement:**
 - [x] `x = value` syntax parsing
-- [ ] Mutable vs immutable variables (`let mut x = 42`)
-- [ ] Compound assignments (`+=`, `-=`, `*=`, `/=`)
-- [ ] Type annotations (`let x: i32 = 42`)
+- [x] Mutable vs immutable variables (`let mut x = 42`)
+- [x] Compound assignments (`+=`, `-=`, `*=`, `/=`)
+- [x] Type annotations (`let x: i32 = 42`)
 
 ### 1.5 Boolean and Comparison Operations
 **Priority: 🔥 Critical**

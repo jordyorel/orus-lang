@@ -161,6 +161,11 @@ static void compileStringConcat(Compiler* compiler, ASTNode* left, ASTNode* righ
 
 ### 1.2 Variable Assignment Implementation
 
+Variables can be declared immutable with `let` or mutable using `let mut`. Type
+annotations are parsed after a colon and stored on the AST for future type
+checking. The compiler records mutability in its local table to prevent writes
+to immutable bindings.
+
 #### Enhanced Symbol Table
 ```c
 // Symbol table with proper scoping and mutability
@@ -269,6 +274,11 @@ static void compileAssignment(Compiler* compiler, ASTNode* node) {
     freeRegister(compiler, value_reg);
 }
 ```
+
+Compound assignment operators such as `+=` or `*=` are translated in the parser
+into a `NODE_BINARY` expression combined with a normal assignment. This keeps the
+code generation simple while still emitting the optimized arithmetic opcodes
+shown above.
 
 ### 1.3 Boolean and Comparison Operations
 

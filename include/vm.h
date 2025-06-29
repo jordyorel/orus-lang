@@ -370,6 +370,7 @@ typedef struct {
         char* name;
         uint8_t reg;  // Register allocation for local
         bool isActive;
+        bool isMutable;
     } locals[REGISTER_COUNT];
     int localCount;
     bool hadError;
