@@ -36,13 +36,71 @@ Build a language that combines Python's readability, Rust's safety, and Lua's pe
 - [x] **DONE**: Fix string support and add proper boolean operations to complete the basic type system.
 
 **Implementation Steps:**
+
 - [x] Fix VALUE type conflicts for strings
 - [x] Implement string object allocation in compiler
 - [x] Add string concatenation operator (`+`)
 - [x] Implement string comparison operators
 - [ ] Add string interpolation support
 
-### 1.2 Variable Assignments
+
+### 1.2 Built-in Functions (Print & I/O)
+**Priority: 🔥 Critical**
+- [ ] **TODO**: Implement essential built-in functions starting with print for basic program output.
+
+```orus
+// Basic print function
+print("Hello, World!")
+print(42)
+print(true)
+
+// Print with string interpolation
+let name = "Orus"
+let version = 1
+print("Welcome to {} version {}", name, version)
+
+// Multiple values
+print("Values:", 1, 2, 3, "done")
+
+// Print with newline (default) and without
+print("Line 1")
+print("Line 2")
+print_no_newline("Same line: ")
+print("continues here")
+```
+
+**Implementation Requirements:**
+- [ ] Parse `print()` function calls with variable arguments
+- [ ] Support printing all basic types (i32, f64, bool, string)
+- [ ] Implement string interpolation with `{}` placeholders
+- [ ] Handle escape sequences (`\n`, `\t`, `\"`, `\\`)
+- [ ] Add `print_no_newline()` variant for precise output control
+- [ ] Format numbers and booleans for display
+
+### 1.3 String Interpolation System
+**Priority: 🔥 High**
+- [ ] **TODO**: Implement full string interpolation with format specifiers and expressions.
+
+```orus
+// Basic interpolation
+let x = 42
+print("The answer is {}", x)
+
+// Multiple placeholders
+let a = 10
+let b = 20
+print("{} + {} = {}", a, b, a + b)
+
+// Format specifiers (future enhancement)
+let pi = 3.14159
+print("Pi rounded: {:.2}", pi)  // "Pi rounded: 3.14"
+
+// Expression interpolation
+let items = [1, 2, 3]
+print("Array has {} items", len(items))
+```
+
+### 1.4 Variable Assignments
 **Priority: 🔥 Critical**
 - [x] **DONE**: Basic assignment operations implemented.
 
@@ -52,7 +110,7 @@ Build a language that combines Python's readability, Rust's safety, and Lua's pe
 - [ ] Compound assignments (`+=`, `-=`, `*=`, `/=`)
 - [ ] Type annotations (`let x: i32 = 42`)
 
-### 1.3 Boolean and Comparison Operations
+### 1.5 Boolean and Comparison Operations
 **Priority: 🔥 Critical**
 - [x] **DONE**: Added logical operators and comparison operations.
 
@@ -99,6 +157,32 @@ for item in collection:
 ### 2.3 Scope and Symbol Tables
 **Priority: 🔥 High**
 - [ ] **TODO**: Implement proper lexical scoping with nested scope management.
+
+### 2.4 Main Function Entry Point
+**Priority: 🔥 Critical**
+- [ ] **TODO**: Implement the main function as the program entry point with proper execution flow.
+
+```orus
+// Main function - program entry point
+fn main:
+    print("Hello, Orus!")
+    let x = 42
+    print("The answer is {}", x)
+
+// Main function with command line arguments (future)
+fn main(args: [string]):
+    if len(args) > 1:
+        print("First argument: {}", args[1])
+    else:
+        print("No arguments provided")
+```
+
+**Implementation Requirements:**
+- [ ] Parse `fn main:` or `fn main():` syntax 
+- [ ] Generate VM entry point that calls main function
+- [ ] Handle main function return values (program exit codes)
+- [ ] Proper error handling if main function is missing
+- [ ] Support for both parameterless and parameterized main functions
 
 ---
 

@@ -329,6 +329,149 @@ static void compileLogicalAnd(Compiler* compiler, ASTNode* node) {
 }
 ```
 
+### 1.2 Built-in Print Function & I/O System
+
+#### High-Performance Print Implementation
+```c
+// Built-in function registry
+typedef struct {
+    char* name;
+    int arity;
+    bool is_variadic;
+    NativeFunction* implementation;
+    uint32_t call_count;      // For optimization
+} BuiltinFunction;
+
+// Print function variants
+typedef enum {
+    PRINT_STANDARD,           // print() with newline
+    PRINT_NO_NEWLINE,        // print_no_newline()
+    PRINT_DEBUG,             // debug_print() with type info
+    PRINT_ERROR,             // error_print() to stderr
+} PrintVariant;
+
+// Native print function implementation
+static Value native_print(VM* vm, int arg_count, Value* args) {
+    // Fast path for single string argument
+    if (arg_count == 1 && IS_STRING(args[0])) {
+        ObjString* str = AS_STRING(args[0]);
+        fwrite(str->rope->leaf.data, sizeof(char), str->length, stdout);
+        fputc('\n', stdout);
+        return NIL_VAL;
+    }
+    
+    // Multi-argument print with formatting
+    print_values_formatted(args, arg_count, stdout, true);
+    return NIL_VAL;
+}
+
+// High-performance value printing
+static void print_values_formatted(Value* args, int count, FILE* output, bool newline) {
+    for (int i = 0; i < count; i++) {
+        if (i > 0) fputc(' ', output);  // Space separator
+        
+        switch (args[i].type) {
+            case VAL_BOOL:
+                fputs(AS_BOOL(args[i]) ? "true" : "false", output);
+                break;
+                
+            case VAL_NIL:
+                fputs("nil", output);
+                break;
+                
+            case VAL_NUMBER:
+                // Optimized number formatting
+                print_number_optimized(AS_NUMBER(args[i]), output);
+                break;
+                
+            case VAL_OBJ:
+                print_object(AS_OBJ(args[i]), output);
+                break;
+        }
+    }
+    
+    if (newline) fputc('\n', output);
+}
+```
+
+### 1.3 String Interpolation Engine
+```c
+// String interpolation parser
+typedef struct {
+    char* template_str;
+    size_t template_len;
+    
+    // Parsed placeholders
+    struct {
+        size_t position;      // Position in template
+        size_t arg_index;     // Which argument to use
+        FormatSpec spec;      // Format specification
+    } placeholders[32];       // Max 32 placeholders
+    int placeholder_count;
+    
+    // Performance optimization
+    bool is_simple;           // Only {} placeholders, no formatting
+    bool has_expressions;     // Contains complex expressions
+} InterpolationTemplate;
+
+// Compile-time string interpolation
+static uint8_t compile_string_interpolation(Compiler* compiler, ASTNode* node) {
+    InterpolationNode* interp = &node->interpolation;
+    
+    // Parse template at compile time
+    InterpolationTemplate* tmpl = parse_interpolation(
+        interp->template_str, 
+        strlen(interp->template_str)
+    );
+    
+    // Compile arguments
+    uint8_t arg_regs[32];
+    for (int i = 0; i < interp->arg_count; i++) {
+        arg_regs[i] = compileExpression(compiler, interp->args[i]);
+    }
+    
+    uint8_t result_reg = allocateRegister(compiler);
+    
+    if (tmpl->is_simple) {
+        // Fast path for simple interpolation
+        emitByte(compiler, OP_STRING_INTERPOLATE_SIMPLE_R);
+        emitByte(compiler, result_reg);
+        emitShort(compiler, add_constant(compiler->chunk, PTR_VAL(tmpl)));
+        emitByte(compiler, interp->arg_count);
+        
+        for (int i = 0; i < interp->arg_count; i++) {
+            emitByte(compiler, arg_regs[i]);
+        }
+    }
+    
+    // Free argument registers
+    for (int i = 0; i < interp->arg_count; i++) {
+        freeRegister(compiler, arg_regs[i]);
+    }
+    
+    return result_reg;
+}
+
+// Opcodes for print operations
+typedef enum {
+    OP_PRINT_R,                    // print_reg
+    OP_PRINT_MULTI_R,             // first_reg, count
+    OP_PRINT_NO_NEWLINE_R,        // print_reg (no newline)
+    OP_STRING_INTERPOLATE_SIMPLE_R, // dst, template, arg_count, args...
+} PrintOpcodes;
+
+// Register built-in functions
+static void register_builtin_functions(VM* vm) {
+    // Standard print function
+    define_native_function(vm, "print", -1, native_print);
+    define_native_function(vm, "print_no_newline", -1, native_print_no_newline);
+    
+    // Debug and error variants
+    define_native_function(vm, "debug_print", -1, native_debug_print);
+    define_native_function(vm, "error_print", -1, native_error_print);
+}
+```
+
 ---
 
 ## 📋 Phase 2: Control Flow & Functions (Weeks 5-8)
@@ -552,7 +695,274 @@ static void compileForRange(Compiler* compiler, ASTNode* node) {
 }
 ```
 
-### 2.3 Function Implementation
+### 2.3 Main Function Entry Point
+
+#### Program Entry Point Infrastructure
+```c
+// Main function discovery and execution
+typedef struct {
+    ObjFunction* main_function;
+    bool has_main;
+    bool main_has_args;
+    int main_arity;
+} ProgramEntryPoint;
+
+// VM entry point management
+typedef struct {
+    ProgramEntryPoint entry;
+    char** command_line_args;
+    int arg_count;
+    int exit_code;
+} ProgramContext;
+
+// Opcodes for main function handling
+typedef enum {
+    OP_PROGRAM_START,      // Initialize program context
+    OP_CALL_MAIN,          // Call main function with args
+    OP_PROGRAM_EXIT,       // Exit with code
+    OP_SET_EXIT_CODE,      // Set program exit code
+} MainOpcodes;
+```
+
+#### Main Function Detection and Compilation
+```c
+// Detect and validate main function during compilation
+static bool detect_main_function(Compiler* compiler, ASTNode* func_node) {
+    FunctionNode* func = &func_node->function;
+    
+    if (strcmp(func->name, "main") != 0) {
+        return false;
+    }
+    
+    // Validate main function signatures
+    if (func->param_count == 0) {
+        // fn main: - parameterless main
+        compiler->program.entry.main_has_args = false;
+        compiler->program.entry.main_arity = 0;
+    } else if (func->param_count == 1) {
+        // fn main(args: [string]): - main with command line args
+        Type* param_type = func->param_types[0];
+        if (!is_string_array_type(param_type)) {
+            error(compiler, "Main function parameter must be [string] type");
+            return false;
+        }
+        compiler->program.entry.main_has_args = true;
+        compiler->program.entry.main_arity = 1;
+    } else {
+        error(compiler, "Main function can have 0 or 1 parameters only");
+        return false;
+    }
+    
+    // Validate return type (optional)
+    if (func->return_type && !is_void_type(func->return_type) && 
+        !is_int_type(func->return_type)) {
+        error(compiler, "Main function must return void or int");
+        return false;
+    }
+    
+    compiler->program.entry.has_main = true;
+    return true;
+}
+
+// Compile main function with special handling
+static void compile_main_function(Compiler* compiler, ASTNode* func_node) {
+    FunctionNode* func = &func_node->function;
+    
+    // Create main function compiler context
+    Compiler main_compiler;
+    init_compiler(&main_compiler, compiler->vm);
+    main_compiler.is_main_function = true;
+    
+    // Enter main function scope
+    enter_scope(&main_compiler);
+    
+    // Handle command line arguments if present
+    if (compiler->program.entry.main_has_args) {
+        uint8_t args_reg = allocate_register(&main_compiler);
+        emit_byte(&main_compiler, OP_LOAD_ARGS_R);
+        emit_byte(&main_compiler, args_reg);
+        
+        declare_local(&main_compiler, func->param_names[0], args_reg, false);
+    }
+    
+    // Compile main function body
+    for (int i = 0; i < func->body->statement_count; i++) {
+        compile_statement(&main_compiler, func->body->statements[i]);
+    }
+    
+    // Implicit return if no explicit return
+    if (!ends_with_return(func->body)) {
+        if (func->return_type && is_int_type(func->return_type)) {
+            // Return 0 by default for int main
+            uint8_t zero_reg = allocate_register(&main_compiler);
+            emit_constant(&main_compiler, INT_VAL(0));
+            emit_byte(&main_compiler, OP_SET_EXIT_CODE);
+            emit_byte(&main_compiler, zero_reg);
+            free_register(&main_compiler, zero_reg);
+        }
+        emit_byte(&main_compiler, OP_RETURN_VOID);
+    }
+    
+    // Create main function object
+    ObjFunction* main_func = new_function();
+    main_func->name = strdup("main");
+    main_func->arity = compiler->program.entry.main_arity;
+    main_func->chunk = main_compiler.chunk;
+    main_func->is_main = true;
+    
+    // Register as program entry point
+    compiler->program.entry.main_function = main_func;
+    
+    exit_scope(&main_compiler);
+}
+
+// Generate program startup code
+static void generate_program_startup(Compiler* compiler) {
+    if (!compiler->program.entry.has_main) {
+        error(compiler, "No main function found - every Orus program must have a main function");
+        return;
+    }
+    
+    // Generate VM startup sequence
+    emit_byte(compiler, OP_PROGRAM_START);
+    
+    // Call main function
+    if (compiler->program.entry.main_has_args) {
+        emit_byte(compiler, OP_CALL_MAIN_WITH_ARGS);
+    } else {
+        emit_byte(compiler, OP_CALL_MAIN);
+    }
+    
+    // Program exit
+    emit_byte(compiler, OP_PROGRAM_EXIT);
+    
+    // Store main function reference
+    int main_const = add_constant(compiler->chunk, 
+                                 FUNCTION_VAL(compiler->program.entry.main_function));
+    emit_short(compiler, main_const);
+}
+```
+
+#### VM Runtime Support for Main Function
+```c
+// VM execution of main function
+static InterpretResult vm_execute_main(VM* vm, ObjFunction* main_func, 
+                                      char** args, int arg_count) {
+    // Set up call frame for main
+    CallFrame* frame = &vm->frames[vm->frame_count++];
+    frame->function = main_func;
+    frame->ip = main_func->chunk->code;
+    frame->slots = vm->stack_top;
+    
+    // Prepare command line arguments if needed
+    if (main_func->arity > 0) {
+        // Create string array for arguments
+        ObjArray* arg_array = new_array();
+        for (int i = 0; i < arg_count; i++) {
+            Value arg_val = STRING_VAL(copy_string(args[i], strlen(args[i])));
+            array_push(arg_array, arg_val);
+        }
+        
+        // Push to VM stack
+        push(vm, ARRAY_VAL(arg_array));
+    }
+    
+    // Execute main function
+    InterpretResult result = vm_run(vm);
+    
+    // Handle main function return value
+    if (result == INTERPRET_OK) {
+        if (main_func->return_type && is_int_type(main_func->return_type)) {
+            Value return_val = pop(vm);
+            if (IS_INT(return_val)) {
+                vm->exit_code = AS_INT(return_val);
+            }
+        }
+    }
+    
+    return result;
+}
+
+// Program entry point for VM
+int orus_main(int argc, char** argv) {
+    VM vm;
+    init_vm(&vm);
+    
+    // Compile program
+    CompilationResult result = compile_file(argv[1]);
+    if (result.status != COMPILE_SUCCESS) {
+        fprintf(stderr, "Compilation failed\n");
+        return 1;
+    }
+    
+    // Find main function
+    ObjFunction* main_func = result.program->entry.main_function;
+    if (!main_func) {
+        fprintf(stderr, "No main function found\n");
+        return 1;
+    }
+    
+    // Execute main with command line arguments
+    char** prog_args = &argv[1];  // Skip program name
+    int prog_arg_count = argc - 1;
+    
+    InterpretResult exec_result = vm_execute_main(&vm, main_func, 
+                                                 prog_args, prog_arg_count);
+    
+    int exit_code = vm.exit_code;
+    free_vm(&vm);
+    
+    if (exec_result == INTERPRET_COMPILE_ERROR) return 65;
+    if (exec_result == INTERPRET_RUNTIME_ERROR) return 70;
+    
+    return exit_code;
+}
+```
+
+#### High-Performance Main Function Optimizations
+```c
+// Fast path for parameterless main functions
+static inline InterpretResult vm_execute_main_fast(VM* vm, ObjFunction* main_func) {
+    // Skip argument preparation for parameterless main
+    if (main_func->arity == 0) {
+        // Direct function call without argument setup
+        CallFrame* frame = &vm->frames[vm->frame_count++];
+        frame->function = main_func;
+        frame->ip = main_func->chunk->code;
+        frame->slots = vm->stack_top;
+        
+        return vm_run(vm);
+    }
+    
+    // Fallback to full argument handling
+    return vm_execute_main(vm, main_func, NULL, 0);
+}
+
+// Compile-time main function validation
+static bool validate_main_function_at_compile_time(Compiler* compiler, 
+                                                   FunctionNode* main_func) {
+    // Check for common main function errors
+    if (main_func->is_generic) {
+        error(compiler, "Main function cannot be generic");
+        return false;
+    }
+    
+    if (main_func->is_recursive) {
+        warning(compiler, "Recursive main function detected - unusual pattern");
+    }
+    
+    // Analyze main function complexity for startup optimization
+    int complexity = analyze_function_complexity(main_func);
+    if (complexity > MAIN_COMPLEXITY_THRESHOLD) {
+        suggestion(compiler, 
+                  "Consider moving complex logic from main to separate functions for faster startup");
+    }
+    
+    return true;
+}
+```
+
+### 2.4 Function Implementation
 
 #### Function Representation
 ```c
