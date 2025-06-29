@@ -36,7 +36,12 @@ Select from:
 6. Orus vs Lua comparison
 7. Stress test
 8. All benchmarks (comprehensive)
-9. Compare all languages (Python + JavaScript + Lua)
+9. **Compare all languages (Python + JavaScript + Lua)** ⭐
+
+**To run all benchmarks at once:**
+```bash
+echo "9" | ./quick_bench.sh  # Auto-select option 9
+```
 
 ### Individual Benchmarks
 
@@ -120,3 +125,4 @@ JavaScript: ~27.8ms  (12.6x slower)
 3. 🥉 Python       - Interpreted, stack-based VM
 4. � JavaScript   - V8 JIT overhead for short-running scripts
 ```
+![alt text](image.png)

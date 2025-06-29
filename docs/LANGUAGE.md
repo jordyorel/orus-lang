@@ -6,33 +6,21 @@ This guide introduces a simplified and elegant Orus syntax inspired by Python, V
 
 ## 🚀 Getting Started
 
-A simple program prints text using the built-in `print` function:
-
 ```orus
 fn main:
     print("Hello, Orus!")
-```
-
-Or as a one-liner:
-
-```orus
-fn main: print("Hello, Orus!")
 ```
 
 ---
 
 ## 🧳 Variables and Mutability
 
-```orus
-let number: i32 = 5       # immutable
-let mut count = 0         # mutable, inferred type
-```
+All variables default to `i32` unless an explicit type is provided.
 
 ```orus
-fn demo:
-    let mut value = 1
-    value = 2       # ✅ allowed
-    # value = 3.0   # ❌ type mismatch
+let number = 5           # inferred as i32
+let flag: bool = true    # explicitly bool
+let mut count = 0        # mutable, inferred as i32
 ```
 
 ---
@@ -60,13 +48,20 @@ elif n == 0:
     print("zero")
 else:
     print("negative")
+
+# Inline conditionals (supports if, elif, else)
+print("ok") if x == 1 elif x == 2 else print("fallback")
+
+# Ternary expression assignment
+let label = x > 0 ? "positive" : "non-positive"
 ```
 
-Inline expression:
+print("ok") if x == 1 elif x == 2 else print("fallback")
 
-```orus
-print("positive") if n > 0 else print("non-positive")
 ```
+```
+
+````
 
 ### Loops
 
@@ -76,35 +71,19 @@ for i in 0..5:
 
 while condition:
     print("looping")
-```
+
+break     # exits the nearest loop
+continue  # skips to the next iteration
+````
 
 ---
 
 ## 📊 Functions
 
-### Multi-line:
-
-```orus
-fn add(a: i32, b: i32) -> i32:
-    return a + b
-```
-
-Or without `return`:
-
 ```orus
 fn add(a: i32, b: i32) -> i32:
     a + b
-```
 
-### One-liner:
-
-```orus
-fn square(x: i32) -> i32: x * x
-```
-
-### No return value:
-
-```orus
 fn greet(name: string):
     print("Hello, {}!", name)
 ```
@@ -137,10 +116,12 @@ enum Status:
     NotFound
     Error(message: string)
 
-fn check(val: i32) -> Status:
-    if val > 0: Status.Ok
-    elif val == 0: Status.NotFound
-    else: Status.Error("Negative value")
+impl Status:
+    fn is_ok(self): self matches Status.Ok
+    fn unwrap(self):
+        match self:
+            Status.Ok(v): v
+            Status.Error(msg): panic("Unwrapped error: {}", msg)
 ```
 
 ---
@@ -149,12 +130,9 @@ fn check(val: i32) -> Status:
 
 ```orus
 match value:
-    0:
-        print("zero")
-    1:
-        print("one")
-    _:
-        print("other")
+    0: print("zero")
+    1: print("one")
+    _: print("other")
 ```
 
 ---
@@ -170,52 +148,390 @@ catch err:
 
 ---
 
-## 🧲 Best Practices
+## 📒 Arrays
 
-* Use `:` instead of `{}` for function and block headers.
-* Indentation determines block scope.
-* Favor immutable bindings; use `let mut` only when needed.
-* Final expression in a function can be returned implicitly.
-* Use inline `if` for concise conditions.
-* Prefer clear module and type naming conventions.
+```orus
+let nums: [i32; 3] = [1, 2, 3]
+let zeros = [0; 5]
+let slice = nums[0..2]
 
----
+let dynamic: [i32] = []
+push(dynamic, 42)
+pop(dynamic)
 
-## 🎉 Future Roadmap for Performance & Features
+for val in nums:
+    print(val)
 
-### ⌚ Immediate (1–2 weeks)
-
-* ✅ String interning (`OP_STRING_INTERN_R`) for faster equality checks
-* ✅ Fused loop opcodes (`OP_FOR_RANGE_R`) for tighter loops
-* ✅ Object memory pooling for small-size structs
-
-### ⏳ Short-Term (2–4 weeks)
-
-* ⚖️ Inline caching for property access (hidden class model)
-* ➕ Add shape-versioning to structs for fast field resolution
-* ➕ Type-specialized opcodes (e.g., `OP_ARRAY_SUM_I32_R`) with SIMD
-
-### ⚖️ Medium-Term (1–2 months)
-
-* 🚀 Add method-based JIT compiler for hot paths
-* ⚖️ Add concurrent generational GC with nursery promotion
-* ⛏ Rope strings, SSO (small string optimization), and SIMD string ops
-* 🧰 JSON parser in C for microbenchmarks
-
-### 📈 Optimization per Benchmark
-
-* **Numeric**: already 12.37x JS, continue adding SIMD vector ops
-* **Strings**: ropes, SIMD search, interned strings
-* **Objects**: inline caching + shape maps
-* **Regex**: compile to DFA + SIMD matching
-
-### 🔮 Strategic Features
-
-* 🔄 Precompile `std` to memory-mapped bytecode
-* ⚖️ Zero-init standard globals at launch
-* ⚖️ Trace compilation or PGO for real-world speed
-* 🌍 Dynamic types with `dyn` keyword only for scripting mode
+let evens = [x for x in nums if x % 2 == 0]
+```
 
 ---
 
-This guide will continue evolving as Orus matures. See `docs/TUTORIAL.md` and `tests/` for more examples.
+## 📐 Generics
+
+```orus
+fn identity<T>(x: T) -> T:
+    x
+
+struct Box<T>:
+    value: T
+
+fn main:
+    let a = identity<i32>(5)
+    let b: Box<string> = Box{ value: "hi" }
+```
+
+With constraints:
+
+```orus
+fn add<T: Numeric>(a: T, b: T) -> T:
+    a + b
+
+fn min<T: Comparable>(a: T, b: T) -> T:
+    a if a < b else b
+```
+
+---
+
+## 📂 Modules
+
+Importing entire modules:
+
+```orus
+use math
+use datetime as dt
+
+dt.now()
+math.pi
+```
+
+Wildcard import:
+
+```orus
+use math:*
+sin(0.5)
+cos(1.0)
+```
+
+Selective import:
+
+```orus
+use math: sin, cos, tan
+print(sin(0.5))
+```
+
+Module aliases:
+
+```orus
+use utils.helpers as h
+h.do_something()
+```
+
+Public function or struct in module:
+
+```orus
+# utils.orus
+pub fn helper():
+    print("from helper")
+
+# main.orus
+use utils
+
+fn main:
+    utils.helper()
+```
+
+---
+
+## 🔧 Built-in Functions
+
+### Printing
+
+```orus
+print("Hello")
+print("x = {}", x)
+```
+
+### Arrays
+
+```orus
+push(arr, value)
+pop(arr)
+reserve(arr, capacity)
+len(arr)
+sorted(arr)
+```
+
+### Strings
+
+```orus
+substring(s, start, len)
+input(prompt)
+```
+
+### Type utilities
+
+```orus
+type_of(x)
+is_type(x, "i32")
+```
+
+### Conversion
+
+```orus
+int("42")
+float("3.14")
+```
+
+### Ranges
+
+```orus
+range(1, 5)       # [1, 2, 3, 4]
+```
+
+### Math helpers (from std):
+
+```orus
+sum(arr)
+min(arr)
+max(arr)
+```
+
+### Time
+
+```orus
+timestamp()       # returns milliseconds
+```
+
+---
+
+## 🧪 Interactive Examples & Quizzes
+
+### 🔍 Operator Precedence Quiz
+
+What is the result of the following?
+
+```orus
+let x = 1
+let y = 2
+let result = x > 0 ? x + y : x + y * 2
+print(result)
+```
+
+**Hint:** Multiplication binds tighter than addition, and ternary has the lowest precedence.
+
+Try rewriting with parentheses to clarify behavior.
+
+### 🧠 Type Inference Exercise
+
+```orus
+let a = 10
+let b = 3.0
+let c = a + b
+print(type_of(c))
+```
+
+What will `type_of(c)` print? Why?
+
+### ❗Casting Safety
+
+Guess whether each line is valid or will error:
+
+```orus
+let good = 42 as string
+let fail = "abc" as i32
+```
+
+**Try It:** Comment/uncomment lines and run in the REPL.
+
+---
+
+## 🪡 Type System and Casting
+
+### Operators
+
+Orus supports the following operators:
+
+### Unary Operators
+
+* `-x` — negation
+* `!x` or `not x` — logical NOT
+
+Examples:
+
+```orus
+let a = -5
+let b = not true
+let c = !false
+```
+
+### Short-Circuit Behavior
+
+Logical operators `and` and `or` short-circuit:
+
+* `and` stops at the first false
+* `or` stops at the first true
+
+```orus
+let result = expensive_call() and false  # never runs
+let check = true or expensive_call()     # never runs
+```
+
+**Arithmetic:**
+
+```orus
++   -   *   /   %   //   # floor division
+```
+
+**Comparison:**
+
+```orus
+<   <=   >   >=   ==   !=
+```
+
+**Logical:**
+
+```orus
+and   or   not
+```
+
+**Bitwise:**
+
+```orus
+&   |   ^   <<   >>
+```
+
+### Operator Precedence (highest to lowest)
+
+> **Note:** The ternary conditional operator `? :` has lower precedence than logical operators `and` and `or`. Use parentheses to clarify when mixing ternary and logical expressions.
+
+\| Precedence | Operators           | Description            | Associativity        | Description            | Associativity        |
+\|------------|---------------------|------------------------|
+\| 1          | `()`                | Grouping               | left-to-right        |
+\| 2          | `!`, `not`          | Unary                  | right-to-left        |
+\| 3          | `*`, `/`, `%`, `//` | Arithmetic             | left-to-right        |
+\| 4          | `+`, `-`            | Arithmetic             | left-to-right        |
+\| 5          | `<<`, `>>`          | Bitwise shift          | left-to-right        |
+\| 6          | `&`                 | Bitwise AND            | left-to-right        |
+\| 7          | `^`                 | Bitwise XOR            | left-to-right        |
+\| 8          | `|`                 | Bitwise OR             | left-to-right        |
+\| 9          | `<`, `>`, `<=`, `>=`, `==`, `!=` | Comparison | left-to-right |
+\| 10         | `and`               | Logical AND            | left-to-right        |
+\| 11         | `or`                | Logical OR             | left-to-right        |
+\| 12         | `? :`               | Ternary conditional     | right-to-left        |
+
+### Primitive Types
+
+* `i32`, `i64` – signed integers
+* `u32`, `u64` – unsigned integers
+* `f64` – floating-point
+* `bool` – `true` or `false`
+* `string` – UTF-8 text
+* `void` – no value (function return)
+* `nil` – explicit null value
+
+### Parentheses and Grouping
+
+### Visual Operator Hierarchy (from tightest to loosest)
+
+```
+ ┌─────────────────────────────┐
+ │       () grouping          │
+ │     !, not (unary)         │
+ │   *, /, %, //              │
+ │   +, -                     │
+ │   <<, >>                   │
+ │   &, ^, | (bitwise ops)    │
+ │   ==, !=, <, >, <=, >=     │
+ │   and                      │
+ │   or                       │
+ │   ? : (ternary)            │
+ └─────────────────────────────┘
+```
+
+### Common Operator Mistakes
+
+* **Ternary binds looser than logical operators**:
+
+  ```orus
+  let result = x > 0 ? a : b and c  # wrong: `b and c` is grouped
+  let result = x > 0 ? a : (b and c)  # ✅ correct
+  ```
+
+* **Mixing `not` with comparisons without parentheses**:
+
+  ```orus
+  let ok = not x == 1      # wrong: means `(not x) == 1`
+  let ok = not (x == 1)    # ✅ correct
+  ```
+
+* **Chained comparisons don't work like in Python**:
+
+  ```orus
+  if 0 < x < 10: ...        # ❌ invalid
+  if x > 0 and x < 10: ...  # ✅ correct
+  ```
+
+* **Unintended precedence between `or` and ternary**:
+
+  ```orus
+  let res = cond ? a : b or c   # actually means `cond ? a : (b or c)`
+  ```
+
+### Precedence Error Example
+
+```orus
+# Misleading: 'x > 0 ? a : b and c' actually binds as:
+x > 0 ? a : (b and c)
+
+# Better: use parentheses
+let result = x > 0 ? a : (b and c)
+```
+
+Parentheses can override default precedence and ensure clarity:
+
+```orus
+let result = (a > 0 and b > 0) ? "ok" : "fail"
+let safe = not (x == 1 or y == 2)
+```
+
+Without parentheses, expressions follow the precedence table above.
+
+### Type Inference
+
+Variables default to `i32` unless otherwise specified. Literal suffixes (`u`, `f64`, etc.) can override the default.
+
+```orus
+let x = 10          # i32
+let y = 10000000000u  # u64
+let z = 3.14        # f64
+```
+
+### Type Casting
+
+Use `as` to convert between types:
+
+```orus
+let a: i32 = -5
+let b: u32 = a as u32
+let c: f64 = a as f64
+let d: string = a as string
+```
+
+### Casting Rules
+
+* **Int to float**: valid, may lose precision
+* **Float to int**: truncates toward zero
+* **Int to bool**: 0 is `false`, non-zero is `true`
+* **Bool to int**: `true` → `1`, `false` → `0`
+* **All types** can be cast to `string` using `as string`
+* **Invalid casts** (e.g. `string` → `i32`) raise runtime errors
+
+```orus
+let b: bool = 0 as bool
+let s = 123 as string
+```
+
+---
+
+This version reflects all updated features including enums, arrays, generics, modules, loops, built-ins, and the type system with casting rules using indentation-based syntax.
