@@ -154,11 +154,29 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             return compiler->locals[localIndex].reg;
         }
         case NODE_PRINT: {
-            int reg = compileExpressionToRegister(node->print.value, compiler);
-            if (reg < 0) return -1;
-            emitByte(compiler, OP_PRINT_R);
-            emitByte(compiler, (uint8_t)reg);
-            return reg;
+            if (node->print.count == 0) return 0;
+            uint8_t regs[32];
+            for (int i = 0; i < node->print.count; i++) {
+                int src = compileExpressionToRegister(node->print.values[i], compiler);
+                if (src < 0) return -1;
+                uint8_t dest = allocateRegister(compiler);
+                regs[i] = dest;
+                if (src != dest) {
+                    emitByte(compiler, OP_MOVE);
+                    emitByte(compiler, dest);
+                    emitByte(compiler, (uint8_t)src);
+                    if (src >= compiler->localCount)
+                        freeRegister(compiler, (uint8_t)src);
+                }
+            }
+            emitByte(compiler, OP_PRINT_MULTI_R);
+            emitByte(compiler, regs[0]);
+            emitByte(compiler, (uint8_t)node->print.count);
+            emitByte(compiler, node->print.newline ? 1 : 0);
+            for (int i = 0; i < node->print.count; i++) {
+                freeRegister(compiler, regs[i]);
+            }
+            return regs[0];
         }
         default:
             return -1;

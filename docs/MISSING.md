@@ -41,7 +41,7 @@ Build a language that combines Python's readability, Rust's safety, and Lua's pe
 - [x] Implement string object allocation in compiler
 - [x] Add string concatenation operator (`+`)
 - [x] Implement string comparison operators
-- [ ] Add string interpolation support
+ - [x] Add string interpolation support
 
 
 ### 1.2 Built-in Functions (Print & I/O)
@@ -71,12 +71,12 @@ print("continues here")
 
 **Implementation Requirements:**
 - [x] Basic `print(value)` statement with newline
-- [ ] Parse `print()` function calls with variable arguments
-- [ ] Support printing all basic types (i32, f64, bool, string)
-- [ ] Implement string interpolation with `{}` placeholders
-- [ ] Handle escape sequences (`\n`, `\t`, `\"`, `\\`)
-- [ ] Add `print_no_newline()` variant for precise output control
-- [ ] Format numbers and booleans for display
+- [x] Parse `print()` function calls with variable arguments
+- [x] Support printing all basic types (i32, f64, bool, string)
+- [x] Implement string interpolation with `{}` placeholders
+- [x] Handle escape sequences (`\n`, `\t`, `\"`, `\\`)
+- [x] Add `print_no_newline()` variant for precise output control
+- [x] Format numbers and booleans for display
 
 ### 1.3 String Interpolation System
 **Priority: 🔥 High**

@@ -348,6 +348,7 @@ typedef enum {
     OP_RETURN_VOID,
 
     // I/O
+    OP_PRINT_MULTI_R,  // first_reg, count, newline_flag
     OP_PRINT_R,        // reg
     OP_PRINT_NO_NL_R,  // reg
 
@@ -468,6 +469,7 @@ typedef enum {
 #define AS_STRING(value) ((ObjString*)(value).as.obj)
 #define AS_ARRAY(value) ((ObjArray*)(value).as.obj)
 #define AS_ERROR(value) ((ObjError*)(value).as.obj)
+#define AS_RANGE_ITERATOR(value) ((ObjRangeIterator*)(value).as.obj)
 
 #define IS_BOOL(value) ((value).type == VAL_BOOL)
 #define IS_NIL(value) ((value).type == VAL_NIL)
@@ -479,6 +481,7 @@ typedef enum {
 #define IS_STRING(value) ((value).type == VAL_STRING)
 #define IS_ARRAY(value) ((value).type == VAL_ARRAY)
 #define IS_ERROR(value) ((value).type == VAL_ERROR)
+#define IS_RANGE_ITERATOR(value) ((value).type == VAL_RANGE_ITERATOR)
 
 // Function declarations
 void initVM(void);

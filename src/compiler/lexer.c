@@ -177,6 +177,8 @@ static TokenType identifier_type(const char* start, int length) {
         case 'p':
             if (length == 5 && memcmp(start, "print", 5) == 0)
                 return TOKEN_PRINT;
+            if (length == 15 && memcmp(start, "print_no_newline", 15) == 0)
+                return TOKEN_PRINT_NO_NL;
             if (length == 3 && memcmp(start, "pub", 3) == 0) return TOKEN_PUB;
             break;
         case 'r':

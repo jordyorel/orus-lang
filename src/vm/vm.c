@@ -9,6 +9,7 @@
 #include "compiler.h"
 #include "parser.h"
 #include "memory.h"
+#include "builtins.h"
 #include <time.h>
 #ifdef _WIN32
 #include <windows.h>
@@ -77,6 +78,13 @@ void printValue(Value value) {
         case VAL_ERROR:
             printf("Error: %s", AS_ERROR(value)->message->chars);
             break;
+        case VAL_RANGE_ITERATOR: {
+            ObjRangeIterator* it = AS_RANGE_ITERATOR(value);
+            printf("range(%lld..%lld)",
+                   (long long)it->current,
+                   (long long)it->end);
+            break;
+        }
         default:
             printf("<unknown>");
     }
@@ -251,6 +259,7 @@ static InterpretResult run(void) {
         dispatchTable[OP_JUMP] = &&LABEL_OP_JUMP;
         dispatchTable[OP_JUMP_IF_NOT_R] = &&LABEL_OP_JUMP_IF_NOT_R;
         dispatchTable[OP_LOOP] = &&LABEL_OP_LOOP;
+        dispatchTable[OP_PRINT_MULTI_R] = &&LABEL_OP_PRINT_MULTI_R;
         dispatchTable[OP_PRINT_R] = &&LABEL_OP_PRINT_R;
         dispatchTable[OP_PRINT_NO_NL_R] = &&LABEL_OP_PRINT_NO_NL_R;
         dispatchTable[OP_RETURN_R] = &&LABEL_OP_RETURN_R;
@@ -608,6 +617,14 @@ LABEL_OP_JUMP_IF_NOT_R: {
 LABEL_OP_LOOP: {
         uint16_t offset = READ_SHORT();
         vm.ip -= offset;
+        DISPATCH();
+    }
+
+LABEL_OP_PRINT_MULTI_R: {
+        uint8_t first = READ_BYTE();
+        uint8_t count = READ_BYTE();
+        uint8_t nl = READ_BYTE();
+        builtin_print(&vm.registers[first], count, nl != 0);
         DISPATCH();
     }
 
