@@ -16,7 +16,7 @@ INCLUDES = -I$(INCDIR)
 
 # Source files
 CORE_SRCS =
-COMPILER_SRCS = $(SRCDIR)/compiler/compiler.c $(SRCDIR)/compiler/lexer.c
+COMPILER_SRCS = $(SRCDIR)/compiler/compiler.c $(SRCDIR)/compiler/lexer.c $(SRCDIR)/compiler/parser.c
 VM_SRCS = $(SRCDIR)/vm/vm.c
 MAIN_SRC = $(SRCDIR)/main.c
 
