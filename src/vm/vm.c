@@ -304,15 +304,17 @@ static InterpretResult run(void) {
 
                 int32_t a = AS_I32(vm.registers[src1]);
                 int32_t b = AS_I32(vm.registers[src2]);
+#if USE_FAST_ARITH
+                vm.registers[dst] = I32_VAL(a + b);
+#else
                 int32_t result;
-
                 if (__builtin_add_overflow(a, b, &result)) {
                     runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
                                  "Integer overflow");
                     RETURN(INTERPRET_RUNTIME_ERROR);
                 }
-
                 vm.registers[dst] = I32_VAL(result);
+#endif
                 break;
             }
 
@@ -330,15 +332,17 @@ static InterpretResult run(void) {
 
                 int32_t a = AS_I32(vm.registers[src1]);
                 int32_t b = AS_I32(vm.registers[src2]);
+#if USE_FAST_ARITH
+                vm.registers[dst] = I32_VAL(a - b);
+#else
                 int32_t result;
-
                 if (__builtin_sub_overflow(a, b, &result)) {
                     runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
                                  "Integer overflow");
                     RETURN(INTERPRET_RUNTIME_ERROR);
                 }
-
                 vm.registers[dst] = I32_VAL(result);
+#endif
                 break;
             }
 
@@ -356,15 +360,17 @@ static InterpretResult run(void) {
 
                 int32_t a = AS_I32(vm.registers[src1]);
                 int32_t b = AS_I32(vm.registers[src2]);
+#if USE_FAST_ARITH
+                vm.registers[dst] = I32_VAL(a * b);
+#else
                 int32_t result;
-
                 if (__builtin_mul_overflow(a, b, &result)) {
                     runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
                                  "Integer overflow");
                     RETURN(INTERPRET_RUNTIME_ERROR);
                 }
-
                 vm.registers[dst] = I32_VAL(result);
+#endif
                 break;
             }
 

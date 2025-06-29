@@ -93,7 +93,7 @@ The VM is compiled with several optimizations enabled by default:
 
 - **Computed Goto Dispatch** – eliminates the dispatch switch and uses a jump
   table for faster instruction decoding.
-- **Fast Arithmetic** – skips overflow checks for integer math.
+- **Fast Arithmetic** – integer operations wrap on overflow with no checks.
 - **Memory Pool** – reuses freed VM objects to reduce allocation overhead.
 
 Simply run `make` to build the optimized VM:
