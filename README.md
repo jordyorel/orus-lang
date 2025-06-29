@@ -37,6 +37,10 @@ Execute code from a file.
 ```
 Shows register states and instruction execution.
 
+### 5. Indentation-Based Syntax
+The lexer supports `INDENT` and `DEDENT` tokens, preparing Orus for the new
+colon-driven syntax outlined in [LANGUAGE.md](docs/LANGUAGE.md).
+
 ## Build Instructions
 
 ```bash
