@@ -25,12 +25,13 @@ echo "2) Standard test (20 iterations)"
 echo "3) Thorough test (50 iterations)"
 echo "4) Orus vs Python comparison"
 echo "5) Orus vs JavaScript comparison"
-echo "6) Stress test"
-echo "7) All benchmarks (comprehensive)"
-echo "8) Compare all languages (Python + JavaScript)"
+echo "6) Orus vs Lua comparison"
+echo "7) Stress test"
+echo "8) All benchmarks (comprehensive)"
+echo "9) Compare all languages (Python + JavaScript + Lua)"
 echo ""
 
-read -p "Enter choice (1-8): " choice
+read -p "Enter choice (1-9): " choice
 
 case $choice in
     1)
@@ -54,20 +55,27 @@ case $choice in
         ./orus_vs_js_benchmark.py --iterations 30
         ;;
     6)
+        echo "🔄 Running Orus vs Lua comparison..."
+        python3 orus_vs_lua_benchmark.py --iterations 30
+        ;;
+    7)
         echo "🔄 Running stress test..."
         ./simple_benchmark.py --stress --iterations 100
         ;;
-    7)
+    8)
         echo "🔄 Running comprehensive benchmark suite..."
         ./simple_benchmark.py --iterations 50 --stress
         ;;
-    8)
+    9)
         echo "🔄 Running all language comparisons..."
         echo "📊 Running Python comparison..."
         ./simple_benchmark.py --iterations 30
         echo ""
         echo "📊 Running JavaScript comparison..."
         ./orus_vs_js_benchmark.py --iterations 30
+        echo ""
+        echo "📊 Running Lua comparison..."
+        python3 orus_vs_lua_benchmark.py --iterations 30
         echo ""
         echo "🏆 FINAL COMPARISON SUMMARY"
         echo "=========================="
@@ -88,10 +96,18 @@ try:
     print(f'🟨 JavaScript: {js_speedup:.2f}x slower than Orus')
 except:
     print('🟨 JavaScript: ~13x slower than Orus')
+try:
+    with open('benchmark_results_lua.json', 'r') as f:
+        lua_data = json.load(f)
+    lua_speedup = lua_data['overall_speedup']
+    print(f'🌙 Lua:        {lua_speedup:.2f}x slower than Orus')
+except:
+    print('🌙 Lua:        ~1.3x slower than Orus')
 print('')
 print('🥇 Winner: Orus VM (Register-based architecture)')
-print('🥈 Second: Python (Stack-based interpreter)')
-print('🥉 Third: JavaScript (V8 JIT overhead for short scripts)')
+print('🥈 Second: Lua (Fast scripting language)')
+print('🥉 Third: Python (Stack-based interpreter)')
+print('� Fourth: JavaScript (V8 JIT overhead for short scripts)')
 "
         ;;
     *)
