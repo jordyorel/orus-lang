@@ -4,14 +4,18 @@
 #include <unistd.h>
 
 #include "vm.h"
+#include "common.h"
+#include "compiler.h"
 
 // Global VM instance
-OrusVM vm;
+VM vm;
 
 // Forward declarations
-InterpretResult run(void);
+static InterpretResult run(void);
 static void runtimeError(ErrorType type, SrcLocation location,
                          const char* format, ...);
+bool compileExpression(ASTNode* node, Compiler* compiler);
+int compileExpressionToRegister(ASTNode* node, Compiler* compiler);
 
 // Memory allocation macros
 #define GROW_CAPACITY(capacity) ((capacity) < 8 ? 8 : (capacity) * 2)
@@ -22,7 +26,7 @@ static void runtimeError(ErrorType type, SrcLocation location,
     reallocate(pointer, sizeof(type) * (oldCount), 0)
 
 // Memory management
-void* reallocate(void* pointer, size_t oldSize, size_t newSize) {
+static void* reallocate(void* pointer, size_t oldSize, size_t newSize) {
     vm.bytesAllocated += newSize - oldSize;
 
     if (newSize == 0) {
@@ -43,25 +47,33 @@ void* reallocate(void* pointer, size_t oldSize, size_t newSize) {
 static Obj* allocateObject(size_t size) {
     Obj* object = (Obj*)reallocate(NULL, 0, size);
     object->next = vm.objects;
-    object->marked = false;
+    object->isMarked = false;
     vm.objects = object;
     return object;
 }
 
 ObjString* allocateString(const char* chars, int length) {
     ObjString* string = (ObjString*)allocateObject(sizeof(ObjString));
+    string->obj.type = OBJ_STRING;
     string->length = length;
     string->chars = (char*)malloc(length + 1);
     memcpy(string->chars, chars, length);
     string->chars[length] = '\0';
 
-
+    // Simple hash
+    uint32_t hash = 2166136261u;
+    for (int i = 0; i < length; i++) {
+        hash ^= (uint8_t)chars[i];
+        hash *= 16777619;
+    }
+    string->hash = hash;
 
     return string;
 }
 
 ObjArray* allocateArray(int capacity) {
     ObjArray* array = (ObjArray*)allocateObject(sizeof(ObjArray));
+    array->obj.type = OBJ_ARRAY;
     array->length = 0;
     array->capacity = capacity;
     array->elements = GROW_ARRAY(Value, NULL, 0, capacity);
@@ -71,6 +83,7 @@ ObjArray* allocateArray(int capacity) {
 ObjError* allocateError(ErrorType type, const char* message,
                         SrcLocation location) {
     ObjError* error = (ObjError*)allocateObject(sizeof(ObjError));
+    error->obj.type = OBJ_ERROR;
     error->type = type;
     error->message = allocateString(message, strlen(message));
     error->location.file = location.file;
@@ -216,8 +229,8 @@ void initCompiler(Compiler* compiler, Chunk* chunk, const char* fileName,
     compiler->hadError = false;
 }
 
-int allocateRegister(Compiler* compiler) {
-    if (compiler->nextRegister >= REGISTER_COUNT) {
+uint8_t allocateRegister(Compiler* compiler) {
+    if (compiler->nextRegister >= (REGISTER_COUNT - 1)) {
         compiler->hadError = true;
         return 0;
     }
@@ -230,7 +243,7 @@ int allocateRegister(Compiler* compiler) {
     return reg;
 }
 
-void freeRegister(Compiler* compiler, int reg) {
+void freeRegister(Compiler* compiler, uint8_t reg) {
     // In a simple allocator, we can just decrement if it's the last allocated
     if (reg == compiler->nextRegister - 1) {
         compiler->nextRegister--;
@@ -238,16 +251,16 @@ void freeRegister(Compiler* compiler, int reg) {
 }
 
 // Type system (simplified)
-Type primitiveTypes[TYPE_COUNT];
+static Type primitiveTypes[TYPE_ANY + 1];
 
 void initTypeSystem(void) {
-    for (int i = 0; i <= TYPE_COUNT-1; i++) {
+    for (int i = 0; i <= TYPE_ANY; i++) {
         primitiveTypes[i].kind = (TypeKind)i;
     }
 }
 
 Type* getPrimitiveType(TypeKind kind) {
-    if (kind <= TYPE_COUNT-1) {
+    if (kind <= TYPE_ANY) {
         return &primitiveTypes[kind];
     }
     return NULL;
@@ -317,18 +330,20 @@ void freeObjects(void) {
     while (object != NULL) {
         Obj* next = object->next;
 
-        // Simple approach: try to determine object type by structure
-        // In a proper implementation, objects would have a type field
-        if (((ObjString*)object)->chars != NULL && 
-            ((ObjString*)object)->length >= 0) {
-            // Assume it's a string if it has valid chars and length
-            free(((ObjString*)object)->chars);
-        } else {
-            // Could be an array - attempt to free elements
-            ObjArray* array = (ObjArray*)object;
-            if (array->elements != NULL && array->capacity > 0) {
-                FREE_ARRAY(Value, array->elements, array->capacity);
-            }
+        switch (object->type) {
+            case OBJ_STRING:
+                free(((ObjString*)object)->chars);
+                break;
+            case OBJ_ARRAY:
+                FREE_ARRAY(Value, ((ObjArray*)object)->elements,
+                           ((ObjArray*)object)->capacity);
+                break;
+            case OBJ_ERROR:
+                // ObjError's message is freed when the string is freed
+                break;
+            case OBJ_RANGE_ITERATOR:
+                // No additional cleanup needed
+                break;
         }
 
         free(object);
@@ -359,7 +374,7 @@ static void runtimeError(ErrorType type, SrcLocation location,
     }
 
     ObjError* err = allocateError(type, buffer, location);
-    vm.lastError = (Value){VAL_ERROR, {.error = err}};
+    vm.lastError = ERROR_VAL(err);
 }
 
 // Debug operations
@@ -435,7 +450,7 @@ int disassembleInstruction(Chunk* chunk, int offset) {
 }
 
 // Main execution engine
-InterpretResult run(void) {
+static InterpretResult run(void) {
 #define READ_BYTE() (*vm.ip++)
 #define READ_SHORT() (vm.ip += 2, (uint16_t)((vm.ip[-2] << 8) | vm.ip[-1]))
 #define READ_CONSTANT(index) (vm.chunk->constants.values[index])
@@ -613,6 +628,29 @@ InterpretResult run(void) {
                 break;
             }
 
+            case OP_MOD_I32_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src1 = READ_BYTE();
+                uint8_t src2 = READ_BYTE();
+
+                if (!IS_I32(vm.registers[src1]) ||
+                    !IS_I32(vm.registers[src2])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                 "Operands must be i32");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+
+                int32_t b = AS_I32(vm.registers[src2]);
+                if (b == 0) {
+                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                 "Division by zero");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+
+                vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) % b);
+                break;
+            }
+
             // Comparison operations
             case OP_LT_I32_R: {
                 uint8_t dst = READ_BYTE();
@@ -745,13 +783,18 @@ InterpretResult run(void) {
 }
 
 // Simple compiler for testing
-static void emitByte(Compiler* compiler, uint8_t byte) {
+void emitByte(Compiler* compiler, uint8_t byte) {
     writeChunk(compiler->chunk, byte, 1, 1);
 }
 
-// Note: emitBytes function removed as it was unused
+// For future use
+__attribute__((unused))
+void emitBytes(Compiler* compiler, uint8_t byte1, uint8_t byte2) {
+    emitByte(compiler, byte1);
+    emitByte(compiler, byte2);
+}
 
-static void emitConstant(Compiler* compiler, uint8_t reg, Value value) {
+void emitConstant(Compiler* compiler, uint8_t reg, Value value) {
     int constant = addConstant(compiler->chunk, value);
     if (constant > UINT8_MAX) {
         compiler->hadError = true;
@@ -764,48 +807,49 @@ static void emitConstant(Compiler* compiler, uint8_t reg, Value value) {
 
 // Basic compilation (simplified for testing)
 bool compile(ASTNode* ast, Compiler* compiler, bool isModule) {
-    (void)ast;      // Mark as intentionally unused
-    (void)isModule; // Mark as intentionally unused
+    UNUSED(isModule);
     
-    // This is a simplified compiler for testing
-    // A real implementation would traverse the AST and generate appropriate
-    // instructions
+    if (!ast) {
+        return false;
+    }
 
-    // Example: compile a simple expression like "10 + 20"
-    uint8_t reg1 = allocateRegister(compiler);
-    uint8_t reg2 = allocateRegister(compiler);
-    uint8_t reg3 = allocateRegister(compiler);
-
-    emitConstant(compiler, reg1, I32_VAL(10));
-    emitConstant(compiler, reg2, I32_VAL(20));
-
-    emitByte(compiler, OP_ADD_I32_R);
-    emitByte(compiler, reg3);
-    emitByte(compiler, reg1);
-    emitByte(compiler, reg2);
-
-    emitByte(compiler, OP_PRINT_R);
-    emitByte(compiler, reg3);
-
-    emitByte(compiler, OP_HALT);
-
-    return !compiler->hadError;
+    // Compile the AST node and get the result register
+    int resultReg = compileExpressionToRegister(ast, compiler);
+    
+    // Add print instruction for the final result if it's a standalone expression (not a declaration)
+    if (resultReg >= 0 && !isModule && ast->type != NODE_VAR_DECL) {
+        emitByte(compiler, OP_PRINT_R);
+        emitByte(compiler, (uint8_t)resultReg);
+    }
+    
+    return resultReg >= 0;
 }
 
 // Main interpretation functions
 InterpretResult interpret(const char* source) {
-    // For testing, create a simple chunk directly
+    // Create a chunk for the compiled bytecode
     Chunk chunk;
     initChunk(&chunk);
 
     Compiler compiler;
-    initCompiler(&compiler, &chunk, "<test>", source);
+    initCompiler(&compiler, &chunk, "<repl>", source);
 
-    // Compile the source (simplified for testing)
-    if (!compile(NULL, &compiler, false)) {
+    // Parse the source into an AST
+    ASTNode* ast = parseSource(source);
+    if (!ast) {
         freeChunk(&chunk);
         return INTERPRET_COMPILE_ERROR;
     }
+
+    // Compile the AST to bytecode
+    if (!compile(ast, &compiler, false)) {
+        freeAST(ast);
+        freeChunk(&chunk);
+        return INTERPRET_COMPILE_ERROR;
+    }
+
+    // Add a halt instruction at the end
+    emitByte(&compiler, OP_HALT);
 
     // Execute the chunk
     vm.chunk = &chunk;
@@ -814,13 +858,13 @@ InterpretResult interpret(const char* source) {
 
     InterpretResult result = run();
 
+    freeAST(ast);
     freeChunk(&chunk);
     return result;
 }
 
 InterpretResult interpret_module(const char* path) {
-    (void)path; // Mark as intentionally unused
-    
+    UNUSED(path);
     // Simplified module interpretation
     return interpret("");
 }

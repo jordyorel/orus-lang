@@ -16,15 +16,15 @@ INCLUDES = -I$(INCDIR)
 
 # Source files
 CORE_SRCS =
-COMPILER_SRCS =
+COMPILER_SRCS = $(SRCDIR)/compiler/compiler.c $(SRCDIR)/compiler/lexer.c
 VM_SRCS = $(SRCDIR)/vm/vm.c
 MAIN_SRC = $(SRCDIR)/main.c
 
-# Object files
-CORE_OBJS = $(CORE_SRCS:.c=.o)
-COMPILER_OBJS = $(COMPILER_SRCS:.c=.o)
-VM_OBJS = $(VM_SRCS:.c=.o)
-MAIN_OBJ = $(MAIN_SRC:.c=.o)
+# Object files (in build directory)
+CORE_OBJS = $(CORE_SRCS:$(SRCDIR)/%.c=$(BUILDDIR)/%.o)
+COMPILER_OBJS = $(COMPILER_SRCS:$(SRCDIR)/%.c=$(BUILDDIR)/%.o)
+VM_OBJS = $(VM_SRCS:$(SRCDIR)/%.c=$(BUILDDIR)/%.o)
+MAIN_OBJ = $(MAIN_SRC:$(SRCDIR)/%.c=$(BUILDDIR)/%.o)
 
 # Test files
 TEST_REGISTER_SRC = $(TESTDIR)/test_register.c
@@ -36,10 +36,14 @@ TEST_REGISTER = test-register
 
 .PHONY: all clean test help format
 
-all: $(ORUS) $(TEST_REGISTER)
+all: $(ORUS)
+
+# Create build directory if it doesn't exist
+$(BUILDDIR):
+	mkdir -p $(BUILDDIR) $(BUILDDIR)/vm $(BUILDDIR)/compiler
 
 # Main interpreter
-$(ORUS): $(MAIN_OBJ) $(VM_OBJS)
+$(ORUS): $(MAIN_OBJ) $(VM_OBJS) $(COMPILER_OBJS)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
 # Test executables
@@ -47,8 +51,9 @@ $(TEST_REGISTER): $(TEST_REGISTER_SRC) $(VM_OBJS)
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
 
 
-# Object files
-%.o: %.c
+# Object files - create build directory structure and compile
+$(BUILDDIR)/%.o: $(SRCDIR)/%.c | $(BUILDDIR)
+	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
 # Run tests
@@ -59,8 +64,6 @@ test: $(TEST_REGISTER)
 # Clean build artifacts
 clean:
 	rm -f $(ORUS) $(TEST_REGISTER)
-	rm -f $(VM_OBJS) $(MAIN_OBJ)
-	rm -f *.o
 	rm -rf $(BUILDDIR)
 
 # Format code

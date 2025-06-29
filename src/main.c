@@ -8,6 +8,7 @@
 
 #include "vm.h"
 #include "common.h"
+#include "compiler.h"
 
 static void repl() {
     char line[1024];

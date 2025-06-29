@@ -2,7 +2,11 @@
 #define ORUS_TYPE_H
 
 #include <stdbool.h>
-#include "value.h"
+
+// Forward declarations - the actual definitions are in vm.h
+typedef struct Obj Obj;
+typedef struct ObjString ObjString;
+typedef struct Value Value;
 
 typedef enum {
     TYPE_I32,
@@ -70,7 +74,7 @@ void markTypeRoots();
 Type* substituteGenerics(Type* type, ObjString** names, Type** subs, int count);
 Type* instantiateStructType(Type* base, Type** args, int argCount);
 
-extern Type primitiveTypes[TYPE_COUNT];
+extern Type* primitiveTypes[TYPE_COUNT];
 
 typedef enum {
     CONSTRAINT_NONE,

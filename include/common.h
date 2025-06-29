@@ -1,19 +1,25 @@
-#ifndef ORUS_COMMON_H
-#define ORUS_COMMON_H
+// common.h - Common definitions and utilities for Orus Language
+#ifndef COMMON_H
+#define COMMON_H
 
-#include<stdbool.h>
-#include<stddef.h>
-#include<stdint.h>
+#include <stdint.h>
+#include <stddef.h>
+#include <stdbool.h>
 
-// Maximum number of global variables (256 since we're using uint8_t for indices)
-#define UINT8_COUNT 256
+// Common exit codes
+#define EXIT_SUCCESS 0
+#define EXIT_FAILURE 1
+#define EXIT_COMPILE_ERROR 65
+#define EXIT_RUNTIME_ERROR 70
+#define EXIT_USAGE_ERROR 64
 
-// Make sure UINT8_MAX is defined
-#ifndef UINT8_MAX
-#define UINT8_MAX 255
+// Debug configuration
+#ifdef DEBUG
+#define DEBUG_PRINT_CODE
+#define DEBUG_TRACE_EXECUTION
 #endif
 
-// #define DEBUG_TRACE_EXECUTION
-// #define DEBUG_PRINT_CODE
+// Utility macros
+#define UNUSED(x) ((void)(x))
 
-#endif
+#endif // COMMON_H

@@ -2,121 +2,136 @@
 
 A register-based virtual machine implementation for the Orus programming language.
 
-## Features
+## Current Status
 
-- **Register-based VM**: More efficient than stack-based VMs for complex expressions
-- **Static typing**: Built-in type system with type checking
-- **Modern syntax**: Clean, readable syntax inspired by modern languages
-- **Memory management**: Automatic garbage collection
-- **Error handling**: Comprehensive error handling with try/catch
-- **Module system**: Import/export functionality for code organization
+✅ **Core Components Integrated and Working:**
 
-## Project Structure
+- **Register-based Virtual Machine**: Complete implementation with 256 registers
+- **Lexer**: Full lexical analysis with token support
+- **Parser**: Basic AST generation (currently supports integer literals)
+- **Compiler**: AST to bytecode compilation pipeline
+- **Bytecode Execution**: VM executes compiled bytecode
+- **Debug Support**: Instruction tracing and disassembly
 
+## Features Currently Working
+
+### 1. Integer Literals
+- Parse and execute simple integer literals
+- Example: `42`, `123`, `789`
+
+### 2. REPL Mode
+```bash
+./orus
 ```
-orus-lang/
-├── src/                    # Source code
-│   ├── core/              # Core AST and utilities
-│   ├── compiler/          # Lexer, parser, and compiler
-│   ├── vm/                # Virtual machine implementation
-│   └── main.c             # Main interpreter executable
-├── include/               # Header files
-├── tests/                 # Test files
-├── docs/                  # Documentation
-├── examples/              # Example programs
-└── tools/                 # Development tools
+Interactive mode where you can enter expressions and see results immediately.
+
+### 3. File Execution
+```bash
+./orus filename.orus
 ```
+Execute code from a file.
 
-## Building
+### 4. Debug Tracing
+```bash
+./orus --trace filename.orus
+```
+Shows register states and instruction execution.
 
-### Using CMake (Recommended)
+## Build Instructions
 
 ```bash
-mkdir build && cd build
-cmake ..
+make clean
 make
 ```
 
-### Using Make (Legacy)
+## Testing
 
+### Basic Integer Test
 ```bash
-make
+echo "42" > test.orus
+./orus test.orus
+# Output: 42
 ```
 
-## Running Tests
-
+### REPL Test
 ```bash
-# Using CMake
-cd build && ctest
-
-# Using Make
-make test
+./orus
+# Enter: 123
+# Output: 123
+# Enter: exit
 ```
 
-## Usage
-
+### Debug Trace
 ```bash
-# Run the interpreter
-./orus program.orus
-
-# Run tests
-./test-register
-./test-parser
-```
-
-## Language Overview
-
-### Basic Syntax
-
-```orus
-// Variables
-let x: i32 = 42;
-let name: string = "Hello, World!";
-
-// Functions
-fn add(a: i32, b: i32) -> i32 {
-    return a + b;
-}
-
-// Control flow
-if x > 0 {
-    print("Positive");
-} else {
-    print("Non-positive");
-}
-
-// Loops
-for i in 0..10 {
-    print(i);
-}
+echo "42" > test.orus  
+./orus --trace test.orus
+# Shows detailed execution trace
 ```
 
 ## Architecture
 
-### Register-based VM
+### Components
 
-Unlike stack-based VMs, our register-based design:
-- Reduces instruction count for complex expressions
-- Enables better optimization opportunities
-- Simplifies register allocation
-- Provides clearer execution model
+1. **Lexer** (`src/compiler/lexer.c`): Tokenizes source code
+2. **Parser** (`src/compiler/parser.c`): Generates AST (basic implementation)
+3. **Compiler** (`src/compiler/compiler.c`): Compiles AST to bytecode
+4. **VM** (`src/vm/vm.c`): Executes bytecode on register-based architecture
+5. **Debug** (`src/vm/vm.c`): Disassembly and tracing utilities
 
-### Compilation Pipeline
+### Bytecode Example
 
-1. **Lexical Analysis**: Source code → Tokens
-2. **Parsing**: Tokens → AST
-3. **Type Checking**: AST → Typed AST
-4. **Code Generation**: Typed AST → Bytecode
-5. **Execution**: Bytecode → Results
+For input `42`, the compiler generates:
+```
+0000    LOAD_CONST    R0, #0 '42'
+0003    PRINT         R0  
+0005    HALT
+```
 
-## Contributing
+## Next Steps for Improvement
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+The foundation is solid and ready for enhancement:
 
-## License
+1. **Enhanced Parser**: 
+   - Binary expressions (`1 + 2`)
+   - Variables and assignments
+   - Function calls
 
-MIT License - see LICENSE file for details.
+2. **More Data Types**:
+   - Strings, booleans, floats
+   - Arrays and objects
+
+3. **Control Flow**:
+   - If/else statements
+   - Loops (for, while)
+
+4. **Functions**:
+   - Function definitions
+   - Parameter passing
+   - Return values
+
+5. **Advanced Features**:
+   - Error handling
+   - Module system
+   - Standard library
+
+## Project Structure
+
+```
+orus-reg-vm/
+├── include/           # Header files
+├── src/
+│   ├── compiler/      # Lexer, parser, compiler
+│   ├── vm/           # Virtual machine implementation
+│   └── main.c        # Entry point and REPL
+├── makefile          # Build configuration
+└── *.orus           # Test files
+```
+
+## Command Line Options
+
+- `--help` or `-h`: Show usage information
+- `--version` or `-v`: Show version
+- `--trace` or `-t`: Enable execution tracing
+- `--debug` or `-d`: Enable debug mode
+
+The project successfully demonstrates a complete language implementation pipeline from source code to execution!

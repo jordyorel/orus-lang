@@ -127,10 +127,10 @@ typedef struct Value {
 #define AS_RANGE_ITERATOR(value) ((value).as.rangeIter)
 
 // Generic dynamic array implementation used for storing Values.
-#include "generic_array.h"
+// #include "generic_array.h"
 
-DEFINE_ARRAY_TYPE(Value, Value)
-void printValue(Value value);
-bool valuesEqual(Value a, Value b);
+// DEFINE_ARRAY_TYPE(Value, Value)
+// void printValue(Value value);
+// bool valuesEqual(Value a, Value b);
 
 #endif

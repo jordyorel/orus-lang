@@ -2,7 +2,15 @@
 #define ORUS_PARSER_H
 
 #include "lexer.h"
-#include "ast.h"
+#include "vm.h"
+
+// Simplified constraint system for parser
+typedef enum {
+    CONSTRAINT_NONE,
+    CONSTRAINT_NUMERIC,
+    CONSTRAINT_COMPARABLE
+} GenericConstraint;
+
 
 typedef enum {
     PREC_NONE,

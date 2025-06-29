@@ -1,0 +1,16 @@
+{
+  "timestamp": "2025-06-29T18:04:29+08:00",
+  "vm_version": "Orus Language Interpreter v0.1.0",
+  "system": "Darwin",
+  "architecture": "arm64",
+  "iterations": 10,
+  "tests": [
+    {
+      "name": "Simple Addition",
+      "category": "basic",
+      "file": "bench_simple_add.orus",
+      "avg_time": .004265,
+      "result": "6",
+      "iterations": 10,
+      "success_rate": 1.0
+    },

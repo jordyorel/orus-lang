@@ -1,54 +1,36 @@
 #ifndef COMPILER_H
 #define COMPILER_H
 
-#include "ast.h"
-#include "chunk.h"
-#include "symtable.h"
-#include "type.h"
-#include "value.h"
+#include "common.h"
+#include "vm.h"
+#include "lexer.h"
+#include "parser.h"
 
-typedef struct {
-    int loopStart;         // Start position of the current loop
-    int loopEnd;           // End position of the current loop (for breaks)
-    int loopContinue;      // Position to jump to for continue statements
-    int loopDepth;         // Nesting level of loops
+// Forward declarations
+typedef struct ASTNode ASTNode;
 
-    // Arrays to store break and continue jumps for patching
-    ObjIntArray* breakJumps;       // GC-managed array of break jump positions
-    int breakJumpCount;            // Number of break jumps
-    int breakJumpCapacity;         // Capacity of the breakJumps array
+// Compiler functions
+void initCompiler(Compiler* compiler, Chunk* chunk, const char* fileName, const char* source);
+uint8_t allocateRegister(Compiler* compiler);
+void freeRegister(Compiler* compiler, uint8_t reg);
+bool compile(ASTNode* ast, Compiler* compiler, bool isModule);
 
-    ObjIntArray* continueJumps;    // GC-managed array of continue jump positions
-    int continueJumpCount;         // Number of continue jumps
-    int continueJumpCapacity;      // Capacity of the continueJumps array
+// Code emission functions
+void emitByte(Compiler* compiler, uint8_t byte);
+void emitBytes(Compiler* compiler, uint8_t byte1, uint8_t byte2);
+void emitConstant(Compiler* compiler, uint8_t reg, Value value);
 
-    SymbolTable symbols;
-    int scopeDepth;
-    Chunk* chunk;
-    bool hadError;
-    bool panicMode;
+// Simple parsing function for testing
+ASTNode* parseSource(const char* source);
+void freeAST(ASTNode* node);
 
-    // File and source information used for diagnostics
-    const char* filePath;
-    const char* sourceCode;
-    const char** lineStarts;
-    int lineCount;
+// Expression parsing functions
+ASTNode* parseExpression();
+ASTNode* parseBinaryExpression(int minPrec);
+ASTNode* parsePrimaryExpression();
 
-    // Line/column of the AST node currently being compiled
-    int currentLine;
-    int currentColumn;
-    Type* currentReturnType;
-    bool currentFunctionHasGenerics;
-    ObjString** genericNames;
-    GenericConstraint* genericConstraints;
-    int genericCount;
-} Compiler;
-
-void initCompiler(Compiler* compiler, Chunk* chunk,
-                  const char* filePath, const char* sourceCode);
-bool compile(ASTNode* ast, Compiler* compiler, bool requireMain);
-uint8_t resolveVariable(Compiler* compiler, Token name);       // Added
-uint8_t addLocal(Compiler* compiler, Token name, Type* type, bool isMutable, bool isConst);  // Added
-uint8_t defineVariable(Compiler* compiler, Token name, Type* type);  // Added
+// Helper functions
+int getOperatorPrecedence(TokenType type);
+const char* getOperatorString(TokenType type);
 
 #endif
