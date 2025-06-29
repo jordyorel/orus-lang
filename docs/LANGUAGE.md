@@ -86,6 +86,10 @@ fn add(a: i32, b: i32) -> i32:
 
 fn greet(name: string):
     print("Hello, {}!", name)
+
+# Format specifiers
+let pi = 3.14159
+print("Pi rounded: {:.2}", pi)
 ```
 
 ---

@@ -421,6 +421,13 @@ typedef struct {
     bool has_expressions;     // Contains complex expressions
 } InterpolationTemplate;
 
+// Runtime formatting currently supports basic specifiers:
+//   {:b} - binary
+//   {:x} or {:X} - hexadecimal
+//   {:o} - octal
+//   {.N} - float with N decimals
+// Implemented in builtin_print using print_formatted_value.
+
 // Compile-time string interpolation
 static uint8_t compile_string_interpolation(Compiler* compiler, ASTNode* node) {
     InterpolationNode* interp = &node->interpolation;

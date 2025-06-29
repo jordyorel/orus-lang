@@ -1,0 +1,5 @@
+let pi = 3.14159
+print("Pi: {:.2}", pi)
+let num = 255
+print("hex: {:x}", num)
+print("binary: {:b}", num)
