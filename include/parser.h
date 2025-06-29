@@ -2,7 +2,7 @@
 #define ORUS_PARSER_H
 
 #include "lexer.h"
-#include "vm.h"
+#include "ast.h"
 
 // Simplified constraint system for parser
 typedef enum {

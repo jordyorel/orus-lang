@@ -36,6 +36,19 @@ static ASTNode* new_node(void) {
     return arena_alloc(&compilerArena, sizeof(ASTNode));
 }
 
+static void addStatement(ASTNode*** list, int* count, int* capacity, ASTNode* stmt) {
+    if (*count + 1 > *capacity) {
+        int newCap = *capacity == 0 ? 4 : (*capacity * 2);
+        ASTNode** newArr = arena_alloc(&compilerArena, sizeof(ASTNode*) * newCap);
+        if (*capacity > 0) {
+            memcpy(newArr, *list, sizeof(ASTNode*) * (*count));
+        }
+        *list = newArr;
+        *capacity = newCap;
+    }
+    (*list)[(*count)++] = stmt;
+}
+
 // Simple token lookahead
 static Token peekedToken = {0};
 static bool hasPeekedToken = false;
@@ -61,26 +74,50 @@ ASTNode* parseExpression();
 ASTNode* parseBinaryExpression(int minPrec);
 ASTNode* parsePrimaryExpression();
 ASTNode* parseVariableDeclaration();
+static void addStatement(ASTNode*** list, int* count, int* capacity, ASTNode* stmt);
 
 // Real parsing function using lexer
 ASTNode* parseSource(const char* source) {
-    // Initialize arena allocator
-    arena_init(&compilerArena, 1 << 16); // 64KB initial size
-    
-    // Initialize lexer with source code
+    arena_init(&compilerArena, 1 << 16);
     init_scanner(source);
-    
-    // Reset lookahead
     hasPeekedToken = false;
-    
-    // Check if this is a statement or expression
-    Token firstToken = peekToken();
-    if (firstToken.type == TOKEN_LET) {
-        return parseVariableDeclaration();
-    } else {
-        // Parse as expression
-        return parseExpression();
+
+    ASTNode** statements = NULL;
+    int count = 0;
+    int capacity = 0;
+
+    while (true) {
+        Token t = peekToken();
+        if (t.type == TOKEN_EOF) break;
+        if (t.type == TOKEN_NEWLINE || t.type == TOKEN_SEMICOLON) {
+            nextToken();
+            continue;
+        }
+
+        ASTNode* stmt = NULL;
+        if (t.type == TOKEN_LET) {
+            stmt = parseVariableDeclaration();
+        } else {
+            stmt = parseExpression();
+        }
+        if (!stmt) return NULL;
+
+        addStatement(&statements, &count, &capacity, stmt);
+
+        t = peekToken();
+        if (t.type == TOKEN_SEMICOLON || t.type == TOKEN_NEWLINE) {
+            nextToken();
+        }
     }
+
+    ASTNode* program = new_node();
+    program->type = NODE_PROGRAM;
+    program->program.declarations = statements;
+    program->program.count = count;
+    program->location.line = 1;
+    program->location.column = 1;
+    program->dataType = NULL;
+    return program;
 }
 
 // Parse variable declarations: let name = initializer
@@ -95,6 +132,25 @@ ASTNode* parseVariableDeclaration() {
         return NULL; // Error: expected identifier
     }
     
+    ASTNode* typeNode = NULL;
+    if (peekToken().type == TOKEN_COLON) {
+        nextToken();
+        Token typeTok = nextToken();
+        if (typeTok.type != TOKEN_IDENTIFIER && typeTok.type != TOKEN_INT &&
+            typeTok.type != TOKEN_I64 && typeTok.type != TOKEN_U32 &&
+            typeTok.type != TOKEN_U64 && typeTok.type != TOKEN_F64 &&
+            typeTok.type != TOKEN_BOOL) {
+            return NULL;
+        }
+        int tl = typeTok.length;
+        char* typeName = arena_alloc(&compilerArena, tl + 1);
+        strncpy(typeName, typeTok.start, tl);
+        typeName[tl] = '\0';
+        typeNode = new_node();
+        typeNode->type = NODE_TYPE;
+        typeNode->typeAnnotation.name = typeName;
+    }
+
     Token equalToken = nextToken();
     if (equalToken.type != TOKEN_EQUAL) {
         return NULL; // Error: expected '='
@@ -122,7 +178,7 @@ ASTNode* parseVariableDeclaration() {
     varNode->varDecl.name = name;
     varNode->varDecl.isPublic = false;
     varNode->varDecl.initializer = initializer;
-    varNode->varDecl.typeAnnotation = NULL;
+    varNode->varDecl.typeAnnotation = typeNode;
     varNode->varDecl.isConst = false;
     
     return varNode;
