@@ -1155,7 +1155,7 @@ static void typeCheckNode(Compiler* compiler, ASTNode* node) {
             }
             node->data.variable.index = index;
 
-            node->valueType = variableTypes[index];
+            node->valueType = vm.globalTypes[index];
             if (!node->valueType) {
                 error(compiler, "Variable has no type defined.");
                 return;
@@ -1541,7 +1541,7 @@ static void typeCheckNode(Compiler* compiler, ASTNode* node) {
             }
 
             // Check that the types are compatible
-            Type* varType = variableTypes[index];
+            Type* varType = vm.globalTypes[index];
             Type* valueType = node->left->valueType;
 
             if (!varType) {
@@ -1582,7 +1582,7 @@ static void typeCheckNode(Compiler* compiler, ASTNode* node) {
 
             // Persist type if the variable was previously nil
             if (varType->kind == TYPE_NIL && valueType->kind != TYPE_NIL) {
-                variableTypes[index] = valueType;
+                vm.globalTypes[index] = valueType;
                 vm.globalTypes[index] = valueType;
                 char tempName[node->data.variable.name.length + 1];
                 memcpy(tempName, node->data.variable.name.start,
@@ -1594,7 +1594,7 @@ static void typeCheckNode(Compiler* compiler, ASTNode* node) {
             } else if (varType->kind == TYPE_ARRAY &&
                        varType->info.array.elementType->kind == TYPE_NIL &&
                        valueType->kind == TYPE_ARRAY) {
-                variableTypes[index] = valueType;
+                vm.globalTypes[index] = valueType;
                 vm.globalTypes[index] = valueType;
                 char tempName[node->data.variable.name.length + 1];
                 memcpy(tempName, node->data.variable.name.start,
@@ -2188,7 +2188,7 @@ static void typeCheckNode(Compiler* compiler, ASTNode* node) {
                         }
                         elemType = val->valueType;
                         if (arr->type == AST_VARIABLE) {
-                            variableTypes[arr->data.variable.index] =
+                            vm.globalTypes[arr->data.variable.index] =
                                 arr->valueType;
                         }
                     }
@@ -2420,8 +2420,8 @@ static void typeCheckNode(Compiler* compiler, ASTNode* node) {
                 tempName[node->data.call.name.length] = '\0';
                 uint8_t priv =
                     findPrivateGlobal(tempName, node->data.call.name.length);
-                if (priv != UINT8_MAX && variableTypes[priv] &&
-                    variableTypes[priv]->kind == TYPE_FUNCTION) {
+                if (priv != UINT8_MAX && vm.globalTypes[priv] &&
+                    vm.globalTypes[priv]->kind == TYPE_FUNCTION) {
                     emitPrivateFunctionError(compiler, &node->data.call.name);
                     return;
                 }
@@ -2458,7 +2458,7 @@ static void typeCheckNode(Compiler* compiler, ASTNode* node) {
             node->data.call.nativeIndex = -1;  // prefer user-defined function
 
             // Get the function's return type
-            Type* funcType = variableTypes[index];
+            Type* funcType = vm.globalTypes[index];
             if (!funcType || funcType->kind != TYPE_FUNCTION) {
                 error(compiler, "Called object is not a function.");
                 return;
@@ -2526,7 +2526,7 @@ static void typeCheckNode(Compiler* compiler, ASTNode* node) {
                     expected->kind == TYPE_ARRAY) {
                     argNodes[i]->valueType = expected;
                     if (argNodes[i]->type == AST_VARIABLE) {
-                        variableTypes[argNodes[i]->data.variable.index] =
+                        vm.globalTypes[argNodes[i]->data.variable.index] =
                             expected;
                     }
                 }
@@ -2742,7 +2742,7 @@ static void typeCheckNode(Compiler* compiler, ASTNode* node) {
                     node->data.variable.name = node->data.field.fieldName;
                     node->data.variable.index = ex->index;
                     node->left = NULL;
-                    node->valueType = variableTypes[ex->index];
+                    node->valueType = vm.globalTypes[ex->index];
                     break;
                 }
             }
@@ -4438,7 +4438,7 @@ static void generateCode(Compiler* compiler, ASTNode* node) {
                 if (compiler->hadError) return;
 
                 if (node->data.call.convertArgs[i]) {
-                    Type* funcType = variableTypes[node->data.call.index];
+                    Type* funcType = vm.globalTypes[node->data.call.index];
                     if (!funcType || funcType->kind != TYPE_FUNCTION) continue;
                     Type* expected = funcType->info.function.paramTypes[i];
                     opCode op =
@@ -4789,7 +4789,7 @@ uint8_t addLocal(Compiler* compiler, Token name, Type* type, bool isMutable,
     vm.variableNames[index].name = nameObj;
 
     vm.variableNames[index].length = name.length;
-    variableTypes[index] = type;  // Should be getPrimitiveType result
+    vm.globalTypes[index] = type;  // Should be getPrimitiveType result
     vm.globalTypes[index] = type;
     vm.globals[index] = NIL_VAL;
     vm.publicGlobals[index] = false;
@@ -4937,7 +4937,7 @@ static void predeclareFunction(Compiler* compiler, ASTNode* node) {
     }
     Type* funcType =
         createFunctionType(node->data.function.returnType, paramTypes, pcount);
-    variableTypes[index] = funcType;
+    vm.globalTypes[index] = funcType;
     vm.globalTypes[index] = funcType;
 }
 
@@ -5058,7 +5058,7 @@ bool compile(ASTNode* ast, Compiler* compiler, bool requireMain) {
         writeOp(compiler, OP_CALL);
         writeOp(compiler, mainIndex);
         writeOp(compiler, 0);  // no arguments
-        Type* mainType = variableTypes[mainIndex];
+        Type* mainType = vm.globalTypes[mainIndex];
         if (!mainType || mainType->kind != TYPE_FUNCTION ||
             !mainType->info.function.returnType ||
             mainType->info.function.returnType->kind != TYPE_VOID) {

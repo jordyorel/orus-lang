@@ -26,6 +26,9 @@ def analyze_directory(directory, extensions):
     """Analyze all files with given extensions in directory."""
     stats = defaultdict(lambda: {'files': 0, 'total': 0, 'code': 0, 'comment': 0, 'blank': 0})
     
+    # Convert to absolute path
+    directory = os.path.abspath(directory)
+    
     for root, dirs, files in os.walk(directory):
         # Skip build directories and hidden directories
         dirs[:] = [d for d in dirs if not d.startswith('.') and d != 'build']
@@ -46,7 +49,7 @@ def analyze_directory(directory, extensions):
 
 def main():
     """Main function."""
-    project_root = Path(__file__).parent
+    project_root = Path(__file__).parent.parent
     
     print("Orus Language Code Statistics")
     print("=" * 40)
@@ -84,26 +87,29 @@ def main():
     print(f"{'Total':<8} {total_files:<6} {total_lines:<8} {total_code:<8} {total_comments:<10} {total_blank:<6}")
     
     # Additional statistics
-    print("\nProject Summary:")
-    print(f"  Total files: {total_files}")
-    print(f"  Total lines: {total_lines}")
-    print(f"  Code lines: {total_code} ({total_code/total_lines*100:.1f}%)")
-    print(f"  Comment lines: {total_comments} ({total_comments/total_lines*100:.1f}%)")
-    print(f"  Blank lines: {total_blank} ({total_blank/total_lines*100:.1f}%)")
-    
-    # Language breakdown
-    if '.c' in stats or '.h' in stats:
-        c_code = stats.get('.c', {}).get('code', 0)
-        h_code = stats.get('.h', {}).get('code', 0)
-        print(f"  C/C++ lines: {c_code + h_code}")
-    
-    if '.py' in stats:
-        py_code = stats['.py']['code']
-        print(f"  Python lines: {py_code}")
-    
-    if '.md' in stats:
-        md_lines = stats['.md']['total']
-        print(f"  Documentation lines: {md_lines}")
+    if total_lines > 0:
+        print("\nProject Summary:")
+        print(f"  Total files: {total_files}")
+        print(f"  Total lines: {total_lines}")
+        print(f"  Code lines: {total_code} ({total_code/total_lines*100:.1f}%)")
+        print(f"  Comment lines: {total_comments} ({total_comments/total_lines*100:.1f}%)")
+        print(f"  Blank lines: {total_blank} ({total_blank/total_lines*100:.1f}%)")
+        
+        # Language breakdown
+        if '.c' in stats or '.h' in stats:
+            c_code = stats.get('.c', {}).get('code', 0)
+            h_code = stats.get('.h', {}).get('code', 0)
+            print(f"  C/C++ lines: {c_code + h_code}")
+        
+        if '.py' in stats:
+            py_code = stats['.py']['code']
+            print(f"  Python lines: {py_code}")
+        
+        if '.md' in stats:
+            md_lines = stats['.md']['total']
+            print(f"  Documentation lines: {md_lines}")
+    else:
+        print("No code found to analyze.")
 
 if __name__ == "__main__":
     main()
