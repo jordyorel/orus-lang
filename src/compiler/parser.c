@@ -1,5 +1,6 @@
 #include "../../include/parser.h"
 #include "../../include/common.h"
+#include "../../include/vm.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -98,20 +99,23 @@ static ASTNode* parseVariableDeclaration(void);
 
 static int getOperatorPrecedence(TokenType type) {
     switch (type) {
-        case TOKEN_PLUS:
-        case TOKEN_MINUS:
-            return 1;
         case TOKEN_STAR:
         case TOKEN_SLASH:
         case TOKEN_MODULO:
-            return 2;
+            return 4;
+        case TOKEN_PLUS:
+        case TOKEN_MINUS:
+            return 3;
         case TOKEN_EQUAL_EQUAL:
         case TOKEN_BANG_EQUAL:
-            return 0;
         case TOKEN_LESS:
         case TOKEN_GREATER:
         case TOKEN_LESS_EQUAL:
         case TOKEN_GREATER_EQUAL:
+            return 2;
+        case TOKEN_AND:
+            return 1;
+        case TOKEN_OR:
             return 0;
         default:
             return -1;
@@ -131,6 +135,8 @@ static const char* getOperatorString(TokenType type) {
         case TOKEN_GREATER: return ">";
         case TOKEN_LESS_EQUAL: return "<=";
         case TOKEN_GREATER_EQUAL: return ">=";
+        case TOKEN_AND: return "and";
+        case TOKEN_OR: return "or";
         default: return "?";
     }
 }
@@ -238,8 +244,26 @@ static ASTNode* parseVariableDeclaration(void) {
     return varNode;
 }
 
-static ASTNode* parseExpression(void) {
-    return parseBinaryExpression(0);
+static ASTNode* parseAssignment(void);
+
+static ASTNode* parseExpression(void) { return parseAssignment(); }
+
+static ASTNode* parseAssignment(void) {
+    ASTNode* left = parseBinaryExpression(0);
+    if (!left) return NULL;
+    if (peekToken().type == TOKEN_EQUAL) {
+        nextToken();
+        ASTNode* value = parseBinaryExpression(0);
+        if (!value || left->type != NODE_IDENTIFIER) return NULL;
+        ASTNode* node = new_node();
+        node->type = NODE_ASSIGN;
+        node->assign.name = left->identifier.name;
+        node->assign.value = value;
+        node->location = left->location;
+        node->dataType = NULL;
+        return node;
+    }
+    return left;
 }
 
 static ASTNode* parseBinaryExpression(int minPrec) {
@@ -295,11 +319,12 @@ static ASTNode* parsePrimaryExpression(void) {
             ASTNode* node = new_node();
             node->type = NODE_LITERAL;
             int contentLen = token.length - 2;
-            char* content = malloc(contentLen + 1);
+            char* content = arena_alloc(&parserArena, contentLen + 1);
             strncpy(content, token.start + 1, contentLen);
             content[contentLen] = '\0';
-            node->literal.value = I32_VAL(0);
-            free(content);
+            ObjString* s = allocateString(content, contentLen);
+            node->literal.value.type = VAL_STRING;
+            node->literal.value.as.obj = (Obj*)s;
             node->location.line = token.line;
             node->location.column = token.column;
             node->dataType = NULL;
