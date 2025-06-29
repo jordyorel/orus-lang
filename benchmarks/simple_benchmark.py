@@ -272,7 +272,7 @@ class OrusPythonBenchmark:
             winner_icon = "🟢" if result['winner'] == 'Orus' else "🔴"
             print(f"   {winner_icon} {result['test_name']}: {result['speedup']:.2f}x")
     
-    def save_results(self, filename="advanced_benchmark_results.json"):
+    def save_results(self, filename="results.json"):
         """Save detailed results to JSON file"""
         output = {
             'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
@@ -311,7 +311,7 @@ def main():
                        help='Run quick benchmark (10 iterations)')
     parser.add_argument('--stress', action='store_true', 
                        help='Include stress testing')
-    parser.add_argument('--output', '-o', default='benchmark_results_python.json',
+    parser.add_argument('--output', '-o', default='results.json',
                        help='Output file for results')
     
     args = parser.parse_args()

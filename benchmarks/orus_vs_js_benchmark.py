@@ -275,7 +275,7 @@ class OrusJavaScriptBenchmark:
         """Generate a stress test with specified number of operations"""
         return " + ".join(str(i) for i in range(1, num_ops + 1))
         
-    def run_comprehensive_benchmark(self):
+    def run_comprehensive_benchmark(self, output_file="results.json"):
         """Run the complete benchmark suite"""
         print("🚀 Orus vs JavaScript Benchmark Suite")
         print("=" * 50)
@@ -325,11 +325,11 @@ class OrusJavaScriptBenchmark:
             self.run_comparison(test_name, code, description)
             
         # Generate summary
-        self.generate_summary(system_info)
+        self.generate_summary(system_info, output_file)
         
         return self.results
         
-    def generate_summary(self, system_info):
+    def generate_summary(self, system_info, output_file="results.json"):
         """Generate comprehensive benchmark summary"""
         if not self.results:
             print("❌ No results to summarize")
@@ -383,7 +383,6 @@ class OrusJavaScriptBenchmark:
         print()
         
         # Save detailed results
-        output_file = "benchmark_results_js.json"
         detailed_results = {
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
             "system_info": system_info,
@@ -417,6 +416,7 @@ def main():
     parser.add_argument("--orus-binary", default="../orus", help="Path to Orus binary")
     parser.add_argument("--iterations", type=int, default=50, help="Number of iterations per test")
     parser.add_argument("--timeout", type=int, default=30, help="Timeout per test in seconds")
+    parser.add_argument("--output", default="results.json", help="Output file for results")
     
     args = parser.parse_args()
     
@@ -426,11 +426,11 @@ def main():
         timeout=args.timeout
     )
     
-    results = benchmark.run_comprehensive_benchmark()
+    results = benchmark.run_comprehensive_benchmark(args.output)
     
     if results:
         print("🎉 Benchmark completed successfully!")
-        print("📁 Check benchmark_results_js.json for detailed results")
+        print(f"📁 Check {args.output} for detailed results")
     else:
         print("❌ Benchmark failed!")
         sys.exit(1)

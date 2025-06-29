@@ -69,13 +69,13 @@ case $choice in
     9)
         echo "🔄 Running all language comparisons..."
         echo "📊 Running Python comparison..."
-        ./simple_benchmark.py --iterations 30
+        ./simple_benchmark.py --iterations 30 --output results_python.json
         echo ""
         echo "📊 Running JavaScript comparison..."
-        ./orus_vs_js_benchmark.py --iterations 30
+        ./orus_vs_js_benchmark.py --iterations 30 --output results_js.json
         echo ""
         echo "📊 Running Lua comparison..."
-        python3 orus_vs_lua_benchmark.py --iterations 30
+        python3 orus_vs_lua_benchmark.py --iterations 30 --output results_lua.json
         echo ""
         echo "🏆 FINAL COMPARISON SUMMARY"
         echo "=========================="

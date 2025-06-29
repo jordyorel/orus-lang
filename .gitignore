@@ -60,9 +60,11 @@ docs/_build/
 *.zip
 
 # Benchmark results (not tracked)
-benchmarks/benchmark_results_*.json
-benchmarks/advanced_benchmark_results.json
-benchmarks/benchmark_results_python.json
-benchmarks/benchmark_results_js.json
-benchmarks/benchmark_results_lua.json
-benchmarks/orus_vs_js_benchmark_results.json
+benchmarks/*.json
+benchmarks/results*.json
+benchmarks/benchmark_results*.json
+benchmarks/*_benchmark_results*.json
+
+# REPL history files
+.orus_history
+*/.orus_history

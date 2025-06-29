@@ -517,7 +517,7 @@ def save_results(results, filename):
 def main():
     parser = argparse.ArgumentParser(description='Benchmark Orus vs Lua performance')
     parser.add_argument('--iterations', type=int, default=30, help='Number of iterations per test')
-    parser.add_argument('--output', type=str, default='benchmark_results_lua.json', help='Output file for results')
+    parser.add_argument('--output', type=str, default='results.json', help='Output file for results')
     
     args = parser.parse_args()
     
