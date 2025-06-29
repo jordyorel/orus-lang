@@ -93,56 +93,6 @@ bool valuesEqual(Value a, Value b) {
     }
 }
 
-// Chunk operations
-void initChunk(Chunk* chunk) {
-    chunk->count = 0;
-    chunk->capacity = 0;
-    chunk->code = NULL;
-    chunk->lines = NULL;
-    chunk->columns = NULL;
-    chunk->constants.count = 0;
-    chunk->constants.capacity = 0;
-    chunk->constants.values = NULL;
-}
-
-void freeChunk(Chunk* chunk) {
-    FREE_ARRAY(uint8_t, chunk->code, chunk->capacity);
-    FREE_ARRAY(int, chunk->lines, chunk->capacity);
-    FREE_ARRAY(int, chunk->columns, chunk->capacity);
-    FREE_ARRAY(Value, chunk->constants.values, chunk->constants.capacity);
-    initChunk(chunk);
-}
-
-void writeChunk(Chunk* chunk, uint8_t byte, int line, int column) {
-    if (chunk->capacity < chunk->count + 1) {
-        int oldCapacity = chunk->capacity;
-        chunk->capacity = GROW_CAPACITY(oldCapacity);
-        chunk->code =
-            GROW_ARRAY(uint8_t, chunk->code, oldCapacity, chunk->capacity);
-        chunk->lines =
-            GROW_ARRAY(int, chunk->lines, oldCapacity, chunk->capacity);
-        chunk->columns =
-            GROW_ARRAY(int, chunk->columns, oldCapacity, chunk->capacity);
-    }
-
-    chunk->code[chunk->count] = byte;
-    chunk->lines[chunk->count] = line;
-    chunk->columns[chunk->count] = column;
-    chunk->count++;
-}
-
-int addConstant(Chunk* chunk, Value value) {
-    if (chunk->constants.capacity < chunk->constants.count + 1) {
-        int oldCapacity = chunk->constants.capacity;
-        chunk->constants.capacity = GROW_CAPACITY(oldCapacity);
-        chunk->constants.values =
-            GROW_ARRAY(Value, chunk->constants.values, oldCapacity,
-                       chunk->constants.capacity);
-    }
-
-    chunk->constants.values[chunk->constants.count] = value;
-    return chunk->constants.count++;
-}
 
 // Compiler operations
 // Type system (simplified)
@@ -239,77 +189,6 @@ static void runtimeError(ErrorType type, SrcLocation location,
     vm.lastError = ERROR_VAL(err);
 }
 
-// Debug operations
-void disassembleChunk(Chunk* chunk, const char* name) {
-    printf("== %s ==\n", name);
-
-    for (int offset = 0; offset < chunk->count;) {
-        offset = disassembleInstruction(chunk, offset);
-    }
-}
-
-int disassembleInstruction(Chunk* chunk, int offset) {
-    printf("%04d ", offset);
-
-    if (offset > 0 && chunk->lines[offset] == chunk->lines[offset - 1]) {
-        printf("   | ");
-    } else {
-        printf("%4d ", chunk->lines[offset]);
-    }
-
-    uint8_t instruction = chunk->code[offset];
-    switch (instruction) {
-        case OP_LOAD_CONST: {
-            uint8_t reg = chunk->code[offset + 1];
-            uint8_t constant = chunk->code[offset + 2];
-            printf("%-16s R%d, #%d '", "LOAD_CONST", reg, constant);
-            printValue(chunk->constants.values[constant]);
-            printf("'\n");
-            return offset + 3;
-        }
-
-        case OP_LOAD_NIL: {
-            uint8_t reg = chunk->code[offset + 1];
-            printf("%-16s R%d\n", "LOAD_NIL", reg);
-            return offset + 2;
-        }
-
-        case OP_MOVE: {
-            uint8_t dst = chunk->code[offset + 1];
-            uint8_t src = chunk->code[offset + 2];
-            printf("%-16s R%d, R%d\n", "MOVE", dst, src);
-            return offset + 3;
-        }
-
-        case OP_ADD_I32_R: {
-            uint8_t dst = chunk->code[offset + 1];
-            uint8_t src1 = chunk->code[offset + 2];
-            uint8_t src2 = chunk->code[offset + 3];
-            printf("%-16s R%d, R%d, R%d\n", "ADD_I32", dst, src1, src2);
-            return offset + 4;
-        }
-
-        case OP_PRINT_R: {
-            uint8_t reg = chunk->code[offset + 1];
-            printf("%-16s R%d\n", "PRINT", reg);
-            return offset + 2;
-        }
-
-        case OP_RETURN_R: {
-            uint8_t reg = chunk->code[offset + 1];
-            printf("%-16s R%d\n", "RETURN", reg);
-            return offset + 2;
-        }
-
-        case OP_HALT:
-            printf("%-16s\n", "HALT");
-            return offset + 1;
-
-        default:
-            printf("Unknown opcode %d\n", instruction);
-            return offset + 1;
-    }
-}
 
 // Main execution engine
 static InterpretResult run(void) {

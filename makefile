@@ -17,7 +17,7 @@ INCLUDES = -I$(INCDIR)
 # Source files
 CORE_SRCS =
 COMPILER_SRCS = $(SRCDIR)/compiler/compiler.c $(SRCDIR)/compiler/lexer.c $(SRCDIR)/compiler/parser.c
-VM_SRCS = $(SRCDIR)/vm/vm.c $(SRCDIR)/vm/memory.c
+VM_SRCS = $(SRCDIR)/vm/vm.c $(SRCDIR)/vm/memory.c $(SRCDIR)/vm/debug.c
 MAIN_SRC = $(SRCDIR)/main.c
 
 # Object files (in build directory)

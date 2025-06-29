@@ -197,3 +197,54 @@ char* copyString(const char* chars, int length) {
     return copy;
 }
 
+// Chunk operations moved from vm.c
+void initChunk(Chunk* chunk) {
+    chunk->count = 0;
+    chunk->capacity = 0;
+    chunk->code = NULL;
+    chunk->lines = NULL;
+    chunk->columns = NULL;
+    chunk->constants.count = 0;
+    chunk->constants.capacity = 0;
+    chunk->constants.values = NULL;
+}
+
+void freeChunk(Chunk* chunk) {
+    FREE_ARRAY(uint8_t, chunk->code, chunk->capacity);
+    FREE_ARRAY(int, chunk->lines, chunk->capacity);
+    FREE_ARRAY(int, chunk->columns, chunk->capacity);
+    FREE_ARRAY(Value, chunk->constants.values, chunk->constants.capacity);
+    initChunk(chunk);
+}
+
+void writeChunk(Chunk* chunk, uint8_t byte, int line, int column) {
+    if (chunk->capacity < chunk->count + 1) {
+        int oldCapacity = chunk->capacity;
+        chunk->capacity = GROW_CAPACITY(oldCapacity);
+        chunk->code =
+            GROW_ARRAY(uint8_t, chunk->code, oldCapacity, chunk->capacity);
+        chunk->lines =
+            GROW_ARRAY(int, chunk->lines, oldCapacity, chunk->capacity);
+        chunk->columns =
+            GROW_ARRAY(int, chunk->columns, oldCapacity, chunk->capacity);
+    }
+
+    chunk->code[chunk->count] = byte;
+    chunk->lines[chunk->count] = line;
+    chunk->columns[chunk->count] = column;
+    chunk->count++;
+}
+
+int addConstant(Chunk* chunk, Value value) {
+    if (chunk->constants.capacity < chunk->constants.count + 1) {
+        int oldCapacity = chunk->constants.capacity;
+        chunk->constants.capacity = GROW_CAPACITY(oldCapacity);
+        chunk->constants.values =
+            GROW_ARRAY(Value, chunk->constants.values, oldCapacity,
+                       chunk->constants.capacity);
+    }
+
+    chunk->constants.values[chunk->constants.count] = value;
+    return chunk->constants.count++;
+}
+
