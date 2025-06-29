@@ -11,19 +11,24 @@
 #include "compiler.h"
 
 static void repl() {
+    char buffer[4096]; // Larger buffer for multiline input
     char line[1024];
     
     printf("Orus Language Interpreter v0.1.0\n");
     printf("Type 'exit' to quit.\n\n");
     
+    vm.filePath = "<repl>";
+    
     for (;;) {
         printf("orus> ");
-        
+        fflush(stdout);
+
+        // Handle EOF (Ctrl+D) or errors in input
         if (!fgets(line, sizeof(line), stdin)) {
             printf("\n");
             break;
         }
-        
+
         // Remove newline
         size_t len = strlen(line);
         if (len > 0 && line[len - 1] == '\n') {
@@ -33,20 +38,46 @@ static void repl() {
         if (strcmp(line, "exit") == 0) {
             break;
         }
-        
-        if (strlen(line) == 0) {
-            continue;
+
+        // Skip empty lines or lines with just whitespace
+        bool isEmpty = true;
+        for (size_t i = 0; line[i] != '\0' && i < sizeof(line); i++) {
+            if (line[i] != ' ' && line[i] != '\t' && line[i] != '\n' && line[i] != '\r') {
+                isEmpty = false;
+                break;
+            }
         }
+        if (isEmpty) continue;
         
-        interpret(line);
+        // Copy line to buffer for processing
+        strcpy(buffer, line);
+
+        // Process the input using the current interpret function
+        InterpretResult result = interpret(buffer);
+        
+        if (result == INTERPRET_COMPILE_ERROR) {
+            printf("Compile error.\n");
+        } else if (result == INTERPRET_RUNTIME_ERROR) {
+            if (IS_ERROR(vm.lastError)) {
+                ObjError* error = AS_ERROR(vm.lastError);
+                printf("Runtime Error: %s\n", error->message->chars);
+            } else {
+                printf("Runtime error.\n");
+            }
+            vm.lastError = NIL_VAL; // Clear the error
+        }
+
+        fflush(stdout);
     }
+    
+    vm.filePath = NULL;
 }
 
 static char* readFile(const char* path) {
     FILE* file = fopen(path, "rb");
     if (file == NULL) {
         fprintf(stderr, "Could not open file \"%s\".\n", path);
-        exit(74);
+        return NULL;
     }
     
     fseek(file, 0L, SEEK_END);
@@ -56,13 +87,16 @@ static char* readFile(const char* path) {
     char* buffer = (char*)malloc(fileSize + 1);
     if (buffer == NULL) {
         fprintf(stderr, "Not enough memory to read \"%s\".\n", path);
-        exit(74);
+        fclose(file);
+        return NULL;
     }
     
     size_t bytesRead = fread(buffer, sizeof(char), fileSize, file);
     if (bytesRead < fileSize) {
         fprintf(stderr, "Could not read file \"%s\".\n", path);
-        exit(74);
+        free(buffer);
+        fclose(file);
+        return NULL;
     }
     
     buffer[bytesRead] = '\0';
@@ -73,11 +107,31 @@ static char* readFile(const char* path) {
 
 static void runFile(const char* path) {
     char* source = readFile(path);
-    InterpretResult result = interpret(source);
-    free(source);
+    if (source == NULL) {
+        // readFile already prints an error message when it fails
+        exit(65);
+    }
     
-    if (result == INTERPRET_COMPILE_ERROR) exit(65);
-    if (result == INTERPRET_RUNTIME_ERROR) exit(70);
+    // Set the file path for better error reporting
+    vm.filePath = path;
+    
+    InterpretResult result = interpret(source);
+    
+    free(source);
+    vm.filePath = NULL;
+    
+    if (result == INTERPRET_COMPILE_ERROR) {
+        fprintf(stderr, "Compilation failed for \"%s\".\n", path);
+        exit(65);
+    }
+    if (result == INTERPRET_RUNTIME_ERROR) {
+        fprintf(stderr, "Runtime error in \"%s\".\n", path);
+        if (IS_ERROR(vm.lastError)) {
+            ObjError* error = AS_ERROR(vm.lastError);
+            printf("Runtime Error: %s\n", error->message->chars);
+        }
+        exit(70);
+    }
 }
 
 static void showUsage(const char* program) {
