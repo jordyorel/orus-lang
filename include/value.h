@@ -96,7 +96,7 @@ typedef struct Value {
 #define F64_VAL(value)   ((Value){VAL_F64, {.f64 = value}})
 #define BOOL_VAL(value)  ((Value){VAL_BOOL, {.boolean = value}})
 #define NIL_VAL          ((Value){VAL_NIL, {.i32 = 0}})
-#define STRING_VAL(obj) ((Value){VAL_STRING, {.string = obj}})
+#define STRING_VAL(value) ((Value){VAL_STRING, {.string = value}})
 #define ARRAY_VAL(obj)   ((Value){VAL_ARRAY, {.array = obj}})
 #define ERROR_VAL(obj)   ((Value){VAL_ERROR, {.error = obj}})
 #define RANGE_ITERATOR_VAL(obj) ((Value){VAL_RANGE_ITERATOR, {.rangeIter = obj}})

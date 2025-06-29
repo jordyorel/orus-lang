@@ -240,7 +240,14 @@ static InterpretResult run(void) {
         dispatchTable[OP_INC_I32_R] = &&LABEL_OP_INC_I32_R;
         dispatchTable[OP_DEC_I32_R] = &&LABEL_OP_DEC_I32_R;
         dispatchTable[OP_LT_I32_R] = &&LABEL_OP_LT_I32_R;
+        dispatchTable[OP_LE_I32_R] = &&LABEL_OP_LE_I32_R;
+        dispatchTable[OP_GT_I32_R] = &&LABEL_OP_GT_I32_R;
+        dispatchTable[OP_GE_I32_R] = &&LABEL_OP_GE_I32_R;
         dispatchTable[OP_EQ_R] = &&LABEL_OP_EQ_R;
+        dispatchTable[OP_NE_R] = &&LABEL_OP_NE_R;
+        dispatchTable[OP_AND_BOOL_R] = &&LABEL_OP_AND_BOOL_R;
+        dispatchTable[OP_OR_BOOL_R] = &&LABEL_OP_OR_BOOL_R;
+        dispatchTable[OP_CONCAT_R] = &&LABEL_OP_CONCAT_R;
         dispatchTable[OP_JUMP] = &&LABEL_OP_JUMP;
         dispatchTable[OP_JUMP_IF_NOT_R] = &&LABEL_OP_JUMP_IF_NOT_R;
         dispatchTable[OP_LOOP] = &&LABEL_OP_LOOP;
@@ -483,12 +490,101 @@ LABEL_OP_LT_I32_R: {
     }
 
 LABEL_OP_EQ_R: {
-        uint8_t dst = READ_BYTE();
-        uint8_t src1 = READ_BYTE();
-        uint8_t src2 = READ_BYTE();
-        vm.registers[dst] = BOOL_VAL(valuesEqual(vm.registers[src1], vm.registers[src2]));
-        DISPATCH();
+    uint8_t dst = READ_BYTE();
+    uint8_t src1 = READ_BYTE();
+    uint8_t src2 = READ_BYTE();
+    vm.registers[dst] = BOOL_VAL(valuesEqual(vm.registers[src1], vm.registers[src2]));
+    DISPATCH();
+}
+
+LABEL_OP_NE_R: {
+    uint8_t dst = READ_BYTE();
+    uint8_t src1 = READ_BYTE();
+    uint8_t src2 = READ_BYTE();
+    vm.registers[dst] = BOOL_VAL(!valuesEqual(vm.registers[src1], vm.registers[src2]));
+    DISPATCH();
+}
+
+LABEL_OP_LE_I32_R: {
+    uint8_t dst = READ_BYTE();
+    uint8_t src1 = READ_BYTE();
+    uint8_t src2 = READ_BYTE();
+    if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
+        RETURN(INTERPRET_RUNTIME_ERROR);
     }
+    vm.registers[dst] = BOOL_VAL(AS_I32(vm.registers[src1]) <= AS_I32(vm.registers[src2]));
+    DISPATCH();
+}
+
+LABEL_OP_GT_I32_R: {
+    uint8_t dst = READ_BYTE();
+    uint8_t src1 = READ_BYTE();
+    uint8_t src2 = READ_BYTE();
+    if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
+        RETURN(INTERPRET_RUNTIME_ERROR);
+    }
+    vm.registers[dst] = BOOL_VAL(AS_I32(vm.registers[src1]) > AS_I32(vm.registers[src2]));
+    DISPATCH();
+}
+
+LABEL_OP_GE_I32_R: {
+    uint8_t dst = READ_BYTE();
+    uint8_t src1 = READ_BYTE();
+    uint8_t src2 = READ_BYTE();
+    if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
+        RETURN(INTERPRET_RUNTIME_ERROR);
+    }
+    vm.registers[dst] = BOOL_VAL(AS_I32(vm.registers[src1]) >= AS_I32(vm.registers[src2]));
+    DISPATCH();
+}
+
+LABEL_OP_AND_BOOL_R: {
+    uint8_t dst = READ_BYTE();
+    uint8_t src1 = READ_BYTE();
+    uint8_t src2 = READ_BYTE();
+    if (!IS_BOOL(vm.registers[src1]) || !IS_BOOL(vm.registers[src2])) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be bool");
+        RETURN(INTERPRET_RUNTIME_ERROR);
+    }
+    vm.registers[dst] = BOOL_VAL(AS_BOOL(vm.registers[src1]) && AS_BOOL(vm.registers[src2]));
+    DISPATCH();
+}
+
+LABEL_OP_OR_BOOL_R: {
+    uint8_t dst = READ_BYTE();
+    uint8_t src1 = READ_BYTE();
+    uint8_t src2 = READ_BYTE();
+    if (!IS_BOOL(vm.registers[src1]) || !IS_BOOL(vm.registers[src2])) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be bool");
+        RETURN(INTERPRET_RUNTIME_ERROR);
+    }
+    vm.registers[dst] = BOOL_VAL(AS_BOOL(vm.registers[src1]) || AS_BOOL(vm.registers[src2]));
+    DISPATCH();
+}
+
+LABEL_OP_CONCAT_R: {
+    uint8_t dst = READ_BYTE();
+    uint8_t src1 = READ_BYTE();
+    uint8_t src2 = READ_BYTE();
+    if (!IS_STRING(vm.registers[src1]) || !IS_STRING(vm.registers[src2])) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be string");
+        RETURN(INTERPRET_RUNTIME_ERROR);
+    }
+    ObjString* a = AS_STRING(vm.registers[src1]);
+    ObjString* b = AS_STRING(vm.registers[src2]);
+    int newLen = a->length + b->length;
+    char* buf = malloc(newLen + 1);
+    memcpy(buf, a->chars, a->length);
+    memcpy(buf + a->length, b->chars, b->length);
+    buf[newLen] = '\0';
+    ObjString* res = allocateString(buf, newLen);
+    free(buf);
+    vm.registers[dst] = STRING_VAL(res);
+    DISPATCH();
+}
 
 LABEL_OP_JUMP: {
         uint16_t offset = READ_SHORT();
@@ -822,6 +918,54 @@ LABEL_UNKNOWN:
                 break;
             }
 
+            case OP_LE_I32_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src1 = READ_BYTE();
+                uint8_t src2 = READ_BYTE();
+
+                if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                 "Operands must be i32");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+
+                vm.registers[dst] = BOOL_VAL(AS_I32(vm.registers[src1]) <=
+                                             AS_I32(vm.registers[src2]));
+                break;
+            }
+
+            case OP_GT_I32_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src1 = READ_BYTE();
+                uint8_t src2 = READ_BYTE();
+
+                if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                 "Operands must be i32");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+
+                vm.registers[dst] = BOOL_VAL(AS_I32(vm.registers[src1]) >
+                                             AS_I32(vm.registers[src2]));
+                break;
+            }
+
+            case OP_GE_I32_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src1 = READ_BYTE();
+                uint8_t src2 = READ_BYTE();
+
+                if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                 "Operands must be i32");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+
+                vm.registers[dst] = BOOL_VAL(AS_I32(vm.registers[src1]) >=
+                                             AS_I32(vm.registers[src2]));
+                break;
+            }
+
             case OP_EQ_R: {
                 uint8_t dst = READ_BYTE();
                 uint8_t src1 = READ_BYTE();
@@ -829,6 +973,72 @@ LABEL_UNKNOWN:
 
                 vm.registers[dst] = BOOL_VAL(
                     valuesEqual(vm.registers[src1], vm.registers[src2]));
+                break;
+            }
+
+            case OP_NE_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src1 = READ_BYTE();
+                uint8_t src2 = READ_BYTE();
+
+                vm.registers[dst] = BOOL_VAL(
+                    !valuesEqual(vm.registers[src1], vm.registers[src2]));
+                break;
+            }
+
+            case OP_AND_BOOL_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src1 = READ_BYTE();
+                uint8_t src2 = READ_BYTE();
+
+                if (!IS_BOOL(vm.registers[src1]) || !IS_BOOL(vm.registers[src2])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                 "Operands must be bool");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+
+                vm.registers[dst] = BOOL_VAL(AS_BOOL(vm.registers[src1]) &&
+                                             AS_BOOL(vm.registers[src2]));
+                break;
+            }
+
+            case OP_OR_BOOL_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src1 = READ_BYTE();
+                uint8_t src2 = READ_BYTE();
+
+                if (!IS_BOOL(vm.registers[src1]) || !IS_BOOL(vm.registers[src2])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                 "Operands must be bool");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+
+                vm.registers[dst] = BOOL_VAL(AS_BOOL(vm.registers[src1]) ||
+                                             AS_BOOL(vm.registers[src2]));
+                break;
+            }
+
+            case OP_CONCAT_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src1 = READ_BYTE();
+                uint8_t src2 = READ_BYTE();
+
+                if (!IS_STRING(vm.registers[src1]) || !IS_STRING(vm.registers[src2])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                 "Operands must be string");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+
+                ObjString* a = AS_STRING(vm.registers[src1]);
+                ObjString* b = AS_STRING(vm.registers[src2]);
+                int newLen = a->length + b->length;
+                char* buf = malloc(newLen + 1);
+                memcpy(buf, a->chars, a->length);
+                memcpy(buf + a->length, b->chars, b->length);
+                buf[newLen] = '\0';
+                ObjString* res = allocateString(buf, newLen);
+                free(buf);
+                vm.registers[dst] = STRING_VAL(res);
                 break;
             }
 
@@ -940,6 +1150,7 @@ LABEL_UNKNOWN:
 #undef READ_CONSTANT
 #undef RETURN
 }
+
 
 // Main interpretation functions
 InterpretResult interpret(const char* source) {

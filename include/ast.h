@@ -18,6 +18,7 @@ typedef enum {
     NODE_IDENTIFIER,
     NODE_LITERAL,
     NODE_BINARY,
+    NODE_ASSIGN,
     NODE_TYPE
 } NodeType;
 
@@ -48,6 +49,10 @@ struct ASTNode {
             ASTNode* left;
             ASTNode* right;
         } binary;
+        struct {
+            char* name;
+            ASTNode* value;
+        } assign;
         struct {
             char* name;
         } typeAnnotation;

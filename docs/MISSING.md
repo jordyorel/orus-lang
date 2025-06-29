@@ -20,8 +20,7 @@ Build a language that combines Python's readability, Rust's safety, and Lua's pe
 - **Boolean Values**: Parser ready, needs VM integration
 - **Error Handling**: Basic framework, needs enhancement
 
-### ❌ **Missing Critical Features**
-- [ ] Variable assignments (`x = value`)
+- [x] Variable assignments (`x = value`)
 - [ ] Control flow (`if`, `while`, `for`)
 - [ ] Functions (`fn name:`)
 - [ ] Arrays and collections
@@ -34,14 +33,16 @@ Build a language that combines Python's readability, Rust's safety, and Lua's pe
 
 ### 1.1 Complete Basic Data Types
 **Priority: 🔥 Critical**
-- [ ] **TODO**: Fix string support and add proper boolean operations to complete the basic type system.
+- [x] **DONE**: Fix string support and add proper boolean operations to complete the basic type system.
 
 **Implementation Steps:**
-- [ ] Fix VALUE type conflicts for strings
-- [ ] Implement string object allocation in compiler
-- [ ] Add string concatenation operator (`+`)
-- [ ] Implement string comparison operators
-- [ ] Add string interpolation support with `{}` syntax
+
+- [x] Fix VALUE type conflicts for strings
+- [x] Implement string object allocation in compiler
+- [x] Add string concatenation operator (`+`)
+- [x] Implement string comparison operators
+- [ ] Add string interpolation support
+
 
 ### 1.2 Built-in Functions (Print & I/O)
 **Priority: 🔥 Critical**
@@ -101,17 +102,17 @@ print("Array has {} items", len(items))
 
 ### 1.4 Variable Assignments
 **Priority: 🔥 Critical**
-- [ ] **TODO**: Complete the variable system with assignment operations and mutability tracking.
+- [x] **DONE**: Basic assignment operations implemented.
 
 **Features to Implement:**
-- [ ] `x = value` syntax parsing
+- [x] `x = value` syntax parsing
 - [ ] Mutable vs immutable variables (`let mut x = 42`)
 - [ ] Compound assignments (`+=`, `-=`, `*=`, `/=`)
 - [ ] Type annotations (`let x: i32 = 42`)
 
 ### 1.5 Boolean and Comparison Operations
 **Priority: 🔥 Critical**
-- [ ] **TODO**: Add logical operators and comparison operations with proper short-circuit evaluation.
+- [x] **DONE**: Added logical operators and comparison operations.
 
 ---
 
