@@ -9,6 +9,26 @@
 #include <string.h>
 #include <stdarg.h>
 
+#include "value.h"
+#include "type.h"
+#include "ast.h"
+#include "location.h"
+
+
+// Chunk (bytecode container)
+typedef struct {
+    int count;
+    int capacity;
+    uint8_t* code;
+    int* lines;
+    int* columns;
+    struct {
+        int count;
+        int capacity;
+        Value* values;
+    } constants;
+} Chunk;
+
 // Register-based VM configuration
 #define REGISTER_COUNT 256
 #define FRAMES_MAX 64
@@ -17,63 +37,6 @@
 #define MAX_NATIVES 256
 #define UINT8_COUNT 256
 
-// Value types
-typedef enum {
-    VAL_BOOL,
-    VAL_NIL,
-    VAL_I32,
-    VAL_I64,
-    VAL_U32,
-    VAL_U64,
-    VAL_F64,
-    VAL_STRING,
-    VAL_ARRAY,
-    VAL_ERROR,
-    VAL_RANGE_ITERATOR
-} ValueType;
-
-// Forward declarations
-typedef struct ObjString ObjString;
-typedef struct ObjArray ObjArray;
-typedef struct ObjError ObjError;
-typedef struct ObjRangeIterator ObjRangeIterator;
-typedef struct Obj Obj;
-
-// Value representation
-typedef struct {
-    ValueType type;
-    union {
-        bool boolean;
-        int32_t i32;
-        int64_t i64;
-        uint32_t u32;
-        uint64_t u64;
-        double f64;
-        Obj* obj;
-    } as;
-} Value;
-
-// Object header
-struct Obj {
-    struct Obj* next;
-    bool isMarked;
-};
-
-// String object
-struct ObjString {
-    Obj obj;
-    int length;
-    char* chars;
-    uint32_t hash;
-};
-
-// Array object
-struct ObjArray {
-    Obj obj;
-    int length;
-    int capacity;
-    Value* elements;
-};
 
 // Error object
 typedef enum {
@@ -107,66 +70,6 @@ struct ObjError {
     } location;
 };
 
-// Range iterator
-struct ObjRangeIterator {
-    Obj obj;
-    int64_t current;
-    int64_t end;
-};
-
-// Source location
-typedef struct {
-    const char* file;
-    int line;
-    int column;
-} SrcLocation;
-
-// Type system
-typedef enum {
-    TYPE_UNKNOWN,
-    TYPE_I32,
-    TYPE_I64,
-    TYPE_U32,
-    TYPE_U64,
-    TYPE_F64,
-    TYPE_BOOL,
-    TYPE_STRING,
-    TYPE_VOID,
-    TYPE_NIL,
-    TYPE_ARRAY,
-    TYPE_FUNCTION,
-    TYPE_ERROR,
-    TYPE_ANY
-} TypeKind;
-
-typedef struct Type Type;
-struct Type {
-    TypeKind kind;
-    union {
-        struct {
-            Type* elementType;
-        } array;
-        struct {
-            int arity;
-            Type** paramTypes;
-            Type* returnType;
-        } function;
-    } info;
-};
-
-// Chunk (bytecode container)
-typedef struct {
-    int count;
-    int capacity;
-    uint8_t* code;
-    int* lines;
-    int* columns;
-    struct {
-        int count;
-        int capacity;
-        Value* values;
-    } constants;
-} Chunk;
 
 // Function
 typedef struct {
@@ -218,182 +121,6 @@ typedef struct {
     long mtime;
     bool from_embedded;
 } Module;
-
-// AST nodes
-typedef enum {
-    NODE_PROGRAM,
-    NODE_VAR_DECL,
-    NODE_IDENTIFIER,
-    NODE_LITERAL,
-    NODE_BINARY,
-    NODE_UNARY,
-    NODE_CALL,
-    NODE_IF,
-    NODE_WHILE,
-    NODE_FOR,
-    NODE_BLOCK,
-    NODE_EXPRESSION_STMT,
-    NODE_PRINT,
-    NODE_FUNCTION,
-    NODE_RETURN,
-    NODE_BREAK,
-    NODE_CONTINUE,
-    NODE_IMPORT,
-    NODE_TRY,
-    NODE_ARRAY,
-    NODE_INDEX,
-    NODE_ARRAY_LITERAL,
-    NODE_SLICE,
-    NODE_TYPE,
-    NODE_RANGE,
-    NODE_TYPE_CAST,
-    NODE_MODULO,
-    NODE_BIT_AND,
-    NODE_BIT_OR,
-    NODE_BIT_XOR,
-    NODE_BIT_NOT,
-    NODE_SHIFT_LEFT,
-    NODE_SHIFT_RIGHT,
-    NODE_ASSIGNMENT,
-    NODE_UPDATE,
-    NODE_LEN,
-    NODE_NATIVE_CALL,
-    NODE_SUBSTRING,
-    NODE_LOGICAL_AND,
-    NODE_LOGICAL_OR
-} NodeType;
-
-typedef struct ASTNode ASTNode;
-struct ASTNode {
-    NodeType type;
-    SrcLocation location;
-    Type* dataType;
-    union {
-        struct {
-            ASTNode** declarations;
-            int count;
-        } program;
-        struct {
-            char* name;
-            bool isPublic;
-            ASTNode* initializer;
-            ASTNode* typeAnnotation;
-            bool isConst;
-        } varDecl;
-        struct {
-            char* name;
-        } identifier;
-        struct {
-            Value value;
-        } literal;
-        struct {
-            char* op;
-            ASTNode* left;
-            ASTNode* right;
-        } binary;
-        struct {
-            char* op;
-            ASTNode* operand;
-        } unary;
-        struct {
-            ASTNode* callee;
-            ASTNode** arguments;
-            int argCount;
-        } call;
-        struct {
-            ASTNode* condition;
-            ASTNode* thenBranch;
-            ASTNode* elseBranch;
-        } ifStmt;
-        struct {
-            ASTNode* condition;
-            ASTNode* body;
-        } whileStmt;
-        struct {
-            ASTNode* init;
-            ASTNode* condition;
-            ASTNode* update;
-            ASTNode* body;
-        } forStmt;
-        struct {
-            ASTNode** statements;
-            int count;
-        } block;
-        struct {
-            ASTNode* expression;
-        } exprStmt;
-        struct {
-            ASTNode** expressions;
-            int count;
-            bool newline;
-        } print;
-        struct {
-            char* name;
-            char** params;
-            int paramCount;
-            ASTNode* body;
-            ASTNode* returnType;
-            bool isPublic;
-        } function;
-        struct {
-            ASTNode* value;
-        } returnStmt;
-        struct {
-            char* path;
-        } import;
-        struct {
-            ASTNode* body;
-            char* errorVar;
-            ASTNode* handler;
-        } tryStmt;
-        struct {
-            ASTNode* object;
-            ASTNode* index;
-        } index;
-        struct {
-            ASTNode** elements;
-            int count;
-        } array;
-        struct {
-            ASTNode* array;
-            ASTNode* start;
-            ASTNode* end;
-        } slice;
-        struct {
-            char* name;
-        } typeNode;
-        struct {
-            ASTNode* start;
-            ASTNode* end;
-        } range;
-        struct {
-            ASTNode* expression;
-            char* targetType;
-        } cast;
-        struct {
-            ASTNode* target;
-            ASTNode* value;
-        } assignment;
-        struct {
-            ASTNode* target;
-            char* op;
-            ASTNode* value;
-        } update;
-        struct {
-            ASTNode* object;
-        } len;
-        struct {
-            char* name;
-            ASTNode** arguments;
-            int argCount;
-        } nativeCall;
-        struct {
-            ASTNode* string;
-            ASTNode* start;
-            ASTNode* length;
-        } substring;
-    };
-};
 
 // Variable info
 typedef struct {
@@ -603,39 +330,6 @@ typedef enum {
     INTERPRET_RUNTIME_ERROR
 } InterpretResult;
 
-// Value macros
-#define BOOL_VAL(value)   ((Value){VAL_BOOL, {.boolean = value}})
-#define NIL_VAL           ((Value){VAL_NIL, {.i32 = 0}})
-#define I32_VAL(value)    ((Value){VAL_I32, {.i32 = value}})
-#define I64_VAL(value)    ((Value){VAL_I64, {.i64 = value}})
-#define U32_VAL(value)    ((Value){VAL_U32, {.u32 = value}})
-#define U64_VAL(value)    ((Value){VAL_U64, {.u64 = value}})
-#define F64_VAL(value)    ((Value){VAL_F64, {.f64 = value}})
-#define STRING_VAL(obj)   ((Value){VAL_STRING, {.obj = (Obj*)obj}})
-#define ARRAY_VAL(obj)    ((Value){VAL_ARRAY, {.obj = (Obj*)obj}})
-#define ERROR_VAL(object)    ((Value){VAL_ERROR, {.obj = (Obj*)object}})
-
-#define AS_BOOL(value)    ((value).as.boolean)
-#define AS_I32(value)     ((value).as.i32)
-#define AS_I64(value)     ((value).as.i64)
-#define AS_U32(value)     ((value).as.u32)
-#define AS_U64(value)     ((value).as.u64)
-#define AS_F64(value)     ((value).as.f64)
-#define AS_OBJ(value)     ((value).as.obj)
-#define AS_STRING(value)  ((ObjString*)(value).as.obj)
-#define AS_ARRAY(value)   ((ObjArray*)(value).as.obj)
-#define AS_ERROR(value)   ((ObjError*)(value).as.obj)
-
-#define IS_BOOL(value)    ((value).type == VAL_BOOL)
-#define IS_NIL(value)     ((value).type == VAL_NIL)
-#define IS_I32(value)     ((value).type == VAL_I32)
-#define IS_I64(value)     ((value).type == VAL_I64)
-#define IS_U32(value)     ((value).type == VAL_U32)
-#define IS_U64(value)     ((value).type == VAL_U64)
-#define IS_F64(value)     ((value).type == VAL_F64)
-#define IS_STRING(value)  ((value).type == VAL_STRING)
-#define IS_ARRAY(value)   ((value).type == VAL_ARRAY)
-#define IS_ERROR(value)   ((value).type == VAL_ERROR)
 
 // Function declarations
 void initVM(void);

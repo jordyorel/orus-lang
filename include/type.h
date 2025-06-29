@@ -70,7 +70,7 @@ void markTypeRoots();
 Type* substituteGenerics(Type* type, ObjString** names, Type** subs, int count);
 Type* instantiateStructType(Type* base, Type** args, int argCount);
 
-extern Type* primitiveTypes[TYPE_COUNT];
+extern Type primitiveTypes[TYPE_COUNT];
 
 typedef enum {
     CONSTRAINT_NONE,

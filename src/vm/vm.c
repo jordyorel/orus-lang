@@ -22,7 +22,7 @@ static void runtimeError(ErrorType type, SrcLocation location,
     reallocate(pointer, sizeof(type) * (oldCount), 0)
 
 // Memory management
-static void* reallocate(void* pointer, size_t oldSize, size_t newSize) {
+void* reallocate(void* pointer, size_t oldSize, size_t newSize) {
     vm.bytesAllocated += newSize - oldSize;
 
     if (newSize == 0) {
@@ -43,7 +43,7 @@ static void* reallocate(void* pointer, size_t oldSize, size_t newSize) {
 static Obj* allocateObject(size_t size) {
     Obj* object = (Obj*)reallocate(NULL, 0, size);
     object->next = vm.objects;
-    object->isMarked = false;
+    object->marked = false;
     vm.objects = object;
     return object;
 }
@@ -55,13 +55,7 @@ ObjString* allocateString(const char* chars, int length) {
     memcpy(string->chars, chars, length);
     string->chars[length] = '\0';
 
-    // Simple hash
-    uint32_t hash = 2166136261u;
-    for (int i = 0; i < length; i++) {
-        hash ^= (uint8_t)chars[i];
-        hash *= 16777619;
-    }
-    string->hash = hash;
+
 
     return string;
 }
@@ -244,16 +238,16 @@ void freeRegister(Compiler* compiler, int reg) {
 }
 
 // Type system (simplified)
-static Type primitiveTypes[TYPE_ANY + 1];
+Type primitiveTypes[TYPE_COUNT];
 
 void initTypeSystem(void) {
-    for (int i = 0; i <= TYPE_ANY; i++) {
+    for (int i = 0; i <= TYPE_COUNT-1; i++) {
         primitiveTypes[i].kind = (TypeKind)i;
     }
 }
 
 Type* getPrimitiveType(TypeKind kind) {
-    if (kind <= TYPE_ANY) {
+    if (kind <= TYPE_COUNT-1) {
         return &primitiveTypes[kind];
     }
     return NULL;
@@ -365,7 +359,7 @@ static void runtimeError(ErrorType type, SrcLocation location,
     }
 
     ObjError* err = allocateError(type, buffer, location);
-    vm.lastError = (Value){VAL_ERROR, {.obj = (Obj*)err}};
+    vm.lastError = (Value){VAL_ERROR, {.error = err}};
 }
 
 // Debug operations

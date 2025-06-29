@@ -15,9 +15,9 @@ BUILDDIR = build
 INCLUDES = -I$(INCDIR)
 
 # Source files
-CORE_SRCS = $(wildcard $(SRCDIR)/core/*.c)
-COMPILER_SRCS = $(wildcard $(SRCDIR)/compiler/*.c)
-VM_SRCS = $(wildcard $(SRCDIR)/vm/*.c)
+CORE_SRCS =
+COMPILER_SRCS =
+VM_SRCS = $(SRCDIR)/vm/vm.c
 MAIN_SRC = $(SRCDIR)/main.c
 
 # Object files
@@ -28,43 +28,38 @@ MAIN_OBJ = $(MAIN_SRC:.c=.o)
 
 # Test files
 TEST_REGISTER_SRC = $(TESTDIR)/test_register.c
-TEST_PARSER_SRC = $(TESTDIR)/test_parser.c
 
 # Targets
 ORUS = orus
 TEST_REGISTER = test-register
-TEST_PARSER = test-parser
+
 
 .PHONY: all clean test help format
 
-all: $(ORUS) $(TEST_REGISTER) $(TEST_PARSER)
+all: $(ORUS) $(TEST_REGISTER)
 
 # Main interpreter
-$(ORUS): $(MAIN_OBJ) $(CORE_OBJS) $(COMPILER_OBJS) $(VM_OBJS)
+$(ORUS): $(MAIN_OBJ) $(VM_OBJS)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
 # Test executables
-$(TEST_REGISTER): $(TEST_REGISTER_SRC) $(CORE_OBJS) $(COMPILER_OBJS) $(VM_OBJS)
+$(TEST_REGISTER): $(TEST_REGISTER_SRC) $(VM_OBJS)
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
 
-$(TEST_PARSER): $(TEST_PARSER_SRC) $(CORE_OBJS) $(COMPILER_OBJS)
-	$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
 
 # Object files
 %.o: %.c
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
 # Run tests
-test: $(TEST_REGISTER) $(TEST_PARSER)
+test: $(TEST_REGISTER)
 	@echo "Running register VM tests..."
 	./$(TEST_REGISTER)
-	@echo "Running parser tests..."
-	./$(TEST_PARSER)
 
 # Clean build artifacts
 clean:
-	rm -f $(ORUS) $(TEST_REGISTER) $(TEST_PARSER)
-	rm -f $(CORE_OBJS) $(COMPILER_OBJS) $(VM_OBJS) $(MAIN_OBJ)
+	rm -f $(ORUS) $(TEST_REGISTER)
+	rm -f $(VM_OBJS) $(MAIN_OBJ)
 	rm -f *.o
 	rm -rf $(BUILDDIR)
 
