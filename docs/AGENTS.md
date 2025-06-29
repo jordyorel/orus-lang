@@ -390,6 +390,174 @@ static void test_with_out_of_memory_injection() {
 - [ ] **Regression cases**: Test previously found bugs to prevent regressions
 - [ ] **Fuzzing integration**: Use AFL++ to discover additional edge cases automatically
 
+### **4. Test Organization & Categorization - MANDATORY STRUCTURE**
+**MANDATORY**: ALL tests MUST be organized according to the categorization in `docs/TEST_CATEGORIZATION.md`. **NO EXCEPTIONS.**
+
+#### **Required Test Directory Structure:**
+```
+tests/
+├── basic/                  # Phase 1: Basic language features
+│   ├── literals/          # literal.orus, boolean.orus
+│   ├── operators/         # binary.orus, boolean_ops2.orus, complex_expr.orus
+│   ├── variables/         # vars.orus, assignment.orus, mut_compound.orus
+│   └── strings/           # string_concat.orus, multi_placeholder.orus, format_spec.orus
+├── control_flow/          # Phase 2: Control flow (when implemented)
+│   ├── conditions/        # if/else tests
+│   ├── loops/            # while/for loop tests
+│   └── functions/        # function definition and call tests
+├── collections/           # Phase 3: Collections (when implemented)
+│   ├── arrays/           # array tests
+│   ├── maps/             # hashmap tests
+│   └── iterators/        # iterator tests
+├── advanced/              # Phase 4: Advanced features (when implemented)
+│   ├── structs/          # struct and method tests
+│   ├── generics/         # generic type tests
+│   └── modules/          # module system tests
+├── edge_cases/            # Edge case and boundary tests
+│   ├── boundaries/       # boundary value tests
+│   ├── errors/           # error condition tests
+│   └── stress/           # stress tests (chain100.orus, etc.)
+└── benchmarks/            # Performance benchmarks
+    ├── micro/            # Micro-benchmarks
+    └── macro/            # Macro-benchmarks
+```
+
+#### **Test Organization Requirements:**
+
+1. **ALWAYS categorize new tests** according to `docs/TEST_CATEGORIZATION.md`
+2. **ALWAYS update the Makefile** to include new test categories
+3. **ALWAYS run tests by category** for targeted testing
+4. **ALWAYS add edge case variants** for each new test category
+
+```makefile
+# ✅ REQUIRED: Makefile targets for each test category
+.PHONY: test-all test-basic test-control-flow test-collections test-advanced test-edge-cases test-benchmarks
+
+# Run all tests
+test-all: test-basic test-edge-cases test-benchmarks
+	@echo "All tests passed!"
+
+# Basic language features (Phase 1)
+test-basic: test-literals test-operators test-variables test-strings
+	@echo "Basic tests passed!"
+
+test-literals:
+	@echo "Testing literals..."
+	./orus tests/basic/literals/literal.orus
+	./orus tests/basic/literals/boolean.orus
+
+test-operators:
+	@echo "Testing operators..."
+	./orus tests/basic/operators/binary.orus
+	./orus tests/basic/operators/boolean_ops2.orus
+	./orus tests/basic/operators/complex_expr.orus
+
+test-variables:
+	@echo "Testing variables..."
+	./orus tests/basic/variables/vars.orus
+	./orus tests/basic/variables/assignment.orus
+	./orus tests/basic/variables/mut_compound.orus
+
+test-strings:
+	@echo "Testing strings..."
+	./orus tests/basic/strings/string_concat.orus
+	./orus tests/basic/strings/multi_placeholder.orus
+	./orus tests/basic/strings/format_spec.orus
+
+# Control flow tests (Phase 2 - when implemented)
+test-control-flow: test-conditions test-loops test-functions
+	@echo "Control flow tests passed!"
+
+test-conditions:
+	@echo "Testing conditions..."
+	# Add if/else tests when implemented
+
+test-loops:
+	@echo "Testing loops..."
+	# Add while/for tests when implemented
+
+test-functions:
+	@echo "Testing functions..."
+	# Add function tests when implemented
+
+# Edge cases and stress tests
+test-edge-cases: test-boundaries test-errors test-stress
+	@echo "Edge case tests passed!"
+
+test-boundaries:
+	@echo "Testing boundary conditions..."
+	# Add boundary value tests
+
+test-errors:
+	@echo "Testing error conditions..."
+	# Add error handling tests
+
+test-stress:
+	@echo "Testing stress conditions..."
+	./orus tests/edge_cases/stress/chain100.orus
+
+# Performance benchmarks
+test-benchmarks: test-micro test-macro
+	@echo "Benchmark tests passed!"
+
+test-micro:
+	@echo "Running micro-benchmarks..."
+	# Add micro-benchmark tests
+
+test-macro:
+	@echo "Running macro-benchmarks..."
+	# Add macro-benchmark tests
+```
+
+#### **Test Creation Workflow - MANDATORY for Every New Test:**
+
+1. **Determine category** using `docs/TEST_CATEGORIZATION.md`
+2. **Create test in correct directory** following the structure above
+3. **Add edge case variants** for the same test scenario
+4. **Update Makefile** with new test targets
+5. **Run category-specific tests** to verify integration
+6. **Document test purpose** and expected behavior
+
+```c
+// ✅ REQUIRED: Example of adding a new test category
+// When implementing if/else statements:
+
+// 1. Create tests/control_flow/conditions/if_basic.orus
+if true:
+    print("condition works")
+
+// 2. Create edge case variant: tests/control_flow/conditions/if_edge_cases.orus
+if true:
+    print("true branch")
+else:
+    print("false branch")
+
+// Test with boundary conditions
+let x = 0
+if x == 0:
+    print("zero")
+elif x > 0:
+    print("positive")
+else:
+    print("negative")
+
+// 3. Update Makefile test-conditions target:
+test-conditions:
+	@echo "Testing conditions..."
+	./orus tests/control_flow/conditions/if_basic.orus
+	./orus tests/control_flow/conditions/if_edge_cases.orus
+	./orus tests/control_flow/conditions/if_nested.orus
+	./orus tests/control_flow/conditions/if_complex.orus
+```
+
+#### **Test Maintenance Requirements:**
+
+- **ALWAYS move tests** to correct categories when reorganizing
+- **ALWAYS update Makefile** when adding/moving tests
+- **ALWAYS maintain edge case coverage** for each category
+- **ALWAYS run category tests** before committing changes
+- **ALWAYS document** test rationale and expected outputs
+
 ---
 
 ## 🚫 **Forbidden Practices**
@@ -433,6 +601,9 @@ Before submitting ANY code, verify:
 - [ ] **100% test coverage with comprehensive edge case testing for EVERY function**
 - [ ] **ALL boundary conditions tested**: empty, null, min/max values, overflow cases
 - [ ] **ALL error paths tested**: OOM, invalid input, system failures, concurrent access
+- [ ] **Tests properly categorized** according to `docs/TEST_CATEGORIZATION.md`
+- [ ] **Makefile updated** with new test targets for added test categories
+- [ ] **Category-specific tests pass** (test-basic, test-control-flow, etc.)
 - [ ] **Fuzz testing with AFL++ discovering additional edge cases**
 - [ ] Memory safety verified with sanitizers on ALL edge cases
 - [ ] Performance regression tests pass for both normal and degenerate inputs
@@ -489,7 +660,19 @@ Every contribution MUST include documentation updates:
    - Include performance benchmarks and analysis
    - Add best practices learned during implementation
 
-3. **Follow Implementation Guidelines**:
+3. **Update `docs/TEST_CATEGORIZATION.md`** for new tests:
+   - Categorize all new tests according to the established structure
+   - Update test coverage analysis for new features
+   - Document missing tests and coverage gaps
+   - Add edge case requirements for new test categories
+
+4. **Update `Makefile`** for new test categories:
+   - Add test targets for new test directories
+   - Update category-specific test runners
+   - Maintain test organization and automation
+   - Ensure all tests are included in `test-all` target
+
+5. **Follow Implementation Guidelines**:
    - **ALWAYS** consult `docs/IMPLEMENTATION_GUIDE.md` before coding
    - Use the provided high-performance patterns and architectures
    - Follow the zero-cost abstraction principles
@@ -546,7 +729,9 @@ void complete_feature_implementation(Feature* feature) {
 4. Implement feature → Using best practices from guide
 5. Update MISSING.md → Mark feature as completed
 6. Update IMPLEMENTATION_GUIDE.md → Add new patterns if applicable
-7. Benchmark and document → Performance characteristics
+7. Update TEST_CATEGORIZATION.md → Categorize new tests
+8. Update Makefile → Add test targets for new categories
+9. Benchmark and document → Performance characteristics
 ```
 
 ### **Documentation Quality Requirements:**
