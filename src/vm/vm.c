@@ -1,4 +1,5 @@
 // register_vm.c - Register-based VM implementation
+#define _POSIX_C_SOURCE 200809L
 #include <math.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -8,6 +9,23 @@
 #include "compiler.h"
 #include "parser.h"
 #include "memory.h"
+#include <time.h>
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
+static double get_time_vm() {
+#ifdef _WIN32
+    LARGE_INTEGER freq, count;
+    QueryPerformanceFrequency(&freq);
+    QueryPerformanceCounter(&count);
+    return (double)count.QuadPart / freq.QuadPart;
+#else
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return ts.tv_sec + ts.tv_nsec / 1e9;
+#endif
+}
 
 // Global VM instance
 VM vm;
@@ -142,6 +160,8 @@ void initVM(void) {
     vm.currentColumn = 1;
     vm.moduleCount = 0;
     vm.nativeFunctionCount = 0;
+    vm.gcCount = 0;
+    vm.lastExecutionTime = 0.0;
 
     // Environment configuration
     const char* envTrace = getenv("ORUS_TRACE");
@@ -194,6 +214,9 @@ static InterpretResult run(void) {
 #define READ_BYTE() (*vm.ip++)
 #define READ_SHORT() (vm.ip += 2, (uint16_t)((vm.ip[-2] << 8) | vm.ip[-1]))
 #define READ_CONSTANT(index) (vm.chunk->constants.values[index])
+
+    double start_time = get_time_vm();
+#define RETURN(val) do { vm.lastExecutionTime = get_time_vm() - start_time; return (val); } while (0)
 
     for (;;) {
         if (vm.trace) {
@@ -253,7 +276,7 @@ static InterpretResult run(void) {
                     vm.globalTypes[globalIndex] == NULL) {
                     runtimeError(ERROR_NAME, (SrcLocation){NULL, 0, 0},
                                  "Undefined variable");
-                    return INTERPRET_RUNTIME_ERROR;
+                    RETURN(INTERPRET_RUNTIME_ERROR);
                 }
                 vm.registers[reg] = vm.globals[globalIndex];
                 break;
@@ -276,7 +299,7 @@ static InterpretResult run(void) {
                     !IS_I32(vm.registers[src2])) {
                     runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
                                  "Operands must be i32");
-                    return INTERPRET_RUNTIME_ERROR;
+                    RETURN(INTERPRET_RUNTIME_ERROR);
                 }
 
                 int32_t a = AS_I32(vm.registers[src1]);
@@ -286,7 +309,7 @@ static InterpretResult run(void) {
                 if (__builtin_add_overflow(a, b, &result)) {
                     runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
                                  "Integer overflow");
-                    return INTERPRET_RUNTIME_ERROR;
+                    RETURN(INTERPRET_RUNTIME_ERROR);
                 }
 
                 vm.registers[dst] = I32_VAL(result);
@@ -302,7 +325,7 @@ static InterpretResult run(void) {
                     !IS_I32(vm.registers[src2])) {
                     runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
                                  "Operands must be i32");
-                    return INTERPRET_RUNTIME_ERROR;
+                    RETURN(INTERPRET_RUNTIME_ERROR);
                 }
 
                 int32_t a = AS_I32(vm.registers[src1]);
@@ -312,7 +335,7 @@ static InterpretResult run(void) {
                 if (__builtin_sub_overflow(a, b, &result)) {
                     runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
                                  "Integer overflow");
-                    return INTERPRET_RUNTIME_ERROR;
+                    RETURN(INTERPRET_RUNTIME_ERROR);
                 }
 
                 vm.registers[dst] = I32_VAL(result);
@@ -328,7 +351,7 @@ static InterpretResult run(void) {
                     !IS_I32(vm.registers[src2])) {
                     runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
                                  "Operands must be i32");
-                    return INTERPRET_RUNTIME_ERROR;
+                    RETURN(INTERPRET_RUNTIME_ERROR);
                 }
 
                 int32_t a = AS_I32(vm.registers[src1]);
@@ -338,7 +361,7 @@ static InterpretResult run(void) {
                 if (__builtin_mul_overflow(a, b, &result)) {
                     runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
                                  "Integer overflow");
-                    return INTERPRET_RUNTIME_ERROR;
+                    RETURN(INTERPRET_RUNTIME_ERROR);
                 }
 
                 vm.registers[dst] = I32_VAL(result);
@@ -354,14 +377,14 @@ static InterpretResult run(void) {
                     !IS_I32(vm.registers[src2])) {
                     runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
                                  "Operands must be i32");
-                    return INTERPRET_RUNTIME_ERROR;
+                    RETURN(INTERPRET_RUNTIME_ERROR);
                 }
 
                 int32_t b = AS_I32(vm.registers[src2]);
                 if (b == 0) {
                     runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
                                  "Division by zero");
-                    return INTERPRET_RUNTIME_ERROR;
+                    RETURN(INTERPRET_RUNTIME_ERROR);
                 }
 
                 vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) / b);
@@ -377,14 +400,14 @@ static InterpretResult run(void) {
                     !IS_I32(vm.registers[src2])) {
                     runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
                                  "Operands must be i32");
-                    return INTERPRET_RUNTIME_ERROR;
+                    RETURN(INTERPRET_RUNTIME_ERROR);
                 }
 
                 int32_t b = AS_I32(vm.registers[src2]);
                 if (b == 0) {
                     runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
                                  "Division by zero");
-                    return INTERPRET_RUNTIME_ERROR;
+                    RETURN(INTERPRET_RUNTIME_ERROR);
                 }
 
                 vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) % b);
@@ -401,7 +424,7 @@ static InterpretResult run(void) {
                 if (__builtin_add_overflow(val, 1, &result)) {
                     runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
                                  "Integer overflow");
-                    return INTERPRET_RUNTIME_ERROR;
+                    RETURN(INTERPRET_RUNTIME_ERROR);
                 }
                 vm.registers[reg] = I32_VAL(result);
 #endif
@@ -418,7 +441,7 @@ static InterpretResult run(void) {
                 if (__builtin_sub_overflow(val, 1, &result)) {
                     runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
                                  "Integer overflow");
-                    return INTERPRET_RUNTIME_ERROR;
+                    RETURN(INTERPRET_RUNTIME_ERROR);
                 }
                 vm.registers[reg] = I32_VAL(result);
 #endif
@@ -435,7 +458,7 @@ static InterpretResult run(void) {
                     !IS_I32(vm.registers[src2])) {
                     runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
                                  "Operands must be i32");
-                    return INTERPRET_RUNTIME_ERROR;
+                    RETURN(INTERPRET_RUNTIME_ERROR);
                 }
 
                 vm.registers[dst] = BOOL_VAL(AS_I32(vm.registers[src1]) <
@@ -467,7 +490,7 @@ static InterpretResult run(void) {
                 if (!IS_BOOL(vm.registers[reg])) {
                     runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
                                  "Condition must be boolean");
-                    return INTERPRET_RUNTIME_ERROR;
+                    RETURN(INTERPRET_RUNTIME_ERROR);
                 }
 
                 if (!AS_BOOL(vm.registers[reg])) {
@@ -512,7 +535,8 @@ static InterpretResult run(void) {
                     vm.registers[frame->baseRegister] = returnValue;
                 } else {
                     // Top-level return
-                    return INTERPRET_OK;
+                    vm.lastExecutionTime = get_time_vm() - start_time;
+                    RETURN(INTERPRET_OK);
                 }
                 break;
             }
@@ -523,18 +547,21 @@ static InterpretResult run(void) {
                     vm.chunk = frame->previousChunk;
                     vm.ip = frame->returnAddress;
                 } else {
-                    return INTERPRET_OK;
+                    vm.lastExecutionTime = get_time_vm() - start_time;
+                    RETURN(INTERPRET_OK);
                 }
                 break;
             }
 
             case OP_HALT:
-                return INTERPRET_OK;
+                vm.lastExecutionTime = get_time_vm() - start_time;
+                RETURN(INTERPRET_OK);
 
             default:
                 runtimeError(ERROR_RUNTIME, (SrcLocation){NULL, 0, 0},
                              "Unknown opcode: %d", instruction);
-                return INTERPRET_RUNTIME_ERROR;
+                vm.lastExecutionTime = get_time_vm() - start_time;
+                RETURN(INTERPRET_RUNTIME_ERROR);
         }
 
         if (IS_ERROR(vm.lastError)) {
@@ -546,7 +573,7 @@ static InterpretResult run(void) {
                 vm.globals[frame.varIndex] = vm.lastError;
                 vm.lastError = NIL_VAL;
             } else {
-                return INTERPRET_RUNTIME_ERROR;
+                RETURN(INTERPRET_RUNTIME_ERROR);
             }
         }
     }
@@ -554,6 +581,7 @@ static InterpretResult run(void) {
 #undef READ_BYTE
 #undef READ_SHORT
 #undef READ_CONSTANT
+#undef RETURN
 }
 
 // Main interpretation functions
