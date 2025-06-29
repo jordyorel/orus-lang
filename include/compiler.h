@@ -4,7 +4,7 @@
 #include "common.h"
 #include "vm.h"
 #include "lexer.h"
-#include "parser.h"
+#include "ast.h"
 
 // Forward declarations
 typedef struct ASTNode ASTNode;

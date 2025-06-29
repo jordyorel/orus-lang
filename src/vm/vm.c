@@ -808,20 +808,31 @@ void emitConstant(Compiler* compiler, uint8_t reg, Value value) {
 // Basic compilation (simplified for testing)
 bool compile(ASTNode* ast, Compiler* compiler, bool isModule) {
     UNUSED(isModule);
-    
+
     if (!ast) {
         return false;
     }
 
-    // Compile the AST node and get the result register
+    if (ast->type == NODE_PROGRAM) {
+        for (int i = 0; i < ast->program.count; i++) {
+            ASTNode* stmt = ast->program.declarations[i];
+            int reg = compileExpressionToRegister(stmt, compiler);
+            if (reg < 0) return false;
+            if (!isModule && stmt->type != NODE_VAR_DECL) {
+                emitByte(compiler, OP_PRINT_R);
+                emitByte(compiler, (uint8_t)reg);
+            }
+        }
+        return true;
+    }
+
     int resultReg = compileExpressionToRegister(ast, compiler);
-    
-    // Add print instruction for the final result if it's a standalone expression (not a declaration)
+
     if (resultReg >= 0 && !isModule && ast->type != NODE_VAR_DECL) {
         emitByte(compiler, OP_PRINT_R);
         emitByte(compiler, (uint8_t)resultReg);
     }
-    
+
     return resultReg >= 0;
 }
 
