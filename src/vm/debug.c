@@ -5,65 +5,69 @@
 
 void disassembleChunk(Chunk* chunk, const char* name) {
     printf("== %s ==\n", name);
-    
+
     for (int offset = 0; offset < chunk->count;) {
         offset = disassembleInstruction(chunk, offset);
     }
 }
 
-static int constantInstruction(const char* name, Chunk* chunk, int offset) {
-    uint8_t reg = chunk->code[offset + 1];
-    uint8_t constant = chunk->code[offset + 2];
-    printf("%-16s %4d -> R%d\n", name, constant, reg);
-    return offset + 3;
-}
-
-static int registerInstruction(const char* name, Chunk* chunk, int offset) {
-    uint8_t reg = chunk->code[offset + 1];
-    printf("%-16s R%d\n", name, reg);
-    return offset + 2;
-}
-
-static int registerBinaryInstruction(const char* name, Chunk* chunk, int offset) {
-    uint8_t dst = chunk->code[offset + 1];
-    uint8_t src1 = chunk->code[offset + 2];
-    uint8_t src2 = chunk->code[offset + 3];
-    printf("%-16s R%d = R%d, R%d\n", name, dst, src1, src2);
-    return offset + 4;
-}
-
-static int simpleInstruction(const char* name, int offset) {
-    printf("%s\n", name);
-    return offset + 1;
-}
-
 int disassembleInstruction(Chunk* chunk, int offset) {
     printf("%04d ", offset);
-    
+
+    if (offset > 0 && chunk->lines[offset] == chunk->lines[offset - 1]) {
+        printf("   | ");
+    } else {
+        printf("%4d ", chunk->lines[offset]);
+    }
+
     uint8_t instruction = chunk->code[offset];
     switch (instruction) {
-        case OP_LOAD_CONST:
-            return constantInstruction("OP_LOAD_CONST", chunk, offset);
-        case OP_LOAD_NIL:
-            return registerInstruction("OP_LOAD_NIL", chunk, offset);
-        case OP_LOAD_TRUE:
-            return registerInstruction("OP_LOAD_TRUE", chunk, offset);
-        case OP_LOAD_FALSE:
-            return registerInstruction("OP_LOAD_FALSE", chunk, offset);
-        case OP_ADD_I32_R:
-            return registerBinaryInstruction("OP_ADD_I32_R", chunk, offset);
-        case OP_SUB_I32_R:
-            return registerBinaryInstruction("OP_SUB_I32_R", chunk, offset);
-        case OP_MUL_I32_R:
-            return registerBinaryInstruction("OP_MUL_I32_R", chunk, offset);
-        case OP_DIV_I32_R:
-            return registerBinaryInstruction("OP_DIV_I32_R", chunk, offset);
-        case OP_PRINT_R:
-            return registerInstruction("OP_PRINT_R", chunk, offset);
-        case OP_PRINT_NO_NL_R:
-            return registerInstruction("OP_PRINT_NO_NL_R", chunk, offset);
+        case OP_LOAD_CONST: {
+            uint8_t reg = chunk->code[offset + 1];
+            uint8_t constant = chunk->code[offset + 2];
+            printf("%-16s R%d, #%d '", "LOAD_CONST", reg, constant);
+            printValue(chunk->constants.values[constant]);
+            printf("'\n");
+            return offset + 3;
+        }
+
+        case OP_LOAD_NIL: {
+            uint8_t reg = chunk->code[offset + 1];
+            printf("%-16s R%d\n", "LOAD_NIL", reg);
+            return offset + 2;
+        }
+
+        case OP_MOVE: {
+            uint8_t dst = chunk->code[offset + 1];
+            uint8_t src = chunk->code[offset + 2];
+            printf("%-16s R%d, R%d\n", "MOVE", dst, src);
+            return offset + 3;
+        }
+
+        case OP_ADD_I32_R: {
+            uint8_t dst = chunk->code[offset + 1];
+            uint8_t src1 = chunk->code[offset + 2];
+            uint8_t src2 = chunk->code[offset + 3];
+            printf("%-16s R%d, R%d, R%d\n", "ADD_I32", dst, src1, src2);
+            return offset + 4;
+        }
+
+        case OP_PRINT_R: {
+            uint8_t reg = chunk->code[offset + 1];
+            printf("%-16s R%d\n", "PRINT", reg);
+            return offset + 2;
+        }
+
+        case OP_RETURN_R: {
+            uint8_t reg = chunk->code[offset + 1];
+            printf("%-16s R%d\n", "RETURN", reg);
+            return offset + 2;
+        }
+
         case OP_HALT:
-            return simpleInstruction("OP_HALT", offset);
+            printf("%-16s\n", "HALT");
+            return offset + 1;
+
         default:
             printf("Unknown opcode %d\n", instruction);
             return offset + 1;
