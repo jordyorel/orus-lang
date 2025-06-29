@@ -485,13 +485,6 @@ void freeChunk(Chunk* chunk);
 void writeChunk(Chunk* chunk, uint8_t byte, int line, int column);
 int addConstant(Chunk* chunk, Value value);
 
-// Compiler operations
-void initCompiler(Compiler* compiler, Chunk* chunk, const char* fileName,
-                  const char* source);
-bool compile(ASTNode* ast, Compiler* compiler, bool isModule);
-uint8_t allocateRegister(Compiler* compiler);
-void freeRegister(Compiler* compiler, uint8_t reg);
-
 // Value operations
 void printValue(Value value);
 bool valuesEqual(Value a, Value b);

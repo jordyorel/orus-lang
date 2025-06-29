@@ -73,3 +73,97 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
 bool compileExpression(ASTNode* node, Compiler* compiler) {
     return compileExpressionToRegister(node, compiler) >= 0;
 }
+
+// ---------------------------------------------------------------------------
+// Compiler setup and register allocation
+// ---------------------------------------------------------------------------
+
+void initCompiler(Compiler* compiler, Chunk* chunk, const char* fileName,
+                  const char* source) {
+    compiler->chunk = chunk;
+    compiler->fileName = fileName;
+    compiler->source = source;
+    compiler->nextRegister = 0;
+    compiler->maxRegisters = 0;
+    compiler->localCount = 0;
+    compiler->hadError = false;
+}
+
+uint8_t allocateRegister(Compiler* compiler) {
+    if (compiler->nextRegister >= (REGISTER_COUNT - 1)) {
+        compiler->hadError = true;
+        return 0;
+    }
+
+    uint8_t reg = compiler->nextRegister++;
+    if (compiler->nextRegister > compiler->maxRegisters) {
+        compiler->maxRegisters = compiler->nextRegister;
+    }
+
+    return reg;
+}
+
+void freeRegister(Compiler* compiler, uint8_t reg) {
+    if (reg == compiler->nextRegister - 1) {
+        compiler->nextRegister--;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Bytecode emission helpers
+// ---------------------------------------------------------------------------
+
+void emitByte(Compiler* compiler, uint8_t byte) {
+    writeChunk(compiler->chunk, byte, 1, 1);
+}
+
+__attribute__((unused))
+void emitBytes(Compiler* compiler, uint8_t byte1, uint8_t byte2) {
+    emitByte(compiler, byte1);
+    emitByte(compiler, byte2);
+}
+
+void emitConstant(Compiler* compiler, uint8_t reg, Value value) {
+    int constant = addConstant(compiler->chunk, value);
+    if (constant > UINT8_MAX) {
+        compiler->hadError = true;
+        return;
+    }
+    emitByte(compiler, OP_LOAD_CONST);
+    emitByte(compiler, reg);
+    emitByte(compiler, (uint8_t)constant);
+}
+
+// ---------------------------------------------------------------------------
+// Top-level compilation entry
+// ---------------------------------------------------------------------------
+
+bool compile(ASTNode* ast, Compiler* compiler, bool isModule) {
+    UNUSED(isModule);
+
+    if (!ast) {
+        return false;
+    }
+
+    if (ast->type == NODE_PROGRAM) {
+        for (int i = 0; i < ast->program.count; i++) {
+            ASTNode* stmt = ast->program.declarations[i];
+            int reg = compileExpressionToRegister(stmt, compiler);
+            if (reg < 0) return false;
+            if (!isModule && stmt->type != NODE_VAR_DECL) {
+                emitByte(compiler, OP_PRINT_R);
+                emitByte(compiler, (uint8_t)reg);
+            }
+        }
+        return true;
+    }
+
+    int resultReg = compileExpressionToRegister(ast, compiler);
+
+    if (resultReg >= 0 && !isModule && ast->type != NODE_VAR_DECL) {
+        emitByte(compiler, OP_PRINT_R);
+        emitByte(compiler, (uint8_t)resultReg);
+    }
+
+    return resultReg >= 0;
+}
