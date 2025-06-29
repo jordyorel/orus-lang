@@ -52,6 +52,18 @@ int disassembleInstruction(Chunk* chunk, int offset) {
             return offset + 4;
         }
 
+        case OP_INC_I32_R: {
+            uint8_t reg = chunk->code[offset + 1];
+            printf("%-16s R%d\n", "INC_I32", reg);
+            return offset + 2;
+        }
+
+        case OP_DEC_I32_R: {
+            uint8_t reg = chunk->code[offset + 1];
+            printf("%-16s R%d\n", "DEC_I32", reg);
+            return offset + 2;
+        }
+
         case OP_PRINT_R: {
             uint8_t reg = chunk->code[offset + 1];
             printf("%-16s R%d\n", "PRINT", reg);

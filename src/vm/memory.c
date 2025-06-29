@@ -7,15 +7,19 @@ static size_t gcThreshold = 0;
 static const double GC_HEAP_GROW_FACTOR = 2.0;
 
 static void freeObject(Obj* object);
+static Obj* freeLists[OBJ_TYPE_COUNT] = {NULL};
+static bool finalizing = false;
 
 void initMemory() {
     vm.bytesAllocated = 0;
     vm.objects = NULL;
     vm.gcPaused = false;
     gcThreshold = 1024 * 1024;
+    for (int i = 0; i < OBJ_TYPE_COUNT; i++) freeLists[i] = NULL;
 }
 
 void freeObjects() {
+    finalizing = true;
     Obj* object = vm.objects;
     while (object) {
         Obj* next = object->next;
@@ -23,6 +27,16 @@ void freeObjects() {
         object = next;
     }
     vm.objects = NULL;
+    finalizing = false;
+    for (int i = 0; i < OBJ_TYPE_COUNT; i++) {
+        Obj* obj = freeLists[i];
+        while (obj) {
+            Obj* next = obj->next;
+            free(obj);
+            obj = next;
+        }
+        freeLists[i] = NULL;
+    }
 }
 
 void* reallocate(void* pointer, size_t oldSize, size_t newSize) {
@@ -43,14 +57,20 @@ void* reallocate(void* pointer, size_t oldSize, size_t newSize) {
 }
 
 static void* allocateObject(size_t size, ObjType type) {
-    vm.bytesAllocated += size;
     if (!vm.gcPaused && vm.bytesAllocated > gcThreshold) {
         collectGarbage();
         gcThreshold = (size_t)(vm.bytesAllocated * GC_HEAP_GROW_FACTOR);
     }
 
-    Obj* object = (Obj*)malloc(size);
-    if (!object) exit(1);
+    Obj* object = NULL;
+    if (freeLists[type]) {
+        object = freeLists[type];
+        freeLists[type] = freeLists[type]->next;
+    } else {
+        object = (Obj*)malloc(size);
+        if (!object) exit(1);
+        vm.bytesAllocated += size;
+    }
     object->type = type;
     object->isMarked = false;
     object->next = vm.objects;
@@ -184,7 +204,12 @@ static void freeObject(Obj* object) {
             vm.bytesAllocated -= sizeof(ObjRangeIterator);
             break;
     }
-    free(object);
+    if (finalizing) {
+        free(object);
+    } else {
+        object->next = freeLists[object->type];
+        freeLists[object->type] = object;
+    }
 }
 
 void pauseGC() { vm.gcPaused = true; }

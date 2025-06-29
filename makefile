@@ -2,7 +2,8 @@
 # Legacy support for building without CMake
 
 CC = gcc
-CFLAGS = -Wall -Wextra -O2 -g -std=c11
+# Enable performance optimizations by default
+CFLAGS = -Wall -Wextra -O2 -g -std=c11 -DUSE_COMPUTED_GOTO=1 -DUSE_FAST_ARITH=1
 LDFLAGS = -lm
 
 # Directories
