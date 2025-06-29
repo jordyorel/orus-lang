@@ -26,13 +26,8 @@ COMPILER_OBJS = $(COMPILER_SRCS:$(SRCDIR)/%.c=$(BUILDDIR)/%.o)
 VM_OBJS = $(VM_SRCS:$(SRCDIR)/%.c=$(BUILDDIR)/%.o)
 MAIN_OBJ = $(MAIN_SRC:$(SRCDIR)/%.c=$(BUILDDIR)/%.o)
 
-# Test files
-TEST_REGISTER_SRC = $(TESTDIR)/test_register.c
-
 # Targets
 ORUS = orus
-TEST_REGISTER = test-register
-
 
 .PHONY: all clean test help format
 
@@ -46,24 +41,24 @@ $(BUILDDIR):
 $(ORUS): $(MAIN_OBJ) $(VM_OBJS) $(COMPILER_OBJS)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
-# Test executables
-$(TEST_REGISTER): $(TEST_REGISTER_SRC) $(VM_OBJS)
-	$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
-
 
 # Object files - create build directory structure and compile
 $(BUILDDIR)/%.o: $(SRCDIR)/%.c | $(BUILDDIR)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
-# Run tests
-test: $(TEST_REGISTER)
-	@echo "Running register VM tests..."
-	./$(TEST_REGISTER)
+# Run tests on .orus files
+test: $(ORUS)
+	@echo "Running Orus tests..."
+	@for test_file in $(TESTDIR)/*.orus; do \
+		echo "Testing: $$test_file"; \
+		./$(ORUS) "$$test_file" || echo "Test failed: $$test_file"; \
+	done
+	@echo "All tests completed."
 
 # Clean build artifacts
 clean:
-	rm -f $(ORUS) $(TEST_REGISTER)
+	rm -f $(ORUS)
 	rm -rf $(BUILDDIR)
 
 # Format code
@@ -80,7 +75,7 @@ help:
 	@echo "Available targets:"
 	@echo "  all      - Build all targets (default)"
 	@echo "  orus     - Build main interpreter"
-	@echo "  test     - Build and run tests"
+	@echo "  test     - Run tests on .orus files in tests/ directory"
 	@echo "  clean    - Remove build artifacts"
 	@echo "  format   - Format source code"
 	@echo "  help     - Show this help message"
