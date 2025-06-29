@@ -263,34 +263,132 @@ ALL code MUST pass these tools in CI:
 - UndefinedBehaviorSanitizer (UBSan)
 - Valgrind Memcheck
 
-### **3. Testing Standards**
-- **100% line coverage** for all new code
-- **Property-based testing** with AFL++ fuzzing
+### **3. Testing Standards - COMPREHENSIVE EDGE CASE COVERAGE REQUIRED**
+**MANDATORY**: Every single test MUST include multiple edge cases and boundary conditions. **NO EXCEPTIONS.**
+
+- **100% line coverage + 100% branch coverage** for all new code
+- **Property-based testing** with AFL++ fuzzing  
 - **Performance regression tests** for every algorithm
 - **Stress testing** with realistic workloads
+- **ALWAYS test edge cases**: empty inputs, null pointers, overflow conditions, boundary values
+- **ALWAYS test error paths**: out-of-memory, invalid input, system failures
+- **ALWAYS test concurrent access**: race conditions, deadlocks, memory ordering
+
+#### **Required Edge Case Categories for EVERY Test:**
+
+1. **Boundary Values**: 0, 1, MAX_INT, MIN_INT, -1, empty collections
+2. **Invalid Inputs**: NULL pointers, negative sizes, malformed data
+3. **Resource Exhaustion**: out-of-memory, stack overflow, file handle limits
+4. **Concurrent Access**: multiple threads, interrupts, async operations
+5. **Performance Extremes**: tiny inputs, massive inputs, degenerate cases
+6. **Error Injection**: simulated failures at every possible point
 
 ```c
-// ✅ REQUIRED: Comprehensive test coverage
-TEST(constraint_checking_simd_correctness) {
-    // Test with various constraint combinations
+// ✅ REQUIRED: Comprehensive test coverage with ALL edge cases
+TEST(constraint_checking_simd_comprehensive) {
+    // EDGE CASE 1: Empty input
+    ASSERT_TRUE(check_constraints_simd(NULL, NULL, 0));
+    
+    // EDGE CASE 2: Single element
+    ConstraintFlags single_type = CONSTRAINT_NUMERIC;
+    ConstraintFlags single_constraint = CONSTRAINT_NUMERIC;
+    ASSERT_TRUE(check_constraints_simd(&single_type, &single_constraint, 1));
+    
+    // EDGE CASE 3: Maximum batch size (boundary testing)
+    test_simd_constraint_checking(MAX_SIMD_BATCH_SIZE);
+    test_simd_constraint_checking(MAX_SIMD_BATCH_SIZE + 1); // Overflow case
+    
+    // EDGE CASE 4: All constraint combinations (exhaustive testing)
+    for (uint8_t type_flags = 0; type_flags < 64; type_flags++) {
+        for (uint8_t constraint_flags = 0; constraint_flags < 64; constraint_flags++) {
+            ConstraintFlags type = type_flags;
+            ConstraintFlags constraint = constraint_flags;
+            
+            bool expected = (type & constraint) == constraint;
+            bool actual = check_constraints_simd(&type, &constraint, 1);
+            
+            ASSERT_EQ(expected, actual) 
+                << "Failed for type=" << (int)type_flags 
+                << " constraint=" << (int)constraint_flags;
+        }
+    }
+    
+    // EDGE CASE 5: Memory alignment testing
+    test_unaligned_memory_access();
+    test_cache_line_boundaries();
+    
+    // EDGE CASE 6: Performance scaling validation
     for (size_t count = 1; count <= 1024; count *= 2) {
         ConstraintFlags* types = generate_random_type_flags(count);
         ConstraintFlags* constraints = generate_random_constraints(count);
         
-        // Test SIMD vs scalar implementations for correctness
+        // Correctness validation
         bool scalar_result = check_constraints_scalar(types, constraints, count);
         bool simd_result = check_constraints_simd(types, constraints, count);
-        
         ASSERT_EQ(scalar_result, simd_result);
         
-        // Performance requirement: SIMD must be at least 4x faster
+        // Performance requirement validation
         uint64_t scalar_cycles = benchmark_scalar(types, constraints, count);
         uint64_t simd_cycles = benchmark_simd(types, constraints, count);
+        ASSERT_LT(simd_cycles * 4, scalar_cycles) 
+            << "SIMD not 4x faster at count=" << count;
+    }
+    
+    // EDGE CASE 7: Error injection testing
+    test_with_out_of_memory_injection();
+    test_with_signal_interruption();
+    test_with_invalid_cpu_features();
+}
+
+// ✅ REQUIRED: Test helper for memory corruption detection
+static void test_unaligned_memory_access() {
+    // Test all possible misalignments
+    for (int offset = 0; offset < 16; offset++) {
+        uint8_t buffer[128];
+        ConstraintFlags* unaligned = (ConstraintFlags*)(buffer + offset);
         
-        ASSERT_LT(simd_cycles * 4, scalar_cycles);
+        // Initialize with pattern
+        for (int i = 0; i < 32; i++) {
+            unaligned[i] = CONSTRAINT_NUMERIC | CONSTRAINT_COMPARABLE;
+        }
+        
+        // Test SIMD operations on unaligned data
+        bool result = check_constraints_simd(unaligned, unaligned, 32);
+        ASSERT_TRUE(result); // Should handle unaligned access gracefully
     }
 }
+
+// ✅ REQUIRED: Error injection framework
+static void test_with_out_of_memory_injection() {
+    // Install memory allocation failure injector
+    install_malloc_failure_injector();
+    
+    for (int failure_point = 0; failure_point < 10; failure_point++) {
+        set_malloc_failure_point(failure_point);
+        
+        // Function should handle OOM gracefully
+        CompileResult result = compile_function_with_constraints(test_function);
+        
+        // Should either succeed or fail gracefully with proper error code
+        ASSERT_TRUE(result == COMPILE_SUCCESS || result == COMPILE_ERROR_MEMORY);
+        ASSERT_NO_MEMORY_LEAKS(); // Even on failure, no leaks allowed
+    }
+    
+    uninstall_malloc_failure_injector();
+}
 ```
+
+#### **Edge Case Testing Checklist - MANDATORY for Every Function:**
+- [ ] **Null/Empty inputs**: Test with NULL pointers, empty strings, zero-length arrays
+- [ ] **Boundary values**: Test with 0, 1, -1, MAX_VALUE, MIN_VALUE  
+- [ ] **Invalid inputs**: Test with negative lengths, invalid enums, corrupted data
+- [ ] **Resource limits**: Test under memory pressure, file descriptor exhaustion
+- [ ] **Concurrent access**: Test with multiple threads, interrupts, async operations
+- [ ] **Performance boundaries**: Test with tiny inputs (1 element) and huge inputs (1M+ elements)
+- [ ] **Error injection**: Test with simulated allocation failures, I/O errors, system call failures
+- [ ] **Platform variations**: Test on different architectures, endianness, alignment requirements
+- [ ] **Regression cases**: Test previously found bugs to prevent regressions
+- [ ] **Fuzzing integration**: Use AFL++ to discover additional edge cases automatically
 
 ---
 
@@ -332,12 +430,14 @@ Before submitting ANY code, verify:
 
 ### **Quality Checklist:**
 - [ ] Zero static analysis warnings
-- [ ] 100% test coverage with property-based tests
-- [ ] Fuzz testing with AFL++
-- [ ] Memory safety verified with sanitizers
-- [ ] Performance regression tests pass
-- [ ] Documentation with complexity analysis
-- [ ] Benchmark results documented
+- [ ] **100% test coverage with comprehensive edge case testing for EVERY function**
+- [ ] **ALL boundary conditions tested**: empty, null, min/max values, overflow cases
+- [ ] **ALL error paths tested**: OOM, invalid input, system failures, concurrent access
+- [ ] **Fuzz testing with AFL++ discovering additional edge cases**
+- [ ] Memory safety verified with sanitizers on ALL edge cases
+- [ ] Performance regression tests pass for both normal and degenerate inputs
+- [ ] Documentation with complexity analysis and edge case behavior
+- [ ] Benchmark results documented for edge cases and worst-case scenarios
 
 ### **Engineering Checklist:**
 - [ ] Error handling for all failure modes
