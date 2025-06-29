@@ -1558,6 +1558,77 @@ bool unify(TypeInferer* inferer, Type* t1, Type* t2) {
 
 ---
 
+## 📋 Phase 3.5: Advanced Error Reporting System 
+
+### 3.5.1 Enhanced Error Framework
+**Priority: 🔥 High**  
+**Note: This feature deserves a separate implementation file (`src/error/`) due to its comprehensive nature**
+
+The error reporting system should implement the design specified in `ERROR_FORMAT_REPORTING.md`, combining Rust's precision with Elm's empathy.
+
+#### Core Error Architecture
+```c
+// Error category system with structured formatting
+typedef enum {
+    ERROR_SYNTAX = 1000,      // E1000-1999: Syntax errors  
+    ERROR_TYPE = 2000,        // E2000-2999: Type errors
+    ERROR_RUNTIME = 0,        // E0000-0999: Runtime errors
+    ERROR_MODULE = 3000,      // E3000-3999: Module/import errors
+    ERROR_INTERNAL = 9000,    // E9000-9999: Internal bugs
+} ErrorCategory;
+
+typedef struct {
+    ErrorCategory category;
+    uint16_t code;            // Specific error code within category
+    char* title;              // Short description
+    char* file;               // Source file
+    uint32_t line;            // Line number
+    uint32_t column;          // Column position
+    char* source_line;        // Original source text
+    char* message;            // Main explanation
+    char* help;               // Optional suggestion
+    char* note;               // Optional context
+} CompilerError;
+
+// Error reporting with rich formatting
+typedef struct {
+    CompilerError* errors;
+    size_t count;
+    size_t capacity;
+    bool use_colors;          // CLI color support
+    bool compact_mode;        // Optional file:line:col format
+} ErrorReporter;
+```
+
+#### Implementation Requirements
+
+**Structured Error Messages**
+- Multi-section format with clear visual hierarchy
+- Inline source code display with caret positioning  
+- Human-centered language avoiding blame
+- Actionable suggestions and helpful context
+
+**Error Categories & Codes**
+- Consistent error numbering across categories
+- Future-ready for documentation linking
+- Structured for IDE integration and tooling
+
+**CLI Presentation**
+- Color coding: red for errors, yellow for warnings, green for notes
+- Unicode framing for visual clarity
+- Optional compact mode for scripts
+- Backtrace support for runtime panics
+
+#### Integration Points
+- Parser error recovery for multiple error reporting
+- Type checker integration with constraint violations
+- Runtime error handling with stack traces
+- REPL integration with suggestion system
+
+**Recommended Implementation**: Create `src/error/` directory with dedicated modules for error formatting, categorization, and reporting infrastructure.
+
+---
+
 ## 📋 Phase 4: Objects & Pattern Matching (Weeks 13-16)
 
 ### 4.1 Struct Implementation

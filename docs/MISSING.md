@@ -249,6 +249,39 @@ let name: string = "Orus" // String type
 let flag: bool = true     // Boolean type
 ```
 
+### 4.3 Enhanced Error Reporting System
+**Priority: 🔥 High**
+**Note: This feature deserves a separate implementation file due to its comprehensive nature**
+- [ ] **TODO**: Implement the advanced error reporting system detailed in `ERROR_FORMAT_REPORTING.md`.
+
+The error reporting system should combine Rust's precision with Elm's empathy, providing:
+
+**Core Requirements:**
+- Structured multi-section error format with visual hierarchy
+- Human-centered language that avoids blame
+- Actionable suggestions and helpful context
+- Error categorization with consistent numbering (E0000-E9999)
+- CLI presentation with colors and Unicode framing
+- Integration with parser, type checker, and runtime
+
+**Example Output Format:**
+```
+-- TYPE MISMATCH: This value isn't what we expected ------- main.orus:3:15
+
+3 | let x: i32 = "hello"
+              |        ^^^^^^ this is a `string`, but `i32` was expected
+              |
+              = Orus expected an integer here, but found a text value instead.
+              = help: You can convert a string to an integer using `int("...")`, if appropriate.
+              = note: Strings and integers can't be mixed directly.
+```
+
+**Implementation Notes:**
+- Create dedicated `src/error/` directory for error infrastructure
+- Implement error recovery in parser for multiple error reporting
+- Add structured error types with rich formatting capabilities
+- Integrate with type system for constraint violation reporting
+
 ---
 
 ## 📋 Phase 5: Advanced Features (Weeks 17-20)
@@ -393,7 +426,7 @@ pub enum Result<T, E>
   - UPPER_CASE for constants
 
 **Error Handling Philosophy:**
-- Rich error reporting with suggestions
+- Rich error reporting with suggestions (see `ERROR_FORMAT_REPORTING.md`)
 - Include source location and context
 - Provide helpful "Did you mean...?" suggestions
 - Show related locations for multi-part errors
@@ -431,7 +464,7 @@ pub enum Result<T, E>
 - [ ] **Weeks 9-12**: Functions, closures, first-class values
 
 ### **Quarter 2: Data & Types (Weeks 13-24)**
-- [ ] **Weeks 13-16**: Arrays, collections, basic type system
+- [ ] **Weeks 13-16**: Arrays, collections, basic type system, enhanced error reporting
 - [ ] **Weeks 17-20**: Pattern matching, structs, enums
 - [ ] **Weeks 21-24**: Module system, standard library core
 
