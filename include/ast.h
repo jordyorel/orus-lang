@@ -38,6 +38,7 @@ struct ASTNode {
             ASTNode* initializer;
             ASTNode* typeAnnotation;
             bool isConst;
+            bool isMutable;
         } varDecl;
         struct {
             char* name;
