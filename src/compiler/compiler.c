@@ -2,6 +2,30 @@
 #include "../../include/common.h"
 #include <string.h>
 
+static int emitJump(Compiler* compiler) {
+    emitByte(compiler, 0);
+    emitByte(compiler, 0);
+    return compiler->chunk->count - 2;
+}
+
+static void patchJump(Compiler* compiler, int offset) {
+    int jump = compiler->chunk->count - offset - 2;
+    compiler->chunk->code[offset] = (jump >> 8) & 0xFF;
+    compiler->chunk->code[offset + 1] = jump & 0xFF;
+}
+
+static void enterScope(Compiler* compiler) { compiler->scopeDepth++; }
+
+static void exitScope(Compiler* compiler) {
+    compiler->scopeDepth--;
+    while (compiler->localCount > 0 &&
+           compiler->locals[compiler->localCount - 1].depth > compiler->scopeDepth) {
+        freeRegister(compiler, compiler->locals[compiler->localCount - 1].reg);
+        compiler->locals[compiler->localCount - 1].isActive = false;
+        compiler->localCount--;
+    }
+}
+
 // Convert an expression AST to a register and emit bytecode
 int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
     if (!node) return -1;
@@ -21,6 +45,7 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
                 int32_t a = AS_I32(node->binary.left->literal.value);
                 int32_t b = AS_I32(node->binary.right->literal.value);
                 int32_t result = 0;
+                bool boolResult = false;
                 const char* op = node->binary.op;
                 if (strcmp(op, "+") == 0) {
                     result = a + b;
@@ -35,26 +60,31 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
                     if (b == 0) return -1;
                     result = a % b;
                 } else if (strcmp(op, "==") == 0) {
-                    result = (a == b);
+                    boolResult = (a == b);
                 } else if (strcmp(op, "!=") == 0) {
-                    result = (a != b);
+                    boolResult = (a != b);
                 } else if (strcmp(op, "<") == 0) {
-                    result = (a < b);
+                    boolResult = (a < b);
                 } else if (strcmp(op, ">") == 0) {
-                    result = (a > b);
+                    boolResult = (a > b);
                 } else if (strcmp(op, "<=") == 0) {
-                    result = (a <= b);
+                    boolResult = (a <= b);
                 } else if (strcmp(op, ">=") == 0) {
-                    result = (a >= b);
+                    boolResult = (a >= b);
                 } else if (strcmp(op, "and") == 0) {
-                    result = (a && b);
+                    boolResult = (a && b);
                 } else if (strcmp(op, "or") == 0) {
-                    result = (a || b);
+                    boolResult = (a || b);
                 } else {
                     return -1;
                 }
                 uint8_t reg = allocateRegister(compiler);
-                emitConstant(compiler, reg, I32_VAL(result));
+                if (strcmp(op, "+") == 0 || strcmp(op, "-") == 0 || strcmp(op, "*") == 0 ||
+                    strcmp(op, "/") == 0 || strcmp(op, "%") == 0) {
+                    emitConstant(compiler, reg, I32_VAL(result));
+                } else {
+                    emitConstant(compiler, reg, BOOL_VAL(boolResult));
+                }
                 return reg;
             }
 
@@ -133,6 +163,7 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             compiler->locals[localIndex].name = node->varDecl.name;
             compiler->locals[localIndex].reg = (uint8_t)initReg;
             compiler->locals[localIndex].isActive = true;
+            compiler->locals[localIndex].depth = compiler->scopeDepth;
             compiler->locals[localIndex].isMutable = node->varDecl.isMutable;
             return initReg;
         }
@@ -183,6 +214,74 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             }
             return regs[0];
         }
+        case NODE_BLOCK: {
+            for (int i = 0; i < node->block.count; i++) {
+                if (compileExpressionToRegister(node->block.statements[i], compiler) < 0)
+                    return -1;
+            }
+            return 0;
+        }
+        case NODE_IF: {
+            int cond = compileExpressionToRegister(node->ifStmt.condition, compiler);
+            if (cond < 0) return -1;
+            emitByte(compiler, OP_JUMP_IF_NOT_R);
+            emitByte(compiler, (uint8_t)cond);
+            int elseJump = emitJump(compiler);
+            freeRegister(compiler, (uint8_t)cond);
+
+            enterScope(compiler);
+            if (compileExpressionToRegister(node->ifStmt.thenBranch, compiler) < 0) {
+                exitScope(compiler);
+                return -1;
+            }
+            exitScope(compiler);
+
+            int endJump = -1;
+            if (node->ifStmt.elseBranch) {
+                emitByte(compiler, OP_JUMP);
+                endJump = emitJump(compiler);
+            }
+
+            patchJump(compiler, elseJump);
+
+            if (node->ifStmt.elseBranch) {
+                enterScope(compiler);
+                if (compileExpressionToRegister(node->ifStmt.elseBranch, compiler) < 0) {
+                    exitScope(compiler);
+                    return -1;
+                }
+                exitScope(compiler);
+                patchJump(compiler, endJump);
+            }
+            return 0;
+        }
+        case NODE_TERNARY: {
+            int cond = compileExpressionToRegister(node->ternary.condition, compiler);
+            if (cond < 0) return -1;
+            uint8_t resultReg = allocateRegister(compiler);
+            emitByte(compiler, OP_JUMP_IF_NOT_R);
+            emitByte(compiler, (uint8_t)cond);
+            int falseJump = emitJump(compiler);
+
+            int trueReg = compileExpressionToRegister(node->ternary.trueExpr, compiler);
+            if (trueReg < 0) return -1;
+            emitByte(compiler, OP_MOVE);
+            emitByte(compiler, resultReg);
+            emitByte(compiler, (uint8_t)trueReg);
+            freeRegister(compiler, (uint8_t)trueReg);
+            int endJump = emitJump(compiler);
+            patchJump(compiler, falseJump);
+
+            int falseReg = compileExpressionToRegister(node->ternary.falseExpr, compiler);
+            if (falseReg < 0) return -1;
+            emitByte(compiler, OP_MOVE);
+            emitByte(compiler, resultReg);
+            emitByte(compiler, (uint8_t)falseReg);
+            freeRegister(compiler, (uint8_t)falseReg);
+            patchJump(compiler, endJump);
+            freeRegister(compiler, (uint8_t)cond);
+            return resultReg;
+        }
         default:
             return -1;
     }
@@ -204,6 +303,7 @@ void initCompiler(Compiler* compiler, Chunk* chunk, const char* fileName,
     compiler->nextRegister = 0;
     compiler->maxRegisters = 0;
     compiler->localCount = 0;
+    compiler->scopeDepth = 0;
     compiler->hadError = false;
 }
 
@@ -269,7 +369,8 @@ bool compile(ASTNode* ast, Compiler* compiler, bool isModule) {
             ASTNode* stmt = ast->program.declarations[i];
             int reg = compileExpressionToRegister(stmt, compiler);
             if (reg < 0) return false;
-            if (!isModule && stmt->type != NODE_VAR_DECL && stmt->type != NODE_PRINT) {
+            if (!isModule && stmt->type != NODE_VAR_DECL && stmt->type != NODE_PRINT &&
+                stmt->type != NODE_IF && stmt->type != NODE_BLOCK) {
                 emitByte(compiler, OP_PRINT_R);
                 emitByte(compiler, (uint8_t)reg);
             }
@@ -279,7 +380,8 @@ bool compile(ASTNode* ast, Compiler* compiler, bool isModule) {
 
     int resultReg = compileExpressionToRegister(ast, compiler);
 
-    if (resultReg >= 0 && !isModule && ast->type != NODE_VAR_DECL && ast->type != NODE_PRINT) {
+    if (resultReg >= 0 && !isModule && ast->type != NODE_VAR_DECL && ast->type != NODE_PRINT &&
+        ast->type != NODE_IF && ast->type != NODE_BLOCK) {
         emitByte(compiler, OP_PRINT_R);
         emitByte(compiler, (uint8_t)resultReg);
     }

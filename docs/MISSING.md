@@ -121,7 +121,7 @@ print("Array has {} items", len(items))
 
 ### 2.1 Conditional Statements
 **Priority: 🔥 High**
-- [ ] **TODO**: Implement if/else statements with proper jump patching and block scoping.
+- [x] **DONE**: Implement if/else statements with nested conditions and `elif`, including jump patching and scoped blocks.
 
 ```orus
 // Target syntax:

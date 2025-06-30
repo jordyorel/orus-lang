@@ -20,6 +20,9 @@ typedef enum {
     NODE_BINARY,
     NODE_ASSIGN,
     NODE_PRINT,
+    NODE_IF,
+    NODE_BLOCK,
+    NODE_TERNARY,
     NODE_TYPE
 } NodeType;
 
@@ -60,6 +63,20 @@ struct ASTNode {
             int count;
             bool newline;
         } print;
+        struct {
+            ASTNode* condition;
+            ASTNode* thenBranch;
+            ASTNode* elseBranch;
+        } ifStmt;
+        struct {
+            ASTNode** statements;
+            int count;
+        } block;
+        struct {
+            ASTNode* condition;
+            ASTNode* trueExpr;
+            ASTNode* falseExpr;
+        } ternary;
         struct {
             char* name;
         } typeAnnotation;
