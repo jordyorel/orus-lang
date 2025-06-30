@@ -370,7 +370,8 @@ bool compile(ASTNode* ast, Compiler* compiler, bool isModule) {
             int reg = compileExpressionToRegister(stmt, compiler);
             if (reg < 0) return false;
             if (!isModule && stmt->type != NODE_VAR_DECL && stmt->type != NODE_PRINT &&
-                stmt->type != NODE_IF && stmt->type != NODE_BLOCK) {
+                stmt->type != NODE_IF && stmt->type != NODE_BLOCK &&
+                stmt->type != NODE_ASSIGN) {
                 emitByte(compiler, OP_PRINT_R);
                 emitByte(compiler, (uint8_t)reg);
             }
