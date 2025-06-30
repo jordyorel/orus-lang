@@ -8,7 +8,10 @@
       "Bash(find:*)",
       "Bash(mkdir:*)",
       "Bash(chmod:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(./build/test_vm)",
+      "Bash(./build/test_memory)",
+      "Bash(./build/test_lexer)"
     ],
     "deny": []
   }

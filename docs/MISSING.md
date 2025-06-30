@@ -188,17 +188,17 @@ while i < 10 and not done and is_valid(i):
 
 # High-performance integer range loops
 for i in 0..5:
-    print("Index: {}", i)  # 0, 1, 2, 3, 4 (exclusive end)
+    print("Index: {}", i)  // 0, 1, 2, 3, 4 (exclusive end)
 
 for i in 0..=5:
-    print("Index: {}", i)  # 0, 1, 2, 3, 4, 5 (inclusive end)
+    print("Index: {}", i)  // 0, 1, 2, 3, 4, 5 (inclusive end)
 
 # Advanced range syntax with step and direction validation
 for i in 0..10..2:
-    print("Even: {}", i)  # 0, 2, 4, 6, 8 (step=2)
+    print("Even: {}", i)  // 0, 2, 4, 6, 8 (step=2)
 
 for i in 10..0..-2:
-    print("Countdown: {}", i)  # 10, 8, 6, 4, 2 (negative step)
+    print("Countdown: {}", i)  // 10, 8, 6, 4, 2 (negative step)
 
 # Range with runtime bounds (bounds checking required)
 let start = get_start_value()
@@ -237,16 +237,14 @@ for i in 0..vector_size:
 @timeout(5000ms) @max_iterations(1000000)
 while server.is_running():
     let request = server.accept_connection()
-    
+
     match request:
-        Some(req) => {
+        Some(req): 
             if process_request(req).is_error():
-                continue  # Skip failed requests
-        }
-        None => {
+                continue  // Skip failed requests
+        None:
             if server.should_shutdown():
                 break
-        }
 
 # Generator-style lazy evaluation for memory efficiency
 for prime in prime_generator(1..1000000):
@@ -259,17 +257,15 @@ for item in large_dataset:
     let result = expensive_computation(item)
 
     match result:
-        Error(err) => {
+        Error(err):
             log_error("Processing failed", err)
             cleanup_partial_state()
             break
-        }
-        Complete(data) => {
+        Complete(data):
             if data.confidence < MIN_CONFIDENCE:
-                continue  # Skip low-quality results
+                continue  // Skip low-quality results
             accumulate_result(data)
-        }
-        Partial(data) => {
+        Partial(data):
             if should_continue_processing():
                 continue
             else:
@@ -284,10 +280,9 @@ loop:
     match input:
         Timeout: continue,
         Quit: break,
-        Command(cmd): {
+        Command(cmd):
             if execute_command(cmd).should_exit():
                 break
-        }
         
 # Parallel loop hint for multi-threaded execution
 @parallel @chunk_size(1000)
@@ -324,31 +319,31 @@ for i in start..end..step:
 
 ```orus
 # Constant range (compile-time optimized)
-for i in 0..5:          # Unrolled: 0, 1, 2, 3, 4
+for i in 0..5:          // Unrolled: 0, 1, 2, 3, 4
     process_fast(i)
 
 # Power-of-2 step (strength reduction)
-for i in 0..16..2:      # Optimized: 0, 2, 4, 6, 8, 10, 12, 14
+for i in 0..16..2:      // Optimized: 0, 2, 4, 6, 8, 10, 12, 14
     handle_even(i)
 
 # Reverse iteration (direction-aware)
-for i in 10..0..-2:     # Countdown: 10, 8, 6, 4, 2
+for i in 10..0..-2:     // Countdown: 10, 8, 6, 4, 2
     countdown_step(i)
 
 # Runtime bounds with bounds checking
 let n = get_array_size()
-for i in 0..n:          # Bounds-checked at runtime
+for i in 0..n:          // Bounds-checked at runtime
     if is_valid_index(i):
         process_array_element(i)
 
 # Large range with memory efficiency
-for i in 0..1000000:    # Iterator-based, O(1) memory
+for i in 0..1000000:    // Iterator-based, O(1) memory
     if should_process(i):
         handle_large_dataset_item(i)
 
 # Nested ranges with optimization
 for row in 0..height:
-    for col in 0..width..2:  # Inner loop optimized for even columns
+    for col in 0..width..2:  // Inner loop optimized for even columns
         process_matrix_cell(row, col)
 ```
 

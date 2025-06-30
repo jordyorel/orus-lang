@@ -30,10 +30,14 @@ VM_OBJS = $(VM_SRCS:$(SRCDIR)/%.c=$(BUILDDIR)/%.o)
 REPL_OBJ = $(REPL_SRC:$(SRCDIR)/%.c=$(BUILDDIR)/%.o)
 MAIN_OBJ = $(MAIN_SRC:$(SRCDIR)/%.c=$(BUILDDIR)/%.o)
 
+# Test files
+C_TEST_SRCS = $(wildcard $(TESTDIR)/c/*.c)
+C_TEST_TARGETS = $(C_TEST_SRCS:$(TESTDIR)/c/%.c=$(BUILDDIR)/%)
+
 # Targets
 ORUS = orus
 
-.PHONY: all clean test help format
+.PHONY: all clean test c-test help format
 
 all: $(ORUS)
 
@@ -51,14 +55,54 @@ $(BUILDDIR)/%.o: $(SRCDIR)/%.c | $(BUILDDIR)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
+# C test executables
+$(BUILDDIR)/test_%: $(TESTDIR)/c/test_%.c $(VM_OBJS) $(COMPILER_OBJS) | $(BUILDDIR)
+	$(CC) $(CFLAGS) $(INCLUDES) -o $@ $< $(VM_OBJS) $(COMPILER_OBJS) $(LDFLAGS)
+
 # Run tests on .orus files
 test: $(ORUS)
 	@echo "Running Orus tests..."
-	@for test_file in $(TESTDIR)/*.orus; do \
-		echo "Testing: $$test_file"; \
-		./$(ORUS) "$$test_file" || echo "Test failed: $$test_file"; \
-	done
-	@echo "All tests completed."
+	@passed=0; failed=0; \
+	for test_file in $(TESTDIR)/*.orus; do \
+		printf "Testing: $$test_file ... "; \
+		if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
+			printf "\033[32mPASS\033[0m\n"; \
+			passed=$$((passed + 1)); \
+		else \
+			printf "\033[31mFAIL\033[0m\n"; \
+			failed=$$((failed + 1)); \
+		fi; \
+	done; \
+	echo ""; \
+	if [ $$failed -eq 0 ]; then \
+		echo "\033[32mAll $$passed tests passed!\033[0m"; \
+	else \
+		echo "\033[31m$$failed test(s) failed, $$passed test(s) passed.\033[0m"; \
+	fi
+
+# Run C unit tests
+c-test: $(C_TEST_TARGETS)
+	@echo "Running C unit tests..."
+	@passed=0; failed=0; \
+	for test_exe in $(C_TEST_TARGETS); do \
+		if [ -f "$$test_exe" ]; then \
+			printf "Running: $$test_exe ... "; \
+			if "$$test_exe" >/dev/null 2>&1; then \
+				printf "\033[32mPASS\033[0m\n"; \
+				passed=$$((passed + 1)); \
+			else \
+				printf "\033[31mFAIL\033[0m\n"; \
+				printf "  Run '$$test_exe' manually to see details\n"; \
+				failed=$$((failed + 1)); \
+			fi; \
+		fi; \
+	done; \
+	echo ""; \
+	if [ $$failed -eq 0 ]; then \
+		echo "\033[32mAll $$passed C tests passed!\033[0m"; \
+	else \
+		echo "\033[31m$$failed C test(s) failed, $$passed C test(s) passed.\033[0m"; \
+	fi
 
 # Clean build artifacts
 clean:
@@ -80,6 +124,7 @@ help:
 	@echo "  all      - Build all targets (default)"
 	@echo "  orus     - Build main interpreter"
 	@echo "  test     - Run tests on .orus files in tests/ directory"
+	@echo "  c-test   - Run C unit tests for VM and critical components"
 	@echo "  clean    - Remove build artifacts"
 	@echo "  format   - Format source code"
 	@echo "  help     - Show this help message"
