@@ -339,6 +339,49 @@ static ASTNode* parseAssignment(void);
 
 static ASTNode* parseExpression(void) { return parseAssignment(); }
 
+// Parse inline conditional expressions using Python-like syntax:
+// expr if cond [elif cond]* else expr
+static ASTNode* parseInlineIf(ASTNode* expr) {
+    if (peekToken().type != TOKEN_IF) return expr;
+    nextToken();
+
+    ASTNode* condition = parseExpression();
+    if (!condition) return NULL;
+
+    ASTNode* root = new_node();
+    root->type = NODE_IF;
+    root->ifStmt.condition = condition;
+    root->ifStmt.thenBranch = expr;
+    root->ifStmt.elseBranch = NULL;
+    root->location = expr->location;
+    root->dataType = NULL;
+
+    ASTNode* current = root;
+    while (peekToken().type == TOKEN_ELIF) {
+        nextToken();
+        ASTNode* elifCond = parseExpression();
+        if (!elifCond) return NULL;
+        ASTNode* newIf = new_node();
+        newIf->type = NODE_IF;
+        newIf->ifStmt.condition = elifCond;
+        newIf->ifStmt.thenBranch = expr;
+        newIf->ifStmt.elseBranch = NULL;
+        newIf->location = expr->location;
+        newIf->dataType = NULL;
+        current->ifStmt.elseBranch = newIf;
+        current = newIf;
+    }
+
+    if (peekToken().type == TOKEN_ELSE) {
+        nextToken();
+        ASTNode* elseExpr = parseExpression();
+        if (!elseExpr) return NULL;
+        current->ifStmt.elseBranch = elseExpr;
+    }
+
+    return root;
+}
+
 static ASTNode* parseTernary(ASTNode* condition) {
     if (peekToken().type != TOKEN_QUESTION) return condition;
     nextToken();
@@ -405,7 +448,9 @@ static ASTNode* parseAssignment(void) {
         node->dataType = NULL;
         return node;
     }
-    return parseTernary(left);
+    ASTNode* expr = parseTernary(left);
+    if (!expr) return NULL;
+    return parseInlineIf(expr);
 }
 
 static ASTNode* parseBinaryExpression(int minPrec) {

@@ -269,6 +269,7 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             emitByte(compiler, resultReg);
             emitByte(compiler, (uint8_t)trueReg);
             freeRegister(compiler, (uint8_t)trueReg);
+            emitByte(compiler, OP_JUMP);
             int endJump = emitJump(compiler);
             patchJump(compiler, falseJump);
 
