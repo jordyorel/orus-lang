@@ -19,6 +19,8 @@ test_parser
 *.swp
 *.swo
 *~
+.claude/
+
 
 # Debug symbols
 *.dSYM/

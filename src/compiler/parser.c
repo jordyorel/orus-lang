@@ -100,6 +100,8 @@ static ASTNode* parseStatement(void);
 static ASTNode* parseIfStatement(void);
 static ASTNode* parseWhileStatement(void);
 static ASTNode* parseForStatement(void);
+static ASTNode* parseBreakStatement(void);
+static ASTNode* parseContinueStatement(void);
 static ASTNode* parseBlock(void);
 
 static int getOperatorPrecedence(TokenType type) {
@@ -194,6 +196,10 @@ static ASTNode* parseStatement(void) {
         return parseWhileStatement();
     } else if (t.type == TOKEN_FOR) {
         return parseForStatement();
+    } else if (t.type == TOKEN_BREAK) {
+        return parseBreakStatement();
+    } else if (t.type == TOKEN_CONTINUE) {
+        return parseContinueStatement();
     } else {
         return parseExpression();
     }
@@ -430,6 +436,34 @@ static ASTNode* parseForStatement(void) {
     }
     node->location.line = forTok.line;
     node->location.column = forTok.column;
+    node->dataType = NULL;
+    return node;
+}
+
+static ASTNode* parseBreakStatement(void) {
+    Token breakToken = nextToken();
+    if (breakToken.type != TOKEN_BREAK) {
+        return NULL;
+    }
+    
+    ASTNode* node = new_node();
+    node->type = NODE_BREAK;
+    node->location.line = breakToken.line;
+    node->location.column = breakToken.column;
+    node->dataType = NULL;
+    return node;
+}
+
+static ASTNode* parseContinueStatement(void) {
+    Token continueToken = nextToken();
+    if (continueToken.type != TOKEN_CONTINUE) {
+        return NULL;
+    }
+    
+    ASTNode* node = new_node();
+    node->type = NODE_CONTINUE;
+    node->location.line = continueToken.line;
+    node->location.column = continueToken.column;
     node->dataType = NULL;
     return node;
 }

@@ -26,6 +26,31 @@ static void exitScope(Compiler* compiler) {
     }
 }
 
+static void enterLoop(Compiler* compiler, int continueTarget) {
+    if (compiler->loopDepth >= 16) return;
+    LoopContext* loop = &compiler->loopStack[compiler->loopDepth];
+    loop->continueTarget = continueTarget;
+    loop->breakCount = 0;
+    loop->scopeDepth = compiler->scopeDepth;
+    compiler->loopDepth++;
+}
+
+static void exitLoop(Compiler* compiler) {
+    if (compiler->loopDepth <= 0) return;
+    compiler->loopDepth--;
+    LoopContext* loop = &compiler->loopStack[compiler->loopDepth];
+    
+    // Patch all break jumps to point to current position
+    for (int i = 0; i < loop->breakCount; i++) {
+        patchJump(compiler, loop->breakJumps[i]);
+    }
+}
+
+static LoopContext* getCurrentLoop(Compiler* compiler) {
+    if (compiler->loopDepth <= 0) return NULL;
+    return &compiler->loopStack[compiler->loopDepth - 1];
+}
+
 // Convert an expression AST to a register and emit bytecode
 int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
     if (!node) return -1;
@@ -257,8 +282,13 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
         }
         case NODE_WHILE: {
             int loopStart = compiler->chunk->count;
+            enterLoop(compiler, loopStart);
+            
             int condReg = compileExpressionToRegister(node->whileStmt.condition, compiler);
-            if (condReg < 0) return -1;
+            if (condReg < 0) {
+                exitLoop(compiler);
+                return -1;
+            }
             emitByte(compiler, OP_JUMP_IF_NOT_R);
             emitByte(compiler, (uint8_t)condReg);
             int exitJump = emitJump(compiler);
@@ -267,6 +297,7 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             enterScope(compiler);
             if (compileExpressionToRegister(node->whileStmt.body, compiler) < 0) {
                 exitScope(compiler);
+                exitLoop(compiler);
                 return -1;
             }
             exitScope(compiler);
@@ -277,6 +308,7 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             emitByte(compiler, (uint8_t)(offset & 0xFF));
 
             patchJump(compiler, exitJump);
+            exitLoop(compiler);
             return 0;
         }
         case NODE_FOR_RANGE: {
@@ -315,6 +347,7 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             emitByte(compiler, (uint8_t)startReg);
 
             int loopStart = compiler->chunk->count;
+            int continueTarget = loopStart;
 
             uint8_t condReg = allocateRegister(compiler);
             emitByte(compiler, node->forRange.inclusive ? OP_LE_I32_R : OP_LT_I32_R);
@@ -327,7 +360,10 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             int exitJump = emitJump(compiler);
             freeRegister(compiler, condReg);
 
+            enterLoop(compiler, continueTarget);
+
             if (compileExpressionToRegister(node->forRange.body, compiler) < 0) {
+                exitLoop(compiler);
                 exitScope(compiler);
                 return -1;
             }
@@ -349,6 +385,7 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             emitByte(compiler, (uint8_t)(offset & 0xFF));
 
             patchJump(compiler, exitJump);
+            exitLoop(compiler);
 
             exitScope(compiler);
 
@@ -378,6 +415,7 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             compiler->locals[localIndex].isMutable = true;
 
             int loopStart = compiler->chunk->count;
+            enterLoop(compiler, loopStart);
 
             uint8_t hasReg = allocateRegister(compiler);
             emitByte(compiler, OP_ITER_NEXT_R);
@@ -391,6 +429,7 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             freeRegister(compiler, hasReg);
 
             if (compileExpressionToRegister(node->forIter.body, compiler) < 0) {
+                exitLoop(compiler);
                 exitScope(compiler);
                 return -1;
             }
@@ -401,6 +440,7 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             emitByte(compiler, (uint8_t)(offset & 0xFF));
 
             patchJump(compiler, exitJump);
+            exitLoop(compiler);
 
             exitScope(compiler);
 
@@ -408,6 +448,39 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             freeRegister(compiler, iterator);
             freeRegister(compiler, loopVar);
 
+            return 0;
+        }
+        case NODE_BREAK: {
+            LoopContext* currentLoop = getCurrentLoop(compiler);
+            if (!currentLoop) {
+                // Break statement outside of loop - compile-time error
+                compiler->hadError = true;
+                return -1;
+            }
+            
+            // Add this break jump to the list to patch later
+            if (currentLoop->breakCount >= 32) {
+                compiler->hadError = true;
+                return -1;
+            }
+            
+            emitByte(compiler, OP_JUMP);
+            currentLoop->breakJumps[currentLoop->breakCount++] = emitJump(compiler);
+            return 0;
+        }
+        case NODE_CONTINUE: {
+            LoopContext* currentLoop = getCurrentLoop(compiler);
+            if (!currentLoop) {
+                // Continue statement outside of loop - compile-time error
+                compiler->hadError = true;
+                return -1;
+            }
+            
+            // Jump directly to the continue target (loop start)
+            emitByte(compiler, OP_LOOP);
+            int offset = (compiler->chunk->count + 2) - currentLoop->continueTarget;
+            emitByte(compiler, (uint8_t)((offset >> 8) & 0xFF));
+            emitByte(compiler, (uint8_t)(offset & 0xFF));
             return 0;
         }
         case NODE_TERNARY: {
@@ -460,6 +533,7 @@ void initCompiler(Compiler* compiler, Chunk* chunk, const char* fileName,
     compiler->maxRegisters = 0;
     compiler->localCount = 0;
     compiler->scopeDepth = 0;
+    compiler->loopDepth = 0;
     compiler->hadError = false;
 }
 

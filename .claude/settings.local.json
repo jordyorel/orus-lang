@@ -11,7 +11,10 @@
       "Bash(rm:*)",
       "Bash(./build/test_vm)",
       "Bash(./build/test_memory)",
-      "Bash(./build/test_lexer)"
+      "Bash(./build/test_lexer)",
+      "Bash(git stash:*)",
+      "Bash(gcc:*)",
+      "Bash(./build/test_break_continue)"
     ],
     "deny": []
   }

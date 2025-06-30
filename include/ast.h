@@ -26,7 +26,9 @@ typedef enum {
     NODE_FOR_ITER,
     NODE_BLOCK,
     NODE_TERNARY,
-    NODE_TYPE
+    NODE_TYPE,
+    NODE_BREAK,
+    NODE_CONTINUE
 } NodeType;
 
 struct ASTNode {
@@ -100,6 +102,12 @@ struct ASTNode {
         struct {
             char* name;
         } typeAnnotation;
+        struct {
+            // Empty struct for break statements
+        } breakStmt;
+        struct {
+            // Empty struct for continue statements
+        } continueStmt;
     };
 };
 

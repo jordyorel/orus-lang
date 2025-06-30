@@ -361,6 +361,14 @@ typedef enum {
     OP_HALT
 } OpCode;
 
+// Loop context for break/continue statements
+typedef struct {
+    int breakJumps[32];    // Array of break jump locations to patch
+    int breakCount;        // Number of break statements
+    int continueTarget;    // Target for continue (loop start)
+    int scopeDepth;        // Scope depth when loop was entered
+} LoopContext;
+
 // Compiler state for register allocation
 typedef struct {
     Chunk* chunk;
@@ -377,6 +385,8 @@ typedef struct {
     } locals[REGISTER_COUNT];
     int localCount;
     int scopeDepth;
+    LoopContext loopStack[16];  // Stack of nested loop contexts
+    int loopDepth;              // Current loop nesting depth
     bool hadError;
 } Compiler;
 
