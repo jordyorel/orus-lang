@@ -1653,351 +1653,842 @@ typedef struct {
 
 ---
 
-## 📋 Phase 4: Objects & Pattern Matching (Weeks 13-16)
+## 📋 Phase 4: High-Performance Arrays & Advanced Collections (Weeks 13-16)
 
-### 4.1 Struct Implementation
+### 4.1 Enhanced Array Architecture
 
-#### Struct Definition
+#### High-Performance Array Types
 ```c
-typedef struct {
-    char* name;
-    Type* type;
-    int offset;           // Byte offset in instance
-    bool is_public;
-    bool is_mutable;
-} Field;
+// Type-specialized array implementations for optimal performance
+typedef enum {
+    ARRAY_GENERIC,         // Mixed-type Value array (fallback)
+    ARRAY_I8,             // 8-bit integers (SIMD-friendly)
+    ARRAY_I16,            // 16-bit integers
+    ARRAY_I32,            // 32-bit integers (primary SIMD target)
+    ARRAY_I64,            // 64-bit integers
+    ARRAY_U8,             // Unsigned 8-bit (bytes, chars)
+    ARRAY_U16,            // Unsigned 16-bit
+    ARRAY_U32,            // Unsigned 32-bit
+    ARRAY_U64,            // Unsigned 64-bit
+    ARRAY_F32,            // 32-bit floats (SIMD optimized)
+    ARRAY_F64,            // 64-bit floats (double precision)
+    ARRAY_BOOL,           // Bit-packed booleans
+    ARRAY_STRING,         // String references with deduplication
+    ARRAY_POINTER,        // Object references with GC integration
+} ArrayElementType;
 
-typedef struct {
-    char* name;
-    Type* signature;
-    ObjFunction* function;
-    bool is_public;
-    bool is_static;
-} Method;
+// Memory layout strategies for different access patterns
+typedef enum {
+    LAYOUT_AOS,           // Array of Structures (default)
+    LAYOUT_SOA,           // Structure of Arrays (SIMD-friendly)
+    LAYOUT_SPARSE,        // Sparse representation for mostly empty
+    LAYOUT_COMPRESSED,    // Compressed format for homogeneous data
+} ArrayLayout;
 
-typedef struct {
-    char* name;
-    Field* fields;
-    int field_count;
-    Method* methods;
-    int method_count;
-    size_t instance_size;
-    uint32_t shape_id;    // For inline caching
-} StructType;
+// Alignment requirements for vectorization
+typedef enum {
+    ALIGN_DEFAULT = 8,    // Default alignment
+    ALIGN_SIMD_128 = 16,  // SSE alignment
+    ALIGN_SIMD_256 = 32,  // AVX alignment  
+    ALIGN_SIMD_512 = 64,  // AVX-512 alignment
+    ALIGN_CACHE = 64,     // Cache line alignment
+} ArrayAlignment;
 
 typedef struct {
     Obj obj;
-    StructType* type;
-    uint8_t data[];       // Inline field storage
-} ObjInstance;
+    ArrayElementType element_type;
+    ArrayLayout layout;
+    ArrayAlignment alignment;
+    
+    union {
+        // Type-specialized storage for performance
+        int8_t* i8_data;
+        int16_t* i16_data;
+        int32_t* i32_data;
+        int64_t* i64_data;
+        uint8_t* u8_data;
+        uint16_t* u16_data;
+        uint32_t* u32_data;
+        uint64_t* u64_data;
+        float* f32_data;
+        double* f64_data;
+        uint8_t* bool_data;     // Bit-packed
+        ObjString** string_data;
+        Value* generic_data;    // Fallback for mixed types
+    } data;
+    
+    // Core array properties
+    int32_t length;
+    int32_t capacity;
+    bool is_fixed_size;         // [T; N] vs [T]
+    bool is_mutable;
+    bool owns_data;             // For memory-mapped arrays
+    
+    // Performance optimizations
+    uint32_t access_pattern;    // Heat map for optimization
+    uint16_t simd_width;        // Detected SIMD capability
+    uint8_t optimization_flags; // Runtime optimization state
+    bool is_sorted;             // For binary search optimization
+    
+    // Memory management
+    void* memory_pool;          // Custom allocator
+    size_t element_size;        // Cached for performance
+    size_t stride;              // For multi-dimensional arrays
+} ObjArray;
+
+// Multi-dimensional array support
+typedef struct {
+    ObjArray base;
+    int32_t* dimensions;        // Shape: [height, width, depth, ...]
+    int32_t* strides;          // Memory strides for each dimension
+    int32_t rank;              // Number of dimensions
+    bool is_contiguous;        // Memory layout optimization
+} ObjMultiArray;
+
+// Memory-mapped array for large datasets
+typedef struct {
+    ObjArray base;
+    int fd;                    // File descriptor
+    size_t file_size;
+    void* mapped_memory;
+    bool is_writable;
+    char* file_path;
+} ObjMappedArray;
+
+// Concurrent array with atomic operations
+typedef struct {
+    ObjArray base;
+    _Atomic int32_t* atomic_i32_data;  // Atomic integer array
+    _Atomic double* atomic_f64_data;   // Atomic double array
+    pthread_rwlock_t rwlock;           // Reader-writer lock
+    bool supports_atomic_ops;
+} ObjAtomicArray;
 ```
 
-#### Struct Compilation
+#### Advanced Array Operations Interface
 ```c
-// Struct definition compilation
-static void compileStruct(Compiler* compiler, ASTNode* node) {
-    StructNode* struct_def = &node->struct_def;
+// Core array operations with performance optimization
+ObjArray* array_new_specialized(ArrayElementType type, int32_t capacity, ArrayAlignment align);
+ObjArray* array_new_fixed(ArrayElementType type, int32_t size, ArrayAlignment align);
+ObjMultiArray* array_new_multi(ArrayElementType type, int32_t* dimensions, int32_t rank);
+ObjMappedArray* array_new_mapped(const char* file_path, ArrayElementType type, bool writable);
+ObjAtomicArray* array_new_atomic(ArrayElementType type, int32_t capacity);
+
+// High-performance access operations
+Value array_get_fast(ObjArray* array, int32_t index);          // Bounds check eliminated
+Value array_get_safe(ObjArray* array, int32_t index);          // Always bounds checked
+void array_set_fast(ObjArray* array, int32_t index, Value value);
+void array_set_safe(ObjArray* array, int32_t index, Value value);
+
+// SIMD-optimized bulk operations
+void array_fill_simd(ObjArray* array, Value value, int32_t start, int32_t count);
+void array_copy_simd(ObjArray* dest, ObjArray* src, int32_t dest_start, int32_t src_start, int32_t count);
+double array_sum_simd_f64(ObjArray* array);                    // Vectorized summation
+int64_t array_sum_simd_i32(ObjArray* array);                   // Integer summation
+void array_scale_simd_f64(ObjArray* array, double factor);     // Vectorized scaling
+void array_add_arrays_simd(ObjArray* dest, ObjArray* a, ObjArray* b);  // Element-wise addition
+
+// Advanced search and sort operations
+int32_t array_binary_search(ObjArray* array, Value key);       // O(log n) search
+void array_sort_parallel(ObjArray* array, int num_threads);    // Parallel merge/quick sort
+void array_radix_sort_i32(ObjArray* array);                   // Integer radix sort
+bool array_is_sorted(ObjArray* array);                        // Sorted state detection
+
+// Memory layout transformations
+ObjArray* array_to_soa(ObjArray* aos_array);                  // AOS to SOA conversion
+ObjArray* array_compress(ObjArray* array);                    // Compress similar values
+void array_prefetch(ObjArray* array, int32_t start, int32_t count);  // Memory prefetching
+
+// Parallel operations with work-stealing
+typedef struct {
+    void (*operation)(void* data, int32_t start, int32_t end);
+    void* user_data;
+    int32_t chunk_size;
+    int32_t num_threads;
+} ParallelArrayOp;
+
+void array_parallel_map(ObjArray* dest, ObjArray* src, ParallelArrayOp* op);
+ObjArray* array_parallel_filter(ObjArray* src, bool (*predicate)(Value), int num_threads);
+Value array_parallel_reduce(ObjArray* array, Value (*reducer)(Value, Value), Value initial);
+
+// Memory pool management for high-frequency operations
+typedef struct {
+    ObjArray** available_arrays;
+    int32_t pool_size;
+    int32_t available_count;
+    ArrayElementType element_type;
+    int32_t array_capacity;
+    pthread_mutex_t mutex;
+} ArrayPool;
+
+ArrayPool* array_pool_create(ArrayElementType type, int32_t array_capacity, int32_t pool_size);
+ObjArray* array_pool_acquire(ArrayPool* pool);
+void array_pool_release(ArrayPool* pool, ObjArray* array);
+void array_pool_destroy(ArrayPool* pool);
+```
+
+#### SIMD-Optimized Opcodes
+```c
+typedef enum {
+    // Enhanced array creation with alignment control
+    OP_ARRAY_NEW_ALIGNED_R,      // dst, element_type, capacity, alignment
+    OP_ARRAY_NEW_FIXED_R,        // dst, element_type, size, alignment
+    OP_ARRAY_NEW_MULTI_R,        // dst, element_type, dims_reg, rank
+    OP_ARRAY_NEW_MAPPED_R,       // dst, file_path_reg, element_type, writable
     
-    // Create struct type
-    StructType* type = allocate_struct_type();
-    type->name = struct_def->name;
-    type->shape_id = next_shape_id();
+    // High-performance access operations
+    OP_ARRAY_GET_FAST_R,         // dst, array, index (no bounds check)
+    OP_ARRAY_SET_FAST_R,         // array, index, value (no bounds check)
+    OP_ARRAY_GET_CHECKED_R,      // dst, array, index (with bounds check)
+    OP_ARRAY_SET_CHECKED_R,      // array, index, value (with bounds check)
     
-    // Calculate field offsets
-    size_t offset = 0;
-    for (int i = 0; i < struct_def->field_count; i++) {
-        Field* field = &type->fields[i];
-        field->name = struct_def->fields[i].name;
-        field->type = resolve_type(struct_def->fields[i].type);
-        field->offset = offset;
-        field->is_public = struct_def->fields[i].is_public;
-        
-        offset += size_of_type(field->type);
+    // SIMD-optimized bulk operations
+    OP_ARRAY_FILL_SIMD_R,        // array, value, start, count
+    OP_ARRAY_COPY_SIMD_R,        // dest, src, dest_start, src_start, count
+    OP_ARRAY_SUM_SIMD_F64_R,     // dst, array (vectorized sum)
+    OP_ARRAY_SUM_SIMD_I32_R,     // dst, array (vectorized sum)
+    OP_ARRAY_SCALE_SIMD_R,       // array, factor (vectorized scaling)
+    OP_ARRAY_ADD_SIMD_R,         // dest, a, b (vectorized addition)
+    
+    // Advanced operations
+    OP_ARRAY_BINARY_SEARCH_R,    // dst, array, key
+    OP_ARRAY_SORT_PARALLEL_R,    // array, num_threads
+    OP_ARRAY_IS_SORTED_R,        // dst, array
+    OP_ARRAY_COMPRESS_R,         // dst, src
+    OP_ARRAY_PREFETCH_R,         // array, start, count
+    
+    // Parallel operations
+    OP_ARRAY_MAP_PARALLEL_R,     // dst, src, func_reg, num_threads
+    OP_ARRAY_FILTER_PARALLEL_R,  // dst, src, predicate_reg, num_threads
+    OP_ARRAY_REDUCE_PARALLEL_R,  // dst, array, reducer_reg, initial, num_threads
+    
+    // Memory management
+    OP_ARRAY_POOL_ACQUIRE_R,     // dst, pool_id
+    OP_ARRAY_POOL_RELEASE_R,     // pool_id, array
+    
+    // Multi-dimensional operations
+    OP_ARRAY_GET_MULTI_R,        // dst, array, indices_reg
+    OP_ARRAY_SET_MULTI_R,        // array, indices_reg, value
+    OP_ARRAY_RESHAPE_R,          // dst, array, new_dims_reg
+    
+    // Atomic operations for concurrent arrays
+    OP_ARRAY_ATOMIC_ADD_R,       // array, index, value
+    OP_ARRAY_ATOMIC_CAS_R,       // dst, array, index, expected, new_value
+    OP_ARRAY_ATOMIC_LOAD_R,      // dst, array, index
+    OP_ARRAY_ATOMIC_STORE_R,     // array, index, value
+} EnhancedArrayOpcodes;
+```
+
+#### Advanced Array Compilation
+```c
+// Array literal compilation with type specialization and optimization
+static uint8_t compileArrayLiteral(Compiler* compiler, ASTNode* node) {
+    ArrayLiteralNode* array = &node->array_literal;
+    
+    // Analyze elements for type specialization opportunity
+    ArrayElementType specialized_type = analyze_array_elements(array->elements, array->count);
+    ArrayAlignment alignment = determine_optimal_alignment(specialized_type, array->count);
+    
+    // Check for compile-time optimization opportunities
+    bool is_homogeneous = check_homogeneous_elements(array->elements, array->count);
+    bool can_simd_optimize = is_homogeneous && (specialized_type == ARRAY_F32 || 
+                                               specialized_type == ARRAY_I32 ||
+                                               specialized_type == ARRAY_F64);
+    
+    if (can_simd_optimize && array->count >= SIMD_THRESHOLD) {
+        return compile_simd_array_literal(compiler, array, specialized_type, alignment);
     }
-    type->instance_size = offset;
     
-    // Register type
-    register_type(compiler, struct_def->name, TYPE_VAL(type));
+    // Standard compilation path with type specialization
+    uint8_t array_reg = allocateRegister(compiler);
+    
+    if (array->count > 0) {
+        // Compile elements into consecutive registers for bulk initialization
+        uint8_t first_elem_reg = reserve_register_range(compiler, array->count);
+        
+        for (int i = 0; i < array->count; i++) {
+            uint8_t elem_reg = compileExpression(compiler, array->elements[i]);
+            if (elem_reg != first_elem_reg + i) {
+                // Move to expected position if not already there
+                emitByte(compiler, OP_MOVE);
+                emitByte(compiler, first_elem_reg + i);
+                emitByte(compiler, elem_reg);
+                freeRegister(compiler, elem_reg);
+            }
+        }
+        
+        // Create specialized array with bulk initialization
+        emitByte(compiler, OP_ARRAY_NEW_BULK_R);
+        emitByte(compiler, array_reg);
+        emitByte(compiler, specialized_type);
+        emitByte(compiler, alignment);
+        emitByte(compiler, first_elem_reg);
+        emitShort(compiler, array->count);
+        
+        free_register_range(compiler, first_elem_reg, array->count);
+    } else {
+        // Empty array
+        emitByte(compiler, OP_ARRAY_NEW_ALIGNED_R);
+        emitByte(compiler, array_reg);
+        emitByte(compiler, specialized_type);
+        emitShort(compiler, 0);  // Initial capacity
+        emitByte(compiler, alignment);
+    }
+    
+    return array_reg;
 }
 
-// Impl block compilation
-static void compileImpl(Compiler* compiler, ASTNode* node) {
-    ImplNode* impl = &node->impl;
+// SIMD-optimized array literal compilation
+static uint8_t compile_simd_array_literal(Compiler* compiler, ArrayLiteralNode* array, 
+                                         ArrayElementType type, ArrayAlignment alignment) {
+    uint8_t array_reg = allocateRegister(compiler);
     
-    // Look up struct type
-    StructType* type = lookup_struct_type(compiler, impl->struct_name);
-    if (!type) {
-        error(compiler, "Unknown struct '%s'", impl->struct_name);
-        return;
+    // Create aligned array for SIMD operations
+    emitByte(compiler, OP_ARRAY_NEW_ALIGNED_R);
+    emitByte(compiler, array_reg);
+    emitByte(compiler, type);
+    emitShort(compiler, array->count);
+    emitByte(compiler, alignment);
+    
+    // Group elements for vectorized initialization
+    int simd_width = get_simd_width_for_type(type);
+    int full_vectors = array->count / simd_width;
+    int remainder = array->count % simd_width;
+    
+    for (int vec = 0; vec < full_vectors; vec++) {
+        // Compile vector's worth of elements
+        uint8_t vec_reg = allocateRegister(compiler);
+        compile_simd_vector_literal(compiler, array->elements + vec * simd_width, 
+                                   simd_width, type, vec_reg);
+        
+        // Store vector to array
+        emitByte(compiler, OP_ARRAY_SET_VECTOR_R);
+        emitByte(compiler, array_reg);
+        emitShort(compiler, vec * simd_width);  // Offset
+        emitByte(compiler, vec_reg);
+        emitByte(compiler, simd_width);
+        
+        freeRegister(compiler, vec_reg);
     }
     
-    // Compile each method
-    for (int i = 0; i < impl->method_count; i++) {
-        FunctionNode* method = &impl->methods[i];
-        
-        // Add implicit 'self' parameter
-        Compiler method_compiler;
-        initCompiler(&method_compiler, compiler->vm);
-        enterScope(&method_compiler);
-        
-        // Reserve register for 'self'
-        uint8_t self_reg = allocateRegister(&method_compiler);
-        declareLocal(&method_compiler, "self", self_reg, method->is_mut_self);
-        
-        // Compile method body
-        compileFunction(&method_compiler, method);
-        
-        // Add to struct type
-        Method* m = &type->methods[type->method_count++];
-        m->name = method->name;
-        m->function = method_compiler.function;
-        m->is_public = method->is_public;
+    // Handle remaining elements
+    if (remainder > 0) {
+        for (int i = full_vectors * simd_width; i < array->count; i++) {
+            uint8_t elem_reg = compileExpression(compiler, array->elements[i]);
+            emitByte(compiler, OP_ARRAY_SET_FAST_R);
+            emitByte(compiler, array_reg);
+            emitShort(compiler, i);
+            emitByte(compiler, elem_reg);
+            freeRegister(compiler, elem_reg);
+        }
     }
+    
+    return array_reg;
 }
 
-// Field access with inline caching
-static uint8_t compileFieldAccess(Compiler* compiler, ASTNode* node) {
-    FieldAccessNode* access = &node->field_access;
+// Array comprehension with parallel execution support
+static uint8_t compileArrayComprehension(Compiler* compiler, ASTNode* node) {
+    ComprehensionNode* comp = &node->comprehension;
     
-    // Compile object expression
-    uint8_t obj_reg = compileExpression(compiler, access->object);
+    // Analyze for parallelization opportunities
+    bool can_parallelize = analyze_comprehension_parallelizable(comp);
+    int estimated_size = estimate_comprehension_size(comp);
     
-    // Allocate inline cache entry
-    uint16_t cache_id = allocate_inline_cache();
+    if (can_parallelize && estimated_size > PARALLEL_THRESHOLD) {
+        return compile_parallel_comprehension(compiler, comp);
+    }
     
-    // Compile field name to constant
-    int name_const = addConstant(compiler->chunk, 
-                                STRING_VAL(intern_string(access->field_name)));
+    // Standard sequential comprehension
+    ArrayElementType result_type = infer_comprehension_result_type(comp);
     
-    // Emit cached field access
+    // Create result array with estimated capacity
     uint8_t result_reg = allocateRegister(compiler);
-    emitByte(compiler, OP_GET_FIELD_IC_R);
+    emitByte(compiler, OP_ARRAY_NEW_ALIGNED_R);
     emitByte(compiler, result_reg);
-    emitByte(compiler, obj_reg);
-    emitShort(compiler, cache_id);
-    emitShort(compiler, name_const);
+    emitByte(compiler, result_type);
+    emitShort(compiler, estimated_size > 0 ? estimated_size : 16);
+    emitByte(compiler, ALIGN_DEFAULT);
     
-    freeRegister(compiler, obj_reg);
+    // Compile iterable and iterator setup
+    uint8_t iter_reg = compileExpression(compiler, comp->iterable);
+    uint8_t iterator_reg = allocateRegister(compiler);
+    
+    // Optimize for known array types
+    if (is_array_type(comp->iterable)) {
+        compile_array_comprehension_optimized(compiler, comp, result_reg, iter_reg);
+    } else {
+        compile_generic_comprehension(compiler, comp, result_reg, iter_reg, iterator_reg);
+    }
+    
+    freeRegister(compiler, iter_reg);
+    freeRegister(compiler, iterator_reg);
+    
+    return result_reg;
+}
+
+// Parallel array comprehension compilation
+static uint8_t compile_parallel_comprehension(Compiler* compiler, ComprehensionNode* comp) {
+    uint8_t result_reg = allocateRegister(compiler);
+    
+    // Compile source array
+    uint8_t source_reg = compileExpression(compiler, comp->iterable);
+    
+    // Create worker function for parallel execution
+    uint8_t worker_func = compile_comprehension_worker(compiler, comp);
+    
+    // Determine thread count (default to CPU count)
+    uint8_t thread_count_reg = allocateRegister(compiler);
+    emitByte(compiler, OP_GET_CPU_COUNT_R);
+    emitByte(compiler, thread_count_reg);
+    
+    // Execute parallel comprehension
+    if (comp->condition) {
+        // Parallel filter + map
+        emitByte(compiler, OP_ARRAY_FILTER_MAP_PARALLEL_R);
+        emitByte(compiler, result_reg);
+        emitByte(compiler, source_reg);
+        emitByte(compiler, worker_func);
+        emitByte(compiler, thread_count_reg);
+    } else {
+        // Parallel map only
+        emitByte(compiler, OP_ARRAY_MAP_PARALLEL_R);
+        emitByte(compiler, result_reg);
+        emitByte(compiler, source_reg);
+        emitByte(compiler, worker_func);
+        emitByte(compiler, thread_count_reg);
+    }
+    
+    freeRegister(compiler, source_reg);
+    freeRegister(compiler, worker_func);
+    freeRegister(compiler, thread_count_reg);
+    
+    return result_reg;
+}
+
+// Multi-dimensional array access compilation
+static uint8_t compileMultiArrayAccess(Compiler* compiler, ASTNode* node) {
+    MultiArrayAccessNode* access = &node->multi_access;
+    
+    // Compile array expression
+    uint8_t array_reg = compileExpression(compiler, access->array);
+    
+    // Compile indices into consecutive registers
+    uint8_t indices_start = reserve_register_range(compiler, access->index_count);
+    for (int i = 0; i < access->index_count; i++) {
+        uint8_t index_reg = compileExpression(compiler, access->indices[i]);
+        if (index_reg != indices_start + i) {
+            emitByte(compiler, OP_MOVE);
+            emitByte(compiler, indices_start + i);
+            emitByte(compiler, index_reg);
+            freeRegister(compiler, index_reg);
+        }
+    }
+    
+    // Optimize for common access patterns
+    if (access->index_count == 2 && is_matrix_type(access->array)) {
+        // Optimized 2D matrix access
+        uint8_t result_reg = allocateRegister(compiler);
+        emitByte(compiler, OP_MATRIX_GET_R);
+        emitByte(compiler, result_reg);
+        emitByte(compiler, array_reg);
+        emitByte(compiler, indices_start);     // row
+        emitByte(compiler, indices_start + 1); // col
+        
+        free_register_range(compiler, indices_start, access->index_count);
+        freeRegister(compiler, array_reg);
+        return result_reg;
+    }
+    
+    // General multi-dimensional access
+    uint8_t result_reg = allocateRegister(compiler);
+    emitByte(compiler, OP_ARRAY_GET_MULTI_R);
+    emitByte(compiler, result_reg);
+    emitByte(compiler, array_reg);
+    emitByte(compiler, indices_start);
+    emitByte(compiler, access->index_count);
+    
+    free_register_range(compiler, indices_start, access->index_count);
+    freeRegister(compiler, array_reg);
+    
     return result_reg;
 }
 ```
 
-#### Property Cache Implementation
+### 4.2 SIMD Optimization Engine
+
+#### SIMD Detection and Capability Management
 ```c
-// Inline cache for fast property access
+// SIMD capability detection at runtime
 typedef struct {
-    uint32_t shape_id;
-    uint16_t offset;
-    Type* type;
-    uint8_t hit_count;
-} PropertyCache;
+    bool has_sse;
+    bool has_sse2;
+    bool has_sse3;
+    bool has_ssse3;
+    bool has_sse4_1;
+    bool has_sse4_2;
+    bool has_avx;
+    bool has_avx2;
+    bool has_avx512;
+    bool has_fma;
+    bool has_neon;        // ARM NEON
+    int max_vector_width; // In bytes
+} SIMDCapabilities;
 
-static PropertyCache property_caches[65536];
+static SIMDCapabilities simd_caps;
 
-// Runtime property access with caching
-Value get_property_cached(uint16_t cache_id, ObjInstance* obj, ObjString* name) {
-    PropertyCache* cache = &property_caches[cache_id];
+// Initialize SIMD capabilities at VM startup
+void init_simd_capabilities(VM* vm) {
+    detect_cpu_features(&simd_caps);
     
-    // Fast path - cache hit
-    if (cache->shape_id == obj->type->shape_id) {
-        cache->hit_count++;
-        return *(Value*)((uint8_t*)obj->data + cache->offset);
+    // Set optimal vector widths for different types
+    vm->simd_i32_width = simd_caps.has_avx2 ? 8 : (simd_caps.has_sse2 ? 4 : 1);
+    vm->simd_f32_width = simd_caps.has_avx ? 8 : (simd_caps.has_sse ? 4 : 1);
+    vm->simd_f64_width = simd_caps.has_avx ? 4 : (simd_caps.has_sse2 ? 2 : 1);
+    
+    // Initialize SIMD function pointers based on capabilities
+    select_optimal_simd_functions(vm, &simd_caps);
+}
+
+// Function pointer table for SIMD operations
+typedef struct {
+    void (*array_sum_f32)(float* array, int length, float* result);
+    void (*array_sum_f64)(double* array, int length, double* result);
+    void (*array_sum_i32)(int32_t* array, int length, int64_t* result);
+    void (*array_scale_f32)(float* array, int length, float factor);
+    void (*array_scale_f64)(double* array, int length, double factor);
+    void (*array_add_f32)(float* dest, float* a, float* b, int length);
+    void (*array_add_f64)(double* dest, double* a, double* b, int length);
+    void (*array_mul_f32)(float* dest, float* a, float* b, int length);
+    void (*array_mul_f64)(double* dest, double* a, double* b, int length);
+    void (*array_dot_f32)(float* a, float* b, int length, float* result);
+    void (*array_dot_f64)(double* a, double* b, int length, double* result);
+} SIMDFunctionTable;
+
+static SIMDFunctionTable simd_funcs;
+```
+
+#### Runtime SIMD Implementation Examples
+```c
+// AVX2-optimized array summation for f64
+void array_sum_f64_avx2(double* array, int length, double* result) {
+    __m256d sum_vec = _mm256_setzero_pd();
+    int simd_length = length & ~3;  // Process 4 doubles at a time
+    
+    for (int i = 0; i < simd_length; i += 4) {
+        __m256d data = _mm256_load_pd(&array[i]);
+        sum_vec = _mm256_add_pd(sum_vec, data);
     }
     
-    // Slow path - cache miss
-    Field* field = lookup_field(obj->type, name);
-    if (!field) {
-        runtime_error("Property '%s' not found", name->chars);
-        return NIL_VAL;
+    // Horizontal sum of vector elements
+    sum_vec = _mm256_hadd_pd(sum_vec, sum_vec);
+    __m128d sum_high = _mm256_extractf128_pd(sum_vec, 1);
+    __m128d sum_low = _mm256_castpd256_pd128(sum_vec);
+    __m128d sum_final = _mm128_add_pd(sum_high, sum_low);
+    
+    double partial_sum = _mm_cvtsd_f64(sum_final);
+    
+    // Handle remaining elements
+    for (int i = simd_length; i < length; i++) {
+        partial_sum += array[i];
     }
     
-    // Update cache
-    cache->shape_id = obj->type->shape_id;
-    cache->offset = field->offset;
-    cache->type = field->type;
-    cache->hit_count = 1;
+    *result = partial_sum;
+}
+
+// SSE2-optimized array scaling for i32
+void array_scale_i32_sse2(int32_t* array, int length, int32_t factor) {
+    __m128i factor_vec = _mm_set1_epi32(factor);
+    int simd_length = length & ~3;  // Process 4 ints at a time
     
-    return *(Value*)((uint8_t*)obj->data + field->offset);
+    for (int i = 0; i < simd_length; i += 4) {
+        __m128i data = _mm_load_si128((__m128i*)&array[i]);
+        __m128i result = _mm_mullo_epi32(data, factor_vec);
+        _mm_store_si128((__m128i*)&array[i], result);
+    }
+    
+    // Handle remaining elements
+    for (int i = simd_length; i < length; i++) {
+        array[i] *= factor;
+    }
+}
+
+// ARM NEON-optimized array addition for f32
+void array_add_f32_neon(float* dest, float* a, float* b, int length) {
+    int simd_length = length & ~3;  // Process 4 floats at a time
+    
+    for (int i = 0; i < simd_length; i += 4) {
+        float32x4_t a_vec = vld1q_f32(&a[i]);
+        float32x4_t b_vec = vld1q_f32(&b[i]);
+        float32x4_t result = vaddq_f32(a_vec, b_vec);
+        vst1q_f32(&dest[i], result);
+    }
+    
+    // Handle remaining elements
+    for (int i = simd_length; i < length; i++) {
+        dest[i] = a[i] + b[i];
+    }
 }
 ```
 
-### 4.2 Enum Implementation
+### 4.3 Memory Layout Optimization
 
-#### Enum Definition
+#### Structure of Arrays (SoA) Transformation
 ```c
+// Transform Array of Structures to Structure of Arrays for SIMD efficiency
 typedef struct {
-    char* name;
-    int tag;
-    Type** field_types;    // For enum variants with data
-    int field_count;
-} EnumVariant;
+    float* x_values;      // All x coordinates
+    float* y_values;      // All y coordinates  
+    float* z_values;      // All z coordinates
+    int32_t length;
+    int32_t capacity;
+    bool owns_memory;
+} SoAVector3Array;
 
-typedef struct {
-    char* name;
-    EnumVariant* variants;
-    int variant_count;
-} EnumType;
-
-typedef struct {
-    Obj obj;
-    EnumType* type;
-    int tag;              // Which variant
-    Value data[];         // Variant data (if any)
-} ObjEnumInstance;
-```
-
-### 4.3 Pattern Matching
-
-#### Pattern Types
-```c
-typedef enum {
-    PATTERN_LITERAL,      // 42, "hello", true
-    PATTERN_VARIABLE,     // x (binds value)
-    PATTERN_WILDCARD,     // _ (matches anything)
-    PATTERN_CONSTRUCTOR,  // Some(x), None
-    PATTERN_STRUCT,       // Point { x, y }
-    PATTERN_ARRAY,        // [first, rest...]
-    PATTERN_GUARD,        // pattern if condition
-} PatternKind;
-
-typedef struct Pattern {
-    PatternKind kind;
-    union {
-        Value literal;
-        char* variable;
-        struct {
-            char* name;
-            struct Pattern** args;
-            int arg_count;
-        } constructor;
-        struct {
-            char** field_names;
-            struct Pattern** field_patterns;
-            int field_count;
-        } struct_pattern;
-        struct {
-            struct Pattern** elements;
-            int element_count;
-            bool has_rest;
-        } array_pattern;
-        struct {
-            struct Pattern* pattern;
-            ASTNode* guard;
-        } guarded;
-    } data;
-} Pattern;
-```
-
-#### Pattern Matching Compilation
-```c
-// Decision tree for efficient pattern matching
-typedef struct DecisionNode {
-    enum {
-        LEAF,              // Execute action
-        SWITCH,            // Switch on constructor/literal
-        GUARD,             // Test guard condition
-    } kind;
+// Convert AoS to SoA for vectorization
+SoAVector3Array* aos_to_soa_vector3(ObjArray* aos_array) {
+    if (aos_array->element_type != ARRAY_GENERIC) {
+        return NULL;  // Type mismatch
+    }
     
-    union {
-        struct {
-            int action_id;
-            Binding* bindings;
-            int binding_count;
-        } leaf;
-        
-        struct {
-            int test_reg;
-            struct DecisionNode** cases;
-            Value* values;
-            int case_count;
-            struct DecisionNode* default_case;
-        } switch_;
-        
-        struct {
-            ASTNode* condition;
-            struct DecisionNode* success;
-            struct DecisionNode* failure;
-        } guard;
-    } data;
-} DecisionNode;
-
-// Compile pattern matching to decision tree
-static void compileMatch(Compiler* compiler, ASTNode* node) {
-    MatchNode* match = &node->match;
+    SoAVector3Array* soa = malloc(sizeof(SoAVector3Array));
+    soa->length = aos_array->length;
+    soa->capacity = aos_array->capacity;
+    soa->owns_memory = true;
     
-    // Compile scrutinee
-    uint8_t value_reg = compileExpression(compiler, match->value);
+    // Allocate aligned memory for each component
+    soa->x_values = aligned_alloc(32, sizeof(float) * soa->capacity);
+    soa->y_values = aligned_alloc(32, sizeof(float) * soa->capacity);
+    soa->z_values = aligned_alloc(32, sizeof(float) * soa->capacity);
     
-    // Build decision tree from patterns
-    DecisionNode* tree = build_decision_tree(match->arms, match->arm_count);
+    // Transform data layout
+    for (int i = 0; i < soa->length; i++) {
+        ObjInstance* vec = AS_INSTANCE(aos_array->data.generic_data[i]);
+        soa->x_values[i] = AS_FLOAT(get_field(vec, "x"));
+        soa->y_values[i] = AS_FLOAT(get_field(vec, "y"));
+        soa->z_values[i] = AS_FLOAT(get_field(vec, "z"));
+    }
     
-    // Compile decision tree to bytecode
-    compile_decision_tree(compiler, tree, value_reg);
-    
-    freeRegister(compiler, value_reg);
+    return soa;
 }
 
-// Pattern compilation example
-static void compile_pattern(Compiler* compiler, Pattern* pattern, 
-                           uint8_t value_reg, int failure_label) {
-    switch (pattern->kind) {
-        case PATTERN_LITERAL: {
-            // Compare with literal
-            uint8_t lit_reg = allocateRegister(compiler);
-            emitConstant(compiler, pattern->data.literal);
-            emitByte(compiler, OP_EQ_R);
-            emitByte(compiler, lit_reg);
-            emitByte(compiler, value_reg);
-            emitByte(compiler, lit_reg);
-            
-            emitByte(compiler, OP_JUMP_IF_NOT_R);
-            emitByte(compiler, lit_reg);
-            emitJumpTo(compiler, failure_label);
-            
-            freeRegister(compiler, lit_reg);
-            break;
-        }
+// SIMD-optimized vector operations on SoA data
+void soa_vector3_scale(SoAVector3Array* vectors, float factor) {
+    int simd_length = vectors->length & ~7;  // Process 8 floats at a time (AVX)
+    
+    __m256 factor_vec = _mm256_set1_ps(factor);
+    
+    for (int i = 0; i < simd_length; i += 8) {
+        // Scale X components
+        __m256 x_vec = _mm256_load_ps(&vectors->x_values[i]);
+        x_vec = _mm256_mul_ps(x_vec, factor_vec);
+        _mm256_store_ps(&vectors->x_values[i], x_vec);
         
-        case PATTERN_VARIABLE: {
-            // Bind value to variable
-            uint8_t var_reg = allocateRegister(compiler);
-            emitByte(compiler, OP_MOVE);
-            emitByte(compiler, var_reg);
-            emitByte(compiler, value_reg);
-            
-            declareLocal(compiler, pattern->data.variable, var_reg, false);
-            break;
-        }
+        // Scale Y components
+        __m256 y_vec = _mm256_load_ps(&vectors->y_values[i]);
+        y_vec = _mm256_mul_ps(y_vec, factor_vec);
+        _mm256_store_ps(&vectors->y_values[i], y_vec);
         
-        case PATTERN_CONSTRUCTOR: {
-            // Check constructor tag
-            uint8_t tag_reg = allocateRegister(compiler);
-            emitByte(compiler, OP_GET_TAG_R);
-            emitByte(compiler, tag_reg);
-            emitByte(compiler, value_reg);
-            
-            uint8_t expected_reg = allocateRegister(compiler);
-            emitConstant(compiler, INT_VAL(pattern->data.constructor.tag));
-            
-            emitByte(compiler, OP_EQ_R);
-            emitByte(compiler, tag_reg);
-            emitByte(compiler, tag_reg);
-            emitByte(compiler, expected_reg);
-            
-            emitByte(compiler, OP_JUMP_IF_NOT_R);
-            emitByte(compiler, tag_reg);
-            emitJumpTo(compiler, failure_label);
-            
-            // Extract and match fields
-            for (int i = 0; i < pattern->data.constructor.arg_count; i++) {
-                uint8_t field_reg = allocateRegister(compiler);
-                emitByte(compiler, OP_EXTRACT_FIELD_R);
-                emitByte(compiler, field_reg);
-                emitByte(compiler, value_reg);
-                emitByte(compiler, i);
-                
-                compile_pattern(compiler, pattern->data.constructor.args[i],
-                               field_reg, failure_label);
+        // Scale Z components
+        __m256 z_vec = _mm256_load_ps(&vectors->z_values[i]);
+        z_vec = _mm256_mul_ps(z_vec, factor_vec);
+        _mm256_store_ps(&vectors->z_values[i], z_vec);
+    }
+    
+    // Handle remaining elements
+    for (int i = simd_length; i < vectors->length; i++) {
+        vectors->x_values[i] *= factor;
+        vectors->y_values[i] *= factor;
+        vectors->z_values[i] *= factor;
+    }
+}
+```
+
+### 4.4 Parallel Array Processing
+
+#### Work-Stealing Thread Pool
+```c
+typedef struct {
+    void (*func)(void* data, int start, int end);
+    void* user_data;
+    int start_index;
+    int end_index;
+    _Atomic bool completed;
+} WorkItem;
+
+typedef struct {
+    WorkItem* work_queue;
+    _Atomic int head;
+    _Atomic int tail;
+    int capacity;
+    pthread_mutex_t mutex;
+    pthread_cond_t work_available;
+    pthread_cond_t work_complete;
+} WorkQueue;
+
+typedef struct {
+    pthread_t* threads;
+    WorkQueue* queues;  // One queue per thread
+    int num_threads;
+    _Atomic bool shutdown;
+    _Atomic int active_workers;
+} ThreadPool;
+
+// Initialize thread pool for parallel array operations
+ThreadPool* thread_pool_create(int num_threads) {
+    ThreadPool* pool = malloc(sizeof(ThreadPool));
+    pool->num_threads = num_threads;
+    pool->threads = malloc(sizeof(pthread_t) * num_threads);
+    pool->queues = malloc(sizeof(WorkQueue) * num_threads);
+    atomic_store(&pool->shutdown, false);
+    atomic_store(&pool->active_workers, 0);
+    
+    // Initialize work queues
+    for (int i = 0; i < num_threads; i++) {
+        WorkQueue* queue = &pool->queues[i];
+        queue->work_queue = malloc(sizeof(WorkItem) * WORK_QUEUE_SIZE);
+        atomic_store(&queue->head, 0);
+        atomic_store(&queue->tail, 0);
+        queue->capacity = WORK_QUEUE_SIZE;
+        pthread_mutex_init(&queue->mutex, NULL);
+        pthread_cond_init(&queue->work_available, NULL);
+        pthread_cond_init(&queue->work_complete, NULL);
+    }
+    
+    // Start worker threads
+    for (int i = 0; i < num_threads; i++) {
+        pthread_create(&pool->threads[i], NULL, worker_thread, pool);
+    }
+    
+    return pool;
+}
+
+// Parallel array map operation with work stealing
+void parallel_array_map(ThreadPool* pool, ObjArray* dest, ObjArray* src, 
+                        void (*map_func)(Value* dest, Value src)) {
+    int chunk_size = calculate_optimal_chunk_size(src->length, pool->num_threads);
+    int num_chunks = (src->length + chunk_size - 1) / chunk_size;
+    
+    // Create work items
+    for (int i = 0; i < num_chunks; i++) {
+        int start = i * chunk_size;
+        int end = min(start + chunk_size, src->length);
+        
+        MapWorkData* work_data = malloc(sizeof(MapWorkData));
+        work_data->dest = dest;
+        work_data->src = src;
+        work_data->map_func = map_func;
+        
+        submit_work_item(pool, array_map_worker, work_data, start, end);
+    }
+    
+    // Wait for completion
+    wait_for_completion(pool);
+}
+
+// Worker function for array mapping
+static void array_map_worker(void* data, int start, int end) {
+    MapWorkData* work = (MapWorkData*)data;
+    
+    for (int i = start; i < end; i++) {
+        Value src_val = array_get_fast(work->src, i);
+        Value dest_val;
+        work->map_func(&dest_val, src_val);
+        array_set_fast(work->dest, i, dest_val);
+    }
+}
+```
+
+### 4.5 Advanced Array Features Integration
+
+#### Memory-Mapped Arrays
+```c
+// Memory-mapped array implementation for large datasets
+ObjMappedArray* create_memory_mapped_array(const char* file_path, 
+                                          ArrayElementType type, 
+                                          bool writable) {
+    int fd = open(file_path, writable ? O_RDWR : O_RDONLY);
+    if (fd == -1) {
+        return NULL;  // File open failed
+    }
+    
+    struct stat st;
+    if (fstat(fd, &st) == -1) {
+        close(fd);
+        return NULL;
+    }
+    
+    size_t element_size = get_element_size(type);
+    size_t array_length = st.st_size / element_size;
+    
+    int prot = PROT_READ;
+    if (writable) prot |= PROT_WRITE;
+    
+    void* mapped = mmap(NULL, st.st_size, prot, MAP_SHARED, fd, 0);
+    if (mapped == MAP_FAILED) {
+        close(fd);
+        return NULL;
+    }
+    
+    ObjMappedArray* array = ALLOCATE_OBJ(ObjMappedArray, OBJ_MAPPED_ARRAY);
+    array->base.element_type = type;
+    array->base.length = array_length;
+    array->base.capacity = array_length;
+    array->base.is_fixed_size = true;
+    array->base.owns_data = false;
+    array->base.element_size = element_size;
+    
+    // Set up data pointer based on type
+    switch (type) {
+        case ARRAY_I32: array->base.data.i32_data = (int32_t*)mapped; break;
+        case ARRAY_F64: array->base.data.f64_data = (double*)mapped; break;
+        case ARRAY_U8:  array->base.data.u8_data = (uint8_t*)mapped; break;
+        default: array->base.data.generic_data = (Value*)mapped; break;
+    }
+    
+    array->fd = fd;
+    array->file_size = st.st_size;
+    array->mapped_memory = mapped;
+    array->is_writable = writable;
+    array->file_path = strdup(file_path);
+    
+    return array;
+}
+
+// Array pool for high-frequency allocations
+ArrayPool* create_array_pool(ArrayElementType type, int32_t array_capacity, int32_t pool_size) {
+    ArrayPool* pool = malloc(sizeof(ArrayPool));
+    pool->available_arrays = malloc(sizeof(ObjArray*) * pool_size);
+    pool->pool_size = pool_size;
+    pool->available_count = pool_size;
+    pool->element_type = type;
+    pool->array_capacity = array_capacity;
+    pthread_mutex_init(&pool->mutex, NULL);
+    
+    // Pre-allocate arrays
+    for (int i = 0; i < pool_size; i++) {
+        pool->available_arrays[i] = array_new_specialized(type, array_capacity, ALIGN_DEFAULT);
+    }
+    
+    return pool;
+}
+```
+
+This enhanced Phase 4 implementation provides:
+
+1. **High-Performance Array Types**: Type-specialized storage with SIMD alignment
+2. **Advanced Memory Layouts**: SoA transformation, cache optimization
+3. **SIMD Optimization**: Runtime capability detection and vectorized operations
+4. **Parallel Processing**: Work-stealing thread pool for concurrent operations
+5. **Memory Management**: Pools, memory mapping, and efficient allocation strategies
+6. **Multi-dimensional Support**: Optimized matrix operations and reshaping
+7. **Runtime Optimization**: Adaptive optimization based on usage patterns
+
+---
+
+## 📋 Phase 5: Objects & Pattern Matching (Weeks 17-20)
+
+### 5.1 Struct Implementation
+*[Content moved from Phase 4 - to be implemented after high-performance arrays]*
                 
                 freeRegister(compiler, field_reg);
             }
