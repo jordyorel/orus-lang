@@ -142,9 +142,9 @@ let result = x > 0 ? "positive" : "non-positive"
 - [ ] **TODO**: Implement high-performance loop constructs with advanced optimization and safety features.
 
 **Core Implementation Requirements:**
-- [ ] While loop syntax parsing and compilation with condition hoisting optimization
-- [ ] For loop with range syntax (`0..5`, `0..=5`, `0..10..2`) and bounds checking
-- [ ] For loop with iterator syntax (`for item in collection`) with zero-copy iteration
+- [x] **DONE**: While loop syntax parsing and basic compilation with condition hoisting
+- [x] **DONE**: For loop with range syntax (`0..5`, `0..=5`, `0..10..2`) and bounds checking
+- [x] **DONE**: For loop with iterator syntax (`for item in collection`) with zero-copy iteration
 - [ ] Break and continue statements with proper scope handling and jump table optimization
 - [ ] Nested loop support with labeled break/continue for arbitrary loop depth
 - [ ] Loop variable scoping, lifetime management, and register allocation optimization

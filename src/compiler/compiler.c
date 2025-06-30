@@ -255,6 +255,161 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             }
             return 0;
         }
+        case NODE_WHILE: {
+            int loopStart = compiler->chunk->count;
+            int condReg = compileExpressionToRegister(node->whileStmt.condition, compiler);
+            if (condReg < 0) return -1;
+            emitByte(compiler, OP_JUMP_IF_NOT_R);
+            emitByte(compiler, (uint8_t)condReg);
+            int exitJump = emitJump(compiler);
+            freeRegister(compiler, (uint8_t)condReg);
+
+            enterScope(compiler);
+            if (compileExpressionToRegister(node->whileStmt.body, compiler) < 0) {
+                exitScope(compiler);
+                return -1;
+            }
+            exitScope(compiler);
+
+            emitByte(compiler, OP_LOOP);
+            int offset = (compiler->chunk->count + 2) - loopStart;
+            emitByte(compiler, (uint8_t)((offset >> 8) & 0xFF));
+            emitByte(compiler, (uint8_t)(offset & 0xFF));
+
+            patchJump(compiler, exitJump);
+            return 0;
+        }
+        case NODE_FOR_RANGE: {
+            int startReg = compileExpressionToRegister(node->forRange.start, compiler);
+            if (startReg < 0) return -1;
+            int endReg = compileExpressionToRegister(node->forRange.end, compiler);
+            if (endReg < 0) { freeRegister(compiler, (uint8_t)startReg); return -1; }
+
+            int stepReg = -1;
+            bool stepConstOne = true;
+            if (node->forRange.step) {
+                stepReg = compileExpressionToRegister(node->forRange.step, compiler);
+                if (stepReg < 0) { freeRegister(compiler, (uint8_t)startReg); freeRegister(compiler, (uint8_t)endReg); return -1; }
+                stepConstOne = false;
+            }
+
+            enterScope(compiler);
+
+            uint8_t loopVar = allocateRegister(compiler);
+            if (compiler->localCount >= REGISTER_COUNT) {
+                freeRegister(compiler, (uint8_t)startReg);
+                freeRegister(compiler, (uint8_t)endReg);
+                if (stepReg >= 0) freeRegister(compiler, (uint8_t)stepReg);
+                exitScope(compiler);
+                return -1;
+            }
+            int localIndex = compiler->localCount++;
+            compiler->locals[localIndex].name = node->forRange.varName;
+            compiler->locals[localIndex].reg = loopVar;
+            compiler->locals[localIndex].isActive = true;
+            compiler->locals[localIndex].depth = compiler->scopeDepth;
+            compiler->locals[localIndex].isMutable = true;
+
+            emitByte(compiler, OP_MOVE);
+            emitByte(compiler, loopVar);
+            emitByte(compiler, (uint8_t)startReg);
+
+            int loopStart = compiler->chunk->count;
+
+            uint8_t condReg = allocateRegister(compiler);
+            emitByte(compiler, node->forRange.inclusive ? OP_LE_I32_R : OP_LT_I32_R);
+            emitByte(compiler, condReg);
+            emitByte(compiler, loopVar);
+            emitByte(compiler, (uint8_t)endReg);
+
+            emitByte(compiler, OP_JUMP_IF_NOT_R);
+            emitByte(compiler, condReg);
+            int exitJump = emitJump(compiler);
+            freeRegister(compiler, condReg);
+
+            if (compileExpressionToRegister(node->forRange.body, compiler) < 0) {
+                exitScope(compiler);
+                return -1;
+            }
+
+            if (stepConstOne) {
+                emitByte(compiler, OP_INC_I32_R);
+                emitByte(compiler, loopVar);
+            } else {
+                emitByte(compiler, OP_ADD_I32_R);
+                emitByte(compiler, loopVar);
+                emitByte(compiler, loopVar);
+                emitByte(compiler, (uint8_t)stepReg);
+                freeRegister(compiler, (uint8_t)stepReg);
+            }
+
+            emitByte(compiler, OP_LOOP);
+            int offset = (compiler->chunk->count + 2) - loopStart;
+            emitByte(compiler, (uint8_t)((offset >> 8) & 0xFF));
+            emitByte(compiler, (uint8_t)(offset & 0xFF));
+
+            patchJump(compiler, exitJump);
+
+            exitScope(compiler);
+
+            freeRegister(compiler, (uint8_t)startReg);
+            freeRegister(compiler, (uint8_t)endReg);
+            freeRegister(compiler, loopVar);
+
+            return 0;
+        }
+        case NODE_FOR_ITER: {
+            int iterSrc = compileExpressionToRegister(node->forIter.iterable, compiler);
+            if (iterSrc < 0) return -1;
+
+            enterScope(compiler);
+
+            uint8_t iterator = allocateRegister(compiler);
+            emitByte(compiler, OP_GET_ITER_R);
+            emitByte(compiler, iterator);
+            emitByte(compiler, (uint8_t)iterSrc);
+
+            uint8_t loopVar = allocateRegister(compiler);
+            int localIndex = compiler->localCount++;
+            compiler->locals[localIndex].name = node->forIter.varName;
+            compiler->locals[localIndex].reg = loopVar;
+            compiler->locals[localIndex].isActive = true;
+            compiler->locals[localIndex].depth = compiler->scopeDepth;
+            compiler->locals[localIndex].isMutable = true;
+
+            int loopStart = compiler->chunk->count;
+
+            uint8_t hasReg = allocateRegister(compiler);
+            emitByte(compiler, OP_ITER_NEXT_R);
+            emitByte(compiler, loopVar);
+            emitByte(compiler, iterator);
+            emitByte(compiler, hasReg);
+
+            emitByte(compiler, OP_JUMP_IF_NOT_R);
+            emitByte(compiler, hasReg);
+            int exitJump = emitJump(compiler);
+            freeRegister(compiler, hasReg);
+
+            if (compileExpressionToRegister(node->forIter.body, compiler) < 0) {
+                exitScope(compiler);
+                return -1;
+            }
+
+            emitByte(compiler, OP_LOOP);
+            int offset = (compiler->chunk->count + 2) - loopStart;
+            emitByte(compiler, (uint8_t)((offset >> 8) & 0xFF));
+            emitByte(compiler, (uint8_t)(offset & 0xFF));
+
+            patchJump(compiler, exitJump);
+
+            exitScope(compiler);
+
+            freeRegister(compiler, (uint8_t)iterSrc);
+            freeRegister(compiler, iterator);
+            freeRegister(compiler, loopVar);
+
+            return 0;
+        }
         case NODE_TERNARY: {
             int cond = compileExpressionToRegister(node->ternary.condition, compiler);
             if (cond < 0) return -1;
@@ -371,7 +526,7 @@ bool compile(ASTNode* ast, Compiler* compiler, bool isModule) {
             int reg = compileExpressionToRegister(stmt, compiler);
             if (reg < 0) return false;
             if (!isModule && stmt->type != NODE_VAR_DECL && stmt->type != NODE_PRINT &&
-                stmt->type != NODE_IF && stmt->type != NODE_BLOCK &&
+                stmt->type != NODE_IF && stmt->type != NODE_WHILE && stmt->type != NODE_FOR_RANGE && stmt->type != NODE_FOR_ITER && stmt->type != NODE_BLOCK &&
                 stmt->type != NODE_ASSIGN) {
                 emitByte(compiler, OP_PRINT_R);
                 emitByte(compiler, (uint8_t)reg);
@@ -383,7 +538,7 @@ bool compile(ASTNode* ast, Compiler* compiler, bool isModule) {
     int resultReg = compileExpressionToRegister(ast, compiler);
 
     if (resultReg >= 0 && !isModule && ast->type != NODE_VAR_DECL && ast->type != NODE_PRINT &&
-        ast->type != NODE_IF && ast->type != NODE_BLOCK) {
+        ast->type != NODE_IF && ast->type != NODE_WHILE && ast->type != NODE_FOR_RANGE && ast->type != NODE_FOR_ITER && ast->type != NODE_BLOCK) {
         emitByte(compiler, OP_PRINT_R);
         emitByte(compiler, (uint8_t)resultReg);
     }

@@ -611,6 +611,8 @@ typedef enum {
 ```
 
 #### While Loop Compilation
+The compiler now supports basic `while` loops compiled using `OP_JUMP_IF_NOT_R`
+and `OP_LOOP` for efficient back-edge jumps.
 ```c
 typedef struct {
     int start;
@@ -670,12 +672,17 @@ static void compileWhile(Compiler* compiler, ASTNode* node) {
 ```c
 static void compileForRange(Compiler* compiler, ASTNode* node) {
     ForRangeNode* for_stmt = &node->for_range;
-    
+    // Supports `start..end`, `start..=end` and `start..end..step` forms.
+
     enterScope(compiler);
     
     // Compile range bounds
     uint8_t start_reg = compileExpression(compiler, for_stmt->start);
     uint8_t end_reg = compileExpression(compiler, for_stmt->end);
+    uint8_t step_reg = 0; // default step = 1
+    if (for_stmt->step) {
+        step_reg = compileExpression(compiler, for_stmt->step);
+    }
     
     // Allocate loop variable
     uint8_t loop_var = allocateRegister(compiler);
@@ -689,9 +696,9 @@ static void compileForRange(Compiler* compiler, ASTNode* node) {
     // Loop start
     int loop_start = currentOffset(compiler);
     
-    // Check condition: loop_var < end
+    // Check condition: loop_var < end (or <= when inclusive)
     uint8_t cond_reg = allocateRegister(compiler);
-    emitByte(compiler, OP_LT_I32_R);
+    emitByte(compiler, for_stmt->inclusive ? OP_LE_I32_R : OP_LT_I32_R);
     emitByte(compiler, cond_reg);
     emitByte(compiler, loop_var);
     emitByte(compiler, end_reg);
@@ -706,9 +713,16 @@ static void compileForRange(Compiler* compiler, ASTNode* node) {
     // Compile loop body
     compileStatement(compiler, for_stmt->body);
     
-    // Increment loop variable
-    emitByte(compiler, OP_INC_I32_R);
-    emitByte(compiler, loop_var);
+    // Increment loop variable by step (default 1)
+    if (for_stmt->step) {
+        emitByte(compiler, OP_ADD_I32_R);
+        emitByte(compiler, loop_var);
+        emitByte(compiler, loop_var);
+        emitByte(compiler, step_reg);
+    } else {
+        emitByte(compiler, OP_INC_I32_R);
+        emitByte(compiler, loop_var);
+    }
     
     // Jump back to start
     emitLoop(compiler, loop_start);
@@ -718,7 +732,45 @@ static void compileForRange(Compiler* compiler, ASTNode* node) {
     
     freeRegister(compiler, start_reg);
     freeRegister(compiler, end_reg);
-    
+
+    exitScope(compiler);
+}
+```
+
+#### For Loop with Iterator
+```c
+static void compileForIter(Compiler* compiler, ASTNode* node) {
+    ForIterNode* for_stmt = &node->for_iter;
+
+    enterScope(compiler);
+
+    uint8_t src = compileExpression(compiler, for_stmt->iterable);
+
+    uint8_t iter_reg = allocateRegister(compiler);
+    emitByte(compiler, OP_GET_ITER_R);
+    emitByte(compiler, iter_reg);
+    emitByte(compiler, src);
+
+    uint8_t loop_var = allocateRegister(compiler);
+    declareLocal(compiler, for_stmt->var_name, loop_var, false);
+
+    int loop_start = currentOffset(compiler);
+
+    uint8_t has_reg = allocateRegister(compiler);
+    emitByte(compiler, OP_ITER_NEXT_R);
+    emitByte(compiler, loop_var);
+    emitByte(compiler, iter_reg);
+    emitByte(compiler, has_reg);
+    emitByte(compiler, OP_JUMP_IF_NOT_R);
+    emitByte(compiler, has_reg);
+    int exit_jump = emitJump(compiler);
+    freeRegister(compiler, has_reg);
+
+    compileStatement(compiler, for_stmt->body);
+
+    emitLoop(compiler, loop_start);
+    patchJump(compiler, exit_jump);
+
     exitScope(compiler);
 }
 ```
