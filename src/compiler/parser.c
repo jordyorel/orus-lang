@@ -199,6 +199,12 @@ static ASTNode* parseVariableDeclaration(void) {
         return NULL;
     }
 
+    bool isMutable = false;
+    if (peekToken().type == TOKEN_MUT) {
+        nextToken();
+        isMutable = true;
+    }
+
     Token nameToken = nextToken();
     if (nameToken.type != TOKEN_IDENTIFIER) {
         return NULL;
@@ -249,6 +255,7 @@ static ASTNode* parseVariableDeclaration(void) {
     varNode->varDecl.initializer = initializer;
     varNode->varDecl.typeAnnotation = typeNode;
     varNode->varDecl.isConst = false;
+    varNode->varDecl.isMutable = isMutable;
 
     return varNode;
 }
@@ -353,9 +360,42 @@ static ASTNode* parseTernary(ASTNode* condition) {
 static ASTNode* parseAssignment(void) {
     ASTNode* left = parseBinaryExpression(0);
     if (!left) return NULL;
-    if (peekToken().type == TOKEN_EQUAL) {
+
+    TokenType t = peekToken().type;
+    if (t == TOKEN_EQUAL || t == TOKEN_PLUS_EQUAL || t == TOKEN_MINUS_EQUAL ||
+        t == TOKEN_STAR_EQUAL || t == TOKEN_SLASH_EQUAL) {
         nextToken();
-        ASTNode* value = parseBinaryExpression(0);
+        ASTNode* value = NULL;
+
+        if (t == TOKEN_EQUAL) {
+            value = parseBinaryExpression(0);
+        } else {
+            ASTNode* right = parseBinaryExpression(0);
+            if (!right) return NULL;
+            if (left->type != NODE_IDENTIFIER) return NULL;
+            ASTNode* binary = new_node();
+            binary->type = NODE_BINARY;
+            binary->binary.left = left;
+            binary->binary.right = right;
+            switch (t) {
+                case TOKEN_PLUS_EQUAL:
+                    binary->binary.op = "+";
+                    break;
+                case TOKEN_MINUS_EQUAL:
+                    binary->binary.op = "-";
+                    break;
+                case TOKEN_STAR_EQUAL:
+                    binary->binary.op = "*";
+                    break;
+                case TOKEN_SLASH_EQUAL:
+                    binary->binary.op = "/";
+                    break;
+                default:
+                    binary->binary.op = "+";
+                    break;
+            }
+            value = binary;
+        }
         if (!value || left->type != NODE_IDENTIFIER) return NULL;
         ASTNode* node = new_node();
         node->type = NODE_ASSIGN;
