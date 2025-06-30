@@ -64,6 +64,85 @@ int disassembleInstruction(Chunk* chunk, int offset) {
             return offset + 2;
         }
 
+        case OP_ADD_I64_R: {
+            uint8_t dst = chunk->code[offset + 1];
+            uint8_t src1 = chunk->code[offset + 2];
+            uint8_t src2 = chunk->code[offset + 3];
+            printf("%-16s R%d, R%d, R%d\n", "ADD_I64", dst, src1, src2);
+            return offset + 4;
+        }
+
+        case OP_SUB_I64_R: {
+            uint8_t dst = chunk->code[offset + 1];
+            uint8_t src1 = chunk->code[offset + 2];
+            uint8_t src2 = chunk->code[offset + 3];
+            printf("%-16s R%d, R%d, R%d\n", "SUB_I64", dst, src1, src2);
+            return offset + 4;
+        }
+
+        case OP_MUL_I64_R: {
+            uint8_t dst = chunk->code[offset + 1];
+            uint8_t src1 = chunk->code[offset + 2];
+            uint8_t src2 = chunk->code[offset + 3];
+            printf("%-16s R%d, R%d, R%d\n", "MUL_I64", dst, src1, src2);
+            return offset + 4;
+        }
+
+        case OP_DIV_I64_R: {
+            uint8_t dst = chunk->code[offset + 1];
+            uint8_t src1 = chunk->code[offset + 2];
+            uint8_t src2 = chunk->code[offset + 3];
+            printf("%-16s R%d, R%d, R%d\n", "DIV_I64", dst, src1, src2);
+            return offset + 4;
+        }
+
+        case OP_MOD_I64_R: {
+            uint8_t dst = chunk->code[offset + 1];
+            uint8_t src1 = chunk->code[offset + 2];
+            uint8_t src2 = chunk->code[offset + 3];
+            printf("%-16s R%d, R%d, R%d\n", "MOD_I64", dst, src1, src2);
+            return offset + 4;
+        }
+
+        case OP_I32_TO_I64_R: {
+            uint8_t dst = chunk->code[offset + 1];
+            uint8_t src = chunk->code[offset + 2];
+            printf("%-16s R%d, R%d\n", "I32_TO_I64", dst, src);
+            return offset + 3;
+        }
+
+        case OP_LT_I64_R: {
+            uint8_t dst = chunk->code[offset + 1];
+            uint8_t src1 = chunk->code[offset + 2];
+            uint8_t src2 = chunk->code[offset + 3];
+            printf("%-16s R%d, R%d, R%d\n", "LT_I64", dst, src1, src2);
+            return offset + 4;
+        }
+
+        case OP_LE_I64_R: {
+            uint8_t dst = chunk->code[offset + 1];
+            uint8_t src1 = chunk->code[offset + 2];
+            uint8_t src2 = chunk->code[offset + 3];
+            printf("%-16s R%d, R%d, R%d\n", "LE_I64", dst, src1, src2);
+            return offset + 4;
+        }
+
+        case OP_GT_I64_R: {
+            uint8_t dst = chunk->code[offset + 1];
+            uint8_t src1 = chunk->code[offset + 2];
+            uint8_t src2 = chunk->code[offset + 3];
+            printf("%-16s R%d, R%d, R%d\n", "GT_I64", dst, src1, src2);
+            return offset + 4;
+        }
+
+        case OP_GE_I64_R: {
+            uint8_t dst = chunk->code[offset + 1];
+            uint8_t src1 = chunk->code[offset + 2];
+            uint8_t src2 = chunk->code[offset + 3];
+            printf("%-16s R%d, R%d, R%d\n", "GE_I64", dst, src1, src2);
+            return offset + 4;
+        }
+
         case OP_PRINT_R: {
             uint8_t reg = chunk->code[offset + 1];
             printf("%-16s R%d\n", "PRINT", reg);

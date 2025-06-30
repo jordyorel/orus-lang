@@ -316,8 +316,8 @@ typedef enum {
     OP_NOT_BOOL_R,
 
     // Type conversions (dst, src)
-    OP_I32_TO_I64_R,
     OP_I32_TO_F64_R,
+    OP_I32_TO_I64_R,
     OP_I64_TO_I32_R,
     OP_I64_TO_F64_R,
     OP_F64_TO_I32_R,
@@ -385,6 +385,7 @@ typedef struct {
         bool isActive;
         int depth;
         bool isMutable;
+        ValueType type; // Type of the variable
     } locals[REGISTER_COUNT];
     int localCount;
     int scopeDepth;

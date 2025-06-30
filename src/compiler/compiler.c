@@ -68,6 +68,48 @@ static LoopContext* getCurrentLoop(Compiler* compiler) {
     return &compiler->loopStack[compiler->loopDepth - 1];
 }
 
+// Helper function to get the value type from an AST node
+static ValueType getNodeValueType(ASTNode* node) {
+    if (node->type == NODE_LITERAL) {
+        return node->literal.value.type;
+    }
+    // Default to i32 for now (can be extended for type inference)
+    return VAL_I32;
+}
+
+// Helper function to get the value type from an AST node with compiler context
+static ValueType getNodeValueTypeWithCompiler(ASTNode* node, Compiler* compiler) {
+    if (node->type == NODE_LITERAL) {
+        return node->literal.value.type;
+    } else if (node->type == NODE_IDENTIFIER) {
+        // Look up variable type in locals
+        const char* name = node->identifier.name;
+        for (int i = compiler->localCount - 1; i >= 0; i--) {
+            if (compiler->locals[i].isActive && strcmp(compiler->locals[i].name, name) == 0) {
+                return compiler->locals[i].type;
+            }
+        }
+        // If not found in locals, default to i32
+        return VAL_I32;
+    }
+    // Default to i32 for other node types
+    return VAL_I32;
+}
+
+// Helper function to determine operation type from operands
+static ValueType inferBinaryOpTypeWithCompiler(ASTNode* left, ASTNode* right, Compiler* compiler) {
+    ValueType leftType = getNodeValueTypeWithCompiler(left, compiler);
+    ValueType rightType = getNodeValueTypeWithCompiler(right, compiler);
+    
+    // If either operand is i64, promote to i64
+    if (leftType == VAL_I64 || rightType == VAL_I64) {
+        return VAL_I64;
+    }
+    
+    // Default to i32
+    return VAL_I32;
+}
+
 // Convert an expression AST to a register and emit bytecode
 int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
     if (!node) return -1;
@@ -130,6 +172,53 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
                 return reg;
             }
 
+            // Constant folding for i64 operations
+            if (node->binary.left->type == NODE_LITERAL &&
+                node->binary.right->type == NODE_LITERAL &&
+                IS_I64(node->binary.left->literal.value) &&
+                IS_I64(node->binary.right->literal.value)) {
+                int64_t a = AS_I64(node->binary.left->literal.value);
+                int64_t b = AS_I64(node->binary.right->literal.value);
+                int64_t result = 0;
+                bool boolResult = false;
+                const char* op = node->binary.op;
+                if (strcmp(op, "+") == 0) {
+                    result = a + b;
+                } else if (strcmp(op, "-") == 0) {
+                    result = a - b;
+                } else if (strcmp(op, "*") == 0) {
+                    result = a * b;
+                } else if (strcmp(op, "/") == 0) {
+                    if (b == 0) return -1;
+                    result = a / b;
+                } else if (strcmp(op, "%") == 0) {
+                    if (b == 0) return -1;
+                    result = a % b;
+                } else if (strcmp(op, "==") == 0) {
+                    boolResult = (a == b);
+                } else if (strcmp(op, "!=") == 0) {
+                    boolResult = (a != b);
+                } else if (strcmp(op, "<") == 0) {
+                    boolResult = (a < b);
+                } else if (strcmp(op, ">") == 0) {
+                    boolResult = (a > b);
+                } else if (strcmp(op, "<=") == 0) {
+                    boolResult = (a <= b);
+                } else if (strcmp(op, ">=") == 0) {
+                    boolResult = (a >= b);
+                } else {
+                    return -1;
+                }
+                uint8_t reg = allocateRegister(compiler);
+                if (strcmp(op, "+") == 0 || strcmp(op, "-") == 0 || strcmp(op, "*") == 0 ||
+                    strcmp(op, "/") == 0 || strcmp(op, "%") == 0) {
+                    emitConstant(compiler, reg, I64_VAL(result));
+                } else {
+                    emitConstant(compiler, reg, BOOL_VAL(boolResult));
+                }
+                return reg;
+            }
+
             int leftReg = compileExpressionToRegister(node->binary.left, compiler);
             if (leftReg < 0) return -1;
             int rightReg = compileExpressionToRegister(node->binary.right, compiler);
@@ -139,34 +228,96 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
                               node->binary.left->type == NODE_BINARY);
 
             uint8_t resultReg = leftTemp ? (uint8_t)leftReg : allocateRegister(compiler);
+            
+            // Determine operation type and handle type conversion
+            ValueType leftType = getNodeValueTypeWithCompiler(node->binary.left, compiler);
+            ValueType rightType = getNodeValueTypeWithCompiler(node->binary.right, compiler);
+            ValueType opType = inferBinaryOpTypeWithCompiler(node->binary.left, node->binary.right, compiler);
+            
+            // Handle type conversion for mixed operations
+            if (opType == VAL_I64) {
+                if (leftType == VAL_I32) {
+                    // Convert left operand from i32 to i64
+                    uint8_t convertReg = allocateRegister(compiler);
+                    emitByte(compiler, OP_I32_TO_I64_R);
+                    emitByte(compiler, convertReg);
+                    emitByte(compiler, (uint8_t)leftReg);
+                    freeRegister(compiler, (uint8_t)leftReg);
+                    leftReg = convertReg;
+                }
+                if (rightType == VAL_I32) {
+                    // Convert right operand from i32 to i64
+                    uint8_t convertReg = allocateRegister(compiler);
+                    emitByte(compiler, OP_I32_TO_I64_R);
+                    emitByte(compiler, convertReg);
+                    emitByte(compiler, (uint8_t)rightReg);
+                    freeRegister(compiler, (uint8_t)rightReg);
+                    rightReg = convertReg;
+                }
+            }
+            
             const char* op = node->binary.op;
             if (strcmp(op, "+") == 0) {
                 if ((node->binary.left->type == NODE_LITERAL && IS_STRING(node->binary.left->literal.value)) ||
                     (node->binary.right->type == NODE_LITERAL && IS_STRING(node->binary.right->literal.value))) {
                     emitByte(compiler, OP_CONCAT_R);
+                } else if (opType == VAL_I64) {
+                    emitByte(compiler, OP_ADD_I64_R);
                 } else {
                     emitByte(compiler, OP_ADD_I32_R);
                 }
             } else if (strcmp(op, "-") == 0) {
-                emitByte(compiler, OP_SUB_I32_R);
+                if (opType == VAL_I64) {
+                    emitByte(compiler, OP_SUB_I64_R);
+                } else {
+                    emitByte(compiler, OP_SUB_I32_R);
+                }
             } else if (strcmp(op, "*") == 0) {
-                emitByte(compiler, OP_MUL_I32_R);
+                if (opType == VAL_I64) {
+                    emitByte(compiler, OP_MUL_I64_R);
+                } else {
+                    emitByte(compiler, OP_MUL_I32_R);
+                }
             } else if (strcmp(op, "/") == 0) {
-                emitByte(compiler, OP_DIV_I32_R);
+                if (opType == VAL_I64) {
+                    emitByte(compiler, OP_DIV_I64_R);
+                } else {
+                    emitByte(compiler, OP_DIV_I32_R);
+                }
             } else if (strcmp(op, "%") == 0) {
-                emitByte(compiler, OP_MOD_I32_R);
+                if (opType == VAL_I64) {
+                    emitByte(compiler, OP_MOD_I64_R);
+                } else {
+                    emitByte(compiler, OP_MOD_I32_R);
+                }
             } else if (strcmp(op, "==") == 0) {
                 emitByte(compiler, OP_EQ_R);
             } else if (strcmp(op, "!=") == 0) {
                 emitByte(compiler, OP_NE_R);
             } else if (strcmp(op, "<") == 0) {
-                emitByte(compiler, OP_LT_I32_R);
+                if (opType == VAL_I64) {
+                    emitByte(compiler, OP_LT_I64_R);
+                } else {
+                    emitByte(compiler, OP_LT_I32_R);
+                }
             } else if (strcmp(op, ">") == 0) {
-                emitByte(compiler, OP_GT_I32_R);
+                if (opType == VAL_I64) {
+                    emitByte(compiler, OP_GT_I64_R);
+                } else {
+                    emitByte(compiler, OP_GT_I32_R);
+                }
             } else if (strcmp(op, "<=") == 0) {
-                emitByte(compiler, OP_LE_I32_R);
+                if (opType == VAL_I64) {
+                    emitByte(compiler, OP_LE_I64_R);
+                } else {
+                    emitByte(compiler, OP_LE_I32_R);
+                }
             } else if (strcmp(op, ">=") == 0) {
-                emitByte(compiler, OP_GE_I32_R);
+                if (opType == VAL_I64) {
+                    emitByte(compiler, OP_GE_I64_R);
+                } else {
+                    emitByte(compiler, OP_GE_I32_R);
+                }
             } else if (strcmp(op, "and") == 0) {
                 emitByte(compiler, OP_AND_BOOL_R);
             } else if (strcmp(op, "or") == 0) {
@@ -195,18 +346,72 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             emitConstant(compiler, reg, I32_VAL(0));
             return reg;
         }
+
+
         case NODE_VAR_DECL: {
             int initReg = compileExpressionToRegister(node->varDecl.initializer, compiler);
             if (initReg < 0) return -1;
+            
             if (compiler->localCount >= REGISTER_COUNT) {
                 return -1;
             }
             int localIndex = compiler->localCount++;
             compiler->locals[localIndex].name = node->varDecl.name;
-            compiler->locals[localIndex].reg = (uint8_t)initReg;
             compiler->locals[localIndex].isActive = true;
             compiler->locals[localIndex].depth = compiler->scopeDepth;
             compiler->locals[localIndex].isMutable = node->varDecl.isMutable;
+            
+            // Determine variable type from type annotation or initializer
+            ValueType declaredType;
+            if (node->varDecl.typeAnnotation && node->varDecl.typeAnnotation->typeAnnotation.name) {
+                const char* typeName = node->varDecl.typeAnnotation->typeAnnotation.name;
+                if (strcmp(typeName, "i64") == 0) {
+                    declaredType = VAL_I64;
+                } else if (strcmp(typeName, "i32") == 0) {
+                    declaredType = VAL_I32;
+                } else if (strcmp(typeName, "f64") == 0) {
+                    declaredType = VAL_F64;
+                } else if (strcmp(typeName, "bool") == 0) {
+                    declaredType = VAL_BOOL;
+                } else {
+                    declaredType = VAL_I32; // default
+                }
+            } else {
+                // Infer type from initializer
+                declaredType = getNodeValueType(node->varDecl.initializer);
+            }
+            compiler->locals[localIndex].type = declaredType;
+            
+            // Handle type conversion if needed
+            // For complex expressions, we need to determine the actual result type
+            ValueType initType;
+            if (node->varDecl.initializer->type == NODE_LITERAL) {
+                initType = node->varDecl.initializer->literal.value.type;
+            } else if (node->varDecl.initializer->type == NODE_BINARY) {
+                // For binary expressions, use the inferred operation type
+                initType = inferBinaryOpTypeWithCompiler(
+                    node->varDecl.initializer->binary.left,
+                    node->varDecl.initializer->binary.right,
+                    compiler);
+            } else {
+                // For other expressions, default to i32 (can be improved)
+                initType = VAL_I32;
+            }
+            
+            if (declaredType != initType) {
+                if (declaredType == VAL_I64 && initType == VAL_I32) {
+                    // Convert i32 to i64
+                    uint8_t convertReg = allocateRegister(compiler);
+                    emitByte(compiler, OP_I32_TO_I64_R);
+                    emitByte(compiler, convertReg);
+                    emitByte(compiler, (uint8_t)initReg);
+                    freeRegister(compiler, (uint8_t)initReg);
+                    initReg = convertReg;
+                }
+                // Add other type conversions as needed
+            }
+            
+            compiler->locals[localIndex].reg = (uint8_t)initReg;
             return initReg;
         }
         case NODE_ASSIGN: {
@@ -358,6 +563,7 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             compiler->locals[localIndex].isActive = true;
             compiler->locals[localIndex].depth = compiler->scopeDepth;
             compiler->locals[localIndex].isMutable = true;
+            compiler->locals[localIndex].type = VAL_I32; // for range loops use i32
 
             emitByte(compiler, OP_MOVE);
             emitByte(compiler, loopVar);
@@ -432,6 +638,7 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             compiler->locals[localIndex].isActive = true;
             compiler->locals[localIndex].depth = compiler->scopeDepth;
             compiler->locals[localIndex].isMutable = true;
+            compiler->locals[localIndex].type = VAL_I64; // iterator values are i64
 
             int loopStart = compiler->chunk->count;
             enterLoop(compiler, loopStart);

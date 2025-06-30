@@ -18,7 +18,13 @@
       "Bash(awk:*)",
       "Bash(./test_indentation_debug)",
       "Bash(timeout:*)",
-      "Bash(gtimeout:*)"
+      "Bash(gtimeout:*)",
+      "Bash(./build_and_run.sh:*)",
+      "Bash(ORUS_TRACE=1 ./orus tests/i64_test.orus)",
+      "Bash(ORUS_TRACE=1 ./orus debug_test.orus)",
+      "Bash(ORUS_TRACE=1 ./orus literal_test.orus)",
+      "Bash(ORUS_TRACE=1 ./orus mixed_test.orus)",
+      "Bash(ORUS_TRACE=1 ./orus simple_mixed_test.orus)"
     ],
     "deny": []
   }

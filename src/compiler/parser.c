@@ -3,6 +3,8 @@
 #include "../../include/vm.h"
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
+#include <limits.h>
 
 // Simple arena allocator used for AST nodes that never moves allocated blocks
 typedef struct ArenaBlock {
@@ -741,7 +743,17 @@ static ASTNode* parsePrimaryExpression(void) {
             int len = token.length < 31 ? token.length : 31;
             strncpy(numStr, token.start, len);
             numStr[len] = '\0';
-            node->literal.value = I32_VAL(atoi(numStr));
+            
+            // Parse as long long to handle large numbers
+            long long value = strtoll(numStr, NULL, 10);
+            
+            // Use i64 if the value is too large for i32 or if it has specific suffix
+            if (value > INT32_MAX || value < INT32_MIN) {
+                node->literal.value = I64_VAL(value);
+            } else {
+                node->literal.value = I32_VAL((int32_t)value);
+            }
+            
             node->location.line = token.line;
             node->location.column = token.column;
             node->dataType = NULL;
