@@ -77,7 +77,7 @@ run_test_lexer: build/test_lexer
 test: $(ORUS)
 	@echo "Running Orus tests..."
 	@passed=0; failed=0; \
-	for test_file in $(TESTDIR)/*.orus; do \
+	for test_file in $(shell find $(TESTDIR) -name '*.orus' | sort); do \
 		printf "Testing: $$test_file ... "; \
 		if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
 			printf "\033[32mPASS\033[0m\n"; \
