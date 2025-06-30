@@ -59,6 +59,20 @@ $(BUILDDIR)/%.o: $(SRCDIR)/%.c | $(BUILDDIR)
 $(BUILDDIR)/test_%: $(TESTDIR)/c/test_%.c $(VM_OBJS) $(COMPILER_OBJS) | $(BUILDDIR)
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ $< $(VM_OBJS) $(COMPILER_OBJS) $(LDFLAGS)
 
+# Adjust the test_lexer target to compile source files into object files first
+build/test_lexer: build/test_lexer.o build/lexer.o
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+
+build/test_lexer.o: $(TESTDIR)/c/test_lexer.c $(INCDIR)/*
+	$(CC) $(CFLAGS) $(INCLUDES) -c -o $@ $<
+
+build/lexer.o: $(SRCDIR)/compiler/lexer.c $(INCDIR)/*
+	$(CC) $(CFLAGS) $(INCLUDES) -c -o $@ $<
+
+# Add a target to build and run the test_lexer binary
+run_test_lexer: build/test_lexer
+	./build/test_lexer
+
 # Run tests on .orus files
 test: $(ORUS)
 	@echo "Running Orus tests..."

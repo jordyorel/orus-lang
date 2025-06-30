@@ -87,7 +87,10 @@ static void skip_whitespace() {
             p++;
             col++;
         } else if (c == '\n') {
-            break; /* newline is significant */
+            p++;
+            line++;
+            col = 1;
+            lineStart = p;
         } else if (c == '/' && p[1] == '/') {
             p += 2;
             while (*p != '\n' && *p) p++;
@@ -490,9 +493,11 @@ Token scan_token() {
         case '-':
             if (match_char('>')) return make_token(TOKEN_ARROW);
             if (match_char('=')) return make_token(TOKEN_MINUS_EQUAL);
+            lexer.column++; // Increment column for single-character token
             return make_token(TOKEN_MINUS);
         case '+':
             if (match_char('=')) return make_token(TOKEN_PLUS_EQUAL);
+            lexer.column++; // Increment column for single-character token
             return make_token(TOKEN_PLUS);
         case '/':
             if (match_char('=')) return make_token(TOKEN_SLASH_EQUAL);
