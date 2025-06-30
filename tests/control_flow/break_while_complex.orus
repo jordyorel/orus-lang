@@ -1,1 +1,12 @@
-...existing code from break_while_complex.orus...
+// Test complex break scenarios in while loop with multiple conditions
+let mut count = 0
+let mut sum = 0
+while count < 20:
+    count = count + 1
+    if count % 2 == 0:
+        continue
+    sum = sum + count
+    if sum > 25:
+        break
+    print(count, sum)
+// Should print odd numbers until sum exceeds 25

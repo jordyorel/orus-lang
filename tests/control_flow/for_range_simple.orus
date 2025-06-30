@@ -1,1 +1,2 @@
-...existing code from for_range_simple.orus...
+for i in 0..5:
+    print(i)
