@@ -96,6 +96,9 @@ static ASTNode* parseExpression(void);
 static ASTNode* parseBinaryExpression(int minPrec);
 static ASTNode* parsePrimaryExpression(void);
 static ASTNode* parseVariableDeclaration(void);
+static ASTNode* parseStatement(void);
+static ASTNode* parseIfStatement(void);
+static ASTNode* parseBlock(void);
 
 static int getOperatorPrecedence(TokenType type) {
     switch (type) {
@@ -158,12 +161,7 @@ ASTNode* parseSource(const char* source) {
             continue;
         }
 
-        ASTNode* stmt = NULL;
-        if (t.type == TOKEN_LET) {
-            stmt = parseVariableDeclaration();
-        } else {
-            stmt = parseExpression();
-        }
+        ASTNode* stmt = parseStatement();
         if (!stmt) return NULL;
 
         addStatement(&statements, &count, &capacity, stmt);
@@ -182,6 +180,17 @@ ASTNode* parseSource(const char* source) {
     program->location.column = 1;
     program->dataType = NULL;
     return program;
+}
+
+static ASTNode* parseStatement(void) {
+    Token t = peekToken();
+    if (t.type == TOKEN_LET) {
+        return parseVariableDeclaration();
+    } else if (t.type == TOKEN_IF) {
+        return parseIfStatement();
+    } else {
+        return parseExpression();
+    }
 }
 
 static ASTNode* parseVariableDeclaration(void) {
@@ -244,9 +253,102 @@ static ASTNode* parseVariableDeclaration(void) {
     return varNode;
 }
 
+static ASTNode* parseBlock(void) {
+    ASTNode** statements = NULL;
+    int count = 0;
+    int capacity = 0;
+
+    while (true) {
+        Token t = peekToken();
+        if (t.type == TOKEN_DEDENT || t.type == TOKEN_EOF) break;
+        if (t.type == TOKEN_NEWLINE || t.type == TOKEN_SEMICOLON) {
+            nextToken();
+            continue;
+        }
+        ASTNode* stmt = parseStatement();
+        if (!stmt) return NULL;
+        addStatement(&statements, &count, &capacity, stmt);
+        t = peekToken();
+        if (t.type == TOKEN_SEMICOLON || t.type == TOKEN_NEWLINE) nextToken();
+    }
+    Token dedent = nextToken();
+    if (dedent.type != TOKEN_DEDENT) return NULL;
+
+    ASTNode* block = new_node();
+    block->type = NODE_BLOCK;
+    block->block.statements = statements;
+    block->block.count = count;
+    block->location.line = dedent.line;
+    block->location.column = dedent.column;
+    block->dataType = NULL;
+    return block;
+}
+
+static ASTNode* parseIfStatement(void) {
+    Token ifTok = nextToken();
+    if (ifTok.type != TOKEN_IF && ifTok.type != TOKEN_ELIF) return NULL;
+
+    ASTNode* condition = parseExpression();
+    if (!condition) return NULL;
+
+    Token colon = nextToken();
+    if (colon.type != TOKEN_COLON) return NULL;
+    if (nextToken().type != TOKEN_NEWLINE) return NULL;
+    if (nextToken().type != TOKEN_INDENT) return NULL;
+
+    ASTNode* thenBranch = parseBlock();
+    if (!thenBranch) return NULL;
+
+    if (peekToken().type == TOKEN_NEWLINE) {
+        nextToken();
+    }
+
+    ASTNode* elseBranch = NULL;
+    Token next = peekToken();
+    if (next.type == TOKEN_ELIF) {
+        elseBranch = parseIfStatement();
+    } else if (next.type == TOKEN_ELSE) {
+        nextToken();
+        if (nextToken().type != TOKEN_COLON) return NULL;
+        if (nextToken().type != TOKEN_NEWLINE) return NULL;
+        if (nextToken().type != TOKEN_INDENT) return NULL;
+        elseBranch = parseBlock();
+        if (!elseBranch) return NULL;
+        if (peekToken().type == TOKEN_NEWLINE) nextToken();
+    }
+
+    ASTNode* node = new_node();
+    node->type = NODE_IF;
+    node->ifStmt.condition = condition;
+    node->ifStmt.thenBranch = thenBranch;
+    node->ifStmt.elseBranch = elseBranch;
+    node->location.line = ifTok.line;
+    node->location.column = ifTok.column;
+    node->dataType = NULL;
+    return node;
+}
+
 static ASTNode* parseAssignment(void);
 
 static ASTNode* parseExpression(void) { return parseAssignment(); }
+
+static ASTNode* parseTernary(ASTNode* condition) {
+    if (peekToken().type != TOKEN_QUESTION) return condition;
+    nextToken();
+    ASTNode* trueExpr = parseExpression();
+    if (!trueExpr) return NULL;
+    if (nextToken().type != TOKEN_COLON) return NULL;
+    ASTNode* falseExpr = parseExpression();
+    if (!falseExpr) return NULL;
+    ASTNode* node = new_node();
+    node->type = NODE_TERNARY;
+    node->ternary.condition = condition;
+    node->ternary.trueExpr = trueExpr;
+    node->ternary.falseExpr = falseExpr;
+    node->location = condition->location;
+    node->dataType = NULL;
+    return node;
+}
 
 static ASTNode* parseAssignment(void) {
     ASTNode* left = parseBinaryExpression(0);
@@ -263,7 +365,7 @@ static ASTNode* parseAssignment(void) {
         node->dataType = NULL;
         return node;
     }
-    return left;
+    return parseTernary(left);
 }
 
 static ASTNode* parseBinaryExpression(int minPrec) {

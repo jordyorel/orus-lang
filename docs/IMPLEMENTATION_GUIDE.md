@@ -575,10 +575,14 @@ static uint8_t compileTernary(Compiler* compiler, ASTNode* node) {
     
     patchJump(compiler, end_jump);
     freeRegister(compiler, cond_reg);
-    
+
     return result_reg;
 }
 ```
+
+The compiler now implements this control flow logic in `compiler.c`.
+`emitJump` and `patchJump` manage forward branch offsets while
+`enterScope`/`exitScope` ensure each block uses isolated locals.
 
 ### 2.2 Loop Implementation
 
@@ -3805,7 +3809,7 @@ TIMED_SECTION(parse, {
 
 ### Week 2-4: Core Language
 1. ✅ String concatenation and operations
-2. ✅ If/else statements with proper scoping
+2. ✅ If/else statements with nested `elif` handling and proper scoping
 3. ✅ While loops with break/continue
 4. ✅ For loops with ranges
 
