@@ -1,6 +1,6 @@
 # Orus Language Benchmarks
 
-This directory contains comprehensive performance benchmarks comparing Orus VM against Python and JavaScript.
+This directory contains comprehensive performance benchmarks comparing Orus VM against Python, JavaScript, Lua, and Java.
 
 ## Files
 
@@ -8,6 +8,7 @@ This directory contains comprehensive performance benchmarks comparing Orus VM a
 - `simple_benchmark.py` - Python vs Orus comparison
 - `orus_vs_js_benchmark.py` - JavaScript vs Orus comparison  
 - `orus_vs_lua_benchmark.py` - Lua vs Orus comparison
+- `orus_vs_java_benchmark.py` - Java vs Orus comparison
 - `quick_bench.sh` - Quick launcher for all benchmark types
 
 ### Test Files
@@ -19,6 +20,7 @@ This directory contains comprehensive performance benchmarks comparing Orus VM a
 - `benchmark_results_python.json` - Python benchmark results
 - `benchmark_results_js.json` - JavaScript benchmark results
 - `benchmark_results_lua.json` - Lua benchmark results
+- `benchmark_results_java.json` - Java benchmark results
 
 ## Usage
 
@@ -36,7 +38,7 @@ Select from:
 6. Orus vs Lua comparison
 7. Stress test
 8. All benchmarks (comprehensive)
-9. **Compare all languages (Python + JavaScript + Lua)** ⭐
+9. **Compare all languages (Python + JavaScript + Lua + Java)** ⭐
 
 **To run all benchmarks at once:**
 ```bash
@@ -59,6 +61,10 @@ python3 orus_vs_js_benchmark.py --iterations 30
 ```bash
 python3 orus_vs_lua_benchmark.py --iterations 30
 ```
+**Java Comparison:**
+```bash
+python3 orus_vs_java_benchmark.py --iterations 30
+```
 **Custom Output File:**
 ```bash
 python3 simple_benchmark.py --output my_results.json
@@ -70,7 +76,8 @@ python3 simple_benchmark.py --output my_results.json
 1. 🥇 **Orus VM** - Fastest (register-based architecture)
 2. 🥈 **Lua** - ~1.3x slower (register-based, but interpreted)
 3. 🥉 **Python** - ~7.5x slower (stack-based interpreter)
-4. � **JavaScript** - ~12.4x slower (V8 JIT overhead for short scripts)
+4. ☕ **Java** - ~38x slower (JVM startup overhead)
+5. � **JavaScript** - ~12.4x slower (V8 JIT overhead for short scripts)
 
 ### Key Insights
 - **Register-based VM** provides consistent performance advantages
@@ -110,6 +117,7 @@ Result files are automatically ignored by git to prevent repository bloat:
 🐍 Orus vs Python:    7.5x faster
 🟨 Orus vs JavaScript: 12.4x faster
 🌙 Orus vs Lua:       1.3x faster
+☕ Orus vs Java:      38x faster
 
 ⚡ EXECUTION TIME COMPARISON (Typical):
 ----------------------------------------
@@ -117,12 +125,14 @@ Orus:       ~2.2ms   (Baseline - fastest)
 Lua:        ~2.9ms   (1.3x slower)
 Python:     ~17.4ms  (7.9x slower)
 JavaScript: ~27.8ms  (12.6x slower)
+Java:       ~40ms    (38x slower)
 
 🏅 PERFORMANCE RANKING:
 ----------------------------------------
 1. 🥇 Orus VM      - Fastest, optimized register-based execution
 2. 🥈 Lua          - Fast scripting language with register-based VM
 3. 🥉 Python       - Interpreted, stack-based VM
-4. � JavaScript   - V8 JIT overhead for short-running scripts
+4. ☕ Java        - ~38x slower (JVM startup overhead)
+5. � JavaScript   - ~12.4x slower (V8 JIT overhead for short-running scripts)
 ```
 ![alt text](image.png)
