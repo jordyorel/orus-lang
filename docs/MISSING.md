@@ -133,13 +133,13 @@ else:
     // block
 
 print("ok") if x == 1 elif x == 2 else print("fallback")
-- [ ] // Ternary operator 
+- [x] // Ternary operator 
 let result = x > 0 ? "positive" : "non-positive"
 ```
 
 ### 2.2 Loop Constructs
 **Priority: 🔥 High**
-- [x] **TODO**: Implement high-performance loop constructs with advanced optimization and safety features.
+- [ ] **TODO**: Implement high-performance loop constructs with advanced optimization and safety features.
 
 **Core Implementation Requirements:**
 - [ ] While loop syntax parsing and compilation with condition hoisting optimization
