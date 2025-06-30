@@ -145,8 +145,8 @@ let result = x > 0 ? "positive" : "non-positive"
 - [x] **DONE**: While loop syntax parsing and basic compilation with condition hoisting
 - [x] **DONE**: For loop with range syntax (`0..5`, `0..=5`, `0..10..2`) and bounds checking
 - [ ] **DONE**: For loop with iterator syntax (`for item in collection`) with zero-copy iteration
-- [ ] Break and continue statements with proper scope handling and jump table optimization *(basic support implemented, dynamic jump table pending)*
-- [ ] Replace fixed-size break/continue jump arrays with dynamic vectors
+- [x] Break and continue statements with proper scope handling and jump table optimization *(dynamic jump table implemented)*
+- [x] Replace fixed-size break/continue jump arrays with dynamic vectors
 - [ ] Nested loop support with labeled break/continue for arbitrary loop depth
 - [ ] Loop variable scoping, lifetime management, and register allocation optimization
 - [ ] Compile-time infinite loop detection and runtime guard mechanisms

@@ -45,11 +45,11 @@ void test_single_character_tokens() {
     token = scan_token();
     ASSERT_EQ(TOKEN_DOT, token.type, "Recognizes dot");
     
-    token = scan_token();    
-    ASSERT_EQ(TOKEN_MINUS, token.type, "Recognizes minus");
-    
     token = scan_token();
     ASSERT_EQ(TOKEN_PLUS, token.type, "Recognizes plus");
+
+    token = scan_token();
+    ASSERT_EQ(TOKEN_MINUS, token.type, "Recognizes minus");
 }
 
 void test_two_character_tokens() {

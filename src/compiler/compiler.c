@@ -1,5 +1,6 @@
 #include "../../include/compiler.h"
 #include "../../include/common.h"
+#include "../../include/jumptable.h"
 #include <string.h>
 
 static int emitJump(Compiler* compiler) {
@@ -30,8 +31,8 @@ static void enterLoop(Compiler* compiler, int continueTarget) {
     if (compiler->loopDepth >= 16) return;
     LoopContext* loop = &compiler->loopStack[compiler->loopDepth];
     loop->continueTarget = continueTarget;
-    loop->breakJumps = intvec_new();
-    loop->continueJumps = intvec_new();
+    loop->breakJumps = jumptable_new();
+    loop->continueJumps = jumptable_new();
     loop->scopeDepth = compiler->scopeDepth;
     compiler->loopDepth++;
 }
@@ -42,11 +43,11 @@ static void exitLoop(Compiler* compiler) {
     LoopContext* loop = &compiler->loopStack[compiler->loopDepth];
     
     // Patch all break jumps to point to current position
-    for (int i = 0; i < loop->breakJumps.count; i++) {
-        patchJump(compiler, loop->breakJumps.data[i]);
+    for (int i = 0; i < loop->breakJumps.offsets.count; i++) {
+        patchJump(compiler, loop->breakJumps.offsets.data[i]);
     }
-    intvec_free(&loop->breakJumps);
-    intvec_free(&loop->continueJumps);
+    jumptable_free(&loop->breakJumps);
+    jumptable_free(&loop->continueJumps);
 }
 
 static void patchContinueJumps(Compiler* compiler, int target) {
@@ -54,10 +55,11 @@ static void patchContinueJumps(Compiler* compiler, int target) {
     LoopContext* loop = &compiler->loopStack[compiler->loopDepth - 1];
     
     // Patch all continue jumps to point to target position
-    for (int i = 0; i < loop->continueJumps.count; i++) {
-        int jump = target - loop->continueJumps.data[i] - 2;
-        compiler->chunk->code[loop->continueJumps.data[i]] = (jump >> 8) & 0xFF;
-        compiler->chunk->code[loop->continueJumps.data[i] + 1] = jump & 0xFF;
+    for (int i = 0; i < loop->continueJumps.offsets.count; i++) {
+        int offset = loop->continueJumps.offsets.data[i];
+        int jump = target - offset - 2;
+        compiler->chunk->code[offset] = (jump >> 8) & 0xFF;
+        compiler->chunk->code[offset + 1] = jump & 0xFF;
     }
 }
 
@@ -477,7 +479,7 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             
             // Add this break jump to the list to patch later
             emitByte(compiler, OP_JUMP);
-            intvec_push(&currentLoop->breakJumps, emitJump(compiler));
+            jumptable_add(&currentLoop->breakJumps, emitJump(compiler));
             return 0;
         }
         case NODE_CONTINUE: {
@@ -490,7 +492,7 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             
             // Add this continue jump to the list to patch later
             emitByte(compiler, OP_JUMP);
-            intvec_push(&currentLoop->continueJumps, emitJump(compiler));
+            jumptable_add(&currentLoop->continueJumps, emitJump(compiler));
             return 0;
         }
         case NODE_TERNARY: {

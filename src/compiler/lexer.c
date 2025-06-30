@@ -57,7 +57,7 @@ static inline Token make_token(TokenType type) {
     token.start = lexer.start;
     token.length = (int)(lexer.current - lexer.start);
     token.line = lexer.line;
-    token.column = lexer.column;
+    token.column = lexer.column - token.length;
     return token;
 }
 
@@ -488,11 +488,9 @@ Token scan_token() {
         case '-':
             if (match_char('>')) return make_token(TOKEN_ARROW);
             if (match_char('=')) return make_token(TOKEN_MINUS_EQUAL);
-            lexer.column++; // Increment column for single-character token
             return make_token(TOKEN_MINUS);
         case '+':
             if (match_char('=')) return make_token(TOKEN_PLUS_EQUAL);
-            lexer.column++; // Increment column for single-character token
             return make_token(TOKEN_PLUS);
         case '/':
             if (match_char('=')) return make_token(TOKEN_SLASH_EQUAL);
