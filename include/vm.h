@@ -340,6 +340,8 @@ typedef enum {
     OP_JUMP_IF_R,      // condition_reg, offset
     OP_JUMP_IF_NOT_R,  // condition_reg, offset
     OP_LOOP,
+    OP_GET_ITER_R,     // dst_iter, iterable_reg
+    OP_ITER_NEXT_R,    // dst_value, iter_reg, has_value_reg
 
     // Function calls
     OP_CALL_R,         // func_reg, first_arg_reg, arg_count, result_reg

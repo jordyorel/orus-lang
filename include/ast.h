@@ -21,6 +21,9 @@ typedef enum {
     NODE_ASSIGN,
     NODE_PRINT,
     NODE_IF,
+    NODE_WHILE,
+    NODE_FOR_RANGE,
+    NODE_FOR_ITER,
     NODE_BLOCK,
     NODE_TERNARY,
     NODE_TYPE
@@ -68,6 +71,23 @@ struct ASTNode {
             ASTNode* thenBranch;
             ASTNode* elseBranch;
         } ifStmt;
+        struct {
+            ASTNode* condition;
+            ASTNode* body;
+        } whileStmt;
+        struct {
+            char* varName;
+            ASTNode* start;
+            ASTNode* end;
+            ASTNode* step;
+            bool inclusive;
+            ASTNode* body;
+        } forRange;
+        struct {
+            char* varName;
+            ASTNode* iterable;
+            ASTNode* body;
+        } forIter;
         struct {
             ASTNode** statements;
             int count;

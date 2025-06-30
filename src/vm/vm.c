@@ -259,6 +259,8 @@ static InterpretResult run(void) {
         dispatchTable[OP_JUMP] = &&LABEL_OP_JUMP;
         dispatchTable[OP_JUMP_IF_NOT_R] = &&LABEL_OP_JUMP_IF_NOT_R;
         dispatchTable[OP_LOOP] = &&LABEL_OP_LOOP;
+        dispatchTable[OP_GET_ITER_R] = &&LABEL_OP_GET_ITER_R;
+        dispatchTable[OP_ITER_NEXT_R] = &&LABEL_OP_ITER_NEXT_R;
         dispatchTable[OP_PRINT_MULTI_R] = &&LABEL_OP_PRINT_MULTI_R;
         dispatchTable[OP_PRINT_R] = &&LABEL_OP_PRINT_R;
         dispatchTable[OP_PRINT_NO_NL_R] = &&LABEL_OP_PRINT_NO_NL_R;
@@ -615,10 +617,41 @@ LABEL_OP_JUMP_IF_NOT_R: {
     }
 
 LABEL_OP_LOOP: {
-        uint16_t offset = READ_SHORT();
-        vm.ip -= offset;
-        DISPATCH();
+    uint16_t offset = READ_SHORT();
+    vm.ip -= offset;
+    DISPATCH();
+}
+
+LABEL_OP_GET_ITER_R: {
+    uint8_t dst = READ_BYTE();
+    uint8_t src = READ_BYTE();
+    Value v = vm.registers[src];
+    if (!IS_RANGE_ITERATOR(v)) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Value not iterable");
+        RETURN(INTERPRET_RUNTIME_ERROR);
     }
+    vm.registers[dst] = v;
+    DISPATCH();
+}
+
+LABEL_OP_ITER_NEXT_R: {
+    uint8_t dst = READ_BYTE();
+    uint8_t iterReg = READ_BYTE();
+    uint8_t hasReg = READ_BYTE();
+    if (!IS_RANGE_ITERATOR(vm.registers[iterReg])) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Invalid iterator");
+        RETURN(INTERPRET_RUNTIME_ERROR);
+    }
+    ObjRangeIterator* it = AS_RANGE_ITERATOR(vm.registers[iterReg]);
+    if (it->current >= it->end) {
+        vm.registers[hasReg] = BOOL_VAL(false);
+    } else {
+        vm.registers[dst] = I64_VAL(it->current);
+        it->current++;
+        vm.registers[hasReg] = BOOL_VAL(true);
+    }
+    DISPATCH();
+}
 
 LABEL_OP_PRINT_MULTI_R: {
         uint8_t first = READ_BYTE();

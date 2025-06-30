@@ -98,6 +98,8 @@ static ASTNode* parsePrimaryExpression(void);
 static ASTNode* parseVariableDeclaration(void);
 static ASTNode* parseStatement(void);
 static ASTNode* parseIfStatement(void);
+static ASTNode* parseWhileStatement(void);
+static ASTNode* parseForStatement(void);
 static ASTNode* parseBlock(void);
 
 static int getOperatorPrecedence(TokenType type) {
@@ -188,6 +190,10 @@ static ASTNode* parseStatement(void) {
         return parseVariableDeclaration();
     } else if (t.type == TOKEN_IF) {
         return parseIfStatement();
+    } else if (t.type == TOKEN_WHILE) {
+        return parseWhileStatement();
+    } else if (t.type == TOKEN_FOR) {
+        return parseForStatement();
     } else {
         return parseExpression();
     }
@@ -331,6 +337,99 @@ static ASTNode* parseIfStatement(void) {
     node->ifStmt.elseBranch = elseBranch;
     node->location.line = ifTok.line;
     node->location.column = ifTok.column;
+    node->dataType = NULL;
+    return node;
+}
+
+static ASTNode* parseWhileStatement(void) {
+    Token whileTok = nextToken();
+    if (whileTok.type != TOKEN_WHILE) return NULL;
+
+    ASTNode* condition = parseExpression();
+    if (!condition) return NULL;
+
+    Token colon = nextToken();
+    if (colon.type != TOKEN_COLON) return NULL;
+    if (nextToken().type != TOKEN_NEWLINE) return NULL;
+    if (nextToken().type != TOKEN_INDENT) return NULL;
+
+    ASTNode* body = parseBlock();
+    if (!body) return NULL;
+    if (peekToken().type == TOKEN_NEWLINE) nextToken();
+
+    ASTNode* node = new_node();
+    node->type = NODE_WHILE;
+    node->whileStmt.condition = condition;
+    node->whileStmt.body = body;
+    node->location.line = whileTok.line;
+    node->location.column = whileTok.column;
+    node->dataType = NULL;
+    return node;
+}
+
+static ASTNode* parseForStatement(void) {
+    Token forTok = nextToken();
+    if (forTok.type != TOKEN_FOR) return NULL;
+
+    Token nameTok = nextToken();
+    if (nameTok.type != TOKEN_IDENTIFIER) return NULL;
+
+    if (nextToken().type != TOKEN_IN) return NULL;
+
+    ASTNode* first = parseExpression();
+    if (!first) return NULL;
+
+    bool isRange = false;
+    bool inclusive = false;
+    ASTNode* end = NULL;
+    ASTNode* step = NULL;
+    if (peekToken().type == TOKEN_DOT_DOT) {
+        isRange = true;
+        nextToken();
+        if (peekToken().type == TOKEN_EQUAL) {
+            nextToken();
+            inclusive = true;
+        }
+        end = parseExpression();
+        if (!end) return NULL;
+        if (peekToken().type == TOKEN_DOT_DOT) {
+            nextToken();
+            step = parseExpression();
+            if (!step) return NULL;
+        }
+    }
+
+    Token colon = nextToken();
+    if (colon.type != TOKEN_COLON) return NULL;
+    if (nextToken().type != TOKEN_NEWLINE) return NULL;
+    if (nextToken().type != TOKEN_INDENT) return NULL;
+
+    ASTNode* body = parseBlock();
+    if (!body) return NULL;
+    if (peekToken().type == TOKEN_NEWLINE) nextToken();
+
+    int len = nameTok.length;
+    char* name = arena_alloc(&parserArena, len + 1);
+    strncpy(name, nameTok.start, len);
+    name[len] = '\0';
+
+    ASTNode* node = new_node();
+    if (isRange) {
+        node->type = NODE_FOR_RANGE;
+        node->forRange.varName = name;
+        node->forRange.start = first;
+        node->forRange.end = end;
+        node->forRange.step = step;
+        node->forRange.inclusive = inclusive;
+        node->forRange.body = body;
+    } else {
+        node->type = NODE_FOR_ITER;
+        node->forIter.varName = name;
+        node->forIter.iterable = first;
+        node->forIter.body = body;
+    }
+    node->location.line = forTok.line;
+    node->location.column = forTok.column;
     node->dataType = NULL;
     return node;
 }
