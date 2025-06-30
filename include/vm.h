@@ -365,6 +365,8 @@ typedef enum {
 typedef struct {
     int breakJumps[32];    // Array of break jump locations to patch
     int breakCount;        // Number of break statements
+    int continueJumps[32]; // Array of continue jump locations to patch  
+    int continueCount;     // Number of continue statements
     int continueTarget;    // Target for continue (loop start)
     int scopeDepth;        // Scope depth when loop was entered
 } LoopContext;

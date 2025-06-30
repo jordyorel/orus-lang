@@ -14,7 +14,11 @@
       "Bash(./build/test_lexer)",
       "Bash(git stash:*)",
       "Bash(gcc:*)",
-      "Bash(./build/test_break_continue)"
+      "Bash(./build/test_break_continue)",
+      "Bash(awk:*)",
+      "Bash(./test_indentation_debug)",
+      "Bash(timeout:*)",
+      "Bash(gtimeout:*)"
     ],
     "deny": []
   }

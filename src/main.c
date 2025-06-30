@@ -61,6 +61,10 @@ static void runFile(const char* path) {
     
     if (result == INTERPRET_COMPILE_ERROR) {
         fprintf(stderr, "Compilation failed for \"%s\".\n", path);
+        if (vm.devMode) {
+            fprintf(stderr, "Debug: Check if the syntax is supported and tokens are properly recognized.\n");
+            fprintf(stderr, "Debug: Try running with simpler syntax to isolate the issue.\n");
+        }
         exit(65);
     }
     if (result == INTERPRET_RUNTIME_ERROR) {

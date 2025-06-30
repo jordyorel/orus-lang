@@ -87,10 +87,8 @@ static void skip_whitespace() {
             p++;
             col++;
         } else if (c == '\n') {
-            p++;
-            line++;
-            col = 1;
-            lineStart = p;
+            // Don't skip newlines - they need to be tokenized
+            break;
         } else if (c == '/' && p[1] == '/') {
             p += 2;
             while (*p != '\n' && *p) p++;
@@ -346,9 +344,6 @@ static Token number() {
 /* -------------------------------------------------------------------------- */
 
 static Token string() {
-    const char* strStart = lexer.start;
-    int strLine = lexer.line;
-
     while (PEEK() != '"' && !is_at_end()) {
         if (PEEK() == '\\') {
             advance();

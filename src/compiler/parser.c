@@ -166,7 +166,22 @@ ASTNode* parseSource(const char* source) {
         }
 
         ASTNode* stmt = parseStatement();
-        if (!stmt) return NULL;
+        if (!stmt) {
+            // If in debug mode, provide some indication of where parsing failed
+            extern VM vm;
+            if (vm.devMode) {
+                Token currentToken = peekToken();
+                fprintf(stderr, "Debug: Failed to parse statement at line %d, column %d\n", 
+                       currentToken.line, currentToken.column);
+                fprintf(stderr, "Debug: Current token type: %d\n", currentToken.type);
+                if (currentToken.type == TOKEN_IDENTIFIER || currentToken.type == TOKEN_FOR || 
+                    currentToken.type == TOKEN_WHILE) {
+                    fprintf(stderr, "Debug: Token text: '%.*s'\n", 
+                           currentToken.length, currentToken.start);
+                }
+            }
+            return NULL;
+        }
 
         addStatement(&statements, &count, &capacity, stmt);
 
@@ -273,19 +288,32 @@ static ASTNode* parseVariableDeclaration(void) {
 }
 
 static ASTNode* parseBlock(void) {
+    extern VM vm;
+    if (vm.devMode) {
+        fprintf(stderr, "Debug: Entering parseBlock\n");
+    }
+    
     ASTNode** statements = NULL;
     int count = 0;
     int capacity = 0;
 
     while (true) {
         Token t = peekToken();
+        if (vm.devMode) {
+            fprintf(stderr, "Debug: parseBlock - Current token type: %d\n", t.type);
+        }
         if (t.type == TOKEN_DEDENT || t.type == TOKEN_EOF) break;
         if (t.type == TOKEN_NEWLINE || t.type == TOKEN_SEMICOLON) {
             nextToken();
             continue;
         }
         ASTNode* stmt = parseStatement();
-        if (!stmt) return NULL;
+        if (!stmt) {
+            if (vm.devMode) {
+                fprintf(stderr, "Debug: parseBlock failed to parse statement\n");
+            }
+            return NULL;
+        }
         addStatement(&statements, &count, &capacity, stmt);
         t = peekToken();
         if (t.type == TOKEN_SEMICOLON || t.type == TOKEN_NEWLINE) nextToken();
@@ -374,44 +402,128 @@ static ASTNode* parseWhileStatement(void) {
 }
 
 static ASTNode* parseForStatement(void) {
+    extern VM vm;
+    if (vm.devMode) {
+        fprintf(stderr, "Debug: Entering parseForStatement\n");
+    }
+    
     Token forTok = nextToken();
-    if (forTok.type != TOKEN_FOR) return NULL;
+    if (forTok.type != TOKEN_FOR) {
+        if (vm.devMode) {
+            fprintf(stderr, "Debug: Expected TOKEN_FOR, got %d\n", forTok.type);
+        }
+        return NULL;
+    }
 
     Token nameTok = nextToken();
-    if (nameTok.type != TOKEN_IDENTIFIER) return NULL;
+    if (nameTok.type != TOKEN_IDENTIFIER) {
+        if (vm.devMode) {
+            fprintf(stderr, "Debug: Expected TOKEN_IDENTIFIER after 'for', got %d\n", nameTok.type);
+        }
+        return NULL;
+    }
 
-    if (nextToken().type != TOKEN_IN) return NULL;
+    Token inTok = nextToken();
+    if (inTok.type != TOKEN_IN) {
+        if (vm.devMode) {
+            fprintf(stderr, "Debug: Expected TOKEN_IN after identifier, got %d\n", inTok.type);
+        }
+        return NULL;
+    }
 
     ASTNode* first = parseExpression();
-    if (!first) return NULL;
+    if (!first) {
+        if (vm.devMode) {
+            fprintf(stderr, "Debug: Failed to parse first expression in for loop\n");
+        }
+        return NULL;
+    }
 
     bool isRange = false;
     bool inclusive = false;
     ASTNode* end = NULL;
     ASTNode* step = NULL;
     if (peekToken().type == TOKEN_DOT_DOT) {
+        if (vm.devMode) {
+            fprintf(stderr, "Debug: Found TOKEN_DOT_DOT, parsing as range\n");
+        }
         isRange = true;
         nextToken();
         if (peekToken().type == TOKEN_EQUAL) {
+            if (vm.devMode) {
+                fprintf(stderr, "Debug: Found TOKEN_EQUAL, marking as inclusive range\n");
+            }
             nextToken();
             inclusive = true;
         }
+        if (vm.devMode) {
+            Token peekEnd = peekToken();
+            fprintf(stderr, "Debug: About to parse end expression, next token type: %d\n", peekEnd.type);
+            if (peekEnd.type == 44 || peekEnd.type == 38) {  // TOKEN_NUMBER-ish
+                fprintf(stderr, "Debug: Token text: '%.*s'\n", peekEnd.length, peekEnd.start);
+            }
+        }
         end = parseExpression();
-        if (!end) return NULL;
+        if (!end) {
+            if (vm.devMode) {
+                fprintf(stderr, "Debug: Failed to parse end expression in range\n");
+            }
+            return NULL;
+        }
+        if (vm.devMode) {
+            fprintf(stderr, "Debug: Successfully parsed end expression\n");
+            Token afterEnd = peekToken();
+            fprintf(stderr, "Debug: After parsing end expression, next token type: %d\n", afterEnd.type);
+            if (afterEnd.type == 44 || afterEnd.type == 38) {  // TOKEN_NUMBER-ish
+                fprintf(stderr, "Debug: Token text: '%.*s'\n", afterEnd.length, afterEnd.start);
+            }
+        }
         if (peekToken().type == TOKEN_DOT_DOT) {
+            if (vm.devMode) {
+                fprintf(stderr, "Debug: Found second TOKEN_DOT_DOT, parsing step\n");
+            }
             nextToken();
             step = parseExpression();
-            if (!step) return NULL;
+            if (!step) {
+                if (vm.devMode) {
+                    fprintf(stderr, "Debug: Failed to parse step expression in range\n");
+                }
+                return NULL;
+            }
         }
     }
 
     Token colon = nextToken();
-    if (colon.type != TOKEN_COLON) return NULL;
-    if (nextToken().type != TOKEN_NEWLINE) return NULL;
-    if (nextToken().type != TOKEN_INDENT) return NULL;
+    if (colon.type != TOKEN_COLON) {
+        if (vm.devMode) {
+            fprintf(stderr, "Debug: Expected TOKEN_COLON after range, got %d\n", colon.type);
+        }
+        return NULL;
+    }
+    
+    Token newline = nextToken();
+    if (newline.type != TOKEN_NEWLINE) {
+        if (vm.devMode) {
+            fprintf(stderr, "Debug: Expected TOKEN_NEWLINE after colon, got %d\n", newline.type);
+        }
+        return NULL;
+    }
+    
+    Token indent = nextToken();
+    if (indent.type != TOKEN_INDENT) {
+        if (vm.devMode) {
+            fprintf(stderr, "Debug: Expected TOKEN_INDENT after newline, got %d\n", indent.type);
+        }
+        return NULL;
+    }
 
     ASTNode* body = parseBlock();
-    if (!body) return NULL;
+    if (!body) {
+        if (vm.devMode) {
+            fprintf(stderr, "Debug: Failed to parse body block in for loop\n");
+        }
+        return NULL;
+    }
     if (peekToken().type == TOKEN_NEWLINE) nextToken();
 
     int len = nameTok.length;

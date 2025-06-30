@@ -31,6 +31,7 @@ static void enterLoop(Compiler* compiler, int continueTarget) {
     LoopContext* loop = &compiler->loopStack[compiler->loopDepth];
     loop->continueTarget = continueTarget;
     loop->breakCount = 0;
+    loop->continueCount = 0;
     loop->scopeDepth = compiler->scopeDepth;
     compiler->loopDepth++;
 }
@@ -43,6 +44,18 @@ static void exitLoop(Compiler* compiler) {
     // Patch all break jumps to point to current position
     for (int i = 0; i < loop->breakCount; i++) {
         patchJump(compiler, loop->breakJumps[i]);
+    }
+}
+
+static void patchContinueJumps(Compiler* compiler, int target) {
+    if (compiler->loopDepth <= 0) return;
+    LoopContext* loop = &compiler->loopStack[compiler->loopDepth - 1];
+    
+    // Patch all continue jumps to point to target position
+    for (int i = 0; i < loop->continueCount; i++) {
+        int jump = target - loop->continueJumps[i] - 2;
+        compiler->chunk->code[loop->continueJumps[i]] = (jump >> 8) & 0xFF;
+        compiler->chunk->code[loop->continueJumps[i] + 1] = jump & 0xFF;
     }
 }
 
@@ -347,7 +360,6 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             emitByte(compiler, (uint8_t)startReg);
 
             int loopStart = compiler->chunk->count;
-            int continueTarget = loopStart;
 
             uint8_t condReg = allocateRegister(compiler);
             emitByte(compiler, node->forRange.inclusive ? OP_LE_I32_R : OP_LT_I32_R);
@@ -360,13 +372,16 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             int exitJump = emitJump(compiler);
             freeRegister(compiler, condReg);
 
-            enterLoop(compiler, continueTarget);
+            enterLoop(compiler, loopStart);
 
             if (compileExpressionToRegister(node->forRange.body, compiler) < 0) {
                 exitLoop(compiler);
                 exitScope(compiler);
                 return -1;
             }
+
+            // Patch continue jumps to point to increment section
+            patchContinueJumps(compiler, compiler->chunk->count);
 
             if (stepConstOne) {
                 emitByte(compiler, OP_INC_I32_R);
@@ -476,11 +491,14 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
                 return -1;
             }
             
-            // Jump directly to the continue target (loop start)
-            emitByte(compiler, OP_LOOP);
-            int offset = (compiler->chunk->count + 2) - currentLoop->continueTarget;
-            emitByte(compiler, (uint8_t)((offset >> 8) & 0xFF));
-            emitByte(compiler, (uint8_t)(offset & 0xFF));
+            // Add this continue jump to the list to patch later
+            if (currentLoop->continueCount >= 32) {
+                compiler->hadError = true;
+                return -1;
+            }
+            
+            emitByte(compiler, OP_JUMP);
+            currentLoop->continueJumps[currentLoop->continueCount++] = emitJump(compiler);
             return 0;
         }
         case NODE_TERNARY: {
