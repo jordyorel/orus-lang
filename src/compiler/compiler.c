@@ -30,8 +30,8 @@ static void enterLoop(Compiler* compiler, int continueTarget) {
     if (compiler->loopDepth >= 16) return;
     LoopContext* loop = &compiler->loopStack[compiler->loopDepth];
     loop->continueTarget = continueTarget;
-    loop->breakCount = 0;
-    loop->continueCount = 0;
+    loop->breakJumps = intvec_new();
+    loop->continueJumps = intvec_new();
     loop->scopeDepth = compiler->scopeDepth;
     compiler->loopDepth++;
 }
@@ -42,9 +42,11 @@ static void exitLoop(Compiler* compiler) {
     LoopContext* loop = &compiler->loopStack[compiler->loopDepth];
     
     // Patch all break jumps to point to current position
-    for (int i = 0; i < loop->breakCount; i++) {
-        patchJump(compiler, loop->breakJumps[i]);
+    for (int i = 0; i < loop->breakJumps.count; i++) {
+        patchJump(compiler, loop->breakJumps.data[i]);
     }
+    intvec_free(&loop->breakJumps);
+    intvec_free(&loop->continueJumps);
 }
 
 static void patchContinueJumps(Compiler* compiler, int target) {
@@ -52,10 +54,10 @@ static void patchContinueJumps(Compiler* compiler, int target) {
     LoopContext* loop = &compiler->loopStack[compiler->loopDepth - 1];
     
     // Patch all continue jumps to point to target position
-    for (int i = 0; i < loop->continueCount; i++) {
-        int jump = target - loop->continueJumps[i] - 2;
-        compiler->chunk->code[loop->continueJumps[i]] = (jump >> 8) & 0xFF;
-        compiler->chunk->code[loop->continueJumps[i] + 1] = jump & 0xFF;
+    for (int i = 0; i < loop->continueJumps.count; i++) {
+        int jump = target - loop->continueJumps.data[i] - 2;
+        compiler->chunk->code[loop->continueJumps.data[i]] = (jump >> 8) & 0xFF;
+        compiler->chunk->code[loop->continueJumps.data[i] + 1] = jump & 0xFF;
     }
 }
 
@@ -474,13 +476,8 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             }
             
             // Add this break jump to the list to patch later
-            if (currentLoop->breakCount >= 32) {
-                compiler->hadError = true;
-                return -1;
-            }
-            
             emitByte(compiler, OP_JUMP);
-            currentLoop->breakJumps[currentLoop->breakCount++] = emitJump(compiler);
+            intvec_push(&currentLoop->breakJumps, emitJump(compiler));
             return 0;
         }
         case NODE_CONTINUE: {
@@ -492,13 +489,8 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             }
             
             // Add this continue jump to the list to patch later
-            if (currentLoop->continueCount >= 32) {
-                compiler->hadError = true;
-                return -1;
-            }
-            
             emitByte(compiler, OP_JUMP);
-            currentLoop->continueJumps[currentLoop->continueCount++] = emitJump(compiler);
+            intvec_push(&currentLoop->continueJumps, emitJump(compiler));
             return 0;
         }
         case NODE_TERNARY: {

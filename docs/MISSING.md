@@ -145,7 +145,8 @@ let result = x > 0 ? "positive" : "non-positive"
 - [x] **DONE**: While loop syntax parsing and basic compilation with condition hoisting
 - [x] **DONE**: For loop with range syntax (`0..5`, `0..=5`, `0..10..2`) and bounds checking
 - [ ] **DONE**: For loop with iterator syntax (`for item in collection`) with zero-copy iteration
-- [ ] Break and continue statements with proper scope handling and jump table optimization
+- [ ] Break and continue statements with proper scope handling and jump table optimization *(basic support implemented, dynamic jump table pending)*
+- [ ] Replace fixed-size break/continue jump arrays with dynamic vectors
 - [ ] Nested loop support with labeled break/continue for arbitrary loop depth
 - [ ] Loop variable scoping, lifetime management, and register allocation optimization
 - [ ] Compile-time infinite loop detection and runtime guard mechanisms
@@ -849,15 +850,15 @@ pub enum Result<T, E>
 ## 📝 Next Immediate Actions
 
 **Week 1 Priority:**
-- [ ] Fix string VALUE type conflicts in compiler
-- [ ] Implement variable assignment (`x = value`) parsing
-- [ ] Add boolean comparison operators (`==`, `!=`, `<`, `>`)
-- [ ] Test basic arithmetic with all data types
+- [x] Fix string VALUE type conflicts in compiler
+- [x] Implement variable assignment (`x = value`) parsing
+- [x] Add boolean comparison operators (`==`, `!=`, `<`, `>`)
+- [x] Test basic arithmetic with all data types
 
 **Week 2-4 Goals:**
-- [ ] Complete string concatenation and operations
-- [ ] Add if/else conditional statements
-- [ ] Implement while loops with break/continue
+- [x] Complete string concatenation and operations
+- [x] Add if/else conditional statements
+- [ ] Implement while loops with break/continue (label support pending)
 - [ ] Build comprehensive test suite for Phase 1 features
 
 This roadmap progresses systematically from basic language features to advanced capabilities, ensuring each phase builds solid foundations for the next. The register-based VM and existing infrastructure provide an excellent platform for rapid feature development.

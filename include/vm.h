@@ -362,11 +362,11 @@ typedef enum {
 } OpCode;
 
 // Loop context for break/continue statements
+#include "intvec.h"
+
 typedef struct {
-    int breakJumps[32];    // Array of break jump locations to patch
-    int breakCount;        // Number of break statements
-    int continueJumps[32]; // Array of continue jump locations to patch  
-    int continueCount;     // Number of continue statements
+    IntVec breakJumps;     // Patches for break statements
+    IntVec continueJumps;  // Jump targets for continue
     int continueTarget;    // Target for continue (loop start)
     int scopeDepth;        // Scope depth when loop was entered
 } LoopContext;
