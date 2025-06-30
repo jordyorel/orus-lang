@@ -610,15 +610,233 @@ let evens = [x for x in nums if x % 2 == 0]
 ```
 
 ### 4.3 Type System Foundation
-**Priority: 📋 Medium**
-- [ ] **TODO**: Implement basic static typing with type inference and checking.
+**Priority: 🔥 High**
+- [ ] **TODO**: Implement comprehensive type system following the high-performance template in `IMPLEMENTATION_GUIDE.md` section 3.2.
+
+#### 4.3.1 Type Representation & Core Infrastructure
+**Based on IMPLEMENTATION_GUIDE.md Type Representation template**
+- [ ] **Type enum with comprehensive coverage**: TYPE_UNKNOWN, TYPE_I32, TYPE_I64, TYPE_U32, TYPE_U64, TYPE_F64, TYPE_BOOL, TYPE_STRING, TYPE_VOID, TYPE_NIL, TYPE_ARRAY, TYPE_FUNCTION, TYPE_STRUCT, TYPE_ENUM, TYPE_GENERIC, TYPE_ANY
+- [ ] **Type struct with union for different kinds**: Array, Function, Struct, Enum, Generic type variants
+- [ ] **Type mutability and nullability flags**: `is_mutable`, `is_nullable` attributes
+- [ ] **Type operations**: `type_new()`, `types_equal()`, `type_assignable_to()`, `type_union()`, `type_intersection()`, `type_free()`
+- [ ] **Common type constructors**: `primitive_type()`, `array_type()`, `function_type()`, `generic_type()`
+- [ ] **Arena allocation for Type objects**: Zero-allocation type creation with batch deallocation
+- [ ] **Type interning system**: Deduplicate identical types for memory efficiency
+- [x] **Basic variable type tracking**: Compiler locals array with type information *(IMPLEMENTED)*
+
+#### 4.3.2 Type Inference Engine (Hindley-Milner)
+**Based on IMPLEMENTATION_GUIDE.md Type Inference Engine template**
+- [ ] **TypeInferer struct**: `next_type_var`, `substitutions` HashMap, `constraints` Vec, `env` HashMap
+- [ ] **Fresh type variable generation**: Unique type variables for inference
+- [ ] **Type environment management**: Variable → Type mapping with scope handling
+- [ ] **Constraint generation**: Type constraints from expressions and function calls
+- [ ] **Unification algorithm**: `unify()` with occurs check and substitution
+- [ ] **Constraint solving**: Iterative constraint resolution with substitution application
+- [ ] **Type instantiation**: Generic type parameter instantiation
+- [ ] **Literal type inference**: Automatic type detection from values
+- [ ] **Binary operation type inference**: Numeric, comparison, and equality operations
+- [ ] **Function type inference**: Parameter and return type inference
+- [ ] **Conditional type inference**: If/else branch type unification
+
+#### 4.3.3 Numeric Type Conversion System
+**Complete Orus numeric conversion specification**
+- [x] **i32 → i64** (Implicit & Explicit): Safe promotion without data loss *(IMPLEMENTED)*
+- [ ] **i32 → u32** (Explicit): Bit reinterpretation with negative wrapping
+- [ ] **i32 → u64** (Implicit & Explicit): Zero-extension promotion  
+- [x] **i32 → f64** (Implicit & Explicit): Exact conversion to floating-point *(EXISTING)*
+- [ ] **u32 → i32** (Explicit): Wrapping conversion with overflow detection
+- [ ] **u64 → i32** (Explicit): Truncation with overflow warning
+- [x] **i64 → i32** (Explicit): Truncation with potential data loss *(EXISTING)*
+- [x] **f64 → i32** (Explicit): Truncation toward zero with NaN/infinity handling *(EXISTING)*
+- [ ] **f64 → u32** (Explicit): Truncation toward zero with range validation
+- [ ] **f64 → u64** (Explicit): Truncation toward zero with range validation
+- [x] **f64 → i64** (Explicit): Truncation toward zero with range validation *(EXISTING)*
+- [ ] **u32 → u64** (Implicit & Explicit): Zero-extension promotion
+- [ ] **u64 → f64** (Explicit): Conversion with potential precision loss
+- [x] **i32 → bool** (Explicit): Zero → false, non-zero → true *(EXISTING)*
+- [x] **bool → i32** (Implicit & Explicit): true → 1, false → 0 *(EXISTING)*
+
+#### 4.3.4 Type Conversion VM Opcodes
+**Register-based VM opcode implementation**
+- [x] **OP_I32_TO_I64_R**: 32-bit to 64-bit integer promotion *(IMPLEMENTED)*
+- [x] **OP_I64_TO_I32_R**: 64-bit to 32-bit integer truncation *(EXISTING)*
+- [x] **OP_I32_TO_F64_R**: Integer to double-precision floating-point *(EXISTING)*
+- [x] **OP_F64_TO_I32_R**: Double to 32-bit integer with rounding *(EXISTING)*
+- [x] **OP_F64_TO_I64_R**: Double to 64-bit integer with rounding *(EXISTING)*
+- [ ] **OP_I32_TO_U32_R**: Signed to unsigned 32-bit reinterpretation
+- [ ] **OP_U32_TO_I32_R**: Unsigned to signed 32-bit conversion with overflow check
+- [ ] **OP_U32_TO_U64_R**: Unsigned 32-bit to 64-bit promotion
+- [ ] **OP_U64_TO_U32_R**: Unsigned 64-bit to 32-bit truncation
+- [ ] **OP_U64_TO_I64_R**: Unsigned to signed 64-bit conversion with range checking
+- [ ] **OP_I64_TO_U64_R**: Signed to unsigned 64-bit conversion
+- [ ] **OP_U64_TO_F64_R**: Unsigned 64-bit to double conversion
+- [ ] **OP_F64_TO_U32_R**: Double to unsigned 32-bit with range validation
+- [ ] **OP_F64_TO_U64_R**: Double to unsigned 64-bit with range validation
+- [x] **OP_BOOL_TO_I32_R**: Boolean to integer conversion *(EXISTING)*
+- [x] **OP_I32_TO_BOOL_R**: Integer to boolean conversion *(EXISTING)*
+
+#### 4.3.5 Advanced Type Features
+**Future-proof type system extensions**
+- [ ] **Type constraint system**: Numeric, Comparable, Equatable, Display, Debug traits
+- [ ] **Generic type parameters**: `<T>`, `<T: Constraint>` with bounds checking
+- [ ] **Generic constraint solving**: Type parameter unification with bounds
+- [ ] **Monomorphization**: Generate specialized concrete implementations
+- [ ] **Type aliases**: `type UserId = i64` syntax and semantics
+- [ ] **Pattern matching types**: Exhaustiveness checking for enum variants
+- [ ] **Associated types**: Types associated with traits/interfaces
+- [ ] **Higher-kinded types (future)**: Types that take type parameters
+- [ ] **Dependent types (future)**: Types that depend on runtime values
+- [ ] **Linear types (future)**: Move semantics and ownership tracking
+
+#### 4.3.6 High-Performance Implementation
+**Zero-cost abstraction with enterprise-grade performance**
+- [ ] **SIMD-optimized constraint checking**: Bulk type validation with AVX-512/NEON
+- [ ] **Lock-free type cache**: Atomic operations for concurrent type access
+- [ ] **Arena-allocated type objects**: Batch allocation/deallocation for performance
+- [ ] **Hash-based unification**: Precomputed type fingerprints for fast comparison
+- [ ] **Template specialization**: Common type patterns optimized at compile-time
+- [ ] **Compile-time type resolution**: Zero runtime type checking overhead
+- [ ] **Type inference caching**: Memoization for expensive computations
+- [ ] **Cross-function type propagation**: Inter-procedural analysis optimization
 
 ```orus
-// Type annotations and inference
-let x: i32 = 42           // Explicit typing
+// 4.3.1 Type Representation & Core Infrastructure Examples
+let x: i32 = 42           // Explicit primitive type annotation
 let y = 42                // Type inference to i32
-let name: string = "Orus" // String type
+let name: string = "Orus" // String type with interning
 let flag: bool = true     // Boolean type
+let data: [i32] = [1, 2, 3]  // Array type with element type
+
+// Type mutability and nullability
+let mut counter: i32 = 0      // Mutable integer
+let optional: i32? = nil      // Nullable integer
+let immutable: i32 = 42       // Immutable by default
+
+// 4.3.2 Type Inference Engine (Hindley-Milner) Examples
+fn identity(x) -> auto:       // Type inference for parameters and return
+    x                         // Inferred as <T>(T) -> T
+
+fn add(a, b):                 // Full type inference
+    a + b                     // Inferred based on usage context
+
+let result = add(1, 2)        // Infers add: (i32, i32) -> i32
+let float_result = add(1.0, 2.0)  // Infers add: (f64, f64) -> f64
+
+// Complex inference with constraints
+fn compare(a, b):
+    a < b                     // Infers <T: Comparable>(T, T) -> bool
+
+// 4.3.3 Numeric Type Conversion System Examples
+let small: i32 = 42
+let big: i64 = small          // Implicit i32 → i64 promotion
+let precise: f64 = small      // Implicit i32 → f64 conversion
+
+// Explicit conversions with `as` operator  
+let big_val: i64 = 5000000000
+let truncated: i32 = big_val as i32      // Explicit i64 → i32 truncation
+let unsigned: u32 = small as u32         // Explicit i32 → u32 reinterpretation
+let float_val: f64 = 3.14159
+let rounded: i32 = float_val as i32      // Explicit f64 → i32 truncation
+
+// Boolean conversions
+let flag: bool = true
+let flag_num: i32 = flag as i32          // Explicit bool → i32 (true = 1)
+let zero: i32 = 0
+let zero_flag: bool = zero as bool       // Explicit i32 → bool (0 = false)
+
+// 4.3.4 Type Conversion VM Opcodes (Implementation Examples)
+// These conversions generate specific VM opcodes:
+let promoted = small_int as i64          // Generates OP_I32_TO_I64_R
+let demoted = big_int as i32             // Generates OP_I64_TO_I32_R  
+let float_conv = int_val as f64          // Generates OP_I32_TO_F64_R
+let int_conv = float_val as i32          // Generates OP_F64_TO_I32_R
+
+// 4.3.5 Advanced Type Features Examples
+// Generic type parameters with constraints
+fn identity<T>(x: T) -> T:
+    x
+
+fn add<T: Numeric>(a: T, b: T) -> T:
+    a + b
+
+fn min<T: Comparable>(a: T, b: T) -> T:
+    a if a < b else b
+
+// Generic struct with multiple constraints
+struct Container<T: Clone + Display>:
+    value: T
+    
+    fn show(self):
+        print("Container: {}", self.value)
+    
+    fn duplicate(self) -> T:
+        self.value.clone()
+
+// Type aliases for domain modeling
+type UserId = i64
+type Temperature = f64
+type Count = u32
+
+fn process_user(id: UserId, temp: Temperature):
+    // Type-safe domain specific parameters
+    if temp > 100.0:
+        print("User {} has high temperature: {}", id, temp)
+
+// Pattern matching with exhaustive type checking
+enum Result<T, E>:
+    Ok(T)
+    Error(E)
+
+fn handle_result<T, E>(result: Result<T, E>) -> T:
+    match result:
+        Ok(value): value
+        Error(err): panic("Error: {}", err)
+
+// Advanced inference with generic collections
+let numbers = [1, 2, 3]               // Inferred as [i32]
+let floats = [1.0, 2.0, 3.0]         // Inferred as [f64]
+let generic_map = map(numbers, |x| x * 2)  // Inferred as [i32]
+
+// Function overloading with trait constraints
+trait Display:
+    fn display(self) -> string
+
+trait Debug:
+    fn debug(self) -> string
+
+fn print<T: Display>(value: T):
+    let output = value.display()
+    // Implementation for displayable types
+    
+fn debug_print<T: Debug>(value: T):
+    let output = value.debug()
+    // Implementation for debuggable types
+
+// 4.3.6 High-Performance Implementation (Transparent to user)
+// These features work automatically for performance:
+fn bulk_convert(numbers: [i32]) -> [i64]:
+    // SIMD-optimized bulk conversion using OP_I32_TO_I64_R
+    numbers.map(|x| x as i64)
+
+fn type_check_batch<T: Numeric>(values: [T]):
+    // SIMD-optimized constraint checking
+    for value in values:
+        ensure_numeric(value)  // Batch type validation
+
+// Zero-cost abstractions - no runtime overhead
+fn generic_sort<T: Comparable>(arr: [T]):
+    // Monomorphized to specific types at compile-time
+    // No virtual calls or runtime type checking
+    quick_sort(arr, |a, b| a < b)
+
+// Type inference caching (transparent performance optimization)
+fn complex_inference():
+    let result = deeply_nested_generic_function(
+        another_generic(some_value),
+        yet_another_generic(other_value)
+    )
+    // Type inference results cached for repeated compilations
+    result
 ```
 
 ### 4.4 Enhanced Error Reporting System

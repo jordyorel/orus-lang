@@ -19,7 +19,8 @@ INCLUDES = -I$(INCDIR)
 CORE_SRCS =
 COMPILER_SRCS = $(SRCDIR)/compiler/compiler.c $(SRCDIR)/compiler/lexer.c $(SRCDIR)/compiler/parser.c
 VM_SRCS = $(SRCDIR)/vm/vm.c $(SRCDIR)/vm/memory.c $(SRCDIR)/vm/debug.c \
-          $(SRCDIR)/vm/builtins.c
+          $(SRCDIR)/vm/builtins.c $(SRCDIR)/type/type_representation.c \
+          $(SRCDIR)/type/type_inference.c
 REPL_SRC = $(SRCDIR)/repl.c
 MAIN_SRC = $(SRCDIR)/main.c
 
@@ -43,7 +44,7 @@ all: $(ORUS)
 
 # Create build directory if it doesn't exist
 $(BUILDDIR):
-	mkdir -p $(BUILDDIR) $(BUILDDIR)/vm $(BUILDDIR)/compiler
+	mkdir -p $(BUILDDIR) $(BUILDDIR)/vm $(BUILDDIR)/compiler $(BUILDDIR)/type
 
 # Main interpreter
 $(ORUS): $(MAIN_OBJ) $(REPL_OBJ) $(VM_OBJS) $(COMPILER_OBJS)

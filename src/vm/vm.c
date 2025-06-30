@@ -119,21 +119,17 @@ bool valuesEqual(Value a, Value b) {
     }
 }
 
-// Compiler operations
-// Type system (simplified)
-static Type primitiveTypes[TYPE_ANY + 1];
+// Type system moved to src/type/type_representation.c
+// Forward declarations for type system functions
+extern void init_extended_type_system(void);
+extern Type* get_primitive_type_cached(TypeKind kind);
 
 void initTypeSystem(void) {
-    for (int i = 0; i <= TYPE_ANY; i++) {
-        primitiveTypes[i].kind = (TypeKind)i;
-    }
+    init_extended_type_system();
 }
 
 Type* getPrimitiveType(TypeKind kind) {
-    if (kind <= TYPE_ANY) {
-        return &primitiveTypes[kind];
-    }
-    return NULL;
+    return get_primitive_type_cached(kind);
 }
 
 // VM initialization
@@ -253,6 +249,18 @@ static InterpretResult run(void) {
         dispatchTable[OP_DIV_I64_R] = &&LABEL_OP_DIV_I64_R;
         dispatchTable[OP_MOD_I64_R] = &&LABEL_OP_MOD_I64_R;
         dispatchTable[OP_I32_TO_I64_R] = &&LABEL_OP_I32_TO_I64_R;
+        dispatchTable[OP_ADD_F64_R] = &&LABEL_OP_ADD_F64_R;
+        dispatchTable[OP_SUB_F64_R] = &&LABEL_OP_SUB_F64_R;
+        dispatchTable[OP_MUL_F64_R] = &&LABEL_OP_MUL_F64_R;
+        dispatchTable[OP_DIV_F64_R] = &&LABEL_OP_DIV_F64_R;
+        dispatchTable[OP_LT_F64_R] = &&LABEL_OP_LT_F64_R;
+        dispatchTable[OP_LE_F64_R] = &&LABEL_OP_LE_F64_R;
+        dispatchTable[OP_GT_F64_R] = &&LABEL_OP_GT_F64_R;
+        dispatchTable[OP_GE_F64_R] = &&LABEL_OP_GE_F64_R;
+        dispatchTable[OP_I32_TO_F64_R] = &&LABEL_OP_I32_TO_F64_R;
+        dispatchTable[OP_I64_TO_F64_R] = &&LABEL_OP_I64_TO_F64_R;
+        dispatchTable[OP_F64_TO_I32_R] = &&LABEL_OP_F64_TO_I32_R;
+        dispatchTable[OP_F64_TO_I64_R] = &&LABEL_OP_F64_TO_I64_R;
         dispatchTable[OP_LT_I32_R] = &&LABEL_OP_LT_I32_R;
         dispatchTable[OP_LE_I32_R] = &&LABEL_OP_LE_I32_R;
         dispatchTable[OP_GT_I32_R] = &&LABEL_OP_GT_I32_R;
@@ -609,6 +617,154 @@ LABEL_OP_I32_TO_I64_R: {
             RETURN(INTERPRET_RUNTIME_ERROR);
         }
         vm.registers[dst] = I64_VAL((int64_t)AS_I32(vm.registers[src]));
+        DISPATCH();
+    }
+
+// F64 Arithmetic Operations
+LABEL_OP_ADD_F64_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t src1 = READ_BYTE();
+        uint8_t src2 = READ_BYTE();
+        if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        vm.registers[dst] = F64_VAL(AS_F64(vm.registers[src1]) + AS_F64(vm.registers[src2]));
+        DISPATCH();
+    }
+
+LABEL_OP_SUB_F64_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t src1 = READ_BYTE();
+        uint8_t src2 = READ_BYTE();
+        if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        vm.registers[dst] = F64_VAL(AS_F64(vm.registers[src1]) - AS_F64(vm.registers[src2]));
+        DISPATCH();
+    }
+
+LABEL_OP_MUL_F64_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t src1 = READ_BYTE();
+        uint8_t src2 = READ_BYTE();
+        if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        vm.registers[dst] = F64_VAL(AS_F64(vm.registers[src1]) * AS_F64(vm.registers[src2]));
+        DISPATCH();
+    }
+
+LABEL_OP_DIV_F64_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t src1 = READ_BYTE();
+        uint8_t src2 = READ_BYTE();
+        if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        double b = AS_F64(vm.registers[src2]);
+        if (b == 0.0) {
+            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Division by zero");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        vm.registers[dst] = F64_VAL(AS_F64(vm.registers[src1]) / b);
+        DISPATCH();
+    }
+
+// F64 Comparison Operations
+LABEL_OP_LT_F64_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t src1 = READ_BYTE();
+        uint8_t src2 = READ_BYTE();
+        if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        vm.registers[dst] = BOOL_VAL(AS_F64(vm.registers[src1]) < AS_F64(vm.registers[src2]));
+        DISPATCH();
+    }
+
+LABEL_OP_LE_F64_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t src1 = READ_BYTE();
+        uint8_t src2 = READ_BYTE();
+        if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        vm.registers[dst] = BOOL_VAL(AS_F64(vm.registers[src1]) <= AS_F64(vm.registers[src2]));
+        DISPATCH();
+    }
+
+LABEL_OP_GT_F64_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t src1 = READ_BYTE();
+        uint8_t src2 = READ_BYTE();
+        if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        vm.registers[dst] = BOOL_VAL(AS_F64(vm.registers[src1]) > AS_F64(vm.registers[src2]));
+        DISPATCH();
+    }
+
+LABEL_OP_GE_F64_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t src1 = READ_BYTE();
+        uint8_t src2 = READ_BYTE();
+        if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        vm.registers[dst] = BOOL_VAL(AS_F64(vm.registers[src1]) >= AS_F64(vm.registers[src2]));
+        DISPATCH();
+    }
+
+// F64 Type Conversion Operations
+LABEL_OP_I32_TO_F64_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t src = READ_BYTE();
+        if (!IS_I32(vm.registers[src])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Source must be i32");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        vm.registers[dst] = F64_VAL((double)AS_I32(vm.registers[src]));
+        DISPATCH();
+    }
+
+LABEL_OP_I64_TO_F64_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t src = READ_BYTE();
+        if (!IS_I64(vm.registers[src])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Source must be i64");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        vm.registers[dst] = F64_VAL((double)AS_I64(vm.registers[src]));
+        DISPATCH();
+    }
+
+LABEL_OP_F64_TO_I32_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t src = READ_BYTE();
+        if (!IS_F64(vm.registers[src])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Source must be f64");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        vm.registers[dst] = I32_VAL((int32_t)AS_F64(vm.registers[src]));
+        DISPATCH();
+    }
+
+LABEL_OP_F64_TO_I64_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t src = READ_BYTE();
+        if (!IS_F64(vm.registers[src])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Source must be f64");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        vm.registers[dst] = I64_VAL((int64_t)AS_F64(vm.registers[src]));
         DISPATCH();
     }
 
@@ -1262,6 +1418,154 @@ LABEL_UNKNOWN:
                     RETURN(INTERPRET_RUNTIME_ERROR);
                 }
                 vm.registers[dst] = I64_VAL((int64_t)AS_I32(vm.registers[src]));
+                break;
+            }
+
+            // F64 Arithmetic Operations
+            case OP_ADD_F64_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src1 = READ_BYTE();
+                uint8_t src2 = READ_BYTE();
+                if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                vm.registers[dst] = F64_VAL(AS_F64(vm.registers[src1]) + AS_F64(vm.registers[src2]));
+                break;
+            }
+
+            case OP_SUB_F64_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src1 = READ_BYTE();
+                uint8_t src2 = READ_BYTE();
+                if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                vm.registers[dst] = F64_VAL(AS_F64(vm.registers[src1]) - AS_F64(vm.registers[src2]));
+                break;
+            }
+
+            case OP_MUL_F64_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src1 = READ_BYTE();
+                uint8_t src2 = READ_BYTE();
+                if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                vm.registers[dst] = F64_VAL(AS_F64(vm.registers[src1]) * AS_F64(vm.registers[src2]));
+                break;
+            }
+
+            case OP_DIV_F64_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src1 = READ_BYTE();
+                uint8_t src2 = READ_BYTE();
+                if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                double b = AS_F64(vm.registers[src2]);
+                if (b == 0.0) {
+                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Division by zero");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                vm.registers[dst] = F64_VAL(AS_F64(vm.registers[src1]) / b);
+                break;
+            }
+
+            // F64 Comparison Operations
+            case OP_LT_F64_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src1 = READ_BYTE();
+                uint8_t src2 = READ_BYTE();
+                if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                vm.registers[dst] = BOOL_VAL(AS_F64(vm.registers[src1]) < AS_F64(vm.registers[src2]));
+                break;
+            }
+
+            case OP_LE_F64_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src1 = READ_BYTE();
+                uint8_t src2 = READ_BYTE();
+                if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                vm.registers[dst] = BOOL_VAL(AS_F64(vm.registers[src1]) <= AS_F64(vm.registers[src2]));
+                break;
+            }
+
+            case OP_GT_F64_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src1 = READ_BYTE();
+                uint8_t src2 = READ_BYTE();
+                if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                vm.registers[dst] = BOOL_VAL(AS_F64(vm.registers[src1]) > AS_F64(vm.registers[src2]));
+                break;
+            }
+
+            case OP_GE_F64_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src1 = READ_BYTE();
+                uint8_t src2 = READ_BYTE();
+                if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                vm.registers[dst] = BOOL_VAL(AS_F64(vm.registers[src1]) >= AS_F64(vm.registers[src2]));
+                break;
+            }
+
+            // F64 Type Conversion Operations
+            case OP_I32_TO_F64_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src = READ_BYTE();
+                if (!IS_I32(vm.registers[src])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Source must be i32");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                vm.registers[dst] = F64_VAL((double)AS_I32(vm.registers[src]));
+                break;
+            }
+
+            case OP_I64_TO_F64_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src = READ_BYTE();
+                if (!IS_I64(vm.registers[src])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Source must be i64");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                vm.registers[dst] = F64_VAL((double)AS_I64(vm.registers[src]));
+                break;
+            }
+
+            case OP_F64_TO_I32_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src = READ_BYTE();
+                if (!IS_F64(vm.registers[src])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Source must be f64");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                vm.registers[dst] = I32_VAL((int32_t)AS_F64(vm.registers[src]));
+                break;
+            }
+
+            case OP_F64_TO_I64_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src = READ_BYTE();
+                if (!IS_F64(vm.registers[src])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Source must be f64");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                vm.registers[dst] = I64_VAL((int64_t)AS_F64(vm.registers[src]));
                 break;
             }
 

@@ -24,7 +24,8 @@
       "Bash(ORUS_TRACE=1 ./orus debug_test.orus)",
       "Bash(ORUS_TRACE=1 ./orus literal_test.orus)",
       "Bash(ORUS_TRACE=1 ./orus mixed_test.orus)",
-      "Bash(ORUS_TRACE=1 ./orus simple_mixed_test.orus)"
+      "Bash(ORUS_TRACE=1 ./orus simple_mixed_test.orus)",
+      "Bash(mv:*)"
     ],
     "deny": []
   }

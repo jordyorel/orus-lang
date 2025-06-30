@@ -6,55 +6,56 @@
 // Forward declarations - the actual definitions are in vm.h
 typedef struct Obj Obj;
 typedef struct ObjString ObjString;
-typedef struct Value Value;
+typedef struct Type Type;
 
-typedef enum {
-    TYPE_I32,
-    TYPE_I64,
-    TYPE_U32,
-    TYPE_U64,
-    TYPE_F64,
-    TYPE_BOOL,
-    TYPE_STRING,
-    TYPE_VOID,
-    TYPE_NIL,
-    TYPE_ARRAY,
-    TYPE_FUNCTION,
-    TYPE_STRUCT,
-    TYPE_GENERIC,
-    TYPE_COUNT
-} TypeKind;
+// Use existing TypeKind from vm.h - just add missing types
+// (The TypeKind enum is already defined in vm.h)
 
 typedef struct FieldInfo {
     ObjString* name;
     struct Type* type;
 } FieldInfo;
 
-typedef struct Type {
-    Obj obj;
-    TypeKind kind;
+// Extended type system structures (complement the existing Type in vm.h)
+typedef struct Variant {
+    ObjString* name;
+    struct Type** field_types;
+    int field_count;
+} Variant;
+
+typedef struct Method {
+    ObjString* name;
+    struct Type* type;
+} Method;
+
+// Extended type information (can be attached to existing Type struct)
+typedef struct TypeExtension {
+    bool is_mutable;
+    bool is_nullable;
+    
+    // Extended union data for new type kinds
     union {
-        struct {
-            struct Type* elementType;
-            int length;            // -1 for dynamic arrays
-        } array;
-        struct {
-            struct Type* returnType;
-            struct Type** paramTypes;
-            int paramCount;
-        } function;
         struct {
             ObjString* name;
             FieldInfo* fields;
             int fieldCount;
+            Method* methods;
+            int methodCount;
             ObjString** genericParams;
             int genericCount;
         } structure;
         struct {
             ObjString* name;
+            Variant* variants;
+            int variant_count;
+        } enum_;
+        struct {
+            ObjString* name;
+            struct Type* constraint;
+            int id;
         } generic;
-    } info;
-} Type;
+    } extended;
+} TypeExtension;
 
 Type* createPrimitiveType(TypeKind kind);
 Type* createArrayType(Type* elementType);
@@ -74,12 +75,66 @@ void markTypeRoots();
 Type* substituteGenerics(Type* type, ObjString** names, Type** subs, int count);
 Type* instantiateStructType(Type* base, Type** args, int argCount);
 
-extern Type* primitiveTypes[TYPE_COUNT];
+extern Type* primitiveTypes[];
 
 typedef enum {
     CONSTRAINT_NONE,
     CONSTRAINT_NUMERIC,
     CONSTRAINT_COMPARABLE
 } GenericConstraint;
+
+// Extended Type System Operations (work with existing Type from vm.h)
+bool type_equals_extended(Type* a, Type* b);
+bool type_assignable_to_extended(Type* from, Type* to);
+Type* type_union_extended(Type* a, Type* b);
+Type* type_intersection_extended(Type* a, Type* b);
+
+// Extended type constructors (complement existing ones)
+Type* create_generic_type(const char* name, Type* constraint);
+TypeExtension* get_type_extension(Type* type);
+void set_type_extension(Type* type, TypeExtension* ext);
+
+// Forward declarations for Type Inference Engine
+typedef struct HashMap HashMap;
+typedef struct Vec Vec;
+typedef struct ASTNode ASTNode;
+
+typedef struct {
+    struct Type* left;
+    struct Type* right;
+} Constraint;
+
+typedef struct {
+    int next_type_var;
+    HashMap* substitutions;
+    Vec* constraints;
+    HashMap* env;
+} TypeInferer;
+
+// Hindley-Milner Type Inference Functions
+TypeInferer* type_inferer_new(void);
+void type_inferer_free(TypeInferer* inferer);
+Type* infer_type(TypeInferer* inferer, ASTNode* expr);
+bool solve_constraints(TypeInferer* inferer);
+bool unify(TypeInferer* inferer, Type* t1, Type* t2);
+Type* fresh_type_var(TypeInferer* inferer);
+void add_constraint(TypeInferer* inferer, Type* left, Type* right);
+void add_substitution(TypeInferer* inferer, int var_id, Type* type);
+Type* apply_substitutions(TypeInferer* inferer, Type* type);
+bool occurs_check(Type* var, Type* type);
+Type* instantiate(Type* type, TypeInferer* inferer);
+
+// Helper types for inference (work with existing system)
+Type* get_numeric_type(void);
+Type* get_comparable_type(void);
+Type* infer_literal_type_extended(Value* value);
+
+// Core type system functions (moved from vm.c)
+void init_extended_type_system(void);
+Type* get_primitive_type_cached(TypeKind kind);
+
+// Bridge functions between ValueType and TypeKind
+TypeKind value_type_to_type_kind(ValueType value_type);
+ValueType type_kind_to_value_type(TypeKind type_kind);
 
 #endif
