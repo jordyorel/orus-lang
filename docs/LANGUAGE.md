@@ -535,7 +535,3 @@ let d: string = a as string
 let b: bool = 0 as bool
 let s = 123 as string
 ```
-
----
-
-This version reflects all updated features including enums, arrays, generics, modules, loops, built-ins, and the type system with casting rules using indentation-based syntax.
