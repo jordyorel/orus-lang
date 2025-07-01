@@ -93,11 +93,11 @@ b = 20
 print(a, "+", b, "=", a + b)
 
 // Format specifiers
-let pi = 3.14159
+pi = 3.14159
 print("Pi rounded: {:.2}", pi)  // "Pi rounded: 3.14"
 
 // Expression interpolation
-let items = [1, 2, 3]
+items = [1, 2, 3]
 print("Array has {} items", len(items))
 ```
 
@@ -107,9 +107,9 @@ print("Array has {} items", len(items))
 
 **Features to Implement:**
 - [x] `x = value` syntax parsing
-- [x] Mutable vs immutable variables (`let mut x = 42`)
+- [x] Mutable vs immutable variables (`mut x = 42`)
 - [x] Compound assignments (`+=`, `-=`, `*=`, `/=`)
-- [x] Type annotations (`let x: i32 = 42`)
+- [x] Type annotations (`x: i32 = 42`)
 
 ### 1.5 Boolean and Comparison Operations
 **Priority: 🔥 Critical**
@@ -134,7 +134,7 @@ else:
 
 print("ok") if x == 1 elif x == 2 else print("fallback")
 - [x] // Ternary operator 
-let result = x > 0 ? "positive" : "non-positive"
+result = x > 0 ? "positive" : "non-positive"
 ```
 
 ### 2.2 Loop Constructs
@@ -179,8 +179,8 @@ while condition:
     if should_skip: continue
 
 # While loop with compound condition and short-circuit evaluation
-let mut i = 0
-let mut done = false
+mut i = 0
+mut done = false
 while i < 10 and not done and is_valid(i):
     i = i + 1
     if i % 2 == 0: continue
@@ -202,8 +202,8 @@ for i in 10..0..-2:
     print("Countdown: {}", i)  // 10, 8, 6, 4, 2 (negative step)
 
 # Range with runtime bounds (bounds checking required)
-let start = get_start_value()
-let end = get_end_value()
+start = get_start_value()
+end = get_end_value()
 for i in start..end:
     if is_safe_index(i):
         process_element(i)
@@ -216,17 +216,13 @@ for item in large_collection:
 # Nested loops with labeled break/continue for complex control flow
 'outer: for i in 0..matrix_height:
     'inner: for j in 0..matrix_width:
-        let value = matrix[i][j]
-        
+        value = matrix[i][j]
         if value == SKIP_MARKER: 
             continue 'inner  # Skip to next column
-        
         if value == ROW_TERMINATOR:
             break 'inner     # Skip to next row
-            
         if value == ABORT_SIGNAL:
             break 'outer     # Exit both loops
-            
         process_cell(i, j, value)
 
 # Performance-critical numerical loop with optimization hints
@@ -237,8 +233,7 @@ for i in 0..vector_size:
 # Loop with resource management and timeout protection
 @timeout(5000ms) @max_iterations(1000000)
 while server.is_running():
-    let request = server.accept_connection()
-
+    request = server.accept_connection()
     match request:
         Some(req): 
             if process_request(req).is_error():
@@ -255,8 +250,7 @@ for prime in prime_generator(1..1000000):
 
 # Loop with early termination and cleanup
 for item in large_dataset:
-    let result = expensive_computation(item)
-
+    result = expensive_computation(item)
     match result:
         Error(err):
             log_error("Processing failed", err)
@@ -276,8 +270,7 @@ for item in large_dataset:
 # Infinite loop with explicit semantics and safety guards
 @stack_guard @resource_limit(memory=100MB, cpu=80%)
 loop:
-    let input = read_input_with_timeout(1000ms)
-
+    input = read_input_with_timeout(1000ms)
     match input:
         Timeout: continue,
         Quit: break,
@@ -332,7 +325,7 @@ for i in 10..0..-2:     // Countdown: 10, 8, 6, 4, 2
     countdown_step(i)
 
 # Runtime bounds with bounds checking
-let n = get_array_size()
+n = get_array_size()
 for i in 0..n:          // Bounds-checked at runtime
     if is_valid_index(i):
         process_array_element(i)
@@ -462,8 +455,8 @@ fn main(args: Array<String>):
         print("Usage: program <input_file>")
         return 1  // Error exit code
     
-    let input_file = args[1]
-    let result = process_file(input_file)
+    input_file = args[1]
+    result = process_file(input_file)
     
     match result:
         Success(data) => {
@@ -477,8 +470,8 @@ fn main(args: Array<String>):
 
 # Main function with environment integration
 fn main():
-    let debug_mode = env.get_bool("DEBUG").unwrap_or(false)
-    let max_threads = env.get_int("MAX_THREADS").unwrap_or(4)
+    debug_mode = env.get_bool("DEBUG").unwrap_or(false)
+    max_threads = env.get_int("MAX_THREADS").unwrap_or(4)
     
     if debug_mode:
         enable_verbose_logging()
@@ -489,7 +482,7 @@ fn main():
     signal.register_handler(SIGINT, graceful_shutdown)
     signal.register_handler(SIGTERM, graceful_shutdown)
     
-    let server = start_application_server()
+    server = start_application_server()
     server.run_until_shutdown()
     
     cleanup_resources()
@@ -499,8 +492,8 @@ fn main():
 @optimize(speed) @profile(startup)
 fn main():
     // Pre-allocate critical resources
-    let memory_pool = allocate_memory_pool(64 * MB)
-    let thread_pool = create_thread_pool(num_cpus())
+    memory_pool = allocate_memory_pool(64 * MB)
+    thread_pool = create_thread_pool(num_cpus())
     
     defer {
         // Guaranteed cleanup
@@ -508,9 +501,9 @@ fn main():
         memory_pool.deallocate()
     }
     
-    let start_time = get_time()
-    let result = run_application()
-    let elapsed = get_time() - start_time
+    start_time = get_time()
+    result = run_application()
+    elapsed = get_time() - start_time
     
     if elapsed > performance_threshold():
         log_performance_warning("Slow startup: {}ms", elapsed)
@@ -568,16 +561,16 @@ fn make_adder(x: i32):
 
 ```orus
 // Fixed-size array with type and length
-let nums: [i32; 3] = [1, 2, 3]
+nums: [i32; 3] = [1, 2, 3]
 
 // Array fill expression (value; length)
-let zeros = [0; 5]           // [i32; 5]
+zeros = [0; 5]           // [i32; 5]
 
 // Slicing (end-exclusive)
-let slice = nums[0..2]       // elements 0 and 1
+slice = nums[0..2]       // elements 0 and 1
 
 // Dynamic array (no length annotation)
-let dynamic: [i32] = []
+dynamic: [i32] = []
 push(dynamic, 42)
 pop(dynamic)
 
@@ -586,7 +579,7 @@ for val in nums:
     print(val)
 
 // Comprehension
-let evens = [x for x in nums if x % 2 == 0]
+evens = [x for x in nums if x % 2 == 0]
 ```
 
 ### 4.2 High-Performance Array Extensions
@@ -605,8 +598,8 @@ let evens = [x for x in nums if x % 2 == 0]
 ```orus
 // Enhanced arrays building on basic array syntax
 // Performance-optimized versions of basic arrays
-@align(32) let simd_nums: [f32; 1024] = [0.0; 1024]  // SIMD-aligned
-@layout(soa) let particles: [Particle] = []          // Structure of arrays
+@align(32) simd_nums: [f32; 1024] = [0.0; 1024]  // SIMD-aligned
+@layout(soa) particles: [Particle] = []          // Structure of arrays
 ```
 
 ### 4.3 Type System Foundation
@@ -701,16 +694,16 @@ let evens = [x for x in nums if x % 2 == 0]
 
 ```orus
 // 4.3.1 Type Representation & Core Infrastructure Examples
-let x: i32 = 42           // Explicit primitive type annotation
-let y = 42                // Type inference to i32
-let name: string = "Orus" // String type with interning
-let flag: bool = true     // Boolean type
-let data: [i32] = [1, 2, 3]  // Array type with element type
+x: i32 = 42           // Explicit primitive type annotation
+y = 42                // Type inference to i32
+name: string = "Orus" // String type with interning
+flag: bool = true     // Boolean type
+data: [i32] = [1, 2, 3]  // Array type with element type
 
 // Type mutability and nullability
-let mut counter: i32 = 0      // Mutable integer
-let optional: i32? = nil      // Nullable integer
-let immutable: i32 = 42       // Immutable by default
+mut counter: i32 = 0      // Mutable integer
+optional: i32? = nil      // Nullable integer
+immutable: i32 = 42       // Immutable by default
 
 // 4.3.2 Type Inference Engine (Hindley-Milner) Examples
 fn identity(x) -> auto:       // Type inference for parameters and return
@@ -719,37 +712,37 @@ fn identity(x) -> auto:       // Type inference for parameters and return
 fn add(a, b):                 // Full type inference
     a + b                     // Inferred based on usage context
 
-let result = add(1, 2)        // Infers add: (i32, i32) -> i32
-let float_result = add(1.0, 2.0)  // Infers add: (f64, f64) -> f64
+result = add(1, 2)        // Infers add: (i32, i32) -> i32
+float_result = add(1.0, 2.0)  // Infers add: (f64, f64) -> f64
 
 // Complex inference with constraints
 fn compare(a, b):
     a < b                     // Infers <T: Comparable>(T, T) -> bool
 
 // 4.3.3 Numeric Type Conversion System Examples
-let small: i32 = 42
-let big: i64 = small          // Implicit i32 → i64 promotion
-let precise: f64 = small      // Implicit i32 → f64 conversion
+small: i32 = 42
+big: i64 = small          // Implicit i32 → i64 promotion
+precise: f64 = small      // Implicit i32 → f64 conversion
 
 // Explicit conversions with `as` operator  
-let big_val: i64 = 5000000000
-let truncated: i32 = big_val as i32      // Explicit i64 → i32 truncation
-let unsigned: u32 = small as u32         // Explicit i32 → u32 reinterpretation
-let float_val: f64 = 3.14159
-let rounded: i32 = float_val as i32      // Explicit f64 → i32 truncation
+big_val: i64 = 5000000000
+truncated: i32 = big_val as i32      // Explicit i64 → i32 truncation
+unsigned: u32 = small as u32         // Explicit i32 → u32 reinterpretation
+float_val: f64 = 3.14159
+rounded: i32 = float_val as i32      // Explicit f64 → i32 truncation
 
 // Boolean conversions
-let flag: bool = true
-let flag_num: i32 = flag as i32          // Explicit bool → i32 (true = 1)
-let zero: i32 = 0
-let zero_flag: bool = zero as bool       // Explicit i32 → bool (0 = false)
+flag: bool = true
+flag_num: i32 = flag as i32          // Explicit bool → i32 (true = 1)
+zero: i32 = 0
+zero_flag: bool = zero as bool       // Explicit i32 → bool (0 = false)
 
 // 4.3.4 Type Conversion VM Opcodes (Implementation Examples)
 // These conversions generate specific VM opcodes:
-let promoted = small_int as i64          // Generates OP_I32_TO_I64_R
-let demoted = big_int as i32             // Generates OP_I64_TO_I32_R  
-let float_conv = int_val as f64          // Generates OP_I32_TO_F64_R
-let int_conv = float_val as i32          // Generates OP_F64_TO_I32_R
+promoted = small_int as i64          // Generates OP_I32_TO_I64_R
+demoted = big_int as i32             // Generates OP_I64_TO_I32_R  
+float_conv = int_val as f64          // Generates OP_I32_TO_F64_R
+int_conv = float_val as i32          // Generates OP_F64_TO_I32_R
 
 // 4.3.5 Advanced Type Features Examples
 // Generic type parameters with constraints
@@ -793,9 +786,9 @@ fn handle_result<T, E>(result: Result<T, E>) -> T:
         Error(err): panic("Error: {}", err)
 
 // Advanced inference with generic collections
-let numbers = [1, 2, 3]               // Inferred as [i32]
-let floats = [1.0, 2.0, 3.0]         // Inferred as [f64]
-let generic_map = map(numbers, |x| x * 2)  // Inferred as [i32]
+numbers = [1, 2, 3]               // Inferred as [i32]
+floats = [1.0, 2.0, 3.0]         // Inferred as [f64]
+generic_map = map(numbers, |x| x * 2)  // Inferred as [i32]
 
 // Function overloading with trait constraints
 trait Display:
@@ -805,11 +798,11 @@ trait Debug:
     fn debug(self) -> string
 
 fn print<T: Display>(value: T):
-    let output = value.display()
+    output = value.display()
     // Implementation for displayable types
     
 fn debug_print<T: Debug>(value: T):
-    let output = value.debug()
+    output = value.debug()
     // Implementation for debuggable types
 
 // 4.3.6 High-Performance Implementation (Transparent to user)
@@ -831,7 +824,7 @@ fn generic_sort<T: Comparable>(arr: [T]):
 
 // Type inference caching (transparent performance optimization)
 fn complex_inference():
-    let result = deeply_nested_generic_function(
+    result = deeply_nested_generic_function(
         another_generic(some_value),
         yet_another_generic(other_value)
     )
@@ -858,7 +851,7 @@ The error reporting system should combine Rust's precision with Elm's empathy, p
 ```
 -- TYPE MISMATCH: This value isn't what we expected ------- main.orus:3:15
 
-3 | let x: i32 = "hello"
+3 | x: i32 = "hello"
               |   ^^^^^ this is a `string`, but `i32` was expected
               |
               = Orus expected an integer here, but found a text value instead.
@@ -951,9 +944,9 @@ fn min<T: Comparable>(a: T, b: T) -> T:
 
 // Usage
 fn main:
-    let a = identity<i32>(5)
-    let b: Box<string> = Box{ value: "hi" }
-    let result = add<i32>(10, 20)
+    a = identity<i32>(5)
+    b: Box<string> = Box{ value: "hi" }
+    result = add<i32>(10, 20)
 ```
 
 ---
