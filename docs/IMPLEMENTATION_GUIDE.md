@@ -5148,4 +5148,5 @@ This enhanced IMPLEMENTATION_GUIDE.md now includes cutting-edge optimization tec
 3. **Quarter 2**: Type system and collections
 4. **Quarter 3**: Optimization and production readiness
 
-This comprehensive roadmap consolidates all documentation into a single reference, providing clear implementation details, code signatures, and priorities for building Orus into a world-class programming language.
+This comprehensive roadmap consolidates all documentation into a single reference, providing clear implementation details, code signatures, and priorities for building Orus into a world-class programming language.\n### Recent Updates\n- Added compiler support for `f64` arithmetic operations and literals.
+- Implemented basic `u32` arithmetic and literals.

@@ -68,6 +68,8 @@ static LoopContext* getCurrentLoop(Compiler* compiler) {
     return &compiler->loopStack[compiler->loopDepth - 1];
 }
 
+static ValueType inferBinaryOpTypeWithCompiler(ASTNode* left, ASTNode* right, Compiler* compiler);
+
 // Helper function to get the value type from an AST node
 static ValueType getNodeValueType(ASTNode* node) {
     if (node->type == NODE_LITERAL) {
@@ -91,8 +93,9 @@ static ValueType getNodeValueTypeWithCompiler(ASTNode* node, Compiler* compiler)
         }
         // If not found in locals, default to i32
         return VAL_I32;
+    } else if (node->type == NODE_BINARY) {
+        return inferBinaryOpTypeWithCompiler(node->binary.left, node->binary.right, compiler);
     }
-    // Default to i32 for other node types
     return VAL_I32;
 }
 
@@ -100,13 +103,19 @@ static ValueType getNodeValueTypeWithCompiler(ASTNode* node, Compiler* compiler)
 static ValueType inferBinaryOpTypeWithCompiler(ASTNode* left, ASTNode* right, Compiler* compiler) {
     ValueType leftType = getNodeValueTypeWithCompiler(left, compiler);
     ValueType rightType = getNodeValueTypeWithCompiler(right, compiler);
-    
-    // If either operand is i64, promote to i64
+
+    if (leftType == VAL_F64 || rightType == VAL_F64) {
+        return VAL_F64;
+    }
+
     if (leftType == VAL_I64 || rightType == VAL_I64) {
         return VAL_I64;
     }
-    
-    // Default to i32
+
+    if (leftType == VAL_U32 || rightType == VAL_U32) {
+        return VAL_U32;
+    }
+
     return VAL_I32;
 }
 
@@ -172,6 +181,53 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
                 return reg;
             }
 
+            // Constant folding for u32 operations
+            if (node->binary.left->type == NODE_LITERAL &&
+                node->binary.right->type == NODE_LITERAL &&
+                IS_U32(node->binary.left->literal.value) &&
+                IS_U32(node->binary.right->literal.value)) {
+                uint32_t a = AS_U32(node->binary.left->literal.value);
+                uint32_t b = AS_U32(node->binary.right->literal.value);
+                uint32_t result = 0;
+                bool boolResult = false;
+                const char* op = node->binary.op;
+                if (strcmp(op, "+") == 0) {
+                    result = a + b;
+                } else if (strcmp(op, "-") == 0) {
+                    result = a - b;
+                } else if (strcmp(op, "*") == 0) {
+                    result = a * b;
+                } else if (strcmp(op, "/") == 0) {
+                    if (b == 0) return -1;
+                    result = a / b;
+                } else if (strcmp(op, "%") == 0) {
+                    if (b == 0) return -1;
+                    result = a % b;
+                } else if (strcmp(op, "==") == 0) {
+                    boolResult = (a == b);
+                } else if (strcmp(op, "!=") == 0) {
+                    boolResult = (a != b);
+                } else if (strcmp(op, "<") == 0) {
+                    boolResult = (a < b);
+                } else if (strcmp(op, ">") == 0) {
+                    boolResult = (a > b);
+                } else if (strcmp(op, "<=") == 0) {
+                    boolResult = (a <= b);
+                } else if (strcmp(op, ">=") == 0) {
+                    boolResult = (a >= b);
+                } else {
+                    return -1;
+                }
+                uint8_t reg = allocateRegister(compiler);
+                if (strcmp(op, "+") == 0 || strcmp(op, "-") == 0 || strcmp(op, "*") == 0 ||
+                    strcmp(op, "/") == 0 || strcmp(op, "%") == 0) {
+                    emitConstant(compiler, reg, U32_VAL(result));
+                } else {
+                    emitConstant(compiler, reg, BOOL_VAL(boolResult));
+                }
+                return reg;
+            }
+
             // Constant folding for i64 operations
             if (node->binary.left->type == NODE_LITERAL &&
                 node->binary.right->type == NODE_LITERAL &&
@@ -219,6 +275,50 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
                 return reg;
             }
 
+            // Constant folding for f64 operations
+            if (node->binary.left->type == NODE_LITERAL &&
+                node->binary.right->type == NODE_LITERAL &&
+                IS_F64(node->binary.left->literal.value) &&
+                IS_F64(node->binary.right->literal.value)) {
+                double a = AS_F64(node->binary.left->literal.value);
+                double b = AS_F64(node->binary.right->literal.value);
+                double result = 0.0;
+                bool boolResult = false;
+                const char* op = node->binary.op;
+                if (strcmp(op, "+") == 0) {
+                    result = a + b;
+                } else if (strcmp(op, "-") == 0) {
+                    result = a - b;
+                } else if (strcmp(op, "*") == 0) {
+                    result = a * b;
+                } else if (strcmp(op, "/") == 0) {
+                    if (b == 0.0) return -1;
+                    result = a / b;
+                } else if (strcmp(op, "==") == 0) {
+                    boolResult = (a == b);
+                } else if (strcmp(op, "!=") == 0) {
+                    boolResult = (a != b);
+                } else if (strcmp(op, "<") == 0) {
+                    boolResult = (a < b);
+                } else if (strcmp(op, ">") == 0) {
+                    boolResult = (a > b);
+                } else if (strcmp(op, "<=") == 0) {
+                    boolResult = (a <= b);
+                } else if (strcmp(op, ">=") == 0) {
+                    boolResult = (a >= b);
+                } else {
+                    return -1;
+                }
+                uint8_t reg = allocateRegister(compiler);
+                if (strcmp(op, "+") == 0 || strcmp(op, "-") == 0 || strcmp(op, "*") == 0 ||
+                    strcmp(op, "/") == 0) {
+                    emitConstant(compiler, reg, F64_VAL(result));
+                } else {
+                    emitConstant(compiler, reg, BOOL_VAL(boolResult));
+                }
+                return reg;
+            }
+
             int leftReg = compileExpressionToRegister(node->binary.left, compiler);
             if (leftReg < 0) return -1;
             int rightReg = compileExpressionToRegister(node->binary.right, compiler);
@@ -235,7 +335,38 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             ValueType opType = inferBinaryOpTypeWithCompiler(node->binary.left, node->binary.right, compiler);
             
             // Handle type conversion for mixed operations
-            if (opType == VAL_I64) {
+            if (opType == VAL_F64) {
+                if (leftType == VAL_I32) {
+                    uint8_t convertReg = allocateRegister(compiler);
+                    emitByte(compiler, OP_I32_TO_F64_R);
+                    emitByte(compiler, convertReg);
+                    emitByte(compiler, (uint8_t)leftReg);
+                    freeRegister(compiler, (uint8_t)leftReg);
+                    leftReg = convertReg;
+                } else if (leftType == VAL_I64) {
+                    uint8_t convertReg = allocateRegister(compiler);
+                    emitByte(compiler, OP_I64_TO_F64_R);
+                    emitByte(compiler, convertReg);
+                    emitByte(compiler, (uint8_t)leftReg);
+                    freeRegister(compiler, (uint8_t)leftReg);
+                    leftReg = convertReg;
+                }
+                if (rightType == VAL_I32) {
+                    uint8_t convertReg = allocateRegister(compiler);
+                    emitByte(compiler, OP_I32_TO_F64_R);
+                    emitByte(compiler, convertReg);
+                    emitByte(compiler, (uint8_t)rightReg);
+                    freeRegister(compiler, (uint8_t)rightReg);
+                    rightReg = convertReg;
+                } else if (rightType == VAL_I64) {
+                    uint8_t convertReg = allocateRegister(compiler);
+                    emitByte(compiler, OP_I64_TO_F64_R);
+                    emitByte(compiler, convertReg);
+                    emitByte(compiler, (uint8_t)rightReg);
+                    freeRegister(compiler, (uint8_t)rightReg);
+                    rightReg = convertReg;
+                }
+            } else if (opType == VAL_I64) {
                 if (leftType == VAL_I32) {
                     // Convert left operand from i32 to i64
                     uint8_t convertReg = allocateRegister(compiler);
@@ -263,30 +394,48 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
                     emitByte(compiler, OP_CONCAT_R);
                 } else if (opType == VAL_I64) {
                     emitByte(compiler, OP_ADD_I64_R);
+                } else if (opType == VAL_F64) {
+                    emitByte(compiler, OP_ADD_F64_R);
+                } else if (opType == VAL_U32) {
+                    emitByte(compiler, OP_ADD_U32_R);
                 } else {
                     emitByte(compiler, OP_ADD_I32_R);
                 }
             } else if (strcmp(op, "-") == 0) {
                 if (opType == VAL_I64) {
                     emitByte(compiler, OP_SUB_I64_R);
+                } else if (opType == VAL_F64) {
+                    emitByte(compiler, OP_SUB_F64_R);
+                } else if (opType == VAL_U32) {
+                    emitByte(compiler, OP_SUB_U32_R);
                 } else {
                     emitByte(compiler, OP_SUB_I32_R);
                 }
             } else if (strcmp(op, "*") == 0) {
                 if (opType == VAL_I64) {
                     emitByte(compiler, OP_MUL_I64_R);
+                } else if (opType == VAL_F64) {
+                    emitByte(compiler, OP_MUL_F64_R);
+                } else if (opType == VAL_U32) {
+                    emitByte(compiler, OP_MUL_U32_R);
                 } else {
                     emitByte(compiler, OP_MUL_I32_R);
                 }
             } else if (strcmp(op, "/") == 0) {
                 if (opType == VAL_I64) {
                     emitByte(compiler, OP_DIV_I64_R);
+                } else if (opType == VAL_F64) {
+                    emitByte(compiler, OP_DIV_F64_R);
+                } else if (opType == VAL_U32) {
+                    emitByte(compiler, OP_DIV_U32_R);
                 } else {
                     emitByte(compiler, OP_DIV_I32_R);
                 }
             } else if (strcmp(op, "%") == 0) {
                 if (opType == VAL_I64) {
                     emitByte(compiler, OP_MOD_I64_R);
+                } else if (opType == VAL_U32) {
+                    emitByte(compiler, OP_MOD_U32_R);
                 } else {
                     emitByte(compiler, OP_MOD_I32_R);
                 }
@@ -297,24 +446,40 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             } else if (strcmp(op, "<") == 0) {
                 if (opType == VAL_I64) {
                     emitByte(compiler, OP_LT_I64_R);
+                } else if (opType == VAL_F64) {
+                    emitByte(compiler, OP_LT_F64_R);
+                } else if (opType == VAL_U32) {
+                    emitByte(compiler, OP_LT_U32_R);
                 } else {
                     emitByte(compiler, OP_LT_I32_R);
                 }
             } else if (strcmp(op, ">") == 0) {
                 if (opType == VAL_I64) {
                     emitByte(compiler, OP_GT_I64_R);
+                } else if (opType == VAL_F64) {
+                    emitByte(compiler, OP_GT_F64_R);
+                } else if (opType == VAL_U32) {
+                    emitByte(compiler, OP_GT_U32_R);
                 } else {
                     emitByte(compiler, OP_GT_I32_R);
                 }
             } else if (strcmp(op, "<=") == 0) {
                 if (opType == VAL_I64) {
                     emitByte(compiler, OP_LE_I64_R);
+                } else if (opType == VAL_F64) {
+                    emitByte(compiler, OP_LE_F64_R);
+                } else if (opType == VAL_U32) {
+                    emitByte(compiler, OP_LE_U32_R);
                 } else {
                     emitByte(compiler, OP_LE_I32_R);
                 }
             } else if (strcmp(op, ">=") == 0) {
                 if (opType == VAL_I64) {
                     emitByte(compiler, OP_GE_I64_R);
+                } else if (opType == VAL_F64) {
+                    emitByte(compiler, OP_GE_F64_R);
+                } else if (opType == VAL_U32) {
+                    emitByte(compiler, OP_GE_U32_R);
                 } else {
                     emitByte(compiler, OP_GE_I32_R);
                 }
@@ -400,15 +565,34 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             
             if (declaredType != initType) {
                 if (declaredType == VAL_I64 && initType == VAL_I32) {
-                    // Convert i32 to i64
                     uint8_t convertReg = allocateRegister(compiler);
                     emitByte(compiler, OP_I32_TO_I64_R);
                     emitByte(compiler, convertReg);
                     emitByte(compiler, (uint8_t)initReg);
                     freeRegister(compiler, (uint8_t)initReg);
                     initReg = convertReg;
+                } else if (declaredType == VAL_F64 && initType == VAL_I32) {
+                    uint8_t convertReg = allocateRegister(compiler);
+                    emitByte(compiler, OP_I32_TO_F64_R);
+                    emitByte(compiler, convertReg);
+                    emitByte(compiler, (uint8_t)initReg);
+                    freeRegister(compiler, (uint8_t)initReg);
+                    initReg = convertReg;
+                } else if (declaredType == VAL_F64 && initType == VAL_I64) {
+                    uint8_t convertReg = allocateRegister(compiler);
+                    emitByte(compiler, OP_I64_TO_F64_R);
+                    emitByte(compiler, convertReg);
+                    emitByte(compiler, (uint8_t)initReg);
+                    freeRegister(compiler, (uint8_t)initReg);
+                    initReg = convertReg;
+                } else if (declaredType == VAL_U32 && initType == VAL_I32) {
+                    uint8_t convertReg = allocateRegister(compiler);
+                    emitByte(compiler, OP_I32_TO_U32_R);
+                    emitByte(compiler, convertReg);
+                    emitByte(compiler, (uint8_t)initReg);
+                    freeRegister(compiler, (uint8_t)initReg);
+                    initReg = convertReg;
                 }
-                // Add other type conversions as needed
             }
             
             compiler->locals[localIndex].reg = (uint8_t)initReg;

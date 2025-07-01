@@ -615,7 +615,7 @@ let evens = [x for x in nums if x % 2 == 0]
 
 #### 4.3.1 Type Representation & Core Infrastructure
 **Based on IMPLEMENTATION_GUIDE.md Type Representation template**
-- [ ] **Type enum with comprehensive coverage**: TYPE_UNKNOWN, TYPE_I32, TYPE_I64, TYPE_U32, TYPE_U64, TYPE_F64, TYPE_BOOL, TYPE_STRING, TYPE_VOID, TYPE_NIL, TYPE_ARRAY, TYPE_FUNCTION, TYPE_STRUCT, TYPE_ENUM, TYPE_GENERIC, TYPE_ANY
+- [x] **Type enum with comprehensive coverage**: TYPE_UNKNOWN, TYPE_I32, TYPE_I64, TYPE_U32, TYPE_U64, TYPE_F64, TYPE_BOOL, TYPE_STRING, TYPE_VOID, TYPE_NIL, TYPE_ARRAY, TYPE_FUNCTION, TYPE_STRUCT, TYPE_ENUM, TYPE_GENERIC, TYPE_ANY
 - [ ] **Type struct with union for different kinds**: Array, Function, Struct, Enum, Generic type variants
 - [ ] **Type mutability and nullability flags**: `is_mutable`, `is_nullable` attributes
 - [ ] **Type operations**: `type_new()`, `types_equal()`, `type_assignable_to()`, `type_union()`, `type_intersection()`, `type_free()`
@@ -663,7 +663,7 @@ let evens = [x for x in nums if x % 2 == 0]
 - [x] **OP_I32_TO_F64_R**: Integer to double-precision floating-point *(EXISTING)*
 - [x] **OP_F64_TO_I32_R**: Double to 32-bit integer with rounding *(EXISTING)*
 - [x] **OP_F64_TO_I64_R**: Double to 64-bit integer with rounding *(EXISTING)*
-- [ ] **OP_I32_TO_U32_R**: Signed to unsigned 32-bit reinterpretation
+- [x] **OP_I32_TO_U32_R**: Signed to unsigned 32-bit reinterpretation
 - [ ] **OP_U32_TO_I32_R**: Unsigned to signed 32-bit conversion with overflow check
 - [ ] **OP_U32_TO_U64_R**: Unsigned 32-bit to 64-bit promotion
 - [ ] **OP_U64_TO_U32_R**: Unsigned 64-bit to 32-bit truncation
