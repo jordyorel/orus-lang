@@ -439,18 +439,18 @@ and   or   not
 ### Visual Operator Hierarchy (from tightest to loosest)
 
 ```
- ┌─────────────────────────────┐
- │       () grouping          │
- │     !, not (unary)         │
- │   *, /, %, //              │
- │   +, -                     │
- │   <<, >>                   │
- │   &, ^, | (bitwise ops)    │
- │   ==, !=, <, >, <=, >=     │
- │   and                      │
- │   or                       │
- │   ? : (ternary)            │
- └─────────────────────────────┘
+┌─────────────────────────────────────┐
+│  (1)  ()                   → Grouping          │
+│  (2)  !, not              → Unary (negation)  │
+│  (3)  *, /, %, //         → Arithmetic         │
+│  (4)  +, -                → Arithmetic         │
+│  (5)  <<, >>              → Bitwise shift      │
+│  (6)  &, ^, |             → Bitwise ops        │
+│  (7)  ==, !=, <, >, <=, >=→ Comparison         │
+│  (8)  and                 → Logical AND        │
+│  (9)  or                  → Logical OR         │
+│ (10)  ? :                 → Ternary conditional│
+└─────────────────────────────────────┘
 ```
 
 ### Common Operator Mistakes
