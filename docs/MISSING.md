@@ -620,7 +620,7 @@ let evens = [x for x in nums if x % 2 == 0]
 - [ ] **Type mutability and nullability flags**: `is_mutable`, `is_nullable` attributes
 - [ ] **Type operations**: `type_new()`, `types_equal()`, `type_assignable_to()`, `type_union()`, `type_intersection()`, `type_free()`
 - [ ] **Common type constructors**: `primitive_type()`, `array_type()`, `function_type()`, `generic_type()`
-- [ ] **Arena allocation for Type objects**: Zero-allocation type creation with batch deallocation
+- [x] **Arena allocation for Type objects**: Zero-allocation type creation with batch deallocation
 - [ ] **Type interning system**: Deduplicate identical types for memory efficiency
 - [x] **Basic variable type tracking**: Compiler locals array with type information *(IMPLEMENTED)*
 
@@ -641,18 +641,18 @@ let evens = [x for x in nums if x % 2 == 0]
 #### 4.3.3 Numeric Type Conversion System
 **Complete Orus numeric conversion specification**
 - [x] **i32 → i64** (Implicit & Explicit): Safe promotion without data loss *(IMPLEMENTED)*
-- [ ] **i32 → u32** (Explicit): Bit reinterpretation with negative wrapping
-- [ ] **i32 → u64** (Implicit & Explicit): Zero-extension promotion  
+- [x] **i32 → u32** (Explicit): Bit reinterpretation with negative wrapping
+- [x] **i32 → u64** (Implicit & Explicit): Zero-extension promotion  
 - [x] **i32 → f64** (Implicit & Explicit): Exact conversion to floating-point *(EXISTING)*
-- [ ] **u32 → i32** (Explicit): Wrapping conversion with overflow detection
-- [ ] **u64 → i32** (Explicit): Truncation with overflow warning
+- [x] **u32 → i32** (Explicit): Wrapping conversion with overflow detection
+- [x] **u64 → i32** (Explicit): Truncation with overflow warning
 - [x] **i64 → i32** (Explicit): Truncation with potential data loss *(EXISTING)*
 - [x] **f64 → i32** (Explicit): Truncation toward zero with NaN/infinity handling *(EXISTING)*
-- [ ] **f64 → u32** (Explicit): Truncation toward zero with range validation
-- [ ] **f64 → u64** (Explicit): Truncation toward zero with range validation
+- [x] **f64 → u32** (Explicit): Truncation toward zero with range validation
+- [x] **f64 → u64** (Explicit): Truncation toward zero with range validation
 - [x] **f64 → i64** (Explicit): Truncation toward zero with range validation *(EXISTING)*
-- [ ] **u32 → u64** (Implicit & Explicit): Zero-extension promotion
-- [ ] **u64 → f64** (Explicit): Conversion with potential precision loss
+- [x] **u32 → u64** (Implicit & Explicit): Zero-extension promotion
+- [x] **u64 → f64** (Explicit): Conversion with potential precision loss
 - [x] **i32 → bool** (Explicit): Zero → false, non-zero → true *(EXISTING)*
 - [x] **bool → i32** (Implicit & Explicit): true → 1, false → 0 *(EXISTING)*
 
@@ -664,14 +664,14 @@ let evens = [x for x in nums if x % 2 == 0]
 - [x] **OP_F64_TO_I32_R**: Double to 32-bit integer with rounding *(EXISTING)*
 - [x] **OP_F64_TO_I64_R**: Double to 64-bit integer with rounding *(EXISTING)*
 - [x] **OP_I32_TO_U32_R**: Signed to unsigned 32-bit reinterpretation
-- [ ] **OP_U32_TO_I32_R**: Unsigned to signed 32-bit conversion with overflow check
-- [ ] **OP_U32_TO_U64_R**: Unsigned 32-bit to 64-bit promotion
-- [ ] **OP_U64_TO_U32_R**: Unsigned 64-bit to 32-bit truncation
-- [ ] **OP_U64_TO_I64_R**: Unsigned to signed 64-bit conversion with range checking
-- [ ] **OP_I64_TO_U64_R**: Signed to unsigned 64-bit conversion
-- [ ] **OP_U64_TO_F64_R**: Unsigned 64-bit to double conversion
-- [ ] **OP_F64_TO_U32_R**: Double to unsigned 32-bit with range validation
-- [ ] **OP_F64_TO_U64_R**: Double to unsigned 64-bit with range validation
+- [x] **OP_U32_TO_I32_R**: Unsigned to signed 32-bit conversion with overflow check
+- [x] **OP_U32_TO_U64_R**: Unsigned 32-bit to 64-bit promotion
+- [x] **OP_U64_TO_U32_R**: Unsigned 64-bit to 32-bit truncation
+- [x] **OP_U64_TO_I64_R**: Unsigned to signed 64-bit conversion with range checking
+- [x] **OP_I64_TO_U64_R**: Signed to unsigned 64-bit conversion
+- [x] **OP_U64_TO_F64_R**: Unsigned 64-bit to double conversion
+- [x] **OP_F64_TO_U32_R**: Double to unsigned 32-bit with range validation
+- [x] **OP_F64_TO_U64_R**: Double to unsigned 64-bit with range validation
 - [x] **OP_BOOL_TO_I32_R**: Boolean to integer conversion *(EXISTING)*
 - [x] **OP_I32_TO_BOOL_R**: Integer to boolean conversion *(EXISTING)*
 
@@ -692,7 +692,7 @@ let evens = [x for x in nums if x % 2 == 0]
 **Zero-cost abstraction with enterprise-grade performance**
 - [ ] **SIMD-optimized constraint checking**: Bulk type validation with AVX-512/NEON
 - [ ] **Lock-free type cache**: Atomic operations for concurrent type access
-- [ ] **Arena-allocated type objects**: Batch allocation/deallocation for performance
+- [x] **Arena-allocated type objects**: Batch allocation/deallocation for performance
 - [ ] **Hash-based unification**: Precomputed type fingerprints for fast comparison
 - [ ] **Template specialization**: Common type patterns optimized at compile-time
 - [ ] **Compile-time type resolution**: Zero runtime type checking overhead
