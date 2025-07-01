@@ -40,7 +40,7 @@ C_TEST_TARGETS = $(C_TEST_SRCS:$(TESTDIR)/c/%.c=$(BUILDDIR)/%)
 # Targets
 ORUS = orus
 
-.PHONY: all clean test test-verbose test-basic test-types test-all c-test benchmark help format
+.PHONY: all clean test test-verbose test-basic test-types test-all c-test benchmark benchmark-orus help format
 
 all: $(ORUS)
 
@@ -286,40 +286,21 @@ test-types: $(ORUS)
 test-all: test c-test
 	@echo "\033[36m=== Comprehensive Test Suite Complete ===\033[0m"
 
-# Run performance benchmarks
+# Run cross-language arithmetic benchmarks
 benchmark: $(ORUS)
-	@echo "Running Orus performance benchmarks..."
-	@echo "=== U32 Arithmetic Benchmarks ==="
-	@if [ -f "tests/types/u32/benchmarks/u32_simple_bench.orus" ]; then \
-		printf "Simple u32 benchmark (1K ops): "; \
-		time ./$(ORUS) tests/types/u32/benchmarks/u32_simple_bench.orus >/dev/null; \
-	fi
-	@if [ -f "tests/types/u32/benchmarks/u32_intensive_bench.orus" ]; then \
-		printf "Intensive u32 benchmark (100K ops): "; \
-		time ./$(ORUS) tests/types/u32/benchmarks/u32_intensive_bench.orus >/dev/null; \
-	fi
+	@echo "=========================================="
+	@echo "Cross-Language Arithmetic Benchmark"
+	@echo "=========================================="
+	@echo "Running equivalent arithmetic tests across languages"
+	@echo "Tests: loops, mixed arithmetic, floating point operations"
 	@echo ""
-	@echo "=== F64 Arithmetic Benchmarks ==="
-	@if [ -f "tests/types/f64/benchmarks/f64_simple_bench.orus" ]; then \
-		printf "Simple f64 benchmark (1K ops): "; \
-		time ./$(ORUS) tests/types/f64/benchmarks/f64_simple_bench.orus >/dev/null; \
-	fi
-	@if [ -f "tests/types/f64/benchmarks/f64_intensive_bench.orus" ]; then \
-		printf "Intensive f64 benchmark (100K ops): "; \
-		time ./$(ORUS) tests/types/f64/benchmarks/f64_intensive_bench.orus >/dev/null; \
-	fi
-	@echo ""
-	@echo "=== U64 Arithmetic Benchmarks ==="
-	@if [ -f "tests/types/u64/benchmarks/u64_simple_bench.orus" ]; then \
-		printf "Simple u64 benchmark (1K ops): "; \
-		time ./$(ORUS) tests/types/u64/benchmarks/u64_simple_bench.orus >/dev/null; \
-	fi
-	@if [ -f "tests/types/u64/benchmarks/u64_intensive_bench.orus" ]; then \
-		printf "Intensive u64 benchmark (100K ops): "; \
-		time ./$(ORUS) tests/types/u64/benchmarks/u64_intensive_bench.orus >/dev/null; \
-	fi
-	@echo ""
-	@echo "Benchmark completed! All operations complete within performance targets."
+	@cd tests/benchmarks && ./run_arithmetic_benchmark.sh
+
+# Run only Orus arithmetic benchmark (fast)
+benchmark-orus: $(ORUS)
+	@echo "=== Orus Arithmetic Benchmark ==="
+	@printf "Running Orus arithmetic tests: "
+	@time ./$(ORUS) tests/benchmarks/arithmetic_benchmark.orus
 
 # Clean build artifacts
 clean:
@@ -346,7 +327,8 @@ help:
 	@echo "  test-types  - Run only type system tests"
 	@echo "  test-all    - Run comprehensive test suite (all tests + C tests)"
 	@echo "  c-test      - Run C unit tests for VM and critical components"
-	@echo "  benchmark   - Run performance benchmarks for numeric operations"
+	@echo "  benchmark   - Run cross-language arithmetic benchmarks (Orus vs Python/JS/Lua)"
+	@echo "  benchmark-orus - Run Orus arithmetic benchmark only (fast)"
 	@echo "  clean       - Remove build artifacts"
 	@echo "  format      - Format source code"
 	@echo "  help        - Show this help message"

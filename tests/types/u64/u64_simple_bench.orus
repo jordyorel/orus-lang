@@ -1,8 +1,0 @@
-// Simple u64 arithmetic benchmark
-// Using new Rust-like type inference
-let mut sum: u64 = 0
-
-for i in 0..1000:
-    sum = sum + 1
-
-print(sum)

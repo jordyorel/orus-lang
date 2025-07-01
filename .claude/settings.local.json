@@ -28,7 +28,8 @@
       "Bash(mv:*)",
       "Bash(./debug_overflow_test)",
       "Bash(time:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(python3:*)"
     ],
     "deny": []
   }

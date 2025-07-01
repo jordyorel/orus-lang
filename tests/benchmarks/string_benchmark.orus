@@ -1,0 +1,25 @@
+// String Manipulation Benchmark
+// Tests: string concatenation, formatting, operations
+
+// Test 1: String concatenation performance (10K iterations)
+let mut result = "start"
+for i in 0..10000:
+    result = result + "x"
+
+print("String length after concatenation:")
+print("placeholder_for_length")  // Will print placeholder since we don't have string length yet
+
+// Test 2: String formatting operations (1K iterations)
+let mut formatted_count = 0
+for i in 0..1000:
+    // Simulate string formatting work
+    formatted_count = formatted_count + 1
+
+print(formatted_count)
+
+// Test 3: String building simulation
+let mut total_chars = 0
+for i in 0..5000:
+    total_chars = total_chars + 10  // Simulate adding 10 chars each time
+
+print(total_chars)

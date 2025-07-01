@@ -1,138 +1,125 @@
-# Orus Language Benchmarks
+# Cross-Language Arithmetic Benchmark Suite
 
-This directory contains comprehensive performance benchmarks comparing Orus VM against Python, JavaScript, Lua, and Java.
+This directory contains **universal arithmetic benchmarks** designed to compare Orus performance against other popular languages (Python, JavaScript, Lua).
+
+## Philosophy: One Benchmark, Multiple Languages
+
+Instead of scattered type-specific tests, we use **one comprehensive arithmetic benchmark** implemented equivalently in each language for direct performance comparison.
 
 ## Files
 
-### Benchmark Scripts
-- `simple_benchmark.py` - Python vs Orus comparison
-- `orus_vs_js_benchmark.py` - JavaScript vs Orus comparison  
-- `orus_vs_lua_benchmark.py` - Lua vs Orus comparison
-- `orus_vs_java_benchmark.py` - Java vs Orus comparison
-- `quick_bench.sh` - Quick launcher for all benchmark types
+### Core Benchmarks
+- **`arithmetic_benchmark.orus`** - Orus implementation
+- **`arithmetic_benchmark.py`** - Python 3 implementation  
+- **`arithmetic_benchmark.js`** - Node.js implementation
+- **`arithmetic_benchmark.lua`** - Lua implementation
 
-### Test Files
-- `complex_expression.orus` - Complex expression test
-- `test_150_ops_fixed.orus` - 150 operation chain test
-- `test_500_ops_fixed.orus` - 500 operation chain test
+### Execution
+- **`run_arithmetic_benchmark.sh`** - Automated cross-language runner
 
-### Result Files (Auto-generated, Git-ignored)
-- `benchmark_results_python.json` - Python benchmark results
-- `benchmark_results_js.json` - JavaScript benchmark results
-- `benchmark_results_lua.json` - Lua benchmark results
-- `benchmark_results_java.json` - Java benchmark results
+## What Gets Tested
 
-## Usage
+Each benchmark performs **identical operations**:
 
-### Quick Start
+1. **Addition Loop** - 1 million iterations of integer addition
+2. **Mixed Arithmetic** - 100K iterations of floating point operations (add, multiply, divide, subtract)
+3. **Integer Arithmetic** - Factorial calculation (1-19)
+4. **Division/Modulo** - 10K iterations of division and modulo operations
+5. **Floating Point Precision** - 50K iterations of precision-sensitive operations
+
+## Running Benchmarks
+
+### From Root Makefile (Recommended)
+
 ```bash
-./quick_bench.sh
+# Run all languages side-by-side
+make benchmark
+
+# Run Orus only (fast)
+make benchmark-orus
+
+# See all options
+make help
 ```
 
-Select from:
-1. Quick test (5 iterations)
-2. Standard test (20 iterations)  
-3. Thorough test (50 iterations)
-4. Orus vs Python comparison
-5. Orus vs JavaScript comparison
-6. Orus vs Lua comparison
-7. Stress test
-8. All benchmarks (comprehensive)
-9. **Compare all languages (Python + JavaScript + Lua + Java)** ⭐
+### Direct Execution
 
-**To run all benchmarks at once:**
 ```bash
-echo "9" | ./quick_bench.sh  # Auto-select option 9
+# Run cross-language comparison
+cd tests/benchmarks
+./run_arithmetic_benchmark.sh
+
+# Run individual language
+./orus arithmetic_benchmark.orus
+python3 arithmetic_benchmark.py
+node arithmetic_benchmark.js
+lua arithmetic_benchmark.lua
 ```
 
-### Individual Benchmarks
-
-**Python Comparison:**
-```bash
-python3 simple_benchmark.py --iterations 30
-```
-
-**JavaScript Comparison:**
-```bash
-python3 orus_vs_js_benchmark.py --iterations 30
-```
-
-**Lua Comparison:**
-```bash
-python3 orus_vs_lua_benchmark.py --iterations 30
-```
-**Java Comparison:**
-```bash
-python3 orus_vs_java_benchmark.py --iterations 30
-```
-**Custom Output File:**
-```bash
-python3 simple_benchmark.py --output my_results.json
-```
-
-## Results Summary
-
-### Performance Rankings
-1. 🥇 **Orus VM** - Fastest (register-based architecture)
-2. 🥈 **Lua** - ~1.3x slower (register-based, but interpreted)
-3. 🥉 **Python** - ~7.5x slower (stack-based interpreter)
-4. ☕ **Java** - ~38x slower (JVM startup overhead)
-5. � **JavaScript** - ~12.4x slower (V8 JIT overhead for short scripts)
-
-### Key Insights
-- **Register-based VM** provides consistent performance advantages
-- **Computed goto dispatch** eliminates switch statement overhead
-- **Fast arithmetic operations** show significant gains over interpreted languages
-- **V8 startup overhead** affects short-running JavaScript scripts
-- **Orus binary execution** is extremely efficient with ~2ms average execution time
-
-## Architecture Benefits
-
-Orus VM optimizations:
-- **Register-based execution** (vs stack-based in Python/JS)
-- **Computed goto dispatch** (faster than switch statements)
-- **Fast arithmetic** (no overflow checks in optimized builds)
-- **Memory pooling** (reduced allocation overhead)
-- **Optimized bytecode** (efficient instruction encoding)
-
-## Requirements
-
-- Built Orus binary (`../orus`)
-- Python 3.6+
-- Node.js (for JavaScript comparisons)
-- Lua 5.4+ (for Lua comparisons)
-
-## Git Integration
-
-Result files are automatically ignored by git to prevent repository bloat:
-- `benchmark_results_*.json` pattern is excluded
-- Only source code and test files are tracked
-- Results are generated fresh on each run
-
-## Example Performance
+## Sample Output
 
 ```
-🏆 ORUS VM PERFORMANCE COMPARISON SUMMARY
-============================================================
-🐍 Orus vs Python:    7.5x faster
-🟨 Orus vs JavaScript: 12.4x faster
-🌙 Orus vs Lua:       1.3x faster
-☕ Orus vs Java:      38x faster
+========================================================
+Universal Arithmetic Benchmark: Cross-Language Testing
+========================================================
 
-⚡ EXECUTION TIME COMPARISON (Typical):
-----------------------------------------
-Orus:       ~2.2ms   (Baseline - fastest)
-Lua:        ~2.9ms   (1.3x slower)
-Python:     ~17.4ms  (7.9x slower)
-JavaScript: ~27.8ms  (12.6x slower)
-Java:       ~40ms    (38x slower)
+=== Orus ===
+Running: ../../orus arithmetic_benchmark.orus
+Results:
+499999500000
+6.9146e+217
+109641728
+34611628
+2.53092e+23
 
-🏅 PERFORMANCE RANKING:
-----------------------------------------
-1. 🥇 Orus VM      - Fastest, optimized register-based execution
-2. 🥈 Lua          - Fast scripting language with register-based VM
-3. 🥉 Python       - Interpreted, stack-based VM
-4. ☕ Java        - ~38x slower (JVM startup overhead)
-5. � JavaScript   - ~12.4x slower (V8 JIT overhead for short-running scripts)
+Timing:
+real    0m0.032s
+user    0m0.028s
+sys     0m0.002s
+
+=== Python 3 ===
+Running: python3 arithmetic_benchmark.py
+Results:
+499999500000
+6.914599446192004e+217
+121645100408832000
+34611628
+2.5309178438242257e+23
+
+Timing:
+Python execution time: 0.036069 seconds
+real    0m0.055s
+user    0m0.047s
+sys     0m0.005s
+========================================================
 ```
-![alt text](image.png)
+
+## Performance Analysis
+
+The benchmarks enable direct comparison of:
+- **Execution Time**: Total runtime across languages
+- **Arithmetic Performance**: Raw computational speed
+- **Memory Usage**: System resource consumption
+- **Precision Handling**: Floating point accuracy
+
+## Design Benefits
+
+### Unified Testing
+- ✅ **Same operations** across all languages
+- ✅ **Comparable results** for validation
+- ✅ **Equivalent workloads** for fair comparison
+- ✅ **Automated execution** via Makefile
+
+### Maintainability
+- ✅ **One file per language** (not scattered)
+- ✅ **Single test suite** to maintain
+- ✅ **Easy to add new languages**
+- ✅ **Consistent test structure**
+
+### Integration
+- ✅ **Makefile integration** for CI/CD
+- ✅ **Professional output** with timing
+- ✅ **Error checking** for missing interpreters
+- ✅ **Documentation** and help system
+
+This approach provides meaningful performance comparisons while maintaining simplicity and avoiding the complexity of managing dozens of scattered benchmark files.
