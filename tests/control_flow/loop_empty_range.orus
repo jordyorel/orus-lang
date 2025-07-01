@@ -1,0 +1,5 @@
+// Test empty range loop with lifetime tracking
+print("Before empty loop")
+for x in 5..5:
+    print("This should not print")
+print("After empty loop")

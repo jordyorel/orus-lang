@@ -1,0 +1,8 @@
+// Test variable lifetime management across loop boundaries
+let mut outer_var = 100
+
+for i in 0..2:
+    print("i: {}, outer_var: {}", i, outer_var)
+    outer_var = outer_var + 1
+
+print("Final: {}", outer_var)

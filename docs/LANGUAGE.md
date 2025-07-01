@@ -1,6 +1,6 @@
 ## ✨ Simplified Orus Syntax Guide (v0.2.0+)
 
-This guide introduces a simplified and elegant Orus syntax inspired by Python, V, and Rust, using indentation-based blocks and optional return statements. It assumes Orus v0.2.0+.
+This guide introduces a simplified and elegant Orus syntax inspired by Python, V, and Rust, using indentation-based blocks, automatic type inference, and optional return statements. It assumes Orus v0.2.0+.
 
 ---
 
@@ -15,12 +15,18 @@ fn main:
 
 ## 🧳 Variables and Mutability
 
-All variables default to `i32` unless an explicit type is provided.
+All variables default to `i32` unless an explicit type is provided. The `let` keyword has been removed.
 
 ```orus
+
 number = 5           # inferred as i32
 flag: bool = true    # explicitly bool
 mut count = 0        # mutable, inferred as i32
+x = 5               # inferred as immutable i32
+mut y = 10          # mutable, inferred as i32
+z: i64 = 0          # explicitly typed immutable
+mut a: u32 = 10     # explicitly typed mutable
+
 ```
 
 ---
@@ -28,7 +34,7 @@ mut count = 0        # mutable, inferred as i32
 ## 🔢 Constants
 
 ```orus
-pub const LIMIT: i32 = 10
+pub const LIMIT = 10
 
 fn main:
     for i in 0..LIMIT:
@@ -56,12 +62,7 @@ print("ok") if x == 1 elif x == 2 else print("fallback")
 label = x > 0 ? "positive" : "non-positive"
 ```
 
-print("ok") if x == 1 elif x == 2 else print("fallback")
-
-```
-```
-
-````
+---
 
 ### Loops
 
@@ -74,14 +75,14 @@ while condition:
 
 break     # exits the nearest loop
 continue  # skips to the next iteration
-````
+```
 
 ---
 
 ## 📊 Functions
 
 ```orus
-fn add(a: i32, b: i32) -> i32:
+fn add(a, b) -> i32:
     a + b
 
 fn greet(name: string):
@@ -90,6 +91,12 @@ fn greet(name: string):
 # Format specifiers
 pi = 3.14159
 print("Pi rounded: @.2f", pi)
+print("Hello,", name)
+
+# Format specifiers
+pi = 3.14159
+print("Pi rounded:", pi)
+
 ```
 
 ---
@@ -250,10 +257,33 @@ fn main:
 ## 🔧 Built-in Functions
 
 ### Printing
+Orus supports a minimal formatting syntax using @ as a prefix in strings to indicate formatting of the next argument:
+
+```orus
+pi = 3.14159
+print("Pi = @.2f", pi)
+```
+
+```orus
+num = 255
+print("Decimal =", num)
+print("Hex = @x", num)      // hex output
+print("Binary = @b", num)   // binary output
+print("Octal = @o", num)    // octal output
+```
+
+The format specifier @ applies to the next value in the argument list. You can mix formatted and unformatted values freely.
+
+For float precision:
+print("rounded:", round(3.14159, 2))
 
 ```orus
 print("Hello")
 print("x =", x)
+
+=======
+print("sum =", 10 + 20)
+
 ```
 
 ### Arrays
@@ -381,25 +411,25 @@ result = expensive_call() and false  # never runs
 check = true or expensive_call()     # never runs
 ```
 
-**Arithmetic:**
+### Arithmetic
 
 ```orus
 +   -   *   /   %   //   # floor division
 ```
 
-**Comparison:**
+### Comparison
 
 ```orus
 <   <=   >   >=   ==   !=
 ```
 
-**Logical:**
+### Logical
 
 ```orus
 and   or   not
 ```
 
-**Bitwise:**
+### Bitwise
 
 ```orus
 &   |   ^   <<   >>
@@ -409,49 +439,20 @@ and   or   not
 
 > **Note:** The ternary conditional operator `? :` has lower precedence than logical operators `and` and `or`. Use parentheses to clarify when mixing ternary and logical expressions.
 
-| Precedence | Operators                        | Description         | Associativity |               |
-| ---------- | -------------------------------- | ------------------- | ------------- | ------------- |
-| 1          | `()`                             | Grouping            | left-to-right |               |
-| 2          | `!`, `not`                       | Unary               | right-to-left |               |
-| 3          | `*`, `/`, `%`, `//`              | Arithmetic          | left-to-right |               |
-| 4          | `+`, `-`                         | Arithmetic          | left-to-right |               |
-| 5          | `<<`, `>>`                       | Bitwise shift       | left-to-right |               |
-| 6          | `&`                              | Bitwise AND         | left-to-right |               |
-| 7          | `^`                              | Bitwise XOR         | left-to-right |               |
-| 8          | \`                               | \`                  | Bitwise OR    | left-to-right |
-| 9          | `<`, `>`, `<=`, `>=`, `==`, `!=` | Comparison          | left-to-right |               |
-| 10         | `and`                            | Logical AND         | left-to-right |               |
-| 11         | `or`                             | Logical OR          | left-to-right |               |
-| 12         | `? :`                            | Ternary conditional | right-to-left |               |
-
-### Primitive Types
-
-* `i32`, `i64` – signed integers
-* `u32`, `u64` – unsigned integers
-* `f64` – floating-point
-* `bool` – `true` or `false`
-* `string` – UTF-8 text
-* `void` – no value (function return)
-* `nil` – explicit null value
-
-### Parentheses and Grouping
-
-### Visual Operator Hierarchy (from tightest to loosest)
-
-```
-┌─────────────────────────────────────┐
-│  (1)  ()                   → Grouping          │
-│  (2)  !, not              → Unary (negation)  │
-│  (3)  *, /, %, //         → Arithmetic         │
-│  (4)  +, -                → Arithmetic         │
-│  (5)  <<, >>              → Bitwise shift      │
-│  (6)  &, ^, |             → Bitwise ops        │
-│  (7)  ==, !=, <, >, <=, >=→ Comparison         │
-│  (8)  and                 → Logical AND        │
-│  (9)  or                  → Logical OR         │
-│ (10)  ? :                 → Ternary conditional│
-└─────────────────────────────────────┘
-```
+| Precedence | Operators                        | Description         | Associativity |               |   |
+| ---------- | -------------------------------- | ------------------- | ------------- | ------------- | - |
+| 1          | `()`                             | Grouping            | left-to-right |               |   |
+| 2          | `!`, `not`                       | Unary               | right-to-left |               |   |
+| 3          | `*`, `/`, `%`, `//`              | Arithmetic          | left-to-right |               |   |
+| 4          | `+`, `-`                         | Arithmetic          | left-to-right |               |   |
+| 5          | `<<`, `>>`                       | Bitwise shift       | left-to-right |               |   |
+| 6          | `&`                              | Bitwise AND         | left-to-right |               |   |
+| 7          | `^`                              | Bitwise XOR         | left-to-right |               |   |
+| 8          | \`                               | \`                  | Bitwise OR    | left-to-right |   |
+| 9          | `<`, `>`, `<=`, `>=`, `==`, `!=` | Comparison          | left-to-right |               |   |
+| 10         | `and`                            | Logical AND         | left-to-right |               |   |
+| 11         | `or`                             | Logical OR          | left-to-right |               |   |
+| 12         | `? :`                            | Ternary conditional | right-to-left |               |   |
 
 ### Common Operator Mistakes
 
@@ -481,6 +482,7 @@ and   or   not
   ```orus
   res = cond ? a : b or c   # actually means `cond ? a : (b or c)`
   ```
+
 
 ### Precedence Error Example
 
@@ -535,3 +537,12 @@ d: string = a as string
 b: bool = 0 as bool
 s = 123 as string
 ```
+
+### Parentheses and Grouping
+
+```orus
+result = (a > 0 and b > 0) ? "ok" : "fail"
+safe = not (x == 1 or y == 2)
+```
+
+---

@@ -426,12 +426,35 @@ typedef enum {
 #include "intvec.h"
 #include "jumptable.h"
 
+// Variable lifetime tracking for register optimization
+typedef struct {
+    int start;              // First instruction where variable is live
+    int end;                // Last instruction where variable is live (-1 if still alive)
+    uint8_t reg;            // Assigned register
+    char* name;             // Variable name for debugging
+    ValueType type;         // Variable type
+    bool spilled;           // Whether variable was spilled to memory
+    bool isLoopVar;         // Whether this is a loop induction variable
+} LiveRange;
+
+// Enhanced register allocator with lifetime tracking
+typedef struct {
+    LiveRange* ranges;      // Array of live ranges
+    int count;              // Number of live ranges
+    int capacity;           // Capacity of ranges array
+    uint8_t* freeRegs;      // List of available registers
+    int freeCount;          // Number of free registers
+    int* lastUse;           // Last use instruction for each register [REGISTER_COUNT]
+} RegisterAllocator;
+
 typedef struct {
     JumpTable breakJumps;     // Patches for break statements
     JumpTable continueJumps;  // Jump targets for continue
     int continueTarget;    // Target for continue (loop start)
     int scopeDepth;        // Scope depth when loop was entered
     const char* label;     // Optional loop label
+    int loopVarIndex;      // Index of loop variable in locals array (-1 if none)
+    int loopVarStartInstr; // Instruction where loop variable becomes live
 } LoopContext;
 
 // Compiler state for register allocation
@@ -448,12 +471,14 @@ typedef struct {
         int depth;
         bool isMutable;
         ValueType type; // Type of the variable
+        int liveRangeIndex; // Index into register allocator's live ranges (-1 if none)
     } locals[REGISTER_COUNT];
     int localCount;
     int scopeDepth;
     LoopContext loopStack[16];  // Stack of nested loop contexts
     int loopDepth;              // Current loop nesting depth
     JumpTable pendingJumps;     // Track all pending forward jumps for cascade updates
+    RegisterAllocator regAlloc; // Enhanced register allocator with lifetime tracking
     bool hadError;
 } Compiler;
 
