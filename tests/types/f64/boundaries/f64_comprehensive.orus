@@ -1,21 +1,21 @@
 // f64 comprehensive boundary tests following AGENTS.md requirements
-let zero: f64 = 0.0
+zero: f64 = 0.0
 print(zero)
 
-let one: f64 = 1.0  
+one: f64 = 1.0  
 print(one)
 
-let neg_one: f64 = 0.0 - 1.0
+neg_one: f64 = 0.0 - 1.0
 print(neg_one)
 
-let result = zero + one
+result = zero + one
 print(result)
 
-let result2 = one * neg_one
+result2 = one * neg_one
 print(result2)
 
-let large: f64 = 999999.0
+large: f64 = 999999.0
 print(large)
 
-let small: f64 = 0.000001
+small: f64 = 0.000001
 print(small)

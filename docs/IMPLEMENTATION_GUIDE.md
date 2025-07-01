@@ -18,7 +18,7 @@ Build a language that combines Python's readability, Rust's safety, and Lua's pe
 - **VM Foundation**: Register-based with 256 registers, computed-goto dispatch
 - **Lexer System**: Full tokenization with all language constructs  
 - **Basic Parser**: Precedence climbing with binary expressions
-- **Variable System**: Declarations (`let x = 42`) and lookup
+- **Variable System**: Declarations (`x = 42`) and lookup
 - **Memory Management**: Mark-and-sweep GC with object pooling
 - **Performance**: 7x faster than Python, 11x faster than Node.js
 
@@ -161,7 +161,7 @@ static void compileStringConcat(Compiler* compiler, ASTNode* left, ASTNode* righ
 
 ### 1.2 Variable Assignment Implementation
 
-Variables can be declared immutable with `let` or mutable using `let mut`. Type
+Variables are declared by assignment. Prefix with `mut` for mutability. Type
 annotations are parsed after a colon and stored on the AST for future type
 checking. The compiler records mutability in its local table to prevent writes
 to immutable bindings.
@@ -173,7 +173,7 @@ typedef struct {
     char* name;
     uint8_t reg;           // Register allocation
     Type* type;           // Type information
-    bool is_mutable;      // let mut vs let
+    bool is_mutable;      // mutable vs immutable
     bool is_initialized;  // For definite assignment analysis
     bool is_captured;     // For closures
     int scope_depth;      // Lexical scope depth
@@ -341,12 +341,11 @@ static void compileLogicalAnd(Compiler* compiler, ASTNode* node) {
 
 ### 1.2 Built-in Print Function & I/O System
 
-The print system now supports variable arguments and simple string interpolation
-using `{}` placeholders. Multiple placeholders are expanded sequentially and the
-implementation prints every Orus value type through `printValue`. The `print()`
-builtin formats values and appends a newline by default, while
-`print_no_newline()` omits the trailing newline. Escape sequences like `\n` and
-`\t` are processed inside string literals.
+The print system now supports variable arguments. Formatting is specified using
+`@` tokens inside strings. The VM detects sequences like `@.2f` or `@x` and
+applies formatting to the next argument. The `print()` builtin appends a newline
+by default, while `print_no_newline()` omits the trailing newline. Escape
+sequences such as `\n` and `\t` are processed inside string literals.
 
 #### High-Performance Print Implementation
 ```c
@@ -418,7 +417,7 @@ typedef struct {
     char* template_str;
     size_t template_len;
     
-    // Parsed placeholders
+    // Parsed @ markers
     struct {
         size_t position;      // Position in template
         size_t arg_index;     // Which argument to use
@@ -427,15 +426,15 @@ typedef struct {
     int placeholder_count;
     
     // Performance optimization
-    bool is_simple;           // Only {} placeholders, no formatting
+    bool is_simple;           // No formatting sequences
     bool has_expressions;     // Contains complex expressions
 } InterpolationTemplate;
 
 // Runtime formatting currently supports basic specifiers:
-//   {:b} - binary
-//   {:x} or {:X} - hexadecimal
-//   {:o} - octal
-//   {.N} - float with N decimals
+//   @b  - binary
+//   @x or @X - hexadecimal
+//   @o  - octal
+//   @.Nf - float with N decimals
 // Implemented in builtin_print using print_formatted_value.
 
 // Compile-time string interpolation
@@ -3547,16 +3546,16 @@ Orus source with performance-critical generics:
 
 fn quicksort<T: Comparable>(arr: [T], low: i32, high: i32):
     if low < high:
-        let pivot = partition<T>(arr, low, high)
+        pivot = partition<T>(arr, low, high)
         quicksort<T>(arr, low, pivot - 1)
         quicksort<T>(arr, pivot + 1, high)
 
 fn binary_search<T: Comparable>(arr: [T], target: T) -> Option<i32>:
-    let mut left = 0
-    let mut right = len(arr) - 1
+    mut left = 0
+    mut right = len(arr) - 1
     
     while left <= right:
-        let mid = (left + right) / 2
+        mid = (left + right) / 2
         match compare(arr[mid], target):
             Ordering.Less: left = mid + 1
             Ordering.Greater: right = mid - 1
@@ -3853,7 +3852,7 @@ impl<T> Vec<T>:
         Vec{ data: [], len: 0, cap: 0 }
     
     pub fn with_capacity(cap: i32) -> Vec<T>:
-        let v = Vec.new()
+        v = Vec.new()
         v.reserve(cap)
         v
     
@@ -3877,13 +3876,13 @@ impl<T> Vec<T>:
             Some(self.data[index])
     
     fn grow(mut self):
-        let new_cap = if self.cap == 0: 4 else: self.cap * 2
+        new_cap = if self.cap == 0: 4 else: self.cap * 2
         self.reserve(new_cap)
     
     pub fn reserve(mut self, new_cap: i32):
         if new_cap <= self.cap: return
         
-        let new_data: [T] = _builtin_array_new(new_cap)
+        new_data: [T] = _builtin_array_new(new_cap)
         for i in 0..self.len:
             new_data[i] = self.data[i]
         
@@ -3909,7 +3908,7 @@ impl<T, E> Result<T, E>:
     pub fn unwrap(self) -> T:
         match self:
             Result.Ok(v): v
-            Result.Err(e): panic("Unwrap on Err: {}", e)
+            Result.Err(e): panic("Unwrap on Err:", e)
     
     pub fn unwrap_or(self, default: T) -> T:
         match self:
@@ -4324,7 +4323,7 @@ TEST(string_concatenation) {
 }
 
 TEST(type_inference) {
-    Type* type = infer_type_of("let f = fn(x) { x + 1 }; f");
+    Type* type = infer_type_of("f = fn(x) { x + 1 }; f");
     Type* expected = function_type(&int_type, 1, &int_type);
     ASSERT_TYPE_EQ(type, expected);
 }

@@ -846,13 +846,23 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
                     break;
                 }
             }
-            if (localIndex < 0) return -1;
+            uint8_t valueReg = compileExpressionToRegister(node->assign.value, compiler);
+            if (valueReg < 0) return -1;
+            if (localIndex < 0) {
+                if (compiler->localCount >= REGISTER_COUNT) return -1;
+                localIndex = compiler->localCount++;
+                compiler->locals[localIndex].name = node->assign.name;
+                compiler->locals[localIndex].reg = (uint8_t)valueReg;
+                compiler->locals[localIndex].isActive = true;
+                compiler->locals[localIndex].depth = compiler->scopeDepth;
+                compiler->locals[localIndex].isMutable = false;
+                compiler->locals[localIndex].type = getNodeValueTypeWithCompiler(node->assign.value, compiler);
+                return valueReg;
+            }
             if (!compiler->locals[localIndex].isMutable) {
                 compiler->hadError = true;
                 return -1;
             }
-            uint8_t valueReg = compileExpressionToRegister(node->assign.value, compiler);
-            if (valueReg < 0) return -1;
             emitByte(compiler, OP_MOVE);
             emitByte(compiler, compiler->locals[localIndex].reg);
             emitByte(compiler, valueReg);

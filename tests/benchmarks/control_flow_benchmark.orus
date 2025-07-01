@@ -2,14 +2,14 @@
 // Tests: loops, conditionals, nested control structures, branching
 
 // Test 1: Simple For Loop Performance (1 million iterations)
-let mut simple_counter = 0
+mut simple_counter = 0
 for i in 0..1000000:
     simple_counter = simple_counter + 1
 
 print(simple_counter)
 
 // Test 2: Nested Loop Performance (1000 x 1000)
-let mut nested_total = 0
+mut nested_total = 0
 for i in 0..1000:
     for j in 0..1000:
         nested_total = nested_total + 1
@@ -17,8 +17,8 @@ for i in 0..1000:
 print(nested_total)
 
 // Test 3: While Loop with Conditional (100K iterations)
-let mut while_counter = 0
-let mut condition_hits = 0
+mut while_counter = 0
+mut condition_hits = 0
 while while_counter < 100000:
     if while_counter % 2 == 0:
         condition_hits = condition_hits + 1
@@ -27,7 +27,7 @@ while while_counter < 100000:
 print(condition_hits)
 
 // Test 4: Conditional Logic (50K iterations)
-let mut complex_result = 0
+mut complex_result = 0
 for i in 0..50000:
     if i % 3 == 0:
         complex_result = complex_result + 3
@@ -40,8 +40,8 @@ for i in 0..50000:
 print(complex_result)
 
 // Test 5: Loop Conditional Processing (10K iterations)
-let mut break_continue_total = 0
-let mut processed_count = 0
+mut break_continue_total = 0
+mut processed_count = 0
 for i in 0..10000:
     if i % 100 == 0:
         break_continue_total = break_continue_total + 0
@@ -53,7 +53,7 @@ print(break_continue_total)
 print(processed_count)
 
 // Test 6: Short Jump Stress Test - Tight Nested Loops (heavily tests OP_LOOP_SHORT)
-let mut tight_nested_total = 0
+mut tight_nested_total = 0
 for a in 0..200:
     for b in 0..200:
         for c in 0..5:
@@ -62,7 +62,7 @@ for a in 0..200:
 print(tight_nested_total)
 
 // Test 7: Dense Conditionals (heavily tests OP_JUMP_IF_NOT_SHORT)
-let mut dense_conditional_total = 0
+mut dense_conditional_total = 0
 for i in 0..20000:
     if i % 2 == 0:
         dense_conditional_total = dense_conditional_total + 1
@@ -76,9 +76,9 @@ for i in 0..20000:
 print(dense_conditional_total)
 
 // Test 8: Mixed Control Flow (tests all short jump types)
-let mut mixed_total = 0
+mut mixed_total = 0
 for outer in 0..100:
-    let mut inner_count = 0
+    mut inner_count = 0
     while inner_count < 50:
         if inner_count % 3 == 0:
             if outer % 2 == 0:

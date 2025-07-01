@@ -2,25 +2,25 @@
 // Variables without explicit type annotations should infer from arithmetic
 
 // f64 arithmetic
-let a: f64 = 1.0
-let b: f64 = 2.0
-let c = a + b  // Should infer f64
+a: f64 = 1.0
+b: f64 = 2.0
+c = a + b  // Should infer f64
 print(c)
 
 // u32 arithmetic  
-let x = 10u32
-let y = 20u32
-let z = x * y  // Should infer u32
+x = 10u32
+y = 20u32
+z = x * y  // Should infer u32
 print(z)
 
 // i64 arithmetic
-let p = 100i64
-let q = 50i64
-let r = p - q  // Should infer i64
+p = 100i64
+q = 50i64
+r = p - q  // Should infer i64
 print(r)
 
 // i32 arithmetic (default)
-let m = 100
-let n = 25
-let o = m / n  // Should infer i32
+m = 100
+n = 25
+o = m / n  // Should infer i32
 print(o)

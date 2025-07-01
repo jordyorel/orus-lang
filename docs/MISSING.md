@@ -11,7 +11,7 @@ Build a language that combines Python's readability, Rust's safety, and Lua's pe
 - **VM Foundation**: Register-based with 256 registers, 100+ opcodes
 - **Lexer System**: Full tokenization with all language constructs  
 - **Basic Parser**: Precedence climbing with binary expressions (`1 + 2`)
-- **Variable System**: Declarations (`let x = 42`) and lookup
+- **Variable System**: Declarations (`x = 42`) and lookup
 - **Memory Management**: Garbage collector framework integrated
 - **Build System**: Clean makefile with benchmarking
 
@@ -55,9 +55,9 @@ print(42)
 print(true)
 
 // Print with string interpolation
-let name = "Orus"
-let version = 1
-print("Welcome to {} version {}", name, version)
+name = "Orus"
+version = 1
+print("Welcome to", name, "version", version)
 
 // Multiple values
 print("Values:", 1, 2, 3, "done")
@@ -84,13 +84,13 @@ print("continues here")
 
 ```orus
 // Basic interpolation
-let x = 42
-print("The answer is {}", x)
+x = 42
+print("The answer is", x)
 
 // Multiple placeholders
-let a = 10
-let b = 20
-print("{} + {} = {}", a, b, a + b)
+a = 10
+b = 20
+print(a, "+", b, "=", a + b)
 
 // Format specifiers
 let pi = 3.14159

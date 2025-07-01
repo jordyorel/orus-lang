@@ -1,5 +1,5 @@
 // Test basic continue statement in while loop
-let mut i = 0
+mut i = 0
 while i < 5:
     i = i + 1
     if i == 3:

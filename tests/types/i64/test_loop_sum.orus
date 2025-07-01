@@ -1,4 +1,4 @@
-let mut x = 0i64
+mut x = 0i64
 for i in 0..1000000:
     x = x + i
 print(x)

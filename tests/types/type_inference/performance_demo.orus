@@ -8,14 +8,14 @@
 
 // AFTER: Types inferred from operands (faster compilation)
 
-let a: f64 = 3.14
-let b: f64 = 2.71
+a: f64 = 3.14
+b: f64 = 2.71
 
 // Complex expressions - all types inferred automatically
-let sum = a + b
-let product = a * b
-let quotient = a / b
-let complex = (a + b) * (a - b)
+sum = a + b
+product = a * b
+quotient = a / b
+complex = (a + b) * (a - b)
 
 print(sum)
 print(product)
@@ -23,19 +23,19 @@ print(quotient)
 print(complex)
 
 // u32 arithmetic - types inferred
-let x = 1000u32
-let y = 250u32
-let u32_result = x + y * 2u32
+x = 1000u32
+y = 250u32
+u32_result = x + y * 2u32
 print(u32_result)
 
 // i64 arithmetic - types inferred  
-let p = 1000000i64
-let q = 500000i64
-let i64_result = p * 2i64 - q
+p = 1000000i64
+q = 500000i64
+i64_result = p * 2i64 - q
 print(i64_result)
 
 // i32 arithmetic (default) - types inferred
-let m = 42
-let n = 8
-let i32_result = m + n * 3
+m = 42
+n = 8
+i32_result = m + n * 3
 print(i32_result)

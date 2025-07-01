@@ -1,13 +1,13 @@
 // Comprehensive i32 arithmetic type inference tests
-let a = 10    // Default i32
-let b = 5     // Default i32
+a = 10    // Default i32
+b = 5     // Default i32
 
 // All basic operations should infer i32 type
-let addition = a + b
-let subtraction = a - b  
-let multiplication = a * b
-let division = a / b
-let modulo = a % b
+addition = a + b
+subtraction = a - b  
+multiplication = a * b
+division = a / b
+modulo = a % b
 
 print(addition)      // 15
 print(subtraction)   // 5
@@ -16,11 +16,11 @@ print(division)      // 2
 print(modulo)        // 0
 
 // Chained operations should also infer i32
-let complex = (a + b) * (a - b)
+complex = (a + b) * (a - b)
 print(complex)
 
 // Explicit i32 variables
-let x = 20i32
-let y = 3i32
-let result = x / y
+x = 20i32
+y = 3i32
+result = x / y
 print(result)
