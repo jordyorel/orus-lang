@@ -1,105 +1,126 @@
-#!/usr/bin/env python3
+#!/usr/bin/env julia
 # Control Flow Benchmark for Cross-Language Performance Testing
 # Equivalent to control_flow_benchmark.orus
 
-import time
-import sys
-
-def main():
-    start_time = time.time()
+function main()
+    start_time = time()
     
     # Test 1: Simple For Loop Performance (1 million iterations)
     simple_counter = 0
-    for i in range(1000000):
+    for i in 0:999999
         simple_counter += 1
+    end
     
-    print(simple_counter)
+    println(simple_counter)
     
     # Test 2: Nested Loop Performance (1000 x 1000)
     nested_total = 0
-    for i in range(1000):
-        for j in range(1000):
+    for i in 0:999
+        for j in 0:999
             nested_total += 1
+        end
+    end
     
-    print(nested_total)
+    println(nested_total)
     
     # Test 3: While Loop with Conditional (100K iterations)
     while_counter = 0
     condition_hits = 0
-    while while_counter < 100000:
-        if while_counter % 2 == 0:
+    while while_counter < 100000
+        if while_counter % 2 == 0
             condition_hits += 1
+        end
         while_counter += 1
+    end
     
-    print(condition_hits)
+    println(condition_hits)
     
     # Test 4: Conditional Logic (50K iterations)
     complex_result = 0
-    for i in range(50000):
-        if i % 3 == 0:
+    for i in 0:49999
+        if i % 3 == 0
             complex_result += 3
-        else:
-            if i % 5 == 0:
+        else
+            if i % 5 == 0
                 complex_result += 5
-            else:
+            else
                 complex_result += 1
+            end
+        end
+    end
     
-    print(complex_result)
+    println(complex_result)
     
     # Test 5: Loop with Conditional Processing (10K iterations)
     break_continue_total = 0
     processed_count = 0
-    for i in range(10000):
-        if i % 100 == 0:
+    for i in 0:9999
+        if i % 100 == 0
             break_continue_total += 0
-        else:
+        else
             break_continue_total += 1
             processed_count += 1
+        end
+    end
     
-    print(break_continue_total)
-    print(processed_count)
+    println(break_continue_total)
+    println(processed_count)
     
     # Test 6: Short Jump Stress Test - Tight Nested Loops
     tight_nested_total = 0
-    for a in range(200):
-        for b in range(200):
-            for c in range(5):
+    for a in 0:199
+        for b in 0:199
+            for c in 0:4
                 tight_nested_total += 1
+            end
+        end
+    end
     
-    print(tight_nested_total)
+    println(tight_nested_total)
     
     # Test 7: Dense Conditionals
     dense_conditional_total = 0
-    for i in range(20000):
-        if i % 2 == 0:
+    for i in 0:19999
+        if i % 2 == 0
             dense_conditional_total += 1
-        if i % 3 == 0:
+        end
+        if i % 3 == 0
             dense_conditional_total += 2
-        if i % 5 == 0:
+        end
+        if i % 5 == 0
             dense_conditional_total += 3
-        if i % 7 == 0:
+        end
+        if i % 7 == 0
             dense_conditional_total += 4
+        end
+    end
     
-    print(dense_conditional_total)
+    println(dense_conditional_total)
     
     # Test 8: Mixed Control Flow
     mixed_total = 0
-    for outer in range(100):
+    for outer in 0:99
         inner_count = 0
-        while inner_count < 50:
-            if inner_count % 3 == 0:
-                if outer % 2 == 0:
+        while inner_count < 50
+            if inner_count % 3 == 0
+                if outer % 2 == 0
                     mixed_total += 1
-                else:
+                else
                     mixed_total += 2
-            else:
+                end
+            else
                 mixed_total += 1
+            end
             inner_count += 1
+        end
+    end
     
-    print(mixed_total)
+    println(mixed_total)
     
-    end_time = time.time()
-    print(f"Python execution time: {end_time - start_time:.6f} seconds", file=sys.stderr)
+    end_time = time()
+    println(stderr, "Julia execution time: $(end_time - start_time:.6f) seconds")
+end
 
-if __name__ == "__main__":
+if abspath(PROGRAM_FILE) == @__FILE__
     main()
+end

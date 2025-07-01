@@ -1,0 +1,11 @@
+let mut result = 0
+
+// Test nested control flow with short jumps
+for i in 0..=2:
+    for j in 0..=1:
+        if i == j:
+            result = result + 1
+        else:
+            result = result + 2
+
+print(result)

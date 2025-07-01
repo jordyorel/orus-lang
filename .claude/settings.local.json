@@ -37,7 +37,12 @@
       "Bash(./run_control_flow_benchmark.sh:*)",
       "Bash(./run_all_benchmarks.sh)",
       "Bash(pkill:*)",
-      "Bash(true)"
+      "Bash(true)",
+      "Bash(for i in {1..5})",
+      "Bash(do echo \"Run $i:\")",
+      "Bash(done)",
+      "Bash(do echo:*)",
+      "Bash(julia:*)"
     ],
     "deny": []
   }

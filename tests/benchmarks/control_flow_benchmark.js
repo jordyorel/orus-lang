@@ -65,6 +65,57 @@ for (let i = 0; i < 10000; i++) {
 console.log(break_continue_total);
 console.log(processed_count);
 
+// Test 6: Short Jump Stress Test - Tight Nested Loops
+let tight_nested_total = 0;
+for (let a = 0; a < 200; a++) {
+    for (let b = 0; b < 200; b++) {
+        for (let c = 0; c < 5; c++) {
+            tight_nested_total++;
+        }
+    }
+}
+
+console.log(tight_nested_total);
+
+// Test 7: Dense Conditionals
+let dense_conditional_total = 0;
+for (let i = 0; i < 20000; i++) {
+    if (i % 2 === 0) {
+        dense_conditional_total += 1;
+    }
+    if (i % 3 === 0) {
+        dense_conditional_total += 2;
+    }
+    if (i % 5 === 0) {
+        dense_conditional_total += 3;
+    }
+    if (i % 7 === 0) {
+        dense_conditional_total += 4;
+    }
+}
+
+console.log(dense_conditional_total);
+
+// Test 8: Mixed Control Flow
+let mixed_total = 0;
+for (let outer = 0; outer < 100; outer++) {
+    let inner_count = 0;
+    while (inner_count < 50) {
+        if (inner_count % 3 === 0) {
+            if (outer % 2 === 0) {
+                mixed_total += 1;
+            } else {
+                mixed_total += 2;
+            }
+        } else {
+            mixed_total += 1;
+        }
+        inner_count++;
+    }
+}
+
+console.log(mixed_total);
+
 const end = process.hrtime.bigint();
 const duration = Number(end - start) / 1000000000;
 console.error(`Node.js execution time: ${duration.toFixed(6)} seconds`);
