@@ -10,10 +10,10 @@ let result = a / b
 print(result)
 
 // Test with different zero values  
-let neg_zero = 0.0 - 0.0
-let result2 = a / neg_zero
+let neg_zero: f64 = 0.0 - 0.0
+let result2: f64 = a / neg_zero
 print(result2)
 
 // Test zero divided by zero (should be NaN)
-let nan_result = b / b
+let nan_result: f64 = b / b
 print(nan_result)

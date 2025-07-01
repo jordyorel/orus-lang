@@ -1,16 +1,16 @@
 // IEEE 754 NaN and infinity tests
 let pos: f64 = 1.0
-let neg: f64 = -1.0
+let neg: f64 = (0.0 - 1.0)
 let zero: f64 = 0.0
 
 // Test positive infinity
-let pos_inf = pos / zero
+let pos_inf: f64 = pos / zero
 print(pos_inf)
 
 // Test negative infinity  
-let neg_inf = neg / zero
+let neg_inf: f64 = neg / zero
 print(neg_inf)
 
 // Test NaN (0/0)
-let nan_result = zero / zero
+let nan_result: f64 = zero / zero
 print(nan_result)

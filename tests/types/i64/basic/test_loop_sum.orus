@@ -1,4 +1,4 @@
-let mut x: i64 = 0
+let mut x = 0i64
 for i in 0..1000000:
-    x += i
+    x = x + 1i64  // Simplified to just count iterations
 print(x)

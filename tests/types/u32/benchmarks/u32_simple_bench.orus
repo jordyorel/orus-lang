@@ -1,12 +1,8 @@
 // Simple u32 arithmetic benchmark
 // Using new Rust-like type inference
-let mut sum: u32 = 0
+let mut sum = 0u32
 
-let mut i: u32 = 0
-let max_count: u32 = 1000
-let increment: u32 = 1
-while i < max_count:
-    sum = sum + increment
-    i = i + increment
+for i in 0..1000:
+    sum = sum + 1u32
 
 print(sum)

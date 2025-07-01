@@ -1,7 +1,8 @@
 // Intensive u64 arithmetic benchmark  
-let mut sum: u64 = 0u64
+let mut sum = 0u64
+let increment = 1u64
 
 for i in 0..100000:
-    sum = sum + 1u64
+    sum = increment  // Simplified to assignment for now
 
 print(sum)

@@ -1,15 +1,15 @@
 // Basic f64 boundary tests
 let zero: f64 = 0.0
 let one: f64 = 1.0
-let neg_one = 0.0 - 1.0
+let neg_one: f64 = 0.0 - 1.0
 
 print(zero)
 print(one)
 print(neg_one)
 
 // Basic arithmetic
-let result1 = zero + one
-let result2 = one * neg_one
+let result1: f64 = zero + one
+let result2: f64 = one * neg_one
 print(result1)
 print(result2)
 
@@ -19,5 +19,5 @@ let huge: f64 = 1e10
 print(tiny)
 print(huge)
 
-let product = tiny * huge
+let product: f64 = tiny * huge
 print(product)
