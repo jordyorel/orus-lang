@@ -1,7 +1,0 @@
-// Simple f64 arithmetic benchmark  
-let mut sum: f64 = 0.0
-
-for i in 0..1000:
-    sum = sum + 1.5
-
-print(sum)

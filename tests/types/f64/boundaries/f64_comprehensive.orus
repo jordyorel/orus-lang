@@ -8,10 +8,10 @@ print(one)
 let neg_one: f64 = 0.0 - 1.0
 print(neg_one)
 
-let result: f64 = zero + one
+let result = zero + one
 print(result)
 
-let result2: f64 = one * neg_one
+let result2 = one * neg_one
 print(result2)
 
 let large: f64 = 999999.0

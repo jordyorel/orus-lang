@@ -104,18 +104,40 @@ static ValueType inferBinaryOpTypeWithCompiler(ASTNode* left, ASTNode* right, Co
     ValueType leftType = getNodeValueTypeWithCompiler(left, compiler);
     ValueType rightType = getNodeValueTypeWithCompiler(right, compiler);
 
+    // If both operands are the same type, result is that type
+    if (leftType == rightType) {
+        return leftType;
+    }
+
+    // Type promotion rules for mixed types:
+    
+    // f64 has highest priority - any f64 operand makes result f64
     if (leftType == VAL_F64 || rightType == VAL_F64) {
         return VAL_F64;
+    }
+
+    // u64 and i64 - both are 64-bit, but we need exact type matches for arithmetic
+    // If one is u64 and other is i64, this is a type error, but we'll return i64 for now
+    if (leftType == VAL_U64 || rightType == VAL_U64) {
+        if (leftType == VAL_I64 || rightType == VAL_I64) {
+            return VAL_I64;  // Mixed 64-bit defaults to signed
+        }
+        return VAL_U64;
     }
 
     if (leftType == VAL_I64 || rightType == VAL_I64) {
         return VAL_I64;
     }
 
+    // u32 and i32 - similar rules
     if (leftType == VAL_U32 || rightType == VAL_U32) {
+        if (leftType == VAL_I32 || rightType == VAL_I32) {
+            return VAL_I32;  // Mixed 32-bit defaults to signed
+        }
         return VAL_U32;
     }
 
+    // Default to i32
     return VAL_I32;
 }
 
@@ -582,8 +604,8 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
                     }
                 }
             } else {
-                // Infer type from initializer
-                declaredType = getNodeValueType(node->varDecl.initializer);
+                // Infer type from initializer using enhanced type inference
+                declaredType = getNodeValueTypeWithCompiler(node->varDecl.initializer, compiler);
             }
             compiler->locals[localIndex].type = declaredType;
             

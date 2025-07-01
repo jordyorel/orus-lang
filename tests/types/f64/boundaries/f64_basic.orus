@@ -7,9 +7,9 @@ print(zero)
 print(one)
 print(neg_one)
 
-// Basic arithmetic
-let result1: f64 = zero + one
-let result2: f64 = one * neg_one
+// Basic arithmetic - types inferred from operands
+let result1 = zero + one
+let result2 = one * neg_one
 print(result1)
 print(result2)
 
@@ -19,5 +19,5 @@ let huge: f64 = 1e10
 print(tiny)
 print(huge)
 
-let product: f64 = tiny * huge
+let product = tiny * huge
 print(product)

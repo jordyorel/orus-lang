@@ -1,4 +1,4 @@
-// u32 overflow tests as required by AGENTS.md
+// u32 overflow tests
 let max_val: u32 = 4294967295u32  // 2^32 - 1
 let one: u32 = 1u32
 

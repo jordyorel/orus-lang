@@ -15,29 +15,29 @@ print(max_val)
 // Test operations near boundaries
 let almost_max: u32 = 4294967294u32  // MAX - 1
 let one_val = 1u32
-let result1: u32 = almost_max + one_val  // Should be MAX
+let result1 = almost_max + one_val  // Should be MAX (inferred u32)
 print(result1)
 
 // Test arithmetic with boundary values
-let zero_times_max: u32 = zero * max_val  // Should be 0
-let one_times_max: u32 = one * max_val    // Should be MAX
+let zero_times_max = zero * max_val  // Should be 0 (inferred u32)
+let one_times_max = one * max_val    // Should be MAX (inferred u32)
 print(zero_times_max)
 print(one_times_max)
 
 // Test division by boundary values
-let max_div_one: u32 = max_val / one      // Should be MAX
-let max_div_max: u32 = max_val / max_val  // Should be 1
+let max_div_one = max_val / one      // Should be MAX (inferred u32)
+let max_div_max = max_val / max_val  // Should be 1 (inferred u32)
 print(max_div_one)
 print(max_div_max)
 
 // Test modulo with boundary values
-let max_mod_one: u32 = max_val % one      // Should be 0
-let one_mod_max: u32 = one % max_val      // Should be 1
+let max_mod_one = max_val % one      // Should be 0 (inferred u32)
+let one_mod_max = one % max_val      // Should be 1 (inferred u32)
 print(max_mod_one)
 print(one_mod_max)
 
 // Test subtraction with boundaries
-let max_minus_one: u32 = max_val - one    // Should be MAX-1
-let max_minus_max: u32 = max_val - max_val // Should be 0
+let max_minus_one = max_val - one    // Should be MAX-1 (inferred u32)
+let max_minus_max = max_val - max_val // Should be 0 (inferred u32)
 print(max_minus_one)
 print(max_minus_max)
