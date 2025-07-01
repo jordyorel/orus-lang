@@ -310,6 +310,11 @@ typedef enum {
     OP_GT_F64_R,
     OP_GE_F64_R,
 
+    OP_LT_U32_R,
+    OP_LE_U32_R,
+    OP_GT_U32_R,
+    OP_GE_U32_R,
+
     // Logical operations
     OP_AND_BOOL_R,
     OP_OR_BOOL_R,
@@ -324,6 +329,8 @@ typedef enum {
     OP_F64_TO_I64_R,
     OP_BOOL_TO_I32_R,
     OP_I32_TO_BOOL_R,
+    OP_I32_TO_U32_R,
+    OP_U32_TO_I32_R,
 
     // String operations
     OP_CONCAT_R,

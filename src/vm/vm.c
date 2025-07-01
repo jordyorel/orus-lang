@@ -248,7 +248,14 @@ static InterpretResult run(void) {
         dispatchTable[OP_MUL_I64_R] = &&LABEL_OP_MUL_I64_R;
         dispatchTable[OP_DIV_I64_R] = &&LABEL_OP_DIV_I64_R;
         dispatchTable[OP_MOD_I64_R] = &&LABEL_OP_MOD_I64_R;
+        dispatchTable[OP_ADD_U32_R] = &&LABEL_OP_ADD_U32_R;
+        dispatchTable[OP_SUB_U32_R] = &&LABEL_OP_SUB_U32_R;
+        dispatchTable[OP_MUL_U32_R] = &&LABEL_OP_MUL_U32_R;
+        dispatchTable[OP_DIV_U32_R] = &&LABEL_OP_DIV_U32_R;
+        dispatchTable[OP_MOD_U32_R] = &&LABEL_OP_MOD_U32_R;
         dispatchTable[OP_I32_TO_I64_R] = &&LABEL_OP_I32_TO_I64_R;
+        dispatchTable[OP_I32_TO_U32_R] = &&LABEL_OP_I32_TO_U32_R;
+        dispatchTable[OP_U32_TO_I32_R] = &&LABEL_OP_U32_TO_I32_R;
         dispatchTable[OP_ADD_F64_R] = &&LABEL_OP_ADD_F64_R;
         dispatchTable[OP_SUB_F64_R] = &&LABEL_OP_SUB_F64_R;
         dispatchTable[OP_MUL_F64_R] = &&LABEL_OP_MUL_F64_R;
@@ -269,6 +276,10 @@ static InterpretResult run(void) {
         dispatchTable[OP_LE_I64_R] = &&LABEL_OP_LE_I64_R;
         dispatchTable[OP_GT_I64_R] = &&LABEL_OP_GT_I64_R;
         dispatchTable[OP_GE_I64_R] = &&LABEL_OP_GE_I64_R;
+        dispatchTable[OP_LT_U32_R] = &&LABEL_OP_LT_U32_R;
+        dispatchTable[OP_LE_U32_R] = &&LABEL_OP_LE_U32_R;
+        dispatchTable[OP_GT_U32_R] = &&LABEL_OP_GT_U32_R;
+        dispatchTable[OP_GE_U32_R] = &&LABEL_OP_GE_U32_R;
         dispatchTable[OP_EQ_R] = &&LABEL_OP_EQ_R;
         dispatchTable[OP_NE_R] = &&LABEL_OP_NE_R;
         dispatchTable[OP_AND_BOOL_R] = &&LABEL_OP_AND_BOOL_R;
@@ -609,6 +620,76 @@ LABEL_OP_MOD_I64_R: {
         DISPATCH();
     }
 
+LABEL_OP_ADD_U32_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t src1 = READ_BYTE();
+        uint8_t src2 = READ_BYTE();
+        if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be u32");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        vm.registers[dst] = U32_VAL(AS_U32(vm.registers[src1]) + AS_U32(vm.registers[src2]));
+        DISPATCH();
+    }
+
+LABEL_OP_SUB_U32_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t src1 = READ_BYTE();
+        uint8_t src2 = READ_BYTE();
+        if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be u32");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        vm.registers[dst] = U32_VAL(AS_U32(vm.registers[src1]) - AS_U32(vm.registers[src2]));
+        DISPATCH();
+    }
+
+LABEL_OP_MUL_U32_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t src1 = READ_BYTE();
+        uint8_t src2 = READ_BYTE();
+        if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be u32");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        vm.registers[dst] = U32_VAL(AS_U32(vm.registers[src1]) * AS_U32(vm.registers[src2]));
+        DISPATCH();
+    }
+
+LABEL_OP_DIV_U32_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t src1 = READ_BYTE();
+        uint8_t src2 = READ_BYTE();
+        if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be u32");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        uint32_t b = AS_U32(vm.registers[src2]);
+        if (b == 0) {
+            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Division by zero");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        vm.registers[dst] = U32_VAL(AS_U32(vm.registers[src1]) / b);
+        DISPATCH();
+    }
+
+LABEL_OP_MOD_U32_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t src1 = READ_BYTE();
+        uint8_t src2 = READ_BYTE();
+        if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be u32");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        uint32_t b = AS_U32(vm.registers[src2]);
+        if (b == 0) {
+            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Division by zero");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        vm.registers[dst] = U32_VAL(AS_U32(vm.registers[src1]) % b);
+        DISPATCH();
+    }
+
 LABEL_OP_I32_TO_I64_R: {
         uint8_t dst = READ_BYTE();
         uint8_t src = READ_BYTE();
@@ -617,6 +698,28 @@ LABEL_OP_I32_TO_I64_R: {
             RETURN(INTERPRET_RUNTIME_ERROR);
         }
         vm.registers[dst] = I64_VAL((int64_t)AS_I32(vm.registers[src]));
+        DISPATCH();
+    }
+
+LABEL_OP_I32_TO_U32_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t src = READ_BYTE();
+        if (!IS_I32(vm.registers[src])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Source must be i32");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        vm.registers[dst] = U32_VAL((uint32_t)AS_I32(vm.registers[src]));
+        DISPATCH();
+    }
+
+LABEL_OP_U32_TO_I32_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t src = READ_BYTE();
+        if (!IS_U32(vm.registers[src])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Source must be u32");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        vm.registers[dst] = I32_VAL((int32_t)AS_U32(vm.registers[src]));
         DISPATCH();
     }
 
@@ -876,7 +979,55 @@ LABEL_OP_GE_I64_R: {
         runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i64");
         RETURN(INTERPRET_RUNTIME_ERROR);
     }
-    vm.registers[dst] = BOOL_VAL(AS_I64(vm.registers[src1]) >= AS_I64(vm.registers[src2]));
+        vm.registers[dst] = BOOL_VAL(AS_I64(vm.registers[src1]) >= AS_I64(vm.registers[src2]));
+        DISPATCH();
+    }
+
+LABEL_OP_LT_U32_R: {
+    uint8_t dst = READ_BYTE();
+    uint8_t src1 = READ_BYTE();
+    uint8_t src2 = READ_BYTE();
+    if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be u32");
+        RETURN(INTERPRET_RUNTIME_ERROR);
+    }
+    vm.registers[dst] = BOOL_VAL(AS_U32(vm.registers[src1]) < AS_U32(vm.registers[src2]));
+    DISPATCH();
+}
+
+LABEL_OP_LE_U32_R: {
+    uint8_t dst = READ_BYTE();
+    uint8_t src1 = READ_BYTE();
+    uint8_t src2 = READ_BYTE();
+    if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be u32");
+        RETURN(INTERPRET_RUNTIME_ERROR);
+    }
+    vm.registers[dst] = BOOL_VAL(AS_U32(vm.registers[src1]) <= AS_U32(vm.registers[src2]));
+    DISPATCH();
+}
+
+LABEL_OP_GT_U32_R: {
+    uint8_t dst = READ_BYTE();
+    uint8_t src1 = READ_BYTE();
+    uint8_t src2 = READ_BYTE();
+    if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be u32");
+        RETURN(INTERPRET_RUNTIME_ERROR);
+    }
+    vm.registers[dst] = BOOL_VAL(AS_U32(vm.registers[src1]) > AS_U32(vm.registers[src2]));
+    DISPATCH();
+}
+
+LABEL_OP_GE_U32_R: {
+    uint8_t dst = READ_BYTE();
+    uint8_t src1 = READ_BYTE();
+    uint8_t src2 = READ_BYTE();
+    if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be u32");
+        RETURN(INTERPRET_RUNTIME_ERROR);
+    }
+    vm.registers[dst] = BOOL_VAL(AS_U32(vm.registers[src1]) >= AS_U32(vm.registers[src2]));
     DISPATCH();
 }
 
@@ -1409,6 +1560,95 @@ LABEL_UNKNOWN:
                 break;
             }
 
+            case OP_ADD_U32_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src1 = READ_BYTE();
+                uint8_t src2 = READ_BYTE();
+
+                if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                 "Operands must be u32");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+
+                vm.registers[dst] = U32_VAL(AS_U32(vm.registers[src1]) + AS_U32(vm.registers[src2]));
+                break;
+            }
+
+            case OP_SUB_U32_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src1 = READ_BYTE();
+                uint8_t src2 = READ_BYTE();
+
+                if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                 "Operands must be u32");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+
+                vm.registers[dst] = U32_VAL(AS_U32(vm.registers[src1]) - AS_U32(vm.registers[src2]));
+                break;
+            }
+
+            case OP_MUL_U32_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src1 = READ_BYTE();
+                uint8_t src2 = READ_BYTE();
+
+                if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                 "Operands must be u32");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+
+                vm.registers[dst] = U32_VAL(AS_U32(vm.registers[src1]) * AS_U32(vm.registers[src2]));
+                break;
+            }
+
+            case OP_DIV_U32_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src1 = READ_BYTE();
+                uint8_t src2 = READ_BYTE();
+
+                if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                 "Operands must be u32");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+
+                uint32_t b = AS_U32(vm.registers[src2]);
+                if (b == 0) {
+                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                 "Division by zero");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+
+                vm.registers[dst] = U32_VAL(AS_U32(vm.registers[src1]) / b);
+                break;
+            }
+
+            case OP_MOD_U32_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src1 = READ_BYTE();
+                uint8_t src2 = READ_BYTE();
+
+                if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                 "Operands must be u32");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+
+                uint32_t b = AS_U32(vm.registers[src2]);
+                if (b == 0) {
+                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                 "Division by zero");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+
+                vm.registers[dst] = U32_VAL(AS_U32(vm.registers[src1]) % b);
+                break;
+            }
+
             case OP_I32_TO_I64_R: {
                 uint8_t dst = READ_BYTE();
                 uint8_t src = READ_BYTE();
@@ -1418,6 +1658,30 @@ LABEL_UNKNOWN:
                     RETURN(INTERPRET_RUNTIME_ERROR);
                 }
                 vm.registers[dst] = I64_VAL((int64_t)AS_I32(vm.registers[src]));
+                break;
+            }
+
+            case OP_I32_TO_U32_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src = READ_BYTE();
+                if (!IS_I32(vm.registers[src])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                 "Source must be i32");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+                vm.registers[dst] = U32_VAL((uint32_t)AS_I32(vm.registers[src]));
+                break;
+            }
+
+            case OP_U32_TO_I32_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src = READ_BYTE();
+                if (!IS_U32(vm.registers[src])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                 "Source must be u32");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+                vm.registers[dst] = I32_VAL((int32_t)AS_U32(vm.registers[src]));
                 break;
             }
 
@@ -1696,8 +1960,61 @@ LABEL_UNKNOWN:
                     RETURN(INTERPRET_RUNTIME_ERROR);
                 }
 
+
                 vm.registers[dst] = BOOL_VAL(AS_I64(vm.registers[src1]) >=
                                              AS_I64(vm.registers[src2]));
+                break;
+            }
+
+            case OP_LT_U32_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src1 = READ_BYTE();
+                uint8_t src2 = READ_BYTE();
+                if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                 "Operands must be u32");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+                vm.registers[dst] = BOOL_VAL(AS_U32(vm.registers[src1]) < AS_U32(vm.registers[src2]));
+                break;
+            }
+
+            case OP_LE_U32_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src1 = READ_BYTE();
+                uint8_t src2 = READ_BYTE();
+                if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                 "Operands must be u32");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+                vm.registers[dst] = BOOL_VAL(AS_U32(vm.registers[src1]) <= AS_U32(vm.registers[src2]));
+                break;
+            }
+
+            case OP_GT_U32_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src1 = READ_BYTE();
+                uint8_t src2 = READ_BYTE();
+                if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                 "Operands must be u32");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+                vm.registers[dst] = BOOL_VAL(AS_U32(vm.registers[src1]) > AS_U32(vm.registers[src2]));
+                break;
+            }
+
+            case OP_GE_U32_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src1 = READ_BYTE();
+                uint8_t src2 = READ_BYTE();
+                if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                 "Operands must be u32");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+                vm.registers[dst] = BOOL_VAL(AS_U32(vm.registers[src1]) >= AS_U32(vm.registers[src2]));
                 break;
             }
 

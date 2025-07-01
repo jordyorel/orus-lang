@@ -739,21 +739,73 @@ static ASTNode* parsePrimaryExpression(void) {
         case TOKEN_NUMBER: {
             ASTNode* node = new_node();
             node->type = NODE_LITERAL;
-            char numStr[32];
-            int len = token.length < 31 ? token.length : 31;
-            strncpy(numStr, token.start, len);
-            numStr[len] = '\0';
-            
-            // Parse as long long to handle large numbers
-            long long value = strtoll(numStr, NULL, 10);
-            
-            // Use i64 if the value is too large for i32 or if it has specific suffix
-            if (value > INT32_MAX || value < INT32_MIN) {
-                node->literal.value = I64_VAL(value);
-            } else {
-                node->literal.value = I32_VAL((int32_t)value);
+
+            /* Copy token text and remove underscores */
+            char raw[64];
+            int len = token.length < 63 ? token.length : 63;
+            strncpy(raw, token.start, len);
+            raw[len] = '\0';
+            char numStr[64];
+            int j = 0;
+            for (int i = 0; i < len && j < 63; i++) {
+                if (raw[i] != '_') numStr[j++] = raw[i];
             }
-            
+            numStr[j] = '\0';
+
+            bool isF64 = false;
+            bool isU32 = false;
+            bool isU64 = false;
+            bool isI64 = false;
+
+            /* Handle explicit suffixes */
+            if (j >= 3 && strcmp(numStr + j - 3, "f64") == 0) {
+                isF64 = true;
+                j -= 3;
+                numStr[j] = '\0';
+            } else if (j >= 3 && strcmp(numStr + j - 3, "u32") == 0) {
+                isU32 = true;
+                j -= 3;
+                numStr[j] = '\0';
+            } else if (j >= 3 && strcmp(numStr + j - 3, "u64") == 0) {
+                isU64 = true;
+                j -= 3;
+                numStr[j] = '\0';
+            } else if (j >= 1 && numStr[j - 1] == 'u') {
+                isU64 = true;
+                j -= 1;
+                numStr[j] = '\0';
+            } else if (j >= 3 && strcmp(numStr + j - 3, "i64") == 0) {
+                isI64 = true;
+                j -= 3;
+                numStr[j] = '\0';
+            }
+
+            /* Detect float by decimal/exponent */
+            for (int i = 0; i < j; i++) {
+                if (numStr[i] == '.' || numStr[i] == 'e' || numStr[i] == 'E') {
+                    isF64 = true;
+                    break;
+                }
+            }
+
+            if (isF64) {
+                double val = strtod(numStr, NULL);
+                node->literal.value = F64_VAL(val);
+            } else if (isU32) {
+                uint32_t val = (uint32_t)strtoul(numStr, NULL, 0);
+                node->literal.value = U32_VAL(val);
+            } else if (isU64) {
+                uint64_t val = strtoull(numStr, NULL, 0);
+                node->literal.value = U64_VAL(val);
+            } else {
+                long long value = strtoll(numStr, NULL, 0);
+                if (isI64 || value > INT32_MAX || value < INT32_MIN) {
+                    node->literal.value = I64_VAL(value);
+                } else {
+                    node->literal.value = I32_VAL((int32_t)value);
+                }
+            }
+
             node->location.line = token.line;
             node->location.column = token.column;
             node->dataType = NULL;
