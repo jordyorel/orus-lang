@@ -85,7 +85,7 @@ test: $(ORUS)
 	for test_file in $(shell find $(TESTDIR)/types -name '*.orus' | sort); do \
 		printf "Testing: $$test_file ... "; \
 		case "$$test_file" in \
-			*/errors/u32_*|*/errors/u64_*) \
+			*/errors/u32_*|*/errors/u64_*|*division_by_zero*|*modulo_by_zero*) \
 				if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
 					printf "\033[31mFAIL (should have failed)\033[0m\n"; \
 					failed=$$((failed + 1)); \
