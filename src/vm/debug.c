@@ -52,6 +52,22 @@ int disassembleInstruction(Chunk* chunk, int offset) {
             return offset + 4;
         }
 
+        case OP_SUB_I32_R: {
+            uint8_t dst = chunk->code[offset + 1];
+            uint8_t src1 = chunk->code[offset + 2];
+            uint8_t src2 = chunk->code[offset + 3];
+            printf("%-16s R%d, R%d, R%d\n", "SUB_I32", dst, src1, src2);
+            return offset + 4;
+        }
+
+        case OP_MUL_I32_R: {
+            uint8_t dst = chunk->code[offset + 1];
+            uint8_t src1 = chunk->code[offset + 2];
+            uint8_t src2 = chunk->code[offset + 3];
+            printf("%-16s R%d, R%d, R%d\n", "MUL_I32", dst, src1, src2);
+            return offset + 4;
+        }
+
         case OP_INC_I32_R: {
             uint8_t reg = chunk->code[offset + 1];
             printf("%-16s R%d\n", "INC_I32", reg);
@@ -153,6 +169,71 @@ int disassembleInstruction(Chunk* chunk, int offset) {
             uint8_t reg = chunk->code[offset + 1];
             printf("%-16s R%d\n", "RETURN", reg);
             return offset + 2;
+        }
+
+        // Short jump optimizations
+        case OP_JUMP_SHORT: {
+            uint8_t offset_val = chunk->code[offset + 1];
+            printf("%-16s +%d\n", "JUMP_SHORT", offset_val);
+            return offset + 2;
+        }
+
+        case OP_JUMP_BACK_SHORT: {
+            uint8_t offset_val = chunk->code[offset + 1];
+            printf("%-16s -%d\n", "JUMP_BACK_SHORT", offset_val);
+            return offset + 2;
+        }
+
+        case OP_JUMP_IF_NOT_SHORT: {
+            uint8_t reg = chunk->code[offset + 1];
+            uint8_t offset_val = chunk->code[offset + 2];
+            printf("%-16s R%d, +%d\n", "JUMP_IF_NOT_SHORT", reg, offset_val);
+            return offset + 3;
+        }
+
+        case OP_LOOP_SHORT: {
+            uint8_t offset_val = chunk->code[offset + 1];
+            printf("%-16s -%d\n", "LOOP_SHORT", offset_val);
+            return offset + 2;
+        }
+
+        // Typed operations for performance
+        case OP_ADD_I32_TYPED: {
+            uint8_t dst = chunk->code[offset + 1];
+            uint8_t left = chunk->code[offset + 2];
+            uint8_t right = chunk->code[offset + 3];
+            printf("%-16s R%d, R%d, R%d (typed)\n", "ADD_I32", dst, left, right);
+            return offset + 4;
+        }
+
+        case OP_SUB_I32_TYPED: {
+            uint8_t dst = chunk->code[offset + 1];
+            uint8_t left = chunk->code[offset + 2];
+            uint8_t right = chunk->code[offset + 3];
+            printf("%-16s R%d, R%d, R%d (typed)\n", "SUB_I32", dst, left, right);
+            return offset + 4;
+        }
+
+        case OP_MUL_I32_TYPED: {
+            uint8_t dst = chunk->code[offset + 1];
+            uint8_t left = chunk->code[offset + 2];
+            uint8_t right = chunk->code[offset + 3];
+            printf("%-16s R%d, R%d, R%d (typed)\n", "MUL_I32", dst, left, right);
+            return offset + 4;
+        }
+
+        case OP_LOAD_I32_CONST: {
+            uint8_t reg = chunk->code[offset + 1];
+            uint16_t constant = (uint16_t)((chunk->code[offset + 2] << 8) | chunk->code[offset + 3]);
+            printf("%-16s R%d, #%d (typed)\n", "LOAD_I32_CONST", reg, constant);
+            return offset + 4;
+        }
+
+        case OP_MOVE_I32: {
+            uint8_t dst = chunk->code[offset + 1];
+            uint8_t src = chunk->code[offset + 2];
+            printf("%-16s R%d, R%d (typed)\n", "MOVE_I32", dst, src);
+            return offset + 3;
         }
 
         case OP_HALT:

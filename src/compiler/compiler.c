@@ -3,7 +3,9 @@
 #include "../../include/jumptable.h"
 #include <string.h>
 
+// Smart jump emission - optimized for short jumps when possible
 static int emitJump(Compiler* compiler) {
+    // Reserve space for a long jump initially (will be optimized in patchJump)
     emitByte(compiler, 0);
     emitByte(compiler, 0);
     return compiler->chunk->count - 2;
@@ -11,8 +13,32 @@ static int emitJump(Compiler* compiler) {
 
 static void patchJump(Compiler* compiler, int offset) {
     int jump = compiler->chunk->count - offset - 2;
+    
+    // For now, just use regular long jumps to avoid complexity
+    // TODO: Implement short jump optimization properly later
     compiler->chunk->code[offset] = (jump >> 8) & 0xFF;
     compiler->chunk->code[offset + 1] = jump & 0xFF;
+}
+
+// Emit conditional jump with smart short/long optimization
+static int emitConditionalJump(Compiler* compiler, uint8_t reg) {
+    // Initially emit a regular conditional jump, will be optimized later
+    emitByte(compiler, OP_JUMP_IF_NOT_R);
+    emitByte(compiler, reg);
+    emitByte(compiler, 0);
+    emitByte(compiler, 0);
+    return compiler->chunk->count - 2;
+}
+
+// Smart loop emission for backward jumps
+static void emitLoop(Compiler* compiler, int loopStart) {
+    int offset = compiler->chunk->count - loopStart + 3; // +3 for the instruction bytes
+    
+    // For now, just use regular loops to avoid issues
+    // TODO: Implement short loop optimization properly later
+    emitByte(compiler, OP_LOOP);
+    emitByte(compiler, (offset >> 8) & 0xFF);
+    emitByte(compiler, offset & 0xFF);
 }
 
 static void enterScope(Compiler* compiler) { compiler->scopeDepth++; }
@@ -420,6 +446,8 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
                     emitByte(compiler, OP_ADD_F64_R);
                 } else if (opType == VAL_U32) {
                     emitByte(compiler, OP_ADD_U32_R);
+                } else if (opType == VAL_U64) {
+                    emitByte(compiler, OP_ADD_U64_R);
                 } else {
                     emitByte(compiler, OP_ADD_I32_R);
                 }
@@ -430,6 +458,8 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
                     emitByte(compiler, OP_SUB_F64_R);
                 } else if (opType == VAL_U32) {
                     emitByte(compiler, OP_SUB_U32_R);
+                } else if (opType == VAL_U64) {
+                    emitByte(compiler, OP_SUB_U64_R);
                 } else {
                     emitByte(compiler, OP_SUB_I32_R);
                 }
@@ -440,6 +470,8 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
                     emitByte(compiler, OP_MUL_F64_R);
                 } else if (opType == VAL_U32) {
                     emitByte(compiler, OP_MUL_U32_R);
+                } else if (opType == VAL_U64) {
+                    emitByte(compiler, OP_MUL_U64_R);
                 } else {
                     emitByte(compiler, OP_MUL_I32_R);
                 }
@@ -450,6 +482,8 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
                     emitByte(compiler, OP_DIV_F64_R);
                 } else if (opType == VAL_U32) {
                     emitByte(compiler, OP_DIV_U32_R);
+                } else if (opType == VAL_U64) {
+                    emitByte(compiler, OP_DIV_U64_R);
                 } else {
                     emitByte(compiler, OP_DIV_I32_R);
                 }
@@ -458,6 +492,8 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
                     emitByte(compiler, OP_MOD_I64_R);
                 } else if (opType == VAL_U32) {
                     emitByte(compiler, OP_MOD_U32_R);
+                } else if (opType == VAL_U64) {
+                    emitByte(compiler, OP_MOD_U64_R);
                 } else {
                     emitByte(compiler, OP_MOD_I32_R);
                 }
@@ -472,6 +508,8 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
                     emitByte(compiler, OP_LT_F64_R);
                 } else if (opType == VAL_U32) {
                     emitByte(compiler, OP_LT_U32_R);
+                } else if (opType == VAL_U64) {
+                    emitByte(compiler, OP_LT_U64_R);
                 } else {
                     emitByte(compiler, OP_LT_I32_R);
                 }
@@ -482,6 +520,8 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
                     emitByte(compiler, OP_GT_F64_R);
                 } else if (opType == VAL_U32) {
                     emitByte(compiler, OP_GT_U32_R);
+                } else if (opType == VAL_U64) {
+                    emitByte(compiler, OP_GT_U64_R);
                 } else {
                     emitByte(compiler, OP_GT_I32_R);
                 }
@@ -492,6 +532,8 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
                     emitByte(compiler, OP_LE_F64_R);
                 } else if (opType == VAL_U32) {
                     emitByte(compiler, OP_LE_U32_R);
+                } else if (opType == VAL_U64) {
+                    emitByte(compiler, OP_LE_U64_R);
                 } else {
                     emitByte(compiler, OP_LE_I32_R);
                 }
@@ -502,6 +544,8 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
                     emitByte(compiler, OP_GE_F64_R);
                 } else if (opType == VAL_U32) {
                     emitByte(compiler, OP_GE_U32_R);
+                } else if (opType == VAL_U64) {
+                    emitByte(compiler, OP_GE_U64_R);
                 } else {
                     emitByte(compiler, OP_GE_I32_R);
                 }
@@ -536,19 +580,7 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
 
 
         case NODE_VAR_DECL: {
-            int initReg = compileExpressionToRegister(node->varDecl.initializer, compiler);
-            if (initReg < 0) return -1;
-            
-            if (compiler->localCount >= REGISTER_COUNT) {
-                return -1;
-            }
-            int localIndex = compiler->localCount++;
-            compiler->locals[localIndex].name = node->varDecl.name;
-            compiler->locals[localIndex].isActive = true;
-            compiler->locals[localIndex].depth = compiler->scopeDepth;
-            compiler->locals[localIndex].isMutable = node->varDecl.isMutable;
-            
-            // Determine variable type from type annotation or initializer
+            // Determine variable type from type annotation FIRST (before compiling expression)
             ValueType declaredType;
             bool hasTypeAnnotation = node->varDecl.typeAnnotation && node->varDecl.typeAnnotation->typeAnnotation.name;
             
@@ -570,13 +602,13 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
                     declaredType = VAL_I32; // default
                 }
                 
-                // Rust-like type coercion: if we have a type annotation and the initializer 
-                // is a literal without explicit suffix, coerce the literal to the declared type
+                // CRITICAL FIX: Coerce literal types BEFORE compiling the expression
+                // This ensures the literal is compiled with the correct type
                 if (node->varDecl.initializer && node->varDecl.initializer->type == NODE_LITERAL) {
                     ASTNode* literal = node->varDecl.initializer;
                     ValueType literalType = literal->literal.value.type;
                     
-                    // Check if this is a plain integer literal (i32 or i64) that can be coerced
+                    // Check if this is a plain integer literal that can be coerced
                     if ((literalType == VAL_I32 || literalType == VAL_I64) && 
                         (declaredType == VAL_U32 || declaredType == VAL_U64 || declaredType == VAL_I32 || declaredType == VAL_I64)) {
                         
@@ -607,6 +639,19 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
                 // Infer type from initializer using enhanced type inference
                 declaredType = getNodeValueTypeWithCompiler(node->varDecl.initializer, compiler);
             }
+            
+            // NOW compile the expression with the correctly typed literal
+            int initReg = compileExpressionToRegister(node->varDecl.initializer, compiler);
+            if (initReg < 0) return -1;
+            
+            if (compiler->localCount >= REGISTER_COUNT) {
+                return -1;
+            }
+            int localIndex = compiler->localCount++;
+            compiler->locals[localIndex].name = node->varDecl.name;
+            compiler->locals[localIndex].isActive = true;
+            compiler->locals[localIndex].depth = compiler->scopeDepth;
+            compiler->locals[localIndex].isMutable = node->varDecl.isMutable;
             compiler->locals[localIndex].type = declaredType;
             
             // Handle type conversion if needed

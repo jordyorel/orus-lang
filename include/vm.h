@@ -376,6 +376,45 @@ typedef enum {
     OP_PRINT_R,        // reg
     OP_PRINT_NO_NL_R,  // reg
 
+    // Short jump optimizations (1-byte offset instead of 2)
+    OP_JUMP_SHORT,         // 1-byte forward jump (0-255)
+    OP_JUMP_BACK_SHORT,    // 1-byte backward jump (0-255)
+    OP_JUMP_IF_NOT_SHORT,  // Conditional short jump
+    OP_LOOP_SHORT,         // Short loop (backward jump)
+
+    // Typed register operations for performance (bypass Value boxing)
+    OP_ADD_I32_TYPED,      // dst_reg, left_reg, right_reg
+    OP_SUB_I32_TYPED,
+    OP_MUL_I32_TYPED,
+    OP_DIV_I32_TYPED,
+    OP_MOD_I32_TYPED,
+    
+    OP_ADD_I64_TYPED,
+    OP_SUB_I64_TYPED,
+    OP_MUL_I64_TYPED,
+    OP_DIV_I64_TYPED,
+    
+    OP_ADD_F64_TYPED,
+    OP_SUB_F64_TYPED,
+    OP_MUL_F64_TYPED,
+    OP_DIV_F64_TYPED,
+    
+    // Typed comparisons
+    OP_LT_I32_TYPED,
+    OP_LE_I32_TYPED,
+    OP_GT_I32_TYPED,
+    OP_GE_I32_TYPED,
+    
+    // Typed loads
+    OP_LOAD_I32_CONST,     // reg, value
+    OP_LOAD_I64_CONST,     // reg, value
+    OP_LOAD_F64_CONST,     // reg, value
+    
+    // Typed moves
+    OP_MOVE_I32,           // dst_reg, src_reg
+    OP_MOVE_I64,           // dst_reg, src_reg
+    OP_MOVE_F64,           // dst_reg, src_reg
+
     // Other
     OP_IMPORT_R,
     OP_GC_PAUSE,
@@ -416,10 +455,42 @@ typedef struct {
     bool hadError;
 } Compiler;
 
+// Typed registers for optimization (unboxed values)
+typedef struct {
+    // Numeric registers (unboxed for performance)
+    int32_t i32_regs[32];
+    int64_t i64_regs[32];
+    uint32_t u32_regs[32];
+    uint64_t u64_regs[32];
+    double f64_regs[32];
+    bool bool_regs[32];
+
+    // Heap object registers (boxed)
+    Value heap_regs[32];
+
+    // Register type tracking (for debugging/safety)
+    uint8_t reg_types[256];  // Track which register bank each logical register maps to
+} TypedRegisters;
+
+// Register type enum
+typedef enum {
+    REG_TYPE_NONE = 0,
+    REG_TYPE_I32,
+    REG_TYPE_I64,
+    REG_TYPE_U32,
+    REG_TYPE_U64,
+    REG_TYPE_F64,
+    REG_TYPE_BOOL,
+    REG_TYPE_HEAP
+} RegisterType;
+
 // VM state
 typedef struct {
-    // Registers
+    // Registers (traditional boxed)
     Value registers[REGISTER_COUNT];
+    
+    // Typed registers for performance optimization
+    TypedRegisters typed_regs;
 
     // Call frames
     CallFrame frames[FRAMES_MAX];

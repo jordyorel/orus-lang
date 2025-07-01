@@ -35,7 +35,9 @@
       "Bash(./tests/benchmarks/control_flow_benchmark.js)",
       "Bash(./tests/benchmarks/control_flow_benchmark.lua)",
       "Bash(./run_control_flow_benchmark.sh:*)",
-      "Bash(./run_all_benchmarks.sh)"
+      "Bash(./run_all_benchmarks.sh)",
+      "Bash(pkill:*)",
+      "Bash(true)"
     ],
     "deny": []
   }

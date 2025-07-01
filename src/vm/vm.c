@@ -142,6 +142,15 @@ void initVM(void) {
     for (int i = 0; i < REGISTER_COUNT; i++) {
         vm.registers[i] = NIL_VAL;
     }
+    
+    // Initialize typed registers for performance optimizations
+    memset(&vm.typed_regs, 0, sizeof(TypedRegisters));
+    for (int i = 0; i < 32; i++) {
+        vm.typed_regs.heap_regs[i] = NIL_VAL;
+    }
+    for (int i = 0; i < 256; i++) {
+        vm.typed_regs.reg_types[i] = REG_TYPE_NONE;
+    }
 
     // Initialize globals
     for (int i = 0; i < UINT8_COUNT; i++) {
@@ -304,6 +313,43 @@ static InterpretResult run(void) {
         dispatchTable[OP_PRINT_NO_NL_R] = &&LABEL_OP_PRINT_NO_NL_R;
         dispatchTable[OP_RETURN_R] = &&LABEL_OP_RETURN_R;
         dispatchTable[OP_RETURN_VOID] = &&LABEL_OP_RETURN_VOID;
+        
+        // Short jump optimizations
+        dispatchTable[OP_JUMP_SHORT] = &&LABEL_OP_JUMP_SHORT;
+        dispatchTable[OP_JUMP_BACK_SHORT] = &&LABEL_OP_JUMP_BACK_SHORT;
+        dispatchTable[OP_JUMP_IF_NOT_SHORT] = &&LABEL_OP_JUMP_IF_NOT_SHORT;
+        dispatchTable[OP_LOOP_SHORT] = &&LABEL_OP_LOOP_SHORT;
+        
+        // Typed operations for performance
+        dispatchTable[OP_ADD_I32_TYPED] = &&LABEL_OP_ADD_I32_TYPED;
+        dispatchTable[OP_SUB_I32_TYPED] = &&LABEL_OP_SUB_I32_TYPED;
+        dispatchTable[OP_MUL_I32_TYPED] = &&LABEL_OP_MUL_I32_TYPED;
+        dispatchTable[OP_DIV_I32_TYPED] = &&LABEL_OP_DIV_I32_TYPED;
+        dispatchTable[OP_MOD_I32_TYPED] = &&LABEL_OP_MOD_I32_TYPED;
+        
+        dispatchTable[OP_ADD_I64_TYPED] = &&LABEL_OP_ADD_I64_TYPED;
+        dispatchTable[OP_SUB_I64_TYPED] = &&LABEL_OP_SUB_I64_TYPED;
+        dispatchTable[OP_MUL_I64_TYPED] = &&LABEL_OP_MUL_I64_TYPED;
+        dispatchTable[OP_DIV_I64_TYPED] = &&LABEL_OP_DIV_I64_TYPED;
+        
+        dispatchTable[OP_ADD_F64_TYPED] = &&LABEL_OP_ADD_F64_TYPED;
+        dispatchTable[OP_SUB_F64_TYPED] = &&LABEL_OP_SUB_F64_TYPED;
+        dispatchTable[OP_MUL_F64_TYPED] = &&LABEL_OP_MUL_F64_TYPED;
+        dispatchTable[OP_DIV_F64_TYPED] = &&LABEL_OP_DIV_F64_TYPED;
+        
+        dispatchTable[OP_LT_I32_TYPED] = &&LABEL_OP_LT_I32_TYPED;
+        dispatchTable[OP_LE_I32_TYPED] = &&LABEL_OP_LE_I32_TYPED;
+        dispatchTable[OP_GT_I32_TYPED] = &&LABEL_OP_GT_I32_TYPED;
+        dispatchTable[OP_GE_I32_TYPED] = &&LABEL_OP_GE_I32_TYPED;
+        
+        dispatchTable[OP_LOAD_I32_CONST] = &&LABEL_OP_LOAD_I32_CONST;
+        dispatchTable[OP_LOAD_I64_CONST] = &&LABEL_OP_LOAD_I64_CONST;
+        dispatchTable[OP_LOAD_F64_CONST] = &&LABEL_OP_LOAD_F64_CONST;
+        
+        dispatchTable[OP_MOVE_I32] = &&LABEL_OP_MOVE_I32;
+        dispatchTable[OP_MOVE_I64] = &&LABEL_OP_MOVE_I64;
+        dispatchTable[OP_MOVE_F64] = &&LABEL_OP_MOVE_F64;
+        
         dispatchTable[OP_HALT] = &&LABEL_OP_HALT;
     }
 
@@ -1360,6 +1406,306 @@ LABEL_OP_RETURN_VOID: {
         }
         DISPATCH();
     }
+
+// Short jump optimizations for performance
+LABEL_OP_JUMP_SHORT: {
+    uint8_t offset = READ_BYTE();
+    vm.ip += offset;
+    DISPATCH();
+}
+
+LABEL_OP_JUMP_BACK_SHORT: {
+    uint8_t offset = READ_BYTE();
+    vm.ip -= offset;
+    DISPATCH();
+}
+
+LABEL_OP_JUMP_IF_NOT_SHORT: {
+    uint8_t reg = READ_BYTE();
+    uint8_t offset = READ_BYTE();
+    
+    if (!IS_BOOL(vm.registers[reg])) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Condition must be boolean");
+        RETURN(INTERPRET_RUNTIME_ERROR);
+    }
+    
+    if (!AS_BOOL(vm.registers[reg])) {
+        vm.ip += offset;
+    }
+    DISPATCH();
+}
+
+LABEL_OP_LOOP_SHORT: {
+    uint8_t offset = READ_BYTE();
+    vm.ip -= offset;
+    DISPATCH();
+}
+
+// Typed arithmetic operations for maximum performance (bypass Value boxing)
+LABEL_OP_ADD_I32_TYPED: {
+    uint8_t dst = READ_BYTE();
+    uint8_t left = READ_BYTE();
+    uint8_t right = READ_BYTE();
+    
+    vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[left] + vm.typed_regs.i32_regs[right];
+    vm.typed_regs.reg_types[dst] = REG_TYPE_I32;
+    
+    DISPATCH();
+}
+
+LABEL_OP_SUB_I32_TYPED: {
+    uint8_t dst = READ_BYTE();
+    uint8_t left = READ_BYTE();
+    uint8_t right = READ_BYTE();
+    
+    vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[left] - vm.typed_regs.i32_regs[right];
+    vm.typed_regs.reg_types[dst] = REG_TYPE_I32;
+    
+    DISPATCH();
+}
+
+LABEL_OP_MUL_I32_TYPED: {
+    uint8_t dst = READ_BYTE();
+    uint8_t left = READ_BYTE();
+    uint8_t right = READ_BYTE();
+    
+    vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[left] * vm.typed_regs.i32_regs[right];
+    vm.typed_regs.reg_types[dst] = REG_TYPE_I32;
+    
+    DISPATCH();
+}
+
+LABEL_OP_DIV_I32_TYPED: {
+    uint8_t dst = READ_BYTE();
+    uint8_t left = READ_BYTE();
+    uint8_t right = READ_BYTE();
+    
+    if (vm.typed_regs.i32_regs[right] == 0) {
+        runtimeError(ERROR_RUNTIME, (SrcLocation){NULL, 0, 0}, "Division by zero");
+        RETURN(INTERPRET_RUNTIME_ERROR);
+    }
+    
+    vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[left] / vm.typed_regs.i32_regs[right];
+    vm.typed_regs.reg_types[dst] = REG_TYPE_I32;
+    
+    DISPATCH();
+}
+
+LABEL_OP_MOD_I32_TYPED: {
+    uint8_t dst = READ_BYTE();
+    uint8_t left = READ_BYTE();
+    uint8_t right = READ_BYTE();
+    
+    if (vm.typed_regs.i32_regs[right] == 0) {
+        runtimeError(ERROR_RUNTIME, (SrcLocation){NULL, 0, 0}, "Modulo by zero");
+        RETURN(INTERPRET_RUNTIME_ERROR);
+    }
+    
+    vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[left] % vm.typed_regs.i32_regs[right];
+    vm.typed_regs.reg_types[dst] = REG_TYPE_I32;
+    
+    DISPATCH();
+}
+
+LABEL_OP_ADD_I64_TYPED: {
+    uint8_t dst = READ_BYTE();
+    uint8_t left = READ_BYTE();
+    uint8_t right = READ_BYTE();
+    
+    vm.typed_regs.i64_regs[dst] = vm.typed_regs.i64_regs[left] + vm.typed_regs.i64_regs[right];
+    vm.typed_regs.reg_types[dst] = REG_TYPE_I64;
+    
+    DISPATCH();
+}
+
+LABEL_OP_SUB_I64_TYPED: {
+    uint8_t dst = READ_BYTE();
+    uint8_t left = READ_BYTE();
+    uint8_t right = READ_BYTE();
+    
+    vm.typed_regs.i64_regs[dst] = vm.typed_regs.i64_regs[left] - vm.typed_regs.i64_regs[right];
+    vm.typed_regs.reg_types[dst] = REG_TYPE_I64;
+    
+    DISPATCH();
+}
+
+LABEL_OP_MUL_I64_TYPED: {
+    uint8_t dst = READ_BYTE();
+    uint8_t left = READ_BYTE();
+    uint8_t right = READ_BYTE();
+    
+    vm.typed_regs.i64_regs[dst] = vm.typed_regs.i64_regs[left] * vm.typed_regs.i64_regs[right];
+    vm.typed_regs.reg_types[dst] = REG_TYPE_I64;
+    
+    DISPATCH();
+}
+
+LABEL_OP_DIV_I64_TYPED: {
+    uint8_t dst = READ_BYTE();
+    uint8_t left = READ_BYTE();
+    uint8_t right = READ_BYTE();
+    
+    if (vm.typed_regs.i64_regs[right] == 0) {
+        runtimeError(ERROR_RUNTIME, (SrcLocation){NULL, 0, 0}, "Division by zero");
+        RETURN(INTERPRET_RUNTIME_ERROR);
+    }
+    
+    vm.typed_regs.i64_regs[dst] = vm.typed_regs.i64_regs[left] / vm.typed_regs.i64_regs[right];
+    vm.typed_regs.reg_types[dst] = REG_TYPE_I64;
+    
+    DISPATCH();
+}
+
+LABEL_OP_ADD_F64_TYPED: {
+    uint8_t dst = READ_BYTE();
+    uint8_t left = READ_BYTE();
+    uint8_t right = READ_BYTE();
+    
+    vm.typed_regs.f64_regs[dst] = vm.typed_regs.f64_regs[left] + vm.typed_regs.f64_regs[right];
+    vm.typed_regs.reg_types[dst] = REG_TYPE_F64;
+    
+    DISPATCH();
+}
+
+LABEL_OP_SUB_F64_TYPED: {
+    uint8_t dst = READ_BYTE();
+    uint8_t left = READ_BYTE();
+    uint8_t right = READ_BYTE();
+    
+    vm.typed_regs.f64_regs[dst] = vm.typed_regs.f64_regs[left] - vm.typed_regs.f64_regs[right];
+    vm.typed_regs.reg_types[dst] = REG_TYPE_F64;
+    
+    DISPATCH();
+}
+
+LABEL_OP_MUL_F64_TYPED: {
+    uint8_t dst = READ_BYTE();
+    uint8_t left = READ_BYTE();
+    uint8_t right = READ_BYTE();
+    
+    vm.typed_regs.f64_regs[dst] = vm.typed_regs.f64_regs[left] * vm.typed_regs.f64_regs[right];
+    vm.typed_regs.reg_types[dst] = REG_TYPE_F64;
+    
+    DISPATCH();
+}
+
+LABEL_OP_DIV_F64_TYPED: {
+    uint8_t dst = READ_BYTE();
+    uint8_t left = READ_BYTE();
+    uint8_t right = READ_BYTE();
+    
+    vm.typed_regs.f64_regs[dst] = vm.typed_regs.f64_regs[left] / vm.typed_regs.f64_regs[right];
+    vm.typed_regs.reg_types[dst] = REG_TYPE_F64;
+    
+    DISPATCH();
+}
+
+LABEL_OP_LT_I32_TYPED: {
+    uint8_t dst = READ_BYTE();
+    uint8_t left = READ_BYTE();
+    uint8_t right = READ_BYTE();
+    
+    vm.typed_regs.bool_regs[dst] = vm.typed_regs.i32_regs[left] < vm.typed_regs.i32_regs[right];
+    vm.typed_regs.reg_types[dst] = REG_TYPE_BOOL;
+    
+    DISPATCH();
+}
+
+LABEL_OP_LE_I32_TYPED: {
+    uint8_t dst = READ_BYTE();
+    uint8_t left = READ_BYTE();
+    uint8_t right = READ_BYTE();
+    
+    vm.typed_regs.bool_regs[dst] = vm.typed_regs.i32_regs[left] <= vm.typed_regs.i32_regs[right];
+    vm.typed_regs.reg_types[dst] = REG_TYPE_BOOL;
+    
+    DISPATCH();
+}
+
+LABEL_OP_GT_I32_TYPED: {
+    uint8_t dst = READ_BYTE();
+    uint8_t left = READ_BYTE();
+    uint8_t right = READ_BYTE();
+    
+    vm.typed_regs.bool_regs[dst] = vm.typed_regs.i32_regs[left] > vm.typed_regs.i32_regs[right];
+    vm.typed_regs.reg_types[dst] = REG_TYPE_BOOL;
+    
+    DISPATCH();
+}
+
+LABEL_OP_GE_I32_TYPED: {
+    uint8_t dst = READ_BYTE();
+    uint8_t left = READ_BYTE();
+    uint8_t right = READ_BYTE();
+    
+    vm.typed_regs.bool_regs[dst] = vm.typed_regs.i32_regs[left] >= vm.typed_regs.i32_regs[right];
+    vm.typed_regs.reg_types[dst] = REG_TYPE_BOOL;
+    
+    DISPATCH();
+}
+
+LABEL_OP_LOAD_I32_CONST: {
+    uint8_t reg = READ_BYTE();
+    uint16_t constantIndex = READ_SHORT();
+    int32_t value = READ_CONSTANT(constantIndex).as.i32;
+    
+    vm.typed_regs.i32_regs[reg] = value;
+    vm.typed_regs.reg_types[reg] = REG_TYPE_I32;
+    
+    DISPATCH();
+}
+
+LABEL_OP_LOAD_I64_CONST: {
+    uint8_t reg = READ_BYTE();
+    uint16_t constantIndex = READ_SHORT();
+    int64_t value = READ_CONSTANT(constantIndex).as.i64;
+    
+    vm.typed_regs.i64_regs[reg] = value;
+    vm.typed_regs.reg_types[reg] = REG_TYPE_I64;
+    
+    DISPATCH();
+}
+
+LABEL_OP_LOAD_F64_CONST: {
+    uint8_t reg = READ_BYTE();
+    uint16_t constantIndex = READ_SHORT();
+    double value = READ_CONSTANT(constantIndex).as.f64;
+    
+    vm.typed_regs.f64_regs[reg] = value;
+    vm.typed_regs.reg_types[reg] = REG_TYPE_F64;
+    
+    DISPATCH();
+}
+
+LABEL_OP_MOVE_I32: {
+    uint8_t dst = READ_BYTE();
+    uint8_t src = READ_BYTE();
+    
+    vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[src];
+    vm.typed_regs.reg_types[dst] = REG_TYPE_I32;
+    
+    DISPATCH();
+}
+
+LABEL_OP_MOVE_I64: {
+    uint8_t dst = READ_BYTE();
+    uint8_t src = READ_BYTE();
+    
+    vm.typed_regs.i64_regs[dst] = vm.typed_regs.i64_regs[src];
+    vm.typed_regs.reg_types[dst] = REG_TYPE_I64;
+    
+    DISPATCH();
+}
+
+LABEL_OP_MOVE_F64: {
+    uint8_t dst = READ_BYTE();
+    uint8_t src = READ_BYTE();
+    
+    vm.typed_regs.f64_regs[dst] = vm.typed_regs.f64_regs[src];
+    vm.typed_regs.reg_types[dst] = REG_TYPE_F64;
+    
+    DISPATCH();
+}
 
 LABEL_OP_HALT:
     vm.lastExecutionTime = get_time_vm() - start_time;
@@ -2713,6 +3059,307 @@ LABEL_UNKNOWN:
                     vm.lastExecutionTime = get_time_vm() - start_time;
                     RETURN(INTERPRET_OK);
                 }
+                break;
+            }
+
+            // Short jump optimizations for performance  
+            case OP_JUMP_SHORT: {
+                uint8_t offset = READ_BYTE();
+                vm.ip += offset;
+                break;
+            }
+
+            case OP_JUMP_BACK_SHORT: {
+                uint8_t offset = READ_BYTE();
+                vm.ip -= offset;
+                break;
+            }
+
+            case OP_JUMP_IF_NOT_SHORT: {
+                uint8_t reg = READ_BYTE();
+                uint8_t offset = READ_BYTE();
+                
+                if (!IS_BOOL(vm.registers[reg])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Condition must be boolean");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                
+                if (!AS_BOOL(vm.registers[reg])) {
+                    vm.ip += offset;
+                }
+                break;
+            }
+
+            case OP_LOOP_SHORT: {
+                uint8_t offset = READ_BYTE();
+                vm.ip -= offset;
+                break;
+            }
+
+            // Typed arithmetic operations for maximum performance (bypass Value boxing)
+            case OP_ADD_I32_TYPED: {
+                uint8_t dst = READ_BYTE();
+                uint8_t left = READ_BYTE();
+                uint8_t right = READ_BYTE();
+                
+                vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[left] + vm.typed_regs.i32_regs[right];
+                vm.typed_regs.reg_types[dst] = REG_TYPE_I32;
+                
+                break;
+            }
+
+            case OP_SUB_I32_TYPED: {
+                uint8_t dst = READ_BYTE();
+                uint8_t left = READ_BYTE();
+                uint8_t right = READ_BYTE();
+                
+                vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[left] - vm.typed_regs.i32_regs[right];
+                vm.typed_regs.reg_types[dst] = REG_TYPE_I32;
+                
+                break;
+            }
+
+            case OP_MUL_I32_TYPED: {
+                uint8_t dst = READ_BYTE();
+                uint8_t left = READ_BYTE();
+                uint8_t right = READ_BYTE();
+                
+                vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[left] * vm.typed_regs.i32_regs[right];
+                vm.typed_regs.reg_types[dst] = REG_TYPE_I32;
+                
+                break;
+            }
+
+            case OP_DIV_I32_TYPED: {
+                uint8_t dst = READ_BYTE();
+                uint8_t left = READ_BYTE();
+                uint8_t right = READ_BYTE();
+                
+                if (vm.typed_regs.i32_regs[right] == 0) {
+                    runtimeError(ERROR_RUNTIME, (SrcLocation){NULL, 0, 0}, "Division by zero");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                
+                vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[left] / vm.typed_regs.i32_regs[right];
+                vm.typed_regs.reg_types[dst] = REG_TYPE_I32;
+                
+                break;
+            }
+
+            case OP_MOD_I32_TYPED: {
+                uint8_t dst = READ_BYTE();
+                uint8_t left = READ_BYTE();
+                uint8_t right = READ_BYTE();
+                
+                if (vm.typed_regs.i32_regs[right] == 0) {
+                    runtimeError(ERROR_RUNTIME, (SrcLocation){NULL, 0, 0}, "Modulo by zero");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                
+                vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[left] % vm.typed_regs.i32_regs[right];
+                vm.typed_regs.reg_types[dst] = REG_TYPE_I32;
+                
+                break;
+            }
+
+            // Additional typed operations (I64, F64, comparisons, loads, moves)
+            case OP_ADD_I64_TYPED: {
+                uint8_t dst = READ_BYTE();
+                uint8_t left = READ_BYTE();
+                uint8_t right = READ_BYTE();
+                
+                vm.typed_regs.i64_regs[dst] = vm.typed_regs.i64_regs[left] + vm.typed_regs.i64_regs[right];
+                vm.typed_regs.reg_types[dst] = REG_TYPE_I64;
+                
+                break;
+            }
+
+            case OP_SUB_I64_TYPED: {
+                uint8_t dst = READ_BYTE();
+                uint8_t left = READ_BYTE();
+                uint8_t right = READ_BYTE();
+                
+                vm.typed_regs.i64_regs[dst] = vm.typed_regs.i64_regs[left] - vm.typed_regs.i64_regs[right];
+                vm.typed_regs.reg_types[dst] = REG_TYPE_I64;
+                
+                break;
+            }
+
+            case OP_MUL_I64_TYPED: {
+                uint8_t dst = READ_BYTE();
+                uint8_t left = READ_BYTE();
+                uint8_t right = READ_BYTE();
+                
+                vm.typed_regs.i64_regs[dst] = vm.typed_regs.i64_regs[left] * vm.typed_regs.i64_regs[right];
+                vm.typed_regs.reg_types[dst] = REG_TYPE_I64;
+                
+                break;
+            }
+
+            case OP_DIV_I64_TYPED: {
+                uint8_t dst = READ_BYTE();
+                uint8_t left = READ_BYTE();
+                uint8_t right = READ_BYTE();
+                
+                if (vm.typed_regs.i64_regs[right] == 0) {
+                    runtimeError(ERROR_RUNTIME, (SrcLocation){NULL, 0, 0}, "Division by zero");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                
+                vm.typed_regs.i64_regs[dst] = vm.typed_regs.i64_regs[left] / vm.typed_regs.i64_regs[right];
+                vm.typed_regs.reg_types[dst] = REG_TYPE_I64;
+                
+                break;
+            }
+
+            case OP_ADD_F64_TYPED: {
+                uint8_t dst = READ_BYTE();
+                uint8_t left = READ_BYTE();
+                uint8_t right = READ_BYTE();
+                
+                vm.typed_regs.f64_regs[dst] = vm.typed_regs.f64_regs[left] + vm.typed_regs.f64_regs[right];
+                vm.typed_regs.reg_types[dst] = REG_TYPE_F64;
+                
+                break;
+            }
+
+            case OP_SUB_F64_TYPED: {
+                uint8_t dst = READ_BYTE();
+                uint8_t left = READ_BYTE();
+                uint8_t right = READ_BYTE();
+                
+                vm.typed_regs.f64_regs[dst] = vm.typed_regs.f64_regs[left] - vm.typed_regs.f64_regs[right];
+                vm.typed_regs.reg_types[dst] = REG_TYPE_F64;
+                
+                break;
+            }
+
+            case OP_MUL_F64_TYPED: {
+                uint8_t dst = READ_BYTE();
+                uint8_t left = READ_BYTE();
+                uint8_t right = READ_BYTE();
+                
+                vm.typed_regs.f64_regs[dst] = vm.typed_regs.f64_regs[left] * vm.typed_regs.f64_regs[right];
+                vm.typed_regs.reg_types[dst] = REG_TYPE_F64;
+                
+                break;
+            }
+
+            case OP_DIV_F64_TYPED: {
+                uint8_t dst = READ_BYTE();
+                uint8_t left = READ_BYTE();
+                uint8_t right = READ_BYTE();
+                
+                vm.typed_regs.f64_regs[dst] = vm.typed_regs.f64_regs[left] / vm.typed_regs.f64_regs[right];
+                vm.typed_regs.reg_types[dst] = REG_TYPE_F64;
+                
+                break;
+            }
+
+            case OP_LT_I32_TYPED: {
+                uint8_t dst = READ_BYTE();
+                uint8_t left = READ_BYTE();
+                uint8_t right = READ_BYTE();
+                
+                vm.typed_regs.bool_regs[dst] = vm.typed_regs.i32_regs[left] < vm.typed_regs.i32_regs[right];
+                vm.typed_regs.reg_types[dst] = REG_TYPE_BOOL;
+                
+                break;
+            }
+
+            case OP_LE_I32_TYPED: {
+                uint8_t dst = READ_BYTE();
+                uint8_t left = READ_BYTE();
+                uint8_t right = READ_BYTE();
+                
+                vm.typed_regs.bool_regs[dst] = vm.typed_regs.i32_regs[left] <= vm.typed_regs.i32_regs[right];
+                vm.typed_regs.reg_types[dst] = REG_TYPE_BOOL;
+                
+                break;
+            }
+
+            case OP_GT_I32_TYPED: {
+                uint8_t dst = READ_BYTE();
+                uint8_t left = READ_BYTE();
+                uint8_t right = READ_BYTE();
+                
+                vm.typed_regs.bool_regs[dst] = vm.typed_regs.i32_regs[left] > vm.typed_regs.i32_regs[right];
+                vm.typed_regs.reg_types[dst] = REG_TYPE_BOOL;
+                
+                break;
+            }
+
+            case OP_GE_I32_TYPED: {
+                uint8_t dst = READ_BYTE();
+                uint8_t left = READ_BYTE();
+                uint8_t right = READ_BYTE();
+                
+                vm.typed_regs.bool_regs[dst] = vm.typed_regs.i32_regs[left] >= vm.typed_regs.i32_regs[right];
+                vm.typed_regs.reg_types[dst] = REG_TYPE_BOOL;
+                
+                break;
+            }
+
+            case OP_LOAD_I32_CONST: {
+                uint8_t reg = READ_BYTE();
+                uint16_t constantIndex = READ_SHORT();
+                int32_t value = READ_CONSTANT(constantIndex).as.i32;
+                
+                vm.typed_regs.i32_regs[reg] = value;
+                vm.typed_regs.reg_types[reg] = REG_TYPE_I32;
+                
+                break;
+            }
+
+            case OP_LOAD_I64_CONST: {
+                uint8_t reg = READ_BYTE();
+                uint16_t constantIndex = READ_SHORT();
+                int64_t value = READ_CONSTANT(constantIndex).as.i64;
+                
+                vm.typed_regs.i64_regs[reg] = value;
+                vm.typed_regs.reg_types[reg] = REG_TYPE_I64;
+                
+                break;
+            }
+
+            case OP_LOAD_F64_CONST: {
+                uint8_t reg = READ_BYTE();
+                uint16_t constantIndex = READ_SHORT();
+                double value = READ_CONSTANT(constantIndex).as.f64;
+                
+                vm.typed_regs.f64_regs[reg] = value;
+                vm.typed_regs.reg_types[reg] = REG_TYPE_F64;
+                
+                break;
+            }
+
+            case OP_MOVE_I32: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src = READ_BYTE();
+                
+                vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[src];
+                vm.typed_regs.reg_types[dst] = REG_TYPE_I32;
+                
+                break;
+            }
+
+            case OP_MOVE_I64: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src = READ_BYTE();
+                
+                vm.typed_regs.i64_regs[dst] = vm.typed_regs.i64_regs[src];
+                vm.typed_regs.reg_types[dst] = REG_TYPE_I64;
+                
+                break;
+            }
+
+            case OP_MOVE_F64: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src = READ_BYTE();
+                
+                vm.typed_regs.f64_regs[dst] = vm.typed_regs.f64_regs[src];
+                vm.typed_regs.reg_types[dst] = REG_TYPE_F64;
+                
                 break;
             }
 
