@@ -97,6 +97,7 @@ typedef enum {
     TOKEN_NEWLINE,
 
     TOKEN_COLON,  // Add this for type annotations
+    TOKEN_APOSTROPHE,
     TOKEN_INDENT,
     TOKEN_DEDENT,
 } TokenType;

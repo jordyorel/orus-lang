@@ -205,6 +205,29 @@ ASTNode* parseSource(const char* source) {
 
 static ASTNode* parseStatement(void) {
     Token t = peekToken();
+    if (t.type == TOKEN_APOSTROPHE) {
+        nextToken();
+        Token labelTok = nextToken();
+        if (labelTok.type != TOKEN_IDENTIFIER) return NULL;
+        if (nextToken().type != TOKEN_COLON) return NULL;
+        int len = labelTok.length;
+        char* label = arena_alloc(&parserArena, len + 1);
+        strncpy(label, labelTok.start, len);
+        label[len] = '\0';
+        Token after = peekToken();
+        ASTNode* stmt = NULL;
+        if (after.type == TOKEN_WHILE) {
+            stmt = parseWhileStatement();
+            if (stmt) stmt->whileStmt.label = label;
+        } else if (after.type == TOKEN_FOR) {
+            stmt = parseForStatement();
+            if (stmt->type == NODE_FOR_RANGE) stmt->forRange.label = label;
+            else if (stmt->type == NODE_FOR_ITER) stmt->forIter.label = label;
+        } else {
+            return NULL;
+        }
+        return stmt;
+    }
     if (t.type == TOKEN_LET) {
         return parseVariableDeclaration();
     } else if (t.type == TOKEN_IF) {
@@ -397,6 +420,7 @@ static ASTNode* parseWhileStatement(void) {
     node->type = NODE_WHILE;
     node->whileStmt.condition = condition;
     node->whileStmt.body = body;
+    node->whileStmt.label = NULL;
     node->location.line = whileTok.line;
     node->location.column = whileTok.column;
     node->dataType = NULL;
@@ -542,11 +566,13 @@ static ASTNode* parseForStatement(void) {
         node->forRange.step = step;
         node->forRange.inclusive = inclusive;
         node->forRange.body = body;
+        node->forRange.label = NULL;
     } else {
         node->type = NODE_FOR_ITER;
         node->forIter.varName = name;
         node->forIter.iterable = first;
         node->forIter.body = body;
+        node->forIter.label = NULL;
     }
     node->location.line = forTok.line;
     node->location.column = forTok.column;
@@ -565,6 +591,17 @@ static ASTNode* parseBreakStatement(void) {
     node->location.line = breakToken.line;
     node->location.column = breakToken.column;
     node->dataType = NULL;
+    node->breakStmt.label = NULL;
+    if (peekToken().type == TOKEN_APOSTROPHE) {
+        nextToken();
+        Token labelTok = nextToken();
+        if (labelTok.type != TOKEN_IDENTIFIER) return NULL;
+        int len = labelTok.length;
+        char* label = arena_alloc(&parserArena, len + 1);
+        strncpy(label, labelTok.start, len);
+        label[len] = '\0';
+        node->breakStmt.label = label;
+    }
     return node;
 }
 
@@ -579,6 +616,17 @@ static ASTNode* parseContinueStatement(void) {
     node->location.line = continueToken.line;
     node->location.column = continueToken.column;
     node->dataType = NULL;
+    node->continueStmt.label = NULL;
+    if (peekToken().type == TOKEN_APOSTROPHE) {
+        nextToken();
+        Token labelTok = nextToken();
+        if (labelTok.type != TOKEN_IDENTIFIER) return NULL;
+        int len = labelTok.length;
+        char* label = arena_alloc(&parserArena, len + 1);
+        strncpy(label, labelTok.start, len);
+        label[len] = '\0';
+        node->continueStmt.label = label;
+    }
     return node;
 }
 

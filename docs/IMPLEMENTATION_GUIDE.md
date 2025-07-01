@@ -619,6 +619,7 @@ typedef struct {
     int scope_depth;
     Vec* break_jumps;      // Patches for break statements
     Vec* continue_targets; // Jump targets for continue
+    const char* label;     // Optional loop label
 } LoopContext;
 
 static void compileWhile(Compiler* compiler, ASTNode* node) {
@@ -665,6 +666,21 @@ static void compileWhile(Compiler* compiler, ASTNode* node) {
     popLoop(compiler);
     vec_free(loop.break_jumps);
     vec_free(loop.continue_targets);
+}
+```
+
+Labeled loops use a helper to resolve break/continue targets:
+
+```c
+static LoopContext* getLoopByLabel(Compiler* c, const char* label) {
+    if (!label) return getCurrentLoop(c);
+    for (int i = c->loopDepth - 1; i >= 0; i--) {
+        LoopContext* loop = &c->loopStack[i];
+        if (loop->label && strcmp(loop->label, label) == 0) {
+            return loop;
+        }
+    }
+    return NULL;
 }
 ```
 

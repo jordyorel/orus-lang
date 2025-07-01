@@ -525,6 +525,8 @@ Token scan_token() {
             return make_token(TOKEN_BIT_XOR);
         case ':':
             return make_token(TOKEN_COLON);
+        case '\'':
+            return make_token(TOKEN_APOSTROPHE);
         case '"':
             return string();
     }
