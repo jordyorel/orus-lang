@@ -29,7 +29,13 @@
       "Bash(./debug_overflow_test)",
       "Bash(time:*)",
       "Bash(ls:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(node:*)",
+      "Bash(lua:*)",
+      "Bash(./tests/benchmarks/control_flow_benchmark.js)",
+      "Bash(./tests/benchmarks/control_flow_benchmark.lua)",
+      "Bash(./run_control_flow_benchmark.sh:*)",
+      "Bash(./run_all_benchmarks.sh)"
     ],
     "deny": []
   }

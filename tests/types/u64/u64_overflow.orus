@@ -1,9 +1,9 @@
-// u64 overflow tests as required by AGENTS.md  
+// u64 overflow tests 
 // Testing error conditions and proper error handling
 // Using new Rust-like type inference
 
-let max_val = 18446744073709551615u64  // 2^64 - 1 (suffix needed for max value)
-let one: u64 = 1
+let max_val = 18446744073709551615  // 2^64 - 1 (suffix needed for max value)
+let one = 1
 
 print(max_val)
 print(one)

@@ -40,7 +40,7 @@ C_TEST_TARGETS = $(C_TEST_SRCS:$(TESTDIR)/c/%.c=$(BUILDDIR)/%)
 # Targets
 ORUS = orus
 
-.PHONY: all clean test test-verbose test-basic test-types test-all c-test benchmark benchmark-orus help format
+.PHONY: all clean test test-verbose test-basic test-types test-all c-test benchmark benchmark-orus benchmark-arithmetic benchmark-control benchmark-control-orus help format
 
 all: $(ORUS)
 
@@ -74,10 +74,6 @@ build/test_lexer.o: $(TESTDIR)/c/test_lexer.c $(INCDIR)/*
 
 build/lexer.o: $(SRCDIR)/compiler/lexer.c $(INCDIR)/*
 	$(CC) $(CFLAGS) $(INCLUDES) -c -o $@ $<
-
-# Add a target to build and run the test_lexer binary
-run_test_lexer: build/test_lexer
-	./build/test_lexer
 
 # Run tests on .orus files
 test: $(ORUS)
@@ -240,67 +236,25 @@ test-verbose: $(ORUS)
 		echo "\033[31m$$failed test(s) failed, $$passed test(s) passed.\033[0m"; \
 	fi
 
-# Run only basic tests (quick smoke test)
-test-basic: $(ORUS)
-	@echo "Running basic tests..."
-	@passed=0; failed=0; \
-	for test_file in $(shell find $(TESTDIR) -path '*/basic/*.orus' | sort); do \
-		printf "Testing: $$test_file ... "; \
-		if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
-			printf "\033[32mPASS\033[0m\n"; \
-			passed=$$((passed + 1)); \
-		else \
-			printf "\033[31mFAIL\033[0m\n"; \
-			failed=$$((failed + 1)); \
-		fi; \
-	done; \
-	echo ""; \
-	if [ $$failed -eq 0 ]; then \
-		echo "\033[32mAll $$passed basic tests passed!\033[0m"; \
-	else \
-		echo "\033[31m$$failed basic test(s) failed, $$passed basic test(s) passed.\033[0m"; \
-	fi
-
-# Run only type tests
-test-types: $(ORUS)
-	@echo "Running type system tests..."
-	@passed=0; failed=0; \
-	for test_file in $(shell find $(TESTDIR)/types -name '*.orus' | sort); do \
-		printf "Testing: $$test_file ... "; \
-		if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
-			printf "\033[32mPASS\033[0m\n"; \
-			passed=$$((passed + 1)); \
-		else \
-			printf "\033[31mFAIL\033[0m\n"; \
-			failed=$$((failed + 1)); \
-		fi; \
-	done; \
-	echo ""; \
-	if [ $$failed -eq 0 ]; then \
-		echo "\033[32mAll $$passed type tests passed!\033[0m"; \
-	else \
-		echo "\033[31m$$failed type test(s) failed, $$passed type test(s) passed.\033[0m"; \
-	fi
-
 # Run comprehensive tests (all tests + C tests)
 test-all: test c-test
 	@echo "\033[36m=== Comprehensive Test Suite Complete ===\033[0m"
 
-# Run cross-language arithmetic benchmarks
+# Run all cross-language benchmarks
 benchmark: $(ORUS)
-	@echo "=========================================="
-	@echo "Cross-Language Arithmetic Benchmark"
-	@echo "=========================================="
-	@echo "Running equivalent arithmetic tests across languages"
-	@echo "Tests: loops, mixed arithmetic, floating point operations"
-	@echo ""
-	@cd tests/benchmarks && ./run_arithmetic_benchmark.sh
+	@cd tests/benchmarks && ./run_all_benchmarks.sh
 
 # Run only Orus arithmetic benchmark (fast)
 benchmark-orus: $(ORUS)
 	@echo "=== Orus Arithmetic Benchmark ==="
 	@printf "Running Orus arithmetic tests: "
 	@time ./$(ORUS) tests/benchmarks/arithmetic_benchmark.orus
+
+# Run only Orus control flow benchmark (fast)
+benchmark-control-orus: $(ORUS)
+	@echo "=== Orus Control Flow Benchmark ==="
+	@printf "Running Orus control flow tests: "
+	@time ./$(ORUS) tests/benchmarks/control_flow_benchmark.orus
 
 # Clean build artifacts
 clean:
@@ -327,8 +281,11 @@ help:
 	@echo "  test-types  - Run only type system tests"
 	@echo "  test-all    - Run comprehensive test suite (all tests + C tests)"
 	@echo "  c-test      - Run C unit tests for VM and critical components"
-	@echo "  benchmark   - Run cross-language arithmetic benchmarks (Orus vs Python/JS/Lua)"
+	@echo "  benchmark   - Run all cross-language benchmarks (Orus vs Python/JS/Lua)"
 	@echo "  benchmark-orus - Run Orus arithmetic benchmark only (fast)"
+	@echo "  benchmark-arithmetic - Run cross-language arithmetic benchmarks only"
+	@echo "  benchmark-control - Run cross-language control flow benchmarks only"
+	@echo "  benchmark-control-orus - Run Orus control flow benchmark only (fast)"
 	@echo "  clean       - Remove build artifacts"
 	@echo "  format      - Format source code"
 	@echo "  help        - Show this help message"
