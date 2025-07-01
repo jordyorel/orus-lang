@@ -1,4 +1,0 @@
-let mut counter = 0
-for i in 0..1000:
-    counter = counter + 1
-print(counter)

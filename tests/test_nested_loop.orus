@@ -1,5 +1,0 @@
-let mut total = 0
-for i in 0..10:
-    for j in 0..10:
-        total = total + 1
-print(total)

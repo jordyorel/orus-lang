@@ -409,20 +409,20 @@ and   or   not
 
 > **Note:** The ternary conditional operator `? :` has lower precedence than logical operators `and` and `or`. Use parentheses to clarify when mixing ternary and logical expressions.
 
-\| Precedence | Operators           | Description            | Associativity        | Description            | Associativity        |
-\|------------|---------------------|------------------------|
-\| 1          | `()`                | Grouping               | left-to-right        |
-\| 2          | `!`, `not`          | Unary                  | right-to-left        |
-\| 3          | `*`, `/`, `%`, `//` | Arithmetic             | left-to-right        |
-\| 4          | `+`, `-`            | Arithmetic             | left-to-right        |
-\| 5          | `<<`, `>>`          | Bitwise shift          | left-to-right        |
-\| 6          | `&`                 | Bitwise AND            | left-to-right        |
-\| 7          | `^`                 | Bitwise XOR            | left-to-right        |
-\| 8          | `|`                 | Bitwise OR             | left-to-right        |
-\| 9          | `<`, `>`, `<=`, `>=`, `==`, `!=` | Comparison | left-to-right |
-\| 10         | `and`               | Logical AND            | left-to-right        |
-\| 11         | `or`                | Logical OR             | left-to-right        |
-\| 12         | `? :`               | Ternary conditional     | right-to-left        |
+| Precedence | Operators                        | Description         | Associativity |               |
+| ---------- | -------------------------------- | ------------------- | ------------- | ------------- |
+| 1          | `()`                             | Grouping            | left-to-right |               |
+| 2          | `!`, `not`                       | Unary               | right-to-left |               |
+| 3          | `*`, `/`, `%`, `//`              | Arithmetic          | left-to-right |               |
+| 4          | `+`, `-`                         | Arithmetic          | left-to-right |               |
+| 5          | `<<`, `>>`                       | Bitwise shift       | left-to-right |               |
+| 6          | `&`                              | Bitwise AND         | left-to-right |               |
+| 7          | `^`                              | Bitwise XOR         | left-to-right |               |
+| 8          | \`                               | \`                  | Bitwise OR    | left-to-right |
+| 9          | `<`, `>`, `<=`, `>=`, `==`, `!=` | Comparison          | left-to-right |               |
+| 10         | `and`                            | Logical AND         | left-to-right |               |
+| 11         | `or`                             | Logical OR          | left-to-right |               |
+| 12         | `? :`                            | Ternary conditional | right-to-left |               |
 
 ### Primitive Types
 
