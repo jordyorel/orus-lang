@@ -1,0 +1,12 @@
+// u32 arithmetic performance benchmark
+// Tests addition, subtraction, multiplication operations
+
+let mut sum: u32 = 0u32
+let mut i: u32 = 0u32
+
+// Benchmark u32 addition performance
+while i < 1000000u32:
+    sum = sum + i
+    i = i + 1u32
+
+print(sum)

@@ -1,0 +1,7 @@
+// Intensive u64 arithmetic benchmark  
+let mut sum: u64 = 0u64
+
+for i in 0..100000:
+    sum = sum + 1u64
+
+print(sum)

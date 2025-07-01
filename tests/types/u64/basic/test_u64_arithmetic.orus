@@ -1,0 +1,4 @@
+let a: u64 = 100
+let b: u64 = 50
+let c = a + b
+print(c)

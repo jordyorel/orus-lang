@@ -1,0 +1,40 @@
+// f64 boundary value tests as required by AGENTS.md
+// Testing boundary conditions: 0, 1, -1, max/min values
+
+// Test zero values
+let zero: f64 = 0.0
+let neg_zero: f64 = -0.0
+print(zero)
+print(neg_zero)
+
+// Test basic boundaries
+let one: f64 = 1.0
+let neg_one: f64 = -1.0
+print(one)
+print(neg_one)
+
+// Test very small positive values
+let tiny: f64 = 1e-100
+let min_normal: f64 = 2.2250738585072014e-308
+print(tiny)
+print(min_normal)
+
+// Test very large values
+let huge: f64 = 1e100
+print(huge)
+
+// Test infinity boundaries (using division to create infinity)
+let inf: f64 = 1.0 / 0.0  // Should become infinity
+let neg_inf: f64 = -1.0 / 0.0  // Should become negative infinity
+print(inf)
+print(neg_inf)
+
+// Test arithmetic with boundary values
+let zero_div_result = zero / one  // Should be 0
+let one_div_zero_result = one / zero  // Should be infinity
+print(zero_div_result)
+print(one_div_zero_result)
+
+// Test operations that might produce NaN
+let nan_result = zero / zero  // Should be NaN
+print(nan_result)

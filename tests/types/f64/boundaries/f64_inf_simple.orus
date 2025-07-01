@@ -1,0 +1,8 @@
+let a: f64 = 1.0
+let b: f64 = 0.0
+let inf_result = a / b
+print(inf_result)
+
+let c: f64 = 0.0
+let nan_result = c / b
+print(nan_result)

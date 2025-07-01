@@ -1,0 +1,15 @@
+// Test simple type inference cases
+
+// Test u64 with small values
+let small_u64: u64 = 100
+print(small_u64)
+
+// Test u32 with small values
+let small_u32: u32 = 200
+print(small_u32)
+
+// Verify these work the same as with suffixes
+let suffix_u64 = 100u64
+let suffix_u32 = 200u32
+print(suffix_u64)
+print(suffix_u32)

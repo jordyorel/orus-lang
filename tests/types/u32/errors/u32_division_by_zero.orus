@@ -1,0 +1,10 @@
+// u32 division by zero error tests as required by AGENTS.md
+// Testing error conditions and proper error handling
+
+let a = 10u32
+let b = 0u32
+
+// This should trigger a runtime error for division by zero
+// VM should handle this gracefully with proper error message
+let result = a / b
+print(result)

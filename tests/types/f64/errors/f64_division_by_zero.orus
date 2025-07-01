@@ -1,0 +1,19 @@
+// f64 division by zero error tests as required by AGENTS.md
+// Testing error conditions and proper error handling
+
+let a: f64 = 5.0
+let b: f64 = 0.0
+
+// This should handle division by zero gracefully
+// The VM should either produce infinity or handle the error
+let result = a / b
+print(result)
+
+// Test with different zero values  
+let neg_zero = 0.0 - 0.0
+let result2 = a / neg_zero
+print(result2)
+
+// Test zero divided by zero (should be NaN)
+let nan_result = b / b
+print(nan_result)

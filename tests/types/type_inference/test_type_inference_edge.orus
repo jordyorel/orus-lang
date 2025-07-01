@@ -1,0 +1,13 @@
+// Test edge cases for type inference
+
+// Test large values that should fit in u64
+let big: u64 = 18446744073709551615
+print(big)
+
+// Test values that should fit in u32
+let medium: u32 = 4294967295  
+print(medium)
+
+// Test f64 (should work as before)
+let pi: f64 = 3.14159
+print(pi)

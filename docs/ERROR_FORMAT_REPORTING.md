@@ -38,7 +38,7 @@ Whenever possible, error messages:
 -- TYPE MISMATCH: This value isn't what we expected ------- main.orus:3:15
 
 3 | let x: i32 = "hello"
-              |        ^^^^^^ this is a `string`, but `i32` was expected
+              |   ^^^^^^ this is a `string`, but `i32` was expected
               |
               = Orus expected an integer here, but found a text value instead.
               = help: You can convert a string to an integer using `int("...")`, if appropriate.
@@ -51,7 +51,7 @@ Whenever possible, error messages:
 -- RUNTIME PANIC: Oh no! You tried to divide by zero ------ main.orus:10:18
 
 10 | let z = 10 / 0
-               |     ^ can't divide by zero — it's undefined!
+               |  ^ can't divide by zero — it's undefined!
                |
                = This computation stopped because dividing by zero is mathematically invalid.
                = help: Add a check before dividing to make sure the number isn't zero.

@@ -1,0 +1,7 @@
+// Intensive u32 arithmetic benchmark
+let mut sum: u32 = 0u32
+
+for i in 0..100000:
+    sum = sum + 1u32
+
+print(sum)

@@ -253,6 +253,11 @@ static InterpretResult run(void) {
         dispatchTable[OP_MUL_U32_R] = &&LABEL_OP_MUL_U32_R;
         dispatchTable[OP_DIV_U32_R] = &&LABEL_OP_DIV_U32_R;
         dispatchTable[OP_MOD_U32_R] = &&LABEL_OP_MOD_U32_R;
+        dispatchTable[OP_ADD_U64_R] = &&LABEL_OP_ADD_U64_R;
+        dispatchTable[OP_SUB_U64_R] = &&LABEL_OP_SUB_U64_R;
+        dispatchTable[OP_MUL_U64_R] = &&LABEL_OP_MUL_U64_R;
+        dispatchTable[OP_DIV_U64_R] = &&LABEL_OP_DIV_U64_R;
+        dispatchTable[OP_MOD_U64_R] = &&LABEL_OP_MOD_U64_R;
         dispatchTable[OP_I32_TO_I64_R] = &&LABEL_OP_I32_TO_I64_R;
         dispatchTable[OP_I32_TO_U32_R] = &&LABEL_OP_I32_TO_U32_R;
         dispatchTable[OP_U32_TO_I32_R] = &&LABEL_OP_U32_TO_I32_R;
@@ -280,6 +285,10 @@ static InterpretResult run(void) {
         dispatchTable[OP_LE_U32_R] = &&LABEL_OP_LE_U32_R;
         dispatchTable[OP_GT_U32_R] = &&LABEL_OP_GT_U32_R;
         dispatchTable[OP_GE_U32_R] = &&LABEL_OP_GE_U32_R;
+        dispatchTable[OP_LT_U64_R] = &&LABEL_OP_LT_U64_R;
+        dispatchTable[OP_LE_U64_R] = &&LABEL_OP_LE_U64_R;
+        dispatchTable[OP_GT_U64_R] = &&LABEL_OP_GT_U64_R;
+        dispatchTable[OP_GE_U64_R] = &&LABEL_OP_GE_U64_R;
         dispatchTable[OP_EQ_R] = &&LABEL_OP_EQ_R;
         dispatchTable[OP_NE_R] = &&LABEL_OP_NE_R;
         dispatchTable[OP_AND_BOOL_R] = &&LABEL_OP_AND_BOOL_R;
@@ -690,6 +699,125 @@ LABEL_OP_MOD_U32_R: {
         DISPATCH();
     }
 
+LABEL_OP_ADD_U64_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t src1 = READ_BYTE();
+        uint8_t src2 = READ_BYTE();
+
+        if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                         "Operands must be u64");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+
+        uint64_t a = AS_U64(vm.registers[src1]);
+        uint64_t b = AS_U64(vm.registers[src2]);
+        
+        // Check for overflow: if a + b < a, then overflow occurred
+        if (UINT64_MAX - a < b) {
+            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                         "u64 addition overflow");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+
+        vm.registers[dst] = U64_VAL(a + b);
+        DISPATCH();
+    }
+
+LABEL_OP_SUB_U64_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t src1 = READ_BYTE();
+        uint8_t src2 = READ_BYTE();
+
+        if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                         "Operands must be u64");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+
+        uint64_t a = AS_U64(vm.registers[src1]);
+        uint64_t b = AS_U64(vm.registers[src2]);
+        
+        // Check for underflow: if a < b, then underflow would occur
+        if (a < b) {
+            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                         "u64 subtraction underflow");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+
+        vm.registers[dst] = U64_VAL(a - b);
+        DISPATCH();
+    }
+
+LABEL_OP_MUL_U64_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t src1 = READ_BYTE();
+        uint8_t src2 = READ_BYTE();
+
+        if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                         "Operands must be u64");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+
+        uint64_t a = AS_U64(vm.registers[src1]);
+        uint64_t b = AS_U64(vm.registers[src2]);
+        
+        // Check for multiplication overflow: if a != 0 && result / a != b
+        if (a != 0 && b > UINT64_MAX / a) {
+            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                         "u64 multiplication overflow");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+
+        vm.registers[dst] = U64_VAL(a * b);
+        DISPATCH();
+    }
+
+LABEL_OP_DIV_U64_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t src1 = READ_BYTE();
+        uint8_t src2 = READ_BYTE();
+
+        if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                         "Operands must be u64");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+
+        uint64_t b = AS_U64(vm.registers[src2]);
+        if (b == 0) {
+            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                         "Division by zero");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+
+        vm.registers[dst] = U64_VAL(AS_U64(vm.registers[src1]) / b);
+        DISPATCH();
+    }
+
+LABEL_OP_MOD_U64_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t src1 = READ_BYTE();
+        uint8_t src2 = READ_BYTE();
+
+        if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                         "Operands must be u64");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+
+        uint64_t b = AS_U64(vm.registers[src2]);
+        if (b == 0) {
+            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                         "Division by zero");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+
+        vm.registers[dst] = U64_VAL(AS_U64(vm.registers[src1]) % b);
+        DISPATCH();
+    }
+
 LABEL_OP_I32_TO_I64_R: {
         uint8_t dst = READ_BYTE();
         uint8_t src = READ_BYTE();
@@ -768,12 +896,15 @@ LABEL_OP_DIV_F64_R: {
             runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
             RETURN(INTERPRET_RUNTIME_ERROR);
         }
+        double a = AS_F64(vm.registers[src1]);
         double b = AS_F64(vm.registers[src2]);
-        if (b == 0.0) {
-            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Division by zero");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        vm.registers[dst] = F64_VAL(AS_F64(vm.registers[src1]) / b);
+        
+        // IEEE 754 compliant: division by zero produces infinity, not error
+        double result = a / b;
+        
+        // The result may be infinity, -infinity, or NaN
+        // These are valid f64 values according to IEEE 754
+        vm.registers[dst] = F64_VAL(result);
         DISPATCH();
     }
 
@@ -1028,6 +1159,54 @@ LABEL_OP_GE_U32_R: {
         RETURN(INTERPRET_RUNTIME_ERROR);
     }
     vm.registers[dst] = BOOL_VAL(AS_U32(vm.registers[src1]) >= AS_U32(vm.registers[src2]));
+    DISPATCH();
+}
+
+LABEL_OP_LT_U64_R: {
+    uint8_t dst = READ_BYTE();
+    uint8_t src1 = READ_BYTE();
+    uint8_t src2 = READ_BYTE();
+    if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be u64");
+        RETURN(INTERPRET_RUNTIME_ERROR);
+    }
+    vm.registers[dst] = BOOL_VAL(AS_U64(vm.registers[src1]) < AS_U64(vm.registers[src2]));
+    DISPATCH();
+}
+
+LABEL_OP_LE_U64_R: {
+    uint8_t dst = READ_BYTE();
+    uint8_t src1 = READ_BYTE();
+    uint8_t src2 = READ_BYTE();
+    if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be u64");
+        RETURN(INTERPRET_RUNTIME_ERROR);
+    }
+    vm.registers[dst] = BOOL_VAL(AS_U64(vm.registers[src1]) <= AS_U64(vm.registers[src2]));
+    DISPATCH();
+}
+
+LABEL_OP_GT_U64_R: {
+    uint8_t dst = READ_BYTE();
+    uint8_t src1 = READ_BYTE();
+    uint8_t src2 = READ_BYTE();
+    if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be u64");
+        RETURN(INTERPRET_RUNTIME_ERROR);
+    }
+    vm.registers[dst] = BOOL_VAL(AS_U64(vm.registers[src1]) > AS_U64(vm.registers[src2]));
+    DISPATCH();
+}
+
+LABEL_OP_GE_U64_R: {
+    uint8_t dst = READ_BYTE();
+    uint8_t src1 = READ_BYTE();
+    uint8_t src2 = READ_BYTE();
+    if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be u64");
+        RETURN(INTERPRET_RUNTIME_ERROR);
+    }
+    vm.registers[dst] = BOOL_VAL(AS_U64(vm.registers[src1]) >= AS_U64(vm.registers[src2]));
     DISPATCH();
 }
 
@@ -1571,7 +1750,17 @@ LABEL_UNKNOWN:
                     RETURN(INTERPRET_RUNTIME_ERROR);
                 }
 
-                vm.registers[dst] = U32_VAL(AS_U32(vm.registers[src1]) + AS_U32(vm.registers[src2]));
+                uint32_t a = AS_U32(vm.registers[src1]);
+                uint32_t b = AS_U32(vm.registers[src2]);
+                
+                // Check for overflow: if a + b < a, then overflow occurred
+                if (UINT32_MAX - a < b) {
+                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                 "u32 addition overflow");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+
+                vm.registers[dst] = U32_VAL(a + b);
                 break;
             }
 
@@ -1586,7 +1775,17 @@ LABEL_UNKNOWN:
                     RETURN(INTERPRET_RUNTIME_ERROR);
                 }
 
-                vm.registers[dst] = U32_VAL(AS_U32(vm.registers[src1]) - AS_U32(vm.registers[src2]));
+                uint32_t a = AS_U32(vm.registers[src1]);
+                uint32_t b = AS_U32(vm.registers[src2]);
+                
+                // Check for underflow: if a < b, then underflow would occur
+                if (a < b) {
+                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                 "u32 subtraction underflow");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+
+                vm.registers[dst] = U32_VAL(a - b);
                 break;
             }
 
@@ -1601,7 +1800,17 @@ LABEL_UNKNOWN:
                     RETURN(INTERPRET_RUNTIME_ERROR);
                 }
 
-                vm.registers[dst] = U32_VAL(AS_U32(vm.registers[src1]) * AS_U32(vm.registers[src2]));
+                uint32_t a = AS_U32(vm.registers[src1]);
+                uint32_t b = AS_U32(vm.registers[src2]);
+                
+                // Check for multiplication overflow: if a != 0 && result / a != b
+                if (a != 0 && b > UINT32_MAX / a) {
+                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                 "u32 multiplication overflow");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+
+                vm.registers[dst] = U32_VAL(a * b);
                 break;
             }
 
@@ -1649,6 +1858,125 @@ LABEL_UNKNOWN:
                 break;
             }
 
+            case OP_ADD_U64_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src1 = read_BYTE();
+                uint8_t src2 = read_BYTE();
+
+                if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                 "Operands must be u64");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+
+                uint64_t a = AS_U64(vm.registers[src1]);
+                uint64_t b = AS_U64(vm.registers[src2]);
+                
+                // Check for overflow: if a + b < a, then overflow occurred
+                if (UINT64_MAX - a < b) {
+                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                 "u64 addition overflow");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+
+                vm.registers[dst] = U64_VAL(a + b);
+                break;
+            }
+
+            case OP_SUB_U64_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src1 = read_BYTE();
+                uint8_t src2 = read_BYTE();
+
+                if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                 "Operands must be u64");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+
+                uint64_t a = AS_U64(vm.registers[src1]);
+                uint64_t b = AS_U64(vm.registers[src2]);
+                
+                // Check for underflow: if a < b, then underflow would occur
+                if (a < b) {
+                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                 "u64 subtraction underflow");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+
+                vm.registers[dst] = U64_VAL(a - b);
+                break;
+            }
+
+            case OP_MUL_U64_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src1 = read_BYTE();
+                uint8_t src2 = read_BYTE();
+
+                if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                 "Operands must be u64");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+
+                uint64_t a = AS_U64(vm.registers[src1]);
+                uint64_t b = AS_U64(vm.registers[src2]);
+                
+                // Check for multiplication overflow: if a != 0 && result / a != b
+                if (a != 0 && b > UINT64_MAX / a) {
+                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                 "u64 multiplication overflow");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+
+                vm.registers[dst] = U64_VAL(a * b);
+                break;
+            }
+
+            case OP_DIV_U64_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src1 = read_BYTE();
+                uint8_t src2 = read_BYTE();
+
+                if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                 "Operands must be u64");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+
+                uint64_t b = AS_U64(vm.registers[src2]);
+                if (b == 0) {
+                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                 "Division by zero");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+
+                vm.registers[dst] = U64_VAL(AS_U64(vm.registers[src1]) / b);
+                break;
+            }
+
+            case OP_MOD_U64_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src1 = read_BYTE();
+                uint8_t src2 = read_BYTE();
+
+                if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                 "Operands must be u64");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+
+                uint64_t b = AS_U64(vm.registers[src2]);
+                if (b == 0) {
+                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                 "Division by zero");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+
+                vm.registers[dst] = U64_VAL(AS_U64(vm.registers[src1]) % b);
+                break;
+            }
+
             case OP_I32_TO_I64_R: {
                 uint8_t dst = READ_BYTE();
                 uint8_t src = READ_BYTE();
@@ -1682,6 +2010,168 @@ LABEL_UNKNOWN:
                     RETURN(INTERPRET_RUNTIME_ERROR);
                 }
                 vm.registers[dst] = I32_VAL((int32_t)AS_U32(vm.registers[src]));
+                break;
+            }
+
+            case OP_F64_TO_U32_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src = read_BYTE();
+                if (!IS_F64(vm.registers[src])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                 "Source must be f64");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+                double val = AS_F64(vm.registers[src]);
+                if (val < 0.0 || val > (double)UINT32_MAX) {
+                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                 "f64 value out of u32 range");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+                vm.registers[dst] = U32_VAL((uint32_t)val);
+                break;
+            }
+
+            case OP_U32_TO_F64_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src = read_BYTE();
+                if (!IS_U32(vm.registers[src])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                 "Source must be u32");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+                vm.registers[dst] = F64_VAL((double)AS_U32(vm.registers[src]));
+                break;
+            }
+
+            case OP_I32_TO_U64_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src = READ_BYTE();
+                if (!IS_I32(vm.registers[src])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                 "Source must be i32");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+                int32_t val = AS_I32(vm.registers[src]);
+                if (val < 0) {
+                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                 "Cannot convert negative i32 to u64");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+                vm.registers[dst] = U64_VAL((uint64_t)val);
+                break;
+            }
+
+            case OP_I64_TO_U64_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src = READ_BYTE();
+                if (!IS_I64(vm.registers[src])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                 "Source must be i64");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+                int64_t val = AS_I64(vm.registers[src]);
+                if (val < 0) {
+                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                 "Cannot convert negative i64 to u64");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+                vm.registers[dst] = U64_VAL((uint64_t)val);
+                break;
+            }
+
+            case OP_U64_TO_I32_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src = READ_BYTE();
+                if (!IS_U64(vm.registers[src])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                 "Source must be u64");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+                uint64_t val = AS_U64(vm.registers[src]);
+                if (val > (uint64_t)INT32_MAX) {
+                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                 "u64 value too large for i32");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+                vm.registers[dst] = I32_VAL((int32_t)val);
+                break;
+            }
+
+            case OP_U64_TO_I64_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src = READ_BYTE();
+                if (!IS_U64(vm.registers[src])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                 "Source must be u64");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+                uint64_t val = AS_U64(vm.registers[src]);
+                if (val > (uint64_t)INT64_MAX) {
+                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                 "u64 value too large for i64");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+                vm.registers[dst] = I64_VAL((int64_t)val);
+                break;
+            }
+
+            case OP_U32_TO_U64_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src = READ_BYTE();
+                if (!IS_U32(vm.registers[src])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                 "Source must be u32");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+                vm.registers[dst] = U64_VAL((uint64_t)AS_U32(vm.registers[src]));
+                break;
+            }
+
+            case OP_U64_TO_U32_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src = READ_BYTE();
+                if (!IS_U64(vm.registers[src])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                 "Source must be u64");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+                uint64_t val = AS_U64(vm.registers[src]);
+                if (val > (uint64_t)UINT32_MAX) {
+                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                 "u64 value too large for u32");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+                vm.registers[dst] = U32_VAL((uint32_t)val);
+                break;
+            }
+
+            case OP_F64_TO_U64_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src = READ_BYTE();
+                if (!IS_F64(vm.registers[src])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                 "Source must be f64");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+                double val = AS_F64(vm.registers[src]);
+                if (val < 0.0 || val > (double)UINT64_MAX) {
+                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                 "f64 value out of u64 range");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+                vm.registers[dst] = U64_VAL((uint64_t)val);
+                break;
+            }
+
+            case OP_U64_TO_F64_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src = read_BYTE();
+                if (!IS_U64(vm.registers[src])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                 "Source must be u64");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+                vm.registers[dst] = F64_VAL((double)AS_U64(vm.registers[src]));
                 break;
             }
 
@@ -1730,12 +2220,15 @@ LABEL_UNKNOWN:
                     runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
                     return INTERPRET_RUNTIME_ERROR;
                 }
+                double a = AS_F64(vm.registers[src1]);
                 double b = AS_F64(vm.registers[src2]);
-                if (b == 0.0) {
-                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Division by zero");
-                    return INTERPRET_RUNTIME_ERROR;
-                }
-                vm.registers[dst] = F64_VAL(AS_F64(vm.registers[src1]) / b);
+                
+                // IEEE 754 compliant: division by zero produces infinity, not error
+                double result = a / b;
+                
+                // The result may be infinity, -infinity, or NaN
+                // These are valid f64 values according to IEEE 754
+                vm.registers[dst] = F64_VAL(result);
                 break;
             }
 
@@ -2015,6 +2508,58 @@ LABEL_UNKNOWN:
                     RETURN(INTERPRET_RUNTIME_ERROR);
                 }
                 vm.registers[dst] = BOOL_VAL(AS_U32(vm.registers[src1]) >= AS_U32(vm.registers[src2]));
+                break;
+            }
+
+            case OP_LT_U64_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src1 = read_BYTE();
+                uint8_t src2 = read_BYTE();
+                if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                 "Operands must be u64");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+                vm.registers[dst] = BOOL_VAL(AS_U64(vm.registers[src1]) < AS_U64(vm.registers[src2]));
+                break;
+            }
+
+            case OP_LE_U64_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src1 = read_BYTE();
+                uint8_t src2 = read_BYTE();
+                if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                 "Operands must be u64");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+                vm.registers[dst] = BOOL_VAL(AS_U64(vm.registers[src1]) <= AS_U64(vm.registers[src2]));
+                break;
+            }
+
+            case OP_GT_U64_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src1 = read_BYTE();
+                uint8_t src2 = read_BYTE();
+                if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                 "Operands must be u64");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+                vm.registers[dst] = BOOL_VAL(AS_U64(vm.registers[src1]) > AS_U64(vm.registers[src2]));
+                break;
+            }
+
+            case OP_GE_U64_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src1 = read_BYTE();
+                uint8_t src2 = read_BYTE();
+                if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                 "Operands must be u64");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+                vm.registers[dst] = BOOL_VAL(AS_U64(vm.registers[src1]) >= AS_U64(vm.registers[src2]));
                 break;
             }
 

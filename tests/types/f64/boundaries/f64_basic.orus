@@ -1,0 +1,23 @@
+// Basic f64 boundary tests
+let zero: f64 = 0.0
+let one: f64 = 1.0
+let neg_one = 0.0 - 1.0
+
+print(zero)
+print(one)
+print(neg_one)
+
+// Basic arithmetic
+let result1 = zero + one
+let result2 = one * neg_one
+print(result1)
+print(result2)
+
+// Test with very small and large numbers
+let tiny: f64 = 1e-10
+let huge: f64 = 1e10
+print(tiny)
+print(huge)
+
+let product = tiny * huge
+print(product)

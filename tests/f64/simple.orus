@@ -1,4 +1,0 @@
-let a: f64 = 1.5
-let b: f64 = 2.25
-let c = a + b * 2.0
-print(c)

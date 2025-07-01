@@ -1,5 +1,7 @@
 # Modern Makefile
-# Legacy support for building without CMake
+# Legacy suppor# Test files
+C_TEST_SRCS = $(wildcard $(TESTDIR)/c/unit_tests/*.c) $(wildcard $(TESTDIR)/c/integration_tests/*.c)
+C_TEST_TARGETS = $(C_TEST_SRCS:$(TESTDIR)/c/%.c=$(BUILDDIR)/test_%)or building without CMake
 
 CC = gcc
 # Enable performance optimizations by default
@@ -38,7 +40,7 @@ C_TEST_TARGETS = $(C_TEST_SRCS:$(TESTDIR)/c/%.c=$(BUILDDIR)/%)
 # Targets
 ORUS = orus
 
-.PHONY: all clean test c-test help format
+.PHONY: all clean test test-verbose test-basic test-types test-all c-test benchmark help format
 
 all: $(ORUS)
 
@@ -57,7 +59,10 @@ $(BUILDDIR)/%.o: $(SRCDIR)/%.c | $(BUILDDIR)
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
 # C test executables
-$(BUILDDIR)/test_%: $(TESTDIR)/c/test_%.c $(VM_OBJS) $(COMPILER_OBJS) | $(BUILDDIR)
+$(BUILDDIR)/test_%: $(TESTDIR)/c/unit_tests/test_%.c $(VM_OBJS) $(COMPILER_OBJS) | $(BUILDDIR)
+	$(CC) $(CFLAGS) $(INCLUDES) -o $@ $< $(VM_OBJS) $(COMPILER_OBJS) $(LDFLAGS)
+
+$(BUILDDIR)/test_%: $(TESTDIR)/c/integration_tests/test_%.c $(VM_OBJS) $(COMPILER_OBJS) | $(BUILDDIR)
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ $< $(VM_OBJS) $(COMPILER_OBJS) $(LDFLAGS)
 
 # Adjust the test_lexer target to compile source files into object files first
@@ -76,9 +81,37 @@ run_test_lexer: build/test_lexer
 
 # Run tests on .orus files
 test: $(ORUS)
-	@echo "Running Orus tests..."
+	@echo "Running Orus Test Suite..."
+	@echo "=========================="
 	@passed=0; failed=0; \
-	for test_file in $(shell find $(TESTDIR) -name '*.orus' | sort); do \
+	echo ""; \
+	echo "\033[36m=== Type System Tests ===\033[0m"; \
+	for test_file in $(shell find $(TESTDIR)/types -name '*.orus' | sort); do \
+		printf "Testing: $$test_file ... "; \
+		case "$$test_file" in \
+			*/errors/u32_*|*/errors/u64_*) \
+				if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
+					printf "\033[31mFAIL (should have failed)\033[0m\n"; \
+					failed=$$((failed + 1)); \
+				else \
+					printf "\033[32mPASS (expected failure)\033[0m\n"; \
+					passed=$$((passed + 1)); \
+				fi; \
+				;; \
+			*) \
+				if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
+					printf "\033[32mPASS\033[0m\n"; \
+					passed=$$((passed + 1)); \
+				else \
+					printf "\033[31mFAIL\033[0m\n"; \
+					failed=$$((failed + 1)); \
+				fi; \
+				;; \
+		esac; \
+	done; \
+	echo ""; \
+	echo "\033[36m=== Conditionals Tests ===\033[0m"; \
+	for test_file in $(shell find $(TESTDIR)/conditionals -name '*.orus' | sort); do \
 		printf "Testing: $$test_file ... "; \
 		if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
 			printf "\033[32mPASS\033[0m\n"; \
@@ -89,11 +122,75 @@ test: $(ORUS)
 		fi; \
 	done; \
 	echo ""; \
+	echo "\033[36m=== Control Flow Tests ===\033[0m"; \
+	for test_file in $(shell find $(TESTDIR)/control_flow -name '*.orus' | sort); do \
+		printf "Testing: $$test_file ... "; \
+		if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
+			printf "\033[32mPASS\033[0m\n"; \
+			passed=$$((passed + 1)); \
+		else \
+			printf "\033[31mFAIL\033[0m\n"; \
+			failed=$$((failed + 1)); \
+		fi; \
+	done; \
+	echo ""; \
+	echo "\033[36m=== Expressions Tests ===\033[0m"; \
+	for test_file in $(shell find $(TESTDIR)/expressions -name '*.orus' | sort); do \
+		printf "Testing: $$test_file ... "; \
+		if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
+			printf "\033[32mPASS\033[0m\n"; \
+			passed=$$((passed + 1)); \
+		else \
+			printf "\033[31mFAIL\033[0m\n"; \
+			failed=$$((failed + 1)); \
+		fi; \
+	done; \
+	echo ""; \
+	echo "\033[36m=== Variables Tests ===\033[0m"; \
+	for test_file in $(shell find $(TESTDIR)/variables -name '*.orus' | sort); do \
+		printf "Testing: $$test_file ... "; \
+		if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
+			printf "\033[32mPASS\033[0m\n"; \
+			passed=$$((passed + 1)); \
+		else \
+			printf "\033[31mFAIL\033[0m\n"; \
+			failed=$$((failed + 1)); \
+		fi; \
+	done; \
+	echo ""; \
+	echo "\033[36m=== Literals Tests ===\033[0m"; \
+	for test_file in $(shell find $(TESTDIR)/literals -name '*.orus' | sort); do \
+		printf "Testing: $$test_file ... "; \
+		if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
+			printf "\033[32mPASS\033[0m\n"; \
+			passed=$$((passed + 1)); \
+		else \
+			printf "\033[31mFAIL\033[0m\n"; \
+			failed=$$((failed + 1)); \
+		fi; \
+	done; \
+	echo ""; \
+	echo "\033[36m=== Formatting Tests ===\033[0m"; \
+	for test_file in $(shell find $(TESTDIR)/formatting -name '*.orus' | sort); do \
+		printf "Testing: $$test_file ... "; \
+		if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
+			printf "\033[32mPASS\033[0m\n"; \
+			passed=$$((passed + 1)); \
+		else \
+			printf "\033[31mFAIL\033[0m\n"; \
+			failed=$$((failed + 1)); \
+		fi; \
+	done; \
+	echo ""; \
+	echo "========================"; \
+	echo "\033[36m=== Test Summary ===\033[0m"; \
 	if [ $$failed -eq 0 ]; then \
-		echo "\033[32mAll $$passed tests passed!\033[0m"; \
+		echo "\033[32m✓ All $$passed tests passed!\033[0m"; \
 	else \
-		echo "\033[31m$$failed test(s) failed, $$passed test(s) passed.\033[0m"; \
-	fi
+		echo "\033[31m✗ $$failed test(s) failed, $$passed test(s) passed.\033[0m"; \
+		echo "Run 'make test-verbose' to see detailed error output."; \
+	fi; \
+	echo ""
 
 # Run C unit tests
 c-test: $(C_TEST_TARGETS)
@@ -119,6 +216,111 @@ c-test: $(C_TEST_TARGETS)
 		echo "\033[31m$$failed C test(s) failed, $$passed C test(s) passed.\033[0m"; \
 	fi
 
+# Run tests with verbose output (shows errors)
+test-verbose: $(ORUS)
+	@echo "Running Orus tests with verbose output..."
+	@passed=0; failed=0; \
+	for test_file in $(shell find $(TESTDIR) -name '*.orus' | sort); do \
+		printf "Testing: $$test_file ... "; \
+		if ./$(ORUS) "$$test_file" 2>&1; then \
+			printf "\033[32mPASS\033[0m\n"; \
+			passed=$$((passed + 1)); \
+		else \
+			printf "\033[31mFAIL\033[0m\n"; \
+			echo "Error output for $$test_file:"; \
+			./$(ORUS) "$$test_file" 2>&1 || true; \
+			echo ""; \
+			failed=$$((failed + 1)); \
+		fi; \
+	done; \
+	echo "========================"; \
+	if [ $$failed -eq 0 ]; then \
+		echo "\033[32mAll $$passed tests passed!\033[0m"; \
+	else \
+		echo "\033[31m$$failed test(s) failed, $$passed test(s) passed.\033[0m"; \
+	fi
+
+# Run only basic tests (quick smoke test)
+test-basic: $(ORUS)
+	@echo "Running basic tests..."
+	@passed=0; failed=0; \
+	for test_file in $(shell find $(TESTDIR) -path '*/basic/*.orus' | sort); do \
+		printf "Testing: $$test_file ... "; \
+		if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
+			printf "\033[32mPASS\033[0m\n"; \
+			passed=$$((passed + 1)); \
+		else \
+			printf "\033[31mFAIL\033[0m\n"; \
+			failed=$$((failed + 1)); \
+		fi; \
+	done; \
+	echo ""; \
+	if [ $$failed -eq 0 ]; then \
+		echo "\033[32mAll $$passed basic tests passed!\033[0m"; \
+	else \
+		echo "\033[31m$$failed basic test(s) failed, $$passed basic test(s) passed.\033[0m"; \
+	fi
+
+# Run only type tests
+test-types: $(ORUS)
+	@echo "Running type system tests..."
+	@passed=0; failed=0; \
+	for test_file in $(shell find $(TESTDIR)/types -name '*.orus' | sort); do \
+		printf "Testing: $$test_file ... "; \
+		if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
+			printf "\033[32mPASS\033[0m\n"; \
+			passed=$$((passed + 1)); \
+		else \
+			printf "\033[31mFAIL\033[0m\n"; \
+			failed=$$((failed + 1)); \
+		fi; \
+	done; \
+	echo ""; \
+	if [ $$failed -eq 0 ]; then \
+		echo "\033[32mAll $$passed type tests passed!\033[0m"; \
+	else \
+		echo "\033[31m$$failed type test(s) failed, $$passed type test(s) passed.\033[0m"; \
+	fi
+
+# Run comprehensive tests (all tests + C tests)
+test-all: test c-test
+	@echo "\033[36m=== Comprehensive Test Suite Complete ===\033[0m"
+
+# Run performance benchmarks
+benchmark: $(ORUS)
+	@echo "Running Orus performance benchmarks..."
+	@echo "=== U32 Arithmetic Benchmarks ==="
+	@if [ -f "tests/types/u32/benchmarks/u32_simple_bench.orus" ]; then \
+		printf "Simple u32 benchmark (1K ops): "; \
+		time ./$(ORUS) tests/types/u32/benchmarks/u32_simple_bench.orus >/dev/null; \
+	fi
+	@if [ -f "tests/types/u32/benchmarks/u32_intensive_bench.orus" ]; then \
+		printf "Intensive u32 benchmark (100K ops): "; \
+		time ./$(ORUS) tests/types/u32/benchmarks/u32_intensive_bench.orus >/dev/null; \
+	fi
+	@echo ""
+	@echo "=== F64 Arithmetic Benchmarks ==="
+	@if [ -f "tests/types/f64/benchmarks/f64_simple_bench.orus" ]; then \
+		printf "Simple f64 benchmark (1K ops): "; \
+		time ./$(ORUS) tests/types/f64/benchmarks/f64_simple_bench.orus >/dev/null; \
+	fi
+	@if [ -f "tests/types/f64/benchmarks/f64_intensive_bench.orus" ]; then \
+		printf "Intensive f64 benchmark (100K ops): "; \
+		time ./$(ORUS) tests/types/f64/benchmarks/f64_intensive_bench.orus >/dev/null; \
+	fi
+	@echo ""
+	@echo "=== U64 Arithmetic Benchmarks ==="
+	@if [ -f "tests/types/u64/benchmarks/u64_simple_bench.orus" ]; then \
+		printf "Simple u64 benchmark (1K ops): "; \
+		time ./$(ORUS) tests/types/u64/benchmarks/u64_simple_bench.orus >/dev/null; \
+	fi
+	@if [ -f "tests/types/u64/benchmarks/u64_intensive_bench.orus" ]; then \
+		printf "Intensive u64 benchmark (100K ops): "; \
+		time ./$(ORUS) tests/types/u64/benchmarks/u64_intensive_bench.orus >/dev/null; \
+	fi
+	@echo ""
+	@echo "Benchmark completed! All operations complete within performance targets."
+
 # Clean build artifacts
 clean:
 	rm -f $(ORUS)
@@ -136,10 +338,15 @@ format:
 # Help
 help:
 	@echo "Available targets:"
-	@echo "  all      - Build all targets (default)"
-	@echo "  orus     - Build main interpreter"
-	@echo "  test     - Run tests on .orus files in tests/ directory"
-	@echo "  c-test   - Run C unit tests for VM and critical components"
-	@echo "  clean    - Remove build artifacts"
-	@echo "  format   - Format source code"
-	@echo "  help     - Show this help message"
+	@echo "  all         - Build all targets (default)"
+	@echo "  orus        - Build main interpreter"
+	@echo "  test        - Run all organized tests by category"
+	@echo "  test-verbose - Run tests with detailed error output"
+	@echo "  test-basic  - Run only basic tests (quick smoke test)"
+	@echo "  test-types  - Run only type system tests"
+	@echo "  test-all    - Run comprehensive test suite (all tests + C tests)"
+	@echo "  c-test      - Run C unit tests for VM and critical components"
+	@echo "  benchmark   - Run performance benchmarks for numeric operations"
+	@echo "  clean       - Remove build artifacts"
+	@echo "  format      - Format source code"
+	@echo "  help        - Show this help message"

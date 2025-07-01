@@ -1,0 +1,14 @@
+// u64 division by zero error tests as required by AGENTS.md
+// Testing error conditions and proper error handling
+// Using new Rust-like type inference
+
+let a: u64 = 10
+let b: u64 = 0
+
+// This should trigger a runtime error for division by zero
+// VM should handle this gracefully with proper error message  
+print(a)
+print(b)
+
+let result = a / b
+print(result)

@@ -1,0 +1,20 @@
+// f64 edge case tests that work with current implementation
+let zero: f64 = 0.0
+let one: f64 = 1.0
+let neg_one: f64 = -1.0
+let huge: f64 = 999999999.0
+let tiny: f64 = 0.000000001
+
+print(zero)
+print(one)
+print(neg_one)
+print(huge)
+print(tiny)
+
+// Test boundary arithmetic
+let sum = huge + tiny
+let diff = huge - tiny
+let product = tiny * 1000000000.0
+print(sum)
+print(diff)
+print(product)

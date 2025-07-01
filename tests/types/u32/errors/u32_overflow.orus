@@ -1,0 +1,7 @@
+// u32 overflow tests as required by AGENTS.md
+let max_val: u32 = 4294967295u32  // 2^32 - 1
+let one: u32 = 1u32
+
+// This should trigger overflow error
+let result = max_val + one
+print(result)

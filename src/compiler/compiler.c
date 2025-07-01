@@ -528,18 +528,58 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             
             // Determine variable type from type annotation or initializer
             ValueType declaredType;
-            if (node->varDecl.typeAnnotation && node->varDecl.typeAnnotation->typeAnnotation.name) {
+            bool hasTypeAnnotation = node->varDecl.typeAnnotation && node->varDecl.typeAnnotation->typeAnnotation.name;
+            
+            if (hasTypeAnnotation) {
                 const char* typeName = node->varDecl.typeAnnotation->typeAnnotation.name;
                 if (strcmp(typeName, "i64") == 0) {
                     declaredType = VAL_I64;
                 } else if (strcmp(typeName, "i32") == 0) {
                     declaredType = VAL_I32;
+                } else if (strcmp(typeName, "u32") == 0) {
+                    declaredType = VAL_U32;
+                } else if (strcmp(typeName, "u64") == 0) {
+                    declaredType = VAL_U64;
                 } else if (strcmp(typeName, "f64") == 0) {
                     declaredType = VAL_F64;
                 } else if (strcmp(typeName, "bool") == 0) {
                     declaredType = VAL_BOOL;
                 } else {
                     declaredType = VAL_I32; // default
+                }
+                
+                // Rust-like type coercion: if we have a type annotation and the initializer 
+                // is a literal without explicit suffix, coerce the literal to the declared type
+                if (node->varDecl.initializer && node->varDecl.initializer->type == NODE_LITERAL) {
+                    ASTNode* literal = node->varDecl.initializer;
+                    ValueType literalType = literal->literal.value.type;
+                    
+                    // Check if this is a plain integer literal (i32 or i64) that can be coerced
+                    if ((literalType == VAL_I32 || literalType == VAL_I64) && 
+                        (declaredType == VAL_U32 || declaredType == VAL_U64 || declaredType == VAL_I32 || declaredType == VAL_I64)) {
+                        
+                        // Get the integer value and coerce it to the declared type
+                        int64_t intValue;
+                        if (literalType == VAL_I32) {
+                            intValue = AS_I32(literal->literal.value);
+                        } else {
+                            intValue = AS_I64(literal->literal.value);
+                        }
+                        
+                        // Coerce to declared type if value is in range
+                        if (declaredType == VAL_U32) {
+                            if (intValue >= 0 && intValue <= UINT32_MAX) {
+                                literal->literal.value = U32_VAL((uint32_t)intValue);
+                            }
+                        } else if (declaredType == VAL_U64) {
+                            if (intValue >= 0) {
+                                literal->literal.value = U64_VAL((uint64_t)intValue);
+                            }
+                        } else if (declaredType == VAL_I64) {
+                            literal->literal.value = I64_VAL(intValue);
+                        }
+                        // VAL_I32 doesn't need coercion from VAL_I32
+                    }
                 }
             } else {
                 // Infer type from initializer
