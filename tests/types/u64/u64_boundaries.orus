@@ -3,17 +3,17 @@
 // Using new Rust-like type inference (no suffix needed with type annotation)
 
 // Test zero and basic boundaries
-let zero: u64 = 0
-let one: u64 = 1
+zero: u64 = 0
+one: u64 = 1
 print(zero)
 print(one)
 
 // Test maximum u64 value (using suffix for very large literals)
-let max_val = 18446744073709551615u64  // 2^64 - 1  
+max_val = 18446744073709551615u64  // 2^64 - 1  
 print(max_val)
 
 // Test medium values with type annotation
-let medium: u64 = 1000000
+medium: u64 = 1000000
 print(medium)
 
 // Test arithmetic with boundary values (when compiler allows)

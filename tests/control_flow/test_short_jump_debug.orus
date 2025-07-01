@@ -1,4 +1,4 @@
-let mut result = 0
+mut result = 0
 
 // Test nested control flow with short jumps
 for i in 0..=2:

@@ -1,17 +1,17 @@
 // Test new Rust-like type inference system
 
 // Test u64 type coercion
-let zero: u64 = 0
+zero: u64 = 0
 print(zero)
 
 // Test u32 type coercion  
-let one: u32 = 1
+one: u32 = 1
 print(one)
 
 // Test i64 type coercion
-let two: i64 = 2
+two: i64 = 2
 print(two)
 
 // Test that explicit suffixes still work
-let three = 3u64
+three = 3u64
 print(three)

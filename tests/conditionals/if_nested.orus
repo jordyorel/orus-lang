@@ -1,4 +1,4 @@
-let x = 0
+x = 0
 if x > 5:
     print("big")
 elif x > 2:
@@ -11,7 +11,7 @@ else:
     else:
         print("small")
 
-let y = 3
+y = 3
 if y > 5:
     print("gt5")
 elif y > 4:
@@ -23,7 +23,7 @@ elif y > 2:
 else:
     print("other")
 
-let z = 0
+z = 0
 if z > 0:
     print("positive")
 elif z == 0:

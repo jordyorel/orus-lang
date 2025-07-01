@@ -18,10 +18,15 @@ fn main:
 All variables default to `i32` unless an explicit type is provided. The `let` keyword has been removed.
 
 ```orus
+
+number = 5           # inferred as i32
+flag: bool = true    # explicitly bool
+mut count = 0        # mutable, inferred as i32
 x = 5               # inferred as immutable i32
 mut y = 10          # mutable, inferred as i32
 z: i64 = 0          # explicitly typed immutable
 mut a: u32 = 10     # explicitly typed mutable
+
 ```
 
 ---
@@ -81,11 +86,17 @@ fn add(a, b) -> i32:
     a + b
 
 fn greet(name: string):
-    print("Hello,", name)
+    print("Hello,", name, "!")
+
+# Format specifiers
+pi = 3.14159
+print("Pi rounded: @.2f", pi)
+print("Hello,", name)
 
 # Format specifiers
 pi = 3.14159
 print("Pi rounded:", pi)
+
 ```
 
 ---
@@ -269,7 +280,10 @@ print("rounded:", round(3.14159, 2))
 ```orus
 print("Hello")
 print("x =", x)
+
+=======
 print("sum =", 10 + 20)
+
 ```
 
 ### Arrays
@@ -468,6 +482,61 @@ and   or   not
   ```orus
   res = cond ? a : b or c   # actually means `cond ? a : (b or c)`
   ```
+
+
+### Precedence Error Example
+
+```orus
+# Misleading: 'x > 0 ? a : b and c' actually binds as:
+x > 0 ? a : (b and c)
+
+# Better: use parentheses
+result = x > 0 ? a : (b and c)
+```
+
+Parentheses can override default precedence and ensure clarity:
+
+```orus
+result = (a > 0 and b > 0) ? "ok" : "fail"
+safe = not (x == 1 or y == 2)
+```
+
+Without parentheses, expressions follow the precedence table above.
+
+### Type Inference
+
+Variables default to `i32` unless otherwise specified. Literal suffixes (`u`, `f64`, etc.) can override the default.
+
+```orus
+x = 10          # i32
+y = 10000000000u  # u64
+z = 3.14        # f64
+```
+
+### Type Casting
+
+Use `as` to convert between types:
+
+```orus
+a: i32 = -5
+b: u32 = a as u32
+c: f64 = a as f64
+d: string = a as string
+```
+
+### Casting Rules
+
+* **Int to float**: valid, may lose precision
+* **Float to int**: truncates toward zero
+* **Int to bool**: 0 is `false`, non-zero is `true`
+* **Bool to int**: `true` → `1`, `false` → `0`
+* **All types** can be cast to `string` using `as string`
+* **Invalid casts** (e.g. `string` → `i32`) raise runtime errors
+
+```orus
+b: bool = 0 as bool
+s = 123 as string
+```
 
 ### Parentheses and Grouping
 

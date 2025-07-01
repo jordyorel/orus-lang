@@ -75,17 +75,14 @@ void test_two_character_tokens() {
 }
 
 void test_keywords() {
-    init_scanner("let mut if else true false nil");
-    
+    init_scanner("mut if else true false nil");
+
     Token token = scan_token();
-    ASSERT_EQ(TOKEN_LET, token.type, "Recognizes 'let' keyword");
-    
-    token = scan_token();
     ASSERT_EQ(TOKEN_MUT, token.type, "Recognizes 'mut' keyword");
-    
+
     token = scan_token();
     ASSERT_EQ(TOKEN_IF, token.type, "Recognizes 'if' keyword");
-    
+
     token = scan_token();
     ASSERT_EQ(TOKEN_ELSE, token.type, "Recognizes 'else' keyword");
     

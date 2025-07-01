@@ -77,6 +77,9 @@ static void addStatement(ASTNode*** list, int* count, int* capacity, ASTNode* st
 static Token peekedToken;
 static bool hasPeekedToken = false;
 
+static Token peekedToken2;
+static bool hasPeekedToken2 = false;
+
 static Token peekToken(void) {
     if (!hasPeekedToken) {
         peekedToken = scan_token();
@@ -85,10 +88,28 @@ static Token peekToken(void) {
     return peekedToken;
 }
 
+static Token peekSecondToken(void) {
+    if (!hasPeekedToken) {
+        peekedToken = scan_token();
+        hasPeekedToken = true;
+    }
+    if (!hasPeekedToken2) {
+        peekedToken2 = scan_token();
+        hasPeekedToken2 = true;
+    }
+    return peekedToken2;
+}
+
 static Token nextToken(void) {
     if (hasPeekedToken) {
-        hasPeekedToken = false;
-        return peekedToken;
+        Token result = peekedToken;
+        if (hasPeekedToken2) {
+            peekedToken = peekedToken2;
+            hasPeekedToken2 = false;
+        } else {
+            hasPeekedToken = false;
+        }
+        return result;
     }
     return scan_token();
 }
@@ -97,7 +118,7 @@ static Token nextToken(void) {
 static ASTNode* parseExpression(void);
 static ASTNode* parseBinaryExpression(int minPrec);
 static ASTNode* parsePrimaryExpression(void);
-static ASTNode* parseVariableDeclaration(void);
+static ASTNode* parseVariableDeclaration(bool isMutable, Token nameToken);
 static ASTNode* parseStatement(void);
 static ASTNode* parseIfStatement(void);
 static ASTNode* parseWhileStatement(void);
@@ -228,9 +249,20 @@ static ASTNode* parseStatement(void) {
         }
         return stmt;
     }
-    if (t.type == TOKEN_LET) {
-        return parseVariableDeclaration();
-    } else if (t.type == TOKEN_IF) {
+    if (t.type == TOKEN_MUT) {
+        nextToken();
+        Token nameTok = nextToken();
+        if (nameTok.type != TOKEN_IDENTIFIER) return NULL;
+        return parseVariableDeclaration(true, nameTok);
+    }
+    if (t.type == TOKEN_IDENTIFIER) {
+        Token second = peekSecondToken();
+        if (second.type == TOKEN_COLON) {
+            nextToken();
+            return parseVariableDeclaration(false, t);
+        }
+    }
+    if (t.type == TOKEN_IF) {
         return parseIfStatement();
     } else if (t.type == TOKEN_WHILE) {
         return parseWhileStatement();
@@ -245,22 +277,7 @@ static ASTNode* parseStatement(void) {
     }
 }
 
-static ASTNode* parseVariableDeclaration(void) {
-    Token letToken = nextToken();
-    if (letToken.type != TOKEN_LET) {
-        return NULL;
-    }
-
-    bool isMutable = false;
-    if (peekToken().type == TOKEN_MUT) {
-        nextToken();
-        isMutable = true;
-    }
-
-    Token nameToken = nextToken();
-    if (nameToken.type != TOKEN_IDENTIFIER) {
-        return NULL;
-    }
+static ASTNode* parseVariableDeclaration(bool isMutable, Token nameToken) {
 
     ASTNode* typeNode = NULL;
     if (peekToken().type == TOKEN_COLON) {
@@ -293,8 +310,8 @@ static ASTNode* parseVariableDeclaration(void) {
 
     ASTNode* varNode = new_node();
     varNode->type = NODE_VAR_DECL;
-    varNode->location.line = letToken.line;
-    varNode->location.column = letToken.column;
+    varNode->location.line = nameToken.line;
+    varNode->location.column = nameToken.column;
     varNode->dataType = NULL;
 
     int len = nameToken.length;
@@ -706,7 +723,9 @@ static ASTNode* parseAssignment(void) {
         ASTNode* value = NULL;
 
         if (t == TOKEN_EQUAL) {
-            value = parseBinaryExpression(0);
+            // Use full expression parsing so constructs like
+            // x = cond ? a : b are handled correctly
+            value = parseAssignment();
         } else {
             ASTNode* right = parseBinaryExpression(0);
             if (!right) return NULL;

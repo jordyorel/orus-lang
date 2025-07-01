@@ -1,13 +1,13 @@
 // Comprehensive i64 arithmetic type inference tests
-let a = 1000000000i64
-let b = 500000000i64
+a = 1000000000i64
+b = 500000000i64
 
 // All basic operations should infer i64 type
-let addition = a + b
-let subtraction = a - b  
-let multiplication = a * b
-let division = a / b
-let modulo = a % b
+addition = a + b
+subtraction = a - b  
+multiplication = a * b
+division = a / b
+modulo = a % b
 
 print(addition)      
 print(subtraction)   
@@ -16,9 +16,9 @@ print(division)
 print(modulo)        
 
 // Chained operations should also infer i64
-let complex = (a + b) / (a - b)
+complex = (a + b) / (a - b)
 print(complex)
 
 // Simple arithmetic with result
-let simple = a / 1000i64
+simple = a / 1000i64
 print(simple)

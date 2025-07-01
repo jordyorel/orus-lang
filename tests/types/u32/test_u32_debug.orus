@@ -1,4 +1,4 @@
-let a = 5u32
-let b = 3u32
-let c = a + b
+a = 5u32
+b = 3u32
+c = a + b
 print(c)

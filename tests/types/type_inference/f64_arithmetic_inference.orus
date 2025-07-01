@@ -1,12 +1,12 @@
 // Comprehensive f64 arithmetic type inference tests
-let a: f64 = 1.5
-let b: f64 = 2.5
+a: f64 = 1.5
+b: f64 = 2.5
 
 // All basic operations should infer f64 type
-let addition = a + b
-let subtraction = a - b  
-let multiplication = a * b
-let division = a / b
+addition = a + b
+subtraction = a - b  
+multiplication = a * b
+division = a / b
 
 print(addition)      // 4.0
 print(subtraction)   // -1.0
@@ -14,9 +14,9 @@ print(multiplication) // 3.75
 print(division)      // 0.6
 
 // Chained operations should also infer f64
-let complex = (a + b) * (a - b)
+complex = (a + b) * (a - b)
 print(complex)
 
 // Mixed with literals should infer f64
-let with_literal = a + 3.14
+with_literal = a + 3.14
 print(with_literal)

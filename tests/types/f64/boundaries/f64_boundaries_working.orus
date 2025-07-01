@@ -1,16 +1,16 @@
 // f64 boundary tests that work with current parser limitations
-let zero: f64 = 0.0
-let one: f64 = 1.0
-let two: f64 = 2.0
+zero: f64 = 0.0
+one: f64 = 1.0
+two: f64 = 2.0
 
 print(zero)
 print(one) 
 print(two)
 
 // Test basic operations
-let sum = zero + one
-let product = one * two
-let quotient = two / one
+sum = zero + one
+product = one * two
+quotient = two / one
 
 print(sum)
 print(product)
