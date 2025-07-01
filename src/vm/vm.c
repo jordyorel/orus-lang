@@ -3408,6 +3408,7 @@ InterpretResult interpret(const char* source) {
     // Parse the source into an AST
     ASTNode* ast = parseSource(source);
     if (!ast) {
+        freeCompiler(&compiler);
         freeChunk(&chunk);
         return INTERPRET_COMPILE_ERROR;
     }
@@ -3415,6 +3416,7 @@ InterpretResult interpret(const char* source) {
     // Compile the AST to bytecode
     if (!compile(ast, &compiler, false)) {
         freeAST(ast);
+        freeCompiler(&compiler);
         freeChunk(&chunk);
         return INTERPRET_COMPILE_ERROR;
     }
@@ -3430,6 +3432,7 @@ InterpretResult interpret(const char* source) {
     InterpretResult result = run();
 
     freeAST(ast);
+    freeCompiler(&compiler);
     freeChunk(&chunk);
     return result;
 }

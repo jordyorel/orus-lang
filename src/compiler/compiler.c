@@ -23,7 +23,9 @@ static int emitJump(Compiler* compiler, uint8_t instruction) {
     emitByte(compiler, instruction);
     if (instruction == OP_JUMP_SHORT) {
         emitByte(compiler, 0xFF);
-        return compiler->chunk->count - 1;
+        int jumpOffset = compiler->chunk->count - 1;
+        jumptable_add(&compiler->pendingJumps, jumpOffset);
+        return jumpOffset;
     } else {
         emitByte(compiler, 0xFF);
         emitByte(compiler, 0xFF);
@@ -31,33 +33,98 @@ static int emitJump(Compiler* compiler, uint8_t instruction) {
     }
 }
 
+static void updateJumpOffsets(Compiler* compiler, int insertPoint, int bytesInserted) {
+    // Update all pending jumps that come after the insertion point
+    for (int i = 0; i < compiler->pendingJumps.offsets.count; i++) {
+        int jumpOffset = compiler->pendingJumps.offsets.data[i];
+        if (jumpOffset > insertPoint) {
+            compiler->pendingJumps.offsets.data[i] += bytesInserted;
+        }
+    }
+    
+    // Update all loop context jumps that come after the insertion point
+    for (int loop = 0; loop < compiler->loopDepth; loop++) {
+        for (int j = 0; j < compiler->loopStack[loop].breakJumps.offsets.count; j++) {
+            int jumpOffset = compiler->loopStack[loop].breakJumps.offsets.data[j];
+            if (jumpOffset > insertPoint) {
+                compiler->loopStack[loop].breakJumps.offsets.data[j] += bytesInserted;
+            }
+        }
+        for (int j = 0; j < compiler->loopStack[loop].continueJumps.offsets.count; j++) {
+            int jumpOffset = compiler->loopStack[loop].continueJumps.offsets.data[j];
+            if (jumpOffset > insertPoint) {
+                compiler->loopStack[loop].continueJumps.offsets.data[j] += bytesInserted;
+            }
+        }
+    }
+}
+
+static void removePendingJump(Compiler* compiler, int offset) {
+    // Remove the jump from the pending list since it's now patched
+    for (int i = 0; i < compiler->pendingJumps.offsets.count; i++) {
+        if (compiler->pendingJumps.offsets.data[i] == offset) {
+            // Remove by replacing with last element and reducing count
+            compiler->pendingJumps.offsets.data[i] = 
+                compiler->pendingJumps.offsets.data[compiler->pendingJumps.offsets.count - 1];
+            compiler->pendingJumps.offsets.count--;
+            break;
+        }
+    }
+}
+
 static void patchJump(Compiler* compiler, int offset) {
     int jump = compiler->chunk->count - offset - 1; // -1 for 1-byte placeholder
     
     if (jump > 255) {
-        // The jump is too long, so we need to use a long jump
-        uint8_t long_jump[] = { OP_JUMP, (jump >> 8) & 0xFF, jump & 0xFF };
+        // Convert short jump to long jump
+        uint8_t originalOpcode = compiler->chunk->code[offset - 1];
+        uint8_t longOpcode;
         
-        // Overwrite the short jump placeholder with a long jump
-        // This requires shifting the bytecode
-        insertCode(compiler, offset - 1, long_jump, sizeof(long_jump));
+        // Map short opcodes to long opcodes
+        switch (originalOpcode) {
+            case OP_JUMP_SHORT:
+                longOpcode = OP_JUMP;
+                break;
+            case OP_JUMP_IF_NOT_SHORT:
+                longOpcode = OP_JUMP_IF_NOT_R;
+                break;
+            default:
+                // Should not happen if we only patch forward jumps
+                longOpcode = OP_JUMP;
+                break;
+        }
         
-        // Since we inserted code, we need to adjust other jumps
-        // This is a complex problem, and for now, we assume it's handled
-        // correctly by the overall compilation strategy.
-        // A more robust solution might involve a jump table that gets updated.
+        // Update the opcode
+        compiler->chunk->code[offset - 1] = longOpcode;
         
+        // Insert an extra byte for the 2-byte offset
+        insertCode(compiler, offset, (uint8_t[]){0}, 1);
+        
+        // Update cascade effects - all jumps after this point need adjustment
+        updateJumpOffsets(compiler, offset, 1);
+        
+        // Recalculate jump distance (now includes the extra byte we inserted)
+        jump = compiler->chunk->count - offset - 2; // -2 for 2-byte placeholder
+        
+        // Patch with 2-byte offset
+        compiler->chunk->code[offset] = (jump >> 8) & 0xFF;
+        compiler->chunk->code[offset + 1] = jump & 0xFF;
     } else {
-        // The jump is short enough, so we can patch the placeholder
+        // The jump is short enough, patch with 1-byte offset
         compiler->chunk->code[offset] = (uint8_t)jump;
     }
+    
+    // Remove from pending jumps since it's now patched
+    removePendingJump(compiler, offset);
 }
 
 static int emitConditionalJump(Compiler* compiler, uint8_t reg) {
     emitByte(compiler, OP_JUMP_IF_NOT_SHORT);
     emitByte(compiler, reg);
     emitByte(compiler, 0xFF); // 1-byte placeholder
-    return compiler->chunk->count - 1;
+    int jumpOffset = compiler->chunk->count - 1;
+    jumptable_add(&compiler->pendingJumps, jumpOffset);
+    return jumpOffset;
 }
 
 // Smart loop emission for backward jumps
@@ -123,13 +190,31 @@ static void patchContinueJumps(Compiler* compiler, LoopContext* loop, int target
     for (int i = 0; i < loop->continueJumps.offsets.count; i++) {
         int offset = loop->continueJumps.offsets.data[i];
         int jump = target - offset - 1; // placeholder is 1 byte
-        // Current implementation assumes short jumps are sufficient.
-        if (jump < 0 || jump > 255) {
-            // Fallback: if jump is out of range, leave as is to avoid corrupting
-            // bytecode. A future improvement could insert long jumps here.
-            compiler->chunk->code[offset] = 0; // safest no-op jump
-        } else {
+        
+        if (jump < 0) {
+            // Backward jump - use OP_JUMP_BACK_SHORT if within range
+            int backwardJump = -jump;
+            if (backwardJump <= 255) {
+                compiler->chunk->code[offset - 1] = OP_JUMP_BACK_SHORT;
+                compiler->chunk->code[offset] = (uint8_t)backwardJump;
+            } else {
+                // Convert to long backward jump (OP_LOOP)
+                compiler->chunk->code[offset - 1] = OP_LOOP;
+                insertCode(compiler, offset, (uint8_t[]){0}, 1);
+                updateJumpOffsets(compiler, offset, 1);
+                compiler->chunk->code[offset] = (backwardJump >> 8) & 0xFF;
+                compiler->chunk->code[offset + 1] = backwardJump & 0xFF;
+            }
+        } else if (jump <= 255) {
+            // Forward short jump - keep as OP_JUMP_SHORT
             compiler->chunk->code[offset] = (uint8_t)jump;
+        } else {
+            // Forward long jump - convert to OP_JUMP
+            compiler->chunk->code[offset - 1] = OP_JUMP;
+            insertCode(compiler, offset, (uint8_t[]){0}, 1);
+            updateJumpOffsets(compiler, offset, 1);
+            compiler->chunk->code[offset] = (jump >> 8) & 0xFF;
+            compiler->chunk->code[offset + 1] = jump & 0xFF;
         }
     }
 }
@@ -151,15 +236,6 @@ static LoopContext* getLoopByLabel(Compiler* compiler, const char* label) {
 }
 
 static ValueType inferBinaryOpTypeWithCompiler(ASTNode* left, ASTNode* right, Compiler* compiler);
-
-// Helper function to get the value type from an AST node
-static ValueType getNodeValueType(ASTNode* node) {
-    if (node->type == NODE_LITERAL) {
-        return node->literal.value.type;
-    }
-    // Default to i32 for now (can be extended for type inference)
-    return VAL_I32;
-}
 
 // Helper function to get the value type from an AST node with compiler context
 static ValueType getNodeValueTypeWithCompiler(ASTNode* node, Compiler* compiler) {
@@ -1083,7 +1159,18 @@ void initCompiler(Compiler* compiler, Chunk* chunk, const char* fileName,
     compiler->localCount = 0;
     compiler->scopeDepth = 0;
     compiler->loopDepth = 0;
+    compiler->pendingJumps = jumptable_new();
     compiler->hadError = false;
+}
+
+void freeCompiler(Compiler* compiler) {
+    jumptable_free(&compiler->pendingJumps);
+    
+    // Clean up any remaining loop contexts (defensive programming)
+    for (int i = 0; i < compiler->loopDepth; i++) {
+        jumptable_free(&compiler->loopStack[i].breakJumps);
+        jumptable_free(&compiler->loopStack[i].continueJumps);
+    }
 }
 
 uint8_t allocateRegister(Compiler* compiler) {

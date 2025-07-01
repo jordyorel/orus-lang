@@ -453,6 +453,7 @@ typedef struct {
     int scopeDepth;
     LoopContext loopStack[16];  // Stack of nested loop contexts
     int loopDepth;              // Current loop nesting depth
+    JumpTable pendingJumps;     // Track all pending forward jumps for cascade updates
     bool hadError;
 } Compiler;
 

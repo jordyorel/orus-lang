@@ -6,6 +6,7 @@
 #include "ast.h"
 
 void initCompiler(Compiler* compiler, Chunk* chunk, const char* fileName, const char* source);
+void freeCompiler(Compiler* compiler);
 uint8_t allocateRegister(Compiler* compiler);
 void freeRegister(Compiler* compiler, uint8_t reg);
 bool compile(ASTNode* ast, Compiler* compiler, bool isModule);
