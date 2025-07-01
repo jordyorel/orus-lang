@@ -431,6 +431,7 @@ typedef struct {
     JumpTable continueJumps;  // Jump targets for continue
     int continueTarget;    // Target for continue (loop start)
     int scopeDepth;        // Scope depth when loop was entered
+    const char* label;     // Optional loop label
 } LoopContext;
 
 // Compiler state for register allocation

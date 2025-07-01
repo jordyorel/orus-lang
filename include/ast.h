@@ -76,6 +76,7 @@ struct ASTNode {
         struct {
             ASTNode* condition;
             ASTNode* body;
+            char* label;
         } whileStmt;
         struct {
             char* varName;
@@ -84,11 +85,13 @@ struct ASTNode {
             ASTNode* step;
             bool inclusive;
             ASTNode* body;
+            char* label;
         } forRange;
         struct {
             char* varName;
             ASTNode* iterable;
             ASTNode* body;
+            char* label;
         } forIter;
         struct {
             ASTNode** statements;
@@ -103,10 +106,10 @@ struct ASTNode {
             char* name;
         } typeAnnotation;
         struct {
-            // Empty struct for break statements
+            char* label;
         } breakStmt;
         struct {
-            // Empty struct for continue statements
+            char* label;
         } continueStmt;
     };
 };

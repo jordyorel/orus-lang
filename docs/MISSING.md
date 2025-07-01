@@ -147,7 +147,7 @@ let result = x > 0 ? "positive" : "non-positive"
 - [ ] **DONE**: For loop with iterator syntax (`for item in collection`) with zero-copy iteration
 - [x] Break and continue statements with proper scope handling and jump table optimization *(dynamic jump table implemented)*
 - [x] Replace fixed-size break/continue jump arrays with dynamic vectors
-- [ ] Nested loop support with labeled break/continue for arbitrary loop depth
+- [x] Nested loop support with labeled break/continue for arbitrary loop depth
 - [ ] Loop variable scoping, lifetime management, and register allocation optimization
 - [ ] Compile-time infinite loop detection and runtime guard mechanisms
 - [ ] Advanced Orus Range Syntax: `start..end..step` with direction validation

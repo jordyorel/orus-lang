@@ -90,13 +90,14 @@ static void exitScope(Compiler* compiler) {
 
 
 
-static void enterLoop(Compiler* compiler, int continueTarget) {
+static void enterLoop(Compiler* compiler, int continueTarget, const char* label) {
     if (compiler->loopDepth >= 16) return;
     LoopContext* loop = &compiler->loopStack[compiler->loopDepth];
     loop->continueTarget = continueTarget;
     loop->breakJumps = jumptable_new();
     loop->continueJumps = jumptable_new();
     loop->scopeDepth = compiler->scopeDepth;
+    loop->label = label;
     compiler->loopDepth++;
 }
 
@@ -111,11 +112,11 @@ static void exitLoop(Compiler* compiler) {
     }
     jumptable_free(&loop->breakJumps);
     jumptable_free(&loop->continueJumps);
+    loop->label = NULL;
 }
 
-static void patchContinueJumps(Compiler* compiler, int target) {
-    if (compiler->loopDepth <= 0) return;
-    LoopContext* loop = &compiler->loopStack[compiler->loopDepth - 1];
+static void patchContinueJumps(Compiler* compiler, LoopContext* loop, int target) {
+    if (!loop) return;
 
     // Continue jumps are emitted using OP_JUMP_SHORT with a single-byte
     // placeholder. Patch each jump to point to the given target.
@@ -136,6 +137,17 @@ static void patchContinueJumps(Compiler* compiler, int target) {
 static LoopContext* getCurrentLoop(Compiler* compiler) {
     if (compiler->loopDepth <= 0) return NULL;
     return &compiler->loopStack[compiler->loopDepth - 1];
+}
+
+static LoopContext* getLoopByLabel(Compiler* compiler, const char* label) {
+    if (!label) return getCurrentLoop(compiler);
+    for (int i = compiler->loopDepth - 1; i >= 0; i--) {
+        LoopContext* loop = &compiler->loopStack[i];
+        if (loop->label && strcmp(loop->label, label) == 0) {
+            return loop;
+        }
+    }
+    return NULL;
 }
 
 static ValueType inferBinaryOpTypeWithCompiler(ASTNode* left, ASTNode* right, Compiler* compiler);
@@ -836,7 +848,7 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
         }
         case NODE_WHILE: {
             int loopStart = compiler->chunk->count;
-            enterLoop(compiler, loopStart);
+            enterLoop(compiler, loopStart, node->whileStmt.label);
             
             int condReg = compileExpressionToRegister(node->whileStmt.condition, compiler);
             if (condReg < 0) {
@@ -855,7 +867,7 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             exitScope(compiler);
 
             // Patch any `continue` statements inside the loop body to jump here
-            patchContinueJumps(compiler, compiler->chunk->count);
+            patchContinueJumps(compiler, getCurrentLoop(compiler), compiler->chunk->count);
 
             emitLoop(compiler, loopStart);
 
@@ -910,7 +922,7 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             int exitJump = emitConditionalJump(compiler, condReg);
             freeRegister(compiler, condReg);
 
-            enterLoop(compiler, loopStart);
+            enterLoop(compiler, loopStart, node->forRange.label);
 
             if (compileExpressionToRegister(node->forRange.body, compiler) < 0) {
                 exitLoop(compiler);
@@ -919,7 +931,7 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             }
 
             // Patch continue jumps to point to increment section
-            patchContinueJumps(compiler, compiler->chunk->count);
+            patchContinueJumps(compiler, getCurrentLoop(compiler), compiler->chunk->count);
 
             if (stepConstOne) {
                 emitByte(compiler, OP_INC_I32_R);
@@ -966,7 +978,7 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             compiler->locals[localIndex].type = VAL_I64; // iterator values are i64
 
             int loopStart = compiler->chunk->count;
-            enterLoop(compiler, loopStart);
+            enterLoop(compiler, loopStart, node->forIter.label);
 
             uint8_t hasReg = allocateRegister(compiler);
             emitByte(compiler, OP_ITER_NEXT_R);
@@ -984,7 +996,7 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             }
 
             // Patch `continue` statements inside the loop body
-            patchContinueJumps(compiler, compiler->chunk->count);
+            patchContinueJumps(compiler, getCurrentLoop(compiler), compiler->chunk->count);
 
             emitLoop(compiler, loopStart);
 
@@ -1000,7 +1012,7 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             return 0;
         }
         case NODE_BREAK: {
-            LoopContext* currentLoop = getCurrentLoop(compiler);
+            LoopContext* currentLoop = getLoopByLabel(compiler, node->breakStmt.label);
             if (!currentLoop) {
                 // Break statement outside of loop - compile-time error
                 compiler->hadError = true;
@@ -1012,7 +1024,7 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             return 0;
         }
         case NODE_CONTINUE: {
-            LoopContext* currentLoop = getCurrentLoop(compiler);
+            LoopContext* currentLoop = getLoopByLabel(compiler, node->continueStmt.label);
             if (!currentLoop) {
                 // Continue statement outside of loop - compile-time error
                 compiler->hadError = true;
