@@ -1,0 +1,25 @@
+// Test advanced range syntax with step values
+
+// Test 1: Basic step syntax - positive step
+for i in 0..10..2:
+    print(i)  // Should print: 0, 2, 4, 6, 8
+
+// Test 2: Step of 1 (equivalent to regular range)
+for i in 1..5..1:
+    print(i)  // Should print: 1, 2, 3, 4
+
+// Test 3: Large step
+for i in 0..20..5:
+    print(i)  // Should print: 0, 5, 10, 15
+
+// Test 4: Step larger than range
+for i in 0..5..10:
+    print(i)  // Should print: 0
+
+// Test 5: Small ranges with step
+for i in 0..5..3:
+    print(i)  // Should print: 0, 3
+
+// Test 6: Single element range
+for i in 5..6..1:
+    print(i)  // Should print: 5

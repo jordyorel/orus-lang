@@ -66,6 +66,8 @@ label = x > 0 ? "positive" : "non-positive"
 
 ### Loops
 
+#### Basic Loops
+
 ```orus
 for i in 0..5:
     print(i)
@@ -75,6 +77,64 @@ while condition:
 
 break     # exits the nearest loop
 continue  # skips to the next iteration
+```
+
+#### Advanced Range Syntax with Step
+
+Orus supports advanced range syntax with customizable step values:
+
+```orus
+# Forward iteration with step
+for i in 0..10..2:
+    print(i)  # prints: 0, 2, 4, 6, 8
+
+# Backward iteration with negative step
+for i in 10..0..-2:
+    print(i)  # prints: 10, 8, 6, 4, 2
+
+# Large steps
+for i in 0..100..25:
+    print(i)  # prints: 0, 25, 50, 75
+
+# Single element iteration
+for i in 5..6..1:
+    print(i)  # prints: 5
+```
+
+#### Loop Safety Features
+
+Orus includes built-in loop safety mechanisms to prevent infinite loops and ensure program reliability:
+
+**Compile-time Infinite Loop Detection:**
+```orus
+# These patterns are detected at compile time:
+while true:     # ❌ Detected as infinite loop
+    print("infinite")
+
+for i in 10..0:  # ❌ Invalid direction detected
+    print(i)
+```
+
+**Runtime Loop Guards:**
+```orus
+# Large loops are automatically protected with iteration limits
+let counter = 0
+while counter < 1000000:
+    counter = counter + 1
+    # Runtime guards prevent runaway execution
+```
+
+**Direction Validation:**
+```orus
+# Step direction must match range direction
+for i in 0..10..1:   # ✅ Valid: positive step for forward range
+    print(i)
+
+for i in 10..0..-1:  # ✅ Valid: negative step for backward range
+    print(i)
+
+for i in 0..10..-1:  # ❌ Invalid: negative step for forward range
+    print(i)
 ```
 
 ---

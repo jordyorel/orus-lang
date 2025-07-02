@@ -415,6 +415,10 @@ typedef enum {
     OP_MOVE_I64,           // dst_reg, src_reg
     OP_MOVE_F64,           // dst_reg, src_reg
 
+    // Runtime loop guards
+    OP_LOOP_GUARD_INIT,    // reg, max_iterations - Initialize loop guard
+    OP_LOOP_GUARD_CHECK,   // reg - Check iteration count and halt if exceeded
+    
     // Other
     OP_IMPORT_R,
     OP_GC_PAUSE,
@@ -447,6 +451,15 @@ typedef struct {
     int* lastUse;           // Last use instruction for each register [REGISTER_COUNT]
 } RegisterAllocator;
 
+// Loop safety and infinite loop detection
+typedef struct {
+    bool isInfinite;          // True if loop is detected as infinite
+    bool hasBreakOrReturn;    // True if loop contains break or return statements
+    bool hasVariableCondition; // True if condition depends on variables
+    int maxIterations;        // Maximum allowed iterations for safety
+    int staticIterationCount; // Compile-time computed iteration count (-1 if unknown)
+} LoopSafetyInfo;
+
 typedef struct {
     JumpTable breakJumps;     // Patches for break statements
     JumpTable continueJumps;  // Jump targets for continue
@@ -455,6 +468,7 @@ typedef struct {
     const char* label;     // Optional loop label
     int loopVarIndex;      // Index of loop variable in locals array (-1 if none)
     int loopVarStartInstr; // Instruction where loop variable becomes live
+    LoopSafetyInfo safety; // Loop safety analysis
 } LoopContext;
 
 // Compiler state for register allocation

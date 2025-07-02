@@ -1,0 +1,57 @@
+// Test integration of all loop safety features
+
+// Test 1: Complex nested loops with range syntax
+for outer in 0..100..10:
+    for inner in outer..outer+5..1:
+        print(outer * 100 + inner)
+
+// Test 2: Loop with break and continue in range syntax
+for i in 0..20..3:
+    if i == 6:
+        continue
+    if i == 15:
+        break
+    print(i)  // Should print: 0, 3, 9, 12
+
+// Test 3: Loop variable scoping with step syntax
+let x = 100
+for x in 0..10..2:
+    print(x)  // Loop variable shadows outer x
+print(x)  // Should print 100 (outer x restored)
+
+// Test 4: Nested loops with different step directions
+for i in 0..10..2:
+    for j in 10..0..-3:
+        if i * j > 50:
+            break
+        print(i + j)
+
+// Test 5: Range with variable bounds (runtime evaluation)
+let start = 5
+let end = 15
+let step = 2
+for i in start..end..step:
+    print(i)
+
+// Test 6: Complex condition with loop guards
+let count = 0
+while count < 1000:
+    count = count + 1
+    if count % 100 == 0:
+        print("Checkpoint: " + count)
+
+// Test 7: Loop with potential infinite recursion protection
+func fibonacci(n):
+    if n <= 1:
+        return n
+    return fibonacci(n - 1) + fibonacci(n - 2)
+
+for i in 0..20..1:
+    print("fib(" + i + ") = " + fibonacci(i))
+
+// Test 8: Mixed loop types with safety features
+for i in 0..5..1:
+    let j = i
+    while j > 0:
+        print("i=" + i + ", j=" + j)
+        j = j - 1

@@ -350,6 +350,10 @@ static InterpretResult run(void) {
         dispatchTable[OP_MOVE_I64] = &&LABEL_OP_MOVE_I64;
         dispatchTable[OP_MOVE_F64] = &&LABEL_OP_MOVE_F64;
         
+        // Runtime loop guard opcodes
+        dispatchTable[OP_LOOP_GUARD_INIT] = &&LABEL_OP_LOOP_GUARD_INIT;
+        dispatchTable[OP_LOOP_GUARD_CHECK] = &&LABEL_OP_LOOP_GUARD_CHECK;
+        
         dispatchTable[OP_HALT] = &&LABEL_OP_HALT;
     }
 
@@ -1703,6 +1707,41 @@ LABEL_OP_MOVE_F64: {
     
     vm.typed_regs.f64_regs[dst] = vm.typed_regs.f64_regs[src];
     vm.typed_regs.reg_types[dst] = REG_TYPE_F64;
+    
+    DISPATCH();
+}
+
+LABEL_OP_LOOP_GUARD_INIT: {
+    uint8_t reg = READ_BYTE();
+    uint32_t maxIterations = READ_BYTE() | (READ_BYTE() << 8) | (READ_BYTE() << 16) | (READ_BYTE() << 24);
+    
+    // Initialize loop guard counter in the register
+    vm.registers[reg] = I32_VAL(0);
+    
+    // Store max iterations in a separate register (reg + 1)
+    if (reg + 1 < REGISTER_COUNT) {
+        vm.registers[reg + 1] = I32_VAL(maxIterations);
+    }
+    
+    DISPATCH();
+}
+
+LABEL_OP_LOOP_GUARD_CHECK: {
+    uint8_t reg = READ_BYTE();
+    
+    // Increment the counter
+    int32_t current = AS_I32(vm.registers[reg]) + 1;
+    vm.registers[reg] = I32_VAL(current);
+    
+    // Check against max iterations
+    if (reg + 1 < REGISTER_COUNT && IS_I32(vm.registers[reg + 1])) {
+        int32_t maxIterations = AS_I32(vm.registers[reg + 1]);
+        if (current > maxIterations) {
+            runtimeError(ERROR_RUNTIME, (SrcLocation){vm.filePath, vm.currentLine, vm.currentColumn},
+                         "Loop exceeded maximum iteration limit (%d)", maxIterations);
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+    }
     
     DISPATCH();
 }
@@ -3359,6 +3398,41 @@ LABEL_UNKNOWN:
                 
                 vm.typed_regs.f64_regs[dst] = vm.typed_regs.f64_regs[src];
                 vm.typed_regs.reg_types[dst] = REG_TYPE_F64;
+                
+                break;
+            }
+
+            case OP_LOOP_GUARD_INIT: {
+                uint8_t reg = READ_BYTE();
+                uint32_t maxIterations = READ_BYTE() | (READ_BYTE() << 8) | (READ_BYTE() << 16) | (READ_BYTE() << 24);
+                
+                // Initialize loop guard counter in the register
+                vm.registers[reg] = I32_VAL(0);
+                
+                // Store max iterations in a separate register (reg + 1)
+                if (reg + 1 < REGISTER_COUNT) {
+                    vm.registers[reg + 1] = I32_VAL(maxIterations);
+                }
+                
+                break;
+            }
+
+            case OP_LOOP_GUARD_CHECK: {
+                uint8_t reg = READ_BYTE();
+                
+                // Increment the counter
+                int32_t current = AS_I32(vm.registers[reg]) + 1;
+                vm.registers[reg] = I32_VAL(current);
+                
+                // Check against max iterations
+                if (reg + 1 < REGISTER_COUNT && IS_I32(vm.registers[reg + 1])) {
+                    int32_t maxIterations = AS_I32(vm.registers[reg + 1]);
+                    if (current > maxIterations) {
+                        runtimeError(ERROR_RUNTIME, (SrcLocation){vm.filePath, vm.currentLine, vm.currentColumn},
+                                     "Loop exceeded maximum iteration limit (%d)", maxIterations);
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+                }
                 
                 break;
             }

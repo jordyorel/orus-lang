@@ -20,6 +20,13 @@ void endVariableLifetime(Compiler* compiler, int localIndex, int instruction);
 uint8_t reuseOrAllocateRegister(Compiler* compiler, const char* name, ValueType type);
 void optimizeLoopVariableLifetimes(Compiler* compiler, int loopStart, int loopEnd);
 
+// Loop safety and infinite loop detection
+bool analyzeLoopSafety(Compiler* compiler, ASTNode* loopNode, LoopSafetyInfo* safety);
+bool detectInfiniteLoop(ASTNode* condition, ASTNode* increment, LoopSafetyInfo* safety);
+bool validateRangeDirection(ASTNode* start, ASTNode* end, ASTNode* step);
+int computeStaticIterationCount(ASTNode* start, ASTNode* end, ASTNode* step, bool inclusive);
+bool hasBreakOrReturnInASTNode(ASTNode* node);
+
 void emitByte(Compiler* compiler, uint8_t byte);
 void emitBytes(Compiler* compiler, uint8_t byte1, uint8_t byte2);
 void emitConstant(Compiler* compiler, uint8_t reg, Value value);

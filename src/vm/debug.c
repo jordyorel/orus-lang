@@ -236,6 +236,22 @@ int disassembleInstruction(Chunk* chunk, int offset) {
             return offset + 3;
         }
 
+        case OP_LOOP_GUARD_INIT: {
+            uint8_t reg = chunk->code[offset + 1];
+            uint32_t maxIterations = chunk->code[offset + 2] | 
+                                   (chunk->code[offset + 3] << 8) | 
+                                   (chunk->code[offset + 4] << 16) | 
+                                   (chunk->code[offset + 5] << 24);
+            printf("%-16s R%d, %u\n", "LOOP_GUARD_INIT", reg, maxIterations);
+            return offset + 6;
+        }
+
+        case OP_LOOP_GUARD_CHECK: {
+            uint8_t reg = chunk->code[offset + 1];
+            printf("%-16s R%d\n", "LOOP_GUARD_CHECK", reg);
+            return offset + 2;
+        }
+
         case OP_HALT:
             printf("%-16s\n", "HALT");
             return offset + 1;

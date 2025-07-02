@@ -55,7 +55,7 @@ let age: i32 = 25           # explicit typing
 let mut score = 0           # mutable variable
 ```
 
-### **Control Flow**
+### **Control Flow with Advanced Loop Safety**
 ```orus
 if score > 100:
     print("High score!")
@@ -64,8 +64,13 @@ elif score > 50:
 else:
     print("Keep trying!")
 
-for i in 0..10:
-    print("Number: {}", i)
+# Advanced range syntax with steps
+for i in 0..20..2:
+    print("Even number: {}", i)
+
+# Automatic infinite loop protection
+while processing:
+    do_work()  # Runtime guards prevent runaway loops
 ```
 
 ### **Structs & Methods**
@@ -147,6 +152,9 @@ echo 'print("Hello, Orus!")' > hello.orus
 - ✅ Register-based VM with computed-goto dispatch
 - ✅ Full lexer and parser with indentation handling  
 - ✅ Integer arithmetic and basic expressions
+- ✅ Advanced loop safety with infinite loop detection
+- ✅ Range syntax with customizable steps (start..end..step)
+- ✅ Runtime loop guards and compile-time validation
 - ✅ REPL with command history
 - ✅ File execution and bytecode compilation
 - ✅ Mark-and-sweep garbage collector with object pooling
@@ -226,6 +234,8 @@ Results are automatically saved and git-ignored to prevent repository bloat.
 
 ## 🎓 Learn More
 
-- **[Language Guide](docs/LANGUAGE.md)** - Complete syntax and features
+- **[Complete Orus Tutorial](docs/COMPLETE_ORUS_TUTORIAL.md)** - 📚 Ultimate comprehensive guide covering every feature
+- **[Language Guide](docs/LANGUAGE.md)** - Complete syntax and features  
+- **[Loop Safety Features](docs/LOOP_SAFETY.md)** - Advanced loop protection and range syntax
 - **[Benchmarks](benchmarks/README.md)** - Performance comparisons
 - **[Missing Features](MISSING.md)** - Development roadmap

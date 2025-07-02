@@ -9,6 +9,11 @@ static void optimizeRegisterPressure(Compiler* compiler);
 static bool isVariableUsedInLoop(Compiler* compiler, int localIndex, int loopStart, int loopEnd);
 static void promoteLoopInvariantVariables(Compiler* compiler, int loopStart, int loopEnd);
 
+// Forward declarations for loop safety functions
+static bool isConstantExpression(ASTNode* node);
+static int evaluateConstantInt(ASTNode* node);
+static bool dependsOnLoopVariable(ASTNode* node, const char* loopVarName);
+
 static void insertCode(Compiler* compiler, int offset, uint8_t* code, int length) {
     if (compiler->chunk->count + length > compiler->chunk->capacity) {
         compiler->chunk->capacity = (compiler->chunk->count + length) * 2;
@@ -963,8 +968,28 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             return 0;
         }
         case NODE_WHILE: {
+            // Perform compile-time safety analysis
+            LoopSafetyInfo safetyInfo;
+            if (!analyzeLoopSafety(compiler, node, &safetyInfo)) {
+                // Infinite loop detected at compile time
+                if (safetyInfo.isInfinite && !safetyInfo.hasBreakOrReturn) {
+                    compiler->hadError = true;
+                    return -1; // Reject infinite loops without break statements
+                }
+            }
+
             int loopStart = compiler->chunk->count;
             enterLoop(compiler, loopStart, node->whileStmt.label);
+            
+            // Initialize runtime loop guard for potentially infinite while loops
+            uint8_t guardReg = 0;
+            if (!safetyInfo.hasVariableCondition || safetyInfo.isInfinite) {
+                guardReg = reuseOrAllocateRegister(compiler, "_while_guard", VAL_I32);
+                emitByte(compiler, OP_LOOP_GUARD_INIT);
+                emitByte(compiler, guardReg);
+                emitByte(compiler, (uint8_t)(safetyInfo.maxIterations >> 8));
+                emitByte(compiler, (uint8_t)(safetyInfo.maxIterations & 0xFF));
+            }
             
             int condReg = compileExpressionToRegister(node->whileStmt.condition, compiler);
             if (condReg < 0) {
@@ -973,6 +998,12 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             }
             int exitJump = emitConditionalJump(compiler, (uint8_t)condReg);
             freeRegister(compiler, (uint8_t)condReg);
+
+            // Add runtime guard check
+            if (guardReg > 0) {
+                emitByte(compiler, OP_LOOP_GUARD_CHECK);
+                emitByte(compiler, guardReg);
+            }
 
             enterScope(compiler);
             if (compileExpressionToRegister(node->whileStmt.body, compiler) < 0) {
@@ -989,9 +1020,25 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
 
             patchJump(compiler, exitJump);
             exitLoop(compiler);
+            
+            // Clean up guard register
+            if (guardReg > 0) {
+                freeRegister(compiler, guardReg);
+            }
+            
             return 0;
         }
         case NODE_FOR_RANGE: {
+            // Perform compile-time safety analysis
+            LoopSafetyInfo safetyInfo;
+            if (!analyzeLoopSafety(compiler, node, &safetyInfo)) {
+                // Infinite loop detected at compile time
+                if (safetyInfo.isInfinite && !safetyInfo.hasBreakOrReturn) {
+                    compiler->hadError = true;
+                    return -1; // Reject infinite loops without break statements
+                }
+            }
+
             int startReg = compileExpressionToRegister(node->forRange.start, compiler);
             if (startReg < 0) return -1;
             int endReg = compileExpressionToRegister(node->forRange.end, compiler);
@@ -1033,6 +1080,16 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             emitByte(compiler, loopVar);
             emitByte(compiler, (uint8_t)startReg);
 
+            // Initialize runtime loop guard if needed
+            uint8_t guardReg = 0;
+            if (safetyInfo.staticIterationCount < 0 || safetyInfo.staticIterationCount > 10000) {
+                guardReg = reuseOrAllocateRegister(compiler, "_loop_guard", VAL_I32);
+                emitByte(compiler, OP_LOOP_GUARD_INIT);
+                emitByte(compiler, guardReg);
+                emitByte(compiler, (uint8_t)(safetyInfo.maxIterations >> 8));
+                emitByte(compiler, (uint8_t)(safetyInfo.maxIterations & 0xFF));
+            }
+
             int loopStart = compiler->chunk->count;
 
             // Use optimized register reuse for condition register
@@ -1045,11 +1102,18 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             int exitJump = emitConditionalJump(compiler, condReg);
             freeRegister(compiler, condReg);
 
-            // Enhanced loop context with variable tracking
+            // Enhanced loop context with variable tracking and safety info
             enterLoop(compiler, loopStart, node->forRange.label);
             LoopContext* currentLoop = getCurrentLoop(compiler);
             currentLoop->loopVarIndex = localIndex;
             currentLoop->loopVarStartInstr = loopStart;
+            currentLoop->safety = safetyInfo;
+
+            // Add runtime guard check if needed
+            if (guardReg > 0) {
+                emitByte(compiler, OP_LOOP_GUARD_CHECK);
+                emitByte(compiler, guardReg);
+            }
 
             if (compileExpressionToRegister(node->forRange.body, compiler) < 0) {
                 exitLoop(compiler);
@@ -1094,6 +1158,9 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
 
             freeRegister(compiler, (uint8_t)startReg);
             freeRegister(compiler, (uint8_t)endReg);
+            if (guardReg > 0) {
+                freeRegister(compiler, guardReg);
+            }
             // Don't manually free loopVar - it's handled by endVariableLifetime
 
             return 0;
@@ -1551,6 +1618,237 @@ static void promoteLoopInvariantVariables(Compiler* compiler, int loopStart, int
             // 3. Used for strength reduction optimizations
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// Loop safety and infinite loop detection
+// ---------------------------------------------------------------------------
+
+static bool isConstantExpression(ASTNode* node) {
+    if (!node) return false;
+    
+    switch (node->type) {
+        case NODE_LITERAL:
+            return true;
+        case NODE_BINARY:
+            return isConstantExpression(node->binary.left) && 
+                   isConstantExpression(node->binary.right);
+        default:
+            return false;
+    }
+}
+
+static int evaluateConstantInt(ASTNode* node) {
+    if (!node || !isConstantExpression(node)) return 0;
+    
+    switch (node->type) {
+        case NODE_LITERAL:
+            if (IS_I32(node->literal.value)) {
+                return AS_I32(node->literal.value);
+            } else if (IS_BOOL(node->literal.value)) {
+                return AS_BOOL(node->literal.value) ? 1 : 0;
+            }
+            return 0;
+        case NODE_BINARY:
+            {
+                int left = evaluateConstantInt(node->binary.left);
+                int right = evaluateConstantInt(node->binary.right);
+                if (strcmp(node->binary.op, "+") == 0) return left + right;
+                if (strcmp(node->binary.op, "-") == 0) return left - right;
+                if (strcmp(node->binary.op, "*") == 0) return left * right;
+                if (strcmp(node->binary.op, "/") == 0) return right != 0 ? left / right : 0;
+                if (strcmp(node->binary.op, "%") == 0) return right != 0 ? left % right : 0;
+                return 0;
+            }
+        default:
+            return 0;
+    }
+}
+
+static bool dependsOnLoopVariable(ASTNode* node, const char* loopVarName) {
+    if (!node || !loopVarName) return false;
+    
+    switch (node->type) {
+        case NODE_IDENTIFIER:
+            return strcmp(node->identifier.name, loopVarName) == 0;
+        case NODE_BINARY:
+            return dependsOnLoopVariable(node->binary.left, loopVarName) ||
+                   dependsOnLoopVariable(node->binary.right, loopVarName);
+        case NODE_ASSIGN:
+            return dependsOnLoopVariable(node->assign.value, loopVarName);
+        default:
+            return false;
+    }
+}
+
+bool hasBreakOrReturnInASTNode(ASTNode* node) {
+    if (!node) return false;
+    
+    switch (node->type) {
+        case NODE_BREAK:
+        case NODE_CONTINUE:
+            return true;
+        case NODE_BLOCK:
+            for (int i = 0; i < node->block.count; i++) {
+                if (hasBreakOrReturnInASTNode(node->block.statements[i])) {
+                    return true;
+                }
+            }
+            return false;
+        case NODE_IF:
+            return hasBreakOrReturnInASTNode(node->ifStmt.thenBranch) ||
+                   hasBreakOrReturnInASTNode(node->ifStmt.elseBranch);
+        case NODE_WHILE:
+            return hasBreakOrReturnInASTNode(node->whileStmt.body);
+        case NODE_FOR_RANGE:
+            return hasBreakOrReturnInASTNode(node->forRange.body);
+        case NODE_FOR_ITER:
+            return hasBreakOrReturnInASTNode(node->forIter.body);
+        default:
+            return false;
+    }
+}
+
+int computeStaticIterationCount(ASTNode* start, ASTNode* end, ASTNode* step, bool inclusive) {
+    // Only compute for constant expressions
+    if (!isConstantExpression(start) || !isConstantExpression(end)) {
+        return -1; // Unknown iteration count
+    }
+    
+    int startVal = evaluateConstantInt(start);
+    int endVal = evaluateConstantInt(end);
+    int stepVal = 1;
+    
+    if (step && isConstantExpression(step)) {
+        stepVal = evaluateConstantInt(step);
+    }
+    
+    // Prevent infinite loops with zero step
+    if (stepVal == 0) {
+        return -2; // Infinite loop detected
+    }
+    
+    // Calculate iteration count based on direction
+    if (stepVal > 0) {
+        if (startVal >= endVal && !inclusive) return 0;
+        if (startVal > endVal && inclusive) return 0;
+        
+        int range = inclusive ? (endVal - startVal + 1) : (endVal - startVal);
+        return (range + stepVal - 1) / stepVal; // Ceiling division
+    } else {
+        if (startVal <= endVal && !inclusive) return 0;
+        if (startVal < endVal && inclusive) return 0;
+        
+        int range = inclusive ? (startVal - endVal + 1) : (startVal - endVal);
+        return (range + (-stepVal) - 1) / (-stepVal); // Ceiling division
+    }
+}
+
+bool validateRangeDirection(ASTNode* start, ASTNode* end, ASTNode* step) {
+    // Only validate for constant expressions
+    if (!isConstantExpression(start) || !isConstantExpression(end)) {
+        return true; // Can't validate, assume correct
+    }
+    
+    int startVal = evaluateConstantInt(start);
+    int endVal = evaluateConstantInt(end);
+    int stepVal = 1;
+    
+    if (step && isConstantExpression(step)) {
+        stepVal = evaluateConstantInt(step);
+    }
+    
+    // Check for zero step (infinite loop)
+    if (stepVal == 0) {
+        return false;
+    }
+    
+    // Check direction consistency
+    if (startVal < endVal && stepVal < 0) {
+        return false; // Ascending range with negative step
+    }
+    
+    if (startVal > endVal && stepVal > 0) {
+        return false; // Descending range with positive step
+    }
+    
+    return true;
+}
+
+bool detectInfiniteLoop(ASTNode* condition, ASTNode* increment, LoopSafetyInfo* safety) {
+    if (!safety) return false;
+    
+    // For while loops, check if condition is constant true
+    if (condition && isConstantExpression(condition)) {
+        int condValue = evaluateConstantInt(condition);
+        if (condValue != 0) {
+            safety->isInfinite = true;
+            return true;
+        }
+    }
+    
+    // Check if condition never changes (no variables modified)
+    // This is a simplified check - a full implementation would do data flow analysis
+    safety->hasVariableCondition = !isConstantExpression(condition);
+    
+    return false;
+}
+
+bool analyzeLoopSafety(Compiler* compiler, ASTNode* loopNode, LoopSafetyInfo* safety) {
+    if (!safety || !loopNode) return false;
+    
+    // Initialize safety info
+    safety->isInfinite = false;
+    safety->hasBreakOrReturn = false;
+    safety->hasVariableCondition = false;
+    safety->maxIterations = 1000000; // Default safety limit
+    safety->staticIterationCount = -1;
+    
+    switch (loopNode->type) {
+        case NODE_FOR_RANGE:
+            {
+                // Check range direction and step validity
+                if (!validateRangeDirection(loopNode->forRange.start, 
+                                          loopNode->forRange.end, 
+                                          loopNode->forRange.step)) {
+                    safety->isInfinite = true;
+                    return false;
+                }
+                
+                // Compute static iteration count
+                safety->staticIterationCount = computeStaticIterationCount(
+                    loopNode->forRange.start,
+                    loopNode->forRange.end,
+                    loopNode->forRange.step,
+                    loopNode->forRange.inclusive
+                );
+                
+                if (safety->staticIterationCount == -2) {
+                    safety->isInfinite = true;
+                    return false;
+                }
+                
+                // Check for break statements in body
+                safety->hasBreakOrReturn = hasBreakOrReturnInASTNode(loopNode->forRange.body);
+                break;
+            }
+        case NODE_WHILE:
+            {
+                // Detect infinite while loops
+                if (detectInfiniteLoop(loopNode->whileStmt.condition, NULL, safety)) {
+                    // Check if there are break statements to prevent infinite execution
+                    safety->hasBreakOrReturn = hasBreakOrReturnInASTNode(loopNode->whileStmt.body);
+                    if (!safety->hasBreakOrReturn) {
+                        return false; // True infinite loop
+                    }
+                }
+                break;
+            }
+        default:
+            return true;
+    }
+    
+    return true;
 }
 
 // ---------------------------------------------------------------------------
