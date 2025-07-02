@@ -1,7 +1,7 @@
 // Test runtime loop guard mechanisms
 
 // Test 1: Loop that should be guarded against infinite execution
-counter = 0
+mut counter = 0
 while counter < 1000000:
     counter = counter + 1
     if counter > 100000:  // Safety check in case guards fail
@@ -15,7 +15,7 @@ for i in 0..1000:
             break
 
 // Test 3: Loop with unpredictable termination condition
-x = 42
+mut x = 42
 while x != 1:
     if x % 2 == 0:
         x = x / 2
@@ -25,10 +25,10 @@ while x != 1:
     // but compiler can't prove it
 
 // Test 4: Loop that modifies its own condition in complex ways
-a = 1
-b = 1
+mut a = 1
+mut b = 1
 while a < 1000:
-    temp = a
+    mut temp = a
     a = b
     b = temp + b
     // Fibonacci sequence - grows exponentially

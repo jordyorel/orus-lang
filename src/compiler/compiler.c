@@ -2,6 +2,7 @@
 #include "../../include/common.h"
 #include "../../include/jumptable.h"
 #include <string.h>
+#include <stdlib.h>
 
 // Forward declarations for enhanced loop optimization functions
 static void analyzeVariableEscapes(Compiler* compiler, int loopDepth);
@@ -1073,7 +1074,8 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             enterScope(compiler);
 
             // Use enhanced register allocation with lifetime tracking for loop variable
-            uint8_t loopVar = allocateRegisterWithLifetime(compiler, node->forRange.varName, VAL_I32, true);
+            // Ensure loop variable gets a low register number to avoid conflicts
+            uint8_t loopVar = allocateRegister(compiler);
             if (compiler->localCount >= REGISTER_COUNT) {
                 freeRegister(compiler, (uint8_t)startReg);
                 freeRegister(compiler, (uint8_t)endReg);
@@ -1100,7 +1102,11 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
 
             // Initialize runtime loop guard if needed
             uint8_t guardReg = 0;
-            if (safetyInfo.staticIterationCount < 0 || safetyInfo.staticIterationCount > 10000) {
+            // Make loop guard threshold configurable via environment variable
+            // Default: 100K iterations (reasonable for most use cases)
+            const char* thresholdEnv = getenv("ORUS_LOOP_GUARD_THRESHOLD");
+            int guardThreshold = thresholdEnv ? atoi(thresholdEnv) : 100000;
+            if (safetyInfo.staticIterationCount < 0 || safetyInfo.staticIterationCount > guardThreshold) {
                 guardReg = reuseOrAllocateRegister(compiler, "_loop_guard", VAL_I32);
                 emitByte(compiler, OP_LOOP_GUARD_INIT);
                 emitByte(compiler, guardReg);
@@ -1112,8 +1118,8 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
 
             int loopStart = compiler->chunk->count;
 
-            // Use optimized register reuse for condition register
-            uint8_t condReg = reuseOrAllocateRegister(compiler, "_loop_cond", VAL_BOOL);
+            // Use optimized register reuse for condition register (ensure it's different from guard)
+            uint8_t condReg = allocateRegister(compiler);
             emitByte(compiler, node->forRange.inclusive ? OP_LE_I32_R : OP_LT_I32_R);
             emitByte(compiler, condReg);
             emitByte(compiler, loopVar);
@@ -2209,7 +2215,10 @@ bool analyzeLoopSafety(Compiler* compiler, ASTNode* loopNode, LoopSafetyInfo* sa
     safety->isInfinite = false;
     safety->hasBreakOrReturn = false;
     safety->hasVariableCondition = false;
-    safety->maxIterations = 1000000; // Default safety limit
+    // Make maximum iterations configurable via environment variable
+    // Default: 1M iterations (safety limit for potentially infinite loops)
+    const char* maxIterEnv = getenv("ORUS_MAX_LOOP_ITERATIONS");
+    safety->maxIterations = maxIterEnv ? atoi(maxIterEnv) : 1000000;
     safety->staticIterationCount = -1;
     
     switch (loopNode->type) {

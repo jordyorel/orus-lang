@@ -159,6 +159,22 @@ int disassembleInstruction(Chunk* chunk, int offset) {
             return offset + 4;
         }
 
+        case OP_LT_I32_R: {
+            uint8_t dst = chunk->code[offset + 1];
+            uint8_t src1 = chunk->code[offset + 2];
+            uint8_t src2 = chunk->code[offset + 3];
+            printf("%-16s R%d, R%d, R%d\n", "LT_I32", dst, src1, src2);
+            return offset + 4;
+        }
+
+        case OP_PRINT_MULTI_R: {
+            uint8_t first = chunk->code[offset + 1];
+            uint8_t count = chunk->code[offset + 2];
+            uint8_t nl = chunk->code[offset + 3];
+            printf("%-16s R%d, count=%d, newline=%d\n", "PRINT_MULTI", first, count, nl);
+            return offset + 4;
+        }
+
         case OP_PRINT_R: {
             uint8_t reg = chunk->code[offset + 1];
             printf("%-16s R%d\n", "PRINT", reg);

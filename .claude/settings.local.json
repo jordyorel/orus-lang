@@ -46,7 +46,20 @@
       "Bash(cp:*)",
       "Bash(sed:*)",
       "Bash(diff:*)",
-      "Bash(/dev/null)"
+      "Bash(/dev/null)",
+      "Bash(./run_simple_perf.sh:*)",
+      "Bash(./run_final_benchmark.sh:*)",
+      "Bash(./debug_opcodes)",
+      "Bash(./check_dispatch)",
+      "Bash(./check_missing_opcodes)",
+      "Bash(ORUS_LOOP_GUARD_THRESHOLD=20000 ./orus quick_test.orus)",
+      "Bash(ORUS_LOOP_GUARD_THRESHOLD=15000 ./orus quick_test.orus)",
+      "Bash(ORUS_LOOP_GUARD_THRESHOLD=14999 ./orus quick_test.orus)",
+      "Bash(ORUS_LOOP_GUARD_THRESHOLD=100000 ./orus test_runtime_guard.orus)",
+      "Bash(ORUS_LOOP_GUARD_THRESHOLD=500000 ./orus test_runtime_guard.orus)",
+      "Bash(ORUS_LOOP_GUARD_THRESHOLD=1000 ORUS_MAX_LOOP_ITERATIONS=1500 ./orus test_guard_small.orus)",
+      "Bash(ORUS_LOOP_GUARD_THRESHOLD=1000 ./orus --trace test_guard_small.orus)",
+      "Bash(./run_all_script.sh)"
     ],
     "deny": []
   }

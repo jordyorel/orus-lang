@@ -274,6 +274,15 @@ static InterpretResult run(void) {
         dispatchTable[OP_SUB_F64_R] = &&LABEL_OP_SUB_F64_R;
         dispatchTable[OP_MUL_F64_R] = &&LABEL_OP_MUL_F64_R;
         dispatchTable[OP_DIV_F64_R] = &&LABEL_OP_DIV_F64_R;
+
+        // Bitwise operations
+        dispatchTable[OP_AND_I32_R] = &&LABEL_OP_AND_I32_R;
+        dispatchTable[OP_OR_I32_R] = &&LABEL_OP_OR_I32_R;
+        dispatchTable[OP_XOR_I32_R] = &&LABEL_OP_XOR_I32_R;
+        dispatchTable[OP_NOT_I32_R] = &&LABEL_OP_NOT_I32_R;
+        dispatchTable[OP_SHL_I32_R] = &&LABEL_OP_SHL_I32_R;
+        dispatchTable[OP_SHR_I32_R] = &&LABEL_OP_SHR_I32_R;
+
         dispatchTable[OP_LT_F64_R] = &&LABEL_OP_LT_F64_R;
         dispatchTable[OP_LE_F64_R] = &&LABEL_OP_LE_F64_R;
         dispatchTable[OP_GT_F64_R] = &&LABEL_OP_GT_F64_R;
@@ -955,6 +964,78 @@ LABEL_OP_DIV_F64_R: {
         // The result may be infinity, -infinity, or NaN
         // These are valid f64 values according to IEEE 754
         vm.registers[dst] = F64_VAL(result);
+        DISPATCH();
+    }
+
+// Bitwise Operations
+LABEL_OP_AND_I32_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t src1 = READ_BYTE();
+        uint8_t src2 = READ_BYTE();
+        if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) & AS_I32(vm.registers[src2]));
+        DISPATCH();
+    }
+
+LABEL_OP_OR_I32_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t src1 = READ_BYTE();
+        uint8_t src2 = READ_BYTE();
+        if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) | AS_I32(vm.registers[src2]));
+        DISPATCH();
+    }
+
+LABEL_OP_XOR_I32_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t src1 = READ_BYTE();
+        uint8_t src2 = READ_BYTE();
+        if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) ^ AS_I32(vm.registers[src2]));
+        DISPATCH();
+    }
+
+LABEL_OP_NOT_I32_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t src = READ_BYTE();
+        if (!IS_I32(vm.registers[src])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operand must be i32");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        vm.registers[dst] = I32_VAL(~AS_I32(vm.registers[src]));
+        DISPATCH();
+    }
+
+LABEL_OP_SHL_I32_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t src1 = READ_BYTE();
+        uint8_t src2 = READ_BYTE();
+        if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) << AS_I32(vm.registers[src2]));
+        DISPATCH();
+    }
+
+LABEL_OP_SHR_I32_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t src1 = READ_BYTE();
+        uint8_t src2 = READ_BYTE();
+        if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) >> AS_I32(vm.registers[src2]));
         DISPATCH();
     }
 
@@ -2614,6 +2695,78 @@ LABEL_UNKNOWN:
                 // The result may be infinity, -infinity, or NaN
                 // These are valid f64 values according to IEEE 754
                 vm.registers[dst] = F64_VAL(result);
+                break;
+            }
+
+            // Bitwise Operations
+            case OP_AND_I32_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src1 = READ_BYTE();
+                uint8_t src2 = READ_BYTE();
+                if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) & AS_I32(vm.registers[src2]));
+                break;
+            }
+
+            case OP_OR_I32_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src1 = READ_BYTE();
+                uint8_t src2 = READ_BYTE();
+                if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) | AS_I32(vm.registers[src2]));
+                break;
+            }
+
+            case OP_XOR_I32_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src1 = READ_BYTE();
+                uint8_t src2 = READ_BYTE();
+                if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) ^ AS_I32(vm.registers[src2]));
+                break;
+            }
+
+            case OP_NOT_I32_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src = READ_BYTE();
+                if (!IS_I32(vm.registers[src])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operand must be i32");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                vm.registers[dst] = I32_VAL(~AS_I32(vm.registers[src]));
+                break;
+            }
+
+            case OP_SHL_I32_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src1 = READ_BYTE();
+                uint8_t src2 = READ_BYTE();
+                if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) << AS_I32(vm.registers[src2]));
+                break;
+            }
+
+            case OP_SHR_I32_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src1 = READ_BYTE();
+                uint8_t src2 = READ_BYTE();
+                if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) >> AS_I32(vm.registers[src2]));
                 break;
             }
 
