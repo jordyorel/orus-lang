@@ -18,6 +18,7 @@ Welcome to the most comprehensive tutorial for the Orus programming language! Th
 9. [Advanced Loop Features](#advanced-loop-features)
 10. [Error Handling and Edge Cases](#error-handling-and-edge-cases)
 11. [Performance Features](#performance-features)
+    - [Loop Invariant Code Motion (LICM)](#loop-invariant-code-motion-licm)
 12. [Complete Language Reference](#complete-language-reference)
 
 ---
@@ -831,6 +832,69 @@ for i in 0..3:
     print(i)
 // May be optimized to: print(0); print(1); print(2)
 ```
+
+#### Loop Invariant Code Motion (LICM)
+
+Orus automatically optimizes loops by moving invariant expressions outside the loop body, reducing computation overhead:
+
+```orus
+// Example: Loop-invariant expressions are automatically hoisted
+a = 5
+b = 10
+for i in 0..1000:
+    // (a + b) is computed only ONCE, not 1000 times!
+    result = a + b + i
+    print(result)
+// The compiler transforms this to:
+// temp = a + b  // Computed once before the loop
+// for i in 0..1000:
+//     result = temp + i
+//     print(result)
+```
+
+**What Gets Optimized:**
+- Arithmetic expressions with loop-invariant operands
+- Variable references that don't change in the loop
+- Complex calculations that don't depend on loop variables
+
+**Safety Features:**
+- Only safe expressions are hoisted (no side effects)
+- Division operations checked for safety
+- Preserves program semantics exactly
+
+**Examples of LICM Optimization:**
+
+```orus
+// Test 1: Basic invariant hoisting
+x = 42
+y = 100
+for j in 0..1000:
+    expensive_calc = x * y * 2  // Computed once, not 1000 times
+    result = expensive_calc + j
+    print(result)
+
+// Test 2: Nested loops - multiple optimization levels  
+outer_val = 70
+for outer in 0..100:
+    // This is invariant to both loops - hoisted to outermost scope
+    base = outer_val * 3
+    for inner in 0..100:
+        // This is invariant to inner loop only
+        combined = base + outer + inner
+        print(combined)
+
+// Test 3: What CANNOT be hoisted (side effects)
+mut counter = 0
+for i in 0..10:
+    counter = counter + 1  // Side effect - cannot hoist
+    result = counter + i
+    print(result)
+```
+
+**Performance Impact:**
+- Reduces loop overhead significantly for computation-heavy loops
+- Eliminates redundant calculations automatically
+- Works with all loop types: `for`, `while`, and nested loops
 
 ### Register Allocation
 

@@ -1,0 +1,41 @@
+// LICM Edge Cases and Boundary Tests
+
+// Edge Case 1: Empty loop body (boundary condition)
+a = 10
+for i in 0..0:
+    result = a + 5
+
+print(999)
+
+// Edge Case 2: Single iteration (boundary condition)
+b = 20
+for i in 0..1:
+    value = b * 2 + i
+    print(value)
+
+print(888)
+
+// Edge Case 3: Loop variable dependency (should NOT be hoisted)
+c = 30
+for i in 0..3:
+    loop_dependent = c + i
+    print(loop_dependent)
+
+print(777)
+
+// Edge Case 4: Assignment side effects (should NOT be hoisted)
+d = 40
+mut counter = 0
+for i in 0..3:
+    counter = counter + 1
+    print(counter)
+
+print(666)
+
+// Edge Case 5: Nested loops with different scopes
+h = 70
+for outer in 0..2:
+    outer_invariant = h * 2
+    for inner in 0..2:
+        combined = outer_invariant + outer + inner
+        print(combined)

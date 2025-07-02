@@ -42,7 +42,8 @@
       "Bash(do echo \"Run $i:\")",
       "Bash(done)",
       "Bash(do echo:*)",
-      "Bash(julia:*)"
+      "Bash(julia:*)",
+      "Bash(cp:*)"
     ],
     "deny": []
   }

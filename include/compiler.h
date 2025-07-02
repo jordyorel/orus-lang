@@ -27,6 +27,26 @@ bool validateRangeDirection(ASTNode* start, ASTNode* end, ASTNode* step);
 int computeStaticIterationCount(ASTNode* start, ASTNode* end, ASTNode* step, bool inclusive);
 bool hasBreakOrReturnInASTNode(ASTNode* node);
 
+// Loop Invariant Code Motion (LICM) optimization
+typedef struct {
+    ASTNode** invariantNodes;       // Array of loop-invariant expressions
+    int count;                      // Number of invariant expressions
+    int capacity;                   // Capacity of invariantNodes array
+    uint8_t* hoistedRegs;          // Registers for hoisted values
+    int* originalInstructions;      // Original instruction positions
+    bool* canHoist;                // Whether each expression can be safely hoisted
+} LICMAnalysis;
+
+void initLICMAnalysis(LICMAnalysis* analysis);
+void freeLICMAnalysis(LICMAnalysis* analysis);
+bool performLICM(Compiler* compiler, int loopStart, int loopEnd, LoopContext* loopCtx);
+bool isLoopInvariant(ASTNode* expr, LoopContext* loopCtx, Compiler* compiler);
+bool canSafelyHoist(ASTNode* expr, LoopContext* loopCtx);
+void hoistInvariantCode(Compiler* compiler, LICMAnalysis* analysis, int preHeaderPos);
+bool hasSideEffects(ASTNode* expr);
+bool dependsOnLoopVariable(ASTNode* expr, LoopContext* loopCtx);
+void collectLoopInvariantExpressions(ASTNode* node, LICMAnalysis* analysis, LoopContext* loopCtx, Compiler* compiler);
+
 void emitByte(Compiler* compiler, uint8_t byte);
 void emitBytes(Compiler* compiler, uint8_t byte1, uint8_t byte2);
 void emitConstant(Compiler* compiler, uint8_t reg, Value value);

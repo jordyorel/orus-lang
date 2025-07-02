@@ -1,0 +1,10 @@
+a = 5
+b = 10
+for i in 0..3:
+    result = a + b + i
+    print(result)
+
+x = 42
+for j in 0..2:
+    sum = x + j
+    print(sum)

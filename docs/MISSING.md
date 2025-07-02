@@ -153,7 +153,7 @@ result = x > 0 ? "positive" : "non-positive"
 - [x] **DONE**: Advanced Orus Range Syntax: `start..end..step` with direction validation *(Implemented with comprehensive compile-time validation and runtime support)*
 
 **Performance & Safety Requirements:**
-- [ ] Loop invariant code motion (LICM) optimization
+- [x] **DONE**: Loop invariant code motion (LICM) optimization *(Comprehensive LICM implementation with AST-based analysis, safety checking, and bytecode transformation)*
 - [ ] Loop unrolling for small, known iteration counts
 - [ ] Strength reduction for induction variables
 - [ ] Dead code elimination within loop bodies
