@@ -128,6 +128,15 @@ static void patchJump(Compiler* compiler, int offset) {
     removePendingJump(compiler, offset);
 }
 
+// Patch all remaining pending jumps at the end of compilation
+static void patchAllPendingJumps(Compiler* compiler) {
+    // Patch all remaining pending jumps to point to the end of the chunk
+    while (compiler->pendingJumps.offsets.count > 0) {
+        int offset = compiler->pendingJumps.offsets.data[0];
+        patchJump(compiler, offset);
+    }
+}
+
 static int emitConditionalJump(Compiler* compiler, uint8_t reg) {
     emitByte(compiler, OP_JUMP_IF_NOT_SHORT);
     emitByte(compiler, reg);
@@ -986,8 +995,10 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
                 guardReg = reuseOrAllocateRegister(compiler, "_while_guard", VAL_I32);
                 emitByte(compiler, OP_LOOP_GUARD_INIT);
                 emitByte(compiler, guardReg);
-                emitByte(compiler, (uint8_t)(safetyInfo.maxIterations >> 8));
                 emitByte(compiler, (uint8_t)(safetyInfo.maxIterations & 0xFF));
+                emitByte(compiler, (uint8_t)((safetyInfo.maxIterations >> 8) & 0xFF));
+                emitByte(compiler, (uint8_t)((safetyInfo.maxIterations >> 16) & 0xFF));
+                emitByte(compiler, (uint8_t)((safetyInfo.maxIterations >> 24) & 0xFF));
             }
             
             int condReg = compileExpressionToRegister(node->whileStmt.condition, compiler);
@@ -1093,8 +1104,10 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
                 guardReg = reuseOrAllocateRegister(compiler, "_loop_guard", VAL_I32);
                 emitByte(compiler, OP_LOOP_GUARD_INIT);
                 emitByte(compiler, guardReg);
-                emitByte(compiler, (uint8_t)(safetyInfo.maxIterations >> 8));
                 emitByte(compiler, (uint8_t)(safetyInfo.maxIterations & 0xFF));
+                emitByte(compiler, (uint8_t)((safetyInfo.maxIterations >> 8) & 0xFF));
+                emitByte(compiler, (uint8_t)((safetyInfo.maxIterations >> 16) & 0xFF));
+                emitByte(compiler, (uint8_t)((safetyInfo.maxIterations >> 24) & 0xFF));
             }
 
             int loopStart = compiler->chunk->count;
@@ -2295,6 +2308,9 @@ bool compile(ASTNode* ast, Compiler* compiler, bool isModule) {
                 emitByte(compiler, (uint8_t)reg);
             }
         }
+        
+        // Patch all remaining pending jumps before finishing
+        patchAllPendingJumps(compiler);
         return true;
     }
 
@@ -2306,5 +2322,7 @@ bool compile(ASTNode* ast, Compiler* compiler, bool isModule) {
         emitByte(compiler, (uint8_t)resultReg);
     }
 
+    // Patch all remaining pending jumps before finishing
+    patchAllPendingJumps(compiler);
     return resultReg >= 0;
 }

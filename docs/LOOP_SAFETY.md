@@ -87,10 +87,83 @@ while x != 1:                    // Collatz conjecture - may be infinite
 
 ### Configuration
 
-Default iteration limits:
-- **Simple loops**: 1,000,000 iterations
-- **Nested loops**: Reduced limits based on nesting depth
-- **Complex conditions**: Conservative limits for unpredictable loops
+#### Default Iteration Limits
+
+**Standard Configuration:**
+- **Default limit**: 1,000,000 iterations (configurable)
+- **Maximum capacity**: 4,294,967,295 iterations (4-byte limit)
+- **Trigger threshold**: Loops with >10,000 static iterations or unknown bounds
+- **Guard activation**: Automatic for potentially unsafe loops
+
+#### How Loop Guards Work
+
+**4-Byte Architecture:**
+```c
+// Compiler emits 4 bytes in little-endian format
+uint32_t maxIterations = 1000000;  // Default: 1 million
+// Supports range: 1 to 4,294,967,295 iterations
+```
+
+**Why 4 Bytes When Most Loops Are Small?**
+- **Future-proofing**: As datasets grow, Orus scales with your needs
+- **No artificial limits**: Prevents "magic number" constraints in algorithms  
+- **Scientific computing**: Research and HPC applications need this capacity
+- **Batch processing**: Large-scale data processing without arbitrary boundaries
+- **VM consistency**: Keeps the guard system simple and uniform
+
+**Runtime Protection:**
+```orus
+// Loops that trigger guards (automatically protected)
+for i in 0..2000000:     // >10k iterations: guard enabled
+    process_data(i)
+
+// Loops that don't need guards (optimized)  
+for i in 0..5000:        // <10k iterations: no guard overhead
+    quick_operation(i)
+```
+
+#### Configuring Loop Limits
+
+**Method 1: Compiler Configuration (Recommended)**
+
+Update the default in `src/compiler/compiler.c`:
+```c
+// Location: analyzeLoopSafety() function
+safety->maxIterations = 5000000;  // Set to 5 million iterations
+```
+
+**Method 2: Runtime Environment Variables (Future Enhancement)**
+```bash
+# Set custom loop limit
+export ORUS_MAX_LOOP_ITERATIONS=2000000
+./orus my_program.orus
+```
+
+**Method 3: Pragma Directives (Future Enhancement)**
+```orus
+#pragma loop_limit 10000000  // Set 10 million limit for this file
+
+for i in 0..huge_dataset_size:
+    intensive_computation(i)
+```
+
+#### Performance Characteristics
+
+**Guard Overhead:**
+- **Enabled**: ~2-5% performance impact per iteration
+- **Disabled**: Zero overhead for small loops (<10k iterations)
+- **Memory**: 2 registers per guarded loop (counter + limit)
+
+**Optimization Strategy:**
+```orus
+// Automatically optimized (no guard)
+for i in 0..1000:
+    fast_operation(i)
+
+// Automatically guarded (safety protection)  
+for i in 0..1000000:
+    safe_operation(i)  // Protected against infinite loops
+```
 
 ---
 

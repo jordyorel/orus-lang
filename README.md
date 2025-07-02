@@ -154,7 +154,8 @@ echo 'print("Hello, Orus!")' > hello.orus
 - ✅ Integer arithmetic and basic expressions
 - ✅ Advanced loop safety with infinite loop detection
 - ✅ Range syntax with customizable steps (start..end..step)
-- ✅ Runtime loop guards and compile-time validation
+- ✅ Runtime loop guards with 4-byte architecture (default 1M, up to 4.3B iterations)
+- ✅ Compile-time validation and configurable limits for any scale
 - ✅ REPL with command history
 - ✅ File execution and bytecode compilation
 - ✅ Mark-and-sweep garbage collector with object pooling
@@ -237,5 +238,6 @@ Results are automatically saved and git-ignored to prevent repository bloat.
 - **[Complete Orus Tutorial](docs/COMPLETE_ORUS_TUTORIAL.md)** - 📚 Ultimate comprehensive guide covering every feature
 - **[Language Guide](docs/LANGUAGE.md)** - Complete syntax and features  
 - **[Loop Safety Features](docs/LOOP_SAFETY.md)** - Advanced loop protection and range syntax
+- **[Loop Configuration Guide](docs/LOOP_CONFIGURATION.md)** - 🔧 Configure 4-byte iteration limits for your use case
 - **[Benchmarks](benchmarks/README.md)** - Performance comparisons
 - **[Missing Features](MISSING.md)** - Development roadmap
