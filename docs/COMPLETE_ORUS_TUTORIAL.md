@@ -218,7 +218,7 @@ print(z)  // Outputs: 45
 zero = 0u32
 one_val = 1u32
 max_val = 4294967295u32        // Maximum u32 value
-almost_max: u32 = 4294967294u32  // Type annotation syntax
+almost_max = 4294967294u32     // Type inferred from suffix
 
 // Type inference with u32
 result1 = almost_max + one_val   // Inferred as u32
@@ -229,8 +229,8 @@ print(result1)  // May overflow!
 
 ```orus
 // Basic u64 operations
-a: u64 = 100
-b: u64 = 200
+a = 100u64
+b = 200u64
 result = a * b
 print(result)  // Outputs: 20000
 ```
@@ -241,20 +241,20 @@ print(result)  // Outputs: 20000
 
 ```orus
 // Basic floating point
-zero: f64 = 0.0
-one: f64 = 1.0
-pi: f64 = 3.14159
+zero = 0.0
+one = 1.0
+pi = 3.14159
 
 // Scientific notation support
-tiny: f64 = 1e-10    // 0.0000000001
-huge: f64 = 1e10     // 10000000000.0
+tiny = 1e-10    // 0.0000000001
+huge = 1e10     // 10000000000.0
 
 // Arithmetic operations
 sum = one + pi
 print(sum)  // Outputs: 4.14159
 
 // Negative floating point
-neg_one: f64 = 0.0 - 1.0
+neg_one = 0.0 - 1.0
 print(neg_one)  // Outputs: -1
 ```
 
@@ -267,11 +267,11 @@ neg = -1.0
 zero = 0.0
 
 // Infinity values
-pos_inf: f64 = pos / zero   // Positive infinity
-neg_inf: f64 = neg / zero   // Negative infinity
+pos_inf = pos / zero   // Positive infinity
+neg_inf = neg / zero   // Negative infinity
 
 // NaN (Not a Number)
-nan_result: f64 = zero / zero  // NaN
+nan_result = zero / zero  // NaN
 
 print(pos_inf)  // Outputs: inf
 print(neg_inf)  // Outputs: -inf
@@ -293,17 +293,23 @@ result = true and false or true
 print(result)  // Outputs: true
 ```
 
-### Type Annotations
+### Type Annotations vs Type Suffixes
 
-You can explicitly specify types using the `:` syntax:
+Orus offers two ways to specify types - choose the most concise approach:
 
 ```orus
-// Explicit type annotations
+// Method 1: Type suffixes (preferred for literals)
+x = 42u32             // 32-bit unsigned integer  
+y = 1000000000i64     // 64-bit signed integer
+z = 3.14159f64        // 64-bit floating point (if needed)
+
+// Method 2: Explicit type annotations (when suffix isn't available)
 x: i32 = 42           // 32-bit signed integer
-y: i64 = 1000000000   // 64-bit signed integer
-z: u32 = 255u32       // 32-bit unsigned integer
-w: f64 = 3.14159      // 64-bit floating point
-flag: bool = true     // Boolean
+flag: bool = true     // Boolean (no suffix available)
+
+// AVOID redundancy - don't use both:
+// wrong: x: u32 = 42u32  ❌ Redundant (compiler will warn)
+// right: x = 42u32       ✅ Concise
 
 // Mutable with type annotation
 mut counter: i32 = 0
@@ -321,8 +327,8 @@ b = 3.14      // Inferred as f64
 c = true      // Inferred as bool
 
 // Type inference from arithmetic
-x: f64 = 1.0
-y: f64 = 2.0
+x = 1.0
+y = 2.0
 result = x + y    // Inferred as f64
 
 // Type inference with different types
@@ -756,8 +762,8 @@ for i in 5..6..1:
 
 ```orus
 // Integer overflow is detected at runtime
-max_val: u32 = 4294967295u32
-one: u32 = 1u32
+max_val = 4294967295u32
+one = 1u32
 // result = max_val + one  // Would trigger overflow error
 ```
 
@@ -847,12 +853,12 @@ for i in 0..3:
 
 ```orus
 // Different types use optimized opcodes
-x: i32 = 10
-y: i32 = 20
+x = 10
+y = 20
 result1 = x + y        // Uses fast i32 addition
 
-a: f64 = 10.0
-b: f64 = 20.0
+a = 10.0
+b = 20.0
 result2 = a + b        // Uses fast f64 addition
 
 // No boxing/unboxing overhead for primitive types
@@ -880,14 +886,31 @@ and, or, not           // Logical operators
 
 ### Built-in Types
 
-| Type | Description | Example |
-|------|-------------|---------|
-| `i32` | 32-bit signed integer | `x = 42` |
-| `i64` | 64-bit signed integer | `x: i64 = 1000000000` |
-| `u32` | 32-bit unsigned integer | `x = 42u32` |
-| `u64` | 64-bit unsigned integer | `x: u64 = 1000` |
-| `f64` | 64-bit floating point | `x = 3.14` |
-| `bool` | Boolean | `x = true` |
+| Type | Description | Suffix Example | Annotation Example |
+|------|-------------|----------------|-------------------|
+| `i32` | 32-bit signed integer (default) | `x = 42` | `x: i32 = 42` |
+| `i64` | 64-bit signed integer | `x = 1000000000i64` | `x: i64 = 1000000000` |
+| `u32` | 32-bit unsigned integer | `x = 42u32` | `x: u32 = 42` |
+| `u64` | 64-bit unsigned integer | `x = 1000u64` | `x: u64 = 1000` |
+| `f64` | 64-bit floating point (default) | `x = 3.14` | `x: f64 = 3.14` |
+| `bool` | Boolean | N/A | `x: bool = true` |
+
+**Best Practice:** Use suffixes when available to avoid redundancy: `x = 42u32` not `x: u32 = 42u32`
+
+### Compiler Warnings for Redundancy
+
+Orus helps you write cleaner code by warning about redundant type annotations:
+
+```orus
+// ❌ This will generate a warning:
+x: u32 = 42u32
+// Warning: Redundant type annotation at line 1:1. 
+// Literal already has type suffix matching declared type 'u32'. 
+// Consider using just 'x = value32' instead of 'x: u32 = valueu32'.
+
+// ✅ Write this instead:
+x = 42u32
+```
 
 ### Operators by Precedence
 
@@ -960,10 +983,10 @@ MAX_SIZE = 1000
 
 ```orus
 // Use appropriate numeric types
-small_number: i32 = 100        // For typical integers
-big_number: i64 = 5000000000   // For large values
-precise_calc: f64 = 3.14159    // For floating point
-counter: u32 = 0u32            // For positive-only values
+small_number = 100             // For typical integers (i32 default)
+big_number = 5000000000i64     // For large values
+precise_calc = 3.14159         // For floating point (f64 default)
+counter = 0u32                 // For positive-only values
 ```
 
 ### Loop Patterns
@@ -994,7 +1017,7 @@ else:
     print("Error: division by zero")
 
 // Use appropriate types to prevent overflow
-mut large_sum: i64 = 0  // Use i64 for large sums
+mut large_sum = 0i64  // Use i64 for large sums
 for i in 0..1000000:
     large_sum += i
 ```
@@ -1055,14 +1078,14 @@ print("Matrix pattern:")
 // types_demo.orus
 
 // Integer types
-small: i32 = 42
-big: i64 = 9223372036854775807
-positive: u32 = 4294967295u32
-huge: u64 = 18446744073709551615u64
+small = 42
+big = 9223372036854775807i64
+positive = 4294967295u32
+huge = 18446744073709551615u64
 
 // Floating point
-pi: f64 = 3.141592653589793
-euler: f64 = 2.718281828459045
+pi = 3.141592653589793
+euler = 2.718281828459045
 
 // Boolean
 is_demo = true

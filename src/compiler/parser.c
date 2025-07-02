@@ -308,6 +308,28 @@ static ASTNode* parseVariableDeclaration(bool isMutable, Token nameToken) {
         return NULL;
     }
 
+    // Check for redundant type annotation with literal suffix
+    if (typeNode && initializer->type == NODE_LITERAL) {
+        const char* declaredType = typeNode->typeAnnotation.name;
+        ValueType literalType = initializer->literal.value.type;
+        
+        bool isRedundant = false;
+        if ((strcmp(declaredType, "u32") == 0 && literalType == VAL_U32) ||
+            (strcmp(declaredType, "u64") == 0 && literalType == VAL_U64) ||
+            (strcmp(declaredType, "i64") == 0 && literalType == VAL_I64) ||
+            (strcmp(declaredType, "f64") == 0 && literalType == VAL_F64)) {
+            isRedundant = true;
+        }
+        
+        if (isRedundant) {
+            printf("Warning: Redundant type annotation at line %d:%d. "
+                   "Literal already has type suffix matching declared type '%s'. "
+                   "Consider using just 'x = value%s' instead of 'x: %s = value%s'.\n",
+                   nameToken.line, nameToken.column, declaredType, 
+                   declaredType, declaredType, declaredType);
+        }
+    }
+
     ASTNode* varNode = new_node();
     varNode->type = NODE_VAR_DECL;
     varNode->location.line = nameToken.line;
