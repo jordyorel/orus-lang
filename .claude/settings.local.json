@@ -48,7 +48,6 @@
       "Bash(diff:*)",
       "Bash(/dev/null)",
       "Bash(./run_simple_perf.sh:*)",
-      "Bash(./run_final_benchmark.sh:*)",
       "Bash(./debug_opcodes)",
       "Bash(./check_dispatch)",
       "Bash(./check_missing_opcodes)",
@@ -80,10 +79,13 @@
       "Bash(./run_loop_safety_tests.sh:*)",
       "Bash(./run_all_tests.sh)",
       "Bash(gdb:*)",
-      "Bash(./tests/benchmarks/run_all_benchmarks.sh:*)",
-      "Bash(ORUS_MAX_LOOP_ITERATIONS=0 ./run_all_benchmarks.sh)",
       "Bash(ORUS_MAX_LOOP_ITERATIONS=0 ./orus -c 'for i in 0..2000000: print(\"\"Test\"\")')",
-      "Bash(ORUS_MAX_LOOP_ITERATIONS=0 ./orus -c 'for i in 0..2000000: print(\"\"Test\"\")')"
+      "Bash(ORUS_MAX_LOOP_ITERATIONS=0 ./orus -c 'for i in 0..2000000: print(\"\"Test\"\")')",
+      "Bash(./run_all_benchmarks_fixed.sh:*)",
+      "Bash(./precise_benchmark.sh:*)",
+      "Bash(./performance_regression_test.sh:*)",
+      "Bash(./performance_dashboard.sh:*)",
+      "Bash(./run_cross_language_benchmarks.sh:*)"
     ],
     "deny": []
   }

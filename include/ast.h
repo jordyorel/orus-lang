@@ -20,6 +20,7 @@ typedef enum {
     NODE_BINARY,
     NODE_ASSIGN,
     NODE_PRINT,
+    NODE_TIME_STAMP,
     NODE_IF,
     NODE_WHILE,
     NODE_FOR_RANGE,

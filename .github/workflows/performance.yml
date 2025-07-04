@@ -1,0 +1,228 @@
+name: Performance Testing
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run nightly performance tests at 2 AM UTC
+    - cron: '0 2 * * *'
+
+jobs:
+  performance-tests:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential bc time valgrind
+        
+    - name: Build Orus
+      run: |
+        make clean
+        make
+        
+    - name: Verify build
+      run: |
+        ./orus --version || ./orus -c "print(\"Build verification\")"
+        
+    - name: Run performance regression tests
+      id: perf_test
+      run: |
+        cd tests/benchmarks
+        ./performance_regression_test.sh
+        echo "exit_code=$?" >> $GITHUB_OUTPUT
+        
+    - name: Upload performance results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: performance-results
+        path: |
+          tests/benchmarks/performance_results.log
+          tests/benchmarks/performance_baselines.txt
+          
+    - name: Comment PR with performance results
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          try {
+            const logContent = fs.readFileSync('tests/benchmarks/performance_results.log', 'utf8');
+            const lines = logContent.trim().split('\n');
+            const latestResult = lines[lines.length - 1];
+            const [timestamp, commit, benchmark, measured, baseline, status] = latestResult.split(',');
+            
+            let statusEmoji = status === '0' ? '✅' : status === '1' ? '⚠️' : '❌';
+            let statusText = status === '0' ? 'PASS' : status === '1' ? 'WARNING' : 'FAIL';
+            
+            const comment = `## Performance Test Results ${statusEmoji}
+            
+            **Status**: ${statusText}
+            **Commit**: ${commit}
+            **Timestamp**: ${timestamp}
+            
+            | Benchmark | Measured | Baseline | Status |
+            |-----------|----------|----------|---------|
+            | ${benchmark} | ${measured}s | ${baseline}s | ${statusEmoji} |
+            
+            ${status !== '0' ? '⚠️ Performance regression detected. Please review changes.' : '🎉 Performance is within acceptable range!'}
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+          } catch (error) {
+            console.log('Could not read performance results:', error);
+          }
+          
+    - name: Fail job on critical performance regression
+      if: steps.perf_test.outputs.exit_code == '2'
+      run: |
+        echo "❌ Critical performance regression detected!"
+        echo "Performance degradation exceeds failure threshold (50%)"
+        echo "Please investigate and address performance issues before merging"
+        exit 1
+        
+    - name: Warning on minor performance regression
+      if: steps.perf_test.outputs.exit_code == '1'
+      run: |
+        echo "⚠️ Minor performance regression detected"
+        echo "Performance degradation is within warning threshold (15-50%)"
+        echo "Consider investigating performance impact"
+
+  performance-comparison:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+    - name: Checkout PR branch
+      uses: actions/checkout@v4
+      
+    - name: Build PR version
+      run: |
+        make clean && make
+        
+    - name: Run PR benchmarks
+      run: |
+        cd tests/benchmarks
+        ./precise_benchmark.sh > pr_results.txt 2>&1 || true
+        
+    - name: Checkout main branch
+      uses: actions/checkout@v4
+      with:
+        ref: main
+        
+    - name: Build main version
+      run: |
+        make clean && make
+        
+    - name: Run main benchmarks
+      run: |
+        cd tests/benchmarks
+        ./precise_benchmark.sh > main_results.txt 2>&1 || true
+        
+    - name: Compare performance
+      run: |
+        cd tests/benchmarks
+        echo "## Performance Comparison" > comparison.md
+        echo "" >> comparison.md
+        echo "### PR Branch vs Main Branch" >> comparison.md
+        echo "" >> comparison.md
+        echo "\`\`\`" >> comparison.md
+        echo "=== PR Branch Results ===" >> comparison.md
+        cat pr_results.txt >> comparison.md
+        echo "" >> comparison.md
+        echo "=== Main Branch Results ===" >> comparison.md
+        cat main_results.txt >> comparison.md
+        echo "\`\`\`" >> comparison.md
+        
+    - name: Upload comparison results
+      uses: actions/upload-artifact@v4
+      with:
+        name: performance-comparison
+        path: tests/benchmarks/comparison.md
+
+  nightly-performance-report:
+    runs-on: ubuntu-latest
+    if: github.event.schedule
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential bc gnuplot
+        
+    - name: Build Orus
+      run: |
+        make clean && make
+        
+    - name: Run comprehensive performance tests
+      run: |
+        cd tests/benchmarks
+        ./performance_regression_test.sh
+        ./precise_benchmark.sh > nightly_results.txt
+        
+    - name: Generate performance report
+      run: |
+        cd tests/benchmarks
+        echo "# Nightly Performance Report - $(date)" > nightly_report.md
+        echo "" >> nightly_report.md
+        echo "## Test Results" >> nightly_report.md
+        echo "\`\`\`" >> nightly_report.md
+        cat nightly_results.txt >> nightly_report.md
+        echo "\`\`\`" >> nightly_report.md
+        echo "" >> nightly_report.md
+        echo "## Historical Data" >> nightly_report.md
+        echo "\`\`\`" >> nightly_report.md
+        tail -10 performance_results.log >> nightly_report.md
+        echo "\`\`\`" >> nightly_report.md
+        
+    - name: Upload nightly report
+      uses: actions/upload-artifact@v4
+      with:
+        name: nightly-performance-report
+        path: tests/benchmarks/nightly_report.md
+        
+    - name: Create issue on performance regression
+      if: failure()
+      uses: actions/github-script@v7
+      with:
+        script: |
+          github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: `Performance Regression Detected - ${new Date().toISOString().split('T')[0]}`,
+            body: `🚨 **Nightly Performance Test Failure**
+            
+            The automated performance tests have detected a regression in the main branch.
+            
+            **Details:**
+            - Date: ${new Date().toISOString()}
+            - Commit: ${context.sha}
+            - Workflow: ${context.workflow}
+            
+            **Action Required:**
+            1. Review recent commits for performance impact
+            2. Run local performance tests: \`cd tests/benchmarks && ./performance_regression_test.sh\`
+            3. Investigate and fix performance issues
+            4. Update performance baselines if intentional changes were made
+            
+            **Resources:**
+            - [Performance Testing Guide](docs/PERFORMANCE_TESTING_GUIDE.md)
+            - [Benchmark Results](tests/benchmarks/performance_results.log)
+            `,
+            labels: ['performance', 'regression', 'priority-high']
+          });

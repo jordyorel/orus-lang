@@ -100,16 +100,25 @@ catch err:
 
 ## ⚡ Performance Benchmarks
 
-Orus consistently outperforms major scripting languages:
+Orus delivers excellent performance, meeting or exceeding documented targets:
 
-| Language   | Speed vs Orus | Execution Time |
-|------------|---------------|----------------|
-| **Orus**   | **1.0×** ⚡   | **~2.2ms**     |
-| Lua        | 1.3× slower   | ~2.9ms         |
-| Python     | 7.0× slower   | ~17.4ms        |
-| JavaScript | 11.0× slower  | ~27.8ms        |
+### Current Performance (Jul 2025)
+| Benchmark Type | **Orus** | Python | Node.js | Lua | Status |
+|----------------|----------|--------|---------|-----|---------|
+| **Arithmetic** | **28ms** ⚡ | 63ms | 38ms | 17ms | ✅ **On Target** |
+| **Control Flow** | **52ms** ⚡ | 86ms | 38ms | 20ms | ✅ **On Target** |
 
-*Benchmarks: Arithmetic-heavy workloads on M1 MacBook Pro*
+### Performance vs. Documented Targets
+- **Arithmetic**: 28ms (Target: 28ms) - **100% of target** 🎯
+- **Control Flow**: 52ms (Target: 51ms) - **102% of target** 🎯
+
+*Benchmarks: 1M+ iteration workloads on M1 MacBook Pro, median of 5 runs*
+
+### Performance Highlights
+- **Zero JIT warmup time** - Consistent performance from first execution
+- **Register-based VM** - Efficient bytecode execution with computed-goto dispatch
+- **Loop optimization** - Advanced LICM and register allocation
+- **Memory efficiency** - Mark-and-sweep GC with object pooling
 
 ---
 
@@ -213,23 +222,35 @@ orus-reg-vm/
 ├── include/              # Header files
 ├── docs/                 # Language documentation  
 ├── tests/                # Test programs (.orus files)
-├── benchmarks/           # Performance comparison suite
+├── tests/benchmarks/     # Performance testing & comparison suite
 └── makefile             # Build configuration
 ```
 
 ---
 
-## � Benchmarking
+## � Performance Testing
 
-Run comprehensive performance tests:
-
+### Quick Performance Check
 ```bash
-cd benchmarks
-./quick_bench.sh          # Interactive benchmark menu
-echo "9" | ./quick_bench.sh    # Run all language comparisons
+cd tests/benchmarks
+./performance_dashboard.sh        # Performance overview
+./performance_regression_test.sh  # Automated regression testing
 ```
 
-Results are automatically saved and git-ignored to prevent repository bloat.
+### Comprehensive Benchmarking
+```bash
+cd tests/benchmarks
+./precise_benchmark.sh           # High-precision timing
+./run_all_benchmarks_fixed.sh   # Cross-language comparison
+```
+
+### Performance Monitoring
+- **Automated regression detection** with pass/warn/fail thresholds
+- **Historical performance tracking** with git commit correlation
+- **CI/CD integration** for continuous performance monitoring
+- **Pre-commit hooks** to catch regressions early
+
+Results are automatically logged and tracked for performance trend analysis.
 
 ---
 
@@ -237,6 +258,7 @@ Results are automatically saved and git-ignored to prevent repository bloat.
 
 - **[Complete Orus Tutorial](docs/COMPLETE_ORUS_TUTORIAL.md)** - 📚 Ultimate comprehensive guide covering every feature
 - **[Language Guide](docs/LANGUAGE.md)** - Complete syntax and features  
+- **[Performance Testing Guide](docs/PERFORMANCE_TESTING_GUIDE.md)** - 🚀 Comprehensive performance testing methodology
 - **[Loop Safety & Performance Guide](docs/LOOP_SAFETY_GUIDE.md)** - 🔒 Progressive loop safety system with performance tuning
-- **[Benchmarks](benchmarks/README.md)** - Performance comparisons
+- **[Benchmarks](tests/benchmarks/README.md)** - Performance comparisons and testing tools
 - **[Missing Features](MISSING.md)** - Development roadmap

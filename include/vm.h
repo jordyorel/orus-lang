@@ -415,9 +415,9 @@ typedef enum {
     OP_MOVE_I64,           // dst_reg, src_reg
     OP_MOVE_F64,           // dst_reg, src_reg
 
-    // Runtime loop guards
-    OP_LOOP_GUARD_INIT,    // reg, max_iterations - Initialize loop guard
-    OP_LOOP_GUARD_CHECK,   // reg - Check iteration count and halt if exceeded
+    
+    // Built-in functions
+    OP_TIME_STAMP,         // reg - Get current timestamp in nanoseconds
     
     // Other
     OP_IMPORT_R,
@@ -463,15 +463,6 @@ typedef struct {
     int spillCount;         // Number of spilled variables
 } RegisterAllocator;
 
-// Loop safety and infinite loop detection
-typedef struct {
-    bool isInfinite;          // True if loop is detected as infinite
-    bool hasBreakOrReturn;    // True if loop contains break or return statements
-    bool hasVariableCondition; // True if condition depends on variables
-    int maxIterations;        // Maximum allowed iterations for safety (0 = unlimited)
-    int warningThreshold;     // Iteration count to show warning (1M default)
-    int staticIterationCount; // Compile-time computed iteration count (-1 if unknown)
-} LoopSafetyInfo;
 
 typedef struct {
     JumpTable breakJumps;     // Patches for break statements
@@ -481,7 +472,6 @@ typedef struct {
     const char* label;     // Optional loop label
     int loopVarIndex;      // Index of loop variable in locals array (-1 if none)
     int loopVarStartInstr; // Instruction where loop variable becomes live
-    LoopSafetyInfo safety; // Loop safety analysis
 } LoopContext;
 
 // Loop Invariant Code Motion (LICM) instruction-level data structures

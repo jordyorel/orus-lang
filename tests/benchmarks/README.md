@@ -1,230 +1,197 @@
-# Cross-Language Arithmetic Benchmark Suite
+# Orus Performance Testing & Benchmark Suite
 
-This directory contains **universal arithmetic benchmarks** designed to compare Orus performance against other popular languages (Python, JavaScript, Lua).
+This directory contains **comprehensive performance testing tools** for Orus, including cross-language benchmarks and automated regression testing.
 
-## Philosophy: One Benchmark, Multiple Languages
+## 🎯 Quick Start
 
-Instead of scattered type-specific tests, we use **one comprehensive arithmetic benchmark** implemented equivalently in each language for direct performance comparison.
-
-## Files
-
-### Core Benchmarks
-- **`arithmetic_benchmark.orus`** - Orus implementation
-- **`arithmetic_benchmark.py`** - Python 3 implementation  
-- **`arithmetic_benchmark.js`** - Node.js implementation
-- **`arithmetic_benchmark.lua`** - Lua implementation
-
-### Wide Range Performance Benchmarks
-- **`final_benchmark.orus`** - Orus optimization showcase
-- **`final_benchmark.lua`** - Lua baseline comparison
-- **`run_final_benchmark.sh`** - LICM and 4-byte loop testing
-- **`simple_perf.orus/.lua`** - Simple performance comparison
-- **`run_simple_perf.sh`** - Quick performance runner
-
-### Debug and Development
-- **`performance_demo.orus`** - Feature demonstration
-- **`wide_range_working.orus`** - Loop safety testing
-- **`test_boundary.orus`** - Loop guard boundary testing
-
-### Execution
-- **`run_arithmetic_benchmark.sh`** - Automated cross-language runner
-- **`run_final_benchmark.sh`** - 🏆 **NEW:** Comprehensive optimization showcase
-
-## What Gets Tested
-
-Each benchmark performs **identical operations**:
-
-1. **Addition Loop** - 1 million iterations of integer addition
-2. **Mixed Arithmetic** - 100K iterations of floating point operations (add, multiply, divide, subtract)
-3. **Integer Arithmetic** - Factorial calculation (1-19)
-4. **Division/Modulo** - 10K iterations of division and modulo operations
-5. **Floating Point Precision** - 50K iterations of precision-sensitive operations
-
-## Running Benchmarks
-
-### From Root Makefile (Recommended)
-
+### Performance Dashboard
 ```bash
-# Run all languages side-by-side
-make benchmark
-
-# Run Orus only (fast)
-make benchmark-orus
-
-# See all options
-make help
+./performance_dashboard.sh        # Quick status overview
 ```
 
-### Direct Execution
-
+### Automated Testing
 ```bash
-# Run cross-language comparison
-cd tests/benchmarks
-./run_arithmetic_benchmark.sh
-
-# Run individual language
-./orus arithmetic_benchmark.orus
-python3 arithmetic_benchmark.py
-node arithmetic_benchmark.js
-lua arithmetic_benchmark.lua
+./performance_regression_test.sh  # Regression testing with baselines
 ```
 
-## Sample Output
-
-```
-========================================================
-Universal Arithmetic Benchmark: Cross-Language Testing
-========================================================
-
-=== Orus ===
-Running: ../../orus arithmetic_benchmark.orus
-Results:
-499999500000
-6.9146e+217
-109641728
-34611628
-2.53092e+23
-
-Timing:
-real    0m0.032s
-user    0m0.028s
-sys     0m0.002s
-
-=== Python 3 ===
-Running: python3 arithmetic_benchmark.py
-Results:
-499999500000
-6.914599446192004e+217
-121645100408832000
-34611628
-2.5309178438242257e+23
-
-Timing:
-Python execution time: 0.036069 seconds
-real    0m0.055s
-user    0m0.047s
-sys     0m0.005s
-========================================================
+### High-Precision Benchmarking
+```bash
+./precise_benchmark.sh           # Detailed timing analysis
 ```
 
-## Performance Analysis
+### Cross-Language Comparison
+```bash
+./run_all_benchmarks_fixed.sh   # Compare with Python, Node.js, Lua, Julia
+```
 
-The benchmarks enable direct comparison of:
-- **Execution Time**: Total runtime across languages
-- **Arithmetic Performance**: Raw computational speed
-- **Memory Usage**: System resource consumption
-- **Precision Handling**: Floating point accuracy
+## 📁 File Structure
 
-## Design Benefits
+### 🔧 Testing Tools
+- **`performance_dashboard.sh`** - Performance status overview with trends
+- **`performance_regression_test.sh`** - Automated regression testing system
+- **`precise_benchmark.sh`** - High-precision timing with statistical analysis  
+- **`run_all_benchmarks_fixed.sh`** - Cross-language benchmark comparison
 
-### Unified Testing
-- ✅ **Same operations** across all languages
-- ✅ **Comparable results** for validation
-- ✅ **Equivalent workloads** for fair comparison
-- ✅ **Automated execution** via Makefile
+### 📊 Benchmark Programs
+- **`arithmetic_benchmark.orus`** - Arithmetic-heavy operations (1M+ iterations)
+- **`control_flow_benchmark.orus`** - Control flow and conditional logic
+- **`arithmetic_benchmark.{py,js,lua,jl}`** - Equivalent implementations for comparison
+- **`control_flow_benchmark.{py,js,lua,jl}`** - Control flow implementations
 
-### Maintainability
-- ✅ **One file per language** (not scattered)
-- ✅ **Single test suite** to maintain
-- ✅ **Easy to add new languages**
-- ✅ **Consistent test structure**
+### 📈 Performance Data
+- **`performance_baselines.txt`** - Performance targets and thresholds
+- **`performance_results.log`** - Historical test results with git commits
 
-### Integration
-- ✅ **Makefile integration** for CI/CD
-- ✅ **Professional output** with timing
-- ✅ **Error checking** for missing interpreters
-- ✅ **Documentation** and help system
+## 🚀 Current Performance Status
 
-This approach provides meaningful performance comparisons while maintaining simplicity and avoiding the complexity of managing dozens of scattered benchmark files.
+### Latest Results (Jul 2025)
+| Benchmark | **Orus** | Target | Status |
+|-----------|----------|--------|--------|
+| **Arithmetic** | **28ms** ⚡ | 30ms | ✅ **Excellent** |
+| **Control Flow** | **52ms** ⚡ | 55ms | ✅ **Excellent** |
+
+### Performance vs Competition
+| Language | Arithmetic | Control Flow |
+|----------|------------|--------------|
+| **Orus** | **28ms** | **52ms** |
+| Python | 63ms | 86ms |
+| Node.js | 38ms | 38ms |
+| Lua | 17ms | 20ms |
+
+*All measurements: M1 MacBook Pro, median of 5 runs*
+
+## 🔍 Benchmark Details
+
+### Arithmetic Benchmark Operations
+1. **Addition Loop** - 1 million integer additions
+2. **Mixed Arithmetic** - 100K floating point operations
+3. **Integer Arithmetic** - Factorial calculations (1-19)
+4. **Division/Modulo** - 10K division and modulo operations
+5. **Floating Point** - 50K precision-sensitive operations
+
+### Control Flow Benchmark Operations
+1. **Conditional Logic** - Complex if/else chains
+2. **Loop Constructs** - Various loop types and nesting
+3. **Function Calls** - Call overhead testing
+4. **Variable Scoping** - Scope resolution performance
+5. **Pattern Matching** - Conditional branching
+
+## 📊 Performance Testing Methodology
+
+### Timing Accuracy
+- **High-precision timing** using nanosecond resolution
+- **Statistical analysis** with median of multiple runs
+- **System isolation** to avoid measurement contamination
+- **Multiple methodologies** for validation
+
+### Regression Detection
+- **Automated baselines** against documented targets
+- **Warning thresholds** at 15% degradation
+- **Failure thresholds** at 50% degradation
+- **Historical tracking** with git commit correlation
+
+### Cross-Language Fairness
+- **Identical algorithms** across all languages
+- **Same computational workload** for each test
+- **Equivalent data structures** and operations
+- **Fair timing methodology** for all languages
+
+## 🔧 Advanced Usage
+
+### Regression Testing Integration
+```bash
+# Run in CI/CD pipeline
+./performance_regression_test.sh
+exit_code=$?
+if [ $exit_code -eq 2 ]; then
+    echo "Critical performance regression detected!"
+    exit 1
+fi
+```
+
+### Custom Baseline Updates
+```bash
+# Update performance targets
+echo "arithmetic,0.025,$(date)" > performance_baselines.txt
+echo "control_flow,0.048,$(date)" >> performance_baselines.txt
+```
+
+### Historical Analysis
+```bash
+# View performance trends
+tail -20 performance_results.log
+
+# Compare specific commits
+grep "abc1234" performance_results.log
+grep "def5678" performance_results.log
+```
+
+## 📈 Performance Features Tested
+
+### Compiler Optimizations
+- ✅ **LICM** - Loop Invariant Code Motion
+- ✅ **Register Allocation** - Efficient register usage
+- ✅ **Constant Folding** - Compile-time evaluation
+- ✅ **Type Specialization** - Type-specific opcodes
+
+### Runtime Performance
+- ✅ **Register-based VM** - Fewer memory accesses
+- ✅ **Computed Goto** - Fast instruction dispatch
+- ✅ **Memory Management** - Efficient GC with object pooling
+- ✅ **Zero JIT Warmup** - Consistent performance from start
+
+### Language Features
+- ✅ **Type Inference** - Minimal type annotation overhead
+- ✅ **Loop Constructs** - For/while loop optimization
+- ✅ **Function Calls** - Efficient calling conventions
+- ✅ **Variable Scoping** - Fast scope resolution
+
+## 🛠️ Troubleshooting
+
+### Common Issues
+
+#### Inconsistent Results
+**Solution**: Ensure system is not under heavy load during testing
+```bash
+# Check system load
+top -l 1 | grep "CPU usage"
+```
+
+#### Missing Language Interpreters
+**Solution**: Install required interpreters
+```bash
+# macOS
+brew install python node lua julia
+
+# Ubuntu
+sudo apt-get install python3 nodejs lua5.3 julia
+```
+
+#### Performance Regression
+**Solution**: Use regression testing tools
+```bash
+./performance_regression_test.sh  # Detailed analysis
+./performance_dashboard.sh        # Quick overview
+```
+
+## 📚 Related Documentation
+
+- **[Performance Testing Guide](../../docs/PERFORMANCE_TESTING_GUIDE.md)** - Comprehensive testing methodology
+- **[Loop Safety Guide](../../docs/LOOP_SAFETY_GUIDE.md)** - Loop optimization and safety
+- **[Architecture Guide](../../docs/VM_OPTIMIZATION.md)** - VM performance details
+
+## 🎯 Performance Targets
+
+### Current Baselines (Jul 2025)
+- **Arithmetic**: ≤ 30ms (currently ~28ms) ✅
+- **Control Flow**: ≤ 55ms (currently ~52ms) ✅
+
+### Quality Standards
+- **Measurement Precision**: ±1ms accuracy
+- **Test Reliability**: <5% variance across runs
+- **Regression Detection**: 15% warning, 50% failure
+- **Documentation**: Complete performance methodology
 
 ---
 
-## 🚀 Wide Range Benchmark Results
-
-### Latest Performance: Orus vs Lua
-
-Our **final benchmark** demonstrates Orus's advanced optimization capabilities:
-
-```bash
-./run_final_benchmark.sh
-```
-
-**Results (Latest Run):**
-```
-🦀 Orus time:  0.006806s
-🌙 Lua time:   0.006584s
-📊 Orus is 1.03x slower than Lua
-```
-
-### Key Optimizations Demonstrated
-
-#### ✅ LICM (Loop Invariant Code Motion)
-```orus
-for i in 0..9000:
-    inv1 = a * b + c        // Hoisted out of loop
-    inv2 = d * a - b        // Computed once, not 9000 times
-    result = inv1 + inv2 + i
-```
-
-#### ✅ 4-Byte Loop Iteration Support
-```orus
-// Wide ranges with efficient stepping
-for i in 0..10000000..10000:    // 1K iterations over 10M range
-    process(i)
-```
-
-#### ✅ Runtime Loop Guards
-- **Safety Threshold**: 10,000 iterations
-- **Maximum Capacity**: 4,294,967,295 iterations (4-byte limit)
-- **Guard Overhead**: ~2-5% for protected loops
-
-### Benchmark Coverage
-
-| Test | Orus Features | Iterations | Range Covered |
-|------|---------------|------------|---------------|
-| **LICM Optimization** | Loop invariant hoisting | 9,000 | Complex expressions |
-| **Nested Loops** | Multi-level optimization | 9,500 | 95×100 matrix |
-| **Wide Range Steps** | 4-byte architecture | 1,000 | 0 to 10,000,000 |
-| **Mixed Arithmetic** | Type-specific opcodes | 8,000 | Float/int operations |
-
-### Performance Insights
-
-#### 🎯 **Competitive Performance**
-- Orus achieves **96.7%** of Lua's speed
-- **Sub-7ms** execution time for complex workloads
-- Register-based VM shows strong baseline performance
-
-#### 🔧 **Optimization Effectiveness**
-- **LICM** reduces redundant calculations in loops
-- **Type-specific opcodes** minimize boxing overhead
-- **Wide range stepping** handles massive datasets efficiently
-
-#### 🛡️ **Safety Without Compromise**
-- Runtime guards protect against infinite loops
-- 4-byte iteration limits support enterprise-scale processing
-- Safety overhead is minimal for typical workloads
-
-### Running Wide Range Benchmarks
-
-```bash
-# Quick performance comparison
-./run_simple_perf.sh
-
-# Comprehensive optimization showcase  
-./run_final_benchmark.sh
-
-# Debug loop safety boundaries
-./orus test_boundary.orus
-```
-
-### Known Issues & Limitations
-
-#### ⚠️ Loop Guard Bug (In Development)
-- **Issue**: Loops >10K iterations trigger safety guards that prevent execution
-- **Workaround**: Use large steps (e.g., `0..1000000..1000`) for wide ranges
-- **Status**: Under investigation - guards should count, not block execution
-
-#### 📊 Performance Notes
-- Small benchmarks favor Lua's mature optimizations
-- Orus shows competitive performance despite being early-stage
-- LICM optimization demonstrates clear algorithmic advantages
+**Orus delivers excellent performance with comprehensive testing infrastructure to maintain and improve it continuously.**

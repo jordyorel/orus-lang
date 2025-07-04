@@ -1,0 +1,50 @@
+#!/bin/bash
+
+# Pre-commit hook for Orus development
+# Runs performance regression tests to catch performance issues early
+
+echo "🔍 Running pre-commit performance checks..."
+
+# Change to the repository root
+cd "$(git rev-parse --show-toplevel)"
+
+# Check if Orus is built
+if [ ! -f "orus" ]; then
+    echo "⚠️  Orus not built. Building now..."
+    if ! make > /dev/null 2>&1; then
+        echo "❌ Build failed. Cannot run performance tests."
+        exit 1
+    fi
+fi
+
+# Run performance regression tests
+echo "📊 Running performance regression tests..."
+cd tests/benchmarks
+
+if ./performance_regression_test.sh > /dev/null 2>&1; then
+    exit_code=$?
+    case $exit_code in
+        0)
+            echo "✅ Performance tests passed"
+            ;;
+        1)
+            echo "⚠️  Performance warning detected"
+            echo "📈 Run './tests/benchmarks/performance_regression_test.sh' for details"
+            echo "🤔 Consider investigating performance impact before committing"
+            # Allow commit with warning
+            ;;
+        2)
+            echo "❌ Critical performance regression detected!"
+            echo "📉 Performance degradation exceeds failure threshold"
+            echo "🛠️  Please run './tests/benchmarks/performance_regression_test.sh' for analysis"
+            echo "🚫 Commit blocked until performance is restored"
+            exit 1
+            ;;
+    esac
+else
+    echo "⚠️  Could not run performance tests"
+    echo "💡 Ensure you're in the correct directory and Orus is built"
+    # Allow commit if tests can't run
+fi
+
+echo "✨ Pre-commit checks complete"

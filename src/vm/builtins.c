@@ -2,6 +2,33 @@
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
+#include <stdint.h>
+
+#ifdef __APPLE__
+#include <mach/mach_time.h>
+#elif defined(__linux__)
+#include <time.h>
+#elif defined(_WIN32)
+#include <windows.h>
+#endif
+
+// High-precision timing infrastructure
+#ifdef __APPLE__
+static uint64_t timebase_numer = 0;
+static uint64_t timebase_denom = 0;
+static bool timebase_initialized = false;
+
+// Initialize mach timebase (called once)
+static void init_timebase() {
+    if (!timebase_initialized) {
+        mach_timebase_info_data_t info;
+        mach_timebase_info(&info);
+        timebase_numer = info.numer;
+        timebase_denom = info.denom;
+        timebase_initialized = true;
+    }
+}
+#endif
 
 static void print_formatted_value(Value value, const char* spec);
 
@@ -164,4 +191,41 @@ void builtin_print(Value* args, int count, bool newline) {
     }
     if (newline) putchar('\n');
     fflush(stdout);
+}
+
+// Cross-platform high-precision timestamp function
+// Returns nanoseconds since an arbitrary but monotonic starting point
+int64_t builtin_time_stamp() {
+#ifdef __APPLE__
+    // macOS: Use mach_absolute_time() - fastest and most precise
+    init_timebase();
+    uint64_t abs_time = mach_absolute_time();
+    return (int64_t)((abs_time * timebase_numer) / timebase_denom);
+    
+#elif defined(__linux__)
+    // Linux: Use clock_gettime with CLOCK_MONOTONIC
+    struct timespec ts;
+    if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) {
+        return (int64_t)(ts.tv_sec * 1000000000LL + ts.tv_nsec);
+    }
+    return 0; // Error fallback
+    
+#elif defined(_WIN32)
+    // Windows: Use QueryPerformanceCounter
+    static LARGE_INTEGER frequency = {0};
+    if (frequency.QuadPart == 0) {
+        QueryPerformanceFrequency(&frequency);
+    }
+    
+    LARGE_INTEGER counter;
+    QueryPerformanceCounter(&counter);
+    
+    // Convert to nanoseconds
+    return (int64_t)((counter.QuadPart * 1000000000LL) / frequency.QuadPart);
+    
+#else
+    // Fallback: Use standard clock() - less precise but portable
+    #include <time.h>
+    return (int64_t)((clock() * 1000000000LL) / CLOCKS_PER_SEC);
+#endif
 }

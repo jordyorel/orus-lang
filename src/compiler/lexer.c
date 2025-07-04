@@ -194,6 +194,7 @@ static TokenType identifier_type(const char* start, int length) {
         case 't':
             if (length == 4 && memcmp(start, "true", 4) == 0) return TOKEN_TRUE;
             if (length == 3 && memcmp(start, "try", 3) == 0) return TOKEN_TRY;
+            if (length == 10 && memcmp(start, "time_stamp", 10) == 0) return TOKEN_TIME_STAMP;
             break;
         case 'u':
             if (length == 3 && memcmp(start, "use", 3) == 0) return TOKEN_USE;

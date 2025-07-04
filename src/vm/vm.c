@@ -8,6 +8,7 @@
 #include <string.h>
 
 #include "vm.h"
+#include "builtins.h"
 #include "common.h"
 #include "compiler.h"
 #include "parser.h"
@@ -362,9 +363,8 @@ static InterpretResult run(void) {
         dispatchTable[OP_MOVE_I64] = &&LABEL_OP_MOVE_I64;
         dispatchTable[OP_MOVE_F64] = &&LABEL_OP_MOVE_F64;
         
-        // Runtime loop guard opcodes
-        dispatchTable[OP_LOOP_GUARD_INIT] = &&LABEL_OP_LOOP_GUARD_INIT;
-        dispatchTable[OP_LOOP_GUARD_CHECK] = &&LABEL_OP_LOOP_GUARD_CHECK;
+        // Built-in functions
+        dispatchTable[OP_TIME_STAMP] = &&LABEL_OP_TIME_STAMP;
         
         dispatchTable[OP_HALT] = &&LABEL_OP_HALT;
     }
@@ -1455,7 +1455,27 @@ LABEL_OP_PRINT_MULTI_R: {
 
 LABEL_OP_PRINT_R: {
         uint8_t reg = READ_BYTE();
-        printValue(vm.registers[reg]);
+        
+        // Check if this is a typed register first
+        if (reg < REGISTER_COUNT && vm.typed_regs.reg_types[reg] != REG_TYPE_NONE) {
+            switch (vm.typed_regs.reg_types[reg]) {
+                case REG_TYPE_I32:
+                    printf("%d", vm.typed_regs.i32_regs[reg]);
+                    break;
+                case REG_TYPE_I64:
+                    printf("%lld", (long long)vm.typed_regs.i64_regs[reg]);
+                    break;
+                case REG_TYPE_F64:
+                    printf("%g", vm.typed_regs.f64_regs[reg]);
+                    break;
+                default:
+                    printValue(vm.registers[reg]);
+                    break;
+            }
+        } else {
+            printValue(vm.registers[reg]);
+        }
+        
         printf("\n");
         fflush(stdout);
         DISPATCH();
@@ -1795,52 +1815,16 @@ LABEL_OP_MOVE_F64: {
     DISPATCH();
 }
 
-LABEL_OP_LOOP_GUARD_INIT: {
-    uint8_t reg = READ_BYTE();
-    uint32_t warningThreshold = READ_BYTE() | (READ_BYTE() << 8) | (READ_BYTE() << 16) | (READ_BYTE() << 24);
-    uint32_t maxIterations = READ_BYTE() | (READ_BYTE() << 8) | (READ_BYTE() << 16) | (READ_BYTE() << 24);
+LABEL_OP_TIME_STAMP: {
+    uint8_t dst = READ_BYTE();
     
-    // Initialize loop guard counter in the register
-    vm.registers[reg] = I32_VAL(0);
+    // Get high-precision timestamp in nanoseconds
+    int64_t timestamp = builtin_time_stamp();
     
-    // Store warning threshold in register (reg + 1)
-    if (reg + 1 < REGISTER_COUNT) {
-        vm.registers[reg + 1] = I32_VAL(warningThreshold);
-    }
-    
-    // Store max iterations in register (reg + 2)
-    if (reg + 2 < REGISTER_COUNT) {
-        vm.registers[reg + 2] = I32_VAL(maxIterations);
-    }
-    
-    DISPATCH();
-}
-
-LABEL_OP_LOOP_GUARD_CHECK: {
-    uint8_t reg = READ_BYTE();
-    
-    // Increment the counter
-    int32_t current = AS_I32(vm.registers[reg]) + 1;
-    vm.registers[reg] = I32_VAL(current);
-    
-    // Get warning threshold and max iterations
-    int32_t warningThreshold = (reg + 1 < REGISTER_COUNT && IS_I32(vm.registers[reg + 1])) 
-                              ? AS_I32(vm.registers[reg + 1]) : 1000000;
-    int32_t maxIterations = (reg + 2 < REGISTER_COUNT && IS_I32(vm.registers[reg + 2])) 
-                           ? AS_I32(vm.registers[reg + 2]) : 10000000;
-    
-    // Check for warning threshold (only warn once)
-    if (current == warningThreshold && warningThreshold > 0) {
-        fprintf(stderr, "Warning: Loop has exceeded %d iterations and is now being monitored for safety.\n", warningThreshold);
-        fprintf(stderr, "Set ORUS_MAX_LOOP_ITERATIONS=0 to disable loop limits.\n");
-    }
-    
-    // Check for hard stop (unless maxIterations is 0 = unlimited)
-    if (maxIterations > 0 && current > maxIterations) {
-        runtimeError(ERROR_RUNTIME, (SrcLocation){vm.filePath, vm.currentLine, vm.currentColumn},
-                     "Loop exceeded maximum iteration limit (%d). Set ORUS_MAX_LOOP_ITERATIONS=0 for unlimited loops.", maxIterations);
-        RETURN(INTERPRET_RUNTIME_ERROR);
-    }
+    // Store in both typed register and regular register for compatibility
+    vm.typed_regs.i64_regs[dst] = timestamp;
+    vm.typed_regs.reg_types[dst] = REG_TYPE_I64;
+    vm.registers[dst] = I64_VAL(timestamp);
     
     DISPATCH();
 }
@@ -3227,7 +3211,27 @@ LABEL_UNKNOWN:
             // I/O operations
             case OP_PRINT_R: {
                 uint8_t reg = READ_BYTE();
-                printValue(vm.registers[reg]);
+                
+                // Check if this is a typed register first
+                if (reg < REGISTER_COUNT && vm.typed_regs.reg_types[reg] != REG_TYPE_NONE) {
+                    switch (vm.typed_regs.reg_types[reg]) {
+                        case REG_TYPE_I32:
+                            printf("%d", vm.typed_regs.i32_regs[reg]);
+                            break;
+                        case REG_TYPE_I64:
+                            printf("%lld", (long long)vm.typed_regs.i64_regs[reg]);
+                            break;
+                        case REG_TYPE_F64:
+                            printf("%g", vm.typed_regs.f64_regs[reg]);
+                            break;
+                        default:
+                            printValue(vm.registers[reg]);
+                            break;
+                    }
+                } else {
+                    printValue(vm.registers[reg]);
+                }
+                
                 printf("\n");
                 fflush(stdout);
                 break;
@@ -3573,30 +3577,6 @@ LABEL_UNKNOWN:
                 break;
             }
 
-            case OP_LOOP_GUARD_INIT: {
-                uint8_t reg = READ_BYTE();
-                uint32_t maxIterations = READ_BYTE() | (READ_BYTE() << 8) | (READ_BYTE() << 16) | (READ_BYTE() << 24);
-                
-                // Initialize loop guard counter in the register
-                vm.registers[reg] = I32_VAL(0);
-                
-                // Store max iterations in a separate register (reg + 1)
-                if (reg + 1 < REGISTER_COUNT) {
-                    vm.registers[reg + 1] = I32_VAL(maxIterations);
-                }
-                
-                break;
-            }
-
-            case OP_LOOP_GUARD_CHECK: {
-                uint8_t reg = READ_BYTE();
-                
-                // Increment the counter
-                int32_t current = AS_I32(vm.registers[reg]) + 1;
-                vm.registers[reg] = I32_VAL(current);
-                
-                // Check against max iterations
-                if (reg + 1 < REGISTER_COUNT && IS_I32(vm.registers[reg + 1])) {
                     int32_t maxIterations = AS_I32(vm.registers[reg + 1]);
                     if (current > maxIterations) {
                         runtimeError(ERROR_RUNTIME, (SrcLocation){vm.filePath, vm.currentLine, vm.currentColumn},
@@ -3604,6 +3584,19 @@ LABEL_UNKNOWN:
                         RETURN(INTERPRET_RUNTIME_ERROR);
                     }
                 }
+                
+                break;
+            }
+
+            case OP_TIME_STAMP: {
+                uint8_t dst = READ_BYTE();
+                
+                // Get high-precision timestamp in nanoseconds
+                int64_t timestamp = builtin_time_stamp();
+                
+                // Store in typed register as i64
+                vm.typed_regs.i64_regs[dst] = timestamp;
+                vm.typed_regs.reg_types[dst] = REG_TYPE_I64;
                 
                 break;
             }

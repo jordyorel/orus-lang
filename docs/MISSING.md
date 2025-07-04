@@ -149,7 +149,7 @@ result = x > 0 ? "positive" : "non-positive"
 - [x] Replace fixed-size break/continue jump arrays with dynamic vectors
 - [x] Nested loop support with labeled break/continue for arbitrary loop depth
 - [x] **DONE**: Loop variable scoping, lifetime management, and register allocation optimization *(Enhanced with live range analysis, register reuse, and cross-loop variable lifetime tracking)*
-- [x] **DONE**: Compile-time infinite loop detection and runtime guard mechanisms *(Implemented with LoopSafetyInfo analysis and VM opcodes OP_LOOP_GUARD_INIT/CHECK)*
+- [ ] Compile-time infinite loop detection and runtime guard mechanisms *(Implemented with LoopSafetyInfo analysis and VM opcodes OP_LOOP_GUARD_INIT/CHECK)*
 - [x] **DONE**: Advanced Orus Range Syntax: `start..end..step` with direction validation *(Implemented with comprehensive compile-time validation and runtime support)*
 
 **Performance & Safety Requirements:**
