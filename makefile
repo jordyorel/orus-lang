@@ -40,7 +40,7 @@ C_TEST_TARGETS = $(C_TEST_SRCS:$(TESTDIR)/c/%.c=$(BUILDDIR)/%)
 # Targets
 ORUS = orus
 
-.PHONY: all clean test test-verbose test-basic test-types test-all c-test benchmark benchmark-orus benchmark-arithmetic benchmark-control benchmark-control-orus help format
+.PHONY: all clean test test-verbose test-basic test-types test-loop-safety test-all c-test benchmark benchmark-orus benchmark-arithmetic benchmark-control benchmark-control-orus help format
 
 all: $(ORUS)
 
@@ -190,6 +190,17 @@ test: $(ORUS)
 		fi; \
 	done; \
 	echo ""; \
+	echo "\033[36m=== Loop Safety Tests ===\033[0m"; \
+	printf "Running comprehensive loop safety test suite ... "; \
+	if cd $(TESTDIR)/loop_safety && ./run_loop_safety_tests.sh >/dev/null 2>&1; then \
+		printf "\033[32mPASS (all 16 tests)\033[0m\n"; \
+		passed=$$((passed + 16)); \
+	else \
+		printf "\033[31mFAIL\033[0m\n"; \
+		failed=$$((failed + 1)); \
+	fi; \
+	cd ../..; \
+	echo ""; \
 	echo "========================"; \
 	echo "\033[36m=== Test Summary ===\033[0m"; \
 	if [ $$failed -eq 0 ]; then \
@@ -248,6 +259,11 @@ test-verbose: $(ORUS)
 		echo "\033[31m$$failed test(s) failed, $$passed test(s) passed.\033[0m"; \
 	fi
 
+# Run loop safety tests only
+test-loop-safety: $(ORUS)
+	@echo "\033[36m=== Loop Safety Test Suite ===\033[0m"
+	@cd $(TESTDIR)/loop_safety && ./run_loop_safety_tests.sh
+
 # Run comprehensive tests (all tests + C tests)
 test-all: test c-test
 	@echo "\033[36m=== Comprehensive Test Suite Complete ===\033[0m"
@@ -291,6 +307,7 @@ help:
 	@echo "  test-verbose - Run tests with detailed error output"
 	@echo "  test-basic  - Run only basic tests (quick smoke test)"
 	@echo "  test-types  - Run only type system tests"
+	@echo "  test-loop-safety - Run comprehensive loop safety test suite"
 	@echo "  test-all    - Run comprehensive test suite (all tests + C tests)"
 	@echo "  c-test      - Run C unit tests for VM and critical components"
 	@echo "  benchmark   - Run all cross-language benchmarks (Orus vs Python/JS/Lua)"

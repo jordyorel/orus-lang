@@ -9,6 +9,7 @@ tests/
 ├── types/          # Type system tests (i32, i64, u32, u64, f64, etc.)
 ├── conditionals/   # Conditional statements and expressions
 ├── control_flow/   # Loops, break, continue statements
+├── loop_safety/    # 🔒 Loop safety system comprehensive tests
 ├── expressions/    # Expressions and operators
 ├── formatting/     # String formatting and output
 ├── literals/       # Literal values and constants
@@ -46,6 +47,17 @@ Tests for if/else statements, ternary operators, and boolean expressions.
 
 #### Control Flow (`control_flow/`)
 Tests for loops (for, while), break/continue statements, and control flow patterns.
+
+#### Loop Safety (`loop_safety/`) 🔒
+Comprehensive tests for the progressive loop safety system:
+- **Threshold Testing**: Edge cases around 100K, 1M, and 10M iteration boundaries
+- **Environment Variables**: `ORUS_MAX_LOOP_ITERATIONS` and `ORUS_LOOP_GUARD_THRESHOLD` configuration
+- **Loop Type Consistency**: For-loops vs while-loops behavior validation
+- **Nested Loops**: Independent guard tracking and multiple warnings
+- **Stress Testing**: Register allocation and very large iteration counts
+- **Static vs Dynamic**: Compile-time vs runtime loop analysis validation
+
+Run: `cd loop_safety && ./run_loop_safety_tests.sh`
 
 #### Expressions (`expressions/`)
 Tests for binary operations, boolean logic, comparison operators, and complex expressions.

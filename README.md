@@ -68,9 +68,9 @@ else:
 for i in 0..20..2:
     print("Even number: {}", i)
 
-# Automatic infinite loop protection
-while processing:
-    do_work()  # Runtime guards prevent runaway loops
+# Progressive loop safety system
+for i in 0..1500000:        # Warns at 1M, continues
+    process_data(i)         # Automatic protection against runaway loops
 ```
 
 ### **Structs & Methods**
@@ -237,7 +237,6 @@ Results are automatically saved and git-ignored to prevent repository bloat.
 
 - **[Complete Orus Tutorial](docs/COMPLETE_ORUS_TUTORIAL.md)** - 📚 Ultimate comprehensive guide covering every feature
 - **[Language Guide](docs/LANGUAGE.md)** - Complete syntax and features  
-- **[Loop Safety Features](docs/LOOP_SAFETY.md)** - Advanced loop protection and range syntax
-- **[Loop Configuration Guide](docs/LOOP_CONFIGURATION.md)** - 🔧 Configure 4-byte iteration limits for your use case
+- **[Loop Safety & Performance Guide](docs/LOOP_SAFETY_GUIDE.md)** - 🔒 Progressive loop safety system with performance tuning
 - **[Benchmarks](benchmarks/README.md)** - Performance comparisons
 - **[Missing Features](MISSING.md)** - Development roadmap

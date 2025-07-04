@@ -1,0 +1,10 @@
+// Test environment variable configurations
+print("Testing 1.5M iterations with environment variables...")
+
+mut count = 0
+while count < 1500000:
+    count = count + 1
+    if count % 500000 == 0:
+        print("Progress:", count)
+
+print("Final count:", count)

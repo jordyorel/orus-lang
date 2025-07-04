@@ -7,7 +7,6 @@
 // Forward declarations for enhanced loop optimization functions
 static void analyzeVariableEscapes(Compiler* compiler, int loopDepth);
 static void optimizeRegisterPressure(Compiler* compiler);
-static bool isVariableUsedInLoop(Compiler* compiler, int localIndex, int loopStart, int loopEnd);
 static void promoteLoopInvariantVariables(Compiler* compiler, int loopStart, int loopEnd);
 
 // Forward declarations for loop safety functions
@@ -987,20 +986,33 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
                 }
             }
 
-            int loopStart = compiler->chunk->count;
-            enterLoop(compiler, loopStart, node->whileStmt.label);
-            
-            // Initialize runtime loop guard for potentially infinite while loops
+            // Initialize runtime loop guard for while loops that can't be statically analyzed
+            // or might exceed 100K iterations (according to new specification)
             uint8_t guardReg = 0;
-            if (!safetyInfo.hasVariableCondition || safetyInfo.isInfinite) {
+            if (!safetyInfo.hasVariableCondition || safetyInfo.isInfinite || 
+                safetyInfo.staticIterationCount < 0 || safetyInfo.staticIterationCount > 100000) {
                 guardReg = reuseOrAllocateRegister(compiler, "_while_guard", VAL_I32);
+                // Ensure we have space for guardReg + 2 (we need 3 consecutive registers)
+                if (guardReg > REGISTER_COUNT - 3) {
+                    // Force allocation of a safe register range
+                    guardReg = REGISTER_COUNT - 3;
+                }
                 emitByte(compiler, OP_LOOP_GUARD_INIT);
                 emitByte(compiler, guardReg);
+                // Emit warning threshold (4 bytes)
+                emitByte(compiler, (uint8_t)(safetyInfo.warningThreshold & 0xFF));
+                emitByte(compiler, (uint8_t)((safetyInfo.warningThreshold >> 8) & 0xFF));
+                emitByte(compiler, (uint8_t)((safetyInfo.warningThreshold >> 16) & 0xFF));
+                emitByte(compiler, (uint8_t)((safetyInfo.warningThreshold >> 24) & 0xFF));
+                // Emit max iterations (4 bytes)
                 emitByte(compiler, (uint8_t)(safetyInfo.maxIterations & 0xFF));
                 emitByte(compiler, (uint8_t)((safetyInfo.maxIterations >> 8) & 0xFF));
                 emitByte(compiler, (uint8_t)((safetyInfo.maxIterations >> 16) & 0xFF));
                 emitByte(compiler, (uint8_t)((safetyInfo.maxIterations >> 24) & 0xFF));
             }
+
+            int loopStart = compiler->chunk->count;
+            enterLoop(compiler, loopStart, node->whileStmt.label);
             
             int condReg = compileExpressionToRegister(node->whileStmt.condition, compiler);
             if (condReg < 0) {
@@ -1103,13 +1115,24 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             // Initialize runtime loop guard if needed
             uint8_t guardReg = 0;
             // Make loop guard threshold configurable via environment variable
-            // Default: 100K iterations (reasonable for most use cases)
+            // Default: 100K iterations (when to enable guards)
             const char* thresholdEnv = getenv("ORUS_LOOP_GUARD_THRESHOLD");
             int guardThreshold = thresholdEnv ? atoi(thresholdEnv) : 100000;
             if (safetyInfo.staticIterationCount < 0 || safetyInfo.staticIterationCount > guardThreshold) {
                 guardReg = reuseOrAllocateRegister(compiler, "_loop_guard", VAL_I32);
+                // Ensure we have space for guardReg + 2 (we need 3 consecutive registers)
+                if (guardReg > REGISTER_COUNT - 3) {
+                    // Force allocation of a safe register range
+                    guardReg = REGISTER_COUNT - 3;
+                }
                 emitByte(compiler, OP_LOOP_GUARD_INIT);
                 emitByte(compiler, guardReg);
+                // Emit warning threshold (4 bytes)
+                emitByte(compiler, (uint8_t)(safetyInfo.warningThreshold & 0xFF));
+                emitByte(compiler, (uint8_t)((safetyInfo.warningThreshold >> 8) & 0xFF));
+                emitByte(compiler, (uint8_t)((safetyInfo.warningThreshold >> 16) & 0xFF));
+                emitByte(compiler, (uint8_t)((safetyInfo.warningThreshold >> 24) & 0xFF));
+                // Emit max iterations (4 bytes)
                 emitByte(compiler, (uint8_t)(safetyInfo.maxIterations & 0xFF));
                 emitByte(compiler, (uint8_t)((safetyInfo.maxIterations >> 8) & 0xFF));
                 emitByte(compiler, (uint8_t)((safetyInfo.maxIterations >> 16) & 0xFF));
@@ -1619,23 +1642,6 @@ static void optimizeRegisterPressure(Compiler* compiler) {
     }
 }
 
-static bool isVariableUsedInLoop(Compiler* compiler, int localIndex, int loopStart, int loopEnd) {
-    if (localIndex < 0 || localIndex >= compiler->localCount) return false;
-    
-    RegisterAllocator* allocator = &compiler->regAlloc;
-    int rangeIndex = compiler->locals[localIndex].liveRangeIndex;
-    
-    if (rangeIndex >= 0 && rangeIndex < allocator->count) {
-        LiveRange* range = &allocator->ranges[rangeIndex];
-        
-        // Check if the variable's lifetime overlaps with the loop
-        if (range->start <= loopEnd && (range->end == -1 || range->end >= loopStart)) {
-            return true;
-        }
-    }
-    
-    return false;
-}
 
 static void promoteLoopInvariantVariables(Compiler* compiler, int loopStart, int loopEnd) {
     RegisterAllocator* allocator = &compiler->regAlloc;
@@ -1801,6 +1807,7 @@ bool isLoopInvariant(ASTNode* expr, LoopContext* loopCtx, Compiler* compiler) {
 }
 
 bool canSafelyHoist(ASTNode* expr, LoopContext* loopCtx) {
+    (void)loopCtx; // Parameter currently unused in simplified implementation
     if (!expr) return false;
     
     // Cannot hoist expressions with side effects
@@ -1841,6 +1848,7 @@ bool canSafelyHoist(ASTNode* expr, LoopContext* loopCtx) {
 }
 
 void hoistInvariantCode(Compiler* compiler, LICMAnalysis* analysis, int preHeaderPos) {
+    (void)preHeaderPos; // Parameter currently unused in simplified implementation
     Chunk* chunk = compiler->chunk;
     
     for (int i = 0; i < analysis->count; i++) {
@@ -1932,6 +1940,7 @@ bool dependsOnLoopVariable(ASTNode* expr, LoopContext* loopCtx) {
     switch (expr->type) {
         case NODE_IDENTIFIER: {
             const char* name = expr->identifier.name;
+            (void)name; // Variable currently unused in simplified implementation
             
             // Check if this identifier is the loop induction variable
             if (loopCtx->loopVarIndex >= 0) {
@@ -2190,6 +2199,7 @@ bool validateRangeDirection(ASTNode* start, ASTNode* end, ASTNode* step) {
 }
 
 bool detectInfiniteLoop(ASTNode* condition, ASTNode* increment, LoopSafetyInfo* safety) {
+    (void)increment; // Parameter currently unused in simplified implementation
     if (!safety) return false;
     
     // For while loops, check if condition is constant true
@@ -2209,6 +2219,7 @@ bool detectInfiniteLoop(ASTNode* condition, ASTNode* increment, LoopSafetyInfo* 
 }
 
 bool analyzeLoopSafety(Compiler* compiler, ASTNode* loopNode, LoopSafetyInfo* safety) {
+    (void)compiler; // Parameter currently unused in simplified implementation
     if (!safety || !loopNode) return false;
     
     // Initialize safety info
@@ -2216,9 +2227,16 @@ bool analyzeLoopSafety(Compiler* compiler, ASTNode* loopNode, LoopSafetyInfo* sa
     safety->hasBreakOrReturn = false;
     safety->hasVariableCondition = false;
     // Make maximum iterations configurable via environment variable
-    // Default: 1M iterations (safety limit for potentially infinite loops)
+    // Default: 10M iterations (hard stop limit)
     const char* maxIterEnv = getenv("ORUS_MAX_LOOP_ITERATIONS");
-    safety->maxIterations = maxIterEnv ? atoi(maxIterEnv) : 1000000;
+    if (maxIterEnv && atoi(maxIterEnv) == 0) {
+        safety->maxIterations = 0; // 0 = unlimited
+    } else {
+        safety->maxIterations = maxIterEnv ? atoi(maxIterEnv) : 10000000; // 10M default
+    }
+    
+    // Warning threshold at 1M iterations
+    safety->warningThreshold = 1000000;
     safety->staticIterationCount = -1;
     
     switch (loopNode->type) {

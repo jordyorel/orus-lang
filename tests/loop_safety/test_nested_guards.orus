@@ -1,0 +1,21 @@
+// Test nested loops where individual loops trigger guards
+print("=== NESTED GUARD TRIGGER TESTS ===")
+
+print("Test 1: Outer loop with 1.5M iterations")
+mut count1 = 0
+for outer in 0..1500000:  // Should warn at 1M
+    for inner in 0..2:
+        count1 = count1 + 1
+print("Outer 1.5M result:", count1)
+
+print("Test 2: Inner loop with dynamic 1.5M iterations")
+mut count2 = 0
+limit = 1500000  // Dynamic limit to ensure guards are enabled
+for outer in 0..3:
+    mut inner_count = 0
+    while inner_count < limit:  // Should warn at 1M
+        inner_count = inner_count + 1
+        count2 = count2 + 1
+print("Inner dynamic result:", count2)
+
+print("All nested guard tests completed!")

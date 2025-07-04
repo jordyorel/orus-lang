@@ -1,0 +1,9 @@
+// Test exactly 10,000,001 iterations
+print("Testing 10,000,001 iterations...")
+
+mut count = 0
+while count < 10000001:
+    count = count + 1
+    if count % 1000000 == 0:
+        print("Progress:", count)
+print("Final count:", count)

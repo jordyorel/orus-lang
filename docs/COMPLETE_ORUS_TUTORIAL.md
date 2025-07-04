@@ -928,41 +928,63 @@ result2 = a + b        // Uses fast f64 addition
 // No boxing/unboxing overhead for primitive types
 ```
 
-### Loop Safety and Large-Scale Processing
+### Progressive Loop Safety System
 
-Orus includes advanced loop safety mechanisms to protect against infinite loops while supporting massive data processing:
+Orus implements a progressive loop safety system that intelligently scales from zero-overhead execution to comprehensive safety monitoring:
 
-#### Automatic Loop Guards
+#### Safety Levels
 
-**4-Byte Iteration Support:**
-- **Maximum capacity**: 4,294,967,295 iterations (4.3 billion)
-- **Default safety limit**: 1,000,000 iterations
-- **Automatic activation**: Loops >10,000 iterations or unknown bounds
+| **Iteration Count** | **Behavior** | **Performance** |
+|---------------------|--------------|-----------------|
+| `< 100K` | ✅ Guard-free execution | **Maximum speed** |
+| `100K–1M` | ✅ Silent protection | **~1% overhead** |
+| `1M–10M` | ⚠️ Warning + continuation | **~1% overhead** |
+| `> 10M` | ❌ Safety stop | **Controlled execution** |
 
 ```orus
-// Automatically protected large loops
+// Fast execution (no guards)
 mut total = 0
-for i in 0..2000000:     // 2 million iterations - automatically guarded
+for i in 0..50000:       // Under 100K - maximum performance
     total = total + i
-print(total)             // Works safely
 
-// Optimized small loops (no guard overhead)
-for i in 0..1000:        // Small loop - no protection needed
-    print(i)
+// Silent protection  
+for batch in 0..500000:  // 500K iterations - protected silently
+    process_batch(batch)
+
+// Warning system
+for record in 0..1500000: // 1.5M iterations - warns at 1M
+    process_record(record)
+// Output: Warning: Loop has exceeded 1000000 iterations...
+
+// Safety stops
+for item in 0..20000000: // 20M requested - stops at 10M
+    process_item(item)
+// Error: Loop exceeded maximum iteration limit (10000000)
 ```
 
-#### Configuring Loop Limits
+#### Environment Configuration
 
-**Current Method** (modify compiler source):
-```c
-// In src/compiler/compiler.c, analyzeLoopSafety() function:
-safety->maxIterations = 5000000;  // Increase to 5 million iterations
+**Runtime Configuration** (no recompilation needed):
+```bash
+# Unlimited loops (scientific computing)
+ORUS_MAX_LOOP_ITERATIONS=0 ./orus simulation.orus
+
+# Custom 50M limit (large-scale data processing)  
+ORUS_MAX_LOOP_ITERATIONS=50000000 ./orus data_processor.orus
+
+# Conservative 1M limit (web applications)
+ORUS_MAX_LOOP_ITERATIONS=1000000 ./orus web_app.orus
+
+# Custom guard threshold
+ORUS_LOOP_GUARD_THRESHOLD=200000 ./orus program.orus
 ```
 
 **Performance Characteristics:**
-- **Small loops** (<10k): Zero guard overhead
-- **Large loops** (>10k): ~2-5% overhead for safety
-- **Memory usage**: 2 registers per guarded loop
+- **Small loops** (<100K): Zero guard overhead
+- **Guarded loops** (>100K): ~1% overhead for comprehensive safety
+- **Memory usage**: 3 registers per guarded loop (auto-managed)
+
+> 📖 **For comprehensive loop safety documentation**, see [Loop Safety Guide](LOOP_SAFETY_GUIDE.md)
 
 #### Enterprise-Scale Examples
 

@@ -456,7 +456,8 @@ typedef struct {
     bool isInfinite;          // True if loop is detected as infinite
     bool hasBreakOrReturn;    // True if loop contains break or return statements
     bool hasVariableCondition; // True if condition depends on variables
-    int maxIterations;        // Maximum allowed iterations for safety
+    int maxIterations;        // Maximum allowed iterations for safety (0 = unlimited)
+    int warningThreshold;     // Iteration count to show warning (1M default)
     int staticIterationCount; // Compile-time computed iteration count (-1 if unknown)
 } LoopSafetyInfo;
 

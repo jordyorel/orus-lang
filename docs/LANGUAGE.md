@@ -101,27 +101,42 @@ for i in 5..6..1:
     print(i)  # prints: 5
 ```
 
-#### Loop Safety Features
+#### Progressive Loop Safety System
 
-Orus includes built-in loop safety mechanisms to prevent infinite loops and ensure program reliability:
+Orus includes a progressive loop safety system that automatically protects against infinite loops while maintaining maximum performance:
 
-**Compile-time Infinite Loop Detection:**
+| **Iteration Count** | **Behavior** | **Message** |
+|---------------------|--------------|-------------|
+| `< 100K` | ✅ Fast, guard-free execution | None |
+| `100K–1M` | ✅ Guarded silently | No message |
+| `1M–10M` | ⚠️ Warns at 1M | Prints warning |
+| `> 10M` | ❌ Stops by default | Runtime error |
+
+**Examples:**
 ```orus
-# These patterns are detected at compile time:
+# Fast execution (no guards)
+for i in 0..50000:
+    print(i)
+
+# Silent protection (guards active)
+for i in 0..500000:
+    process_data(i)
+
+# Warning + continuation
+for i in 0..1500000:     # Warns at 1M, continues
+    compute(i)
+
+# Configurable limits
+# Set ORUS_MAX_LOOP_ITERATIONS=0 for unlimited loops
+```
+
+**Compile-time Detection:**
+```orus
 while true:     # ❌ Detected as infinite loop
     print("infinite")
 
 for i in 10..0:  # ❌ Invalid direction detected
     print(i)
-```
-
-**Runtime Loop Guards:**
-```orus
-# Large loops are automatically protected with iteration limits
-let counter = 0
-while counter < 1000000:
-    counter = counter + 1
-    # Runtime guards prevent runaway execution
 ```
 
 **Direction Validation:**

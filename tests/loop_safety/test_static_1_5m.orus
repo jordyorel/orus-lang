@@ -1,0 +1,8 @@
+// Test static analysis with 1.5M iterations
+print("Testing static for-loop with 1.5M iterations...")
+
+mut sum = 0
+for i in 0..1500000:  // Static range > 1M, should warn
+    sum = sum + i
+
+print("Result:", sum)

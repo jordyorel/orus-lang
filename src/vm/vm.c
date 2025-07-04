@@ -1794,14 +1794,20 @@ LABEL_OP_MOVE_F64: {
 
 LABEL_OP_LOOP_GUARD_INIT: {
     uint8_t reg = READ_BYTE();
+    uint32_t warningThreshold = READ_BYTE() | (READ_BYTE() << 8) | (READ_BYTE() << 16) | (READ_BYTE() << 24);
     uint32_t maxIterations = READ_BYTE() | (READ_BYTE() << 8) | (READ_BYTE() << 16) | (READ_BYTE() << 24);
     
     // Initialize loop guard counter in the register
     vm.registers[reg] = I32_VAL(0);
     
-    // Store max iterations in a separate register (reg + 1)
+    // Store warning threshold in register (reg + 1)
     if (reg + 1 < REGISTER_COUNT) {
-        vm.registers[reg + 1] = I32_VAL(maxIterations);
+        vm.registers[reg + 1] = I32_VAL(warningThreshold);
+    }
+    
+    // Store max iterations in register (reg + 2)
+    if (reg + 2 < REGISTER_COUNT) {
+        vm.registers[reg + 2] = I32_VAL(maxIterations);
     }
     
     DISPATCH();
@@ -1814,14 +1820,23 @@ LABEL_OP_LOOP_GUARD_CHECK: {
     int32_t current = AS_I32(vm.registers[reg]) + 1;
     vm.registers[reg] = I32_VAL(current);
     
-    // Check against max iterations
-    if (reg + 1 < REGISTER_COUNT && IS_I32(vm.registers[reg + 1])) {
-        int32_t maxIterations = AS_I32(vm.registers[reg + 1]);
-        if (current > maxIterations) {
-            runtimeError(ERROR_RUNTIME, (SrcLocation){vm.filePath, vm.currentLine, vm.currentColumn},
-                         "Loop exceeded maximum iteration limit (%d)", maxIterations);
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
+    // Get warning threshold and max iterations
+    int32_t warningThreshold = (reg + 1 < REGISTER_COUNT && IS_I32(vm.registers[reg + 1])) 
+                              ? AS_I32(vm.registers[reg + 1]) : 1000000;
+    int32_t maxIterations = (reg + 2 < REGISTER_COUNT && IS_I32(vm.registers[reg + 2])) 
+                           ? AS_I32(vm.registers[reg + 2]) : 10000000;
+    
+    // Check for warning threshold (only warn once)
+    if (current == warningThreshold && warningThreshold > 0) {
+        fprintf(stderr, "Warning: Loop has exceeded %d iterations and is now being monitored for safety.\n", warningThreshold);
+        fprintf(stderr, "Set ORUS_MAX_LOOP_ITERATIONS=0 to disable loop limits.\n");
+    }
+    
+    // Check for hard stop (unless maxIterations is 0 = unlimited)
+    if (maxIterations > 0 && current > maxIterations) {
+        runtimeError(ERROR_RUNTIME, (SrcLocation){vm.filePath, vm.currentLine, vm.currentColumn},
+                     "Loop exceeded maximum iteration limit (%d). Set ORUS_MAX_LOOP_ITERATIONS=0 for unlimited loops.", maxIterations);
+        RETURN(INTERPRET_RUNTIME_ERROR);
     }
     
     DISPATCH();

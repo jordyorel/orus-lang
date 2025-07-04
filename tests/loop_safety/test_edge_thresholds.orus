@@ -1,0 +1,40 @@
+// Test exact threshold boundaries
+print("=== EXACT THRESHOLD TESTS ===")
+
+print("Test 1: Exactly 99,999 iterations (just under 100K guard threshold)")
+mut count1 = 0
+while count1 < 99999:
+    count1 = count1 + 1
+print("99,999 result:", count1)
+
+print("Test 2: Exactly 100,000 iterations (at 100K guard threshold)")
+mut count2 = 0
+while count2 < 100000:
+    count2 = count2 + 1
+print("100,000 result:", count2)
+
+print("Test 3: Exactly 100,001 iterations (just over 100K guard threshold)")
+mut count3 = 0
+while count3 < 100001:
+    count3 = count3 + 1
+print("100,001 result:", count3)
+
+print("Test 4: Exactly 999,999 iterations (just under 1M warning)")
+mut count4 = 0
+while count4 < 999999:
+    count4 = count4 + 1
+print("999,999 result:", count4)
+
+print("Test 5: Exactly 1,000,000 iterations (at 1M warning)")
+mut count5 = 0
+while count5 < 1000000:
+    count5 = count5 + 1
+print("1,000,000 result:", count5)
+
+print("Test 6: Exactly 1,000,001 iterations (just over 1M warning)")
+mut count6 = 0
+while count6 < 1000001:
+    count6 = count6 + 1
+print("1,000,001 result:", count6)
+
+print("All edge threshold tests completed!")
