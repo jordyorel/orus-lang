@@ -78,7 +78,12 @@
       "Bash(ORUS_MAX_LOOP_ITERATIONS=2000000 ./orus test_custom_limit.orus)",
       "Bash(ORUS_MAX_LOOP_ITERATIONS=50000000 ./orus test_custom_very_large.orus)",
       "Bash(./run_loop_safety_tests.sh:*)",
-      "Bash(./run_all_tests.sh)"
+      "Bash(./run_all_tests.sh)",
+      "Bash(gdb:*)",
+      "Bash(./tests/benchmarks/run_all_benchmarks.sh:*)",
+      "Bash(ORUS_MAX_LOOP_ITERATIONS=0 ./run_all_benchmarks.sh)",
+      "Bash(ORUS_MAX_LOOP_ITERATIONS=0 ./orus -c 'for i in 0..2000000: print(\"\"Test\"\")')",
+      "Bash(ORUS_MAX_LOOP_ITERATIONS=0 ./orus -c 'for i in 0..2000000: print(\"\"Test\"\")')"
     ],
     "deny": []
   }

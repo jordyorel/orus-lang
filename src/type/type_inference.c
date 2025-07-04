@@ -10,8 +10,14 @@
 // Simplified type inference that works with existing vm.h Type structure
 
 // Forward declarations for internal structures
+typedef struct HashMapEntry {
+    char* key;
+    void* value;
+    struct HashMapEntry* next;
+} HashMapEntry;
+
 typedef struct HashMap {
-    void** buckets;
+    HashMapEntry** buckets;
     size_t capacity;
     size_t count;
 } HashMap;
@@ -23,14 +29,23 @@ typedef struct Vec {
     size_t element_size;
 } Vec;
 
-// Hash map implementation (simplified)
+// Hash map implementation with proper chaining
+static size_t hash_string(const char* str) {
+    size_t hash = 5381;
+    int c;
+    while ((c = *str++)) {
+        hash = ((hash << 5) + hash) + c;
+    }
+    return hash;
+}
+
 static HashMap* hashmap_new(void) {
     HashMap* map = malloc(sizeof(HashMap));
     if (!map) return NULL;
     
     map->capacity = 16;
     map->count = 0;
-    map->buckets = calloc(map->capacity, sizeof(void*));
+    map->buckets = calloc(map->capacity, sizeof(HashMapEntry*));
     
     if (!map->buckets) {
         free(map);
@@ -42,18 +57,67 @@ static HashMap* hashmap_new(void) {
 
 static void hashmap_free(HashMap* map) {
     if (!map) return;
+    
+    for (size_t i = 0; i < map->capacity; i++) {
+        HashMapEntry* entry = map->buckets[i];
+        while (entry) {
+            HashMapEntry* next = entry->next;
+            free(entry->key);
+            free(entry);
+            entry = next;
+        }
+    }
+    
     free(map->buckets);
     free(map);
 }
 
 static void* hashmap_get(HashMap* map, const char* key) {
-    (void)map; (void)key;
-    return NULL; // Simplified for now
+    if (!map || !key) return NULL;
+    
+    size_t index = hash_string(key) % map->capacity;
+    HashMapEntry* entry = map->buckets[index];
+    
+    while (entry) {
+        if (strcmp(entry->key, key) == 0) {
+            return entry->value;
+        }
+        entry = entry->next;
+    }
+    
+    return NULL;
 }
 
 static void hashmap_set(HashMap* map, const char* key, void* value) {
-    (void)map; (void)key; (void)value;
-    // Simplified for now
+    if (!map || !key) return;
+    
+    size_t index = hash_string(key) % map->capacity;
+    HashMapEntry* entry = map->buckets[index];
+    
+    // Check if key already exists
+    while (entry) {
+        if (strcmp(entry->key, key) == 0) {
+            entry->value = value;
+            return;
+        }
+        entry = entry->next;
+    }
+    
+    // Create new entry
+    entry = malloc(sizeof(HashMapEntry));
+    if (!entry) return;
+    
+    entry->key = malloc(strlen(key) + 1);
+    if (!entry->key) {
+        free(entry);
+        return;
+    }
+    
+    strcpy(entry->key, key);
+    entry->value = value;
+    entry->next = map->buckets[index];
+    map->buckets[index] = entry;
+    map->count++;
 }
 
 // Vector implementation for constraints
@@ -107,56 +171,190 @@ void type_inferer_free(TypeInferer* inferer) {
     free(inferer);
 }
 
-// Generate fresh type variable (simplified - use existing types for now)
+// Generate fresh type variable
 Type* fresh_type_var(TypeInferer* inferer) {
     if (!inferer) return NULL;
     
-    // For now, return a basic type - real implementation would need TYPE_GENERIC
-    return getPrimitiveType(TYPE_ANY);
+    // Create a generic type with unique ID
+    char var_name[32];
+    snprintf(var_name, sizeof(var_name), "t%d", inferer->next_type_var++);
+    
+    Type* var_type = create_generic_type(var_name, NULL);
+    return var_type ? var_type : getPrimitiveType(TYPE_ANY);
 }
 
-// Add constraint to the constraint set (simplified)
+// Add constraint to the constraint set
 void add_constraint(TypeInferer* inferer, Type* left, Type* right) {
     if (!inferer || !left || !right) return;
-    // Simplified - would add to constraint vector
+    
+    // Grow vector if needed
+    if (inferer->constraints->count >= inferer->constraints->capacity) {
+        size_t new_capacity = inferer->constraints->capacity * 2;
+        void* new_data = realloc(inferer->constraints->data, 
+                                new_capacity * inferer->constraints->element_size);
+        if (!new_data) return;
+        
+        inferer->constraints->data = new_data;
+        inferer->constraints->capacity = new_capacity;
+    }
+    
+    // Add constraint to vector
+    Constraint* constraints = (Constraint*)inferer->constraints->data;
+    constraints[inferer->constraints->count].left = left;
+    constraints[inferer->constraints->count].right = right;
+    inferer->constraints->count++;
 }
 
-// Add substitution (simplified)
+// Add substitution
 void add_substitution(TypeInferer* inferer, int var_id, Type* type) {
-    (void)inferer; (void)var_id; (void)type;
-    // Simplified for now
+    if (!inferer || !type) return;
+    
+    char var_name[32];
+    snprintf(var_name, sizeof(var_name), "t%d", var_id);
+    
+    hashmap_set(inferer->substitutions, var_name, type);
 }
 
-// Apply substitutions to a type (simplified)
+// Apply substitutions to a type
 Type* apply_substitutions(TypeInferer* inferer, Type* type) {
-    (void)inferer;
-    return type; // Simplified - just return the original type
+    if (!inferer || !type) return type;
+    
+    // Check if this type is a generic variable that has a substitution
+    TypeExtension* ext = get_type_extension(type);
+    if (ext && type->kind == TYPE_ANY) { // Using TYPE_ANY as generic placeholder
+        char var_name[32];
+        snprintf(var_name, sizeof(var_name), "t%d", ext->extended.generic.id);
+        
+        Type* substitution = (Type*)hashmap_get(inferer->substitutions, var_name);
+        if (substitution) {
+            return apply_substitutions(inferer, substitution);
+        }
+    }
+    
+    return type;
 }
 
-// Occurs check (simplified)
+// Occurs check - prevents infinite types
 bool occurs_check(Type* var, Type* type) {
-    (void)var; (void)type;
-    return false; // Simplified
+    if (!var || !type) return false;
+    
+    if (type_equals_extended(var, type)) return true;
+    
+    // Check compound types
+    switch (type->kind) {
+        case TYPE_ARRAY:
+            return occurs_check(var, type->info.array.elementType);
+        case TYPE_FUNCTION: {
+            if (occurs_check(var, type->info.function.returnType)) return true;
+            for (int i = 0; i < type->info.function.arity; i++) {
+                if (occurs_check(var, type->info.function.paramTypes[i])) return true;
+            }
+            return false;
+        }
+        default:
+            return false;
+    }
 }
 
-// Unification algorithm (simplified)
+// Unification algorithm - core of type inference
 bool unify(TypeInferer* inferer, Type* t1, Type* t2) {
     if (!inferer || !t1 || !t2) return false;
     
-    // Simple equality check for now
-    return type_equals_extended(t1, t2);
+    // Apply existing substitutions
+    t1 = apply_substitutions(inferer, t1);
+    t2 = apply_substitutions(inferer, t2);
+    
+    // If they're already equal, we're done
+    if (type_equals_extended(t1, t2)) return true;
+    
+    // Handle generic variables (using TYPE_ANY as placeholder)
+    TypeExtension* ext1 = get_type_extension(t1);
+    TypeExtension* ext2 = get_type_extension(t2);
+    
+    if (ext1 && t1->kind == TYPE_ANY) {
+        if (occurs_check(t1, t2)) return false;
+        add_substitution(inferer, ext1->extended.generic.id, t2);
+        return true;
+    }
+    
+    if (ext2 && t2->kind == TYPE_ANY) {
+        if (occurs_check(t2, t1)) return false;
+        add_substitution(inferer, ext2->extended.generic.id, t1);
+        return true;
+    }
+    
+    // Unify compound types
+    if (t1->kind == t2->kind) {
+        switch (t1->kind) {
+            case TYPE_ARRAY:
+                return unify(inferer, t1->info.array.elementType, t2->info.array.elementType);
+            case TYPE_FUNCTION:
+                if (t1->info.function.arity != t2->info.function.arity) return false;
+                if (!unify(inferer, t1->info.function.returnType, t2->info.function.returnType)) return false;
+                for (int i = 0; i < t1->info.function.arity; i++) {
+                    if (!unify(inferer, t1->info.function.paramTypes[i], t2->info.function.paramTypes[i])) {
+                        return false;
+                    }
+                }
+                return true;
+            default:
+                return false;
+        }
+    }
+    
+    return false;
 }
 
-// Constraint solving (simplified)
+// Constraint solving - iteratively unify all constraints
 bool solve_constraints(TypeInferer* inferer) {
-    (void)inferer;
-    return true; // Simplified - always succeeds
+    if (!inferer || !inferer->constraints) return true;
+    
+    Constraint* constraints = (Constraint*)inferer->constraints->data;
+    
+    for (size_t i = 0; i < inferer->constraints->count; i++) {
+        if (!unify(inferer, constraints[i].left, constraints[i].right)) {
+            return false;
+        }
+    }
+    
+    return true;
 }
 
-// Type instantiation (simplified)
+// Type instantiation - create fresh instances of generic types
 Type* instantiate(Type* type, TypeInferer* inferer) {
-    (void)inferer;
-    return type; // Simplified
+    if (!type || !inferer) return type;
+    
+    // Apply any existing substitutions first
+    type = apply_substitutions(inferer, type);
+    
+    // For generic types, create fresh variables
+    TypeExtension* ext = get_type_extension(type);
+    if (ext && type->kind == TYPE_ANY) {
+        return fresh_type_var(inferer);
+    }
+    
+    // For compound types, recursively instantiate components
+    switch (type->kind) {
+        case TYPE_ARRAY: {
+            Type* elem_type = instantiate(type->info.array.elementType, inferer);
+            return createArrayType(elem_type);
+        }
+        case TYPE_FUNCTION: {
+            Type* return_type = instantiate(type->info.function.returnType, inferer);
+            Type** param_types = malloc(type->info.function.arity * sizeof(Type*));
+            if (!param_types) return type;
+            
+            for (int i = 0; i < type->info.function.arity; i++) {
+                param_types[i] = instantiate(type->info.function.paramTypes[i], inferer);
+            }
+            
+            Type* func_type = createFunctionType(return_type, param_types, type->info.function.arity);
+            free(param_types);
+            return func_type;
+        }
+        default:
+            return type;
+    }
 }
 
 // Simplified type inference function
@@ -212,3 +410,5 @@ Type* infer_type(TypeInferer* inferer, ASTNode* expr) {
             return getPrimitiveType(TYPE_UNKNOWN);
     }
 }
+
+// Helper functions are implemented in type_representation.c

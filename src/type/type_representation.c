@@ -277,6 +277,67 @@ ValueType type_kind_to_value_type(TypeKind type_kind) {
     return VAL_NIL;
 }
 
+// Type creation functions
+Type* createArrayType(Type* elementType) {
+    if (!elementType) return NULL;
+    
+    Type* array_type = arena_alloc(sizeof(Type));
+    if (!array_type) return NULL;
+    
+    array_type->kind = TYPE_ARRAY;
+    array_type->info.array.elementType = elementType;
+    
+    return array_type;
+}
+
+Type* createFunctionType(Type* returnType, Type** paramTypes, int paramCount) {
+    if (!returnType || (paramCount > 0 && !paramTypes)) return NULL;
+    
+    Type* func_type = arena_alloc(sizeof(Type));
+    if (!func_type) return NULL;
+    
+    func_type->kind = TYPE_FUNCTION;
+    func_type->info.function.returnType = returnType;
+    func_type->info.function.arity = paramCount;
+    
+    if (paramCount > 0) {
+        func_type->info.function.paramTypes = arena_alloc(paramCount * sizeof(Type*));
+        if (!func_type->info.function.paramTypes) return NULL;
+        
+        for (int i = 0; i < paramCount; i++) {
+            func_type->info.function.paramTypes[i] = paramTypes[i];
+        }
+    } else {
+        func_type->info.function.paramTypes = NULL;
+    }
+    
+    return func_type;
+}
+
+Type* createPrimitiveType(TypeKind kind) {
+    return getPrimitiveType(kind);
+}
+
+Type* createSizedArrayType(Type* elementType, int length) {
+    // For now, just create a regular array type
+    // In a full implementation, we'd track the size
+    (void)length;
+    return createArrayType(elementType);
+}
+
+Type* createStructType(ObjString* name, FieldInfo* fields, int fieldCount,
+                       ObjString** generics, int genericCount) {
+    // Stub implementation for now
+    (void)name; (void)fields; (void)fieldCount; (void)generics; (void)genericCount;
+    return getPrimitiveType(TYPE_UNKNOWN);
+}
+
+Type* createGenericType(ObjString* name) {
+    // Stub implementation for now
+    (void)name;
+    return getPrimitiveType(TYPE_ANY);
+}
+
 // Initialize the extended type system (called from existing initTypeSystem in vm.c)
 void init_extended_type_system(void) {
     init_primitive_types();

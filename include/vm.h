@@ -439,6 +439,16 @@ typedef struct {
     ValueType type;         // Variable type
     bool spilled;           // Whether variable was spilled to memory
     bool isLoopVar;         // Whether this is a loop induction variable
+    
+    // Enhanced lifetime analysis fields
+    int firstUse;           // First use of this variable
+    int lastUse;            // Last use of this variable  
+    bool escapes;           // Whether variable escapes current scope
+    bool nestedLoopUsage;   // Whether used in nested loops
+    bool crossesLoopBoundary; // Whether lifetime crosses loop boundaries
+    bool isShortLived;      // Whether variable has short lifetime
+    bool isLoopInvariant;   // Whether variable is loop invariant
+    int priority;           // Priority for register allocation
 } LiveRange;
 
 // Enhanced register allocator with lifetime tracking
@@ -449,6 +459,8 @@ typedef struct {
     uint8_t* freeRegs;      // List of available registers
     int freeCount;          // Number of free registers
     int* lastUse;           // Last use instruction for each register [REGISTER_COUNT]
+    bool* registers;        // Register allocation bitmap
+    int spillCount;         // Number of spilled variables
 } RegisterAllocator;
 
 // Loop safety and infinite loop detection
@@ -472,6 +484,26 @@ typedef struct {
     LoopSafetyInfo safety; // Loop safety analysis
 } LoopContext;
 
+// Loop Invariant Code Motion (LICM) instruction-level data structures
+typedef struct {
+    int instructionOffset;    // Offset in bytecode where invariant operation occurs
+    uint8_t operation;        // The operation opcode
+    uint8_t operand1;         // First operand register
+    uint8_t operand2;         // Second operand register  
+    uint8_t result;           // Result register
+    bool canHoist;            // Whether this operation can be safely hoisted
+    bool hasBeenHoisted;      // Whether this has already been hoisted
+} InvariantNode;
+
+typedef struct {
+    InvariantNode* invariantNodes;  // Array of detected invariant operations
+    int count;                      // Number of invariant operations found
+    int capacity;                   // Capacity of arrays
+    uint8_t* hoistedRegs;          // Registers used for hoisted values
+    uint8_t* originalInstructions; // Original instruction opcodes
+    bool* canHoist;                // Which operations can be hoisted
+} InstructionLICMAnalysis;
+
 // Compiler state for register allocation
 typedef struct {
     Chunk* chunk;
@@ -487,11 +519,13 @@ typedef struct {
         bool isMutable;
         ValueType type; // Type of the variable
         int liveRangeIndex; // Index into register allocator's live ranges (-1 if none)
+        bool isSpilled; // Whether variable has been spilled to memory
     } locals[REGISTER_COUNT];
     int localCount;
     int scopeDepth;
     LoopContext loopStack[16];  // Stack of nested loop contexts
     int loopDepth;              // Current loop nesting depth
+    int loopStart;              // Start instruction of current loop
     JumpTable pendingJumps;     // Track all pending forward jumps for cascade updates
     RegisterAllocator regAlloc; // Enhanced register allocator with lifetime tracking
     bool hadError;

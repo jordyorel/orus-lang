@@ -3,6 +3,9 @@
 #include <math.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include "vm.h"
 #include "common.h"
@@ -3679,8 +3682,151 @@ InterpretResult interpret(const char* source) {
     return result;
 }
 
+// Helper function to read file contents
+static char* readFile(const char* path) {
+    FILE* file = fopen(path, "rb");
+    if (file == NULL) {
+        fprintf(stderr, "Could not open file \"%s\".\n", path);
+        return NULL;
+    }
+    
+    fseek(file, 0L, SEEK_END);
+    size_t fileSize = ftell(file);
+    rewind(file);
+    
+    char* buffer = (char*)malloc(fileSize + 1);
+    if (buffer == NULL) {
+        fprintf(stderr, "Not enough memory to read \"%s\".\n", path);
+        fclose(file);
+        return NULL;
+    }
+    
+    size_t bytesRead = fread(buffer, sizeof(char), fileSize, file);
+    if (bytesRead < fileSize) {
+        fprintf(stderr, "Could not read file \"%s\".\n", path);
+        free(buffer);
+        fclose(file);
+        return NULL;
+    }
+    
+    buffer[bytesRead] = '\0';
+    
+    fclose(file);
+    return buffer;
+}
+
+// Helper function to get file modification time
+static long getFileModTime(const char* path) {
+    struct stat st;
+    if (stat(path, &st) == 0) {
+        return st.st_mtime;
+    }
+    return -1;
+}
+
+// Helper function to check if a module is already loaded
+static bool isModuleLoaded(const char* path) {
+    for (int i = 0; i < vm.moduleCount; i++) {
+        if (vm.loadedModules[i] && strcmp(vm.loadedModules[i]->chars, path) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Helper function to add module to loaded modules list
+static void addLoadedModule(const char* path) {
+    if (vm.moduleCount < UINT8_COUNT) {
+        vm.loadedModules[vm.moduleCount] = allocateString(path, strlen(path));
+        vm.moduleCount++;
+    }
+}
+
 InterpretResult interpret_module(const char* path) {
-    UNUSED(path);
-    // Simplified module interpretation
-    return interpret("");
+    if (!path) {
+        fprintf(stderr, "Module path cannot be null.\n");
+        return INTERPRET_COMPILE_ERROR;
+    }
+    
+    // Check if module is already loaded to prevent circular dependencies
+    if (isModuleLoaded(path)) {
+        // Module already loaded, return success
+        return INTERPRET_OK;
+    }
+    
+    // Read the module file
+    char* source = readFile(path);
+    if (!source) {
+        return INTERPRET_COMPILE_ERROR;
+    }
+    
+    // Create a chunk for the compiled bytecode
+    Chunk chunk;
+    initChunk(&chunk);
+    
+    // Extract module name from path (filename without extension)
+    const char* fileName = strrchr(path, '/');
+    if (!fileName) fileName = strrchr(path, '\\'); // Windows path separator
+    if (!fileName) fileName = path;
+    else fileName++; // Skip the separator
+    
+    // Create compiler for the module
+    Compiler compiler;
+    initCompiler(&compiler, &chunk, fileName, source);
+    
+    // Parse the module source into an AST
+    ASTNode* ast = parseSource(source);
+    if (!ast) {
+        fprintf(stderr, "Failed to parse module: %s\n", path);
+        free(source);
+        freeCompiler(&compiler);
+        freeChunk(&chunk);
+        return INTERPRET_COMPILE_ERROR;
+    }
+    
+    // Compile the AST to bytecode (mark as module)
+    if (!compile(ast, &compiler, true)) {
+        fprintf(stderr, "Failed to compile module: %s\n", path);
+        freeAST(ast);
+        free(source);
+        freeCompiler(&compiler);
+        freeChunk(&chunk);
+        return INTERPRET_COMPILE_ERROR;
+    }
+    
+    // Add a halt instruction at the end
+    emitByte(&compiler, OP_HALT);
+    
+    // Store current VM state
+    Chunk* oldChunk = vm.chunk;
+    uint8_t* oldIP = vm.ip;
+    const char* oldFilePath = vm.filePath;
+    
+    // Set VM state for module execution
+    vm.chunk = &chunk;
+    vm.ip = chunk.code;
+    vm.filePath = path;
+    
+    // Execute the module
+    InterpretResult result = run();
+    
+    // Restore VM state
+    vm.chunk = oldChunk;
+    vm.ip = oldIP;
+    vm.filePath = oldFilePath;
+    
+    // Add module to loaded modules list if successful
+    if (result == INTERPRET_OK) {
+        addLoadedModule(path);
+    } else {
+        fprintf(stderr, "Runtime error in module: %s\n", path);
+    }
+    
+    // Clean up
+    freeAST(ast);
+    free(source);
+    freeCompiler(&compiler);
+    freeChunk(&chunk);
+    
+    return result;
 }
