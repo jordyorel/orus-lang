@@ -1,4 +1,0 @@
-# Orus Performance Baselines
-# Format: benchmark_name,baseline_time_seconds,last_updated
-arithmetic,0.030,Fri Jul  4 23:07:15 CST 2025
-control_flow,0.055,Fri Jul  4 23:07:15 CST 2025
