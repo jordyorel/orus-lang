@@ -39,7 +39,7 @@ mut counter = 0
 mut flag = false
 while counter < 10 and not flag:
     print("Counter:", counter)
-    counter = counter + 1
+    counter += 1
     if counter == 5:
         flag = true
 
@@ -68,7 +68,7 @@ for i in 0..10:
 print("While with nested break:")
 mut value = 0
 while value < 20:
-    value = value + 1
+    value += 1
     if value > 15:
         if value % 2 == 0:
             print("Breaking at even:", value)
@@ -83,7 +83,7 @@ for outer in 0..3:
     while inner_counter < 2:
         for deep in 10..12:
             print("Triple nested:", outer, inner_counter, deep)
-        inner_counter = inner_counter + 1
+        inner_counter += 1
 
 // Test 11: Range with same start and end values
 print("Same start/end with different steps:")

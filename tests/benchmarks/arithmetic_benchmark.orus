@@ -46,7 +46,7 @@ for i in 0..50000:
 
 print(precision_test)
 
-let benchmark_end = time_stamp()
+benchmark_end = time_stamp()
 let total_duration = benchmark_end - benchmark_start
 let duration_ms = total_duration / 1000000
 

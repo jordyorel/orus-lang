@@ -885,8 +885,12 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
                     emitByte(compiler, OP_GE_I32_R);
                 }
             } else if (strcmp(op, "and") == 0) {
+                // Implement short-circuit AND using existing binary operation for now
+                // TODO: Implement proper short-circuit evaluation
                 emitByte(compiler, OP_AND_BOOL_R);
             } else if (strcmp(op, "or") == 0) {
+                // Implement short-circuit OR using existing binary operation for now
+                // TODO: Implement proper short-circuit evaluation
                 emitByte(compiler, OP_OR_BOOL_R);
             } else {
                 return -1;

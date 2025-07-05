@@ -10,10 +10,10 @@ print("Outer x:", outer_x)
 
 // Test 2: Mutable variable edge cases
 mut y = 0
-y = y + 1
-y = y - 1
-y = y * 10
-y = y / 10
+y += 1
+y -= 1
+y *= 10
+y /= 10
 print("Final y:", y)
 
 // Test 3: Variable scoping in loops
@@ -26,9 +26,7 @@ print("Original i:", original_i)
 mut a = 1
 mut b = 2
 mut c = 3
-// Simulate chained assignment step by step
-b = b + c
-a = a + b
+a += b += c  // Should work right-to-left
 print("Chain result:", a, b, c)
 
 // Test 5: Assignment with complex expressions

@@ -27,10 +27,11 @@ print("Complex boolean:", complex_result)
 // Test 3: Short-circuit evaluation edge cases
 flag1 = false
 flag2 = true
-// Test short-circuit evaluation with boolean expressions
-result1 = flag1 and false    // Should be false without evaluating second operand
-result2 = flag2 or false     // Should be true without evaluating second operand
-print("Short circuit results:", result1, result2)
+// NOTE: True short-circuit evaluation is not yet implemented
+// These test cases use regular boolean evaluation instead
+result1 = flag1 and false    // Regular boolean evaluation
+result2 = flag2 or false     // Regular boolean evaluation  
+print("Boolean results:", result1, result2)
 
 // Test 4: Ternary operator nesting
 value = 42

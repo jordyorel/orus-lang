@@ -2,6 +2,9 @@
 
 // Test 1: Deep nesting stress test
 // Test the parser's ability to handle deeply nested expressions
+
+benchmark_start = time_stamp()
+
 deep_expr = (((((((((1 + 2) * 3) + 4) * 5) + 6) * 7) + 8) * 9) + 10)
 print("Deep nesting result:", deep_expr)
 
@@ -29,6 +32,7 @@ var20 = 20
 
 sum_all = var1 + var2 + var3 + var4 + var5 + var6 + var7 + var8 + var9 + var10 + var11 + var12 + var13 + var14 + var15 + var16 + var17 + var18 + var19 + var20
 print("Many variables sum:", sum_all)
+print("Expected sum:", 210)
 
 // Test 3: Deeply nested scopes
 if true:
@@ -68,11 +72,11 @@ for d in 0..2:
 mut stress_counter = 0
 for i in 0..10:
     for j in 0..10:
-        stress_counter = stress_counter + 1
-        stress_counter = stress_counter * 2
-        stress_counter = stress_counter / 2
-        stress_counter = stress_counter - 1
-        stress_counter = stress_counter + 1
+        stress_counter += 1
+        stress_counter *= 2
+        stress_counter /= 2
+        stress_counter -= 1
+        stress_counter += 1
 
 print("Stress test final counter:", stress_counter)
 
@@ -97,16 +101,14 @@ large_calc = 123 + 456 + 789 + 101112 + 131415 + 161718 + 192021 + 222324
 print("Large calculation:", large_calc)
 
 // Test 10: Multiple data type mix in complex expression
-base_calc = 100 + 200
-float_check = 3.14159 > 3.0
-bool_check = true and false
-range_check = (50 > 25) and (30 < 40)
-
-print("Base calculation:", base_calc)
-print("Float check result:", float_check)
-print("Bool check result:", bool_check)
-print("Range check result:", range_check)
-
-// Simple mixed calculation
-mixed_complex = base_calc + 25
+mixed_complex = (100 + 200) * (3.14159 > 3.0 ? 1 : 0) + (true and false ? 10 : 20) + ((50 > 25) and (30 < 40) ? 5 : 15)
 print("Mixed complex result:", mixed_complex)
+
+
+benchmark_end = time_stamp()
+total_duration = benchmark_end - benchmark_start
+duration_ms = total_duration / 1000000
+
+print("Stress test benchmark completed!")
+print("Total time (nanoseconds):", total_duration)
+print("Total time (milliseconds):", duration_ms)
