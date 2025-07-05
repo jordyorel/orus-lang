@@ -110,6 +110,8 @@ print("Array has {} items", len(items))
 - [x] Mutable vs immutable variables (`mut x = 42`)
 - [x] Compound assignments (`+=`, `-=`, `*=`, `/=`)
 - [x] Type annotations (`x: i32 = 42`)
+- [x] **DONE**: Unary operators (`-x`, `not x`) and negative literal parsing
+- [x] **DONE**: Runtime string concatenation for variables and expressions
 
 ### 1.5 Boolean and Comparison Operations
 **Priority: 🔥 Critical**

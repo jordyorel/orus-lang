@@ -716,6 +716,26 @@ static ASTNode* parseInlineIf(ASTNode* expr) {
     return root;
 }
 
+static ASTNode* parseUnaryExpression(void) {
+    Token t = peekToken();
+    if (t.type == TOKEN_MINUS || t.type == TOKEN_NOT || t.type == TOKEN_BIT_NOT) {
+        nextToken();
+        ASTNode* operand = parseUnaryExpression();
+        if (!operand) return NULL;
+        ASTNode* node = new_node();
+        node->type = NODE_UNARY;
+        if (t.type == TOKEN_MINUS) node->unary.op = "-";
+        else if (t.type == TOKEN_NOT) node->unary.op = "not";
+        else node->unary.op = "~";
+        node->unary.operand = operand;
+        node->location.line = t.line;
+        node->location.column = t.column;
+        node->dataType = NULL;
+        return node;
+    }
+    return parsePrimaryExpression();
+}
+
 static ASTNode* parseTernary(ASTNode* condition) {
     if (peekToken().type != TOKEN_QUESTION) return condition;
     nextToken();
@@ -749,7 +769,7 @@ static ASTNode* parseAssignment(void) {
             // x = cond ? a : b are handled correctly
             value = parseAssignment();
         } else {
-            ASTNode* right = parseBinaryExpression(0);
+            ASTNode* right = parseAssignment();
             if (!right) return NULL;
             if (left->type != NODE_IDENTIFIER) return NULL;
             ASTNode* binary = new_node();
@@ -790,7 +810,7 @@ static ASTNode* parseAssignment(void) {
 }
 
 static ASTNode* parseBinaryExpression(int minPrec) {
-    ASTNode* left = parsePrimaryExpression();
+    ASTNode* left = parseUnaryExpression();
     if (!left) return NULL;
 
     while (true) {

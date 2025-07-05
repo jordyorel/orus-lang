@@ -27,6 +27,7 @@ typedef enum {
     NODE_FOR_ITER,
     NODE_BLOCK,
     NODE_TERNARY,
+    NODE_UNARY,
     NODE_TYPE,
     NODE_BREAK,
     NODE_CONTINUE
@@ -103,6 +104,10 @@ struct ASTNode {
             ASTNode* trueExpr;
             ASTNode* falseExpr;
         } ternary;
+        struct {
+            char* op;
+            ASTNode* operand;
+        } unary;
         struct {
             char* name;
         } typeAnnotation;
