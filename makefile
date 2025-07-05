@@ -40,7 +40,7 @@ C_TEST_TARGETS = $(C_TEST_SRCS:$(TESTDIR)/c/%.c=$(BUILDDIR)/%)
 # Targets
 ORUS = orus
 
-.PHONY: all clean test test-verbose test-basic test-types test-loop-safety test-all c-test benchmark benchmark-orus benchmark-arithmetic benchmark-control benchmark-control-orus help format
+.PHONY: all clean test test-verbose test-basic test-types test-loop-safety test-all c-test benchmark help format
 
 all: $(ORUS)
 
@@ -268,21 +268,9 @@ test-loop-safety: $(ORUS)
 test-all: test c-test
 	@echo "\033[36m=== Comprehensive Test Suite Complete ===\033[0m"
 
-# Run all cross-language benchmarks
+# Run all benchmarks
 benchmark: $(ORUS)
 	@cd tests/benchmarks && ./run_all_benchmarks.sh
-
-# Run only Orus arithmetic benchmark (fast)
-benchmark-orus: $(ORUS)
-	@echo "=== Orus Arithmetic Benchmark ==="
-	@printf "Running Orus arithmetic tests: "
-	@time ./$(ORUS) tests/benchmarks/arithmetic_benchmark.orus
-
-# Run only Orus control flow benchmark (fast)
-benchmark-control-orus: $(ORUS)
-	@echo "=== Orus Control Flow Benchmark ==="
-	@printf "Running Orus control flow tests: "
-	@time ./$(ORUS) tests/benchmarks/control_flow_benchmark.orus
 
 # Clean build artifacts
 clean:
@@ -310,11 +298,7 @@ help:
 	@echo "  test-loop-safety - Run comprehensive loop safety test suite"
 	@echo "  test-all    - Run comprehensive test suite (all tests + C tests)"
 	@echo "  c-test      - Run C unit tests for VM and critical components"
-	@echo "  benchmark   - Run all cross-language benchmarks (Orus vs Python/JS/Lua)"
-	@echo "  benchmark-orus - Run Orus arithmetic benchmark only (fast)"
-	@echo "  benchmark-arithmetic - Run cross-language arithmetic benchmarks only"
-	@echo "  benchmark-control - Run cross-language control flow benchmarks only"
-	@echo "  benchmark-control-orus - Run Orus control flow benchmark only (fast)"
+	@echo "  benchmark   - Run all benchmarks (Orus native + cross-language comparisons)"
 	@echo "  clean       - Remove build artifacts"
 	@echo "  format      - Format source code"
 	@echo "  help        - Show this help message"

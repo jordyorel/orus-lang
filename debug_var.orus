@@ -1,0 +1,1 @@
+mut x: i32 = 5; print("x is:", x)

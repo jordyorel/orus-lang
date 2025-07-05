@@ -638,10 +638,36 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             }
             
             const char* op = node->binary.op;
+            
+            // Phase 3.2: Check if we can emit typed instructions based on type inference
+            ValueType typedOpType;
+            bool canUseTyped = canEmitTypedInstruction(compiler, node->binary.left, node->binary.right, &typedOpType);
+            
             if (strcmp(op, "+") == 0) {
                 if ((node->binary.left->type == NODE_LITERAL && IS_STRING(node->binary.left->literal.value)) ||
                     (node->binary.right->type == NODE_LITERAL && IS_STRING(node->binary.right->literal.value))) {
                     emitByte(compiler, OP_CONCAT_R);
+                }
+                // Phase 2.3: Instruction fusion for immediate arithmetic
+                else if (opType == VAL_I32 && node->binary.right->type == NODE_LITERAL && 
+                         IS_I32(node->binary.right->literal.value)) {
+                    // Use fused ADD_I32_IMM instruction for var + constant
+                    emitByte(compiler, OP_ADD_I32_IMM);
+                    emitByte(compiler, resultReg);
+                    emitByte(compiler, (uint8_t)leftReg);
+                    int32_t immediate = AS_I32(node->binary.right->literal.value);
+                    // Emit 4-byte immediate value correctly
+                    emitByte(compiler, (uint8_t)(immediate & 0xFF));
+                    emitByte(compiler, (uint8_t)((immediate >> 8) & 0xFF));
+                    emitByte(compiler, (uint8_t)((immediate >> 16) & 0xFF));
+                    emitByte(compiler, (uint8_t)((immediate >> 24) & 0xFF));
+                    freeRegister(compiler, (uint8_t)rightReg);
+                    freeRegister(compiler, (uint8_t)leftReg);
+                    return resultReg;
+                }
+                // Phase 3.2: Use typed instructions when types are known at compile time
+                else if (canUseTyped) {
+                    emitTypedBinaryOp(compiler, op, typedOpType, resultReg, (uint8_t)leftReg, (uint8_t)rightReg);
                 } else if (opType == VAL_I64) {
                     emitByte(compiler, OP_ADD_I64_R);
                 } else if (opType == VAL_F64) {
@@ -654,7 +680,26 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
                     emitByte(compiler, OP_ADD_I32_R);
                 }
             } else if (strcmp(op, "-") == 0) {
-                if (opType == VAL_I64) {
+                // Phase 2.3: Instruction fusion for immediate subtraction
+                if (opType == VAL_I32 && node->binary.right->type == NODE_LITERAL && 
+                    IS_I32(node->binary.right->literal.value)) {
+                    // Use fused SUB_I32_IMM instruction for var - constant
+                    emitByte(compiler, OP_SUB_I32_IMM);
+                    emitByte(compiler, resultReg);
+                    emitByte(compiler, (uint8_t)leftReg);
+                    int32_t immediate = AS_I32(node->binary.right->literal.value);
+                    emitByte(compiler, (uint8_t)(immediate & 0xFF));
+                    emitByte(compiler, (uint8_t)((immediate >> 8) & 0xFF));
+                    emitByte(compiler, (uint8_t)((immediate >> 16) & 0xFF));
+                    emitByte(compiler, (uint8_t)((immediate >> 24) & 0xFF));
+                    freeRegister(compiler, (uint8_t)rightReg);
+                    freeRegister(compiler, (uint8_t)leftReg);
+                    return resultReg;
+                }
+                // Phase 3.2: Use typed instructions when types are known at compile time
+                else if (canUseTyped) {
+                    emitTypedBinaryOp(compiler, op, typedOpType, resultReg, (uint8_t)leftReg, (uint8_t)rightReg);
+                } else if (opType == VAL_I64) {
                     emitByte(compiler, OP_SUB_I64_R);
                 } else if (opType == VAL_F64) {
                     emitByte(compiler, OP_SUB_F64_R);
@@ -666,7 +711,26 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
                     emitByte(compiler, OP_SUB_I32_R);
                 }
             } else if (strcmp(op, "*") == 0) {
-                if (opType == VAL_I64) {
+                // Phase 2.3: Instruction fusion for immediate multiplication
+                if (opType == VAL_I32 && node->binary.right->type == NODE_LITERAL && 
+                    IS_I32(node->binary.right->literal.value)) {
+                    // Use fused MUL_I32_IMM instruction for var * constant
+                    emitByte(compiler, OP_MUL_I32_IMM);
+                    emitByte(compiler, resultReg);
+                    emitByte(compiler, (uint8_t)leftReg);
+                    int32_t immediate = AS_I32(node->binary.right->literal.value);
+                    emitByte(compiler, (uint8_t)(immediate & 0xFF));
+                    emitByte(compiler, (uint8_t)((immediate >> 8) & 0xFF));
+                    emitByte(compiler, (uint8_t)((immediate >> 16) & 0xFF));
+                    emitByte(compiler, (uint8_t)((immediate >> 24) & 0xFF));
+                    freeRegister(compiler, (uint8_t)rightReg);
+                    freeRegister(compiler, (uint8_t)leftReg);
+                    return resultReg;
+                }
+                // Phase 3.2: Use typed instructions when types are known at compile time
+                else if (canUseTyped) {
+                    emitTypedBinaryOp(compiler, op, typedOpType, resultReg, (uint8_t)leftReg, (uint8_t)rightReg);
+                } else if (opType == VAL_I64) {
                     emitByte(compiler, OP_MUL_I64_R);
                 } else if (opType == VAL_F64) {
                     emitByte(compiler, OP_MUL_F64_R);
@@ -704,7 +768,10 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             } else if (strcmp(op, "!=") == 0) {
                 emitByte(compiler, OP_NE_R);
             } else if (strcmp(op, "<") == 0) {
-                if (opType == VAL_I64) {
+                // Phase 3.2: Use typed instructions when types are known at compile time
+                if (canUseTyped) {
+                    emitTypedBinaryOp(compiler, op, typedOpType, resultReg, (uint8_t)leftReg, (uint8_t)rightReg);
+                } else if (opType == VAL_I64) {
                     emitByte(compiler, OP_LT_I64_R);
                 } else if (opType == VAL_F64) {
                     emitByte(compiler, OP_LT_F64_R);
@@ -1333,6 +1400,9 @@ void initCompiler(Compiler* compiler, Chunk* chunk, const char* fileName,
     // Initialize enhanced register allocator
     initRegisterAllocator(&compiler->regAlloc);
     
+    // Phase 3.1: Initialize type inference system
+    initCompilerTypeInference(compiler);
+    
     // Initialize all locals to have no live range index
     for (int i = 0; i < REGISTER_COUNT; i++) {
         compiler->locals[i].liveRangeIndex = -1;
@@ -1346,6 +1416,9 @@ void freeCompiler(Compiler* compiler) {
     
     // Clean up enhanced register allocator
     freeRegisterAllocator(&compiler->regAlloc);
+    
+    // Phase 3.1: Clean up type inference system
+    freeCompilerTypeInference(compiler);
     
     // Clean up any remaining loop contexts (defensive programming)
     for (int i = 0; i < compiler->loopDepth; i++) {
@@ -2677,4 +2750,217 @@ static void hoistInvariantCodeInstruction(Compiler* compiler, InstructionLICMAna
             updateJumpTargetsAfterInsertion(compiler, hoistPos, 4);
         }
     }
+}
+
+
+// ============================================================================
+// Phase 3.1: Type Inference Integration for VM Optimization
+// ============================================================================
+
+// Initialize type inference for the compiler
+void initCompilerTypeInference(Compiler* compiler) {
+    if (!compiler) return;
+    
+    compiler->typeInferer = type_inferer_new();
+    if (!compiler->typeInferer) {
+        // Fallback: type inference is optional for compilation
+        compiler->typeInferer = NULL;
+    }
+}
+
+// Free type inference resources
+void freeCompilerTypeInference(Compiler* compiler) {
+    if (!compiler || !compiler->typeInferer) return;
+    
+    type_inferer_free(compiler->typeInferer);
+    compiler->typeInferer = NULL;
+}
+
+// Infer the type of an expression during compilation
+Type* inferExpressionType(Compiler* compiler, ASTNode* expr) {
+    if (!compiler || !expr) return NULL;
+    
+    // Use type inferer if available, otherwise fallback to basic type inference
+    if (compiler->typeInferer) {
+        Type* inferredType = infer_type(compiler->typeInferer, expr);
+        if (inferredType) {
+            return inferredType;
+        }
+    }
+    
+    // Fallback: Basic type inference for common cases
+    switch (expr->type) {
+        case NODE_LITERAL: {
+            return infer_literal_type_extended(&expr->literal.value);
+        }
+        
+        case NODE_IDENTIFIER: {
+            // Look up variable in local scope
+            for (int i = compiler->localCount - 1; i >= 0; i--) {
+                if (compiler->locals[i].isActive && 
+                    strcmp(compiler->locals[i].name, expr->identifier.name) == 0) {
+                    return get_primitive_type_cached(valueTypeToTypeKind(compiler->locals[i].type));
+                }
+            }
+            return get_primitive_type_cached(TYPE_UNKNOWN);
+        }
+        
+        case NODE_BINARY: {
+            // Basic arithmetic operations result in numeric types
+            if (strcmp(expr->binary.op, "+") == 0 ||
+                strcmp(expr->binary.op, "-") == 0 ||
+                strcmp(expr->binary.op, "*") == 0 ||
+                strcmp(expr->binary.op, "/") == 0 ||
+                strcmp(expr->binary.op, "%") == 0) {
+                
+                Type* leftType = inferExpressionType(compiler, expr->binary.left);
+                Type* rightType = inferExpressionType(compiler, expr->binary.right);
+                
+                // Promote to larger type if different
+                if (leftType && rightType) {
+                    if (leftType->kind == TYPE_F64 || rightType->kind == TYPE_F64) {
+                        return get_primitive_type_cached(TYPE_F64);
+                    }
+                    if (leftType->kind == TYPE_I64 || rightType->kind == TYPE_I64) {
+                        return get_primitive_type_cached(TYPE_I64);
+                    }
+                    if (leftType->kind == TYPE_U64 || rightType->kind == TYPE_U64) {
+                        return get_primitive_type_cached(TYPE_U64);
+                    }
+                    if (leftType->kind == TYPE_U32 || rightType->kind == TYPE_U32) {
+                        return get_primitive_type_cached(TYPE_U32);
+                    }
+                }
+                return get_primitive_type_cached(TYPE_I32);
+            }
+            
+            // Comparison operations result in boolean
+            if (strcmp(expr->binary.op, "<") == 0 ||
+                strcmp(expr->binary.op, ">") == 0 ||
+                strcmp(expr->binary.op, "<=") == 0 ||
+                strcmp(expr->binary.op, ">=") == 0 ||
+                strcmp(expr->binary.op, "==") == 0 ||
+                strcmp(expr->binary.op, "!=") == 0) {
+                return get_primitive_type_cached(TYPE_BOOL);
+            }
+            
+            return get_primitive_type_cached(TYPE_UNKNOWN);
+        }
+        
+        default:
+            return get_primitive_type_cached(TYPE_UNKNOWN);
+    }
+}
+
+// Resolve and update variable type information
+bool resolveVariableType(Compiler* compiler, const char* name, Type* inferredType) {
+    if (!compiler || !name || !inferredType) return false;
+    
+    // Find the variable in local scope
+    for (int i = compiler->localCount - 1; i >= 0; i--) {
+        if (compiler->locals[i].isActive && 
+            strcmp(compiler->locals[i].name, name) == 0) {
+            
+            // Convert inferred Type to ValueType for storage
+            ValueType vtype = typeKindToValueType(inferredType->kind);
+            if (vtype != VAL_NIL) { // VAL_NIL indicates no conversion available
+                compiler->locals[i].type = vtype;
+                return true;
+            }
+        }
+    }
+    
+    return false;
+}
+
+// Convert TypeKind to ValueType for compatibility
+ValueType typeKindToValueType(TypeKind kind) {
+    return type_kind_to_value_type(kind);
+}
+
+// Convert ValueType to TypeKind for compatibility
+TypeKind valueTypeToTypeKind(ValueType vtype) {
+    return value_type_to_type_kind(vtype);
+}
+
+// Phase 3.2: Emit typed instructions when types are known
+bool canEmitTypedInstruction(Compiler* compiler, ASTNode* left, ASTNode* right, ValueType* outType) {
+    if (!compiler || !left || !right) return false;
+    
+    // Use type inference to determine if both operands have known, compatible types
+    Type* leftType = inferExpressionType(compiler, left);
+    Type* rightType = inferExpressionType(compiler, right);
+    
+    if (!leftType || !rightType) return false;
+    
+    // Check if both types are the same and are suitable for typed operations
+    if (leftType->kind == rightType->kind) {
+        switch (leftType->kind) {
+            case TYPE_I32:
+                *outType = VAL_I32;
+                return true;
+            case TYPE_I64:
+                *outType = VAL_I64;
+                return true;
+            case TYPE_U32:
+                *outType = VAL_U32;
+                return true;
+            case TYPE_U64:
+                *outType = VAL_U64;
+                return true;
+            case TYPE_F64:
+                *outType = VAL_F64;
+                return true;
+            default:
+                return false;
+        }
+    }
+    
+    return false;
+}
+
+// Phase 3.2: Emit the appropriate typed instruction for binary operations
+void emitTypedBinaryOp(Compiler* compiler, const char* op, ValueType type, uint8_t dst, uint8_t left, uint8_t right) {
+    if (strcmp(op, "+") == 0) {
+        switch (type) {
+            case VAL_I32: emitByte(compiler, OP_ADD_I32_TYPED); break;
+            case VAL_I64: emitByte(compiler, OP_ADD_I64_TYPED); break;
+            case VAL_U32: emitByte(compiler, OP_ADD_U32_TYPED); break;
+            case VAL_U64: emitByte(compiler, OP_ADD_U64_TYPED); break;
+            case VAL_F64: emitByte(compiler, OP_ADD_F64_TYPED); break;
+            default: emitByte(compiler, OP_ADD_I32_R); break;
+        }
+    } else if (strcmp(op, "-") == 0) {
+        switch (type) {
+            case VAL_I32: emitByte(compiler, OP_SUB_I32_TYPED); break;
+            case VAL_I64: emitByte(compiler, OP_SUB_I64_TYPED); break;
+            case VAL_U32: emitByte(compiler, OP_SUB_U32_TYPED); break;
+            case VAL_U64: emitByte(compiler, OP_SUB_U64_TYPED); break;
+            case VAL_F64: emitByte(compiler, OP_SUB_F64_TYPED); break;
+            default: emitByte(compiler, OP_SUB_I32_R); break;
+        }
+    } else if (strcmp(op, "*") == 0) {
+        switch (type) {
+            case VAL_I32: emitByte(compiler, OP_MUL_I32_TYPED); break;
+            case VAL_I64: emitByte(compiler, OP_MUL_I64_TYPED); break;
+            case VAL_U32: emitByte(compiler, OP_MUL_U32_TYPED); break;
+            case VAL_U64: emitByte(compiler, OP_MUL_U64_TYPED); break;
+            case VAL_F64: emitByte(compiler, OP_MUL_F64_TYPED); break;
+            default: emitByte(compiler, OP_MUL_I32_R); break;
+        }
+    } else if (strcmp(op, "<") == 0) {
+        switch (type) {
+            case VAL_I32: emitByte(compiler, OP_LT_I32_TYPED); break;
+            case VAL_I64: emitByte(compiler, OP_LT_I64_TYPED); break;
+            case VAL_U32: emitByte(compiler, OP_LT_U32_TYPED); break;
+            case VAL_U64: emitByte(compiler, OP_LT_U64_TYPED); break;
+            case VAL_F64: emitByte(compiler, OP_LT_F64_TYPED); break;
+            default: emitByte(compiler, OP_LT_I32_R); break;
+        }
+    }
+    // Add more operations as needed
+    
+    emitByte(compiler, dst);
+    emitByte(compiler, left);
+    emitByte(compiler, right);
 }

@@ -399,11 +399,41 @@ typedef enum {
     OP_MUL_F64_TYPED,
     OP_DIV_F64_TYPED,
     
+    OP_ADD_U32_TYPED,
+    OP_SUB_U32_TYPED,
+    OP_MUL_U32_TYPED,
+    OP_DIV_U32_TYPED,
+    
+    OP_ADD_U64_TYPED,
+    OP_SUB_U64_TYPED,
+    OP_MUL_U64_TYPED,
+    OP_DIV_U64_TYPED,
+    
     // Typed comparisons
     OP_LT_I32_TYPED,
     OP_LE_I32_TYPED,
     OP_GT_I32_TYPED,
     OP_GE_I32_TYPED,
+    
+    OP_LT_I64_TYPED,
+    OP_LE_I64_TYPED,
+    OP_GT_I64_TYPED,
+    OP_GE_I64_TYPED,
+    
+    OP_LT_F64_TYPED,
+    OP_LE_F64_TYPED,
+    OP_GT_F64_TYPED,
+    OP_GE_F64_TYPED,
+    
+    OP_LT_U32_TYPED,
+    OP_LE_U32_TYPED,
+    OP_GT_U32_TYPED,
+    OP_GE_U32_TYPED,
+    
+    OP_LT_U64_TYPED,
+    OP_LE_U64_TYPED,
+    OP_GT_U64_TYPED,
+    OP_GE_U64_TYPED,
     
     // Typed loads
     OP_LOAD_I32_CONST,     // reg, value
@@ -418,6 +448,25 @@ typedef enum {
     
     // Built-in functions
     OP_TIME_STAMP,         // reg - Get current timestamp in nanoseconds
+    
+    // Phase 2.1: Fused instructions for better performance
+    // Immediate arithmetic (constant folding optimizations)
+    OP_ADD_I32_IMM,        // dst_reg, src_reg, immediate_value
+    OP_SUB_I32_IMM,        // dst_reg, src_reg, immediate_value  
+    OP_MUL_I32_IMM,        // dst_reg, src_reg, immediate_value
+    OP_CMP_I32_IMM,        // dst_reg, src_reg, immediate_value -> bool
+    
+    // Load and operate patterns
+    OP_LOAD_ADD_I32,       // dst_reg = memory[src_reg] + operand_reg
+    OP_LOAD_CMP_I32,       // dst_reg = memory[src_reg] < operand_reg
+    
+    // Loop optimization fused instructions  
+    OP_INC_CMP_JMP,        // increment_reg, limit_reg, jump_offset (fused i++; if(i<limit) jump)
+    OP_DEC_CMP_JMP,        // decrement_reg, zero_test, jump_offset (fused i--; if(i>0) jump)
+    
+    // Multiply-add and other multi-operation fusions
+    OP_MUL_ADD_I32,        // dst_reg = src1_reg * src2_reg + src3_reg (FMA pattern)
+    OP_LOAD_INC_STORE,     // memory[address_reg]++ (atomic increment pattern)
     
     // Other
     OP_IMPORT_R,
@@ -494,6 +543,9 @@ typedef struct {
     bool* canHoist;                // Which operations can be hoisted
 } InstructionLICMAnalysis;
 
+// Forward declarations
+struct TypeInferer;
+
 // Compiler state for register allocation
 typedef struct {
     Chunk* chunk;
@@ -518,6 +570,7 @@ typedef struct {
     int loopStart;              // Start instruction of current loop
     JumpTable pendingJumps;     // Track all pending forward jumps for cascade updates
     RegisterAllocator regAlloc; // Enhanced register allocator with lifetime tracking
+    struct TypeInferer* typeInferer;   // Type inference engine for Phase 3.1 optimization
     bool hadError;
 } Compiler;
 

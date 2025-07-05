@@ -1,0 +1,75 @@
+// VM Optimization Impact Benchmark
+// Tests the specific optimizations implemented in VM_OPTIMIZATION.md
+// Measures improvements from dispatch optimizations and fused instructions
+
+benchmark_start = time_stamp()
+print("Starting VM optimization benchmark...")
+
+// Test 1: Hot Opcode Performance (Tests dispatch table optimization)
+// This test heavily uses ADD_I32_TYPED, LT_I32_TYPED which are now first in dispatch table
+mut hot_opcode_sum: i32 = 0
+for i in 0..1000000:
+    hot_opcode_sum = hot_opcode_sum + 1
+    if hot_opcode_sum < 500000:
+        hot_opcode_sum = hot_opcode_sum + 1
+
+print("Hot opcode test result:", hot_opcode_sum)
+
+// Test 2: Typed Operations Performance (Tests removal of type checks)
+// Uses typed register operations that now have no type checking overhead
+mut typed_ops_result: i32 = 0
+for i in 0..1000000:
+    typed_ops_result = typed_ops_result + i
+    typed_ops_result = typed_ops_result - 1
+    typed_ops_result = typed_ops_result * 1
+
+print("Typed operations result:", typed_ops_result)
+
+// Test 3: Immediate Arithmetic (Tests fused instructions ADD_I32_IMM, etc.)
+// These should use fused instructions for var + constant patterns
+mut immediate_sum: i32 = 0
+for i in 0..1000000:
+    immediate_sum = immediate_sum + 5    // Should use ADD_I32_IMM
+    immediate_sum = immediate_sum - 2    // Should use SUB_I32_IMM  
+    immediate_sum = immediate_sum * 3    // Should use MUL_I32_IMM
+
+print("Immediate arithmetic result:", immediate_sum)
+
+// Test 4: Loop Optimization (Tests INC_CMP_JMP fusion)
+// Tight loops that should benefit from fused increment-compare-jump
+mut tight_loop_count: i32 = 0
+for outer in 0..1000:
+    for inner in 0..1000:
+        tight_loop_count = tight_loop_count + 1
+
+print("Tight loop result:", tight_loop_count)
+
+// Test 5: Fast Dispatch Stress Test
+// Maximum stress on the optimized DISPATCH() macro
+mut dispatch_stress: i32 = 0
+for i in 0..2000000:
+    dispatch_stress = dispatch_stress + 1
+    dispatch_stress = dispatch_stress + 2
+    dispatch_stress = dispatch_stress + 3
+
+print("Dispatch stress result:", dispatch_stress)
+
+// Test 6: Mixed Optimization Benefits
+// Combines all optimizations: hot opcodes, typed ops, immediate arithmetic
+mut mixed_result: i32 = 0
+for i in 0..500000:
+    mixed_result = mixed_result + 10     // Fused immediate
+    mixed_result = mixed_result - 5      // Fused immediate
+    if mixed_result < 1000000:           // Hot opcode comparison
+        mixed_result = mixed_result * 2  // Fused immediate
+
+print("Mixed optimization result:", mixed_result)
+
+benchmark_end = time_stamp()
+total_duration = benchmark_end - benchmark_start
+duration_ms = total_duration / 1000000
+
+print("VM optimization benchmark completed!")
+print("Total time (nanoseconds):", total_duration)
+print("Total time (milliseconds):", duration_ms)
+print("Performance improvements should be visible compared to previous versions")

@@ -4,6 +4,7 @@
 #include "common.h"
 #include "vm.h"
 #include "ast.h"
+#include "type.h"
 
 void initCompiler(Compiler* compiler, Chunk* chunk, const char* fileName, const char* source);
 void freeCompiler(Compiler* compiler);
@@ -48,5 +49,17 @@ void emitConstant(Compiler* compiler, uint8_t reg, Value value);
 // Compilation helpers
 bool compileExpression(ASTNode* node, Compiler* compiler);
 int compileExpressionToRegister(ASTNode* node, Compiler* compiler);
+
+// Phase 3.1: Type inference integration for optimization
+void initCompilerTypeInference(Compiler* compiler);
+void freeCompilerTypeInference(Compiler* compiler);
+Type* inferExpressionType(Compiler* compiler, ASTNode* expr);
+bool resolveVariableType(Compiler* compiler, const char* name, Type* inferredType);
+ValueType typeKindToValueType(TypeKind kind);
+TypeKind valueTypeToTypeKind(ValueType vtype);
+
+// Phase 3.2: Emit typed instructions when types are known
+bool canEmitTypedInstruction(Compiler* compiler, ASTNode* left, ASTNode* right, ValueType* outType);
+void emitTypedBinaryOp(Compiler* compiler, const char* op, ValueType type, uint8_t dst, uint8_t left, uint8_t right);
 
 #endif // COMPILER_H

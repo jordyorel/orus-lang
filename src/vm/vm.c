@@ -242,6 +242,43 @@ static InterpretResult run(void) {
 #if USE_COMPUTED_GOTO
     static void* dispatchTable[OP_HALT + 1] = {0};
     if (!dispatchTable[OP_HALT]) {
+        // Phase 1.3 Optimization: Hot opcodes first for better cache locality
+        // Most frequently used typed operations (hot path)
+        dispatchTable[OP_ADD_I32_TYPED] = &&LABEL_OP_ADD_I32_TYPED;
+        dispatchTable[OP_SUB_I32_TYPED] = &&LABEL_OP_SUB_I32_TYPED;
+        dispatchTable[OP_MUL_I32_TYPED] = &&LABEL_OP_MUL_I32_TYPED;
+        dispatchTable[OP_LT_I32_TYPED] = &&LABEL_OP_LT_I32_TYPED;
+        dispatchTable[OP_LE_I32_TYPED] = &&LABEL_OP_LE_I32_TYPED;
+        dispatchTable[OP_GT_I32_TYPED] = &&LABEL_OP_GT_I32_TYPED;
+        dispatchTable[OP_GE_I32_TYPED] = &&LABEL_OP_GE_I32_TYPED;
+        
+        // Short jumps for tight loops
+        dispatchTable[OP_JUMP_SHORT] = &&LABEL_OP_JUMP_SHORT;
+        dispatchTable[OP_JUMP_BACK_SHORT] = &&LABEL_OP_JUMP_BACK_SHORT;
+        dispatchTable[OP_JUMP_IF_NOT_SHORT] = &&LABEL_OP_JUMP_IF_NOT_SHORT;
+        dispatchTable[OP_LOOP_SHORT] = &&LABEL_OP_LOOP_SHORT;
+        
+        // Loop-critical operations
+        dispatchTable[OP_INC_I32_R] = &&LABEL_OP_INC_I32_R;
+        
+        // Remaining typed operations
+        dispatchTable[OP_DIV_I32_TYPED] = &&LABEL_OP_DIV_I32_TYPED;
+        dispatchTable[OP_MOD_I32_TYPED] = &&LABEL_OP_MOD_I32_TYPED;
+        dispatchTable[OP_ADD_I64_TYPED] = &&LABEL_OP_ADD_I64_TYPED;
+        dispatchTable[OP_SUB_I64_TYPED] = &&LABEL_OP_SUB_I64_TYPED;
+        dispatchTable[OP_MUL_I64_TYPED] = &&LABEL_OP_MUL_I64_TYPED;
+        dispatchTable[OP_DIV_I64_TYPED] = &&LABEL_OP_DIV_I64_TYPED;
+        dispatchTable[OP_ADD_F64_TYPED] = &&LABEL_OP_ADD_F64_TYPED;
+        dispatchTable[OP_SUB_F64_TYPED] = &&LABEL_OP_SUB_F64_TYPED;
+        dispatchTable[OP_MUL_F64_TYPED] = &&LABEL_OP_MUL_F64_TYPED;
+        dispatchTable[OP_DIV_F64_TYPED] = &&LABEL_OP_DIV_F64_TYPED;
+        
+        // Constant loading (also hot)
+        dispatchTable[OP_LOAD_I32_CONST] = &&LABEL_OP_LOAD_I32_CONST;
+        dispatchTable[OP_LOAD_I64_CONST] = &&LABEL_OP_LOAD_I64_CONST;
+        dispatchTable[OP_LOAD_F64_CONST] = &&LABEL_OP_LOAD_F64_CONST;
+        
+        // Standard operations (less hot)
         dispatchTable[OP_LOAD_CONST] = &&LABEL_OP_LOAD_CONST;
         dispatchTable[OP_LOAD_NIL] = &&LABEL_OP_LOAD_NIL;
         dispatchTable[OP_LOAD_TRUE] = &&LABEL_OP_LOAD_TRUE;
@@ -327,41 +364,20 @@ static InterpretResult run(void) {
         dispatchTable[OP_RETURN_R] = &&LABEL_OP_RETURN_R;
         dispatchTable[OP_RETURN_VOID] = &&LABEL_OP_RETURN_VOID;
         
-        // Short jump optimizations
-        dispatchTable[OP_JUMP_SHORT] = &&LABEL_OP_JUMP_SHORT;
-        dispatchTable[OP_JUMP_BACK_SHORT] = &&LABEL_OP_JUMP_BACK_SHORT;
-        dispatchTable[OP_JUMP_IF_NOT_SHORT] = &&LABEL_OP_JUMP_IF_NOT_SHORT;
-        dispatchTable[OP_LOOP_SHORT] = &&LABEL_OP_LOOP_SHORT;
-        
-        // Typed operations for performance
-        dispatchTable[OP_ADD_I32_TYPED] = &&LABEL_OP_ADD_I32_TYPED;
-        dispatchTable[OP_SUB_I32_TYPED] = &&LABEL_OP_SUB_I32_TYPED;
-        dispatchTable[OP_MUL_I32_TYPED] = &&LABEL_OP_MUL_I32_TYPED;
-        dispatchTable[OP_DIV_I32_TYPED] = &&LABEL_OP_DIV_I32_TYPED;
-        dispatchTable[OP_MOD_I32_TYPED] = &&LABEL_OP_MOD_I32_TYPED;
-        
-        dispatchTable[OP_ADD_I64_TYPED] = &&LABEL_OP_ADD_I64_TYPED;
-        dispatchTable[OP_SUB_I64_TYPED] = &&LABEL_OP_SUB_I64_TYPED;
-        dispatchTable[OP_MUL_I64_TYPED] = &&LABEL_OP_MUL_I64_TYPED;
-        dispatchTable[OP_DIV_I64_TYPED] = &&LABEL_OP_DIV_I64_TYPED;
-        
-        dispatchTable[OP_ADD_F64_TYPED] = &&LABEL_OP_ADD_F64_TYPED;
-        dispatchTable[OP_SUB_F64_TYPED] = &&LABEL_OP_SUB_F64_TYPED;
-        dispatchTable[OP_MUL_F64_TYPED] = &&LABEL_OP_MUL_F64_TYPED;
-        dispatchTable[OP_DIV_F64_TYPED] = &&LABEL_OP_DIV_F64_TYPED;
-        
-        dispatchTable[OP_LT_I32_TYPED] = &&LABEL_OP_LT_I32_TYPED;
-        dispatchTable[OP_LE_I32_TYPED] = &&LABEL_OP_LE_I32_TYPED;
-        dispatchTable[OP_GT_I32_TYPED] = &&LABEL_OP_GT_I32_TYPED;
-        dispatchTable[OP_GE_I32_TYPED] = &&LABEL_OP_GE_I32_TYPED;
-        
-        dispatchTable[OP_LOAD_I32_CONST] = &&LABEL_OP_LOAD_I32_CONST;
-        dispatchTable[OP_LOAD_I64_CONST] = &&LABEL_OP_LOAD_I64_CONST;
-        dispatchTable[OP_LOAD_F64_CONST] = &&LABEL_OP_LOAD_F64_CONST;
+        // Note: Hot opcodes already assigned above for optimal cache locality
         
         dispatchTable[OP_MOVE_I32] = &&LABEL_OP_MOVE_I32;
         dispatchTable[OP_MOVE_I64] = &&LABEL_OP_MOVE_I64;
         dispatchTable[OP_MOVE_F64] = &&LABEL_OP_MOVE_F64;
+        
+        // Phase 2.2: Fused instruction dispatch entries
+        dispatchTable[OP_ADD_I32_IMM] = &&LABEL_OP_ADD_I32_IMM;
+        dispatchTable[OP_SUB_I32_IMM] = &&LABEL_OP_SUB_I32_IMM;
+        dispatchTable[OP_MUL_I32_IMM] = &&LABEL_OP_MUL_I32_IMM;
+        dispatchTable[OP_CMP_I32_IMM] = &&LABEL_OP_CMP_I32_IMM;
+        dispatchTable[OP_INC_CMP_JMP] = &&LABEL_OP_INC_CMP_JMP;
+        dispatchTable[OP_DEC_CMP_JMP] = &&LABEL_OP_DEC_CMP_JMP;
+        dispatchTable[OP_MUL_ADD_I32] = &&LABEL_OP_MUL_ADD_I32;
         
         // Built-in functions
         dispatchTable[OP_TIME_STAMP] = &&LABEL_OP_TIME_STAMP;
@@ -372,35 +388,48 @@ static InterpretResult run(void) {
 
     uint8_t instruction;
 
-#define DISPATCH() \
-    do { \
-        if (IS_ERROR(vm.lastError)) { \
-            if (vm.tryFrameCount > 0) { \
-                TryFrame frame = vm.tryFrames[--vm.tryFrameCount]; \
-                vm.ip = frame.handler; \
-                vm.globals[frame.varIndex] = vm.lastError; \
-                vm.lastError = NIL_VAL; \
-            } else { \
-                RETURN(INTERPRET_RUNTIME_ERROR); \
+// Phase 1.1 Optimization: Fast DISPATCH macro for production builds
+#ifdef ORUS_DEBUG
+    // Debug build: Keep full error checking and tracing
+    #define DISPATCH() \
+        do { \
+            if (IS_ERROR(vm.lastError)) { \
+                if (vm.tryFrameCount > 0) { \
+                    TryFrame frame = vm.tryFrames[--vm.tryFrameCount]; \
+                    vm.ip = frame.handler; \
+                    vm.globals[frame.varIndex] = vm.lastError; \
+                    vm.lastError = NIL_VAL; \
+                } else { \
+                    RETURN(INTERPRET_RUNTIME_ERROR); \
+                } \
             } \
-        } \
-        if (vm.trace) { \
-            printf("        "); \
-            for (int i = 0; i < 8; i++) { \
-                printf("[ R%d: ", i); \
-                printValue(vm.registers[i]); \
-                printf(" ]"); \
+            if (vm.trace) { \
+                printf("        "); \
+                for (int i = 0; i < 8; i++) { \
+                    printf("[ R%d: ", i); \
+                    printValue(vm.registers[i]); \
+                    printf(" ]"); \
+                } \
+                printf("\\n"); \
+                disassembleInstruction(vm.chunk, (int)(vm.ip - vm.chunk->code)); \
             } \
-            printf("\\n"); \
-            disassembleInstruction(vm.chunk, (int)(vm.ip - vm.chunk->code)); \
-        } \
-        vm.instruction_count++; \
-        instruction = READ_BYTE(); \
-        if (instruction > OP_HALT || dispatchTable[instruction] == NULL) { \
-            goto LABEL_UNKNOWN; \
-        } \
-        goto *dispatchTable[instruction]; \
-    } while (0)
+            vm.instruction_count++; \
+            instruction = READ_BYTE(); \
+            if (instruction > OP_HALT || dispatchTable[instruction] == NULL) { \
+                goto LABEL_UNKNOWN; \
+            } \
+            goto *dispatchTable[instruction]; \
+        } while (0)
+    
+    // Same as normal dispatch for debug builds
+    #define DISPATCH_TYPED() DISPATCH()
+#else
+    // Production build: Ultra-fast dispatch with no checks
+    #define DISPATCH() goto *dispatchTable[*vm.ip++]
+    
+    // Even faster for typed operations - no error checking needed
+    #define DISPATCH_TYPED() goto *dispatchTable[*vm.ip++]
+#endif
     DISPATCH();
 
 LABEL_OP_LOAD_CONST: {
@@ -1551,58 +1580,55 @@ LABEL_OP_LOOP_SHORT: {
 
 // Typed arithmetic operations for maximum performance (bypass Value boxing)
 LABEL_OP_ADD_I32_TYPED: {
-    uint8_t dst = READ_BYTE();
-    uint8_t left = READ_BYTE();
-    uint8_t right = READ_BYTE();
+    uint8_t dst = *vm.ip++;
+    uint8_t left = *vm.ip++;
+    uint8_t right = *vm.ip++;
     
     vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[left] + vm.typed_regs.i32_regs[right];
-    vm.typed_regs.reg_types[dst] = REG_TYPE_I32;
     
-    DISPATCH();
+    DISPATCH_TYPED();
 }
 
 LABEL_OP_SUB_I32_TYPED: {
-    uint8_t dst = READ_BYTE();
-    uint8_t left = READ_BYTE();
-    uint8_t right = READ_BYTE();
+    uint8_t dst = *vm.ip++;
+    uint8_t left = *vm.ip++;
+    uint8_t right = *vm.ip++;
     
     vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[left] - vm.typed_regs.i32_regs[right];
-    vm.typed_regs.reg_types[dst] = REG_TYPE_I32;
     
-    DISPATCH();
+    DISPATCH_TYPED();
 }
 
 LABEL_OP_MUL_I32_TYPED: {
-    uint8_t dst = READ_BYTE();
-    uint8_t left = READ_BYTE();
-    uint8_t right = READ_BYTE();
+    uint8_t dst = *vm.ip++;
+    uint8_t left = *vm.ip++;
+    uint8_t right = *vm.ip++;
     
     vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[left] * vm.typed_regs.i32_regs[right];
-    vm.typed_regs.reg_types[dst] = REG_TYPE_I32;
     
-    DISPATCH();
+    DISPATCH_TYPED();
 }
 
 LABEL_OP_DIV_I32_TYPED: {
-    uint8_t dst = READ_BYTE();
-    uint8_t left = READ_BYTE();
-    uint8_t right = READ_BYTE();
+    uint8_t dst = *vm.ip++;
+    uint8_t left = *vm.ip++;
+    uint8_t right = *vm.ip++;
     
+    // Keep zero check for safety, but remove type checks
     if (vm.typed_regs.i32_regs[right] == 0) {
         runtimeError(ERROR_RUNTIME, (SrcLocation){NULL, 0, 0}, "Division by zero");
         RETURN(INTERPRET_RUNTIME_ERROR);
     }
     
     vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[left] / vm.typed_regs.i32_regs[right];
-    vm.typed_regs.reg_types[dst] = REG_TYPE_I32;
     
-    DISPATCH();
+    DISPATCH_TYPED();
 }
 
 LABEL_OP_MOD_I32_TYPED: {
-    uint8_t dst = READ_BYTE();
-    uint8_t left = READ_BYTE();
-    uint8_t right = READ_BYTE();
+    uint8_t dst = *vm.ip++;
+    uint8_t left = *vm.ip++;
+    uint8_t right = *vm.ip++;
     
     if (vm.typed_regs.i32_regs[right] == 0) {
         runtimeError(ERROR_RUNTIME, (SrcLocation){NULL, 0, 0}, "Modulo by zero");
@@ -1610,48 +1636,44 @@ LABEL_OP_MOD_I32_TYPED: {
     }
     
     vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[left] % vm.typed_regs.i32_regs[right];
-    vm.typed_regs.reg_types[dst] = REG_TYPE_I32;
     
-    DISPATCH();
+    DISPATCH_TYPED();
 }
 
 LABEL_OP_ADD_I64_TYPED: {
-    uint8_t dst = READ_BYTE();
-    uint8_t left = READ_BYTE();
-    uint8_t right = READ_BYTE();
+    uint8_t dst = *vm.ip++;
+    uint8_t left = *vm.ip++;
+    uint8_t right = *vm.ip++;
     
     vm.typed_regs.i64_regs[dst] = vm.typed_regs.i64_regs[left] + vm.typed_regs.i64_regs[right];
-    vm.typed_regs.reg_types[dst] = REG_TYPE_I64;
     
-    DISPATCH();
+    DISPATCH_TYPED();
 }
 
 LABEL_OP_SUB_I64_TYPED: {
-    uint8_t dst = READ_BYTE();
-    uint8_t left = READ_BYTE();
-    uint8_t right = READ_BYTE();
+    uint8_t dst = *vm.ip++;
+    uint8_t left = *vm.ip++;
+    uint8_t right = *vm.ip++;
     
     vm.typed_regs.i64_regs[dst] = vm.typed_regs.i64_regs[left] - vm.typed_regs.i64_regs[right];
-    vm.typed_regs.reg_types[dst] = REG_TYPE_I64;
     
-    DISPATCH();
+    DISPATCH_TYPED();
 }
 
 LABEL_OP_MUL_I64_TYPED: {
-    uint8_t dst = READ_BYTE();
-    uint8_t left = READ_BYTE();
-    uint8_t right = READ_BYTE();
+    uint8_t dst = *vm.ip++;
+    uint8_t left = *vm.ip++;
+    uint8_t right = *vm.ip++;
     
     vm.typed_regs.i64_regs[dst] = vm.typed_regs.i64_regs[left] * vm.typed_regs.i64_regs[right];
-    vm.typed_regs.reg_types[dst] = REG_TYPE_I64;
     
-    DISPATCH();
+    DISPATCH_TYPED();
 }
 
 LABEL_OP_DIV_I64_TYPED: {
-    uint8_t dst = READ_BYTE();
-    uint8_t left = READ_BYTE();
-    uint8_t right = READ_BYTE();
+    uint8_t dst = *vm.ip++;
+    uint8_t left = *vm.ip++;
+    uint8_t right = *vm.ip++;
     
     if (vm.typed_regs.i64_regs[right] == 0) {
         runtimeError(ERROR_RUNTIME, (SrcLocation){NULL, 0, 0}, "Division by zero");
@@ -1659,97 +1681,88 @@ LABEL_OP_DIV_I64_TYPED: {
     }
     
     vm.typed_regs.i64_regs[dst] = vm.typed_regs.i64_regs[left] / vm.typed_regs.i64_regs[right];
-    vm.typed_regs.reg_types[dst] = REG_TYPE_I64;
     
-    DISPATCH();
+    DISPATCH_TYPED();
 }
 
 LABEL_OP_ADD_F64_TYPED: {
-    uint8_t dst = READ_BYTE();
-    uint8_t left = READ_BYTE();
-    uint8_t right = READ_BYTE();
+    uint8_t dst = *vm.ip++;
+    uint8_t left = *vm.ip++;
+    uint8_t right = *vm.ip++;
     
     vm.typed_regs.f64_regs[dst] = vm.typed_regs.f64_regs[left] + vm.typed_regs.f64_regs[right];
-    vm.typed_regs.reg_types[dst] = REG_TYPE_F64;
     
-    DISPATCH();
+    DISPATCH_TYPED();
 }
 
 LABEL_OP_SUB_F64_TYPED: {
-    uint8_t dst = READ_BYTE();
-    uint8_t left = READ_BYTE();
-    uint8_t right = READ_BYTE();
+    uint8_t dst = *vm.ip++;
+    uint8_t left = *vm.ip++;
+    uint8_t right = *vm.ip++;
     
     vm.typed_regs.f64_regs[dst] = vm.typed_regs.f64_regs[left] - vm.typed_regs.f64_regs[right];
-    vm.typed_regs.reg_types[dst] = REG_TYPE_F64;
     
-    DISPATCH();
+    DISPATCH_TYPED();
 }
 
 LABEL_OP_MUL_F64_TYPED: {
-    uint8_t dst = READ_BYTE();
-    uint8_t left = READ_BYTE();
-    uint8_t right = READ_BYTE();
+    uint8_t dst = *vm.ip++;
+    uint8_t left = *vm.ip++;
+    uint8_t right = *vm.ip++;
     
     vm.typed_regs.f64_regs[dst] = vm.typed_regs.f64_regs[left] * vm.typed_regs.f64_regs[right];
-    vm.typed_regs.reg_types[dst] = REG_TYPE_F64;
     
-    DISPATCH();
+    DISPATCH_TYPED();
 }
 
 LABEL_OP_DIV_F64_TYPED: {
-    uint8_t dst = READ_BYTE();
-    uint8_t left = READ_BYTE();
-    uint8_t right = READ_BYTE();
+    uint8_t dst = *vm.ip++;
+    uint8_t left = *vm.ip++;
+    uint8_t right = *vm.ip++;
     
     vm.typed_regs.f64_regs[dst] = vm.typed_regs.f64_regs[left] / vm.typed_regs.f64_regs[right];
-    vm.typed_regs.reg_types[dst] = REG_TYPE_F64;
     
-    DISPATCH();
+    DISPATCH_TYPED();
 }
 
 LABEL_OP_LT_I32_TYPED: {
-    uint8_t dst = READ_BYTE();
-    uint8_t left = READ_BYTE();
-    uint8_t right = READ_BYTE();
+    uint8_t dst = *vm.ip++;
+    uint8_t left = *vm.ip++;
+    uint8_t right = *vm.ip++;
     
     vm.typed_regs.bool_regs[dst] = vm.typed_regs.i32_regs[left] < vm.typed_regs.i32_regs[right];
-    vm.typed_regs.reg_types[dst] = REG_TYPE_BOOL;
     
-    DISPATCH();
+    DISPATCH_TYPED();
 }
 
 LABEL_OP_LE_I32_TYPED: {
-    uint8_t dst = READ_BYTE();
-    uint8_t left = READ_BYTE();
-    uint8_t right = READ_BYTE();
+    uint8_t dst = *vm.ip++;
+    uint8_t left = *vm.ip++;
+    uint8_t right = *vm.ip++;
     
     vm.typed_regs.bool_regs[dst] = vm.typed_regs.i32_regs[left] <= vm.typed_regs.i32_regs[right];
-    vm.typed_regs.reg_types[dst] = REG_TYPE_BOOL;
     
-    DISPATCH();
+    DISPATCH_TYPED();
 }
 
 LABEL_OP_GT_I32_TYPED: {
-    uint8_t dst = READ_BYTE();
-    uint8_t left = READ_BYTE();
-    uint8_t right = READ_BYTE();
+    uint8_t dst = *vm.ip++;
+    uint8_t left = *vm.ip++;
+    uint8_t right = *vm.ip++;
     
     vm.typed_regs.bool_regs[dst] = vm.typed_regs.i32_regs[left] > vm.typed_regs.i32_regs[right];
-    vm.typed_regs.reg_types[dst] = REG_TYPE_BOOL;
     
-    DISPATCH();
+    DISPATCH_TYPED();
 }
 
 LABEL_OP_GE_I32_TYPED: {
-    uint8_t dst = READ_BYTE();
-    uint8_t left = READ_BYTE();
-    uint8_t right = READ_BYTE();
+    uint8_t dst = *vm.ip++;
+    uint8_t left = *vm.ip++;
+    uint8_t right = *vm.ip++;
     
     vm.typed_regs.bool_regs[dst] = vm.typed_regs.i32_regs[left] >= vm.typed_regs.i32_regs[right];
-    vm.typed_regs.reg_types[dst] = REG_TYPE_BOOL;
     
-    DISPATCH();
+    DISPATCH_TYPED();
 }
 
 LABEL_OP_LOAD_I32_CONST: {
@@ -1827,6 +1840,147 @@ LABEL_OP_TIME_STAMP: {
     vm.registers[dst] = I64_VAL(timestamp);
     
     DISPATCH();
+}
+
+// Phase 2.2: Fused instruction implementations for better performance
+LABEL_OP_ADD_I32_IMM: {
+    uint8_t dst = *vm.ip++;
+    uint8_t src = *vm.ip++;
+    int32_t imm = *(int32_t*)vm.ip;
+    vm.ip += 4;
+    
+    // Check if source register has typed value, otherwise use boxed
+    if (vm.typed_regs.reg_types[src] == REG_TYPE_I32) {
+        // Use typed registers for maximum performance
+        vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[src] + imm;
+        vm.typed_regs.reg_types[dst] = REG_TYPE_I32;
+    } else {
+        // Fall back to boxed operation with type check
+        if (!IS_I32(vm.registers[src])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operand must be i32");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        int32_t result = AS_I32(vm.registers[src]) + imm;
+        vm.registers[dst] = I32_VAL(result);
+    }
+    
+    DISPATCH_TYPED();
+}
+
+LABEL_OP_SUB_I32_IMM: {
+    uint8_t dst = *vm.ip++;
+    uint8_t src = *vm.ip++;
+    int32_t imm = *(int32_t*)vm.ip;
+    vm.ip += 4;
+    
+    // Check if source register has typed value, otherwise use boxed
+    if (vm.typed_regs.reg_types[src] == REG_TYPE_I32) {
+        // Use typed registers for maximum performance
+        vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[src] - imm;
+        vm.typed_regs.reg_types[dst] = REG_TYPE_I32;
+    } else {
+        // Fall back to boxed operation with type check
+        if (!IS_I32(vm.registers[src])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operand must be i32");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        int32_t result = AS_I32(vm.registers[src]) - imm;
+        vm.registers[dst] = I32_VAL(result);
+    }
+    
+    DISPATCH_TYPED();
+}
+
+LABEL_OP_MUL_I32_IMM: {
+    uint8_t dst = *vm.ip++;
+    uint8_t src = *vm.ip++;
+    int32_t imm = *(int32_t*)vm.ip;
+    vm.ip += 4;
+    
+    // Check if source register has typed value, otherwise use boxed
+    if (vm.typed_regs.reg_types[src] == REG_TYPE_I32) {
+        // Use typed registers for maximum performance
+        vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[src] * imm;
+        vm.typed_regs.reg_types[dst] = REG_TYPE_I32;
+    } else {
+        // Fall back to boxed operation with type check
+        if (!IS_I32(vm.registers[src])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operand must be i32");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        int32_t result = AS_I32(vm.registers[src]) * imm;
+        vm.registers[dst] = I32_VAL(result);
+    }
+    
+    DISPATCH_TYPED();
+}
+
+LABEL_OP_CMP_I32_IMM: {
+    uint8_t dst = *vm.ip++;
+    uint8_t src = *vm.ip++;
+    int32_t imm = *(int32_t*)vm.ip;
+    vm.ip += 4;
+    
+    vm.typed_regs.bool_regs[dst] = vm.typed_regs.i32_regs[src] < imm;
+    
+    DISPATCH_TYPED();
+}
+
+LABEL_OP_INC_CMP_JMP: {
+    uint8_t reg = *vm.ip++;
+    uint8_t limit_reg = *vm.ip++;
+    int16_t offset = *(int16_t*)vm.ip;
+    vm.ip += 2;
+    
+    // Check if registers have typed values, otherwise use boxed
+    if (vm.typed_regs.reg_types[reg] == REG_TYPE_I32 && 
+        vm.typed_regs.reg_types[limit_reg] == REG_TYPE_I32) {
+        // Fused increment + compare + conditional jump - maximum performance
+        if (++vm.typed_regs.i32_regs[reg] < vm.typed_regs.i32_regs[limit_reg]) {
+            vm.ip += offset;
+        }
+    } else {
+        // Fall back to boxed operation with type checks
+        if (!IS_I32(vm.registers[reg]) || !IS_I32(vm.registers[limit_reg])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        int32_t incremented = AS_I32(vm.registers[reg]) + 1;
+        vm.registers[reg] = I32_VAL(incremented);
+        if (incremented < AS_I32(vm.registers[limit_reg])) {
+            vm.ip += offset;
+        }
+    }
+    
+    DISPATCH_TYPED();
+}
+
+LABEL_OP_DEC_CMP_JMP: {
+    uint8_t reg = *vm.ip++;
+    uint8_t zero_test = *vm.ip++;
+    int16_t offset = *(int16_t*)vm.ip;
+    vm.ip += 2;
+    
+    // Fused decrement + compare + conditional jump
+    if (--vm.typed_regs.i32_regs[reg] > vm.typed_regs.i32_regs[zero_test]) {
+        vm.ip += offset;
+    }
+    
+    DISPATCH_TYPED();
+}
+
+LABEL_OP_MUL_ADD_I32: {
+    uint8_t dst = *vm.ip++;
+    uint8_t mul1 = *vm.ip++;
+    uint8_t mul2 = *vm.ip++;
+    uint8_t add = *vm.ip++;
+    
+    // Fused multiply-add (single operation on modern CPUs)
+    vm.typed_regs.i32_regs[dst] = 
+        vm.typed_regs.i32_regs[mul1] * vm.typed_regs.i32_regs[mul2] + 
+        vm.typed_regs.i32_regs[add];
+    
+    DISPATCH_TYPED();
 }
 
 LABEL_OP_HALT:
@@ -3573,17 +3727,6 @@ LABEL_UNKNOWN:
                 
                 vm.typed_regs.f64_regs[dst] = vm.typed_regs.f64_regs[src];
                 vm.typed_regs.reg_types[dst] = REG_TYPE_F64;
-                
-                break;
-            }
-
-                    int32_t maxIterations = AS_I32(vm.registers[reg + 1]);
-                    if (current > maxIterations) {
-                        runtimeError(ERROR_RUNTIME, (SrcLocation){vm.filePath, vm.currentLine, vm.currentColumn},
-                                     "Loop exceeded maximum iteration limit (%d)", maxIterations);
-                        RETURN(INTERPRET_RUNTIME_ERROR);
-                    }
-                }
                 
                 break;
             }
