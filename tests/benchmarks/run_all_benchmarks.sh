@@ -29,7 +29,8 @@ ORUS_BINARY="../../orus"
 
 # Arrays to store benchmark results (using temp files for compatibility)
 TEMP_DIR=$(mktemp -d)
-BENCHMARK_NAMES=("arithmetic" "control_flow" "vm_optimization")
+BENCHMARK_NAMES=("arithmetic" "control_flow")  # Exclude vm_optimization from cross-language comparison
+ORUS_ONLY_BENCHMARKS=("vm_optimization")       # Orus-specific benchmarks
 LANGUAGES_TESTED=()
 
 # Helper functions for storing/retrieving results
@@ -296,6 +297,22 @@ for benchmark_type in "${BENCHMARK_NAMES[@]}"; do
     echo ""
 done
 
+# Display Orus-specific benchmarks separately
+echo -e "${CYAN}=== Orus-Specific Performance Benchmarks ===${NC}"
+for benchmark_type in "${ORUS_ONLY_BENCHMARKS[@]}"; do
+    benchmark_title=$(capitalize "$benchmark_type")
+    time_ms=$(get_benchmark_time "orus" "$benchmark_type")
+    status=$(get_benchmark_status "orus" "$benchmark_type")
+    
+    if [[ -n "$time_ms" && "$status" == "SUCCESS" ]]; then
+        classification=$(classify_performance $time_ms)
+        color=$(get_performance_color "$classification")
+        echo -e "  ${benchmark_title}: ${color}${time_ms}ms - ${classification}${NC}"
+        echo -e "    → Tests Orus VM optimizations and internal performance"
+    fi
+done
+echo ""
+
 # Overall language classification
 echo -e "${CYAN}=== Overall Language Performance Classification ===${NC}"
 
@@ -355,9 +372,9 @@ for result in "${overall_results[@]}"; do
 done
 
 echo -e "${BLUE}Performance Notes:${NC}"
-echo "• Orus benchmarks test the core VM performance and optimizations"
-echo "• Cross-language comparisons show relative performance vs other interpreters"
-echo "• VM optimization benchmarks verify specific optimizations are working"
+echo "• Cross-language rankings based on arithmetic + control flow benchmarks only"
+echo "• VM optimization benchmark excluded from overall ranking (Orus-specific)"
+echo "• Orus benchmarks test core VM performance and internal optimizations"
 echo "• Performance classifications: Excellent (≤100ms), Very Good (≤500ms), Good (≤1s), Fair (≤3s), Poor (≤10s), Very Poor (>10s)"
 echo ""
 

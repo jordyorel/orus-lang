@@ -38,7 +38,7 @@ static bool isConstantExpression(ASTNode* node);
 static int evaluateConstantInt(ASTNode* node);
 
 // Phase 3.1: Register type tracking functions
-static void initRegisterTypes(Compiler* compiler) {
+__attribute__((unused)) static void initRegisterTypes(Compiler* compiler) {
     for (int i = 0; i < REGISTER_COUNT; i++) {
         compiler->registerTypes[i] = VAL_NIL; // Unknown/untyped
     }
@@ -54,7 +54,7 @@ static ValueType getRegisterType(Compiler* compiler, uint8_t reg) {
     return compiler->registerTypes[reg];
 }
 
-static bool isRegisterTyped(Compiler* compiler, uint8_t reg) {
+__attribute__((unused)) static bool isRegisterTyped(Compiler* compiler, uint8_t reg) {
     ValueType type = getRegisterType(compiler, reg);
     return type != VAL_NIL && type != VAL_ERROR;
 }
@@ -1003,10 +1003,15 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             
             compiler->locals[localIndex].reg = (uint8_t)initReg;
             
-            // Phase 3.1: Track register type for typed operations (disabled - causes issues)
-            // if (hasTypeAnnotation) {
-            //     setRegisterType(compiler, (uint8_t)initReg, declaredType);
-            // }
+            // Phase 3.1: Safe type tracking for literals and simple expressions
+            if (node->varDecl.initializer->type == NODE_LITERAL) {
+                // Direct literal assignment - 100% safe to track type
+                compiler->locals[localIndex].hasKnownType = true;
+                compiler->locals[localIndex].knownType = declaredType; // Use final type after any conversions
+            } else {
+                // Complex expressions - don't track type for safety
+                compiler->locals[localIndex].hasKnownType = false;
+            }
             
             return initReg;
         }
@@ -1030,6 +1035,17 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
                 compiler->locals[localIndex].depth = compiler->scopeDepth;
                 compiler->locals[localIndex].isMutable = false;
                 compiler->locals[localIndex].type = getNodeValueTypeWithCompiler(node->assign.value, compiler);
+                
+                // Phase 3.1: Safe type tracking for new variable assignments
+                if (node->assign.value->type == NODE_LITERAL) {
+                    // Direct literal assignment - 100% safe to track type
+                    compiler->locals[localIndex].hasKnownType = true;
+                    compiler->locals[localIndex].knownType = compiler->locals[localIndex].type;
+                } else {
+                    // Complex expressions - don't track type for safety
+                    compiler->locals[localIndex].hasKnownType = false;
+                }
+                
                 return valueReg;
             }
             if (!compiler->locals[localIndex].isMutable) {
@@ -1040,6 +1056,17 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             emitByte(compiler, compiler->locals[localIndex].reg);
             emitByte(compiler, valueReg);
             freeRegister(compiler, valueReg);
+            
+            // Phase 3.1: Update safe type tracking for existing variable reassignments
+            if (node->assign.value->type == NODE_LITERAL) {
+                // Direct literal assignment - update known type
+                compiler->locals[localIndex].hasKnownType = true;
+                compiler->locals[localIndex].knownType = getNodeValueTypeWithCompiler(node->assign.value, compiler);
+            } else {
+                // Complex expressions - clear type tracking for safety
+                compiler->locals[localIndex].hasKnownType = false;
+            }
+            
             return compiler->locals[localIndex].reg;
         }
         case NODE_PRINT: {
@@ -1189,6 +1216,9 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             compiler->locals[localIndex].depth = compiler->scopeDepth;
             compiler->locals[localIndex].isMutable = true;
             compiler->locals[localIndex].type = VAL_I32; // for range loops use i32
+            // Initialize safe type tracking fields
+            compiler->locals[localIndex].hasKnownType = false; // Loop variables change, so not safe to track
+            compiler->locals[localIndex].knownType = VAL_NIL;
             
             // Connect local to live range in register allocator
             int rangeIndex = compiler->regAlloc.count - 1; // Most recently added range
@@ -1293,6 +1323,9 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             compiler->locals[localIndex].depth = compiler->scopeDepth;
             compiler->locals[localIndex].isMutable = true;
             compiler->locals[localIndex].type = VAL_I64; // iterator values are i64
+            // Initialize safe type tracking fields
+            compiler->locals[localIndex].hasKnownType = false; // Loop variables change, so not safe to track
+            compiler->locals[localIndex].knownType = VAL_NIL;
             
             // Connect local to live range in register allocator
             int rangeIndex = compiler->regAlloc.count - 1; // Most recently added range
@@ -1442,9 +1475,11 @@ void initCompiler(Compiler* compiler, Chunk* chunk, const char* fileName,
     // Phase 3.1: Initialize type inference system
     initCompilerTypeInference(compiler);
     
-    // Initialize all locals to have no live range index
+    // Initialize all locals to have no live range index and safe type tracking
     for (int i = 0; i < REGISTER_COUNT; i++) {
         compiler->locals[i].liveRangeIndex = -1;
+        compiler->locals[i].hasKnownType = false;
+        compiler->locals[i].knownType = VAL_NIL;
     }
     
     compiler->hadError = false;
@@ -1662,7 +1697,7 @@ void optimizeLoopVariableLifetimes(Compiler* compiler, int loopStart, int loopEn
 }
 
 // Enhanced variable lifetime management across loop boundaries
-static void analyzeVariableEscapes(Compiler* compiler, int loopDepth) {
+__attribute__((unused)) static void analyzeVariableEscapes(Compiler* compiler, int loopDepth) {
     RegisterAllocator* allocator = &compiler->regAlloc;
     
     // Check if any variables in the current scope escape to outer scopes
@@ -1705,7 +1740,7 @@ static void analyzeVariableEscapes(Compiler* compiler, int loopDepth) {
     }
 }
 
-static void optimizeRegisterPressure(Compiler* compiler) {
+__attribute__((unused)) static void optimizeRegisterPressure(Compiler* compiler) {
     RegisterAllocator* allocator = &compiler->regAlloc;
     int currentInstr = compiler->chunk->count;
     
@@ -1966,7 +2001,7 @@ static bool hasInstructionSideEffects(uint8_t instruction) {
     }
 }
 
-static bool isRegisterUsedAfterLoop(Compiler* compiler, uint8_t reg, LoopContext* loopCtx) {
+static bool isRegisterUsedAfterLoop(Compiler* compiler, uint8_t reg, LoopContext* loopCtx __attribute__((unused))) {
     // Find the local variable using this register
     int localIndex = findLocalByRegister(compiler, reg);
     if (localIndex == -1) return false;
@@ -2061,7 +2096,7 @@ static void updateJumpTargetsAfterInsertion(Compiler* compiler, int insertPos, i
     }
 }
 
-static void promoteLoopInvariantVariables(Compiler* compiler, int loopStart, int loopEnd) {
+__attribute__((unused)) static void promoteLoopInvariantVariables(Compiler* compiler, int loopStart, int loopEnd) {
     RegisterAllocator* allocator = &compiler->regAlloc;
     
     // Look for variables that are defined before the loop and used within it
@@ -2357,42 +2392,28 @@ void hoistInvariantCode(Compiler* compiler, LICMAnalysis* analysis, int preHeade
         analysis->hoistedRegs[i] = hoistedReg;
         
         // Compile the expression to the hoisted register at preheader position
-        int savedCount = chunk->count;
+        int savedCount __attribute__((unused)) = chunk->count;
         
         // Temporarily set the instruction pointer to preheader
         // This is a simplified approach - a full implementation would
         // use proper instruction insertion with offset updates
         
         // Compile the invariant expression
-        int exprReg = compileExpressionToRegister(expr, compiler);
+        int exprReg __attribute__((unused)) = compileExpressionToRegister(expr, compiler);
         
         // Enhanced implementation for instruction-based hoisting
-        InvariantNode* node = &analysis->invariantNodes[i];
-        if (node->hasBeenHoisted) continue;
+        // Note: This function uses AST-based analysis, not instruction-based
+        // TODO: Implement proper instruction hoisting for better performance
         
         // Calculate preheader position (just before loop start)
-        int hoistPos = preHeaderPos >= 0 ? preHeaderPos : node->instructionOffset - 1;
+        int hoistPos __attribute__((unused)) = preHeaderPos >= 0 ? preHeaderPos : 0; // Simplified for AST-based analysis
         
-        // Create space for the hoisted instruction at preheader
-        if (insertInstructionSpace(compiler, hoistPos, 4)) { // 4 bytes for typical arithmetic op
-            
-            // Copy the invariant instruction to preheader
-            chunk->code[hoistPos] = node->operation;
-            chunk->code[hoistPos + 1] = node->operand1;
-            chunk->code[hoistPos + 2] = node->operand2;
-            chunk->code[hoistPos + 3] = node->result;
-            
-            // Replace original instruction with NOP or register move
-            chunk->code[node->instructionOffset] = OP_MOVE;
-            chunk->code[node->instructionOffset + 1] = node->result; // destination
-            chunk->code[node->instructionOffset + 2] = node->result; // source (already computed)
-            chunk->code[node->instructionOffset + 3] = 0; // padding
-            
-            node->hasBeenHoisted = true;
-            
-            // Update any jump targets that might be affected
-            updateJumpTargetsAfterInsertion(compiler, hoistPos, 4);
-        }
+        // Simplified hoisting for AST-based analysis
+        // In a full implementation, this would:
+        // 1. Generate code for the expression at preheader position
+        // 2. Replace original expression with a register reference
+        // 3. Update jump targets appropriately
+        // For now, this is a placeholder for the optimization framework
     }
 }
 
@@ -2616,7 +2637,7 @@ static bool isConstantExpression(ASTNode* node) {
     }
 }
 
-static int evaluateConstantInt(ASTNode* node) {
+__attribute__((unused)) static int evaluateConstantInt(ASTNode* node) {
     if (!node || !isConstantExpression(node)) return 0;
     
     switch (node->type) {
@@ -2800,7 +2821,7 @@ static void hoistInvariantCodeInstruction(Compiler* compiler, InstructionLICMAna
 void initCompilerTypeInference(Compiler* compiler) {
     if (!compiler) return;
     
-    compiler->typeInferer = type_inferer_new();
+    compiler->typeInferer = (struct TypeInferer*)type_inferer_new();
     if (!compiler->typeInferer) {
         // Fallback: type inference is optional for compilation
         compiler->typeInferer = NULL;
@@ -2811,7 +2832,7 @@ void initCompilerTypeInference(Compiler* compiler) {
 void freeCompilerTypeInference(Compiler* compiler) {
     if (!compiler || !compiler->typeInferer) return;
     
-    type_inferer_free(compiler->typeInferer);
+    type_inferer_free((TypeInferer*)compiler->typeInferer);
     compiler->typeInferer = NULL;
 }
 
@@ -2821,7 +2842,7 @@ Type* inferExpressionType(Compiler* compiler, ASTNode* expr) {
     
     // Use type inferer if available, otherwise fallback to basic type inference
     if (compiler->typeInferer) {
-        Type* inferredType = infer_type(compiler->typeInferer, expr);
+        Type* inferredType = infer_type((TypeInferer*)compiler->typeInferer, expr);
         if (inferredType) {
             return inferredType;
         }
@@ -2923,7 +2944,7 @@ TypeKind valueTypeToTypeKind(ValueType vtype) {
 }
 
 // Phase 3.1: Check if a node represents a register with known type
-static bool getNodeRegisterType(Compiler* compiler, ASTNode* node, ValueType* outType) {
+__attribute__((unused)) static bool getNodeRegisterType(Compiler* compiler, ASTNode* node, ValueType* outType) {
     if (!compiler || !node || !outType) return false;
     
     // Be conservative - only handle simple identifiers for now
@@ -2947,43 +2968,35 @@ static bool getNodeRegisterType(Compiler* compiler, ASTNode* node, ValueType* ou
     return false;
 }
 
-// Phase 3.2: Emit typed instructions when types are known
+// Phase 3.2: Emit typed instructions when types are known (SAFE implementation)
 bool canEmitTypedInstruction(Compiler* compiler, ASTNode* left, ASTNode* right, ValueType* outType) {
-    if (!compiler || !left || !right) return false;
+    if (!compiler || !left || !right || !outType) return false;
     
-    // Phase 3.1: Register type checking disabled for stability
-    // Will implement safer approach later
+    // ULTRA-CONSERVATIVE APPROACH: Only literal + literal operations for now
+    // This is the safest approach that won't break existing functionality
     
-    // Fallback to type inference for complex expressions
-    Type* leftType = inferExpressionType(compiler, left);
-    Type* rightType = inferExpressionType(compiler, right);
-    
-    if (!leftType || !rightType) return false;
-    
-    // Check if both types are the same and are suitable for typed operations
-    if (leftType->kind == rightType->kind) {
-        switch (leftType->kind) {
-            case TYPE_I32:
-                *outType = VAL_I32;
-                return true;
-            case TYPE_I64:
-                *outType = VAL_I64;
-                return true;
-            case TYPE_U32:
-                *outType = VAL_U32;
-                return true;
-            case TYPE_U64:
-                *outType = VAL_U64;
-                return true;
-            case TYPE_F64:
-                *outType = VAL_F64;
-                return true;
-            default:
-                return false;
-        }
+    // Only proceed if BOTH operands are literals
+    if (left->type != NODE_LITERAL || right->type != NODE_LITERAL) {
+        return false;
     }
     
-    return false;
+    ValueType leftType = left->literal.value.type;
+    ValueType rightType = right->literal.value.type;
+    
+    // Only proceed if both types are identical
+    if (leftType != rightType) {
+        return false;
+    }
+    
+    // Only enable typed operations for basic numeric types
+    switch (leftType) {
+        case VAL_I32:
+        case VAL_F64:
+            *outType = leftType;
+            return true;
+        default:
+            return false;
+    }
 }
 
 // Phase 3.2: Emit the appropriate typed instruction for binary operations

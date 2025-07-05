@@ -543,7 +543,7 @@ typedef struct {
     bool* canHoist;                // Which operations can be hoisted
 } InstructionLICMAnalysis;
 
-// Forward declarations
+// Forward declarations  
 struct TypeInferer;
 
 // Compiler state for register allocation
@@ -562,6 +562,9 @@ typedef struct {
         ValueType type; // Type of the variable
         int liveRangeIndex; // Index into register allocator's live ranges (-1 if none)
         bool isSpilled; // Whether variable has been spilled to memory
+        // Phase 3 safe type tracking fields
+        bool hasKnownType; // Whether we know the exact type of this variable
+        ValueType knownType; // The known type (only valid if hasKnownType is true)
     } locals[REGISTER_COUNT];
     int localCount;
     int scopeDepth;

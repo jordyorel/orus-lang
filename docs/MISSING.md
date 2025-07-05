@@ -170,7 +170,7 @@ result = x > 0 ? "positive" : "non-positive"
 - [ ] Generator-style lazy evaluation for large ranges
 - [ ] Loop timeout and resource limit enforcement
 - [ ] Profiling integration for hot loop identification
-
+ 
 ```orus
 # Basic while loop with performance considerations
 while condition:

@@ -1485,8 +1485,8 @@ LABEL_OP_PRINT_MULTI_R: {
 LABEL_OP_PRINT_R: {
         uint8_t reg = READ_BYTE();
         
-        // Check if this is a typed register first
-        if (reg < REGISTER_COUNT && vm.typed_regs.reg_types[reg] != REG_TYPE_NONE) {
+        // Check if this is a typed register first (reg is uint8_t, so always < 256)
+        if (vm.typed_regs.reg_types[reg] != REG_TYPE_NONE) {
             switch (vm.typed_regs.reg_types[reg]) {
                 case REG_TYPE_I32:
                     printf("%d", vm.typed_regs.i32_regs[reg]);
@@ -1961,7 +1961,7 @@ LABEL_OP_HALT:
     vm.lastExecutionTime = get_time_vm() - start_time;
     RETURN(INTERPRET_OK);
 
-LABEL_UNKNOWN:
+LABEL_UNKNOWN: __attribute__((unused))
     runtimeError(ERROR_RUNTIME, (SrcLocation){NULL, 0, 0},
                  "Unknown opcode: %d", instruction);
     RETURN(INTERPRET_RUNTIME_ERROR);
@@ -3826,7 +3826,7 @@ static char* readFile(const char* path) {
 }
 
 // Helper function to get file modification time
-static long getFileModTime(const char* path) {
+__attribute__((unused)) static long getFileModTime(const char* path) {
     struct stat st;
     if (stat(path, &st) == 0) {
         return st.st_mtime;
