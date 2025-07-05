@@ -343,6 +343,11 @@ static ValueType getNodeValueTypeWithCompiler(ASTNode* node, Compiler* compiler)
         }
         // If not found in locals, default to i32
         return VAL_I32;
+    } else if (node->type == NODE_UNARY) {
+        if (strcmp(node->unary.op, "not") == 0) {
+            return VAL_BOOL;
+        }
+        return getNodeValueTypeWithCompiler(node->unary.operand, compiler);
     } else if (node->type == NODE_BINARY) {
         return inferBinaryOpTypeWithCompiler(node->binary.left, node->binary.right, compiler);
     }
@@ -400,6 +405,46 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             uint8_t reg = allocateRegister(compiler);
             emitConstant(compiler, reg, node->literal.value);
             return reg;
+        }
+        case NODE_UNARY: {
+            int operandReg = compileExpressionToRegister(node->unary.operand, compiler);
+            if (operandReg < 0) return -1;
+            uint8_t resultReg = allocateRegister(compiler);
+            if (strcmp(node->unary.op, "not") == 0) {
+                emitByte(compiler, OP_NOT_BOOL_R);
+                emitByte(compiler, resultReg);
+                emitByte(compiler, (uint8_t)operandReg);
+                freeRegister(compiler, (uint8_t)operandReg);
+                return resultReg;
+            } else if (strcmp(node->unary.op, "-") == 0) {
+                ValueType opType = getNodeValueTypeWithCompiler(node->unary.operand, compiler);
+                Value zero;
+                uint8_t opcode;
+                switch (opType) {
+                    case VAL_I64: zero = I64_VAL(0); opcode = OP_SUB_I64_R; break;
+                    case VAL_F64: zero = F64_VAL(0); opcode = OP_SUB_F64_R; break;
+                    case VAL_U32: zero = U32_VAL(0); opcode = OP_SUB_U32_R; break;
+                    case VAL_U64: zero = U64_VAL(0); opcode = OP_SUB_U64_R; break;
+                    default:      zero = I32_VAL(0); opcode = OP_SUB_I32_R; break;
+                }
+                uint8_t zeroReg = allocateRegister(compiler);
+                emitConstant(compiler, zeroReg, zero);
+                emitByte(compiler, opcode);
+                emitByte(compiler, resultReg);
+                emitByte(compiler, zeroReg);
+                emitByte(compiler, (uint8_t)operandReg);
+                freeRegister(compiler, (uint8_t)operandReg);
+                freeRegister(compiler, zeroReg);
+                return resultReg;
+            } else if (strcmp(node->unary.op, "~") == 0) {
+                emitByte(compiler, OP_NOT_I32_R);
+                emitByte(compiler, resultReg);
+                emitByte(compiler, (uint8_t)operandReg);
+                freeRegister(compiler, (uint8_t)operandReg);
+                return resultReg;
+            }
+            freeRegister(compiler, (uint8_t)operandReg);
+            return -1;
         }
         case NODE_BINARY: {
             // Constant folding for binary operations on literals
@@ -666,8 +711,7 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             bool canUseTyped = canEmitTypedInstruction(compiler, node->binary.left, node->binary.right, &typedOpType);
             
             if (strcmp(op, "+") == 0) {
-                if ((node->binary.left->type == NODE_LITERAL && IS_STRING(node->binary.left->literal.value)) ||
-                    (node->binary.right->type == NODE_LITERAL && IS_STRING(node->binary.right->literal.value))) {
+                if (leftType == VAL_STRING || rightType == VAL_STRING) {
                     emitByte(compiler, OP_CONCAT_R);
                 }
                 // Phase 2.3: Instruction fusion for immediate arithmetic

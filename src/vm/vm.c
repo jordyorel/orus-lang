@@ -352,6 +352,7 @@ static InterpretResult run(void) {
         dispatchTable[OP_NE_R] = &&LABEL_OP_NE_R;
         dispatchTable[OP_AND_BOOL_R] = &&LABEL_OP_AND_BOOL_R;
         dispatchTable[OP_OR_BOOL_R] = &&LABEL_OP_OR_BOOL_R;
+        dispatchTable[OP_NOT_BOOL_R] = &&LABEL_OP_NOT_BOOL_R;
         dispatchTable[OP_CONCAT_R] = &&LABEL_OP_CONCAT_R;
         dispatchTable[OP_JUMP] = &&LABEL_OP_JUMP;
         dispatchTable[OP_JUMP_IF_NOT_R] = &&LABEL_OP_JUMP_IF_NOT_R;
@@ -1394,6 +1395,17 @@ LABEL_OP_OR_BOOL_R: {
         RETURN(INTERPRET_RUNTIME_ERROR);
     }
     vm.registers[dst] = BOOL_VAL(AS_BOOL(vm.registers[src1]) || AS_BOOL(vm.registers[src2]));
+    DISPATCH();
+}
+
+LABEL_OP_NOT_BOOL_R: {
+    uint8_t dst = READ_BYTE();
+    uint8_t src = READ_BYTE();
+    if (!IS_BOOL(vm.registers[src])) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operand must be bool");
+        RETURN(INTERPRET_RUNTIME_ERROR);
+    }
+    vm.registers[dst] = BOOL_VAL(!AS_BOOL(vm.registers[src]));
     DISPATCH();
 }
 
@@ -3280,6 +3292,20 @@ LABEL_UNKNOWN: __attribute__((unused))
 
                 vm.registers[dst] = BOOL_VAL(AS_BOOL(vm.registers[src1]) ||
                                              AS_BOOL(vm.registers[src2]));
+                break;
+            }
+
+            case OP_NOT_BOOL_R: {
+                uint8_t dst = READ_BYTE();
+                uint8_t src = READ_BYTE();
+
+                if (!IS_BOOL(vm.registers[src])) {
+                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                 "Operand must be bool");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+
+                vm.registers[dst] = BOOL_VAL(!AS_BOOL(vm.registers[src]));
                 break;
             }
 

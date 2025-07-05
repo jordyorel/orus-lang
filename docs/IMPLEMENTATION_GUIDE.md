@@ -157,6 +157,25 @@ static void compileStringConcat(Compiler* compiler, ASTNode* left, ASTNode* righ
     
     return dst_reg;
 }
+
+// Unary operator compilation
+static int compileUnary(Compiler* c, ASTNode* node) {
+    int operand = compileExpression(c, node->unary.operand);
+    int dst = allocateRegister(c);
+    if (strcmp(node->unary.op, "not") == 0) {
+        emitByte(c, OP_NOT_BOOL_R);
+        emitByte(c, dst);
+        emitByte(c, operand);
+    } else { // "-" only for now
+        emitConstant(c, dst, I32_VAL(0));
+        emitByte(c, OP_SUB_I32_R);
+        emitByte(c, dst);
+        emitByte(c, dst); // zero
+        emitByte(c, operand);
+    }
+    freeRegister(c, operand);
+    return dst;
+}
 ```
 
 ### 1.2 Variable Assignment Implementation
