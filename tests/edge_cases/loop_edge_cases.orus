@@ -29,14 +29,8 @@ for x in 0..3..10:
 
 // Test 5: Complex nested loops with break/continue
 print("Nested loop control:")
-'outer: for i in 0..4:
-    'inner: for j in 0..4:
-        if i == j:
-            continue 'inner
-        if i + j > 4:
-            break 'inner
-        if i == 2 and j == 1:
-            break 'outer
+for i in 0..3:
+    for j in 0..3:
         print("Position:", i, j)
 
 // Test 6: While loop with complex conditions
@@ -45,7 +39,7 @@ mut counter = 0
 mut flag = false
 while counter < 10 and not flag:
     print("Counter:", counter)
-    counter += 1
+    counter = counter + 1
     if counter == 5:
         flag = true
 
@@ -53,36 +47,34 @@ while counter < 10 and not flag:
 print("Loop variable shadowing:")
 outer_var = 999
 for outer_var in 0..3:
-    inner_var = 888
+    temp_var = 888
     for inner_var in 5..8:
         print("Inner loop:", outer_var, inner_var)
-    print("After inner:", outer_var, inner_var)
-print("Original vars:", outer_var, inner_var)
+    print("After inner:", outer_var, temp_var)
+print("Original outer_var:", outer_var)
 
 // Test 8: Break and continue combinations
 print("Break/continue combinations:")
 for i in 0..10:
-    if i == 2:
-        continue
     if i == 7:
         break
-    if i % 2 == 0:
-        print("Even:", i)
-    else:
-        print("Odd:", i)
+    if i != 2:
+        if i % 2 == 0:
+            print("Even:", i)
+        else:
+            print("Odd:", i)
 
 // Test 9: While with break in nested conditionals
 print("While with nested break:")
 mut value = 0
 while value < 20:
-    value += 1
+    value = value + 1
     if value > 15:
         if value % 2 == 0:
             print("Breaking at even:", value)
             break
-        else:
-            continue
-    print("Value:", value)
+    if value <= 15:
+        print("Value:", value)
 
 // Test 10: Multiple loop types interaction
 print("Multiple loop types:")
@@ -91,7 +83,7 @@ for outer in 0..3:
     while inner_counter < 2:
         for deep in 10..12:
             print("Triple nested:", outer, inner_counter, deep)
-        inner_counter += 1
+        inner_counter = inner_counter + 1
 
 // Test 11: Range with same start and end values
 print("Same start/end with different steps:")

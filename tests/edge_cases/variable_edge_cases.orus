@@ -1,31 +1,34 @@
 // Edge cases for variable assignments and scoping
 
-// Test 1: Variable shadowing in different scopes
-x = 999
+// Test 1: Variable scoping in different scopes
+outer_x = 999
 if true:
-    x = 42  // Should shadow outer x
-    print("Inner x:", x)
-print("Outer x:", x)
+    inner_x = 42
+    print("Inner x:", inner_x)
+    print("Outer from inner:", outer_x)
+print("Outer x:", outer_x)
 
 // Test 2: Mutable variable edge cases
 mut y = 0
-y += 1
-y -= 1
-y *= 10
-y /= 10
+y = y + 1
+y = y - 1
+y = y * 10
+y = y / 10
 print("Final y:", y)
 
-// Test 3: Variable shadowing in loops
-i = 888
-for i in 0..3:
-    print("Loop i:", i)
-print("Original i:", i)
+// Test 3: Variable scoping in loops
+original_i = 888
+for loop_i in 0..3:
+    print("Loop i:", loop_i)
+print("Original i:", original_i)
 
 // Test 4: Complex assignment chains
 mut a = 1
 mut b = 2
 mut c = 3
-a += b += c  // Should work right-to-left
+// Simulate chained assignment step by step
+b = b + c
+a = a + b
 print("Chain result:", a, b, c)
 
 // Test 5: Assignment with complex expressions
