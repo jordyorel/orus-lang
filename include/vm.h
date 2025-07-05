@@ -571,6 +571,8 @@ typedef struct {
     JumpTable pendingJumps;     // Track all pending forward jumps for cascade updates
     RegisterAllocator regAlloc; // Enhanced register allocator with lifetime tracking
     struct TypeInferer* typeInferer;   // Type inference engine for Phase 3.1 optimization
+    // Phase 3.1: Compile-time register type tracking for aggressive optimization
+    ValueType registerTypes[REGISTER_COUNT]; // Track known types of registers at compile time
     bool hadError;
 } Compiler;
 

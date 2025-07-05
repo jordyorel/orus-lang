@@ -37,6 +37,28 @@ static void hoistInvariantCodeInstruction(Compiler* compiler, InstructionLICMAna
 static bool isConstantExpression(ASTNode* node);
 static int evaluateConstantInt(ASTNode* node);
 
+// Phase 3.1: Register type tracking functions
+static void initRegisterTypes(Compiler* compiler) {
+    for (int i = 0; i < REGISTER_COUNT; i++) {
+        compiler->registerTypes[i] = VAL_NIL; // Unknown/untyped
+    }
+}
+
+static void setRegisterType(Compiler* compiler, uint8_t reg, ValueType type) {
+    // REGISTER_COUNT is 256, so all uint8_t values are valid
+    compiler->registerTypes[reg] = type;
+}
+
+static ValueType getRegisterType(Compiler* compiler, uint8_t reg) {
+    // REGISTER_COUNT is 256, so all uint8_t values are valid
+    return compiler->registerTypes[reg];
+}
+
+static bool isRegisterTyped(Compiler* compiler, uint8_t reg) {
+    ValueType type = getRegisterType(compiler, reg);
+    return type != VAL_NIL && type != VAL_ERROR;
+}
+
 static void insertCode(Compiler* compiler, int offset, uint8_t* code, int length) {
     if (compiler->chunk->count + length > compiler->chunk->capacity) {
         compiler->chunk->capacity = (compiler->chunk->count + length) * 2;
@@ -980,6 +1002,12 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             }
             
             compiler->locals[localIndex].reg = (uint8_t)initReg;
+            
+            // Phase 3.1: Track register type for typed operations (disabled - causes issues)
+            // if (hasTypeAnnotation) {
+            //     setRegisterType(compiler, (uint8_t)initReg, declaredType);
+            // }
+            
             return initReg;
         }
         case NODE_ASSIGN: {
@@ -1017,11 +1045,19 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
         case NODE_PRINT: {
             if (node->print.count == 0) return 0;
             uint8_t regs[32];
+            
+            // Allocate contiguous registers for print arguments
+            uint8_t firstReg = allocateRegister(compiler);
+            regs[0] = firstReg;
+            for (int i = 1; i < node->print.count; i++) {
+                regs[i] = allocateRegister(compiler);
+            }
+            
+            // Compile each argument and move to its designated register
             for (int i = 0; i < node->print.count; i++) {
                 int src = compileExpressionToRegister(node->print.values[i], compiler);
                 if (src < 0) return -1;
-                uint8_t dest = allocateRegister(compiler);
-                regs[i] = dest;
+                uint8_t dest = regs[i];
                 if (src != dest) {
                     emitByte(compiler, OP_MOVE);
                     emitByte(compiler, dest);
@@ -1399,6 +1435,9 @@ void initCompiler(Compiler* compiler, Chunk* chunk, const char* fileName,
     
     // Initialize enhanced register allocator
     initRegisterAllocator(&compiler->regAlloc);
+    
+    // Phase 3.1: Initialize register type tracking (disabled - causes variable resolution issues)
+    // initRegisterTypes(compiler);
     
     // Phase 3.1: Initialize type inference system
     initCompilerTypeInference(compiler);
@@ -2883,11 +2922,39 @@ TypeKind valueTypeToTypeKind(ValueType vtype) {
     return value_type_to_type_kind(vtype);
 }
 
+// Phase 3.1: Check if a node represents a register with known type
+static bool getNodeRegisterType(Compiler* compiler, ASTNode* node, ValueType* outType) {
+    if (!compiler || !node || !outType) return false;
+    
+    // Be conservative - only handle simple identifiers for now
+    if (node->type == NODE_IDENTIFIER && node->identifier.name) {
+        // Find the local variable
+        for (int i = compiler->localCount - 1; i >= 0; i--) {
+            if (compiler->locals[i].isActive && 
+                compiler->locals[i].name && 
+                strcmp(compiler->locals[i].name, node->identifier.name) == 0) {
+                
+                uint8_t reg = compiler->locals[i].reg;
+                ValueType regType = getRegisterType(compiler, reg);
+                if (regType != VAL_NIL && regType != VAL_ERROR) {
+                    *outType = regType;
+                    return true;
+                }
+                break;
+            }
+        }
+    }
+    return false;
+}
+
 // Phase 3.2: Emit typed instructions when types are known
 bool canEmitTypedInstruction(Compiler* compiler, ASTNode* left, ASTNode* right, ValueType* outType) {
     if (!compiler || !left || !right) return false;
     
-    // Use type inference to determine if both operands have known, compatible types
+    // Phase 3.1: Register type checking disabled for stability
+    // Will implement safer approach later
+    
+    // Fallback to type inference for complex expressions
     Type* leftType = inferExpressionType(compiler, left);
     Type* rightType = inferExpressionType(compiler, right);
     
@@ -2963,4 +3030,7 @@ void emitTypedBinaryOp(Compiler* compiler, const char* op, ValueType type, uint8
     emitByte(compiler, dst);
     emitByte(compiler, left);
     emitByte(compiler, right);
+    
+    // Phase 3.1: Mark the result register as having the known type
+    setRegisterType(compiler, dst, type);
 }

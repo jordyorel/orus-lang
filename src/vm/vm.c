@@ -1849,20 +1849,14 @@ LABEL_OP_ADD_I32_IMM: {
     int32_t imm = *(int32_t*)vm.ip;
     vm.ip += 4;
     
-    // Check if source register has typed value, otherwise use boxed
-    if (vm.typed_regs.reg_types[src] == REG_TYPE_I32) {
-        // Use typed registers for maximum performance
-        vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[src] + imm;
-        vm.typed_regs.reg_types[dst] = REG_TYPE_I32;
-    } else {
-        // Fall back to boxed operation with type check
-        if (!IS_I32(vm.registers[src])) {
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operand must be i32");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        int32_t result = AS_I32(vm.registers[src]) + imm;
-        vm.registers[dst] = I32_VAL(result);
+    // Compiler ensures this is only emitted for i32 operations, so trust it
+    if (!IS_I32(vm.registers[src])) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operand must be i32");
+        RETURN(INTERPRET_RUNTIME_ERROR);
     }
+    
+    int32_t result = AS_I32(vm.registers[src]) + imm;
+    vm.registers[dst] = I32_VAL(result);
     
     DISPATCH_TYPED();
 }
@@ -1873,20 +1867,14 @@ LABEL_OP_SUB_I32_IMM: {
     int32_t imm = *(int32_t*)vm.ip;
     vm.ip += 4;
     
-    // Check if source register has typed value, otherwise use boxed
-    if (vm.typed_regs.reg_types[src] == REG_TYPE_I32) {
-        // Use typed registers for maximum performance
-        vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[src] - imm;
-        vm.typed_regs.reg_types[dst] = REG_TYPE_I32;
-    } else {
-        // Fall back to boxed operation with type check
-        if (!IS_I32(vm.registers[src])) {
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operand must be i32");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        int32_t result = AS_I32(vm.registers[src]) - imm;
-        vm.registers[dst] = I32_VAL(result);
+    // Compiler ensures this is only emitted for i32 operations, so trust it
+    if (!IS_I32(vm.registers[src])) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operand must be i32");
+        RETURN(INTERPRET_RUNTIME_ERROR);
     }
+    
+    int32_t result = AS_I32(vm.registers[src]) - imm;
+    vm.registers[dst] = I32_VAL(result);
     
     DISPATCH_TYPED();
 }
@@ -1897,20 +1885,14 @@ LABEL_OP_MUL_I32_IMM: {
     int32_t imm = *(int32_t*)vm.ip;
     vm.ip += 4;
     
-    // Check if source register has typed value, otherwise use boxed
-    if (vm.typed_regs.reg_types[src] == REG_TYPE_I32) {
-        // Use typed registers for maximum performance
-        vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[src] * imm;
-        vm.typed_regs.reg_types[dst] = REG_TYPE_I32;
-    } else {
-        // Fall back to boxed operation with type check
-        if (!IS_I32(vm.registers[src])) {
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operand must be i32");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        int32_t result = AS_I32(vm.registers[src]) * imm;
-        vm.registers[dst] = I32_VAL(result);
+    // Compiler ensures this is only emitted for i32 operations, so trust it
+    if (!IS_I32(vm.registers[src])) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operand must be i32");
+        RETURN(INTERPRET_RUNTIME_ERROR);
     }
+    
+    int32_t result = AS_I32(vm.registers[src]) * imm;
+    vm.registers[dst] = I32_VAL(result);
     
     DISPATCH_TYPED();
 }
@@ -1932,24 +1914,16 @@ LABEL_OP_INC_CMP_JMP: {
     int16_t offset = *(int16_t*)vm.ip;
     vm.ip += 2;
     
-    // Check if registers have typed values, otherwise use boxed
-    if (vm.typed_regs.reg_types[reg] == REG_TYPE_I32 && 
-        vm.typed_regs.reg_types[limit_reg] == REG_TYPE_I32) {
-        // Fused increment + compare + conditional jump - maximum performance
-        if (++vm.typed_regs.i32_regs[reg] < vm.typed_regs.i32_regs[limit_reg]) {
-            vm.ip += offset;
-        }
-    } else {
-        // Fall back to boxed operation with type checks
-        if (!IS_I32(vm.registers[reg]) || !IS_I32(vm.registers[limit_reg])) {
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        int32_t incremented = AS_I32(vm.registers[reg]) + 1;
-        vm.registers[reg] = I32_VAL(incremented);
-        if (incremented < AS_I32(vm.registers[limit_reg])) {
-            vm.ip += offset;
-        }
+    // Compiler ensures this is only emitted for i32 operations, so trust it
+    if (!IS_I32(vm.registers[reg]) || !IS_I32(vm.registers[limit_reg])) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
+        RETURN(INTERPRET_RUNTIME_ERROR);
+    }
+    
+    int32_t incremented = AS_I32(vm.registers[reg]) + 1;
+    vm.registers[reg] = I32_VAL(incremented);
+    if (incremented < AS_I32(vm.registers[limit_reg])) {
+        vm.ip += offset;
     }
     
     DISPATCH_TYPED();
