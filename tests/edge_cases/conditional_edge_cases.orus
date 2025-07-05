@@ -1,0 +1,88 @@
+// Edge cases for conditional statements and boolean logic
+
+// Test 1: Deeply nested conditionals
+x = 15
+if x > 20:
+    print("Greater than 20")
+elif x > 15:
+    print("Greater than 15")
+elif x > 10:
+    if x < 20:
+        if x == 15:
+            print("Exactly 15")
+        else:
+            print("Between 10 and 20, not 15")
+    else:
+        print("20 or greater")
+else:
+    print("10 or less")
+
+// Test 2: Complex boolean expressions
+a = true
+b = false
+c = true
+complex_result = (a and b) or (not b and c) or (a and not b)
+print("Complex boolean:", complex_result)
+
+// Test 3: Short-circuit evaluation edge cases
+flag1 = false
+flag2 = true
+result1 = flag1 and print("This should not print")
+result2 = flag2 or print("This should not print either")
+print("Short circuit results:", result1, result2)
+
+// Test 4: Ternary operator nesting
+value = 42
+nested_ternary = value > 50 ? "large" : value > 25 ? "medium" : value > 10 ? "small" : "tiny"
+print("Nested ternary:", nested_ternary)
+
+// Test 5: Ternary with different types
+condition = true
+ternary_num = condition ? 42 : 0
+ternary_str = condition ? "yes" : "no"
+ternary_bool = condition ? false : true
+print("Ternary types:", ternary_num, ternary_str, ternary_bool)
+
+// Test 6: Multiple elif chains
+score = 75
+if score >= 90:
+    grade = "A"
+elif score >= 80:
+    grade = "B"
+elif score >= 70:
+    grade = "C"
+elif score >= 60:
+    grade = "D"
+else:
+    grade = "F"
+print("Grade:", grade)
+
+// Test 7: Conditional with complex arithmetic
+number = 17
+if (number + 3) * 2 > 35:
+    print("Complex condition true")
+else:
+    print("Complex condition false")
+
+// Test 8: Boolean comparisons
+true_val = true
+false_val = false
+print("true == true:", true_val == true)
+print("false == false:", false_val == false)
+print("true != false:", true_val != false_val)
+
+// Test 9: Inline conditionals
+result_a = 5
+result_b = 10
+print("Max via inline:") if result_a > result_b else print("result_a:", result_a)
+print("result_b:", result_b) if result_b > result_a else print("Equal or less")
+
+// Test 10: Conditional with floating point comparisons
+float_a = 3.14159
+float_b = 2.71828
+if float_a > float_b:
+    print("Pi > e")
+elif float_a < float_b:
+    print("Pi < e")
+else:
+    print("Pi == e")

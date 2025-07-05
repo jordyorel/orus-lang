@@ -21,7 +21,7 @@ Build a language that combines Python's readability, Rust's safety, and Lua's pe
 - **Error Handling**: Basic framework, needs enhancement
 
 - [x] Variable assignments (`x = value`)
-- [ ] Control flow (`if`, `while`, `for`)
+- [x] Control flow (`if`, `while`, `for`)
 - [ ] Functions (`fn name:`)
 - [ ] Arrays and collections
 - [ ] Type system integration
@@ -1042,8 +1042,8 @@ pub enum Result<T, E>
 ## 📅 Development Timeline
 
 ### **Quarter 1: Language Core (Weeks 1-12)**
-- [ ] **Weeks 1-4**: Complete basic types, assignments, booleans
-- [ ] **Weeks 5-8**: Control flow, scoping, loops
+- [x] **Weeks 1-4**: Complete basic types, assignments, booleans
+- [x] **Weeks 5-8**: Control flow, scoping, loops
 - [ ] **Weeks 9-12**: Functions, closures, first-class values
 
 ### **Quarter 2: Data & Types (Weeks 13-24)**
