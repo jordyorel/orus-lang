@@ -255,6 +255,14 @@ static ASTNode* parseStatement(void) {
         if (nameTok.type != TOKEN_IDENTIFIER) return NULL;
         return parseVariableDeclaration(true, nameTok);
     }
+    if (t.type == TOKEN_LET) {
+        // ERROR: 'let' is not supported in Orus
+        fprintf(stderr, "Error at line %d:%d: 'let' keyword is not supported in Orus.\n", 
+                t.line, t.column);
+        fprintf(stderr, "Use 'mut variable_name = value' for mutable variables\n");
+        fprintf(stderr, "or 'variable_name = value' for immutable variables.\n");
+        return NULL;
+    }
     if (t.type == TOKEN_IDENTIFIER) {
         Token second = peekSecondToken();
         if (second.type == TOKEN_COLON) {

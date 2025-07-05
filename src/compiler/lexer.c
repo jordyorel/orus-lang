@@ -161,6 +161,7 @@ static TokenType identifier_type(const char* start, int length) {
                 return TOKEN_IMPORT;
             break;
         case 'l':
+            if (length == 3 && memcmp(start, "let", 3) == 0) return TOKEN_LET;
             break;
         case 'm':
             if (length == 3 && memcmp(start, "mut", 3) == 0) return TOKEN_MUT;

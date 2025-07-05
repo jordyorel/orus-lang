@@ -61,6 +61,7 @@ typedef enum {
     TOKEN_RETURN,
     TOKEN_TRUE,
     TOKEN_MUT,
+    TOKEN_LET,
     TOKEN_CONST,
     TOKEN_WHILE,
     TOKEN_TRY,

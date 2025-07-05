@@ -2,7 +2,7 @@
 // Implements the same arithmetic operations as Python, JS, Lua versions
 // Tests: loops, arithmetic, large numbers, floating point operations
 
-let benchmark_start = time_stamp()
+benchmark_start = time_stamp()
 print("Starting arithmetic benchmark...")
 
 mut total = 0i64
@@ -47,8 +47,8 @@ for i in 0..50000:
 print(precision_test)
 
 benchmark_end = time_stamp()
-let total_duration = benchmark_end - benchmark_start
-let duration_ms = total_duration / 1000000
+total_duration = benchmark_end - benchmark_start
+duration_ms = total_duration / 1000000
 
 print("Arithmetic benchmark completed!")
 print("Total time (nanoseconds):", total_duration)
