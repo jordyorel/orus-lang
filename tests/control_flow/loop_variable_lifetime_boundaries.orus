@@ -6,3 +6,4 @@ for i in 0..2:
     outer_var = outer_var + 1
 
 print("Final:", outer_var)
+
