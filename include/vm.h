@@ -722,6 +722,11 @@ typedef enum {
 // Function declarations
 void initVM(void);
 void freeVM(void);
+void warmupVM(void);
+#if USE_COMPUTED_GOTO
+extern void* vm_dispatch_table[OP_HALT + 1];
+void initDispatchTable(void);
+#endif
 InterpretResult interpret(const char* source);
 InterpretResult interpret_module(const char* path);
 
