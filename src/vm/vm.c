@@ -136,7 +136,165 @@ Type* getPrimitiveType(TypeKind kind) {
     return get_primitive_type_cached(kind);
 }
 
+//me
 // VM initialization
+// Global dispatch table - initialized once at startup
+#if USE_COMPUTED_GOTO
+static void* dispatchTable[OP_HALT + 1] = {0};
+static bool dispatchTableInitialized = false;
+
+static void initDispatchTable(void) {
+    if (dispatchTableInitialized) return;
+    
+    // Phase 1.3 Optimization: Hot opcodes first for better cache locality
+    // Most frequently used typed operations (hot path)
+    dispatchTable[OP_ADD_I32_TYPED] = &&LABEL_OP_ADD_I32_TYPED;
+    dispatchTable[OP_SUB_I32_TYPED] = &&LABEL_OP_SUB_I32_TYPED;
+    dispatchTable[OP_MUL_I32_TYPED] = &&LABEL_OP_MUL_I32_TYPED;
+    dispatchTable[OP_LT_I32_TYPED] = &&LABEL_OP_LT_I32_TYPED;
+    dispatchTable[OP_LE_I32_TYPED] = &&LABEL_OP_LE_I32_TYPED;
+    dispatchTable[OP_GT_I32_TYPED] = &&LABEL_OP_GT_I32_TYPED;
+    dispatchTable[OP_GE_I32_TYPED] = &&LABEL_OP_GE_I32_TYPED;
+    
+    // Short jumps for tight loops
+    dispatchTable[OP_JUMP_SHORT] = &&LABEL_OP_JUMP_SHORT;
+    dispatchTable[OP_JUMP_BACK_SHORT] = &&LABEL_OP_JUMP_BACK_SHORT;
+    dispatchTable[OP_JUMP_IF_NOT_SHORT] = &&LABEL_OP_JUMP_IF_NOT_SHORT;
+    dispatchTable[OP_LOOP_SHORT] = &&LABEL_OP_LOOP_SHORT;
+    
+    // Loop-critical operations
+    dispatchTable[OP_INC_I32_R] = &&LABEL_OP_INC_I32_R;
+    
+    // Remaining typed operations
+    dispatchTable[OP_DIV_I32_TYPED] = &&LABEL_OP_DIV_I32_TYPED;
+    dispatchTable[OP_MOD_I32_TYPED] = &&LABEL_OP_MOD_I32_TYPED;
+    dispatchTable[OP_ADD_I64_TYPED] = &&LABEL_OP_ADD_I64_TYPED;
+    dispatchTable[OP_SUB_I64_TYPED] = &&LABEL_OP_SUB_I64_TYPED;
+    dispatchTable[OP_MUL_I64_TYPED] = &&LABEL_OP_MUL_I64_TYPED;
+    dispatchTable[OP_DIV_I64_TYPED] = &&LABEL_OP_DIV_I64_TYPED;
+    dispatchTable[OP_ADD_F64_TYPED] = &&LABEL_OP_ADD_F64_TYPED;
+    dispatchTable[OP_SUB_F64_TYPED] = &&LABEL_OP_SUB_F64_TYPED;
+    dispatchTable[OP_MUL_F64_TYPED] = &&LABEL_OP_MUL_F64_TYPED;
+    dispatchTable[OP_DIV_F64_TYPED] = &&LABEL_OP_DIV_F64_TYPED;
+    
+    // Constant loading (also hot)
+    dispatchTable[OP_LOAD_I32_CONST] = &&LABEL_OP_LOAD_I32_CONST;
+    dispatchTable[OP_LOAD_I64_CONST] = &&LABEL_OP_LOAD_I64_CONST;
+    dispatchTable[OP_LOAD_F64_CONST] = &&LABEL_OP_LOAD_F64_CONST;
+    
+    // Standard operations (less hot)
+    dispatchTable[OP_LOAD_CONST] = &&LABEL_OP_LOAD_CONST;
+    dispatchTable[OP_LOAD_NIL] = &&LABEL_OP_LOAD_NIL;
+    dispatchTable[OP_LOAD_TRUE] = &&LABEL_OP_LOAD_TRUE;
+    dispatchTable[OP_LOAD_FALSE] = &&LABEL_OP_LOAD_FALSE;
+    dispatchTable[OP_MOVE] = &&LABEL_OP_MOVE;
+    dispatchTable[OP_LOAD_GLOBAL] = &&LABEL_OP_LOAD_GLOBAL;
+    dispatchTable[OP_STORE_GLOBAL] = &&LABEL_OP_STORE_GLOBAL;
+    dispatchTable[OP_ADD_I32_R] = &&LABEL_OP_ADD_I32_R;
+    dispatchTable[OP_SUB_I32_R] = &&LABEL_OP_SUB_I32_R;
+    dispatchTable[OP_MUL_I32_R] = &&LABEL_OP_MUL_I32_R;
+    dispatchTable[OP_DIV_I32_R] = &&LABEL_OP_DIV_I32_R;
+    dispatchTable[OP_MOD_I32_R] = &&LABEL_OP_MOD_I32_R;
+    dispatchTable[OP_INC_I32_R] = &&LABEL_OP_INC_I32_R;
+    dispatchTable[OP_DEC_I32_R] = &&LABEL_OP_DEC_I32_R;
+    dispatchTable[OP_ADD_I64_R] = &&LABEL_OP_ADD_I64_R;
+    dispatchTable[OP_SUB_I64_R] = &&LABEL_OP_SUB_I64_R;
+    dispatchTable[OP_MUL_I64_R] = &&LABEL_OP_MUL_I64_R;
+    dispatchTable[OP_DIV_I64_R] = &&LABEL_OP_DIV_I64_R;
+    dispatchTable[OP_MOD_I64_R] = &&LABEL_OP_MOD_I64_R;
+    dispatchTable[OP_ADD_U32_R] = &&LABEL_OP_ADD_U32_R;
+    dispatchTable[OP_SUB_U32_R] = &&LABEL_OP_SUB_U32_R;
+    dispatchTable[OP_MUL_U32_R] = &&LABEL_OP_MUL_U32_R;
+    dispatchTable[OP_DIV_U32_R] = &&LABEL_OP_DIV_U32_R;
+    dispatchTable[OP_MOD_U32_R] = &&LABEL_OP_MOD_U32_R;
+    dispatchTable[OP_ADD_U64_R] = &&LABEL_OP_ADD_U64_R;
+    dispatchTable[OP_SUB_U64_R] = &&LABEL_OP_SUB_U64_R;
+    dispatchTable[OP_MUL_U64_R] = &&LABEL_OP_MUL_U64_R;
+    dispatchTable[OP_DIV_U64_R] = &&LABEL_OP_DIV_U64_R;
+    dispatchTable[OP_MOD_U64_R] = &&LABEL_OP_MOD_U64_R;
+    dispatchTable[OP_I32_TO_I64_R] = &&LABEL_OP_I32_TO_I64_R;
+    dispatchTable[OP_I32_TO_U32_R] = &&LABEL_OP_I32_TO_U32_R;
+    dispatchTable[OP_U32_TO_I32_R] = &&LABEL_OP_U32_TO_I32_R;
+    dispatchTable[OP_ADD_F64_R] = &&LABEL_OP_ADD_F64_R;
+    dispatchTable[OP_SUB_F64_R] = &&LABEL_OP_SUB_F64_R;
+    dispatchTable[OP_MUL_F64_R] = &&LABEL_OP_MUL_F64_R;
+    dispatchTable[OP_DIV_F64_R] = &&LABEL_OP_DIV_F64_R;
+
+    // Bitwise operations
+    dispatchTable[OP_AND_I32_R] = &&LABEL_OP_AND_I32_R;
+    dispatchTable[OP_OR_I32_R] = &&LABEL_OP_OR_I32_R;
+    dispatchTable[OP_XOR_I32_R] = &&LABEL_OP_XOR_I32_R;
+    dispatchTable[OP_NOT_I32_R] = &&LABEL_OP_NOT_I32_R;
+    dispatchTable[OP_SHL_I32_R] = &&LABEL_OP_SHL_I32_R;
+    dispatchTable[OP_SHR_I32_R] = &&LABEL_OP_SHR_I32_R;
+
+    dispatchTable[OP_LT_F64_R] = &&LABEL_OP_LT_F64_R;
+    dispatchTable[OP_LE_F64_R] = &&LABEL_OP_LE_F64_R;
+    dispatchTable[OP_GT_F64_R] = &&LABEL_OP_GT_F64_R;
+    dispatchTable[OP_GE_F64_R] = &&LABEL_OP_GE_F64_R;
+    dispatchTable[OP_I32_TO_F64_R] = &&LABEL_OP_I32_TO_F64_R;
+    dispatchTable[OP_I64_TO_F64_R] = &&LABEL_OP_I64_TO_F64_R;
+    dispatchTable[OP_F64_TO_I32_R] = &&LABEL_OP_F64_TO_I32_R;
+    dispatchTable[OP_F64_TO_I64_R] = &&LABEL_OP_F64_TO_I64_R;
+    dispatchTable[OP_LT_I32_R] = &&LABEL_OP_LT_I32_R;
+    dispatchTable[OP_LE_I32_R] = &&LABEL_OP_LE_I32_R;
+    dispatchTable[OP_GT_I32_R] = &&LABEL_OP_GT_I32_R;
+    dispatchTable[OP_GE_I32_R] = &&LABEL_OP_GE_I32_R;
+    dispatchTable[OP_LT_I64_R] = &&LABEL_OP_LT_I64_R;
+    dispatchTable[OP_LE_I64_R] = &&LABEL_OP_LE_I64_R;
+    dispatchTable[OP_GT_I64_R] = &&LABEL_OP_GT_I64_R;
+    dispatchTable[OP_GE_I64_R] = &&LABEL_OP_GE_I64_R;
+    dispatchTable[OP_LT_U32_R] = &&LABEL_OP_LT_U32_R;
+    dispatchTable[OP_LE_U32_R] = &&LABEL_OP_LE_U32_R;
+    dispatchTable[OP_GT_U32_R] = &&LABEL_OP_GT_U32_R;
+    dispatchTable[OP_GE_U32_R] = &&LABEL_OP_GE_U32_R;
+    dispatchTable[OP_LT_U64_R] = &&LABEL_OP_LT_U64_R;
+    dispatchTable[OP_LE_U64_R] = &&LABEL_OP_LE_U64_R;
+    dispatchTable[OP_GT_U64_R] = &&LABEL_OP_GT_U64_R;
+    dispatchTable[OP_GE_U64_R] = &&LABEL_OP_GE_U64_R;
+    dispatchTable[OP_EQ_R] = &&LABEL_OP_EQ_R;
+    dispatchTable[OP_NE_R] = &&LABEL_OP_NE_R;
+    dispatchTable[OP_AND_BOOL_R] = &&LABEL_OP_AND_BOOL_R;
+    dispatchTable[OP_OR_BOOL_R] = &&LABEL_OP_OR_BOOL_R;
+    dispatchTable[OP_NOT_BOOL_R] = &&LABEL_OP_NOT_BOOL_R;
+    dispatchTable[OP_CONCAT_R] = &&LABEL_OP_CONCAT_R;
+    dispatchTable[OP_JUMP] = &&LABEL_OP_JUMP;
+    dispatchTable[OP_JUMP_IF_NOT_R] = &&LABEL_OP_JUMP_IF_NOT_R;
+    dispatchTable[OP_LOOP] = &&LABEL_OP_LOOP;
+    dispatchTable[OP_GET_ITER_R] = &&LABEL_OP_GET_ITER_R;
+    dispatchTable[OP_ITER_NEXT_R] = &&LABEL_OP_ITER_NEXT_R;
+    dispatchTable[OP_PRINT_MULTI_R] = &&LABEL_OP_PRINT_MULTI_R;
+    dispatchTable[OP_PRINT_R] = &&LABEL_OP_PRINT_R;
+    dispatchTable[OP_PRINT_NO_NL_R] = &&LABEL_OP_PRINT_NO_NL_R;
+    dispatchTable[OP_RETURN_R] = &&LABEL_OP_RETURN_R;
+    dispatchTable[OP_RETURN_VOID] = &&LABEL_OP_RETURN_VOID;
+    
+    // Note: Hot opcodes already assigned above for optimal cache locality
+    
+    dispatchTable[OP_MOVE_I32] = &&LABEL_OP_MOVE_I32;
+    dispatchTable[OP_MOVE_I64] = &&LABEL_OP_MOVE_I64;
+    dispatchTable[OP_MOVE_F64] = &&LABEL_OP_MOVE_F64;
+    
+    // Phase 2.2: Fused instruction dispatch entries
+    dispatchTable[OP_ADD_I32_IMM] = &&LABEL_OP_ADD_I32_IMM;
+    dispatchTable[OP_SUB_I32_IMM] = &&LABEL_OP_SUB_I32_IMM;
+    dispatchTable[OP_MUL_I32_IMM] = &&LABEL_OP_MUL_I32_IMM;
+    dispatchTable[OP_CMP_I32_IMM] = &&LABEL_OP_CMP_I32_IMM;
+    dispatchTable[OP_INC_CMP_JMP] = &&LABEL_OP_INC_CMP_JMP;
+    dispatchTable[OP_DEC_CMP_JMP] = &&LABEL_OP_DEC_CMP_JMP;
+    dispatchTable[OP_MUL_ADD_I32] = &&LABEL_OP_MUL_ADD_I32;
+    
+    // Built-in functions
+    dispatchTable[OP_TIME_STAMP] = &&LABEL_OP_TIME_STAMP;
+    
+    dispatchTable[OP_HALT] = &&LABEL_OP_HALT;
+    
+    dispatchTableInitialized = true;
+}
+#endif
+
+
+
 void initVM(void) {
     initTypeSystem();
 
@@ -186,6 +344,11 @@ void initVM(void) {
 
     vm.chunk = NULL;
     vm.ip = NULL;
+    
+    // CRITICAL FIX: Initialize dispatch table at VM startup, not first execution
+#if USE_COMPUTED_GOTO
+    initDispatchTable();
+#endif
 }
 
 void freeVM(void) {
