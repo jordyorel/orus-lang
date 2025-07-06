@@ -159,18 +159,17 @@ result = x > 0 ? "positive" : "non-positive"
 - [ ] Strength reduction for induction variables
 - [ ] Dead code elimination within loop bodies
 - [ ] Bounds check elimination for provably safe ranges
-- [ ] Stack overflow protection for deeply nested loops
 - [ ] Memory allocation minimization in loop constructs
 - [ ] Branch prediction hints for common loop patterns
 
 **Advanced Features:**
-- [ ] Parallel loop execution hints (`@parallel for i in range`)
-- [ ] Loop fusion optimization for adjacent compatible loops
 - [ ] SIMD vectorization support for numerical loops
+- [ ] Loop fusion optimization for adjacent compatible loops (can get complex and slow compile times.)
+- [ ] Profiling integration for hot loop identification
 - [ ] Iterator protocol for custom collection types
 - [ ] Generator-style lazy evaluation for large ranges
-- [ ] Loop timeout and resource limit enforcement
-- [ ] Profiling integration for hot loop identification
+- [ ] Parallel loop execution hints (`@parallel for i in range`) (need a lightweight task scheduler)
+
  
 ```orus
 # Basic while loop with performance considerations
