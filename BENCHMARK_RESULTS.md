@@ -14,25 +14,31 @@
 ### Arithmetic Benchmark
 | Language | Time (sec) | Relative Performance | Status |
 |----------|------------|---------------------|---------|
-| 🥇 **Lua** | 0.019s | 1.0x (fastest) | ✅ |
-| 🥈 **Orus** | 0.033s | 1.7x slower | ✅ |
-| 🥉 **Node.js** | 0.036s | 1.9x slower | ✅ |
-| 🔸 **Python** | 0.083s | 4.4x slower | ✅ |
+| 🥇 **Lua** | 0.011s | 1.0x (fastest) | ✅ |
+| 🥈 **Orus** | 0.028s | 2.6x slower | ✅ |
+| 🥉 **Node.js** | 0.070s | 6.4x slower | ✅ |
+| 🔸 **Python** | 0.213s | 19.4x slower | ✅ |
 
 ### Control Flow Benchmark (with Short Jump Tests)
 | Language | Time (sec) | Relative Performance | Status |
 |----------|------------|---------------------|---------|
-| 🥇 **Node.js** | 0.020s | 1.0x (fastest) | ✅ |
-| 🥈 **Lua** | 0.022s | 1.1x slower | ✅ |
-| 🥉 **Orus** | 0.060s | 3.0x slower | ✅ |
-| 🔸 **Python** | 0.142s | 7.1x slower | ✅ |
+| 🥇 **Lua** | 0.017s | 1.0x (fastest) | ✅ |
+| 🥈 **Node.js** | 0.055s | 3.2x slower | ✅ |
+| 🥉 **Orus** | 0.057s | 3.4x slower | ✅ |
+| 🔸 **Python** | 0.209s | 12.3x slower | ✅ |
 
 ### Scope Management Benchmark
 | Language | Time (ms) | Relative Performance | Status |
 |----------|----------|---------------------|--------|
-| 🥇 **Orus** | 8ms | fastest | ✅ |
-| 🥈 **Node.js** | 46ms | 5.8x slower | ✅ |
-| 🥉 **Python** | 241ms | 30.1x slower | ✅ |
+| 🥇 **Lua** | 5ms | fastest | ✅ |
+| 🥈 **Orus** | 8ms | 1.6x slower | ✅ |
+| 🥉 **Node.js** | 46ms | 9.2x slower | ✅ |
+| 🔸 **Python** | 131ms | 26.2x slower | ✅ |
+
+### Scoop Management Benchmark (Lua only)
+| Language | Time (ms) | Relative Performance | Status |
+|----------|----------|---------------------|--------|
+| 🥇 **Lua** | 6ms | fastest | ✅ |
 
 ---
 
@@ -47,7 +53,7 @@
 - **Orus beats Python consistently** by 1.6x - 1.8x across all benchmarks
 - **Competitive with Node.js** on arithmetic workloads
 - **Short jump optimizations working effectively** - complex control flow executes smoothly
-- **Lua nearly matches Node.js** thanks to LuaJIT's efficiency
+- **Lua now leads all benchmarks** thanks to LuaJIT's efficiency
 
 ---
 

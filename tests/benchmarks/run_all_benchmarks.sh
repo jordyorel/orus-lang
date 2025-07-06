@@ -29,7 +29,7 @@ ORUS_BINARY="../../orus"
 
 # Arrays to store benchmark results (using temp files for compatibility)
 TEMP_DIR=$(mktemp -d)
-BENCHMARK_NAMES=("arithmetic" "control_flow" "scope_management")  # Exclude vm_optimization from cross-language comparison
+BENCHMARK_NAMES=("arithmetic" "control_flow" "scope_management" "scoop_management")  # Exclude vm_optimization from cross-language comparison
 ORUS_ONLY_BENCHMARKS=("vm_optimization")       # Orus-specific benchmarks
 LANGUAGES_TESTED=()
 
@@ -187,6 +187,7 @@ if command_exists lua; then
     run_benchmark "Lua Arithmetic Benchmark" "lua arithmetic_benchmark.lua" "lua" "arithmetic"
     run_benchmark "Lua Control Flow Benchmark" "lua control_flow_benchmark.lua" "lua" "control_flow"
     run_benchmark "Lua Scope Management Benchmark" "lua scope_management_benchmark.lua" "lua" "scope_management"
+    run_benchmark "Lua Scoop Management Benchmark" "lua scoop_management_benchmark.lua" "lua" "scoop_management"
 else
     echo -e "${YELLOW}Lua not available - skipping Lua benchmarks${NC}"
 fi
