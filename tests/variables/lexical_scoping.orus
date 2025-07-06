@@ -1,0 +1,7 @@
+// Lexical scoping and shadowing
+x = 5
+if true:
+    mut x = 1  // shadows outer variable
+    print(x)
+print(x)
+

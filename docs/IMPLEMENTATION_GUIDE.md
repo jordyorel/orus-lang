@@ -611,6 +611,10 @@ static uint8_t compileTernary(Compiler* compiler, ASTNode* node) {
 The compiler now implements this control flow logic in `compiler.c`.
 `emitJump` and `patchJump` manage forward branch offsets while
 `enterScope`/`exitScope` ensure each block uses isolated locals.
+Inner variable declarations automatically shadow outer variables. When a new
+name is introduced inside a scope, the compiler allocates a fresh register and
+records the current `scope_depth`. Lookups search locals in reverse order so the
+innermost definition is found first, preserving lexical scoping semantics.
 
 ### 2.2 Loop Implementation
 
