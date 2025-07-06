@@ -1,0 +1,38 @@
+// Scope Management Benchmark for Cross-Language Performance Testing
+// Tests nested scopes, variable shadowing, and constant-time scope entry/exit
+
+benchmark_start = time_stamp()
+print("Starting scope management benchmark...")
+
+mut sum = 0
+
+// Test 1: Nested if scopes with shadowing (50K iterations)
+for i in 0..50000:
+    value = i
+    if value % 2 == 0:
+        mut value = value + 1
+        if value % 3 == 0:
+            mut value = value + 2
+            sum = sum + value
+        else:
+            sum = sum + value
+    else:
+        sum = sum + value
+
+// Test 2: Deeply nested loops with shadowed variables
+for outer in 0..100:
+    for inner in 0..100:
+        mut outer_val = inner
+        for deep in 0..10:
+            mut outer_val = deep
+            sum = sum + outer_val
+
+print(sum)
+
+benchmark_end = time_stamp()
+total_duration = benchmark_end - benchmark_start
+duration_ms = total_duration / 1000000
+
+print("Scope management benchmark completed!")
+print("Total time (nanoseconds):", total_duration)
+print("Total time (milliseconds):", duration_ms)
