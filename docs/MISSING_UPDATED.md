@@ -117,23 +117,6 @@ for i in 0..1000000:
 - [ ] Interned string keys for symbol names (memory deduplication)
 - [ ] Register allocation optimization across scope boundaries
 
-### 2.4 Main Function Entry Point
-**Priority: 🔥 Critical**
-- [ ] **TODO**: Implement production-ready main function with comprehensive execution environment.
-
-```orus
-// Standard main function
-fn main():
-    print("Hello, Orus!")
-
-// Main with command-line arguments
-fn main(args: Array<String>):
-    if args.length() < 2:
-        print("Usage: program <input_file>")
-        return 1
-    process_file(args[1])
-```
-
 ---
 
 ## 📋 Phase 3: Functions & Advanced Type Optimizations (Weeks 9-12)
@@ -153,7 +136,7 @@ fn add(a: i32, b: i32) -> i32:
     a + b
 
 fn greet(name: string):
-    print("Hello, {}!", name)
+    print("Hello ", name)
 ```
 
 ### 3.2 Advanced Type System Optimizations
