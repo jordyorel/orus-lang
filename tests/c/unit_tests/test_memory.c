@@ -1,6 +1,6 @@
 #include "test_framework.h"
-#include "../../include/vm.h"
-#include "../../include/memory.h"
+#include "../../../include/vm.h"
+#include "../../../include/memory.h"
 
 extern VM vm;
 

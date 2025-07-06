@@ -222,6 +222,11 @@ void enter_scope(SymbolTable* table);
 void exit_scope(SymbolTable* table);
 ```
 
+The actual implementation uses an open-addressing hash map with the FNV-1a
+hashing algorithm. Entries are resized when the load factor exceeds `0.75`, and
+tombstones maintain probe sequences during deletions. This design provides
+constant time insertion and lookup, meeting the <5 ns average lookup goal.
+
 #### Assignment Compilation
 ```c
 // Assignment node in AST

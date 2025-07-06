@@ -1,5 +1,5 @@
 #include "test_framework.h"
-#include "../../include/lexer.h"
+#include "../../../include/lexer.h"
 
 extern Lexer lexer;
 

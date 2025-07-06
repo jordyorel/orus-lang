@@ -2,6 +2,7 @@
 #include "../../include/common.h"
 #include "../../include/jumptable.h"
 #include "../../include/lexer.h"
+#include "../../include/symbol_table.h"
 #include <string.h>
 #include <stdlib.h>
 
@@ -228,6 +229,7 @@ static void exitScope(Compiler* compiler) {
             freeRegister(compiler, compiler->locals[localIndex].reg);
         }
         
+        symbol_table_remove(&compiler->symbols, compiler->locals[localIndex].name);
         compiler->locals[localIndex].isActive = false;
         compiler->localCount--;
     }
@@ -337,11 +339,9 @@ static ValueType getNodeValueTypeWithCompiler(ASTNode* node, Compiler* compiler)
     } else if (node->type == NODE_IDENTIFIER) {
         const char* name = node->identifier.name;
         
-        // Look up variable type in locals
-        for (int i = compiler->localCount - 1; i >= 0; i--) {
-            if (compiler->locals[i].isActive && strcmp(compiler->locals[i].name, name) == 0) {
-                return compiler->locals[i].type;
-            }
+        int localIndex;
+        if (symbol_table_get(&compiler->symbols, name, &localIndex)) {
+            return compiler->locals[localIndex].type;
         }
         // If not found in locals, default to i32
         return VAL_I32;
@@ -915,12 +915,9 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
         case NODE_IDENTIFIER: {
             const char* name = node->identifier.name;
             
-            // Regular variable lookup
-            for (int i = compiler->localCount - 1; i >= 0; i--) {
-                if (compiler->locals[i].isActive &&
-                    strcmp(compiler->locals[i].name, name) == 0) {
-                    return compiler->locals[i].reg;
-                }
+            int localIndex;
+            if (symbol_table_get(&compiler->symbols, name, &localIndex)) {
+                return compiler->locals[localIndex].reg;
             }
             uint8_t reg = allocateRegister(compiler);
             emitConstant(compiler, reg, I32_VAL(0));
@@ -1002,6 +999,7 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             compiler->locals[localIndex].depth = compiler->scopeDepth;
             compiler->locals[localIndex].isMutable = node->varDecl.isMutable;
             compiler->locals[localIndex].type = declaredType;
+            symbol_table_set(&compiler->symbols, node->varDecl.name, localIndex);
             
             // Handle type conversion if needed
             // For complex expressions, we need to determine the actual result type
@@ -1085,6 +1083,7 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
                 compiler->locals[localIndex].depth = compiler->scopeDepth;
                 compiler->locals[localIndex].isMutable = false;
                 compiler->locals[localIndex].type = getNodeValueTypeWithCompiler(node->assign.value, compiler);
+                symbol_table_set(&compiler->symbols, node->assign.name, localIndex);
                 
                 // Phase 3.1: Safe type tracking for new variable assignments
                 if (node->assign.value->type == NODE_LITERAL) {
@@ -1269,6 +1268,7 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             // Initialize safe type tracking fields
             compiler->locals[localIndex].hasKnownType = false; // Loop variables change, so not safe to track
             compiler->locals[localIndex].knownType = VAL_NIL;
+            symbol_table_set(&compiler->symbols, node->forRange.varName, localIndex);
             
             // Connect local to live range in register allocator
             int rangeIndex = compiler->regAlloc.count - 1; // Most recently added range
@@ -1376,6 +1376,7 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             // Initialize safe type tracking fields
             compiler->locals[localIndex].hasKnownType = false; // Loop variables change, so not safe to track
             compiler->locals[localIndex].knownType = VAL_NIL;
+            symbol_table_set(&compiler->symbols, node->forIter.varName, localIndex);
             
             // Connect local to live range in register allocator
             int rangeIndex = compiler->regAlloc.count - 1; // Most recently added range
@@ -1516,6 +1517,7 @@ void initCompiler(Compiler* compiler, Chunk* chunk, const char* fileName,
     compiler->scopeStack[0] = 0;
     compiler->loopDepth = 0;
     compiler->pendingJumps = jumptable_new();
+    symbol_table_init(&compiler->symbols);
     
     // Initialize enhanced register allocator
     initRegisterAllocator(&compiler->regAlloc);
@@ -1538,6 +1540,7 @@ void initCompiler(Compiler* compiler, Chunk* chunk, const char* fileName,
 
 void freeCompiler(Compiler* compiler) {
     jumptable_free(&compiler->pendingJumps);
+    symbol_table_free(&compiler->symbols);
     
     // Clean up enhanced register allocator
     freeRegisterAllocator(&compiler->regAlloc);
@@ -2906,12 +2909,9 @@ Type* inferExpressionType(Compiler* compiler, ASTNode* expr) {
         }
         
         case NODE_IDENTIFIER: {
-            // Look up variable in local scope
-            for (int i = compiler->localCount - 1; i >= 0; i--) {
-                if (compiler->locals[i].isActive && 
-                    strcmp(compiler->locals[i].name, expr->identifier.name) == 0) {
-                    return get_primitive_type_cached(valueTypeToTypeKind(compiler->locals[i].type));
-                }
+            int localIndex;
+            if (symbol_table_get(&compiler->symbols, expr->identifier.name, &localIndex)) {
+                return get_primitive_type_cached(valueTypeToTypeKind(compiler->locals[localIndex].type));
             }
             return get_primitive_type_cached(TYPE_UNKNOWN);
         }
@@ -3000,19 +3000,13 @@ __attribute__((unused)) static bool getNodeRegisterType(Compiler* compiler, ASTN
     
     // Be conservative - only handle simple identifiers for now
     if (node->type == NODE_IDENTIFIER && node->identifier.name) {
-        // Find the local variable
-        for (int i = compiler->localCount - 1; i >= 0; i--) {
-            if (compiler->locals[i].isActive && 
-                compiler->locals[i].name && 
-                strcmp(compiler->locals[i].name, node->identifier.name) == 0) {
-                
-                uint8_t reg = compiler->locals[i].reg;
-                ValueType regType = getRegisterType(compiler, reg);
-                if (regType != VAL_NIL && regType != VAL_ERROR) {
-                    *outType = regType;
-                    return true;
-                }
-                break;
+        int localIndex;
+        if (symbol_table_get(&compiler->symbols, node->identifier.name, &localIndex)) {
+            uint8_t reg = compiler->locals[localIndex].reg;
+            ValueType regType = getRegisterType(compiler, reg);
+            if (regType != VAL_NIL && regType != VAL_ERROR) {
+                *outType = regType;
+                return true;
             }
         }
     }

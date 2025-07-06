@@ -1,7 +1,7 @@
-#include "../../include/vm.h"
-#include "../../include/parser.h"
-#include "../../include/compiler.h"
-#include "../../include/lexer.h"
+#include "../../../include/vm.h"
+#include "../../../include/parser.h"
+#include "../../../include/compiler.h"
+#include "../../../include/lexer.h"
 #include "test_framework.h"
 #include <string.h>
 

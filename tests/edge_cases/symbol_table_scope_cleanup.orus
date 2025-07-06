@@ -1,0 +1,8 @@
+// Reuse variable name after inner scope
+mut x = 1
+if true:
+    mut x = 2
+    print(x)
+print(x)
+x = 3
+print(x)
