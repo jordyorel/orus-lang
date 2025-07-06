@@ -4,7 +4,7 @@
 
 ### 🎯 Test Configuration
 - **New Test Cases Added**: 3 additional short jump stress tests
-- **Languages Tested**: Orus, Python, Node.js, Lua, Julia (ready)
+- **Languages Tested**: Orus, Python, Node.js, Lua
 - **Enhanced Benchmarks**: Extended control flow tests with 200K nested loops + 20K dense conditionals
 
 ---
@@ -14,18 +14,18 @@
 ### Arithmetic Benchmark
 | Language | Time (sec) | Relative Performance | Status |
 |----------|------------|---------------------|---------|
-| 🥇 **Lua** | 0.017s | 1.0x (fastest) | ✅ |
-| 🥈 **Orus** | 0.028s | 1.6x slower | ✅ |
-| 🥉 **Node.js** | 0.042s | 2.5x slower | ✅ |
-| 🔸 **Python** | 0.055s | 3.2x slower | ✅ |
+| 🥇 **Lua** | 0.019s | 1.0x (fastest) | ✅ |
+| 🥈 **Orus** | 0.033s | 1.7x slower | ✅ |
+| 🥉 **Node.js** | 0.036s | 1.9x slower | ✅ |
+| 🔸 **Python** | 0.083s | 4.4x slower | ✅ |
 
 ### Control Flow Benchmark (with Short Jump Tests)
 | Language | Time (sec) | Relative Performance | Status |
 |----------|------------|---------------------|---------|
-| 🥇 **Lua** | 0.020s | 1.0x (fastest) | ✅ |
-| 🥈 **Node.js** | 0.039s | 1.9x slower | ✅ |
-| 🥉 **Orus** | 0.051s | 2.5x slower | ✅ |
-| 🔸 **Python** | 0.087s | 4.3x slower | ✅ |
+| 🥇 **Node.js** | 0.020s | 1.0x (fastest) | ✅ |
+| 🥈 **Lua** | 0.022s | 1.1x slower | ✅ |
+| 🥉 **Orus** | 0.060s | 3.0x slower | ✅ |
+| 🔸 **Python** | 0.142s | 7.1x slower | ✅ |
 
 ### Scope Management Benchmark
 | Language | Time (ms) | Relative Performance | Status |
@@ -47,17 +47,7 @@
 - **Orus beats Python consistently** by 1.6x - 1.8x across all benchmarks
 - **Competitive with Node.js** on arithmetic workloads
 - **Short jump optimizations working effectively** - complex control flow executes smoothly
-- **Lua dominates** due to highly optimized LuaJIT implementation
-
----
-
-## 🔧 Julia Integration Status
-
-✅ **Julia benchmark files created** (`arithmetic_benchmark.jl`, `control_flow_benchmark.jl`)  
-✅ **Benchmark runner updated** with Julia support  
-⏳ **Julia installation in progress** - ready to test when available  
-
-Expected Julia performance: Likely competitive with or faster than Node.js due to LLVM JIT compilation.
+- **Lua nearly matches Node.js** thanks to LuaJIT's efficiency
 
 ---
 

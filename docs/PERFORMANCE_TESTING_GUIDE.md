@@ -46,7 +46,7 @@ cd tests/benchmarks
 ```
 
 **Features:**
-- Comparison with Python, Node.js, Lua, Julia
+- Comparison with Python, Node.js, Lua
 - Accurate timing methodology
 - Multiple runs for stability
 - Winner detection
