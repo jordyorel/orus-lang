@@ -88,9 +88,9 @@ Baselines are stored in `performance_baselines.txt` and automatically updated wh
 
 | Benchmark | Target (ms) | Classification |
 |-----------|-------------|----------------|
-| Arithmetic | 25 | Excellent |
+| Arithmetic | 35 | Excellent |
 | Control Flow | 45 | Very Good |
-| VM Optimization | 180 | Good |
+| VM Optimization | 185 | Good |
 
 ## 🔍 Monitoring & CI Integration
 
