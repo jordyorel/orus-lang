@@ -119,6 +119,7 @@ static ASTNode* parseExpression(void);
 static ASTNode* parseBinaryExpression(int minPrec);
 static ASTNode* parsePrimaryExpression(void);
 static ASTNode* parseVariableDeclaration(bool isMutable, Token nameToken);
+static ASTNode* parseAssignOrVarList(bool isMutable, Token nameToken);
 static ASTNode* parseStatement(void);
 static ASTNode* parseIfStatement(void);
 static ASTNode* parseWhileStatement(void);
@@ -183,9 +184,16 @@ ASTNode* parseSource(const char* source) {
     while (true) {
         Token t = peekToken();
         if (t.type == TOKEN_EOF) break;
-        if (t.type == TOKEN_NEWLINE || t.type == TOKEN_SEMICOLON) {
+        if (t.type == TOKEN_NEWLINE) {
             nextToken();
             continue;
+        }
+        if (t.type == TOKEN_SEMICOLON) {
+            fprintf(stderr,
+                    "Error at line %d:%d: Semicolons are not allowed in Orus."
+                    " Use a newline to separate statements.\n",
+                    t.line, t.column);
+            return NULL;
         }
 
         ASTNode* stmt = parseStatement();
@@ -209,8 +217,14 @@ ASTNode* parseSource(const char* source) {
         addStatement(&statements, &count, &capacity, stmt);
 
         t = peekToken();
-        if (t.type == TOKEN_SEMICOLON || t.type == TOKEN_NEWLINE) {
+        if (t.type == TOKEN_NEWLINE) {
             nextToken();
+        } else if (t.type == TOKEN_SEMICOLON) {
+            fprintf(stderr,
+                    "Error at line %d:%d: Semicolons are not allowed in Orus."
+                    " Use a newline to separate statements.\n",
+                    t.line, t.column);
+            return NULL;
         }
     }
 
@@ -253,7 +267,10 @@ static ASTNode* parseStatement(void) {
         nextToken();
         Token nameTok = nextToken();
         if (nameTok.type != TOKEN_IDENTIFIER) return NULL;
-        return parseVariableDeclaration(true, nameTok);
+        if (peekToken().type == TOKEN_COLON) {
+            return parseVariableDeclaration(true, nameTok);
+        }
+        return parseAssignOrVarList(true, nameTok);
     }
     if (t.type == TOKEN_LET) {
         // ERROR: 'let' is not supported in Orus
@@ -268,6 +285,9 @@ static ASTNode* parseStatement(void) {
         if (second.type == TOKEN_COLON) {
             nextToken();
             return parseVariableDeclaration(false, t);
+        } else if (second.type == TOKEN_EQUAL) {
+            nextToken();
+            return parseAssignOrVarList(false, t);
         }
     }
     if (t.type == TOKEN_IF) {
@@ -356,7 +376,180 @@ static ASTNode* parseVariableDeclaration(bool isMutable, Token nameToken) {
     varNode->varDecl.isConst = false;
     varNode->varDecl.isMutable = isMutable;
 
-    return varNode;
+    ASTNode** vars = NULL;
+    int count = 0;
+    int capacity = 0;
+    addStatement(&vars, &count, &capacity, varNode);
+
+    while (peekToken().type == TOKEN_COMMA) {
+        nextToken();
+        while (peekToken().type == TOKEN_NEWLINE) nextToken();
+        Token nextName = nextToken();
+        if (nextName.type != TOKEN_IDENTIFIER) return NULL;
+
+        ASTNode* nextType = NULL;
+        if (peekToken().type == TOKEN_COLON) {
+            nextToken();
+            Token typeTok = nextToken();
+            if (typeTok.type != TOKEN_IDENTIFIER && typeTok.type != TOKEN_INT &&
+                typeTok.type != TOKEN_I64 && typeTok.type != TOKEN_U32 &&
+                typeTok.type != TOKEN_U64 && typeTok.type != TOKEN_F64 &&
+                typeTok.type != TOKEN_BOOL) {
+                return NULL;
+            }
+            int tl = typeTok.length;
+            char* typeName = arena_alloc(&parserArena, tl + 1);
+            strncpy(typeName, typeTok.start, tl);
+            typeName[tl] = '\0';
+            nextType = new_node();
+            nextType->type = NODE_TYPE;
+            nextType->typeAnnotation.name = typeName;
+        }
+
+        Token eqTok = nextToken();
+        if (eqTok.type != TOKEN_EQUAL) return NULL;
+        ASTNode* init = parseExpression();
+        if (!init) return NULL;
+
+        ASTNode* n = new_node();
+        n->type = NODE_VAR_DECL;
+        n->location.line = nextName.line;
+        n->location.column = nextName.column;
+        n->dataType = NULL;
+
+        int nlen = nextName.length;
+        char* nname = arena_alloc(&parserArena, nlen + 1);
+        strncpy(nname, nextName.start, nlen);
+        nname[nlen] = '\0';
+
+        n->varDecl.name = nname;
+        n->varDecl.isPublic = false;
+        n->varDecl.initializer = init;
+        n->varDecl.typeAnnotation = nextType;
+        n->varDecl.isConst = false;
+        n->varDecl.isMutable = isMutable;
+
+        addStatement(&vars, &count, &capacity, n);
+    }
+
+    if (count == 1) {
+        return varNode;
+    }
+
+    ASTNode* block = new_node();
+    block->type = NODE_BLOCK;
+    block->block.statements = vars;
+    block->block.count = count;
+    block->location = varNode->location;
+    block->dataType = NULL;
+    return block;
+}
+
+static ASTNode* parseAssignOrVarList(bool isMutable, Token nameToken) {
+    if (nextToken().type != TOKEN_EQUAL) return NULL;
+    ASTNode* initializer = parseExpression();
+    if (!initializer) return NULL;
+
+    if (peekToken().type != TOKEN_COMMA && !isMutable) {
+        // Regular assignment
+        ASTNode* node = new_node();
+        node->type = NODE_ASSIGN;
+        int len = nameToken.length;
+        char* name = arena_alloc(&parserArena, len + 1);
+        strncpy(name, nameToken.start, len);
+        name[len] = '\0';
+        node->assign.name = name;
+        node->assign.value = initializer;
+        node->location.line = nameToken.line;
+        node->location.column = nameToken.column;
+        node->dataType = NULL;
+        return node;
+    }
+
+    // Treat as variable declaration list
+    ASTNode** vars = NULL;
+    int count = 0;
+    int capacity = 0;
+
+    ASTNode* first = new_node();
+    first->type = NODE_VAR_DECL;
+    first->location.line = nameToken.line;
+    first->location.column = nameToken.column;
+    first->dataType = NULL;
+
+    int len = nameToken.length;
+    char* name = arena_alloc(&parserArena, len + 1);
+    strncpy(name, nameToken.start, len);
+    name[len] = '\0';
+
+    first->varDecl.name = name;
+    first->varDecl.isPublic = false;
+    first->varDecl.initializer = initializer;
+    first->varDecl.typeAnnotation = NULL;
+    first->varDecl.isConst = false;
+    first->varDecl.isMutable = isMutable;
+
+    addStatement(&vars, &count, &capacity, first);
+
+    while (peekToken().type == TOKEN_COMMA) {
+        nextToken();
+        while (peekToken().type == TOKEN_NEWLINE) nextToken();
+        Token nextName = nextToken();
+        if (nextName.type != TOKEN_IDENTIFIER) return NULL;
+
+        ASTNode* nextType = NULL;
+        if (peekToken().type == TOKEN_COLON) {
+            nextToken();
+            Token typeTok = nextToken();
+            if (typeTok.type != TOKEN_IDENTIFIER && typeTok.type != TOKEN_INT &&
+                typeTok.type != TOKEN_I64 && typeTok.type != TOKEN_U32 &&
+                typeTok.type != TOKEN_U64 && typeTok.type != TOKEN_F64 &&
+                typeTok.type != TOKEN_BOOL) {
+                return NULL;
+            }
+            int tl = typeTok.length;
+            char* typeName = arena_alloc(&parserArena, tl + 1);
+            strncpy(typeName, typeTok.start, tl);
+            typeName[tl] = '\0';
+            nextType = new_node();
+            nextType->type = NODE_TYPE;
+            nextType->typeAnnotation.name = typeName;
+        }
+
+        if (nextToken().type != TOKEN_EQUAL) return NULL;
+        ASTNode* init = parseExpression();
+        if (!init) return NULL;
+
+        ASTNode* n = new_node();
+        n->type = NODE_VAR_DECL;
+        n->location.line = nextName.line;
+        n->location.column = nextName.column;
+        n->dataType = NULL;
+
+        int nlen = nextName.length;
+        char* nname = arena_alloc(&parserArena, nlen + 1);
+        strncpy(nname, nextName.start, nlen);
+        nname[nlen] = '\0';
+
+        n->varDecl.name = nname;
+        n->varDecl.isPublic = false;
+        n->varDecl.initializer = init;
+        n->varDecl.typeAnnotation = nextType;
+        n->varDecl.isConst = false;
+        n->varDecl.isMutable = isMutable;
+
+        addStatement(&vars, &count, &capacity, n);
+    }
+
+    if (count == 1) return first;
+
+    ASTNode* block = new_node();
+    block->type = NODE_BLOCK;
+    block->block.statements = vars;
+    block->block.count = count;
+    block->location = first->location;
+    block->dataType = NULL;
+    return block;
 }
 
 static ASTNode* parseBlock(void) {
@@ -375,9 +568,16 @@ static ASTNode* parseBlock(void) {
             fprintf(stderr, "Debug: parseBlock - Current token type: %d\n", t.type);
         }
         if (t.type == TOKEN_DEDENT || t.type == TOKEN_EOF) break;
-        if (t.type == TOKEN_NEWLINE || t.type == TOKEN_SEMICOLON) {
+        if (t.type == TOKEN_NEWLINE) {
             nextToken();
             continue;
+        }
+        if (t.type == TOKEN_SEMICOLON) {
+            fprintf(stderr,
+                    "Error at line %d:%d: Semicolons are not allowed in Orus."
+                    " Use a newline to separate statements.\n",
+                    t.line, t.column);
+            return NULL;
         }
         ASTNode* stmt = parseStatement();
         if (!stmt) {
@@ -388,7 +588,15 @@ static ASTNode* parseBlock(void) {
         }
         addStatement(&statements, &count, &capacity, stmt);
         t = peekToken();
-        if (t.type == TOKEN_SEMICOLON || t.type == TOKEN_NEWLINE) nextToken();
+        if (t.type == TOKEN_NEWLINE) {
+            nextToken();
+        } else if (t.type == TOKEN_SEMICOLON) {
+            fprintf(stderr,
+                    "Error at line %d:%d: Semicolons are not allowed in Orus."
+                    " Use a newline to separate statements.\n",
+                    t.line, t.column);
+            return NULL;
+        }
     }
     Token dedent = nextToken();
     if (dedent.type != TOKEN_DEDENT) return NULL;

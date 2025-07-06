@@ -29,6 +29,13 @@ mut a: u32 = 10     # explicitly typed mutable
 
 ```
 
+Multiple declarations can be written on a single line by separating them with
+commas. Semicolons are **not** allowed; use a newline to terminate statements.
+
+```orus
+x = 1, y = 2, z = 3  # declares three variables
+```
+
 ---
 
 ## 🔢 Constants
