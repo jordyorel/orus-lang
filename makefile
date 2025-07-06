@@ -19,7 +19,7 @@ INCLUDES = -I$(INCDIR)
 
 # Source files
 CORE_SRCS =
-COMPILER_SRCS = $(SRCDIR)/compiler/compiler.c $(SRCDIR)/compiler/lexer.c $(SRCDIR)/compiler/parser.c
+COMPILER_SRCS = $(SRCDIR)/compiler/compiler.c $(SRCDIR)/compiler/lexer.c $(SRCDIR)/compiler/parser.c $(SRCDIR)/compiler/symbol_table.c
 VM_SRCS = $(SRCDIR)/vm/vm.c $(SRCDIR)/vm/memory.c $(SRCDIR)/vm/debug.c \
           $(SRCDIR)/vm/builtins.c $(SRCDIR)/type/type_representation.c \
           $(SRCDIR)/type/type_inference.c
@@ -34,8 +34,11 @@ REPL_OBJ = $(REPL_SRC:$(SRCDIR)/%.c=$(BUILDDIR)/%.o)
 MAIN_OBJ = $(MAIN_SRC:$(SRCDIR)/%.c=$(BUILDDIR)/%.o)
 
 # Test files
-C_TEST_SRCS = $(wildcard $(TESTDIR)/c/*.c)
-C_TEST_TARGETS = $(C_TEST_SRCS:$(TESTDIR)/c/%.c=$(BUILDDIR)/%)
+C_UNIT_SRCS = $(wildcard $(TESTDIR)/c/unit_tests/test_*.c)
+C_INTEGRATION_SRCS = $(wildcard $(TESTDIR)/c/integration_tests/test_*.c)
+C_TEST_TARGETS = \
+    $(C_UNIT_SRCS:$(TESTDIR)/c/unit_tests/test_%.c=$(BUILDDIR)/test_%) \
+    $(C_INTEGRATION_SRCS:$(TESTDIR)/c/integration_tests/test_%.c=$(BUILDDIR)/test_%)
 
 # Targets
 ORUS = orus
@@ -60,17 +63,17 @@ $(BUILDDIR)/%.o: $(SRCDIR)/%.c | $(BUILDDIR)
 
 # C test executables
 $(BUILDDIR)/test_%: $(TESTDIR)/c/unit_tests/test_%.c $(VM_OBJS) $(COMPILER_OBJS) | $(BUILDDIR)
-	$(CC) $(CFLAGS) $(INCLUDES) -o $@ $< $(VM_OBJS) $(COMPILER_OBJS) $(LDFLAGS)
+	$(CC) $(CFLAGS) $(INCLUDES) -I$(TESTDIR)/c/framework -o $@ $< $(VM_OBJS) $(COMPILER_OBJS) $(LDFLAGS)
 
 $(BUILDDIR)/test_%: $(TESTDIR)/c/integration_tests/test_%.c $(VM_OBJS) $(COMPILER_OBJS) | $(BUILDDIR)
-	$(CC) $(CFLAGS) $(INCLUDES) -o $@ $< $(VM_OBJS) $(COMPILER_OBJS) $(LDFLAGS)
+	$(CC) $(CFLAGS) $(INCLUDES) -I$(TESTDIR)/c/framework -o $@ $< $(VM_OBJS) $(COMPILER_OBJS) $(LDFLAGS)
 
 # Adjust the test_lexer target to compile source files into object files first
 build/test_lexer: build/test_lexer.o build/lexer.o
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
-build/test_lexer.o: $(TESTDIR)/c/test_lexer.c $(INCDIR)/*
-	$(CC) $(CFLAGS) $(INCLUDES) -c -o $@ $<
+build/test_lexer.o: $(TESTDIR)/c/unit_tests/test_lexer.c $(INCDIR)/*
+	$(CC) $(CFLAGS) $(INCLUDES) -I$(TESTDIR)/c/framework -c -o $@ $<
 
 build/lexer.o: $(SRCDIR)/compiler/lexer.c $(INCDIR)/*
 	$(CC) $(CFLAGS) $(INCLUDES) -c -o $@ $<

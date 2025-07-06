@@ -30,6 +30,13 @@ When adding a test, update this document with the file name and category. Exampl
 - edge_cases/lexical_scoping_edge_cases.orus – complex shadowing edge cases
 - variables/lexical_scoping_deep.orus – deep nested scope shadowing
 - edge_cases/nested_loop_scope_exit.orus – verifies scope cleanup in nested loops
+- c/unit_tests/test_symbol_table.c – symbol table unit tests
+- variables/symbol_table_basic.orus – simple symbol table usage
+- variables/symbol_table_shadowing.orus – shadowing with inner scope
+- variables/symbol_table_loop_scope.orus – variable updates inside loops
+- edge_cases/symbol_table_many_vars.orus – large number of variables
+- edge_cases/symbol_table_long_names.orus – very long variable names
+- edge_cases/symbol_table_scope_cleanup.orus – reuse names after scope exit
 ```
 
 

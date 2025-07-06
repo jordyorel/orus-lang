@@ -1,6 +1,6 @@
 #include "test_framework.h"
-#include "../../include/vm.h"
-#include "../../include/memory.h"
+#include "../../../include/vm.h"
+#include "../../../include/memory.h"
 
 // Forward declarations to access internal VM functions for testing
 extern VM vm;
