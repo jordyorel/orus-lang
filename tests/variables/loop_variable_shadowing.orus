@@ -1,5 +1,5 @@
 // Test loop variable shadowing with proper scope management
 i = 999
 for i in 0..2:
-    print("Loop i: {}", i)
-print("Outer i: {}", i)
+    print("Loop i: ", i)
+print("Outer i: ", i)
