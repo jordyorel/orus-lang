@@ -39,6 +39,7 @@ if [[ ! -f "$BASELINES_FILE" ]]; then
     echo "# Format: benchmark_name=baseline_time_ms" >> "$BASELINES_FILE"
     echo "arithmetic=50" >> "$BASELINES_FILE"
     echo "control_flow=100" >> "$BASELINES_FILE"
+    echo "scope_management=60" >> "$BASELINES_FILE"
     echo "vm_optimization=25" >> "$BASELINES_FILE"
 fi
 
@@ -216,8 +217,8 @@ TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
 OVERALL_STATUS=0
 
 # Define benchmarks to run
-BENCHMARK_FILES=("arithmetic_benchmark.orus" "control_flow_benchmark.orus" "vm_optimization_benchmark.orus")
-BENCHMARK_NAMES=("arithmetic" "control_flow" "vm_optimization")
+BENCHMARK_FILES=("arithmetic_benchmark.orus" "control_flow_benchmark.orus" "scope_management_benchmark.orus" "vm_optimization_benchmark.orus")
+BENCHMARK_NAMES=("arithmetic" "control_flow" "scope_management" "vm_optimization")
 
 # Run each benchmark
 for i in "${!BENCHMARK_FILES[@]}"; do

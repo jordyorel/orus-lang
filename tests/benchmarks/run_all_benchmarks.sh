@@ -29,7 +29,7 @@ ORUS_BINARY="../../orus"
 
 # Arrays to store benchmark results (using temp files for compatibility)
 TEMP_DIR=$(mktemp -d)
-BENCHMARK_NAMES=("arithmetic" "control_flow")  # Exclude vm_optimization from cross-language comparison
+BENCHMARK_NAMES=("arithmetic" "control_flow" "scope_management")  # Exclude vm_optimization from cross-language comparison
 ORUS_ONLY_BENCHMARKS=("vm_optimization")       # Orus-specific benchmarks
 LANGUAGES_TESTED=()
 
@@ -147,10 +147,13 @@ LANGUAGES_TESTED+=("orus")
 # 1. Arithmetic Benchmark
 run_benchmark "Orus Arithmetic Benchmark" "$ORUS_BINARY arithmetic_benchmark.orus" "orus" "arithmetic"
 
-# 2. Control Flow Benchmark  
+# 2. Control Flow Benchmark
 run_benchmark "Orus Control Flow Benchmark" "$ORUS_BINARY control_flow_benchmark.orus" "orus" "control_flow"
 
-# 3. VM Optimization Benchmark
+# 3. Scope Management Benchmark
+run_benchmark "Orus Scope Management Benchmark" "$ORUS_BINARY scope_management_benchmark.orus" "orus" "scope_management"
+
+# 4. VM Optimization Benchmark
 run_benchmark "Orus VM Optimization Benchmark" "$ORUS_BINARY vm_optimization_benchmark.orus" "orus" "vm_optimization"
 
 echo -e "${BLUE}=== Cross-Language Benchmark Comparisons ===${NC}"
@@ -161,6 +164,7 @@ if command_exists python3; then
     LANGUAGES_TESTED+=("python")
     run_benchmark "Python Arithmetic Benchmark" "python3 arithmetic_benchmark.py" "python" "arithmetic"
     run_benchmark "Python Control Flow Benchmark" "python3 control_flow_benchmark.py" "python" "control_flow"
+    run_benchmark "Python Scope Management Benchmark" "python3 scope_management_benchmark.py" "python" "scope_management"
 else
     echo -e "${YELLOW}Python 3 not available - skipping Python benchmarks${NC}"
 fi
@@ -171,6 +175,7 @@ if command_exists node; then
     LANGUAGES_TESTED+=("javascript")
     run_benchmark "JavaScript Arithmetic Benchmark" "node arithmetic_benchmark.js" "javascript" "arithmetic"
     run_benchmark "JavaScript Control Flow Benchmark" "node control_flow_benchmark.js" "javascript" "control_flow"
+    run_benchmark "JavaScript Scope Management Benchmark" "node scope_management_benchmark.js" "javascript" "scope_management"
 else
     echo -e "${YELLOW}Node.js not available - skipping JavaScript benchmarks${NC}"
 fi
@@ -181,6 +186,7 @@ if command_exists lua; then
     LANGUAGES_TESTED+=("lua")
     run_benchmark "Lua Arithmetic Benchmark" "lua arithmetic_benchmark.lua" "lua" "arithmetic"
     run_benchmark "Lua Control Flow Benchmark" "lua control_flow_benchmark.lua" "lua" "control_flow"
+    run_benchmark "Lua Scope Management Benchmark" "lua scope_management_benchmark.lua" "lua" "scope_management"
 else
     echo -e "${YELLOW}Lua not available - skipping Lua benchmarks${NC}"
 fi
