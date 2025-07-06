@@ -29,11 +29,12 @@ Build a language that combines Python's readability, Rust's safety, and Lua's pe
 
 ---
 
-## 📋 Phase 1: Core Language Foundation (Weeks 1-4)
+## 📋 Phase 1: Core Language Foundation & Basic Type System (Weeks 1-4)
 
-### 1.1 Complete Basic Data Types
+### 1.1 Complete Basic Data Types & Early Type Infrastructure
 **Priority: 🔥 Critical**
 - [x] **DONE**: Fix string support and add proper boolean operations to complete the basic type system.
+- [ ] **NEW**: Build minimal type representation system (prepares for advanced features)
 
 **Implementation Steps:**
 
@@ -42,7 +43,9 @@ Build a language that combines Python's readability, Rust's safety, and Lua's pe
 - [x] Add string concatenation operator (`+`)
 - [x] Implement string comparison operators
 - [x] Add string interpolation support
-
+- [ ] **NEW**: Add basic TYPE enum and type checking infrastructure
+- [ ] **NEW**: Implement type annotation parsing (`x: i32 = 42`)
+- [ ] **NEW**: Add type mismatch error reporting foundation
 
 ### 1.2 Built-in Functions (Print & I/O)
 **Priority: 🔥 Critical**
@@ -101,9 +104,10 @@ items = [1, 2, 3]
 print("Array has {} items", len(items))
 ```
 
-### 1.4 Variable Assignments
+### 1.4 Variable Assignments & Basic Type Checking
 **Priority: 🔥 Critical**
 - [x] **DONE**: Basic assignment operations implemented.
+- [ ] **NEW**: Add compile-time type checking for assignments
 
 **Features to Implement:**
 - [x] `x = value` syntax parsing
@@ -112,18 +116,30 @@ print("Array has {} items", len(items))
 - [x] Type annotations (`x: i32 = 42`)
 - [x] **DONE**: Unary operators (`-x`, `not x`) and negative literal parsing
 - [x] **DONE**: Runtime string concatenation for variables and expressions
+- [ ] **NEW**: Basic type inference for simple assignments
+- [ ] **NEW**: Type coercion rules for numeric types
 
 ### 1.5 Boolean and Comparison Operations
 **Priority: 🔥 Critical**
 - [x] **DONE**: Added logical operators and comparison operations.
 
+### 1.6 Fundamental Error Reporting Infrastructure
+**Priority: 🔥 Critical**
+- [ ] **NEW**: Implement basic structured error reporting (foundation for advanced features)
+- [ ] **NEW**: Add source location tracking in parser
+- [ ] **NEW**: Create error severity levels (Error, Warning, Info)
+- [ ] **NEW**: Implement multi-line error display with context
+- [ ] **NEW**: Add "Did you mean?" suggestion framework
+
 ---
 
-## 📋 Phase 2: Control Flow & Scope (Weeks 5-8)
+## 📋 Phase 2: Control Flow & Progressive Optimization (Weeks 5-8)
 
-### 2.1 Conditional Statements
+### 2.1 Conditional Statements & Basic Optimization
 **Priority: 🔥 High**
 - [x] **DONE**: Implement if/else statements with nested conditions and `elif`, including jump patching and scoped blocks.
+- [ ] **NEW**: Add basic dead code elimination for unreachable branches
+- [ ] **NEW**: Implement constant folding for compile-time known conditions
 
 ```orus
 // Target syntax:
@@ -139,9 +155,10 @@ print("ok") if x == 1 elif x == 2 else print("fallback")
 result = x > 0 ? "positive" : "non-positive"
 ```
 
-### 2.2 Loop Constructs
+### 2.2 Loop Constructs & Performance Foundations
 **Priority: 🔥 High**
-- [ ] **TODO**: Implement high-performance loop constructs with advanced optimization and safety features.
+- [ ] **TODO**: Implement high-performance loop constructs with progressive optimization features.
+- [ ] **NEW**: Build optimization framework that will support advanced features later
 
 **Core Implementation Requirements:**
 - [x] **DONE**: While loop syntax parsing and basic compilation with condition hoisting
@@ -153,14 +170,14 @@ result = x > 0 ? "positive" : "non-positive"
 - [x] **DONE**: Loop variable scoping, lifetime management, and register allocation optimization *(Enhanced with live range analysis, register reuse, and cross-loop variable lifetime tracking)*
 - [x] **DONE**: Advanced Orus Range Syntax: `start..end..step` with direction validation *(Implemented with comprehensive compile-time validation and runtime support)*
 
-**Performance & Safety Requirements:**
+**Performance & Safety Requirements (Progressive Implementation):**
 - [x] **DONE**: Loop invariant code motion (LICM) optimization *(Comprehensive LICM implementation with AST-based analysis, safety checking, and bytecode transformation)*
-- [ ] Loop unrolling for small, known iteration counts
-- [ ] Strength reduction for induction variables
-- [ ] Dead code elimination within loop bodies
-- [ ] Bounds check elimination for provably safe ranges
-- [ ] Memory allocation minimization in loop constructs
-- [ ] Branch prediction hints for common loop patterns
+- [ ] **Phase 2**: Loop unrolling for small, known iteration counts (enables advanced vectorization later)
+- [ ] **Phase 3**: Strength reduction for induction variables (foundation for advanced math optimizations)
+- [ ] **Phase 4**: Dead code elimination within loop bodies (enables advanced type system optimizations)
+- [ ] **Phase 5**: Bounds check elimination for provably safe ranges (requires type system)
+- [ ] **Phase 6**: Memory allocation minimization in loop constructs (enables advanced memory management)
+- [ ] **Phase 6**: Branch prediction hints for common loop patterns (enables advanced profiling)
 
 
 ## 🎯 Orus Range Syntax: `start..end..step`
@@ -277,9 +294,10 @@ for i in get_start()..get_end()..get_step():  // Runtime validation with fallbac
 * Automatic parallelization detection for independent iterations
 
 
-### 2.3 Scope and Symbol Tables
+### 2.3 Scope and Symbol Tables & Early Generic Preparation
 **Priority: 🔥 High**
 - [ ] **TODO**: Implement enterprise-grade lexical scoping with high-performance symbol resolution.
+- [ ] **NEW**: Design symbol table structure to support generics and advanced type features
 
 **Core Scoping Requirements:**
 - [x] Lexical scoping with proper variable shadowing semantics ✅
@@ -316,24 +334,39 @@ fn greet(name: string):
     print("Hello, {}!", name)
 ```
 
-### 3.2 Closures and Upvalues
+### 3.2 Basic Type System Core
+**Priority: 🔥 High**
+- [ ] **NEW**: Implement core type system infrastructure (moved from Phase 4 for better progression)
+- [ ] **NEW**: Add basic type inference for functions
+- [ ] **NEW**: Implement primitive type conversions
+- [ ] **NEW**: Add type error reporting with function context
+
+### 3.3 Closures and Upvalues (Deferred)
 **Priority: 📋 Medium**
-- [ ] **TODO**: Add support for nested functions and variable capture.
+- [ ] **TODO**: Add support for nested functions and variable capture (moved to Phase 5 after type system is solid).
 
 ```orus
-// Closures (future feature)
-fn make_adder(x: i32):
-    // Return function that captures x
-    // Implementation TBD
+// Basic function with type checking
+fn add(a: i32, b: i32) -> i32:
+    a + b
+
+fn greet(name: string):
+    print("Hello ", name)
+    
+// Type inference in action
+fn identity(x):
+    x  // Type inferred from usage
 ```
 
 ---
 
-## 📋 Phase 4: Collections & Type System (Weeks 13-16)
+## 📋 Phase 4: Collections & Advanced Type Features (Weeks 13-16)
 
-### 4.1 Basic Array Implementation
+### 4.1 Basic Array Implementation & Generic Type Preparation
 **Priority: 📋 Medium-High**
 - [ ] **TODO**: Add dynamic arrays with indexing, slicing, and common operations.
+- [ ] **NEW**: Design arrays with generic type support in mind (prepares for advanced features)
+- [ ] **NEW**: Implement basic generic syntax parsing for arrays ([T])
 
 ```orus
 // Fixed-size array with type and length
@@ -378,9 +411,11 @@ evens = [x for x in nums if x % 2 == 0]
 @layout(soa) particles: [Particle] = []          // Structure of arrays
 ```
 
-### 4.3 Type System Foundation
+### 4.3 Advanced Type System Features (Building on Phase 3)
 **Priority: 🔥 High**
-- [ ] **TODO**: Implement comprehensive type system following the high-performance template in `IMPLEMENTATION_GUIDE.md` section 3.2.
+- [ ] **TODO**: Implement advanced type system features building on Phase 3 foundations.
+- [ ] **NEW**: Add generic type parameters and constraints
+- [ ] **NEW**: Implement type inference for complex expressions
 
 #### 4.3.1 Type Representation & Core Infrastructure
 **Based on IMPLEMENTATION_GUIDE.md Type Representation template**
@@ -536,7 +571,7 @@ struct Container<T: Clone + Display>:
     value: T
     
     fn show(self):
-        print("Container: {}", self.value)
+        print("Container: ", self.value)
     
     fn duplicate(self) -> T:
         self.value.clone()
@@ -643,11 +678,13 @@ The error reporting system should combine Rust's precision with Elm's empathy, p
 
 ---
 
-## 📋 Phase 5: Advanced Features (Weeks 17-20)
+## 📋 Phase 5: Advanced Language Features & Optimization (Weeks 17-20)
 
-### 5.1 Struct and Enum Types
+### 5.1 Struct and Enum Types & Closures
 **Priority: 📋 Medium**
 - [ ] **TODO**: Add user-defined types with methods and pattern matching.
+- [ ] **NEW**: Implement closures and upvalues (moved from Phase 3 after type system is solid)
+- [ ] **NEW**: Add method dispatch optimization using type system knowledge
 
 ```orus
 // Struct definition
@@ -682,9 +719,11 @@ match value:
     _: print("other")
 ```
 
-### 5.3 Generics and Generic Constraints
+### 5.3 Advanced Generic Features & Monomorphization
 **Priority: 📋 Medium**
-- [ ] **TODO**: Add generic type parameters for functions and structs with constraint system.
+- [ ] **TODO**: Add advanced generic features building on Phase 4 foundations.
+- [ ] **NEW**: Implement monomorphization for performance
+- [ ] **NEW**: Add higher-order generic constraints
 
 **Implementation Strategy:**
 - [ ] Add generic type parameter parsing (`<T>`, `<T: Constraint>`)
@@ -726,14 +765,14 @@ fn main:
 ```
 
 ---
-### 5.4 Advanced Loop Optimizations
-**Advanced Features:**
-- [ ] SIMD vectorization support for numerical loops
-- [ ] Loop fusion optimization for adjacent compatible loops (can get complex and slow compile times.)
-- [ ] Profiling integration for hot loop identification
-- [ ] Iterator protocol for custom collection types
-- [ ] Generator-style lazy evaluation for large ranges
-- [ ] Parallel loop execution hints (`@parallel for i in range`) (need a lightweight task scheduler)
+### 5.4 Advanced Loop Optimizations (Moved to Phase 6)
+**Note: These advanced features have been moved to Phase 6 for better integration with the module system and production features:**
+- [ ] **Phase 6**: SIMD vectorization support for numerical loops
+- [ ] **Phase 6**: Loop fusion optimization for adjacent compatible loops  
+- [ ] **Phase 6**: Profiling integration for hot loop identification
+- [ ] **Phase 6**: Iterator protocol for custom collection types
+- [ ] **Phase 6**: Generator-style lazy evaluation for large ranges
+- [ ] **Phase 6**: Parallel loop execution hints (`@parallel for i in range`)
 
  
 ```orus
@@ -851,11 +890,14 @@ for i in 0..huge_array.length():
 ```
 ---
 
-## 📋 Phase 6: Module System & Standard Library (Weeks 21-24)
+## 📋 Phase 6: Module System & Production Features (Weeks 21-24)
 
-### 6.1 Module System
+### 6.1 Module System & Advanced Optimization
 **Priority: 📋 Medium-High**
 - [ ] **TODO**: Add import/export functionality with module loading.
+- [ ] **NEW**: Implement cross-module optimization using type system knowledge
+- [ ] **NEW**: Add SIMD vectorization support for numerical loops
+- [ ] **NEW**: Implement advanced loop optimizations (fusion, parallelization)
 
 ```orus
 // math.orus
@@ -871,9 +913,11 @@ fn main:
     print("Square root: {}", result)
 ```
 
-### 6.2 Standard Library Core
+### 6.2 Standard Library Core & Performance Integration
 **Priority: 📋 Medium**
 - [ ] **TODO**: Implement essential standard library modules.
+- [ ] **NEW**: Integrate all advanced features (generics, SIMD, optimization) into standard library
+- [ ] **NEW**: Add performance-optimized collection implementations
 
 ```orus
 // std/io.orus
