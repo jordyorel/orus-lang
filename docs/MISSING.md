@@ -162,128 +162,6 @@ result = x > 0 ? "positive" : "non-positive"
 - [ ] Memory allocation minimization in loop constructs
 - [ ] Branch prediction hints for common loop patterns
 
-**Advanced Features:**
-- [ ] SIMD vectorization support for numerical loops
-- [ ] Loop fusion optimization for adjacent compatible loops (can get complex and slow compile times.)
-- [ ] Profiling integration for hot loop identification
-- [ ] Iterator protocol for custom collection types
-- [ ] Generator-style lazy evaluation for large ranges
-- [ ] Parallel loop execution hints (`@parallel for i in range`) (need a lightweight task scheduler)
-
- 
-```orus
-# Basic while loop with performance considerations
-while condition:
-    print("looping")
-    if should_break: break
-    if should_skip: continue
-
-# While loop with compound condition and short-circuit evaluation
-mut i = 0
-mut done = false
-while i < 10 and not done and is_valid(i):
-    i = i + 1
-    if i % 2 == 0: continue
-    print("Odd number: {}", i)
-    done = check_completion(i)
-
-# High-performance integer range loops
-for i in 0..5:
-    print("Index: {}", i)  // 0, 1, 2, 3, 4 (exclusive end)
-
-for i in 0..=5:
-    print("Index: {}", i)  // 0, 1, 2, 3, 4, 5 (inclusive end)
-
-# ✅ IMPLEMENTED: Advanced range syntax with step and direction validation
-for i in 0..10..2:
-    print("Even: {}", i)  // 0, 2, 4, 6, 8 (step=2) - WORKING
-
-for i in 10..0..-2:
-    print("Countdown: {}", i)  // 10, 8, 6, 4, 2 (negative step) - PLANNED
-
-# Range with runtime bounds (bounds checking required)
-start = get_start_value()
-end = get_end_value()
-for i in start..end:
-    if is_safe_index(i):
-        process_element(i)
-
-# Collection iteration with zero-copy semantics
-for item in large_collection:
-    if item.is_valid():
-        transform_item(item)
-
-# Nested loops with labeled break/continue for complex control flow
-'outer: for i in 0..matrix_height:
-    'inner: for j in 0..matrix_width:
-        value = matrix[i][j]
-        if value == SKIP_MARKER: 
-            continue 'inner  # Skip to next column
-        if value == ROW_TERMINATOR:
-            break 'inner     # Skip to next row
-        if value == ABORT_SIGNAL:
-            break 'outer     # Exit both loops
-        process_cell(i, j, value)
-
-# Performance-critical numerical loop with optimization hints
-@simd @unroll(4)
-for i in 0..vector_size:
-    result[i] = alpha * x[i] + beta * y[i]  # SAXPY operation
-
-# Loop with resource management and timeout protection
-@timeout(5000ms) @max_iterations(1000000)
-while server.is_running():
-    request = server.accept_connection()
-    match request:
-        Some(req): 
-            if process_request(req).is_error():
-                continue  // Skip failed requests
-        None:
-            if server.should_shutdown():
-                break
-
-# Generator-style lazy evaluation for memory efficiency
-for prime in prime_generator(1..1000000):
-    if prime > target_threshold:
-        break
-    add_to_prime_cache(prime)
-
-# Loop with early termination and cleanup
-for item in large_dataset:
-    result = expensive_computation(item)
-    match result:
-        Error(err):
-            log_error("Processing failed", err)
-            cleanup_partial_state()
-            break
-        Complete(data):
-            if data.confidence < MIN_CONFIDENCE:
-                continue  // Skip low-quality results
-            accumulate_result(data)
-        Partial(data):
-            if should_continue_processing():
-                continue
-            else:
-                finalize_partial_result(data)
-                break
-
-# Infinite loop with explicit semantics and safety guards
-@stack_guard @resource_limit(memory=100MB, cpu=80%)
-loop:
-    input = read_input_with_timeout(1000ms)
-    match input:
-        Timeout: continue,
-        Quit: break,
-        Command(cmd):
-            if execute_command(cmd).should_exit():
-                break
-        
-# Parallel loop hint for multi-threaded execution
-@parallel @chunk_size(1000)
-for i in 0..huge_array.length():
-    huge_array[i] = complex_transform(huge_array[i])
-
-```
 
 ## 🎯 Orus Range Syntax: `start..end..step`
 
@@ -847,6 +725,130 @@ fn main:
     result = add<i32>(10, 20)
 ```
 
+---
+### 5.4 Advanced Loop Optimizations
+**Advanced Features:**
+- [ ] SIMD vectorization support for numerical loops
+- [ ] Loop fusion optimization for adjacent compatible loops (can get complex and slow compile times.)
+- [ ] Profiling integration for hot loop identification
+- [ ] Iterator protocol for custom collection types
+- [ ] Generator-style lazy evaluation for large ranges
+- [ ] Parallel loop execution hints (`@parallel for i in range`) (need a lightweight task scheduler)
+
+ 
+```orus
+# Basic while loop with performance considerations
+while condition:
+    print("looping")
+    if should_break: break
+    if should_skip: continue
+
+# While loop with compound condition and short-circuit evaluation
+mut i = 0
+mut done = false
+while i < 10 and not done and is_valid(i):
+    i = i + 1
+    if i % 2 == 0: continue
+    print("Odd number: {}", i)
+    done = check_completion(i)
+
+# High-performance integer range loops
+for i in 0..5:
+    print("Index: {}", i)  // 0, 1, 2, 3, 4 (exclusive end)
+
+for i in 0..=5:
+    print("Index: {}", i)  // 0, 1, 2, 3, 4, 5 (inclusive end)
+
+# ✅ IMPLEMENTED: Advanced range syntax with step and direction validation
+for i in 0..10..2:
+    print("Even: {}", i)  // 0, 2, 4, 6, 8 (step=2) - WORKING
+
+for i in 10..0..-2:
+    print("Countdown: {}", i)  // 10, 8, 6, 4, 2 (negative step) - PLANNED
+
+# Range with runtime bounds (bounds checking required)
+start = get_start_value()
+end = get_end_value()
+for i in start..end:
+    if is_safe_index(i):
+        process_element(i)
+
+# Collection iteration with zero-copy semantics
+for item in large_collection:
+    if item.is_valid():
+        transform_item(item)
+
+# Nested loops with labeled break/continue for complex control flow
+'outer: for i in 0..matrix_height:
+    'inner: for j in 0..matrix_width:
+        value = matrix[i][j]
+        if value == SKIP_MARKER: 
+            continue 'inner  # Skip to next column
+        if value == ROW_TERMINATOR:
+            break 'inner     # Skip to next row
+        if value == ABORT_SIGNAL:
+            break 'outer     # Exit both loops
+        process_cell(i, j, value)
+
+# Performance-critical numerical loop with optimization hints
+@simd @unroll(4)
+for i in 0..vector_size:
+    result[i] = alpha * x[i] + beta * y[i]  # SAXPY operation
+
+# Loop with resource management and timeout protection
+@timeout(5000ms) @max_iterations(1000000)
+while server.is_running():
+    request = server.accept_connection()
+    match request:
+        Some(req): 
+            if process_request(req).is_error():
+                continue  // Skip failed requests
+        None:
+            if server.should_shutdown():
+                break
+
+# Generator-style lazy evaluation for memory efficiency
+for prime in prime_generator(1..1000000):
+    if prime > target_threshold:
+        break
+    add_to_prime_cache(prime)
+
+# Loop with early termination and cleanup
+for item in large_dataset:
+    result = expensive_computation(item)
+    match result:
+        Error(err):
+            log_error("Processing failed", err)
+            cleanup_partial_state()
+            break
+        Complete(data):
+            if data.confidence < MIN_CONFIDENCE:
+                continue  // Skip low-quality results
+            accumulate_result(data)
+        Partial(data):
+            if should_continue_processing():
+                continue
+            else:
+                finalize_partial_result(data)
+                break
+
+# Infinite loop with explicit semantics and safety guards
+@stack_guard @resource_limit(memory=100MB, cpu=80%)
+loop:
+    input = read_input_with_timeout(1000ms)
+    match input:
+        Timeout: continue,
+        Quit: break,
+        Command(cmd):
+            if execute_command(cmd).should_exit():
+                break
+        
+# Parallel loop hint for multi-threaded execution
+@parallel @chunk_size(1000)
+for i in 0..huge_array.length():
+    huge_array[i] = complex_transform(huge_array[i])
+
+```
 ---
 
 ## 📋 Phase 6: Module System & Standard Library (Weeks 21-24)
