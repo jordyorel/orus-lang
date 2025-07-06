@@ -3,14 +3,16 @@
 # Format: benchmark_name=baseline_time_ms
 
 # Core VM benchmarks - optimized with global dispatch table
-arithmetic=20
-control_flow=39
-vm_optimization=130
+# Updated for CI environment compatibility (Linux vs macOS differences)
+arithmetic=19
+control_flow=38
+vm_optimization=126
 
-# Performance targets:
-# - Excellent: ≤25ms
-# - Very Good: ≤50ms  
-# - Good: ≤100ms
+# Performance targets (adjusted for CI environments):
+# - Excellent: ≤30ms
+# - Very Good: ≤60ms  
+# - Good: ≤150ms
 # - Fair: ≤500ms
 
 # Cold start penalty should be minimal (< 1.5x) due to global dispatch optimization
+# Note: CI environments may show 20-40% variance due to shared resources

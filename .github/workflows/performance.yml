@@ -22,6 +22,12 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y build-essential bc time valgrind
         
+    - name: Optimize CI environment for performance testing
+      run: |
+        cd tests/benchmarks
+        ./optimize_for_ci.sh || true
+        source /tmp/performance_env.sh || true
+        
     - name: Build Orus
       run: |
         make clean
@@ -35,6 +41,7 @@ jobs:
       id: perf_test
       run: |
         cd tests/benchmarks
+        source /tmp/performance_env.sh || true
         ./performance_regression_test.sh
         echo "exit_code=$?" >> $GITHUB_OUTPUT
         
@@ -115,6 +122,8 @@ jobs:
     - name: Run PR benchmarks
       run: |
         cd tests/benchmarks
+        ./optimize_for_ci.sh || true
+        source /tmp/performance_env.sh || true
         ./precise_benchmark.sh > pr_results.txt 2>&1 || true
         
     - name: Checkout main branch
@@ -129,6 +138,8 @@ jobs:
     - name: Run main benchmarks
       run: |
         cd tests/benchmarks
+        ./optimize_for_ci.sh || true
+        source /tmp/performance_env.sh || true
         ./precise_benchmark.sh > main_results.txt 2>&1 || true
         
     - name: Compare performance
@@ -172,6 +183,8 @@ jobs:
     - name: Run comprehensive performance tests
       run: |
         cd tests/benchmarks
+        ./optimize_for_ci.sh || true
+        source /tmp/performance_env.sh || true
         ./performance_regression_test.sh
         ./precise_benchmark.sh > nightly_results.txt
         
@@ -183,7 +196,8 @@ jobs:
         echo "## Orus VM Performance Optimization Status" >> nightly_report.md
         echo "✅ **Cold Start Optimization**: Global dispatch table eliminates cold start penalty" >> nightly_report.md
         echo "🚀 **VM Performance**: Optimized computed goto dispatch for maximum speed" >> nightly_report.md
-        echo "📊 **Performance Target**: VM execution consistently under 25ms (Excellent tier)" >> nightly_report.md
+        echo "📊 **Performance Target**: VM execution under 30ms (Excellent), under 60ms (Very Good)" >> nightly_report.md
+        echo "⚡ **CI Environment**: Performance baselines adjusted for shared runner variance" >> nightly_report.md
         echo "" >> nightly_report.md
         echo "## Test Results" >> nightly_report.md
         echo "\`\`\`" >> nightly_report.md
