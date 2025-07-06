@@ -28,6 +28,8 @@ When adding a test, update this document with the file name and category. Exampl
 - variables/lexical_scoping.orus – demonstrates variable shadowing semantics
 - variables/lexical_scoping_nested.orus – nested scopes and loop shadowing
 - edge_cases/lexical_scoping_edge_cases.orus – complex shadowing edge cases
+- variables/lexical_scoping_deep.orus – deep nested scope shadowing
+- edge_cases/nested_loop_scope_exit.orus – verifies scope cleanup in nested loops
 ```
 
 

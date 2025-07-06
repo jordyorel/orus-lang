@@ -1,0 +1,15 @@
+// Deep nested lexical scoping with repeated names
+value = "root"
+if true:
+    mut value = "level1"
+    if true:
+        mut value = "level2"
+        if true:
+            mut value = "level3"
+            if true:
+                mut value = "level4"
+                print("inner level4:", value)
+            print("after level4:", value)
+        print("after level3:", value)
+    print("after level2:", value)
+print("global:", value)

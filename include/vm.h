@@ -568,6 +568,7 @@ typedef struct {
     } locals[REGISTER_COUNT];
     int localCount;
     int scopeDepth;
+    int scopeStack[REGISTER_COUNT];
     LoopContext loopStack[16];  // Stack of nested loop contexts
     int loopDepth;              // Current loop nesting depth
     int loopStart;              // Start instruction of current loop
