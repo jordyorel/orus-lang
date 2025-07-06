@@ -1,0 +1,16 @@
+# Orus Performance Baselines (in milliseconds)
+# Updated after cold start optimization and global dispatch table implementation
+# Format: benchmark_name=baseline_time_ms
+
+# Core VM benchmarks - optimized with global dispatch table
+arithmetic=20
+control_flow=39
+vm_optimization=130
+
+# Performance targets:
+# - Excellent: ≤25ms
+# - Very Good: ≤50ms  
+# - Good: ≤100ms
+# - Fair: ≤500ms
+
+# Cold start penalty should be minimal (< 1.5x) due to global dispatch optimization

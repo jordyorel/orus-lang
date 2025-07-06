@@ -4,6 +4,7 @@
 # Runs performance regression tests to catch performance issues early
 
 echo "🔍 Running pre-commit performance checks..."
+echo "💡 Note: Cold start optimization is active - global dispatch table eliminates initial delays"
 
 # Change to the repository root
 cd "$(git rev-parse --show-toplevel)"

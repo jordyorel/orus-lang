@@ -32,6 +32,20 @@ static double get_time_vm() {
 #endif
 }
 
+// High-resolution timer for profiling
+static double now_ns(void) {
+#ifdef _WIN32
+    LARGE_INTEGER freq, count;
+    QueryPerformanceFrequency(&freq);
+    QueryPerformanceCounter(&count);
+    return (double)count.QuadPart * 1e9 / freq.QuadPart;
+#else
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (double)ts.tv_sec * 1e9 + ts.tv_nsec;
+#endif
+}
+
 // Global VM instance
 VM vm;
 
@@ -42,7 +56,6 @@ void* vm_dispatch_table[OP_HALT + 1] = {0};
 static InterpretResult run(void);
 static void runtimeError(ErrorType type, SrcLocation location,
                          const char* format, ...);
-void initDispatchTable(void);
 
 // Memory allocation handled in memory.c
 
@@ -194,10 +207,8 @@ void initVM(void) {
     vm.chunk = NULL;
     vm.ip = NULL;
     
-    // Initialize dispatch table before running user code
-    initDispatchTable();
-    // Warm up the VM to prime caches
-    warmupVM();
+    // Dispatch table will be initialized on first run() call
+    // No dummy warm-up needed - eliminates cold start penalty
 }
 
 void freeVM(void) {
@@ -216,66 +227,7 @@ void freeVM(void) {
     vm.ip = NULL;
 }
 
-// Execute a small program once to warm up dispatch table and CPU caches
-void warmupVM(void) {
-    const char* warmupCode =
-        "let sum: i32 = 0;\n"
-        "for i in 0..100 {\n"
-        "    sum = sum + i;\n"
-        "}\n";
 
-    Chunk warmupChunk;
-    initChunk(&warmupChunk);
-
-    Compiler compiler;
-    initCompiler(&compiler, &warmupChunk, "<warmup>", warmupCode);
-
-    ASTNode* ast = parseSource(warmupCode);
-    if (ast && compile(ast, &compiler, false)) {
-        emitByte(&compiler, OP_HALT);
-
-        Chunk* oldChunk = vm.chunk;
-        uint8_t* oldIP = vm.ip;
-
-        vm.chunk = &warmupChunk;
-        vm.ip = warmupChunk.code;
-        run();
-
-        vm.chunk = oldChunk;
-        vm.ip = oldIP;
-    }
-
-    if (ast) freeAST(ast);
-    freeCompiler(&compiler);
-    freeChunk(&warmupChunk);
-}
-
-// Initialize dispatch table once during VM startup
-void initDispatchTable(void) {
-#if USE_COMPUTED_GOTO
-    if (vm_dispatch_table[OP_HALT]) return;
-
-    // Labels for computed goto are scoped to the run() function, so
-    // we execute a tiny dummy chunk once to let run() populate the
-    // global dispatch table before user code runs.
-
-    Chunk dummy;
-    initChunk(&dummy);
-    writeChunk(&dummy, OP_HALT, 0, 0);
-
-    Chunk* oldChunk = vm.chunk;
-    uint8_t* oldIP = vm.ip;
-
-    vm.chunk = &dummy;
-    vm.ip = dummy.code;
-    run();
-
-    vm.chunk = oldChunk;
-    vm.ip = oldIP;
-
-    freeChunk(&dummy);
-#endif
-}
 
 // Memory management implemented in memory.c
 
@@ -313,10 +265,9 @@ static InterpretResult run(void) {
     } while (0)
 
 #if USE_COMPUTED_GOTO
-    if (!vm_dispatch_table[OP_HALT]) {
-        // Populate dispatch table on first execution. This is normally
-        // triggered by initDispatchTable() during VM startup, but the
-        // check remains to handle edge cases.
+    // Initialize dispatch table with label addresses - this only runs ONCE per process
+    static bool global_dispatch_initialized = false;
+    if (!global_dispatch_initialized) {
         // Phase 1.3 Optimization: Hot opcodes first for better cache locality
         // Most frequently used typed operations (hot path)
         vm_dispatch_table[OP_ADD_I32_TYPED] = &&LABEL_OP_ADD_I32_TYPED;
@@ -459,8 +410,10 @@ static InterpretResult run(void) {
         vm_dispatch_table[OP_TIME_STAMP] = &&LABEL_OP_TIME_STAMP;
         
         vm_dispatch_table[OP_HALT] = &&LABEL_OP_HALT;
+        
+        // Mark dispatch table as initialized to prevent re-initialization
+        global_dispatch_initialized = true;
     }
-
 
     uint8_t instruction;
 
@@ -3854,6 +3807,8 @@ LABEL_UNKNOWN: __attribute__((unused))
 
 // Main interpretation functions
 InterpretResult interpret(const char* source) {
+    double t0 = now_ns();
+    
     // Create a chunk for the compiled bytecode
     Chunk chunk;
     initChunk(&chunk);
@@ -3861,8 +3816,15 @@ InterpretResult interpret(const char* source) {
     Compiler compiler;
     initCompiler(&compiler, &chunk, "<repl>", source);
 
+    double t1 = now_ns();
+    fprintf(stderr, "[PROFILE] Init (chunk+compiler): %.3f ms\n", (t1 - t0) / 1e6);
+
     // Parse the source into an AST
+    double t2 = now_ns();
     ASTNode* ast = parseSource(source);
+    double t3 = now_ns();
+    fprintf(stderr, "[PROFILE] parseSource: %.3f ms\n", (t3 - t2) / 1e6);
+    
     if (!ast) {
         freeCompiler(&compiler);
         freeChunk(&chunk);
@@ -3870,26 +3832,39 @@ InterpretResult interpret(const char* source) {
     }
 
     // Compile the AST to bytecode
+    double t4 = now_ns();
     if (!compile(ast, &compiler, false)) {
         freeAST(ast);
         freeCompiler(&compiler);
         freeChunk(&chunk);
         return INTERPRET_COMPILE_ERROR;
     }
+    double t5 = now_ns();
+    fprintf(stderr, "[PROFILE] compile(AST→bytecode): %.3f ms\n", (t5 - t4) / 1e6);
 
     // Add a halt instruction at the end
+    double t6 = now_ns();
     emitByte(&compiler, OP_HALT);
+    double t7 = now_ns();
+    fprintf(stderr, "[PROFILE] emit+patch: %.3f ms\n", (t7 - t6) / 1e6);
 
     // Execute the chunk
     vm.chunk = &chunk;
     vm.ip = chunk.code;
     vm.frameCount = 0;
 
+    double t8 = now_ns();
     InterpretResult result = run();
+    double t9 = now_ns();
+    fprintf(stderr, "[PROFILE] run() execution: %.3f ms\n", (t9 - t8) / 1e6);
 
     freeAST(ast);
     freeCompiler(&compiler);
     freeChunk(&chunk);
+    
+    double t10 = now_ns();
+    fprintf(stderr, "[PROFILE] TOTAL interpret(): %.3f ms\n", (t10 - t0) / 1e6);
+    
     return result;
 }
 
@@ -3954,6 +3929,8 @@ static void addLoadedModule(const char* path) {
 }
 
 InterpretResult interpret_module(const char* path) {
+    double t0 = now_ns();
+    
     if (!path) {
         fprintf(stderr, "Module path cannot be null.\n");
         return INTERPRET_COMPILE_ERROR;
@@ -3966,7 +3943,11 @@ InterpretResult interpret_module(const char* path) {
     }
     
     // Read the module file
+    double t1 = now_ns();
     char* source = readFile(path);
+    double t2 = now_ns();
+    fprintf(stderr, "[PROFILE] ReadFile: %.3f ms\n", (t2 - t1) / 1e6);
+    
     if (!source) {
         return INTERPRET_COMPILE_ERROR;
     }
@@ -3985,8 +3966,15 @@ InterpretResult interpret_module(const char* path) {
     Compiler compiler;
     initCompiler(&compiler, &chunk, fileName, source);
     
+    double t3 = now_ns();
+    fprintf(stderr, "[PROFILE] Init (chunk+compiler): %.3f ms\n", (t3 - t2) / 1e6);
+    
     // Parse the module source into an AST
+    double t4 = now_ns();
     ASTNode* ast = parseSource(source);
+    double t5 = now_ns();
+    fprintf(stderr, "[PROFILE] parseSource: %.3f ms\n", (t5 - t4) / 1e6);
+    
     if (!ast) {
         fprintf(stderr, "Failed to parse module: %s\n", path);
         free(source);
@@ -3996,6 +3984,7 @@ InterpretResult interpret_module(const char* path) {
     }
     
     // Compile the AST to bytecode (mark as module)
+    double t6 = now_ns();
     if (!compile(ast, &compiler, true)) {
         fprintf(stderr, "Failed to compile module: %s\n", path);
         freeAST(ast);
@@ -4004,9 +3993,14 @@ InterpretResult interpret_module(const char* path) {
         freeChunk(&chunk);
         return INTERPRET_COMPILE_ERROR;
     }
+    double t7 = now_ns();
+    fprintf(stderr, "[PROFILE] compile(AST→bytecode): %.3f ms\n", (t7 - t6) / 1e6);
     
     // Add a halt instruction at the end
+    double t8 = now_ns();
     emitByte(&compiler, OP_HALT);
+    double t9 = now_ns();
+    fprintf(stderr, "[PROFILE] emit+patch: %.3f ms\n", (t9 - t8) / 1e6);
     
     // Store current VM state
     Chunk* oldChunk = vm.chunk;
@@ -4019,7 +4013,10 @@ InterpretResult interpret_module(const char* path) {
     vm.filePath = path;
     
     // Execute the module
+    double t10 = now_ns();
     InterpretResult result = run();
+    double t11 = now_ns();
+    fprintf(stderr, "[PROFILE] run() execution: %.3f ms\n", (t11 - t10) / 1e6);
     
     // Restore VM state
     vm.chunk = oldChunk;
@@ -4038,6 +4035,9 @@ InterpretResult interpret_module(const char* path) {
     free(source);
     freeCompiler(&compiler);
     freeChunk(&chunk);
+    
+    double t12 = now_ns();
+    fprintf(stderr, "[PROFILE] TOTAL interpret_module(): %.3f ms\n", (t12 - t0) / 1e6);
     
     return result;
 }
