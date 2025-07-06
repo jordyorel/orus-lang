@@ -1,0 +1,12 @@
+// Complex nested lexical scoping with multiple shadowed variables
+x = 0
+if true:
+    mut x = 1  // level 1 shadow
+    print("level1 start:", x)
+    if true:
+        mut x = 2  // level 2 shadow
+        for x in 5..7:
+            print("loop level2:", x)
+        print("level2 end:", x)
+    print("level1 end:", x)
+print("global:", x)

@@ -36,6 +36,20 @@ commas. Semicolons are **not** allowed; use a newline to terminate statements.
 x = 1, y = 2, z = 3  # declares three variables
 ```
 
+### Lexical Scoping
+
+Orus uses lexical scoping. A variable declared inside a block is visible only
+within that block. Inner declarations with the same name **shadow** outer
+variables without modifying them.
+
+```orus
+x = 5
+if true:
+    mut x = 1  # shadows outer `x`
+    print(x)   # prints 1
+print(x)       # prints 5
+```
+
 ---
 
 ## 🔢 Constants
