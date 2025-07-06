@@ -206,16 +206,18 @@ static void emitLoop(Compiler* compiler, int loopStart) {
     }
 }
 
-static void enterScope(Compiler* compiler) { compiler->scopeDepth++; }
+static void enterScope(Compiler* compiler) {
+    compiler->scopeStack[compiler->scopeDepth] = compiler->localCount;
+    compiler->scopeDepth++;
+}
 
 static void exitScope(Compiler* compiler) {
     compiler->scopeDepth--;
+    int targetCount = compiler->scopeStack[compiler->scopeDepth];
     int currentInstr = compiler->chunk->count;
     
     // Enhanced scope exit with lifetime tracking
-    while (compiler->localCount > 0 &&
-           compiler->locals[compiler->localCount - 1].depth > compiler->scopeDepth) {
-        
+    while (compiler->localCount > targetCount) {
         int localIndex = compiler->localCount - 1;
         
         // End variable lifetime in the register allocator if tracked
@@ -1511,6 +1513,7 @@ void initCompiler(Compiler* compiler, Chunk* chunk, const char* fileName,
     compiler->maxRegisters = 0;
     compiler->localCount = 0;
     compiler->scopeDepth = 0;
+    compiler->scopeStack[0] = 0;
     compiler->loopDepth = 0;
     compiler->pendingJumps = jumptable_new();
     

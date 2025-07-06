@@ -616,6 +616,11 @@ name is introduced inside a scope, the compiler allocates a fresh register and
 records the current `scope_depth`. Lookups search locals in reverse order so the
 innermost definition is found first, preserving lexical scoping semantics.
 
+To keep scope management O(1), the compiler stores the `localCount` at each
+`scopeDepth` in a `scopeStack` array. Exiting a scope simply restores the local
+count from this stack and pops variables in a tight loop, avoiding any linear
+search through existing locals.
+
 ### 2.2 Loop Implementation
 
 #### Loop Opcodes

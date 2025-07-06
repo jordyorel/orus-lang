@@ -1,0 +1,9 @@
+// Nested loops with shadowed variables to test scope exit
+outer = -1
+for outer in 0..1:
+    for outer in 5..6:
+        for outer in 9..10:
+            print("inner:", outer)
+        print("middle:", outer)
+    print("outer loop:", outer)
+print("global:", outer)
