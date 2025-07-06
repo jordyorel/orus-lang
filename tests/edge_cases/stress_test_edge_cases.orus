@@ -4,6 +4,8 @@
 // Test the parser's ability to handle deeply nested expressions
 
 benchmark_start = time_stamp()
+start_time = time_stamp()
+print("Start time:", start_time)
 
 deep_expr = (((((((((1 + 2) * 3) + 4) * 5) + 6) * 7) + 8) * 9) + 10)
 print("Deep nesting result:", deep_expr)
@@ -112,3 +114,12 @@ duration_ms = total_duration / 1000000
 print("Stress test benchmark completed!")
 print("Total time (nanoseconds):", total_duration)
 print("Total time (milliseconds):", duration_ms)
+
+
+end_time = time_stamp()
+duration = end_time - start_time
+duration_ms_final = duration / 1000000
+
+print("Calculation result:", stress_counter)
+print("Time taken (nanoseconds):", duration)
+print("Time taken (milliseconds):", duration_ms_final)

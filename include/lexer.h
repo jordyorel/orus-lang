@@ -134,9 +134,7 @@ typedef struct {
 void init_scanner(const char* source);
 Token scan_token();
 
-// Utility functions for precise position tracking
-int calculateColumn(const char* lineStart, const char* position, int tabWidth);
-const char* findLineStart(const char* source, const char* position);
+// Utility functions for precise position tracking (currently unused)
 
 // Expose the global scanner instance so other modules (like the parser)
 // can access the raw source when producing error messages.
