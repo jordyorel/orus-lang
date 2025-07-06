@@ -8,6 +8,7 @@
 arithmetic=35
 control_flow=45
 scope_management=60
+scoop_management=60
 vm_optimization=185
 
 # Performance targets (adjusted for CI environments):
