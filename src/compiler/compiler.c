@@ -1512,6 +1512,64 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             freeRegister(compiler, (uint8_t)cond);
             return resultReg;
         }
+        case NODE_FUNCTION: {
+            // Create function object and store it in a register
+            uint8_t reg = allocateRegister(compiler);
+            
+            // For now, store function index in constants table
+            // TODO: Implement proper function compilation and chunk creation
+            Value funcValue = I32_VAL(0); // Placeholder
+            emitConstant(compiler, reg, funcValue);
+            
+            return reg;
+        }
+        case NODE_CALL: {
+            // Compile function call: func_reg, first_arg_reg, arg_count, result_reg
+            int funcReg = compileExpressionToRegister(node->call.callee, compiler);
+            if (funcReg < 0) return -1;
+            
+            uint8_t resultReg = allocateRegister(compiler);
+            uint8_t firstArgReg = 0;
+            
+            // Compile arguments to consecutive registers
+            if (node->call.argCount > 0) {
+                firstArgReg = allocateRegister(compiler);
+                for (int i = 0; i < node->call.argCount; i++) {
+                    int argReg = compileExpressionToRegister(node->call.args[i], compiler);
+                    if (argReg < 0) {
+                        freeRegister(compiler, (uint8_t)funcReg);
+                        return -1;
+                    }
+                    // TODO: Ensure arguments are in consecutive registers
+                }
+            }
+            
+            // Emit OP_CALL_R instruction
+            emitByte(compiler, OP_CALL_R);
+            emitByte(compiler, (uint8_t)funcReg);
+            emitByte(compiler, firstArgReg);
+            emitByte(compiler, (uint8_t)node->call.argCount);
+            emitByte(compiler, resultReg);
+            
+            freeRegister(compiler, (uint8_t)funcReg);
+            return resultReg;
+        }
+        case NODE_RETURN: {
+            if (node->returnStmt.value) {
+                // Return with value
+                int valueReg = compileExpressionToRegister(node->returnStmt.value, compiler);
+                if (valueReg < 0) return -1;
+                
+                emitByte(compiler, OP_RETURN_R);
+                emitByte(compiler, (uint8_t)valueReg);
+                
+                freeRegister(compiler, (uint8_t)valueReg);
+            } else {
+                // Void return
+                emitByte(compiler, OP_RETURN_VOID);
+            }
+            return 0; // Return statements don't produce values
+        }
         default:
             return -1;
     }

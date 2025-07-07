@@ -388,6 +388,7 @@ static InterpretResult run(void) {
         vm_dispatch_table[OP_PRINT_MULTI_R] = &&LABEL_OP_PRINT_MULTI_R;
         vm_dispatch_table[OP_PRINT_R] = &&LABEL_OP_PRINT_R;
         vm_dispatch_table[OP_PRINT_NO_NL_R] = &&LABEL_OP_PRINT_NO_NL_R;
+        vm_dispatch_table[OP_CALL_R] = &&LABEL_OP_CALL_R;
         vm_dispatch_table[OP_RETURN_R] = &&LABEL_OP_RETURN_R;
         vm_dispatch_table[OP_RETURN_VOID] = &&LABEL_OP_RETURN_VOID;
         
@@ -1554,6 +1555,30 @@ LABEL_OP_PRINT_NO_NL_R: {
         uint8_t reg = READ_BYTE();
         printValue(vm.registers[reg]);
         fflush(stdout);
+        DISPATCH();
+    }
+
+LABEL_OP_CALL_R: {
+        uint8_t funcReg = READ_BYTE();
+        uint8_t firstArgReg = READ_BYTE();
+        uint8_t argCount = READ_BYTE();
+        uint8_t resultReg = READ_BYTE();
+        
+        Value funcValue = vm.registers[funcReg];
+        
+        // For now, simple function call simulation
+        // TODO: Implement proper function objects and call frames
+        if (IS_I32(funcValue)) {
+            // Placeholder: just return first argument or 0
+            if (argCount > 0) {
+                vm.registers[resultReg] = vm.registers[firstArgReg];
+            } else {
+                vm.registers[resultReg] = I32_VAL(0);
+            }
+        } else {
+            vm.registers[resultReg] = NIL_VAL;
+        }
+        
         DISPATCH();
     }
 
@@ -3427,6 +3452,28 @@ LABEL_UNKNOWN: __attribute__((unused))
             }
 
             // Function operations
+            case OP_CALL_R: {
+                uint8_t funcReg = READ_BYTE();
+                uint8_t firstArgReg = READ_BYTE();
+                uint8_t argCount = READ_BYTE();
+                uint8_t resultReg = READ_BYTE();
+                
+                Value funcValue = vm.registers[funcReg];
+                
+                // For now, simple function call simulation
+                // TODO: Implement proper function objects and call frames
+                if (IS_I32(funcValue)) {
+                    // Placeholder: just return first argument or 0
+                    if (argCount > 0) {
+                        vm.registers[resultReg] = vm.registers[firstArgReg];
+                    } else {
+                        vm.registers[resultReg] = I32_VAL(0);
+                    }
+                } else {
+                    vm.registers[resultReg] = NIL_VAL;
+                }
+                break;
+            }
             case OP_RETURN_R: {
                 uint8_t reg = READ_BYTE();
                 Value returnValue = vm.registers[reg];

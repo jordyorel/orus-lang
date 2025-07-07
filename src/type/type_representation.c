@@ -214,6 +214,10 @@ Type* infer_literal_type_extended(Value* value) {
             return get_primitive_type_cached(TYPE_ERROR);
         case VAL_RANGE_ITERATOR:
             return get_primitive_type_cached(TYPE_UNKNOWN);
+        case VAL_FUNCTION:
+            return get_primitive_type_cached(TYPE_FUNCTION);
+        case VAL_CLOSURE:
+            return get_primitive_type_cached(TYPE_FUNCTION);
     }
     
     return get_primitive_type_cached(TYPE_UNKNOWN);
@@ -253,6 +257,8 @@ TypeKind value_type_to_type_kind(ValueType value_type) {
         case VAL_ARRAY: return TYPE_ARRAY;
         case VAL_ERROR: return TYPE_ERROR;
         case VAL_RANGE_ITERATOR: return TYPE_UNKNOWN;
+        case VAL_FUNCTION: return TYPE_FUNCTION;
+        case VAL_CLOSURE: return TYPE_FUNCTION;
     }
     return TYPE_UNKNOWN;
 }

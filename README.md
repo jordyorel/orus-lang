@@ -169,13 +169,14 @@ echo 'print("Hello, Orus!")' > hello.orus
 - ✅ File execution and bytecode compilation
 - ✅ Mark-and-sweep garbage collector with object pooling
 - ✅ VM debugging and tracing
+- ✅ **Function definitions and calls** (Phase 3 complete!)
+- ✅ **Control flow** (if/else, loops)
+- ✅ **String types and operations**
 
 ### 🔄 **In Development**
-- 🔄 String types and operations
-- 🔄 Function definitions and calls
-- 🔄 Control flow (if/else, loops) 
 - 🔄 Struct definitions and methods
 - 🔄 Pattern matching and enums
+- 🔄 Arrays and collections
 
 ### 🔮 **Planned Features**
 - 📅 Generics and type constraints
@@ -258,7 +259,7 @@ Results are automatically logged and tracked for performance trend analysis.
 
 Orus follows [Semantic Versioning 2.0.0](docs/VERSIONING.md) to clearly
 communicate API stability and compatibility. The current release is
-`v0.1.0`, which indicates that the language is still in early
+`v0.2.0`, which indicates that the language is still in early
 development and the public API may change at any time.
 
 ---

@@ -15,5 +15,5 @@ lower precedence than the associated stable version. Build metadata may be
 appended with a plus sign (e.g. `1.0.0+20130313144700`) and is ignored when
 comparing versions.
 
-The current Orus version is **0.1.0**, indicating active initial development.
+The current Orus version is **0.2.0**, indicating active initial development.
 No stability guarantees are made while the major version is zero.

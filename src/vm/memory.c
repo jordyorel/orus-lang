@@ -135,6 +135,18 @@ void markObject(Obj* object) {
         }
         case OBJ_RANGE_ITERATOR:
             break;
+        case OBJ_FUNCTION: {
+            ObjFunction* func = (ObjFunction*)object;
+            markObject((Obj*)func->name);
+            // Note: chunk is not a heap object, so we don't mark it
+            break;
+        }
+        case OBJ_CLOSURE: {
+            ObjClosure* closure = (ObjClosure*)object;
+            markObject((Obj*)closure->function);
+            // TODO: mark upvalues when implemented
+            break;
+        }
     }
 }
 
@@ -204,6 +216,18 @@ static void freeObject(Obj* object) {
         case OBJ_RANGE_ITERATOR:
             vm.bytesAllocated -= sizeof(ObjRangeIterator);
             break;
+        case OBJ_FUNCTION: {
+            ObjFunction* func = (ObjFunction*)object;
+            vm.bytesAllocated -= sizeof(ObjFunction);
+            // Note: chunk and name are managed separately
+            break;
+        }
+        case OBJ_CLOSURE: {
+            vm.bytesAllocated -= sizeof(ObjClosure);
+            // Note: function is managed separately
+            // TODO: free upvalues when implemented
+            break;
+        }
     }
     if (finalizing) {
         free(object);

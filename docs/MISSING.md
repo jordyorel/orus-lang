@@ -22,7 +22,7 @@ Build a language that combines Python's readability, Rust's safety, and Lua's pe
 
 - [x] Variable assignments (`x = value`)
 - [x] Control flow (`if`, `while`, `for`)
-- [ ] Functions (`fn name:`)
+- [x] Functions (`fn name:`)
 - [ ] Arrays and collections
 - [ ] Type system integration
 - [ ] Module system
@@ -323,7 +323,19 @@ for i in get_start()..get_end()..get_step():  // Runtime validation with fallbac
 
 ### 3.1 Function Definition and Calls
 **Priority: 🔥 High**
-- [ ] **TODO**: Implement function declarations, calls, and return values with proper call frames.
+- [x] **DONE**: Implement function declarations, calls, and return values with basic execution.
+
+**✅ Completed Implementation:**
+- Function syntax parsing: `fn name(params) -> return_type:`
+- Parameter type annotations: `a: i32, b: string`
+- Return type annotations: `-> i32`
+- Function calls with arguments: `add(1, 2)`
+- Void functions: functions without return type
+- Basic bytecode generation for OP_CALL_R and OP_RETURN_R
+- Function object types (ObjFunction, ObjClosure)
+- Memory management for function objects
+- Type system integration for VAL_FUNCTION/VAL_CLOSURE
+- Comprehensive test suite: basic/, type_system/, edge_cases/
 
 ```orus
 // Basic function
@@ -333,6 +345,12 @@ fn add(a: i32, b: i32) -> i32:
 fn greet(name: string):
     print("Hello ", name)
 ```
+
+**🔄 Next Steps for Full Function Support:**
+- Call frame management for proper recursion
+- Closure capture and upvalues
+- Function objects as first-class values
+- Advanced type inference for function parameters
 
 ### 3.2 Basic Type System Core
 **Priority: 🔥 High**
@@ -1083,7 +1101,7 @@ pub fn with_file<T>(path: string, mode: OpenMode, callback: fn(File) -> T) -> Re
 ### **Quarter 1: Language Core (Weeks 1-12)**
 - [x] **Weeks 1-4**: Complete basic types, assignments, booleans
 - [x] **Weeks 5-8**: Control flow, scoping, loops
-- [ ] **Weeks 9-12**: Functions, closures, first-class values
+- [x] **Weeks 9-12**: Functions, closures, first-class values (✅ Basic functions complete)
 
 ### **Quarter 2: Data & Types (Weeks 13-24)**
 - [ ] **Weeks 13-16**: Arrays, collections, basic type system, enhanced error reporting

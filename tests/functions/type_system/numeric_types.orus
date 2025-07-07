@@ -1,0 +1,17 @@
+// Function with different numeric types
+fn multiply_i64(a: i64, b: i64) -> i64:
+    a * b
+
+fn divide_f64(a: f64, b: f64) -> f64:
+    a / b
+
+fn add_u32(a: u32, b: u32) -> u32:
+    a + b
+
+result1 = multiply_i64(100, 200)
+result2 = divide_f64(10.0, 3.0)
+result3 = add_u32(50, 75)
+
+print(result1)
+print(result2) 
+print(result3)

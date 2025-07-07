@@ -203,6 +203,18 @@ test: $(ORUS)
 		fi; \
 	done; \
 	echo ""; \
+	echo "\033[36m=== Functions Tests ===\033[0m"; \
+	for test_file in $(shell find $(TESTDIR)/functions -name '*.orus' | sort); do \
+		printf "Testing: $$test_file ... "; \
+		if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
+			printf "\033[32mPASS\033[0m\n"; \
+			passed=$$((passed + 1)); \
+		else \
+			printf "\033[31mFAIL\033[0m\n"; \
+			failed=$$((failed + 1)); \
+		fi; \
+	done; \
+	echo ""; \
 	echo "\033[36m=== Edge Cases Tests ===\033[0m"; \
 	for test_file in $(shell find $(TESTDIR)/edge_cases -name '*.orus' | sort); do \
 		printf "Testing: $$test_file ... "; \

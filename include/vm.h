@@ -30,7 +30,9 @@ typedef enum {
     VAL_STRING,
     VAL_ARRAY,
     VAL_ERROR,
-    VAL_RANGE_ITERATOR
+    VAL_RANGE_ITERATOR,
+    VAL_FUNCTION,
+    VAL_CLOSURE
 } ValueType;
 
 // Forward declarations
@@ -38,6 +40,8 @@ typedef struct ObjString ObjString;
 typedef struct ObjArray ObjArray;
 typedef struct ObjError ObjError;
 typedef struct ObjRangeIterator ObjRangeIterator;
+typedef struct ObjFunction ObjFunction;
+typedef struct ObjClosure ObjClosure;
 typedef struct Obj Obj;
 
 // Value representation
@@ -59,10 +63,12 @@ typedef enum {
     OBJ_STRING,
     OBJ_ARRAY,
     OBJ_ERROR,
-    OBJ_RANGE_ITERATOR
+    OBJ_RANGE_ITERATOR,
+    OBJ_FUNCTION,
+    OBJ_CLOSURE
 } ObjType;
 
-#define OBJ_TYPE_COUNT 4
+#define OBJ_TYPE_COUNT 6
 
 // Object header
 struct Obj {
@@ -126,6 +132,35 @@ struct ObjRangeIterator {
     int64_t end;
 };
 
+// Chunk (bytecode container)
+typedef struct {
+    int count;
+    int capacity;
+    uint8_t* code;
+    int* lines;
+    int* columns;
+    struct {
+        int count;
+        int capacity;
+        Value* values;
+    } constants;
+} Chunk;
+
+// Function object
+struct ObjFunction {
+    Obj obj;
+    int arity;
+    Chunk* chunk;
+    ObjString* name;
+};
+
+// Closure object (for capturing upvalues)
+struct ObjClosure {
+    Obj obj;
+    ObjFunction* function;
+    // Upvalues will be added later for closures
+};
+
 // Source location
 typedef struct {
     const char* file;
@@ -165,20 +200,6 @@ struct Type {
         } function;
     } info;
 };
-
-// Chunk (bytecode container)
-typedef struct {
-    int count;
-    int capacity;
-    uint8_t* code;
-    int* lines;
-    int* columns;
-    struct {
-        int count;
-        int capacity;
-        Value* values;
-    } constants;
-} Chunk;
 
 // Function
 typedef struct {

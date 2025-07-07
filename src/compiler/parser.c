@@ -127,6 +127,9 @@ static ASTNode* parseForStatement(void);
 static ASTNode* parseBreakStatement(void);
 static ASTNode* parseContinueStatement(void);
 static ASTNode* parseBlock(void);
+static ASTNode* parseFunctionDefinition(void);
+static ASTNode* parseReturnStatement(void);
+static ASTNode* parseCallExpression(ASTNode* callee);
 
 static int getOperatorPrecedence(TokenType type) {
     switch (type) {
@@ -300,6 +303,10 @@ static ASTNode* parseStatement(void) {
         return parseBreakStatement();
     } else if (t.type == TOKEN_CONTINUE) {
         return parseContinueStatement();
+    } else if (t.type == TOKEN_FN) {
+        return parseFunctionDefinition();
+    } else if (t.type == TOKEN_RETURN) {
+        return parseReturnStatement();
     } else {
         return parseExpression();
     }
@@ -1180,6 +1187,12 @@ static ASTNode* parsePrimaryExpression(void) {
             node->location.line = token.line;
             node->location.column = token.column;
             node->dataType = NULL;
+            
+            // Check if this is a function call
+            if (peekToken().type == TOKEN_LEFT_PAREN) {
+                return parseCallExpression(node);
+            }
+            
             return node;
         }
         case TOKEN_PRINT:
@@ -1242,6 +1255,215 @@ static ASTNode* parsePrimaryExpression(void) {
         default:
             return NULL;
     }
+}
+
+// Parse function definition: fn name(param1, param2) -> return_type:
+static ASTNode* parseFunctionDefinition(void) {
+    // Consume 'fn' token
+    nextToken();
+    
+    // Get function name
+    Token nameTok = nextToken();
+    if (nameTok.type != TOKEN_IDENTIFIER) {
+        return NULL;
+    }
+    
+    // Copy function name
+    int nameLen = nameTok.length;
+    char* functionName = arena_alloc(&parserArena, nameLen + 1);
+    strncpy(functionName, nameTok.start, nameLen);
+    functionName[nameLen] = '\0';
+    
+    // Parse parameter list
+    if (nextToken().type != TOKEN_LEFT_PAREN) {
+        return NULL;
+    }
+    
+    FunctionParam* params = NULL;
+    int paramCount = 0;
+    int paramCapacity = 0;
+    
+    if (peekToken().type != TOKEN_RIGHT_PAREN) {
+        while (true) {
+            Token paramTok = nextToken();
+            if (paramTok.type != TOKEN_IDENTIFIER) {
+                return NULL;
+            }
+            
+            // Copy parameter name
+            int paramLen = paramTok.length;
+            char* paramName = arena_alloc(&parserArena, paramLen + 1);
+            strncpy(paramName, paramTok.start, paramLen);
+            paramName[paramLen] = '\0';
+            
+            // Optional type annotation
+            ASTNode* paramType = NULL;
+            if (peekToken().type == TOKEN_COLON) {
+                nextToken(); // consume ':'
+                Token typeTok = nextToken();
+                if (typeTok.type != TOKEN_IDENTIFIER && typeTok.type != TOKEN_INT &&
+                    typeTok.type != TOKEN_I64 && typeTok.type != TOKEN_U32 &&
+                    typeTok.type != TOKEN_U64 && typeTok.type != TOKEN_F64 &&
+                    typeTok.type != TOKEN_BOOL && typeTok.type != TOKEN_STRING) {
+                    return NULL;
+                }
+                int typeLen = typeTok.length;
+                char* typeName = arena_alloc(&parserArena, typeLen + 1);
+                strncpy(typeName, typeTok.start, typeLen);
+                typeName[typeLen] = '\0';
+                paramType = new_node();
+                paramType->type = NODE_TYPE;
+                paramType->typeAnnotation.name = typeName;
+            }
+            
+            // Add parameter to list
+            if (paramCount + 1 > paramCapacity) {
+                int newCap = paramCapacity == 0 ? 4 : (paramCapacity * 2);
+                FunctionParam* newParams = arena_alloc(&parserArena, sizeof(FunctionParam) * newCap);
+                if (paramCapacity > 0) {
+                    memcpy(newParams, params, sizeof(FunctionParam) * paramCount);
+                }
+                params = newParams;
+                paramCapacity = newCap;
+            }
+            params[paramCount].name = paramName;
+            params[paramCount].typeAnnotation = paramType;
+            paramCount++;
+            
+            if (peekToken().type != TOKEN_COMMA) break;
+            nextToken(); // consume ','
+        }
+    }
+    
+    if (nextToken().type != TOKEN_RIGHT_PAREN) {
+        return NULL;
+    }
+    
+    // Optional return type annotation
+    ASTNode* returnType = NULL;
+    if (peekToken().type == TOKEN_ARROW) {
+        nextToken(); // consume '->'
+        Token typeTok = nextToken();
+        if (typeTok.type != TOKEN_IDENTIFIER && typeTok.type != TOKEN_INT &&
+            typeTok.type != TOKEN_I64 && typeTok.type != TOKEN_U32 &&
+            typeTok.type != TOKEN_U64 && typeTok.type != TOKEN_F64 &&
+            typeTok.type != TOKEN_BOOL && typeTok.type != TOKEN_STRING) {
+            return NULL;
+        }
+        int typeLen = typeTok.length;
+        char* typeName = arena_alloc(&parserArena, typeLen + 1);
+        strncpy(typeName, typeTok.start, typeLen);
+        typeName[typeLen] = '\0';
+        returnType = new_node();
+        returnType->type = NODE_TYPE;
+        returnType->typeAnnotation.name = typeName;
+    }
+    
+    // Expect ':'
+    if (nextToken().type != TOKEN_COLON) {
+        return NULL;
+    }
+    
+    // Expect newline after colon
+    if (nextToken().type != TOKEN_NEWLINE) {
+        return NULL;
+    }
+    
+    // Expect indent for function body
+    if (nextToken().type != TOKEN_INDENT) {
+        return NULL;
+    }
+    
+    ASTNode* body = parseBlock();
+    if (!body) {
+        return NULL;
+    }
+    
+    // Create function node
+    ASTNode* function = new_node();
+    function->type = NODE_FUNCTION;
+    function->function.name = functionName;
+    function->function.params = params;
+    function->function.paramCount = paramCount;
+    function->function.returnType = returnType;
+    function->function.body = body;
+    function->location.line = nameTok.line;
+    function->location.column = nameTok.column;
+    function->dataType = NULL;
+    
+    return function;
+}
+
+// Parse return statement: return [expression]
+static ASTNode* parseReturnStatement(void) {
+    Token returnTok = nextToken(); // consume 'return'
+    
+    ASTNode* value = NULL;
+    
+    // Check if there's a return value
+    Token next = peekToken();
+    if (next.type != TOKEN_NEWLINE && next.type != TOKEN_EOF && next.type != TOKEN_DEDENT) {
+        value = parseExpression();
+        if (!value) {
+            return NULL;
+        }
+    }
+    
+    ASTNode* returnStmt = new_node();
+    returnStmt->type = NODE_RETURN;
+    returnStmt->returnStmt.value = value;
+    returnStmt->location.line = returnTok.line;
+    returnStmt->location.column = returnTok.column;
+    returnStmt->dataType = NULL;
+    
+    return returnStmt;
+}
+
+// Parse function call: identifier(arg1, arg2, ...)
+static ASTNode* parseCallExpression(ASTNode* callee) {
+    // Consume '('
+    Token openParen = nextToken();
+    
+    ASTNode** args = NULL;
+    int argCount = 0;
+    int argCapacity = 0;
+    
+    if (peekToken().type != TOKEN_RIGHT_PAREN) {
+        while (true) {
+            ASTNode* arg = parseExpression();
+            if (!arg) return NULL;
+            
+            // Add argument to list
+            if (argCount + 1 > argCapacity) {
+                int newCap = argCapacity == 0 ? 4 : (argCapacity * 2);
+                ASTNode** newArgs = arena_alloc(&parserArena, sizeof(ASTNode*) * newCap);
+                if (argCapacity > 0) {
+                    memcpy(newArgs, args, sizeof(ASTNode*) * argCount);
+                }
+                args = newArgs;
+                argCapacity = newCap;
+            }
+            args[argCount++] = arg;
+            
+            if (peekToken().type != TOKEN_COMMA) break;
+            nextToken(); // consume ','
+        }
+    }
+    
+    if (nextToken().type != TOKEN_RIGHT_PAREN) {
+        return NULL;
+    }
+    
+    ASTNode* call = new_node();
+    call->type = NODE_CALL;
+    call->call.callee = callee;
+    call->call.args = args;
+    call->call.argCount = argCount;
+    call->location.line = openParen.line;
+    call->location.column = openParen.column;
+    call->dataType = NULL;
+    
+    return call;
 }
 
 void freeAST(ASTNode* node) {

@@ -11,6 +11,12 @@ struct SrcLocation;
 // Forward declaration
 typedef struct ASTNode ASTNode;
 
+// Function parameter representation
+typedef struct {
+    char* name;
+    ASTNode* typeAnnotation;  // Optional type annotation
+} FunctionParam;
+
 // Different kinds of AST nodes supported in the minimal language
 typedef enum {
     NODE_PROGRAM,
@@ -30,7 +36,10 @@ typedef enum {
     NODE_UNARY,
     NODE_TYPE,
     NODE_BREAK,
-    NODE_CONTINUE
+    NODE_CONTINUE,
+    NODE_FUNCTION,
+    NODE_CALL,
+    NODE_RETURN
 } NodeType;
 
 struct ASTNode {
@@ -117,6 +126,21 @@ struct ASTNode {
         struct {
             char* label;
         } continueStmt;
+        struct {
+            char* name;                    // Function name
+            FunctionParam* params;         // Parameters
+            int paramCount;                // Number of parameters
+            ASTNode* returnType;           // Optional return type annotation
+            ASTNode* body;                 // Function body (block)
+        } function;
+        struct {
+            ASTNode* callee;               // Function expression
+            ASTNode** args;                // Arguments
+            int argCount;                  // Number of arguments
+        } call;
+        struct {
+            ASTNode* value;                // Return value (NULL for void return)
+        } returnStmt;
     };
 };
 
