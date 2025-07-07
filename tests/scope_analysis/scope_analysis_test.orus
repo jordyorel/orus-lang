@@ -1,0 +1,26 @@
+// Test compile-time scope analysis and variable lifetime tracking
+
+// Global scope variables  
+x = 10
+y = 20
+
+// Test basic scope
+if x > 5:
+    temp = x + y
+    print("temp:", temp)
+
+// Test loop scope with lifetime tracking
+for i in 0..5:
+    loop_var = i * 2
+    print("loop_var:", loop_var)
+    
+    if loop_var > 4:
+        nested = loop_var + 1
+        print("nested:", nested)
+
+// Test variable reuse across scopes
+if y > 15:
+    another_temp = y - 10
+    print("another_temp:", another_temp)
+
+print("Scope analysis test completed")

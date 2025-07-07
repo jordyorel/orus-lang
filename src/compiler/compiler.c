@@ -3,6 +3,7 @@
 #include "../../include/jumptable.h"
 #include "../../include/lexer.h"
 #include "../../include/symbol_table.h"
+#include "../../include/scope_analysis.h"
 #include <string.h>
 #include <stdlib.h>
 
@@ -210,12 +211,26 @@ static void emitLoop(Compiler* compiler, int loopStart) {
 static void enterScope(Compiler* compiler) {
     compiler->scopeStack[compiler->scopeDepth] = compiler->localCount;
     compiler->scopeDepth++;
+    
+    // Integrate with scope analysis
+    compilerEnterScope(compiler, false);
+}
+
+static void enterLoopScope(Compiler* compiler) {
+    compiler->scopeStack[compiler->scopeDepth] = compiler->localCount;
+    compiler->scopeDepth++;
+    
+    // Integrate with scope analysis - mark as loop scope
+    compilerEnterScope(compiler, true);
 }
 
 static void exitScope(Compiler* compiler) {
     compiler->scopeDepth--;
     int targetCount = compiler->scopeStack[compiler->scopeDepth];
     int currentInstr = compiler->chunk->count;
+    
+    // Integrate with scope analysis
+    compilerExitScope(compiler);
     
     // Enhanced scope exit with lifetime tracking
     while (compiler->localCount > targetCount) {
@@ -917,6 +932,8 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             
             int localIndex;
             if (symbol_table_get(&compiler->symbols, name, &localIndex)) {
+                // Integrate with scope analysis - track variable usage
+                compilerUseVariable(compiler, name);
                 return compiler->locals[localIndex].reg;
             }
             uint8_t reg = allocateRegister(compiler);
@@ -1050,6 +1067,9 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             }
             
             compiler->locals[localIndex].reg = (uint8_t)initReg;
+            
+            // Integrate with scope analysis - track variable declaration
+            compilerDeclareVariable(compiler, node->varDecl.name, declaredType, (uint8_t)initReg);
             
             // Phase 3.1: Safe type tracking for literals and simple expressions
             if (node->varDecl.initializer->type == NODE_LITERAL) {
@@ -1203,7 +1223,7 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             freeRegister(compiler, (uint8_t)condReg);
 
 
-            enterScope(compiler);
+            enterLoopScope(compiler);
             if (compileExpressionToRegister(node->whileStmt.body, compiler) < 0) {
                 exitScope(compiler);
                 exitLoop(compiler);
@@ -1245,7 +1265,7 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
                 stepConstOne = false;
             }
 
-            enterScope(compiler);
+            enterLoopScope(compiler);
 
             // Use enhanced register allocation with lifetime tracking for loop variable
             // Ensure loop variable gets a low register number to avoid conflicts
@@ -1356,7 +1376,7 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             int iterSrc = compileExpressionToRegister(node->forIter.iterable, compiler);
             if (iterSrc < 0) return -1;
 
-            enterScope(compiler);
+            enterLoopScope(compiler);
 
             // Use enhanced register allocation for iterator
             uint8_t iterator = reuseOrAllocateRegister(compiler, "_iterator", VAL_ARRAY);
@@ -1528,6 +1548,9 @@ void initCompiler(Compiler* compiler, Chunk* chunk, const char* fileName,
     // Phase 3.1: Initialize type inference system
     initCompilerTypeInference(compiler);
     
+    // Initialize scope analysis system
+    initCompilerScopeAnalysis(compiler);
+    
     // Initialize all locals to have no live range index and safe type tracking
     for (int i = 0; i < REGISTER_COUNT; i++) {
         compiler->locals[i].liveRangeIndex = -1;
@@ -1547,6 +1570,10 @@ void freeCompiler(Compiler* compiler) {
     
     // Phase 3.1: Clean up type inference system
     freeCompilerTypeInference(compiler);
+    
+    // Finalize scope analysis and clean up
+    finalizeCompilerScopeAnalysis(compiler);
+    freeScopeAnalyzer(&compiler->scopeAnalyzer);
     
     // Clean up any remaining loop contexts (defensive programming)
     for (int i = 0; i < compiler->loopDepth; i++) {

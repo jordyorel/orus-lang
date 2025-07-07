@@ -303,10 +303,10 @@ for i in get_start()..get_end()..get_step():  // Runtime validation with fallbac
 - [x] Lexical scoping with proper variable shadowing semantics ✅
 - [x] Nested scope management with O(1) scope entry/exit ✅
 - [x] Symbol table optimization with hash-based lookup (< 5ns average) ✅
-- [ ] Compile-time scope analysis and variable lifetime tracking
-- [ ] Register allocation optimization across scope boundaries
-- [ ] Closure capture analysis for upvalue optimization
-- [ ] Dead variable elimination in complex scope hierarchies
+- [x] **DONE**: Compile-time scope analysis and variable lifetime tracking
+- [x] **DONE**: Register allocation optimization across scope boundaries
+- [x] **DONE**: Closure capture analysis for upvalue optimization *(Comprehensive analysis of variable capture patterns across scope boundaries, with heap allocation optimization and register prioritization)*
+- [x] **DONE**: Dead variable elimination in complex scope hierarchies *(Conservative dead code elimination with complex lifetime analysis, write-only variable detection, and register reclamation)*
 
 **Advanced Symbol Table Features:**
 - [ ] Interned string keys for symbol names (memory deduplication)
@@ -898,6 +898,7 @@ for i in 0..huge_array.length():
 - [ ] **NEW**: Implement cross-module optimization using type system knowledge
 - [ ] **NEW**: Add SIMD vectorization support for numerical loops
 - [ ] **NEW**: Implement advanced loop optimizations (fusion, parallelization)
+- [ ] **NEW**: Add comprehensive File I/O system for practical programming tasks
 
 ```orus
 // math.orus
@@ -914,10 +915,11 @@ fn main:
 ```
 
 ### 6.2 Standard Library Core & Performance Integration
-**Priority: 📋 Medium**
+**Priority: 📋 Medium-High**
 - [ ] **TODO**: Implement essential standard library modules.
 - [ ] **NEW**: Integrate all advanced features (generics, SIMD, optimization) into standard library
 - [ ] **NEW**: Add performance-optimized collection implementations
+- [ ] **NEW**: Complete File I/O system with error handling and resource management
 
 ```orus
 // std/io.orus
@@ -930,6 +932,99 @@ pub struct Map<K, V>
 
 // std/result.orus
 pub enum Result<T, E>
+
+// std/fs.orus - File I/O and File System Operations
+pub struct File
+pub enum OpenMode: Read, Write, Append, ReadWrite
+
+// Basic file operations
+pub fn open(path: string, mode: OpenMode) -> Result<File, IoError>
+pub fn close(file: File) -> Result<(), IoError>
+pub fn read(file: File) -> Result<string, IoError>
+pub fn read_bytes(file: File, count: usize) -> Result<[u8], IoError>
+pub fn write(file: File, content: string) -> Result<(), IoError>
+pub fn write_bytes(file: File, bytes: [u8]) -> Result<(), IoError>
+pub fn append(file: File, content: string) -> Result<(), IoError>
+
+// Line-based operations
+pub fn read_lines(file: File) -> Result<[string], IoError>
+pub fn write_lines(file: File, lines: [string]) -> Result<(), IoError>
+pub fn read_line(file: File) -> Result<string, IoError>
+
+// File positioning
+pub fn seek(file: File, position: i64) -> Result<(), IoError>
+pub fn tell(file: File) -> Result<i64, IoError>
+pub fn rewind(file: File) -> Result<(), IoError>
+
+// Convenience functions for entire file operations
+pub fn read_file(path: string) -> Result<string, IoError>
+pub fn write_file(path: string, content: string) -> Result<(), IoError>
+pub fn read_file_bytes(path: string) -> Result<[u8], IoError>
+pub fn write_file_bytes(path: string, bytes: [u8]) -> Result<(), IoError>
+
+// File system operations
+pub fn exists(path: string) -> bool
+pub fn is_file(path: string) -> bool
+pub fn is_dir(path: string) -> bool
+pub fn mkdir(path: string) -> Result<(), IoError>
+pub fn mkdir_all(path: string) -> Result<(), IoError>
+pub fn rmdir(path: string) -> Result<(), IoError>
+pub fn delete(path: string) -> Result<(), IoError>
+pub fn copy(src: string, dest: string) -> Result<(), IoError>
+pub fn move(src: string, dest: string) -> Result<(), IoError>
+pub fn rename(old_path: string, new_path: string) -> Result<(), IoError>
+
+// Directory operations
+pub fn list_dir(path: string) -> Result<[string], IoError>
+pub fn walk_dir(path: string) -> Result<[string], IoError>
+pub fn current_dir() -> Result<string, IoError>
+pub fn set_current_dir(path: string) -> Result<(), IoError>
+
+// File metadata
+pub struct FileMetadata:
+    size: u64
+    modified: DateTime
+    created: DateTime
+    permissions: FilePermissions
+    is_file: bool
+    is_dir: bool
+
+pub fn metadata(path: string) -> Result<FileMetadata, IoError>
+pub fn size(path: string) -> Result<u64, IoError>
+pub fn modified_time(path: string) -> Result<DateTime, IoError>
+pub fn created_time(path: string) -> Result<DateTime, IoError>
+
+// File permissions
+pub struct FilePermissions:
+    readable: bool
+    writable: bool
+    executable: bool
+
+pub fn permissions(path: string) -> Result<FilePermissions, IoError>
+pub fn set_permissions(path: string, perms: FilePermissions) -> Result<(), IoError>
+
+// Path operations
+pub fn join_path(parts: [string]) -> string
+pub fn split_path(path: string) -> [string]
+pub fn parent_dir(path: string) -> string?
+pub fn filename(path: string) -> string?
+pub fn extension(path: string) -> string?
+pub fn absolute_path(path: string) -> Result<string, IoError>
+pub fn canonical_path(path: string) -> Result<string, IoError>
+
+// Error types
+pub enum IoError:
+    NotFound(path: string)
+    PermissionDenied(path: string)
+    AlreadyExists(path: string)
+    InvalidInput(message: string)
+    UnexpectedEof
+    WriteZero
+    Interrupted
+    Other(message: string)
+
+// Resource management with automatic cleanup
+pub fn with_file<T>(path: string, mode: OpenMode, callback: fn(File) -> T) -> Result<T, IoError>
 ```
 
 ---
@@ -1015,5 +1110,15 @@ pub enum Result<T, E>
 - [x] Add if/else conditional statements
 - [ ] Implement while loops with break/continue (label support pending)
 - [ ] Build comprehensive test suite for Phase 1 features
+
+**Critical Missing Features for Full Language:**
+- [ ] **Functions & Closures** - Essential for code organization and reusability
+- [ ] **File I/O System** - Critical for practical programming tasks
+- [ ] **Collections (Arrays/Maps)** - Fundamental data structures
+- [ ] **User-Defined Types** - Structs, enums, and custom types
+- [ ] **Module System** - Code organization and library support
+- [ ] **Advanced Type System** - Generics, inference, and safety
+- [ ] **Error Handling** - Result types and exception management
+- [ ] **Pattern Matching** - Modern language feature for data handling
 
 This roadmap progresses systematically from basic language features to advanced capabilities, ensuring each phase builds solid foundations for the next. The register-based VM and existing infrastructure provide an excellent platform for rapid feature development.

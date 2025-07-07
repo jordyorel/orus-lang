@@ -547,6 +547,101 @@ typedef struct {
 // Forward declarations  
 struct TypeInferer;
 
+// Compile-time scope analysis structures
+typedef struct ScopeVariable {
+    char* name;              // Variable name
+    ValueType type;          // Variable type
+    int declarationPoint;    // Instruction where variable is declared
+    int firstUse;            // First use of the variable
+    int lastUse;             // Last use of the variable
+    bool escapes;            // Whether variable escapes current scope
+    bool isLoopVar;          // Whether this is a loop induction variable
+    bool isLoopInvariant;    // Whether variable is loop invariant
+    bool crossesLoopBoundary; // Whether lifetime crosses loop boundaries
+    uint8_t reg;             // Assigned register
+    int priority;            // Priority for register allocation
+    
+    // Closure capture analysis
+    bool isCaptured;         // Whether variable is captured by nested function
+    bool isUpvalue;          // Whether variable is an upvalue from parent scope
+    int captureDepth;        // Scope depth where variable is captured
+    int captureCount;        // Number of times variable is captured
+    bool needsHeapAllocation; // Whether variable needs heap allocation for capture
+    
+    // Dead variable elimination
+    bool isDead;             // Whether variable is never used after declaration
+    bool isWriteOnly;        // Whether variable is only written to, never read
+    bool isReadOnly;         // Whether variable is only read from, never written
+    int useCount;            // Number of times variable is used
+    int writeCount;          // Number of times variable is written to
+    bool hasComplexLifetime; // Whether variable has complex lifetime across scopes
+    
+    struct ScopeVariable* next; // Linked list for hash table
+} ScopeVariable;
+
+typedef struct ScopeInfo {
+    int depth;               // Scope depth
+    int startInstruction;    // First instruction in scope
+    int endInstruction;      // Last instruction in scope (-1 if still active)
+    ScopeVariable* variables; // Hash table of variables in this scope
+    int variableCount;       // Number of variables in scope
+    bool isLoopScope;        // Whether this is a loop scope
+    bool hasNestedScopes;    // Whether this scope contains nested scopes
+    
+    // Register allocation info
+    uint8_t* usedRegisters;  // Bitmap of registers used in this scope
+    int registerCount;       // Number of registers allocated in this scope
+    
+    // Lifetime analysis
+    int* variableLifetimes;  // Array of variable lifetimes
+    bool* canShareRegisters; // Which variables can share registers
+    
+    struct ScopeInfo* parent; // Parent scope
+    struct ScopeInfo* children; // Child scopes
+    struct ScopeInfo* sibling;  // Next sibling scope
+} ScopeInfo;
+
+typedef struct {
+    ScopeInfo* rootScope;    // Root scope of the program
+    ScopeInfo* currentScope; // Current active scope
+    ScopeInfo** scopeStack;  // Stack of active scopes
+    int scopeStackSize;      // Size of scope stack
+    int scopeStackCapacity;  // Capacity of scope stack
+    
+    // Analysis results
+    int totalScopes;         // Total number of scopes analyzed
+    int maxNestingDepth;     // Maximum nesting depth found
+    int totalVariables;      // Total number of variables
+    
+    // Register allocation optimization
+    uint8_t* globalRegisterUsage; // Global register usage bitmap
+    int* registerInterference;    // Register interference graph
+    bool* canCoalesce;           // Which registers can be coalesced
+    
+    // Cross-scope optimization opportunities
+    ScopeVariable** hoistableVariables; // Variables that can be hoisted
+    int hoistableCount;                 // Number of hoistable variables
+    
+    // Lifetime analysis results
+    int* variableLifespans;  // Lifespan of each variable
+    bool* shortLivedVars;    // Variables with short lifespans
+    bool* longLivedVars;     // Variables with long lifespans
+    
+    // Closure capture analysis
+    ScopeVariable** capturedVariables; // Variables captured by closures
+    int capturedCount;                  // Number of captured variables
+    int* captureDepths;                 // Depth of each capture
+    bool hasNestedFunctions;            // Whether code contains nested functions
+    
+    // Dead variable elimination
+    ScopeVariable** deadVariables;      // Variables identified as dead
+    int deadCount;                      // Number of dead variables
+    ScopeVariable** writeOnlyVariables; // Variables that are only written to
+    int writeOnlyCount;                 // Number of write-only variables
+    int eliminatedInstructions;         // Number of instructions eliminated
+    int savedRegisters;                 // Number of registers saved
+} ScopeAnalyzer;
+
 // Compiler state for register allocation
 typedef struct {
     Chunk* chunk;
@@ -577,6 +672,7 @@ typedef struct {
     RegisterAllocator regAlloc; // Enhanced register allocator with lifetime tracking
     SymbolTable symbols;        // Hash-based symbol table for fast lookup
     struct TypeInferer* typeInferer;   // Type inference engine for Phase 3.1 optimization
+    ScopeAnalyzer scopeAnalyzer; // Compile-time scope analysis and optimization
     // Phase 3.1: Compile-time register type tracking for aggressive optimization
     ValueType registerTypes[REGISTER_COUNT]; // Track known types of registers at compile time
     bool hadError;

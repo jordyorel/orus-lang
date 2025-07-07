@@ -1,0 +1,48 @@
+// Complex Scope Analysis Test
+// Tests for advanced scope analysis scenarios
+
+// Test 1: Mixed scenarios - some variables captured, some dead
+mut global_counter = 0
+for phase in 0..2:
+    mut phase_data = phase * 10
+    mut phase_dead = phase * 5
+    global_counter = global_counter + phase_data
+    
+    for iteration in 0..2:
+        mut iter_live = iteration + phase_data
+        mut iter_dead = iteration * 999
+        print("Phase", phase, "iteration", iteration, "live:", iter_live)
+        global_counter = global_counter + iter_live
+
+print("Final global counter:", global_counter)
+
+// Test 2: Register pressure simulation
+mut reg_var_01 = 1
+mut reg_var_02 = 2
+mut reg_var_03 = 3
+mut reg_var_04 = 4
+mut reg_var_05 = 5
+
+// Only use some of them
+mut result = reg_var_01 + reg_var_02 + reg_var_04
+print("Register pressure test result:", result)
+
+// Test 3: Control flow with dead variables
+mut control_var = 0
+for control_loop in 0..3:
+    mut loop_accumulator = 0
+    mut loop_dead = 999
+    
+    if control_loop % 2 == 0:
+        mut even_var = control_loop * 2
+        control_var = control_var + even_var
+        loop_accumulator = loop_accumulator + even_var
+    else:
+        mut odd_var = control_loop * 3
+        control_var = control_var + odd_var
+        loop_accumulator = loop_accumulator + odd_var
+    
+    print("Control loop", control_loop, "accumulator:", loop_accumulator)
+
+print("Final control var:", control_var)
+print("Complex scope analysis test completed")

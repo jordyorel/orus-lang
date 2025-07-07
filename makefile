@@ -1,7 +1,5 @@
 # Modern Makefile
-# Legacy suppor# Test files
-C_TEST_SRCS = $(wildcard $(TESTDIR)/c/unit_tests/*.c) $(wildcard $(TESTDIR)/c/integration_tests/*.c)
-C_TEST_TARGETS = $(C_TEST_SRCS:$(TESTDIR)/c/%.c=$(BUILDDIR)/test_%)or building without CMake
+# Legacy support for building without CMake
 
 CC = gcc
 # Enable performance optimizations by default
@@ -19,7 +17,7 @@ INCLUDES = -I$(INCDIR)
 
 # Source files
 CORE_SRCS =
-COMPILER_SRCS = $(SRCDIR)/compiler/compiler.c $(SRCDIR)/compiler/lexer.c $(SRCDIR)/compiler/parser.c $(SRCDIR)/compiler/symbol_table.c
+COMPILER_SRCS = $(SRCDIR)/compiler/compiler.c $(SRCDIR)/compiler/lexer.c $(SRCDIR)/compiler/parser.c $(SRCDIR)/compiler/symbol_table.c $(SRCDIR)/compiler/scope_analysis.c
 VM_SRCS = $(SRCDIR)/vm/vm.c $(SRCDIR)/vm/memory.c $(SRCDIR)/vm/debug.c \
           $(SRCDIR)/vm/builtins.c $(SRCDIR)/type/type_representation.c \
           $(SRCDIR)/type/type_inference.c
@@ -43,7 +41,7 @@ C_TEST_TARGETS = \
 # Targets
 ORUS = orus
 
-.PHONY: all clean test test-verbose test-basic test-types test-all c-test benchmark help format
+.PHONY: all clean test test-verbose test-basic test-types test-scope-analysis test-all c-test benchmark help format
 
 all: $(ORUS)
 
@@ -171,6 +169,18 @@ test: $(ORUS)
 	echo ""; \
 	echo "\033[36m=== Formatting Tests ===\033[0m"; \
 	for test_file in $(shell find $(TESTDIR)/formatting -name '*.orus' | sort); do \
+		printf "Testing: $$test_file ... "; \
+		if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
+			printf "\033[32mPASS\033[0m\n"; \
+			passed=$$((passed + 1)); \
+		else \
+			printf "\033[31mFAIL\033[0m\n"; \
+			failed=$$((failed + 1)); \
+		fi; \
+	done; \
+	echo ""; \
+	echo "\033[36m=== Scope Analysis Tests ===\033[0m"; \
+	for test_file in $(shell find $(TESTDIR)/scope_analysis -name '*.orus' | sort); do \
 		printf "Testing: $$test_file ... "; \
 		if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
 			printf "\033[32mPASS\033[0m\n"; \

@@ -96,7 +96,13 @@ run_benchmark() {
     local output_file=$(mktemp)
     local success=true
     
-    if bash -c "$command" > "$output_file" 2>&1; then
+    # Try to run command with better error handling
+    set +e  # Temporarily disable error exit
+    eval "$command" > "$output_file" 2>&1
+    local exit_code=$?
+    set -e  # Re-enable error exit
+    
+    if [ $exit_code -eq 0 ]; then
         local end_time=$(date +%s%N 2>/dev/null || date +%s)
         
         # Calculate duration (handle both nanosecond and second precision)
@@ -127,9 +133,14 @@ run_benchmark() {
         store_benchmark_time "$language" "$benchmark_type" "$duration"
         store_benchmark_status "$language" "$benchmark_type" "FAILED"
         
-        echo -e "${RED}✗ $name failed after ${duration}ms${NC}"
+        echo -e "${RED}✗ $name failed after ${duration}ms (exit code: $exit_code)${NC}"
         echo "Error output:"
         tail -n 10 "$output_file"
+        
+        # Check if this was a segfault
+        if [ $exit_code -eq 139 ] || [ $exit_code -eq 11 ]; then
+            echo -e "${RED}Detected segmentation fault (exit code $exit_code)${NC}"
+        fi
         success=false
     fi
     
