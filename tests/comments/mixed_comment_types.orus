@@ -1,0 +1,31 @@
+// Test mixing line and block comments
+x = 1 // Line comment followed by block /* comment */
+
+/* Block comment followed by line comment */ // Line comment
+
+// Line comment
+/* Block comment on next line */
+y = 2
+
+/* Start block */ // Line in middle /* End block */
+z = 3
+
+// Multiple comment types in expression
+result = x /* block */ + y // line comment /* another block */
+
+/* 
+ * Traditional C-style block comment
+ * with asterisks on each line
+ */
+print(result)
+
+//////////////////////////
+// Comment divider line //
+//////////////////////////
+
+/* ************************
+ * Block comment divider  *
+ ************************ */
+
+final_result = result * 2
+print(final_result)

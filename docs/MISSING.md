@@ -76,7 +76,7 @@ print("continues here")
 - [x] Basic `print(value)` statement with newline
 - [x] Parse `print()` function calls with variable arguments
 - [x] Support printing all basic types (i32, f64, bool, string)
-- [x] Implement string interpolation with `{}` placeholders
+- [x] Implement string interpolation with placeholders
 - [x] Handle escape sequences (`\n`, `\t`, `\"`, `\\`)
 - [x] Add `print_no_newline()` variant for precise output control
 - [x] Format numbers and booleans for display
@@ -101,7 +101,7 @@ print("Pi rounded: {:.2}", pi)  // "Pi rounded: 3.14"
 
 // Expression interpolation
 items = [1, 2, 3]
-print("Array has {} items", len(items))
+print("Array has items", len(items))
 ```
 
 ### 1.4 Variable Assignments & Basic Type Checking
@@ -331,7 +331,7 @@ fn add(a: i32, b: i32) -> i32:
     a + b
 
 fn greet(name: string):
-    print("Hello, {}!", name)
+    print("Hello ", name)
 ```
 
 ### 3.2 Basic Type System Core
@@ -584,7 +584,7 @@ type Count = u32
 fn process_user(id: UserId, temp: Temperature):
     // Type-safe domain specific parameters
     if temp > 100.0:
-        print("User {} has high temperature: {}", id, temp)
+        print("User" id, "has high temperature:", temp)
 
 // Pattern matching with exhaustive type checking
 enum Result<T, E>:
@@ -594,7 +594,7 @@ enum Result<T, E>:
 fn handle_result<T, E>(result: Result<T, E>) -> T:
     match result:
         Ok(value): value
-        Error(err): panic("Error: {}", err)
+        Error(err): panic("Error: ", err)
 
 // Advanced inference with generic collections
 numbers = [1, 2, 3]               // Inferred as [i32]
@@ -788,22 +788,22 @@ mut done = false
 while i < 10 and not done and is_valid(i):
     i = i + 1
     if i % 2 == 0: continue
-    print("Odd number: {}", i)
+    print("Odd number ", i)
     done = check_completion(i)
 
 # High-performance integer range loops
 for i in 0..5:
-    print("Index: {}", i)  // 0, 1, 2, 3, 4 (exclusive end)
+    print("Index: ", i)  // 0, 1, 2, 3, 4 (exclusive end)
 
 for i in 0..=5:
-    print("Index: {}", i)  // 0, 1, 2, 3, 4, 5 (inclusive end)
+    print("Index: ", i)  // 0, 1, 2, 3, 4, 5 (inclusive end)
 
 # ✅ IMPLEMENTED: Advanced range syntax with step and direction validation
 for i in 0..10..2:
-    print("Even: {}", i)  // 0, 2, 4, 6, 8 (step=2) - WORKING
+    print("Even: ", i)  // 0, 2, 4, 6, 8 (step=2) - WORKING
 
 for i in 10..0..-2:
-    print("Countdown: {}", i)  // 10, 8, 6, 4, 2 (negative step) - PLANNED
+    print("Countdown: ", i)  // 10, 8, 6, 4, 2 (negative step) - PLANNED
 
 # Range with runtime bounds (bounds checking required)
 start = get_start_value()
@@ -911,7 +911,7 @@ use math: sqrt, PI
 
 fn main:
     let result = math.sqrt(25.0)
-    print("Square root: {}", result)
+    print("Square root: ", result)
 ```
 
 ### 6.2 Standard Library Core & Performance Integration

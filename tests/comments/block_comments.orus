@@ -1,0 +1,13 @@
+/* Basic block comment test */
+x = 1
+
+/* Multi-line
+   block comment
+   spanning several lines */
+y = 2
+
+/* Block comment at end */ z = 3
+
+/* Block comment with special chars !@#$%^&*(){}[]<>?/ */
+result = x + y + z
+print(result)

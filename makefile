@@ -41,7 +41,7 @@ C_TEST_TARGETS = \
 # Targets
 ORUS = orus
 
-.PHONY: all clean test test-verbose test-basic test-types test-scope-analysis test-all c-test benchmark help format
+.PHONY: all clean test test-verbose test-basic test-types test-scope-analysis test-comments test-all c-test benchmark help format
 
 all: $(ORUS)
 
@@ -181,6 +181,18 @@ test: $(ORUS)
 	echo ""; \
 	echo "\033[36m=== Scope Analysis Tests ===\033[0m"; \
 	for test_file in $(shell find $(TESTDIR)/scope_analysis -name '*.orus' | sort); do \
+		printf "Testing: $$test_file ... "; \
+		if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
+			printf "\033[32mPASS\033[0m\n"; \
+			passed=$$((passed + 1)); \
+		else \
+			printf "\033[31mFAIL\033[0m\n"; \
+			failed=$$((failed + 1)); \
+		fi; \
+	done; \
+	echo ""; \
+	echo "\033[36m=== Comments Tests ===\033[0m"; \
+	for test_file in $(shell find $(TESTDIR)/comments -name '*.orus' | sort); do \
 		printf "Testing: $$test_file ... "; \
 		if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
 			printf "\033[32mPASS\033[0m\n"; \
