@@ -10,6 +10,7 @@
 #include "common.h"
 #include "compiler.h"
 #include "repl.h"
+#include "version.h"
 
 
 static char* readFile(const char* path) {
@@ -89,7 +90,7 @@ static void showUsage(const char* program) {
 }
 
 static void showVersion() {
-    printf("Orus Language Interpreter v0.1.0\n");
+    printf("Orus Language Interpreter v%s\n", ORUS_VERSION_STRING);
     printf("Built with register-based virtual machine\n");
 }
 

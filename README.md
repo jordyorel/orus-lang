@@ -254,6 +254,15 @@ Results are automatically logged and tracked for performance trend analysis.
 
 ---
 
+## 📦 Versioning
+
+Orus follows [Semantic Versioning 2.0.0](docs/VERSIONING.md) to clearly
+communicate API stability and compatibility. The current release is
+`v0.1.0`, which indicates that the language is still in early
+development and the public API may change at any time.
+
+---
+
 ## 🎓 Learn More
 
 - **[Complete Orus Tutorial](docs/COMPLETE_ORUS_TUTORIAL.md)** - 📚 Ultimate comprehensive guide covering every feature

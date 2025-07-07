@@ -1,0 +1,10 @@
+#ifndef ORUS_VERSION_H
+#define ORUS_VERSION_H
+
+#define ORUS_VERSION_MAJOR 0
+#define ORUS_VERSION_MINOR 1
+#define ORUS_VERSION_PATCH 0
+
+#define ORUS_VERSION_STRING "0.1.0"
+
+#endif // ORUS_VERSION_H
