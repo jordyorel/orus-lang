@@ -5198,3 +5198,7 @@ This enhanced IMPLEMENTATION_GUIDE.md now includes cutting-edge optimization tec
 
 This comprehensive roadmap consolidates all documentation into a single reference, providing clear implementation details, code signatures, and priorities for building Orus into a world-class programming language.\n### Recent Updates\n- Added compiler support for `f64` arithmetic operations and literals.
 - Implemented basic `u32` arithmetic and literals.
+
+### Versioning
+
+All Orus releases adhere to [Semantic Versioning 2.0.0](VERSIONING.md). The header `include/version.h` defines `ORUS_VERSION_MAJOR`, `ORUS_VERSION_MINOR`, and `ORUS_VERSION_PATCH` macros that encode the interpreter version. The `showVersion()` helper in `src/main.c` prints this version information for command line users.
