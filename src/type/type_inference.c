@@ -1,3 +1,8 @@
+// Simplified type inference that works with existing vm.h Type structure
+// File: src/type/type_inference.c
+// This file implements a simplified type inference system for the Orus language. 
+// A modern type inference system is complex and requires a deep understanding of the language semantics, but this implementation provides a basic framework for type inference using generic types, constraints, and substitutions.
+
 #include "../../include/vm.h"
 #include "../../include/type.h"
 #include "../../include/ast.h"
@@ -7,7 +12,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-// Simplified type inference that works with existing vm.h Type structure
 
 // Forward declarations for internal structures
 typedef struct HashMapEntry {

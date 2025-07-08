@@ -297,4 +297,3 @@ int addConstant(Chunk* chunk, Value value) {
     chunk->constants.values[chunk->constants.count] = value;
     return chunk->constants.count++;
 }
-

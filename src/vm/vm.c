@@ -20,30 +20,30 @@
 #endif
 
 static double get_time_vm() {
-#ifdef _WIN32
+    #ifdef _WIN32
     LARGE_INTEGER freq, count;
     QueryPerformanceFrequency(&freq);
     QueryPerformanceCounter(&count);
     return (double)count.QuadPart / freq.QuadPart;
-#else
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return ts.tv_sec + ts.tv_nsec / 1e9;
-#endif
+    #else
+        struct timespec ts;
+        clock_gettime(CLOCK_MONOTONIC, &ts);
+        return ts.tv_sec + ts.tv_nsec / 1e9;
+    #endif
 }
 
 // High-resolution timer for profiling
 static double now_ns(void) {
-#ifdef _WIN32
-    LARGE_INTEGER freq, count;
-    QueryPerformanceFrequency(&freq);
-    QueryPerformanceCounter(&count);
-    return (double)count.QuadPart * 1e9 / freq.QuadPart;
-#else
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (double)ts.tv_sec * 1e9 + ts.tv_nsec;
-#endif
+    #ifdef _WIN32
+        LARGE_INTEGER freq, count;
+        QueryPerformanceFrequency(&freq);
+        QueryPerformanceCounter(&count);
+        return (double)count.QuadPart * 1e9 / freq.QuadPart;
+    #else
+        struct timespec ts;
+        clock_gettime(CLOCK_MONOTONIC, &ts);
+        return (double)ts.tv_sec * 1e9 + ts.tv_nsec;
+    #endif
 }
 
 // Global VM instance
@@ -227,10 +227,6 @@ void freeVM(void) {
     vm.ip = NULL;
 }
 
-
-
-// Memory management implemented in memory.c
-
 // Runtime error handling
 static void runtimeError(ErrorType type, SrcLocation location,
                          const char* format, ...) {
@@ -253,18 +249,18 @@ static void runtimeError(ErrorType type, SrcLocation location,
 // Debug operations
 // Main execution engine
 static InterpretResult run(void) {
-#define READ_BYTE() (*vm.ip++)
-#define READ_SHORT() (vm.ip += 2, (uint16_t)((vm.ip[-2] << 8) | vm.ip[-1]))
-#define READ_CONSTANT(index) (vm.chunk->constants.values[index])
+    #define READ_BYTE() (*vm.ip++)
+    #define READ_SHORT() (vm.ip += 2, (uint16_t)((vm.ip[-2] << 8) | vm.ip[-1]))
+    #define READ_CONSTANT(index) (vm.chunk->constants.values[index])
 
     double start_time = get_time_vm();
-#define RETURN(val)                                                                          \
-    do {                                                                                     \
-        vm.lastExecutionTime = get_time_vm() - start_time;                                    \
-        return (val);                                                                         \
-    } while (0)
+    #define RETURN(val)                                                                          \
+        do {                                                                                     \
+            vm.lastExecutionTime = get_time_vm() - start_time;                                    \
+            return (val);                                                                         \
+        } while (0)
 
-#if USE_COMPUTED_GOTO
+    #if USE_COMPUTED_GOTO
     // Initialize dispatch table with label addresses - this only runs ONCE per process
     static bool global_dispatch_initialized = false;
     if (!global_dispatch_initialized) {
@@ -418,101 +414,812 @@ static InterpretResult run(void) {
 
     uint8_t instruction;
 
-// Phase 1.1 Optimization: Fast DISPATCH macro for production builds
-#ifdef ORUS_DEBUG
-    // Debug build: Keep full error checking and tracing
-    #define DISPATCH() \
-        do { \
-            if (IS_ERROR(vm.lastError)) { \
-                if (vm.tryFrameCount > 0) { \
-                    TryFrame frame = vm.tryFrames[--vm.tryFrameCount]; \
-                    vm.ip = frame.handler; \
-                    vm.globals[frame.varIndex] = vm.lastError; \
-                    vm.lastError = NIL_VAL; \
-                } else { \
-                    RETURN(INTERPRET_RUNTIME_ERROR); \
+    // Phase 1.1 Optimization: Fast DISPATCH macro for production builds
+    #ifdef ORUS_DEBUG
+        // Debug build: Keep full error checking and tracing
+        #define DISPATCH() \
+            do { \
+                if (IS_ERROR(vm.lastError)) { \
+                    if (vm.tryFrameCount > 0) { \
+                        TryFrame frame = vm.tryFrames[--vm.tryFrameCount]; \
+                        vm.ip = frame.handler; \
+                        vm.globals[frame.varIndex] = vm.lastError; \
+                        vm.lastError = NIL_VAL; \
+                    } else { \
+                        RETURN(INTERPRET_RUNTIME_ERROR); \
+                    } \
                 } \
-            } \
-            if (vm.trace) { \
-                printf("        "); \
-                for (int i = 0; i < 8; i++) { \
-                    printf("[ R%d: ", i); \
-                    printValue(vm.registers[i]); \
-                    printf(" ]"); \
+                if (vm.trace) { \
+                    printf("        "); \
+                    for (int i = 0; i < 8; i++) { \
+                        printf("[ R%d: ", i); \
+                        printValue(vm.registers[i]); \
+                        printf(" ]"); \
+                    } \
+                    printf("\\n"); \
+                    disassembleInstruction(vm.chunk, (int)(vm.ip - vm.chunk->code)); \
                 } \
-                printf("\\n"); \
-                disassembleInstruction(vm.chunk, (int)(vm.ip - vm.chunk->code)); \
-            } \
-            vm.instruction_count++; \
-            instruction = READ_BYTE(); \
-            if (instruction > OP_HALT || vm_dispatch_table[instruction] == NULL) { \
-                goto LABEL_UNKNOWN; \
-            } \
-            goto *vm_dispatch_table[instruction]; \
-        } while (0)
-    
-    // Same as normal dispatch for debug builds
-    #define DISPATCH_TYPED() DISPATCH()
-#else
+                vm.instruction_count++; \
+                instruction = READ_BYTE(); \
+                if (instruction > OP_HALT || vm_dispatch_table[instruction] == NULL) { \
+                    goto LABEL_UNKNOWN; \
+                } \
+                goto *vm_dispatch_table[instruction]; \
+            } while (0)
+        
+        // Same as normal dispatch for debug builds
+        #define DISPATCH_TYPED() DISPATCH()
+    #else
     // Production build: Ultra-fast dispatch with no checks
     #define DISPATCH() goto *vm_dispatch_table[*vm.ip++]
     
     // Even faster for typed operations - no error checking needed
     #define DISPATCH_TYPED() goto *vm_dispatch_table[*vm.ip++]
-#endif
-    DISPATCH();
-
-LABEL_OP_LOAD_CONST: {
-        uint8_t reg = READ_BYTE();
-        uint16_t constantIndex = READ_SHORT();
-        vm.registers[reg] = READ_CONSTANT(constantIndex);
+    #endif
         DISPATCH();
-    }
 
-LABEL_OP_LOAD_NIL: {
-        uint8_t reg = READ_BYTE();
-        vm.registers[reg] = NIL_VAL;
-        DISPATCH();
-    }
-
-LABEL_OP_LOAD_TRUE: {
-        uint8_t reg = READ_BYTE();
-        vm.registers[reg] = BOOL_VAL(true);
-        DISPATCH();
-    }
-
-LABEL_OP_LOAD_FALSE: {
-        uint8_t reg = READ_BYTE();
-        vm.registers[reg] = BOOL_VAL(false);
-        DISPATCH();
-    }
-
-LABEL_OP_MOVE: {
-        uint8_t dst = READ_BYTE();
-        uint8_t src = READ_BYTE();
-        vm.registers[dst] = vm.registers[src];
-        DISPATCH();
-    }
-
-LABEL_OP_LOAD_GLOBAL: {
-        uint8_t reg = READ_BYTE();
-        uint8_t globalIndex = READ_BYTE();
-        if (globalIndex >= vm.variableCount || vm.globalTypes[globalIndex] == NULL) {
-            runtimeError(ERROR_NAME, (SrcLocation){NULL, 0, 0}, "Undefined variable");
-            RETURN(INTERPRET_RUNTIME_ERROR);
+    LABEL_OP_LOAD_CONST: {
+            uint8_t reg = READ_BYTE();
+            uint16_t constantIndex = READ_SHORT();
+            vm.registers[reg] = READ_CONSTANT(constantIndex);
+            DISPATCH();
         }
-        vm.registers[reg] = vm.globals[globalIndex];
+
+    LABEL_OP_LOAD_NIL: {
+            uint8_t reg = READ_BYTE();
+            vm.registers[reg] = NIL_VAL;
+            DISPATCH();
+        }
+
+    LABEL_OP_LOAD_TRUE: {
+            uint8_t reg = READ_BYTE();
+            vm.registers[reg] = BOOL_VAL(true);
+            DISPATCH();
+        }
+
+    LABEL_OP_LOAD_FALSE: {
+            uint8_t reg = READ_BYTE();
+            vm.registers[reg] = BOOL_VAL(false);
+            DISPATCH();
+        }
+
+    LABEL_OP_MOVE: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src = READ_BYTE();
+            vm.registers[dst] = vm.registers[src];
+            DISPATCH();
+        }
+
+    LABEL_OP_LOAD_GLOBAL: {
+            uint8_t reg = READ_BYTE();
+            uint8_t globalIndex = READ_BYTE();
+            if (globalIndex >= vm.variableCount || vm.globalTypes[globalIndex] == NULL) {
+                runtimeError(ERROR_NAME, (SrcLocation){NULL, 0, 0}, "Undefined variable");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            vm.registers[reg] = vm.globals[globalIndex];
+            DISPATCH();
+        }
+
+    LABEL_OP_STORE_GLOBAL: {
+            uint8_t globalIndex = READ_BYTE();
+            uint8_t reg = READ_BYTE();
+            vm.globals[globalIndex] = vm.registers[reg];
+            DISPATCH();
+        }
+
+    LABEL_OP_ADD_I32_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src1 = READ_BYTE();
+            uint8_t src2 = READ_BYTE();
+            if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            int32_t a = AS_I32(vm.registers[src1]);
+            int32_t b = AS_I32(vm.registers[src2]);
+    #if USE_FAST_ARITH
+            vm.registers[dst] = I32_VAL(a + b);
+    #else
+            int32_t result;
+            if (__builtin_add_overflow(a, b, &result)) {
+                runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Integer overflow");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            vm.registers[dst] = I32_VAL(result);
+    #endif
+            DISPATCH();
+        }
+
+    LABEL_OP_SUB_I32_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src1 = READ_BYTE();
+            uint8_t src2 = READ_BYTE();
+            if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            int32_t a = AS_I32(vm.registers[src1]);
+            int32_t b = AS_I32(vm.registers[src2]);
+    #if USE_FAST_ARITH
+            vm.registers[dst] = I32_VAL(a - b);
+    #else
+            int32_t result;
+            if (__builtin_sub_overflow(a, b, &result)) {
+                runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Integer overflow");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            vm.registers[dst] = I32_VAL(result);
+    #endif
+            DISPATCH();
+        }
+
+    LABEL_OP_MUL_I32_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src1 = READ_BYTE();
+            uint8_t src2 = READ_BYTE();
+            if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            int32_t a = AS_I32(vm.registers[src1]);
+            int32_t b = AS_I32(vm.registers[src2]);
+    #if USE_FAST_ARITH
+            vm.registers[dst] = I32_VAL(a * b);
+    #else
+            int32_t result;
+            if (__builtin_mul_overflow(a, b, &result)) {
+                runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Integer overflow");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            vm.registers[dst] = I32_VAL(result);
+    #endif
+            DISPATCH();
+        }
+
+    LABEL_OP_DIV_I32_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src1 = READ_BYTE();
+            uint8_t src2 = READ_BYTE();
+            if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            int32_t b = AS_I32(vm.registers[src2]);
+            if (b == 0) {
+                runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Division by zero");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) / b);
+            DISPATCH();
+        }
+
+    LABEL_OP_MOD_I32_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src1 = READ_BYTE();
+            uint8_t src2 = READ_BYTE();
+            if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            int32_t b = AS_I32(vm.registers[src2]);
+            if (b == 0) {
+                runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Division by zero");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) % b);
+            DISPATCH();
+        }
+
+    LABEL_OP_INC_I32_R: {
+            uint8_t reg = READ_BYTE();
+    #if USE_FAST_ARITH
+            vm.registers[reg] = I32_VAL(AS_I32(vm.registers[reg]) + 1);
+    #else
+            int32_t val = AS_I32(vm.registers[reg]);
+            int32_t result;
+            if (__builtin_add_overflow(val, 1, &result)) {
+                runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Integer overflow");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            vm.registers[reg] = I32_VAL(result);
+    #endif
+            DISPATCH();
+        }
+
+    LABEL_OP_DEC_I32_R: {
+            uint8_t reg = READ_BYTE();
+    #if USE_FAST_ARITH
+            vm.registers[reg] = I32_VAL(AS_I32(vm.registers[reg]) - 1);
+    #else
+            int32_t val = AS_I32(vm.registers[reg]);
+            int32_t result;
+            if (__builtin_sub_overflow(val, 1, &result)) {
+                runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Integer overflow");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            vm.registers[reg] = I32_VAL(result);
+    #endif
+            DISPATCH();
+        }
+
+    LABEL_OP_ADD_I64_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src1 = READ_BYTE();
+            uint8_t src2 = READ_BYTE();
+            if (!IS_I64(vm.registers[src1]) || !IS_I64(vm.registers[src2])) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i64");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            int64_t a = AS_I64(vm.registers[src1]);
+            int64_t b = AS_I64(vm.registers[src2]);
+    #if USE_FAST_ARITH
+            vm.registers[dst] = I64_VAL(a + b);
+    #else
+            int64_t result;
+            if (__builtin_add_overflow(a, b, &result)) {
+                runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Integer overflow");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            vm.registers[dst] = I64_VAL(result);
+    #endif
+            DISPATCH();
+        }
+
+    LABEL_OP_SUB_I64_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src1 = READ_BYTE();
+            uint8_t src2 = READ_BYTE();
+            if (!IS_I64(vm.registers[src1]) || !IS_I64(vm.registers[src2])) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i64");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            int64_t a = AS_I64(vm.registers[src1]);
+            int64_t b = AS_I64(vm.registers[src2]);
+    #if USE_FAST_ARITH
+            vm.registers[dst] = I64_VAL(a - b);
+    #else
+            int64_t result;
+            if (__builtin_sub_overflow(a, b, &result)) {
+                runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Integer overflow");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            vm.registers[dst] = I64_VAL(result);
+    #endif
+            DISPATCH();
+        }
+
+    LABEL_OP_MUL_I64_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src1 = READ_BYTE();
+            uint8_t src2 = READ_BYTE();
+            if (!IS_I64(vm.registers[src1]) || !IS_I64(vm.registers[src2])) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i64");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            int64_t a = AS_I64(vm.registers[src1]);
+            int64_t b = AS_I64(vm.registers[src2]);
+    #if USE_FAST_ARITH
+            vm.registers[dst] = I64_VAL(a * b);
+    #else
+            int64_t result;
+            if (__builtin_mul_overflow(a, b, &result)) {
+                runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Integer overflow");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            vm.registers[dst] = I64_VAL(result);
+    #endif
+            DISPATCH();
+        }
+
+    LABEL_OP_DIV_I64_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src1 = READ_BYTE();
+            uint8_t src2 = READ_BYTE();
+            if (!IS_I64(vm.registers[src1]) || !IS_I64(vm.registers[src2])) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i64");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            int64_t b = AS_I64(vm.registers[src2]);
+            if (b == 0) {
+                runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Division by zero");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            vm.registers[dst] = I64_VAL(AS_I64(vm.registers[src1]) / b);
+            DISPATCH();
+        }
+
+    LABEL_OP_MOD_I64_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src1 = READ_BYTE();
+            uint8_t src2 = READ_BYTE();
+            if (!IS_I64(vm.registers[src1]) || !IS_I64(vm.registers[src2])) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i64");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            int64_t b = AS_I64(vm.registers[src2]);
+            if (b == 0) {
+                runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Division by zero");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            vm.registers[dst] = I64_VAL(AS_I64(vm.registers[src1]) % b);
+            DISPATCH();
+        }
+
+    LABEL_OP_ADD_U32_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src1 = READ_BYTE();
+            uint8_t src2 = READ_BYTE();
+            if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be u32");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            vm.registers[dst] = U32_VAL(AS_U32(vm.registers[src1]) + AS_U32(vm.registers[src2]));
+            DISPATCH();
+        }
+
+    LABEL_OP_SUB_U32_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src1 = READ_BYTE();
+            uint8_t src2 = READ_BYTE();
+            if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be u32");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            vm.registers[dst] = U32_VAL(AS_U32(vm.registers[src1]) - AS_U32(vm.registers[src2]));
+            DISPATCH();
+        }
+
+    LABEL_OP_MUL_U32_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src1 = READ_BYTE();
+            uint8_t src2 = READ_BYTE();
+            if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be u32");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            vm.registers[dst] = U32_VAL(AS_U32(vm.registers[src1]) * AS_U32(vm.registers[src2]));
+            DISPATCH();
+        }
+
+    LABEL_OP_DIV_U32_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src1 = READ_BYTE();
+            uint8_t src2 = READ_BYTE();
+            if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be u32");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            uint32_t b = AS_U32(vm.registers[src2]);
+            if (b == 0) {
+                runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Division by zero");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            vm.registers[dst] = U32_VAL(AS_U32(vm.registers[src1]) / b);
+            DISPATCH();
+        }
+
+    LABEL_OP_MOD_U32_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src1 = READ_BYTE();
+            uint8_t src2 = READ_BYTE();
+            if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be u32");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            uint32_t b = AS_U32(vm.registers[src2]);
+            if (b == 0) {
+                runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Division by zero");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            vm.registers[dst] = U32_VAL(AS_U32(vm.registers[src1]) % b);
+            DISPATCH();
+        }
+
+    LABEL_OP_ADD_U64_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src1 = READ_BYTE();
+            uint8_t src2 = READ_BYTE();
+
+            if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                            "Operands must be u64");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+
+            uint64_t a = AS_U64(vm.registers[src1]);
+            uint64_t b = AS_U64(vm.registers[src2]);
+            
+            // Check for overflow: if a + b < a, then overflow occurred
+            if (UINT64_MAX - a < b) {
+                runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                            "u64 addition overflow");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+
+            vm.registers[dst] = U64_VAL(a + b);
+            DISPATCH();
+        }
+
+    LABEL_OP_SUB_U64_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src1 = READ_BYTE();
+            uint8_t src2 = READ_BYTE();
+
+            if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                            "Operands must be u64");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+
+            uint64_t a = AS_U64(vm.registers[src1]);
+            uint64_t b = AS_U64(vm.registers[src2]);
+            
+            // Check for underflow: if a < b, then underflow would occur
+            if (a < b) {
+                runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                            "u64 subtraction underflow");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+
+            vm.registers[dst] = U64_VAL(a - b);
+            DISPATCH();
+        }
+
+    LABEL_OP_MUL_U64_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src1 = READ_BYTE();
+            uint8_t src2 = READ_BYTE();
+
+            if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                            "Operands must be u64");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+
+            uint64_t a = AS_U64(vm.registers[src1]);
+            uint64_t b = AS_U64(vm.registers[src2]);
+            
+            // Check for multiplication overflow: if a != 0 && result / a != b
+            if (a != 0 && b > UINT64_MAX / a) {
+                runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                            "u64 multiplication overflow");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+
+            vm.registers[dst] = U64_VAL(a * b);
+            DISPATCH();
+        }
+
+    LABEL_OP_DIV_U64_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src1 = READ_BYTE();
+            uint8_t src2 = READ_BYTE();
+
+            if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                            "Operands must be u64");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+
+            uint64_t b = AS_U64(vm.registers[src2]);
+            if (b == 0) {
+                runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                            "Division by zero");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+
+            vm.registers[dst] = U64_VAL(AS_U64(vm.registers[src1]) / b);
+            DISPATCH();
+        }
+
+    LABEL_OP_MOD_U64_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src1 = READ_BYTE();
+            uint8_t src2 = READ_BYTE();
+
+            if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                            "Operands must be u64");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+
+            uint64_t b = AS_U64(vm.registers[src2]);
+            if (b == 0) {
+                runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                            "Division by zero");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+
+            vm.registers[dst] = U64_VAL(AS_U64(vm.registers[src1]) % b);
+            DISPATCH();
+        }
+
+    LABEL_OP_I32_TO_I64_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src = READ_BYTE();
+            if (!IS_I32(vm.registers[src])) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Source must be i32");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            vm.registers[dst] = I64_VAL((int64_t)AS_I32(vm.registers[src]));
+            DISPATCH();
+        }
+
+    LABEL_OP_I32_TO_U32_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src = READ_BYTE();
+            if (!IS_I32(vm.registers[src])) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Source must be i32");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            vm.registers[dst] = U32_VAL((uint32_t)AS_I32(vm.registers[src]));
+            DISPATCH();
+        }
+
+    LABEL_OP_U32_TO_I32_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src = READ_BYTE();
+            if (!IS_U32(vm.registers[src])) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Source must be u32");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            vm.registers[dst] = I32_VAL((int32_t)AS_U32(vm.registers[src]));
+            DISPATCH();
+        }
+
+    // F64 Arithmetic Operations
+    LABEL_OP_ADD_F64_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src1 = READ_BYTE();
+            uint8_t src2 = READ_BYTE();
+            if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            vm.registers[dst] = F64_VAL(AS_F64(vm.registers[src1]) + AS_F64(vm.registers[src2]));
+            DISPATCH();
+        }
+
+    LABEL_OP_SUB_F64_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src1 = READ_BYTE();
+            uint8_t src2 = READ_BYTE();
+            if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            vm.registers[dst] = F64_VAL(AS_F64(vm.registers[src1]) - AS_F64(vm.registers[src2]));
+            DISPATCH();
+        }
+
+    LABEL_OP_MUL_F64_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src1 = READ_BYTE();
+            uint8_t src2 = READ_BYTE();
+            if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            vm.registers[dst] = F64_VAL(AS_F64(vm.registers[src1]) * AS_F64(vm.registers[src2]));
+            DISPATCH();
+        }
+
+    LABEL_OP_DIV_F64_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src1 = READ_BYTE();
+            uint8_t src2 = READ_BYTE();
+            if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            double a = AS_F64(vm.registers[src1]);
+            double b = AS_F64(vm.registers[src2]);
+            
+            // IEEE 754 compliant: division by zero produces infinity, not error
+            double result = a / b;
+            
+            // The result may be infinity, -infinity, or NaN
+            // These are valid f64 values according to IEEE 754
+            vm.registers[dst] = F64_VAL(result);
+            DISPATCH();
+        }
+
+    // Bitwise Operations
+    LABEL_OP_AND_I32_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src1 = READ_BYTE();
+            uint8_t src2 = READ_BYTE();
+            if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) & AS_I32(vm.registers[src2]));
+            DISPATCH();
+        }
+
+    LABEL_OP_OR_I32_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src1 = READ_BYTE();
+            uint8_t src2 = READ_BYTE();
+            if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) | AS_I32(vm.registers[src2]));
+            DISPATCH();
+        }
+
+    LABEL_OP_XOR_I32_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src1 = READ_BYTE();
+            uint8_t src2 = READ_BYTE();
+            if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) ^ AS_I32(vm.registers[src2]));
+            DISPATCH();
+        }
+
+    LABEL_OP_NOT_I32_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src = READ_BYTE();
+            if (!IS_I32(vm.registers[src])) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operand must be i32");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            vm.registers[dst] = I32_VAL(~AS_I32(vm.registers[src]));
+            DISPATCH();
+        }
+
+    LABEL_OP_SHL_I32_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src1 = READ_BYTE();
+            uint8_t src2 = READ_BYTE();
+            if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) << AS_I32(vm.registers[src2]));
+            DISPATCH();
+        }
+
+    LABEL_OP_SHR_I32_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src1 = READ_BYTE();
+            uint8_t src2 = READ_BYTE();
+            if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) >> AS_I32(vm.registers[src2]));
+            DISPATCH();
+        }
+
+    // F64 Comparison Operations
+    LABEL_OP_LT_F64_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src1 = READ_BYTE();
+            uint8_t src2 = READ_BYTE();
+            if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            vm.registers[dst] = BOOL_VAL(AS_F64(vm.registers[src1]) < AS_F64(vm.registers[src2]));
+            DISPATCH();
+        }
+
+    LABEL_OP_LE_F64_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src1 = READ_BYTE();
+            uint8_t src2 = READ_BYTE();
+            if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            vm.registers[dst] = BOOL_VAL(AS_F64(vm.registers[src1]) <= AS_F64(vm.registers[src2]));
+            DISPATCH();
+        }
+
+    LABEL_OP_GT_F64_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src1 = READ_BYTE();
+            uint8_t src2 = READ_BYTE();
+            if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            vm.registers[dst] = BOOL_VAL(AS_F64(vm.registers[src1]) > AS_F64(vm.registers[src2]));
+            DISPATCH();
+        }
+
+    LABEL_OP_GE_F64_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src1 = READ_BYTE();
+            uint8_t src2 = READ_BYTE();
+            if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            vm.registers[dst] = BOOL_VAL(AS_F64(vm.registers[src1]) >= AS_F64(vm.registers[src2]));
+            DISPATCH();
+        }
+
+    // F64 Type Conversion Operations
+    LABEL_OP_I32_TO_F64_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src = READ_BYTE();
+            if (!IS_I32(vm.registers[src])) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Source must be i32");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            vm.registers[dst] = F64_VAL((double)AS_I32(vm.registers[src]));
+            DISPATCH();
+        }
+
+    LABEL_OP_I64_TO_F64_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src = READ_BYTE();
+            if (!IS_I64(vm.registers[src])) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Source must be i64");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            vm.registers[dst] = F64_VAL((double)AS_I64(vm.registers[src]));
+            DISPATCH();
+        }
+
+    LABEL_OP_F64_TO_I32_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src = READ_BYTE();
+            if (!IS_F64(vm.registers[src])) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Source must be f64");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            vm.registers[dst] = I32_VAL((int32_t)AS_F64(vm.registers[src]));
+            DISPATCH();
+        }
+
+    LABEL_OP_F64_TO_I64_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src = READ_BYTE();
+            if (!IS_F64(vm.registers[src])) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Source must be f64");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            vm.registers[dst] = I64_VAL((int64_t)AS_F64(vm.registers[src]));
+            DISPATCH();
+        }
+
+    LABEL_OP_LT_I32_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src1 = READ_BYTE();
+            uint8_t src2 = READ_BYTE();
+            if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            vm.registers[dst] = BOOL_VAL(AS_I32(vm.registers[src1]) < AS_I32(vm.registers[src2]));
+            DISPATCH();
+        }
+
+    LABEL_OP_EQ_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t src1 = READ_BYTE();
+        uint8_t src2 = READ_BYTE();
+        vm.registers[dst] = BOOL_VAL(valuesEqual(vm.registers[src1], vm.registers[src2]));
         DISPATCH();
     }
 
-LABEL_OP_STORE_GLOBAL: {
-        uint8_t globalIndex = READ_BYTE();
-        uint8_t reg = READ_BYTE();
-        vm.globals[globalIndex] = vm.registers[reg];
+    LABEL_OP_NE_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t src1 = READ_BYTE();
+        uint8_t src2 = READ_BYTE();
+        vm.registers[dst] = BOOL_VAL(!valuesEqual(vm.registers[src1], vm.registers[src2]));
         DISPATCH();
     }
 
-LABEL_OP_ADD_I32_R: {
+    LABEL_OP_LE_I32_R: {
         uint8_t dst = READ_BYTE();
         uint8_t src1 = READ_BYTE();
         uint8_t src2 = READ_BYTE();
@@ -520,22 +1227,11 @@ LABEL_OP_ADD_I32_R: {
             runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
             RETURN(INTERPRET_RUNTIME_ERROR);
         }
-        int32_t a = AS_I32(vm.registers[src1]);
-        int32_t b = AS_I32(vm.registers[src2]);
-#if USE_FAST_ARITH
-        vm.registers[dst] = I32_VAL(a + b);
-#else
-        int32_t result;
-        if (__builtin_add_overflow(a, b, &result)) {
-            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Integer overflow");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        vm.registers[dst] = I32_VAL(result);
-#endif
+        vm.registers[dst] = BOOL_VAL(AS_I32(vm.registers[src1]) <= AS_I32(vm.registers[src2]));
         DISPATCH();
     }
 
-LABEL_OP_SUB_I32_R: {
+    LABEL_OP_GT_I32_R: {
         uint8_t dst = READ_BYTE();
         uint8_t src1 = READ_BYTE();
         uint8_t src2 = READ_BYTE();
@@ -543,22 +1239,11 @@ LABEL_OP_SUB_I32_R: {
             runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
             RETURN(INTERPRET_RUNTIME_ERROR);
         }
-        int32_t a = AS_I32(vm.registers[src1]);
-        int32_t b = AS_I32(vm.registers[src2]);
-#if USE_FAST_ARITH
-        vm.registers[dst] = I32_VAL(a - b);
-#else
-        int32_t result;
-        if (__builtin_sub_overflow(a, b, &result)) {
-            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Integer overflow");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        vm.registers[dst] = I32_VAL(result);
-#endif
+        vm.registers[dst] = BOOL_VAL(AS_I32(vm.registers[src1]) > AS_I32(vm.registers[src2]));
         DISPATCH();
     }
 
-LABEL_OP_MUL_I32_R: {
+    LABEL_OP_GE_I32_R: {
         uint8_t dst = READ_BYTE();
         uint8_t src1 = READ_BYTE();
         uint8_t src2 = READ_BYTE();
@@ -566,88 +1251,11 @@ LABEL_OP_MUL_I32_R: {
             runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
             RETURN(INTERPRET_RUNTIME_ERROR);
         }
-        int32_t a = AS_I32(vm.registers[src1]);
-        int32_t b = AS_I32(vm.registers[src2]);
-#if USE_FAST_ARITH
-        vm.registers[dst] = I32_VAL(a * b);
-#else
-        int32_t result;
-        if (__builtin_mul_overflow(a, b, &result)) {
-            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Integer overflow");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        vm.registers[dst] = I32_VAL(result);
-#endif
+        vm.registers[dst] = BOOL_VAL(AS_I32(vm.registers[src1]) >= AS_I32(vm.registers[src2]));
         DISPATCH();
     }
 
-LABEL_OP_DIV_I32_R: {
-        uint8_t dst = READ_BYTE();
-        uint8_t src1 = READ_BYTE();
-        uint8_t src2 = READ_BYTE();
-        if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        int32_t b = AS_I32(vm.registers[src2]);
-        if (b == 0) {
-            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Division by zero");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) / b);
-        DISPATCH();
-    }
-
-LABEL_OP_MOD_I32_R: {
-        uint8_t dst = READ_BYTE();
-        uint8_t src1 = READ_BYTE();
-        uint8_t src2 = READ_BYTE();
-        if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        int32_t b = AS_I32(vm.registers[src2]);
-        if (b == 0) {
-            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Division by zero");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) % b);
-        DISPATCH();
-    }
-
-LABEL_OP_INC_I32_R: {
-        uint8_t reg = READ_BYTE();
-#if USE_FAST_ARITH
-        vm.registers[reg] = I32_VAL(AS_I32(vm.registers[reg]) + 1);
-#else
-        int32_t val = AS_I32(vm.registers[reg]);
-        int32_t result;
-        if (__builtin_add_overflow(val, 1, &result)) {
-            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Integer overflow");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        vm.registers[reg] = I32_VAL(result);
-#endif
-        DISPATCH();
-    }
-
-LABEL_OP_DEC_I32_R: {
-        uint8_t reg = READ_BYTE();
-#if USE_FAST_ARITH
-        vm.registers[reg] = I32_VAL(AS_I32(vm.registers[reg]) - 1);
-#else
-        int32_t val = AS_I32(vm.registers[reg]);
-        int32_t result;
-        if (__builtin_sub_overflow(val, 1, &result)) {
-            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Integer overflow");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        vm.registers[reg] = I32_VAL(result);
-#endif
-        DISPATCH();
-    }
-
-LABEL_OP_ADD_I64_R: {
+    LABEL_OP_LT_I64_R: {
         uint8_t dst = READ_BYTE();
         uint8_t src1 = READ_BYTE();
         uint8_t src2 = READ_BYTE();
@@ -655,22 +1263,11 @@ LABEL_OP_ADD_I64_R: {
             runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i64");
             RETURN(INTERPRET_RUNTIME_ERROR);
         }
-        int64_t a = AS_I64(vm.registers[src1]);
-        int64_t b = AS_I64(vm.registers[src2]);
-#if USE_FAST_ARITH
-        vm.registers[dst] = I64_VAL(a + b);
-#else
-        int64_t result;
-        if (__builtin_add_overflow(a, b, &result)) {
-            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Integer overflow");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        vm.registers[dst] = I64_VAL(result);
-#endif
+        vm.registers[dst] = BOOL_VAL(AS_I64(vm.registers[src1]) < AS_I64(vm.registers[src2]));
         DISPATCH();
     }
 
-LABEL_OP_SUB_I64_R: {
+    LABEL_OP_LE_I64_R: {
         uint8_t dst = READ_BYTE();
         uint8_t src1 = READ_BYTE();
         uint8_t src2 = READ_BYTE();
@@ -678,22 +1275,11 @@ LABEL_OP_SUB_I64_R: {
             runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i64");
             RETURN(INTERPRET_RUNTIME_ERROR);
         }
-        int64_t a = AS_I64(vm.registers[src1]);
-        int64_t b = AS_I64(vm.registers[src2]);
-#if USE_FAST_ARITH
-        vm.registers[dst] = I64_VAL(a - b);
-#else
-        int64_t result;
-        if (__builtin_sub_overflow(a, b, &result)) {
-            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Integer overflow");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        vm.registers[dst] = I64_VAL(result);
-#endif
+        vm.registers[dst] = BOOL_VAL(AS_I64(vm.registers[src1]) <= AS_I64(vm.registers[src2]));
         DISPATCH();
     }
 
-LABEL_OP_MUL_I64_R: {
+    LABEL_OP_GT_I64_R: {
         uint8_t dst = READ_BYTE();
         uint8_t src1 = READ_BYTE();
         uint8_t src2 = READ_BYTE();
@@ -701,22 +1287,11 @@ LABEL_OP_MUL_I64_R: {
             runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i64");
             RETURN(INTERPRET_RUNTIME_ERROR);
         }
-        int64_t a = AS_I64(vm.registers[src1]);
-        int64_t b = AS_I64(vm.registers[src2]);
-#if USE_FAST_ARITH
-        vm.registers[dst] = I64_VAL(a * b);
-#else
-        int64_t result;
-        if (__builtin_mul_overflow(a, b, &result)) {
-            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Integer overflow");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        vm.registers[dst] = I64_VAL(result);
-#endif
+        vm.registers[dst] = BOOL_VAL(AS_I64(vm.registers[src1]) > AS_I64(vm.registers[src2]));
         DISPATCH();
     }
 
-LABEL_OP_DIV_I64_R: {
+    LABEL_OP_GE_I64_R: {
         uint8_t dst = READ_BYTE();
         uint8_t src1 = READ_BYTE();
         uint8_t src2 = READ_BYTE();
@@ -724,33 +1299,11 @@ LABEL_OP_DIV_I64_R: {
             runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i64");
             RETURN(INTERPRET_RUNTIME_ERROR);
         }
-        int64_t b = AS_I64(vm.registers[src2]);
-        if (b == 0) {
-            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Division by zero");
-            RETURN(INTERPRET_RUNTIME_ERROR);
+            vm.registers[dst] = BOOL_VAL(AS_I64(vm.registers[src1]) >= AS_I64(vm.registers[src2]));
+            DISPATCH();
         }
-        vm.registers[dst] = I64_VAL(AS_I64(vm.registers[src1]) / b);
-        DISPATCH();
-    }
 
-LABEL_OP_MOD_I64_R: {
-        uint8_t dst = READ_BYTE();
-        uint8_t src1 = READ_BYTE();
-        uint8_t src2 = READ_BYTE();
-        if (!IS_I64(vm.registers[src1]) || !IS_I64(vm.registers[src2])) {
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i64");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        int64_t b = AS_I64(vm.registers[src2]);
-        if (b == 0) {
-            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Division by zero");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        vm.registers[dst] = I64_VAL(AS_I64(vm.registers[src1]) % b);
-        DISPATCH();
-    }
-
-LABEL_OP_ADD_U32_R: {
+    LABEL_OP_LT_U32_R: {
         uint8_t dst = READ_BYTE();
         uint8_t src1 = READ_BYTE();
         uint8_t src2 = READ_BYTE();
@@ -758,11 +1311,11 @@ LABEL_OP_ADD_U32_R: {
             runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be u32");
             RETURN(INTERPRET_RUNTIME_ERROR);
         }
-        vm.registers[dst] = U32_VAL(AS_U32(vm.registers[src1]) + AS_U32(vm.registers[src2]));
+        vm.registers[dst] = BOOL_VAL(AS_U32(vm.registers[src1]) < AS_U32(vm.registers[src2]));
         DISPATCH();
     }
 
-LABEL_OP_SUB_U32_R: {
+    LABEL_OP_LE_U32_R: {
         uint8_t dst = READ_BYTE();
         uint8_t src1 = READ_BYTE();
         uint8_t src2 = READ_BYTE();
@@ -770,11 +1323,11 @@ LABEL_OP_SUB_U32_R: {
             runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be u32");
             RETURN(INTERPRET_RUNTIME_ERROR);
         }
-        vm.registers[dst] = U32_VAL(AS_U32(vm.registers[src1]) - AS_U32(vm.registers[src2]));
+        vm.registers[dst] = BOOL_VAL(AS_U32(vm.registers[src1]) <= AS_U32(vm.registers[src2]));
         DISPATCH();
     }
 
-LABEL_OP_MUL_U32_R: {
+    LABEL_OP_GT_U32_R: {
         uint8_t dst = READ_BYTE();
         uint8_t src1 = READ_BYTE();
         uint8_t src2 = READ_BYTE();
@@ -782,11 +1335,11 @@ LABEL_OP_MUL_U32_R: {
             runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be u32");
             RETURN(INTERPRET_RUNTIME_ERROR);
         }
-        vm.registers[dst] = U32_VAL(AS_U32(vm.registers[src1]) * AS_U32(vm.registers[src2]));
+        vm.registers[dst] = BOOL_VAL(AS_U32(vm.registers[src1]) > AS_U32(vm.registers[src2]));
         DISPATCH();
     }
 
-LABEL_OP_DIV_U32_R: {
+    LABEL_OP_GE_U32_R: {
         uint8_t dst = READ_BYTE();
         uint8_t src1 = READ_BYTE();
         uint8_t src2 = READ_BYTE();
@@ -794,3152 +1347,2582 @@ LABEL_OP_DIV_U32_R: {
             runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be u32");
             RETURN(INTERPRET_RUNTIME_ERROR);
         }
-        uint32_t b = AS_U32(vm.registers[src2]);
-        if (b == 0) {
-            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Division by zero");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        vm.registers[dst] = U32_VAL(AS_U32(vm.registers[src1]) / b);
+        vm.registers[dst] = BOOL_VAL(AS_U32(vm.registers[src1]) >= AS_U32(vm.registers[src2]));
         DISPATCH();
     }
 
-LABEL_OP_MOD_U32_R: {
+    LABEL_OP_LT_U64_R: {
         uint8_t dst = READ_BYTE();
         uint8_t src1 = READ_BYTE();
         uint8_t src2 = READ_BYTE();
-        if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be u32");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        uint32_t b = AS_U32(vm.registers[src2]);
-        if (b == 0) {
-            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Division by zero");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        vm.registers[dst] = U32_VAL(AS_U32(vm.registers[src1]) % b);
-        DISPATCH();
-    }
-
-LABEL_OP_ADD_U64_R: {
-        uint8_t dst = READ_BYTE();
-        uint8_t src1 = READ_BYTE();
-        uint8_t src2 = READ_BYTE();
-
         if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                         "Operands must be u64");
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be u64");
             RETURN(INTERPRET_RUNTIME_ERROR);
         }
-
-        uint64_t a = AS_U64(vm.registers[src1]);
-        uint64_t b = AS_U64(vm.registers[src2]);
-        
-        // Check for overflow: if a + b < a, then overflow occurred
-        if (UINT64_MAX - a < b) {
-            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
-                         "u64 addition overflow");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-
-        vm.registers[dst] = U64_VAL(a + b);
+        vm.registers[dst] = BOOL_VAL(AS_U64(vm.registers[src1]) < AS_U64(vm.registers[src2]));
         DISPATCH();
     }
 
-LABEL_OP_SUB_U64_R: {
+    LABEL_OP_LE_U64_R: {
         uint8_t dst = READ_BYTE();
         uint8_t src1 = READ_BYTE();
         uint8_t src2 = READ_BYTE();
-
         if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                         "Operands must be u64");
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be u64");
             RETURN(INTERPRET_RUNTIME_ERROR);
         }
-
-        uint64_t a = AS_U64(vm.registers[src1]);
-        uint64_t b = AS_U64(vm.registers[src2]);
-        
-        // Check for underflow: if a < b, then underflow would occur
-        if (a < b) {
-            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
-                         "u64 subtraction underflow");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-
-        vm.registers[dst] = U64_VAL(a - b);
+        vm.registers[dst] = BOOL_VAL(AS_U64(vm.registers[src1]) <= AS_U64(vm.registers[src2]));
         DISPATCH();
     }
 
-LABEL_OP_MUL_U64_R: {
+    LABEL_OP_GT_U64_R: {
         uint8_t dst = READ_BYTE();
         uint8_t src1 = READ_BYTE();
         uint8_t src2 = READ_BYTE();
-
         if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                         "Operands must be u64");
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be u64");
             RETURN(INTERPRET_RUNTIME_ERROR);
         }
-
-        uint64_t a = AS_U64(vm.registers[src1]);
-        uint64_t b = AS_U64(vm.registers[src2]);
-        
-        // Check for multiplication overflow: if a != 0 && result / a != b
-        if (a != 0 && b > UINT64_MAX / a) {
-            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
-                         "u64 multiplication overflow");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-
-        vm.registers[dst] = U64_VAL(a * b);
+        vm.registers[dst] = BOOL_VAL(AS_U64(vm.registers[src1]) > AS_U64(vm.registers[src2]));
         DISPATCH();
     }
 
-LABEL_OP_DIV_U64_R: {
+    LABEL_OP_GE_U64_R: {
         uint8_t dst = READ_BYTE();
         uint8_t src1 = READ_BYTE();
         uint8_t src2 = READ_BYTE();
-
         if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                         "Operands must be u64");
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be u64");
             RETURN(INTERPRET_RUNTIME_ERROR);
         }
-
-        uint64_t b = AS_U64(vm.registers[src2]);
-        if (b == 0) {
-            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
-                         "Division by zero");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-
-        vm.registers[dst] = U64_VAL(AS_U64(vm.registers[src1]) / b);
+        vm.registers[dst] = BOOL_VAL(AS_U64(vm.registers[src1]) >= AS_U64(vm.registers[src2]));
         DISPATCH();
     }
 
-LABEL_OP_MOD_U64_R: {
+    LABEL_OP_AND_BOOL_R: {
         uint8_t dst = READ_BYTE();
         uint8_t src1 = READ_BYTE();
         uint8_t src2 = READ_BYTE();
-
-        if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                         "Operands must be u64");
+        if (!IS_BOOL(vm.registers[src1]) || !IS_BOOL(vm.registers[src2])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be bool");
             RETURN(INTERPRET_RUNTIME_ERROR);
         }
-
-        uint64_t b = AS_U64(vm.registers[src2]);
-        if (b == 0) {
-            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
-                         "Division by zero");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-
-        vm.registers[dst] = U64_VAL(AS_U64(vm.registers[src1]) % b);
+        vm.registers[dst] = BOOL_VAL(AS_BOOL(vm.registers[src1]) && AS_BOOL(vm.registers[src2]));
         DISPATCH();
     }
 
-LABEL_OP_I32_TO_I64_R: {
+    LABEL_OP_OR_BOOL_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t src1 = READ_BYTE();
+        uint8_t src2 = READ_BYTE();
+        if (!IS_BOOL(vm.registers[src1]) || !IS_BOOL(vm.registers[src2])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be bool");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        vm.registers[dst] = BOOL_VAL(AS_BOOL(vm.registers[src1]) || AS_BOOL(vm.registers[src2]));
+        DISPATCH();
+    }
+
+    LABEL_OP_NOT_BOOL_R: {
         uint8_t dst = READ_BYTE();
         uint8_t src = READ_BYTE();
-        if (!IS_I32(vm.registers[src])) {
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Source must be i32");
+        if (!IS_BOOL(vm.registers[src])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operand must be bool");
             RETURN(INTERPRET_RUNTIME_ERROR);
         }
-        vm.registers[dst] = I64_VAL((int64_t)AS_I32(vm.registers[src]));
+        vm.registers[dst] = BOOL_VAL(!AS_BOOL(vm.registers[src]));
         DISPATCH();
     }
 
-LABEL_OP_I32_TO_U32_R: {
-        uint8_t dst = READ_BYTE();
-        uint8_t src = READ_BYTE();
-        if (!IS_I32(vm.registers[src])) {
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Source must be i32");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        vm.registers[dst] = U32_VAL((uint32_t)AS_I32(vm.registers[src]));
-        DISPATCH();
-    }
-
-LABEL_OP_U32_TO_I32_R: {
-        uint8_t dst = READ_BYTE();
-        uint8_t src = READ_BYTE();
-        if (!IS_U32(vm.registers[src])) {
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Source must be u32");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        vm.registers[dst] = I32_VAL((int32_t)AS_U32(vm.registers[src]));
-        DISPATCH();
-    }
-
-// F64 Arithmetic Operations
-LABEL_OP_ADD_F64_R: {
+    LABEL_OP_CONCAT_R: {
         uint8_t dst = READ_BYTE();
         uint8_t src1 = READ_BYTE();
         uint8_t src2 = READ_BYTE();
-        if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
+        if (!IS_STRING(vm.registers[src1]) || !IS_STRING(vm.registers[src2])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be string");
             RETURN(INTERPRET_RUNTIME_ERROR);
         }
-        vm.registers[dst] = F64_VAL(AS_F64(vm.registers[src1]) + AS_F64(vm.registers[src2]));
+        ObjString* a = AS_STRING(vm.registers[src1]);
+        ObjString* b = AS_STRING(vm.registers[src2]);
+        int newLen = a->length + b->length;
+        char* buf = malloc(newLen + 1);
+        memcpy(buf, a->chars, a->length);
+        memcpy(buf + a->length, b->chars, b->length);
+        buf[newLen] = '\0';
+        ObjString* res = allocateString(buf, newLen);
+        free(buf);
+        vm.registers[dst] = STRING_VAL(res);
         DISPATCH();
     }
 
-LABEL_OP_SUB_F64_R: {
-        uint8_t dst = READ_BYTE();
-        uint8_t src1 = READ_BYTE();
-        uint8_t src2 = READ_BYTE();
-        if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
-            RETURN(INTERPRET_RUNTIME_ERROR);
+    LABEL_OP_JUMP: {
+            uint16_t offset = READ_SHORT();
+            vm.ip += offset;
+            DISPATCH();
         }
-        vm.registers[dst] = F64_VAL(AS_F64(vm.registers[src1]) - AS_F64(vm.registers[src2]));
-        DISPATCH();
-    }
 
-LABEL_OP_MUL_F64_R: {
-        uint8_t dst = READ_BYTE();
-        uint8_t src1 = READ_BYTE();
-        uint8_t src2 = READ_BYTE();
-        if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
-            RETURN(INTERPRET_RUNTIME_ERROR);
+    LABEL_OP_JUMP_IF_NOT_R: {
+            uint8_t reg = READ_BYTE();
+            uint16_t offset = READ_SHORT();
+            if (!IS_BOOL(vm.registers[reg])) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Condition must be boolean");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            if (!AS_BOOL(vm.registers[reg])) {
+                vm.ip += offset;
+            }
+            DISPATCH();
         }
-        vm.registers[dst] = F64_VAL(AS_F64(vm.registers[src1]) * AS_F64(vm.registers[src2]));
-        DISPATCH();
-    }
 
-LABEL_OP_DIV_F64_R: {
-        uint8_t dst = READ_BYTE();
-        uint8_t src1 = READ_BYTE();
-        uint8_t src2 = READ_BYTE();
-        if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        double a = AS_F64(vm.registers[src1]);
-        double b = AS_F64(vm.registers[src2]);
-        
-        // IEEE 754 compliant: division by zero produces infinity, not error
-        double result = a / b;
-        
-        // The result may be infinity, -infinity, or NaN
-        // These are valid f64 values according to IEEE 754
-        vm.registers[dst] = F64_VAL(result);
-        DISPATCH();
-    }
-
-// Bitwise Operations
-LABEL_OP_AND_I32_R: {
-        uint8_t dst = READ_BYTE();
-        uint8_t src1 = READ_BYTE();
-        uint8_t src2 = READ_BYTE();
-        if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) & AS_I32(vm.registers[src2]));
-        DISPATCH();
-    }
-
-LABEL_OP_OR_I32_R: {
-        uint8_t dst = READ_BYTE();
-        uint8_t src1 = READ_BYTE();
-        uint8_t src2 = READ_BYTE();
-        if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) | AS_I32(vm.registers[src2]));
-        DISPATCH();
-    }
-
-LABEL_OP_XOR_I32_R: {
-        uint8_t dst = READ_BYTE();
-        uint8_t src1 = READ_BYTE();
-        uint8_t src2 = READ_BYTE();
-        if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) ^ AS_I32(vm.registers[src2]));
-        DISPATCH();
-    }
-
-LABEL_OP_NOT_I32_R: {
-        uint8_t dst = READ_BYTE();
-        uint8_t src = READ_BYTE();
-        if (!IS_I32(vm.registers[src])) {
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operand must be i32");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        vm.registers[dst] = I32_VAL(~AS_I32(vm.registers[src]));
-        DISPATCH();
-    }
-
-LABEL_OP_SHL_I32_R: {
-        uint8_t dst = READ_BYTE();
-        uint8_t src1 = READ_BYTE();
-        uint8_t src2 = READ_BYTE();
-        if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) << AS_I32(vm.registers[src2]));
-        DISPATCH();
-    }
-
-LABEL_OP_SHR_I32_R: {
-        uint8_t dst = READ_BYTE();
-        uint8_t src1 = READ_BYTE();
-        uint8_t src2 = READ_BYTE();
-        if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) >> AS_I32(vm.registers[src2]));
-        DISPATCH();
-    }
-
-// F64 Comparison Operations
-LABEL_OP_LT_F64_R: {
-        uint8_t dst = READ_BYTE();
-        uint8_t src1 = READ_BYTE();
-        uint8_t src2 = READ_BYTE();
-        if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        vm.registers[dst] = BOOL_VAL(AS_F64(vm.registers[src1]) < AS_F64(vm.registers[src2]));
-        DISPATCH();
-    }
-
-LABEL_OP_LE_F64_R: {
-        uint8_t dst = READ_BYTE();
-        uint8_t src1 = READ_BYTE();
-        uint8_t src2 = READ_BYTE();
-        if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        vm.registers[dst] = BOOL_VAL(AS_F64(vm.registers[src1]) <= AS_F64(vm.registers[src2]));
-        DISPATCH();
-    }
-
-LABEL_OP_GT_F64_R: {
-        uint8_t dst = READ_BYTE();
-        uint8_t src1 = READ_BYTE();
-        uint8_t src2 = READ_BYTE();
-        if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        vm.registers[dst] = BOOL_VAL(AS_F64(vm.registers[src1]) > AS_F64(vm.registers[src2]));
-        DISPATCH();
-    }
-
-LABEL_OP_GE_F64_R: {
-        uint8_t dst = READ_BYTE();
-        uint8_t src1 = READ_BYTE();
-        uint8_t src2 = READ_BYTE();
-        if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        vm.registers[dst] = BOOL_VAL(AS_F64(vm.registers[src1]) >= AS_F64(vm.registers[src2]));
-        DISPATCH();
-    }
-
-// F64 Type Conversion Operations
-LABEL_OP_I32_TO_F64_R: {
-        uint8_t dst = READ_BYTE();
-        uint8_t src = READ_BYTE();
-        if (!IS_I32(vm.registers[src])) {
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Source must be i32");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        vm.registers[dst] = F64_VAL((double)AS_I32(vm.registers[src]));
-        DISPATCH();
-    }
-
-LABEL_OP_I64_TO_F64_R: {
-        uint8_t dst = READ_BYTE();
-        uint8_t src = READ_BYTE();
-        if (!IS_I64(vm.registers[src])) {
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Source must be i64");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        vm.registers[dst] = F64_VAL((double)AS_I64(vm.registers[src]));
-        DISPATCH();
-    }
-
-LABEL_OP_F64_TO_I32_R: {
-        uint8_t dst = READ_BYTE();
-        uint8_t src = READ_BYTE();
-        if (!IS_F64(vm.registers[src])) {
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Source must be f64");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        vm.registers[dst] = I32_VAL((int32_t)AS_F64(vm.registers[src]));
-        DISPATCH();
-    }
-
-LABEL_OP_F64_TO_I64_R: {
-        uint8_t dst = READ_BYTE();
-        uint8_t src = READ_BYTE();
-        if (!IS_F64(vm.registers[src])) {
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Source must be f64");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        vm.registers[dst] = I64_VAL((int64_t)AS_F64(vm.registers[src]));
-        DISPATCH();
-    }
-
-LABEL_OP_LT_I32_R: {
-        uint8_t dst = READ_BYTE();
-        uint8_t src1 = READ_BYTE();
-        uint8_t src2 = READ_BYTE();
-        if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        vm.registers[dst] = BOOL_VAL(AS_I32(vm.registers[src1]) < AS_I32(vm.registers[src2]));
-        DISPATCH();
-    }
-
-LABEL_OP_EQ_R: {
-    uint8_t dst = READ_BYTE();
-    uint8_t src1 = READ_BYTE();
-    uint8_t src2 = READ_BYTE();
-    vm.registers[dst] = BOOL_VAL(valuesEqual(vm.registers[src1], vm.registers[src2]));
-    DISPATCH();
-}
-
-LABEL_OP_NE_R: {
-    uint8_t dst = READ_BYTE();
-    uint8_t src1 = READ_BYTE();
-    uint8_t src2 = READ_BYTE();
-    vm.registers[dst] = BOOL_VAL(!valuesEqual(vm.registers[src1], vm.registers[src2]));
-    DISPATCH();
-}
-
-LABEL_OP_LE_I32_R: {
-    uint8_t dst = READ_BYTE();
-    uint8_t src1 = READ_BYTE();
-    uint8_t src2 = READ_BYTE();
-    if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
-        RETURN(INTERPRET_RUNTIME_ERROR);
-    }
-    vm.registers[dst] = BOOL_VAL(AS_I32(vm.registers[src1]) <= AS_I32(vm.registers[src2]));
-    DISPATCH();
-}
-
-LABEL_OP_GT_I32_R: {
-    uint8_t dst = READ_BYTE();
-    uint8_t src1 = READ_BYTE();
-    uint8_t src2 = READ_BYTE();
-    if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
-        RETURN(INTERPRET_RUNTIME_ERROR);
-    }
-    vm.registers[dst] = BOOL_VAL(AS_I32(vm.registers[src1]) > AS_I32(vm.registers[src2]));
-    DISPATCH();
-}
-
-LABEL_OP_GE_I32_R: {
-    uint8_t dst = READ_BYTE();
-    uint8_t src1 = READ_BYTE();
-    uint8_t src2 = READ_BYTE();
-    if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
-        RETURN(INTERPRET_RUNTIME_ERROR);
-    }
-    vm.registers[dst] = BOOL_VAL(AS_I32(vm.registers[src1]) >= AS_I32(vm.registers[src2]));
-    DISPATCH();
-}
-
-LABEL_OP_LT_I64_R: {
-    uint8_t dst = READ_BYTE();
-    uint8_t src1 = READ_BYTE();
-    uint8_t src2 = READ_BYTE();
-    if (!IS_I64(vm.registers[src1]) || !IS_I64(vm.registers[src2])) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i64");
-        RETURN(INTERPRET_RUNTIME_ERROR);
-    }
-    vm.registers[dst] = BOOL_VAL(AS_I64(vm.registers[src1]) < AS_I64(vm.registers[src2]));
-    DISPATCH();
-}
-
-LABEL_OP_LE_I64_R: {
-    uint8_t dst = READ_BYTE();
-    uint8_t src1 = READ_BYTE();
-    uint8_t src2 = READ_BYTE();
-    if (!IS_I64(vm.registers[src1]) || !IS_I64(vm.registers[src2])) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i64");
-        RETURN(INTERPRET_RUNTIME_ERROR);
-    }
-    vm.registers[dst] = BOOL_VAL(AS_I64(vm.registers[src1]) <= AS_I64(vm.registers[src2]));
-    DISPATCH();
-}
-
-LABEL_OP_GT_I64_R: {
-    uint8_t dst = READ_BYTE();
-    uint8_t src1 = READ_BYTE();
-    uint8_t src2 = READ_BYTE();
-    if (!IS_I64(vm.registers[src1]) || !IS_I64(vm.registers[src2])) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i64");
-        RETURN(INTERPRET_RUNTIME_ERROR);
-    }
-    vm.registers[dst] = BOOL_VAL(AS_I64(vm.registers[src1]) > AS_I64(vm.registers[src2]));
-    DISPATCH();
-}
-
-LABEL_OP_GE_I64_R: {
-    uint8_t dst = READ_BYTE();
-    uint8_t src1 = READ_BYTE();
-    uint8_t src2 = READ_BYTE();
-    if (!IS_I64(vm.registers[src1]) || !IS_I64(vm.registers[src2])) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i64");
-        RETURN(INTERPRET_RUNTIME_ERROR);
-    }
-        vm.registers[dst] = BOOL_VAL(AS_I64(vm.registers[src1]) >= AS_I64(vm.registers[src2]));
-        DISPATCH();
-    }
-
-LABEL_OP_LT_U32_R: {
-    uint8_t dst = READ_BYTE();
-    uint8_t src1 = READ_BYTE();
-    uint8_t src2 = READ_BYTE();
-    if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be u32");
-        RETURN(INTERPRET_RUNTIME_ERROR);
-    }
-    vm.registers[dst] = BOOL_VAL(AS_U32(vm.registers[src1]) < AS_U32(vm.registers[src2]));
-    DISPATCH();
-}
-
-LABEL_OP_LE_U32_R: {
-    uint8_t dst = READ_BYTE();
-    uint8_t src1 = READ_BYTE();
-    uint8_t src2 = READ_BYTE();
-    if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be u32");
-        RETURN(INTERPRET_RUNTIME_ERROR);
-    }
-    vm.registers[dst] = BOOL_VAL(AS_U32(vm.registers[src1]) <= AS_U32(vm.registers[src2]));
-    DISPATCH();
-}
-
-LABEL_OP_GT_U32_R: {
-    uint8_t dst = READ_BYTE();
-    uint8_t src1 = READ_BYTE();
-    uint8_t src2 = READ_BYTE();
-    if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be u32");
-        RETURN(INTERPRET_RUNTIME_ERROR);
-    }
-    vm.registers[dst] = BOOL_VAL(AS_U32(vm.registers[src1]) > AS_U32(vm.registers[src2]));
-    DISPATCH();
-}
-
-LABEL_OP_GE_U32_R: {
-    uint8_t dst = READ_BYTE();
-    uint8_t src1 = READ_BYTE();
-    uint8_t src2 = READ_BYTE();
-    if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be u32");
-        RETURN(INTERPRET_RUNTIME_ERROR);
-    }
-    vm.registers[dst] = BOOL_VAL(AS_U32(vm.registers[src1]) >= AS_U32(vm.registers[src2]));
-    DISPATCH();
-}
-
-LABEL_OP_LT_U64_R: {
-    uint8_t dst = READ_BYTE();
-    uint8_t src1 = READ_BYTE();
-    uint8_t src2 = READ_BYTE();
-    if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be u64");
-        RETURN(INTERPRET_RUNTIME_ERROR);
-    }
-    vm.registers[dst] = BOOL_VAL(AS_U64(vm.registers[src1]) < AS_U64(vm.registers[src2]));
-    DISPATCH();
-}
-
-LABEL_OP_LE_U64_R: {
-    uint8_t dst = READ_BYTE();
-    uint8_t src1 = READ_BYTE();
-    uint8_t src2 = READ_BYTE();
-    if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be u64");
-        RETURN(INTERPRET_RUNTIME_ERROR);
-    }
-    vm.registers[dst] = BOOL_VAL(AS_U64(vm.registers[src1]) <= AS_U64(vm.registers[src2]));
-    DISPATCH();
-}
-
-LABEL_OP_GT_U64_R: {
-    uint8_t dst = READ_BYTE();
-    uint8_t src1 = READ_BYTE();
-    uint8_t src2 = READ_BYTE();
-    if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be u64");
-        RETURN(INTERPRET_RUNTIME_ERROR);
-    }
-    vm.registers[dst] = BOOL_VAL(AS_U64(vm.registers[src1]) > AS_U64(vm.registers[src2]));
-    DISPATCH();
-}
-
-LABEL_OP_GE_U64_R: {
-    uint8_t dst = READ_BYTE();
-    uint8_t src1 = READ_BYTE();
-    uint8_t src2 = READ_BYTE();
-    if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be u64");
-        RETURN(INTERPRET_RUNTIME_ERROR);
-    }
-    vm.registers[dst] = BOOL_VAL(AS_U64(vm.registers[src1]) >= AS_U64(vm.registers[src2]));
-    DISPATCH();
-}
-
-LABEL_OP_AND_BOOL_R: {
-    uint8_t dst = READ_BYTE();
-    uint8_t src1 = READ_BYTE();
-    uint8_t src2 = READ_BYTE();
-    if (!IS_BOOL(vm.registers[src1]) || !IS_BOOL(vm.registers[src2])) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be bool");
-        RETURN(INTERPRET_RUNTIME_ERROR);
-    }
-    vm.registers[dst] = BOOL_VAL(AS_BOOL(vm.registers[src1]) && AS_BOOL(vm.registers[src2]));
-    DISPATCH();
-}
-
-LABEL_OP_OR_BOOL_R: {
-    uint8_t dst = READ_BYTE();
-    uint8_t src1 = READ_BYTE();
-    uint8_t src2 = READ_BYTE();
-    if (!IS_BOOL(vm.registers[src1]) || !IS_BOOL(vm.registers[src2])) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be bool");
-        RETURN(INTERPRET_RUNTIME_ERROR);
-    }
-    vm.registers[dst] = BOOL_VAL(AS_BOOL(vm.registers[src1]) || AS_BOOL(vm.registers[src2]));
-    DISPATCH();
-}
-
-LABEL_OP_NOT_BOOL_R: {
-    uint8_t dst = READ_BYTE();
-    uint8_t src = READ_BYTE();
-    if (!IS_BOOL(vm.registers[src])) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operand must be bool");
-        RETURN(INTERPRET_RUNTIME_ERROR);
-    }
-    vm.registers[dst] = BOOL_VAL(!AS_BOOL(vm.registers[src]));
-    DISPATCH();
-}
-
-LABEL_OP_CONCAT_R: {
-    uint8_t dst = READ_BYTE();
-    uint8_t src1 = READ_BYTE();
-    uint8_t src2 = READ_BYTE();
-    if (!IS_STRING(vm.registers[src1]) || !IS_STRING(vm.registers[src2])) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be string");
-        RETURN(INTERPRET_RUNTIME_ERROR);
-    }
-    ObjString* a = AS_STRING(vm.registers[src1]);
-    ObjString* b = AS_STRING(vm.registers[src2]);
-    int newLen = a->length + b->length;
-    char* buf = malloc(newLen + 1);
-    memcpy(buf, a->chars, a->length);
-    memcpy(buf + a->length, b->chars, b->length);
-    buf[newLen] = '\0';
-    ObjString* res = allocateString(buf, newLen);
-    free(buf);
-    vm.registers[dst] = STRING_VAL(res);
-    DISPATCH();
-}
-
-LABEL_OP_JUMP: {
+    LABEL_OP_LOOP: {
         uint16_t offset = READ_SHORT();
+        vm.ip -= offset;
+        DISPATCH();
+    }
+
+    LABEL_OP_GET_ITER_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t src = READ_BYTE();
+        Value v = vm.registers[src];
+        if (!IS_RANGE_ITERATOR(v)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Value not iterable");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        vm.registers[dst] = v;
+        DISPATCH();
+    }
+
+    LABEL_OP_ITER_NEXT_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t iterReg = READ_BYTE();
+        uint8_t hasReg = READ_BYTE();
+        if (!IS_RANGE_ITERATOR(vm.registers[iterReg])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Invalid iterator");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        ObjRangeIterator* it = AS_RANGE_ITERATOR(vm.registers[iterReg]);
+        if (it->current >= it->end) {
+            vm.registers[hasReg] = BOOL_VAL(false);
+        } else {
+            vm.registers[dst] = I64_VAL(it->current);
+            it->current++;
+            vm.registers[hasReg] = BOOL_VAL(true);
+        }
+        DISPATCH();
+    }
+
+    LABEL_OP_PRINT_MULTI_R: {
+            uint8_t first = READ_BYTE();
+            uint8_t count = READ_BYTE();
+            uint8_t nl = READ_BYTE();
+            builtin_print(&vm.registers[first], count, nl != 0);
+            DISPATCH();
+        }
+
+    LABEL_OP_PRINT_R: {
+            uint8_t reg = READ_BYTE();
+            
+            // Check if this is a typed register first (reg is uint8_t, so always < 256)
+            if (vm.typed_regs.reg_types[reg] != REG_TYPE_NONE) {
+                switch (vm.typed_regs.reg_types[reg]) {
+                    case REG_TYPE_I32:
+                        printf("%d", vm.typed_regs.i32_regs[reg]);
+                        break;
+                    case REG_TYPE_I64:
+                        printf("%lld", (long long)vm.typed_regs.i64_regs[reg]);
+                        break;
+                    case REG_TYPE_F64:
+                        printf("%g", vm.typed_regs.f64_regs[reg]);
+                        break;
+                    default:
+                        printValue(vm.registers[reg]);
+                        break;
+                }
+            } else {
+                printValue(vm.registers[reg]);
+            }
+            
+            printf("\n");
+            fflush(stdout);
+            DISPATCH();
+        }
+
+    LABEL_OP_PRINT_NO_NL_R: {
+            uint8_t reg = READ_BYTE();
+            printValue(vm.registers[reg]);
+            fflush(stdout);
+            DISPATCH();
+        }
+
+    LABEL_OP_CALL_R: {
+            uint8_t funcReg = READ_BYTE();
+            uint8_t firstArgReg = READ_BYTE();
+            uint8_t argCount = READ_BYTE();
+            uint8_t resultReg = READ_BYTE();
+            
+            Value funcValue = vm.registers[funcReg];
+            
+            if (IS_I32(funcValue)) {
+                int functionIndex = AS_I32(funcValue);
+                
+                if (functionIndex < 0 || functionIndex >= vm.functionCount) {
+                    vm.registers[resultReg] = NIL_VAL;
+                    DISPATCH();
+                }
+                
+                Function* function = &vm.functions[functionIndex];
+                
+                // Check arity
+                if (argCount != function->arity) {
+                    vm.registers[resultReg] = NIL_VAL;
+                    DISPATCH();
+                }
+                
+                // Check if we have room for another call frame
+                if (vm.frameCount >= FRAMES_MAX) {
+                    vm.registers[resultReg] = NIL_VAL;
+                    DISPATCH();
+                }
+                
+                // Create new call frame
+                CallFrame* frame = &vm.frames[vm.frameCount++];
+                frame->returnAddress = vm.ip;
+                frame->previousChunk = vm.chunk;
+                frame->baseRegister = resultReg;
+                frame->registerCount = argCount;
+                frame->functionIndex = functionIndex;
+                
+                // Save registers that will be overwritten by parameters
+                Value savedRegisters[256];
+                for (int i = 0; i < argCount; i++) {
+                    savedRegisters[i] = vm.registers[i];
+                }
+                
+                // Copy arguments to function's parameter registers
+                for (int i = 0; i < argCount; i++) {
+                    vm.registers[i] = vm.registers[firstArgReg + i];
+                }
+                
+                // Store saved registers in call frame for restoration
+                frame->savedRegisterCount = argCount;
+                for (int i = 0; i < argCount; i++) {
+                    frame->savedRegisters[i] = savedRegisters[i];
+                }
+                
+                // Switch to function's chunk
+                vm.chunk = function->chunk;
+                vm.ip = function->chunk->code + function->start;
+                
+            } else {
+                vm.registers[resultReg] = NIL_VAL;
+            }
+            
+            DISPATCH();
+        }
+
+    LABEL_OP_RETURN_R: {
+            uint8_t reg = READ_BYTE();
+            Value returnValue = vm.registers[reg];
+            if (vm.frameCount > 0) {
+                CallFrame* frame = &vm.frames[--vm.frameCount];
+                
+                // Restore saved registers
+                for (int i = 0; i < frame->savedRegisterCount; i++) {
+                    vm.registers[i] = frame->savedRegisters[i];
+                }
+                
+                vm.chunk = frame->previousChunk;
+                vm.ip = frame->returnAddress;
+                vm.registers[frame->baseRegister] = returnValue;
+            } else {
+                vm.lastExecutionTime = get_time_vm() - start_time;
+                RETURN(INTERPRET_OK);
+            }
+            DISPATCH();
+        }
+
+    LABEL_OP_RETURN_VOID: {
+            if (vm.frameCount > 0) {
+                CallFrame* frame = &vm.frames[--vm.frameCount];
+                vm.chunk = frame->previousChunk;
+                vm.ip = frame->returnAddress;
+            } else {
+                vm.lastExecutionTime = get_time_vm() - start_time;
+                RETURN(INTERPRET_OK);
+            }
+            DISPATCH();
+        }
+
+    // Short jump optimizations for performance
+    LABEL_OP_JUMP_SHORT: {
+        uint8_t offset = READ_BYTE();
         vm.ip += offset;
         DISPATCH();
     }
 
-LABEL_OP_JUMP_IF_NOT_R: {
+    LABEL_OP_JUMP_BACK_SHORT: {
+        uint8_t offset = READ_BYTE();
+        vm.ip -= offset;
+        DISPATCH();
+    }
+
+    LABEL_OP_JUMP_IF_NOT_SHORT: {
         uint8_t reg = READ_BYTE();
-        uint16_t offset = READ_SHORT();
+        uint8_t offset = READ_BYTE();
+        
         if (!IS_BOOL(vm.registers[reg])) {
             runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Condition must be boolean");
             RETURN(INTERPRET_RUNTIME_ERROR);
         }
+        
         if (!AS_BOOL(vm.registers[reg])) {
             vm.ip += offset;
         }
         DISPATCH();
     }
 
-LABEL_OP_LOOP: {
-    uint16_t offset = READ_SHORT();
-    vm.ip -= offset;
-    DISPATCH();
-}
-
-LABEL_OP_GET_ITER_R: {
-    uint8_t dst = READ_BYTE();
-    uint8_t src = READ_BYTE();
-    Value v = vm.registers[src];
-    if (!IS_RANGE_ITERATOR(v)) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Value not iterable");
-        RETURN(INTERPRET_RUNTIME_ERROR);
-    }
-    vm.registers[dst] = v;
-    DISPATCH();
-}
-
-LABEL_OP_ITER_NEXT_R: {
-    uint8_t dst = READ_BYTE();
-    uint8_t iterReg = READ_BYTE();
-    uint8_t hasReg = READ_BYTE();
-    if (!IS_RANGE_ITERATOR(vm.registers[iterReg])) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Invalid iterator");
-        RETURN(INTERPRET_RUNTIME_ERROR);
-    }
-    ObjRangeIterator* it = AS_RANGE_ITERATOR(vm.registers[iterReg]);
-    if (it->current >= it->end) {
-        vm.registers[hasReg] = BOOL_VAL(false);
-    } else {
-        vm.registers[dst] = I64_VAL(it->current);
-        it->current++;
-        vm.registers[hasReg] = BOOL_VAL(true);
-    }
-    DISPATCH();
-}
-
-LABEL_OP_PRINT_MULTI_R: {
-        uint8_t first = READ_BYTE();
-        uint8_t count = READ_BYTE();
-        uint8_t nl = READ_BYTE();
-        builtin_print(&vm.registers[first], count, nl != 0);
+    LABEL_OP_LOOP_SHORT: {
+        uint8_t offset = READ_BYTE();
+        vm.ip -= offset;
         DISPATCH();
     }
 
-LABEL_OP_PRINT_R: {
+    // Typed arithmetic operations for maximum performance (bypass Value boxing)
+    LABEL_OP_ADD_I32_TYPED: {
+        uint8_t dst = *vm.ip++;
+        uint8_t left = *vm.ip++;
+        uint8_t right = *vm.ip++;
+        
+        vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[left] + vm.typed_regs.i32_regs[right];
+        
+        DISPATCH_TYPED();
+    }
+
+    LABEL_OP_SUB_I32_TYPED: {
+        uint8_t dst = *vm.ip++;
+        uint8_t left = *vm.ip++;
+        uint8_t right = *vm.ip++;
+        
+        vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[left] - vm.typed_regs.i32_regs[right];
+        
+        DISPATCH_TYPED();
+    }
+
+    LABEL_OP_MUL_I32_TYPED: {
+        uint8_t dst = *vm.ip++;
+        uint8_t left = *vm.ip++;
+        uint8_t right = *vm.ip++;
+        
+        vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[left] * vm.typed_regs.i32_regs[right];
+        
+        DISPATCH_TYPED();
+    }
+
+    LABEL_OP_DIV_I32_TYPED: {
+        uint8_t dst = *vm.ip++;
+        uint8_t left = *vm.ip++;
+        uint8_t right = *vm.ip++;
+        
+        // Keep zero check for safety, but remove type checks
+        if (vm.typed_regs.i32_regs[right] == 0) {
+            runtimeError(ERROR_RUNTIME, (SrcLocation){NULL, 0, 0}, "Division by zero");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        
+        vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[left] / vm.typed_regs.i32_regs[right];
+        
+        DISPATCH_TYPED();
+    }
+
+    LABEL_OP_MOD_I32_TYPED: {
+        uint8_t dst = *vm.ip++;
+        uint8_t left = *vm.ip++;
+        uint8_t right = *vm.ip++;
+        
+        if (vm.typed_regs.i32_regs[right] == 0) {
+            runtimeError(ERROR_RUNTIME, (SrcLocation){NULL, 0, 0}, "Modulo by zero");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        
+        vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[left] % vm.typed_regs.i32_regs[right];
+        
+        DISPATCH_TYPED();
+    }
+
+    LABEL_OP_ADD_I64_TYPED: {
+        uint8_t dst = *vm.ip++;
+        uint8_t left = *vm.ip++;
+        uint8_t right = *vm.ip++;
+        
+        vm.typed_regs.i64_regs[dst] = vm.typed_regs.i64_regs[left] + vm.typed_regs.i64_regs[right];
+        
+        DISPATCH_TYPED();
+    }
+
+    LABEL_OP_SUB_I64_TYPED: {
+        uint8_t dst = *vm.ip++;
+        uint8_t left = *vm.ip++;
+        uint8_t right = *vm.ip++;
+        
+        vm.typed_regs.i64_regs[dst] = vm.typed_regs.i64_regs[left] - vm.typed_regs.i64_regs[right];
+        
+        DISPATCH_TYPED();
+    }
+
+    LABEL_OP_MUL_I64_TYPED: {
+        uint8_t dst = *vm.ip++;
+        uint8_t left = *vm.ip++;
+        uint8_t right = *vm.ip++;
+        
+        vm.typed_regs.i64_regs[dst] = vm.typed_regs.i64_regs[left] * vm.typed_regs.i64_regs[right];
+        
+        DISPATCH_TYPED();
+    }
+
+    LABEL_OP_DIV_I64_TYPED: {
+        uint8_t dst = *vm.ip++;
+        uint8_t left = *vm.ip++;
+        uint8_t right = *vm.ip++;
+        
+        if (vm.typed_regs.i64_regs[right] == 0) {
+            runtimeError(ERROR_RUNTIME, (SrcLocation){NULL, 0, 0}, "Division by zero");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        
+        vm.typed_regs.i64_regs[dst] = vm.typed_regs.i64_regs[left] / vm.typed_regs.i64_regs[right];
+        
+        DISPATCH_TYPED();
+    }
+
+    LABEL_OP_ADD_F64_TYPED: {
+        uint8_t dst = *vm.ip++;
+        uint8_t left = *vm.ip++;
+        uint8_t right = *vm.ip++;
+        
+        vm.typed_regs.f64_regs[dst] = vm.typed_regs.f64_regs[left] + vm.typed_regs.f64_regs[right];
+        
+        DISPATCH_TYPED();
+    }
+
+    LABEL_OP_SUB_F64_TYPED: {
+        uint8_t dst = *vm.ip++;
+        uint8_t left = *vm.ip++;
+        uint8_t right = *vm.ip++;
+        
+        vm.typed_regs.f64_regs[dst] = vm.typed_regs.f64_regs[left] - vm.typed_regs.f64_regs[right];
+        
+        DISPATCH_TYPED();
+    }
+
+    LABEL_OP_MUL_F64_TYPED: {
+        uint8_t dst = *vm.ip++;
+        uint8_t left = *vm.ip++;
+        uint8_t right = *vm.ip++;
+        
+        vm.typed_regs.f64_regs[dst] = vm.typed_regs.f64_regs[left] * vm.typed_regs.f64_regs[right];
+        
+        DISPATCH_TYPED();
+    }
+
+    LABEL_OP_DIV_F64_TYPED: {
+        uint8_t dst = *vm.ip++;
+        uint8_t left = *vm.ip++;
+        uint8_t right = *vm.ip++;
+        
+        vm.typed_regs.f64_regs[dst] = vm.typed_regs.f64_regs[left] / vm.typed_regs.f64_regs[right];
+        
+        DISPATCH_TYPED();
+    }
+
+    LABEL_OP_LT_I32_TYPED: {
+        uint8_t dst = *vm.ip++;
+        uint8_t left = *vm.ip++;
+        uint8_t right = *vm.ip++;
+        
+        vm.typed_regs.bool_regs[dst] = vm.typed_regs.i32_regs[left] < vm.typed_regs.i32_regs[right];
+        
+        DISPATCH_TYPED();
+    }
+
+    LABEL_OP_LE_I32_TYPED: {
+        uint8_t dst = *vm.ip++;
+        uint8_t left = *vm.ip++;
+        uint8_t right = *vm.ip++;
+        
+        vm.typed_regs.bool_regs[dst] = vm.typed_regs.i32_regs[left] <= vm.typed_regs.i32_regs[right];
+        
+        DISPATCH_TYPED();
+    }
+
+    LABEL_OP_GT_I32_TYPED: {
+        uint8_t dst = *vm.ip++;
+        uint8_t left = *vm.ip++;
+        uint8_t right = *vm.ip++;
+        
+        vm.typed_regs.bool_regs[dst] = vm.typed_regs.i32_regs[left] > vm.typed_regs.i32_regs[right];
+        
+        DISPATCH_TYPED();
+    }
+
+    LABEL_OP_GE_I32_TYPED: {
+        uint8_t dst = *vm.ip++;
+        uint8_t left = *vm.ip++;
+        uint8_t right = *vm.ip++;
+        
+        vm.typed_regs.bool_regs[dst] = vm.typed_regs.i32_regs[left] >= vm.typed_regs.i32_regs[right];
+        
+        DISPATCH_TYPED();
+    }
+
+    LABEL_OP_LOAD_I32_CONST: {
         uint8_t reg = READ_BYTE();
+        uint16_t constantIndex = READ_SHORT();
+        int32_t value = READ_CONSTANT(constantIndex).as.i32;
         
-        // Check if this is a typed register first (reg is uint8_t, so always < 256)
-        if (vm.typed_regs.reg_types[reg] != REG_TYPE_NONE) {
-            switch (vm.typed_regs.reg_types[reg]) {
-                case REG_TYPE_I32:
-                    printf("%d", vm.typed_regs.i32_regs[reg]);
-                    break;
-                case REG_TYPE_I64:
-                    printf("%lld", (long long)vm.typed_regs.i64_regs[reg]);
-                    break;
-                case REG_TYPE_F64:
-                    printf("%g", vm.typed_regs.f64_regs[reg]);
-                    break;
-                default:
-                    printValue(vm.registers[reg]);
-                    break;
-            }
-        } else {
-            printValue(vm.registers[reg]);
-        }
+        vm.typed_regs.i32_regs[reg] = value;
+        vm.typed_regs.reg_types[reg] = REG_TYPE_I32;
         
-        printf("\n");
-        fflush(stdout);
         DISPATCH();
     }
 
-LABEL_OP_PRINT_NO_NL_R: {
+    LABEL_OP_LOAD_I64_CONST: {
         uint8_t reg = READ_BYTE();
-        printValue(vm.registers[reg]);
-        fflush(stdout);
-        DISPATCH();
-    }
-
-LABEL_OP_CALL_R: {
-        uint8_t funcReg = READ_BYTE();
-        uint8_t firstArgReg = READ_BYTE();
-        uint8_t argCount = READ_BYTE();
-        uint8_t resultReg = READ_BYTE();
+        uint16_t constantIndex = READ_SHORT();
+        int64_t value = READ_CONSTANT(constantIndex).as.i64;
         
-        Value funcValue = vm.registers[funcReg];
-        printf("VM CALL: funcReg=%d, firstArgReg=%d, argCount=%d, resultReg=%d\n", 
-               funcReg, firstArgReg, argCount, resultReg);
-        printf("VM CALL: funcValue type=%d, isI32=%s\n", funcValue.type, IS_I32(funcValue) ? "YES" : "NO");
-        
-        if (IS_I32(funcValue)) {
-            int functionIndex = AS_I32(funcValue);
-            printf("VM CALL: functionIndex=%d, vm.functionCount=%d\n", functionIndex, vm.functionCount);
-            
-            if (functionIndex < 0 || functionIndex >= vm.functionCount) {
-                printf("VM CALL: Invalid function index, returning NIL\n");
-                vm.registers[resultReg] = NIL_VAL;
-                DISPATCH();
-            }
-            
-            Function* function = &vm.functions[functionIndex];
-            
-            // Check arity
-            if (argCount != function->arity) {
-                printf("VM CALL: Arity mismatch, returning NIL\n");
-                vm.registers[resultReg] = NIL_VAL;
-                DISPATCH();
-            }
-            
-            // Check if we have room for another call frame
-            if (vm.frameCount >= FRAMES_MAX) {
-                printf("VM CALL: Too many frames, returning NIL\n");
-                vm.registers[resultReg] = NIL_VAL;
-                DISPATCH();
-            }
-            
-            // Create new call frame
-            CallFrame* frame = &vm.frames[vm.frameCount++];
-            frame->returnAddress = vm.ip;
-            frame->previousChunk = vm.chunk;
-            frame->baseRegister = resultReg;
-            frame->registerCount = argCount;
-            frame->functionIndex = functionIndex;
-            
-            // Save registers that will be overwritten by parameters
-            Value savedRegisters[256];
-            for (int i = 0; i < argCount; i++) {
-                savedRegisters[i] = vm.registers[i];
-            }
-            
-            // Copy arguments to function's parameter registers
-            printf("VM CALL: Copying %d arguments from register %d to 0..%d\n", argCount, firstArgReg, argCount-1);
-            for (int i = 0; i < argCount; i++) {
-                printf("VM CALL: arg[%d]: copying from reg %d to reg %d\n", i, firstArgReg + i, i);
-                vm.registers[i] = vm.registers[firstArgReg + i];
-            }
-            
-            // Store saved registers in call frame for restoration
-            frame->savedRegisterCount = argCount;
-            for (int i = 0; i < argCount; i++) {
-                frame->savedRegisters[i] = savedRegisters[i];
-            }
-            
-            // Switch to function's chunk
-            vm.chunk = function->chunk;
-            vm.ip = function->chunk->code + function->start;
-            
-        } else {
-            vm.registers[resultReg] = NIL_VAL;
-        }
+        vm.typed_regs.i64_regs[reg] = value;
+        vm.typed_regs.reg_types[reg] = REG_TYPE_I64;
         
         DISPATCH();
     }
 
-LABEL_OP_RETURN_R: {
+    LABEL_OP_LOAD_F64_CONST: {
         uint8_t reg = READ_BYTE();
-        Value returnValue = vm.registers[reg];
-        printf("VM RETURN: reg=%d, value type=%d\n", reg, returnValue.type);
-        if (vm.frameCount > 0) {
-            CallFrame* frame = &vm.frames[--vm.frameCount];
-            printf("VM RETURN: baseRegister=%d, frameCount after=%d\n", frame->baseRegister, vm.frameCount);
-            
-            // Restore saved registers
-            printf("VM RETURN: Restoring %d saved registers\n", frame->savedRegisterCount);
-            for (int i = 0; i < frame->savedRegisterCount; i++) {
-                printf("VM RETURN: Restoring register %d\n", i);
-                vm.registers[i] = frame->savedRegisters[i];
-            }
-            
-            vm.chunk = frame->previousChunk;
-            vm.ip = frame->returnAddress;
-            vm.registers[frame->baseRegister] = returnValue;
-        } else {
-            vm.lastExecutionTime = get_time_vm() - start_time;
-            RETURN(INTERPRET_OK);
-        }
+        uint16_t constantIndex = READ_SHORT();
+        double value = READ_CONSTANT(constantIndex).as.f64;
+        
+        vm.typed_regs.f64_regs[reg] = value;
+        vm.typed_regs.reg_types[reg] = REG_TYPE_F64;
+        
         DISPATCH();
     }
 
-LABEL_OP_RETURN_VOID: {
-        if (vm.frameCount > 0) {
-            CallFrame* frame = &vm.frames[--vm.frameCount];
-            vm.chunk = frame->previousChunk;
-            vm.ip = frame->returnAddress;
-        } else {
-            vm.lastExecutionTime = get_time_vm() - start_time;
-            RETURN(INTERPRET_OK);
-        }
+    LABEL_OP_MOVE_I32: {
+        uint8_t dst = READ_BYTE();
+        uint8_t src = READ_BYTE();
+        
+        vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[src];
+        vm.typed_regs.reg_types[dst] = REG_TYPE_I32;
+        
         DISPATCH();
     }
 
-// Short jump optimizations for performance
-LABEL_OP_JUMP_SHORT: {
-    uint8_t offset = READ_BYTE();
-    vm.ip += offset;
-    DISPATCH();
-}
-
-LABEL_OP_JUMP_BACK_SHORT: {
-    uint8_t offset = READ_BYTE();
-    vm.ip -= offset;
-    DISPATCH();
-}
-
-LABEL_OP_JUMP_IF_NOT_SHORT: {
-    uint8_t reg = READ_BYTE();
-    uint8_t offset = READ_BYTE();
-    
-    if (!IS_BOOL(vm.registers[reg])) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Condition must be boolean");
-        RETURN(INTERPRET_RUNTIME_ERROR);
+    LABEL_OP_MOVE_I64: {
+        uint8_t dst = READ_BYTE();
+        uint8_t src = READ_BYTE();
+        
+        vm.typed_regs.i64_regs[dst] = vm.typed_regs.i64_regs[src];
+        vm.typed_regs.reg_types[dst] = REG_TYPE_I64;
+        
+        DISPATCH();
     }
-    
-    if (!AS_BOOL(vm.registers[reg])) {
-        vm.ip += offset;
+
+    LABEL_OP_MOVE_F64: {
+        uint8_t dst = READ_BYTE();
+        uint8_t src = READ_BYTE();
+        
+        vm.typed_regs.f64_regs[dst] = vm.typed_regs.f64_regs[src];
+        vm.typed_regs.reg_types[dst] = REG_TYPE_F64;
+        
+        DISPATCH();
     }
-    DISPATCH();
-}
 
-LABEL_OP_LOOP_SHORT: {
-    uint8_t offset = READ_BYTE();
-    vm.ip -= offset;
-    DISPATCH();
-}
-
-// Typed arithmetic operations for maximum performance (bypass Value boxing)
-LABEL_OP_ADD_I32_TYPED: {
-    uint8_t dst = *vm.ip++;
-    uint8_t left = *vm.ip++;
-    uint8_t right = *vm.ip++;
-    
-    vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[left] + vm.typed_regs.i32_regs[right];
-    
-    DISPATCH_TYPED();
-}
-
-LABEL_OP_SUB_I32_TYPED: {
-    uint8_t dst = *vm.ip++;
-    uint8_t left = *vm.ip++;
-    uint8_t right = *vm.ip++;
-    
-    vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[left] - vm.typed_regs.i32_regs[right];
-    
-    DISPATCH_TYPED();
-}
-
-LABEL_OP_MUL_I32_TYPED: {
-    uint8_t dst = *vm.ip++;
-    uint8_t left = *vm.ip++;
-    uint8_t right = *vm.ip++;
-    
-    vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[left] * vm.typed_regs.i32_regs[right];
-    
-    DISPATCH_TYPED();
-}
-
-LABEL_OP_DIV_I32_TYPED: {
-    uint8_t dst = *vm.ip++;
-    uint8_t left = *vm.ip++;
-    uint8_t right = *vm.ip++;
-    
-    // Keep zero check for safety, but remove type checks
-    if (vm.typed_regs.i32_regs[right] == 0) {
-        runtimeError(ERROR_RUNTIME, (SrcLocation){NULL, 0, 0}, "Division by zero");
-        RETURN(INTERPRET_RUNTIME_ERROR);
+    LABEL_OP_TIME_STAMP: {
+        uint8_t dst = READ_BYTE();
+        
+        // Get high-precision timestamp in nanoseconds
+        int64_t timestamp = builtin_time_stamp();
+        
+        // Store in both typed register and regular register for compatibility
+        vm.typed_regs.i64_regs[dst] = timestamp;
+        vm.typed_regs.reg_types[dst] = REG_TYPE_I64;
+        vm.registers[dst] = I64_VAL(timestamp);
+        
+        DISPATCH();
     }
-    
-    vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[left] / vm.typed_regs.i32_regs[right];
-    
-    DISPATCH_TYPED();
-}
 
-LABEL_OP_MOD_I32_TYPED: {
-    uint8_t dst = *vm.ip++;
-    uint8_t left = *vm.ip++;
-    uint8_t right = *vm.ip++;
-    
-    if (vm.typed_regs.i32_regs[right] == 0) {
-        runtimeError(ERROR_RUNTIME, (SrcLocation){NULL, 0, 0}, "Modulo by zero");
-        RETURN(INTERPRET_RUNTIME_ERROR);
-    }
-    
-    vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[left] % vm.typed_regs.i32_regs[right];
-    
-    DISPATCH_TYPED();
-}
-
-LABEL_OP_ADD_I64_TYPED: {
-    uint8_t dst = *vm.ip++;
-    uint8_t left = *vm.ip++;
-    uint8_t right = *vm.ip++;
-    
-    vm.typed_regs.i64_regs[dst] = vm.typed_regs.i64_regs[left] + vm.typed_regs.i64_regs[right];
-    
-    DISPATCH_TYPED();
-}
-
-LABEL_OP_SUB_I64_TYPED: {
-    uint8_t dst = *vm.ip++;
-    uint8_t left = *vm.ip++;
-    uint8_t right = *vm.ip++;
-    
-    vm.typed_regs.i64_regs[dst] = vm.typed_regs.i64_regs[left] - vm.typed_regs.i64_regs[right];
-    
-    DISPATCH_TYPED();
-}
-
-LABEL_OP_MUL_I64_TYPED: {
-    uint8_t dst = *vm.ip++;
-    uint8_t left = *vm.ip++;
-    uint8_t right = *vm.ip++;
-    
-    vm.typed_regs.i64_regs[dst] = vm.typed_regs.i64_regs[left] * vm.typed_regs.i64_regs[right];
-    
-    DISPATCH_TYPED();
-}
-
-LABEL_OP_DIV_I64_TYPED: {
-    uint8_t dst = *vm.ip++;
-    uint8_t left = *vm.ip++;
-    uint8_t right = *vm.ip++;
-    
-    if (vm.typed_regs.i64_regs[right] == 0) {
-        runtimeError(ERROR_RUNTIME, (SrcLocation){NULL, 0, 0}, "Division by zero");
-        RETURN(INTERPRET_RUNTIME_ERROR);
-    }
-    
-    vm.typed_regs.i64_regs[dst] = vm.typed_regs.i64_regs[left] / vm.typed_regs.i64_regs[right];
-    
-    DISPATCH_TYPED();
-}
-
-LABEL_OP_ADD_F64_TYPED: {
-    uint8_t dst = *vm.ip++;
-    uint8_t left = *vm.ip++;
-    uint8_t right = *vm.ip++;
-    
-    vm.typed_regs.f64_regs[dst] = vm.typed_regs.f64_regs[left] + vm.typed_regs.f64_regs[right];
-    
-    DISPATCH_TYPED();
-}
-
-LABEL_OP_SUB_F64_TYPED: {
-    uint8_t dst = *vm.ip++;
-    uint8_t left = *vm.ip++;
-    uint8_t right = *vm.ip++;
-    
-    vm.typed_regs.f64_regs[dst] = vm.typed_regs.f64_regs[left] - vm.typed_regs.f64_regs[right];
-    
-    DISPATCH_TYPED();
-}
-
-LABEL_OP_MUL_F64_TYPED: {
-    uint8_t dst = *vm.ip++;
-    uint8_t left = *vm.ip++;
-    uint8_t right = *vm.ip++;
-    
-    vm.typed_regs.f64_regs[dst] = vm.typed_regs.f64_regs[left] * vm.typed_regs.f64_regs[right];
-    
-    DISPATCH_TYPED();
-}
-
-LABEL_OP_DIV_F64_TYPED: {
-    uint8_t dst = *vm.ip++;
-    uint8_t left = *vm.ip++;
-    uint8_t right = *vm.ip++;
-    
-    vm.typed_regs.f64_regs[dst] = vm.typed_regs.f64_regs[left] / vm.typed_regs.f64_regs[right];
-    
-    DISPATCH_TYPED();
-}
-
-LABEL_OP_LT_I32_TYPED: {
-    uint8_t dst = *vm.ip++;
-    uint8_t left = *vm.ip++;
-    uint8_t right = *vm.ip++;
-    
-    vm.typed_regs.bool_regs[dst] = vm.typed_regs.i32_regs[left] < vm.typed_regs.i32_regs[right];
-    
-    DISPATCH_TYPED();
-}
-
-LABEL_OP_LE_I32_TYPED: {
-    uint8_t dst = *vm.ip++;
-    uint8_t left = *vm.ip++;
-    uint8_t right = *vm.ip++;
-    
-    vm.typed_regs.bool_regs[dst] = vm.typed_regs.i32_regs[left] <= vm.typed_regs.i32_regs[right];
-    
-    DISPATCH_TYPED();
-}
-
-LABEL_OP_GT_I32_TYPED: {
-    uint8_t dst = *vm.ip++;
-    uint8_t left = *vm.ip++;
-    uint8_t right = *vm.ip++;
-    
-    vm.typed_regs.bool_regs[dst] = vm.typed_regs.i32_regs[left] > vm.typed_regs.i32_regs[right];
-    
-    DISPATCH_TYPED();
-}
-
-LABEL_OP_GE_I32_TYPED: {
-    uint8_t dst = *vm.ip++;
-    uint8_t left = *vm.ip++;
-    uint8_t right = *vm.ip++;
-    
-    vm.typed_regs.bool_regs[dst] = vm.typed_regs.i32_regs[left] >= vm.typed_regs.i32_regs[right];
-    
-    DISPATCH_TYPED();
-}
-
-LABEL_OP_LOAD_I32_CONST: {
-    uint8_t reg = READ_BYTE();
-    uint16_t constantIndex = READ_SHORT();
-    int32_t value = READ_CONSTANT(constantIndex).as.i32;
-    
-    vm.typed_regs.i32_regs[reg] = value;
-    vm.typed_regs.reg_types[reg] = REG_TYPE_I32;
-    
-    DISPATCH();
-}
-
-LABEL_OP_LOAD_I64_CONST: {
-    uint8_t reg = READ_BYTE();
-    uint16_t constantIndex = READ_SHORT();
-    int64_t value = READ_CONSTANT(constantIndex).as.i64;
-    
-    vm.typed_regs.i64_regs[reg] = value;
-    vm.typed_regs.reg_types[reg] = REG_TYPE_I64;
-    
-    DISPATCH();
-}
-
-LABEL_OP_LOAD_F64_CONST: {
-    uint8_t reg = READ_BYTE();
-    uint16_t constantIndex = READ_SHORT();
-    double value = READ_CONSTANT(constantIndex).as.f64;
-    
-    vm.typed_regs.f64_regs[reg] = value;
-    vm.typed_regs.reg_types[reg] = REG_TYPE_F64;
-    
-    DISPATCH();
-}
-
-LABEL_OP_MOVE_I32: {
-    uint8_t dst = READ_BYTE();
-    uint8_t src = READ_BYTE();
-    
-    vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[src];
-    vm.typed_regs.reg_types[dst] = REG_TYPE_I32;
-    
-    DISPATCH();
-}
-
-LABEL_OP_MOVE_I64: {
-    uint8_t dst = READ_BYTE();
-    uint8_t src = READ_BYTE();
-    
-    vm.typed_regs.i64_regs[dst] = vm.typed_regs.i64_regs[src];
-    vm.typed_regs.reg_types[dst] = REG_TYPE_I64;
-    
-    DISPATCH();
-}
-
-LABEL_OP_MOVE_F64: {
-    uint8_t dst = READ_BYTE();
-    uint8_t src = READ_BYTE();
-    
-    vm.typed_regs.f64_regs[dst] = vm.typed_regs.f64_regs[src];
-    vm.typed_regs.reg_types[dst] = REG_TYPE_F64;
-    
-    DISPATCH();
-}
-
-LABEL_OP_TIME_STAMP: {
-    uint8_t dst = READ_BYTE();
-    
-    // Get high-precision timestamp in nanoseconds
-    int64_t timestamp = builtin_time_stamp();
-    
-    // Store in both typed register and regular register for compatibility
-    vm.typed_regs.i64_regs[dst] = timestamp;
-    vm.typed_regs.reg_types[dst] = REG_TYPE_I64;
-    vm.registers[dst] = I64_VAL(timestamp);
-    
-    DISPATCH();
-}
-
-// Phase 2.2: Fused instruction implementations for better performance
-LABEL_OP_ADD_I32_IMM: {
-    uint8_t dst = *vm.ip++;
-    uint8_t src = *vm.ip++;
-    int32_t imm = *(int32_t*)vm.ip;
-    vm.ip += 4;
-    
-    // Compiler ensures this is only emitted for i32 operations, so trust it
-    if (!IS_I32(vm.registers[src])) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operand must be i32");
-        RETURN(INTERPRET_RUNTIME_ERROR);
-    }
-    
-    int32_t result = AS_I32(vm.registers[src]) + imm;
-    vm.registers[dst] = I32_VAL(result);
-    
-    DISPATCH_TYPED();
-}
-
-LABEL_OP_SUB_I32_IMM: {
-    uint8_t dst = *vm.ip++;
-    uint8_t src = *vm.ip++;
-    int32_t imm = *(int32_t*)vm.ip;
-    vm.ip += 4;
-    
-    // Compiler ensures this is only emitted for i32 operations, so trust it
-    if (!IS_I32(vm.registers[src])) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operand must be i32");
-        RETURN(INTERPRET_RUNTIME_ERROR);
-    }
-    
-    int32_t result = AS_I32(vm.registers[src]) - imm;
-    vm.registers[dst] = I32_VAL(result);
-    
-    DISPATCH_TYPED();
-}
-
-LABEL_OP_MUL_I32_IMM: {
-    uint8_t dst = *vm.ip++;
-    uint8_t src = *vm.ip++;
-    int32_t imm = *(int32_t*)vm.ip;
-    vm.ip += 4;
-    
-    // Compiler ensures this is only emitted for i32 operations, so trust it
-    if (!IS_I32(vm.registers[src])) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operand must be i32");
-        RETURN(INTERPRET_RUNTIME_ERROR);
-    }
-    
-    int32_t result = AS_I32(vm.registers[src]) * imm;
-    vm.registers[dst] = I32_VAL(result);
-    
-    DISPATCH_TYPED();
-}
-
-LABEL_OP_CMP_I32_IMM: {
-    uint8_t dst = *vm.ip++;
-    uint8_t src = *vm.ip++;
-    int32_t imm = *(int32_t*)vm.ip;
-    vm.ip += 4;
-    
-    vm.typed_regs.bool_regs[dst] = vm.typed_regs.i32_regs[src] < imm;
-    
-    DISPATCH_TYPED();
-}
-
-LABEL_OP_INC_CMP_JMP: {
-    uint8_t reg = *vm.ip++;
-    uint8_t limit_reg = *vm.ip++;
-    int16_t offset = *(int16_t*)vm.ip;
-    vm.ip += 2;
-    
-    // Compiler ensures this is only emitted for i32 operations, so trust it
-    if (!IS_I32(vm.registers[reg]) || !IS_I32(vm.registers[limit_reg])) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
-        RETURN(INTERPRET_RUNTIME_ERROR);
-    }
-    
-    int32_t incremented = AS_I32(vm.registers[reg]) + 1;
-    vm.registers[reg] = I32_VAL(incremented);
-    if (incremented < AS_I32(vm.registers[limit_reg])) {
-        vm.ip += offset;
-    }
-    
-    DISPATCH_TYPED();
-}
-
-LABEL_OP_DEC_CMP_JMP: {
-    uint8_t reg = *vm.ip++;
-    uint8_t zero_test = *vm.ip++;
-    int16_t offset = *(int16_t*)vm.ip;
-    vm.ip += 2;
-    
-    // Fused decrement + compare + conditional jump
-    if (--vm.typed_regs.i32_regs[reg] > vm.typed_regs.i32_regs[zero_test]) {
-        vm.ip += offset;
-    }
-    
-    DISPATCH_TYPED();
-}
-
-LABEL_OP_MUL_ADD_I32: {
-    uint8_t dst = *vm.ip++;
-    uint8_t mul1 = *vm.ip++;
-    uint8_t mul2 = *vm.ip++;
-    uint8_t add = *vm.ip++;
-    
-    // Fused multiply-add (single operation on modern CPUs)
-    vm.typed_regs.i32_regs[dst] = 
-        vm.typed_regs.i32_regs[mul1] * vm.typed_regs.i32_regs[mul2] + 
-        vm.typed_regs.i32_regs[add];
-    
-    DISPATCH_TYPED();
-}
-
-LABEL_OP_HALT:
-    vm.lastExecutionTime = get_time_vm() - start_time;
-    RETURN(INTERPRET_OK);
-
-LABEL_UNKNOWN: __attribute__((unused))
-    runtimeError(ERROR_RUNTIME, (SrcLocation){NULL, 0, 0},
-                 "Unknown opcode: %d", instruction);
-    RETURN(INTERPRET_RUNTIME_ERROR);
-
-#else  // USE_COMPUTED_GOTO
-
-    for (;;) {
-        if (vm.trace) {
-            // Debug trace
-            printf("        ");
-            for (int i = 0; i < 8; i++) {
-                printf("[ R%d: ", i);
-                printValue(vm.registers[i]);
-                printf(" ]");
-            }
-            printf("\n");
-
-            disassembleInstruction(vm.chunk, (int)(vm.ip - vm.chunk->code));
+    // Phase 2.2: Fused instruction implementations for better performance
+    LABEL_OP_ADD_I32_IMM: {
+        uint8_t dst = *vm.ip++;
+        uint8_t src = *vm.ip++;
+        int32_t imm = *(int32_t*)vm.ip;
+        vm.ip += 4;
+        
+        // Compiler ensures this is only emitted for i32 operations, so trust it
+        if (!IS_I32(vm.registers[src])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operand must be i32");
+            RETURN(INTERPRET_RUNTIME_ERROR);
         }
-
-        vm.instruction_count++;
-
-        uint8_t instruction = READ_BYTE();
-
-        switch (instruction) {
-            case OP_LOAD_CONST: {
-                uint8_t reg = READ_BYTE();
-                uint16_t constantIndex = READ_SHORT();
-                vm.registers[reg] = READ_CONSTANT(constantIndex);
-                break;
-            }
-
-            case OP_LOAD_NIL: {
-                uint8_t reg = READ_BYTE();
-                vm.registers[reg] = NIL_VAL;
-                break;
-            }
-
-            case OP_LOAD_TRUE: {
-                uint8_t reg = READ_BYTE();
-                vm.registers[reg] = BOOL_VAL(true);
-                break;
-            }
-
-            case OP_LOAD_FALSE: {
-                uint8_t reg = READ_BYTE();
-                vm.registers[reg] = BOOL_VAL(false);
-                break;
-            }
-
-            case OP_MOVE: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src = READ_BYTE();
-                vm.registers[dst] = vm.registers[src];
-                break;
-            }
-
-            case OP_LOAD_GLOBAL: {
-                uint8_t reg = READ_BYTE();
-                uint8_t globalIndex = READ_BYTE();
-                if (globalIndex >= vm.variableCount ||
-                    vm.globalTypes[globalIndex] == NULL) {
-                    runtimeError(ERROR_NAME, (SrcLocation){NULL, 0, 0},
-                                 "Undefined variable");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-                vm.registers[reg] = vm.globals[globalIndex];
-                break;
-            }
-
-            case OP_STORE_GLOBAL: {
-                uint8_t globalIndex = READ_BYTE();
-                uint8_t reg = READ_BYTE();
-                vm.globals[globalIndex] = vm.registers[reg];
-                break;
-            }
-
-            // Arithmetic operations
-            case OP_ADD_I32_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = READ_BYTE();
-                uint8_t src2 = READ_BYTE();
-
-                if (!IS_I32(vm.registers[src1]) ||
-                    !IS_I32(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Operands must be i32");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-
-                int32_t a = AS_I32(vm.registers[src1]);
-                int32_t b = AS_I32(vm.registers[src2]);
-#if USE_FAST_ARITH
-                vm.registers[dst] = I32_VAL(a + b);
-#else
-                int32_t result;
-                if (__builtin_add_overflow(a, b, &result)) {
-                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
-                                 "Integer overflow");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-                vm.registers[dst] = I32_VAL(result);
-#endif
-                break;
-            }
-
-            case OP_SUB_I32_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = READ_BYTE();
-                uint8_t src2 = READ_BYTE();
-
-                if (!IS_I32(vm.registers[src1]) ||
-                    !IS_I32(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Operands must be i32");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-
-                int32_t a = AS_I32(vm.registers[src1]);
-                int32_t b = AS_I32(vm.registers[src2]);
-#if USE_FAST_ARITH
-                vm.registers[dst] = I32_VAL(a - b);
-#else
-                int32_t result;
-                if (__builtin_sub_overflow(a, b, &result)) {
-                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
-                                 "Integer overflow");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-                vm.registers[dst] = I32_VAL(result);
-#endif
-                break;
-            }
-
-            case OP_MUL_I32_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = READ_BYTE();
-                uint8_t src2 = READ_BYTE();
-
-                if (!IS_I32(vm.registers[src1]) ||
-                    !IS_I32(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Operands must be i32");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-
-                int32_t a = AS_I32(vm.registers[src1]);
-                int32_t b = AS_I32(vm.registers[src2]);
-#if USE_FAST_ARITH
-                vm.registers[dst] = I32_VAL(a * b);
-#else
-                int32_t result;
-                if (__builtin_mul_overflow(a, b, &result)) {
-                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
-                                 "Integer overflow");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-                vm.registers[dst] = I32_VAL(result);
-#endif
-                break;
-            }
-
-            case OP_DIV_I32_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = READ_BYTE();
-                uint8_t src2 = READ_BYTE();
-
-                if (!IS_I32(vm.registers[src1]) ||
-                    !IS_I32(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Operands must be i32");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-
-                int32_t b = AS_I32(vm.registers[src2]);
-                if (b == 0) {
-                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
-                                 "Division by zero");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-
-                vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) / b);
-                break;
-            }
-
-            case OP_MOD_I32_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = READ_BYTE();
-                uint8_t src2 = READ_BYTE();
-
-                if (!IS_I32(vm.registers[src1]) ||
-                    !IS_I32(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Operands must be i32");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-
-                int32_t b = AS_I32(vm.registers[src2]);
-                if (b == 0) {
-                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
-                                 "Division by zero");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-
-                vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) % b);
-                break;
-            }
-
-            case OP_INC_I32_R: {
-                uint8_t reg = READ_BYTE();
-#if USE_FAST_ARITH
-                vm.registers[reg] = I32_VAL(AS_I32(vm.registers[reg]) + 1);
-#else
-                int32_t val = AS_I32(vm.registers[reg]);
-                int32_t result;
-                if (__builtin_add_overflow(val, 1, &result)) {
-                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
-                                 "Integer overflow");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-                vm.registers[reg] = I32_VAL(result);
-#endif
-                break;
-            }
-
-            case OP_DEC_I32_R: {
-                uint8_t reg = READ_BYTE();
-#if USE_FAST_ARITH
-                vm.registers[reg] = I32_VAL(AS_I32(vm.registers[reg]) - 1);
-#else
-                int32_t val = AS_I32(vm.registers[reg]);
-                int32_t result;
-                if (__builtin_sub_overflow(val, 1, &result)) {
-                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
-                                 "Integer overflow");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-                vm.registers[reg] = I32_VAL(result);
-#endif
-                break;
-            }
-
-            // I64 arithmetic operations
-            case OP_ADD_I64_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = READ_BYTE();
-                uint8_t src2 = READ_BYTE();
-
-                if (!IS_I64(vm.registers[src1]) ||
-                    !IS_I64(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Operands must be i64");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-
-                int64_t a = AS_I64(vm.registers[src1]);
-                int64_t b = AS_I64(vm.registers[src2]);
-#if USE_FAST_ARITH
-                vm.registers[dst] = I64_VAL(a + b);
-#else
-                int64_t result;
-                if (__builtin_add_overflow(a, b, &result)) {
-                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
-                                 "Integer overflow");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-                vm.registers[dst] = I64_VAL(result);
-#endif
-                break;
-            }
-
-            case OP_SUB_I64_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = READ_BYTE();
-                uint8_t src2 = READ_BYTE();
-
-                if (!IS_I64(vm.registers[src1]) ||
-                    !IS_I64(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Operands must be i64");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-
-                int64_t a = AS_I64(vm.registers[src1]);
-                int64_t b = AS_I64(vm.registers[src2]);
-#if USE_FAST_ARITH
-                vm.registers[dst] = I64_VAL(a - b);
-#else
-                int64_t result;
-                if (__builtin_sub_overflow(a, b, &result)) {
-                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
-                                 "Integer overflow");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-                vm.registers[dst] = I64_VAL(result);
-#endif
-                break;
-            }
-
-            case OP_MUL_I64_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = READ_BYTE();
-                uint8_t src2 = READ_BYTE();
-
-                if (!IS_I64(vm.registers[src1]) ||
-                    !IS_I64(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Operands must be i64");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-
-                int64_t a = AS_I64(vm.registers[src1]);
-                int64_t b = AS_I64(vm.registers[src2]);
-#if USE_FAST_ARITH
-                vm.registers[dst] = I64_VAL(a * b);
-#else
-                int64_t result;
-                if (__builtin_mul_overflow(a, b, &result)) {
-                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
-                                 "Integer overflow");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-                vm.registers[dst] = I64_VAL(result);
-#endif
-                break;
-            }
-
-            case OP_DIV_I64_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = READ_BYTE();
-                uint8_t src2 = READ_BYTE();
-
-                if (!IS_I64(vm.registers[src1]) ||
-                    !IS_I64(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Operands must be i64");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-
-                int64_t b = AS_I64(vm.registers[src2]);
-                if (b == 0) {
-                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
-                                 "Division by zero");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-
-                vm.registers[dst] = I64_VAL(AS_I64(vm.registers[src1]) / b);
-                break;
-            }
-
-            case OP_MOD_I64_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = READ_BYTE();
-                uint8_t src2 = READ_BYTE();
-
-                if (!IS_I64(vm.registers[src1]) ||
-                    !IS_I64(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Operands must be i64");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-
-                int64_t b = AS_I64(vm.registers[src2]);
-                if (b == 0) {
-                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
-                                 "Division by zero");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-
-                vm.registers[dst] = I64_VAL(AS_I64(vm.registers[src1]) % b);
-                break;
-            }
-
-            case OP_ADD_U32_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = READ_BYTE();
-                uint8_t src2 = READ_BYTE();
-
-                if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Operands must be u32");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-
-                uint32_t a = AS_U32(vm.registers[src1]);
-                uint32_t b = AS_U32(vm.registers[src2]);
-                
-                // Check for overflow: if a + b < a, then overflow occurred
-                if (UINT32_MAX - a < b) {
-                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
-                                 "u32 addition overflow");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-
-                vm.registers[dst] = U32_VAL(a + b);
-                break;
-            }
-
-            case OP_SUB_U32_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = READ_BYTE();
-                uint8_t src2 = READ_BYTE();
-
-                if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Operands must be u32");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-
-                uint32_t a = AS_U32(vm.registers[src1]);
-                uint32_t b = AS_U32(vm.registers[src2]);
-                
-                // Check for underflow: if a < b, then underflow would occur
-                if (a < b) {
-                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
-                                 "u32 subtraction underflow");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-
-                vm.registers[dst] = U32_VAL(a - b);
-                break;
-            }
-
-            case OP_MUL_U32_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = READ_BYTE();
-                uint8_t src2 = READ_BYTE();
-
-                if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Operands must be u32");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-
-                uint32_t a = AS_U32(vm.registers[src1]);
-                uint32_t b = AS_U32(vm.registers[src2]);
-                
-                // Check for multiplication overflow: if a != 0 && result / a != b
-                if (a != 0 && b > UINT32_MAX / a) {
-                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
-                                 "u32 multiplication overflow");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-
-                vm.registers[dst] = U32_VAL(a * b);
-                break;
-            }
-
-            case OP_DIV_U32_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = READ_BYTE();
-                uint8_t src2 = READ_BYTE();
-
-                if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Operands must be u32");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-
-                uint32_t b = AS_U32(vm.registers[src2]);
-                if (b == 0) {
-                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
-                                 "Division by zero");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-
-                vm.registers[dst] = U32_VAL(AS_U32(vm.registers[src1]) / b);
-                break;
-            }
-
-            case OP_MOD_U32_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = READ_BYTE();
-                uint8_t src2 = READ_BYTE();
-
-                if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Operands must be u32");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-
-                uint32_t b = AS_U32(vm.registers[src2]);
-                if (b == 0) {
-                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
-                                 "Division by zero");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-
-                vm.registers[dst] = U32_VAL(AS_U32(vm.registers[src1]) % b);
-                break;
-            }
-
-            case OP_ADD_U64_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = read_BYTE();
-                uint8_t src2 = read_BYTE();
-
-                if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Operands must be u64");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-
-                uint64_t a = AS_U64(vm.registers[src1]);
-                uint64_t b = AS_U64(vm.registers[src2]);
-                
-                // Check for overflow: if a + b < a, then overflow occurred
-                if (UINT64_MAX - a < b) {
-                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
-                                 "u64 addition overflow");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-
-                vm.registers[dst] = U64_VAL(a + b);
-                break;
-            }
-
-            case OP_SUB_U64_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = read_BYTE();
-                uint8_t src2 = read_BYTE();
-
-                if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Operands must be u64");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-
-                uint64_t a = AS_U64(vm.registers[src1]);
-                uint64_t b = AS_U64(vm.registers[src2]);
-                
-                // Check for underflow: if a < b, then underflow would occur
-                if (a < b) {
-                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
-                                 "u64 subtraction underflow");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-
-                vm.registers[dst] = U64_VAL(a - b);
-                break;
-            }
-
-            case OP_MUL_U64_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = read_BYTE();
-                uint8_t src2 = read_BYTE();
-
-                if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Operands must be u64");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-
-                uint64_t a = AS_U64(vm.registers[src1]);
-                uint64_t b = AS_U64(vm.registers[src2]);
-                
-                // Check for multiplication overflow: if a != 0 && result / a != b
-                if (a != 0 && b > UINT64_MAX / a) {
-                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
-                                 "u64 multiplication overflow");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-
-                vm.registers[dst] = U64_VAL(a * b);
-                break;
-            }
-
-            case OP_DIV_U64_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = read_BYTE();
-                uint8_t src2 = read_BYTE();
-
-                if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Operands must be u64");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-
-                uint64_t b = AS_U64(vm.registers[src2]);
-                if (b == 0) {
-                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
-                                 "Division by zero");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-
-                vm.registers[dst] = U64_VAL(AS_U64(vm.registers[src1]) / b);
-                break;
-            }
-
-            case OP_MOD_U64_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = read_BYTE();
-                uint8_t src2 = read_BYTE();
-
-                if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Operands must be u64");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-
-                uint64_t b = AS_U64(vm.registers[src2]);
-                if (b == 0) {
-                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
-                                 "Division by zero");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-
-                vm.registers[dst] = U64_VAL(AS_U64(vm.registers[src1]) % b);
-                break;
-            }
-
-            case OP_I32_TO_I64_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src = READ_BYTE();
-                if (!IS_I32(vm.registers[src])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Source must be i32");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-                vm.registers[dst] = I64_VAL((int64_t)AS_I32(vm.registers[src]));
-                break;
-            }
-
-            case OP_I32_TO_U32_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src = READ_BYTE();
-                if (!IS_I32(vm.registers[src])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Source must be i32");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-                vm.registers[dst] = U32_VAL((uint32_t)AS_I32(vm.registers[src]));
-                break;
-            }
-
-            case OP_U32_TO_I32_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src = READ_BYTE();
-                if (!IS_U32(vm.registers[src])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Source must be u32");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-                vm.registers[dst] = I32_VAL((int32_t)AS_U32(vm.registers[src]));
-                break;
-            }
-
-            case OP_F64_TO_U32_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src = read_BYTE();
-                if (!IS_F64(vm.registers[src])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Source must be f64");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-                double val = AS_F64(vm.registers[src]);
-                if (val < 0.0 || val > (double)UINT32_MAX) {
-                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
-                                 "f64 value out of u32 range");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-                vm.registers[dst] = U32_VAL((uint32_t)val);
-                break;
-            }
-
-            case OP_U32_TO_F64_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src = read_BYTE();
-                if (!IS_U32(vm.registers[src])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Source must be u32");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-                vm.registers[dst] = F64_VAL((double)AS_U32(vm.registers[src]));
-                break;
-            }
-
-            case OP_I32_TO_U64_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src = READ_BYTE();
-                if (!IS_I32(vm.registers[src])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Source must be i32");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-                int32_t val = AS_I32(vm.registers[src]);
-                if (val < 0) {
-                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
-                                 "Cannot convert negative i32 to u64");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-                vm.registers[dst] = U64_VAL((uint64_t)val);
-                break;
-            }
-
-            case OP_I64_TO_U64_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src = READ_BYTE();
-                if (!IS_I64(vm.registers[src])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Source must be i64");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-                int64_t val = AS_I64(vm.registers[src]);
-                if (val < 0) {
-                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
-                                 "Cannot convert negative i64 to u64");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-                vm.registers[dst] = U64_VAL((uint64_t)val);
-                break;
-            }
-
-            case OP_U64_TO_I32_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src = READ_BYTE();
-                if (!IS_U64(vm.registers[src])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Source must be u64");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-                uint64_t val = AS_U64(vm.registers[src]);
-                if (val > (uint64_t)INT32_MAX) {
-                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
-                                 "u64 value too large for i32");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-                vm.registers[dst] = I32_VAL((int32_t)val);
-                break;
-            }
-
-            case OP_U64_TO_I64_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src = READ_BYTE();
-                if (!IS_U64(vm.registers[src])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Source must be u64");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-                uint64_t val = AS_U64(vm.registers[src]);
-                if (val > (uint64_t)INT64_MAX) {
-                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
-                                 "u64 value too large for i64");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-                vm.registers[dst] = I64_VAL((int64_t)val);
-                break;
-            }
-
-            case OP_U32_TO_U64_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src = READ_BYTE();
-                if (!IS_U32(vm.registers[src])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Source must be u32");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-                vm.registers[dst] = U64_VAL((uint64_t)AS_U32(vm.registers[src]));
-                break;
-            }
-
-            case OP_U64_TO_U32_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src = READ_BYTE();
-                if (!IS_U64(vm.registers[src])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Source must be u64");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-                uint64_t val = AS_U64(vm.registers[src]);
-                if (val > (uint64_t)UINT32_MAX) {
-                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
-                                 "u64 value too large for u32");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-                vm.registers[dst] = U32_VAL((uint32_t)val);
-                break;
-            }
-
-            case OP_F64_TO_U64_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src = READ_BYTE();
-                if (!IS_F64(vm.registers[src])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Source must be f64");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-                double val = AS_F64(vm.registers[src]);
-                if (val < 0.0 || val > (double)UINT64_MAX) {
-                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
-                                 "f64 value out of u64 range");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-                vm.registers[dst] = U64_VAL((uint64_t)val);
-                break;
-            }
-
-            case OP_U64_TO_F64_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src = read_BYTE();
-                if (!IS_U64(vm.registers[src])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Source must be u64");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-                vm.registers[dst] = F64_VAL((double)AS_U64(vm.registers[src]));
-                break;
-            }
-
-            // F64 Arithmetic Operations
-            case OP_ADD_F64_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = READ_BYTE();
-                uint8_t src2 = READ_BYTE();
-                if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
-                    return INTERPRET_RUNTIME_ERROR;
-                }
-                vm.registers[dst] = F64_VAL(AS_F64(vm.registers[src1]) + AS_F64(vm.registers[src2]));
-                break;
-            }
-
-            case OP_SUB_F64_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = READ_BYTE();
-                uint8_t src2 = READ_BYTE();
-                if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
-                    return INTERPRET_RUNTIME_ERROR;
-                }
-                vm.registers[dst] = F64_VAL(AS_F64(vm.registers[src1]) - AS_F64(vm.registers[src2]));
-                break;
-            }
-
-            case OP_MUL_F64_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = READ_BYTE();
-                uint8_t src2 = READ_BYTE();
-                if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
-                    return INTERPRET_RUNTIME_ERROR;
-                }
-                vm.registers[dst] = F64_VAL(AS_F64(vm.registers[src1]) * AS_F64(vm.registers[src2]));
-                break;
-            }
-
-            case OP_DIV_F64_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = READ_BYTE();
-                uint8_t src2 = READ_BYTE();
-                if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
-                    return INTERPRET_RUNTIME_ERROR;
-                }
-                double a = AS_F64(vm.registers[src1]);
-                double b = AS_F64(vm.registers[src2]);
-                
-                // IEEE 754 compliant: division by zero produces infinity, not error
-                double result = a / b;
-                
-                // The result may be infinity, -infinity, or NaN
-                // These are valid f64 values according to IEEE 754
-                vm.registers[dst] = F64_VAL(result);
-                break;
-            }
-
-            // Bitwise Operations
-            case OP_AND_I32_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = READ_BYTE();
-                uint8_t src2 = READ_BYTE();
-                if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
-                    return INTERPRET_RUNTIME_ERROR;
-                }
-                vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) & AS_I32(vm.registers[src2]));
-                break;
-            }
-
-            case OP_OR_I32_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = READ_BYTE();
-                uint8_t src2 = READ_BYTE();
-                if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
-                    return INTERPRET_RUNTIME_ERROR;
-                }
-                vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) | AS_I32(vm.registers[src2]));
-                break;
-            }
-
-            case OP_XOR_I32_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = READ_BYTE();
-                uint8_t src2 = READ_BYTE();
-                if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
-                    return INTERPRET_RUNTIME_ERROR;
-                }
-                vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) ^ AS_I32(vm.registers[src2]));
-                break;
-            }
-
-            case OP_NOT_I32_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src = READ_BYTE();
-                if (!IS_I32(vm.registers[src])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operand must be i32");
-                    return INTERPRET_RUNTIME_ERROR;
-                }
-                vm.registers[dst] = I32_VAL(~AS_I32(vm.registers[src]));
-                break;
-            }
-
-            case OP_SHL_I32_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = READ_BYTE();
-                uint8_t src2 = READ_BYTE();
-                if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
-                    return INTERPRET_RUNTIME_ERROR;
-                }
-                vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) << AS_I32(vm.registers[src2]));
-                break;
-            }
-
-            case OP_SHR_I32_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = READ_BYTE();
-                uint8_t src2 = READ_BYTE();
-                if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
-                    return INTERPRET_RUNTIME_ERROR;
-                }
-                vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) >> AS_I32(vm.registers[src2]));
-                break;
-            }
-
-            // F64 Comparison Operations
-            case OP_LT_F64_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = READ_BYTE();
-                uint8_t src2 = READ_BYTE();
-                if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
-                    return INTERPRET_RUNTIME_ERROR;
-                }
-                vm.registers[dst] = BOOL_VAL(AS_F64(vm.registers[src1]) < AS_F64(vm.registers[src2]));
-                break;
-            }
-
-            case OP_LE_F64_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = READ_BYTE();
-                uint8_t src2 = READ_BYTE();
-                if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
-                    return INTERPRET_RUNTIME_ERROR;
-                }
-                vm.registers[dst] = BOOL_VAL(AS_F64(vm.registers[src1]) <= AS_F64(vm.registers[src2]));
-                break;
-            }
-
-            case OP_GT_F64_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = READ_BYTE();
-                uint8_t src2 = READ_BYTE();
-                if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
-                    return INTERPRET_RUNTIME_ERROR;
-                }
-                vm.registers[dst] = BOOL_VAL(AS_F64(vm.registers[src1]) > AS_F64(vm.registers[src2]));
-                break;
-            }
-
-            case OP_GE_F64_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = READ_BYTE();
-                uint8_t src2 = READ_BYTE();
-                if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
-                    return INTERPRET_RUNTIME_ERROR;
-                }
-                vm.registers[dst] = BOOL_VAL(AS_F64(vm.registers[src1]) >= AS_F64(vm.registers[src2]));
-                break;
-            }
-
-            // F64 Type Conversion Operations
-            case OP_I32_TO_F64_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src = READ_BYTE();
-                if (!IS_I32(vm.registers[src])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Source must be i32");
-                    return INTERPRET_RUNTIME_ERROR;
-                }
-                vm.registers[dst] = F64_VAL((double)AS_I32(vm.registers[src]));
-                break;
-            }
-
-            case OP_I64_TO_F64_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src = READ_BYTE();
-                if (!IS_I64(vm.registers[src])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Source must be i64");
-                    return INTERPRET_RUNTIME_ERROR;
-                }
-                vm.registers[dst] = F64_VAL((double)AS_I64(vm.registers[src]));
-                break;
-            }
-
-            case OP_F64_TO_I32_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src = READ_BYTE();
-                if (!IS_F64(vm.registers[src])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Source must be f64");
-                    return INTERPRET_RUNTIME_ERROR;
-                }
-                vm.registers[dst] = I32_VAL((int32_t)AS_F64(vm.registers[src]));
-                break;
-            }
-
-            case OP_F64_TO_I64_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src = READ_BYTE();
-                if (!IS_F64(vm.registers[src])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Source must be f64");
-                    return INTERPRET_RUNTIME_ERROR;
-                }
-                vm.registers[dst] = I64_VAL((int64_t)AS_F64(vm.registers[src]));
-                break;
-            }
-
-            // Comparison operations
-            case OP_LT_I32_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = READ_BYTE();
-                uint8_t src2 = READ_BYTE();
-
-                if (!IS_I32(vm.registers[src1]) ||
-                    !IS_I32(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Operands must be i32");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-
-                vm.registers[dst] = BOOL_VAL(AS_I32(vm.registers[src1]) <
-                                             AS_I32(vm.registers[src2]));
-                break;
-            }
-
-            case OP_LE_I32_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = READ_BYTE();
-                uint8_t src2 = READ_BYTE();
-
-                if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Operands must be i32");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-
-                vm.registers[dst] = BOOL_VAL(AS_I32(vm.registers[src1]) <=
-                                             AS_I32(vm.registers[src2]));
-                break;
-            }
-
-            case OP_GT_I32_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = READ_BYTE();
-                uint8_t src2 = READ_BYTE();
-
-                if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Operands must be i32");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-
-                vm.registers[dst] = BOOL_VAL(AS_I32(vm.registers[src1]) >
-                                             AS_I32(vm.registers[src2]));
-                break;
-            }
-
-            case OP_GE_I32_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = READ_BYTE();
-                uint8_t src2 = READ_BYTE();
-
-                if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Operands must be i32");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-
-                vm.registers[dst] = BOOL_VAL(AS_I32(vm.registers[src1]) >=
-                                             AS_I32(vm.registers[src2]));
-                break;
-            }
-
-            // I64 comparison operations
-            case OP_LT_I64_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = READ_BYTE();
-                uint8_t src2 = READ_BYTE();
-
-                if (!IS_I64(vm.registers[src1]) ||
-                    !IS_I64(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Operands must be i64");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-
-                vm.registers[dst] = BOOL_VAL(AS_I64(vm.registers[src1]) <
-                                             AS_I64(vm.registers[src2]));
-                break;
-            }
-
-            case OP_LE_I64_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = READ_BYTE();
-                uint8_t src2 = READ_BYTE();
-
-                if (!IS_I64(vm.registers[src1]) || !IS_I64(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Operands must be i64");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-
-                vm.registers[dst] = BOOL_VAL(AS_I64(vm.registers[src1]) <=
-                                             AS_I64(vm.registers[src2]));
-                break;
-            }
-
-            case OP_GT_I64_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = READ_BYTE();
-                uint8_t src2 = READ_BYTE();
-
-                if (!IS_I64(vm.registers[src1]) || !IS_I64(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Operands must be i64");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-
-                vm.registers[dst] = BOOL_VAL(AS_I64(vm.registers[src1]) >
-                                             AS_I64(vm.registers[src2]));
-                break;
-            }
-
-            case OP_GE_I64_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = READ_BYTE();
-                uint8_t src2 = READ_BYTE();
-
-                if (!IS_I64(vm.registers[src1]) || !IS_I64(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Operands must be i64");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-
-
-                vm.registers[dst] = BOOL_VAL(AS_I64(vm.registers[src1]) >=
-                                             AS_I64(vm.registers[src2]));
-                break;
-            }
-
-            case OP_LT_U32_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = READ_BYTE();
-                uint8_t src2 = READ_BYTE();
-                if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Operands must be u32");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-                vm.registers[dst] = BOOL_VAL(AS_U32(vm.registers[src1]) < AS_U32(vm.registers[src2]));
-                break;
-            }
-
-            case OP_LE_U32_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = READ_BYTE();
-                uint8_t src2 = READ_BYTE();
-                if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Operands must be u32");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-                vm.registers[dst] = BOOL_VAL(AS_U32(vm.registers[src1]) <= AS_U32(vm.registers[src2]));
-                break;
-            }
-
-            case OP_GT_U32_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = READ_BYTE();
-                uint8_t src2 = READ_BYTE();
-                if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Operands must be u32");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-                vm.registers[dst] = BOOL_VAL(AS_U32(vm.registers[src1]) > AS_U32(vm.registers[src2]));
-                break;
-            }
-
-            case OP_GE_U32_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = READ_BYTE();
-                uint8_t src2 = READ_BYTE();
-                if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Operands must be u32");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-                vm.registers[dst] = BOOL_VAL(AS_U32(vm.registers[src1]) >= AS_U32(vm.registers[src2]));
-                break;
-            }
-
-            case OP_LT_U64_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = read_BYTE();
-                uint8_t src2 = read_BYTE();
-                if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Operands must be u64");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-                vm.registers[dst] = BOOL_VAL(AS_U64(vm.registers[src1]) < AS_U64(vm.registers[src2]));
-                break;
-            }
-
-            case OP_LE_U64_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = read_BYTE();
-                uint8_t src2 = read_BYTE();
-                if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Operands must be u64");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-                vm.registers[dst] = BOOL_VAL(AS_U64(vm.registers[src1]) <= AS_U64(vm.registers[src2]));
-                break;
-            }
-
-            case OP_GT_U64_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = read_BYTE();
-                uint8_t src2 = read_BYTE();
-                if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Operands must be u64");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-                vm.registers[dst] = BOOL_VAL(AS_U64(vm.registers[src1]) > AS_U64(vm.registers[src2]));
-                break;
-            }
-
-            case OP_GE_U64_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = read_BYTE();
-                uint8_t src2 = read_BYTE();
-                if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Operands must be u64");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-                vm.registers[dst] = BOOL_VAL(AS_U64(vm.registers[src1]) >= AS_U64(vm.registers[src2]));
-                break;
-            }
-
-            case OP_EQ_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = READ_BYTE();
-                uint8_t src2 = READ_BYTE();
-
-                vm.registers[dst] = BOOL_VAL(
-                    valuesEqual(vm.registers[src1], vm.registers[src2]));
-                break;
-            }
-
-            case OP_NE_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = READ_BYTE();
-                uint8_t src2 = READ_BYTE();
-
-                vm.registers[dst] = BOOL_VAL(
-                    !valuesEqual(vm.registers[src1], vm.registers[src2]));
-                break;
-            }
-
-            case OP_AND_BOOL_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = READ_BYTE();
-                uint8_t src2 = READ_BYTE();
-
-                if (!IS_BOOL(vm.registers[src1]) || !IS_BOOL(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Operands must be bool");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-
-                vm.registers[dst] = BOOL_VAL(AS_BOOL(vm.registers[src1]) &&
-                                             AS_BOOL(vm.registers[src2]));
-                break;
-            }
-
-            case OP_OR_BOOL_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = READ_BYTE();
-                uint8_t src2 = READ_BYTE();
-
-                if (!IS_BOOL(vm.registers[src1]) || !IS_BOOL(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Operands must be bool");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-
-                vm.registers[dst] = BOOL_VAL(AS_BOOL(vm.registers[src1]) ||
-                                             AS_BOOL(vm.registers[src2]));
-                break;
-            }
-
-            case OP_NOT_BOOL_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src = READ_BYTE();
-
-                if (!IS_BOOL(vm.registers[src])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Operand must be bool");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-
-                vm.registers[dst] = BOOL_VAL(!AS_BOOL(vm.registers[src]));
-                break;
-            }
-
-            case OP_CONCAT_R: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src1 = READ_BYTE();
-                uint8_t src2 = READ_BYTE();
-
-                if (!IS_STRING(vm.registers[src1]) || !IS_STRING(vm.registers[src2])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Operands must be string");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-
-                ObjString* a = AS_STRING(vm.registers[src1]);
-                ObjString* b = AS_STRING(vm.registers[src2]);
-                int newLen = a->length + b->length;
-                char* buf = malloc(newLen + 1);
-                memcpy(buf, a->chars, a->length);
-                memcpy(buf + a->length, b->chars, b->length);
-                buf[newLen] = '\0';
-                ObjString* res = allocateString(buf, newLen);
-                free(buf);
-                vm.registers[dst] = STRING_VAL(res);
-                break;
-            }
-
-            // Control flow
-            case OP_JUMP: {
-                uint16_t offset = READ_SHORT();
-                vm.ip += offset;
-                break;
-            }
-
-            case OP_JUMP_IF_NOT_R: {
-                uint8_t reg = READ_BYTE();
-                uint16_t offset = READ_SHORT();
-
-                if (!IS_BOOL(vm.registers[reg])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                 "Condition must be boolean");
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
-
-                if (!AS_BOOL(vm.registers[reg])) {
-                    vm.ip += offset;
-                }
-                break;
-            }
-
-            case OP_LOOP: {
-                uint16_t offset = READ_SHORT();
-                vm.ip -= offset;
-                break;
-            }
-
-            // I/O operations
-            case OP_PRINT_R: {
-                uint8_t reg = READ_BYTE();
-                
-                // Check if this is a typed register first
-                if (reg < REGISTER_COUNT && vm.typed_regs.reg_types[reg] != REG_TYPE_NONE) {
-                    switch (vm.typed_regs.reg_types[reg]) {
-                        case REG_TYPE_I32:
-                            printf("%d", vm.typed_regs.i32_regs[reg]);
-                            break;
-                        case REG_TYPE_I64:
-                            printf("%lld", (long long)vm.typed_regs.i64_regs[reg]);
-                            break;
-                        case REG_TYPE_F64:
-                            printf("%g", vm.typed_regs.f64_regs[reg]);
-                            break;
-                        default:
-                            printValue(vm.registers[reg]);
-                            break;
-                    }
-                } else {
-                    printValue(vm.registers[reg]);
+        
+        int32_t result = AS_I32(vm.registers[src]) + imm;
+        vm.registers[dst] = I32_VAL(result);
+        
+        DISPATCH_TYPED();
+    }
+
+    LABEL_OP_SUB_I32_IMM: {
+        uint8_t dst = *vm.ip++;
+        uint8_t src = *vm.ip++;
+        int32_t imm = *(int32_t*)vm.ip;
+        vm.ip += 4;
+        
+        // Compiler ensures this is only emitted for i32 operations, so trust it
+        if (!IS_I32(vm.registers[src])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operand must be i32");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        
+        int32_t result = AS_I32(vm.registers[src]) - imm;
+        vm.registers[dst] = I32_VAL(result);
+        
+        DISPATCH_TYPED();
+    }
+
+    LABEL_OP_MUL_I32_IMM: {
+        uint8_t dst = *vm.ip++;
+        uint8_t src = *vm.ip++;
+        int32_t imm = *(int32_t*)vm.ip;
+        vm.ip += 4;
+        
+        // Compiler ensures this is only emitted for i32 operations, so trust it
+        if (!IS_I32(vm.registers[src])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operand must be i32");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        
+        int32_t result = AS_I32(vm.registers[src]) * imm;
+        vm.registers[dst] = I32_VAL(result);
+        
+        DISPATCH_TYPED();
+    }
+
+    LABEL_OP_CMP_I32_IMM: {
+        uint8_t dst = *vm.ip++;
+        uint8_t src = *vm.ip++;
+        int32_t imm = *(int32_t*)vm.ip;
+        vm.ip += 4;
+        
+        vm.typed_regs.bool_regs[dst] = vm.typed_regs.i32_regs[src] < imm;
+        
+        DISPATCH_TYPED();
+    }
+
+    LABEL_OP_INC_CMP_JMP: {
+        uint8_t reg = *vm.ip++;
+        uint8_t limit_reg = *vm.ip++;
+        int16_t offset = *(int16_t*)vm.ip;
+        vm.ip += 2;
+        
+        // Compiler ensures this is only emitted for i32 operations, so trust it
+        if (!IS_I32(vm.registers[reg]) || !IS_I32(vm.registers[limit_reg])) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        
+        int32_t incremented = AS_I32(vm.registers[reg]) + 1;
+        vm.registers[reg] = I32_VAL(incremented);
+        if (incremented < AS_I32(vm.registers[limit_reg])) {
+            vm.ip += offset;
+        }
+        
+        DISPATCH_TYPED();
+    }
+
+    LABEL_OP_DEC_CMP_JMP: {
+        uint8_t reg = *vm.ip++;
+        uint8_t zero_test = *vm.ip++;
+        int16_t offset = *(int16_t*)vm.ip;
+        vm.ip += 2;
+        
+        // Fused decrement + compare + conditional jump
+        if (--vm.typed_regs.i32_regs[reg] > vm.typed_regs.i32_regs[zero_test]) {
+            vm.ip += offset;
+        }
+        
+        DISPATCH_TYPED();
+    }
+
+    LABEL_OP_MUL_ADD_I32: {
+        uint8_t dst = *vm.ip++;
+        uint8_t mul1 = *vm.ip++;
+        uint8_t mul2 = *vm.ip++;
+        uint8_t add = *vm.ip++;
+        
+        // Fused multiply-add (single operation on modern CPUs)
+        vm.typed_regs.i32_regs[dst] = 
+            vm.typed_regs.i32_regs[mul1] * vm.typed_regs.i32_regs[mul2] + 
+            vm.typed_regs.i32_regs[add];
+        
+        DISPATCH_TYPED();
+    }
+
+    LABEL_OP_HALT:
+        vm.lastExecutionTime = get_time_vm() - start_time;
+        RETURN(INTERPRET_OK);
+
+    LABEL_UNKNOWN: __attribute__((unused))
+        runtimeError(ERROR_RUNTIME, (SrcLocation){NULL, 0, 0},
+                    "Unknown opcode: %d", instruction);
+        RETURN(INTERPRET_RUNTIME_ERROR);
+
+    #else  // USE_COMPUTED_GOTO
+
+        for (;;) {
+            if (vm.trace) {
+                // Debug trace
+                printf("        ");
+                for (int i = 0; i < 8; i++) {
+                    printf("[ R%d: ", i);
+                    printValue(vm.registers[i]);
+                    printf(" ]");
                 }
-                
                 printf("\n");
-                fflush(stdout);
-                break;
+
+                disassembleInstruction(vm.chunk, (int)(vm.ip - vm.chunk->code));
             }
 
-            case OP_PRINT_NO_NL_R: {
-                uint8_t reg = READ_BYTE();
-                printValue(vm.registers[reg]);
-                fflush(stdout);
-                break;
-            }
+            vm.instruction_count++;
 
-            // Function operations
-            case OP_CALL_R: {
-                uint8_t funcReg = READ_BYTE();
-                uint8_t firstArgReg = READ_BYTE();
-                uint8_t argCount = READ_BYTE();
-                uint8_t resultReg = READ_BYTE();
-                
-                Value funcValue = vm.registers[funcReg];
-                
-                if (IS_I32(funcValue)) {
-                    int functionIndex = AS_I32(funcValue);
-                    
-                    if (functionIndex < 0 || functionIndex >= vm.functionCount) {
-                        vm.registers[resultReg] = NIL_VAL;
-                        break;
-                    }
-                    
-                    Function* function = &vm.functions[functionIndex];
-                    
-                    // Check arity
-                    if (argCount != function->arity) {
-                        vm.registers[resultReg] = NIL_VAL;
-                        break;
-                    }
-                    
-                    // Check if we have room for another call frame
-                    if (vm.frameCount >= FRAMES_MAX) {
-                        vm.registers[resultReg] = NIL_VAL;
-                        break;
-                    }
-                    
-                    // Create new call frame
-                    CallFrame* frame = &vm.frames[vm.frameCount++];
-                    frame->returnAddress = vm.ip;
-                    frame->previousChunk = vm.chunk;
-                    frame->baseRegister = resultReg;
-                    frame->registerCount = argCount;
-                    frame->functionIndex = functionIndex;
-                    
-                    // Copy arguments to function's parameter registers
-                    for (int i = 0; i < argCount; i++) {
-                        vm.registers[i] = vm.registers[firstArgReg + i];
-                    }
-                    
-                    // Switch to function's chunk
-                    vm.chunk = function->chunk;
-                    vm.ip = function->chunk->code + function->start;
-                    
-                } else {
-                    vm.registers[resultReg] = NIL_VAL;
+            uint8_t instruction = READ_BYTE();
+
+            switch (instruction) {
+                case OP_LOAD_CONST: {
+                    uint8_t reg = READ_BYTE();
+                    uint16_t constantIndex = READ_SHORT();
+                    vm.registers[reg] = READ_CONSTANT(constantIndex);
+                    break;
                 }
-                break;
-            }
-            case OP_RETURN_R: {
-                uint8_t reg = READ_BYTE();
-                Value returnValue = vm.registers[reg];
 
-                if (vm.frameCount > 0) {
-                    CallFrame* frame = &vm.frames[--vm.frameCount];
-                    vm.chunk = frame->previousChunk;
-                    vm.ip = frame->returnAddress;
-
-                    // Store return value in the result register
-                    vm.registers[frame->baseRegister] = returnValue;
-                } else {
-                    // Top-level return
-                    vm.lastExecutionTime = get_time_vm() - start_time;
-                    RETURN(INTERPRET_OK);
+                case OP_LOAD_NIL: {
+                    uint8_t reg = READ_BYTE();
+                    vm.registers[reg] = NIL_VAL;
+                    break;
                 }
-                break;
-            }
 
-            case OP_RETURN_VOID: {
-                if (vm.frameCount > 0) {
-                    CallFrame* frame = &vm.frames[--vm.frameCount];
-                    vm.chunk = frame->previousChunk;
-                    vm.ip = frame->returnAddress;
-                } else {
-                    vm.lastExecutionTime = get_time_vm() - start_time;
-                    RETURN(INTERPRET_OK);
+                case OP_LOAD_TRUE: {
+                    uint8_t reg = READ_BYTE();
+                    vm.registers[reg] = BOOL_VAL(true);
+                    break;
                 }
-                break;
-            }
 
-            // Short jump optimizations for performance  
-            case OP_JUMP_SHORT: {
-                uint8_t offset = READ_BYTE();
-                vm.ip += offset;
-                break;
-            }
-
-            case OP_JUMP_BACK_SHORT: {
-                uint8_t offset = READ_BYTE();
-                vm.ip -= offset;
-                break;
-            }
-
-            case OP_JUMP_IF_NOT_SHORT: {
-                uint8_t reg = READ_BYTE();
-                uint8_t offset = READ_BYTE();
-                
-                if (!IS_BOOL(vm.registers[reg])) {
-                    runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Condition must be boolean");
-                    return INTERPRET_RUNTIME_ERROR;
+                case OP_LOAD_FALSE: {
+                    uint8_t reg = READ_BYTE();
+                    vm.registers[reg] = BOOL_VAL(false);
+                    break;
                 }
-                
-                if (!AS_BOOL(vm.registers[reg])) {
+
+                case OP_MOVE: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src = READ_BYTE();
+                    vm.registers[dst] = vm.registers[src];
+                    break;
+                }
+
+                case OP_LOAD_GLOBAL: {
+                    uint8_t reg = READ_BYTE();
+                    uint8_t globalIndex = READ_BYTE();
+                    if (globalIndex >= vm.variableCount ||
+                        vm.globalTypes[globalIndex] == NULL) {
+                        runtimeError(ERROR_NAME, (SrcLocation){NULL, 0, 0},
+                                    "Undefined variable");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+                    vm.registers[reg] = vm.globals[globalIndex];
+                    break;
+                }
+
+                case OP_STORE_GLOBAL: {
+                    uint8_t globalIndex = READ_BYTE();
+                    uint8_t reg = READ_BYTE();
+                    vm.globals[globalIndex] = vm.registers[reg];
+                    break;
+                }
+
+                // Arithmetic operations
+                case OP_ADD_I32_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
+
+                    if (!IS_I32(vm.registers[src1]) ||
+                        !IS_I32(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Operands must be i32");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    int32_t a = AS_I32(vm.registers[src1]);
+                    int32_t b = AS_I32(vm.registers[src2]);
+    #if USE_FAST_ARITH
+                    vm.registers[dst] = I32_VAL(a + b);
+    #else
+                    int32_t result;
+                    if (__builtin_add_overflow(a, b, &result)) {
+                        runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                    "Integer overflow");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+                    vm.registers[dst] = I32_VAL(result);
+    #endif
+                    break;
+                }
+
+                case OP_SUB_I32_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
+
+                    if (!IS_I32(vm.registers[src1]) ||
+                        !IS_I32(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Operands must be i32");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    int32_t a = AS_I32(vm.registers[src1]);
+                    int32_t b = AS_I32(vm.registers[src2]);
+    #if USE_FAST_ARITH
+                    vm.registers[dst] = I32_VAL(a - b);
+    #else
+                    int32_t result;
+                    if (__builtin_sub_overflow(a, b, &result)) {
+                        runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                    "Integer overflow");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+                    vm.registers[dst] = I32_VAL(result);
+    #endif
+                    break;
+                }
+
+                case OP_MUL_I32_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
+
+                    if (!IS_I32(vm.registers[src1]) ||
+                        !IS_I32(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Operands must be i32");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    int32_t a = AS_I32(vm.registers[src1]);
+                    int32_t b = AS_I32(vm.registers[src2]);
+    #if USE_FAST_ARITH
+                    vm.registers[dst] = I32_VAL(a * b);
+    #else
+                    int32_t result;
+                    if (__builtin_mul_overflow(a, b, &result)) {
+                        runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                    "Integer overflow");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+                    vm.registers[dst] = I32_VAL(result);
+    #endif
+                    break;
+                }
+
+                case OP_DIV_I32_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
+
+                    if (!IS_I32(vm.registers[src1]) ||
+                        !IS_I32(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Operands must be i32");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    int32_t b = AS_I32(vm.registers[src2]);
+                    if (b == 0) {
+                        runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                    "Division by zero");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) / b);
+                    break;
+                }
+
+                case OP_MOD_I32_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
+
+                    if (!IS_I32(vm.registers[src1]) ||
+                        !IS_I32(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Operands must be i32");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    int32_t b = AS_I32(vm.registers[src2]);
+                    if (b == 0) {
+                        runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                    "Division by zero");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) % b);
+                    break;
+                }
+
+                case OP_INC_I32_R: {
+                    uint8_t reg = READ_BYTE();
+    #if USE_FAST_ARITH
+                    vm.registers[reg] = I32_VAL(AS_I32(vm.registers[reg]) + 1);
+    #else
+                    int32_t val = AS_I32(vm.registers[reg]);
+                    int32_t result;
+                    if (__builtin_add_overflow(val, 1, &result)) {
+                        runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                    "Integer overflow");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+                    vm.registers[reg] = I32_VAL(result);
+    #endif
+                    break;
+                }
+
+                case OP_DEC_I32_R: {
+                    uint8_t reg = READ_BYTE();
+    #if USE_FAST_ARITH
+                    vm.registers[reg] = I32_VAL(AS_I32(vm.registers[reg]) - 1);
+    #else
+                    int32_t val = AS_I32(vm.registers[reg]);
+                    int32_t result;
+                    if (__builtin_sub_overflow(val, 1, &result)) {
+                        runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                    "Integer overflow");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+                    vm.registers[reg] = I32_VAL(result);
+    #endif
+                    break;
+                }
+
+                // I64 arithmetic operations
+                case OP_ADD_I64_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
+
+                    if (!IS_I64(vm.registers[src1]) ||
+                        !IS_I64(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Operands must be i64");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    int64_t a = AS_I64(vm.registers[src1]);
+                    int64_t b = AS_I64(vm.registers[src2]);
+    #if USE_FAST_ARITH
+                    vm.registers[dst] = I64_VAL(a + b);
+    #else
+                    int64_t result;
+                    if (__builtin_add_overflow(a, b, &result)) {
+                        runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                    "Integer overflow");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+                    vm.registers[dst] = I64_VAL(result);
+    #endif
+                    break;
+                }
+
+                case OP_SUB_I64_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
+
+                    if (!IS_I64(vm.registers[src1]) ||
+                        !IS_I64(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Operands must be i64");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    int64_t a = AS_I64(vm.registers[src1]);
+                    int64_t b = AS_I64(vm.registers[src2]);
+    #if USE_FAST_ARITH
+                    vm.registers[dst] = I64_VAL(a - b);
+    #else
+                    int64_t result;
+                    if (__builtin_sub_overflow(a, b, &result)) {
+                        runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                    "Integer overflow");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+                    vm.registers[dst] = I64_VAL(result);
+    #endif
+                    break;
+                }
+
+                case OP_MUL_I64_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
+
+                    if (!IS_I64(vm.registers[src1]) ||
+                        !IS_I64(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Operands must be i64");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    int64_t a = AS_I64(vm.registers[src1]);
+                    int64_t b = AS_I64(vm.registers[src2]);
+    #if USE_FAST_ARITH
+                    vm.registers[dst] = I64_VAL(a * b);
+    #else
+                    int64_t result;
+                    if (__builtin_mul_overflow(a, b, &result)) {
+                        runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                    "Integer overflow");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+                    vm.registers[dst] = I64_VAL(result);
+    #endif
+                    break;
+                }
+
+                case OP_DIV_I64_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
+
+                    if (!IS_I64(vm.registers[src1]) ||
+                        !IS_I64(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Operands must be i64");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    int64_t b = AS_I64(vm.registers[src2]);
+                    if (b == 0) {
+                        runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                    "Division by zero");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    vm.registers[dst] = I64_VAL(AS_I64(vm.registers[src1]) / b);
+                    break;
+                }
+
+                case OP_MOD_I64_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
+
+                    if (!IS_I64(vm.registers[src1]) ||
+                        !IS_I64(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Operands must be i64");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    int64_t b = AS_I64(vm.registers[src2]);
+                    if (b == 0) {
+                        runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                    "Division by zero");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    vm.registers[dst] = I64_VAL(AS_I64(vm.registers[src1]) % b);
+                    break;
+                }
+
+                case OP_ADD_U32_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
+
+                    if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Operands must be u32");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    uint32_t a = AS_U32(vm.registers[src1]);
+                    uint32_t b = AS_U32(vm.registers[src2]);
+                    
+                    // Check for overflow: if a + b < a, then overflow occurred
+                    if (UINT32_MAX - a < b) {
+                        runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                    "u32 addition overflow");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    vm.registers[dst] = U32_VAL(a + b);
+                    break;
+                }
+
+                case OP_SUB_U32_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
+
+                    if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Operands must be u32");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    uint32_t a = AS_U32(vm.registers[src1]);
+                    uint32_t b = AS_U32(vm.registers[src2]);
+                    
+                    // Check for underflow: if a < b, then underflow would occur
+                    if (a < b) {
+                        runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                    "u32 subtraction underflow");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    vm.registers[dst] = U32_VAL(a - b);
+                    break;
+                }
+
+                case OP_MUL_U32_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
+
+                    if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Operands must be u32");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    uint32_t a = AS_U32(vm.registers[src1]);
+                    uint32_t b = AS_U32(vm.registers[src2]);
+                    
+                    // Check for multiplication overflow: if a != 0 && result / a != b
+                    if (a != 0 && b > UINT32_MAX / a) {
+                        runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                    "u32 multiplication overflow");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    vm.registers[dst] = U32_VAL(a * b);
+                    break;
+                }
+
+                case OP_DIV_U32_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
+
+                    if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Operands must be u32");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    uint32_t b = AS_U32(vm.registers[src2]);
+                    if (b == 0) {
+                        runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                    "Division by zero");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    vm.registers[dst] = U32_VAL(AS_U32(vm.registers[src1]) / b);
+                    break;
+                }
+
+                case OP_MOD_U32_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
+
+                    if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Operands must be u32");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    uint32_t b = AS_U32(vm.registers[src2]);
+                    if (b == 0) {
+                        runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                    "Division by zero");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    vm.registers[dst] = U32_VAL(AS_U32(vm.registers[src1]) % b);
+                    break;
+                }
+
+                case OP_ADD_U64_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = read_BYTE();
+                    uint8_t src2 = read_BYTE();
+
+                    if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Operands must be u64");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    uint64_t a = AS_U64(vm.registers[src1]);
+                    uint64_t b = AS_U64(vm.registers[src2]);
+                    
+                    // Check for overflow: if a + b < a, then overflow occurred
+                    if (UINT64_MAX - a < b) {
+                        runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                    "u64 addition overflow");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    vm.registers[dst] = U64_VAL(a + b);
+                    break;
+                }
+
+                case OP_SUB_U64_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = read_BYTE();
+                    uint8_t src2 = read_BYTE();
+
+                    if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Operands must be u64");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    uint64_t a = AS_U64(vm.registers[src1]);
+                    uint64_t b = AS_U64(vm.registers[src2]);
+                    
+                    // Check for underflow: if a < b, then underflow would occur
+                    if (a < b) {
+                        runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                    "u64 subtraction underflow");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    vm.registers[dst] = U64_VAL(a - b);
+                    break;
+                }
+
+                case OP_MUL_U64_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = read_BYTE();
+                    uint8_t src2 = read_BYTE();
+
+                    if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Operands must be u64");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    uint64_t a = AS_U64(vm.registers[src1]);
+                    uint64_t b = AS_U64(vm.registers[src2]);
+                    
+                    // Check for multiplication overflow: if a != 0 && result / a != b
+                    if (a != 0 && b > UINT64_MAX / a) {
+                        runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                    "u64 multiplication overflow");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    vm.registers[dst] = U64_VAL(a * b);
+                    break;
+                }
+
+                case OP_DIV_U64_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = read_BYTE();
+                    uint8_t src2 = read_BYTE();
+
+                    if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Operands must be u64");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    uint64_t b = AS_U64(vm.registers[src2]);
+                    if (b == 0) {
+                        runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                    "Division by zero");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    vm.registers[dst] = U64_VAL(AS_U64(vm.registers[src1]) / b);
+                    break;
+                }
+
+                case OP_MOD_U64_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = read_BYTE();
+                    uint8_t src2 = read_BYTE();
+
+                    if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Operands must be u64");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    uint64_t b = AS_U64(vm.registers[src2]);
+                    if (b == 0) {
+                        runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                    "Division by zero");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    vm.registers[dst] = U64_VAL(AS_U64(vm.registers[src1]) % b);
+                    break;
+                }
+
+                case OP_I32_TO_I64_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src = READ_BYTE();
+                    if (!IS_I32(vm.registers[src])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Source must be i32");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+                    vm.registers[dst] = I64_VAL((int64_t)AS_I32(vm.registers[src]));
+                    break;
+                }
+
+                case OP_I32_TO_U32_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src = READ_BYTE();
+                    if (!IS_I32(vm.registers[src])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Source must be i32");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+                    vm.registers[dst] = U32_VAL((uint32_t)AS_I32(vm.registers[src]));
+                    break;
+                }
+
+                case OP_U32_TO_I32_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src = READ_BYTE();
+                    if (!IS_U32(vm.registers[src])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Source must be u32");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+                    vm.registers[dst] = I32_VAL((int32_t)AS_U32(vm.registers[src]));
+                    break;
+                }
+
+                case OP_F64_TO_U32_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src = read_BYTE();
+                    if (!IS_F64(vm.registers[src])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Source must be f64");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+                    double val = AS_F64(vm.registers[src]);
+                    if (val < 0.0 || val > (double)UINT32_MAX) {
+                        runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                    "f64 value out of u32 range");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+                    vm.registers[dst] = U32_VAL((uint32_t)val);
+                    break;
+                }
+
+                case OP_U32_TO_F64_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src = read_BYTE();
+                    if (!IS_U32(vm.registers[src])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Source must be u32");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+                    vm.registers[dst] = F64_VAL((double)AS_U32(vm.registers[src]));
+                    break;
+                }
+
+                case OP_I32_TO_U64_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src = READ_BYTE();
+                    if (!IS_I32(vm.registers[src])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Source must be i32");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+                    int32_t val = AS_I32(vm.registers[src]);
+                    if (val < 0) {
+                        runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                    "Cannot convert negative i32 to u64");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+                    vm.registers[dst] = U64_VAL((uint64_t)val);
+                    break;
+                }
+
+                case OP_I64_TO_U64_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src = READ_BYTE();
+                    if (!IS_I64(vm.registers[src])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Source must be i64");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+                    int64_t val = AS_I64(vm.registers[src]);
+                    if (val < 0) {
+                        runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                    "Cannot convert negative i64 to u64");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+                    vm.registers[dst] = U64_VAL((uint64_t)val);
+                    break;
+                }
+
+                case OP_U64_TO_I32_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src = READ_BYTE();
+                    if (!IS_U64(vm.registers[src])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Source must be u64");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+                    uint64_t val = AS_U64(vm.registers[src]);
+                    if (val > (uint64_t)INT32_MAX) {
+                        runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                    "u64 value too large for i32");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+                    vm.registers[dst] = I32_VAL((int32_t)val);
+                    break;
+                }
+
+                case OP_U64_TO_I64_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src = READ_BYTE();
+                    if (!IS_U64(vm.registers[src])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Source must be u64");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+                    uint64_t val = AS_U64(vm.registers[src]);
+                    if (val > (uint64_t)INT64_MAX) {
+                        runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                    "u64 value too large for i64");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+                    vm.registers[dst] = I64_VAL((int64_t)val);
+                    break;
+                }
+
+                case OP_U32_TO_U64_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src = READ_BYTE();
+                    if (!IS_U32(vm.registers[src])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Source must be u32");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+                    vm.registers[dst] = U64_VAL((uint64_t)AS_U32(vm.registers[src]));
+                    break;
+                }
+
+                case OP_U64_TO_U32_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src = READ_BYTE();
+                    if (!IS_U64(vm.registers[src])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Source must be u64");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+                    uint64_t val = AS_U64(vm.registers[src]);
+                    if (val > (uint64_t)UINT32_MAX) {
+                        runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                    "u64 value too large for u32");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+                    vm.registers[dst] = U32_VAL((uint32_t)val);
+                    break;
+                }
+
+                case OP_F64_TO_U64_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src = READ_BYTE();
+                    if (!IS_F64(vm.registers[src])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Source must be f64");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+                    double val = AS_F64(vm.registers[src]);
+                    if (val < 0.0 || val > (double)UINT64_MAX) {
+                        runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                    "f64 value out of u64 range");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+                    vm.registers[dst] = U64_VAL((uint64_t)val);
+                    break;
+                }
+
+                case OP_U64_TO_F64_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src = read_BYTE();
+                    if (!IS_U64(vm.registers[src])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Source must be u64");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+                    vm.registers[dst] = F64_VAL((double)AS_U64(vm.registers[src]));
+                    break;
+                }
+
+                // F64 Arithmetic Operations
+                case OP_ADD_F64_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
+                    if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    vm.registers[dst] = F64_VAL(AS_F64(vm.registers[src1]) + AS_F64(vm.registers[src2]));
+                    break;
+                }
+
+                case OP_SUB_F64_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
+                    if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    vm.registers[dst] = F64_VAL(AS_F64(vm.registers[src1]) - AS_F64(vm.registers[src2]));
+                    break;
+                }
+
+                case OP_MUL_F64_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
+                    if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    vm.registers[dst] = F64_VAL(AS_F64(vm.registers[src1]) * AS_F64(vm.registers[src2]));
+                    break;
+                }
+
+                case OP_DIV_F64_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
+                    if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    double a = AS_F64(vm.registers[src1]);
+                    double b = AS_F64(vm.registers[src2]);
+                    
+                    // IEEE 754 compliant: division by zero produces infinity, not error
+                    double result = a / b;
+                    
+                    // The result may be infinity, -infinity, or NaN
+                    // These are valid f64 values according to IEEE 754
+                    vm.registers[dst] = F64_VAL(result);
+                    break;
+                }
+
+                // Bitwise Operations
+                case OP_AND_I32_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
+                    if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) & AS_I32(vm.registers[src2]));
+                    break;
+                }
+
+                case OP_OR_I32_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
+                    if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) | AS_I32(vm.registers[src2]));
+                    break;
+                }
+
+                case OP_XOR_I32_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
+                    if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) ^ AS_I32(vm.registers[src2]));
+                    break;
+                }
+
+                case OP_NOT_I32_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src = READ_BYTE();
+                    if (!IS_I32(vm.registers[src])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operand must be i32");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    vm.registers[dst] = I32_VAL(~AS_I32(vm.registers[src]));
+                    break;
+                }
+
+                case OP_SHL_I32_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
+                    if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) << AS_I32(vm.registers[src2]));
+                    break;
+                }
+
+                case OP_SHR_I32_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
+                    if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) >> AS_I32(vm.registers[src2]));
+                    break;
+                }
+
+                // F64 Comparison Operations
+                case OP_LT_F64_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
+                    if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    vm.registers[dst] = BOOL_VAL(AS_F64(vm.registers[src1]) < AS_F64(vm.registers[src2]));
+                    break;
+                }
+
+                case OP_LE_F64_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
+                    if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    vm.registers[dst] = BOOL_VAL(AS_F64(vm.registers[src1]) <= AS_F64(vm.registers[src2]));
+                    break;
+                }
+
+                case OP_GT_F64_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
+                    if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    vm.registers[dst] = BOOL_VAL(AS_F64(vm.registers[src1]) > AS_F64(vm.registers[src2]));
+                    break;
+                }
+
+                case OP_GE_F64_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
+                    if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    vm.registers[dst] = BOOL_VAL(AS_F64(vm.registers[src1]) >= AS_F64(vm.registers[src2]));
+                    break;
+                }
+
+                // F64 Type Conversion Operations
+                case OP_I32_TO_F64_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src = READ_BYTE();
+                    if (!IS_I32(vm.registers[src])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Source must be i32");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    vm.registers[dst] = F64_VAL((double)AS_I32(vm.registers[src]));
+                    break;
+                }
+
+                case OP_I64_TO_F64_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src = READ_BYTE();
+                    if (!IS_I64(vm.registers[src])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Source must be i64");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    vm.registers[dst] = F64_VAL((double)AS_I64(vm.registers[src]));
+                    break;
+                }
+
+                case OP_F64_TO_I32_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src = READ_BYTE();
+                    if (!IS_F64(vm.registers[src])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Source must be f64");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    vm.registers[dst] = I32_VAL((int32_t)AS_F64(vm.registers[src]));
+                    break;
+                }
+
+                case OP_F64_TO_I64_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src = READ_BYTE();
+                    if (!IS_F64(vm.registers[src])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Source must be f64");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    vm.registers[dst] = I64_VAL((int64_t)AS_F64(vm.registers[src]));
+                    break;
+                }
+
+                // Comparison operations
+                case OP_LT_I32_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
+
+                    if (!IS_I32(vm.registers[src1]) ||
+                        !IS_I32(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Operands must be i32");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    vm.registers[dst] = BOOL_VAL(AS_I32(vm.registers[src1]) <
+                                                AS_I32(vm.registers[src2]));
+                    break;
+                }
+
+                case OP_LE_I32_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
+
+                    if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Operands must be i32");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    vm.registers[dst] = BOOL_VAL(AS_I32(vm.registers[src1]) <=
+                                                AS_I32(vm.registers[src2]));
+                    break;
+                }
+
+                case OP_GT_I32_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
+
+                    if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Operands must be i32");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    vm.registers[dst] = BOOL_VAL(AS_I32(vm.registers[src1]) >
+                                                AS_I32(vm.registers[src2]));
+                    break;
+                }
+
+                case OP_GE_I32_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
+
+                    if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Operands must be i32");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    vm.registers[dst] = BOOL_VAL(AS_I32(vm.registers[src1]) >=
+                                                AS_I32(vm.registers[src2]));
+                    break;
+                }
+
+                // I64 comparison operations
+                case OP_LT_I64_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
+
+                    if (!IS_I64(vm.registers[src1]) ||
+                        !IS_I64(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Operands must be i64");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    vm.registers[dst] = BOOL_VAL(AS_I64(vm.registers[src1]) <
+                                                AS_I64(vm.registers[src2]));
+                    break;
+                }
+
+                case OP_LE_I64_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
+
+                    if (!IS_I64(vm.registers[src1]) || !IS_I64(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Operands must be i64");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    vm.registers[dst] = BOOL_VAL(AS_I64(vm.registers[src1]) <=
+                                                AS_I64(vm.registers[src2]));
+                    break;
+                }
+
+                case OP_GT_I64_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
+
+                    if (!IS_I64(vm.registers[src1]) || !IS_I64(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Operands must be i64");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    vm.registers[dst] = BOOL_VAL(AS_I64(vm.registers[src1]) >
+                                                AS_I64(vm.registers[src2]));
+                    break;
+                }
+
+                case OP_GE_I64_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
+
+                    if (!IS_I64(vm.registers[src1]) || !IS_I64(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Operands must be i64");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+
+                    vm.registers[dst] = BOOL_VAL(AS_I64(vm.registers[src1]) >=
+                                                AS_I64(vm.registers[src2]));
+                    break;
+                }
+
+                case OP_LT_U32_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
+                    if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Operands must be u32");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+                    vm.registers[dst] = BOOL_VAL(AS_U32(vm.registers[src1]) < AS_U32(vm.registers[src2]));
+                    break;
+                }
+
+                case OP_LE_U32_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
+                    if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Operands must be u32");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+                    vm.registers[dst] = BOOL_VAL(AS_U32(vm.registers[src1]) <= AS_U32(vm.registers[src2]));
+                    break;
+                }
+
+                case OP_GT_U32_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
+                    if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Operands must be u32");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+                    vm.registers[dst] = BOOL_VAL(AS_U32(vm.registers[src1]) > AS_U32(vm.registers[src2]));
+                    break;
+                }
+
+                case OP_GE_U32_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
+                    if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Operands must be u32");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+                    vm.registers[dst] = BOOL_VAL(AS_U32(vm.registers[src1]) >= AS_U32(vm.registers[src2]));
+                    break;
+                }
+
+                case OP_LT_U64_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = read_BYTE();
+                    uint8_t src2 = read_BYTE();
+                    if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Operands must be u64");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+                    vm.registers[dst] = BOOL_VAL(AS_U64(vm.registers[src1]) < AS_U64(vm.registers[src2]));
+                    break;
+                }
+
+                case OP_LE_U64_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = read_BYTE();
+                    uint8_t src2 = read_BYTE();
+                    if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Operands must be u64");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+                    vm.registers[dst] = BOOL_VAL(AS_U64(vm.registers[src1]) <= AS_U64(vm.registers[src2]));
+                    break;
+                }
+
+                case OP_GT_U64_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = read_BYTE();
+                    uint8_t src2 = read_BYTE();
+                    if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Operands must be u64");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+                    vm.registers[dst] = BOOL_VAL(AS_U64(vm.registers[src1]) > AS_U64(vm.registers[src2]));
+                    break;
+                }
+
+                case OP_GE_U64_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = read_BYTE();
+                    uint8_t src2 = read_BYTE();
+                    if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Operands must be u64");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+                    vm.registers[dst] = BOOL_VAL(AS_U64(vm.registers[src1]) >= AS_U64(vm.registers[src2]));
+                    break;
+                }
+
+                case OP_EQ_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
+
+                    vm.registers[dst] = BOOL_VAL(
+                        valuesEqual(vm.registers[src1], vm.registers[src2]));
+                    break;
+                }
+
+                case OP_NE_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
+
+                    vm.registers[dst] = BOOL_VAL(
+                        !valuesEqual(vm.registers[src1], vm.registers[src2]));
+                    break;
+                }
+
+                case OP_AND_BOOL_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
+
+                    if (!IS_BOOL(vm.registers[src1]) || !IS_BOOL(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Operands must be bool");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    vm.registers[dst] = BOOL_VAL(AS_BOOL(vm.registers[src1]) &&
+                                                AS_BOOL(vm.registers[src2]));
+                    break;
+                }
+
+                case OP_OR_BOOL_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
+
+                    if (!IS_BOOL(vm.registers[src1]) || !IS_BOOL(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Operands must be bool");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    vm.registers[dst] = BOOL_VAL(AS_BOOL(vm.registers[src1]) ||
+                                                AS_BOOL(vm.registers[src2]));
+                    break;
+                }
+
+                case OP_NOT_BOOL_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src = READ_BYTE();
+
+                    if (!IS_BOOL(vm.registers[src])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Operand must be bool");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    vm.registers[dst] = BOOL_VAL(!AS_BOOL(vm.registers[src]));
+                    break;
+                }
+
+                case OP_CONCAT_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
+
+                    if (!IS_STRING(vm.registers[src1]) || !IS_STRING(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Operands must be string");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    ObjString* a = AS_STRING(vm.registers[src1]);
+                    ObjString* b = AS_STRING(vm.registers[src2]);
+                    int newLen = a->length + b->length;
+                    char* buf = malloc(newLen + 1);
+                    memcpy(buf, a->chars, a->length);
+                    memcpy(buf + a->length, b->chars, b->length);
+                    buf[newLen] = '\0';
+                    ObjString* res = allocateString(buf, newLen);
+                    free(buf);
+                    vm.registers[dst] = STRING_VAL(res);
+                    break;
+                }
+
+                // Control flow
+                case OP_JUMP: {
+                    uint16_t offset = READ_SHORT();
                     vm.ip += offset;
+                    break;
                 }
-                break;
-            }
 
-            case OP_LOOP_SHORT: {
-                uint8_t offset = READ_BYTE();
-                vm.ip -= offset;
-                break;
-            }
+                case OP_JUMP_IF_NOT_R: {
+                    uint8_t reg = READ_BYTE();
+                    uint16_t offset = READ_SHORT();
 
-            // Typed arithmetic operations for maximum performance (bypass Value boxing)
-            case OP_ADD_I32_TYPED: {
-                uint8_t dst = READ_BYTE();
-                uint8_t left = READ_BYTE();
-                uint8_t right = READ_BYTE();
-                
-                vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[left] + vm.typed_regs.i32_regs[right];
-                vm.typed_regs.reg_types[dst] = REG_TYPE_I32;
-                
-                break;
-            }
+                    if (!IS_BOOL(vm.registers[reg])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Condition must be boolean");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
 
-            case OP_SUB_I32_TYPED: {
-                uint8_t dst = READ_BYTE();
-                uint8_t left = READ_BYTE();
-                uint8_t right = READ_BYTE();
-                
-                vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[left] - vm.typed_regs.i32_regs[right];
-                vm.typed_regs.reg_types[dst] = REG_TYPE_I32;
-                
-                break;
-            }
-
-            case OP_MUL_I32_TYPED: {
-                uint8_t dst = READ_BYTE();
-                uint8_t left = READ_BYTE();
-                uint8_t right = READ_BYTE();
-                
-                vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[left] * vm.typed_regs.i32_regs[right];
-                vm.typed_regs.reg_types[dst] = REG_TYPE_I32;
-                
-                break;
-            }
-
-            case OP_DIV_I32_TYPED: {
-                uint8_t dst = READ_BYTE();
-                uint8_t left = READ_BYTE();
-                uint8_t right = READ_BYTE();
-                
-                if (vm.typed_regs.i32_regs[right] == 0) {
-                    runtimeError(ERROR_RUNTIME, (SrcLocation){NULL, 0, 0}, "Division by zero");
-                    return INTERPRET_RUNTIME_ERROR;
+                    if (!AS_BOOL(vm.registers[reg])) {
+                        vm.ip += offset;
+                    }
+                    break;
                 }
-                
-                vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[left] / vm.typed_regs.i32_regs[right];
-                vm.typed_regs.reg_types[dst] = REG_TYPE_I32;
-                
-                break;
-            }
 
-            case OP_MOD_I32_TYPED: {
-                uint8_t dst = READ_BYTE();
-                uint8_t left = READ_BYTE();
-                uint8_t right = READ_BYTE();
-                
-                if (vm.typed_regs.i32_regs[right] == 0) {
-                    runtimeError(ERROR_RUNTIME, (SrcLocation){NULL, 0, 0}, "Modulo by zero");
-                    return INTERPRET_RUNTIME_ERROR;
+                case OP_LOOP: {
+                    uint16_t offset = READ_SHORT();
+                    vm.ip -= offset;
+                    break;
                 }
-                
-                vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[left] % vm.typed_regs.i32_regs[right];
-                vm.typed_regs.reg_types[dst] = REG_TYPE_I32;
-                
-                break;
-            }
 
-            // Additional typed operations (I64, F64, comparisons, loads, moves)
-            case OP_ADD_I64_TYPED: {
-                uint8_t dst = READ_BYTE();
-                uint8_t left = READ_BYTE();
-                uint8_t right = READ_BYTE();
-                
-                vm.typed_regs.i64_regs[dst] = vm.typed_regs.i64_regs[left] + vm.typed_regs.i64_regs[right];
-                vm.typed_regs.reg_types[dst] = REG_TYPE_I64;
-                
-                break;
-            }
-
-            case OP_SUB_I64_TYPED: {
-                uint8_t dst = READ_BYTE();
-                uint8_t left = READ_BYTE();
-                uint8_t right = READ_BYTE();
-                
-                vm.typed_regs.i64_regs[dst] = vm.typed_regs.i64_regs[left] - vm.typed_regs.i64_regs[right];
-                vm.typed_regs.reg_types[dst] = REG_TYPE_I64;
-                
-                break;
-            }
-
-            case OP_MUL_I64_TYPED: {
-                uint8_t dst = READ_BYTE();
-                uint8_t left = READ_BYTE();
-                uint8_t right = READ_BYTE();
-                
-                vm.typed_regs.i64_regs[dst] = vm.typed_regs.i64_regs[left] * vm.typed_regs.i64_regs[right];
-                vm.typed_regs.reg_types[dst] = REG_TYPE_I64;
-                
-                break;
-            }
-
-            case OP_DIV_I64_TYPED: {
-                uint8_t dst = READ_BYTE();
-                uint8_t left = READ_BYTE();
-                uint8_t right = READ_BYTE();
-                
-                if (vm.typed_regs.i64_regs[right] == 0) {
-                    runtimeError(ERROR_RUNTIME, (SrcLocation){NULL, 0, 0}, "Division by zero");
-                    return INTERPRET_RUNTIME_ERROR;
+                // I/O operations
+                case OP_PRINT_R: {
+                    uint8_t reg = READ_BYTE();
+                    
+                    // Check if this is a typed register first
+                    if (reg < REGISTER_COUNT && vm.typed_regs.reg_types[reg] != REG_TYPE_NONE) {
+                        switch (vm.typed_regs.reg_types[reg]) {
+                            case REG_TYPE_I32:
+                                printf("%d", vm.typed_regs.i32_regs[reg]);
+                                break;
+                            case REG_TYPE_I64:
+                                printf("%lld", (long long)vm.typed_regs.i64_regs[reg]);
+                                break;
+                            case REG_TYPE_F64:
+                                printf("%g", vm.typed_regs.f64_regs[reg]);
+                                break;
+                            default:
+                                printValue(vm.registers[reg]);
+                                break;
+                        }
+                    } else {
+                        printValue(vm.registers[reg]);
+                    }
+                    
+                    printf("\n");
+                    fflush(stdout);
+                    break;
                 }
-                
-                vm.typed_regs.i64_regs[dst] = vm.typed_regs.i64_regs[left] / vm.typed_regs.i64_regs[right];
-                vm.typed_regs.reg_types[dst] = REG_TYPE_I64;
-                
-                break;
+
+                case OP_PRINT_NO_NL_R: {
+                    uint8_t reg = READ_BYTE();
+                    printValue(vm.registers[reg]);
+                    fflush(stdout);
+                    break;
+                }
+
+                // Function operations
+                case OP_CALL_R: {
+                    uint8_t funcReg = READ_BYTE();
+                    uint8_t firstArgReg = READ_BYTE();
+                    uint8_t argCount = READ_BYTE();
+                    uint8_t resultReg = READ_BYTE();
+                    
+                    Value funcValue = vm.registers[funcReg];
+                    
+                    if (IS_I32(funcValue)) {
+                        int functionIndex = AS_I32(funcValue);
+                        
+                        if (functionIndex < 0 || functionIndex >= vm.functionCount) {
+                            vm.registers[resultReg] = NIL_VAL;
+                            break;
+                        }
+                        
+                        Function* function = &vm.functions[functionIndex];
+                        
+                        // Check arity
+                        if (argCount != function->arity) {
+                            vm.registers[resultReg] = NIL_VAL;
+                            break;
+                        }
+                        
+                        // Check if we have room for another call frame
+                        if (vm.frameCount >= FRAMES_MAX) {
+                            vm.registers[resultReg] = NIL_VAL;
+                            break;
+                        }
+                        
+                        // Create new call frame
+                        CallFrame* frame = &vm.frames[vm.frameCount++];
+                        frame->returnAddress = vm.ip;
+                        frame->previousChunk = vm.chunk;
+                        frame->baseRegister = resultReg;
+                        frame->registerCount = argCount;
+                        frame->functionIndex = functionIndex;
+                        
+                        // Copy arguments to function's parameter registers
+                        for (int i = 0; i < argCount; i++) {
+                            vm.registers[i] = vm.registers[firstArgReg + i];
+                        }
+                        
+                        // Switch to function's chunk
+                        vm.chunk = function->chunk;
+                        vm.ip = function->chunk->code + function->start;
+                        
+                    } else {
+                        vm.registers[resultReg] = NIL_VAL;
+                    }
+                    break;
+                }
+                case OP_RETURN_R: {
+                    uint8_t reg = READ_BYTE();
+                    Value returnValue = vm.registers[reg];
+
+                    if (vm.frameCount > 0) {
+                        CallFrame* frame = &vm.frames[--vm.frameCount];
+                        vm.chunk = frame->previousChunk;
+                        vm.ip = frame->returnAddress;
+
+                        // Store return value in the result register
+                        vm.registers[frame->baseRegister] = returnValue;
+                    } else {
+                        // Top-level return
+                        vm.lastExecutionTime = get_time_vm() - start_time;
+                        RETURN(INTERPRET_OK);
+                    }
+                    break;
+                }
+
+                case OP_RETURN_VOID: {
+                    if (vm.frameCount > 0) {
+                        CallFrame* frame = &vm.frames[--vm.frameCount];
+                        vm.chunk = frame->previousChunk;
+                        vm.ip = frame->returnAddress;
+                    } else {
+                        vm.lastExecutionTime = get_time_vm() - start_time;
+                        RETURN(INTERPRET_OK);
+                    }
+                    break;
+                }
+
+                // Short jump optimizations for performance  
+                case OP_JUMP_SHORT: {
+                    uint8_t offset = READ_BYTE();
+                    vm.ip += offset;
+                    break;
+                }
+
+                case OP_JUMP_BACK_SHORT: {
+                    uint8_t offset = READ_BYTE();
+                    vm.ip -= offset;
+                    break;
+                }
+
+                case OP_JUMP_IF_NOT_SHORT: {
+                    uint8_t reg = READ_BYTE();
+                    uint8_t offset = READ_BYTE();
+                    
+                    if (!IS_BOOL(vm.registers[reg])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Condition must be boolean");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    
+                    if (!AS_BOOL(vm.registers[reg])) {
+                        vm.ip += offset;
+                    }
+                    break;
+                }
+
+                case OP_LOOP_SHORT: {
+                    uint8_t offset = READ_BYTE();
+                    vm.ip -= offset;
+                    break;
+                }
+
+                // Typed arithmetic operations for maximum performance (bypass Value boxing)
+                case OP_ADD_I32_TYPED: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t left = READ_BYTE();
+                    uint8_t right = READ_BYTE();
+                    
+                    vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[left] + vm.typed_regs.i32_regs[right];
+                    vm.typed_regs.reg_types[dst] = REG_TYPE_I32;
+                    
+                    break;
+                }
+
+                case OP_SUB_I32_TYPED: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t left = READ_BYTE();
+                    uint8_t right = READ_BYTE();
+                    
+                    vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[left] - vm.typed_regs.i32_regs[right];
+                    vm.typed_regs.reg_types[dst] = REG_TYPE_I32;
+                    
+                    break;
+                }
+
+                case OP_MUL_I32_TYPED: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t left = READ_BYTE();
+                    uint8_t right = READ_BYTE();
+                    
+                    vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[left] * vm.typed_regs.i32_regs[right];
+                    vm.typed_regs.reg_types[dst] = REG_TYPE_I32;
+                    
+                    break;
+                }
+
+                case OP_DIV_I32_TYPED: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t left = READ_BYTE();
+                    uint8_t right = READ_BYTE();
+                    
+                    if (vm.typed_regs.i32_regs[right] == 0) {
+                        runtimeError(ERROR_RUNTIME, (SrcLocation){NULL, 0, 0}, "Division by zero");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    
+                    vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[left] / vm.typed_regs.i32_regs[right];
+                    vm.typed_regs.reg_types[dst] = REG_TYPE_I32;
+                    
+                    break;
+                }
+
+                case OP_MOD_I32_TYPED: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t left = READ_BYTE();
+                    uint8_t right = READ_BYTE();
+                    
+                    if (vm.typed_regs.i32_regs[right] == 0) {
+                        runtimeError(ERROR_RUNTIME, (SrcLocation){NULL, 0, 0}, "Modulo by zero");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    
+                    vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[left] % vm.typed_regs.i32_regs[right];
+                    vm.typed_regs.reg_types[dst] = REG_TYPE_I32;
+                    
+                    break;
+                }
+
+                // Additional typed operations (I64, F64, comparisons, loads, moves)
+                case OP_ADD_I64_TYPED: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t left = READ_BYTE();
+                    uint8_t right = READ_BYTE();
+                    
+                    vm.typed_regs.i64_regs[dst] = vm.typed_regs.i64_regs[left] + vm.typed_regs.i64_regs[right];
+                    vm.typed_regs.reg_types[dst] = REG_TYPE_I64;
+                    
+                    break;
+                }
+
+                case OP_SUB_I64_TYPED: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t left = READ_BYTE();
+                    uint8_t right = READ_BYTE();
+                    
+                    vm.typed_regs.i64_regs[dst] = vm.typed_regs.i64_regs[left] - vm.typed_regs.i64_regs[right];
+                    vm.typed_regs.reg_types[dst] = REG_TYPE_I64;
+                    
+                    break;
+                }
+
+                case OP_MUL_I64_TYPED: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t left = READ_BYTE();
+                    uint8_t right = READ_BYTE();
+                    
+                    vm.typed_regs.i64_regs[dst] = vm.typed_regs.i64_regs[left] * vm.typed_regs.i64_regs[right];
+                    vm.typed_regs.reg_types[dst] = REG_TYPE_I64;
+                    
+                    break;
+                }
+
+                case OP_DIV_I64_TYPED: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t left = READ_BYTE();
+                    uint8_t right = READ_BYTE();
+                    
+                    if (vm.typed_regs.i64_regs[right] == 0) {
+                        runtimeError(ERROR_RUNTIME, (SrcLocation){NULL, 0, 0}, "Division by zero");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    
+                    vm.typed_regs.i64_regs[dst] = vm.typed_regs.i64_regs[left] / vm.typed_regs.i64_regs[right];
+                    vm.typed_regs.reg_types[dst] = REG_TYPE_I64;
+                    
+                    break;
+                }
+
+                case OP_ADD_F64_TYPED: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t left = READ_BYTE();
+                    uint8_t right = READ_BYTE();
+                    
+                    vm.typed_regs.f64_regs[dst] = vm.typed_regs.f64_regs[left] + vm.typed_regs.f64_regs[right];
+                    vm.typed_regs.reg_types[dst] = REG_TYPE_F64;
+                    
+                    break;
+                }
+
+                case OP_SUB_F64_TYPED: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t left = READ_BYTE();
+                    uint8_t right = READ_BYTE();
+                    
+                    vm.typed_regs.f64_regs[dst] = vm.typed_regs.f64_regs[left] - vm.typed_regs.f64_regs[right];
+                    vm.typed_regs.reg_types[dst] = REG_TYPE_F64;
+                    
+                    break;
+                }
+
+                case OP_MUL_F64_TYPED: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t left = READ_BYTE();
+                    uint8_t right = READ_BYTE();
+                    
+                    vm.typed_regs.f64_regs[dst] = vm.typed_regs.f64_regs[left] * vm.typed_regs.f64_regs[right];
+                    vm.typed_regs.reg_types[dst] = REG_TYPE_F64;
+                    
+                    break;
+                }
+
+                case OP_DIV_F64_TYPED: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t left = READ_BYTE();
+                    uint8_t right = READ_BYTE();
+                    
+                    vm.typed_regs.f64_regs[dst] = vm.typed_regs.f64_regs[left] / vm.typed_regs.f64_regs[right];
+                    vm.typed_regs.reg_types[dst] = REG_TYPE_F64;
+                    
+                    break;
+                }
+
+                case OP_LT_I32_TYPED: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t left = READ_BYTE();
+                    uint8_t right = READ_BYTE();
+                    
+                    vm.typed_regs.bool_regs[dst] = vm.typed_regs.i32_regs[left] < vm.typed_regs.i32_regs[right];
+                    vm.typed_regs.reg_types[dst] = REG_TYPE_BOOL;
+                    
+                    break;
+                }
+
+                case OP_LE_I32_TYPED: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t left = READ_BYTE();
+                    uint8_t right = READ_BYTE();
+                    
+                    vm.typed_regs.bool_regs[dst] = vm.typed_regs.i32_regs[left] <= vm.typed_regs.i32_regs[right];
+                    vm.typed_regs.reg_types[dst] = REG_TYPE_BOOL;
+                    
+                    break;
+                }
+
+                case OP_GT_I32_TYPED: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t left = READ_BYTE();
+                    uint8_t right = READ_BYTE();
+                    
+                    vm.typed_regs.bool_regs[dst] = vm.typed_regs.i32_regs[left] > vm.typed_regs.i32_regs[right];
+                    vm.typed_regs.reg_types[dst] = REG_TYPE_BOOL;
+                    
+                    break;
+                }
+
+                case OP_GE_I32_TYPED: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t left = READ_BYTE();
+                    uint8_t right = READ_BYTE();
+                    
+                    vm.typed_regs.bool_regs[dst] = vm.typed_regs.i32_regs[left] >= vm.typed_regs.i32_regs[right];
+                    vm.typed_regs.reg_types[dst] = REG_TYPE_BOOL;
+                    
+                    break;
+                }
+
+                case OP_LOAD_I32_CONST: {
+                    uint8_t reg = READ_BYTE();
+                    uint16_t constantIndex = READ_SHORT();
+                    int32_t value = READ_CONSTANT(constantIndex).as.i32;
+                    
+                    vm.typed_regs.i32_regs[reg] = value;
+                    vm.typed_regs.reg_types[reg] = REG_TYPE_I32;
+                    
+                    break;
+                }
+
+                case OP_LOAD_I64_CONST: {
+                    uint8_t reg = READ_BYTE();
+                    uint16_t constantIndex = READ_SHORT();
+                    int64_t value = READ_CONSTANT(constantIndex).as.i64;
+                    
+                    vm.typed_regs.i64_regs[reg] = value;
+                    vm.typed_regs.reg_types[reg] = REG_TYPE_I64;
+                    
+                    break;
+                }
+
+                case OP_LOAD_F64_CONST: {
+                    uint8_t reg = READ_BYTE();
+                    uint16_t constantIndex = READ_SHORT();
+                    double value = READ_CONSTANT(constantIndex).as.f64;
+                    
+                    vm.typed_regs.f64_regs[reg] = value;
+                    vm.typed_regs.reg_types[reg] = REG_TYPE_F64;
+                    
+                    break;
+                }
+
+                case OP_MOVE_I32: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src = READ_BYTE();
+                    
+                    vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[src];
+                    vm.typed_regs.reg_types[dst] = REG_TYPE_I32;
+                    
+                    break;
+                }
+
+                case OP_MOVE_I64: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src = READ_BYTE();
+                    
+                    vm.typed_regs.i64_regs[dst] = vm.typed_regs.i64_regs[src];
+                    vm.typed_regs.reg_types[dst] = REG_TYPE_I64;
+                    
+                    break;
+                }
+
+                case OP_MOVE_F64: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src = READ_BYTE();
+                    
+                    vm.typed_regs.f64_regs[dst] = vm.typed_regs.f64_regs[src];
+                    vm.typed_regs.reg_types[dst] = REG_TYPE_F64;
+                    
+                    break;
+                }
+
+                case OP_TIME_STAMP: {
+                    uint8_t dst = READ_BYTE();
+                    
+                    // Get high-precision timestamp in nanoseconds
+                    int64_t timestamp = builtin_time_stamp();
+                    
+                    // Store in typed register as i64
+                    vm.typed_regs.i64_regs[dst] = timestamp;
+                    vm.typed_regs.reg_types[dst] = REG_TYPE_I64;
+                    
+                    break;
+                }
+
+                case OP_HALT:
+                    vm.lastExecutionTime = get_time_vm() - start_time;
+                    RETURN(INTERPRET_OK);
+
+                default:
+                    runtimeError(ERROR_RUNTIME, (SrcLocation){NULL, 0, 0},
+                                "Unknown opcode: %d", instruction);
+                    vm.lastExecutionTime = get_time_vm() - start_time;
+                    RETURN(INTERPRET_RUNTIME_ERROR);
             }
 
-            case OP_ADD_F64_TYPED: {
-                uint8_t dst = READ_BYTE();
-                uint8_t left = READ_BYTE();
-                uint8_t right = READ_BYTE();
-                
-                vm.typed_regs.f64_regs[dst] = vm.typed_regs.f64_regs[left] + vm.typed_regs.f64_regs[right];
-                vm.typed_regs.reg_types[dst] = REG_TYPE_F64;
-                
-                break;
+            if (IS_ERROR(vm.lastError)) {
+                // Handle runtime errors
+                if (vm.tryFrameCount > 0) {
+                    // Exception handling
+                    TryFrame frame = vm.tryFrames[--vm.tryFrameCount];
+                    vm.ip = frame.handler;
+                    vm.globals[frame.varIndex] = vm.lastError;
+                    vm.lastError = NIL_VAL;
+                } else {
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
             }
-
-            case OP_SUB_F64_TYPED: {
-                uint8_t dst = READ_BYTE();
-                uint8_t left = READ_BYTE();
-                uint8_t right = READ_BYTE();
-                
-                vm.typed_regs.f64_regs[dst] = vm.typed_regs.f64_regs[left] - vm.typed_regs.f64_regs[right];
-                vm.typed_regs.reg_types[dst] = REG_TYPE_F64;
-                
-                break;
-            }
-
-            case OP_MUL_F64_TYPED: {
-                uint8_t dst = READ_BYTE();
-                uint8_t left = READ_BYTE();
-                uint8_t right = READ_BYTE();
-                
-                vm.typed_regs.f64_regs[dst] = vm.typed_regs.f64_regs[left] * vm.typed_regs.f64_regs[right];
-                vm.typed_regs.reg_types[dst] = REG_TYPE_F64;
-                
-                break;
-            }
-
-            case OP_DIV_F64_TYPED: {
-                uint8_t dst = READ_BYTE();
-                uint8_t left = READ_BYTE();
-                uint8_t right = READ_BYTE();
-                
-                vm.typed_regs.f64_regs[dst] = vm.typed_regs.f64_regs[left] / vm.typed_regs.f64_regs[right];
-                vm.typed_regs.reg_types[dst] = REG_TYPE_F64;
-                
-                break;
-            }
-
-            case OP_LT_I32_TYPED: {
-                uint8_t dst = READ_BYTE();
-                uint8_t left = READ_BYTE();
-                uint8_t right = READ_BYTE();
-                
-                vm.typed_regs.bool_regs[dst] = vm.typed_regs.i32_regs[left] < vm.typed_regs.i32_regs[right];
-                vm.typed_regs.reg_types[dst] = REG_TYPE_BOOL;
-                
-                break;
-            }
-
-            case OP_LE_I32_TYPED: {
-                uint8_t dst = READ_BYTE();
-                uint8_t left = READ_BYTE();
-                uint8_t right = READ_BYTE();
-                
-                vm.typed_regs.bool_regs[dst] = vm.typed_regs.i32_regs[left] <= vm.typed_regs.i32_regs[right];
-                vm.typed_regs.reg_types[dst] = REG_TYPE_BOOL;
-                
-                break;
-            }
-
-            case OP_GT_I32_TYPED: {
-                uint8_t dst = READ_BYTE();
-                uint8_t left = READ_BYTE();
-                uint8_t right = READ_BYTE();
-                
-                vm.typed_regs.bool_regs[dst] = vm.typed_regs.i32_regs[left] > vm.typed_regs.i32_regs[right];
-                vm.typed_regs.reg_types[dst] = REG_TYPE_BOOL;
-                
-                break;
-            }
-
-            case OP_GE_I32_TYPED: {
-                uint8_t dst = READ_BYTE();
-                uint8_t left = READ_BYTE();
-                uint8_t right = READ_BYTE();
-                
-                vm.typed_regs.bool_regs[dst] = vm.typed_regs.i32_regs[left] >= vm.typed_regs.i32_regs[right];
-                vm.typed_regs.reg_types[dst] = REG_TYPE_BOOL;
-                
-                break;
-            }
-
-            case OP_LOAD_I32_CONST: {
-                uint8_t reg = READ_BYTE();
-                uint16_t constantIndex = READ_SHORT();
-                int32_t value = READ_CONSTANT(constantIndex).as.i32;
-                
-                vm.typed_regs.i32_regs[reg] = value;
-                vm.typed_regs.reg_types[reg] = REG_TYPE_I32;
-                
-                break;
-            }
-
-            case OP_LOAD_I64_CONST: {
-                uint8_t reg = READ_BYTE();
-                uint16_t constantIndex = READ_SHORT();
-                int64_t value = READ_CONSTANT(constantIndex).as.i64;
-                
-                vm.typed_regs.i64_regs[reg] = value;
-                vm.typed_regs.reg_types[reg] = REG_TYPE_I64;
-                
-                break;
-            }
-
-            case OP_LOAD_F64_CONST: {
-                uint8_t reg = READ_BYTE();
-                uint16_t constantIndex = READ_SHORT();
-                double value = READ_CONSTANT(constantIndex).as.f64;
-                
-                vm.typed_regs.f64_regs[reg] = value;
-                vm.typed_regs.reg_types[reg] = REG_TYPE_F64;
-                
-                break;
-            }
-
-            case OP_MOVE_I32: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src = READ_BYTE();
-                
-                vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[src];
-                vm.typed_regs.reg_types[dst] = REG_TYPE_I32;
-                
-                break;
-            }
-
-            case OP_MOVE_I64: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src = READ_BYTE();
-                
-                vm.typed_regs.i64_regs[dst] = vm.typed_regs.i64_regs[src];
-                vm.typed_regs.reg_types[dst] = REG_TYPE_I64;
-                
-                break;
-            }
-
-            case OP_MOVE_F64: {
-                uint8_t dst = READ_BYTE();
-                uint8_t src = READ_BYTE();
-                
-                vm.typed_regs.f64_regs[dst] = vm.typed_regs.f64_regs[src];
-                vm.typed_regs.reg_types[dst] = REG_TYPE_F64;
-                
-                break;
-            }
-
-            case OP_TIME_STAMP: {
-                uint8_t dst = READ_BYTE();
-                
-                // Get high-precision timestamp in nanoseconds
-                int64_t timestamp = builtin_time_stamp();
-                
-                // Store in typed register as i64
-                vm.typed_regs.i64_regs[dst] = timestamp;
-                vm.typed_regs.reg_types[dst] = REG_TYPE_I64;
-                
-                break;
-            }
-
-            case OP_HALT:
-                vm.lastExecutionTime = get_time_vm() - start_time;
-                RETURN(INTERPRET_OK);
-
-            default:
-                runtimeError(ERROR_RUNTIME, (SrcLocation){NULL, 0, 0},
-                             "Unknown opcode: %d", instruction);
-                vm.lastExecutionTime = get_time_vm() - start_time;
-                RETURN(INTERPRET_RUNTIME_ERROR);
         }
+    #endif  // USE_COMPUTED_GOTO
 
-        if (IS_ERROR(vm.lastError)) {
-            // Handle runtime errors
-            if (vm.tryFrameCount > 0) {
-                // Exception handling
-                TryFrame frame = vm.tryFrames[--vm.tryFrameCount];
-                vm.ip = frame.handler;
-                vm.globals[frame.varIndex] = vm.lastError;
-                vm.lastError = NIL_VAL;
-            } else {
-                RETURN(INTERPRET_RUNTIME_ERROR);
-            }
-        }
-    }
-#endif  // USE_COMPUTED_GOTO
-
-#undef READ_BYTE
-#undef READ_SHORT
-#undef READ_CONSTANT
-#undef RETURN
+    #undef READ_BYTE
+    #undef READ_SHORT
+    #undef READ_CONSTANT
+    #undef RETURN
 }
 
 

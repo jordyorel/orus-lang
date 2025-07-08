@@ -244,7 +244,28 @@ static void exitScope(Compiler* compiler) {
             freeRegister(compiler, compiler->locals[localIndex].reg);
         }
         
-        symbol_table_remove(&compiler->symbols, compiler->locals[localIndex].name);
+        // Handle variable shadowing properly - restore previous variable instead of removing
+        const char* varName = compiler->locals[localIndex].name;
+        
+        // Look for a previous variable with the same name at a lower scope depth
+        int previousLocalIndex = -1;
+        for (int i = localIndex - 1; i >= 0; i--) {
+            if (compiler->locals[i].isActive && 
+                strcmp(compiler->locals[i].name, varName) == 0 &&
+                compiler->locals[i].depth < compiler->locals[localIndex].depth) {
+                previousLocalIndex = i;
+                break;
+            }
+        }
+        
+        if (previousLocalIndex >= 0) {
+            // Restore the previous variable in the symbol table
+            symbol_table_set(&compiler->symbols, varName, previousLocalIndex);
+        } else {
+            // No previous variable found, remove the symbol entirely
+            symbol_table_remove(&compiler->symbols, varName);
+        }
+        
         compiler->locals[localIndex].isActive = false;
         compiler->localCount--;
     }
@@ -1582,7 +1603,6 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             
             // Store function in VM functions array
             int functionIndex = vm.functionCount++;
-            printf("COMPILER: Storing function index %d, vm.functionCount now %d\n", functionIndex, vm.functionCount);
             vm.functions[functionIndex].chunk = functionChunk;
             vm.functions[functionIndex].arity = node->function.paramCount;
             vm.functions[functionIndex].start = 0;
