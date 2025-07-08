@@ -1,3 +1,4 @@
+#define _POSIX_C_SOURCE 200809L
 #include "../../include/compiler.h"
 #include "../../include/common.h"
 #include "../../include/jumptable.h"
