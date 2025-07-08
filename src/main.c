@@ -92,6 +92,13 @@ static void showUsage(const char* program) {
 static void showVersion() {
     printf("Orus Language Interpreter v%s\n", ORUS_VERSION_STRING);
     printf("Built with register-based virtual machine\n");
+    
+    // ✅ Phase 4: Add diagnostic output for dispatch mode
+    #ifdef USE_COMPUTED_GOTO
+        printf("Dispatch Mode: Computed Goto (fast)\n");
+    #else
+        printf("Dispatch Mode: Switch-based (portable)\n");
+    #endif
 }
 
 int main(int argc, const char* argv[]) {

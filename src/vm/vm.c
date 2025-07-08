@@ -7,6 +7,15 @@
 #include <stdlib.h>
 #include <string.h>
 
+// ✅ Phase 1: Auto-detect computed goto support
+#ifndef USE_COMPUTED_GOTO
+  #if defined(__GNUC__) || defined(__clang__)
+    #define USE_COMPUTED_GOTO 1
+  #else
+    #define USE_COMPUTED_GOTO 0
+  #endif
+#endif
+
 #include "vm.h"
 #include "builtins.h"
 #include "common.h"

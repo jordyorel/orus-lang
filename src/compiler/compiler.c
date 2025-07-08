@@ -2969,7 +2969,7 @@ bool compile(ASTNode* ast, Compiler* compiler, bool isModule) {
             if (reg < 0) return false;
             if (!isModule && stmt->type != NODE_VAR_DECL && stmt->type != NODE_PRINT &&
                 stmt->type != NODE_IF && stmt->type != NODE_WHILE && stmt->type != NODE_FOR_RANGE && stmt->type != NODE_FOR_ITER && stmt->type != NODE_BLOCK &&
-                stmt->type != NODE_ASSIGN) {
+                stmt->type != NODE_ASSIGN && stmt->type != NODE_FUNCTION) {
                 emitByte(compiler, OP_PRINT_R);
                 emitByte(compiler, (uint8_t)reg);
             }
@@ -2983,7 +2983,7 @@ bool compile(ASTNode* ast, Compiler* compiler, bool isModule) {
     int resultReg = compileExpressionToRegister(ast, compiler);
 
     if (resultReg >= 0 && !isModule && ast->type != NODE_VAR_DECL && ast->type != NODE_PRINT &&
-        ast->type != NODE_IF && ast->type != NODE_WHILE && ast->type != NODE_FOR_RANGE && ast->type != NODE_FOR_ITER && ast->type != NODE_BLOCK) {
+        ast->type != NODE_IF && ast->type != NODE_WHILE && ast->type != NODE_FOR_RANGE && ast->type != NODE_FOR_ITER && ast->type != NODE_BLOCK && ast->type != NODE_FUNCTION) {
         emitByte(compiler, OP_PRINT_R);
         emitByte(compiler, (uint8_t)resultReg);
     }

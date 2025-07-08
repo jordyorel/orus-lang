@@ -2,8 +2,17 @@
 # Legacy support for building without CMake
 
 CC = gcc
+
+# ✅ Phase 3: Optional override from CLI: make USE_GOTO=1
+USE_GOTO ?= 1
+
 # Enable performance optimizations by default
-CFLAGS = -Wall -Wextra -O2 -g -std=c11 -DUSE_COMPUTED_GOTO=1 -DUSE_FAST_ARITH=1
+CFLAGS = -Wall -Wextra -O2 -g -std=c11 -DUSE_FAST_ARITH=1
+
+# Add computed goto flag based on USE_GOTO setting
+ifeq ($(USE_GOTO), 1)
+    CFLAGS += -DUSE_COMPUTED_GOTO=1
+endif
 LDFLAGS = -lm
 
 # Directories

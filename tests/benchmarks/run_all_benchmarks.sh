@@ -149,10 +149,60 @@ run_benchmark() {
     return $([ "$success" = true ] && echo 0 || echo 1)
 }
 
-# Start benchmarking
-echo -e "${BLUE}=== Orus Native Benchmarks ===${NC}"
+# ✅ Dispatch Mode Benchmarks
+echo -e "${BLUE}=== Orus VM Dispatch Mode Comparison ===${NC}"
 
-# Add Orus to tested languages
+# Function to rebuild Orus with specific dispatch mode
+rebuild_orus() {
+    local use_goto=$1
+    local mode_name=$2
+    
+    echo -e "${CYAN}Building Orus with $mode_name dispatch...${NC}"
+    
+    cd ../..
+    make clean > /dev/null 2>&1
+    if make USE_GOTO=$use_goto > /dev/null 2>&1; then
+        cd tests/benchmarks
+        echo -e "${GREEN}✓ Build successful with $mode_name dispatch${NC}"
+        
+        # Verify dispatch mode
+        version_output=$(../../orus --version 2>/dev/null)
+        dispatch_mode=$(echo "$version_output" | grep "Dispatch Mode" | sed 's/Dispatch Mode: //')
+        echo -e "${CYAN}Verified: $dispatch_mode${NC}"
+        return 0
+    else
+        cd tests/benchmarks
+        echo -e "${RED}✗ Build failed with $mode_name dispatch${NC}"
+        return 1
+    fi
+}
+
+# Test computed goto dispatch
+if rebuild_orus 1 "computed goto"; then
+    LANGUAGES_TESTED+=("orus_goto")
+    run_benchmark "Orus Computed Goto - Arithmetic" "$ORUS_BINARY arithmetic_benchmark.orus" "orus_goto" "arithmetic"
+    run_benchmark "Orus Computed Goto - Control Flow" "$ORUS_BINARY control_flow_benchmark.orus" "orus_goto" "control_flow"
+    run_benchmark "Orus Computed Goto - VM Optimization" "$ORUS_BINARY vm_optimization_benchmark.orus" "orus_goto" "vm_optimization"
+else
+    echo -e "${RED}Skipping computed goto benchmarks due to build failure${NC}"
+fi
+
+# Test switch-based dispatch
+if rebuild_orus 0 "switch-based"; then
+    LANGUAGES_TESTED+=("orus_switch")
+    run_benchmark "Orus Switch-based - Arithmetic" "$ORUS_BINARY arithmetic_benchmark.orus" "orus_switch" "arithmetic"
+    run_benchmark "Orus Switch-based - Control Flow" "$ORUS_BINARY control_flow_benchmark.orus" "orus_switch" "control_flow"
+    run_benchmark "Orus Switch-based - VM Optimization" "$ORUS_BINARY vm_optimization_benchmark.orus" "orus_switch" "vm_optimization"
+else
+    echo -e "${RED}Skipping switch-based benchmarks due to build failure${NC}"
+fi
+
+# Restore default build (computed goto)
+rebuild_orus 1 "computed goto (default)" > /dev/null
+
+echo -e "${BLUE}=== Orus Native Benchmarks (Default Mode) ===${NC}"
+
+# Add standard Orus to tested languages
 LANGUAGES_TESTED+=("orus")
 
 # 1. Arithmetic Benchmark
