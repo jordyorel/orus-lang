@@ -30,6 +30,13 @@ COMPILER_SRCS = $(SRCDIR)/compiler/compiler.c $(SRCDIR)/compiler/lexer.c $(SRCDI
 VM_SRCS = $(SRCDIR)/vm/vm.c $(SRCDIR)/vm/memory.c $(SRCDIR)/vm/debug.c \
           $(SRCDIR)/vm/builtins.c $(SRCDIR)/type/type_representation.c \
           $(SRCDIR)/type/type_inference.c
+
+# Conditional dispatch sources based on computed goto support
+ifeq ($(USE_GOTO), 1)
+    VM_SRCS += $(SRCDIR)/vm/vm_dispatch_goto.c
+else
+    VM_SRCS += $(SRCDIR)/vm/vm_dispatch_switch.c
+endif
 REPL_SRC = $(SRCDIR)/repl.c
 MAIN_SRC = $(SRCDIR)/main.c
 

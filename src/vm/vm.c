@@ -17,6 +17,7 @@
 #endif
 
 #include "vm.h"
+#include "vm_dispatch.h"
 #include "builtins.h"
 #include "common.h"
 #include "compiler.h"
@@ -61,10 +62,11 @@ VM vm;
 #if USE_COMPUTED_GOTO
 void* vm_dispatch_table[OP_HALT + 1] = {0};
 #endif
+
 // Forward declarations
 static InterpretResult run(void);
-static void runtimeError(ErrorType type, SrcLocation location,
-                         const char* format, ...);
+void runtimeError(ErrorType type, SrcLocation location,
+                   const char* format, ...);
 
 // Memory allocation handled in memory.c
 
@@ -237,7 +239,7 @@ void freeVM(void) {
 }
 
 // Runtime error handling
-static void runtimeError(ErrorType type, SrcLocation location,
+void runtimeError(ErrorType type, SrcLocation location,
                          const char* format, ...) {
     char buffer[256];
     va_list args;

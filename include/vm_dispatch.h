@@ -1,0 +1,73 @@
+#ifndef vm_dispatch_h
+#define vm_dispatch_h
+
+#include "vm.h"
+#include "common.h"
+
+// Forward declarations
+extern VM vm;
+
+// Common dispatch function prototype
+InterpretResult vm_run_dispatch(void);
+
+// Dispatch table for computed goto (when enabled)
+#if USE_COMPUTED_GOTO
+extern void* vm_dispatch_table[OP_HALT + 1];
+extern bool global_dispatch_initialized;
+#endif
+
+// Common macros used by both dispatch implementations
+#define READ_BYTE() (*vm.ip++)
+#define READ_SHORT() \
+    (vm.ip += 2, (uint16_t)((vm.ip[-2] << 8) | vm.ip[-1]))
+#define READ_CONSTANT(index) (vm.chunk->constants.values[index])
+// Note: RETURN macro is defined in vm.c to handle timing
+
+// Error handling function - implemented in vm.c
+void runtimeError(ErrorType type, SrcLocation location, const char* format, ...);
+
+// Dispatch macros - defined differently for each implementation
+#ifdef USE_COMPUTED_GOTO
+    // Fast dispatch macros for computed goto
+    #ifdef ORUS_DEBUG
+        #define DISPATCH() \
+            do { \
+                if (IS_ERROR(vm.lastError)) { \
+                    if (vm.tryFrameCount > 0) { \
+                        TryFrame frame = vm.tryFrames[--vm.tryFrameCount]; \
+                        vm.ip = frame.handler; \
+                        vm.globals[frame.varIndex] = vm.lastError; \
+                        vm.lastError = NIL_VAL; \
+                    } else { \
+                        RETURN(INTERPRET_RUNTIME_ERROR); \
+                    } \
+                } \
+                if (vm.trace) { \
+                    printf("        "); \
+                    for (int i = 0; i < 8; i++) { \
+                        printf("[ R%d: ", i); \
+                        printValue(vm.registers[i]); \
+                        printf(" ]"); \
+                    } \
+                    printf("\\n"); \
+                    disassembleInstruction(vm.chunk, (int)(vm.ip - vm.chunk->code)); \
+                } \
+                vm.instruction_count++; \
+                instruction = READ_BYTE(); \
+                if (instruction > OP_HALT || vm_dispatch_table[instruction] == NULL) { \
+                    goto LABEL_UNKNOWN; \
+                } \
+                goto *vm_dispatch_table[instruction]; \
+            } while (0)
+        #define DISPATCH_TYPED() DISPATCH()
+    #else
+        #define DISPATCH() goto *vm_dispatch_table[*vm.ip++]
+        #define DISPATCH_TYPED() goto *vm_dispatch_table[*vm.ip++]
+    #endif
+#else
+    // Switch-based dispatch doesn't use these macros
+    #define DISPATCH() break
+    #define DISPATCH_TYPED() break
+#endif
+
+#endif
