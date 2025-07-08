@@ -10,10 +10,12 @@ extern VM vm;
 // Common dispatch function prototype
 InterpretResult vm_run_dispatch(void);
 
+// Timer utility shared with dispatch implementations
+double get_time_vm(void);
+
 // Dispatch table for computed goto (when enabled)
 #if USE_COMPUTED_GOTO
 extern void* vm_dispatch_table[OP_HALT + 1];
-extern bool global_dispatch_initialized;
 #endif
 
 // Common macros used by both dispatch implementations
