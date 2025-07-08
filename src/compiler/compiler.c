@@ -932,13 +932,19 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             
             int localIndex;
             if (symbol_table_get(&compiler->symbols, name, &localIndex)) {
-                // Integrate with scope analysis - track variable usage
-                compilerUseVariable(compiler, name);
-                return compiler->locals[localIndex].reg;
+                if (localIndex >= 0 && localIndex < compiler->localCount && 
+                    compiler->locals[localIndex].isActive) {
+                    uint8_t reg = compiler->locals[localIndex].reg;
+                    compilerUseVariable(compiler, name);
+                    return reg;
+                } else {
+                    compiler->hadError = true;
+                    return -1;
+                }
             }
-            uint8_t reg = allocateRegister(compiler);
-            emitConstant(compiler, reg, I32_VAL(0));
-            return reg;
+            
+            compiler->hadError = true;
+            return -1;
         }
 
 
@@ -1172,11 +1178,20 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             return regs[0];
         }
         case NODE_BLOCK: {
+            int lastResult = 0;
             for (int i = 0; i < node->block.count; i++) {
-                if (compileExpressionToRegister(node->block.statements[i], compiler) < 0)
-                    return -1;
+                int result = compileExpressionToRegister(node->block.statements[i], compiler);
+                if (result < 0) return -1;
+                
+                // For the last statement, keep its result to return it
+                if (i == node->block.count - 1) {
+                    lastResult = result;
+                } else {
+                    // For non-last statements, we might want to free temporary registers
+                    // but for now, just keep the behavior simple
+                }
             }
-            return 0;
+            return lastResult;
         }
         case NODE_IF: {
             int cond = compileExpressionToRegister(node->ifStmt.condition, compiler);
@@ -1516,9 +1531,80 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             // Create function object and store it in a register
             uint8_t reg = allocateRegister(compiler);
             
-            // For now, store function index in constants table
-            // TODO: Implement proper function compilation and chunk creation
-            Value funcValue = I32_VAL(0); // Placeholder
+            // Check if we have room for another function
+            if (vm.functionCount >= UINT8_COUNT) {
+                return -1;
+            }
+            
+            // Create a new chunk for the function body
+            Chunk* functionChunk = (Chunk*)malloc(sizeof(Chunk));
+            initChunk(functionChunk);
+            
+            // Create a new compiler context for the function
+            Compiler functionCompiler;
+            initCompiler(&functionCompiler, functionChunk, compiler->fileName, compiler->source);
+            
+            // Set up function parameters as local variables
+            // Parameters are passed in registers 0, 1, 2, etc. by the caller
+            for (int i = 0; i < node->function.paramCount; i++) {
+                // Add parameter as local variable in function scope
+                char* paramName = node->function.params[i].name;
+                
+                functionCompiler.locals[functionCompiler.localCount].name = paramName;
+                functionCompiler.locals[functionCompiler.localCount].reg = i;
+                functionCompiler.locals[functionCompiler.localCount].isActive = true;
+                functionCompiler.locals[functionCompiler.localCount].depth = 0;
+                functionCompiler.locals[functionCompiler.localCount].isMutable = false;
+                
+                // Store current index before incrementing
+                int currentLocalIndex = functionCompiler.localCount;
+                
+                // Add to symbol table for lookup - CRITICAL: Use current localCount before incrementing
+                symbol_table_set(&functionCompiler.symbols, paramName, currentLocalIndex);
+                
+                functionCompiler.localCount++;
+            }
+            
+            // Set next register to start after parameters
+            functionCompiler.nextRegister = node->function.paramCount;
+            
+            // Compile function body in the new context
+            int resultReg = compileExpressionToRegister(node->function.body, &functionCompiler);
+            if (resultReg < 0) {
+                freeChunk(functionChunk);
+                free(functionChunk);
+                return -1;
+            }
+            
+            // Add implicit return for the last expression
+            emitByte(&functionCompiler, OP_RETURN_R);
+            emitByte(&functionCompiler, (uint8_t)resultReg);
+            
+            // Store function in VM functions array
+            int functionIndex = vm.functionCount++;
+            printf("COMPILER: Storing function index %d, vm.functionCount now %d\n", functionIndex, vm.functionCount);
+            vm.functions[functionIndex].chunk = functionChunk;
+            vm.functions[functionIndex].arity = node->function.paramCount;
+            vm.functions[functionIndex].start = 0;
+            
+            // Add function name to global symbol table
+            if (compiler->localCount >= REGISTER_COUNT) {
+                freeChunk(functionChunk);
+                free(functionChunk);
+                return -1;
+            }
+            int localIndex = compiler->localCount++;
+            compiler->locals[localIndex].name = node->function.name;
+            compiler->locals[localIndex].reg = reg;
+            compiler->locals[localIndex].isActive = true;
+            compiler->locals[localIndex].depth = compiler->scopeDepth;
+            compiler->locals[localIndex].isMutable = false;
+            compiler->locals[localIndex].type = VAL_I32; // function index is stored as i32
+            symbol_table_set(&compiler->symbols, node->function.name, localIndex);
+            
+            
+            // Store function index as constant
+            Value funcValue = I32_VAL(functionIndex);
             emitConstant(compiler, reg, funcValue);
             
             return reg;
@@ -1534,13 +1620,23 @@ int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
             // Compile arguments to consecutive registers
             if (node->call.argCount > 0) {
                 firstArgReg = allocateRegister(compiler);
+                
+                // Compile each argument and move to consecutive registers if needed
                 for (int i = 0; i < node->call.argCount; i++) {
                     int argReg = compileExpressionToRegister(node->call.args[i], compiler);
                     if (argReg < 0) {
                         freeRegister(compiler, (uint8_t)funcReg);
                         return -1;
                     }
-                    // TODO: Ensure arguments are in consecutive registers
+                    
+                    // Move argument to consecutive register if not already there
+                    uint8_t targetReg = firstArgReg + i;
+                    if (argReg != targetReg) {
+                        emitByte(compiler, OP_MOVE);
+                        emitByte(compiler, targetReg);
+                        emitByte(compiler, (uint8_t)argReg);
+                        freeRegister(compiler, (uint8_t)argReg);
+                    }
                 }
             }
             

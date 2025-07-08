@@ -224,6 +224,8 @@ typedef struct {
     uint8_t baseRegister;   // Base register for this frame
     uint8_t registerCount;  // Number of registers used by this function
     uint8_t functionIndex;
+    uint8_t savedRegisterCount;  // Number of saved registers
+    Value savedRegisters[16];    // Saved registers overwritten by parameters
 } CallFrame;
 
 // Try frame

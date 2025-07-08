@@ -1565,16 +1565,67 @@ LABEL_OP_CALL_R: {
         uint8_t resultReg = READ_BYTE();
         
         Value funcValue = vm.registers[funcReg];
+        printf("VM CALL: funcReg=%d, firstArgReg=%d, argCount=%d, resultReg=%d\n", 
+               funcReg, firstArgReg, argCount, resultReg);
+        printf("VM CALL: funcValue type=%d, isI32=%s\n", funcValue.type, IS_I32(funcValue) ? "YES" : "NO");
         
-        // For now, simple function call simulation
-        // TODO: Implement proper function objects and call frames
         if (IS_I32(funcValue)) {
-            // Placeholder: just return first argument or 0
-            if (argCount > 0) {
-                vm.registers[resultReg] = vm.registers[firstArgReg];
-            } else {
-                vm.registers[resultReg] = I32_VAL(0);
+            int functionIndex = AS_I32(funcValue);
+            printf("VM CALL: functionIndex=%d, vm.functionCount=%d\n", functionIndex, vm.functionCount);
+            
+            if (functionIndex < 0 || functionIndex >= vm.functionCount) {
+                printf("VM CALL: Invalid function index, returning NIL\n");
+                vm.registers[resultReg] = NIL_VAL;
+                DISPATCH();
             }
+            
+            Function* function = &vm.functions[functionIndex];
+            
+            // Check arity
+            if (argCount != function->arity) {
+                printf("VM CALL: Arity mismatch, returning NIL\n");
+                vm.registers[resultReg] = NIL_VAL;
+                DISPATCH();
+            }
+            
+            // Check if we have room for another call frame
+            if (vm.frameCount >= FRAMES_MAX) {
+                printf("VM CALL: Too many frames, returning NIL\n");
+                vm.registers[resultReg] = NIL_VAL;
+                DISPATCH();
+            }
+            
+            // Create new call frame
+            CallFrame* frame = &vm.frames[vm.frameCount++];
+            frame->returnAddress = vm.ip;
+            frame->previousChunk = vm.chunk;
+            frame->baseRegister = resultReg;
+            frame->registerCount = argCount;
+            frame->functionIndex = functionIndex;
+            
+            // Save registers that will be overwritten by parameters
+            Value savedRegisters[256];
+            for (int i = 0; i < argCount; i++) {
+                savedRegisters[i] = vm.registers[i];
+            }
+            
+            // Copy arguments to function's parameter registers
+            printf("VM CALL: Copying %d arguments from register %d to 0..%d\n", argCount, firstArgReg, argCount-1);
+            for (int i = 0; i < argCount; i++) {
+                printf("VM CALL: arg[%d]: copying from reg %d to reg %d\n", i, firstArgReg + i, i);
+                vm.registers[i] = vm.registers[firstArgReg + i];
+            }
+            
+            // Store saved registers in call frame for restoration
+            frame->savedRegisterCount = argCount;
+            for (int i = 0; i < argCount; i++) {
+                frame->savedRegisters[i] = savedRegisters[i];
+            }
+            
+            // Switch to function's chunk
+            vm.chunk = function->chunk;
+            vm.ip = function->chunk->code + function->start;
+            
         } else {
             vm.registers[resultReg] = NIL_VAL;
         }
@@ -1585,8 +1636,18 @@ LABEL_OP_CALL_R: {
 LABEL_OP_RETURN_R: {
         uint8_t reg = READ_BYTE();
         Value returnValue = vm.registers[reg];
+        printf("VM RETURN: reg=%d, value type=%d\n", reg, returnValue.type);
         if (vm.frameCount > 0) {
             CallFrame* frame = &vm.frames[--vm.frameCount];
+            printf("VM RETURN: baseRegister=%d, frameCount after=%d\n", frame->baseRegister, vm.frameCount);
+            
+            // Restore saved registers
+            printf("VM RETURN: Restoring %d saved registers\n", frame->savedRegisterCount);
+            for (int i = 0; i < frame->savedRegisterCount; i++) {
+                printf("VM RETURN: Restoring register %d\n", i);
+                vm.registers[i] = frame->savedRegisters[i];
+            }
+            
             vm.chunk = frame->previousChunk;
             vm.ip = frame->returnAddress;
             vm.registers[frame->baseRegister] = returnValue;
@@ -3460,15 +3521,45 @@ LABEL_UNKNOWN: __attribute__((unused))
                 
                 Value funcValue = vm.registers[funcReg];
                 
-                // For now, simple function call simulation
-                // TODO: Implement proper function objects and call frames
                 if (IS_I32(funcValue)) {
-                    // Placeholder: just return first argument or 0
-                    if (argCount > 0) {
-                        vm.registers[resultReg] = vm.registers[firstArgReg];
-                    } else {
-                        vm.registers[resultReg] = I32_VAL(0);
+                    int functionIndex = AS_I32(funcValue);
+                    
+                    if (functionIndex < 0 || functionIndex >= vm.functionCount) {
+                        vm.registers[resultReg] = NIL_VAL;
+                        break;
                     }
+                    
+                    Function* function = &vm.functions[functionIndex];
+                    
+                    // Check arity
+                    if (argCount != function->arity) {
+                        vm.registers[resultReg] = NIL_VAL;
+                        break;
+                    }
+                    
+                    // Check if we have room for another call frame
+                    if (vm.frameCount >= FRAMES_MAX) {
+                        vm.registers[resultReg] = NIL_VAL;
+                        break;
+                    }
+                    
+                    // Create new call frame
+                    CallFrame* frame = &vm.frames[vm.frameCount++];
+                    frame->returnAddress = vm.ip;
+                    frame->previousChunk = vm.chunk;
+                    frame->baseRegister = resultReg;
+                    frame->registerCount = argCount;
+                    frame->functionIndex = functionIndex;
+                    
+                    // Copy arguments to function's parameter registers
+                    for (int i = 0; i < argCount; i++) {
+                        vm.registers[i] = vm.registers[firstArgReg + i];
+                    }
+                    
+                    // Switch to function's chunk
+                    vm.chunk = function->chunk;
+                    vm.ip = function->chunk->code + function->start;
+                    
                 } else {
                     vm.registers[resultReg] = NIL_VAL;
                 }
