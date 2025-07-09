@@ -305,9 +305,9 @@ test-verbose: $(ORUS)
 test-all: test c-test
 	@echo "\033[36m=== Comprehensive Test Suite Complete ===\033[0m"
 
-# Run all benchmarks
+# Run performance benchmarks
 benchmark: $(ORUS)
-	@cd tests/benchmarks && ./run_all_benchmarks.sh
+	@cd tests/benchmarks && ./unified_benchmark.sh
 
 # Clean build artifacts
 clean:
@@ -334,7 +334,7 @@ help:
 	@echo "  test-types  - Run only type system tests"
 	@echo "  test-all    - Run comprehensive test suite (all tests + C tests)"
 	@echo "  c-test      - Run C unit tests for VM and critical components"
-	@echo "  benchmark   - Run all benchmarks (Orus native + cross-language comparisons)"
+	@echo "  benchmark   - Run performance benchmarks (Orus vs Python/JS/Lua)"
 	@echo "  clean       - Remove build artifacts"
 	@echo "  format      - Format source code"
 	@echo "  help        - Show this help message"

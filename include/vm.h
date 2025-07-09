@@ -27,6 +27,7 @@ typedef enum {
     VAL_U32,
     VAL_U64,
     VAL_F64,
+    VAL_NUMBER,  // Generic number type for literals
     VAL_STRING,
     VAL_ARRAY,
     VAL_ERROR,
@@ -54,6 +55,7 @@ typedef struct {
         uint32_t u32;
         uint64_t u64;
         double f64;
+        double number;  // Generic number for literals
         Obj* obj;
     } as;
 } Value;
@@ -183,8 +185,28 @@ typedef enum {
     TYPE_ARRAY,
     TYPE_FUNCTION,
     TYPE_ERROR,
-    TYPE_ANY
+    TYPE_ANY,
+    TYPE_VAR,
+    TYPE_GENERIC,
+    TYPE_INSTANCE
 } TypeKind;
+
+// Forward declarations for type system
+typedef struct TypeVar TypeVar;
+typedef struct TypeScheme TypeScheme;
+typedef struct TypeEnv TypeEnv;
+typedef struct TypeArena TypeArena;
+typedef struct HashMap HashMap;
+
+// Type Arena structure
+struct TypeArena {
+    uint8_t* memory;
+    size_t size;
+    size_t used;
+    struct TypeArena* next;
+};
+
+#define ARENA_SIZE (64 * 1024)
 
 typedef struct Type Type;
 struct Type {
@@ -198,6 +220,19 @@ struct Type {
             Type** paramTypes;
             Type* returnType;
         } function;
+        struct {
+            void* var;  // TypeVar* but using void* to avoid forward declaration issues
+        } var;
+        struct {
+            char* name;
+            int paramCount;
+            Type** params;
+        } generic;
+        struct {
+            Type* base;
+            Type** args;
+            int argCount;
+        } instance;
     } info;
 };
 

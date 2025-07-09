@@ -111,12 +111,27 @@ typedef struct {
     HashMap* env;
 } TypeInferer;
 
+// Advanced Type Inference Functions (Algorithm W)
+void init_type_inference(void);
+void cleanup_type_inference(void);
+Type* algorithm_w(TypeEnv* env, ASTNode* node);
+Type* make_var_type(TypeEnv* env);
+Type* fresh_type(Type* t, HashMap* mapping);
+Type* prune(Type* t);
+bool occurs_in_type(TypeVar* var, Type* type);
+bool unify(Type* a, Type* b);
+
+// HashMap functions
+HashMap* hashmap_new(void);
+void hashmap_free(HashMap* map);
+void* hashmap_get(HashMap* map, const char* key);
+void hashmap_set(HashMap* map, const char* key, void* value);
+
 // Hindley-Milner Type Inference Functions
 TypeInferer* type_inferer_new(void);
 void type_inferer_free(TypeInferer* inferer);
 Type* infer_type(TypeInferer* inferer, ASTNode* expr);
 bool solve_constraints(TypeInferer* inferer);
-bool unify(TypeInferer* inferer, Type* t1, Type* t2);
 Type* fresh_type_var(TypeInferer* inferer);
 void add_constraint(TypeInferer* inferer, Type* left, Type* right);
 void add_substitution(TypeInferer* inferer, int var_id, Type* type);

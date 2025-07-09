@@ -39,7 +39,8 @@ typedef enum {
     NODE_CONTINUE,
     NODE_FUNCTION,
     NODE_CALL,
-    NODE_RETURN
+    NODE_RETURN,
+    NODE_LET
 } NodeType;
 
 struct ASTNode {
@@ -141,6 +142,10 @@ struct ASTNode {
         struct {
             ASTNode* value;                // Return value (NULL for void return)
         } returnStmt;
+        struct {
+            char* name;                    // Variable name
+            ASTNode* value;                // Value expression
+        } let;
     };
 };
 
