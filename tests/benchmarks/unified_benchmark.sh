@@ -20,6 +20,7 @@ NC='\033[0m'
 
 # Benchmark results - using regular variables instead of associative arrays for compatibility
 benchmark_results=""
+overall_results=""
 
 # Function to get high precision time
 get_time_ns() {
@@ -96,10 +97,12 @@ run_language_benchmark() {
         local avg_time_ms=$(echo "$avg_time_ns" | awk '{printf "%.1f", $1/1000000}')
         
         benchmark_results="${benchmark_results}${lang}:${avg_time_ms};"
+        overall_results="${overall_results}${lang}:${avg_time_ms};"
         echo -e " ${GREEN}${avg_time_ms}ms${NC}"
     else
         echo -e " ${RED}FAILED${NC}"
         benchmark_results="${benchmark_results}${lang}:FAILED;"
+        overall_results="${overall_results}${lang}:FAILED;"
     fi
 }
 
@@ -242,12 +245,89 @@ echo ""
 echo -e "${CYAN}📊 Overall Language Performance Summary:${NC}"
 echo ""
 
-# Simple language classification based on typical performance patterns
-echo -e "${BLUE}Performance Classification:${NC}"
-echo -e "  ${GREEN}🥇 Lua${NC}           - Excellent (Fastest overall, optimized for performance)"
-echo -e "  ${GREEN}🥈 Orus${NC}          - Excellent (Strong performance, competitive with mature languages)"
-echo -e "  ${YELLOW}🥉 JavaScript${NC}     - Good (V8 engine optimization, good for most workloads)"
-echo -e "  ${YELLOW}4. Python${NC}        - Good (Slower but acceptable, prioritizes readability)"
+# Dynamic performance ranking based on actual benchmark results
+echo -e "${BLUE}Performance Classification (Based on Actual Results):${NC}"
+
+# Create a temporary file to store results for processing
+temp_results=$(mktemp)
+echo "$overall_results" | tr ';' '\n' | grep -v "FAILED" | grep -v "^$" > "$temp_results"
+
+# Calculate averages and sort
+lang_averages=$(mktemp)
+while IFS=':' read -r lang time; do
+    if [[ -n "$lang" && -n "$time" && "$time" =~ ^[0-9]+\.?[0-9]*$ ]]; then
+        echo "$lang $time" >> "$lang_averages"
+    fi
+done < "$temp_results"
+
+# Group by language and calculate averages
+final_results=$(mktemp)
+if [[ -s "$lang_averages" ]]; then
+    awk '{
+        lang_total[$1] += $2
+        lang_count[$1]++
+    }
+    END {
+        for (lang in lang_total) {
+            avg = lang_total[lang] / lang_count[lang]
+            printf "%.1f:%s\n", avg, lang
+        }
+    }' "$lang_averages" | sort -n > "$final_results"
+fi
+
+# Display dynamic ranking
+rank=1
+medals=("🥇" "🥈" "🥉" "4.")
+
+while IFS=':' read -r avg_time lang; do
+    if [[ -n "$lang" && -n "$avg_time" ]]; then
+        # Performance classification based on actual time
+        time_int=$(echo "$avg_time" | awk '{printf "%.0f", $1}')
+        if [[ $time_int -le 50 ]]; then
+            class="${GREEN}Excellent${NC}"
+        elif [[ $time_int -le 150 ]]; then
+            class="${YELLOW}Good${NC}"
+        elif [[ $time_int -le 500 ]]; then
+            class="${YELLOW}Fair${NC}"
+        else
+            class="${RED}Poor${NC}"
+        fi
+        
+        # Get medal or rank number
+        if [[ $rank -le 4 ]]; then
+            medal_or_rank="${medals[$((rank-1))]}"
+        else
+            medal_or_rank="${rank}."
+        fi
+        
+        # Add description based on language
+        case "$lang" in
+            "Orus")
+                # Get dispatch mode from current build
+                dispatch_mode=$("$ORUS_BINARY" --version 2>/dev/null | grep "Dispatch Mode" | cut -d: -f2 | sed 's/^ *//' || echo "Unknown")
+                description="Advanced register-based VM with $dispatch_mode dispatch"
+                ;;
+            "Lua")
+                description="Mature scripting language optimized for performance"
+                ;;
+            "JavaScript")
+                description="V8 engine with advanced JIT compilation"
+                ;;
+            "Python")
+                description="Interpreted language prioritizing readability and ease of use"
+                ;;
+            *)
+                description="Language performance results"
+                ;;
+        esac
+        
+        echo -e "  ${medal_or_rank} ${lang} (${avg_time}ms avg) - ${class} - ${description}"
+        ((rank++))
+    fi
+done < "$final_results"
+
+# Clean up temporary files
+rm -f "$temp_results" "$lang_averages" "$final_results"
 echo ""
 
 

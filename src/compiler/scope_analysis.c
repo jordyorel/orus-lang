@@ -58,14 +58,6 @@ static bool validateAnalysisResults(ScopeAnalyzer* analyzer);
 // Compile-time Scope Analysis Implementation
 // ---------------------------------------------------------------------------
 
-static uint32_t hash_string(const char* str) {
-    uint32_t hash = 2166136261u;
-    for (int i = 0; str[i] != '\0'; i++) {
-        hash ^= (uint8_t)str[i];
-        hash *= 16777619;
-    }
-    return hash;
-}
 
 // Initialize scope analyzer
 void initScopeAnalyzer(ScopeAnalyzer* analyzer) {
@@ -967,6 +959,8 @@ static int getCurrentInstructionCount(Chunk* chunk) {
 
 
 // Apply scope optimizations to compiler
+// TODO: This function is currently unused but should be integrated in the future
+// when scope optimizations are re-enabled for stability
 static void applyScopeOptimizationsToCompiler(Compiler* compiler) {
     ScopeAnalyzer* analyzer = &compiler->scopeAnalyzer;
     

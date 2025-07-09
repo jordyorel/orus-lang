@@ -306,7 +306,20 @@ test-all: test c-test
 	@echo "\033[36m=== Comprehensive Test Suite Complete ===\033[0m"
 
 # Run performance benchmarks
-benchmark: $(ORUS)
+# Usage: make benchmark [DISPATCH=goto|switch]
+# Default: goto (computed goto dispatch for best performance)
+# Example: make benchmark DISPATCH=switch
+DISPATCH ?= goto
+benchmark: 
+	@echo "Building Orus with $(DISPATCH) dispatch mode for benchmarking..."
+	@if [ "$(DISPATCH)" = "goto" ]; then \
+		$(MAKE) clean && $(MAKE) USE_GOTO=1; \
+	elif [ "$(DISPATCH)" = "switch" ]; then \
+		$(MAKE) clean && $(MAKE) USE_GOTO=0; \
+	else \
+		echo "Invalid DISPATCH mode. Use 'goto' or 'switch'"; \
+		exit 1; \
+	fi
 	@cd tests/benchmarks && ./unified_benchmark.sh
 
 # Clean build artifacts
@@ -335,6 +348,8 @@ help:
 	@echo "  test-all    - Run comprehensive test suite (all tests + C tests)"
 	@echo "  c-test      - Run C unit tests for VM and critical components"
 	@echo "  benchmark   - Run performance benchmarks (Orus vs Python/JS/Lua)"
+	@echo "              Usage: make benchmark [DISPATCH=goto|switch]"
+	@echo "              Default: goto (computed goto dispatch for best performance)"
 	@echo "  clean       - Remove build artifacts"
 	@echo "  format      - Format source code"
 	@echo "  help        - Show this help message"

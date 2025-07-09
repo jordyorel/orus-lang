@@ -218,8 +218,11 @@ static void freeObject(Obj* object) {
             break;
         case OBJ_FUNCTION: {
             ObjFunction* func = (ObjFunction*)object;
+            if (func->chunk != NULL) {
+                freeChunk(func->chunk);
+                free(func->chunk);
+            }
             vm.bytesAllocated -= sizeof(ObjFunction);
-            // Note: chunk and name are managed separately
             break;
         }
         case OBJ_CLOSURE: {
