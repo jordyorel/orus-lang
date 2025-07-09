@@ -499,8 +499,8 @@ InterpretResult vm_run_dispatch(void) {
 
                 case OP_ADD_U64_R: {
                     uint8_t dst = READ_BYTE();
-                    uint8_t src1 = read_BYTE();
-                    uint8_t src2 = read_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
 
                     if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
                         runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
@@ -524,8 +524,8 @@ InterpretResult vm_run_dispatch(void) {
 
                 case OP_SUB_U64_R: {
                     uint8_t dst = READ_BYTE();
-                    uint8_t src1 = read_BYTE();
-                    uint8_t src2 = read_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
 
                     if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
                         runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
@@ -549,8 +549,8 @@ InterpretResult vm_run_dispatch(void) {
 
                 case OP_MUL_U64_R: {
                     uint8_t dst = READ_BYTE();
-                    uint8_t src1 = read_BYTE();
-                    uint8_t src2 = read_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
 
                     if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
                         runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
@@ -574,8 +574,8 @@ InterpretResult vm_run_dispatch(void) {
 
                 case OP_DIV_U64_R: {
                     uint8_t dst = READ_BYTE();
-                    uint8_t src1 = read_BYTE();
-                    uint8_t src2 = read_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
 
                     if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
                         runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
@@ -596,8 +596,8 @@ InterpretResult vm_run_dispatch(void) {
 
                 case OP_MOD_U64_R: {
                     uint8_t dst = READ_BYTE();
-                    uint8_t src1 = read_BYTE();
-                    uint8_t src2 = read_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
 
                     if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
                         runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
@@ -654,7 +654,7 @@ InterpretResult vm_run_dispatch(void) {
 
                 case OP_F64_TO_U32_R: {
                     uint8_t dst = READ_BYTE();
-                    uint8_t src = read_BYTE();
+                    uint8_t src = READ_BYTE();
                     if (!IS_F64(vm.registers[src])) {
                         runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
                                     "Source must be f64");
@@ -672,7 +672,7 @@ InterpretResult vm_run_dispatch(void) {
 
                 case OP_U32_TO_F64_R: {
                     uint8_t dst = READ_BYTE();
-                    uint8_t src = read_BYTE();
+                    uint8_t src = READ_BYTE();
                     if (!IS_U32(vm.registers[src])) {
                         runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
                                     "Source must be u32");
@@ -804,7 +804,7 @@ InterpretResult vm_run_dispatch(void) {
 
                 case OP_U64_TO_F64_R: {
                     uint8_t dst = READ_BYTE();
-                    uint8_t src = read_BYTE();
+                    uint8_t src = READ_BYTE();
                     if (!IS_U64(vm.registers[src])) {
                         runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
                                     "Source must be u64");
@@ -1224,8 +1224,8 @@ InterpretResult vm_run_dispatch(void) {
 
                 case OP_LT_U64_R: {
                     uint8_t dst = READ_BYTE();
-                    uint8_t src1 = read_BYTE();
-                    uint8_t src2 = read_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
                     if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
                         runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
                                     "Operands must be u64");
@@ -1237,8 +1237,8 @@ InterpretResult vm_run_dispatch(void) {
 
                 case OP_LE_U64_R: {
                     uint8_t dst = READ_BYTE();
-                    uint8_t src1 = read_BYTE();
-                    uint8_t src2 = read_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
                     if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
                         runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
                                     "Operands must be u64");
@@ -1250,8 +1250,8 @@ InterpretResult vm_run_dispatch(void) {
 
                 case OP_GT_U64_R: {
                     uint8_t dst = READ_BYTE();
-                    uint8_t src1 = read_BYTE();
-                    uint8_t src2 = read_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
                     if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
                         runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
                                     "Operands must be u64");
@@ -1263,8 +1263,8 @@ InterpretResult vm_run_dispatch(void) {
 
                 case OP_GE_U64_R: {
                     uint8_t dst = READ_BYTE();
-                    uint8_t src1 = read_BYTE();
-                    uint8_t src2 = read_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
                     if (!IS_U64(vm.registers[src1]) || !IS_U64(vm.registers[src2])) {
                         runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
                                     "Operands must be u64");
@@ -1394,6 +1394,15 @@ InterpretResult vm_run_dispatch(void) {
                 }
 
                 // I/O operations
+                case OP_PRINT_MULTI_R: {
+                    uint8_t first = READ_BYTE();
+                    uint8_t count = READ_BYTE();
+                    uint8_t nl = READ_BYTE();
+
+                    builtin_print(&vm.registers[first], count, nl != 0);
+                    break;
+                }
+
                 case OP_PRINT_R: {
                     uint8_t reg = READ_BYTE();
                     
@@ -1820,10 +1829,117 @@ InterpretResult vm_run_dispatch(void) {
                     // Get high-precision timestamp in nanoseconds
                     int64_t timestamp = builtin_time_stamp();
                     
-                    // Store in typed register as i64
+                    // Store in typed register and regular register for compatibility
                     vm.typed_regs.i64_regs[dst] = timestamp;
                     vm.typed_regs.reg_types[dst] = REG_TYPE_I64;
-                    
+                    vm.registers[dst] = I64_VAL(timestamp);
+
+                    break;
+                }
+
+                // Fused instructions for optimized loops and arithmetic
+                case OP_ADD_I32_IMM: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src = READ_BYTE();
+                    int32_t imm = *(int32_t*)vm.ip;
+                    vm.ip += 4;
+
+                    if (!IS_I32(vm.registers[src])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Operand must be i32");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    int32_t result = AS_I32(vm.registers[src]) + imm;
+                    vm.registers[dst] = I32_VAL(result);
+                    break;
+                }
+
+                case OP_SUB_I32_IMM: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src = READ_BYTE();
+                    int32_t imm = *(int32_t*)vm.ip;
+                    vm.ip += 4;
+
+                    if (!IS_I32(vm.registers[src])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Operand must be i32");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    int32_t result = AS_I32(vm.registers[src]) - imm;
+                    vm.registers[dst] = I32_VAL(result);
+                    break;
+                }
+
+                case OP_MUL_I32_IMM: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src = READ_BYTE();
+                    int32_t imm = *(int32_t*)vm.ip;
+                    vm.ip += 4;
+
+                    if (!IS_I32(vm.registers[src])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Operand must be i32");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    int32_t result = AS_I32(vm.registers[src]) * imm;
+                    vm.registers[dst] = I32_VAL(result);
+                    break;
+                }
+
+                case OP_CMP_I32_IMM: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src = READ_BYTE();
+                    int32_t imm = *(int32_t*)vm.ip;
+                    vm.ip += 4;
+
+                    vm.typed_regs.bool_regs[dst] = vm.typed_regs.i32_regs[src] < imm;
+                    vm.typed_regs.reg_types[dst] = REG_TYPE_BOOL;
+                    break;
+                }
+
+                case OP_INC_CMP_JMP: {
+                    uint8_t reg = READ_BYTE();
+                    uint8_t limit_reg = READ_BYTE();
+                    int16_t offset = READ_SHORT();
+
+                    if (!IS_I32(vm.registers[reg]) || !IS_I32(vm.registers[limit_reg])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Operands must be i32");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    int32_t incremented = AS_I32(vm.registers[reg]) + 1;
+                    vm.registers[reg] = I32_VAL(incremented);
+                    if (incremented < AS_I32(vm.registers[limit_reg])) {
+                        vm.ip += offset;
+                    }
+                    break;
+                }
+
+                case OP_DEC_CMP_JMP: {
+                    uint8_t reg = READ_BYTE();
+                    uint8_t zero_test = READ_BYTE();
+                    int16_t offset = READ_SHORT();
+
+                    if (--vm.typed_regs.i32_regs[reg] > vm.typed_regs.i32_regs[zero_test]) {
+                        vm.ip += offset;
+                    }
+                    break;
+                }
+
+                case OP_MUL_ADD_I32: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t mul1 = READ_BYTE();
+                    uint8_t mul2 = READ_BYTE();
+                    uint8_t add = READ_BYTE();
+
+                    vm.typed_regs.i32_regs[dst] =
+                        vm.typed_regs.i32_regs[mul1] * vm.typed_regs.i32_regs[mul2] +
+                        vm.typed_regs.i32_regs[add];
+                    vm.typed_regs.reg_types[dst] = REG_TYPE_I32;
                     break;
                 }
 
@@ -1851,8 +1967,6 @@ InterpretResult vm_run_dispatch(void) {
                 }
             }
         }
-    #endif  // USE_COMPUTED_GOTO
-
     #undef RETURN
 }
 #endif // !USE_COMPUTED_GOTO
