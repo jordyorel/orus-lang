@@ -961,13 +961,29 @@ static void compile_continue_statement(ASTNode* node, Compiler* compiler) {
 static void compile_print_statement(ASTNode* node, Compiler* compiler) {
     if (!node || node->type != NODE_PRINT) return;
     
-    // Compile all arguments
+    if (node->print.count == 0) {
+        // Empty print() call - just print newline if needed
+        if (node->print.newline) {
+            emitByte(compiler, OP_PRINT_R);
+            emitByte(compiler, 0);  // dummy register, won't be used for empty print
+        }
+        return;
+    }
+    
+    // Compile and print each argument individually for now
+    // This is simpler and should work with the current OP_PRINT_R implementation
     for (int i = 0; i < node->print.count; i++) {
         ExprDesc arg = compile_expression(node->print.values[i], compiler);
         if (arg.kind != EXPR_VOID) {
             int argReg = expr_to_register(&arg, compiler);
             if (argReg >= 0) {
-                emitByte(compiler, OP_PRINT_R);
+                if (i == node->print.count - 1 && node->print.newline) {
+                    // Last argument, use regular print with newline
+                    emitByte(compiler, OP_PRINT_R);
+                } else {
+                    // Not last argument or no newline, use print without newline
+                    emitByte(compiler, OP_PRINT_NO_NL_R);
+                }
                 emitByte(compiler, argReg);
             }
             free_expr_temp(&arg, compiler);
