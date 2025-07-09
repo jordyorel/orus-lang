@@ -32,16 +32,21 @@ let evens = [x for x in numbers if x % 2 == 0]  # Type-safe comprehensions
 ```
 
 ### **Modern Features**
-Pattern matching, generics, error handling, and modules - everything you expect from a 2025 language:
+Advanced type inference, functions, and type safety - with pattern matching and generics coming soon:
 
 ```orus
-enum Result<T>:
-    Ok(value: T)
-    Error(message: string)
+fn fibonacci(n: i32) -> i32:
+    if n <= 1: 
+        n
+    else: 
+        fibonacci(n-1) + fibonacci(n-2)
 
-match parse_number("42"):
-    Result.Ok(num): print("Parsed: {}", num)
-    Result.Error(msg): print("Failed: {}", msg)
+// Type inference in action
+fn add(a, b):  // Types inferred from usage
+    a + b
+
+result = add(1, 2)        // Inferred as i32
+float_result = add(1.0, 2.0)  // Inferred as f64
 ```
 
 ---
@@ -160,7 +165,12 @@ echo 'print("Hello, Orus!")' > hello.orus
 ### ✅ **Working Features**
 - ✅ Register-based VM with computed-goto dispatch
 - ✅ Full lexer and parser with indentation handling  
-- ✅ Integer arithmetic and basic expressions
+- ✅ **Advanced Hindley-Milner type inference system** with arena allocation
+- ✅ **Complete type system foundation** (15+ primitive & complex types)
+- ✅ Integer arithmetic and basic expressions with type safety
+- ✅ **Function definitions and calls** with type checking and inference
+- ✅ **Control flow** (if/else, loops) with type-aware scoping
+- ✅ **String types and operations** with type-safe concatenation
 - ✅ Advanced loop safety with infinite loop detection
 - ✅ Range syntax with customizable steps (start..end..step)
 - ✅ Runtime loop guards with 4-byte architecture (default 1M, up to 4.3B iterations)
@@ -169,21 +179,21 @@ echo 'print("Hello, Orus!")' > hello.orus
 - ✅ File execution and bytecode compilation
 - ✅ Mark-and-sweep garbage collector with object pooling
 - ✅ VM debugging and tracing
-- ✅ **Function definitions and calls** (Phase 3 complete!)
-- ✅ **Control flow** (if/else, loops)
-- ✅ **String types and operations**
+- ✅ **Type coercion and promotions** (i32→i64, i32→f64)
+- ✅ **Complex expression type inference** with constraint solving
 
 ### 🔄 **In Development**
-- 🔄 Struct definitions and methods
-- 🔄 Pattern matching and enums
-- 🔄 Arrays and collections
+- 🔄 Struct definitions and methods (foundation in place)
+- 🔄 Pattern matching and enums (type system ready)
+- 🔄 Arrays and collections (type inference complete)
+- 🔄 Generic system completion (Hindley-Milner foundation implemented)
 
 ### 🔮 **Planned Features**
-- 📅 Generics and type constraints
 - 📅 Module system and imports
-- 📅 Standard library
+- 📅 Standard library expansion
 - 📅 Advanced GC optimizations (generational, concurrent)
-- 📅 Error handling system
+- 📅 Enhanced error handling and diagnostics
+- 📅 Trait system and advanced type features
 
 ---
 
@@ -195,6 +205,14 @@ Unlike stack-based VMs (Python, JavaScript), Orus uses a register architecture t
 - Enables better instruction-level optimization
 - Provides more efficient memory access patterns
 
+### **Advanced Type System**
+Sophisticated Hindley-Milner type inference with:
+- **Algorithm W implementation** with union-find optimization
+- **Arena-based memory management** for type objects
+- **Constraint-based solving** with comprehensive error reporting
+- **Type variable unification** with occurs check
+- **Polymorphic type schemes** for generic programming
+
 ### **Computed Goto Dispatch**
 ```c
 // Instead of slow switch statements:
@@ -204,8 +222,11 @@ switch (instruction) { case OP_ADD: ...; }
 goto *dispatch_table[instruction];
 ```
 
-### **Fast Arithmetic**
-Optimized integer operations without overflow checking in release builds, specialized opcodes for common patterns.
+### **Type-Aware Compilation**
+- **Static type checking** with inference reduces runtime overhead
+- **Type-specific opcodes** for optimal performance
+- **Compile-time optimizations** based on type information
+- **Zero-cost abstractions** for type safety
 
 ### **Memory Management**
 Mark-and-sweep garbage collector with object pooling, automatic memory reclamation, and configurable thresholds for optimal performance.
@@ -218,12 +239,16 @@ Mark-and-sweep garbage collector with object pooling, automatic memory reclamati
 orus-reg-vm/
 ├── src/
 │   ├── compiler/          # Lexer, parser, bytecode compiler
+│   ├── type/             # Hindley-Milner type inference system
 │   ├── vm/               # Virtual machine core
 │   └── main.c            # REPL and CLI entry point
 ├── include/              # Header files
 ├── docs/                 # Language documentation  
 ├── tests/                # Test programs (.orus files)
-├── tests/benchmarks/     # Performance testing & comparison suite
+│   ├── types/            # Type system tests
+│   ├── functions/        # Function definition tests
+│   ├── benchmarks/       # Performance testing & comparison suite
+│   └── ...              # Comprehensive test coverage
 └── makefile             # Build configuration
 ```
 
@@ -259,8 +284,13 @@ Results are automatically logged and tracked for performance trend analysis.
 
 Orus follows [Semantic Versioning 2.0.0](docs/VERSIONING.md) to clearly
 communicate API stability and compatibility. The current release is
-`v0.2.0`, which indicates that the language is still in early
-development and the public API may change at any time.
+`v0.3.0`, which reflects major advances in the type system including:
+
+- **v0.3.0**: Advanced Hindley-Milner type inference system
+- **v0.2.0**: Functions and control flow implementation  
+- **v0.1.0**: Basic VM and language foundations
+
+The language is in active development with a solid foundation for building advanced features.
 
 ---
 
