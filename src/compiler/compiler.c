@@ -969,26 +969,31 @@ static void compile_print_statement(ASTNode* node, Compiler* compiler) {
         }
         return;
     }
-    
-    // Compile and print each argument individually for now
-    // This is simpler and should work with the current OP_PRINT_R implementation
+
+    // Preload space constant for separating arguments
+    ObjString* spaceStr = allocateString(" ", 1);
+    int spaceReg = allocateRegister(compiler);
+    emitConstant(compiler, spaceReg, STRING_VAL(spaceStr));
+
+    // Compile and print each argument with spacing
     for (int i = 0; i < node->print.count; i++) {
         ExprDesc arg = compile_expression(node->print.values[i], compiler);
         if (arg.kind != EXPR_VOID) {
             int argReg = expr_to_register(&arg, compiler);
             if (argReg >= 0) {
-                if (i == node->print.count - 1 && node->print.newline) {
-                    // Last argument, use regular print with newline
-                    emitByte(compiler, OP_PRINT_R);
-                } else {
-                    // Not last argument or no newline, use print without newline
-                    emitByte(compiler, OP_PRINT_NO_NL_R);
-                }
+                bool last = (i == node->print.count - 1);
+                emitByte(compiler, last && node->print.newline ? OP_PRINT_R : OP_PRINT_NO_NL_R);
                 emitByte(compiler, argReg);
+                if (!last) {
+                    emitByte(compiler, OP_PRINT_NO_NL_R);
+                    emitByte(compiler, spaceReg);
+                }
             }
             free_expr_temp(&arg, compiler);
         }
     }
+
+    freeRegister(compiler, spaceReg);
 }
 
 static void compile_block_statement(ASTNode* node, Compiler* compiler) {
