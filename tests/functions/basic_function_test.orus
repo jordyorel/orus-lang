@@ -1,0 +1,14 @@
+// Test basic function functionality
+print("Testing basic function functionality")
+
+fn add(a: i32, b: i32) -> i32:
+    a + b
+
+result = add(5, 3)
+print("5 + 3 =", result)
+
+fn greet(name: string):
+    print("Hello", name)
+
+greet("Orus")
+print("Basic function test completed")

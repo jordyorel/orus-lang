@@ -235,6 +235,7 @@ ensure_orus_built
 # Run benchmark categories
 run_benchmark_category "Arithmetic Operations" "arithmetic_benchmark.orus"
 run_benchmark_category "Control Flow" "control_flow_benchmark.orus"
+run_benchmark_category "Function Calls" "function_benchmark.orus"
 
 echo -e "${BLUE}=================================================================${NC}"
 echo -e "${GREEN}✨ Benchmark comparison complete!${NC}"

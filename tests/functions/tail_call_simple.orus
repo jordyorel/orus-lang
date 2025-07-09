@@ -1,0 +1,12 @@
+// Simple test for tail call optimization
+print("Testing tail call optimization")
+
+// Test basic recursion without tail optimization first
+fn simple_countdown(n: i32):
+    if n > 0:
+        print("Counting:", n)
+        simple_countdown(n - 1)
+
+print("Starting countdown from 5")
+simple_countdown(5)
+print("Countdown completed")

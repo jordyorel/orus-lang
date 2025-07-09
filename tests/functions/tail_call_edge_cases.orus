@@ -1,0 +1,100 @@
+// Edge case tests for tail call optimization
+// Testing boundary conditions and special cases
+
+print("=== Tail Call Optimization Edge Cases ===")
+
+// Test 1: Single recursion step
+fn single_step(n: i32) -> i32:
+    if n <= 0:
+        42
+    else:
+        single_step(n - 1)
+
+print("Test 1: Single recursion step")
+result1 = single_step(1)
+print("Single step result:", result1)
+
+// Test 2: No recursion case
+fn no_recursion(n: i32) -> i32:
+    if n <= 0:
+        100
+    else:
+        200
+
+print("Test 2: No recursion case")
+result2 = no_recursion(5)
+print("No recursion result:", result2)
+
+// Test 3: Zero parameter recursion
+fn zero_param() -> i32:
+    42
+
+print("Test 3: Zero parameter function")
+result3 = zero_param()
+print("Zero param result:", result3)
+
+// Test 4: Negative number handling
+fn negative_countdown(n: i32) -> i32:
+    if n >= 0:
+        0
+    else:
+        negative_countdown(n + 1)
+
+print("Test 4: Negative number handling")
+result4 = negative_countdown(-5)
+print("Negative countdown result:", result4)
+
+// Test 5: Large number tail call
+fn large_tail(n: i32) -> i32:
+    if n <= 0:
+        999
+    else:
+        large_tail(n - 1)
+
+print("Test 5: Large number tail call (50000 levels)")
+result5 = large_tail(50000)
+print("Large tail result:", result5)
+
+// Test 6: Mutual tail recursion (if supported)
+fn even_check(n: i32) -> i32:
+    if n <= 0:
+        1
+    else:
+        odd_check(n - 1)
+
+fn odd_check(n: i32) -> i32:
+    if n <= 0:
+        0
+    else:
+        even_check(n - 1)
+
+print("Test 6: Mutual tail recursion")
+result6 = even_check(10)
+print("Even check result:", result6)
+
+// Test 7: Complex condition in tail call
+fn complex_condition(n: i32, flag: i32) -> i32:
+    if n <= 0 or flag == 0:
+        n + flag
+    else:
+        complex_condition(n - 1, flag - 1)
+
+print("Test 7: Complex condition in tail call")
+result7 = complex_condition(100, 50)
+print("Complex condition result:", result7)
+
+// Test 8: Nested if with tail call
+fn nested_if_tail(n: i32) -> i32:
+    if n <= 0:
+        0
+    else:
+        if n % 2 == 0:
+            nested_if_tail(n - 2)
+        else:
+            nested_if_tail(n - 1)
+
+print("Test 8: Nested if with tail call")
+result8 = nested_if_tail(1000)
+print("Nested if tail result:", result8)
+
+print("=== All edge case tests completed successfully! ===")

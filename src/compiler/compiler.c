@@ -443,6 +443,61 @@ static ExprDesc compile_expression(ASTNode* node, Compiler* compiler);
 static void compile_statement(ASTNode* node, Compiler* compiler);
 
 // ============================================================================
+// Tail Call Optimization
+// ============================================================================
+
+typedef struct {
+    bool inTailPosition;
+    const char* currentFunction;
+    int functionDepth;
+} TailCallContext;
+
+static bool is_tail_call(ASTNode* node, TailCallContext* context) {
+    if (!node || !context || !context->inTailPosition) {
+        return false;
+    }
+    
+    // Check if this is a function call
+    if (node->type != NODE_CALL) {
+        return false;
+    }
+    
+    // Check if the call is to the same function (recursive tail call)
+    if (node->call.callee && node->call.callee->type == NODE_IDENTIFIER) {
+        const char* calleeName = node->call.callee->identifier.name;
+        if (context->currentFunction && strcmp(calleeName, context->currentFunction) == 0) {
+            return true;
+        }
+    }
+    
+    // For now, only optimize recursive tail calls
+    // Future enhancement: optimize all tail calls
+    return false;
+}
+
+static void set_tail_context(TailCallContext* context, bool inTailPosition) {
+    if (context) {
+        context->inTailPosition = inTailPosition;
+    }
+}
+
+static TailCallContext* push_function_context(TailCallContext* parentContext, const char* functionName) {
+    TailCallContext* context = malloc(sizeof(TailCallContext));
+    if (context) {
+        context->inTailPosition = false;
+        context->currentFunction = functionName;
+        context->functionDepth = parentContext ? parentContext->functionDepth + 1 : 0;
+    }
+    return context;
+}
+
+static void pop_function_context(TailCallContext* context) {
+    if (context) {
+        free(context);
+    }
+}
+
+// ============================================================================
 // Expression Compilation
 // ============================================================================
 
@@ -635,6 +690,10 @@ static ExprDesc compile_function_call(ASTNode* node, Compiler* compiler) {
         return make_void_expr();
     }
     
+    // Check if this is a tail call
+    TailCallContext* context = (TailCallContext*)compiler->tailCallContext;
+    bool isTailCall = is_tail_call(node, context);
+    
     // Get function expression
     ExprDesc func = compile_expression(node->call.callee, compiler);
     if (func.kind == EXPR_VOID) {
@@ -665,8 +724,13 @@ static ExprDesc compile_function_call(ASTNode* node, Compiler* compiler) {
     // Allocate result register
     int resultReg = allocateRegister(compiler);
     
-    // Emit function call
-    emitByte(compiler, OP_CALL_R);
+    // Emit appropriate call instruction
+    if (isTailCall) {
+        emitByte(compiler, OP_TAIL_CALL_R);
+    } else {
+        emitByte(compiler, OP_CALL_R);
+    }
+    
     emitByte(compiler, resultReg);
     emitByte(compiler, funcReg);
     emitByte(compiler, argCount);
@@ -1009,6 +1073,99 @@ static void compile_block_statement(ASTNode* node, Compiler* compiler) {
     endScope(compiler);
 }
 
+static void compile_function_definition(ASTNode* node, Compiler* compiler) {
+    if (!node || node->type != NODE_FUNCTION) return;
+    
+    const char* functionName = node->function.name;
+    
+    // Push new function context for tail call optimization
+    TailCallContext* parentContext = (TailCallContext*)compiler->tailCallContext;
+    TailCallContext* functionContext = push_function_context(parentContext, functionName);
+    compiler->tailCallContext = functionContext;
+    
+    // Create new scope for function parameters
+    beginScope(compiler);
+    
+    // Add parameters to local scope
+    for (int i = 0; i < node->function.paramCount; i++) {
+        const char* paramName = node->function.params[i].name;
+        int paramReg = allocateRegister(compiler);
+        addLocal(compiler, paramName, VAL_I32, paramReg, false);  // Default to i32 for now
+    }
+    
+    // Compile function body with tail call detection
+    if (node->function.body) {
+        // The last statement in the function body is in tail position
+        if (node->function.body->type == NODE_BLOCK) {
+            ASTNode* block = node->function.body;
+            
+            // Compile all statements except the last one normally
+            for (int i = 0; i < block->block.count - 1; i++) {
+                set_tail_context(functionContext, false);
+                compile_statement(block->block.statements[i], compiler);
+                if (compiler->hadError) break;
+            }
+            
+            // The last statement is in tail position if it's a return or direct call
+            if (block->block.count > 0 && !compiler->hadError) {
+                ASTNode* lastStmt = block->block.statements[block->block.count - 1];
+                
+                // Check if the last statement is a return statement
+                if (lastStmt->type == NODE_RETURN) {
+                    set_tail_context(functionContext, true);
+                } else if (lastStmt->type == NODE_CALL) {
+                    set_tail_context(functionContext, true);
+                } else {
+                    set_tail_context(functionContext, false);
+                }
+                
+                compile_statement(lastStmt, compiler);
+            }
+        } else {
+            // Single statement function body
+            set_tail_context(functionContext, true);
+            compile_statement(node->function.body, compiler);
+        }
+    }
+    
+    // Ensure function ends with a return
+    emitByte(compiler, OP_RETURN_VOID);
+    
+    // End function scope
+    endScope(compiler);
+    
+    // Restore parent context
+    compiler->tailCallContext = parentContext;
+    pop_function_context(functionContext);
+}
+
+static void compile_return_statement(ASTNode* node, Compiler* compiler) {
+    if (!node || node->type != NODE_RETURN) return;
+    
+    TailCallContext* context = (TailCallContext*)compiler->tailCallContext;
+    
+    if (node->returnStmt.value) {
+        // Set tail context for the return expression
+        set_tail_context(context, true);
+        
+        ExprDesc returnValue = compile_expression(node->returnStmt.value, compiler);
+        if (returnValue.kind != EXPR_VOID) {
+            int returnReg = expr_to_register(&returnValue, compiler);
+            if (returnReg >= 0) {
+                emitByte(compiler, OP_RETURN_R);
+                emitByte(compiler, returnReg);
+            }
+            free_expr_temp(&returnValue, compiler);
+        }
+        
+        // Reset tail context
+        set_tail_context(context, false);
+    } else {
+        // Void return
+        emitByte(compiler, OP_RETURN_VOID);
+    }
+}
+
 // Expression statements are handled directly in the switch statement
 
 // Main statement compilation dispatcher
@@ -1046,6 +1203,14 @@ static void compile_statement(ASTNode* node, Compiler* compiler) {
             
         case NODE_BLOCK:
             compile_block_statement(node, compiler);
+            break;
+            
+        case NODE_FUNCTION:
+            compile_function_definition(node, compiler);
+            break;
+            
+        case NODE_RETURN:
+            compile_return_statement(node, compiler);
             break;
             
         default: {
@@ -1088,6 +1253,9 @@ void initCompiler(Compiler* compiler, Chunk* chunk, const char* fileName, const 
     if (compiler->typeInferer) {
         initCompilerTypeInference(compiler);
     }
+    
+    // Initialize tail call context
+    compiler->tailCallContext = NULL;
 }
 
 void freeCompiler(Compiler* compiler) {
@@ -1099,6 +1267,12 @@ void freeCompiler(Compiler* compiler) {
     // Free type inference if available
     if (compiler->typeInferer) {
         freeCompilerTypeInference(compiler);
+    }
+    
+    // Free tail call context if it exists
+    if (compiler->tailCallContext) {
+        pop_function_context((TailCallContext*)compiler->tailCallContext);
+        compiler->tailCallContext = NULL;
     }
     
     // Clear other fields

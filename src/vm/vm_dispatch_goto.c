@@ -136,6 +136,7 @@ InterpretResult vm_run_dispatch(void) {
         vm_dispatch_table[OP_PRINT_R] = &&LABEL_OP_PRINT_R;
         vm_dispatch_table[OP_PRINT_NO_NL_R] = &&LABEL_OP_PRINT_NO_NL_R;
         vm_dispatch_table[OP_CALL_R] = &&LABEL_OP_CALL_R;
+        vm_dispatch_table[OP_TAIL_CALL_R] = &&LABEL_OP_TAIL_CALL_R;
         vm_dispatch_table[OP_RETURN_R] = &&LABEL_OP_RETURN_R;
         vm_dispatch_table[OP_RETURN_VOID] = &&LABEL_OP_RETURN_VOID;
         
@@ -1361,6 +1362,56 @@ InterpretResult vm_run_dispatch(void) {
                 }
                 
                 // Switch to function's chunk
+                vm.chunk = function->chunk;
+                vm.ip = function->chunk->code + function->start;
+                
+            } else {
+                vm.registers[resultReg] = NIL_VAL;
+            }
+            
+            DISPATCH();
+        }
+
+    LABEL_OP_TAIL_CALL_R: {
+            uint8_t funcReg = READ_BYTE();
+            uint8_t firstArgReg = READ_BYTE();
+            uint8_t argCount = READ_BYTE();
+            uint8_t resultReg = READ_BYTE();
+            
+            Value funcValue = vm.registers[funcReg];
+            
+            if (IS_I32(funcValue)) {
+                int functionIndex = AS_I32(funcValue);
+                
+                if (functionIndex < 0 || functionIndex >= vm.functionCount) {
+                    vm.registers[resultReg] = NIL_VAL;
+                    DISPATCH();
+                }
+                
+                Function* function = &vm.functions[functionIndex];
+                
+                // Check arity
+                if (argCount != function->arity) {
+                    vm.registers[resultReg] = NIL_VAL;
+                    DISPATCH();
+                }
+                
+                // For tail calls, we reuse the current frame instead of creating a new one
+                // This prevents stack growth in recursive calls
+                
+                // Copy arguments to function's parameter registers
+                // We need to be careful about overlapping registers
+                Value tempArgs[256];
+                for (int i = 0; i < argCount; i++) {
+                    tempArgs[i] = vm.registers[firstArgReg + i];
+                }
+                
+                // Clear the parameter registers first
+                for (int i = 0; i < argCount; i++) {
+                    vm.registers[i] = tempArgs[i];
+                }
+                
+                // Switch to function's chunk - reuse current frame
                 vm.chunk = function->chunk;
                 vm.ip = function->chunk->code + function->start;
                 

@@ -1,0 +1,11 @@
+// Test tail call optimization with countdown function
+fn countdown(n: i32) -> i32:
+    if n <= 0:
+        0
+    else:
+        print("Counting down:", n)
+        countdown(n - 1)
+
+// Test with a large number to ensure no stack overflow
+result = countdown(100)
+print("Countdown completed, result:", result)

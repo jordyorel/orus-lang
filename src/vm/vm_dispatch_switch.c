@@ -1491,6 +1491,54 @@ InterpretResult vm_run_dispatch(void) {
                     }
                     break;
                 }
+                case OP_TAIL_CALL_R: {
+                    uint8_t funcReg = READ_BYTE();
+                    uint8_t firstArgReg = READ_BYTE();
+                    uint8_t argCount = READ_BYTE();
+                    uint8_t resultReg = READ_BYTE();
+                    
+                    Value funcValue = vm.registers[funcReg];
+                    
+                    if (IS_I32(funcValue)) {
+                        int functionIndex = AS_I32(funcValue);
+                        
+                        if (functionIndex < 0 || functionIndex >= vm.functionCount) {
+                            vm.registers[resultReg] = NIL_VAL;
+                            break;
+                        }
+                        
+                        Function* function = &vm.functions[functionIndex];
+                        
+                        // Check arity
+                        if (argCount != function->arity) {
+                            vm.registers[resultReg] = NIL_VAL;
+                            break;
+                        }
+                        
+                        // For tail calls, we reuse the current frame instead of creating a new one
+                        // This prevents stack growth in recursive calls
+                        
+                        // Copy arguments to function's parameter registers
+                        // We need to be careful about overlapping registers
+                        Value tempArgs[256];
+                        for (int i = 0; i < argCount; i++) {
+                            tempArgs[i] = vm.registers[firstArgReg + i];
+                        }
+                        
+                        // Clear the parameter registers first
+                        for (int i = 0; i < argCount; i++) {
+                            vm.registers[i] = tempArgs[i];
+                        }
+                        
+                        // Switch to function's chunk - reuse current frame
+                        vm.chunk = function->chunk;
+                        vm.ip = function->chunk->code + function->start;
+                        
+                    } else {
+                        vm.registers[resultReg] = NIL_VAL;
+                    }
+                    break;
+                }
                 case OP_RETURN_R: {
                     uint8_t reg = READ_BYTE();
                     Value returnValue = vm.registers[reg];

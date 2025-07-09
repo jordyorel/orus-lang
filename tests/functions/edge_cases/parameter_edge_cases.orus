@@ -1,0 +1,40 @@
+// Edge cases for function parameters
+
+// Test 1: Multiple parameters of different types
+fn multi_param(a: i32, b: f64, c: string) -> i32:
+    print("Parameters:", a, b, c)
+    a
+
+result1 = multi_param(42, 3.14, "test")
+print("Multi-param result:", result1)
+
+// Test 2: Single parameter functions
+fn square(x: i32) -> i32:
+    x * x
+
+result2 = square(5)
+print("Square of 5:", result2)
+
+// Test 3: No parameter functions
+fn get_constant() -> i32:
+    42
+
+result3 = get_constant()
+print("Constant result:", result3)
+
+// Test 4: Parameter shadowing
+fn shadow_test(x: i32) -> i32:
+    x = x + 1
+    x
+
+result4 = shadow_test(10)
+print("Shadow test result:", result4)
+
+// Test 5: Complex parameter expressions
+fn complex_params(a: i32, b: i32) -> i32:
+    (a + b) * (a - b)
+
+result5 = complex_params(7, 3)
+print("Complex params result:", result5)
+
+print("All parameter edge cases completed")

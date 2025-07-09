@@ -427,6 +427,7 @@ typedef enum {
     // Function calls
     OP_CALL_R,         // func_reg, first_arg_reg, arg_count, result_reg
     OP_CALL_NATIVE_R,  // native_index, first_arg_reg, arg_count, result_reg
+    OP_TAIL_CALL_R,    // func_reg, first_arg_reg, arg_count, result_reg (tail call optimization)
     OP_RETURN_R,       // value_reg (or no operand for void)
     OP_RETURN_VOID,
 
@@ -734,6 +735,9 @@ typedef struct {
     // Phase 3.1: Compile-time register type tracking for aggressive optimization
     ValueType registerTypes[REGISTER_COUNT]; // Track known types of registers at compile time
     bool hadError;
+    
+    // Tail call optimization context
+    void* tailCallContext;  // TailCallContext* - avoid circular dependency
 } Compiler;
 
 // Typed registers for optimization (unboxed values)

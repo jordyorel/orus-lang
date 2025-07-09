@@ -358,7 +358,7 @@ fn greet(name: string):
 - ✅ Function calls with proper argument passing
 - ✅ Type inference for function parameters and return values
 - ✅ Basic recursion support (simple cases working)
-- 🔄 Advanced recursion with tail call optimization
+- ✅ **COMPLETE**: Advanced recursion with tail call optimization ✅
 - 🔄 Closure capture and upvalues
 - 🔄 Function objects as first-class values
 - 🔄 Higher-order functions with generic constraints

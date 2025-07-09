@@ -1,0 +1,61 @@
+// Stress test for tail call optimization
+// This test should run without stack overflow due to tail call optimization
+
+print("=== Tail Call Optimization Stress Test ===")
+
+// Test 1: Deep recursion with tail call optimization
+fn deep_countdown(n: i32) -> i32:
+    if n <= 0:
+        0
+    else:
+        deep_countdown(n - 1)
+
+print("Test 1: Deep recursion countdown")
+result1 = deep_countdown(10000)
+print("Deep countdown result:", result1)
+
+// Test 2: Tail recursive sum
+fn tail_sum(n: i32, acc: i32) -> i32:
+    if n <= 0:
+        acc
+    else:
+        tail_sum(n - 1, acc + n)
+
+print("Test 2: Tail recursive sum")
+result2 = tail_sum(1000, 0)
+print("Sum 1 to 1000:", result2)
+
+// Test 3: Tail recursive power
+fn tail_power(base: i32, exp: i32, acc: i32) -> i32:
+    if exp <= 0:
+        acc
+    else:
+        tail_power(base, exp - 1, acc * base)
+
+print("Test 3: Tail recursive power")
+result3 = tail_power(2, 10, 1)
+print("2^10 =", result3)
+
+// Test 4: Tail recursive GCD
+fn tail_gcd(a: i32, b: i32) -> i32:
+    if b == 0:
+        a
+    else:
+        tail_gcd(b, a % b)
+
+print("Test 4: Tail recursive GCD")
+result4 = tail_gcd(48, 18)
+print("GCD(48, 18) =", result4)
+
+// Test 5: Very deep recursion (this would cause stack overflow without TCO)
+fn extreme_recursion(n: i32) -> i32:
+    if n <= 0:
+        42
+    else:
+        extreme_recursion(n - 1)
+
+print("Test 5: Extreme recursion (100000 levels)")
+result5 = extreme_recursion(100000)
+print("Extreme recursion result:", result5)
+
+print("=== All tail call optimization tests completed successfully! ===")
