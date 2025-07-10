@@ -1394,20 +1394,10 @@ void emitConstant(Compiler* compiler, uint8_t reg, Value value) {
     // Add constant to chunk and emit load instruction
     int constant = addConstant(compiler->chunk, value);
     
-    // Choose appropriate load instruction based on value type
-    switch (value.type) {
-        case VAL_I32:
-        case VAL_F64:
-            emitByte(compiler, OP_LOAD_CONST);
-            emitByte(compiler, reg);
-            emitByte(compiler, constant & 0xFF);
-            break;
-        default:
-            emitByte(compiler, OP_LOAD_CONST);
-            emitByte(compiler, reg);
-            emitBytes(compiler, (constant >> 8) & 0xFF, constant & 0xFF);
-            break;
-    }
+    // Always emit 2 bytes for constant index to match VM expectations
+    emitByte(compiler, OP_LOAD_CONST);
+    emitByte(compiler, reg);
+    emitBytes(compiler, (constant >> 8) & 0xFF, constant & 0xFF);
 }
 
 // ============================================================================
