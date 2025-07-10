@@ -26,7 +26,11 @@ int disassembleInstruction(Chunk* chunk, int offset) {
             uint8_t reg = chunk->code[offset + 1];
             uint16_t constant = (uint16_t)((chunk->code[offset + 2] << 8) | chunk->code[offset + 3]);
             printf("%-16s R%d, #%d '", "LOAD_CONST", reg, constant);
-            printValue(chunk->constants.values[constant]);
+            if (constant < chunk->constants.count) {
+                printValue(chunk->constants.values[constant]);
+            } else {
+                printf("INVALID_CONSTANT_INDEX");
+            }
             printf("'\n");
             return offset + 4;
         }
@@ -181,6 +185,16 @@ int disassembleInstruction(Chunk* chunk, int offset) {
             return offset + 2;
         }
 
+        case OP_CALL_NATIVE_R: {
+            uint8_t native_index = chunk->code[offset + 1];
+            uint8_t first_arg = chunk->code[offset + 2];
+            uint8_t arg_count = chunk->code[offset + 3];
+            uint8_t result_reg = chunk->code[offset + 4];
+            printf("%-16s native=%d, args=R%d..R%d, result=R%d\n", 
+                   "CALL_NATIVE", native_index, first_arg, first_arg + arg_count - 1, result_reg);
+            return offset + 5;
+        }
+
         case OP_RETURN_R: {
             uint8_t reg = chunk->code[offset + 1];
             printf("%-16s R%d\n", "RETURN", reg);
@@ -257,6 +271,10 @@ int disassembleInstruction(Chunk* chunk, int offset) {
             printf("%-16s R%d\n", "TIME_STAMP", dst);
             return offset + 2;
         }
+
+        case OP_RETURN_VOID:
+            printf("%-16s\n", "RETURN_VOID");
+            return offset + 1;
 
         case OP_HALT:
             printf("%-16s\n", "HALT");

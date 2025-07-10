@@ -24,6 +24,7 @@
 #include "parser.h"
 #include "memory.h"
 #include "builtins.h"
+#include "debug.h"
 #include <time.h>
 #ifdef _WIN32
 #include <windows.h>
@@ -313,6 +314,11 @@ InterpretResult interpret(const char* source) {
     vm.ip = chunk.code;
     vm.frameCount = 0;
 
+    // Debug output: disassemble chunk if in dev mode
+    if (vm.devMode) {
+        disassembleChunk(&chunk, "main");
+    }
+
     double t8 = now_ns();
     InterpretResult result = run();
     double t9 = now_ns();
@@ -471,6 +477,11 @@ InterpretResult interpret_module(const char* path) {
     vm.chunk = &chunk;
     vm.ip = chunk.code;
     vm.filePath = path;
+    
+    // Debug output: disassemble chunk if in dev mode
+    if (vm.devMode) {
+        disassembleChunk(&chunk, fileName);
+    }
     
     // Execute the module
     double t10 = now_ns();
