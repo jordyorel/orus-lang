@@ -66,3 +66,7 @@ make benchmark          # Performance tests
 5. Submit pull request
 
 See [BENCHMARK_RESULTS.md](docs/BENCHMARK_RESULTS.md) for detailed performance data.
+
+## License
+
+Orus is licensed under the [MIT License](LICENSE).

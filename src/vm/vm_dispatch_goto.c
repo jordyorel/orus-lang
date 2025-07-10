@@ -140,6 +140,12 @@ InterpretResult vm_run_dispatch(void) {
         vm_dispatch_table[OP_RETURN_R] = &&LABEL_OP_RETURN_R;
         vm_dispatch_table[OP_RETURN_VOID] = &&LABEL_OP_RETURN_VOID;
         
+        // Closure operations
+        vm_dispatch_table[OP_CLOSURE_R] = &&LABEL_OP_CLOSURE_R;
+        vm_dispatch_table[OP_GET_UPVALUE_R] = &&LABEL_OP_GET_UPVALUE_R;
+        vm_dispatch_table[OP_SET_UPVALUE_R] = &&LABEL_OP_SET_UPVALUE_R;
+        vm_dispatch_table[OP_CLOSE_UPVALUE_R] = &&LABEL_OP_CLOSE_UPVALUE_R;
+        
         // Note: Hot opcodes already assigned above for optimal cache locality
         
         vm_dispatch_table[OP_MOVE_I32] = &&LABEL_OP_MOVE_I32;
@@ -1866,6 +1872,61 @@ InterpretResult vm_run_dispatch(void) {
             vm.typed_regs.i32_regs[add];
         
         DISPATCH_TYPED();
+    }
+
+    LABEL_OP_CLOSURE_R: {
+        uint8_t dstReg = READ_BYTE();
+        uint8_t functionReg = READ_BYTE();
+        uint8_t upvalueCount = READ_BYTE();
+        
+        Value functionValue = vm.registers[functionReg];
+        if (!IS_FUNCTION(functionValue)) {
+            runtimeError(ERROR_RUNTIME, (SrcLocation){NULL, 0, 0},
+                        "Expected function for closure creation");
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        
+        ObjFunction* function = AS_FUNCTION(functionValue);
+        ObjClosure* closure = allocateClosure(function);
+        
+        for (int i = 0; i < upvalueCount; i++) {
+            uint8_t isLocal = READ_BYTE();
+            uint8_t index = READ_BYTE();
+            
+            if (isLocal) {
+                closure->upvalues[i] = captureUpvalue(&vm.registers[index]);
+            } else {
+                ObjClosure* enclosing = AS_CLOSURE(vm.registers[0]); // Current closure
+                closure->upvalues[i] = enclosing->upvalues[index];
+            }
+        }
+        
+        vm.registers[dstReg] = CLOSURE_VAL(closure);
+        DISPATCH();
+    }
+
+    LABEL_OP_GET_UPVALUE_R: {
+        uint8_t dstReg = READ_BYTE();
+        uint8_t upvalueIndex = READ_BYTE();
+        
+        ObjClosure* closure = AS_CLOSURE(vm.registers[0]); // Current closure
+        vm.registers[dstReg] = *closure->upvalues[upvalueIndex]->location;
+        DISPATCH();
+    }
+
+    LABEL_OP_SET_UPVALUE_R: {
+        uint8_t upvalueIndex = READ_BYTE();
+        uint8_t valueReg = READ_BYTE();
+        
+        ObjClosure* closure = AS_CLOSURE(vm.registers[0]); // Current closure
+        *closure->upvalues[upvalueIndex]->location = vm.registers[valueReg];
+        DISPATCH();
+    }
+
+    LABEL_OP_CLOSE_UPVALUE_R: {
+        uint8_t localReg = READ_BYTE();
+        closeUpvalues(&vm.registers[localReg]);
+        DISPATCH();
     }
 
     LABEL_OP_HALT:

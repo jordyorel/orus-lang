@@ -1078,19 +1078,30 @@ static void compile_function_definition(ASTNode* node, Compiler* compiler) {
     
     const char* functionName = node->function.name;
     
+    // Create a new chunk for the function
+    Chunk* functionChunk = malloc(sizeof(Chunk));
+    initChunk(functionChunk);
+    
+    // Create a nested compiler for this function
+    Compiler functionCompiler;
+    initCompiler(&functionCompiler, functionChunk, compiler->fileName, compiler->source);
+    
+    // Copy parent scope analyzer state for closure analysis
+    functionCompiler.scopeAnalyzer = compiler->scopeAnalyzer;
+    
     // Push new function context for tail call optimization
     TailCallContext* parentContext = (TailCallContext*)compiler->tailCallContext;
     TailCallContext* functionContext = push_function_context(parentContext, functionName);
-    compiler->tailCallContext = functionContext;
+    functionCompiler.tailCallContext = functionContext;
     
     // Create new scope for function parameters
-    beginScope(compiler);
+    beginScope(&functionCompiler);
     
     // Add parameters to local scope
     for (int i = 0; i < node->function.paramCount; i++) {
         const char* paramName = node->function.params[i].name;
-        int paramReg = allocateRegister(compiler);
-        addLocal(compiler, paramName, VAL_I32, paramReg, false);  // Default to i32 for now
+        int paramReg = allocateRegister(&functionCompiler);
+        addLocal(&functionCompiler, paramName, VAL_I32, paramReg, false);  // Default to i32 for now
     }
     
     // Compile function body with tail call detection
@@ -1102,12 +1113,12 @@ static void compile_function_definition(ASTNode* node, Compiler* compiler) {
             // Compile all statements except the last one normally
             for (int i = 0; i < block->block.count - 1; i++) {
                 set_tail_context(functionContext, false);
-                compile_statement(block->block.statements[i], compiler);
-                if (compiler->hadError) break;
+                compile_statement(block->block.statements[i], &functionCompiler);
+                if (functionCompiler.hadError) break;
             }
             
             // The last statement is in tail position if it's a return or direct call
-            if (block->block.count > 0 && !compiler->hadError) {
+            if (block->block.count > 0 && !functionCompiler.hadError) {
                 ASTNode* lastStmt = block->block.statements[block->block.count - 1];
                 
                 // Check if the last statement is a return statement
@@ -1119,24 +1130,50 @@ static void compile_function_definition(ASTNode* node, Compiler* compiler) {
                     set_tail_context(functionContext, false);
                 }
                 
-                compile_statement(lastStmt, compiler);
+                compile_statement(lastStmt, &functionCompiler);
             }
         } else {
             // Single statement function body
             set_tail_context(functionContext, true);
-            compile_statement(node->function.body, compiler);
+            compile_statement(node->function.body, &functionCompiler);
         }
     }
     
     // Ensure function ends with a return
-    emitByte(compiler, OP_RETURN_VOID);
+    emitByte(&functionCompiler, OP_RETURN_VOID);
     
     // End function scope
-    endScope(compiler);
+    endScope(&functionCompiler);
+    
+    // Create function object from compiled chunk
+    ObjFunction* function = allocateFunction();
+    if (function) {
+        // Set function properties
+        function->chunk = functionChunk;
+        function->arity = node->function.paramCount;
+        function->name = allocateString(functionName, strlen(functionName));
+        
+        // Add function to constant table
+        Value functionValue = FUNCTION_VAL(function);
+        int constantIndex = addConstant(compiler->chunk, functionValue);
+        
+        // Allocate register for the function/closure
+        int functionReg = allocateRegister(compiler);
+        
+        // TODO: Analyze if this function captures any upvalues
+        // For now, create a simple function reference
+        emitBytes(compiler, OP_LOAD_CONST, functionReg);
+        emitByte(compiler, constantIndex);
+        
+        // Add function to symbol table as a variable
+        addLocal(compiler, functionName, VAL_FUNCTION, functionReg, false);
+    }
     
     // Restore parent context
-    compiler->tailCallContext = parentContext;
     pop_function_context(functionContext);
+    
+    // Clean up function compiler (but keep the chunk alive in the function object)
+    freeCompiler(&functionCompiler);
 }
 
 static void compile_return_statement(ASTNode* node, Compiler* compiler) {
@@ -1312,11 +1349,18 @@ bool compile(ASTNode* ast, Compiler* compiler, bool isModule) {
     // Initialize compiler state
     compiler->hadError = false;
     
+    // Run scope analysis to detect closures and upvalues
+    initScopeAnalyzer(&compiler->scopeAnalyzer);
+    performAdvancedScopeAnalysis(&compiler->scopeAnalyzer);
+    
     // Compile the AST
     compile_statement(ast, compiler);
     
     // Emit return instruction if not already present
     emitByte(compiler, OP_RETURN_VOID);
+    
+    // Clean up scope analysis
+    freeScopeAnalyzer(&compiler->scopeAnalyzer);
     
     return !compiler->hadError;
 }

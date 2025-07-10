@@ -43,6 +43,7 @@ typedef struct ObjError ObjError;
 typedef struct ObjRangeIterator ObjRangeIterator;
 typedef struct ObjFunction ObjFunction;
 typedef struct ObjClosure ObjClosure;
+typedef struct ObjUpvalue ObjUpvalue;
 typedef struct Obj Obj;
 
 // Value representation
@@ -67,10 +68,11 @@ typedef enum {
     OBJ_ERROR,
     OBJ_RANGE_ITERATOR,
     OBJ_FUNCTION,
-    OBJ_CLOSURE
+    OBJ_CLOSURE,
+    OBJ_UPVALUE
 } ObjType;
 
-#define OBJ_TYPE_COUNT 6
+#define OBJ_TYPE_COUNT 7
 
 // Object header
 struct Obj {
@@ -152,15 +154,25 @@ typedef struct {
 struct ObjFunction {
     Obj obj;
     int arity;
+    int upvalueCount;
     Chunk* chunk;
     ObjString* name;
+};
+
+// Upvalue object (for closure capture)
+struct ObjUpvalue {
+    Obj obj;
+    Value* location;        // Points to value (stack or heap)
+    Value closed;           // Heap storage when closed
+    struct ObjUpvalue* next; // Linked list for GC
 };
 
 // Closure object (for capturing upvalues)
 struct ObjClosure {
     Obj obj;
     ObjFunction* function;
-    // Upvalues will be added later for closures
+    ObjUpvalue** upvalues;  // Array of upvalue pointers
+    int upvalueCount;       // Number of upvalues
 };
 
 // Source location
@@ -430,6 +442,12 @@ typedef enum {
     OP_TAIL_CALL_R,    // func_reg, first_arg_reg, arg_count, result_reg (tail call optimization)
     OP_RETURN_R,       // value_reg (or no operand for void)
     OP_RETURN_VOID,
+
+    // Closure operations
+    OP_CLOSURE_R,      // dst_reg, function_reg, upvalue_count, upvalue_indices...
+    OP_GET_UPVALUE_R,  // dst_reg, upvalue_index
+    OP_SET_UPVALUE_R,  // upvalue_index, value_reg
+    OP_CLOSE_UPVALUE_R, // local_reg (close upvalue pointing to this local)
 
     // I/O
     OP_PRINT_MULTI_R,  // first_reg, count, newline_flag
@@ -816,6 +834,9 @@ typedef struct {
     size_t gcCount;
     bool gcPaused;
 
+    // Upvalue management
+    ObjUpvalue* openUpvalues;  // Linked list of open upvalues
+
     // Execution state
     uint64_t instruction_count;
     ASTNode* astRoot;
@@ -855,6 +876,8 @@ typedef enum {
 #define STRING_VAL(value) ((Value){VAL_STRING, {.obj = (Obj*)value}})
 #define ARRAY_VAL(obj) ((Value){VAL_ARRAY, {.obj = (Obj*)obj}})
 #define ERROR_VAL(object) ((Value){VAL_ERROR, {.obj = (Obj*)object}})
+#define FUNCTION_VAL(value) ((Value){VAL_FUNCTION, {.obj = (Obj*)value}})
+#define CLOSURE_VAL(value) ((Value){VAL_CLOSURE, {.obj = (Obj*)value}})
 
 #define AS_BOOL(value) ((value).as.boolean)
 #define AS_I32(value) ((value).as.i32)
@@ -867,6 +890,8 @@ typedef enum {
 #define AS_ARRAY(value) ((ObjArray*)(value).as.obj)
 #define AS_ERROR(value) ((ObjError*)(value).as.obj)
 #define AS_RANGE_ITERATOR(value) ((ObjRangeIterator*)(value).as.obj)
+#define AS_FUNCTION(value) ((ObjFunction*)(value).as.obj)
+#define AS_CLOSURE(value) ((ObjClosure*)(value).as.obj)
 
 #define IS_BOOL(value) ((value).type == VAL_BOOL)
 #define IS_NIL(value) ((value).type == VAL_NIL)
@@ -879,6 +904,8 @@ typedef enum {
 #define IS_ARRAY(value) ((value).type == VAL_ARRAY)
 #define IS_ERROR(value) ((value).type == VAL_ERROR)
 #define IS_RANGE_ITERATOR(value) ((value).type == VAL_RANGE_ITERATOR)
+#define IS_FUNCTION(value) ((value).type == VAL_FUNCTION)
+#define IS_CLOSURE(value) ((value).type == VAL_CLOSURE)
 
 // Function declarations
 void initVM(void);
@@ -906,10 +933,17 @@ ObjString* allocateString(const char* chars, int length);
 ObjArray* allocateArray(int capacity);
 ObjError* allocateError(ErrorType type, const char* message,
                         SrcLocation location);
+ObjFunction* allocateFunction(void);
+ObjClosure* allocateClosure(ObjFunction* function);
+ObjUpvalue* allocateUpvalue(Value* slot);
 
 // Memory management
 void collectGarbage(void);
 void freeObjects(void);
+
+// Upvalue management
+ObjUpvalue* captureUpvalue(Value* local);
+void closeUpvalues(Value* last);
 
 // Type system
 void initTypeSystem(void);

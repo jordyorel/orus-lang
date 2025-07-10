@@ -1570,6 +1570,61 @@ InterpretResult vm_run_dispatch(void) {
                     break;
                 }
 
+                case OP_CLOSURE_R: {
+                    uint8_t dstReg = READ_BYTE();
+                    uint8_t functionReg = READ_BYTE();
+                    uint8_t upvalueCount = READ_BYTE();
+                    
+                    Value functionValue = vm.registers[functionReg];
+                    if (!IS_FUNCTION(functionValue)) {
+                        runtimeError(ERROR_RUNTIME, (SrcLocation){NULL, 0, 0},
+                                    "Expected function for closure creation");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+                    
+                    ObjFunction* function = AS_FUNCTION(functionValue);
+                    ObjClosure* closure = allocateClosure(function);
+                    
+                    for (int i = 0; i < upvalueCount; i++) {
+                        uint8_t isLocal = READ_BYTE();
+                        uint8_t index = READ_BYTE();
+                        
+                        if (isLocal) {
+                            closure->upvalues[i] = captureUpvalue(&vm.registers[index]);
+                        } else {
+                            ObjClosure* enclosing = AS_CLOSURE(vm.registers[0]); // Current closure
+                            closure->upvalues[i] = enclosing->upvalues[index];
+                        }
+                    }
+                    
+                    vm.registers[dstReg] = CLOSURE_VAL(closure);
+                    break;
+                }
+
+                case OP_GET_UPVALUE_R: {
+                    uint8_t dstReg = READ_BYTE();
+                    uint8_t upvalueIndex = READ_BYTE();
+                    
+                    ObjClosure* closure = AS_CLOSURE(vm.registers[0]); // Current closure
+                    vm.registers[dstReg] = *closure->upvalues[upvalueIndex]->location;
+                    break;
+                }
+
+                case OP_SET_UPVALUE_R: {
+                    uint8_t upvalueIndex = READ_BYTE();
+                    uint8_t valueReg = READ_BYTE();
+                    
+                    ObjClosure* closure = AS_CLOSURE(vm.registers[0]); // Current closure
+                    *closure->upvalues[upvalueIndex]->location = vm.registers[valueReg];
+                    break;
+                }
+
+                case OP_CLOSE_UPVALUE_R: {
+                    uint8_t localReg = READ_BYTE();
+                    closeUpvalues(&vm.registers[localReg]);
+                    break;
+                }
+
                 // Short jump optimizations for performance  
                 case OP_JUMP_SHORT: {
                     uint8_t offset = READ_BYTE();

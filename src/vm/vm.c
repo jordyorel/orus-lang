@@ -210,6 +210,9 @@ void initVM(void) {
     vm.nativeFunctionCount = 0;
     vm.gcCount = 0;
     vm.lastExecutionTime = 0.0;
+    
+    // Initialize upvalue management
+    vm.openUpvalues = NULL;
 
     // Environment configuration
     const char* envTrace = getenv("ORUS_TRACE");
@@ -274,13 +277,13 @@ InterpretResult interpret(const char* source) {
     initCompiler(&compiler, &chunk, "<repl>", source);
 
     double t1 = now_ns();
-    fprintf(stderr, "[PROFILE] Init (chunk+compiler): %.3f ms\n", (t1 - t0) / 1e6);
+    // fprintf(stderr, "[PROFILE] Init (chunk+compiler): %.3f ms\n", (t1 - t0) / 1e6);
 
     // Parse the source into an AST
     double t2 = now_ns();
     ASTNode* ast = parseSource(source);
     double t3 = now_ns();
-    fprintf(stderr, "[PROFILE] parseSource: %.3f ms\n", (t3 - t2) / 1e6);
+    // fprintf(stderr, "[PROFILE] parseSource: %.3f ms\n", (t3 - t2) / 1e6);
     
     if (!ast) {
         freeCompiler(&compiler);
@@ -297,13 +300,13 @@ InterpretResult interpret(const char* source) {
         return INTERPRET_COMPILE_ERROR;
     }
     double t5 = now_ns();
-    fprintf(stderr, "[PROFILE] compile(AST→bytecode): %.3f ms\n", (t5 - t4) / 1e6);
+    // fprintf(stderr, "[PROFILE] compile(AST→bytecode): %.3f ms\n", (t5 - t4) / 1e6);
 
     // Add a halt instruction at the end
     double t6 = now_ns();
     emitByte(&compiler, OP_HALT);
     double t7 = now_ns();
-    fprintf(stderr, "[PROFILE] emit+patch: %.3f ms\n", (t7 - t6) / 1e6);
+    // fprintf(stderr, "[PROFILE] emit+patch: %.3f ms\n", (t7 - t6) / 1e6);
 
     // Execute the chunk
     vm.chunk = &chunk;
@@ -313,14 +316,14 @@ InterpretResult interpret(const char* source) {
     double t8 = now_ns();
     InterpretResult result = run();
     double t9 = now_ns();
-    fprintf(stderr, "[PROFILE] run() execution: %.3f ms\n", (t9 - t8) / 1e6);
+    // fprintf(stderr, "[PROFILE] run() execution: %.3f ms\n", (t9 - t8) / 1e6);
 
     freeAST(ast);
     freeCompiler(&compiler);
     freeChunk(&chunk);
     
     double t10 = now_ns();
-    fprintf(stderr, "[PROFILE] TOTAL interpret(): %.3f ms\n", (t10 - t0) / 1e6);
+    // fprintf(stderr, "[PROFILE] TOTAL interpret(): %.3f ms\n", (t10 - t0) / 1e6);
     
     return result;
 }
@@ -403,7 +406,7 @@ InterpretResult interpret_module(const char* path) {
     double t1 = now_ns();
     char* source = readFile(path);
     double t2 = now_ns();
-    fprintf(stderr, "[PROFILE] ReadFile: %.3f ms\n", (t2 - t1) / 1e6);
+    // fprintf(stderr, "[PROFILE] ReadFile: %.3f ms\n", (t2 - t1) / 1e6);
     
     if (!source) {
         return INTERPRET_COMPILE_ERROR;
@@ -424,13 +427,13 @@ InterpretResult interpret_module(const char* path) {
     initCompiler(&compiler, &chunk, fileName, source);
     
     double t3 = now_ns();
-    fprintf(stderr, "[PROFILE] Init (chunk+compiler): %.3f ms\n", (t3 - t2) / 1e6);
+    // fprintf(stderr, "[PROFILE] Init (chunk+compiler): %.3f ms\n", (t3 - t2) / 1e6);
     
     // Parse the module source into an AST
     double t4 = now_ns();
     ASTNode* ast = parseSource(source);
     double t5 = now_ns();
-    fprintf(stderr, "[PROFILE] parseSource: %.3f ms\n", (t5 - t4) / 1e6);
+    // fprintf(stderr, "[PROFILE] parseSource: %.3f ms\n", (t5 - t4) / 1e6);
     
     if (!ast) {
         fprintf(stderr, "Failed to parse module: %s\n", path);
@@ -451,13 +454,13 @@ InterpretResult interpret_module(const char* path) {
         return INTERPRET_COMPILE_ERROR;
     }
     double t7 = now_ns();
-    fprintf(stderr, "[PROFILE] compile(AST→bytecode): %.3f ms\n", (t7 - t6) / 1e6);
+    // fprintf(stderr, "[PROFILE] compile(AST→bytecode): %.3f ms\n", (t7 - t6) / 1e6);
     
     // Add a halt instruction at the end
     double t8 = now_ns();
     emitByte(&compiler, OP_HALT);
     double t9 = now_ns();
-    fprintf(stderr, "[PROFILE] emit+patch: %.3f ms\n", (t9 - t8) / 1e6);
+    // fprintf(stderr, "[PROFILE] emit+patch: %.3f ms\n", (t9 - t8) / 1e6);
     
     // Store current VM state
     Chunk* oldChunk = vm.chunk;
@@ -473,7 +476,7 @@ InterpretResult interpret_module(const char* path) {
     double t10 = now_ns();
     InterpretResult result = run();
     double t11 = now_ns();
-    fprintf(stderr, "[PROFILE] run() execution: %.3f ms\n", (t11 - t10) / 1e6);
+    // fprintf(stderr, "[PROFILE] run() execution: %.3f ms\n", (t11 - t10) / 1e6);
     
     // Restore VM state
     vm.chunk = oldChunk;
@@ -494,7 +497,7 @@ InterpretResult interpret_module(const char* path) {
     freeChunk(&chunk);
     
     double t12 = now_ns();
-    fprintf(stderr, "[PROFILE] TOTAL interpret_module(): %.3f ms\n", (t12 - t0) / 1e6);
+    // fprintf(stderr, "[PROFILE] TOTAL interpret_module(): %.3f ms\n", (t12 - t0) / 1e6);
     
     return result;
 }

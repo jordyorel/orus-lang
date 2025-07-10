@@ -114,6 +114,36 @@ ObjRangeIterator* allocateRangeIterator(int64_t start, int64_t end) {
     return it;
 }
 
+ObjFunction* allocateFunction(void) {
+    ObjFunction* function = (ObjFunction*)allocateObject(sizeof(ObjFunction), OBJ_FUNCTION);
+    function->arity = 0;
+    function->upvalueCount = 0;
+    function->chunk = NULL;
+    function->name = NULL;
+    return function;
+}
+
+ObjClosure* allocateClosure(ObjFunction* function) {
+    ObjUpvalue** upvalues = (ObjUpvalue**)reallocate(NULL, 0, sizeof(ObjUpvalue*) * function->upvalueCount);
+    for (int i = 0; i < function->upvalueCount; i++) {
+        upvalues[i] = NULL;
+    }
+    
+    ObjClosure* closure = (ObjClosure*)allocateObject(sizeof(ObjClosure), OBJ_CLOSURE);
+    closure->function = function;
+    closure->upvalues = upvalues;
+    closure->upvalueCount = function->upvalueCount;
+    return closure;
+}
+
+ObjUpvalue* allocateUpvalue(Value* slot) {
+    ObjUpvalue* upvalue = (ObjUpvalue*)allocateObject(sizeof(ObjUpvalue), OBJ_UPVALUE);
+    upvalue->location = slot;
+    upvalue->closed = NIL_VAL;
+    upvalue->next = NULL;
+    return upvalue;
+}
+
 void markValue(Value value);
 
 void markObject(Obj* object) {
@@ -144,7 +174,14 @@ void markObject(Obj* object) {
         case OBJ_CLOSURE: {
             ObjClosure* closure = (ObjClosure*)object;
             markObject((Obj*)closure->function);
-            // TODO: mark upvalues when implemented
+            for (int i = 0; i < closure->upvalueCount; i++) {
+                markObject((Obj*)closure->upvalues[i]);
+            }
+            break;
+        }
+        case OBJ_UPVALUE: {
+            ObjUpvalue* upvalue = (ObjUpvalue*)object;
+            markValue(upvalue->closed);
             break;
         }
     }
@@ -156,6 +193,8 @@ void markValue(Value value) {
         case VAL_ARRAY:
         case VAL_ERROR:
         case VAL_RANGE_ITERATOR:
+        case VAL_FUNCTION:
+        case VAL_CLOSURE:
             markObject(value.as.obj);
             break;
         default:
@@ -171,6 +210,11 @@ static void markRoots() {
         markValue(vm.globals[i]);
     }
     markValue(vm.lastError);
+    
+    // Mark open upvalues
+    for (ObjUpvalue* upvalue = vm.openUpvalues; upvalue != NULL; upvalue = upvalue->next) {
+        markObject((Obj*)upvalue);
+    }
 }
 
 static void sweep() {
@@ -226,9 +270,13 @@ static void freeObject(Obj* object) {
             break;
         }
         case OBJ_CLOSURE: {
-            vm.bytesAllocated -= sizeof(ObjClosure);
-            // Note: function is managed separately
-            // TODO: free upvalues when implemented
+            ObjClosure* closure = (ObjClosure*)object;
+            vm.bytesAllocated -= sizeof(ObjClosure) + sizeof(ObjUpvalue*) * closure->upvalueCount;
+            free(closure->upvalues);
+            break;
+        }
+        case OBJ_UPVALUE: {
+            vm.bytesAllocated -= sizeof(ObjUpvalue);
             break;
         }
     }
@@ -248,6 +296,40 @@ char* copyString(const char* chars, int length) {
     memcpy(copy, chars, length);
     copy[length] = '\0';
     return copy;
+}
+
+ObjUpvalue* captureUpvalue(Value* local) {
+    ObjUpvalue* prevUpvalue = NULL;
+    ObjUpvalue* upvalue = vm.openUpvalues;
+    
+    while (upvalue != NULL && upvalue->location > local) {
+        prevUpvalue = upvalue;
+        upvalue = upvalue->next;
+    }
+    
+    if (upvalue != NULL && upvalue->location == local) {
+        return upvalue;
+    }
+    
+    ObjUpvalue* createdUpvalue = allocateUpvalue(local);
+    createdUpvalue->next = upvalue;
+    
+    if (prevUpvalue == NULL) {
+        vm.openUpvalues = createdUpvalue;
+    } else {
+        prevUpvalue->next = createdUpvalue;
+    }
+    
+    return createdUpvalue;
+}
+
+void closeUpvalues(Value* last) {
+    while (vm.openUpvalues != NULL && vm.openUpvalues->location >= last) {
+        ObjUpvalue* upvalue = vm.openUpvalues;
+        upvalue->closed = *upvalue->location;
+        upvalue->location = &upvalue->closed;
+        vm.openUpvalues = upvalue->next;
+    }
 }
 
 // Chunk operations moved from vm.c

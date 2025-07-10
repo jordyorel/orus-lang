@@ -1,0 +1,12 @@
+// Basic closure test - capturing a local variable
+fn make_counter() -> fn() -> i32:
+    mut count = 0
+    fn counter() -> i32:
+        count += 1
+        count
+    counter
+
+counter = make_counter()
+print("First call: ", counter())
+print("Second call: ", counter())
+print("Third call: ", counter())
