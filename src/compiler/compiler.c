@@ -441,6 +441,7 @@ void endScope(Compiler* compiler) {
 
 static ExprDesc compile_expression(ASTNode* node, Compiler* compiler);
 static void compile_statement(ASTNode* node, Compiler* compiler);
+static void compile_print_statement(ASTNode* node, Compiler* compiler);
 
 // ============================================================================
 // Tail Call Optimization
@@ -774,6 +775,11 @@ static ExprDesc compile_expression(ASTNode* node, Compiler* compiler) {
             return make_register_expr(reg, VAL_I64, true);
         }
         
+        case NODE_PRINT: {
+            compile_print_statement(node, compiler);
+            return make_void_expr();
+        }
+        
         default:
             return make_void_expr();
     }
@@ -1034,12 +1040,7 @@ static void compile_print_statement(ASTNode* node, Compiler* compiler) {
         return;
     }
 
-    // Preload space constant for separating arguments
-    ObjString* spaceStr = allocateString(" ", 1);
-    int spaceReg = allocateRegister(compiler);
-    emitConstant(compiler, spaceReg, STRING_VAL(spaceStr));
-
-    // Compile and print each argument with spacing
+    // Simplified implementation without space allocation
     for (int i = 0; i < node->print.count; i++) {
         ExprDesc arg = compile_expression(node->print.values[i], compiler);
         if (arg.kind != EXPR_VOID) {
@@ -1048,16 +1049,10 @@ static void compile_print_statement(ASTNode* node, Compiler* compiler) {
                 bool last = (i == node->print.count - 1);
                 emitByte(compiler, last && node->print.newline ? OP_PRINT_R : OP_PRINT_NO_NL_R);
                 emitByte(compiler, argReg);
-                if (!last) {
-                    emitByte(compiler, OP_PRINT_NO_NL_R);
-                    emitByte(compiler, spaceReg);
-                }
             }
             free_expr_temp(&arg, compiler);
         }
     }
-
-    freeRegister(compiler, spaceReg);
 }
 
 static void compile_block_statement(ASTNode* node, Compiler* compiler) {

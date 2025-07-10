@@ -150,6 +150,7 @@ static TokenType identifier_type(const char* start, int length) {
                 return TOKEN_FALSE;
             if (length == 3 && memcmp(start, "for", 3) == 0) return TOKEN_FOR;
             if (length == 2 && start[1] == 'n') return TOKEN_FN;
+            if (length == 3 && memcmp(start, "f64", 3) == 0) return TOKEN_F64;
             break;
         case 'i':
             if (length == 2 && memcmp(start, "if", 2) == 0) return TOKEN_IF;
