@@ -1,8 +1,0 @@
-a = 15
-b = 25
-mut i = 0
-while i < 3:
-    base = a + b
-    result = base + i
-    print("While result:", result)
-    i = i + 1

@@ -1,5 +1,0 @@
-value = 1
-if true:
-    mut value = 5
-    print(value)
-print(value)

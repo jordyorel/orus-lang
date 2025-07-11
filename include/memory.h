@@ -23,6 +23,8 @@ ObjString* allocateString(const char* chars, int length);
 ObjArray* allocateArray(int capacity);
 ObjError* allocateError(ErrorType type, const char* message, SrcLocation location);
 ObjRangeIterator* allocateRangeIterator(int64_t start, int64_t end);
+ObjFunction* allocateFunction(void);
+ObjClosure* allocateClosure(ObjFunction* function);
 char* copyString(const char* chars, int length);
 
 #endif

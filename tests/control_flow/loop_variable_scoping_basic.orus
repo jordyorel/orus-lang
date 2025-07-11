@@ -1,3 +1,0 @@
-// Test basic loop variable scoping with enhanced lifetime tracking
-for i in 0..3:
-    print("Loop iteration: {}", i)

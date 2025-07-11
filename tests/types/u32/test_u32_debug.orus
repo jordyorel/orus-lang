@@ -1,4 +1,0 @@
-a = 5u32
-b = 3u32
-c = a + b
-print(c)

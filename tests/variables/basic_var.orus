@@ -1,0 +1,3 @@
+// Test variable declaration and assignment
+x = 42
+print(x)
