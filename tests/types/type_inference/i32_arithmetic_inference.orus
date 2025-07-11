@@ -1,0 +1,26 @@
+// Comprehensive i32 arithmetic type inference tests
+a = 10    // Default i32
+b = 5     // Default i32
+
+// All basic operations should infer i32 type
+addition = a + b
+subtraction = a - b  
+multiplication = a * b
+division = a / b
+modulo = a % b
+
+print(addition)      // 15
+print(subtraction)   // 5
+print(multiplication) // 50
+print(division)      // 2
+print(modulo)        // 0
+
+// Chained operations should also infer i32
+complex = (a + b) * (a - b)
+print(complex)
+
+// Explicit i32 variables
+x = 20i32
+y = 3i32
+result = x / y
+print(result)

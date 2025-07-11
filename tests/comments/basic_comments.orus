@@ -1,0 +1,6 @@
+// Basic line comment test
+x = 1
+// Comment at start of line
+y = 2 // Comment at end of line
+z = x + y
+print(z)

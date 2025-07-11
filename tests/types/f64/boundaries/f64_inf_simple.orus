@@ -1,0 +1,8 @@
+a: f64 = 1.0
+b: f64 = 0.0
+inf_result = a / b
+print(inf_result)
+
+c: f64 = 0.0
+nan_result = c / b
+print(nan_result)

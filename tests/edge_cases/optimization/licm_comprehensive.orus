@@ -1,0 +1,48 @@
+// LICM Comprehensive Test Suite
+
+// Test 1: Basic loop-invariant arithmetic
+a = 5
+b = 10
+for i in 0..3:
+    result = a + b + i  // (a + b) should be hoisted
+    print(result)
+
+print(999)  // Separator
+
+// Test 2: Loop variable dependency (should NOT be hoisted)
+c = 30
+for i in 0..3:
+    loop_dependent = c + i  // Cannot hoist due to i dependency
+    print(loop_dependent)
+
+print(888)  // Separator
+
+// Test 3: While loop with invariant expressions
+d = 15
+e = 25
+mut i = 0
+while i < 3:
+    base = d + e  // Should be hoisted
+    result = base + i
+    print(result)
+    i = i + 1
+
+print(777)  // Separator
+
+// Test 4: Nested loops with different scopes
+f = 70
+for outer in 0..2:
+    outer_invariant = f * 2  // Invariant to both loops
+    for inner in 0..2:
+        combined = outer_invariant + outer + inner
+        print(combined)
+
+print(666)  // Separator
+
+// Test 5: Side effects (should NOT be hoisted)
+g = 40
+mut counter = 0
+for i in 0..3:
+    counter = counter + 1  // Side effect - cannot hoist
+    result = g + counter + i
+    print(result)

@@ -1,0 +1,3 @@
+x = 5
+result = x > 0 ? "positive" : "non-positive"
+print(result)

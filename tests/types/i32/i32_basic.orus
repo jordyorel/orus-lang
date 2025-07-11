@@ -1,0 +1,14 @@
+// Basic i32 tests
+x: i32 = 42
+y: i32 = 13
+print(x + y)
+print(x - y)
+print(x * y)
+print(x / y)
+print(x % y)
+
+// Test with subtraction to create negative values
+ten: i32 = 10
+neg = 0 - ten
+print(neg + x)
+print(x - neg)

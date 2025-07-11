@@ -1,0 +1,75 @@
+// Edge cases for operator precedence and complex expressions
+
+// Test 1: Operator precedence stress test
+result1 = 2 + 3 * 4 - 1     // Should be: 2 + 12 - 1 = 13
+result2 = (2 + 3) * (4 - 1) // Should be: 5 * 3 = 15
+result3 = 2 * 3 + 4 * 5     // Should be: 6 + 20 = 26
+print("Precedence test 1:", result1)
+print("Precedence test 2:", result2)
+print("Precedence test 3:", result3)
+
+// Test 2: Deeply nested parentheses
+deep = ((((1 + 2) * 3) + 4) * 5)
+print("Deep nesting:", deep)
+
+// Test 3: Boolean operator precedence
+bool_result1 = true or false and false   // Should be: true or (false and false) = true
+bool_result2 = (true or false) and false // Should be: true and false = false
+print("Boolean precedence 1:", bool_result1)
+print("Boolean precedence 2:", bool_result2)
+
+// Test 4: Comparison operator precedence
+comp_result1 = 5 + 3 > 4 * 2    // Should be: 8 > 8 = false
+comp_result2 = (5 + 3) > (4 * 2) // Should be: 8 > 8 = false
+comp_result3 = 5 + 3 > 4 + 2    // Should be: 8 > 6 = true
+print("Comparison precedence 1:", comp_result1)
+print("Comparison precedence 2:", comp_result2)
+print("Comparison precedence 3:", comp_result3)
+
+// Test 5: Mixed arithmetic and comparison
+mixed1 = 10 - 5 == 2 + 3        // Should be: 5 == 5 = true
+mixed2 = 10 / 2 > 3 * 1         // Should be: 5 > 3 = true
+mixed3 = 15 % 4 < 20 / 5        // Should be: 3 < 4 = true
+print("Mixed 1:", mixed1)
+print("Mixed 2:", mixed2)
+print("Mixed 3:", mixed3)
+
+// Test 6: Unary operator precedence
+unary1 = -2 + 3                 // Should be: (-2) + 3 = 1
+unary2 = -(2 + 3)               // Should be: -(5) = -5
+unary3 = not true and false     // Should be: (not true) and false = false
+unary4 = not (true and false)   // Should be: not (false) = true
+print("Unary 1:", unary1)
+print("Unary 2:", unary2)
+print("Unary 3:", unary3)
+print("Unary 4:", unary4)
+
+// Test 7: Very long expression chains
+long_expr = 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10
+mult_chain = 2 * 2 * 2 * 2 * 2  // Should be 32
+print("Long addition:", long_expr)
+print("Multiplication chain:", mult_chain)
+
+// Test 8: Floating point precedence
+float_expr1 = 2.5 * 4.0 + 1.5   // Should be: 10.0 + 1.5 = 11.5
+float_expr2 = 2.5 * (4.0 + 1.5) // Should be: 2.5 * 5.5 = 13.75
+print("Float precedence 1:", float_expr1)
+print("Float precedence 2:", float_expr2)
+
+// Test 9: Modulo with other operations
+mod_expr1 = 17 % 5 + 3          // Should be: 2 + 3 = 5
+mod_expr2 = 17 % (5 + 3)        // Should be: 17 % 8 = 1
+mod_expr3 = (17 + 3) % 5        // Should be: 20 % 5 = 0
+print("Modulo 1:", mod_expr1)
+print("Modulo 2:", mod_expr2)
+print("Modulo 3:", mod_expr3)
+
+// Test 10: Complex boolean expressions
+complex_bool = (5 > 3) and (2 < 4) or (1 == 0) and (3 != 3)
+print("Complex boolean:", complex_bool)
+
+// Test 11: Ternary operator precedence
+ternary_expr = 5 > 3 ? 10 + 5 : 20 - 5   // Should be: true ? 15 : 15 = 15
+ternary_complex = (5 > 3) ? (10 + 5) : (20 - 5)
+print("Ternary precedence:", ternary_expr)
+print("Ternary complex:", ternary_complex)

@@ -1,0 +1,13 @@
+// u64 overflow tests 
+// Testing error conditions and proper error handling
+// Using new Rust-like type inference
+
+max_val = 18446744073709551615  // 2^64 - 1 (suffix needed for max value)
+one = 1
+
+print(max_val)
+print(one)
+
+// This should trigger overflow error:
+result = max_val + one
+print(result)

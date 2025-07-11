@@ -202,7 +202,7 @@ typedef struct TypeEnv {
     struct TypeEnv* parent;
 } TypeEnv;
 
-static TypeEnv* type_env_new(TypeEnv* parent) {
+TypeEnv* type_env_new(TypeEnv* parent) {
     TypeEnv* env = arena_alloc(sizeof(TypeEnv));
     if (!env) return NULL;
     env->entries = NULL;

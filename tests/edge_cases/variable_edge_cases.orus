@@ -1,0 +1,44 @@
+// Edge cases for variable assignments and scoping
+
+// Test 1: Variable scoping in different scopes
+outer_x = 999
+if true:
+    inner_x = 42
+    print("Inner x:", inner_x)
+    print("Outer from inner:", outer_x)
+print("Outer x:", outer_x)
+
+// Test 2: Mutable variable edge cases
+mut y = 0
+y += 1
+y -= 1
+y *= 10
+y /= 10
+print("Final y:", y)
+
+// Test 3: Variable scoping in loops
+original_i = 888
+for loop_i in 0..3:
+    print("Loop i:", loop_i)
+print("Original i:", original_i)
+
+// Test 4: Complex assignment chains
+mut a = 1
+mut b = 2
+mut c = 3
+a += b += c  // Should work right-to-left
+print("Chain result:", a, b, c)
+
+// Test 5: Assignment with complex expressions
+mut result = 0
+result = (1 + 2) * (3 + 4) - (5 + 6) + 7
+print("Complex assignment:", result)
+
+// Test 6: Multiple variable declarations with different types
+num1 = 42
+num2 = 42i64
+num3 = 42u32
+num4 = 42u64
+num5 = 42.0
+flag = true
+print("Multiple types:", num1, num2, num3, num4, num5, flag)

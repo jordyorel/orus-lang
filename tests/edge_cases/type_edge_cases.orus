@@ -1,0 +1,100 @@
+// Edge cases for type system and type safety
+
+// Test 1: Type suffix vs annotation consistency
+val1 = 42u32
+val2: u32 = 42
+val3 = 1000i64
+val4: i64 = 1000
+print("u32 values:", val1, val2)
+print("i64 values:", val3, val4)
+
+// Test 2: Type inference in complex expressions
+inferred1 = 10 + 20 + 30    // Should infer as i32
+inferred2 = 1.0 + 2.0       // Should infer as f64
+inferred3 = true and false  // Should infer as bool
+print("Inferred types:", inferred1, inferred2, inferred3)
+
+// Test 3: Mutable type consistency
+mut mutable_i32 = 42
+mut mutable_u32 = 42u32
+mut mutable_f64 = 42.0
+mut mutable_bool = true
+
+mutable_i32 += 1
+mutable_u32 += 1u32
+mutable_f64 += 1.0
+mutable_bool = not mutable_bool
+
+print("Mutable results:", mutable_i32, mutable_u32, mutable_f64, mutable_bool)
+
+// Test 4: Type boundaries for different integer types
+max_i32_test = 2147483647
+min_i32_test = -2147483648
+max_u32_test = 4294967295u32
+min_u32_test = 0u32
+
+print("i32 boundaries:", max_i32_test, min_i32_test)
+print("u32 boundaries:", max_u32_test, min_u32_test)
+
+// Test 5: Floating point precision edge cases
+precise1 = 0.1 + 0.2        // Classic floating point precision test
+precise2 = 1.0 / 3.0        // Should show precision limits
+precise3 = 999999999999999.0 + 1.0  // Large number precision
+print("Precision test 1:", precise1)
+print("Precision test 2:", precise2)
+print("Precision test 3:", precise3)
+
+// Test 6: Boolean type operations
+bool_true = true
+bool_false = false
+bool_and = bool_true and bool_false
+bool_or = bool_true or bool_false
+bool_not_true = not bool_true
+bool_not_false = not bool_false
+
+print("Boolean operations:")
+print("true and false:", bool_and)
+print("true or false:", bool_or)
+print("not true:", bool_not_true)
+print("not false:", bool_not_false)
+
+// Test 7: Type consistency in loops
+for type_test in 0..3:
+    local_i32 = type_test + 1
+    local_f64 = type_test + 1.0
+    local_bool = type_test > 1
+    print("Loop types:", type_test, local_i32, local_f64, local_bool)
+
+// Test 8: Type consistency in conditionals
+test_value = 42
+if test_value > 0:
+    positive_result = test_value + 10
+    print("Positive branch:", positive_result)
+else:
+    negative_result = test_value - 10
+    print("Negative branch:", negative_result)
+
+// Test 9: Mixed type arithmetic consistency (same types only)
+int_a = 10
+int_b = 20
+int_result = int_a + int_b
+
+float_a = 10.5
+float_b = 20.7
+float_result = float_a + float_b
+
+print("Integer arithmetic:", int_result)
+print("Float arithmetic:", float_result)
+
+// Test 10: String type consistency
+str_a = "Hello"
+str_b = "World"
+str_result = str_a + " " + str_b
+print("String concatenation:", str_result)
+
+// Test 11: Type inference with compound assignments
+mut compound_test = 100
+compound_test += 50     // Should maintain i32 type
+compound_test *= 2      // Should maintain i32 type
+compound_test /= 4      // Should maintain i32 type
+print("Compound assignment result:", compound_test)

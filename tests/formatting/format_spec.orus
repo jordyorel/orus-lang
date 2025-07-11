@@ -1,0 +1,5 @@
+pi = 3.14159
+print("Pi: @.2f", pi)
+num = 255
+print("hex: @x", num)
+print("binary: @b", num)

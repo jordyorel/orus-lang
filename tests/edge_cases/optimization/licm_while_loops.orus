@@ -1,0 +1,39 @@
+// LICM Tests for While Loops
+
+// Test 1: Basic while loop with invariant expressions
+a = 15
+b = 25
+mut i = 0
+while i < 3:
+    base = a + b
+    result = base + i
+    print(result)
+    i = i + 1
+
+print(777)
+
+// Test 2: While loop with invariant condition parts
+d = 45
+max_iter = 4
+mut k = 0
+while k < max_iter:
+    scaled = d * max_iter
+    current = scaled + k
+    print(current)
+    k = k + 1
+
+print(666)
+
+// Test 3: Nested while loops
+e = 55
+mut outer = 0
+while outer < 2:
+    outer_base = e * 3
+    
+    mut inner = 0
+    while inner < 2:
+        nested_result = outer_base + outer + inner
+        print(nested_result)
+        inner = inner + 1
+    
+    outer = outer + 1

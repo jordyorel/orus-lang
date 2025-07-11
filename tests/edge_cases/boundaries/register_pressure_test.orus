@@ -1,0 +1,11 @@
+// Test register pressure and allocation optimization in loops
+
+// Create many variables in a loop to test register allocation
+for i in 0..3:
+    a = i + 1
+    b = i + 2
+    c = i + 3
+    d = i + 4
+    e = i + 5
+    sum = a + b + c + d + e
+    print("i:", i, "sum:", sum)

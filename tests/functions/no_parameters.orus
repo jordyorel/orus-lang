@@ -1,0 +1,6 @@
+// Function with no parameters
+fn get_answer() -> i32:
+    42
+
+answer = get_answer()
+print(answer)

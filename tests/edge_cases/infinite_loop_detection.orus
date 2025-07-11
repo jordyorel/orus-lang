@@ -1,0 +1,18 @@
+// Test compile-time infinite loop detection
+
+// Test 1: Loop with false condition (should be optimized out)
+while false:
+    print("This should never execute")
+
+// Test 2: Loop with break statement (should not be infinite)
+while true:
+    print("This has a break")
+    break
+
+// Test 3: Simple for loops that should work
+for i in 0..5:
+    print(i)
+
+// Test 4: Range with step
+for i in 0..10..2:
+    print(i)

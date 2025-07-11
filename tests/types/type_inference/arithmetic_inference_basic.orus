@@ -1,0 +1,26 @@
+// Test basic arithmetic type inference
+// Variables without explicit type annotations should infer from arithmetic
+
+// f64 arithmetic
+a: f64 = 1.0
+b: f64 = 2.0
+c = a + b  // Should infer f64
+print(c)
+
+// u32 arithmetic  
+x = 10u32
+y = 20u32
+z = x * y  // Should infer u32
+print(z)
+
+// i64 arithmetic
+p = 100i64
+q = 50i64
+r = p - q  // Should infer i64
+print(r)
+
+// i32 arithmetic (default)
+m = 100
+n = 25
+o = m / n  // Should infer i32
+print(o)

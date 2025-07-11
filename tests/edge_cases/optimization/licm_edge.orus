@@ -1,0 +1,15 @@
+a = 10
+for i in 0..0:
+    result = a + 5
+
+print("Empty loop test passed")
+
+b = 20
+for i in 0..1:
+    value = b * 2 + i
+    print("Single iteration:", value)
+
+c = 30
+for i in 0..3:
+    loop_dependent = c + i
+    print("Loop dependent:", loop_dependent)

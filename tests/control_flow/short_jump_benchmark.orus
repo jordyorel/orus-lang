@@ -1,0 +1,40 @@
+// Short Jump Performance Benchmark
+// Tests scenarios that should benefit most from short jump optimizations
+
+// Test 1: Simple tight loops (should use OP_LOOP_SHORT heavily)
+mut tight_loop_total = 0
+for i in 0..100000:
+    tight_loop_total = tight_loop_total + 1
+
+print(tight_loop_total)
+
+// Test 2: Many small conditionals (should use OP_JUMP_IF_NOT_SHORT)
+mut conditional_total = 0
+for i in 0..50000:
+    if i % 2 == 0:
+        conditional_total = conditional_total + 1
+    if i % 3 == 0:
+        conditional_total = conditional_total + 2
+    if i % 5 == 0:
+        conditional_total = conditional_total + 3
+
+print(conditional_total)
+
+// Test 3: Nested short loops (heavy short jump usage)
+mut nested_short_total = 0
+for i in 0..500:
+    for j in 0..200:
+        if i + j < 100:
+            nested_short_total = nested_short_total + 1
+
+print(nested_short_total)
+
+// Test 4: While loops with frequent conditions
+mut while_total = 0
+mut counter = 0
+while counter < 30000:
+    if counter % 7 == 0:
+        while_total = while_total + counter
+    counter = counter + 1
+
+print(while_total)

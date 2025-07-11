@@ -1,0 +1,33 @@
+// Simplified loop safety integration test
+
+// Test 1: Simple nested loops with range syntax
+for outer in 0..3:
+    for inner in 0..2:
+        result = outer * 10 + inner
+        print(result)
+
+print(999)
+
+// Test 2: Loop with break and continue
+for i in 0..10:
+    if i == 3:
+        continue
+    if i == 7:
+        break
+    print(i)
+
+print(888)
+
+// Test 3: Loop variable scoping
+x = 100
+for x in 0..3:
+    print(x)
+print(x)
+
+print(777)
+
+// Test 4: Range with variable bounds
+start = 2
+end = 5
+for i in start..end:
+    print(i)

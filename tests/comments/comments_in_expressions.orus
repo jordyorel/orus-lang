@@ -1,0 +1,13 @@
+// Test comments mixed with expressions
+x = 1 // Initialize x
+y = 2 /* Initialize y */ + 3 // Add 3
+z = /* comment */ 4
+
+// Comments between operators
+result = x /* first */ + /* second */ y /* third */ * /* fourth */ z
+
+// Comments in complex expressions
+complex = (x + y) /* intermediate */ * (z - 1) // final calc
+
+print(result)
+print(complex)

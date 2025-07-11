@@ -1,0 +1,29 @@
+// LICM Side Effects and Safety Tests
+
+// Test 1: Assignment operations (side effects)
+b = 20
+mut accumulator = 0
+for i in 0..3:
+    accumulator = accumulator + b
+    print(accumulator)
+
+print(777)
+
+// Test 2: Compound assignment operations  
+c = 30
+mut total = 0
+for i in 0..3:
+    total += c
+    print(total)
+
+print(666)
+
+// Test 3: Mixed safe and unsafe expressions
+d = 40
+e = 50
+mut counter = 0
+for i in 0..3:
+    safe_expr = d + e
+    counter = counter + 1
+    result = safe_expr + counter + i
+    print(result)

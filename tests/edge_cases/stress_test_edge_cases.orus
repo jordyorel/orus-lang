@@ -1,0 +1,110 @@
+// Edge cases for memory management and performance limits
+
+// Test 1: Deep nesting stress test
+// Test the parser's ability to handle deeply nested expressions
+
+benchmark_start = time_stamp()
+start_time = time_stamp()
+print("Start time:", start_time)
+
+deep_expr = (((((((((1 + 2) * 3) + 4) * 5) + 6) * 7) + 8) * 9) + 10)
+print("Deep nesting result:", deep_expr)
+
+// Test 2: Many variables in single scope
+var1 = 1, var2 = 2, var3 = 3, var4 = 4,
+var5 = 5, var6 = 6, var7 = 7, var8 = 8,
+var9 = 9, var10 = 10, var11 = 11, var12 = 12,
+var13 = 13, var14 = 14, var15 = 15, var16 = 16,
+var17 = 17, var18 = 18, var19 = 19, var20 = 20
+
+sum_all = var1 + var2 + var3 + var4 + var5 + var6 + var7 + var8 + var9 + var10 + var11 + var12 + var13 + var14 + var15 + var16 + var17 + var18 + var19 + var20
+print("Many variables sum:", sum_all)
+print("Expected sum:", 210)
+
+// Test 3: Deeply nested scopes
+if true:
+    level1 = 1
+    if true:
+        level2 = 2
+        if true:
+            level3 = 3
+            if true:
+                level4 = 4
+                if true:
+                    level5 = 5
+                    if true:
+                        level6 = 6
+                        print("Deep scope level 6:", level6)
+                    print("Deep scope level 5:", level5)
+                print("Deep scope level 4:", level4)
+            print("Deep scope level 3:", level3)
+        print("Deep scope level 2:", level2)
+    print("Deep scope level 1:", level1)
+
+// Test 4: Many consecutive loops
+print("Consecutive loops test:")
+for a in 0..2:
+    print("Loop A:", a)
+
+for b in 0..2:
+    print("Loop B:", b)
+
+for c in 0..2:
+    print("Loop C:", c)
+
+for d in 0..2:
+    print("Loop D:", d)
+
+// Test 5: Stress test with many operations
+mut stress_counter = 0
+for i in 0..10:
+    for j in 0..10:
+        stress_counter += 1
+        stress_counter *= 2
+        stress_counter /= 2
+        stress_counter -= 1
+        stress_counter += 1
+
+print("Stress test final counter:", stress_counter)
+
+// Test 6: Long string concatenation chain
+long_concat = "a" + "b" + "c" + "d" + "e" + "f" + "g" + "h" + "i" + "j" + "k" + "l" + "m" + "n" + "o" + "p" + "q" + "r" + "s" + "t" + "u" + "v" + "w" + "x" + "y" + "z"
+print("Long concatenation:", long_concat)
+
+// Test 7: Many boolean operations
+bool_chain = true and true and true and true and true and false or true or false or true or false or not false and not false and not false
+print("Boolean chain result:", bool_chain)
+
+// Test 8: Nested loop variable stress test
+print("Nested loop variable test:")
+for outer1 in 0..3:
+    for inner1 in 0..3:
+        for deep1 in 0..3:
+            nested_result = outer1 * 100 + inner1 * 10 + deep1
+            print("Nested result:", nested_result)
+
+// Test 9: Large arithmetic expressions
+large_calc = 123 + 456 + 789 + 101112 + 131415 + 161718 + 192021 + 222324
+print("Large calculation:", large_calc)
+
+// Test 10: Multiple data type mix in complex expression
+mixed_complex = (100 + 200) * (3.14159 > 3.0 ? 1 : 0) + (true and false ? 10 : 20) + ((50 > 25) and (30 < 40) ? 5 : 15)
+print("Mixed complex result:", mixed_complex)
+
+
+benchmark_end = time_stamp()
+total_duration = benchmark_end - benchmark_start
+duration_ms = total_duration / 1000000
+
+print("Stress test benchmark completed!")
+print("Total time (nanoseconds):", total_duration)
+print("Total time (milliseconds):", duration_ms)
+
+
+end_time = time_stamp()
+duration = end_time - start_time
+duration_ms_final = duration / 1000000
+
+print("Calculation result:", stress_counter)
+print("Time taken (nanoseconds):", duration)
+print("Time taken (milliseconds):", duration_ms_final)

@@ -1,0 +1,36 @@
+// Closure Capture Analysis Test
+// Tests for detecting variables captured by nested functions (when implemented)
+
+// Test 1: Simple variable capture scenario
+mut outer_var: i32 = 42
+print("Outer variable declared:", outer_var)
+
+// Test 2: Multiple scope levels
+mut level1_var = 10
+for i in 0..3:
+    mut level2_var = 20
+    for j in 0..2:
+        mut level3_var = 30
+        mut temp = level1_var + level2_var + level3_var
+        print("Nested scope calculation:", temp)
+
+// Test 3: Variables that escape scope through assignment
+mut escaping_var = 100
+for i in 0..5:
+    escaping_var = escaping_var + i
+print("Escaping variable final value:", escaping_var)
+
+// Test 4: Loop variable capture patterns
+for loop_var in 0..5:
+    mut inner = loop_var * 2
+    print("Loop iteration:", loop_var, "inner:", inner)
+
+// Test 5: Variable shadowing scenarios
+mut shadowed_var = 1
+print("Original:", shadowed_var)
+for i in 0..2:
+    mut shadowed_var = 999
+    print("Shadowed:", shadowed_var)
+print("After loop:", shadowed_var)
+
+print("Closure capture test completed")

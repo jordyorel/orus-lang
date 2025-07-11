@@ -1,0 +1,10 @@
+mut x: i64 = 5000000000
+mut y: i64 = 2000000000
+x += y
+print(x)
+
+mut z: i64 = 1000000000
+for i in 0..10:
+    z = z + i
+print(z)
+

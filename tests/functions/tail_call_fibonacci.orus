@@ -1,0 +1,10 @@
+// Test tail call optimization with fibonacci function
+fn fibonacci(n: i32, a: i32, b: i32) -> i32:
+    if n == 0:
+        a
+    else:
+        fibonacci(n - 1, b, a + b)
+
+// Test with a reasonably large number
+result = fibonacci(10, 0, 1)
+print("Fibonacci of 10 is:", result)

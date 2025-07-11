@@ -1,0 +1,29 @@
+// Basic Loop Invariant Code Motion (LICM) Tests
+
+// Test 1: Simple loop-invariant arithmetic
+a = 5
+b = 10
+for i in 0..3:
+    result = a + b + i
+    print(result)
+
+print(999)
+
+// Test 2: Loop-invariant variable references
+x = 42
+y = 100
+for j in 0..2:
+    sum = x + j
+    product = y * 2 + j
+    print(sum)
+    print(product)
+
+print(888)
+
+// Test 3: Nested loop-invariant expressions
+outer_val = 7
+for k in 0..2:
+    base = outer_val * 3
+    inner_sum = base + k
+    print(base)
+    print(inner_sum)

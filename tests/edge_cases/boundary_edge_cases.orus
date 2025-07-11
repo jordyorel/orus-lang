@@ -1,0 +1,98 @@
+// Edge cases for boundary conditions and limits
+
+// Test 1: Zero-based indexing edge cases
+for i in 0..1:
+    print("Zero-based single:", i)
+
+for j in 0..0:
+    print("This should not print")
+
+// Test 2: Range boundary conditions
+print("Range boundaries:")
+for start_zero in 0..5:
+    print("Start at zero:", start_zero)
+
+for end_zero in 5..0:
+    print("End at zero (should not print):", end_zero)
+
+// Test 3: Arithmetic boundary conditions
+boundary_add = 2147483647 + 0    // Max i32 + 0
+boundary_sub = -2147483648 + 1   // Min i32 + 1
+boundary_mul = 1000000 * 1       // Large number * 1
+boundary_div = 1000000 / 1       // Large number / 1
+
+print("Boundary arithmetic:", boundary_add, boundary_sub, boundary_mul, boundary_div)
+
+// Test 4: Boolean boundary conditions
+true_and_true = true and true
+false_or_false = false or false
+not_not_true = not (not true)
+not_not_false = not (not false)
+
+print("Boolean boundaries:", true_and_true, false_or_false, not_not_true, not_not_false)
+
+// Test 5: String boundary conditions
+single_char = "a"
+two_chars = "ab"
+three_chars = "abc"
+
+concat_result = single_char + two_chars + three_chars
+print("String boundaries:", concat_result)
+
+// Test 6: Floating point boundary conditions
+smallest_positive = 1e-10
+largest_reasonable = 1e10
+zero_float = 0.0
+one_float = 1.0
+
+print("Float boundaries:", smallest_positive, largest_reasonable, zero_float, one_float)
+
+// Test 7: Loop iteration boundary conditions
+print("Loop boundaries:")
+for single_iter in 7..8:
+    print("Single iteration:", single_iter)
+
+for two_iter in 10..12:
+    print("Two iterations:", two_iter)
+
+// Test 8: Conditional boundary conditions
+boundary_val = 50
+if boundary_val == 50:
+    print("Exact boundary match")
+elif boundary_val > 50:
+    print("Above boundary")
+else:
+    print("Below boundary")
+
+// Test 9: Variable scope boundaries
+global_boundary = 999
+if true:
+    local_boundary = 111
+    print("Local scope:", local_boundary)
+    print("Global from local:", global_boundary)
+print("Global scope:", global_boundary)
+
+// Test 10: Nested boundary conditions
+for outer_bound in 0..2:
+    for inner_bound in 0..2:
+        if outer_bound == inner_bound:
+            print("Boundary match:", outer_bound, inner_bound)
+        else:
+            print("Boundary mismatch:", outer_bound, inner_bound)
+
+// Test 11: Expression evaluation boundaries
+expr_boundary1 = 5 + 5 - 5 + 5 - 5  // Should be 5
+expr_boundary2 = 10 * 1 / 1 * 1 / 1  // Should be 10
+expr_boundary3 = 100 % 99 % 98 % 97  // Complex modulo chain
+
+print("Expression boundaries:", expr_boundary1, expr_boundary2, expr_boundary3)
+
+// Test 12: Type boundaries
+min_i32 = -2147483648
+max_i32 = 2147483647
+max_u32 = 4294967295u32
+min_u32 = 0u32
+
+print("Type boundaries:")
+print("i32 min/max:", min_i32, max_i32)
+print("u32 min/max:", min_u32, max_u32)

@@ -1,0 +1,55 @@
+// Universal Arithmetic Benchmark for Cross-Language Performance Testing
+// Implements the same arithmetic operations as Python, JS, Lua versions
+// Tests: loops, arithmetic, large numbers, floating point operations
+
+benchmark_start = time_stamp()
+print("Starting arithmetic benchmark...")
+
+mut total = 0i64
+
+// Test 1: Basic Addition Loop (1 million iterations)
+for i in 0..1000000:
+    total = total + i
+
+print(total)
+
+// Test 2: Mixed Arithmetic Operations (100K iterations)
+mut result = 1.0
+for i in 0..100000:
+    result = result + 1.5
+    result = result * 1.01
+    result = result / 1.005
+    result = result - 0.5
+
+print(result)
+
+// Test 3: Integer Arithmetic Performance
+mut factorial_approx = 1
+for i in 1..20:
+    factorial_approx = factorial_approx * i
+
+print(factorial_approx)
+
+// Test 4: Division and Modulo Operations
+mut division_sum = 0
+for i in 1..10000:
+    division_sum = division_sum + (1000000 / i) + (1000000 % i)
+
+print(division_sum)
+
+// Test 5: Floating Point Precision
+mut precision_test: f64 = 0.0
+for i in 0..50000:
+    precision_test = precision_test + 0.1
+    precision_test = precision_test - 0.05
+    precision_test = precision_test * 1.001
+
+print(precision_test)
+
+benchmark_end = time_stamp()
+total_duration = benchmark_end - benchmark_start
+duration_ms = total_duration / 1000000
+
+print("Arithmetic benchmark completed!")
+print("Total time (nanoseconds):", total_duration)
+print("Total time (milliseconds):", duration_ms)

@@ -1,0 +1,43 @@
+// f64 boundary value tests
+// Testing boundary conditions: 0, 1, -1, max/min values
+
+// Test zero values
+zero: f64 = 0.0
+neg_zero: f64 = 0.0 - 0.0
+print(zero)
+print(neg_zero)
+
+// Test basic boundaries
+one: f64 = 1.0
+neg_one: f64 = 0.0 - 1.0
+print(one)
+print(neg_one)
+
+// Test very small positive values
+tiny: f64 = 1e-100
+min_normal: f64 = 2.2250738585072014e-308
+print(tiny)
+print(min_normal)
+
+// Test very large values
+huge: f64 = 1e100
+print(huge)
+
+// Test infinity boundaries (using division to create infinity)
+one_val: f64 = 1.0
+zero_val: f64 = 0.0
+neg_one_val: f64 = 0.0 - 1.0
+inf: f64 = one_val / zero_val  // Should become infinity
+neg_inf: f64 = neg_one_val / zero_val  // Should become negative infinity
+print(inf)
+print(neg_inf)
+
+// Test arithmetic with boundary values
+zero_div_result: f64 = zero / one  // Should be 0
+one_div_zero_result: f64 = one / zero  // Should be infinity
+print(zero_div_result)
+print(one_div_zero_result)
+
+// Test operations that might produce NaN
+nan_result: f64 = zero / zero  // Should be NaN
+print(nan_result)

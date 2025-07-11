@@ -1,0 +1,5 @@
+// Void function test
+fn greet(name: string):
+    print("Hello ", name)
+
+greet("Orus")

@@ -1,0 +1,18 @@
+// Function with different numeric types
+// Simple test that demonstrates basic function functionality
+fn identity_i32(a: i32) -> i32:
+    a
+
+fn identity_f64(a: f64) -> f64:
+    a
+
+fn identity_bool(a: bool) -> bool:
+    a
+
+result1 = identity_i32(100)
+result2 = identity_f64(3.14159)
+result3 = identity_bool(true)
+
+print(result1)
+print(result2) 
+print(result3)

@@ -1,0 +1,21 @@
+// f64 comprehensive boundary tests following AGENTS.md requirements
+zero: f64 = 0.0
+print(zero)
+
+one: f64 = 1.0  
+print(one)
+
+neg_one: f64 = 0.0 - 1.0
+print(neg_one)
+
+result = zero + one
+print(result)
+
+result2 = one * neg_one
+print(result2)
+
+large: f64 = 999999.0
+print(large)
+
+small: f64 = 0.000001
+print(small)

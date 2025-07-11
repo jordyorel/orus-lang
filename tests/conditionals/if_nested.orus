@@ -1,0 +1,32 @@
+x = 0
+if x > 5:
+    print("big")
+elif x > 2:
+    print("medium")
+else:
+    if x == 0:
+        print("zero")
+    elif x == 1:
+        print("one")
+    else:
+        print("small")
+
+y = 3
+if y > 5:
+    print("gt5")
+elif y > 4:
+    print("gt4")
+elif y > 3:
+    print("gt3")
+elif y > 2:
+    print("gt2")
+else:
+    print("other")
+
+z = 0
+if z > 0:
+    print("positive")
+elif z == 0:
+    print("zero")
+else:
+    print("negative")

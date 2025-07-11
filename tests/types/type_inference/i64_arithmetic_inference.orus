@@ -1,0 +1,24 @@
+// Comprehensive i64 arithmetic type inference tests
+a = 1000000000i64
+b = 500000000i64
+
+// All basic operations should infer i64 type
+addition = a + b
+subtraction = a - b  
+multiplication = a * b
+division = a / b
+modulo = a % b
+
+print(addition)      
+print(subtraction)   
+print(multiplication) 
+print(division)      
+print(modulo)        
+
+// Chained operations should also infer i64
+complex = (a + b) / (a - b)
+print(complex)
+
+// Simple arithmetic with result
+simple = a / 1000i64
+print(simple)

@@ -1,0 +1,6 @@
+// Test basic continue statement in for range loop
+for i in 0..5:
+    if i == 2:
+        continue
+    print(i)
+// Should print: 0, 1, 3, 4

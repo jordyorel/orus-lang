@@ -1,0 +1,6 @@
+a: f64 = 5.0
+print(a)
+b: f64 = 0.0
+print(b)
+result = a / b
+print(result)

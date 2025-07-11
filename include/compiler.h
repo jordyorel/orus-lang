@@ -64,7 +64,8 @@ TypeKind valueTypeToTypeKind(ValueType vtype);
 bool canEmitTypedInstruction(Compiler* compiler, ASTNode* left, ASTNode* right, ValueType* outType);
 void emitTypedBinaryOp(Compiler* compiler, const char* op, ValueType type, uint8_t dst, uint8_t left, uint8_t right);
 
-#define PHASE1_TYPED_EXPRESSIONS 1
+#define TYPED_EXPRESSIONS 1
+#define TYPED_STATEMENTS 1
 #define NO_JUMP (-1)
 
 typedef enum {
@@ -95,5 +96,13 @@ typedef struct TypedExpDesc {
     int t;
     int f;
 } TypedExpDesc;
+
+// Phase 2: TypedExpDesc-based statement compilation
+int compile_typed_statement(ASTNode* node, Compiler* compiler);
+void compile_typed_if_statement(ASTNode* node, Compiler* compiler, TypedExpDesc* result);
+void compile_typed_while_statement(ASTNode* node, Compiler* compiler, TypedExpDesc* result);
+void compile_typed_for_statement(ASTNode* node, Compiler* compiler, TypedExpDesc* result);
+void compile_typed_block_statement(ASTNode* node, Compiler* compiler, TypedExpDesc* result);
+void compile_typed_call(Compiler* compiler, ASTNode* node, TypedExpDesc* result);
 
 #endif // COMPILER_H

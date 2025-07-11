@@ -1,0 +1,17 @@
+// f64 boundary tests that work with current parser limitations
+zero: f64 = 0.0
+one: f64 = 1.0
+two: f64 = 2.0
+
+print(zero)
+print(one) 
+print(two)
+
+// Test basic operations
+sum = zero + one
+product = one * two
+quotient = two / one
+
+print(sum)
+print(product)
+print(quotient)

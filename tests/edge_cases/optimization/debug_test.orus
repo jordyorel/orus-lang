@@ -1,0 +1,16 @@
+// Test 1
+a = 5
+b = 10
+for i in 0..3:
+    result = a + b + i
+    print("Result:", result)
+
+print("=====")
+
+// Test 2
+x = 42
+y = 100
+for j in 0..2:
+    sum = x + j
+    product = y * 2 + j
+    print("Sum:", sum, "Product:", product)
