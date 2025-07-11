@@ -469,8 +469,358 @@ static ValueType inferBinaryOpTypeWithCompiler(ASTNode* left, ASTNode* right,
     return VAL_I32;
 }
 
-// Convert an expression AST to a register and emit bytecode
+// ---------------------------------------------------------------------------
+// Phase 1: Typed Expression Descriptor infrastructure
+// ---------------------------------------------------------------------------
+
+static void init_typed_exp(TypedExpDesc* e, ExpKind kind, ValueType type, int info) {
+    e->kind = kind;
+    e->type = type;
+    e->isConstant = (kind == EXP_K);
+    e->u.s.info = info;
+    e->u.s.regType = type;
+    e->u.s.isTemporary = false;
+    e->t = e->f = NO_JUMP;
+}
+
+static void discharge_typed_reg(Compiler* compiler, TypedExpDesc* e, int reg) {
+    switch (e->kind) {
+        case EXP_K: {
+            emitConstant(compiler, reg, e->u.constant.value);
+            setRegisterType(compiler, reg, e->type);
+            break;
+        }
+        case EXP_LOCAL: {
+            if (e->u.s.info != reg) {
+                emitByte(compiler, OP_MOVE);
+                emitByte(compiler, reg);
+                emitByte(compiler, e->u.s.info);
+            }
+            setRegisterType(compiler, reg, e->type);
+            break;
+        }
+        case EXP_TRUE:
+        case EXP_FALSE: {
+            emitByte(compiler, e->kind == EXP_TRUE ? OP_LOAD_TRUE : OP_LOAD_FALSE);
+            emitByte(compiler, reg);
+            setRegisterType(compiler, reg, VAL_BOOL);
+            break;
+        }
+        case EXP_NIL: {
+            emitByte(compiler, OP_LOAD_NIL);
+            emitByte(compiler, reg);
+            setRegisterType(compiler, reg, VAL_NIL);
+            break;
+        }
+        default:
+            break;
+    }
+    e->kind = EXP_TEMP;
+    e->u.s.info = reg;
+    e->u.s.regType = e->type;
+}
+
+static bool try_constant_fold(TypedExpDesc* left, TypedExpDesc* right,
+                             const char* op, TypedExpDesc* result) {
+    if (left->kind != EXP_K || right->kind != EXP_K) {
+        return false;
+    }
+
+    Value leftVal = left->u.constant.value;
+    Value rightVal = right->u.constant.value;
+
+    if (IS_I32(leftVal) && IS_I32(rightVal)) {
+        int32_t a = AS_I32(leftVal);
+        int32_t b = AS_I32(rightVal);
+
+        if (strcmp(op, "+") == 0) {
+            result->u.constant.value = I32_VAL(a + b);
+            result->type = VAL_I32;
+            result->kind = EXP_K;
+            return true;
+        }
+        if (strcmp(op, "-") == 0) {
+            result->u.constant.value = I32_VAL(a - b);
+            result->type = VAL_I32;
+            result->kind = EXP_K;
+            return true;
+        }
+        if (strcmp(op, "*") == 0) {
+            result->u.constant.value = I32_VAL(a * b);
+            result->type = VAL_I32;
+            result->kind = EXP_K;
+            return true;
+        }
+        if (strcmp(op, "/") == 0 && b != 0) {
+            result->u.constant.value = I32_VAL(a / b);
+            result->type = VAL_I32;
+            result->kind = EXP_K;
+            return true;
+        }
+        if (strcmp(op, "%") == 0 && b != 0) {
+            result->u.constant.value = I32_VAL(a % b);
+            result->type = VAL_I32;
+            result->kind = EXP_K;
+            return true;
+        }
+    }
+
+    if ((IS_I32(leftVal) || IS_F64(leftVal)) &&
+        (IS_I32(rightVal) || IS_F64(rightVal))) {
+        double a = IS_I32(leftVal) ? AS_I32(leftVal) : AS_F64(leftVal);
+        double b = IS_I32(rightVal) ? AS_I32(rightVal) : AS_F64(rightVal);
+
+        if (strcmp(op, "+") == 0) {
+            result->u.constant.value = F64_VAL(a + b);
+            result->type = VAL_F64;
+            result->kind = EXP_K;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static void compile_typed_expr(Compiler* compiler, ASTNode* node, TypedExpDesc* desc);
+
+static void compile_typed_binary(Compiler* compiler, ASTNode* node, TypedExpDesc* desc) {
+    TypedExpDesc left, right;
+    compile_typed_expr(compiler, node->binary.left, &left);
+    compile_typed_expr(compiler, node->binary.right, &right);
+
+    if (try_constant_fold(&left, &right, node->binary.op, desc)) {
+        return;
+    }
+
+    ValueType resultType = inferBinaryOpTypeWithCompiler(
+        node->binary.left, node->binary.right, compiler);
+
+    if (left.type != resultType || right.type != resultType) {
+        desc->kind = EXP_VOID;
+        if (left.u.s.isTemporary) freeRegister(compiler, left.u.s.info);
+        if (right.u.s.isTemporary) freeRegister(compiler, right.u.s.info);
+        return;
+    }
+
+    discharge_typed_reg(compiler, &left, allocateRegister(compiler));
+    discharge_typed_reg(compiler, &right, allocateRegister(compiler));
+
+    int resultReg = allocateRegister(compiler);
+
+    if (strcmp(node->binary.op, "+") == 0) {
+        switch (resultType) {
+            case VAL_I32: emitByte(compiler, OP_ADD_I32_R); break;
+            case VAL_I64: emitByte(compiler, OP_ADD_I64_R); break;
+            case VAL_F64: emitByte(compiler, OP_ADD_F64_R); break;
+            default:
+                desc->kind = EXP_VOID;
+                if (left.u.s.isTemporary) freeRegister(compiler, left.u.s.info);
+                if (right.u.s.isTemporary) freeRegister(compiler, right.u.s.info);
+                return;
+        }
+    } else if (strcmp(node->binary.op, "-") == 0) {
+        switch (resultType) {
+            case VAL_I32: emitByte(compiler, OP_SUB_I32_R); break;
+            case VAL_I64: emitByte(compiler, OP_SUB_I64_R); break;
+            case VAL_F64: emitByte(compiler, OP_SUB_F64_R); break;
+            default:
+                desc->kind = EXP_VOID;
+                if (left.u.s.isTemporary) freeRegister(compiler, left.u.s.info);
+                if (right.u.s.isTemporary) freeRegister(compiler, right.u.s.info);
+                return;
+        }
+    } else if (strcmp(node->binary.op, "*") == 0) {
+        switch (resultType) {
+            case VAL_I32: emitByte(compiler, OP_MUL_I32_R); break;
+            case VAL_I64: emitByte(compiler, OP_MUL_I64_R); break;
+            case VAL_F64: emitByte(compiler, OP_MUL_F64_R); break;
+            default:
+                desc->kind = EXP_VOID;
+                if (left.u.s.isTemporary) freeRegister(compiler, left.u.s.info);
+                if (right.u.s.isTemporary) freeRegister(compiler, right.u.s.info);
+                return;
+        }
+    } else if (strcmp(node->binary.op, "/") == 0) {
+        switch (resultType) {
+            case VAL_I32: emitByte(compiler, OP_DIV_I32_R); break;
+            case VAL_I64: emitByte(compiler, OP_DIV_I64_R); break;
+            case VAL_F64: emitByte(compiler, OP_DIV_F64_R); break;
+            default:
+                desc->kind = EXP_VOID;
+                if (left.u.s.isTemporary) freeRegister(compiler, left.u.s.info);
+                if (right.u.s.isTemporary) freeRegister(compiler, right.u.s.info);
+                return;
+        }
+    } else if (strcmp(node->binary.op, "%") == 0) {
+        switch (resultType) {
+            case VAL_I32: emitByte(compiler, OP_MOD_I32_R); break;
+            case VAL_I64: emitByte(compiler, OP_MOD_I64_R); break;
+            case VAL_U32: emitByte(compiler, OP_MOD_U32_R); break;
+            case VAL_U64: emitByte(compiler, OP_MOD_U64_R); break;
+            default:
+                desc->kind = EXP_VOID;
+                if (left.u.s.isTemporary) freeRegister(compiler, left.u.s.info);
+                if (right.u.s.isTemporary) freeRegister(compiler, right.u.s.info);
+                return;
+        }
+    } else {
+        desc->kind = EXP_VOID;
+        if (left.u.s.isTemporary) freeRegister(compiler, left.u.s.info);
+        if (right.u.s.isTemporary) freeRegister(compiler, right.u.s.info);
+        return;
+    }
+
+    emitByte(compiler, resultReg);
+    emitByte(compiler, left.u.s.info);
+    emitByte(compiler, right.u.s.info);
+
+    if (left.u.s.isTemporary) freeRegister(compiler, left.u.s.info);
+    if (right.u.s.isTemporary) freeRegister(compiler, right.u.s.info);
+
+    desc->kind = EXP_TEMP;
+    desc->type = resultType;
+    desc->u.s.info = resultReg;
+    desc->u.s.regType = resultType;
+    desc->u.s.isTemporary = true;
+    desc->isConstant = false;
+}
+
+static void compile_typed_unary(Compiler* compiler, ASTNode* node, TypedExpDesc* desc) {
+    TypedExpDesc operand;
+    compile_typed_expr(compiler, node->unary.operand, &operand);
+
+    if (operand.kind == EXP_K && strcmp(node->unary.op, "-") == 0) {
+        Value v = operand.u.constant.value;
+        if (IS_I32(v)) {
+            desc->u.constant.value = I32_VAL(-AS_I32(v));
+            desc->type = VAL_I32;
+            desc->kind = EXP_K;
+            desc->isConstant = true;
+            return;
+        } else if (IS_F64(v)) {
+            desc->u.constant.value = F64_VAL(-AS_F64(v));
+            desc->type = VAL_F64;
+            desc->kind = EXP_K;
+            desc->isConstant = true;
+            return;
+        }
+    }
+
+    discharge_typed_reg(compiler, &operand, allocateRegister(compiler));
+    int resultReg = allocateRegister(compiler);
+    if (strcmp(node->unary.op, "not") == 0) {
+        emitByte(compiler, OP_NOT_BOOL_R);
+        emitByte(compiler, resultReg);
+        emitByte(compiler, operand.u.s.info);
+        desc->type = VAL_BOOL;
+    } else if (strcmp(node->unary.op, "-") == 0) {
+        Value zero;
+        uint8_t opcode;
+        switch (operand.type) {
+            case VAL_I64: zero = I64_VAL(0); opcode = OP_SUB_I64_R; break;
+            case VAL_F64: zero = F64_VAL(0); opcode = OP_SUB_F64_R; break;
+            case VAL_U32: zero = U32_VAL(0); opcode = OP_SUB_U32_R; break;
+            case VAL_U64: zero = U64_VAL(0); opcode = OP_SUB_U64_R; break;
+            default: zero = I32_VAL(0); opcode = OP_SUB_I32_R; break;
+        }
+        uint8_t zeroReg = allocateRegister(compiler);
+        emitConstant(compiler, zeroReg, zero);
+        emitByte(compiler, opcode);
+        emitByte(compiler, resultReg);
+        emitByte(compiler, zeroReg);
+        emitByte(compiler, operand.u.s.info);
+        freeRegister(compiler, zeroReg);
+        desc->type = operand.type;
+    } else if (strcmp(node->unary.op, "~") == 0) {
+        emitByte(compiler, OP_NOT_I32_R);
+        emitByte(compiler, resultReg);
+        emitByte(compiler, operand.u.s.info);
+        desc->type = VAL_I32;
+    } else {
+        emitByte(compiler, OP_NOT_BOOL_R);
+        emitByte(compiler, resultReg);
+        emitByte(compiler, operand.u.s.info);
+        desc->type = VAL_BOOL;
+    }
+
+    if (operand.u.s.isTemporary) freeRegister(compiler, operand.u.s.info);
+
+    desc->kind = EXP_TEMP;
+    desc->u.s.info = resultReg;
+    desc->u.s.regType = desc->type;
+    desc->u.s.isTemporary = true;
+    desc->isConstant = false;
+}
+
+static void compile_typed_expr(Compiler* compiler, ASTNode* node, TypedExpDesc* desc) {
+    switch (node->type) {
+        case NODE_LITERAL: {
+            desc->kind = EXP_K;
+            desc->type = node->literal.value.type;
+            desc->u.constant.value = node->literal.value;
+            desc->u.constant.constIndex = -1;
+            desc->isConstant = true;
+            break;
+        }
+        case NODE_IDENTIFIER: {
+            int localIndex;
+            if (symbol_table_get(&compiler->symbols, node->identifier.name, &localIndex)) {
+                desc->kind = EXP_LOCAL;
+                desc->type = compiler->locals[localIndex].type;
+                desc->u.s.info = compiler->locals[localIndex].reg;
+                desc->u.s.regType = desc->type;
+                desc->isConstant = false;
+            } else {
+                desc->kind = EXP_VOID;
+                desc->type = VAL_NIL;
+            }
+            break;
+        }
+        case NODE_BINARY: {
+            compile_typed_binary(compiler, node, desc);
+            break;
+        }
+        case NODE_UNARY: {
+            compile_typed_unary(compiler, node, desc);
+            break;
+        }
+        default: {
+            desc->kind = EXP_VOID;
+            desc->type = VAL_NIL;
+            break;
+        }
+    }
+}
+
+static int compileExpressionToRegister_old(ASTNode* node, Compiler* compiler);
+
+int compile_typed_expression_to_register(ASTNode* node, Compiler* compiler) {
+    TypedExpDesc desc;
+    compile_typed_expr(compiler, node, &desc);
+
+    if (desc.kind == EXP_VOID) {
+        return compileExpressionToRegister_old(node, compiler);
+    }
+
+    int reg = allocateRegister(compiler);
+    discharge_typed_reg(compiler, &desc, reg);
+    return reg;
+}
+
+int compileExpressionToRegister_new(ASTNode* node, Compiler* compiler) {
+    return compile_typed_expression_to_register(node, compiler);
+}
+
 int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
+#if PHASE1_TYPED_EXPRESSIONS
+    return compile_typed_expression_to_register(node, compiler);
+#else
+    return compileExpressionToRegister_old(node, compiler);
+#endif
+}
+
+// Convert an expression AST to a register and emit bytecode
+static int compileExpressionToRegister_old(ASTNode* node, Compiler* compiler) {
     if (!node) return -1;
 
     switch (node->type) {

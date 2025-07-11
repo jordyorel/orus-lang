@@ -1147,6 +1147,7 @@ pub fn with_file<T>(path: string, mode: OpenMode, callback: fn(File) -> T) -> Re
 - [x] Add if/else conditional statements
 - [ ] Implement while loops with break/continue (label support pending)
 - [ ] Build comprehensive test suite for Phase 1 features
+- [ ] Implement TypedExpDesc infrastructure for new compiler
 
 **Critical Missing Features for Full Language:**
 - [ ] **Functions & Closures** - Essential for code organization and reusability

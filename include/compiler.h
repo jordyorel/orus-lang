@@ -49,6 +49,8 @@ void emitConstant(Compiler* compiler, uint8_t reg, Value value);
 // Compilation helpers
 bool compileExpression(ASTNode* node, Compiler* compiler);
 int compileExpressionToRegister(ASTNode* node, Compiler* compiler);
+int compile_typed_expression_to_register(ASTNode* node, Compiler* compiler);
+int compileExpressionToRegister_new(ASTNode* node, Compiler* compiler);
 
 // Phase 3.1: Type inference integration for optimization
 void initCompilerTypeInference(Compiler* compiler);
@@ -61,5 +63,37 @@ TypeKind valueTypeToTypeKind(ValueType vtype);
 // Phase 3.2: Emit typed instructions when types are known
 bool canEmitTypedInstruction(Compiler* compiler, ASTNode* left, ASTNode* right, ValueType* outType);
 void emitTypedBinaryOp(Compiler* compiler, const char* op, ValueType type, uint8_t dst, uint8_t left, uint8_t right);
+
+#define PHASE1_TYPED_EXPRESSIONS 1
+#define NO_JUMP (-1)
+
+typedef enum {
+    EXP_VOID,
+    EXP_NIL,
+    EXP_TRUE,
+    EXP_FALSE,
+    EXP_K,
+    EXP_LOCAL,
+    EXP_TEMP
+} ExpKind;
+
+typedef struct TypedExpDesc {
+    ExpKind kind;
+    ValueType type;
+    bool isConstant;
+    union {
+        struct {
+            int info;
+            ValueType regType;
+            bool isTemporary;
+        } s;
+        struct {
+            Value value;
+            int constIndex;
+        } constant;
+    } u;
+    int t;
+    int f;
+} TypedExpDesc;
 
 #endif // COMPILER_H
