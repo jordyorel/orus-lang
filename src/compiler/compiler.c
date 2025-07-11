@@ -83,6 +83,7 @@ static void compileStatement(ASTNode* node, Compiler* compiler) {
         case NODE_IF: {
             uint8_t cond = compileExpression_internal(node->ifStmt.condition, compiler);
             int elseJump = emitJump(compiler, OP_JUMP_IF_NOT_SHORT);
+            emitByte(compiler, cond);  // Use the condition register
             compileStatement(node->ifStmt.thenBranch, compiler);
             if (node->ifStmt.elseBranch) {
                 int endJump = emitJump(compiler, OP_JUMP_SHORT);
@@ -157,7 +158,7 @@ static uint8_t compileExpression_internal(ASTNode* node, Compiler* compiler) {
             uint8_t l = compileExpression_internal(node->binary.left, compiler);
             uint8_t r = compileExpression_internal(node->binary.right, compiler);
             ValueType lt = getRegisterType(compiler, l);
-            ValueType rt = getRegisterType(compiler, r);
+            (void)getRegisterType(compiler, r); // Suppress unused warning for now
             
             // Use the left type as result type (simplified)
             ValueType out = lt;
@@ -272,7 +273,7 @@ void emitConstant(Compiler* compiler, uint8_t reg, Value value) {
         compiler->hadError = true;
         return;
     }
-    emitByte(compiler, OP_LOAD_CONSTANT_R);
+    emitByte(compiler, OP_LOAD_CONST);
     emitByte(compiler, reg);
     emitByte(compiler, (uint8_t)(constant & 0xFF));
     emitByte(compiler, (uint8_t)((constant >> 8) & 0xFF));
@@ -292,8 +293,10 @@ void freeRegister(Compiler* compiler, uint8_t reg) {
     // Simple register allocator - just ignore deallocation for now
 }
 
-void initCompiler(Compiler* compiler, Chunk* chunk) {
+void initCompiler(Compiler* compiler, Chunk* chunk, const char* fileName, const char* source) {
     compiler->chunk = chunk;
+    compiler->fileName = fileName;
+    compiler->source = source;
     compiler->hadError = false;
     compiler->nextRegister = 0;
     for (int i = 0; i < REGISTER_COUNT; i++) {
@@ -349,4 +352,238 @@ void compile_typed_block_statement(ASTNode* node, Compiler* compiler, TypedExpDe
 void compile_typed_call(Compiler* compiler, ASTNode* node, TypedExpDesc* result) {
     (void)result;
     compileExpression_internal(node, compiler);
+}
+
+// Emit typed binary operations based on the operation and type
+void emitTypedBinaryOp(Compiler* compiler, const char* op, ValueType type, uint8_t dst, uint8_t left, uint8_t right) {
+    if (strcmp(op, "+") == 0) {
+        switch (type) {
+            case VAL_I32:
+                emitByte(compiler, OP_ADD_I32_R);
+                break;
+            case VAL_I64:
+                emitByte(compiler, OP_ADD_I64_R);
+                break;
+            case VAL_U32:
+                emitByte(compiler, OP_ADD_U32_R);
+                break;
+            case VAL_U64:
+                emitByte(compiler, OP_ADD_U64_R);
+                break;
+            case VAL_F64:
+                emitByte(compiler, OP_ADD_F64_R);
+                break;
+            default:
+                emitByte(compiler, OP_ADD_I32_R); // Default to i32
+                break;
+        }
+    } else if (strcmp(op, "-") == 0) {
+        switch (type) {
+            case VAL_I32:
+                emitByte(compiler, OP_SUB_I32_R);
+                break;
+            case VAL_I64:
+                emitByte(compiler, OP_SUB_I64_R);
+                break;
+            case VAL_U32:
+                emitByte(compiler, OP_SUB_U32_R);
+                break;
+            case VAL_U64:
+                emitByte(compiler, OP_SUB_U64_R);
+                break;
+            case VAL_F64:
+                emitByte(compiler, OP_SUB_F64_R);
+                break;
+            default:
+                emitByte(compiler, OP_SUB_I32_R);
+                break;
+        }
+    } else if (strcmp(op, "*") == 0) {
+        switch (type) {
+            case VAL_I32:
+                emitByte(compiler, OP_MUL_I32_R);
+                break;
+            case VAL_I64:
+                emitByte(compiler, OP_MUL_I64_R);
+                break;
+            case VAL_U32:
+                emitByte(compiler, OP_MUL_U32_R);
+                break;
+            case VAL_U64:
+                emitByte(compiler, OP_MUL_U64_R);
+                break;
+            case VAL_F64:
+                emitByte(compiler, OP_MUL_F64_R);
+                break;
+            default:
+                emitByte(compiler, OP_MUL_I32_R);
+                break;
+        }
+    } else if (strcmp(op, "/") == 0) {
+        switch (type) {
+            case VAL_I32:
+                emitByte(compiler, OP_DIV_I32_R);
+                break;
+            case VAL_I64:
+                emitByte(compiler, OP_DIV_I64_R);
+                break;
+            case VAL_U32:
+                emitByte(compiler, OP_DIV_U32_R);
+                break;
+            case VAL_U64:
+                emitByte(compiler, OP_DIV_U64_R);
+                break;
+            case VAL_F64:
+                emitByte(compiler, OP_DIV_F64_R);
+                break;
+            default:
+                emitByte(compiler, OP_DIV_I32_R);
+                break;
+        }
+    } else if (strcmp(op, "%") == 0) {
+        switch (type) {
+            case VAL_I32:
+                emitByte(compiler, OP_MOD_I32_R);
+                break;
+            case VAL_I64:
+                emitByte(compiler, OP_MOD_I64_R);
+                break;
+            case VAL_U32:
+                emitByte(compiler, OP_MOD_U32_R);
+                break;
+            case VAL_U64:
+                emitByte(compiler, OP_MOD_U64_R);
+                break;
+            default:
+                emitByte(compiler, OP_MOD_I32_R);
+                break;
+        }
+    } else if (strcmp(op, "<") == 0) {
+        switch (type) {
+            case VAL_I32:
+                emitByte(compiler, OP_LT_I32_R);
+                break;
+            case VAL_I64:
+                emitByte(compiler, OP_LT_I64_R);
+                break;
+            case VAL_U32:
+                emitByte(compiler, OP_LT_U32_R);
+                break;
+            case VAL_U64:
+                emitByte(compiler, OP_LT_U64_R);
+                break;
+            case VAL_F64:
+                emitByte(compiler, OP_LT_F64_R);
+                break;
+            default:
+                emitByte(compiler, OP_LT_I32_R);
+                break;
+        }
+        setRegisterType(compiler, dst, VAL_BOOL);
+        emitByte(compiler, dst);
+        emitByte(compiler, left);
+        emitByte(compiler, right);
+        return; // Early return for comparison ops
+    } else if (strcmp(op, "<=") == 0) {
+        switch (type) {
+            case VAL_I32:
+                emitByte(compiler, OP_LE_I32_R);
+                break;
+            case VAL_I64:
+                emitByte(compiler, OP_LE_I64_R);
+                break;
+            case VAL_U32:
+                emitByte(compiler, OP_LE_U32_R);
+                break;
+            case VAL_U64:
+                emitByte(compiler, OP_LE_U64_R);
+                break;
+            case VAL_F64:
+                emitByte(compiler, OP_LE_F64_R);
+                break;
+            default:
+                emitByte(compiler, OP_LE_I32_R);
+                break;
+        }
+        setRegisterType(compiler, dst, VAL_BOOL);
+        emitByte(compiler, dst);
+        emitByte(compiler, left);
+        emitByte(compiler, right);
+        return;
+    } else if (strcmp(op, ">") == 0) {
+        switch (type) {
+            case VAL_I32:
+                emitByte(compiler, OP_GT_I32_R);
+                break;
+            case VAL_I64:
+                emitByte(compiler, OP_GT_I64_R);
+                break;
+            case VAL_U32:
+                emitByte(compiler, OP_GT_U32_R);
+                break;
+            case VAL_U64:
+                emitByte(compiler, OP_GT_U64_R);
+                break;
+            case VAL_F64:
+                emitByte(compiler, OP_GT_F64_R);
+                break;
+            default:
+                emitByte(compiler, OP_GT_I32_R);
+                break;
+        }
+        setRegisterType(compiler, dst, VAL_BOOL);
+        emitByte(compiler, dst);
+        emitByte(compiler, left);
+        emitByte(compiler, right);
+        return;
+    } else if (strcmp(op, ">=") == 0) {
+        switch (type) {
+            case VAL_I32:
+                emitByte(compiler, OP_GE_I32_R);
+                break;
+            case VAL_I64:
+                emitByte(compiler, OP_GE_I64_R);
+                break;
+            case VAL_U32:
+                emitByte(compiler, OP_GE_U32_R);
+                break;
+            case VAL_U64:
+                emitByte(compiler, OP_GE_U64_R);
+                break;
+            case VAL_F64:
+                emitByte(compiler, OP_GE_F64_R);
+                break;
+            default:
+                emitByte(compiler, OP_GE_I32_R);
+                break;
+        }
+        setRegisterType(compiler, dst, VAL_BOOL);
+        emitByte(compiler, dst);
+        emitByte(compiler, left);
+        emitByte(compiler, right);
+        return;
+    } else if (strcmp(op, "==") == 0) {
+        emitByte(compiler, OP_EQ_R);
+        setRegisterType(compiler, dst, VAL_BOOL);
+        emitByte(compiler, dst);
+        emitByte(compiler, left);
+        emitByte(compiler, right);
+        return;
+    } else if (strcmp(op, "!=") == 0) {
+        emitByte(compiler, OP_NE_R);
+        setRegisterType(compiler, dst, VAL_BOOL);
+        emitByte(compiler, dst);
+        emitByte(compiler, left);
+        emitByte(compiler, right);
+        return;
+    } else {
+        // Default to addition for unknown operators
+        emitByte(compiler, OP_ADD_I32_R);
+    }
+    
+    // For arithmetic operations
+    setRegisterType(compiler, dst, type);
+    emitByte(compiler, dst);
+    emitByte(compiler, left);
+    emitByte(compiler, right);
 }
