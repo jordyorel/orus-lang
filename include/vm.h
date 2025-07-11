@@ -354,6 +354,7 @@ typedef enum {
     OP_SUB_F64_R,
     OP_MUL_F64_R,
     OP_DIV_F64_R,
+    OP_MOD_F64_R,
 
     // Bitwise operations
     OP_AND_I32_R,
@@ -471,21 +472,25 @@ typedef enum {
     OP_SUB_I64_TYPED,
     OP_MUL_I64_TYPED,
     OP_DIV_I64_TYPED,
+    OP_MOD_I64_TYPED,
     
     OP_ADD_F64_TYPED,
     OP_SUB_F64_TYPED,
     OP_MUL_F64_TYPED,
     OP_DIV_F64_TYPED,
+    OP_MOD_F64_TYPED,
     
     OP_ADD_U32_TYPED,
     OP_SUB_U32_TYPED,
     OP_MUL_U32_TYPED,
     OP_DIV_U32_TYPED,
+    OP_MOD_U32_TYPED,
     
     OP_ADD_U64_TYPED,
     OP_SUB_U64_TYPED,
     OP_MUL_U64_TYPED,
     OP_DIV_U64_TYPED,
+    OP_MOD_U64_TYPED,
     
     // Typed comparisons
     OP_LT_I32_TYPED,
@@ -522,6 +527,19 @@ typedef enum {
     OP_MOVE_I32,           // dst_reg, src_reg
     OP_MOVE_I64,           // dst_reg, src_reg
     OP_MOVE_F64,           // dst_reg, src_reg
+    
+    // Mixed-type arithmetic (i32 + f64 combinations)
+    OP_ADD_I32_F64,        // dst_reg, i32_reg, f64_reg -> f64 result
+    OP_SUB_I32_F64,        // dst_reg, i32_reg, f64_reg -> f64 result
+    OP_MUL_I32_F64,        // dst_reg, i32_reg, f64_reg -> f64 result
+    OP_DIV_I32_F64,        // dst_reg, i32_reg, f64_reg -> f64 result
+    OP_MOD_I32_F64,        // dst_reg, i32_reg, f64_reg -> f64 result
+    
+    OP_ADD_F64_I32,        // dst_reg, f64_reg, i32_reg -> f64 result
+    OP_SUB_F64_I32,        // dst_reg, f64_reg, i32_reg -> f64 result
+    OP_MUL_F64_I32,        // dst_reg, f64_reg, i32_reg -> f64 result
+    OP_DIV_F64_I32,        // dst_reg, f64_reg, i32_reg -> f64 result
+    OP_MOD_F64_I32,        // dst_reg, f64_reg, i32_reg -> f64 result
 
     
     // Built-in functions

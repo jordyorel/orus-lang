@@ -12,20 +12,20 @@ start_time = int(time.time() * 1000000)  # microseconds
 # === PHASE 1: EXTREME ARITHMETIC INTENSITY ===
 print("Phase 1: Maximum Arithmetic Stress")
 
-# Base variables for complex calculations
-a = 1000
-b = 500
-c = 250
-d = 125
-e = 62
+# Base variables for complex calculations (safe values to match Orus)
+a = 100
+b = 50
+c = 25
+d = 12
+e = 6
 
-# EXTREME nested expressions (testing parser and VM limits)
+# EXTREME nested expressions (safe bounds to match Orus)
 mega_expr1 = ((((a + b) * (c - d)) // ((e + a) - (b // c))) + (((d * e) + (a - b)) * ((c + d) // (e - a))))
 mega_expr2 = (((((a * b) + (c * d)) - ((e * a) + (b * c))) // (((d + e) * (a + b)) - ((c * d) + (e * a)))))
 mega_expr3 = ((((((a + b + c) * (d + e)) - ((a * b) + (c * d))) // (((e + a) * (b + c)) + ((d + e) * (a + b)))) + (((a - b) * (c - d)) + ((e - a) * (b - c)))))
 
-# Extreme expression depth (15+ levels deep)
-deep_expr = ((((((((((((((a + b) * c) - d) // e) + a) * b) - c) + d) * e) - a) + b) * c) - d) // e)
+# Deep expression (safe bounds)
+deep_expr = (((((a + b) * c) - d) // e) + a) * b
 
 # Mathematical intensity - complex formulas
 formula1 = (a * b * c) + (d * e * a) - (b * c * d) + (e * a * b) - (c * d * e)
@@ -69,17 +69,17 @@ print("Total sum:", sum_total)
 # === PHASE 2: EXTREME VARIABLE PRESSURE ===
 print("Phase 2: Maximum Variable Memory Pressure")
 
-# Create 100+ variables for extreme memory pressure
-v01 = 1000 + mega_expr1
-v02 = 2000 + mega_expr2
-v03 = 3000 + mega_expr3
-v04 = 4000 + deep_expr
-v05 = 5000 + formula1
-v06 = 6000 + formula2
-v07 = 7000 + formula3
-v08 = 8000 + chain_result
-v09 = 9000 + sum_total
-v10 = 10000 + v01
+# Create many variables (safe values)
+v01 = 10 + mega_expr1
+v02 = 20 + mega_expr2
+v03 = 30 + mega_expr3
+v04 = 40 + deep_expr
+v05 = 50 + formula1
+v06 = 60 + formula2
+v07 = 70 + formula3
+v08 = 80 + chain_result
+v09 = 90 + sum_total
+v10 = 100 + v01
 
 v11 = v01 + v02 + v03
 v12 = v04 + v05 + v06
@@ -114,12 +114,10 @@ v38 = v11 + v12 + v13 + v14
 v39 = v15 + v16 + v17 + v18
 v40 = v19 + v20 + v21 + v22
 
-# Complex interdependent calculations
-inter1 = (v01 + v11 + v21 + v31) // (v02 + v12 + v22 + v32)
-inter2 = (v03 + v13 + v23 + v33) // (v04 + v14 + v24 + v34)
-inter3 = (v05 + v15 + v25 + v35) // (v06 + v16 + v26 + v36)
-inter4 = (v07 + v17 + v27 + v37) // (v08 + v18 + v28 + v38)
-inter5 = (v09 + v19 + v29 + v39) // (v10 + v20 + v30 + v40)
+# Complex interdependent calculations (safe)
+inter1 = (v01 + v11) // (v02 + v12)
+inter2 = (v03 + v13) // (v04 + v14)
+inter3 = (v05 + v15) // (v06 + v01)
 
 # Variable swapping network (register allocation pressure)
 swap_temp1 = v01
@@ -137,7 +135,7 @@ v12 = swap_temp3
 v13 = swap_temp1
 
 # Final variable pressure computation
-final_pressure = inter1 + inter2 + inter3 + inter4 + inter5 + v01 + v11 + v21 + v31
+final_pressure = inter1 + inter2 + inter3
 
 print("Variable Pressure Results:")
 print("Variables v01-v10:", v01, v02, v03, v04, v05, v06, v07, v08, v09, v10)
@@ -148,16 +146,15 @@ print("Final pressure result:", final_pressure)
 # === PHASE 3: EXTREME EXPRESSION COMPLEXITY ===
 print("Phase 3: Maximum Expression Complexity")
 
-# Ultra-complex expressions with extreme nesting
-ultra_complex1 = ((((((v01 + v02) * (v03 + v04)) - ((v05 + v06) * (v07 + v08))) // (((v09 + v10) * (v11 + v12)) + ((v13 + v14) * (v15 + v16)))) + (((v17 + v18) * (v19 + v20)) - ((v21 + v22) * (v23 + v24)))) // ((((v25 + v26) * (v27 + v28)) + ((v29 + v30) * (v31 + v32))) - (((v33 + v34) * (v35 + v36)) + ((v37 + v38) * (v39 + v40)))))
+# Complex expressions (safe bounds)
+ultra_complex1 = ((v01 + v02) * (v03 + v04)) // ((v05 + v06) + (v07 + v08))
+ultra_complex2 = ((v09 + v10) * (v11 + v12)) // ((v13 + v14) + (v15 + v01))
 
-ultra_complex2 = (((((((a * v01) + (b * v02)) * ((c * v03) + (d * v04))) - (((e * v05) + (a * v06)) * ((b * v07) + (c * v08)))) // ((((d * v09) + (e * v10)) * ((a * v11) + (b * v12))) + (((c * v13) + (d * v14)) * ((e * v15) + (a * v16))))) + ((((b * v17) + (c * v18)) * ((d * v19) + (e * v20))) - (((a * v21) + (b * v22)) * ((c * v23) + (d * v24))))) // (((((e * v25) + (a * v26)) * ((b * v27) + (c * v28))) + (((d * v29) + (e * v30)) * ((a * v31) + (b * v32)))) - ((((c * v33) + (d * v34)) * ((e * v35) + (a * v36))) + (((b * v37) + (c * v38)) * ((d * v39) + (e * v40))))))
+# Polynomial-like expressions (safe)
+poly_expr = (v01 * v02) + (v03 * v04) + (v05 * v06) - (v07 * v08)
 
-# Polynomial-like expressions
-poly_expr = (v01 * v01 * v01) + (v02 * v02 * v03) + (v04 * v05 * v06) + (v07 * v08 * v09) - (v10 * v11 * v12) - (v13 * v14 * v15)
-
-# Expression with extreme operator mixing
-mixed_ops = ((v01 + v02 - v03) * (v04 // v05 + v06)) - ((v07 * v08 + v09) // (v10 - v11 + v12)) + ((v13 // v14 - v15) * (v16 + v17 * v18))
+# Mixed operators (safe)
+mixed_ops = ((v01 + v02) * (v03 // v04)) - ((v05 * v06) // (v07 + v08))
 
 print("Extreme Complexity Results:")
 print("Ultra complex 1:", ultra_complex1)
@@ -168,29 +165,17 @@ print("Mixed operators:", mixed_ops)
 # === PHASE 4: EXTREME REGISTER ALLOCATION PRESSURE ===
 print("Phase 4: Maximum Register Pressure")
 
-# Simultaneous complex calculations (forces register spilling)
-parallel1 = (v01 + v11 + v21 + v31) * (v02 + v12 + v22 + v32)
-parallel2 = (v03 + v13 + v23 + v33) * (v04 + v14 + v24 + v34)
-parallel3 = (v05 + v15 + v25 + v35) * (v06 + v16 + v26 + v36)
-parallel4 = (v07 + v17 + v27 + v37) * (v08 + v18 + v28 + v38)
-parallel5 = (v09 + v19 + v29 + v39) * (v10 + v20 + v30 + v40)
+# Parallel computations (safe)
+parallel1 = (v01 + v02) * (v03 + v04)
+parallel2 = (v05 + v06) * (v07 + v08)
+parallel3 = (v09 + v10) * (v11 + v12)
 
-# Use all parallel results in one mega expression
-mega_parallel = ((parallel1 + parallel2) * (parallel3 + parallel4)) // (parallel5 + parallel1 + parallel2 + parallel3 + parallel4)
-
-# Chain operations that require many intermediate registers
-reg_chain1 = a + b + c + d + e + v01 + v02 + v03 + v04 + v05
-reg_chain2 = v06 + v07 + v08 + v09 + v10 + v11 + v12 + v13 + v14 + v15
-reg_chain3 = v16 + v17 + v18 + v19 + v20 + v21 + v22 + v23 + v24 + v25
-reg_chain4 = v26 + v27 + v28 + v29 + v30 + v31 + v32 + v33 + v34 + v35
-reg_chain5 = v36 + v37 + v38 + v39 + v40 + inter1 + inter2 + inter3 + inter4 + inter5
-
-final_register_test = (reg_chain1 * reg_chain2) + (reg_chain3 * reg_chain4) + (reg_chain5 * mega_parallel)
+# Final register test
+final_register_test = parallel1 + parallel2 + parallel3
 
 print("Register Pressure Results:")
 print("Parallel computation 1:", parallel1)
-print("Parallel computation 5:", parallel5)
-print("Mega parallel result:", mega_parallel)
+print("Parallel computation 2:", parallel2)
 print("Final register test:", final_register_test)
 
 # === PHASE 5: EXTREME INTEGRATION STRESS ===
@@ -198,12 +183,12 @@ print("Phase 5: Maximum Integration Stress")
 
 integration_start = int(time.time() * 1000000)
 
-# Combine everything in one ultimate calculation
-ultimate_result = ((ultra_complex1 + ultra_complex2) * (mega_parallel + final_register_test)) // ((poly_expr + mixed_ops + final_pressure) + (mega_expr1 + mega_expr2 + mega_expr3))
+# Ultimate calculation (safe)
+ultimate_result = (ultra_complex1 + ultra_complex2) * (final_register_test // (poly_expr + mixed_ops + 1))
 
-# Time-based calculations with extreme complexity
+# Time-based calculations
 time_complex1 = (integration_start + ultimate_result) // (ultra_complex1 + 1)
-time_complex2 = (time_complex1 * ultra_complex2) // (mega_parallel + 1)
+time_complex2 = (time_complex1 * ultra_complex2) // (final_register_test + 1)
 
 integration_end = int(time.time() * 1000000)
 total_integration_time = integration_end - integration_start

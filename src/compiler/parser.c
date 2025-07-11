@@ -20,6 +20,10 @@ typedef struct {
 
 static Arena parserArena;
 
+// Parser recursion depth tracking
+#define MAX_RECURSION_DEPTH 1000
+static int recursionDepth = 0;
+
 static void arena_init(Arena* a, size_t initial) {
     a->head = malloc(sizeof(ArenaBlock));
     a->head->buffer = malloc(initial);
@@ -987,9 +991,19 @@ static ASTNode* parseInlineIf(ASTNode* expr) {
 static ASTNode* parseUnaryExpression(void) {
     Token t = peekToken();
     if (t.type == TOKEN_MINUS || t.type == TOKEN_NOT || t.type == TOKEN_BIT_NOT) {
+        // Check recursion depth for unary expressions too
+        if (recursionDepth >= MAX_RECURSION_DEPTH) {
+            fprintf(stderr, "Error: Expression too complex (recursion depth limit reached)\n");
+            return NULL;
+        }
+        
         nextToken();
+        recursionDepth++;
         ASTNode* operand = parseUnaryExpression();
-        if (!operand) return NULL;
+        if (!operand) {
+            recursionDepth--;
+            return NULL;
+        }
         ASTNode* node = new_node();
         node->type = NODE_UNARY;
         if (t.type == TOKEN_MINUS) node->unary.op = "-";
@@ -999,6 +1013,7 @@ static ASTNode* parseUnaryExpression(void) {
         node->location.line = t.line;
         node->location.column = t.column;
         node->dataType = NULL;
+        recursionDepth--;
         return node;
     }
     return parsePrimaryExpression();
@@ -1078,8 +1093,18 @@ static ASTNode* parseAssignment(void) {
 }
 
 static ASTNode* parseBinaryExpression(int minPrec) {
+    // Check recursion depth
+    if (recursionDepth >= MAX_RECURSION_DEPTH) {
+        fprintf(stderr, "Error: Expression too complex (recursion depth limit reached)\n");
+        return NULL;
+    }
+    
+    recursionDepth++;
     ASTNode* left = parseUnaryExpression();
-    if (!left) return NULL;
+    if (!left) {
+        recursionDepth--;
+        return NULL;
+    }
 
     while (true) {
         Token operator = peekToken();
@@ -1092,7 +1117,10 @@ static ASTNode* parseBinaryExpression(int minPrec) {
         nextToken();
 
         ASTNode* right = parseBinaryExpression(prec + 1);
-        if (!right) return NULL;
+        if (!right) {
+            recursionDepth--;
+            return NULL;
+        }
 
         ASTNode* binaryNode = new_node();
         binaryNode->type = NODE_BINARY;
@@ -1106,6 +1134,7 @@ static ASTNode* parseBinaryExpression(int minPrec) {
         left = binaryNode;
     }
 
+    recursionDepth--;
     return left;
 }
 

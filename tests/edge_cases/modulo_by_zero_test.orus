@@ -1,0 +1,5 @@
+// Test modulo by zero handling
+print("=== Modulo By Zero Test ===")
+print("Testing 10 % 0:")
+print(10 % 0)
+print("This should not print")

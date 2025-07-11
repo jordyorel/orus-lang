@@ -1,5 +1,6 @@
 #include "vm_dispatch.h"
 #include "builtins.h"
+#include <math.h>
 
 // ✅ Auto-detect computed goto support
 #ifndef USE_COMPUTED_GOTO
@@ -307,21 +308,16 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t src1 = READ_BYTE();
                     uint8_t src2 = READ_BYTE();
 
-                    if (!IS_I32(vm.registers[src1]) ||
-                        !IS_I32(vm.registers[src2])) {
+                    // Type validation with mixed-type support
+                    if (!(IS_I32(vm.registers[src1]) || IS_I64(vm.registers[src1])) ||
+                        !(IS_I32(vm.registers[src2]) || IS_I64(vm.registers[src2]))) {
                         runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                    "Operands must be i32");
+                                    "Operands must be i32 or i64");
                         RETURN(INTERPRET_RUNTIME_ERROR);
                     }
 
-                    int32_t b = AS_I32(vm.registers[src2]);
-                    if (b == 0) {
-                        runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
-                                    "Division by zero");
-                        RETURN(INTERPRET_RUNTIME_ERROR);
-                    }
-
-                    vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) / b);
+                    // Use mixed-type division handling
+                    HANDLE_MIXED_DIV(vm.registers[src1], vm.registers[src2], dst);
                     break;
                 }
 
@@ -330,21 +326,16 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t src1 = READ_BYTE();
                     uint8_t src2 = READ_BYTE();
 
-                    if (!IS_I32(vm.registers[src1]) ||
-                        !IS_I32(vm.registers[src2])) {
+                    // Type validation with mixed-type support
+                    if (!(IS_I32(vm.registers[src1]) || IS_I64(vm.registers[src1])) ||
+                        !(IS_I32(vm.registers[src2]) || IS_I64(vm.registers[src2]))) {
                         runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                    "Operands must be i32");
+                                    "Operands must be i32 or i64");
                         RETURN(INTERPRET_RUNTIME_ERROR);
                     }
 
-                    int32_t b = AS_I32(vm.registers[src2]);
-                    if (b == 0) {
-                        runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
-                                    "Division by zero");
-                        RETURN(INTERPRET_RUNTIME_ERROR);
-                    }
-
-                    vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) % b);
+                    // Use mixed-type modulo handling
+                    HANDLE_MIXED_MOD(vm.registers[src1], vm.registers[src2], dst);
                     break;
                 }
 
@@ -999,6 +990,26 @@ InterpretResult vm_run_dispatch(void) {
                     
                     // IEEE 754 compliant: division by zero produces infinity, not error
                     double result = a / b;
+                    
+                    // The result may be infinity, -infinity, or NaN
+                    // These are valid f64 values according to IEEE 754
+                    vm.registers[dst] = F64_VAL(result);
+                    break;
+                }
+
+                case OP_MOD_F64_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src1 = READ_BYTE();
+                    uint8_t src2 = READ_BYTE();
+                    if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be f64");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    double a = AS_F64(vm.registers[src1]);
+                    double b = AS_F64(vm.registers[src2]);
+                    
+                    // IEEE 754 compliant: use fmod for floating point modulo
+                    double result = fmod(a, b);
                     
                     // The result may be infinity, -infinity, or NaN
                     // These are valid f64 values according to IEEE 754
@@ -1887,6 +1898,22 @@ InterpretResult vm_run_dispatch(void) {
                     break;
                 }
 
+                case OP_MOD_I64_TYPED: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t left = READ_BYTE();
+                    uint8_t right = READ_BYTE();
+                    
+                    if (vm.typed_regs.i64_regs[right] == 0) {
+                        runtimeError(ERROR_RUNTIME, (SrcLocation){NULL, 0, 0}, "Division by zero");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    
+                    vm.typed_regs.i64_regs[dst] = vm.typed_regs.i64_regs[left] % vm.typed_regs.i64_regs[right];
+                    vm.typed_regs.reg_types[dst] = REG_TYPE_I64;
+                    
+                    break;
+                }
+
                 case OP_ADD_F64_TYPED: {
                     uint8_t dst = READ_BYTE();
                     uint8_t left = READ_BYTE();
@@ -1927,6 +1954,311 @@ InterpretResult vm_run_dispatch(void) {
                     
                     vm.typed_regs.f64_regs[dst] = vm.typed_regs.f64_regs[left] / vm.typed_regs.f64_regs[right];
                     vm.typed_regs.reg_types[dst] = REG_TYPE_F64;
+                    
+                    break;
+                }
+
+                case OP_MOD_F64_TYPED: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t left = READ_BYTE();
+                    uint8_t right = READ_BYTE();
+                    
+                    vm.typed_regs.f64_regs[dst] = fmod(vm.typed_regs.f64_regs[left], vm.typed_regs.f64_regs[right]);
+                    vm.typed_regs.reg_types[dst] = REG_TYPE_F64;
+                    
+                    break;
+                }
+
+                // U32 Typed Operations
+                case OP_ADD_U32_TYPED: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t left = READ_BYTE();
+                    uint8_t right = READ_BYTE();
+                    
+                    vm.typed_regs.u32_regs[dst] = vm.typed_regs.u32_regs[left] + vm.typed_regs.u32_regs[right];
+                    vm.typed_regs.reg_types[dst] = REG_TYPE_U32;
+                    
+                    break;
+                }
+
+                case OP_SUB_U32_TYPED: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t left = READ_BYTE();
+                    uint8_t right = READ_BYTE();
+                    
+                    vm.typed_regs.u32_regs[dst] = vm.typed_regs.u32_regs[left] - vm.typed_regs.u32_regs[right];
+                    vm.typed_regs.reg_types[dst] = REG_TYPE_U32;
+                    
+                    break;
+                }
+
+                case OP_MUL_U32_TYPED: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t left = READ_BYTE();
+                    uint8_t right = READ_BYTE();
+                    
+                    vm.typed_regs.u32_regs[dst] = vm.typed_regs.u32_regs[left] * vm.typed_regs.u32_regs[right];
+                    vm.typed_regs.reg_types[dst] = REG_TYPE_U32;
+                    
+                    break;
+                }
+
+                case OP_DIV_U32_TYPED: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t left = READ_BYTE();
+                    uint8_t right = READ_BYTE();
+                    
+                    if (vm.typed_regs.u32_regs[right] == 0) {
+                        runtimeError(ERROR_RUNTIME, (SrcLocation){NULL, 0, 0}, "Division by zero");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    
+                    vm.typed_regs.u32_regs[dst] = vm.typed_regs.u32_regs[left] / vm.typed_regs.u32_regs[right];
+                    vm.typed_regs.reg_types[dst] = REG_TYPE_U32;
+                    
+                    break;
+                }
+
+                case OP_MOD_U32_TYPED: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t left = READ_BYTE();
+                    uint8_t right = READ_BYTE();
+                    
+                    if (vm.typed_regs.u32_regs[right] == 0) {
+                        runtimeError(ERROR_RUNTIME, (SrcLocation){NULL, 0, 0}, "Division by zero");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    
+                    vm.typed_regs.u32_regs[dst] = vm.typed_regs.u32_regs[left] % vm.typed_regs.u32_regs[right];
+                    vm.typed_regs.reg_types[dst] = REG_TYPE_U32;
+                    
+                    break;
+                }
+
+                // U64 Typed Operations
+                case OP_ADD_U64_TYPED: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t left = READ_BYTE();
+                    uint8_t right = READ_BYTE();
+                    
+                    vm.typed_regs.u64_regs[dst] = vm.typed_regs.u64_regs[left] + vm.typed_regs.u64_regs[right];
+                    vm.typed_regs.reg_types[dst] = REG_TYPE_U64;
+                    
+                    break;
+                }
+
+                case OP_SUB_U64_TYPED: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t left = READ_BYTE();
+                    uint8_t right = READ_BYTE();
+                    
+                    vm.typed_regs.u64_regs[dst] = vm.typed_regs.u64_regs[left] - vm.typed_regs.u64_regs[right];
+                    vm.typed_regs.reg_types[dst] = REG_TYPE_U64;
+                    
+                    break;
+                }
+
+                case OP_MUL_U64_TYPED: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t left = READ_BYTE();
+                    uint8_t right = READ_BYTE();
+                    
+                    vm.typed_regs.u64_regs[dst] = vm.typed_regs.u64_regs[left] * vm.typed_regs.u64_regs[right];
+                    vm.typed_regs.reg_types[dst] = REG_TYPE_U64;
+                    
+                    break;
+                }
+
+                case OP_DIV_U64_TYPED: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t left = READ_BYTE();
+                    uint8_t right = READ_BYTE();
+                    
+                    if (vm.typed_regs.u64_regs[right] == 0) {
+                        runtimeError(ERROR_RUNTIME, (SrcLocation){NULL, 0, 0}, "Division by zero");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    
+                    vm.typed_regs.u64_regs[dst] = vm.typed_regs.u64_regs[left] / vm.typed_regs.u64_regs[right];
+                    vm.typed_regs.reg_types[dst] = REG_TYPE_U64;
+                    
+                    break;
+                }
+
+                case OP_MOD_U64_TYPED: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t left = READ_BYTE();
+                    uint8_t right = READ_BYTE();
+                    
+                    if (vm.typed_regs.u64_regs[right] == 0) {
+                        runtimeError(ERROR_RUNTIME, (SrcLocation){NULL, 0, 0}, "Division by zero");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    
+                    vm.typed_regs.u64_regs[dst] = vm.typed_regs.u64_regs[left] % vm.typed_regs.u64_regs[right];
+                    vm.typed_regs.reg_types[dst] = REG_TYPE_U64;
+                    
+                    break;
+                }
+
+                // Mixed-Type Arithmetic Operations (I32 op F64)
+                case OP_ADD_I32_F64: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t i32_reg = READ_BYTE();
+                    uint8_t f64_reg = READ_BYTE();
+                    
+                    if (!IS_I32(vm.registers[i32_reg]) || !IS_F64(vm.registers[f64_reg])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Mixed-type operation requires i32 and f64 operands");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    
+                    double result = (double)AS_I32(vm.registers[i32_reg]) + AS_F64(vm.registers[f64_reg]);
+                    vm.registers[dst] = F64_VAL(result);
+                    
+                    break;
+                }
+
+                case OP_SUB_I32_F64: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t i32_reg = READ_BYTE();
+                    uint8_t f64_reg = READ_BYTE();
+                    
+                    if (!IS_I32(vm.registers[i32_reg]) || !IS_F64(vm.registers[f64_reg])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Mixed-type operation requires i32 and f64 operands");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    
+                    double result = (double)AS_I32(vm.registers[i32_reg]) - AS_F64(vm.registers[f64_reg]);
+                    vm.registers[dst] = F64_VAL(result);
+                    
+                    break;
+                }
+
+                case OP_MUL_I32_F64: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t i32_reg = READ_BYTE();
+                    uint8_t f64_reg = READ_BYTE();
+                    
+                    if (!IS_I32(vm.registers[i32_reg]) || !IS_F64(vm.registers[f64_reg])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Mixed-type operation requires i32 and f64 operands");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    
+                    double result = (double)AS_I32(vm.registers[i32_reg]) * AS_F64(vm.registers[f64_reg]);
+                    vm.registers[dst] = F64_VAL(result);
+                    
+                    break;
+                }
+
+                case OP_DIV_I32_F64: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t i32_reg = READ_BYTE();
+                    uint8_t f64_reg = READ_BYTE();
+                    
+                    if (!IS_I32(vm.registers[i32_reg]) || !IS_F64(vm.registers[f64_reg])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Mixed-type operation requires i32 and f64 operands");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    
+                    double result = (double)AS_I32(vm.registers[i32_reg]) / AS_F64(vm.registers[f64_reg]);
+                    vm.registers[dst] = F64_VAL(result);
+                    
+                    break;
+                }
+
+                case OP_MOD_I32_F64: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t i32_reg = READ_BYTE();
+                    uint8_t f64_reg = READ_BYTE();
+                    
+                    if (!IS_I32(vm.registers[i32_reg]) || !IS_F64(vm.registers[f64_reg])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Mixed-type operation requires i32 and f64 operands");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    
+                    double result = fmod((double)AS_I32(vm.registers[i32_reg]), AS_F64(vm.registers[f64_reg]));
+                    vm.registers[dst] = F64_VAL(result);
+                    
+                    break;
+                }
+
+                // Mixed-Type Arithmetic Operations (F64 op I32)
+                case OP_ADD_F64_I32: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t f64_reg = READ_BYTE();
+                    uint8_t i32_reg = READ_BYTE();
+                    
+                    if (!IS_F64(vm.registers[f64_reg]) || !IS_I32(vm.registers[i32_reg])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Mixed-type operation requires f64 and i32 operands");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    
+                    double result = AS_F64(vm.registers[f64_reg]) + (double)AS_I32(vm.registers[i32_reg]);
+                    vm.registers[dst] = F64_VAL(result);
+                    
+                    break;
+                }
+
+                case OP_SUB_F64_I32: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t f64_reg = READ_BYTE();
+                    uint8_t i32_reg = READ_BYTE();
+                    
+                    if (!IS_F64(vm.registers[f64_reg]) || !IS_I32(vm.registers[i32_reg])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Mixed-type operation requires f64 and i32 operands");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    
+                    double result = AS_F64(vm.registers[f64_reg]) - (double)AS_I32(vm.registers[i32_reg]);
+                    vm.registers[dst] = F64_VAL(result);
+                    
+                    break;
+                }
+
+                case OP_MUL_F64_I32: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t f64_reg = READ_BYTE();
+                    uint8_t i32_reg = READ_BYTE();
+                    
+                    if (!IS_F64(vm.registers[f64_reg]) || !IS_I32(vm.registers[i32_reg])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Mixed-type operation requires f64 and i32 operands");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    
+                    double result = AS_F64(vm.registers[f64_reg]) * (double)AS_I32(vm.registers[i32_reg]);
+                    vm.registers[dst] = F64_VAL(result);
+                    
+                    break;
+                }
+
+                case OP_DIV_F64_I32: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t f64_reg = READ_BYTE();
+                    uint8_t i32_reg = READ_BYTE();
+                    
+                    if (!IS_F64(vm.registers[f64_reg]) || !IS_I32(vm.registers[i32_reg])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Mixed-type operation requires f64 and i32 operands");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    
+                    double result = AS_F64(vm.registers[f64_reg]) / (double)AS_I32(vm.registers[i32_reg]);
+                    vm.registers[dst] = F64_VAL(result);
+                    
+                    break;
+                }
+
+                case OP_MOD_F64_I32: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t f64_reg = READ_BYTE();
+                    uint8_t i32_reg = READ_BYTE();
+                    
+                    if (!IS_F64(vm.registers[f64_reg]) || !IS_I32(vm.registers[i32_reg])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Mixed-type operation requires f64 and i32 operands");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    
+                    double result = fmod(AS_F64(vm.registers[f64_reg]), (double)AS_I32(vm.registers[i32_reg]));
+                    vm.registers[dst] = F64_VAL(result);
                     
                     break;
                 }

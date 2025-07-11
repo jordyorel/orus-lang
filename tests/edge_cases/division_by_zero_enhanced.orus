@@ -1,0 +1,11 @@
+// Enhanced division by zero tests for new modulo operations
+print("=== Enhanced Division By Zero Tests ===")
+
+// Test division by zero with different values
+print("--- Division By Zero Tests ---")
+print("Testing 10 / 0:")
+print(10 / 0)
+print("This should not print")
+
+// Note: The test will stop at the first division by zero error
+// Each test case needs to be run separately to see all behaviors

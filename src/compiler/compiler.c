@@ -90,6 +90,8 @@ static int compileExpr(ASTNode* node, Compiler* compiler) {
                 emitByte(compiler, OP_MUL_I32_R);
             } else if (strcmp(node->binary.op, "/") == 0) {
                 emitByte(compiler, OP_DIV_I32_R);
+            } else if (strcmp(node->binary.op, "%") == 0) {
+                emitByte(compiler, OP_MOD_I32_R);
             } else {
                 compiler->hadError = true;
                 emitByte(compiler, OP_ADD_I32_R);

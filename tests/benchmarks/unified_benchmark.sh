@@ -234,6 +234,8 @@ ensure_orus_built
 
 # Run benchmark categories
 run_benchmark_category "Comprehensive Performance" "comprehensive_benchmark.orus"
+run_benchmark_category "Extreme Performance" "extreme_benchmark.orus"
+# run_benchmark_category "Modulo Operations" "modulo_operations_benchmark.orus"
 
 echo -e "${BLUE}=================================================================${NC}"
 echo -e "${GREEN}✨ Benchmark comparison complete!${NC}"
