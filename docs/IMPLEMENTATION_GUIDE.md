@@ -122,6 +122,9 @@ typedef enum {
 ```
 
 #### Compiler Integration
+The initial compiler generates bytecode in a single pass as the AST is
+traversed.  Instructions are emitted directly to the `Chunk` without an
+intermediate representation, mirroring Lua's design.
 ```c
 // In compiler.c
 static void compileString(Compiler* compiler, ASTNode* node) {

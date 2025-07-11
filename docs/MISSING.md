@@ -11,6 +11,7 @@ Build a language that combines Python's readability, Rust's safety, and Lua's pe
 - **VM Foundation**: Register-based with 256 registers, 100+ opcodes
 - **Lexer System**: Full tokenization with all language constructs  
 - **Advanced Parser**: Precedence climbing with complex expressions
+- **Compiler**: Single-pass bytecode generation for the VM
 - **Variable System**: Declarations (`x = 42`) with type inference
 - **Memory Management**: Garbage collector with object pooling
 - **Build System**: Clean makefile with comprehensive benchmarking
