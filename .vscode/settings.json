@@ -14,6 +14,7 @@
         "optional": "c",
         "ratio": "c",
         "vector": "c",
-        "ios": "c"
+        "ios": "c",
+        "vm_dispatch.h": "c"
     }
 }

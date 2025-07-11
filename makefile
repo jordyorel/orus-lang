@@ -5,6 +5,18 @@ CC = gcc
 CFLAGS = -Wall -Wextra -O2 -g -std=c11
 LDFLAGS = -lm
 
+# Dispatch method selection (default: auto-detect)
+# Usage: make DISPATCH=switch or make DISPATCH=goto
+ifdef DISPATCH
+  ifeq ($(DISPATCH),switch)
+    CFLAGS += -DUSE_COMPUTED_GOTO=0
+  else ifeq ($(DISPATCH),goto)
+    CFLAGS += -DUSE_COMPUTED_GOTO=1
+  else
+    $(error Invalid DISPATCH value: $(DISPATCH). Use 'switch' or 'goto')
+  endif
+endif
+
 # Directories
 SRCDIR = src
 INCDIR = include
@@ -16,7 +28,7 @@ INCLUDES = -I$(INCDIR)
 
 # Source files
 COMPILER_SRCS = $(SRCDIR)/compiler/compiler.c $(SRCDIR)/compiler/lexer.c $(SRCDIR)/compiler/parser.c $(SRCDIR)/compiler/symbol_table.c
-VM_SRCS = $(SRCDIR)/vm/vm.c $(SRCDIR)/vm/memory.c $(SRCDIR)/vm/debug.c $(SRCDIR)/vm/builtins.c $(SRCDIR)/vm/vm_dispatch_switch.c $(SRCDIR)/type/type_representation.c
+VM_SRCS = $(SRCDIR)/vm/vm.c $(SRCDIR)/vm/memory.c $(SRCDIR)/vm/debug.c $(SRCDIR)/vm/builtins.c $(SRCDIR)/vm/vm_dispatch_switch.c $(SRCDIR)/vm/vm_dispatch_goto.c $(SRCDIR)/type/type_representation.c
 REPL_SRC = $(SRCDIR)/repl.c
 MAIN_SRC = $(SRCDIR)/main.c
 
@@ -212,3 +224,13 @@ help:
 	@echo "  benchmark - Run cross-language performance benchmarks"
 	@echo "  clean     - Remove build artifacts"
 	@echo "  help      - Show this help message"
+	@echo ""
+	@echo "Dispatch method selection:"
+	@echo "  DISPATCH=switch - Force switch-based dispatch"
+	@echo "  DISPATCH=goto   - Force computed goto dispatch"
+	@echo "  (default)       - Auto-detect best dispatch method"
+	@echo ""
+	@echo "Examples:"
+	@echo "  make DISPATCH=switch    - Build with switch dispatch"
+	@echo "  make benchmark DISPATCH=goto  - Benchmark with goto dispatch"
+	@echo "  make test DISPATCH=switch     - Test with switch dispatch"

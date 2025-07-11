@@ -1,6 +1,150 @@
 #include "vm_dispatch.h"
 #include "builtins.h"
 
+// ✅ Auto-detect computed goto support
+#ifndef USE_COMPUTED_GOTO
+  #if defined(__GNUC__) || defined(__clang__)
+    #define USE_COMPUTED_GOTO 1
+  #else
+    #define USE_COMPUTED_GOTO 0
+  #endif
+#endif
+
+// These macros implement automatic i32 -> i64 promotion on overflow
+// with zero-cost when overflow is not detected (hot path optimization)
+
+#define HANDLE_I32_OVERFLOW_ADD(a, b, dst_reg) \
+    do { \
+        int32_t result; \
+        if (unlikely(__builtin_add_overflow(a, b, &result))) { \
+            /* Overflow detected: promote to i64 and continue */ \
+            int64_t result64 = (int64_t)(a) + (int64_t)(b); \
+            vm.registers[dst_reg] = I64_VAL(result64); \
+        } else { \
+            /* Hot path: no overflow, stay with i32 */ \
+            vm.registers[dst_reg] = I32_VAL(result); \
+        } \
+    } while (0)
+
+#define HANDLE_I32_OVERFLOW_SUB(a, b, dst_reg) \
+    do { \
+        int32_t result; \
+        if (unlikely(__builtin_sub_overflow(a, b, &result))) { \
+            /* Overflow detected: promote to i64 and continue */ \
+            int64_t result64 = (int64_t)(a) - (int64_t)(b); \
+            vm.registers[dst_reg] = I64_VAL(result64); \
+        } else { \
+            /* Hot path: no overflow, stay with i32 */ \
+            vm.registers[dst_reg] = I32_VAL(result); \
+        } \
+    } while (0)
+
+#define HANDLE_I32_OVERFLOW_MUL(a, b, dst_reg) \
+    do { \
+        int32_t result; \
+        if (unlikely(__builtin_mul_overflow(a, b, &result))) { \
+            /* Overflow detected: promote to i64 and continue */ \
+            int64_t result64 = (int64_t)(a) * (int64_t)(b); \
+            vm.registers[dst_reg] = I64_VAL(result64); \
+        } else { \
+            /* Hot path: no overflow, stay with i32 */ \
+            vm.registers[dst_reg] = I32_VAL(result); \
+        } \
+    } while (0)
+
+// Branch prediction hints for performance (following AGENTS.md performance-first principle)
+#ifndef likely
+#define likely(x)       __builtin_expect(!!(x), 1)
+#endif
+#ifndef unlikely
+#define unlikely(x)     __builtin_expect(!!(x), 0)
+#endif
+
+// Mixed-type arithmetic: Intelligent type promotion for operations
+// When i32 and i64 are mixed, promote result to i64
+#define HANDLE_MIXED_ADD(val1, val2, dst_reg) \
+    do { \
+        if (IS_I32(val1) && IS_I32(val2)) { \
+            HANDLE_I32_OVERFLOW_ADD(AS_I32(val1), AS_I32(val2), dst_reg); \
+        } else if (IS_I64(val1) && IS_I64(val2)) { \
+            /* Both i64: perform i64 arithmetic with overflow check */ \
+            int64_t a = AS_I64(val1); \
+            int64_t b = AS_I64(val2); \
+            int64_t result; \
+            if (unlikely(__builtin_add_overflow(a, b, &result))) { \
+                runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
+                           "Integer overflow: result exceeds i64 range"); \
+                RETURN(INTERPRET_RUNTIME_ERROR); \
+            } \
+            vm.registers[dst_reg] = I64_VAL(result); \
+        } else { \
+            /* Mixed types: promote to i64 */ \
+            int64_t a = IS_I32(val1) ? (int64_t)AS_I32(val1) : AS_I64(val1); \
+            int64_t b = IS_I32(val2) ? (int64_t)AS_I32(val2) : AS_I64(val2); \
+            int64_t result; \
+            if (unlikely(__builtin_add_overflow(a, b, &result))) { \
+                runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
+                           "Integer overflow: result exceeds i64 range"); \
+                RETURN(INTERPRET_RUNTIME_ERROR); \
+            } \
+            vm.registers[dst_reg] = I64_VAL(result); \
+        } \
+    } while (0)
+
+#define HANDLE_MIXED_SUB(val1, val2, dst_reg) \
+    do { \
+        if (IS_I32(val1) && IS_I32(val2)) { \
+            HANDLE_I32_OVERFLOW_SUB(AS_I32(val1), AS_I32(val2), dst_reg); \
+        } else if (IS_I64(val1) && IS_I64(val2)) { \
+            int64_t a = AS_I64(val1); \
+            int64_t b = AS_I64(val2); \
+            int64_t result; \
+            if (unlikely(__builtin_sub_overflow(a, b, &result))) { \
+                runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
+                           "Integer overflow: result exceeds i64 range"); \
+                RETURN(INTERPRET_RUNTIME_ERROR); \
+            } \
+            vm.registers[dst_reg] = I64_VAL(result); \
+        } else { \
+            int64_t a = IS_I32(val1) ? (int64_t)AS_I32(val1) : AS_I64(val1); \
+            int64_t b = IS_I32(val2) ? (int64_t)AS_I32(val2) : AS_I64(val2); \
+            int64_t result; \
+            if (unlikely(__builtin_sub_overflow(a, b, &result))) { \
+                runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
+                           "Integer overflow: result exceeds i64 range"); \
+                RETURN(INTERPRET_RUNTIME_ERROR); \
+            } \
+            vm.registers[dst_reg] = I64_VAL(result); \
+        } \
+    } while (0)
+
+#define HANDLE_MIXED_MUL(val1, val2, dst_reg) \
+    do { \
+        if (IS_I32(val1) && IS_I32(val2)) { \
+            HANDLE_I32_OVERFLOW_MUL(AS_I32(val1), AS_I32(val2), dst_reg); \
+        } else if (IS_I64(val1) && IS_I64(val2)) { \
+            int64_t a = AS_I64(val1); \
+            int64_t b = AS_I64(val2); \
+            int64_t result; \
+            if (unlikely(__builtin_mul_overflow(a, b, &result))) { \
+                runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
+                           "Integer overflow: result exceeds i64 range"); \
+                RETURN(INTERPRET_RUNTIME_ERROR); \
+            } \
+            vm.registers[dst_reg] = I64_VAL(result); \
+        } else { \
+            int64_t a = IS_I32(val1) ? (int64_t)AS_I32(val1) : AS_I64(val1); \
+            int64_t b = IS_I32(val2) ? (int64_t)AS_I32(val2) : AS_I64(val2); \
+            int64_t result; \
+            if (unlikely(__builtin_mul_overflow(a, b, &result))) { \
+                runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
+                           "Integer overflow: result exceeds i64 range"); \
+                RETURN(INTERPRET_RUNTIME_ERROR); \
+            } \
+            vm.registers[dst_reg] = I64_VAL(result); \
+        } \
+    } while (0)
+
 #if !USE_COMPUTED_GOTO
 
 InterpretResult vm_run_dispatch(void) {
@@ -82,32 +226,29 @@ InterpretResult vm_run_dispatch(void) {
                     break;
                 }
 
-                // Arithmetic operations
+                // Arithmetic operations with intelligent overflow handling
                 case OP_ADD_I32_R: {
                     uint8_t dst = READ_BYTE();
                     uint8_t src1 = READ_BYTE();
                     uint8_t src2 = READ_BYTE();
 
-                    if (!IS_I32(vm.registers[src1]) ||
-                        !IS_I32(vm.registers[src2])) {
+                    // Type validation with mixed-type support
+                    if (!(IS_I32(vm.registers[src1]) || IS_I64(vm.registers[src1])) ||
+                        !(IS_I32(vm.registers[src2]) || IS_I64(vm.registers[src2]))) {
                         runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                    "Operands must be i32");
+                                    "Operands must be integers (i32 or i64)");
                         RETURN(INTERPRET_RUNTIME_ERROR);
                     }
 
+#if USE_FAST_ARITH
+                    // Fast path: assume i32, no overflow checking
                     int32_t a = AS_I32(vm.registers[src1]);
                     int32_t b = AS_I32(vm.registers[src2]);
-    #if USE_FAST_ARITH
                     vm.registers[dst] = I32_VAL(a + b);
-    #else
-                    int32_t result;
-                    if (__builtin_add_overflow(a, b, &result)) {
-                        runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
-                                    "Integer overflow");
-                        RETURN(INTERPRET_RUNTIME_ERROR);
-                    }
-                    vm.registers[dst] = I32_VAL(result);
-    #endif
+#else
+                    // Intelligent overflow handling with automatic promotion
+                    HANDLE_MIXED_ADD(vm.registers[src1], vm.registers[src2], dst);
+#endif
                     break;
                 }
 
@@ -116,26 +257,23 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t src1 = READ_BYTE();
                     uint8_t src2 = READ_BYTE();
 
-                    if (!IS_I32(vm.registers[src1]) ||
-                        !IS_I32(vm.registers[src2])) {
+                    // Type validation with mixed-type support
+                    if (!(IS_I32(vm.registers[src1]) || IS_I64(vm.registers[src1])) ||
+                        !(IS_I32(vm.registers[src2]) || IS_I64(vm.registers[src2]))) {
                         runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                    "Operands must be i32");
+                                    "Operands must be integers (i32 or i64)");
                         RETURN(INTERPRET_RUNTIME_ERROR);
                     }
 
+#if USE_FAST_ARITH
+                    // Fast path: assume i32, no overflow checking
                     int32_t a = AS_I32(vm.registers[src1]);
                     int32_t b = AS_I32(vm.registers[src2]);
-    #if USE_FAST_ARITH
                     vm.registers[dst] = I32_VAL(a - b);
-    #else
-                    int32_t result;
-                    if (__builtin_sub_overflow(a, b, &result)) {
-                        runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
-                                    "Integer overflow");
-                        RETURN(INTERPRET_RUNTIME_ERROR);
-                    }
-                    vm.registers[dst] = I32_VAL(result);
-    #endif
+#else
+                    // Intelligent overflow handling with automatic promotion
+                    HANDLE_MIXED_SUB(vm.registers[src1], vm.registers[src2], dst);
+#endif
                     break;
                 }
 
@@ -144,26 +282,23 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t src1 = READ_BYTE();
                     uint8_t src2 = READ_BYTE();
 
-                    if (!IS_I32(vm.registers[src1]) ||
-                        !IS_I32(vm.registers[src2])) {
+                    // Type validation with mixed-type support
+                    if (!(IS_I32(vm.registers[src1]) || IS_I64(vm.registers[src1])) ||
+                        !(IS_I32(vm.registers[src2]) || IS_I64(vm.registers[src2]))) {
                         runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                    "Operands must be i32");
+                                    "Operands must be integers (i32 or i64)");
                         RETURN(INTERPRET_RUNTIME_ERROR);
                     }
 
+#if USE_FAST_ARITH
+                    // Fast path: assume i32, no overflow checking
                     int32_t a = AS_I32(vm.registers[src1]);
                     int32_t b = AS_I32(vm.registers[src2]);
-    #if USE_FAST_ARITH
                     vm.registers[dst] = I32_VAL(a * b);
-    #else
-                    int32_t result;
-                    if (__builtin_mul_overflow(a, b, &result)) {
-                        runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
-                                    "Integer overflow");
-                        RETURN(INTERPRET_RUNTIME_ERROR);
-                    }
-                    vm.registers[dst] = I32_VAL(result);
-    #endif
+#else
+                    // Intelligent overflow handling with automatic promotion
+                    HANDLE_MIXED_MUL(vm.registers[src1], vm.registers[src2], dst);
+#endif
                     break;
                 }
 
