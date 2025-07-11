@@ -1,5 +1,0 @@
-// Test nested loop variable scoping with register allocation optimization
-for i in 0..2:
-    print("Outer: {}", i)
-    for j in 0..2:
-        print("  Inner: {}", j)

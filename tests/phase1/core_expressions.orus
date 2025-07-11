@@ -1,0 +1,37 @@
+// Phase 1 Core Expression Tests
+// These tests must pass after Phase 1 TypedExpDesc implementation
+
+// Basic literals
+print(42)
+print(3.14)
+print(true)
+print(false)
+print("hello")
+
+// Simple binary expressions
+print(1 + 2)
+print(5 - 3)
+print(2 * 3)
+print(10 / 2)
+print(7 % 3)
+
+// Type-specific arithmetic
+print(1i32 + 2i32)
+print(1.0 + 2.0)
+print(1u32 + 2u32)
+
+// Variables
+x = 42
+print(x)
+
+y = x + 10
+print(y)
+
+// Type annotations
+z: i32 = 100
+print(z)
+
+// Mutable variables
+mut counter = 0
+counter = counter + 1
+print(counter)

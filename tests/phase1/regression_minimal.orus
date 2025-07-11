@@ -1,0 +1,29 @@
+// Phase 1 Minimal Regression Test
+// Essential functionality that must never break
+
+// Basic print
+print("Phase 1 Regression Test")
+
+// Literals
+print(42)
+print(3.14)
+print(true)
+print("hello")
+
+// Simple arithmetic
+print(1 + 1)
+print(5 * 2)
+
+// Variables
+x = 10
+y = 20
+print(x + y)
+
+// Type inference
+z = 1.5 + 2.5
+print(z)
+
+// Constant folding
+print(10 + 20)
+
+print("All basic functionality working")

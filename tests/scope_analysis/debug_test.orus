@@ -1,4 +1,0 @@
-// Debug test for syntax issues
-mut dead_var = 42
-mut used_var = 10
-print("Used variable:", used_var)

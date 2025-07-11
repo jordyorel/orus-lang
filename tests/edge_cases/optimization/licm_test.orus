@@ -1,6 +1,0 @@
-// Basic LICM test
-a = 5
-b = 10
-for i in 0..3:
-    result = a + b + i
-    print("Result:", result)

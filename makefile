@@ -57,7 +57,7 @@ C_TEST_TARGETS = \
 # Targets
 ORUS = orus
 
-.PHONY: all clean test test-verbose test-basic test-types test-scope-analysis test-comments test-all c-test benchmark help format
+.PHONY: all clean test test-verbose test-basic test-types test-scope-analysis test-comments test-all c-test benchmark help format test-phase1 test-regression
 
 all: $(ORUS)
 
@@ -97,6 +97,24 @@ test: $(ORUS)
 	@echo "Running Orus Test Suite..."
 	@echo "=========================="
 	@passed=0; failed=0; \
+	echo ""; \
+	echo "\033[36m=== Phase 1 Tests ===\033[0m"; \
+	for test_file in $(TESTDIR)/phase1/core_expressions.orus \
+	                  $(TESTDIR)/phase1/type_inference.orus \
+	                  $(TESTDIR)/phase1/constant_folding.orus \
+	                  $(TESTDIR)/phase1/variable_operations.orus \
+	                  $(TESTDIR)/phase1/regression_minimal.orus; do \
+		if [ -f "$$test_file" ]; then \
+			printf "Testing: $$test_file ... "; \
+			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
+				printf "\033[32mPASS\033[0m\n"; \
+				passed=$$((passed + 1)); \
+			else \
+				printf "\033[31mFAIL\033[0m\n"; \
+				failed=$$((failed + 1)); \
+			fi; \
+		fi; \
+	done; \
 	echo ""; \
 	echo "\033[36m=== Type System Tests ===\033[0m"; \
 	for test_file in $(shell find $(TESTDIR)/types -name '*.orus' | sort); do \
@@ -305,6 +323,132 @@ test-verbose: $(ORUS)
 test-all: test c-test
 	@echo "\033[36m=== Comprehensive Test Suite Complete ===\033[0m"
 
+# Phase 1 Test Suite - Type-Aware Expression Descriptors
+test-phase1: $(ORUS)
+	@echo "\033[36m🚀 Phase 1 Test Suite - Type-Aware Expression Descriptors\033[0m"
+	@echo "=========================================================="
+	@passed=0; failed=0; \
+	echo ""; \
+	echo "\033[36m=== Phase 1 Core Tests ===\033[0m"; \
+	for test_file in tests/phase1/core_expressions.orus \
+	                  tests/phase1/type_inference.orus \
+	                  tests/phase1/constant_folding.orus \
+	                  tests/phase1/variable_operations.orus \
+	                  tests/phase1/regression_minimal.orus; do \
+		if [ -f "$$test_file" ]; then \
+			printf "Testing: $$test_file ... "; \
+			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
+				printf "\033[32mPASS\033[0m\n"; \
+				passed=$$((passed + 1)); \
+			else \
+				printf "\033[31mFAIL\033[0m\n"; \
+				echo "  Error: $$(./$(ORUS) "$$test_file" 2>&1 | head -1)"; \
+				failed=$$((failed + 1)); \
+			fi; \
+		fi; \
+	done; \
+	echo ""; \
+	echo "\033[36m=== Essential Existing Tests ===\033[0m"; \
+	for test_file in tests/literals/literal.orus \
+	                  tests/expressions/binary.orus \
+	                  tests/variables/assignment.orus; do \
+		if [ -f "$$test_file" ]; then \
+			printf "Testing: $$test_file ... "; \
+			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
+				printf "\033[32mPASS\033[0m\n"; \
+				passed=$$((passed + 1)); \
+			else \
+				printf "\033[31mFAIL\033[0m\n"; \
+				echo "  Error: $$(./$(ORUS) "$$test_file" 2>&1 | head -1)"; \
+				failed=$$((failed + 1)); \
+			fi; \
+		fi; \
+	done; \
+	echo ""; \
+	echo "\033[36m=== Type System Tests ===\033[0m"; \
+	for test_file in tests/types/i32/i32_basic.orus \
+	                  tests/types/f64/f64_basic.orus \
+	                  tests/types/type_inference/arithmetic_inference_basic.orus; do \
+		if [ -f "$$test_file" ]; then \
+			printf "Testing: $$test_file ... "; \
+			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
+				printf "\033[32mPASS\033[0m\n"; \
+				passed=$$((passed + 1)); \
+			else \
+				printf "\033[31mFAIL\033[0m\n"; \
+				echo "  Error: $$(./$(ORUS) "$$test_file" 2>&1 | head -1)"; \
+				failed=$$((failed + 1)); \
+			fi; \
+		fi; \
+	done; \
+	echo ""; \
+	echo "=========================================================="; \
+	echo "\033[36mPhase 1 Test Results:\033[0m"; \
+	echo "  Total tests: $$((passed + failed))"; \
+	if [ $$failed -eq 0 ]; then \
+		echo "  \033[32mPassed: $$passed\033[0m"; \
+		echo "  \033[32mFailed: $$failed\033[0m"; \
+		echo ""; \
+		echo "\033[32m🎉 All Phase 1 tests passed!\033[0m"; \
+		echo "Phase 1 implementation is ready for the next phase."; \
+	else \
+		echo "  \033[32mPassed: $$passed\033[0m"; \
+		echo "  \033[31mFailed: $$failed\033[0m"; \
+		echo ""; \
+		echo "\033[31m❌ Some tests failed.\033[0m"; \
+		echo "Please fix the failing tests before proceeding to Phase 2."; \
+		echo "Run 'make test-phase1' with individual files to debug."; \
+	fi; \
+	echo ""
+
+# Regression test suite - monitor that existing functionality doesn't break
+test-regression: $(ORUS)
+	@echo "\033[36m🔍 Regression Test Suite - Ensure No Breakage\033[0m"
+	@echo "=============================================="
+	@passed=0; failed=0; \
+	echo ""; \
+	echo "\033[36m=== Critical Regression Tests ===\033[0m"; \
+	for test_file in tests/literals/literal.orus \
+	                  tests/expressions/binary.orus \
+	                  tests/variables/assignment.orus \
+	                  tests/types/i32/i32_basic.orus \
+	                  tests/types/f64/f64_basic.orus \
+	                  tests/conditionals/if_basic.orus \
+	                  tests/control_flow/for_range_basic.orus \
+	                  tests/control_flow/while_basic.orus \
+	                  tests/functions/basic_function_test.orus; do \
+		if [ -f "$$test_file" ]; then \
+			printf "Testing: $$test_file ... "; \
+			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
+				printf "\033[32mPASS\033[0m\n"; \
+				passed=$$((passed + 1)); \
+			else \
+				printf "\033[31mFAIL\033[0m\n"; \
+				echo "  Error: $$(./$(ORUS) "$$test_file" 2>&1 | head -1)"; \
+				failed=$$((failed + 1)); \
+			fi; \
+		fi; \
+	done; \
+	echo ""; \
+	echo "=============================================="; \
+	echo "\033[36mRegression Test Results:\033[0m"; \
+	echo "  Total tests: $$((passed + failed))"; \
+	if [ $$failed -eq 0 ]; then \
+		echo "  \033[32mPassed: $$passed\033[0m"; \
+		echo "  \033[32mFailed: $$failed\033[0m"; \
+		echo ""; \
+		echo "\033[32m✅ No regressions detected!\033[0m"; \
+		echo "All critical functionality is working correctly."; \
+	else \
+		echo "  \033[32mPassed: $$passed\033[0m"; \
+		echo "  \033[31mFailed: $$failed\033[0m"; \
+		echo ""; \
+		echo "\033[31m⚠️  REGRESSION DETECTED!\033[0m"; \
+		echo "Critical functionality has been broken."; \
+		echo "Please investigate and fix before continuing."; \
+	fi; \
+	echo ""
+
 # Run performance benchmarks
 # Usage: make benchmark [DISPATCH=goto|switch]
 # Default: goto (computed goto dispatch for best performance)
@@ -346,6 +490,8 @@ help:
 	@echo "  test-basic  - Run only basic tests (quick smoke test)"
 	@echo "  test-types  - Run only type system tests"
 	@echo "  test-all    - Run comprehensive test suite (all tests + C tests)"
+	@echo "  test-phase1 - Run Phase 1 tests (TypedExpDesc implementation)"
+	@echo "  test-regression - Run regression tests (ensure no functionality breaks)"
 	@echo "  c-test      - Run C unit tests for VM and critical components"
 	@echo "  benchmark   - Run performance benchmarks (Orus vs Python/JS/Lua)"
 	@echo "              Usage: make benchmark [DISPATCH=goto|switch]"

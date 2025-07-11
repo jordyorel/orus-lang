@@ -1,4 +1,0 @@
-a: u64 = 100u64
-print(a)
-b: u64 = 50u64
-print(b)

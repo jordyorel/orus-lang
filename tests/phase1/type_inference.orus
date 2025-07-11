@@ -1,0 +1,30 @@
+// Phase 1 Type Inference Tests
+// Test automatic type deduction and promotion
+
+// Basic type inference
+a = 42        // Should infer i32
+b = 3.14      // Should infer f64
+c = true      // Should infer bool
+d = "hello"   // Should infer string
+
+print(a)
+print(b) 
+print(c)
+print(d)
+
+// Type promotion in arithmetic
+e = 1 + 2.0   // Should promote to f64
+print(e)
+
+f = 1i32 + 2i32  // Should stay i32
+print(f)
+
+g = 1u32 + 2u32  // Should stay u32
+print(g)
+
+// Complex type inference
+h = a + f     // i32 + i32 -> i32
+print(h)
+
+i = a + e     // i32 + f64 -> f64
+print(i)
