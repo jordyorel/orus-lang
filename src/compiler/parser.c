@@ -115,6 +115,7 @@ static Token nextToken(void) {
 }
 
 // Forward declarations
+static ASTNode* parsePrintStatement(void);
 static ASTNode* parseExpression(void);
 static ASTNode* parseBinaryExpression(int minPrec);
 static ASTNode* parsePrimaryExpression(void);
@@ -244,6 +245,10 @@ ASTNode* parseSource(const char* source) {
 
 static ASTNode* parseStatement(void) {
     Token t = peekToken();
+
+    if (t.type == TOKEN_PRINT || t.type == TOKEN_PRINT_NO_NL) {
+        return parsePrintStatement();
+    }
     if (t.type == TOKEN_APOSTROPHE) {
         nextToken();
         Token labelTok = nextToken();
@@ -268,8 +273,8 @@ static ASTNode* parseStatement(void) {
         return stmt;
     }
     if (t.type == TOKEN_MUT) {
-        nextToken();
-        Token nameTok = nextToken();
+        nextToken(); // consume TOKEN_MUT
+        Token nameTok = nextToken(); // get identifier
         if (nameTok.type != TOKEN_IDENTIFIER) return NULL;
         if (peekToken().type == TOKEN_COLON) {
             return parseVariableDeclaration(true, nameTok);
@@ -311,6 +316,45 @@ static ASTNode* parseStatement(void) {
     } else {
         return parseExpression();
     }
+}
+
+static ASTNode* parsePrintStatement(void) {
+    // Consume PRINT or PRINT_NO_NL
+    Token printTok = nextToken();
+    bool newline = (printTok.type == TOKEN_PRINT);
+
+    // Expect '('
+    Token left = nextToken();
+    if (left.type != TOKEN_LEFT_PAREN) return NULL;
+
+    // Gather zero or more comma-separated expressions
+    ASTNode** args = NULL;
+    int count = 0, capacity = 0;
+    if (peekToken().type != TOKEN_RIGHT_PAREN) {
+        while (true) {
+            ASTNode* expr = parseExpression();
+            if (!expr) return NULL;
+            addStatement(&args, &count, &capacity, expr);
+            if (peekToken().type != TOKEN_COMMA) break;
+            nextToken();  // consume comma
+        }
+    }
+
+    // Expect ')'
+    Token close = nextToken();
+    if (close.type != TOKEN_RIGHT_PAREN) return NULL;
+
+    // Build the NODE_PRINT AST node
+    ASTNode* node = new_node();
+    node->type = NODE_PRINT;
+    node->print.values = args;
+    node->print.count = count;
+    node->print.newline = newline;
+    node->location.line = printTok.line;
+    node->location.column = printTok.column;
+    node->dataType = NULL;
+
+    return node;
 }
 
 static ASTNode* parseVariableDeclaration(bool isMutable, Token nameToken) {

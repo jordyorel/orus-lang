@@ -1,0 +1,1610 @@
+#define _POSIX_C_SOURCE 200809L
+#include "../../include/compiler.h"
+#include "../../include/common.h"
+#include "../../include/jumptable.h"
+#include "../../include/lexer.h"
+#include "../../include/symbol_table.h"
+#include "../../include/scope_analysis.h"
+#include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <time.h>
+
+// ============================================================================
+// Simplified Compiler - Lua-inspired design for Orus language
+// ============================================================================
+
+// ============================================================================
+// Expression Descriptor System (Lua-inspired)
+// ============================================================================
+
+typedef enum {
+    EXPR_CONST,     // Compile-time constant
+    EXPR_LOCAL,     // Local variable (in slot)
+    EXPR_REGISTER,  // Already in a register
+    EXPR_TEMP,      // Temporary value (needs register)
+    EXPR_VOID       // No value (statements)
+} ExprKind;
+
+typedef struct {
+    ExprKind kind;
+    ValueType type;
+    union {
+        struct {
+            int reg;
+            bool is_temp;  // Can be freed after use
+        } reg_info;
+        struct {
+            int slot;
+            const char* name;
+        } local_info;
+        struct {
+            Value value;
+            int const_id;  // Index in constant table, -1 if not cached
+        } const_info;
+    };
+} ExprDesc;
+
+// ============================================================================
+// Jump Management for Control Flow
+// ============================================================================
+
+typedef struct {
+    int address;        // Address to patch
+    int target;         // Target address (-1 = needs patching)
+    bool is_forward;    // Forward or backward jump
+} JumpInfo;
+
+typedef struct {
+    JumpInfo* jumps;
+    int count;
+    int capacity;
+} JumpList;
+
+static void init_jump_list(JumpList* list) {
+    list->jumps = NULL;
+    list->count = 0;
+    list->capacity = 0;
+}
+
+static void free_jump_list(JumpList* list) {
+    if (list->jumps) {
+        free(list->jumps);
+        list->jumps = NULL;
+    }
+    list->count = 0;
+    list->capacity = 0;
+}
+
+static int add_jump(JumpList* list, int address) {
+    if (list->count >= list->capacity) {
+        int newCapacity = list->capacity < 8 ? 8 : list->capacity * 2;
+        list->jumps = realloc(list->jumps, newCapacity * sizeof(JumpInfo));
+        if (!list->jumps) return -1;
+        list->capacity = newCapacity;
+    }
+    
+    int index = list->count++;
+    list->jumps[index].address = address;
+    list->jumps[index].target = -1;
+    list->jumps[index].is_forward = true;
+    return index;
+}
+
+static void patch_jump_list(JumpList* list, Compiler* compiler, int target) {
+    for (int i = 0; i < list->count; i++) {
+        if (list->jumps[i].target == -1) {
+            int address = list->jumps[i].address;
+            int offset = target - address - 2;
+            
+            // Patch the jump offset as 2-byte (little-endian)
+            if (offset >= 0 && offset <= 65535) {
+                compiler->chunk->code[address] = (uint8_t)(offset & 0xFF);        // Low byte
+                compiler->chunk->code[address + 1] = (uint8_t)((offset >> 8) & 0xFF); // High byte
+            } else {
+                // Use max offset for overflow
+                compiler->chunk->code[address] = 0xFF;
+                compiler->chunk->code[address + 1] = 0xFF;
+            }
+            
+            list->jumps[i].target = target;
+        }
+    }
+}
+
+// ============================================================================
+// Expression Creation Helpers
+// ============================================================================
+
+static inline ExprDesc make_const_expr(Value value, ValueType type) {
+    ExprDesc desc = {0};
+    desc.kind = EXPR_CONST;
+    desc.type = type;
+    desc.const_info.value = value;
+    desc.const_info.const_id = -1;
+    return desc;
+}
+
+static inline ExprDesc make_local_expr(int slot, const char* name, ValueType type) {
+    ExprDesc desc = {0};
+    desc.kind = EXPR_LOCAL;
+    desc.type = type;
+    desc.local_info.slot = slot;
+    desc.local_info.name = name;
+    return desc;
+}
+
+static inline ExprDesc make_register_expr(int reg, ValueType type, bool is_temp) {
+    ExprDesc desc = {0};
+    desc.kind = EXPR_REGISTER;
+    desc.type = type;
+    desc.reg_info.reg = reg;
+    desc.reg_info.is_temp = is_temp;
+    return desc;
+}
+
+static inline ExprDesc make_void_expr(void) {
+    ExprDesc desc = {0};
+    desc.kind = EXPR_VOID;
+    desc.type = VAL_NIL;
+    return desc;
+}
+
+// ============================================================================
+// Register Management
+// ============================================================================
+
+static int expr_to_register(ExprDesc* expr, Compiler* compiler) {
+    if (!expr || expr->kind == EXPR_VOID) return -1;
+    
+    switch (expr->kind) {
+        case EXPR_REGISTER:
+            return expr->reg_info.reg;
+            
+        case EXPR_LOCAL: {
+            // Load local variable to a new register
+            int dest = allocateRegister(compiler);
+            emitByte(compiler, OP_MOVE);
+            emitByte(compiler, dest);
+            emitByte(compiler, expr->local_info.slot);
+            return dest;
+        }
+        
+        case EXPR_CONST: {
+            // Load constant to a new register
+            int dest = allocateRegister(compiler);
+            if (dest == 255) return -1; // Register allocation failed
+            emitConstant(compiler, dest, expr->const_info.value);
+            return dest;
+        }
+        
+        default:
+            return -1;
+    }
+}
+
+static int expr_to_register_reuse(ExprDesc* expr, Compiler* compiler) {
+    if (!expr || expr->kind == EXPR_VOID) return -1;
+    
+    // If already in register and it's temporary, reuse it
+    if (expr->kind == EXPR_REGISTER && expr->reg_info.is_temp) {
+        return expr->reg_info.reg;
+    }
+    
+    return expr_to_register(expr, compiler);
+}
+
+static void free_expr_temp(ExprDesc* expr, Compiler* compiler) {
+    if (expr && expr->kind == EXPR_REGISTER && expr->reg_info.is_temp) {
+        freeRegister(compiler, expr->reg_info.reg);
+        expr->kind = EXPR_VOID;  // Mark as freed
+    }
+}
+
+// ============================================================================
+// Type Promotion and Inference
+// ============================================================================
+
+static ValueType promote_types(ValueType left, ValueType right) {
+    // f64 has highest precedence
+    if (left == VAL_F64 || right == VAL_F64) return VAL_F64;
+    
+    // Then i64/u64
+    if (left == VAL_I64 || right == VAL_I64) return VAL_I64;
+    if (left == VAL_U64 || right == VAL_U64) return VAL_U64;
+    
+    // Then i32/u32
+    if (left == VAL_I32 || right == VAL_I32) return VAL_I32;
+    if (left == VAL_U32 || right == VAL_U32) return VAL_U32;
+    
+    // Default
+    return VAL_I32;
+}
+
+static ValueType infer_binary_result_type(const char* op, ValueType left, ValueType right) {
+    // Comparison operators always return bool
+    if (strcmp(op, "<") == 0 || strcmp(op, ">") == 0 || strcmp(op, "<=") == 0 ||
+        strcmp(op, ">=") == 0 || strcmp(op, "==") == 0 || strcmp(op, "!=") == 0) {
+        return VAL_BOOL;
+    }
+    
+    // Logical operators return bool
+    if (strcmp(op, "and") == 0 || strcmp(op, "or") == 0) {
+        return VAL_BOOL;
+    }
+    
+    // Arithmetic operators use type promotion
+    return promote_types(left, right);
+}
+
+// ============================================================================
+// Opcode Selection
+// ============================================================================
+
+static uint8_t select_binary_opcode(const char* op, ValueType type) {
+    // Arithmetic operations
+    if (strcmp(op, "+") == 0) {
+        switch (type) {
+            case VAL_I32: return OP_ADD_I32_R;
+            case VAL_I64: return OP_ADD_I64_R;
+            case VAL_F64: return OP_ADD_F64_R;
+            case VAL_U32: return OP_ADD_U32_R;
+            case VAL_U64: return OP_ADD_U64_R;
+            default: return OP_ADD_I32_R;
+        }
+    }
+    
+    if (strcmp(op, "-") == 0) {
+        switch (type) {
+            case VAL_I32: return OP_SUB_I32_R;
+            case VAL_I64: return OP_SUB_I64_R;
+            case VAL_F64: return OP_SUB_F64_R;
+            case VAL_U32: return OP_SUB_U32_R;
+            case VAL_U64: return OP_SUB_U64_R;
+            default: return OP_SUB_I32_R;
+        }
+    }
+    
+    if (strcmp(op, "*") == 0) {
+        switch (type) {
+            case VAL_I32: return OP_MUL_I32_R;
+            case VAL_I64: return OP_MUL_I64_R;
+            case VAL_F64: return OP_MUL_F64_R;
+            case VAL_U32: return OP_MUL_U32_R;
+            case VAL_U64: return OP_MUL_U64_R;
+            default: return OP_MUL_I32_R;
+        }
+    }
+    
+    if (strcmp(op, "/") == 0) {
+        switch (type) {
+            case VAL_I32: return OP_DIV_I32_R;
+            case VAL_I64: return OP_DIV_I64_R;
+            case VAL_F64: return OP_DIV_F64_R;
+            case VAL_U32: return OP_DIV_U32_R;
+            case VAL_U64: return OP_DIV_U64_R;
+            default: return OP_DIV_I32_R;
+        }
+    }
+    
+    // Comparison operations
+    if (strcmp(op, "<") == 0) {
+        switch (type) {
+            case VAL_I32: return OP_LT_I32_R;
+            case VAL_I64: return OP_LT_I64_R;
+            case VAL_F64: return OP_LT_F64_R;
+            case VAL_U32: return OP_LT_U32_R;
+            case VAL_U64: return OP_LT_U64_R;
+            default: return OP_LT_I32_R;
+        }
+    }
+    
+    if (strcmp(op, ">") == 0) {
+        switch (type) {
+            case VAL_I32: return OP_GT_I32_R;
+            case VAL_I64: return OP_GT_I64_R;
+            case VAL_F64: return OP_GT_F64_R;
+            case VAL_U32: return OP_GT_U32_R;
+            case VAL_U64: return OP_GT_U64_R;
+            default: return OP_GT_I32_R;
+        }
+    }
+    
+    // Generic operations
+    if (strcmp(op, "==") == 0) return OP_EQ_R;
+    if (strcmp(op, "!=") == 0) return OP_NE_R;
+    if (strcmp(op, "and") == 0) return OP_AND_BOOL_R;
+    if (strcmp(op, "or") == 0) return OP_OR_BOOL_R;
+    
+    return 0;  // Invalid
+}
+
+// ============================================================================
+// Constant Folding
+// ============================================================================
+
+static bool can_fold_constants(ExprDesc* left, ExprDesc* right) {
+    return left && right && 
+           left->kind == EXPR_CONST && 
+           right->kind == EXPR_CONST;
+}
+
+static ExprDesc fold_binary_constants(ExprDesc* left, ExprDesc* right, const char* op) {
+    if (!can_fold_constants(left, right)) {
+        return make_void_expr();
+    }
+    
+    Value lval = left->const_info.value;
+    Value rval = right->const_info.value;
+    
+    // Only fold if types match (for simplicity)
+    if (lval.type != rval.type) {
+        return make_void_expr();
+    }
+    
+    // Integer folding
+    if (IS_I32(lval) && IS_I32(rval)) {
+        int32_t a = AS_I32(lval);
+        int32_t b = AS_I32(rval);
+        
+        if (strcmp(op, "+") == 0) {
+            return make_const_expr(I32_VAL(a + b), VAL_I32);
+        } else if (strcmp(op, "-") == 0) {
+            return make_const_expr(I32_VAL(a - b), VAL_I32);
+        } else if (strcmp(op, "*") == 0) {
+            return make_const_expr(I32_VAL(a * b), VAL_I32);
+        } else if (strcmp(op, "/") == 0 && b != 0) {
+            return make_const_expr(I32_VAL(a / b), VAL_I32);
+        } else if (strcmp(op, "<") == 0) {
+            return make_const_expr(BOOL_VAL(a < b), VAL_BOOL);
+        } else if (strcmp(op, ">") == 0) {
+            return make_const_expr(BOOL_VAL(a > b), VAL_BOOL);
+        } else if (strcmp(op, "==") == 0) {
+            return make_const_expr(BOOL_VAL(a == b), VAL_BOOL);
+        }
+    }
+    
+    // Float folding
+    if (IS_F64(lval) && IS_F64(rval)) {
+        double a = AS_F64(lval);
+        double b = AS_F64(rval);
+        
+        if (strcmp(op, "+") == 0) {
+            return make_const_expr(F64_VAL(a + b), VAL_F64);
+        } else if (strcmp(op, "-") == 0) {
+            return make_const_expr(F64_VAL(a - b), VAL_F64);
+        } else if (strcmp(op, "*") == 0) {
+            return make_const_expr(F64_VAL(a * b), VAL_F64);
+        } else if (strcmp(op, "/") == 0 && b != 0.0) {
+            return make_const_expr(F64_VAL(a / b), VAL_F64);
+        } else if (strcmp(op, "<") == 0) {
+            return make_const_expr(BOOL_VAL(a < b), VAL_BOOL);
+        } else if (strcmp(op, ">") == 0) {
+            return make_const_expr(BOOL_VAL(a > b), VAL_BOOL);
+        } else if (strcmp(op, "==") == 0) {
+            return make_const_expr(BOOL_VAL(a == b), VAL_BOOL);
+        }
+    }
+    
+    return make_void_expr();  // Couldn't fold
+}
+
+// ============================================================================
+// Missing Function Implementations
+// ============================================================================
+
+void addLocal(Compiler* compiler, const char* name, ValueType type, uint8_t reg, bool isMutable) {
+    if (compiler->localCount >= REGISTER_COUNT) {
+        compiler->hadError = true;
+        return;
+    }
+    
+    int index = compiler->localCount++;
+    compiler->locals[index].name = strdup(name);
+    compiler->locals[index].reg = reg;
+    compiler->locals[index].isActive = true;
+    compiler->locals[index].depth = compiler->scopeDepth;
+    compiler->locals[index].isMutable = isMutable;
+    compiler->locals[index].type = type;
+    compiler->locals[index].liveRangeIndex = -1;
+    compiler->locals[index].isSpilled = false;
+    compiler->locals[index].hasKnownType = true;
+    compiler->locals[index].knownType = type;
+}
+
+void beginScope(Compiler* compiler) {
+    if (compiler->scopeDepth < REGISTER_COUNT - 1) {
+        compiler->scopeStack[compiler->scopeDepth] = compiler->localCount;
+        compiler->scopeDepth++;
+    }
+}
+
+void endScope(Compiler* compiler) {
+    if (compiler->scopeDepth > 0) {
+        compiler->scopeDepth--;
+        int prevLocalCount = compiler->scopeStack[compiler->scopeDepth];
+        
+        // Free locals that are going out of scope
+        for (int i = prevLocalCount; i < compiler->localCount; i++) {
+            if (compiler->locals[i].name) {
+                free(compiler->locals[i].name);
+                compiler->locals[i].name = NULL;
+            }
+            compiler->locals[i].isActive = false;
+            freeRegister(compiler, compiler->locals[i].reg);
+        }
+        
+        compiler->localCount = prevLocalCount;
+    }
+}
+
+// ============================================================================
+// Forward Declarations
+// ============================================================================
+
+static ExprDesc compile_expression(ASTNode* node, Compiler* compiler);
+static void compile_statement(ASTNode* node, Compiler* compiler);
+static void compile_print_statement(ASTNode* node, Compiler* compiler);
+static void compile_var_declaration(ASTNode* node, Compiler* compiler);
+
+// ============================================================================
+// Tail Call Optimization
+// ============================================================================
+
+typedef struct {
+    bool inTailPosition;
+    const char* currentFunction;
+    int functionDepth;
+} TailCallContext;
+
+static bool is_tail_call(ASTNode* node, TailCallContext* context) {
+    if (!node || !context || !context->inTailPosition) {
+        return false;
+    }
+    
+    // Check if this is a function call
+    if (node->type != NODE_CALL) {
+        return false;
+    }
+    
+    // Check if the call is to the same function (recursive tail call)
+    if (node->call.callee && node->call.callee->type == NODE_IDENTIFIER) {
+        const char* calleeName = node->call.callee->identifier.name;
+        if (context->currentFunction && strcmp(calleeName, context->currentFunction) == 0) {
+            return true;
+        }
+    }
+    
+    // For now, only optimize recursive tail calls
+    // Future enhancement: optimize all tail calls
+    return false;
+}
+
+static void set_tail_context(TailCallContext* context, bool inTailPosition) {
+    if (context) {
+        context->inTailPosition = inTailPosition;
+    }
+}
+
+static TailCallContext* push_function_context(TailCallContext* parentContext, const char* functionName) {
+    TailCallContext* context = malloc(sizeof(TailCallContext));
+    if (context) {
+        context->inTailPosition = false;
+        context->currentFunction = functionName;
+        context->functionDepth = parentContext ? parentContext->functionDepth + 1 : 0;
+    }
+    return context;
+}
+
+static void pop_function_context(TailCallContext* context) {
+    if (context) {
+        free(context);
+    }
+}
+
+// ============================================================================
+// Expression Compilation
+// ============================================================================
+
+static ExprDesc compile_literal(ASTNode* node, Compiler* compiler) {
+    (void)compiler;  // Not needed for literals
+    
+    if (!node || node->type != NODE_LITERAL) {
+        return make_void_expr();
+    }
+    
+    return make_const_expr(node->literal.value, node->literal.value.type);
+}
+
+static ExprDesc compile_identifier(ASTNode* node, Compiler* compiler) {
+    if (!node || node->type != NODE_IDENTIFIER) {
+        return make_void_expr();
+    }
+    
+    const char* name = node->identifier.name;
+    
+    // Search through locals
+    for (int i = compiler->localCount - 1; i >= 0; i--) {
+        if (compiler->locals[i].isActive && strcmp(name, compiler->locals[i].name) == 0) {
+            // Mark variable as used (for scope analysis)
+            // Skip scope analysis for now
+            
+            return make_local_expr(compiler->locals[i].reg, name, compiler->locals[i].type);
+        }
+    }
+    
+    // Variable not found
+    compiler->hadError = true;
+    return make_void_expr();
+}
+
+static ExprDesc compile_binary(ASTNode* node, Compiler* compiler) {
+    if (!node || node->type != NODE_BINARY) {
+        return make_void_expr();
+    }
+    
+    const char* op = node->binary.op;
+    
+    // Compile operands
+    ExprDesc left = compile_expression(node->binary.left, compiler);
+    ExprDesc right = compile_expression(node->binary.right, compiler);
+    
+    if (left.kind == EXPR_VOID || right.kind == EXPR_VOID) {
+        free_expr_temp(&left, compiler);
+        free_expr_temp(&right, compiler);
+        return make_void_expr();
+    }
+    
+    // Try constant folding first
+    ExprDesc folded = fold_binary_constants(&left, &right, op);
+    if (folded.kind == EXPR_CONST) {
+        free_expr_temp(&left, compiler);
+        free_expr_temp(&right, compiler);
+        return folded;
+    }
+    
+    // Determine result type
+    ValueType resultType = infer_binary_result_type(op, left.type, right.type);
+    
+    // Get operand registers
+    int leftReg = expr_to_register_reuse(&left, compiler);
+    int rightReg = expr_to_register(&right, compiler);
+    
+    if (leftReg < 0 || rightReg < 0) {
+        free_expr_temp(&left, compiler);
+        free_expr_temp(&right, compiler);
+        return make_void_expr();
+    }
+    
+    // Allocate result register (try to reuse left if it's temporary)
+    int resultReg;
+    if (left.kind == EXPR_REGISTER && left.reg_info.is_temp) {
+        resultReg = leftReg;
+    } else {
+        resultReg = allocateRegister(compiler);
+    }
+    
+    // Select and emit opcode
+    uint8_t opcode = select_binary_opcode(op, resultType);
+    if (opcode == 0) {
+        // Fallback for untyped operations
+        opcode = select_binary_opcode(op, VAL_I32);
+    }
+    
+    if (opcode != 0) {
+        emitByte(compiler, opcode);
+        emitByte(compiler, resultReg);
+        emitByte(compiler, leftReg);
+        emitByte(compiler, rightReg);
+    }
+    
+    // Clean up temporaries
+    if (rightReg != leftReg) {
+        free_expr_temp(&right, compiler);
+    }
+    if (!(left.kind == EXPR_REGISTER && left.reg_info.is_temp)) {
+        free_expr_temp(&left, compiler);
+    }
+    
+    return make_register_expr(resultReg, resultType, true);
+}
+
+static ExprDesc compile_unary(ASTNode* node, Compiler* compiler) {
+    if (!node || node->type != NODE_UNARY) {
+        return make_void_expr();
+    }
+    
+    const char* op = node->unary.op;
+    ExprDesc operand = compile_expression(node->unary.operand, compiler);
+    
+    if (operand.kind == EXPR_VOID) {
+        return make_void_expr();
+    }
+    
+    // Handle constant folding for unary operations
+    if (operand.kind == EXPR_CONST) {
+        if (strcmp(op, "-") == 0) {
+            Value val = operand.const_info.value;
+            if (IS_I32(val)) {
+                return make_const_expr(I32_VAL(-AS_I32(val)), VAL_I32);
+            } else if (IS_F64(val)) {
+                return make_const_expr(F64_VAL(-AS_F64(val)), VAL_F64);
+            }
+        } else if (strcmp(op, "not") == 0) {
+            Value val = operand.const_info.value;
+            if (IS_BOOL(val)) {
+                return make_const_expr(BOOL_VAL(!AS_BOOL(val)), VAL_BOOL);
+            }
+        }
+    }
+    
+    // Get operand register
+    int operandReg = expr_to_register_reuse(&operand, compiler);
+    if (operandReg < 0) {
+        free_expr_temp(&operand, compiler);
+        return make_void_expr();
+    }
+    
+    // Allocate result register
+    int resultReg;
+    if (operand.kind == EXPR_REGISTER && operand.reg_info.is_temp) {
+        resultReg = operandReg;
+    } else {
+        resultReg = allocateRegister(compiler);
+    }
+    
+    // Emit operation
+    if (strcmp(op, "not") == 0) {
+        emitByte(compiler, OP_NOT_BOOL_R);
+        emitByte(compiler, resultReg);
+        emitByte(compiler, operandReg);
+        free_expr_temp(&operand, compiler);
+        return make_register_expr(resultReg, VAL_BOOL, true);
+    } else if (strcmp(op, "-") == 0) {
+        // Implement as 0 - operand
+        uint8_t zeroReg = allocateRegister(compiler);
+        ValueType opType = operand.type;
+        Value zero;
+        uint8_t subOpcode;
+        
+        switch (opType) {
+            case VAL_I64: zero = I64_VAL(0); subOpcode = OP_SUB_I64_R; break;
+            case VAL_F64: zero = F64_VAL(0); subOpcode = OP_SUB_F64_R; break;
+            case VAL_U32: zero = U32_VAL(0); subOpcode = OP_SUB_U32_R; break;
+            case VAL_U64: zero = U64_VAL(0); subOpcode = OP_SUB_U64_R; break;
+            default:      zero = I32_VAL(0); subOpcode = OP_SUB_I32_R; break;
+        }
+        
+        emitConstant(compiler, zeroReg, zero);
+        emitByte(compiler, subOpcode);
+        emitByte(compiler, resultReg);
+        emitByte(compiler, zeroReg);
+        emitByte(compiler, operandReg);
+        
+        freeRegister(compiler, zeroReg);
+        free_expr_temp(&operand, compiler);
+        return make_register_expr(resultReg, opType, true);
+    }
+    
+    free_expr_temp(&operand, compiler);
+    return make_void_expr();
+}
+
+static ExprDesc compile_function_call(ASTNode* node, Compiler* compiler) {
+    if (!node || node->type != NODE_CALL) {
+        return make_void_expr();
+    }
+    
+    // Check if this is a tail call
+    TailCallContext* context = (TailCallContext*)compiler->tailCallContext;
+    bool isTailCall = is_tail_call(node, context);
+    
+    // Get function expression
+    ExprDesc func = compile_expression(node->call.callee, compiler);
+    if (func.kind == EXPR_VOID) {
+        return make_void_expr();
+    }
+    
+    int funcReg = expr_to_register(&func, compiler);
+    if (funcReg < 0) {
+        free_expr_temp(&func, compiler);
+        return make_void_expr();
+    }
+    
+    // Compile arguments
+    int argCount = 0;
+    int argRegs[256];  // Max 256 arguments
+    
+    for (int i = 0; i < node->call.argCount && i < 256; i++) {
+        ExprDesc arg = compile_expression(node->call.args[i], compiler);
+        if (arg.kind != EXPR_VOID) {
+            argRegs[argCount] = expr_to_register(&arg, compiler);
+            if (argRegs[argCount] >= 0) {
+                argCount++;
+            }
+            free_expr_temp(&arg, compiler);
+        }
+    }
+    
+    // Allocate result register
+    int resultReg = allocateRegister(compiler);
+    
+    // Emit appropriate call instruction
+    if (isTailCall) {
+        emitByte(compiler, OP_TAIL_CALL_R);
+    } else {
+        emitByte(compiler, OP_CALL_R);
+    }
+    
+    emitByte(compiler, resultReg);
+    emitByte(compiler, funcReg);
+    emitByte(compiler, argCount);
+    
+    for (int i = 0; i < argCount; i++) {
+        emitByte(compiler, argRegs[i]);
+    }
+    
+    free_expr_temp(&func, compiler);
+    
+    // Return type would be inferred from function signature
+    return make_register_expr(resultReg, VAL_I32, true);  // Placeholder type
+}
+
+// Main expression compilation dispatcher
+static ExprDesc compile_expression(ASTNode* node, Compiler* compiler) {
+    if (!node) {
+        return make_void_expr();
+    }
+    
+    switch (node->type) {
+        case NODE_LITERAL:
+            return compile_literal(node, compiler);
+            
+        case NODE_IDENTIFIER:
+            return compile_identifier(node, compiler);
+            
+        case NODE_BINARY:
+            return compile_binary(node, compiler);
+            
+        case NODE_UNARY:
+            return compile_unary(node, compiler);
+            
+        case NODE_CALL:
+            return compile_function_call(node, compiler);
+            
+        case NODE_TIME_STAMP: {
+            int reg = allocateRegister(compiler);
+            emitByte(compiler, OP_TIME_STAMP);
+            emitByte(compiler, reg);
+            return make_register_expr(reg, VAL_I64, true);
+        }
+        
+        case NODE_PRINT: {
+            compile_print_statement(node, compiler);
+            return make_void_expr();
+        }
+        
+        default:
+            return make_void_expr();
+    }
+}
+
+// ============================================================================
+// Statement Compilation
+// ============================================================================
+
+static void compile_assignment(ASTNode* node, Compiler* compiler) {
+    if (!node || node->type != NODE_ASSIGN) return;
+    
+    const char* varName = node->assign.name;
+    ExprDesc value = compile_expression(node->assign.value, compiler);
+    
+    if (value.kind == EXPR_VOID) return;
+    
+    // Find existing variable
+    for (int i = compiler->localCount - 1; i >= 0; i--) {
+        if (compiler->locals[i].isActive && strcmp(varName, compiler->locals[i].name) == 0) {
+            // Existing variable - assign to it
+            int valueReg = expr_to_register(&value, compiler);
+            if (valueReg >= 0) {
+                emitByte(compiler, OP_MOVE);
+                emitByte(compiler, compiler->locals[i].reg);
+                emitByte(compiler, valueReg);
+            }
+            free_expr_temp(&value, compiler);
+            return;
+        }
+    }
+    
+    // New variable - create it
+    int reg = expr_to_register_reuse(&value, compiler);
+    if (reg >= 0) {
+        addLocal(compiler, varName, value.type, reg, false);  // immutable by default
+    }
+    
+    free_expr_temp(&value, compiler);
+}
+
+static void compile_var_declaration(ASTNode* node, Compiler* compiler) {
+    if (!node || node->type != NODE_VAR_DECL) return;
+    
+    const char* varName = node->varDecl.name;
+    bool isMutable = node->varDecl.isMutable;
+    
+    // Compile the initializer
+    ExprDesc value = compile_expression(node->varDecl.initializer, compiler);
+    
+    if (value.kind == EXPR_VOID) return;
+    
+    // Get a register for the variable
+    int reg = expr_to_register_reuse(&value, compiler);
+    if (reg >= 0) {
+        addLocal(compiler, varName, value.type, reg, isMutable);
+    }
+    
+    free_expr_temp(&value, compiler);
+}
+
+static void compile_if_statement(ASTNode* node, Compiler* compiler) {
+    if (!node || node->type != NODE_IF) return;
+    
+    // Compile condition
+    ExprDesc condition = compile_expression(node->ifStmt.condition, compiler);
+    if (condition.kind == EXPR_VOID) return;
+    
+    int condReg = expr_to_register(&condition, compiler);
+    if (condReg < 0) {
+        free_expr_temp(&condition, compiler);
+        return;
+    }
+    
+    // Jump lists for control flow
+    JumpList elseJumps, endJumps;
+    init_jump_list(&elseJumps);
+    init_jump_list(&endJumps);
+    
+    // Emit conditional jump to else/end
+    emitByte(compiler, OP_JUMP_IF_NOT_R);
+    emitByte(compiler, condReg);
+    add_jump(&elseJumps, compiler->chunk->count);
+    emitByte(compiler, 0);  // Placeholder
+    
+    free_expr_temp(&condition, compiler);
+    
+    // Compile then branch
+    compile_statement(node->ifStmt.thenBranch, compiler);
+    
+    // Jump to end if there's an else branch
+    if (node->ifStmt.elseBranch) {
+        emitByte(compiler, OP_JUMP);
+        add_jump(&endJumps, compiler->chunk->count);
+        emitByte(compiler, 0);  // Placeholder
+    }
+    
+    // Patch else jump
+    int currentPos = compiler->chunk->count;
+    patch_jump_list(&elseJumps, compiler, currentPos);
+    
+    // Compile else branch if present
+    if (node->ifStmt.elseBranch) {
+        compile_statement(node->ifStmt.elseBranch, compiler);
+        
+        // Patch end jumps
+        currentPos = compiler->chunk->count;
+        patch_jump_list(&endJumps, compiler, currentPos);
+    }
+    
+    free_jump_list(&elseJumps);
+    free_jump_list(&endJumps);
+}
+
+static void compile_while_statement(ASTNode* node, Compiler* compiler) {
+    if (!node || node->type != NODE_WHILE) return;
+    
+    // Mark loop start
+    int loopStart = compiler->chunk->count;
+    
+    // Jump lists for break/continue
+    JumpList breakJumps, continueJumps;
+    init_jump_list(&breakJumps);
+    init_jump_list(&continueJumps);
+    
+    // Compile condition
+    ExprDesc condition = compile_expression(node->whileStmt.condition, compiler);
+    if (condition.kind == EXPR_VOID) {
+        return;
+    }
+    
+    int condReg = expr_to_register(&condition, compiler);
+    if (condReg < 0) {
+        free_expr_temp(&condition, compiler);
+        return;
+    }
+    
+    // Emit conditional jump to end
+    emitByte(compiler, OP_JUMP_IF_NOT_R);
+    emitByte(compiler, condReg);
+    add_jump(&breakJumps, compiler->chunk->count);
+    emitByte(compiler, 0);  // Placeholder
+    
+    free_expr_temp(&condition, compiler);
+    
+    // Compile loop body
+    compile_statement(node->whileStmt.body, compiler);
+    
+    // Patch continue jumps to here
+    patch_jump_list(&continueJumps, compiler, compiler->chunk->count);
+    
+    // Jump back to condition
+    emitByte(compiler, OP_JUMP);
+    int offset = loopStart - compiler->chunk->count - 1;
+    emitByte(compiler, offset & 0xFF);
+    
+    // Patch break jumps
+    patch_jump_list(&breakJumps, compiler, compiler->chunk->count);
+    
+    free_jump_list(&breakJumps);
+    free_jump_list(&continueJumps);
+}
+
+static void compile_for_statement(ASTNode* node, Compiler* compiler) {
+    if (!node || node->type != NODE_FOR_RANGE) return;
+    
+    // Create new scope for loop variable
+    beginScope(compiler);
+    
+    // Compile range start
+    ExprDesc startExpr = compile_expression(node->forRange.start, compiler);
+    int startReg = expr_to_register(&startExpr, compiler);
+    
+    // Compile range end
+    ExprDesc endExpr = compile_expression(node->forRange.end, compiler);
+    int endReg = expr_to_register(&endExpr, compiler);
+    
+    // Compile step (default to 1 if not provided)
+    int stepReg;
+    if (node->forRange.step) {
+        ExprDesc stepExpr = compile_expression(node->forRange.step, compiler);
+        stepReg = expr_to_register(&stepExpr, compiler);
+        free_expr_temp(&stepExpr, compiler);
+    } else {
+        stepReg = allocateRegister(compiler);
+        emitConstant(compiler, stepReg, I32_VAL(1));
+    }
+    
+    // Create loop variable
+    int varReg = allocateRegister(compiler);
+    const char* varName = node->forRange.varName;
+    addLocal(compiler, varName, startExpr.type, varReg, false);
+    
+    // Initialize loop variable
+    emitByte(compiler, OP_MOVE);
+    emitByte(compiler, varReg);
+    emitByte(compiler, startReg);
+    
+    // Loop start
+    int loopStart = compiler->chunk->count;
+    
+    // Jump lists for break/continue
+    JumpList breakJumps, continueJumps;
+    init_jump_list(&breakJumps);
+    init_jump_list(&continueJumps);
+    
+    // Check loop condition (var < end for positive step, var > end for negative step)
+    int condReg = allocateRegister(compiler);
+    emitByte(compiler, OP_LT_I32_R);
+    emitByte(compiler, condReg);
+    emitByte(compiler, varReg);
+    emitByte(compiler, endReg);
+    
+    // Jump to end if condition false
+    emitByte(compiler, OP_JUMP_IF_NOT_R);
+    emitByte(compiler, condReg);
+    add_jump(&breakJumps, compiler->chunk->count);
+    emitByte(compiler, 0);  // Placeholder low byte
+    emitByte(compiler, 0);  // Placeholder high byte
+    
+    // Compile loop body
+    compile_statement(node->forRange.body, compiler);
+    
+    // Patch continue jumps to here
+    patch_jump_list(&continueJumps, compiler, compiler->chunk->count);
+    
+    // Increment loop variable
+    emitByte(compiler, OP_ADD_I32_R);
+    emitByte(compiler, varReg);
+    emitByte(compiler, varReg);
+    emitByte(compiler, stepReg);
+    
+    // Jump back to condition check - use OP_LOOP for backward jump
+    emitByte(compiler, OP_LOOP);
+    int offset = compiler->chunk->count - loopStart + 2;  // Calculate positive offset for OP_LOOP
+    emitByte(compiler, offset & 0xFF);           // Low byte
+    emitByte(compiler, (offset >> 8) & 0xFF);    // High byte
+    
+    // Patch break jumps
+    patch_jump_list(&breakJumps, compiler, compiler->chunk->count);
+    
+    // Clean up
+    freeRegister(compiler, condReg);
+    freeRegister(compiler, stepReg);
+    free_expr_temp(&startExpr, compiler);
+    free_expr_temp(&endExpr, compiler);
+    
+    // End scope
+    endScope(compiler);
+    
+    free_jump_list(&breakJumps);
+    free_jump_list(&continueJumps);
+}
+
+static void compile_break_statement(ASTNode* node, Compiler* compiler) {
+    (void)node;  // No additional data needed
+    
+    // TODO: Implement break statement handling
+    // For now, just mark as error
+    compiler->hadError = true;
+}
+
+static void compile_continue_statement(ASTNode* node, Compiler* compiler) {
+    (void)node;  // No additional data needed
+    
+    // TODO: Implement continue statement handling
+    // For now, just mark as error
+    compiler->hadError = true;
+}
+
+static void compile_print_statement(ASTNode* node, Compiler* compiler) {
+    if (!node || node->type != NODE_PRINT) return;
+    
+    if (node->print.count == 0) {
+        // Empty print() call - just print newline if needed
+        if (node->print.newline) {
+            emitByte(compiler, OP_PRINT_R);
+            emitByte(compiler, 0);  // dummy register, won't be used for empty print
+        }
+        return;
+    }
+
+    // Simplified implementation without space allocation
+    for (int i = 0; i < node->print.count; i++) {
+        ExprDesc arg = compile_expression(node->print.values[i], compiler);
+        if (arg.kind == EXPR_VOID) {
+            compiler->hadError = true;
+            return;
+        }
+        int argReg = expr_to_register(&arg, compiler);
+        if (argReg < 0) {
+            compiler->hadError = true;
+            free_expr_temp(&arg, compiler);
+            return;
+        }
+        bool last = (i == node->print.count - 1);
+        emitByte(compiler, last && node->print.newline ? OP_PRINT_R : OP_PRINT_NO_NL_R);
+        emitByte(compiler, argReg);
+        free_expr_temp(&arg, compiler);
+    }
+}
+
+static void compile_block_statement(ASTNode* node, Compiler* compiler) {
+    if (!node || node->type != NODE_BLOCK) return;
+    
+    beginScope(compiler);
+    
+    for (int i = 0; i < node->block.count; i++) {
+        compile_statement(node->block.statements[i], compiler);
+        if (compiler->hadError) break;
+    }
+    
+    endScope(compiler);
+}
+
+static void compile_function_definition(ASTNode* node, Compiler* compiler) {
+    if (!node || node->type != NODE_FUNCTION) return;
+    
+    const char* functionName = node->function.name;
+    
+    // Create a new chunk for the function
+    Chunk* functionChunk = malloc(sizeof(Chunk));
+    initChunk(functionChunk);
+    
+    // Create a nested compiler for this function
+    Compiler functionCompiler;
+    initCompiler(&functionCompiler, functionChunk, compiler->fileName, compiler->source);
+    
+    // Copy parent scope analyzer state for closure analysis
+    functionCompiler.scopeAnalyzer = compiler->scopeAnalyzer;
+    
+    // Push new function context for tail call optimization
+    TailCallContext* parentContext = (TailCallContext*)compiler->tailCallContext;
+    TailCallContext* functionContext = push_function_context(parentContext, functionName);
+    functionCompiler.tailCallContext = functionContext;
+    
+    // Create new scope for function parameters
+    beginScope(&functionCompiler);
+    
+    // Add parameters to local scope
+    for (int i = 0; i < node->function.paramCount; i++) {
+        const char* paramName = node->function.params[i].name;
+        int paramReg = allocateRegister(&functionCompiler);
+        addLocal(&functionCompiler, paramName, VAL_I32, paramReg, false);  // Default to i32 for now
+    }
+    
+    // Compile function body with tail call detection
+    if (node->function.body) {
+        // The last statement in the function body is in tail position
+        if (node->function.body->type == NODE_BLOCK) {
+            ASTNode* block = node->function.body;
+            
+            // Compile all statements except the last one normally
+            for (int i = 0; i < block->block.count - 1; i++) {
+                set_tail_context(functionContext, false);
+                compile_statement(block->block.statements[i], &functionCompiler);
+                if (functionCompiler.hadError) break;
+            }
+            
+            // The last statement is in tail position if it's a return or direct call
+            if (block->block.count > 0 && !functionCompiler.hadError) {
+                ASTNode* lastStmt = block->block.statements[block->block.count - 1];
+                
+                // Check if the last statement is a return statement
+                if (lastStmt->type == NODE_RETURN) {
+                    set_tail_context(functionContext, true);
+                } else if (lastStmt->type == NODE_CALL) {
+                    set_tail_context(functionContext, true);
+                } else {
+                    set_tail_context(functionContext, false);
+                }
+                
+                compile_statement(lastStmt, &functionCompiler);
+            }
+        } else {
+            // Single statement function body
+            set_tail_context(functionContext, true);
+            compile_statement(node->function.body, &functionCompiler);
+        }
+    }
+    
+    // Ensure function ends with a return
+    emitByte(&functionCompiler, OP_RETURN_VOID);
+    
+    // End function scope
+    endScope(&functionCompiler);
+    
+    // Create function object from compiled chunk
+    ObjFunction* function = allocateFunction();
+    if (function) {
+        // Set function properties
+        function->chunk = functionChunk;
+        function->arity = node->function.paramCount;
+        function->name = allocateString(functionName, strlen(functionName));
+        
+        // Add function to constant table
+        Value functionValue = FUNCTION_VAL(function);
+        int constantIndex = addConstant(compiler->chunk, functionValue);
+        
+        // Allocate register for the function/closure
+        int functionReg = allocateRegister(compiler);
+        
+        // TODO: Analyze if this function captures any upvalues
+        // For now, create a simple function reference
+        emitBytes(compiler, OP_LOAD_CONST, functionReg);
+        emitByte(compiler, constantIndex);
+        
+        // Add function to symbol table as a variable
+        addLocal(compiler, functionName, VAL_FUNCTION, functionReg, false);
+    }
+    
+    // Restore parent context
+    pop_function_context(functionContext);
+    
+    // Clean up function compiler (but keep the chunk alive in the function object)
+    freeCompiler(&functionCompiler);
+}
+
+static void compile_return_statement(ASTNode* node, Compiler* compiler) {
+    if (!node || node->type != NODE_RETURN) return;
+    
+    TailCallContext* context = (TailCallContext*)compiler->tailCallContext;
+    
+    if (node->returnStmt.value) {
+        // Set tail context for the return expression
+        set_tail_context(context, true);
+        
+        ExprDesc returnValue = compile_expression(node->returnStmt.value, compiler);
+        if (returnValue.kind != EXPR_VOID) {
+            int returnReg = expr_to_register(&returnValue, compiler);
+            if (returnReg >= 0) {
+                emitByte(compiler, OP_RETURN_R);
+                emitByte(compiler, returnReg);
+            }
+            free_expr_temp(&returnValue, compiler);
+        }
+        
+        // Reset tail context
+        set_tail_context(context, false);
+    } else {
+        // Void return
+        emitByte(compiler, OP_RETURN_VOID);
+    }
+}
+
+// Expression statements are handled directly in the switch statement
+
+// Main statement compilation dispatcher
+static void compile_statement(ASTNode* node, Compiler* compiler) {
+    if (!node) return;
+    
+    switch (node->type) {
+        case NODE_ASSIGN:
+            compile_assignment(node, compiler);
+            break;
+            
+        case NODE_VAR_DECL:
+            compile_var_declaration(node, compiler);
+            break;
+            
+        case NODE_IF:
+            compile_if_statement(node, compiler);
+            break;
+            
+        case NODE_WHILE:
+            compile_while_statement(node, compiler);
+            break;
+            
+        case NODE_FOR_RANGE:
+            compile_for_statement(node, compiler);
+            break;
+            
+        case NODE_BREAK:
+            compile_break_statement(node, compiler);
+            break;
+            
+        case NODE_CONTINUE:
+            compile_continue_statement(node, compiler);
+            break;
+            
+        case NODE_PRINT:
+            compile_print_statement(node, compiler);
+            break;
+            
+        case NODE_BLOCK:
+            compile_block_statement(node, compiler);
+            break;
+            
+        case NODE_FUNCTION:
+            compile_function_definition(node, compiler);
+            break;
+            
+        case NODE_RETURN:
+            compile_return_statement(node, compiler);
+            break;
+            
+        default: {
+            // Try compiling as expression and discard result
+            ExprDesc expr = compile_expression(node, compiler);
+            free_expr_temp(&expr, compiler);
+            break;
+        }
+    }
+}
+
+// ============================================================================
+// Public API Implementation - Compatibility Layer
+// ============================================================================
+
+void initCompiler(Compiler* compiler, Chunk* chunk, const char* fileName, const char* source) {
+    compiler->chunk = chunk;
+    compiler->fileName = fileName;
+    compiler->source = source;
+    compiler->hadError = false;
+    
+    // Initialize register allocation
+    compiler->nextRegister = 0;
+    compiler->maxRegisters = 0;
+    for (int i = 0; i < REGISTER_COUNT; i++) {
+        compiler->registerTypes[i] = VAL_NIL;
+    }
+    
+    // Initialize locals
+    compiler->localCount = 0;
+    compiler->scopeDepth = 0;
+    
+    // Initialize symbol table
+    symbol_table_init(&compiler->symbols);
+    
+    // Initialize jumptable for compatibility
+    compiler->pendingJumps = jumptable_new();
+    
+    // Initialize type inference if available
+    if (compiler->typeInferer) {
+        initCompilerTypeInference(compiler);
+    }
+    
+    // Initialize tail call context
+    compiler->tailCallContext = NULL;
+}
+
+void freeCompiler(Compiler* compiler) {
+    if (!compiler) return;
+    
+    // Free symbol table
+    symbol_table_free(&compiler->symbols);
+    
+    // Free type inference if available
+    if (compiler->typeInferer) {
+        freeCompilerTypeInference(compiler);
+    }
+    
+    // Free tail call context if it exists
+    if (compiler->tailCallContext) {
+        pop_function_context((TailCallContext*)compiler->tailCallContext);
+        compiler->tailCallContext = NULL;
+    }
+    
+    // Clear other fields
+    compiler->chunk = NULL;
+    compiler->fileName = NULL;
+    compiler->source = NULL;
+    compiler->localCount = 0;
+    compiler->nextRegister = 0;
+}
+
+uint8_t allocateRegister(Compiler* compiler) {
+    // Use simple incrementing allocation
+    if ((int)compiler->nextRegister >= REGISTER_COUNT) {
+        compiler->hadError = true;
+        return 255; // Return invalid register number instead of 0
+    }
+    
+    uint8_t reg = compiler->nextRegister++;
+    if (reg >= compiler->maxRegisters) {
+        compiler->maxRegisters = reg + 1;
+    }
+    
+    return reg;
+}
+
+void freeRegister(Compiler* compiler, uint8_t reg) {
+    if (reg < (uint8_t)REGISTER_COUNT) {
+        compiler->registerTypes[reg] = VAL_NIL;
+    }
+    // For simplicity, we don't actually free registers in this implementation
+}
+
+bool compile(ASTNode* ast, Compiler* compiler, bool isModule) {
+    (void)isModule;
+    if (!ast || !compiler) return false;
+
+    // Initialize compiler state
+    compiler->hadError = false;
+    initScopeAnalyzer(&compiler->scopeAnalyzer);
+    performAdvancedScopeAnalysis(&compiler->scopeAnalyzer);
+
+    // If this is a full program, compile each top-level declaration
+    if (ast->type == NODE_PROGRAM) {
+        for (int i = 0; i < ast->program.count; i++) {
+            compile_statement(ast->program.declarations[i], compiler);
+            if (compiler->hadError) break;
+        }
+    } else {
+        // Single-statement input (e.g. REPL)
+        compile_statement(ast, compiler);
+    }
+
+    // Ensure there's a return at the end
+    emitByte(compiler, OP_RETURN_VOID);
+
+    freeScopeAnalyzer(&compiler->scopeAnalyzer);
+    return !compiler->hadError;
+}
+
+bool compileExpression(ASTNode* node, Compiler* compiler) {
+    if (!node || !compiler) return false;
+    
+    ExprDesc expr = compile_expression(node, compiler);
+    bool success = expr.kind != EXPR_VOID;
+    free_expr_temp(&expr, compiler);
+    
+    return success;
+}
+
+int compileExpressionToRegister(ASTNode* node, Compiler* compiler) {
+    if (!node || !compiler) return -1;
+    
+    ExprDesc expr = compile_expression(node, compiler);
+    return expr_to_register(&expr, compiler);
+}
+
+void emitByte(Compiler* compiler, uint8_t byte) {
+    if (!compiler || !compiler->chunk) return;
+    
+    writeChunk(compiler->chunk, byte, 1, 1);  // Use placeholder line/column
+}
+
+void emitBytes(Compiler* compiler, uint8_t byte1, uint8_t byte2) {
+    emitByte(compiler, byte1);
+    emitByte(compiler, byte2);
+}
+
+void emitConstant(Compiler* compiler, uint8_t reg, Value value) {
+    if (!compiler || !compiler->chunk) return;
+    
+    // Add constant to chunk and emit load instruction
+    int constant = addConstant(compiler->chunk, value);
+    
+    // Always emit 2 bytes for constant index to match VM expectations
+    emitByte(compiler, OP_LOAD_CONST);
+    emitByte(compiler, reg);
+    emitBytes(compiler, (constant >> 8) & 0xFF, constant & 0xFF);
+}
+
+// ============================================================================
+// Stub implementations for compatibility with existing code
+// ============================================================================
+
+// Enhanced register allocation stubs
+void initRegisterAllocator(RegisterAllocator* allocator) {
+    if (allocator) {
+        memset(allocator, 0, sizeof(RegisterAllocator));
+    }
+}
+
+void freeRegisterAllocator(RegisterAllocator* allocator) {
+    // Nothing to free in simple implementation
+    (void)allocator;
+}
+
+uint8_t allocateRegisterWithLifetime(Compiler* compiler, const char* name, ValueType type, bool isLoopVar) {
+    // For now, just use regular allocation
+    (void)name; (void)type; (void)isLoopVar;
+    return allocateRegister(compiler);
+}
+
+void markVariableLastUse(Compiler* compiler, int localIndex, int instruction) {
+    // Stub implementation
+    (void)compiler; (void)localIndex; (void)instruction;
+}
+
+void endVariableLifetime(Compiler* compiler, int localIndex, int instruction) {
+    // Stub implementation
+    (void)compiler; (void)localIndex; (void)instruction;
+}
+
+uint8_t reuseOrAllocateRegister(Compiler* compiler, const char* name, ValueType type) {
+    // For now, just allocate new register
+    (void)name; (void)type;
+    return allocateRegister(compiler);
+}
+
+void optimizeLoopVariableLifetimes(Compiler* compiler, int loopStart, int loopEnd) {
+    // Stub implementation
+    (void)compiler; (void)loopStart; (void)loopEnd;
+}
+
+// Functions are already defined earlier in the file
+
+// LICM analysis stubs
+void initLICMAnalysis(LICMAnalysis* analysis) {
+    if (analysis) {
+        memset(analysis, 0, sizeof(LICMAnalysis));
+    }
+}
+
+void freeLICMAnalysis(LICMAnalysis* analysis) {
+    if (analysis) {
+        if (analysis->invariantNodes) free(analysis->invariantNodes);
+        if (analysis->hoistedRegs) free(analysis->hoistedRegs);
+        if (analysis->originalInstructions) free(analysis->originalInstructions);
+        if (analysis->canHoist) free(analysis->canHoist);
+        memset(analysis, 0, sizeof(LICMAnalysis));
+    }
+}
+
+bool performLICM(Compiler* compiler, int loopStart, int loopEnd, LoopContext* loopCtx) {
+    // Stub implementation - would implement full LICM here
+    (void)compiler; (void)loopStart; (void)loopEnd; (void)loopCtx;
+    return false;
+}
+
+bool isLoopInvariant(ASTNode* expr, LoopContext* loopCtx, Compiler* compiler) {
+    // Stub implementation
+    (void)expr; (void)loopCtx; (void)compiler;
+    return false;
+}
+
+bool canSafelyHoist(ASTNode* expr, LoopContext* loopCtx) {
+    // Stub implementation
+    (void)expr; (void)loopCtx;
+    return false;
+}
+
+void hoistInvariantCode(Compiler* compiler, LICMAnalysis* analysis, int preHeaderPos) {
+    // Stub implementation
+    (void)compiler; (void)analysis; (void)preHeaderPos;
+}
+
+bool hasSideEffects(ASTNode* expr) {
+    // Stub implementation
+    (void)expr;
+    return false;
+}
+
+bool dependsOnLoopVariable(ASTNode* expr, LoopContext* loopCtx) {
+    // Stub implementation
+    (void)expr; (void)loopCtx;
+    return false;
+}
+
+void collectLoopInvariantExpressions(ASTNode* node, LICMAnalysis* analysis, LoopContext* loopCtx, Compiler* compiler) {
+    // Stub implementation
+    (void)node; (void)analysis; (void)loopCtx; (void)compiler;
+}
+
+// Type inference stubs
+void initCompilerTypeInference(Compiler* compiler) {
+    // Stub - would initialize type inference system
+    (void)compiler;
+}
+
+void freeCompilerTypeInference(Compiler* compiler) {
+    // Stub - would free type inference resources
+    (void)compiler;
+}
+
+Type* inferExpressionType(Compiler* compiler, ASTNode* expr) {
+    // Stub - would return inferred type
+    (void)compiler; (void)expr;
+    return NULL;
+}
+
+bool resolveVariableType(Compiler* compiler, const char* name, Type* inferredType) {
+    // Stub implementation
+    (void)compiler; (void)name; (void)inferredType;
+    return false;
+}
+
+ValueType typeKindToValueType(TypeKind kind) {
+    switch (kind) {
+        case TYPE_I32: return VAL_I32;
+        case TYPE_I64: return VAL_I64;
+        case TYPE_U32: return VAL_U32;
+        case TYPE_U64: return VAL_U64;
+        case TYPE_F64: return VAL_F64;
+        case TYPE_BOOL: return VAL_BOOL;
+        case TYPE_STRING: return VAL_STRING;
+        case TYPE_NIL: return VAL_NIL;
+        default: return VAL_NIL;
+    }
+}
+
+TypeKind valueTypeToTypeKind(ValueType vtype) {
+    switch (vtype) {
+        case VAL_I32: return TYPE_I32;
+        case VAL_I64: return TYPE_I64;
+        case VAL_U32: return TYPE_U32;
+        case VAL_U64: return TYPE_U64;
+        case VAL_F64: return TYPE_F64;
+        case VAL_BOOL: return TYPE_BOOL;
+        case VAL_STRING: return TYPE_STRING;
+        case VAL_NIL: return TYPE_NIL;
+        default: return TYPE_UNKNOWN;
+    }
+}
+
+bool canEmitTypedInstruction(Compiler* compiler, ASTNode* left, ASTNode* right, ValueType* outType) {
+    // Stub implementation
+    (void)compiler; (void)left; (void)right; (void)outType;
+    return false;
+}
+
+void emitTypedBinaryOp(Compiler* compiler, const char* op, ValueType type, uint8_t dst, uint8_t left, uint8_t right) {
+    // Use our opcode selection
+    uint8_t opcode = select_binary_opcode(op, type);
+    if (opcode != 0) {
+        emitByte(compiler, opcode);
+        emitByte(compiler, dst);
+        emitByte(compiler, left);
+        emitByte(compiler, right);
+    }
+}
