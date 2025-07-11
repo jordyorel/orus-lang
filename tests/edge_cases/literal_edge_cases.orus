@@ -1,0 +1,39 @@
+// Edge cases for literals
+
+// Zero
+print(0)
+
+// Single digit
+print(1)
+print(9)
+
+// Large numbers
+print(123456789)
+print(999999999)
+
+// Empty string
+print("")
+
+// Single character strings
+print("a")
+print("Z")
+print("1")
+print("!")
+
+// Strings with spaces
+print(" ")
+print("   ")
+print("hello world")
+
+// Strings with special characters
+print("Hello, World!")
+print("Test123")
+print("a b c")
+
+// Long strings
+print("This is a very long string to test how the compiler handles longer literals")
+
+// Numbers as strings
+print("42")
+print("0")
+print("123")

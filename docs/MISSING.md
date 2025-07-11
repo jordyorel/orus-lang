@@ -25,10 +25,10 @@ Build a language that combines Python's readability, Rust's safety, and Lua's pe
 - **Array System**: Type inference ready, needs collection implementation
 - **Error Handling**: Basic framework, needs enhanced diagnostics
 
-- [x] Variable assignments (`x = value`) ✅
-- [x] Control flow (`if`, `while`, `for`) ✅
-- [x] Functions (`fn name:`) ✅
-- [x] Advanced type inference ✅
+- [x] Variable assignments (`x = value`)
+- [ ] Control flow (`if`, `while`, `for`)
+- [ ] Functions (`fn name:`)
+- [ ] Advanced type inference
 - [ ] Arrays and collections (type system ready)
 - [ ] Struct definitions and methods
 - [ ] Pattern matching and enums
@@ -45,11 +45,11 @@ Build a language that combines Python's readability, Rust's safety, and Lua's pe
 
 **Implementation Steps:**
 
-- [x] Fix VALUE type conflicts for strings
-- [x] Implement string object allocation in compiler
-- [x] Add string concatenation operator (`+`)
-- [x] Implement string comparison operators
-- [x] Add string interpolation support
+- [ ] Fix VALUE type conflicts for strings
+- [ ] Implement string object allocation in compiler
+- [ ] Add string concatenation operator (`+`)
+- [ ] Implement string comparison operators
+- [ ] Add string interpolation support
 - [ ] **NEW**: Add basic TYPE enum and type checking infrastructure
 - [ ] **NEW**: Implement type annotation parsing (`x: i32 = 42`)
 - [ ] **NEW**: Add type mismatch error reporting foundation

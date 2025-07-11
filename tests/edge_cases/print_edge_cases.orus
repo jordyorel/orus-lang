@@ -1,0 +1,33 @@
+// Edge cases for print statements
+
+// Empty print (should print newline)
+print()
+
+// Multiple prints in sequence
+print(1)
+print(2)
+print(3)
+
+// Print variables
+x = 42
+print(x)
+
+// Print expressions directly
+print(5 + 5)
+print(10 - 3)
+print(2 * 8)
+print(20 / 4)
+
+// Print complex expressions
+print((1 + 2) * (3 + 4))
+
+// Print strings
+print("Hello")
+print("World")
+print("")
+
+// Print mixed content (numbers and calculations)
+value = 10
+print(value)
+print(value + 5)
+print(value * 2)

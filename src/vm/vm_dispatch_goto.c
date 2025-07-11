@@ -1279,36 +1279,13 @@ InterpretResult vm_run_dispatch(void) {
 
     LABEL_OP_PRINT_R: {
             uint8_t reg = READ_BYTE();
-            
-            // Check if this is a typed register first (reg is uint8_t, so always < 256)
-            if (vm.typed_regs.reg_types[reg] != REG_TYPE_NONE) {
-                switch (vm.typed_regs.reg_types[reg]) {
-                    case REG_TYPE_I32:
-                        printf("%d", vm.typed_regs.i32_regs[reg]);
-                        break;
-                    case REG_TYPE_I64:
-                        printf("%lld", (long long)vm.typed_regs.i64_regs[reg]);
-                        break;
-                    case REG_TYPE_F64:
-                        printf("%g", vm.typed_regs.f64_regs[reg]);
-                        break;
-                    default:
-                        printValue(vm.registers[reg]);
-                        break;
-                }
-            } else {
-                printValue(vm.registers[reg]);
-            }
-            
-            printf("\n");
-            fflush(stdout);
+            builtin_print(&vm.registers[reg], 1, true);
             DISPATCH();
         }
 
     LABEL_OP_PRINT_NO_NL_R: {
             uint8_t reg = READ_BYTE();
-            printValue(vm.registers[reg]);
-            fflush(stdout);
+            builtin_print(&vm.registers[reg], 1, false);
             DISPATCH();
         }
 
@@ -1748,13 +1725,13 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_TIME_STAMP: {
         uint8_t dst = READ_BYTE();
         
-        // Get high-precision timestamp in nanoseconds
-        int64_t timestamp = builtin_time_stamp();
+        // Get high-precision timestamp in milliseconds
+        int32_t timestamp = builtin_time_stamp();
         
         // Store in both typed register and regular register for compatibility
-        vm.typed_regs.i64_regs[dst] = timestamp;
-        vm.typed_regs.reg_types[dst] = REG_TYPE_I64;
-        vm.registers[dst] = I64_VAL(timestamp);
+        vm.typed_regs.i32_regs[dst] = timestamp;
+        vm.typed_regs.reg_types[dst] = REG_TYPE_I32;
+        vm.registers[dst] = I32_VAL(timestamp);
         
         DISPATCH();
     }

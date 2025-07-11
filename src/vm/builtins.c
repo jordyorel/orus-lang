@@ -195,19 +195,23 @@ void builtin_print(Value* args, int count, bool newline) {
 }
 
 // Cross-platform high-precision timestamp function
-// Returns nanoseconds since an arbitrary but monotonic starting point
-int64_t builtin_time_stamp() {
+// Returns milliseconds since an arbitrary but monotonic starting point (as i32)
+int32_t builtin_time_stamp() {
 #ifdef __APPLE__
     // macOS: Use mach_absolute_time() - fastest and most precise
     init_timebase();
     uint64_t abs_time = mach_absolute_time();
-    return (int64_t)((abs_time * timebase_numer) / timebase_denom);
+    // Convert to milliseconds and return as i32
+    uint64_t nanoseconds = (abs_time * timebase_numer) / timebase_denom;
+    return (int32_t)(nanoseconds / 1000000);
     
 #elif defined(__linux__)
     // Linux: Use clock_gettime with CLOCK_MONOTONIC
     struct timespec ts;
     if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) {
-        return (int64_t)(ts.tv_sec * 1000000000LL + ts.tv_nsec);
+        // Convert to milliseconds and return as i32
+        uint64_t nanoseconds = ts.tv_sec * 1000000000LL + ts.tv_nsec;
+        return (int32_t)(nanoseconds / 1000000);
     }
     return 0; // Error fallback
     
@@ -221,8 +225,9 @@ int64_t builtin_time_stamp() {
     LARGE_INTEGER counter;
     QueryPerformanceCounter(&counter);
     
-    // Convert to nanoseconds
-    return (int64_t)((counter.QuadPart * 1000000000LL) / frequency.QuadPart);
+    // Convert to milliseconds and return as i32
+    uint64_t nanoseconds = (counter.QuadPart * 1000000000LL) / frequency.QuadPart;
+    return (int32_t)(nanoseconds / 1000000);
     
 #else
     // Fallback: Use standard clock() - less precise but portable

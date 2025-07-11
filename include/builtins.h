@@ -9,7 +9,7 @@
 void builtin_print(Value* args, int count, bool newline);
 
 // High-precision timestamp function
-// Returns nanoseconds since an arbitrary but monotonic starting point
-int64_t builtin_time_stamp(void);
+// Returns milliseconds since an arbitrary but monotonic starting point
+int32_t builtin_time_stamp(void);
 
 #endif // ORUS_BUILTINS_H
