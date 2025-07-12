@@ -1,0 +1,16 @@
+// Boolean operations and type checking
+a: bool = true
+b: bool = false
+
+result1 = a and b
+result2 = a or b
+result3 = not a
+
+print(result1)
+print(result2)
+print(result3)
+
+// Boolean with non-boolean should fail if attempted
+flag = true
+num = 42
+// mixed = flag + num  // Would fail if uncommented

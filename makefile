@@ -108,6 +108,45 @@ test: $(ORUS)
 		fi; \
 	done; \
 	echo ""; \
+	echo "\033[36m=== Type System Tests ===\033[0m"; \
+	for test_file in $(TESTDIR)/types/basic_inference.orus \
+	                  $(TESTDIR)/types/annotations.orus \
+	                  $(TESTDIR)/types/same_type_arithmetic.orus \
+	                  $(TESTDIR)/types/literal_suffixes.orus \
+	                  $(TESTDIR)/types/boolean_operations.orus \
+	                  $(TESTDIR)/types/string_operations.orus \
+	                  $(TESTDIR)/types/type_propagation.orus \
+	                  $(TESTDIR)/types/complex_expressions.orus \
+	                  $(TESTDIR)/types/float_precision.orus \
+	                  $(TESTDIR)/types/edge_case_limits.orus \
+	                  $(TESTDIR)/types/implicit_conversion_test.orus; do \
+		if [ -f "$$test_file" ]; then \
+			printf "Testing: $$test_file ... "; \
+			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
+				printf "\033[32mPASS\033[0m\n"; \
+				passed=$$((passed + 1)); \
+			else \
+				printf "\033[31mFAIL\033[0m\n"; \
+				failed=$$((failed + 1)); \
+			fi; \
+		fi; \
+	done; \
+	echo ""; \
+	echo "\033[36m=== Type Safety Tests (Expected to Fail) ===\033[0m"; \
+	for test_file in $(TESTDIR)/types/type_safety_fail.orus \
+	                  $(TESTDIR)/types/int_float_mix_fail.orus; do \
+		if [ -f "$$test_file" ]; then \
+			printf "Testing: $$test_file ... "; \
+			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
+				printf "\033[31mUNEXPECTED PASS\033[0m\n"; \
+				failed=$$((failed + 1)); \
+			else \
+				printf "\033[32mCORRECT FAIL\033[0m\n"; \
+				passed=$$((passed + 1)); \
+			fi; \
+		fi; \
+	done; \
+	echo ""; \
 	echo "\033[36m=== Arithmetic Edge Cases ===\033[0m"; \
 	for test_file in $(TESTDIR)/edge_cases/arithmetic_edge_cases.orus \
 	                  $(TESTDIR)/edge_cases/operator_precedence.orus \

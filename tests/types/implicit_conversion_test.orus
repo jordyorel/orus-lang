@@ -1,0 +1,6 @@
+// Type mismatch with variable declarations
+a: i32 = 10
+b: i64 = a  // This might fail without implicit conversion
+
+print(a)
+print(b)

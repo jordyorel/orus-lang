@@ -1,0 +1,20 @@
+// Complex type combinations and edge cases
+// Nested arithmetic with same types
+a: i32 = 10
+b: i32 = 20
+c: i32 = 30
+complex_result = (a + b) * c - (a * b)
+print(complex_result)
+
+// Multiple variable declarations
+x: f64 = 1.0
+y: f64 = 2.0
+z: f64 = 3.0
+float_complex = x * y + z / (x + y)
+print(float_complex)
+
+// Mixed operations that should be safe (same family)
+p: u32 = 100
+q: u32 = 200
+unsigned_ops = p + q - (p * 2)
+print(unsigned_ops)

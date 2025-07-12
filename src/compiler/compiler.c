@@ -12,6 +12,7 @@
 static bool compileNode(ASTNode* node, Compiler* compiler);
 static int compileExpr(ASTNode* node, Compiler* compiler);
 
+
 void initCompiler(Compiler* compiler, Chunk* chunk, const char* fileName,
                    const char* source) {
     compiler->chunk = chunk;

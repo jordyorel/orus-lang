@@ -1,0 +1,15 @@
+// Same type arithmetic should work
+a: i32 = 10
+b: i32 = 20
+result = a + b
+print(result)
+
+x: f64 = 1.5
+y: f64 = 2.5
+float_result = x * y
+print(float_result)
+
+p: u32 = 100
+q: u32 = 50
+unsigned_result = p - q
+print(unsigned_result)

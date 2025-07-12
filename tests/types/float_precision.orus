@@ -1,0 +1,21 @@
+// Float precision and operations
+precise: f64 = 0.1
+sum = precise + 0.2  // Classic floating point precision test
+
+very_small: f64 = 1e-10
+very_large: f64 = 1e10
+
+result1 = sum
+result2 = very_small * very_large
+
+print(result1)
+print(result2)
+
+// Scientific notation
+scientific1: f64 = 1.5e3   // 1500.0
+scientific2: f64 = 2.5e-2  // 0.025
+scientific_result = scientific1 + scientific2
+
+print(scientific1)
+print(scientific2)
+print(scientific_result)

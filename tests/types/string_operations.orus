@@ -1,0 +1,12 @@
+// String type operations
+s1 = "Hello"
+s2 = "World"
+s3 = s1 + " " + s2  // String concatenation
+
+print(s1)
+print(s2)
+print(s3)
+
+// Test string with other types
+text = "Number: "
+// mixed = text + 42  // Would fail - no implicit string conversion

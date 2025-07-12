@@ -1,0 +1,17 @@
+// Type inference with variables
+first = 42
+second = first + 10
+third = second * 2
+
+print(first)
+print(second) 
+print(third)
+
+// Type should propagate through assignments
+value1 = 100
+value2 = value1
+value3 = value2 + value1
+
+print(value1)
+print(value2)
+print(value3)

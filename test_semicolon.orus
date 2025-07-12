@@ -1,3 +1,0 @@
-// Test semicolon error with source line display
-x = 42;
-print("Should not reach here")
