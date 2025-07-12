@@ -1,0 +1,7 @@
+// Test file to demonstrate enhanced error reporting
+
+// Test 1: Division by zero  
+x = 42
+y = 10 / 0
+
+print("This shouldn't run due to division by zero")

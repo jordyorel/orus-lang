@@ -65,7 +65,14 @@
 // When i32 and i64 are mixed, promote result to i64
 #define HANDLE_MIXED_ADD(val1, val2, dst_reg) \
     do { \
-        if (IS_I32(val1) && IS_I32(val2)) { \
+        /* Simple f64 promotion following Lua's design */ \
+        if (IS_F64(val1) || IS_F64(val2)) { \
+            double a = IS_F64(val1) ? AS_F64(val1) : \
+                      (IS_I64(val1) ? (double)AS_I64(val1) : (double)AS_I32(val1)); \
+            double b = IS_F64(val2) ? AS_F64(val2) : \
+                      (IS_I64(val2) ? (double)AS_I64(val2) : (double)AS_I32(val2)); \
+            vm.registers[dst_reg] = F64_VAL(a + b); \
+        } else if (IS_I32(val1) && IS_I32(val2)) { \
             HANDLE_I32_OVERFLOW_ADD(AS_I32(val1), AS_I32(val2), dst_reg); \
         } else if (IS_I64(val1) && IS_I64(val2)) { \
             /* Both i64: perform i64 arithmetic with overflow check */ \
@@ -79,7 +86,7 @@
             } \
             vm.registers[dst_reg] = I64_VAL(result); \
         } else { \
-            /* Mixed types: promote to i64 */ \
+            /* Mixed integer types: promote to i64 */ \
             int64_t a = IS_I32(val1) ? (int64_t)AS_I32(val1) : AS_I64(val1); \
             int64_t b = IS_I32(val2) ? (int64_t)AS_I32(val2) : AS_I64(val2); \
             int64_t result; \
@@ -94,7 +101,14 @@
 
 #define HANDLE_MIXED_SUB(val1, val2, dst_reg) \
     do { \
-        if (IS_I32(val1) && IS_I32(val2)) { \
+        /* Simple f64 promotion following Lua's design */ \
+        if (IS_F64(val1) || IS_F64(val2)) { \
+            double a = IS_F64(val1) ? AS_F64(val1) : \
+                      (IS_I64(val1) ? (double)AS_I64(val1) : (double)AS_I32(val1)); \
+            double b = IS_F64(val2) ? AS_F64(val2) : \
+                      (IS_I64(val2) ? (double)AS_I64(val2) : (double)AS_I32(val2)); \
+            vm.registers[dst_reg] = F64_VAL(a - b); \
+        } else if (IS_I32(val1) && IS_I32(val2)) { \
             HANDLE_I32_OVERFLOW_SUB(AS_I32(val1), AS_I32(val2), dst_reg); \
         } else if (IS_I64(val1) && IS_I64(val2)) { \
             int64_t a = AS_I64(val1); \
@@ -121,7 +135,14 @@
 
 #define HANDLE_MIXED_MUL(val1, val2, dst_reg) \
     do { \
-        if (IS_I32(val1) && IS_I32(val2)) { \
+        /* Simple f64 promotion following Lua's design */ \
+        if (IS_F64(val1) || IS_F64(val2)) { \
+            double a = IS_F64(val1) ? AS_F64(val1) : \
+                      (IS_I64(val1) ? (double)AS_I64(val1) : (double)AS_I32(val1)); \
+            double b = IS_F64(val2) ? AS_F64(val2) : \
+                      (IS_I64(val2) ? (double)AS_I64(val2) : (double)AS_I32(val2)); \
+            vm.registers[dst_reg] = F64_VAL(a * b); \
+        } else if (IS_I32(val1) && IS_I32(val2)) { \
             HANDLE_I32_OVERFLOW_MUL(AS_I32(val1), AS_I32(val2), dst_reg); \
         } else if (IS_I64(val1) && IS_I64(val2)) { \
             int64_t a = AS_I64(val1); \
@@ -149,8 +170,18 @@
 // Simplified mixed-type division and modulo handling
 #define HANDLE_MIXED_DIV(val1, val2, dst_reg) \
     do { \
-        /* Handle basic i32 and i64 cases */ \
-        if (IS_I32(val1) && IS_I32(val2)) { \
+        /* Simple f64 promotion following Lua's design */ \
+        if (IS_F64(val1) || IS_F64(val2)) { \
+            double a = IS_F64(val1) ? AS_F64(val1) : \
+                      (IS_I64(val1) ? (double)AS_I64(val1) : (double)AS_I32(val1)); \
+            double b = IS_F64(val2) ? AS_F64(val2) : \
+                      (IS_I64(val2) ? (double)AS_I64(val2) : (double)AS_I32(val2)); \
+            if (b == 0.0) { \
+                runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Division by zero"); \
+                RETURN(INTERPRET_RUNTIME_ERROR); \
+            } \
+            vm.registers[dst_reg] = F64_VAL(a / b); \
+        } else if (IS_I32(val1) && IS_I32(val2)) { \
             int32_t a = AS_I32(val1); \
             int32_t b = AS_I32(val2); \
             if (b == 0) { \
@@ -164,7 +195,7 @@
                 vm.registers[dst_reg] = I32_VAL(a / b); \
             } \
         } else { \
-            /* Mixed types: promote to i64 */ \
+            /* Mixed integer types: promote to i64 */ \
             int64_t a = IS_I32(val1) ? (int64_t)AS_I32(val1) : AS_I64(val1); \
             int64_t b = IS_I32(val2) ? (int64_t)AS_I32(val2) : AS_I64(val2); \
             if (b == 0) { \
@@ -177,8 +208,18 @@
 
 #define HANDLE_MIXED_MOD(val1, val2, dst_reg) \
     do { \
-        /* Handle basic i32 and i64 cases */ \
-        if (IS_I32(val1) && IS_I32(val2)) { \
+        /* Simple f64 promotion following Lua's design */ \
+        if (IS_F64(val1) || IS_F64(val2)) { \
+            double a = IS_F64(val1) ? AS_F64(val1) : \
+                      (IS_I64(val1) ? (double)AS_I64(val1) : (double)AS_I32(val1)); \
+            double b = IS_F64(val2) ? AS_F64(val2) : \
+                      (IS_I64(val2) ? (double)AS_I64(val2) : (double)AS_I32(val2)); \
+            if (b == 0.0) { \
+                runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Division by zero"); \
+                RETURN(INTERPRET_RUNTIME_ERROR); \
+            } \
+            vm.registers[dst_reg] = F64_VAL(fmod(a, b)); \
+        } else if (IS_I32(val1) && IS_I32(val2)) { \
             int32_t a = AS_I32(val1); \
             int32_t b = AS_I32(val2); \
             if (b == 0) { \
@@ -192,7 +233,7 @@
                 vm.registers[dst_reg] = I32_VAL(a % b); \
             } \
         } else { \
-            /* Mixed types: promote to i64 */ \
+            /* Mixed integer types: promote to i64 */ \
             int64_t a = IS_I32(val1) ? (int64_t)AS_I32(val1) : AS_I64(val1); \
             int64_t b = IS_I32(val2) ? (int64_t)AS_I32(val2) : AS_I64(val2); \
             if (b == 0) { \
@@ -418,6 +459,12 @@ InterpretResult vm_run_dispatch(void) {
                         RETURN(INTERPRET_RUNTIME_ERROR); \
                     } \
                 } \
+                /* Update line tracking for error reporting */ \
+                int instruction_offset = (int)(vm.ip - vm.chunk->code); \
+                if (vm.chunk && instruction_offset >= 0 && instruction_offset < vm.chunk->count) { \
+                    vm.currentLine = vm.chunk->lines[instruction_offset]; \
+                    vm.currentColumn = vm.chunk->columns[instruction_offset]; \
+                } \
                 if (vm.trace) { \
                     printf("        "); \
                     for (int i = 0; i < 8; i++) { \
@@ -439,11 +486,25 @@ InterpretResult vm_run_dispatch(void) {
         // Same as normal dispatch for debug builds
         #define DISPATCH_TYPED() DISPATCH()
     #else
-    // Production build: Ultra-fast dispatch with no checks
-    #define DISPATCH() goto *vm_dispatch_table[*vm.ip++]
+    // Production build: Ultra-fast dispatch with line tracking for error reporting
+    #define DISPATCH() do { \
+        int instruction_offset = (int)(vm.ip - vm.chunk->code); \
+        if (vm.chunk && instruction_offset >= 0 && instruction_offset < vm.chunk->count) { \
+            vm.currentLine = vm.chunk->lines[instruction_offset]; \
+            vm.currentColumn = vm.chunk->columns[instruction_offset]; \
+        } \
+        goto *vm_dispatch_table[*vm.ip++]; \
+    } while(0)
     
-    // Even faster for typed operations - no error checking needed
-    #define DISPATCH_TYPED() goto *vm_dispatch_table[*vm.ip++]
+    // Even faster for typed operations - no error checking needed but still track lines
+    #define DISPATCH_TYPED() do { \
+        int instruction_offset = (int)(vm.ip - vm.chunk->code); \
+        if (vm.chunk && instruction_offset >= 0 && instruction_offset < vm.chunk->count) { \
+            vm.currentLine = vm.chunk->lines[instruction_offset]; \
+            vm.currentColumn = vm.chunk->columns[instruction_offset]; \
+        } \
+        goto *vm_dispatch_table[*vm.ip++]; \
+    } while(0)
     #endif
         DISPATCH();
 
@@ -502,11 +563,11 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t src1 = READ_BYTE();
             uint8_t src2 = READ_BYTE();
             
-            // Type validation with mixed-type support
-            if (!(IS_I32(vm.registers[src1]) || IS_I64(vm.registers[src1])) ||
-                !(IS_I32(vm.registers[src2]) || IS_I64(vm.registers[src2]))) {
+            // Simple type validation - allow numeric types following Lua's design
+            if (!(IS_I32(vm.registers[src1]) || IS_I64(vm.registers[src1]) || IS_F64(vm.registers[src1])) ||
+                !(IS_I32(vm.registers[src2]) || IS_I64(vm.registers[src2]) || IS_F64(vm.registers[src2]))) {
                 runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                            "Operands must be integers (i32 or i64)");
+                            "Operands must be numeric (i32, i64, or f64)");
                 RETURN(INTERPRET_RUNTIME_ERROR);
             }
 
@@ -527,11 +588,11 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t src1 = READ_BYTE();
             uint8_t src2 = READ_BYTE();
             
-            // Type validation with mixed-type support
-            if (!(IS_I32(vm.registers[src1]) || IS_I64(vm.registers[src1])) ||
-                !(IS_I32(vm.registers[src2]) || IS_I64(vm.registers[src2]))) {
+            // Simple type validation - allow numeric types following Lua's design
+            if (!(IS_I32(vm.registers[src1]) || IS_I64(vm.registers[src1]) || IS_F64(vm.registers[src1])) ||
+                !(IS_I32(vm.registers[src2]) || IS_I64(vm.registers[src2]) || IS_F64(vm.registers[src2]))) {
                 runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                            "Operands must be integers (i32 or i64)");
+                            "Operands must be numeric (i32, i64, or f64)");
                 RETURN(INTERPRET_RUNTIME_ERROR);
             }
 
@@ -552,11 +613,11 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t src1 = READ_BYTE();
             uint8_t src2 = READ_BYTE();
             
-            // Type validation with mixed-type support
-            if (!(IS_I32(vm.registers[src1]) || IS_I64(vm.registers[src1])) ||
-                !(IS_I32(vm.registers[src2]) || IS_I64(vm.registers[src2]))) {
+            // Simple type validation - allow numeric types following Lua's design
+            if (!(IS_I32(vm.registers[src1]) || IS_I64(vm.registers[src1]) || IS_F64(vm.registers[src1])) ||
+                !(IS_I32(vm.registers[src2]) || IS_I64(vm.registers[src2]) || IS_F64(vm.registers[src2]))) {
                 runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                            "Operands must be integers (i32 or i64)");
+                            "Operands must be numeric (i32, i64, or f64)");
                 RETURN(INTERPRET_RUNTIME_ERROR);
             }
 
@@ -577,10 +638,10 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t src1 = READ_BYTE();
             uint8_t src2 = READ_BYTE();
             
-            // Type validation with mixed-type support
-            if (!(IS_I32(vm.registers[src1]) || IS_I64(vm.registers[src1])) ||
-                !(IS_I32(vm.registers[src2]) || IS_I64(vm.registers[src2]))) {
-                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32 or i64");
+            // Simple type validation - allow numeric types following Lua's design
+            if (!(IS_I32(vm.registers[src1]) || IS_I64(vm.registers[src1]) || IS_F64(vm.registers[src1])) ||
+                !(IS_I32(vm.registers[src2]) || IS_I64(vm.registers[src2]) || IS_F64(vm.registers[src2]))) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be numeric (i32, i64, or f64)");
                 RETURN(INTERPRET_RUNTIME_ERROR);
             }
             // Use mixed-type division handling
@@ -593,10 +654,10 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t src1 = READ_BYTE();
             uint8_t src2 = READ_BYTE();
             
-            // Type validation with mixed-type support
-            if (!(IS_I32(vm.registers[src1]) || IS_I64(vm.registers[src1])) ||
-                !(IS_I32(vm.registers[src2]) || IS_I64(vm.registers[src2]))) {
-                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be i32 or i64");
+            // Simple type validation - allow numeric types following Lua's design
+            if (!(IS_I32(vm.registers[src1]) || IS_I64(vm.registers[src1]) || IS_F64(vm.registers[src1])) ||
+                !(IS_I32(vm.registers[src2]) || IS_I64(vm.registers[src2]) || IS_F64(vm.registers[src2]))) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be numeric (i32, i64, or f64)");
                 RETURN(INTERPRET_RUNTIME_ERROR);
             }
             // Use mixed-type modulo handling

@@ -8,6 +8,7 @@
 
 #include "vm.h"
 #include "common.h"
+#include "error_reporting.h"
 #include "compiler.h"
 #include "repl.h"
 #include "version.h"
@@ -55,8 +56,28 @@ static void runFile(const char* path) {
     // Set the file path for better error reporting
     vm.filePath = path;
     
+    // Initialize error reporting with arena allocation
+    ErrorReportResult error_init = init_error_reporting();
+    if (error_init != ERROR_REPORT_SUCCESS) {
+        fprintf(stderr, "Failed to initialize error reporting\n");
+        free(source);
+        exit(70);
+    }
+    
+    // Set source text for error reporting with bounds checking
+    size_t source_len = strlen(source);
+    ErrorReportResult source_result = set_source_text(source, source_len);
+    if (source_result != ERROR_REPORT_SUCCESS) {
+        fprintf(stderr, "Failed to set source text for error reporting\n");
+        cleanup_error_reporting();
+        free(source);
+        exit(70);
+    }
+    
     InterpretResult result = interpret(source);
     
+    // Clean up error reporting before freeing source
+    cleanup_error_reporting();
     free(source);
     vm.filePath = NULL;
     
@@ -69,11 +90,7 @@ static void runFile(const char* path) {
         exit(65);
     }
     if (result == INTERPRET_RUNTIME_ERROR) {
-        fprintf(stderr, "Runtime error in \"%s\".\n", path);
-        if (IS_ERROR(vm.lastError)) {
-            ObjError* error = AS_ERROR(vm.lastError);
-            printf("Runtime Error: %s\n", error->message->chars);
-        }
+        // Enhanced error reporting is now handled in runtimeError() function
         exit(70);
     }
 }
@@ -102,6 +119,9 @@ static void showVersion() {
 }
 
 int main(int argc, const char* argv[]) {
+    // Initialize error reporting system
+    init_error_reporting();
+    
     bool traceExecution = false;
     bool debugMode = false;
     const char* fileName = NULL;

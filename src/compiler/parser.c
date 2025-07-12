@@ -1,6 +1,7 @@
 #include "../../include/parser.h"
 #include "../../include/common.h"
 #include "../../include/vm.h"
+#include "../../include/error_reporting.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
@@ -32,7 +33,7 @@ static void arena_init(Arena* a, size_t initial) {
     a->head->next = NULL;
 }
 
-static void* arena_alloc(Arena* a, size_t size) {
+static void* parser_arena_alloc(Arena* a, size_t size) {
     ArenaBlock* block = a->head;
     if (block->used + size > block->capacity) {
         size_t newCap = block->capacity * 2;
@@ -50,7 +51,7 @@ static void* arena_alloc(Arena* a, size_t size) {
     return ptr;
 }
 
-static void arena_reset(Arena* a) {
+static void parser_arena_reset(Arena* a) {
     ArenaBlock* block = a->head->next;
     while (block) {
         ArenaBlock* next = block->next;
@@ -62,12 +63,12 @@ static void arena_reset(Arena* a) {
     a->head->next = NULL;
 }
 
-static ASTNode* new_node(void) { return arena_alloc(&parserArena, sizeof(ASTNode)); }
+static ASTNode* new_node(void) { return parser_arena_alloc(&parserArena, sizeof(ASTNode)); }
 
 static void addStatement(ASTNode*** list, int* count, int* capacity, ASTNode* stmt) {
     if (*count + 1 > *capacity) {
         int newCap = *capacity == 0 ? 4 : (*capacity * 2);
-        ASTNode** newArr = arena_alloc(&parserArena, sizeof(ASTNode*) * newCap);
+        ASTNode** newArr = parser_arena_alloc(&parserArena, sizeof(ASTNode*) * newCap);
         if (*capacity > 0) {
             memcpy(newArr, *list, sizeof(ASTNode*) * (*count));
         }
@@ -198,10 +199,9 @@ ASTNode* parseSource(const char* source) {
             continue;
         }
         if (t.type == TOKEN_SEMICOLON) {
-            fprintf(stderr,
-                    "Error at line %d:%d: Semicolons are not allowed in Orus."
-                    " Use a newline to separate statements.\n",
-                    t.line, t.column);
+            SrcLocation location = {NULL, t.line, t.column};
+            report_compile_error(E1007_SEMICOLON_NOT_ALLOWED, location, 
+                               "found ';' here");
             return NULL;
         }
 
@@ -229,10 +229,9 @@ ASTNode* parseSource(const char* source) {
         if (t.type == TOKEN_NEWLINE) {
             nextToken();
         } else if (t.type == TOKEN_SEMICOLON) {
-            fprintf(stderr,
-                    "Error at line %d:%d: Semicolons are not allowed in Orus."
-                    " Use a newline to separate statements.\n",
-                    t.line, t.column);
+            SrcLocation location = {NULL, t.line, t.column};
+            report_compile_error(E1007_SEMICOLON_NOT_ALLOWED, location, 
+                               "found ';' here");
             return NULL;
         }
     }
@@ -259,7 +258,7 @@ static ASTNode* parseStatement(void) {
         if (labelTok.type != TOKEN_IDENTIFIER) return NULL;
         if (nextToken().type != TOKEN_COLON) return NULL;
         int len = labelTok.length;
-        char* label = arena_alloc(&parserArena, len + 1);
+        char* label = parser_arena_alloc(&parserArena, len + 1);
         strncpy(label, labelTok.start, len);
         label[len] = '\0';
         Token after = peekToken();
@@ -287,10 +286,9 @@ static ASTNode* parseStatement(void) {
     }
     if (t.type == TOKEN_LET) {
         // ERROR: 'let' is not supported in Orus
-        fprintf(stderr, "Error at line %d:%d: 'let' keyword is not supported in Orus.\n", 
-                t.line, t.column);
-        fprintf(stderr, "Use 'mut variable_name = value' for mutable variables\n");
-        fprintf(stderr, "or 'variable_name = value' for immutable variables.\n");
+        SrcLocation location = {NULL, t.line, t.column};
+        report_compile_error(E1006_INVALID_SYNTAX, location, 
+                           "'let' keyword is not supported in Orus");
         return NULL;
     }
     if (t.type == TOKEN_IDENTIFIER) {
@@ -374,7 +372,7 @@ static ASTNode* parseVariableDeclaration(bool isMutable, Token nameToken) {
             return NULL;
         }
         int tl = typeTok.length;
-        char* typeName = arena_alloc(&parserArena, tl + 1);
+        char* typeName = parser_arena_alloc(&parserArena, tl + 1);
         strncpy(typeName, typeTok.start, tl);
         typeName[tl] = '\0';
         typeNode = new_node();
@@ -421,7 +419,7 @@ static ASTNode* parseVariableDeclaration(bool isMutable, Token nameToken) {
     varNode->dataType = NULL;
 
     int len = nameToken.length;
-    char* name = arena_alloc(&parserArena, len + 1);
+    char* name = parser_arena_alloc(&parserArena, len + 1);
     strncpy(name, nameToken.start, len);
     name[len] = '\0';
 
@@ -454,7 +452,7 @@ static ASTNode* parseVariableDeclaration(bool isMutable, Token nameToken) {
                 return NULL;
             }
             int tl = typeTok.length;
-            char* typeName = arena_alloc(&parserArena, tl + 1);
+            char* typeName = parser_arena_alloc(&parserArena, tl + 1);
             strncpy(typeName, typeTok.start, tl);
             typeName[tl] = '\0';
             nextType = new_node();
@@ -474,7 +472,7 @@ static ASTNode* parseVariableDeclaration(bool isMutable, Token nameToken) {
         n->dataType = NULL;
 
         int nlen = nextName.length;
-        char* nname = arena_alloc(&parserArena, nlen + 1);
+        char* nname = parser_arena_alloc(&parserArena, nlen + 1);
         strncpy(nname, nextName.start, nlen);
         nname[nlen] = '\0';
 
@@ -511,7 +509,7 @@ static ASTNode* parseAssignOrVarList(bool isMutable, Token nameToken) {
         ASTNode* node = new_node();
         node->type = NODE_ASSIGN;
         int len = nameToken.length;
-        char* name = arena_alloc(&parserArena, len + 1);
+        char* name = parser_arena_alloc(&parserArena, len + 1);
         strncpy(name, nameToken.start, len);
         name[len] = '\0';
         node->assign.name = name;
@@ -534,7 +532,7 @@ static ASTNode* parseAssignOrVarList(bool isMutable, Token nameToken) {
     first->dataType = NULL;
 
     int len = nameToken.length;
-    char* name = arena_alloc(&parserArena, len + 1);
+    char* name = parser_arena_alloc(&parserArena, len + 1);
     strncpy(name, nameToken.start, len);
     name[len] = '\0';
 
@@ -564,7 +562,7 @@ static ASTNode* parseAssignOrVarList(bool isMutable, Token nameToken) {
                 return NULL;
             }
             int tl = typeTok.length;
-            char* typeName = arena_alloc(&parserArena, tl + 1);
+            char* typeName = parser_arena_alloc(&parserArena, tl + 1);
             strncpy(typeName, typeTok.start, tl);
             typeName[tl] = '\0';
             nextType = new_node();
@@ -583,7 +581,7 @@ static ASTNode* parseAssignOrVarList(bool isMutable, Token nameToken) {
         n->dataType = NULL;
 
         int nlen = nextName.length;
-        char* nname = arena_alloc(&parserArena, nlen + 1);
+        char* nname = parser_arena_alloc(&parserArena, nlen + 1);
         strncpy(nname, nextName.start, nlen);
         nname[nlen] = '\0';
 
@@ -629,10 +627,9 @@ static ASTNode* parseBlock(void) {
             continue;
         }
         if (t.type == TOKEN_SEMICOLON) {
-            fprintf(stderr,
-                    "Error at line %d:%d: Semicolons are not allowed in Orus."
-                    " Use a newline to separate statements.\n",
-                    t.line, t.column);
+            SrcLocation location = {NULL, t.line, t.column};
+            report_compile_error(E1007_SEMICOLON_NOT_ALLOWED, location, 
+                               "found ';' here");
             return NULL;
         }
         ASTNode* stmt = parseStatement();
@@ -647,10 +644,9 @@ static ASTNode* parseBlock(void) {
         if (t.type == TOKEN_NEWLINE) {
             nextToken();
         } else if (t.type == TOKEN_SEMICOLON) {
-            fprintf(stderr,
-                    "Error at line %d:%d: Semicolons are not allowed in Orus."
-                    " Use a newline to separate statements.\n",
-                    t.line, t.column);
+            SrcLocation location = {NULL, t.line, t.column};
+            report_compile_error(E1007_SEMICOLON_NOT_ALLOWED, location, 
+                               "found ';' here");
             return NULL;
         }
     }
@@ -864,7 +860,7 @@ static ASTNode* parseForStatement(void) {
     if (peekToken().type == TOKEN_NEWLINE) nextToken();
 
     int len = nameTok.length;
-    char* name = arena_alloc(&parserArena, len + 1);
+    char* name = parser_arena_alloc(&parserArena, len + 1);
     strncpy(name, nameTok.start, len);
     name[len] = '\0';
 
@@ -908,7 +904,7 @@ static ASTNode* parseBreakStatement(void) {
         Token labelTok = nextToken();
         if (labelTok.type != TOKEN_IDENTIFIER) return NULL;
         int len = labelTok.length;
-        char* label = arena_alloc(&parserArena, len + 1);
+        char* label = parser_arena_alloc(&parserArena, len + 1);
         strncpy(label, labelTok.start, len);
         label[len] = '\0';
         node->breakStmt.label = label;
@@ -933,7 +929,7 @@ static ASTNode* parseContinueStatement(void) {
         Token labelTok = nextToken();
         if (labelTok.type != TOKEN_IDENTIFIER) return NULL;
         int len = labelTok.length;
-        char* label = arena_alloc(&parserArena, len + 1);
+        char* label = parser_arena_alloc(&parserArena, len + 1);
         strncpy(label, labelTok.start, len);
         label[len] = '\0';
         node->continueStmt.label = label;
@@ -993,7 +989,10 @@ static ASTNode* parseUnaryExpression(void) {
     if (t.type == TOKEN_MINUS || t.type == TOKEN_NOT || t.type == TOKEN_BIT_NOT) {
         // Check recursion depth for unary expressions too
         if (recursionDepth >= MAX_RECURSION_DEPTH) {
-            fprintf(stderr, "Error: Expression too complex (recursion depth limit reached)\n");
+            Token t = peekToken();
+            SrcLocation location = {NULL, t.line, t.column};
+            report_compile_error(E1009_EXPRESSION_TOO_COMPLEX, location, 
+                               "expression nesting exceeds maximum depth of %d", MAX_RECURSION_DEPTH);
             return NULL;
         }
         
@@ -1095,7 +1094,10 @@ static ASTNode* parseAssignment(void) {
 static ASTNode* parseBinaryExpression(int minPrec) {
     // Check recursion depth
     if (recursionDepth >= MAX_RECURSION_DEPTH) {
-        fprintf(stderr, "Error: Expression too complex (recursion depth limit reached)\n");
+        Token t = peekToken();
+        SrcLocation location = {NULL, t.line, t.column};
+        report_compile_error(E1009_EXPRESSION_TOO_COMPLEX, location, 
+                           "expression nesting exceeds maximum depth of %d", MAX_RECURSION_DEPTH);
         return NULL;
     }
     
@@ -1221,7 +1223,7 @@ static ASTNode* parsePrimaryExpression(void) {
             ASTNode* node = new_node();
             node->type = NODE_LITERAL;
             int contentLen = token.length - 2;
-            char* content = arena_alloc(&parserArena, contentLen + 1);
+            char* content = parser_arena_alloc(&parserArena, contentLen + 1);
             strncpy(content, token.start + 1, contentLen);
             content[contentLen] = '\0';
             ObjString* s = allocateString(content, contentLen);
@@ -1254,7 +1256,7 @@ static ASTNode* parsePrimaryExpression(void) {
             ASTNode* node = new_node();
             node->type = NODE_IDENTIFIER;
             int len = token.length;
-            char* name = arena_alloc(&parserArena, len + 1);
+            char* name = parser_arena_alloc(&parserArena, len + 1);
             strncpy(name, token.start, len);
             name[len] = '\0';
             node->identifier.name = name;
@@ -1344,7 +1346,7 @@ static ASTNode* parseFunctionDefinition(void) {
     
     // Copy function name
     int nameLen = nameTok.length;
-    char* functionName = arena_alloc(&parserArena, nameLen + 1);
+    char* functionName = parser_arena_alloc(&parserArena, nameLen + 1);
     strncpy(functionName, nameTok.start, nameLen);
     functionName[nameLen] = '\0';
     
@@ -1366,7 +1368,7 @@ static ASTNode* parseFunctionDefinition(void) {
             
             // Copy parameter name
             int paramLen = paramTok.length;
-            char* paramName = arena_alloc(&parserArena, paramLen + 1);
+            char* paramName = parser_arena_alloc(&parserArena, paramLen + 1);
             strncpy(paramName, paramTok.start, paramLen);
             paramName[paramLen] = '\0';
             
@@ -1382,7 +1384,7 @@ static ASTNode* parseFunctionDefinition(void) {
                     return NULL;
                 }
                 int typeLen = typeTok.length;
-                char* typeName = arena_alloc(&parserArena, typeLen + 1);
+                char* typeName = parser_arena_alloc(&parserArena, typeLen + 1);
                 strncpy(typeName, typeTok.start, typeLen);
                 typeName[typeLen] = '\0';
                 paramType = new_node();
@@ -1393,7 +1395,7 @@ static ASTNode* parseFunctionDefinition(void) {
             // Add parameter to list
             if (paramCount + 1 > paramCapacity) {
                 int newCap = paramCapacity == 0 ? 4 : (paramCapacity * 2);
-                FunctionParam* newParams = arena_alloc(&parserArena, sizeof(FunctionParam) * newCap);
+                FunctionParam* newParams = parser_arena_alloc(&parserArena, sizeof(FunctionParam) * newCap);
                 if (paramCapacity > 0) {
                     memcpy(newParams, params, sizeof(FunctionParam) * paramCount);
                 }
@@ -1430,7 +1432,7 @@ static ASTNode* parseFunctionDefinition(void) {
                 return NULL;
             }
             int typeLen = typeTok.length;
-            char* typeName = arena_alloc(&parserArena, typeLen + 1);
+            char* typeName = parser_arena_alloc(&parserArena, typeLen + 1);
             strncpy(typeName, typeTok.start, typeLen);
             typeName[typeLen] = '\0';
             returnType = new_node();
@@ -1516,7 +1518,7 @@ static ASTNode* parseCallExpression(ASTNode* callee) {
             // Add argument to list
             if (argCount + 1 > argCapacity) {
                 int newCap = argCapacity == 0 ? 4 : (argCapacity * 2);
-                ASTNode** newArgs = arena_alloc(&parserArena, sizeof(ASTNode*) * newCap);
+                ASTNode** newArgs = parser_arena_alloc(&parserArena, sizeof(ASTNode*) * newCap);
                 if (argCapacity > 0) {
                     memcpy(newArgs, args, sizeof(ASTNode*) * argCount);
                 }
@@ -1580,14 +1582,14 @@ static ASTNode* parseFunctionType(void) {
             if (typeTok.type == TOKEN_FN) {
                 // TODO: Handle nested function types - for now just treat as identifier
                 int typeLen = 2; // "fn"
-                char* typeName = arena_alloc(&parserArena, typeLen + 1);
+                char* typeName = parser_arena_alloc(&parserArena, typeLen + 1);
                 strcpy(typeName, "fn");
                 paramType = new_node();
                 paramType->type = NODE_TYPE;
                 paramType->typeAnnotation.name = typeName;
             } else {
                 int typeLen = typeTok.length;
-                char* typeName = arena_alloc(&parserArena, typeLen + 1);
+                char* typeName = parser_arena_alloc(&parserArena, typeLen + 1);
                 strncpy(typeName, typeTok.start, typeLen);
                 typeName[typeLen] = '\0';
                 paramType = new_node();
@@ -1598,7 +1600,7 @@ static ASTNode* parseFunctionType(void) {
             // Add parameter to list
             if (paramCount + 1 > paramCapacity) {
                 int newCap = paramCapacity == 0 ? 4 : (paramCapacity * 2);
-                FunctionParam* newParams = arena_alloc(&parserArena, sizeof(FunctionParam) * newCap);
+                FunctionParam* newParams = parser_arena_alloc(&parserArena, sizeof(FunctionParam) * newCap);
                 if (paramCapacity > 0) {
                     memcpy(newParams, params, sizeof(FunctionParam) * paramCount);
                 }
@@ -1635,7 +1637,7 @@ static ASTNode* parseFunctionType(void) {
                 return NULL;
             }
             int typeLen = typeTok.length;
-            char* typeName = arena_alloc(&parserArena, typeLen + 1);
+            char* typeName = parser_arena_alloc(&parserArena, typeLen + 1);
             strncpy(typeName, typeTok.start, typeLen);
             typeName[typeLen] = '\0';
             returnType = new_node();
@@ -1657,7 +1659,7 @@ static ASTNode* parseFunctionType(void) {
 }
 
 void freeAST(ASTNode* node) {
-    arena_reset(&parserArena);
+    parser_arena_reset(&parserArena);
     (void)node;
 }
 

@@ -22,6 +22,8 @@ void initCompiler(Compiler* compiler, Chunk* chunk, const char* fileName,
     compiler->localCount = 0;
     compiler->scopeDepth = 0;
     compiler->hadError = false;
+    compiler->currentLine = 1;     // Initialize line tracking
+    compiler->currentColumn = 1;   // Initialize column tracking
     symbol_table_init(&compiler->symbols);
 }
 
@@ -43,7 +45,7 @@ void freeRegister(Compiler* compiler, uint8_t reg) {
 }
 
 void emitByte(Compiler* compiler, uint8_t byte) {
-    writeChunk(compiler->chunk, byte, 0, 0);
+    writeChunk(compiler->chunk, byte, compiler->currentLine, compiler->currentColumn);
 }
 
 void emitBytes(Compiler* compiler, uint8_t b1, uint8_t b2) {
@@ -60,6 +62,12 @@ void emitConstant(Compiler* compiler, uint8_t reg, Value value) {
 }
 
 static int compileExpr(ASTNode* node, Compiler* compiler) {
+    // Update current line/column for error reporting
+    if (node) {
+        compiler->currentLine = node->location.line;
+        compiler->currentColumn = node->location.column;
+    }
+    
     switch (node->type) {
         case NODE_LITERAL: {
             uint8_t r = allocateRegister(compiler);
@@ -82,6 +90,7 @@ static int compileExpr(ASTNode* node, Compiler* compiler) {
             int left = compileExpr(node->binary.left, compiler);
             int right = compileExpr(node->binary.right, compiler);
             uint8_t dst = allocateRegister(compiler);
+            
             if (strcmp(node->binary.op, "+") == 0) {
                 emitByte(compiler, OP_ADD_I32_R);
             } else if (strcmp(node->binary.op, "-") == 0) {
@@ -94,8 +103,9 @@ static int compileExpr(ASTNode* node, Compiler* compiler) {
                 emitByte(compiler, OP_MOD_I32_R);
             } else {
                 compiler->hadError = true;
-                emitByte(compiler, OP_ADD_I32_R);
+                emitByte(compiler, OP_ADD_I32_R); // Fallback
             }
+            
             emitByte(compiler, dst);
             emitByte(compiler, (uint8_t)left);
             emitByte(compiler, (uint8_t)right);
@@ -116,6 +126,12 @@ static int compileExpr(ASTNode* node, Compiler* compiler) {
 }
 
 static bool compileNode(ASTNode* node, Compiler* compiler) {
+    // Update current line/column for error reporting
+    if (node) {
+        compiler->currentLine = node->location.line;
+        compiler->currentColumn = node->location.column;
+    }
+    
     switch (node->type) {
         case NODE_PROGRAM:
             for (int i = 0; i < node->program.count; i++) {

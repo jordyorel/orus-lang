@@ -25,6 +25,7 @@
 #include "memory.h"
 #include "builtins.h"
 #include "debug.h"
+#include "error_reporting.h"
 #include <time.h>
 #ifdef _WIN32
 #include <windows.h>
@@ -257,6 +258,10 @@ void runtimeError(ErrorType type, SrcLocation location,
         location.column = vm.currentColumn;
     }
 
+    // Use enhanced error reporting
+    ErrorCode code = map_error_type_to_code(type);
+    report_runtime_error(code, location, "%s", buffer);
+
     ObjError* err = allocateError(type, buffer, location);
     vm.lastError = ERROR_VAL(err);
 }
@@ -268,6 +273,9 @@ static InterpretResult run(void) {
 }
 // Main interpretation functions
 InterpretResult interpret(const char* source) {
+    // Source text is now set in main.c with proper error handling
+    // set_source_text(source, strlen(source)) is called before interpret()
+    
     // double t0 = now_ns();
     
     // Create a chunk for the compiled bytecode

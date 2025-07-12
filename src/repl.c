@@ -300,12 +300,7 @@ process_input:
         if(result==INTERPRET_OK){
             show_stats(&stats);
         }else if(result==INTERPRET_RUNTIME_ERROR){
-            if(IS_ERROR(vm.lastError)){
-                ObjError* error=AS_ERROR(vm.lastError);
-                print_colored(COLOR_ERROR,"Runtime Error: %s\n",error->message->chars);
-            }else{
-                print_colored(COLOR_ERROR,"Runtime error.\n");
-            }
+            // Enhanced error reporting is now handled in runtimeError() function
             vm.lastError=NIL_VAL;
         }
         ib->multiline=false;

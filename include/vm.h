@@ -743,6 +743,8 @@ typedef struct {
     const char* fileName;
     const char* source;
     uint8_t nextRegister;  // Next available register
+    int currentLine;       // Current line for error reporting
+    int currentColumn;     // Current column for error reporting
     uint8_t maxRegisters;  // Maximum registers used
     struct {
         char* name;

@@ -1,0 +1,9 @@
+a = 10i32
+b = 2.5f64
+c = a + b
+print(c)
+
+d = 5i64  
+e = 3.14f64
+f = d * e
+print(f)
