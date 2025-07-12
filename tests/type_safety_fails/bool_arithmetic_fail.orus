@@ -1,0 +1,5 @@
+// Type safety: mixing boolean with arithmetic should fail
+a: bool = true
+b: i32 = 10
+result = a + b  // This should fail - bool + int
+print(result)

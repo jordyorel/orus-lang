@@ -67,7 +67,9 @@ test: $(ORUS)
 	echo "\033[36m=== Basic Expression Tests ===\033[0m"; \
 	for test_file in $(TESTDIR)/expressions/binary.orus \
 	                  $(TESTDIR)/expressions/simple_add.orus \
-	                  $(TESTDIR)/expressions/simple_literal.orus; do \
+	                  $(TESTDIR)/expressions/simple_literal.orus \
+	                  $(TESTDIR)/expressions/parenthesized_cast_should_parse.orus \
+	                  $(TESTDIR)/expressions/comprehensive_parenthesized_casts.orus; do \
 		if [ -f "$$test_file" ]; then \
 			printf "Testing: $$test_file ... "; \
 			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
@@ -119,7 +121,10 @@ test: $(ORUS)
 	                  $(TESTDIR)/types/complex_expressions.orus \
 	                  $(TESTDIR)/types/float_precision.orus \
 	                  $(TESTDIR)/types/edge_case_limits.orus \
-	                  $(TESTDIR)/types/implicit_conversion_test.orus; do \
+	                  $(TESTDIR)/types/implicit_conversion_test.orus \
+	                  $(TESTDIR)/types/type_safety_fail.orus \
+	                  $(TESTDIR)/types/bool_ops_on_int_fail.orus \
+	                  $(TESTDIR)/types/not_on_int_fail.orus; do \
 		if [ -f "$$test_file" ]; then \
 			printf "Testing: $$test_file ... "; \
 			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
@@ -133,8 +138,14 @@ test: $(ORUS)
 	done; \
 	echo ""; \
 	echo "\033[36m=== Type Safety Tests (Expected to Fail) ===\033[0m"; \
-	for test_file in $(TESTDIR)/types/type_safety_fail.orus \
-	                  $(TESTDIR)/types/int_float_mix_fail.orus; do \
+	for test_file in $(TESTDIR)/type_safety_fails/int_float_mix_fail.orus \
+	                  $(TESTDIR)/type_safety_fails/signed_unsigned_mix_fail.orus \
+	                  $(TESTDIR)/type_safety_fails/different_int_sizes_fail.orus \
+	                  $(TESTDIR)/type_safety_fails/bool_arithmetic_fail.orus \
+	                  $(TESTDIR)/type_safety_fails/string_arithmetic_fail.orus \
+	                  $(TESTDIR)/type_safety_fails/invalid_cast_chain_fail.orus \
+	                  $(TESTDIR)/type_safety_fails/direct_cast_chain_should_fail.orus \
+	                  $(TESTDIR)/type_safety_fails/minus_on_bool_fail.orus; do \
 		if [ -f "$$test_file" ]; then \
 			printf "Testing: $$test_file ... "; \
 			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \

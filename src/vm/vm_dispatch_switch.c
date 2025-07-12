@@ -389,7 +389,102 @@ InterpretResult vm_run_dispatch(void) {
                 case OP_STORE_GLOBAL: {
                     uint8_t globalIndex = READ_BYTE();
                     uint8_t reg = READ_BYTE();
-                    vm.globals[globalIndex] = vm.registers[reg];
+                    
+                    // CREATIVE SOLUTION: Type safety enforcement with intelligent literal coercion
+                    // This maintains single-pass design while being flexible for compatible types
+                    Value valueToStore = vm.registers[reg];
+                    Type* declaredType = vm.globalTypes[globalIndex];
+                    
+                    // Check if the value being stored matches the declared type
+                    if (declaredType && declaredType->kind != TYPE_ANY) {
+                        bool typeMatches = false;
+                        Value coercedValue = valueToStore; // Default to original value
+                        
+                        switch (declaredType->kind) {
+                            case TYPE_I32:
+                                typeMatches = IS_I32(valueToStore);
+                                break;
+                            case TYPE_I64:
+                                if (IS_I64(valueToStore)) {
+                                    typeMatches = true;
+                                } else if (IS_I32(valueToStore)) {
+                                    // SMART COERCION: i32 literals can be coerced to i64
+                                    int32_t val = AS_I32(valueToStore);
+                                    coercedValue = I64_VAL((int64_t)val);
+                                    typeMatches = true;
+                                }
+                                break;
+                            case TYPE_U32:
+                                if (IS_U32(valueToStore)) {
+                                    typeMatches = true;
+                                } else if (IS_I32(valueToStore)) {
+                                    // SMART COERCION: non-negative i32 literals can be coerced to u32
+                                    int32_t val = AS_I32(valueToStore);
+                                    if (val >= 0) {
+                                        coercedValue = U32_VAL((uint32_t)val);
+                                        typeMatches = true;
+                                    }
+                                }
+                                break;
+                            case TYPE_U64:
+                                if (IS_U64(valueToStore)) {
+                                    typeMatches = true;
+                                } else if (IS_I32(valueToStore)) {
+                                    // SMART COERCION: non-negative i32 literals can be coerced to u64
+                                    int32_t val = AS_I32(valueToStore);
+                                    if (val >= 0) {
+                                        coercedValue = U64_VAL((uint64_t)val);
+                                        typeMatches = true;
+                                    }
+                                }
+                                break;
+                            case TYPE_F64:
+                                if (IS_F64(valueToStore)) {
+                                    typeMatches = true;
+                                } else if (IS_I32(valueToStore)) {
+                                    // SMART COERCION: i32 literals can be coerced to f64
+                                    int32_t val = AS_I32(valueToStore);
+                                    coercedValue = F64_VAL((double)val);
+                                    typeMatches = true;
+                                }
+                                break;
+                            case TYPE_BOOL:
+                                typeMatches = IS_BOOL(valueToStore);
+                                break;
+                            case TYPE_STRING:
+                                typeMatches = IS_STRING(valueToStore);
+                                break;
+                            default:
+                                typeMatches = true; // TYPE_ANY allows anything
+                                break;
+                        }
+                        
+                        if (!typeMatches) {
+                            const char* expectedTypeName = "unknown";
+                            switch (declaredType->kind) {
+                                case TYPE_I32: expectedTypeName = "i32"; break;
+                                case TYPE_I64: expectedTypeName = "i64"; break;
+                                case TYPE_U32: expectedTypeName = "u32"; break;
+                                case TYPE_U64: expectedTypeName = "u64"; break;
+                                case TYPE_F64: expectedTypeName = "f64"; break;
+                                case TYPE_BOOL: expectedTypeName = "bool"; break;
+                                case TYPE_STRING: expectedTypeName = "string"; break;
+                                default: break;
+                            }
+                            
+                            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                        "Type mismatch: cannot assign value to variable of type '%s'. Use 'as' for explicit conversion.",
+                                        expectedTypeName);
+                            return INTERPRET_RUNTIME_ERROR;
+                        }
+                        
+                        // Store the coerced value
+                        vm.globals[globalIndex] = coercedValue;
+                    } else {
+                        // No declared type, store as-is
+                        vm.globals[globalIndex] = valueToStore;
+                    }
+                    
                     break;
                 }
 
@@ -399,9 +494,95 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t src1 = READ_BYTE();
                     uint8_t src2 = READ_BYTE();
 
-                    // Simple type validation - allow all numeric types
-                    if (!(IS_I32(vm.registers[src1]) || IS_I64(vm.registers[src1]) || IS_U32(vm.registers[src1]) || IS_U64(vm.registers[src1]) || IS_F64(vm.registers[src1])) ||
-                        !(IS_I32(vm.registers[src2]) || IS_I64(vm.registers[src2]) || IS_U32(vm.registers[src2]) || IS_U64(vm.registers[src2]) || IS_F64(vm.registers[src2]))) {
+                    // Check if either operand is a string - if so, do string concatenation
+                    if (IS_STRING(vm.registers[src1]) || IS_STRING(vm.registers[src2])) {
+                        // Convert both operands to strings and concatenate
+                        Value left = vm.registers[src1];
+                        Value right = vm.registers[src2];
+                        
+                        // Convert left operand to string if needed
+                        if (!IS_STRING(left)) {
+                            char buffer[64];
+                            if (IS_I32(left)) {
+                                snprintf(buffer, sizeof(buffer), "%d", AS_I32(left));
+                            } else if (IS_I64(left)) {
+                                snprintf(buffer, sizeof(buffer), "%lld", AS_I64(left));
+                            } else if (IS_U32(left)) {
+                                snprintf(buffer, sizeof(buffer), "%u", AS_U32(left));
+                            } else if (IS_U64(left)) {
+                                snprintf(buffer, sizeof(buffer), "%llu", AS_U64(left));
+                            } else if (IS_F64(left)) {
+                                snprintf(buffer, sizeof(buffer), "%.6g", AS_F64(left));
+                            } else if (IS_BOOL(left)) {
+                                snprintf(buffer, sizeof(buffer), "%s", AS_BOOL(left) ? "true" : "false");
+                            } else {
+                                snprintf(buffer, sizeof(buffer), "nil");
+                            }
+                            ObjString* leftStr = allocateString(buffer, (int)strlen(buffer));
+                            left = STRING_VAL(leftStr);
+                        }
+                        
+                        // Convert right operand to string if needed
+                        if (!IS_STRING(right)) {
+                            char buffer[64];
+                            if (IS_I32(right)) {
+                                snprintf(buffer, sizeof(buffer), "%d", AS_I32(right));
+                            } else if (IS_I64(right)) {
+                                snprintf(buffer, sizeof(buffer), "%lld", AS_I64(right));
+                            } else if (IS_U32(right)) {
+                                snprintf(buffer, sizeof(buffer), "%u", AS_U32(right));
+                            } else if (IS_U64(right)) {
+                                snprintf(buffer, sizeof(buffer), "%llu", AS_U64(right));
+                            } else if (IS_F64(right)) {
+                                snprintf(buffer, sizeof(buffer), "%.6g", AS_F64(right));
+                            } else if (IS_BOOL(right)) {
+                                snprintf(buffer, sizeof(buffer), "%s", AS_BOOL(right) ? "true" : "false");
+                            } else {
+                                snprintf(buffer, sizeof(buffer), "nil");
+                            }
+                            ObjString* rightStr = allocateString(buffer, (int)strlen(buffer));
+                            right = STRING_VAL(rightStr);
+                        }
+                        
+                        // Concatenate the strings
+                        ObjString* leftStr = AS_STRING(left);
+                        ObjString* rightStr = AS_STRING(right);
+                        int newLength = leftStr->length + rightStr->length;
+                        
+                        // Use stack buffer for small strings, or temporary allocation for large ones
+                        if (newLength < 1024) {
+                            char buffer[1024];
+                            memcpy(buffer, leftStr->chars, leftStr->length);
+                            memcpy(buffer + leftStr->length, rightStr->chars, rightStr->length);
+                            buffer[newLength] = '\0';
+                            ObjString* result = allocateString(buffer, newLength);
+                            vm.registers[dst] = STRING_VAL(result);
+                        } else {
+                            // For large strings, use temporary allocation via reallocate
+                            char* tempBuffer = (char*)reallocate(NULL, 0, newLength + 1);
+                            memcpy(tempBuffer, leftStr->chars, leftStr->length);
+                            memcpy(tempBuffer + leftStr->length, rightStr->chars, rightStr->length);
+                            tempBuffer[newLength] = '\0';
+                            ObjString* result = allocateString(tempBuffer, newLength);
+                            reallocate(tempBuffer, newLength + 1, 0); // Free temporary buffer
+                            vm.registers[dst] = STRING_VAL(result);
+                        }
+                        break;
+                    }
+
+                    // STRICT TYPE SAFETY: No automatic coercion, types must match exactly
+                    Value val1 = vm.registers[src1];
+                    Value val2 = vm.registers[src2];
+                    
+                    // Enforce strict type matching - no coercion allowed
+                    if (val1.type != val2.type) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Operands must be the same type. Use 'as' for explicit type conversion.");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    // Ensure both operands are numeric
+                    if (!(IS_I32(val1) || IS_I64(val1) || IS_U32(val1) || IS_U64(val1) || IS_F64(val1))) {
                         runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
                                     "Operands must be numeric (i32, i64, u32, u64, or f64)");
                         RETURN(INTERPRET_RUNTIME_ERROR);
@@ -409,12 +590,32 @@ InterpretResult vm_run_dispatch(void) {
 
 #if USE_FAST_ARITH
                     // Fast path: assume i32, no overflow checking
-                    int32_t a = AS_I32(vm.registers[src1]);
-                    int32_t b = AS_I32(vm.registers[src2]);
+                    int32_t a = AS_I32(val1);
+                    int32_t b = AS_I32(val2);
                     vm.registers[dst] = I32_VAL(a + b);
 #else
-                    // Intelligent overflow handling with automatic promotion
-                    HANDLE_MIXED_ADD(vm.registers[src1], vm.registers[src2], dst);
+                    // Strict same-type arithmetic only (after coercion)
+                    if (IS_I32(val1)) {
+                        int32_t a = AS_I32(val1);
+                        int32_t b = AS_I32(val2);
+                        vm.registers[dst] = I32_VAL(a + b);
+                    } else if (IS_I64(val1)) {
+                        int64_t a = AS_I64(val1);
+                        int64_t b = AS_I64(val2);
+                        vm.registers[dst] = I64_VAL(a + b);
+                    } else if (IS_U32(val1)) {
+                        uint32_t a = AS_U32(val1);
+                        uint32_t b = AS_U32(val2);
+                        vm.registers[dst] = U32_VAL(a + b);
+                    } else if (IS_U64(val1)) {
+                        uint64_t a = AS_U64(val1);
+                        uint64_t b = AS_U64(val2);
+                        vm.registers[dst] = U64_VAL(a + b);
+                    } else if (IS_F64(val1)) {
+                        double a = AS_F64(val1);
+                        double b = AS_F64(val2);
+                        vm.registers[dst] = F64_VAL(a + b);
+                    }
 #endif
                     break;
                 }
@@ -424,9 +625,19 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t src1 = READ_BYTE();
                     uint8_t src2 = READ_BYTE();
 
-                    // Simple type validation - allow all numeric types
-                    if (!(IS_I32(vm.registers[src1]) || IS_I64(vm.registers[src1]) || IS_U32(vm.registers[src1]) || IS_U64(vm.registers[src1]) || IS_F64(vm.registers[src1])) ||
-                        !(IS_I32(vm.registers[src2]) || IS_I64(vm.registers[src2]) || IS_U32(vm.registers[src2]) || IS_U64(vm.registers[src2]) || IS_F64(vm.registers[src2]))) {
+                    // STRICT TYPE SAFETY: No automatic coercion, types must match exactly
+                    Value val1 = vm.registers[src1];
+                    Value val2 = vm.registers[src2];
+                    
+                    // Enforce strict type matching - no coercion allowed
+                    if (val1.type != val2.type) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Operands must be the same type. Use 'as' for explicit type conversion.");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    // Ensure both operands are numeric
+                    if (!(IS_I32(val1) || IS_I64(val1) || IS_U32(val1) || IS_U64(val1) || IS_F64(val1))) {
                         runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
                                     "Operands must be numeric (i32, i64, u32, u64, or f64)");
                         RETURN(INTERPRET_RUNTIME_ERROR);
@@ -434,12 +645,32 @@ InterpretResult vm_run_dispatch(void) {
 
 #if USE_FAST_ARITH
                     // Fast path: assume i32, no overflow checking
-                    int32_t a = AS_I32(vm.registers[src1]);
-                    int32_t b = AS_I32(vm.registers[src2]);
+                    int32_t a = AS_I32(val1);
+                    int32_t b = AS_I32(val2);
                     vm.registers[dst] = I32_VAL(a - b);
 #else
-                    // Intelligent overflow handling with automatic promotion
-                    HANDLE_MIXED_SUB(vm.registers[src1], vm.registers[src2], dst);
+                    // Strict same-type arithmetic only (after coercion)
+                    if (IS_I32(val1)) {
+                        int32_t a = AS_I32(val1);
+                        int32_t b = AS_I32(val2);
+                        vm.registers[dst] = I32_VAL(a - b);
+                    } else if (IS_I64(val1)) {
+                        int64_t a = AS_I64(val1);
+                        int64_t b = AS_I64(val2);
+                        vm.registers[dst] = I64_VAL(a - b);
+                    } else if (IS_U32(val1)) {
+                        uint32_t a = AS_U32(val1);
+                        uint32_t b = AS_U32(val2);
+                        vm.registers[dst] = U32_VAL(a - b);
+                    } else if (IS_U64(val1)) {
+                        uint64_t a = AS_U64(val1);
+                        uint64_t b = AS_U64(val2);
+                        vm.registers[dst] = U64_VAL(a - b);
+                    } else if (IS_F64(val1)) {
+                        double a = AS_F64(val1);
+                        double b = AS_F64(val2);
+                        vm.registers[dst] = F64_VAL(a - b);
+                    }
 #endif
                     break;
                 }
@@ -449,9 +680,19 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t src1 = READ_BYTE();
                     uint8_t src2 = READ_BYTE();
 
-                    // Simple type validation - allow all numeric types
-                    if (!(IS_I32(vm.registers[src1]) || IS_I64(vm.registers[src1]) || IS_U32(vm.registers[src1]) || IS_U64(vm.registers[src1]) || IS_F64(vm.registers[src1])) ||
-                        !(IS_I32(vm.registers[src2]) || IS_I64(vm.registers[src2]) || IS_U32(vm.registers[src2]) || IS_U64(vm.registers[src2]) || IS_F64(vm.registers[src2]))) {
+                    // STRICT TYPE SAFETY: No automatic coercion, types must match exactly
+                    Value val1 = vm.registers[src1];
+                    Value val2 = vm.registers[src2];
+                    
+                    // Enforce strict type matching - no coercion allowed
+                    if (val1.type != val2.type) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Operands must be the same type. Use 'as' for explicit type conversion.");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+
+                    // Ensure both operands are numeric
+                    if (!(IS_I32(val1) || IS_I64(val1) || IS_U32(val1) || IS_U64(val1) || IS_F64(val1))) {
                         runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
                                     "Operands must be numeric (i32, i64, u32, u64, or f64)");
                         RETURN(INTERPRET_RUNTIME_ERROR);
@@ -459,12 +700,32 @@ InterpretResult vm_run_dispatch(void) {
 
 #if USE_FAST_ARITH
                     // Fast path: assume i32, no overflow checking
-                    int32_t a = AS_I32(vm.registers[src1]);
-                    int32_t b = AS_I32(vm.registers[src2]);
+                    int32_t a = AS_I32(val1);
+                    int32_t b = AS_I32(val2);
                     vm.registers[dst] = I32_VAL(a * b);
 #else
-                    // Intelligent overflow handling with automatic promotion
-                    HANDLE_MIXED_MUL(vm.registers[src1], vm.registers[src2], dst);
+                    // Strict same-type arithmetic only (after coercion)
+                    if (IS_I32(val1)) {
+                        int32_t a = AS_I32(val1);
+                        int32_t b = AS_I32(val2);
+                        vm.registers[dst] = I32_VAL(a * b);
+                    } else if (IS_I64(val1)) {
+                        int64_t a = AS_I64(val1);
+                        int64_t b = AS_I64(val2);
+                        vm.registers[dst] = I64_VAL(a * b);
+                    } else if (IS_U32(val1)) {
+                        uint32_t a = AS_U32(val1);
+                        uint32_t b = AS_U32(val2);
+                        vm.registers[dst] = U32_VAL(a * b);
+                    } else if (IS_U64(val1)) {
+                        uint64_t a = AS_U64(val1);
+                        uint64_t b = AS_U64(val2);
+                        vm.registers[dst] = U64_VAL(a * b);
+                    } else if (IS_F64(val1)) {
+                        double a = AS_F64(val1);
+                        double b = AS_F64(val2);
+                        vm.registers[dst] = F64_VAL(a * b);
+                    }
 #endif
                     break;
                 }
@@ -535,6 +796,22 @@ InterpretResult vm_run_dispatch(void) {
                         RETURN(INTERPRET_RUNTIME_ERROR);
                     }
                     vm.registers[reg] = I32_VAL(result);
+    #endif
+                    break;
+                }
+
+                case OP_NEG_I32_R: {
+                    uint8_t reg = READ_BYTE();
+    #if USE_FAST_ARITH
+                    vm.registers[reg] = I32_VAL(-AS_I32(vm.registers[reg]));
+    #else
+                    int32_t val = AS_I32(vm.registers[reg]);
+                    if (val == INT32_MIN) {
+                        runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0},
+                                    "Integer overflow: cannot negate INT32_MIN");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+                    vm.registers[reg] = I32_VAL(-val);
     #endif
                     break;
                 }
@@ -929,6 +1206,19 @@ InterpretResult vm_run_dispatch(void) {
                         RETURN(INTERPRET_RUNTIME_ERROR);
                     }
                     vm.registers[dst] = U32_VAL((uint32_t)AS_I32(vm.registers[src]));
+                    break;
+                }
+
+                case OP_I32_TO_BOOL_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src = READ_BYTE();
+                    if (!IS_I32(vm.registers[src])) {
+                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                                    "Source must be i32");
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+                    // Convert i32 to bool: 0 -> false, non-zero -> true
+                    vm.registers[dst] = BOOL_VAL(AS_I32(vm.registers[src]) != 0);
                     break;
                 }
 
@@ -1611,14 +1901,49 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t src1 = READ_BYTE();
                     uint8_t src2 = READ_BYTE();
 
-                    if (!IS_BOOL(vm.registers[src1]) || !IS_BOOL(vm.registers[src2])) {
-                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                    "Operands must be bool");
-                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    // Convert operands to boolean using truthiness rules
+                    bool left_bool = false;
+                    bool right_bool = false;
+                    
+                    // Convert left operand to boolean
+                    if (IS_BOOL(vm.registers[src1])) {
+                        left_bool = AS_BOOL(vm.registers[src1]);
+                    } else if (IS_I32(vm.registers[src1])) {
+                        left_bool = AS_I32(vm.registers[src1]) != 0;
+                    } else if (IS_I64(vm.registers[src1])) {
+                        left_bool = AS_I64(vm.registers[src1]) != 0;
+                    } else if (IS_U32(vm.registers[src1])) {
+                        left_bool = AS_U32(vm.registers[src1]) != 0;
+                    } else if (IS_U64(vm.registers[src1])) {
+                        left_bool = AS_U64(vm.registers[src1]) != 0;
+                    } else if (IS_F64(vm.registers[src1])) {
+                        left_bool = AS_F64(vm.registers[src1]) != 0.0;
+                    } else if (IS_NIL(vm.registers[src1])) {
+                        left_bool = false;
+                    } else {
+                        left_bool = true; // Objects, strings, etc. are truthy
+                    }
+                    
+                    // Convert right operand to boolean
+                    if (IS_BOOL(vm.registers[src2])) {
+                        right_bool = AS_BOOL(vm.registers[src2]);
+                    } else if (IS_I32(vm.registers[src2])) {
+                        right_bool = AS_I32(vm.registers[src2]) != 0;
+                    } else if (IS_I64(vm.registers[src2])) {
+                        right_bool = AS_I64(vm.registers[src2]) != 0;
+                    } else if (IS_U32(vm.registers[src2])) {
+                        right_bool = AS_U32(vm.registers[src2]) != 0;
+                    } else if (IS_U64(vm.registers[src2])) {
+                        right_bool = AS_U64(vm.registers[src2]) != 0;
+                    } else if (IS_F64(vm.registers[src2])) {
+                        right_bool = AS_F64(vm.registers[src2]) != 0.0;
+                    } else if (IS_NIL(vm.registers[src2])) {
+                        right_bool = false;
+                    } else {
+                        right_bool = true; // Objects, strings, etc. are truthy
                     }
 
-                    vm.registers[dst] = BOOL_VAL(AS_BOOL(vm.registers[src1]) &&
-                                                AS_BOOL(vm.registers[src2]));
+                    vm.registers[dst] = BOOL_VAL(left_bool && right_bool);
                     break;
                 }
 
@@ -1627,14 +1952,49 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t src1 = READ_BYTE();
                     uint8_t src2 = READ_BYTE();
 
-                    if (!IS_BOOL(vm.registers[src1]) || !IS_BOOL(vm.registers[src2])) {
-                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                    "Operands must be bool");
-                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    // Convert operands to boolean using truthiness rules
+                    bool left_bool = false;
+                    bool right_bool = false;
+                    
+                    // Convert left operand to boolean
+                    if (IS_BOOL(vm.registers[src1])) {
+                        left_bool = AS_BOOL(vm.registers[src1]);
+                    } else if (IS_I32(vm.registers[src1])) {
+                        left_bool = AS_I32(vm.registers[src1]) != 0;
+                    } else if (IS_I64(vm.registers[src1])) {
+                        left_bool = AS_I64(vm.registers[src1]) != 0;
+                    } else if (IS_U32(vm.registers[src1])) {
+                        left_bool = AS_U32(vm.registers[src1]) != 0;
+                    } else if (IS_U64(vm.registers[src1])) {
+                        left_bool = AS_U64(vm.registers[src1]) != 0;
+                    } else if (IS_F64(vm.registers[src1])) {
+                        left_bool = AS_F64(vm.registers[src1]) != 0.0;
+                    } else if (IS_NIL(vm.registers[src1])) {
+                        left_bool = false;
+                    } else {
+                        left_bool = true; // Objects, strings, etc. are truthy
+                    }
+                    
+                    // Convert right operand to boolean
+                    if (IS_BOOL(vm.registers[src2])) {
+                        right_bool = AS_BOOL(vm.registers[src2]);
+                    } else if (IS_I32(vm.registers[src2])) {
+                        right_bool = AS_I32(vm.registers[src2]) != 0;
+                    } else if (IS_I64(vm.registers[src2])) {
+                        right_bool = AS_I64(vm.registers[src2]) != 0;
+                    } else if (IS_U32(vm.registers[src2])) {
+                        right_bool = AS_U32(vm.registers[src2]) != 0;
+                    } else if (IS_U64(vm.registers[src2])) {
+                        right_bool = AS_U64(vm.registers[src2]) != 0;
+                    } else if (IS_F64(vm.registers[src2])) {
+                        right_bool = AS_F64(vm.registers[src2]) != 0.0;
+                    } else if (IS_NIL(vm.registers[src2])) {
+                        right_bool = false;
+                    } else {
+                        right_bool = true; // Objects, strings, etc. are truthy
                     }
 
-                    vm.registers[dst] = BOOL_VAL(AS_BOOL(vm.registers[src1]) ||
-                                                AS_BOOL(vm.registers[src2]));
+                    vm.registers[dst] = BOOL_VAL(left_bool || right_bool);
                     break;
                 }
 
@@ -1642,13 +2002,27 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
 
-                    if (!IS_BOOL(vm.registers[src])) {
-                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                    "Operand must be bool");
-                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    // Convert operand to boolean using truthiness rules, then negate
+                    bool src_bool = false;
+                    if (IS_BOOL(vm.registers[src])) {
+                        src_bool = AS_BOOL(vm.registers[src]);
+                    } else if (IS_I32(vm.registers[src])) {
+                        src_bool = AS_I32(vm.registers[src]) != 0;
+                    } else if (IS_I64(vm.registers[src])) {
+                        src_bool = AS_I64(vm.registers[src]) != 0;
+                    } else if (IS_U32(vm.registers[src])) {
+                        src_bool = AS_U32(vm.registers[src]) != 0;
+                    } else if (IS_U64(vm.registers[src])) {
+                        src_bool = AS_U64(vm.registers[src]) != 0;
+                    } else if (IS_F64(vm.registers[src])) {
+                        src_bool = AS_F64(vm.registers[src]) != 0.0;
+                    } else if (IS_NIL(vm.registers[src])) {
+                        src_bool = false;
+                    } else {
+                        src_bool = true; // Objects, strings, etc. are truthy
                     }
 
-                    vm.registers[dst] = BOOL_VAL(!AS_BOOL(vm.registers[src]));
+                    vm.registers[dst] = BOOL_VAL(!src_bool);
                     break;
                 }
 
@@ -1673,6 +2047,37 @@ InterpretResult vm_run_dispatch(void) {
                     ObjString* res = allocateString(buf, newLen);
                     free(buf);
                     vm.registers[dst] = STRING_VAL(res);
+                    break;
+                }
+
+                case OP_TO_STRING_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src = READ_BYTE();
+                    Value val = vm.registers[src];
+                    char buffer[64];
+                    
+                    if (IS_I32(val)) {
+                        snprintf(buffer, sizeof(buffer), "%d", AS_I32(val));
+                    } else if (IS_I64(val)) {
+                        snprintf(buffer, sizeof(buffer), "%lld", (long long)AS_I64(val));
+                    } else if (IS_U32(val)) {
+                        snprintf(buffer, sizeof(buffer), "%u", AS_U32(val));
+                    } else if (IS_U64(val)) {
+                        snprintf(buffer, sizeof(buffer), "%llu", (unsigned long long)AS_U64(val));
+                    } else if (IS_F64(val)) {
+                        snprintf(buffer, sizeof(buffer), "%g", AS_F64(val));
+                    } else if (IS_BOOL(val)) {
+                        snprintf(buffer, sizeof(buffer), "%s", AS_BOOL(val) ? "true" : "false");
+                    } else if (IS_STRING(val)) {
+                        // Already a string, just copy
+                        vm.registers[dst] = val;
+                        break;
+                    } else {
+                        snprintf(buffer, sizeof(buffer), "nil");
+                    }
+                    
+                    ObjString* result = allocateString(buffer, (int)strlen(buffer));
+                    vm.registers[dst] = STRING_VAL(result);
                     break;
                 }
 

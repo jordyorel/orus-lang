@@ -568,6 +568,7 @@ typedef enum {
     OP_IMPORT_R,
     OP_GC_PAUSE,
     OP_GC_RESUME,
+    OP_NEG_I32_R,    // dst_reg, src_reg - Negate i32 value
     OP_HALT
 } OpCode;
 

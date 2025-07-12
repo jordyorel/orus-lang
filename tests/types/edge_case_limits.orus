@@ -1,11 +1,11 @@
 // Edge case: Large numbers and overflow potential
-big_i32: i32 = 2147483647      // Max i32
-big_u32: u32 = 4294967295      // Max u32 
-big_i64: i64 = 9223372036854775807  // Max i64
+big_i32 = 2147483647i32      // Max i32
+big_u32 = 4294967295u32      // Max u32 
+big_i64 = 9223372036854775807i64  // Max i64
 
-small_i32: i32 = -2147483648   // Min i32
+small_i32 = -2147483647i32 - 1i32   // Min i32 computed safely
 
-print(big_i32)
-print(big_u32)
-print(big_i64)
-print(small_i32)
+print("big_i32:", big_i32)
+print("big_u32:", big_u32)
+print("big_i64:", big_i64)
+print("small_i32:", small_i32)

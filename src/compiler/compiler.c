@@ -12,7 +12,6 @@
 static bool compileNode(ASTNode* node, Compiler* compiler);
 static int compileExpr(ASTNode* node, Compiler* compiler);
 
-
 void initCompiler(Compiler* compiler, Chunk* chunk, const char* fileName,
                    const char* source) {
     compiler->chunk = chunk;
@@ -102,6 +101,12 @@ static int compileExpr(ASTNode* node, Compiler* compiler) {
                 emitByte(compiler, OP_DIV_I32_R);
             } else if (strcmp(node->binary.op, "%") == 0) {
                 emitByte(compiler, OP_MOD_I32_R);
+            } else if (strcmp(node->binary.op, "and") == 0) {
+                // Use runtime polymorphic AND (handles any type to boolean conversion)
+                emitByte(compiler, OP_AND_BOOL_R);
+            } else if (strcmp(node->binary.op, "or") == 0) {
+                // Use runtime polymorphic OR (handles any type to boolean conversion)
+                emitByte(compiler, OP_OR_BOOL_R);
             } else {
                 compiler->hadError = true;
                 emitByte(compiler, OP_ADD_I32_R); // Fallback
@@ -138,11 +143,9 @@ static int compileExpr(ASTNode* node, Compiler* compiler) {
             } else if (strcmp(targetType, "u64") == 0) {
                 emitByte(compiler, OP_I32_TO_U64_R);
             } else if (strcmp(targetType, "bool") == 0) {
-                // Bool conversion not working yet, just copy value
-                emitByte(compiler, OP_MOVE);
+                emitByte(compiler, OP_I32_TO_BOOL_R);
             } else if (strcmp(targetType, "string") == 0) {
-                // String conversion not implemented yet, just copy value
-                emitByte(compiler, OP_MOVE);
+                emitByte(compiler, OP_TO_STRING_R);
             } else {
                 // Invalid or same-type cast, just copy the value
                 emitByte(compiler, OP_MOVE);
@@ -152,6 +155,32 @@ static int compileExpr(ASTNode* node, Compiler* compiler) {
             emitByte(compiler, (uint8_t)srcReg);
             freeRegister(compiler, srcReg);
             return dstReg;
+        }
+        case NODE_UNARY: {
+            int operand = compileExpr(node->unary.operand, compiler);
+            uint8_t dst = allocateRegister(compiler);
+            
+            if (strcmp(node->unary.op, "not") == 0) {
+                emitByte(compiler, OP_NOT_BOOL_R);
+                emitByte(compiler, dst);
+                emitByte(compiler, (uint8_t)operand);
+            } else if (strcmp(node->unary.op, "-") == 0) {
+                // Use proper single-pass negation opcode (in-place operation)
+                emitByte(compiler, OP_MOVE);  // First copy operand to destination
+                emitByte(compiler, dst);
+                emitByte(compiler, (uint8_t)operand);
+                emitByte(compiler, OP_NEG_I32_R);  // Then negate in-place (single register)
+                emitByte(compiler, dst);
+            } else {
+                // For now, unsupported unary operations
+                compiler->hadError = true;
+                emitByte(compiler, OP_MOVE); // Fallback
+                emitByte(compiler, dst);
+                emitByte(compiler, (uint8_t)operand);
+            }
+            
+            freeRegister(compiler, operand);
+            return dst;
         }
         default:
             compiler->hadError = true;
@@ -182,7 +211,33 @@ static bool compileNode(ASTNode* node, Compiler* compiler) {
             vm.variableNames[idx].name = name;
             vm.variableNames[idx].length = name->length;
             vm.globals[idx] = NIL_VAL;
-            vm.globalTypes[idx] = getPrimitiveType(TYPE_ANY);
+            
+            // CREATIVE SOLUTION: Type-aware single-pass compilation
+            // Extract the declared type from AST and set proper type for global variable
+            if (node->varDecl.typeAnnotation) {
+                const char* typeName = node->varDecl.typeAnnotation->typeAnnotation.name;
+                if (strcmp(typeName, "i32") == 0) {
+                    vm.globalTypes[idx] = getPrimitiveType(TYPE_I32);
+                } else if (strcmp(typeName, "i64") == 0) {
+                    vm.globalTypes[idx] = getPrimitiveType(TYPE_I64);
+                } else if (strcmp(typeName, "u32") == 0) {
+                    vm.globalTypes[idx] = getPrimitiveType(TYPE_U32);
+                } else if (strcmp(typeName, "u64") == 0) {
+                    vm.globalTypes[idx] = getPrimitiveType(TYPE_U64);
+                } else if (strcmp(typeName, "f64") == 0) {
+                    vm.globalTypes[idx] = getPrimitiveType(TYPE_F64);
+                } else if (strcmp(typeName, "bool") == 0) {
+                    vm.globalTypes[idx] = getPrimitiveType(TYPE_BOOL);
+                } else if (strcmp(typeName, "string") == 0) {
+                    vm.globalTypes[idx] = getPrimitiveType(TYPE_STRING);
+                } else {
+                    vm.globalTypes[idx] = getPrimitiveType(TYPE_ANY);
+                }
+            } else {
+                // Type inference: infer from literal value if no explicit type
+                vm.globalTypes[idx] = getPrimitiveType(TYPE_ANY);
+            }
+            
             symbol_table_set(&compiler->symbols, node->varDecl.name, idx);
             emitByte(compiler, OP_STORE_GLOBAL);
             emitByte(compiler, (uint8_t)idx);
@@ -201,6 +256,7 @@ static bool compileNode(ASTNode* node, Compiler* compiler) {
                 vm.variableNames[idx].name = name;
                 vm.variableNames[idx].length = name->length;
                 vm.globals[idx] = NIL_VAL;
+                // For assignments without declaration, keep as TYPE_ANY for flexibility
                 vm.globalTypes[idx] = getPrimitiveType(TYPE_ANY);
                 symbol_table_set(&compiler->symbols, node->assign.name, idx);
             }

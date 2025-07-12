@@ -16,5 +16,5 @@ print(float_complex)
 // Mixed operations that should be safe (same family)
 p: u32 = 100
 q: u32 = 200
-unsigned_ops = p + q - (p * 2)
+unsigned_ops = p + q - (p * 2u32)
 print(unsigned_ops)

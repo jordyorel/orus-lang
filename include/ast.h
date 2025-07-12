@@ -150,6 +150,7 @@ struct ASTNode {
         struct {
             ASTNode* expression;           // Expression to cast
             ASTNode* targetType;           // Target type
+            bool parenthesized;            // Whether the cast was explicitly parenthesized
         } cast;
     };
 };

@@ -1,0 +1,5 @@
+// Type safety: mixing signed and unsigned integers should fail
+a: i64 = 100
+b: u64 = 200
+result = a + b  // This should fail - signed/unsigned mismatch
+print(result)

@@ -1,0 +1,4 @@
+// Type safety: unary minus on non-numeric should fail
+a: bool = true
+result = -a  // This should fail - minus on boolean
+print(result)

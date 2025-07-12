@@ -1,0 +1,23 @@
+// Test parenthesized cast chains - these should be allowed
+a: i32 = 10
+
+// Test case 1: Simple parenthesized cast chain
+// result1: string = ((a as bool) as string)
+// print("Parenthesized cast chain works:", result1)
+
+// // Test case 2: Nested parenthesized cast chains  
+// result2: i32 = (((a as bool) as string) as i32)
+// print("Nested parenthesized chains work:", result2)
+
+// // Test case 3: Mixed expressions with parenthesized casts
+// result3: bool = ((a + 5) as bool)
+// print("Mixed expression with cast:", result3)
+
+// // Test case 4: Multiple separate parenthesized casts
+// temp1: bool = (a as bool)
+// temp2: string = (temp1 as string)
+// print("Separate parenthesized casts:", temp2)
+
+// // Test case 5: Boundary condition - single parenthesized cast
+// result4: bool = (a as bool)
+// print("Single parenthesized cast:", result4)

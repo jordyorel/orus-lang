@@ -1,0 +1,30 @@
+// Edge case tests for cast chain validation
+// These tests cover boundary conditions and complex scenarios
+
+// Edge case 1: Empty parentheses (should fail gracefully)
+// a: i32 = 10
+// result1 = (as bool)  // Should fail at parse time
+
+// Edge case 2: Deeply nested parentheses 
+a: i32 = 10
+result2: string = ((((a as bool)) as string))
+print("Deeply nested parentheses:", result2)
+
+// Edge case 3: Parentheses with arithmetic operations
+result3: bool = ((a + 5 * 2) as bool)
+print("Arithmetic in parenthesized cast:", result3)
+
+// Edge case 4: Complex type chain with intermediate variables
+temp1: bool = (a as bool)
+temp2: string = (temp1 as string)  
+temp3: i32 = (temp2 as i32)
+result4: f64 = (temp3 as f64)
+print("Multi-step cast chain:", result4)
+
+// Edge case 5: Parenthesized casts in expressions
+result5: i32 = ((a as bool) as i32) + ((10 as bool) as i32)  // All properly parenthesized
+print("Mixed cast patterns:", result5)
+
+// Edge case 6: Maximum reasonable nesting depth
+result6: i32 = ((((((a as bool) as string) as i32) as f64) as bool) as i32)
+print("Maximum nesting depth:", result6)

@@ -1,0 +1,5 @@
+// Test just addition
+p: u32 = 100
+// result1 = p * 2u32
+result1 = p * (2 as u32)
+print(result1)

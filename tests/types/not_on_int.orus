@@ -1,0 +1,4 @@
+// Type safety: unary not on non-boolean should fail
+a: i32 = 10
+result = not a  // This should fail - not on integer
+print(result)

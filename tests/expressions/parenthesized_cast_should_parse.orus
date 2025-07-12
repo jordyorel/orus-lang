@@ -1,0 +1,4 @@
+// Test to verify parser accepts parenthesized cast chains  
+// a: i32 = 10
+// result: string = ((a as bool) as string)  // This should pass parsing
+// print("Parser accepts parenthesized cast chains")

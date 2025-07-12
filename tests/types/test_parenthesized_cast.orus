@@ -1,0 +1,5 @@
+// Test proper way to do multi-step casting with intermediate variables
+a: i32 = 10
+temp: bool = a as bool  // Step 1: i32 -> bool
+result: string = temp as string  // Step 2: bool -> string
+print(result)

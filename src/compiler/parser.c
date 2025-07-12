@@ -124,6 +124,7 @@ static ASTNode* parsePrintStatement(void);
 static ASTNode* parseExpression(void);
 static ASTNode* parseBinaryExpression(int minPrec);
 static ASTNode* parsePrimaryExpression(void);
+static ASTNode* parseParenthesizedExpression(void); // New function for tracking parentheses
 static ASTNode* parseVariableDeclaration(bool isMutable, Token nameToken);
 static ASTNode* parseAssignOrVarList(bool isMutable, Token nameToken);
 static ASTNode* parseStatement(void);
@@ -1122,6 +1123,17 @@ static ASTNode* parseBinaryExpression(int minPrec) {
 
         // Handle 'as' operator specially for type casting
         if (operator.type == TOKEN_AS) {
+            // Check for chained casts - reject direct chains but allow parenthesized chains
+            if (left->type == NODE_CAST && !left->cast.parenthesized) {
+                // This is a direct chained cast like "a as bool as string"
+                // Reject this as ambiguous - user should use parentheses or intermediate variables
+                fprintf(stderr, "Error: Chained type casts are not allowed at line %d:%d. "
+                       "Use parentheses like '((a as type1) as type2)' or an intermediate variable for clarity.\n",
+                       operator.line, operator.column);
+                recursionDepth--;
+                return NULL;
+            }
+            
             // Parse the target type
             Token typeToken = nextToken();
             if (typeToken.type != TOKEN_IDENTIFIER && typeToken.type != TOKEN_INT &&
@@ -1148,6 +1160,7 @@ static ASTNode* parseBinaryExpression(int minPrec) {
             castNode->type = NODE_CAST;
             castNode->cast.expression = left;
             castNode->cast.targetType = targetType;
+            castNode->cast.parenthesized = false; // Default to false, will be set by parseParenthesizedExpression
             castNode->location.line = operator.line;
             castNode->location.column = operator.column;
             castNode->dataType = NULL;
@@ -1359,12 +1372,7 @@ static ASTNode* parsePrimaryExpression(void) {
             return node;
         }
         case TOKEN_LEFT_PAREN: {
-            ASTNode* expr = parseExpression();
-            Token closeParen = nextToken();
-            if (closeParen.type != TOKEN_RIGHT_PAREN) {
-                return NULL;
-            }
-            return expr;
+            return parseParenthesizedExpression();
         }
         default:
             return NULL;
@@ -1699,5 +1707,28 @@ static ASTNode* parseFunctionType(void) {
 void freeAST(ASTNode* node) {
     parser_arena_reset(&parserArena);
     (void)node;
+}
+
+// Parse parenthesized expressions and mark cast nodes as parenthesized
+// This enables proper distinction between direct cast chains and parenthesized ones
+static ASTNode* parseParenthesizedExpression(void) {
+    // TOKEN_LEFT_PAREN already consumed by caller
+    ASTNode* expr = parseExpression();
+    if (!expr) {
+        return NULL;
+    }
+    
+    Token closeParen = nextToken();
+    if (closeParen.type != TOKEN_RIGHT_PAREN) {
+        return NULL;
+    }
+    
+    // Mark cast nodes as parenthesized to allow chained casts with explicit parentheses
+    // This follows the zero-cost abstraction principle - only a boolean flag is needed
+    if (expr->type == NODE_CAST) {
+        expr->cast.parenthesized = true;
+    }
+    
+    return expr;
 }
 
