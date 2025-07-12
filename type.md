@@ -7,9 +7,9 @@
 | `c: bool = true`                         | Valid boolean                                    |
 | `d: string = "hello"`                    | Valid string                                     |
 | `e: i64 = 42i64`                         | Type-suffixed integer literal                    |
-| `x: i32 = 5; y: i32 = x + 10`            | Same type addition                               |
+| `x: i32 = 5, y: i32 = x + 10`            | Same type addition                               |
 | `result: string = (x as bool) as string` | Multi-step casting with intermediate parentheses |
-| `n: u32 = 100u32; r = n * 2u32`          | Typed literal matches variable                   |
+| `n: u32 = 100u32 r = n * 2u32`          | Typed literal matches variable                   |
 | `r: i64 = (x as i64) + 100i64`           | Explicit widening                                |
 | `flag: bool = 0 as bool`                 | Explicit i32→bool                                |
 | `result = flag as string`                | Explicit bool→string                             |
@@ -25,14 +25,14 @@
 | Expression                                    | Why It Fails                                        |
 | --------------------------------------------- | --------------------------------------------------- |
 | `a: i32 = "hi"`                               | Type mismatch (string → i32)                        |
-| `a = 10; b = "text"; r = a + b`               | Cannot add i32 and string                           |
+| `a = 10, b = "text", r = a + b`               | Cannot add i32 and string                           |
 | `x: i32 = true`                               | bool ≠ i32                                          |
 | `result = a as bool as string`                | Chained casts without parentheses are disallowed    |
-| `x: i64 = 42; y: u64 = 10u64; z = x + y`      | No implicit i64 + u64 allowed                       |
-| `a: i32 = 50; b: i64 = 100 as i32; r = a + b` | `100 as i32` still i32; adding i32 + i64 is invalid |
-| `x: u32 = 5; y = x * 2`                       | `2` is `i32`; mismatch with `u32`                   |
+| `x: i64 = 42, y: u64 = 10u64, z = x + y`      | No implicit i64 + u64 allowed                       |
+| `a: i32 = 50, b: i64 = 100 as i32, r = a + b` | `100 as i32` still i32; adding i32 + i64 is invalid |
+| `x: u32 = 5, y = x * 2`                       | `2` is `i32`; mismatch with `u32`                   |
 | `nullable: i32 = nil`                         | nil not allowed in non-nullable type                |
-| `x = 10; y = "10"; x == y`                    | Cannot compare i32 and string                       |
+| `x = 10, y = "10", x == y`                    | Cannot compare i32 and string                       |
 | `x: i32 = 5.5`                                | Implicit float → int not allowed                    |
 | `x = 3 + true`                                | Cannot add int and bool                             |
 | `fn add(a: i32, b: string) -> i32: a + b`     | Mismatched operand types                            |
@@ -53,12 +53,11 @@
 
 ---
 
-# 🧩 Optional Flexibility (Decide Based on Philosophy)
+# 🧩 Flexibility
 
 | Expression                  | Recommendation                                                           |
 | --------------------------- | ------------------------------------------------------------------------ |
 | `x = 5 as string`           | Allow only if `as string` is defined as safe coercion like `to_string()` |
-| `x: any = 5`                | Allow if `any` is part of the system, but require unwrapping for usage   |
 | `result = x ? "yes" : "no"` | Allow ternary only if condition is guaranteed `bool`                     |
 | `x = 10 + 20u32`            | Disallow unless both are explicitly same type                            |
 
