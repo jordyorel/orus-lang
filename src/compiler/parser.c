@@ -147,6 +147,8 @@ static int getOperatorPrecedence(TokenType type) {
         case TOKEN_PLUS:
         case TOKEN_MINUS:
             return 3;
+        case TOKEN_AS:
+            return 2;  // Cast operator has higher precedence than comparison
         case TOKEN_EQUAL_EQUAL:
         case TOKEN_BANG_EQUAL:
         case TOKEN_LESS:
@@ -1117,6 +1119,42 @@ static ASTNode* parseBinaryExpression(int minPrec) {
         }
 
         nextToken();
+
+        // Handle 'as' operator specially for type casting
+        if (operator.type == TOKEN_AS) {
+            // Parse the target type
+            Token typeToken = nextToken();
+            if (typeToken.type != TOKEN_IDENTIFIER && typeToken.type != TOKEN_INT &&
+                typeToken.type != TOKEN_I64 && typeToken.type != TOKEN_U32 &&
+                typeToken.type != TOKEN_U64 && typeToken.type != TOKEN_F64 &&
+                typeToken.type != TOKEN_BOOL && typeToken.type != TOKEN_STRING) {
+                recursionDepth--;
+                return NULL;
+            }
+
+            // Create a proper null-terminated string for the type name
+            size_t typeNameLen = typeToken.length;
+            char* typeName = parser_arena_alloc(&parserArena, typeNameLen + 1);
+            memcpy(typeName, typeToken.start, typeNameLen);
+            typeName[typeNameLen] = '\0';
+
+            ASTNode* targetType = new_node();
+            targetType->type = NODE_TYPE;
+            targetType->typeAnnotation.name = typeName;
+            targetType->location.line = typeToken.line;
+            targetType->location.column = typeToken.column;
+
+            ASTNode* castNode = new_node();
+            castNode->type = NODE_CAST;
+            castNode->cast.expression = left;
+            castNode->cast.targetType = targetType;
+            castNode->location.line = operator.line;
+            castNode->location.column = operator.column;
+            castNode->dataType = NULL;
+
+            left = castNode;
+            continue;
+        }
 
         ASTNode* right = parseBinaryExpression(prec + 1);
         if (!right) {

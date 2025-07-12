@@ -120,6 +120,39 @@ static int compileExpr(ASTNode* node, Compiler* compiler) {
             emitByte(compiler, r);
             return r;
         }
+        case NODE_CAST: {
+            int srcReg = compileExpr(node->cast.expression, compiler);
+            uint8_t dstReg = allocateRegister(compiler);
+            
+            // Get the target type name from the type annotation
+            const char* targetType = node->cast.targetType->typeAnnotation.name;
+            
+            // For now, assume source is i32 and determine conversion opcode
+            // TODO: This should use proper type inference
+            if (strcmp(targetType, "i64") == 0) {
+                emitByte(compiler, OP_I32_TO_I64_R);
+            } else if (strcmp(targetType, "f64") == 0) {
+                emitByte(compiler, OP_I32_TO_F64_R);
+            } else if (strcmp(targetType, "u32") == 0) {
+                emitByte(compiler, OP_I32_TO_U32_R);
+            } else if (strcmp(targetType, "u64") == 0) {
+                emitByte(compiler, OP_I32_TO_U64_R);
+            } else if (strcmp(targetType, "bool") == 0) {
+                // Bool conversion not working yet, just copy value
+                emitByte(compiler, OP_MOVE);
+            } else if (strcmp(targetType, "string") == 0) {
+                // String conversion not implemented yet, just copy value
+                emitByte(compiler, OP_MOVE);
+            } else {
+                // Invalid or same-type cast, just copy the value
+                emitByte(compiler, OP_MOVE);
+            }
+            
+            emitByte(compiler, dstReg);
+            emitByte(compiler, (uint8_t)srcReg);
+            freeRegister(compiler, srcReg);
+            return dstReg;
+        }
         default:
             compiler->hadError = true;
             return allocateRegister(compiler);

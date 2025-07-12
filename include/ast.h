@@ -40,7 +40,8 @@ typedef enum {
     NODE_FUNCTION,
     NODE_CALL,
     NODE_RETURN,
-    NODE_LET
+    NODE_LET,
+    NODE_CAST        // Add cast node for 'as' operator
 } NodeType;
 
 struct ASTNode {
@@ -146,6 +147,10 @@ struct ASTNode {
             char* name;                    // Variable name
             ASTNode* value;                // Value expression
         } let;
+        struct {
+            ASTNode* expression;           // Expression to cast
+            ASTNode* targetType;           // Target type
+        } cast;
     };
 };
 
