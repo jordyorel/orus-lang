@@ -528,18 +528,7 @@ typedef enum {
     OP_MOVE_I64,           // dst_reg, src_reg
     OP_MOVE_F64,           // dst_reg, src_reg
     
-    // Mixed-type arithmetic (i32 + f64 combinations)
-    OP_ADD_I32_F64,        // dst_reg, i32_reg, f64_reg -> f64 result
-    OP_SUB_I32_F64,        // dst_reg, i32_reg, f64_reg -> f64 result
-    OP_MUL_I32_F64,        // dst_reg, i32_reg, f64_reg -> f64 result
-    OP_DIV_I32_F64,        // dst_reg, i32_reg, f64_reg -> f64 result
-    OP_MOD_I32_F64,        // dst_reg, i32_reg, f64_reg -> f64 result
-    
-    OP_ADD_F64_I32,        // dst_reg, f64_reg, i32_reg -> f64 result
-    OP_SUB_F64_I32,        // dst_reg, f64_reg, i32_reg -> f64 result
-    OP_MUL_F64_I32,        // dst_reg, f64_reg, i32_reg -> f64 result
-    OP_DIV_F64_I32,        // dst_reg, f64_reg, i32_reg -> f64 result
-    OP_MOD_F64_I32,        // dst_reg, f64_reg, i32_reg -> f64 result
+    // TODO: Removed mixed-type op for Rust-style strict typing
 
     
     // Built-in functions
