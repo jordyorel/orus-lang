@@ -3,6 +3,7 @@
 #include "vm_constants.h"
 #include "vm_string_ops.h"
 #include "vm_arithmetic.h"
+#include "vm_control_flow.h"
 #include <math.h>
 
 // ✅ Auto-detect computed goto support
@@ -1811,29 +1812,20 @@ InterpretResult vm_run_dispatch(void) {
                 // Control flow
                 case OP_JUMP: {
                     uint16_t offset = READ_SHORT();
-                    vm.ip += offset;
+                    CF_JUMP(offset);
                     break;
                 }
 
                 case OP_JUMP_IF_NOT_R: {
                     uint8_t reg = READ_BYTE();
                     uint16_t offset = READ_SHORT();
-
-                    if (!IS_BOOL(vm.registers[reg])) {
-                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
-                                    "Condition must be boolean");
-                        RETURN(INTERPRET_RUNTIME_ERROR);
-                    }
-
-                    if (!AS_BOOL(vm.registers[reg])) {
-                        vm.ip += offset;
-                    }
+                    CF_JUMP_IF_NOT(reg, offset);
                     break;
                 }
 
                 case OP_LOOP: {
                     uint16_t offset = READ_SHORT();
-                    vm.ip -= offset;
+                    CF_LOOP(offset);
                     break;
                 }
 
@@ -2049,34 +2041,26 @@ InterpretResult vm_run_dispatch(void) {
                 // Short jump optimizations for performance  
                 case OP_JUMP_SHORT: {
                     uint8_t offset = READ_BYTE();
-                    vm.ip += offset;
+                    CF_JUMP_SHORT(offset);
                     break;
                 }
 
                 case OP_JUMP_BACK_SHORT: {
                     uint8_t offset = READ_BYTE();
-                    vm.ip -= offset;
+                    CF_JUMP_BACK_SHORT(offset);
                     break;
                 }
 
                 case OP_JUMP_IF_NOT_SHORT: {
                     uint8_t reg = READ_BYTE();
                     uint8_t offset = READ_BYTE();
-                    
-                    if (!IS_BOOL(vm.registers[reg])) {
-                        runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Condition must be boolean");
-                        return INTERPRET_RUNTIME_ERROR;
-                    }
-                    
-                    if (!AS_BOOL(vm.registers[reg])) {
-                        vm.ip += offset;
-                    }
+                    CF_JUMP_IF_NOT_SHORT(reg, offset);
                     break;
                 }
 
                 case OP_LOOP_SHORT: {
                     uint8_t offset = READ_BYTE();
-                    vm.ip -= offset;
+                    CF_LOOP_SHORT(offset);
                     break;
                 }
 

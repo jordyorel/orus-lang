@@ -4,8 +4,8 @@ This roadmap tracks progress of the virtual machine refactoring work. It follows
 
 ## Phase 1 – Code Organization Restructuring
 - [x] Split core initialization into **vm_core.c**
-- [ ] Move arithmetic helpers into **vm_arithmetic.c**
-- [ ] Move control flow operations into **vm_control_flow.c**
+- [x] Move arithmetic helpers into **vm_arithmetic.c**
+- [x] Move control flow operations into **vm_control_flow.c**
 - [ ] Move memory operations into **vm_memory.c**
 - [ ] Move typed register ops into **vm_typed_ops.c**
 - [ ] Move comparison ops into **vm_comparison.c**
