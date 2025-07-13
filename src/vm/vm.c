@@ -70,7 +70,7 @@ static InterpretResult run(void);
 void runtimeError(ErrorType type, SrcLocation location,
                    const char* format, ...);
 
-// Memory allocation handled in memory.c
+// Memory allocation handled in vm_memory.c
 
 // Value operations
 void printValue(Value value) {
