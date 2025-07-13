@@ -928,14 +928,22 @@ typedef enum {
 #define IS_CLOSURE(value) ((value).type == VAL_CLOSURE)
 
 // Function declarations
+/** Initialize the global VM state and subsystems. */
 void initVM(void);
+
+/** Release all resources associated with the VM. */
 void freeVM(void);
+
+/** Perform startup warmup routines for optimal JIT selection. */
 void warmupVM(void);
 #if USE_COMPUTED_GOTO
 extern void* vm_dispatch_table[OP_HALT + 1];
 void initDispatchTable(void);
 #endif
+/** Execute Orus source code provided as a null-terminated string. */
 InterpretResult interpret(const char* source);
+
+/** Execute an Orus module loaded from disk. */
 InterpretResult interpret_module(const char* path);
 
 // Chunk operations

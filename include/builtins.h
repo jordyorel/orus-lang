@@ -5,11 +5,21 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-// Print multiple values with optional newline.
+/**
+ * Print the provided values to standard output.
+ *
+ * @param args   Array of values to print.
+ * @param count  Number of values in the array.
+ * @param newline When true, append a newline after printing.
+ */
 void builtin_print(Value* args, int count, bool newline);
 
-// High-precision timestamp function
-// Returns milliseconds since an arbitrary but monotonic starting point
+/**
+ * Obtain a monotonic timestamp in milliseconds.
+ *
+ * The epoch is unspecified but monotonically increasing for the
+ * duration of the process.
+ */
 int32_t builtin_time_stamp(void);
 
 #endif // ORUS_BUILTINS_H

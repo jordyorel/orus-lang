@@ -5,6 +5,7 @@
 #include "vm.h"
 #include "vm_constants.h"
 #include "common.h"
+#include "vm_validation.h"
 
 #define CURRENT_LOCATION() ((SrcLocation){vm.filePath, vm.currentLine, vm.currentColumn})
 

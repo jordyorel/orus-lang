@@ -27,7 +27,7 @@ This roadmap tracks progress of the virtual machine refactoring work. It follows
 
 ## Phase 5 – Performance and Maintainability Enhancements
 - [x] Add profiling infrastructure
-- [ ] Add validation functions
-- [ ] Improve documentation for public APIs
+- [x] Add validation functions
+- [x] Improve documentation for public APIs
 
 This file will be updated as tasks are completed.

@@ -5214,6 +5214,7 @@ This comprehensive roadmap consolidates all documentation into a single referenc
 - Extracted typed register helpers into `vm_typed_ops.c` with macros in `vm_typed_ops.h`.
 - Applied `VM_ERROR_RETURN` macros across all VM modules for consistent error handling.
 - Added rope-based `ObjString` representation with global string interning.
+- Added `vm_validation.c` with helpers for register and frame validation.
 
 ### Versioning
 
