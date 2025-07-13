@@ -18,11 +18,10 @@
     do { \
         int32_t result; \
         if (unlikely(__builtin_add_overflow(a, b, &result))) { \
-            /* Overflow detected: promote to i64 and continue */ \
-            int64_t result64 = (int64_t)(a) + (int64_t)(b); \
-            vm.registers[dst_reg] = I64_VAL(result64); \
+            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
+                       "Integer overflow"); \
+            RETURN(INTERPRET_RUNTIME_ERROR); \
         } else { \
-            /* Hot path: no overflow, stay with i32 */ \
             vm.registers[dst_reg] = I32_VAL(result); \
         } \
     } while (0)
@@ -31,11 +30,10 @@
     do { \
         int32_t result; \
         if (unlikely(__builtin_sub_overflow(a, b, &result))) { \
-            /* Overflow detected: promote to i64 and continue */ \
-            int64_t result64 = (int64_t)(a) - (int64_t)(b); \
-            vm.registers[dst_reg] = I64_VAL(result64); \
+            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
+                       "Integer overflow"); \
+            RETURN(INTERPRET_RUNTIME_ERROR); \
         } else { \
-            /* Hot path: no overflow, stay with i32 */ \
             vm.registers[dst_reg] = I32_VAL(result); \
         } \
     } while (0)
@@ -44,11 +42,10 @@
     do { \
         int32_t result; \
         if (unlikely(__builtin_mul_overflow(a, b, &result))) { \
-            /* Overflow detected: promote to i64 and continue */ \
-            int64_t result64 = (int64_t)(a) * (int64_t)(b); \
-            vm.registers[dst_reg] = I64_VAL(result64); \
+            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
+                       "Integer overflow"); \
+            RETURN(INTERPRET_RUNTIME_ERROR); \
         } else { \
-            /* Hot path: no overflow, stay with i32 */ \
             vm.registers[dst_reg] = I32_VAL(result); \
         } \
     } while (0)
@@ -373,18 +370,7 @@ InterpretResult vm_run_dispatch(void) {
         vm_dispatch_table[OP_DIV_U64_TYPED] = &&LABEL_OP_DIV_U64_TYPED;
         vm_dispatch_table[OP_MOD_U64_TYPED] = &&LABEL_OP_MOD_U64_TYPED;
         
-        // Mixed-type arithmetic operations
-        vm_dispatch_table[OP_ADD_I32_F64] = &&LABEL_OP_ADD_I32_F64;
-        vm_dispatch_table[OP_SUB_I32_F64] = &&LABEL_OP_SUB_I32_F64;
-        vm_dispatch_table[OP_MUL_I32_F64] = &&LABEL_OP_MUL_I32_F64;
-        vm_dispatch_table[OP_DIV_I32_F64] = &&LABEL_OP_DIV_I32_F64;
-        vm_dispatch_table[OP_MOD_I32_F64] = &&LABEL_OP_MOD_I32_F64;
-        
-        vm_dispatch_table[OP_ADD_F64_I32] = &&LABEL_OP_ADD_F64_I32;
-        vm_dispatch_table[OP_SUB_F64_I32] = &&LABEL_OP_SUB_F64_I32;
-        vm_dispatch_table[OP_MUL_F64_I32] = &&LABEL_OP_MUL_F64_I32;
-        vm_dispatch_table[OP_DIV_F64_I32] = &&LABEL_OP_DIV_F64_I32;
-        vm_dispatch_table[OP_MOD_F64_I32] = &&LABEL_OP_MOD_F64_I32;
+        // TODO: Removed mixed-type op for Rust-style strict typing
         
         // Constant loading (also hot)
         vm_dispatch_table[OP_LOAD_I32_CONST] = &&LABEL_OP_LOAD_I32_CONST;
@@ -906,15 +892,75 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t dst = READ_BYTE();
             uint8_t src1 = READ_BYTE();
             uint8_t src2 = READ_BYTE();
-            
-            // Simple type validation - allow numeric types following Lua's design
-            if (!(IS_I32(vm.registers[src1]) || IS_I64(vm.registers[src1]) || IS_F64(vm.registers[src1])) ||
-                !(IS_I32(vm.registers[src2]) || IS_I64(vm.registers[src2]) || IS_F64(vm.registers[src2]))) {
-                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be numeric (i32, i64, or f64)");
+
+            // Strict type safety for numeric operations
+            if (vm.registers[src1].type != vm.registers[src2].type) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                            "Operands must be the same type. Use 'as' for explicit type conversion.");
                 RETURN(INTERPRET_RUNTIME_ERROR);
             }
-            // Use mixed-type division handling
-            HANDLE_MIXED_DIV(vm.registers[src1], vm.registers[src2], dst);
+
+            if (!(IS_I32(vm.registers[src1]) || IS_I64(vm.registers[src1]) ||
+                  IS_U32(vm.registers[src1]) || IS_U64(vm.registers[src1]) || IS_F64(vm.registers[src1]))) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                            "Operands must be numeric (i32, i64, u32, u64, or f64)");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+
+            if (IS_I32(vm.registers[src1])) {
+                int32_t a = AS_I32(vm.registers[src1]);
+                int32_t b = AS_I32(vm.registers[src2]);
+                if (b == 0) {
+                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Division by zero");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+                if (a == INT32_MIN && b == -1) {
+                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Integer overflow");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+                vm.registers[dst] = I32_VAL(a / b);
+            } else if (IS_I64(vm.registers[src1])) {
+                int64_t a = AS_I64(vm.registers[src1]);
+                int64_t b = AS_I64(vm.registers[src2]);
+                if (b == 0) {
+                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Division by zero");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+                if (a == INT64_MIN && b == -1) {
+                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Integer overflow");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+                vm.registers[dst] = I64_VAL(a / b);
+            } else if (IS_U32(vm.registers[src1])) {
+                uint32_t a = AS_U32(vm.registers[src1]);
+                uint32_t b = AS_U32(vm.registers[src2]);
+                if (b == 0) {
+                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Division by zero");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+                vm.registers[dst] = U32_VAL(a / b);
+            } else if (IS_U64(vm.registers[src1])) {
+                uint64_t a = AS_U64(vm.registers[src1]);
+                uint64_t b = AS_U64(vm.registers[src2]);
+                if (b == 0) {
+                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Division by zero");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+                vm.registers[dst] = U64_VAL(a / b);
+            } else {
+                double a = AS_F64(vm.registers[src1]);
+                double b = AS_F64(vm.registers[src2]);
+                if (b == 0.0) {
+                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Division by zero");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+                double res = a / b;
+                if (!isfinite(res)) {
+                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Floating-point overflow");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+                vm.registers[dst] = F64_VAL(res);
+            }
             DISPATCH();
         }
 
@@ -922,15 +968,75 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t dst = READ_BYTE();
             uint8_t src1 = READ_BYTE();
             uint8_t src2 = READ_BYTE();
-            
-            // Simple type validation - allow numeric types following Lua's design
-            if (!(IS_I32(vm.registers[src1]) || IS_I64(vm.registers[src1]) || IS_F64(vm.registers[src1])) ||
-                !(IS_I32(vm.registers[src2]) || IS_I64(vm.registers[src2]) || IS_F64(vm.registers[src2]))) {
-                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Operands must be numeric (i32, i64, or f64)");
+
+            // Strict type safety for numeric operations
+            if (vm.registers[src1].type != vm.registers[src2].type) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                            "Operands must be the same type. Use 'as' for explicit type conversion.");
                 RETURN(INTERPRET_RUNTIME_ERROR);
             }
-            // Use mixed-type modulo handling
-            HANDLE_MIXED_MOD(vm.registers[src1], vm.registers[src2], dst);
+
+            if (!(IS_I32(vm.registers[src1]) || IS_I64(vm.registers[src1]) ||
+                  IS_U32(vm.registers[src1]) || IS_U64(vm.registers[src1]) || IS_F64(vm.registers[src1]))) {
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0},
+                            "Operands must be numeric (i32, i64, u32, u64, or f64)");
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+
+            if (IS_I32(vm.registers[src1])) {
+                int32_t a = AS_I32(vm.registers[src1]);
+                int32_t b = AS_I32(vm.registers[src2]);
+                if (b == 0) {
+                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Division by zero");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+                if (a == INT32_MIN && b == -1) {
+                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Integer overflow");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+                vm.registers[dst] = I32_VAL(a % b);
+            } else if (IS_I64(vm.registers[src1])) {
+                int64_t a = AS_I64(vm.registers[src1]);
+                int64_t b = AS_I64(vm.registers[src2]);
+                if (b == 0) {
+                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Division by zero");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+                if (a == INT64_MIN && b == -1) {
+                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Integer overflow");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+                vm.registers[dst] = I64_VAL(a % b);
+            } else if (IS_U32(vm.registers[src1])) {
+                uint32_t a = AS_U32(vm.registers[src1]);
+                uint32_t b = AS_U32(vm.registers[src2]);
+                if (b == 0) {
+                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Division by zero");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+                vm.registers[dst] = U32_VAL(a % b);
+            } else if (IS_U64(vm.registers[src1])) {
+                uint64_t a = AS_U64(vm.registers[src1]);
+                uint64_t b = AS_U64(vm.registers[src2]);
+                if (b == 0) {
+                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Division by zero");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+                vm.registers[dst] = U64_VAL(a % b);
+            } else {
+                double a = AS_F64(vm.registers[src1]);
+                double b = AS_F64(vm.registers[src2]);
+                if (b == 0.0) {
+                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Division by zero");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+                double res = fmod(a, b);
+                if (!isfinite(res)) {
+                    runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, "Floating-point overflow");
+                    RETURN(INTERPRET_RUNTIME_ERROR);
+                }
+                vm.registers[dst] = F64_VAL(res);
+            }
             DISPATCH();
         }
 
@@ -2643,167 +2749,7 @@ InterpretResult vm_run_dispatch(void) {
         DISPATCH_TYPED();
     }
 
-    // Mixed-Type Arithmetic Operations (I32 op F64)
-    LABEL_OP_ADD_I32_F64: {
-        uint8_t dst = READ_BYTE();
-        uint8_t i32_reg = READ_BYTE();
-        uint8_t f64_reg = READ_BYTE();
-        
-        if (!IS_I32(vm.registers[i32_reg]) || !IS_F64(vm.registers[f64_reg])) {
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Mixed-type operation requires i32 and f64 operands");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        
-        double result = (double)AS_I32(vm.registers[i32_reg]) + AS_F64(vm.registers[f64_reg]);
-        vm.registers[dst] = F64_VAL(result);
-        
-        DISPATCH();
-    }
-
-    LABEL_OP_SUB_I32_F64: {
-        uint8_t dst = READ_BYTE();
-        uint8_t i32_reg = READ_BYTE();
-        uint8_t f64_reg = READ_BYTE();
-        
-        if (!IS_I32(vm.registers[i32_reg]) || !IS_F64(vm.registers[f64_reg])) {
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Mixed-type operation requires i32 and f64 operands");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        
-        double result = (double)AS_I32(vm.registers[i32_reg]) - AS_F64(vm.registers[f64_reg]);
-        vm.registers[dst] = F64_VAL(result);
-        
-        DISPATCH();
-    }
-
-    LABEL_OP_MUL_I32_F64: {
-        uint8_t dst = READ_BYTE();
-        uint8_t i32_reg = READ_BYTE();
-        uint8_t f64_reg = READ_BYTE();
-        
-        if (!IS_I32(vm.registers[i32_reg]) || !IS_F64(vm.registers[f64_reg])) {
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Mixed-type operation requires i32 and f64 operands");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        
-        double result = (double)AS_I32(vm.registers[i32_reg]) * AS_F64(vm.registers[f64_reg]);
-        vm.registers[dst] = F64_VAL(result);
-        
-        DISPATCH();
-    }
-
-    LABEL_OP_DIV_I32_F64: {
-        uint8_t dst = READ_BYTE();
-        uint8_t i32_reg = READ_BYTE();
-        uint8_t f64_reg = READ_BYTE();
-        
-        if (!IS_I32(vm.registers[i32_reg]) || !IS_F64(vm.registers[f64_reg])) {
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Mixed-type operation requires i32 and f64 operands");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        
-        double result = (double)AS_I32(vm.registers[i32_reg]) / AS_F64(vm.registers[f64_reg]);
-        vm.registers[dst] = F64_VAL(result);
-        
-        DISPATCH();
-    }
-
-    LABEL_OP_MOD_I32_F64: {
-        uint8_t dst = READ_BYTE();
-        uint8_t i32_reg = READ_BYTE();
-        uint8_t f64_reg = READ_BYTE();
-        
-        if (!IS_I32(vm.registers[i32_reg]) || !IS_F64(vm.registers[f64_reg])) {
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Mixed-type operation requires i32 and f64 operands");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        
-        double result = fmod((double)AS_I32(vm.registers[i32_reg]), AS_F64(vm.registers[f64_reg]));
-        vm.registers[dst] = F64_VAL(result);
-        
-        DISPATCH();
-    }
-
-    // Mixed-Type Arithmetic Operations (F64 op I32)
-    LABEL_OP_ADD_F64_I32: {
-        uint8_t dst = READ_BYTE();
-        uint8_t f64_reg = READ_BYTE();
-        uint8_t i32_reg = READ_BYTE();
-        
-        if (!IS_F64(vm.registers[f64_reg]) || !IS_I32(vm.registers[i32_reg])) {
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Mixed-type operation requires f64 and i32 operands");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        
-        double result = AS_F64(vm.registers[f64_reg]) + (double)AS_I32(vm.registers[i32_reg]);
-        vm.registers[dst] = F64_VAL(result);
-        
-        DISPATCH();
-    }
-
-    LABEL_OP_SUB_F64_I32: {
-        uint8_t dst = READ_BYTE();
-        uint8_t f64_reg = READ_BYTE();
-        uint8_t i32_reg = READ_BYTE();
-        
-        if (!IS_F64(vm.registers[f64_reg]) || !IS_I32(vm.registers[i32_reg])) {
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Mixed-type operation requires f64 and i32 operands");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        
-        double result = AS_F64(vm.registers[f64_reg]) - (double)AS_I32(vm.registers[i32_reg]);
-        vm.registers[dst] = F64_VAL(result);
-        
-        DISPATCH();
-    }
-
-    LABEL_OP_MUL_F64_I32: {
-        uint8_t dst = READ_BYTE();
-        uint8_t f64_reg = READ_BYTE();
-        uint8_t i32_reg = READ_BYTE();
-        
-        if (!IS_F64(vm.registers[f64_reg]) || !IS_I32(vm.registers[i32_reg])) {
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Mixed-type operation requires f64 and i32 operands");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        
-        double result = AS_F64(vm.registers[f64_reg]) * (double)AS_I32(vm.registers[i32_reg]);
-        vm.registers[dst] = F64_VAL(result);
-        
-        DISPATCH();
-    }
-
-    LABEL_OP_DIV_F64_I32: {
-        uint8_t dst = READ_BYTE();
-        uint8_t f64_reg = READ_BYTE();
-        uint8_t i32_reg = READ_BYTE();
-        
-        if (!IS_F64(vm.registers[f64_reg]) || !IS_I32(vm.registers[i32_reg])) {
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Mixed-type operation requires f64 and i32 operands");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        
-        double result = AS_F64(vm.registers[f64_reg]) / (double)AS_I32(vm.registers[i32_reg]);
-        vm.registers[dst] = F64_VAL(result);
-        
-        DISPATCH();
-    }
-
-    LABEL_OP_MOD_F64_I32: {
-        uint8_t dst = READ_BYTE();
-        uint8_t f64_reg = READ_BYTE();
-        uint8_t i32_reg = READ_BYTE();
-        
-        if (!IS_F64(vm.registers[f64_reg]) || !IS_I32(vm.registers[i32_reg])) {
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Mixed-type operation requires f64 and i32 operands");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        
-        double result = fmod(AS_F64(vm.registers[f64_reg]), (double)AS_I32(vm.registers[i32_reg]));
-        vm.registers[dst] = F64_VAL(result);
-        
-        DISPATCH();
-    }
+    // TODO: Removed mixed-type op for Rust-style strict typing
 
     LABEL_OP_TIME_STAMP: {
         uint8_t dst = READ_BYTE();
@@ -3013,8 +2959,9 @@ InterpretResult vm_run_dispatch(void) {
             RETURN(INTERPRET_RUNTIME_ERROR); \
         } \
         if (unlikely(a == INT32_MIN && b == -1)) { \
-            /* Division overflow: promote to i64 */ \
-            vm.registers[dst_reg] = I64_VAL((int64_t)INT32_MAX + 1); \
+            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
+                       "Integer overflow"); \
+            RETURN(INTERPRET_RUNTIME_ERROR); \
         } else { \
             vm.registers[dst_reg] = I32_VAL(a / b); \
         } \
@@ -3028,8 +2975,9 @@ InterpretResult vm_run_dispatch(void) {
             RETURN(INTERPRET_RUNTIME_ERROR); \
         } \
         if (unlikely(a == INT32_MIN && b == -1)) { \
-            /* Modulo overflow case: result is 0 */ \
-            vm.registers[dst_reg] = I32_VAL(0); \
+            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
+                       "Integer overflow"); \
+            RETURN(INTERPRET_RUNTIME_ERROR); \
         } else { \
             vm.registers[dst_reg] = I32_VAL(a % b); \
         } \
@@ -3040,9 +2988,9 @@ InterpretResult vm_run_dispatch(void) {
     do { \
         uint32_t result; \
         if (unlikely(__builtin_add_overflow(a, b, &result))) { \
-            /* Overflow detected: promote to u64 and continue */ \
-            uint64_t result64 = (uint64_t)(a) + (uint64_t)(b); \
-            vm.registers[dst_reg] = U64_VAL(result64); \
+            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
+                       "Unsigned integer overflow"); \
+            RETURN(INTERPRET_RUNTIME_ERROR); \
         } else { \
             vm.registers[dst_reg] = U32_VAL(result); \
         } \
@@ -3065,9 +3013,9 @@ InterpretResult vm_run_dispatch(void) {
     do { \
         uint32_t result; \
         if (unlikely(__builtin_mul_overflow(a, b, &result))) { \
-            /* Overflow detected: promote to u64 and continue */ \
-            uint64_t result64 = (uint64_t)(a) * (uint64_t)(b); \
-            vm.registers[dst_reg] = U64_VAL(result64); \
+            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
+                       "Unsigned integer overflow"); \
+            RETURN(INTERPRET_RUNTIME_ERROR); \
         } else { \
             vm.registers[dst_reg] = U32_VAL(result); \
         } \

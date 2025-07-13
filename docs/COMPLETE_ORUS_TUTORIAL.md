@@ -380,6 +380,7 @@ sum = num1 + num2  // Inferred as u32
 ```
 
 **Important:** Orus requires exact type matching - you cannot mix different numeric types without explicit conversion.
+Attempting operations like `i32 + i64` will raise a runtime error unless you cast one side to match the other.
 
 ---
 

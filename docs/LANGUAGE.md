@@ -513,6 +513,10 @@ check = true or expensive_call()     # never runs
 +   -   *   /   %   //   # floor division
 ```
 
+Numeric operators require both operands to have the **same type**. The VM does
+not perform implicit promotions like `i32` to `i64` or `f64`. Use explicit casts
+with `as` when combining different numeric types.
+
 ### Comparison
 
 ```orus
