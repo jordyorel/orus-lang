@@ -5201,6 +5201,8 @@ This comprehensive roadmap consolidates all documentation into a single referenc
 - Started TypedExpDesc infrastructure for Lua-style compiler migration.
 - Introduced `vm_control_flow.c` with macros in `vm_control_flow.h`.
 - Centralized arithmetic helpers in `vm_arithmetic.h` and removed duplicates from dispatch code.
+- Moved GC and allocator logic into `vm_memory.c`.
+- Extracted typed register helpers into `vm_typed_ops.c` with macros in `vm_typed_ops.h`.
 
 ### Versioning
 
