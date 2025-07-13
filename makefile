@@ -5,17 +5,9 @@ CC = gcc
 CFLAGS = -Wall -Wextra -O2 -g -std=c11
 LDFLAGS = -lm
 
-# Dispatch method selection (default: auto-detect)
-# Usage: make DISPATCH=switch or make DISPATCH=goto
-ifdef DISPATCH
-  ifeq ($(DISPATCH),switch)
-    CFLAGS += -DUSE_COMPUTED_GOTO=0
-  else ifeq ($(DISPATCH),goto)
-    CFLAGS += -DUSE_COMPUTED_GOTO=1
-  else
-    $(error Invalid DISPATCH value: $(DISPATCH). Use 'switch' or 'goto')
-  endif
-endif
+# Both dispatchers are always compiled and linked
+# The runtime will auto-detect the best dispatch method
+# No flags needed - both switch and goto dispatchers are included
 
 # Directories
 SRCDIR = src
@@ -298,12 +290,12 @@ help:
 	@echo "  clean     - Remove build artifacts"
 	@echo "  help      - Show this help message"
 	@echo ""
-	@echo "Dispatch method selection:"
-	@echo "  DISPATCH=switch - Force switch-based dispatch"
-	@echo "  DISPATCH=goto   - Force computed goto dispatch"
-	@echo "  (default)       - Auto-detect best dispatch method"
+	@echo "Build configuration:"
+	@echo "  Both switch and goto dispatchers are always compiled and linked"
+	@echo "  Runtime automatically selects the best dispatch method"
+	@echo "  No flags needed - both dispatchers are included by default"
 	@echo ""
 	@echo "Examples:"
-	@echo "  make DISPATCH=switch    - Build with switch dispatch"
-	@echo "  make benchmark DISPATCH=goto  - Benchmark with goto dispatch"
-	@echo "  make test DISPATCH=switch     - Test with switch dispatch"
+	@echo "  make           - Build with both dispatchers (default)"
+	@echo "  make test      - Run tests with both dispatchers available"
+	@echo "  make benchmark - Run benchmarks with optimal dispatch"
