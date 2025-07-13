@@ -20,7 +20,9 @@ INCLUDES = -I$(INCDIR)
 
 # Source files
 COMPILER_SRCS = $(SRCDIR)/compiler/compiler.c $(SRCDIR)/compiler/lexer.c $(SRCDIR)/compiler/parser.c $(SRCDIR)/compiler/symbol_table.c
-VM_SRCS = $(SRCDIR)/vm/vm_core.c $(SRCDIR)/vm/vm.c $(SRCDIR)/vm/memory.c $(SRCDIR)/vm/debug.c $(SRCDIR)/vm/builtins.c $(SRCDIR)/vm/vm_dispatch.c $(SRCDIR)/type/type_representation.c $(SRCDIR)/error_reporting.c
+
+VM_SRCS = $(SRCDIR)/vm/vm_core.c $(SRCDIR)/vm/vm.c $(SRCDIR)/vm/vm_memory.c $(SRCDIR)/vm/debug.c $(SRCDIR)/vm/builtins.c $(SRCDIR)/vm/vm_arithmetic.c $(SRCDIR)/vm/vm_control_flow.c $(SRCDIR)/vm/vm_typed_ops.c $(SRCDIR)/vm/vm_string_ops.c $(SRCDIR)/vm/vm_dispatch_switch.c $(SRCDIR)/vm/vm_dispatch_goto.c $(SRCDIR)/type/type_representation.c $(SRCDIR)/error_reporting.c
+
 REPL_SRC = $(SRCDIR)/repl.c
 MAIN_SRC = $(SRCDIR)/main.c
 

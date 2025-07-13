@@ -5,6 +5,8 @@
 #include "vm_arithmetic.h"
 #include "vm_control_flow.h"
 #include "vm_comparison.h"
+#include "vm_typed_ops.h"
+
 #include <math.h>
 
 // ✅ Auto-detect computed goto support
@@ -1954,408 +1956,179 @@ InterpretResult vm_run_dispatch(void) {
 
     // Typed arithmetic operations for maximum performance (bypass Value boxing)
     LABEL_OP_ADD_I32_TYPED: {
-        uint8_t dst = *vm.ip++;
-        uint8_t left = *vm.ip++;
-        uint8_t right = *vm.ip++;
-        
-        vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[left] + vm.typed_regs.i32_regs[right];
-        
+        VM_TYPED_BIN_OP(i32_regs, +, REG_TYPE_I32);
         DISPATCH_TYPED();
     }
 
     LABEL_OP_SUB_I32_TYPED: {
-        uint8_t dst = *vm.ip++;
-        uint8_t left = *vm.ip++;
-        uint8_t right = *vm.ip++;
-        
-        vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[left] - vm.typed_regs.i32_regs[right];
-        
+        VM_TYPED_BIN_OP(i32_regs, -, REG_TYPE_I32);
         DISPATCH_TYPED();
     }
 
     LABEL_OP_MUL_I32_TYPED: {
-        uint8_t dst = *vm.ip++;
-        uint8_t left = *vm.ip++;
-        uint8_t right = *vm.ip++;
-        
-        vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[left] * vm.typed_regs.i32_regs[right];
-        
+        VM_TYPED_BIN_OP(i32_regs, *, REG_TYPE_I32);
         DISPATCH_TYPED();
     }
 
     LABEL_OP_DIV_I32_TYPED: {
-        uint8_t dst = *vm.ip++;
-        uint8_t left = *vm.ip++;
-        uint8_t right = *vm.ip++;
-        
-        // Keep zero check for safety, but remove type checks
-        if (vm.typed_regs.i32_regs[right] == 0) {
-            runtimeError(ERROR_RUNTIME, (SrcLocation){NULL, 0, 0}, "Division by zero");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        
-        vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[left] / vm.typed_regs.i32_regs[right];
-        
+        VM_TYPED_DIV_OP(i32_regs, REG_TYPE_I32);
         DISPATCH_TYPED();
     }
 
     LABEL_OP_MOD_I32_TYPED: {
-        uint8_t dst = *vm.ip++;
-        uint8_t left = *vm.ip++;
-        uint8_t right = *vm.ip++;
-        
-        if (vm.typed_regs.i32_regs[right] == 0) {
-            runtimeError(ERROR_RUNTIME, (SrcLocation){NULL, 0, 0}, "Modulo by zero");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        
-        vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[left] % vm.typed_regs.i32_regs[right];
-        
+        VM_TYPED_MOD_OP(i32_regs, REG_TYPE_I32, vm.typed_regs.i32_regs[left] % vm.typed_regs.i32_regs[right]);
         DISPATCH_TYPED();
     }
 
     LABEL_OP_ADD_I64_TYPED: {
-        uint8_t dst = *vm.ip++;
-        uint8_t left = *vm.ip++;
-        uint8_t right = *vm.ip++;
-        
-        vm.typed_regs.i64_regs[dst] = vm.typed_regs.i64_regs[left] + vm.typed_regs.i64_regs[right];
-        
+        VM_TYPED_BIN_OP(i64_regs, +, REG_TYPE_I64);
         DISPATCH_TYPED();
     }
 
     LABEL_OP_SUB_I64_TYPED: {
-        uint8_t dst = *vm.ip++;
-        uint8_t left = *vm.ip++;
-        uint8_t right = *vm.ip++;
-        
-        vm.typed_regs.i64_regs[dst] = vm.typed_regs.i64_regs[left] - vm.typed_regs.i64_regs[right];
-        
+        VM_TYPED_BIN_OP(i64_regs, -, REG_TYPE_I64);
         DISPATCH_TYPED();
     }
 
     LABEL_OP_MUL_I64_TYPED: {
-        uint8_t dst = *vm.ip++;
-        uint8_t left = *vm.ip++;
-        uint8_t right = *vm.ip++;
-        
-        vm.typed_regs.i64_regs[dst] = vm.typed_regs.i64_regs[left] * vm.typed_regs.i64_regs[right];
-        
+        VM_TYPED_BIN_OP(i64_regs, *, REG_TYPE_I64);
         DISPATCH_TYPED();
     }
 
     LABEL_OP_DIV_I64_TYPED: {
-        uint8_t dst = *vm.ip++;
-        uint8_t left = *vm.ip++;
-        uint8_t right = *vm.ip++;
-        
-        if (vm.typed_regs.i64_regs[right] == 0) {
-            runtimeError(ERROR_RUNTIME, (SrcLocation){NULL, 0, 0}, "Division by zero");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        
-        vm.typed_regs.i64_regs[dst] = vm.typed_regs.i64_regs[left] / vm.typed_regs.i64_regs[right];
-        
+        VM_TYPED_DIV_OP(i64_regs, REG_TYPE_I64);
         DISPATCH_TYPED();
     }
 
     LABEL_OP_MOD_I64_TYPED: {
-        uint8_t dst = *vm.ip++;
-        uint8_t left = *vm.ip++;
-        uint8_t right = *vm.ip++;
-        
-        if (vm.typed_regs.i64_regs[right] == 0) {
-            runtimeError(ERROR_RUNTIME, (SrcLocation){NULL, 0, 0}, "Division by zero");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        
-        vm.typed_regs.i64_regs[dst] = vm.typed_regs.i64_regs[left] % vm.typed_regs.i64_regs[right];
-        
+        VM_TYPED_MOD_OP(i64_regs, REG_TYPE_I64, vm.typed_regs.i64_regs[left] % vm.typed_regs.i64_regs[right]);
         DISPATCH_TYPED();
     }
 
     LABEL_OP_ADD_F64_TYPED: {
-        uint8_t dst = *vm.ip++;
-        uint8_t left = *vm.ip++;
-        uint8_t right = *vm.ip++;
-        
-        vm.typed_regs.f64_regs[dst] = vm.typed_regs.f64_regs[left] + vm.typed_regs.f64_regs[right];
-        
+        VM_TYPED_BIN_OP(f64_regs, +, REG_TYPE_F64);
         DISPATCH_TYPED();
     }
 
     LABEL_OP_SUB_F64_TYPED: {
-        uint8_t dst = *vm.ip++;
-        uint8_t left = *vm.ip++;
-        uint8_t right = *vm.ip++;
-        
-        vm.typed_regs.f64_regs[dst] = vm.typed_regs.f64_regs[left] - vm.typed_regs.f64_regs[right];
-        
+        VM_TYPED_BIN_OP(f64_regs, -, REG_TYPE_F64);
         DISPATCH_TYPED();
     }
 
     LABEL_OP_MUL_F64_TYPED: {
-        uint8_t dst = *vm.ip++;
-        uint8_t left = *vm.ip++;
-        uint8_t right = *vm.ip++;
-        
-        vm.typed_regs.f64_regs[dst] = vm.typed_regs.f64_regs[left] * vm.typed_regs.f64_regs[right];
-        
+        VM_TYPED_BIN_OP(f64_regs, *, REG_TYPE_F64);
         DISPATCH_TYPED();
     }
 
     LABEL_OP_DIV_F64_TYPED: {
-        uint8_t dst = *vm.ip++;
-        uint8_t left = *vm.ip++;
-        uint8_t right = *vm.ip++;
-        
-        vm.typed_regs.f64_regs[dst] = vm.typed_regs.f64_regs[left] / vm.typed_regs.f64_regs[right];
-        
+        VM_TYPED_DIV_OP(f64_regs, REG_TYPE_F64);
         DISPATCH_TYPED();
     }
 
     LABEL_OP_MOD_F64_TYPED: {
-        uint8_t dst = *vm.ip++;
-        uint8_t left = *vm.ip++;
-        uint8_t right = *vm.ip++;
-        
-        vm.typed_regs.f64_regs[dst] = fmod(vm.typed_regs.f64_regs[left], vm.typed_regs.f64_regs[right]);
-        
+        VM_TYPED_MOD_OP(f64_regs, REG_TYPE_F64, fmod(vm.typed_regs.f64_regs[left], vm.typed_regs.f64_regs[right]));
         DISPATCH_TYPED();
     }
 
     LABEL_OP_LT_I32_TYPED: {
-        uint8_t dst = *vm.ip++;
-        uint8_t left = *vm.ip++;
-        uint8_t right = *vm.ip++;
-        
-        vm.typed_regs.bool_regs[dst] = vm.typed_regs.i32_regs[left] < vm.typed_regs.i32_regs[right];
-        
+        VM_TYPED_CMP_OP(i32_regs, <);
         DISPATCH_TYPED();
     }
 
     LABEL_OP_LE_I32_TYPED: {
-        uint8_t dst = *vm.ip++;
-        uint8_t left = *vm.ip++;
-        uint8_t right = *vm.ip++;
-        
-        vm.typed_regs.bool_regs[dst] = vm.typed_regs.i32_regs[left] <= vm.typed_regs.i32_regs[right];
-        
+        VM_TYPED_CMP_OP(i32_regs, <=);
         DISPATCH_TYPED();
     }
 
     LABEL_OP_GT_I32_TYPED: {
-        uint8_t dst = *vm.ip++;
-        uint8_t left = *vm.ip++;
-        uint8_t right = *vm.ip++;
-        
-        vm.typed_regs.bool_regs[dst] = vm.typed_regs.i32_regs[left] > vm.typed_regs.i32_regs[right];
-        
+        VM_TYPED_CMP_OP(i32_regs, >);
         DISPATCH_TYPED();
     }
 
     LABEL_OP_GE_I32_TYPED: {
-        uint8_t dst = *vm.ip++;
-        uint8_t left = *vm.ip++;
-        uint8_t right = *vm.ip++;
-        
-        vm.typed_regs.bool_regs[dst] = vm.typed_regs.i32_regs[left] >= vm.typed_regs.i32_regs[right];
-        
+        VM_TYPED_CMP_OP(i32_regs, >=);
         DISPATCH_TYPED();
     }
 
     LABEL_OP_LOAD_I32_CONST: {
-        uint8_t reg = READ_BYTE();
-        uint16_t constantIndex = READ_SHORT();
-        int32_t value = READ_CONSTANT(constantIndex).as.i32;
-        
-        vm.typed_regs.i32_regs[reg] = value;
-        vm.typed_regs.reg_types[reg] = REG_TYPE_I32;
-        
+        VM_TYPED_LOAD_CONST(i32_regs, i32, REG_TYPE_I32);
         DISPATCH();
     }
 
     LABEL_OP_LOAD_I64_CONST: {
-        uint8_t reg = READ_BYTE();
-        uint16_t constantIndex = READ_SHORT();
-        int64_t value = READ_CONSTANT(constantIndex).as.i64;
-        
-        vm.typed_regs.i64_regs[reg] = value;
-        vm.typed_regs.reg_types[reg] = REG_TYPE_I64;
-        
+        VM_TYPED_LOAD_CONST(i64_regs, i64, REG_TYPE_I64);
         DISPATCH();
     }
 
     LABEL_OP_LOAD_F64_CONST: {
-        uint8_t reg = READ_BYTE();
-        uint16_t constantIndex = READ_SHORT();
-        double value = READ_CONSTANT(constantIndex).as.f64;
-        
-        vm.typed_regs.f64_regs[reg] = value;
-        vm.typed_regs.reg_types[reg] = REG_TYPE_F64;
-        
+        VM_TYPED_LOAD_CONST(f64_regs, f64, REG_TYPE_F64);
         DISPATCH();
     }
 
     LABEL_OP_MOVE_I32: {
-        uint8_t dst = READ_BYTE();
-        uint8_t src = READ_BYTE();
-        
-        vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[src];
-        vm.typed_regs.reg_types[dst] = REG_TYPE_I32;
-        
+        VM_TYPED_MOVE(i32_regs, REG_TYPE_I32);
         DISPATCH();
     }
 
     LABEL_OP_MOVE_I64: {
-        uint8_t dst = READ_BYTE();
-        uint8_t src = READ_BYTE();
-        
-        vm.typed_regs.i64_regs[dst] = vm.typed_regs.i64_regs[src];
-        vm.typed_regs.reg_types[dst] = REG_TYPE_I64;
-        
+        VM_TYPED_MOVE(i64_regs, REG_TYPE_I64);
         DISPATCH();
     }
 
     LABEL_OP_MOVE_F64: {
-        uint8_t dst = READ_BYTE();
-        uint8_t src = READ_BYTE();
-        
-        vm.typed_regs.f64_regs[dst] = vm.typed_regs.f64_regs[src];
-        vm.typed_regs.reg_types[dst] = REG_TYPE_F64;
-        
+        VM_TYPED_MOVE(f64_regs, REG_TYPE_F64);
         DISPATCH();
     }
 
     // U32 Typed Operations
     LABEL_OP_ADD_U32_TYPED: {
-        uint8_t dst = *vm.ip++;
-        uint8_t left = *vm.ip++;
-        uint8_t right = *vm.ip++;
-        
-        vm.typed_regs.u32_regs[dst] = vm.typed_regs.u32_regs[left] + vm.typed_regs.u32_regs[right];
-        vm.typed_regs.reg_types[dst] = REG_TYPE_U32;
-        
+        VM_TYPED_BIN_OP(u32_regs, +, REG_TYPE_U32);
         DISPATCH_TYPED();
     }
 
     LABEL_OP_SUB_U32_TYPED: {
-        uint8_t dst = *vm.ip++;
-        uint8_t left = *vm.ip++;
-        uint8_t right = *vm.ip++;
-        
-        vm.typed_regs.u32_regs[dst] = vm.typed_regs.u32_regs[left] - vm.typed_regs.u32_regs[right];
-        vm.typed_regs.reg_types[dst] = REG_TYPE_U32;
-        
+        VM_TYPED_BIN_OP(u32_regs, -, REG_TYPE_U32);
         DISPATCH_TYPED();
     }
 
     LABEL_OP_MUL_U32_TYPED: {
-        uint8_t dst = *vm.ip++;
-        uint8_t left = *vm.ip++;
-        uint8_t right = *vm.ip++;
-        
-        vm.typed_regs.u32_regs[dst] = vm.typed_regs.u32_regs[left] * vm.typed_regs.u32_regs[right];
-        vm.typed_regs.reg_types[dst] = REG_TYPE_U32;
-        
+        VM_TYPED_BIN_OP(u32_regs, *, REG_TYPE_U32);
         DISPATCH_TYPED();
     }
 
     LABEL_OP_DIV_U32_TYPED: {
-        uint8_t dst = *vm.ip++;
-        uint8_t left = *vm.ip++;
-        uint8_t right = *vm.ip++;
-        
-        if (vm.typed_regs.u32_regs[right] == 0) {
-            runtimeError(ERROR_RUNTIME, (SrcLocation){NULL, 0, 0}, "Division by zero");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        
-        vm.typed_regs.u32_regs[dst] = vm.typed_regs.u32_regs[left] / vm.typed_regs.u32_regs[right];
-        vm.typed_regs.reg_types[dst] = REG_TYPE_U32;
-        
+        VM_TYPED_DIV_OP(u32_regs, REG_TYPE_U32);
         DISPATCH_TYPED();
     }
 
     LABEL_OP_MOD_U32_TYPED: {
-        uint8_t dst = *vm.ip++;
-        uint8_t left = *vm.ip++;
-        uint8_t right = *vm.ip++;
-        
-        if (vm.typed_regs.u32_regs[right] == 0) {
-            runtimeError(ERROR_RUNTIME, (SrcLocation){NULL, 0, 0}, "Division by zero");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        
-        vm.typed_regs.u32_regs[dst] = vm.typed_regs.u32_regs[left] % vm.typed_regs.u32_regs[right];
-        vm.typed_regs.reg_types[dst] = REG_TYPE_U32;
-        
+        VM_TYPED_MOD_OP(u32_regs, REG_TYPE_U32, vm.typed_regs.u32_regs[left] % vm.typed_regs.u32_regs[right]);
         DISPATCH_TYPED();
     }
 
     // U64 Typed Operations
     LABEL_OP_ADD_U64_TYPED: {
-        uint8_t dst = *vm.ip++;
-        uint8_t left = *vm.ip++;
-        uint8_t right = *vm.ip++;
-        
-        vm.typed_regs.u64_regs[dst] = vm.typed_regs.u64_regs[left] + vm.typed_regs.u64_regs[right];
-        vm.typed_regs.reg_types[dst] = REG_TYPE_U64;
-        
+        VM_TYPED_BIN_OP(u64_regs, +, REG_TYPE_U64);
         DISPATCH_TYPED();
     }
 
     LABEL_OP_SUB_U64_TYPED: {
-        uint8_t dst = *vm.ip++;
-        uint8_t left = *vm.ip++;
-        uint8_t right = *vm.ip++;
-        
-        vm.typed_regs.u64_regs[dst] = vm.typed_regs.u64_regs[left] - vm.typed_regs.u64_regs[right];
-        vm.typed_regs.reg_types[dst] = REG_TYPE_U64;
-        
+        VM_TYPED_BIN_OP(u64_regs, -, REG_TYPE_U64);
         DISPATCH_TYPED();
     }
 
     LABEL_OP_MUL_U64_TYPED: {
-        uint8_t dst = *vm.ip++;
-        uint8_t left = *vm.ip++;
-        uint8_t right = *vm.ip++;
-        
-        vm.typed_regs.u64_regs[dst] = vm.typed_regs.u64_regs[left] * vm.typed_regs.u64_regs[right];
-        vm.typed_regs.reg_types[dst] = REG_TYPE_U64;
-        
+        VM_TYPED_BIN_OP(u64_regs, *, REG_TYPE_U64);
         DISPATCH_TYPED();
     }
 
     LABEL_OP_DIV_U64_TYPED: {
-        uint8_t dst = *vm.ip++;
-        uint8_t left = *vm.ip++;
-        uint8_t right = *vm.ip++;
-        
-        if (vm.typed_regs.u64_regs[right] == 0) {
-            runtimeError(ERROR_RUNTIME, (SrcLocation){NULL, 0, 0}, "Division by zero");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        
-        vm.typed_regs.u64_regs[dst] = vm.typed_regs.u64_regs[left] / vm.typed_regs.u64_regs[right];
-        vm.typed_regs.reg_types[dst] = REG_TYPE_U64;
-        
+        VM_TYPED_DIV_OP(u64_regs, REG_TYPE_U64);
         DISPATCH_TYPED();
     }
 
     LABEL_OP_MOD_U64_TYPED: {
-        uint8_t dst = *vm.ip++;
-        uint8_t left = *vm.ip++;
-        uint8_t right = *vm.ip++;
-        
-        if (vm.typed_regs.u64_regs[right] == 0) {
-            runtimeError(ERROR_RUNTIME, (SrcLocation){NULL, 0, 0}, "Division by zero");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        
-        vm.typed_regs.u64_regs[dst] = vm.typed_regs.u64_regs[left] % vm.typed_regs.u64_regs[right];
-        vm.typed_regs.reg_types[dst] = REG_TYPE_U64;
-        
+        VM_TYPED_MOD_OP(u64_regs, REG_TYPE_U64, vm.typed_regs.u64_regs[left] % vm.typed_regs.u64_regs[right]);
         DISPATCH_TYPED();
     }
 

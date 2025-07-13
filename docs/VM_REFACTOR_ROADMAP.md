@@ -6,9 +6,9 @@ This roadmap tracks progress of the virtual machine refactoring work. It follows
 - [x] Split core initialization into **vm_core.c**
 - [x] Move arithmetic helpers into **vm_arithmetic.c**
 - [x] Move control flow operations into **vm_control_flow.c**
-- [ ] Move memory operations into **vm_memory.c**
-- [ ] Move typed register ops into **vm_typed_ops.c**
-- [x] Move comparison ops into **vm_comparison.c**
+- [x] Move memory operations into **vm_memory.c**
+- [x] Move typed register ops into **vm_typed_ops.c**
+- [ ] Move comparison ops into **vm_comparison.c**
 - [x] Create **vm_string_ops.c** with string builder
 - [x] Create central **vm_dispatch.c** including all modules
 - [x] Introduce **vm_internal.h** for shared macros
