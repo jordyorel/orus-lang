@@ -1,0 +1,7 @@
+// Explicit casting should allow mixed-type arithmetic
+// Expected: compile and run successfully
+
+x: i32 = 5
+y: i64 = 100i64
+z = (x as i64) + y
+print(z)

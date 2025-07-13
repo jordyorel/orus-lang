@@ -1,0 +1,6 @@
+// Cross-type comparison requires explicit cast
+// Expected: compile and run successfully
+
+x: i32 = 10
+y: f64 = 10.0
+print((x as f64) - y)
