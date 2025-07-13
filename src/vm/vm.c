@@ -158,7 +158,7 @@ Type* getPrimitiveType(TypeKind kind) {
 // Runtime error handling
 void runtimeError(ErrorType type, SrcLocation location,
                          const char* format, ...) {
-    char buffer[256];
+    char buffer[ERROR_BUFFER_SIZE];
     va_list args;
     va_start(args, format);
     vsnprintf(buffer, sizeof(buffer), format, args);

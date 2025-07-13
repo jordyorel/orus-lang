@@ -23,6 +23,14 @@ static Arena parserArena;
 
 // Parser recursion depth tracking
 #define MAX_RECURSION_DEPTH 1000
+
+#define PREC_MUL_DIV_MOD 4
+#define PREC_ADD_SUB 3
+#define PREC_CAST 2
+#define PREC_COMPARISON 2
+#define PREC_AND 1
+#define PREC_OR 0
+#define PREC_NONE -1
 static int recursionDepth = 0;
 
 static void arena_init(Arena* a, size_t initial) {
@@ -145,25 +153,25 @@ static int getOperatorPrecedence(TokenType type) {
         case TOKEN_STAR:
         case TOKEN_SLASH:
         case TOKEN_MODULO:
-            return 4;
+            return PREC_MUL_DIV_MOD;
         case TOKEN_PLUS:
         case TOKEN_MINUS:
-            return 3;
+            return PREC_ADD_SUB;
         case TOKEN_AS:
-            return 2;  // Cast operator has higher precedence than comparison
+            return PREC_CAST;  // Cast operator has higher precedence than comparison
         case TOKEN_EQUAL_EQUAL:
         case TOKEN_BANG_EQUAL:
         case TOKEN_LESS:
         case TOKEN_GREATER:
         case TOKEN_LESS_EQUAL:
         case TOKEN_GREATER_EQUAL:
-            return 2;
+            return PREC_COMPARISON;
         case TOKEN_AND:
-            return 1;
+            return PREC_AND;
         case TOKEN_OR:
-            return 0;
+            return PREC_OR;
         default:
-            return -1;
+            return PREC_NONE;
     }
 }
 
@@ -187,7 +195,7 @@ static const char* getOperatorString(TokenType type) {
 }
 
 ASTNode* parseSource(const char* source) {
-    arena_init(&parserArena, 1 << 16);
+    arena_init(&parserArena, PARSER_ARENA_SIZE);
     init_scanner(source);
     hasPeekedToken = false;
 

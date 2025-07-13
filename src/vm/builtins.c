@@ -34,9 +34,9 @@ static void init_timebase() {
 static void print_formatted_value(Value value, const char* spec);
 
 static void print_binary(unsigned long long value) {
-    char buf[65];
-    int index = 64;
-    buf[64] = '\0';
+    char buf[BINARY_BUFFER_SIZE];
+    int index = BINARY_BUFFER_LAST_INDEX;
+    buf[BINARY_BUFFER_LAST_INDEX] = '\0';
     if (value == 0) {
         putchar('0');
         return;
@@ -203,15 +203,15 @@ int32_t builtin_time_stamp() {
     uint64_t abs_time = mach_absolute_time();
     // Convert to milliseconds and return as i32
     uint64_t nanoseconds = (abs_time * timebase_numer) / timebase_denom;
-    return (int32_t)(nanoseconds / 1000000);
+    return (int32_t)(nanoseconds / NANOSECONDS_PER_MILLISECOND);
     
 #elif defined(__linux__)
     // Linux: Use clock_gettime with CLOCK_MONOTONIC
     struct timespec ts;
     if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) {
         // Convert to milliseconds and return as i32
-        uint64_t nanoseconds = ts.tv_sec * 1000000000LL + ts.tv_nsec;
-        return (int32_t)(nanoseconds / 1000000);
+        uint64_t nanoseconds = ts.tv_sec * NANOSECONDS_PER_SECOND + ts.tv_nsec;
+        return (int32_t)(nanoseconds / NANOSECONDS_PER_MILLISECOND);
     }
     return 0; // Error fallback
     
@@ -226,12 +226,12 @@ int32_t builtin_time_stamp() {
     QueryPerformanceCounter(&counter);
     
     // Convert to milliseconds and return as i32
-    uint64_t nanoseconds = (counter.QuadPart * 1000000000LL) / frequency.QuadPart;
-    return (int32_t)(nanoseconds / 1000000);
+    uint64_t nanoseconds = (counter.QuadPart * NANOSECONDS_PER_SECOND) / frequency.QuadPart;
+    return (int32_t)(nanoseconds / NANOSECONDS_PER_MILLISECOND);
     
 #else
     // Fallback: Use standard clock() - less precise but portable
     #include <time.h>
-    return (int64_t)((clock() * 1000000000LL) / CLOCKS_PER_SEC);
+    return (int64_t)((clock() * NANOSECONDS_PER_SECOND) / CLOCKS_PER_SEC);
 #endif
 }

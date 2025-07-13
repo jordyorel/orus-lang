@@ -21,7 +21,7 @@
 // ---- Arena and utilities ----
 static TypeArena* type_arena = NULL;
 static void* arena_alloc(size_t size) {
-    size = (size + 7) & ~7;
+    size = (size + ARENA_ALIGNMENT - 1) & ~(ARENA_ALIGNMENT - 1);
     if (!type_arena || type_arena->used + size > type_arena->size) {
         size_t chunk = size > ARENA_SIZE ? size : ARENA_SIZE;
         TypeArena* a = malloc(sizeof(TypeArena));

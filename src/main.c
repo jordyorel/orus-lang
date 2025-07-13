@@ -141,12 +141,12 @@ int main(int argc, const char* argv[]) {
         } else if (argv[i][0] == '-') {
             fprintf(stderr, "Unknown option: %s\n", argv[i]);
             showUsage(argv[0]);
-            return 64;
+            return EXIT_USAGE_ERROR;
         } else {
             if (fileName != NULL) {
                 fprintf(stderr, "Too many arguments.\n");
                 showUsage(argv[0]);
-                return 64;
+                return EXIT_USAGE_ERROR;
             }
             fileName = argv[i];
         }
