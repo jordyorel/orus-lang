@@ -3,6 +3,7 @@
 #include "vm_constants.h"
 #include "vm_string_ops.h"
 #include "vm_arithmetic.h"
+#include "vm_control_flow.h"
 #include <math.h>
 
 // ✅ Auto-detect computed goto support
@@ -1787,26 +1788,20 @@ InterpretResult vm_run_dispatch(void) {
 
     LABEL_OP_JUMP: {
             uint16_t offset = READ_SHORT();
-            vm.ip += offset;
+            CF_JUMP(offset);
             DISPATCH();
         }
 
     LABEL_OP_JUMP_IF_NOT_R: {
             uint8_t reg = READ_BYTE();
             uint16_t offset = READ_SHORT();
-            if (!IS_BOOL(vm.registers[reg])) {
-                runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Condition must be boolean");
-                RETURN(INTERPRET_RUNTIME_ERROR);
-            }
-            if (!AS_BOOL(vm.registers[reg])) {
-                vm.ip += offset;
-            }
+            CF_JUMP_IF_NOT(reg, offset);
             DISPATCH();
         }
 
     LABEL_OP_LOOP: {
         uint16_t offset = READ_SHORT();
-        vm.ip -= offset;
+        CF_LOOP(offset);
         DISPATCH();
     }
 
@@ -2013,34 +2008,26 @@ InterpretResult vm_run_dispatch(void) {
     // Short jump optimizations for performance
     LABEL_OP_JUMP_SHORT: {
         uint8_t offset = READ_BYTE();
-        vm.ip += offset;
+        CF_JUMP_SHORT(offset);
         DISPATCH();
     }
 
     LABEL_OP_JUMP_BACK_SHORT: {
         uint8_t offset = READ_BYTE();
-        vm.ip -= offset;
+        CF_JUMP_BACK_SHORT(offset);
         DISPATCH();
     }
 
     LABEL_OP_JUMP_IF_NOT_SHORT: {
         uint8_t reg = READ_BYTE();
         uint8_t offset = READ_BYTE();
-        
-        if (!IS_BOOL(vm.registers[reg])) {
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL, 0, 0}, "Condition must be boolean");
-            RETURN(INTERPRET_RUNTIME_ERROR);
-        }
-        
-        if (!AS_BOOL(vm.registers[reg])) {
-            vm.ip += offset;
-        }
+        CF_JUMP_IF_NOT_SHORT(reg, offset);
         DISPATCH();
     }
 
     LABEL_OP_LOOP_SHORT: {
         uint8_t offset = READ_BYTE();
-        vm.ip -= offset;
+        CF_LOOP_SHORT(offset);
         DISPATCH();
     }
 
@@ -2649,388 +2636,3 @@ InterpretResult vm_run_dispatch(void) {
     #undef RETURN
 }
 #endif // USE_COMPUTED_GOTO
-
-// Extended overflow handling for all arithmetic operations and types
-
-// Division macros with zero-check
-#define HANDLE_I32_OVERFLOW_DIV(a, b, dst_reg) \
-    do { \
-        if (unlikely(b == 0)) { \
-            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
-                       "Division by zero"); \
-            RETURN(INTERPRET_RUNTIME_ERROR); \
-        } \
-        if (unlikely(a == INT32_MIN && b == -1)) { \
-            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
-                       "Integer overflow"); \
-            RETURN(INTERPRET_RUNTIME_ERROR); \
-        } else { \
-            vm.registers[dst_reg] = I32_VAL(a / b); \
-        } \
-    } while (0)
-
-#define HANDLE_I32_OVERFLOW_MOD(a, b, dst_reg) \
-    do { \
-        if (unlikely(b == 0)) { \
-            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
-                       "Division by zero"); \
-            RETURN(INTERPRET_RUNTIME_ERROR); \
-        } \
-        if (unlikely(a == INT32_MIN && b == -1)) { \
-            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
-                       "Integer overflow"); \
-            RETURN(INTERPRET_RUNTIME_ERROR); \
-        } else { \
-            vm.registers[dst_reg] = I32_VAL(a % b); \
-        } \
-    } while (0)
-
-// Unsigned 32-bit overflow handling
-#define HANDLE_U32_OVERFLOW_ADD(a, b, dst_reg) \
-    do { \
-        uint32_t result; \
-        if (unlikely(__builtin_add_overflow(a, b, &result))) { \
-            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
-                       "Unsigned integer overflow"); \
-            RETURN(INTERPRET_RUNTIME_ERROR); \
-        } else { \
-            vm.registers[dst_reg] = U32_VAL(result); \
-        } \
-    } while (0)
-
-#define HANDLE_U32_OVERFLOW_SUB(a, b, dst_reg) \
-    do { \
-        uint32_t result; \
-        if (unlikely(__builtin_sub_overflow(a, b, &result))) { \
-            /* Underflow detected: error or wrap behavior */ \
-            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
-                       "Unsigned integer underflow"); \
-            RETURN(INTERPRET_RUNTIME_ERROR); \
-        } else { \
-            vm.registers[dst_reg] = U32_VAL(result); \
-        } \
-    } while (0)
-
-#define HANDLE_U32_OVERFLOW_MUL(a, b, dst_reg) \
-    do { \
-        uint32_t result; \
-        if (unlikely(__builtin_mul_overflow(a, b, &result))) { \
-            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
-                       "Unsigned integer overflow"); \
-            RETURN(INTERPRET_RUNTIME_ERROR); \
-        } else { \
-            vm.registers[dst_reg] = U32_VAL(result); \
-        } \
-    } while (0)
-
-#define HANDLE_U32_OVERFLOW_DIV(a, b, dst_reg) \
-    do { \
-        if (unlikely(b == 0)) { \
-            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
-                       "Division by zero"); \
-            RETURN(INTERPRET_RUNTIME_ERROR); \
-        } \
-        vm.registers[dst_reg] = U32_VAL(a / b); \
-    } while (0)
-
-#define HANDLE_U32_OVERFLOW_MOD(a, b, dst_reg) \
-    do { \
-        if (unlikely(b == 0)) { \
-            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
-                       "Division by zero"); \
-            RETURN(INTERPRET_RUNTIME_ERROR); \
-        } \
-        vm.registers[dst_reg] = U32_VAL(a % b); \
-    } while (0)
-
-// 64-bit overflow handling (already implemented in mixed macros but standalone versions)
-#define HANDLE_I64_OVERFLOW_ADD(a, b, dst_reg) \
-    do { \
-        int64_t result; \
-        if (unlikely(__builtin_add_overflow(a, b, &result))) { \
-            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
-                       "Integer overflow: result exceeds i64 range"); \
-            RETURN(INTERPRET_RUNTIME_ERROR); \
-        } \
-        vm.registers[dst_reg] = I64_VAL(result); \
-    } while (0)
-
-#define HANDLE_I64_OVERFLOW_SUB(a, b, dst_reg) \
-    do { \
-        int64_t result; \
-        if (unlikely(__builtin_sub_overflow(a, b, &result))) { \
-            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
-                       "Integer overflow: result exceeds i64 range"); \
-            RETURN(INTERPRET_RUNTIME_ERROR); \
-        } \
-        vm.registers[dst_reg] = I64_VAL(result); \
-    } while (0)
-
-#define HANDLE_I64_OVERFLOW_MUL(a, b, dst_reg) \
-    do { \
-        int64_t result; \
-        if (unlikely(__builtin_mul_overflow(a, b, &result))) { \
-            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
-                       "Integer overflow: result exceeds i64 range"); \
-            RETURN(INTERPRET_RUNTIME_ERROR); \
-        } \
-        vm.registers[dst_reg] = I64_VAL(result); \
-    } while (0)
-
-#define HANDLE_I64_OVERFLOW_DIV(a, b, dst_reg) \
-    do { \
-        if (unlikely(b == 0)) { \
-            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
-                       "Division by zero"); \
-            RETURN(INTERPRET_RUNTIME_ERROR); \
-        } \
-        if (unlikely(a == INT64_MIN && b == -1)) { \
-            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
-                       "Integer overflow: result exceeds i64 range"); \
-            RETURN(INTERPRET_RUNTIME_ERROR); \
-        } \
-        vm.registers[dst_reg] = I64_VAL(a / b); \
-    } while (0)
-
-#define HANDLE_I64_OVERFLOW_MOD(a, b, dst_reg) \
-    do { \
-        if (unlikely(b == 0)) { \
-            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
-                       "Division by zero"); \
-            RETURN(INTERPRET_RUNTIME_ERROR); \
-        } \
-        if (unlikely(a == INT64_MIN && b == -1)) { \
-            vm.registers[dst_reg] = I64_VAL(0); \
-        } else { \
-            vm.registers[dst_reg] = I64_VAL(a % b); \
-        } \
-    } while (0)
-
-// Unsigned 64-bit overflow handling
-#define HANDLE_U64_OVERFLOW_ADD(a, b, dst_reg) \
-    do { \
-        uint64_t result; \
-        if (unlikely(__builtin_add_overflow(a, b, &result))) { \
-            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
-                       "Unsigned integer overflow: result exceeds u64 range"); \
-            RETURN(INTERPRET_RUNTIME_ERROR); \
-        } \
-        vm.registers[dst_reg] = U64_VAL(result); \
-    } while (0)
-
-#define HANDLE_U64_OVERFLOW_SUB(a, b, dst_reg) \
-    do { \
-        uint64_t result; \
-        if (unlikely(__builtin_sub_overflow(a, b, &result))) { \
-            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
-                       "Unsigned integer underflow"); \
-            RETURN(INTERPRET_RUNTIME_ERROR); \
-        } \
-        vm.registers[dst_reg] = U64_VAL(result); \
-    } while (0)
-
-#define HANDLE_U64_OVERFLOW_MUL(a, b, dst_reg) \
-    do { \
-        uint64_t result; \
-        if (unlikely(__builtin_mul_overflow(a, b, &result))) { \
-            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
-                       "Unsigned integer overflow: result exceeds u64 range"); \
-            RETURN(INTERPRET_RUNTIME_ERROR); \
-        } \
-        vm.registers[dst_reg] = U64_VAL(result); \
-    } while (0)
-
-#define HANDLE_U64_OVERFLOW_DIV(a, b, dst_reg) \
-    do { \
-        if (unlikely(b == 0)) { \
-            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
-                       "Division by zero"); \
-            RETURN(INTERPRET_RUNTIME_ERROR); \
-        } \
-        vm.registers[dst_reg] = U64_VAL(a / b); \
-    } while (0)
-
-#define HANDLE_U64_OVERFLOW_MOD(a, b, dst_reg) \
-    do { \
-        if (unlikely(b == 0)) { \
-            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
-                       "Division by zero"); \
-            RETURN(INTERPRET_RUNTIME_ERROR); \
-        } \
-        vm.registers[dst_reg] = U64_VAL(a % b); \
-    } while (0)
-
-// Floating-point overflow handling
-#define HANDLE_F64_OVERFLOW_ADD(a, b, dst_reg) \
-    do { \
-        double result = a + b; \
-        if (unlikely(!isfinite(result))) { \
-            if (isnan(result)) { \
-                runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
-                           "Floating-point operation resulted in NaN"); \
-            } else { \
-                runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
-                           "Floating-point overflow: result is infinite"); \
-            } \
-            RETURN(INTERPRET_RUNTIME_ERROR); \
-        } \
-        vm.registers[dst_reg] = F64_VAL(result); \
-    } while (0)
-
-#define HANDLE_F64_OVERFLOW_SUB(a, b, dst_reg) \
-    do { \
-        double result = a - b; \
-        if (unlikely(!isfinite(result))) { \
-            if (isnan(result)) { \
-                runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
-                           "Floating-point operation resulted in NaN"); \
-            } else { \
-                runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
-                           "Floating-point overflow: result is infinite"); \
-            } \
-            RETURN(INTERPRET_RUNTIME_ERROR); \
-        } \
-        vm.registers[dst_reg] = F64_VAL(result); \
-    } while (0)
-
-#define HANDLE_F64_OVERFLOW_MUL(a, b, dst_reg) \
-    do { \
-        double result = a * b; \
-        if (unlikely(!isfinite(result))) { \
-            if (isnan(result)) { \
-                runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
-                           "Floating-point operation resulted in NaN"); \
-            } else { \
-                runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
-                           "Floating-point overflow: result is infinite"); \
-            } \
-            RETURN(INTERPRET_RUNTIME_ERROR); \
-        } \
-        vm.registers[dst_reg] = F64_VAL(result); \
-    } while (0)
-
-#define HANDLE_F64_OVERFLOW_DIV(a, b, dst_reg) \
-    do { \
-        if (unlikely(b == 0.0)) { \
-            runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
-                       "Division by zero"); \
-            RETURN(INTERPRET_RUNTIME_ERROR); \
-        } \
-        double result = a / b; \
-        if (unlikely(!isfinite(result))) { \
-            if (isnan(result)) { \
-                runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
-                           "Floating-point operation resulted in NaN"); \
-            } else { \
-                runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
-                           "Floating-point overflow: result is infinite"); \
-            } \
-            RETURN(INTERPRET_RUNTIME_ERROR); \
-        } \
-        vm.registers[dst_reg] = F64_VAL(result); \
-    } while (0)
-
-// Extended mixed-type arithmetic supporting all numeric types with intelligent promotion
-// Priority: u32 < i32 < u64 < i64 < f64
-
-// Enhanced mixed-type ADD with full type support
-#define HANDLE_MIXED_ADD_ENHANCED(val1, val2, dst_reg) \
-    do { \
-        if (IS_F64(val1) || IS_F64(val2)) { \
-            /* Float arithmetic: promote both to f64 */ \
-            double a = IS_F64(val1) ? AS_F64(val1) : \
-                      IS_I32(val1) ? (double)AS_I32(val1) : \
-                      IS_I64(val1) ? (double)AS_I64(val1) : \
-                      IS_U32(val1) ? (double)AS_U32(val1) : (double)AS_U64(val1); \
-            double b = IS_F64(val2) ? AS_F64(val2) : \
-                      IS_I32(val2) ? (double)AS_I32(val2) : \
-                      IS_I64(val2) ? (double)AS_I64(val2) : \
-                      IS_U32(val2) ? (double)AS_U32(val2) : (double)AS_U64(val2); \
-            HANDLE_F64_OVERFLOW_ADD(a, b, dst_reg); \
-        } else if (IS_I32(val1) && IS_I32(val2)) { \
-            HANDLE_I32_OVERFLOW_ADD(AS_I32(val1), AS_I32(val2), dst_reg); \
-        } else if (IS_I64(val1) && IS_I64(val2)) { \
-            HANDLE_I64_OVERFLOW_ADD(AS_I64(val1), AS_I64(val2), dst_reg); \
-        } else if (IS_U32(val1) && IS_U32(val2)) { \
-            HANDLE_U32_OVERFLOW_ADD(AS_U32(val1), AS_U32(val2), dst_reg); \
-        } else if (IS_U64(val1) && IS_U64(val2)) { \
-            HANDLE_U64_OVERFLOW_ADD(AS_U64(val1), AS_U64(val2), dst_reg); \
-        } else { \
-            /* Mixed integer types: promote to largest signed type */ \
-            int64_t a = IS_I32(val1) ? (int64_t)AS_I32(val1) : \
-                       IS_I64(val1) ? AS_I64(val1) : \
-                       IS_U32(val1) ? (int64_t)AS_U32(val1) : (int64_t)AS_U64(val1); \
-            int64_t b = IS_I32(val2) ? (int64_t)AS_I32(val2) : \
-                       IS_I64(val2) ? AS_I64(val2) : \
-                       IS_U32(val2) ? (int64_t)AS_U32(val2) : (int64_t)AS_U64(val2); \
-            HANDLE_I64_OVERFLOW_ADD(a, b, dst_reg); \
-        } \
-    } while (0)
-
-// Enhanced mixed-type SUB with full type support
-#define HANDLE_MIXED_SUB_ENHANCED(val1, val2, dst_reg) \
-    do { \
-        if (IS_F64(val1) || IS_F64(val2)) { \
-            /* Float arithmetic: promote both to f64 */ \
-            double a = IS_F64(val1) ? AS_F64(val1) : \
-                      IS_I32(val1) ? (double)AS_I32(val1) : \
-                      IS_I64(val1) ? (double)AS_I64(val1) : \
-                      IS_U32(val1) ? (double)AS_U32(val1) : (double)AS_U64(val1); \
-            double b = IS_F64(val2) ? AS_F64(val2) : \
-                      IS_I32(val2) ? (double)AS_I32(val2) : \
-                      IS_I64(val2) ? (double)AS_I64(val2) : \
-                      IS_U32(val2) ? (double)AS_U32(val2) : (double)AS_U64(val2); \
-            HANDLE_F64_OVERFLOW_SUB(a, b, dst_reg); \
-        } else if (IS_I32(val1) && IS_I32(val2)) { \
-            HANDLE_I32_OVERFLOW_SUB(AS_I32(val1), AS_I32(val2), dst_reg); \
-        } else if (IS_I64(val1) && IS_I64(val2)) { \
-            HANDLE_I64_OVERFLOW_SUB(AS_I64(val1), AS_I64(val2), dst_reg); \
-        } else if (IS_U32(val1) && IS_U32(val2)) { \
-            HANDLE_U32_OVERFLOW_SUB(AS_U32(val1), AS_U32(val2), dst_reg); \
-        } else if (IS_U64(val1) && IS_U64(val2)) { \
-            HANDLE_U64_OVERFLOW_SUB(AS_U64(val1), AS_U64(val2), dst_reg); \
-        } else { \
-            /* Mixed integer types: promote to largest signed type */ \
-            int64_t a = IS_I32(val1) ? (int64_t)AS_I32(val1) : \
-                       IS_I64(val1) ? AS_I64(val1) : \
-                       IS_U32(val1) ? (int64_t)AS_U32(val1) : (int64_t)AS_U64(val1); \
-            int64_t b = IS_I32(val2) ? (int64_t)AS_I32(val2) : \
-                       IS_I64(val2) ? AS_I64(val2) : \
-                       IS_U32(val2) ? (int64_t)AS_U32(val2) : (int64_t)AS_U64(val2); \
-            HANDLE_I64_OVERFLOW_SUB(a, b, dst_reg); \
-        } \
-    } while (0)
-
-// Enhanced mixed-type MUL with full type support
-#define HANDLE_MIXED_MUL_ENHANCED(val1, val2, dst_reg) \
-    do { \
-        if (IS_F64(val1) || IS_F64(val2)) { \
-            /* Float arithmetic: promote both to f64 */ \
-            double a = IS_F64(val1) ? AS_F64(val1) : \
-                      IS_I32(val1) ? (double)AS_I32(val1) : \
-                      IS_I64(val1) ? (double)AS_I64(val1) : \
-                      IS_U32(val1) ? (double)AS_U32(val1) : (double)AS_U64(val1); \
-            double b = IS_F64(val2) ? AS_F64(val2) : \
-                      IS_I32(val2) ? (double)AS_I32(val2) : \
-                      IS_I64(val2) ? (double)AS_I64(val2) : \
-                      IS_U32(val2) ? (double)AS_U32(val2) : (double)AS_U64(val2); \
-            HANDLE_F64_OVERFLOW_MUL(a, b, dst_reg); \
-        } else if (IS_I32(val1) && IS_I32(val2)) { \
-            HANDLE_I32_OVERFLOW_MUL(AS_I32(val1), AS_I32(val2), dst_reg); \
-        } else if (IS_I64(val1) && IS_I64(val2)) { \
-            HANDLE_I64_OVERFLOW_MUL(AS_I64(val1), AS_I64(val2), dst_reg); \
-        } else if (IS_U32(val1) && IS_U32(val2)) { \
-            HANDLE_U32_OVERFLOW_MUL(AS_U32(val1), AS_U32(val2), dst_reg); \
-        } else if (IS_U64(val1) && IS_U64(val2)) { \
-            HANDLE_U64_OVERFLOW_MUL(AS_U64(val1), AS_U64(val2), dst_reg); \
-        } else { \
-            /* Mixed integer types: promote to largest signed type */ \
-            int64_t a = IS_I32(val1) ? (int64_t)AS_I32(val1) : \
-                       IS_I64(val1) ? AS_I64(val1) : \
-                       IS_U32(val1) ? (int64_t)AS_U32(val1) : (int64_t)AS_U64(val1); \
-            int64_t b = IS_I32(val2) ? (int64_t)AS_I32(val2) : \
-                       IS_I64(val2) ? AS_I64(val2) : \
-                       IS_U32(val2) ? (int64_t)AS_U32(val2) : (int64_t)AS_U64(val2); \
-            HANDLE_I64_OVERFLOW_MUL(a, b, dst_reg); \
-        } \
-    } while (0)
