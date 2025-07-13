@@ -44,20 +44,6 @@ double get_time_vm(void) {
     #endif
 }
 
-// High-resolution timer for profiling
-// static double now_ns(void) {
-//     #ifdef _WIN32
-//         LARGE_INTEGER freq, count;
-//         QueryPerformanceFrequency(&freq);
-//         QueryPerformanceCounter(&count);
-//         return (double)count.QuadPart * 1e9 / freq.QuadPart;
-//     #else
-//         struct timespec ts;
-//         clock_gettime(CLOCK_MONOTONIC, &ts);
-//         return (double)ts.tv_sec * 1e9 + ts.tv_nsec;
-//     #endif
-// }
-
 // Global VM instance is defined in vm_core.c
 extern VM vm;
 
@@ -167,9 +153,6 @@ Type* getPrimitiveType(TypeKind kind) {
 }
 
 
-
-
-
 // initVM and freeVM implementations are moved to vm_core.c
 
 // Runtime error handling
@@ -205,7 +188,7 @@ InterpretResult interpret(const char* source) {
     // Source text is now set in main.c with proper error handling
     // set_source_text(source, strlen(source)) is called before interpret()
     
-    // double t0 = now_ns();
+
     
     // Create a chunk for the compiled bytecode
     Chunk chunk;
@@ -214,15 +197,9 @@ InterpretResult interpret(const char* source) {
     Compiler compiler;
     initCompiler(&compiler, &chunk, "<repl>", source);
 
-    // double t1 = now_ns();
-    // fprintf(stderr, "[PROFILE] Init (chunk+compiler): %.3f ms\n", (t1 - t0) / 1e6);
-
     // Parse the source into an AST
-    // double t2 = now_ns();
     ASTNode* ast = parseSource(source);
-    // double t3 = now_ns();
-    // fprintf(stderr, "[PROFILE] parseSource: %.3f ms\n", (t3 - t2) / 1e6);
-    
+ 
     if (!ast) {
         freeCompiler(&compiler);
         freeChunk(&chunk);
@@ -230,21 +207,15 @@ InterpretResult interpret(const char* source) {
     }
 
     // Compile the AST to bytecode
-    // double t4 = now_ns();
     if (!compile(ast, &compiler, false)) {
         freeAST(ast);
         freeCompiler(&compiler);
         freeChunk(&chunk);
         return INTERPRET_COMPILE_ERROR;
     }
-    // double t5 = now_ns();
-    // fprintf(stderr, "[PROFILE] compile(AST→bytecode): %.3f ms\n", (t5 - t4) / 1e6);
 
     // Add a halt instruction at the end
-    // double t6 = now_ns();
     emitByte(&compiler, OP_HALT);
-    // double t7 = now_ns();
-    // fprintf(stderr, "[PROFILE] emit+patch: %.3f ms\n", (t7 - t6) / 1e6);
 
     // Execute the chunk
     vm.chunk = &chunk;
@@ -256,17 +227,11 @@ InterpretResult interpret(const char* source) {
         disassembleChunk(&chunk, "main");
     }
 
-    // double t8 = now_ns();
     InterpretResult result = run();
-    // double t9 = now_ns();
-    // fprintf(stderr, "[PROFILE] run() execution: %.3f ms\n", (t9 - t8) / 1e6);
-
+  
     freeAST(ast);
     freeCompiler(&compiler);
     freeChunk(&chunk);
-    
-    // double t10 = now_ns();
-    // fprintf(stderr, "[PROFILE] TOTAL interpret(): %.3f ms\n", (t10 - t0) / 1e6);
     
     return result;
 }
@@ -332,7 +297,6 @@ static void addLoadedModule(const char* path) {
 }
 
 InterpretResult interpret_module(const char* path) {
-    // double t0 = now_ns();
     
     if (!path) {
         fprintf(stderr, "Module path cannot be null.\n");
@@ -346,11 +310,9 @@ InterpretResult interpret_module(const char* path) {
     }
     
     // Read the module file
-    // double t1 = now_ns();
+
     char* source = readFile(path);
-    // double t2 = now_ns();
-    // fprintf(stderr, "[PROFILE] ReadFile: %.3f ms\n", (t2 - t1) / 1e6);
-    
+  
     if (!source) {
         return INTERPRET_COMPILE_ERROR;
     }
@@ -368,16 +330,10 @@ InterpretResult interpret_module(const char* path) {
     // Create compiler for the module
     Compiler compiler;
     initCompiler(&compiler, &chunk, fileName, source);
-    
-    // double t3 = now_ns();
-    // fprintf(stderr, "[PROFILE] Init (chunk+compiler): %.3f ms\n", (t3 - t2) / 1e6);
-    
+
     // Parse the module source into an AST
-    // double t4 = now_ns();
     ASTNode* ast = parseSource(source);
-    // double t5 = now_ns();
-    // fprintf(stderr, "[PROFILE] parseSource: %.3f ms\n", (t5 - t4) / 1e6);
-    
+
     if (!ast) {
         fprintf(stderr, "Failed to parse module: %s\n", path);
         free(source);
@@ -386,8 +342,6 @@ InterpretResult interpret_module(const char* path) {
         return INTERPRET_COMPILE_ERROR;
     }
     
-    // Compile the AST to bytecode (mark as module)
-    // double t6 = now_ns();
     if (!compile(ast, &compiler, true)) {
         fprintf(stderr, "Failed to compile module: %s\n", path);
         freeAST(ast);
@@ -396,14 +350,8 @@ InterpretResult interpret_module(const char* path) {
         freeChunk(&chunk);
         return INTERPRET_COMPILE_ERROR;
     }
-    // double t7 = now_ns();
-    // fprintf(stderr, "[PROFILE] compile(AST→bytecode): %.3f ms\n", (t7 - t6) / 1e6);
-    
-    // Add a halt instruction at the end
-    // double t8 = now_ns();
+
     emitByte(&compiler, OP_HALT);
-    // double t9 = now_ns();
-    // fprintf(stderr, "[PROFILE] emit+patch: %.3f ms\n", (t9 - t8) / 1e6);
     
     // Store current VM state
     Chunk* oldChunk = vm.chunk;
@@ -420,11 +368,7 @@ InterpretResult interpret_module(const char* path) {
         disassembleChunk(&chunk, fileName);
     }
     
-    // Execute the module
-    // double t10 = now_ns();
     InterpretResult result = run();
-    // double t11 = now_ns();
-    // fprintf(stderr, "[PROFILE] run() execution: %.3f ms\n", (t11 - t10) / 1e6);
     
     // Restore VM state
     vm.chunk = oldChunk;
@@ -443,9 +387,6 @@ InterpretResult interpret_module(const char* path) {
     free(source);
     freeCompiler(&compiler);
     freeChunk(&chunk);
-    
-    // double t12 = now_ns();
-    // fprintf(stderr, "[PROFILE] TOTAL interpret_module(): %.3f ms\n", (t12 - t0) / 1e6);
-    
+
     return result;
 }
