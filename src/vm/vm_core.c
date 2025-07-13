@@ -1,0 +1,68 @@
+// vm_core.c - VM initialization and core management
+#include "vm_internal.h"
+#include "builtins.h"
+#include "memory.h"
+#include "type.h"
+
+VM vm; // Global VM instance
+
+void initVM(void) {
+    initTypeSystem();
+    initMemory();
+
+    for (int i = 0; i < REGISTER_COUNT; i++) {
+        vm.registers[i] = NIL_VAL;
+    }
+
+    memset(&vm.typed_regs, 0, sizeof(TypedRegisters));
+    for (int i = 0; i < 32; i++) {
+        vm.typed_regs.heap_regs[i] = NIL_VAL;
+    }
+    for (int i = 0; i < 256; i++) {
+        vm.typed_regs.reg_types[i] = REG_TYPE_NONE;
+    }
+
+    for (int i = 0; i < UINT8_COUNT; i++) {
+        vm.globals[i] = NIL_VAL;
+        vm.globalTypes[i] = NULL;
+        vm.publicGlobals[i] = false;
+        vm.variableNames[i].name = NULL;
+        vm.variableNames[i].length = 0;
+    }
+
+    vm.variableCount = 0;
+    vm.functionCount = 0;
+    vm.frameCount = 0;
+    vm.tryFrameCount = 0;
+    vm.lastError = NIL_VAL;
+    vm.instruction_count = 0;
+    vm.astRoot = NULL;
+    vm.filePath = NULL;
+    vm.currentLine = 0;
+    vm.currentColumn = 1;
+    vm.moduleCount = 0;
+    vm.nativeFunctionCount = 0;
+    vm.gcCount = 0;
+    vm.lastExecutionTime = 0.0;
+
+    vm.openUpvalues = NULL;
+
+    const char* envTrace = getenv("ORUS_TRACE");
+    vm.trace = envTrace && envTrace[0] != '\0';
+
+    vm.chunk = NULL;
+    vm.ip = NULL;
+}
+
+void freeVM(void) {
+    freeObjects();
+    for (int i = 0; i < UINT8_COUNT; i++) {
+        vm.variableNames[i].name = NULL;
+        vm.globalTypes[i] = NULL;
+        vm.publicGlobals[i] = false;
+    }
+    vm.astRoot = NULL;
+    vm.chunk = NULL;
+    vm.ip = NULL;
+}
+

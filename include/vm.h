@@ -9,10 +9,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include "symbol_table.h"
+#include "vm_constants.h"
 
 // Register-based VM configuration
-#define REGISTER_COUNT 256
-#define FRAMES_MAX 64
+#define REGISTER_COUNT VM_MAX_REGISTERS
+#define FRAMES_MAX VM_MAX_CALL_FRAMES
 #define STACK_INIT_CAPACITY 256
 #define TRY_MAX 16
 #define MAX_NATIVES 256

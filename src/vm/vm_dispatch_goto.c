@@ -1,5 +1,7 @@
 #include "vm_dispatch.h"
 #include "builtins.h"
+#include "vm_constants.h"
+#include "vm_string_ops.h"
 #include <math.h>
 
 // ✅ Auto-detect computed goto support
@@ -711,22 +713,20 @@ InterpretResult vm_run_dispatch(void) {
                 ObjString* rightStr = AS_STRING(right);
                 int newLength = leftStr->length + rightStr->length;
                 
-                // Use stack buffer for small strings, or temporary allocation for large ones
-                if (newLength < 1024) {
-                    char buffer[1024];
+                // Use stack buffer for small strings, otherwise fall back to a StringBuilder
+                if (newLength < VM_SMALL_STRING_BUFFER) {
+                    char buffer[VM_SMALL_STRING_BUFFER];
                     memcpy(buffer, leftStr->chars, leftStr->length);
                     memcpy(buffer + leftStr->length, rightStr->chars, rightStr->length);
                     buffer[newLength] = '\0';
                     ObjString* result = allocateString(buffer, newLength);
                     vm.registers[dst] = STRING_VAL(result);
                 } else {
-                    // For large strings, use temporary allocation via reallocate
-                    char* tempBuffer = (char*)reallocate(NULL, 0, newLength + 1);
-                    memcpy(tempBuffer, leftStr->chars, leftStr->length);
-                    memcpy(tempBuffer + leftStr->length, rightStr->chars, rightStr->length);
-                    tempBuffer[newLength] = '\0';
-                    ObjString* result = allocateString(tempBuffer, newLength);
-                    reallocate(tempBuffer, newLength + 1, 0); // Free temporary buffer
+                    StringBuilder* sb = createStringBuilder(newLength + 1);
+                    appendToStringBuilder(sb, leftStr->chars, leftStr->length);
+                    appendToStringBuilder(sb, rightStr->chars, rightStr->length);
+                    ObjString* result = stringBuilderToString(sb);
+                    freeStringBuilder(sb);
                     vm.registers[dst] = STRING_VAL(result);
                 }
                 DISPATCH();
