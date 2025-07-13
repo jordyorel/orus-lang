@@ -67,6 +67,11 @@ make benchmark          # Performance tests
 
 See [BENCHMARK_RESULTS.md](docs/BENCHMARK_RESULTS.md) for detailed performance data.
 
+## Public API Documentation
+
+For details on embedding the Orus VM in other applications, see
+[VM_PUBLIC_API.md](docs/VM_PUBLIC_API.md).
+
 ## License
 
 Orus is licensed under the [MIT License](LICENSE).
