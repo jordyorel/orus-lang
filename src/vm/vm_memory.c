@@ -1,5 +1,6 @@
 #include "memory.h"
 #include "vm.h"
+#include "vm_string_ops.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -84,6 +85,7 @@ ObjString* allocateString(const char* chars, int length) {
     string->chars = (char*)reallocate(NULL, 0, length + 1);
     memcpy(string->chars, chars, length);
     string->chars[length] = '\0';
+    string->rope = rope_from_cstr(chars, length);
     string->hash = 0;
     vm.bytesAllocated += length + 1;
     return string;
@@ -100,7 +102,7 @@ ObjArray* allocateArray(int capacity) {
 ObjError* allocateError(ErrorType type, const char* message, SrcLocation location) {
     ObjError* error = (ObjError*)allocateObject(sizeof(ObjError), OBJ_ERROR);
     error->type = type;
-    error->message = allocateString(message, (int)strlen(message));
+    error->message = intern_string(message, (int)strlen(message));
     error->location.file = location.file;
     error->location.line = location.line;
     error->location.column = location.column;

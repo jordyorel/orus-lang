@@ -10,6 +10,7 @@
 #include <string.h>
 #include "symbol_table.h"
 #include "vm_constants.h"
+#include "vm_string_ops.h"
 
 // Register-based VM configuration
 #define REGISTER_COUNT VM_MAX_REGISTERS
@@ -87,6 +88,7 @@ struct ObjString {
     Obj obj;
     int length;
     char* chars;
+    StringRope* rope;
     uint32_t hash;
 };
 
