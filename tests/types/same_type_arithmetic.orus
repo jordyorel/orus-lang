@@ -9,7 +9,7 @@ y: f64 = 2.5
 float_result = x * y
 print(float_result)
 
-p: u32 = 100
-q: u32 = 50
+p: u32 = 100u32
+q: u32 = 50u32
 unsigned_result = p - q
 print(unsigned_result)

@@ -14,7 +14,7 @@ float_complex = x * y + z / (x + y)
 print(float_complex)
 
 // Mixed operations that should be safe (same family)
-p: u32 = 100
-q: u32 = 200
+p: u32 = 100u32
+q: u32 = 200u32
 unsigned_ops = p + q - (p * 2u32)
 print(unsigned_ops)

@@ -121,6 +121,7 @@ struct ASTNode {
         } unary;
         struct {
             char* name;
+            bool isNullable;
         } typeAnnotation;
         struct {
             char* label;

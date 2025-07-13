@@ -1,8 +1,8 @@
 // Type annotations for primitive types
 a: i32 = 42
-b: i64 = 100
-c: u32 = 50
-d: u64 = 200
+b: i64 = 100i64
+c: u32 = 50u32
+d: u64 = 200u64
 e: f64 = 3.14
 f: bool = true
 g: string = "hello"

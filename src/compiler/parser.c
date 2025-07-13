@@ -138,6 +138,7 @@ static ASTNode* parseFunctionDefinition(void);
 static ASTNode* parseReturnStatement(void);
 static ASTNode* parseCallExpression(ASTNode* callee);
 static ASTNode* parseFunctionType(void);
+static ASTNode* parseTypeAnnotation(void);
 
 static int getOperatorPrecedence(TokenType type) {
     switch (type) {
@@ -362,25 +363,40 @@ static ASTNode* parsePrintStatement(void) {
     return node;
 }
 
+static ASTNode* parseTypeAnnotation(void) {
+    Token typeTok = nextToken();
+    if (typeTok.type != TOKEN_IDENTIFIER && typeTok.type != TOKEN_INT &&
+        typeTok.type != TOKEN_I64 && typeTok.type != TOKEN_U32 &&
+        typeTok.type != TOKEN_U64 && typeTok.type != TOKEN_F64 &&
+        typeTok.type != TOKEN_BOOL && typeTok.type != TOKEN_STRING) {
+        return NULL;
+    }
+
+    int tl = typeTok.length;
+    char* typeName = parser_arena_alloc(&parserArena, tl + 1);
+    strncpy(typeName, typeTok.start, tl);
+    typeName[tl] = '\0';
+
+    ASTNode* typeNode = new_node();
+    typeNode->type = NODE_TYPE;
+    typeNode->typeAnnotation.name = typeName;
+    typeNode->typeAnnotation.isNullable = false;
+
+    if (peekToken().type == TOKEN_QUESTION) {
+        nextToken();
+        typeNode->typeAnnotation.isNullable = true;
+    }
+
+    return typeNode;
+}
+
 static ASTNode* parseVariableDeclaration(bool isMutable, Token nameToken) {
 
     ASTNode* typeNode = NULL;
     if (peekToken().type == TOKEN_COLON) {
         nextToken();
-        Token typeTok = nextToken();
-        if (typeTok.type != TOKEN_IDENTIFIER && typeTok.type != TOKEN_INT &&
-            typeTok.type != TOKEN_I64 && typeTok.type != TOKEN_U32 &&
-            typeTok.type != TOKEN_U64 && typeTok.type != TOKEN_F64 &&
-            typeTok.type != TOKEN_BOOL) {
-            return NULL;
-        }
-        int tl = typeTok.length;
-        char* typeName = parser_arena_alloc(&parserArena, tl + 1);
-        strncpy(typeName, typeTok.start, tl);
-        typeName[tl] = '\0';
-        typeNode = new_node();
-        typeNode->type = NODE_TYPE;
-        typeNode->typeAnnotation.name = typeName;
+        typeNode = parseTypeAnnotation();
+        if (!typeNode) return NULL;
     }
 
     Token equalToken = nextToken();
@@ -405,13 +421,43 @@ static ASTNode* parseVariableDeclaration(bool isMutable, Token nameToken) {
             (strcmp(declaredType, "f64") == 0 && literalType == VAL_F64)) {
             isRedundant = true;
         }
-        
+
         if (isRedundant) {
             printf("Warning: Redundant type annotation at line %d:%d. "
                    "Literal already has type suffix matching declared type '%s'. "
                    "Consider using just 'x = value%s' instead of 'x: %s = value%s'.\n",
-                   nameToken.line, nameToken.column, declaredType, 
+                   nameToken.line, nameToken.column, declaredType,
                    declaredType, declaredType, declaredType);
+        } else {
+            bool mismatch = true;
+            if (strcmp(declaredType, "i32") == 0 && literalType == VAL_I32)
+                mismatch = false;
+            else if (strcmp(declaredType, "i64") == 0 && literalType == VAL_I64)
+                mismatch = false;
+            else if (strcmp(declaredType, "u32") == 0 && literalType == VAL_U32)
+                mismatch = false;
+            else if (strcmp(declaredType, "u64") == 0 && literalType == VAL_U64)
+                mismatch = false;
+            else if (strcmp(declaredType, "f64") == 0 && literalType == VAL_F64)
+                mismatch = false;
+            else if (strcmp(declaredType, "bool") == 0 && literalType == VAL_BOOL)
+                mismatch = false;
+            else if (strcmp(declaredType, "string") == 0 && literalType == VAL_STRING)
+                mismatch = false;
+            else if (literalType == VAL_NIL && typeNode->typeAnnotation.isNullable)
+                mismatch = false;
+
+            if (literalType == VAL_NIL && !typeNode->typeAnnotation.isNullable) {
+                fprintf(stderr, "Error: nil not allowed for non-nullable type at line %d:%d.\n",
+                        nameToken.line, nameToken.column);
+                return NULL;
+            }
+
+            if (mismatch) {
+                fprintf(stderr, "Error: Type mismatch at line %d:%d. Literal does not match declared type '%s'.\n",
+                        nameToken.line, nameToken.column, declaredType);
+                return NULL;
+            }
         }
     }
 
@@ -447,26 +493,59 @@ static ASTNode* parseVariableDeclaration(bool isMutable, Token nameToken) {
         ASTNode* nextType = NULL;
         if (peekToken().type == TOKEN_COLON) {
             nextToken();
-            Token typeTok = nextToken();
-            if (typeTok.type != TOKEN_IDENTIFIER && typeTok.type != TOKEN_INT &&
-                typeTok.type != TOKEN_I64 && typeTok.type != TOKEN_U32 &&
-                typeTok.type != TOKEN_U64 && typeTok.type != TOKEN_F64 &&
-                typeTok.type != TOKEN_BOOL) {
-                return NULL;
-            }
-            int tl = typeTok.length;
-            char* typeName = parser_arena_alloc(&parserArena, tl + 1);
-            strncpy(typeName, typeTok.start, tl);
-            typeName[tl] = '\0';
-            nextType = new_node();
-            nextType->type = NODE_TYPE;
-            nextType->typeAnnotation.name = typeName;
+            nextType = parseTypeAnnotation();
+            if (!nextType) return NULL;
         }
 
         Token eqTok = nextToken();
         if (eqTok.type != TOKEN_EQUAL) return NULL;
         ASTNode* init = parseExpression();
         if (!init) return NULL;
+
+        if (nextType && init->type == NODE_LITERAL) {
+            const char* declaredType = nextType->typeAnnotation.name;
+            ValueType litType = init->literal.value.type;
+
+            bool isRedundant = false;
+            if ((strcmp(declaredType, "u32") == 0 && litType == VAL_U32) ||
+                (strcmp(declaredType, "u64") == 0 && litType == VAL_U64) ||
+                (strcmp(declaredType, "i64") == 0 && litType == VAL_I64) ||
+                (strcmp(declaredType, "f64") == 0 && litType == VAL_F64)) {
+                isRedundant = true;
+            }
+
+            if (!isRedundant) {
+                bool mismatch = true;
+                if (strcmp(declaredType, "i32") == 0 && litType == VAL_I32)
+                    mismatch = false;
+                else if (strcmp(declaredType, "i64") == 0 && litType == VAL_I64)
+                    mismatch = false;
+                else if (strcmp(declaredType, "u32") == 0 && litType == VAL_U32)
+                    mismatch = false;
+                else if (strcmp(declaredType, "u64") == 0 && litType == VAL_U64)
+                    mismatch = false;
+                else if (strcmp(declaredType, "f64") == 0 && litType == VAL_F64)
+                    mismatch = false;
+                else if (strcmp(declaredType, "bool") == 0 && litType == VAL_BOOL)
+                    mismatch = false;
+                else if (strcmp(declaredType, "string") == 0 && litType == VAL_STRING)
+                    mismatch = false;
+                else if (litType == VAL_NIL && nextType->typeAnnotation.isNullable)
+                    mismatch = false;
+
+                if (litType == VAL_NIL && !nextType->typeAnnotation.isNullable) {
+                    fprintf(stderr, "Error: nil not allowed for non-nullable type at line %d:%d.\n",
+                            nextName.line, nextName.column);
+                    return NULL;
+                }
+
+                if (mismatch) {
+                    fprintf(stderr, "Error: Type mismatch at line %d:%d. Literal does not match declared type '%s'.\n",
+                            nextName.line, nextName.column, declaredType);
+                    return NULL;
+                }
+            }
+        }
 
         ASTNode* n = new_node();
         n->type = NODE_VAR_DECL;
@@ -557,25 +636,58 @@ static ASTNode* parseAssignOrVarList(bool isMutable, Token nameToken) {
         ASTNode* nextType = NULL;
         if (peekToken().type == TOKEN_COLON) {
             nextToken();
-            Token typeTok = nextToken();
-            if (typeTok.type != TOKEN_IDENTIFIER && typeTok.type != TOKEN_INT &&
-                typeTok.type != TOKEN_I64 && typeTok.type != TOKEN_U32 &&
-                typeTok.type != TOKEN_U64 && typeTok.type != TOKEN_F64 &&
-                typeTok.type != TOKEN_BOOL) {
-                return NULL;
-            }
-            int tl = typeTok.length;
-            char* typeName = parser_arena_alloc(&parserArena, tl + 1);
-            strncpy(typeName, typeTok.start, tl);
-            typeName[tl] = '\0';
-            nextType = new_node();
-            nextType->type = NODE_TYPE;
-            nextType->typeAnnotation.name = typeName;
+            nextType = parseTypeAnnotation();
+            if (!nextType) return NULL;
         }
 
         if (nextToken().type != TOKEN_EQUAL) return NULL;
         ASTNode* init = parseExpression();
         if (!init) return NULL;
+
+        if (nextType && init->type == NODE_LITERAL) {
+            const char* declaredType = nextType->typeAnnotation.name;
+            ValueType litType = init->literal.value.type;
+
+            bool isRedundant = false;
+            if ((strcmp(declaredType, "u32") == 0 && litType == VAL_U32) ||
+                (strcmp(declaredType, "u64") == 0 && litType == VAL_U64) ||
+                (strcmp(declaredType, "i64") == 0 && litType == VAL_I64) ||
+                (strcmp(declaredType, "f64") == 0 && litType == VAL_F64)) {
+                isRedundant = true;
+            }
+
+            if (!isRedundant) {
+                bool mismatch = true;
+                if (strcmp(declaredType, "i32") == 0 && litType == VAL_I32)
+                    mismatch = false;
+                else if (strcmp(declaredType, "i64") == 0 && litType == VAL_I64)
+                    mismatch = false;
+                else if (strcmp(declaredType, "u32") == 0 && litType == VAL_U32)
+                    mismatch = false;
+                else if (strcmp(declaredType, "u64") == 0 && litType == VAL_U64)
+                    mismatch = false;
+                else if (strcmp(declaredType, "f64") == 0 && litType == VAL_F64)
+                    mismatch = false;
+                else if (strcmp(declaredType, "bool") == 0 && litType == VAL_BOOL)
+                    mismatch = false;
+                else if (strcmp(declaredType, "string") == 0 && litType == VAL_STRING)
+                    mismatch = false;
+                else if (litType == VAL_NIL && nextType->typeAnnotation.isNullable)
+                    mismatch = false;
+
+                if (litType == VAL_NIL && !nextType->typeAnnotation.isNullable) {
+                    fprintf(stderr, "Error: nil not allowed for non-nullable type at line %d:%d.\n",
+                            nextName.line, nextName.column);
+                    return NULL;
+                }
+
+                if (mismatch) {
+                    fprintf(stderr, "Error: Type mismatch at line %d:%d. Literal does not match declared type '%s'.\n",
+                            nextName.line, nextName.column, declaredType);
+                    return NULL;
+                }
+            }
+        }
 
         ASTNode* n = new_node();
         n->type = NODE_VAR_DECL;
@@ -1303,6 +1415,15 @@ static ASTNode* parsePrimaryExpression(void) {
             node->dataType = NULL;
             return node;
         }
+        case TOKEN_NIL: {
+            ASTNode* node = new_node();
+            node->type = NODE_LITERAL;
+            node->literal.value = NIL_VAL;
+            node->location.line = token.line;
+            node->location.column = token.column;
+            node->dataType = NULL;
+            return node;
+        }
         case TOKEN_IDENTIFIER: {
             ASTNode* node = new_node();
             node->type = NODE_IDENTIFIER;
@@ -1421,21 +1542,9 @@ static ASTNode* parseFunctionDefinition(void) {
             // Optional type annotation
             ASTNode* paramType = NULL;
             if (peekToken().type == TOKEN_COLON) {
-                nextToken(); // consume ':'
-                Token typeTok = nextToken();
-                if (typeTok.type != TOKEN_IDENTIFIER && typeTok.type != TOKEN_INT &&
-                    typeTok.type != TOKEN_I64 && typeTok.type != TOKEN_U32 &&
-                    typeTok.type != TOKEN_U64 && typeTok.type != TOKEN_F64 &&
-                    typeTok.type != TOKEN_BOOL && typeTok.type != TOKEN_STRING) {
-                    return NULL;
-                }
-                int typeLen = typeTok.length;
-                char* typeName = parser_arena_alloc(&parserArena, typeLen + 1);
-                strncpy(typeName, typeTok.start, typeLen);
-                typeName[typeLen] = '\0';
-                paramType = new_node();
-                paramType->type = NODE_TYPE;
-                paramType->typeAnnotation.name = typeName;
+                nextToken();
+                paramType = parseTypeAnnotation();
+                if (!paramType) return NULL;
             }
             
             // Add parameter to list
@@ -1470,20 +1579,8 @@ static ASTNode* parseFunctionDefinition(void) {
             returnType = parseFunctionType();
             if (!returnType) return NULL;
         } else {
-            typeTok = nextToken();
-            if (typeTok.type != TOKEN_IDENTIFIER && typeTok.type != TOKEN_INT &&
-                typeTok.type != TOKEN_I64 && typeTok.type != TOKEN_U32 &&
-                typeTok.type != TOKEN_U64 && typeTok.type != TOKEN_F64 &&
-                typeTok.type != TOKEN_BOOL && typeTok.type != TOKEN_STRING) {
-                return NULL;
-            }
-            int typeLen = typeTok.length;
-            char* typeName = parser_arena_alloc(&parserArena, typeLen + 1);
-            strncpy(typeName, typeTok.start, typeLen);
-            typeName[typeLen] = '\0';
-            returnType = new_node();
-            returnType->type = NODE_TYPE;
-            returnType->typeAnnotation.name = typeName;
+            returnType = parseTypeAnnotation();
+            if (!returnType) return NULL;
         }
     }
     
@@ -1675,20 +1772,8 @@ static ASTNode* parseFunctionType(void) {
         if (typeTok.type == TOKEN_FN) {
             returnType = parseFunctionType();
         } else {
-            typeTok = nextToken();
-            if (typeTok.type != TOKEN_IDENTIFIER && typeTok.type != TOKEN_INT &&
-                typeTok.type != TOKEN_I64 && typeTok.type != TOKEN_U32 &&
-                typeTok.type != TOKEN_U64 && typeTok.type != TOKEN_F64 &&
-                typeTok.type != TOKEN_BOOL && typeTok.type != TOKEN_STRING) {
-                return NULL;
-            }
-            int typeLen = typeTok.length;
-            char* typeName = parser_arena_alloc(&parserArena, typeLen + 1);
-            strncpy(typeName, typeTok.start, typeLen);
-            typeName[typeLen] = '\0';
-            returnType = new_node();
-            returnType->type = NODE_TYPE;
-            returnType->typeAnnotation.name = typeName;
+            returnType = parseTypeAnnotation();
+            if (!returnType) return NULL;
         }
     }
     
