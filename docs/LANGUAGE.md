@@ -19,13 +19,13 @@ All variables default to `i32` unless an explicit type is provided. The `let` ke
 
 ```orus
 
-number = 5           # inferred as i32
-flag: bool = true    # explicitly bool
-mut count = 0        # mutable, inferred as i32
-x = 5               # inferred as immutable i32
-mut y = 10          # mutable, inferred as i32
-z: i64 = 0          # explicitly typed immutable
-mut a: u32 = 10     # explicitly typed mutable
+number = 5           // inferred as i32
+flag: bool = true    // explicitly bool
+mut count = 0        // mutable, inferred as i32
+x = 5               // inferred as immutable i32
+mut y = 10          // mutable, inferred as i32
+z: i64 = 0          // explicitly typed immutable
+mut a: u32 = 10     // explicitly typed mutable
 
 ```
 
@@ -45,9 +45,9 @@ variables without modifying them.
 ```orus
 x = 5
 if true:
-    mut x = 1  # shadows outer `x`
-    print(x)   # prints 1
-print(x)       # prints 5
+    mut x = 1  // shadows outer `x`
+    print(x)   // prints 1
+print(x)       // prints 5
 ```
 
 ---
@@ -76,10 +76,10 @@ elif n == 0:
 else:
     print("negative")
 
-# Inline conditionals (supports if, elif, else)
+// Inline conditionals (supports if, elif, else)
 print("ok") if x == 1 elif x == 2 else print("fallback")
 
-# Ternary expression assignment
+/: Ternary expression assignment
 label = x > 0 ? "positive" : "non-positive"
 ```
 
@@ -96,8 +96,8 @@ for i in 0..5:
 while condition:
     print("looping")
 
-break     # exits the nearest loop
-continue  # skips to the next iteration
+break     // exits the nearest loop
+continue  // skips to the next iteration
 ```
 
 #### Advanced Range Syntax with Step
@@ -107,69 +107,31 @@ Orus supports advanced range syntax with customizable step values:
 ```orus
 # Forward iteration with step
 for i in 0..10..2:
-    print(i)  # prints: 0, 2, 4, 6, 8
+    print(i)  // prints: 0, 2, 4, 6, 8
 
 # Backward iteration with negative step
 for i in 10..0..-2:
-    print(i)  # prints: 10, 8, 6, 4, 2
+    print(i)  // prints: 10, 8, 6, 4, 2
 
 # Large steps
 for i in 0..100..25:
-    print(i)  # prints: 0, 25, 50, 75
+    print(i)  // prints: 0, 25, 50, 75
 
 # Single element iteration
 for i in 5..6..1:
-    print(i)  # prints: 5
-```
-
-#### Progressive Loop Safety System
-
-Orus includes a progressive loop safety system that automatically protects against infinite loops while maintaining maximum performance:
-
-| **Iteration Count** | **Behavior** | **Message** |
-|---------------------|--------------|-------------|
-| `< 100K` | ✅ Fast, guard-free execution | None |
-| `100K–1M` | ✅ Guarded silently | No message |
-| `1M–10M` | ⚠️ Warns at 1M | Prints warning |
-| `> 10M` | ❌ Stops by default | Runtime error |
-
-**Examples:**
-```orus
-# Fast execution (no guards)
-for i in 0..50000:
-    print(i)
-
-# Silent protection (guards active)
-for i in 0..500000:
-    process_data(i)
-
-# Warning + continuation
-for i in 0..1500000:     # Warns at 1M, continues
-    compute(i)
-
-# Configurable limits
-# Set ORUS_MAX_LOOP_ITERATIONS=0 for unlimited loops
-```
-
-**Compile-time Detection:**
-```orus
-while true:     # ❌ Detected as infinite loop
-    print("infinite")
-
-for i in 10..0:  # ❌ Invalid direction detected
-    print(i)
+    print(i)  // prints: 5
 ```
 
 **Direction Validation:**
 ```orus
-# Step direction must match range direction
-for i in 0..10..1:   # ✅ Valid: positive step for forward range
+// Step direction must match range direction
+for i in 0..10..1:   // ✅ Valid: positive step for forward range
     print(i)
 
-for i in 10..0..-1:  # ✅ Valid: negative step for backward range
+for i in 10..0..-1:  // ✅ Valid: negative step for backward range
     print(i)
 
-for i in 0..10..-1:  # ❌ Invalid: negative step for forward range
+for i in 0..10..-1:  // ❌ Invalid: negative step for forward range
     print(i)
 ```
 
@@ -184,12 +146,12 @@ fn add(a, b) -> i32:
 fn greet(name: string):
     print("Hello,", name, "!")
 
-# Format specifiers
+// Format specifiers
 pi = 3.14159
 print("Pi rounded: @.2f", pi)
 print("Hello,", name)
 
-# Format specifiers
+// Format specifiers
 pi = 3.14159
 print("Pi rounded:", pi)
 
@@ -430,7 +392,7 @@ max(arr)
 ### Time
 
 ```orus
-timestamp()       # returns milliseconds
+times_tamp()       # returns milliseconds
 ```
 
 ---
@@ -559,22 +521,22 @@ and   or   not
 * **Ternary binds looser than logical operators**:
 
   ```orus
-  result = x > 0 ? a : b and c  # wrong: `b and c` is grouped
-  result = x > 0 ? a : (b and c)  # ✅ correct
+  result = x > 0 ? a : b and c  // wrong: `b and c` is grouped
+  result = x > 0 ? a : (b and c)  // ✅ correct
   ```
 
 * **Mixing `not` with comparisons without parentheses**:
 
   ```orus
-  ok = not x == 1      # wrong: means `(not x) == 1`
-  ok = not (x == 1)    # ✅ correct
+  ok = not x == 1      // wrong: means `(not x) == 1`
+  ok = not (x == 1)    // ✅ correct
   ```
 
 * **Chained comparisons don't work like in Python**:
 
   ```orus
-  if 0 < x < 10: ...        # ❌ invalid
-  if x > 0 and x < 10: ...  # ✅ correct
+  if 0 < x < 10: ...        // ❌ invalid
+  if x > 0 and x < 10: ...  // ✅ correct
   ```
 
 * **Unintended precedence between `or` and ternary**:
@@ -587,10 +549,10 @@ and   or   not
 ### Precedence Error Example
 
 ```orus
-# Misleading: 'x > 0 ? a : b and c' actually binds as:
+// Misleading: 'x > 0 ? a : b and c' actually binds as:
 x > 0 ? a : (b and c)
 
-# Better: use parentheses
+// Better: use parentheses
 result = x > 0 ? a : (b and c)
 ```
 
@@ -608,9 +570,9 @@ Without parentheses, expressions follow the precedence table above.
 Variables default to `i32` unless otherwise specified. Literal suffixes (`u`, `f64`, etc.) can override the default.
 
 ```orus
-x = 10          # i32
-y = 10000000000u  # u64
-z = 3.14        # f64
+x = 10          // i32
+y = 10000000000u  // u64
+z = 3.14        // f64
 ```
 
 ### Type Casting
