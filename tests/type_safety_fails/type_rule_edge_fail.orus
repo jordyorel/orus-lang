@@ -1,0 +1,2 @@
+x: i32 = nil
+result = 1 as bool as string

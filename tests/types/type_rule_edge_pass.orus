@@ -1,0 +1,5 @@
+flag: bool = 0 as bool
+result = flag as string
+val: i64 = (5 as i64)
+mut count: i32 = 0
+print(result, val, count)

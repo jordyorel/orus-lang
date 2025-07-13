@@ -1,0 +1,5 @@
+a: i32 = 10
+b: f64 = 3.14
+c: bool = true
+d: string = "hello"
+print(a, b, c, d)
