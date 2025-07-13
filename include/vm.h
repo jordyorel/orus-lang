@@ -800,6 +800,11 @@ typedef enum {
     REG_TYPE_HEAP
 } RegisterType;
 
+// Profiling counters
+typedef struct {
+    uint64_t instruction_counts[VM_DISPATCH_TABLE_SIZE];
+} VMProfile;
+
 // VM state
 typedef struct {
     // Registers (traditional boxed)
@@ -858,6 +863,8 @@ typedef struct {
     int currentColumn;
 
     double lastExecutionTime;
+
+    VMProfile profile;
 
     // Configuration
     bool trace;

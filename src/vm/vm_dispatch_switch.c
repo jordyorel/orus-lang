@@ -43,6 +43,7 @@ InterpretResult vm_run_dispatch(void) {
             vm.instruction_count++;
 
             uint8_t instruction = READ_BYTE();
+            PROFILE_INC(instruction);
 
             switch (instruction) {
                 case OP_LOAD_CONST: {

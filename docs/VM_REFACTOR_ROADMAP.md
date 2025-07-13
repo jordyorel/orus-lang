@@ -26,7 +26,7 @@ This roadmap tracks progress of the virtual machine refactoring work. It follows
 - [x] Introduce rope data structure and interning
 
 ## Phase 5 – Performance and Maintainability Enhancements
-- [ ] Add profiling infrastructure
+- [x] Add profiling infrastructure
 - [ ] Add validation functions
 - [ ] Improve documentation for public APIs
 
