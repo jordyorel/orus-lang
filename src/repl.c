@@ -94,7 +94,7 @@ static void history_add(History *h, const char *line) {
 static void history_save(History *h) {
     FILE *f = fopen(HISTORY_FILE, "w");
     if (!f) return;
-    size_t start = h->count > 500 ? h->count - 500 : 0;
+    size_t start = h->count > HISTORY_SAVE_LIMIT ? h->count - HISTORY_SAVE_LIMIT : 0;
     for (size_t i = start; i < h->count; i++) {
         fprintf(f, "%s\n", h->items[i]);
     }
@@ -213,12 +213,12 @@ static bool process_command(const char* input){
 #endif
         return true;
     }
-    if(strncmp(input,":timing ",8)==0){
-        repl_state.show_timing = (strcmp(input+8,"on")==0);
+    if(strncmp(input,":timing ",COMMAND_TIMING_PREFIX_LEN)==0){
+        repl_state.show_timing = (strcmp(input+COMMAND_TIMING_PREFIX_LEN,"on")==0);
         return true;
     }
-    if(strncmp(input,":memory ",8)==0){
-        repl_state.show_memory = (strcmp(input+8,"on")==0);
+    if(strncmp(input,":memory ",COMMAND_MEMORY_PREFIX_LEN)==0){
+        repl_state.show_memory = (strcmp(input+COMMAND_MEMORY_PREFIX_LEN,"on")==0);
         return true;
     }
     if(strcmp(input,":history")==0){
@@ -231,8 +231,8 @@ static bool process_command(const char* input){
         print_colored(COLOR_SUCCESS,"VM state reset.\n");
         return true;
     }
-    if(strncmp(input,":load ",6)==0){
-        const char* filename=input+6; while(*filename==' ') filename++;
+    if(strncmp(input,":load ",COMMAND_LOAD_PREFIX_LEN)==0){
+        const char* filename=input+COMMAND_LOAD_PREFIX_LEN; while(*filename==' ') filename++;
         double start=get_time();
         InterpretResult res=interpret_file(filename);
         double elapsed=get_time()-start;

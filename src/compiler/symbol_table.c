@@ -7,10 +7,10 @@
 #define MAX_LOAD_FACTOR 0.75
 
 static uint64_t fnv1a_hash(const char* key) {
-    uint64_t hash = 14695981039346656037ull;
+    uint64_t hash = FNV_OFFSET_BASIS;
     while (*key) {
         hash ^= (unsigned char)(*key++);
-        hash *= 1099511628211ull;
+        hash *= FNV_PRIME;
     }
     return hash;
 }
