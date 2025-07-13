@@ -58,8 +58,8 @@ double get_time_vm(void) {
 //     #endif
 // }
 
-// Global VM instance
-VM vm;
+// Global VM instance is defined in vm_core.c
+extern VM vm;
 
 #if USE_COMPUTED_GOTO
 void* vm_dispatch_table[OP_HALT + 1] = {0};
@@ -170,78 +170,7 @@ Type* getPrimitiveType(TypeKind kind) {
 
 
 
-void initVM(void) {
-    initTypeSystem();
-
-    initMemory();
-
-    // Clear registers
-    for (int i = 0; i < REGISTER_COUNT; i++) {
-        vm.registers[i] = NIL_VAL;
-    }
-    
-    // Initialize typed registers for performance optimizations
-    memset(&vm.typed_regs, 0, sizeof(TypedRegisters));
-    for (int i = 0; i < 32; i++) {
-        vm.typed_regs.heap_regs[i] = NIL_VAL;
-    }
-    for (int i = 0; i < 256; i++) {
-        vm.typed_regs.reg_types[i] = REG_TYPE_NONE;
-    }
-
-    // Initialize globals
-    for (int i = 0; i < UINT8_COUNT; i++) {
-        vm.globals[i] = NIL_VAL;
-        vm.globalTypes[i] = NULL;
-        vm.publicGlobals[i] = false;
-        vm.variableNames[i].name = NULL;
-        vm.variableNames[i].length = 0;
-    }
-
-    vm.variableCount = 0;
-    vm.functionCount = 0;
-    vm.frameCount = 0;
-    vm.tryFrameCount = 0;
-    vm.lastError = NIL_VAL;
-    vm.instruction_count = 0;
-    vm.astRoot = NULL;
-    vm.filePath = NULL;
-    vm.currentLine = 0;
-    vm.currentColumn = 1;
-    vm.moduleCount = 0;
-    vm.nativeFunctionCount = 0;
-    vm.gcCount = 0;
-    vm.lastExecutionTime = 0.0;
-    
-    // Initialize upvalue management
-    vm.openUpvalues = NULL;
-
-    // Environment configuration
-    const char* envTrace = getenv("ORUS_TRACE");
-    vm.trace = envTrace && envTrace[0] != '\0';
-
-    vm.chunk = NULL;
-    vm.ip = NULL;
-    
-    // Dispatch table will be initialized on first run() call
-    // No dummy warm-up needed - eliminates cold start penalty
-}
-
-void freeVM(void) {
-    // Free all allocated objects
-    freeObjects();
-
-    // Clear globals
-    for (int i = 0; i < UINT8_COUNT; i++) {
-        vm.variableNames[i].name = NULL;
-        vm.globalTypes[i] = NULL;
-        vm.publicGlobals[i] = false;
-    }
-
-    vm.astRoot = NULL;
-    vm.chunk = NULL;
-    vm.ip = NULL;
-}
+// initVM and freeVM implementations are moved to vm_core.c
 
 // Runtime error handling
 void runtimeError(ErrorType type, SrcLocation location,
