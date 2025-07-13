@@ -1,0 +1,7 @@
+// Complex expression with explicit casts
+// Expected: compile and run successfully
+
+a: i32 = 5
+b: f64 = 3.5
+c = (a as f64) * b + 2.0
+print(c)

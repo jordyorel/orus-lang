@@ -119,7 +119,11 @@ test: $(ORUS)
                           $(TESTDIR)/types/not_on_int_fail.orus \
                           $(TESTDIR)/types/type_rule_simple_pass.orus \
                           $(TESTDIR)/types/type_rule_complex_pass.orus \
-                          $(TESTDIR)/types/type_rule_edge_pass.orus; do \
+                          $(TESTDIR)/types/type_rule_edge_pass.orus \
+                          $(TESTDIR)/types/arithmetic_same_types_v2.orus \
+                          $(TESTDIR)/types/explicit_cast_arithmetic.orus \
+                          $(TESTDIR)/types/complex_expression_with_casts.orus \
+                          $(TESTDIR)/types/cross_type_comparison.orus; do \
 		if [ -f "$$test_file" ]; then \
 			printf "Testing: $$test_file ... "; \
 			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
@@ -143,7 +147,10 @@ test: $(ORUS)
                           $(TESTDIR)/type_safety_fails/minus_on_bool_fail.orus \
                           $(TESTDIR)/type_safety_fails/type_rule_simple_fail.orus \
                           $(TESTDIR)/type_safety_fails/type_rule_complex_fail.orus \
-                          $(TESTDIR)/type_safety_fails/type_rule_edge_fail.orus; do \
+                          $(TESTDIR)/type_safety_fails/type_rule_edge_fail.orus \
+                          $(TESTDIR)/type_safety_fails/mixed_type_operations_fail.orus \
+                          $(TESTDIR)/type_safety_fails/implicit_widening_fail.orus \
+                          $(TESTDIR)/type_safety_fails/chained_mixed_ops_fail.orus; do \
 		if [ -f "$$test_file" ]; then \
 			printf "Testing: $$test_file ... "; \
 			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
@@ -160,8 +167,9 @@ test: $(ORUS)
 	for test_file in $(TESTDIR)/edge_cases/arithmetic_edge_cases.orus \
 	                  $(TESTDIR)/edge_cases/operator_precedence.orus \
 	                  $(TESTDIR)/edge_cases/boundary_values.orus \
-	                  $(TESTDIR)/edge_cases/error_conditions.orus \
-	                  $(TESTDIR)/edge_cases/modulo_overflow_test.orus; do \
+                          $(TESTDIR)/edge_cases/error_conditions.orus \
+                          $(TESTDIR)/edge_cases/modulo_overflow_test.orus \
+                          $(TESTDIR)/edge_cases/overflow_i32_plus_one.orus; do \
 		if [ -f "$$test_file" ]; then \
 			printf "Testing: $$test_file ... "; \
 			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
@@ -248,8 +256,9 @@ test: $(ORUS)
 	echo "\033[36m=== Division by Zero Tests (Expected to Fail) ===\033[0m"; \
 	for test_file in $(TESTDIR)/edge_cases/modulo_by_zero_test.orus \
 	                  $(TESTDIR)/edge_cases/large_number_modulo_by_zero.orus \
-	                  $(TESTDIR)/edge_cases/expression_modulo_by_zero.orus \
-	                  $(TESTDIR)/edge_cases/division_by_zero_enhanced.orus; do \
+                          $(TESTDIR)/edge_cases/expression_modulo_by_zero.orus \
+                          $(TESTDIR)/edge_cases/division_by_zero_enhanced.orus \
+                          $(TESTDIR)/edge_cases/division_by_zero_runtime.orus; do \
 		if [ -f "$$test_file" ]; then \
 			printf "Testing: $$test_file ... "; \
 			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
