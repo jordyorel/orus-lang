@@ -6,6 +6,8 @@
 #include "vm_constants.h"
 #include "common.h"
 
+#define CURRENT_LOCATION() ((SrcLocation){vm.filePath, vm.currentLine, vm.currentColumn})
+
 #define VM_ERROR_RETURN(type, loc, msg, ...) \
     do { \
         runtimeError(type, loc, msg, ##__VA_ARGS__); \
