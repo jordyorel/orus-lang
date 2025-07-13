@@ -1,6 +1,7 @@
 // debug.c - Debug utilities for the VM
 #include "../../include/debug.h"
 #include "../../include/common.h"
+#include "../../include/vm_constants.h"
 #include <stdio.h>
 
 void disassembleChunk(Chunk* chunk, const char* name) {
@@ -283,5 +284,15 @@ int disassembleInstruction(Chunk* chunk, int offset) {
         default:
             printf("Unknown opcode %d\n", instruction);
             return offset + 1;
+    }
+}
+
+void dumpProfile(void) {
+    printf("=== VM Instruction Profile ===\n");
+    for (int i = 0; i < VM_DISPATCH_TABLE_SIZE; i++) {
+        if (vm.profile.instruction_counts[i] > 0) {
+            printf("%3d: %llu\n", i,
+                   (unsigned long long)vm.profile.instruction_counts[i]);
+        }
     }
 }

@@ -4398,6 +4398,15 @@ TIMED_SECTION(parse, {
 });
 ```
 
+```c
+// VM instruction profiling
+#ifdef VM_ENABLE_PROFILING
+#define PROFILE_INC(op) (vm.profile.instruction_counts[(op)]++)
+#else
+#define PROFILE_INC(op) ((void)0)
+#endif
+```
+
 ---
 
 ## 🚀 Implementation Priorities

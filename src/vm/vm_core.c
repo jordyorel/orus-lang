@@ -4,6 +4,7 @@
 #include "memory.h"
 #include "vm_string_ops.h"
 #include "type.h"
+#include <string.h>
 
 VM vm; // Global VM instance
 
@@ -46,6 +47,7 @@ void initVM(void) {
     vm.nativeFunctionCount = 0;
     vm.gcCount = 0;
     vm.lastExecutionTime = 0.0;
+    memset(&vm.profile, 0, sizeof(VMProfile));
 
     vm.openUpvalues = NULL;
 
