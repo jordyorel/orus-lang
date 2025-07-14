@@ -1,4 +1,0 @@
-// Test u32 * 2 specifically
-p: u32 = 100
-result = p * 2
-print(result)

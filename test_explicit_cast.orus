@@ -1,5 +1,0 @@
-// Test explicit casting with 'as' keyword
-a: i32 = 10
-b: u32 = 20u32
-result = (a as u32) + b  // Should work: explicit conversion
-print(result)

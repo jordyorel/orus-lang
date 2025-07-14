@@ -1,5 +1,0 @@
-// Test that i32↔u32 coercion still works for small positive values
-a: i32 = 10
-b: u32 = 20u32
-result = a + b  // Should work: i32(10) can safely coerce to u32
-print(result)

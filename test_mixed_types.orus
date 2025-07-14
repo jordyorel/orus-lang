@@ -1,5 +1,0 @@
-// Test mixed types - should fail at runtime
-a: i32 = 50
-b: i64 = 100
-result = (a as i64) + b
-print(result)

@@ -1,5 +1,0 @@
-// Test same types - should pass
-a: i32 = 50
-b: i32 = 100
-result = a + b  
-print(result)

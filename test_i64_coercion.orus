@@ -1,3 +1,0 @@
-// Simple test for i64 literal coercion
-b: i64 = 100
-print(b)

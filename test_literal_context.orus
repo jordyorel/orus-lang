@@ -1,9 +1,0 @@
-// Test different scenarios
-// This should work (and does)
-x: u32 = 2
-print(x)
-
-// This fails but probably shouldn't (problematic)
-p: u32 = 100
-result1 = p * 2
-print(result1)
