@@ -5,6 +5,10 @@
 #include <string.h>
 #include <assert.h>
 
+#define ANALYZER_VAR_CAPACITY 64
+#define ANALYZER_LIFESPAN_CAPACITY 1024
+#define ANALYZER_MAX_LIMIT 64
+
 // ---------------------------------------------------------------------------
 // Forward declarations
 // ---------------------------------------------------------------------------
@@ -82,47 +86,47 @@ void initScopeAnalyzer(ScopeAnalyzer* analyzer) {
     analyzer->canCoalesce = calloc(REGISTER_COUNT, sizeof(bool));
     
     // Initialize optimization tracking
-    analyzer->hoistableVariables = malloc(sizeof(ScopeVariable*) * 64);
+    analyzer->hoistableVariables = malloc(sizeof(ScopeVariable*) * ANALYZER_VAR_CAPACITY);
     if (analyzer->hoistableVariables) {
-        memset(analyzer->hoistableVariables, 0, sizeof(ScopeVariable*) * 64);
+        memset(analyzer->hoistableVariables, 0, sizeof(ScopeVariable*) * ANALYZER_VAR_CAPACITY);
     }
     analyzer->hoistableCount = 0;
     
     // Initialize lifetime analysis
-    analyzer->variableLifespans = malloc(sizeof(int) * 1024);
-    analyzer->shortLivedVars = malloc(sizeof(bool) * 1024);
-    analyzer->longLivedVars = malloc(sizeof(bool) * 1024);
+    analyzer->variableLifespans = malloc(sizeof(int) * ANALYZER_LIFESPAN_CAPACITY);
+    analyzer->shortLivedVars = malloc(sizeof(bool) * ANALYZER_LIFESPAN_CAPACITY);
+    analyzer->longLivedVars = malloc(sizeof(bool) * ANALYZER_LIFESPAN_CAPACITY);
     if (analyzer->variableLifespans) {
-        memset(analyzer->variableLifespans, 0, sizeof(int) * 1024);
+        memset(analyzer->variableLifespans, 0, sizeof(int) * ANALYZER_LIFESPAN_CAPACITY);
     }
     if (analyzer->shortLivedVars) {
-        memset(analyzer->shortLivedVars, 0, sizeof(bool) * 1024);
+        memset(analyzer->shortLivedVars, 0, sizeof(bool) * ANALYZER_LIFESPAN_CAPACITY);
     }
     if (analyzer->longLivedVars) {
-        memset(analyzer->longLivedVars, 0, sizeof(bool) * 1024);
+        memset(analyzer->longLivedVars, 0, sizeof(bool) * ANALYZER_LIFESPAN_CAPACITY);
     }
     
     // Initialize closure capture analysis
-    analyzer->capturedVariables = malloc(sizeof(ScopeVariable*) * 64);
+    analyzer->capturedVariables = malloc(sizeof(ScopeVariable*) * ANALYZER_VAR_CAPACITY);
     if (analyzer->capturedVariables) {
-        memset(analyzer->capturedVariables, 0, sizeof(ScopeVariable*) * 64);
+        memset(analyzer->capturedVariables, 0, sizeof(ScopeVariable*) * ANALYZER_VAR_CAPACITY);
     }
     analyzer->capturedCount = 0;
-    analyzer->captureDepths = malloc(sizeof(int) * 64);
+    analyzer->captureDepths = malloc(sizeof(int) * ANALYZER_VAR_CAPACITY);
     if (analyzer->captureDepths) {
-        memset(analyzer->captureDepths, 0, sizeof(int) * 64);
+        memset(analyzer->captureDepths, 0, sizeof(int) * ANALYZER_VAR_CAPACITY);
     }
     analyzer->hasNestedFunctions = false;
     
     // Initialize dead variable elimination
-    analyzer->deadVariables = malloc(sizeof(ScopeVariable*) * 64);
+    analyzer->deadVariables = malloc(sizeof(ScopeVariable*) * ANALYZER_VAR_CAPACITY);
     if (analyzer->deadVariables) {
-        memset(analyzer->deadVariables, 0, sizeof(ScopeVariable*) * 64);
+        memset(analyzer->deadVariables, 0, sizeof(ScopeVariable*) * ANALYZER_VAR_CAPACITY);
     }
     analyzer->deadCount = 0;
-    analyzer->writeOnlyVariables = malloc(sizeof(ScopeVariable*) * 64);
+    analyzer->writeOnlyVariables = malloc(sizeof(ScopeVariable*) * ANALYZER_VAR_CAPACITY);
     if (analyzer->writeOnlyVariables) {
-        memset(analyzer->writeOnlyVariables, 0, sizeof(ScopeVariable*) * 64);
+        memset(analyzer->writeOnlyVariables, 0, sizeof(ScopeVariable*) * ANALYZER_VAR_CAPACITY);
     }
     analyzer->writeOnlyCount = 0;
     analyzer->eliminatedInstructions = 0;
@@ -255,8 +259,8 @@ ScopeInfo* createScope(ScopeAnalyzer* analyzer, int depth, int startInstruction,
     scope->registerCount = 0;
     
     // Initialize lifetime analysis
-    scope->variableLifetimes = malloc(sizeof(int) * 64);
-    scope->canShareRegisters = malloc(sizeof(bool) * 64);
+    scope->variableLifetimes = malloc(sizeof(int) * ANALYZER_VAR_CAPACITY);
+    scope->canShareRegisters = malloc(sizeof(bool) * ANALYZER_VAR_CAPACITY);
     
     // Initialize tree structure
     scope->parent = analyzer->currentScope;
@@ -706,7 +710,7 @@ static void identifyHoistableVariables(ScopeInfo* scope, ScopeAnalyzer* analyzer
         // Check if variable can be hoisted to a parent scope
         if (var->isLoopInvariant && !var->crossesLoopBoundary && !var->escapes) {
             // Add to hoistable variables list
-            if (analyzer->hoistableCount < 64) { // Arbitrary limit
+            if (analyzer->hoistableCount < ANALYZER_MAX_LIMIT) { // Arbitrary limit
                 analyzer->hoistableVariables[analyzer->hoistableCount++] = var;
             }
         }
@@ -1138,7 +1142,7 @@ static void findCapturedVariablesInScope(ScopeInfo* scope, ScopeAnalyzer* analyz
                 var->captureDepth = parentScope->depth;
                 
                 // Add to captured variables list
-                if (analyzer->capturedCount < 64) {
+                if (analyzer->capturedCount < ANALYZER_MAX_LIMIT) {
                     analyzer->capturedVariables[analyzer->capturedCount] = parentVar;
                     analyzer->captureDepths[analyzer->capturedCount] = scope->depth - parentScope->depth;
                     analyzer->capturedCount++;
@@ -1282,7 +1286,7 @@ static void identifyDeadVariables(ScopeInfo* scope, ScopeAnalyzer* analyzer) {
             var->isDead = true;
             
             // Add to dead variables list
-            if (analyzer->deadCount < 64) {
+            if (analyzer->deadCount < ANALYZER_MAX_LIMIT) {
                 analyzer->deadVariables[analyzer->deadCount] = var;
                 analyzer->deadCount++;
             }
@@ -1294,7 +1298,7 @@ static void identifyDeadVariables(ScopeInfo* scope, ScopeAnalyzer* analyzer) {
             if (var->useCount == 0 && var->writeCount <= 1) {
                 var->isDead = true;
                 
-                if (analyzer->deadCount < 64) {
+                if (analyzer->deadCount < ANALYZER_MAX_LIMIT) {
                     analyzer->deadVariables[analyzer->deadCount] = var;
                     analyzer->deadCount++;
                 }
@@ -1325,7 +1329,7 @@ static void identifyWriteOnlyVariables(ScopeInfo* scope, ScopeAnalyzer* analyzer
                 var->isWriteOnly = true;
                 
                 // Add to write-only variables list
-                if (analyzer->writeOnlyCount < 64) {
+                if (analyzer->writeOnlyCount < ANALYZER_MAX_LIMIT) {
                     analyzer->writeOnlyVariables[analyzer->writeOnlyCount] = var;
                     analyzer->writeOnlyCount++;
                 }

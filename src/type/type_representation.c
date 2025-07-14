@@ -22,8 +22,8 @@ static bool type_system_initialized = false;
 
 // ---- Arena allocation ----
 static void* arena_alloc(size_t size) {
-    // Align to 8-byte boundary for optimal performance
-    size = (size + 7) & ~7;
+    // Align to ARENA_ALIGNMENT-byte boundary for optimal performance
+    size = (size + ARENA_ALIGNMENT - 1) & ~(ARENA_ALIGNMENT - 1);
     
     if (!type_arena || type_arena->used + size > type_arena->size) {
         size_t chunk = size > ARENA_SIZE ? size : ARENA_SIZE;
@@ -63,7 +63,7 @@ HashMap* hashmap_new(void) {
     HashMap* map = malloc(sizeof(HashMap));
     if (!map) return NULL;
     
-    map->capacity = 16;
+    map->capacity = HASHMAP_INITIAL_CAPACITY;
     map->count = 0;
     map->buckets = calloc(map->capacity, sizeof(HashMapEntry*));
     
@@ -135,10 +135,10 @@ static void hashmap_set_int(HashMap* map, int key, void* value) {
 
 // String hashmap implementation for type inference
 static size_t hash_string(const char* str) {
-    size_t hash = 5381;
+    size_t hash = DJB2_INITIAL_HASH;
     int c;
     while ((c = *str++)) {
-        hash = ((hash << 5) + hash) + c;
+        hash = ((hash << DJB2_SHIFT) + hash) + c;
     }
     return hash;
 }

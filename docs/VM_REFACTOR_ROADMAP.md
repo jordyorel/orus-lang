@@ -19,15 +19,15 @@ This roadmap tracks progress of the virtual machine refactoring work. It follows
 
 ## Phase 3 – Error Handling Standardization
 - [x] Added error handling macros in **vm_internal.h**
-- [ ] Apply macros across VM code
+- [x] Apply macros across VM code
 
 ## Phase 4 – String Operations Optimization
 - [x] Added `StringBuilder` implementation
-- [ ] Introduce rope data structure and interning
+- [x] Introduce rope data structure and interning
 
 ## Phase 5 – Performance and Maintainability Enhancements
-- [ ] Add profiling infrastructure
-- [ ] Add validation functions
-- [ ] Improve documentation for public APIs
+- [x] Add profiling infrastructure
+- [x] Add validation functions
+- [x] Improve documentation for public APIs
 
 This file will be updated as tasks are completed.

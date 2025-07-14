@@ -37,6 +37,12 @@ extern void* vm_dispatch_table[OP_HALT + 1];
 // Error handling function - implemented in vm.c
 void runtimeError(ErrorType type, SrcLocation location, const char* format, ...);
 
+#ifdef VM_ENABLE_PROFILING
+#  define PROFILE_INC(op) (vm.profile.instruction_counts[(op)]++)
+#else
+#  define PROFILE_INC(op) ((void)0)
+#endif
+
 // Dispatch macros - defined differently for each implementation
 #ifdef USE_COMPUTED_GOTO
     // Fast dispatch macros for computed goto
@@ -65,6 +71,7 @@ void runtimeError(ErrorType type, SrcLocation location, const char* format, ...)
                 } \
                 vm.instruction_count++; \
                 instruction = READ_BYTE(); \
+                PROFILE_INC(instruction); \
                 if (instruction > OP_HALT || vm_dispatch_table[instruction] == NULL) { \
                     goto LABEL_UNKNOWN; \
                 } \
@@ -72,8 +79,12 @@ void runtimeError(ErrorType type, SrcLocation location, const char* format, ...)
             } while (0)
         #define DISPATCH_TYPED() DISPATCH()
     #else
-        #define DISPATCH() goto *vm_dispatch_table[*vm.ip++]
-        #define DISPATCH_TYPED() goto *vm_dispatch_table[*vm.ip++]
+        #define DISPATCH() do { \
+            uint8_t inst = *vm.ip++; \
+            PROFILE_INC(inst); \
+            goto *vm_dispatch_table[inst]; \
+        } while(0)
+        #define DISPATCH_TYPED() DISPATCH()
     #endif
 #else
     // Switch-based dispatch doesn't use these macros

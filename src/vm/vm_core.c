@@ -2,13 +2,16 @@
 #include "vm_internal.h"
 #include "builtins.h"
 #include "memory.h"
+#include "vm_string_ops.h"
 #include "type.h"
+#include <string.h>
 
 VM vm; // Global VM instance
 
 void initVM(void) {
     initTypeSystem();
     initMemory();
+    init_string_table(&globalStringTable);
 
     for (int i = 0; i < REGISTER_COUNT; i++) {
         vm.registers[i] = NIL_VAL;
@@ -44,6 +47,7 @@ void initVM(void) {
     vm.nativeFunctionCount = 0;
     vm.gcCount = 0;
     vm.lastExecutionTime = 0.0;
+    memset(&vm.profile, 0, sizeof(VMProfile));
 
     vm.openUpvalues = NULL;
 

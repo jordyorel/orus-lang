@@ -10,6 +10,7 @@
 #include <string.h>
 #include "symbol_table.h"
 #include "vm_constants.h"
+#include "vm_string_ops.h"
 
 // Register-based VM configuration
 #define REGISTER_COUNT VM_MAX_REGISTERS
@@ -87,6 +88,7 @@ struct ObjString {
     Obj obj;
     int length;
     char* chars;
+    StringRope* rope;
     uint32_t hash;
 };
 
@@ -798,6 +800,11 @@ typedef enum {
     REG_TYPE_HEAP
 } RegisterType;
 
+// Profiling counters
+typedef struct {
+    uint64_t instruction_counts[VM_DISPATCH_TABLE_SIZE];
+} VMProfile;
+
 // VM state
 typedef struct {
     // Registers (traditional boxed)
@@ -856,6 +863,8 @@ typedef struct {
     int currentColumn;
 
     double lastExecutionTime;
+
+    VMProfile profile;
 
     // Configuration
     bool trace;
@@ -919,14 +928,22 @@ typedef enum {
 #define IS_CLOSURE(value) ((value).type == VAL_CLOSURE)
 
 // Function declarations
+/** Initialize the global VM state and subsystems. */
 void initVM(void);
+
+/** Release all resources associated with the VM. */
 void freeVM(void);
+
+/** Perform startup warmup routines for optimal JIT selection. */
 void warmupVM(void);
 #if USE_COMPUTED_GOTO
 extern void* vm_dispatch_table[OP_HALT + 1];
 void initDispatchTable(void);
 #endif
+/** Execute Orus source code provided as a null-terminated string. */
 InterpretResult interpret(const char* source);
+
+/** Execute an Orus module loaded from disk. */
 InterpretResult interpret_module(const char* path);
 
 // Chunk operations
