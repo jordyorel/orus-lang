@@ -7,6 +7,11 @@
 #include "common.h"
 #include "vm_validation.h"
 
+// runtimeError is implemented in vm.c and used by validation helpers.
+// Declare it here so any internal VM module including this header has
+// access to the prototype without needing the dispatch headers.
+void runtimeError(ErrorType type, SrcLocation location, const char* format, ...);
+
 #define CURRENT_LOCATION() ((SrcLocation){vm.filePath, vm.currentLine, vm.currentColumn})
 
 #define VM_ERROR_RETURN(type, loc, msg, ...) \
