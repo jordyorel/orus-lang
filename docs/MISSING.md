@@ -1160,3 +1160,128 @@ pub fn with_file<T>(path: string, mode: OpenMode, callback: fn(File) -> T) -> Re
 - [ ] **Pattern Matching** - Modern language feature for data handling
 
 This roadmap progresses systematically from basic language features to advanced capabilities, ensuring each phase builds solid foundations for the next. The register-based VM and existing infrastructure provide an excellent platform for rapid feature development.
+
+---
+
+# Orus Typing System Roadmap
+
+## ✅ Official Orus Typing Behavior (as per tutorial)
+
+| Syntax                  | Valid? | Inferred/Parsed As                                  |
+| ----------------------- | ------ | --------------------------------------------------- |
+| `x = 10`                | ✅      | Inferred as `i32`                                   |
+| `y = 3.14`              | ✅      | Inferred as `f64`                                   |
+| `x = 10i64`             | ✅      | Explicit suffix → `i64`                             |
+| `x: u32 = 10`           | ✅      | Explicit annotation, constant converted if possible |
+| `x: i64 = 10u32`        | ❌      | ❌ Implicit coercion not allowed                     |
+| `x: i64 = 10u32 as i64` | ✅      | ✅ Requires `as`                                     |
+
+## 🧭 Implementation Roadmap: Default Inference + Explicit Typing
+
+> ✳️ Goal: Orus supports **default type inference from numeric literals** — `x = 10` is valid and becomes `i32`. No need for suffix or annotation unless you want another type.
+
+### ✅ Phase 1: Literal Type Inference (Parser) - COMPLETED
+
+#### 1.1 In `parsePrimaryExpression()`:
+
+| Case                | Result           | Status |
+| ------------------- | ---------------- | ------ |
+| Unsuffixed integer  | infer `VAL_I32`  | ✅ DONE |
+| Unsuffixed float    | infer `VAL_F64`  | ✅ DONE |
+| Suffix like `10i64` | assign `VAL_I64` | ✅ DONE |
+| `true` / `"text"`   | pretyped         | ✅ DONE |
+
+**Implementation Details:**
+- ✅ Default `i32` inference for unsuffixed integers that fit in int32 range
+- ✅ Default `f64` inference for unsuffixed floats (contains `.`, `e`, `E`)
+- ✅ All suffixes supported: `i32`, `i64`, `u32`, `u64`, `f64`, `u`
+- ✅ Boundary handling: integers > INT32_MAX automatically become `i64`
+- ✅ Underscore stripping: `1_000_000` → `1000000`
+- ✅ Scientific notation: `1.23e5` → `f64`
+
+**Implementation Location:** `src/compiler/parser.c:1314` in `parsePrimaryExpression()`
+
+### ✅ Phase 2: Variable Declarations
+
+#### 2.1 Accept these forms:
+
+```orus
+a = 10        // infer i32
+b = 3.14      // infer f64
+c = 10u64     // use suffix
+d: u32 = 42   // annotation overrides
+```
+
+In `parser.c → parseVariableDeclaration()`:
+
+* Store either:
+  * `initializer->literal.value.type`
+  * or `typeAnnotation` (if exists)
+
+### ✅ Phase 3: Compiler Type Resolution
+
+In `compiler.c → compileNode`:
+
+```c
+if (node->varDecl.typeAnnotation) {
+    // Check: is initializer type convertible?
+    if (!types_match(inferredType, annotatedType)) {
+        error("Cannot assign %s to %s", inferredType, annotatedType);
+    }
+} else {
+    // use literal's inferred type
+    varType = node->initializer->literal.value.type;
+}
+```
+
+### ✅ Phase 4: Binary Operation Rules
+
+* **Types must match exactly**
+* **`as` keyword required** for cross-type operations
+
+```orus
+a = 10
+b = 2.5
+c = a + b        # ❌ error: i32 + f64
+c = (a as f64) + b  # ✅
+```
+
+### ✅ Phase 5: Casting Rules
+
+```orus
+a = 10
+b = a as f64    # OK
+c = b as string # OK
+```
+
+Only legal way to change type is `as`. All other conversions are errors.
+
+## ✅ Final Behavior Summary (Canonical)
+
+| Code                    | Behavior                       | Why                               |
+| ----------------------- | ------------------------------ | --------------------------------- |
+| `x = 10`                | ✅ `i32`                        | inferred                          |
+| `x = 3.14`              | ✅ `f64`                        | inferred                          |
+| `x = 10i64`             | ✅ `i64`                        | suffix                            |
+| `x: u64 = 100`          | ✅ `i32` → `u64` if convertible |                                   |
+| `x: f64 = 10`           | ✅ `i32` → `f64` if valid       |                                   |
+| `x: f64 = 10u32`        | ❌                              | no implicit cross-type assignment |
+| `x: f64 = 10u32 as f64` | ✅                              | cast required                     |
+
+## 🔧 Implementation Tasks
+
+| Task                             | Where        | What to do                                       |
+| -------------------------------- | ------------ | ------------------------------------------------ |
+| Default i32/f64 inference        | `parser.c`   | Already supported — confirm logic                |
+| Suffix parsing                   | `parser.c`   | Confirm all numeric suffixes: `i32`, `u32`, etc. |
+| Cast-only type conversions       | `compiler.c` | Block cross-type assignment unless `as` is used  |
+| Binary op type match enforcement | `compiler.c` | Add checks in `NODE_BINARY`                      |
+| Good error messages              | both         | "Try using `as` to convert types"                |
+
+## Status
+
+- [x] Phase 1: Literal Type Inference ✅ COMPLETED
+- [x] Phase 2: Variable Declarations ✅ COMPLETED
+- [ ] Phase 3: Compiler Type Resolution
+- [ ] Phase 4: Binary Operation Rules
+- [ ] Phase 5: Casting Rules

@@ -66,6 +66,7 @@ struct ASTNode {
         } identifier;
         struct {
             Value value;
+            bool hasExplicitSuffix;
         } literal;
         struct {
             char* op;

@@ -423,10 +423,11 @@ static ASTNode* parseVariableDeclaration(bool isMutable, Token nameToken) {
         ValueType literalType = initializer->literal.value.type;
         
         bool isRedundant = false;
-        if ((strcmp(declaredType, "u32") == 0 && literalType == VAL_U32) ||
-            (strcmp(declaredType, "u64") == 0 && literalType == VAL_U64) ||
-            (strcmp(declaredType, "i64") == 0 && literalType == VAL_I64) ||
-            (strcmp(declaredType, "f64") == 0 && literalType == VAL_F64)) {
+        if (initializer->literal.hasExplicitSuffix &&
+            ((strcmp(declaredType, "u32") == 0 && literalType == VAL_U32) ||
+             (strcmp(declaredType, "u64") == 0 && literalType == VAL_U64) ||
+             (strcmp(declaredType, "i64") == 0 && literalType == VAL_I64) ||
+             (strcmp(declaredType, "f64") == 0 && literalType == VAL_F64))) {
             isRedundant = true;
         }
 
@@ -452,6 +453,43 @@ static ASTNode* parseVariableDeclaration(bool isMutable, Token nameToken) {
                 mismatch = false;
             else if (strcmp(declaredType, "string") == 0 && literalType == VAL_STRING)
                 mismatch = false;
+            // Allow compatible type conversions when annotation overrides
+            else if (strcmp(declaredType, "u32") == 0 && literalType == VAL_I32) {
+                // Allow i32 -> u32 conversion if value is non-negative
+                int32_t value = initializer->literal.value.as.i32;
+                if (value >= 0) {
+                    mismatch = false;
+                    // Convert the literal to u32 type
+                    initializer->literal.value.type = VAL_U32;
+                    initializer->literal.value.as.u32 = (uint32_t)value;
+                }
+            }
+            else if (strcmp(declaredType, "u64") == 0 && literalType == VAL_I32) {
+                // Allow i32 -> u64 conversion if value is non-negative
+                int32_t value = initializer->literal.value.as.i32;
+                if (value >= 0) {
+                    mismatch = false;
+                    // Convert the literal to u64 type
+                    initializer->literal.value.type = VAL_U64;
+                    initializer->literal.value.as.u64 = (uint64_t)value;
+                }
+            }
+            else if (strcmp(declaredType, "i64") == 0 && literalType == VAL_I32) {
+                // Allow i32 -> i64 conversion always
+                int32_t value = initializer->literal.value.as.i32;
+                mismatch = false;
+                // Convert the literal to i64 type
+                initializer->literal.value.type = VAL_I64;
+                initializer->literal.value.as.i64 = (int64_t)value;
+            }
+            else if (strcmp(declaredType, "f64") == 0 && literalType == VAL_I32) {
+                // Allow i32 -> f64 conversion
+                int32_t value = initializer->literal.value.as.i32;
+                mismatch = false;
+                // Convert the literal to f64 type
+                initializer->literal.value.type = VAL_F64;
+                initializer->literal.value.as.f64 = (double)value;
+            }
             else if (literalType == VAL_NIL && typeNode->typeAnnotation.isNullable)
                 mismatch = false;
 
@@ -515,10 +553,11 @@ static ASTNode* parseVariableDeclaration(bool isMutable, Token nameToken) {
             ValueType litType = init->literal.value.type;
 
             bool isRedundant = false;
-            if ((strcmp(declaredType, "u32") == 0 && litType == VAL_U32) ||
-                (strcmp(declaredType, "u64") == 0 && litType == VAL_U64) ||
-                (strcmp(declaredType, "i64") == 0 && litType == VAL_I64) ||
-                (strcmp(declaredType, "f64") == 0 && litType == VAL_F64)) {
+            if (init->literal.hasExplicitSuffix &&
+                ((strcmp(declaredType, "u32") == 0 && litType == VAL_U32) ||
+                 (strcmp(declaredType, "u64") == 0 && litType == VAL_U64) ||
+                 (strcmp(declaredType, "i64") == 0 && litType == VAL_I64) ||
+                 (strcmp(declaredType, "f64") == 0 && litType == VAL_F64))) {
                 isRedundant = true;
             }
 
@@ -538,6 +577,43 @@ static ASTNode* parseVariableDeclaration(bool isMutable, Token nameToken) {
                     mismatch = false;
                 else if (strcmp(declaredType, "string") == 0 && litType == VAL_STRING)
                     mismatch = false;
+                // Allow compatible type conversions when annotation overrides
+                else if (strcmp(declaredType, "u32") == 0 && litType == VAL_I32) {
+                    // Allow i32 -> u32 conversion if value is non-negative
+                    int32_t value = init->literal.value.as.i32;
+                    if (value >= 0) {
+                        mismatch = false;
+                        // Convert the literal to u32 type
+                        init->literal.value.type = VAL_U32;
+                        init->literal.value.as.u32 = (uint32_t)value;
+                    }
+                }
+                else if (strcmp(declaredType, "u64") == 0 && litType == VAL_I32) {
+                    // Allow i32 -> u64 conversion if value is non-negative
+                    int32_t value = init->literal.value.as.i32;
+                    if (value >= 0) {
+                        mismatch = false;
+                        // Convert the literal to u64 type
+                        init->literal.value.type = VAL_U64;
+                        init->literal.value.as.u64 = (uint64_t)value;
+                    }
+                }
+                else if (strcmp(declaredType, "i64") == 0 && litType == VAL_I32) {
+                    // Allow i32 -> i64 conversion always
+                    int32_t value = init->literal.value.as.i32;
+                    mismatch = false;
+                    // Convert the literal to i64 type
+                    init->literal.value.type = VAL_I64;
+                    init->literal.value.as.i64 = (int64_t)value;
+                }
+                else if (strcmp(declaredType, "f64") == 0 && litType == VAL_I32) {
+                    // Allow i32 -> f64 conversion
+                    int32_t value = init->literal.value.as.i32;
+                    mismatch = false;
+                    // Convert the literal to f64 type
+                    init->literal.value.type = VAL_F64;
+                    init->literal.value.as.f64 = (double)value;
+                }
                 else if (litType == VAL_NIL && nextType->typeAnnotation.isNullable)
                     mismatch = false;
 
@@ -657,10 +733,11 @@ static ASTNode* parseAssignOrVarList(bool isMutable, Token nameToken) {
             ValueType litType = init->literal.value.type;
 
             bool isRedundant = false;
-            if ((strcmp(declaredType, "u32") == 0 && litType == VAL_U32) ||
-                (strcmp(declaredType, "u64") == 0 && litType == VAL_U64) ||
-                (strcmp(declaredType, "i64") == 0 && litType == VAL_I64) ||
-                (strcmp(declaredType, "f64") == 0 && litType == VAL_F64)) {
+            if (init->literal.hasExplicitSuffix &&
+                ((strcmp(declaredType, "u32") == 0 && litType == VAL_U32) ||
+                 (strcmp(declaredType, "u64") == 0 && litType == VAL_U64) ||
+                 (strcmp(declaredType, "i64") == 0 && litType == VAL_I64) ||
+                 (strcmp(declaredType, "f64") == 0 && litType == VAL_F64))) {
                 isRedundant = true;
             }
 
@@ -680,6 +757,43 @@ static ASTNode* parseAssignOrVarList(bool isMutable, Token nameToken) {
                     mismatch = false;
                 else if (strcmp(declaredType, "string") == 0 && litType == VAL_STRING)
                     mismatch = false;
+                // Allow compatible type conversions when annotation overrides
+                else if (strcmp(declaredType, "u32") == 0 && litType == VAL_I32) {
+                    // Allow i32 -> u32 conversion if value is non-negative
+                    int32_t value = init->literal.value.as.i32;
+                    if (value >= 0) {
+                        mismatch = false;
+                        // Convert the literal to u32 type
+                        init->literal.value.type = VAL_U32;
+                        init->literal.value.as.u32 = (uint32_t)value;
+                    }
+                }
+                else if (strcmp(declaredType, "u64") == 0 && litType == VAL_I32) {
+                    // Allow i32 -> u64 conversion if value is non-negative
+                    int32_t value = init->literal.value.as.i32;
+                    if (value >= 0) {
+                        mismatch = false;
+                        // Convert the literal to u64 type
+                        init->literal.value.type = VAL_U64;
+                        init->literal.value.as.u64 = (uint64_t)value;
+                    }
+                }
+                else if (strcmp(declaredType, "i64") == 0 && litType == VAL_I32) {
+                    // Allow i32 -> i64 conversion always
+                    int32_t value = init->literal.value.as.i32;
+                    mismatch = false;
+                    // Convert the literal to i64 type
+                    init->literal.value.type = VAL_I64;
+                    init->literal.value.as.i64 = (int64_t)value;
+                }
+                else if (strcmp(declaredType, "f64") == 0 && litType == VAL_I32) {
+                    // Allow i32 -> f64 conversion
+                    int32_t value = init->literal.value.as.i32;
+                    mismatch = false;
+                    // Convert the literal to f64 type
+                    init->literal.value.type = VAL_F64;
+                    init->literal.value.as.f64 = (double)value;
+                }
                 else if (litType == VAL_NIL && nextType->typeAnnotation.isNullable)
                     mismatch = false;
 
@@ -1335,27 +1449,39 @@ static ASTNode* parsePrimaryExpression(void) {
             bool isU32 = false;
             bool isU64 = false;
             bool isI64 = false;
+            bool isI32 = false;
+            bool hasExplicitSuffix = false;
 
             /* Handle explicit suffixes */
             if (j >= 3 && strcmp(numStr + j - 3, "f64") == 0) {
                 isF64 = true;
+                hasExplicitSuffix = true;
                 j -= 3;
                 numStr[j] = '\0';
             } else if (j >= 3 && strcmp(numStr + j - 3, "u32") == 0) {
                 isU32 = true;
+                hasExplicitSuffix = true;
                 j -= 3;
                 numStr[j] = '\0';
             } else if (j >= 3 && strcmp(numStr + j - 3, "u64") == 0) {
                 isU64 = true;
+                hasExplicitSuffix = true;
+                j -= 3;
+                numStr[j] = '\0';
+            } else if (j >= 3 && strcmp(numStr + j - 3, "i32") == 0) {
+                isI32 = true;
+                hasExplicitSuffix = true;
+                j -= 3;
+                numStr[j] = '\0';
+            } else if (j >= 3 && strcmp(numStr + j - 3, "i64") == 0) {
+                isI64 = true;
+                hasExplicitSuffix = true;
                 j -= 3;
                 numStr[j] = '\0';
             } else if (j >= 1 && numStr[j - 1] == 'u') {
                 isU64 = true;
+                hasExplicitSuffix = true;
                 j -= 1;
-                numStr[j] = '\0';
-            } else if (j >= 3 && strcmp(numStr + j - 3, "i64") == 0) {
-                isI64 = true;
-                j -= 3;
                 numStr[j] = '\0';
             }
 
@@ -1376,6 +1502,9 @@ static ASTNode* parsePrimaryExpression(void) {
             } else if (isU64) {
                 uint64_t val = strtoull(numStr, NULL, 0);
                 node->literal.value = U64_VAL(val);
+            } else if (isI32) {
+                int32_t val = (int32_t)strtol(numStr, NULL, 0);
+                node->literal.value = I32_VAL(val);
             } else {
                 long long value = strtoll(numStr, NULL, 0);
                 if (isI64 || value > INT32_MAX || value < INT32_MIN) {
@@ -1385,6 +1514,7 @@ static ASTNode* parsePrimaryExpression(void) {
                 }
             }
 
+            node->literal.hasExplicitSuffix = hasExplicitSuffix;
             node->location.line = token.line;
             node->location.column = token.column;
             node->dataType = NULL;
@@ -1400,6 +1530,7 @@ static ASTNode* parsePrimaryExpression(void) {
             ObjString* s = allocateString(content, contentLen);
             node->literal.value.type = VAL_STRING;
             node->literal.value.as.obj = (Obj*)s;
+            node->literal.hasExplicitSuffix = false;
             node->location.line = token.line;
             node->location.column = token.column;
             node->dataType = NULL;
@@ -1409,6 +1540,7 @@ static ASTNode* parsePrimaryExpression(void) {
             ASTNode* node = new_node();
             node->type = NODE_LITERAL;
             node->literal.value = BOOL_VAL(true);
+            node->literal.hasExplicitSuffix = false;
             node->location.line = token.line;
             node->location.column = token.column;
             node->dataType = NULL;
@@ -1418,6 +1550,7 @@ static ASTNode* parsePrimaryExpression(void) {
             ASTNode* node = new_node();
             node->type = NODE_LITERAL;
             node->literal.value = BOOL_VAL(false);
+            node->literal.hasExplicitSuffix = false;
             node->location.line = token.line;
             node->location.column = token.column;
             node->dataType = NULL;
@@ -1427,6 +1560,7 @@ static ASTNode* parsePrimaryExpression(void) {
             ASTNode* node = new_node();
             node->type = NODE_LITERAL;
             node->literal.value = NIL_VAL;
+            node->literal.hasExplicitSuffix = false;
             node->location.line = token.line;
             node->location.column = token.column;
             node->dataType = NULL;
