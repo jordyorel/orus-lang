@@ -240,6 +240,9 @@ ASTNode* parseSource(const char* source) {
         t = peekToken();
         if (t.type == TOKEN_NEWLINE) {
             nextToken();
+        } else if (t.type == TOKEN_COMMA) {
+            // Handle comma as statement separator for multi-variable declarations
+            nextToken();
         } else if (t.type == TOKEN_SEMICOLON) {
             SrcLocation location = {NULL, t.line, t.column};
             report_compile_error(E1007_SEMICOLON_NOT_ALLOWED, location, 
@@ -525,144 +528,9 @@ static ASTNode* parseVariableDeclaration(bool isMutable, Token nameToken) {
     varNode->varDecl.isConst = false;
     varNode->varDecl.isMutable = isMutable;
 
-    ASTNode** vars = NULL;
-    int count = 0;
-    int capacity = 0;
-    addStatement(&vars, &count, &capacity, varNode);
-
-    while (peekToken().type == TOKEN_COMMA) {
-        nextToken();
-        while (peekToken().type == TOKEN_NEWLINE) nextToken();
-        Token nextName = nextToken();
-        if (nextName.type != TOKEN_IDENTIFIER) return NULL;
-
-        ASTNode* nextType = NULL;
-        if (peekToken().type == TOKEN_COLON) {
-            nextToken();
-            nextType = parseTypeAnnotation();
-            if (!nextType) return NULL;
-        }
-
-        Token eqTok = nextToken();
-        if (eqTok.type != TOKEN_EQUAL) return NULL;
-        ASTNode* init = parseExpression();
-        if (!init) return NULL;
-
-        if (nextType && init->type == NODE_LITERAL) {
-            const char* declaredType = nextType->typeAnnotation.name;
-            ValueType litType = init->literal.value.type;
-
-            bool isRedundant = false;
-            if (init->literal.hasExplicitSuffix &&
-                ((strcmp(declaredType, "u32") == 0 && litType == VAL_U32) ||
-                 (strcmp(declaredType, "u64") == 0 && litType == VAL_U64) ||
-                 (strcmp(declaredType, "i64") == 0 && litType == VAL_I64) ||
-                 (strcmp(declaredType, "f64") == 0 && litType == VAL_F64))) {
-                isRedundant = true;
-            }
-
-            if (!isRedundant) {
-                bool mismatch = true;
-                if (strcmp(declaredType, "i32") == 0 && litType == VAL_I32)
-                    mismatch = false;
-                else if (strcmp(declaredType, "i64") == 0 && litType == VAL_I64)
-                    mismatch = false;
-                else if (strcmp(declaredType, "u32") == 0 && litType == VAL_U32)
-                    mismatch = false;
-                else if (strcmp(declaredType, "u64") == 0 && litType == VAL_U64)
-                    mismatch = false;
-                else if (strcmp(declaredType, "f64") == 0 && litType == VAL_F64)
-                    mismatch = false;
-                else if (strcmp(declaredType, "bool") == 0 && litType == VAL_BOOL)
-                    mismatch = false;
-                else if (strcmp(declaredType, "string") == 0 && litType == VAL_STRING)
-                    mismatch = false;
-                // Allow compatible type conversions when annotation overrides
-                else if (strcmp(declaredType, "u32") == 0 && litType == VAL_I32) {
-                    // Allow i32 -> u32 conversion if value is non-negative
-                    int32_t value = init->literal.value.as.i32;
-                    if (value >= 0) {
-                        mismatch = false;
-                        // Convert the literal to u32 type
-                        init->literal.value.type = VAL_U32;
-                        init->literal.value.as.u32 = (uint32_t)value;
-                    }
-                }
-                else if (strcmp(declaredType, "u64") == 0 && litType == VAL_I32) {
-                    // Allow i32 -> u64 conversion if value is non-negative
-                    int32_t value = init->literal.value.as.i32;
-                    if (value >= 0) {
-                        mismatch = false;
-                        // Convert the literal to u64 type
-                        init->literal.value.type = VAL_U64;
-                        init->literal.value.as.u64 = (uint64_t)value;
-                    }
-                }
-                else if (strcmp(declaredType, "i64") == 0 && litType == VAL_I32) {
-                    // Allow i32 -> i64 conversion always
-                    int32_t value = init->literal.value.as.i32;
-                    mismatch = false;
-                    // Convert the literal to i64 type
-                    init->literal.value.type = VAL_I64;
-                    init->literal.value.as.i64 = (int64_t)value;
-                }
-                else if (strcmp(declaredType, "f64") == 0 && litType == VAL_I32) {
-                    // Allow i32 -> f64 conversion
-                    int32_t value = init->literal.value.as.i32;
-                    mismatch = false;
-                    // Convert the literal to f64 type
-                    init->literal.value.type = VAL_F64;
-                    init->literal.value.as.f64 = (double)value;
-                }
-                else if (litType == VAL_NIL && nextType->typeAnnotation.isNullable)
-                    mismatch = false;
-
-                if (litType == VAL_NIL && !nextType->typeAnnotation.isNullable) {
-                    fprintf(stderr, "Error: nil not allowed for non-nullable type at line %d:%d.\n",
-                            nextName.line, nextName.column);
-                    return NULL;
-                }
-
-                if (mismatch) {
-                    fprintf(stderr, "Error: Type mismatch at line %d:%d. Literal does not match declared type '%s'.\n",
-                            nextName.line, nextName.column, declaredType);
-                    return NULL;
-                }
-            }
-        }
-
-        ASTNode* n = new_node();
-        n->type = NODE_VAR_DECL;
-        n->location.line = nextName.line;
-        n->location.column = nextName.column;
-        n->dataType = NULL;
-
-        int nlen = nextName.length;
-        char* nname = parser_arena_alloc(&parserArena, nlen + 1);
-        strncpy(nname, nextName.start, nlen);
-        nname[nlen] = '\0';
-
-        n->varDecl.name = nname;
-        n->varDecl.isPublic = false;
-        n->varDecl.initializer = init;
-        n->varDecl.typeAnnotation = nextType;
-        n->varDecl.isConst = false;
-        n->varDecl.isMutable = isMutable;
-
-        addStatement(&vars, &count, &capacity, n);
-    }
-
-    if (count == 1) {
-        return varNode;
-    }
-
-    ASTNode* block = new_node();
-    block->type = NODE_BLOCK;
-    block->block.statements = vars;
-    block->block.count = count;
-    block->location = varNode->location;
-    block->dataType = NULL;
-    return block;
+    // For multiple variable declarations separated by commas,
+    // only parse the first one and let the main parser handle the rest
+    return varNode;
 }
 
 static ASTNode* parseAssignOrVarList(bool isMutable, Token nameToken) {
@@ -670,6 +538,8 @@ static ASTNode* parseAssignOrVarList(bool isMutable, Token nameToken) {
     ASTNode* initializer = parseExpression();
     if (!initializer) return NULL;
 
+    // For multiple variable declarations separated by commas,
+    // only parse the first one and let the main parser handle the rest
     if (peekToken().type != TOKEN_COMMA && !isMutable) {
         // Regular assignment
         ASTNode* node = new_node();
@@ -686,161 +556,27 @@ static ASTNode* parseAssignOrVarList(bool isMutable, Token nameToken) {
         return node;
     }
 
-    // Treat as variable declaration list
-    ASTNode** vars = NULL;
-    int count = 0;
-    int capacity = 0;
-
-    ASTNode* first = new_node();
-    first->type = NODE_VAR_DECL;
-    first->location.line = nameToken.line;
-    first->location.column = nameToken.column;
-    first->dataType = NULL;
+    // Create a single variable declaration for the first variable
+    ASTNode* varNode = new_node();
+    varNode->type = NODE_VAR_DECL;
+    varNode->location.line = nameToken.line;
+    varNode->location.column = nameToken.column;
+    varNode->dataType = NULL;
 
     int len = nameToken.length;
     char* name = parser_arena_alloc(&parserArena, len + 1);
     strncpy(name, nameToken.start, len);
     name[len] = '\0';
 
-    first->varDecl.name = name;
-    first->varDecl.isPublic = false;
-    first->varDecl.initializer = initializer;
-    first->varDecl.typeAnnotation = NULL;
-    first->varDecl.isConst = false;
-    first->varDecl.isMutable = isMutable;
+    varNode->varDecl.name = name;
+    varNode->varDecl.isPublic = false;
+    varNode->varDecl.initializer = initializer;
+    varNode->varDecl.typeAnnotation = NULL;
+    varNode->varDecl.isConst = false;
+    varNode->varDecl.isMutable = isMutable;
 
-    addStatement(&vars, &count, &capacity, first);
-
-    while (peekToken().type == TOKEN_COMMA) {
-        nextToken();
-        while (peekToken().type == TOKEN_NEWLINE) nextToken();
-        Token nextName = nextToken();
-        if (nextName.type != TOKEN_IDENTIFIER) return NULL;
-
-        ASTNode* nextType = NULL;
-        if (peekToken().type == TOKEN_COLON) {
-            nextToken();
-            nextType = parseTypeAnnotation();
-            if (!nextType) return NULL;
-        }
-
-        if (nextToken().type != TOKEN_EQUAL) return NULL;
-        ASTNode* init = parseExpression();
-        if (!init) return NULL;
-
-        if (nextType && init->type == NODE_LITERAL) {
-            const char* declaredType = nextType->typeAnnotation.name;
-            ValueType litType = init->literal.value.type;
-
-            bool isRedundant = false;
-            if (init->literal.hasExplicitSuffix &&
-                ((strcmp(declaredType, "u32") == 0 && litType == VAL_U32) ||
-                 (strcmp(declaredType, "u64") == 0 && litType == VAL_U64) ||
-                 (strcmp(declaredType, "i64") == 0 && litType == VAL_I64) ||
-                 (strcmp(declaredType, "f64") == 0 && litType == VAL_F64))) {
-                isRedundant = true;
-            }
-
-            if (!isRedundant) {
-                bool mismatch = true;
-                if (strcmp(declaredType, "i32") == 0 && litType == VAL_I32)
-                    mismatch = false;
-                else if (strcmp(declaredType, "i64") == 0 && litType == VAL_I64)
-                    mismatch = false;
-                else if (strcmp(declaredType, "u32") == 0 && litType == VAL_U32)
-                    mismatch = false;
-                else if (strcmp(declaredType, "u64") == 0 && litType == VAL_U64)
-                    mismatch = false;
-                else if (strcmp(declaredType, "f64") == 0 && litType == VAL_F64)
-                    mismatch = false;
-                else if (strcmp(declaredType, "bool") == 0 && litType == VAL_BOOL)
-                    mismatch = false;
-                else if (strcmp(declaredType, "string") == 0 && litType == VAL_STRING)
-                    mismatch = false;
-                // Allow compatible type conversions when annotation overrides
-                else if (strcmp(declaredType, "u32") == 0 && litType == VAL_I32) {
-                    // Allow i32 -> u32 conversion if value is non-negative
-                    int32_t value = init->literal.value.as.i32;
-                    if (value >= 0) {
-                        mismatch = false;
-                        // Convert the literal to u32 type
-                        init->literal.value.type = VAL_U32;
-                        init->literal.value.as.u32 = (uint32_t)value;
-                    }
-                }
-                else if (strcmp(declaredType, "u64") == 0 && litType == VAL_I32) {
-                    // Allow i32 -> u64 conversion if value is non-negative
-                    int32_t value = init->literal.value.as.i32;
-                    if (value >= 0) {
-                        mismatch = false;
-                        // Convert the literal to u64 type
-                        init->literal.value.type = VAL_U64;
-                        init->literal.value.as.u64 = (uint64_t)value;
-                    }
-                }
-                else if (strcmp(declaredType, "i64") == 0 && litType == VAL_I32) {
-                    // Allow i32 -> i64 conversion always
-                    int32_t value = init->literal.value.as.i32;
-                    mismatch = false;
-                    // Convert the literal to i64 type
-                    init->literal.value.type = VAL_I64;
-                    init->literal.value.as.i64 = (int64_t)value;
-                }
-                else if (strcmp(declaredType, "f64") == 0 && litType == VAL_I32) {
-                    // Allow i32 -> f64 conversion
-                    int32_t value = init->literal.value.as.i32;
-                    mismatch = false;
-                    // Convert the literal to f64 type
-                    init->literal.value.type = VAL_F64;
-                    init->literal.value.as.f64 = (double)value;
-                }
-                else if (litType == VAL_NIL && nextType->typeAnnotation.isNullable)
-                    mismatch = false;
-
-                if (litType == VAL_NIL && !nextType->typeAnnotation.isNullable) {
-                    fprintf(stderr, "Error: nil not allowed for non-nullable type at line %d:%d.\n",
-                            nextName.line, nextName.column);
-                    return NULL;
-                }
-
-                if (mismatch) {
-                    fprintf(stderr, "Error: Type mismatch at line %d:%d. Literal does not match declared type '%s'.\n",
-                            nextName.line, nextName.column, declaredType);
-                    return NULL;
-                }
-            }
-        }
-
-        ASTNode* n = new_node();
-        n->type = NODE_VAR_DECL;
-        n->location.line = nextName.line;
-        n->location.column = nextName.column;
-        n->dataType = NULL;
-
-        int nlen = nextName.length;
-        char* nname = parser_arena_alloc(&parserArena, nlen + 1);
-        strncpy(nname, nextName.start, nlen);
-        nname[nlen] = '\0';
-
-        n->varDecl.name = nname;
-        n->varDecl.isPublic = false;
-        n->varDecl.initializer = init;
-        n->varDecl.typeAnnotation = nextType;
-        n->varDecl.isConst = false;
-        n->varDecl.isMutable = isMutable;
-
-        addStatement(&vars, &count, &capacity, n);
-    }
-
-    if (count == 1) return first;
-
-    ASTNode* block = new_node();
-    block->type = NODE_BLOCK;
-    block->block.statements = vars;
-    block->block.count = count;
-    block->location = first->location;
-    block->dataType = NULL;
-    return block;
+    // Don't consume the comma - let the main parser handle subsequent declarations
+    return varNode;
 }
 
 static ASTNode* parseBlock(void) {

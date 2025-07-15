@@ -1,0 +1,82 @@
+// Test case for multiple variable declarations on the same line
+// This tests the fix for the parser infinite loop issue
+// Comprehensive edge case coverage as required by AGENTS.md
+
+// Basic multiple variable declaration
+x = 1, y = 2, z = 3
+print(x)  // Should print 1
+print(y)  // Should print 2  
+print(z)  // Should print 3
+
+// Multiple variables with type annotations
+a: i32 = 10, b: i64 = 20
+print(a)  // Should print 10
+print(b)  // Should print 20
+
+// Mutable variables
+mut c = 100, mut d = 200
+print(c)  // Should print 100
+print(d)  // Should print 200
+
+// Mixed declarations
+e: f64 = 3.14, mut f = 42, g = "hello"
+print(e)  // Should print 3.14
+print(f)  // Should print 42
+print(g)  // Should print hello
+
+// EDGE CASE 1: Boundary Values - safe integer ranges  
+min_val = -1000000, max_val = 1000000
+print(min_val)  // Should print -1000000
+print(max_val)  // Should print 1000000
+
+// EDGE CASE 2: Different numeric types in one line
+small: u32 = 0, large = 18446744073709551615u
+print(small)  // Should print 0
+print(large)  // Should print 18446744073709551615
+
+// EDGE CASE 3: Mixed type conversions
+conv1: i64 = 42, conv2: f64 = 123, conv3: u32 = 456
+print(conv1)  // Should print 42
+print(conv2)  // Should print 123
+print(conv3)  // Should print 456
+
+// EDGE CASE 4: Boolean values
+flag1 = true, flag2 = false, flag3: bool = true
+print(flag1)  // Should print true
+print(flag2)  // Should print false
+print(flag3)  // Should print true
+
+// EDGE CASE 5: String values with special characters
+str1 = "hello", str2 = "", str3 = "special chars: !@#$%"
+print(str1)   // Should print hello
+print(str2)   // Should print (empty)
+print(str3)   // Should print special chars: !@#$%
+
+// EDGE CASE 6: Single element lists (boundary testing)
+single = 999
+print(single)  // Should print 999
+
+// EDGE CASE 7: Floating point precision
+pi = 3.14159265359f64, e = 2.71828f64
+print(pi)  // Should print 3.14159265359
+print(e)   // Should print 2.71828
+
+// EDGE CASE 8: Mixed mutable and immutable with types
+mut var1: i32 = 10, var2 = 20, mut var3: f64 = 30.5
+print(var1)  // Should print 10
+print(var2)  // Should print 20
+print(var3)  // Should print 30.5
+
+// EDGE CASE 9: Numeric literals with underscores
+big_num = 1_000_000, small_num = 255
+print(big_num)   // Should print 1000000
+print(small_num) // Should print 255
+
+// EDGE CASE 10: Multiple assignments mixed with regular statements
+first = 1, second = 2
+print("Between declarations")
+third = 3, fourth = 4
+print(first)   // Should print 1
+print(second)  // Should print 2
+print(third)   // Should print 3
+print(fourth)  // Should print 4

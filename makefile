@@ -77,7 +77,9 @@ test: $(ORUS)
 	done; \
 	echo ""; \
 	echo "\033[36m=== Variables Tests ===\033[0m"; \
-	for test_file in $(TESTDIR)/variables/basic_var.orus; do \
+	for test_file in $(TESTDIR)/variables/basic_var.orus \
+	                  $(TESTDIR)/variables/multiple_variable_declarations.orus \
+	                  $(TESTDIR)/variables/multiple_variable_edge_cases.orus; do \
 		if [ -f "$$test_file" ]; then \
 			printf "Testing: $$test_file ... "; \
 			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \

@@ -1,0 +1,35 @@
+// Additional edge case tests for multiple variable declarations
+// These test various boundary conditions and syntax variations
+
+// EDGE CASE: Very long variable names with multiple declarations
+very_long_variable_name_that_tests_identifier_limits = 1, another_extremely_long_variable_name_for_boundary_testing = 2
+print(very_long_variable_name_that_tests_identifier_limits)
+print(another_extremely_long_variable_name_for_boundary_testing)
+
+// EDGE CASE: Numbers with many underscores
+num1 = 1_2_3_4_5_6, num2 = 9_8_7_6_5_4
+print("number1: ", num1)  // Should print 123456
+print("number2: ", num2)  // Should print 987654
+
+// EDGE CASE: Mixing different number formats
+decimal = 42, scientific = 1e3, negative = -99
+print(decimal)    // Should print 42
+print(scientific) // Should print 1000
+print(negative)   // Should print -99
+
+// EDGE CASE: Many variables on one line (stress test)
+v1 = 1, v2 = 2, v3 = 3, v4 = 4, v5 = 5, v6 = 6, v7 = 7, v8 = 8, v9 = 9, v10 = 10
+print(v1)
+print(v5)
+print(v10)
+
+// EDGE CASE: Zero values
+zero_int = 0, zero_float = 0.0
+print(zero_int)   // Should print 0
+print(zero_float) // Should print 0
+
+// EDGE CASE: Nested expressions in initializers
+calc1 = 2 + 3, calc2 = 10 - 4, calc3 = 6 * 7
+print(calc1)  // Should print 5
+print(calc2)  // Should print 6
+print(calc3)  // Should print 42
