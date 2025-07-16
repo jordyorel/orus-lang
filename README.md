@@ -20,6 +20,8 @@ print("Result: ", fibonacci(10))
 
 ## Performance (Jul 2025)
 
+*Benchmarks run on Apple M1 Pro with optimized builds*
+
 | Benchmark | **Orus** | Python | Node.js | Lua | LuaJIT |
 |-----------|----------|--------|---------|-----|--------|
 | Arithmetic | **20.7ms** | 35.0ms | 48.7ms | 20.8ms | 20.0ms |
