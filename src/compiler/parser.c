@@ -159,7 +159,15 @@ static ASTNode* parsePrintStatement(ParserContext* ctx);
 static ASTNode* parseExpression(ParserContext* ctx);
 static ASTNode* parseBinaryExpression(ParserContext* ctx, int minPrec);
 static ASTNode* parsePrimaryExpression(ParserContext* ctx);
-static ASTNode* parseParenthesizedExpression(ParserContext* ctx);
+
+// Primary expression handlers
+static ASTNode* parseNumberLiteral(ParserContext* ctx, Token token);
+static ASTNode* parseStringLiteral(ParserContext* ctx, Token token);
+static ASTNode* parseBooleanLiteral(ParserContext* ctx, Token token);
+static ASTNode* parseNilLiteral(ParserContext* ctx, Token token);
+static ASTNode* parseIdentifierExpression(ParserContext* ctx, Token token);
+static ASTNode* parseTimeStampExpression(ParserContext* ctx, Token token);
+static ASTNode* parseParenthesizedExpressionToken(ParserContext* ctx, Token token);
 static ASTNode* parseVariableDeclaration(ParserContext* ctx, bool isMutable, Token nameToken);
 static ASTNode* parseAssignOrVarList(ParserContext* ctx, bool isMutable, Token nameToken);
 static ASTNode* parseStatement(ParserContext* ctx);
@@ -1158,224 +1166,218 @@ static ASTNode* parseBinaryExpression(ParserContext* ctx, int minPrec) {
     return left;
 }
 
+// Primary expression handlers
+
+static ASTNode* parseNumberLiteral(ParserContext* ctx, Token token) {
+    ASTNode* node = new_node(ctx);
+    node->type = NODE_LITERAL;
+
+    /* Copy token text and remove underscores */
+    char raw[64];
+    int len = token.length < 63 ? token.length : 63;
+    strncpy(raw, token.start, len);
+    raw[len] = '\0';
+    char numStr[64];
+    int j = 0;
+    for (int i = 0; i < len && j < 63; i++) {
+        if (raw[i] != '_') numStr[j++] = raw[i];
+    }
+    numStr[j] = '\0';
+
+    bool isF64 = false;
+    bool isU32 = false;
+    bool isU64 = false;
+    bool isI64 = false;
+    bool isI32 = false;
+    bool hasExplicitSuffix = false;
+
+    /* Handle explicit suffixes */
+    if (j >= 3 && strcmp(numStr + j - 3, "f64") == 0) {
+        isF64 = true;
+        hasExplicitSuffix = true;
+        j -= 3;
+        numStr[j] = '\0';
+    } else if (j >= 3 && strcmp(numStr + j - 3, "u32") == 0) {
+        isU32 = true;
+        hasExplicitSuffix = true;
+        j -= 3;
+        numStr[j] = '\0';
+    } else if (j >= 3 && strcmp(numStr + j - 3, "u64") == 0) {
+        isU64 = true;
+        hasExplicitSuffix = true;
+        j -= 3;
+        numStr[j] = '\0';
+    } else if (j >= 3 && strcmp(numStr + j - 3, "i32") == 0) {
+        isI32 = true;
+        hasExplicitSuffix = true;
+        j -= 3;
+        numStr[j] = '\0';
+    } else if (j >= 3 && strcmp(numStr + j - 3, "i64") == 0) {
+        isI64 = true;
+        hasExplicitSuffix = true;
+        j -= 3;
+        numStr[j] = '\0';
+    } else if (j >= 1 && numStr[j - 1] == 'u') {
+        isU64 = true;
+        hasExplicitSuffix = true;
+        j -= 1;
+        numStr[j] = '\0';
+    }
+
+    /* Detect float by decimal/exponent */
+    for (int i = 0; i < j; i++) {
+        if (numStr[i] == '.' || numStr[i] == 'e' || numStr[i] == 'E') {
+            isF64 = true;
+            break;
+        }
+    }
+
+    if (isF64) {
+        double val = strtod(numStr, NULL);
+        node->literal.value = F64_VAL(val);
+    } else if (isU32) {
+        uint32_t val = (uint32_t)strtoul(numStr, NULL, 0);
+        node->literal.value = U32_VAL(val);
+    } else if (isU64) {
+        uint64_t val = strtoull(numStr, NULL, 0);
+        node->literal.value = U64_VAL(val);
+    } else if (isI32) {
+        int32_t val = (int32_t)strtol(numStr, NULL, 0);
+        node->literal.value = I32_VAL(val);
+    } else {
+        long long value = strtoll(numStr, NULL, 0);
+        if (isI64 || value > INT32_MAX || value < INT32_MIN) {
+            node->literal.value = I64_VAL(value);
+        } else {
+            node->literal.value = I32_VAL((int32_t)value);
+        }
+    }
+
+    node->literal.hasExplicitSuffix = hasExplicitSuffix;
+    node->location.line = token.line;
+    node->location.column = token.column;
+    node->dataType = NULL;
+    return node;
+}
+
+static ASTNode* parseStringLiteral(ParserContext* ctx, Token token) {
+    ASTNode* node = new_node(ctx);
+    node->type = NODE_LITERAL;
+    int contentLen = token.length - 2;
+    char* content = parser_arena_alloc(ctx, contentLen + 1);
+    strncpy(content, token.start + 1, contentLen);
+    content[contentLen] = '\0';
+    ObjString* s = allocateString(content, contentLen);
+    node->literal.value.type = VAL_STRING;
+    node->literal.value.as.obj = (Obj*)s;
+    node->literal.hasExplicitSuffix = false;
+    node->location.line = token.line;
+    node->location.column = token.column;
+    node->dataType = NULL;
+    return node;
+}
+
+static ASTNode* parseBooleanLiteral(ParserContext* ctx, Token token) {
+    ASTNode* node = new_node(ctx);
+    node->type = NODE_LITERAL;
+    node->literal.value = BOOL_VAL(token.type == TOKEN_TRUE);
+    node->literal.hasExplicitSuffix = false;
+    node->location.line = token.line;
+    node->location.column = token.column;
+    node->dataType = NULL;
+    return node;
+}
+
+static ASTNode* parseNilLiteral(ParserContext* ctx, Token token) {
+    ASTNode* node = new_node(ctx);
+    node->type = NODE_LITERAL;
+    node->literal.value = NIL_VAL;
+    node->literal.hasExplicitSuffix = false;
+    node->location.line = token.line;
+    node->location.column = token.column;
+    node->dataType = NULL;
+    return node;
+}
+
+static ASTNode* parseIdentifierExpression(ParserContext* ctx, Token token) {
+    ASTNode* node = new_node(ctx);
+    node->type = NODE_IDENTIFIER;
+    int len = token.length;
+    char* name = parser_arena_alloc(ctx, len + 1);
+    strncpy(name, token.start, len);
+    name[len] = '\0';
+    node->identifier.name = name;
+    node->location.line = token.line;
+    node->location.column = token.column;
+    node->dataType = NULL;
+    
+    // Check if this is a function call
+    if (peekToken(ctx).type == TOKEN_LEFT_PAREN) {
+        return parseCallExpression(ctx, node);
+    }
+    
+    return node;
+}
+
+
+static ASTNode* parseTimeStampExpression(ParserContext* ctx, Token token) {
+    Token next = nextToken(ctx);
+    if (next.type != TOKEN_LEFT_PAREN) {
+        return NULL;
+    }
+    Token close = nextToken(ctx);
+    if (close.type != TOKEN_RIGHT_PAREN) {
+        return NULL;
+    }
+    ASTNode* node = new_node(ctx);
+    node->type = NODE_TIME_STAMP;
+    node->location.line = token.line;
+    node->location.column = token.column;
+    node->dataType = NULL;
+    return node;
+}
+
+static ASTNode* parseParenthesizedExpressionToken(ParserContext* ctx, Token token) {
+    (void)token; // Unused parameter
+    ASTNode* expr = parseExpression(ctx);
+    if (!expr) return NULL;
+    
+    Token rightParen = nextToken(ctx);
+    if (rightParen.type != TOKEN_RIGHT_PAREN) {
+        return NULL;
+    }
+    
+    // Mark cast nodes as parenthesized to allow chained casts with explicit parentheses
+    if (expr->type == NODE_CAST) {
+        expr->cast.parenthesized = true;
+    }
+    
+    return expr;
+}
+
 static ASTNode* parsePrimaryExpression(ParserContext* ctx) {
     Token token = nextToken(ctx);
 
     switch (token.type) {
-        case TOKEN_NUMBER: {
-            ASTNode* node = new_node(ctx);
-            node->type = NODE_LITERAL;
-
-            /* Copy token text and remove underscores */
-            char raw[64];
-            int len = token.length < 63 ? token.length : 63;
-            strncpy(raw, token.start, len);
-            raw[len] = '\0';
-            char numStr[64];
-            int j = 0;
-            for (int i = 0; i < len && j < 63; i++) {
-                if (raw[i] != '_') numStr[j++] = raw[i];
-            }
-            numStr[j] = '\0';
-
-            bool isF64 = false;
-            bool isU32 = false;
-            bool isU64 = false;
-            bool isI64 = false;
-            bool isI32 = false;
-            bool hasExplicitSuffix = false;
-
-            /* Handle explicit suffixes */
-            if (j >= 3 && strcmp(numStr + j - 3, "f64") == 0) {
-                isF64 = true;
-                hasExplicitSuffix = true;
-                j -= 3;
-                numStr[j] = '\0';
-            } else if (j >= 3 && strcmp(numStr + j - 3, "u32") == 0) {
-                isU32 = true;
-                hasExplicitSuffix = true;
-                j -= 3;
-                numStr[j] = '\0';
-            } else if (j >= 3 && strcmp(numStr + j - 3, "u64") == 0) {
-                isU64 = true;
-                hasExplicitSuffix = true;
-                j -= 3;
-                numStr[j] = '\0';
-            } else if (j >= 3 && strcmp(numStr + j - 3, "i32") == 0) {
-                isI32 = true;
-                hasExplicitSuffix = true;
-                j -= 3;
-                numStr[j] = '\0';
-            } else if (j >= 3 && strcmp(numStr + j - 3, "i64") == 0) {
-                isI64 = true;
-                hasExplicitSuffix = true;
-                j -= 3;
-                numStr[j] = '\0';
-            } else if (j >= 1 && numStr[j - 1] == 'u') {
-                isU64 = true;
-                hasExplicitSuffix = true;
-                j -= 1;
-                numStr[j] = '\0';
-            }
-
-            /* Detect float by decimal/exponent */
-            for (int i = 0; i < j; i++) {
-                if (numStr[i] == '.' || numStr[i] == 'e' || numStr[i] == 'E') {
-                    isF64 = true;
-                    break;
-                }
-            }
-
-            if (isF64) {
-                double val = strtod(numStr, NULL);
-                node->literal.value = F64_VAL(val);
-            } else if (isU32) {
-                uint32_t val = (uint32_t)strtoul(numStr, NULL, 0);
-                node->literal.value = U32_VAL(val);
-            } else if (isU64) {
-                uint64_t val = strtoull(numStr, NULL, 0);
-                node->literal.value = U64_VAL(val);
-            } else if (isI32) {
-                int32_t val = (int32_t)strtol(numStr, NULL, 0);
-                node->literal.value = I32_VAL(val);
-            } else {
-                long long value = strtoll(numStr, NULL, 0);
-                if (isI64 || value > INT32_MAX || value < INT32_MIN) {
-                    node->literal.value = I64_VAL(value);
-                } else {
-                    node->literal.value = I32_VAL((int32_t)value);
-                }
-            }
-
-            node->literal.hasExplicitSuffix = hasExplicitSuffix;
-            node->location.line = token.line;
-            node->location.column = token.column;
-            node->dataType = NULL;
-            return node;
-        }
-        case TOKEN_STRING: {
-            ASTNode* node = new_node(ctx);
-            node->type = NODE_LITERAL;
-            int contentLen = token.length - 2;
-            char* content = parser_arena_alloc(ctx, contentLen + 1);
-            strncpy(content, token.start + 1, contentLen);
-            content[contentLen] = '\0';
-            ObjString* s = allocateString(content, contentLen);
-            node->literal.value.type = VAL_STRING;
-            node->literal.value.as.obj = (Obj*)s;
-            node->literal.hasExplicitSuffix = false;
-            node->location.line = token.line;
-            node->location.column = token.column;
-            node->dataType = NULL;
-            return node;
-        }
-        case TOKEN_TRUE: {
-            ASTNode* node = new_node(ctx);
-            node->type = NODE_LITERAL;
-            node->literal.value = BOOL_VAL(true);
-            node->literal.hasExplicitSuffix = false;
-            node->location.line = token.line;
-            node->location.column = token.column;
-            node->dataType = NULL;
-            return node;
-        }
-        case TOKEN_FALSE: {
-            ASTNode* node = new_node(ctx);
-            node->type = NODE_LITERAL;
-            node->literal.value = BOOL_VAL(false);
-            node->literal.hasExplicitSuffix = false;
-            node->location.line = token.line;
-            node->location.column = token.column;
-            node->dataType = NULL;
-            return node;
-        }
-        case TOKEN_NIL: {
-            ASTNode* node = new_node(ctx);
-            node->type = NODE_LITERAL;
-            node->literal.value = NIL_VAL;
-            node->literal.hasExplicitSuffix = false;
-            node->location.line = token.line;
-            node->location.column = token.column;
-            node->dataType = NULL;
-            return node;
-        }
-        case TOKEN_IDENTIFIER: {
-            ASTNode* node = new_node(ctx);
-            node->type = NODE_IDENTIFIER;
-            int len = token.length;
-            char* name = parser_arena_alloc(ctx, len + 1);
-            strncpy(name, token.start, len);
-            name[len] = '\0';
-            node->identifier.name = name;
-            node->location.line = token.line;
-            node->location.column = token.column;
-            node->dataType = NULL;
-            
-            // Check if this is a function call
-            if (peekToken(ctx).type == TOKEN_LEFT_PAREN) {
-                return parseCallExpression(ctx, node);
-            }
-            
-            return node;
-        }
-        case TOKEN_PRINT:
-        case TOKEN_PRINT_NO_NL: {
-            bool newline = token.type == TOKEN_PRINT;
-            Token next = nextToken(ctx);
-            if (next.type != TOKEN_LEFT_PAREN) {
-                return NULL;
-            }
-            ASTNode** args = NULL;
-            int count = 0;
-            int capacity = 0;
-            if (peekToken(ctx).type != TOKEN_RIGHT_PAREN) {
-                while (true) {
-                    ASTNode* expr = parseExpression(ctx);
-                    if (!expr) return NULL;
-                    addStatement(ctx, &args, &count, &capacity, expr);
-                    if (peekToken(ctx).type != TOKEN_COMMA) break;
-                    nextToken(ctx);
-                }
-            }
-            Token close = nextToken(ctx);
-            if (close.type != TOKEN_RIGHT_PAREN) {
-                return NULL;
-            }
-            ASTNode* node = new_node(ctx);
-            node->type = NODE_PRINT;
-            node->print.values = args;
-            node->print.count = count;
-            node->print.newline = newline;
-            node->location.line = token.line;
-            node->location.column = token.column;
-            node->dataType = NULL;
-            return node;
-        }
-        case TOKEN_TIME_STAMP: {
-            Token next = nextToken(ctx);
-            if (next.type != TOKEN_LEFT_PAREN) {
-                return NULL;
-            }
-            Token close = nextToken(ctx);
-            if (close.type != TOKEN_RIGHT_PAREN) {
-                return NULL;
-            }
-            ASTNode* node = new_node(ctx);
-            node->type = NODE_TIME_STAMP;
-            node->location.line = token.line;
-            node->location.column = token.column;
-            node->dataType = NULL;
-            return node;
-        }
-        case TOKEN_LEFT_PAREN: {
-            return parseParenthesizedExpression(ctx);
-        }
+        case TOKEN_NUMBER:
+            return parseNumberLiteral(ctx, token);
+        case TOKEN_STRING:
+            return parseStringLiteral(ctx, token);
+        case TOKEN_TRUE:
+        case TOKEN_FALSE:
+            return parseBooleanLiteral(ctx, token);
+        case TOKEN_NIL:
+            return parseNilLiteral(ctx, token);
+        case TOKEN_IDENTIFIER:
+            return parseIdentifierExpression(ctx, token);
+        case TOKEN_TIME_STAMP:
+            return parseTimeStampExpression(ctx, token);
+        case TOKEN_LEFT_PAREN:
+            return parseParenthesizedExpressionToken(ctx, token);
         default:
             return NULL;
     }
 }
-
-// Parse function definition: fn name(param1, param2) -> return_type:
 static ASTNode* parseFunctionDefinition(ParserContext* ctx) {
     // Consume 'fn' token
     nextToken(ctx);
@@ -1670,28 +1672,6 @@ void freeAST(ASTNode* node) {
     (void)node;
 }
 
-// Parse parenthesized expressions and mark cast nodes as parenthesized
-// This enables proper distinction between direct cast chains and parenthesized ones
-static ASTNode* parseParenthesizedExpression(ParserContext* ctx) {
-    // TOKEN_LEFT_PAREN already consumed by caller
-    ASTNode* expr = parseExpression(ctx);
-    if (!expr) {
-        return NULL;
-    }
-    
-    Token closeParen = nextToken(ctx);
-    if (closeParen.type != TOKEN_RIGHT_PAREN) {
-        return NULL;
-    }
-    
-    // Mark cast nodes as parenthesized to allow chained casts with explicit parentheses
-    // This follows the zero-cost abstraction principle - only a boolean flag is needed
-    if (expr->type == NODE_CAST) {
-        expr->cast.parenthesized = true;
-    }
-    
-    return expr;
-}
 
 // Context-based parsing interface - new implementation
 ASTNode* parseSourceWithContext(ParserContext* ctx, const char* source) {

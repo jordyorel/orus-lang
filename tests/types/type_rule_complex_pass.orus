@@ -2,4 +2,4 @@ x: i32 = 5
 result: string = ((x as bool) as string)
 n: u32 = 100u32
 r = n * 2u32
-print(result, r)
+print(result, " ", r)

@@ -15,6 +15,7 @@
 
 // ====== I32 Typed Arithmetic Handlers ======
 
+static inline void handle_add_i32_typed(void) __attribute__((unused)); 
 static inline void handle_add_i32_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
