@@ -9,6 +9,8 @@
 #include "vm.h"
 #include "common.h"
 #include "error_reporting.h"
+#include "errors/error_interface.h"
+#include "errors/features/type_errors.h"
 #include "compiler.h"
 #include "repl.h"
 #include "version.h"
@@ -121,6 +123,10 @@ static void showVersion() {
 int main(int argc, const char* argv[]) {
     // Initialize error reporting system
     init_error_reporting();
+    
+    // Initialize feature-based error system
+    init_feature_errors();
+    init_type_errors();
     
     bool traceExecution = false;
     bool debugMode = false;

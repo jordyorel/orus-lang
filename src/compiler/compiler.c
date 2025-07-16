@@ -9,6 +9,7 @@
 #include "../../include/symbol_table.h"
 #include "../../include/type.h"
 #include "../../include/error_reporting.h"
+#include "../../include/errors/features/type_errors.h"
 #include <string.h>
 
 static bool compileNode(ASTNode* node, Compiler* compiler);
@@ -143,7 +144,7 @@ static int compileExpr(ASTNode* node, Compiler* compiler) {
                 leftType->kind != TYPE_ANY && rightType->kind != TYPE_ANY &&
                 !type_equals_extended(leftType, rightType)) {
                 SrcLocation location = {vm.filePath, node->location.line, node->location.column};
-                report_type_error(E2004_MIXED_ARITHMETIC, location, getTypeName(leftType->kind), getTypeName(rightType->kind));
+                report_mixed_arithmetic(location, getTypeName(leftType->kind), getTypeName(rightType->kind));
                 compiler->hadError = true;
             }
             
@@ -211,7 +212,7 @@ static int compileExpr(ASTNode* node, Compiler* compiler) {
                 targetType = getPrimitiveType(TYPE_STRING);
             } else {
                 SrcLocation location = {vm.filePath, node->location.line, node->location.column};
-                report_type_error(E2003_UNDEFINED_TYPE, location, "valid type", targetTypeName);
+                report_undefined_type(location, targetTypeName);
                 compiler->hadError = true;
                 return allocateRegister(compiler);
             }
@@ -220,7 +221,7 @@ static int compileExpr(ASTNode* node, Compiler* compiler) {
             if (sourceType->kind == TYPE_STRING && targetType->kind != TYPE_STRING) {
                 // Use new friendly error reporting
                 SrcLocation location = {vm.filePath, node->location.line, node->location.column};
-                report_type_error(E2005_INVALID_CAST, location, getTypeName(targetType->kind), getTypeName(sourceType->kind));
+                report_invalid_cast(location, getTypeName(targetType->kind), getTypeName(sourceType->kind));
                 compiler->hadError = true;
                 return allocateRegister(compiler);
             }
@@ -237,7 +238,7 @@ static int compileExpr(ASTNode* node, Compiler* compiler) {
                 sourceType->kind != TYPE_F64 && sourceType->kind != TYPE_BOOL && 
                 sourceType->kind != TYPE_STRING) {
                 SrcLocation location = {vm.filePath, node->location.line, node->location.column};
-                report_type_error(E2005_INVALID_CAST, location, "supported type", getTypeName(sourceType->kind));
+                report_invalid_cast(location, "supported type", getTypeName(sourceType->kind));
                 compiler->hadError = true;
                 return allocateRegister(compiler);
             }
@@ -247,7 +248,7 @@ static int compileExpr(ASTNode* node, Compiler* compiler) {
                 targetType->kind != TYPE_F64 && targetType->kind != TYPE_BOOL && 
                 targetType->kind != TYPE_STRING) {
                 SrcLocation location = {vm.filePath, node->location.line, node->location.column};
-                report_type_error(E2005_INVALID_CAST, location, "supported type", getTypeName(targetType->kind));
+                report_invalid_cast(location, "supported type", getTypeName(targetType->kind));
                 compiler->hadError = true;
                 return allocateRegister(compiler);
             }
@@ -421,7 +422,7 @@ static int compileExpr(ASTNode* node, Compiler* compiler) {
             
             if (!validCast) {
                 SrcLocation location = {vm.filePath, node->location.line, node->location.column};
-                report_type_error(E2005_INVALID_CAST, location, getTypeName(targetType->kind), getTypeName(sourceType->kind));
+                report_invalid_cast(location, getTypeName(targetType->kind), getTypeName(sourceType->kind));
                 compiler->hadError = true;
                 freeRegister(compiler, srcReg);
                 return allocateRegister(compiler);
@@ -532,7 +533,7 @@ static bool compileNode(ASTNode* node, Compiler* compiler) {
                     // Only allow compatible assignments or require explicit casting
                     if (!type_equals_extended(inferredType, annotatedType)) {
                         SrcLocation location = {vm.filePath, node->location.line, node->location.column};
-                        report_type_error(E2001_TYPE_MISMATCH, location, getTypeName(annotatedType->kind), getTypeName(inferredType->kind));
+                        report_type_mismatch(location, getTypeName(annotatedType->kind), getTypeName(inferredType->kind));
                         compiler->hadError = true;
                         vm.globalTypes[idx] = getPrimitiveType(TYPE_ANY);
                     } else {
