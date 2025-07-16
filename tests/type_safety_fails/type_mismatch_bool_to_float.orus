@@ -1,0 +1,5 @@
+// Test: Type mismatch error - bool assigned to f64
+// Expected: Friendly error message showing type mismatch
+
+value: f64 = true
+print(value)

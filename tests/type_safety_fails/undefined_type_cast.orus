@@ -1,0 +1,6 @@
+// Test: Undefined type error - casting to invalid type
+// Expected: Friendly error message about invalid type name
+
+value = 42
+result = value as xyz
+print(result)

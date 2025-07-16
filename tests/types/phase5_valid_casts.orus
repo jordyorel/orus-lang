@@ -1,0 +1,49 @@
+// Phase 5: Valid casting tests
+// All these casts should work correctly
+
+// Basic numeric casts
+a: i32 = 10
+b = a as i64
+print(b)
+
+c: i64 = 100i64
+d = c as i32
+print(d)
+
+// Floating point casts
+e: f64 = 3.14
+f = e as i32
+print(f)
+
+g: i32 = 42
+h = g as f64
+print(h)
+
+// Unsigned type casts
+i: u32 = 50u32
+j = i as i32
+print(j)
+
+k: i32 = 25
+l = k as u32
+print(l)
+
+// Boolean casts
+m: bool = true
+n = m as i32
+print(n)
+
+o: i32 = 0
+p = o as bool
+print(p)
+
+q: i32 = 1
+r = q as bool
+print(r)
+
+// Complex chain with explicit annotations
+s: i32 = 123
+t = s as f64
+u = t as i64
+v = u as bool
+print(v)

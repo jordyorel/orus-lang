@@ -1,0 +1,7 @@
+// Test: Chain casting with error in the middle
+// Expected: Should show friendly error about string conversion
+
+a: i32 = 42
+b = a as string
+c = b as f64  // This should fail with friendly message
+print(c)

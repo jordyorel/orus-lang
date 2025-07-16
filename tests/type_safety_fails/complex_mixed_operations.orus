@@ -1,0 +1,14 @@
+// Test: Complex mixed operations with multiple type errors
+// Expected: Should show friendly error for the first type mismatch
+
+a: i32 = 10
+b: f64 = 3.14
+c: string = "hello"
+
+// This should trigger mixed arithmetic error
+result1 = a + b
+print(result1)
+
+// This would also be an error if reached
+result2 = a + c
+print(result2)

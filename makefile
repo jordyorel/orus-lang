@@ -127,7 +127,9 @@ test: $(ORUS)
                           $(TESTDIR)/types/arithmetic_same_types_v2.orus \
                           $(TESTDIR)/types/explicit_cast_arithmetic.orus \
                           $(TESTDIR)/types/complex_expression_with_casts.orus \
-                          $(TESTDIR)/types/cross_type_comparison.orus; do \
+                          $(TESTDIR)/types/cross_type_comparison.orus \
+                          $(TESTDIR)/types/valid_string_conversions.orus \
+                          $(TESTDIR)/types/valid_numeric_conversions.orus; do \
 		if [ -f "$$test_file" ]; then \
 			printf "Testing: $$test_file ... "; \
 			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
@@ -154,7 +156,19 @@ test: $(ORUS)
                           $(TESTDIR)/type_safety_fails/type_rule_edge_fail.orus \
                           $(TESTDIR)/type_safety_fails/mixed_type_operations_fail.orus \
                           $(TESTDIR)/type_safety_fails/implicit_widening_fail.orus \
-                          $(TESTDIR)/type_safety_fails/chained_mixed_ops_fail.orus; do \
+                          $(TESTDIR)/type_safety_fails/chained_mixed_ops_fail.orus \
+                          $(TESTDIR)/type_safety_fails/type_mismatch_string_to_int.orus \
+                          $(TESTDIR)/type_safety_fails/type_mismatch_bool_to_float.orus \
+                          $(TESTDIR)/type_safety_fails/type_mismatch_float_to_bool.orus \
+                          $(TESTDIR)/type_safety_fails/invalid_cast_string_to_int.orus \
+                          $(TESTDIR)/type_safety_fails/invalid_cast_string_to_bool.orus \
+                          $(TESTDIR)/type_safety_fails/invalid_cast_string_to_float.orus \
+                          $(TESTDIR)/type_safety_fails/mixed_arithmetic_int_float.orus \
+                          $(TESTDIR)/type_safety_fails/mixed_arithmetic_signed_unsigned.orus \
+                          $(TESTDIR)/type_safety_fails/mixed_arithmetic_different_sizes.orus \
+                          $(TESTDIR)/type_safety_fails/undefined_type_cast.orus \
+                          $(TESTDIR)/type_safety_fails/complex_mixed_operations.orus \
+                          $(TESTDIR)/type_safety_fails/chain_cast_with_error.orus; do \
 		if [ -f "$$test_file" ]; then \
 			printf "Testing: $$test_file ... "; \
 			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \

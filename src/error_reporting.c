@@ -689,7 +689,7 @@ const char* get_error_help(ErrorCode code) {
         case E2001_TYPE_MISMATCH:
             return "You can convert between types using conversion functions if appropriate.";
         case E2004_MIXED_ARITHMETIC:
-            return "Use explicit conversion like .as_i64() or .as_f64() to make your intent clear.";
+            return "Use explicit conversion like (value as i64) or (value as f64) to make your intent clear.";
         
         case E3001_FILE_NOT_FOUND:
             return "Check the file path and make sure the file exists.";

@@ -501,3 +501,27 @@ void freeTypeSystem(void) {
 bool type_equals_extended(Type* a, Type* b) {
     return equalsType(a, b);
 }
+
+// Phase 3/4: Type name string representation for error messages
+const char* getTypeName(TypeKind kind) {
+    switch (kind) {
+        case TYPE_UNKNOWN: return "unknown";
+        case TYPE_I32: return "i32";
+        case TYPE_I64: return "i64";
+        case TYPE_U32: return "u32";
+        case TYPE_U64: return "u64";
+        case TYPE_F64: return "f64";
+        case TYPE_BOOL: return "bool";
+        case TYPE_STRING: return "string";
+        case TYPE_VOID: return "void";
+        case TYPE_NIL: return "nil";
+        case TYPE_ARRAY: return "array";
+        case TYPE_FUNCTION: return "function";
+        case TYPE_ERROR: return "error";
+        case TYPE_ANY: return "any";
+        case TYPE_VAR: return "type_var";
+        case TYPE_GENERIC: return "generic";
+        case TYPE_INSTANCE: return "instance";
+        default: return "unknown";
+    }
+}

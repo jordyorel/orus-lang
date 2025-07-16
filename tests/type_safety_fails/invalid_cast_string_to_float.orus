@@ -1,0 +1,6 @@
+// Test: Invalid cast error - string to f64
+// Expected: Friendly error message about string conversion restrictions
+
+text = "3.14"
+value = text as f64
+print(value)

@@ -1,0 +1,7 @@
+// Test: Valid numeric conversions with explicit casting
+// Expected: Should compile and run successfully
+
+// Simple conversion test
+a: i32 = 10
+a_unsigned = a as u32
+print(a_unsigned)

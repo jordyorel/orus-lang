@@ -1,0 +1,22 @@
+// Test: Valid string conversions - all types to string
+// Expected: Should compile and run successfully
+
+// Integer to string
+a: i32 = 42
+a_str = a as string
+print(a_str)
+
+// Boolean to string
+b: bool = true
+b_str = b as string
+print(b_str)
+
+// Float to string
+c: f64 = 3.14
+c_str = c as string
+print(c_str)
+
+// Unsigned integer to string
+d: u32 = 100u32
+d_str = d as string
+print(d_str)

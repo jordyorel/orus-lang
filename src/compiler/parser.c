@@ -497,14 +497,42 @@ static ASTNode* parseVariableDeclaration(bool isMutable, Token nameToken) {
                 mismatch = false;
 
             if (literalType == VAL_NIL && !typeNode->typeAnnotation.isNullable) {
-                fprintf(stderr, "Error: nil not allowed for non-nullable type at line %d:%d.\n",
-                        nameToken.line, nameToken.column);
+                // Use structured error reporting for nil assignment error
+                SrcLocation location = {
+                    .file = NULL, // Will be set by error reporting system
+                    .line = nameToken.line,
+                    .column = nameToken.column
+                };
+                
+                report_compile_error(E2001_TYPE_MISMATCH, location,
+                    "nil not allowed for non-nullable type '%s'", declaredType);
                 return NULL;
             }
 
             if (mismatch) {
-                fprintf(stderr, "Error: Type mismatch at line %d:%d. Literal does not match declared type '%s'.\n",
-                        nameToken.line, nameToken.column, declaredType);
+                // Use structured error reporting instead of fprintf
+                SrcLocation location = {
+                    .file = NULL, // Will be set by error reporting system
+                    .line = nameToken.line,
+                    .column = nameToken.column
+                };
+                
+                // Get the actual literal type name for the error
+                const char* literalTypeName = "unknown";
+                switch (literalType) {
+                    case VAL_I32: literalTypeName = "i32"; break;
+                    case VAL_I64: literalTypeName = "i64"; break;
+                    case VAL_U32: literalTypeName = "u32"; break;
+                    case VAL_U64: literalTypeName = "u64"; break;
+                    case VAL_F64: literalTypeName = "f64"; break;
+                    case VAL_BOOL: literalTypeName = "bool"; break;
+                    case VAL_STRING: literalTypeName = "string"; break;
+                    case VAL_NIL: literalTypeName = "nil"; break;
+                    default: literalTypeName = "unknown"; break;
+                }
+                
+                // Report structured type error
+                report_type_error(E2001_TYPE_MISMATCH, location, declaredType, literalTypeName);
                 return NULL;
             }
         }

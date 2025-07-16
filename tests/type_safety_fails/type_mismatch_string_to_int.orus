@@ -1,0 +1,5 @@
+// Test: Type mismatch error - string assigned to i32
+// Expected: Friendly error message showing "this is a `string`, but `i32` was expected"
+
+x: i32 = "hello"
+print(x)
