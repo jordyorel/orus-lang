@@ -21,7 +21,7 @@ INCLUDES = -I$(INCDIR)
 # Source files
 COMPILER_SRCS = $(SRCDIR)/compiler/compiler.c $(SRCDIR)/compiler/lexer.c $(SRCDIR)/compiler/parser.c $(SRCDIR)/compiler/symbol_table.c
 
-VM_SRCS = $(SRCDIR)/vm/vm_core.c $(SRCDIR)/vm/vm.c $(SRCDIR)/vm/vm_memory.c $(SRCDIR)/vm/debug.c $(SRCDIR)/vm/builtins.c $(SRCDIR)/vm/vm_arithmetic.c $(SRCDIR)/vm/vm_control_flow.c $(SRCDIR)/vm/vm_typed_ops.c $(SRCDIR)/vm/vm_string_ops.c $(SRCDIR)/vm/vm_comparison.c $(SRCDIR)/vm/vm_dispatch_switch.c $(SRCDIR)/vm/vm_dispatch_goto.c $(SRCDIR)/vm/vm_validation.c $(SRCDIR)/type/type_representation.c $(SRCDIR)/error_reporting.c $(SRCDIR)/errors/core/error_base.c $(SRCDIR)/errors/features/type_errors.c
+VM_SRCS = $(SRCDIR)/vm/vm_core.c $(SRCDIR)/vm/vm.c $(SRCDIR)/vm/vm_memory.c $(SRCDIR)/vm/debug.c $(SRCDIR)/vm/builtins.c $(SRCDIR)/vm/vm_arithmetic.c $(SRCDIR)/vm/vm_control_flow.c $(SRCDIR)/vm/vm_typed_ops.c $(SRCDIR)/vm/vm_string_ops.c $(SRCDIR)/vm/vm_comparison.c $(SRCDIR)/vm/vm_dispatch_switch.c $(SRCDIR)/vm/vm_dispatch_goto.c $(SRCDIR)/vm/vm_validation.c $(SRCDIR)/type/type_representation.c $(SRCDIR)/errors/infrastructure/error_infrastructure.c $(SRCDIR)/errors/core/error_base.c $(SRCDIR)/errors/features/type_errors.c
 
 REPL_SRC = $(SRCDIR)/repl.c
 MAIN_SRC = $(SRCDIR)/main.c
@@ -41,7 +41,7 @@ all: $(ORUS)
 
 # Create build directory
 $(BUILDDIR):
-	mkdir -p $(BUILDDIR) $(BUILDDIR)/vm $(BUILDDIR)/compiler $(BUILDDIR)/type $(BUILDDIR)/errors/core $(BUILDDIR)/errors/features
+	mkdir -p $(BUILDDIR) $(BUILDDIR)/vm $(BUILDDIR)/compiler $(BUILDDIR)/type $(BUILDDIR)/errors/core $(BUILDDIR)/errors/features $(BUILDDIR)/errors/infrastructure
 
 # Main interpreter
 $(ORUS): $(MAIN_OBJ) $(REPL_OBJ) $(VM_OBJS) $(COMPILER_OBJS)
@@ -257,7 +257,8 @@ test: $(ORUS)
 	done; \
 	echo ""; \
 	echo "\033[36m=== Benchmark Tests ===\033[0m"; \
-	for test_file in $(TESTDIR)/benchmarks/extreme_benchmark.orus \
+	for test_file in $(TESTDIR)/benchmarks/arithmetic_benchmark.orus \
+	                  $(TESTDIR)/benchmarks/extreme_benchmark.orus \
 	                  $(TESTDIR)/benchmarks/modulo_operations_benchmark.orus; do \
 		if [ -f "$$test_file" ]; then \
 			printf "Testing: $$test_file ... "; \

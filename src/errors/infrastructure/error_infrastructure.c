@@ -1,4 +1,4 @@
-#include "../include/error_reporting.h"
+#include "../../../include/error_reporting.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -533,8 +533,11 @@ ErrorReportResult report_compile_error(ErrorCode code, SrcLocation location, con
     return report_enhanced_error(&error);
 }
 
-// Type error reporting with token-spanning caret
+// DEPRECATED: This function is replaced by feature-specific error functions
+// in src/errors/features/. Kept for backward compatibility only.
+// New code should use report_type_mismatch(), report_mixed_arithmetic(), etc.
 ErrorReportResult report_type_error(ErrorCode code, SrcLocation location, const char* expected, const char* found) {
+    // Legacy compatibility - delegate to compile error with basic message
     if (!expected || !found) {
         return ERROR_REPORT_INVALID_INPUT;
     }
@@ -547,68 +550,7 @@ ErrorReportResult report_type_error(ErrorCode code, SrcLocation location, const 
         return ERROR_REPORT_BUFFER_OVERFLOW;
     }
     
-    // Ensure filename is set if available
-    extern VM vm;
-    if (location.file == NULL && vm.filePath) {
-        location.file = vm.filePath;
-    }
-    
-    int caret_start = location.column > 0 ? location.column - 1 : 0;
-    int caret_end = caret_start + 1;
-    
-    // Enhanced token-spanning caret calculation
-    if (g_error_state.config.source_text) {
-        char line_buffer[MAX_SOURCE_LINE_SIZE];
-        size_t line_length;
-        
-        ErrorReportResult line_result = get_source_line_safe(
-            g_error_state.config.source_text,
-            g_error_state.source_text_length,
-            location.line,
-            line_buffer, sizeof(line_buffer),
-            &line_length);
-        
-        if (line_result == ERROR_REPORT_SUCCESS) {
-            // String literal detection with bounds checking
-            if ((size_t)caret_start < line_length && line_buffer[caret_start] == '"') {
-                caret_end = caret_start + 1;
-                while ((size_t)caret_end < line_length && line_buffer[caret_end] != '"') {
-                    caret_end++;
-                }
-                if ((size_t)caret_end < line_length) caret_end++; // Include closing quote
-            }
-            // Identifier/number detection
-            else {
-                while ((size_t)caret_end < line_length && 
-                       (isalnum(line_buffer[caret_end]) || line_buffer[caret_end] == '_' || line_buffer[caret_end] == '.')) {
-                    caret_end++;
-                }
-            }
-            
-            // Fallback to found type length
-            if (caret_end <= caret_start + 1) {
-                size_t found_len = simd_strlen(found);
-                caret_end = caret_start + found_len;
-                if ((size_t)caret_end > line_length) caret_end = line_length;
-            }
-        }
-    }
-    
-    EnhancedError error = {
-        .code = code,
-        .severity = SEVERITY_ERROR,
-        .category = get_error_category(code),
-        .title = get_error_title(code),
-        .message = message,
-        .help = get_error_help(code),
-        .note = get_error_note(code),
-        .location = location,
-        .source_line = NULL,  // Will be retrieved in report_enhanced_error
-        .caret_start = caret_start,
-        .caret_end = caret_end
-    };
-    
-    return report_enhanced_error(&error);
+    return report_compile_error(code, location, "%s", message);
 }
 
 // Error code mapping and title functions (keep existing implementations)
@@ -625,7 +567,10 @@ ErrorCode map_error_type_to_code(ErrorType type) {
 }
 
 const char* get_error_title(ErrorCode code) {
+    // NOTE: E2xxx (type) errors are now handled by src/errors/features/type_errors.c
+    // This function is kept for runtime, syntax, module, and internal errors only
     switch (code) {
+        // Runtime errors (E0xxx)
         case E0001_DIVISION_BY_ZERO: return "Oh no! You tried to divide by zero";
         case E0002_INDEX_OUT_OF_BOUNDS: return "Index is outside the valid range";
         case E0003_NULL_REFERENCE: return "Tried to use a null value";
@@ -634,6 +579,7 @@ const char* get_error_title(ErrorCode code) {
         case E0006_MODULO_BY_ZERO: return "Can't find remainder when dividing by zero";
         case E0007_TYPE_CONVERSION: return "Can't convert between these types";
         
+        // Syntax errors (E1xxx)
         case E1001_UNEXPECTED_TOKEN: return "Found something unexpected here";
         case E1002_MISSING_COLON: return "Something's missing here";
         case E1003_MISSING_PARENTHESIS: return "Missing closing parenthesis";
@@ -644,30 +590,36 @@ const char* get_error_title(ErrorCode code) {
         case E1008_INVALID_INDENTATION: return "Indentation looks off";
         case E1009_EXPRESSION_TOO_COMPLEX: return "Expression is too deeply nested";
         
-        case E2001_TYPE_MISMATCH: return "This value isn't what we expected";
-        case E2002_INCOMPATIBLE_TYPES: return "These types don't work together";
-        case E2003_UNDEFINED_TYPE: return "This type doesn't exist";
-        case E2004_MIXED_ARITHMETIC: return "Can't mix these number types directly";
-        case E2005_INVALID_CAST: return "Can't convert to this type";
-        case E2006_TYPE_ANNOTATION_REQUIRED: return "Need to specify the type here";
-        case E2007_UNSUPPORTED_OPERATION: return "This operation isn't supported for this type";
-        
+        // Module errors (E3xxx)
         case E3001_FILE_NOT_FOUND: return "Can't find the file you're looking for";
         case E3002_CYCLIC_IMPORT: return "Modules are importing each other in a circle";
         case E3003_MODULE_NOT_FOUND: return "Can't find this module";
         case E3004_IMPORT_FAILED: return "Failed to import this module";
         
+        // Internal errors (E9xxx)
         case E9001_INTERNAL_PANIC: return "Internal compiler error (this is our bug!)";
         case E9002_VM_CRASH: return "Virtual machine crashed unexpectedly";
         case E9003_COMPILER_BUG: return "Compiler encountered an internal error";
         case E9004_ASSERTION_FAILED: return "Internal assertion failed";
+        
+        // Type errors (E2xxx) - handled by feature modules
+        case E2001_TYPE_MISMATCH:
+        case E2002_INCOMPATIBLE_TYPES:
+        case E2003_UNDEFINED_TYPE:
+        case E2004_MIXED_ARITHMETIC:
+        case E2005_INVALID_CAST:
+        case E2006_TYPE_ANNOTATION_REQUIRED:
+        case E2007_UNSUPPORTED_OPERATION:
+            return "Type error (handled by feature module)";
         
         default: return "Something went wrong";
     }
 }
 
 const char* get_error_help(ErrorCode code) {
+    // NOTE: E2xxx (type) errors are now handled by src/errors/features/type_errors.c
     switch (code) {
+        // Runtime errors (E0xxx)
         case E0001_DIVISION_BY_ZERO: 
             return "Add a check before dividing to make sure the number isn't zero.";
         case E0002_INDEX_OUT_OF_BOUNDS:
@@ -677,6 +629,7 @@ const char* get_error_help(ErrorCode code) {
         case E0006_MODULO_BY_ZERO:
             return "Add a check to ensure the divisor isn't zero before using the modulo operator.";
         
+        // Syntax errors (E1xxx)
         case E1002_MISSING_COLON:
             return "Try adding a ':' at the end of this line.";
         case E1003_MISSING_PARENTHESIS:
@@ -686,28 +639,45 @@ const char* get_error_help(ErrorCode code) {
         case E1009_EXPRESSION_TOO_COMPLEX:
             return "Break this into smaller expressions using intermediate variables.";
         
-        case E2001_TYPE_MISMATCH:
-            return "You can convert between types using conversion functions if appropriate.";
-        case E2004_MIXED_ARITHMETIC:
-            return "Use explicit conversion like (value as i64) or (value as f64) to make your intent clear.";
-        
+        // Module errors (E3xxx)
         case E3001_FILE_NOT_FOUND:
             return "Check the file path and make sure the file exists.";
+        
+        // Type errors (E2xxx) - handled by feature modules, return NULL to use feature help
+        case E2001_TYPE_MISMATCH:
+        case E2002_INCOMPATIBLE_TYPES:
+        case E2003_UNDEFINED_TYPE:
+        case E2004_MIXED_ARITHMETIC:
+        case E2005_INVALID_CAST:
+        case E2006_TYPE_ANNOTATION_REQUIRED:
+        case E2007_UNSUPPORTED_OPERATION:
+            return NULL; // Handled by feature modules
         
         default: return NULL;
     }
 }
 
 const char* get_error_note(ErrorCode code) {
+    // NOTE: E2xxx (type) errors are now handled by src/errors/features/type_errors.c
     switch (code) {
+        // Runtime errors (E0xxx)
         case E0001_DIVISION_BY_ZERO:
             return "Division by zero is mathematically undefined.";
+        
+        // Syntax errors (E1xxx)
         case E1007_SEMICOLON_NOT_ALLOWED:
             return "Orus uses newlines instead of semicolons to separate statements.";
+        
+        // Type errors (E2xxx) - handled by feature modules, return NULL to use feature notes
         case E2001_TYPE_MISMATCH:
-            return "Different types can't be mixed directly for safety reasons.";
+        case E2002_INCOMPATIBLE_TYPES:
+        case E2003_UNDEFINED_TYPE:
         case E2004_MIXED_ARITHMETIC:
-            return "Explicit type conversion prevents accidental precision loss.";
+        case E2005_INVALID_CAST:
+        case E2006_TYPE_ANNOTATION_REQUIRED:
+        case E2007_UNSUPPORTED_OPERATION:
+            return NULL; // Handled by feature modules
+            
         default: return NULL;
     }
 }

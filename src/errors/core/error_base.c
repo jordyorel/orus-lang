@@ -1,9 +1,11 @@
 #include "../../../include/errors/error_interface.h"
 #include "../../../include/errors/error_types.h"
 #include "../../../include/error_reporting.h"  // For backward compatibility
+#include "../../../include/vm.h"  // For VM and EnhancedError
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdarg.h>
 
 // Maximum number of error categories
 #define MAX_ERROR_CATEGORIES 8
@@ -164,9 +166,39 @@ ErrorReportResult report_feature_error(ErrorCode code, SrcLocation location,
         return ERROR_REPORT_INVALID_INPUT;
     }
     
-    // For now, delegate to the legacy system for actual reporting
-    // This maintains compatibility while we transition
-    return report_type_error(code, location, expected, found);
+    // Get error info from registered feature modules
+    const FeatureErrorInfo* error_info = get_error_info(code);
+    if (!error_info) {
+        // Fallback to legacy system if error not found in feature modules
+        return report_type_error(code, location, expected, found);
+    }
+    
+    // Create enhanced error with feature-specific information
+    extern VM vm;
+    char message[2048];
+    snprintf(message, sizeof(message), "this is a `%s`, but `%s` was expected", 
+             found ? found : "unknown", expected ? expected : "unknown");
+    
+    EnhancedError error = {
+        .code = code,
+        .severity = SEVERITY_ERROR,
+        .category = get_error_category_name(get_error_feature(code)),
+        .title = error_info->title,
+        .message = message,
+        .help = error_info->help,
+        .note = error_info->note,
+        .location = location,
+        .source_line = NULL,
+        .caret_start = location.column > 0 ? location.column - 1 : 0,
+        .caret_end = location.column > 0 ? location.column : 1
+    };
+    
+    // Ensure filename is set
+    if (error.location.file == NULL && vm.filePath) {
+        error.location.file = vm.filePath;
+    }
+    
+    return report_enhanced_error(&error);
 }
 
 // Formatted error reporting
@@ -186,6 +218,33 @@ ErrorReportResult report_feature_error_f(ErrorCode code, SrcLocation location,
         return ERROR_REPORT_BUFFER_OVERFLOW;
     }
     
-    // For now, delegate to legacy system
-    return report_compile_error(code, location, "%s", message);
+    // Get error info from registered feature modules
+    const FeatureErrorInfo* error_info = get_error_info(code);
+    if (!error_info) {
+        // Fallback to legacy system if error not found in feature modules
+        return report_compile_error(code, location, "%s", message);
+    }
+    
+    // Create enhanced error with feature-specific information
+    extern VM vm;
+    EnhancedError error = {
+        .code = code,
+        .severity = SEVERITY_ERROR,
+        .category = get_error_category_name(get_error_feature(code)),
+        .title = error_info->title,
+        .message = message,
+        .help = error_info->help,
+        .note = error_info->note,
+        .location = location,
+        .source_line = NULL,
+        .caret_start = location.column > 0 ? location.column - 1 : 0,
+        .caret_end = location.column > 0 ? location.column : 1
+    };
+    
+    // Ensure filename is set
+    if (error.location.file == NULL && vm.filePath) {
+        error.location.file = vm.filePath;
+    }
+    
+    return report_enhanced_error(&error);
 }

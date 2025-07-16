@@ -93,6 +93,7 @@ ErrorReportResult report_unsupported_operation(SrcLocation location, const char*
 
 // Get type-specific error suggestions
 const char* get_type_error_suggestion(ErrorCode code, const char* context) {
+    (void)context; // Unused parameter
     const FeatureErrorInfo* error = get_error_info(code);
     if (error && error->help) {
         return error->help;
