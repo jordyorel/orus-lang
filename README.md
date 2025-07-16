@@ -20,20 +20,21 @@ print("Result: ", fibonacci(10))
 
 ## Performance (Jul 2025)
 
-*Benchmarks run on Apple M1 Pro with optimized builds*
+*Benchmarks run on Apple M1 Pro with optimized builds (5-run average with statistical analysis)*
 
-| Benchmark | **Orus** | Python | Node.js | Lua | LuaJIT |
-|-----------|----------|--------|---------|-----|--------|
-| Arithmetic | **20.7ms** | 35.0ms | 48.7ms | 20.8ms | 20.0ms |
-| Comprehensive | **20.2ms** | 35.3ms | 45.4ms | 20.6ms | 20.4ms |
-| Extreme Stress | **20.6ms** | 35.4ms | 46.0ms | 20.9ms | 20.7ms |
+| Language | **Mean Time** | **Range** | **Relative Performance** |
+|----------|---------------|-----------|--------------------------|
+| **LuaJIT** | **20.6ms** | 20.5-20.9ms | 1.0× (baseline) |
+| **Lua** | **20.8ms** | 20.7-20.9ms | 1.01× slower |
+| **Orus** | **21.5ms** | 20.5-24.8ms | 1.04× slower |
+| **Python** | **35.1ms** | 34.7-35.7ms | 1.70× slower |
+| **JavaScript** | **45.6ms** | 45.0-45.9ms | 2.21× slower |
 
-**Overall Average**: Orus **20.5ms** | Python 35.2ms | JavaScript 46.7ms | Lua 20.8ms | LuaJIT 20.4ms
-
-- **Performance vs Python**: 1.7× faster  
-- **Performance vs JavaScript**: 2.3× faster
-- **Performance vs Lua**: Competitive (within 1% difference)
-- **Performance vs LuaJIT**: Competitive (within 1% difference)
+**Performance Summary**:
+- **vs Python**: 1.6× faster  
+- **vs JavaScript**: 2.1× faster
+- **vs LuaJIT**: Competitive (within 4% difference)
+- **vs Lua**: Competitive (within 3% difference)
 
 ## Quick Start
 
