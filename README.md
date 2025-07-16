@@ -73,8 +73,8 @@ See [BENCHMARK_RESULTS.md](docs/BENCHMARK_RESULTS.md) for detailed performance d
 
 ## Public API Documentation
 
-For details on embedding the Orus VM in other applications, see
-[VM_PUBLIC_API.md](docs/VM_PUBLIC_API.md).
+<!-- For details on embedding the Orus VM in other applications, see
+[VM_PUBLIC_API.md](docs/VM_PUBLIC_API.md). -->
 
 ## License
 
