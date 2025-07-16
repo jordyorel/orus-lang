@@ -10,9 +10,10 @@ ifeq ($(UNAME_M),arm64)
     APPLE_SILICON_FLAGS = -mcpu=apple-m1 -mtune=apple-m1 -O3 -flto
     APPLE_SILICON_FLAGS += -ffast-math -funroll-loops
     APPLE_SILICON_FLAGS += -march=armv8.4-a+simd+crypto+sha3
+    APPLE_SILICON_FLAGS += -DUSE_COMPUTED_GOTO=1
     CFLAGS = -Wall -Wextra $(APPLE_SILICON_FLAGS) -g -std=c11
 else
-    # Generic flags for other architectures
+    # Generic flags for other architectures (auto-detect computed goto)
     CFLAGS = -Wall -Wextra -O2 -g -std=c11
 endif
 

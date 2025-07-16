@@ -131,10 +131,22 @@ typedef struct {
     TokenType type;
 } KeywordEntry;
 
+// Context-based lexer state (replaces global state)
+typedef struct LexerContext {
+    Lexer lexer;
+} LexerContext;
+
+// Context lifecycle management
+LexerContext* lexer_context_create(const char* source);
+void lexer_context_destroy(LexerContext* ctx);
+
+// Context-based API
+void init_scanner_ctx(LexerContext* ctx, const char* source);
+Token scan_token_ctx(LexerContext* ctx);
+
+// Backward compatibility API (uses internal context)
 void init_scanner(const char* source);
 Token scan_token();
-
-// Utility functions for precise position tracking (currently unused)
 
 // Expose the global scanner instance so other modules (like the parser)
 // can access the raw source when producing error messages.

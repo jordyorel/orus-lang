@@ -12,8 +12,8 @@
 
 #define ERR_LEN(msg) (sizeof(msg) - 1)
 
-#define PEEK() (*lexer.current)
-#define PEEK_NEXT() (*(lexer.current + 1))
+#define PEEK(ctx) (*(ctx)->lexer.current)
+#define PEEK_NEXT(ctx) (*((ctx)->lexer.current + 1))
 #define IS_ALPHA(c) \
     (((c) >= 'a' && (c) <= 'z') || ((c) >= 'A' && (c) <= 'Z') || (c) == '_')
 #define IS_DIGIT(c) ((c) >= '0' && (c) <= '9')
@@ -24,12 +24,72 @@
 /*                             Global lexer state                           */
 /* -------------------------------------------------------------------------- */
 
-Lexer lexer;
+Lexer lexer;  // Keep for backward compatibility
+
+/* -------------------------------------------------------------------------- */
+/*                         Context lifecycle management                       */
+/* -------------------------------------------------------------------------- */
+
+LexerContext* lexer_context_create(const char* source) {
+    LexerContext* ctx = malloc(sizeof(LexerContext));
+    if (!ctx) return NULL;
+    
+    init_scanner_ctx(ctx, source);
+    return ctx;
+}
+
+void lexer_context_destroy(LexerContext* ctx) {
+    if (ctx) {
+        free(ctx);
+    }
+}
 
 /* -------------------------------------------------------------------------- */
 /*                         Very hot inline functions                          */
 /* -------------------------------------------------------------------------- */
 
+static inline char advance_ctx(LexerContext* ctx) {
+    char c = *ctx->lexer.current++;
+    if (c == '\n') {
+        ctx->lexer.line++;
+        ctx->lexer.column = 1;
+        ctx->lexer.lineStart = ctx->lexer.current;
+    } else {
+        ctx->lexer.column++;
+    }
+    return c;
+}
+
+static inline bool match_char_ctx(LexerContext* ctx, char expected) {
+    if (PEEK(ctx) != expected) return false;
+    ctx->lexer.current++;
+    ctx->lexer.column++;
+    return true;
+}
+
+static inline bool is_at_end_ctx(LexerContext* ctx) { return PEEK(ctx) == '\0'; }
+
+static inline Token make_token_ctx(LexerContext* ctx, TokenType type) {
+    Token token;
+    token.type = type;
+    token.start = ctx->lexer.start;
+    token.length = (int)(ctx->lexer.current - ctx->lexer.start);
+    token.line = ctx->lexer.line;
+    token.column = ctx->lexer.column - token.length;
+    return token;
+}
+
+static inline Token error_token_ctx(LexerContext* ctx, const char* msg, int len) {
+    Token token;
+    token.type = TOKEN_ERROR;
+    token.start = msg;
+    token.length = len;
+    token.line = ctx->lexer.line;
+    token.column = ctx->lexer.column;
+    return token;
+}
+
+// Backward compatibility functions (use global lexer)
 static inline char advance() {
     char c = *lexer.current++;
     if (c == '\n') {
@@ -43,13 +103,13 @@ static inline char advance() {
 }
 
 static inline bool match_char(char expected) {
-    if (PEEK() != expected) return false;
+    if (*lexer.current != expected) return false;
     lexer.current++;
     lexer.column++;
     return true;
 }
 
-static inline bool is_at_end() { return PEEK() == '\0'; }
+static inline bool is_at_end() { return *lexer.current == '\0'; }
 
 static inline Token make_token(TokenType type) {
     Token token;
@@ -75,6 +135,50 @@ static inline Token error_token(const char* msg, int len) {
 /*                       Fast whitespace & comment skipping                   */
 /* -------------------------------------------------------------------------- */
 
+static void skip_whitespace_ctx(LexerContext* ctx) {
+    const char* p = ctx->lexer.current;
+    int col = ctx->lexer.column;
+    int line = ctx->lexer.line;
+    const char* lineStart = ctx->lexer.lineStart;
+
+    for (;;) {
+        char c = *p;
+        if (c == ' ' || c == '\r' || c == '\t') {
+            p++;
+            col++;
+        } else if (c == '\n') {
+            // Don't skip newlines - they need to be tokenized
+            break;
+        } else if (c == '/' && p[1] == '/') {
+            p += 2;
+            while (*p != '\n' && *p) p++;
+        } else if (c == '/' && p[1] == '*') {
+            p += 2;
+            while (!(*p == '*' && p[1] == '/') && *p) {
+                if (*p == '\n') {
+                    line++;
+                    col = 1;
+                    lineStart = p + 1;
+                } else
+                    col++;
+                p++;
+            }
+            if (*p) {
+                p += 2;
+                col += 2;
+            }
+        } else {
+            break;
+        }
+    }
+
+    ctx->lexer.current = p;
+    ctx->lexer.column = col;
+    ctx->lexer.line = line;
+    ctx->lexer.lineStart = lineStart;
+}
+
+// Backward compatibility version
 static void skip_whitespace() {
     const char* p = lexer.current;
     int col = lexer.column;
@@ -215,8 +319,18 @@ static TokenType identifier_type(const char* start, int length) {
 /*                            Identifier & keyword scan                       */
 /* -------------------------------------------------------------------------- */
 
+static Token identifier_ctx(LexerContext* ctx) {
+    while (IS_ALPHA(PEEK(ctx)) || IS_DIGIT(PEEK(ctx))) {
+        advance_ctx(ctx);
+    }
+    int length = (int)(ctx->lexer.current - ctx->lexer.start);
+    TokenType type = identifier_type(ctx->lexer.start, length);
+    return make_token_ctx(ctx, type);
+}
+
+// Backward compatibility version
 static Token identifier() {
-    while (IS_ALPHA(PEEK()) || IS_DIGIT(PEEK())) {
+    while (IS_ALPHA(*lexer.current) || IS_DIGIT(*lexer.current)) {
         advance();
     }
     int length = (int)(lexer.current - lexer.start);
@@ -228,6 +342,15 @@ static Token identifier() {
 /*                               Sequence matching */
 /* -------------------------------------------------------------------------- */
 
+static inline bool match_sequence_ctx(LexerContext* ctx, const char* seq) {
+    const char* p = ctx->lexer.current;
+    while (*seq) {
+        if (*p++ != *seq++) return false;
+    }
+    return true;
+}
+
+// Backward compatibility version
 static inline bool match_sequence(const char* seq) {
     const char* p = lexer.current;
     while (*seq) {
@@ -240,17 +363,119 @@ static inline bool match_sequence(const char* seq) {
 /*                          Number literal scanning                           */
 /* -------------------------------------------------------------------------- */
 
+static Token number_ctx(LexerContext* ctx) {
+    /* 0xABC-style hex? */
+    if (ctx->lexer.start[0] == '0' && (PEEK(ctx) == 'x' || PEEK(ctx) == 'X')) {
+        advance_ctx(ctx); /* consume x/X */
+        if (!IS_HEX_DIGIT(PEEK(ctx)))
+            return error_token_ctx(ctx, "Invalid hexadecimal literal.",
+                               ERR_LEN("Invalid hexadecimal literal."));
+        while (IS_HEX_DIGIT(PEEK(ctx)) || PEEK(ctx) == '_') {
+            if (PEEK(ctx) == '_') {
+                advance_ctx(ctx);
+                if (!IS_HEX_DIGIT(PEEK(ctx)))
+                    return error_token_ctx(ctx,
+                        "Invalid underscore placement in number.",
+                        ERR_LEN("Invalid underscore placement in number."));
+            } else {
+                advance_ctx(ctx);
+            }
+        }
+        if (PEEK(ctx) == 'u' || PEEK(ctx) == 'U') advance_ctx(ctx);
+        return make_token_ctx(ctx, TOKEN_NUMBER);
+    }
+
+    /* Decimal integer + underscores */
+    while (IS_DIGIT(PEEK(ctx)) || PEEK(ctx) == '_') {
+        if (PEEK(ctx) == '_') {
+            advance_ctx(ctx);
+            if (!IS_DIGIT(PEEK(ctx)))
+                return error_token_ctx(ctx,
+                    "Invalid underscore placement in number.",
+                    ERR_LEN("Invalid underscore placement in number."));
+        } else {
+            advance_ctx(ctx);
+        }
+    }
+
+    /* Fractional part */
+    if (PEEK(ctx) == '.' && IS_DIGIT(PEEK_NEXT(ctx))) {
+        advance_ctx(ctx);
+        while (IS_DIGIT(PEEK(ctx)) || PEEK(ctx) == '_') {
+            if (PEEK(ctx) == '_') {
+                advance_ctx(ctx);
+                if (!IS_DIGIT(PEEK(ctx)))
+                    return error_token_ctx(ctx,
+                        "Invalid underscore placement in number.",
+                        ERR_LEN("Invalid underscore placement in number."));
+            } else {
+                advance_ctx(ctx);
+            }
+        }
+    }
+
+    /* Exponent part */
+    if (PEEK(ctx) == 'e' || PEEK(ctx) == 'E') {
+        advance_ctx(ctx);
+        if (PEEK(ctx) == '+' || PEEK(ctx) == '-') advance_ctx(ctx);
+        if (!IS_DIGIT(PEEK(ctx)))
+            return error_token_ctx(ctx,
+                "Invalid scientific notation: Expected digit after 'e' or 'E'.",
+                ERR_LEN("Invalid scientific notation: Expected digit after 'e' "
+                        "or 'E'."));
+        while (IS_DIGIT(PEEK(ctx)) || PEEK(ctx) == '_') {
+            if (PEEK(ctx) == '_') {
+                advance_ctx(ctx);
+                if (!IS_DIGIT(PEEK(ctx)))
+                    return error_token_ctx(ctx,
+                        "Invalid underscore placement in number.",
+                        ERR_LEN("Invalid underscore placement in number."));
+            } else {
+                advance_ctx(ctx);
+            }
+        }
+    }
+
+    /* Optional suffixes */
+    if (match_sequence_ctx(ctx, "i32")) {
+        advance_ctx(ctx);
+        advance_ctx(ctx);
+        advance_ctx(ctx);
+    } else if (match_sequence_ctx(ctx, "i64")) {
+        advance_ctx(ctx);
+        advance_ctx(ctx);
+        advance_ctx(ctx);
+    } else if (match_sequence_ctx(ctx, "u32")) {
+        advance_ctx(ctx);
+        advance_ctx(ctx);
+        advance_ctx(ctx);
+    } else if (match_sequence_ctx(ctx, "u64")) {
+        advance_ctx(ctx);
+        advance_ctx(ctx);
+        advance_ctx(ctx);
+    } else if (match_sequence_ctx(ctx, "f64")) {
+        advance_ctx(ctx);
+        advance_ctx(ctx);
+        advance_ctx(ctx);
+    } else if (PEEK(ctx) == 'u' || PEEK(ctx) == 'U') {
+        advance_ctx(ctx);
+    }
+
+    return make_token_ctx(ctx, TOKEN_NUMBER);
+}
+
+// Backward compatibility version
 static Token number() {
     /* 0xABC-style hex? */
-    if (lexer.start[0] == '0' && (PEEK() == 'x' || PEEK() == 'X')) {
+    if (lexer.start[0] == '0' && (*lexer.current == 'x' || *lexer.current == 'X')) {
         advance(); /* consume x/X */
-        if (!IS_HEX_DIGIT(PEEK()))
+        if (!IS_HEX_DIGIT(*lexer.current))
             return error_token("Invalid hexadecimal literal.",
                                ERR_LEN("Invalid hexadecimal literal."));
-        while (IS_HEX_DIGIT(PEEK()) || PEEK() == '_') {
-            if (PEEK() == '_') {
+        while (IS_HEX_DIGIT(*lexer.current) || *lexer.current == '_') {
+            if (*lexer.current == '_') {
                 advance();
-                if (!IS_HEX_DIGIT(PEEK()))
+                if (!IS_HEX_DIGIT(*lexer.current))
                     return error_token(
                         "Invalid underscore placement in number.",
                         ERR_LEN("Invalid underscore placement in number."));
@@ -258,15 +483,15 @@ static Token number() {
                 advance();
             }
         }
-        if (PEEK() == 'u' || PEEK() == 'U') advance();
+        if (*lexer.current == 'u' || *lexer.current == 'U') advance();
         return make_token(TOKEN_NUMBER);
     }
 
     /* Decimal integer + underscores */
-    while (IS_DIGIT(PEEK()) || PEEK() == '_') {
-        if (PEEK() == '_') {
+    while (IS_DIGIT(*lexer.current) || *lexer.current == '_') {
+        if (*lexer.current == '_') {
             advance();
-            if (!IS_DIGIT(PEEK()))
+            if (!IS_DIGIT(*lexer.current))
                 return error_token(
                     "Invalid underscore placement in number.",
                     ERR_LEN("Invalid underscore placement in number."));
@@ -276,12 +501,12 @@ static Token number() {
     }
 
     /* Fractional part */
-    if (PEEK() == '.' && IS_DIGIT(PEEK_NEXT())) {
+    if (*lexer.current == '.' && IS_DIGIT(*(lexer.current + 1))) {
         advance();
-        while (IS_DIGIT(PEEK()) || PEEK() == '_') {
-            if (PEEK() == '_') {
+        while (IS_DIGIT(*lexer.current) || *lexer.current == '_') {
+            if (*lexer.current == '_') {
                 advance();
-                if (!IS_DIGIT(PEEK()))
+                if (!IS_DIGIT(*lexer.current))
                     return error_token(
                         "Invalid underscore placement in number.",
                         ERR_LEN("Invalid underscore placement in number."));
@@ -292,18 +517,18 @@ static Token number() {
     }
 
     /* Exponent part */
-    if (PEEK() == 'e' || PEEK() == 'E') {
+    if (*lexer.current == 'e' || *lexer.current == 'E') {
         advance();
-        if (PEEK() == '+' || PEEK() == '-') advance();
-        if (!IS_DIGIT(PEEK()))
+        if (*lexer.current == '+' || *lexer.current == '-') advance();
+        if (!IS_DIGIT(*lexer.current))
             return error_token(
                 "Invalid scientific notation: Expected digit after 'e' or 'E'.",
                 ERR_LEN("Invalid scientific notation: Expected digit after 'e' "
                         "or 'E'."));
-        while (IS_DIGIT(PEEK()) || PEEK() == '_') {
-            if (PEEK() == '_') {
+        while (IS_DIGIT(*lexer.current) || *lexer.current == '_') {
+            if (*lexer.current == '_') {
                 advance();
-                if (!IS_DIGIT(PEEK()))
+                if (!IS_DIGIT(*lexer.current))
                     return error_token(
                         "Invalid underscore placement in number.",
                         ERR_LEN("Invalid underscore placement in number."));
@@ -334,7 +559,7 @@ static Token number() {
         advance();
         advance();
         advance();
-    } else if (PEEK() == 'u' || PEEK() == 'U') {
+    } else if (*lexer.current == 'u' || *lexer.current == 'U') {
         advance();
     }
 
@@ -345,12 +570,39 @@ static Token number() {
 /*                              String literal scanning                       */
 /* -------------------------------------------------------------------------- */
 
+static Token string_ctx(LexerContext* ctx) {
+    while (PEEK(ctx) != '"' && !is_at_end_ctx(ctx)) {
+        if (PEEK(ctx) == '\\') {
+            advance_ctx(ctx);
+            if (PEEK(ctx) == 'n' || PEEK(ctx) == 't' || PEEK(ctx) == '\\' ||
+                PEEK(ctx) == '"') {
+                advance_ctx(ctx);
+            } else {
+                return error_token_ctx(ctx, "Invalid escape sequence.",
+                                   ERR_LEN("Invalid escape sequence."));
+            }
+        } else {
+            advance_ctx(ctx);
+        }
+    }
+
+    if (is_at_end_ctx(ctx)) {
+        /* unterminated string */
+        return error_token_ctx(ctx, "Unterminated string.",
+                           ERR_LEN("Unterminated string."));
+    }
+
+    advance_ctx(ctx); /* closing '"' */
+    return make_token_ctx(ctx, TOKEN_STRING);
+}
+
+// Backward compatibility version
 static Token string() {
-    while (PEEK() != '"' && !is_at_end()) {
-        if (PEEK() == '\\') {
+    while (*lexer.current != '"' && !is_at_end()) {
+        if (*lexer.current == '\\') {
             advance();
-            if (PEEK() == 'n' || PEEK() == 't' || PEEK() == '\\' ||
-                PEEK() == '"') {
+            if (*lexer.current == 'n' || *lexer.current == 't' || *lexer.current == '\\' ||
+                *lexer.current == '"') {
                 advance();
             } else {
                 return error_token("Invalid escape sequence.",
@@ -376,7 +628,24 @@ static Token string() {
 /* -------------------------------------------------------------------------- */
 
 /**
- * Initialize lexer for a new source buffer.
+ * Initialize lexer context for a new source buffer.
+ */
+void init_scanner_ctx(LexerContext* ctx, const char* source) {
+    ctx->lexer.start = source;
+    ctx->lexer.current = source;
+    ctx->lexer.source = source;
+    ctx->lexer.line = 1;
+    ctx->lexer.column = 1;
+    ctx->lexer.lineStart = source;
+    ctx->lexer.inBlockComment = false;
+    ctx->lexer.indentStack[0] = 0;
+    ctx->lexer.indentTop = 0;
+    ctx->lexer.pendingDedents = 0;
+    ctx->lexer.atLineStart = true;
+}
+
+/**
+ * Initialize lexer for a new source buffer (backward compatibility).
  */
 void init_scanner(const char* source) {
     lexer.start = source;
@@ -393,7 +662,156 @@ void init_scanner(const char* source) {
 }
 
 /**
- * Retrieve the next token.
+ * Retrieve the next token using context.
+ */
+Token scan_token_ctx(LexerContext* ctx) {
+    if (ctx->lexer.pendingDedents > 0) {
+        ctx->lexer.pendingDedents--;
+        ctx->lexer.start = ctx->lexer.current;
+        return make_token_ctx(ctx, TOKEN_DEDENT);
+    }
+
+    if (ctx->lexer.atLineStart) {
+        const char* p = ctx->lexer.current;
+        int indent = 0;
+        while (*p == ' ' || *p == '\t') {
+            indent += (*p == '\t') ? 4 : 1;
+            p++;
+        }
+        ctx->lexer.current = p;
+        ctx->lexer.column = indent + 1;
+
+        skip_whitespace_ctx(ctx);
+
+        if (PEEK(ctx) == '\n') {
+            advance_ctx(ctx);
+            ctx->lexer.atLineStart = true;
+            ctx->lexer.start = ctx->lexer.current - 1;
+            return make_token_ctx(ctx, TOKEN_NEWLINE);
+        }
+
+        int prevIndent = ctx->lexer.indentStack[ctx->lexer.indentTop];
+        if (indent > prevIndent) {
+            if (ctx->lexer.indentTop < 63) ctx->lexer.indentStack[++ctx->lexer.indentTop] = indent;
+            ctx->lexer.atLineStart = false;
+            ctx->lexer.start = ctx->lexer.current;
+            return make_token_ctx(ctx, TOKEN_INDENT);
+        } else if (indent < prevIndent) {
+            while (ctx->lexer.indentTop > 0 && indent < ctx->lexer.indentStack[ctx->lexer.indentTop]) {
+                ctx->lexer.indentTop--;
+                ctx->lexer.pendingDedents++;
+            }
+            if (indent != ctx->lexer.indentStack[ctx->lexer.indentTop]) {
+                ctx->lexer.start = ctx->lexer.current;
+                return error_token_ctx(ctx, "Inconsistent indentation.",
+                                   ERR_LEN("Inconsistent indentation."));
+            }
+            ctx->lexer.atLineStart = false;
+            if (ctx->lexer.pendingDedents > 0) {
+                ctx->lexer.pendingDedents--;
+                ctx->lexer.start = ctx->lexer.current;
+                return make_token_ctx(ctx, TOKEN_DEDENT);
+            }
+        } else {
+            ctx->lexer.atLineStart = false;
+        }
+    }
+
+    skip_whitespace_ctx(ctx);
+    ctx->lexer.start = ctx->lexer.current;
+
+    if (is_at_end_ctx(ctx)) {
+        if (ctx->lexer.indentTop > 0) {
+            ctx->lexer.indentTop--;
+            return make_token_ctx(ctx, TOKEN_DEDENT);
+        }
+        return make_token_ctx(ctx, TOKEN_EOF);
+    }
+
+    char c = advance_ctx(ctx);
+
+    /* Single‐char or 2‐char tokens */
+    switch (c) {
+        case '\n':
+            ctx->lexer.atLineStart = true;
+            return make_token_ctx(ctx, TOKEN_NEWLINE);
+        case '(':
+            return make_token_ctx(ctx, TOKEN_LEFT_PAREN);
+        case ')':
+            return make_token_ctx(ctx, TOKEN_RIGHT_PAREN);
+        case '{':
+            return make_token_ctx(ctx, TOKEN_LEFT_BRACE);
+        case '}':
+            return make_token_ctx(ctx, TOKEN_RIGHT_BRACE);
+        case '[':
+            return make_token_ctx(ctx, TOKEN_LEFT_BRACKET);
+        case ']':
+            return make_token_ctx(ctx, TOKEN_RIGHT_BRACKET);
+        case ';':
+            return make_token_ctx(ctx, TOKEN_SEMICOLON);
+        case ',':
+            return make_token_ctx(ctx, TOKEN_COMMA);
+        case '.':
+            if (match_char_ctx(ctx, '.')) return make_token_ctx(ctx, TOKEN_DOT_DOT);
+            return make_token_ctx(ctx, TOKEN_DOT);
+        case '?':
+            return make_token_ctx(ctx, TOKEN_QUESTION);
+        case '-':
+            if (match_char_ctx(ctx, '>')) return make_token_ctx(ctx, TOKEN_ARROW);
+            if (match_char_ctx(ctx, '=')) return make_token_ctx(ctx, TOKEN_MINUS_EQUAL);
+            return make_token_ctx(ctx, TOKEN_MINUS);
+        case '+':
+            if (match_char_ctx(ctx, '=')) return make_token_ctx(ctx, TOKEN_PLUS_EQUAL);
+            return make_token_ctx(ctx, TOKEN_PLUS);
+        case '/':
+            if (match_char_ctx(ctx, '=')) return make_token_ctx(ctx, TOKEN_SLASH_EQUAL);
+            return make_token_ctx(ctx, TOKEN_SLASH);
+        case '%':
+            if (match_char_ctx(ctx, '=')) return make_token_ctx(ctx, TOKEN_MODULO_EQUAL);
+            return make_token_ctx(ctx, TOKEN_MODULO);
+        case '*':
+            if (match_char_ctx(ctx, '=')) return make_token_ctx(ctx, TOKEN_STAR_EQUAL);
+            return make_token_ctx(ctx, TOKEN_STAR);
+        case '!':
+            if (match_char_ctx(ctx, '=')) return make_token_ctx(ctx, TOKEN_BANG_EQUAL);
+            return make_token_ctx(ctx, TOKEN_BIT_NOT);
+        case '=':
+            return make_token_ctx(ctx, match_char_ctx(ctx, '=') ? TOKEN_EQUAL_EQUAL
+                                              : TOKEN_EQUAL);
+        case '<':
+            if (match_char_ctx(ctx, '<')) return make_token_ctx(ctx, TOKEN_SHIFT_LEFT);
+            return make_token_ctx(ctx, match_char_ctx(ctx, '=') ? TOKEN_LESS_EQUAL : TOKEN_LESS);
+        case '>':
+            if (PEEK(ctx) == '>' && PEEK_NEXT(ctx) != '{' && PEEK_NEXT(ctx) != '>') {
+                advance_ctx(ctx);
+                return make_token_ctx(ctx, TOKEN_SHIFT_RIGHT);
+            }
+            return make_token_ctx(ctx, match_char_ctx(ctx, '=') ? TOKEN_GREATER_EQUAL
+                                              : TOKEN_GREATER);
+        case '&':
+            return make_token_ctx(ctx, TOKEN_BIT_AND);
+        case '|':
+            return make_token_ctx(ctx, TOKEN_BIT_OR);
+        case '^':
+            return make_token_ctx(ctx, TOKEN_BIT_XOR);
+        case ':':
+            return make_token_ctx(ctx, TOKEN_COLON);
+        case '\'':
+            return make_token_ctx(ctx, TOKEN_APOSTROPHE);
+        case '"':
+            return string_ctx(ctx);
+    }
+
+    /* Identifiers and numbers */
+    if (IS_ALPHA(c)) return identifier_ctx(ctx);
+    if (IS_DIGIT(c)) return number_ctx(ctx);
+
+    return error_token_ctx(ctx, "Unexpected character.",
+                       ERR_LEN("Unexpected character."));
+}
+
+/**
+ * Retrieve the next token (backward compatibility).
  */
 Token scan_token() {
     if (lexer.pendingDedents > 0) {
@@ -414,7 +832,7 @@ Token scan_token() {
 
         skip_whitespace();
 
-        if (PEEK() == '\n') {
+        if (*lexer.current == '\n') {
             advance();
             lexer.atLineStart = true;
             lexer.start = lexer.current - 1;
@@ -513,7 +931,7 @@ Token scan_token() {
             if (match_char('<')) return make_token(TOKEN_SHIFT_LEFT);
             return make_token(match_char('=') ? TOKEN_LESS_EQUAL : TOKEN_LESS);
         case '>':
-            if (PEEK() == '>' && PEEK_NEXT() != '{' && PEEK_NEXT() != '>') {
+            if (*lexer.current == '>' && *(lexer.current + 1) != '{' && *(lexer.current + 1) != '>') {
                 advance();
                 return make_token(TOKEN_SHIFT_RIGHT);
             }
