@@ -56,13 +56,6 @@ make test               # Run test suite
 make benchmark          # Performance tests
 ```
 
-### Code Structure
-- `src/vm/` - Virtual machine implementation
-- `src/compiler/` - Lexer, parser, compiler
-- `src/type/` - Type system and inference
-- `tests/` - Test files and benchmarks
-- `docs/` - Documentation and specs
-
 ### Guidelines
 - Follow existing code style
 - Add tests for new features
