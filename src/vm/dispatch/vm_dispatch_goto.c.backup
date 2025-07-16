@@ -6,11 +6,10 @@
 #include "vm/vm_control_flow.h"
 #include "vm/vm_comparison.h"
 #include "vm/vm_typed_ops.h"
-#include "vm/vm_opcode_handlers.h"
 
 #include <math.h>
 
-// Auto-detect computed goto support
+// ✅ Auto-detect computed goto support
 #ifndef USE_COMPUTED_GOTO
   #if defined(__GNUC__) || defined(__clang__)
     #define USE_COMPUTED_GOTO 1
@@ -216,27 +215,34 @@ InterpretResult vm_run_dispatch(void) {
         DISPATCH();
 
     LABEL_OP_LOAD_CONST: {
-            handle_load_const();
+            uint8_t reg = READ_BYTE();
+            uint16_t constantIndex = READ_SHORT();
+            vm.registers[reg] = READ_CONSTANT(constantIndex);
             DISPATCH();
         }
 
     LABEL_OP_LOAD_NIL: {
-            handle_load_nil();
+            uint8_t reg = READ_BYTE();
+            vm.registers[reg] = NIL_VAL;
             DISPATCH();
         }
 
     LABEL_OP_LOAD_TRUE: {
-            handle_load_true();
+            uint8_t reg = READ_BYTE();
+            vm.registers[reg] = BOOL_VAL(true);
             DISPATCH();
         }
 
     LABEL_OP_LOAD_FALSE: {
-            handle_load_false();
+            uint8_t reg = READ_BYTE();
+            vm.registers[reg] = BOOL_VAL(false);
             DISPATCH();
         }
 
     LABEL_OP_MOVE: {
-            handle_move_reg();
+            uint8_t dst = READ_BYTE();
+            uint8_t src = READ_BYTE();
+            vm.registers[dst] = vm.registers[src];
             DISPATCH();
         }
 
@@ -1846,77 +1852,77 @@ InterpretResult vm_run_dispatch(void) {
 
     // Typed arithmetic operations for maximum performance (bypass Value boxing)
     LABEL_OP_ADD_I32_TYPED: {
-        handle_add_i32_typed();
+        VM_TYPED_BIN_OP(i32_regs, +, REG_TYPE_I32);
         DISPATCH_TYPED();
     }
 
     LABEL_OP_SUB_I32_TYPED: {
-        handle_sub_i32_typed();
+        VM_TYPED_BIN_OP(i32_regs, -, REG_TYPE_I32);
         DISPATCH_TYPED();
     }
 
     LABEL_OP_MUL_I32_TYPED: {
-        handle_mul_i32_typed();
+        VM_TYPED_BIN_OP(i32_regs, *, REG_TYPE_I32);
         DISPATCH_TYPED();
     }
 
     LABEL_OP_DIV_I32_TYPED: {
-        handle_div_i32_typed();
+        VM_TYPED_DIV_OP(i32_regs, REG_TYPE_I32);
         DISPATCH_TYPED();
     }
 
     LABEL_OP_MOD_I32_TYPED: {
-        handle_mod_i32_typed();
+        VM_TYPED_MOD_OP(i32_regs, REG_TYPE_I32, vm.typed_regs.i32_regs[left] % vm.typed_regs.i32_regs[right]);
         DISPATCH_TYPED();
     }
 
     LABEL_OP_ADD_I64_TYPED: {
-        handle_add_i64_typed();
+        VM_TYPED_BIN_OP(i64_regs, +, REG_TYPE_I64);
         DISPATCH_TYPED();
     }
 
     LABEL_OP_SUB_I64_TYPED: {
-        handle_sub_i64_typed();
+        VM_TYPED_BIN_OP(i64_regs, -, REG_TYPE_I64);
         DISPATCH_TYPED();
     }
 
     LABEL_OP_MUL_I64_TYPED: {
-        handle_mul_i64_typed();
+        VM_TYPED_BIN_OP(i64_regs, *, REG_TYPE_I64);
         DISPATCH_TYPED();
     }
 
     LABEL_OP_DIV_I64_TYPED: {
-        handle_div_i64_typed();
+        VM_TYPED_DIV_OP(i64_regs, REG_TYPE_I64);
         DISPATCH_TYPED();
     }
 
     LABEL_OP_MOD_I64_TYPED: {
-        handle_mod_i64_typed();
+        VM_TYPED_MOD_OP(i64_regs, REG_TYPE_I64, vm.typed_regs.i64_regs[left] % vm.typed_regs.i64_regs[right]);
         DISPATCH_TYPED();
     }
 
     LABEL_OP_ADD_F64_TYPED: {
-        handle_add_f64_typed();
+        VM_TYPED_BIN_OP(f64_regs, +, REG_TYPE_F64);
         DISPATCH_TYPED();
     }
 
     LABEL_OP_SUB_F64_TYPED: {
-        handle_sub_f64_typed();
+        VM_TYPED_BIN_OP(f64_regs, -, REG_TYPE_F64);
         DISPATCH_TYPED();
     }
 
     LABEL_OP_MUL_F64_TYPED: {
-        handle_mul_f64_typed();
+        VM_TYPED_BIN_OP(f64_regs, *, REG_TYPE_F64);
         DISPATCH_TYPED();
     }
 
     LABEL_OP_DIV_F64_TYPED: {
-        handle_div_f64_typed();
+        VM_TYPED_DIV_OP(f64_regs, REG_TYPE_F64);
         DISPATCH_TYPED();
     }
 
     LABEL_OP_MOD_F64_TYPED: {
-        handle_mod_f64_typed();
+        VM_TYPED_MOD_OP(f64_regs, REG_TYPE_F64, fmod(vm.typed_regs.f64_regs[left], vm.typed_regs.f64_regs[right]));
         DISPATCH_TYPED();
     }
 
@@ -1941,84 +1947,84 @@ InterpretResult vm_run_dispatch(void) {
     }
 
     LABEL_OP_LOAD_I32_CONST: {
-        handle_load_i32_const();
+        VM_TYPED_LOAD_CONST(i32_regs, i32, REG_TYPE_I32);
         DISPATCH();
     }
 
     LABEL_OP_LOAD_I64_CONST: {
-        handle_load_i64_const();
+        VM_TYPED_LOAD_CONST(i64_regs, i64, REG_TYPE_I64);
         DISPATCH();
     }
 
     LABEL_OP_LOAD_F64_CONST: {
-        handle_load_f64_const();
+        VM_TYPED_LOAD_CONST(f64_regs, f64, REG_TYPE_F64);
         DISPATCH();
     }
 
     LABEL_OP_MOVE_I32: {
-        handle_move_i32();
+        VM_TYPED_MOVE(i32_regs, REG_TYPE_I32);
         DISPATCH();
     }
 
     LABEL_OP_MOVE_I64: {
-        handle_move_i64();
+        VM_TYPED_MOVE(i64_regs, REG_TYPE_I64);
         DISPATCH();
     }
 
     LABEL_OP_MOVE_F64: {
-        handle_move_f64();
+        VM_TYPED_MOVE(f64_regs, REG_TYPE_F64);
         DISPATCH();
     }
 
     // U32 Typed Operations
     LABEL_OP_ADD_U32_TYPED: {
-        handle_add_u32_typed();
+        VM_TYPED_BIN_OP(u32_regs, +, REG_TYPE_U32);
         DISPATCH_TYPED();
     }
 
     LABEL_OP_SUB_U32_TYPED: {
-        handle_sub_u32_typed();
+        VM_TYPED_BIN_OP(u32_regs, -, REG_TYPE_U32);
         DISPATCH_TYPED();
     }
 
     LABEL_OP_MUL_U32_TYPED: {
-        handle_mul_u32_typed();
+        VM_TYPED_BIN_OP(u32_regs, *, REG_TYPE_U32);
         DISPATCH_TYPED();
     }
 
     LABEL_OP_DIV_U32_TYPED: {
-        handle_div_u32_typed();
+        VM_TYPED_DIV_OP(u32_regs, REG_TYPE_U32);
         DISPATCH_TYPED();
     }
 
     LABEL_OP_MOD_U32_TYPED: {
-        handle_mod_u32_typed();
+        VM_TYPED_MOD_OP(u32_regs, REG_TYPE_U32, vm.typed_regs.u32_regs[left] % vm.typed_regs.u32_regs[right]);
         DISPATCH_TYPED();
     }
 
     // U64 Typed Operations
     LABEL_OP_ADD_U64_TYPED: {
-        handle_add_u64_typed();
+        VM_TYPED_BIN_OP(u64_regs, +, REG_TYPE_U64);
         DISPATCH_TYPED();
     }
 
     LABEL_OP_SUB_U64_TYPED: {
-        handle_sub_u64_typed();
+        VM_TYPED_BIN_OP(u64_regs, -, REG_TYPE_U64);
         DISPATCH_TYPED();
     }
 
     LABEL_OP_MUL_U64_TYPED: {
-        handle_mul_u64_typed();
+        VM_TYPED_BIN_OP(u64_regs, *, REG_TYPE_U64);
         DISPATCH_TYPED();
     }
 
     LABEL_OP_DIV_U64_TYPED: {
-        handle_div_u64_typed();
+        VM_TYPED_DIV_OP(u64_regs, REG_TYPE_U64);
         DISPATCH_TYPED();
     }
 
     LABEL_OP_MOD_U64_TYPED: {
-        handle_mod_u64_typed();
+        VM_TYPED_MOD_OP(u64_regs, REG_TYPE_U64, vm.typed_regs.u64_regs[left] % vm.typed_regs.u64_regs[right]);
         DISPATCH_TYPED();
     }
 
@@ -2211,9 +2217,4 @@ InterpretResult vm_run_dispatch(void) {
 
     #undef RETURN
 }
-
-// Include the handlers implementation
-#include "../handlers/vm_arithmetic_handlers.c"
-#include "../handlers/vm_memory_handlers.c"
-#include "../handlers/vm_control_flow_handlers.c"
 #endif // USE_COMPUTED_GOTO

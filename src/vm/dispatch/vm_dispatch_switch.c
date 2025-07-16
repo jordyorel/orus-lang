@@ -6,6 +6,7 @@
 #include "vm/vm_control_flow.h"
 #include "vm/vm_comparison.h"
 #include "vm/vm_typed_ops.h"
+#include "vm/vm_opcode_handlers.h"
 #include <math.h>
 
 // ✅ Auto-detect computed goto support
@@ -47,146 +48,37 @@ InterpretResult vm_run_dispatch(void) {
 
             switch (instruction) {
                 case OP_LOAD_CONST: {
-                    uint8_t reg = READ_BYTE();
-                    uint16_t constantIndex = READ_SHORT();
-                    vm.registers[reg] = READ_CONSTANT(constantIndex);
+                    handle_load_const();
                     break;
                 }
 
                 case OP_LOAD_NIL: {
-                    uint8_t reg = READ_BYTE();
-                    vm.registers[reg] = NIL_VAL;
+                    handle_load_nil();
                     break;
                 }
 
                 case OP_LOAD_TRUE: {
-                    uint8_t reg = READ_BYTE();
-                    vm.registers[reg] = BOOL_VAL(true);
+                    handle_load_true();
                     break;
                 }
 
                 case OP_LOAD_FALSE: {
-                    uint8_t reg = READ_BYTE();
-                    vm.registers[reg] = BOOL_VAL(false);
+                    handle_load_false();
                     break;
                 }
 
                 case OP_MOVE: {
-                    uint8_t dst = READ_BYTE();
-                    uint8_t src = READ_BYTE();
-                    vm.registers[dst] = vm.registers[src];
+                    handle_move_reg();
                     break;
                 }
 
                 case OP_LOAD_GLOBAL: {
-                    uint8_t reg = READ_BYTE();
-                    uint8_t globalIndex = READ_BYTE();
-                    if (globalIndex >= vm.variableCount ||
-                        vm.globalTypes[globalIndex] == NULL) {
-                        VM_ERROR_RETURN(ERROR_NAME, CURRENT_LOCATION(), "Undefined variable");
-                    }
-                    vm.registers[reg] = vm.globals[globalIndex];
+                    handle_load_global();
                     break;
                 }
 
                 case OP_STORE_GLOBAL: {
-                    uint8_t globalIndex = READ_BYTE();
-                    uint8_t reg = READ_BYTE();
-                    
-                    // CREATIVE SOLUTION: Type safety enforcement with intelligent literal coercion
-                    // This maintains single-pass design while being flexible for compatible types
-                    Value valueToStore = vm.registers[reg];
-                    Type* declaredType = vm.globalTypes[globalIndex];
-                    
-                    // Check if the value being stored matches the declared type
-                    if (declaredType && declaredType->kind != TYPE_ANY) {
-                        bool typeMatches = false;
-                        Value coercedValue = valueToStore; // Default to original value
-                        
-                        switch (declaredType->kind) {
-                            case TYPE_I32:
-                                typeMatches = IS_I32(valueToStore);
-                                break;
-                            case TYPE_I64:
-                                if (IS_I64(valueToStore)) {
-                                    typeMatches = true;
-                                } else if (IS_I32(valueToStore)) {
-                                    // SMART COERCION: i32 literals can be coerced to i64
-                                    int32_t val = AS_I32(valueToStore);
-                                    coercedValue = I64_VAL((int64_t)val);
-                                    typeMatches = true;
-                                }
-                                break;
-                            case TYPE_U32:
-                                if (IS_U32(valueToStore)) {
-                                    typeMatches = true;
-                                } else if (IS_I32(valueToStore)) {
-                                    // SMART COERCION: non-negative i32 literals can be coerced to u32
-                                    int32_t val = AS_I32(valueToStore);
-                                    if (val >= 0) {
-                                        coercedValue = U32_VAL((uint32_t)val);
-                                        typeMatches = true;
-                                    }
-                                }
-                                break;
-                            case TYPE_U64:
-                                if (IS_U64(valueToStore)) {
-                                    typeMatches = true;
-                                } else if (IS_I32(valueToStore)) {
-                                    // SMART COERCION: non-negative i32 literals can be coerced to u64
-                                    int32_t val = AS_I32(valueToStore);
-                                    if (val >= 0) {
-                                        coercedValue = U64_VAL((uint64_t)val);
-                                        typeMatches = true;
-                                    }
-                                }
-                                break;
-                            case TYPE_F64:
-                                if (IS_F64(valueToStore)) {
-                                    typeMatches = true;
-                                } else if (IS_I32(valueToStore)) {
-                                    // SMART COERCION: i32 literals can be coerced to f64
-                                    int32_t val = AS_I32(valueToStore);
-                                    coercedValue = F64_VAL((double)val);
-                                    typeMatches = true;
-                                }
-                                break;
-                            case TYPE_BOOL:
-                                typeMatches = IS_BOOL(valueToStore);
-                                break;
-                            case TYPE_STRING:
-                                typeMatches = IS_STRING(valueToStore);
-                                break;
-                            default:
-                                typeMatches = true; // TYPE_ANY allows anything
-                                break;
-                        }
-                        
-                        if (!typeMatches) {
-                            const char* expectedTypeName = "unknown";
-                            switch (declaredType->kind) {
-                                case TYPE_I32: expectedTypeName = "i32"; break;
-                                case TYPE_I64: expectedTypeName = "i64"; break;
-                                case TYPE_U32: expectedTypeName = "u32"; break;
-                                case TYPE_U64: expectedTypeName = "u64"; break;
-                                case TYPE_F64: expectedTypeName = "f64"; break;
-                                case TYPE_BOOL: expectedTypeName = "bool"; break;
-                                case TYPE_STRING: expectedTypeName = "string"; break;
-                                default: break;
-                            }
-                            
-                            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Type mismatch: cannot assign value to variable of type '%s'. Use 'as' for explicit conversion.",
-                                        expectedTypeName);
-                            return INTERPRET_RUNTIME_ERROR;
-                        }
-                        
-                        // Store the coerced value
-                        vm.globals[globalIndex] = coercedValue;
-                    } else {
-                        // No declared type, store as-is
-                        vm.globals[globalIndex] = valueToStore;
-                    }
-                    
+                    handle_store_global();
                     break;
                 }
 
@@ -1584,23 +1476,17 @@ InterpretResult vm_run_dispatch(void) {
 
                 // I/O operations
                 case OP_PRINT_MULTI_R: {
-                    uint8_t first = READ_BYTE();
-                    uint8_t count = READ_BYTE();
-                    uint8_t nl = READ_BYTE();
-
-                    builtin_print(&vm.registers[first], count, nl != 0);
+                    handle_print_multi();
                     break;
                 }
 
                 case OP_PRINT_R: {
-                    uint8_t reg = READ_BYTE();
-                    builtin_print(&vm.registers[reg], 1, true);
+                    handle_print();
                     break;
                 }
 
                 case OP_PRINT_NO_NL_R: {
-                    uint8_t reg = READ_BYTE();
-                    builtin_print(&vm.registers[reg], 1, false);
+                    handle_print_no_nl();
                     break;
                 }
 
@@ -1817,130 +1703,130 @@ InterpretResult vm_run_dispatch(void) {
 
                 // Typed arithmetic operations for maximum performance (bypass Value boxing)
                 case OP_ADD_I32_TYPED: {
-                    VM_TYPED_BIN_OP(i32_regs, +, REG_TYPE_I32);
+                    handle_add_i32_typed();
                     break;
                 }
 
                 case OP_SUB_I32_TYPED: {
-                    VM_TYPED_BIN_OP(i32_regs, -, REG_TYPE_I32);
+                    handle_sub_i32_typed();
                     break;
                 }
 
                 case OP_MUL_I32_TYPED: {
-                    VM_TYPED_BIN_OP(i32_regs, *, REG_TYPE_I32);
+                    handle_mul_i32_typed();
                     break;
                 }
 
                 case OP_DIV_I32_TYPED: {
-                    VM_TYPED_DIV_OP(i32_regs, REG_TYPE_I32);
+                    handle_div_i32_typed();
                     break;
                 }
 
                 case OP_MOD_I32_TYPED: {
-                    VM_TYPED_MOD_OP(i32_regs, REG_TYPE_I32, vm.typed_regs.i32_regs[left] % vm.typed_regs.i32_regs[right]);
+                    handle_mod_i32_typed();
                     break;
                 }
 
                 // Additional typed operations (I64, F64, comparisons, loads, moves)
                 case OP_ADD_I64_TYPED: {
-                    VM_TYPED_BIN_OP(i64_regs, +, REG_TYPE_I64);
+                    handle_add_i64_typed();
                     break;
                 }
 
                 case OP_SUB_I64_TYPED: {
-                    VM_TYPED_BIN_OP(i64_regs, -, REG_TYPE_I64);
+                    handle_sub_i64_typed();
                     break;
                 }
 
                 case OP_MUL_I64_TYPED: {
-                    VM_TYPED_BIN_OP(i64_regs, *, REG_TYPE_I64);
+                    handle_mul_i64_typed();
                     break;
                 }
 
                 case OP_DIV_I64_TYPED: {
-                    VM_TYPED_DIV_OP(i64_regs, REG_TYPE_I64);
+                    handle_div_i64_typed();
                     break;
                 }
 
                 case OP_MOD_I64_TYPED: {
-                    VM_TYPED_MOD_OP(i64_regs, REG_TYPE_I64, vm.typed_regs.i64_regs[left] % vm.typed_regs.i64_regs[right]);
+                    handle_mod_i64_typed();
                     break;
                 }
 
                 case OP_ADD_F64_TYPED: {
-                    VM_TYPED_BIN_OP(f64_regs, +, REG_TYPE_F64);
+                    handle_add_f64_typed();
                     break;
                 }
 
                 case OP_SUB_F64_TYPED: {
-                    VM_TYPED_BIN_OP(f64_regs, -, REG_TYPE_F64);
+                    handle_sub_f64_typed();
                     break;
                 }
 
                 case OP_MUL_F64_TYPED: {
-                    VM_TYPED_BIN_OP(f64_regs, *, REG_TYPE_F64);
+                    handle_mul_f64_typed();
                     break;
                 }
 
                 case OP_DIV_F64_TYPED: {
-                    VM_TYPED_DIV_OP(f64_regs, REG_TYPE_F64);
+                    handle_div_f64_typed();
                     break;
                 }
 
                 case OP_MOD_F64_TYPED: {
-                    VM_TYPED_MOD_OP(f64_regs, REG_TYPE_F64, fmod(vm.typed_regs.f64_regs[left], vm.typed_regs.f64_regs[right]));
+                    handle_mod_f64_typed();
                     break;
                 }
 
                 // U32 Typed Operations
                 case OP_ADD_U32_TYPED: {
-                    VM_TYPED_BIN_OP(u32_regs, +, REG_TYPE_U32);
+                    handle_add_u32_typed();
                     break;
                 }
 
                 case OP_SUB_U32_TYPED: {
-                    VM_TYPED_BIN_OP(u32_regs, -, REG_TYPE_U32);
+                    handle_sub_u32_typed();
                     break;
                 }
 
                 case OP_MUL_U32_TYPED: {
-                    VM_TYPED_BIN_OP(u32_regs, *, REG_TYPE_U32);
+                    handle_mul_u32_typed();
                     break;
                 }
 
                 case OP_DIV_U32_TYPED: {
-                    VM_TYPED_DIV_OP(u32_regs, REG_TYPE_U32);
+                    handle_div_u32_typed();
                     break;
                 }
 
                 case OP_MOD_U32_TYPED: {
-                    VM_TYPED_MOD_OP(u32_regs, REG_TYPE_U32, vm.typed_regs.u32_regs[left] % vm.typed_regs.u32_regs[right]);
+                    handle_mod_u32_typed();
                     break;
                 }
 
                 // U64 Typed Operations
                 case OP_ADD_U64_TYPED: {
-                    VM_TYPED_BIN_OP(u64_regs, +, REG_TYPE_U64);
+                    handle_add_u64_typed();
                     break;
                 }
 
                 case OP_SUB_U64_TYPED: {
-                    VM_TYPED_BIN_OP(u64_regs, -, REG_TYPE_U64);
+                    handle_sub_u64_typed();
                     break;
                 }
 
                 case OP_MUL_U64_TYPED: {
-                    VM_TYPED_BIN_OP(u64_regs, *, REG_TYPE_U64);
+                    handle_mul_u64_typed();
                     break;
                 }
 
                 case OP_DIV_U64_TYPED: {
-                    VM_TYPED_DIV_OP(u64_regs, REG_TYPE_U64);
+                    handle_div_u64_typed();
                     break;
                 }
 
                 case OP_MOD_U64_TYPED: {
-                    VM_TYPED_MOD_OP(u64_regs, REG_TYPE_U64, vm.typed_regs.u64_regs[left] % vm.typed_regs.u64_regs[right]);
+                    handle_mod_u64_typed();
                     break;
                 }
 
@@ -1967,32 +1853,32 @@ InterpretResult vm_run_dispatch(void) {
                 }
 
                 case OP_LOAD_I32_CONST: {
-                    VM_TYPED_LOAD_CONST(i32_regs, i32, REG_TYPE_I32);
+                    handle_load_i32_const();
                     break;
                 }
 
                 case OP_LOAD_I64_CONST: {
-                    VM_TYPED_LOAD_CONST(i64_regs, i64, REG_TYPE_I64);
+                    handle_load_i64_const();
                     break;
                 }
 
                 case OP_LOAD_F64_CONST: {
-                    VM_TYPED_LOAD_CONST(f64_regs, f64, REG_TYPE_F64);
+                    handle_load_f64_const();
                     break;
                 }
 
                 case OP_MOVE_I32: {
-                    VM_TYPED_MOVE(i32_regs, REG_TYPE_I32);
+                    handle_move_i32();
                     break;
                 }
 
                 case OP_MOVE_I64: {
-                    VM_TYPED_MOVE(i64_regs, REG_TYPE_I64);
+                    handle_move_i64();
                     break;
                 }
 
                 case OP_MOVE_F64: {
-                    VM_TYPED_MOVE(f64_regs, REG_TYPE_F64);
+                    handle_move_f64();
                     break;
                 }
 
