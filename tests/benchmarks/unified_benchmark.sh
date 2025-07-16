@@ -140,6 +140,10 @@ run_benchmark_category() {
         run_language_benchmark "Lua" "${base_name}.lua" "lua \"$SCRIPT_DIR/${base_name}.lua\""
     fi
     
+    if [[ -f "$SCRIPT_DIR/${base_name}.lua" ]] && command -v luajit >/dev/null 2>&1; then
+        run_language_benchmark "LuaJIT" "${base_name}.lua" "luajit \"$SCRIPT_DIR/${base_name}.lua\""
+    fi
+    
     echo ""
     
     # Display category results
@@ -311,6 +315,9 @@ while IFS=':' read -r avg_time lang; do
                 ;;
             "Lua")
                 description="Mature scripting language optimized for performance"
+                ;;
+            "LuaJIT")
+                description="Lua with Just-In-Time compilation for high performance"
                 ;;
             "JavaScript")
                 description="V8 engine with advanced JIT compilation"

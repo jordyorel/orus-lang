@@ -7,22 +7,12 @@
 #include <stdint.h>
 #include <limits.h>
 
-// Simple arena allocator used for AST nodes that never moves allocated blocks
-typedef struct ArenaBlock {
-    char* buffer;
-    size_t capacity;
-    size_t used;
-    struct ArenaBlock* next;
-} ArenaBlock;
-
-typedef struct {
-    ArenaBlock* head;
-} Arena;
-
-static Arena parserArena;
+// ArenaBlock and Arena are now defined in parser.h
+// This eliminates the redefinition error
 
 // Parser recursion depth tracking
 #define MAX_RECURSION_DEPTH 1000
+#define PARSER_ARENA_SIZE (1 << 16)  // 64KB
 
 #define PREC_MUL_DIV_MOD 4
 #define PREC_ADD_SUB 3
@@ -31,7 +21,6 @@ static Arena parserArena;
 #define PREC_AND 1
 #define PREC_OR 0
 #define PREC_NONE -1
-static int recursionDepth = 0;
 
 static void arena_init(Arena* a, size_t initial) {
     a->head = malloc(sizeof(ArenaBlock));
@@ -41,7 +30,8 @@ static void arena_init(Arena* a, size_t initial) {
     a->head->next = NULL;
 }
 
-static void* parser_arena_alloc(Arena* a, size_t size) {
+static void* parser_arena_alloc(ParserContext* ctx, size_t size) {
+    Arena* a = &ctx->arena;
     ArenaBlock* block = a->head;
     if (block->used + size > block->capacity) {
         size_t newCap = block->capacity * 2;
@@ -59,7 +49,8 @@ static void* parser_arena_alloc(Arena* a, size_t size) {
     return ptr;
 }
 
-static void parser_arena_reset(Arena* a) {
+static void parser_arena_reset(ParserContext* ctx) {
+    Arena* a = &ctx->arena;
     ArenaBlock* block = a->head->next;
     while (block) {
         ArenaBlock* next = block->next;
@@ -71,12 +62,12 @@ static void parser_arena_reset(Arena* a) {
     a->head->next = NULL;
 }
 
-static ASTNode* new_node(void) { return parser_arena_alloc(&parserArena, sizeof(ASTNode)); }
+static ASTNode* new_node(ParserContext* ctx) { return parser_arena_alloc(ctx, sizeof(ASTNode)); }
 
-static void addStatement(ASTNode*** list, int* count, int* capacity, ASTNode* stmt) {
+static void addStatement(ParserContext* ctx, ASTNode*** list, int* count, int* capacity, ASTNode* stmt) {
     if (*count + 1 > *capacity) {
         int newCap = *capacity == 0 ? 4 : (*capacity * 2);
-        ASTNode** newArr = parser_arena_alloc(&parserArena, sizeof(ASTNode*) * newCap);
+        ASTNode** newArr = parser_arena_alloc(ctx, sizeof(ASTNode*) * newCap);
         if (*capacity > 0) {
             memcpy(newArr, *list, sizeof(ASTNode*) * (*count));
         }
@@ -86,67 +77,103 @@ static void addStatement(ASTNode*** list, int* count, int* capacity, ASTNode* st
     (*list)[(*count)++] = stmt;
 }
 
-// Simple token lookahead
-static Token peekedToken;
-static bool hasPeekedToken = false;
-
-static Token peekedToken2;
-static bool hasPeekedToken2 = false;
-
-static Token peekToken(void) {
-    if (!hasPeekedToken) {
-        peekedToken = scan_token();
-        hasPeekedToken = true;
-    }
-    return peekedToken;
+// Parser context lifecycle functions
+ParserContext* parser_context_create(void) {
+    ParserContext* ctx = malloc(sizeof(ParserContext));
+    if (!ctx) return NULL;
+    
+    // Initialize arena
+    arena_init(&ctx->arena, PARSER_ARENA_SIZE);
+    
+    // Initialize state
+    ctx->recursion_depth = 0;
+    ctx->has_peeked_token = false;
+    ctx->has_peeked_token2 = false;
+    ctx->max_recursion_depth = MAX_RECURSION_DEPTH;
+    
+    return ctx;
 }
 
-static Token peekSecondToken(void) {
-    if (!hasPeekedToken) {
-        peekedToken = scan_token();
-        hasPeekedToken = true;
+void parser_context_destroy(ParserContext* ctx) {
+    if (!ctx) return;
+    
+    // Free arena blocks
+    ArenaBlock* block = ctx->arena.head;
+    while (block) {
+        ArenaBlock* next = block->next;
+        free(block->buffer);
+        free(block);
+        block = next;
     }
-    if (!hasPeekedToken2) {
-        peekedToken2 = scan_token();
-        hasPeekedToken2 = true;
-    }
-    return peekedToken2;
+    
+    free(ctx);
 }
 
-static Token nextToken(void) {
-    if (hasPeekedToken) {
-        Token result = peekedToken;
-        if (hasPeekedToken2) {
-            peekedToken = peekedToken2;
-            hasPeekedToken2 = false;
+void parser_context_reset(ParserContext* ctx) {
+    if (!ctx) return;
+    
+    parser_arena_reset(ctx);
+    ctx->recursion_depth = 0;
+    ctx->has_peeked_token = false;
+    ctx->has_peeked_token2 = false;
+}
+
+// Token lookahead functions now use context
+
+static Token peekToken(ParserContext* ctx) {
+    if (!ctx->has_peeked_token) {
+        ctx->peeked_token = scan_token();
+        ctx->has_peeked_token = true;
+    }
+    return ctx->peeked_token;
+}
+
+static Token peekSecondToken(ParserContext* ctx) {
+    if (!ctx->has_peeked_token) {
+        ctx->peeked_token = scan_token();
+        ctx->has_peeked_token = true;
+    }
+    if (!ctx->has_peeked_token2) {
+        ctx->peeked_token2 = scan_token();
+        ctx->has_peeked_token2 = true;
+    }
+    return ctx->peeked_token2;
+}
+
+static Token nextToken(ParserContext* ctx) {
+    if (ctx->has_peeked_token) {
+        Token result = ctx->peeked_token;
+        if (ctx->has_peeked_token2) {
+            ctx->peeked_token = ctx->peeked_token2;
+            ctx->has_peeked_token2 = false;
         } else {
-            hasPeekedToken = false;
+            ctx->has_peeked_token = false;
         }
         return result;
     }
     return scan_token();
 }
 
-// Forward declarations
-static ASTNode* parsePrintStatement(void);
-static ASTNode* parseExpression(void);
-static ASTNode* parseBinaryExpression(int minPrec);
-static ASTNode* parsePrimaryExpression(void);
-static ASTNode* parseParenthesizedExpression(void); // New function for tracking parentheses
-static ASTNode* parseVariableDeclaration(bool isMutable, Token nameToken);
-static ASTNode* parseAssignOrVarList(bool isMutable, Token nameToken);
-static ASTNode* parseStatement(void);
-static ASTNode* parseIfStatement(void);
-static ASTNode* parseWhileStatement(void);
-static ASTNode* parseForStatement(void);
-static ASTNode* parseBreakStatement(void);
-static ASTNode* parseContinueStatement(void);
-static ASTNode* parseBlock(void);
-static ASTNode* parseFunctionDefinition(void);
-static ASTNode* parseReturnStatement(void);
-static ASTNode* parseCallExpression(ASTNode* callee);
-static ASTNode* parseFunctionType(void);
-static ASTNode* parseTypeAnnotation(void);
+// Forward declarations - all now take ParserContext*
+static ASTNode* parsePrintStatement(ParserContext* ctx);
+static ASTNode* parseExpression(ParserContext* ctx);
+static ASTNode* parseBinaryExpression(ParserContext* ctx, int minPrec);
+static ASTNode* parsePrimaryExpression(ParserContext* ctx);
+static ASTNode* parseParenthesizedExpression(ParserContext* ctx);
+static ASTNode* parseVariableDeclaration(ParserContext* ctx, bool isMutable, Token nameToken);
+static ASTNode* parseAssignOrVarList(ParserContext* ctx, bool isMutable, Token nameToken);
+static ASTNode* parseStatement(ParserContext* ctx);
+static ASTNode* parseIfStatement(ParserContext* ctx);
+static ASTNode* parseWhileStatement(ParserContext* ctx);
+static ASTNode* parseForStatement(ParserContext* ctx);
+static ASTNode* parseBreakStatement(ParserContext* ctx);
+static ASTNode* parseContinueStatement(ParserContext* ctx);
+static ASTNode* parseBlock(ParserContext* ctx);
+static ASTNode* parseFunctionDefinition(ParserContext* ctx);
+static ASTNode* parseReturnStatement(ParserContext* ctx);
+static ASTNode* parseCallExpression(ParserContext* ctx, ASTNode* callee);
+static ASTNode* parseFunctionType(ParserContext* ctx);
+static ASTNode* parseTypeAnnotation(ParserContext* ctx);
 
 static int getOperatorPrecedence(TokenType type) {
     switch (type) {
@@ -194,95 +221,37 @@ static const char* getOperatorString(TokenType type) {
     }
 }
 
+// Backward compatibility wrapper
 ASTNode* parseSource(const char* source) {
-    arena_init(&parserArena, PARSER_ARENA_SIZE);
-    init_scanner(source);
-    hasPeekedToken = false;
-
-    ASTNode** statements = NULL;
-    int count = 0;
-    int capacity = 0;
-
-    while (true) {
-        Token t = peekToken();
-        if (t.type == TOKEN_EOF) break;
-        if (t.type == TOKEN_NEWLINE) {
-            nextToken();
-            continue;
-        }
-        if (t.type == TOKEN_SEMICOLON) {
-            SrcLocation location = {NULL, t.line, t.column};
-            report_compile_error(E1007_SEMICOLON_NOT_ALLOWED, location, 
-                               "found ';' here");
-            return NULL;
-        }
-
-        ASTNode* stmt = parseStatement();
-        if (!stmt) {
-            // If in debug mode, provide some indication of where parsing failed
-            extern VM vm;
-            if (vm.devMode) {
-                Token currentToken = peekToken();
-                fprintf(stderr, "Debug: Failed to parse statement at line %d, column %d\n", 
-                       currentToken.line, currentToken.column);
-                fprintf(stderr, "Debug: Current token type: %d\n", currentToken.type);
-                if (currentToken.type == TOKEN_IDENTIFIER || currentToken.type == TOKEN_FOR || 
-                    currentToken.type == TOKEN_WHILE) {
-                    fprintf(stderr, "Debug: Token text: '%.*s'\n", 
-                           currentToken.length, currentToken.start);
-                }
-            }
-            return NULL;
-        }
-
-        addStatement(&statements, &count, &capacity, stmt);
-
-        t = peekToken();
-        if (t.type == TOKEN_NEWLINE) {
-            nextToken();
-        } else if (t.type == TOKEN_COMMA) {
-            // Handle comma as statement separator for multi-variable declarations
-            nextToken();
-        } else if (t.type == TOKEN_SEMICOLON) {
-            SrcLocation location = {NULL, t.line, t.column};
-            report_compile_error(E1007_SEMICOLON_NOT_ALLOWED, location, 
-                               "found ';' here");
-            return NULL;
-        }
+    static ParserContext* global_ctx = NULL;
+    if (!global_ctx) {
+        global_ctx = parser_context_create();
     }
-
-    ASTNode* program = new_node();
-    program->type = NODE_PROGRAM;
-    program->program.declarations = statements;
-    program->program.count = count;
-    program->location.line = 1;
-    program->location.column = 1;
-    program->dataType = NULL;
-    return program;
+    return parseSourceWithContext(global_ctx, source);
 }
 
-static ASTNode* parseStatement(void) {
-    Token t = peekToken();
+static ASTNode* parseStatement(ParserContext* ctx) {
+    Token t = peekToken(ctx);
 
     if (t.type == TOKEN_PRINT || t.type == TOKEN_PRINT_NO_NL) {
-        return parsePrintStatement();
+        return parsePrintStatement(ctx);
     }
     if (t.type == TOKEN_APOSTROPHE) {
-        nextToken();
-        Token labelTok = nextToken();
+        nextToken(ctx);
+        Token labelTok = nextToken(ctx);
         if (labelTok.type != TOKEN_IDENTIFIER) return NULL;
-        if (nextToken().type != TOKEN_COLON) return NULL;
+        if (nextToken(ctx).type != TOKEN_COLON) return NULL;
         int len = labelTok.length;
-        char* label = parser_arena_alloc(&parserArena, len + 1);
+        char* label = parser_arena_alloc(ctx, len + 1);
         strncpy(label, labelTok.start, len);
         label[len] = '\0';
-        Token after = peekToken();
+        Token after = peekToken(ctx);
         ASTNode* stmt = NULL;
         if (after.type == TOKEN_WHILE) {
-            stmt = parseWhileStatement();
+            stmt = parseWhileStatement(ctx);
             if (stmt) stmt->whileStmt.label = label;
         } else if (after.type == TOKEN_FOR) {
-            stmt = parseForStatement();
+            stmt = parseForStatement(ctx);
             if (stmt->type == NODE_FOR_RANGE) stmt->forRange.label = label;
             else if (stmt->type == NODE_FOR_ITER) stmt->forIter.label = label;
         } else {
@@ -291,13 +260,13 @@ static ASTNode* parseStatement(void) {
         return stmt;
     }
     if (t.type == TOKEN_MUT) {
-        nextToken(); // consume TOKEN_MUT
-        Token nameTok = nextToken(); // get identifier
+        nextToken(ctx); // consume TOKEN_MUT
+        Token nameTok = nextToken(ctx); // get identifier
         if (nameTok.type != TOKEN_IDENTIFIER) return NULL;
-        if (peekToken().type == TOKEN_COLON) {
-            return parseVariableDeclaration(true, nameTok);
+        if (peekToken(ctx).type == TOKEN_COLON) {
+            return parseVariableDeclaration(ctx, true, nameTok);
         }
-        return parseAssignOrVarList(true, nameTok);
+        return parseAssignOrVarList(ctx, true, nameTok);
     }
     if (t.type == TOKEN_LET) {
         // ERROR: 'let' is not supported in Orus
@@ -307,62 +276,62 @@ static ASTNode* parseStatement(void) {
         return NULL;
     }
     if (t.type == TOKEN_IDENTIFIER) {
-        Token second = peekSecondToken();
+        Token second = peekSecondToken(ctx);
         if (second.type == TOKEN_COLON) {
-            nextToken();
-            return parseVariableDeclaration(false, t);
+            nextToken(ctx);
+            return parseVariableDeclaration(ctx, false, t);
         } else if (second.type == TOKEN_EQUAL) {
-            nextToken();
-            return parseAssignOrVarList(false, t);
+            nextToken(ctx);
+            return parseAssignOrVarList(ctx, false, t);
         }
     }
     if (t.type == TOKEN_IF) {
-        return parseIfStatement();
+        return parseIfStatement(ctx);
     } else if (t.type == TOKEN_WHILE) {
-        return parseWhileStatement();
+        return parseWhileStatement(ctx);
     } else if (t.type == TOKEN_FOR) {
-        return parseForStatement();
+        return parseForStatement(ctx);
     } else if (t.type == TOKEN_BREAK) {
-        return parseBreakStatement();
+        return parseBreakStatement(ctx);
     } else if (t.type == TOKEN_CONTINUE) {
-        return parseContinueStatement();
+        return parseContinueStatement(ctx);
     } else if (t.type == TOKEN_FN) {
-        return parseFunctionDefinition();
+        return parseFunctionDefinition(ctx);
     } else if (t.type == TOKEN_RETURN) {
-        return parseReturnStatement();
+        return parseReturnStatement(ctx);
     } else {
-        return parseExpression();
+        return parseExpression(ctx);
     }
 }
 
-static ASTNode* parsePrintStatement(void) {
+static ASTNode* parsePrintStatement(ParserContext* ctx) {
     // Consume PRINT or PRINT_NO_NL
-    Token printTok = nextToken();
+    Token printTok = nextToken(ctx);
     bool newline = (printTok.type == TOKEN_PRINT);
 
     // Expect '('
-    Token left = nextToken();
+    Token left = nextToken(ctx);
     if (left.type != TOKEN_LEFT_PAREN) return NULL;
 
     // Gather zero or more comma-separated expressions
     ASTNode** args = NULL;
     int count = 0, capacity = 0;
-    if (peekToken().type != TOKEN_RIGHT_PAREN) {
+    if (peekToken(ctx).type != TOKEN_RIGHT_PAREN) {
         while (true) {
-            ASTNode* expr = parseExpression();
+            ASTNode* expr = parseExpression(ctx);
             if (!expr) return NULL;
-            addStatement(&args, &count, &capacity, expr);
-            if (peekToken().type != TOKEN_COMMA) break;
-            nextToken();  // consume comma
+            addStatement(ctx, &args, &count, &capacity, expr);
+            if (peekToken(ctx).type != TOKEN_COMMA) break;
+            nextToken(ctx);  // consume comma
         }
     }
 
     // Expect ')'
-    Token close = nextToken();
+    Token close = nextToken(ctx);
     if (close.type != TOKEN_RIGHT_PAREN) return NULL;
 
     // Build the NODE_PRINT AST node
-    ASTNode* node = new_node();
+    ASTNode* node = new_node(ctx);
     node->type = NODE_PRINT;
     node->print.values = args;
     node->print.count = count;
@@ -374,8 +343,8 @@ static ASTNode* parsePrintStatement(void) {
     return node;
 }
 
-static ASTNode* parseTypeAnnotation(void) {
-    Token typeTok = nextToken();
+static ASTNode* parseTypeAnnotation(ParserContext* ctx) {
+    Token typeTok = nextToken(ctx);
     if (typeTok.type != TOKEN_IDENTIFIER && typeTok.type != TOKEN_INT &&
         typeTok.type != TOKEN_I64 && typeTok.type != TOKEN_U32 &&
         typeTok.type != TOKEN_U64 && typeTok.type != TOKEN_F64 &&
@@ -384,38 +353,38 @@ static ASTNode* parseTypeAnnotation(void) {
     }
 
     int tl = typeTok.length;
-    char* typeName = parser_arena_alloc(&parserArena, tl + 1);
+    char* typeName = parser_arena_alloc(ctx, tl + 1);
     strncpy(typeName, typeTok.start, tl);
     typeName[tl] = '\0';
 
-    ASTNode* typeNode = new_node();
+    ASTNode* typeNode = new_node(ctx);
     typeNode->type = NODE_TYPE;
     typeNode->typeAnnotation.name = typeName;
     typeNode->typeAnnotation.isNullable = false;
 
-    if (peekToken().type == TOKEN_QUESTION) {
-        nextToken();
+    if (peekToken(ctx).type == TOKEN_QUESTION) {
+        nextToken(ctx);
         typeNode->typeAnnotation.isNullable = true;
     }
 
     return typeNode;
 }
 
-static ASTNode* parseVariableDeclaration(bool isMutable, Token nameToken) {
+static ASTNode* parseVariableDeclaration(ParserContext* ctx, bool isMutable, Token nameToken) {
 
     ASTNode* typeNode = NULL;
-    if (peekToken().type == TOKEN_COLON) {
-        nextToken();
-        typeNode = parseTypeAnnotation();
+    if (peekToken(ctx).type == TOKEN_COLON) {
+        nextToken(ctx);
+        typeNode = parseTypeAnnotation(ctx);
         if (!typeNode) return NULL;
     }
 
-    Token equalToken = nextToken();
+    Token equalToken = nextToken(ctx);
     if (equalToken.type != TOKEN_EQUAL) {
         return NULL;
     }
 
-    ASTNode* initializer = parseExpression();
+    ASTNode* initializer = parseExpression(ctx);
     if (!initializer) {
         return NULL;
     }
@@ -538,14 +507,14 @@ static ASTNode* parseVariableDeclaration(bool isMutable, Token nameToken) {
         }
     }
 
-    ASTNode* varNode = new_node();
+    ASTNode* varNode = new_node(ctx);
     varNode->type = NODE_VAR_DECL;
     varNode->location.line = nameToken.line;
     varNode->location.column = nameToken.column;
     varNode->dataType = NULL;
 
     int len = nameToken.length;
-    char* name = parser_arena_alloc(&parserArena, len + 1);
+    char* name = parser_arena_alloc(ctx, len + 1);
     strncpy(name, nameToken.start, len);
     name[len] = '\0';
 
@@ -561,19 +530,19 @@ static ASTNode* parseVariableDeclaration(bool isMutable, Token nameToken) {
     return varNode;
 }
 
-static ASTNode* parseAssignOrVarList(bool isMutable, Token nameToken) {
-    if (nextToken().type != TOKEN_EQUAL) return NULL;
-    ASTNode* initializer = parseExpression();
+static ASTNode* parseAssignOrVarList(ParserContext* ctx, bool isMutable, Token nameToken) {
+    if (nextToken(ctx).type != TOKEN_EQUAL) return NULL;
+    ASTNode* initializer = parseExpression(ctx);
     if (!initializer) return NULL;
 
     // For multiple variable declarations separated by commas,
     // only parse the first one and let the main parser handle the rest
-    if (peekToken().type != TOKEN_COMMA && !isMutable) {
+    if (peekToken(ctx).type != TOKEN_COMMA && !isMutable) {
         // Regular assignment
-        ASTNode* node = new_node();
+        ASTNode* node = new_node(ctx);
         node->type = NODE_ASSIGN;
         int len = nameToken.length;
-        char* name = parser_arena_alloc(&parserArena, len + 1);
+        char* name = parser_arena_alloc(ctx, len + 1);
         strncpy(name, nameToken.start, len);
         name[len] = '\0';
         node->assign.name = name;
@@ -585,14 +554,14 @@ static ASTNode* parseAssignOrVarList(bool isMutable, Token nameToken) {
     }
 
     // Create a single variable declaration for the first variable
-    ASTNode* varNode = new_node();
+    ASTNode* varNode = new_node(ctx);
     varNode->type = NODE_VAR_DECL;
     varNode->location.line = nameToken.line;
     varNode->location.column = nameToken.column;
     varNode->dataType = NULL;
 
     int len = nameToken.length;
-    char* name = parser_arena_alloc(&parserArena, len + 1);
+    char* name = parser_arena_alloc(ctx, len + 1);
     strncpy(name, nameToken.start, len);
     name[len] = '\0';
 
@@ -607,7 +576,7 @@ static ASTNode* parseAssignOrVarList(bool isMutable, Token nameToken) {
     return varNode;
 }
 
-static ASTNode* parseBlock(void) {
+static ASTNode* parseBlock(ParserContext* ctx) {
     extern VM vm;
     if (vm.devMode) {
         fprintf(stderr, "Debug: Entering parseBlock\n");
@@ -618,13 +587,13 @@ static ASTNode* parseBlock(void) {
     int capacity = 0;
 
     while (true) {
-        Token t = peekToken();
+        Token t = peekToken(ctx);
         if (vm.devMode) {
             fprintf(stderr, "Debug: parseBlock - Current token type: %d\n", t.type);
         }
         if (t.type == TOKEN_DEDENT || t.type == TOKEN_EOF) break;
         if (t.type == TOKEN_NEWLINE) {
-            nextToken();
+            nextToken(ctx);
             continue;
         }
         if (t.type == TOKEN_SEMICOLON) {
@@ -633,17 +602,17 @@ static ASTNode* parseBlock(void) {
                                "found ';' here");
             return NULL;
         }
-        ASTNode* stmt = parseStatement();
+        ASTNode* stmt = parseStatement(ctx);
         if (!stmt) {
             if (vm.devMode) {
                 fprintf(stderr, "Debug: parseBlock failed to parse statement\n");
             }
             return NULL;
         }
-        addStatement(&statements, &count, &capacity, stmt);
-        t = peekToken();
+        addStatement(ctx, &statements, &count, &capacity, stmt);
+        t = peekToken(ctx);
         if (t.type == TOKEN_NEWLINE) {
-            nextToken();
+            nextToken(ctx);
         } else if (t.type == TOKEN_SEMICOLON) {
             SrcLocation location = {NULL, t.line, t.column};
             report_compile_error(E1007_SEMICOLON_NOT_ALLOWED, location, 
@@ -651,10 +620,10 @@ static ASTNode* parseBlock(void) {
             return NULL;
         }
     }
-    Token dedent = nextToken();
+    Token dedent = nextToken(ctx);
     if (dedent.type != TOKEN_DEDENT) return NULL;
 
-    ASTNode* block = new_node();
+    ASTNode* block = new_node(ctx);
     block->type = NODE_BLOCK;
     block->block.statements = statements;
     block->block.count = count;
@@ -664,40 +633,40 @@ static ASTNode* parseBlock(void) {
     return block;
 }
 
-static ASTNode* parseIfStatement(void) {
-    Token ifTok = nextToken();
+static ASTNode* parseIfStatement(ParserContext* ctx) {
+    Token ifTok = nextToken(ctx);
     if (ifTok.type != TOKEN_IF && ifTok.type != TOKEN_ELIF) return NULL;
 
-    ASTNode* condition = parseExpression();
+    ASTNode* condition = parseExpression(ctx);
     if (!condition) return NULL;
 
-    Token colon = nextToken();
+    Token colon = nextToken(ctx);
     if (colon.type != TOKEN_COLON) return NULL;
-    if (nextToken().type != TOKEN_NEWLINE) return NULL;
-    if (nextToken().type != TOKEN_INDENT) return NULL;
+    if (nextToken(ctx).type != TOKEN_NEWLINE) return NULL;
+    if (nextToken(ctx).type != TOKEN_INDENT) return NULL;
 
-    ASTNode* thenBranch = parseBlock();
+    ASTNode* thenBranch = parseBlock(ctx);
     if (!thenBranch) return NULL;
 
-    if (peekToken().type == TOKEN_NEWLINE) {
-        nextToken();
+    if (peekToken(ctx).type == TOKEN_NEWLINE) {
+        nextToken(ctx);
     }
 
     ASTNode* elseBranch = NULL;
-    Token next = peekToken();
+    Token next = peekToken(ctx);
     if (next.type == TOKEN_ELIF) {
-        elseBranch = parseIfStatement();
+        elseBranch = parseIfStatement(ctx);
     } else if (next.type == TOKEN_ELSE) {
-        nextToken();
-        if (nextToken().type != TOKEN_COLON) return NULL;
-        if (nextToken().type != TOKEN_NEWLINE) return NULL;
-        if (nextToken().type != TOKEN_INDENT) return NULL;
-        elseBranch = parseBlock();
+        nextToken(ctx);
+        if (nextToken(ctx).type != TOKEN_COLON) return NULL;
+        if (nextToken(ctx).type != TOKEN_NEWLINE) return NULL;
+        if (nextToken(ctx).type != TOKEN_INDENT) return NULL;
+        elseBranch = parseBlock(ctx);
         if (!elseBranch) return NULL;
-        if (peekToken().type == TOKEN_NEWLINE) nextToken();
+        if (peekToken(ctx).type == TOKEN_NEWLINE) nextToken(ctx);
     }
 
-    ASTNode* node = new_node();
+    ASTNode* node = new_node(ctx);
     node->type = NODE_IF;
     node->ifStmt.condition = condition;
     node->ifStmt.thenBranch = thenBranch;
@@ -708,23 +677,23 @@ static ASTNode* parseIfStatement(void) {
     return node;
 }
 
-static ASTNode* parseWhileStatement(void) {
-    Token whileTok = nextToken();
+static ASTNode* parseWhileStatement(ParserContext* ctx) {
+    Token whileTok = nextToken(ctx);
     if (whileTok.type != TOKEN_WHILE) return NULL;
 
-    ASTNode* condition = parseExpression();
+    ASTNode* condition = parseExpression(ctx);
     if (!condition) return NULL;
 
-    Token colon = nextToken();
+    Token colon = nextToken(ctx);
     if (colon.type != TOKEN_COLON) return NULL;
-    if (nextToken().type != TOKEN_NEWLINE) return NULL;
-    if (nextToken().type != TOKEN_INDENT) return NULL;
+    if (nextToken(ctx).type != TOKEN_NEWLINE) return NULL;
+    if (nextToken(ctx).type != TOKEN_INDENT) return NULL;
 
-    ASTNode* body = parseBlock();
+    ASTNode* body = parseBlock(ctx);
     if (!body) return NULL;
-    if (peekToken().type == TOKEN_NEWLINE) nextToken();
+    if (peekToken(ctx).type == TOKEN_NEWLINE) nextToken(ctx);
 
-    ASTNode* node = new_node();
+    ASTNode* node = new_node(ctx);
     node->type = NODE_WHILE;
     node->whileStmt.condition = condition;
     node->whileStmt.body = body;
@@ -735,13 +704,13 @@ static ASTNode* parseWhileStatement(void) {
     return node;
 }
 
-static ASTNode* parseForStatement(void) {
+static ASTNode* parseForStatement(ParserContext* ctx) {
     extern VM vm;
     if (vm.devMode) {
         fprintf(stderr, "Debug: Entering parseForStatement\n");
     }
     
-    Token forTok = nextToken();
+    Token forTok = nextToken(ctx);
     if (forTok.type != TOKEN_FOR) {
         if (vm.devMode) {
             fprintf(stderr, "Debug: Expected TOKEN_FOR, got %d\n", forTok.type);
@@ -749,7 +718,7 @@ static ASTNode* parseForStatement(void) {
         return NULL;
     }
 
-    Token nameTok = nextToken();
+    Token nameTok = nextToken(ctx);
     if (nameTok.type != TOKEN_IDENTIFIER) {
         if (vm.devMode) {
             fprintf(stderr, "Debug: Expected TOKEN_IDENTIFIER after 'for', got %d\n", nameTok.type);
@@ -757,7 +726,7 @@ static ASTNode* parseForStatement(void) {
         return NULL;
     }
 
-    Token inTok = nextToken();
+    Token inTok = nextToken(ctx);
     if (inTok.type != TOKEN_IN) {
         if (vm.devMode) {
             fprintf(stderr, "Debug: Expected TOKEN_IN after identifier, got %d\n", inTok.type);
@@ -765,7 +734,7 @@ static ASTNode* parseForStatement(void) {
         return NULL;
     }
 
-    ASTNode* first = parseExpression();
+    ASTNode* first = parseExpression(ctx);
     if (!first) {
         if (vm.devMode) {
             fprintf(stderr, "Debug: Failed to parse first expression in for loop\n");
@@ -777,27 +746,27 @@ static ASTNode* parseForStatement(void) {
     bool inclusive = false;
     ASTNode* end = NULL;
     ASTNode* step = NULL;
-    if (peekToken().type == TOKEN_DOT_DOT) {
+    if (peekToken(ctx).type == TOKEN_DOT_DOT) {
         if (vm.devMode) {
             fprintf(stderr, "Debug: Found TOKEN_DOT_DOT, parsing as range\n");
         }
         isRange = true;
-        nextToken();
-        if (peekToken().type == TOKEN_EQUAL) {
+        nextToken(ctx);
+        if (peekToken(ctx).type == TOKEN_EQUAL) {
             if (vm.devMode) {
                 fprintf(stderr, "Debug: Found TOKEN_EQUAL, marking as inclusive range\n");
             }
-            nextToken();
+            nextToken(ctx);
             inclusive = true;
         }
         if (vm.devMode) {
-            Token peekEnd = peekToken();
+            Token peekEnd = peekToken(ctx);
             fprintf(stderr, "Debug: About to parse end expression, next token type: %d\n", peekEnd.type);
             if (peekEnd.type == 44 || peekEnd.type == 38) {  // TOKEN_NUMBER-ish
                 fprintf(stderr, "Debug: Token text: '%.*s'\n", peekEnd.length, peekEnd.start);
             }
         }
-        end = parseExpression();
+        end = parseExpression(ctx);
         if (!end) {
             if (vm.devMode) {
                 fprintf(stderr, "Debug: Failed to parse end expression in range\n");
@@ -806,18 +775,18 @@ static ASTNode* parseForStatement(void) {
         }
         if (vm.devMode) {
             fprintf(stderr, "Debug: Successfully parsed end expression\n");
-            Token afterEnd = peekToken();
+            Token afterEnd = peekToken(ctx);
             fprintf(stderr, "Debug: After parsing end expression, next token type: %d\n", afterEnd.type);
             if (afterEnd.type == 44 || afterEnd.type == 38) {  // TOKEN_NUMBER-ish
                 fprintf(stderr, "Debug: Token text: '%.*s'\n", afterEnd.length, afterEnd.start);
             }
         }
-        if (peekToken().type == TOKEN_DOT_DOT) {
+        if (peekToken(ctx).type == TOKEN_DOT_DOT) {
             if (vm.devMode) {
                 fprintf(stderr, "Debug: Found second TOKEN_DOT_DOT, parsing step\n");
             }
-            nextToken();
-            step = parseExpression();
+            nextToken(ctx);
+            step = parseExpression(ctx);
             if (!step) {
                 if (vm.devMode) {
                     fprintf(stderr, "Debug: Failed to parse step expression in range\n");
@@ -827,7 +796,7 @@ static ASTNode* parseForStatement(void) {
         }
     }
 
-    Token colon = nextToken();
+    Token colon = nextToken(ctx);
     if (colon.type != TOKEN_COLON) {
         if (vm.devMode) {
             fprintf(stderr, "Debug: Expected TOKEN_COLON after range, got %d\n", colon.type);
@@ -835,7 +804,7 @@ static ASTNode* parseForStatement(void) {
         return NULL;
     }
     
-    Token newline = nextToken();
+    Token newline = nextToken(ctx);
     if (newline.type != TOKEN_NEWLINE) {
         if (vm.devMode) {
             fprintf(stderr, "Debug: Expected TOKEN_NEWLINE after colon, got %d\n", newline.type);
@@ -843,7 +812,7 @@ static ASTNode* parseForStatement(void) {
         return NULL;
     }
     
-    Token indent = nextToken();
+    Token indent = nextToken(ctx);
     if (indent.type != TOKEN_INDENT) {
         if (vm.devMode) {
             fprintf(stderr, "Debug: Expected TOKEN_INDENT after newline, got %d\n", indent.type);
@@ -851,21 +820,21 @@ static ASTNode* parseForStatement(void) {
         return NULL;
     }
 
-    ASTNode* body = parseBlock();
+    ASTNode* body = parseBlock(ctx);
     if (!body) {
         if (vm.devMode) {
             fprintf(stderr, "Debug: Failed to parse body block in for loop\n");
         }
         return NULL;
     }
-    if (peekToken().type == TOKEN_NEWLINE) nextToken();
+    if (peekToken(ctx).type == TOKEN_NEWLINE) nextToken(ctx);
 
     int len = nameTok.length;
-    char* name = parser_arena_alloc(&parserArena, len + 1);
+    char* name = parser_arena_alloc(ctx, len + 1);
     strncpy(name, nameTok.start, len);
     name[len] = '\0';
 
-    ASTNode* node = new_node();
+    ASTNode* node = new_node(ctx);
     if (isRange) {
         node->type = NODE_FOR_RANGE;
         node->forRange.varName = name;
@@ -888,24 +857,24 @@ static ASTNode* parseForStatement(void) {
     return node;
 }
 
-static ASTNode* parseBreakStatement(void) {
-    Token breakToken = nextToken();
+static ASTNode* parseBreakStatement(ParserContext* ctx) {
+    Token breakToken = nextToken(ctx);
     if (breakToken.type != TOKEN_BREAK) {
         return NULL;
     }
     
-    ASTNode* node = new_node();
+    ASTNode* node = new_node(ctx);
     node->type = NODE_BREAK;
     node->location.line = breakToken.line;
     node->location.column = breakToken.column;
     node->dataType = NULL;
     node->breakStmt.label = NULL;
-    if (peekToken().type == TOKEN_APOSTROPHE) {
-        nextToken();
-        Token labelTok = nextToken();
+    if (peekToken(ctx).type == TOKEN_APOSTROPHE) {
+        nextToken(ctx);
+        Token labelTok = nextToken(ctx);
         if (labelTok.type != TOKEN_IDENTIFIER) return NULL;
         int len = labelTok.length;
-        char* label = parser_arena_alloc(&parserArena, len + 1);
+        char* label = parser_arena_alloc(ctx, len + 1);
         strncpy(label, labelTok.start, len);
         label[len] = '\0';
         node->breakStmt.label = label;
@@ -913,24 +882,24 @@ static ASTNode* parseBreakStatement(void) {
     return node;
 }
 
-static ASTNode* parseContinueStatement(void) {
-    Token continueToken = nextToken();
+static ASTNode* parseContinueStatement(ParserContext* ctx) {
+    Token continueToken = nextToken(ctx);
     if (continueToken.type != TOKEN_CONTINUE) {
         return NULL;
     }
     
-    ASTNode* node = new_node();
+    ASTNode* node = new_node(ctx);
     node->type = NODE_CONTINUE;
     node->location.line = continueToken.line;
     node->location.column = continueToken.column;
     node->dataType = NULL;
     node->continueStmt.label = NULL;
-    if (peekToken().type == TOKEN_APOSTROPHE) {
-        nextToken();
-        Token labelTok = nextToken();
+    if (peekToken(ctx).type == TOKEN_APOSTROPHE) {
+        nextToken(ctx);
+        Token labelTok = nextToken(ctx);
         if (labelTok.type != TOKEN_IDENTIFIER) return NULL;
         int len = labelTok.length;
-        char* label = parser_arena_alloc(&parserArena, len + 1);
+        char* label = parser_arena_alloc(ctx, len + 1);
         strncpy(label, labelTok.start, len);
         label[len] = '\0';
         node->continueStmt.label = label;
@@ -938,20 +907,20 @@ static ASTNode* parseContinueStatement(void) {
     return node;
 }
 
-static ASTNode* parseAssignment(void);
+static ASTNode* parseAssignment(ParserContext* ctx);
 
-static ASTNode* parseExpression(void) { return parseAssignment(); }
+static ASTNode* parseExpression(ParserContext* ctx) { return parseAssignment(ctx); }
 
 // Parse inline conditional expressions using Python-like syntax:
 // expr if cond [elif cond]* else expr
-static ASTNode* parseInlineIf(ASTNode* expr) {
-    if (peekToken().type != TOKEN_IF) return expr;
-    nextToken();
+static ASTNode* parseInlineIf(ParserContext* ctx, ASTNode* expr) {
+    if (peekToken(ctx).type != TOKEN_IF) return expr;
+    nextToken(ctx);
 
-    ASTNode* condition = parseExpression();
+    ASTNode* condition = parseExpression(ctx);
     if (!condition) return NULL;
 
-    ASTNode* root = new_node();
+    ASTNode* root = new_node(ctx);
     root->type = NODE_IF;
     root->ifStmt.condition = condition;
     root->ifStmt.thenBranch = expr;
@@ -960,11 +929,11 @@ static ASTNode* parseInlineIf(ASTNode* expr) {
     root->dataType = NULL;
 
     ASTNode* current = root;
-    while (peekToken().type == TOKEN_ELIF) {
-        nextToken();
-        ASTNode* elifCond = parseExpression();
+    while (peekToken(ctx).type == TOKEN_ELIF) {
+        nextToken(ctx);
+        ASTNode* elifCond = parseExpression(ctx);
         if (!elifCond) return NULL;
-        ASTNode* newIf = new_node();
+        ASTNode* newIf = new_node(ctx);
         newIf->type = NODE_IF;
         newIf->ifStmt.condition = elifCond;
         newIf->ifStmt.thenBranch = expr;
@@ -975,9 +944,9 @@ static ASTNode* parseInlineIf(ASTNode* expr) {
         current = newIf;
     }
 
-    if (peekToken().type == TOKEN_ELSE) {
-        nextToken();
-        ASTNode* elseExpr = parseExpression();
+    if (peekToken(ctx).type == TOKEN_ELSE) {
+        nextToken(ctx);
+        ASTNode* elseExpr = parseExpression(ctx);
         if (!elseExpr) return NULL;
         current->ifStmt.elseBranch = elseExpr;
     }
@@ -985,26 +954,26 @@ static ASTNode* parseInlineIf(ASTNode* expr) {
     return root;
 }
 
-static ASTNode* parseUnaryExpression(void) {
-    Token t = peekToken();
+static ASTNode* parseUnaryExpression(ParserContext* ctx) {
+    Token t = peekToken(ctx);
     if (t.type == TOKEN_MINUS || t.type == TOKEN_NOT || t.type == TOKEN_BIT_NOT) {
         // Check recursion depth for unary expressions too
-        if (recursionDepth >= MAX_RECURSION_DEPTH) {
-            Token t = peekToken();
+        if (ctx->recursion_depth >= ctx->max_recursion_depth) {
+            Token t = peekToken(ctx);
             SrcLocation location = {NULL, t.line, t.column};
             report_compile_error(E1009_EXPRESSION_TOO_COMPLEX, location, 
-                               "expression nesting exceeds maximum depth of %d", MAX_RECURSION_DEPTH);
+                               "expression nesting exceeds maximum depth of %d", ctx->max_recursion_depth);
             return NULL;
         }
         
-        nextToken();
-        recursionDepth++;
-        ASTNode* operand = parseUnaryExpression();
+        nextToken(ctx);
+        ctx->recursion_depth++;
+        ASTNode* operand = parseUnaryExpression(ctx);
         if (!operand) {
-            recursionDepth--;
+            ctx->recursion_depth--;
             return NULL;
         }
-        ASTNode* node = new_node();
+        ASTNode* node = new_node(ctx);
         node->type = NODE_UNARY;
         if (t.type == TOKEN_MINUS) node->unary.op = "-";
         else if (t.type == TOKEN_NOT) node->unary.op = "not";
@@ -1013,21 +982,21 @@ static ASTNode* parseUnaryExpression(void) {
         node->location.line = t.line;
         node->location.column = t.column;
         node->dataType = NULL;
-        recursionDepth--;
+        ctx->recursion_depth--;
         return node;
     }
-    return parsePrimaryExpression();
+    return parsePrimaryExpression(ctx);
 }
 
-static ASTNode* parseTernary(ASTNode* condition) {
-    if (peekToken().type != TOKEN_QUESTION) return condition;
-    nextToken();
-    ASTNode* trueExpr = parseExpression();
+static ASTNode* parseTernary(ParserContext* ctx, ASTNode* condition) {
+    if (peekToken(ctx).type != TOKEN_QUESTION) return condition;
+    nextToken(ctx);
+    ASTNode* trueExpr = parseExpression(ctx);
     if (!trueExpr) return NULL;
-    if (nextToken().type != TOKEN_COLON) return NULL;
-    ASTNode* falseExpr = parseExpression();
+    if (nextToken(ctx).type != TOKEN_COLON) return NULL;
+    ASTNode* falseExpr = parseExpression(ctx);
     if (!falseExpr) return NULL;
-    ASTNode* node = new_node();
+    ASTNode* node = new_node(ctx);
     node->type = NODE_TERNARY;
     node->ternary.condition = condition;
     node->ternary.trueExpr = trueExpr;
@@ -1037,25 +1006,25 @@ static ASTNode* parseTernary(ASTNode* condition) {
     return node;
 }
 
-static ASTNode* parseAssignment(void) {
-    ASTNode* left = parseBinaryExpression(0);
+static ASTNode* parseAssignment(ParserContext* ctx) {
+    ASTNode* left = parseBinaryExpression(ctx, 0);
     if (!left) return NULL;
 
-    TokenType t = peekToken().type;
+    TokenType t = peekToken(ctx).type;
     if (t == TOKEN_EQUAL || t == TOKEN_PLUS_EQUAL || t == TOKEN_MINUS_EQUAL ||
         t == TOKEN_STAR_EQUAL || t == TOKEN_SLASH_EQUAL) {
-        nextToken();
+        nextToken(ctx);
         ASTNode* value = NULL;
 
         if (t == TOKEN_EQUAL) {
             // Use full expression parsing so constructs like
             // x = cond ? a : b are handled correctly
-            value = parseAssignment();
+            value = parseAssignment(ctx);
         } else {
-            ASTNode* right = parseAssignment();
+            ASTNode* right = parseAssignment(ctx);
             if (!right) return NULL;
             if (left->type != NODE_IDENTIFIER) return NULL;
-            ASTNode* binary = new_node();
+            ASTNode* binary = new_node(ctx);
             binary->type = NODE_BINARY;
             binary->binary.left = left;
             binary->binary.right = right;
@@ -1079,7 +1048,7 @@ static ASTNode* parseAssignment(void) {
             value = binary;
         }
         if (!value || left->type != NODE_IDENTIFIER) return NULL;
-        ASTNode* node = new_node();
+        ASTNode* node = new_node(ctx);
         node->type = NODE_ASSIGN;
         node->assign.name = left->identifier.name;
         node->assign.value = value;
@@ -1087,37 +1056,37 @@ static ASTNode* parseAssignment(void) {
         node->dataType = NULL;
         return node;
     }
-    ASTNode* expr = parseTernary(left);
+    ASTNode* expr = parseTernary(ctx, left);
     if (!expr) return NULL;
-    return parseInlineIf(expr);
+    return parseInlineIf(ctx, expr);
 }
 
-static ASTNode* parseBinaryExpression(int minPrec) {
+static ASTNode* parseBinaryExpression(ParserContext* ctx, int minPrec) {
     // Check recursion depth
-    if (recursionDepth >= MAX_RECURSION_DEPTH) {
-        Token t = peekToken();
+    if (ctx->recursion_depth >= ctx->max_recursion_depth) {
+        Token t = peekToken(ctx);
         SrcLocation location = {NULL, t.line, t.column};
         report_compile_error(E1009_EXPRESSION_TOO_COMPLEX, location, 
-                           "expression nesting exceeds maximum depth of %d", MAX_RECURSION_DEPTH);
+                           "expression nesting exceeds maximum depth of %d", ctx->max_recursion_depth);
         return NULL;
     }
     
-    recursionDepth++;
-    ASTNode* left = parseUnaryExpression();
+    ctx->recursion_depth++;
+    ASTNode* left = parseUnaryExpression(ctx);
     if (!left) {
-        recursionDepth--;
+        ctx->recursion_depth--;
         return NULL;
     }
 
     while (true) {
-        Token operator = peekToken();
+        Token operator = peekToken(ctx);
         int prec = getOperatorPrecedence(operator.type);
 
         if (prec < minPrec || operator.type == TOKEN_EOF) {
             break;
         }
 
-        nextToken();
+        nextToken(ctx);
 
         // Handle 'as' operator specially for type casting
         if (operator.type == TOKEN_AS) {
@@ -1128,33 +1097,33 @@ static ASTNode* parseBinaryExpression(int minPrec) {
                 fprintf(stderr, "Error: Chained type casts are not allowed at line %d:%d. "
                        "Use parentheses like '((a as type1) as type2)' or an intermediate variable for clarity.\n",
                        operator.line, operator.column);
-                recursionDepth--;
+                ctx->recursion_depth--;
                 return NULL;
             }
             
             // Parse the target type
-            Token typeToken = nextToken();
+            Token typeToken = nextToken(ctx);
             if (typeToken.type != TOKEN_IDENTIFIER && typeToken.type != TOKEN_INT &&
                 typeToken.type != TOKEN_I64 && typeToken.type != TOKEN_U32 &&
                 typeToken.type != TOKEN_U64 && typeToken.type != TOKEN_F64 &&
                 typeToken.type != TOKEN_BOOL && typeToken.type != TOKEN_STRING) {
-                recursionDepth--;
+                ctx->recursion_depth--;
                 return NULL;
             }
 
             // Create a proper null-terminated string for the type name
             size_t typeNameLen = typeToken.length;
-            char* typeName = parser_arena_alloc(&parserArena, typeNameLen + 1);
+            char* typeName = parser_arena_alloc(ctx, typeNameLen + 1);
             memcpy(typeName, typeToken.start, typeNameLen);
             typeName[typeNameLen] = '\0';
 
-            ASTNode* targetType = new_node();
+            ASTNode* targetType = new_node(ctx);
             targetType->type = NODE_TYPE;
             targetType->typeAnnotation.name = typeName;
             targetType->location.line = typeToken.line;
             targetType->location.column = typeToken.column;
 
-            ASTNode* castNode = new_node();
+            ASTNode* castNode = new_node(ctx);
             castNode->type = NODE_CAST;
             castNode->cast.expression = left;
             castNode->cast.targetType = targetType;
@@ -1167,13 +1136,13 @@ static ASTNode* parseBinaryExpression(int minPrec) {
             continue;
         }
 
-        ASTNode* right = parseBinaryExpression(prec + 1);
+        ASTNode* right = parseBinaryExpression(ctx, prec + 1);
         if (!right) {
-            recursionDepth--;
+            ctx->recursion_depth--;
             return NULL;
         }
 
-        ASTNode* binaryNode = new_node();
+        ASTNode* binaryNode = new_node(ctx);
         binaryNode->type = NODE_BINARY;
         binaryNode->binary.left = left;
         binaryNode->binary.right = right;
@@ -1185,16 +1154,16 @@ static ASTNode* parseBinaryExpression(int minPrec) {
         left = binaryNode;
     }
 
-    recursionDepth--;
+    ctx->recursion_depth--;
     return left;
 }
 
-static ASTNode* parsePrimaryExpression(void) {
-    Token token = nextToken();
+static ASTNode* parsePrimaryExpression(ParserContext* ctx) {
+    Token token = nextToken(ctx);
 
     switch (token.type) {
         case TOKEN_NUMBER: {
-            ASTNode* node = new_node();
+            ASTNode* node = new_node(ctx);
             node->type = NODE_LITERAL;
 
             /* Copy token text and remove underscores */
@@ -1285,10 +1254,10 @@ static ASTNode* parsePrimaryExpression(void) {
             return node;
         }
         case TOKEN_STRING: {
-            ASTNode* node = new_node();
+            ASTNode* node = new_node(ctx);
             node->type = NODE_LITERAL;
             int contentLen = token.length - 2;
-            char* content = parser_arena_alloc(&parserArena, contentLen + 1);
+            char* content = parser_arena_alloc(ctx, contentLen + 1);
             strncpy(content, token.start + 1, contentLen);
             content[contentLen] = '\0';
             ObjString* s = allocateString(content, contentLen);
@@ -1301,7 +1270,7 @@ static ASTNode* parsePrimaryExpression(void) {
             return node;
         }
         case TOKEN_TRUE: {
-            ASTNode* node = new_node();
+            ASTNode* node = new_node(ctx);
             node->type = NODE_LITERAL;
             node->literal.value = BOOL_VAL(true);
             node->literal.hasExplicitSuffix = false;
@@ -1311,7 +1280,7 @@ static ASTNode* parsePrimaryExpression(void) {
             return node;
         }
         case TOKEN_FALSE: {
-            ASTNode* node = new_node();
+            ASTNode* node = new_node(ctx);
             node->type = NODE_LITERAL;
             node->literal.value = BOOL_VAL(false);
             node->literal.hasExplicitSuffix = false;
@@ -1321,7 +1290,7 @@ static ASTNode* parsePrimaryExpression(void) {
             return node;
         }
         case TOKEN_NIL: {
-            ASTNode* node = new_node();
+            ASTNode* node = new_node(ctx);
             node->type = NODE_LITERAL;
             node->literal.value = NIL_VAL;
             node->literal.hasExplicitSuffix = false;
@@ -1331,10 +1300,10 @@ static ASTNode* parsePrimaryExpression(void) {
             return node;
         }
         case TOKEN_IDENTIFIER: {
-            ASTNode* node = new_node();
+            ASTNode* node = new_node(ctx);
             node->type = NODE_IDENTIFIER;
             int len = token.length;
-            char* name = parser_arena_alloc(&parserArena, len + 1);
+            char* name = parser_arena_alloc(ctx, len + 1);
             strncpy(name, token.start, len);
             name[len] = '\0';
             node->identifier.name = name;
@@ -1343,8 +1312,8 @@ static ASTNode* parsePrimaryExpression(void) {
             node->dataType = NULL;
             
             // Check if this is a function call
-            if (peekToken().type == TOKEN_LEFT_PAREN) {
-                return parseCallExpression(node);
+            if (peekToken(ctx).type == TOKEN_LEFT_PAREN) {
+                return parseCallExpression(ctx, node);
             }
             
             return node;
@@ -1352,27 +1321,27 @@ static ASTNode* parsePrimaryExpression(void) {
         case TOKEN_PRINT:
         case TOKEN_PRINT_NO_NL: {
             bool newline = token.type == TOKEN_PRINT;
-            Token next = nextToken();
+            Token next = nextToken(ctx);
             if (next.type != TOKEN_LEFT_PAREN) {
                 return NULL;
             }
             ASTNode** args = NULL;
             int count = 0;
             int capacity = 0;
-            if (peekToken().type != TOKEN_RIGHT_PAREN) {
+            if (peekToken(ctx).type != TOKEN_RIGHT_PAREN) {
                 while (true) {
-                    ASTNode* expr = parseExpression();
+                    ASTNode* expr = parseExpression(ctx);
                     if (!expr) return NULL;
-                    addStatement(&args, &count, &capacity, expr);
-                    if (peekToken().type != TOKEN_COMMA) break;
-                    nextToken();
+                    addStatement(ctx, &args, &count, &capacity, expr);
+                    if (peekToken(ctx).type != TOKEN_COMMA) break;
+                    nextToken(ctx);
                 }
             }
-            Token close = nextToken();
+            Token close = nextToken(ctx);
             if (close.type != TOKEN_RIGHT_PAREN) {
                 return NULL;
             }
-            ASTNode* node = new_node();
+            ASTNode* node = new_node(ctx);
             node->type = NODE_PRINT;
             node->print.values = args;
             node->print.count = count;
@@ -1383,15 +1352,15 @@ static ASTNode* parsePrimaryExpression(void) {
             return node;
         }
         case TOKEN_TIME_STAMP: {
-            Token next = nextToken();
+            Token next = nextToken(ctx);
             if (next.type != TOKEN_LEFT_PAREN) {
                 return NULL;
             }
-            Token close = nextToken();
+            Token close = nextToken(ctx);
             if (close.type != TOKEN_RIGHT_PAREN) {
                 return NULL;
             }
-            ASTNode* node = new_node();
+            ASTNode* node = new_node(ctx);
             node->type = NODE_TIME_STAMP;
             node->location.line = token.line;
             node->location.column = token.column;
@@ -1399,7 +1368,7 @@ static ASTNode* parsePrimaryExpression(void) {
             return node;
         }
         case TOKEN_LEFT_PAREN: {
-            return parseParenthesizedExpression();
+            return parseParenthesizedExpression(ctx);
         }
         default:
             return NULL;
@@ -1407,24 +1376,24 @@ static ASTNode* parsePrimaryExpression(void) {
 }
 
 // Parse function definition: fn name(param1, param2) -> return_type:
-static ASTNode* parseFunctionDefinition(void) {
+static ASTNode* parseFunctionDefinition(ParserContext* ctx) {
     // Consume 'fn' token
-    nextToken();
+    nextToken(ctx);
     
     // Get function name
-    Token nameTok = nextToken();
+    Token nameTok = nextToken(ctx);
     if (nameTok.type != TOKEN_IDENTIFIER) {
         return NULL;
     }
     
     // Copy function name
     int nameLen = nameTok.length;
-    char* functionName = parser_arena_alloc(&parserArena, nameLen + 1);
+    char* functionName = parser_arena_alloc(ctx, nameLen + 1);
     strncpy(functionName, nameTok.start, nameLen);
     functionName[nameLen] = '\0';
     
     // Parse parameter list
-    if (nextToken().type != TOKEN_LEFT_PAREN) {
+    if (nextToken(ctx).type != TOKEN_LEFT_PAREN) {
         return NULL;
     }
     
@@ -1432,31 +1401,31 @@ static ASTNode* parseFunctionDefinition(void) {
     int paramCount = 0;
     int paramCapacity = 0;
     
-    if (peekToken().type != TOKEN_RIGHT_PAREN) {
+    if (peekToken(ctx).type != TOKEN_RIGHT_PAREN) {
         while (true) {
-            Token paramTok = nextToken();
+            Token paramTok = nextToken(ctx);
             if (paramTok.type != TOKEN_IDENTIFIER) {
                 return NULL;
             }
             
             // Copy parameter name
             int paramLen = paramTok.length;
-            char* paramName = parser_arena_alloc(&parserArena, paramLen + 1);
+            char* paramName = parser_arena_alloc(ctx, paramLen + 1);
             strncpy(paramName, paramTok.start, paramLen);
             paramName[paramLen] = '\0';
             
             // Optional type annotation
             ASTNode* paramType = NULL;
-            if (peekToken().type == TOKEN_COLON) {
-                nextToken();
-                paramType = parseTypeAnnotation();
+            if (peekToken(ctx).type == TOKEN_COLON) {
+                nextToken(ctx);
+                paramType = parseTypeAnnotation(ctx);
                 if (!paramType) return NULL;
             }
             
             // Add parameter to list
             if (paramCount + 1 > paramCapacity) {
                 int newCap = paramCapacity == 0 ? 4 : (paramCapacity * 2);
-                FunctionParam* newParams = parser_arena_alloc(&parserArena, sizeof(FunctionParam) * newCap);
+                FunctionParam* newParams = parser_arena_alloc(ctx, sizeof(FunctionParam) * newCap);
                 if (paramCapacity > 0) {
                     memcpy(newParams, params, sizeof(FunctionParam) * paramCount);
                 }
@@ -1467,51 +1436,51 @@ static ASTNode* parseFunctionDefinition(void) {
             params[paramCount].typeAnnotation = paramType;
             paramCount++;
             
-            if (peekToken().type != TOKEN_COMMA) break;
-            nextToken(); // consume ','
+            if (peekToken(ctx).type != TOKEN_COMMA) break;
+            nextToken(ctx); // consume ','
         }
     }
     
-    if (nextToken().type != TOKEN_RIGHT_PAREN) {
+    if (nextToken(ctx).type != TOKEN_RIGHT_PAREN) {
         return NULL;
     }
     
     // Optional return type annotation
     ASTNode* returnType = NULL;
-    if (peekToken().type == TOKEN_ARROW) {
-        nextToken(); // consume '->'
-        Token typeTok = peekToken();
+    if (peekToken(ctx).type == TOKEN_ARROW) {
+        nextToken(ctx); // consume '->'
+        Token typeTok = peekToken(ctx);
         if (typeTok.type == TOKEN_FN) {
-            returnType = parseFunctionType();
+            returnType = parseFunctionType(ctx);
             if (!returnType) return NULL;
         } else {
-            returnType = parseTypeAnnotation();
+            returnType = parseTypeAnnotation(ctx);
             if (!returnType) return NULL;
         }
     }
     
     // Expect ':'
-    if (nextToken().type != TOKEN_COLON) {
+    if (nextToken(ctx).type != TOKEN_COLON) {
         return NULL;
     }
     
     // Expect newline after colon
-    if (nextToken().type != TOKEN_NEWLINE) {
+    if (nextToken(ctx).type != TOKEN_NEWLINE) {
         return NULL;
     }
     
     // Expect indent for function body
-    if (nextToken().type != TOKEN_INDENT) {
+    if (nextToken(ctx).type != TOKEN_INDENT) {
         return NULL;
     }
     
-    ASTNode* body = parseBlock();
+    ASTNode* body = parseBlock(ctx);
     if (!body) {
         return NULL;
     }
     
     // Create function node
-    ASTNode* function = new_node();
+    ASTNode* function = new_node(ctx);
     function->type = NODE_FUNCTION;
     function->function.name = functionName;
     function->function.params = params;
@@ -1526,21 +1495,21 @@ static ASTNode* parseFunctionDefinition(void) {
 }
 
 // Parse return statement: return [expression]
-static ASTNode* parseReturnStatement(void) {
-    Token returnTok = nextToken(); // consume 'return'
+static ASTNode* parseReturnStatement(ParserContext* ctx) {
+    Token returnTok = nextToken(ctx); // consume 'return'
     
     ASTNode* value = NULL;
     
     // Check if there's a return value
-    Token next = peekToken();
+    Token next = peekToken(ctx);
     if (next.type != TOKEN_NEWLINE && next.type != TOKEN_EOF && next.type != TOKEN_DEDENT) {
-        value = parseExpression();
+        value = parseExpression(ctx);
         if (!value) {
             return NULL;
         }
     }
     
-    ASTNode* returnStmt = new_node();
+    ASTNode* returnStmt = new_node(ctx);
     returnStmt->type = NODE_RETURN;
     returnStmt->returnStmt.value = value;
     returnStmt->location.line = returnTok.line;
@@ -1551,23 +1520,23 @@ static ASTNode* parseReturnStatement(void) {
 }
 
 // Parse function call: identifier(arg1, arg2, ...)
-static ASTNode* parseCallExpression(ASTNode* callee) {
+static ASTNode* parseCallExpression(ParserContext* ctx, ASTNode* callee) {
     // Consume '('
-    Token openParen = nextToken();
+    Token openParen = nextToken(ctx);
     
     ASTNode** args = NULL;
     int argCount = 0;
     int argCapacity = 0;
     
-    if (peekToken().type != TOKEN_RIGHT_PAREN) {
+    if (peekToken(ctx).type != TOKEN_RIGHT_PAREN) {
         while (true) {
-            ASTNode* arg = parseExpression();
+            ASTNode* arg = parseExpression(ctx);
             if (!arg) return NULL;
             
             // Add argument to list
             if (argCount + 1 > argCapacity) {
                 int newCap = argCapacity == 0 ? 4 : (argCapacity * 2);
-                ASTNode** newArgs = parser_arena_alloc(&parserArena, sizeof(ASTNode*) * newCap);
+                ASTNode** newArgs = parser_arena_alloc(ctx, sizeof(ASTNode*) * newCap);
                 if (argCapacity > 0) {
                     memcpy(newArgs, args, sizeof(ASTNode*) * argCount);
                 }
@@ -1576,16 +1545,16 @@ static ASTNode* parseCallExpression(ASTNode* callee) {
             }
             args[argCount++] = arg;
             
-            if (peekToken().type != TOKEN_COMMA) break;
-            nextToken(); // consume ','
+            if (peekToken(ctx).type != TOKEN_COMMA) break;
+            nextToken(ctx); // consume ','
         }
     }
     
-    if (nextToken().type != TOKEN_RIGHT_PAREN) {
+    if (nextToken(ctx).type != TOKEN_RIGHT_PAREN) {
         return NULL;
     }
     
-    ASTNode* call = new_node();
+    ASTNode* call = new_node(ctx);
     call->type = NODE_CALL;
     call->call.callee = callee;
     call->call.args = args;
@@ -1598,14 +1567,14 @@ static ASTNode* parseCallExpression(ASTNode* callee) {
 }
 
 // Parse function type: fn(param_types...) -> return_type
-static ASTNode* parseFunctionType(void) {
+static ASTNode* parseFunctionType(ParserContext* ctx) {
     // Expect 'fn'
-    if (nextToken().type != TOKEN_FN) {
+    if (nextToken(ctx).type != TOKEN_FN) {
         return NULL;
     }
     
     // Expect '('
-    if (nextToken().type != TOKEN_LEFT_PAREN) {
+    if (nextToken(ctx).type != TOKEN_LEFT_PAREN) {
         return NULL;
     }
     
@@ -1614,10 +1583,10 @@ static ASTNode* parseFunctionType(void) {
     int paramCount = 0;
     int paramCapacity = 0;
     
-    if (peekToken().type != TOKEN_RIGHT_PAREN) {
+    if (peekToken(ctx).type != TOKEN_RIGHT_PAREN) {
         while (true) {
             // For function types, we only need the type, not the name
-            Token typeTok = nextToken();
+            Token typeTok = nextToken(ctx);
             if (typeTok.type != TOKEN_IDENTIFIER && typeTok.type != TOKEN_INT &&
                 typeTok.type != TOKEN_I64 && typeTok.type != TOKEN_U32 &&
                 typeTok.type != TOKEN_U64 && typeTok.type != TOKEN_F64 &&
@@ -1631,17 +1600,17 @@ static ASTNode* parseFunctionType(void) {
             if (typeTok.type == TOKEN_FN) {
                 // TODO: Handle nested function types - for now just treat as identifier
                 int typeLen = 2; // "fn"
-                char* typeName = parser_arena_alloc(&parserArena, typeLen + 1);
+                char* typeName = parser_arena_alloc(ctx, typeLen + 1);
                 strcpy(typeName, "fn");
-                paramType = new_node();
+                paramType = new_node(ctx);
                 paramType->type = NODE_TYPE;
                 paramType->typeAnnotation.name = typeName;
             } else {
                 int typeLen = typeTok.length;
-                char* typeName = parser_arena_alloc(&parserArena, typeLen + 1);
+                char* typeName = parser_arena_alloc(ctx, typeLen + 1);
                 strncpy(typeName, typeTok.start, typeLen);
                 typeName[typeLen] = '\0';
-                paramType = new_node();
+                paramType = new_node(ctx);
                 paramType->type = NODE_TYPE;
                 paramType->typeAnnotation.name = typeName;
             }
@@ -1649,7 +1618,7 @@ static ASTNode* parseFunctionType(void) {
             // Add parameter to list
             if (paramCount + 1 > paramCapacity) {
                 int newCap = paramCapacity == 0 ? 4 : (paramCapacity * 2);
-                FunctionParam* newParams = parser_arena_alloc(&parserArena, sizeof(FunctionParam) * newCap);
+                FunctionParam* newParams = parser_arena_alloc(ctx, sizeof(FunctionParam) * newCap);
                 if (paramCapacity > 0) {
                     memcpy(newParams, params, sizeof(FunctionParam) * paramCount);
                 }
@@ -1660,31 +1629,31 @@ static ASTNode* parseFunctionType(void) {
             params[paramCount].typeAnnotation = paramType;
             paramCount++;
             
-            if (peekToken().type != TOKEN_COMMA) break;
-            nextToken(); // consume ','
+            if (peekToken(ctx).type != TOKEN_COMMA) break;
+            nextToken(ctx); // consume ','
         }
     }
     
     // Expect ')'
-    if (nextToken().type != TOKEN_RIGHT_PAREN) {
+    if (nextToken(ctx).type != TOKEN_RIGHT_PAREN) {
         return NULL;
     }
     
     // Parse return type
     ASTNode* returnType = NULL;
-    if (peekToken().type == TOKEN_ARROW) {
-        nextToken(); // consume '->'
-        Token typeTok = peekToken();
+    if (peekToken(ctx).type == TOKEN_ARROW) {
+        nextToken(ctx); // consume '->'
+        Token typeTok = peekToken(ctx);
         if (typeTok.type == TOKEN_FN) {
-            returnType = parseFunctionType();
+            returnType = parseFunctionType(ctx);
         } else {
-            returnType = parseTypeAnnotation();
+            returnType = parseTypeAnnotation(ctx);
             if (!returnType) return NULL;
         }
     }
     
     // Create function type node  
-    ASTNode* funcType = new_node();
+    ASTNode* funcType = new_node(ctx);
     funcType->type = NODE_FUNCTION; // Reuse NODE_FUNCTION for function types
     funcType->function.name = NULL; // No name for function types
     funcType->function.params = params;
@@ -1696,20 +1665,21 @@ static ASTNode* parseFunctionType(void) {
 }
 
 void freeAST(ASTNode* node) {
-    parser_arena_reset(&parserArena);
+    // Note: AST memory is managed by the parser context arena
+    // This function is kept for backward compatibility but doesn't need to do anything
     (void)node;
 }
 
 // Parse parenthesized expressions and mark cast nodes as parenthesized
 // This enables proper distinction between direct cast chains and parenthesized ones
-static ASTNode* parseParenthesizedExpression(void) {
+static ASTNode* parseParenthesizedExpression(ParserContext* ctx) {
     // TOKEN_LEFT_PAREN already consumed by caller
-    ASTNode* expr = parseExpression();
+    ASTNode* expr = parseExpression(ctx);
     if (!expr) {
         return NULL;
     }
     
-    Token closeParen = nextToken();
+    Token closeParen = nextToken(ctx);
     if (closeParen.type != TOKEN_RIGHT_PAREN) {
         return NULL;
     }
@@ -1721,5 +1691,55 @@ static ASTNode* parseParenthesizedExpression(void) {
     }
     
     return expr;
+}
+
+// Context-based parsing interface - new implementation
+ASTNode* parseSourceWithContext(ParserContext* ctx, const char* source) {
+    if (!ctx) return NULL;
+    
+    parser_context_reset(ctx);
+    init_scanner(source);
+    
+    ASTNode** statements = NULL;
+    int count = 0;
+    int capacity = 0;
+    
+    while (true) {
+        Token t = peekToken(ctx);
+        if (t.type == TOKEN_EOF) break;
+        if (t.type == TOKEN_NEWLINE) {
+            nextToken(ctx);
+            continue;
+        }
+        if (t.type == TOKEN_COMMA) {
+            // Skip commas between statements (for comma-separated variable declarations)
+            nextToken(ctx);
+            continue;
+        }
+        if (t.type == TOKEN_SEMICOLON) {
+            SrcLocation location = {NULL, t.line, t.column};
+            report_compile_error(E1007_SEMICOLON_NOT_ALLOWED, location, 
+                               "found ';' here");
+            return NULL;
+        }
+        
+        ASTNode* stmt = parseStatement(ctx);
+        if (!stmt) {
+            return NULL;
+        }
+        
+        addStatement(ctx, &statements, &count, &capacity, stmt);
+    }
+    
+    // Create program node even if empty (valid empty program)
+    ASTNode* root = new_node(ctx);
+    root->type = NODE_PROGRAM;
+    root->program.declarations = statements;
+    root->program.count = count;
+    root->location.line = 1;
+    root->location.column = 1;
+    root->dataType = NULL;
+    
+    return root;
 }
 
