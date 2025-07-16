@@ -14,13 +14,112 @@
 #include <stdlib.h>
 
 // Use TypeArena from vm.h
-static TypeArena* type_arena = NULL;
+static TypeArena* type_arena = NULL;  // Keep for backward compatibility
 
 // Primitive type cache for performance
-static HashMap* primitive_cache = NULL;
-static bool type_system_initialized = false;
+static HashMap* primitive_cache = NULL;  // Keep for backward compatibility
+static bool type_system_initialized = false;  // Keep for backward compatibility
 
-// ---- Arena allocation ----
+// Forward declarations for context functions
+static void* arena_alloc_ctx(TypeContext* ctx, size_t size);
+static void* hashmap_get_int(HashMap* map, int key);
+static void hashmap_set_int(HashMap* map, int key, void* value);
+
+// ---- Context lifecycle management ----
+TypeContext* type_context_create(void) {
+    TypeContext* ctx = malloc(sizeof(TypeContext));
+    if (!ctx) return NULL;
+    
+    ctx->arena = NULL;
+    ctx->primitive_cache = NULL;
+    ctx->initialized = false;
+    
+    type_context_init(ctx);
+    return ctx;
+}
+
+void type_context_destroy(TypeContext* ctx) {
+    if (!ctx) return;
+    
+    // Free primitive cache
+    if (ctx->primitive_cache) {
+        hashmap_free(ctx->primitive_cache);
+    }
+    
+    // Free arena chain
+    while (ctx->arena) {
+        TypeArena* next = ctx->arena->next;
+        free(ctx->arena->memory);
+        free(ctx->arena);
+        ctx->arena = next;
+    }
+    
+    free(ctx);
+}
+
+void type_context_init(TypeContext* ctx) {
+    if (!ctx || ctx->initialized) return;
+    
+    ctx->primitive_cache = hashmap_new();
+    if (!ctx->primitive_cache) return;
+    
+    // Initialize primitive types
+    for (TypeKind k = TYPE_UNKNOWN; k <= TYPE_ANY; k++) {
+        Type* t = arena_alloc_ctx(ctx, sizeof(Type));
+        if (!t) continue;
+        
+        memset(t, 0, sizeof(Type));
+        t->kind = k;
+        
+        // Initialize union fields based on type
+        switch (k) {
+        case TYPE_ARRAY:
+            t->info.array.elementType = NULL;
+            break;
+        case TYPE_FUNCTION:
+            t->info.function.arity = 0;
+            t->info.function.paramTypes = NULL;
+            t->info.function.returnType = NULL;
+            break;
+        default:
+            break;
+        }
+        
+        hashmap_set_int(ctx->primitive_cache, k, t);
+    }
+    
+    ctx->initialized = true;
+}
+
+// ---- Context-based arena allocation ----
+static void* arena_alloc_ctx(TypeContext* ctx, size_t size) {
+    if (!ctx) return NULL;
+    
+    // Align to ARENA_ALIGNMENT-byte boundary for optimal performance
+    size = (size + ARENA_ALIGNMENT - 1) & ~(ARENA_ALIGNMENT - 1);
+    
+    if (!ctx->arena || ctx->arena->used + size > ctx->arena->size) {
+        size_t chunk = size > ARENA_SIZE ? size : ARENA_SIZE;
+        TypeArena* a = malloc(sizeof(TypeArena));
+        if (!a) return NULL;
+        
+        a->size = chunk;
+        a->memory = malloc(a->size);
+        if (!a->memory) {
+            free(a);
+            return NULL;
+        }
+        a->used = 0;
+        a->next = ctx->arena;
+        ctx->arena = a;
+    }
+    
+    void* p = ctx->arena->memory + ctx->arena->used;
+    ctx->arena->used += size;
+    return p;
+}
+
+// ---- Arena allocation (backward compatibility) ----
 static void* arena_alloc(size_t size) {
     // Align to ARENA_ALIGNMENT-byte boundary for optimal performance
     size = (size + ARENA_ALIGNMENT - 1) & ~(ARENA_ALIGNMENT - 1);
@@ -168,7 +267,12 @@ void hashmap_set(HashMap* map, const char* key, void* value) {
     hashmap_set_int(map, hash_key, value);
 }
 
-// ---- Type system initialization ----
+// ---- Context-based type system initialization ----
+void init_type_representation_ctx(TypeContext* ctx) {
+    type_context_init(ctx);
+}
+
+// ---- Type system initialization (backward compatibility) ----
 void init_type_representation(void) {
     if (type_system_initialized) return;
     
@@ -203,12 +307,44 @@ void init_type_representation(void) {
     type_system_initialized = true;
 }
 
-// ---- Type constructors ----
+// ---- Context-based type constructors ----
+Type* getPrimitive_ctx(TypeContext* ctx, TypeKind k) {
+    if (!ctx) return NULL;
+    if (!ctx->initialized) {
+        init_type_representation_ctx(ctx);
+    }
+    return hashmap_get_int(ctx->primitive_cache, k);
+}
+
+// ---- Type constructors (backward compatibility) ----
 Type* getPrimitive(TypeKind k) {
     if (!type_system_initialized) {
         init_type_representation();
     }
     return hashmap_get_int(primitive_cache, k);
+}
+
+Type* createGeneric_ctx(TypeContext* ctx, const char* name, int paramCount) {
+    if (!ctx || !name || paramCount < 0) return NULL;
+    
+    Type* t = arena_alloc_ctx(ctx, sizeof(Type));
+    if (!t) return NULL;
+    
+    t->kind = TYPE_GENERIC;
+    t->info.generic.name = arena_alloc_ctx(ctx, strlen(name) + 1);
+    if (!t->info.generic.name) return NULL;
+    strcpy(t->info.generic.name, name);
+    
+    t->info.generic.paramCount = paramCount;
+    t->info.generic.params = NULL;
+    
+    if (paramCount > 0) {
+        t->info.generic.params = arena_alloc_ctx(ctx, sizeof(Type*) * paramCount);
+        if (!t->info.generic.params) return NULL;
+        memset(t->info.generic.params, 0, sizeof(Type*) * paramCount);
+    }
+    
+    return t;
 }
 
 Type* createGeneric(const char* name, int paramCount) {
@@ -331,7 +467,20 @@ Type* type_intersection_extended(Type* a, Type* b) {
     return NULL; // No intersection
 }
 
-// ---- Type creation functions ----
+// ---- Context-based type creation functions ----
+Type* createArrayType_ctx(TypeContext* ctx, Type* elementType) {
+    if (!ctx || !elementType) return NULL;
+    
+    Type* array_type = arena_alloc_ctx(ctx, sizeof(Type));
+    if (!array_type) return NULL;
+    
+    array_type->kind = TYPE_ARRAY;
+    array_type->info.array.elementType = elementType;
+    
+    return array_type;
+}
+
+// ---- Type creation functions (backward compatibility) ----
 Type* createArrayType(Type* elementType) {
     if (!elementType) return NULL;
     
@@ -342,6 +491,30 @@ Type* createArrayType(Type* elementType) {
     array_type->info.array.elementType = elementType;
     
     return array_type;
+}
+
+Type* createFunctionType_ctx(TypeContext* ctx, Type* returnType, Type** paramTypes, int paramCount) {
+    if (!ctx || !returnType || (paramCount > 0 && !paramTypes)) return NULL;
+    
+    Type* func_type = arena_alloc_ctx(ctx, sizeof(Type));
+    if (!func_type) return NULL;
+    
+    func_type->kind = TYPE_FUNCTION;
+    func_type->info.function.returnType = returnType;
+    func_type->info.function.arity = paramCount;
+    
+    if (paramCount > 0) {
+        func_type->info.function.paramTypes = arena_alloc_ctx(ctx, paramCount * sizeof(Type*));
+        if (!func_type->info.function.paramTypes) return NULL;
+        
+        for (int i = 0; i < paramCount; i++) {
+            func_type->info.function.paramTypes[i] = paramTypes[i];
+        }
+    } else {
+        func_type->info.function.paramTypes = NULL;
+    }
+    
+    return func_type;
 }
 
 Type* createFunctionType(Type* returnType, Type** paramTypes, int paramCount) {
@@ -368,6 +541,10 @@ Type* createFunctionType(Type* returnType, Type** paramTypes, int paramCount) {
     return func_type;
 }
 
+Type* createPrimitiveType_ctx(TypeContext* ctx, TypeKind kind) {
+    return getPrimitive_ctx(ctx, kind);
+}
+
 Type* createPrimitiveType(TypeKind kind) {
     return getPrimitive(kind);
 }
@@ -379,6 +556,40 @@ Type* get_numeric_type(void) {
 
 Type* get_comparable_type(void) {
     return getPrimitive(TYPE_I32);
+}
+
+Type* infer_literal_type_extended_ctx(TypeContext* ctx, Value* value) {
+    if (!ctx || !value) return getPrimitive_ctx(ctx, TYPE_UNKNOWN);
+    
+    switch (value->type) {
+    case VAL_BOOL:
+        return getPrimitive_ctx(ctx, TYPE_BOOL);
+    case VAL_NIL:
+        return getPrimitive_ctx(ctx, TYPE_NIL);
+    case VAL_I32:
+        return getPrimitive_ctx(ctx, TYPE_I32);
+    case VAL_I64:
+        return getPrimitive_ctx(ctx, TYPE_I64);
+    case VAL_U32:
+        return getPrimitive_ctx(ctx, TYPE_U32);
+    case VAL_U64:
+        return getPrimitive_ctx(ctx, TYPE_U64);
+    case VAL_F64:
+        return getPrimitive_ctx(ctx, TYPE_F64);
+    case VAL_STRING:
+        return getPrimitive_ctx(ctx, TYPE_STRING);
+    case VAL_ARRAY:
+        return getPrimitive_ctx(ctx, TYPE_ARRAY);
+    case VAL_ERROR:
+        return getPrimitive_ctx(ctx, TYPE_ERROR);
+    case VAL_RANGE_ITERATOR:
+        return getPrimitive_ctx(ctx, TYPE_UNKNOWN);
+    case VAL_FUNCTION:
+    case VAL_CLOSURE:
+        return getPrimitive_ctx(ctx, TYPE_FUNCTION);
+    default:
+        return getPrimitive_ctx(ctx, TYPE_UNKNOWN);
+    }
 }
 
 Type* infer_literal_type_extended(Value* value) {

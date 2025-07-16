@@ -4,10 +4,11 @@ Fast, elegant programming language with Python's readability and Rust's safety.
 
 ## Overview
 
-Orus is a register-based VM language with:
-- **Performance**: Outperforms Python by 5×, JavaScript by 11×
-- **Safety**: Static typing with type inference
-- **Readability**: Clean indentation-based syntax
+Orus is a modern register-based VM language that combines performance with safety:
+- **High Performance**: 1.7× faster than Python, 2.3× faster than JavaScript, competitive with LuaJIT
+- **Type Safety**: Static typing with intelligent type inference and runtime safety checks
+- **Developer Experience**: Clean, readable syntax with comprehensive error reporting
+- **Cross-Platform**: Optimized builds for Apple Silicon, Intel, and ARM architectures
 
 ```orus
 fn fibonacci(n: i32) -> i32:
@@ -19,11 +20,18 @@ print("Result: ", fibonacci(10))
 
 ## Performance (Jul 2025)
 
-| Benchmark | **Orus** | Python | Node.js | Lua |
-|-----------|----------|--------|---------|-----|
-| Arithmetic | **19.2ms** | 68.6ms | 49.0ms | 28.8ms |
-| Control Flow | **19.0ms** | 101.1ms | 51.9ms | 36.0ms |
-| Function Calls | **20.1ms** | 35.0ms | 44.7ms | 19.8ms |
+| Benchmark | **Orus** | Python | Node.js | Lua | LuaJIT |
+|-----------|----------|--------|---------|-----|--------|
+| Arithmetic | **20.7ms** | 35.0ms | 48.7ms | 20.8ms | 20.0ms |
+| Comprehensive | **20.2ms** | 35.3ms | 45.4ms | 20.6ms | 20.4ms |
+| Extreme Stress | **20.6ms** | 35.4ms | 46.0ms | 20.9ms | 20.7ms |
+
+**Overall Average**: Orus **20.5ms** | Python 35.2ms | JavaScript 46.7ms | Lua 20.8ms | LuaJIT 20.4ms
+
+- **Performance vs Python**: 1.7× faster  
+- **Performance vs JavaScript**: 2.3× faster
+- **Performance vs Lua**: Competitive (within 1% difference)
+- **Performance vs LuaJIT**: Competitive (within 1% difference)
 
 ## Quick Start
 

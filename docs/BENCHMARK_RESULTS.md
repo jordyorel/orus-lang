@@ -5,40 +5,43 @@
 ## Current Performance Summary (July 2025)
 
 ### 🎯 Test Configuration
-- **Date**: July 9, 2025
-- **Orus Version**: v0.2.2
+- **Date**: July 17, 2025
+- **Orus Version**: v0.2.3
 - **Platform**: Darwin arm64 (Apple Silicon)
-- **Languages Tested**: Orus, Python, JavaScript (Node.js), Lua
+- **Languages Tested**: Orus, Python, JavaScript (Node.js), Lua, LuaJIT
 - **Benchmark Iterations**: 5 runs with warmup
-- **Key Features**: Tail Call Optimization implementation
+- **Key Features**: Computed Goto dispatch, Apple Silicon optimizations
 
 ---
 
-## 📊 Latest Benchmark Results *(Updated July 2025)*
+## 📊 Latest Benchmark Results *(Updated July 17, 2025)*
 
-### Arithmetic Operations Benchmark
+### Pure Arithmetic Operations Benchmark
 | Language | Time (ms) | Relative Performance | Status |
 |----------|----------|---------------------|---------|
-| 🥇 **Orus** | 19.4ms | 1.0x (fastest) | ✅ |
-| 🥈 **Lua** | 29.5ms | 1.52x slower | ✅ |
-| 🥉 **JavaScript** | 50.2ms | 2.59x slower | ✅ |
-| 🔸 **Python** | 69.5ms | 3.58x slower | ✅ |
+| 🥇 **LuaJIT** | 20.0ms | 1.0x (fastest) | ✅ |
+| 🥈 **Orus** | 20.7ms | 1.03x slower | ✅ |
+| 🥉 **Lua** | 20.8ms | 1.04x slower | ✅ |
+| 🔸 **Python** | 35.0ms | 1.75x slower | ✅ |
+| 🔸 **JavaScript** | 48.7ms | 2.44x slower | ✅ |
 
-### Control Flow Benchmark
+### Comprehensive Performance Benchmark
 | Language | Time (ms) | Relative Performance | Status |
 |----------|----------|---------------------|---------|
-| 🥇 **Orus** | 18.3ms | 1.0x (fastest) | ✅ |
-| 🥈 **Lua** | 34.9ms | 1.91x slower | ✅ |
-| 🥉 **JavaScript** | 52.2ms | 2.85x slower | ✅ |
-| 🔸 **Python** | 102.9ms | 5.62x slower | ✅ |
+| 🥇 **Orus** | 20.2ms | 1.0x (fastest) | ✅ |
+| 🥈 **LuaJIT** | 20.4ms | 1.01x slower | ✅ |
+| 🥉 **Lua** | 20.6ms | 1.02x slower | ✅ |
+| 🔸 **Python** | 35.3ms | 1.75x slower | ✅ |
+| 🔸 **JavaScript** | 45.4ms | 2.25x slower | ✅ |
 
-### Function Calls Benchmark (with Tail Call Optimization)
+### Extreme Stress Test Benchmark
 | Language | Time (ms) | Relative Performance | Status |
 |----------|----------|---------------------|---------|
-| 🥇 **Lua** | 19.2ms | 1.0x (fastest) | ✅ |
-| 🥈 **Orus** | 19.9ms | 1.04x slower | ✅ |
-| 🥉 **Python** | 31.8ms | 1.66x slower | ✅ |
-| 🔸 **JavaScript** | 44.2ms | 2.30x slower | ✅ |
+| 🥇 **Orus** | 20.6ms | 1.0x (fastest) | ✅ |
+| 🥈 **LuaJIT** | 20.7ms | 1.0x (fastest) | ✅ |
+| � **Lua** | 20.9ms | 1.01x slower | ✅ |
+| 🔸 **Python** | 35.4ms | 1.72x slower | ✅ |
+| 🔸 **JavaScript** | 46.0ms | 2.23x slower | ✅ |
 
 ### 📉 Historical Trend
 | Version    | Avg Runtime | Dispatch      | Notes                         |
@@ -46,7 +49,8 @@
 | v0.1.0     | \~42ms      | Switch        | Naive compiler                |
 | v0.2.0     | \~25ms      | Switch        | Early optimizations           |
 | v0.2.1     | \~19.9ms    | Computed Goto | Simplified Lua-style compiler |
-| **v0.2.2** | **19.2ms**  | Computed Goto | Tail call optimization added  |
+| v0.2.2     | 19.2ms      | Computed Goto | Tail call optimization added  |
+| **v0.2.3** | **20.5ms**  | Computed Goto | Apple Silicon optimizations   |
 
 ### Overall Language Performance Ranking
 | Rank | Language | Average Time | Classification | Architecture |

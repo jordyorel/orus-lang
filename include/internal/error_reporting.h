@@ -112,6 +112,29 @@ typedef struct {
     ErrorArena* arena;  // Arena allocator for zero-cost abstractions
 } ErrorReportingConfig;
 
+// Context-based error system state (replaces global state)
+typedef struct ErrorContext {
+    ErrorReportingConfig config;
+    ErrorArena arena;
+    char arena_memory[64 * 1024];  // ERROR_ARENA_SIZE
+    uint64_t source_text_length;
+} ErrorContext;
+
+// Context lifecycle management
+ErrorContext* error_context_create(void);
+void error_context_destroy(ErrorContext* ctx);
+ErrorReportResult error_context_init(ErrorContext* ctx);
+
+// Context-based API
+ErrorReportResult init_error_reporting_ctx(ErrorContext* ctx);
+ErrorReportResult cleanup_error_reporting_ctx(ErrorContext* ctx);
+ErrorReportResult set_error_colors_ctx(ErrorContext* ctx, bool enable_colors);
+ErrorReportResult set_compact_mode_ctx(ErrorContext* ctx, bool compact);
+ErrorReportResult set_source_text_ctx(ErrorContext* ctx, const char* source, size_t length);
+ErrorReportResult report_enhanced_error_ctx(ErrorContext* ctx, const EnhancedError* error);
+ErrorReportResult report_runtime_error_ctx(ErrorContext* ctx, ErrorCode code, SrcLocation location, const char* format, ...);
+ErrorReportResult report_compile_error_ctx(ErrorContext* ctx, ErrorCode code, SrcLocation location, const char* format, ...);
+
 // Arena allocator functions (zero-cost abstraction)
 ErrorReportResult init_error_arena(ErrorArena* arena, size_t size);
 void cleanup_error_arena(ErrorArena* arena);

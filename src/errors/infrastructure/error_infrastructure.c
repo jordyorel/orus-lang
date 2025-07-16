@@ -15,7 +15,7 @@
 #define MAX_ERROR_MESSAGE_SIZE 2048
 #define MAX_SOURCE_LINE_SIZE 1024
 
-// Cache-aligned global configuration for optimal performance  
+// Cache-aligned global configuration for optimal performance (backward compatibility)
 typedef struct {
     ErrorReportingConfig config;
     ErrorArena arena;
@@ -45,6 +45,63 @@ static _Alignas(CACHE_LINE_SIZE) ErrorState g_error_state = {
     .arena_memory = {0},
     .source_text_length = 0
 };
+
+// ---- Context lifecycle management ----
+ErrorContext* error_context_create(void) {
+    ErrorContext* ctx = malloc(sizeof(ErrorContext));
+    if (!ctx) return NULL;
+    
+    ErrorReportResult result = error_context_init(ctx);
+    if (result != ERROR_REPORT_SUCCESS) {
+        free(ctx);
+        return NULL;
+    }
+    
+    return ctx;
+}
+
+void error_context_destroy(ErrorContext* ctx) {
+    if (!ctx) return;
+    
+    cleanup_error_reporting_ctx(ctx);
+    free(ctx);
+}
+
+ErrorReportResult error_context_init(ErrorContext* ctx) {
+    if (!ctx) return ERROR_REPORT_INVALID_INPUT;
+    
+    // Initialize default configuration
+    ctx->config.colors.enabled = true;
+    ctx->config.colors.error_color = "\033[0;31m";     // Red
+    ctx->config.colors.warning_color = "\033[1;33m";   // Yellow
+    ctx->config.colors.note_color = "\033[0;32m";      // Green
+    ctx->config.colors.help_color = "\033[0;36m";      // Cyan
+    ctx->config.colors.reset_color = "\033[0m";        // Reset
+    ctx->config.colors.bold_color = "\033[1m";         // Bold
+    
+    ctx->config.compact_mode = false;
+    ctx->config.show_backtrace = false;
+    ctx->config.show_help = true;
+    ctx->config.show_notes = true;
+    ctx->config.source_text = NULL;
+    ctx->config.arena = &ctx->arena;
+    
+    // Initialize arena
+    ctx->arena.memory = ctx->arena_memory;
+    ctx->arena.size = ERROR_ARENA_SIZE;
+    ctx->arena.used = 0;
+    ctx->arena.alignment = CACHE_LINE_SIZE;
+    
+    ctx->source_text_length = 0;
+    
+    // Check terminal capabilities for colors
+    const char* term = getenv("TERM");
+    if (!term || strcmp(term, "dumb") == 0) {
+        ctx->config.colors.enabled = false;
+    }
+    
+    return ERROR_REPORT_SUCCESS;
+}
 
 // SIMD-optimized string length calculation (zero-cost abstraction)
 static inline size_t simd_strlen(const char* str) {
@@ -110,7 +167,12 @@ void arena_reset(ErrorArena* arena) {
     }
 }
 
-// High-performance initialization with structured error handling
+// Context-based initialization
+ErrorReportResult init_error_reporting_ctx(ErrorContext* ctx) {
+    return error_context_init(ctx);
+}
+
+// High-performance initialization with structured error handling (backward compatibility)
 ErrorReportResult init_error_reporting(void) {
     // Initialize arena allocator
     ErrorReportResult result = init_error_arena(&g_error_state.arena, ERROR_ARENA_SIZE);
@@ -129,12 +191,37 @@ ErrorReportResult init_error_reporting(void) {
     return ERROR_REPORT_SUCCESS;
 }
 
+ErrorReportResult cleanup_error_reporting_ctx(ErrorContext* ctx) {
+    if (!ctx) return ERROR_REPORT_INVALID_INPUT;
+    
+    // Reset arena (no malloc/free overhead)
+    arena_reset(&ctx->arena);
+    ctx->config.source_text = NULL;
+    ctx->source_text_length = 0;
+    
+    return ERROR_REPORT_SUCCESS;
+}
+
 ErrorReportResult cleanup_error_reporting(void) {
     // Reset arena (no malloc/free overhead)
     arena_reset(&g_error_state.arena);
     g_error_state.config.source_text = NULL;
     g_error_state.source_text_length = 0;
     
+    return ERROR_REPORT_SUCCESS;
+}
+
+ErrorReportResult set_error_colors_ctx(ErrorContext* ctx, bool enable_colors) {
+    if (!ctx) return ERROR_REPORT_INVALID_INPUT;
+    
+    ctx->config.colors.enabled = enable_colors;
+    return ERROR_REPORT_SUCCESS;
+}
+
+ErrorReportResult set_compact_mode_ctx(ErrorContext* ctx, bool compact) {
+    if (!ctx) return ERROR_REPORT_INVALID_INPUT;
+    
+    ctx->config.compact_mode = compact;
     return ERROR_REPORT_SUCCESS;
 }
 
@@ -148,7 +235,38 @@ ErrorReportResult set_compact_mode(bool compact) {
     return ERROR_REPORT_SUCCESS;
 }
 
-// Bounds-checked source text storage with arena allocation
+// Context-based source text storage with arena allocation
+ErrorReportResult set_source_text_ctx(ErrorContext* ctx, const char* source, size_t length) {
+    if (!ctx) return ERROR_REPORT_INVALID_INPUT;
+    if (!source && length > 0) {
+        return ERROR_REPORT_INVALID_INPUT;
+    }
+    
+    if (length == 0) {
+        ctx->config.source_text = NULL;
+        ctx->source_text_length = 0;
+        return ERROR_REPORT_SUCCESS;
+    }
+    
+    // Allocate from arena instead of malloc
+    char* arena_copy = arena_alloc(&ctx->arena, length + 1, 1);
+    if (!arena_copy) {
+        return ERROR_REPORT_OUT_OF_MEMORY;
+    }
+    
+    // Bounds-checked copy
+    if (length > 0) {
+        memcpy(arena_copy, source, length);
+    }
+    arena_copy[length] = '\0';
+    
+    ctx->config.source_text = arena_copy;
+    ctx->source_text_length = length;
+    
+    return ERROR_REPORT_SUCCESS;
+}
+
+// Bounds-checked source text storage with arena allocation (backward compatibility)
 ErrorReportResult set_source_text(const char* source, size_t length) {
     if (!source && length > 0) {
         return ERROR_REPORT_INVALID_INPUT;
@@ -289,7 +407,123 @@ ErrorReportResult format_error_line_safe(char* buffer, size_t buffer_size, const
     return ERROR_REPORT_SUCCESS;
 }
 
-// High-performance error reporting with structured error handling
+// Context-based error reporting with structured error handling
+ErrorReportResult report_enhanced_error_ctx(ErrorContext* ctx, const EnhancedError* error) {
+    if (!ctx || !error) {
+        return ERROR_REPORT_INVALID_INPUT;
+    }
+    
+    const char* error_color = ctx->config.colors.enabled ? ctx->config.colors.error_color : "";
+    const char* help_color = ctx->config.colors.enabled ? ctx->config.colors.help_color : "";
+    const char* note_color = ctx->config.colors.enabled ? ctx->config.colors.note_color : "";
+    const char* reset_color = ctx->config.colors.enabled ? ctx->config.colors.reset_color : "";
+    const char* bold_color = ctx->config.colors.enabled ? ctx->config.colors.bold_color : "";
+    
+    if (ctx->config.compact_mode) {
+        // Compact format with bounds checking
+        int result = fprintf(stderr, "%s:%d:%d: %s%s%s\n",
+                            error->location.file ? error->location.file : "<unknown>",
+                            error->location.line,
+                            error->location.column,
+                            error_color,
+                            error->message ? error->message : "Unknown error",
+                            reset_color);
+        
+        return result < 0 ? ERROR_REPORT_FILE_ERROR : ERROR_REPORT_SUCCESS;
+    }
+    
+    // Full format with performance optimization
+    fprintf(stderr, "%s-- %s: %s %s", 
+            error_color,
+            error->category ? error->category : "UNKNOWN",
+            error->title ? error->title : "Unknown error",
+            reset_color);
+    
+    // Optimized dash filling
+    const char* category = error->category ? error->category : "UNKNOWN";
+    const char* title = error->title ? error->title : "Unknown error";
+    size_t cat_len = simd_strlen(category);
+    size_t title_len = simd_strlen(title);
+    int dashes_needed = 60 - cat_len - title_len - 4;
+    
+    for (int i = 0; i < dashes_needed && i < 50; i++) {
+        fputc('-', stderr);
+    }
+    
+    fprintf(stderr, " %s:%d:%d\n\n",
+            error->location.file ? error->location.file : "<unknown>",
+            error->location.line,
+            error->location.column);
+    
+    // Source line display with arena allocation
+    char line_buffer[MAX_SOURCE_LINE_SIZE];
+    char caret_buffer[MAX_SOURCE_LINE_SIZE];
+    
+    ErrorReportResult line_result = ERROR_REPORT_INVALID_INPUT;
+    if (ctx->config.source_text && error->location.line > 0) {
+        size_t line_length;
+        line_result = get_source_line_safe(ctx->config.source_text, 
+                                          ctx->source_text_length,
+                                          error->location.line,
+                                          line_buffer, sizeof(line_buffer),
+                                          &line_length);
+    }
+    
+    if (line_result == ERROR_REPORT_SUCCESS) {
+        fprintf(stderr, "%s%3d%s | %s\n",
+                bold_color,
+                error->location.line,
+                reset_color,
+                line_buffer);
+        
+        // Format caret line with bounds checking
+        ErrorReportResult caret_result = format_error_line_safe(caret_buffer, sizeof(caret_buffer),
+                                                               line_buffer, simd_strlen(line_buffer),
+                                                               error->caret_start, error->caret_end);
+        
+        if (caret_result == ERROR_REPORT_SUCCESS) {
+            fprintf(stderr, "      | %s%s%s",
+                    error_color, caret_buffer, reset_color);
+            
+            if (error->message && simd_strlen(error->message) > 0) {
+                fprintf(stderr, " %s", error->message);
+            }
+            fprintf(stderr, "\n      |\n");
+        }
+    } else {
+        // Fallback display
+        fprintf(stderr, "      | (source line not available)\n");
+        fprintf(stderr, "      | ");
+        
+        int caret_pos = error->location.column > 0 ? error->location.column - 1 : 0;
+        for (int i = 0; i < caret_pos && i < 80; i++) {
+            fputc(' ', stderr);
+        }
+        fprintf(stderr, "%s^%s %s\n", error_color, reset_color, 
+                error->message ? error->message : "");
+        fprintf(stderr, "      |\n");
+    }
+    
+    // Main explanation
+    fprintf(stderr, "      = %s\n", error->message ? error->message : "Unknown error");
+    
+    // Help and notes with bounds checking
+    if (error->help && ctx->config.show_help) {
+        fprintf(stderr, "      = %shelp%s: %s\n", 
+                help_color, reset_color, error->help);
+    }
+    
+    if (error->note && ctx->config.show_notes) {
+        fprintf(stderr, "      = %snote%s: %s\n", 
+                note_color, reset_color, error->note);
+    }
+    
+    fprintf(stderr, "\n");
+    
+    return ERROR_REPORT_SUCCESS;
+}
+
+// High-performance error reporting with structured error handling (backward compatibility)
 ErrorReportResult report_enhanced_error(const EnhancedError* error) {
     if (!error) {
         return ERROR_REPORT_INVALID_INPUT;
@@ -405,7 +639,159 @@ ErrorReportResult report_enhanced_error(const EnhancedError* error) {
     return ERROR_REPORT_SUCCESS;
 }
 
-// Runtime error reporting with structured error handling
+// Context-based runtime error reporting with structured error handling
+ErrorReportResult report_runtime_error_ctx(ErrorContext* ctx, ErrorCode code, SrcLocation location, const char* format, ...) {
+    if (!ctx) return ERROR_REPORT_INVALID_INPUT;
+    
+    char message[MAX_ERROR_MESSAGE_SIZE];
+    
+    if (format) {
+        va_list args;
+        va_start(args, format);
+        int result = vsnprintf(message, sizeof(message), format, args);
+        va_end(args);
+        
+        if (result < 0 || result >= (int)sizeof(message)) {
+            return ERROR_REPORT_BUFFER_OVERFLOW;
+        }
+    } else {
+        message[0] = '\0';
+    }
+    
+    // Ensure filename is set if available
+    extern VM vm;
+    if (location.file == NULL && vm.filePath) {
+        location.file = vm.filePath;
+    }
+    
+    // Better caret positioning with bounds checking
+    int caret_start = location.column > 0 ? location.column - 1 : 0;
+    int caret_end = caret_start + 1;
+    
+    // Enhanced caret positioning for division by zero
+    if (code == E0001_DIVISION_BY_ZERO && ctx->config.source_text) {
+        char line_buffer[MAX_SOURCE_LINE_SIZE];
+        size_t line_length;
+        
+        ErrorReportResult line_result = get_source_line_safe(
+            ctx->config.source_text,
+            ctx->source_text_length,
+            location.line,
+            line_buffer, sizeof(line_buffer),
+            &line_length);
+        
+        if (line_result == ERROR_REPORT_SUCCESS) {
+            const char* div_pos = strchr(line_buffer + caret_start, '/');
+            if (div_pos && div_pos < line_buffer + line_length) {
+                caret_end = (div_pos - line_buffer) + 1;
+            }
+        }
+    }
+    
+    EnhancedError error = {
+        .code = code,
+        .severity = SEVERITY_ERROR,
+        .category = get_error_category(code),
+        .title = get_error_title(code),
+        .message = message,
+        .help = get_error_help(code),
+        .note = get_error_note(code),
+        .location = location,
+        .source_line = NULL,  // Will be retrieved in report_enhanced_error_ctx
+        .caret_start = caret_start,
+        .caret_end = caret_end
+    };
+    
+    return report_enhanced_error_ctx(ctx, &error);
+}
+
+// Compile-time error reporting with structured error handling
+ErrorReportResult report_compile_error_ctx(ErrorContext* ctx, ErrorCode code, SrcLocation location, const char* format, ...) {
+    if (!ctx) {
+        return ERROR_REPORT_INVALID_INPUT;
+    }
+    
+    char message[MAX_ERROR_MESSAGE_SIZE];
+    
+    if (format) {
+        va_list args;
+        va_start(args, format);
+        int result = vsnprintf(message, sizeof(message), format, args);
+        va_end(args);
+        
+        if (result < 0 || result >= (int)sizeof(message)) {
+            return ERROR_REPORT_BUFFER_OVERFLOW;
+        }
+    } else {
+        message[0] = '\0';
+    }
+    
+    // Ensure filename is set if available
+    extern VM vm;
+    if (location.file == NULL && vm.filePath) {
+        location.file = vm.filePath;
+    }
+    
+    // Better caret positioning with bounds checking
+    int caret_start = location.column > 0 ? location.column - 1 : 0;
+    int caret_end = caret_start + 1;
+    
+    // Enhanced caret positioning for specific error types
+    if (ctx->config.source_text) {
+        char line_buffer[MAX_SOURCE_LINE_SIZE];
+        size_t line_length;
+        
+        ErrorReportResult line_result = get_source_line_safe(
+            ctx->config.source_text,
+            ctx->source_text_length,
+            location.line,
+            line_buffer, sizeof(line_buffer),
+            &line_length);
+        
+        if (line_result == ERROR_REPORT_SUCCESS) {
+            // Adjust caret positioning based on error type
+            switch (code) {
+            case E1002_MISSING_COLON:
+                {
+                    const char* colon_pos = strchr(line_buffer + caret_start, ':');
+                    if (colon_pos && colon_pos < line_buffer + line_length) {
+                        caret_end = (colon_pos - line_buffer) + 1;
+                    }
+                }
+                break;
+            case E1003_MISSING_PARENTHESIS:
+                {
+                    const char* paren_pos = strchr(line_buffer + caret_start, '(');
+                    if (paren_pos && paren_pos < line_buffer + line_length) {
+                        caret_end = (paren_pos - line_buffer) + 1;
+                    }
+                }
+                break;
+            default:
+                // Use default positioning
+                break;
+            }
+        }
+    }
+    
+    EnhancedError error = {
+        .code = code,
+        .severity = SEVERITY_ERROR,
+        .category = get_error_category(code),
+        .title = get_error_title(code),
+        .message = message,
+        .help = get_error_help(code),
+        .note = get_error_note(code),
+        .location = location,
+        .source_line = NULL,  // Will be retrieved in report_enhanced_error_ctx
+        .caret_start = caret_start,
+        .caret_end = caret_end
+    };
+    
+    return report_enhanced_error_ctx(ctx, &error);
+}
+
+// Runtime error reporting with structured error handling (backward compatibility)
 ErrorReportResult report_runtime_error(ErrorCode code, SrcLocation location, const char* format, ...) {
     char message[MAX_ERROR_MESSAGE_SIZE];
     

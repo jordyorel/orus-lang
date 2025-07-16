@@ -94,6 +94,27 @@ Type* create_generic_type(const char* name, Type* constraint);
 TypeExtension* get_type_extension(Type* type);
 void set_type_extension(Type* type, TypeExtension* ext);
 
+// Context-based type system state (replaces global state)
+typedef struct TypeContext {
+    TypeArena* arena;
+    HashMap* primitive_cache;
+    bool initialized;
+} TypeContext;
+
+// Context lifecycle management
+TypeContext* type_context_create(void);
+void type_context_destroy(TypeContext* ctx);
+void type_context_init(TypeContext* ctx);
+
+// Context-based API
+Type* getPrimitive_ctx(TypeContext* ctx, TypeKind k);
+Type* createGeneric_ctx(TypeContext* ctx, const char* name, int paramCount);
+Type* createArrayType_ctx(TypeContext* ctx, Type* elementType);
+Type* createFunctionType_ctx(TypeContext* ctx, Type* returnType, Type** paramTypes, int paramCount);
+Type* createPrimitiveType_ctx(TypeContext* ctx, TypeKind kind);
+Type* infer_literal_type_extended_ctx(TypeContext* ctx, Value* value);
+void init_type_representation_ctx(TypeContext* ctx);
+
 // Forward declarations for Type Inference Engine
 typedef struct HashMap HashMap;
 typedef struct Vec Vec;
