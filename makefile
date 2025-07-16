@@ -2,7 +2,20 @@
 # For current working test suite only
 
 CC = gcc
-CFLAGS = -Wall -Wextra -O2 -g -std=c11
+
+# Apple Silicon Detection and Optimization
+UNAME_M := $(shell uname -m)
+ifeq ($(UNAME_M),arm64)
+    # Apple Silicon (M1/M2/M3) optimizations
+    APPLE_SILICON_FLAGS = -mcpu=apple-m1 -mtune=apple-m1 -O3 -flto
+    APPLE_SILICON_FLAGS += -ffast-math -funroll-loops
+    APPLE_SILICON_FLAGS += -march=armv8.4-a+simd+crypto+sha3
+    CFLAGS = -Wall -Wextra $(APPLE_SILICON_FLAGS) -g -std=c11
+else
+    # Generic flags for other architectures
+    CFLAGS = -Wall -Wextra -O2 -g -std=c11
+endif
+
 LDFLAGS = -lm
 
 # Both dispatchers are always compiled and linked
