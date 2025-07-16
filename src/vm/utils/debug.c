@@ -1,7 +1,7 @@
 // debug.c - Debug utilities for the VM
-#include "../../include/debug.h"
-#include "../../include/common.h"
-#include "../../include/vm_constants.h"
+#include "../../../include/debug.h"
+#include "../../../include/common.h"
+#include "../../../include/vm_constants.h"
 #include <stdio.h>
 
 void disassembleChunk(Chunk* chunk, const char* name) {
