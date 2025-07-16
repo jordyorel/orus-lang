@@ -1,7 +1,7 @@
-#include "../../../include/errors/error_interface.h"
-#include "../../../include/errors/error_types.h"
-#include "../../../include/error_reporting.h"  // For backward compatibility
-#include "../../../include/vm.h"  // For VM and EnhancedError
+#include "errors/error_interface.h"
+#include "errors/error_types.h"
+#include "internal/error_reporting.h"  // For backward compatibility
+#include "vm/vm.h"  // For VM and EnhancedError
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>

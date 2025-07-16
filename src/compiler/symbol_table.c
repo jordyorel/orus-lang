@@ -1,7 +1,7 @@
-#include "../../include/symbol_table.h"
+#include "compiler/symbol_table.h"
 #include <stdlib.h>
 #include <string.h>
-#include "../../include/memory.h"
+#include "runtime/memory.h"
 
 #define INITIAL_CAPACITY 16
 #define MAX_LOAD_FACTOR 0.75

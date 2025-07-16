@@ -1,7 +1,7 @@
 #ifndef ORUS_VM_CONTROL_FLOW_H
 #define ORUS_VM_CONTROL_FLOW_H
 
-#include "../src/vm/core/vm_internal.h"
+#include "../../src/vm/core/vm_internal.h"
 
 #define CF_JUMP(offset) \
     do { \

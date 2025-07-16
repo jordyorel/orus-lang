@@ -8,7 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "symbol_table.h"
+#include "compiler/symbol_table.h"
 #include "vm_constants.h"
 #include "vm_string_ops.h"
 
@@ -305,7 +305,7 @@ typedef struct {
 } Module;
 
 // AST node definitions are maintained separately
-#include "ast.h"
+#include "compiler/ast.h"
 
 // Variable info
 typedef struct {
@@ -565,8 +565,8 @@ typedef enum {
 } OpCode;
 
 // Loop context for break/continue statements
-#include "intvec.h"
-#include "jumptable.h"
+#include "internal/intvec.h"
+#include "runtime/jumptable.h"
 
 // Variable lifetime tracking for register optimization
 typedef struct {

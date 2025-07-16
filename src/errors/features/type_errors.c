@@ -1,5 +1,5 @@
-#include "../../../include/errors/features/type_errors.h"
-#include "../../../include/errors/error_interface.h"
+#include "errors/features/type_errors.h"
+#include "errors/error_interface.h"
 #include <string.h>
 
 // Type error definitions with friendly messages

@@ -5,7 +5,7 @@
 // macro based for performance, so this file is intentionally
 // minimal.
 
-#include "vm_arithmetic.h"
+#include "vm/vm_arithmetic.h"
 
 // Placeholder to satisfy the build system.
 int vm_arithmetic_module_present = 1;

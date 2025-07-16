@@ -1,7 +1,7 @@
 #ifndef ORUS_INTVEC_H
 #define ORUS_INTVEC_H
 
-#include "memory.h"
+#include "runtime/memory.h"
 
 typedef struct {
     int* data;

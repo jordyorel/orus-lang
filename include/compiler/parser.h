@@ -1,7 +1,7 @@
 #ifndef ORUS_PARSER_H
 #define ORUS_PARSER_H
 
-#include "vm.h"
+#include "vm/vm.h"
 #include "lexer.h"
 #include "ast.h"
 

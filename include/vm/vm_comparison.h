@@ -1,7 +1,7 @@
 #ifndef ORUS_VM_COMPARISON_H
 #define ORUS_VM_COMPARISON_H
 
-#include "../src/vm/core/vm_internal.h"
+#include "../../src/vm/core/vm_internal.h"
 
 // Equality comparisons
 #define CMP_EQ(dst, a, b) \

@@ -11,7 +11,7 @@
 
 void* reallocate(void* pointer, size_t oldSize, size_t newSize);
 
-#include "vm.h"
+#include "vm/vm.h"
 
 void initMemory(void);
 void collectGarbage(void);

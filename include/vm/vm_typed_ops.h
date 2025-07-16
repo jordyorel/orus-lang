@@ -1,7 +1,7 @@
 #ifndef ORUS_VM_TYPED_OPS_H
 #define ORUS_VM_TYPED_OPS_H
 
-#include "../src/vm/core/vm_internal.h"
+#include "../../src/vm/core/vm_internal.h"
 #include <math.h>
 
 #define VM_TYPED_BIN_OP(array, op, type_enum) \

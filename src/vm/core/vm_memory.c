@@ -1,6 +1,6 @@
-#include "memory.h"
-#include "vm.h"
-#include "vm_string_ops.h"
+#include "runtime/memory.h"
+#include "vm/vm.h"
+#include "vm/vm_string_ops.h"
 #include <stdlib.h>
 #include <string.h>
 

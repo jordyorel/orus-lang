@@ -1,9 +1,9 @@
 // vm_core.c - VM initialization and core management
 #include "vm_internal.h"
-#include "builtins.h"
-#include "memory.h"
-#include "vm_string_ops.h"
-#include "type.h"
+#include "runtime/builtins.h"
+#include "runtime/memory.h"
+#include "vm/vm_string_ops.h"
+#include "type/type.h"
 #include <string.h>
 
 VM vm; // Global VM instance

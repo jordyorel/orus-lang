@@ -6,14 +6,14 @@
 #include <string.h>
 #include <stdbool.h>
 
-#include "vm.h"
-#include "common.h"
-#include "error_reporting.h"
+#include "vm/vm.h"
+#include "public/common.h"
+#include "internal/error_reporting.h"
 #include "errors/error_interface.h"
 #include "errors/features/type_errors.h"
-#include "compiler.h"
-#include "repl.h"
-#include "version.h"
+#include "compiler/compiler.h"
+#include "tools/repl.h"
+#include "public/version.h"
 
 
 static char* readFile(const char* path) {

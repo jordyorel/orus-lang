@@ -1,7 +1,7 @@
 #ifndef ORUS_VM_ARITHMETIC_H
 #define ORUS_VM_ARITHMETIC_H
 
-#include "../src/vm/core/vm_internal.h"
+#include "../../src/vm/core/vm_internal.h"
 #include <math.h>
 
 // These macros implement automatic overflow handling and type promotion

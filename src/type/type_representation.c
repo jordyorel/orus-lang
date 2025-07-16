@@ -6,10 +6,10 @@
  * - Named generic types and specialization
  */
 
-#include "../../include/vm.h"
-#include "../../include/type.h"
-#include "../../include/memory.h"
-#include "../../include/common.h"
+#include "vm/vm.h"
+#include "type/type.h"
+#include "runtime/memory.h"
+#include "public/common.h"
 #include <string.h>
 #include <stdlib.h>
 

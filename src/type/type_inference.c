@@ -8,11 +8,11 @@
  *  - Separate TypeVar and Type constructors, using arena allocation
  */
 
-#include "../../include/vm.h"
-#include "../../include/type.h"
-#include "../../include/ast.h"
-#include "../../include/memory.h"
-#include "../../include/common.h"
+#include "vm/vm.h"
+#include "type/type.h"
+#include "compiler/ast.h"
+#include "runtime/memory.h"
+#include "public/common.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>

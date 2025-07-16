@@ -1,7 +1,7 @@
 #ifndef ORUS_BUILTINS_H
 #define ORUS_BUILTINS_H
 
-#include "vm.h"
+#include "vm/vm.h"
 #include <stdbool.h>
 #include <stdint.h>
 

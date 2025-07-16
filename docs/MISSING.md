@@ -84,9 +84,9 @@ print("continues here")
 - [x] Parse `print()` function calls with variable arguments
 - [x] Support printing all basic types (i32, f64, bool, string)
 - [x] Implement string interpolation with placeholders
-- [x] Handle escape sequences (`\n`, `\t`, `\"`, `\\`)
-- [x] Add `print_no_newline()` variant for precise output control
-- [x] Format numbers and booleans for display
+- [ ] Handle escape sequences (`\n`, `\t`, `\"`, `\\`)
+- [ ] Add `print_no_newline()` variant for precise output control
+- [ ] Format numbers and booleans for display
 
 ### 1.3 String Interpolation System
 **Priority: 🔥 High**
@@ -104,7 +104,7 @@ print(a, "+", b, "=", a + b)
 
 // Format specifiers
 pi = 3.14159
-print("Pi rounded: {:.2}", pi)  // "Pi rounded: 3.14"
+print("Pi rounded: ", pi)  // "Pi rounded: 3.14"
 
 // Expression interpolation
 items = [1, 2, 3]
@@ -118,10 +118,10 @@ print("Array has items", len(items))
 
 **Features to Implement:**
 - [x] `x = value` syntax parsing
-- [x] Mutable vs immutable variables (`mut x = 42`)
-- [x] Compound assignments (`+=`, `-=`, `*=`, `/=`)
+- [ ] Mutable vs immutable variables (`mut x = 42`)
+- [ ] Compound assignments (`+=`, `-=`, `*=`, `/=`)
 - [x] Type annotations (`x: i32 = 42`)
-- [x] **DONE**: Unary operators (`-x`, `not x`) and negative literal parsing
+- [ ] **DONE**: Unary operators (`-x`, `not x`) and negative literal parsing
 - [x] **DONE**: Runtime string concatenation for variables and expressions
 - [ ] **NEW**: Basic type inference for simple assignments
 - [ ] **NEW**: Type coercion rules for numeric types
@@ -144,7 +144,7 @@ print("Array has items", len(items))
 
 ### 2.1 Conditional Statements & Basic Optimization
 **Priority: 🔥 High**
-- [x] **DONE**: Implement if/else statements with nested conditions and `elif`, including jump patching and scoped blocks.
+- [ ] **NEW**: Implement if/else statements with nested conditions and `elif`, including jump patching and scoped blocks.
 - [ ] **NEW**: Add basic dead code elimination for unreachable branches
 - [ ] **NEW**: Implement constant folding for compile-time known conditions
 
@@ -168,14 +168,14 @@ result = x > 0 ? "positive" : "non-positive"
 - [ ] **NEW**: Build optimization framework that will support advanced features later
 
 **Core Implementation Requirements:**
-- [x] **DONE**: While loop syntax parsing and basic compilation with condition hoisting
-- [x] **DONE**: For loop with range syntax (`0..5`, `0..=5`, `0..10..2`) and bounds checking
-- [ ] **DONE**: For loop with iterator syntax (`for item in collection`) with zero-copy iteration
-- [x] Break and continue statements with proper scope handling and jump table optimization *(dynamic jump table implemented)*
-- [x] Replace fixed-size break/continue jump arrays with dynamic vectors
-- [x] Nested loop support with labeled break/continue for arbitrary loop depth
-- [x] **DONE**: Loop variable scoping, lifetime management, and register allocation optimization *(Enhanced with live range analysis, register reuse, and cross-loop variable lifetime tracking)*
-- [x] **DONE**: Advanced Orus Range Syntax: `start..end..step` with direction validation *(Implemented with comprehensive compile-time validation and runtime support)*
+- [ ] **NEW**: While loop syntax parsing and basic compilation with condition hoisting
+- [ ] **new**: For loop with range syntax (`0..5`, `0..=5`, `0..10..2`) and bounds checking
+- [ ] **new**: For loop with iterator syntax (`for item in collection`) with zero-copy iteration
+- [ ] Break and continue statements with proper scope handling and jump table optimization *(dynamic jump table implemented)*
+- [ ] Replace fixed-size break/continue jump arrays with dynamic vectors
+- [ ] Nested loop support with labeled break/continue for arbitrary loop depth
+- [ ] **NEW*: Loop variable scoping, lifetime management, and register allocation optimization *(Enhanced with live range analysis, register reuse, and cross-loop variable lifetime tracking)*
+- [ ] **NEW**: Advanced Orus Range Syntax: `start..end..step` with direction validation *(Implemented with comprehensive compile-time validation and runtime support)*
 
 **Performance & Safety Requirements (Progressive Implementation):**
 - [x] **DONE**: Loop invariant code motion (LICM) optimization *(Comprehensive LICM implementation with AST-based analysis, safety checking, and bytecode transformation)*
@@ -307,13 +307,13 @@ for i in get_start()..get_end()..get_step():  // Runtime validation with fallbac
 - [ ] **NEW**: Design symbol table structure to support generics and advanced type features
 
 **Core Scoping Requirements:**
-- [x] Lexical scoping with proper variable shadowing semantics ✅
-- [x] Nested scope management with O(1) scope entry/exit ✅
-- [x] Symbol table optimization with hash-based lookup (< 5ns average) ✅
-- [x] **DONE**: Compile-time scope analysis and variable lifetime tracking
-- [x] **DONE**: Register allocation optimization across scope boundaries
-- [x] **DONE**: Closure capture analysis for upvalue optimization *(Comprehensive analysis of variable capture patterns across scope boundaries, with heap allocation optimization and register prioritization)*
-- [x] **DONE**: Dead variable elimination in complex scope hierarchies *(Conservative dead code elimination with complex lifetime analysis, write-only variable detection, and register reclamation)*
+- [ ] Lexical scoping with proper variable shadowing semantics ✅
+- [ ] Nested scope management with O(1) scope entry/exit ✅
+- [ ] Symbol table optimization with hash-based lookup (< 5ns average) ✅
+- [ ] **NEW**: Compile-time scope analysis and variable lifetime tracking
+- [ ] **NEW**: Register allocation optimization across scope boundaries
+- [ ] **NEW**: Closure capture analysis for upvalue optimization *(Comprehensive analysis of variable capture patterns across scope boundaries, with heap allocation optimization and register prioritization)*
+- [ ] **NEW**: Dead variable elimination in complex scope hierarchies *(Conservative dead code elimination with complex lifetime analysis, write-only variable detection, and register reclamation)*
 
 **Advanced Symbol Table Features:**
 - [ ] Interned string keys for symbol names (memory deduplication)
@@ -330,7 +330,7 @@ for i in get_start()..get_end()..get_step():  // Runtime validation with fallbac
 
 ### 3.1 Function Definition and Calls
 **Priority: 🔥 High**
-- [x] **DONE**: Implement function declarations, calls, and return values with basic execution.
+- [NEW] **DONE**: Implement function declarations, calls, and return values with basic execution.
 
 **✅ Completed Implementation:**
 - Function syntax parsing: `fn name(params) -> return_type:`
@@ -474,43 +474,6 @@ evens = [x for x in nums if x % 2 == 0]
 - [ ] **Binary operation type inference**: Numeric, comparison, and equality operations
 - [ ] **Function type inference**: Parameter and return type inference
 - [ ] **Conditional type inference**: If/else branch type unification
-
-#### 4.3.3 Numeric Type Conversion System
-**Complete Orus numeric conversion specification**
-- [x] **i32 → i64** (Implicit & Explicit): Safe promotion without data loss *(IMPLEMENTED)*
-- [x] **i32 → u32** (Explicit): Bit reinterpretation with negative wrapping
-- [x] **i32 → u64** (Implicit & Explicit): Zero-extension promotion  
-- [x] **i32 → f64** (Implicit & Explicit): Exact conversion to floating-point *(EXISTING)*
-- [x] **u32 → i32** (Explicit): Wrapping conversion with overflow detection
-- [x] **u64 → i32** (Explicit): Truncation with overflow warning
-- [x] **i64 → i32** (Explicit): Truncation with potential data loss *(EXISTING)*
-- [x] **f64 → i32** (Explicit): Truncation toward zero with NaN/infinity handling *(EXISTING)*
-- [x] **f64 → u32** (Explicit): Truncation toward zero with range validation
-- [x] **f64 → u64** (Explicit): Truncation toward zero with range validation
-- [x] **f64 → i64** (Explicit): Truncation toward zero with range validation *(EXISTING)*
-- [x] **u32 → u64** (Implicit & Explicit): Zero-extension promotion
-- [x] **u64 → f64** (Explicit): Conversion with potential precision loss
-- [x] **i32 → bool** (Explicit): Zero → false, non-zero → true *(EXISTING)*
-- [x] **bool → i32** (Implicit & Explicit): true → 1, false → 0 *(EXISTING)*
-
-#### 4.3.4 Type Conversion VM Opcodes
-**Register-based VM opcode implementation**
-- [x] **OP_I32_TO_I64_R**: 32-bit to 64-bit integer promotion *(IMPLEMENTED)*
-- [x] **OP_I64_TO_I32_R**: 64-bit to 32-bit integer truncation *(EXISTING)*
-- [x] **OP_I32_TO_F64_R**: Integer to double-precision floating-point *(EXISTING)*
-- [x] **OP_F64_TO_I32_R**: Double to 32-bit integer with rounding *(EXISTING)*
-- [x] **OP_F64_TO_I64_R**: Double to 64-bit integer with rounding *(EXISTING)*
-- [x] **OP_I32_TO_U32_R**: Signed to unsigned 32-bit reinterpretation
-- [x] **OP_U32_TO_I32_R**: Unsigned to signed 32-bit conversion with overflow check
-- [x] **OP_U32_TO_U64_R**: Unsigned 32-bit to 64-bit promotion
-- [x] **OP_U64_TO_U32_R**: Unsigned 64-bit to 32-bit truncation
-- [x] **OP_U64_TO_I64_R**: Unsigned to signed 64-bit conversion with range checking
-- [x] **OP_I64_TO_U64_R**: Signed to unsigned 64-bit conversion
-- [x] **OP_U64_TO_F64_R**: Unsigned 64-bit to double conversion
-- [x] **OP_F64_TO_U32_R**: Double to unsigned 32-bit with range validation
-- [x] **OP_F64_TO_U64_R**: Double to unsigned 64-bit with range validation
-- [x] **OP_BOOL_TO_I32_R**: Boolean to integer conversion *(EXISTING)*
-- [x] **OP_I32_TO_BOOL_R**: Integer to boolean conversion *(EXISTING)*
 
 #### 4.3.5 Advanced Type Features
 **Future-proof type system extensions**
@@ -831,7 +794,7 @@ for i in 0..5:
 for i in 0..=5:
     print("Index: ", i)  // 0, 1, 2, 3, 4, 5 (inclusive end)
 
-# ✅ IMPLEMENTED: Advanced range syntax with step and direction validation
+# Advanced range syntax with step and direction validation
 for i in 0..10..2:
     print("Even: ", i)  // 0, 2, 4, 6, 8 (step=2) - WORKING
 

@@ -1,7 +1,7 @@
 #ifndef ERROR_REPORTING_H
 #define ERROR_REPORTING_H
 
-#include "vm.h"
+#include "vm/vm.h"
 #include <stdbool.h>
 
 // Error categories and codes (E0000-E9999)

@@ -2,10 +2,10 @@
 #ifndef VM_INTERNAL_H
 #define VM_INTERNAL_H
 
-#include "vm.h"
-#include "vm_constants.h"
-#include "common.h"
-#include "vm_validation.h"
+#include "vm/vm.h"
+#include "vm/vm_constants.h"
+#include "public/common.h"
+#include "vm/vm_validation.h"
 
 // runtimeError is implemented in vm.c and used by validation helpers.
 // Declare it here so any internal VM module including this header has

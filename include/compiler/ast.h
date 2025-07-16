@@ -1,7 +1,7 @@
 #ifndef ORUS_AST_H
 #define ORUS_AST_H
 
-#include "common.h"
+#include "public/common.h"
 
 // Forward declarations for types defined in vm.h
 struct Value;

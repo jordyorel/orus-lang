@@ -4,7 +4,7 @@
 #include <string.h>
 
 
-#include "../../include/lexer.h"
+#include "compiler/lexer.h"
 
 /* -------------------------------------------------------------------------- */
 /*                        Configuration & fast macros                         */

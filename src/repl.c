@@ -6,8 +6,8 @@
 #include <ctype.h>
 #include <time.h>
 
-#include "vm.h"
-#include "compiler.h"
+#include "vm/vm.h"
+#include "compiler/compiler.h"
 
 #ifdef _WIN32
 #include <windows.h>

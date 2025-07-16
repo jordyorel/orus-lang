@@ -1,7 +1,7 @@
 #ifndef ORUS_JUMPTABLE_H
 #define ORUS_JUMPTABLE_H
 
-#include "intvec.h"
+#include "internal/intvec.h"
 
 typedef struct {
     IntVec offsets;

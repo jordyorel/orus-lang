@@ -1,5 +1,5 @@
 #include "vm_internal.h"
-#include "vm_validation.h"
+#include "vm/vm_validation.h"
 
 // Validate that the given register index is within bounds.
 bool validate_register_index(int index) {

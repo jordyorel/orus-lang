@@ -3,8 +3,8 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include "../error_reporting.h"  // Use existing error codes
-#include "../vm.h"               // For SrcLocation
+#include "internal/error_reporting.h"  // Use existing error codes
+#include "vm/vm.h"               // For SrcLocation
 
 // Error feature categories
 typedef enum {

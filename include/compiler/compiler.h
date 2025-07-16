@@ -1,10 +1,10 @@
 #ifndef COMPILER_H
 #define COMPILER_H
 
-#include "common.h"
-#include "vm.h"
+#include "public/common.h"
+#include "vm/vm.h"
 #include "ast.h"
-#include "type.h"
+#include "type/type.h"
 
 void initCompiler(Compiler* compiler, Chunk* chunk, const char* fileName, const char* source);
 void freeCompiler(Compiler* compiler);

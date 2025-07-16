@@ -1,8 +1,8 @@
 // vm_string_ops.c - String operations and optimizations
-#include "vm_string_ops.h"
-#include "memory.h"
-#include "vm_constants.h"
-#include "type.h"
+#include "vm/vm_string_ops.h"
+#include "runtime/memory.h"
+#include "vm/vm_constants.h"
+#include "type/type.h"
 #include <stdlib.h>
 #include <string.h>
 

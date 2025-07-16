@@ -11,7 +11,7 @@
 #endif
 
 #include "vm.h"
-#include "common.h"
+#include "public/common.h"
 
 // Forward declarations
 extern VM vm;

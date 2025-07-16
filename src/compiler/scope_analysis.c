@@ -1,6 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
-#include "../../include/vm.h"
-#include "../../include/compiler.h"
+#include "vm/vm.h"
+#include "compiler/compiler.h"
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>

@@ -1,11 +1,11 @@
-#include "vm_dispatch.h"
-#include "builtins.h"
-#include "vm_constants.h"
-#include "vm_string_ops.h"
-#include "vm_arithmetic.h"
-#include "vm_control_flow.h"
-#include "vm_comparison.h"
-#include "vm_typed_ops.h"
+#include "vm/vm_dispatch.h"
+#include "runtime/builtins.h"
+#include "vm/vm_constants.h"
+#include "vm/vm_string_ops.h"
+#include "vm/vm_arithmetic.h"
+#include "vm/vm_control_flow.h"
+#include "vm/vm_comparison.h"
+#include "vm/vm_typed_ops.h"
 #include <math.h>
 
 // ✅ Auto-detect computed goto support

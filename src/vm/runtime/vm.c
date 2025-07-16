@@ -16,16 +16,16 @@
   #endif
 #endif
 
-#include "vm.h"
-#include "vm_dispatch.h"
-#include "builtins.h"
-#include "common.h"
-#include "compiler.h"
-#include "parser.h"
-#include "memory.h"
-#include "builtins.h"
-#include "debug.h"
-#include "error_reporting.h"
+#include "vm/vm.h"
+#include "vm/vm_dispatch.h"
+#include "runtime/builtins.h"
+#include "public/common.h"
+#include "compiler/compiler.h"
+#include "compiler/parser.h"
+#include "runtime/memory.h"
+#include "runtime/builtins.h"
+#include "tools/debug.h"
+#include "internal/error_reporting.h"
 #include <time.h>
 #ifdef _WIN32
 #include <windows.h>
@@ -187,9 +187,6 @@ static InterpretResult run(void) {
 InterpretResult interpret(const char* source) {
     // Source text is now set in main.c with proper error handling
     // set_source_text(source, strlen(source)) is called before interpret()
-    
-
-    
     // Create a chunk for the compiled bytecode
     Chunk chunk;
     initChunk(&chunk);

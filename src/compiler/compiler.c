@@ -4,12 +4,12 @@
 
 
 
-#include "../../include/compiler.h"
-#include "../../include/memory.h"
-#include "../../include/symbol_table.h"
-#include "../../include/type.h"
-#include "../../include/error_reporting.h"
-#include "../../include/errors/features/type_errors.h"
+#include "compiler/compiler.h"
+#include "runtime/memory.h"
+#include "compiler/symbol_table.h"
+#include "type/type.h"
+#include "internal/error_reporting.h"
+#include "errors/features/type_errors.h"
 #include <string.h>
 
 static bool compileNode(ASTNode* node, Compiler* compiler);

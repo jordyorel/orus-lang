@@ -1,7 +1,7 @@
-#include "../../include/parser.h"
-#include "../../include/common.h"
-#include "../../include/vm.h"
-#include "../../include/error_reporting.h"
+#include "compiler/parser.h"
+#include "public/common.h"
+#include "vm/vm.h"
+#include "internal/error_reporting.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
