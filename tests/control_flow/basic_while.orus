@@ -1,0 +1,7 @@
+// Basic while loop test
+start_time = time_stamp()
+i = 0
+while i < 3:
+    print("i is: ", i)
+    i = i + 1
+print("Final i: ", i)

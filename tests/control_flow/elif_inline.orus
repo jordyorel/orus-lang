@@ -1,0 +1,6 @@
+// Inline elif test
+x = 7
+if x == 5: print("five")
+elif x == 7: print("seven")
+elif x == 9: print("nine")
+else: print("other")

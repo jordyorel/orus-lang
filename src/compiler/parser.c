@@ -736,27 +736,48 @@ static ASTNode* parseIfStatement(ParserContext* ctx) {
 
     Token colon = nextToken(ctx);
     if (colon.type != TOKEN_COLON) return NULL;
-    if (nextToken(ctx).type != TOKEN_NEWLINE) return NULL;
-    if (nextToken(ctx).type != TOKEN_INDENT) return NULL;
-
-    ASTNode* thenBranch = parseBlock(ctx);
-    if (!thenBranch) return NULL;
+    
+    // Check if this is a single-line if or block if
+    Token next = peekToken(ctx);
+    ASTNode* thenBranch = NULL;
+    
+    if (next.type == TOKEN_NEWLINE) {
+        // Block-style if statement: if condition:\n    statement
+        nextToken(ctx); // consume newline
+        if (nextToken(ctx).type != TOKEN_INDENT) return NULL;
+        thenBranch = parseBlock(ctx);
+        if (!thenBranch) return NULL;
+    } else {
+        // Single-line if statement: if condition: statement
+        thenBranch = parseStatement(ctx);
+        if (!thenBranch) return NULL;
+    }
 
     if (peekToken(ctx).type == TOKEN_NEWLINE) {
         nextToken(ctx);
     }
 
     ASTNode* elseBranch = NULL;
-    Token next = peekToken(ctx);
-    if (next.type == TOKEN_ELIF) {
+    Token nextTok = peekToken(ctx);
+    if (nextTok.type == TOKEN_ELIF) {
         elseBranch = parseIfStatement(ctx);
-    } else if (next.type == TOKEN_ELSE) {
-        nextToken(ctx);
+    } else if (nextTok.type == TOKEN_ELSE) {
+        nextToken(ctx); // consume else
         if (nextToken(ctx).type != TOKEN_COLON) return NULL;
-        if (nextToken(ctx).type != TOKEN_NEWLINE) return NULL;
-        if (nextToken(ctx).type != TOKEN_INDENT) return NULL;
-        elseBranch = parseBlock(ctx);
-        if (!elseBranch) return NULL;
+        
+        // Check if this is a single-line else or block else
+        Token afterColon = peekToken(ctx);
+        if (afterColon.type == TOKEN_NEWLINE) {
+            // Block-style else: else:\n    statement
+            nextToken(ctx); // consume newline
+            if (nextToken(ctx).type != TOKEN_INDENT) return NULL;
+            elseBranch = parseBlock(ctx);
+            if (!elseBranch) return NULL;
+        } else {
+            // Single-line else: else: statement
+            elseBranch = parseStatement(ctx);
+            if (!elseBranch) return NULL;
+        }
         if (peekToken(ctx).type == TOKEN_NEWLINE) nextToken(ctx);
     }
 
@@ -780,11 +801,22 @@ static ASTNode* parseWhileStatement(ParserContext* ctx) {
 
     Token colon = nextToken(ctx);
     if (colon.type != TOKEN_COLON) return NULL;
-    if (nextToken(ctx).type != TOKEN_NEWLINE) return NULL;
-    if (nextToken(ctx).type != TOKEN_INDENT) return NULL;
-
-    ASTNode* body = parseBlock(ctx);
-    if (!body) return NULL;
+    
+    // Check if this is a single-line while or block while
+    Token next = peekToken(ctx);
+    ASTNode* body = NULL;
+    
+    if (next.type == TOKEN_NEWLINE) {
+        // Block-style while: while condition:\n    statement
+        nextToken(ctx); // consume newline
+        if (nextToken(ctx).type != TOKEN_INDENT) return NULL;
+        body = parseBlock(ctx);
+        if (!body) return NULL;
+    } else {
+        // Single-line while: while condition: statement
+        body = parseStatement(ctx);
+        if (!body) return NULL;
+    }
     if (peekToken(ctx).type == TOKEN_NEWLINE) nextToken(ctx);
 
     ASTNode* node = new_node(ctx);

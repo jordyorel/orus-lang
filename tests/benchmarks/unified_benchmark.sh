@@ -44,8 +44,8 @@ ensure_orus_built() {
     # Clean build for consistent results
     make clean > /dev/null 2>&1
     
-    # Build with optimal settings (use computed goto for best performance)
-    if make USE_GOTO=1 > /dev/null 2>&1; then
+    # Build with optimal settings (release profile for best performance)
+    if make release > /dev/null 2>&1; then
         echo -e "${GREEN}✅ Orus binary built successfully${NC}"
     else
         echo -e "${RED}❌ Failed to build Orus binary${NC}"
@@ -270,6 +270,7 @@ ensure_orus_built
 run_benchmark_category "Pure Arithmetic Performance" "arithmetic_benchmark.orus"
 run_benchmark_category "Comprehensive Performance" "comprehensive_benchmark.orus"
 run_benchmark_category "Extreme Performance" "extreme_benchmark.orus"
+run_benchmark_category "Control Flow Performance" "control_flow_benchmark.orus"
 # run_benchmark_category "Modulo Operations" "modulo_operations_benchmark.orus"
 
 echo -e "${BLUE}=================================================================${NC}"

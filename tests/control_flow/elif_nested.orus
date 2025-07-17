@@ -1,0 +1,17 @@
+// Nested elif test
+x = 15
+y = 3
+if x > 10:
+    if y > 5:
+        print("x > 10 and y > 5")
+    elif y > 2:
+        print("x > 10 and y > 2")
+    else:
+        print("x > 10 and y <= 2")
+elif x > 5:
+    if y > 2:
+        print("x > 5 and y > 2")
+    else:
+        print("x > 5 and y <= 2")
+else:
+    print("x <= 5")

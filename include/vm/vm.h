@@ -825,6 +825,7 @@ typedef struct {
     Value globals[UINT8_COUNT];
     Type* globalTypes[UINT8_COUNT];
     bool publicGlobals[UINT8_COUNT];
+    bool mutableGlobals[UINT8_COUNT];
     VariableInfo variableNames[UINT8_COUNT];
     int variableCount;
 

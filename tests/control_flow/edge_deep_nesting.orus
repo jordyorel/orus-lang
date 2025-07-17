@@ -1,0 +1,18 @@
+// Edge case: deep nesting test
+x = 10
+if x > 5:
+    print("Level 1")
+    if x > 8:
+        print("Level 2")
+        if x > 9:
+            print("Level 3")
+            if x > 9:
+                print("Level 4")
+            else:
+                print("Level 4 else")
+        else:
+            print("Level 3 else")
+    else:
+        print("Level 2 else")
+else:
+    print("Level 1 else")

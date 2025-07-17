@@ -26,8 +26,8 @@ Build a language that combines Python's readability, Rust's safety, and Lua's pe
 - **Error Handling**: Basic framework, needs enhanced diagnostics
 
 - [x] Variable assignments (`x = value`)
-- [ ] Control flow (`if`, `while`, `for`)
-- [ ] Functions (`fn name:`)
+- [x] Control flow (`if`, `while`, `for`)
+- [x] Functions (`fn name:`)
 - [ ] Advanced type inference
 - [ ] Arrays and collections (type system ready)
 - [ ] Struct definitions and methods
@@ -45,14 +45,13 @@ Build a language that combines Python's readability, Rust's safety, and Lua's pe
 
 **Implementation Steps:**
 
-- [ ] Fix VALUE type conflicts for strings
+- [*] Fix VALUE type conflicts for strings
 - [ ] Implement string object allocation in compiler
-- [ ] Add string concatenation operator (`+`)
+- [*] Add string concatenation operator (`+`)
 - [ ] Implement string comparison operators
-- [ ] Add string interpolation support
-- [ ] **NEW**: Add basic TYPE enum and type checking infrastructure
-- [ ] **NEW**: Implement type annotation parsing (`x: i32 = 42`)
-- [ ] **NEW**: Add type mismatch error reporting foundation
+- [*] **NEW**: Add basic TYPE enum and type checking infrastructure
+- [*] **NEW**: Implement type annotation parsing (`x: i32 = 42`)
+- [*] **NEW**: Add type mismatch error reporting foundation
 
 ### 1.2 Built-in Functions (Print & I/O)
 **Priority: 🔥 Critical**
@@ -84,7 +83,7 @@ print("continues here")
 - [x] Parse `print()` function calls with variable arguments
 - [x] Support printing all basic types (i32, f64, bool, string)
 - [x] Implement string interpolation with placeholders
-- [ ] Handle escape sequences (`\n`, `\t`, `\"`, `\\`)
+- [*] Handle escape sequences (`\n`, `\t`, `\"`, `\\`)
 - [ ] Format numbers and booleans for display
 
 ### 1.3 String Interpolation System
@@ -113,7 +112,7 @@ print("Array has items", len(items))
 ### 1.4 Variable Assignments & Basic Type Checking
 **Priority: 🔥 Critical**
 - [x] **DONE**: Basic assignment operations implemented.
-- [ ] **NEW**: Add compile-time type checking for assignments
+- [*] **NEW**: Add compile-time type checking for assignments
 
 **Features to Implement:**
 - [x] `x = value` syntax parsing
@@ -177,7 +176,7 @@ result = x > 0 ? "positive" : "non-positive"
 - [ ] **NEW**: Advanced Orus Range Syntax: `start..end..step` with direction validation *(Implemented with comprehensive compile-time validation and runtime support)*
 
 **Performance & Safety Requirements (Progressive Implementation):**
-- [x] **DONE**: Loop invariant code motion (LICM) optimization *(Comprehensive LICM implementation with AST-based analysis, safety checking, and bytecode transformation)*
+- [ ] **DONE**: Loop invariant code motion (LICM) optimization *(Comprehensive LICM implementation with AST-based analysis, safety checking, and bytecode transformation)*
 - [ ] **Phase 2**: Loop unrolling for small, known iteration counts (enables advanced vectorization later)
 - [ ] **Phase 3**: Strength reduction for induction variables (foundation for advanced math optimizations)
 - [ ] **Phase 4**: Dead code elimination within loop bodies (enables advanced type system optimizations)

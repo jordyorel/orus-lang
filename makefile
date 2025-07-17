@@ -174,6 +174,34 @@ test: $(ORUS)
 		fi; \
 	done; \
 	echo ""; \
+	echo "\033[36m=== Control Flow Tests ===\033[0m"; \
+	for test_file in $(TESTDIR)/control_flow/basic_if.orus \
+	                  $(TESTDIR)/control_flow/if_else.orus \
+	                  $(TESTDIR)/control_flow/nested_if.orus \
+	                  $(TESTDIR)/control_flow/inline_if.orus \
+	                  $(TESTDIR)/control_flow/elif_basic.orus \
+	                  $(TESTDIR)/control_flow/elif_multiple.orus \
+	                  $(TESTDIR)/control_flow/elif_inline.orus \
+	                  $(TESTDIR)/control_flow/elif_nested.orus \
+	                  $(TESTDIR)/control_flow/basic_while.orus \
+	                  $(TESTDIR)/control_flow/inline_while.orus \
+	                  $(TESTDIR)/control_flow/comprehensive_control.orus \
+	                  $(TESTDIR)/control_flow/edge_zero_iterations.orus \
+	                  $(TESTDIR)/control_flow/edge_complex_conditions.orus \
+	                  $(TESTDIR)/control_flow/edge_deep_nesting.orus \
+	                  $(TESTDIR)/control_flow/edge_mixed_styles.orus; do \
+		if [ -f "$$test_file" ]; then \
+			printf "Testing: $$test_file ... "; \
+			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
+				printf "\033[32mPASS\033[0m\n"; \
+				passed=$$((passed + 1)); \
+			else \
+				printf "\033[31mFAIL\033[0m\n"; \
+				failed=$$((failed + 1)); \
+			fi; \
+		fi; \
+	done; \
+	echo ""; \
 	echo "\033[36m=== Literals Tests ===\033[0m"; \
 	for test_file in $(TESTDIR)/literals/literal.orus; do \
 		if [ -f "$$test_file" ]; then \
@@ -250,7 +278,10 @@ test: $(ORUS)
                           $(TESTDIR)/type_safety_fails/mixed_arithmetic_different_sizes.orus \
                           $(TESTDIR)/type_safety_fails/undefined_type_cast.orus \
                           $(TESTDIR)/type_safety_fails/complex_mixed_operations.orus \
-                          $(TESTDIR)/type_safety_fails/chain_cast_with_error.orus; do \
+                          $(TESTDIR)/type_safety_fails/chain_cast_with_error.orus \
+                          $(TESTDIR)/type_safety_fails/control_flow_non_bool_condition.orus \
+                          $(TESTDIR)/type_safety_fails/control_flow_string_condition.orus \
+                          $(TESTDIR)/type_safety_fails/control_flow_float_condition.orus; do \
 		if [ -f "$$test_file" ]; then \
 			printf "Testing: $$test_file ... "; \
 			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \

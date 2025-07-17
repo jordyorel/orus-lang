@@ -1,0 +1,8 @@
+// Comprehensive control flow test
+x = 10
+if x > 15: print("big")
+else: print("small")
+
+y = 0
+while y < 3: y = y + 1
+print("y =", y)

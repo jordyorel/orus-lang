@@ -29,6 +29,7 @@ void initVM(void) {
         vm.globals[i] = NIL_VAL;
         vm.globalTypes[i] = NULL;
         vm.publicGlobals[i] = false;
+        vm.mutableGlobals[i] = false;
         vm.variableNames[i].name = NULL;
         vm.variableNames[i].length = 0;
     }
@@ -64,6 +65,7 @@ void freeVM(void) {
         vm.variableNames[i].name = NULL;
         vm.globalTypes[i] = NULL;
         vm.publicGlobals[i] = false;
+        vm.mutableGlobals[i] = false;
     }
     vm.astRoot = NULL;
     vm.chunk = NULL;

@@ -131,11 +131,22 @@ static Type* getExprType(ASTNode* node, Compiler* compiler) {
             return getPrimitiveType(TYPE_UNKNOWN);
         }
         case NODE_BINARY: {
+            // Check if this is a comparison operator - they return bool
+            if (strcmp(node->binary.op, "==") == 0 || strcmp(node->binary.op, "!=") == 0 ||
+                strcmp(node->binary.op, "<") == 0 || strcmp(node->binary.op, "<=") == 0 ||
+                strcmp(node->binary.op, ">") == 0 || strcmp(node->binary.op, ">=") == 0) {
+                return getPrimitiveType(TYPE_BOOL);
+            }
+            
+            // Check if this is a logical operator - they return bool
+            if (strcmp(node->binary.op, "and") == 0 || strcmp(node->binary.op, "or") == 0) {
+                return getPrimitiveType(TYPE_BOOL);
+            }
+            
             Type* leftType = getExprType(node->binary.left, compiler);
             Type* rightType = getExprType(node->binary.right, compiler);
             
-            // For now, return left type if both are same, otherwise unknown
-            // This will be refined in the actual binary operation compilation
+            // For arithmetic operators, return left type if both are same, otherwise unknown
             if (type_equals_extended(leftType, rightType)) {
                 return leftType;
             }
@@ -231,6 +242,18 @@ static int compileBinaryOp(ASTNode* node, Compiler* compiler) {
         emitByte(compiler, OP_AND_BOOL_R);
     } else if (strcmp(node->binary.op, "or") == 0) {
         emitByte(compiler, OP_OR_BOOL_R);
+    } else if (strcmp(node->binary.op, "==") == 0) {
+        emitByte(compiler, OP_EQ_R);
+    } else if (strcmp(node->binary.op, "!=") == 0) {
+        emitByte(compiler, OP_NE_R);
+    } else if (strcmp(node->binary.op, "<") == 0) {
+        emitByte(compiler, OP_LT_I32_R);
+    } else if (strcmp(node->binary.op, "<=") == 0) {
+        emitByte(compiler, OP_LE_I32_R);
+    } else if (strcmp(node->binary.op, ">") == 0) {
+        emitByte(compiler, OP_GT_I32_R);
+    } else if (strcmp(node->binary.op, ">=") == 0) {
+        emitByte(compiler, OP_GE_I32_R);
     } else {
         compiler->hadError = true;
         emitByte(compiler, OP_ADD_I32_R); // Fallback
@@ -675,6 +698,9 @@ static bool compileNode(ASTNode* node, Compiler* compiler) {
                 vm.globalTypes[idx] = inferredType ? inferredType : getPrimitiveType(TYPE_ANY);
             }
             
+            // Set mutability based on declaration
+            vm.mutableGlobals[idx] = node->varDecl.isMutable;
+            
             symbol_table_set(&compiler->symbols, node->varDecl.name, idx);
             emitByte(compiler, OP_STORE_GLOBAL);
             emitByte(compiler, (uint8_t)idx);
@@ -865,6 +891,16 @@ static bool compileNode(ASTNode* node, Compiler* compiler) {
             freeRegister(compiler, endReg);
             freeRegister(compiler, loopVarReg);
             
+            return true;
+        }
+
+        case NODE_BLOCK: {
+            // Compile all statements in the block
+            for (int i = 0; i < node->block.count; i++) {
+                if (!compileNode(node->block.statements[i], compiler)) {
+                    return false;
+                }
+            }
             return true;
         }
 

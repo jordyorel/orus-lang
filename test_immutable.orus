@@ -1,0 +1,5 @@
+// Test immutable variable enforcement
+x = 10
+print("Initial x:", x)
+x = 20  // This should fail if mutability is enforced
+print("Modified x:", x)
