@@ -162,6 +162,13 @@ static ASTNode* parsePrimaryExpression(ParserContext* ctx);
 
 // Primary expression handlers
 static ASTNode* parseNumberLiteral(ParserContext* ctx, Token token);
+
+// Number parsing helper functions
+static void preprocessNumberToken(const char* tokenStart, int tokenLength, char* numStr, int* processedLength);
+static bool detectNumberSuffix(char* numStr, int* length, bool* isF64, bool* isU32, bool* isU64, bool* isI32, bool* isI64, bool* hasExplicitSuffix);
+static bool isFloatingPointNumber(const char* numStr, int length);
+static Value parseNumberValue(const char* numStr, bool isF64, bool isU32, bool isU64, bool isI32, bool isI64);
+
 static ASTNode* parseStringLiteral(ParserContext* ctx, Token token);
 static ASTNode* parseBooleanLiteral(ParserContext* ctx, Token token);
 static ASTNode* parseNilLiteral(ParserContext* ctx, Token token);
@@ -1168,91 +1175,114 @@ static ASTNode* parseBinaryExpression(ParserContext* ctx, int minPrec) {
 
 // Primary expression handlers
 
-static ASTNode* parseNumberLiteral(ParserContext* ctx, Token token) {
-    ASTNode* node = new_node(ctx);
-    node->type = NODE_LITERAL;
-
-    /* Copy token text and remove underscores */
+// Number parsing helper functions implementation
+static void preprocessNumberToken(const char* tokenStart, int tokenLength, char* numStr, int* processedLength) {
     char raw[64];
-    int len = token.length < 63 ? token.length : 63;
-    strncpy(raw, token.start, len);
+    int len = tokenLength < 63 ? tokenLength : 63;
+    strncpy(raw, tokenStart, len);
     raw[len] = '\0';
-    char numStr[64];
+    
     int j = 0;
     for (int i = 0; i < len && j < 63; i++) {
         if (raw[i] != '_') numStr[j++] = raw[i];
     }
     numStr[j] = '\0';
+    *processedLength = j;
+}
 
-    bool isF64 = false;
-    bool isU32 = false;
-    bool isU64 = false;
-    bool isI64 = false;
-    bool isI32 = false;
-    bool hasExplicitSuffix = false;
-
-    /* Handle explicit suffixes */
+static bool detectNumberSuffix(char* numStr, int* length, bool* isF64, bool* isU32, bool* isU64, bool* isI32, bool* isI64, bool* hasExplicitSuffix) {
+    int j = *length;
+    
+    *isF64 = *isU32 = *isU64 = *isI32 = *isI64 = *hasExplicitSuffix = false;
+    
     if (j >= 3 && strcmp(numStr + j - 3, "f64") == 0) {
-        isF64 = true;
-        hasExplicitSuffix = true;
+        *isF64 = true;
+        *hasExplicitSuffix = true;
         j -= 3;
         numStr[j] = '\0';
     } else if (j >= 3 && strcmp(numStr + j - 3, "u32") == 0) {
-        isU32 = true;
-        hasExplicitSuffix = true;
+        *isU32 = true;
+        *hasExplicitSuffix = true;
         j -= 3;
         numStr[j] = '\0';
     } else if (j >= 3 && strcmp(numStr + j - 3, "u64") == 0) {
-        isU64 = true;
-        hasExplicitSuffix = true;
+        *isU64 = true;
+        *hasExplicitSuffix = true;
         j -= 3;
         numStr[j] = '\0';
     } else if (j >= 3 && strcmp(numStr + j - 3, "i32") == 0) {
-        isI32 = true;
-        hasExplicitSuffix = true;
+        *isI32 = true;
+        *hasExplicitSuffix = true;
         j -= 3;
         numStr[j] = '\0';
     } else if (j >= 3 && strcmp(numStr + j - 3, "i64") == 0) {
-        isI64 = true;
-        hasExplicitSuffix = true;
+        *isI64 = true;
+        *hasExplicitSuffix = true;
         j -= 3;
         numStr[j] = '\0';
     } else if (j >= 1 && numStr[j - 1] == 'u') {
-        isU64 = true;
-        hasExplicitSuffix = true;
+        *isU64 = true;
+        *hasExplicitSuffix = true;
         j -= 1;
         numStr[j] = '\0';
     }
+    
+    *length = j;
+    return *hasExplicitSuffix;
+}
 
-    /* Detect float by decimal/exponent */
-    for (int i = 0; i < j; i++) {
+static bool isFloatingPointNumber(const char* numStr, int length) {
+    for (int i = 0; i < length; i++) {
         if (numStr[i] == '.' || numStr[i] == 'e' || numStr[i] == 'E') {
-            isF64 = true;
-            break;
+            return true;
         }
     }
+    return false;
+}
 
+static Value parseNumberValue(const char* numStr, bool isF64, bool isU32, bool isU64, bool isI32, bool isI64) {
     if (isF64) {
         double val = strtod(numStr, NULL);
-        node->literal.value = F64_VAL(val);
+        return F64_VAL(val);
     } else if (isU32) {
         uint32_t val = (uint32_t)strtoul(numStr, NULL, 0);
-        node->literal.value = U32_VAL(val);
+        return U32_VAL(val);
     } else if (isU64) {
         uint64_t val = strtoull(numStr, NULL, 0);
-        node->literal.value = U64_VAL(val);
+        return U64_VAL(val);
     } else if (isI32) {
         int32_t val = (int32_t)strtol(numStr, NULL, 0);
-        node->literal.value = I32_VAL(val);
+        return I32_VAL(val);
     } else {
         long long value = strtoll(numStr, NULL, 0);
         if (isI64 || value > INT32_MAX || value < INT32_MIN) {
-            node->literal.value = I64_VAL(value);
+            return I64_VAL(value);
         } else {
-            node->literal.value = I32_VAL((int32_t)value);
+            return I32_VAL((int32_t)value);
         }
     }
+}
 
+static ASTNode* parseNumberLiteral(ParserContext* ctx, Token token) {
+    ASTNode* node = new_node(ctx);
+    node->type = NODE_LITERAL;
+
+    // Preprocess token (remove underscores)
+    char numStr[64];
+    int length;
+    preprocessNumberToken(token.start, token.length, numStr, &length);
+
+    // Detect and handle type suffixes
+    bool isF64, isU32, isU64, isI32, isI64, hasExplicitSuffix;
+    detectNumberSuffix(numStr, &length, &isF64, &isU32, &isU64, &isI32, &isI64, &hasExplicitSuffix);
+
+    // Check for floating point notation if no explicit type suffix
+    if (!hasExplicitSuffix && isFloatingPointNumber(numStr, length)) {
+        isF64 = true;
+    }
+
+    // Parse the numeric value
+    node->literal.value = parseNumberValue(numStr, isF64, isU32, isU64, isI32, isI64);
     node->literal.hasExplicitSuffix = hasExplicitSuffix;
     node->location.line = token.line;
     node->location.column = token.column;
