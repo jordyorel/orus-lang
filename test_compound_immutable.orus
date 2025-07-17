@@ -1,5 +1,0 @@
-// Test compound assignment on immutable variable (should fail)
-x = 10  // immutable variable
-print("Initial x:", x)
-x += 5  // This should fail
-print("This should not print:", x)

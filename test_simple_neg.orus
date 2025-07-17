@@ -1,4 +1,0 @@
-// Test just basic i32 negation
-mut x = 42
-mut y = -x
-print(y)

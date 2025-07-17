@@ -1,5 +1,0 @@
-// Test complex unary expression
-mut x = 10
-mut y = 20
-mut result = -(x + y)
-print(result)

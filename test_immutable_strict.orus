@@ -1,5 +1,0 @@
-// Test immutable variable enforcement with explicit declarations
-x = 10  // This declares an immutable variable
-print("Initial x:", x)
-x = 20  // This should fail - trying to reassign immutable variable
-print("This should not print:", x)

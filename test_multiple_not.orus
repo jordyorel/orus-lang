@@ -1,3 +1,0 @@
-// Test multiple not operators
-mut result3 = not not not false
-print(result3)

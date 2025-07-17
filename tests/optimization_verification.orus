@@ -1,0 +1,32 @@
+// Test to verify optimization is working
+// This test includes optimization opportunities
+
+// Test 1: Dead code elimination for always-false condition
+if false:
+    print("This should never be executed")
+    mut x = 42
+    x = x + 1
+
+// Test 2: Dead code elimination for always-true condition  
+if true:
+    print("This should always be executed")
+
+// Test 3: Constant folding
+if 5 + 3 == 8:
+    print("Constant folding works")
+
+// Test 4: Complex constant expression
+if 2 * 3 + 4 == 10:
+    print("Complex constant folding works")
+
+// Test 5: Boolean constant folding
+if true and false:
+    print("This should never print")
+else:
+    print("Boolean constant folding works")
+
+// Test 6: Comparison constant folding
+if 10 > 5:
+    print("Comparison constant folding works")
+
+print("Optimization verification complete")

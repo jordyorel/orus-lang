@@ -141,9 +141,9 @@ print("Array has items", len(items))
 
 ### 2.1 Conditional Statements & Basic Optimization
 **Priority: 🔥 High**
-- [ ] **NEW**: Implement if/else statements with nested conditions and `elif`, including jump patching and scoped blocks.
-- [ ] **NEW**: Add basic dead code elimination for unreachable branches
-- [ ] **NEW**: Implement constant folding for compile-time known conditions
+- [*] **Done**: Implement if/else statements with nested conditions and `elif`, including jump patching and scoped blocks.
+- [*] **NEW**: Add basic dead code elimination for unreachable branches
+- [*] **NEW**: Implement constant folding for compile-time known conditions
 
 ```orus
 // Target syntax:

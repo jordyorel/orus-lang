@@ -16,6 +16,12 @@ static bool compileNode(ASTNode* node, Compiler* compiler);
 static int compileExpr(ASTNode* node, Compiler* compiler);
 static Type* getExprType(ASTNode* node, Compiler* compiler);
 
+// Optimization functions
+static Value evaluateConstantExpression(ASTNode* node);
+static bool isConstantExpression(ASTNode* node);
+static bool isAlwaysTrue(ASTNode* node);
+static bool isAlwaysFalse(ASTNode* node);
+
 // Expression compilation handlers
 static int compileLiteral(ASTNode* node, Compiler* compiler);
 static int compileIdentifier(ASTNode* node, Compiler* compiler);
@@ -116,6 +122,184 @@ void emitConstant(Compiler* compiler, uint8_t reg, Value value) {
     emitByte(compiler, (uint8_t)(idx & 0xFF));
 }
 
+// Optimization functions - Single-pass constant folding and dead code elimination
+// These functions evaluate expressions at compile time for optimization
+
+static bool isConstantExpression(ASTNode* node) {
+    if (!node) return false;
+    
+    switch (node->type) {
+        case NODE_LITERAL:
+            return true;
+            
+        case NODE_BINARY: {
+            // Binary expressions are constant if both operands are constant
+            return isConstantExpression(node->binary.left) && 
+                   isConstantExpression(node->binary.right);
+        }
+        
+        case NODE_UNARY: {
+            // Unary expressions are constant if operand is constant
+            return isConstantExpression(node->unary.operand);
+        }
+        
+        case NODE_CAST: {
+            // Cast expressions are constant if operand is constant
+            return isConstantExpression(node->cast.expression);
+        }
+        
+        default:
+            return false;
+    }
+}
+
+static Value evaluateConstantExpression(ASTNode* node) {
+    if (!node) return NIL_VAL;
+    
+    switch (node->type) {
+        case NODE_LITERAL:
+            return node->literal.value;
+            
+        case NODE_BINARY: {
+            Value left = evaluateConstantExpression(node->binary.left);
+            Value right = evaluateConstantExpression(node->binary.right);
+            
+            // Perform constant folding for supported operations
+            const char* op = node->binary.op;
+            
+            // Arithmetic operations
+            if (strcmp(op, "+") == 0) {
+                if (IS_I32(left) && IS_I32(right)) {
+                    return I32_VAL(AS_I32(left) + AS_I32(right));
+                }
+                if (IS_F64(left) && IS_F64(right)) {
+                    return F64_VAL(AS_F64(left) + AS_F64(right));
+                }
+            } else if (strcmp(op, "-") == 0) {
+                if (IS_I32(left) && IS_I32(right)) {
+                    return I32_VAL(AS_I32(left) - AS_I32(right));
+                }
+                if (IS_F64(left) && IS_F64(right)) {
+                    return F64_VAL(AS_F64(left) - AS_F64(right));
+                }
+            } else if (strcmp(op, "*") == 0) {
+                if (IS_I32(left) && IS_I32(right)) {
+                    return I32_VAL(AS_I32(left) * AS_I32(right));
+                }
+                if (IS_F64(left) && IS_F64(right)) {
+                    return F64_VAL(AS_F64(left) * AS_F64(right));
+                }
+            } else if (strcmp(op, "/") == 0) {
+                if (IS_I32(left) && IS_I32(right) && AS_I32(right) != 0) {
+                    return I32_VAL(AS_I32(left) / AS_I32(right));
+                }
+                if (IS_F64(left) && IS_F64(right) && AS_F64(right) != 0.0) {
+                    return F64_VAL(AS_F64(left) / AS_F64(right));
+                }
+            }
+            
+            // Comparison operations
+            else if (strcmp(op, "==") == 0) {
+                if (IS_I32(left) && IS_I32(right)) {
+                    return BOOL_VAL(AS_I32(left) == AS_I32(right));
+                }
+                if (IS_F64(left) && IS_F64(right)) {
+                    return BOOL_VAL(AS_F64(left) == AS_F64(right));
+                }
+                if (IS_BOOL(left) && IS_BOOL(right)) {
+                    return BOOL_VAL(AS_BOOL(left) == AS_BOOL(right));
+                }
+            } else if (strcmp(op, "!=") == 0) {
+                if (IS_I32(left) && IS_I32(right)) {
+                    return BOOL_VAL(AS_I32(left) != AS_I32(right));
+                }
+                if (IS_F64(left) && IS_F64(right)) {
+                    return BOOL_VAL(AS_F64(left) != AS_F64(right));
+                }
+                if (IS_BOOL(left) && IS_BOOL(right)) {
+                    return BOOL_VAL(AS_BOOL(left) != AS_BOOL(right));
+                }
+            } else if (strcmp(op, "<") == 0) {
+                if (IS_I32(left) && IS_I32(right)) {
+                    return BOOL_VAL(AS_I32(left) < AS_I32(right));
+                }
+                if (IS_F64(left) && IS_F64(right)) {
+                    return BOOL_VAL(AS_F64(left) < AS_F64(right));
+                }
+            } else if (strcmp(op, "<=") == 0) {
+                if (IS_I32(left) && IS_I32(right)) {
+                    return BOOL_VAL(AS_I32(left) <= AS_I32(right));
+                }
+                if (IS_F64(left) && IS_F64(right)) {
+                    return BOOL_VAL(AS_F64(left) <= AS_F64(right));
+                }
+            } else if (strcmp(op, ">") == 0) {
+                if (IS_I32(left) && IS_I32(right)) {
+                    return BOOL_VAL(AS_I32(left) > AS_I32(right));
+                }
+                if (IS_F64(left) && IS_F64(right)) {
+                    return BOOL_VAL(AS_F64(left) > AS_F64(right));
+                }
+            } else if (strcmp(op, ">=") == 0) {
+                if (IS_I32(left) && IS_I32(right)) {
+                    return BOOL_VAL(AS_I32(left) >= AS_I32(right));
+                }
+                if (IS_F64(left) && IS_F64(right)) {
+                    return BOOL_VAL(AS_F64(left) >= AS_F64(right));
+                }
+            }
+            
+            // Logical operations
+            else if (strcmp(op, "and") == 0) {
+                if (IS_BOOL(left) && IS_BOOL(right)) {
+                    return BOOL_VAL(AS_BOOL(left) && AS_BOOL(right));
+                }
+            } else if (strcmp(op, "or") == 0) {
+                if (IS_BOOL(left) && IS_BOOL(right)) {
+                    return BOOL_VAL(AS_BOOL(left) || AS_BOOL(right));
+                }
+            }
+            
+            return NIL_VAL;
+        }
+        
+        case NODE_UNARY: {
+            Value operand = evaluateConstantExpression(node->unary.operand);
+            const char* op = node->unary.op;
+            
+            if (strcmp(op, "not") == 0 && IS_BOOL(operand)) {
+                return BOOL_VAL(!AS_BOOL(operand));
+            } else if (strcmp(op, "-") == 0) {
+                if (IS_I32(operand)) {
+                    return I32_VAL(-AS_I32(operand));
+                }
+                if (IS_F64(operand)) {
+                    return F64_VAL(-AS_F64(operand));
+                }
+            }
+            
+            return NIL_VAL;
+        }
+        
+        default:
+            return NIL_VAL;
+    }
+}
+
+static bool isAlwaysTrue(ASTNode* node) {
+    if (!isConstantExpression(node)) return false;
+    
+    Value result = evaluateConstantExpression(node);
+    return IS_BOOL(result) && AS_BOOL(result);
+}
+
+static bool isAlwaysFalse(ASTNode* node) {
+    if (!isConstantExpression(node)) return false;
+    
+    Value result = evaluateConstantExpression(node);
+    return IS_BOOL(result) && !AS_BOOL(result);
+}
+
 // Helper function to get the type of an expression
 static Type* getExprType(ASTNode* node, Compiler* compiler) {
     if (!node) return getPrimitiveType(TYPE_UNKNOWN);
@@ -211,6 +395,16 @@ static int compileIdentifier(ASTNode* node, Compiler* compiler) {
 }
 
 static int compileBinaryOp(ASTNode* node, Compiler* compiler) {
+    // Optimization: Constant folding for binary expressions
+    if (isConstantExpression(node)) {
+        Value result = evaluateConstantExpression(node);
+        if (!IS_NIL(result)) {
+            uint8_t r = allocateRegister(compiler);
+            emitConstant(compiler, r, result);
+            return r;
+        }
+    }
+    
     // Phase 4: Simple type checking for binary operations
     // Only check for obvious mismatches, let VM handle runtime type dispatch
     Type* leftType = getExprType(node->binary.left, compiler);
@@ -579,6 +773,16 @@ static int compileCast(ASTNode* node, Compiler* compiler) {
 }
 
 static int compileUnary(ASTNode* node, Compiler* compiler) {
+    // Optimization: Constant folding for unary expressions
+    if (isConstantExpression(node)) {
+        Value result = evaluateConstantExpression(node);
+        if (!IS_NIL(result)) {
+            uint8_t r = allocateRegister(compiler);
+            emitConstant(compiler, r, result);
+            return r;
+        }
+    }
+    
     int operand = compileExpr(node->unary.operand, compiler);
     uint8_t dst = allocateRegister(compiler);
     
@@ -784,7 +988,19 @@ static bool compileNode(ASTNode* node, Compiler* compiler) {
         }
 
         case NODE_IF: {
-            // Compile condition
+            // Optimization: Constant folding and dead code elimination
+            if (isAlwaysTrue(node->ifStmt.condition)) {
+                // Always true condition - compile only then branch, eliminate else
+                return compileNode(node->ifStmt.thenBranch, compiler);
+            } else if (isAlwaysFalse(node->ifStmt.condition)) {
+                // Always false condition - compile only else branch, eliminate then
+                if (node->ifStmt.elseBranch) {
+                    return compileNode(node->ifStmt.elseBranch, compiler);
+                }
+                return true; // Empty else branch
+            }
+            
+            // Non-constant condition - compile normally
             int conditionReg = compileExpr(node->ifStmt.condition, compiler);
             
             // Emit conditional jump - if condition is false, jump to else/end

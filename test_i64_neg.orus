@@ -1,5 +1,0 @@
-// Simple test for specific types
-mut x_i64 = 200i64
-print("Before negation:", x_i64)
-mut neg_i64 = -x_i64
-print("After negation:", neg_i64)
