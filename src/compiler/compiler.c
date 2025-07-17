@@ -72,6 +72,42 @@ void emitBytes(Compiler* compiler, uint8_t b1, uint8_t b2) {
     emitByte(compiler, b2);
 }
 
+// Control flow helper functions
+int emitJump(Compiler* compiler) {
+    // Emit placeholder bytes for jump offset
+    emitByte(compiler, 0xff);
+    emitByte(compiler, 0xff);
+    return compiler->chunk->count - 2;
+}
+
+void patchJump(Compiler* compiler, int offset) {
+    // Calculate jump distance
+    int jump = compiler->chunk->count - offset - 2;
+    
+    if (jump > UINT16_MAX) {
+        // Jump too far - could implement long jumps here
+        compiler->hadError = true;
+        return;
+    }
+    
+    // Patch the placeholder bytes
+    compiler->chunk->code[offset] = (jump >> 8) & 0xff;
+    compiler->chunk->code[offset + 1] = jump & 0xff;
+}
+
+void emitLoop(Compiler* compiler, int loopStart) {
+    emitByte(compiler, OP_LOOP);
+    
+    int offset = compiler->chunk->count - loopStart + 2;
+    if (offset > UINT16_MAX) {
+        compiler->hadError = true;
+        return;
+    }
+    
+    emitByte(compiler, (offset >> 8) & 0xff);
+    emitByte(compiler, offset & 0xff);
+}
+
 void emitConstant(Compiler* compiler, uint8_t reg, Value value) {
     int idx = addConstant(compiler->chunk, value);
     emitByte(compiler, OP_LOAD_CONST);
@@ -688,6 +724,147 @@ static bool compileNode(ASTNode* node, Compiler* compiler) {
                 emitByte(compiler, r);
                 freeRegister(compiler, r);
             }
+            return true;
+        }
+
+        case NODE_IF: {
+            // Compile condition
+            int conditionReg = compileExpr(node->ifStmt.condition, compiler);
+            
+            // Emit conditional jump - if condition is false, jump to else/end
+            emitByte(compiler, OP_JUMP_IF_NOT_R);
+            emitByte(compiler, (uint8_t)conditionReg);
+            int thenJump = emitJump(compiler);
+            
+            freeRegister(compiler, conditionReg);
+            
+            // Compile then branch
+            if (!compileNode(node->ifStmt.thenBranch, compiler)) return false;
+            
+            // Jump over else branch if we executed then branch
+            int elseJump = -1;
+            if (node->ifStmt.elseBranch) {
+                emitByte(compiler, OP_JUMP);
+                elseJump = emitJump(compiler);
+            }
+            
+            // Patch the then jump to point here (start of else or end)
+            patchJump(compiler, thenJump);
+            
+            // Compile else branch if it exists
+            if (node->ifStmt.elseBranch) {
+                if (!compileNode(node->ifStmt.elseBranch, compiler)) return false;
+                patchJump(compiler, elseJump);
+            }
+            
+            return true;
+        }
+
+        case NODE_WHILE: {
+            // Mark loop start for continue statements
+            int loopStart = compiler->chunk->count;
+            
+            // Compile condition
+            int conditionReg = compileExpr(node->whileStmt.condition, compiler);
+            
+            // Emit conditional jump to exit loop if condition is false
+            emitByte(compiler, OP_JUMP_IF_NOT_R);
+            emitByte(compiler, (uint8_t)conditionReg);
+            int exitJump = emitJump(compiler);
+            
+            freeRegister(compiler, conditionReg);
+            
+            // Compile body
+            if (!compileNode(node->whileStmt.body, compiler)) return false;
+            
+            // Jump back to loop start
+            emitLoop(compiler, loopStart);
+            
+            // Patch exit jump to point here
+            patchJump(compiler, exitJump);
+            
+            return true;
+        }
+
+        case NODE_FOR_RANGE: {
+            // For now, implement basic for loop as while loop equivalent
+            // TODO: Implement proper range iterator support
+            
+            // Allocate loop variable
+            int loopVarReg = allocateRegister(compiler);
+            
+            // Initialize loop variable with start value
+            int startReg = compileExpr(node->forRange.start, compiler);
+            emitByte(compiler, OP_MOVE);
+            emitByte(compiler, loopVarReg);
+            emitByte(compiler, (uint8_t)startReg);
+            freeRegister(compiler, startReg);
+            
+            // Get end value
+            int endReg = compileExpr(node->forRange.end, compiler);
+            
+            // Mark loop start
+            int loopStart = compiler->chunk->count;
+            
+            // Check condition: loopVar < end
+            int conditionReg = allocateRegister(compiler);
+            emitByte(compiler, OP_LT_I32_R);
+            emitByte(compiler, conditionReg);
+            emitByte(compiler, loopVarReg);
+            emitByte(compiler, (uint8_t)endReg);
+            
+            // Exit if condition is false
+            emitByte(compiler, OP_JUMP_IF_NOT_R);
+            emitByte(compiler, conditionReg);
+            int exitJump = emitJump(compiler);
+            
+            freeRegister(compiler, conditionReg);
+            
+            // Store loop variable in global for access in body
+            // TODO: Implement proper scoped variables
+            int varIdx = vm.variableCount++;
+            ObjString* varName = allocateString(node->forRange.varName, 
+                                              (int)strlen(node->forRange.varName));
+            vm.variableNames[varIdx].name = varName;
+            vm.variableNames[varIdx].length = varName->length;
+            vm.globals[varIdx] = NIL_VAL;
+            
+            emitByte(compiler, OP_STORE_GLOBAL);
+            emitByte(compiler, (uint8_t)varIdx);
+            emitByte(compiler, loopVarReg);
+            
+            // Compile body
+            if (!compileNode(node->forRange.body, compiler)) return false;
+            
+            // Increment loop variable
+            if (node->forRange.step) {
+                // Use custom step
+                int stepReg = compileExpr(node->forRange.step, compiler);
+                emitByte(compiler, OP_ADD_I32_R);
+                emitByte(compiler, loopVarReg);
+                emitByte(compiler, loopVarReg);
+                emitByte(compiler, (uint8_t)stepReg);
+                freeRegister(compiler, stepReg);
+            } else {
+                // Default step of 1
+                int oneReg = allocateRegister(compiler);
+                emitConstant(compiler, oneReg, I32_VAL(1));
+                emitByte(compiler, OP_ADD_I32_R);
+                emitByte(compiler, loopVarReg);
+                emitByte(compiler, loopVarReg);
+                emitByte(compiler, oneReg);
+                freeRegister(compiler, oneReg);
+            }
+            
+            // Jump back to condition check
+            emitLoop(compiler, loopStart);
+            
+            // Patch exit jump
+            patchJump(compiler, exitJump);
+            
+            freeRegister(compiler, endReg);
+            freeRegister(compiler, loopVarReg);
+            
             return true;
         }
 

@@ -9,6 +9,7 @@
 
 # Executables
 /orus
+/orus_debug
 /test-register
 /test-parser
 test_register

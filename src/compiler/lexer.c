@@ -575,7 +575,7 @@ static Token string_ctx(LexerContext* ctx) {
         if (PEEK(ctx) == '\\') {
             advance_ctx(ctx);
             if (PEEK(ctx) == 'n' || PEEK(ctx) == 't' || PEEK(ctx) == '\\' ||
-                PEEK(ctx) == '"') {
+                PEEK(ctx) == '"' || PEEK(ctx) == 'r' || PEEK(ctx) == '0') {
                 advance_ctx(ctx);
             } else {
                 return error_token_ctx(ctx, "Invalid escape sequence.",
@@ -602,7 +602,7 @@ static Token string() {
         if (*lexer.current == '\\') {
             advance();
             if (*lexer.current == 'n' || *lexer.current == 't' || *lexer.current == '\\' ||
-                *lexer.current == '"') {
+                *lexer.current == '"' || *lexer.current == 'r' || *lexer.current == '0') {
                 advance();
             } else {
                 return error_token("Invalid escape sequence.",

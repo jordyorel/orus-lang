@@ -1,0 +1,11 @@
+// Simple control flow test
+x = 10
+
+// Test simple if without indentation
+if x > 5: print("x is greater than 5")
+
+// Test while loop  
+mut i = 0
+while i < 3: i += 1
+
+print("Final i:", i)

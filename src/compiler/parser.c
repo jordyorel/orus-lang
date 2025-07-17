@@ -160,6 +160,15 @@ static ASTNode* parseExpression(ParserContext* ctx);
 static ASTNode* parseBinaryExpression(ParserContext* ctx, int minPrec);
 static ASTNode* parsePrimaryExpression(ParserContext* ctx);
 
+// Control flow parsing functions
+static ASTNode* parseIfStatement(ParserContext* ctx);
+static ASTNode* parseWhileStatement(ParserContext* ctx);
+static ASTNode* parseForStatement(ParserContext* ctx);
+static ASTNode* parseBreakStatement(ParserContext* ctx);
+static ASTNode* parseContinueStatement(ParserContext* ctx);
+static ASTNode* parseFunctionDefinition(ParserContext* ctx);
+static ASTNode* parseReturnStatement(ParserContext* ctx);
+
 // Primary expression handlers
 static ASTNode* parseNumberLiteral(ParserContext* ctx, Token token);
 
@@ -546,7 +555,77 @@ static ASTNode* parseVariableDeclaration(ParserContext* ctx, bool isMutable, Tok
 }
 
 static ASTNode* parseAssignOrVarList(ParserContext* ctx, bool isMutable, Token nameToken) {
-    if (nextToken(ctx).type != TOKEN_EQUAL) return NULL;
+    Token opToken = nextToken(ctx);
+    
+    // Handle compound assignments (+=, -=, *=, /=, %=)
+    if (opToken.type == TOKEN_PLUS_EQUAL || opToken.type == TOKEN_MINUS_EQUAL || 
+        opToken.type == TOKEN_STAR_EQUAL || opToken.type == TOKEN_SLASH_EQUAL ||
+        opToken.type == TOKEN_MODULO_EQUAL) {
+        
+        // Compound assignments are only valid for existing variables, not declarations
+        if (isMutable) {
+            // This is actually a variable declaration with mut, not a compound assignment
+            return NULL;
+        }
+        
+        ASTNode* right = parseExpression(ctx);
+        if (!right) return NULL;
+        
+        // Create equivalent binary operation: x += y becomes x = x + y
+        ASTNode* identifierLeft = new_node(ctx);
+        identifierLeft->type = NODE_IDENTIFIER;
+        int len = nameToken.length;
+        char* name = parser_arena_alloc(ctx, len + 1);
+        strncpy(name, nameToken.start, len);
+        name[len] = '\0';
+        identifierLeft->identifier.name = name;
+        identifierLeft->location.line = nameToken.line;
+        identifierLeft->location.column = nameToken.column;
+        identifierLeft->dataType = NULL;
+        
+        ASTNode* binaryOp = new_node(ctx);
+        binaryOp->type = NODE_BINARY;
+        binaryOp->binary.left = identifierLeft;
+        binaryOp->binary.right = right;
+        binaryOp->location.line = opToken.line;
+        binaryOp->location.column = opToken.column;
+        binaryOp->dataType = NULL;
+        
+        // Map compound operator to binary operator
+        switch (opToken.type) {
+            case TOKEN_PLUS_EQUAL:
+                binaryOp->binary.op = "+";
+                break;
+            case TOKEN_MINUS_EQUAL:
+                binaryOp->binary.op = "-";
+                break;
+            case TOKEN_STAR_EQUAL:
+                binaryOp->binary.op = "*";
+                break;
+            case TOKEN_SLASH_EQUAL:
+                binaryOp->binary.op = "/";
+                break;
+            case TOKEN_MODULO_EQUAL:
+                binaryOp->binary.op = "%";
+                break;
+            default:
+                return NULL;
+        }
+        
+        // Create assignment with the binary operation as the value
+        ASTNode* assignNode = new_node(ctx);
+        assignNode->type = NODE_ASSIGN;
+        assignNode->assign.name = name; // Reuse the allocated name
+        assignNode->assign.value = binaryOp;
+        assignNode->location.line = nameToken.line;
+        assignNode->location.column = nameToken.column;
+        assignNode->dataType = NULL;
+        
+        return assignNode;
+    }
+    
+    // Regular assignment
+    if (opToken.type != TOKEN_EQUAL) return NULL;
     ASTNode* initializer = parseExpression(ctx);
     if (!initializer) return NULL;
 
@@ -1293,11 +1372,56 @@ static ASTNode* parseNumberLiteral(ParserContext* ctx, Token token) {
 static ASTNode* parseStringLiteral(ParserContext* ctx, Token token) {
     ASTNode* node = new_node(ctx);
     node->type = NODE_LITERAL;
-    int contentLen = token.length - 2;
-    char* content = parser_arena_alloc(ctx, contentLen + 1);
-    strncpy(content, token.start + 1, contentLen);
-    content[contentLen] = '\0';
-    ObjString* s = allocateString(content, contentLen);
+    
+    // Process escape sequences in string content
+    int rawLen = token.length - 2; // Remove quotes
+    const char* raw = token.start + 1; // Skip opening quote
+    
+    // Allocate buffer for processed content (may be smaller due to escape sequences)
+    char* content = parser_arena_alloc(ctx, rawLen + 1);
+    int processedLen = 0;
+    
+    for (int i = 0; i < rawLen; i++) {
+        if (raw[i] == '\\' && i + 1 < rawLen) {
+            // Process escape sequence
+            switch (raw[i + 1]) {
+                case 'n':
+                    content[processedLen++] = '\n';
+                    i++; // Skip the next character
+                    break;
+                case 't':
+                    content[processedLen++] = '\t';
+                    i++; // Skip the next character
+                    break;
+                case '\\':
+                    content[processedLen++] = '\\';
+                    i++; // Skip the next character
+                    break;
+                case '"':
+                    content[processedLen++] = '"';
+                    i++; // Skip the next character
+                    break;
+                case 'r':
+                    content[processedLen++] = '\r';
+                    i++; // Skip the next character
+                    break;
+                case '0':
+                    content[processedLen++] = '\0';
+                    i++; // Skip the next character
+                    break;
+                default:
+                    // Invalid escape sequence - just copy the backslash and character
+                    content[processedLen++] = raw[i];
+                    break;
+            }
+        } else {
+            // Regular character
+            content[processedLen++] = raw[i];
+        }
+    }
+    
+    content[processedLen] = '\0';
+    ObjString* s = allocateString(content, processedLen);
     node->literal.value.type = VAL_STRING;
     node->literal.value.as.obj = (Obj*)s;
     node->literal.hasExplicitSuffix = false;
@@ -1752,4 +1876,5 @@ ASTNode* parseSourceWithContext(ParserContext* ctx, const char* source) {
     
     return root;
 }
+
 

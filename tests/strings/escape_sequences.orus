@@ -1,0 +1,16 @@
+// Test escape sequences in string literals
+text1 = "Hello\nWorld"  // Newline
+text2 = "Tab\tSeparated"  // Tab
+text3 = "Quote: \"Hello\""  // Quote
+text4 = "Backslash: \\\\"  // Backslash
+text5 = "Carriage\rReturn"  // Carriage return
+
+print(text1)
+print(text2) 
+print(text3)
+print(text4)
+print(text5)
+
+// Test combinations
+combined = "Line 1\nLine 2\tTabbed\"Quoted\""
+print(combined)
