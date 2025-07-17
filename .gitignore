@@ -5,6 +5,7 @@
 *.so
 *.dylib
 *.dll
+*.class
 
 # Executables
 /orus
@@ -20,7 +21,7 @@ test_parser
 *.swo
 *~
 .claude/
-.vscode/
+
 
 
 # Debug symbols

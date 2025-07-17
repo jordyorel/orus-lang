@@ -23,6 +23,14 @@ static int compileBinaryOp(ASTNode* node, Compiler* compiler);
 static int compileCast(ASTNode* node, Compiler* compiler);
 static int compileUnary(ASTNode* node, Compiler* compiler);
 
+// Cast compilation handlers
+static bool compileCastFromI32(Type* targetType, Compiler* compiler, uint8_t dstReg, int srcReg);
+static bool compileCastFromI64(Type* targetType, Compiler* compiler, uint8_t dstReg, int srcReg);
+static bool compileCastFromU32(Type* targetType, Compiler* compiler, uint8_t dstReg, int srcReg);
+static bool compileCastFromU64(Type* targetType, Compiler* compiler, uint8_t dstReg, int srcReg);
+static bool compileCastFromF64(Type* targetType, Compiler* compiler, uint8_t dstReg, int srcReg);
+static bool compileCastFromBool(Type* targetType, Compiler* compiler, uint8_t dstReg, int srcReg);
+
 void initCompiler(Compiler* compiler, Chunk* chunk, const char* fileName,
                    const char* source) {
     compiler->chunk = chunk;
@@ -200,6 +208,186 @@ static int compileBinaryOp(ASTNode* node, Compiler* compiler) {
     return dst;
 }
 
+// Cast compilation handlers - each handles one source type
+static bool compileCastFromI32(Type* targetType, Compiler* compiler, uint8_t dstReg, int srcReg) {
+    (void)dstReg; (void)srcReg;  // Unused for simple opcodes
+    if (targetType->kind == TYPE_I64) {
+        emitByte(compiler, OP_I32_TO_I64_R);
+    } else if (targetType->kind == TYPE_U32) {
+        emitByte(compiler, OP_I32_TO_U32_R);
+    } else if (targetType->kind == TYPE_U64) {
+        emitByte(compiler, OP_I32_TO_U64_R);
+    } else if (targetType->kind == TYPE_F64) {
+        emitByte(compiler, OP_I32_TO_F64_R);
+    } else if (targetType->kind == TYPE_BOOL) {
+        emitByte(compiler, OP_I32_TO_BOOL_R);
+    } else if (targetType->kind == TYPE_STRING) {
+        emitByte(compiler, OP_TO_STRING_R);
+    } else {
+        return false;
+    }
+    return true;
+}
+
+static bool compileCastFromI64(Type* targetType, Compiler* compiler, uint8_t dstReg, int srcReg) {
+    if (targetType->kind == TYPE_I32) {
+        emitByte(compiler, OP_I64_TO_I32_R);
+    } else if (targetType->kind == TYPE_U32) {
+        // Chain: i64 → i32 → u32 (use existing opcodes)
+        emitByte(compiler, OP_I64_TO_I32_R);
+        emitByte(compiler, dstReg);
+        emitByte(compiler, (uint8_t)srcReg);
+        srcReg = dstReg;
+        dstReg = allocateRegister(compiler);
+        emitByte(compiler, OP_I32_TO_U32_R);
+    } else if (targetType->kind == TYPE_U64) {
+        emitByte(compiler, OP_I64_TO_U64_R);
+    } else if (targetType->kind == TYPE_F64) {
+        emitByte(compiler, OP_I64_TO_F64_R);
+    } else if (targetType->kind == TYPE_BOOL) {
+        // Chain: i64 → i32 → bool
+        emitByte(compiler, OP_I64_TO_I32_R);
+        emitByte(compiler, dstReg);
+        emitByte(compiler, (uint8_t)srcReg);
+        srcReg = dstReg;
+        dstReg = allocateRegister(compiler);
+        emitByte(compiler, OP_I32_TO_BOOL_R);
+    } else if (targetType->kind == TYPE_STRING) {
+        emitByte(compiler, OP_TO_STRING_R);
+    } else {
+        return false;
+    }
+    return true;
+}
+
+static bool compileCastFromU32(Type* targetType, Compiler* compiler, uint8_t dstReg, int srcReg) {
+    if (targetType->kind == TYPE_I32) {
+        (void)dstReg; (void)srcReg;  // Unused for simple opcodes
+        emitByte(compiler, OP_U32_TO_I32_R);
+    } else if (targetType->kind == TYPE_I64) {
+        // Chain: u32 → i32 → i64
+        emitByte(compiler, OP_U32_TO_I32_R);
+        emitByte(compiler, dstReg);
+        emitByte(compiler, (uint8_t)srcReg);
+        srcReg = dstReg;
+        dstReg = allocateRegister(compiler);
+        emitByte(compiler, OP_I32_TO_I64_R);
+    } else if (targetType->kind == TYPE_U64) {
+        emitByte(compiler, OP_U32_TO_U64_R);
+    } else if (targetType->kind == TYPE_F64) {
+        emitByte(compiler, OP_U32_TO_F64_R);
+    } else if (targetType->kind == TYPE_BOOL) {
+        // Chain: u32 → i32 → bool
+        emitByte(compiler, OP_U32_TO_I32_R);
+        emitByte(compiler, dstReg);
+        emitByte(compiler, (uint8_t)srcReg);
+        srcReg = dstReg;
+        dstReg = allocateRegister(compiler);
+        emitByte(compiler, OP_I32_TO_BOOL_R);
+    } else if (targetType->kind == TYPE_STRING) {
+        emitByte(compiler, OP_TO_STRING_R);
+    } else {
+        return false;
+    }
+    return true;
+}
+
+static bool compileCastFromU64(Type* targetType, Compiler* compiler, uint8_t dstReg, int srcReg) {
+    (void)dstReg; (void)srcReg;  // May be unused for simple opcodes
+    if (targetType->kind == TYPE_I32) {
+        emitByte(compiler, OP_U64_TO_I32_R);
+    } else if (targetType->kind == TYPE_I64) {
+        emitByte(compiler, OP_U64_TO_I64_R);
+    } else if (targetType->kind == TYPE_U32) {
+        emitByte(compiler, OP_U64_TO_U32_R);
+    } else if (targetType->kind == TYPE_F64) {
+        emitByte(compiler, OP_U64_TO_F64_R);
+    } else if (targetType->kind == TYPE_BOOL) {
+        // Chain: u64 → i32 → bool
+        emitByte(compiler, OP_U64_TO_I32_R);
+        emitByte(compiler, dstReg);
+        emitByte(compiler, (uint8_t)srcReg);
+        srcReg = dstReg;
+        dstReg = allocateRegister(compiler);
+        emitByte(compiler, OP_I32_TO_BOOL_R);
+    } else if (targetType->kind == TYPE_STRING) {
+        emitByte(compiler, OP_TO_STRING_R);
+    } else {
+        return false;
+    }
+    return true;
+}
+
+static bool compileCastFromF64(Type* targetType, Compiler* compiler, uint8_t dstReg, int srcReg) {
+    (void)dstReg; (void)srcReg;  // May be unused for simple opcodes
+    if (targetType->kind == TYPE_I32) {
+        emitByte(compiler, OP_F64_TO_I32_R);
+    } else if (targetType->kind == TYPE_I64) {
+        emitByte(compiler, OP_F64_TO_I64_R);
+    } else if (targetType->kind == TYPE_U32) {
+        emitByte(compiler, OP_F64_TO_U32_R);
+    } else if (targetType->kind == TYPE_U64) {
+        emitByte(compiler, OP_F64_TO_U64_R);
+    } else if (targetType->kind == TYPE_BOOL) {
+        // Chain: f64 → i32 → bool
+        emitByte(compiler, OP_F64_TO_I32_R);
+        emitByte(compiler, dstReg);
+        emitByte(compiler, (uint8_t)srcReg);
+        srcReg = dstReg;
+        dstReg = allocateRegister(compiler);
+        emitByte(compiler, OP_I32_TO_BOOL_R);
+    } else if (targetType->kind == TYPE_STRING) {
+        emitByte(compiler, OP_TO_STRING_R);
+    } else {
+        return false;
+    }
+    return true;
+}
+
+static bool compileCastFromBool(Type* targetType, Compiler* compiler, uint8_t dstReg, int srcReg) {
+    (void)dstReg; (void)srcReg;  // May be unused for some opcodes
+    if (targetType->kind == TYPE_I32) {
+        emitByte(compiler, OP_BOOL_TO_I32_R);
+    } else if (targetType->kind == TYPE_I64) {
+        // Chain: bool → i32 → i64
+        emitByte(compiler, OP_BOOL_TO_I32_R);
+        emitByte(compiler, dstReg);
+        emitByte(compiler, (uint8_t)srcReg);
+        srcReg = dstReg;
+        dstReg = allocateRegister(compiler);
+        emitByte(compiler, OP_I32_TO_I64_R);
+    } else if (targetType->kind == TYPE_U32) {
+        // Chain: bool → i32 → u32
+        emitByte(compiler, OP_BOOL_TO_I32_R);
+        emitByte(compiler, dstReg);
+        emitByte(compiler, (uint8_t)srcReg);
+        srcReg = dstReg;
+        dstReg = allocateRegister(compiler);
+        emitByte(compiler, OP_I32_TO_U32_R);
+    } else if (targetType->kind == TYPE_U64) {
+        // Chain: bool → i32 → u64
+        emitByte(compiler, OP_BOOL_TO_I32_R);
+        emitByte(compiler, dstReg);
+        emitByte(compiler, (uint8_t)srcReg);
+        srcReg = dstReg;
+        dstReg = allocateRegister(compiler);
+        emitByte(compiler, OP_I32_TO_U64_R);
+    } else if (targetType->kind == TYPE_F64) {
+        // Chain: bool → i32 → f64
+        emitByte(compiler, OP_BOOL_TO_I32_R);
+        emitByte(compiler, dstReg);
+        emitByte(compiler, (uint8_t)srcReg);
+        srcReg = dstReg;
+        dstReg = allocateRegister(compiler);
+        emitByte(compiler, OP_I32_TO_F64_R);
+    } else if (targetType->kind == TYPE_STRING) {
+        emitByte(compiler, OP_TO_STRING_R);
+    } else {
+        return false;
+    }
+    return true;
+}
+
 static int compileCast(ASTNode* node, Compiler* compiler) {
     // Phase 5: Comprehensive casting rules implementation
     
@@ -272,167 +460,30 @@ static int compileCast(ASTNode* node, Compiler* compiler) {
     int srcReg = compileExpr(node->cast.expression, compiler);
     uint8_t dstReg = allocateRegister(compiler);
     
-    // Generate appropriate conversion opcode based on source→target type combination
-    bool validCast = true;
+    // Delegate to type-specific cast handlers
+    bool validCast = false;
     
-    if (sourceType->kind == TYPE_I32) {
-        if (targetType->kind == TYPE_I64) {
-            emitByte(compiler, OP_I32_TO_I64_R);
-        } else if (targetType->kind == TYPE_U32) {
-            emitByte(compiler, OP_I32_TO_U32_R);
-        } else if (targetType->kind == TYPE_U64) {
-            emitByte(compiler, OP_I32_TO_U64_R);
-        } else if (targetType->kind == TYPE_F64) {
-            emitByte(compiler, OP_I32_TO_F64_R);
-        } else if (targetType->kind == TYPE_BOOL) {
-            emitByte(compiler, OP_I32_TO_BOOL_R);
-        } else if (targetType->kind == TYPE_STRING) {
-            emitByte(compiler, OP_TO_STRING_R);
-        } else {
+    switch (sourceType->kind) {
+        case TYPE_I32:
+            validCast = compileCastFromI32(targetType, compiler, dstReg, srcReg);
+            break;
+        case TYPE_I64:
+            validCast = compileCastFromI64(targetType, compiler, dstReg, srcReg);
+            break;
+        case TYPE_U32:
+            validCast = compileCastFromU32(targetType, compiler, dstReg, srcReg);
+            break;
+        case TYPE_U64:
+            validCast = compileCastFromU64(targetType, compiler, dstReg, srcReg);
+            break;
+        case TYPE_F64:
+            validCast = compileCastFromF64(targetType, compiler, dstReg, srcReg);
+            break;
+        case TYPE_BOOL:
+            validCast = compileCastFromBool(targetType, compiler, dstReg, srcReg);
+            break;
+        default:
             validCast = false;
-        }
-    } else if (sourceType->kind == TYPE_I64) {
-        if (targetType->kind == TYPE_I32) {
-            emitByte(compiler, OP_I64_TO_I32_R);
-        } else if (targetType->kind == TYPE_U32) {
-            // Chain: i64 → i32 → u32 (use existing opcodes)
-            emitByte(compiler, OP_I64_TO_I32_R);
-            emitByte(compiler, dstReg);
-            emitByte(compiler, (uint8_t)srcReg);
-            srcReg = dstReg;
-            dstReg = allocateRegister(compiler);
-            emitByte(compiler, OP_I32_TO_U32_R);
-        } else if (targetType->kind == TYPE_U64) {
-            emitByte(compiler, OP_I64_TO_U64_R);
-        } else if (targetType->kind == TYPE_F64) {
-            emitByte(compiler, OP_I64_TO_F64_R);
-        } else if (targetType->kind == TYPE_BOOL) {
-            // Chain: i64 → i32 → bool
-            emitByte(compiler, OP_I64_TO_I32_R);
-            emitByte(compiler, dstReg);
-            emitByte(compiler, (uint8_t)srcReg);
-            srcReg = dstReg;
-            dstReg = allocateRegister(compiler);
-            emitByte(compiler, OP_I32_TO_BOOL_R);
-        } else if (targetType->kind == TYPE_STRING) {
-            emitByte(compiler, OP_TO_STRING_R);
-        } else {
-            validCast = false;
-        }
-    } else if (sourceType->kind == TYPE_U32) {
-        if (targetType->kind == TYPE_I32) {
-            emitByte(compiler, OP_U32_TO_I32_R);
-        } else if (targetType->kind == TYPE_I64) {
-            // Chain: u32 → i32 → i64
-            emitByte(compiler, OP_U32_TO_I32_R);
-            emitByte(compiler, dstReg);
-            emitByte(compiler, (uint8_t)srcReg);
-            srcReg = dstReg;
-            dstReg = allocateRegister(compiler);
-            emitByte(compiler, OP_I32_TO_I64_R);
-        } else if (targetType->kind == TYPE_U64) {
-            emitByte(compiler, OP_U32_TO_U64_R);
-        } else if (targetType->kind == TYPE_F64) {
-            emitByte(compiler, OP_U32_TO_F64_R);
-        } else if (targetType->kind == TYPE_BOOL) {
-            // Chain: u32 → i32 → bool
-            emitByte(compiler, OP_U32_TO_I32_R);
-            emitByte(compiler, dstReg);
-            emitByte(compiler, (uint8_t)srcReg);
-            srcReg = dstReg;
-            dstReg = allocateRegister(compiler);
-            emitByte(compiler, OP_I32_TO_BOOL_R);
-        } else if (targetType->kind == TYPE_STRING) {
-            emitByte(compiler, OP_TO_STRING_R);
-        } else {
-            validCast = false;
-        }
-    } else if (sourceType->kind == TYPE_U64) {
-        if (targetType->kind == TYPE_I32) {
-            emitByte(compiler, OP_U64_TO_I32_R);
-        } else if (targetType->kind == TYPE_I64) {
-            emitByte(compiler, OP_U64_TO_I64_R);
-        } else if (targetType->kind == TYPE_U32) {
-            emitByte(compiler, OP_U64_TO_U32_R);
-        } else if (targetType->kind == TYPE_F64) {
-            emitByte(compiler, OP_U64_TO_F64_R);
-        } else if (targetType->kind == TYPE_BOOL) {
-            // Chain: u64 → i32 → bool
-            emitByte(compiler, OP_U64_TO_I32_R);
-            emitByte(compiler, dstReg);
-            emitByte(compiler, (uint8_t)srcReg);
-            srcReg = dstReg;
-            dstReg = allocateRegister(compiler);
-            emitByte(compiler, OP_I32_TO_BOOL_R);
-        } else if (targetType->kind == TYPE_STRING) {
-            emitByte(compiler, OP_TO_STRING_R);
-        } else {
-            validCast = false;
-        }
-    } else if (sourceType->kind == TYPE_F64) {
-        if (targetType->kind == TYPE_I32) {
-            emitByte(compiler, OP_F64_TO_I32_R);
-        } else if (targetType->kind == TYPE_I64) {
-            emitByte(compiler, OP_F64_TO_I64_R);
-        } else if (targetType->kind == TYPE_U32) {
-            emitByte(compiler, OP_F64_TO_U32_R);
-        } else if (targetType->kind == TYPE_U64) {
-            emitByte(compiler, OP_F64_TO_U64_R);
-        } else if (targetType->kind == TYPE_BOOL) {
-            // Chain: f64 → i32 → bool
-            emitByte(compiler, OP_F64_TO_I32_R);
-            emitByte(compiler, dstReg);
-            emitByte(compiler, (uint8_t)srcReg);
-            srcReg = dstReg;
-            dstReg = allocateRegister(compiler);
-            emitByte(compiler, OP_I32_TO_BOOL_R);
-        } else if (targetType->kind == TYPE_STRING) {
-            emitByte(compiler, OP_TO_STRING_R);
-        } else {
-            validCast = false;
-        }
-    } else if (sourceType->kind == TYPE_BOOL) {
-        if (targetType->kind == TYPE_I32) {
-            emitByte(compiler, OP_BOOL_TO_I32_R);
-        } else if (targetType->kind == TYPE_I64) {
-            // Chain: bool → i32 → i64
-            emitByte(compiler, OP_BOOL_TO_I32_R);
-            emitByte(compiler, dstReg);
-            emitByte(compiler, (uint8_t)srcReg);
-            srcReg = dstReg;
-            dstReg = allocateRegister(compiler);
-            emitByte(compiler, OP_I32_TO_I64_R);
-        } else if (targetType->kind == TYPE_U32) {
-            // Chain: bool → i32 → u32
-            emitByte(compiler, OP_BOOL_TO_I32_R);
-            emitByte(compiler, dstReg);
-            emitByte(compiler, (uint8_t)srcReg);
-            srcReg = dstReg;
-            dstReg = allocateRegister(compiler);
-            emitByte(compiler, OP_I32_TO_U32_R);
-        } else if (targetType->kind == TYPE_U64) {
-            // Chain: bool → i32 → u64
-            emitByte(compiler, OP_BOOL_TO_I32_R);
-            emitByte(compiler, dstReg);
-            emitByte(compiler, (uint8_t)srcReg);
-            srcReg = dstReg;
-            dstReg = allocateRegister(compiler);
-            emitByte(compiler, OP_I32_TO_U64_R);
-        } else if (targetType->kind == TYPE_F64) {
-            // Chain: bool → i32 → f64
-            emitByte(compiler, OP_BOOL_TO_I32_R);
-            emitByte(compiler, dstReg);
-            emitByte(compiler, (uint8_t)srcReg);
-            srcReg = dstReg;
-            dstReg = allocateRegister(compiler);
-            emitByte(compiler, OP_I32_TO_F64_R);
-        } else if (targetType->kind == TYPE_STRING) {
-            emitByte(compiler, OP_TO_STRING_R);
-        } else {
-            validCast = false;
-        }
-    } else {
-        validCast = false;
     }
     
     if (!validCast) {

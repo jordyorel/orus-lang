@@ -144,6 +144,36 @@ run_benchmark_category() {
         run_language_benchmark "LuaJIT" "${base_name}.lua" "luajit \"$SCRIPT_DIR/${base_name}.lua\""
     fi
     
+    # Check for Java benchmark (detect based on benchmark type)
+    local java_class=""
+    case "$base_name" in
+        "arithmetic_benchmark")
+            java_class="ArithmeticBenchmark"
+            ;;
+        "comprehensive_benchmark")
+            java_class="ComprehensiveBenchmark"
+            ;;
+        "extreme_benchmark")
+            java_class="ExtremeBenchmark"
+            ;;
+    esac
+    
+    if [[ -n "$java_class" ]] && [[ -f "$SCRIPT_DIR/${java_class}.java" ]] && command -v java >/dev/null 2>&1; then
+        # Compile Java if needed
+        if [[ ! -f "$SCRIPT_DIR/${java_class}.class" ]] || [[ "$SCRIPT_DIR/${java_class}.java" -nt "$SCRIPT_DIR/${java_class}.class" ]]; then
+            echo -n "  Compiling Java ($java_class)..."
+            if javac "$SCRIPT_DIR/${java_class}.java" > /dev/null 2>&1; then
+                echo " ✅"
+            else
+                echo " ❌"
+            fi
+        fi
+        
+        if [[ -f "$SCRIPT_DIR/${java_class}.class" ]]; then
+            run_language_benchmark "Java" "${java_class}.java" "cd \"$SCRIPT_DIR\" && java $java_class"
+        fi
+    fi
+    
     echo ""
     
     # Display category results

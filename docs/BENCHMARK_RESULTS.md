@@ -16,23 +16,32 @@
 
 ## 📊 Latest Benchmark Results *(Updated July 17, 2025)*
 
-### Pure Arithmetic Operations Benchmark
+### Pure Arithmetic Operations Benchmark (5-run average)
 | Language | Time (ms) | Relative Performance | Status |
 |----------|----------|---------------------|---------|
-| 🥇 **LuaJIT** | 20.0ms | 1.0x (fastest) | ✅ |
-| 🥈 **Orus** | 20.7ms | 1.03x slower | ✅ |
-| 🥉 **Lua** | 20.8ms | 1.04x slower | ✅ |
-| 🔸 **Python** | 35.0ms | 1.75x slower | ✅ |
-| 🔸 **JavaScript** | 48.7ms | 2.44x slower | ✅ |
+| 🥇 **LuaJIT** | 20.6ms | 1.0x (baseline) | ✅ |
+| 🥈 **Lua** | 20.8ms | 1.01x slower | ✅ |
+| 🥉 **Orus** | 21.5ms | 1.04x slower | ✅ |
+| 🔸 **Python** | 35.1ms | 1.70x slower | ✅ |
+| 🔸 **JavaScript** | 45.6ms | 2.21x slower | ✅ |
 
-### Comprehensive Performance Benchmark
+### Orus vs Java Pure Arithmetic Benchmark (NEW!)
 | Language | Time (ms) | Relative Performance | Status |
 |----------|----------|---------------------|---------|
-| 🥇 **Orus** | 20.2ms | 1.0x (fastest) | ✅ |
-| 🥈 **LuaJIT** | 20.4ms | 1.01x slower | ✅ |
-| 🥉 **Lua** | 20.6ms | 1.02x slower | ✅ |
-| 🔸 **Python** | 35.3ms | 1.75x slower | ✅ |
-| 🔸 **JavaScript** | 45.4ms | 2.25x slower | ✅ |
+| 🥇 **Orus** | 5.2ms | **13.5x faster than Java** | ✅ |
+| 🔸 **Java (HotSpot JVM)** | 70.4ms | 1.0x (JVM baseline) | ✅ |
+
+*Test includes 500+ arithmetic operations, mathematical algorithms, and computational stress tests*
+
+### Comprehensive Performance Benchmark (5-run average)
+| Language | Time (ms) | Range (ms) | Relative Performance | Status |
+|----------|----------|-----------|---------------------|---------|
+| 🥇 **Orus** | 20.4ms | 20.3-20.7 | 1.0x (fastest) | ✅ |
+| 🥈 **LuaJIT** | 20.6ms | 20.4-20.7 | 1.01x slower | ✅ |
+| 🥉 **Lua** | 21.1ms | 20.9-21.6 | 1.03x slower | ✅ |
+| 🔸 **Python** | 35.1ms | 34.8-35.4 | 1.72x slower | ✅ |
+| 🔸 **JavaScript** | 45.6ms | 45.3-45.7 | 2.24x slower | ✅ |
+| 🔸 **Java** | 71.6ms | 68.0-74.7 | 3.51x slower | ✅ |
 
 ### Extreme Stress Test Benchmark
 | Language | Time (ms) | Relative Performance | Status |

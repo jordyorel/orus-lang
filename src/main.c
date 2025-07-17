@@ -14,6 +14,7 @@
 #include "compiler/compiler.h"
 #include "tools/repl.h"
 #include "public/version.h"
+#include "config/config.h"
 
 
 static char* readFile(const char* path) {
@@ -97,28 +98,8 @@ static void runFile(const char* path) {
     }
 }
 
-static void showUsage(const char* program) {
-    printf("Usage: %s [options] [file]\n", program);
-    printf("Options:\n");
-    printf("  -h, --help     Show this help message\n");
-    printf("  -v, --version  Show version information\n");
-    printf("  -t, --trace    Enable execution tracing\n");
-    printf("  -d, --debug    Enable debug mode\n");
-    printf("\n");
-    printf("If no file is provided, starts interactive REPL mode.\n");
-}
-
-static void showVersion() {
-    printf("Orus Language Interpreter v%s\n", ORUS_VERSION_STRING);
-    printf("Built with register-based virtual machine\n");
-    
-    // ✅ Phase 4: Add diagnostic output for dispatch mode
-    #ifdef USE_COMPUTED_GOTO
-        printf("Dispatch Mode: Computed Goto (fast)\n");
-    #else
-        printf("Dispatch Mode: Switch-based (portable)\n");
-    #endif
-}
+// Note: showUsage and showVersion functions are now handled by the configuration system
+// See config_print_help() and config_print_version() in src/config/config.c
 
 int main(int argc, const char* argv[]) {
     // Initialize error reporting system
@@ -128,55 +109,89 @@ int main(int argc, const char* argv[]) {
     init_feature_errors();
     init_type_errors();
     
-    bool traceExecution = false;
-    bool debugMode = false;
-    const char* fileName = NULL;
+    // Create and initialize configuration
+    OrusConfig* config = config_create();
+    if (!config) {
+        fprintf(stderr, "Error: Failed to create configuration\n");
+        return EXIT_USAGE_ERROR;
+    }
     
-    // Parse command line arguments
-    for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
-            showUsage(argv[0]);
-            return 0;
-        } else if (strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--version") == 0) {
-            showVersion();
-            return 0;
-        } else if (strcmp(argv[i], "-t") == 0 || strcmp(argv[i], "--trace") == 0) {
-            traceExecution = true;
-        } else if (strcmp(argv[i], "-d") == 0 || strcmp(argv[i], "--debug") == 0) {
-            debugMode = true;
-        } else if (argv[i][0] == '-') {
-            fprintf(stderr, "Unknown option: %s\n", argv[i]);
-            showUsage(argv[0]);
+    // Load configuration from environment variables
+    config_load_from_env(config);
+    
+    // Load configuration file if specified in environment
+    const char* config_file = getenv(ORUS_CONFIG_FILE);
+    if (config_file) {
+        config_load_from_file(config, config_file);
+    }
+    
+    // Parse command line arguments (highest precedence)
+    if (!config_parse_args(config, argc, argv)) {
+        // config_parse_args returns false for help/version or errors
+        config_destroy(config);
+        return 0; // Help/version shown, normal exit
+    }
+    
+    // Validate configuration
+    if (!config_validate(config)) {
+        config_print_errors(config);
+        config_destroy(config);
+        return EXIT_USAGE_ERROR;
+    }
+    
+    // Set global configuration for access by other modules
+    config_set_global(config);
+    
+    // Load configuration file if specified via command line
+    if (config->config_file && config->config_file != config_file) {
+        config_load_from_file(config, config->config_file);
+        // Re-validate after loading config file
+        if (!config_validate(config)) {
+            config_print_errors(config);
+            config_destroy(config);
             return EXIT_USAGE_ERROR;
-        } else {
-            if (fileName != NULL) {
-                fprintf(stderr, "Too many arguments.\n");
-                showUsage(argv[0]);
-                return EXIT_USAGE_ERROR;
-            }
-            fileName = argv[i];
         }
     }
     
-    // Initialize VM
+    // Initialize VM with configuration
     initVM();
     
-    // Set VM options
-    if (traceExecution) {
-        vm.trace = true;
+    // Apply configuration to VM
+    vm.trace = config->trace_execution;
+    vm.devMode = config->debug_mode;
+    
+    // Apply VM configuration settings
+    // Note: In a real implementation, we'd need to modify the VM to accept these parameters
+    // For now, we'll just set the trace and debug flags
+    
+    if (config->verbose && !config->quiet) {
+        printf("Orus Language Interpreter starting...\n");
+        if (config->show_ast || config->show_bytecode || config->show_tokens) {
+            printf("Development tools enabled: ");
+            if (config->show_ast) printf("AST ");
+            if (config->show_bytecode) printf("Bytecode ");
+            if (config->show_tokens) printf("Tokens ");
+            printf("\n");
+        }
     }
     
-    if (debugMode) {
-        vm.devMode = true;
+    // Handle special development modes
+    if (config->benchmark_mode && !config->quiet) {
+        printf("Benchmark mode enabled\n");
     }
     
-    // Run file or REPL
-    if (fileName == NULL) {
+    // Run file or REPL based on configuration
+    if (config->repl_mode) {
+        if (!config->quiet) {
+            printf("Starting REPL mode...\n");
+        }
         repl();
     } else {
-        runFile(fileName);
+        runFile(config->input_file);
     }
     
+    // Cleanup
     freeVM();
+    config_destroy(config);
     return 0;
 }

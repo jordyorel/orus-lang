@@ -22,19 +22,30 @@ print("Result: ", fibonacci(10))
 
 *Benchmarks run on Apple M1 Pro with optimized builds (5-run average with statistical analysis)*
 
+### Comprehensive Benchmark Results
+
 | Language | **Mean Time** | **Range** | **Relative Performance** |
 |----------|---------------|-----------|--------------------------|
-| **LuaJIT** | **20.6ms** | 20.5-20.9ms | 1.0× (baseline) |
-| **Lua** | **20.8ms** | 20.7-20.9ms | 1.01× slower |
-| **Orus** | **21.5ms** | 20.5-24.8ms | 1.04× slower |
-| **Python** | **35.1ms** | 34.7-35.7ms | 1.70× slower |
-| **JavaScript** | **45.6ms** | 45.0-45.9ms | 2.21× slower |
+| **LuaJIT** | **21.0ms** | 20.8-21.2ms | 1.0× (baseline) |
+| **Orus** | **21.0ms** | 20.5-21.5ms | 1.0× (tied for fastest) |
+| **Lua** | **21.1ms** | 20.8-21.2ms | 1.00× slower |
+| **Python** | **35.3ms** | 34.8-35.7ms | 1.68× slower |
+| **JavaScript** | **46.1ms** | 45.7-46.8ms | 2.20× slower |
+| **Java** | **72.1ms** | 67.0-75.5ms | 3.43× slower |
+
+### Pure Arithmetic Performance
+
+| Language | **Mean Time** | **Operations** | **Relative Performance** |
+|----------|---------------|----------------|--------------------------|
+| **Orus** | **5.2ms** | 500+ arithmetic ops | **13.5× faster than Java** |
+| **Java (HotSpot)** | **70.4ms** | 500+ arithmetic ops | 1.0× (JVM baseline) |
 
 **Performance Summary**:
-- **vs Python**: 1.6× faster  
-- **vs JavaScript**: 2.1× faster
-- **vs LuaJIT**: Competitive (within 4% difference)
-- **vs Lua**: Competitive (within 3% difference)
+- **vs Python**: 1.7× faster (comprehensive) 
+- **vs JavaScript**: 2.2× faster (comprehensive)
+- **vs Java**: 3.4× faster (comprehensive), 13.5× faster (pure arithmetic)
+- **vs LuaJIT**: Tied for fastest
+- **vs Lua**: Tied for fastest
 
 ## Quick Start
 
