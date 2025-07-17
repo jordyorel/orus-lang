@@ -148,7 +148,13 @@ test: $(ORUS)
 	                  $(TESTDIR)/expressions/comprehensive_parenthesized_casts.orus \
 	                  $(TESTDIR)/expressions/unary_operators.orus \
 	                  $(TESTDIR)/expressions/unary_comprehensive.orus \
-	                  $(TESTDIR)/expressions/unary_edge_cases.orus; do \
+	                  $(TESTDIR)/expressions/unary_edge_cases.orus \
+	                  $(TESTDIR)/expressions/ternary_basic.orus \
+	                  $(TESTDIR)/expressions/ternary_advanced.orus \
+	                  $(TESTDIR)/expressions/ternary_edge_cases.orus \
+	                  $(TESTDIR)/expressions/ternary_types.orus \
+	                  $(TESTDIR)/expressions/ternary_optimization.orus \
+	                  $(TESTDIR)/expressions/ternary_comprehensive.orus; do \
 		if [ -f "$$test_file" ]; then \
 			printf "Testing: $$test_file ... "; \
 			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
@@ -194,7 +200,8 @@ test: $(ORUS)
 	                  $(TESTDIR)/control_flow/edge_zero_iterations.orus \
 	                  $(TESTDIR)/control_flow/edge_complex_conditions.orus \
 	                  $(TESTDIR)/control_flow/edge_deep_nesting.orus \
-	                  $(TESTDIR)/control_flow/edge_mixed_styles.orus; do \
+	                  $(TESTDIR)/control_flow/edge_mixed_styles.orus \
+	                  $(TESTDIR)/control_flow/optimization_verification.orus; do \
 		if [ -f "$$test_file" ]; then \
 			printf "Testing: $$test_file ... "; \
 			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \

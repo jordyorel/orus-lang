@@ -28,6 +28,7 @@ static int compileIdentifier(ASTNode* node, Compiler* compiler);
 static int compileBinaryOp(ASTNode* node, Compiler* compiler);
 static int compileCast(ASTNode* node, Compiler* compiler);
 static int compileUnary(ASTNode* node, Compiler* compiler);
+static int compileTernary(ASTNode* node, Compiler* compiler);
 
 // Cast compilation handlers
 static bool compileCastFromI32(Type* targetType, Compiler* compiler, uint8_t dstReg, int srcReg);
@@ -809,6 +810,60 @@ static int compileUnary(ASTNode* node, Compiler* compiler) {
     return dst;
 }
 
+static int compileTernary(ASTNode* node, Compiler* compiler) {
+    // Apply constant folding optimization first
+    if (isConstantExpression(node->ternary.condition)) {
+        Value conditionValue = evaluateConstantExpression(node->ternary.condition);
+        if (IS_BOOL(conditionValue)) {
+            // Dead code elimination - compile only the taken branch
+            if (AS_BOOL(conditionValue)) {
+                return compileExpr(node->ternary.trueExpr, compiler);
+            } else {
+                return compileExpr(node->ternary.falseExpr, compiler);
+            }
+        }
+    }
+    
+    // Non-constant condition - compile with conditional jumps
+    int conditionReg = compileExpr(node->ternary.condition, compiler);
+    
+    // Allocate result register
+    int resultReg = allocateRegister(compiler);
+    
+    // Emit conditional jump - if condition is false, jump to false expression
+    emitByte(compiler, OP_JUMP_IF_NOT_R);
+    emitByte(compiler, (uint8_t)conditionReg);
+    int falseJump = emitJump(compiler);
+    
+    freeRegister(compiler, conditionReg);
+    
+    // Compile true expression and store in result register
+    int trueReg = compileExpr(node->ternary.trueExpr, compiler);
+    emitByte(compiler, OP_MOVE);
+    emitByte(compiler, (uint8_t)resultReg);
+    emitByte(compiler, (uint8_t)trueReg);
+    freeRegister(compiler, trueReg);
+    
+    // Jump over false expression
+    emitByte(compiler, OP_JUMP);
+    int endJump = emitJump(compiler);
+    
+    // Patch the false jump to point here (start of false expression)
+    patchJump(compiler, falseJump);
+    
+    // Compile false expression and store in result register
+    int falseReg = compileExpr(node->ternary.falseExpr, compiler);
+    emitByte(compiler, OP_MOVE);
+    emitByte(compiler, (uint8_t)resultReg);
+    emitByte(compiler, (uint8_t)falseReg);
+    freeRegister(compiler, falseReg);
+    
+    // Patch the end jump
+    patchJump(compiler, endJump);
+    
+    return resultReg;
+}
+
 static int compileExpr(ASTNode* node, Compiler* compiler) {
     // Update current line/column for error reporting
     if (node) {
@@ -833,6 +888,8 @@ static int compileExpr(ASTNode* node, Compiler* compiler) {
             return compileCast(node, compiler);
         case NODE_UNARY:
             return compileUnary(node, compiler);
+        case NODE_TERNARY:
+            return compileTernary(node, compiler);
         default:
             compiler->hadError = true;
             return allocateRegister(compiler);

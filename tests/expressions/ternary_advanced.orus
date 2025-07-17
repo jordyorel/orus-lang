@@ -1,0 +1,40 @@
+// Advanced ternary operator tests
+// Tests complex conditions and nested ternary expressions
+
+// Test 1: Nested ternary operators
+a = 15
+result = a > 10 ? (a > 20 ? "large" : "medium") : "small"
+print(result)
+
+// Test 2: Multiple nested ternary
+value = 75
+grade = value >= 90 ? "A" : value >= 80 ? "B" : value >= 70 ? "C" : "F"
+print(grade)
+
+// Test 3: Ternary with arithmetic expressions
+x = 8
+y = 3
+max_value = x > y ? x * 2 : y * 2
+print(max_value)
+
+// Test 4: String concatenation in ternary
+isVIP = true
+message = isVIP ? "Welcome VIP: " + "Premium Access" : "Welcome: " + "Standard Access"
+print(message)
+
+// Test 5: Boolean logic in condition
+temperature = 22
+humidity = 65
+comfort = temperature > 20 and humidity < 70 ? "comfortable" : "uncomfortable"
+print(comfort)
+
+// Test 6: Complex nested parentheses
+score1 = 85
+score2 = 92
+final_grade = (score1 + score2) / 2 > 85 ? "Pass" : "Fail"
+print(final_grade)
+
+// Test 7: Ternary with string operations
+count = 5
+message2 = count > 0 ? "Items: 5" : "No items"
+print(message2)

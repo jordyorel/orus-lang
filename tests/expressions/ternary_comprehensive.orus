@@ -1,0 +1,36 @@
+// Comprehensive ternary operator test
+// Tests all basic ternary functionality
+
+// Test 1: Basic ternary operator
+x = 5
+result = x > 0 ? "positive" : "negative"
+print(result)
+
+// Test 2: Nested ternary
+a = 15
+nested = a > 10 ? (a > 20 ? "large" : "medium") : "small"
+print(nested)
+
+// Test 3: Boolean condition
+isActive = true
+status = isActive ? "active" : "inactive"
+print(status)
+
+// Test 4: String comparison
+name = "Alice"
+greeting = name == "Alice" ? "Hello Alice!" : "Hello stranger!"
+print(greeting)
+
+// Test 5: Arithmetic in ternary
+num1 = 8
+num2 = 3
+max_val = num1 > num2 ? num1 * 2 : num2 * 2
+print(max_val)
+
+// Test 6: Complex condition
+temperature = 22
+humidity = 65
+comfort = temperature > 20 and humidity < 70 ? "comfortable" : "uncomfortable"
+print(comfort)
+
+print("All ternary tests completed")

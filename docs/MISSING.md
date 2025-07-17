@@ -142,8 +142,8 @@ print("Array has items", len(items))
 ### 2.1 Conditional Statements & Basic Optimization
 **Priority: 🔥 High**
 - [*] **Done**: Implement if/else statements with nested conditions and `elif`, including jump patching and scoped blocks.
-- [*] **NEW**: Add basic dead code elimination for unreachable branches
-- [*] **NEW**: Implement constant folding for compile-time known conditions
+- [*] **Done**: Add basic dead code elimination for unreachable branches
+- [*] **Done**: Implement constant folding for compile-time known conditions
 
 ```orus
 // Target syntax:
@@ -155,7 +155,7 @@ else:
     // block
 
 print("ok") if x == 1 elif x == 2 else print("fallback")
-- [x] // Ternary operator 
+- [ ] // Ternary operator 
 result = x > 0 ? "positive" : "non-positive"
 ```
 

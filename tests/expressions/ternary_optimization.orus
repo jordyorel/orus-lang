@@ -1,0 +1,42 @@
+// Performance tests for ternary operator
+// Tests optimization and performance characteristics
+
+// Test 1: Constant folding optimization
+result1 = true ? "optimized" : "not reached"
+print(result1)
+
+// Test 2: Constant folding with false condition
+result2 = false ? "not reached" : "optimized"
+print(result2)
+
+// Test 3: Simple expression optimization
+x = 10
+result3 = x > 5 ? "greater" : "lesser"
+print(result3)
+
+// Test 4: Arithmetic optimization
+a = 5
+b = 3
+result4 = a > b ? a + b : a - b
+print(result4)
+
+// Test 5: String optimization
+name = "Alice"
+result5 = name == "Alice" ? "match" : "no match"
+print(result5)
+
+// Test 6: Nested optimization
+value = 42
+result6 = value > 40 ? (value > 50 ? "high" : "medium") : "low"
+print(result6)
+
+// Test 7: Boolean optimization
+flag = true
+result7 = flag ? "enabled" : "disabled"
+print(result7)
+
+// Test 8: Complex condition optimization
+score = 85
+threshold = 80
+result8 = score > threshold ? "pass" : "fail"
+print(result8)
