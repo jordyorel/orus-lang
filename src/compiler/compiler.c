@@ -713,6 +713,7 @@ static bool compileNode(ASTNode* node, Compiler* compiler) {
             int reg = compileExpr(node->assign.value, compiler);
             int idx;
             if (!symbol_table_get(&compiler->symbols, node->assign.name, &idx)) {
+                // Variable doesn't exist - create new one (immutable by default for plain assignments)
                 idx = vm.variableCount++;
                 ObjString* name = allocateString(node->assign.name,
                                                  (int)strlen(node->assign.name));
@@ -722,7 +723,17 @@ static bool compileNode(ASTNode* node, Compiler* compiler) {
                 // For assignments without declaration, infer type from assigned expression
                 Type* inferredType = getExprType(node->assign.value, compiler);
                 vm.globalTypes[idx] = inferredType ? inferredType : getPrimitiveType(TYPE_ANY);
+                vm.mutableGlobals[idx] = false; // Plain assignments create immutable variables
                 symbol_table_set(&compiler->symbols, node->assign.name, idx);
+            } else {
+                // Variable exists - check if it's mutable
+                if (!vm.mutableGlobals[idx]) {
+                    SrcLocation location = {vm.filePath, node->location.line, node->location.column};
+                    report_immutable_assignment(location, node->assign.name);
+                    compiler->hadError = true;
+                    freeRegister(compiler, reg);
+                    return false;
+                }
             }
             emitByte(compiler, OP_STORE_GLOBAL);
             emitByte(compiler, (uint8_t)idx);

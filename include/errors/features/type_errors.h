@@ -15,6 +15,7 @@ ErrorReportResult report_undefined_type(SrcLocation location, const char* type_n
 ErrorReportResult report_incompatible_types(SrcLocation location, const char* left_type, const char* right_type);
 ErrorReportResult report_type_annotation_required(SrcLocation location, const char* context);
 ErrorReportResult report_unsupported_operation(SrcLocation location, const char* operation, const char* type);
+ErrorReportResult report_immutable_assignment(SrcLocation location, const char* variable_name);
 
 // Type error utilities
 const char* get_type_error_suggestion(ErrorCode code, const char* context);

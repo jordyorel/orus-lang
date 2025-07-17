@@ -1,0 +1,20 @@
+// Test compound assignments on mutable variables
+mut a = 10
+print("Initial a:", a)
+
+a += 5
+print("After +=:", a)  // Should print 15
+
+a -= 3
+print("After -=:", a)  // Should print 12
+
+a *= 2
+print("After *=:", a)  // Should print 24
+
+a /= 4
+print("After /=:", a)  // Should print 6
+
+// Test with different types
+mut f = 3.14
+f += 1.86
+print("Float after +=:", f)  // Should print 5.0

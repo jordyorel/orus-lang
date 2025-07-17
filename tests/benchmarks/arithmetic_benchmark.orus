@@ -66,9 +66,9 @@ print("Triangle area:", triangle_area)
 print("Phase 3: Iterative Calculations")
 
 // Fibonacci-like sequence
-fib_a = 1
-fib_b = 1
-fib_c = fib_a + fib_b
+mut fib_a = 1
+mut fib_b = 1
+mut fib_c = fib_a + fib_b
 fib_a = fib_b
 fib_b = fib_c
 fib_c = fib_a + fib_b
@@ -92,7 +92,7 @@ fib_b = fib_c
 fib_c = fib_a + fib_b
 
 // Factorial-like calculations
-fact_result = 1
+mut fact_result = 1
 fact_result = fact_result * 2
 fact_result = fact_result * 3
 fact_result = fact_result * 4
@@ -119,10 +119,10 @@ print("5^4:", power_5_4)
 print("Phase 4: Mathematical Algorithms")
 
 // Greatest Common Divisor simulation (Euclidean algorithm)
-gcd_a = 1071
-gcd_b = 462
+mut gcd_a = 1071
+mut gcd_b = 462
 // Step 1: 1071 = 462 * 2 + 147
-gcd_remainder = gcd_a - gcd_b * 2
+mut gcd_remainder = gcd_a - gcd_b * 2
 gcd_a = gcd_b
 gcd_b = gcd_remainder
 // Step 2: 462 = 147 * 3 + 21
@@ -135,7 +135,7 @@ gcd_result = gcd_b
 
 // Square root approximation (Newton's method)
 sqrt_target = 100
-sqrt_guess = 50
+mut sqrt_guess = 50
 sqrt_guess = (sqrt_guess + sqrt_target / sqrt_guess) / 2
 sqrt_guess = (sqrt_guess + sqrt_target / sqrt_guess) / 2
 sqrt_guess = (sqrt_guess + sqrt_target / sqrt_guess) / 2

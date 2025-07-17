@@ -57,9 +57,9 @@ single = 999
 print(single)  // Should print 999
 
 // EDGE CASE 7: Floating point precision
-pi = 3.14159265359f64, e = 2.71828f64
-print(pi)  // Should print 3.14159265359
-print(e)   // Should print 2.71828
+pi = 3.14159265359f64, euler = 2.71828f64
+print(pi)     // Should print 3.14159265359
+print(euler)  // Should print 2.71828
 
 // EDGE CASE 8: Mixed mutable and immutable with types
 mut var1: i32 = 10, var2 = 20, mut var3: f64 = 30.5

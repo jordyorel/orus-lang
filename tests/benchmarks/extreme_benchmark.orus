@@ -28,8 +28,8 @@ formula2 = ((a + b + c + d + e) * (a - b - c - d - e)) / ((a * b) + (c * d) + (e
 formula3 = (((a / b) + (c / d)) * ((e / a) + (b / c))) - (((d / e) + (a / b)) * ((c / d) + (e / a)))
 
 // Computation chains
-chain_result = 0
-temp_val = 1
+mut chain_result = 0
+mut temp_val = 1
 temp_val = temp_val + a
 chain_result = chain_result + temp_val
 temp_val = temp_val * b

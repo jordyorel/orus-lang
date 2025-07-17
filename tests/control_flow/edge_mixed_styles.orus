@@ -6,11 +6,11 @@ y = 3
 if y < 5:
     print("Block if")
 
-z = 0
+mut z = 0
 while z < 2: z = z + 1
 print("After inline while:", z)
 
-w = 0
+mut w = 0
 while w < 2:
     print("Block while:", w)
     w = w + 1

@@ -45,6 +45,12 @@ static const FeatureErrorInfo type_errors[] = {
         .title = "This operation isn't supported for this type",
         .help = "Check the documentation for supported operations on this type.",
         .note = "Different types support different operations for safety and clarity."
+    },
+    {
+        .code = E2008_IMMUTABLE_ASSIGNMENT,
+        .title = "This variable is protected from changes",
+        .help = "To modify this variable, declare it as mutable with 'mut' when you first create it: 'mut variable_name = value'",
+        .note = "Variables are immutable by default to help prevent bugs and make your code more predictable."
     }
 };
 
@@ -91,6 +97,12 @@ ErrorReportResult report_unsupported_operation(SrcLocation location, const char*
                                  "Operation '%s' not supported for type '%s'", operation, type);
 }
 
+// Immutable assignment error
+ErrorReportResult report_immutable_assignment(SrcLocation location, const char* variable_name) {
+    return report_feature_error_f(E2008_IMMUTABLE_ASSIGNMENT, location, 
+                                 "Variable '%s' is immutable and cannot be changed", variable_name);
+}
+
 // Get type-specific error suggestions
 const char* get_type_error_suggestion(ErrorCode code, const char* context) {
     (void)context; // Unused parameter
@@ -107,6 +119,8 @@ const char* get_type_error_suggestion(ErrorCode code, const char* context) {
             return "Cast one of the values to match the other's type.";
         case E2005_INVALID_CAST:
             return "Check if this type conversion is allowed in Orus.";
+        case E2008_IMMUTABLE_ASSIGNMENT:
+            return "Try declaring the variable with 'mut' to make it changeable.";
         default:
             return "Check the Orus documentation for type system rules.";
     }

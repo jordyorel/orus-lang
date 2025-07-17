@@ -116,8 +116,8 @@ print("Array has items", len(items))
 
 **Features to Implement:**
 - [x] `x = value` syntax parsing
-- [ ] Mutable vs immutable variables (`mut x = 42`)
-- [ ] Compound assignments (`+=`, `-=`, `*=`, `/=`)
+- [*] Mutable vs immutable variables (`mut x = 42`)
+- [*] Compound assignments (`+=`, `-=`, `*=`, `/=`)
 - [x] Type annotations (`x: i32 = 42`)
 - [ ] **DONE**: Unary operators (`-x`, `not x`) and negative literal parsing
 - [x] **DONE**: Runtime string concatenation for variables and expressions

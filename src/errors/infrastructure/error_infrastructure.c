@@ -996,6 +996,7 @@ const char* get_error_title(ErrorCode code) {
         case E2005_INVALID_CAST:
         case E2006_TYPE_ANNOTATION_REQUIRED:
         case E2007_UNSUPPORTED_OPERATION:
+        case E2008_IMMUTABLE_ASSIGNMENT:
             return "Type error (handled by feature module)";
         
         default: return "Something went wrong";
@@ -1037,6 +1038,7 @@ const char* get_error_help(ErrorCode code) {
         case E2005_INVALID_CAST:
         case E2006_TYPE_ANNOTATION_REQUIRED:
         case E2007_UNSUPPORTED_OPERATION:
+        case E2008_IMMUTABLE_ASSIGNMENT:
             return NULL; // Handled by feature modules
         
         default: return NULL;
@@ -1062,6 +1064,7 @@ const char* get_error_note(ErrorCode code) {
         case E2005_INVALID_CAST:
         case E2006_TYPE_ANNOTATION_REQUIRED:
         case E2007_UNSUPPORTED_OPERATION:
+        case E2008_IMMUTABLE_ASSIGNMENT:
             return NULL; // Handled by feature modules
             
         default: return NULL;

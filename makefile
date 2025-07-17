@@ -161,7 +161,9 @@ test: $(ORUS)
 	echo "\033[36m=== Variables Tests ===\033[0m"; \
 	for test_file in $(TESTDIR)/variables/basic_var.orus \
 	                  $(TESTDIR)/variables/multiple_variable_declarations.orus \
-	                  $(TESTDIR)/variables/multiple_variable_edge_cases.orus; do \
+	                  $(TESTDIR)/variables/multiple_variable_edge_cases.orus \
+	                  $(TESTDIR)/variables/mutable_test.orus \
+	                  $(TESTDIR)/variables/compound_assignments_pass.orus; do \
 		if [ -f "$$test_file" ]; then \
 			printf "Testing: $$test_file ... "; \
 			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
@@ -281,7 +283,9 @@ test: $(ORUS)
                           $(TESTDIR)/type_safety_fails/chain_cast_with_error.orus \
                           $(TESTDIR)/type_safety_fails/control_flow_non_bool_condition.orus \
                           $(TESTDIR)/type_safety_fails/control_flow_string_condition.orus \
-                          $(TESTDIR)/type_safety_fails/control_flow_float_condition.orus; do \
+                          $(TESTDIR)/type_safety_fails/control_flow_float_condition.orus \
+                          $(TESTDIR)/type_safety_fails/immutable_assignment_fail.orus \
+                          $(TESTDIR)/type_safety_fails/compound_assignment_immutable_fail.orus; do \
 		if [ -f "$$test_file" ]; then \
 			printf "Testing: $$test_file ... "; \
 			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \

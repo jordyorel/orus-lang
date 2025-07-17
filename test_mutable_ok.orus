@@ -1,0 +1,5 @@
+// Test mutable variable (should work)
+mut y = 10  // This declares a mutable variable
+print("Initial y:", y)
+y = 20      // This should work
+print("Modified y:", y)
