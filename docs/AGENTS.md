@@ -13,6 +13,18 @@ Before implementing ANYTHING, you MUST:
 
 **NEVER implement features without first understanding the existing architecture and roadmap!**
 
+### **🔥 CRITICAL REMINDER: Single-Pass Compiler Design**
+**Orus uses a SINGLE-PASS compiler for maximum performance. This affects EVERY compiler change:**
+- ✅ **Compile in ONE forward pass only** - no multiple phases
+- ✅ **Generate bytecode immediately** - no deferred code generation  
+- ✅ **Linear O(n) compilation time** - scales directly with source size
+- ✅ **Sub-millisecond compilation** - directly impacts VM startup speed
+- ❌ **NO multi-pass algorithms** - forbidden in compiler design
+- ❌ **NO lookahead/backtracking** - forward-only parsing
+- ❌ **NO complex analysis passes** - keep analysis simple and fast
+
+**Why This Matters**: Compilation happens at VM runtime. Slow compilation = slow program startup!
+
 ### **⚡ Critical Implementation Priorities**
 Focus on these features in order for a functional Orus language:
 1. **Print Function** (Phase 1.2) - Essential output with `print()` and string interpolation
@@ -25,6 +37,49 @@ Focus on these features in order for a functional Orus language:
 ---
 
 ## 🚀 **Core Performance Principles**
+
+### **0. Single-Pass Compiler Design (CRITICAL)**
+**The Orus compiler is designed as a SINGLE-PASS system for maximum performance. This is NON-NEGOTIABLE.**
+
+- **ONE PASS ONLY**: Compilation must complete in a single forward pass through source code
+- **NO MULTIPLE PASSES**: No separate parsing, analysis, and codegen phases
+- **IMMEDIATE CODEGEN**: Generate bytecode as soon as syntax is validated
+- **LINEAR TIME**: Compilation time MUST scale O(n) with source size
+- **ZERO LOOK-AHEAD**: Cannot peek ahead in source - resolve symbols as encountered
+- **FAST RUNTIME STARTUP**: Compilation speed directly affects VM startup time
+
+```c
+// ✅ CORRECT: Single-pass compilation with immediate emission
+void compile_expression(Compiler* c) {
+    advance_token(c);                    // Single forward scan
+    parse_and_emit_immediately(c);       // Generate bytecode NOW
+    // NO second pass for optimization
+    // NO deferred analysis
+    // NO symbol table post-processing
+}
+
+// ❌ WRONG: Multi-pass compilation (FORBIDDEN)
+void compile_multi_pass(Compiler* c) {
+    parse_pass(c);        // ❌ Separate parsing pass
+    analyze_pass(c);      // ❌ Separate analysis pass  
+    optimize_pass(c);     // ❌ Separate optimization pass
+    codegen_pass(c);      // ❌ Separate code generation
+}
+```
+
+**Why Single-Pass is Critical:**
+1. **VM Startup Speed**: Compilation happens at runtime - MUST be instant
+2. **Memory Efficiency**: No need to store intermediate representations
+3. **Predictable Performance**: Linear compilation time guarantees
+4. **Simplicity**: Fewer phases = fewer bugs and easier maintenance
+5. **Cache Efficiency**: Single forward scan = optimal memory access patterns
+
+**Implementation Rules:**
+- **Forward References**: Use jump patching for unknown labels/functions
+- **Symbol Resolution**: Resolve symbols immediately when encountered 
+- **Error Recovery**: Must continue compilation after errors (single pass)
+- **Optimization**: Only local/peephole optimizations during emission
+- **Type Checking**: Immediate type validation, no deferred checking
 
 ### **1. Zero-Cost Abstractions**
 - Every abstraction MUST compile to optimal assembly code
@@ -98,6 +153,62 @@ for (size_t i = 0; i < count; i++) {
     }
 }
 ```
+
+### **4. Compiler Performance (CRITICAL FOR VM STARTUP)**
+**The compiler performance DIRECTLY impacts VM runtime startup. Keep it FAST and SIMPLE.**
+
+- **Sub-Millisecond Compilation**: Small programs (< 1KB) must compile in < 1ms
+- **Linear Scaling**: Large programs must compile at 1MB/sec minimum  
+- **Zero Allocation Hot Path**: Avoid malloc/free in compilation hot paths
+- **Minimal AST**: Use minimal intermediate representations
+- **Cache-Friendly Parsing**: Sequential memory access patterns only
+- **No Complex Analysis**: Keep analysis simple - defer complex work to runtime
+
+```c
+// ✅ CORRECT: Fast single-pass compilation metrics
+typedef struct {
+    uint64_t tokens_per_second;    // Target: 1M+ tokens/sec
+    uint64_t bytes_per_second;     // Target: 1MB+/sec  
+    uint64_t compilation_latency;  // Target: < 1ms for small files
+    uint64_t memory_allocations;   // Target: < 10 allocs per compilation
+} CompilerPerformanceMetrics;
+
+static inline void fast_token_advance(Lexer* lexer) {
+    // Optimized for single-pass scanning
+    lexer->current++;                    // Simple pointer increment
+    // NO complex lookahead
+    // NO token buffering  
+    // NO backtracking
+}
+
+// ❌ WRONG: Slow compilation patterns (FORBIDDEN)
+void slow_compilation(Compiler* c) {
+    // ❌ Multiple symbol table passes
+    build_symbol_table(c);
+    resolve_forward_references(c);
+    
+    // ❌ Complex AST transformations  
+    optimize_ast(c->ast);
+    transform_ast(c->ast);
+    
+    // ❌ Expensive analysis
+    dataflow_analysis(c);
+    interprocedural_analysis(c);
+}
+```
+
+**Compilation Speed Targets:**
+- **Interactive REPL**: < 1ms compilation latency for single expressions
+- **Small Scripts**: < 10ms for programs under 10KB
+- **Large Programs**: Linear scaling at 1MB/sec minimum
+- **Memory Usage**: < 2× source size for compilation memory overhead
+- **Zero GC Pressure**: No garbage collection during compilation
+
+**Performance Monitoring:**
+- **Always Profile**: Measure compilation time for every change
+- **Regression Testing**: Compilation speed tests in CI/CD
+- **Memory Profiling**: Track allocation patterns during compilation
+- **Cache Analysis**: Monitor CPU cache misses in compilation hot paths
 
 ---
 

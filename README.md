@@ -52,19 +52,69 @@ print("Result: ", fibonacci(10))
 ```bash
 git clone https://github.com/jordyorel/orus-lang.git
 cd orus-lang
-make clean && make
-./orus                    # REPL
-./orus program.orus       # Run file
-make benchmark           # Run benchmarks
+make release            # Build optimized release version
+./orus                  # REPL
+./orus program.orus     # Run file
+make benchmark          # Run benchmarks
+```
+
+### Build Profiles
+
+Orus supports multiple build configurations:
+
+```bash
+# Production (optimized, creates 'orus')
+make release
+
+# Development (debugging, creates 'orus_debug')  
+make debug
+
+# Performance analysis (creates 'orus_profiling')
+make profiling
+
+# Clean all builds
+make clean
+
+# View all available build options
+make help
+```
+
+**Build Features:**
+- **Release**: Maximum optimization (-O3, LTO, fast-math) for production use
+- **Debug**: Full debugging symbols (-O0, -g3) with assertions for development
+- **Profiling**: Optimized with gprof instrumentation for performance analysis
+- **Cross-compilation**: Linux and Windows targets available
+- **Static analysis**: Built-in cppcheck and clang analyzer integration
+
+### Installation
+
+```bash
+# System-wide installation (requires sudo)
+make install
+
+# Manual installation
+make release
+sudo cp orus /usr/local/bin/orus
 ```
 
 ## Contributing
 
 ### Development Setup
 ```bash
-make clean && make       # Build with optimizations
-make test               # Run test suite
-make benchmark          # Performance tests
+# Build for development (with debugging)
+make debug
+
+# Run comprehensive test suite
+make test
+
+# Run performance benchmarks  
+make benchmark
+
+# Run static analysis
+make analyze
+
+# Build all profiles
+make clean && make debug && make release && make profiling
 ```
 
 ### Guidelines
@@ -77,8 +127,16 @@ make benchmark          # Performance tests
 1. Fork the repository
 2. Create feature branch
 3. Make changes with tests
-4. Run `make test && make benchmark`
-5. Submit pull request
+4. Verify with: `make test && make benchmark && make analyze`
+5. Test all profiles: `make clean && make debug && make release && make profiling`
+6. Submit pull request
+
+**Pre-submission Checklist:**
+- ✅ All tests pass (`make test`)
+- ✅ Benchmarks show no regression (`make benchmark`) 
+- ✅ Static analysis passes (`make analyze`)
+- ✅ All build profiles compile successfully
+- ✅ Documentation updated for new features
 
 See [BENCHMARK_RESULTS.md](docs/BENCHMARK_RESULTS.md) for detailed performance data.
 

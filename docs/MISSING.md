@@ -85,7 +85,6 @@ print("continues here")
 - [x] Support printing all basic types (i32, f64, bool, string)
 - [x] Implement string interpolation with placeholders
 - [ ] Handle escape sequences (`\n`, `\t`, `\"`, `\\`)
-- [ ] Add `print_no_newline()` variant for precise output control
 - [ ] Format numbers and booleans for display
 
 ### 1.3 String Interpolation System

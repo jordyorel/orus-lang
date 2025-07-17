@@ -1,23 +1,70 @@
-# Simplified Orus Makefile
-# For current working test suite only
+# Enhanced Orus Makefile with Build Profiles
+# Supports debug, release, and profiling configurations
 
 CC = gcc
 
-# Apple Silicon Detection and Optimization
+# Build Profile Configuration
+# Usage: make PROFILE=debug|release|profiling
+# Default is debug for development
+PROFILE ?= debug
+
+# Architecture Detection
 UNAME_M := $(shell uname -m)
+UNAME_S := $(shell uname -s)
+
+# Base compiler flags
+BASE_CFLAGS = -Wall -Wextra -std=c11
+
+# Architecture-specific optimizations
 ifeq ($(UNAME_M),arm64)
     # Apple Silicon (M1/M2/M3) optimizations
-    APPLE_SILICON_FLAGS = -mcpu=apple-m1 -mtune=apple-m1 -O3 -flto
-    APPLE_SILICON_FLAGS += -ffast-math -funroll-loops
-    APPLE_SILICON_FLAGS += -march=armv8.4-a+simd+crypto+sha3
-    APPLE_SILICON_FLAGS += -DUSE_COMPUTED_GOTO=1
-    CFLAGS = -Wall -Wextra $(APPLE_SILICON_FLAGS) -g -std=c11
+    ARCH_FLAGS = -mcpu=apple-m1 -mtune=apple-m1 -march=armv8.4-a+simd+crypto+sha3
+    ARCH_DEFINES = -DUSE_COMPUTED_GOTO=1
+else ifeq ($(UNAME_M),x86_64)
+    # Intel/AMD x86_64 optimizations
+    ARCH_FLAGS = -march=native -mtune=native
+    ARCH_DEFINES = -DUSE_COMPUTED_GOTO=1
 else
-    # Generic flags for other architectures (auto-detect computed goto)
-    CFLAGS = -Wall -Wextra -O2 -g -std=c11
+    # Generic fallback
+    ARCH_FLAGS = 
+    ARCH_DEFINES = 
 endif
 
+# Profile-specific configurations
+ifeq ($(PROFILE),debug)
+    # Debug build: maximum debugging info, no optimization, all checks enabled
+    OPT_FLAGS = -O0 -g3 -DDEBUG=1
+    DEBUG_FLAGS = -fno-omit-frame-pointer -fstack-protector-strong
+    DEFINES = $(ARCH_DEFINES) -DDEBUG_MODE=1 -DENABLE_ASSERTIONS=1
+    SUFFIX = _debug
+    PROFILE_DESC = Debug (no optimization, full debugging)
+else ifeq ($(PROFILE),release)
+    # Release build: maximum optimization, minimal debug info
+    OPT_FLAGS = -O3 -g1 -DNDEBUG=1 -flto
+    FAST_FLAGS = -ffast-math -funroll-loops -finline-functions
+    DEFINES = $(ARCH_DEFINES) -DRELEASE_MODE=1 -DENABLE_OPTIMIZATIONS=1
+    SUFFIX = 
+    PROFILE_DESC = Release (maximum optimization)
+else ifeq ($(PROFILE),profiling)
+    # Profiling build: optimization + profiling instrumentation
+    OPT_FLAGS = -O2 -g2 -pg
+    PROFILE_FLAGS = -fno-omit-frame-pointer
+    DEFINES = $(ARCH_DEFINES) -DPROFILING_MODE=1 -DENABLE_PROFILING=1
+    SUFFIX = _profiling
+    PROFILE_DESC = Profiling (optimization + instrumentation)
+else
+    $(error Invalid PROFILE: $(PROFILE). Use debug, release, or profiling)
+endif
+
+# Assemble final CFLAGS
+CFLAGS = $(BASE_CFLAGS) $(ARCH_FLAGS) $(OPT_FLAGS) $(DEBUG_FLAGS) $(FAST_FLAGS) $(PROFILE_FLAGS) $(DEFINES)
+
 LDFLAGS = -lm
+
+# Add profiling link flags if needed
+ifeq ($(PROFILE),profiling)
+    LDFLAGS += -pg
+endif
 
 # Both dispatchers are always compiled and linked
 # The runtime will auto-detect the best dispatch method
@@ -27,7 +74,7 @@ LDFLAGS = -lm
 SRCDIR = src
 INCDIR = include
 TESTDIR = tests
-BUILDDIR = build
+BUILDDIR = build/$(PROFILE)
 
 # Include path
 INCLUDES = -I$(INCDIR)
@@ -40,31 +87,52 @@ VM_SRCS = $(SRCDIR)/vm/core/vm_core.c $(SRCDIR)/vm/runtime/vm.c $(SRCDIR)/vm/cor
 REPL_SRC = $(SRCDIR)/repl.c
 MAIN_SRC = $(SRCDIR)/main.c
 
-# Object files
+# Object files (profile-specific)
 COMPILER_OBJS = $(COMPILER_SRCS:$(SRCDIR)/%.c=$(BUILDDIR)/%.o)
 VM_OBJS = $(VM_SRCS:$(SRCDIR)/%.c=$(BUILDDIR)/%.o)
 REPL_OBJ = $(REPL_SRC:$(SRCDIR)/%.c=$(BUILDDIR)/%.o)
 MAIN_OBJ = $(MAIN_SRC:$(SRCDIR)/%.c=$(BUILDDIR)/%.o)
 
-# Target
-ORUS = orus
+# Target (profile-specific)
+ORUS = orus$(SUFFIX)
 
-.PHONY: all clean test benchmark help
+.PHONY: all clean test benchmark help debug release profiling analyze install
 
-all: $(ORUS)
+all: build-info $(ORUS)
+
+# Build information
+build-info:
+	@echo "Building Orus Language Interpreter"
+	@echo "Profile: $(PROFILE_DESC)"
+	@echo "Target: $(ORUS)"
+	@echo "Architecture: $(UNAME_S) $(UNAME_M)"
+	@echo ""
+
+# Profile-specific build targets
+debug:
+	@$(MAKE) PROFILE=debug
+
+release:
+	@$(MAKE) PROFILE=release
+
+profiling:
+	@$(MAKE) PROFILE=profiling
 
 # Create build directory
 $(BUILDDIR):
-	mkdir -p $(BUILDDIR) $(BUILDDIR)/vm/core $(BUILDDIR)/vm/dispatch $(BUILDDIR)/vm/operations $(BUILDDIR)/vm/runtime $(BUILDDIR)/vm/utils $(BUILDDIR)/vm/handlers $(BUILDDIR)/compiler $(BUILDDIR)/type $(BUILDDIR)/errors/core $(BUILDDIR)/errors/features $(BUILDDIR)/errors/infrastructure $(BUILDDIR)/config
+	@mkdir -p $(BUILDDIR) $(BUILDDIR)/vm/core $(BUILDDIR)/vm/dispatch $(BUILDDIR)/vm/operations $(BUILDDIR)/vm/runtime $(BUILDDIR)/vm/utils $(BUILDDIR)/vm/handlers $(BUILDDIR)/compiler $(BUILDDIR)/type $(BUILDDIR)/errors/core $(BUILDDIR)/errors/features $(BUILDDIR)/errors/infrastructure $(BUILDDIR)/config
 
 # Main interpreter
 $(ORUS): $(MAIN_OBJ) $(REPL_OBJ) $(VM_OBJS) $(COMPILER_OBJS)
-	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+	@echo "Linking $(ORUS)..."
+	@$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+	@echo "✓ Build complete: $(ORUS)"
 
 # Object files
 $(BUILDDIR)/%.o: $(SRCDIR)/%.c | $(BUILDDIR)
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+	@echo "Compiling $<..."
+	@$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
 # Run comprehensive test suite
 test: $(ORUS)
@@ -318,26 +386,73 @@ test: $(ORUS)
 benchmark: $(ORUS)
 	@cd $(TESTDIR)/benchmarks && ./unified_benchmark.sh
 
+# Static Analysis
+analyze:
+	@echo "Running static analysis..."
+	@echo "==========================="
+	@echo "🔍 Running cppcheck..."
+	@command -v cppcheck >/dev/null 2>&1 && cppcheck --enable=all --std=c11 --platform=unix64 --error-exitcode=1 $(SRCDIR)/ || echo "⚠️  cppcheck not found, skipping"
+	@echo ""
+	@echo "🔍 Running clang static analyzer..."
+	@command -v clang >/dev/null 2>&1 && scan-build --status-bugs make clean all || echo "⚠️  clang static analyzer not found, skipping"
+	@echo ""
+	@echo "✓ Static analysis complete"
+
+# Cross-compilation targets
+cross-linux:
+	@echo "Cross-compiling for Linux x86_64..."
+	@$(MAKE) CC=x86_64-linux-gnu-gcc PROFILE=release
+
+cross-windows:
+	@echo "Cross-compiling for Windows x86_64..."
+	@$(MAKE) CC=x86_64-w64-mingw32-gcc PROFILE=release LDFLAGS="-lm -static"
+
+# Installation
+install: release
+	@echo "Installing Orus to /usr/local/bin..."
+	@sudo cp orus /usr/local/bin/orus
+	@echo "✓ Orus installed successfully"
+
 # Clean build artifacts
 clean:
-	rm -f $(ORUS)
-	rm -rf $(BUILDDIR)
+	@echo "Cleaning build artifacts..."
+	@rm -f orus orus_debug orus_profiling
+	@rm -rf build/
+	@echo "✓ Clean complete"
 
 # Help
 help:
-	@echo "Available targets:"
-	@echo "  all       - Build the Orus interpreter (default)"
-	@echo "  test      - Run comprehensive test suite (all tests)"
+	@echo "Enhanced Orus Build System"
+	@echo "========================="
+	@echo ""
+	@echo "Build Profiles:"
+	@echo "  debug     - Debug build (no optimization, full debugging)"
+	@echo "  release   - Release build (maximum optimization)"
+	@echo "  profiling - Profiling build (optimization + instrumentation)"
+	@echo ""
+	@echo "Main Targets:"
+	@echo "  all       - Build for current profile (default: debug)"
+	@echo "  test      - Run comprehensive test suite"
 	@echo "  benchmark - Run cross-language performance benchmarks"
-	@echo "  clean     - Remove build artifacts"
+	@echo "  clean     - Remove all build artifacts"
 	@echo "  help      - Show this help message"
 	@echo ""
-	@echo "Build configuration:"
-	@echo "  Both switch and goto dispatchers are always compiled and linked"
-	@echo "  Runtime automatically selects the best dispatch method"
-	@echo "  No flags needed - both dispatchers are included by default"
+	@echo "Development Targets:"
+	@echo "  analyze   - Run static analysis (cppcheck, clang analyzer)"
+	@echo "  install   - Install release build to /usr/local/bin"
+	@echo ""
+	@echo "Cross-compilation:"
+	@echo "  cross-linux   - Cross-compile for Linux x86_64"
+	@echo "  cross-windows - Cross-compile for Windows x86_64"
 	@echo ""
 	@echo "Examples:"
-	@echo "  make           - Build with both dispatchers (default)"
-	@echo "  make test      - Run tests with both dispatchers available"
-	@echo "  make benchmark - Run benchmarks with optimal dispatch"
+	@echo "  make                    - Build debug version (creates orus_debug)"
+	@echo "  make release            - Build optimized release version (creates orus)"
+	@echo "  make PROFILE=profiling  - Build with profiling support (creates orus_profiling)"
+	@echo "  make test               - Run tests (builds debug if needed)"
+	@echo "  make benchmark          - Run benchmarks (builds debug if needed)"
+	@echo "  make analyze            - Run static analysis tools"
+	@echo ""
+	@echo "Advanced Usage:"
+	@echo "  CC=clang make           - Use clang compiler"
+	@echo "  PROFILE=release make    - Explicit profile selection"
