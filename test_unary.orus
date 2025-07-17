@@ -1,0 +1,24 @@
+// Test basic unary minus operator
+mut x = 42
+mut y = -x
+print(y)  // Should print -42
+
+// Test unary minus with literal  
+mut z = -123
+print(z)  // Should print -123
+
+// Test unary not operator
+mut a = true
+mut b = not a
+print(b)  // Should print false
+
+// Test unary not with literal
+mut c = not false
+print(c)  // Should print true
+
+// Test chained unary operators
+mut d = not not true
+print(d)  // Should print true
+
+mut e = -(-456)
+print(e)  // Should print 456

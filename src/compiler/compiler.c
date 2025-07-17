@@ -165,6 +165,25 @@ static Type* getExprType(ASTNode* node, Compiler* compiler) {
                 if (strcmp(typeName, "string") == 0) return getPrimitiveType(TYPE_STRING);
             }
             return getPrimitiveType(TYPE_UNKNOWN);
+        case NODE_UNARY: {
+            // Handle unary expressions
+            if (strcmp(node->unary.op, "not") == 0) {
+                return getPrimitiveType(TYPE_BOOL);
+            } else if (strcmp(node->unary.op, "-") == 0) {
+                // Negation preserves the operand type (mostly)
+                Type* operandType = getExprType(node->unary.operand, compiler);
+                
+                // For unsigned types, negation converts to signed
+                if (operandType->kind == TYPE_U32) {
+                    return getPrimitiveType(TYPE_I32);
+                } else if (operandType->kind == TYPE_U64) {
+                    return getPrimitiveType(TYPE_I64);
+                } else {
+                    return operandType; // i32, i64, f64 stay the same
+                }
+            }
+            return getPrimitiveType(TYPE_UNKNOWN);
+        }
         default:
             return getPrimitiveType(TYPE_UNKNOWN);
     }
@@ -568,11 +587,11 @@ static int compileUnary(ASTNode* node, Compiler* compiler) {
         emitByte(compiler, dst);
         emitByte(compiler, (uint8_t)operand);
     } else if (strcmp(node->unary.op, "-") == 0) {
-        // Use proper single-pass negation opcode (in-place operation)
+        // Use the original generic negation opcode that handles all types
         emitByte(compiler, OP_MOVE);  // First copy operand to destination
         emitByte(compiler, dst);
         emitByte(compiler, (uint8_t)operand);
-        emitByte(compiler, OP_NEG_I32_R);  // Then negate in-place (single register)
+        emitByte(compiler, OP_NEG_I32_R);  // Generic negation (handles all numeric types)
         emitByte(compiler, dst);
     } else {
         // For now, unsupported unary operations

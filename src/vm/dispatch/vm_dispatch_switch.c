@@ -1968,7 +1968,7 @@ InterpretResult vm_run_dispatch(void) {
                         vm.ip += offset;
                     }
                     break;
-                }
+                               }
 
                 case OP_DEC_CMP_JMP: {
                     uint8_t reg = READ_BYTE();

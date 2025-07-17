@@ -1,0 +1,13 @@
+// Test for negative literal edge cases and proper error handling
+
+// Test negative literals with type suffixes
+mut a = -123i32
+mut b = -456i64  
+mut c = -789u32  // Negative unsigned (should work but convert to signed)
+mut d = -3.14f64
+
+print("Negative typed literals:")
+print(a, b, c, d)
+
+// Test edge case: negation of boolean should fail gracefully
+// This should be caught by the type system, not cause a crash

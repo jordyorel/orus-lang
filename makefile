@@ -145,7 +145,10 @@ test: $(ORUS)
 	                  $(TESTDIR)/expressions/simple_add.orus \
 	                  $(TESTDIR)/expressions/simple_literal.orus \
 	                  $(TESTDIR)/expressions/parenthesized_cast_should_parse.orus \
-	                  $(TESTDIR)/expressions/comprehensive_parenthesized_casts.orus; do \
+	                  $(TESTDIR)/expressions/comprehensive_parenthesized_casts.orus \
+	                  $(TESTDIR)/expressions/unary_operators.orus \
+	                  $(TESTDIR)/expressions/unary_comprehensive.orus \
+	                  $(TESTDIR)/expressions/unary_edge_cases.orus; do \
 		if [ -f "$$test_file" ]; then \
 			printf "Testing: $$test_file ... "; \
 			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \

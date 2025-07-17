@@ -1,0 +1,38 @@
+// Comprehensive unary operator test
+// Testing basic unary minus
+mut x = 42
+mut neg_x = -x
+print(neg_x)  // Expected: -42
+
+// Testing unary minus with different types
+mut a_i32 = 100i32
+mut neg_a = -a_i32
+print(neg_a)  // Expected: -100
+
+mut b_i64 = 200i64
+mut neg_b = -b_i64  
+print(neg_b)  // Expected: -200
+
+mut c_f64 = 3.14f64
+mut neg_c = -c_f64
+print(neg_c)  // Expected: -3.14
+
+// Testing NOT operator
+mut bool_var = true
+mut neg_bool = not bool_var
+print(neg_bool)  // Expected: false
+
+// Testing NOT with literals
+print(not true)   // Expected: false
+print(not false)  // Expected: true
+
+// Testing chained unary operations
+mut double_neg = -(-42)
+print(double_neg)  // Expected: 42
+
+mut double_not = not not true
+print(double_not)  // Expected: true
+
+// Testing zero negation
+mut zero = 0
+print(-zero)  // Expected: 0

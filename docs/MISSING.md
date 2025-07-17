@@ -119,9 +119,8 @@ print("Array has items", len(items))
 - [*] Mutable vs immutable variables (`mut x = 42`)
 - [*] Compound assignments (`+=`, `-=`, `*=`, `/=`)
 - [x] Type annotations (`x: i32 = 42`)
-- [ ] **DONE**: Unary operators (`-x`, `not x`) and negative literal parsing
+- [x] **DONE**: Unary operators (`-x`, `not x`) and negative literal parsing
 - [x] **DONE**: Runtime string concatenation for variables and expressions
-- [ ] **NEW**: Basic type inference for simple assignments
 - [ ] **NEW**: Type coercion rules for numeric types
 
 ### 1.5 Boolean and Comparison Operations

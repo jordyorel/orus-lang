@@ -1,0 +1,3 @@
+// Simple precedence test
+mut result1 = -5 + 3
+print(result1)

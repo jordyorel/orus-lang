@@ -1,0 +1,4 @@
+// Test just the ternary expression part
+mut condition = true
+mut result5 = condition ? -100 : -200
+print(result5)

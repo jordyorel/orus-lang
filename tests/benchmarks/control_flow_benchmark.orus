@@ -2,28 +2,28 @@
 // Focus on while loops and conditional performance
 print("=== Orus Control Flow Performance Benchmark ===")
 
-start_time = time_stamp()
+mut start_time = time_stamp()
 
 // === PHASE 1: BASIC WHILE LOOPS ===
 print("Phase 1: Basic While Loops")
 
 // Simple counting loop
-counter = 0
+mut counter = 0
 while counter < 100000:
     counter = counter + 1
 print("Counter result:", counter)
 
 // Summation loop (avoiding overflow with smaller numbers)
-sum: i64 = 0
-i = 0
+mut sum: i64 = 0
+mut i = 0
 while i < 50000:
     sum = sum + (i as i64)
     i = i + 1
 print("Sum result:", sum)
 
 // Multiplication accumulator
-product: i64 = 1
-j = 1
+mut product: i64 = 1
+mut j = 1
 while j <= 20:
     product = product * (j as i64)
     j = j + 1
@@ -32,10 +32,10 @@ print("Product result:", product)
 // === PHASE 2: NESTED LOOPS ===
 print("Phase 2: Nested Loops")
 
-nested_sum = 0
-outer = 0
+mut nested_sum = 0
+mut outer = 0
 while outer < 500:
-    inner = 0
+    mut inner = 0
     while inner < 200:
         nested_sum = nested_sum + 1
         inner = inner + 1
@@ -43,10 +43,10 @@ while outer < 500:
 print("Nested sum result:", nested_sum)
 
 // Matrix-like computation
-matrix_result = 0
-row = 0
+mut matrix_result = 0
+mut row = 0
 while row < 300:
-    col = 0
+    mut col = 0
     while col < 333:
         matrix_result = matrix_result + (row * col)
         col = col + 1
@@ -57,8 +57,8 @@ print("Matrix result:", matrix_result)
 print("Phase 3: Conditional Performance")
 
 // If-else chains in loops
-conditional_sum = 0
-k = 0
+mut conditional_sum = 0
+mut k = 0
 while k < 100000:
     if k % 5 == 0:
         conditional_sum = conditional_sum + k
@@ -71,8 +71,8 @@ while k < 100000:
 print("Conditional sum result:", conditional_sum)
 
 // Complex boolean expressions
-bool_ops = 0
-m = 0
+mut bool_ops = 0
+mut m = 0
 while m < 50000:
     if (m > 100) == true:
         if (m < 40000) == true:
@@ -84,12 +84,12 @@ print("Boolean operations result:", bool_ops)
 // === PHASE 4: FIBONACCI SEQUENCE ===
 print("Phase 4: Fibonacci Sequence")
 
-fib_n = 35
-fib_a = 0
-fib_b = 1
-fib_i = 2
+mut fib_n = 35
+mut fib_a = 0
+mut fib_b = 1
+mut fib_i = 2
 while fib_i <= fib_n:
-    fib_temp = fib_a + fib_b
+    mut fib_temp = fib_a + fib_b
     fib_a = fib_b
     fib_b = fib_temp
     fib_i = fib_i + 1
@@ -99,12 +99,12 @@ print("Fibonacci result:", fib_b)
 print("Phase 5: Prime Number Sieve")
 
 // Simple prime finding
-prime_limit = 10000
-prime_count = 0
-candidate = 2
+mut prime_limit = 10000
+mut prime_count = 0
+mut candidate = 2
 while candidate <= prime_limit:
-    is_prime = true
-    divisor = 2
+    mut is_prime = true
+    mut divisor = 2
     while divisor * divisor <= candidate:
         if candidate % divisor == 0:
             is_prime = false
@@ -120,9 +120,9 @@ print("Prime count result:", prime_count)
 print("Phase 6: String Operations with Loops")
 
 // String building simulation (using numbers)
-string_sim = 0
-char_code = 65  // ASCII 'A'
-str_length = 0
+mut string_sim = 0
+mut char_code = 65  // ASCII 'A'
+mut str_length = 0
 while str_length < 10000:
     string_sim = string_sim + char_code
     char_code = char_code + 1
@@ -135,30 +135,30 @@ print("String simulation result:", string_sim)
 print("Phase 7: Mathematical Series")
 
 // Pi approximation using Leibniz formula
-pi_approx = 0
-term = 1
-sign = 1
-series_i = 0
+mut pi_approx = 0
+mut term = 1
+mut sign = 1
+mut series_i = 0
 while series_i < 100000:
     pi_approx = pi_approx + (sign * 1000000 / term)
     sign = -sign
     term = term + 2
     series_i = series_i + 1
-pi_result = pi_approx * 4 / 1000000
+mut pi_result = pi_approx * 4 / 1000000
 print("Pi approximation result:", pi_result)
 
 // Square root using Newton's method
-sqrt_target = 123456
-sqrt_x = sqrt_target / 2
-sqrt_iterations = 0
+mut sqrt_target = 123456
+mut sqrt_x = sqrt_target / 2
+mut sqrt_iterations = 0
 while sqrt_iterations < 10000:
     sqrt_x = (sqrt_x + sqrt_target / sqrt_x) / 2
     sqrt_iterations = sqrt_iterations + 1
 print("Square root result:", sqrt_x)
 
 // === FINAL BENCHMARK RESULTS ===
-end_time = time_stamp()
-total_elapsed = end_time - start_time
+mut end_time = time_stamp()
+mut total_elapsed = end_time - start_time
 
 print("=== CONTROL FLOW BENCHMARK COMPLETE ===")
 print("Total execution time:", total_elapsed)

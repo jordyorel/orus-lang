@@ -2,32 +2,32 @@
 // Tests all currently supported features in one complex benchmark
 print("=== Orus Comprehensive Performance Benchmark ===")
 
-start_time = time_stamp()
+mut start_time = time_stamp()
 
 // === ARITHMETIC OPERATIONS INTENSIVE TEST ===
 print("Phase 1: Intensive Arithmetic Operations")
 
 // Complex arithmetic chains
-a = 100
-b = 50
-c = 25
-d = 12
-e = 6
+mut a = 100
+mut b = 50
+mut c = 25
+mut d = 12
+mut e = 6
 
 // Multi-step calculations
-result1 = a + b * c - d / e
-result2 = (a - b) * (c + d) / e
-result3 = a * b / c + d - e
-result4 = (a + b + c + d + e) / (a - b - c - d - e)
+mut result1 = a + b * c - d / e
+mut result2 = (a - b) * (c + d) / e
+mut result3 = a * b / c + d - e
+mut result4 = (a + b + c + d + e) / (a - b - c - d - e)
 
 // Nested arithmetic expressions
-complex1 = ((a + b) * c - d) / ((e + d) * c - b)
-complex2 = (a * b + c * d) / (a - b + c - d)
-complex3 = ((a / b) * c + d) - ((e * d) / c + b)
+mut complex1 = ((a + b) * c - d) / ((e + d) * c - b)
+mut complex2 = (a * b + c * d) / (a - b + c - d)
+mut complex3 = ((a / b) * c + d) - ((e * d) / c + b)
 
 // Iterative calculations (simulating loops)
-sum = 0
-counter = 0
+mut sum = 0
+mut counter = 0
 counter = counter + 1
 sum = sum + counter
 counter = counter + 1
@@ -79,37 +79,37 @@ print("Iterative sum:", sum)
 print("Phase 2: Intensive Variable Operations")
 
 // Variable assignment chains
-var1 = 10
-var2 = var1 * 2
-var3 = var2 + var1
-var4 = var3 - var2
-var5 = var4 * var1
-var6 = var5 / var2
-var7 = var6 + var3
-var8 = var7 - var4
-var9 = var8 * var5
-var10 = var9 / var6
+mut var1 = 10
+mut var2 = var1 * 2
+mut var3 = var2 + var1
+mut var4 = var3 - var2
+mut var5 = var4 * var1
+mut var6 = var5 / var2
+mut var7 = var6 + var3
+mut var8 = var7 - var4
+mut var9 = var8 * var5
+mut var10 = var9 / var6
 
 // Variable swapping simulation
-temp_a = var1
-temp_b = var2
+mut temp_a = var1
+mut temp_b = var2
 var1 = temp_b
 var2 = temp_a
 
 // Complex variable interdependencies
-base = 5
-multiplier = 3
-offset = 7
-threshold = 20
+mut base = 5
+mut multiplier = 3
+mut offset = 7
+mut threshold = 20
 
-calc_a = base * multiplier + offset
-calc_b = calc_a - threshold
-calc_c = calc_b * base / multiplier
-calc_d = calc_c + offset - threshold
-calc_e = calc_d * multiplier / base
+mut calc_a = base * multiplier + offset
+mut calc_b = calc_a - threshold
+mut calc_c = calc_b * base / multiplier
+mut calc_d = calc_c + offset - threshold
+mut calc_e = calc_d * multiplier / base
 
 // Variable reuse patterns
-accumulator = 0
+mut accumulator = 0
 accumulator = accumulator + base
 accumulator = accumulator * multiplier
 accumulator = accumulator - offset
@@ -129,28 +129,28 @@ print("Accumulator result:", accumulator)
 print("Phase 3: Intensive Literal Operations")
 
 // Large number calculations
-big1 = 1000000
-big2 = 500000
-big3 = 250000
-big4 = 125000
-big5 = 62500
+mut big1 = 1000000
+mut big2 = 500000
+mut big3 = 250000
+mut big4 = 125000
+mut big5 = 62500
 
 // Operations with large numbers
-large_sum = big1 + big2 + big3 + big4 + big5
-large_diff = big1 - big2 - big3 - big4 - big5
-large_prod = big1 / 1000 * big2 / 1000
-large_div = big1 / big2 * big3 / big4
+mut large_sum = big1 + big2 + big3 + big4 + big5
+mut large_diff = big1 - big2 - big3 - big4 - big5
+mut large_prod = big1 / 1000 * big2 / 1000
+mut large_div = big1 / big2 * big3 / big4
 
 // Mixed literal and variable operations
-mixed1 = 42 + var1 * 17 - 8
-mixed2 = 99 - var2 / 3 + 21
-mixed3 = 77 * var3 + 13 - 56
-mixed4 = 88 / var4 - 44 + 33
+mut mixed1 = 42 + var1 * 17 - 8
+mut mixed2 = 99 - var2 / 3 + 21
+mut mixed3 = 77 * var3 + 13 - 56
+mut mixed4 = 88 / var4 - 44 + 33
 
 // Decimal-like operations (using integer division)
-decimal1 = 100 * 355 / 113
-decimal2 = 1000 * 22 / 7
-decimal3 = 10000 * 618 / 1000
+mut decimal1 = 100 * 355 / 113
+mut decimal2 = 1000 * 22 / 7
+mut decimal3 = 10000 * 618 / 1000
 
 print("Literal Phase Results:")
 print("Large sum:", large_sum)
@@ -165,31 +165,31 @@ print("Decimal approximation 2:", decimal2)
 print("Phase 4: Intensive Timestamp Operations")
 
 // Multiple timestamp measurements
-ts1 = time_stamp()
-ts2 = time_stamp()
-ts3 = time_stamp()
-ts4 = time_stamp()
-ts5 = time_stamp()
+mut ts1 = time_stamp()
+mut ts2 = time_stamp()
+mut ts3 = time_stamp()
+mut ts4 = time_stamp()
+mut ts5 = time_stamp()
 
 // Timestamp arithmetic
-ts_diff1 = ts2 - ts1
-ts_diff2 = ts3 - ts2
-ts_diff3 = ts4 - ts3
-ts_diff4 = ts5 - ts4
+mut ts_diff1 = ts2 - ts1
+mut ts_diff2 = ts3 - ts2
+mut ts_diff3 = ts4 - ts3
+mut ts_diff4 = ts5 - ts4
 
 // Complex timestamp calculations
-ts_total = ts_diff1 + ts_diff2 + ts_diff3 + ts_diff4
-ts_avg = ts_total / 4
-ts_max = ts_diff1
-temp_check = ts_diff2 - ts_max
+mut ts_total = ts_diff1 + ts_diff2 + ts_diff3 + ts_diff4
+mut ts_avg = ts_total / 4
+mut ts_max = ts_diff1
+mut temp_check = ts_diff2 - ts_max
 temp_check = ts_diff3 - ts_max
 temp_check = ts_diff4 - ts_max
 
 // Timestamp with arithmetic operations
-ts_calc1 = ts1 + 1000
-ts_calc2 = ts2 * 2 / 2
-ts_calc3 = ts3 - 500 + 500
-ts_calc4 = (ts4 + ts5) / 2
+mut ts_calc1 = ts1 + 1000
+mut ts_calc2 = ts2 * 2 / 2
+mut ts_calc3 = ts3 - 500 + 500
+mut ts_calc4 = (ts4 + ts5) / 2
 
 print("Timestamp Phase Results:")
 print("Timestamp 1:", ts1)
@@ -219,25 +219,25 @@ print("Complex expression 3:", 1000 / 10 + 200 / 4)
 print("Phase 6: Comprehensive Integration")
 
 // Combine all features in complex calculations
-integration_start = time_stamp()
+mut integration_start = time_stamp()
 
 // Complex integrated calculation
-step1 = (big1 / 1000) + (var1 * var2)
-step2 = step1 - (complex1 * 10)
-step3 = step2 + (ts_avg * 100)
-step4 = step3 / (accumulator + 1)
-step5 = step4 * (decimal1 / 100)
+mut step1 = (big1 / 1000) + (var1 * var2)
+mut step2 = step1 - (complex1 * 10)
+mut step3 = step2 + (ts_avg * 100)
+mut step4 = step3 / (accumulator + 1)
+mut step5 = step4 * (decimal1 / 100)
 
 // Multiple variable interactions
-chain_a = step1 + step2
-chain_b = step3 + step4
-chain_c = step5 + chain_a
-chain_d = chain_b + chain_c
-final_result = chain_d / 4
+mut chain_a = step1 + step2
+mut chain_b = step3 + step4
+mut chain_c = step5 + chain_a
+mut chain_d = chain_b + chain_c
+mut final_result = chain_d / 4
 
 // Final timestamp
-integration_end = time_stamp()
-integration_time = integration_end - integration_start
+mut integration_end = time_stamp()
+mut integration_time = integration_end - integration_start
 
 print("Integration Phase Results:")
 print("Step 1:", step1)
@@ -249,8 +249,8 @@ print("Final integrated result:", final_result)
 print("Integration time:", integration_time)
 
 // === FINAL BENCHMARK RESULTS ===
-end_time = time_stamp()
-total_elapsed = end_time - start_time
+mut end_time = time_stamp()
+mut total_elapsed = end_time - start_time
 
 print("=== BENCHMARK COMPLETE ===")
 print("Total execution time:", total_elapsed)

@@ -1,0 +1,29 @@
+// Edge case tests for unary operators
+
+// Test precedence: unary minus should bind tighter than binary operations
+mut result1 = -5 + 3  // Should be (-5) + 3 = -2, not -(5 + 3) = -8
+print(result1)
+
+// Test with parentheses for clarity
+mut result2 = -(5 + 3)  // Should be -8
+print(result2)
+
+// Test multiple unary operators
+mut result3 = not not not false  // Should be true
+print(result3)
+
+// Test unary with complex expressions
+mut x = 10
+mut y = 20
+mut result4 = -(x + y)  // Should be -30
+print(result4)
+
+// Test chained unary minus
+mut result5 = -(-42)  // Should be 42
+print(result5)
+
+// Test unary with different types
+mut a_i32 = -100i32
+mut a_i64 = -200i64
+mut a_f64 = -3.14f64
+print("Type-specific negation:", a_i32, " ", a_i64, " ", a_f64)
