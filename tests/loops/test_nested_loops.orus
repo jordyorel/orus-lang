@@ -1,0 +1,10 @@
+// Test nested loops with break/continue
+for i in 1..3:
+    print("outer " + (i as string))
+    for j in 1..3:
+        if j == 2:
+            continue
+        print("  inner " + (j as string))
+    if i == 2:
+        break
+print("done")

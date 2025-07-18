@@ -1,0 +1,33 @@
+// Test complex nested loops with multiple break/continue
+print("=== Complex Nested Loops ===")
+mut outerCount = 0
+while outerCount < 3:
+    print("Outer while: " + (outerCount as string))
+    
+    for i in 1..5:
+        print("  For loop i: " + (i as string))
+        
+        mut innerCount = 0
+        while innerCount < 4:
+            print("    Inner while: " + (innerCount as string))
+            
+            if innerCount == 1:
+                innerCount = innerCount + 1
+                continue
+            
+            if innerCount == 2 and i == 3:
+                print("    Breaking inner while")
+                break
+                
+            innerCount = innerCount + 1
+        
+        if i == 3:
+            print("  Breaking for loop")
+            break
+    
+    outerCount = outerCount + 1
+    if outerCount == 2:
+        print("Continuing outer while")
+        continue
+        
+print("Done with complex nested test")

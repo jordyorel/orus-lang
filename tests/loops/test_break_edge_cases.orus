@@ -1,0 +1,26 @@
+// Test break/continue edge cases
+print("=== Break Edge Cases ===")
+
+// Test 1: Multiple breaks in same loop
+print("Test 1: Multiple breaks")
+for i in 1..5:
+    if i == 2:
+        print("Break at 2")
+        break
+    if i == 3:
+        print("Break at 3")
+        break
+    print(i)
+print("Test 1 done")
+
+// Test 2: Break in nested if
+print("Test 2: Break in nested if")
+for i in 1..4:
+    if i > 1:
+        if i == 3:
+            print("Nested break")
+            break
+    print(i)
+print("Test 2 done")
+
+print("All edge cases complete")

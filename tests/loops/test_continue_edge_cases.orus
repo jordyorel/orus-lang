@@ -1,0 +1,27 @@
+// Test continue edge cases
+print("=== Continue Edge Cases ===")
+
+// Test 1: Multiple continues
+print("Test 1: Multiple continues")
+for i in 1..6:
+    if i == 2:
+        print("Continue at 2")
+        continue
+    if i == 4:
+        print("Continue at 4")
+        continue
+    print(i)
+print("Test 1 done")
+
+// Test 2: Continue in while loop
+print("Test 2: Continue in while")
+mut j = 0
+while j < 5:
+    j = j + 1
+    if j == 3:
+        print("Continue at 3")
+        continue
+    print(j)
+print("Test 2 done")
+
+print("All continue tests complete")

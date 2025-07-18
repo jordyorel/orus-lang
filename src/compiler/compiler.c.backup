@@ -1107,11 +1107,12 @@ static bool compileNode(ASTNode* node, Compiler* compiler) {
                 fprintf(stderr, "Error: Maximum loop nesting depth exceeded\n");
                 return false;
             }
-            compiler->loopStack[compiler->loopDepth++] = loopCtx;
             
             // Mark loop start for continue statements
             int loopStart = compiler->chunk->count;
-            compiler->loopStack[compiler->loopDepth - 1].continueTarget = loopStart;
+            loopCtx.continueTarget = loopStart;
+            
+            compiler->loopStack[compiler->loopDepth++] = loopCtx;
             
             // Compile condition
             int conditionReg = compileExpr(node->whileStmt.condition, compiler);
@@ -1135,15 +1136,17 @@ static bool compileNode(ASTNode* node, Compiler* compiler) {
             // Patch exit jump to point here
             patchJump(compiler, exitJump);
             
-            // Patch all break jumps BEFORE freeing jumptable and popping loop context
-            LoopContext* patchLoop = &compiler->loopStack[compiler->loopDepth - 1];
-            for (int i = 0; i < patchLoop->breakJumps.offsets.count; i++) {
-                patchJump(compiler, patchLoop->breakJumps.offsets.data[i]);
+            // Get the loop context from the stack (not the local variable)
+            LoopContext* stackLoopCtx = &compiler->loopStack[compiler->loopDepth - 1];
+            
+            // Patch all break jumps
+            for (int i = 0; i < stackLoopCtx->breakJumps.offsets.count; i++) {
+                patchJump(compiler, stackLoopCtx->breakJumps.offsets.data[i]);
             }
             
             // Cleanup
-            jumptable_free(&patchLoop->breakJumps);
-            jumptable_free(&patchLoop->continueJumps);
+            jumptable_free(&stackLoopCtx->breakJumps);
+            jumptable_free(&stackLoopCtx->continueJumps);
             compiler->loopDepth--;
             
             return true;
@@ -1216,25 +1219,25 @@ static bool compileNode(ASTNode* node, Compiler* compiler) {
             emitByte(compiler, (uint8_t)varIdx);
             emitByte(compiler, loopVarReg);
             
-            // Set continueTarget to increment code (to be emitted after body)
-            int continueTarget = -1;
-            compiler->loopStack[compiler->loopDepth - 1].continueTarget = -1; // will set after body
-            
             // Compile body
             if (!compileNode(node->forRange.body, compiler)) {
                 compiler->loopDepth--;
                 return false;
             }
-            // Place increment code here (continueTarget)
-            continueTarget = compiler->chunk->count;
+            
+            // Continue target: jump to increment
+            int continueTarget = compiler->chunk->count;
             compiler->loopStack[compiler->loopDepth - 1].continueTarget = continueTarget;
             
-            // Patch all continue jumps to point to increment code
-            LoopContext* continueLoop = &compiler->loopStack[compiler->loopDepth - 1];
-            for (int i = 0; i < continueLoop->continueJumps.offsets.count; i++) {
-                patchJump(compiler, continueLoop->continueJumps.offsets.data[i]);
+            // Get the loop context from the stack to patch continue jumps
+            LoopContext* stackLoopCtx = &compiler->loopStack[compiler->loopDepth - 1];
+            
+            // Patch all continue jumps to jump to this increment step
+            for (int i = 0; i < stackLoopCtx->continueJumps.offsets.count; i++) {
+                patchJump(compiler, stackLoopCtx->continueJumps.offsets.data[i]);
             }
             
+            // Increment loop variable
             if (node->forRange.step) {
                 // Use custom step
                 int stepReg = compileExpr(node->forRange.step, compiler);
@@ -1253,21 +1256,26 @@ static bool compileNode(ASTNode* node, Compiler* compiler) {
                 emitByte(compiler, oneReg);
                 freeRegister(compiler, oneReg);
             }
+            
             // Jump back to condition check
             emitLoop(compiler, loopStart);
             
             // Patch exit jump
             patchJump(compiler, exitJump);
             
-            // Patch all break jumps BEFORE freeing jumptable and popping loop context
-            LoopContext* patchLoop = &compiler->loopStack[compiler->loopDepth - 1];
-            for (int i = 0; i < patchLoop->breakJumps.offsets.count; i++) {
-                patchJump(compiler, patchLoop->breakJumps.offsets.data[i]);
+            // Get the loop context from the stack (not the local variable)
+            LoopContext* stackLoopCtx = &compiler->loopStack[compiler->loopDepth - 1];
+            
+            // Patch all break jumps
+            for (int i = 0; i < stackLoopCtx->breakJumps.offsets.count; i++) {
+                patchJump(compiler, stackLoopCtx->breakJumps.offsets.data[i]);
             }
             
             // Cleanup
-            jumptable_free(&patchLoop->breakJumps);
-            jumptable_free(&patchLoop->continueJumps);
+            freeRegister(compiler, endReg);
+            freeRegister(compiler, loopVarReg);
+            jumptable_free(&stackLoopCtx->breakJumps);
+            jumptable_free(&stackLoopCtx->continueJumps);
             compiler->loopDepth--;
             
             return true;
@@ -1345,12 +1353,14 @@ static bool compileNode(ASTNode* node, Compiler* compiler) {
                 loop = &compiler->loopStack[compiler->loopDepth - 1];
             }
             
-            // Check if continue target is already set (for while loops)
-            if (loop->continueTarget != -1) {
-                // Jump to continue target (loop start)
+            // For different loop types, continue works differently:
+            // - While loops: jump backward to condition check (use emitLoop)
+            // - For loops: jump forward to increment step (use jump patching)
+            if (loop->continueTarget <= compiler->chunk->count) {
+                // Continue target is before current position (while loop)
                 emitLoop(compiler, loop->continueTarget);
             } else {
-                // For loops where continue target is not yet set, add jump to continue table
+                // Continue target is after current position (for loop)
                 emitByte(compiler, OP_JUMP);
                 int continueJump = emitJump(compiler);
                 jumptable_add(&loop->continueJumps, continueJump);
@@ -1411,12 +1421,6 @@ static bool compileNode(ASTNode* node, Compiler* compiler) {
             // Update the stack with the continue target
             compiler->loopStack[compiler->loopDepth - 1].continueTarget = loopCtx.continueTarget;
             
-            // Patch all continue jumps to point to loop start
-            LoopContext* continueLoop2 = &compiler->loopStack[compiler->loopDepth - 1];
-            for (int i = 0; i < continueLoop2->continueJumps.offsets.count; i++) {
-                patchJump(compiler, continueLoop2->continueJumps.offsets.data[i]);
-            }
-            
             // Get next value from iterator
             int hasNextReg = allocateRegister(compiler);
             emitByte(compiler, OP_ITER_NEXT_R);
@@ -1448,15 +1452,19 @@ static bool compileNode(ASTNode* node, Compiler* compiler) {
             // Patch exit jump
             patchJump(compiler, exitJump);
             
-            // Patch all break jumps BEFORE freeing jumptable and popping loop context
-            LoopContext* patchLoop = &compiler->loopStack[compiler->loopDepth - 1];
-            for (int i = 0; i < patchLoop->breakJumps.offsets.count; i++) {
-                patchJump(compiler, patchLoop->breakJumps.offsets.data[i]);
+            // Get the loop context from the stack (not the local variable)
+            LoopContext* stackLoopCtx = &compiler->loopStack[compiler->loopDepth - 1];
+            
+            // Patch all break jumps
+            for (int i = 0; i < stackLoopCtx->breakJumps.offsets.count; i++) {
+                patchJump(compiler, stackLoopCtx->breakJumps.offsets.data[i]);
             }
             
             // Cleanup
-            jumptable_free(&patchLoop->breakJumps);
-            jumptable_free(&patchLoop->continueJumps);
+            freeRegister(compiler, iteratorReg);
+            freeRegister(compiler, loopVarReg);
+            jumptable_free(&stackLoopCtx->breakJumps);
+            jumptable_free(&stackLoopCtx->continueJumps);
             compiler->loopDepth--;
             
             return true;

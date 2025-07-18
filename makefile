@@ -40,8 +40,8 @@ ifeq ($(PROFILE),debug)
     PROFILE_DESC = Debug (no optimization, full debugging)
 else ifeq ($(PROFILE),release)
     # Release build: maximum optimization, minimal debug info
-    OPT_FLAGS = -O3 -g1 -DNDEBUG=1 -flto
-    FAST_FLAGS = -ffast-math -funroll-loops -finline-functions
+    OPT_FLAGS = -O3 -g1 -DNDEBUG=1
+    FAST_FLAGS = -funroll-loops -finline-functions
     DEFINES = $(ARCH_DEFINES) -DRELEASE_MODE=1 -DENABLE_OPTIMIZATIONS=1
     SUFFIX = 
     PROFILE_DESC = Release (maximum optimization)
@@ -202,6 +202,34 @@ test: $(ORUS)
 	                  $(TESTDIR)/control_flow/edge_deep_nesting.orus \
 	                  $(TESTDIR)/control_flow/edge_mixed_styles.orus \
 	                  $(TESTDIR)/control_flow/optimization_verification.orus; do \
+		if [ -f "$$test_file" ]; then \
+			printf "Testing: $$test_file ... "; \
+			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
+				printf "\033[32mPASS\033[0m\n"; \
+				passed=$$((passed + 1)); \
+			else \
+				printf "\033[31mFAIL\033[0m\n"; \
+				failed=$$((failed + 1)); \
+			fi; \
+		fi; \
+	done; \
+	echo ""; \
+	echo "\033[36m=== Loop Control Tests ===\033[0m"; \
+	for test_file in $(TESTDIR)/loops/test_for_simple.orus \
+	                  $(TESTDIR)/loops/test_for_break.orus \
+	                  $(TESTDIR)/loops/test_for_continue.orus \
+	                  $(TESTDIR)/loops/test_for_continue_simple.orus \
+	                  $(TESTDIR)/loops/test_for_ranges.orus \
+	                  $(TESTDIR)/loops/test_while_break.orus \
+	                  $(TESTDIR)/loops/test_while_continue.orus \
+	                  $(TESTDIR)/loops/test_nested_simple.orus \
+	                  $(TESTDIR)/loops/test_nested_loops.orus \
+	                  $(TESTDIR)/loops/test_complex_nested.orus \
+	                  $(TESTDIR)/loops/test_deep_simple.orus \
+	                  $(TESTDIR)/loops/test_deep_nesting.orus \
+	                  $(TESTDIR)/loops/test_break_edge_cases.orus \
+	                  $(TESTDIR)/loops/test_continue_edge_cases.orus \
+	                  $(TESTDIR)/loops/test_debug_continue.orus; do \
 		if [ -f "$$test_file" ]; then \
 			printf "Testing: $$test_file ... "; \
 			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \

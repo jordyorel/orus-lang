@@ -155,7 +155,7 @@ else:
     // block
 
 print("ok") if x == 1 elif x == 2 else print("fallback")
-- [ ] // Ternary operator 
+- [*] // Ternary operator 
 result = x > 0 ? "positive" : "non-positive"
 ```
 
