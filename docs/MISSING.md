@@ -201,10 +201,10 @@ for i in start..end..step:
 * **`step`**: Optional stride (must be non-zero, defaults to 1)
 
 **Compile-Time Optimizations:**
-- [ ] Constant range folding for known bounds
-- [ ] Loop unrolling for small iteration counts (< 8 iterations)
-- [ ] Strength reduction for power-of-2 steps
-- [ ] Dead iteration elimination for unreachable ranges
+- [x] Constant range folding for known bounds
+- [x] Loop unrolling for small iteration counts (≤ 8 iterations)
+- [x] Strength reduction for power-of-2 steps (framework implemented)
+- [x] Dead iteration elimination for unreachable ranges
 
 ---
 

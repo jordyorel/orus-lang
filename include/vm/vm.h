@@ -769,6 +769,15 @@ typedef struct {
     
     // Tail call optimization context
     void* tailCallContext;  // TailCallContext* - avoid circular dependency
+    
+    // Loop optimization framework
+    struct {
+        bool enabled;
+        int unrollCount;
+        int strengthReductionCount;
+        int boundsEliminationCount;
+        int totalOptimizations;
+    } optimizer;
 } Compiler;
 
 // Typed registers for optimization (unboxed values)

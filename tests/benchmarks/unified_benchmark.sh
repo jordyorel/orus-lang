@@ -144,6 +144,23 @@ run_benchmark_category() {
         run_language_benchmark "LuaJIT" "${base_name}.lua" "luajit \"$SCRIPT_DIR/${base_name}.lua\""
     fi
     
+    # Check for C benchmark
+    if [[ -f "$SCRIPT_DIR/${base_name}.c" ]] && command -v gcc >/dev/null 2>&1; then
+        # Compile C if needed
+        if [[ ! -f "$SCRIPT_DIR/${base_name}" ]] || [[ "$SCRIPT_DIR/${base_name}.c" -nt "$SCRIPT_DIR/${base_name}" ]]; then
+            echo -n "  Compiling C (${base_name})..."
+            if gcc -O3 -march=native -mtune=native -ffast-math -funroll-loops -o "$SCRIPT_DIR/${base_name}" "$SCRIPT_DIR/${base_name}.c" > /dev/null 2>&1; then
+                echo " ✅"
+            else
+                echo " ❌"
+            fi
+        fi
+        
+        if [[ -f "$SCRIPT_DIR/${base_name}" ]]; then
+            run_language_benchmark "C (GCC)" "${base_name}.c" "cd \"$SCRIPT_DIR\" && ./${base_name}"
+        fi
+    fi
+    
     # Check for Java benchmark (detect based on benchmark type)
     local java_class=""
     case "$base_name" in
@@ -155,6 +172,9 @@ run_benchmark_category() {
             ;;
         "extreme_benchmark")
             java_class="ExtremeBenchmark"
+            ;;
+        "simple_loop_benchmark_optimized")
+            java_class="SimpleLoopBenchmarkOptimized"
             ;;
     esac
     
@@ -271,6 +291,8 @@ run_benchmark_category "Pure Arithmetic Performance" "arithmetic_benchmark.orus"
 run_benchmark_category "Comprehensive Performance" "comprehensive_benchmark.orus"
 run_benchmark_category "Extreme Performance" "extreme_benchmark.orus"
 run_benchmark_category "Control Flow Performance" "control_flow_benchmark.orus"
+run_benchmark_category "Loop Optimization Performance" "simple_loop_benchmark.orus"
+run_benchmark_category "Optimized Loop Performance" "simple_loop_benchmark_optimized.orus"
 # run_benchmark_category "Modulo Operations" "modulo_operations_benchmark.orus"
 
 echo -e "${BLUE}=================================================================${NC}"

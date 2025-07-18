@@ -83,6 +83,8 @@ The test suite is organized into comprehensive categories with specific behavior
 - **Type system**: Phase 5 complete with comprehensive casting rules
 - **String conversions**: All types can cast to string, string cannot cast to others
 - **Variable system**: Declarations with type inference and annotation support
+- **Control flow**: Complete if/else, while, for loops with break/continue
+- **Loop optimization**: High-performance unrolling and optimization framework
 - **Error reporting**: Feature-based modular system with friendly messages
 - **Memory management**: GC with object pooling and arena allocation
 - **Comprehensive testing**: 100+ tests including type error validation
@@ -93,9 +95,9 @@ The test suite is organized into comprehensive categories with specific behavior
 - **Type error improvements**: Friendly, mentor-like error messages
 - **Modular error architecture**: Feature-based organization for maintainability
 - **Enhanced test coverage**: Dedicated type error tests with expected failure validation
+- **Loop optimization framework**: High-performance loop unrolling and optimization system
 
 ### ❌ Missing Critical Features
-- Control flow statements (`if`, `while`, `for`)
 - Function definitions and calls (`fn name:`)
 - Arrays and collections
 - Module system and imports

@@ -80,7 +80,7 @@ BUILDDIR = build/$(PROFILE)
 INCLUDES = -I$(INCDIR)
 
 # Source files
-COMPILER_SRCS = $(SRCDIR)/compiler/compiler.c $(SRCDIR)/compiler/lexer.c $(SRCDIR)/compiler/parser.c $(SRCDIR)/compiler/symbol_table.c
+COMPILER_SRCS = $(SRCDIR)/compiler/compiler.c $(SRCDIR)/compiler/lexer.c $(SRCDIR)/compiler/parser.c $(SRCDIR)/compiler/symbol_table.c $(SRCDIR)/compiler/loop_optimization.c
 
 VM_SRCS = $(SRCDIR)/vm/core/vm_core.c $(SRCDIR)/vm/runtime/vm.c $(SRCDIR)/vm/core/vm_memory.c $(SRCDIR)/vm/utils/debug.c $(SRCDIR)/vm/runtime/builtins.c $(SRCDIR)/vm/operations/vm_arithmetic.c $(SRCDIR)/vm/operations/vm_control_flow.c $(SRCDIR)/vm/operations/vm_typed_ops.c $(SRCDIR)/vm/operations/vm_string_ops.c $(SRCDIR)/vm/operations/vm_comparison.c $(SRCDIR)/vm/dispatch/vm_dispatch_switch.c $(SRCDIR)/vm/dispatch/vm_dispatch_goto.c $(SRCDIR)/vm/core/vm_validation.c $(SRCDIR)/type/type_representation.c $(SRCDIR)/errors/infrastructure/error_infrastructure.c $(SRCDIR)/errors/core/error_base.c $(SRCDIR)/errors/features/type_errors.c $(SRCDIR)/config/config.c
 
@@ -221,6 +221,7 @@ test: $(ORUS)
 	                  $(TESTDIR)/loops/test_for_continue_simple.orus \
 	                  $(TESTDIR)/loops/test_for_ranges.orus \
 	                  $(TESTDIR)/loops/test_step_ranges.orus \
+	                  $(TESTDIR)/loops/test_loop_optimization.orus \
 	                  $(TESTDIR)/loops/test_while_break.orus \
 	                  $(TESTDIR)/loops/test_while_continue.orus \
 	                  $(TESTDIR)/loops/test_nested_simple.orus \
@@ -415,7 +416,8 @@ test: $(ORUS)
 	echo "\033[36m=== Benchmark Tests ===\033[0m"; \
 	for test_file in $(TESTDIR)/benchmarks/arithmetic_benchmark.orus \
 	                  $(TESTDIR)/benchmarks/extreme_benchmark.orus \
-	                  $(TESTDIR)/benchmarks/modulo_operations_benchmark.orus; do \
+	                  $(TESTDIR)/benchmarks/modulo_operations_benchmark.orus \
+	                  $(TESTDIR)/benchmarks/loop_optimization_benchmark.orus; do \
 		if [ -f "$$test_file" ]; then \
 			printf "Testing: $$test_file ... "; \
 			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
@@ -459,6 +461,10 @@ test: $(ORUS)
 # Run cross-language benchmark tests
 benchmark: $(ORUS)
 	@cd $(TESTDIR)/benchmarks && ./unified_benchmark.sh
+
+# Run loop optimization performance benchmark
+benchmark-loops: $(ORUS)
+	@./benchmark_loop_optimization.sh
 
 # Static Analysis
 analyze:

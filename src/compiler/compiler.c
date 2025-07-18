@@ -11,9 +11,10 @@
 #include "internal/error_reporting.h"
 #include "errors/features/type_errors.h"
 #include "runtime/jumptable.h"
+#include "compiler/loop_optimization.h"
 #include <string.h>
 
-static bool compileNode(ASTNode* node, Compiler* compiler);
+bool compileNode(ASTNode* node, Compiler* compiler);
 static int compileExpr(ASTNode* node, Compiler* compiler);
 static Type* getExprType(ASTNode* node, Compiler* compiler);
 
@@ -53,6 +54,13 @@ void initCompiler(Compiler* compiler, Chunk* chunk, const char* fileName,
     compiler->currentLine = 1;     // Initialize line tracking
     compiler->currentColumn = 1;   // Initialize column tracking
     symbol_table_init(&compiler->symbols);
+    
+    // Initialize loop optimizer
+    compiler->optimizer.enabled = true;
+    compiler->optimizer.unrollCount = 0;
+    compiler->optimizer.strengthReductionCount = 0;
+    compiler->optimizer.boundsEliminationCount = 0;
+    compiler->optimizer.totalOptimizations = 0;
 }
 
 void freeCompiler(Compiler* compiler) {
@@ -898,7 +906,7 @@ static int compileExpr(ASTNode* node, Compiler* compiler) {
     }
 }
 
-static bool compileNode(ASTNode* node, Compiler* compiler) {
+bool compileNode(ASTNode* node, Compiler* compiler) {
     // Update current line/column for error reporting
     if (node) {
         compiler->currentLine = node->location.line;
@@ -1150,6 +1158,12 @@ static bool compileNode(ASTNode* node, Compiler* compiler) {
         }
 
         case NODE_FOR_RANGE: {
+            // Try loop optimization first
+            if (optimizeLoop(node, compiler)) {
+                // Loop was optimized (e.g., unrolled), no need for regular compilation
+                return true;
+            }
+            
             // Enter loop context
             LoopContext loopCtx;
             loopCtx.breakJumps = jumptable_new();

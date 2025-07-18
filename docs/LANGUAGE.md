@@ -7,7 +7,6 @@ This guide introduces a simplified and elegant Orus syntax inspired by Python, V
 ## 🚀 Getting Started
 
 ```orus
-fn main:
     print("Hello, Orus!")
 ```
 
@@ -56,9 +55,7 @@ print(x)       // prints 5
 
 ```orus
 pub const LIMIT = 10
-
-fn main:
-    for i in 0..LIMIT:
+for i in 0..LIMIT:
         print(i)
 ```
 
@@ -245,9 +242,8 @@ fn identity<T>(x: T) -> T:
 struct Box<T>:
     value: T
 
-fn main:
-    a = identity<i32>(5)
-    b: Box<string> = Box{ value: "hi" }
+a = identity<i32>(5)
+b: Box<string> = Box{ value: "hi" }
 ```
 
 With constraints:
@@ -306,8 +302,7 @@ pub fn helper():
 # main.orus
 use utils
 
-fn main:
-    utils.helper()
+utils.helper()
 ```
 
 ---
