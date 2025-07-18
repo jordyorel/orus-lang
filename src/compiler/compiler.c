@@ -1177,15 +1177,80 @@ static bool compileNode(ASTNode* node, Compiler* compiler) {
             emitByte(compiler, (uint8_t)startReg);
             freeRegister(compiler, startReg);
             
-            // Get end value
+            // Get end value and adjust for inclusive ranges
             int endReg = compileExpr(node->forRange.end, compiler);
+            
+            // Adjust end value for inclusive ranges
+            if (node->forRange.inclusive) {
+                int adjustedEndReg = allocateRegister(compiler);
+                int oneReg = allocateRegister(compiler);
+                
+                // Check if we have a negative step to determine adjustment direction
+                bool isNegativeStep = false;
+                if (node->forRange.step) {
+                    if (node->forRange.step->type == NODE_LITERAL && 
+                        node->forRange.step->literal.value.type == VAL_I32 &&
+                        node->forRange.step->literal.value.as.i32 < 0) {
+                        isNegativeStep = true;
+                    } else if (node->forRange.step->type == NODE_UNARY &&
+                               strcmp(node->forRange.step->unary.op, "-") == 0) {
+                        // Unary minus operation (e.g., -1, -2)
+                        isNegativeStep = true;
+                    }
+                }
+                
+                if (isNegativeStep) {
+                    // For negative step: end = end - 1
+                    emitConstant(compiler, oneReg, I32_VAL(1));
+                    emitByte(compiler, OP_SUB_I32_R);
+                } else {
+                    // For positive step: end = end + 1
+                    emitConstant(compiler, oneReg, I32_VAL(1));
+                    emitByte(compiler, OP_ADD_I32_R);
+                }
+                
+                emitByte(compiler, adjustedEndReg);
+                emitByte(compiler, (uint8_t)endReg);
+                emitByte(compiler, oneReg);
+                
+                freeRegister(compiler, endReg);
+                freeRegister(compiler, oneReg);
+                endReg = adjustedEndReg;
+            }
             
             // Mark loop start for condition check
             int loopStart = compiler->chunk->count;
             
-            // Check condition: loopVar < end
+            // Check condition: loopVar < end (for positive step) or loopVar > end (for negative step)
             int conditionReg = allocateRegister(compiler);
-            emitByte(compiler, OP_LT_I32_R);
+            
+            // Determine comparison operator based on step direction
+            // We need to check if step is positive or negative
+            if (node->forRange.step) {
+                // Custom step - check if it's a negative value
+                bool isNegativeStep = false;
+                if (node->forRange.step->type == NODE_LITERAL && 
+                    node->forRange.step->literal.value.type == VAL_I32 &&
+                    node->forRange.step->literal.value.as.i32 < 0) {
+                    isNegativeStep = true;
+                } else if (node->forRange.step->type == NODE_UNARY &&
+                           strcmp(node->forRange.step->unary.op, "-") == 0) {
+                    // Unary minus operation (e.g., -1, -2)
+                    isNegativeStep = true;
+                }
+                
+                if (isNegativeStep) {
+                    // For negative step: loopVar > end
+                    emitByte(compiler, OP_GT_I32_R);
+                } else {
+                    // For positive step: loopVar < end
+                    emitByte(compiler, OP_LT_I32_R);
+                }
+            } else {
+                // Default step of 1 is always positive
+                emitByte(compiler, OP_LT_I32_R);
+            }
+            
             emitByte(compiler, conditionReg);
             emitByte(compiler, loopVarReg);
             emitByte(compiler, (uint8_t)endReg);

@@ -220,6 +220,7 @@ test: $(ORUS)
 	                  $(TESTDIR)/loops/test_for_continue.orus \
 	                  $(TESTDIR)/loops/test_for_continue_simple.orus \
 	                  $(TESTDIR)/loops/test_for_ranges.orus \
+	                  $(TESTDIR)/loops/test_step_ranges.orus \
 	                  $(TESTDIR)/loops/test_while_break.orus \
 	                  $(TESTDIR)/loops/test_while_continue.orus \
 	                  $(TESTDIR)/loops/test_nested_simple.orus \
