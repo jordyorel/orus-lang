@@ -285,7 +285,8 @@ echo ""
 echo -e "${CYAN}🖥️  System Information:${NC}"
 echo "  Date:     $(date)"
 echo "  Platform: $(uname -s) $(uname -m)"
-echo "  Orus:     $($ORUS_BINARY --version 2>/dev/null || echo 'Building...')"
+ORUS_VERSION=$(grep -o '"[0-9]\+\.[0-9]\+\.[0-9]\+"' "$SCRIPT_DIR/../../include/public/version.h" | tr -d '"')
+echo "  Orus:     Orus Language Interpreter v$ORUS_VERSION"
 if command -v git >/dev/null 2>&1 && git rev-parse --git-dir >/dev/null 2>&1; then
     echo "  Commit:   $(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
 fi
@@ -299,8 +300,6 @@ run_benchmark_category "Pure Arithmetic Performance" "arithmetic_benchmark.orus"
 run_benchmark_category "Comprehensive Performance" "comprehensive_benchmark.orus"
 run_benchmark_category "Extreme Performance" "extreme_benchmark.orus"
 run_benchmark_category "Control Flow Performance" "licm_benchmark.orus"
-run_benchmark_category "Comprehensive Orus Features" "comprehensive_orus_benchmark.orus"
-# run_benchmark_category "Modulo Operations" "modulo_operations_benchmark.orus"
 
 echo -e "${BLUE}=================================================================${NC}"
 echo -e "${GREEN}✨ Benchmark comparison complete!${NC}"
