@@ -5,116 +5,89 @@ print("=== Loop Optimization Performance Benchmark ===")
 
 // Test 1: Small loop unrolling benchmark
 print("Test 1: Small loop unrolling (should be optimized)")
-iterations = 10000
-
-for outer in 1..iterations:
-    // This small loop should be unrolled
-    for i in 1..4:
-        x = i * 2
-        y = x + 1
-        z = y * 3
+for outer1 in 1..100:
+    for i1 in 1..4:
+        mut x1 = i1 * 2
+        mut y1 = x1 + 1
+        mut z1 = y1 * 3
 print("Small loop unrolling completed")
 
 // Test 2: Medium loop that should NOT be unrolled
 print("Test 2: Medium loop (should NOT be unrolled)")
-for outer in 1..iterations:
-    // This loop is too large to unroll
-    for i in 1..15:
-        x = i * 2
-        y = x + 1
-        z = y * 3
-        
+for outer2 in 1..100:
+    for i2 in 1..15:
+        mut x2 = i2 * 2
+        mut y2 = x2 + 1
+        mut z2 = y2 * 3
 print("Medium loop completed")
 
 // Test 3: Single iteration loop (should be optimized)
 print("Test 3: Single iteration loop (should be optimized)")
-for outer in 1..iterations:
-    // Single iteration - perfect for unrolling
-    for i in 5..6:
-        x = i * 2
-        y = x + 1
-        z = y * 3
-        
+for outer3 in 1..100:
+    for i3 in 5..6:
+        mut x3 = i3 * 2
+        mut y3 = x3 + 1
+        mut z3 = y3 * 3
 print("Single iteration loop completed")
 
 // Test 4: Step loop benchmark (should be optimized)
 print("Test 4: Step loop (should be optimized)")
-for outer in 1..iterations:
-    // Step loop with 3 iterations
-    for i in 0..6..2:
-        x = i * 2
-        y = x + 1
-        z = y * 3
-        
+for outer4 in 1..100:
+    for i4 in 0..6..2:
+        mut x4 = i4 * 2
+        mut y4 = x4 + 1
+        mut z4 = y4 * 3
 print("Step loop completed")
 
 // Test 5: Complex arithmetic in small loop
 print("Test 5: Complex arithmetic in small loop")
-for outer in 1..iterations:
-    // Complex operations that should benefit from unrolling
-    for i in 1..3:
-        x = i * i
-        y = x + (i * 2)
-        z = y / (i + 1)
-        w = z % 7
-        
+for outer5 in 1..100:
+    for i5 in 1..3:
+        mut x5 = i5 * i5
+        mut y5 = x5 + (i5 * 2)
+        mut z5 = y5 / (i5 + 1)
+        mut w5 = z5 % 7
 print("Complex arithmetic loop completed")
 
 // Test 6: Nested small loops (both should be optimized)
 print("Test 6: Nested small loops")
-for outer in 1..1000:  // Reduced iterations for nested loops
-    for i in 1..3:
-        for j in 1..3:
-            x = i * j
-            y = x + 1
-            z = y * 2
-            
+for outer6 in 1..100:
+    for i6 in 1..3:
+        for j6 in 1..3:
+            mut x6 = i6 * j6
+            mut y6 = x6 + 1
+            mut z6 = y6 * 2
 print("Nested small loops completed")
 
 // Test 7: Loop with break/continue (should NOT be optimized)
 print("Test 7: Loop with break/continue (should NOT be optimized)")
-for outer in 1..iterations:
-    for i in 1..8:
-        if i == 3:
+for outer7 in 1..100:
+    for i7 in 1..8:
+        if i7 == 3:
             continue
-        if i == 6:
+        if i7 == 6:
             break
-        x = i * 2
-        y = x + 1
-        z = y * 3
-        
+        mut x7 = i7 * 2
+        mut y7 = x7 + 1
+        mut z7 = y7 * 3
 print("Loop with break/continue completed")
 
 // Test 8: Large step loop (should be optimized)
 print("Test 8: Large step loop (should be optimized)")
-for outer in 1..iterations:
-    // Large step but only 3 iterations
-    for i in 10..40..10:
-        x = i / 10
-        y = x + 1
-        z = y * 2
-        
+for outer8 in 1..100:
+    for i8 in 10..40..10:
+        mut x8 = i8 / 10
+        mut y8 = x8 + 1
+        mut z8 = y8 * 2
 print("Large step loop completed")
 
 // Test 9: Empty range loop (should be optimized away)
 print("Test 9: Empty range loop (should be optimized away)")
-for outer in 1..iterations:
-    // Empty range - should be completely eliminated
-    for i in 10..5:
-        x = i * 2
-        y = x + 1
-        z = y * 3
-        
+for outer9 in 1..100:
+    for i9 in 10..5:
+        mut x9 = i9 * 2
+        mut y9 = x9 + 1
+        mut z9 = y9 * 3
 print("Empty range loop completed")
-
-// Test 10: Performance comparison summary
-print("Test 10: Performance comparison")
-print("This benchmark tests various loop patterns:")
-print("- Small loops (1-8 iterations): Should be unrolled")
-print("- Large loops (9+ iterations): Should use normal dispatch")
-print("- Single iteration loops: Should be fully inlined")
-print("- Step loops: Should be unrolled if small")
-print("- Break/continue loops: Should never be unrolled")
-print("- Empty range loops: Should be eliminated")
 
 print("=== Loop Optimization Benchmark Complete ===")

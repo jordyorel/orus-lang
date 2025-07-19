@@ -776,6 +776,7 @@ typedef struct {
         int unrollCount;
         int strengthReductionCount;
         int boundsEliminationCount;
+        int licmCount;
         int totalOptimizations;
     } optimizer;
 } Compiler;

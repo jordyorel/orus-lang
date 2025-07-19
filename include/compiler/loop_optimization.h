@@ -20,6 +20,7 @@ typedef struct {
     int unrollCount;
     int strengthReductionCount;
     int boundsEliminationCount;
+    int licmCount;
     int totalOptimizations;
 } LoopOptimizationStats;
 
@@ -29,6 +30,7 @@ typedef struct {
     int unrollCount;
     int strengthReductionCount;
     int boundsEliminationCount;
+    int licmCount;
     int totalOptimizations;
 } LoopOptimizer;
 
@@ -50,5 +52,10 @@ void setLoopOptimizationEnabled(LoopOptimizer* optimizer, bool enabled);
 
 // Reset optimization counters
 void resetLoopOptimizationStats(LoopOptimizer* optimizer);
+
+// Global optimization statistics
+void updateGlobalOptimizationStats(LoopOptimizer* optimizer);
+void updateGlobalOptimizationStatsFromCompiler(Compiler* compiler);
+void printGlobalOptimizationStats(void);
 
 #endif // LOOP_OPTIMIZATION_H

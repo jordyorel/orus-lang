@@ -51,6 +51,7 @@ typedef struct {
     bool show_ast;                 // Show AST dump (--show-ast)
     bool show_bytecode;            // Show bytecode dump (--show-bytecode)
     bool show_tokens;              // Show token stream (--show-tokens)
+    bool show_optimization_stats;  // Show optimization statistics (--show-opt-stats)
     bool benchmark_mode;           // Enable benchmarking (--benchmark)
     
     // File paths

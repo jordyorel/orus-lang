@@ -79,6 +79,7 @@ void config_reset_to_defaults(OrusConfig* config) {
     config->show_ast = false;
     config->show_bytecode = false;
     config->show_tokens = false;
+    config->show_optimization_stats = false;
     config->benchmark_mode = false;
     
     // File paths
@@ -243,6 +244,8 @@ bool config_parse_args(OrusConfig* config, int argc, const char* argv[]) {
             config->show_bytecode = true;
         } else if (strcmp(arg, "--show-tokens") == 0) {
             config->show_tokens = true;
+        } else if (strcmp(arg, "--show-opt-stats") == 0) {
+            config->show_optimization_stats = true;
         } else if (strcmp(arg, "--benchmark") == 0) {
             config->benchmark_mode = true;
         }
@@ -421,6 +424,7 @@ void config_print_help(const char* program_name) {
     printf("  --show-ast              Show AST dump\n");
     printf("  --show-bytecode         Show bytecode dump\n");
     printf("  --show-tokens           Show token stream\n");
+    printf("  --show-opt-stats        Show optimization statistics\n");
     printf("  --benchmark             Enable benchmarking mode\n");
     printf("\nVM Configuration:\n");
     printf("  --max-recursion=N       Set maximum recursion depth (default: %d)\n", DEFAULT_MAX_RECURSION_DEPTH);

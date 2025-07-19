@@ -1,0 +1,30 @@
+print("=== LICM Optimization Test ===")
+
+print("Test 1: Simple invariant expression")
+x = 10
+y = 20
+for i in 1..5:
+    mut result = (x + y) * i
+    print("Result:", result)
+print("Test 1 done")
+
+print("Test 2: Complex invariant expression")
+a = 5
+b = 3
+c = 7
+for i in 1..4:
+    mut temp = (a * b) + c
+    mut final = temp + i
+    print("Final:", final)
+print("Test 2 done")
+
+print("Test 3: Simple nested loops")
+outer_const = 50
+for i in 1..3:
+    mut outer_inv = outer_const * 2
+    for j in 1..3:
+        mut final_val = outer_inv + i + j
+        print("Final val:", final_val)
+print("Test 3 done")
+
+print("=== LICM Test Complete ===")

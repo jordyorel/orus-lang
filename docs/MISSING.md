@@ -161,25 +161,25 @@ result = x > 0 ? "positive" : "non-positive"
 
 ### 2.2 Loop Constructs & Performance Foundations
 **Priority: 🔥 High**
-- [ ] **TODO**: Implement high-performance loop constructs with progressive optimization features.
-- [ ] **NEW**: Build optimization framework that will support advanced features later
+- [x] **DONE**: Implement high-performance loop constructs with progressive optimization features.
+- [x] **DONE**: Build optimization framework that supports advanced features
 
 **Core Implementation Requirements:**
-- [ ] **NEW**: While loop syntax parsing and basic compilation with condition hoisting
-- [ ] **new**: For loop with range syntax (`0..5`, `0..=5`, `0..10..2`) and bounds checking
-- [ ] **new**: For loop with iterator syntax (`for item in collection`) with zero-copy iteration
-- [ ] Break and continue statements with proper scope handling and jump table optimization *(dynamic jump table implemented)*
-- [ ] Replace fixed-size break/continue jump arrays with dynamic vectors
-- [ ] Nested loop support with labeled break/continue for arbitrary loop depth
-- [ ] **NEW*: Loop variable scoping, lifetime management, and register allocation optimization *(Enhanced with live range analysis, register reuse, and cross-loop variable lifetime tracking)*
-- [ ] **NEW**: Advanced Orus Range Syntax: `start..end..step` with direction validation *(Implemented with comprehensive compile-time validation and runtime support)*
+- [x] **DONE**: While loop syntax parsing and basic compilation with condition hoisting
+- [x] **DONE**: For loop with range syntax (`0..5`, `0..=5`, `0..10..2`) and bounds checking
+- [ ] **TODO**: For loop with iterator syntax (`for item in collection`) with zero-copy iteration
+- [x] **DONE**: Break and continue statements with proper scope handling and jump table optimization
+- [x] **DONE**: Replace fixed-size break/continue jump arrays with dynamic vectors
+- [ ] **TODO**: Nested loop support with labeled break/continue for arbitrary loop depth
+- [x] **DONE**: Loop variable scoping, lifetime management, and register allocation optimization
+- [x] **DONE**: Advanced Orus Range Syntax: `start..end..step` with direction validation
 
 **Performance & Safety Requirements (Progressive Implementation):**
-- [ ] **DONE**: Loop invariant code motion (LICM) optimization *(Comprehensive LICM implementation with AST-based analysis, safety checking, and bytecode transformation)*
-- [ ] **Phase 2**: Loop unrolling for small, known iteration counts (enables advanced vectorization later)
-- [ ] **Phase 3**: Strength reduction for induction variables (foundation for advanced math optimizations)
-- [ ] **Phase 4**: Dead code elimination within loop bodies (enables advanced type system optimizations)
-- [ ] **Phase 5**: Bounds check elimination for provably safe ranges (requires type system)
+- [ ] **TODO**: Loop invariant code motion (LICM) optimization *(Next priority for control flow performance)*
+- [x] **DONE**: Loop unrolling for small, known iteration counts (implemented with comprehensive optimization)
+- [ ] **TODO**: Strength reduction for induction variables (foundation for advanced math optimizations)
+- [ ] **TODO**: Dead code elimination within loop bodies (enables advanced type system optimizations)
+- [ ] **TODO**: Bounds check elimination for provably safe ranges (requires type system)
 - [ ] **Phase 6**: Memory allocation minimization in loop constructs (enables advanced memory management)
 - [ ] **Phase 6**: Branch prediction hints for common loop patterns (enables advanced profiling)
 

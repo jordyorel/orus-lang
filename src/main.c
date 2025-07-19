@@ -12,6 +12,7 @@
 #include "errors/error_interface.h"
 #include "errors/features/type_errors.h"
 #include "compiler/compiler.h"
+#include "compiler/loop_optimization.h"
 #include "tools/repl.h"
 #include "public/version.h"
 #include "config/config.h"
@@ -166,11 +167,12 @@ int main(int argc, const char* argv[]) {
     
     if (config->verbose && !config->quiet) {
         printf("Orus Language Interpreter starting...\n");
-        if (config->show_ast || config->show_bytecode || config->show_tokens) {
+        if (config->show_ast || config->show_bytecode || config->show_tokens || config->show_optimization_stats) {
             printf("Development tools enabled: ");
             if (config->show_ast) printf("AST ");
             if (config->show_bytecode) printf("Bytecode ");
             if (config->show_tokens) printf("Tokens ");
+            if (config->show_optimization_stats) printf("OptStats ");
             printf("\n");
         }
     }
@@ -188,6 +190,11 @@ int main(int argc, const char* argv[]) {
         repl();
     } else {
         runFile(config->input_file);
+    }
+    
+    // Show optimization statistics if requested
+    if (config->show_optimization_stats && !config->quiet) {
+        printGlobalOptimizationStats();
     }
     
     // Cleanup

@@ -222,6 +222,8 @@ test: $(ORUS)
 	                  $(TESTDIR)/loops/test_for_ranges.orus \
 	                  $(TESTDIR)/loops/test_step_ranges.orus \
 	                  $(TESTDIR)/loops/test_loop_optimization.orus \
+	                  $(TESTDIR)/loops/test_licm_optimization.orus \
+                  $(TESTDIR)/loops/test_strength_reduction.orus \
 	                  $(TESTDIR)/loops/test_while_break.orus \
 	                  $(TESTDIR)/loops/test_while_continue.orus \
 	                  $(TESTDIR)/loops/test_nested_simple.orus \
