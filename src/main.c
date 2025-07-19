@@ -23,6 +23,7 @@ static char* readFile(const char* path) {
     FILE* file = fopen(path, "rb");
     if (file == NULL) {
         fprintf(stderr, "Could not open file \"%s\".\n", path);
+        free_string_table(&globalStringTable);
         return NULL;
     }
     
@@ -34,6 +35,7 @@ static char* readFile(const char* path) {
     if (buffer == NULL) {
         fprintf(stderr, "Not enough memory to read \"%s\".\n", path);
         fclose(file);
+        free_string_table(&globalStringTable);
         return NULL;
     }
     
@@ -42,6 +44,7 @@ static char* readFile(const char* path) {
         fprintf(stderr, "Could not read file \"%s\".\n", path);
         free(buffer);
         fclose(file);
+        free_string_table(&globalStringTable);
         return NULL;
     }
     
@@ -55,6 +58,7 @@ static void runFile(const char* path) {
     char* source = readFile(path);
     if (source == NULL) {
         // readFile already prints an error message when it fails
+        free_string_table(&globalStringTable);
         exit(65);
     }
     
@@ -66,6 +70,7 @@ static void runFile(const char* path) {
     if (error_init != ERROR_REPORT_SUCCESS) {
         fprintf(stderr, "Failed to initialize error reporting\n");
         free(source);
+        free_string_table(&globalStringTable);
         exit(70);
     }
     
@@ -76,6 +81,7 @@ static void runFile(const char* path) {
         fprintf(stderr, "Failed to set source text for error reporting\n");
         cleanup_error_reporting();
         free(source);
+        free_string_table(&globalStringTable);
         exit(70);
     }
     
@@ -92,10 +98,12 @@ static void runFile(const char* path) {
             fprintf(stderr, "Debug: Check if the syntax is supported and tokens are properly recognized.\n");
             fprintf(stderr, "Debug: Try running with simpler syntax to isolate the issue.\n");
         }
+        free_string_table(&globalStringTable);
         exit(65);
     }
     if (result == INTERPRET_RUNTIME_ERROR) {
         // Enhanced error reporting is now handled in runtimeError() function
+        free_string_table(&globalStringTable);
         exit(70);
     }
 }
@@ -104,6 +112,8 @@ static void runFile(const char* path) {
 // See config_print_help() and config_print_version() in src/config/config.c
 
 int main(int argc, const char* argv[]) {
+    // Strict leak-free: initialize global string table first
+    init_string_table(&globalStringTable);
     // Initialize error reporting system
     init_error_reporting();
     
@@ -116,6 +126,7 @@ int main(int argc, const char* argv[]) {
     OrusConfig* config = config_create();
     if (!config) {
         fprintf(stderr, "Error: Failed to create configuration\n");
+        free_string_table(&globalStringTable);
         return EXIT_USAGE_ERROR;
     }
     
@@ -132,6 +143,7 @@ int main(int argc, const char* argv[]) {
     if (!config_parse_args(config, argc, argv)) {
         // config_parse_args returns false for help/version or errors
         config_destroy(config);
+        free_string_table(&globalStringTable);
         return 0; // Help/version shown, normal exit
     }
     
@@ -139,6 +151,7 @@ int main(int argc, const char* argv[]) {
     if (!config_validate(config)) {
         config_print_errors(config);
         config_destroy(config);
+        free_string_table(&globalStringTable);
         return EXIT_USAGE_ERROR;
     }
     
@@ -152,7 +165,8 @@ int main(int argc, const char* argv[]) {
         if (!config_validate(config)) {
             config_print_errors(config);
             config_destroy(config);
-            return EXIT_USAGE_ERROR;
+        free_string_table(&globalStringTable);
+        return EXIT_USAGE_ERROR;
         }
     }
     
@@ -201,6 +215,7 @@ int main(int argc, const char* argv[]) {
     
     // Cleanup
     freeVM();
+    free_string_table(&globalStringTable);
     config_destroy(config);
     return 0;
 }

@@ -69,4 +69,8 @@ char* rope_to_cstr(StringRope* rope);
 void init_string_table(StringInternTable* table);
 ObjString* intern_string(const char* chars, int length);
 
+// Cleanup routines
+void free_rope(StringRope* rope);
+void free_string_table(StringInternTable* table);
+
 #endif // ORUS_VM_STRING_OPS_H

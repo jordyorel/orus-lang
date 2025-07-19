@@ -247,6 +247,7 @@ static void freeObject(Obj* object) {
             ObjString* s = (ObjString*)object;
             vm.bytesAllocated -= sizeof(ObjString) + s->length + 1;
             free(s->chars);
+            if (s->rope) free_rope(s->rope);
             break;
         }
         case OBJ_ARRAY: {
