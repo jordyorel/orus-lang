@@ -181,14 +181,19 @@ static void print_string_interpolated(ObjString* str, Value* args, int* arg_inde
 
 void builtin_print(Value* args, int count, bool newline) {
     int consumed = 0;
+    bool first_value = true;
+    
     if (count > 0 && IS_STRING(args[0])) {
         ObjString* str = AS_STRING(args[0]);
         print_string_interpolated(str, args + 1, &consumed, count - 1);
         consumed += 1; // account for the format string
+        first_value = false; // We've already printed something
     }
+    
     for (int arg_index = consumed; arg_index < count; arg_index++) {
-        if (arg_index > 0) putchar(' ');
+        if (!first_value) putchar(' ');
         printValue(args[arg_index]);
+        first_value = false;
     }
     if (newline) putchar('\n');
     fflush(stdout);

@@ -975,6 +975,15 @@ const char* get_error_title(ErrorCode code) {
         case E1007_SEMICOLON_NOT_ALLOWED: return "Semicolons aren't needed in Orus";
         case E1008_INVALID_INDENTATION: return "Indentation looks off";
         case E1009_EXPRESSION_TOO_COMPLEX: return "Expression is too deeply nested";
+        case E1010_UNDEFINED_VARIABLE: return "Can't find this variable";
+        case E1011_VARIABLE_REDEFINITION: return "This variable name is already taken";
+        case E1012_SCOPE_VIOLATION: return "This variable isn't available here";
+        case E1013_INVALID_VARIABLE_NAME: return "This isn't a valid variable name";
+        case E1014_MUTABLE_REQUIRED: return "This variable needs to be mutable";
+        case E1015_INVALID_MULTIPLE_DECLARATION: return "Something's wrong with this variable declaration";
+        case E1016_LOOP_VARIABLE_MODIFICATION: return "Loop variables can't be modified inside the loop";
+        case E1017_IMMUTABLE_COMPOUND_ASSIGNMENT: return "Can't use compound assignment on immutable variables";
+        case E1018_VARIABLE_NOT_INITIALIZED: return "This variable hasn't been given a value yet";
         
         // Module errors (E3xxx)
         case E3001_FILE_NOT_FOUND: return "Can't find the file you're looking for";
@@ -1025,6 +1034,24 @@ const char* get_error_help(ErrorCode code) {
             return "Remove the semicolon - Orus doesn't need them to end statements.";
         case E1009_EXPRESSION_TOO_COMPLEX:
             return "Break this into smaller expressions using intermediate variables.";
+        case E1010_UNDEFINED_VARIABLE:
+            return "Make sure you've declared the variable before using it, or check the spelling.";
+        case E1011_VARIABLE_REDEFINITION:
+            return "Choose a different name for this variable, or use assignment to change the existing one.";
+        case E1012_SCOPE_VIOLATION:
+            return "Check if the variable is declared in the current scope or an outer scope.";
+        case E1013_INVALID_VARIABLE_NAME:
+            return "Variable names should start with a letter or underscore, followed by letters, numbers, or underscores.";
+        case E1014_MUTABLE_REQUIRED:
+            return "Add 'mut' before the variable name when declaring it: 'mut variable_name = value'";
+        case E1015_INVALID_MULTIPLE_DECLARATION:
+            return "Check the syntax for multiple variable declarations: 'var1 = value1, var2 = value2'";
+        case E1016_LOOP_VARIABLE_MODIFICATION:
+            return "Use a different variable inside the loop, or restructure your logic.";
+        case E1017_IMMUTABLE_COMPOUND_ASSIGNMENT:
+            return "Declare the variable as mutable with 'mut' if you need to modify it: 'mut var = value'";
+        case E1018_VARIABLE_NOT_INITIALIZED:
+            return "Initialize the variable with a value when declaring it: 'variable_name = value'";
         
         // Module errors (E3xxx)
         case E3001_FILE_NOT_FOUND:

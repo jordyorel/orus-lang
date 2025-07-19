@@ -2,6 +2,8 @@
 #include "public/common.h"
 #include "vm/vm.h"
 #include "internal/error_reporting.h"
+#include "errors/features/variable_errors.h"
+#include "errors/features/control_flow_errors.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
@@ -542,6 +544,14 @@ static ASTNode* parseVariableDeclaration(ParserContext* ctx, bool isMutable, Tok
     strncpy(name, nameToken.start, len);
     name[len] = '\0';
 
+    // Validate variable name follows Orus conventions
+    if (!is_valid_variable_name(name)) {
+        const char* reason = get_variable_name_violation_reason(name);
+        SrcLocation location = {NULL, nameToken.line, nameToken.column};
+        report_invalid_variable_name(location, name, reason);
+        return NULL;
+    }
+
     varNode->varDecl.name = name;
     varNode->varDecl.isPublic = false;
     varNode->varDecl.initializer = initializer;
@@ -578,6 +588,15 @@ static ASTNode* parseAssignOrVarList(ParserContext* ctx, bool isMutable, Token n
         char* name = parser_arena_alloc(ctx, len + 1);
         strncpy(name, nameToken.start, len);
         name[len] = '\0';
+        
+        // Validate variable name even for compound assignment
+        if (!is_valid_variable_name(name)) {
+            const char* reason = get_variable_name_violation_reason(name);
+            SrcLocation location = {NULL, nameToken.line, nameToken.column};
+            report_invalid_variable_name(location, name, reason);
+            return NULL;
+        }
+        
         identifierLeft->identifier.name = name;
         identifierLeft->location.line = nameToken.line;
         identifierLeft->location.column = nameToken.column;
@@ -731,11 +750,21 @@ static ASTNode* parseIfStatement(ParserContext* ctx) {
     Token ifTok = nextToken(ctx);
     if (ifTok.type != TOKEN_IF && ifTok.type != TOKEN_ELIF) return NULL;
 
+    // Parse condition with error checking
     ASTNode* condition = parseExpression(ctx);
-    if (!condition) return NULL;
+    if (!condition) {
+        SrcLocation location = {NULL, ifTok.line, ifTok.column};
+        report_empty_condition(location, ifTok.type == TOKEN_IF ? "if" : "elif");
+        return NULL;
+    }
 
+    // Check for missing colon
     Token colon = nextToken(ctx);
-    if (colon.type != TOKEN_COLON) return NULL;
+    if (colon.type != TOKEN_COLON) {
+        SrcLocation location = {NULL, colon.line, colon.column};
+        report_missing_colon(location, ifTok.type == TOKEN_IF ? "if" : "elif");
+        return NULL;
+    }
     
     // Check if this is a single-line if or block if
     Token next = peekToken(ctx);
@@ -744,13 +773,26 @@ static ASTNode* parseIfStatement(ParserContext* ctx) {
     if (next.type == TOKEN_NEWLINE) {
         // Block-style if statement: if condition:\n    statement
         nextToken(ctx); // consume newline
-        if (nextToken(ctx).type != TOKEN_INDENT) return NULL;
+        Token indentToken = nextToken(ctx);
+        if (indentToken.type != TOKEN_INDENT) {
+            SrcLocation location = {NULL, indentToken.line, indentToken.column};
+            report_invalid_indentation(location, "if", 4, 0); // Assuming 4-space indentation
+            return NULL;
+        }
         thenBranch = parseBlock(ctx);
-        if (!thenBranch) return NULL;
+        if (!thenBranch) {
+            SrcLocation location = {NULL, ifTok.line, ifTok.column};
+            report_empty_block(location, "if");
+            return NULL;
+        }
     } else {
         // Single-line if statement: if condition: statement
         thenBranch = parseStatement(ctx);
-        if (!thenBranch) return NULL;
+        if (!thenBranch) {
+            SrcLocation location = {NULL, ifTok.line, ifTok.column};
+            report_empty_block(location, "if");
+            return NULL;
+        }
     }
 
     if (peekToken(ctx).type == TOKEN_NEWLINE) {
@@ -763,7 +805,12 @@ static ASTNode* parseIfStatement(ParserContext* ctx) {
         elseBranch = parseIfStatement(ctx);
     } else if (nextTok.type == TOKEN_ELSE) {
         nextToken(ctx); // consume else
-        if (nextToken(ctx).type != TOKEN_COLON) return NULL;
+        Token elseColon = nextToken(ctx);
+        if (elseColon.type != TOKEN_COLON) {
+            SrcLocation location = {NULL, elseColon.line, elseColon.column};
+            report_missing_colon(location, "else");
+            return NULL;
+        }
         
         // Check if this is a single-line else or block else
         Token afterColon = peekToken(ctx);
@@ -796,11 +843,21 @@ static ASTNode* parseWhileStatement(ParserContext* ctx) {
     Token whileTok = nextToken(ctx);
     if (whileTok.type != TOKEN_WHILE) return NULL;
 
+    // Parse condition with error checking
     ASTNode* condition = parseExpression(ctx);
-    if (!condition) return NULL;
+    if (!condition) {
+        SrcLocation location = {NULL, whileTok.line, whileTok.column};
+        report_empty_condition(location, "while");
+        return NULL;
+    }
 
+    // Check for missing colon
     Token colon = nextToken(ctx);
-    if (colon.type != TOKEN_COLON) return NULL;
+    if (colon.type != TOKEN_COLON) {
+        SrcLocation location = {NULL, colon.line, colon.column};
+        report_missing_colon(location, "while");
+        return NULL;
+    }
     
     // Check if this is a single-line while or block while
     Token next = peekToken(ctx);
@@ -846,14 +903,31 @@ static ASTNode* parseForStatement(ParserContext* ctx) {
 
     Token nameTok = nextToken(ctx);
     if (nameTok.type != TOKEN_IDENTIFIER) {
+        SrcLocation location = {NULL, forTok.line, forTok.column};
+        report_invalid_loop_variable(location, "missing", "loop variable name is required after 'for'");
         if (vm.devMode) {
             fprintf(stderr, "Debug: Expected TOKEN_IDENTIFIER after 'for', got %d\n", nameTok.type);
         }
         return NULL;
     }
+    
+    // Validate loop variable name
+    int len = nameTok.length;
+    char* name = parser_arena_alloc(ctx, len + 1);
+    strncpy(name, nameTok.start, len);
+    name[len] = '\0';
+    
+    // Check for valid variable name conventions
+    if (name[0] >= '0' && name[0] <= '9') {
+        SrcLocation location = {NULL, nameTok.line, nameTok.column};
+        report_invalid_loop_variable(location, name, "variable names cannot start with a digit");
+        return NULL;
+    }
 
     Token inTok = nextToken(ctx);
     if (inTok.type != TOKEN_IN) {
+        SrcLocation location = {NULL, nameTok.line, nameTok.column};
+        report_invalid_range_syntax(location, "for loop", "expected 'in' after loop variable");
         if (vm.devMode) {
             fprintf(stderr, "Debug: Expected TOKEN_IN after identifier, got %d\n", inTok.type);
         }
@@ -862,6 +936,8 @@ static ASTNode* parseForStatement(ParserContext* ctx) {
 
     ASTNode* first = parseExpression(ctx);
     if (!first) {
+        SrcLocation location = {NULL, inTok.line, inTok.column};
+        report_invalid_range_syntax(location, "missing", "range or iterable expression is required after 'in'");
         if (vm.devMode) {
             fprintf(stderr, "Debug: Failed to parse first expression in for loop\n");
         }
@@ -894,6 +970,8 @@ static ASTNode* parseForStatement(ParserContext* ctx) {
         }
         end = parseExpression(ctx);
         if (!end) {
+            SrcLocation location = {NULL, forTok.line, forTok.column};
+            report_invalid_range_syntax(location, "incomplete", "range end value is required after '..'");
             if (vm.devMode) {
                 fprintf(stderr, "Debug: Failed to parse end expression in range\n");
             }
@@ -914,6 +992,8 @@ static ASTNode* parseForStatement(ParserContext* ctx) {
             nextToken(ctx);
             step = parseExpression(ctx);
             if (!step) {
+                SrcLocation location = {NULL, forTok.line, forTok.column};
+                report_invalid_range_syntax(location, "incomplete", "step value is required after second '..'");
                 if (vm.devMode) {
                     fprintf(stderr, "Debug: Failed to parse step expression in range\n");
                 }
@@ -924,6 +1004,8 @@ static ASTNode* parseForStatement(ParserContext* ctx) {
 
     Token colon = nextToken(ctx);
     if (colon.type != TOKEN_COLON) {
+        SrcLocation location = {NULL, forTok.line, forTok.column};
+        report_missing_colon(location, "for");
         if (vm.devMode) {
             fprintf(stderr, "Debug: Expected TOKEN_COLON after range, got %d\n", colon.type);
         }
@@ -932,6 +1014,8 @@ static ASTNode* parseForStatement(ParserContext* ctx) {
     
     Token newline = nextToken(ctx);
     if (newline.type != TOKEN_NEWLINE) {
+        SrcLocation location = {NULL, colon.line, colon.column};
+        report_invalid_indentation(location, "for", 0, -1);
         if (vm.devMode) {
             fprintf(stderr, "Debug: Expected TOKEN_NEWLINE after colon, got %d\n", newline.type);
         }
@@ -940,6 +1024,8 @@ static ASTNode* parseForStatement(ParserContext* ctx) {
     
     Token indent = nextToken(ctx);
     if (indent.type != TOKEN_INDENT) {
+        SrcLocation location = {NULL, newline.line, newline.column};
+        report_invalid_indentation(location, "for", 4, 0);
         if (vm.devMode) {
             fprintf(stderr, "Debug: Expected TOKEN_INDENT after newline, got %d\n", indent.type);
         }
@@ -948,17 +1034,14 @@ static ASTNode* parseForStatement(ParserContext* ctx) {
 
     ASTNode* body = parseBlock(ctx);
     if (!body) {
+        SrcLocation location = {NULL, indent.line, indent.column};
+        report_empty_block(location, "for loop");
         if (vm.devMode) {
             fprintf(stderr, "Debug: Failed to parse body block in for loop\n");
         }
         return NULL;
     }
     if (peekToken(ctx).type == TOKEN_NEWLINE) nextToken(ctx);
-
-    int len = nameTok.length;
-    char* name = parser_arena_alloc(ctx, len + 1);
-    strncpy(name, nameTok.start, len);
-    name[len] = '\0';
 
     ASTNode* node = new_node(ctx);
     if (isRange) {
@@ -989,22 +1072,36 @@ static ASTNode* parseBreakStatement(ParserContext* ctx) {
         return NULL;
     }
     
+    // Check if break is used outside of loop context
+    if (!is_valid_break_continue_context()) {
+        SrcLocation location = {NULL, breakToken.line, breakToken.column};
+        report_break_outside_loop(location);
+        return NULL;
+    }
+    
     ASTNode* node = new_node(ctx);
     node->type = NODE_BREAK;
     node->location.line = breakToken.line;
     node->location.column = breakToken.column;
     node->dataType = NULL;
     node->breakStmt.label = NULL;
+    
+    // Handle labeled break
     if (peekToken(ctx).type == TOKEN_APOSTROPHE) {
         nextToken(ctx);
         Token labelTok = nextToken(ctx);
-        if (labelTok.type != TOKEN_IDENTIFIER) return NULL;
+        if (labelTok.type != TOKEN_IDENTIFIER) {
+            SrcLocation location = {NULL, labelTok.line, labelTok.column};
+            report_invalid_loop_variable(location, "label", "expected identifier after apostrophe");
+            return NULL;
+        }
         int len = labelTok.length;
         char* label = parser_arena_alloc(ctx, len + 1);
         strncpy(label, labelTok.start, len);
         label[len] = '\0';
         node->breakStmt.label = label;
     }
+    
     return node;
 }
 
@@ -1014,16 +1111,29 @@ static ASTNode* parseContinueStatement(ParserContext* ctx) {
         return NULL;
     }
     
+    // Check if continue is used outside of loop context
+    if (!is_valid_break_continue_context()) {
+        SrcLocation location = {NULL, continueToken.line, continueToken.column};
+        report_continue_outside_loop(location);
+        return NULL;
+    }
+    
     ASTNode* node = new_node(ctx);
     node->type = NODE_CONTINUE;
     node->location.line = continueToken.line;
     node->location.column = continueToken.column;
     node->dataType = NULL;
     node->continueStmt.label = NULL;
+    
+    // Handle labeled continue
     if (peekToken(ctx).type == TOKEN_APOSTROPHE) {
         nextToken(ctx);
         Token labelTok = nextToken(ctx);
-        if (labelTok.type != TOKEN_IDENTIFIER) return NULL;
+        if (labelTok.type != TOKEN_IDENTIFIER) {
+            SrcLocation location = {NULL, labelTok.line, labelTok.column};
+            report_invalid_loop_variable(location, "label", "expected identifier after apostrophe");
+            return NULL;
+        }
         int len = labelTok.length;
         char* label = parser_arena_alloc(ctx, len + 1);
         strncpy(label, labelTok.start, len);

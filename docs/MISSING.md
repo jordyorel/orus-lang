@@ -669,6 +669,49 @@ The error reporting system should combine Rust's precision with Elm's empathy, p
 - Add structured error types with rich formatting capabilities
 - Integrate with type system for constraint violation reporting
 
+### 4.5 Advanced Variable Error Detection
+**Priority: 📋 Medium-High**
+**Note: These features require architectural improvements to Orus's variable system**
+
+**❌ Missing Advanced Variable Error Detection:**
+- [ ] **TODO**: Duplicate variable declarations - Currently disabled due to architectural limitations where all variables are globals, causing false positives in loop contexts
+- [ ] **TODO**: Use before initialization - Variables declared but used before being assigned a value
+- [ ] **TODO**: Out-of-scope access - Using variables outside their declared scope (partially works, needs refinement)
+- [ ] **TODO**: Const variable reassignment - When Orus adds const variables
+- [ ] **TODO**: Advanced scope violations - Complex nested scope edge cases and lifetime management
+- [ ] **TODO**: Variable lifetime issues - Using variables after they should be destroyed or go out of scope
+
+**Implementation Requirements for Missing Features:**
+- [ ] Implement proper local variable architecture (currently all variables are globals)
+- [ ] Add variable initialization tracking in compiler
+- [ ] Enhance scope analysis for complex nested contexts
+- [ ] Add const variable support to language
+- [ ] Implement variable lifetime analysis
+- [ ] Add more sophisticated scope violation detection
+
+**Example Error Messages to Implement:**
+```
+-- ERROR: Variable used before initialization ------------ main.orus:5:12
+
+5 | print(uninitialized_var)
+         ^^^^^^^^^^^^^^^^^ variable 'uninitialized_var' is used here but may not be initialized
+         
+= help: Make sure to assign a value before using this variable
+= note: Variables must be initialized before they can be used
+
+-- ERROR: Variable used outside of scope ----------------- main.orus:8:5
+
+8 | print(loop_var)
+        ^^^^^^^^ variable 'loop_var' is not accessible here
+        
+= help: This variable was declared inside a loop and is not available outside
+= note: Variables declared in loops have limited scope
+```
+
+**Current Status:**
+- ✅ Basic variable error detection implemented (undefined variables, immutable modification, loop protection)
+- ❌ Advanced variable lifetime and scope analysis needs architectural improvements
+
 ---
 
 ## 📋 Phase 5: Advanced Language Features & Optimization (Weeks 17-20)

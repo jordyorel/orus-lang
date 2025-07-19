@@ -245,6 +245,7 @@ uint16_t allocate_frame_register(RegisterFile* rf) {
 
 // Phase 1: Temporary register allocation
 uint16_t allocate_temp_register(RegisterFile* rf) {
+    (void)rf; // Suppress unused parameter warning
     // Simple linear allocation for temps (could be more sophisticated)
     static uint8_t next_temp = 0;
     

@@ -779,7 +779,7 @@ static void findInvariantExpressionsOptimized(ASTNode* node, const char* loopVar
 }
 
 // Check if expression is simple literal arithmetic (safe for hoisting)
-static bool isSimpleLiteralExpression(ASTNode* expr) {
+__attribute__((unused)) static bool isSimpleLiteralExpression(ASTNode* expr) {
     if (!expr) return false;
     
     switch (expr->type) {

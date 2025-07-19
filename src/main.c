@@ -11,6 +11,7 @@
 #include "internal/error_reporting.h"
 #include "errors/error_interface.h"
 #include "errors/features/type_errors.h"
+#include "errors/features/variable_errors.h"
 #include "compiler/compiler.h"
 #include "compiler/loop_optimization.h"
 #include "tools/repl.h"
@@ -109,6 +110,7 @@ int main(int argc, const char* argv[]) {
     // Initialize feature-based error system
     init_feature_errors();
     init_type_errors();
+    init_variable_errors();
     
     // Create and initialize configuration
     OrusConfig* config = config_create();

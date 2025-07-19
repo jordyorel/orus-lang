@@ -98,6 +98,18 @@ bool symbol_table_set(SymbolTable* table, const char* name, int index, int scope
     uint64_t hash = fnv1a_hash(name);
     SymbolEntry* entry = find_entry(table->entries, table->capacity, hash, name);
     bool is_new = entry->name == NULL;
+    
+    // Conservative duplicate detection: only prevent obvious duplicates in the same basic scope
+    // Due to architectural limitations, all variables are currently globals, so we need to be careful
+    // about when to report duplicates vs. allow variable updates/shadowing
+    if (!is_new && entry->scope_depth == scope_depth && scope_depth == 0) {
+        // Only prevent duplicates at the top-level global scope
+        // This catches obvious cases like: x = 42; x = 100
+        return false;
+    }
+    // Allow all other cases (loop variables, block variables, etc.)
+    // This is a conservative approach that avoids false positives
+    
     if (is_new && !entry->is_tombstone) {
         table->count++;
     } else if (is_new && entry->is_tombstone && entry->name) {
@@ -110,7 +122,10 @@ bool symbol_table_set(SymbolTable* table, const char* name, int index, int scope
     entry->index = index;
     entry->scope_depth = scope_depth;
     entry->is_tombstone = false;
-    return is_new;
+    
+    // Return true for successful set operations
+    // Return false only if we detected a true duplicate at global scope
+    return true;
 }
 
 bool symbol_table_get(SymbolTable* table, const char* name, int* out_index) {

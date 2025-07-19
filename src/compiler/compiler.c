@@ -10,6 +10,7 @@
 #include "type/type.h"
 #include "internal/error_reporting.h"
 #include "errors/features/type_errors.h"
+#include "errors/features/variable_errors.h"
 #include "runtime/jumptable.h"
 #include "compiler/loop_optimization.h"
 #include "vm/register_file.h"
@@ -422,6 +423,12 @@ static int compileLiteral(ASTNode* node, Compiler* compiler) {
 static int compileIdentifier(ASTNode* node, Compiler* compiler) {
     int index;
     if (!symbol_table_get_in_scope(&compiler->symbols, node->identifier.name, compiler->scopeDepth, &index)) {
+        // Report specific error for undefined variable using modular error system
+        SrcLocation location = node->location;
+        if (location.file == NULL) {
+            location.file = vm.filePath;
+        }
+        report_undefined_variable(location, node->identifier.name);
         compiler->hadError = true;
         return allocateRegister(compiler);
     }
@@ -1038,6 +1045,9 @@ bool compileNode(ASTNode* node, Compiler* compiler) {
             // Set mutability based on declaration
             vm.mutableGlobals[idx] = node->varDecl.isMutable;
             
+            // Add variable to symbol table 
+            // Note: Duplicate detection temporarily reduced due to architectural limitations
+            // where all variables are globals and loop variables cause false positives
             symbol_table_set(&compiler->symbols, node->varDecl.name, idx, compiler->scopeDepth);
             emitByte(compiler, OP_STORE_GLOBAL);
             emitByte(compiler, (uint8_t)idx);
@@ -1080,6 +1090,15 @@ bool compileNode(ASTNode* node, Compiler* compiler) {
                 
                 symbol_table_set(&compiler->symbols, node->assign.name, idx, compiler->scopeDepth);
             } else {
+                // Check if trying to modify a loop variable (negative index indicates register-based loop variable)
+                if (idx < 0) {
+                    SrcLocation location = {vm.filePath, node->location.line, node->location.column};
+                    report_loop_variable_modification(location, node->assign.name, "for");
+                    compiler->hadError = true;
+                    freeRegister(compiler, reg);
+                    return false;
+                }
+                
                 // Variable exists in current scope - check if it's mutable
                 if (!vm.mutableGlobals[idx]) {
                     SrcLocation location = {vm.filePath, node->location.line, node->location.column};
@@ -1097,23 +1116,47 @@ bool compileNode(ASTNode* node, Compiler* compiler) {
         }
 
         case NODE_PRINT: {
-            for (int i = 0; i < node->print.count; i++) {
-                int r = compileExpr(node->print.values[i], compiler);
-                if (i == node->print.count - 1 && node->print.newline) {
-                    emitByte(compiler, OP_PRINT_R);
-                } else {
-                    emitByte(compiler, OP_PRINT_NO_NL_R);
-                }
-                emitByte(compiler, (uint8_t)r);
-                freeRegister(compiler, r);
-            }
-            if (node->print.count == 0 && node->print.newline) {
+            if (node->print.count == 0) {
+                // Handle empty print() case
                 uint8_t r = allocateRegister(compiler);
                 emitByte(compiler, OP_LOAD_NIL);
                 emitByte(compiler, r);
                 emitByte(compiler, OP_PRINT_R);
                 emitByte(compiler, r);
                 freeRegister(compiler, r);
+            } else if (node->print.count == 1) {
+                // Single argument - use simple print
+                int r = compileExpr(node->print.values[0], compiler);
+                if (node->print.newline) {
+                    emitByte(compiler, OP_PRINT_R);
+                } else {
+                    emitByte(compiler, OP_PRINT_NO_NL_R);
+                }
+                emitByte(compiler, (uint8_t)r);
+                freeRegister(compiler, r);
+            } else {
+                // Multiple arguments - use multi-print for proper spacing
+                uint8_t firstReg = allocateRegister(compiler);
+                
+                // Compile all expressions into consecutive registers
+                for (int i = 0; i < node->print.count; i++) {
+                    int r = compileExpr(node->print.values[i], compiler);
+                    if (i == 0) {
+                        firstReg = r;
+                    }
+                    // Note: We keep the registers allocated for multi-print
+                }
+                
+                // Emit multi-print instruction
+                emitByte(compiler, OP_PRINT_MULTI_R);
+                emitByte(compiler, firstReg);
+                emitByte(compiler, (uint8_t)node->print.count);
+                emitByte(compiler, node->print.newline ? 1 : 0);
+                
+                // Free all registers
+                for (int i = 0; i < node->print.count; i++) {
+                    freeRegister(compiler, firstReg + i);
+                }
             }
             return true;
         }

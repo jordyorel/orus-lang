@@ -154,7 +154,7 @@ static void cache_in_l1(RegisterCache* cache, uint16_t register_id, Value value)
 }
 
 // Phase 4: Cache a register value in L2
-static void cache_in_l2(RegisterCache* cache, uint16_t register_id, Value value) {
+__attribute__((unused)) static void cache_in_l2(RegisterCache* cache, uint16_t register_id, Value value) {
     CacheEntry* entry = find_lru_l2_entry(cache);
     
     // If entry is dirty, it needs writeback
