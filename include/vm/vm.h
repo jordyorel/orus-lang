@@ -267,16 +267,56 @@ typedef struct {
     Type* returnType;
 } NativeFunction;
 
-// Call frame for register-based VM
-typedef struct {
+// Phase 1: Enhanced CallFrame structure for hierarchical register windows
+typedef struct CallFrame {
+    Value registers[FRAME_REGISTERS];     // Function-local registers
+    struct CallFrame* parent;             // Parent scope
+    struct CallFrame* next;               // Call stack linkage
+    
+    // Frame metadata
+    uint16_t register_count;              // Registers in use
+    uint16_t spill_start;                 // First spilled register ID (Phase 2)
+    uint8_t module_id;                    // Module this frame belongs to
+    uint8_t flags;                        // Frame properties
+    
+    // Legacy compatibility
     uint8_t* returnAddress;
     Chunk* previousChunk;
-    uint8_t baseRegister;   // Base register for this frame
-    uint8_t registerCount;  // Number of registers used by this function
+    uint8_t baseRegister;                 // Base register for this frame
     uint8_t functionIndex;
-    uint8_t savedRegisterCount;  // Number of saved registers
-    Value savedRegisters[16];    // Saved registers overwritten by parameters
+    uint8_t savedRegisterCount;           // Number of saved registers
+    Value savedRegisters[16];             // Saved registers overwritten by parameters
 } CallFrame;
+
+// Phase 1: Register File Architecture
+typedef struct RegisterFile {
+    // Core register banks
+    Value globals[GLOBAL_REGISTERS];      // Global state (preserve existing behavior)
+    Value temps[TEMP_REGISTERS];          // Short-lived values
+    
+    // Dynamic frame management
+    CallFrame* current_frame;             // Active function frame
+    CallFrame* frame_stack;               // Call stack of frames
+    
+    // Phase 2: Spill area for unlimited scaling
+    struct SpillManager* spilled_registers;  // When registers exhausted
+    struct RegisterMetadata* metadata;      // Tracking register state
+    
+    // Phase 3: Module system
+    struct ModuleManager* module_manager;   // Module register management
+    
+    // Phase 4: Advanced register optimizations
+    struct RegisterCache* cache;            // Multi-level register caching
+} RegisterFile;
+
+// Phase 2: Register metadata for spilling
+typedef struct RegisterMetadata {
+    uint8_t is_temp : 1;        // Temporary register
+    uint8_t is_global : 1;      // Global register  
+    uint8_t is_spilled : 1;     // In spill area
+    uint8_t refcount : 5;       // Reference counting
+    uint8_t last_used;          // LRU tracking
+} RegisterMetadata;
 
 // Try frame
 typedef struct {
@@ -446,6 +486,21 @@ typedef enum {
     OP_TAIL_CALL_R,    // func_reg, first_arg_reg, arg_count, result_reg (tail call optimization)
     OP_RETURN_R,       // value_reg (or no operand for void)
     OP_RETURN_VOID,
+
+    // Phase 1: Frame register operations
+    OP_LOAD_FRAME,     // reg, frame_offset - Load from frame register
+    OP_STORE_FRAME,    // frame_offset, reg - Store to frame register
+    OP_ENTER_FRAME,    // frame_size - Allocate new call frame
+    OP_EXIT_FRAME,     // - Deallocate current call frame
+    OP_MOVE_FRAME,     // dst_frame_offset, src_frame_offset - Move between frame registers
+
+    // Phase 3: Module register operations
+    OP_LOAD_MODULE,    // reg, module_id, module_offset - Load from module register
+    OP_STORE_MODULE,   // module_id, module_offset, reg - Store to module register
+    OP_LOAD_MODULE_NAME, // module_name_index - Load module by name
+    OP_SWITCH_MODULE,  // module_id - Switch active module context
+    OP_EXPORT_VAR,     // var_name_index, reg - Export variable from current module
+    OP_IMPORT_VAR,     // var_name_index, src_module_id - Import variable from module
 
     // Closure operations
     OP_CLOSURE_R,      // dst_reg, function_reg, upvalue_count, upvalue_indices...
@@ -815,9 +870,15 @@ typedef struct {
     uint64_t instruction_counts[VM_DISPATCH_TABLE_SIZE];
 } VMProfile;
 
+// Phase 1: Register access functions (forward declarations)
+// These are implemented in register_file.c
+
 // VM state
 typedef struct {
-    // Registers (traditional boxed)
+    // Phase 1: New register file architecture
+    RegisterFile register_file;
+    
+    // Legacy registers (for backward compatibility during transition)
     Value registers[REGISTER_COUNT];
     
     // Typed registers for performance optimization

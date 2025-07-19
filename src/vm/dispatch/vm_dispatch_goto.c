@@ -7,6 +7,7 @@
 #include "vm/vm_comparison.h"
 #include "vm/vm_typed_ops.h"
 #include "vm/vm_opcode_handlers.h"
+#include "vm/register_file.h"
 
 #include <math.h>
 
@@ -178,6 +179,13 @@ InterpretResult vm_run_dispatch(void) {
         vm_dispatch_table[OP_TAIL_CALL_R] = &&LABEL_OP_TAIL_CALL_R;
         vm_dispatch_table[OP_RETURN_R] = &&LABEL_OP_RETURN_R;
         vm_dispatch_table[OP_RETURN_VOID] = &&LABEL_OP_RETURN_VOID;
+        
+        // Phase 1: Frame register operations
+        vm_dispatch_table[OP_LOAD_FRAME] = &&LABEL_OP_LOAD_FRAME;
+        vm_dispatch_table[OP_STORE_FRAME] = &&LABEL_OP_STORE_FRAME;
+        vm_dispatch_table[OP_ENTER_FRAME] = &&LABEL_OP_ENTER_FRAME;
+        vm_dispatch_table[OP_EXIT_FRAME] = &&LABEL_OP_EXIT_FRAME;
+        vm_dispatch_table[OP_MOVE_FRAME] = &&LABEL_OP_MOVE_FRAME;
         
         // Closure operations
         vm_dispatch_table[OP_CLOSURE_R] = &&LABEL_OP_CLOSURE_R;
@@ -1704,7 +1712,7 @@ InterpretResult vm_run_dispatch(void) {
                 frame->returnAddress = vm.ip;
                 frame->previousChunk = vm.chunk;
                 frame->baseRegister = resultReg;
-                frame->registerCount = argCount;
+                frame->register_count = argCount;
                 frame->functionIndex = functionIndex;
                 
                 // Save registers that will be overwritten by parameters
@@ -1817,6 +1825,46 @@ InterpretResult vm_run_dispatch(void) {
             }
             DISPATCH();
         }
+
+    // Phase 1: Frame register operations
+    LABEL_OP_LOAD_FRAME: {
+        uint8_t reg = READ_BYTE();
+        uint8_t frame_offset = READ_BYTE();
+        uint16_t frame_reg_id = FRAME_REG_START + frame_offset;
+        Value* src = get_register(&vm.register_file, frame_reg_id);
+        vm.registers[reg] = *src;
+        DISPATCH();
+    }
+
+    LABEL_OP_STORE_FRAME: {
+        uint8_t frame_offset = READ_BYTE();
+        uint8_t reg = READ_BYTE();
+        uint16_t frame_reg_id = FRAME_REG_START + frame_offset;
+        set_register(&vm.register_file, frame_reg_id, vm.registers[reg]);
+        DISPATCH();
+    }
+
+    LABEL_OP_ENTER_FRAME: {
+        uint8_t frame_size = READ_BYTE();
+        (void)frame_size; // Frame size is implicit in current implementation
+        allocate_frame(&vm.register_file);
+        DISPATCH();
+    }
+
+    LABEL_OP_EXIT_FRAME: {
+        deallocate_frame(&vm.register_file);
+        DISPATCH();
+    }
+
+    LABEL_OP_MOVE_FRAME: {
+        uint8_t dst_offset = READ_BYTE();
+        uint8_t src_offset = READ_BYTE();
+        uint16_t dst_reg_id = FRAME_REG_START + dst_offset;
+        uint16_t src_reg_id = FRAME_REG_START + src_offset;
+        Value* src = get_register(&vm.register_file, src_reg_id);
+        set_register(&vm.register_file, dst_reg_id, *src);
+        DISPATCH();
+    }
 
     // Short jump optimizations for performance
     LABEL_OP_JUMP_SHORT: {

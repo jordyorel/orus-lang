@@ -7,6 +7,19 @@
 #define VM_MAX_REGISTERS 256
 #define VM_MAX_UPVALUES 256
 
+// Phase 1: Register file architecture constants
+#define GLOBAL_REGISTERS 256    // Fast-access globals (preserve existing behavior)
+#define FRAME_REGISTERS 64      // Per-function registers  
+#define TEMP_REGISTERS 32       // Scratch space
+#define MODULE_REGISTERS 128    // Per-module scope (Phase 3)
+
+// Register ID layout (as per roadmap)
+#define GLOBAL_REG_START 0
+#define FRAME_REG_START 256
+#define TEMP_REG_START 320
+#define MODULE_REG_START 352      // Phase 3: Module registers
+#define SPILL_REG_START 480       // Updated to accommodate module registers
+
 // String operation thresholds
 #define VM_SMALL_STRING_BUFFER 1024
 #define VM_LARGE_STRING_THRESHOLD 4096

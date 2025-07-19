@@ -12,6 +12,7 @@
 #include "errors/features/type_errors.h"
 #include "runtime/jumptable.h"
 #include "compiler/loop_optimization.h"
+#include "vm/register_file.h"
 #include <string.h>
 
 bool compileNode(ASTNode* node, Compiler* compiler);
@@ -72,6 +73,26 @@ uint8_t allocateRegister(Compiler* compiler) {
     if (compiler->nextRegister > compiler->maxRegisters)
         compiler->maxRegisters = compiler->nextRegister;
     return r;
+}
+
+// Phase 1: Frame register allocation for local variables
+uint16_t allocateFrameRegister(Compiler* compiler) {
+    // Use global VM register file for allocation
+    extern VM vm;
+    uint16_t reg = allocate_frame_register(&vm.register_file);
+    
+    if (reg == 0) {
+        // Error: couldn't allocate frame register
+        // Fall back to global allocation for now
+        return allocateRegister(compiler);
+    }
+    
+    return reg;
+}
+
+// Phase 1: Global register allocation (unchanged behavior)
+uint16_t allocateGlobalRegister(Compiler* compiler) {
+    return allocateRegister(compiler);
 }
 
 void freeRegister(Compiler* compiler, uint8_t reg) {

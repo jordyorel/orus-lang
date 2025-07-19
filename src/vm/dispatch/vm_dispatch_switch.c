@@ -7,6 +7,7 @@
 #include "vm/vm_comparison.h"
 #include "vm/vm_typed_ops.h"
 #include "vm/vm_opcode_handlers.h"
+#include "vm/register_file.h"
 #include <math.h>
 
 // ✅ Auto-detect computed goto support
@@ -1526,7 +1527,7 @@ InterpretResult vm_run_dispatch(void) {
                         frame->returnAddress = vm.ip;
                         frame->previousChunk = vm.chunk;
                         frame->baseRegister = resultReg;
-                        frame->registerCount = argCount;
+                        frame->register_count = argCount;
                         frame->functionIndex = functionIndex;
                         
                         // Copy arguments to function's parameter registers
@@ -1619,6 +1620,46 @@ InterpretResult vm_run_dispatch(void) {
                         vm.lastExecutionTime = get_time_vm() - start_time;
                         RETURN(INTERPRET_OK);
                     }
+                    break;
+                }
+
+                // Phase 1: Frame register operations
+                case OP_LOAD_FRAME: {
+                    uint8_t reg = READ_BYTE();
+                    uint8_t frame_offset = READ_BYTE();
+                    uint16_t frame_reg_id = FRAME_REG_START + frame_offset;
+                    Value* src = get_register(&vm.register_file, frame_reg_id);
+                    vm.registers[reg] = *src;
+                    break;
+                }
+
+                case OP_STORE_FRAME: {
+                    uint8_t frame_offset = READ_BYTE();
+                    uint8_t reg = READ_BYTE();
+                    uint16_t frame_reg_id = FRAME_REG_START + frame_offset;
+                    set_register(&vm.register_file, frame_reg_id, vm.registers[reg]);
+                    break;
+                }
+
+                case OP_ENTER_FRAME: {
+                    uint8_t frame_size = READ_BYTE();
+                    (void)frame_size; // Frame size is implicit in current implementation
+                    allocate_frame(&vm.register_file);
+                    break;
+                }
+
+                case OP_EXIT_FRAME: {
+                    deallocate_frame(&vm.register_file);
+                    break;
+                }
+
+                case OP_MOVE_FRAME: {
+                    uint8_t dst_offset = READ_BYTE();
+                    uint8_t src_offset = READ_BYTE();
+                    uint16_t dst_reg_id = FRAME_REG_START + dst_offset;
+                    uint16_t src_reg_id = FRAME_REG_START + src_offset;
+                    Value* src = get_register(&vm.register_file, src_reg_id);
+                    set_register(&vm.register_file, dst_reg_id, *src);
                     break;
                 }
 

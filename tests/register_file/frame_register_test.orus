@@ -1,0 +1,6 @@
+// Test for frame register functionality
+// This should now use the new register file architecture
+mut a = 10
+mut b = 20
+mut c = a + b
+print(c)  // Should print 30

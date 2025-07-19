@@ -3,6 +3,7 @@
 #include "runtime/builtins.h"
 #include "runtime/memory.h"
 #include "vm/vm_string_ops.h"
+#include "vm/register_file.h"
 #include "type/type.h"
 #include <string.h>
 
@@ -13,6 +14,10 @@ void initVM(void) {
     initMemory();
     init_string_table(&globalStringTable);
 
+    // Phase 1: Initialize new register file architecture
+    init_register_file(&vm.register_file);
+
+    // Legacy register initialization (for backward compatibility)
     for (int i = 0; i < REGISTER_COUNT; i++) {
         vm.registers[i] = NIL_VAL;
     }
@@ -60,6 +65,9 @@ void initVM(void) {
 }
 
 void freeVM(void) {
+    // Phase 1: Free register file resources
+    free_register_file(&vm.register_file);
+    
     freeObjects();
     for (int i = 0; i < UINT8_COUNT; i++) {
         vm.variableNames[i].name = NULL;
