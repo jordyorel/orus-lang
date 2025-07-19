@@ -5,6 +5,6 @@
 #define ORUS_VERSION_MINOR 2
 #define ORUS_VERSION_PATCH 3
 
-#define ORUS_VERSION_STRING "0.2.3"
+#define ORUS_VERSION_STRING "0.2.4"
 
 #endif // ORUS_VERSION_H
