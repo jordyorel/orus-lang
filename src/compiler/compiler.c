@@ -1002,21 +1002,42 @@ bool compileNode(ASTNode* node, Compiler* compiler) {
         case NODE_ASSIGN: {
             int reg = compileExpr(node->assign.value, compiler);
             int idx;
-            if (!symbol_table_get_in_scope(&compiler->symbols, node->assign.name, compiler->scopeDepth, &idx)) {
-                // Variable doesn't exist - create new one (immutable by default for plain assignments)
+            
+            // Check if variable exists - use different lookup based on context
+            bool foundInCurrentScope = false;
+            if (compiler->loopDepth > 0) {
+                // Inside loop: Only look in exact current scope to enable auto-mutable
+                foundInCurrentScope = symbol_table_get_exact_scope(&compiler->symbols, node->assign.name, compiler->scopeDepth, &idx);
+            } else {
+                // Outside loop: Use normal scope lookup (current + outer scopes)
+                foundInCurrentScope = symbol_table_get_in_scope(&compiler->symbols, node->assign.name, compiler->scopeDepth, &idx);
+            }
+            
+            if (!foundInCurrentScope) {
+                // Variable doesn't exist in current scope - create new one
                 idx = vm.variableCount++;
                 ObjString* name = allocateString(node->assign.name,
                                                  (int)strlen(node->assign.name));
                 vm.variableNames[idx].name = name;
                 vm.variableNames[idx].length = name->length;
                 vm.globals[idx] = NIL_VAL;
+                
                 // For assignments without declaration, infer type from assigned expression
                 Type* inferredType = getExprType(node->assign.value, compiler);
                 vm.globalTypes[idx] = inferredType ? inferredType : getPrimitiveType(TYPE_ANY);
-                vm.mutableGlobals[idx] = false; // Plain assignments create immutable variables
+                
+                // ✨ Auto-mutable inside loops for elegant syntax
+                if (compiler->loopDepth > 0) {
+                    // Inside loop: Variables are auto-mutable for convenience
+                    vm.mutableGlobals[idx] = true;
+                } else {
+                    // Outside loop: Plain assignments create immutable variables
+                    vm.mutableGlobals[idx] = false;
+                }
+                
                 symbol_table_set(&compiler->symbols, node->assign.name, idx, compiler->scopeDepth);
             } else {
-                // Variable exists - check if it's mutable
+                // Variable exists in current scope - check if it's mutable
                 if (!vm.mutableGlobals[idx]) {
                     SrcLocation location = {vm.filePath, node->location.line, node->location.column};
                     report_immutable_assignment(location, node->assign.name);
@@ -1180,6 +1201,7 @@ bool compileNode(ASTNode* node, Compiler* compiler) {
                 return false;
             }
             compiler->loopStack[compiler->loopDepth++] = loopCtx;
+            printf("🔄 FOR_RANGE: Incremented loopDepth to %d\n", compiler->loopDepth);
             
             // Begin new scope for loop variables
             compiler->scopeDepth++;
@@ -1304,10 +1326,13 @@ bool compileNode(ASTNode* node, Compiler* compiler) {
             compiler->loopStack[compiler->loopDepth - 1].continueTarget = -1; // will set after body
             
             // Compile body
+            printf("🔄 FOR_RANGE: About to compile body, loopDepth=%d, scopeDepth=%d\n", 
+                   compiler->loopDepth, compiler->scopeDepth);
             if (!compileNode(node->forRange.body, compiler)) {
                 compiler->loopDepth--;
                 return false;
             }
+            printf("🔄 FOR_RANGE: Finished compiling body\n");
             // Place increment code here (continueTarget)
             continueTarget = compiler->chunk->count;
             compiler->loopStack[compiler->loopDepth - 1].continueTarget = continueTarget;

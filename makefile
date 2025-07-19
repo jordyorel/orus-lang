@@ -244,7 +244,7 @@ test: $(ORUS)
 	                  $(TESTDIR)/loops/test_deep_nesting.orus \
 	                  $(TESTDIR)/loops/test_break_edge_cases.orus \
 	                  $(TESTDIR)/loops/test_continue_edge_cases.orus \
-	                  $(TESTDIR)/loops/test_debug_continue.orus; do \
+	                  $(TESTDIR)/loops/test_auto_mutable_comprehensive.orus; do \
 		if [ -f "$$test_file" ]; then \
 			printf "Testing: $$test_file ... "; \
 			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \

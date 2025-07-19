@@ -1,0 +1,12 @@
+// Minimal LICM test - now with elegant auto-mutable syntax!
+x = 10
+y = 20
+mut total = 0
+
+for i in 1..3:
+    constant_expr = x + y        // ✨ Auto-mutable in loop scope
+    loop_dependent = i * 2       // ✨ Auto-mutable in loop scope  
+    total = total + constant_expr + loop_dependent
+    print("Iteration ", i, " : constant = ", constant_expr, " dependent = ", loop_dependent)
+
+print("Total:", total)

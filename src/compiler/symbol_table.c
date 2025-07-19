@@ -164,3 +164,26 @@ bool symbol_table_get_in_scope(SymbolTable* table, const char* name, int scope_d
     if (out_index) *out_index = entry->index;
     return true;
 }
+
+// Get symbol only if it exists in exact scope depth (not outer scopes)
+bool symbol_table_get_exact_scope(SymbolTable* table, const char* name, int exact_scope_depth, int* out_index) {
+    if (!table->entries || table->capacity == 0) return false;
+    uint64_t hash = fnv1a_hash(name);
+    size_t index = hash & (table->capacity - 1);
+    
+    for (size_t attempts = 0; attempts < table->capacity; attempts++) {
+        SymbolEntry* entry = &table->entries[index];
+        if (!entry->name && !entry->is_tombstone) {
+            break; // Empty slot, no more entries
+        }
+        if (entry->name && entry->hash == hash && strcmp(entry->name, name) == 0) {
+            // Found matching name, check if it's in the exact scope
+            if (entry->scope_depth == exact_scope_depth) {
+                if (out_index) *out_index = entry->index;
+                return true;
+            }
+        }
+        index = (index + 1) & (table->capacity - 1);
+    }
+    return false;
+}

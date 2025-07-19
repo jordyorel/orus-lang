@@ -28,6 +28,9 @@ void symbol_table_remove(SymbolTable* table, const char* name);
 // Scope management functions
 void symbol_table_begin_scope(SymbolTable* table, int scope_depth);
 void symbol_table_end_scope(SymbolTable* table, int scope_depth);
+
+// Additional scope-specific lookup
+bool symbol_table_get_exact_scope(SymbolTable* table, const char* name, int exact_scope_depth, int* out_index);
 bool symbol_table_get_in_scope(SymbolTable* table, const char* name, int scope_depth, int* out_index);
 
 #endif // ORUS_SYMBOL_TABLE_H
