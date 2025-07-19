@@ -1,0 +1,57 @@
+// If/else statements and variable scope
+// If/else should NOT create new scopes in Orus
+
+mut global_var = 100
+condition_var = true
+
+print("=== Test 1: Basic if/else variable access ===")
+if condition_var:
+    mut if_var = 200
+    print("In if branch, if_var:", if_var)
+    print("Can access global_var:", global_var)
+else:
+    mut else_var = 300
+    print("In else branch, else_var:", else_var)
+
+// Both if_var and else_var should be accessible here (same scope)
+// Note: Only one will be initialized depending on which branch was taken
+print("After if/else, global_var:", global_var)
+
+print("\n=== Test 2: Nested if statements ===")
+mut x = 50
+if x > 0:
+    mut positive_var = x * 2
+    print("x is positive, positive_var:", positive_var)
+    
+    if x > 25:
+        mut large_positive_var = x * 4
+        print("x is large positive, large_positive_var:", large_positive_var)
+    else:
+        mut small_positive_var = x + 10
+        print("x is small positive, small_positive_var:", small_positive_var)
+
+// All variables should be accessible here (same scope as if statements)
+print("After nested if, x:", x)
+
+print("\n=== Test 3: If/else inside loops ===")
+for i in 1..4:
+    print("Loop iteration i:", i)
+    
+    if i % 2 == 0:
+        mut even_loop_var = i * 10
+        print("  Even iteration, even_loop_var:", even_loop_var)
+    else:
+        mut odd_loop_var = i * 5
+        print("  Odd iteration, odd_loop_var:", odd_loop_var)
+    
+    // Both variables should be accessible within the loop scope
+    mut loop_sum = i * 100  // Always accessible
+    print("  Loop sum:", loop_sum)
+
+// Loop variables (including if/else variables) should not be accessible here
+// Uncomment to test scope violations:
+// print("Outside loop i:", i)  // Should fail
+// print("Outside even_loop_var:", even_loop_var)  // Should fail
+
+print("=== If/else scope tests completed ===")
+print("Final global_var:", global_var)

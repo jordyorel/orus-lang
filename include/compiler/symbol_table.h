@@ -9,6 +9,7 @@ typedef struct {
     uint64_t hash;
     const char* name;
     int index;       // Local index
+    int scope_depth; // Scope depth when variable was declared
     bool is_tombstone;
 } SymbolEntry;
 
@@ -20,8 +21,13 @@ typedef struct {
 
 void symbol_table_init(SymbolTable* table);
 void symbol_table_free(SymbolTable* table);
-bool symbol_table_set(SymbolTable* table, const char* name, int index);
+bool symbol_table_set(SymbolTable* table, const char* name, int index, int scope_depth);
 bool symbol_table_get(SymbolTable* table, const char* name, int* out_index);
 void symbol_table_remove(SymbolTable* table, const char* name);
+
+// Scope management functions
+void symbol_table_begin_scope(SymbolTable* table, int scope_depth);
+void symbol_table_end_scope(SymbolTable* table, int scope_depth);
+bool symbol_table_get_in_scope(SymbolTable* table, const char* name, int scope_depth, int* out_index);
 
 #endif // ORUS_SYMBOL_TABLE_H

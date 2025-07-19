@@ -1,0 +1,28 @@
+// Variable shadowing test in different scopes
+// Inner scopes should be able to shadow outer scope variables
+
+mut global_var = 100
+print("Global variable:", global_var)
+
+// For loop with variable that shadows global
+for global_var in 1..4:
+    print("Loop variable shadows global:", global_var)
+    
+    // Nested loop with same variable name
+    for inner_var in 5..7:
+        print("  Nested loop inner_var:", inner_var)
+        print("  Nested can still see shadowed global_var:", global_var)
+
+print("After loops, global_var should be restored:", global_var)
+
+// Another test with different variable names
+mut x = 50
+for x in 10..13:
+    print("Loop x shadows outer x:", x)
+    mut y = x * 2
+    print("Loop y:", y)
+
+print("After loop, x should be restored:", x)
+// y should not be accessible here (was in loop scope)
+// Uncomment next line to test scope violation
+// print("y outside loop:", y)  // Should fail

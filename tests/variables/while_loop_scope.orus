@@ -1,0 +1,22 @@
+// While loop scope test
+// While loops should NOT create new scopes - variables are in the same scope
+
+mut outer_var = 50
+mut counter = 0
+print("Before while loop, outer_var:", outer_var)
+print("Before while loop, counter:", counter)
+
+// While loop does not create new scope
+while counter < 3:
+    print("While loop, counter:", counter)
+    print("While loop, outer_var:", outer_var)
+    
+    // Can access and modify variables from same scope
+    outer_var = outer_var + 10
+    counter = counter + 1
+
+print("After while loop, outer_var:", outer_var)
+print("After while loop, counter:", counter)
+
+// Variables used in while loop should still be accessible
+print("Counter is still accessible:", counter)

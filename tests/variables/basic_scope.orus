@@ -1,0 +1,19 @@
+// Basic variable scope test - global scope variables
+// Variables declared at top level should be accessible throughout
+
+mut x = 42
+y = "hello"
+z = 3.14
+
+// Should be able to access and modify global variables
+print("Global x:", x)
+print("Global y:", y) 
+print("Global z:", z)
+
+// Modify global variables
+x = x + 1
+print("Modified x:", x)
+
+// Create new global variables later
+a = x * 2
+print("New global a:", a)

@@ -172,7 +172,18 @@ test: $(ORUS)
 	                  $(TESTDIR)/variables/multiple_variable_declarations.orus \
 	                  $(TESTDIR)/variables/multiple_variable_edge_cases.orus \
 	                  $(TESTDIR)/variables/mutable_test.orus \
-	                  $(TESTDIR)/variables/compound_assignments_pass.orus; do \
+	                  $(TESTDIR)/variables/compound_assignments_pass.orus \
+	                  $(TESTDIR)/variables/basic_scope.orus \
+	                  $(TESTDIR)/variables/for_loop_scope.orus \
+	                  $(TESTDIR)/variables/while_loop_scope.orus \
+	                  $(TESTDIR)/variables/nested_for_scope.orus \
+	                  $(TESTDIR)/variables/variable_shadowing.orus \
+	                  $(TESTDIR)/variables/scope_variable_lifetime.orus \
+	                  $(TESTDIR)/variables/complex_scope_interactions.orus \
+	                  $(TESTDIR)/variables/scope_with_control_flow.orus \
+	                  $(TESTDIR)/variables/loop_scope_edge_cases.orus \
+	                  $(TESTDIR)/variables/step_range_scope.orus \
+	                  $(TESTDIR)/variables/if_else_scope.orus; do \
 		if [ -f "$$test_file" ]; then \
 			printf "Testing: $$test_file ... "; \
 			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \

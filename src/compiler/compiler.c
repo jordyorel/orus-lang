@@ -320,7 +320,7 @@ static Type* getExprType(ASTNode* node, Compiler* compiler) {
             return infer_literal_type_extended(&node->literal.value);
         case NODE_IDENTIFIER: {
             int index;
-            if (symbol_table_get(&compiler->symbols, node->identifier.name, &index)) {
+            if (symbol_table_get_in_scope(&compiler->symbols, node->identifier.name, compiler->scopeDepth, &index)) {
                 return vm.globalTypes[index];
             }
             return getPrimitiveType(TYPE_UNKNOWN);
@@ -394,7 +394,7 @@ static int compileLiteral(ASTNode* node, Compiler* compiler) {
 
 static int compileIdentifier(ASTNode* node, Compiler* compiler) {
     int index;
-    if (!symbol_table_get(&compiler->symbols, node->identifier.name, &index)) {
+    if (!symbol_table_get_in_scope(&compiler->symbols, node->identifier.name, compiler->scopeDepth, &index)) {
         compiler->hadError = true;
         return allocateRegister(compiler);
     }
@@ -991,7 +991,7 @@ bool compileNode(ASTNode* node, Compiler* compiler) {
             // Set mutability based on declaration
             vm.mutableGlobals[idx] = node->varDecl.isMutable;
             
-            symbol_table_set(&compiler->symbols, node->varDecl.name, idx);
+            symbol_table_set(&compiler->symbols, node->varDecl.name, idx, compiler->scopeDepth);
             emitByte(compiler, OP_STORE_GLOBAL);
             emitByte(compiler, (uint8_t)idx);
             emitByte(compiler, (uint8_t)reg);
@@ -1002,7 +1002,7 @@ bool compileNode(ASTNode* node, Compiler* compiler) {
         case NODE_ASSIGN: {
             int reg = compileExpr(node->assign.value, compiler);
             int idx;
-            if (!symbol_table_get(&compiler->symbols, node->assign.name, &idx)) {
+            if (!symbol_table_get_in_scope(&compiler->symbols, node->assign.name, compiler->scopeDepth, &idx)) {
                 // Variable doesn't exist - create new one (immutable by default for plain assignments)
                 idx = vm.variableCount++;
                 ObjString* name = allocateString(node->assign.name,
@@ -1014,7 +1014,7 @@ bool compileNode(ASTNode* node, Compiler* compiler) {
                 Type* inferredType = getExprType(node->assign.value, compiler);
                 vm.globalTypes[idx] = inferredType ? inferredType : getPrimitiveType(TYPE_ANY);
                 vm.mutableGlobals[idx] = false; // Plain assignments create immutable variables
-                symbol_table_set(&compiler->symbols, node->assign.name, idx);
+                symbol_table_set(&compiler->symbols, node->assign.name, idx, compiler->scopeDepth);
             } else {
                 // Variable exists - check if it's mutable
                 if (!vm.mutableGlobals[idx]) {
@@ -1181,6 +1181,10 @@ bool compileNode(ASTNode* node, Compiler* compiler) {
             }
             compiler->loopStack[compiler->loopDepth++] = loopCtx;
             
+            // Begin new scope for loop variables
+            compiler->scopeDepth++;
+            symbol_table_begin_scope(&compiler->symbols, compiler->scopeDepth);
+            
             // Allocate loop variable
             int loopVarReg = allocateRegister(compiler);
             
@@ -1286,7 +1290,7 @@ bool compileNode(ASTNode* node, Compiler* compiler) {
             vm.globals[varIdx] = NIL_VAL;
             
             // Add to symbol table so it can be found during compilation
-            symbol_table_set(&compiler->symbols, node->forRange.varName, varIdx);
+            symbol_table_set(&compiler->symbols, node->forRange.varName, varIdx, compiler->scopeDepth);
             
             // Set type for loop variable (ranges use i32)
             vm.globalTypes[varIdx] = getPrimitiveType(TYPE_I32);
@@ -1343,6 +1347,10 @@ bool compileNode(ASTNode* node, Compiler* compiler) {
             for (int i = 0; i < patchLoop->breakJumps.offsets.count; i++) {
                 patchJump(compiler, patchLoop->breakJumps.offsets.data[i]);
             }
+            
+            // Cleanup scope and remove loop variables  
+            symbol_table_end_scope(&compiler->symbols, compiler->scopeDepth);
+            compiler->scopeDepth--;
             
             // Cleanup
             jumptable_free(&patchLoop->breakJumps);
@@ -1456,6 +1464,10 @@ bool compileNode(ASTNode* node, Compiler* compiler) {
             }
             compiler->loopStack[compiler->loopDepth++] = loopCtx;
             
+            // Begin new scope for loop variables
+            compiler->scopeDepth++;
+            symbol_table_begin_scope(&compiler->symbols, compiler->scopeDepth);
+            
             // Compile iterable expression
             int iterableReg = compileExpr(node->forIter.iterable, compiler);
             
@@ -1479,7 +1491,7 @@ bool compileNode(ASTNode* node, Compiler* compiler) {
             vm.globals[varIdx] = NIL_VAL;
             
             // Add to symbol table so it can be found during compilation
-            symbol_table_set(&compiler->symbols, node->forIter.varName, varIdx);
+            symbol_table_set(&compiler->symbols, node->forIter.varName, varIdx, compiler->scopeDepth);
             
             // Set type for loop variable (iterator type depends on iterable)
             vm.globalTypes[varIdx] = getPrimitiveType(TYPE_ANY);
@@ -1532,6 +1544,10 @@ bool compileNode(ASTNode* node, Compiler* compiler) {
             for (int i = 0; i < patchLoop->breakJumps.offsets.count; i++) {
                 patchJump(compiler, patchLoop->breakJumps.offsets.data[i]);
             }
+            
+            // Cleanup scope and remove loop variables  
+            symbol_table_end_scope(&compiler->symbols, compiler->scopeDepth);
+            compiler->scopeDepth--;
             
             // Cleanup
             jumptable_free(&patchLoop->breakJumps);

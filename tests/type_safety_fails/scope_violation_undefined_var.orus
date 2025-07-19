@@ -1,0 +1,7 @@
+// Test that should fail: accessing completely undefined variable
+
+x = 42
+print("Defined variable x:", x)
+
+// This should fail - y was never declared in any scope
+print("Trying to access undefined variable y:", y)

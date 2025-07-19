@@ -1,0 +1,19 @@
+// For loop variable scope test
+// Loop variables should be scoped to the loop and not accessible outside
+
+mut outer_var = 100
+print("Before loop, outer_var:", outer_var)
+
+// For loop creates a new scope for the loop variable
+for i in 1..4:
+    print("Loop i:", i)
+    // Can access outer variables from within loop
+    print("Outer var from loop:", outer_var)
+    // Can modify outer variables from within loop
+    outer_var = outer_var + i
+
+print("After loop, outer_var:", outer_var)
+
+// Try to access loop variable outside loop - this should fail
+// Uncomment the next line to test scope violation (should cause compilation error)
+// print("Loop variable outside:", i)  // This should fail

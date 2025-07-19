@@ -1,0 +1,9 @@
+// Test that should fail: accessing variable from inner scope in outer scope
+
+for i in 1..2:
+    for j in 1..2:
+        inner_var = i + j
+        print("Inner variable:", inner_var)
+    
+    // This should fail - inner_var was declared in inner scope
+    print("Trying to access inner_var in outer scope:", inner_var)

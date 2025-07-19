@@ -33,6 +33,29 @@ static SymbolEntry* find_entry(SymbolEntry* entries, size_t capacity, uint64_t h
     }
 }
 
+// Find entry in current scope or outer scopes (scope-aware lookup)
+static SymbolEntry* find_entry_with_scope(SymbolEntry* entries, size_t capacity, uint64_t hash, const char* name, int max_scope_depth) {
+    size_t index = hash & (capacity - 1);
+    SymbolEntry* best_match = NULL;
+    int best_scope = -1;
+    
+    for (size_t attempts = 0; attempts < capacity; attempts++) {
+        SymbolEntry* entry = &entries[index];
+        if (!entry->name && !entry->is_tombstone) {
+            break; // Empty slot, no more entries
+        }
+        if (entry->name && entry->hash == hash && strcmp(entry->name, name) == 0) {
+            // Found matching name, check if it's in an accessible scope
+            if (entry->scope_depth <= max_scope_depth && entry->scope_depth > best_scope) {
+                best_match = entry;
+                best_scope = entry->scope_depth;
+            }
+        }
+        index = (index + 1) & (capacity - 1);
+    }
+    return best_match;
+}
+
 static void adjust_capacity(SymbolTable* table, size_t new_capacity) {
     SymbolEntry* new_entries = calloc(new_capacity, sizeof(SymbolEntry));
     for (size_t i = 0; i < table->capacity; i++) {
@@ -67,7 +90,7 @@ void symbol_table_free(SymbolTable* table) {
     table->count = 0;
 }
 
-bool symbol_table_set(SymbolTable* table, const char* name, int index) {
+bool symbol_table_set(SymbolTable* table, const char* name, int index, int scope_depth) {
     if (!name) return false;
     if ((double)(table->count + 1) / (double)table->capacity > MAX_LOAD_FACTOR) {
         adjust_capacity(table, table->capacity * 2);
@@ -85,6 +108,7 @@ bool symbol_table_set(SymbolTable* table, const char* name, int index) {
     }
     entry->hash = hash;
     entry->index = index;
+    entry->scope_depth = scope_depth;
     entry->is_tombstone = false;
     return is_new;
 }
@@ -107,4 +131,36 @@ void symbol_table_remove(SymbolTable* table, const char* name) {
     entry->name = NULL;
     entry->is_tombstone = true;
     table->count--;
+}
+
+// Scope management functions
+void symbol_table_begin_scope(SymbolTable* table, int scope_depth) {
+    // No specific action needed for beginning scope
+    // Variables will be added with the new scope depth
+    (void)table; // Suppress unused parameter warning
+    (void)scope_depth;
+}
+
+void symbol_table_end_scope(SymbolTable* table, int scope_depth) {
+    if (!table->entries || table->capacity == 0) return;
+    
+    // Remove all variables from the ending scope
+    for (size_t i = 0; i < table->capacity; i++) {
+        SymbolEntry* entry = &table->entries[i];
+        if (entry->name && !entry->is_tombstone && entry->scope_depth == scope_depth) {
+            free((char*)entry->name);
+            entry->name = NULL;
+            entry->is_tombstone = true;
+            table->count--;
+        }
+    }
+}
+
+bool symbol_table_get_in_scope(SymbolTable* table, const char* name, int scope_depth, int* out_index) {
+    if (!table->entries || table->capacity == 0) return false;
+    uint64_t hash = fnv1a_hash(name);
+    SymbolEntry* entry = find_entry_with_scope(table->entries, table->capacity, hash, name, scope_depth);
+    if (!entry || !entry->name) return false;
+    if (out_index) *out_index = entry->index;
+    return true;
 }
