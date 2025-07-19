@@ -321,7 +321,13 @@ static Type* getExprType(ASTNode* node, Compiler* compiler) {
         case NODE_IDENTIFIER: {
             int index;
             if (symbol_table_get_in_scope(&compiler->symbols, node->identifier.name, compiler->scopeDepth, &index)) {
-                return vm.globalTypes[index];
+                if (index < 0) {
+                    // Register-based variable (loop variable) - always i32 for now
+                    return getPrimitiveType(TYPE_I32);
+                } else {
+                    // Global variable
+                    return vm.globalTypes[index];
+                }
             }
             return getPrimitiveType(TYPE_UNKNOWN);
         }
@@ -398,11 +404,23 @@ static int compileIdentifier(ASTNode* node, Compiler* compiler) {
         compiler->hadError = true;
         return allocateRegister(compiler);
     }
-    uint8_t r = allocateRegister(compiler);
-    emitByte(compiler, OP_LOAD_GLOBAL);
-    emitByte(compiler, r);
-    emitByte(compiler, (uint8_t)index);
-    return r;
+    
+    if (index < 0) {
+        // Register-based variable (loop variable) - negative index encodes register number
+        int regNum = -(index + 1);
+        uint8_t r = allocateRegister(compiler);
+        emitByte(compiler, OP_MOVE);
+        emitByte(compiler, r);
+        emitByte(compiler, (uint8_t)regNum);
+        return r;
+    } else {
+        // Global variable
+        uint8_t r = allocateRegister(compiler);
+        emitByte(compiler, OP_LOAD_GLOBAL);
+        emitByte(compiler, r);
+        emitByte(compiler, (uint8_t)index);
+        return r;
+    }
 }
 
 static int compileBinaryOp(ASTNode* node, Compiler* compiler) {
@@ -884,16 +902,9 @@ static int compileExpr(ASTNode* node, Compiler* compiler) {
     // ✨ LICM: Check if this expression should be replaced with a hoisted temporary variable
     int tempVarIdx;
     if (tryReplaceInvariantExpression(node, &tempVarIdx)) {
-        // Expression was hoisted - load the temporary variable instead
-        int reg = allocateRegister(compiler);
-        emitByte(compiler, OP_LOAD_GLOBAL);
-        emitByte(compiler, (uint8_t)tempVarIdx);
-        emitByte(compiler, (uint8_t)reg);
-        
-        if (vm.trace) {
-            printf("🔄 LICM: Using hoisted temp var (idx=%d) for expression\n", tempVarIdx);
-        }
-        return reg;
+        // Expression was hoisted - use the register directly (tempVarIdx is a register number)
+        printf("🔄 LICM: Using hoisted register %d for expression (should be 15 or 21)\n", tempVarIdx);
+        return tempVarIdx;
     }
     
     switch (node->type) {
@@ -1020,13 +1031,9 @@ bool compileNode(ASTNode* node, Compiler* compiler) {
             
             // Check if variable exists - use different lookup based on context
             bool foundInCurrentScope = false;
-            if (compiler->loopDepth > 0) {
-                // Inside loop: Only look in exact current scope to enable auto-mutable
-                foundInCurrentScope = symbol_table_get_exact_scope(&compiler->symbols, node->assign.name, compiler->scopeDepth, &idx);
-            } else {
-                // Outside loop: Use normal scope lookup (current + outer scopes)
-                foundInCurrentScope = symbol_table_get_in_scope(&compiler->symbols, node->assign.name, compiler->scopeDepth, &idx);
-            }
+            // ✨ FIX: Always use normal scope lookup to find variables in outer scopes
+            // The previous logic broke assignment to outer-scope variables inside loops
+            foundInCurrentScope = symbol_table_get_in_scope(&compiler->symbols, node->assign.name, compiler->scopeDepth, &idx);
             
             if (!foundInCurrentScope) {
                 // Variable doesn't exist in current scope - create new one
@@ -1316,24 +1323,12 @@ bool compileNode(ASTNode* node, Compiler* compiler) {
             
             freeRegister(compiler, conditionReg);
             
-            // Store loop variable in global for access in body
-            // TODO: Implement proper scoped variables
-            int varIdx = vm.variableCount++;
-            ObjString* varName = allocateString(node->forRange.varName, 
-                                              (int)strlen(node->forRange.varName));
-            vm.variableNames[varIdx].name = varName;
-            vm.variableNames[varIdx].length = varName->length;
-            vm.globals[varIdx] = NIL_VAL;
+            // Use register-based local variable for loop variable instead of global
+            // Add to symbol table with negative index to indicate register-based variable
+            symbol_table_set(&compiler->symbols, node->forRange.varName, -(loopVarReg + 1), compiler->scopeDepth);
             
-            // Add to symbol table so it can be found during compilation
-            symbol_table_set(&compiler->symbols, node->forRange.varName, varIdx, compiler->scopeDepth);
-            
-            // Set type for loop variable (ranges use i32)
-            vm.globalTypes[varIdx] = getPrimitiveType(TYPE_I32);
-            
-            emitByte(compiler, OP_STORE_GLOBAL);
-            emitByte(compiler, (uint8_t)varIdx);
-            emitByte(compiler, loopVarReg);
+            // No need to store to global - loop variable stays in register
+            // The loop variable register (loopVarReg) already contains the current value
             
             // Set continueTarget to increment code (to be emitted after body)
             int continueTarget = -1;
@@ -1387,6 +1382,10 @@ bool compileNode(ASTNode* node, Compiler* compiler) {
             // Cleanup scope and remove loop variables  
             symbol_table_end_scope(&compiler->symbols, compiler->scopeDepth);
             compiler->scopeDepth--;
+            
+            // Free the loop variable register and end register
+            freeRegister(compiler, loopVarReg);
+            freeRegister(compiler, endReg);
             
             // ✨ LICM: Deactivate expression replacements when exiting FOR_RANGE loop
             disableLICMReplacements();

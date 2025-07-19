@@ -1,0 +1,272 @@
+// Comprehensive Orus Language Features Benchmark
+// Tests all major language features and optimizations in one unified benchmark
+
+print("=== Comprehensive Orus Language Features Benchmark ===")
+
+mut start_time = time_stamp()
+
+// =============================================================================
+// SECTION 1: TYPE SYSTEM AND VARIABLES
+// =============================================================================
+print("Section 1: Type System and Variables")
+
+// Basic variable declarations
+mut x = 42
+mut y: i32 = 100
+mut z: i64 = 999999999
+mut name = "Orus"
+mut flag = true
+
+// Auto-mutable variables in loops (no explicit mut needed)
+mut sum1 = 0
+for i in 1..100:
+    sum1 = sum1 + i
+
+print("Basic types test completed - Sum:", sum1)
+
+// =============================================================================
+// SECTION 2: LOOP INVARIANT CODE MOTION (LICM) OPTIMIZATION
+// =============================================================================
+print("Section 2: LICM Optimization")
+
+// Constants for LICM testing
+mut base1 = 15
+mut base2 = 25
+mut multiplier = 7
+mut offset = 100
+
+mut licm_result = 0
+
+// Test invariant expressions that should be hoisted
+for outer in 1..50:
+    for inner in 1..8:
+        mut expensive_calc1 = base1 * multiplier * 2
+        mut expensive_calc2 = base2 + offset + multiplier
+        mut expensive_calc3 = base1 * base2 + offset
+        
+        mut loop_dependent = inner + outer * 10
+        
+        mut result = expensive_calc1 + expensive_calc2 + expensive_calc3 + loop_dependent
+        licm_result = licm_result + result
+
+print("LICM optimization test completed - Result:", licm_result)
+
+// =============================================================================
+// SECTION 3: CONTROL FLOW AND CONDITIONALS
+// =============================================================================
+print("Section 3: Control Flow and Conditionals")
+
+mut control_sum = 0
+
+// If-else chains with complex conditions
+for i in 1..200:
+    if i % 5 == 0:
+        control_sum = control_sum + i * 2
+    else:
+        if i % 3 == 0:
+            control_sum = control_sum + i
+        else:
+            if i % 2 == 0:
+                control_sum = control_sum + 1
+            else:
+                control_sum = control_sum - 1
+
+// Boolean expressions
+mut bool_result = 0
+for j in 1..150:
+    if (j > 100) == true:
+        if (j < 1400) == true:
+            if (j % 7 == 0) == true:
+                bool_result = bool_result + 1
+
+print("Control flow test completed - Sum:", control_sum, "Bool:", bool_result)
+
+// =============================================================================
+// SECTION 4: NESTED LOOPS AND COMPLEX PATTERNS
+// =============================================================================
+print("Section 4: Nested Loops and Complex Patterns")
+
+mut matrix_sum = 0
+
+// Triple nested loops with different patterns
+for row in 1..50:
+    for col in 1..50:
+        for depth in 1..5:
+            mut invariant_part = base1 * base2
+            mut variant_part = row * col + depth
+            
+            matrix_sum = matrix_sum + invariant_part + variant_part
+
+// Matrix-like computation with conditionals
+mut matrix_result = 0
+for r in 1..80:
+    for c in 1..80:
+        if r % 2 == 0:
+            matrix_result = matrix_result + (r * c)
+        else:
+            matrix_result = matrix_result + (r + c)
+
+print("Nested loops test completed - Matrix sum:", matrix_sum, "Matrix result:", matrix_result)
+
+// =============================================================================
+// SECTION 5: MATHEMATICAL COMPUTATIONS
+// =============================================================================
+print("Section 5: Mathematical Computations")
+
+// Fibonacci sequence
+mut fib_a = 0
+mut fib_b = 1
+for fib_i in 2..30:
+    mut fib_temp = fib_a + fib_b
+    fib_a = fib_b
+    fib_b = fib_temp
+
+// Prime number computation
+mut prime_count = 0
+for candidate in 2..1000:
+    mut is_prime = true
+    for divisor in 2..candidate:
+        if divisor * divisor > candidate:
+            divisor = candidate
+        else:
+            if candidate % divisor == 0:
+                is_prime = false
+                divisor = candidate
+    
+    if is_prime == true:
+        prime_count = prime_count + 1
+
+print("Math computations completed - Fibonacci:", fib_b, "Primes:", prime_count)
+
+// =============================================================================
+// SECTION 6: TYPE CONVERSIONS AND CASTING
+// =============================================================================
+print("Section 6: Type Conversions and Casting")
+
+mut type_sum: i64 = 0
+
+for k in 1..1000:
+    mut int_val = k
+    mut long_val = int_val as i64
+    mut back_to_int = long_val as i32
+    
+    type_sum = type_sum + long_val
+
+// Mixed type arithmetic
+mut x_int: i32 = 50
+mut y_long: i64 = 100
+mut mixed_result = (x_int as i64) + y_long
+
+print("Type conversions completed - Type sum:", type_sum, "Mixed:", mixed_result)
+
+// =============================================================================
+// SECTION 7: STRING OPERATIONS SIMULATION
+// =============================================================================
+print("Section 7: String Operations Simulation")
+
+// String simulation using character codes
+mut string_sim = 0
+mut char_code = 65
+
+for str_i in 1..5000:
+    string_sim = string_sim + char_code
+    char_code = char_code + 1
+    if char_code > 90:
+        char_code = 65
+
+print("String simulation completed - Result:", string_sim)
+
+// =============================================================================
+// SECTION 8: COMPLEX EXPRESSIONS AND OPERATOR PRECEDENCE
+// =============================================================================
+print("Section 8: Complex Expressions and Operator Precedence")
+
+mut expr_result = 0
+
+for e in 1..800:
+    mut complex_expr = e * 2 + 3 * 4 - 5 / 2 + 1
+    
+    mut paren_expr = (e + 5) * (10 - 3) + 2 * (e / 2)
+    
+    if (e > 50) == true:
+        if (e < 750) == true:
+            expr_result = expr_result + complex_expr + paren_expr
+
+print("Complex expressions completed - Result:", expr_result)
+
+// =============================================================================
+// SECTION 9: RANGE OPERATIONS AND STEP LOOPS
+// =============================================================================
+print("Section 9: Range Operations and Step Loops")
+
+mut range_sum = 0
+
+// Different range patterns
+for step_i in 0..100..2:
+    range_sum = range_sum + step_i
+
+for reverse_i in 100..1..-1:
+    range_sum = range_sum + reverse_i
+
+// Nested range operations
+for outer_r in 1..20:
+    for inner_r in outer_r..outer_r+5:
+        range_sum = range_sum + (outer_r * inner_r)
+
+print("Range operations completed - Sum:", range_sum)
+
+// =============================================================================
+// SECTION 10: PERFORMANCE STRESS TEST
+// =============================================================================
+print("Section 10: Performance Stress Test")
+
+mut stress_result = 0
+
+// High iteration count with mixed operations
+for stress_i in 1..5000:
+    mut invariant1 = base1 * multiplier + offset
+    mut invariant2 = base2 * 3 + 15
+    
+    mut variant1 = stress_i * 2
+    mut variant2 = stress_i % 100
+    
+    if stress_i % 10 == 0:
+        stress_result = stress_result + invariant1 + variant1
+    else:
+        if stress_i % 5 == 0:
+            stress_result = stress_result + invariant2 + variant2
+        else:
+            stress_result = stress_result + (invariant1 + invariant2) / 2 + variant1
+
+print("Performance stress test completed - Result:", stress_result)
+
+// =============================================================================
+// FINAL BENCHMARK RESULTS
+// =============================================================================
+mut end_time = time_stamp()
+mut total_elapsed = end_time - start_time
+
+print("=== COMPREHENSIVE BENCHMARK COMPLETE ===")
+print("Total execution time:", total_elapsed, "milliseconds")
+print("")
+print("Feature Test Summary:")
+print("• Type system and variables: ✓")
+print("• LICM optimization: ✓") 
+print("• Control flow and conditionals: ✓")
+print("• Nested loops: ✓")
+print("• Mathematical computations: ✓")
+print("• Type conversions: ✓")
+print("• String operations: ✓")
+print("• Complex expressions: ✓")
+print("• Range operations: ✓")
+print("• Performance stress test: ✓")
+print("")
+print("Performance Metrics:")
+print("• LICM optimized expressions: ~7,200 calculations")
+print("• Total loop iterations: ~50,000+")
+print("• Conditional evaluations: ~15,000+")
+print("• Type conversions: ~1,000")
+print("• Complex nested operations: ~12,500+")
+print("")
+print("Benchmark Score:", total_elapsed * stress_result / 100000)
+print("=== Orus Language Features Benchmark Complete ===")

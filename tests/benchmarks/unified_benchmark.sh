@@ -299,6 +299,7 @@ run_benchmark_category "Pure Arithmetic Performance" "arithmetic_benchmark.orus"
 run_benchmark_category "Comprehensive Performance" "comprehensive_benchmark.orus"
 run_benchmark_category "Extreme Performance" "extreme_benchmark.orus"
 run_benchmark_category "Control Flow Performance" "licm_benchmark.orus"
+run_benchmark_category "Comprehensive Orus Features" "comprehensive_orus_benchmark.orus"
 # run_benchmark_category "Modulo Operations" "modulo_operations_benchmark.orus"
 
 echo -e "${BLUE}=================================================================${NC}"

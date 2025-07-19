@@ -140,6 +140,7 @@ static bool tryBoundsEliminationOptimized(ASTNode* node, LoopAnalysis* analysis,
 static bool tryLoopInvariantCodeMotionOptimized(ASTNode* node, LoopAnalysis* analysis, Compiler* compiler);
 static void findInvariantExpressionsOptimized(ASTNode* node, const char* loopVarName, 
                                             InvariantExpr* invariants, int* count);
+static bool isSimpleLiteralExpression(ASTNode* expr);
 static bool isLoopInvariantExprOptimized(ASTNode* expr, const char* loopVarName);
 static void findStrengthReductionsOptimized(ASTNode* node, const char* loopVarName,
                                            StrengthReduction* reductions, int* count);
@@ -273,14 +274,27 @@ bool optimizeLoop(ASTNode* node, Compiler* compiler) {
     LoopAnalysis analysis = analyzeLoopOptimized(node);
     
     bool optimized = false;
+    bool completelyReplaced = false;  // ✨ NEW: Track if loop was completely replaced
     
     // Apply optimizations in order of potential impact
     
-    // 1. Loop unrolling (highest impact for small loops)
+    // 1. For loops that will be unrolled, apply LICM first to optimize the unrolling
+    if (analysis.canUnroll && !analysis.hasBreakContinue && analysis.canApplyLICM && analysis.invariantCount > 0) {
+        if (tryLoopInvariantCodeMotionOptimized(node, &analysis, compiler)) {
+            compiler->optimizer.licmCount++;
+            if (vm.trace) {
+                printf("🔄 LICM: Pre-unroll hoisting of %d invariant expression(s)\n", 
+                       analysis.invariantCount);
+            }
+        }
+    }
+    
+    // 2. Loop unrolling (highest impact for small loops) - COMPLETE REPLACEMENT
     if (analysis.canUnroll && !analysis.hasBreakContinue) {
         if (tryUnrollLoopOptimized(node, &analysis, compiler)) {
             compiler->optimizer.unrollCount++;
             optimized = true;
+            completelyReplaced = true;  // ✨ Unrolling completely replaces the loop
             
             if (vm.trace) {
                 printf("🔄 UNROLL: Unrolled loop with %lld iterations\n", 
@@ -302,8 +316,8 @@ bool optimizeLoop(ASTNode* node, Compiler* compiler) {
         }
     }
     
-    // 3. Loop Invariant Code Motion (medium impact)
-    if (analysis.canApplyLICM && analysis.invariantCount > 0) {
+    // 3. Loop Invariant Code Motion (medium impact) - Only for loops that won't be unrolled
+    if (!completelyReplaced && analysis.canApplyLICM && analysis.invariantCount > 0) {
         if (tryLoopInvariantCodeMotionOptimized(node, &analysis, compiler)) {
             compiler->optimizer.licmCount++;
             
@@ -311,6 +325,19 @@ bool optimizeLoop(ASTNode* node, Compiler* compiler) {
             // Since LICM doesn't prevent regular compilation, we activate replacements so the 
             // normal loop compilation will use hoisted variables
             activateExpressionReplacements(analysis.invariants, analysis.invariantCount);
+            printf("🔧 LICM: Activated %d expression replacements\n", analysis.invariantCount);
+            
+            // Reserve hoisted registers to prevent them from being reused during regular compilation
+            for (int i = 0; i < analysis.invariantCount; i++) {
+                if (analysis.invariants[i].isHoisted) {
+                    int hoistedReg = analysis.invariants[i].tempVarIndex;
+                    // Ensure the register allocator doesn't reuse this register
+                    if (hoistedReg >= compiler->nextRegister) {
+                        compiler->nextRegister = hoistedReg + 1;
+                    }
+                    printf("🔧 LICM: Reserved register %d for hoisted value\n", hoistedReg);
+                }
+            }
             
             if (vm.trace) {
                 printf("🔄 LICM: Hoisted %d invariant expression(s), replacements activated\n", 
@@ -336,7 +363,10 @@ bool optimizeLoop(ASTNode* node, Compiler* compiler) {
         updateGlobalOptimizationStatsFromCompiler(compiler);
     }
     
-    return optimized;
+    // ✨ FIX: Return whether loop was completely replaced, not just optimized
+    // This allows enhancement optimizations (LICM, bounds elimination) to be applied
+    // while still allowing regular compilation to proceed
+    return completelyReplaced;
 }
 
 // Enhanced loop analysis with better heuristics
@@ -393,10 +423,12 @@ static LoopAnalysis analyzeLoopOptimized(ASTNode* node) {
         findInvariantExpressionsOptimized(node->forRange.body, loopVar, 
                                         analysis.invariants, &analysis.invariantCount);
         
+        
         // Find strength reduction opportunities
         findStrengthReductionsOptimized(node->forRange.body, loopVar,
                                       analysis.reductions, &analysis.reductionCount);
         
+        // Enable LICM for all loops with invariant expressions
         analysis.canApplyLICM = analysis.invariantCount > 0;
         analysis.canStrengthReduce = analysis.reductionCount > 0;
     }
@@ -423,28 +455,43 @@ static bool tryUnrollLoopOptimized(ASTNode* node, LoopAnalysis* analysis, Compil
     int oldVarIdx = -1;
     bool hadOldVar = symbol_table_get_in_scope(&compiler->symbols, loopVarName, compiler->scopeDepth, &oldVarIdx);
     
+    // ✨ NEW: Activate LICM replacements if any invariants were hoisted
+    if (analysis->invariantCount > 0) {
+        activateExpressionReplacements(analysis->invariants, analysis->invariantCount);
+        if (vm.trace) {
+            printf("🔧 UNROLL+LICM: Using %d hoisted expressions during unrolling\n", 
+                   analysis->invariantCount);
+        }
+    }
+    
     for (int64_t i = 0; i < analysis->iterationCount; i++) {
-        // Create temporary variable for this iteration
-        int varIdx = vm.variableCount++;
-        ObjString* varName = allocateString(loopVarName, (int)strlen(loopVarName));
-        vm.variableNames[varIdx].name = varName;
-        vm.variableNames[varIdx].length = varName->length;
-        vm.globals[varIdx] = I32_VAL((int32_t)current);
+        // ✨ FIX: Use register-based variable instead of global variable
+        int loopVarReg = allocateRegister(compiler);
         
-        // Update symbol table with current scope
-        symbol_table_set(&compiler->symbols, loopVarName, varIdx, compiler->scopeDepth);
-        vm.globalTypes[varIdx] = getPrimitiveType(TYPE_I32);
+        // Load current iteration value into register
+        emitConstant(compiler, (uint8_t)loopVarReg, I32_VAL((int32_t)current));
+        
+        // Update symbol table with negative index to indicate register-based variable
+        symbol_table_set(&compiler->symbols, loopVarName, -(loopVarReg + 1), compiler->scopeDepth);
         
         // ✨ FIX: Increment loopDepth for auto-mutable variables during unrolling
         compiler->loopDepth++;
         
-        // Compile the body
+        // Compile the body (now with LICM replacements active)
         compileNode(node->forRange.body, compiler);
         
         // ✨ FIX: Restore loopDepth after compiling body
         compiler->loopDepth--;
         
+        // Free the register for this iteration
+        freeRegister(compiler, (uint8_t)loopVarReg);
+        
         current += analysis->stepValue;
+    }
+    
+    // ✨ NEW: Deactivate LICM replacements after unrolling
+    if (analysis->invariantCount > 0) {
+        disableLICMReplacements();
     }
     
     // Restore original variable binding
@@ -509,48 +556,47 @@ static bool tryLoopInvariantCodeMotionOptimized(ASTNode* node, LoopAnalysis* ana
         return false;
     }
     
+    
     bool applied = false;
     
     // Hoist expressions that are profitable (used multiple times or expensive)
     for (int i = 0; i < analysis->invariantCount; i++) {
         InvariantExpr* inv = &analysis->invariants[i];
         
-        // Enhanced hoisting criteria: multiple uses OR expensive operations
-        bool shouldHoist = (inv->useCount > 1) || isExpensiveExpression(inv->expr);
+        // Enhanced hoisting criteria: any expression that appears in loop (computed every iteration)
+        bool shouldHoist = (inv->useCount >= 0) || isExpensiveExpression(inv->expr);
         
         if (inv->canHoist && shouldHoist && !inv->isHoisted) {
             // Generate unique temporary variable name
             snprintf(g_optContext.tempVarNames[i], TEMP_VAR_NAME_SIZE, 
                     "__licm_temp_%d_%p", i, (void*)inv->expr);
             
-            // Create temporary variable for hoisted expression
-            int tempVarIdx = vm.variableCount++;
-            ObjString* tempVarName = allocateString(g_optContext.tempVarNames[i], 
-                                                   (int)strlen(g_optContext.tempVarNames[i]));
-            vm.variableNames[tempVarIdx].name = tempVarName;
-            vm.variableNames[tempVarIdx].length = tempVarName->length;
+            // Create temporary variable for hoisted expression using register-based allocation
+            int tempVarReg = allocateRegister(compiler);
             
-            // Add to symbol table with current scope
+            
+            // Add to symbol table with register-based index (negative for registers)
             symbol_table_set(&compiler->symbols, g_optContext.tempVarNames[i], 
-                           tempVarIdx, compiler->scopeDepth);
+                           -(tempVarReg + 1), compiler->scopeDepth);
             
             // Compile the invariant expression before the loop
             // This generates bytecode that computes the expression once
-            if (compileInvariantExpression(inv->expr, tempVarIdx, compiler)) {
-                inv->tempVarIndex = tempVarIdx;
+            if (compileInvariantExpression(inv->expr, tempVarReg, compiler)) {
+                inv->tempVarIndex = tempVarReg;
                 inv->isHoisted = true;
                 applied = true;
                 
+                
                 // Mark expression for replacement in loop body
-                markExpressionForReplacement(inv->expr, tempVarIdx);
+                markExpressionForReplacement(inv->expr, tempVarReg);
                 
                 if (vm.trace) {
                     printf("🔄 LICM: Hoisted expression to temp var %s (uses: %d)\n", 
                            g_optContext.tempVarNames[i], inv->useCount);
                 }
             } else {
-                // Rollback variable allocation if compilation failed
-                vm.variableCount--;
+                // Rollback register allocation if compilation failed
+                // Note: Register rollback handled by compiler's register allocator
                 symbol_table_remove(&compiler->symbols, g_optContext.tempVarNames[i]);
             }
         }
@@ -610,6 +656,7 @@ static bool tryReplaceExpression(ASTNode* expr, int* outTempVarIdx) {
 static void findInvariantExpressionsOptimized(ASTNode* node, const char* loopVarName, 
                                             InvariantExpr* invariants, int* count) {
     if (!node || *count >= MAX_INVARIANTS) return;
+    
     
     // First pass: collect all potentially invariant expressions
     ASTNode* candidates[MAX_INVARIANTS];
@@ -699,6 +746,13 @@ static void findInvariantExpressionsOptimized(ASTNode* node, const char* loopVar
                 }
                 break;
                 
+            case NODE_ASSIGN:
+                // Add assignment value to stack for analysis
+                if (current->assign.value && stackTop < 255) {
+                    stack[stackTop++] = current->assign.value;
+                }
+                break;
+                
             default:
                 // Handle other node types as needed
                 break;
@@ -710,8 +764,9 @@ static void findInvariantExpressionsOptimized(ASTNode* node, const char* loopVar
         int useCount = 0;
         countExpressionUses(node, candidates[i], &useCount);
         
-        // Only include expressions with multiple uses or that are expensive
-        if (useCount > 1 || isExpensiveExpression(candidates[i])) {
+        
+        // Include expressions that appear in loop (even single use) since they're computed every iteration
+        if (useCount >= 0 || isExpensiveExpression(candidates[i])) {
             invariants[*count].expr = candidates[i];
             invariants[*count].useCount = useCount;
             invariants[*count].canHoist = true;
@@ -719,6 +774,25 @@ static void findInvariantExpressionsOptimized(ASTNode* node, const char* loopVar
             invariants[*count].tempVarIndex = *count;
             (*count)++;
         }
+    }
+    
+}
+
+// Check if expression is simple literal arithmetic (safe for hoisting)
+static bool isSimpleLiteralExpression(ASTNode* expr) {
+    if (!expr) return false;
+    
+    switch (expr->type) {
+        case NODE_LITERAL:
+            return true;
+            
+        case NODE_BINARY:
+            // Only allow binary operations between literals
+            return isSimpleLiteralExpression(expr->binary.left) && 
+                   isSimpleLiteralExpression(expr->binary.right);
+                   
+        default:
+            return false;
     }
 }
 
@@ -731,11 +805,15 @@ static bool isLoopInvariantExprOptimized(ASTNode* expr, const char* loopVarName)
             return true;
             
         case NODE_IDENTIFIER:
+            // Only allow identifiers that are NOT the loop variable
+            // and that exist before the loop (not loop-local variables)
             if (loopVarName && expr->identifier.name && 
                 strcmp(expr->identifier.name, loopVarName) == 0) {
                 return false;
             }
-            return true;
+            // For now, be conservative and reject all identifiers except globals
+            // TODO: Check if variable exists in outer scope
+            return false;
             
         case NODE_BINARY:
             return isLoopInvariantExprOptimized(expr->binary.left, loopVarName) &&
@@ -966,20 +1044,34 @@ static bool isExpensiveExpression(ASTNode* expr) {
 static bool compileInvariantExpression(ASTNode* expr, int targetVarIdx, Compiler* compiler) {
     if (!expr || !compiler) return false;
     
+    
     // Save current compilation state
     int savedInstructionCount = compiler->chunk->count;
     
-    // Compile the expression
-    if (!compileNode(expr, compiler)) {
-        // Restore state on failure
-        compiler->chunk->count = savedInstructionCount;
-        return false;
+    // For constant expressions, evaluate directly and emit as constant
+    if (isConstantExpression(expr)) {
+        int64_t constantValue = evaluateConstantInt(expr);
+        emitConstant(compiler, (uint8_t)targetVarIdx, I32_VAL((int32_t)constantValue));
+        
+        if (vm.trace) {
+            printf("🔄 LICM: Hoisted constant expression with value %lld to register %d\n", 
+                   (long long)constantValue, targetVarIdx);
+        }
+    } else {
+        // For non-constant expressions, use the old approach but properly track register usage
+        if (!compileNode(expr, compiler)) {
+            // Restore state on failure
+            compiler->chunk->count = savedInstructionCount;
+            return false;
+        }
+        
+        // CompileNode for expressions should leave result in register 0 (by convention)
+        // Move it to our target register
+        emitByte(compiler, OP_MOVE);
+        emitByte(compiler, (uint8_t)targetVarIdx); // Target register  
+        emitByte(compiler, 0); // Source register (result from expression compilation)
     }
     
-    // Generate store instruction to target variable
-    emitByte(compiler, OP_STORE_GLOBAL);
-    emitBytes(compiler, (uint8_t)(targetVarIdx & 0xFF), (uint8_t)((targetVarIdx >> 8) & 0xFF));
-    emitByte(compiler, 0); // Result register
     
     return true;
 }
