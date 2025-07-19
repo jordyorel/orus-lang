@@ -15,6 +15,7 @@
         "ratio": "c",
         "vector": "c",
         "ios": "c",
-        "vm_dispatch.h": "c"
+        "vm_dispatch.h": "c",
+        "typeinfo": "cpp"
     }
 }
