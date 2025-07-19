@@ -175,7 +175,7 @@ result = x > 0 ? "positive" : "non-positive"
 - [x] **DONE**: Advanced Orus Range Syntax: `start..end..step` with direction validation
 
 **Performance & Safety Requirements (Progressive Implementation):**
-- [ ] **TODO**: Loop invariant code motion (LICM) optimization *(Next priority for control flow performance)*
+- [x] **DONE**: Loop invariant code motion (LICM) optimization with full expression replacement system *(Elegant auto-mutable variables + hoisting)*
 - [x] **DONE**: Loop unrolling for small, known iteration counts (implemented with comprehensive optimization)
 - [ ] **TODO**: Strength reduction for induction variables (foundation for advanced math optimizations)
 - [ ] **TODO**: Dead code elimination within loop bodies (enables advanced type system optimizations)
@@ -258,7 +258,7 @@ for row in 0..height:
 * Memory allocation tracking for range objects
 
 ```orus
-# ❌ Compile-time errors with enhanced diagnostics
+// ❌ Compile-time errors with enhanced diagnostics
 for i in 0..5..0:      // Error: "Step cannot be zero. Did you mean step=1?"
 for i in 0..5..-1:     // Error: "Negative step in ascending range (0 < 5). Use positive step or reverse bounds."
 for i in 5..0..1:      // Error: "Positive step in descending range (5 > 0). Use negative step or reverse bounds."
@@ -304,9 +304,9 @@ for i in get_start()..get_end()..get_step():  // Runtime validation with fallbac
 - [ ] **NEW**: Design symbol table structure to support generics and advanced type features
 
 **Core Scoping Requirements:**
-- [ ] Lexical scoping with proper variable shadowing semantics ✅
-- [ ] Nested scope management with O(1) scope entry/exit ✅
-- [ ] Symbol table optimization with hash-based lookup (< 5ns average) ✅
+- [ ] Lexical scoping with proper variable shadowing semantics
+- [ ] Nested scope management with O(1) scope entry/exit
+- [ ] Symbol table optimization with hash-based lookup (< 5ns average)
 - [ ] **NEW**: Compile-time scope analysis and variable lifetime tracking
 - [ ] **NEW**: Register allocation optimization across scope boundaries
 - [ ] **NEW**: Closure capture analysis for upvalue optimization *(Comprehensive analysis of variable capture patterns across scope boundaries, with heap allocation optimization and register prioritization)*
@@ -327,9 +327,9 @@ for i in get_start()..get_end()..get_step():  // Runtime validation with fallbac
 
 ### 3.1 Function Definition and Calls
 **Priority: 🔥 High**
-- [NEW] **DONE**: Implement function declarations, calls, and return values with basic execution.
+- [ ] Implement function declarations, calls, and return values with basic execution.
 
-**✅ Completed Implementation:**
+** Implementation:**
 - Function syntax parsing: `fn name(params) -> return_type:`
 - Parameter type annotations: `a: i32, b: string`
 - Return type annotations: `-> i32`

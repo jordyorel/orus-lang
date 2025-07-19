@@ -881,6 +881,21 @@ static int compileExpr(ASTNode* node, Compiler* compiler) {
         compiler->currentColumn = node->location.column;
     }
     
+    // ✨ LICM: Check if this expression should be replaced with a hoisted temporary variable
+    int tempVarIdx;
+    if (tryReplaceInvariantExpression(node, &tempVarIdx)) {
+        // Expression was hoisted - load the temporary variable instead
+        int reg = allocateRegister(compiler);
+        emitByte(compiler, OP_LOAD_GLOBAL);
+        emitByte(compiler, (uint8_t)tempVarIdx);
+        emitByte(compiler, (uint8_t)reg);
+        
+        if (vm.trace) {
+            printf("🔄 LICM: Using hoisted temp var (idx=%d) for expression\n", tempVarIdx);
+        }
+        return reg;
+    }
+    
     switch (node->type) {
         case NODE_LITERAL:
             return compileLiteral(node, compiler);
@@ -1201,7 +1216,6 @@ bool compileNode(ASTNode* node, Compiler* compiler) {
                 return false;
             }
             compiler->loopStack[compiler->loopDepth++] = loopCtx;
-            printf("🔄 FOR_RANGE: Incremented loopDepth to %d\n", compiler->loopDepth);
             
             // Begin new scope for loop variables
             compiler->scopeDepth++;
@@ -1326,13 +1340,10 @@ bool compileNode(ASTNode* node, Compiler* compiler) {
             compiler->loopStack[compiler->loopDepth - 1].continueTarget = -1; // will set after body
             
             // Compile body
-            printf("🔄 FOR_RANGE: About to compile body, loopDepth=%d, scopeDepth=%d\n", 
-                   compiler->loopDepth, compiler->scopeDepth);
             if (!compileNode(node->forRange.body, compiler)) {
                 compiler->loopDepth--;
                 return false;
             }
-            printf("🔄 FOR_RANGE: Finished compiling body\n");
             // Place increment code here (continueTarget)
             continueTarget = compiler->chunk->count;
             compiler->loopStack[compiler->loopDepth - 1].continueTarget = continueTarget;
@@ -1376,6 +1387,9 @@ bool compileNode(ASTNode* node, Compiler* compiler) {
             // Cleanup scope and remove loop variables  
             symbol_table_end_scope(&compiler->symbols, compiler->scopeDepth);
             compiler->scopeDepth--;
+            
+            // ✨ LICM: Deactivate expression replacements when exiting FOR_RANGE loop
+            disableLICMReplacements();
             
             // Cleanup
             jumptable_free(&patchLoop->breakJumps);

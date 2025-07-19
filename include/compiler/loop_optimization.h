@@ -58,4 +58,9 @@ void updateGlobalOptimizationStats(LoopOptimizer* optimizer);
 void updateGlobalOptimizationStatsFromCompiler(Compiler* compiler);
 void printGlobalOptimizationStats(void);
 
+// LICM Expression Replacement Interface (single-pass compatible)
+bool tryReplaceInvariantExpression(ASTNode* expr, int* outTempVarIdx);
+void enableLICMReplacements(void);
+void disableLICMReplacements(void);
+
 #endif // LOOP_OPTIMIZATION_H

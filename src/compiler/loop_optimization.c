@@ -89,6 +89,17 @@ typedef struct {
 // Thread-local optimization context to avoid allocations
 static __thread OptimizationContext g_optContext = {0};
 
+// Expression replacement mapping for LICM (single-pass compatible)
+typedef struct {
+    ASTNode* originalExpr;      // Original expression to replace
+    int tempVarIdx;             // Temporary variable index to use instead
+    bool isActive;              // Whether this replacement is currently active
+} ExpressionReplacement;
+
+// Global replacement table (thread-local for safety)
+static __thread ExpressionReplacement g_replacements[MAX_INVARIANTS];
+static __thread int g_replacementCount = 0;
+
 // Enhanced loop analysis results with better memory layout
 typedef struct {
     // Constant analysis
@@ -115,6 +126,11 @@ typedef struct {
     InvariantExpr* invariants;
     StrengthReduction* reductions;
 } LoopAnalysis;
+
+// Forward declare replacement functions
+static void activateExpressionReplacements(InvariantExpr* invariants, int count);
+static void deactivateExpressionReplacements(void);
+static bool tryReplaceExpression(ASTNode* expr, int* outTempVarIdx);
 
 // Forward declarations
 static LoopAnalysis analyzeLoopOptimized(ASTNode* node);
@@ -290,10 +306,14 @@ bool optimizeLoop(ASTNode* node, Compiler* compiler) {
     if (analysis.canApplyLICM && analysis.invariantCount > 0) {
         if (tryLoopInvariantCodeMotionOptimized(node, &analysis, compiler)) {
             compiler->optimizer.licmCount++;
-            optimized = true;
+            
+            // ✨ CRITICAL: Activate expression replacements for the regular loop compilation that follows
+            // Since LICM doesn't prevent regular compilation, we activate replacements so the 
+            // normal loop compilation will use hoisted variables
+            activateExpressionReplacements(analysis.invariants, analysis.invariantCount);
             
             if (vm.trace) {
-                printf("🔄 LICM: Hoisted %d invariant expression(s)\n", 
+                printf("🔄 LICM: Hoisted %d invariant expression(s), replacements activated\n", 
                        analysis.invariantCount);
             }
         }
@@ -491,10 +511,6 @@ static bool tryLoopInvariantCodeMotionOptimized(ASTNode* node, LoopAnalysis* ana
     
     bool applied = false;
     
-    // Store current compiler state to restore after hoisting
-    int savedInstructionCount = compiler->chunk->count;
-    int savedVariableCount = vm.variableCount;
-    
     // Hoist expressions that are profitable (used multiple times or expensive)
     for (int i = 0; i < analysis->invariantCount; i++) {
         InvariantExpr* inv = &analysis->invariants[i];
@@ -541,6 +557,53 @@ static bool tryLoopInvariantCodeMotionOptimized(ASTNode* node, LoopAnalysis* ana
     }
     
     return applied;
+}
+
+// ============================================================================
+// Expression Replacement System for LICM (Single-Pass Compatible)
+// ============================================================================
+
+// Activate expression replacements for loop body compilation
+static void activateExpressionReplacements(InvariantExpr* invariants, int count) {
+    for (int i = 0; i < g_replacementCount; i++) {
+        g_replacements[i].isActive = false;
+    }
+    
+    // Activate only the hoisted invariants
+    for (int i = 0; i < count; i++) {
+        if (invariants[i].isHoisted) {
+            for (int j = 0; j < g_replacementCount; j++) {
+                if (expressionsEqual(g_replacements[j].originalExpr, invariants[i].expr)) {
+                    g_replacements[j].isActive = true;
+                    g_replacements[j].tempVarIdx = invariants[i].tempVarIndex;
+                    break;
+                }
+            }
+        }
+    }
+}
+
+// Deactivate all expression replacements
+static void deactivateExpressionReplacements(void) {
+    for (int i = 0; i < g_replacementCount; i++) {
+        g_replacements[i].isActive = false;
+    }
+    g_replacementCount = 0;  // Reset for next loop
+}
+
+// Try to replace an expression with a temporary variable (single-pass compatible)
+static bool tryReplaceExpression(ASTNode* expr, int* outTempVarIdx) {
+    if (!expr || !outTempVarIdx) return false;
+    
+    for (int i = 0; i < g_replacementCount; i++) {
+        if (g_replacements[i].isActive && 
+            expressionsEqual(g_replacements[i].originalExpr, expr)) {
+            *outTempVarIdx = g_replacements[i].tempVarIdx;
+            return true;
+        }
+    }
+    
+    return false;
 }
 
 // Enhanced invariant expression detection with accurate use counting
@@ -923,15 +986,13 @@ static bool compileInvariantExpression(ASTNode* expr, int targetVarIdx, Compiler
 
 // Mark an expression for replacement with a temporary variable during compilation
 static void markExpressionForReplacement(ASTNode* expr, int tempVarIdx) {
-    if (!expr) return;
+    if (!expr || g_replacementCount >= MAX_INVARIANTS) return;
     
-    // Store replacement information in a global mapping table
-    // This is a simplified approach - stores mapping for later use during compilation
-    // In production, would use a more sophisticated mapping system
-    (void)tempVarIdx; // Suppress unused warning for now
-    
-    // TODO: Implement expression replacement mapping system
-    // For now, just mark that this has been processed
+    // Store replacement mapping for single-pass compilation
+    g_replacements[g_replacementCount].originalExpr = expr;
+    g_replacements[g_replacementCount].tempVarIdx = tempVarIdx;
+    g_replacements[g_replacementCount].isActive = false;  // Will be activated during loop compilation
+    g_replacementCount++;
 }
 
 // Count how many times a target expression appears in a subtree
@@ -1034,4 +1095,24 @@ static bool expressionsEqual(ASTNode* a, ASTNode* b) {
         default:
             return false; // Conservative - assume different
     }
+}
+
+// ============================================================================
+// Public LICM Expression Replacement Interface
+// ============================================================================
+
+// Public interface for checking if an expression should be replaced (for compiler integration)
+bool tryReplaceInvariantExpression(ASTNode* expr, int* outTempVarIdx) {
+    return tryReplaceExpression(expr, outTempVarIdx);
+}
+
+// Enable LICM replacements (called when entering optimized loop body)
+void enableLICMReplacements(void) {
+    // Implementation will be handled by activateExpressionReplacements
+    // This is called from the main compiler when LICM has been applied
+}
+
+// Disable LICM replacements (called when exiting loop)
+void disableLICMReplacements(void) {
+    deactivateExpressionReplacements();
 }

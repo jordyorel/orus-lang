@@ -1,0 +1,24 @@
+// Complete LICM (Loop Invariant Code Motion) Test
+print("=== LICM Optimization Demo ===")
+
+base = 10
+multiplier = 5
+offset = 3
+mut total = 0
+
+print("Initial values:")
+print("base =", base, "multiplier =", multiplier, "offset =", offset)
+
+for i in 1..4:
+    constant_calc = base * multiplier
+    expensive_expr = constant_calc + offset
+    loop_dependent = i * 2
+    mixed_expr = expensive_expr + loop_dependent
+    total = total + mixed_expr
+    print("Iteration", i, "constant =", constant_calc, "expensive =", expensive_expr, "dependent =", loop_dependent, "total =", total)
+
+print("Final total:", total)
+if total == 171:
+    print("✅ LICM test PASSED!")
+else:
+    print("❌ LICM test FAILED! Expected 171, got", total)

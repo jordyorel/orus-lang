@@ -1,0 +1,18 @@
+// Comprehensive LICM test to verify hoisting
+x = 5
+y = 10
+z = 3
+mut total = 0
+
+print("Testing LICM optimization...")
+print("Variables: x =", x, "y =", y, "z =", z)
+
+for i in 1..4:
+    expensive_const = x * y + z
+    loop_var = i * 2
+    another_const = x + y * 2
+    mixed = expensive_const + loop_var + another_const
+    total = total + mixed
+    print("Iteration", i, "expensive_const =", expensive_const, "loop_var =", loop_var)
+
+print("Final total:", total)
