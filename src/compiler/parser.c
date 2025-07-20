@@ -259,7 +259,7 @@ ASTNode* parseSource(const char* source) {
 static ASTNode* parseStatement(ParserContext* ctx) {
     Token t = peekToken(ctx);
 
-    if (t.type == TOKEN_PRINT || t.type == TOKEN_PRINT_NO_NL) {
+    if (t.type == TOKEN_PRINT || t.type == TOKEN_PRINT_NO_NL || t.type == TOKEN_PRINT_SEP) {
         return parsePrintStatement(ctx);
     }
     if (t.type == TOKEN_APOSTROPHE) {
@@ -331,9 +331,10 @@ static ASTNode* parseStatement(ParserContext* ctx) {
 }
 
 static ASTNode* parsePrintStatement(ParserContext* ctx) {
-    // Consume PRINT or PRINT_NO_NL
+    // Consume PRINT, PRINT_NO_NL, or PRINT_SEP
     Token printTok = nextToken(ctx);
     bool newline = (printTok.type == TOKEN_PRINT);
+    bool hasSeparator = (printTok.type == TOKEN_PRINT_SEP);
 
     // Expect '('
     Token left = nextToken(ctx);
@@ -342,8 +343,20 @@ static ASTNode* parsePrintStatement(ParserContext* ctx) {
     // Gather zero or more comma-separated expressions
     ASTNode** args = NULL;
     int count = 0, capacity = 0;
+    ASTNode* separator = NULL;
+    
     if (peekToken(ctx).type != TOKEN_RIGHT_PAREN) {
-        while (true) {
+        if (hasSeparator) {
+            // For print_sep, first argument is the separator
+            separator = parseExpression(ctx);
+            if (!separator) return NULL;
+            if (peekToken(ctx).type == TOKEN_COMMA) {
+                nextToken(ctx); // consume comma after separator
+            }
+        }
+        
+        // Parse remaining arguments (or all arguments for regular print)
+        while (peekToken(ctx).type != TOKEN_RIGHT_PAREN) {
             ASTNode* expr = parseExpression(ctx);
             if (!expr) return NULL;
             addStatement(ctx, &args, &count, &capacity, expr);
@@ -362,6 +375,7 @@ static ASTNode* parsePrintStatement(ParserContext* ctx) {
     node->print.values = args;
     node->print.count = count;
     node->print.newline = newline;
+    node->print.separator = separator;
     node->location.line = printTok.line;
     node->location.column = printTok.column;
     node->dataType = NULL;

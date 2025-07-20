@@ -173,6 +173,7 @@ InterpretResult vm_run_dispatch(void) {
         vm_dispatch_table[OP_GET_ITER_R] = &&LABEL_OP_GET_ITER_R;
         vm_dispatch_table[OP_ITER_NEXT_R] = &&LABEL_OP_ITER_NEXT_R;
         vm_dispatch_table[OP_PRINT_MULTI_R] = &&LABEL_OP_PRINT_MULTI_R;
+        vm_dispatch_table[OP_PRINT_MULTI_SEP_R] = &&LABEL_OP_PRINT_MULTI_SEP_R;
         vm_dispatch_table[OP_PRINT_R] = &&LABEL_OP_PRINT_R;
         vm_dispatch_table[OP_PRINT_NO_NL_R] = &&LABEL_OP_PRINT_NO_NL_R;
         vm_dispatch_table[OP_CALL_R] = &&LABEL_OP_CALL_R;
@@ -1661,19 +1662,28 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t first = READ_BYTE();
             uint8_t count = READ_BYTE();
             uint8_t nl = READ_BYTE();
-            builtin_print(&vm.registers[first], count, nl != 0);
+            builtin_print(&vm.registers[first], count, nl != 0, NULL);
+            DISPATCH();
+        }
+
+    LABEL_OP_PRINT_MULTI_SEP_R: {
+            uint8_t first = READ_BYTE();
+            uint8_t count = READ_BYTE();
+            uint8_t sep_reg = READ_BYTE();
+            uint8_t nl = READ_BYTE();
+            builtin_print_with_sep_value(&vm.registers[first], count, nl != 0, vm.registers[sep_reg]);
             DISPATCH();
         }
 
     LABEL_OP_PRINT_R: {
             uint8_t reg = READ_BYTE();
-            builtin_print(&vm.registers[reg], 1, true);
+            builtin_print(&vm.registers[reg], 1, true, NULL);
             DISPATCH();
         }
 
     LABEL_OP_PRINT_NO_NL_R: {
             uint8_t reg = READ_BYTE();
-            builtin_print(&vm.registers[reg], 1, false);
+            builtin_print(&vm.registers[reg], 1, false, NULL);
             DISPATCH();
         }
 

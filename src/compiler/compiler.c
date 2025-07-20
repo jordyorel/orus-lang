@@ -1137,6 +1137,14 @@ bool compileNode(ASTNode* node, Compiler* compiler) {
             } else {
                 // Multiple arguments - use multi-print for proper spacing
                 uint8_t firstReg = allocateRegister(compiler);
+                uint8_t sepReg = 0;
+                bool hasCustomSep = false;
+                
+                // Handle custom separator if provided
+                if (node->print.separator) {
+                    sepReg = compileExpr(node->print.separator, compiler);
+                    hasCustomSep = true;
+                }
                 
                 // Compile all expressions into consecutive registers
                 for (int i = 0; i < node->print.count; i++) {
@@ -1147,15 +1155,28 @@ bool compileNode(ASTNode* node, Compiler* compiler) {
                     // Note: We keep the registers allocated for multi-print
                 }
                 
-                // Emit multi-print instruction
-                emitByte(compiler, OP_PRINT_MULTI_R);
-                emitByte(compiler, firstReg);
-                emitByte(compiler, (uint8_t)node->print.count);
-                emitByte(compiler, node->print.newline ? 1 : 0);
+                // Emit appropriate multi-print instruction
+                if (hasCustomSep) {
+                    emitByte(compiler, OP_PRINT_MULTI_SEP_R);
+                    emitByte(compiler, firstReg);
+                    emitByte(compiler, (uint8_t)node->print.count);
+                    emitByte(compiler, sepReg);
+                    emitByte(compiler, node->print.newline ? 1 : 0);
+                } else {
+                    emitByte(compiler, OP_PRINT_MULTI_R);
+                    emitByte(compiler, firstReg);
+                    emitByte(compiler, (uint8_t)node->print.count);
+                    emitByte(compiler, node->print.newline ? 1 : 0);
+                }
                 
                 // Free all registers
                 for (int i = 0; i < node->print.count; i++) {
                     freeRegister(compiler, firstReg + i);
+                }
+                
+                // Free separator register if used
+                if (hasCustomSep) {
+                    freeRegister(compiler, sepReg);
                 }
             }
             return true;

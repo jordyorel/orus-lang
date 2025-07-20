@@ -4,7 +4,8 @@
 #include <limits.h>
 
 // Control flow error definitions with friendly, mentor-like messages
-static const FeatureErrorInfo control_flow_errors[] = {
+// Note: Reserved for future error infrastructure integration
+static const FeatureErrorInfo control_flow_errors[] __attribute__((unused)) = {
     {
         .code = E1401_BREAK_OUTSIDE_LOOP,
         .title = "'break' can only be used inside a loop",

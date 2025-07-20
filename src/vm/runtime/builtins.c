@@ -179,9 +179,12 @@ static void print_string_interpolated(ObjString* str, Value* args, int* arg_inde
     }
 }
 
-void builtin_print(Value* args, int count, bool newline) {
+void builtin_print(Value* args, int count, bool newline, const char* separator) {
     int consumed = 0;
     bool first_value = true;
+    
+    // Use default space separator if none provided
+    const char* sep = separator ? separator : " ";
     
     if (count > 0 && IS_STRING(args[0])) {
         ObjString* str = AS_STRING(args[0]);
@@ -191,12 +194,24 @@ void builtin_print(Value* args, int count, bool newline) {
     }
     
     for (int arg_index = consumed; arg_index < count; arg_index++) {
-        if (!first_value) putchar(' ');
+        if (!first_value) printf("%s", sep);
         printValue(args[arg_index]);
         first_value = false;
     }
     if (newline) putchar('\n');
     fflush(stdout);
+}
+
+void builtin_print_with_sep_value(Value* args, int count, bool newline, Value separator_value) {
+    const char* sep = " "; // default
+    
+    // Extract separator string from Value
+    if (IS_STRING(separator_value)) {
+        ObjString* sepObj = AS_STRING(separator_value);
+        sep = sepObj->chars;
+    }
+    
+    builtin_print(args, count, newline, sep);
 }
 
 // Cross-platform high-precision timestamp function

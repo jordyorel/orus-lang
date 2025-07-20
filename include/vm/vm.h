@@ -509,9 +509,10 @@ typedef enum {
     OP_CLOSE_UPVALUE_R, // local_reg (close upvalue pointing to this local)
 
     // I/O
-    OP_PRINT_MULTI_R,  // first_reg, count, newline_flag
-    OP_PRINT_R,        // reg
-    OP_PRINT_NO_NL_R,  // reg
+    OP_PRINT_MULTI_R,     // first_reg, count, newline_flag
+    OP_PRINT_MULTI_SEP_R, // first_reg, count, sep_reg, newline_flag
+    OP_PRINT_R,           // reg
+    OP_PRINT_NO_NL_R,     // reg
 
     // Short jump optimizations (1-byte offset instead of 2)
     OP_JUMP_SHORT,         // 1-byte forward jump (0-255)

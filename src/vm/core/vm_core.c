@@ -68,6 +68,9 @@ void freeVM(void) {
     // Phase 1: Free register file resources
     free_register_file(&vm.register_file);
     
+    // Free global string table
+    free_string_table(&globalStringTable);
+    
     freeObjects();
     for (int i = 0; i < UINT8_COUNT; i++) {
         vm.variableNames[i].name = NULL;

@@ -79,7 +79,10 @@ print(999999)
 
 ### The `print` Statement
 
-`print` is your primary output function:
+Orus provides powerful printing functions for different output needs:
+
+#### Basic Print Function
+`print` automatically inserts spaces between arguments:
 
 ```orus
 // Basic print
@@ -90,6 +93,10 @@ print("The answer is", 42)
 
 // Expressions in print
 print(10 + 20 + 12)
+
+// Multiple values with automatic spacing
+print("x", "y", "z")
+print(1, 2, 3, 4, 5)
 ```
 
 **Output:**
@@ -97,6 +104,46 @@ print(10 + 20 + 12)
 42
 The answer is 42
 42
+x y z
+1 2 3 4 5
+```
+
+#### Custom Separator Print Function
+Use `print_sep` for custom formatting with any separator:
+
+```orus
+// Comma-separated values
+print_sep(", ", "apple", "banana", "cherry")
+
+// Pipe-separated values
+print_sep(" | ", "name", "age", "city")
+
+// No separator (concatenation)
+print_sep("", "hello", "world")
+
+// Custom separators
+print_sep(" -> ", "step1", "step2", "step3")
+print_sep("\n", "line1", "line2", "line3")
+
+// Variable separators
+separator = " :: "
+print_sep(separator, "custom", "format")
+
+// Expression separators
+print_sep(1 + 2, "number", "separator")
+```
+
+**Output:**
+```
+apple, banana, cherry
+name | age | city
+helloworld
+step1 -> step2 -> step3
+line1
+line2
+line3
+custom :: format
+number3separator
 ```
 
 ### The `time_stamp` Builtin

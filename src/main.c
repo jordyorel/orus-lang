@@ -215,7 +215,6 @@ int main(int argc, const char* argv[]) {
     
     // Cleanup
     freeVM();
-    free_string_table(&globalStringTable);
     config_destroy(config);
     return 0;
 }

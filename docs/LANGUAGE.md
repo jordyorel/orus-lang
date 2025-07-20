@@ -310,31 +310,57 @@ utils.helper()
 ## 🔧 Built-in Functions
 
 ### Printing
-Orus supports a minimal formatting syntax using @ as a prefix in strings to indicate formatting of the next argument:
+
+Orus provides several printing functions for different output needs:
+
+#### Basic Print Function
+The standard `print()` function automatically inserts spaces between arguments:
+
+```orus
+print("Hello", "world")          // Output: Hello world
+print(42, "is the answer")       // Output: 42 is the answer
+print("x =", x, "y =", y)        // Output: x = 5 y = 10
+```
+
+#### Custom Separator Print
+Use `print_sep()` to specify a custom separator between arguments:
+
+```orus
+print_sep(", ", "a", "b", "c")           // Output: a, b, c
+print_sep(" | ", "x", "y", "z")          // Output: x | y | z
+print_sep("", "no", "space", "between")  // Output: nospacebetween
+print_sep(" -> ", "step1", "step2")      // Output: step1 -> step2
+```
+
+The separator can be any expression that evaluates to a string:
+```orus
+sep = " :: "
+print_sep(sep, "custom", "separator")    // Output: custom :: separator
+print_sep(1 + 2, "calculated", "sep")   // Output: calculated3sep
+```
+
+#### Format Specifiers
+Orus supports minimal formatting syntax using @ as a prefix in strings:
 
 ```orus
 pi = 3.14159
-print("Pi = @.2f", pi)
+print("Pi = @.2f", pi)           // Output: Pi = 3.14
 ```
 
 ```orus
 num = 255
-print("Decimal =", num)
-print("Hex = @x", num)      // hex output
-print("Binary = @b", num)   // binary output
-print("Octal = @o", num)    // octal output
+print("Decimal =", num)          // Output: Decimal = 255
+print("Hex = @x", num)           // Output: Hex = ff
+print("Binary = @b", num)        // Output: Binary = 11111111
+print("Octal = @o", num)         // Output: Octal = 377
 ```
 
 The format specifier @ applies to the next value in the argument list. You can mix formatted and unformatted values freely.
 
-For float precision:
-print("rounded:", round(3.14159, 2))
-
+#### Examples
 ```orus
 print("Hello")
 print("x =", x)
-
-=======
 print("sum =", 10 + 20)
 
 ```

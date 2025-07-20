@@ -4,7 +4,7 @@
 CC = gcc
 
 # Build Profile Configuration
-# Usage: make PROFILE=debug|release|profiling
+# Usage: make PROFILE=debug|release|profiling|ci
 # Default is debug for development
 PROFILE ?= debug
 
@@ -52,8 +52,16 @@ else ifeq ($(PROFILE),profiling)
     DEFINES = $(ARCH_DEFINES) -DPROFILING_MODE=1 -DENABLE_PROFILING=1
     SUFFIX = _profiling
     PROFILE_DESC = Profiling (optimization + instrumentation)
+else ifeq ($(PROFILE),ci)
+    # CI build: treat warnings as errors for strict CI enforcement
+    OPT_FLAGS = -O2 -g1
+    DEBUG_FLAGS = -fno-omit-frame-pointer -fstack-protector-strong
+    PROFILE_FLAGS = -Werror
+    DEFINES = $(ARCH_DEFINES) -DCI_MODE=1
+    SUFFIX = _ci
+    PROFILE_DESC = CI (warnings as errors, optimized)
 else
-    $(error Invalid PROFILE: $(PROFILE). Use debug, release, or profiling)
+    $(error Invalid PROFILE: $(PROFILE). Use debug, release, profiling, or ci)
 endif
 
 # Assemble final CFLAGS
@@ -117,6 +125,9 @@ release:
 
 profiling:
 	@$(MAKE) PROFILE=profiling
+
+ci:
+	@$(MAKE) PROFILE=ci
 
 # Create build directory
 $(BUILDDIR):
@@ -470,6 +481,14 @@ test: $(ORUS)
 	fi; \
 	echo ""
 
+# CI test target: Build with warnings as errors and run full test suite
+ci-test: 
+	@echo "Building with CI profile (warnings as errors)..."
+	@$(MAKE) clean
+	@$(MAKE) PROFILE=ci
+	@echo ""
+	@echo "Running tests with CI build..."
+	@$(MAKE) test ORUS=orus_ci
 
 # Run cross-language benchmark tests
 benchmark: $(ORUS)
@@ -478,6 +497,10 @@ benchmark: $(ORUS)
 # Run loop optimization performance benchmark
 benchmark-loops: $(ORUS)
 	@./benchmark_loop_optimization.sh
+
+# Run integration tests
+integration-test: $(ORUS)
+	@./scripts/run_integration_tests.sh
 
 # Static Analysis
 analyze:
@@ -542,7 +565,10 @@ help:
 	@echo "  make                    - Build debug version (creates orus_debug)"
 	@echo "  make release            - Build optimized release version (creates orus)"
 	@echo "  make PROFILE=profiling  - Build with profiling support (creates orus_profiling)"
+	@echo "  make PROFILE=ci         - Build with warnings as errors (creates orus_ci)"
 	@echo "  make test               - Run tests (builds debug if needed)"
+	@echo "  make ci-test            - Build with warnings as errors and run tests"
+	@echo "  make integration-test   - Run cross-feature integration tests"
 	@echo "  make benchmark          - Run benchmarks (builds debug if needed)"
 	@echo "  make analyze            - Run static analysis tools"
 	@echo ""
