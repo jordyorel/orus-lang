@@ -1,6 +1,0 @@
-fn square(x):
-    result = x * x
-    return result
-
-result = square(5)
-print("Result:", result)

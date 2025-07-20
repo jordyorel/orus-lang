@@ -1,4 +1,5 @@
 #include "vm/vm_dispatch.h"
+#include "vm/spill_manager.h"
 #include "runtime/builtins.h"
 #include "vm/vm_constants.h"
 #include "vm/vm_string_ops.h"
@@ -9,6 +10,28 @@
 #include "vm/vm_opcode_handlers.h"
 #include "vm/register_file.h"
 #include <math.h>
+
+// Bridge functions for safe register access across legacy and hierarchical systems
+static inline Value vm_get_register_safe(uint16_t id) {
+    if (id < 256) {
+        // Legacy global registers
+        return vm.registers[id];
+    } else {
+        // Use register file for frame/spill registers
+        Value* reg_ptr = get_register(&vm.register_file, id);
+        return reg_ptr ? *reg_ptr : NIL_VAL;
+    }
+}
+
+static inline void vm_set_register_safe(uint16_t id, Value value) {
+    if (id < 256) {
+        // Legacy global registers
+        vm.registers[id] = value;
+    } else {
+        // Use register file for frame/spill registers
+        set_register(&vm.register_file, id, value);
+    }
+}
 
 // ✅ Auto-detect computed goto support
 #ifndef USE_COMPUTED_GOTO
@@ -1531,27 +1554,46 @@ InterpretResult vm_run_dispatch(void) {
                         frame->functionIndex = functionIndex;
                         
                         // Use shared parameter base calculation for consistency with compiler
-                        uint8_t paramBase = calculateParameterBaseRegister(argCount);
+                        uint16_t paramBase = calculateParameterBaseRegister(argCount);
                         frame->parameterBaseRegister = paramBase;
                         
-                        // Save registers that will be overwritten by parameters
-                        frame->savedRegisterCount = argCount < 64 ? argCount : 64;  // Respect increased limit
+                        // Initialize register file frame if using frame/spill registers
+                        if (paramBase >= FRAME_REG_START) {
+                            CallFrame* rf_frame = allocate_frame(&vm.register_file);
+                            if (!rf_frame) {
+                                vm.registers[resultReg] = NIL_VAL;
+                                vm.frameCount--; // Revert frame allocation
+                                break;
+                            }
+                        }
+                        
+                        // Pre-reserve spill slots for parameters 64+ to prevent ID conflicts
+                        for (int i = FRAME_REGISTERS; i < argCount; i++) {
+                            uint16_t spillId = SPILL_REG_START + (i - FRAME_REGISTERS);
+                            reserve_spill_slot(vm.register_file.spilled_registers, spillId);
+                        }
+                        
+                        // Save registers that will be overwritten by parameters (only for frame registers)
+                        frame->savedRegisterCount = argCount < FRAME_REGISTERS ? argCount : FRAME_REGISTERS;
                         for (int i = 0; i < frame->savedRegisterCount; i++) {
-                            frame->savedRegisters[i] = vm.registers[paramBase + i];
+                            uint16_t paramRegId = FRAME_REG_START + i;
+                            frame->savedRegisters[i] = vm_get_register_safe(paramRegId);
                         }
                         
                         // Update register file's current frame
                         vm.register_file.current_frame = frame;
                         
-                        // Copy arguments to frame-local registers using the new register file system
+                        // Copy arguments to parameter registers using hierarchical allocation
                         for (int i = 0; i < argCount; i++) {
-                            uint16_t frame_reg_id = FRAME_REG_START + i;
-                            set_register(&vm.register_file, frame_reg_id, vm.registers[firstArgReg + i]);
-                        }
-                        
-                        // Map parameters to dynamically allocated register range
-                        for (int i = 0; i < argCount; i++) {
-                            vm.registers[paramBase + i] = vm.registers[firstArgReg + i];
+                            uint16_t paramRegId;
+                            if (i < FRAME_REGISTERS) {
+                                // Parameters 0-63: Use frame registers (256-319)
+                                paramRegId = FRAME_REG_START + i;
+                            } else {
+                                // Parameters 64+: Use spill registers (480+)
+                                paramRegId = SPILL_REG_START + (i - FRAME_REGISTERS);
+                            }
+                            vm_set_register_safe(paramRegId, vm.registers[firstArgReg + i]);
                         }
                         
                         // Switch to function's chunk
@@ -1620,9 +1662,9 @@ InterpretResult vm_run_dispatch(void) {
                     if (vm.frameCount > 0) {
                         CallFrame* frame = &vm.frames[--vm.frameCount];
                         
-                        // Restore saved registers using dynamic parameter base
+                        // Restore saved registers using dynamic parameter base and bridge functions
                         for (int i = 0; i < frame->savedRegisterCount; i++) {
-                            vm.registers[frame->parameterBaseRegister + i] = frame->savedRegisters[i];
+                            vm_set_register_safe(frame->parameterBaseRegister + i, frame->savedRegisters[i]);
                         }
                         
                         vm.chunk = frame->previousChunk;
@@ -1642,9 +1684,9 @@ InterpretResult vm_run_dispatch(void) {
                     if (vm.frameCount > 0) {
                         CallFrame* frame = &vm.frames[--vm.frameCount];
                         
-                        // Restore saved registers using dynamic parameter base
+                        // Restore saved registers using dynamic parameter base and bridge functions
                         for (int i = 0; i < frame->savedRegisterCount; i++) {
-                            vm.registers[frame->parameterBaseRegister + i] = frame->savedRegisters[i];
+                            vm_set_register_safe(frame->parameterBaseRegister + i, frame->savedRegisters[i]);
                         }
                         
                         vm.chunk = frame->previousChunk;
@@ -1663,6 +1705,26 @@ InterpretResult vm_run_dispatch(void) {
                     uint16_t frame_reg_id = FRAME_REG_START + frame_offset;
                     Value* src = get_register(&vm.register_file, frame_reg_id);
                     vm.registers[reg] = *src;
+                    break;
+                }
+
+                case OP_LOAD_SPILL: {
+                    uint8_t reg = READ_BYTE();
+                    uint8_t spill_id_high = READ_BYTE();
+                    uint8_t spill_id_low = READ_BYTE();
+                    uint16_t spill_id = (spill_id_high << 8) | spill_id_low;
+                    Value* src = get_register(&vm.register_file, spill_id);
+                    vm.registers[reg] = *src;
+                    break;
+                }
+
+                case OP_STORE_SPILL: {
+                    uint8_t spill_id_high = READ_BYTE();
+                    uint8_t spill_id_low = READ_BYTE();
+                    uint8_t reg = READ_BYTE();
+                    uint16_t spill_id = (spill_id_high << 8) | spill_id_low;
+                    Value value = vm.registers[reg];
+                    set_register(&vm.register_file, spill_id, value);
                     break;
                 }
 

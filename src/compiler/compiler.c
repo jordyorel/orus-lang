@@ -443,13 +443,23 @@ static int compileIdentifier(ASTNode* node, Compiler* compiler) {
     
     if (index < 0) {
         if (index <= -1000) {
-            // Function parameter - use enhanced parameter register allocation
+            // Function parameter - use hierarchical register allocation
             int paramNum = -(index + 1000);
-            uint8_t paramBase = calculateParameterBaseRegister(compiler->currentFunctionParameterCount);
             uint8_t r = allocateRegister(compiler);
-            emitByte(compiler, OP_MOVE);
-            emitByte(compiler, r);
-            emitByte(compiler, (uint8_t)(paramBase + paramNum));  // Enhanced parameter register range
+            
+            if (paramNum < FRAME_REGISTERS) {
+                // Parameters 0-63: Use frame registers (256-319)
+                emitByte(compiler, OP_LOAD_FRAME);
+                emitByte(compiler, r);  // Destination register
+                emitByte(compiler, (uint8_t)paramNum);  // Frame offset (0-63)
+            } else {
+                // Parameters 64+: Use spill registers (480+)
+                uint16_t spillId = SPILL_REG_START + (paramNum - FRAME_REGISTERS);
+                emitByte(compiler, OP_LOAD_SPILL);
+                emitByte(compiler, r);  // Destination register
+                emitByte(compiler, (uint8_t)(spillId >> 8));    // High byte of spill ID
+                emitByte(compiler, (uint8_t)(spillId & 0xFF));  // Low byte of spill ID
+            }
             return r;
         } else {
             // Register-based variable (loop variable) - negative index encodes register number

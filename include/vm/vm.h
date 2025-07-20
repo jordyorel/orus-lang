@@ -284,30 +284,18 @@ typedef struct CallFrame {
     Chunk* previousChunk;
     uint8_t baseRegister;                 // Base register for this frame
     uint8_t functionIndex;
-    uint8_t parameterBaseRegister;        // Base register for function parameters (optimization)
+    uint16_t parameterBaseRegister;       // Base register for function parameters (frame/spill space)
     uint8_t savedRegisterCount;           // Number of saved registers
     Value savedRegisters[64];             // Saved registers overwritten by parameters (increased limit)
 } CallFrame;
 
 // Shared function for parameter register allocation (used by both compiler and VM)
-static inline uint8_t calculateParameterBaseRegister(int argCount) {
-    // Enhanced parameter register allocation with higher limits
-    // Allocate from high register range to avoid conflicts
-    
-    if (argCount <= 0) {
-        return 200;  // Default fallback
-    }
-    
-    // For all parameter counts, allocate from top of register space
-    // This allows up to 255 parameters theoretically
-    uint8_t paramBase = 256 - argCount;
-    
-    // Ensure we don't go below register 0
-    if (paramBase < 1) {
-        paramBase = 1;  // Reserve register 0 for special purposes
-    }
-    
-    return paramBase;
+static inline uint16_t calculateParameterBaseRegister(int argCount) {
+    // Hierarchical register allocation for unlimited parameters
+    // Always start parameters at frame register 256 regardless of count
+    // Individual parameters beyond frame space will spill automatically
+    (void)argCount; // Suppress unused parameter warning
+    return FRAME_REG_START;  // 256 - all parameters start here
 }
 
 // Phase 1: Register File Architecture
@@ -515,6 +503,10 @@ typedef enum {
     OP_ENTER_FRAME,    // frame_size - Allocate new call frame
     OP_EXIT_FRAME,     // - Deallocate current call frame
     OP_MOVE_FRAME,     // dst_frame_offset, src_frame_offset - Move between frame registers
+
+    // Phase 2: Spill register operations for unlimited parameters
+    OP_LOAD_SPILL,     // reg, spill_id_high, spill_id_low - Load from spill register (16-bit ID)
+    OP_STORE_SPILL,    // spill_id_high, spill_id_low, reg - Store to spill register (16-bit ID)
 
     // Phase 3: Module register operations
     OP_LOAD_MODULE,    // reg, module_id, module_offset - Load from module register

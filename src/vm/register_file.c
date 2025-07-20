@@ -97,14 +97,8 @@ void set_register_internal(RegisterFile* rf, uint16_t id, Value value) {
     
     // Phase 2: Spilled registers (480+) - Store in HashMap
     if (rf->spilled_registers && is_spilled_register(id)) {
-        // Update existing spilled value or create new one
         SpillManager* spill_mgr = rf->spilled_registers;
-        Value dummy;
-        if (unspill_register_value(spill_mgr, id, &dummy)) {
-            // Update existing spill
-            remove_spilled_register(spill_mgr, id);
-        }
-        spill_register_value(spill_mgr, value);
+        set_spill_register_value(spill_mgr, id, value);
         return;
     }
     

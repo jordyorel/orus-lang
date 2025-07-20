@@ -115,6 +115,69 @@ uint16_t spill_register_value(SpillManager* manager, Value value) {
     return spill_id;
 }
 
+// Phase 2: Set a spill register value with explicit register ID
+bool set_spill_register_value(SpillManager* manager, uint16_t register_id, Value value) {
+    if (!manager) {
+        return false;
+    }
+    
+    // Resize if needed (75% load factor)
+    if (manager->count + manager->tombstones >= manager->capacity * 3 / 4) {
+        resize_spill_table(manager);
+    }
+    
+    SpillEntry* entry = find_spill_entry(manager->entries, manager->capacity, register_id);
+    
+    if (entry->is_tombstone) {
+        manager->tombstones--;
+    }
+    
+    bool is_new = (entry->register_id != register_id || entry->is_tombstone);
+    entry->register_id = register_id;
+    entry->value = value;
+    entry->is_tombstone = false;
+    entry->last_used = manager->lru_counter++;
+    
+    if (is_new) {
+        manager->count++;
+    }
+    
+    return true;
+}
+
+// Phase 2: Reserve a spill slot with explicit register ID (for parameters)
+void reserve_spill_slot(SpillManager* manager, uint16_t register_id) {
+    if (!manager) {
+        return;
+    }
+    
+    // Resize if needed (75% load factor)
+    if (manager->count + manager->tombstones >= manager->capacity * 3 / 4) {
+        resize_spill_table(manager);
+    }
+    
+    SpillEntry* entry = find_spill_entry(manager->entries, manager->capacity, register_id);
+    
+    if (entry->is_tombstone) {
+        manager->tombstones--;
+    }
+    
+    bool is_new = (entry->register_id != register_id || entry->is_tombstone);
+    entry->register_id = register_id;
+    entry->value = NIL_VAL; // Initialize to nil
+    entry->is_tombstone = false;
+    entry->last_used = manager->lru_counter++;
+    
+    if (is_new) {
+        manager->count++;
+    }
+    
+    // Ensure next_spill_id doesn't conflict with reserved parameter IDs
+    if (register_id >= manager->next_spill_id) {
+        manager->next_spill_id = register_id + 1;
+    }
+}
+
 // Phase 2: Unspill a register value
 bool unspill_register_value(SpillManager* manager, uint16_t register_id, Value* value) {
     SpillEntry* entry = find_spill_entry(manager->entries, manager->capacity, register_id);

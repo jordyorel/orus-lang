@@ -15,6 +15,8 @@ void free_spill_manager(SpillManager* manager);
 
 // Phase 2: Spilling operations
 uint16_t spill_register_value(SpillManager* manager, Value value);
+bool set_spill_register_value(SpillManager* manager, uint16_t register_id, Value value);
+void reserve_spill_slot(SpillManager* manager, uint16_t register_id);
 bool unspill_register_value(SpillManager* manager, uint16_t register_id, Value* value);
 void remove_spilled_register(SpillManager* manager, uint16_t register_id);
 

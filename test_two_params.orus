@@ -1,7 +1,0 @@
-fn test_two(a, b):
-    print("Parameter a:", a)
-    print("Parameter b:", b)
-    return a + b
-
-result = test_two(10, 20)
-print("Result:", result)
