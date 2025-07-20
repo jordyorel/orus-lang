@@ -1,0 +1,6 @@
+fn test_one(a):
+    print("Parameter a:", a)
+    return a
+
+result = test_one(42)
+print("Result:", result)

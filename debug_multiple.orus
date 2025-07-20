@@ -1,0 +1,5 @@
+fn test_four(a, b, c, d):
+    return a + b + c + d
+
+result = test_four(1, 2, 3, 4)
+print("Result should be 10:", result)

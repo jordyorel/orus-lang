@@ -1,0 +1,6 @@
+fn test_no_print(a, b, c, d, e):
+    result = a + b + c + d + e
+    return result
+
+result = test_no_print(1, 2, 3, 4, 5)
+print("Sum should be 15:", result)

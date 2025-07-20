@@ -1,0 +1,7 @@
+fn helper():
+    print("Helper called")
+
+fn main():
+    helper()
+
+main()

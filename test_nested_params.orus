@@ -1,0 +1,8 @@
+fn square(x):
+    x * x
+
+fn use_square(a):
+    square(a)
+
+result = use_square(5)
+print("Result:", result)

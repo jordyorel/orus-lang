@@ -1,0 +1,4 @@
+fn test():
+    print("Hello from function")
+
+test()

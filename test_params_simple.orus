@@ -1,0 +1,6 @@
+fn test_add(a, b):
+    result = a + b
+    return result
+
+answer = test_add(10, 20)
+print("Answer:", answer)

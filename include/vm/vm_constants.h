@@ -9,7 +9,7 @@
 
 // Phase 1: Register file architecture constants
 #define GLOBAL_REGISTERS 256    // Fast-access globals (preserve existing behavior)
-#define FRAME_REGISTERS 64      // Per-function registers  
+#define FRAME_REGISTERS 255     // Per-function registers (max for uint8_t bytecode)  
 #define TEMP_REGISTERS 32       // Scratch space
 #define MODULE_REGISTERS 128    // Per-module scope (Phase 3)
 

@@ -1,0 +1,5 @@
+fn test_three(a, b, c):
+    return a + b + c
+
+result = test_three(1, 2, 3)
+print("Result should be 6:", result)

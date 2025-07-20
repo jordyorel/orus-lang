@@ -233,7 +233,7 @@ uint16_t allocate_frame_register(RegisterFile* rf) {
     }
     
     if (rf->current_frame->register_count >= FRAME_REGISTERS) {
-        // Phase 2 TODO: Trigger register spilling
+        // Frame full - with 255 registers, this should be extremely rare
         return 0; // Error: frame full
     }
     

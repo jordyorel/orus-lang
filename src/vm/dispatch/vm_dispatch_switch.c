@@ -1522,7 +1522,7 @@ InterpretResult vm_run_dispatch(void) {
                             break;
                         }
                         
-                        // Create new call frame
+                        // Create new call frame (traditional approach)
                         CallFrame* frame = &vm.frames[vm.frameCount++];
                         frame->returnAddress = vm.ip;
                         frame->previousChunk = vm.chunk;
@@ -1530,9 +1530,19 @@ InterpretResult vm_run_dispatch(void) {
                         frame->register_count = argCount;
                         frame->functionIndex = functionIndex;
                         
-                        // Copy arguments to function's parameter registers
+                        // Update register file's current frame
+                        vm.register_file.current_frame = frame;
+                        
+                        // Copy arguments to frame-local registers using the new register file system
                         for (int i = 0; i < argCount; i++) {
-                            vm.registers[i] = vm.registers[firstArgReg + i];
+                            uint16_t frame_reg_id = FRAME_REG_START + i;
+                            set_register(&vm.register_file, frame_reg_id, vm.registers[firstArgReg + i]);
+                        }
+                        
+                        // Map parameters to a safe register range that won't conflict with function calls
+                        // Use registers 200-254 as parameter storage (avoiding 0-199 used by function calls)
+                        for (int i = 0; i < argCount; i++) {
+                            vm.registers[200 + i] = vm.registers[firstArgReg + i];
                         }
                         
                         // Switch to function's chunk
@@ -1571,16 +1581,18 @@ InterpretResult vm_run_dispatch(void) {
                         // For tail calls, we reuse the current frame instead of creating a new one
                         // This prevents stack growth in recursive calls
                         
-                        // Copy arguments to function's parameter registers
+                        // Copy arguments to function's frame registers
                         // We need to be careful about overlapping registers
                         Value tempArgs[256];
                         for (int i = 0; i < argCount; i++) {
                             tempArgs[i] = vm.registers[firstArgReg + i];
                         }
                         
-                        // Clear the parameter registers first
+                        // Clear the current frame's parameter registers first, then set new ones
                         for (int i = 0; i < argCount; i++) {
-                            vm.registers[i] = tempArgs[i];
+                            uint16_t frame_reg_id = FRAME_REG_START + i;
+                            set_register(&vm.register_file, frame_reg_id, tempArgs[i]);
+                            vm.registers[200 + i] = tempArgs[i];  // Use safe parameter register range
                         }
                         
                         // Switch to function's chunk - reuse current frame

@@ -14,6 +14,7 @@
 #include "runtime/jumptable.h"
 #include "compiler/loop_optimization.h"
 #include "vm/register_file.h"
+#include "vm/vm_constants.h"
 #include <string.h>
 
 bool compileNode(ASTNode* node, Compiler* compiler);
@@ -344,8 +345,14 @@ static Type* getExprType(ASTNode* node, Compiler* compiler) {
             int index;
             if (symbol_table_get_in_scope(&compiler->symbols, node->identifier.name, compiler->scopeDepth, &index)) {
                 if (index < 0) {
-                    // Register-based variable (loop variable) - always i32 for now
-                    return getPrimitiveType(TYPE_I32);
+                    if (index <= -1000) {
+                        // Function parameter - type depends on parameter declaration
+                        // For now, return i32, but this should be improved to use actual parameter types
+                        return getPrimitiveType(TYPE_I32);
+                    } else {
+                        // Register-based variable (loop variable) - always i32 for now
+                        return getPrimitiveType(TYPE_I32);
+                    }
                 } else {
                     // Global variable
                     return vm.globalTypes[index];
@@ -434,13 +441,24 @@ static int compileIdentifier(ASTNode* node, Compiler* compiler) {
     }
     
     if (index < 0) {
-        // Register-based variable (loop variable) - negative index encodes register number
-        int regNum = -(index + 1);
-        uint8_t r = allocateRegister(compiler);
-        emitByte(compiler, OP_MOVE);
-        emitByte(compiler, r);
-        emitByte(compiler, (uint8_t)regNum);
-        return r;
+        if (index <= -1000) {
+            // Function parameter - negative index encodes parameter number
+            // Parameters are in safe register range (200-254) to avoid conflicts with function calls
+            int paramNum = -(index + 1000);
+            uint8_t r = allocateRegister(compiler);
+            emitByte(compiler, OP_MOVE);
+            emitByte(compiler, r);
+            emitByte(compiler, (uint8_t)(200 + paramNum));  // Safe parameter register range
+            return r;
+        } else {
+            // Register-based variable (loop variable) - negative index encodes register number
+            int regNum = -(index + 1);
+            uint8_t r = allocateRegister(compiler);
+            emitByte(compiler, OP_MOVE);
+            emitByte(compiler, r);
+            emitByte(compiler, (uint8_t)regNum);
+            return r;
+        }
     } else {
         // Global variable
         uint8_t r = allocateRegister(compiler);
@@ -954,6 +972,45 @@ static int compileExpr(ASTNode* node, Compiler* compiler) {
             return compileUnary(node, compiler);
         case NODE_TERNARY:
             return compileTernary(node, compiler);
+        case NODE_CALL: {
+            // Single-pass function call compilation for expressions
+            // Compile function expression (could be identifier or complex expression)
+            int funcReg = compileExpr(node->call.callee, compiler);
+            
+            // Allocate result register
+            int resultReg = allocateRegister(compiler);
+            
+            // Allocate consecutive registers for arguments
+            int firstArgReg = 0;
+            if (node->call.argCount > 0) {
+                firstArgReg = compiler->nextRegister;
+                for (int i = 0; i < node->call.argCount; i++) {
+                    int targetReg = firstArgReg + i;
+                    int argReg = compileExpr(node->call.args[i], compiler);
+                    
+                    // Move argument to consecutive register if needed
+                    if (argReg != targetReg) {
+                        emitByte(compiler, OP_MOVE);
+                        emitByte(compiler, targetReg);
+                        emitByte(compiler, argReg);
+                    }
+                    
+                    // Ensure we allocate the target register
+                    if (targetReg >= compiler->nextRegister) {
+                        compiler->nextRegister = targetReg + 1;
+                    }
+                }
+            }
+            
+            // Emit function call
+            emitByte(compiler, OP_CALL_R);
+            emitByte(compiler, funcReg);           // Function register
+            emitByte(compiler, firstArgReg);       // First argument register
+            emitByte(compiler, node->call.argCount); // Argument count
+            emitByte(compiler, resultReg);         // Result register
+            
+            return resultReg;
+        }
         default:
             compiler->hadError = true;
             return allocateRegister(compiler);
@@ -1090,8 +1147,8 @@ bool compileNode(ASTNode* node, Compiler* compiler) {
                 
                 symbol_table_set(&compiler->symbols, node->assign.name, idx, compiler->scopeDepth);
             } else {
-                // Check if trying to modify a loop variable (negative index indicates register-based loop variable)
-                if (idx < 0) {
+                // Check if trying to modify a loop variable (negative index > -1000 indicates register-based loop variable)
+                if (idx < 0 && idx > -1000) {
                     SrcLocation location = {vm.filePath, node->location.line, node->location.column};
                     report_loop_variable_modification(location, node->assign.name, "for");
                     compiler->hadError = true;
@@ -1677,6 +1734,93 @@ bool compileNode(ASTNode* node, Compiler* compiler) {
             jumptable_free(&patchLoop->continueJumps);
             compiler->loopDepth--;
             
+            return true;
+        }
+
+        case NODE_FUNCTION: {
+            // Single-pass function compilation with immediate bytecode generation
+            // Allocate function object 
+            int functionIdx = vm.functionCount++;
+            ObjFunction* objFunction = allocateFunction();
+            objFunction->name = allocateString(node->function.name, strlen(node->function.name));
+            objFunction->arity = node->function.paramCount;
+            objFunction->chunk = malloc(sizeof(Chunk));
+            initChunk(objFunction->chunk);
+            
+            // Create VM Function entry
+            Function function;
+            function.start = 0;  // Will be set when function is called
+            function.arity = node->function.paramCount;
+            function.chunk = objFunction->chunk;
+            
+            // Store function in global function table
+            vm.functions[functionIdx] = function;
+            
+            // Create new compiler context for function body
+            Compiler functionCompiler;
+            initCompiler(&functionCompiler, objFunction->chunk, compiler->fileName, compiler->source);
+            functionCompiler.scopeDepth = compiler->scopeDepth + 1;
+            
+            // Copy global symbols (functions) from parent compiler to function compiler
+            // This allows functions to call other functions that were defined earlier
+            for (size_t i = 0; i < compiler->symbols.capacity; i++) {
+                SymbolEntry* entry = &compiler->symbols.entries[i];
+                if (entry->name != NULL && !entry->is_tombstone && entry->scope_depth == 0) {
+                    symbol_table_set(&functionCompiler.symbols, entry->name, entry->index, 0);
+                }
+            }
+            
+            // Begin function scope
+            symbol_table_begin_scope(&functionCompiler.symbols, functionCompiler.scopeDepth);
+            
+            // Add function parameters to symbol table using frame-local register indices
+            for (int i = 0; i < node->function.paramCount; i++) {
+                FunctionParam* param = &node->function.params[i];
+                // Parameters use frame-local register indices (0, 1, 2, ... up to 63)
+                // This leverages the 64 frame registers available per function
+                // Use -1000 range for function parameters to avoid conflict with loop variables
+                symbol_table_set(&functionCompiler.symbols, param->name, -(1000 + i), functionCompiler.scopeDepth);
+            }
+            
+            // Compile function body
+            if (!compileNode(node->function.body, &functionCompiler)) {
+                return false;
+            }
+            
+            // Emit implicit return for void functions
+            if (node->function.returnType == NULL) {
+                emitByte(&functionCompiler, OP_RETURN_VOID);
+            }
+            
+            // End function scope
+            symbol_table_end_scope(&functionCompiler.symbols, functionCompiler.scopeDepth);
+            
+            // Store function as global variable (as function index)
+            int globalIdx = vm.variableCount++;
+            vm.variableNames[globalIdx].name = objFunction->name;
+            vm.variableNames[globalIdx].length = objFunction->name->length;
+            vm.globals[globalIdx] = I32_VAL(functionIdx);  // Store function index
+            vm.globalTypes[globalIdx] = getPrimitiveType(TYPE_FUNCTION);
+            vm.mutableGlobals[globalIdx] = false;
+            
+            // Register function name in symbol table for identifier resolution
+            symbol_table_set(&compiler->symbols, objFunction->name->chars, globalIdx, compiler->scopeDepth);
+            
+            return !functionCompiler.hadError;
+        }
+
+
+        case NODE_RETURN: {
+            // Single-pass return statement compilation
+            if (node->returnStmt.value) {
+                // Return with value
+                int valueReg = compileExpr(node->returnStmt.value, compiler);
+                emitByte(compiler, OP_RETURN_R);
+                emitByte(compiler, valueReg);
+            } else {
+                // Void return
+                emitByte(compiler, OP_RETURN_VOID);
+            }
             return true;
         }
 
