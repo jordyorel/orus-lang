@@ -284,9 +284,31 @@ typedef struct CallFrame {
     Chunk* previousChunk;
     uint8_t baseRegister;                 // Base register for this frame
     uint8_t functionIndex;
+    uint8_t parameterBaseRegister;        // Base register for function parameters (optimization)
     uint8_t savedRegisterCount;           // Number of saved registers
-    Value savedRegisters[16];             // Saved registers overwritten by parameters
+    Value savedRegisters[64];             // Saved registers overwritten by parameters (increased limit)
 } CallFrame;
+
+// Shared function for parameter register allocation (used by both compiler and VM)
+static inline uint8_t calculateParameterBaseRegister(int argCount) {
+    // Enhanced parameter register allocation with higher limits
+    // Allocate from high register range to avoid conflicts
+    
+    if (argCount <= 0) {
+        return 200;  // Default fallback
+    }
+    
+    // For all parameter counts, allocate from top of register space
+    // This allows up to 255 parameters theoretically
+    uint8_t paramBase = 256 - argCount;
+    
+    // Ensure we don't go below register 0
+    if (paramBase < 1) {
+        paramBase = 1;  // Reserve register 0 for special purposes
+    }
+    
+    return paramBase;
+}
 
 // Phase 1: Register File Architecture
 typedef struct RegisterFile {
@@ -835,6 +857,9 @@ typedef struct {
         int licmCount;
         int totalOptimizations;
     } optimizer;
+    
+    // Function compilation context
+    int currentFunctionParameterCount;  // Parameter count for dynamic register allocation
 } Compiler;
 
 // Typed registers for optimization (unboxed values)

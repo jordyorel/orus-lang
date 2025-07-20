@@ -56,6 +56,7 @@ void initCompiler(Compiler* compiler, Chunk* chunk, const char* fileName,
     compiler->hadError = false;
     compiler->currentLine = 1;     // Initialize line tracking
     compiler->currentColumn = 1;   // Initialize column tracking
+    compiler->currentFunctionParameterCount = 0;  // Initialize parameter count
     symbol_table_init(&compiler->symbols);
     
     // Initialize loop optimizer
@@ -442,13 +443,13 @@ static int compileIdentifier(ASTNode* node, Compiler* compiler) {
     
     if (index < 0) {
         if (index <= -1000) {
-            // Function parameter - negative index encodes parameter number
-            // Parameters are in safe register range (200-254) to avoid conflicts with function calls
+            // Function parameter - use enhanced parameter register allocation
             int paramNum = -(index + 1000);
+            uint8_t paramBase = calculateParameterBaseRegister(compiler->currentFunctionParameterCount);
             uint8_t r = allocateRegister(compiler);
             emitByte(compiler, OP_MOVE);
             emitByte(compiler, r);
-            emitByte(compiler, (uint8_t)(200 + paramNum));  // Safe parameter register range
+            emitByte(compiler, (uint8_t)(paramBase + paramNum));  // Enhanced parameter register range
             return r;
         } else {
             // Register-based variable (loop variable) - negative index encodes register number
@@ -1760,6 +1761,7 @@ bool compileNode(ASTNode* node, Compiler* compiler) {
             Compiler functionCompiler;
             initCompiler(&functionCompiler, objFunction->chunk, compiler->fileName, compiler->source);
             functionCompiler.scopeDepth = compiler->scopeDepth + 1;
+            functionCompiler.currentFunctionParameterCount = node->function.paramCount;  // Set for parameter register allocation
             
             // Copy global symbols (functions) from parent compiler to function compiler
             // This allows functions to call other functions that were defined earlier

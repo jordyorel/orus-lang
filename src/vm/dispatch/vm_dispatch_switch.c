@@ -1522,13 +1522,23 @@ InterpretResult vm_run_dispatch(void) {
                             break;
                         }
                         
-                        // Create new call frame (traditional approach)
+                        // Create new call frame with optimized parameter allocation
                         CallFrame* frame = &vm.frames[vm.frameCount++];
                         frame->returnAddress = vm.ip;
                         frame->previousChunk = vm.chunk;
                         frame->baseRegister = resultReg;
                         frame->register_count = argCount;
                         frame->functionIndex = functionIndex;
+                        
+                        // Use shared parameter base calculation for consistency with compiler
+                        uint8_t paramBase = calculateParameterBaseRegister(argCount);
+                        frame->parameterBaseRegister = paramBase;
+                        
+                        // Save registers that will be overwritten by parameters
+                        frame->savedRegisterCount = argCount < 64 ? argCount : 64;  // Respect increased limit
+                        for (int i = 0; i < frame->savedRegisterCount; i++) {
+                            frame->savedRegisters[i] = vm.registers[paramBase + i];
+                        }
                         
                         // Update register file's current frame
                         vm.register_file.current_frame = frame;
@@ -1539,10 +1549,9 @@ InterpretResult vm_run_dispatch(void) {
                             set_register(&vm.register_file, frame_reg_id, vm.registers[firstArgReg + i]);
                         }
                         
-                        // Map parameters to a safe register range that won't conflict with function calls
-                        // Use registers 200-254 as parameter storage (avoiding 0-199 used by function calls)
+                        // Map parameters to dynamically allocated register range
                         for (int i = 0; i < argCount; i++) {
-                            vm.registers[200 + i] = vm.registers[firstArgReg + i];
+                            vm.registers[paramBase + i] = vm.registers[firstArgReg + i];
                         }
                         
                         // Switch to function's chunk
@@ -1610,6 +1619,12 @@ InterpretResult vm_run_dispatch(void) {
 
                     if (vm.frameCount > 0) {
                         CallFrame* frame = &vm.frames[--vm.frameCount];
+                        
+                        // Restore saved registers using dynamic parameter base
+                        for (int i = 0; i < frame->savedRegisterCount; i++) {
+                            vm.registers[frame->parameterBaseRegister + i] = frame->savedRegisters[i];
+                        }
+                        
                         vm.chunk = frame->previousChunk;
                         vm.ip = frame->returnAddress;
 
@@ -1626,6 +1641,12 @@ InterpretResult vm_run_dispatch(void) {
                 case OP_RETURN_VOID: {
                     if (vm.frameCount > 0) {
                         CallFrame* frame = &vm.frames[--vm.frameCount];
+                        
+                        // Restore saved registers using dynamic parameter base
+                        for (int i = 0; i < frame->savedRegisterCount; i++) {
+                            vm.registers[frame->parameterBaseRegister + i] = frame->savedRegisters[i];
+                        }
+                        
                         vm.chunk = frame->previousChunk;
                         vm.ip = frame->returnAddress;
                     } else {

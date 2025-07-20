@@ -5,9 +5,9 @@
 #include <string.h>
 #include <assert.h>
 
-#define ANALYZER_VAR_CAPACITY 64
+#define ANALYZER_VAR_CAPACITY 255
 #define ANALYZER_LIFESPAN_CAPACITY 1024
-#define ANALYZER_MAX_LIMIT 64
+#define ANALYZER_MAX_LIMIT 255
 
 // ---------------------------------------------------------------------------
 // Forward declarations
