@@ -411,6 +411,10 @@ static ASTNode* parseTypeAnnotation(ParserContext* ctx) {
 }
 
 static ASTNode* parseVariableDeclaration(ParserContext* ctx, bool isMutable, Token nameToken) {
+    // Check for redeclaration in same scope
+    if (symbolTableContainsInScope(ctx->symbols, nameToken.lexeme, ctx->current_scope_depth)) {
+        error(ctx, "Cannot redeclare '%s' in same scope", nameToken.lexeme);
+    }
 
     ASTNode* typeNode = NULL;
     if (peekToken(ctx).type == TOKEN_COLON) {
@@ -763,6 +767,9 @@ static ASTNode* parseBlock(ParserContext* ctx) {
 static ASTNode* parseIfStatement(ParserContext* ctx) {
     Token ifTok = nextToken(ctx);
     if (ifTok.type != TOKEN_IF && ifTok.type != TOKEN_ELIF) return NULL;
+    
+    ctx->current_scope_depth++;
+    intvec_push(&ctx->scope_stack, ctx->current_token.pos);
 
     // Parse condition with error checking
     ASTNode* condition = parseExpression(ctx);
