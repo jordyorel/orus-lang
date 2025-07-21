@@ -1,12 +1,12 @@
 #!/bin/zsh
 
-# Expected error lines from the test file
+# Expected error messages (must match exactly)
 EXPECTED_ERRORS=(
-    "print(inner)"         # line 10
-    "print(loop_var)"      # line 19
-    "mut x = 30"           # line 25
-    "print(c)"             # line 36
-    "print(b)"             # line 38
+    "Variable 'inner' is not in scope" 
+    "Variable 'loop_var' is not in scope"
+    "Cannot redeclare 'x' in same scope"
+    "Variable 'c' is not in scope"
+    "Variable 'b' is not in scope"
 )
 
 # Run compiler and capture errors

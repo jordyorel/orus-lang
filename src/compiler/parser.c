@@ -333,6 +333,10 @@ static ASTNode* parseStatement(ParserContext* ctx) {
 static ASTNode* parsePrintStatement(ParserContext* ctx) {
     // Consume PRINT, PRINT_NO_NL, or PRINT_SEP
     Token printTok = nextToken(ctx);
+    
+    // Track scope for print arguments
+    ctx->current_scope_depth++;
+    intvec_push(&ctx->scope_stack, ctx->current_token.pos);
     bool newline = (printTok.type == TOKEN_PRINT);
     bool hasSeparator = (printTok.type == TOKEN_PRINT_SEP);
 
@@ -908,6 +912,10 @@ static ASTNode* parseWhileStatement(ParserContext* ctx) {
     node->location.line = whileTok.line;
     node->location.column = whileTok.column;
     node->dataType = NULL;
+    
+    // Pop print argument scope
+    ctx->current_scope_depth--;
+    intvec_pop(&ctx->scope_stack);
     return node;
 }
 
@@ -1621,12 +1629,17 @@ static ASTNode* parseNilLiteral(ParserContext* ctx, Token token) {
 
 static ASTNode* parseIdentifierExpression(ParserContext* ctx, Token token) {
     // Check variable is in scope
-    if (!symbol_table_get_in_scope(ctx->symbols, token.lexeme, ctx->current_scope_depth, NULL)) {
-        error(ctx, "Variable '%s' is not in scope", token.lexeme);
+    int var_index;
+    if (!symbol_table_get_in_scope(ctx->symbols, token.lexeme, ctx->current_scope_depth, &var_index)) {
+        SrcLocation location = {NULL, token.line, token.column};
+        report_compile_error(E1008_UNDEFINED_VARIABLE, location, 
+                           "Variable '%s' is not in scope", token.lexeme);
+        return NULL;
     }
 
     ASTNode* node = new_node(ctx);
     node->type = NODE_IDENTIFIER;
+    node->identifier.index = var_index;
     int len = token.length;
     char* name = parser_arena_alloc(ctx, len + 1);
     strncpy(name, token.start, len);
