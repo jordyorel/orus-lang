@@ -857,6 +857,9 @@ static ASTNode* parseIfStatement(ParserContext* ctx) {
     node->location.line = ifTok.line;
     node->location.column = ifTok.column;
     node->dataType = NULL;
+
+    ctx->current_scope_depth--;
+    intvec_pop(&ctx->scope_stack);
     return node;
 }
 
@@ -1617,6 +1620,11 @@ static ASTNode* parseNilLiteral(ParserContext* ctx, Token token) {
 }
 
 static ASTNode* parseIdentifierExpression(ParserContext* ctx, Token token) {
+    // Check variable is in scope
+    if (!symbol_table_get_in_scope(ctx->symbols, token.lexeme, ctx->current_scope_depth, NULL)) {
+        error(ctx, "Variable '%s' is not in scope", token.lexeme);
+    }
+
     ASTNode* node = new_node(ctx);
     node->type = NODE_IDENTIFIER;
     int len = token.length;
