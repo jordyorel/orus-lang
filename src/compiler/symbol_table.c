@@ -172,16 +172,12 @@ void symbol_table_end_scope(SymbolTable* table, int scope_depth) {
 }
 
 bool symbol_table_get_in_scope(SymbolTable* table, const char* name, int scope_depth, int* out_index) {
-    // Walk up scope hierarchy to find nearest declaration
-    for (int depth = scope_depth; depth >= 0; depth--) {
-        uint64_t hash = fnv1a_hash(name);
-        SymbolEntry* entry = find_entry_with_scope(table->entries, table->capacity, hash, name, depth);
-        if (entry && entry->name) {
-            if (out_index) *out_index = entry->index;
-            return true;
-        }
-    }
-    return false;
+    if (!table->entries || table->capacity == 0) return false;
+    uint64_t hash = fnv1a_hash(name);
+    SymbolEntry* entry = find_entry_with_scope(table->entries, table->capacity, hash, name, scope_depth);
+    if (!entry || !entry->name) return false;
+    if (out_index) *out_index = entry->index;
+    return true;
 }
 
 // Get symbol only if it exists in exact scope depth (not outer scopes)
