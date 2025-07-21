@@ -15,6 +15,7 @@ c = 7
 for i in 1..4:
     mut temp = (a * b) + c
     mut final = temp + i
+    // a = a + 1
     print("Final:", final)
 print("Test 2 done")
 

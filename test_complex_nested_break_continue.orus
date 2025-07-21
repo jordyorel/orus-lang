@@ -1,0 +1,35 @@
+// Complex nested loop test: WHILE → FOR → WHILE → IF with break/continue
+mut outer_counter = 0
+while outer_counter < 3:
+    print("Outer while: " + (outer_counter as string))
+    
+    for middle in 1..4:
+        print("  Middle for: " + (middle as string))
+        
+        mut inner_counter = 0
+        while inner_counter < 3:
+            print("    Inner while: " + (inner_counter as string))
+            
+            if inner_counter == 1:
+                if middle == 2:
+                    // This should break from the inner while loop
+                    break
+                else:
+                    // This should continue in the inner while loop
+                    inner_counter = inner_counter + 1
+                    continue
+            
+            if inner_counter == 2 && middle == 3:
+                // This should break from the middle for loop
+                break
+            
+            inner_counter = inner_counter + 1
+        
+        if middle == 3:
+            break  // Break from middle for loop
+    
+    outer_counter = outer_counter + 1
+    if outer_counter == 2:
+        break  // Break from outer while loop
+
+print("Done with complex nesting")

@@ -1,0 +1,14 @@
+// Type literal suffixes
+a = 42        // i32 by default
+b = 42u       // u64 with 'u' suffix
+c = 42u32     // u32 with 'u32' suffix
+d = 42u64     // u64 with 'u64' suffix
+e = 42i64     // i64 with 'i64' suffix
+f = 3.14      // f64 by default
+
+print(a)
+print(b)
+print(c)
+print(d)
+print(e)
+print(f)

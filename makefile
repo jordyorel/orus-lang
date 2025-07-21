@@ -237,25 +237,25 @@ test: $(ORUS)
 	done; \
 	echo ""; \
 	echo "\033[36m=== Loop Control Tests ===\033[0m"; \
-	for test_file in $(TESTDIR)/loops/test_for_simple.orus \
-	                  $(TESTDIR)/loops/test_for_break.orus \
-	                  $(TESTDIR)/loops/test_for_continue.orus \
-	                  $(TESTDIR)/loops/test_for_continue_simple.orus \
-	                  $(TESTDIR)/loops/test_for_ranges.orus \
-	                  $(TESTDIR)/loops/test_step_ranges.orus \
-	                  $(TESTDIR)/loops/test_loop_optimization.orus \
-	                  $(TESTDIR)/loops/test_licm_optimization.orus \
-                  $(TESTDIR)/loops/test_strength_reduction.orus \
-	                  $(TESTDIR)/loops/test_while_break.orus \
-	                  $(TESTDIR)/loops/test_while_continue.orus \
-	                  $(TESTDIR)/loops/test_nested_simple.orus \
-	                  $(TESTDIR)/loops/test_nested_loops.orus \
-	                  $(TESTDIR)/loops/test_complex_nested.orus \
-	                  $(TESTDIR)/loops/test_deep_simple.orus \
-	                  $(TESTDIR)/loops/test_deep_nesting.orus \
+	for test_file in $(TESTDIR)/control_flow/for_range_simple.orus \
+	                  $(TESTDIR)/control_flow/break_for_range_basic.orus \
+	                  $(TESTDIR)/control_flow/continue_for_range_basic.orus \
+	                  $(TESTDIR)/control_flow/continue_while_basic.orus \
+	                  $(TESTDIR)/control_flow/for_range_basic.orus \
+	                  $(TESTDIR)/control_flow/continue_for_step.orus \
+	                  $(TESTDIR)/control_flow/loop_safety_integration.orus \
+	                  $(TESTDIR)/edge_cases/optimization/licm_basic.orus \
+                  $(TESTDIR)/control_flow/stress_test_short_jumps.orus \
+	                  $(TESTDIR)/control_flow/break_while_basic.orus \
+	                  $(TESTDIR)/control_flow/continue_while_basic.orus \
+	                  $(TESTDIR)/control_flow/loop_variable_scoping_nested.orus \
+	                  $(TESTDIR)/control_flow/break_continue_nested.orus \
+	                  $(TESTDIR)/control_flow/break_continue_labeled.orus \
+	                  $(TESTDIR)/control_flow/short_jump_benchmark.orus \
+	                  $(TESTDIR)/control_flow/advanced_range_syntax.orus \
 	                  $(TESTDIR)/loops/test_break_edge_cases.orus \
 	                  $(TESTDIR)/loops/test_continue_edge_cases.orus \
-	                  $(TESTDIR)/loops/test_auto_mutable_comprehensive.orus; do \
+	                  $(TESTDIR)/control_flow/loop_variable_lifetime_boundaries.orus; do \
 		if [ -f "$$test_file" ]; then \
 			printf "Testing: $$test_file ... "; \
 			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
@@ -283,17 +283,19 @@ test: $(ORUS)
 	done; \
 	echo ""; \
 	echo "\033[36m=== Function Tests ===\033[0m"; \
-	for test_file in $(TESTDIR)/functions/basic_function.orus \
+	for test_file in $(TESTDIR)/functions/basic_function_test.orus \
 	                  $(TESTDIR)/functions/simple_add.orus \
-	                  $(TESTDIR)/functions/simple_function.orus \
+	                  $(TESTDIR)/functions/function_definition.orus \
 	                  $(TESTDIR)/functions/void_function.orus \
 	                  $(TESTDIR)/functions/call_test.orus \
-	                  $(TESTDIR)/functions/function_edge_cases.orus \
+	                  $(TESTDIR)/functions/edge_cases/parameter_edge_cases.orus \
 	                  $(TESTDIR)/functions/just_definition.orus \
 	                  $(TESTDIR)/functions/first_class_functions.orus \
 	                  $(TESTDIR)/functions/higher_order_functions.orus \
 	                  $(TESTDIR)/functions/function_objects.orus \
-	                  $(TESTDIR)/functions/nested_function_calls.orus; do \
+	                  $(TESTDIR)/functions/nested_calls.orus \
+	                  $(TESTDIR)/functions/closures_basic.orus \
+	                  $(TESTDIR)/functions/closures_infrastructure.orus; do \
 		if [ -f "$$test_file" ]; then \
 			printf "Testing: $$test_file ... "; \
 			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
@@ -307,20 +309,19 @@ test: $(ORUS)
 	done; \
 	echo ""; \
 	echo "\033[36m=== Type System Tests ===\033[0m"; \
-	for test_file in $(TESTDIR)/types/basic_inference.orus \
+	for test_file in $(TESTDIR)/types/type_inference/test_type_inference_simple.orus \
 	                  $(TESTDIR)/types/annotations.orus \
-	                  $(TESTDIR)/types/same_type_arithmetic.orus \
+	                  $(TESTDIR)/types/type_inference/arithmetic_inference_basic.orus \
 	                  $(TESTDIR)/types/literal_suffixes.orus \
 	                  $(TESTDIR)/types/boolean_operations.orus \
 	                  $(TESTDIR)/types/string_operations.orus \
 	                  $(TESTDIR)/types/type_propagation.orus \
-	                  $(TESTDIR)/types/complex_expressions.orus \
+	                  $(TESTDIR)/types/type_inference/mixed_type_inference.orus \
 	                  $(TESTDIR)/types/float_precision.orus \
                           $(TESTDIR)/types/edge_case_limits.orus \
-                          $(TESTDIR)/types/implicit_conversion_test.orus \
-                          $(TESTDIR)/types/type_safety_fail.orus \
-                          $(TESTDIR)/types/bool_ops_on_int_fail.orus \
-                          $(TESTDIR)/types/not_on_int_fail.orus \
+                          $(TESTDIR)/types/i32/i32_basic.orus \
+                          $(TESTDIR)/types/i64/i64_test.orus \
+                          $(TESTDIR)/types/f64/boundaries/f64_basic.orus \
                           $(TESTDIR)/types/type_rule_simple_pass.orus \
                           $(TESTDIR)/types/type_rule_complex_pass.orus \
                           $(TESTDIR)/types/type_rule_edge_pass.orus \
@@ -483,7 +484,9 @@ test: $(ORUS)
 	                  $(TESTDIR)/edge_cases/large_number_modulo_by_zero.orus \
                           $(TESTDIR)/edge_cases/expression_modulo_by_zero.orus \
                           $(TESTDIR)/edge_cases/division_by_zero_enhanced.orus \
-                          $(TESTDIR)/edge_cases/division_by_zero_runtime.orus; do \
+                          $(TESTDIR)/edge_cases/division_by_zero_runtime.orus \
+                          $(TESTDIR)/types/u32/u32_division_by_zero.orus \
+                          $(TESTDIR)/types/f64/test_f64_runtime_div.orus; do \
 		if [ -f "$$test_file" ]; then \
 			printf "Testing: $$test_file ... "; \
 			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \

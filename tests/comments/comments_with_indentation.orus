@@ -1,0 +1,16 @@
+// Test comments with proper indentation
+if true:
+    x = 1
+    y = 2
+    
+    /* Block comment between statements */
+    z = 3
+    
+    if x > 0:
+        result = x + y + z
+        print(result)
+    
+    print("done")
+    
+// Comment at root level
+print("finished")

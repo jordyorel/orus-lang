@@ -122,11 +122,19 @@ int emitJump(Compiler* compiler) {
 }
 
 void patchJump(Compiler* compiler, int offset) {
+    // Validate offset bounds
+    if (offset < 0 || offset >= compiler->chunk->count - 1) {
+        fprintf(stderr, "Error: invalid jump offset %d (bytecode size: %d)\n", offset, compiler->chunk->count);
+        compiler->hadError = true;
+        return;
+    }
+    
     // Calculate jump distance
     int jump = compiler->chunk->count - offset - 2;
     
-    if (jump > UINT16_MAX) {
-        // Jump too far - could implement long jumps here
+    if (jump > UINT16_MAX || jump < 0) {
+        // Jump too far or backward overflow
+        fprintf(stderr, "Error: jump distance %d exceeds bounds (max: %d)\n", jump, UINT16_MAX);
         compiler->hadError = true;
         return;
     }
@@ -1481,12 +1489,28 @@ bool compileNode(ASTNode* node, Compiler* compiler) {
         case NODE_IF: {
             // Optimization: Constant folding and dead code elimination
             if (isAlwaysTrue(node->ifStmt.condition)) {
-                // Always true condition - compile only then branch, eliminate else
-                return compileNode(node->ifStmt.thenBranch, compiler);
+                // Always true condition - compile only then branch with proper scoping
+                compiler->scopeDepth++;
+                symbol_table_begin_scope(&compiler->symbols, compiler->scopeDepth);
+                
+                bool result = compileNode(node->ifStmt.thenBranch, compiler);
+                
+                symbol_table_end_scope(&compiler->symbols, compiler->scopeDepth);
+                compiler->scopeDepth--;
+                
+                return result;
             } else if (isAlwaysFalse(node->ifStmt.condition)) {
-                // Always false condition - compile only else branch, eliminate then
+                // Always false condition - compile only else branch with proper scoping
                 if (node->ifStmt.elseBranch) {
-                    return compileNode(node->ifStmt.elseBranch, compiler);
+                    compiler->scopeDepth++;
+                    symbol_table_begin_scope(&compiler->symbols, compiler->scopeDepth);
+                    
+                    bool result = compileNode(node->ifStmt.elseBranch, compiler);
+                    
+                    symbol_table_end_scope(&compiler->symbols, compiler->scopeDepth);
+                    compiler->scopeDepth--;
+                    
+                    return result;
                 }
                 return true; // Empty else branch
             }
@@ -1501,8 +1525,18 @@ bool compileNode(ASTNode* node, Compiler* compiler) {
             
             freeRegister(compiler, conditionReg);
             
+            // Begin new scope for then branch
+            compiler->scopeDepth++;
+            symbol_table_begin_scope(&compiler->symbols, compiler->scopeDepth);
+            
             // Compile then branch
-            if (!compileNode(node->ifStmt.thenBranch, compiler)) return false;
+            bool thenResult = compileNode(node->ifStmt.thenBranch, compiler);
+            
+            // End scope for then branch
+            symbol_table_end_scope(&compiler->symbols, compiler->scopeDepth);
+            compiler->scopeDepth--;
+            
+            if (!thenResult) return false;
             
             // Jump over else branch if we executed then branch
             int elseJump = -1;
@@ -1516,7 +1550,17 @@ bool compileNode(ASTNode* node, Compiler* compiler) {
             
             // Compile else branch if it exists
             if (node->ifStmt.elseBranch) {
-                if (!compileNode(node->ifStmt.elseBranch, compiler)) return false;
+                // Begin new scope for else branch
+                compiler->scopeDepth++;
+                symbol_table_begin_scope(&compiler->symbols, compiler->scopeDepth);
+                
+                bool elseResult = compileNode(node->ifStmt.elseBranch, compiler);
+                
+                // End scope for else branch
+                symbol_table_end_scope(&compiler->symbols, compiler->scopeDepth);
+                compiler->scopeDepth--;
+                
+                if (!elseResult) return false;
                 patchJump(compiler, elseJump);
             }
             
@@ -1524,6 +1568,13 @@ bool compileNode(ASTNode* node, Compiler* compiler) {
         }
 
         case NODE_WHILE: {
+            // Future optimization hook (per WHILE_LOOP_OPTIMIZATION_PLAN.md)
+            // TODO: Add optimizeLoop(node, compiler) call here when optimization is implemented
+            // if (optimizeLoop(node, compiler)) {
+            //     // Optimization applied, still need regular compilation for LICM replacements  
+            //     enableLICMReplacements();
+            // }
+            
             // Enter loop context
             LoopContext loopCtx;
             loopCtx.breakJumps = jumptable_new();
@@ -1555,8 +1606,18 @@ bool compileNode(ASTNode* node, Compiler* compiler) {
             
             freeRegister(compiler, conditionReg);
             
+            // Begin new scope for while body (following FOR loop pattern)
+            compiler->scopeDepth++;
+            symbol_table_begin_scope(&compiler->symbols, compiler->scopeDepth);
+            
             // Compile body
-            if (!compileNode(node->whileStmt.body, compiler)) {
+            bool bodyResult = compileNode(node->whileStmt.body, compiler);
+            
+            // End scope for while body
+            symbol_table_end_scope(&compiler->symbols, compiler->scopeDepth);
+            compiler->scopeDepth--;
+            
+            if (!bodyResult) {
                 compiler->loopDepth--;
                 return false;
             }
@@ -1577,6 +1638,10 @@ bool compileNode(ASTNode* node, Compiler* compiler) {
             jumptable_free(&patchLoop->breakJumps);
             jumptable_free(&patchLoop->continueJumps);
             compiler->loopDepth--;
+            
+            // Future optimization cleanup (per WHILE_LOOP_OPTIMIZATION_PLAN.md)
+            // TODO: Add disableLICMReplacements() call here when optimization is implemented
+            // disableLICMReplacements();
             
             return true;
         }
@@ -1781,6 +1846,8 @@ bool compileNode(ASTNode* node, Compiler* compiler) {
 
         case NODE_BLOCK: {
             // Compile all statements in the block
+            // Note: For now, not adding scope management to blocks
+            // to avoid interfering with existing FOR loop scoping
             for (int i = 0; i < node->block.count; i++) {
                 if (!compileNode(node->block.statements[i], compiler)) {
                     return false;
@@ -1811,6 +1878,10 @@ bool compileNode(ASTNode* node, Compiler* compiler) {
                 if (compiler->loopDepth == 0) {
                     // TODO: Use structured error reporting
                     fprintf(stderr, "Error: break statement outside of loop\n");
+                    return false;
+                }
+                if (compiler->loopDepth > 16) {
+                    fprintf(stderr, "Error: loop nesting too deep (max 16 levels)\n");
                     return false;
                 }
                 loop = &compiler->loopStack[compiler->loopDepth - 1];
@@ -1846,6 +1917,10 @@ bool compileNode(ASTNode* node, Compiler* compiler) {
                 if (compiler->loopDepth == 0) {
                     // TODO: Use structured error reporting
                     fprintf(stderr, "Error: continue statement outside of loop\n");
+                    return false;
+                }
+                if (compiler->loopDepth > 16) {
+                    fprintf(stderr, "Error: loop nesting too deep (max 16 levels)\n");
                     return false;
                 }
                 loop = &compiler->loopStack[compiler->loopDepth - 1];
