@@ -1,0 +1,45 @@
+# Test 1: Basic block scoping
+mut outer = 10
+
+if true:
+    outer = 20       # Can modify outer
+    mut inner = 30   # New variable in if block
+    print(inner)     # ✅ Should work
+
+print(outer)         # ✅ Should print 20
+print(inner)         # ❌ Should fail: inner not in scope
+
+# Test 2: Loop scoping
+mut sum = 0
+
+for i in 0..3:
+    sum = sum + i    # Can modify outer
+    mut loop_var = i * 10
+    print(loop_var)  # ✅ Should work
+
+print(sum)           # ✅ Should print 3 (0+1+2)
+print(loop_var)      # ❌ Should fail: loop_var not in scope
+
+# Test 3: Shadowing prevention
+mut x = 10
+
+if true:
+    x = 20           # ✅ Can assign existing variable
+    mut x = 30       # ❌ Should fail: can't redeclare in same scope hierarchy
+    print(x)
+
+print(x)
+
+# Test 4: Nested scopes
+mut a = 1
+
+if true:
+    mut b = 2
+    if true:
+        mut c = 3
+        a = a + b + c  # Can access outer scopes
+        print(a, b, c) # ✅ Should work
+    
+    print(c)           # ❌ Should fail: c not in scope
+
+print(b)               # ❌ Should fail: b not in scope
