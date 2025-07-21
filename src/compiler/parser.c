@@ -772,6 +772,13 @@ static ASTNode* parseIfStatement(ParserContext* ctx) {
         return NULL;
     }
 
+    // Check for assignment in condition (= instead of ==)
+    if (condition->type == NODE_ASSIGN) {
+        SrcLocation location = {NULL, condition->location.line, condition->location.column};
+        report_assignment_in_condition(location, ifTok.type == TOKEN_IF ? "if" : "elif");
+        return NULL;
+    }
+
     // Check for missing colon
     Token colon = nextToken(ctx);
     if (colon.type != TOKEN_COLON) {
@@ -862,6 +869,13 @@ static ASTNode* parseWhileStatement(ParserContext* ctx) {
     if (!condition) {
         SrcLocation location = {NULL, whileTok.line, whileTok.column};
         report_empty_condition(location, "while");
+        return NULL;
+    }
+
+    // Check for assignment in condition (= instead of ==)
+    if (condition->type == NODE_ASSIGN) {
+        SrcLocation location = {NULL, condition->location.line, condition->location.column};
+        report_assignment_in_condition(location, "while");
         return NULL;
     }
 
