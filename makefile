@@ -282,6 +282,30 @@ test: $(ORUS)
 		fi; \
 	done; \
 	echo ""; \
+	echo "\033[36m=== Function Tests ===\033[0m"; \
+	for test_file in $(TESTDIR)/functions/basic_function.orus \
+	                  $(TESTDIR)/functions/simple_add.orus \
+	                  $(TESTDIR)/functions/simple_function.orus \
+	                  $(TESTDIR)/functions/void_function.orus \
+	                  $(TESTDIR)/functions/call_test.orus \
+	                  $(TESTDIR)/functions/function_edge_cases.orus \
+	                  $(TESTDIR)/functions/just_definition.orus \
+	                  $(TESTDIR)/functions/first_class_functions.orus \
+	                  $(TESTDIR)/functions/higher_order_functions.orus \
+	                  $(TESTDIR)/functions/function_objects.orus \
+	                  $(TESTDIR)/functions/nested_function_calls.orus; do \
+		if [ -f "$$test_file" ]; then \
+			printf "Testing: $$test_file ... "; \
+			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
+				printf "\033[32mPASS\033[0m\n"; \
+				passed=$$((passed + 1)); \
+			else \
+				printf "\033[31mFAIL\033[0m\n"; \
+				failed=$$((failed + 1)); \
+			fi; \
+		fi; \
+	done; \
+	echo ""; \
 	echo "\033[36m=== Type System Tests ===\033[0m"; \
 	for test_file in $(TESTDIR)/types/basic_inference.orus \
 	                  $(TESTDIR)/types/annotations.orus \

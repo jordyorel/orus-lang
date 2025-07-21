@@ -429,37 +429,96 @@ static int compileLiteral(ASTNode* node, Compiler* compiler) {
 }
 
 static int compileIdentifier(ASTNode* node, Compiler* compiler) {
-    int index;
-    if (!symbol_table_get_in_scope(&compiler->symbols, node->identifier.name, compiler->scopeDepth, &index)) {
-        // Report specific error for undefined variable using modular error system
-        SrcLocation location = node->location;
-        if (location.file == NULL) {
-            location.file = vm.filePath;
+    // First check local variables directly (if we're in a function scope)
+    if (compiler->scopeDepth > 0) {
+        // Search local variables array
+        for (int i = 0; i < compiler->localCount; i++) {
+            if (compiler->locals[i].isActive && 
+                compiler->locals[i].depth == compiler->scopeDepth &&
+                strcmp(compiler->locals[i].name, node->identifier.name) == 0) {
+                // Found local variable - copy its value to a new register
+                uint8_t r = allocateRegister(compiler);
+                emitByte(compiler, OP_MOVE);
+                emitByte(compiler, r);
+                emitByte(compiler, compiler->locals[i].reg);
+                return r;
+            }
         }
-        report_undefined_variable(location, node->identifier.name);
-        compiler->hadError = true;
-        return allocateRegister(compiler);
+        
+        // Search outer scopes for upvalue capture
+        for (int depth = compiler->scopeDepth - 1; depth > 0; depth--) {
+            for (int i = 0; i < compiler->localCount; i++) {
+                if (compiler->locals[i].isActive && 
+                    compiler->locals[i].depth == depth &&
+                    strcmp(compiler->locals[i].name, node->identifier.name) == 0) {
+                    // Found variable in outer scope - this is an upvalue capture
+                    // For now, emit upvalue access (will need proper upvalue management later)
+                    uint8_t r = allocateRegister(compiler);
+                    emitByte(compiler, OP_GET_UPVALUE_R);
+                    emitByte(compiler, r);
+                    emitByte(compiler, (uint8_t)i);  // Use local index as upvalue index temporarily
+                    return r;
+                }
+            }
+        }
     }
     
-    if (index < 0) {
-        if (index <= -1000) {
-            // Function parameter - use hierarchical register allocation
-            int paramNum = -(index + 1000);
-            uint8_t r = allocateRegister(compiler);
-            
-            if (paramNum < FRAME_REGISTERS) {
-                // Parameters 0-63: Use frame registers (256-319)
-                emitByte(compiler, OP_LOAD_FRAME);
-                emitByte(compiler, r);  // Destination register
-                emitByte(compiler, (uint8_t)paramNum);  // Frame offset (0-63)
-            } else {
-                // Parameters 64+: Use spill registers (480+)
-                uint16_t spillId = SPILL_REG_START + (paramNum - FRAME_REGISTERS);
-                emitByte(compiler, OP_LOAD_SPILL);
-                emitByte(compiler, r);  // Destination register
-                emitByte(compiler, (uint8_t)(spillId >> 8));    // High byte of spill ID
-                emitByte(compiler, (uint8_t)(spillId & 0xFF));  // Low byte of spill ID
+    // Fall back to symbol table for global variables and function parameters
+    int index;
+    int foundScope = -1;
+    
+    // First try to find in current scope
+    if (symbol_table_get_in_scope(&compiler->symbols, node->identifier.name, compiler->scopeDepth, &index)) {
+        foundScope = compiler->scopeDepth;
+    } else {
+        // Search outer scopes for closure capture
+        for (int scope = compiler->scopeDepth - 1; scope >= 0; scope--) {
+            if (symbol_table_get_in_scope(&compiler->symbols, node->identifier.name, scope, &index)) {
+                foundScope = scope;
+                break;
             }
+        }
+        
+        // If still not found, report error
+        if (foundScope == -1) {
+            SrcLocation location = node->location;
+            if (location.file == NULL) {
+                location.file = vm.filePath;
+            }
+            report_undefined_variable(location, node->identifier.name);
+            compiler->hadError = true;
+            return allocateRegister(compiler);
+        }
+    }
+    
+    // Note: Closure capture is handled below in the index-based dispatch
+    // Variables from outer scopes are already marked with closure indices (-2000 range)
+    // and will be processed by the upvalue handling code
+    
+    if (index < 0) {
+        if (index <= -2000) {
+            // Closure variable (upvalue) - captured from outer scope
+            int upvalueIndex = -(index + 2000);
+            uint8_t r = allocateRegister(compiler);
+            // Generate upvalue access bytecode
+            emitByte(compiler, OP_GET_UPVALUE_R);
+            emitByte(compiler, r);
+            emitByte(compiler, (uint8_t)upvalueIndex);  // Upvalue index
+            
+            // TODO: Set flag indicating this function captures upvalues
+            // This requires passing context or using a global flag
+            // For now, upvalue usage is implicit
+            
+            return r;
+        } else if (index <= -1000) {
+            // Function parameter - use simple register approach
+            int paramNum = -(index + 1000);
+            uint8_t paramBase = 256 - compiler->currentFunctionParameterCount;
+            if (paramBase < 1) paramBase = 1;
+            uint8_t r = allocateRegister(compiler);
+            emitByte(compiler, OP_MOVE);
+            emitByte(compiler, r);
+            emitByte(compiler, (uint8_t)(paramBase + paramNum));
             return r;
         } else {
             // Register-based variable (loop variable) - negative index encodes register number
@@ -471,8 +530,51 @@ static int compileIdentifier(ASTNode* node, Compiler* compiler) {
             return r;
         }
     } else {
-        // Global variable
+        // Global variable (could be function or regular variable)
         uint8_t r = allocateRegister(compiler);
+        
+        // Check if this is a function that needs to become a closure
+        Value globalValue = vm.globals[index];
+        if (IS_FUNCTION(globalValue)) {
+            ObjFunction* function = AS_FUNCTION(globalValue);
+            
+            // If this function captures upvalues, create a closure automatically
+            if (function->upvalueCount > 0) {
+                // Load the function first
+                uint8_t funcReg = allocateRegister(compiler);
+                emitByte(compiler, OP_LOAD_GLOBAL);
+                emitByte(compiler, funcReg);
+                emitByte(compiler, (uint8_t)index);
+                
+                // Create closure with upvalues from current scope
+                emitByte(compiler, OP_CLOSURE_R);
+                emitByte(compiler, r);                        // destination register
+                emitByte(compiler, funcReg);                 // function register
+                emitByte(compiler, (uint8_t)function->upvalueCount); // upvalue count
+                
+                // Emit upvalue references - capture local variables that this function needs
+                int capturedCount = 0;
+                for (int i = 0; i < compiler->localCount && capturedCount < function->upvalueCount; i++) {
+                    if (compiler->locals[i].isActive && compiler->locals[i].depth == compiler->scopeDepth) {
+                        emitByte(compiler, 1);                    // isLocal = 1 (local variable)  
+                        emitByte(compiler, (uint8_t)i);           // local variable index
+                        capturedCount++;
+                    }
+                }
+                
+                // If we didn't capture enough, fill remaining slots
+                while (capturedCount < function->upvalueCount) {
+                    emitByte(compiler, 0);                        // isLocal = 0 (no capture)
+                    emitByte(compiler, 0);                        // index 0
+                    capturedCount++;
+                }
+                
+                freeRegister(compiler, funcReg);
+                return r;
+            }
+        }
+        
+        // Regular global variable or function without upvalues
         emitByte(compiler, OP_LOAD_GLOBAL);
         emitByte(compiler, r);
         emitByte(compiler, (uint8_t)index);
@@ -1113,61 +1215,186 @@ bool compileNode(ASTNode* node, Compiler* compiler) {
             // Set mutability based on declaration
             vm.mutableGlobals[idx] = node->varDecl.isMutable;
             
-            // Add variable to symbol table 
-            // Note: Duplicate detection temporarily reduced due to architectural limitations
-            // where all variables are globals and loop variables cause false positives
-            symbol_table_set(&compiler->symbols, node->varDecl.name, idx, compiler->scopeDepth);
-            emitByte(compiler, OP_STORE_GLOBAL);
-            emitByte(compiler, (uint8_t)idx);
-            emitByte(compiler, (uint8_t)reg);
-            freeRegister(compiler, reg);
+            // Check if we're in a function (local scope) or global scope
+            if (compiler->scopeDepth > 0) {
+                // Local variable declaration inside a function
+                if (compiler->localCount >= REGISTER_COUNT) {
+                    SrcLocation location = {vm.filePath, node->location.line, node->location.column};
+                    // TODO: Add proper error for too many locals
+                    compiler->hadError = true;
+                    freeRegister(compiler, reg);
+                    return false;
+                }
+                
+                // Add to locals array
+                compiler->locals[compiler->localCount].name = strdup(node->varDecl.name);
+                compiler->locals[compiler->localCount].reg = reg;
+                compiler->locals[compiler->localCount].isActive = true;
+                compiler->locals[compiler->localCount].depth = compiler->scopeDepth;
+                compiler->locals[compiler->localCount].isMutable = node->varDecl.isMutable;
+                compiler->locals[compiler->localCount].type = 
+                    annotatedType ? type_kind_to_value_type(annotatedType->kind) : VAL_NIL;
+                compiler->locals[compiler->localCount].hasKnownType = annotatedType != NULL;
+                compiler->locals[compiler->localCount].knownType = 
+                    annotatedType ? type_kind_to_value_type(annotatedType->kind) : VAL_NIL;
+                compiler->locals[compiler->localCount].isSpilled = false;
+                compiler->locals[compiler->localCount].liveRangeIndex = -1;
+                
+                // Add to symbol table with local index (positive)
+                symbol_table_set(&compiler->symbols, node->varDecl.name, compiler->localCount, compiler->scopeDepth);
+                
+                // Local variables don't need explicit store - value is already in register
+                // The register itself serves as the storage location
+                
+                compiler->localCount++;
+                
+                // Don't free the register - it's being used by the local variable
+            } else {
+                // Global variable declaration (original logic)
+                symbol_table_set(&compiler->symbols, node->varDecl.name, idx, compiler->scopeDepth);
+                emitByte(compiler, OP_STORE_GLOBAL);
+                emitByte(compiler, (uint8_t)idx);
+                emitByte(compiler, (uint8_t)reg);
+                freeRegister(compiler, reg);
+            }
             return true;
         }
 
         case NODE_ASSIGN: {
             int reg = compileExpr(node->assign.value, compiler);
             int idx;
+            int foundScope = -1;
             
-            // Check if variable exists - use different lookup based on context
-            bool foundInCurrentScope = false;
-            // ✨ FIX: Always use normal scope lookup to find variables in outer scopes
-            // The previous logic broke assignment to outer-scope variables inside loops
-            foundInCurrentScope = symbol_table_get_in_scope(&compiler->symbols, node->assign.name, compiler->scopeDepth, &idx);
-            
-            if (!foundInCurrentScope) {
-                // Variable doesn't exist in current scope - create new one
-                idx = vm.variableCount++;
-                ObjString* name = allocateString(node->assign.name,
-                                                 (int)strlen(node->assign.name));
-                vm.variableNames[idx].name = name;
-                vm.variableNames[idx].length = name->length;
-                vm.globals[idx] = NIL_VAL;
-                
-                // For assignments without declaration, infer type from assigned expression
-                Type* inferredType = getExprType(node->assign.value, compiler);
-                vm.globalTypes[idx] = inferredType ? inferredType : getPrimitiveType(TYPE_ANY);
-                
-                // ✨ Auto-mutable inside loops for elegant syntax
-                if (compiler->loopDepth > 0) {
-                    // Inside loop: Variables are auto-mutable for convenience
-                    vm.mutableGlobals[idx] = true;
-                } else {
-                    // Outside loop: Plain assignments create immutable variables
-                    vm.mutableGlobals[idx] = false;
+            // Check if variable exists - look in current scope first, then outer scopes
+            if (symbol_table_get_in_scope(&compiler->symbols, node->assign.name, compiler->scopeDepth, &idx)) {
+                foundScope = compiler->scopeDepth;
+            } else {
+                // Search outer scopes for closure capture
+                for (int scope = compiler->scopeDepth - 1; scope >= 0; scope--) {
+                    if (symbol_table_get_in_scope(&compiler->symbols, node->assign.name, scope, &idx)) {
+                        foundScope = scope;
+                        break;
+                    }
                 }
                 
-                symbol_table_set(&compiler->symbols, node->assign.name, idx, compiler->scopeDepth);
-            } else {
-                // Check if trying to modify a loop variable (negative index > -1000 indicates register-based loop variable)
-                if (idx < 0 && idx > -1000) {
+                if (foundScope == -1) {
+                    // Variable doesn't exist anywhere - create new one
+                    if (compiler->scopeDepth > 0) {
+                        // Inside function - create local variable
+                        if (compiler->localCount >= REGISTER_COUNT) {
+                            SrcLocation location = {vm.filePath, node->location.line, node->location.column};
+                            // TODO: Add proper error for too many locals
+                            compiler->hadError = true;
+                            freeRegister(compiler, reg);
+                            return false;
+                        }
+                        
+                        // Add to locals array
+                        compiler->locals[compiler->localCount].name = strdup(node->assign.name);
+                        compiler->locals[compiler->localCount].reg = reg;
+                        compiler->locals[compiler->localCount].isActive = true;
+                        compiler->locals[compiler->localCount].depth = compiler->scopeDepth;
+                        compiler->locals[compiler->localCount].isMutable = true; // Assignments create mutable variables
+                        compiler->locals[compiler->localCount].type = VAL_NIL;
+                        compiler->locals[compiler->localCount].hasKnownType = false;
+                        compiler->locals[compiler->localCount].knownType = VAL_NIL;
+                        compiler->locals[compiler->localCount].isSpilled = false;
+                        compiler->locals[compiler->localCount].liveRangeIndex = -1;
+                        
+                        // Add to symbol table with local index
+                        symbol_table_set(&compiler->symbols, node->assign.name, compiler->localCount, compiler->scopeDepth);
+                        
+                        compiler->localCount++;
+                        
+                        // Don't free the register - it's being used by the local variable
+                        return true;
+                    } else {
+                        // Global scope - create global variable
+                        idx = vm.variableCount++;
+                        ObjString* name = allocateString(node->assign.name,
+                                                         (int)strlen(node->assign.name));
+                        vm.variableNames[idx].name = name;
+                        vm.variableNames[idx].length = name->length;
+                        vm.globals[idx] = NIL_VAL;
+                        
+                        // For assignments without declaration, infer type from assigned expression
+                        Type* inferredType = getExprType(node->assign.value, compiler);
+                        vm.globalTypes[idx] = inferredType ? inferredType : getPrimitiveType(TYPE_ANY);
+                        
+                        // ✨ Auto-mutable inside loops for elegant syntax
+                        if (compiler->loopDepth > 0) {
+                            // Inside loop: Variables are auto-mutable for convenience
+                            vm.mutableGlobals[idx] = true;
+                        } else {
+                            // Outside loop: Plain assignments create immutable variables
+                            vm.mutableGlobals[idx] = false;
+                        }
+                        
+                        symbol_table_set(&compiler->symbols, node->assign.name, idx, compiler->scopeDepth);
+                        
+                        emitByte(compiler, OP_STORE_GLOBAL);
+                        emitByte(compiler, (uint8_t)idx);
+                        emitByte(compiler, (uint8_t)reg);
+                        freeRegister(compiler, reg);
+                        return true;
+                    }
+                }
+            }
+            
+            // Variable exists - check if it's local or global, and if it's in outer scope (upvalue)
+            if (foundScope > 0 && idx >= 0 && foundScope == compiler->scopeDepth) {
+                // Local variable in current scope
+                if (idx < compiler->localCount && compiler->locals[idx].isActive) {
+                    // Check if it's mutable
+                    if (!compiler->locals[idx].isMutable) {
+                        SrcLocation location = {vm.filePath, node->location.line, node->location.column};
+                        report_immutable_assignment(location, node->assign.name);
+                        compiler->hadError = true;
+                        freeRegister(compiler, reg);
+                        return false;
+                    }
+                    
+                    // Move value to the local's register
+                    emitByte(compiler, OP_MOVE);
+                    emitByte(compiler, compiler->locals[idx].reg);
+                    emitByte(compiler, reg);
+                    freeRegister(compiler, reg);
+                    return true;
+                }
+            }
+            
+            // Variable exists - handle different cases based on index range
+            if (idx < 0) {
+                if (idx <= -2000) {
+                    // Closure variable (upvalue) - captured from outer scope
+                    int upvalueIndex = -(idx + 2000);
+                    
+                    // Check if the original variable is mutable
+                    // For now, assume closure captured variables are mutable if they're in a function context
+                    // TODO: Implement proper mutability tracking for upvalues
+                    
+                    emitByte(compiler, OP_SET_UPVALUE_R);
+                    emitByte(compiler, (uint8_t)upvalueIndex);  // Upvalue index
+                    emitByte(compiler, (uint8_t)reg);           // Value register
+                    freeRegister(compiler, reg);
+                    return true;
+                } else if (idx <= -1000) {
+                    // Function parameter - not modifiable in assignments
+                    SrcLocation location = {vm.filePath, node->location.line, node->location.column};
+                    report_immutable_assignment(location, node->assign.name);
+                    compiler->hadError = true;
+                    freeRegister(compiler, reg);
+                    return false;
+                } else {
+                    // Loop variable (negative index > -1000)
                     SrcLocation location = {vm.filePath, node->location.line, node->location.column};
                     report_loop_variable_modification(location, node->assign.name, "for");
                     compiler->hadError = true;
                     freeRegister(compiler, reg);
                     return false;
                 }
-                
-                // Variable exists in current scope - check if it's mutable
+            } else {
+                // Regular global variable - check if it's mutable
                 if (!vm.mutableGlobals[idx]) {
                     SrcLocation location = {vm.filePath, node->location.line, node->location.column};
                     report_immutable_assignment(location, node->assign.name);
@@ -1175,12 +1402,13 @@ bool compileNode(ASTNode* node, Compiler* compiler) {
                     freeRegister(compiler, reg);
                     return false;
                 }
+                
+                emitByte(compiler, OP_STORE_GLOBAL);
+                emitByte(compiler, (uint8_t)idx);
+                emitByte(compiler, (uint8_t)reg);
+                freeRegister(compiler, reg);
+                return true;
             }
-            emitByte(compiler, OP_STORE_GLOBAL);
-            emitByte(compiler, (uint8_t)idx);
-            emitByte(compiler, (uint8_t)reg);
-            freeRegister(compiler, reg);
-            return true;
         }
 
         case NODE_PRINT: {
@@ -1770,11 +1998,26 @@ bool compileNode(ASTNode* node, Compiler* compiler) {
             // Create new compiler context for function body
             Compiler functionCompiler;
             initCompiler(&functionCompiler, objFunction->chunk, compiler->fileName, compiler->source);
-            functionCompiler.scopeDepth = compiler->scopeDepth + 1;
-            functionCompiler.currentFunctionParameterCount = node->function.paramCount;  // Set for parameter register allocation
             
-            // Copy global symbols (functions) from parent compiler to function compiler
-            // This allows functions to call other functions that were defined earlier
+            // Set nested function to one level deeper than parent
+            functionCompiler.scopeDepth = compiler->scopeDepth + 1;
+            functionCompiler.currentFunctionParameterCount = node->function.paramCount;
+            functionCompiler.localCount = 0;  // Ensure clean local state
+            
+            // Track upvalues for this function - implement proper upvalue capture
+            int upvalueCount = 0;
+            
+            // Copy local variables from outer scopes as upvalues
+            for (int i = 0; i < compiler->localCount; i++) {
+                if (compiler->locals[i].isActive && compiler->locals[i].depth < functionCompiler.scopeDepth) {
+                    // This local variable from outer scope becomes an upvalue
+                    int closureIndex = -(2000 + upvalueCount);
+                    symbol_table_set(&functionCompiler.symbols, compiler->locals[i].name, closureIndex, 0);
+                    upvalueCount++;
+                }
+            }
+            
+            // Copy global variables as-is (not as upvalues)
             for (size_t i = 0; i < compiler->symbols.capacity; i++) {
                 SymbolEntry* entry = &compiler->symbols.entries[i];
                 if (entry->name != NULL && !entry->is_tombstone && entry->scope_depth == 0) {
@@ -1782,15 +2025,10 @@ bool compileNode(ASTNode* node, Compiler* compiler) {
                 }
             }
             
-            // Begin function scope
-            symbol_table_begin_scope(&functionCompiler.symbols, functionCompiler.scopeDepth);
-            
-            // Add function parameters to symbol table using frame-local register indices
+            // Add function parameters to symbol table
             for (int i = 0; i < node->function.paramCount; i++) {
                 FunctionParam* param = &node->function.params[i];
-                // Parameters use frame-local register indices (0, 1, 2, ... up to 63)
-                // This leverages the 64 frame registers available per function
-                // Use -1000 range for function parameters to avoid conflict with loop variables
+                // Use -1000 range for function parameters
                 symbol_table_set(&functionCompiler.symbols, param->name, -(1000 + i), functionCompiler.scopeDepth);
             }
             
@@ -1804,18 +2042,19 @@ bool compileNode(ASTNode* node, Compiler* compiler) {
                 emitByte(&functionCompiler, OP_RETURN_VOID);
             }
             
-            // End function scope
-            symbol_table_end_scope(&functionCompiler.symbols, functionCompiler.scopeDepth);
+            // Set the upvalue count for this function
+            objFunction->upvalueCount = upvalueCount;
             
-            // Store function as global variable (as function index)
+            // Store function as global variable (as function object for proper closure support)
             int globalIdx = vm.variableCount++;
             vm.variableNames[globalIdx].name = objFunction->name;
             vm.variableNames[globalIdx].length = objFunction->name->length;
-            vm.globals[globalIdx] = I32_VAL(functionIdx);  // Store function index
+            
+            // Store the actual function object instead of just the index
+            vm.globals[globalIdx] = FUNCTION_VAL(objFunction);
             vm.globalTypes[globalIdx] = getPrimitiveType(TYPE_FUNCTION);
             vm.mutableGlobals[globalIdx] = false;
             
-            // Register function name in symbol table for identifier resolution
             symbol_table_set(&compiler->symbols, objFunction->name->chars, globalIdx, compiler->scopeDepth);
             
             return !functionCompiler.hadError;

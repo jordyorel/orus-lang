@@ -1,0 +1,13 @@
+// Test basic closure
+fn outer():
+    x = 42
+    
+    fn inner():
+        return x
+    
+    return inner
+
+// Test it
+closure = outer()
+result = closure()
+print("Closure result:", result)

@@ -105,6 +105,11 @@ ErrorReportResult report_unreachable_condition(SrcLocation location, const char*
         "This condition will never be reached: %s", reason);
 }
 
+ErrorReportResult report_assignment_in_condition(SrcLocation location, const char* statement_type) {
+    return report_feature_error_f(E1403_NON_BOOLEAN_CONDITION, location, 
+        "Did you mean '==' instead of '=' in this %s condition? Assignment (=) used where comparison (==) was likely intended", statement_type);
+}
+
 // ============================================================================
 // Loop Range Error Reporting
 // ============================================================================

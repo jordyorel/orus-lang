@@ -16,6 +16,7 @@ ErrorReportResult report_labeled_continue_not_found(SrcLocation location, const 
 ErrorReportResult report_non_boolean_condition(SrcLocation location, const char* condition_type, const char* statement_type);
 ErrorReportResult report_empty_condition(SrcLocation location, const char* statement_type);
 ErrorReportResult report_unreachable_condition(SrcLocation location, const char* reason);
+ErrorReportResult report_assignment_in_condition(SrcLocation location, const char* statement_type);
 
 // Loop Range Error Reporting
 ErrorReportResult report_invalid_range_syntax(SrcLocation location, const char* range_text, const char* issue);

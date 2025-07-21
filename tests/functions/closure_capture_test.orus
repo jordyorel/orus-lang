@@ -1,0 +1,22 @@
+// Test closure capture and upvalues
+fn makeCounter(start):
+    mut count = start
+    
+    fn increment():
+        count = count + 1
+        return count
+    
+    return increment
+
+// Test the closure
+counter = makeCounter(0)
+print("First call:", counter())
+print("Second call:", counter())
+
+// Test another counter instance
+counter2 = makeCounter(10)
+print("Counter2 first:", counter2())
+print("Counter2 second:", counter2())
+
+// Original counter should be unaffected
+print("Original first counter:", counter())

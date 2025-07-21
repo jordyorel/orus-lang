@@ -74,3 +74,4 @@ benchmarks/*_benchmark_results*.json
 # REPL history files
 .orus_history
 */.orus_history
+.aider*

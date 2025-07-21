@@ -1,0 +1,39 @@
+// Test higher-order function features
+fn add(a, b):
+    return a + b
+
+fn multiply(x, y):
+    return x * y
+
+fn subtract(a, b):
+    return a - b
+
+// Test 1: Function as parameter
+fn applyOperation(func, x, y):
+    return func(x, y)
+
+result1 = applyOperation(add, 10, 5)
+print("Apply add:", result1)
+
+result2 = applyOperation(multiply, 6, 7)
+print("Apply multiply:", result2)
+
+result3 = applyOperation(subtract, 20, 8)
+print("Apply subtract:", result3)
+
+// Test 2: Function that returns a function
+fn getOperation(op_type):
+    if op_type == 1:
+        return add
+    elif op_type == 2:
+        return multiply
+    else:
+        return subtract
+
+op1 = getOperation(1)
+result4 = op1(12, 8)
+print("Returned add function:", result4)
+
+op2 = getOperation(2)
+result5 = op2(9, 4)
+print("Returned multiply function:", result5)

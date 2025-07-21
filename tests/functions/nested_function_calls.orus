@@ -1,0 +1,44 @@
+// Test nested and complex function calls
+fn add(a, b):
+    return a + b
+
+fn multiply(x, y):
+    return x * y
+
+fn divide(a, b):
+    return a / b
+
+// Test 1: Function calls as arguments (step by step for now)
+temp1 = multiply(3, 4)
+temp2 = divide(10, 2)
+result1 = add(temp1, temp2)
+print("Nested calls:", result1)
+
+// Test 2: Function variables in expressions
+addFunc = add
+multiplyFunc = multiply
+result2 = addFunc(multiplyFunc(2, 3), 10)
+print("Function variables in expressions:", result2)
+
+// Test 3: Chain of function calls
+fn increment(x):
+    return x + 1
+
+fn decrement(x):
+    return x - 1
+
+value = 10
+result3 = increment(decrement(increment(value)))
+print("Chain of calls:", result3)
+
+// Test 4: Complex higher-order function usage
+fn applyTwice(func, value):
+    temp = func(value)
+    return func(temp)
+
+result4 = applyTwice(increment, 5)
+print("Apply twice increment:", result4)
+
+incFunc = increment
+result5 = applyTwice(incFunc, 8)
+print("Apply twice with function variable:", result5)

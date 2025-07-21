@@ -1,0 +1,22 @@
+// Test multiple closure captures
+fn createCalculator(x, y):
+    fn add():
+        return x + y
+    
+    fn multiply():
+        return x * y
+    
+    fn getValue(choice):
+        if choice == 1:
+            return add()
+        else:
+            return multiply()
+    
+    return getValue
+
+// Test the calculator
+calc = createCalculator(5, 3)
+sum_result = calc(1)
+mult_result = calc(2)
+print("Sum:", sum_result)
+print("Multiply:", mult_result)

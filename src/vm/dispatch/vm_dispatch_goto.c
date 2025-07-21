@@ -1720,7 +1720,79 @@ InterpretResult vm_run_dispatch(void) {
             
             Value funcValue = vm.registers[funcReg];
             
-            if (IS_I32(funcValue)) {
+            if (IS_CLOSURE(funcValue)) {
+                // Calling a closure
+                ObjClosure* closure = AS_CLOSURE(funcValue);
+                ObjFunction* function = closure->function;
+                
+                // Check arity
+                if (argCount != function->arity) {
+                    vm.registers[resultReg] = NIL_VAL;
+                    DISPATCH();
+                }
+                
+                // Check if we have room for another call frame
+                if (vm.frameCount >= FRAMES_MAX) {
+                    vm.registers[resultReg] = NIL_VAL;
+                    DISPATCH();
+                }
+                
+                // Create new call frame with closure context
+                CallFrame* frame = &vm.frames[vm.frameCount++];
+                frame->returnAddress = vm.ip;
+                frame->previousChunk = vm.chunk;
+                frame->baseRegister = resultReg;
+                
+                // Set up closure context (closure in register 0)
+                vm.registers[0] = funcValue;  // Store closure in register 0 for upvalue access
+                
+                // Copy arguments to the start of register space for the function
+                for (int i = 0; i < argCount; i++) {
+                    vm.registers[256 - argCount + i] = vm.registers[firstArgReg + i];
+                }
+                
+                // Switch to function's bytecode
+                vm.chunk = function->chunk;
+                vm.ip = function->chunk->code;
+                
+                DISPATCH();
+            } else if (IS_FUNCTION(funcValue)) {
+                // Calling a function object directly
+                ObjFunction* objFunction = AS_FUNCTION(funcValue);
+                
+                // Check arity
+                if (argCount != objFunction->arity) {
+                    vm.registers[resultReg] = NIL_VAL;
+                    DISPATCH();
+                }
+                
+                // Check if we have room for another call frame
+                if (vm.frameCount >= FRAMES_MAX) {
+                    vm.registers[resultReg] = NIL_VAL;
+                    DISPATCH();
+                }
+                
+                // Create new call frame
+                CallFrame* frame = &vm.frames[vm.frameCount++];
+                frame->returnAddress = vm.ip;
+                frame->previousChunk = vm.chunk;
+                frame->baseRegister = resultReg;
+                
+                // Simple parameter base calculation to match compiler
+                uint8_t paramBase = 256 - objFunction->arity;
+                if (paramBase < 1) paramBase = 1;
+                
+                // Copy arguments to parameter registers
+                for (int i = 0; i < argCount; i++) {
+                    vm.registers[paramBase + i] = vm.registers[firstArgReg + i];
+                }
+                
+                // Switch to function's bytecode
+                vm.chunk = objFunction->chunk;
+                vm.ip = objFunction->chunk->code;
+                
+                DISPATCH();
+            } else if (IS_I32(funcValue)) {
                 int functionIndex = AS_I32(funcValue);
                 
                 if (functionIndex < 0 || functionIndex >= vm.functionCount) {
@@ -1750,44 +1822,20 @@ InterpretResult vm_run_dispatch(void) {
                 frame->register_count = argCount;
                 frame->functionIndex = functionIndex;
                 
-                // Use shared parameter base calculation for frame/spill registers
-                uint16_t paramBase = calculateParameterBaseRegister(argCount);
+                // Simple parameter base calculation to match compiler
+                uint8_t paramBase = 256 - function->arity;
+                if (paramBase < 1) paramBase = 1;
                 frame->parameterBaseRegister = paramBase;
                 
-                // Initialize register file frame if using frame/spill registers
-                if (paramBase >= FRAME_REG_START) {
-                    CallFrame* rf_frame = allocate_frame(&vm.register_file);
-                    if (!rf_frame) {
-                        vm.registers[resultReg] = NIL_VAL;
-                        vm.frameCount--; // Revert frame allocation
-                        DISPATCH();
-                    }
+                // Save registers that will be overwritten by parameters
+                frame->savedRegisterCount = argCount < 64 ? argCount : 64;
+                for (int i = 0; i < frame->savedRegisterCount; i++) {
+                    frame->savedRegisters[i] = vm.registers[paramBase + i];
                 }
                 
-                // Pre-reserve spill slots for parameters 64+ to prevent ID conflicts
-                for (int i = FRAME_REGISTERS; i < argCount; i++) {
-                    uint16_t spillId = SPILL_REG_START + (i - FRAME_REGISTERS);
-                    reserve_spill_slot(vm.register_file.spilled_registers, spillId);
-                }
-                
-                // Save registers that will be overwritten by parameters (only for frame registers)
-                for (int i = 0; i < argCount && i < FRAME_REGISTERS; i++) {
-                    uint16_t paramRegId = FRAME_REG_START + i;
-                    frame->savedRegisters[i] = vm_get_register_safe(paramRegId);
-                }
-                frame->savedRegisterCount = argCount < FRAME_REGISTERS ? argCount : FRAME_REGISTERS;
-                
-                // Copy arguments to parameter registers using hierarchical allocation
+                // Copy arguments to parameter registers
                 for (int i = 0; i < argCount; i++) {
-                    uint16_t paramRegId;
-                    if (i < FRAME_REGISTERS) {
-                        // Parameters 0-63: Use frame registers (256-319)
-                        paramRegId = FRAME_REG_START + i;
-                    } else {
-                        // Parameters 64+: Use spill registers (480+)
-                        paramRegId = SPILL_REG_START + (i - FRAME_REGISTERS);
-                    }
-                    vm_set_register_safe(paramRegId, vm.registers[firstArgReg + i]);
+                    vm.registers[paramBase + i] = vm.registers[firstArgReg + i];
                 }
                 
                 // Switch to function's chunk
@@ -1859,7 +1907,7 @@ InterpretResult vm_run_dispatch(void) {
             if (vm.frameCount > 0) {
                 CallFrame* frame = &vm.frames[--vm.frameCount];
                 
-                // Restore saved registers using dynamic parameter base
+                // Restore saved registers - simple approach
                 for (int i = 0; i < frame->savedRegisterCount; i++) {
                     vm.registers[frame->parameterBaseRegister + i] = frame->savedRegisters[i];
                 }
@@ -1878,7 +1926,7 @@ InterpretResult vm_run_dispatch(void) {
             if (vm.frameCount > 0) {
                 CallFrame* frame = &vm.frames[--vm.frameCount];
                 
-                // Restore saved registers using dynamic parameter base
+                // Restore saved registers - simple approach
                 for (int i = 0; i < frame->savedRegisterCount; i++) {
                     vm.registers[frame->parameterBaseRegister + i] = frame->savedRegisters[i];
                 }

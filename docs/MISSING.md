@@ -144,6 +144,7 @@ print("Array has items", len(items))
 - [*] **Done**: Implement if/else statements with nested conditions and `elif`, including jump patching and scoped blocks.
 - [*] **Done**: Add basic dead code elimination for unreachable branches
 - [*] **Done**: Implement constant folding for compile-time known conditions
+- [ ] **Todo**: If/else and loops should create new scopes in Orus no need 'mut' inside loop or if statement
 
 ```orus
 // Target syntax:
@@ -157,6 +158,46 @@ else:
 print("ok") if x == 1 elif x == 2 else print("fallback")
 - [*] // Ternary operator 
 result = x > 0 ? "positive" : "non-positive"
+```
+
+** ✅ Correct behavior: temp and other live only inside their blocks.
+** ✅ result was declared outside and mutated — no need to redeclare mut
+
+```orus
+mut result = 0
+
+if condition:
+    result = 42  // ✅ Assigning existing mutable variable
+    mut temp = 99  // ✅ Declared only inside the if-block
+else:
+    result = -1
+    mut other = 123
+
+print(result)         // ✅ OK
+print(temp)           // ❌ Error: temp is out of scope
+print(other)          // ❌ Error: other is out of scope
+```
+
+** ✅ Loop body has its own scope — variables declared inside are local to each iteration.
+```orus
+mut sum = 0
+
+for i in 0..5:
+    sum = sum + i  // ✅ Using outer variable
+    mut loop_val = i * 10
+    print(loop_val)
+
+print(sum)        // ✅ OK
+print(loop_val)   // ❌ Error: loop_val is out of scope
+```
+
+** ✅ Encourages clarity: no shadowing unless explicitly intended via a new block.
+```orus
+mut x = 10
+
+if something:
+    x = 20         // ✅ Assign
+    mut x = 30     // ❌ Error: can't redeclare `x` in the same scope hierarchy
 ```
 
 ### 2.2 Loop Constructs & Performance Foundations
@@ -363,9 +404,11 @@ fn greet(name: string):
 - [x] **COMPLETE**: Register allocation optimization for function parameters ✅
 - [x] **COMPLETE**: Hierarchical register system (frame + spill registers) ✅
 - [x] **COMPLETE**: Support for 250+ function parameters ✅
-- [ ] Closure capture and upvalues
-- [ ] Function objects as first-class values  
-- [ ] Higher-order functions with generic constraints
+- [x] **COMPLETE**: Function objects as first-class values ✅
+- [x] **COMPLETE**: Higher-order functions (functions as parameters/return values) ✅
+- [ ] **IN PROGRESS**: Closure capture and upvalues 🔧
+- [ ] **NEXT**: Lambda/anonymous function syntax
+- [ ] **NEXT**: Generic constraints for higher-order functions
 
 **Parameter Support:**
 - ✅ **Parameters 1-64**: Frame registers (optimal performance)
@@ -384,21 +427,48 @@ fn greet(name: string):
 - [ ] **NEW**: Complete generic system implementation
 - [ ] **NEW**: Enhanced error diagnostics with type information
 
-### 3.3 Closures and Upvalues (Deferred)
-**Priority: 📋 Medium**
-- [ ] **TODO**: Add support for nested functions and variable capture (moved to Phase 5 after type system is solid).
+### 3.3 Closures and Upvalues (Partially Complete)
+**Priority: 🔥 High**
+- [x] **COMPLETE**: VM-level closure infrastructure (ObjClosure, ObjUpvalue, opcodes) ✅
+- [x] **COMPLETE**: Basic function system with first-class functions ✅
+- [x] **COMPLETE**: Higher-order functions (functions as parameters/return values) ✅
+- [x] **COMPLETE**: Basic closure capture analysis (outer scope variable lookup) ✅
+- [x] **COMPLETE**: Upvalue access compilation (OP_GET_UPVALUE_R, OP_SET_UPVALUE_R) ✅
+- [x] **WORKING**: Simple closure scenarios (function parameter capture) ✅
+- [ ] **PARTIAL**: Complex closure scenarios (local variable capture needs refinement) 🔧
+- [ ] **NEXT**: Closure variable mutability support
+- [ ] **NEXT**: Closure bytecode generation optimization (OP_CLOSURE_R)
+- [ ] **NEXT**: Multiple upvalue capture optimization
+- [ ] **NEXT**: Lambda/anonymous function syntax
+- [ ] **NEXT**: Complex closure scenarios (multiple nesting levels)
+- [ ] **NEXT**: TODO: Implement proper mutability tracking for upvalues
 
 ```orus
-// Basic function with type checking
+// ✅ WORKING: Basic functions with type checking
 fn add(a: i32, b: i32) -> i32:
     a + b
 
-fn greet(name: string):
-    print("Hello ", name)
+// ✅ WORKING: Higher-order functions  
+fn applyTwice(func, value):
+    return func(func(value))
+
+// ✅ WORKING: First-class functions
+addFunc = add
+result = addFunc(5, 3)
+
+// 🔧 IN PROGRESS: Closure capture
+fn makeCounter(start):
+    count = start
     
-// Type inference in action
-fn identity(x):
-    x  // Type inferred from usage
+    fn increment():         // Nested function
+        count = count + 1   // ← Captures 'count' from outer scope
+        return count
+    
+    return increment
+
+counter = makeCounter(0)
+print(counter())  // Should print 1
+print(counter())  // Should print 2
 ```
 
 ---
