@@ -90,7 +90,7 @@ void symbol_table_free(SymbolTable* table) {
     table->count = 0;
 }
 
-bool symbol_table_set(SymbolTable* table, const char* name, int index, int scope_depth) {
+bool symbol_table_set(SymbolTable* table, const char* name, int index, int scope_depth, int scope_id, bool is_mutable) {
     if (!name) return false;
     if ((double)(table->count + 1) / (double)table->capacity > MAX_LOAD_FACTOR) {
         adjust_capacity(table, table->capacity * 2);
@@ -98,33 +98,34 @@ bool symbol_table_set(SymbolTable* table, const char* name, int index, int scope
     uint64_t hash = fnv1a_hash(name);
     SymbolEntry* entry = find_entry(table->entries, table->capacity, hash, name);
     bool is_new = entry->name == NULL;
-    
-    // Conservative duplicate detection: only prevent obvious duplicates in the same basic scope
-    // Due to architectural limitations, all variables are currently globals, so we need to be careful
-    // about when to report duplicates vs. allow variable updates/shadowing
-    if (!is_new && entry->scope_depth == scope_depth && scope_depth == 0) {
-        // Only prevent duplicates at the top-level global scope
-        // This catches obvious cases like: x = 42; x = 100
-        return false;
+
+    // Check for illegal shadowing in same scope hierarchy
+    if (!is_new && entry->scope_id == scope_id && strcmp(entry->name, name) == 0) {
+        return false; // Reject redeclaration in same scope
     }
-    // Allow all other cases (loop variables, block variables, etc.)
-    // This is a conservative approach that avoids false positives
-    
+
+    // Check for assignment to immutable variable
+    if (!is_new && !entry->is_mutable && entry->scope_depth <= scope_depth) {
+        return false; // Cannot assign to immutable variable
+    }
+
     if (is_new && !entry->is_tombstone) {
         table->count++;
     } else if (is_new && entry->is_tombstone && entry->name) {
         free((char*)entry->name);
     }
+    
     if (is_new || entry->is_tombstone) {
         entry->name = copyString(name, (int)strlen(name));
     }
+    
     entry->hash = hash;
     entry->index = index;
     entry->scope_depth = scope_depth;
+    entry->scope_id = scope_id;
+    entry->is_mutable = is_mutable;
     entry->is_tombstone = false;
     
-    // Return true for successful set operations
-    // Return false only if we detected a true duplicate at global scope
     return true;
 }
 
@@ -149,11 +150,12 @@ void symbol_table_remove(SymbolTable* table, const char* name) {
 }
 
 // Scope management functions
-void symbol_table_begin_scope(SymbolTable* table, int scope_depth) {
-    // No specific action needed for beginning scope
-    // Variables will be added with the new scope depth
-    (void)table; // Suppress unused parameter warning
-    (void)scope_depth;
+void symbol_table_begin_scope(SymbolTable* table, int scope_depth, int scope_id) {
+    // Track scope hierarchy in compiler state
+    // The actual scope management is handled during variable declaration/assignment
+    (void)table;
+    (void)scope_depth; 
+    (void)scope_id;
 }
 
 void symbol_table_end_scope(SymbolTable* table, int scope_depth) {
@@ -171,12 +173,16 @@ void symbol_table_end_scope(SymbolTable* table, int scope_depth) {
     }
 }
 
-bool symbol_table_get_in_scope(SymbolTable* table, const char* name, int scope_depth, int* out_index) {
+bool symbol_table_get_in_scope(SymbolTable* table, const char* name, int scope_depth, int scope_id, int* out_index, bool* out_is_mutable) {
     if (!table->entries || table->capacity == 0) return false;
     uint64_t hash = fnv1a_hash(name);
     SymbolEntry* entry = find_entry_with_scope(table->entries, table->capacity, hash, name, scope_depth);
+    
     if (!entry || !entry->name) return false;
+    if (entry->scope_id > scope_id) return false; // Variable declared in inner scope
+    
     if (out_index) *out_index = entry->index;
+    if (out_is_mutable) *out_is_mutable = entry->is_mutable;
     return true;
 }
 

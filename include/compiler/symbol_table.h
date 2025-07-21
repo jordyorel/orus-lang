@@ -10,6 +10,8 @@ typedef struct {
     const char* name;
     int index;       // Local index
     int scope_depth; // Scope depth when variable was declared
+    int scope_id;    // Unique ID of the declaring scope
+    bool is_mutable; // Whether variable is mutable
     bool is_tombstone;
 } SymbolEntry;
 
