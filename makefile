@@ -1,6 +1,3 @@
-# Enhanced Orus Makefile with Build Profiles
-# Supports debug, release, and profiling configurations
-
 CC = gcc
 
 # Build Profile Configuration
@@ -74,10 +71,6 @@ ifeq ($(PROFILE),profiling)
     LDFLAGS += -pg
 endif
 
-# Both dispatchers are always compiled and linked
-# The runtime will auto-detect the best dispatch method
-# No flags needed - both switch and goto dispatchers are included
-
 # Directories
 SRCDIR = src
 INCDIR = include
@@ -89,9 +82,7 @@ INCLUDES = -I$(INCDIR)
 
 # Source files
 COMPILER_SRCS = $(SRCDIR)/compiler/compiler.c $(SRCDIR)/compiler/lexer.c $(SRCDIR)/compiler/parser.c $(SRCDIR)/compiler/symbol_table.c $(SRCDIR)/compiler/loop_optimization.c
-
 VM_SRCS = $(SRCDIR)/vm/core/vm_core.c $(SRCDIR)/vm/runtime/vm.c $(SRCDIR)/vm/core/vm_memory.c $(SRCDIR)/vm/utils/debug.c $(SRCDIR)/vm/runtime/builtins.c $(SRCDIR)/vm/operations/vm_arithmetic.c $(SRCDIR)/vm/operations/vm_control_flow.c $(SRCDIR)/vm/operations/vm_typed_ops.c $(SRCDIR)/vm/operations/vm_string_ops.c $(SRCDIR)/vm/operations/vm_comparison.c $(SRCDIR)/vm/dispatch/vm_dispatch_switch.c $(SRCDIR)/vm/dispatch/vm_dispatch_goto.c $(SRCDIR)/vm/core/vm_validation.c $(SRCDIR)/vm/register_file.c $(SRCDIR)/vm/spill_manager.c $(SRCDIR)/vm/module_manager.c $(SRCDIR)/vm/register_cache.c $(SRCDIR)/type/type_representation.c $(SRCDIR)/errors/infrastructure/error_infrastructure.c $(SRCDIR)/errors/core/error_base.c $(SRCDIR)/errors/features/type_errors.c $(SRCDIR)/errors/features/variable_errors.c $(SRCDIR)/errors/features/control_flow_errors.c $(SRCDIR)/config/config.c
-
 REPL_SRC = $(SRCDIR)/repl.c
 MAIN_SRC = $(SRCDIR)/main.c
 
@@ -149,354 +140,31 @@ $(BUILDDIR)/%.o: $(SRCDIR)/%.c | $(BUILDDIR)
 test: $(ORUS)
 	@echo "Running Comprehensive Test Suite..."
 	@echo "==================================="
-	@passed=0; failed=0; \
-	echo ""; \
-	echo "\033[36m=== Basic Expression Tests ===\033[0m"; \
-	for test_file in $(TESTDIR)/expressions/binary.orus \
-	                  $(TESTDIR)/expressions/simple_add.orus \
-	                  $(TESTDIR)/expressions/simple_literal.orus \
-	                  $(TESTDIR)/expressions/parenthesized_cast_should_parse.orus \
-	                  $(TESTDIR)/expressions/comprehensive_parenthesized_casts.orus \
-	                  $(TESTDIR)/expressions/unary_operators.orus \
-	                  $(TESTDIR)/expressions/unary_comprehensive.orus \
-	                  $(TESTDIR)/expressions/unary_edge_cases.orus \
-	                  $(TESTDIR)/expressions/ternary_basic.orus \
-	                  $(TESTDIR)/expressions/ternary_advanced.orus \
-	                  $(TESTDIR)/expressions/ternary_edge_cases.orus \
-	                  $(TESTDIR)/expressions/ternary_types.orus \
-	                  $(TESTDIR)/expressions/ternary_optimization.orus \
-	                  $(TESTDIR)/expressions/ternary_comprehensive.orus; do \
-		if [ -f "$$test_file" ]; then \
-			printf "Testing: $$test_file ... "; \
-			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
-				printf "\033[32mPASS\033[0m\n"; \
-				passed=$$((passed + 1)); \
-			else \
-				printf "\033[31mFAIL\033[0m\n"; \
-				failed=$$((failed + 1)); \
+	@passed=0; failed=0; current_dir=""; \
+	SUBDIRS="benchmarks comments control_flow edge_cases expressions formatting functions literals register_file scope_analysis strings type_safety_fails types/f64 types/i32 types/i64 variables"; \
+	for subdir in $$SUBDIRS; do \
+		for test_file in $$(find $(TESTDIR)/$$subdir -type f -name "*.orus" | sort); do \
+			if [ -f "$$test_file" ]; then \
+				if [ "$$subdir" != "$$current_dir" ]; then \
+					current_dir=$$subdir; \
+					echo ""; \
+					echo "\033[36m=== $$current_dir Tests ===\033[0m"; \
+				fi; \
+				printf "Testing: $$test_file ... "; \
+				if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
+					printf "\033[32mPASS\033[0m\n"; \
+					passed=$$((passed + 1)); \
+				else \
+					if echo "$$test_file" | grep -q -E "$(TESTDIR)/type_safety_fails|$(TESTDIR)/edge_cases/modulo_by_zero_test.orus|$(TESTDIR)/edge_cases/large_number_modulo_by_zero.orus|$(TESTDIR)/edge_cases/expression_modulo_by_zero.orus|$(TESTDIR)/edge_cases/division_by_zero_enhanced.orus|$(TESTDIR)/edge_cases/division_by_zero_runtime.orus|$(TESTDIR)/types/u32/u32_division_by_zero.orus|$(TESTDIR)/types/f64/test_f64_runtime_div.orus"; then \
+						printf "\033[32mCORRECT FAIL\033[0m\n"; \
+						passed=$$((passed + 1)); \
+					else \
+						printf "\033[31mFAIL\033[0m\n"; \
+						failed=$$((failed + 1)); \
+					fi; \
+				fi; \
 			fi; \
-		fi; \
-	done; \
-	echo ""; \
-	echo "\033[36m=== Variables Tests ===\033[0m"; \
-	for test_file in $(TESTDIR)/variables/basic_var.orus \
-	                  $(TESTDIR)/variables/multiple_variable_declarations.orus \
-	                  $(TESTDIR)/variables/multiple_variable_edge_cases.orus \
-	                  $(TESTDIR)/variables/mutable_test.orus \
-	                  $(TESTDIR)/variables/compound_assignments_pass.orus \
-	                  $(TESTDIR)/variables/basic_scope.orus \
-	                  $(TESTDIR)/variables/for_loop_scope.orus \
-	                  $(TESTDIR)/variables/while_loop_scope.orus \
-	                  $(TESTDIR)/variables/nested_for_scope.orus \
-	                  $(TESTDIR)/variables/variable_shadowing.orus \
-	                  $(TESTDIR)/variables/scope_variable_lifetime.orus \
-	                  $(TESTDIR)/variables/complex_scope_interactions.orus \
-	                  $(TESTDIR)/variables/scope_with_control_flow.orus \
-	                  $(TESTDIR)/variables/loop_scope_edge_cases.orus \
-	                  $(TESTDIR)/variables/step_range_scope.orus \
-	                  $(TESTDIR)/variables/if_else_scope.orus; do \
-		if [ -f "$$test_file" ]; then \
-			printf "Testing: $$test_file ... "; \
-			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
-				printf "\033[32mPASS\033[0m\n"; \
-				passed=$$((passed + 1)); \
-			else \
-				printf "\033[31mFAIL\033[0m\n"; \
-				failed=$$((failed + 1)); \
-			fi; \
-		fi; \
-	done; \
-	echo ""; \
-	echo "\033[36m=== Control Flow Tests ===\033[0m"; \
-	for test_file in $(TESTDIR)/control_flow/basic_if.orus \
-	                  $(TESTDIR)/control_flow/if_else.orus \
-	                  $(TESTDIR)/control_flow/nested_if.orus \
-	                  $(TESTDIR)/control_flow/inline_if.orus \
-	                  $(TESTDIR)/control_flow/elif_basic.orus \
-	                  $(TESTDIR)/control_flow/elif_multiple.orus \
-	                  $(TESTDIR)/control_flow/elif_inline.orus \
-	                  $(TESTDIR)/control_flow/elif_nested.orus \
-	                  $(TESTDIR)/control_flow/basic_while.orus \
-	                  $(TESTDIR)/control_flow/inline_while.orus \
-	                  $(TESTDIR)/control_flow/comprehensive_control.orus \
-	                  $(TESTDIR)/control_flow/edge_zero_iterations.orus \
-	                  $(TESTDIR)/control_flow/edge_complex_conditions.orus \
-	                  $(TESTDIR)/control_flow/edge_deep_nesting.orus \
-	                  $(TESTDIR)/control_flow/edge_mixed_styles.orus \
-	                  $(TESTDIR)/control_flow/optimization_verification.orus; do \
-		if [ -f "$$test_file" ]; then \
-			printf "Testing: $$test_file ... "; \
-			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
-				printf "\033[32mPASS\033[0m\n"; \
-				passed=$$((passed + 1)); \
-			else \
-				printf "\033[31mFAIL\033[0m\n"; \
-				failed=$$((failed + 1)); \
-			fi; \
-		fi; \
-	done; \
-	echo ""; \
-	echo "\033[36m=== Loop Control Tests ===\033[0m"; \
-	for test_file in $(TESTDIR)/control_flow/for_range_simple.orus \
-	                  $(TESTDIR)/control_flow/break_for_range_basic.orus \
-	                  $(TESTDIR)/control_flow/continue_for_range_basic.orus \
-	                  $(TESTDIR)/control_flow/continue_while_basic.orus \
-	                  $(TESTDIR)/control_flow/for_range_basic.orus \
-	                  $(TESTDIR)/control_flow/continue_for_step.orus \
-	                  $(TESTDIR)/control_flow/loop_safety_integration.orus \
-	                  $(TESTDIR)/edge_cases/optimization/licm_basic.orus \
-                  $(TESTDIR)/control_flow/stress_test_short_jumps.orus \
-	                  $(TESTDIR)/control_flow/break_while_basic.orus \
-	                  $(TESTDIR)/control_flow/continue_while_basic.orus \
-	                  $(TESTDIR)/control_flow/loop_variable_scoping_nested.orus \
-	                  $(TESTDIR)/control_flow/break_continue_nested.orus \
-	                  $(TESTDIR)/control_flow/break_continue_labeled.orus \
-	                  $(TESTDIR)/control_flow/short_jump_benchmark.orus \
-	                  $(TESTDIR)/control_flow/advanced_range_syntax.orus \
-	                  $(TESTDIR)/loops/test_break_edge_cases.orus \
-	                  $(TESTDIR)/loops/test_continue_edge_cases.orus \
-	                  $(TESTDIR)/control_flow/loop_variable_lifetime_boundaries.orus; do \
-		if [ -f "$$test_file" ]; then \
-			printf "Testing: $$test_file ... "; \
-			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
-				printf "\033[32mPASS\033[0m\n"; \
-				passed=$$((passed + 1)); \
-			else \
-				printf "\033[31mFAIL\033[0m\n"; \
-				failed=$$((failed + 1)); \
-			fi; \
-		fi; \
-	done; \
-	echo ""; \
-	echo "\033[36m=== Literals Tests ===\033[0m"; \
-	for test_file in $(TESTDIR)/literals/literal.orus; do \
-		if [ -f "$$test_file" ]; then \
-			printf "Testing: $$test_file ... "; \
-			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
-				printf "\033[32mPASS\033[0m\n"; \
-				passed=$$((passed + 1)); \
-			else \
-				printf "\033[31mFAIL\033[0m\n"; \
-				failed=$$((failed + 1)); \
-			fi; \
-		fi; \
-	done; \
-	echo ""; \
-	echo "\033[36m=== Function Tests ===\033[0m"; \
-	for test_file in $(TESTDIR)/functions/basic_function_test.orus \
-	                  $(TESTDIR)/functions/simple_add.orus \
-	                  $(TESTDIR)/functions/function_definition.orus \
-	                  $(TESTDIR)/functions/void_function.orus \
-	                  $(TESTDIR)/functions/call_test.orus \
-	                  $(TESTDIR)/functions/edge_cases/parameter_edge_cases.orus \
-	                  $(TESTDIR)/functions/just_definition.orus \
-	                  $(TESTDIR)/functions/first_class_functions.orus \
-	                  $(TESTDIR)/functions/higher_order_functions.orus \
-	                  $(TESTDIR)/functions/function_objects.orus \
-	                  $(TESTDIR)/functions/nested_calls.orus \
-	                  $(TESTDIR)/functions/closures_basic.orus \
-	                  $(TESTDIR)/functions/closures_infrastructure.orus; do \
-		if [ -f "$$test_file" ]; then \
-			printf "Testing: $$test_file ... "; \
-			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
-				printf "\033[32mPASS\033[0m\n"; \
-				passed=$$((passed + 1)); \
-			else \
-				printf "\033[31mFAIL\033[0m\n"; \
-				failed=$$((failed + 1)); \
-			fi; \
-		fi; \
-	done; \
-	echo ""; \
-	echo "\033[36m=== Type System Tests ===\033[0m"; \
-	for test_file in $(TESTDIR)/types/type_inference/test_type_inference_simple.orus \
-	                  $(TESTDIR)/types/annotations.orus \
-	                  $(TESTDIR)/types/type_inference/arithmetic_inference_basic.orus \
-	                  $(TESTDIR)/types/literal_suffixes.orus \
-	                  $(TESTDIR)/types/boolean_operations.orus \
-	                  $(TESTDIR)/types/string_operations.orus \
-	                  $(TESTDIR)/types/type_propagation.orus \
-	                  $(TESTDIR)/types/type_inference/mixed_type_inference.orus \
-	                  $(TESTDIR)/types/float_precision.orus \
-                          $(TESTDIR)/types/edge_case_limits.orus \
-                          $(TESTDIR)/types/i32/i32_basic.orus \
-                          $(TESTDIR)/types/i64/i64_test.orus \
-                          $(TESTDIR)/types/f64/boundaries/f64_basic.orus \
-                          $(TESTDIR)/types/type_rule_simple_pass.orus \
-                          $(TESTDIR)/types/type_rule_complex_pass.orus \
-                          $(TESTDIR)/types/type_rule_edge_pass.orus \
-                          $(TESTDIR)/types/arithmetic_same_types_v2.orus \
-                          $(TESTDIR)/types/explicit_cast_arithmetic.orus \
-                          $(TESTDIR)/types/complex_expression_with_casts.orus \
-                          $(TESTDIR)/types/cross_type_comparison.orus \
-                          $(TESTDIR)/types/valid_string_conversions.orus \
-                          $(TESTDIR)/types/valid_numeric_conversions.orus; do \
-		if [ -f "$$test_file" ]; then \
-			printf "Testing: $$test_file ... "; \
-			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
-				printf "\033[32mPASS\033[0m\n"; \
-				passed=$$((passed + 1)); \
-			else \
-				printf "\033[31mFAIL\033[0m\n"; \
-				failed=$$((failed + 1)); \
-			fi; \
-		fi; \
-	done; \
-	echo ""; \
-	echo "\033[36m=== Type Safety Tests (Expected to Fail) ===\033[0m"; \
-	for test_file in $(TESTDIR)/type_safety_fails/int_float_mix_fail.orus \
-	                  $(TESTDIR)/type_safety_fails/signed_unsigned_mix_fail.orus \
-	                  $(TESTDIR)/type_safety_fails/different_int_sizes_fail.orus \
-	                  $(TESTDIR)/type_safety_fails/bool_arithmetic_fail.orus \
-	                  $(TESTDIR)/type_safety_fails/string_arithmetic_fail.orus \
-	                  $(TESTDIR)/type_safety_fails/invalid_cast_chain_fail.orus \
-                          $(TESTDIR)/type_safety_fails/direct_cast_chain_should_fail.orus \
-                          $(TESTDIR)/type_safety_fails/minus_on_bool_fail.orus \
-                          $(TESTDIR)/type_safety_fails/type_rule_simple_fail.orus \
-                          $(TESTDIR)/type_safety_fails/type_rule_complex_fail.orus \
-                          $(TESTDIR)/type_safety_fails/type_rule_edge_fail.orus \
-                          $(TESTDIR)/type_safety_fails/mixed_type_operations_fail.orus \
-                          $(TESTDIR)/type_safety_fails/implicit_widening_fail.orus \
-                          $(TESTDIR)/type_safety_fails/chained_mixed_ops_fail.orus \
-                          $(TESTDIR)/type_safety_fails/type_mismatch_string_to_int.orus \
-                          $(TESTDIR)/type_safety_fails/type_mismatch_bool_to_float.orus \
-                          $(TESTDIR)/type_safety_fails/type_mismatch_float_to_bool.orus \
-                          $(TESTDIR)/type_safety_fails/invalid_cast_string_to_int.orus \
-                          $(TESTDIR)/type_safety_fails/invalid_cast_string_to_bool.orus \
-                          $(TESTDIR)/type_safety_fails/invalid_cast_string_to_float.orus \
-                          $(TESTDIR)/type_safety_fails/mixed_arithmetic_int_float.orus \
-                          $(TESTDIR)/type_safety_fails/mixed_arithmetic_signed_unsigned.orus \
-                          $(TESTDIR)/type_safety_fails/mixed_arithmetic_different_sizes.orus \
-                          $(TESTDIR)/type_safety_fails/undefined_type_cast.orus \
-                          $(TESTDIR)/type_safety_fails/complex_mixed_operations.orus \
-                          $(TESTDIR)/type_safety_fails/chain_cast_with_error.orus \
-                          $(TESTDIR)/type_safety_fails/control_flow_non_bool_condition.orus \
-                          $(TESTDIR)/type_safety_fails/control_flow_string_condition.orus \
-                          $(TESTDIR)/type_safety_fails/control_flow_float_condition.orus \
-                          $(TESTDIR)/type_safety_fails/immutable_assignment_fail.orus \
-                          $(TESTDIR)/type_safety_fails/compound_assignment_immutable_fail.orus; do \
-		if [ -f "$$test_file" ]; then \
-			printf "Testing: $$test_file ... "; \
-			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
-				printf "\033[31mUNEXPECTED PASS\033[0m\n"; \
-				failed=$$((failed + 1)); \
-			else \
-				printf "\033[32mCORRECT FAIL\033[0m\n"; \
-				passed=$$((passed + 1)); \
-			fi; \
-		fi; \
-	done; \
-	echo ""; \
-	echo "\033[36m=== Arithmetic Edge Cases ===\033[0m"; \
-	for test_file in $(TESTDIR)/edge_cases/arithmetic_edge_cases.orus \
-	                  $(TESTDIR)/edge_cases/operator_precedence.orus \
-	                  $(TESTDIR)/edge_cases/boundary_values.orus \
-                          $(TESTDIR)/edge_cases/error_conditions.orus \
-                          $(TESTDIR)/edge_cases/modulo_overflow_test.orus \
-                          $(TESTDIR)/edge_cases/overflow_i32_plus_one.orus; do \
-		if [ -f "$$test_file" ]; then \
-			printf "Testing: $$test_file ... "; \
-			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
-				printf "\033[32mPASS\033[0m\n"; \
-				passed=$$((passed + 1)); \
-			else \
-				printf "\033[31mFAIL\033[0m\n"; \
-				failed=$$((failed + 1)); \
-			fi; \
-		fi; \
-	done; \
-	echo ""; \
-	echo "\033[36m=== Variable Edge Cases ===\033[0m"; \
-	for test_file in $(TESTDIR)/edge_cases/variable_edge_cases.orus; do \
-		if [ -f "$$test_file" ]; then \
-			printf "Testing: $$test_file ... "; \
-			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
-				printf "\033[32mPASS\033[0m\n"; \
-				passed=$$((passed + 1)); \
-			else \
-				printf "\033[31mFAIL\033[0m\n"; \
-				failed=$$((failed + 1)); \
-			fi; \
-		fi; \
-	done; \
-	echo ""; \
-	echo "\033[36m=== Literal Edge Cases ===\033[0m"; \
-	for test_file in $(TESTDIR)/edge_cases/literal_edge_cases.orus; do \
-		if [ -f "$$test_file" ]; then \
-			printf "Testing: $$test_file ... "; \
-			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
-				printf "\033[32mPASS\033[0m\n"; \
-				passed=$$((passed + 1)); \
-			else \
-				printf "\033[31mFAIL\033[0m\n"; \
-				failed=$$((failed + 1)); \
-			fi; \
-		fi; \
-	done; \
-	echo ""; \
-	echo "\033[36m=== Print Edge Cases ===\033[0m"; \
-	for test_file in $(TESTDIR)/edge_cases/print_edge_cases.orus; do \
-		if [ -f "$$test_file" ]; then \
-			printf "Testing: $$test_file ... "; \
-			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
-				printf "\033[32mPASS\033[0m\n"; \
-				passed=$$((passed + 1)); \
-			else \
-				printf "\033[31mFAIL\033[0m\n"; \
-				failed=$$((failed + 1)); \
-			fi; \
-		fi; \
-	done; \
-	echo ""; \
-	echo "\033[36m=== Expression Nesting ===\033[0m"; \
-	for test_file in $(TESTDIR)/edge_cases/expression_nesting.orus; do \
-		if [ -f "$$test_file" ]; then \
-			printf "Testing: $$test_file ... "; \
-			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
-				printf "\033[32mPASS\033[0m\n"; \
-				passed=$$((passed + 1)); \
-			else \
-				printf "\033[31mFAIL\033[0m\n"; \
-				failed=$$((failed + 1)); \
-			fi; \
-		fi; \
-	done; \
-	echo ""; \
-	echo "\033[36m=== Benchmark Tests ===\033[0m"; \
-	for test_file in $(TESTDIR)/benchmarks/arithmetic_benchmark.orus \
-	                  $(TESTDIR)/benchmarks/extreme_benchmark.orus \
-	                  $(TESTDIR)/benchmarks/modulo_operations_benchmark.orus \
-	                  $(TESTDIR)/benchmarks/loop_optimization_benchmark.orus; do \
-		if [ -f "$$test_file" ]; then \
-			printf "Testing: $$test_file ... "; \
-			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
-				printf "\033[32mPASS\033[0m\n"; \
-				passed=$$((passed + 1)); \
-			else \
-				printf "\033[31mFAIL\033[0m\n"; \
-				failed=$$((failed + 1)); \
-			fi; \
-		fi; \
-	done; \
-	echo ""; \
-	echo "\033[36m=== Division by Zero Tests (Expected to Fail) ===\033[0m"; \
-	for test_file in $(TESTDIR)/edge_cases/modulo_by_zero_test.orus \
-	                  $(TESTDIR)/edge_cases/large_number_modulo_by_zero.orus \
-                          $(TESTDIR)/edge_cases/expression_modulo_by_zero.orus \
-                          $(TESTDIR)/edge_cases/division_by_zero_enhanced.orus \
-                          $(TESTDIR)/edge_cases/division_by_zero_runtime.orus \
-                          $(TESTDIR)/types/u32/u32_division_by_zero.orus \
-                          $(TESTDIR)/types/f64/test_f64_runtime_div.orus; do \
-		if [ -f "$$test_file" ]; then \
-			printf "Testing: $$test_file ... "; \
-			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
-				printf "\033[31mUNEXPECTED PASS\033[0m\n"; \
-				failed=$$((failed + 1)); \
-			else \
-				printf "\033[32mCORRECT FAIL\033[0m\n"; \
-				passed=$$((passed + 1)); \
-			fi; \
-		fi; \
+		done; \
 	done; \
 	echo ""; \
 	echo "========================"; \
@@ -520,15 +188,7 @@ ci-test:
 # Run cross-language benchmark tests
 benchmark: $(ORUS)
 	@cd $(TESTDIR)/benchmarks && ./unified_benchmark.sh
-
-# Run loop optimization performance benchmark
-benchmark-loops: $(ORUS)
-	@./benchmark_loop_optimization.sh
-
-# Run integration tests
-integration-test: $(ORUS)
-	@./scripts/run_integration_tests.sh
-
+	
 # Static Analysis
 analyze:
 	@echo "Running static analysis..."

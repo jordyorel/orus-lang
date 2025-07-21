@@ -354,14 +354,8 @@ static Type* getExprType(ASTNode* node, Compiler* compiler) {
             int index;
             if (symbol_table_get_in_scope(&compiler->symbols, node->identifier.name, compiler->scopeDepth, &index)) {
                 if (index < 0) {
-                    if (index <= -1000) {
-                        // Function parameter - type depends on parameter declaration
-                        // For now, return i32, but this should be improved to use actual parameter types
-                        return getPrimitiveType(TYPE_I32);
-                    } else {
-                        // Register-based variable (loop variable) - always i32 for now
-                        return getPrimitiveType(TYPE_I32);
-                    }
+                    // Register-based variable (loop variable) - always i32 for now
+                    return getPrimitiveType(TYPE_I32);
                 } else {
                     // Global variable
                     return vm.globalTypes[index];
@@ -507,6 +501,8 @@ static int compileIdentifier(ASTNode* node, Compiler* compiler) {
         if (index <= -2000) {
             // Closure variable (upvalue) - captured from outer scope
             int upvalueIndex = -(index + 2000);
+            printf("DEBUG: Accessing upvalue '%s' with index %d (upvalueIndex=%d)\n", 
+                   node->identifier.name, index, upvalueIndex);
             uint8_t r = allocateRegister(compiler);
             // Generate upvalue access bytecode
             emitByte(compiler, OP_GET_UPVALUE_R);
@@ -518,18 +514,8 @@ static int compileIdentifier(ASTNode* node, Compiler* compiler) {
             // For now, upvalue usage is implicit
             
             return r;
-        } else if (index <= -1000) {
-            // Function parameter - use simple register approach
-            int paramNum = -(index + 1000);
-            uint8_t paramBase = 256 - compiler->currentFunctionParameterCount;
-            if (paramBase < 1) paramBase = 1;
-            uint8_t r = allocateRegister(compiler);
-            emitByte(compiler, OP_MOVE);
-            emitByte(compiler, r);
-            emitByte(compiler, (uint8_t)(paramBase + paramNum));
-            return r;
-        } else {
-            // Register-based variable (loop variable) - negative index encodes register number
+        } else if (index < 0) {
+            // Loop variable access
             int regNum = -(index + 1);
             uint8_t r = allocateRegister(compiler);
             emitByte(compiler, OP_MOVE);
@@ -555,20 +541,25 @@ static int compileIdentifier(ASTNode* node, Compiler* compiler) {
                 emitByte(compiler, (uint8_t)index);
                 
                 // Create closure with upvalues from current scope
+                printf("DEBUG: Creating closure for function '%s' with %d upvalues\n", 
+                       function->name->chars, function->upvalueCount);
                 emitByte(compiler, OP_CLOSURE_R);
                 emitByte(compiler, r);                        // destination register
                 emitByte(compiler, funcReg);                 // function register
                 emitByte(compiler, (uint8_t)function->upvalueCount); // upvalue count
                 
-                // Emit upvalue references - capture local variables that this function needs
+                // Emit upvalue references - capture local variables from current and outer scopes that this function needs
                 int capturedCount = 0;
                 for (int i = 0; i < compiler->localCount && capturedCount < function->upvalueCount; i++) {
-                    if (compiler->locals[i].isActive && compiler->locals[i].depth == compiler->scopeDepth) {
+                    if (compiler->locals[i].isActive && compiler->locals[i].depth <= compiler->scopeDepth) {
+                        printf("DEBUG: Emitting upvalue capture[%d]: local[%d] '%s' at depth %d\n", 
+                               capturedCount, i, compiler->locals[i].name, compiler->locals[i].depth);
                         emitByte(compiler, 1);                    // isLocal = 1 (local variable)  
                         emitByte(compiler, (uint8_t)i);           // local variable index
                         capturedCount++;
                     }
                 }
+                printf("DEBUG: Closure creation emitted %d upvalue captures\n", capturedCount);
                 
                 // If we didn't capture enough, fill remaining slots
                 while (capturedCount < function->upvalueCount) {
@@ -1386,15 +1377,8 @@ bool compileNode(ASTNode* node, Compiler* compiler) {
                     emitByte(compiler, (uint8_t)reg);           // Value register
                     freeRegister(compiler, reg);
                     return true;
-                } else if (idx <= -1000) {
-                    // Function parameter - not modifiable in assignments
-                    SrcLocation location = {vm.filePath, node->location.line, node->location.column};
-                    report_immutable_assignment(location, node->assign.name);
-                    compiler->hadError = true;
-                    freeRegister(compiler, reg);
-                    return false;
                 } else {
-                    // Loop variable (negative index > -1000)
+                    // Loop variable (negative index)
                     SrcLocation location = {vm.filePath, node->location.line, node->location.column};
                     report_loop_variable_modification(location, node->assign.name, "for");
                     compiler->hadError = true;
@@ -2053,6 +2037,9 @@ bool compileNode(ASTNode* node, Compiler* compiler) {
 
         case NODE_FUNCTION: {
             // Single-pass function compilation with immediate bytecode generation
+            printf("DEBUG: Compiling function '%s' at scope depth %d\n", 
+                   node->function.name, compiler->scopeDepth);
+            
             // Allocate function object 
             int functionIdx = vm.functionCount++;
             ObjFunction* objFunction = allocateFunction();
@@ -2083,14 +2070,22 @@ bool compileNode(ASTNode* node, Compiler* compiler) {
             int upvalueCount = 0;
             
             // Copy local variables from outer scopes as upvalues
+            printf("DEBUG: Scanning %d locals for upvalue capture\n", compiler->localCount);
             for (int i = 0; i < compiler->localCount; i++) {
-                if (compiler->locals[i].isActive && compiler->locals[i].depth < functionCompiler.scopeDepth) {
+                if (compiler->locals[i].isActive && 
+                    compiler->locals[i].depth < functionCompiler.scopeDepth &&
+                    compiler->locals[i].name != NULL &&
+                    upvalueCount < 256) {  // Reasonable upvalue limit
                     // This local variable from outer scope becomes an upvalue
                     int closureIndex = -(2000 + upvalueCount);
+                    printf("DEBUG: Capturing upvalue[%d]: '%s' from depth %d -> index %d\n", 
+                           upvalueCount, compiler->locals[i].name, 
+                           compiler->locals[i].depth, closureIndex);
                     symbol_table_set(&functionCompiler.symbols, compiler->locals[i].name, closureIndex, 0);
                     upvalueCount++;
                 }
             }
+            printf("DEBUG: Function '%s' captures %d upvalues\n", node->function.name, upvalueCount);
             
             // Copy global variables as-is (not as upvalues)
             for (size_t i = 0; i < compiler->symbols.capacity; i++) {
@@ -2100,11 +2095,33 @@ bool compileNode(ASTNode* node, Compiler* compiler) {
                 }
             }
             
-            // Add function parameters to symbol table
+            // Add function parameters as local variables so they can be captured as upvalues
             for (int i = 0; i < node->function.paramCount; i++) {
                 FunctionParam* param = &node->function.params[i];
-                // Use -1000 range for function parameters
-                symbol_table_set(&functionCompiler.symbols, param->name, -(1000 + i), functionCompiler.scopeDepth);
+                
+                // Add parameter as a local variable
+                if (functionCompiler.localCount >= REGISTER_COUNT) {
+                    fprintf(stderr, "Too many parameters for function\n");
+                    return false;
+                }
+                
+                functionCompiler.locals[functionCompiler.localCount].name = param->name;
+                functionCompiler.locals[functionCompiler.localCount].reg = i;  // Parameters use first N registers
+                functionCompiler.locals[functionCompiler.localCount].isActive = true;
+                functionCompiler.locals[functionCompiler.localCount].depth = functionCompiler.scopeDepth;
+                functionCompiler.locals[functionCompiler.localCount].isMutable = true;  // Parameters are mutable by default
+                functionCompiler.locals[functionCompiler.localCount].type = VAL_NIL;  // Will be determined at runtime
+                functionCompiler.locals[functionCompiler.localCount].liveRangeIndex = -1;
+                functionCompiler.locals[functionCompiler.localCount].isSpilled = false;
+                functionCompiler.locals[functionCompiler.localCount].hasKnownType = false;
+                
+                // Also add to symbol table for name resolution
+                symbol_table_set(&functionCompiler.symbols, param->name, functionCompiler.localCount, functionCompiler.scopeDepth);
+                
+                functionCompiler.localCount++;
+                
+                printf("DEBUG: Added parameter '%s' as local[%d] at depth %d\n", 
+                       param->name, functionCompiler.localCount - 1, functionCompiler.scopeDepth);
             }
             
             // Compile function body

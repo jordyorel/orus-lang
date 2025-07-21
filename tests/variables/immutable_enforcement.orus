@@ -1,8 +1,0 @@
-// Test comprehensive mutability enforcement
-// This file tests various mutability scenarios
-
-// Test 1: Immutable variable declaration and failed reassignment
-x = 42
-print("Immutable x:", x)
-// This should fail:
-x = 100

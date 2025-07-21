@@ -1644,7 +1644,9 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_JUMP_IF_NOT_R: {
             uint8_t reg = READ_BYTE();
             uint16_t offset = READ_SHORT();
-            CF_JUMP_IF_NOT(reg, offset);
+            if (!CF_JUMP_IF_NOT(reg, offset)) {
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
             DISPATCH();
         }
 
@@ -1907,6 +1909,10 @@ InterpretResult vm_run_dispatch(void) {
             if (vm.frameCount > 0) {
                 CallFrame* frame = &vm.frames[--vm.frameCount];
                 
+                // Close upvalues before restoring registers to prevent corruption
+                printf("DEBUG VM: Closing upvalues before return\n");
+                closeUpvalues(&vm.registers[frame->parameterBaseRegister]);
+                
                 // Restore saved registers - simple approach
                 for (int i = 0; i < frame->savedRegisterCount; i++) {
                     vm.registers[frame->parameterBaseRegister + i] = frame->savedRegisters[i];
@@ -1925,6 +1931,10 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_RETURN_VOID: {
             if (vm.frameCount > 0) {
                 CallFrame* frame = &vm.frames[--vm.frameCount];
+                
+                // Close upvalues before restoring registers to prevent corruption
+                printf("DEBUG VM: Closing upvalues before void return\n");
+                closeUpvalues(&vm.registers[frame->parameterBaseRegister]);
                 
                 // Restore saved registers - simple approach
                 for (int i = 0; i < frame->savedRegisterCount; i++) {
@@ -2016,7 +2026,9 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_JUMP_IF_NOT_SHORT: {
         uint8_t reg = READ_BYTE();
         uint8_t offset = READ_BYTE();
-        CF_JUMP_IF_NOT_SHORT(reg, offset);
+        if (!CF_JUMP_IF_NOT_SHORT(reg, offset)) {
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
         DISPATCH();
     }
 
@@ -2336,6 +2348,9 @@ InterpretResult vm_run_dispatch(void) {
         uint8_t functionReg = READ_BYTE();
         uint8_t upvalueCount = READ_BYTE();
         
+        printf("DEBUG VM: Creating closure in reg[%d] from function reg[%d] with %d upvalues\n", 
+               dstReg, functionReg, upvalueCount);
+        
         Value functionValue = vm.registers[functionReg];
         if (!IS_FUNCTION(functionValue)) {
             VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(), "Expected function for closure creation");
@@ -2348,10 +2363,22 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t isLocal = READ_BYTE();
             uint8_t index = READ_BYTE();
             
+            printf("DEBUG VM: Upvalue[%d]: isLocal=%d, index=%d\n", i, isLocal, index);
+            
             if (isLocal) {
+                Value localValue = vm.registers[index];
+                printf("DEBUG VM: Capturing local register[%d] as upvalue\n", index);
+                if (IS_I32(localValue)) {
+                    printf("DEBUG VM: Local register[%d] contains i32: %d\n", index, AS_I32(localValue));
+                } else if (IS_NIL(localValue)) {
+                    printf("DEBUG VM: Local register[%d] contains NIL\n", index);
+                } else {
+                    printf("DEBUG VM: Local register[%d] contains type: %d\n", index, localValue.type);
+                }
                 closure->upvalues[i] = captureUpvalue(&vm.registers[index]);
             } else {
                 ObjClosure* enclosing = AS_CLOSURE(vm.registers[0]); // Current closure
+                printf("DEBUG VM: Copying upvalue[%d] from enclosing closure\n", index);
                 closure->upvalues[i] = enclosing->upvalues[index];
             }
         }
@@ -2364,8 +2391,27 @@ InterpretResult vm_run_dispatch(void) {
         uint8_t dstReg = READ_BYTE();
         uint8_t upvalueIndex = READ_BYTE();
         
+        printf("DEBUG VM: Getting upvalue[%d] into reg[%d]\n", upvalueIndex, dstReg);
+        
         ObjClosure* closure = AS_CLOSURE(vm.registers[0]); // Current closure
-        vm.registers[dstReg] = *closure->upvalues[upvalueIndex]->location;
+        if (closure == NULL || upvalueIndex >= closure->function->upvalueCount) {
+            printf("DEBUG VM: ERROR - Invalid upvalue access!\n");
+            VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(), "Invalid upvalue access");
+        }
+        
+        Value upvalue = *closure->upvalues[upvalueIndex]->location;
+        vm.registers[dstReg] = upvalue;
+        
+        // Debug the actual value and type
+        if (IS_I32(upvalue)) {
+            printf("DEBUG VM: Upvalue[%d] retrieved i32 value: %d\n", upvalueIndex, AS_I32(upvalue));
+        } else if (IS_BOOL(upvalue)) {
+            printf("DEBUG VM: Upvalue[%d] retrieved bool value: %s\n", upvalueIndex, AS_BOOL(upvalue) ? "true" : "false");
+        } else if (IS_NIL(upvalue)) {
+            printf("DEBUG VM: Upvalue[%d] retrieved NIL value\n", upvalueIndex);
+        } else {
+            printf("DEBUG VM: Upvalue[%d] retrieved unknown type: %d\n", upvalueIndex, upvalue.type);
+        }
         DISPATCH();
     }
 

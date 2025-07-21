@@ -1488,7 +1488,9 @@ InterpretResult vm_run_dispatch(void) {
                 case OP_JUMP_IF_NOT_R: {
                     uint8_t reg = READ_BYTE();
                     uint16_t offset = READ_SHORT();
-                    CF_JUMP_IF_NOT(reg, offset);
+                    if (!CF_JUMP_IF_NOT(reg, offset)) {
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
                     break;
                 }
 
@@ -1871,7 +1873,9 @@ InterpretResult vm_run_dispatch(void) {
                 case OP_JUMP_IF_NOT_SHORT: {
                     uint8_t reg = READ_BYTE();
                     uint8_t offset = READ_BYTE();
-                    CF_JUMP_IF_NOT_SHORT(reg, offset);
+                    if (!CF_JUMP_IF_NOT_SHORT(reg, offset)) {
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
                     break;
                 }
 

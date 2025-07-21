@@ -1,5 +1,5 @@
 // Test simple multiple captures
-fn test(a, b):
+fn test(a, b) -> i32:
     fn inner():
         result1 = a
         result2 = b

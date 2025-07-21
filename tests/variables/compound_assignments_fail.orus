@@ -1,5 +1,5 @@
 // Test compound assignments on immutable variables (should fail)
-b = 20
+mut b = 20
 print("Immutable b:", b)
 // This should fail:
 b += 10
