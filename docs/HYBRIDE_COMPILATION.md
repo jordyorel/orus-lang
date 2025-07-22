@@ -1,6 +1,4 @@
-Below is a complete rewrite of the compiler based on the provided recommendations. The rewrite enhances function and closure handling, implements Loop-Invariant Code Motion (LICM), improves register management with liveness considerations, strengthens error handling, and adopts a hybrid approach with localized pre-passes. This implementation assumes a register-based virtual machine (VM) similar to Lua’s, with instructions like `OP_GET_UPVALUE_R`, `OP_SET_UPVALUE_R`, and `OP_CLOSURE_R`. The code is written in C and is production-ready, free of debug statements and hardcoded values.
 
----
 
 ### Compiler Overview
 

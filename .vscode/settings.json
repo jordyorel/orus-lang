@@ -16,6 +16,7 @@
         "vector": "c",
         "ios": "c",
         "vm_dispatch.h": "c",
-        "typeinfo": "cpp"
+        "typeinfo": "cpp",
+        "hybrid_compiler.h": "c"
     }
 }

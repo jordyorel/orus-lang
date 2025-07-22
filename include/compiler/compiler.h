@@ -8,8 +8,6 @@
 
 void initCompiler(Compiler* compiler, Chunk* chunk, const char* fileName, const char* source);
 void freeCompiler(Compiler* compiler);
-uint8_t allocateRegister(Compiler* compiler);
-void freeRegister(Compiler* compiler, uint8_t reg);
 bool compile(ASTNode* ast, Compiler* compiler, bool isModule);
 bool compileNode(ASTNode* node, Compiler* compiler);
 
@@ -43,6 +41,9 @@ bool hasSideEffects(ASTNode* expr);
 bool dependsOnLoopVariable(ASTNode* expr, LoopContext* loopCtx);
 void collectLoopInvariantExpressions(ASTNode* node, LICMAnalysis* analysis, LoopContext* loopCtx, Compiler* compiler);
 
+// Shared utility functions (implemented in hybrid_compiler.c)
+uint8_t allocateRegister(Compiler* compiler);
+void freeRegister(Compiler* compiler, uint8_t reg);
 void emitByte(Compiler* compiler, uint8_t byte);
 void emitBytes(Compiler* compiler, uint8_t byte1, uint8_t byte2);
 void emitConstant(Compiler* compiler, uint8_t reg, Value value);

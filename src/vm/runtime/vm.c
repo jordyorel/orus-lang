@@ -21,6 +21,7 @@
 #include "runtime/builtins.h"
 #include "public/common.h"
 #include "compiler/compiler.h"
+#include "compiler/hybrid_compiler.h"
 #include "compiler/parser.h"
 #include "runtime/memory.h"
 #include "runtime/builtins.h"
@@ -204,7 +205,7 @@ InterpretResult interpret(const char* source) {
     }
 
     // Compile the AST to bytecode
-    if (!compile(ast, &compiler, false)) {
+    if (!compileHybrid(ast, &compiler, false, COMPILE_AUTO)) {
         freeAST(ast);
         freeCompiler(&compiler);
         freeChunk(&chunk);
@@ -339,7 +340,7 @@ InterpretResult interpret_module(const char* path) {
         return INTERPRET_COMPILE_ERROR;
     }
     
-    if (!compile(ast, &compiler, true)) {
+    if (!compileHybrid(ast, &compiler, true, COMPILE_AUTO)) {
         fprintf(stderr, "Failed to compile module: %s\n", path);
         freeAST(ast);
         free(source);
