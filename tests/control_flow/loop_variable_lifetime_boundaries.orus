@@ -33,7 +33,7 @@ print("Outside variable:", outside_var)
 // Test 5: Loop variables with type casting
 print("\n=== Test 5: Auto-mutable with type casting ===")
 for i in 1..3:
-    as_float = i as f64
+    as_float = (i as f64)
     doubled = as_float * 2.5
     print("i =", i, "as_float =", as_float, "doubled =", doubled)
 

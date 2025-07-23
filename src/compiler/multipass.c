@@ -877,18 +877,10 @@ static bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
         }
 
         case NODE_FOR_RANGE: {
-            // MULTI-PASS LOOP COMPILATION WITH OPTIMIZATIONS
-            printf("[DEBUG] Compiling for loop with variable '%s'\n",
-                   node->forRange.varName);
-
-            // PASS 1: Skip loop optimization in multipass mode to avoid
-            // compiler switching Loop optimization calls compileHybrid which
-            // can switch back to singlepass
-            printf("[DEBUG] Skipping loop optimization in multipass mode\n");
-
-            // PASS 2: Enhanced loop analysis
+            // Simple, robust for-loop compilation - no complex optimizations
             beginLoopScope(compiler);
 
+            // Push loop context onto stack
             if (mpCompiler->loopCount >= mpCompiler->loopCapacity) {
                 mpCompiler->loopCapacity *= 2;
                 mpCompiler->loops = realloc(
@@ -896,36 +888,57 @@ static bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
                     mpCompiler->loopCapacity * sizeof(MultiPassLoopContext));
             }
 
-            MultiPassLoopContext* context =
-                &mpCompiler->loops[mpCompiler->loopCount++];
+            MultiPassLoopContext* context = &mpCompiler->loops[mpCompiler->loopCount++];
             context->breakJumps = jumptable_new();
             context->continueJumps = jumptable_new();
             context->label = NULL;
             context->isOptimized = false;
             context->scopeDepth = compiler->scopeDepth;
+            
+            // Initialize empty invariants - no complex optimization
+            context->invariants.entries = NULL;
+            context->invariants.count = 0;
+            context->invariants.capacity = 0;
+            context->modifiedVars.names = NULL;
+            context->modifiedVars.count = 0;
 
-            // PASS 3: Analyze loop for invariants and modifications
-            analyzeLoopInvariants(node->forRange.body, mpCompiler,
-                                  &context->invariants);
-            collectModifiedVariables(node->forRange.body,
-                                     &context->modifiedVars);
-
-            // PASS 4: Hoist invariants (LICM)
-            for (int i = 0; i < context->invariants.count; i++) {
-                uint8_t reg = context->invariants.entries[i].reg;
-                int tempReg = compileMultiPassExpr(
-                    context->invariants.entries[i].expr, compiler);
-                emitByte(compiler, OP_MOVE);
-                emitByte(compiler, reg);
-                emitByte(compiler, tempReg);
-                freeRegister(compiler, tempReg);
-            }
-
-            // PASS 5: Compile loop with enhanced features
+            // 1. Evaluate start and end expressions
             int startReg = compileMultiPassExpr(node->forRange.start, compiler);
             int endReg = compileMultiPassExpr(node->forRange.end, compiler);
+            if (startReg < 0 || endReg < 0) {
+                endScope(compiler);
+                mpCompiler->loopCount--;
+                if (startReg >= 0) freeRegister(compiler, startReg);
+                if (endReg >= 0) freeRegister(compiler, endReg);
+                return false;
+            }
 
-            // FIX: Create hidden local for end value to preserve it
+            // 2. Create loop variable
+            int loopVarIndex = addLocal(compiler, node->forRange.varName, false);
+            if (loopVarIndex < 0) {
+                SrcLocation loc = {.file = compiler->fileName,
+                                   .line = node->location.line,
+                                   .column = node->location.column};
+                report_compile_error(E1009_EXPRESSION_TOO_COMPLEX, loc,
+                                     "Too many local variables");
+                endScope(compiler);
+                mpCompiler->loopCount--;
+                freeRegister(compiler, startReg);
+                freeRegister(compiler, endReg);
+                return false;
+            }
+
+            compilerDeclareVariable(compiler, node->forRange.varName, VAL_I32,
+                                    compiler->locals[loopVarIndex].reg);
+            uint8_t iterReg = compiler->locals[loopVarIndex].reg;
+
+            // 3. Initialize: iter = start
+            emitByte(compiler, OP_MOVE);
+            emitByte(compiler, iterReg);
+            emitByte(compiler, startReg);
+            freeRegister(compiler, startReg);
+
+            // 4. Store end value in a local to preserve it across iterations
             char hiddenEndName[32];
             snprintf(hiddenEndName, sizeof(hiddenEndName), "__end_%d_%d",
                      compiler->scopeDepth, mpCompiler->loopCount);
@@ -938,99 +951,56 @@ static bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
                                      "Too many local variables");
                 endScope(compiler);
                 mpCompiler->loopCount--;
-                freeRegister(compiler, startReg);
                 freeRegister(compiler, endReg);
                 return false;
             }
             uint8_t hiddenEndReg = compiler->locals[hiddenEndIndex].reg;
-
-            // Store end value in hidden local
             emitByte(compiler, OP_MOVE);
             emitByte(compiler, hiddenEndReg);
             emitByte(compiler, endReg);
-            freeRegister(compiler, endReg);  // Free original end register
+            freeRegister(compiler, endReg);
 
-            int loopVarIndex =
-                addLocal(compiler, node->forRange.varName, false);
-            if (loopVarIndex < 0) {
-                SrcLocation loc = {.file = compiler->fileName,
-                                   .line = node->location.line,
-                                   .column = node->location.column};
-                report_compile_error(E1009_EXPRESSION_TOO_COMPLEX, loc,
-                                     "Too many local variables");
-                endScope(compiler);
-                mpCompiler->loopCount--;
-                freeRegister(compiler, startReg);
-                return false;
-            }
-
-            // Register loop variable with scope analysis
-            compilerDeclareVariable(compiler, node->forRange.varName, VAL_I32,
-                                    compiler->locals[loopVarIndex].reg);
-
-            uint8_t iterReg = compiler->locals[loopVarIndex].reg;
-
-            // Initialize iterator
-            emitByte(compiler, OP_MOVE);
-            emitByte(compiler, iterReg);
-            emitByte(compiler, startReg);
-            freeRegister(compiler, startReg);  // Free start register now
-
+            // 5. Loop condition check: iter <= hiddenEnd
             int loopStart = compiler->chunk->count;
             context->startInstr = loopStart;
 
-            // Check condition: iterReg <= hiddenEndReg
             uint8_t condReg = allocateRegister(compiler);
             emitByte(compiler, OP_LE_I32_R);
             emitByte(compiler, condReg);
             emitByte(compiler, iterReg);
-            emitByte(compiler, hiddenEndReg);  // Use hidden local
+            emitByte(compiler, hiddenEndReg);
 
             emitByte(compiler, OP_JUMP_IF_NOT_R);
             emitByte(compiler, condReg);
             int exitJump = emitJump(compiler);
-
             freeRegister(compiler, condReg);
 
-            // PASS 6: Compile body with invariants available
-            mpCompiler->currentInvariants = &context->invariants;
+            // 6. Compile loop body
             bool success = compileMultiPassNode(node->forRange.body, compiler);
-            mpCompiler->currentInvariants = NULL;
-
             if (!success) {
                 endScope(compiler);
                 mpCompiler->loopCount--;
                 return false;
             }
 
-            // PASS 7: Handle continue statements - patch to increment location
+            // 7. Continue target: increment iterator
             int continueTarget = compiler->chunk->count;
-            patchContinueJumps(&context->continueJumps, compiler,
-                               continueTarget);
-
-            // Increment iterator
+            patchContinueJumps(&context->continueJumps, compiler, continueTarget);
+            
             emitByte(compiler, OP_INC_I32_R);
             emitByte(compiler, iterReg);
 
-            // Jump back to condition
-            emitLoop(compiler, context->startInstr);
+            // 8. Jump back to condition
+            emitLoop(compiler, loopStart);
 
-            // PASS 8: Patch exit and break jumps
+            // 9. Patch exit and break jumps
             patchJump(compiler, exitJump);
             patchBreakJumps(&context->breakJumps, compiler);
-
-            // Cleanup
             endScope(compiler);
-            free(context->invariants.entries);
-            for (int j = 0; j < context->modifiedVars.count; j++) {
-                free(context->modifiedVars.names[j]);
-            }
-            free(context->modifiedVars.names);
             jumptable_free(&context->breakJumps);
             jumptable_free(&context->continueJumps);
-
             mpCompiler->loopCount--;
-            // StartReg and endReg were freed earlier
+            
             return true;
         }
 
@@ -1132,7 +1102,18 @@ static bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
                 return false;
             }
 
-            MultiPassLoopContext* targetLoop = &mpCompiler->loops[mpCompiler->loopCount - 1];
+            // Find the loop at the current scope depth
+            MultiPassLoopContext* targetLoop = NULL;
+            for (int i = mpCompiler->loopCount - 1; i >= 0; i--) {
+                if (mpCompiler->loops[i].scopeDepth <= compiler->scopeDepth) {
+                    targetLoop = &mpCompiler->loops[i];
+                    break;
+                }
+            }
+            
+            if (!targetLoop) {
+                targetLoop = &mpCompiler->loops[mpCompiler->loopCount - 1];
+            }
             if (node->breakStmt.label) {
                 // Find labeled loop
                 targetLoop = NULL; // Reset for search
