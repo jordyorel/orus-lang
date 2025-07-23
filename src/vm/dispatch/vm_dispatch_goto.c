@@ -9,6 +9,7 @@
 #include "vm/vm_typed_ops.h"
 #include "vm/vm_opcode_handlers.h"
 #include "vm/register_file.h"
+#include "vm/vm_profiling.h"
 
 #include <math.h>
 
@@ -44,6 +45,9 @@ static inline void vm_set_register_safe(uint16_t id, Value value) {
 #endif
 
 #if USE_COMPUTED_GOTO
+
+// Profiling timing variable accessible to DISPATCH macro
+static uint64_t instruction_start_time = 0;
 
 InterpretResult vm_run_dispatch(void) {
 
@@ -247,6 +251,13 @@ InterpretResult vm_run_dispatch(void) {
 
     // Phase 1.1 Optimization: Fast DISPATCH macro for production builds
     // Macros are defined in vm_dispatch.h to avoid redefinition warnings
+    
+    // Profiling hook: Initialize timing for first instruction
+    if (g_profiling.isActive) {
+        instruction_start_time = getTimestamp();
+        g_profiling.totalInstructions++;
+    }
+    
         DISPATCH();
 
     LABEL_OP_LOAD_CONST: {
@@ -1652,6 +1663,14 @@ InterpretResult vm_run_dispatch(void) {
 
     LABEL_OP_LOOP: {
         uint16_t offset = READ_SHORT();
+        
+        // Hot path detection: Profile loop iterations
+        if (g_profiling.isActive && (g_profiling.enabledFlags & PROFILE_HOT_PATHS)) {
+            static uint64_t loop_iterations = 0;
+            loop_iterations++;
+            profileHotPath((void*)(vm.ip - vm.chunk->code), loop_iterations);
+        }
+        
         CF_LOOP(offset);
         DISPATCH();
     }
@@ -2034,6 +2053,14 @@ InterpretResult vm_run_dispatch(void) {
 
     LABEL_OP_LOOP_SHORT: {
         uint8_t offset = READ_BYTE();
+        
+        // Hot path detection: Profile short loop iterations (tight loops)
+        if (g_profiling.isActive && (g_profiling.enabledFlags & PROFILE_HOT_PATHS)) {
+            static uint64_t short_loop_iterations = 0;
+            short_loop_iterations++;
+            profileHotPath((void*)(vm.ip - vm.chunk->code), short_loop_iterations);
+        }
+        
         CF_LOOP_SHORT(offset);
         DISPATCH();
     }

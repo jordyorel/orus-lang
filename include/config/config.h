@@ -70,6 +70,15 @@ typedef struct {
     bool memory_debugging;         // Enable memory debugging (default: false)
     uint32_t arena_size;           // Arena allocation size (default: 64KB)
     
+    // VM Profiling
+    bool vm_profiling_enabled;     // Enable VM profiling (--profile)
+    bool profile_instructions;     // Profile instruction execution (--profile-instructions)
+    bool profile_hot_paths;        // Profile hot paths and loops (--profile-hot-paths)
+    bool profile_registers;        // Profile register usage (--profile-registers)
+    bool profile_memory_access;    // Profile memory access patterns (--profile-memory)
+    bool profile_branches;         // Profile branch prediction (--profile-branches)
+    const char* profile_output;    // Profiling output file (--profile-output)
+    
 } OrusConfig;
 
 // Configuration initialization and management

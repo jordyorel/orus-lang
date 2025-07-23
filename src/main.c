@@ -17,6 +17,7 @@
 #include "tools/repl.h"
 #include "public/version.h"
 #include "config/config.h"
+#include "vm/vm_profiling.h"
 
 
 static char* readFile(const char* path) {
@@ -122,6 +123,9 @@ int main(int argc, const char* argv[]) {
     init_type_errors();
     init_variable_errors();
     
+    // Initialize VM profiling system
+    initVMProfiling();
+    
     // Create and initialize configuration
     OrusConfig* config = config_create();
     if (!config) {
@@ -177,6 +181,23 @@ int main(int argc, const char* argv[]) {
     vm.trace = config->trace_execution;
     vm.devMode = config->debug_mode;
     
+    // Configure VM profiling based on command line options
+    if (config->vm_profiling_enabled) {
+        ProfilingFlags flags = PROFILE_NONE;
+        
+        if (config->profile_instructions) flags |= PROFILE_INSTRUCTIONS;
+        if (config->profile_hot_paths) flags |= PROFILE_HOT_PATHS;
+        if (config->profile_registers) flags |= PROFILE_REGISTER_USAGE;
+        if (config->profile_memory_access) flags |= PROFILE_MEMORY_ACCESS;
+        if (config->profile_branches) flags |= PROFILE_BRANCH_PREDICTION;
+        
+        enableProfiling(flags);
+        
+        if (config->verbose && !config->quiet) {
+            printf("VM Profiling enabled with flags: 0x%X\n", flags);
+        }
+    }
+    
     // Apply VM configuration settings
     // Note: In a real implementation, we'd need to modify the VM to accept these parameters
     // For now, we'll just set the trace and debug flags
@@ -213,7 +234,16 @@ int main(int argc, const char* argv[]) {
         printGlobalOptimizationStats();
     }
     
-    // Cleanup
+    // Cleanup and profiling export
+    if (config->vm_profiling_enabled) {
+        if (config->profile_output) {
+            exportProfilingData(config->profile_output);
+        } else if (config->verbose && !config->quiet) {
+            dumpProfilingStats();
+        }
+        shutdownVMProfiling();
+    }
+    
     freeVM();
     config_destroy(config);
     return 0;

@@ -97,6 +97,15 @@ void config_reset_to_defaults(OrusConfig* config) {
     config->memory_profiling = false;
     config->memory_debugging = false;
     config->arena_size = DEFAULT_ARENA_SIZE;
+    
+    // VM Profiling
+    config->vm_profiling_enabled = false;
+    config->profile_instructions = false;
+    config->profile_hot_paths = false;
+    config->profile_registers = false;
+    config->profile_memory_access = false;
+    config->profile_branches = false;
+    config->profile_output = NULL;
 }
 
 // Environment variable loading
@@ -248,6 +257,30 @@ bool config_parse_args(OrusConfig* config, int argc, const char* argv[]) {
             config->show_optimization_stats = true;
         } else if (strcmp(arg, "--benchmark") == 0) {
             config->benchmark_mode = true;
+        }
+        
+        // VM Profiling options
+        else if (strcmp(arg, "--profile") == 0) {
+            config->vm_profiling_enabled = true;
+            config->profile_instructions = true;
+            config->profile_hot_paths = true;
+        } else if (strcmp(arg, "--profile-instructions") == 0) {
+            config->vm_profiling_enabled = true;
+            config->profile_instructions = true;
+        } else if (strcmp(arg, "--profile-hot-paths") == 0) {
+            config->vm_profiling_enabled = true;
+            config->profile_hot_paths = true;
+        } else if (strcmp(arg, "--profile-registers") == 0) {
+            config->vm_profiling_enabled = true;
+            config->profile_registers = true;
+        } else if (strcmp(arg, "--profile-memory") == 0) {
+            config->vm_profiling_enabled = true;
+            config->profile_memory_access = true;
+        } else if (strcmp(arg, "--profile-branches") == 0) {
+            config->vm_profiling_enabled = true;
+            config->profile_branches = true;
+        } else if (strncmp(arg, "--profile-output=", 17) == 0) {
+            config->profile_output = arg + 17;
         }
         
         // VM configuration with values
@@ -439,6 +472,14 @@ void config_print_help(const char* program_name) {
     printf("  --error-format=FORMAT   Set error format: friendly, json, minimal\n");
     printf("  --no-colors             Disable colored error output\n");
     printf("  --no-context            Disable error context lines\n");
+    printf("\nVM Profiling:\n");
+    printf("  --profile               Enable basic profiling (instructions + hot paths)\n");
+    printf("  --profile-instructions  Profile instruction execution counts\n");
+    printf("  --profile-hot-paths     Profile hot paths and loop detection\n");
+    printf("  --profile-registers     Profile register allocation patterns\n");
+    printf("  --profile-memory        Profile memory access patterns\n");
+    printf("  --profile-branches      Profile branch prediction accuracy\n");
+    printf("  --profile-output=FILE   Export profiling data to file\n");
     printf("\nOptimization:\n");
     printf("  -O0, -O1, -O2           Set optimization level (default: 1)\n");
     printf("  --no-inline             Disable function inlining\n");

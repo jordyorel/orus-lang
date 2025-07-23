@@ -12,6 +12,7 @@
 
 #include "vm.h"
 #include "public/common.h"
+#include "vm/vm_profiling.h"
 
 // Forward declarations
 extern VM vm;
@@ -82,6 +83,13 @@ void runtimeError(ErrorType type, SrcLocation location, const char* format, ...)
         #define DISPATCH() do { \
             uint8_t inst = *vm.ip++; \
             PROFILE_INC(inst); \
+            if (g_profiling.isActive && instruction_start_time > 0) { \
+                uint64_t cycles = getTimestamp() - instruction_start_time; \
+                profileInstruction(inst, cycles); \
+            } \
+            if (g_profiling.isActive) { \
+                instruction_start_time = getTimestamp(); \
+            } \
             goto *vm_dispatch_table[inst]; \
         } while(0)
         #define DISPATCH_TYPED() DISPATCH()

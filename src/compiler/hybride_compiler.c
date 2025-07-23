@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "compiler/hybrid_compiler.h"
+#include "compiler/backend_selection.h"
 #include "compiler/symbol_table.h"
 #include "vm/vm.h"
 #include "vm/vm_constants.h"
@@ -180,31 +181,68 @@ static bool isComplexExpression(ASTNode* node) {
     return false;
 }
 
-// Choose compilation strategy based on complexity analysis
+// Smart compilation strategy selection using new backend selection system
 CompilationStrategy chooseStrategy(CodeComplexity complexity) {
-    // TEMPORARY STRICT SEPARATION for debugging:
-    // Force SINGLE-PASS for anything with break/continue to test single-pass
-    // Force MULTI-PASS only for functions and calls
-    
     printf("[DEBUG] Strategy analysis: functions=%d, calls=%d, loops=%d, nested=%d, break/continue=%d\n", 
            complexity.functionCount, complexity.callCount, complexity.loopCount, 
            complexity.nestedLoopDepth, complexity.hasBreakContinue);
     
-    // SINGLE-PASS: Basic constructs WITHOUT break/continue AND WITHOUT nested loops
-    if (complexity.functionCount == 0 &&         // No functions
-        complexity.callCount == 0 &&             // No function calls
-        !complexity.hasBreakContinue &&          // No break/continue
-        complexity.nestedLoopDepth == 0) {       // No nested loops
-        printf("[DEBUG] -> Choosing SINGLE-PASS (simple constructs only)\n");
-        return COMPILE_SINGLE_PASS;
+    // Initialize compilation context for smart backend selection
+    CompilationContext ctx;
+    initCompilationContext(&ctx, false); // Assume release mode for now
+    
+    // Update context based on complexity analysis
+    ctx.functionCallDepth = complexity.callCount;
+    ctx.loopNestingDepth = complexity.nestedLoopDepth;
+    ctx.hasBreakContinue = complexity.hasBreakContinue;
+    ctx.hasComplexTypes = complexity.hasComplexExpressions;
+    
+    // Create a dummy AST node for backend selection (since we only have complexity data)
+    // In real implementation, this would use the actual AST
+    ASTNode dummyNode = {0};
+    if (complexity.loopCount > 0) {
+        dummyNode.type = NODE_FOR_RANGE;
+    } else if (complexity.callCount > 0) {
+        dummyNode.type = NODE_CALL;
+    } else {
+        dummyNode.type = NODE_LITERAL;
     }
     
-    // MULTI-PASS: Functions, function calls, break/continue, OR nested loops
-    printf("[DEBUG] -> Choosing MULTI-PASS (has complex features)\n");
-    return COMPILE_MULTI_PASS;
+    // Use smart backend selection
+    CompilerBackend backend = chooseOptimalBackend(&dummyNode, &ctx);
     
-    // Default to multi-pass for safety
-    return COMPILE_MULTI_PASS;
+    // Override backend selection if complex features require multi-pass
+    if (complexity.hasBreakContinue || complexity.nestedLoopDepth > 1) {
+        backend = BACKEND_OPTIMIZED;
+        printf("[DEBUG] -> Smart Backend Override: MULTI-PASS (complex features: break/continue=%d, nesting=%d)\n", 
+               complexity.hasBreakContinue, complexity.nestedLoopDepth);
+    }
+    
+    CompilationStrategy strategy;
+    switch (backend) {
+        case BACKEND_FAST:
+            strategy = COMPILE_SINGLE_PASS;
+            printf("[DEBUG] -> Smart Backend Selection: SINGLE-PASS (fast compilation)\n");
+            break;
+        case BACKEND_OPTIMIZED:
+            strategy = COMPILE_MULTI_PASS;
+            printf("[DEBUG] -> Smart Backend Selection: MULTI-PASS (optimized compilation)\n");
+            break;
+        case BACKEND_HYBRID:
+        case BACKEND_AUTO:
+        default:
+            // Fallback logic
+            if (complexity.hasBreakContinue || complexity.nestedLoopDepth > 1) {
+                strategy = COMPILE_MULTI_PASS;
+                printf("[DEBUG] -> Smart Backend Selection: MULTI-PASS (fallback - complex features)\n");
+            } else {
+                strategy = COMPILE_SINGLE_PASS;
+                printf("[DEBUG] -> Smart Backend Selection: SINGLE-PASS (fallback - simple code)\n");
+            }
+            break;
+    }
+    
+    return strategy;
 }
 
 // Compiler initialization and cleanup (compatibility with old API)

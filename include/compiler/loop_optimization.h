@@ -41,6 +41,12 @@ void initLoopOptimization(LoopOptimizer* optimizer);
 // Returns true if any optimization was applied
 bool optimizeLoop(ASTNode* node, Compiler* compiler);
 
+// PGO-enhanced loop optimization entry point
+// Integrates profile-guided optimization data for smarter optimization decisions
+bool optimizePGOLoop(ASTNode* node, Compiler* compiler);
+void applyPGOToLoopCompilation(ASTNode* node, Compiler* compiler);
+void printPGOLoopStats(void);
+
 // Get optimization statistics
 LoopOptimizationStats getLoopOptimizationStats(LoopOptimizer* optimizer);
 

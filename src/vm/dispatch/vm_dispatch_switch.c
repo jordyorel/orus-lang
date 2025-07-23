@@ -9,6 +9,7 @@
 #include "vm/vm_typed_ops.h"
 #include "vm/vm_opcode_handlers.h"
 #include "vm/register_file.h"
+#include "vm/vm_profiling.h"
 #include <math.h>
 
 // Bridge functions for safe register access across legacy and hierarchical systems

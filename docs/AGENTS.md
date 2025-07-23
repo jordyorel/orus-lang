@@ -13,17 +13,38 @@ Before implementing ANYTHING, you MUST:
 
 **NEVER implement features without first understanding the existing architecture and roadmap!**
 
-### **🔥 CRITICAL REMINDER: Single-Pass Compiler Design**
-**Orus uses a SINGLE-PASS compiler for maximum performance. This affects EVERY compiler change:**
-- ✅ **Compile in ONE forward pass only** - no multiple phases
-- ✅ **Generate bytecode immediately** - no deferred code generation  
-- ✅ **Linear O(n) compilation time** - scales directly with source size
-- ✅ **Sub-millisecond compilation** - directly impacts VM startup speed
-- ❌ **NO multi-pass algorithms** - forbidden in compiler design
-- ❌ **NO lookahead/backtracking** - forward-only parsing
-- ❌ **NO complex analysis passes** - keep analysis simple and fast
+### **🔥 CRITICAL REMINDER: Shared Frontend + Specialized Backends Architecture**
+**Orus uses a SHARED FRONTEND with SPECIALIZED BACKENDS for optimal performance and feature consistency. This affects EVERY compiler change:**
 
-**Why This Matters**: Compilation happens at VM runtime. Slow compilation = slow program startup!
+#### **✅ SHARED FRONTEND (Single-Pass Design)**
+- ✅ **Single parsing pass** - unified AST generation for all backends
+- ✅ **Unified type checking** - consistent semantics across compilation modes
+- ✅ **Shared semantic analysis** - no feature gaps between backends
+- ✅ **Single validation pass** - error handling consistency
+- ✅ **Forward-only parsing** - no backtracking or lookahead
+
+#### **✅ SPECIALIZED BACKENDS (Performance-Optimized)**
+- ✅ **FAST Backend**: Direct bytecode emission, development-optimized
+- ✅ **OPTIMIZED Backend**: Advanced optimizations, production-ready
+- ✅ **HYBRID Backend**: Smart backend selection based on code characteristics
+- ✅ **VM-Aware Optimizations**: Register allocation for 256-register VM
+- ✅ **Profile-Guided Optimization**: Hot path detection and recompilation
+
+#### **🎯 Smart Backend Selection**
+```c
+CompilerBackend chooseOptimalBackend(ASTNode* node, CompilationContext* ctx) {
+    if (ctx->isDebugMode) return BACKEND_FAST;           // Fast compilation
+    if (isHotPath(node, ctx->profile)) return BACKEND_OPTIMIZED;  // Hot code
+    if (hasComplexLoops(node)) return BACKEND_OPTIMIZED; // Complex optimizations
+    return BACKEND_HYBRID;                               // Smart selection
+}
+```
+
+**Why This Architecture Matters**: 
+- **Feature Consistency**: Single frontend ensures all backends support same features
+- **Performance Flexibility**: Choose optimal backend per code section
+- **VM Optimization**: Specialized backends optimize for 256-register VM
+- **Development Speed**: Fast backend for development, optimized for production
 
 ### **⚡ Critical Implementation Priorities**
 Focus on these features in order for a functional Orus language:
@@ -38,48 +59,79 @@ Focus on these features in order for a functional Orus language:
 
 ## 🚀 **Core Performance Principles**
 
-### **0. Single-Pass Compiler Design (CRITICAL)**
-**The Orus compiler is designed as a SINGLE-PASS system for maximum performance. This is NON-NEGOTIABLE.**
+### **0. Shared Frontend + Specialized Backends Architecture (CRITICAL)**
+**The Orus compiler uses a SHARED FRONTEND with SPECIALIZED BACKENDS for optimal performance. This is NON-NEGOTIABLE.**
 
-- **ONE PASS ONLY**: Compilation must complete in a single forward pass through source code
-- **NO MULTIPLE PASSES**: No separate parsing, analysis, and codegen phases
-- **IMMEDIATE CODEGEN**: Generate bytecode as soon as syntax is validated
-- **LINEAR TIME**: Compilation time MUST scale O(n) with source size
-- **ZERO LOOK-AHEAD**: Cannot peek ahead in source - resolve symbols as encountered
-- **FAST RUNTIME STARTUP**: Compilation speed directly affects VM startup time
+#### **📋 SHARED FRONTEND PRINCIPLES**
+- **SINGLE PARSING PASS**: Unified AST generation for all backends
+- **UNIFIED TYPE CHECKING**: Consistent semantics across all compilation modes
+- **SHARED VALIDATION**: Single source of truth for language semantics
+- **LINEAR FRONTEND TIME**: Frontend MUST scale O(n) with source size
+- **FORWARD-ONLY PARSING**: No backtracking or lookahead in frontend
+- **IMMEDIATE ANALYSIS**: Type checking and validation as parsing progresses
 
 ```c
-// ✅ CORRECT: Single-pass compilation with immediate emission
-void compile_expression(Compiler* c) {
-    advance_token(c);                    // Single forward scan
-    parse_and_emit_immediately(c);       // Generate bytecode NOW
-    // NO second pass for optimization
-    // NO deferred analysis
-    // NO symbol table post-processing
+// ✅ CORRECT: Shared frontend with typed expressions
+TypedExpression* analyzeExpression(ASTNode* node, Compiler* compiler) {
+    TypedExpression* typed = malloc(sizeof(TypedExpression));
+    typed->node = node;
+    typed->inferredType = inferType(node, compiler);        // Unified typing
+    typed->isConstant = isConstantExpression(node);         // Shared analysis
+    typed->preferredReg = suggestRegister(node, compiler);  // VM hints
+    typed->flags = validateSafety(node, compiler);          // Unified validation
+    return typed;
 }
 
-// ❌ WRONG: Multi-pass compilation (FORBIDDEN)
-void compile_multi_pass(Compiler* c) {
-    parse_pass(c);        // ❌ Separate parsing pass
-    analyze_pass(c);      // ❌ Separate analysis pass  
-    optimize_pass(c);     // ❌ Separate optimization pass
-    codegen_pass(c);      // ❌ Separate code generation
+// ✅ CORRECT: Backend-specific code generation
+int compileTypedExpression(TypedExpression* expr, Compiler* compiler, Backend backend) {
+    switch (backend) {
+        case BACKEND_FAST:      return compileFast(expr, compiler);
+        case BACKEND_OPTIMIZED: return compileOptimized(expr, compiler);
+        case BACKEND_HYBRID:    return compileHybrid(expr, compiler);
+    }
 }
 ```
 
-**Why Single-Pass is Critical:**
-1. **VM Startup Speed**: Compilation happens at runtime - MUST be instant
-2. **Memory Efficiency**: No need to store intermediate representations
-3. **Predictable Performance**: Linear compilation time guarantees
-4. **Simplicity**: Fewer phases = fewer bugs and easier maintenance
-5. **Cache Efficiency**: Single forward scan = optimal memory access patterns
+#### **🚀 SPECIALIZED BACKEND PRINCIPLES**
+- **BACKEND_FAST**: Direct bytecode emission, minimal optimization, development speed
+- **BACKEND_OPTIMIZED**: Advanced VM optimizations, register allocation, production performance
+- **BACKEND_HYBRID**: Profile-guided selection, adaptive optimization
+- **VM-AWARE**: All backends optimize for 256-register VM architecture
+- **HOT PATH SWITCHING**: Runtime profiling guides backend selection
+
+```c
+// ✅ CORRECT: Smart backend selection with profiling
+CompilerBackend chooseBackend(TypedExpression* expr, CompilationContext* ctx) {
+    // Debug mode: prioritize compilation speed
+    if (ctx->isDebugMode) return BACKEND_FAST;
+    
+    // Hot path detected: use aggressive optimization
+    if (isHotPath(expr->node, ctx->profile)) return BACKEND_OPTIMIZED;
+    
+    // Complex loops: benefit from optimization
+    if (hasComplexLoops(expr->node)) return BACKEND_OPTIMIZED;
+    
+    // Simple expressions: fast compilation
+    if (isSimpleExpression(expr->node)) return BACKEND_FAST;
+    
+    return BACKEND_HYBRID; // Smart selection
+}
+```
+
+**Why This Architecture is Critical:**
+1. **Feature Consistency**: Single frontend eliminates feature gaps between backends
+2. **Performance Flexibility**: Choose optimal backend per code section
+3. **VM Startup Speed**: Fast backend ensures rapid development iteration
+4. **Production Performance**: Optimized backend maximizes runtime performance
+5. **Profile-Guided Optimization**: Hot path detection enables adaptive optimization
+6. **Maintenance Simplicity**: Single frontend reduces complexity and bugs
 
 **Implementation Rules:**
-- **Forward References**: Use jump patching for unknown labels/functions
-- **Symbol Resolution**: Resolve symbols immediately when encountered 
-- **Error Recovery**: Must continue compilation after errors (single pass)
-- **Optimization**: Only local/peephole optimizations during emission
-- **Type Checking**: Immediate type validation, no deferred checking
+- **Shared Frontend**: All language features MUST be implemented in shared analysis
+- **Backend Specialization**: Each backend optimizes for different use cases
+- **Profile Integration**: Profiling data guides backend selection decisions
+- **VM Optimization**: All backends MUST optimize for 256-register VM
+- **Hot Path Detection**: Runtime profiling enables adaptive recompilation
 
 ### **1. Zero-Cost Abstractions**
 - Every abstraction MUST compile to optimal assembly code
@@ -155,59 +207,106 @@ for (size_t i = 0; i < count; i++) {
 ```
 
 ### **4. Compiler Performance (CRITICAL FOR VM STARTUP)**
-**The compiler performance DIRECTLY impacts VM runtime startup. Keep it FAST and SIMPLE.**
+**The compiler performance DIRECTLY impacts VM runtime startup. Architecture MUST balance speed and optimization.**
 
-- **Sub-Millisecond Compilation**: Small programs (< 1KB) must compile in < 1ms
-- **Linear Scaling**: Large programs must compile at 1MB/sec minimum  
-- **Zero Allocation Hot Path**: Avoid malloc/free in compilation hot paths
-- **Minimal AST**: Use minimal intermediate representations
+#### **🚀 FRONTEND PERFORMANCE (ALWAYS FAST)**
+- **Sub-Millisecond Frontend**: Parsing + analysis must complete in < 1ms for small programs
+- **Linear Frontend Scaling**: Frontend MUST scale O(n) at 1MB/sec minimum  
+- **Zero Allocation Frontend**: Avoid malloc/free in parsing hot paths
+- **Shared Analysis Efficiency**: Single analysis pass for all backends
 - **Cache-Friendly Parsing**: Sequential memory access patterns only
-- **No Complex Analysis**: Keep analysis simple - defer complex work to runtime
+
+#### **⚡ BACKEND PERFORMANCE (ADAPTIVE)**
+- **FAST Backend**: < 1ms total compilation for development iteration
+- **OPTIMIZED Backend**: Advanced optimizations worth the compilation cost
+- **HYBRID Backend**: Smart cost/benefit analysis for optimization decisions
+- **Profile-Guided Selection**: Hot path detection guides backend choice
 
 ```c
-// ✅ CORRECT: Fast single-pass compilation metrics
+// ✅ CORRECT: Adaptive compilation performance metrics
 typedef struct {
-    uint64_t tokens_per_second;    // Target: 1M+ tokens/sec
-    uint64_t bytes_per_second;     // Target: 1MB+/sec  
-    uint64_t compilation_latency;  // Target: < 1ms for small files
-    uint64_t memory_allocations;   // Target: < 10 allocs per compilation
-} CompilerPerformanceMetrics;
+    // Shared frontend metrics (ALWAYS fast)
+    uint64_t frontend_tokens_per_second;    // Target: 2M+ tokens/sec
+    uint64_t frontend_latency;              // Target: < 0.5ms for small files
+    uint64_t shared_analysis_time;          // Target: < 0.3ms for analysis
+    
+    // Backend-specific metrics (adaptive)
+    uint64_t fast_backend_latency;          // Target: < 0.5ms additional
+    uint64_t optimized_backend_latency;     // Target: < 10ms for complex optimization
+    uint64_t profile_lookup_time;           // Target: < 0.1ms for hot path detection
+    
+    // Overall compilation metrics
+    uint64_t total_compilation_time;        // Varies by backend selection
+    uint64_t backend_selection_time;        // Target: < 0.1ms decision time
+} AdaptiveCompilerMetrics;
 
-static inline void fast_token_advance(Lexer* lexer) {
-    // Optimized for single-pass scanning
-    lexer->current++;                    // Simple pointer increment
-    // NO complex lookahead
-    // NO token buffering  
-    // NO backtracking
+// ✅ CORRECT: Fast shared frontend with adaptive backends
+CompilationResult compileWithAdaptiveBackend(ASTNode* ast, CompilerContext* ctx) {
+    uint64_t start_time = get_time_ns();
+    
+    // STEP 1: Fast shared frontend (ALWAYS optimized)
+    TypedExpression* typed = analyzeExpression(ast, ctx->compiler);  // < 0.5ms
+    
+    // STEP 2: Smart backend selection (profile-guided)
+    CompilerBackend backend = chooseOptimalBackend(ast, ctx);        // < 0.1ms
+    
+    // STEP 3: Backend-specific compilation (adaptive performance)
+    int result;
+    switch (backend) {
+        case BACKEND_FAST:                                           // < 0.5ms
+            result = compileFastPath(typed, ctx->compiler);
+            break;
+        case BACKEND_OPTIMIZED:                                      // < 10ms
+            result = compileOptimizedPath(typed, ctx);
+            break;  
+        case BACKEND_HYBRID:                                         // < 2ms
+            result = compileHybridPath(typed, ctx);
+            break;
+    }
+    
+    // Track performance for future backend decisions
+    uint64_t total_time = get_time_ns() - start_time;
+    updateCompilationMetrics(backend, total_time, ast);
+    
+    return result;
 }
 
-// ❌ WRONG: Slow compilation patterns (FORBIDDEN)
-void slow_compilation(Compiler* c) {
-    // ❌ Multiple symbol table passes
-    build_symbol_table(c);
-    resolve_forward_references(c);
-    
-    // ❌ Complex AST transformations  
-    optimize_ast(c->ast);
-    transform_ast(c->ast);
-    
-    // ❌ Expensive analysis
-    dataflow_analysis(c);
-    interprocedural_analysis(c);
+// ❌ WRONG: Uniform slow compilation (FORBIDDEN)
+void slow_uniform_compilation(Compiler* c) {
+    // ❌ Always use expensive optimization regardless of code characteristics
+    build_complex_symbol_table(c);          // Expensive for simple code
+    perform_global_optimization(c);         // Overkill for development
+    advanced_register_allocation(c);        // Unnecessary for cold code
+    interprocedural_analysis(c);            // Too slow for small functions
 }
 ```
 
-**Compilation Speed Targets:**
-- **Interactive REPL**: < 1ms compilation latency for single expressions
-- **Small Scripts**: < 10ms for programs under 10KB
-- **Large Programs**: Linear scaling at 1MB/sec minimum
-- **Memory Usage**: < 2× source size for compilation memory overhead
-- **Zero GC Pressure**: No garbage collection during compilation
+**Adaptive Compilation Speed Targets:**
+
+#### **🚀 Frontend Targets (ALWAYS FAST):**
+- **Interactive REPL**: < 0.5ms frontend latency for single expressions
+- **Small Scripts**: < 2ms frontend for programs under 10KB  
+- **Large Programs**: Frontend scales at 2MB/sec minimum
+- **Memory Usage**: < 1.5× source size for frontend memory overhead
+
+#### **⚡ Backend Targets (ADAPTIVE):**
+- **FAST Backend**: + 0.5ms additional (total < 1ms for REPL)
+- **OPTIMIZED Backend**: + 10ms for complex optimization (production builds)
+- **HYBRID Backend**: + 2ms with smart optimization selection
+- **Profile Lookup**: < 0.1ms to determine hot path status
+
+#### **🎯 Total Compilation Targets:**
+- **Development Mode**: < 1ms total (frontend + FAST backend)
+- **Production Mode**: < 15ms total (frontend + OPTIMIZED backend)  
+- **Adaptive Mode**: 1-5ms total (frontend + HYBRID backend)
+- **Hot Path Recompilation**: < 20ms for runtime optimization
 
 **Performance Monitoring:**
-- **Always Profile**: Measure compilation time for every change
-- **Regression Testing**: Compilation speed tests in CI/CD
-- **Memory Profiling**: Track allocation patterns during compilation
+- **Always Profile**: Measure frontend + backend time separately
+- **Backend Selection Analytics**: Track backend choice effectiveness
+- **Hot Path Detection**: Monitor profile-guided optimization benefits
+- **Regression Testing**: Compilation speed tests for ALL backends in CI/CD
+- **Memory Profiling**: Track allocation patterns for frontend + backends
 - **Cache Analysis**: Monitor CPU cache misses in compilation hot paths
 
 ---
@@ -348,11 +447,31 @@ static CompileResult compile_function(Function* func) {
 }
 ```
 
-### **2. Benchmark Targets**
-- **Compilation Speed**: >100,000 lines of code per second
-- **Memory Usage**: <10MB for 1M lines of code compilation
-- **Startup Time**: <5ms cold start, <1ms warm start
-- **Runtime Performance**: 10x faster than Python, 2x faster than JavaScript
+### **2. Adaptive Benchmark Targets**
+
+#### **🚀 Frontend Benchmarks (Shared across all backends):**
+- **Frontend Speed**: >2M tokens/sec, >2MB source/sec
+- **Frontend Memory**: <1.5× source size for parsing + analysis
+- **Frontend Latency**: <0.5ms for small programs, <2ms for 10KB programs
+
+#### **⚡ Backend Benchmarks (Specialized performance):**
+- **FAST Backend**: >1M lines/sec compilation, <1ms total latency
+- **OPTIMIZED Backend**: >100K lines/sec with advanced optimization, <15ms total
+- **HYBRID Backend**: >500K lines/sec with selective optimization, <5ms total
+- **Profile-Guided Selection**: >10M backend decisions/sec, <0.1ms lookup
+
+#### **🎯 VM Runtime Performance:**
+- **Hot Path Detection**: Detect hot loops within 100 iterations
+- **Profile-Guided Recompilation**: <20ms recompilation for hot paths  
+- **Register VM Optimization**: 256-register utilization >80% for complex code
+- **Overall Runtime**: 10x faster than Python, 2x faster than JavaScript
+- **VM Startup**: <5ms cold start, <1ms warm start with profiling enabled
+
+#### **🔄 Adaptive Optimization Targets:**
+- **Backend Selection Accuracy**: >90% optimal backend choice
+- **Hot Path Optimization Gain**: >2x performance improvement for detected hot paths
+- **Profile Overhead**: <5% runtime overhead when profiling enabled
+- **Memory Efficiency**: <10MB total for 1M lines compilation (all backends)
 
 ---
 
@@ -759,7 +878,13 @@ Before contributing to Orus, study these resources:
 ### **MANDATORY: Always Update Documentation**
 Every contribution MUST include documentation updates:
 
-1. **Update `docs/MISSING.md`** with completed features:
+1. **Update `COMPILER_ARCHITECTURE.md`** for architectural changes:
+   - Update phase completion status (Phase 1, 2, 3, 4)
+   - Document shared frontend + specialized backend modifications
+   - Add new backend selection heuristics and optimization decisions
+   - Update VM-aware optimization strategies and profiling integration
+
+2. **Update `docs/MISSING.md`** with completed features:
    - Mark TODO items as ✅ COMPLETED when implemented
    - Add new TODO items for discovered requirements
    - Update progress estimates and implementation status
@@ -835,14 +960,16 @@ void complete_feature_implementation(Feature* feature) {
 ### **Required Documentation Flow:**
 ```
 1. Read LANGUAGE.md → Understand Orus specifications
-2. Check MISSING.md → See what needs implementation
-3. Study IMPLEMENTATION_GUIDE.md → Learn high-performance patterns
-4. Implement feature → Using best practices from guide
-5. Update MISSING.md → Mark feature as completed
-6. Update IMPLEMENTATION_GUIDE.md → Add new patterns if applicable
-7. Update TEST_CATEGORIZATION.md → Categorize new tests
-8. Update Makefile → Add test targets for new categories
-9. Benchmark and document → Performance characteristics
+2. Check COMPILER_ARCHITECTURE.md → Understand current architecture phase
+3. Check MISSING.md → See what needs implementation  
+4. Study IMPLEMENTATION_GUIDE.md → Learn high-performance patterns
+5. Implement feature → Using shared frontend + specialized backend approach
+6. Update COMPILER_ARCHITECTURE.md → Mark phase progress, document backend changes
+7. Update MISSING.md → Mark feature as completed
+8. Update IMPLEMENTATION_GUIDE.md → Add new patterns if applicable
+9. Update TEST_CATEGORIZATION.md → Categorize new tests
+10. Update Makefile → Add test targets for new categories
+11. Benchmark all backends → Performance characteristics across FAST/OPTIMIZED/HYBRID
 ```
 
 ### **Documentation Quality Requirements:**

@@ -10,6 +10,7 @@
 #include "compiler/compiler.h"
 #include "compiler/loop_optimization.h"
 #include "compiler/symbol_table.h"
+#include "compiler/vm_optimization.h"
 #include "errors/features/type_errors.h"
 #include "errors/features/variable_errors.h"
 #include "internal/error_reporting.h"
@@ -183,9 +184,46 @@ void freeMultiPassCompiler(Compiler* compiler) {
     }
 }
 
-// Multi-pass specific utility functions
+// Multi-pass specific utility functions with VM-aware optimizations
 // Using shared allocateRegister and freeRegister functions from
-// hybrid_compiler.c
+// hybrid_compiler.c, enhanced with VM optimization context
+
+// VM optimization state for multipass compiler
+static VMOptimizationContext g_vmOptCtx = {0};
+static RegisterState g_regState = {0};
+static bool g_vmOptInitialized = false;
+
+// Initialize VM optimization for multipass compiler
+static void initVMOptimization(Compiler* compiler) {
+    if (!g_vmOptInitialized) {
+        g_vmOptCtx = createVMOptimizationContext(BACKEND_OPTIMIZED);
+        initRegisterState(&g_regState);
+        g_vmOptInitialized = true;
+        printf("[DEBUG] VM optimization initialized for multipass compiler\n");
+    }
+}
+
+// Optimized register allocation using VM-aware system
+static uint8_t allocateOptimizedRegister(Compiler* compiler, bool isLoopVar, int estimatedLifetime) {
+    initVMOptimization(compiler);
+    
+    int optimalReg = allocateOptimalRegister(&g_regState, &g_vmOptCtx, isLoopVar, estimatedLifetime);
+    if (optimalReg >= 0) {
+        printf("[DEBUG] VM-optimized register allocation: reg=%d, isLoopVar=%d, lifetime=%d\n", 
+               optimalReg, isLoopVar, estimatedLifetime);
+        return (uint8_t)optimalReg;
+    }
+    
+    // Fallback to traditional allocation
+    return allocateRegister(compiler);
+}
+
+// Free register using VM-aware system
+static void freeOptimizedRegisterMP(uint8_t reg) {
+    if (g_vmOptInitialized) {
+        freeOptimizedRegister(&g_regState, reg);
+    }
+}
 
 static void beginScope(Compiler* compiler) {
     compiler->scopeDepth++;
@@ -530,13 +568,13 @@ static void patchContinueJumps(JumpTable* table, Compiler* compiler,
     for (int i = 0; i < table->offsets.count; i++) {
         int offset = table->offsets.data[i];
 
-        // Calculate jump to continue target (forward jump)
-        int jump = continueTarget - offset - 2;
+        // Calculate jump to continue target (backward jump for OP_LOOP)
+        int jump = offset + 2 - continueTarget;  // Reversed for backward jump
         printf(
             "[DEBUG] patchContinueJumps: offset=%d, continueTarget=%d, "
-            "jump=%d\n",
+            "backward_jump=%d\n",
             offset, continueTarget, jump);
-        if (jump <= UINT16_MAX) {
+        if (jump >= 0 && jump <= UINT16_MAX) {
             compiler->chunk->code[offset] = (jump >> 8) & 0xff;
             compiler->chunk->code[offset + 1] = jump & 0xff;
         }
@@ -635,6 +673,10 @@ static int compileMultiPassBinaryOp(ASTNode* node, Compiler* compiler) {
         emitByte(compiler, OP_EQ_R);
     } else if (strcmp(node->binary.op, "!=") == 0) {
         emitByte(compiler, OP_NE_R);
+    } else if (strcmp(node->binary.op, "and") == 0) {
+        emitByte(compiler, OP_AND_BOOL_R);
+    } else if (strcmp(node->binary.op, "or") == 0) {
+        emitByte(compiler, OP_OR_BOOL_R);
     } else {
         SrcLocation loc = {.file = compiler->fileName,
                            .line = node->location.line,
@@ -740,6 +782,23 @@ static int compileMultiPassExpr(ASTNode* node, Compiler* compiler) {
             emitByte(compiler, resultReg);
 
             freeRegister(compiler, funcReg);
+            return resultReg;
+        }
+        case NODE_CAST: {
+            // Type casting support
+            int sourceReg = compileMultiPassExpr(node->cast.expression, compiler);
+            if (sourceReg < 0) return -1;
+            
+            uint8_t resultReg = allocateRegister(compiler);
+            
+            // Get target type from AST node
+            // For now, assume string casting (most common case)
+            // TODO: Implement proper type parsing from targetType AST node
+            emitByte(compiler, OP_TO_STRING_R);
+            emitByte(compiler, resultReg);
+            emitByte(compiler, sourceReg);
+            
+            freeRegister(compiler, sourceReg);
             return resultReg;
         }
         default:
@@ -983,12 +1042,13 @@ static bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
                 return false;
             }
 
-            // 7. Continue target: increment iterator
-            int continueTarget = compiler->chunk->count;
-            patchContinueJumps(&context->continueJumps, compiler, continueTarget);
-            
+            // 7. Continue target: increment iterator - emit increment operation first
             emitByte(compiler, OP_INC_I32_R);
             emitByte(compiler, iterReg);
+            
+            // Patch continue jumps to point to the increment operation
+            int continueTarget = compiler->chunk->count - 2; // Point to OP_INC_I32_R we just emitted
+            patchContinueJumps(&context->continueJumps, compiler, continueTarget);
 
             // 8. Jump back to condition
             emitLoop(compiler, loopStart);
@@ -1183,7 +1243,7 @@ static bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
                 targetLoop = &mpCompiler->loops[mpCompiler->loopCount - 1];
             }
 
-            emitByte(compiler, OP_JUMP);
+            emitByte(compiler, OP_LOOP);
             int continueJump = emitJump(compiler);
             jumptable_add(&targetLoop->continueJumps, continueJump);
 
