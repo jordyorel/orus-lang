@@ -182,12 +182,28 @@ static bool isComplexExpression(ASTNode* node) {
 
 // Choose compilation strategy based on complexity analysis
 CompilationStrategy chooseStrategy(CodeComplexity complexity) {
-    if (complexity.complexityScore <= SIMPLE_COMPLEXITY_THRESHOLD &&
-        complexity.functionCount <= SIMPLE_FUNCTION_THRESHOLD &&
-        complexity.loopCount <= SIMPLE_LOOP_THRESHOLD &&
-        complexity.nestedLoopDepth <= SIMPLE_NESTING_THRESHOLD) {
+    // TEMPORARY STRICT SEPARATION for debugging:
+    // Force SINGLE-PASS for anything with break/continue to test single-pass
+    // Force MULTI-PASS only for functions and calls
+    
+    printf("[DEBUG] Strategy analysis: functions=%d, calls=%d, loops=%d, nested=%d, break/continue=%d\n", 
+           complexity.functionCount, complexity.callCount, complexity.loopCount, 
+           complexity.nestedLoopDepth, complexity.hasBreakContinue);
+    
+    // SINGLE-PASS: Basic constructs WITHOUT break/continue AND WITHOUT nested loops
+    if (complexity.functionCount == 0 &&         // No functions
+        complexity.callCount == 0 &&             // No function calls
+        !complexity.hasBreakContinue &&          // No break/continue
+        complexity.nestedLoopDepth == 0) {       // No nested loops
+        printf("[DEBUG] -> Choosing SINGLE-PASS (simple constructs only)\n");
         return COMPILE_SINGLE_PASS;
     }
+    
+    // MULTI-PASS: Functions, function calls, break/continue, OR nested loops
+    printf("[DEBUG] -> Choosing MULTI-PASS (has complex features)\n");
+    return COMPILE_MULTI_PASS;
+    
+    // Default to multi-pass for safety
     return COMPILE_MULTI_PASS;
 }
 
@@ -276,7 +292,11 @@ bool compileHybrid(ASTNode* ast, Compiler* compiler, bool isModule,
     CodeComplexity complexity = {0};
     if (strategy == COMPILE_AUTO) {
         complexity = analyzeComplexity(ast);
+        printf("[DEBUG] Complexity analysis: loops=%d, nestedDepth=%d, hasBreakContinue=%d\n", 
+               complexity.loopCount, complexity.nestedLoopDepth, complexity.hasBreakContinue);
         strategy = chooseStrategy(complexity);
+        printf("[DEBUG] Chosen strategy: %s\n", 
+               strategy == COMPILE_MULTI_PASS ? "MULTI_PASS" : "SINGLE_PASS");
     }
 
     // Choose and execute compilation strategy

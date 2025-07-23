@@ -1,7 +1,7 @@
 #ifndef SCOPE_ANALYSIS_H
 #define SCOPE_ANALYSIS_H
 
-#include "vm.h"
+#include "vm/vm.h"
 
 // ---------------------------------------------------------------------------
 // Compile-time Scope Analysis and Register Allocation Optimization
@@ -71,6 +71,7 @@ void updateRegisterAllocatorFromScopeAnalysis(Compiler* compiler, ScopeAnalyzer*
 void updateLocalVariablesFromScopeAnalysis(Compiler* compiler, ScopeAnalyzer* analyzer);
 void updateTypeInformationFromScopeAnalysis(Compiler* compiler, ScopeAnalyzer* analyzer);
 ScopeVariable* findVariableInScopeTree(ScopeInfo* scope, const char* name);
+ScopeVariable* findVariableInScopeChain(ScopeInfo* scope, const char* name);
 ScopeVariable* findVariableWithRegister(ScopeInfo* scope, uint8_t reg);
 
 // ---------------------------------------------------------------------------

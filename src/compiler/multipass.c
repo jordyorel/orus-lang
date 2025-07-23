@@ -4,6 +4,7 @@
 // Description: Multi-pass compiler for the Orus language - advanced
 // optimizations
 
+#include <stdio.h>
 #include <string.h>
 
 #include "compiler/compiler.h"
@@ -14,6 +15,7 @@
 #include "internal/error_reporting.h"
 #include "runtime/jumptable.h"
 #include "runtime/memory.h"
+#include "tools/scope_analysis.h"
 #include "type/type.h"
 #include "vm/register_file.h"
 #include "vm/vm_constants.h"
@@ -86,7 +88,8 @@ static MultiPassCompiler* g_multiPassCompiler = NULL;
 static bool compileMultiPassNode(ASTNode* node, Compiler* compiler);
 static int compileMultiPassExpr(ASTNode* node, Compiler* compiler);
 static void collectUpvalues(ASTNode* node, MultiPassCompiler* mpCompiler);
-void addUpvalue(UpvalueSet* upvalues, const char* name, int idx, bool isLocal, int scope);
+void addUpvalue(UpvalueSet* upvalues, const char* name, int idx, bool isLocal,
+                int scope);
 static void analyzeLoopInvariants(ASTNode* loopBody,
                                   MultiPassCompiler* mpCompiler,
                                   LoopInvariants* invariants);
@@ -181,18 +184,39 @@ void freeMultiPassCompiler(Compiler* compiler) {
 }
 
 // Multi-pass specific utility functions
-// Using shared allocateRegister and freeRegister functions from hybrid_compiler.c
+// Using shared allocateRegister and freeRegister functions from
+// hybrid_compiler.c
 
 static void beginScope(Compiler* compiler) {
     compiler->scopeDepth++;
     symbol_table_begin_scope(&compiler->symbols, compiler->scopeDepth);
+    // Use scope analysis system for comprehensive tracking
+    compilerEnterScope(compiler, false);  // false = not a loop scope initially
+}
+
+static void beginLoopScope(Compiler* compiler) {
+    compiler->scopeDepth++;
+    printf("[DEBUG] beginLoopScope: entered loop scope, depth now %d\n",
+           compiler->scopeDepth);
+    symbol_table_begin_scope(&compiler->symbols, compiler->scopeDepth);
+    // Use scope analysis system for comprehensive tracking
+    compilerEnterScope(compiler, true);  // true = this is a loop scope
 }
 
 static void endScope(Compiler* compiler) {
-    // Free local variables in this scope
+    printf("[DEBUG] endScope: exiting scope at depth %d\n",
+           compiler->scopeDepth);
+
+    // Use scope analysis system first
+    compilerExitScope(compiler);
+
+    // Keep existing local variable cleanup for now
     for (int i = 0; i < compiler->localCount; i++) {
         if (compiler->locals[i].isActive &&
             compiler->locals[i].depth == compiler->scopeDepth) {
+            printf("[DEBUG] endScope: deactivating variable '%s' at depth %d\n",
+                   compiler->locals[i].name ? compiler->locals[i].name : "NULL",
+                   compiler->locals[i].depth);
             if (compiler->locals[i].name) {
                 free(compiler->locals[i].name);
                 compiler->locals[i].name = NULL;
@@ -203,6 +227,7 @@ static void endScope(Compiler* compiler) {
 
     symbol_table_end_scope(&compiler->symbols, compiler->scopeDepth);
     compiler->scopeDepth--;
+    printf("[DEBUG] endScope: depth now %d\n", compiler->scopeDepth);
 }
 
 static int addLocal(Compiler* compiler, const char* name, bool isMutable) {
@@ -224,17 +249,27 @@ static int addLocal(Compiler* compiler, const char* name, bool isMutable) {
     compiler->locals[index].hasKnownType = false;
     compiler->locals[index].knownType = VAL_NIL;
 
+    printf("[DEBUG] addLocal: added '%s' at index %d, depth %d, reg %d\n", name,
+           index, compiler->scopeDepth, reg);
+
     symbol_table_set(&compiler->symbols, name, index, compiler->scopeDepth);
     return index;
 }
 
 static int findLocal(Compiler* compiler, const char* name) {
+    printf("[DEBUG] findLocal: searching for '%s' among %d locals\n", name,
+           compiler->localCount);
     for (int i = compiler->localCount - 1; i >= 0; i--) {
-        if (compiler->locals[i].isActive &&
+        printf("[DEBUG]   local[%d]: name='%s', active=%d, depth=%d\n", i,
+               compiler->locals[i].name ? compiler->locals[i].name : "NULL",
+               compiler->locals[i].isActive, compiler->locals[i].depth);
+        if (compiler->locals[i].isActive && compiler->locals[i].name != NULL &&
             strcmp(compiler->locals[i].name, name) == 0) {
+            printf("[DEBUG] findLocal: FOUND '%s' at index %d\n", name, i);
             return i;
         }
     }
+    printf("[DEBUG] findLocal: NOT FOUND '%s'\n", name);
     return -1;
 }
 
@@ -319,8 +354,8 @@ static void collectUpvalues(ASTNode* node, MultiPassCompiler* mpCompiler) {
     }
 }
 
-void addUpvalue(UpvalueSet* upvalues, const char* name, int idx,
-                       bool isLocal, int scope) {
+void addUpvalue(UpvalueSet* upvalues, const char* name, int idx, bool isLocal,
+                int scope) {
     // Check if already added
     for (int i = 0; i < upvalues->count; i++) {
         if (strcmp(upvalues->entries[i].name, name) == 0) return;
@@ -466,9 +501,13 @@ static void analyzeLoopInvariants(ASTNode* loopBody,
 
 // Jump table management
 static void patchBreakJumps(JumpTable* table, Compiler* compiler) {
+    printf("[DEBUG] patchBreakJumps: Patching %d break jumps to position %d\n",
+           table->offsets.count, compiler->chunk->count);
     for (int i = 0; i < table->offsets.count; i++) {
         int offset = table->offsets.data[i];
         int jump = compiler->chunk->count - offset - 2;
+        printf("[DEBUG] patchBreakJumps: offset=%d, current=%d, jump=%d\n",
+               offset, compiler->chunk->count, jump);
         if (jump <= UINT16_MAX) {
             compiler->chunk->code[offset] = (jump >> 8) & 0xff;
             compiler->chunk->code[offset + 1] = jump & 0xff;
@@ -478,39 +517,70 @@ static void patchBreakJumps(JumpTable* table, Compiler* compiler) {
 
 static void patchContinueJumps(JumpTable* table, Compiler* compiler,
                                int continueTarget) {
+    // Only patch if there are continue jumps to patch
+    if (table->offsets.count == 0) {
+        printf("[DEBUG] patchContinueJumps: No continue jumps to patch\n");
+        return;
+    }
+
+    printf(
+        "[DEBUG] patchContinueJumps: Patching %d continue jumps to target %d\n",
+        table->offsets.count, continueTarget);
+
     for (int i = 0; i < table->offsets.count; i++) {
         int offset = table->offsets.data[i];
 
-        // Change OP_JUMP to OP_LOOP
-        compiler->chunk->code[offset - 1] = OP_LOOP;
-
-        int loopOffset = (offset + 2) - continueTarget;
-        printf("DEBUG: Continue patch - offset=%d, continueTarget=%d, loopOffset=%d\n", 
-               offset, continueTarget, loopOffset);
-        if (loopOffset > 0 && loopOffset <= UINT16_MAX) {
-            compiler->chunk->code[offset] = (loopOffset >> 8) & 0xff;
-            compiler->chunk->code[offset + 1] = loopOffset & 0xff;
-            printf("DEBUG: Continue patch SUCCESS\n");
-        } else {
-            printf("DEBUG: Continue patch FAILED - using original bytes\n");
+        // Calculate jump to continue target (forward jump)
+        int jump = continueTarget - offset - 2;
+        printf(
+            "[DEBUG] patchContinueJumps: offset=%d, continueTarget=%d, "
+            "jump=%d\n",
+            offset, continueTarget, jump);
+        if (jump <= UINT16_MAX) {
+            compiler->chunk->code[offset] = (jump >> 8) & 0xff;
+            compiler->chunk->code[offset + 1] = jump & 0xff;
         }
     }
 }
 
 // Expression compilation with multi-pass features
-static int compileLiteral(ASTNode* node, Compiler* compiler) {
+static int compileMultiPassLiteral(ASTNode* node, Compiler* compiler) {
     uint8_t reg = allocateRegister(compiler);
     emitConstant(compiler, reg, node->literal.value);
     return reg;
 }
 
-static int compileIdentifier(ASTNode* node, Compiler* compiler) {
+static int compileMultiPassIdentifier(ASTNode* node, Compiler* compiler) {
     MultiPassCompiler* mpCompiler = g_multiPassCompiler;
 
-    // Try locals first
+    // DEBUG: Variable resolution for identifier
+    printf(
+        "[DEBUG] compileIdentifier: Looking for variable '%s' at scope depth "
+        "%d\n",
+        node->identifier.name, compiler->scopeDepth);
+    fflush(stdout);
+
+    // Try locals first (handles loop variables and current scope)
     int localIndex = findLocal(compiler, node->identifier.name);
-    if (localIndex >= 0) {
+    printf("[DEBUG] findLocal returned index: %d\n", localIndex);
+
+    if (localIndex >= 0 && compiler->locals[localIndex].name != NULL) {
+        printf("[DEBUG] Found '%s' in locals at index %d, depth %d, reg %d\n",
+               node->identifier.name, localIndex,
+               compiler->locals[localIndex].depth,
+               compiler->locals[localIndex].reg);
+        // Record variable usage in scope analysis
+        compilerUseVariable(compiler, node->identifier.name);
         return compiler->locals[localIndex].reg;
+    }
+
+    // Try scope analysis for cross-scope variable access
+    ScopeVariable* scopeVar = findVariableInScopeChain(
+        compiler->scopeAnalyzer.currentScope, node->identifier.name);
+    if (scopeVar) {
+        // Found in scope chain - record usage and return register
+        compilerUseVariable(compiler, node->identifier.name);
+        return scopeVar->reg;
     }
 
     // Check upvalues if in function
@@ -518,6 +588,8 @@ static int compileIdentifier(ASTNode* node, Compiler* compiler) {
         for (int i = 0; i < mpCompiler->upvalues.count; i++) {
             if (strcmp(mpCompiler->upvalues.entries[i].name,
                        node->identifier.name) == 0) {
+                // Record variable usage in scope analysis
+                compilerUseVariable(compiler, node->identifier.name);
                 uint8_t reg = allocateRegister(compiler);
                 emitByte(compiler, OP_GET_UPVALUE_R);
                 emitByte(compiler, reg);
@@ -527,11 +599,15 @@ static int compileIdentifier(ASTNode* node, Compiler* compiler) {
         }
     }
 
+    printf(
+        "[DEBUG] compileIdentifier: About to report undefined variable '%s'\n",
+        node->identifier.name);
+    fflush(stdout);
     report_undefined_variable(node->location, node->identifier.name);
     return -1;
 }
 
-static int compileBinaryOp(ASTNode* node, Compiler* compiler) {
+static int compileMultiPassBinaryOp(ASTNode* node, Compiler* compiler) {
     int leftReg = compileMultiPassExpr(node->binary.left, compiler);
     int rightReg = compileMultiPassExpr(node->binary.right, compiler);
     uint8_t resultReg = allocateRegister(compiler);
@@ -597,11 +673,11 @@ static int compileMultiPassExpr(ASTNode* node, Compiler* compiler) {
 
     switch (node->type) {
         case NODE_LITERAL:
-            return compileLiteral(node, compiler);
+            return compileMultiPassLiteral(node, compiler);
         case NODE_IDENTIFIER:
-            return compileIdentifier(node, compiler);
+            return compileMultiPassIdentifier(node, compiler);
         case NODE_BINARY:
-            return compileBinaryOp(node, compiler);
+            return compileMultiPassBinaryOp(node, compiler);
         case NODE_TIME_STAMP: {
             uint8_t resultReg = allocateRegister(compiler);
             emitByte(compiler, OP_TIME_STAMP);
@@ -802,14 +878,16 @@ static bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
 
         case NODE_FOR_RANGE: {
             // MULTI-PASS LOOP COMPILATION WITH OPTIMIZATIONS
+            printf("[DEBUG] Compiling for loop with variable '%s'\n",
+                   node->forRange.varName);
 
-            // PASS 1: Try loop optimization first
-            if (optimizeLoop(node, compiler)) {
-                return true;
-            }
+            // PASS 1: Skip loop optimization in multipass mode to avoid
+            // compiler switching Loop optimization calls compileHybrid which
+            // can switch back to singlepass
+            printf("[DEBUG] Skipping loop optimization in multipass mode\n");
 
             // PASS 2: Enhanced loop analysis
-            beginScope(compiler);
+            beginLoopScope(compiler);
 
             if (mpCompiler->loopCount >= mpCompiler->loopCapacity) {
                 mpCompiler->loopCapacity *= 2;
@@ -847,6 +925,31 @@ static bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
             int startReg = compileMultiPassExpr(node->forRange.start, compiler);
             int endReg = compileMultiPassExpr(node->forRange.end, compiler);
 
+            // FIX: Create hidden local for end value to preserve it
+            char hiddenEndName[32];
+            snprintf(hiddenEndName, sizeof(hiddenEndName), "__end_%d_%d",
+                     compiler->scopeDepth, mpCompiler->loopCount);
+            int hiddenEndIndex = addLocal(compiler, hiddenEndName, false);
+            if (hiddenEndIndex < 0) {
+                SrcLocation loc = {.file = compiler->fileName,
+                                   .line = node->location.line,
+                                   .column = node->location.column};
+                report_compile_error(E1009_EXPRESSION_TOO_COMPLEX, loc,
+                                     "Too many local variables");
+                endScope(compiler);
+                mpCompiler->loopCount--;
+                freeRegister(compiler, startReg);
+                freeRegister(compiler, endReg);
+                return false;
+            }
+            uint8_t hiddenEndReg = compiler->locals[hiddenEndIndex].reg;
+
+            // Store end value in hidden local
+            emitByte(compiler, OP_MOVE);
+            emitByte(compiler, hiddenEndReg);
+            emitByte(compiler, endReg);
+            freeRegister(compiler, endReg);  // Free original end register
+
             int loopVarIndex =
                 addLocal(compiler, node->forRange.varName, false);
             if (loopVarIndex < 0) {
@@ -857,8 +960,13 @@ static bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
                                      "Too many local variables");
                 endScope(compiler);
                 mpCompiler->loopCount--;
+                freeRegister(compiler, startReg);
                 return false;
             }
+
+            // Register loop variable with scope analysis
+            compilerDeclareVariable(compiler, node->forRange.varName, VAL_I32,
+                                    compiler->locals[loopVarIndex].reg);
 
             uint8_t iterReg = compiler->locals[loopVarIndex].reg;
 
@@ -866,16 +974,17 @@ static bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
             emitByte(compiler, OP_MOVE);
             emitByte(compiler, iterReg);
             emitByte(compiler, startReg);
+            freeRegister(compiler, startReg);  // Free start register now
 
             int loopStart = compiler->chunk->count;
             context->startInstr = loopStart;
 
-            // Check condition
+            // Check condition: iterReg <= hiddenEndReg
             uint8_t condReg = allocateRegister(compiler);
             emitByte(compiler, OP_LE_I32_R);
             emitByte(compiler, condReg);
             emitByte(compiler, iterReg);
-            emitByte(compiler, endReg);
+            emitByte(compiler, hiddenEndReg);  // Use hidden local
 
             emitByte(compiler, OP_JUMP_IF_NOT_R);
             emitByte(compiler, condReg);
@@ -894,8 +1003,8 @@ static bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
                 return false;
             }
 
-            // PASS 7: Handle continue statements - patch to condition check
-            int continueTarget = loopStart;
+            // PASS 7: Handle continue statements - patch to increment location
+            int continueTarget = compiler->chunk->count;
             patchContinueJumps(&context->continueJumps, compiler,
                                continueTarget);
 
@@ -904,7 +1013,7 @@ static bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
             emitByte(compiler, iterReg);
 
             // Jump back to condition
-            emitLoop(compiler, loopStart);
+            emitLoop(compiler, context->startInstr);
 
             // PASS 8: Patch exit and break jumps
             patchJump(compiler, exitJump);
@@ -921,15 +1030,13 @@ static bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
             jumptable_free(&context->continueJumps);
 
             mpCompiler->loopCount--;
-            freeRegister(compiler, startReg);
-            freeRegister(compiler, endReg);
-
+            // StartReg and endReg were freed earlier
             return true;
         }
 
         case NODE_WHILE: {
             // MULTI-PASS WHILE LOOP COMPILATION
-            beginScope(compiler);
+            beginLoopScope(compiler);
 
             if (mpCompiler->loopCount >= mpCompiler->loopCapacity) {
                 mpCompiler->loopCapacity *= 2;
@@ -992,9 +1099,10 @@ static bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
             }
 
             // Patch continue jumps to loop start
-            patchContinueJumps(&context->continueJumps, compiler, loopStart);
+            patchContinueJumps(&context->continueJumps, compiler,
+                               context->startInstr);
 
-            emitLoop(compiler, loopStart);
+            emitLoop(compiler, context->startInstr);
             patchJump(compiler, exitJump);
             patchBreakJumps(&context->breakJumps, compiler);
 
@@ -1024,10 +1132,10 @@ static bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
                 return false;
             }
 
-            // Find target loop (default to innermost unless labeled)
-            MultiPassLoopContext* targetLoop = NULL;
+            MultiPassLoopContext* targetLoop = &mpCompiler->loops[mpCompiler->loopCount - 1];
             if (node->breakStmt.label) {
                 // Find labeled loop
+                targetLoop = NULL; // Reset for search
                 for (int i = mpCompiler->loopCount - 1; i >= 0; i--) {
                     if (mpCompiler->loops[i].label &&
                         strcmp(mpCompiler->loops[i].label,
@@ -1036,6 +1144,7 @@ static bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
                         break;
                     }
                 }
+
                 if (!targetLoop) {
                     SrcLocation loc = {.file = compiler->fileName,
                                        .line = node->location.line,
@@ -1044,21 +1153,6 @@ static bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
                         E1006_INVALID_SYNTAX, loc,
                         "Undefined loop label in break statement");
                     return false;
-                }
-            } else {
-                // Find the loop that matches the current syntactic scope depth
-                // The break should target the loop whose scopeDepth matches current scope
-                targetLoop = NULL;
-                for (int i = mpCompiler->loopCount - 1; i >= 0; i--) {
-                    if (mpCompiler->loops[i].scopeDepth == compiler->scopeDepth) {
-                        targetLoop = &mpCompiler->loops[i];
-                        break;
-                    }
-                }
-                
-                // If no exact scope match found, fall back to innermost loop
-                if (!targetLoop) {
-                    targetLoop = &mpCompiler->loops[mpCompiler->loopCount - 1];
                 }
             }
 
@@ -1102,20 +1196,10 @@ static bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
                     return false;
                 }
             } else {
-                // Find the loop that matches the current syntactic scope depth
-                // The continue should target the loop whose scopeDepth matches current scope
-                targetLoop = NULL;
-                for (int i = mpCompiler->loopCount - 1; i >= 0; i--) {
-                    if (mpCompiler->loops[i].scopeDepth == compiler->scopeDepth) {
-                        targetLoop = &mpCompiler->loops[i];
-                        break;
-                    }
-                }
-                
-                // If no exact scope match found, fall back to innermost loop
-                if (!targetLoop) {
-                    targetLoop = &mpCompiler->loops[mpCompiler->loopCount - 1];
-                }
+                // For continue statements, target the innermost loop (most
+                // common case) Unlike break, continue statements typically
+                // target the immediate enclosing loop
+                targetLoop = &mpCompiler->loops[mpCompiler->loopCount - 1];
             }
 
             emitByte(compiler, OP_JUMP);
@@ -1129,6 +1213,20 @@ static bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
             int valueReg = compileMultiPassExpr(node->assign.value, compiler);
             if (valueReg < 0) return false;
 
+            // Try scope analysis first for cross-scope variable assignment
+            ScopeVariable* scopeVar = findVariableInScopeChain(
+                compiler->scopeAnalyzer.currentScope, node->assign.name);
+            if (scopeVar) {
+                // Found in scope chain - record usage and assign
+                compilerUseVariable(compiler, node->assign.name);
+                emitByte(compiler, OP_MOVE);
+                emitByte(compiler, scopeVar->reg);
+                emitByte(compiler, valueReg);
+                freeRegister(compiler, valueReg);
+                return true;
+            }
+
+            // Fallback: Try locals for backward compatibility
             int localIndex = findLocal(compiler, node->assign.name);
             if (localIndex >= 0) {
                 if (!compiler->locals[localIndex].isMutable) {
@@ -1138,6 +1236,8 @@ static bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
                     return false;
                 }
 
+                // Record variable usage in scope analysis
+                compilerUseVariable(compiler, node->assign.name);
                 emitByte(compiler, OP_MOVE);
                 emitByte(compiler, compiler->locals[localIndex].reg);
                 emitByte(compiler, valueReg);
@@ -1150,6 +1250,8 @@ static bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
                 for (int i = 0; i < mpCompiler->upvalues.count; i++) {
                     if (strcmp(mpCompiler->upvalues.entries[i].name,
                                node->assign.name) == 0) {
+                        // Record variable usage in scope analysis
+                        compilerUseVariable(compiler, node->assign.name);
                         emitByte(compiler, OP_SET_UPVALUE_R);
                         emitByte(compiler, (uint8_t)i);
                         emitByte(compiler, valueReg);
@@ -1341,18 +1443,28 @@ static bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
 bool compileMultiPass(ASTNode* ast, Compiler* compiler, bool isModule) {
     if (!ast) return false;
 
+    printf("[DEBUG] compileMultiPass: Starting multi-pass compilation\n");
+    fflush(stdout);
+
     MultiPassCompiler* mpCompiler = g_multiPassCompiler;
+
+    // Initialize scope analyzer
+    initCompilerScopeAnalysis(compiler);
 
     // PASS 1: Type analysis (placeholder for now)
     mpCompiler->typeAnalysisComplete = true;
 
-    // PASS 2: Scope analysis (placeholder for now)
+    // PASS 2: Scope analysis - now using comprehensive system
+    // The scope analysis happens incrementally during compilation
     mpCompiler->scopeAnalysisComplete = true;
 
     // PASS 3: Main compilation with optimizations
     bool success = compileMultiPassNode(ast, compiler);
 
-    // PASS 4: Post-compilation optimizations (placeholder for now)
+    // PASS 4: Post-compilation optimizations and finalization
+    if (success) {
+        finalizeCompilerScopeAnalysis(compiler);
+    }
     mpCompiler->optimizationComplete = true;
 
     if (success && !isModule) {

@@ -16,12 +16,9 @@
 #include "vm/register_file.h"
 #include "vm/vm_constants.h"
 
-// Single-pass specific structures
+// Single-pass specific structures - SIMPLIFIED (no break/continue support)
 typedef struct {
-    JumpTable breakJumps;
-    JumpTable continueJumps;
-    int loopStart;
-    int scopeDepth;
+    int loopStart;  // Only track loop start for simple loops
 } SinglePassLoopContext;
 
 typedef struct {
@@ -85,11 +82,7 @@ void freeSinglePassCompiler(Compiler* compiler) {
     symbol_table_free(&compiler->symbols);
 
     if (g_singlePassCompiler) {
-        // Free loop contexts
-        for (int i = 0; i < g_singlePassCompiler->loopCount; i++) {
-            jumptable_free(&g_singlePassCompiler->loops[i].breakJumps);
-            jumptable_free(&g_singlePassCompiler->loops[i].continueJumps);
-        }
+        // Simple cleanup - no jump tables to free
         free(g_singlePassCompiler->loops);
         free(g_singlePassCompiler);
         g_singlePassCompiler = NULL;
@@ -203,77 +196,39 @@ static void enterLoop(Compiler* compiler) {
 
     SinglePassLoopContext* context =
         &spCompiler->loops[spCompiler->loopCount++];
-    context->breakJumps = jumptable_new();
-    context->continueJumps = jumptable_new();
     context->loopStart = compiler->chunk->count;
-    context->scopeDepth = compiler->scopeDepth;
 }
 
 static void exitLoop(Compiler* compiler) {
     SinglePassCompiler* spCompiler = g_singlePassCompiler;
     if (spCompiler->loopCount == 0) return;
-
-    SinglePassLoopContext* context =
-        &spCompiler->loops[--spCompiler->loopCount];
-
-    // Patch break jumps to current position
-    for (int i = 0; i < context->breakJumps.offsets.count; i++) {
-        int offset = context->breakJumps.offsets.data[i];
-        int jump = compiler->chunk->count - offset - 2;
-        if (jump <= UINT16_MAX) {
-            compiler->chunk->code[offset] = (jump >> 8) & 0xff;
-            compiler->chunk->code[offset + 1] = jump & 0xff;
-        }
-    }
-
-    jumptable_free(&context->breakJumps);
-    jumptable_free(&context->continueJumps);
+    
+    // Simple exit - no break/continue jump patching needed
+    spCompiler->loopCount--;
 }
 
-static void patchContinueJumps(Compiler* compiler, int continueTarget) {
-    SinglePassCompiler* spCompiler = g_singlePassCompiler;
-    if (spCompiler->loopCount == 0) return;
-
-    SinglePassLoopContext* context =
-        &spCompiler->loops[spCompiler->loopCount - 1];
-
-    for (int i = 0; i < context->continueJumps.offsets.count; i++) {
-        int offset = context->continueJumps.offsets.data[i];
-
-        // Change OP_JUMP to OP_LOOP
-        compiler->chunk->code[offset - 1] = OP_LOOP;
-
-        int loopOffset = (offset + 2) - continueTarget;
-        printf("DEBUG SP: Continue patch - offset=%d, continueTarget=%d, loopOffset=%d\n", 
-               offset, continueTarget, loopOffset);
-        if (loopOffset > 0 && loopOffset <= UINT16_MAX) {
-            compiler->chunk->code[offset] = (loopOffset >> 8) & 0xff;
-            compiler->chunk->code[offset + 1] = loopOffset & 0xff;
-            printf("DEBUG SP: Continue patch SUCCESS\n");
-        } else {
-            printf("DEBUG SP: Continue patch FAILED\n");
-        }
-    }
-}
+// patchContinueJumps removed - single-pass doesn't handle break/continue
 
 // Expression compilation
-static int compileLiteral(ASTNode* node, Compiler* compiler) {
+static int compileSinglePassLiteral(ASTNode* node, Compiler* compiler) {
     uint8_t reg = allocateRegister(compiler);
     emitConstant(compiler, reg, node->literal.value);
     return reg;
 }
 
-static int compileIdentifier(ASTNode* node, Compiler* compiler) {
+static int compileSinglePassIdentifier(ASTNode* node, Compiler* compiler) {
     int localIndex = findLocal(compiler, node->identifier.name);
     if (localIndex >= 0) {
         return compiler->locals[localIndex].reg;
     }
 
+    printf("[DEBUG] singlepass: About to report undefined variable '%s'\n", node->identifier.name);
+    fflush(stdout);
     report_undefined_variable(node->location, node->identifier.name);
     return -1;
 }
 
-static int compileBinaryOp(ASTNode* node, Compiler* compiler) {
+static int compileSinglePassBinaryOp(ASTNode* node, Compiler* compiler) {
     int leftReg = compileSinglePassExpr(node->binary.left, compiler);
     int rightReg = compileSinglePassExpr(node->binary.right, compiler);
     uint8_t resultReg = allocateRegister(compiler);
@@ -327,11 +282,11 @@ static int compileSinglePassExpr(ASTNode* node, Compiler* compiler) {
 
     switch (node->type) {
         case NODE_LITERAL:
-            return compileLiteral(node, compiler);
+            return compileSinglePassLiteral(node, compiler);
         case NODE_IDENTIFIER:
-            return compileIdentifier(node, compiler);
+            return compileSinglePassIdentifier(node, compiler);
         case NODE_BINARY:
-            return compileBinaryOp(node, compiler);
+            return compileSinglePassBinaryOp(node, compiler);
         case NODE_TIME_STAMP: {
             uint8_t resultReg = allocateRegister(compiler);
             emitByte(compiler, OP_TIME_STAMP);
@@ -369,6 +324,9 @@ static bool compileSinglePassNode(ASTNode* node, Compiler* compiler) {
             int startReg =
                 compileSinglePassExpr(node->forRange.start, compiler);
             int endReg = compileSinglePassExpr(node->forRange.end, compiler);
+            
+            // Protect end register from being reused during loop body compilation
+            // by marking it as permanently allocated during the loop
 
             beginScope(compiler);
 
@@ -406,7 +364,8 @@ static bool compileSinglePassNode(ASTNode* node, Compiler* compiler) {
             emitByte(compiler, condReg);
             int exitJump = emitJump(compiler);
 
-            freeRegister(compiler, condReg);
+            // Don't free condReg yet - keep it reserved during loop body compilation
+            // to prevent nested loops from corrupting our condition evaluation
 
             // Compile body
             bool success = compileSinglePassNode(node->forRange.body, compiler);
@@ -417,9 +376,7 @@ static bool compileSinglePassNode(ASTNode* node, Compiler* compiler) {
                 return false;
             }
 
-            // Patch continue jumps to point to condition check
-            int continueTarget = loopStart;
-            patchContinueJumps(compiler, continueTarget);
+            // No continue jump patching needed - single-pass doesn't support break/continue
 
             // Increment
             emitByte(compiler, OP_INC_I32_R);
@@ -435,6 +392,8 @@ static bool compileSinglePassNode(ASTNode* node, Compiler* compiler) {
             exitLoop(compiler);
             endScope(compiler);
 
+            // Free all registers at the very end to avoid nested loop conflicts
+            freeRegister(compiler, condReg);  // Free the condition register we kept reserved
             freeRegister(compiler, startReg);
             freeRegister(compiler, endReg);
 
@@ -470,8 +429,7 @@ static bool compileSinglePassNode(ASTNode* node, Compiler* compiler) {
                 return false;
             }
 
-            // Patch continue jumps to loop start
-            patchContinueJumps(compiler, loopStart);
+            // No continue jump patching needed - single-pass doesn't support break/continue
 
             emitLoop(compiler, loopStart);
             patchJump(compiler, exitJump);
@@ -482,44 +440,16 @@ static bool compileSinglePassNode(ASTNode* node, Compiler* compiler) {
             return true;
         }
 
-        case NODE_BREAK: {
-            SinglePassCompiler* spCompiler = g_singlePassCompiler;
-            if (spCompiler->loopCount == 0) {
-                SrcLocation loc = {.file = compiler->fileName,
-                                   .line = node->location.line,
-                                   .column = node->location.column};
-                report_compile_error(E1006_INVALID_SYNTAX, loc,
-                                     "break statement outside of loop");
-                return false;
-            }
-
-            SinglePassLoopContext* context =
-                &spCompiler->loops[spCompiler->loopCount - 1];
-            emitByte(compiler, OP_JUMP);
-            int breakJump = emitJump(compiler);
-            jumptable_add(&context->breakJumps, breakJump);
-
-            return true;
-        }
-
+        case NODE_BREAK:
         case NODE_CONTINUE: {
-            SinglePassCompiler* spCompiler = g_singlePassCompiler;
-            if (spCompiler->loopCount == 0) {
-                SrcLocation loc = {.file = compiler->fileName,
-                                   .line = node->location.line,
-                                   .column = node->location.column};
-                report_compile_error(E1006_INVALID_SYNTAX, loc,
-                                     "continue statement outside of loop");
-                return false;
-            }
-
-            SinglePassLoopContext* context =
-                &spCompiler->loops[spCompiler->loopCount - 1];
-            emitByte(compiler, OP_JUMP);
-            int continueJump = emitJump(compiler);
-            jumptable_add(&context->continueJumps, continueJump);
-
-            return true;
+            // Break/continue are now handled ONLY by multi-pass compiler
+            // Single-pass should never encounter these due to routing logic
+            SrcLocation loc = {.file = compiler->fileName,
+                               .line = node->location.line,
+                               .column = node->location.column};
+            report_compile_error(E1006_INVALID_SYNTAX, loc,
+                                 "break/continue statements require multi-pass compilation");
+            return false;
         }
 
         case NODE_ASSIGN: {

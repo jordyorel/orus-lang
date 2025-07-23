@@ -17,6 +17,9 @@ typedef struct {
     SymbolEntry* entries;
     size_t capacity;
     size_t count;
+    int* scope_stack;     // Stack of active scopes
+    int scope_stack_size; // Current size of scope stack
+    int scope_stack_capacity; // Capacity of scope stack
 } SymbolTable;
 
 void symbol_table_init(SymbolTable* table);

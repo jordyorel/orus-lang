@@ -36,7 +36,7 @@ static void applyScopeOptimizationsToCompiler(Compiler* compiler);
 static void updateRegisterAllocatorFromScopeAnalysis(Compiler* compiler, ScopeAnalyzer* analyzer);
 static void updateLocalVariablesFromScopeAnalysis(Compiler* compiler, ScopeAnalyzer* analyzer);
 static void updateTypeInformationFromScopeAnalysis(Compiler* compiler, ScopeAnalyzer* analyzer);
-static ScopeVariable* findVariableInScopeTree(ScopeInfo* scope, const char* name);
+ScopeVariable* findVariableInScopeTree(ScopeInfo* scope, const char* name);
 static ScopeVariable* findVariableWithRegister(ScopeInfo* scope, uint8_t reg);
 
 // Forward declarations for closure capture analysis
@@ -1047,7 +1047,7 @@ static void updateTypeInformationFromScopeAnalysis(Compiler* compiler, ScopeAnal
 }
 
 // Helper function to find variable in scope tree
-static ScopeVariable* findVariableInScopeTree(ScopeInfo* scope, const char* name) {
+ScopeVariable* findVariableInScopeTree(ScopeInfo* scope, const char* name) {
     if (scope == NULL) return NULL;
     
     // Search in current scope
@@ -1063,6 +1063,18 @@ static ScopeVariable* findVariableInScopeTree(ScopeInfo* scope, const char* name
     }
     
     return NULL;
+}
+
+// Helper function to find variable in scope chain (upwards search)
+ScopeVariable* findVariableInScopeChain(ScopeInfo* scope, const char* name) {
+    if (scope == NULL) return NULL;
+    
+    // Search in current scope first
+    ScopeVariable* var = findVariableInScope(scope, name);
+    if (var != NULL) return var;
+    
+    // Search in parent scopes (upward traversal)
+    return findVariableInScopeChain(scope->parent, name);
 }
 
 // Helper function to find variable with specific register

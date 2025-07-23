@@ -74,6 +74,11 @@ void symbol_table_init(SymbolTable* table) {
     table->capacity = INITIAL_CAPACITY;
     table->count = 0;
     table->entries = calloc(table->capacity, sizeof(SymbolEntry));
+    
+    // Initialize scope stack
+    table->scope_stack_capacity = 16;
+    table->scope_stack_size = 0;
+    table->scope_stack = calloc(table->scope_stack_capacity, sizeof(int));
 }
 
 void symbol_table_free(SymbolTable* table) {
@@ -85,9 +90,15 @@ void symbol_table_free(SymbolTable* table) {
         }
         free(table->entries);
     }
+    if (table->scope_stack) {
+        free(table->scope_stack);
+    }
     table->entries = NULL;
+    table->scope_stack = NULL;
     table->capacity = 0;
     table->count = 0;
+    table->scope_stack_size = 0;
+    table->scope_stack_capacity = 0;
 }
 
 bool symbol_table_set(SymbolTable* table, const char* name, int index, int scope_depth) {
@@ -148,25 +159,63 @@ void symbol_table_remove(SymbolTable* table, const char* name) {
     table->count--;
 }
 
+// Helper function to check if a scope is still active
+static bool is_scope_active(SymbolTable* table, int scope_depth) {
+    for (int i = 0; i < table->scope_stack_size; i++) {
+        if (table->scope_stack[i] == scope_depth) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // Scope management functions
 void symbol_table_begin_scope(SymbolTable* table, int scope_depth) {
-    // No specific action needed for beginning scope
-    // Variables will be added with the new scope depth
-    (void)table; // Suppress unused parameter warning
-    (void)scope_depth;
+    // Add scope to the active scope stack
+    if (table->scope_stack_size >= table->scope_stack_capacity) {
+        table->scope_stack_capacity *= 2;
+        table->scope_stack = realloc(table->scope_stack, 
+                                   table->scope_stack_capacity * sizeof(int));
+    }
+    table->scope_stack[table->scope_stack_size++] = scope_depth;
 }
 
 void symbol_table_end_scope(SymbolTable* table, int scope_depth) {
     if (!table->entries || table->capacity == 0) return;
     
-    // Remove all variables from the ending scope
+    // Remove scope from active scope stack
+    for (int i = 0; i < table->scope_stack_size; i++) {
+        if (table->scope_stack[i] == scope_depth) {
+            // Shift remaining scopes down
+            for (int j = i; j < table->scope_stack_size - 1; j++) {
+                table->scope_stack[j] = table->scope_stack[j + 1];
+            }
+            table->scope_stack_size--;
+            break;
+        }
+    }
+    
+    // NON-DESTRUCTIVE: Only remove variables from the ending scope 
+    // if they are not accessible from any remaining active scope
     for (size_t i = 0; i < table->capacity; i++) {
         SymbolEntry* entry = &table->entries[i];
         if (entry->name && !entry->is_tombstone && entry->scope_depth == scope_depth) {
-            free((char*)entry->name);
-            entry->name = NULL;
-            entry->is_tombstone = true;
-            table->count--;
+            // Check if this variable's scope is still accessible from remaining active scopes
+            bool still_accessible = false;
+            for (int j = 0; j < table->scope_stack_size; j++) {
+                if (table->scope_stack[j] >= scope_depth) {
+                    still_accessible = true;
+                    break;
+                }
+            }
+            
+            // Only destroy if truly inaccessible
+            if (!still_accessible) {
+                free((char*)entry->name);
+                entry->name = NULL;
+                entry->is_tombstone = true;
+                table->count--;
+            }
         }
     }
 }

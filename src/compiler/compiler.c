@@ -1499,6 +1499,8 @@ static int compileIdentifier(ASTNode* node, Compiler* compiler) {
         }
     }
     
+    printf("[DEBUG] compiler.c: About to report undefined variable '%s'\n", node->identifier.name);
+    fflush(stdout);
     report_undefined_variable(node->location, node->identifier.name);
     return -1;
 }
