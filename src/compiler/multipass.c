@@ -14,6 +14,7 @@
 #include "errors/features/type_errors.h"
 #include "errors/features/variable_errors.h"
 #include "internal/error_reporting.h"
+#include "internal/logging.h"
 #include "runtime/jumptable.h"
 #include "runtime/memory.h"
 #include "tools/scope_analysis.h"
@@ -94,6 +95,7 @@ void addUpvalue(UpvalueSet* upvalues, const char* name, int idx, bool isLocal,
 static void analyzeLoopInvariants(ASTNode* loopBody,
                                   MultiPassCompiler* mpCompiler,
                                   LoopInvariants* invariants);
+static bool dependsOnModified(ASTNode* expr, ModifiedSet* modified);
 
 void initMultiPassCompiler(Compiler* compiler, Chunk* chunk,
                            const char* fileName, const char* source) {
@@ -199,7 +201,7 @@ static void initVMOptimization(Compiler* compiler __attribute__((unused))) {
         g_vmOptCtx = createVMOptimizationContext(BACKEND_OPTIMIZED);
         initRegisterState(&g_regState);
         g_vmOptInitialized = true;
-        printf("[DEBUG] VM optimization initialized for multipass compiler\n");
+        LOG_COMPILER_DEBUG("multipass", "VM optimization initialized");
     }
 }
 
@@ -209,8 +211,8 @@ __attribute__((unused)) static uint8_t allocateOptimizedRegister(Compiler* compi
     
     int optimalReg = allocateOptimalRegister(&g_regState, &g_vmOptCtx, isLoopVar, estimatedLifetime);
     if (optimalReg >= 0) {
-        printf("[DEBUG] VM-optimized register allocation: reg=%d, isLoopVar=%d, lifetime=%d\n", 
-               optimalReg, isLoopVar, estimatedLifetime);
+        LOG_COMPILER_DEBUG("multipass", "VM-optimized register allocation: reg=%d, isLoopVar=%d, lifetime=%d", 
+                          optimalReg, isLoopVar, estimatedLifetime);
         return (uint8_t)optimalReg;
     }
     
@@ -234,16 +236,16 @@ static void beginScope(Compiler* compiler) {
 
 static void beginLoopScope(Compiler* compiler) {
     compiler->scopeDepth++;
-    printf("[DEBUG] beginLoopScope: entered loop scope, depth now %d\n",
-           compiler->scopeDepth);
+    LOG_COMPILER_DEBUG("multipass", "beginLoopScope: entered loop scope, depth now %d", 
+                      compiler->scopeDepth);
     symbol_table_begin_scope(&compiler->symbols, compiler->scopeDepth);
     // Use scope analysis system for comprehensive tracking
     compilerEnterScope(compiler, true);  // true = this is a loop scope
 }
 
 static void endScope(Compiler* compiler) {
-    printf("[DEBUG] endScope: exiting scope at depth %d\n",
-           compiler->scopeDepth);
+    LOG_COMPILER_DEBUG("multipass", "endScope: exiting scope at depth %d", 
+                      compiler->scopeDepth);
 
     // Use scope analysis system first
     compilerExitScope(compiler);
@@ -466,7 +468,7 @@ static void collectModifiedVariables(ASTNode* node, ModifiedSet* modified) {
 }
 
 // PASS 3: Loop invariant analysis (LICM)
-__attribute__((unused)) static bool dependsOnModified(ASTNode* node, ModifiedSet* modified) {
+static bool dependsOnModified(ASTNode* node, ModifiedSet* modified) {
     if (!node) return false;
 
     switch (node->type) {
@@ -513,22 +515,30 @@ bool hasSideEffects(ASTNode* node) {
 }
 
 static void analyzeLoopInvariants(ASTNode* loopBody,
-                                  MultiPassCompiler* mpCompiler __attribute__((unused)),
+                                  MultiPassCompiler* mpCompiler,
                                   LoopInvariants* invariants) {
     ModifiedSet modified = {0};
     collectModifiedVariables(loopBody, &modified);
 
-    // Initialize invariants
-    invariants->entries = NULL;
+    invariants->entries = malloc(sizeof(InvariantEntry) * 8);
+    invariants->capacity = 8;
     invariants->count = 0;
-    invariants->capacity = 0;
 
-    // TODO: Traverse AST to find candidate expressions that:
-    // 1. Don't depend on modified variables
-    // 2. Don't have side effects
-    // 3. Are worth hoisting
-
-    // For now, just initialize the structure
+    // Traverse loop body to find invariant expressions
+    if (loopBody->type == NODE_BLOCK) {
+        for (int i = 0; i < loopBody->block.count; i++) {
+            ASTNode* node = loopBody->block.statements[i];
+            if (!hasSideEffects(node) && !dependsOnModified(node, &modified)) {
+                if (invariants->count >= invariants->capacity) {
+                    invariants->capacity *= 2;
+                    invariants->entries = realloc(invariants->entries, invariants->capacity * sizeof(InvariantEntry));
+                }
+                InvariantEntry* entry = &invariants->entries[invariants->count++];
+                entry->expr = node;
+                entry->reg = allocateRegister(mpCompiler->base);
+            }
+        }
+    }
 
     // Free modified set
     for (int i = 0; i < modified.count; i++) {
@@ -536,6 +546,8 @@ static void analyzeLoopInvariants(ASTNode* loopBody,
     }
     free(modified.names);
 }
+
+// Remove duplicate - using existing function above
 
 // Jump table management
 static void patchBreakJumps(JumpTable* table, Compiler* compiler) {
@@ -1544,9 +1556,73 @@ void initCompilerTypeInference(Compiler* compiler) { (void)compiler; }
 void freeCompilerTypeInference(Compiler* compiler) { (void)compiler; }
 
 Type* inferExpressionType(Compiler* compiler, ASTNode* expr) {
-    (void)compiler;
-    (void)expr;
-    return NULL;
+    if (!expr) return NULL;
+    
+    switch (expr->type) {
+        case NODE_LITERAL:
+            return getPrimitiveType(valueTypeToTypeKind(expr->literal.value.type));
+            
+        case NODE_BINARY: {
+            // Infer based on operator and operand types
+            Type* leftType = inferExpressionType(compiler, expr->binary.left);
+            Type* rightType = inferExpressionType(compiler, expr->binary.right);
+            
+            if (leftType && rightType && leftType->kind == rightType->kind) {
+                return leftType; // Simplified: assumes same type for now
+            }
+            
+            // For mixed types, apply promotion rules
+            if (leftType && rightType) {
+                if (leftType->kind == TYPE_F64 || rightType->kind == TYPE_F64) {
+                    return getPrimitiveType(TYPE_F64);
+                }
+                if (leftType->kind == TYPE_I64 || rightType->kind == TYPE_I64) {
+                    return getPrimitiveType(TYPE_I64);
+                }
+                if (leftType->kind == TYPE_I32 || rightType->kind == TYPE_I32) {
+                    return getPrimitiveType(TYPE_I32);
+                }
+            }
+            return NULL;
+        }
+        
+        case NODE_CAST:
+            // Use specified target type from AST
+            if (expr->cast.targetType && expr->cast.targetType->type == NODE_TYPE) {
+                const char* typeName = expr->cast.targetType->typeAnnotation.name;
+                if (strcmp(typeName, "i32") == 0) return getPrimitiveType(TYPE_I32);
+                if (strcmp(typeName, "i64") == 0) return getPrimitiveType(TYPE_I64);
+                if (strcmp(typeName, "f64") == 0) return getPrimitiveType(TYPE_F64);
+                if (strcmp(typeName, "bool") == 0) return getPrimitiveType(TYPE_BOOL);
+                if (strcmp(typeName, "string") == 0) return getPrimitiveType(TYPE_STRING);
+            }
+            return NULL;
+            
+        case NODE_IDENTIFIER: {
+            // Look up variable type from locals
+            int localIndex = findLocal(compiler, expr->identifier.name);
+            if (localIndex >= 0 && compiler->locals[localIndex].hasKnownType) {
+                return getPrimitiveType(valueTypeToTypeKind(compiler->locals[localIndex].knownType));
+            }
+            return NULL;
+        }
+        
+        case NODE_UNARY: {
+            Type* operandType = inferExpressionType(compiler, expr->unary.operand);
+            const char* op = expr->unary.op;
+            
+            if (strcmp(op, "-") == 0 || strcmp(op, "+") == 0) {
+                return operandType; // Unary arithmetic preserves type
+            }
+            if (strcmp(op, "!") == 0) {
+                return getPrimitiveType(TYPE_BOOL); // Logical not always returns bool
+            }
+            return NULL;
+        }
+        
+        default:
+            return NULL;
+    }
 }
 
 bool resolveVariableType(Compiler* compiler, const char* name,

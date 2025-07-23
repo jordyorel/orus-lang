@@ -13,24 +13,16 @@
 typedef enum {
     COMPILE_SINGLE_PASS,    // Fast compilation for simple code
     COMPILE_MULTI_PASS,     // Advanced compilation with optimizations
+    COMPILE_HYBRID,         // Granular compilation with per-node strategy selection
     COMPILE_AUTO            // Automatically choose based on code complexity
 } CompilationStrategy;
 
-// Complexity analysis result
-typedef struct {
-    int functionCount;
-    int loopCount;
-    int nestedLoopDepth;
-    int upvalueCount;
-    int callCount;
-    bool hasBreakContinue;
-    bool hasComplexExpressions;
-    int complexityScore;
-} CodeComplexity;
+// Use unified complexity analysis from backend_selection.h
+#include "compiler/backend_selection.h"
 
 // Hybrid compiler interface
 bool compileHybrid(ASTNode* ast, Compiler* compiler, bool isModule, CompilationStrategy strategy);
-CodeComplexity analyzeComplexity(ASTNode* ast);
+// Remove duplicate - use analyzeCodeComplexity from backend_selection.h
 CompilationStrategy chooseStrategy(CodeComplexity complexity);
 
 // Single-pass compiler interface

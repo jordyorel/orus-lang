@@ -3,7 +3,7 @@
 
 #include "compiler/compiler.h"
 #include "compiler/vm_optimization.h"
-#include "ast/ast.h"
+#include "ast.h"
 
 // Compiler context for backend-specific settings
 typedef struct {

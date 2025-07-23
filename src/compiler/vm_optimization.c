@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdio.h>
 #include "vm/vm.h"
+#include "vm/vm_config.h"
 #include "compiler/compiler.h"
 #include "compiler/vm_optimization.h"
 #include "vm/vm_profiling.h"
@@ -9,10 +10,8 @@
 #define max(a, b) ((a) > (b) ? (a) : (b))
 #define min(a, b) ((a) < (b) ? (a) : (b))
 
-// VM Constants
-#define VM_REGISTER_COUNT 256
-#define VM_CACHE_LINE_SIZE 64
-#define VM_PREFERRED_WORKING_SET 128  // Preferred number of active registers
+// Global register state for optimization
+RegisterState g_regState = {0};
 
 // Create VM optimization context based on backend selection
 VMOptimizationContext createVMOptimizationContext(CompilerBackend backend) {
@@ -31,10 +30,10 @@ VMOptimizationContext createVMOptimizationContext(CompilerBackend backend) {
             
         case BACKEND_OPTIMIZED:
             // Optimized compilation - aggressive optimizations
-            ctx.targetRegisterCount = VM_PREFERRED_WORKING_SET;
+            ctx.targetRegisterCount = getVMConfig()->preferredWorkingSet;
             ctx.enableRegisterReuse = true;
             ctx.optimizeForSpeed = true;
-            ctx.enableComputedGoto = true;
+            ctx.enableComputedGoto = getVMConfig()->supportsComputedGoto;
             ctx.registerPressure = 0.0f;
             ctx.spillThreshold = 200;
             break;
@@ -45,7 +44,7 @@ VMOptimizationContext createVMOptimizationContext(CompilerBackend backend) {
             ctx.targetRegisterCount = 64;
             ctx.enableRegisterReuse = true;
             ctx.optimizeForSpeed = true;
-            ctx.enableComputedGoto = true;
+            ctx.enableComputedGoto = getVMConfig()->supportsComputedGoto;
             ctx.registerPressure = 0.0f;
             ctx.spillThreshold = 50;
             break;
@@ -54,10 +53,10 @@ VMOptimizationContext createVMOptimizationContext(CompilerBackend backend) {
     return ctx;
 }
 
-// Initialize register state for 256-register VM
+// Initialize register state for VM
 void initRegisterState(RegisterState* regState) {
     memset(regState, 0, sizeof(RegisterState));
-    regState->availableRegisters = VM_REGISTER_COUNT;
+    regState->availableRegisters = vmGetRegisterCount();
     regState->highWaterMark = 0;
     
     // Mark first few registers as reserved for special purposes
@@ -70,12 +69,13 @@ void initRegisterState(RegisterState* regState) {
 // Calculate current register pressure (0.0 = no pressure, 1.0 = full)
 float calculateRegisterPressure(RegisterState* regState) {
     int activeRegisters = 0;
-    for (int i = 0; i < VM_REGISTER_COUNT; i++) {
+    int registerCount = vmGetRegisterCount();
+    for (int i = 0; i < registerCount; i++) {
         if (regState->liveRegisters[i] > 0) {
             activeRegisters++;
         }
     }
-    return (float)activeRegisters / (float)VM_REGISTER_COUNT;
+    return (float)activeRegisters / (float)registerCount;
 }
 
 // Allocate optimal register based on VM characteristics
@@ -84,8 +84,9 @@ int allocateOptimalRegister(RegisterState* regState, VMOptimizationContext* vmCt
     // Find best register based on optimization context
     int bestReg = -1;
     int bestScore = -1;
+    int registerCount = vmGetRegisterCount();
     
-    for (int i = 4; i < VM_REGISTER_COUNT; i++) { // Skip reserved registers
+    for (int i = 4; i < registerCount; i++) { // Skip reserved registers
         if (regState->isPinned[i] || regState->liveRegisters[i] > 0) {
             continue;
         }
@@ -127,7 +128,8 @@ int allocateOptimalRegister(RegisterState* regState, VMOptimizationContext* vmCt
 
 // Free optimized register
 void freeOptimizedRegister(RegisterState* regState, int reg) {
-    if (reg >= 0 && reg < VM_REGISTER_COUNT && !regState->isPinned[reg]) {
+    int registerCount = vmGetRegisterCount();
+    if (reg >= 0 && reg < registerCount && !regState->isPinned[reg]) {
         regState->liveRegisters[reg] = 0;
         regState->lastUse[reg] = 1; // Mark as recently freed
         regState->availableRegisters++;
@@ -242,7 +244,8 @@ void optimizeRegisterUsage(ASTNode* node, RegisterState* regState) {
         case NODE_FOR_RANGE:
         case NODE_WHILE:
             // Loop variables get special treatment
-            for (int i = 0; i < VM_REGISTER_COUNT; i++) {
+            int registerCount = vmGetRegisterCount();
+            for (int i = 0; i < registerCount; i++) {
                 if (regState->liveRegisters[i] > 0) {
                     regState->isLoopVariable[i] = true;
                 }
@@ -282,7 +285,7 @@ void markHotPath(ASTNode* node, RegisterState* regState) {
     #ifdef VM_PROFILING_H
     if (shouldOptimizeForHotPath((void*)node)) {
         // Hot paths get priority register allocation
-        for (int i = 0; i < min(32, VM_REGISTER_COUNT); i++) {
+        for (int i = 0; i < min(32, vmGetRegisterCount()); i++) {
             if (regState->liveRegisters[i] > 0) {
                 regState->spillCost[i] = 0; // Don't spill hot path registers
             }
@@ -290,7 +293,7 @@ void markHotPath(ASTNode* node, RegisterState* regState) {
     }
     #else
     // Fallback: Assume all nodes might be hot paths
-    for (int i = 0; i < min(32, VM_REGISTER_COUNT); i++) {
+    for (int i = 0; i < min(32, vmGetRegisterCount()); i++) {
         if (regState->liveRegisters[i] > 0) {
             regState->spillCost[i] = 0; // Don't spill hot path registers
         }
@@ -305,8 +308,8 @@ void optimizeHotPath(ASTNode* node, VMOptimizationContext* vmCtx, Compiler* comp
     // Hot paths get maximum optimization
     vmCtx->enableRegisterReuse = true;
     vmCtx->optimizeForSpeed = true;
-    vmCtx->enableComputedGoto = true;
-    vmCtx->targetRegisterCount = min(VM_PREFERRED_WORKING_SET, VM_REGISTER_COUNT);
+    vmCtx->enableComputedGoto = vmSupportsComputedGoto();
+    vmCtx->targetRegisterCount = min(getVMConfig()->preferredWorkingSet, vmGetRegisterCount());
 }
 
 // Debug helpers
@@ -318,7 +321,8 @@ void dumpRegisterState(RegisterState* regState) {
     printf("High water mark: %d\n", regState->highWaterMark);
     
     int liveCount = 0;
-    for (int i = 0; i < VM_REGISTER_COUNT; i++) {
+    int registerCount = vmGetRegisterCount();
+    for (int i = 0; i < registerCount; i++) {
         if (regState->liveRegisters[i] > 0) {
             liveCount++;
         }
@@ -343,13 +347,14 @@ void validateRegisterAllocation(RegisterState* regState) {
     if (!regState) return;
     
     int liveCount = 0;
-    for (int i = 0; i < VM_REGISTER_COUNT; i++) {
+    int registerCount = vmGetRegisterCount();
+    for (int i = 0; i < registerCount; i++) {
         if (regState->liveRegisters[i] > 0) {
             liveCount++;
         }
     }
     
-    int expectedAvailable = VM_REGISTER_COUNT - liveCount - 4; // 4 reserved
+    int expectedAvailable = registerCount - liveCount - 4; // 4 reserved
     if (regState->availableRegisters != expectedAvailable) {
         printf("WARNING: Register accounting mismatch. Expected %d available, got %d\n",
                expectedAvailable, regState->availableRegisters);

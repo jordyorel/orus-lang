@@ -25,21 +25,21 @@ typedef struct {
     size_t codeSize;           // Estimated code size
 } CompilationContext;
 
-// Code analysis results
+// Unified code complexity structure (merging CodeAnalysisResult and CodeComplexity)
 typedef struct {
-    int loopCount;              // Number of loops in code
-    int maxNestingDepth;        // Maximum nesting depth
-    int functionCallCount;      // Number of function calls
-    int complexExpressionCount; // Number of complex expressions
-    int controlFlowCount;       // Number of control flow statements
-    bool hasRecursion;          // Contains recursive calls
-    bool hasComplexArithmetic;  // Complex arithmetic operations
-    float optimizationPotential; // 0.0-1.0 score for optimization benefit
-} CodeAnalysisResult;
+    int loopCount;
+    int nestedLoopDepth;
+    int functionCount;
+    int callCount;
+    int complexExpressionCount;
+    bool hasBreakContinue;
+    bool hasComplexArithmetic;
+    float complexityScore; // Unified score for backend selection
+} CodeComplexity;
 
 // Core backend selection functions
 CompilerBackend chooseOptimalBackend(ASTNode* node, CompilationContext* ctx);
-CodeAnalysisResult analyzeCodeComplexity(ASTNode* node);
+CodeComplexity analyzeCodeComplexity(ASTNode* node);
 void initCompilationContext(CompilationContext* ctx, bool debugMode);
 void updateCompilationContext(CompilationContext* ctx, ASTNode* node);
 
@@ -47,7 +47,7 @@ void updateCompilationContext(CompilationContext* ctx, ASTNode* node);
 bool isSimpleExpression(ASTNode* node);
 bool isComplexLoop(ASTNode* node);
 bool hasOptimizationOpportunities(ASTNode* node);
-bool shouldUseOptimizedBackend(CodeAnalysisResult* analysis, CompilationContext* ctx);
+bool shouldUseOptimizedBackend(CodeComplexity* analysis, CompilationContext* ctx);
 float calculateOptimizationBenefit(ASTNode* node);
 
 // Hot path detection (Phase 4 preparation)

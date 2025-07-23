@@ -8,9 +8,18 @@
 #include "compiler/hybrid_compiler.h"
 #include "compiler/backend_selection.h"
 #include "compiler/symbol_table.h"
+#include "compiler/shared_node_compilation.h"
+#include "internal/logging.h"
 #include "vm/vm.h"
 #include "vm/vm_constants.h"
+#include "vm/vm_config.h"
 #include "runtime/memory.h"
+
+// Forward declarations
+static int addToSecondaryConstantTable(Compiler* compiler, Value value);
+static bool compileGranularHybrid(ASTNode* ast, Compiler* compiler, bool isModule);
+static CompilationStrategy chooseNodeStrategy(ASTNode* node);
+static bool isSimpleProgram(ASTNode* ast);
 
 // Complexity analysis thresholds
 #define SIMPLE_FUNCTION_THRESHOLD 2
@@ -18,149 +27,12 @@
 #define SIMPLE_NESTING_THRESHOLD 2
 #define SIMPLE_COMPLEXITY_THRESHOLD 10
 
-// Forward declarations
-static void analyzeNodeComplexity(ASTNode* node, CodeComplexity* complexity,
-                                  int depth);
+// Remove duplicated complexity analysis - now using unified version from backend_selection.c
+// Forward declarations for remaining functions
 static int countPotentialUpvalues(ASTNode* node);
 static bool isComplexExpression(ASTNode* node);
 
-// Analyze code complexity to determine compilation strategy
-CodeComplexity analyzeComplexity(ASTNode* ast) {
-    CodeComplexity complexity = {0};
-
-    if (!ast) return complexity;
-
-    analyzeNodeComplexity(ast, &complexity, 0);
-
-    // Calculate overall complexity score
-    complexity.complexityScore =
-        complexity.functionCount * 3 + complexity.loopCount * 2 +
-        complexity.nestedLoopDepth * 4 + complexity.upvalueCount * 2 +
-        complexity.callCount + (complexity.hasBreakContinue ? 3 : 0) +
-        (complexity.hasComplexExpressions ? 2 : 0);
-
-    return complexity;
-}
-
-static void analyzeNodeComplexity(ASTNode* node, CodeComplexity* complexity,
-                                  int depth) {
-    if (!node) return;
-
-    switch (node->type) {
-        case NODE_PROGRAM:
-            for (int i = 0; i < node->program.count; i++) {
-                analyzeNodeComplexity(node->program.declarations[i], complexity,
-                                      depth);
-            }
-            break;
-
-        case NODE_FUNCTION:
-            complexity->functionCount++;
-            // Functions increase potential upvalue usage
-            complexity->upvalueCount +=
-                countPotentialUpvalues(node->function.body);
-            analyzeNodeComplexity(node->function.body, complexity, depth + 1);
-            break;
-
-        case NODE_FOR_RANGE:
-        case NODE_WHILE:
-            complexity->loopCount++;
-            if (depth > complexity->nestedLoopDepth) {
-                complexity->nestedLoopDepth = depth;
-            }
-
-            ASTNode* loopBody = (node->type == NODE_FOR_RANGE)
-                                    ? node->forRange.body
-                                    : node->whileStmt.body;
-            analyzeNodeComplexity(loopBody, complexity, depth + 1);
-            break;
-
-        case NODE_BREAK:
-        case NODE_CONTINUE:
-            complexity->hasBreakContinue = true;
-            break;
-
-        case NODE_CALL:
-            complexity->callCount++;
-            analyzeNodeComplexity(node->call.callee, complexity, depth);
-            for (int i = 0; i < node->call.argCount; i++) {
-                analyzeNodeComplexity(node->call.args[i], complexity, depth);
-            }
-            break;
-
-        case NODE_BINARY:
-            // Check for complex nested expressions
-            if (isComplexExpression(node)) {
-                complexity->hasComplexExpressions = true;
-            }
-            analyzeNodeComplexity(node->binary.left, complexity, depth);
-            analyzeNodeComplexity(node->binary.right, complexity, depth);
-            break;
-
-        case NODE_TERNARY:
-            complexity->hasComplexExpressions = true;
-            analyzeNodeComplexity(node->ternary.condition, complexity, depth);
-            analyzeNodeComplexity(node->ternary.trueExpr, complexity, depth);
-            analyzeNodeComplexity(node->ternary.falseExpr, complexity, depth);
-            break;
-
-        case NODE_BLOCK:
-            for (int i = 0; i < node->block.count; i++) {
-                analyzeNodeComplexity(node->block.statements[i], complexity,
-                                      depth);
-            }
-            break;
-
-        case NODE_IF:
-            analyzeNodeComplexity(node->ifStmt.condition, complexity, depth);
-            analyzeNodeComplexity(node->ifStmt.thenBranch, complexity, depth);
-            if (node->ifStmt.elseBranch) {
-                analyzeNodeComplexity(node->ifStmt.elseBranch, complexity,
-                                      depth);
-            }
-            break;
-
-        case NODE_VAR_DECL:
-            if (node->varDecl.initializer) {
-                analyzeNodeComplexity(node->varDecl.initializer, complexity,
-                                      depth);
-            }
-            break;
-
-        case NODE_ASSIGN:
-            analyzeNodeComplexity(node->assign.value, complexity, depth);
-            break;
-
-        case NODE_PRINT:
-            for (int i = 0; i < node->print.count; i++) {
-                analyzeNodeComplexity(node->print.values[i], complexity, depth);
-            }
-            break;
-
-        case NODE_RETURN:
-            if (node->returnStmt.value) {
-                analyzeNodeComplexity(node->returnStmt.value, complexity,
-                                      depth);
-            }
-            break;
-
-        // Additional nodes that might be needed
-        case NODE_UNARY:
-            if (isComplexExpression(node)) {
-                complexity->hasComplexExpressions = true;
-            }
-            analyzeNodeComplexity(node->unary.operand, complexity, depth);
-            break;
-            
-        case NODE_CAST:
-            analyzeNodeComplexity(node->cast.expression, complexity, depth);
-            break;
-
-        // Other nodes can be added as needed
-        default:
-            break;
-    }
-}
+// Removed duplicate analyzeNodeComplexity - now using unified version from backend_selection.c
 
 // Simple heuristic for potential upvalues
 static int countPotentialUpvalues(ASTNode* node __attribute__((unused))) {
@@ -183,9 +55,9 @@ static bool isComplexExpression(ASTNode* node) {
 
 // Smart compilation strategy selection using new backend selection system
 CompilationStrategy chooseStrategy(CodeComplexity complexity) {
-    printf("[DEBUG] Strategy analysis: functions=%d, calls=%d, loops=%d, nested=%d, break/continue=%d\n", 
-           complexity.functionCount, complexity.callCount, complexity.loopCount, 
-           complexity.nestedLoopDepth, complexity.hasBreakContinue);
+    LOG_COMPILER_DEBUG("hybrid", "Strategy analysis: functions=%d, calls=%d, loops=%d, nested=%d, break/continue=%d", 
+                      complexity.functionCount, complexity.callCount, complexity.loopCount, 
+                      complexity.nestedLoopDepth, complexity.hasBreakContinue);
     
     // Initialize compilation context for smart backend selection
     CompilationContext ctx;
@@ -195,7 +67,7 @@ CompilationStrategy chooseStrategy(CodeComplexity complexity) {
     ctx.functionCallDepth = complexity.callCount;
     ctx.loopNestingDepth = complexity.nestedLoopDepth;
     ctx.hasBreakContinue = complexity.hasBreakContinue;
-    ctx.hasComplexTypes = complexity.hasComplexExpressions;
+    ctx.hasComplexTypes = complexity.hasComplexArithmetic;
     
     // Create a dummy AST node for backend selection (since we only have complexity data)
     // In real implementation, this would use the actual AST
@@ -214,30 +86,46 @@ CompilationStrategy chooseStrategy(CodeComplexity complexity) {
     // Override backend selection if complex features require multi-pass
     if (complexity.hasBreakContinue || complexity.nestedLoopDepth > 1) {
         backend = BACKEND_OPTIMIZED;
-        printf("[DEBUG] -> Smart Backend Override: MULTI-PASS (complex features: break/continue=%d, nesting=%d)\n", 
-               complexity.hasBreakContinue, complexity.nestedLoopDepth);
+        LOG_COMPILER_DEBUG("hybrid", "-> Smart Backend Override: MULTI-PASS (complex features: break/continue=%d, nesting=%d)", 
+                          complexity.hasBreakContinue, complexity.nestedLoopDepth);
     }
     
     CompilationStrategy strategy;
     switch (backend) {
         case BACKEND_FAST:
             strategy = COMPILE_SINGLE_PASS;
-            printf("[DEBUG] -> Smart Backend Selection: SINGLE-PASS (fast compilation)\n");
+            LOG_COMPILER_DEBUG("hybrid", "-> Smart Backend Selection: SINGLE-PASS (fast compilation)");
             break;
         case BACKEND_OPTIMIZED:
             strategy = COMPILE_MULTI_PASS;
-            printf("[DEBUG] -> Smart Backend Selection: MULTI-PASS (optimized compilation)\n");
+            LOG_COMPILER_DEBUG("hybrid", "-> Smart Backend Selection: MULTI-PASS (optimized compilation)");
             break;
         case BACKEND_HYBRID:
+            // Use granular hybrid compilation for mixed complexity
+            if (complexity.functionCount > 0 || 
+                (complexity.loopCount > 0 && complexity.complexExpressionCount > 3)) {
+                strategy = COMPILE_HYBRID;
+                LOG_COMPILER_DEBUG("hybrid", "-> Smart Backend Selection: HYBRID (mixed complexity)");
+            } else {
+                // Fall back to single strategy for simpler cases
+                strategy = (complexity.complexityScore > 15.0f) ? COMPILE_MULTI_PASS : COMPILE_SINGLE_PASS;
+                LOG_COMPILER_DEBUG("hybrid", "-> Smart Backend Selection: %s (hybrid fallback)", 
+                                  strategy == COMPILE_MULTI_PASS ? "MULTI-PASS" : "SINGLE-PASS");
+            }
+            break;
         case BACKEND_AUTO:
         default:
-            // Fallback logic
+            // Fallback logic with hybrid consideration
             if (complexity.hasBreakContinue || complexity.nestedLoopDepth > 1) {
                 strategy = COMPILE_MULTI_PASS;
-                printf("[DEBUG] -> Smart Backend Selection: MULTI-PASS (fallback - complex features)\n");
+                LOG_COMPILER_DEBUG("hybrid", "-> Smart Backend Selection: MULTI-PASS (fallback - complex features)");
+            } else if (complexity.functionCount > 0 && complexity.complexExpressionCount < 10) {
+                // Mixed complexity - good candidate for hybrid
+                strategy = COMPILE_HYBRID;
+                LOG_COMPILER_DEBUG("hybrid", "-> Smart Backend Selection: HYBRID (fallback - mixed complexity)");
             } else {
                 strategy = COMPILE_SINGLE_PASS;
-                printf("[DEBUG] -> Smart Backend Selection: SINGLE-PASS (fallback - simple code)\n");
+                LOG_COMPILER_DEBUG("hybrid", "-> Smart Backend Selection: SINGLE-PASS (fallback - simple code)");
             }
             break;
     }
@@ -299,20 +187,44 @@ void emitBytes(Compiler* compiler, uint8_t byte1, uint8_t byte2) {
 
 void emitConstant(Compiler* compiler, uint8_t reg, Value value) {
     int constantIndex = addConstant(compiler->chunk, value);
-
+    
     if (constantIndex < 65536) {
         emitByte(compiler, OP_LOAD_CONST);
         emitByte(compiler, reg);
         emitByte(compiler, (constantIndex >> 8) & 0xff);
         emitByte(compiler, constantIndex & 0xff);
     } else {
-        // For now, just use regular OP_LOAD_CONST with truncated index
-        // TODO: Implement proper handling of large constant pools
-        emitByte(compiler, OP_LOAD_CONST);
+        // Store in secondary constant table for large constant pools
+        int tableIndex = addToSecondaryConstantTable(compiler, value);
+        emitByte(compiler, OPCODE_LOAD_CONST_EXT);
         emitByte(compiler, reg);
-        emitByte(compiler, (constantIndex >> 8) & 0xff);
-        emitByte(compiler, constantIndex & 0xff);
+        emitByte(compiler, (tableIndex >> 8) & 0xff);
+        emitByte(compiler, tableIndex & 0xff);
     }
+}
+
+// Helper function for secondary constant table management
+static int addToSecondaryConstantTable(Compiler* compiler __attribute__((unused)), Value value) {
+    // For now, implement a simple secondary table
+    // In a full implementation, this would manage a separate constant table
+    // with proper memory management and cleanup
+    
+    static Value* secondaryConstants = NULL;
+    static int secondaryCount = 0;
+    static int secondaryCapacity = 0;
+    
+    if (secondaryConstants == NULL) {
+        secondaryCapacity = 256;
+        secondaryConstants = malloc(sizeof(Value) * secondaryCapacity);
+    }
+    
+    if (secondaryCount >= secondaryCapacity) {
+        secondaryCapacity *= 2;
+        secondaryConstants = realloc(secondaryConstants, sizeof(Value) * secondaryCapacity);
+    }
+    
+    secondaryConstants[secondaryCount] = value;
+    return secondaryCount++;
 }
 
 // Compatibility wrapper for old compileNode API
@@ -329,12 +241,18 @@ bool compileHybrid(ASTNode* ast, Compiler* compiler, bool isModule,
     // Analyze complexity if using auto strategy
     CodeComplexity complexity = {0};
     if (strategy == COMPILE_AUTO) {
-        complexity = analyzeComplexity(ast);
-        printf("[DEBUG] Complexity analysis: loops=%d, nestedDepth=%d, hasBreakContinue=%d\n", 
-               complexity.loopCount, complexity.nestedLoopDepth, complexity.hasBreakContinue);
+        complexity = analyzeCodeComplexity(ast);
+        LOG_DEBUG("Complexity analysis: loops=%d, nestedDepth=%d, hasBreakContinue=%d", 
+                 complexity.loopCount, complexity.nestedLoopDepth, complexity.hasBreakContinue);
         strategy = chooseStrategy(complexity);
-        printf("[DEBUG] Chosen strategy: %s\n", 
-               strategy == COMPILE_MULTI_PASS ? "MULTI_PASS" : "SINGLE_PASS");
+        LOG_DEBUG("Chosen strategy: %s", 
+                 strategy == COMPILE_MULTI_PASS ? "MULTI_PASS" : "SINGLE_PASS");
+    }
+
+    // Check if this is a good candidate for granular hybrid compilation
+    if (strategy == COMPILE_HYBRID && ast->type == NODE_PROGRAM) {
+        LOG_COMPILER_DEBUG("hybrid", "Using granular hybrid compilation for program");
+        return compileGranularHybrid(ast, compiler, isModule);
     }
 
     // Choose and execute compilation strategy
@@ -349,10 +267,217 @@ bool compileHybrid(ASTNode* ast, Compiler* compiler, bool isModule,
                                   compiler->source);
             return compileMultiPass(ast, compiler, isModule);
 
+        case COMPILE_HYBRID:
+            // For non-program nodes, fall back to complexity-based selection
+            LOG_COMPILER_DEBUG("hybrid", "Falling back to complexity-based selection for non-program node");
+            CodeComplexity nodeComplexity = analyzeCodeComplexity(ast);
+            CompilationStrategy fallbackStrategy = chooseStrategy(nodeComplexity);
+            return compileHybrid(ast, compiler, isModule, fallbackStrategy);
+
         default:
             // Fallback to single-pass
             initSinglePassCompiler(compiler, compiler->chunk,
                                    compiler->fileName, compiler->source);
             return compileSinglePass(ast, compiler, isModule);
     }
+}
+
+// Granular hybrid compilation implementation
+static bool compileGranularHybrid(ASTNode* ast, Compiler* compiler, bool isModule) {
+    if (!ast || ast->type != NODE_PROGRAM) {
+        LOG_ERROR("compileGranularHybrid called with non-program node");
+        return false;
+    }
+
+    LOG_COMPILER_DEBUG("hybrid", "Starting granular hybrid compilation for program with %d declarations", 
+                      ast->program.count);
+
+    // Fast-path check for very simple programs
+    if (isSimpleProgram(ast)) {
+        LOG_COMPILER_DEBUG("hybrid", "Fast-path compilation: simple program detected");
+        initSinglePassCompiler(compiler, compiler->chunk, compiler->fileName, compiler->source);
+        return compileSinglePass(ast, compiler, isModule);
+    }
+
+    // Initialize compiler context for hybrid mode
+    initMultiPassCompiler(compiler, compiler->chunk, compiler->fileName, compiler->source);
+    
+    bool success = true;
+    int singlePassNodes = 0;
+    int multiPassNodes = 0;
+
+    // Compile each top-level declaration with appropriate strategy
+    for (int i = 0; i < ast->program.count; i++) {
+        ASTNode* node = ast->program.declarations[i];
+        if (!node) continue;
+
+        // Analyze complexity of this specific node
+        CodeComplexity nodeComplexity = analyzeCodeComplexity(node);
+        CompilationStrategy nodeStrategy = chooseNodeStrategy(node);
+
+        LOG_COMPILER_DEBUG("hybrid", "Node %d: type=%d, strategy=%s, complexity=%.1f", 
+                          i, node->type,
+                          nodeStrategy == COMPILE_SINGLE_PASS ? "SINGLE_PASS" : "MULTI_PASS",
+                          nodeComplexity.complexityScore);
+
+        // Track statistics
+        if (nodeStrategy == COMPILE_SINGLE_PASS) {
+            singlePassNodes++;
+        } else {
+            multiPassNodes++;
+        }
+
+        // Compile the node with the chosen strategy
+        switch (nodeStrategy) {
+            case COMPILE_SINGLE_PASS: {
+                // Use shared node compilation for simple nodes
+                CompilerContext ctx = createSinglePassContext();
+                if (!compileSharedNode(node, compiler, &ctx)) {
+                    LOG_ERROR("Failed to compile node %d with single-pass strategy", i);
+                    success = false;
+                }
+                break;
+            }
+            case COMPILE_MULTI_PASS: {
+                // For multi-pass, compile the node directly
+                // In a real implementation, this would use per-node multi-pass compilation
+                if (!compileMultiPass(node, compiler, false)) {
+                    LOG_ERROR("Failed to compile node %d with multi-pass strategy", i);
+                    success = false;
+                }
+                break;
+            }
+            default:
+                LOG_WARN("Unknown strategy for node %d, falling back to multi-pass", i);
+                if (!compileMultiPass(node, compiler, false)) {
+                    LOG_ERROR("Failed to compile node %d with fallback strategy", i);
+                    success = false;
+                }
+                break;
+        }
+
+        if (!success) {
+            break;
+        }
+    }
+
+    LOG_COMPILER_DEBUG("hybrid", "Granular compilation complete: %d single-pass, %d multi-pass nodes", 
+                      singlePassNodes, multiPassNodes);
+
+    return success;
+}
+
+// Choose compilation strategy for individual nodes
+static CompilationStrategy chooseNodeStrategy(ASTNode* node) {
+    if (!node) {
+        return COMPILE_SINGLE_PASS;
+    }
+
+    // Analyze the specific node
+    CodeComplexity complexity = analyzeCodeComplexity(node);
+
+    // Fast compilation for simple statements
+    switch (node->type) {
+        case NODE_LITERAL:
+        case NODE_IDENTIFIER:
+        case NODE_VAR_DECL:
+            // Simple declarations and expressions
+            if (complexity.complexityScore < 5.0f) {
+                return COMPILE_SINGLE_PASS;
+            }
+            break;
+
+        case NODE_ASSIGN:
+        case NODE_BINARY:
+        case NODE_CAST:
+            // Simple operations
+            if (complexity.complexityScore < 10.0f && !complexity.hasComplexArithmetic) {
+                return COMPILE_SINGLE_PASS;
+            }
+            break;
+
+        case NODE_IF:
+            // Simple if statements without complex nesting
+            if (complexity.nestedLoopDepth == 0 && complexity.complexityScore < 15.0f) {
+                return COMPILE_SINGLE_PASS;
+            }
+            break;
+
+        case NODE_WHILE:
+        case NODE_FOR_RANGE:
+            // Loops generally benefit from multi-pass optimization
+            return COMPILE_MULTI_PASS;
+
+        case NODE_FUNCTION:
+        case NODE_CALL:
+            // Functions always use multi-pass for proper optimization
+            return COMPILE_MULTI_PASS;
+
+        case NODE_BREAK:
+        case NODE_CONTINUE:
+            // Control flow statements need multi-pass support
+            return COMPILE_MULTI_PASS;
+
+        case NODE_BLOCK:
+            // Blocks depend on their content complexity
+            if (complexity.loopCount > 0 || complexity.functionCount > 0) {
+                return COMPILE_MULTI_PASS;
+            }
+            if (complexity.complexityScore < 20.0f) {
+                return COMPILE_SINGLE_PASS;
+            }
+            break;
+
+        default:
+            // Unknown or complex nodes use multi-pass
+            return COMPILE_MULTI_PASS;
+    }
+
+    // Default decision based on overall complexity
+    return (complexity.complexityScore > 15.0f) ? COMPILE_MULTI_PASS : COMPILE_SINGLE_PASS;
+}
+
+// Fast-path detection for very simple programs
+static bool isSimpleProgram(ASTNode* ast) {
+    if (!ast || ast->type != NODE_PROGRAM) {
+        return false;
+    }
+
+    // Check if all top-level declarations are simple
+    for (int i = 0; i < ast->program.count; i++) {
+        ASTNode* node = ast->program.declarations[i];
+        if (!node) continue;
+
+        switch (node->type) {
+            case NODE_FUNCTION:
+            case NODE_CALL:
+            case NODE_BREAK:
+            case NODE_CONTINUE:
+            case NODE_WHILE:
+            case NODE_FOR_RANGE:
+                // These are never simple
+                return false;
+
+            case NODE_IF:
+                // Check for nested complexity
+                if (node->ifStmt.elseBranch != NULL) {
+                    return false; // If-else is more complex
+                }
+                break;
+
+            case NODE_BLOCK:
+                // Blocks with multiple statements are complex
+                if (node->block.count > 3) {
+                    return false;
+                }
+                break;
+
+            default:
+                // Other nodes are potentially simple
+                break;
+        }
+    }
+
+    // Simple program: few declarations, no complex structures
+    return ast->program.count <= 5;
 }

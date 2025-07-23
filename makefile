@@ -81,10 +81,15 @@ BUILDDIR = build/$(PROFILE)
 INCLUDES = -I$(INCDIR)
 
 # Source files
-COMPILER_SRCS = $(SRCDIR)/compiler/hybride_compiler.c $(SRCDIR)/compiler/singlepass.c $(SRCDIR)/compiler/multipass.c $(SRCDIR)/compiler/lexer.c $(SRCDIR)/compiler/parser.c $(SRCDIR)/compiler/symbol_table.c $(SRCDIR)/compiler/loop_optimization.c $(SRCDIR)/compiler/pgo_loop_optimization.c $(SRCDIR)/compiler/profile_guided_optimization.c $(SRCDIR)/compiler/scope_analysis.c $(SRCDIR)/compiler/backend_selection.c $(SRCDIR)/compiler/vm_optimization.c
-VM_SRCS = $(SRCDIR)/vm/core/vm_core.c $(SRCDIR)/vm/runtime/vm.c $(SRCDIR)/vm/core/vm_memory.c $(SRCDIR)/vm/utils/debug.c $(SRCDIR)/vm/runtime/builtins.c $(SRCDIR)/vm/operations/vm_arithmetic.c $(SRCDIR)/vm/operations/vm_control_flow.c $(SRCDIR)/vm/operations/vm_typed_ops.c $(SRCDIR)/vm/operations/vm_string_ops.c $(SRCDIR)/vm/operations/vm_comparison.c $(SRCDIR)/vm/dispatch/vm_dispatch_switch.c $(SRCDIR)/vm/dispatch/vm_dispatch_goto.c $(SRCDIR)/vm/core/vm_validation.c $(SRCDIR)/vm/register_file.c $(SRCDIR)/vm/spill_manager.c $(SRCDIR)/vm/module_manager.c $(SRCDIR)/vm/register_cache.c $(SRCDIR)/vm/profiling/vm_profiling.c $(SRCDIR)/type/type_representation.c $(SRCDIR)/errors/infrastructure/error_infrastructure.c $(SRCDIR)/errors/core/error_base.c $(SRCDIR)/errors/features/type_errors.c $(SRCDIR)/errors/features/variable_errors.c $(SRCDIR)/errors/features/control_flow_errors.c $(SRCDIR)/config/config.c
+COMPILER_SRCS = $(SRCDIR)/compiler/hybride_compiler.c $(SRCDIR)/compiler/singlepass.c $(SRCDIR)/compiler/multipass.c $(SRCDIR)/compiler/lexer.c $(SRCDIR)/compiler/parser.c $(SRCDIR)/compiler/symbol_table.c $(SRCDIR)/compiler/loop_optimization.c $(SRCDIR)/compiler/pgo_loop_optimization.c $(SRCDIR)/compiler/profile_guided_optimization.c $(SRCDIR)/compiler/scope_analysis.c $(SRCDIR)/compiler/backend_selection.c $(SRCDIR)/compiler/vm_optimization.c $(SRCDIR)/compiler/shared_node_compilation.c
+VM_SRCS = $(SRCDIR)/vm/core/vm_core.c $(SRCDIR)/vm/runtime/vm.c $(SRCDIR)/vm/core/vm_memory.c $(SRCDIR)/vm/utils/debug.c $(SRCDIR)/vm/runtime/builtins.c $(SRCDIR)/vm/operations/vm_arithmetic.c $(SRCDIR)/vm/operations/vm_control_flow.c $(SRCDIR)/vm/operations/vm_typed_ops.c $(SRCDIR)/vm/operations/vm_string_ops.c $(SRCDIR)/vm/operations/vm_comparison.c $(SRCDIR)/vm/dispatch/vm_dispatch_switch.c $(SRCDIR)/vm/dispatch/vm_dispatch_goto.c $(SRCDIR)/vm/core/vm_validation.c $(SRCDIR)/vm/register_file.c $(SRCDIR)/vm/spill_manager.c $(SRCDIR)/vm/module_manager.c $(SRCDIR)/vm/register_cache.c $(SRCDIR)/vm/profiling/vm_profiling.c $(SRCDIR)/vm/vm_config.c $(SRCDIR)/type/type_representation.c $(SRCDIR)/errors/infrastructure/error_infrastructure.c $(SRCDIR)/errors/core/error_base.c $(SRCDIR)/errors/features/type_errors.c $(SRCDIR)/errors/features/variable_errors.c $(SRCDIR)/errors/features/control_flow_errors.c $(SRCDIR)/config/config.c $(SRCDIR)/internal/logging.c
 REPL_SRC = $(SRCDIR)/repl.c
 MAIN_SRC = $(SRCDIR)/main.c
+
+# Unit testing files
+UNITY_SRCS = $(TESTDIR)/unit/unity.c
+UNIT_TEST_SRCS = $(TESTDIR)/unit/test_shared_compilation.c $(TESTDIR)/unit/test_backend_selection.c $(TESTDIR)/unit/test_vm_optimization.c
+TEST_RUNNER_SRC = $(TESTDIR)/run_unit_tests.c
 
 # Object files (profile-specific)
 COMPILER_OBJS = $(COMPILER_SRCS:$(SRCDIR)/%.c=$(BUILDDIR)/%.o)
@@ -92,10 +97,16 @@ VM_OBJS = $(VM_SRCS:$(SRCDIR)/%.c=$(BUILDDIR)/%.o)
 REPL_OBJ = $(REPL_SRC:$(SRCDIR)/%.c=$(BUILDDIR)/%.o)
 MAIN_OBJ = $(MAIN_SRC:$(SRCDIR)/%.c=$(BUILDDIR)/%.o)
 
+# Unit test object files
+UNITY_OBJS = $(UNITY_SRCS:$(TESTDIR)/%.c=$(BUILDDIR)/tests/%.o)
+UNIT_TEST_OBJS = $(UNIT_TEST_SRCS:$(TESTDIR)/%.c=$(BUILDDIR)/tests/%.o)
+TEST_RUNNER_OBJ = $(TEST_RUNNER_SRC:$(TESTDIR)/%.c=$(BUILDDIR)/tests/%.o)
+
 # Target (profile-specific)
 ORUS = orus$(SUFFIX)
+UNIT_TEST_RUNNER = test_runner$(SUFFIX)
 
-.PHONY: all clean test benchmark help debug release profiling analyze install
+.PHONY: all clean test unit-test benchmark help debug release profiling analyze install
 
 all: build-info $(ORUS)
 
@@ -122,7 +133,7 @@ ci:
 
 # Create build directory
 $(BUILDDIR):
-	@mkdir -p $(BUILDDIR) $(BUILDDIR)/vm/core $(BUILDDIR)/vm/dispatch $(BUILDDIR)/vm/operations $(BUILDDIR)/vm/runtime $(BUILDDIR)/vm/utils $(BUILDDIR)/vm/handlers $(BUILDDIR)/vm/profiling $(BUILDDIR)/compiler $(BUILDDIR)/type $(BUILDDIR)/errors/core $(BUILDDIR)/errors/features $(BUILDDIR)/errors/infrastructure $(BUILDDIR)/config
+	@mkdir -p $(BUILDDIR) $(BUILDDIR)/vm/core $(BUILDDIR)/vm/dispatch $(BUILDDIR)/vm/operations $(BUILDDIR)/vm/runtime $(BUILDDIR)/vm/utils $(BUILDDIR)/vm/handlers $(BUILDDIR)/vm/profiling $(BUILDDIR)/compiler $(BUILDDIR)/type $(BUILDDIR)/errors/core $(BUILDDIR)/errors/features $(BUILDDIR)/errors/infrastructure $(BUILDDIR)/config $(BUILDDIR)/internal $(BUILDDIR)/tests/unit
 
 # Main interpreter
 $(ORUS): $(MAIN_OBJ) $(REPL_OBJ) $(VM_OBJS) $(COMPILER_OBJS)
@@ -135,6 +146,18 @@ $(BUILDDIR)/%.o: $(SRCDIR)/%.c | $(BUILDDIR)
 	@mkdir -p $(dir $@)
 	@echo "Compiling $<..."
 	@$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+
+# Test object files
+$(BUILDDIR)/tests/%.o: $(TESTDIR)/%.c | $(BUILDDIR)
+	@mkdir -p $(dir $@)
+	@echo "Compiling test $<..."
+	@$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+
+# Unit test runner
+$(UNIT_TEST_RUNNER): $(TEST_RUNNER_OBJ) $(UNITY_OBJS) $(UNIT_TEST_OBJS) $(VM_OBJS) $(COMPILER_OBJS)
+	@echo "Linking unit test runner $(UNIT_TEST_RUNNER)..."
+	@$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+	@echo "✓ Unit test runner built: $(UNIT_TEST_RUNNER)"
 
 # Run comprehensive test suite
 test: $(ORUS)
@@ -176,6 +199,12 @@ test: $(ORUS)
 	fi; \
 	echo ""
 
+# Run unit tests
+unit-test: $(UNIT_TEST_RUNNER)
+	@echo "Running Unit Test Suite..."
+	@echo "=========================="
+	@./$(UNIT_TEST_RUNNER)
+
 # CI test target: Build with warnings as errors and run full test suite
 ci-test: 
 	@echo "Building with CI profile (warnings as errors)..."
@@ -184,6 +213,8 @@ ci-test:
 	@echo ""
 	@echo "Running tests with CI build..."
 	@$(MAKE) test ORUS=orus_ci
+	@echo "Running unit tests with CI build..."
+	@$(MAKE) unit-test UNIT_TEST_RUNNER=test_runner_ci
 
 # Run cross-language benchmark tests
 benchmark: $(ORUS)
@@ -219,7 +250,8 @@ install: release
 # Clean build artifacts
 clean:
 	@echo "Cleaning build artifacts..."
-	@rm -f orus orus_debug orus_profiling
+	@rm -f orus orus_debug orus_profiling orus_ci
+	@rm -f test_runner test_runner_debug test_runner_profiling test_runner_ci
 	@rm -rf build/
 	@echo "✓ Clean complete"
 
@@ -236,6 +268,7 @@ help:
 	@echo "Main Targets:"
 	@echo "  all       - Build for current profile (default: debug)"
 	@echo "  test      - Run comprehensive test suite"
+	@echo "  unit-test - Run unit tests for compiler components"
 	@echo "  benchmark - Run cross-language performance benchmarks"
 	@echo "  clean     - Remove all build artifacts"
 	@echo "  help      - Show this help message"

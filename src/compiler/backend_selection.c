@@ -9,6 +9,9 @@
 #define max(a, b) ((a) > (b) ? (a) : (b))
 #define min(a, b) ((a) < (b) ? (a) : (b))
 
+// Forward declaration for helper function
+static void analyzeNodeComplexity(ASTNode* node, CodeComplexity* complexity, int depth);
+
 // Global profile data for hot path detection (legacy - now using PGO system)
 __attribute__((unused)) static ProfileData* g_profileData = NULL;
 __attribute__((unused)) static int g_profileCount = 0;
@@ -26,68 +29,127 @@ void initCompilationContext(CompilationContext* ctx, bool debugMode) {
     ctx->codeSize = 0;
 }
 
-// Analyze code complexity recursively
-CodeAnalysisResult analyzeCodeComplexity(ASTNode* node) {
-    CodeAnalysisResult result = {0};
+// Unified complexity analysis (merging both previous implementations)
+CodeComplexity analyzeCodeComplexity(ASTNode* node) {
+    CodeComplexity result = {0};
     if (!node) return result;
     
+    analyzeNodeComplexity(node, &result, 0);
+    
+    // Calculate unified complexity score
+    result.complexityScore = 
+        result.functionCount * 3.0f + 
+        result.loopCount * 2.0f +
+        result.nestedLoopDepth * 4.0f + 
+        result.callCount * 1.0f + 
+        result.complexExpressionCount * 1.5f +
+        (result.hasBreakContinue ? 3.0f : 0.0f) +
+        (result.hasComplexArithmetic ? 2.0f : 0.0f);
+    
+    return result;
+}
+
+// Recursive helper function for unified complexity analysis
+static void analyzeNodeComplexity(ASTNode* node, CodeComplexity* complexity, int depth) {
+    if (!node) return;
+
     switch (node->type) {
+        case NODE_PROGRAM:
+            for (int i = 0; i < node->program.count; i++) {
+                analyzeNodeComplexity(node->program.declarations[i], complexity, depth);
+            }
+            break;
+
+        case NODE_FUNCTION:
+            complexity->functionCount++;
+            analyzeNodeComplexity(node->function.body, complexity, depth + 1);
+            break;
+
         case NODE_FOR_RANGE:
         case NODE_WHILE:
-            result.loopCount++;
-            result.controlFlowCount++;
-            result.maxNestingDepth = 1; // Simplified for now
+            complexity->loopCount++;
+            if (depth > complexity->nestedLoopDepth) {
+                complexity->nestedLoopDepth = depth;
+            }
+
+            ASTNode* loopBody = (node->type == NODE_FOR_RANGE)
+                                    ? node->forRange.body
+                                    : node->whileStmt.body;
+            analyzeNodeComplexity(loopBody, complexity, depth + 1);
             break;
-            
+
+        case NODE_BREAK:
+        case NODE_CONTINUE:
+            complexity->hasBreakContinue = true;
+            break;
+
         case NODE_CALL:
-            result.functionCallCount++;
+            complexity->callCount++;
+            analyzeNodeComplexity(node->call.callee, complexity, depth);
+            for (int i = 0; i < node->call.argCount; i++) {
+                analyzeNodeComplexity(node->call.args[i], complexity, depth);
+            }
             break;
-            
+
         case NODE_BINARY:
+            // Check for complex arithmetic operations
             if (node->binary.op && 
                 (strcmp(node->binary.op, "*") == 0 || 
                  strcmp(node->binary.op, "/") == 0 ||
                  strcmp(node->binary.op, "%") == 0)) {
-                result.hasComplexArithmetic = true;
-                result.complexExpressionCount++;
+                complexity->hasComplexArithmetic = true;
+                complexity->complexExpressionCount++;
             }
+            analyzeNodeComplexity(node->binary.left, complexity, depth);
+            analyzeNodeComplexity(node->binary.right, complexity, depth);
             break;
-            
+
         case NODE_CAST:
-            result.complexExpressionCount++;
+            complexity->complexExpressionCount++;
+            analyzeNodeComplexity(node->cast.expression, complexity, depth);
             break;
-            
-        case NODE_BREAK:
-        case NODE_CONTINUE:
-            result.controlFlowCount++;
+
+        case NODE_TERNARY:
+            complexity->complexExpressionCount++;
+            analyzeNodeComplexity(node->ternary.condition, complexity, depth);
+            analyzeNodeComplexity(node->ternary.trueExpr, complexity, depth);
+            analyzeNodeComplexity(node->ternary.falseExpr, complexity, depth);
             break;
-            
+
         case NODE_BLOCK:
-            // Analyze all statements in block
             for (int i = 0; i < node->block.count; i++) {
-                CodeAnalysisResult nested = analyzeCodeComplexity(node->block.statements[i]);
-                result.loopCount += nested.loopCount;
-                result.maxNestingDepth = max(result.maxNestingDepth, nested.maxNestingDepth);
-                result.functionCallCount += nested.functionCallCount;
-                result.complexExpressionCount += nested.complexExpressionCount;
-                result.controlFlowCount += nested.controlFlowCount;
-                result.hasComplexArithmetic = result.hasComplexArithmetic || nested.hasComplexArithmetic;
+                analyzeNodeComplexity(node->block.statements[i], complexity, depth);
             }
             break;
-            
+
+        case NODE_IF:
+            analyzeNodeComplexity(node->ifStmt.condition, complexity, depth);
+            analyzeNodeComplexity(node->ifStmt.thenBranch, complexity, depth);
+            if (node->ifStmt.elseBranch) {
+                analyzeNodeComplexity(node->ifStmt.elseBranch, complexity, depth);
+            }
+            break;
+
+        case NODE_VAR_DECL:
+            if (node->varDecl.initializer) {
+                analyzeNodeComplexity(node->varDecl.initializer, complexity, depth);
+            }
+            break;
+
+        case NODE_ASSIGN:
+            analyzeNodeComplexity(node->assign.value, complexity, depth);
+            break;
+
+        case NODE_RETURN:
+            if (node->returnStmt.value) {
+                analyzeNodeComplexity(node->returnStmt.value, complexity, depth);
+            }
+            break;
+
         default:
-            // For other node types, recursively analyze children
+            // For simple nodes like NODE_LITERAL, NODE_IDENTIFIER, no additional complexity
             break;
     }
-    
-    // Calculate optimization potential (0.0 - 1.0)
-    float complexity = (float)(result.loopCount * 3 + 
-                              result.functionCallCount * 2 + 
-                              result.complexExpressionCount +
-                              result.controlFlowCount);
-    result.optimizationPotential = min(1.0f, complexity / 20.0f);
-    
-    return result;
 }
 
 // Check if expression is simple
@@ -119,10 +181,10 @@ bool isComplexLoop(ASTNode* node) {
     switch (node->type) {
         case NODE_FOR_RANGE:
         case NODE_WHILE: {
-            CodeAnalysisResult analysis = analyzeCodeComplexity(node);
-            return analysis.maxNestingDepth > 1 || 
-                   analysis.controlFlowCount > 2 ||
-                   analysis.functionCallCount > 0 ||
+            CodeComplexity analysis = analyzeCodeComplexity(node);
+            return analysis.nestedLoopDepth > 1 || 
+                   analysis.loopCount > 2 ||
+                   analysis.callCount > 0 ||
                    analysis.complexExpressionCount > 3;
         }
         default:
@@ -132,13 +194,13 @@ bool isComplexLoop(ASTNode* node) {
 
 // Check for optimization opportunities
 bool hasOptimizationOpportunities(ASTNode* node) {
-    CodeAnalysisResult analysis = analyzeCodeComplexity(node);
-    return analysis.optimizationPotential > 0.3f;
+    CodeComplexity analysis = analyzeCodeComplexity(node);
+    return analysis.complexityScore > 10.0f;
 }
 
 // Calculate optimization benefit score
 float calculateOptimizationBenefit(ASTNode* node) {
-    CodeAnalysisResult analysis = analyzeCodeComplexity(node);
+    CodeComplexity analysis = analyzeCodeComplexity(node);
     
     float benefit = 0.0f;
     
@@ -146,13 +208,13 @@ float calculateOptimizationBenefit(ASTNode* node) {
     benefit += analysis.loopCount * 0.4f;
     
     // Nested structures benefit from optimization
-    benefit += analysis.maxNestingDepth * 0.2f;
+    benefit += analysis.nestedLoopDepth * 0.2f;
     
     // Complex expressions benefit moderately
     benefit += analysis.complexExpressionCount * 0.1f;
     
     // Function calls benefit from optimization
-    benefit += analysis.functionCallCount * 0.15f;
+    benefit += analysis.callCount * 0.15f;
     
     // Complex arithmetic benefits from optimization
     if (analysis.hasComplexArithmetic) {
@@ -163,7 +225,7 @@ float calculateOptimizationBenefit(ASTNode* node) {
 }
 
 // Determine if optimized backend should be used
-bool shouldUseOptimizedBackend(CodeAnalysisResult* analysis, CompilationContext* ctx) {
+bool shouldUseOptimizedBackend(CodeComplexity* analysis, CompilationContext* ctx) {
     // Always use fast backend in debug mode
     if (ctx->isDebugMode) return false;
     
@@ -171,13 +233,16 @@ bool shouldUseOptimizedBackend(CodeAnalysisResult* analysis, CompilationContext*
     if (ctx->isHotPath) return true;
     
     // Use optimized for complex loops
-    if (analysis->loopCount >= 2 || analysis->maxNestingDepth >= 2) return true;
+    if (analysis->loopCount >= 2 || analysis->nestedLoopDepth >= 2) return true;
     
     // Use optimized for high function call density
-    if (analysis->functionCallCount >= 3) return true;
+    if (analysis->callCount >= 3) return true;
     
-    // Use optimized if optimization potential is high
-    if (analysis->optimizationPotential >= 0.5f) return true;
+    // Use optimized for complex expressions
+    if (analysis->complexExpressionCount >= 3) return true;
+    
+    // Use optimized if overall complexity score is high (threshold: 15.0)
+    if (analysis->complexityScore > 15.0f) return true;
     
     return false;
 }
@@ -202,7 +267,7 @@ CompilerBackend chooseOptimalBackend(ASTNode* node, CompilationContext* ctx) {
         }
     }
     
-    CodeAnalysisResult analysis = analyzeCodeComplexity(node);
+    CodeComplexity analysis = analyzeCodeComplexity(node);
     
     // Simple expressions always use fast backend
     if (isSimpleExpression(node)) {

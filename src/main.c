@@ -9,6 +9,7 @@
 #include "vm/vm.h"
 #include "public/common.h"
 #include "internal/error_reporting.h"
+#include "internal/logging.h"
 #include "errors/error_interface.h"
 #include "errors/features/type_errors.h"
 #include "errors/features/variable_errors.h"
@@ -113,6 +114,10 @@ static void runFile(const char* path) {
 // See config_print_help() and config_print_version() in src/config/config.c
 
 int main(int argc, const char* argv[]) {
+    // Initialize logging system first (can be configured via environment variables)
+    initLogger(LOG_INFO);
+    LOG_INFO("Orus Language Interpreter starting up");
+
     // Strict leak-free: initialize global string table first
     init_string_table(&globalStringTable);
     // Initialize error reporting system
@@ -246,5 +251,8 @@ int main(int argc, const char* argv[]) {
     
     freeVM();
     config_destroy(config);
+    
+    LOG_INFO("Orus Language Interpreter shutting down");
+    shutdownLogger();
     return 0;
 }
