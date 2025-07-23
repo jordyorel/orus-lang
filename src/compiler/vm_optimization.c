@@ -171,7 +171,7 @@ InstructionOptHints getInstructionOptimizations(ASTNode* node, VMOptimizationCon
 }
 
 // Get loop-specific optimizations
-LoopOptimizationHints getLoopOptimizations(ASTNode* loopNode, VMOptimizationContext* vmCtx) {
+LoopOptimizationHints getLoopOptimizations(ASTNode* loopNode __attribute__((unused)), VMOptimizationContext* vmCtx) {
     LoopOptimizationHints hints = {0};
     
     if (!vmCtx->optimizeForSpeed) {
@@ -188,7 +188,7 @@ LoopOptimizationHints getLoopOptimizations(ASTNode* loopNode, VMOptimizationCont
 }
 
 // Get memory layout optimizations
-MemoryLayoutHints getMemoryLayoutOptimizations(ASTNode* node, VMOptimizationContext* vmCtx) {
+MemoryLayoutHints getMemoryLayoutOptimizations(ASTNode* node __attribute__((unused)), VMOptimizationContext* vmCtx) {
     MemoryLayoutHints hints = {0};
     
     hints.enableConstantPooling = vmCtx->optimizeForSpeed;
@@ -209,14 +209,14 @@ void optimizeForRegisterVM(ASTNode* node, VMOptimizationContext* vmCtx,
     
     // Integrate profiling data into optimization decisions
     if (g_profiling.isActive) {
-        updateOptimizationHints(vmCtx);
+        updateOptimizationHints((struct VMOptimizationContext*)vmCtx);
     }
     
     // Apply register allocation optimizations
     optimizeRegisterUsage(node, regState);
     
     // Get instruction optimizations
-    InstructionOptHints instHints = getInstructionOptimizations(node, vmCtx);
+    InstructionOptHints instHints __attribute__((unused)) = getInstructionOptimizations(node, vmCtx);
     
     // Apply loop optimizations if this is a loop
     if (node->type == NODE_FOR_RANGE || node->type == NODE_WHILE) {

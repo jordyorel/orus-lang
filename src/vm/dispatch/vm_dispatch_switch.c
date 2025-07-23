@@ -13,26 +13,26 @@
 #include <math.h>
 
 // Bridge functions for safe register access across legacy and hierarchical systems
-static inline Value vm_get_register_safe(uint16_t id) {
-    if (id < 256) {
-        // Legacy global registers
-        return vm.registers[id];
-    } else {
-        // Use register file for frame/spill registers
-        Value* reg_ptr = get_register(&vm.register_file, id);
-        return reg_ptr ? *reg_ptr : NIL_VAL;
-    }
-}
+// static inline Value vm_get_register_safe(uint16_t id) {
+//     if (id < 256) {
+//         // Legacy global registers
+//         return vm.registers[id];
+//     } else {
+//         // Use register file for frame/spill registers
+//         Value* reg_ptr = get_register(&vm.register_file, id);
+//         return reg_ptr ? *reg_ptr : NIL_VAL;
+//     }
+// }
 
-static inline void vm_set_register_safe(uint16_t id, Value value) {
-    if (id < 256) {
-        // Legacy global registers
-        vm.registers[id] = value;
-    } else {
-        // Use register file for frame/spill registers
-        set_register(&vm.register_file, id, value);
-    }
-}
+// static inline void vm_set_register_safe(uint16_t id, Value value) {
+//     if (id < 256) {
+//         // Legacy global registers
+//         vm.registers[id] = value;
+//     } else {
+//         // Use register file for frame/spill registers
+//         set_register(&vm.register_file, id, value);
+//     }
+// }
 
 // ✅ Auto-detect computed goto support
 #ifndef USE_COMPUTED_GOTO

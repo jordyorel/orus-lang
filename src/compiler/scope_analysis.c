@@ -965,7 +965,7 @@ static int getCurrentInstructionCount(Chunk* chunk) {
 // Apply scope optimizations to compiler
 // TODO: This function is currently unused but should be integrated in the future
 // when scope optimizations are re-enabled for stability
-static void applyScopeOptimizationsToCompiler(Compiler* compiler) {
+__attribute__((unused)) static void applyScopeOptimizationsToCompiler(Compiler* compiler) {
     ScopeAnalyzer* analyzer = &compiler->scopeAnalyzer;
     
     // Update register allocator with optimization results

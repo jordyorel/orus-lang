@@ -9,10 +9,10 @@
 #define max(a, b) ((a) > (b) ? (a) : (b))
 #define min(a, b) ((a) < (b) ? (a) : (b))
 
-// Global profile data for hot path detection
-static ProfileData* g_profileData = NULL;
-static int g_profileCount = 0;
-static int g_profileCapacity = 0;
+// Global profile data for hot path detection (legacy - now using PGO system)
+__attribute__((unused)) static ProfileData* g_profileData = NULL;
+__attribute__((unused)) static int g_profileCount = 0;
+__attribute__((unused)) static int g_profileCapacity = 0;
 
 // Initialize compilation context
 void initCompilationContext(CompilationContext* ctx, bool debugMode) {
@@ -295,7 +295,7 @@ void applyPGOToCompilationContext(CompilationContext* ctx, ASTNode* node) {
 }
 
 // Hot path detection using PGO data
-bool isCompilationHotPath(ASTNode* node, ProfileData* profile) {
+bool isCompilationHotPath(ASTNode* node, ProfileData* profile __attribute__((unused))) {
     // If PGO is enabled, use actual profiling data
     if (g_pgoContext.isEnabled) {
         void* codeAddress = (void*)node;

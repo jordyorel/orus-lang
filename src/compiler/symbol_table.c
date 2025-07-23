@@ -160,7 +160,7 @@ void symbol_table_remove(SymbolTable* table, const char* name) {
 }
 
 // Helper function to check if a scope is still active
-static bool is_scope_active(SymbolTable* table, int scope_depth) {
+__attribute__((unused)) static bool is_scope_active(SymbolTable* table, int scope_depth) {
     for (int i = 0; i < table->scope_stack_size; i++) {
         if (table->scope_stack[i] == scope_depth) {
             return true;

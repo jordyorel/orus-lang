@@ -62,7 +62,7 @@ void resetPGOContext(void) {
 }
 
 // Calculate hotness score based on execution patterns
-float calculateHotness(uint64_t executionCount, uint64_t totalCycles, double averageCycles) {
+float calculateHotness(uint64_t executionCount, uint64_t totalCycles, double averageCycles __attribute__((unused))) {
     if (executionCount == 0) return 0.0f;
     
     // Hotness is a combination of execution frequency and time spent
@@ -142,7 +142,7 @@ bool shouldOptimizeNode(ASTNode* node, HotPathAnalysis* analysis) {
 }
 
 // Make profile-guided optimization decisions
-PGODecisionFlags makePGODecisions(ASTNode* node, HotPathAnalysis* analysis, CompilerBackend currentBackend) {
+PGODecisionFlags makePGODecisions(ASTNode* node, HotPathAnalysis* analysis, CompilerBackend currentBackend __attribute__((unused))) {
     if (!g_pgoContext.isEnabled || !node || !analysis) return PGO_DECISION_NONE;
     
     PGODecisionFlags decisions = PGO_DECISION_NONE;
@@ -175,7 +175,7 @@ PGODecisionFlags makePGODecisions(ASTNode* node, HotPathAnalysis* analysis, Comp
 }
 
 // Choose optimal backend based on profiling data
-CompilerBackend choosePGOBackend(ASTNode* node, HotPathAnalysis* analysis, CompilerBackend defaultBackend) {
+CompilerBackend choosePGOBackend(ASTNode* node __attribute__((unused)), HotPathAnalysis* analysis, CompilerBackend defaultBackend) {
     if (!g_pgoContext.isEnabled || !analysis) return defaultBackend;
     
     // Hot paths should use optimized backend
@@ -194,7 +194,7 @@ CompilerBackend choosePGOBackend(ASTNode* node, HotPathAnalysis* analysis, Compi
 }
 
 // Function inlining decisions
-bool shouldInlineFunction(ASTNode* functionNode, HotPathAnalysis* analysis) {
+bool shouldInlineFunction(ASTNode* functionNode __attribute__((unused)), HotPathAnalysis* analysis) {
     if (!g_pgoContext.isEnabled || !analysis || !analysis->isFunction) return false;
     
     // Only inline hot, small functions
@@ -207,7 +207,7 @@ bool shouldInlineFunction(ASTNode* functionNode, HotPathAnalysis* analysis) {
 }
 
 // Loop unrolling decisions
-bool shouldUnrollLoop(ASTNode* loopNode, HotPathAnalysis* analysis) {
+bool shouldUnrollLoop(ASTNode* loopNode __attribute__((unused)), HotPathAnalysis* analysis) {
     if (!g_pgoContext.isEnabled || !analysis || !analysis->isLoop) return false;
     
     // Unroll hot loops with reasonable iteration counts

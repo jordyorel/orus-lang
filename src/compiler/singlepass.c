@@ -199,7 +199,7 @@ static void enterLoop(Compiler* compiler) {
     context->loopStart = compiler->chunk->count;
 }
 
-static void exitLoop(Compiler* compiler) {
+static void exitLoop(Compiler* compiler __attribute__((unused))) {
     SinglePassCompiler* spCompiler = g_singlePassCompiler;
     if (spCompiler->loopCount == 0) return;
     
@@ -293,13 +293,14 @@ static int compileSinglePassExpr(ASTNode* node, Compiler* compiler) {
             emitByte(compiler, resultReg);
             return resultReg;
         }
-        default:
+        default: {
             SrcLocation loc = {.file = compiler->fileName,
                                .line = node->location.line,
                                .column = node->location.column};
             report_compile_error(E1006_INVALID_SYNTAX, loc,
                                  "Unsupported expression type in single-pass");
             return -1;
+        }
     }
 }
 

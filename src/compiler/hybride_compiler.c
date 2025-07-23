@@ -163,7 +163,7 @@ static void analyzeNodeComplexity(ASTNode* node, CodeComplexity* complexity,
 }
 
 // Simple heuristic for potential upvalues
-static int countPotentialUpvalues(ASTNode* node) {
+static int countPotentialUpvalues(ASTNode* node __attribute__((unused))) {
     // Placeholder: return 1 per function as an estimate
     return 1;
 }

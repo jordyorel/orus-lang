@@ -194,7 +194,7 @@ static RegisterState g_regState = {0};
 static bool g_vmOptInitialized = false;
 
 // Initialize VM optimization for multipass compiler
-static void initVMOptimization(Compiler* compiler) {
+static void initVMOptimization(Compiler* compiler __attribute__((unused))) {
     if (!g_vmOptInitialized) {
         g_vmOptCtx = createVMOptimizationContext(BACKEND_OPTIMIZED);
         initRegisterState(&g_regState);
@@ -204,7 +204,7 @@ static void initVMOptimization(Compiler* compiler) {
 }
 
 // Optimized register allocation using VM-aware system
-static uint8_t allocateOptimizedRegister(Compiler* compiler, bool isLoopVar, int estimatedLifetime) {
+__attribute__((unused)) static uint8_t allocateOptimizedRegister(Compiler* compiler, bool isLoopVar, int estimatedLifetime) {
     initVMOptimization(compiler);
     
     int optimalReg = allocateOptimalRegister(&g_regState, &g_vmOptCtx, isLoopVar, estimatedLifetime);
@@ -219,7 +219,7 @@ static uint8_t allocateOptimizedRegister(Compiler* compiler, bool isLoopVar, int
 }
 
 // Free register using VM-aware system
-static void freeOptimizedRegisterMP(uint8_t reg) {
+__attribute__((unused)) static void freeOptimizedRegisterMP(uint8_t reg) {
     if (g_vmOptInitialized) {
         freeOptimizedRegister(&g_regState, reg);
     }
@@ -466,7 +466,7 @@ static void collectModifiedVariables(ASTNode* node, ModifiedSet* modified) {
 }
 
 // PASS 3: Loop invariant analysis (LICM)
-static bool dependsOnModified(ASTNode* node, ModifiedSet* modified) {
+__attribute__((unused)) static bool dependsOnModified(ASTNode* node, ModifiedSet* modified) {
     if (!node) return false;
 
     switch (node->type) {
@@ -513,7 +513,7 @@ bool hasSideEffects(ASTNode* node) {
 }
 
 static void analyzeLoopInvariants(ASTNode* loopBody,
-                                  MultiPassCompiler* mpCompiler,
+                                  MultiPassCompiler* mpCompiler __attribute__((unused)),
                                   LoopInvariants* invariants) {
     ModifiedSet modified = {0};
     collectModifiedVariables(loopBody, &modified);
@@ -801,13 +801,14 @@ static int compileMultiPassExpr(ASTNode* node, Compiler* compiler) {
             freeRegister(compiler, sourceReg);
             return resultReg;
         }
-        default:
+        default: {
             SrcLocation loc = {.file = compiler->fileName,
                                .line = node->location.line,
                                .column = node->location.column};
             report_compile_error(E1006_INVALID_SYNTAX, loc,
                                  "Unsupported expression type in multi-pass");
             return -1;
+        }
     }
 }
 
