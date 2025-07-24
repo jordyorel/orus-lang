@@ -74,12 +74,10 @@ int compileSharedBinaryOp(ASTNode* node, Compiler* compiler, CompilerContext* ct
     }
 
     // Compile operands
-    int leftReg = compileSharedNode(node->binary.left, compiler, ctx) ? 
-                  compiler->nextRegister - 1 : -1;
+    int leftReg = compileSharedNodeExpr(node->binary.left, compiler, ctx);
     if (leftReg == -1) return -1;
 
-    int rightReg = compileSharedNode(node->binary.right, compiler, ctx) ? 
-                   compiler->nextRegister - 1 : -1;
+    int rightReg = compileSharedNodeExpr(node->binary.right, compiler, ctx);
     if (rightReg == -1) {
         freeRegister(compiler, leftReg);
         return -1;
@@ -97,28 +95,34 @@ int compileSharedBinaryOp(ASTNode* node, Compiler* compiler, CompilerContext* ct
         resultReg = allocateRegister(compiler);
     }
 
-    // Emit operation based on operator using centralized opcodes
+    // Emit operation based on operator using correct opcodes (matching single-pass)
     const char* op = node->binary.op;
     if (strcmp(op, "+") == 0) {
-        emitByte(compiler, OPCODE_ADD_I32_R);
+        emitByte(compiler, OP_ADD_I32_R);
     } else if (strcmp(op, "-") == 0) {
-        emitByte(compiler, OPCODE_SUB_I32_R);
+        emitByte(compiler, OP_SUB_I32_R);
     } else if (strcmp(op, "*") == 0) {
-        emitByte(compiler, OPCODE_MUL_I32_R);
+        emitByte(compiler, OP_MUL_I32_R);
     } else if (strcmp(op, "/") == 0) {
-        emitByte(compiler, OPCODE_DIV_I32_R);
+        emitByte(compiler, OP_DIV_I32_R);
+    } else if (strcmp(op, "%") == 0) {
+        emitByte(compiler, OP_MOD_I32_R);
     } else if (strcmp(op, "==") == 0) {
-        emitByte(compiler, OPCODE_EQ_I32_R);
+        emitByte(compiler, OP_EQ_R);
     } else if (strcmp(op, "!=") == 0) {
-        emitByte(compiler, OPCODE_NE_I32_R);
+        emitByte(compiler, OP_NE_R);
     } else if (strcmp(op, ">") == 0) {
-        emitByte(compiler, OPCODE_GT_I32_R);
+        emitByte(compiler, OP_GT_I32_R);
     } else if (strcmp(op, ">=") == 0) {
-        emitByte(compiler, OPCODE_GE_I32_R);
+        emitByte(compiler, OP_GE_I32_R);
     } else if (strcmp(op, "<") == 0) {
-        emitByte(compiler, OPCODE_LT_I32_R);
+        emitByte(compiler, OP_LT_I32_R);
     } else if (strcmp(op, "<=") == 0) {
-        emitByte(compiler, OPCODE_LE_I32_R);
+        emitByte(compiler, OP_LE_I32_R);
+    } else if (strcmp(op, "and") == 0 || strcmp(op, "&&") == 0) {
+        emitByte(compiler, OP_AND_BOOL_R);
+    } else if (strcmp(op, "or") == 0 || strcmp(op, "||") == 0) {
+        emitByte(compiler, OP_OR_BOOL_R);
     } else {
         freeRegister(compiler, leftReg);
         freeRegister(compiler, rightReg);
@@ -154,10 +158,11 @@ int compileSharedVarDecl(ASTNode* node, Compiler* compiler, CompilerContext* ctx
     // Compile initializer if present
     uint8_t valueReg = 0;
     if (node->varDecl.initializer) {
-        if (!compileSharedNode(node->varDecl.initializer, compiler, ctx)) {
+        int initReg = compileSharedNodeExpr(node->varDecl.initializer, compiler, ctx);
+        if (initReg < 0) {
             return -1;
         }
-        valueReg = compiler->nextRegister - 1;
+        valueReg = initReg;
     } else {
         // Default initialize based on type
         valueReg = allocateRegister(compiler);
@@ -184,31 +189,57 @@ int compileSharedAssignment(ASTNode* node, Compiler* compiler, CompilerContext* 
         return -1;
     }
 
+    // Compile the value expression first and get the register it's in
+    int valueRegResult = compileSharedNodeExpr(node->assign.value, compiler, ctx);
+    if (valueRegResult < 0) {
+        return -1;
+    }
+
+    uint8_t valueReg = (uint8_t)valueRegResult;
+
     // Find the variable
     int localIndex = findLocal(compiler, node->assign.name);
-    if (localIndex == -1) {
-        SrcLocation loc = {.file = compiler->fileName, .line = node->location.line, .column = node->location.column};
-        report_undefined_variable(loc, node->assign.name);
-        return -1;
+    if (localIndex >= 0) {
+        // Variable exists - check if it's mutable for assignment
+        if (!compiler->locals[localIndex].isMutable) {
+            report_immutable_variable_assignment(node->location, node->assign.name);
+            freeRegister(compiler, valueReg);
+            return -1;
+        }
+        
+        uint8_t targetReg = compiler->locals[localIndex].reg;
+        
+        // Move value to target register if different
+        if (valueReg != targetReg) {
+            emitByte(compiler, OP_MOVE);
+            emitByte(compiler, targetReg);
+            emitByte(compiler, valueReg);
+            freeRegister(compiler, valueReg);
+        }
+        
+        return targetReg;
+    } else {
+        // Variable doesn't exist - create new mutable variable (matching single-pass behavior)
+        int newLocalIndex = addLocal(compiler, node->assign.name, true);
+        if (newLocalIndex < 0) {
+            SrcLocation loc = {.file = compiler->fileName, .line = node->location.line, .column = node->location.column};
+            report_compile_error(E1009_EXPRESSION_TOO_COMPLEX, loc, "Too many local variables");
+            freeRegister(compiler, valueReg);
+            return -1;
+        }
+
+        uint8_t targetReg = compiler->locals[newLocalIndex].reg;
+        
+        // Move value to target register if different
+        if (valueReg != targetReg) {
+            emitByte(compiler, OP_MOVE);
+            emitByte(compiler, targetReg);
+            emitByte(compiler, valueReg);
+            freeRegister(compiler, valueReg);
+        }
+        
+        return targetReg;
     }
-
-    // Compile the value expression
-    if (!compileSharedNode(node->assign.value, compiler, ctx)) {
-        return -1;
-    }
-
-    uint8_t valueReg = compiler->nextRegister - 1;
-    uint8_t targetReg = compiler->locals[localIndex].reg;
-
-    // Move value to target register if different
-    if (valueReg != targetReg) {
-        emitByte(compiler, OPCODE_MOVE_R);
-        emitByte(compiler, targetReg);
-        emitByte(compiler, valueReg);
-        freeRegister(compiler, valueReg);
-    }
-
-    return targetReg;
 }
 
 // Shared if statement compilation
@@ -218,11 +249,12 @@ int compileSharedIfStatement(ASTNode* node, Compiler* compiler, CompilerContext*
     }
 
     // Compile condition
-    if (!compileSharedNode(node->ifStmt.condition, compiler, ctx)) {
+    int condRegResult = compileSharedNodeExpr(node->ifStmt.condition, compiler, ctx);
+    if (condRegResult < 0) {
         return -1;
     }
 
-    uint8_t condReg = compiler->nextRegister - 1;
+    uint8_t condReg = condRegResult;
 
     // Jump if false
     emitByte(compiler, OPCODE_JUMP_IF_FALSE_R);
@@ -278,11 +310,12 @@ int compileSharedWhileLoop(ASTNode* node, Compiler* compiler, CompilerContext* c
     int loopStart = compiler->chunk->count;
 
     // Compile condition
-    if (!compileSharedNode(node->whileStmt.condition, compiler, ctx)) {
+    int condRegResult = compileSharedNodeExpr(node->whileStmt.condition, compiler, ctx);
+    if (condRegResult < 0) {
         return -1;
     }
 
-    uint8_t condReg = compiler->nextRegister - 1;
+    uint8_t condReg = condRegResult;
 
     // Jump if false (exit loop)
     emitByte(compiler, OPCODE_JUMP_IF_FALSE_R);
@@ -320,17 +353,19 @@ int compileSharedForLoop(ASTNode* node, Compiler* compiler, CompilerContext* ctx
     }
 
     // Compile start value
-    if (!compileSharedNode(node->forRange.start, compiler, ctx)) {
+    int startRegResult = compileSharedNodeExpr(node->forRange.start, compiler, ctx);
+    if (startRegResult < 0) {
         return -1;
     }
-    uint8_t startReg = compiler->nextRegister - 1;
+    uint8_t startReg = startRegResult;
 
     // Compile end value
-    if (!compileSharedNode(node->forRange.end, compiler, ctx)) {
+    int endRegResult = compileSharedNodeExpr(node->forRange.end, compiler, ctx);
+    if (endRegResult < 0) {
         freeRegister(compiler, startReg);
         return -1;
     }
-    uint8_t endReg = compiler->nextRegister - 1;
+    uint8_t endReg = endRegResult;
 
     // Create loop variable
     int loopVarIndex = addLocal(compiler, node->forRange.varName, false);
@@ -356,14 +391,14 @@ int compileSharedForLoop(ASTNode* node, Compiler* compiler, CompilerContext* ctx
     compiler->locals[loopVarIndex].reg = iterReg;
 
     // Initialize iterator
-    emitByte(compiler, OPCODE_MOVE_R);
+    emitByte(compiler, OP_MOVE);
     emitByte(compiler, iterReg);
     emitByte(compiler, startReg);
 
     int loopStart = compiler->chunk->count;
 
     // Check loop condition (iter < end)
-    emitByte(compiler, OPCODE_LT_I32_R);
+    emitByte(compiler, OP_LT_I32_R);
     uint8_t condReg = allocateRegister(compiler);
     emitByte(compiler, condReg);
     emitByte(compiler, iterReg);
@@ -387,7 +422,7 @@ int compileSharedForLoop(ASTNode* node, Compiler* compiler, CompilerContext* ctx
     }
 
     // Increment iterator
-    emitByte(compiler, OPCODE_ADD_I32_R);
+    emitByte(compiler, OP_ADD_I32_R);
     emitByte(compiler, iterReg);
     emitByte(compiler, iterReg);
     
@@ -455,11 +490,12 @@ int compileSharedCast(ASTNode* node, Compiler* compiler, CompilerContext* ctx) {
     }
 
     // Compile the expression to be cast
-    if (!compileSharedNode(node->cast.expression, compiler, ctx)) {
+    int sourceRegResult = compileSharedNodeExpr(node->cast.expression, compiler, ctx);
+    if (sourceRegResult < 0) {
         return -1;
     }
 
-    uint8_t sourceReg = compiler->nextRegister - 1;
+    uint8_t sourceReg = sourceRegResult;
     uint8_t targetReg;
 
     if (ctx->enableOptimizations && ctx->vmOptCtx) {
@@ -477,7 +513,7 @@ int compileSharedCast(ASTNode* node, Compiler* compiler, CompilerContext* ctx) {
     if (targetTypeNode && targetTypeNode->type == NODE_TYPE) {
         const char* typeName = targetTypeNode->typeAnnotation.name;
         if (strcmp(typeName, "string") == 0) {
-            emitByte(compiler, OPCODE_TO_STRING_R);
+            emitByte(compiler, OP_TO_STRING_R);
         } else if (strcmp(typeName, "i32") == 0) {
             emitByte(compiler, OPCODE_TO_I32_R);
         } else if (strcmp(typeName, "i64") == 0) {
@@ -502,6 +538,45 @@ int compileSharedCast(ASTNode* node, Compiler* compiler, CompilerContext* ctx) {
 
     freeRegister(compiler, sourceReg);
     return targetReg;
+}
+
+// Expression compilation that returns register number
+int compileSharedNodeExpr(ASTNode* node, Compiler* compiler, CompilerContext* ctx) {
+    if (!node || !compiler || !ctx) {
+        return -1;
+    }
+
+    switch (node->type) {
+        case NODE_LITERAL:
+            return compileSharedLiteral(node, compiler, ctx);
+        case NODE_BINARY:
+            return compileSharedBinaryOp(node, compiler, ctx);
+        case NODE_CAST:
+            return compileSharedCast(node, compiler, ctx);
+        case NODE_IDENTIFIER: {
+            // Variable access
+            int localIndex = findLocal(compiler, node->identifier.name);
+            if (localIndex == -1) {
+                SrcLocation loc = {.file = compiler->fileName, .line = node->location.line, .column = node->location.column};
+                report_undefined_variable(loc, node->identifier.name);
+                return -1;
+            }
+            // For variable access, we need to make the variable's register available as a temporary
+            // This requires allocating a temporary register and copying the value
+            uint8_t tempReg = allocateRegister(compiler);
+            uint8_t varReg = compiler->locals[localIndex].reg;
+            
+            // Copy variable value to temp register
+            emitByte(compiler, OP_MOVE);
+            emitByte(compiler, tempReg);
+            emitByte(compiler, varReg);
+            
+            return tempReg;
+        }
+        default:
+            // Unknown expression type
+            return -1;
+    }
 }
 
 // Main shared node compilation dispatch function
@@ -537,8 +612,17 @@ bool compileSharedNode(ASTNode* node, Compiler* compiler, CompilerContext* ctx) 
                 report_undefined_variable(loc, node->identifier.name);
                 return false;
             }
-            // The register is already allocated, just update nextRegister
-            compiler->nextRegister = compiler->locals[localIndex].reg + 1;
+            // For variable access, we need to make the variable's register available as nextRegister - 1
+            // This requires allocating a temporary register and copying the value
+            uint8_t tempReg = allocateRegister(compiler);
+            uint8_t varReg = compiler->locals[localIndex].reg;
+            
+            // Copy variable value to temp register
+            emitByte(compiler, OP_MOVE);
+            emitByte(compiler, tempReg);
+            emitByte(compiler, varReg);
+            
+            // Now nextRegister - 1 points to the temp register with the variable's value
             return true;
         }
         // Backend-specific nodes should be handled by the individual compilers
@@ -587,7 +671,19 @@ static int addLocal(Compiler* compiler, const char* name, bool isAssigned) {
     compiler->locals[index].isActive = true;
     compiler->locals[index].depth = compiler->scopeDepth;
     compiler->locals[index].isMutable = isAssigned;
-    compiler->locals[index].reg = 0; // Will be set by caller
+    
+    // Variables get persistent registers starting from 0, never freed
+    // This ensures variables don't interfere with temporary expression registers
+    uint8_t reg = index; // Use the local index as the register number
+    compiler->locals[index].reg = reg;
+    
+    // Update nextRegister to ensure temporaries don't conflict with variables
+    if (reg >= compiler->nextRegister) {
+        compiler->nextRegister = reg + 1;
+        if (compiler->nextRegister > compiler->maxRegisters) {
+            compiler->maxRegisters = compiler->nextRegister;
+        }
+    }
     
     return index;
 }

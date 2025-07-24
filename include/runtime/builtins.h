@@ -31,6 +31,6 @@ void builtin_print_with_sep_value(Value* args, int count, bool newline, Value se
  * The epoch is unspecified but monotonically increasing for the
  * duration of the process.
  */
-int32_t builtin_time_stamp(void);
+double builtin_time_stamp();
 
 #endif // ORUS_BUILTINS_H

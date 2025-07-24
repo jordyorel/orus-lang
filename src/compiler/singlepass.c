@@ -135,13 +135,9 @@ static int addLocal(Compiler* compiler, const char* name, bool isMutable) {
     }
 
     int index = compiler->localCount++;
-    // Use optimal register allocation - longer lifetime for local variables
-    uint8_t reg = allocateOptimalRegister(&g_singlePassCompiler->regState, 
-                                         &g_singlePassCompiler->vmCtx, 
-                                         false, 50);
-    if (reg < 0) {
-        reg = allocateRegister(compiler); // Fallback for compatibility
-    }
+    // Use simple register allocation for now to debug the issue
+    // TODO: Re-enable optimal register allocation after fixing the bug
+    uint8_t reg = allocateRegister(compiler);
 
     compiler->locals[index].name = strdup(name);
     compiler->locals[index].reg = reg;
@@ -289,6 +285,10 @@ static int compileSinglePassBinaryOp(ASTNode* node, Compiler* compiler) {
         emitByte(compiler, OP_EQ_R);
     } else if (strcmp(node->binary.op, "!=") == 0) {
         emitByte(compiler, OP_NE_R);
+    } else if (strcmp(node->binary.op, "and") == 0 || strcmp(node->binary.op, "&&") == 0) {
+        emitByte(compiler, OP_AND_BOOL_R);
+    } else if (strcmp(node->binary.op, "or") == 0 || strcmp(node->binary.op, "||") == 0) {
+        emitByte(compiler, OP_OR_BOOL_R);
     } else {
         SrcLocation loc = {.file = compiler->fileName,
                            .line = node->location.line,
@@ -336,7 +336,7 @@ static int compileSinglePassUnaryOp(ASTNode* node, Compiler* compiler) {
         emitByte(compiler, OP_MOVE);
         emitByte(compiler, resultReg);
         emitByte(compiler, operandReg);
-    } else if (strcmp(node->unary.op, "!") == 0) {
+    } else if (strcmp(node->unary.op, "!") == 0 || strcmp(node->unary.op, "not") == 0) {
         // Logical NOT - assume boolean for now
         emitByte(compiler, OP_NOT_BOOL_R);
         emitByte(compiler, resultReg);
@@ -381,13 +381,65 @@ static int compileSinglePassExpr(ASTNode* node, Compiler* compiler) {
             emitByte(compiler, resultReg);
             return resultReg;
         }
-        case NODE_UNARY: {
-            SrcLocation loc = {.file = compiler->fileName,
-                               .line = node->location.line,
-                               .column = node->location.column};
-            report_compile_error(E1006_INVALID_SYNTAX, loc,
-                                 "Negative numbers are not supported yet - try using 0 - number instead");
-            return -1;
+        case NODE_UNARY:
+            return compileSinglePassUnaryOp(node, compiler);
+        case NODE_TERNARY: {
+            // Compile condition
+            int condReg = compileSinglePassExpr(node->ternary.condition, compiler);
+            if (condReg < 0) return -1;
+            
+            // Allocate result register
+            uint8_t resultReg = allocateOptimalRegister(&g_singlePassCompiler->regState, 
+                                                       &g_singlePassCompiler->vmCtx, 
+                                                       false, 15);
+            if (resultReg < 0) {
+                resultReg = allocateRegister(compiler); // Fallback for compatibility
+            }
+            
+            // Jump if condition is false
+            emitByte(compiler, OP_JUMP_IF_NOT_R);
+            emitByte(compiler, condReg);
+            int falseJump = emitJump(compiler);
+            
+            freeRegister(compiler, condReg);
+            
+            // Compile true expression
+            int trueReg = compileSinglePassExpr(node->ternary.trueExpr, compiler);
+            if (trueReg < 0) {
+                freeRegister(compiler, resultReg);
+                return -1;
+            }
+            
+            // Move true result to result register
+            emitByte(compiler, OP_MOVE);
+            emitByte(compiler, resultReg);
+            emitByte(compiler, trueReg);
+            freeRegister(compiler, trueReg);
+            
+            // Jump over false branch
+            emitByte(compiler, OP_JUMP);
+            int endJump = emitJump(compiler);
+            
+            // Patch false jump
+            patchJump(compiler, falseJump);
+            
+            // Compile false expression
+            int falseReg = compileSinglePassExpr(node->ternary.falseExpr, compiler);
+            if (falseReg < 0) {
+                freeRegister(compiler, resultReg);
+                return -1;
+            }
+            
+            // Move false result to result register
+            emitByte(compiler, OP_MOVE);
+            emitByte(compiler, resultReg);
+            emitByte(compiler, falseReg);
+            freeRegister(compiler, falseReg);
+            
+            // Patch end jump
+            patchJump(compiler, endJump);
+            
+            return resultReg;
         }
         default: {
             SrcLocation loc = {.file = compiler->fileName,

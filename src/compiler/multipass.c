@@ -585,11 +585,11 @@ static void patchContinueJumps(JumpTable* table, Compiler* compiler,
     for (int i = 0; i < table->offsets.count; i++) {
         int offset = table->offsets.data[i];
 
-        // Calculate jump to continue target (backward jump for OP_LOOP)
-        int jump = offset + 2 - continueTarget;  // Reversed for backward jump
+        // Calculate jump to continue target (forward jump using OP_JUMP)
+        int jump = continueTarget - (offset + 2);  // Forward jump calculation
         printf(
             "[DEBUG] patchContinueJumps: offset=%d, continueTarget=%d, "
-            "backward_jump=%d\n",
+            "forward_jump=%d\n",
             offset, continueTarget, jump);
         if (jump >= 0 && jump <= UINT16_MAX) {
             compiler->chunk->code[offset] = (jump >> 8) & 0xff;
@@ -1264,7 +1264,8 @@ static bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
                 targetLoop = &mpCompiler->loops[mpCompiler->loopCount - 1];
             }
 
-            emitByte(compiler, OP_LOOP);
+            // Continue should be a forward jump to the increment section
+            emitByte(compiler, OP_JUMP);
             int continueJump = emitJump(compiler);
             jumptable_add(&targetLoop->continueJumps, continueJump);
 

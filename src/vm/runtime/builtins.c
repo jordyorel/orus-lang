@@ -215,43 +215,37 @@ void builtin_print_with_sep_value(Value* args, int count, bool newline, Value se
 }
 
 // Cross-platform high-precision timestamp function
-// Returns milliseconds since an arbitrary but monotonic starting point (as i32)
-int32_t builtin_time_stamp() {
+// Returns SECONDS since an arbitrary but monotonic starting point (as double)
+double builtin_time_stamp() {
 #ifdef __APPLE__
-    // macOS: Use mach_absolute_time() - fastest and most precise
-    init_timebase();
-    uint64_t abs_time = mach_absolute_time();
-    // Convert to milliseconds and return as i32
-    uint64_t nanoseconds = (abs_time * timebase_numer) / timebase_denom;
-    return (int32_t)(nanoseconds / NANOSECONDS_PER_MILLISECOND);
-    
+// macOS: Use mach_absolute_time() → seconds (double)
+init_timebase();
+uint64_t abs_time = mach_absolute_time();
+uint64_t nanoseconds = (abs_time * timebase_numer) / timebase_denom;
+return (double)nanoseconds / 1e9;  // ns → s
+
 #elif defined(__linux__)
-    // Linux: Use clock_gettime with CLOCK_MONOTONIC
+    // Linux: Use clock_gettime → seconds (double)
     struct timespec ts;
     if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) {
-        // Convert to milliseconds and return as i32
-        uint64_t nanoseconds = ts.tv_sec * NANOSECONDS_PER_SECOND + ts.tv_nsec;
-        return (int32_t)(nanoseconds / NANOSECONDS_PER_MILLISECOND);
+        return (double)ts.tv_sec + (double)ts.tv_nsec / 1e9;  // s + ns → s
     }
-    return 0; // Error fallback
-    
+    return 0.0;  // Error fallback
+
 #elif defined(_WIN32)
-    // Windows: Use QueryPerformanceCounter
-    static LARGE_INTEGER frequency = {0};
-    if (frequency.QuadPart == 0) {
-        QueryPerformanceFrequency(&frequency);
-    }
-    
-    LARGE_INTEGER counter;
-    QueryPerformanceCounter(&counter);
-    
-    // Convert to milliseconds and return as i32
-    uint64_t nanoseconds = (counter.QuadPart * NANOSECONDS_PER_SECOND) / frequency.QuadPart;
-    return (int32_t)(nanoseconds / NANOSECONDS_PER_MILLISECOND);
-    
+// Windows: QueryPerformanceCounter → seconds (double)
+static LARGE_INTEGER frequency = {0};
+if (frequency.QuadPart == 0) {
+    QueryPerformanceFrequency(&frequency);
+}
+
+LARGE_INTEGER counter;
+QueryPerformanceCounter(&counter);
+return (double)counter.QuadPart / (double)frequency.QuadPart;  // counts → s
+
 #else
-    // Fallback: Use standard clock() - less precise but portable
-    #include <time.h>
-    return (int64_t)((clock() * NANOSECONDS_PER_SECOND) / CLOCKS_PER_SEC);
+// Fallback: clock() → seconds (double)
+#include <time.h>
+    return (double)clock() / (double)CLOCKS_PER_SEC;
 #endif
 }

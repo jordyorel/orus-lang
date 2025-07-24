@@ -777,37 +777,38 @@ InterpretResult vm_run_dispatch(void) {
         }
 
     LABEL_OP_NEG_I32_R: {
-            uint8_t reg = READ_BYTE();
+            uint8_t dst = READ_BYTE();
+            uint8_t src = READ_BYTE();
             
             // Type safety: negation only works on numeric types
-            if (!(IS_I32(vm.registers[reg]) || IS_I64(vm.registers[reg]) || IS_U32(vm.registers[reg]) || IS_U64(vm.registers[reg]) || IS_F64(vm.registers[reg]))) {
+            if (!(IS_I32(vm.registers[src]) || IS_I64(vm.registers[src]) || IS_U32(vm.registers[src]) || IS_U64(vm.registers[src]) || IS_F64(vm.registers[src]))) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Unary minus only works on numeric types (i32, i64, u32, u64, f64)");
             }
             
     #if USE_FAST_ARITH
-            vm.registers[reg] = I32_VAL(-AS_I32(vm.registers[reg]));
+            vm.registers[dst] = I32_VAL(-AS_I32(vm.registers[src]));
     #else
             // Handle different numeric types appropriately
-            if (IS_I32(vm.registers[reg])) {
-                int32_t val = AS_I32(vm.registers[reg]);
+            if (IS_I32(vm.registers[src])) {
+                int32_t val = AS_I32(vm.registers[src]);
                 if (val == INT32_MIN) {
                     VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow: cannot negate INT32_MIN");
                 }
-                vm.registers[reg] = I32_VAL(-val);
-            } else if (IS_I64(vm.registers[reg])) {
-                int64_t val = AS_I64(vm.registers[reg]);
-                vm.registers[reg] = I64_VAL(-val);
-            } else if (IS_U32(vm.registers[reg])) {
-                uint32_t val = AS_U32(vm.registers[reg]);
+                vm.registers[dst] = I32_VAL(-val);
+            } else if (IS_I64(vm.registers[src])) {
+                int64_t val = AS_I64(vm.registers[src]);
+                vm.registers[dst] = I64_VAL(-val);
+            } else if (IS_U32(vm.registers[src])) {
+                uint32_t val = AS_U32(vm.registers[src]);
                 // Convert to signed for negation
-                vm.registers[reg] = I32_VAL(-((int32_t)val));
-            } else if (IS_U64(vm.registers[reg])) {
-                uint64_t val = AS_U64(vm.registers[reg]);
+                vm.registers[dst] = I32_VAL(-((int32_t)val));
+            } else if (IS_U64(vm.registers[src])) {
+                uint64_t val = AS_U64(vm.registers[src]);
                 // Convert to signed for negation
-                vm.registers[reg] = I64_VAL(-((int64_t)val));
-            } else if (IS_F64(vm.registers[reg])) {
-                double val = AS_F64(vm.registers[reg]);
-                vm.registers[reg] = F64_VAL(-val);
+                vm.registers[dst] = I64_VAL(-((int64_t)val));
+            } else if (IS_F64(vm.registers[src])) {
+                double val = AS_F64(vm.registers[src]);
+                vm.registers[dst] = F64_VAL(-val);
             }
     #endif
             DISPATCH();

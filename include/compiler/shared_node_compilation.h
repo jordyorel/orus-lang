@@ -27,6 +27,7 @@ int compileSharedCast(ASTNode* node, Compiler* compiler, CompilerContext* ctx);
 
 // Main shared node compilation dispatch function
 bool compileSharedNode(ASTNode* node, Compiler* compiler, CompilerContext* ctx);
+int compileSharedNodeExpr(ASTNode* node, Compiler* compiler, CompilerContext* ctx);
 
 // Helper functions for context management
 CompilerContext createSinglePassContext(void);
