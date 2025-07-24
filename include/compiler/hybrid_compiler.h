@@ -29,6 +29,7 @@ CompilationStrategy chooseStrategy(CodeComplexity complexity);
 void initSinglePassCompiler(Compiler* compiler, Chunk* chunk, const char* fileName, const char* source);
 void freeSinglePassCompiler(Compiler* compiler);
 bool compileSinglePass(ASTNode* ast, Compiler* compiler, bool isModule);
+void enableSinglePassFastPath(void);
 
 // Multi-pass compiler interface  
 void initMultiPassCompiler(Compiler* compiler, Chunk* chunk, const char* fileName, const char* source);

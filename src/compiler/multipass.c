@@ -11,6 +11,7 @@
 #include "compiler/loop_optimization.h"
 #include "compiler/symbol_table.h"
 #include "compiler/vm_optimization.h"
+#include "compiler/node_registry.h"
 #include "errors/features/type_errors.h"
 #include "errors/features/variable_errors.h"
 #include "internal/error_reporting.h"
@@ -202,6 +203,9 @@ static void initVMOptimization(Compiler* compiler __attribute__((unused))) {
         initRegisterState(&g_regState);
         g_vmOptInitialized = true;
         LOG_COMPILER_DEBUG("multipass", "VM optimization initialized");
+        
+        // Initialize node registry for extensible compilation
+        registerAllNodeHandlers();
     }
 }
 
@@ -276,7 +280,8 @@ static int addLocal(Compiler* compiler, const char* name, bool isMutable) {
     }
 
     int index = compiler->localCount++;
-    uint8_t reg = allocateRegister(compiler);
+    // Use optimized register allocation for local variables - longer lifetime  
+    uint8_t reg = allocateOptimizedRegister(compiler, false, 50);
 
     compiler->locals[index].name = strdup(name);
     compiler->locals[index].reg = reg;
@@ -535,7 +540,7 @@ static void analyzeLoopInvariants(ASTNode* loopBody,
                 }
                 InvariantEntry* entry = &invariants->entries[invariants->count++];
                 entry->expr = node;
-                entry->reg = allocateRegister(mpCompiler->base);
+                entry->reg = allocateOptimizedRegister(mpCompiler->base, false, 80);
             }
         }
     }
@@ -595,7 +600,8 @@ static void patchContinueJumps(JumpTable* table, Compiler* compiler,
 
 // Expression compilation with multi-pass features
 static int compileMultiPassLiteral(ASTNode* node, Compiler* compiler) {
-    uint8_t reg = allocateRegister(compiler);
+    // Use optimized register allocation for literals - short lifetime
+    uint8_t reg = allocateOptimizedRegister(compiler, false, 5);
     emitConstant(compiler, reg, node->literal.value);
     return reg;
 }
@@ -640,7 +646,7 @@ static int compileMultiPassIdentifier(ASTNode* node, Compiler* compiler) {
                        node->identifier.name) == 0) {
                 // Record variable usage in scope analysis
                 compilerUseVariable(compiler, node->identifier.name);
-                uint8_t reg = allocateRegister(compiler);
+                uint8_t reg = allocateOptimizedRegister(compiler, false, 20);
                 emitByte(compiler, OP_GET_UPVALUE_R);
                 emitByte(compiler, reg);
                 emitByte(compiler, (uint8_t)i);
@@ -660,7 +666,8 @@ static int compileMultiPassIdentifier(ASTNode* node, Compiler* compiler) {
 static int compileMultiPassBinaryOp(ASTNode* node, Compiler* compiler) {
     int leftReg = compileMultiPassExpr(node->binary.left, compiler);
     int rightReg = compileMultiPassExpr(node->binary.right, compiler);
-    uint8_t resultReg = allocateRegister(compiler);
+    // Use optimized register allocation for binary operations - moderate lifetime
+    uint8_t resultReg = allocateOptimizedRegister(compiler, false, 15);
 
     // Enhanced binary operations with type awareness
     if (strcmp(node->binary.op, "+") == 0) {
@@ -733,7 +740,7 @@ static int compileMultiPassExpr(ASTNode* node, Compiler* compiler) {
         case NODE_BINARY:
             return compileMultiPassBinaryOp(node, compiler);
         case NODE_TIME_STAMP: {
-            uint8_t resultReg = allocateRegister(compiler);
+            uint8_t resultReg = allocateOptimizedRegister(compiler, false, 10);
             emitByte(compiler, OP_TIME_STAMP);
             emitByte(compiler, resultReg);
             return resultReg;
@@ -753,7 +760,7 @@ static int compileMultiPassExpr(ASTNode* node, Compiler* compiler) {
                                              "time_stamp() takes no arguments");
                         return -1;
                     }
-                    uint8_t resultReg = allocateRegister(compiler);
+                    uint8_t resultReg = allocateOptimizedRegister(compiler, false, 10);
                     emitByte(compiler, OP_TIME_STAMP);
                     emitByte(compiler, resultReg);
                     return resultReg;
@@ -762,7 +769,7 @@ static int compileMultiPassExpr(ASTNode* node, Compiler* compiler) {
 
             // Regular function call
             int funcReg = compileMultiPassExpr(node->call.callee, compiler);
-            int resultReg = allocateRegister(compiler);
+            int resultReg = allocateOptimizedRegister(compiler, false, 25);
 
             int firstArgReg = 0;
             if (node->call.argCount > 0) {
@@ -801,7 +808,7 @@ static int compileMultiPassExpr(ASTNode* node, Compiler* compiler) {
             int sourceReg = compileMultiPassExpr(node->cast.expression, compiler);
             if (sourceReg < 0) return -1;
             
-            uint8_t resultReg = allocateRegister(compiler);
+            uint8_t resultReg = allocateOptimizedRegister(compiler, false, 15);
             
             // Get target type from AST node
             // For now, assume string casting (most common case)
@@ -1036,7 +1043,8 @@ static bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
             int loopStart = compiler->chunk->count;
             context->startInstr = loopStart;
 
-            uint8_t condReg = allocateRegister(compiler);
+            // Use optimized register allocation for loop condition - long lifetime
+            uint8_t condReg = allocateOptimizedRegister(compiler, true, 100);
             emitByte(compiler, OP_LE_I32_R);
             emitByte(compiler, condReg);
             emitByte(compiler, iterReg);
@@ -1376,7 +1384,7 @@ static bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
 
         case NODE_PRINT: {
             if (node->print.count == 0) {
-                uint8_t r = allocateRegister(compiler);
+                uint8_t r = allocateOptimizedRegister(compiler, false, 5);
                 emitByte(compiler, OP_LOAD_NIL);
                 emitByte(compiler, r);
                 emitByte(compiler, OP_PRINT_R);
@@ -1396,7 +1404,7 @@ static bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
                 uint8_t* argRegs = malloc(node->print.count * sizeof(uint8_t));
 
                 for (int i = 0; i < node->print.count; i++) {
-                    argRegs[i] = allocateRegister(compiler);
+                    argRegs[i] = allocateOptimizedRegister(compiler, false, 5);
                 }
 
                 for (int i = 0; i < node->print.count; i++) {

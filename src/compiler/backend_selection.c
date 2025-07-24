@@ -5,6 +5,7 @@
 #include "compiler/compiler.h"
 #include "compiler/backend_selection.h"
 #include "compiler/profile_guided_optimization.h"
+#include "compiler/node_registry.h"
 
 #define max(a, b) ((a) > (b) ? (a) : (b))
 #define min(a, b) ((a) < (b) ? (a) : (b))
@@ -53,6 +54,13 @@ CodeComplexity analyzeCodeComplexity(ASTNode* node) {
 static void analyzeNodeComplexity(ASTNode* node, CodeComplexity* complexity, int depth) {
     if (!node) return;
 
+    // Try to use registered node handler for complexity analysis
+    NodeHandler* handler = getNodeHandler(node->type);
+    if (handler && handler->analyzeComplexity) {
+        handler->analyzeComplexity(node, complexity);
+    }
+
+    // Fallback to default analysis for recursive traversal
     switch (node->type) {
         case NODE_PROGRAM:
             for (int i = 0; i < node->program.count; i++) {

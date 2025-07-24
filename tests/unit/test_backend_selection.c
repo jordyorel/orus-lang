@@ -131,7 +131,7 @@ void test_choose_backend_simple(void) {
     ASTNode* right = createLiteralNode(20);
     ASTNode* binary = createBinaryNode(left, right, "+");
     
-    CompilerBackend backend = chooseOptimalBackend(binary);
+    CompilerBackend backend = chooseOptimalBackend(binary, NULL);
     
     // Simple expressions should use fast backend
     TEST_ASSERT_TRUE(backend == BACKEND_FAST || backend == BACKEND_AUTO);
@@ -157,7 +157,7 @@ void test_choose_backend_complex(void) {
     ASTNode* outerEnd = createLiteralNode(100);
     ASTNode* outerLoop = createForLoopNode("i", outerStart, outerEnd, outerBody);
     
-    CompilerBackend backend = chooseOptimalBackend(outerLoop);
+    CompilerBackend backend = chooseOptimalBackend(outerLoop, NULL);
     
     // Complex nested loops should use optimized backend
     TEST_ASSERT_TRUE(backend == BACKEND_OPTIMIZED || backend == BACKEND_HYBRID);
@@ -242,8 +242,8 @@ void test_backend_selection_consistency(void) {
     ASTNode* node = createLiteralNode(42);
     
     // Multiple calls should return the same result
-    CompilerBackend backend1 = chooseOptimalBackend(node);
-    CompilerBackend backend2 = chooseOptimalBackend(node);
+    CompilerBackend backend1 = chooseOptimalBackend(node, NULL);
+    CompilerBackend backend2 = chooseOptimalBackend(node, NULL);
     
     TEST_ASSERT_EQUAL_INT(backend1, backend2);
     

@@ -9,6 +9,7 @@
 #include "compiler/backend_selection.h"
 #include "compiler/symbol_table.h"
 #include "compiler/shared_node_compilation.h"
+#include "compiler/node_registry.h"
 #include "internal/logging.h"
 #include "vm/vm.h"
 #include "vm/vm_constants.h"
@@ -20,6 +21,7 @@ static int addToSecondaryConstantTable(Compiler* compiler, Value value);
 static bool compileGranularHybrid(ASTNode* ast, Compiler* compiler, bool isModule);
 static CompilationStrategy chooseNodeStrategy(ASTNode* node);
 static bool isSimpleProgram(ASTNode* ast);
+static bool shouldUseFastPath(ASTNode* ast, CompilationStrategy strategy);
 
 // Complexity analysis thresholds
 #define SIMPLE_FUNCTION_THRESHOLD 2
@@ -238,6 +240,17 @@ bool compileHybrid(ASTNode* ast, Compiler* compiler, bool isModule,
                    CompilationStrategy strategy) {
     if (!ast) return false;
 
+    // Initialize node registry for extensible compilation
+    registerAllNodeHandlers();
+
+    // Fast-path optimization disabled for debugging
+    // if (shouldUseFastPath(ast, strategy)) {
+    //     LOG_DEBUG("Fast-path compilation: simple program detected, bypassing complexity analysis");
+    //     initSinglePassCompiler(compiler, compiler->chunk, compiler->fileName, compiler->source);
+    //     enableSinglePassFastPath();
+    //     return compileSinglePass(ast, compiler, isModule);
+    // }
+
     // Analyze complexity if using auto strategy
     CodeComplexity complexity = {0};
     if (strategy == COMPILE_AUTO) {
@@ -438,8 +451,14 @@ static CompilationStrategy chooseNodeStrategy(ASTNode* node) {
 }
 
 // Fast-path detection for very simple programs
+// This function determines if a program is simple enough to skip complexity analysis
 static bool isSimpleProgram(ASTNode* ast) {
     if (!ast || ast->type != NODE_PROGRAM) {
+        return false;
+    }
+
+    // Programs with too many declarations are not simple
+    if (ast->program.count > 5) {
         return false;
     }
 
@@ -449,35 +468,117 @@ static bool isSimpleProgram(ASTNode* ast) {
         if (!node) continue;
 
         switch (node->type) {
+            // Complex constructs that disqualify from fast-path
             case NODE_FUNCTION:
             case NODE_CALL:
             case NODE_BREAK:
             case NODE_CONTINUE:
             case NODE_WHILE:
             case NODE_FOR_RANGE:
-                // These are never simple
+                LOG_DEBUG("Fast-path disqualified by complex node type: %d", node->type);
                 return false;
 
             case NODE_IF:
-                // Check for nested complexity
+                // Simple if without else is allowed, but if-else is complex
                 if (node->ifStmt.elseBranch != NULL) {
-                    return false; // If-else is more complex
+                    LOG_DEBUG("Fast-path disqualified by if-else statement");
+                    return false;
                 }
-                break;
-
-            case NODE_BLOCK:
-                // Blocks with multiple statements are complex
-                if (node->block.count > 3) {
+                // Check if condition is simple (no nested calls or complex expressions)
+                if (node->ifStmt.condition && node->ifStmt.condition->type == NODE_CALL) {
+                    LOG_DEBUG("Fast-path disqualified by complex if condition");
                     return false;
                 }
                 break;
 
+            case NODE_BLOCK:
+                // Blocks with many statements are complex
+                if (node->block.count > 3) {
+                    LOG_DEBUG("Fast-path disqualified by large block (%d statements)", node->block.count);
+                    return false;
+                }
+                break;
+
+            case NODE_VAR_DECL:
+            case NODE_ASSIGN:
+            case NODE_PRINT:
+            case NODE_LITERAL:
+            case NODE_IDENTIFIER:
+            case NODE_BINARY:
+            case NODE_CAST:
+            case NODE_TIME_STAMP:
+                // These are simple and allowed
+                break;
+
             default:
-                // Other nodes are potentially simple
+                // Unknown or potentially complex nodes
+                LOG_DEBUG("Fast-path disqualified by unknown node type: %d", node->type);
+                return false;
+        }
+    }
+
+    LOG_DEBUG("Program qualified for fast-path compilation (%d declarations)", ast->program.count);
+    return true;
+}
+
+// Determine if fast-path compilation should be used
+// This combines simplicity checks with strategy considerations
+static bool shouldUseFastPath(ASTNode* ast, CompilationStrategy strategy) {
+    // Only use fast-path for auto strategy (let explicit strategies proceed normally)
+    if (strategy != COMPILE_AUTO) {
+        return false;
+    }
+
+    // Only apply to programs
+    if (!ast || ast->type != NODE_PROGRAM) {
+        return false;
+    }
+
+    // Check if the program qualifies for fast-path
+    if (!isSimpleProgram(ast)) {
+        return false;
+    }
+
+    // Additional checks for very trivial programs that benefit most from fast-path
+    // Programs with only literals, simple variable declarations, and basic arithmetic
+    int trivialNodes = 0;
+    for (int i = 0; i < ast->program.count; i++) {
+        ASTNode* node = ast->program.declarations[i];
+        if (!node) continue;
+
+        switch (node->type) {
+            case NODE_VAR_DECL:
+                // Simple variable declarations are trivial
+                if (node->varDecl.initializer == NULL || 
+                    node->varDecl.initializer->type == NODE_LITERAL ||
+                    node->varDecl.initializer->type == NODE_IDENTIFIER) {
+                    trivialNodes++;
+                }
+                break;
+            case NODE_ASSIGN:
+            case NODE_PRINT:
+            case NODE_LITERAL:
+                trivialNodes++;
+                break;
+            case NODE_BINARY:
+                // Simple arithmetic is allowed
+                if (node->binary.left && node->binary.right &&
+                    (node->binary.left->type == NODE_LITERAL || node->binary.left->type == NODE_IDENTIFIER) &&
+                    (node->binary.right->type == NODE_LITERAL || node->binary.right->type == NODE_IDENTIFIER)) {
+                    trivialNodes++;
+                }
+                break;
+            default:
                 break;
         }
     }
 
-    // Simple program: few declarations, no complex structures
-    return ast->program.count <= 5;
+    // If most nodes are trivial, it's an excellent fast-path candidate
+    bool isMostlyTrivial = (ast->program.count > 0) && (trivialNodes >= ast->program.count * 0.7);
+    
+    if (isMostlyTrivial) {
+        LOG_DEBUG("Fast-path: program is mostly trivial (%d/%d nodes)", trivialNodes, ast->program.count);
+    }
+
+    return true; // All simple programs use fast-path
 }

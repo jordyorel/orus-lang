@@ -7,9 +7,12 @@
 
 #include "compiler/compiler.h"
 #include "compiler/symbol_table.h"
+#include "compiler/vm_optimization.h"
+#include "compiler/node_registry.h"
 #include "errors/features/type_errors.h"
 #include "errors/features/variable_errors.h"
 #include "internal/error_reporting.h"
+#include "internal/logging.h"
 #include "runtime/jumptable.h"
 #include "runtime/memory.h"
 #include "type/type.h"
@@ -26,6 +29,9 @@ typedef struct {
     SinglePassLoopContext* loops;
     int loopCount;
     int loopCapacity;
+    VMOptimizationContext vmCtx;
+    RegisterState regState;
+    bool fastPathMode; // Flag to enable additional fast-path optimizations
 } SinglePassCompiler;
 
 // Global single-pass compiler instance
@@ -34,6 +40,8 @@ static SinglePassCompiler* g_singlePassCompiler = NULL;
 // Forward declarations
 static bool compileSinglePassNode(ASTNode* node, Compiler* compiler);
 static int compileSinglePassExpr(ASTNode* node, Compiler* compiler);
+static int compileSinglePassUnaryOp(ASTNode* node, Compiler* compiler);
+static void enableFastPathMode(void);
 
 // Missing function declarations
 int addConstant(Chunk* chunk, Value value);
@@ -76,6 +84,14 @@ void initSinglePassCompiler(Compiler* compiler, Chunk* chunk,
     g_singlePassCompiler->loops = malloc(sizeof(SinglePassLoopContext) * 8);
     g_singlePassCompiler->loopCount = 0;
     g_singlePassCompiler->loopCapacity = 8;
+    g_singlePassCompiler->fastPathMode = false; // Will be enabled by fast-path compilation
+    
+    // Initialize VM optimization for fast backend
+    g_singlePassCompiler->vmCtx = createVMOptimizationContext(BACKEND_FAST);
+    initRegisterState(&g_singlePassCompiler->regState);
+    
+    // Initialize node registry for extensible compilation
+    registerAllNodeHandlers();
 }
 
 void freeSinglePassCompiler(Compiler* compiler) {
@@ -119,7 +135,13 @@ static int addLocal(Compiler* compiler, const char* name, bool isMutable) {
     }
 
     int index = compiler->localCount++;
-    uint8_t reg = allocateRegister(compiler);
+    // Use optimal register allocation - longer lifetime for local variables
+    uint8_t reg = allocateOptimalRegister(&g_singlePassCompiler->regState, 
+                                         &g_singlePassCompiler->vmCtx, 
+                                         false, 50);
+    if (reg < 0) {
+        reg = allocateRegister(compiler); // Fallback for compatibility
+    }
 
     compiler->locals[index].name = strdup(name);
     compiler->locals[index].reg = reg;
@@ -211,7 +233,13 @@ static void exitLoop(Compiler* compiler __attribute__((unused))) {
 
 // Expression compilation
 static int compileSinglePassLiteral(ASTNode* node, Compiler* compiler) {
-    uint8_t reg = allocateRegister(compiler);
+    // Use optimal register allocation with low lifetime since literals are usually short-lived
+    uint8_t reg = allocateOptimalRegister(&g_singlePassCompiler->regState, 
+                                         &g_singlePassCompiler->vmCtx, 
+                                         false, 5);
+    if (reg < 0) {
+        reg = allocateRegister(compiler); // Fallback for compatibility
+    }
     emitConstant(compiler, reg, node->literal.value);
     return reg;
 }
@@ -231,7 +259,13 @@ static int compileSinglePassIdentifier(ASTNode* node, Compiler* compiler) {
 static int compileSinglePassBinaryOp(ASTNode* node, Compiler* compiler) {
     int leftReg = compileSinglePassExpr(node->binary.left, compiler);
     int rightReg = compileSinglePassExpr(node->binary.right, compiler);
-    uint8_t resultReg = allocateRegister(compiler);
+    // Use optimal register allocation for binary operations - moderate lifetime
+    uint8_t resultReg = allocateOptimalRegister(&g_singlePassCompiler->regState, 
+                                               &g_singlePassCompiler->vmCtx, 
+                                               false, 15);
+    if (resultReg < 0) {
+        resultReg = allocateRegister(compiler); // Fallback for compatibility
+    }
 
     if (strcmp(node->binary.op, "+") == 0) {
         emitByte(compiler, OP_ADD_I32_R);
@@ -277,9 +311,57 @@ static int compileSinglePassBinaryOp(ASTNode* node, Compiler* compiler) {
     return resultReg;
 }
 
+static int compileSinglePassUnaryOp(ASTNode* node, Compiler* compiler) {
+    if (!node || node->type != NODE_UNARY) return -1;
+    
+    int operandReg = compileSinglePassExpr(node->unary.operand, compiler);
+    if (operandReg < 0) return -1;
+    
+    // Use optimal register allocation for unary operations - short lifetime
+    uint8_t resultReg = allocateOptimalRegister(&g_singlePassCompiler->regState, 
+                                               &g_singlePassCompiler->vmCtx, 
+                                               false, 10);
+    if (resultReg < 0) {
+        resultReg = allocateRegister(compiler); // Fallback for compatibility
+    }
+    
+    // Handle different unary operators
+    if (strcmp(node->unary.op, "-") == 0) {
+        // Unary minus: negate the operand
+        emitByte(compiler, OP_NEG_I32_R);
+        emitByte(compiler, resultReg);
+        emitByte(compiler, operandReg);
+    } else if (strcmp(node->unary.op, "+") == 0) {
+        // Unary plus: just move the operand (no-op)
+        emitByte(compiler, OP_MOVE);
+        emitByte(compiler, resultReg);
+        emitByte(compiler, operandReg);
+    } else if (strcmp(node->unary.op, "!") == 0) {
+        // Logical NOT - assume boolean for now
+        emitByte(compiler, OP_NOT_BOOL_R);
+        emitByte(compiler, resultReg);
+        emitByte(compiler, operandReg);
+    } else {
+        // Unsupported unary operator
+        SrcLocation loc = {.file = compiler->fileName,
+                           .line = node->location.line,
+                           .column = node->location.column};
+        report_compile_error(E1006_INVALID_SYNTAX, loc,
+                             "This unary operator is not supported");
+        freeRegister(compiler, operandReg);
+        return -1;
+    }
+    
+    // Free the operand register since we're done with it
+    freeRegister(compiler, operandReg);
+    
+    return resultReg;
+}
+
 static int compileSinglePassExpr(ASTNode* node, Compiler* compiler) {
     if (!node) return -1;
 
+    // Direct implementation (node registry disabled for debugging)
     switch (node->type) {
         case NODE_LITERAL:
             return compileSinglePassLiteral(node, compiler);
@@ -288,17 +370,37 @@ static int compileSinglePassExpr(ASTNode* node, Compiler* compiler) {
         case NODE_BINARY:
             return compileSinglePassBinaryOp(node, compiler);
         case NODE_TIME_STAMP: {
-            uint8_t resultReg = allocateRegister(compiler);
+            // Use optimal register allocation for timestamp - short lifetime
+            uint8_t resultReg = allocateOptimalRegister(&g_singlePassCompiler->regState, 
+                                                       &g_singlePassCompiler->vmCtx, 
+                                                       false, 10);
+            if (resultReg < 0) {
+                resultReg = allocateRegister(compiler); // Fallback for compatibility
+            }
             emitByte(compiler, OP_TIME_STAMP);
             emitByte(compiler, resultReg);
             return resultReg;
+        }
+        case NODE_UNARY: {
+            SrcLocation loc = {.file = compiler->fileName,
+                               .line = node->location.line,
+                               .column = node->location.column};
+            report_compile_error(E1006_INVALID_SYNTAX, loc,
+                                 "Negative numbers are not supported yet - try using 0 - number instead");
+            return -1;
         }
         default: {
             SrcLocation loc = {.file = compiler->fileName,
                                .line = node->location.line,
                                .column = node->location.column};
-            report_compile_error(E1006_INVALID_SYNTAX, loc,
-                                 "Unsupported expression type in single-pass");
+            // Better error message for users
+            if (node->type == NODE_CALL) {
+                report_compile_error(E1006_INVALID_SYNTAX, loc,
+                                     "Function calls are not supported yet");
+            } else {
+                report_compile_error(E1006_INVALID_SYNTAX, loc,
+                                     "This expression syntax is not supported yet");
+            }
             return -1;
         }
     }
@@ -310,6 +412,7 @@ static bool compileSinglePassNode(ASTNode* node, Compiler* compiler) {
     compiler->currentLine = node->location.line;
     compiler->currentColumn = node->location.column;
 
+    // Direct implementation (node registry disabled for debugging)
     switch (node->type) {
         case NODE_PROGRAM:
             for (int i = 0; i < node->program.count; i++) {
@@ -331,7 +434,7 @@ static bool compileSinglePassNode(ASTNode* node, Compiler* compiler) {
 
             beginScope(compiler);
 
-            // Add loop variable
+            // Add loop variable - mark as loop variable for optimal allocation
             int loopVarIndex =
                 addLocal(compiler, node->forRange.varName, false);
             if (loopVarIndex < 0) {
@@ -344,6 +447,10 @@ static bool compileSinglePassNode(ASTNode* node, Compiler* compiler) {
             }
 
             uint8_t iterReg = compiler->locals[loopVarIndex].reg;
+            // Mark as loop variable in register state for optimization
+            if (iterReg < 256) {
+                g_singlePassCompiler->regState.isLoopVariable[iterReg] = true;
+            }
 
             // Initialize iterator
             emitByte(compiler, OP_MOVE);
@@ -354,8 +461,13 @@ static bool compileSinglePassNode(ASTNode* node, Compiler* compiler) {
             enterLoop(compiler);
             int loopStart = compiler->chunk->count;
 
-            // Check condition
-            uint8_t condReg = allocateRegister(compiler);
+            // Check condition - use optimal register allocation for loop condition
+            uint8_t condReg = allocateOptimalRegister(&g_singlePassCompiler->regState, 
+                                                     &g_singlePassCompiler->vmCtx, 
+                                                     true, 100); // Loop variable, long lifetime
+            if (condReg < 0) {
+                condReg = allocateRegister(compiler); // Fallback for compatibility
+            }
             emitByte(compiler, OP_LE_I32_R);
             emitByte(compiler, condReg);
             emitByte(compiler, iterReg);
@@ -604,4 +716,23 @@ bool compileSinglePass(ASTNode* ast, Compiler* compiler, bool isModule) {
     }
 
     return success && !compiler->hadError;
+}
+
+// Enable fast-path optimizations for simple programs
+static void enableFastPathMode(void) {
+    if (g_singlePassCompiler) {
+        g_singlePassCompiler->fastPathMode = true;
+        LOG_DEBUG("Fast-path mode enabled for single-pass compiler");
+        
+        // Optimize VM context for even faster compilation
+        g_singlePassCompiler->vmCtx.targetRegisterCount = 16; // Use fewer registers for simplicity
+        g_singlePassCompiler->vmCtx.enableRegisterReuse = false; // Skip register reuse analysis
+        g_singlePassCompiler->vmCtx.optimizeForSpeed = false; // Skip speed optimizations
+        g_singlePassCompiler->vmCtx.spillThreshold = 12; // Earlier spilling threshold
+    }
+}
+
+// Public function to enable fast-path mode (called from hybrid_compiler.c)
+void enableSinglePassFastPath(void) {
+    enableFastPathMode();
 }

@@ -12,7 +12,7 @@ print("Small loop test completed")
 
 // Test 2: Medium loop that should NOT be unrolled
 print("Test 2: Medium loop (not unrolled)")
-for outer in 1..1001:
+for outer in 1..1000:
     for i in 1..16:
         mut x2 = i * 2
         mut y2 = x2 + 1
