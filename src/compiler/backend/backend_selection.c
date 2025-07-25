@@ -4,8 +4,54 @@
 #include "vm/vm.h"
 #include "compiler/compiler.h"
 #include "compiler/backend_selection.h"
-#include "compiler/profile_guided_optimization.h"
+// #include "compiler/profile_guided_optimization.h" // DISABLED in Phase 2
 #include "compiler/node_registry.h"
+
+// Stub for node registry during simplified compilation
+NodeHandler* getNodeHandler(NodeType type) {
+    (void)type;
+    return NULL; // Use fallback analysis instead
+}
+
+// PHASE 2: Stub implementations for disabled PGO functions
+typedef struct {
+    bool isEnabled;
+} PGOContext;
+
+typedef struct {
+    bool isHot;
+} HotPathAnalysis;
+
+static PGOContext g_pgoContext = {false};
+
+static HotPathAnalysis* analyzeHotPath(ASTNode* node __attribute__((unused)), void* addr __attribute__((unused))) {
+    return NULL; // PGO disabled
+}
+
+static CompilerBackend choosePGOBackend(ASTNode* node __attribute__((unused)), HotPathAnalysis* analysis __attribute__((unused)), CompilerBackend fallback) {
+    return fallback; // Always use fallback when PGO disabled
+}
+
+static bool isPGOHotPath(HotPathAnalysis* analysis __attribute__((unused))) {
+    return false; // No hot paths when PGO disabled
+}
+
+static bool shouldOptimizeNode(ASTNode* node __attribute__((unused)), HotPathAnalysis* analysis __attribute__((unused))) {
+    return false; // No optimization when PGO disabled
+}
+
+static void integrateWithBackendSelection(void) {
+    // No-op when PGO disabled
+}
+
+// PHASE 2: Additional PGO stub types and functions
+typedef enum {
+    PGO_DECISION_OPTIMIZE_BACKEND = 1
+} PGODecisionFlags;
+
+static PGODecisionFlags makePGODecisions(ASTNode* node __attribute__((unused)), HotPathAnalysis* analysis __attribute__((unused)), CompilerBackend fallback __attribute__((unused))) {
+    return 0; // No decisions when PGO disabled
+}
 
 #define max(a, b) ((a) > (b) ? (a) : (b))
 #define min(a, b) ((a) < (b) ? (a) : (b))
@@ -255,50 +301,11 @@ bool shouldUseOptimizedBackend(CodeComplexity* analysis, CompilationContext* ctx
     return false;
 }
 
-// Main backend selection function with PGO integration
-CompilerBackend chooseOptimalBackend(ASTNode* node, CompilationContext* ctx) {
-    if (!node || !ctx) return BACKEND_FAST;
-    
-    // Always use fast backend in debug mode for quick compilation
-    if (ctx->isDebugMode) return BACKEND_FAST;
-    
-    // Check PGO data first if available
-    if (g_pgoContext.isEnabled) {
-        void* codeAddress = (void*)node;
-        HotPathAnalysis* pgoAnalysis = analyzeHotPath(node, codeAddress);
-        if (pgoAnalysis) {
-            // Use PGO-guided backend selection
-            CompilerBackend pgoBackend = choosePGOBackend(node, pgoAnalysis, BACKEND_FAST);
-            if (pgoBackend != BACKEND_FAST) {
-                return pgoBackend;
-            }
-        }
-    }
-    
-    CodeComplexity analysis = analyzeCodeComplexity(node);
-    
-    // Simple expressions always use fast backend
-    if (isSimpleExpression(node)) {
-        return BACKEND_FAST;
-    }
-    
-    // Complex loops benefit from optimization
-    if (isComplexLoop(node)) {
-        return BACKEND_OPTIMIZED;
-    }
-    
-    // Hot paths use optimized backend
-    if (ctx->isHotPath) {
-        return BACKEND_OPTIMIZED;
-    }
-    
-    // Use heuristics to decide
-    if (shouldUseOptimizedBackend(&analysis, ctx)) {
-        return BACKEND_OPTIMIZED;
-    }
-    
-    // Default to fast for everything else
-    return BACKEND_FAST;
+// PHASE 2: Simplified backend selection - always use optimized backend
+CompilerBackend chooseOptimalBackend(ASTNode* node __attribute__((unused)), CompilationContext* ctx __attribute__((unused))) {
+    // PHASE 2 SIMPLIFICATION: Always use multi-pass optimized backend during development
+    // This ensures predictable behavior and easier debugging
+    return BACKEND_OPTIMIZED;
 }
 
 // Update compilation context based on current node
@@ -363,7 +370,7 @@ void applyPGOToCompilationContext(CompilationContext* ctx, ASTNode* node) {
         }
         
         // Integrate with VM optimization system
-        integrateWithBackendSelection(ctx, analysis);
+        integrateWithBackendSelection();
     }
 }
 

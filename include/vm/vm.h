@@ -497,18 +497,18 @@ typedef enum {
     OP_RETURN_R,       // value_reg (or no operand for void)
     OP_RETURN_VOID,
 
-    // Phase 1: Frame register operations
+    // Frame register operations
     OP_LOAD_FRAME,     // reg, frame_offset - Load from frame register
     OP_STORE_FRAME,    // frame_offset, reg - Store to frame register
     OP_ENTER_FRAME,    // frame_size - Allocate new call frame
     OP_EXIT_FRAME,     // - Deallocate current call frame
     OP_MOVE_FRAME,     // dst_frame_offset, src_frame_offset - Move between frame registers
 
-    // Phase 2: Spill register operations for unlimited parameters
+    // Spill register operations for unlimited parameters
     OP_LOAD_SPILL,     // reg, spill_id_high, spill_id_low - Load from spill register (16-bit ID)
     OP_STORE_SPILL,    // spill_id_high, spill_id_low, reg - Store to spill register (16-bit ID)
 
-    // Phase 3: Module register operations
+    // Module register operations
     OP_LOAD_MODULE,    // reg, module_id, module_offset - Load from module register
     OP_STORE_MODULE,   // module_id, module_offset, reg - Store to module register
     OP_LOAD_MODULE_NAME, // module_name_index - Load module by name
@@ -607,7 +607,7 @@ typedef enum {
     // Built-in functions
     OP_TIME_STAMP,         // reg - Get current timestamp in nanoseconds
     
-    // Phase 2.1: Fused instructions for better performance
+    // Fused instructions for better performance
     // Immediate arithmetic (constant folding optimizations)
     OP_ADD_I32_IMM,        // dst_reg, src_reg, immediate_value
     OP_SUB_I32_IMM,        // dst_reg, src_reg, immediate_value  

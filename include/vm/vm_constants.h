@@ -17,7 +17,7 @@
 #define GLOBAL_REG_START 0
 #define FRAME_REG_START 256
 #define TEMP_REG_START 320
-#define MODULE_REG_START 352      // Phase 3: Module registers
+#define MODULE_REG_START 352      // Module registers
 #define SPILL_REG_START 480       // Updated to accommodate module registers
 
 // String operation thresholds

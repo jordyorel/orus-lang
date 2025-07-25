@@ -218,11 +218,11 @@ void builtin_print_with_sep_value(Value* args, int count, bool newline, Value se
 // Returns SECONDS since an arbitrary but monotonic starting point (as double)
 double builtin_time_stamp() {
 #ifdef __APPLE__
-// macOS: Use mach_absolute_time() → seconds (double)
-init_timebase();
-uint64_t abs_time = mach_absolute_time();
-uint64_t nanoseconds = (abs_time * timebase_numer) / timebase_denom;
-return (double)nanoseconds / 1e9;  // ns → s
+    // macOS: Use mach_absolute_time() → seconds (double)
+    init_timebase();
+    uint64_t abs_time = mach_absolute_time();
+    uint64_t nanoseconds = (abs_time * timebase_numer) / timebase_denom;
+    return (double)nanoseconds / 1e9;  // ns → s
 
 #elif defined(__linux__)
     // Linux: Use clock_gettime → seconds (double)
@@ -233,19 +233,18 @@ return (double)nanoseconds / 1e9;  // ns → s
     return 0.0;  // Error fallback
 
 #elif defined(_WIN32)
-// Windows: QueryPerformanceCounter → seconds (double)
-static LARGE_INTEGER frequency = {0};
-if (frequency.QuadPart == 0) {
-    QueryPerformanceFrequency(&frequency);
-}
+    // Windows: QueryPerformanceCounter → seconds (double)
+    static LARGE_INTEGER frequency = {0};
+    if (frequency.QuadPart == 0) {
+        QueryPerformanceFrequency(&frequency);
+    }
 
-LARGE_INTEGER counter;
-QueryPerformanceCounter(&counter);
-return (double)counter.QuadPart / (double)frequency.QuadPart;  // counts → s
+    LARGE_INTEGER counter;
+    QueryPerformanceCounter(&counter);
+    return (double)counter.QuadPart / (double)frequency.QuadPart;  // counts → s
 
 #else
-// Fallback: clock() → seconds (double)
-#include <time.h>
+    // Fallback: clock() → seconds (double)
     return (double)clock() / (double)CLOCKS_PER_SEC;
 #endif
 }

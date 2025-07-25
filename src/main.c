@@ -14,7 +14,8 @@
 #include "errors/features/type_errors.h"
 #include "errors/features/variable_errors.h"
 #include "compiler/compiler.h"
-#include "compiler/loop_optimization.h"
+#include "compiler/simple_compiler.h"
+// #include "compiler/loop_optimization.h" // DISABLED in Phase 2
 #include "tools/repl.h"
 #include "public/version.h"
 #include "config/config.h"
