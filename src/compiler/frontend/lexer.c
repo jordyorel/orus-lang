@@ -1,3 +1,6 @@
+// Lexer implementation for the Orus Language Compiler
+
+
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>

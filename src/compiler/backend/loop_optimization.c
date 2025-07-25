@@ -1,17 +1,7 @@
 /* Author: Jordy Orel KONDA
  *
- * Optimized Loop Optimization Framework for Orus
- * 
- * Implements high-performance loop optimizations that work within the single-pass
- * compiler design. All optimizations are applied during the single forward pass
- * through the source code.
- * 
- * Key Design Principles:
- * - Single-pass only: No multiple passes or deferred analysis
- * - Immediate optimization: Apply optimizations as loops are compiled
- * - Zero-cost abstractions: Optimizations must not add runtime overhead
- * - Edge case safety: Comprehensive boundary condition handling
- * - Memory efficient: Reduced allocations and improved cache locality
+ * Optimized Loop Optimization Framework for Orus Language Compiler
+ * Date: 2025-07-01
  */
 
 #include "compiler/loop_optimization.h"

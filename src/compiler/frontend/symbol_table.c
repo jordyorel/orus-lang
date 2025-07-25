@@ -1,3 +1,7 @@
+// Orus Language Compiler - Symbol Table Implementation
+
+
+
 #include "compiler/symbol_table.h"
 #include <stdlib.h>
 #include <string.h>

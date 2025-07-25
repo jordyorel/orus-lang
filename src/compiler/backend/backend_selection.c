@@ -1,3 +1,8 @@
+// Author: Jordy Orel KONDA
+// Date: 2025-07-01
+// Description: Simplified multi-pass backend for the Orus language compiler
+
+
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>

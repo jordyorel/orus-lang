@@ -1,8 +1,15 @@
-// multi_pass_compiler.c
-// Author: Hierat
-// Date: 2023-10-01
-// Description: Multi-pass compiler for the Orus language - advanced
-// optimizations
+// Project: Orus Language Compiler
+// Author: KONDA JORDY OREL
+// Date: 2025-07-01
+
+/*
+  * A multi-pass compiler for the Orus language, designed to optimize
+  * code generation through advanced techniques like loop optimization,
+  * register allocation, and closure handling.
+  * 
+*/ 
+
+
 
 #include <stdio.h>
 #include <string.h>
@@ -24,6 +31,7 @@
 #include "vm/vm_constants.h"
 
 // Forward declarations
+void initMultiPassCompiler(Compiler* compiler, Chunk* chunk, const char* fileName, const char* source);
 bool compileMultiPass(ASTNode* ast, Compiler* compiler, bool isModule);
 bool compileMultiPassNode(ASTNode* node, Compiler* compiler);
 
@@ -79,21 +87,21 @@ void initCompiler(Compiler* compiler, Chunk* chunk, const char* fileName, const 
     compiler->loopDepth = 0;
     compiler->hadError = false;
     
-    // Initialize symbol table (if available)
-    // initSymbolTable(&compiler->symbols);
+    // Initialize symbol table
+    symbol_table_init(&compiler->symbols);
     
-    // Initialize jump table (if available)  
-    // initJumpTable(&compiler->pendingJumps);
+    // Initialize jump table
+    compiler->pendingJumps = jumptable_new();
 }
 
 void freeCompiler(Compiler* compiler) {
     if (!compiler) return;
     
-    // Free symbol table (if available)
-    // freeSymbolTable(&compiler->symbols);
+    // Free symbol table
+    symbol_table_free(&compiler->symbols);
     
-    // Free jump table (if available)
-    // freeJumpTable(&compiler->pendingJumps);
+    // Free jump table
+    jumptable_free(&compiler->pendingJumps);
     
     // Reset fields
     compiler->chunk = NULL;
@@ -108,6 +116,9 @@ bool compileProgram(ASTNode* ast, Compiler* compiler, bool isModule) {
         return false;
     }
     
+    // Initialize multi-pass compiler state (basic initCompiler already called by VM)
+    initMultiPassCompiler(compiler, compiler->chunk, compiler->fileName, compiler->source);
+    
     // Route to multi-pass compilation
     return compileMultiPass(ast, compiler, isModule);
 }
@@ -121,6 +132,8 @@ bool compileNode(ASTNode* node, Compiler* compiler) {
 
 // Simplified register allocation - replace optimized allocation with basic allocation
 #define allocateOptimizedRegister(compiler, isLoopVar, lifetime) allocateRegister(compiler)
+
+// MultiPassCompiler will be defined later in the file
 
 // Upvalue entry for closure handling
 typedef struct {

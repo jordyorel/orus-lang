@@ -1,3 +1,6 @@
+// Orus Language Compiler - Parser Implementation
+
+
 #include "compiler/parser.h"
 #include "public/common.h"
 #include "vm/vm.h"

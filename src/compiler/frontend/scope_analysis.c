@@ -1,3 +1,9 @@
+// Author: Jordy Orel KONDA
+// Date: 2025-07-01
+// Description: Compile-time scope analysis for the Orus language compiler
+
+
+
 #define _POSIX_C_SOURCE 200809L
 #include "vm/vm.h"
 #include "compiler/compiler.h"

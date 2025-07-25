@@ -23,6 +23,7 @@ test_parser
 *.swo
 *~
 .claude/
+.serena/
 
 
 
