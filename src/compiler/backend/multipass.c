@@ -42,22 +42,20 @@ uint16_t allocateRegister(Compiler* compiler) {
     }
     
     // PRIORITY 1: Global registers (0-255) - bytecode compatible
-    bool register_used[GLOBAL_REGISTERS] = {true}; // Reserve register 0
-    
-    // Mark registers used by active local variables in global space
-    for (int i = 0; i < compiler->localCount; i++) {
-        if (compiler->locals[i].isActive && compiler->locals[i].reg < GLOBAL_REGISTERS) {
-            register_used[compiler->locals[i].reg] = true;
-        }
-    }
-    
-    // Try to find a free register in global space (0-255) - preferred for bytecode compatibility
-    for (uint16_t reg = 1; reg < GLOBAL_REGISTERS; reg++) {
-        if (!register_used[reg]) {
-            // Update nextRegister only if we're allocating beyond current high water mark
-            if (reg >= compiler->nextRegister && reg < GLOBAL_REGISTERS) {
-                compiler->nextRegister = reg + 1;
+    // Improved allocation strategy: avoid conflicts with active locals
+    for (uint16_t reg = compiler->nextRegister; reg < GLOBAL_REGISTERS; reg++) {
+        bool conflict = false;
+        
+        // Check if this register conflicts with any active local variable
+        for (int i = 0; i < compiler->localCount; i++) {
+            if (compiler->locals[i].isActive && compiler->locals[i].reg == reg) {
+                conflict = true;
+                break;
             }
+        }
+        
+        if (!conflict) {
+            compiler->nextRegister = reg + 1;
             return reg;
         }
     }
@@ -1822,7 +1820,6 @@ bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
 
                 for (int i = 0; i < node->print.count; i++) {
                     argRegs[i] = allocateOptimizedRegister(compiler, false, 5);
-                    printf("[DEBUG] Allocated argRegs[%d] = %d\n", i, argRegs[i]);
                 }
                 
                 uint8_t firstReg = argRegs[0];
@@ -1830,7 +1827,6 @@ bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
                 for (int i = 0; i < node->print.count; i++) {
                     int valueReg =
                         compileMultiPassExpr(node->print.values[i], compiler);
-                    printf("[DEBUG] Expression %d compiled to valueReg = %d\n", i, valueReg);
                     if (valueReg < 0) {
                         for (int j = 0; j < node->print.count; j++) {
                             freeRegister(compiler, argRegs[j]);
@@ -1840,7 +1836,6 @@ bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
                     }
 
                     // Always move the value to ensure it's in the target register
-                    printf("[DEBUG] Moving from reg %d to argRegs[%d] = %d\n", valueReg, i, argRegs[i]);
                     emitByte(compiler, OP_MOVE);
                     emitByte(compiler, argRegs[i]);
                     emitByte(compiler, valueReg);
