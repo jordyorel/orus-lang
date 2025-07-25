@@ -450,9 +450,6 @@ static void patchJump(Compiler* compiler, int offset) {
     compiler->chunk->code[offset + 1] = jump & 0xff;
 }
 
-// Using shared emitConstant function from hybrid_compiler.c
-
-// PASS 1: Upvalue collection and analysis
 static void collectUpvalues(ASTNode* node, MultiPassCompiler* mpCompiler) {
     if (!node) return;
 
@@ -517,7 +514,7 @@ void addUpvalue(UpvalueSet* upvalues, const char* name, int idx, bool isLocal,
     entry->scope = scope;
 }
 
-// PASS 2: Modified variable analysis
+// Modified variable analysis
 static void addModified(ModifiedSet* set, const char* name) {
     // Check if already added
     for (int i = 0; i < set->count; i++) {
@@ -569,7 +566,7 @@ static void collectModifiedVariables(ASTNode* node, ModifiedSet* modified) {
     }
 }
 
-// PASS 3: Loop invariant analysis (LICM)
+// Loop invariant analysis (LICM)
 static bool dependsOnModified(ASTNode* node, ModifiedSet* modified) {
     if (!node) return false;
 
@@ -918,7 +915,7 @@ static int compileMultiPassExpr(ASTNode* node, Compiler* compiler) {
             return resultReg;
         }
         case NODE_UNARY: {
-            // PHASE 3: Add support for unary expressions (e.g., -123, !true)
+            // Add support for unary expressions (e.g., -123, !true)
             int operandReg = compileMultiPassExpr(node->unary.operand, compiler);
             if (operandReg < 0) return -1;
             
@@ -949,7 +946,7 @@ static int compileMultiPassExpr(ASTNode* node, Compiler* compiler) {
             return resultReg;
         }
         case NODE_TERNARY: {
-            // PHASE 3: Add support for ternary expressions (condition ? true_val : false_val)
+            // Add support for ternary expressions (condition ? true_val : false_val)
             int conditionReg = compileMultiPassExpr(node->ternary.condition, compiler);
             if (conditionReg < 0) return -1;
             
@@ -1041,7 +1038,7 @@ bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
             printf("DEBUG: Multi-pass function compilation for '%s'\n",
                    node->function.name);
 
-            // PASS 1: Upvalue analysis
+            // Upvalue analysis
             mpCompiler->inFunction = true;
             UpvalueSet oldUpvalues = mpCompiler->upvalues;
             mpCompiler->upvalues.entries = malloc(sizeof(UpvalueEntry) * 8);
@@ -1050,7 +1047,7 @@ bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
 
             collectUpvalues(node->function.body, mpCompiler);
 
-            // PASS 2: Create function object
+            // Create function object
             extern VM vm;
             int functionIdx = vm.functionCount++;
             ObjFunction* objFunction = allocateFunction();
@@ -1067,7 +1064,7 @@ bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
             function.chunk = objFunction->chunk;
             vm.functions[functionIdx] = function;
 
-            // PASS 3: Create function compiler
+            // Create function compiler
             Compiler functionCompiler;
             initMultiPassCompiler(&functionCompiler, objFunction->chunk,
                                   compiler->fileName, compiler->source);
@@ -1075,7 +1072,7 @@ bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
             functionCompiler.currentFunctionParameterCount =
                 node->function.paramCount;
 
-            // PASS 4: Setup upvalues
+            // Setup upvalues
             for (int i = 0; i < mpCompiler->upvalues.count; i++) {
                 UpvalueEntry* upvalue = &mpCompiler->upvalues.entries[i];
                 int closureIndex = -(2000 + i);
@@ -1083,7 +1080,7 @@ bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
                                  closureIndex, 0);
             }
 
-            // PASS 5: Add parameters
+            // Add parameters
             for (int i = 0; i < node->function.paramCount; i++) {
                 FunctionParam* param = &node->function.params[i];
 
@@ -1111,7 +1108,7 @@ bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
                 functionCompiler.localCount++;
             }
 
-            // PASS 6: Compile function body
+            // Compile function body
             bool success =
                 compileMultiPassNode(node->function.body, &functionCompiler);
 
@@ -1171,7 +1168,7 @@ bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
             context->modifiedVars.names = NULL;
             context->modifiedVars.count = 0;
 
-            // 1. Evaluate start and end expressions
+            // Evaluate start and end expressions
             int startReg = compileMultiPassExpr(node->forRange.start, compiler);
             int endReg = compileMultiPassExpr(node->forRange.end, compiler);
             if (startReg < 0 || endReg < 0) {
@@ -1182,7 +1179,7 @@ bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
                 return false;
             }
 
-            // 2. Create loop variable
+            // Create loop variable
             int loopVarIndex = addLocal(compiler, node->forRange.varName, false);
             if (loopVarIndex < 0) {
                 SrcLocation loc = {.file = compiler->fileName,
@@ -1201,13 +1198,13 @@ bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
                                     compiler->locals[loopVarIndex].reg);
             uint8_t iterReg = compiler->locals[loopVarIndex].reg;
 
-            // 3. Initialize: iter = start
+            // Initialize: iter = start
             emitByte(compiler, OP_MOVE);
             emitByte(compiler, iterReg);
             emitByte(compiler, startReg);
             freeRegister(compiler, startReg);
 
-            // 4. Store end value in a local to preserve it across iterations
+            // Store end value in a local to preserve it across iterations
             char hiddenEndName[32];
             snprintf(hiddenEndName, sizeof(hiddenEndName), "__end_%d_%d",
                      compiler->scopeDepth, mpCompiler->loopCount);
@@ -1229,7 +1226,7 @@ bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
             emitByte(compiler, endReg);
             freeRegister(compiler, endReg);
 
-            // 5. Loop condition check: iter <= hiddenEnd
+            // Loop condition check: iter <= hiddenEnd
             int loopStart = compiler->chunk->count;
             context->startInstr = loopStart;
 
@@ -1245,7 +1242,7 @@ bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
             int exitJump = emitJump(compiler);
             freeRegister(compiler, condReg);
 
-            // 6. Compile loop body
+            // Compile loop body
             bool success = compileMultiPassNode(node->forRange.body, compiler);
             if (!success) {
                 endScope(compiler);
@@ -1253,7 +1250,7 @@ bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
                 return false;
             }
 
-            // 7. Continue target: increment iterator - emit increment operation first
+            // Continue target: increment iterator - emit increment operation first
             emitByte(compiler, OP_INC_I32_R);
             emitByte(compiler, iterReg);
             
@@ -1261,10 +1258,10 @@ bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
             int continueTarget = compiler->chunk->count - 2; // Point to OP_INC_I32_R we just emitted
             patchContinueJumps(&context->continueJumps, compiler, continueTarget);
 
-            // 8. Jump back to condition
+            // Jump back to condition
             emitLoop(compiler, loopStart);
 
-            // 9. Patch exit and break jumps
+            // Patch exit and break jumps
             patchJump(compiler, exitJump);
             patchBreakJumps(&context->breakJumps, compiler);
             endScope(compiler);
