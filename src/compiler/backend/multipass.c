@@ -1742,10 +1742,8 @@ bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
 
             freeRegister(compiler, conditionReg);
 
-            beginScope(compiler);
             bool success =
                 compileMultiPassNode(node->ifStmt.thenBranch, compiler);
-            endScope(compiler);
 
             if (!success) return false;
 
@@ -1755,10 +1753,8 @@ bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
 
                 patchJump(compiler, thenJump);
 
-                beginScope(compiler);
                 success =
                     compileMultiPassNode(node->ifStmt.elseBranch, compiler);
-                endScope(compiler);
 
                 if (!success) return false;
                 patchJump(compiler, elseJump);
