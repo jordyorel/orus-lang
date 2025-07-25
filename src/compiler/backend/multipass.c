@@ -625,15 +625,28 @@ static void analyzeLoopInvariants(ASTNode* loopBody,
     if (loopBody->type == NODE_BLOCK) {
         for (int i = 0; i < loopBody->block.count; i++) {
             ASTNode* node = loopBody->block.statements[i];
-            if (!hasSideEffects(node) && !dependsOnModified(node, &modified)) {
-                if (invariants->count >= invariants->capacity) {
-                    invariants->capacity *= 2;
-                    invariants->entries = realloc(invariants->entries, invariants->capacity * sizeof(InvariantEntry));
+            
+            // Only consider expression nodes for invariant analysis
+            // Statement nodes (NODE_PRINT, NODE_IF, NODE_WHILE, etc.) should never be hoisted
+            if (node->type == NODE_LITERAL || 
+                node->type == NODE_IDENTIFIER || 
+                node->type == NODE_BINARY ||
+                node->type == NODE_CALL ||
+                node->type == NODE_CAST ||
+                node->type == NODE_UNARY ||
+                node->type == NODE_TERNARY) {
+                
+                if (!hasSideEffects(node) && !dependsOnModified(node, &modified)) {
+                    if (invariants->count >= invariants->capacity) {
+                        invariants->capacity *= 2;
+                        invariants->entries = realloc(invariants->entries, invariants->capacity * sizeof(InvariantEntry));
+                    }
+                    InvariantEntry* entry = &invariants->entries[invariants->count++];
+                    entry->expr = node;
+                    entry->reg = allocateOptimizedRegister(mpCompiler->base, false, 80);
                 }
-                InvariantEntry* entry = &invariants->entries[invariants->count++];
-                entry->expr = node;
-                entry->reg = allocateOptimizedRegister(mpCompiler->base, false, 80);
             }
+            // Statement nodes are ignored - they cannot be hoisted as invariants
         }
     }
 
@@ -677,11 +690,12 @@ static void patchContinueJumps(JumpTable* table, Compiler* compiler,
     for (int i = 0; i < table->offsets.count; i++) {
         int offset = table->offsets.data[i];
 
-        // Calculate jump to continue target (forward jump using OP_JUMP)
-        int jump = continueTarget - (offset + 2);  // Forward jump calculation
+        // Calculate backward jump to continue target (like emitLoop)
+        // Continue jumps go backward from current position to the increment/condition
+        int jump = (offset + 2) - continueTarget;  // Backward jump calculation
         printf(
             "[DEBUG] patchContinueJumps: offset=%d, continueTarget=%d, "
-            "forward_jump=%d\n",
+            "backward_jump=%d\n",
             offset, continueTarget, jump);
         if (jump >= 0 && jump <= UINT16_MAX) {
             compiler->chunk->code[offset] = (jump >> 8) & 0xff;
