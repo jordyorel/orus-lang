@@ -37,20 +37,27 @@ bool compileMultiPassNode(ASTNode* node, Compiler* compiler);
 
 // Core compiler functions (previously in hybrid_compiler.c)
 uint8_t allocateRegister(Compiler* compiler) {
-    if (!compiler || compiler->nextRegister >= 255) {
+    if (!compiler) {
         return 255; // Invalid register
     }
-    return compiler->nextRegister++;
+    
+    // For now, use simple incremental allocation without freeing
+    // This ensures each register allocation gets a unique register
+    if (compiler->nextRegister >= 255) {
+        return 255; // Invalid register
+    }
+    
+    uint8_t reg = compiler->nextRegister++;
+    return reg;
 }
 
 void freeRegister(Compiler* compiler, uint8_t reg) {
     if (!compiler || reg >= 255) {
         return;
     }
-    // Simple register deallocation
-    if (compiler->nextRegister > 0) {
-        compiler->nextRegister--;
-    }
+    
+    // Don't actually free registers to avoid reuse conflicts
+    // This ensures each register allocation gets a unique register
 }
 
 void emitByte(Compiler* compiler, uint8_t byte) {
@@ -65,10 +72,12 @@ void emitConstant(Compiler* compiler, uint8_t reg, Value value) {
         return;
     }
     int constant = addConstant(compiler->chunk, value);
-    if (constant < 256) {
+    if (constant < 65536) {  // 16-bit constant index
         emitByte(compiler, OP_LOAD_CONST);
         emitByte(compiler, reg);
-        emitByte(compiler, (uint8_t)constant);
+        // Emit 16-bit constant index in big-endian order
+        emitByte(compiler, (uint8_t)(constant >> 8));   // High byte
+        emitByte(compiler, (uint8_t)(constant & 0xFF)); // Low byte
     }
 }
 

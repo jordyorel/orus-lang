@@ -25,6 +25,28 @@ make benchmark
 make clean
 ```
 
+### Build Profiles
+```bash
+# Development build (no optimization, full debugging - creates orus_debug)
+make debug
+
+# Production build (maximum optimization - creates orus)
+make release
+
+# Profiling build (optimization + instrumentation - creates orus_profiling)
+make profiling
+
+# CI build (warnings as errors - creates orus_ci)
+make ci
+
+# Cross-compilation targets
+make cross-linux      # Linux x86_64
+make cross-windows     # Windows x86_64
+
+# View all available build options
+make help
+```
+
 ### Test Categories
 The test suite is organized into comprehensive categories with specific behaviors:
 - **Basic tests**: Must pass (expressions, variables, literals)
@@ -167,6 +189,12 @@ make test 2>&1 | grep "Type System Tests"      # Type checking and conversions
 make test 2>&1 | grep "Type Safety Tests"      # Expected failures with friendly errors
 make test 2>&1 | grep "Expression Tests"       # Basic expressions
 
+# Run unit tests for compiler components
+make unit-test
+
+# CI testing with warnings as errors
+make ci-test
+
 # Test type error messages specifically
 ./orus tests/type_safety_fails/type_mismatch_string_to_int.orus
 ./orus tests/type_safety_fails/mixed_arithmetic_int_float.orus
@@ -177,6 +205,16 @@ make test 2>&1 | grep "Expression Tests"       # Basic expressions
 
 # Performance testing
 make benchmark  # Cross-language comparisons
+```
+
+### Code Quality and Analysis
+```bash
+# Run static analysis (cppcheck, clang analyzer)
+make analyze
+
+# Installation commands
+make install          # System-wide installation (requires sudo)
+make release && sudo cp orus /usr/local/bin/orus  # Manual installation
 ```
 
 ## Code Organization Patterns
