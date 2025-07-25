@@ -2094,13 +2094,13 @@ InterpretResult vm_run_dispatch(void) {
                 case OP_TIME_STAMP: {
                     uint8_t dst = READ_BYTE();
                     
-                    // Get high-precision timestamp in milliseconds
-                    int32_t timestamp = builtin_time_stamp();
+                    // Get high-precision timestamp in seconds
+                    double timestamp = builtin_time_stamp();
                     
                     // Store in typed register and regular register for compatibility
-                    vm.typed_regs.i32_regs[dst] = timestamp;
-                    vm.typed_regs.reg_types[dst] = REG_TYPE_I32;
-                    vm.registers[dst] = I32_VAL(timestamp);
+                    vm.typed_regs.f64_regs[dst] = timestamp;
+                    vm.typed_regs.reg_types[dst] = REG_TYPE_F64;
+                    vm.registers[dst] = F64_VAL(timestamp);
 
                     break;
                 }

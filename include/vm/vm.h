@@ -805,13 +805,13 @@ typedef struct {
     Chunk* chunk;
     const char* fileName;
     const char* source;
-    uint8_t nextRegister;  // Next available register
+    uint16_t nextRegister;  // Next available register (supports full VM register space)
     int currentLine;       // Current line for error reporting
     int currentColumn;     // Current column for error reporting
-    uint8_t maxRegisters;  // Maximum registers used
+    uint16_t maxRegisters;  // Maximum registers used (supports full VM register space)
     struct {
         char* name;
-        uint8_t reg;  // Register allocation for local
+        uint16_t reg;  // Register allocation for local (supports full VM register space)
         bool isActive;
         int depth;
         bool isMutable;

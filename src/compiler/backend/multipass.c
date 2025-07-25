@@ -36,43 +36,77 @@ bool compileMultiPass(ASTNode* ast, Compiler* compiler, bool isModule);
 bool compileMultiPassNode(ASTNode* node, Compiler* compiler);
 
 // Core compiler functions (previously in hybrid_compiler.c)
-uint8_t allocateRegister(Compiler* compiler) {
+uint16_t allocateRegister(Compiler* compiler) {
     if (!compiler) {
-        return 255; // Invalid register
+        return 65535; // Invalid register
     }
     
-    // Create a register usage map to avoid conflicts with local variables
-    bool register_used[256] = {true}; // Reserve register 0
+    // PRIORITY 1: Global registers (0-255) - bytecode compatible
+    bool register_used[GLOBAL_REGISTERS] = {true}; // Reserve register 0
     
-    // Mark registers used by active local variables
+    // Mark registers used by active local variables in global space
     for (int i = 0; i < compiler->localCount; i++) {
-        if (compiler->locals[i].isActive) {
+        if (compiler->locals[i].isActive && compiler->locals[i].reg < GLOBAL_REGISTERS) {
             register_used[compiler->locals[i].reg] = true;
         }
     }
     
-    // Find the first available register starting from nextRegister
-    uint8_t reg = compiler->nextRegister;
-    while (reg < 255 && register_used[reg]) {
-        reg++;
+    // Try to find a free register in global space (0-255) - preferred for bytecode compatibility
+    for (uint16_t reg = 1; reg < GLOBAL_REGISTERS; reg++) {
+        if (!register_used[reg]) {
+            // Update nextRegister only if we're allocating beyond current high water mark
+            if (reg >= compiler->nextRegister && reg < GLOBAL_REGISTERS) {
+                compiler->nextRegister = reg + 1;
+            }
+            return reg;
+        }
     }
     
-    if (reg >= 255) {
-        return 255; // No available registers
+    // PRIORITY 2: Warn and use extended registers (requires VM register file)
+    // TODO: Implement proper bytecode format for 16-bit registers
+    // For now, log a warning when using extended registers
+    
+    printf("[WARNING] Using extended register space (>255) - may require VM register file access\n");
+    
+    // Check frame registers (256-319) 
+    for (uint16_t reg = FRAME_REG_START; reg < FRAME_REG_START + FRAME_REGISTERS; reg++) {
+        bool frame_reg_used = false;
+        for (int i = 0; i < compiler->localCount; i++) {
+            if (compiler->locals[i].isActive && compiler->locals[i].reg == reg) {
+                frame_reg_used = true;
+                break;
+            }
+        }
+        if (!frame_reg_used) {
+            return reg;
+        }
     }
     
-    // Update nextRegister to be after this allocation
-    compiler->nextRegister = reg + 1;
-    return reg;
+    // Check temp registers (320-351)
+    for (uint16_t reg = TEMP_REG_START; reg < TEMP_REG_START + TEMP_REGISTERS; reg++) {
+        bool temp_reg_used = false;
+        for (int i = 0; i < compiler->localCount; i++) {
+            if (compiler->locals[i].isActive && compiler->locals[i].reg == reg) {
+                temp_reg_used = true;
+                break;
+            }
+        }
+        if (!temp_reg_used) {
+            return reg;
+        }
+    }
+    
+    return 65535; // No available registers
 }
 
-void freeRegister(Compiler* compiler, uint8_t reg) {
-    if (!compiler || reg >= 255) {
+void freeRegister(Compiler* compiler, uint16_t reg) {
+    if (!compiler || reg >= 65535) {
         return;
     }
     
-    // Don't actually free registers to avoid reuse conflicts
-    // This ensures each register allocation gets a unique register
+    // With the larger register space, we can implement proper freeing
+    // Mark the register as available for reuse in future allocations
+    // TODO: Implement register lifecycle tracking for optimization
 }
 
 void emitByte(Compiler* compiler, uint8_t byte) {
@@ -82,14 +116,26 @@ void emitByte(Compiler* compiler, uint8_t byte) {
     writeChunk(compiler->chunk, byte, compiler->currentLine, compiler->currentColumn);
 }
 
-void emitConstant(Compiler* compiler, uint8_t reg, Value value) {
+// Safe register emission - handles register > 255 with warnings
+void emitRegister(Compiler* compiler, uint16_t reg) {
+    if (reg > 255) {
+        printf("[ERROR] Cannot emit register %d in bytecode (>255). Need extended opcodes.\n", reg);
+        // For now, fallback to register within bytecode range
+        // TODO: Implement extended opcodes for registers > 255
+        reg = reg % 256;
+        printf("[FALLBACK] Using register %d instead.\n", reg);
+    }
+    emitByte(compiler, (uint8_t)reg);
+}
+
+void emitConstant(Compiler* compiler, uint16_t reg, Value value) {
     if (!compiler || !compiler->chunk) {
         return;
     }
     int constant = addConstant(compiler->chunk, value);
     if (constant < 65536) {  // 16-bit constant index
         emitByte(compiler, OP_LOAD_CONST);
-        emitByte(compiler, reg);
+        emitRegister(compiler, reg);  // Safe register emission with >255 handling
         // Emit 16-bit constant index in big-endian order
         emitByte(compiler, (uint8_t)(constant >> 8));   // High byte
         emitByte(compiler, (uint8_t)(constant & 0xFF)); // Low byte

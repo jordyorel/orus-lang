@@ -14,10 +14,10 @@ bool compileNode(ASTNode* node, Compiler* compiler);
 // Enhanced register allocation with lifetime tracking
 void initRegisterAllocator(RegisterAllocator* allocator);
 void freeRegisterAllocator(RegisterAllocator* allocator);
-uint8_t allocateRegisterWithLifetime(Compiler* compiler, const char* name, ValueType type, bool isLoopVar);
+uint16_t allocateRegisterWithLifetime(Compiler* compiler, const char* name, ValueType type, bool isLoopVar);
 void markVariableLastUse(Compiler* compiler, int localIndex, int instruction);
 void endVariableLifetime(Compiler* compiler, int localIndex, int instruction);
-uint8_t reuseOrAllocateRegister(Compiler* compiler, const char* name, ValueType type);
+uint16_t reuseOrAllocateRegister(Compiler* compiler, const char* name, ValueType type);
 void optimizeLoopVariableLifetimes(Compiler* compiler, int loopStart, int loopEnd);
 
 
@@ -26,7 +26,7 @@ typedef struct {
     ASTNode** invariantNodes;       // Array of loop-invariant expressions
     int count;                      // Number of invariant expressions
     int capacity;                   // Capacity of invariantNodes array
-    uint8_t* hoistedRegs;          // Registers for hoisted values
+    uint16_t* hoistedRegs;          // Registers for hoisted values (supports full VM register space)
     int* originalInstructions;      // Original instruction positions
     bool* canHoist;                // Whether each expression can be safely hoisted
 } LICMAnalysis;
@@ -42,11 +42,11 @@ bool dependsOnLoopVariable(ASTNode* expr, LoopContext* loopCtx);
 void collectLoopInvariantExpressions(ASTNode* node, LICMAnalysis* analysis, LoopContext* loopCtx, Compiler* compiler);
 
 // Shared utility functions (implemented in hybrid_compiler.c)
-uint8_t allocateRegister(Compiler* compiler);
-void freeRegister(Compiler* compiler, uint8_t reg);
+uint16_t allocateRegister(Compiler* compiler);
+void freeRegister(Compiler* compiler, uint16_t reg);
 void emitByte(Compiler* compiler, uint8_t byte);
 void emitBytes(Compiler* compiler, uint8_t byte1, uint8_t byte2);
-void emitConstant(Compiler* compiler, uint8_t reg, Value value);
+void emitConstant(Compiler* compiler, uint16_t reg, Value value);
 
 // Compilation helpers
 bool compileExpression(ASTNode* node, Compiler* compiler);
