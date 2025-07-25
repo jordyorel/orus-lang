@@ -706,11 +706,21 @@ static void patchContinueJumps(JumpTable* table, Compiler* compiler,
     for (int i = 0; i < table->offsets.count; i++) {
         int offset = table->offsets.data[i];
 
-        // Calculate forward jump like patchJump does (NOT backward like emitLoop)
-        // Continue should jump forward to the increment section
-        int jump = continueTarget - offset - 2;
-        printf("[DEBUG] patchContinueJumps: offset=%d, continueTarget=%d, forward_jump=%d\n",
-               offset, continueTarget, jump);
+        // Determine if this is a forward or backward jump
+        bool isForwardJump = continueTarget > offset;
+        int jump;
+        
+        if (isForwardJump) {
+            // Forward jump: like patchJump does
+            jump = continueTarget - offset - 2;
+            printf("[DEBUG] patchContinueJumps: offset=%d, continueTarget=%d, forward_jump=%d\n",
+                   offset, continueTarget, jump);
+        } else {
+            // Backward jump: like emitLoop does  
+            jump = offset - continueTarget + 2;
+            printf("[DEBUG] patchContinueJumps: offset=%d, continueTarget=%d, backward_jump=%d\n",
+                   offset, continueTarget, jump);
+        }
             
         // Validate jump bounds before patching
         if (jump < 0) {
@@ -729,14 +739,17 @@ static void patchContinueJumps(JumpTable* table, Compiler* compiler,
             continue;
         }
         
-        // Verify that jumping forward from offset+2 lands at continueTarget
-        int landingPos = offset + 2 + jump;
-        if (landingPos != continueTarget) {
-            printf("[DEBUG] patchContinueJumps: Jump calculation error: expected %d, got %d\n", 
-                   continueTarget, landingPos);
-            continue;
+        // For forward jumps, verify that jumping forward lands at continueTarget
+        if (isForwardJump) {
+            int landingPos = offset + 2 + jump;
+            if (landingPos != continueTarget) {
+                printf("[DEBUG] patchContinueJumps: Jump calculation error: expected %d, got %d\n", 
+                       continueTarget, landingPos);
+                continue;
+            }
         }
         
+        // Patch the jump offset (keep OP_JUMP instruction unchanged for both directions)
         compiler->chunk->code[offset] = (jump >> 8) & 0xff;
         compiler->chunk->code[offset + 1] = jump & 0xff;
     }
@@ -1300,12 +1313,13 @@ bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
                 return false;
             }
 
-            // Patch continue jumps to point HERE (before increment)
-            patchContinueJumps(&context->continueJumps, compiler, compiler->chunk->count);
-            
-            // Continue target: increment iterator
+            // Continue target: increment iterator (capture position before emitting)
+            int continueTarget = compiler->chunk->count;
             emitByte(compiler, OP_INC_I32_R);
             emitByte(compiler, iterReg);
+            
+            // Patch continue jumps to point to increment instruction we just emitted
+            patchContinueJumps(&context->continueJumps, compiler, continueTarget);
 
             // Jump back to condition
             emitLoop(compiler, loopStart);
