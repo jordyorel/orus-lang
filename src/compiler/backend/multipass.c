@@ -906,9 +906,17 @@ static void patchContinueJumps(JumpTable* table, Compiler* compiler,
             }
         }
         
-        // Patch the jump offset (keep OP_JUMP instruction unchanged for both directions)
-        compiler->chunk->code[offset] = (jump >> 8) & 0xff;
-        compiler->chunk->code[offset + 1] = jump & 0xff;
+        // Patch the jump offset and opcode based on direction
+        if (isForwardJump) {
+            // Forward jump uses OP_JUMP (instruction already in place)
+            compiler->chunk->code[offset] = (jump >> 8) & 0xff;
+            compiler->chunk->code[offset + 1] = jump & 0xff;
+        } else {
+            // Backward jump needs OP_LOOP instead of OP_JUMP
+            compiler->chunk->code[offset - 1] = OP_LOOP;  // Replace OP_JUMP with OP_LOOP
+            compiler->chunk->code[offset] = (jump >> 8) & 0xff;
+            compiler->chunk->code[offset + 1] = jump & 0xff;
+        }
     }
 }
 
@@ -1810,16 +1818,19 @@ bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
                 freeRegister(compiler, valueReg);
             } else {
                 // Multi-argument print
-                uint8_t firstReg = compiler->nextRegister;
                 uint8_t* argRegs = malloc(node->print.count * sizeof(uint8_t));
 
                 for (int i = 0; i < node->print.count; i++) {
                     argRegs[i] = allocateOptimizedRegister(compiler, false, 5);
+                    printf("[DEBUG] Allocated argRegs[%d] = %d\n", i, argRegs[i]);
                 }
+                
+                uint8_t firstReg = argRegs[0];
 
                 for (int i = 0; i < node->print.count; i++) {
                     int valueReg =
                         compileMultiPassExpr(node->print.values[i], compiler);
+                    printf("[DEBUG] Expression %d compiled to valueReg = %d\n", i, valueReg);
                     if (valueReg < 0) {
                         for (int j = 0; j < node->print.count; j++) {
                             freeRegister(compiler, argRegs[j]);
@@ -1828,10 +1839,12 @@ bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
                         return false;
                     }
 
+                    // Always move the value to ensure it's in the target register
+                    printf("[DEBUG] Moving from reg %d to argRegs[%d] = %d\n", valueReg, i, argRegs[i]);
+                    emitByte(compiler, OP_MOVE);
+                    emitByte(compiler, argRegs[i]);
+                    emitByte(compiler, valueReg);
                     if (valueReg != argRegs[i]) {
-                        emitByte(compiler, OP_MOVE);
-                        emitByte(compiler, argRegs[i]);
-                        emitByte(compiler, valueReg);
                         freeRegister(compiler, valueReg);
                     }
                 }
