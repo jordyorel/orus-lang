@@ -2207,6 +2207,29 @@ InterpretResult vm_run_dispatch(void) {
                     vm.lastExecutionTime = get_time_vm() - start_time;
                     RETURN(INTERPRET_OK);
 
+                // Extended opcodes for 16-bit register access (Phase 2)
+                case OP_LOAD_CONST_EXT: {
+                    handle_load_const_ext();
+                    break;
+                }
+
+                case OP_MOVE_EXT: {
+                    handle_move_ext();
+                    break;
+                }
+
+                case OP_STORE_EXT: {
+                    // TODO: Implement handle_store_ext()  
+                    VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(), "OP_STORE_EXT not implemented yet");
+                    break;
+                }
+
+                case OP_LOAD_EXT: {
+                    // TODO: Implement handle_load_ext()
+                    VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(), "OP_LOAD_EXT not implemented yet");
+                    break;
+                }
+
                 default:
                     VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(), "Unknown opcode: %d", instruction);
                     vm.lastExecutionTime = get_time_vm() - start_time;

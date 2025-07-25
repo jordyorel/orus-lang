@@ -45,8 +45,12 @@ void collectLoopInvariantExpressions(ASTNode* node, LICMAnalysis* analysis, Loop
 uint16_t allocateRegister(Compiler* compiler);
 void freeRegister(Compiler* compiler, uint16_t reg);
 void emitByte(Compiler* compiler, uint8_t byte);
+void emitShort(Compiler* compiler, uint16_t value);
 void emitBytes(Compiler* compiler, uint8_t byte1, uint8_t byte2);
 void emitConstant(Compiler* compiler, uint16_t reg, Value value);
+void emitConstantExt(Compiler* compiler, uint16_t reg, Value value);
+void emitMoveExt(Compiler* compiler, uint16_t dst_reg, uint16_t src_reg);
+void emitMove(Compiler* compiler, uint16_t dst_reg, uint16_t src_reg);
 
 // Compilation helpers
 bool compileExpression(ASTNode* node, Compiler* compiler);

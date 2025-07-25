@@ -631,6 +631,13 @@ typedef enum {
     OP_GC_PAUSE,
     OP_GC_RESUME,
     OP_NEG_I32_R,    // dst_reg, src_reg - Negate i32 value
+    
+    // Extended opcodes for 16-bit register access (Phase 2)
+    OP_LOAD_CONST_EXT,  // reg16, const16 - Load constant into extended register
+    OP_MOVE_EXT,        // dst_reg16, src_reg16 - Move between extended registers
+    OP_STORE_EXT,       // reg16, addr16 - Store extended register to memory
+    OP_LOAD_EXT,        // reg16, addr16 - Load from memory to extended register
+    
     OP_HALT
 } OpCode;
 

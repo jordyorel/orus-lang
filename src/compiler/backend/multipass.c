@@ -62,11 +62,8 @@ uint16_t allocateRegister(Compiler* compiler) {
         }
     }
     
-    // PRIORITY 2: Warn and use extended registers (requires VM register file)
-    // TODO: Implement proper bytecode format for 16-bit registers
-    // For now, log a warning when using extended registers
-    
-    printf("[WARNING] Using extended register space (>255) - may require VM register file access\n");
+    // PRIORITY 2: Use extended registers (VM register file integration)
+    printf("[INFO] Using extended register space (>255) - activating Phase 2 extended opcodes\n");
     
     // Check frame registers (256-319) 
     for (uint16_t reg = FRAME_REG_START; reg < FRAME_REG_START + FRAME_REGISTERS; reg++) {
@@ -96,7 +93,23 @@ uint16_t allocateRegister(Compiler* compiler) {
         }
     }
     
-    return 65535; // No available registers
+    // PRIORITY 3: Module registers (352-479) - now activated! (Phase 2.2)
+    printf("[INFO] Using module register space (352-479) - large program mode activated\n");
+    
+    for (uint16_t reg = MODULE_REG_START; reg < MODULE_REG_START + MODULE_REGISTERS; reg++) {
+        bool module_reg_used = false;
+        for (int i = 0; i < compiler->localCount; i++) {
+            if (compiler->locals[i].isActive && compiler->locals[i].reg == reg) {
+                module_reg_used = true;
+                break;
+            }
+        }
+        if (!module_reg_used) {
+            return reg;
+        }
+    }
+    
+    return 65535; // No available registers (480 registers exhausted!)
 }
 
 void freeRegister(Compiler* compiler, uint16_t reg) {
@@ -116,6 +129,15 @@ void emitByte(Compiler* compiler, uint8_t byte) {
     writeChunk(compiler->chunk, byte, compiler->currentLine, compiler->currentColumn);
 }
 
+void emitShort(Compiler* compiler, uint16_t value) {
+    if (!compiler || !compiler->chunk) {
+        return;
+    }
+    // Emit 16-bit value in big-endian order
+    emitByte(compiler, (uint8_t)(value >> 8));   // High byte first
+    emitByte(compiler, (uint8_t)(value & 0xFF)); // Low byte second
+}
+
 // Safe register emission - handles register > 255 with warnings
 void emitRegister(Compiler* compiler, uint16_t reg) {
     if (reg > 255) {
@@ -132,14 +154,64 @@ void emitConstant(Compiler* compiler, uint16_t reg, Value value) {
     if (!compiler || !compiler->chunk) {
         return;
     }
+    
+    // Smart opcode selection based on register ID
+    if (reg > 255) {
+        // Use extended opcode for registers > 255
+        emitConstantExt(compiler, reg, value);
+        return;
+    }
+    
+    // Use standard opcode for registers 0-255
     int constant = addConstant(compiler->chunk, value);
     if (constant < 65536) {  // 16-bit constant index
         emitByte(compiler, OP_LOAD_CONST);
-        emitRegister(compiler, reg);  // Safe register emission with >255 handling
+        emitByte(compiler, (uint8_t)reg);  // 8-bit register (bytecode compatible)
         // Emit 16-bit constant index in big-endian order
         emitByte(compiler, (uint8_t)(constant >> 8));   // High byte
         emitByte(compiler, (uint8_t)(constant & 0xFF)); // Low byte
     }
+}
+
+// Extended constant loading for registers > 255
+void emitConstantExt(Compiler* compiler, uint16_t reg, Value value) {
+    if (!compiler || !compiler->chunk) {
+        return;
+    }
+    int constant = addConstant(compiler->chunk, value);
+    if (constant < 65536) {  // 16-bit constant index
+        emitByte(compiler, OP_LOAD_CONST_EXT);
+        emitShort(compiler, reg);        // 16-bit register ID
+        emitShort(compiler, constant);   // 16-bit constant index
+    }
+}
+
+// Extended register move for registers > 255 (Phase 2.2)
+void emitMoveExt(Compiler* compiler, uint16_t dst_reg, uint16_t src_reg) {
+    if (!compiler || !compiler->chunk) {
+        return;
+    }
+    emitByte(compiler, OP_MOVE_EXT);
+    emitShort(compiler, dst_reg);    // 16-bit destination register
+    emitShort(compiler, src_reg);    // 16-bit source register
+}
+
+// Smart move operation - chooses standard or extended opcode
+void emitMove(Compiler* compiler, uint16_t dst_reg, uint16_t src_reg) {
+    if (!compiler || !compiler->chunk) {
+        return;
+    }
+    
+    // Use extended opcode if either register > 255
+    if (dst_reg > 255 || src_reg > 255) {
+        emitMoveExt(compiler, dst_reg, src_reg);
+        return;
+    }
+    
+    // Use standard opcode for registers 0-255
+    emitByte(compiler, OP_MOVE);
+    emitByte(compiler, (uint8_t)dst_reg);
+    emitByte(compiler, (uint8_t)src_reg);
 }
 
 void initCompiler(Compiler* compiler, Chunk* chunk, const char* fileName, const char* source) {
