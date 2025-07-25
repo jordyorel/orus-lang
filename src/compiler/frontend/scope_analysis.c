@@ -1075,12 +1075,27 @@ ScopeVariable* findVariableInScopeTree(ScopeInfo* scope, const char* name) {
 ScopeVariable* findVariableInScopeChain(ScopeInfo* scope, const char* name) {
     if (scope == NULL) return NULL;
     
+    // Add recursion depth protection to prevent infinite loops
+    static int recursionDepth = 0;
+    recursionDepth++;
+    
+    if (recursionDepth > 100) {
+        printf("[ERROR] Infinite recursion detected in findVariableInScopeChain for variable '%s'\n", name);
+        recursionDepth--; // Reset before returning
+        return NULL;
+    }
+    
     // Search in current scope first
     ScopeVariable* var = findVariableInScope(scope, name);
-    if (var != NULL) return var;
+    if (var != NULL) {
+        recursionDepth--;
+        return var;
+    }
     
     // Search in parent scopes (upward traversal)
-    return findVariableInScopeChain(scope->parent, name);
+    ScopeVariable* result = findVariableInScopeChain(scope->parent, name);
+    recursionDepth--;
+    return result;
 }
 
 // Helper function to find variable with specific register

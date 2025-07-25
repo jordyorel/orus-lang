@@ -668,10 +668,27 @@ static void patchBreakJumps(JumpTable* table, Compiler* compiler) {
         int jump = compiler->chunk->count - offset - 2;
         printf("[DEBUG] patchBreakJumps: offset=%d, current=%d, jump=%d\n",
                offset, compiler->chunk->count, jump);
-        if (jump <= UINT16_MAX) {
-            compiler->chunk->code[offset] = (jump >> 8) & 0xff;
-            compiler->chunk->code[offset + 1] = jump & 0xff;
+        
+        // Validate jump bounds before patching
+        if (jump < 0) {
+            printf("[DEBUG] patchBreakJumps: Invalid negative jump %d\n", jump);
+            continue;
         }
+        if (jump > UINT16_MAX) {
+            printf("[DEBUG] patchBreakJumps: Jump %d exceeds UINT16_MAX\n", jump);
+            continue;
+        }
+        
+        // Additional bounds check: ensure the target is within chunk bounds
+        int targetPos = offset + 2 + jump;
+        if (targetPos > compiler->chunk->count) {
+            printf("[DEBUG] patchBreakJumps: Target position %d exceeds chunk size %d\n", 
+                   targetPos, compiler->chunk->count);
+            continue;
+        }
+        
+        compiler->chunk->code[offset] = (jump >> 8) & 0xff;
+        compiler->chunk->code[offset + 1] = jump & 0xff;
     }
 }
 
@@ -683,24 +700,45 @@ static void patchContinueJumps(JumpTable* table, Compiler* compiler,
         return;
     }
 
-    printf(
-        "[DEBUG] patchContinueJumps: Patching %d continue jumps to target %d\n",
-        table->offsets.count, continueTarget);
+    printf("[DEBUG] patchContinueJumps: Patching %d continue jumps to target %d\n",
+           table->offsets.count, continueTarget);
 
     for (int i = 0; i < table->offsets.count; i++) {
         int offset = table->offsets.data[i];
 
-        // Calculate backward jump to continue target (like emitLoop)
-        // Continue jumps go backward from current position to the increment/condition
-        int jump = (offset + 2) - continueTarget;  // Backward jump calculation
-        printf(
-            "[DEBUG] patchContinueJumps: offset=%d, continueTarget=%d, "
-            "backward_jump=%d\n",
-            offset, continueTarget, jump);
-        if (jump >= 0 && jump <= UINT16_MAX) {
-            compiler->chunk->code[offset] = (jump >> 8) & 0xff;
-            compiler->chunk->code[offset + 1] = jump & 0xff;
+        // Calculate forward jump like patchJump does (NOT backward like emitLoop)
+        // Continue should jump forward to the increment section
+        int jump = continueTarget - offset - 2;
+        printf("[DEBUG] patchContinueJumps: offset=%d, continueTarget=%d, forward_jump=%d\n",
+               offset, continueTarget, jump);
+            
+        // Validate jump bounds before patching
+        if (jump < 0) {
+            printf("[DEBUG] patchContinueJumps: Invalid negative jump %d\n", jump);
+            continue;
         }
+        if (jump > UINT16_MAX) {
+            printf("[DEBUG] patchContinueJumps: Jump %d exceeds UINT16_MAX\n", jump);
+            continue;
+        }
+        
+        // Additional bounds check: ensure the target is within chunk bounds
+        if (continueTarget < 0 || continueTarget > compiler->chunk->count) {
+            printf("[DEBUG] patchContinueJumps: Continue target %d out of chunk bounds [0, %d]\n", 
+                   continueTarget, compiler->chunk->count);
+            continue;
+        }
+        
+        // Verify that jumping forward from offset+2 lands at continueTarget
+        int landingPos = offset + 2 + jump;
+        if (landingPos != continueTarget) {
+            printf("[DEBUG] patchContinueJumps: Jump calculation error: expected %d, got %d\n", 
+                   continueTarget, landingPos);
+            continue;
+        }
+        
+        compiler->chunk->code[offset] = (jump >> 8) & 0xff;
+        compiler->chunk->code[offset + 1] = jump & 0xff;
     }
 }
 
@@ -1262,13 +1300,12 @@ bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
                 return false;
             }
 
-            // Continue target: increment iterator - emit increment operation first
+            // Patch continue jumps to point HERE (before increment)
+            patchContinueJumps(&context->continueJumps, compiler, compiler->chunk->count);
+            
+            // Continue target: increment iterator
             emitByte(compiler, OP_INC_I32_R);
             emitByte(compiler, iterReg);
-            
-            // Patch continue jumps to point to the increment operation
-            int continueTarget = compiler->chunk->count - 2; // Point to OP_INC_I32_R we just emitted
-            patchContinueJumps(&context->continueJumps, compiler, continueTarget);
 
             // Jump back to condition
             emitLoop(compiler, loopStart);
