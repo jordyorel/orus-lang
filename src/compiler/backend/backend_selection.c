@@ -33,10 +33,6 @@ static HotPathAnalysis* analyzeHotPath(ASTNode* node __attribute__((unused)), vo
     return NULL; // PGO disabled
 }
 
-static CompilerBackend choosePGOBackend(ASTNode* node __attribute__((unused)), HotPathAnalysis* analysis __attribute__((unused)), CompilerBackend fallback) {
-    return fallback; // Always use fallback when PGO disabled
-}
-
 static bool isPGOHotPath(HotPathAnalysis* analysis __attribute__((unused))) {
     return false; // No hot paths when PGO disabled
 }

@@ -307,26 +307,24 @@ void freeMultiPassCompiler(Compiler* compiler) {
     }
 }
 
-// Multi-pass specific utility functions with VM-aware optimizations
-// Using shared allocateRegister and freeRegister functions from
-// hybrid_compiler.c, enhanced with VM optimization context
+// void resetMultiPassCompiler() {
+//     if (g_multiPassCompiler) {
+//         g_multiPassCompiler->typeAnalysisComplete = false;
+//         g_multiPassCompiler->scopeAnalysisComplete = false;
+//         g_multiPassCompiler->optimizationComplete = false;
+//         g_multiPassCompiler->inFunction = false;
 
-// VM optimization state for multipass compiler (disabled stubs)
-static VMOptimizationContext g_vmOptCtx = {0};
-static RegisterState g_regState = {0};
-static bool g_vmOptInitialized = false;
+//         // Reset loop contexts
+//         g_multiPassCompiler->loopCount = 0;
+//         for (int i = 0; i < g_multiPassCompiler->loopCapacity; i++) {
+//             g_multiPassCompiler->loops[i].startInstr = -1;
+//             g_multiPassCompiler->loops[i].scopeDepth = -1;
+//             g_multiPassCompiler->loops[i].label = NULL;
+//             g_multiPassCompiler->loops[i].isOptimized = false;
+//         }
+//     }
+// }
 
-// Simplified VM optimization - no-op for basic compilation
-static void initVMOptimization(Compiler* compiler __attribute__((unused))) {
-    if (!g_vmOptInitialized) {
-        g_vmOptInitialized = true;
-        LOG_COMPILER_DEBUG("multipass", "VM optimization disabled for simplified compilation");
-    }
-}
-
-// Simplified register allocation - using macro replacement above
-
-// Simplified register deallocation - using standard freeRegister
 
 static void beginScope(Compiler* compiler) {
     compiler->scopeDepth++;
