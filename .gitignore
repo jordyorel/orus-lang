@@ -39,6 +39,7 @@ Thumbs.db
 *.tmp
 *.temp
 *.log
+*.orus
 
 # CMake files
 CMakeCache.txt

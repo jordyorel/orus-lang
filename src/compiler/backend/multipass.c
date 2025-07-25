@@ -375,8 +375,27 @@ static int addLocal(Compiler* compiler, const char* name, bool isMutable) {
     }
 
     int index = compiler->localCount++;
-    // Use optimized register allocation for local variables - longer lifetime  
-    uint8_t reg = allocateOptimizedRegister(compiler, false, 50);
+    
+    // Find first available register by checking active locals
+    uint8_t reg = 1; // Start from register 1 (0 is reserved)
+    bool registers_used[REGISTER_COUNT] = {true}; // Reserve register 0
+    
+    // Mark registers used by active locals
+    for (int i = 0; i < compiler->localCount - 1; i++) {
+        if (compiler->locals[i].isActive) {
+            registers_used[compiler->locals[i].reg] = true;
+        }
+    }
+    
+    // Find first free register (max 255 since reg is uint8_t)
+    while (reg < 255 && registers_used[reg]) {
+        reg++;
+    }
+    
+    if (reg >= 255 || registers_used[reg]) {
+        // Fallback to sequential allocation if we run out
+        reg = (index + 1) % 256;
+    }
 
     compiler->locals[index].name = strdup(name);
     compiler->locals[index].reg = reg;
