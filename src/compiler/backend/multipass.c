@@ -41,13 +41,28 @@ uint8_t allocateRegister(Compiler* compiler) {
         return 255; // Invalid register
     }
     
-    // For now, use simple incremental allocation without freeing
-    // This ensures each register allocation gets a unique register
-    if (compiler->nextRegister >= 255) {
-        return 255; // Invalid register
+    // Create a register usage map to avoid conflicts with local variables
+    bool register_used[256] = {true}; // Reserve register 0
+    
+    // Mark registers used by active local variables
+    for (int i = 0; i < compiler->localCount; i++) {
+        if (compiler->locals[i].isActive) {
+            register_used[compiler->locals[i].reg] = true;
+        }
     }
     
-    uint8_t reg = compiler->nextRegister++;
+    // Find the first available register starting from nextRegister
+    uint8_t reg = compiler->nextRegister;
+    while (reg < 255 && register_used[reg]) {
+        reg++;
+    }
+    
+    if (reg >= 255) {
+        return 255; // No available registers
+    }
+    
+    // Update nextRegister to be after this allocation
+    compiler->nextRegister = reg + 1;
     return reg;
 }
 
@@ -376,25 +391,30 @@ static int addLocal(Compiler* compiler, const char* name, bool isMutable) {
 
     int index = compiler->localCount++;
     
-    // Find first available register by checking active locals
+    // Proper nested scope register allocation
     uint8_t reg = 1; // Start from register 1 (0 is reserved)
-    bool registers_used[REGISTER_COUNT] = {true}; // Reserve register 0
     
-    // Mark registers used by active locals
+    // Create a register usage map for active variables
+    bool register_used[256] = {true}; // Reserve register 0
+    
+    // Mark registers used by currently active locals
     for (int i = 0; i < compiler->localCount - 1; i++) {
         if (compiler->locals[i].isActive) {
-            registers_used[compiler->locals[i].reg] = true;
+            register_used[compiler->locals[i].reg] = true;
         }
     }
     
-    // Find first free register (max 255 since reg is uint8_t)
-    while (reg < 255 && registers_used[reg]) {
-        reg++;
+    // Find the first available register
+    for (uint8_t r = 1; r < 255; r++) {
+        if (!register_used[r]) {
+            reg = r;
+            break;
+        }
     }
     
-    if (reg >= 255 || registers_used[reg]) {
-        // Fallback to sequential allocation if we run out
-        reg = (index + 1) % 256;
+    // If no register found, use fallback (this shouldn't happen with 256 registers)
+    if (register_used[reg]) {
+        reg = (index % 254) + 1; // Ensure we stay in valid range
     }
 
     compiler->locals[index].name = strdup(name);
