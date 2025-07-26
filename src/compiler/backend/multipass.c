@@ -18,6 +18,8 @@
 #include "compiler/loop_optimization.h"
 #include "compiler/symbol_table.h"
 #include "compiler/vm_optimization.h"
+#include "vm/spill_manager.h"
+#include "vm/vm_constants.h"
 #include "compiler/node_registry.h"
 #include "errors/features/type_errors.h"
 #include "errors/features/variable_errors.h"
@@ -107,7 +109,13 @@ uint16_t allocateRegister(Compiler* compiler) {
         }
     }
     
-    return 65535; // No available registers (480 registers exhausted!)
+    // PRIORITY 4: Automatic spill system - unlimited register space via memory
+    printf("[INFO] All 480 registers exhausted - activating automatic spill system\n");
+    
+    // Use spill register space (480+) - these are virtual registers backed by memory
+    // The VM will automatically handle load/store operations for spilled registers
+    static uint16_t next_spill_reg = 480;
+    return next_spill_reg++;
 }
 
 void freeRegister(Compiler* compiler, uint16_t reg) {
@@ -501,37 +509,15 @@ static void endScope(Compiler* compiler) {
 }
 
 static int addLocal(Compiler* compiler, const char* name, bool isMutable) {
-    if (compiler->localCount >= REGISTER_COUNT) {
+    // Use new unlimited locals system with automatic spilling
+    if (compiler->localCount >= MAX_LOCAL_VARIABLES) {
         return -1;
     }
 
     int index = compiler->localCount++;
     
-    // Proper nested scope register allocation
-    uint8_t reg = 1; // Start from register 1 (0 is reserved)
-    
-    // Create a register usage map for active variables
-    bool register_used[256] = {true}; // Reserve register 0
-    
-    // Mark registers used by currently active locals
-    for (int i = 0; i < compiler->localCount - 1; i++) {
-        if (compiler->locals[i].isActive) {
-            register_used[compiler->locals[i].reg] = true;
-        }
-    }
-    
-    // Find the first available register
-    for (uint8_t r = 1; r < 255; r++) {
-        if (!register_used[r]) {
-            reg = r;
-            break;
-        }
-    }
-    
-    // If no register found, use fallback (this shouldn't happen with 256 registers)
-    if (register_used[reg]) {
-        reg = (index % 254) + 1; // Ensure we stay in valid range
-    }
+    // Use the improved register allocation system that supports 480+ registers with spilling
+    uint16_t reg = allocateRegister(compiler);
 
     compiler->locals[index].name = strdup(name);
     compiler->locals[index].reg = reg;

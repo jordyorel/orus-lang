@@ -828,10 +828,10 @@ typedef struct {
         // Phase 3 safe type tracking fields
         bool hasKnownType; // Whether we know the exact type of this variable
         ValueType knownType; // The known type (only valid if hasKnownType is true)
-    } locals[REGISTER_COUNT];
+    } locals[MAX_LOCAL_VARIABLES];  // Support many local variables with spilling
     int localCount;
     int scopeDepth;
-    int scopeStack[REGISTER_COUNT];
+    int scopeStack[MAX_LOCAL_VARIABLES];  // Match locals array size
     LoopContext loopStack[16];  // Stack of nested loop contexts
     int loopDepth;              // Current loop nesting depth
     int loopStart;              // Start instruction of current loop

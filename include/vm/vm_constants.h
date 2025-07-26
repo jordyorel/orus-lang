@@ -13,6 +13,9 @@
 #define TEMP_REGISTERS 32       // Scratch space
 #define MODULE_REGISTERS 128    // Per-module scope (Phase 3)
 
+// Compiler limits - generous but practical limit
+#define MAX_LOCAL_VARIABLES 32768  // Maximum local variables per compilation unit (half of uint16_t range)
+
 // Register ID layout (as per roadmap)
 #define GLOBAL_REG_START 0
 #define FRAME_REG_START 256
