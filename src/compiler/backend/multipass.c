@@ -118,14 +118,290 @@ uint16_t allocateRegister(Compiler* compiler) {
     return next_spill_reg++;
 }
 
-void freeRegister(Compiler* compiler, uint16_t reg) {
-    if (!compiler || reg >= 65535) {
-        return;
+// ===== PHASE 2.3: COMPREHENSIVE LIFETIME ANALYSIS & REGISTER REUSE =====
+
+void initLifetimeAnalyzer(LifetimeAnalyzer* analyzer) {
+    if (!analyzer) return;
+    
+    // Initialize register lifetime tracking
+    analyzer->capacity = 512;  // Start with reasonable capacity
+    analyzer->lifetimes = malloc(sizeof(RegisterLifetime) * analyzer->capacity);
+    analyzer->count = 0;
+    analyzer->current_instruction = 0;
+    
+    // Initialize free register pools for optimal tier-based reuse
+    analyzer->free_global_regs = malloc(sizeof(uint16_t) * 256);
+    analyzer->free_global_count = 0;
+    analyzer->free_frame_regs = malloc(sizeof(uint16_t) * 64);
+    analyzer->free_frame_count = 0;
+    analyzer->free_temp_regs = malloc(sizeof(uint16_t) * 32);
+    analyzer->free_temp_count = 0;
+    analyzer->free_module_regs = malloc(sizeof(uint16_t) * 128);
+    analyzer->free_module_count = 0;
+    
+    // Initialize all arrays to zero
+    if (analyzer->lifetimes) {
+        memset(analyzer->lifetimes, 0, sizeof(RegisterLifetime) * analyzer->capacity);
+    }
+}
+
+void freeLifetimeAnalyzer(LifetimeAnalyzer* analyzer) {
+    if (!analyzer) return;
+    
+    // Free all variable names
+    for (int i = 0; i < analyzer->count; i++) {
+        if (analyzer->lifetimes[i].variable_name) {
+            free(analyzer->lifetimes[i].variable_name);
+        }
     }
     
-    // With the larger register space, we can implement proper freeing
-    // Mark the register as available for reuse in future allocations
-    // TODO: Implement register lifecycle tracking for optimization
+    free(analyzer->lifetimes);
+    free(analyzer->free_global_regs);
+    free(analyzer->free_frame_regs);
+    free(analyzer->free_temp_regs);
+    free(analyzer->free_module_regs);
+}
+
+uint16_t reuseDeadRegister(Compiler* compiler, ValueType type) {
+    if (!compiler->lifetimeAnalyzer) return 0;
+    
+    LifetimeAnalyzer* analyzer = (LifetimeAnalyzer*)compiler->lifetimeAnalyzer;
+    
+    // Try to reuse a register from the appropriate tier based on type
+    // Prioritize reusing registers of the same type for better performance
+    
+    // 1. Check global register pool first (fastest access)
+    for (int i = 0; i < analyzer->free_global_count; i++) {
+        uint16_t reg = analyzer->free_global_regs[i];
+        
+        // Find the lifetime entry for this register
+        for (int j = 0; j < analyzer->count; j++) {
+            if (analyzer->lifetimes[j].reg == reg && 
+                analyzer->lifetimes[j].type == type && 
+                analyzer->lifetimes[j].is_reusable) {
+                
+                // Remove from free pool
+                for (int k = i; k < analyzer->free_global_count - 1; k++) {
+                    analyzer->free_global_regs[k] = analyzer->free_global_regs[k + 1];
+                }
+                analyzer->free_global_count--;
+                
+                // Mark as active again
+                analyzer->lifetimes[j].is_active = true;
+                analyzer->lifetimes[j].is_reusable = false;
+                analyzer->lifetimes[j].birth_instruction = analyzer->current_instruction;
+                
+                printf("[OPTIMIZE] Reusing global register %d (type %d) for new variable\n", reg, type);
+                return reg;
+            }
+        }
+    }
+    
+    // 2. Check frame register pool
+    for (int i = 0; i < analyzer->free_frame_count; i++) {
+        uint16_t reg = analyzer->free_frame_regs[i];
+        
+        for (int j = 0; j < analyzer->count; j++) {
+            if (analyzer->lifetimes[j].reg == reg && 
+                analyzer->lifetimes[j].type == type && 
+                analyzer->lifetimes[j].is_reusable) {
+                
+                // Remove from free pool
+                for (int k = i; k < analyzer->free_frame_count - 1; k++) {
+                    analyzer->free_frame_regs[k] = analyzer->free_frame_regs[k + 1];
+                }
+                analyzer->free_frame_count--;
+                
+                analyzer->lifetimes[j].is_active = true;
+                analyzer->lifetimes[j].is_reusable = false;
+                analyzer->lifetimes[j].birth_instruction = analyzer->current_instruction;
+                
+                printf("[OPTIMIZE] Reusing frame register %d (type %d) for new variable\n", reg, type);
+                return reg;
+            }
+        }
+    }
+    
+    // 3. Check temp register pool  
+    for (int i = 0; i < analyzer->free_temp_count; i++) {
+        uint16_t reg = analyzer->free_temp_regs[i];
+        
+        for (int j = 0; j < analyzer->count; j++) {
+            if (analyzer->lifetimes[j].reg == reg && 
+                analyzer->lifetimes[j].is_reusable) {  // Temps are more flexible with types
+                
+                // Remove from free pool
+                for (int k = i; k < analyzer->free_temp_count - 1; k++) {
+                    analyzer->free_temp_regs[k] = analyzer->free_temp_regs[k + 1];
+                }
+                analyzer->free_temp_count--;
+                
+                analyzer->lifetimes[j].is_active = true;
+                analyzer->lifetimes[j].is_reusable = false;
+                analyzer->lifetimes[j].type = type;  // Update type
+                analyzer->lifetimes[j].birth_instruction = analyzer->current_instruction;
+                
+                printf("[OPTIMIZE] Reusing temp register %d for new variable (type %d)\n", reg, type);
+                return reg;
+            }
+        }
+    }
+    
+    // 4. Check module register pool
+    for (int i = 0; i < analyzer->free_module_count; i++) {
+        uint16_t reg = analyzer->free_module_regs[i];
+        
+        for (int j = 0; j < analyzer->count; j++) {
+            if (analyzer->lifetimes[j].reg == reg && 
+                analyzer->lifetimes[j].is_reusable) {
+                
+                // Remove from free pool
+                for (int k = i; k < analyzer->free_module_count - 1; k++) {
+                    analyzer->free_module_regs[k] = analyzer->free_module_regs[k + 1];
+                }
+                analyzer->free_module_count--;
+                
+                analyzer->lifetimes[j].is_active = true;
+                analyzer->lifetimes[j].is_reusable = false;
+                analyzer->lifetimes[j].type = type;
+                analyzer->lifetimes[j].birth_instruction = analyzer->current_instruction;
+                
+                printf("[OPTIMIZE] Reusing module register %d for new variable (type %d)\n", reg, type);
+                return reg;
+            }
+        }
+    }
+    
+    return 0;  // No suitable register found for reuse
+}
+
+uint16_t allocateRegisterSmart(Compiler* compiler, const char* varName, ValueType type) {
+    if (!compiler->lifetimeAnalyzer) {
+        // Fallback to original allocation if no analyzer
+        return allocateRegister(compiler);
+    }
+    
+    LifetimeAnalyzer* analyzer = (LifetimeAnalyzer*)compiler->lifetimeAnalyzer;
+    
+    // First try to reuse a dead register of the same type
+    uint16_t reused_reg = reuseDeadRegister(compiler, type);
+    if (reused_reg != 0) {
+        return reused_reg;
+    }
+    
+    // If no reusable register, allocate a new one using original strategy
+    uint16_t new_reg = allocateRegister(compiler);
+    
+    // Track this new register in our lifetime analysis
+    if (analyzer->count >= analyzer->capacity) {
+        // Expand capacity
+        analyzer->capacity *= 2;
+        analyzer->lifetimes = realloc(analyzer->lifetimes, 
+                                    sizeof(RegisterLifetime) * analyzer->capacity);
+    }
+    
+    RegisterLifetime* lifetime = &analyzer->lifetimes[analyzer->count++];
+    lifetime->reg = new_reg;
+    lifetime->birth_instruction = analyzer->current_instruction;
+    lifetime->last_use_instruction = -1;  // Unknown until marked
+    lifetime->is_active = true;
+    lifetime->is_reusable = false;
+    lifetime->type = type;
+    lifetime->variable_name = varName ? strdup(varName) : NULL;
+    
+    printf("[DEBUG] Allocated new register %d for variable '%s' (type %d)\n", 
+           new_reg, varName ? varName : "<temp>", type);
+    
+    return new_reg;
+}
+
+void markRegisterLastUse(Compiler* compiler, uint16_t reg, int instruction) {
+    if (!compiler->lifetimeAnalyzer) return;
+    
+    LifetimeAnalyzer* analyzer = (LifetimeAnalyzer*)compiler->lifetimeAnalyzer;
+    
+    // Find the register in our lifetime tracking
+    for (int i = 0; i < analyzer->count; i++) {
+        if (analyzer->lifetimes[i].reg == reg && analyzer->lifetimes[i].is_active) {
+            analyzer->lifetimes[i].last_use_instruction = instruction;
+            break;
+        }
+    }
+}
+
+void freeRegisterSmart(Compiler* compiler, uint16_t reg) {
+    if (!compiler->lifetimeAnalyzer) return;
+    
+    LifetimeAnalyzer* analyzer = (LifetimeAnalyzer*)compiler->lifetimeAnalyzer;
+    
+    // Find the register and mark it as reusable
+    for (int i = 0; i < analyzer->count; i++) {
+        if (analyzer->lifetimes[i].reg == reg && analyzer->lifetimes[i].is_active) {
+            analyzer->lifetimes[i].is_active = false;
+            analyzer->lifetimes[i].is_reusable = true;
+            analyzer->lifetimes[i].last_use_instruction = analyzer->current_instruction;
+            
+            // Add to appropriate free pool based on register range
+            if (reg < 256) {  // Global registers
+                if (analyzer->free_global_count < 256) {
+                    analyzer->free_global_regs[analyzer->free_global_count++] = reg;
+                }
+            } else if (reg < 320) {  // Frame registers
+                if (analyzer->free_frame_count < 64) {
+                    analyzer->free_frame_regs[analyzer->free_frame_count++] = reg;
+                }
+            } else if (reg < 352) {  // Temp registers
+                if (analyzer->free_temp_count < 32) {
+                    analyzer->free_temp_regs[analyzer->free_temp_count++] = reg;
+                }
+            } else if (reg < 480) {  // Module registers
+                if (analyzer->free_module_count < 128) {
+                    analyzer->free_module_regs[analyzer->free_module_count++] = reg;
+                }
+            }
+            // Note: Spill registers (480+) are managed by the spill system
+            
+            printf("[OPTIMIZE] Register %d freed and available for reuse (variable: %s)\n", 
+                   reg, analyzer->lifetimes[i].variable_name ? analyzer->lifetimes[i].variable_name : "<temp>");
+            break;
+        }
+    }
+}
+
+// Legacy freeRegister now uses smart system
+void freeRegister(Compiler* compiler, uint16_t reg) {
+    freeRegisterSmart(compiler, reg);
+}
+
+void analyzeRegisterLifetimes(Compiler* compiler, ASTNode* ast) {
+    // This is a stub implementation for the lifetime analysis API
+    // In a full implementation, this would traverse the AST and:
+    // 1. Identify where variables are first used (birth)
+    // 2. Identify where variables are last used (death)
+    // 3. Mark optimal points for register reuse
+    // For now, the main optimization happens in the smart allocation functions above
+}
+
+void optimizeRegisterLifetimes(Compiler* compiler) {
+    if (!compiler->lifetimeAnalyzer) return;
+    
+    LifetimeAnalyzer* analyzer = (LifetimeAnalyzer*)compiler->lifetimeAnalyzer;
+    
+    // Print optimization statistics
+    int global_reusable = analyzer->free_global_count;
+    int frame_reusable = analyzer->free_frame_count;
+    int temp_reusable = analyzer->free_temp_count;
+    int module_reusable = analyzer->free_module_count;
+    int total_tracked = analyzer->count;
+    
+    printf("[OPTIMIZE] Register lifetime optimization complete:\n");
+    printf("  - Total registers tracked: %d\n", total_tracked);
+    printf("  - Global registers available for reuse: %d\n", global_reusable);
+    printf("  - Frame registers available for reuse: %d\n", frame_reusable);
+    printf("  - Temp registers available for reuse: %d\n", temp_reusable);
+    printf("  - Module registers available for reuse: %d\n", module_reusable);
+    printf("  - Total registers available for reuse: %d\n", 
+           global_reusable + frame_reusable + temp_reusable + module_reusable);
 }
 
 void emitByte(Compiler* compiler, uint8_t byte) {
@@ -133,6 +409,11 @@ void emitByte(Compiler* compiler, uint8_t byte) {
         return;
     }
     writeChunk(compiler->chunk, byte, compiler->currentLine, compiler->currentColumn);
+    
+    // Phase 2.3: Update instruction counter for lifetime analysis
+    if (compiler->lifetimeAnalyzer) {
+        ((LifetimeAnalyzer*)compiler->lifetimeAnalyzer)->current_instruction = compiler->chunk->count;
+    }
 }
 
 void emitShort(Compiler* compiler, uint16_t value) {
@@ -416,6 +697,13 @@ void initMultiPassCompiler(Compiler* compiler, Chunk* chunk,
     g_multiPassCompiler->typeAnalysisComplete = false;
     g_multiPassCompiler->scopeAnalysisComplete = false;
     g_multiPassCompiler->optimizationComplete = false;
+    
+    // Phase 2.3: Initialize comprehensive lifetime analysis system
+    compiler->lifetimeAnalyzer = malloc(sizeof(LifetimeAnalyzer));
+    if (compiler->lifetimeAnalyzer) {
+        initLifetimeAnalyzer((LifetimeAnalyzer*)compiler->lifetimeAnalyzer);
+        printf("[OPTIMIZE] Lifetime analyzer initialized - smart register reuse enabled\n");
+    }
 }
 
 void freeMultiPassCompiler(Compiler* compiler) {
@@ -443,6 +731,13 @@ void freeMultiPassCompiler(Compiler* compiler) {
 
         free(g_multiPassCompiler);
         g_multiPassCompiler = NULL;
+    }
+    
+    // Phase 2.3: Free lifetime analyzer
+    if (compiler->lifetimeAnalyzer) {
+        freeLifetimeAnalyzer((LifetimeAnalyzer*)compiler->lifetimeAnalyzer);
+        free(compiler->lifetimeAnalyzer);
+        compiler->lifetimeAnalyzer = NULL;
     }
 }
 
@@ -495,6 +790,12 @@ static void endScope(Compiler* compiler) {
             printf("[DEBUG] endScope: deactivating variable '%s' at depth %d\n",
                    compiler->locals[i].name ? compiler->locals[i].name : "NULL",
                    compiler->locals[i].depth);
+            
+            // Phase 2.3: Free register using lifetime analyzer for optimal reuse
+            if (compiler->lifetimeAnalyzer) {
+                freeRegisterSmart(compiler, compiler->locals[i].reg);
+            }
+            
             if (compiler->locals[i].name) {
                 free(compiler->locals[i].name);
                 compiler->locals[i].name = NULL;
@@ -517,7 +818,13 @@ static int addLocal(Compiler* compiler, const char* name, bool isMutable) {
     int index = compiler->localCount++;
     
     // Use the improved register allocation system that supports 480+ registers with spilling
-    uint16_t reg = allocateRegister(compiler);
+    // Try smart allocation with lifetime analysis first, fallback to basic allocation
+    uint16_t reg;
+    if (compiler->lifetimeAnalyzer) {
+        reg = allocateRegisterSmart(compiler, name, VAL_I32);  // Default to i32, will be updated with type inference
+    } else {
+        reg = allocateRegister(compiler);
+    }
 
     compiler->locals[index].name = strdup(name);
     compiler->locals[index].reg = reg;

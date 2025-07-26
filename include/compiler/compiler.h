@@ -111,4 +111,43 @@ void compile_typed_for_statement(ASTNode* node, Compiler* compiler, TypedExpDesc
 void compile_typed_block_statement(ASTNode* node, Compiler* compiler, TypedExpDesc* result);
 void compile_typed_call(Compiler* compiler, ASTNode* node, TypedExpDesc* result);
 
+// Phase 2.3: Comprehensive Lifetime Analysis & Register Reuse System
+typedef struct {
+    uint16_t reg;                  // Register number
+    int birth_instruction;         // When register was allocated
+    int last_use_instruction;      // Last use of this register
+    bool is_active;               // Currently in use
+    bool is_reusable;             // Can be reused after last_use
+    ValueType type;               // Type stored in register
+    char* variable_name;          // Variable name (for debugging)
+} RegisterLifetime;
+
+typedef struct {
+    RegisterLifetime* lifetimes;   // Array of register lifetimes
+    int count;                    // Number of tracked registers
+    int capacity;                 // Capacity of lifetimes array
+    
+    // Free register pools by tier for optimal reuse
+    uint16_t* free_global_regs;   // Pool of free global registers (0-255)
+    int free_global_count;
+    uint16_t* free_frame_regs;    // Pool of free frame registers (256-319)  
+    int free_frame_count;
+    uint16_t* free_temp_regs;     // Pool of free temp registers (320-351)
+    int free_temp_count;
+    uint16_t* free_module_regs;   // Pool of free module registers (352-479)
+    int free_module_count;
+    
+    int current_instruction;      // Current bytecode instruction counter
+} LifetimeAnalyzer;
+
+// Lifetime analysis functions
+void initLifetimeAnalyzer(LifetimeAnalyzer* analyzer);
+void freeLifetimeAnalyzer(LifetimeAnalyzer* analyzer);
+uint16_t allocateRegisterSmart(Compiler* compiler, const char* varName, ValueType type);
+void markRegisterLastUse(Compiler* compiler, uint16_t reg, int instruction);
+void freeRegisterSmart(Compiler* compiler, uint16_t reg);
+void optimizeRegisterLifetimes(Compiler* compiler);
+uint16_t reuseDeadRegister(Compiler* compiler, ValueType type);
+void analyzeRegisterLifetimes(Compiler* compiler, ASTNode* ast);
+
 #endif // COMPILER_H

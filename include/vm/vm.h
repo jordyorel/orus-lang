@@ -807,6 +807,9 @@ typedef struct {
     int savedRegisters;                 // Number of registers saved
 } ScopeAnalyzer;
 
+// Forward declaration to avoid circular dependency
+struct LifetimeAnalyzer;
+
 // Compiler state for register allocation
 typedef struct {
     Chunk* chunk;
@@ -859,6 +862,9 @@ typedef struct {
     
     // Function compilation context
     int currentFunctionParameterCount;  // Parameter count for dynamic register allocation
+    
+    // Phase 2.3: Comprehensive lifetime analysis and register reuse system
+    struct LifetimeAnalyzer* lifetimeAnalyzer;  // Smart register reuse and lifetime tracking
 } Compiler;
 
 // Typed registers for optimization (unboxed values)
