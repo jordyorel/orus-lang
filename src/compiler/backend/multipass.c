@@ -845,19 +845,13 @@ static int addLocal(Compiler* compiler, const char* name, bool isMutable) {
 }
 
 static int findLocal(Compiler* compiler, const char* name) {
-    printf("[DEBUG] findLocal: searching for '%s' among %d locals\n", name,
-           compiler->localCount);
+    // Reduced debug output for findLocal
     for (int i = compiler->localCount - 1; i >= 0; i--) {
-        printf("[DEBUG]   local[%d]: name='%s', active=%d, depth=%d\n", i,
-               compiler->locals[i].name ? compiler->locals[i].name : "NULL",
-               compiler->locals[i].isActive, compiler->locals[i].depth);
         if (compiler->locals[i].isActive && compiler->locals[i].name != NULL &&
             strcmp(compiler->locals[i].name, name) == 0) {
-            printf("[DEBUG] findLocal: FOUND '%s' at index %d\n", name, i);
             return i;
         }
     }
-    printf("[DEBUG] findLocal: NOT FOUND '%s'\n", name);
     return -1;
 }
 
@@ -1540,7 +1534,7 @@ bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
         return true;
     }
 
-    if (recursionDepth > 15) {
+    if (recursionDepth > 100) {
         printf("[ERROR] Maximum recursion depth exceeded in compileMultiPassNode (depth: %d)\n", recursionDepth);
         printf("[ERROR] Node type: %d, line: %d\n", node->type, node->location.line);
         recursionDepth = 0;  // Reset on error
@@ -1551,9 +1545,12 @@ bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
     compiler->currentLine = node->location.line;
     compiler->currentColumn = node->location.column;
 
-    printf("[DEBUG] compileMultiPassNode: depth %d, handling node type %d at line %d\n", 
-           recursionDepth, node->type, node->location.line);
-    fflush(stdout);
+    // Debug output only for problematic cases
+    if (recursionDepth > 40) {
+        printf("[DEBUG] compileMultiPassNode: depth %d, handling node type %d at line %d\n", 
+               recursionDepth, node->type, node->location.line);
+        fflush(stdout);
+    }
 
     switch (node->type) {
         case NODE_PROGRAM:
@@ -2141,8 +2138,7 @@ bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
             return true;
 
         case NODE_PRINT: {
-            printf("[DEBUG] Matched NODE_PRINT case at line %d\n", node->location.line);
-            fflush(stdout);
+            // Debug output removed for performance
             if (node->print.count == 0) {
                 uint8_t r = allocateOptimizedRegister(compiler, false, 5);
                 emitByte(compiler, OP_LOAD_NIL);
