@@ -1532,14 +1532,27 @@ static int compileMultiPassExpr(ASTNode* node, Compiler* compiler) {
 }
 
 bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
-    if (!node) return true;
+    static int recursionDepth = 0;
+    recursionDepth++;
+    
+    if (!node) {
+        recursionDepth--;
+        return true;
+    }
+
+    if (recursionDepth > 15) {
+        printf("[ERROR] Maximum recursion depth exceeded in compileMultiPassNode (depth: %d)\n", recursionDepth);
+        printf("[ERROR] Node type: %d, line: %d\n", node->type, node->location.line);
+        recursionDepth = 0;  // Reset on error
+        return false;
+    }
 
     MultiPassCompiler* mpCompiler = g_multiPassCompiler;
     compiler->currentLine = node->location.line;
     compiler->currentColumn = node->location.column;
 
-    printf("[DEBUG] compileMultiPassNode: handling node type %d at line %d\n", 
-           node->type, node->location.line);
+    printf("[DEBUG] compileMultiPassNode: depth %d, handling node type %d at line %d\n", 
+           recursionDepth, node->type, node->location.line);
     fflush(stdout);
 
     switch (node->type) {
@@ -1661,6 +1674,16 @@ bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
 
         case NODE_FOR_RANGE: {
             printf("[DEBUG] Matched NODE_FOR_RANGE case at line %d\n", node->location.line);
+            printf("[DEBUG] Current loop depth: %d\n", mpCompiler->loopCount);
+            
+            // TEMPORARY FIX: Prevent all nested for loops to stop infinite recursion
+            if (mpCompiler->loopCount > 0) {
+                printf("[ERROR] Nested for loops are temporarily disabled to prevent infinite loop (depth: %d)\n", 
+                       mpCompiler->loopCount);
+                printf("[ERROR] This is a temporary fix - nested for loops need proper implementation\n");
+                return false;
+            }
+            
             fflush(stdout);
             // Simple, robust for-loop compilation - no complex optimizations
             beginLoopScope(compiler);
@@ -1761,10 +1784,38 @@ bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
             int exitJump = emitJump(compiler);
             freeRegister(compiler, condReg);
 
-            // Compile loop body
-            bool success = compileMultiPassNode(node->forRange.body, compiler);
-            if (!success) {
+            // Compile loop body with proper scoping
+            printf("[DEBUG] About to compile for loop body at depth %d\n", mpCompiler->loopCount);
+            fflush(stdout);
+            
+            // Add call protection specifically for for loop body compilation
+            static int forLoopBodyCalls = 0;
+            forLoopBodyCalls++;
+            
+            if (forLoopBodyCalls > 1) {
+                printf("[ERROR] Too many for loop body compilation calls (call #%d) - preventing infinite loop\n", forLoopBodyCalls);
+                forLoopBodyCalls = 0;
                 endScope(compiler);
+                mpCompiler->loopCount--;
+                return false;
+            }
+            
+            // Ensure proper scope wrapping for nested loop bodies
+            printf("[DEBUG] Beginning inner scope for loop body (call #%d)\n", forLoopBodyCalls);
+            fflush(stdout);
+            beginScope(compiler);
+            printf("[DEBUG] Calling compileMultiPassNode for loop body\n");
+            fflush(stdout);
+            bool success = compileMultiPassNode(node->forRange.body, compiler);
+            printf("[DEBUG] Returned from compileMultiPassNode, ending inner scope\n");
+            fflush(stdout);
+            endScope(compiler);
+            
+            forLoopBodyCalls--;
+            
+            printf("[DEBUG] Finished compiling for loop body, success: %d\n", success);
+            if (!success) {
+                endScope(compiler);  // End the outer loop scope
                 mpCompiler->loopCount--;
                 return false;
             }
@@ -2205,11 +2256,16 @@ bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
             int reg = compileMultiPassExpr(node, compiler);
             if (reg >= 0) {
                 freeRegister(compiler, reg);
+                recursionDepth--;
                 return true;
             }
+            recursionDepth--;
             return false;
         }
     }
+    
+    // Should never reach here, but add recursion decrement as safety
+    recursionDepth--;
 }
 
 bool compileMultiPass(ASTNode* ast, Compiler* compiler, bool isModule) {
