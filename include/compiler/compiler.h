@@ -150,4 +150,138 @@ void optimizeRegisterLifetimes(Compiler* compiler);
 uint16_t reuseDeadRegister(Compiler* compiler, ValueType type);
 void analyzeRegisterLifetimes(Compiler* compiler, ASTNode* ast);
 
+// ============================================================================
+// Iterative Compilation System (replaces recursive compileMultiPassNode)
+// ============================================================================
+
+// Forward declarations
+typedef struct IterativeContext IterativeContext;
+typedef struct WorkItem WorkItem;
+typedef struct ScopeFrame ScopeFrame;
+typedef struct JumpPatch JumpPatch;
+
+// Special node types for iterative compilation control
+typedef enum {
+    WORK_NODE_NORMAL,      // Regular AST node
+    WORK_NODE_SCOPE_END,   // Marks end of scope for cleanup
+    WORK_NODE_LOOP_PATCH,  // Marks point for jump patching
+    WORK_NODE_ERROR_RECOVERY  // Error recovery point
+} WorkNodeType;
+
+// Jump patch information for forward references
+typedef enum {
+    JUMP_BREAK,
+    JUMP_CONTINUE,
+    JUMP_IF_FALSE,
+    JUMP_IF_TRUE,
+    JUMP_UNCONDITIONAL
+} JumpType;
+
+// Work item for the compilation queue
+struct WorkItem {
+    ASTNode* node;
+    WorkNodeType type;
+    int priority;          // Higher numbers = higher priority
+    int scopeDepth;        // Scope depth when queued
+    void* metadata;        // Additional context data
+};
+
+// Jump patch information
+struct JumpPatch {
+    int offset;            // Bytecode offset to patch
+    int target;            // Target offset (filled later)
+    JumpType type;         // Type of jump
+    int scopeDepth;        // Scope level this jump belongs to
+    int loopDepth;         // Loop nesting level
+};
+
+// Scope frame for iterative scope management
+struct ScopeFrame {
+    int startLocalCount;   // Local count when scope started
+    int scopeDepth;        // Current scope depth
+    int registerBase;      // Base register for this scope
+    
+    // Control flow tracking
+    JumpPatch* breakJumps;
+    JumpPatch* continueJumps;
+    int breakCount;
+    int continueCount;
+    int breakCapacity;
+    int continueCapacity;
+    
+    // Loop-specific data
+    int loopStart;         // Loop start offset (for continue)
+    int loopEnd;           // Loop end offset (for break)
+    bool isLoopScope;      // Whether this is a loop scope
+    
+    // Error recovery
+    int errorRecoveryPoint;
+};
+
+// Main iterative compilation context
+struct IterativeContext {
+    // Work queue for iterative processing
+    WorkItem* workQueue;
+    int workQueueSize;
+    int workQueueCapacity;
+    
+    // Scope management stack
+    ScopeFrame* scopeStack;
+    int scopeDepth;
+    int maxScopeDepth;
+    int scopeStackCapacity;
+    
+    // Jump patching system
+    JumpPatch* pendingJumps;
+    int jumpCount;
+    int jumpCapacity;
+    
+    // Error recovery state
+    bool inErrorRecovery;
+    int errorCount;
+    int maxErrors;
+    
+    // Statistics and debugging
+    int nodesProcessed;
+    int maxWorkQueueSize;
+    bool debugMode;
+};
+
+// Core iterative compilation functions (replaces compileMultiPassNode)
+bool compileIterative(ASTNode* ast, Compiler* compiler);
+bool processNode(ASTNode* node, Compiler* compiler, IterativeContext* ctx);
+
+// Compilation context management
+void initIterativeContext(IterativeContext* ctx);
+void cleanupIterativeContext(IterativeContext* ctx);
+
+// Work queue management
+void pushWork(IterativeContext* ctx, ASTNode* node, WorkNodeType type, int priority);
+void pushPriorityWork(IterativeContext* ctx, ASTNode* node, WorkNodeType type);
+WorkItem* popWork(IterativeContext* ctx);
+bool hasWork(IterativeContext* ctx);
+
+// Scope management
+void pushScope(IterativeContext* ctx, Compiler* compiler, bool isLoopScope);
+void popScope(IterativeContext* ctx, Compiler* compiler);
+ScopeFrame* getCurrentScope(IterativeContext* ctx);
+
+// Jump patching
+void addJumpPatch(IterativeContext* ctx, int offset, JumpType type, int target);
+void patchJumps(IterativeContext* ctx, Compiler* compiler, JumpType type, int target);
+void patchScopeJumps(IterativeContext* ctx, Compiler* compiler, int scopeDepth);
+
+// Error handling
+bool handleCompilationError(IterativeContext* ctx, Compiler* compiler, const char* message);
+void dumpCompilationState(IterativeContext* ctx, Compiler* compiler);
+
+// Node processors (replace recursive switch cases)
+bool processProgram(ASTNode* node, Compiler* compiler, IterativeContext* ctx);
+bool processBlock(ASTNode* node, Compiler* compiler, IterativeContext* ctx);
+bool processForRange(ASTNode* node, Compiler* compiler, IterativeContext* ctx);
+bool processIfStatement(ASTNode* node, Compiler* compiler, IterativeContext* ctx);
+bool processWhileStatement(ASTNode* node, Compiler* compiler, IterativeContext* ctx);
+bool processExpression(ASTNode* node, Compiler* compiler, IterativeContext* ctx);
+bool processLeafNode(ASTNode* node, Compiler* compiler, IterativeContext* ctx);
+
 #endif // COMPILER_H

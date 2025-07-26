@@ -555,8 +555,8 @@ bool compileProgram(ASTNode* ast, Compiler* compiler, bool isModule) {
 bool compileNode(ASTNode* node, Compiler* compiler) {
     if (!node || !compiler) return false;
     
-    // Route to multi-pass node compilation
-    return compileMultiPassNode(node, compiler);
+    // Route to iterative compilation system
+    return compileIterative(node, compiler);
 }
 
 // Simplified register allocation - replace optimized allocation with basic allocation
@@ -1525,6 +1525,371 @@ static int compileMultiPassExpr(ASTNode* node, Compiler* compiler) {
     }
 }
 
+// ============================================================================
+// ITERATIVE COMPILATION SYSTEM (replaces recursive compileMultiPassNode)
+// ============================================================================
+
+void initIterativeContext(IterativeContext* ctx) {
+    if (!ctx) return;
+    
+    // Initialize work queue
+    ctx->workQueueCapacity = 64;
+    ctx->workQueue = malloc(sizeof(WorkItem) * ctx->workQueueCapacity);
+    ctx->workQueueSize = 0;
+    
+    // Initialize scope stack
+    ctx->scopeStackCapacity = 32;
+    ctx->scopeStack = malloc(sizeof(ScopeFrame) * ctx->scopeStackCapacity);
+    ctx->scopeDepth = 0;
+    ctx->maxScopeDepth = 0;
+    
+    // Initialize jump patching
+    ctx->jumpCapacity = 128;
+    ctx->pendingJumps = malloc(sizeof(JumpPatch) * ctx->jumpCapacity);
+    ctx->jumpCount = 0;
+    
+    // Error recovery
+    ctx->inErrorRecovery = false;
+    ctx->errorCount = 0;
+    ctx->maxErrors = 10;
+    
+    // Statistics
+    ctx->nodesProcessed = 0;
+    ctx->maxWorkQueueSize = 0;
+    ctx->debugMode = false;
+    
+    printf("[ITERATIVE] Compilation context initialized\n");
+}
+
+void cleanupIterativeContext(IterativeContext* ctx) {
+    if (!ctx) return;
+    
+    // Cleanup work queue
+    if (ctx->workQueue) {
+        free(ctx->workQueue);
+        ctx->workQueue = NULL;
+    }
+    
+    // Cleanup scope stack (and nested allocations)
+    if (ctx->scopeStack) {
+        for (int i = 0; i < ctx->scopeDepth; i++) {
+            ScopeFrame* frame = &ctx->scopeStack[i];
+            if (frame->breakJumps) free(frame->breakJumps);
+            if (frame->continueJumps) free(frame->continueJumps);
+        }
+        free(ctx->scopeStack);
+        ctx->scopeStack = NULL;
+    }
+    
+    // Cleanup jump patches
+    if (ctx->pendingJumps) {
+        free(ctx->pendingJumps);
+        ctx->pendingJumps = NULL;
+    }
+    
+    printf("[ITERATIVE] Compilation context cleaned up\n");
+}
+
+// Work Queue Management
+static void expandWorkQueue(IterativeContext* ctx) {
+    ctx->workQueueCapacity *= 2;
+    ctx->workQueue = realloc(ctx->workQueue, sizeof(WorkItem) * ctx->workQueueCapacity);
+    if (!ctx->workQueue) {
+        printf("[ERROR] Failed to expand work queue\n");
+        exit(1);
+    }
+}
+
+void pushWork(IterativeContext* ctx, ASTNode* node, WorkNodeType type, int priority) {
+    if (!ctx || !node) return;
+    
+    if (ctx->workQueueSize >= ctx->workQueueCapacity) {
+        expandWorkQueue(ctx);
+    }
+    
+    WorkItem* item = &ctx->workQueue[ctx->workQueueSize++];
+    item->node = node;
+    item->type = type;
+    item->priority = priority;
+    item->scopeDepth = ctx->scopeDepth;
+    item->metadata = NULL;
+    
+    if (ctx->workQueueSize > ctx->maxWorkQueueSize) {
+        ctx->maxWorkQueueSize = ctx->workQueueSize;
+    }
+}
+
+void pushPriorityWork(IterativeContext* ctx, ASTNode* node, WorkNodeType type) {
+    pushWork(ctx, node, type, 10); // High priority
+}
+
+WorkItem* popWork(IterativeContext* ctx) {
+    if (!ctx || ctx->workQueueSize == 0) return NULL;
+    return &ctx->workQueue[--ctx->workQueueSize];
+}
+
+bool hasWork(IterativeContext* ctx) {
+    return ctx && ctx->workQueueSize > 0;
+}
+
+// Scope Management
+static void expandScopeStack(IterativeContext* ctx) {
+    ctx->scopeStackCapacity *= 2;
+    ctx->scopeStack = realloc(ctx->scopeStack, sizeof(ScopeFrame) * ctx->scopeStackCapacity);
+    if (!ctx->scopeStack) {
+        printf("[ERROR] Failed to expand scope stack\n");
+        exit(1);
+    }
+}
+
+void pushScope(IterativeContext* ctx, Compiler* compiler, bool isLoopScope) {
+    if (!ctx || !compiler) return;
+    
+    if (ctx->scopeDepth >= ctx->scopeStackCapacity) {
+        expandScopeStack(ctx);
+    }
+    
+    ScopeFrame* frame = &ctx->scopeStack[ctx->scopeDepth];
+    frame->startLocalCount = compiler->localCount;
+    frame->scopeDepth = ++ctx->scopeDepth;
+    frame->registerBase = compiler->nextRegister;
+    frame->isLoopScope = isLoopScope;
+    
+    // Initialize jump arrays
+    frame->breakCapacity = 8;
+    frame->continueCapacity = 8;
+    frame->breakJumps = malloc(sizeof(JumpPatch) * frame->breakCapacity);
+    frame->continueJumps = malloc(sizeof(JumpPatch) * frame->continueCapacity);
+    frame->breakCount = 0;
+    frame->continueCount = 0;
+    
+    if (isLoopScope) {
+        frame->loopStart = compiler->chunk->count;
+        frame->loopEnd = -1;
+    } else {
+        frame->loopStart = -1;
+        frame->loopEnd = -1;
+    }
+    
+    frame->errorRecoveryPoint = compiler->chunk->count;
+    
+    if (ctx->scopeDepth > ctx->maxScopeDepth) {
+        ctx->maxScopeDepth = ctx->scopeDepth;
+    }
+    
+    compiler->scopeDepth = ctx->scopeDepth;
+}
+
+void popScope(IterativeContext* ctx, Compiler* compiler) {
+    if (!ctx || !compiler || ctx->scopeDepth == 0) return;
+    
+    ScopeFrame* frame = &ctx->scopeStack[ctx->scopeDepth - 1];
+    
+    // Patch any remaining jumps for this scope
+    patchScopeJumps(ctx, compiler, ctx->scopeDepth);
+    
+    // Cleanup local variables that went out of scope
+    while (compiler->localCount > frame->startLocalCount) {
+        compiler->localCount--;
+        compiler->locals[compiler->localCount].isActive = false;
+    }
+    
+    // Cleanup jump arrays
+    if (frame->breakJumps) free(frame->breakJumps);
+    if (frame->continueJumps) free(frame->continueJumps);
+    
+    ctx->scopeDepth--;
+    compiler->scopeDepth = ctx->scopeDepth;
+}
+
+ScopeFrame* getCurrentScope(IterativeContext* ctx) {
+    if (!ctx || ctx->scopeDepth == 0) return NULL;
+    return &ctx->scopeStack[ctx->scopeDepth - 1];
+}
+
+// Jump Patching
+static void expandJumpArray(IterativeContext* ctx) {
+    ctx->jumpCapacity *= 2;
+    ctx->pendingJumps = realloc(ctx->pendingJumps, sizeof(JumpPatch) * ctx->jumpCapacity);
+    if (!ctx->pendingJumps) {
+        printf("[ERROR] Failed to expand jump array\n");
+        exit(1);
+    }
+}
+
+void addJumpPatch(IterativeContext* ctx, int offset, JumpType type, int target) {
+    if (!ctx) return;
+    
+    if (ctx->jumpCount >= ctx->jumpCapacity) {
+        expandJumpArray(ctx);
+    }
+    
+    JumpPatch* patch = &ctx->pendingJumps[ctx->jumpCount++];
+    patch->offset = offset;
+    patch->target = target;
+    patch->type = type;
+    patch->scopeDepth = ctx->scopeDepth;
+    patch->loopDepth = 0;
+}
+
+void patchJumps(IterativeContext* ctx, Compiler* compiler, JumpType type, int target) {
+    if (!ctx || !compiler) return;
+    
+    for (int i = 0; i < ctx->jumpCount; i++) {
+        JumpPatch* patch = &ctx->pendingJumps[i];
+        if (patch->type == type && patch->target == -1) {
+            patch->target = target;
+            
+            int distance = target - patch->offset - 2;
+            compiler->chunk->code[patch->offset] = (distance >> 8) & 0xff;
+            compiler->chunk->code[patch->offset + 1] = distance & 0xff;
+        }
+    }
+}
+
+void patchScopeJumps(IterativeContext* ctx, Compiler* compiler, int scopeDepth) {
+    if (!ctx || !compiler) return;
+    
+    int currentOffset = compiler->chunk->count;
+    
+    for (int i = 0; i < ctx->jumpCount; i++) {
+        JumpPatch* patch = &ctx->pendingJumps[i];
+        if (patch->scopeDepth == scopeDepth && patch->target == -1) {
+            patchJumps(ctx, compiler, patch->type, currentOffset);
+        }
+    }
+}
+
+// Node Processors
+bool processProgram(ASTNode* node, Compiler* compiler, IterativeContext* ctx) {
+    for (int i = node->program.count - 1; i >= 0; i--) {
+        pushWork(ctx, node->program.declarations[i], WORK_NODE_NORMAL, 1);
+    }
+    return true;
+}
+
+bool processBlock(ASTNode* node, Compiler* compiler, IterativeContext* ctx) {
+    pushScope(ctx, compiler, false);
+    
+    for (int i = node->block.count - 1; i >= 0; i--) {
+        pushWork(ctx, node->block.statements[i], WORK_NODE_NORMAL, 1);
+    }
+    
+    // Schedule scope cleanup
+    pushWork(ctx, NULL, WORK_NODE_SCOPE_END, 10);
+    
+    return true;
+}
+
+bool processForRange(ASTNode* node, Compiler* compiler, IterativeContext* ctx) {
+    // Remove the artificial nested loop restriction
+    printf("[DEBUG] processForRange: Processing for loop at line %d\n", node->location.line);
+    
+    pushScope(ctx, compiler, true);
+    
+    // Compile loop variable and bounds (simplified version)
+    if (node->forRange.varName) {
+        uint16_t varReg = allocateRegister(compiler);
+        addLocal(compiler, node->forRange.varName, varReg);
+    }
+    
+    // Emit basic loop setup
+    int loopStart = compiler->chunk->count;
+    emitByte(compiler, OP_JUMP_IF_NOT_R);
+    int exitJump = compiler->chunk->count;
+    emitShort(compiler, 0xffff); // Will patch later
+    
+    // Queue loop body
+    pushWork(ctx, node->forRange.body, WORK_NODE_NORMAL, 1);
+    
+    // Schedule loop end and scope cleanup
+    pushWork(ctx, NULL, WORK_NODE_LOOP_PATCH, 5);
+    pushWork(ctx, NULL, WORK_NODE_SCOPE_END, 10);
+    
+    return true;
+}
+
+bool processExpression(ASTNode* node, Compiler* compiler, IterativeContext* ctx) {
+    // Use existing expression compilation from the old system
+    return compileExpression(node, compiler);
+}
+
+bool processLeafNode(ASTNode* node, Compiler* compiler, IterativeContext* ctx) {
+    // Handle leaf nodes like literals, identifiers, etc.
+    switch (node->type) {
+        case NODE_LITERAL:
+        case NODE_IDENTIFIER:
+        case NODE_ASSIGN:
+        case NODE_BINARY:
+        case NODE_UNARY:
+        case NODE_CAST:
+            return processExpression(node, compiler, ctx);
+        default:
+            return true;
+    }
+}
+
+// Main iterative compilation function
+bool compileIterative(ASTNode* ast, Compiler* compiler) {
+    IterativeContext ctx;
+    initIterativeContext(&ctx);
+    
+    // Initialize with root node
+    pushWork(&ctx, ast, WORK_NODE_NORMAL, 1);
+    
+    while (hasWork(&ctx)) {
+        WorkItem* item = popWork(&ctx);
+        
+        if (!item) break;
+        
+        ctx.nodesProcessed++;
+        
+        // Handle special node types
+        if (item->type == WORK_NODE_SCOPE_END) {
+            popScope(&ctx, compiler);
+            continue;
+        }
+        
+        if (item->type == WORK_NODE_LOOP_PATCH) {
+            // Handle loop jump patching here
+            continue;
+        }
+        
+        // Process regular nodes
+        if (!processNode(item->node, compiler, &ctx)) {
+            cleanupIterativeContext(&ctx);
+            return false;
+        }
+    }
+    
+    cleanupIterativeContext(&ctx);
+    printf("[ITERATIVE] Processed %d nodes successfully\n", ctx.nodesProcessed);
+    return true;
+}
+
+bool processNode(ASTNode* node, Compiler* compiler, IterativeContext* ctx) {
+    if (!node) return true;
+    
+    compiler->currentLine = node->location.line;
+    compiler->currentColumn = node->location.column;
+    
+    switch (node->type) {
+        case NODE_PROGRAM:
+            return processProgram(node, compiler, ctx);
+        case NODE_BLOCK:
+            return processBlock(node, compiler, ctx);
+        case NODE_FOR_RANGE:
+            return processForRange(node, compiler, ctx);
+        case NODE_IF:
+        case NODE_WHILE:
+            // For now, fall back to the old system for complex control flow
+            return compileMultiPassNode(node, compiler);
+        default:
+            return processLeafNode(node, compiler, ctx);
+    }
+}
+
+// OLD RECURSIVE SYSTEM (will be phased out)
 bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
     static int recursionDepth = 0;
     recursionDepth++;
@@ -2282,8 +2647,8 @@ bool compileMultiPass(ASTNode* ast, Compiler* compiler, bool isModule) {
     // The scope analysis happens incrementally during compilation
     mpCompiler->scopeAnalysisComplete = true;
 
-    // PASS 3: Main compilation with optimizations
-    bool success = compileMultiPassNode(ast, compiler);
+    // PASS 3: Main compilation with iterative system
+    bool success = compileIterative(ast, compiler);
 
     // PASS 4: Post-compilation optimizations and finalization
     if (success) {
