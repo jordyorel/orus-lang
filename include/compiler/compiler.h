@@ -282,6 +282,15 @@ bool processForRange(ASTNode* node, Compiler* compiler, IterativeContext* ctx);
 bool processIfStatement(ASTNode* node, Compiler* compiler, IterativeContext* ctx);
 bool processWhileStatement(ASTNode* node, Compiler* compiler, IterativeContext* ctx);
 bool processExpression(ASTNode* node, Compiler* compiler, IterativeContext* ctx);
+bool processPrint(ASTNode* node, Compiler* compiler, IterativeContext* ctx);
 bool processLeafNode(ASTNode* node, Compiler* compiler, IterativeContext* ctx);
+
+// Phase 1: Basic expression processors  
+bool processLiteral(ASTNode* node, Compiler* compiler, IterativeContext* ctx);
+bool processIdentifier(ASTNode* node, Compiler* compiler, IterativeContext* ctx);
+bool processAssignment(ASTNode* node, Compiler* compiler, IterativeContext* ctx);
+bool processBinaryOperation(ASTNode* node, Compiler* compiler, IterativeContext* ctx);
+bool processUnaryOperation(ASTNode* node, Compiler* compiler, IterativeContext* ctx);
+bool processCast(ASTNode* node, Compiler* compiler, IterativeContext* ctx);
 
 #endif // COMPILER_H

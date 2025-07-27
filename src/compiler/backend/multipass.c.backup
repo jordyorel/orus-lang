@@ -700,15 +700,15 @@ void initMultiPassCompiler(Compiler* compiler, Chunk* chunk,
     
     // Phase 2.3: Initialize comprehensive lifetime analysis system
     printf("[DEBUG] Temporarily skipping lifetime analyzer initialization\n");
-    
+    fflush(stdout);
     compiler->lifetimeAnalyzer = NULL;
     // compiler->lifetimeAnalyzer = malloc(sizeof(LifetimeAnalyzer));
     // if (compiler->lifetimeAnalyzer) {
     //     printf("[DEBUG] About to call initLifetimeAnalyzer\n");
-    //     
+    //     fflush(stdout);
     //     initLifetimeAnalyzer((LifetimeAnalyzer*)compiler->lifetimeAnalyzer);
     //     printf("[DEBUG] initLifetimeAnalyzer completed\n");
-    //     
+    //     fflush(stdout);
     //     printf("[OPTIMIZE] Lifetime analyzer initialized - smart register reuse enabled\n");
     // }
 }
@@ -1228,7 +1228,7 @@ static int compileMultiPassIdentifier(ASTNode* node, Compiler* compiler) {
         "[DEBUG] compileIdentifier: Looking for variable '%s' at scope depth "
         "%d\n",
         node->identifier.name, compiler->scopeDepth);
-    
+    fflush(stdout);
 
     // Try locals first (handles loop variables and current scope)
     int localIndex = findLocal(compiler, node->identifier.name);
@@ -1272,7 +1272,7 @@ static int compileMultiPassIdentifier(ASTNode* node, Compiler* compiler) {
     printf(
         "[DEBUG] compileIdentifier: About to report undefined variable '%s'\n",
         node->identifier.name);
-    
+    fflush(stdout);
     report_undefined_variable(node->location, node->identifier.name);
     return -1;
 }
@@ -1538,17 +1538,17 @@ static int compileMultiPassExpr(ASTNode* node, Compiler* compiler) {
 
 void initIterativeContext(IterativeContext* ctx) {
     printf("[DEBUG] initIterativeContext: Starting\n");
-    
+    fflush(stdout);
     if (!ctx) return;
     
     printf("[DEBUG] initIterativeContext: About to initialize work queue\n");
-    
+    fflush(stdout);
     // Initialize work queue using proper memory management
     ctx->workQueueCapacity = 0;  // Start with 0, will grow as needed
     ctx->workQueue = NULL;
     ctx->workQueueSize = 0;
     printf("[DEBUG] initIterativeContext: Work queue initialized\n");
-    
+    fflush(stdout);
     
     // Initialize scope stack using proper memory management
     ctx->scopeStackCapacity = 0;  // Start with 0, will grow as needed
@@ -1572,7 +1572,7 @@ void initIterativeContext(IterativeContext* ctx) {
     ctx->debugMode = false;
     
     printf("[DEBUG] initIterativeContext: All initialization complete\n");
-    
+    fflush(stdout);
     printf("[ITERATIVE] Compilation context initialized\n");
 }
 
@@ -1662,7 +1662,7 @@ bool hasWork(IterativeContext* ctx) {
     if (!result) {
         printf("[DEBUG] hasWork: about to return false (ctx: %p, size: %d)\n", ctx, ctx->workQueueSize);
         // TEMPORARY: Skip fflush to test if this is causing the hang
-        // 
+        // fflush(stdout);
         printf("[DEBUG] hasWork: SKIPPED fflush, returning false\n");
     } else {
         printf("[DEBUG] hasWork: returning true\n");
@@ -1881,161 +1881,16 @@ bool processAssignment(ASTNode* node, Compiler* compiler, IterativeContext* ctx)
     printf("[DEBUG] processAssignment: Processing assignment to '%s'\n", 
            node->assign.name);
     
-    // Handle value expression directly to avoid calling recursive compiler
-    int valueReg = -1;
+    // First, process the value expression
+    pushWork(ctx, node->assign.value, WORK_NODE_NORMAL, 1);
     
-    if (node->assign.value->type == NODE_LITERAL) {
-        // For literals, allocate a register and emit load constant
-        valueReg = allocateRegister(compiler);
-        emitConstant(compiler, valueReg, node->assign.value->literal.value);
-        printf("[DEBUG] processAssignment: Compiled literal to register %d\n", valueReg);
-    } else if (node->assign.value->type == NODE_IDENTIFIER) {
-        // For identifiers, find the existing variable register
-        int localIndex = findLocal(compiler, node->assign.value->identifier.name);
-        if (localIndex >= 0) {
-            valueReg = compiler->locals[localIndex].reg;
-            printf("[DEBUG] processAssignment: Found variable '%s' in register %d\n", 
-                   node->assign.value->identifier.name, valueReg);
-        } else {
-            printf("[DEBUG] processAssignment: Variable '%s' not found\n", 
-                   node->assign.value->identifier.name);
-            return false;
-        }
-    } else if (node->assign.value->type == NODE_BINARY) {
-        // Handle binary operations inline to avoid recursive compiler calls
-        ASTNode* binOp = node->assign.value;
-        int leftReg = -1, rightReg = -1;
-        
-        // Handle left operand
-        if (binOp->binary.left->type == NODE_IDENTIFIER) {
-            int localIndex = findLocal(compiler, binOp->binary.left->identifier.name);
-            if (localIndex >= 0) {
-                leftReg = compiler->locals[localIndex].reg;
-            } else {
-                printf("[DEBUG] processAssignment: Binary left variable '%s' not found\n", 
-                       binOp->binary.left->identifier.name);
-                return false;
-            }
-        } else if (binOp->binary.left->type == NODE_LITERAL) {
-            leftReg = allocateRegister(compiler);
-            emitConstant(compiler, leftReg, binOp->binary.left->literal.value);
-        } else {
-            printf("[DEBUG] processAssignment: Unsupported binary left operand type %d\n", 
-                   binOp->binary.left->type);
-            return false;
-        }
-        
-        // Handle right operand
-        if (binOp->binary.right->type == NODE_IDENTIFIER) {
-            int localIndex = findLocal(compiler, binOp->binary.right->identifier.name);
-            if (localIndex >= 0) {
-                rightReg = compiler->locals[localIndex].reg;
-            } else {
-                printf("[DEBUG] processAssignment: Binary right variable '%s' not found\n", 
-                       binOp->binary.right->identifier.name);
-                if (binOp->binary.left->type == NODE_LITERAL) freeRegister(compiler, leftReg);
-                return false;
-            }
-        } else if (binOp->binary.right->type == NODE_LITERAL) {
-            rightReg = allocateRegister(compiler);
-            emitConstant(compiler, rightReg, binOp->binary.right->literal.value);
-        } else {
-            printf("[DEBUG] processAssignment: Unsupported binary right operand type %d\n", 
-                   binOp->binary.right->type);
-            if (binOp->binary.left->type == NODE_LITERAL) freeRegister(compiler, leftReg);
-            return false;
-        }
-        
-        // Allocate result register
-        valueReg = allocateRegister(compiler);
-        
-        // Emit binary operation
-        if (strcmp(binOp->binary.op, ">") == 0) {
-            emitByte(compiler, OP_GT_I32_R);
-            emitByte(compiler, valueReg);
-            emitByte(compiler, leftReg);
-            emitByte(compiler, rightReg);
-        } else if (strcmp(binOp->binary.op, "<") == 0) {
-            emitByte(compiler, OP_LT_I32_R);
-            emitByte(compiler, valueReg);
-            emitByte(compiler, leftReg);
-            emitByte(compiler, rightReg);
-        } else if (strcmp(binOp->binary.op, ">=") == 0) {
-            emitByte(compiler, OP_GE_I32_R);
-            emitByte(compiler, valueReg);
-            emitByte(compiler, leftReg);
-            emitByte(compiler, rightReg);
-        } else if (strcmp(binOp->binary.op, "<=") == 0) {
-            emitByte(compiler, OP_LE_I32_R);
-            emitByte(compiler, valueReg);
-            emitByte(compiler, leftReg);
-            emitByte(compiler, rightReg);
-        } else if (strcmp(binOp->binary.op, "==") == 0) {
-            emitByte(compiler, OP_EQ_R);
-            emitByte(compiler, valueReg);
-            emitByte(compiler, leftReg);
-            emitByte(compiler, rightReg);
-        } else if (strcmp(binOp->binary.op, "!=") == 0) {
-            emitByte(compiler, OP_NE_R);
-            emitByte(compiler, valueReg);
-            emitByte(compiler, leftReg);
-            emitByte(compiler, rightReg);
-        } else if (strcmp(binOp->binary.op, "+") == 0) {
-            emitByte(compiler, OP_ADD_I32_R);
-            emitByte(compiler, valueReg);
-            emitByte(compiler, leftReg);
-            emitByte(compiler, rightReg);
-        } else if (strcmp(binOp->binary.op, "-") == 0) {
-            emitByte(compiler, OP_SUB_I32_R);
-            emitByte(compiler, valueReg);
-            emitByte(compiler, leftReg);
-            emitByte(compiler, rightReg);
-        } else {
-            printf("[DEBUG] processAssignment: Unsupported binary operator '%s'\n", 
-                   binOp->binary.op);
-            if (binOp->binary.left->type == NODE_LITERAL) freeRegister(compiler, leftReg);
-            if (binOp->binary.right->type == NODE_LITERAL) freeRegister(compiler, rightReg);
-            freeRegister(compiler, valueReg);
-            return false;
-        }
-        
-        // Free operand registers if they were allocated for literals
-        if (binOp->binary.left->type == NODE_LITERAL) freeRegister(compiler, leftReg);
-        if (binOp->binary.right->type == NODE_LITERAL) freeRegister(compiler, rightReg);
-        
-        printf("[DEBUG] processAssignment: Generated binary operation '%s' in register %d\n", 
-               binOp->binary.op, valueReg);
-    } else {
-        printf("[DEBUG] processAssignment: Unsupported value expression type %d\n", 
-               node->assign.value->type);
-        return false;
-    }
+    // Then handle the variable assignment
+    // For now, simplified: allocate register and add local
+    uint16_t reg = allocateRegister(compiler);
+    addLocal(compiler, node->assign.name, reg);
     
-    if (valueReg < 0) {
-        printf("[DEBUG] processAssignment: Failed to get value register\n");
-        return false;
-    }
-    
-    // Handle the variable assignment - let addLocal allocate the register
-    int localIndex = addLocal(compiler, node->assign.name, true); // true = mutable
-    if (localIndex < 0) {
-        printf("[DEBUG] processAssignment: Failed to add local variable\n");
-        freeRegister(compiler, valueReg);
-        return false;
-    }
-    
-    uint16_t varReg = compiler->locals[localIndex].reg;
-    
-    // Move the value to the variable's register
-    emitByte(compiler, OP_MOVE);
-    emitByte(compiler, varReg);
-    emitByte(compiler, valueReg);
-    
-    // Free the temporary register used for the value
-    freeRegister(compiler, valueReg);
-    
-    printf("[DEBUG] processAssignment: Variable '%s' assigned to register %d\n", 
-           node->assign.name, varReg);
+    printf("[DEBUG] processAssignment: Allocated register %d for variable '%s'\n", 
+           reg, node->assign.name);
     
     return true;
 }
@@ -2232,8 +2087,16 @@ bool processIfStatement(ASTNode* node, Compiler* compiler, IterativeContext* ctx
             }
         } else if (cond->binary.left->type == NODE_LITERAL) {
             leftReg = allocateOptimizedRegister(compiler, false, 5);
-            emitConstant(compiler, leftReg, cond->binary.left->literal.value);
-            printf("[DEBUG] processIfStatement: Loaded left literal into register %d\n", leftReg);
+            Value value = cond->binary.left->literal.value;
+            if (value.type == VAL_I32) {
+                emitByte(compiler, OP_LOAD_I32_CONST);
+                emitByte(compiler, leftReg);
+                emitBytes(compiler, (value.as.i32 >> 8) & 0xFF, value.as.i32 & 0xFF);
+            } else {
+                printf("[DEBUG] processIfStatement: Unsupported left literal type\n");
+                freeRegister(compiler, leftReg);
+                return false;
+            }
         } else {
             printf("[DEBUG] processIfStatement: Unsupported left operand type %d\n", cond->binary.left->type);
             return false;
@@ -2253,8 +2116,17 @@ bool processIfStatement(ASTNode* node, Compiler* compiler, IterativeContext* ctx
             }
         } else if (cond->binary.right->type == NODE_LITERAL) {
             rightReg = allocateOptimizedRegister(compiler, false, 5);
-            emitConstant(compiler, rightReg, cond->binary.right->literal.value);
-            printf("[DEBUG] processIfStatement: Loaded right literal into register %d\n", rightReg);
+            Value value = cond->binary.right->literal.value;
+            if (value.type == VAL_I32) {
+                emitByte(compiler, OP_LOAD_I32_CONST);
+                emitByte(compiler, rightReg);
+                emitBytes(compiler, (value.as.i32 >> 8) & 0xFF, value.as.i32 & 0xFF);
+            } else {
+                printf("[DEBUG] processIfStatement: Unsupported right literal type\n");
+                if (cond->binary.left->type == NODE_LITERAL) freeRegister(compiler, leftReg);
+                freeRegister(compiler, rightReg);
+                return false;
+            }
         } else {
             printf("[DEBUG] processIfStatement: Unsupported right operand type %d\n", cond->binary.right->type);
             if (cond->binary.left->type == NODE_LITERAL) freeRegister(compiler, leftReg);
@@ -2324,60 +2196,32 @@ bool processIfStatement(ASTNode* node, Compiler* compiler, IterativeContext* ctx
     emitByte(compiler, conditionReg);
     int thenJump = emitJump(compiler);
     
-    // For the iterative system, we need to handle jump patching differently
-    // We can't patch immediately because the then branch hasn't been compiled yet
-    // Let's use a simpler approach: compile the then branch inline if it's simple
-    
+    // Compile then branch
+    printf("[DEBUG] processIfStatement: Compiling then branch\n");
     if (node->ifStmt.thenBranch) {
-        printf("[DEBUG] processIfStatement: Compiling then branch inline\n");
-        
-        // Compile then branch immediately (not queued)
-        bool thenSuccess = true;
-        if (node->ifStmt.thenBranch->type == NODE_BLOCK) {
-            // Handle block inline by processing its statements
-            for (int i = 0; i < node->ifStmt.thenBranch->block.count; i++) {
-                ASTNode* stmt = node->ifStmt.thenBranch->block.statements[i];
-                if (stmt->type == NODE_PRINT) {
-                    // Handle print statements inline
-                    if (!processPrint(stmt, compiler, ctx)) {
-                        thenSuccess = false;
-                        break;
-                    }
-                } else {
-                    // For other statement types, fall back to queueing
-                    pushWork(ctx, stmt, WORK_NODE_NORMAL, 10);
-                }
-            }
-        } else {
-            // Single statement - try to handle inline
-            if (node->ifStmt.thenBranch->type == NODE_PRINT) {
-                thenSuccess = processPrint(node->ifStmt.thenBranch, compiler, ctx);
-            } else {
-                // Fall back to queueing
-                pushWork(ctx, node->ifStmt.thenBranch, WORK_NODE_NORMAL, 10);
-            }
-        }
-        
-        if (!thenSuccess) {
-            printf("[ERROR] processIfStatement: Failed to compile then branch\n");
-            return false;
-        }
+        pushWork(ctx, node->ifStmt.thenBranch, WORK_NODE_NORMAL, 10);
     }
     
-    // Now we can patch the jump correctly since the then branch is compiled
-    printf("[DEBUG] processIfStatement: Patching then jump from %d to %d\n", 
-           thenJump, compiler->chunk->count);
-    patchJump(compiler, thenJump);
-    
-    // If there's an else branch, emit jump over it
+    // If there's an else branch, emit jump over it and patch the then branch
     int elseJump = -1;
     if (node->ifStmt.elseBranch) {
         printf("[DEBUG] processIfStatement: Has else branch, emitting else jump\n");
         emitByte(compiler, OP_JUMP);
         elseJump = emitJump(compiler);
-        
-        // Patch the else jump immediately since we don't have else branch content yet
-        patchJump(compiler, elseJump);
+    }
+    
+    // Patch the then jump to jump here (after then branch)
+    patchJump(compiler, thenJump);
+    
+    // Compile else branch if it exists
+    if (node->ifStmt.elseBranch) {
+        printf("[DEBUG] processIfStatement: Compiling else branch\n");
+        pushWork(ctx, node->ifStmt.elseBranch, WORK_NODE_NORMAL, 10);
+        // The else jump will be patched after the else branch is compiled
+        // For now, we'll patch it immediately (simplified approach)
+        if (elseJump >= 0) {
+            patchJump(compiler, elseJump);
+        }
     }
     
     printf("[DEBUG] processIfStatement: If statement processing complete\n");
@@ -2704,14 +2548,14 @@ bool compileIterative(ASTNode* ast, Compiler* compiler) {
     
     // Initialize with root node
     printf("[DEBUG] compileIterative: About to push root node type %d\n", ast->type);
-    
+    fflush(stdout);
     pushWork(&ctx, ast, WORK_NODE_NORMAL, 1);
     printf("[DEBUG] compileIterative: Root node pushed, queue size: %d\n", ctx.workQueueSize);
-    
+    fflush(stdout);
     
     int iterations = 0;
     printf("[DEBUG] compileIterative: About to enter main loop\n");
-    
+    fflush(stdout);
     while (hasWork(&ctx)) {
         iterations++;
         printf("[DEBUG] compileIterative: Iteration %d, queue size: %d\n", iterations, ctx.workQueueSize);
@@ -2819,7 +2663,7 @@ bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
     if (recursionDepth > 40) {
         printf("[DEBUG] compileMultiPassNode: depth %d, handling node type %d at line %d\n", 
                recursionDepth, node->type, node->location.line);
-        
+        fflush(stdout);
     }
 
     switch (node->type) {
@@ -2951,7 +2795,7 @@ bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
                 return false;
             }
             
-            
+            fflush(stdout);
             // Simple, robust for-loop compilation - no complex optimizations
             beginLoopScope(compiler);
 
@@ -3053,7 +2897,7 @@ bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
 
             // Compile loop body with proper scoping
             printf("[DEBUG] About to compile for loop body at depth %d\n", mpCompiler->loopCount);
-            
+            fflush(stdout);
             
             // Add call protection specifically for for loop body compilation
             static int forLoopBodyCalls = 0;
@@ -3069,13 +2913,13 @@ bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
             
             // Ensure proper scope wrapping for nested loop bodies
             printf("[DEBUG] Beginning inner scope for loop body (call #%d)\n", forLoopBodyCalls);
-            
+            fflush(stdout);
             beginScope(compiler);
             printf("[DEBUG] Calling compileMultiPassNode for loop body\n");
-            
+            fflush(stdout);
             bool success = compileMultiPassNode(node->forRange.body, compiler);
             printf("[DEBUG] Returned from compileMultiPassNode, ending inner scope\n");
-            
+            fflush(stdout);
             endScope(compiler);
             
             forLoopBodyCalls--;
@@ -3518,7 +3362,7 @@ bool compileMultiPassNode(ASTNode* node, Compiler* compiler) {
         default: {
             printf("[DEBUG] Hit default case for node type %d at line %d - treating as expression\n", 
                    node->type, node->location.line);
-            
+            fflush(stdout);
             int reg = compileMultiPassExpr(node, compiler);
             if (reg >= 0) {
                 freeRegister(compiler, reg);
@@ -3538,43 +3382,43 @@ bool compileMultiPass(ASTNode* ast, Compiler* compiler, bool isModule) {
     if (!ast) return false;
 
     printf("[DEBUG] compileMultiPass: Starting multi-pass compilation\n");
-    
+    fflush(stdout);
     
     printf("[DEBUG] compileMultiPass: About to get mpCompiler\n");
-    
+    fflush(stdout);
     MultiPassCompiler* mpCompiler = g_multiPassCompiler;
     printf("[DEBUG] compileMultiPass: Got mpCompiler: %p\n", mpCompiler);
-    
+    fflush(stdout);
 
     // Initialize scope analyzer (TEMPORARILY DISABLED for debugging)
     printf("[DEBUG] compileMultiPass: About to skip scope analysis\n");
-    
+    fflush(stdout);
     // initCompilerScopeAnalysis(compiler);
     printf("[DEBUG] compileMultiPass: Scope analysis skipped\n");
-    
+    fflush(stdout);
 
     // PASS 1: Type analysis (placeholder for now)
     printf("[DEBUG] compileMultiPass: About to set typeAnalysisComplete\n");
-    
+    fflush(stdout);
     mpCompiler->typeAnalysisComplete = true;
     printf("[DEBUG] compileMultiPass: typeAnalysisComplete set\n");
-    
+    fflush(stdout);
 
     // PASS 2: Scope analysis - now using comprehensive system
     // The scope analysis happens incrementally during compilation
     printf("[DEBUG] compileMultiPass: About to set scopeAnalysisComplete\n");
-    
+    fflush(stdout);
     mpCompiler->scopeAnalysisComplete = true;
     printf("[DEBUG] compileMultiPass: scopeAnalysisComplete set\n");
-    
+    fflush(stdout);
 
     // PASS 3: Main compilation with iterative system
     printf("[DEBUG] compileMultiPass: About to call compileIterative (step 1)\n");
-    
+    fflush(stdout);
     printf("[DEBUG] compileMultiPass: About to call compileIterative (step 2)\n");
-    
+    fflush(stdout);
     printf("[DEBUG] compileMultiPass: About to call compileIterative\n");
-    
+    fflush(stdout);
     bool success = compileIterative(ast, compiler);
     printf("[DEBUG] compileIterative returned: %d\n", success);
 

@@ -21,6 +21,9 @@
 #include "config/config.h"
 #include "vm/vm_profiling.h"
 
+// Bytecode debugging function
+void dumpBytecode(Chunk* chunk);
+
 
 static char* readFile(const char* path) {
     FILE* file = fopen(path, "rb");
