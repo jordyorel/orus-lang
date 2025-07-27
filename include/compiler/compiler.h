@@ -293,4 +293,8 @@ bool processBinaryOperation(ASTNode* node, Compiler* compiler, IterativeContext*
 bool processUnaryOperation(ASTNode* node, Compiler* compiler, IterativeContext* ctx);
 bool processCast(ASTNode* node, Compiler* compiler, IterativeContext* ctx);
 
+// Phase 3.2: Break/continue statement processors
+bool processBreak(ASTNode* node, Compiler* compiler, IterativeContext* ctx);
+bool processContinue(ASTNode* node, Compiler* compiler, IterativeContext* ctx);
+
 #endif // COMPILER_H

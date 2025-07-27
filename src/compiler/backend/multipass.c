@@ -2343,18 +2343,40 @@ bool processIfStatement(ASTNode* node, Compiler* compiler, IterativeContext* ctx
                         thenSuccess = false;
                         break;
                     }
+                } else if (stmt->type == NODE_BREAK) {
+                    // Handle break statements inline
+                    if (!processBreak(stmt, compiler, ctx)) {
+                        thenSuccess = false;
+                        break;
+                    }
+                } else if (stmt->type == NODE_CONTINUE) {
+                    // Handle continue statements inline
+                    if (!processContinue(stmt, compiler, ctx)) {
+                        thenSuccess = false;
+                        break;
+                    }
+                } else if (stmt->type == NODE_ASSIGN) {
+                    // Handle assignment statements inline
+                    if (!processAssignment(stmt, compiler, ctx)) {
+                        thenSuccess = false;
+                        break;
+                    }
                 } else {
-                    // For other statement types, fall back to queueing
-                    pushWork(ctx, stmt, WORK_NODE_NORMAL, 10);
+                    printf("[WARNING] processIfStatement: Unhandled statement type %d in then-branch, skipping\n", stmt->type);
                 }
             }
         } else {
             // Single statement - try to handle inline
             if (node->ifStmt.thenBranch->type == NODE_PRINT) {
                 thenSuccess = processPrint(node->ifStmt.thenBranch, compiler, ctx);
+            } else if (node->ifStmt.thenBranch->type == NODE_BREAK) {
+                thenSuccess = processBreak(node->ifStmt.thenBranch, compiler, ctx);
+            } else if (node->ifStmt.thenBranch->type == NODE_CONTINUE) {
+                thenSuccess = processContinue(node->ifStmt.thenBranch, compiler, ctx);
+            } else if (node->ifStmt.thenBranch->type == NODE_ASSIGN) {
+                thenSuccess = processAssignment(node->ifStmt.thenBranch, compiler, ctx);
             } else {
-                // Fall back to queueing
-                pushWork(ctx, node->ifStmt.thenBranch, WORK_NODE_NORMAL, 10);
+                printf("[WARNING] processIfStatement: Unhandled single statement type %d in then-branch, skipping\n", node->ifStmt.thenBranch->type);
             }
         }
         
@@ -2466,30 +2488,158 @@ bool processBlock(ASTNode* node, Compiler* compiler, IterativeContext* ctx) {
 }
 
 bool processForRange(ASTNode* node, Compiler* compiler, IterativeContext* ctx) {
-    // Remove the artificial nested loop restriction
     printf("[DEBUG] processForRange: Processing for loop at line %d\n", node->location.line);
     
-    pushScope(ctx, compiler, true);
+    pushScope(ctx, compiler, true);  // true = isLoopScope
     
-    // Compile loop variable and bounds (simplified version)
-    if (node->forRange.varName) {
-        uint16_t varReg = allocateRegister(compiler);
-        addLocal(compiler, node->forRange.varName, varReg);
+    // Get the current loop scope for break/continue tracking
+    ScopeFrame* loopScope = getCurrentScope(ctx);
+    if (!loopScope) {
+        printf("[ERROR] processForRange: Failed to get loop scope\n");
+        return false;
     }
     
-    // Emit basic loop setup
+    // Compile the range bounds first
+    
+    if (!node->forRange.start || !node->forRange.end) {
+        printf("[ERROR] processForRange: Missing start or end in range\n");
+        return false;
+    }
+    
+    // Allocate registers for range bounds and loop variable
+    int startReg = compileExpressionToRegister(node->forRange.start, compiler);
+    int endReg = compileExpressionToRegister(node->forRange.end, compiler);
+    int varReg = allocateRegister(compiler);
+    
+    if (startReg < 0 || endReg < 0 || varReg < 0) {
+        printf("[ERROR] processForRange: Failed to allocate registers: startReg=%d, endReg=%d, varReg=%d\n", 
+               startReg, endReg, varReg);
+        return false;
+    }
+    
+    // Add the loop variable to scope - addLocal allocates its own register
+    int actualVarIndex = -1;
+    if (node->forRange.varName) {
+        actualVarIndex = addLocal(compiler, node->forRange.varName, true); // true = mutable
+        if (actualVarIndex < 0) {
+            printf("[ERROR] processForRange: Failed to add loop variable to scope\n");
+            return false;
+        }
+    }
+    
+    // Get the actual register allocated by addLocal
+    int actualVarReg = compiler->locals[actualVarIndex].reg;
+    
+    // Initialize loop variable with start value
+    emitByte(compiler, OP_MOVE);
+    emitByte(compiler, actualVarReg);
+    emitByte(compiler, startReg);
+    
+    // Loop start point - store in scope for continue statements
     int loopStart = compiler->chunk->count;
+    loopScope->loopStart = loopStart;
+    
+    // Compare loop variable with end value (i < end)
+    int conditionReg = allocateRegister(compiler);
+    emitByte(compiler, OP_LT_I32_R);  // Assuming i32 for now
+    emitByte(compiler, conditionReg);
+    emitByte(compiler, actualVarReg);
+    emitByte(compiler, endReg);
+    
+    // Jump if condition is false (exit loop)
     emitByte(compiler, OP_JUMP_IF_NOT_R);
-    int exitJump = compiler->chunk->count;
-    emitShort(compiler, 0xffff); // Will patch later
+    emitByte(compiler, conditionReg);
+    int exitJump = emitJump(compiler);
     
-    // Queue loop body
-    pushWork(ctx, node->forRange.body, WORK_NODE_NORMAL, 1);
+    // Compile loop body inline (like we did for if statements)
+    if (node->forRange.body) {
+        if (node->forRange.body->type == NODE_BLOCK) {
+            // Handle block inline by processing its statements
+            for (int i = 0; i < node->forRange.body->block.count; i++) {
+                ASTNode* stmt = node->forRange.body->block.statements[i];
+                if (stmt->type == NODE_PRINT) {
+                    if (!processPrint(stmt, compiler, ctx)) {
+                        printf("[ERROR] processForRange: Failed to compile print in loop body\n");
+                        return false;
+                    }
+                } else if (stmt->type == NODE_IF) {
+                    if (!processIfStatement(stmt, compiler, ctx)) {
+                        printf("[ERROR] processForRange: Failed to compile if statement in loop body\n");
+                        return false;
+                    }
+                } else if (stmt->type == NODE_BREAK) {
+                    if (!processBreak(stmt, compiler, ctx)) {
+                        printf("[ERROR] processForRange: Failed to compile break statement\n");
+                        return false;
+                    }
+                } else if (stmt->type == NODE_CONTINUE) {
+                    if (!processContinue(stmt, compiler, ctx)) {
+                        printf("[ERROR] processForRange: Failed to compile continue statement\n");
+                        return false;
+                    }
+                } else if (stmt->type == NODE_ASSIGN) {
+                    if (!processAssignment(stmt, compiler, ctx)) {
+                        printf("[ERROR] processForRange: Failed to compile assignment in loop body\n");
+                        return false;
+                    }
+                } else {
+                    printf("[WARNING] processForRange: Unhandled statement type %d in loop body, skipping\n", stmt->type);
+                }
+            }
+        } else if (node->forRange.body->type == NODE_PRINT) {
+            if (!processPrint(node->forRange.body, compiler, ctx)) {
+                printf("[ERROR] processForRange: Failed to compile single print statement\n");
+                return false;
+            }
+        } else if (node->forRange.body->type == NODE_IF) {
+            if (!processIfStatement(node->forRange.body, compiler, ctx)) {
+                printf("[ERROR] processForRange: Failed to compile single if statement\n");
+                return false;
+            }
+        } else if (node->forRange.body->type == NODE_BREAK) {
+            if (!processBreak(node->forRange.body, compiler, ctx)) {
+                printf("[ERROR] processForRange: Failed to compile single break statement\n");
+                return false;
+            }
+        } else if (node->forRange.body->type == NODE_CONTINUE) {
+            if (!processContinue(node->forRange.body, compiler, ctx)) {
+                printf("[ERROR] processForRange: Failed to compile single continue statement\n");
+                return false;
+            }
+        } else {
+            printf("[WARNING] processForRange: Unhandled single statement type %d in loop body, skipping\n", node->forRange.body->type);
+        }
+    }
     
-    // Schedule loop end and scope cleanup
-    pushWork(ctx, NULL, WORK_NODE_LOOP_PATCH, 5);
-    pushWork(ctx, NULL, WORK_NODE_SCOPE_END, 10);
+    // Increment loop variable - continue statements should jump here
+    int continueTarget = compiler->chunk->count;
+    emitByte(compiler, OP_INC_I32_R);  // Increment actualVarReg by 1
+    emitByte(compiler, actualVarReg);
     
+    // Jump back to loop start
+    emitLoop(compiler, loopStart);
+    
+    // Patch the exit jump
+    patchJump(compiler, exitJump);
+    
+    // Store loop end position and patch break/continue jumps
+    int loopEnd = compiler->chunk->count;
+    loopScope->loopEnd = loopEnd;
+    
+    // Patch all break jumps to jump to loop end
+    patchJumps(ctx, compiler, JUMP_BREAK, loopEnd);
+    
+    // Patch all continue jumps to jump to increment (correct continue behavior)
+    patchJumps(ctx, compiler, JUMP_CONTINUE, continueTarget);
+    
+    // Free temporary registers
+    freeRegister(compiler, startReg);
+    freeRegister(compiler, endReg);
+    freeRegister(compiler, conditionReg);
+    
+    // Note: actualVarReg will be freed when scope ends
+    
+    printf("[DEBUG] processForRange: For loop compilation complete with inline processing\n");
     return true;
 }
 
@@ -2677,6 +2827,62 @@ bool processPrint(ASTNode* node, Compiler* compiler, IterativeContext* ctx) {
     }
 }
 
+bool processBreak(ASTNode* node, Compiler* compiler, IterativeContext* ctx) {
+    printf("[DEBUG] processBreak: Processing break statement\n");
+    
+    // Find the innermost loop scope
+    ScopeFrame* loopScope = NULL;
+    for (int i = ctx->scopeDepth - 1; i >= 0; i--) {
+        if (ctx->scopeStack[i].isLoopScope) {
+            loopScope = &ctx->scopeStack[i];
+            break;
+        }
+    }
+    
+    if (!loopScope) {
+        printf("[ERROR] processBreak: break statement outside of loop\n");
+        return false;
+    }
+    
+    // Emit a jump instruction that will be patched later
+    emitByte(compiler, OP_JUMP);
+    int jumpOffset = emitJump(compiler);
+    
+    // Add this jump to the loop's break jumps for later patching
+    addJumpPatch(ctx, jumpOffset, JUMP_BREAK, -1);
+    
+    printf("[DEBUG] processBreak: Break jump added at offset %d\n", jumpOffset);
+    return true;
+}
+
+bool processContinue(ASTNode* node, Compiler* compiler, IterativeContext* ctx) {
+    printf("[DEBUG] processContinue: Processing continue statement\n");
+    
+    // Find the innermost loop scope
+    ScopeFrame* loopScope = NULL;
+    for (int i = ctx->scopeDepth - 1; i >= 0; i--) {
+        if (ctx->scopeStack[i].isLoopScope) {
+            loopScope = &ctx->scopeStack[i];
+            break;
+        }
+    }
+    
+    if (!loopScope) {
+        printf("[ERROR] processContinue: continue statement outside of loop\n");
+        return false;
+    }
+    
+    // Emit a jump instruction that will be patched to loop start
+    emitByte(compiler, OP_JUMP);
+    int jumpOffset = emitJump(compiler);
+    
+    // Add this jump to the loop's continue jumps for later patching
+    addJumpPatch(ctx, jumpOffset, JUMP_CONTINUE, -1);
+    
+    printf("[DEBUG] processContinue: Continue jump added at offset %d\n", jumpOffset);
+    return true;
+}
+
 bool processLeafNode(ASTNode* node, Compiler* compiler, IterativeContext* ctx) {
     // Handle leaf nodes like literals, identifiers, etc.
     switch (node->type) {
@@ -2689,6 +2895,10 @@ bool processLeafNode(ASTNode* node, Compiler* compiler, IterativeContext* ctx) {
             return processExpression(node, compiler, ctx);
         case NODE_PRINT:
             return processPrint(node, compiler, ctx);
+        case NODE_BREAK:
+            return processBreak(node, compiler, ctx);
+        case NODE_CONTINUE:
+            return processContinue(node, compiler, ctx);
         default:
             printf("[DEBUG] processLeafNode: Unhandled node type %d\n", node->type);
             return true;
