@@ -44,10 +44,6 @@ static inline void handle_move_ext(void) {
     }
 }
 
-static inline void handle_load_nil(void) {
-    uint8_t reg = READ_BYTE();
-    vm.registers[reg] = NIL_VAL;
-}
 
 static inline void handle_load_true(void) {
     uint8_t reg = READ_BYTE();

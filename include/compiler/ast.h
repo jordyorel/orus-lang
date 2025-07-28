@@ -2,11 +2,9 @@
 #define ORUS_AST_H
 
 #include "public/common.h"
+#include "vm/vm.h"
 
-// Forward declarations for types defined in vm.h
-struct Value;
-struct Type;
-struct SrcLocation;
+// Value, Type, and SrcLocation are now available from vm.h
 
 // Forward declaration
 typedef struct ASTNode ASTNode;
@@ -40,7 +38,6 @@ typedef enum {
     NODE_FUNCTION,
     NODE_CALL,
     NODE_RETURN,
-    NODE_LET,
     NODE_CAST        // Add cast node for 'as' operator
 } NodeType;
 
@@ -146,10 +143,6 @@ struct ASTNode {
         struct {
             ASTNode* value;                // Return value (NULL for void return)
         } returnStmt;
-        struct {
-            char* name;                    // Variable name
-            ASTNode* value;                // Value expression
-        } let;
         struct {
             ASTNode* expression;           // Expression to cast
             ASTNode* targetType;           // Target type

@@ -52,7 +52,6 @@ typedef enum {
     TOKEN_FOR,
     TOKEN_FN,
     TOKEN_IF,
-    TOKEN_NIL,
     TOKEN_OR,
     TOKEN_NOT,
     TOKEN_PRINT,
@@ -62,7 +61,6 @@ typedef enum {
     TOKEN_RETURN,
     TOKEN_TRUE,
     TOKEN_MUT,
-    TOKEN_LET,
     TOKEN_CONST,
     TOKEN_WHILE,
     TOKEN_TRY,
@@ -148,6 +146,11 @@ Token scan_token_ctx(LexerContext* ctx);
 // Backward compatibility API (uses internal context)
 void init_scanner(const char* source);
 Token scan_token();
+
+// Debug functions
+const char* token_type_to_string(TokenType type);
+void print_token(Token token);
+void debug_print_tokens(const char* source);
 
 // Expose the global scanner instance so other modules (like the parser)
 // can access the raw source when producing error messages.

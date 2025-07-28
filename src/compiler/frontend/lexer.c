@@ -269,7 +269,6 @@ static TokenType identifier_type(const char* start, int length) {
                 return TOKEN_IMPORT;
             break;
         case 'l':
-            if (length == 3 && memcmp(start, "let", 3) == 0) return TOKEN_LET;
             break;
         case 'm':
             if (length == 3 && memcmp(start, "mut", 3) == 0) return TOKEN_MUT;
@@ -277,7 +276,6 @@ static TokenType identifier_type(const char* start, int length) {
                 return TOKEN_MATCH;
             break;
         case 'n':
-            if (length == 3 && memcmp(start, "nil", 3) == 0) return TOKEN_NIL;
             if (length == 3 && memcmp(start, "not", 3) == 0) return TOKEN_NOT;
             break;
         case 'o':
@@ -875,6 +873,8 @@ Token scan_token() {
     lexer.start = lexer.current;
 
     if (is_at_end()) {
+        printf("[DEBUG] scan_token: At end, current char = %d, indentTop = %d\n", *lexer.current, lexer.indentTop);
+        fflush(stdout);
         if (lexer.indentTop > 0) {
             lexer.indentTop--;
             return make_token(TOKEN_DEDENT);
@@ -883,6 +883,8 @@ Token scan_token() {
     }
 
     char c = advance();
+    printf("[DEBUG] scan_token: Processing character '%c' (ASCII %d)\n", c >= 32 && c <= 126 ? c : '?', (int)c);
+    fflush(stdout);
 
     /* Single‐char or 2‐char tokens */
     switch (c) {
@@ -962,4 +964,122 @@ Token scan_token() {
 
     return error_token("Unexpected character.",
                        ERR_LEN("Unexpected character."));
+}
+
+/* -------------------------------------------------------------------------- */
+/*                            Debug Functions                                */
+/* -------------------------------------------------------------------------- */
+
+const char* token_type_to_string(TokenType type) {
+    switch (type) {
+        case TOKEN_LEFT_PAREN: return "LEFT_PAREN";
+        case TOKEN_RIGHT_PAREN: return "RIGHT_PAREN";
+        case TOKEN_LEFT_BRACE: return "LEFT_BRACE";
+        case TOKEN_RIGHT_BRACE: return "RIGHT_BRACE";
+        case TOKEN_LEFT_BRACKET: return "LEFT_BRACKET";
+        case TOKEN_RIGHT_BRACKET: return "RIGHT_BRACKET";
+        case TOKEN_COMMA: return "COMMA";
+        case TOKEN_DOT: return "DOT";
+        case TOKEN_MINUS: return "MINUS";
+        case TOKEN_PLUS: return "PLUS";
+        case TOKEN_QUESTION: return "QUESTION";
+        case TOKEN_SEMICOLON: return "SEMICOLON";
+        case TOKEN_SLASH: return "SLASH";
+        case TOKEN_STAR: return "STAR";
+        case TOKEN_BANG_EQUAL: return "BANG_EQUAL";
+        case TOKEN_EQUAL: return "EQUAL";
+        case TOKEN_EQUAL_EQUAL: return "EQUAL_EQUAL";
+        case TOKEN_GREATER: return "GREATER";
+        case TOKEN_GREATER_EQUAL: return "GREATER_EQUAL";
+        case TOKEN_LESS: return "LESS";
+        case TOKEN_LESS_EQUAL: return "LESS_EQUAL";
+        case TOKEN_MODULO: return "MODULO";
+        case TOKEN_PLUS_EQUAL: return "PLUS_EQUAL";
+        case TOKEN_MINUS_EQUAL: return "MINUS_EQUAL";
+        case TOKEN_STAR_EQUAL: return "STAR_EQUAL";
+        case TOKEN_SLASH_EQUAL: return "SLASH_EQUAL";
+        case TOKEN_MODULO_EQUAL: return "MODULO_EQUAL";
+        case TOKEN_DOT_DOT: return "DOT_DOT";
+        case TOKEN_ARROW: return "ARROW";
+        case TOKEN_IDENTIFIER: return "IDENTIFIER";
+        case TOKEN_STRING: return "STRING";
+        case TOKEN_NUMBER: return "NUMBER";
+        case TOKEN_AND: return "AND";
+        case TOKEN_BREAK: return "BREAK";
+        case TOKEN_CONTINUE: return "CONTINUE";
+        case TOKEN_ELSE: return "ELSE";
+        case TOKEN_ELIF: return "ELIF";
+        case TOKEN_FALSE: return "FALSE";
+        case TOKEN_FOR: return "FOR";
+        case TOKEN_FN: return "FN";
+        case TOKEN_IF: return "IF";
+        case TOKEN_OR: return "OR";
+        case TOKEN_NOT: return "NOT";
+        case TOKEN_PRINT: return "PRINT";
+        case TOKEN_PRINT_NO_NL: return "PRINT_NO_NL";
+        case TOKEN_PRINT_SEP: return "PRINT_SEP";
+        case TOKEN_TIME_STAMP: return "TIME_STAMP";
+        case TOKEN_RETURN: return "RETURN";
+        case TOKEN_TRUE: return "TRUE";
+        case TOKEN_MUT: return "MUT";
+        case TOKEN_CONST: return "CONST";
+        case TOKEN_WHILE: return "WHILE";
+        case TOKEN_TRY: return "TRY";
+        case TOKEN_CATCH: return "CATCH";
+        case TOKEN_INT: return "INT";
+        case TOKEN_I64: return "I64";
+        case TOKEN_IN: return "IN";
+        case TOKEN_BOOL: return "BOOL";
+        case TOKEN_STRUCT: return "STRUCT";
+        case TOKEN_IMPL: return "IMPL";
+        case TOKEN_IMPORT: return "IMPORT";
+        case TOKEN_USE: return "USE";
+        case TOKEN_AS: return "AS";
+        case TOKEN_MATCH: return "MATCH";
+        case TOKEN_PUB: return "PUB";
+        case TOKEN_STATIC: return "STATIC";
+        case TOKEN_U32: return "U32";
+        case TOKEN_U64: return "U64";
+        case TOKEN_F64: return "F64";
+        case TOKEN_BIT_AND: return "BIT_AND";
+        case TOKEN_BIT_OR: return "BIT_OR";
+        case TOKEN_BIT_XOR: return "BIT_XOR";
+        case TOKEN_BIT_NOT: return "BIT_NOT";
+        case TOKEN_SHIFT_LEFT: return "SHIFT_LEFT";
+        case TOKEN_SHIFT_RIGHT: return "SHIFT_RIGHT";
+        case TOKEN_ERROR: return "ERROR";
+        case TOKEN_EOF: return "EOF";
+        case TOKEN_NEWLINE: return "NEWLINE";
+        case TOKEN_COLON: return "COLON";
+        case TOKEN_APOSTROPHE: return "APOSTROPHE";
+        case TOKEN_INDENT: return "INDENT";
+        case TOKEN_DEDENT: return "DEDENT";
+        default: return "UNKNOWN";
+    }
+}
+
+void print_token(Token token) {
+    printf("%-15s '%.*s' (line %d, col %d)\n",
+           token_type_to_string(token.type),
+           token.length,
+           token.start,
+           token.line,
+           token.column);
+}
+
+void debug_print_tokens(const char* source) {
+    printf("=== TOKEN DEBUG OUTPUT ===\n");
+    init_scanner(source);
+    
+    for (;;) {
+        Token token = scan_token();
+        print_token(token);
+        
+        if (token.type == TOKEN_EOF) break;
+        if (token.type == TOKEN_ERROR) {
+            printf("Lexical error encountered: %.*s\n", token.length, token.start);
+            break;
+        }
+    }
+    printf("=== END TOKEN DEBUG ===\n");
 }

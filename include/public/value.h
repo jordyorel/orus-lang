@@ -37,7 +37,6 @@ typedef enum {
     VAL_U64,
     VAL_F64,
     VAL_BOOL,
-    VAL_NIL,
     VAL_STRING,
     VAL_ARRAY,
     VAL_ERROR,
@@ -95,7 +94,6 @@ typedef struct Value {
 #define U64_VAL(value)   ((Value){VAL_U64, {.u64 = value}})
 #define F64_VAL(value)   ((Value){VAL_F64, {.f64 = value}})
 #define BOOL_VAL(value)  ((Value){VAL_BOOL, {.boolean = value}})
-#define NIL_VAL          ((Value){VAL_NIL, {.i32 = 0}})
 #define STRING_VAL(value) ((Value){VAL_STRING, {.string = value}})
 #define ARRAY_VAL(obj)   ((Value){VAL_ARRAY, {.array = obj}})
 #define ERROR_VAL(obj)   ((Value){VAL_ERROR, {.error = obj}})
@@ -108,7 +106,6 @@ typedef struct Value {
 #define IS_U64(value)    ((value).type == VAL_U64)
 #define IS_F64(value)    ((value).type == VAL_F64)
 #define IS_BOOL(value)   ((value).type == VAL_BOOL)
-#define IS_NIL(value)    ((value).type == VAL_NIL)
 #define IS_STRING(value) ((value).type == VAL_STRING)
 #define IS_ARRAY(value)  ((value).type == VAL_ARRAY)
 #define IS_ERROR(value)  ((value).type == VAL_ERROR)

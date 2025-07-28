@@ -77,6 +77,7 @@ void config_reset_to_defaults(OrusConfig* config) {
     
     // Development Tools
     config->show_ast = false;
+    config->show_typed_ast = false;
     config->show_bytecode = false;
     config->show_tokens = false;
     config->show_optimization_stats = false;
@@ -249,6 +250,8 @@ bool config_parse_args(OrusConfig* config, int argc, const char* argv[]) {
         // Development tools
         else if (strcmp(arg, "--show-ast") == 0) {
             config->show_ast = true;
+        } else if (strcmp(arg, "--show-typed-ast") == 0) {
+            config->show_typed_ast = true;
         } else if (strcmp(arg, "--show-bytecode") == 0) {
             config->show_bytecode = true;
         } else if (strcmp(arg, "--show-tokens") == 0) {
@@ -455,6 +458,7 @@ void config_print_help(const char* program_name) {
     printf("  -q, --quiet             Suppress non-essential output\n");
     printf("\nDevelopment Tools:\n");
     printf("  --show-ast              Show AST dump\n");
+    printf("  --show-typed-ast        Show typed AST with type annotations\n");
     printf("  --show-bytecode         Show bytecode dump\n");
     printf("  --show-tokens           Show token stream\n");
     printf("  --show-opt-stats        Show optimization statistics\n");

@@ -164,7 +164,7 @@ void reserve_spill_slot(SpillManager* manager, uint16_t register_id) {
     
     bool is_new = (entry->register_id != register_id || entry->is_tombstone);
     entry->register_id = register_id;
-    entry->value = NIL_VAL; // Initialize to nil
+    entry->value = BOOL_VAL(false); // Initialize to nil
     entry->is_tombstone = false;
     entry->last_used = manager->lru_counter++;
     

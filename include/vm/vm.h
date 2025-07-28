@@ -22,7 +22,6 @@
 // Value types
 typedef enum {
     VAL_BOOL,
-    VAL_NIL,
     VAL_I32,
     VAL_I64,
     VAL_U32,
@@ -195,7 +194,6 @@ typedef enum {
     TYPE_BOOL,
     TYPE_STRING,
     TYPE_VOID,
-    TYPE_NIL,
     TYPE_ARRAY,
     TYPE_FUNCTION,
     TYPE_ERROR,
@@ -353,8 +351,8 @@ typedef struct {
     bool from_embedded;
 } Module;
 
-// AST node definitions are maintained separately
-#include "compiler/ast.h"
+// Forward declaration to avoid circular dependency
+typedef struct ASTNode ASTNode;
 
 // Variable info
 typedef struct {
@@ -366,7 +364,6 @@ typedef struct {
 typedef enum {
     // Constants and literals
     OP_LOAD_CONST,  // reg, const_index - Load constant into register
-    OP_LOAD_NIL,    // reg - Load nil into register
     OP_LOAD_TRUE,   // reg - Load true into register
     OP_LOAD_FALSE,  // reg - Load false into register
 
@@ -988,7 +985,6 @@ typedef enum {
 
 // Value macros
 #define BOOL_VAL(value) ((Value){VAL_BOOL, {.boolean = value}})
-#define NIL_VAL ((Value){VAL_NIL, {.i32 = 0}})
 #define I32_VAL(value) ((Value){VAL_I32, {.i32 = value}})
 #define I64_VAL(value) ((Value){VAL_I64, {.i64 = value}})
 #define U32_VAL(value) ((Value){VAL_U32, {.u32 = value}})
@@ -1015,7 +1011,6 @@ typedef enum {
 #define AS_CLOSURE(value) ((ObjClosure*)(value).as.obj)
 
 #define IS_BOOL(value) ((value).type == VAL_BOOL)
-#define IS_NIL(value) ((value).type == VAL_NIL)
 #define IS_I32(value) ((value).type == VAL_I32)
 #define IS_I64(value) ((value).type == VAL_I64)
 #define IS_U32(value) ((value).type == VAL_U32)

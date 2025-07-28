@@ -564,8 +564,6 @@ Type* infer_literal_type_extended_ctx(TypeContext* ctx, Value* value) {
     switch (value->type) {
     case VAL_BOOL:
         return getPrimitive_ctx(ctx, TYPE_BOOL);
-    case VAL_NIL:
-        return getPrimitive_ctx(ctx, TYPE_NIL);
     case VAL_I32:
         return getPrimitive_ctx(ctx, TYPE_I32);
     case VAL_I64:
@@ -598,8 +596,6 @@ Type* infer_literal_type_extended(Value* value) {
     switch (value->type) {
     case VAL_BOOL:
         return getPrimitive(TYPE_BOOL);
-    case VAL_NIL:
-        return getPrimitive(TYPE_NIL);
     case VAL_I32:
         return getPrimitive(TYPE_I32);
     case VAL_I64:
@@ -649,7 +645,6 @@ Type* create_generic_type(const char* name, Type* constraint) {
 TypeKind value_type_to_type_kind(ValueType value_type) {
     switch (value_type) {
     case VAL_BOOL: return TYPE_BOOL;
-    case VAL_NIL: return TYPE_NIL;
     case VAL_I32: return TYPE_I32;
     case VAL_I64: return TYPE_I64;
     case VAL_U32: return TYPE_U32;
@@ -668,7 +663,6 @@ TypeKind value_type_to_type_kind(ValueType value_type) {
 ValueType type_kind_to_value_type(TypeKind type_kind) {
     switch (type_kind) {
     case TYPE_BOOL: return VAL_BOOL;
-    case TYPE_NIL: return VAL_NIL;
     case TYPE_I32: return VAL_I32;
     case TYPE_I64: return VAL_I64;
     case TYPE_U32: return VAL_U32;
@@ -678,10 +672,10 @@ ValueType type_kind_to_value_type(TypeKind type_kind) {
     case TYPE_ARRAY: return VAL_ARRAY;
     case TYPE_ERROR: return VAL_ERROR;
     case TYPE_FUNCTION: return VAL_FUNCTION;
-    case TYPE_ANY: return VAL_NIL; // No direct ValueType equivalent
-    case TYPE_UNKNOWN: return VAL_NIL;
-    case TYPE_VOID: return VAL_NIL;
-    default: return VAL_NIL;
+    case TYPE_ANY: return VAL_BOOL; // No direct ValueType equivalent
+    case TYPE_UNKNOWN: return VAL_BOOL;
+    case TYPE_VOID: return VAL_BOOL;
+    default: return VAL_BOOL;
     }
 }
 
@@ -725,7 +719,6 @@ const char* getTypeName(TypeKind kind) {
         case TYPE_BOOL: return "bool";
         case TYPE_STRING: return "string";
         case TYPE_VOID: return "void";
-        case TYPE_NIL: return "nil";
         case TYPE_ARRAY: return "array";
         case TYPE_FUNCTION: return "function";
         case TYPE_ERROR: return "error";

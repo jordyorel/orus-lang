@@ -21,7 +21,7 @@
 //     } else {
 //         // Use register file for frame/spill registers
 //         Value* reg_ptr = get_register(&vm.register_file, id);
-//         return reg_ptr ? *reg_ptr : NIL_VAL;
+//         return reg_ptr ? *reg_ptr : BOOL_VAL(false);
 //     }
 // }
 
@@ -116,7 +116,6 @@ InterpretResult vm_run_dispatch(void) {
         
         // Standard operations (less hot)
         vm_dispatch_table[OP_LOAD_CONST] = &&LABEL_OP_LOAD_CONST;
-        vm_dispatch_table[OP_LOAD_NIL] = &&LABEL_OP_LOAD_NIL;
         vm_dispatch_table[OP_LOAD_TRUE] = &&LABEL_OP_LOAD_TRUE;
         vm_dispatch_table[OP_LOAD_FALSE] = &&LABEL_OP_LOAD_FALSE;
         vm_dispatch_table[OP_MOVE] = &&LABEL_OP_MOVE;
@@ -265,10 +264,6 @@ InterpretResult vm_run_dispatch(void) {
             DISPATCH();
         }
 
-    LABEL_OP_LOAD_NIL: {
-            handle_load_nil();
-            DISPATCH();
-        }
 
     LABEL_OP_LOAD_TRUE: {
             handle_load_true();
@@ -1488,7 +1483,7 @@ InterpretResult vm_run_dispatch(void) {
             left_bool = AS_U64(vm.registers[src1]) != 0;
         } else if (IS_F64(vm.registers[src1])) {
             left_bool = AS_F64(vm.registers[src1]) != 0.0;
-        } else if (IS_NIL(vm.registers[src1])) {
+        } else if (IS_BOOL(vm.registers[src1])) {
             left_bool = false;
         } else {
             left_bool = true; // Objects, strings, etc. are truthy
@@ -1507,7 +1502,7 @@ InterpretResult vm_run_dispatch(void) {
             right_bool = AS_U64(vm.registers[src2]) != 0;
         } else if (IS_F64(vm.registers[src2])) {
             right_bool = AS_F64(vm.registers[src2]) != 0.0;
-        } else if (IS_NIL(vm.registers[src2])) {
+        } else if (IS_BOOL(vm.registers[src2])) {
             right_bool = false;
         } else {
             right_bool = true; // Objects, strings, etc. are truthy
@@ -1539,7 +1534,7 @@ InterpretResult vm_run_dispatch(void) {
             left_bool = AS_U64(vm.registers[src1]) != 0;
         } else if (IS_F64(vm.registers[src1])) {
             left_bool = AS_F64(vm.registers[src1]) != 0.0;
-        } else if (IS_NIL(vm.registers[src1])) {
+        } else if (IS_BOOL(vm.registers[src1])) {
             left_bool = false;
         } else {
             left_bool = true; // Objects, strings, etc. are truthy
@@ -1558,7 +1553,7 @@ InterpretResult vm_run_dispatch(void) {
             right_bool = AS_U64(vm.registers[src2]) != 0;
         } else if (IS_F64(vm.registers[src2])) {
             right_bool = AS_F64(vm.registers[src2]) != 0.0;
-        } else if (IS_NIL(vm.registers[src2])) {
+        } else if (IS_BOOL(vm.registers[src2])) {
             right_bool = false;
         } else {
             right_bool = true; // Objects, strings, etc. are truthy
@@ -1586,7 +1581,7 @@ InterpretResult vm_run_dispatch(void) {
             src_bool = AS_U64(vm.registers[src]) != 0;
         } else if (IS_F64(vm.registers[src])) {
             src_bool = AS_F64(vm.registers[src]) != 0.0;
-        } else if (IS_NIL(vm.registers[src])) {
+        } else if (IS_BOOL(vm.registers[src])) {
             src_bool = false;
         } else {
             src_bool = true; // Objects, strings, etc. are truthy
@@ -1749,13 +1744,13 @@ InterpretResult vm_run_dispatch(void) {
                 
                 // Check arity
                 if (argCount != function->arity) {
-                    vm.registers[resultReg] = NIL_VAL;
+                    vm.registers[resultReg] = BOOL_VAL(false);
                     DISPATCH();
                 }
                 
                 // Check if we have room for another call frame
                 if (vm.frameCount >= FRAMES_MAX) {
-                    vm.registers[resultReg] = NIL_VAL;
+                    vm.registers[resultReg] = BOOL_VAL(false);
                     DISPATCH();
                 }
                 
@@ -1784,13 +1779,13 @@ InterpretResult vm_run_dispatch(void) {
                 
                 // Check arity
                 if (argCount != objFunction->arity) {
-                    vm.registers[resultReg] = NIL_VAL;
+                    vm.registers[resultReg] = BOOL_VAL(false);
                     DISPATCH();
                 }
                 
                 // Check if we have room for another call frame
                 if (vm.frameCount >= FRAMES_MAX) {
-                    vm.registers[resultReg] = NIL_VAL;
+                    vm.registers[resultReg] = BOOL_VAL(false);
                     DISPATCH();
                 }
                 
@@ -1818,7 +1813,7 @@ InterpretResult vm_run_dispatch(void) {
                 int functionIndex = AS_I32(funcValue);
                 
                 if (functionIndex < 0 || functionIndex >= vm.functionCount) {
-                    vm.registers[resultReg] = NIL_VAL;
+                    vm.registers[resultReg] = BOOL_VAL(false);
                     DISPATCH();
                 }
                 
@@ -1826,13 +1821,13 @@ InterpretResult vm_run_dispatch(void) {
                 
                 // Check arity
                 if (argCount != function->arity) {
-                    vm.registers[resultReg] = NIL_VAL;
+                    vm.registers[resultReg] = BOOL_VAL(false);
                     DISPATCH();
                 }
                 
                 // Check if we have room for another call frame
                 if (vm.frameCount >= FRAMES_MAX) {
-                    vm.registers[resultReg] = NIL_VAL;
+                    vm.registers[resultReg] = BOOL_VAL(false);
                     DISPATCH();
                 }
                 
@@ -1865,7 +1860,7 @@ InterpretResult vm_run_dispatch(void) {
                 vm.ip = function->chunk->code + function->start;
                 
             } else {
-                vm.registers[resultReg] = NIL_VAL;
+                vm.registers[resultReg] = BOOL_VAL(false);
             }
             
             DISPATCH();
@@ -1883,7 +1878,7 @@ InterpretResult vm_run_dispatch(void) {
                 int functionIndex = AS_I32(funcValue);
                 
                 if (functionIndex < 0 || functionIndex >= vm.functionCount) {
-                    vm.registers[resultReg] = NIL_VAL;
+                    vm.registers[resultReg] = BOOL_VAL(false);
                     DISPATCH();
                 }
                 
@@ -1891,7 +1886,7 @@ InterpretResult vm_run_dispatch(void) {
                 
                 // Check arity
                 if (argCount != function->arity) {
-                    vm.registers[resultReg] = NIL_VAL;
+                    vm.registers[resultReg] = BOOL_VAL(false);
                     DISPATCH();
                 }
                 
@@ -1917,7 +1912,7 @@ InterpretResult vm_run_dispatch(void) {
                 vm.ip = function->chunk->code + function->start;
                 
             } else {
-                vm.registers[resultReg] = NIL_VAL;
+                vm.registers[resultReg] = BOOL_VAL(false);
             }
             
             DISPATCH();
@@ -2398,7 +2393,7 @@ InterpretResult vm_run_dispatch(void) {
                 printf("DEBUG VM: Capturing local register[%d] as upvalue\n", index);
                 if (IS_I32(localValue)) {
                     printf("DEBUG VM: Local register[%d] contains i32: %d\n", index, AS_I32(localValue));
-                } else if (IS_NIL(localValue)) {
+                } else if (IS_BOOL(localValue)) {
                     printf("DEBUG VM: Local register[%d] contains NIL\n", index);
                 } else {
                     printf("DEBUG VM: Local register[%d] contains type: %d\n", index, localValue.type);
@@ -2435,7 +2430,7 @@ InterpretResult vm_run_dispatch(void) {
             printf("DEBUG VM: Upvalue[%d] retrieved i32 value: %d\n", upvalueIndex, AS_I32(upvalue));
         } else if (IS_BOOL(upvalue)) {
             printf("DEBUG VM: Upvalue[%d] retrieved bool value: %s\n", upvalueIndex, AS_BOOL(upvalue) ? "true" : "false");
-        } else if (IS_NIL(upvalue)) {
+        } else if (IS_BOOL(upvalue)) {
             printf("DEBUG VM: Upvalue[%d] retrieved NIL value\n", upvalueIndex);
         } else {
             printf("DEBUG VM: Upvalue[%d] retrieved unknown type: %d\n", upvalueIndex, upvalue.type);

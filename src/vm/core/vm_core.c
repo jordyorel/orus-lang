@@ -19,19 +19,19 @@ void initVM(void) {
 
     // Legacy register initialization (for backward compatibility)
     for (int i = 0; i < REGISTER_COUNT; i++) {
-        vm.registers[i] = NIL_VAL;
+        vm.registers[i] = BOOL_VAL(false); // Default value instead of NIL_VAL
     }
 
     memset(&vm.typed_regs, 0, sizeof(TypedRegisters));
     for (int i = 0; i < 32; i++) {
-        vm.typed_regs.heap_regs[i] = NIL_VAL;
+        vm.typed_regs.heap_regs[i] = BOOL_VAL(false); // Default value instead of NIL_VAL
     }
     for (int i = 0; i < 256; i++) {
         vm.typed_regs.reg_types[i] = REG_TYPE_NONE;
     }
 
     for (int i = 0; i < UINT8_COUNT; i++) {
-        vm.globals[i] = NIL_VAL;
+        vm.globals[i] = BOOL_VAL(false); // Default value instead of NIL_VAL
         vm.globalTypes[i] = NULL;
         vm.publicGlobals[i] = false;
         vm.mutableGlobals[i] = false;
@@ -43,7 +43,7 @@ void initVM(void) {
     vm.functionCount = 0;
     vm.frameCount = 0;
     vm.tryFrameCount = 0;
-    vm.lastError = NIL_VAL;
+    vm.lastError = BOOL_VAL(false); // Default value instead of NIL_VAL
     vm.instruction_count = 0;
     vm.astRoot = NULL;
     vm.filePath = NULL;

@@ -21,10 +21,15 @@
 #include "runtime/builtins.h"
 #include "public/common.h"
 #include "compiler/parser.h"
+#include "compiler/compiler.h"
 #include "runtime/memory.h"
 #include "runtime/builtins.h"
 #include "tools/debug.h"
 #include "internal/error_reporting.h"
+#include "config/config.h"
+#include "compiler/typed_ast.h"
+#include "compiler/typed_ast_visualizer.h"
+#include "type/type.h"
 #include <time.h>
 #ifdef _WIN32
 #include <windows.h>
@@ -62,9 +67,6 @@ void printValue(Value value) {
     switch (value.type) {
         case VAL_BOOL:
             printf(AS_BOOL(value) ? "true" : "false");
-            break;
-        case VAL_NIL:
-            printf("nil");
             break;
         case VAL_I32:
             printf("%d", AS_I32(value));
@@ -115,8 +117,6 @@ bool valuesEqual(Value a, Value b) {
     switch (a.type) {
         case VAL_BOOL:
             return AS_BOOL(a) == AS_BOOL(b);
-        case VAL_NIL:
-            return true;
         case VAL_I32:
             return AS_I32(a) == AS_I32(b);
         case VAL_I64:
@@ -186,7 +186,8 @@ static InterpretResult run(void) {
 InterpretResult interpret(const char* source) {
     // Source text is now set in main.c with proper error handling
     // set_source_text(source, strlen(source)) is called before interpret()
-    printf("[DEBUG] interpret: Starting interpretation\n");
+    printf("[DEBUG] interpret: Starting with source length %zu\n", strlen(source));
+    fflush(stdout);
     // Create a chunk for the compiled bytecode
     Chunk chunk;
     initChunk(&chunk);
@@ -195,25 +196,83 @@ InterpretResult interpret(const char* source) {
     initCompiler(&compiler, &chunk, "<repl>", source);
 
     // Parse the source into an AST
-    printf("[DEBUG] interpret: Starting to parse source\n");
     ASTNode* ast = parseSource(source);
-    printf("[DEBUG] interpret: Parsing completed\n");
+    printf("[DEBUG] interpret: parseSource returned, ast = %p\n", (void*)ast);
+    fflush(stdout);
  
     if (!ast) {
+        printf("[DEBUG] interpret: ast is NULL, returning error\n");
+        fflush(stdout);
         freeCompiler(&compiler);
         freeChunk(&chunk);
         return INTERPRET_COMPILE_ERROR;
     }
+    
+    printf("[DEBUG] interpret: ast is valid, continuing\n");
+    fflush(stdout);
 
+    // Check if typed AST visualization is enabled
+    printf("[DEBUG] interpret: About to check config\n");
+    fflush(stdout);
+    
+    const OrusConfig* config = config_get_global();
+    printf("[DEBUG] interpret: config = %p\n", (void*)config);
+    fflush(stdout);
+    
+    if (config && config->show_typed_ast) {
+        printf("[DEBUG] interpret: Typed AST visualization enabled\n");
+        fflush(stdout);
+        // Type inference system is integrated with AST parsing
+        
+        // Create a basic type environment for testing
+        // Note: This would normally be created by the type system
+        TypeEnv* type_env = NULL; // Placeholder - would be properly initialized
+        
+        // Generate typed AST (this will populate the dataType fields)
+        TypedASTNode* typed_ast = generate_typed_ast(ast, type_env);
+        
+        if (typed_ast) {
+            printf("\n=== TYPED AST VISUALIZATION ===\n");
+            printf("Source: %s\n", source);
+            printf("================================\n");
+            
+            // Use colored output if terminal supports it
+            if (terminal_supports_color()) {
+                visualize_typed_ast_colored(typed_ast, stdout);
+            } else {
+                visualize_typed_ast_detailed(typed_ast, stdout, true, true);
+            }
+            
+            printf("\n=== END TYPED AST ===\n\n");
+            
+            // Clean up typed AST
+            free_typed_ast_node(typed_ast);
+        } else {
+            printf("[WARNING] interpret: Failed to generate typed AST\n");
+        }
+        
+        printf("[DEBUG] interpret: Typed AST visualization completed\n");
+    } else {
+        printf("[DEBUG] interpret: Typed AST visualization disabled or config is NULL\n");
+        fflush(stdout);
+    }
+
+    printf("[DEBUG] interpret: About to call compileProgram\n");
+    fflush(stdout);
+    
     // Compile the AST to bytecode
-    printf("[DEBUG] interpret: Starting compilation\n");
-    if (!compileProgram(ast, &compiler, false)) {
+    bool compilation_result = compileProgram(ast, &compiler, false);
+    printf("[DEBUG] interpret: compileProgram returned %s\n", compilation_result ? "true" : "false");
+    fflush(stdout);
+    
+    if (!compilation_result) {
         printf("[ERROR] interpret: Compilation failed\n");
         freeAST(ast);
         freeCompiler(&compiler);
         freeChunk(&chunk);
         return INTERPRET_COMPILE_ERROR;
     }
+    
     printf("[DEBUG] interpret: Compilation completed\n");
 
     // Add a halt instruction at the end

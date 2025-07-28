@@ -7,7 +7,6 @@
 #include <time.h>
 
 #include "vm/vm.h"
-#include "compiler/compiler.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -301,7 +300,7 @@ process_input:
             show_stats(&stats);
         }else if(result==INTERPRET_RUNTIME_ERROR){
             // Enhanced error reporting is now handled in runtimeError() function
-            vm.lastError=NIL_VAL;
+            // vm.lastError=NIL_VAL; // NIL_VAL removed, error already handled
         }
         ib->multiline=false;
         fflush(stdout);

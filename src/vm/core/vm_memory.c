@@ -141,7 +141,7 @@ ObjClosure* allocateClosure(ObjFunction* function) {
 ObjUpvalue* allocateUpvalue(Value* slot) {
     ObjUpvalue* upvalue = (ObjUpvalue*)allocateObject(sizeof(ObjUpvalue), OBJ_UPVALUE);
     upvalue->location = slot;
-    upvalue->closed = NIL_VAL;
+    upvalue->closed = BOOL_VAL(false); // Default value instead of NIL_VAL
     upvalue->next = NULL;
     return upvalue;
 }

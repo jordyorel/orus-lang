@@ -136,6 +136,10 @@ typedef struct {
 void init_type_inference(void);
 void cleanup_type_inference(void);
 Type* algorithm_w(TypeEnv* env, ASTNode* node);
+
+// Typed AST Generation
+typedef struct TypedASTNode TypedASTNode;  // Forward declaration
+TypedASTNode* generate_typed_ast(ASTNode* root, TypeEnv* env);
 Type* make_var_type(TypeEnv* env);
 Type* fresh_type(Type* t, HashMap* mapping);
 Type* prune(Type* t);

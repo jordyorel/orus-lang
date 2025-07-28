@@ -13,8 +13,6 @@
 #include "errors/error_interface.h"
 #include "errors/features/type_errors.h"
 #include "errors/features/variable_errors.h"
-#include "compiler/compiler.h"
-#include "compiler/simple_compiler.h"
 // #include "compiler/loop_optimization.h" // DISABLED in Phase 2
 #include "tools/repl.h"
 #include "public/version.h"
@@ -240,7 +238,8 @@ int main(int argc, const char* argv[]) {
     
     // Show optimization statistics if requested
     if (config->show_optimization_stats && !config->quiet) {
-        printGlobalOptimizationStats();
+        // printGlobalOptimizationStats(); // TODO: Implementation missing
+        printf("Optimization statistics: Feature not yet implemented\n");
     }
     
     // Cleanup and profiling export

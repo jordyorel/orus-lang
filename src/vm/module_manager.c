@@ -86,7 +86,7 @@ RegisterModule* load_module(ModuleManager* manager, const char* module_name) {
     
     // Initialize module
     for (int i = 0; i < MODULE_REGISTERS; i++) {
-        module->registers[i] = NIL_VAL;
+        module->registers[i] = BOOL_VAL(false);
     }
     
     module->module_name = (char*)malloc(strlen(module_name) + 1);

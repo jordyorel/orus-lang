@@ -20,7 +20,7 @@
 //     } else {
 //         // Use register file for frame/spill registers
 //         Value* reg_ptr = get_register(&vm.register_file, id);
-//         return reg_ptr ? *reg_ptr : NIL_VAL;
+//         return reg_ptr ? *reg_ptr : BOOL_VAL(false);
 //     }
 // }
 
@@ -77,10 +77,6 @@ InterpretResult vm_run_dispatch(void) {
                     break;
                 }
 
-                case OP_LOAD_NIL: {
-                    handle_load_nil();
-                    break;
-                }
 
                 case OP_LOAD_TRUE: {
                     handle_load_true();
@@ -1342,7 +1338,7 @@ InterpretResult vm_run_dispatch(void) {
                         left_bool = AS_U64(vm.registers[src1]) != 0;
                     } else if (IS_F64(vm.registers[src1])) {
                         left_bool = AS_F64(vm.registers[src1]) != 0.0;
-                    } else if (IS_NIL(vm.registers[src1])) {
+                    } else if (IS_BOOL(vm.registers[src1])) {
                         left_bool = false;
                     } else {
                         left_bool = true; // Objects, strings, etc. are truthy
@@ -1361,7 +1357,7 @@ InterpretResult vm_run_dispatch(void) {
                         right_bool = AS_U64(vm.registers[src2]) != 0;
                     } else if (IS_F64(vm.registers[src2])) {
                         right_bool = AS_F64(vm.registers[src2]) != 0.0;
-                    } else if (IS_NIL(vm.registers[src2])) {
+                    } else if (IS_BOOL(vm.registers[src2])) {
                         right_bool = false;
                     } else {
                         right_bool = true; // Objects, strings, etc. are truthy
@@ -1393,7 +1389,7 @@ InterpretResult vm_run_dispatch(void) {
                         left_bool = AS_U64(vm.registers[src1]) != 0;
                     } else if (IS_F64(vm.registers[src1])) {
                         left_bool = AS_F64(vm.registers[src1]) != 0.0;
-                    } else if (IS_NIL(vm.registers[src1])) {
+                    } else if (IS_BOOL(vm.registers[src1])) {
                         left_bool = false;
                     } else {
                         left_bool = true; // Objects, strings, etc. are truthy
@@ -1412,7 +1408,7 @@ InterpretResult vm_run_dispatch(void) {
                         right_bool = AS_U64(vm.registers[src2]) != 0;
                     } else if (IS_F64(vm.registers[src2])) {
                         right_bool = AS_F64(vm.registers[src2]) != 0.0;
-                    } else if (IS_NIL(vm.registers[src2])) {
+                    } else if (IS_BOOL(vm.registers[src2])) {
                         right_bool = false;
                     } else {
                         right_bool = true; // Objects, strings, etc. are truthy
@@ -1440,7 +1436,7 @@ InterpretResult vm_run_dispatch(void) {
                         src_bool = AS_U64(vm.registers[src]) != 0;
                     } else if (IS_F64(vm.registers[src])) {
                         src_bool = AS_F64(vm.registers[src]) != 0.0;
-                    } else if (IS_NIL(vm.registers[src])) {
+                    } else if (IS_BOOL(vm.registers[src])) {
                         src_bool = false;
                     } else {
                         src_bool = true; // Objects, strings, etc. are truthy
@@ -1557,13 +1553,13 @@ InterpretResult vm_run_dispatch(void) {
                         
                         // Check arity
                         if (argCount != function->arity) {
-                            vm.registers[resultReg] = NIL_VAL;
+                            vm.registers[resultReg] = BOOL_VAL(false);
                             break;
                         }
                         
                         // Check if we have room for another call frame
                         if (vm.frameCount >= FRAMES_MAX) {
-                            vm.registers[resultReg] = NIL_VAL;
+                            vm.registers[resultReg] = BOOL_VAL(false);
                             break;
                         }
                         
@@ -1590,7 +1586,7 @@ InterpretResult vm_run_dispatch(void) {
                         int functionIndex = AS_I32(funcValue);
                         
                         if (functionIndex < 0 || functionIndex >= vm.functionCount) {
-                            vm.registers[resultReg] = NIL_VAL;
+                            vm.registers[resultReg] = BOOL_VAL(false);
                             break;
                         }
                         
@@ -1598,13 +1594,13 @@ InterpretResult vm_run_dispatch(void) {
                         
                         // Check arity
                         if (argCount != function->arity) {
-                            vm.registers[resultReg] = NIL_VAL;
+                            vm.registers[resultReg] = BOOL_VAL(false);
                             break;
                         }
                         
                         // Check if we have room for another call frame
                         if (vm.frameCount >= FRAMES_MAX) {
-                            vm.registers[resultReg] = NIL_VAL;
+                            vm.registers[resultReg] = BOOL_VAL(false);
                             break;
                         }
                         
@@ -1642,13 +1638,13 @@ InterpretResult vm_run_dispatch(void) {
                         
                         // Check arity
                         if (argCount != objFunction->arity) {
-                            vm.registers[resultReg] = NIL_VAL;
+                            vm.registers[resultReg] = BOOL_VAL(false);
                             break;
                         }
                         
                         // Check if we have room for another call frame
                         if (vm.frameCount >= FRAMES_MAX) {
-                            vm.registers[resultReg] = NIL_VAL;
+                            vm.registers[resultReg] = BOOL_VAL(false);
                             break;
                         }
                         
@@ -1672,7 +1668,7 @@ InterpretResult vm_run_dispatch(void) {
                         vm.ip = objFunction->chunk->code;
                         
                     } else {
-                        vm.registers[resultReg] = NIL_VAL;
+                        vm.registers[resultReg] = BOOL_VAL(false);
                     }
                     break;
                 }
@@ -1688,7 +1684,7 @@ InterpretResult vm_run_dispatch(void) {
                         int functionIndex = AS_I32(funcValue);
                         
                         if (functionIndex < 0 || functionIndex >= vm.functionCount) {
-                            vm.registers[resultReg] = NIL_VAL;
+                            vm.registers[resultReg] = BOOL_VAL(false);
                             break;
                         }
                         
@@ -1696,7 +1692,7 @@ InterpretResult vm_run_dispatch(void) {
                         
                         // Check arity
                         if (argCount != function->arity) {
-                            vm.registers[resultReg] = NIL_VAL;
+                            vm.registers[resultReg] = BOOL_VAL(false);
                             break;
                         }
                         
@@ -1722,7 +1718,7 @@ InterpretResult vm_run_dispatch(void) {
                         vm.ip = function->chunk->code + function->start;
                         
                     } else {
-                        vm.registers[resultReg] = NIL_VAL;
+                        vm.registers[resultReg] = BOOL_VAL(false);
                     }
                     break;
                 }
@@ -2243,7 +2239,7 @@ InterpretResult vm_run_dispatch(void) {
                     TryFrame frame = vm.tryFrames[--vm.tryFrameCount];
                     vm.ip = frame.handler;
                     vm.globals[frame.varIndex] = vm.lastError;
-                    vm.lastError = NIL_VAL;
+                    vm.lastError = BOOL_VAL(false);
                 } else {
                     RETURN(INTERPRET_RUNTIME_ERROR);
                 }

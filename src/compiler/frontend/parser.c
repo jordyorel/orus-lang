@@ -185,7 +185,6 @@ static Value parseNumberValue(const char* numStr, bool isF64, bool isU32, bool i
 
 static ASTNode* parseStringLiteral(ParserContext* ctx, Token token);
 static ASTNode* parseBooleanLiteral(ParserContext* ctx, Token token);
-static ASTNode* parseNilLiteral(ParserContext* ctx, Token token);
 static ASTNode* parseIdentifierExpression(ParserContext* ctx, Token token);
 static ASTNode* parseTimeStampExpression(ParserContext* ctx, Token token);
 static ASTNode* parseParenthesizedExpressionToken(ParserContext* ctx, Token token);
@@ -260,9 +259,7 @@ ASTNode* parseSource(const char* source) {
 }
 
 static ASTNode* parseStatement(ParserContext* ctx) {
-    printf("[DEBUG] parseStatement: Starting, peeking token\n");
     Token t = peekToken(ctx);
-    printf("[DEBUG] parseStatement: Peeked token type %d\n", t.type);
 
     if (t.type == TOKEN_PRINT || t.type == TOKEN_PRINT_NO_NL || t.type == TOKEN_PRINT_SEP) {
         printf("[DEBUG] parseStatement: Parsing print statement\n");
@@ -299,13 +296,6 @@ static ASTNode* parseStatement(ParserContext* ctx) {
             return parseVariableDeclaration(ctx, true, nameTok);
         }
         return parseAssignOrVarList(ctx, true, nameTok);
-    }
-    if (t.type == TOKEN_LET) {
-        // ERROR: 'let' is not supported in Orus
-        SrcLocation location = {NULL, t.line, t.column};
-        report_compile_error(E1006_INVALID_SYNTAX, location, 
-                           "'let' keyword is not supported in Orus");
-        return NULL;
     }
     if (t.type == TOKEN_IDENTIFIER) {
         Token second = peekSecondToken(ctx);
@@ -508,21 +498,7 @@ static ASTNode* parseVariableDeclaration(ParserContext* ctx, bool isMutable, Tok
                 initializer->literal.value.type = VAL_F64;
                 initializer->literal.value.as.f64 = (double)value;
             }
-            else if (literalType == VAL_NIL && typeNode->typeAnnotation.isNullable)
-                mismatch = false;
 
-            if (literalType == VAL_NIL && !typeNode->typeAnnotation.isNullable) {
-                // Use structured error reporting for nil assignment error
-                SrcLocation location = {
-                    .file = NULL, // Will be set by error reporting system
-                    .line = nameToken.line,
-                    .column = nameToken.column
-                };
-                
-                report_compile_error(E2001_TYPE_MISMATCH, location,
-                    "nil not allowed for non-nullable type '%s'", declaredType);
-                return NULL;
-            }
 
             if (mismatch) {
                 // Use structured error reporting instead of fprintf
@@ -542,7 +518,6 @@ static ASTNode* parseVariableDeclaration(ParserContext* ctx, bool isMutable, Tok
                     case VAL_F64: literalTypeName = "f64"; break;
                     case VAL_BOOL: literalTypeName = "bool"; break;
                     case VAL_STRING: literalTypeName = "string"; break;
-                    case VAL_NIL: literalTypeName = "nil"; break;
                     default: literalTypeName = "unknown"; break;
                 }
                 
@@ -1186,7 +1161,9 @@ static ASTNode* parseContinueStatement(ParserContext* ctx) {
 
 static ASTNode* parseAssignment(ParserContext* ctx);
 
-static ASTNode* parseExpression(ParserContext* ctx) { return parseAssignment(ctx); }
+static ASTNode* parseExpression(ParserContext* ctx) { 
+    return parseAssignment(ctx); 
+}
 
 // Parse inline conditional expressions using Python-like syntax:
 // expr if cond [elif cond]* else expr
@@ -1625,16 +1602,6 @@ static ASTNode* parseBooleanLiteral(ParserContext* ctx, Token token) {
     return node;
 }
 
-static ASTNode* parseNilLiteral(ParserContext* ctx, Token token) {
-    ASTNode* node = new_node(ctx);
-    node->type = NODE_LITERAL;
-    node->literal.value = NIL_VAL;
-    node->literal.hasExplicitSuffix = false;
-    node->location.line = token.line;
-    node->location.column = token.column;
-    node->dataType = NULL;
-    return node;
-}
 
 static ASTNode* parseIdentifierExpression(ParserContext* ctx, Token token) {
     ASTNode* node = new_node(ctx);
@@ -1703,8 +1670,6 @@ static ASTNode* parsePrimaryExpression(ParserContext* ctx) {
         case TOKEN_TRUE:
         case TOKEN_FALSE:
             return parseBooleanLiteral(ctx, token);
-        case TOKEN_NIL:
-            return parseNilLiteral(ctx, token);
         case TOKEN_IDENTIFIER:
             return parseIdentifierExpression(ctx, token);
         case TOKEN_TIME_STAMP:
@@ -2014,26 +1979,42 @@ void freeAST(ASTNode* node) {
 ASTNode* parseSourceWithContext(ParserContext* ctx, const char* source) {
     if (!ctx) return NULL;
     
-    printf("[DEBUG] parseSourceWithContext: Starting with source: %.50s...\n", source);
+    printf("[DEBUG] parseSourceWithContext: Starting with source: '%s'\n", source);
+    fflush(stdout);
+    
     parser_context_reset(ctx);
+    printf("[DEBUG] parseSourceWithContext: Context reset complete\n");
+    fflush(stdout);
+    
     init_scanner(source);
+    printf("[DEBUG] parseSourceWithContext: Scanner initialized\n");
+    fflush(stdout);
     
     ASTNode** statements = NULL;
     int count = 0;
     int capacity = 0;
     
-    printf("[DEBUG] parseSourceWithContext: Entering main parsing loop\n");
     while (true) {
-        printf("[DEBUG] parseSourceWithContext: Loop iteration %d\n", count);
+        printf("[DEBUG] parseSourceWithContext: About to peek token\n");
+        fflush(stdout);
+        
         Token t = peekToken(ctx);
-        printf("[DEBUG] parseSourceWithContext: Peeked token type %d\n", t.type);
+        printf("[DEBUG] parseSourceWithContext: Got token type %d\n", t.type);
+        fflush(stdout);
+        
+        printf("[DEBUG] parseSourceWithContext: TOKEN_EOF value = %d, t.type = %d\n", TOKEN_EOF, t.type);
+        fflush(stdout);
         if (t.type == TOKEN_EOF) break;
         if (t.type == TOKEN_NEWLINE) {
+            printf("[DEBUG] parseSourceWithContext: Consuming newline\n");
+            fflush(stdout);
             nextToken(ctx);
             continue;
         }
         if (t.type == TOKEN_COMMA) {
             // Skip commas between statements (for comma-separated variable declarations)
+            printf("[DEBUG] parseSourceWithContext: Consuming comma\n");
+            fflush(stdout);
             nextToken(ctx);
             continue;
         }
@@ -2044,22 +2025,42 @@ ASTNode* parseSourceWithContext(ParserContext* ctx, const char* source) {
             return NULL;
         }
         
+        printf("[DEBUG] parseSourceWithContext: About to parse statement for token type %d\n", t.type);
+        fflush(stdout);
+        
         ASTNode* stmt = parseStatement(ctx);
         if (!stmt) {
+            printf("[DEBUG] parseSourceWithContext: parseStatement returned NULL\n");
+            fflush(stdout);
             return NULL;
         }
         
+        printf("[DEBUG] parseSourceWithContext: Statement parsed successfully\n");
+        fflush(stdout);
+        
         addStatement(ctx, &statements, &count, &capacity, stmt);
+        
+        printf("[DEBUG] parseSourceWithContext: Statement added to list\n");
+        fflush(stdout);
     }
+    
+    printf("[DEBUG] parseSourceWithContext: Loop completed, creating program node\n");
+    fflush(stdout);
     
     // Create program node even if empty (valid empty program)
     ASTNode* root = new_node(ctx);
+    
+    printf("[DEBUG] parseSourceWithContext: Program node created\n");
+    fflush(stdout);
     root->type = NODE_PROGRAM;
     root->program.declarations = statements;
     root->program.count = count;
     root->location.line = 1;
     root->location.column = 1;
     root->dataType = NULL;
+    
+    printf("[DEBUG] parseSourceWithContext: Returning program node\n");
+    fflush(stdout);
     
     return root;
 }

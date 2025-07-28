@@ -163,12 +163,12 @@ void deallocate_frame(RegisterFile* rf) {
 void init_register_file(RegisterFile* rf) {
     // Initialize global registers to NIL
     for (int i = 0; i < GLOBAL_REGISTERS; i++) {
-        rf->globals[i] = NIL_VAL;
+        rf->globals[i] = BOOL_VAL(false);
     }
     
     // Initialize temp registers to NIL
     for (int i = 0; i < TEMP_REGISTERS; i++) {
-        rf->temps[i] = NIL_VAL;
+        rf->temps[i] = BOOL_VAL(false);
     }
     
     // Initialize frame management
@@ -312,7 +312,7 @@ void get_register_file_stats(RegisterFile* rf, size_t* global_used, size_t* fram
     if (global_used) {
         *global_used = 0;
         for (int i = 0; i < GLOBAL_REGISTERS; i++) {
-            if (rf->globals[i].type != VAL_NIL) (*global_used)++;
+            if (rf->globals[i].type != VAL_BOOL) (*global_used)++;
         }
     }
     
@@ -323,7 +323,7 @@ void get_register_file_stats(RegisterFile* rf, size_t* global_used, size_t* fram
     if (temp_used) {
         *temp_used = 0;
         for (int i = 0; i < TEMP_REGISTERS; i++) {
-            if (rf->temps[i].type != VAL_NIL) (*temp_used)++;
+            if (rf->temps[i].type != VAL_BOOL) (*temp_used)++;
         }
     }
     

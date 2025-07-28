@@ -55,7 +55,7 @@ void runtimeError(ErrorType type, SrcLocation location, const char* format, ...)
                         TryFrame frame = vm.tryFrames[--vm.tryFrameCount]; \
                         vm.ip = frame.handler; \
                         vm.globals[frame.varIndex] = vm.lastError; \
-                        vm.lastError = NIL_VAL; \
+                        vm.lastError = BOOL_VAL(false); \
                     } else { \
                         RETURN(INTERPRET_RUNTIME_ERROR); \
                     } \

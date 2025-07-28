@@ -55,7 +55,6 @@ static inline void handle_load_f64_const(void);
 // Register operations
 static inline void handle_move_reg(void);
 static inline void handle_load_const(void);
-static inline void handle_load_nil(void);
 static inline void handle_load_true(void);
 static inline void handle_load_false(void);
 

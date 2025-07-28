@@ -36,11 +36,6 @@ int disassembleInstruction(Chunk* chunk, int offset) {
             return offset + 4;
         }
 
-        case OP_LOAD_NIL: {
-            uint8_t reg = chunk->code[offset + 1];
-            printf("%-16s R%d\n", "LOAD_NIL", reg);
-            return offset + 2;
-        }
 
         case OP_MOVE: {
             uint8_t dst = chunk->code[offset + 1];
