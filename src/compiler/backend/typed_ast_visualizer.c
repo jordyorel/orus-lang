@@ -30,6 +30,10 @@ typedef struct {
     int max_depth;          // Maximum depth to visualize (-1 for unlimited)
 } VisualizerConfig;
 
+// Forward declarations
+static void visualize_node_recursive(TypedASTNode* node, int depth, bool is_last, const VisualizerConfig* config);
+static void print_indent(int depth, bool is_last, VisualizerConfig* config);
+
 // ANSI color codes for terminal output
 #define COLOR_RESET     "\033[0m"
 #define COLOR_BOLD      "\033[1m"
@@ -79,6 +83,63 @@ static const char* get_node_type_name(NodeType type) {
     }
 }
 
+
+// Helper function to detect if this is an if-elif-else chain
+static bool is_if_elif_chain(TypedASTNode* node) {
+    if (!node || node->original->type != NODE_IF) return false;
+    
+    // Check if the else branch is another if statement (indicating elif)
+    return (node->typed.ifStmt.elseBranch && 
+            node->typed.ifStmt.elseBranch->original->type == NODE_IF);
+}
+
+// Helper function to visualize if-elif-else chains in a flattened way
+static void visualize_if_elif_chain(TypedASTNode* node, int depth, const VisualizerConfig* config) {
+    TypedASTNode* current = node;
+    int chain_index = 0;
+    
+    while (current && current->original->type == NODE_IF) {
+        // Print the condition (with appropriate if/elif label)
+        const char* prefix = (chain_index == 0) ? "[if]" : "[elif]";
+        
+        // Use standard indentation for condition
+        print_indent(depth + 1, false, (VisualizerConfig*)config);
+        printf("%sCondition%s: %s\n", 
+               config->use_colors ? COLOR_CYAN : "",
+               config->use_colors ? COLOR_RESET : "",
+               prefix);
+        
+        if (current->typed.ifStmt.condition) {
+            visualize_node_recursive(current->typed.ifStmt.condition, depth + 2, false, config);
+        }
+        
+        // Visualize the block directly without manual header
+        if (current->typed.ifStmt.thenBranch) {
+            visualize_node_recursive(current->typed.ifStmt.thenBranch, depth + 1, false, config);
+        }
+        
+        // Move to the next part of the chain
+        if (current->typed.ifStmt.elseBranch && 
+            current->typed.ifStmt.elseBranch->original->type == NODE_IF) {
+            current = current->typed.ifStmt.elseBranch;
+            chain_index++;
+        } else {
+            // Handle the final else block if present
+            if (current->typed.ifStmt.elseBranch) {
+                // Print the else condition label
+                print_indent(depth + 1, false, (VisualizerConfig*)config);
+                printf("%sCondition%s: [else]\n", 
+                       config->use_colors ? COLOR_CYAN : "",
+                       config->use_colors ? COLOR_RESET : "");
+                
+                // Then visualize the else block
+                visualize_node_recursive(current->typed.ifStmt.elseBranch, depth + 1, true, config);
+            }
+            break;
+        }
+    }
+}
+
 // Helper function to get type name string
 static const char* get_type_name(Type* type) {
     if (!type) return "unresolved";
@@ -94,7 +155,26 @@ static const char* get_type_name(Type* type) {
         case TYPE_STRING: return "string";
         case TYPE_VOID: return "void";
         case TYPE_ARRAY: return "array";
-        case TYPE_FUNCTION: return "function";
+        case TYPE_FUNCTION: {
+            // Create a more detailed function type signature
+            static char func_sig[256];
+            if (type->info.function.arity > 0 && type->info.function.paramTypes && type->info.function.returnType) {
+                snprintf(func_sig, sizeof(func_sig), "function(");
+                
+                for (int i = 0; i < type->info.function.arity; i++) {
+                    if (i > 0) strcat(func_sig, ",");
+                    const char* param_type = get_type_name(type->info.function.paramTypes[i]);
+                    strcat(func_sig, param_type);
+                }
+                
+                strcat(func_sig, ")->");
+                const char* return_type = get_type_name(type->info.function.returnType);
+                strcat(func_sig, return_type);
+                
+                return func_sig;
+            }
+            return "function";
+        }
         case TYPE_ERROR: return "error";
         case TYPE_ANY: return "any";
         case TYPE_VAR: return "var";
@@ -166,7 +246,7 @@ static const char* get_literal_value_string(Value* value, char* buffer, size_t b
 }
 
 // Core visualization function - recursive AST traversal
-static void visualize_node_recursive(TypedASTNode* node, int depth, bool is_last, VisualizerConfig* config) {
+static void visualize_node_recursive(TypedASTNode* node, int depth, bool is_last, const VisualizerConfig* config) {
     if (!node || !node->original) return;
     
     // Check depth limit
@@ -362,15 +442,21 @@ static void visualize_node_recursive(TypedASTNode* node, int depth, bool is_last
             }
             break;
         case NODE_IF:
-            if (node->typed.ifStmt.condition) {
-                visualize_node_recursive(node->typed.ifStmt.condition, depth + 1, false, config);
-            }
-            if (node->typed.ifStmt.thenBranch) {
-                visualize_node_recursive(node->typed.ifStmt.thenBranch, depth + 1, 
-                                       !node->typed.ifStmt.elseBranch, config);
-            }
-            if (node->typed.ifStmt.elseBranch) {
-                visualize_node_recursive(node->typed.ifStmt.elseBranch, depth + 1, true, config);
+            // Check if this is part of an if-elif-else chain
+            if (is_if_elif_chain(node)) {
+                visualize_if_elif_chain(node, depth, config);
+            } else {
+                // Regular if statement
+                if (node->typed.ifStmt.condition) {
+                    visualize_node_recursive(node->typed.ifStmt.condition, depth + 1, false, config);
+                }
+                if (node->typed.ifStmt.thenBranch) {
+                    visualize_node_recursive(node->typed.ifStmt.thenBranch, depth + 1, 
+                                           !node->typed.ifStmt.elseBranch, config);
+                }
+                if (node->typed.ifStmt.elseBranch) {
+                    visualize_node_recursive(node->typed.ifStmt.elseBranch, depth + 1, true, config);
+                }
             }
             break;
         case NODE_WHILE:
@@ -390,6 +476,55 @@ static void visualize_node_recursive(TypedASTNode* node, int depth, bool is_last
             }
             if (node->typed.ternary.falseExpr) {
                 visualize_node_recursive(node->typed.ternary.falseExpr, depth + 1, true, config);
+            }
+            break;
+        case NODE_BLOCK:
+            if (node->typed.block.statements) {
+                for (int i = 0; i < node->typed.block.count; i++) {
+                    if (node->typed.block.statements[i]) {
+                        visualize_node_recursive(node->typed.block.statements[i], depth + 1, 
+                                               i == node->typed.block.count - 1, config);
+                    }
+                }
+            }
+            break;
+        case NODE_FOR_RANGE:
+            if (node->typed.forRange.start) {
+                visualize_node_recursive(node->typed.forRange.start, depth + 1, false, config);
+            }
+            if (node->typed.forRange.end) {
+                visualize_node_recursive(node->typed.forRange.end, depth + 1, 
+                                       !node->typed.forRange.step && !node->typed.forRange.body, config);
+            }
+            if (node->typed.forRange.step) {
+                visualize_node_recursive(node->typed.forRange.step, depth + 1, 
+                                       !node->typed.forRange.body, config);
+            }
+            if (node->typed.forRange.body) {
+                visualize_node_recursive(node->typed.forRange.body, depth + 1, true, config);
+            }
+            break;
+        case NODE_FOR_ITER:
+            if (node->typed.forIter.iterable) {
+                visualize_node_recursive(node->typed.forIter.iterable, depth + 1, 
+                                       !node->typed.forIter.body, config);
+            }
+            if (node->typed.forIter.body) {
+                visualize_node_recursive(node->typed.forIter.body, depth + 1, true, config);
+            }
+            break;
+        case NODE_FUNCTION:
+            if (node->typed.function.returnType) {
+                visualize_node_recursive(node->typed.function.returnType, depth + 1, 
+                                       !node->typed.function.body, config);
+            }
+            if (node->typed.function.body) {
+                visualize_node_recursive(node->typed.function.body, depth + 1, true, config);
+            }
+            break;
+        case NODE_RETURN:
+            if (node->typed.returnStmt.value) {
+                visualize_node_recursive(node->typed.returnStmt.value, depth + 1, true, config);
             }
             break;
         // Add more cases as needed for other node types

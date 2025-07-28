@@ -823,8 +823,32 @@ static Type* infer_basic_type(ASTNode* ast) {
             break;
             
         case NODE_BINARY:
-            // Binary operations typically return i32 for arithmetic
-            type->kind = TYPE_I32;
+            // Binary operations: arithmetic returns operand type, comparisons return bool
+            if (ast->binary.op) {
+                if (strcmp(ast->binary.op, ">") == 0 ||
+                    strcmp(ast->binary.op, "<") == 0 ||
+                    strcmp(ast->binary.op, ">=") == 0 ||
+                    strcmp(ast->binary.op, "<=") == 0 ||
+                    strcmp(ast->binary.op, "==") == 0 ||
+                    strcmp(ast->binary.op, "!=") == 0) {
+                    type->kind = TYPE_BOOL;
+                } else {
+                    // Arithmetic operations: try to infer from operands
+                    if (ast->binary.left) {
+                        Type* left_type = infer_basic_type(ast->binary.left);
+                        if (left_type) {
+                            type->kind = left_type->kind;
+                            free(left_type);
+                        } else {
+                            type->kind = TYPE_I32; // Default fallback
+                        }
+                    } else {
+                        type->kind = TYPE_I32; // Default fallback
+                    }
+                }
+            } else {
+                type->kind = TYPE_I32; // Default fallback
+            }
             break;
             
         case NODE_IDENTIFIER:
@@ -841,9 +865,24 @@ static Type* infer_basic_type(ASTNode* ast) {
         case NODE_FOR_RANGE:
         case NODE_FOR_ITER:
         case NODE_BLOCK:
-        case NODE_RETURN:
             // Statements typically return void
             type->kind = TYPE_VOID;
+            break;
+            
+        case NODE_RETURN:
+            // Return statement type depends on what it returns
+            if (ast->returnStmt.value) {
+                // If there's a return value, recursively infer its type
+                Type* value_type = infer_basic_type(ast->returnStmt.value);
+                if (value_type) {
+                    type->kind = value_type->kind;
+                    free(value_type); // Free the temporary type
+                } else {
+                    type->kind = TYPE_VOID;
+                }
+            } else {
+                type->kind = TYPE_VOID;
+            }
             break;
             
         case NODE_FUNCTION:
@@ -853,6 +892,70 @@ static Type* infer_basic_type(ASTNode* ast) {
         case NODE_CALL:
             // Function calls default to i32 (would be resolved by proper type inference)
             type->kind = TYPE_I32;
+            break;
+            
+        case NODE_TYPE:
+            // Type annotation nodes - parse the type name
+            if (ast->typeAnnotation.name) {
+                if (strcmp(ast->typeAnnotation.name, "i32") == 0) {
+                    type->kind = TYPE_I32;
+                } else if (strcmp(ast->typeAnnotation.name, "i64") == 0) {
+                    type->kind = TYPE_I64;
+                } else if (strcmp(ast->typeAnnotation.name, "u32") == 0) {
+                    type->kind = TYPE_U32;
+                } else if (strcmp(ast->typeAnnotation.name, "u64") == 0) {
+                    type->kind = TYPE_U64;
+                } else if (strcmp(ast->typeAnnotation.name, "f64") == 0) {
+                    type->kind = TYPE_F64;
+                } else if (strcmp(ast->typeAnnotation.name, "bool") == 0) {
+                    type->kind = TYPE_BOOL;
+                } else if (strcmp(ast->typeAnnotation.name, "string") == 0) {
+                    type->kind = TYPE_STRING;
+                } else if (strcmp(ast->typeAnnotation.name, "void") == 0) {
+                    type->kind = TYPE_VOID;
+                } else {
+                    type->kind = TYPE_UNKNOWN;
+                }
+            } else {
+                type->kind = TYPE_UNKNOWN;
+            }
+            break;
+            
+        case NODE_CAST:
+            // Cast expressions take the type of their target type
+            if (ast->cast.targetType) {
+                Type* target_type = infer_basic_type(ast->cast.targetType);
+                if (target_type) {
+                    type->kind = target_type->kind;
+                    free(target_type);
+                } else {
+                    type->kind = TYPE_UNKNOWN;
+                }
+            } else {
+                type->kind = TYPE_UNKNOWN;
+            }
+            break;
+            
+        case NODE_TERNARY:
+            // Ternary expressions: condition ? true_expr : false_expr
+            // Type is the unified type of both branches
+            if (ast->ternary.trueExpr && ast->ternary.falseExpr) {
+                Type* true_type = infer_basic_type(ast->ternary.trueExpr);
+                Type* false_type = infer_basic_type(ast->ternary.falseExpr);
+                
+                if (true_type && false_type && true_type->kind == false_type->kind) {
+                    type->kind = true_type->kind;
+                } else if (true_type) {
+                    type->kind = true_type->kind;
+                } else {
+                    type->kind = TYPE_UNKNOWN;
+                }
+                
+                if (true_type) free(true_type);
+                if (false_type) free(false_type);
+            } else {
+                type->kind = TYPE_UNKNOWN;
+            }
             break;
             
         default:

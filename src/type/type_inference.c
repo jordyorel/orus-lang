@@ -384,22 +384,20 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                 strcmp(node->binary.op, "-") == 0 ||
                 strcmp(node->binary.op, "*") == 0 ||
                 strcmp(node->binary.op, "/") == 0) {
+                // Arithmetic operations - return the type of the operands
                 if (!unify(l, r)) {
                     error("Type mismatch in arithmetic operation");
                     return NULL;
                 }
-                if (!unify(l, getPrimitiveType(TYPE_I32)) &&
-                    !unify(l, getPrimitiveType(TYPE_F64))) {
-                    error("Arithmetic operation requires numeric types");
-                    return NULL;
-                }
+                // Return the unified type (could be i32, f64, etc.)
                 return l;
             } else if (strcmp(node->binary.op, "==") == 0 ||
-                       strcmp(node->binary.op, "!=") == 0) {
-                if (!unify(l, r)) {
-                    error("Type mismatch in comparison");
-                    return NULL;
-                }
+                       strcmp(node->binary.op, "!=") == 0 ||
+                       strcmp(node->binary.op, "<") == 0 ||
+                       strcmp(node->binary.op, "<=") == 0 ||
+                       strcmp(node->binary.op, ">") == 0 ||
+                       strcmp(node->binary.op, ">=") == 0) {
+                // Comparison operations always return bool
                 return getPrimitiveType(TYPE_BOOL);
             }
             error("Unknown binary operator: %s", node->binary.op);
@@ -442,6 +440,118 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                 if (!t) return NULL;
             }
             return getPrimitiveType(TYPE_VOID);
+        }
+        case NODE_FUNCTION: {
+            // For function declarations, get the actual return type from type annotation
+            Type* return_type = getPrimitiveType(TYPE_VOID); // Default to void
+            
+            if (node->function.returnType) {
+                return_type = algorithm_w(env, node->function.returnType);
+                if (!return_type) return_type = getPrimitiveType(TYPE_VOID);
+            }
+            
+            // Process parameters and their types
+            Type** param_types = NULL;
+            int param_count = node->function.paramCount;
+            
+            if (param_count > 0) {
+                param_types = arena_alloc(sizeof(Type*) * param_count);
+                for (int i = 0; i < param_count; i++) {
+                    if (node->function.params[i].typeAnnotation) {
+                        param_types[i] = algorithm_w(env, node->function.params[i].typeAnnotation);
+                        if (!param_types[i]) param_types[i] = getPrimitiveType(TYPE_I32);
+                    } else {
+                        param_types[i] = getPrimitiveType(TYPE_I32); // Default fallback
+                    }
+                }
+            }
+            
+            Type* func_type = createFunctionType(return_type, param_types, param_count);
+            
+            // Add function to environment if it has a name
+            if (node->function.name) {
+                TypeScheme* scheme = generalize(env, func_type);
+                type_env_define(env, node->function.name, scheme);
+            }
+            
+            return func_type;
+        }
+        case NODE_CALL: {
+            // Function call type inference
+            Type* callee_type = algorithm_w(env, node->call.callee);
+            if (!callee_type) return NULL;
+            
+            // If callee is an identifier, look up its function type in environment
+            if (node->call.callee->type == NODE_IDENTIFIER) {
+                TypeScheme* scheme = type_env_lookup(env, node->call.callee->identifier.name);
+                if (scheme && scheme->type && scheme->type->kind == TYPE_FUNCTION) {
+                    return scheme->type->info.function.returnType;
+                }
+            }
+            
+            // Fallback: if we can't determine the type, return the callee type if it's a function
+            if (callee_type && callee_type->kind == TYPE_FUNCTION) {
+                return callee_type->info.function.returnType;
+            }
+            
+            return getPrimitiveType(TYPE_UNKNOWN);
+        }
+        case NODE_RETURN: {
+            if (node->returnStmt.value) {
+                Type* value_type = algorithm_w(env, node->returnStmt.value);
+                return value_type; // Return statement takes the type of its value
+            }
+            return getPrimitiveType(TYPE_VOID);
+        }
+        case NODE_TYPE: {
+            // Type annotation nodes - convert type name to actual Type*
+            if (node->typeAnnotation.name) {
+                if (strcmp(node->typeAnnotation.name, "i32") == 0) {
+                    return getPrimitiveType(TYPE_I32);
+                } else if (strcmp(node->typeAnnotation.name, "i64") == 0) {
+                    return getPrimitiveType(TYPE_I64);
+                } else if (strcmp(node->typeAnnotation.name, "u32") == 0) {
+                    return getPrimitiveType(TYPE_U32);
+                } else if (strcmp(node->typeAnnotation.name, "u64") == 0) {
+                    return getPrimitiveType(TYPE_U64);
+                } else if (strcmp(node->typeAnnotation.name, "f64") == 0) {
+                    return getPrimitiveType(TYPE_F64);
+                } else if (strcmp(node->typeAnnotation.name, "bool") == 0) {
+                    return getPrimitiveType(TYPE_BOOL);
+                } else if (strcmp(node->typeAnnotation.name, "string") == 0) {
+                    return getPrimitiveType(TYPE_STRING);
+                } else if (strcmp(node->typeAnnotation.name, "void") == 0) {
+                    return getPrimitiveType(TYPE_VOID);
+                }
+            }
+            return getPrimitiveType(TYPE_UNKNOWN);
+        }
+        case NODE_CAST: {
+            // Cast expressions take the type of their target type
+            if (node->cast.targetType) {
+                Type* target_type = algorithm_w(env, node->cast.targetType);
+                return target_type;
+            }
+            return getPrimitiveType(TYPE_UNKNOWN);
+        }
+        case NODE_TERNARY: {
+            // Ternary expressions: condition ? true_expr : false_expr
+            Type* condition_type = algorithm_w(env, node->ternary.condition);
+            Type* true_type = algorithm_w(env, node->ternary.trueExpr);
+            Type* false_type = algorithm_w(env, node->ternary.falseExpr);
+            
+            if (!condition_type || !true_type || !false_type) {
+                return getPrimitiveType(TYPE_UNKNOWN);
+            }
+            
+            // Condition should be boolean (we can relax this later)
+            // For now, just unify the two branches
+            if (unify(true_type, false_type)) {
+                return true_type;
+            }
+            
+            // If types don't unify, return the true branch type as fallback
+            return true_type;
         }
         default:
             error("Unsupported node type in type inference: %d", node->type);
@@ -543,6 +653,9 @@ static void populate_ast_types(ASTNode* node, TypeEnv* env) {
         case NODE_CAST:
             populate_ast_types(node->cast.expression, env);
             populate_ast_types(node->cast.targetType, env);
+            break;
+        case NODE_TYPE:
+            // Type annotation nodes don't need child processing
             break;
         default:
             break;
