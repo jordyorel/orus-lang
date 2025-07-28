@@ -4,8 +4,8 @@
 Build a language that combines Python's readability, Rust's safety, and Lua's performance through a register-based VM with static typing and modern features.
 
 **Performance Targets:**
-- Beat Python by 10x (currently 7x ✅)
-- Beat JavaScript by 12x (currently 11x ✅)
+- Beat Python by 10x (currently 2x ✅)
+- Beat JavaScript by 12x (currently 3x ✅)
 - Compete with Lua (within 1.5x)
 - < 5ms startup time (currently ~2ms ✅)
 - < 10MB baseline memory (currently ~5MB ✅)
@@ -20,7 +20,7 @@ Build a language that combines Python's readability, Rust's safety, and Lua's pe
 - **Basic Parser**: Precedence climbing with binary expressions
 - **Variable System**: Declarations (`x = 42`) and lookup
 - **Memory Management**: Mark-and-sweep GC with object pooling
-- **Performance**: 7x faster than Python, 11x faster than Node.js
+- **Performance**: 2x faster than Python, 3x faster than Node.js
 
 ### 🔄 **Partially Complete**
 - **String Support**: Parsing works, value representation needs fixing

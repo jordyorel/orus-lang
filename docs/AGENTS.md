@@ -13,125 +13,164 @@ Before implementing ANYTHING, you MUST:
 
 **NEVER implement features without first understanding the existing architecture and roadmap!**
 
-### **🔥 CRITICAL REMINDER: Shared Frontend + Specialized Backends Architecture**
-**Orus uses a SHARED FRONTEND with SPECIALIZED BACKENDS for optimal performance and feature consistency. This affects EVERY compiler change:**
+### **🔥 CRITICAL REMINDER: Single-Pass Compiler Architecture (NEW)**
+**Orus uses a SINGLE-PASS COMPILER DESIGN inspired by Lua for optimal simplicity and performance:**
 
-#### **✅ SHARED FRONTEND (Single-Pass Design)**
-- ✅ **Single parsing pass** - unified AST generation for all backends
-- ✅ **Unified type checking** - consistent semantics across compilation modes
-- ✅ **Shared semantic analysis** - no feature gaps between backends
-- ✅ **Single validation pass** - error handling consistency
-- ✅ **Forward-only parsing** - no backtracking or lookahead
+#### **✅ COMPLETED COMPONENTS**
+- ✅ **Lexer** - Complete tokenization with 105+ token types and type suffixes
+- ✅ **Parser** - Precedence-climbing parser with comprehensive AST (45+ node types)
+- ✅ **VM** - 256-register architecture with 135+ optimized opcodes
+- ✅ **Type System** - Phase 5 complete with comprehensive casting rules
 
-#### **✅ SPECIALIZED BACKENDS (Performance-Optimized)**
-- ✅ **FAST Backend**: Direct bytecode emission, development-optimized
-- ✅ **OPTIMIZED Backend**: Advanced optimizations, production-ready
-- ✅ **HYBRID Backend**: Smart backend selection based on code characteristics
-- ✅ **VM-Aware Optimizations**: Register allocation for 256-register VM
-- ✅ **Profile-Guided Optimization**: Hot path detection and recompilation
+#### **❌ MISSING CRITICAL COMPONENT: COMPILER BACKEND**
+- ❌ **Compiler Backend**: AST-to-bytecode transformation (NEEDS IMPLEMENTATION)
 
-#### **🎯 Smart Backend Selection**
+#### **🎯 NEW COMPILER DESIGN (Lua-Inspired)**
+- ✅ **Single-Pass Compilation**: Direct AST-to-bytecode with no intermediate representations
+- ✅ **Register Allocation**: Optimal usage of 256 VM registers (globals, locals, temporaries)
+- ✅ **Type Integration**: Leverages existing Phase 5 type system for casting and validation
+- ✅ **Local Optimizations**: Peephole optimization and register reuse
+- ✅ **Performance Focus**: Zero-cost abstractions and efficient instruction selection
+
+#### **🎯 Register Allocation Strategy**
 ```c
-CompilerBackend chooseOptimalBackend(ASTNode* node, CompilationContext* ctx) {
-    if (ctx->isDebugMode) return BACKEND_FAST;           // Fast compilation
-    if (isHotPath(node, ctx->profile)) return BACKEND_OPTIMIZED;  // Hot code
-    if (hasComplexLoops(node)) return BACKEND_OPTIMIZED; // Complex optimizations
-    return BACKEND_HYBRID;                               // Smart selection
-}
+// Register allocation for 256-register VM
+typedef enum {
+    REGISTER_GLOBAL   = 0,   // R0-R63:   Global variables (64 registers)
+    REGISTER_LOCAL    = 64,  // R64-R191: Function locals and parameters (128 registers)  
+    REGISTER_TEMP     = 192, // R192-R239: Temporary expressions (48 registers)
+    REGISTER_MODULE   = 240  // R240-R255: Module imports/exports (16 registers)
+} RegisterRange;
+
+// Example compilation: x = 42 + y
+LOAD_CONST_I32 R192, 0    // Load 42 into temp register
+LOAD_LOCAL R193, y_slot   // Load y into temp register  
+ADD_I32_R R0, R192, R193  // Add and store in global x register
 ```
 
 **Why This Architecture Matters**: 
-- **Feature Consistency**: Single frontend ensures all backends support same features
-- **Performance Flexibility**: Choose optimal backend per code section
-- **VM Optimization**: Specialized backends optimize for 256-register VM
-- **Development Speed**: Fast backend for development, optimized for production
+- **Simplicity**: Single-pass design like Lua eliminates complexity
+- **Performance**: Direct AST-to-bytecode with optimal register usage
+- **Integration**: Leverages existing VM, type system, and parser
+- **Maintainability**: No intermediate representations to debug
 
 ### **⚡ Critical Implementation Priorities**
 Focus on these features in order for a functional Orus language:
-1. **Print Function** (Phase 1.2) - Essential output with `print()` and string interpolation
-2. **Main Function** (Phase 2.4) - Program entry point with `fn main:` syntax
-3. **Variable Assignments** (Phase 1.4) - `x = value` operations  
-4. **Control Flow** (Phase 2.1-2.2) - `if/else` and `while/for` loops
-5. **Function Calls** (Phase 3.1) - Function definitions and invocations
-6. **Arrays** (Phase 4.1) - Dynamic collections with indexing
+1. **Compiler Backend** (Phase 1.0) - AST-to-bytecode compilation with register allocation
+2. **Print Function** (Phase 1.2) - Essential output with `print()` and string interpolation
+3. **Main Function** (Phase 2.4) - Program entry point with `fn main:` syntax
+4. **Variable Assignments** (Phase 1.4) - `x = value` operations  
+5. **Control Flow** (Phase 2.1-2.2) - `if/else` and `while/for` loops
+6. **Function Calls** (Phase 3.1) - Function definitions and invocations
+7. **Arrays** (Phase 4.1) - Dynamic collections with indexing
 
 ---
 
 ## 🚀 **Core Performance Principles**
 
-### **0. Shared Frontend + Specialized Backends Architecture (CRITICAL)**
-**The Orus compiler uses a SHARED FRONTEND with SPECIALIZED BACKENDS for optimal performance. This is NON-NEGOTIABLE.**
+### **0. Single-Pass Compiler Architecture (CRITICAL - NEW DESIGN)**
+**The Orus compiler uses a SINGLE-PASS DESIGN inspired by Lua for optimal simplicity and performance. This is NON-NEGOTIABLE.**
 
-#### **📋 SHARED FRONTEND PRINCIPLES**
-- **SINGLE PARSING PASS**: Unified AST generation for all backends
-- **UNIFIED TYPE CHECKING**: Consistent semantics across all compilation modes
-- **SHARED VALIDATION**: Single source of truth for language semantics
-- **LINEAR FRONTEND TIME**: Frontend MUST scale O(n) with source size
-- **FORWARD-ONLY PARSING**: No backtracking or lookahead in frontend
-- **IMMEDIATE ANALYSIS**: Type checking and validation as parsing progresses
+#### **📋 SINGLE-PASS COMPILER PRINCIPLES**
+- **DIRECT COMPILATION**: AST nodes directly generate bytecode instructions
+- **NO INTERMEDIATE REPRESENTATIONS**: Direct AST-to-bytecode transformation
+- **REGISTER-AWARE COMPILATION**: Optimal usage of 256 VM registers
+- **TYPE-INTEGRATED COMPILATION**: Uses existing Phase 5 type system
+- **LOCAL OPTIMIZATIONS**: Peephole optimization and register reuse
+- **PERFORMANCE-FIRST**: Zero-cost abstractions and efficient instruction selection
 
 ```c
-// ✅ CORRECT: Shared frontend with typed expressions
-TypedExpression* analyzeExpression(ASTNode* node, Compiler* compiler) {
-    TypedExpression* typed = malloc(sizeof(TypedExpression));
-    typed->node = node;
-    typed->inferredType = inferType(node, compiler);        // Unified typing
-    typed->isConstant = isConstantExpression(node);         // Shared analysis
-    typed->preferredReg = suggestRegister(node, compiler);  // VM hints
-    typed->flags = validateSafety(node, compiler);          // Unified validation
-    return typed;
-}
-
-// ✅ CORRECT: Backend-specific code generation
-int compileTypedExpression(TypedExpression* expr, Compiler* compiler, Backend backend) {
-    switch (backend) {
-        case BACKEND_FAST:      return compileFast(expr, compiler);
-        case BACKEND_OPTIMIZED: return compileOptimized(expr, compiler);
-        case BACKEND_HYBRID:    return compileHybrid(expr, compiler);
+// ✅ CORRECT: Single-pass compilation of AST nodes
+int compileExpression(ASTNode* node, CompilerContext* ctx) {
+    // Use existing type system for type analysis
+    Type* nodeType = inferType(node, ctx->typeContext);
+    
+    switch (node->type) {
+        case NODE_LITERAL:
+            return compileLiteral(node, ctx);
+        case NODE_BINARY:
+            return compileBinaryExpression(node, ctx);
+        case NODE_IDENTIFIER:
+            return compileVariableReference(node, ctx);
+        case NODE_CAST:
+            return compileCastExpression(node, ctx);
     }
 }
-```
 
-#### **🚀 SPECIALIZED BACKEND PRINCIPLES**
-- **BACKEND_FAST**: Direct bytecode emission, minimal optimization, development speed
-- **BACKEND_OPTIMIZED**: Advanced VM optimizations, register allocation, production performance
-- **BACKEND_HYBRID**: Profile-guided selection, adaptive optimization
-- **VM-AWARE**: All backends optimize for 256-register VM architecture
-- **HOT PATH SWITCHING**: Runtime profiling guides backend selection
-
-```c
-// ✅ CORRECT: Smart backend selection with profiling
-CompilerBackend chooseBackend(TypedExpression* expr, CompilationContext* ctx) {
-    // Debug mode: prioritize compilation speed
-    if (ctx->isDebugMode) return BACKEND_FAST;
+// ✅ CORRECT: Direct bytecode emission
+int compileBinaryExpression(ASTNode* node, CompilerContext* ctx) {
+    // Compile operands
+    int leftReg = compileExpression(node->binary.left, ctx);
+    int rightReg = compileExpression(node->binary.right, ctx);
     
-    // Hot path detected: use aggressive optimization
-    if (isHotPath(expr->node, ctx->profile)) return BACKEND_OPTIMIZED;
+    // Allocate result register
+    int resultReg = allocateTempRegister(ctx);
     
-    // Complex loops: benefit from optimization
-    if (hasComplexLoops(expr->node)) return BACKEND_OPTIMIZED;
+    // Select type-specific opcode
+    Opcode op = selectArithmeticOpcode(node->binary.op, node->dataType);
     
-    // Simple expressions: fast compilation
-    if (isSimpleExpression(expr->node)) return BACKEND_FAST;
+    // Emit instruction directly
+    emitInstruction(ctx, op, resultReg, leftReg, rightReg);
     
-    return BACKEND_HYBRID; // Smart selection
+    return resultReg;
 }
 ```
 
-**Why This Architecture is Critical:**
-1. **Feature Consistency**: Single frontend eliminates feature gaps between backends
-2. **Performance Flexibility**: Choose optimal backend per code section
-3. **VM Startup Speed**: Fast backend ensures rapid development iteration
-4. **Production Performance**: Optimized backend maximizes runtime performance
-5. **Profile-Guided Optimization**: Hot path detection enables adaptive optimization
-6. **Maintenance Simplicity**: Single frontend reduces complexity and bugs
+#### **🎯 COMPILER IMPLEMENTATION STRATEGY**
+- **Phase 1**: Basic expressions and literals (NODE_LITERAL, NODE_BINARY)
+- **Phase 2**: Variable declarations and assignments (NODE_VAR_DECL, NODE_ASSIGN)
+- **Phase 3**: Type casting integration (NODE_CAST with Phase 5 type system)
+- **Phase 4**: Control flow structures (NODE_IF, NODE_WHILE, NODE_FOR_RANGE)
+- **Phase 5**: Function calls and definitions (NODE_FUNCTION, NODE_CALL)
+- **Phase 6**: Local optimizations (peephole optimization, register reuse)
 
-**Implementation Rules:**
-- **Shared Frontend**: All language features MUST be implemented in shared analysis
-- **Backend Specialization**: Each backend optimizes for different use cases
-- **Profile Integration**: Profiling data guides backend selection decisions
-- **VM Optimization**: All backends MUST optimize for 256-register VM
-- **Hot Path Detection**: Runtime profiling enables adaptive recompilation
+```c
+// ✅ CORRECT: Register allocation for different node types
+int allocateRegisterForNode(ASTNode* node, CompilerContext* ctx) {
+    switch (node->type) {
+        case NODE_VAR_DECL:
+            // Global variables get persistent registers
+            return allocateGlobalRegister(ctx, node->varDecl.name);
+            
+        case NODE_LITERAL:
+        case NODE_BINARY:
+            // Temporary expressions get temp registers
+            return allocateTempRegister(ctx);
+            
+        case NODE_FUNCTION:
+            // Function locals get frame registers
+            return allocateLocalRegister(ctx, node);
+    }
+}
+
+// ✅ CORRECT: Type-specific instruction selection
+Opcode selectArithmeticOpcode(const char* op, Type* type) {
+    if (strcmp(op, "+") == 0) {
+        switch (type->kind) {
+            case TYPE_I32: return OP_ADD_I32_R;
+            case TYPE_I64: return OP_ADD_I64_R;
+            case TYPE_F64: return OP_ADD_F64_R;
+            case TYPE_STRING: return OP_STRING_CONCAT;
+        }
+    }
+    // Similar for -, *, /, %
+}
+```
+
+**Why Single-Pass Design is Critical:**
+1. **Simplicity**: No complex intermediate representations to debug
+2. **Performance**: Direct AST-to-bytecode minimizes compilation overhead
+3. **Memory Efficiency**: No additional IR memory allocation
+4. **Integration**: Leverages existing parser and type system
+5. **Maintainability**: Lua-style architecture proven for decades
+6. **VM Optimization**: Direct register allocation for 256-register VM
+
+**Implementation Requirements:**
+- **Direct Compilation**: Each AST node type has a corresponding compile function
+- **Register Management**: Smart allocation of global, local, and temporary registers
+- **Type Integration**: Use existing Phase 5 type system for instruction selection
+- **Local Optimization**: Peephole optimization and register reuse during emission
+- **Error Handling**: Integration with existing modular error system
 
 ### **1. Zero-Cost Abstractions**
 - Every abstraction MUST compile to optimal assembly code
@@ -878,11 +917,11 @@ Before contributing to Orus, study these resources:
 ### **MANDATORY: Always Update Documentation**
 Every contribution MUST include documentation updates:
 
-1. **Update `COMPILER_ARCHITECTURE.md`** for architectural changes:
-   - Update phase completion status (Phase 1, 2, 3, 4)
-   - Document shared frontend + specialized backend modifications
-   - Add new backend selection heuristics and optimization decisions
-   - Update VM-aware optimization strategies and profiling integration
+1. **Update `COMPILER_DESIGN.md`** for architectural changes:
+   - Update phase completion status (Phase 1, 2, 3, 4, 5, 6)
+   - Document single-pass compiler implementation progress
+   - Add new register allocation strategies and optimization decisions
+   - Update VM-aware optimization strategies and bytecode generation
 
 2. **Update `docs/MISSING.md`** with completed features:
    - Mark TODO items as ✅ COMPLETED when implemented
@@ -960,16 +999,16 @@ void complete_feature_implementation(Feature* feature) {
 ### **Required Documentation Flow:**
 ```
 1. Read LANGUAGE.md → Understand Orus specifications
-2. Check COMPILER_ARCHITECTURE.md → Understand current architecture phase
+2. Check COMPILER_DESIGN.md → Understand current single-pass compiler architecture
 3. Check MISSING.md → See what needs implementation  
 4. Study IMPLEMENTATION_GUIDE.md → Learn high-performance patterns
-5. Implement feature → Using shared frontend + specialized backend approach
-6. Update COMPILER_ARCHITECTURE.md → Mark phase progress, document backend changes
+5. Implement feature → Using single-pass AST-to-bytecode compilation
+6. Update COMPILER_DESIGN.md → Mark phase progress, document register allocation
 7. Update MISSING.md → Mark feature as completed
 8. Update IMPLEMENTATION_GUIDE.md → Add new patterns if applicable
 9. Update TEST_CATEGORIZATION.md → Categorize new tests
 10. Update Makefile → Add test targets for new categories
-11. Benchmark all backends → Performance characteristics across FAST/OPTIMIZED/HYBRID
+11. Benchmark compiler → Performance characteristics of single-pass compilation
 ```
 
 ### **Documentation Quality Requirements:**
