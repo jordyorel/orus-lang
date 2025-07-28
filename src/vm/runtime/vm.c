@@ -245,6 +245,29 @@ InterpretResult interpret(const char* source) {
             
             printf("\n=== END TYPED AST ===\n\n");
             
+            // ===== TEST NEW MULTI-PASS COMPILER (Phase 1) =====
+            printf("[VM] Testing new multi-pass compiler...\n");
+            
+            CompilerContext* multi_compiler = init_compiler_context(typed_ast);
+            if (multi_compiler) {
+                multi_compiler->enable_visualization = true;  // Enable debug output
+                
+                if (compile_to_bytecode(multi_compiler)) {
+                    printf("[VM] ✅ Multi-pass compiler succeeded!\n");
+                    printf("[VM] Generated %d bytecode instructions\n", 
+                           multi_compiler->bytecode->count);
+                    
+                    // TODO: In Phase 2, we'll use this bytecode instead of legacy compiler
+                    // For now, just verify it works alongside existing system
+                } else {
+                    printf("[VM] ❌ Multi-pass compiler failed\n");
+                }
+                
+                free_compiler_context(multi_compiler);
+            } else {
+                printf("[VM] ❌ Failed to initialize multi-pass compiler\n");
+            }
+            
             // Clean up typed AST
             free_typed_ast_node(typed_ast);
         } else {
@@ -273,17 +296,23 @@ InterpretResult interpret(const char* source) {
         return INTERPRET_COMPILE_ERROR;
     }
     
-    printf("[DEBUG] interpret: Compilation completed\n");
+    printf("[DEBUG] interpret: Compilation completed, chunk.count = %d\n", chunk.count);
 
     // Add a halt instruction at the end
     emitByte(&compiler, OP_HALT);
     
     printf("[DEBUG] interpret: Compilation complete, about to dump bytecode\n");
 
-// DEBUG: Dump bytecode before execution (disabled)
-#if 0
+// DEBUG: Dump bytecode before execution (ENABLED for debugging)
+#if 1
     printf("\n=== BYTECODE DUMP ===\n");
     printf("Instructions: %d\n", chunk.count);
+    printf("Constants: %d\n", chunk.constants.count);
+    for(int c = 0; c < chunk.constants.count; c++) {
+        printf("  const[%d] = ", c);
+        printValue(chunk.constants.values[c]);
+        printf("\n");
+    }
     
     for (int i = 0; i < chunk.count; i++) {
         printf("%04d: %02X", i, chunk.code[i]);
@@ -293,8 +322,12 @@ InterpretResult interpret(const char* source) {
             case OP_LOAD_I32_CONST:
                 printf(" (OP_LOAD_I32_CONST)");
                 if (i + 3 < chunk.count) {
-                    printf(" reg=%d, value=%d", chunk.code[i+1], 
-                           (chunk.code[i+2] << 8) | chunk.code[i+3]);
+                    uint16_t constantIndex = (chunk.code[i+2] << 8) | chunk.code[i+3];
+                    printf(" reg=%d, constantIndex=%d", chunk.code[i+1], constantIndex);
+                    if (constantIndex < chunk.constants.count) {
+                        printf(" actualValue=");
+                        printValue(chunk.constants.values[constantIndex]);
+                    }
                     i += 3;
                 }
                 break;
@@ -326,6 +359,7 @@ InterpretResult interpret(const char* source) {
 #endif
 
     printf("[DEBUG] interpret: About to execute bytecode\n");
+    printf("[DEBUG] interpret: chunk.count after OP_HALT = %d\n", chunk.count);
 
     // Execute the chunk
     vm.chunk = &chunk;
@@ -333,6 +367,7 @@ InterpretResult interpret(const char* source) {
     vm.frameCount = 0;
     
     printf("[DEBUG] interpret: VM setup complete, calling run()\n");
+    fflush(stdout);
 
     // Debug output: disassemble chunk if in dev mode
     if (vm.devMode) {
