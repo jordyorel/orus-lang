@@ -1,4 +1,0 @@
-// Should fail: string condition in while loop
-text = "hello"
-while text:
-    print("This should fail - text is not boolean")

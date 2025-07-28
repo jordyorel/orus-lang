@@ -260,9 +260,12 @@ ASTNode* parseSource(const char* source) {
 }
 
 static ASTNode* parseStatement(ParserContext* ctx) {
+    printf("[DEBUG] parseStatement: Starting, peeking token\n");
     Token t = peekToken(ctx);
+    printf("[DEBUG] parseStatement: Peeked token type %d\n", t.type);
 
     if (t.type == TOKEN_PRINT || t.type == TOKEN_PRINT_NO_NL || t.type == TOKEN_PRINT_SEP) {
+        printf("[DEBUG] parseStatement: Parsing print statement\n");
         return parsePrintStatement(ctx);
     }
     if (t.type == TOKEN_APOSTROPHE) {
@@ -864,11 +867,14 @@ static ASTNode* parseIfStatement(ParserContext* ctx) {
 }
 
 static ASTNode* parseWhileStatement(ParserContext* ctx) {
+    printf("[DEBUG] parseWhileStatement: Starting to parse while statement\n");
     Token whileTok = nextToken(ctx);
     if (whileTok.type != TOKEN_WHILE) return NULL;
 
     // Parse condition with error checking
+    printf("[DEBUG] parseWhileStatement: About to parse condition expression\n");
     ASTNode* condition = parseExpression(ctx);
+    printf("[DEBUG] parseWhileStatement: Condition expression parsed\n");
     if (!condition) {
         SrcLocation location = {NULL, whileTok.line, whileTok.column};
         report_empty_condition(location, "while");
@@ -896,12 +902,16 @@ static ASTNode* parseWhileStatement(ParserContext* ctx) {
     
     if (next.type == TOKEN_NEWLINE) {
         // Block-style while: while condition:\n    statement
+        printf("[DEBUG] parseWhileStatement: Processing block-style while loop\n");
         nextToken(ctx); // consume newline
         if (nextToken(ctx).type != TOKEN_INDENT) return NULL;
+        printf("[DEBUG] parseWhileStatement: About to parse block\n");
         body = parseBlock(ctx);
+        printf("[DEBUG] parseWhileStatement: Block parsing completed\n");
         if (!body) return NULL;
     } else {
         // Single-line while: while condition: statement
+        printf("[DEBUG] parseWhileStatement: Processing single-line while loop\n");
         body = parseStatement(ctx);
         if (!body) return NULL;
     }
@@ -2004,6 +2014,7 @@ void freeAST(ASTNode* node) {
 ASTNode* parseSourceWithContext(ParserContext* ctx, const char* source) {
     if (!ctx) return NULL;
     
+    printf("[DEBUG] parseSourceWithContext: Starting with source: %.50s...\n", source);
     parser_context_reset(ctx);
     init_scanner(source);
     
@@ -2011,8 +2022,11 @@ ASTNode* parseSourceWithContext(ParserContext* ctx, const char* source) {
     int count = 0;
     int capacity = 0;
     
+    printf("[DEBUG] parseSourceWithContext: Entering main parsing loop\n");
     while (true) {
+        printf("[DEBUG] parseSourceWithContext: Loop iteration %d\n", count);
         Token t = peekToken(ctx);
+        printf("[DEBUG] parseSourceWithContext: Peeked token type %d\n", t.type);
         if (t.type == TOKEN_EOF) break;
         if (t.type == TOKEN_NEWLINE) {
             nextToken(ctx);

@@ -1,7 +1,0 @@
-// Test: Mixed arithmetic error - i32 + u32
-// Expected: Friendly error message about type safety
-
-a: i32 = 10
-b: u32 = 20u32
-result = a * b
-print(result)

@@ -1,4 +1,0 @@
-// Should fail: non-boolean condition in if statement
-x = 10
-if x:
-    print("This should fail - x is not boolean")

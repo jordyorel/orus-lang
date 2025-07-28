@@ -18,6 +18,7 @@
         "vm_dispatch.h": "c",
         "typeinfo": "cpp",
         "hybrid_compiler.h": "c",
-        "shared_node_compilation.h": "c"
+        "shared_node_compilation.h": "c",
+        "vm.h": "c"
     }
 }

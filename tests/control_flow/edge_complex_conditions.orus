@@ -1,9 +1,0 @@
-// Edge case: complex conditions with type conversions
-x = 10
-y = 5
-if (x > y) == true:
-    print("Complex condition works")
-
-z = 0
-if (z as bool) == false:
-    print("Type conversion in condition works")

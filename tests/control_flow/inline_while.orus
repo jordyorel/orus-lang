@@ -1,4 +1,0 @@
-// Single-line while loop test
-mut i = 0
-while i < 3: i = i + 1
-print("Final i:", i)

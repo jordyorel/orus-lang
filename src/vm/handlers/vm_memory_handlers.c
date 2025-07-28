@@ -183,36 +183,36 @@ static inline void handle_store_global(void) {
 static inline void handle_load_i32_const(void) {
     uint8_t reg = READ_BYTE();
     uint16_t constantIndex = READ_SHORT();
-    vm.typed_regs.i32_regs[reg] = READ_CONSTANT(constantIndex).as.i32;
-    vm.typed_regs.reg_types[reg] = REG_TYPE_I32;
+    // Store in the standard register system where comparison operations expect values
+    vm.registers[reg] = READ_CONSTANT(constantIndex);
 }
 
 static inline void handle_load_i64_const(void) {
     uint8_t reg = READ_BYTE();
     uint16_t constantIndex = READ_SHORT();
-    vm.typed_regs.i64_regs[reg] = READ_CONSTANT(constantIndex).as.i64;
-    vm.typed_regs.reg_types[reg] = REG_TYPE_I64;
+    // Store in the standard register system where comparison operations expect values
+    vm.registers[reg] = READ_CONSTANT(constantIndex);
 }
 
 static inline void handle_load_u32_const(void) {
     uint8_t reg = READ_BYTE();
     uint16_t constantIndex = READ_SHORT();
-    vm.typed_regs.u32_regs[reg] = READ_CONSTANT(constantIndex).as.u32;
-    vm.typed_regs.reg_types[reg] = REG_TYPE_U32;
+    // Store in the standard register system where comparison operations expect values
+    vm.registers[reg] = READ_CONSTANT(constantIndex);
 }
 
 static inline void handle_load_u64_const(void) {
     uint8_t reg = READ_BYTE();
     uint16_t constantIndex = READ_SHORT();
-    vm.typed_regs.u64_regs[reg] = READ_CONSTANT(constantIndex).as.u64;
-    vm.typed_regs.reg_types[reg] = REG_TYPE_U64;
+    // Store in the standard register system where comparison operations expect values
+    vm.registers[reg] = READ_CONSTANT(constantIndex);
 }
 
 static inline void handle_load_f64_const(void) {
     uint8_t reg = READ_BYTE();
     uint16_t constantIndex = READ_SHORT();
-    vm.typed_regs.f64_regs[reg] = READ_CONSTANT(constantIndex).as.f64;
-    vm.typed_regs.reg_types[reg] = REG_TYPE_F64;
+    // Store in the standard register system where comparison operations expect values
+    vm.registers[reg] = READ_CONSTANT(constantIndex);
 }
 
 // ====== Typed Move Operation Handlers ======
@@ -220,15 +220,25 @@ static inline void handle_load_f64_const(void) {
 static inline void handle_move_i32(void) {
     uint8_t dst = READ_BYTE();
     uint8_t src = READ_BYTE();
-    vm.typed_regs.i32_regs[dst] = vm.typed_regs.i32_regs[src];
-    vm.typed_regs.reg_types[dst] = REG_TYPE_I32;
+    // Read from the standard register system where OP_LOAD_CONST stores values
+    if (!IS_I32(vm.registers[src])) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Source register must contain i32 value");
+        return;
+    }
+    // Store the value in the destination register in the standard register system
+    vm.registers[dst] = vm.registers[src];
 }
 
 static inline void handle_move_i64(void) {
     uint8_t dst = READ_BYTE();
     uint8_t src = READ_BYTE();
-    vm.typed_regs.i64_regs[dst] = vm.typed_regs.i64_regs[src];
-    vm.typed_regs.reg_types[dst] = REG_TYPE_I64;
+    // Read from the standard register system where OP_LOAD_CONST stores values
+    if (!IS_I64(vm.registers[src])) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Source register must contain i64 value");
+        return;
+    }
+    // Store the value in the destination register in the standard register system
+    vm.registers[dst] = vm.registers[src];
 }
 
 static inline void handle_move_u32(void) {
@@ -248,8 +258,13 @@ static inline void handle_move_u64(void) {
 static inline void handle_move_f64(void) {
     uint8_t dst = READ_BYTE();
     uint8_t src = READ_BYTE();
-    vm.typed_regs.f64_regs[dst] = vm.typed_regs.f64_regs[src];
-    vm.typed_regs.reg_types[dst] = REG_TYPE_F64;
+    // Read from the standard register system where OP_LOAD_CONST stores values
+    if (!IS_F64(vm.registers[src])) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Source register must contain f64 value");
+        return;
+    }
+    // Store the value in the destination register in the standard register system
+    vm.registers[dst] = vm.registers[src];
 }
 
 // ====== Print Operation Handlers ======

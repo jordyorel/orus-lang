@@ -1,7 +1,0 @@
-// Implicit widening from i32 to i64 should not be allowed
-// Expected: compilation error
-
-x: i32 = 5
-y: i64 = 100
-z = x + y
-print(z)

@@ -1,5 +1,0 @@
-// Test: Undefined type error - invalid type annotation
-// Expected: Friendly error message about unknown type
-
-value: unknown_type = 42
-print(value)

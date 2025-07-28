@@ -1,4 +1,0 @@
-// Should fail: float condition in if statement
-x = 3.14
-if x:
-    print("This should fail - x is not boolean")

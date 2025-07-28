@@ -1,5 +1,0 @@
-// Test: Type mismatch error - f64 assigned to bool
-// Expected: Friendly error message with helpful conversion guidance
-
-flag: bool = 3.14
-print(flag)

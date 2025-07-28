@@ -20,9 +20,6 @@
 #include "vm/vm_dispatch.h"
 #include "runtime/builtins.h"
 #include "public/common.h"
-#include "compiler/compiler.h"
-#include "compiler/hybrid_compiler.h"
-#include "compiler/simple_compiler.h"
 #include "compiler/parser.h"
 #include "runtime/memory.h"
 #include "runtime/builtins.h"
@@ -189,6 +186,7 @@ static InterpretResult run(void) {
 InterpretResult interpret(const char* source) {
     // Source text is now set in main.c with proper error handling
     // set_source_text(source, strlen(source)) is called before interpret()
+    printf("[DEBUG] interpret: Starting interpretation\n");
     // Create a chunk for the compiled bytecode
     Chunk chunk;
     initChunk(&chunk);
@@ -197,7 +195,9 @@ InterpretResult interpret(const char* source) {
     initCompiler(&compiler, &chunk, "<repl>", source);
 
     // Parse the source into an AST
+    printf("[DEBUG] interpret: Starting to parse source\n");
     ASTNode* ast = parseSource(source);
+    printf("[DEBUG] interpret: Parsing completed\n");
  
     if (!ast) {
         freeCompiler(&compiler);
@@ -206,20 +206,23 @@ InterpretResult interpret(const char* source) {
     }
 
     // Compile the AST to bytecode
+    printf("[DEBUG] interpret: Starting compilation\n");
     if (!compileProgram(ast, &compiler, false)) {
+        printf("[ERROR] interpret: Compilation failed\n");
         freeAST(ast);
         freeCompiler(&compiler);
         freeChunk(&chunk);
         return INTERPRET_COMPILE_ERROR;
     }
+    printf("[DEBUG] interpret: Compilation completed\n");
 
     // Add a halt instruction at the end
     emitByte(&compiler, OP_HALT);
     
     printf("[DEBUG] interpret: Compilation complete, about to dump bytecode\n");
 
-#ifdef DEBUG_BYTECODE_DUMP
-    // DEBUG: Dump bytecode before execution (enable with -DDEBUG_BYTECODE_DUMP)
+// DEBUG: Dump bytecode before execution (disabled)
+#if 0
     printf("\n=== BYTECODE DUMP ===\n");
     printf("Instructions: %d\n", chunk.count);
     

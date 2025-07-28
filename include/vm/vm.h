@@ -8,7 +8,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "compiler/symbol_table.h"
 #include "vm_constants.h"
 #include "vm_string_ops.h"
 
@@ -840,7 +839,6 @@ typedef struct {
     int loopStart;              // Start instruction of current loop
     JumpTable pendingJumps;     // Track all pending forward jumps for cascade updates
     RegisterAllocator regAlloc; // Enhanced register allocator with lifetime tracking
-    SymbolTable symbols;        // Hash-based symbol table for fast lookup
     struct TypeInferer* typeInferer;   // Type inference engine for Phase 3.1 optimization
     ScopeAnalyzer scopeAnalyzer; // Compile-time scope analysis and optimization
     // Phase 3.1: Compile-time register type tracking for aggressive optimization

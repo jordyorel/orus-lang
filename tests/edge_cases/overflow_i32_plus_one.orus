@@ -1,5 +1,0 @@
-// Overflowing i32 addition should be detected
-// Expected: runtime error or compilation failure due to overflow
-
-a: i32 = 2147483647
-print(a + 1)

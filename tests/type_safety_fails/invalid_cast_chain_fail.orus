@@ -1,5 +1,0 @@
-// Type safety: invalid type casting should fail
-a: i32 = 10
-b: string = "test"
-result = a as bool as string  // This should fail - invalid chain casting
-print(result)

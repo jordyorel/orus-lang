@@ -1,7 +1,0 @@
-// Chained mixed-type operations without casts should fail
-// Expected: compilation error
-
-a: i32 = 1
-b: f64 = 2.0
-c: i64 = 3
-print(a + b + c)

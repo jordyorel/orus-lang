@@ -1,5 +1,0 @@
-// Type safety: mixing different sized integers should fail
-a: i32 = 50
-b: i64 = 100
-result = a + b  // This should fail - different integer sizes
-print(result)

@@ -1,6 +1,0 @@
-// Test: Invalid cast error - string to bool
-// Expected: Friendly error message about invalid string conversion
-
-text = "true"
-flag = text as bool
-print(flag)

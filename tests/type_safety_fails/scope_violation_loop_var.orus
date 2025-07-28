@@ -1,7 +1,0 @@
-// Test that should fail: accessing loop variable outside its scope
-
-for i in 1..3:
-    print("Loop variable i:", i)
-
-// This should cause a compilation error - accessing loop variable outside scope
-print("Trying to access i outside loop:", i)

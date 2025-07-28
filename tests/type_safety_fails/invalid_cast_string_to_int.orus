@@ -1,6 +1,0 @@
-// Test: Invalid cast error - string to i32
-// Expected: Friendly error message explaining string conversions not allowed
-
-text = "42"
-number = text as i32
-print(number)

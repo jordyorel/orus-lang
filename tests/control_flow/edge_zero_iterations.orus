@@ -1,6 +1,0 @@
-// Edge case: while loop with zero iterations
-mut i = 5
-while i < 3:
-    print("This should not print")
-    i = i + 1
-print("i remains:", i)

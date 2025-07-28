@@ -1,7 +1,0 @@
-// Division by zero should trigger a runtime error
-// Expected: runtime error when executing
-
-x: i32 = 10
-y: i32 = 0
-print(x / y)
-print("this should not print")

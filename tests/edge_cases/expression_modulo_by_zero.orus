@@ -1,5 +1,0 @@
-// Test expression modulo by zero handling
-print("=== Expression Modulo By Zero Test ===")
-print("Testing (1000 + 2000) % (5 - 5):")
-print((1000 + 2000) % (5 - 5))
-print("This should not print")

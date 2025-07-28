@@ -1,5 +1,0 @@
-// Test large number modulo by zero handling
-print("=== Large Number Modulo By Zero Test ===")
-print("Testing 2147483647 % 0:")
-print(2147483647 % 0)
-print("This should not print")

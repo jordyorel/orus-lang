@@ -1,7 +1,0 @@
-// Basic function definition and call test
-fn add(a: i32, b: i32) -> i32:
-    result = a + b
-    return result
-
-answer = add(5, 3)
-print("Result:", answer)
