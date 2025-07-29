@@ -182,7 +182,11 @@ int main(int argc, const char* argv[]) {
     }
     
     // Initialize VM with configuration
+    printf("[MAIN_TRACE] About to call initVM()\n");
+    fflush(stdout);
     initVM();
+    printf("[MAIN_TRACE] initVM() completed\n");
+    fflush(stdout);
     
     // Apply configuration to VM
     vm.trace = config->trace_execution;

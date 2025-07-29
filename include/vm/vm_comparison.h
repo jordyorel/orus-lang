@@ -166,6 +166,9 @@
 #define CMP_F64_LT(dst, a, b) \
     do { \
         if (!IS_F64(vm.registers[(a)]) || !IS_F64(vm.registers[(b)])) { \
+            fprintf(stderr, "[F64_LT_ERROR_TRACE] CMP_F64_LT triggered: dst=%d, a=%d, b=%d\n", (dst), (a), (b)); \
+            fprintf(stderr, "[F64_LT_ERROR_TRACE] Register[%d] type: %d, Register[%d] type: %d\n", (a), vm.registers[(a)].type, (b), vm.registers[(b)].type); \
+            fflush(stderr); \
             runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be f64"); \
             RETURN(INTERPRET_RUNTIME_ERROR); \
         } \
@@ -175,6 +178,9 @@
 #define CMP_F64_LE(dst, a, b) \
     do { \
         if (!IS_F64(vm.registers[(a)]) || !IS_F64(vm.registers[(b)])) { \
+            fprintf(stderr, "[F64_LE_ERROR_TRACE] CMP_F64_LE triggered: dst=%d, a=%d, b=%d\n", (dst), (a), (b)); \
+            fprintf(stderr, "[F64_LE_ERROR_TRACE] Register[%d] type: %d, Register[%d] type: %d\n", (a), vm.registers[(a)].type, (b), vm.registers[(b)].type); \
+            fflush(stderr); \
             runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be f64"); \
             RETURN(INTERPRET_RUNTIME_ERROR); \
         } \
@@ -184,6 +190,9 @@
 #define CMP_F64_GT(dst, a, b) \
     do { \
         if (!IS_F64(vm.registers[(a)]) || !IS_F64(vm.registers[(b)])) { \
+            fprintf(stderr, "[F64_GT_ERROR_TRACE] CMP_F64_GT triggered: dst=%d, a=%d, b=%d\n", (dst), (a), (b)); \
+            fprintf(stderr, "[F64_GT_ERROR_TRACE] Register[%d] type: %d, Register[%d] type: %d\n", (a), vm.registers[(a)].type, (b), vm.registers[(b)].type); \
+            fflush(stderr); \
             runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be f64"); \
             RETURN(INTERPRET_RUNTIME_ERROR); \
         } \
@@ -193,6 +202,9 @@
 #define CMP_F64_GE(dst, a, b) \
     do { \
         if (!IS_F64(vm.registers[(a)]) || !IS_F64(vm.registers[(b)])) { \
+            fprintf(stderr, "[F64_GE_ERROR_TRACE] CMP_F64_GE triggered: dst=%d, a=%d, b=%d\n", (dst), (a), (b)); \
+            fprintf(stderr, "[F64_GE_ERROR_TRACE] Register[%d] type: %d, Register[%d] type: %d\n", (a), vm.registers[(a)].type, (b), vm.registers[(b)].type); \
+            fflush(stderr); \
             runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be f64"); \
             RETURN(INTERPRET_RUNTIME_ERROR); \
         } \

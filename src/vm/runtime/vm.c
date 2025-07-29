@@ -144,7 +144,11 @@ extern void init_extended_type_system(void);
 extern Type* get_primitive_type_cached(TypeKind kind);
 
 void initTypeSystem(void) {
+    printf("[TYPE_SYSTEM_TRACE] initTypeSystem() starting\n");
+    fflush(stdout);
     init_extended_type_system();
+    printf("[TYPE_SYSTEM_TRACE] init_extended_type_system() completed\n");
+    fflush(stdout);
 }
 
 Type* getPrimitiveType(TypeKind kind) {
@@ -162,6 +166,12 @@ void runtimeError(ErrorType type, SrcLocation location,
     va_start(args, format);
     vsnprintf(buffer, sizeof(buffer), format, args);
     va_end(args);
+
+    // DEBUG: Trace runtime errors to find the source
+    fprintf(stderr, "[RUNTIME_ERROR_TRACE] runtimeError called: type=%d, message='%s'\n", type, buffer);
+    fprintf(stderr, "[RUNTIME_ERROR_TRACE] Location: file=%s, line=%d, column=%d\n", 
+            location.file ? location.file : "NULL", location.line, location.column);
+    fflush(stderr);
 
     if (location.file == NULL && vm.filePath) {
         location.file = vm.filePath;
@@ -334,7 +344,11 @@ InterpretResult interpret(const char* source) {
                         fflush(stdout);
                         
                         // Execute the bytecode
+                        printf("[VM] About to call run() function...\n");
+                        fflush(stdout);
                         InterpretResult exec_result = run();
+                        printf("[VM] run() function returned with result: %d\n", exec_result);
+                        fflush(stdout);
                         printf("[VM] Bytecode execution completed with result: %d\n", exec_result);
                         fflush(stdout);
                         
@@ -377,11 +391,13 @@ InterpretResult interpret(const char* source) {
         printf("[DEBUG] interpret: Typed AST visualization completed\n");
     }
 
-    printf("[DEBUG] interpret: About to call compileProgram\n");
+    printf("[DEBUG] interpret: About to call legacy compileProgram\n");
     fflush(stdout);
     
     // Compile the AST to bytecode
     bool compilation_result = compileProgram(ast, &compiler, false);
+    printf("[DEBUG] interpret: Legacy compileProgram completed\n");
+    fflush(stdout);
     printf("[DEBUG] interpret: compileProgram returned %s\n", compilation_result ? "true" : "false");
     fflush(stdout);
     
@@ -471,9 +487,11 @@ InterpretResult interpret(const char* source) {
         disassembleChunk(&chunk, "main");
     }
 
+    printf("[DEBUG] interpret: About to call legacy run() function\n");
+    fflush(stdout);
     InterpretResult result = run();
-    
-    printf("[DEBUG] interpret: run() returned with result: %d\n", result);
+    printf("[DEBUG] interpret: Legacy run() returned with result: %d\n", result);
+    fflush(stdout);
   
     freeAST(ast);
     freeCompiler(&compiler);

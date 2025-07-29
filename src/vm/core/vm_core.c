@@ -10,9 +10,26 @@
 VM vm; // Global VM instance
 
 void initVM(void) {
+    printf("[VM_CORE_TRACE] initVM() starting\n");
+    fflush(stdout);
+    
+    printf("[VM_CORE_TRACE] About to call initTypeSystem()\n");
+    fflush(stdout);
     initTypeSystem();
+    printf("[VM_CORE_TRACE] initTypeSystem() completed\n");
+    fflush(stdout);
+    
+    printf("[VM_CORE_TRACE] About to call initMemory()\n");
+    fflush(stdout);
     initMemory();
+    printf("[VM_CORE_TRACE] initMemory() completed\n");
+    fflush(stdout);
+    
+    printf("[VM_CORE_TRACE] About to call init_string_table()\n");
+    fflush(stdout);
     init_string_table(&globalStringTable);
+    printf("[VM_CORE_TRACE] init_string_table() completed\n");
+    fflush(stdout);
 
     // Phase 1: Initialize new register file architecture
     init_register_file(&vm.register_file);

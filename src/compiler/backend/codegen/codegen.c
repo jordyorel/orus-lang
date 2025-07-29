@@ -257,7 +257,9 @@ void compile_print_statement(CompilerContext* ctx, TypedASTNode* print) {
     
     if (print->typed.print.count == 0) {
         // Print with no arguments - use register 0 (standard behavior)
-        emit_instruction_to_buffer(ctx->bytecode, OP_PRINT_R, 0, 0, 0);
+        // OP_PRINT_R format: opcode + register (2 bytes total)
+        emit_byte_to_buffer(ctx->bytecode, OP_PRINT_R);
+        emit_byte_to_buffer(ctx->bytecode, 0);
         printf("[CODEGEN] Emitted OP_PRINT_R R0 (no arguments)\n");
     } else if (print->typed.print.count == 1) {
         // Single expression print - compile expression and emit print
@@ -266,7 +268,9 @@ void compile_print_statement(CompilerContext* ctx, TypedASTNode* print) {
         
         if (reg != -1) {
             // Use OP_PRINT_R which calls handle_print() -> builtin_print()
-            emit_instruction_to_buffer(ctx->bytecode, OP_PRINT_R, reg, 0, 0);
+            // OP_PRINT_R format: opcode + register (2 bytes total)
+            emit_byte_to_buffer(ctx->bytecode, OP_PRINT_R);
+            emit_byte_to_buffer(ctx->bytecode, reg);
             printf("[CODEGEN] Emitted OP_PRINT_R R%d (single expression)\n", reg);
             
             // Free the temporary register
@@ -334,7 +338,8 @@ bool generate_bytecode_from_ast(CompilerContext* ctx) {
     apply_peephole_optimizations(ctx);
     
     // Emit HALT instruction to complete the program
-    emit_instruction_to_buffer(ctx->bytecode, OP_HALT, 0, 0, 0);
+    // OP_HALT format: opcode only (1 byte total)
+    emit_byte_to_buffer(ctx->bytecode, OP_HALT);
     printf("[CODEGEN] Emitted OP_HALT\n");
     
     int final_count = ctx->bytecode->count;
