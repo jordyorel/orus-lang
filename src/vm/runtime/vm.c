@@ -219,8 +219,14 @@ InterpretResult interpret(const char* source) {
     printf("[DEBUG] interpret: config = %p\n", (void*)config);
     fflush(stdout);
     
+    // Disable verbose parser debug output from this point forward to clean up typed AST output
     if (config && config->show_typed_ast) {
-        printf("[DEBUG] interpret: Typed AST visualization enabled\n");
+        extern void set_parser_debug(bool enabled);
+        set_parser_debug(false);  // Disable parser debug for cleaner typed AST output
+    }
+    
+    if (config && config->show_typed_ast) {
+        // printf("[DEBUG] interpret: Typed AST visualization enabled\n");
         fflush(stdout);
         // Type inference system is integrated with AST parsing
         

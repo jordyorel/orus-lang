@@ -1,4 +1,4 @@
-// spill_manager.c - Phase 2: Register Spilling Implementation
+// spill_manager.c - Register Spilling Implementation
 // HashMap-based register spilling for unlimited variable support
 
 #include "vm/spill_manager.h"
@@ -10,7 +10,7 @@
 #define SPILL_INITIAL_CAPACITY 16
 #define SPILL_MAX_LOAD_FACTOR 0.75
 
-// Phase 2: Spill entry structure
+// Spill entry structure
 typedef struct {
     uint16_t register_id;     // Register ID being spilled
     Value value;              // Spilled value
@@ -18,7 +18,7 @@ typedef struct {
     uint8_t last_used;        // LRU tracking
 } SpillEntry;
 
-// Phase 2: Spill manager structure  
+// Spill manager structure  
 struct SpillManager {
     SpillEntry* entries;      // Hash table entries
     size_t capacity;          // Hash table capacity
@@ -69,7 +69,7 @@ static void resize_spill_table(SpillManager* manager) {
     free(old_entries);
 }
 
-// Phase 2: Create spill manager
+// Create spill manager
 SpillManager* create_spill_manager(void) {
     SpillManager* manager = (SpillManager*)malloc(sizeof(SpillManager));
     if (!manager) return NULL;
@@ -84,7 +84,7 @@ SpillManager* create_spill_manager(void) {
     return manager;
 }
 
-// Phase 2: Free spill manager
+// Free spill manager
 void free_spill_manager(SpillManager* manager) {
     if (manager) {
         free(manager->entries);
@@ -92,7 +92,7 @@ void free_spill_manager(SpillManager* manager) {
     }
 }
 
-// Phase 2: Spill a register value
+// Spill a register value
 uint16_t spill_register_value(SpillManager* manager, Value value) {
     // Check if we need to resize
     if ((manager->count + manager->tombstones + 1) * 4 > manager->capacity * 3) {
@@ -115,7 +115,7 @@ uint16_t spill_register_value(SpillManager* manager, Value value) {
     return spill_id;
 }
 
-// Phase 2: Set a spill register value with explicit register ID
+// Set a spill register value with explicit register ID
 bool set_spill_register_value(SpillManager* manager, uint16_t register_id, Value value) {
     if (!manager) {
         return false;
@@ -145,7 +145,7 @@ bool set_spill_register_value(SpillManager* manager, uint16_t register_id, Value
     return true;
 }
 
-// Phase 2: Reserve a spill slot with explicit register ID (for parameters)
+// Reserve a spill slot with explicit register ID (for parameters)
 void reserve_spill_slot(SpillManager* manager, uint16_t register_id) {
     if (!manager) {
         return;
@@ -178,7 +178,7 @@ void reserve_spill_slot(SpillManager* manager, uint16_t register_id) {
     }
 }
 
-// Phase 2: Unspill a register value
+// Unspill a register value
 bool unspill_register_value(SpillManager* manager, uint16_t register_id, Value* value) {
     SpillEntry* entry = find_spill_entry(manager->entries, manager->capacity, register_id);
     
@@ -191,7 +191,7 @@ bool unspill_register_value(SpillManager* manager, uint16_t register_id, Value* 
     return true;
 }
 
-// Phase 2: Remove spilled register
+// Remove spilled register
 void remove_spilled_register(SpillManager* manager, uint16_t register_id) {
     SpillEntry* entry = find_spill_entry(manager->entries, manager->capacity, register_id);
     
@@ -203,7 +203,7 @@ void remove_spilled_register(SpillManager* manager, uint16_t register_id) {
     }
 }
 
-// Phase 2: Check if spilling is needed (pressure analysis)
+// Check if spilling is needed (pressure analysis)
 bool needs_spilling(SpillManager* manager) {
     (void)manager; // Not used in simple implementation
     // Simple heuristic: spill when we have more than threshold active entries
@@ -211,13 +211,13 @@ bool needs_spilling(SpillManager* manager) {
     return false; // For now, spilling is manual
 }
 
-// Phase 2: Get spill statistics
+// Get spill statistics
 void get_spill_stats(SpillManager* manager, size_t* active_spills, size_t* total_capacity) {
     if (active_spills) *active_spills = manager->count;
     if (total_capacity) *total_capacity = manager->capacity;
 }
 
-// Phase 2: Find least recently used spill for eviction
+// Find least recently used spill for eviction
 uint16_t find_lru_spill(SpillManager* manager) {
     uint8_t oldest_time = 255;
     uint16_t lru_id = 0;

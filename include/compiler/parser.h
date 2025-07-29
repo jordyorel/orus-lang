@@ -47,6 +47,9 @@ void parser_context_reset(ParserContext* ctx);
 ASTNode* parseSource(const char* source);
 ASTNode* parseSourceWithContext(ParserContext* ctx, const char* source);
 
+// Debug control
+void set_parser_debug(bool enabled);
+
 // AST cleanup
 void freeAST(ASTNode* node);
 

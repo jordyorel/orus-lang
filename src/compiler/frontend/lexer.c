@@ -873,7 +873,7 @@ Token scan_token() {
     lexer.start = lexer.current;
 
     if (is_at_end()) {
-        printf("[DEBUG] scan_token: At end, current char = %d, indentTop = %d\n", *lexer.current, lexer.indentTop);
+        // printf("[DEBUG] scan_token: At end, current char = %d, indentTop = %d\n", *lexer.current, lexer.indentTop);
         fflush(stdout);
         if (lexer.indentTop > 0) {
             lexer.indentTop--;
@@ -883,7 +883,7 @@ Token scan_token() {
     }
 
     char c = advance();
-    printf("[DEBUG] scan_token: Processing character '%c' (ASCII %d)\n", c >= 32 && c <= 126 ? c : '?', (int)c);
+    // printf("[DEBUG] scan_token: Processing character '%c' (ASCII %d)\n", c >= 32 && c <= 126 ? c : '?', (int)c);
     fflush(stdout);
 
     /* Single‐char or 2‐char tokens */

@@ -1,4 +1,4 @@
-// register_file.c - Phase 1 & 2: Register File Architecture Implementation
+// register_file.c - Register File Architecture Implementation
 // Implementation of hierarchical register windows with dynamic spilling
 
 #include "vm/vm.h"
@@ -35,14 +35,14 @@ Value* get_register_internal(RegisterFile* rf, uint16_t id) {
         return &rf->temps[id - TEMP_REG_START];
     }
     
-    // Phase 3: Module registers (352-479)
+    // Module registers (352-479)
     if (rf->module_manager && is_module_register(id)) {
         uint8_t module_id = (id - MODULE_REG_START) / MODULE_REGISTERS;
         uint16_t reg_offset = (id - MODULE_REG_START) % MODULE_REGISTERS;
         return get_module_register(rf->module_manager, module_id, reg_offset);
     }
     
-    // Phase 2: Spilled registers (480+) - HashMap lookup
+    // Spilled registers (480+) - HashMap lookup
     if (rf->spilled_registers && is_spilled_register(id)) {
         static Value spilled_value;
         if (unspill_register_value(rf->spilled_registers, id, &spilled_value)) {
@@ -54,7 +54,7 @@ Value* get_register_internal(RegisterFile* rf, uint16_t id) {
     return &rf->globals[id % GLOBAL_REGISTERS];
 }
 
-// Phase 4: Cached register access function (public interface)
+// Cached register access function (public interface)
 Value* get_register(RegisterFile* rf, uint16_t id) {
     // Use cache if available, otherwise fall back to direct access
     if (rf->cache) {

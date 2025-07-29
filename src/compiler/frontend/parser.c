@@ -1975,45 +1975,58 @@ void freeAST(ASTNode* node) {
 }
 
 
+// Global flag to control parser debug output - can be set externally
+static bool parser_debug_enabled = false;
+
+// Function to control parser debug output
+void set_parser_debug(bool enabled) {
+    parser_debug_enabled = enabled;
+}
+
+// Debug macro that checks the flag
+#define PARSER_DEBUG_PRINTF(...) do { \
+    if (parser_debug_enabled) { \
+        printf(__VA_ARGS__); \
+        fflush(stdout); \
+    } \
+} while(0)
+
 // Context-based parsing interface - new implementation
 ASTNode* parseSourceWithContext(ParserContext* ctx, const char* source) {
     if (!ctx) return NULL;
     
-    printf("[DEBUG] parseSourceWithContext: Starting with source: '%s'\n", source);
-    fflush(stdout);
+    // PARSER_DEBUG_PRINTF("[DEBUG] parseSourceWithContext: Starting with source: '%s'\n", source);
     
     parser_context_reset(ctx);
-    printf("[DEBUG] parseSourceWithContext: Context reset complete\n");
-    fflush(stdout);
+    // PARSER_DEBUG_PRINTF("[DEBUG] parseSourceWithContext: Context reset complete\n");
     
     init_scanner(source);
-    printf("[DEBUG] parseSourceWithContext: Scanner initialized\n");
-    fflush(stdout);
+    // PARSER_DEBUG_PRINTF("[DEBUG] parseSourceWithContext: Scanner initialized\n");
     
     ASTNode** statements = NULL;
     int count = 0;
     int capacity = 0;
     
     while (true) {
-        printf("[DEBUG] parseSourceWithContext: About to peek token\n");
+        // printf("[DEBUG] parseSourceWithContext: About to peek token\n");
         fflush(stdout);
         
         Token t = peekToken(ctx);
-        printf("[DEBUG] parseSourceWithContext: Got token type %d\n", t.type);
+        // printf("[DEBUG] parseSourceWithContext: Got token type %d\n", t.type);
         fflush(stdout);
         
-        printf("[DEBUG] parseSourceWithContext: TOKEN_EOF value = %d, t.type = %d\n", TOKEN_EOF, t.type);
+        // printf("[DEBUG] parseSourceWithContext: TOKEN_EOF value = %d, t.type = %d\n", TOKEN_EOF, t.type);
         fflush(stdout);
         if (t.type == TOKEN_EOF) break;
         if (t.type == TOKEN_NEWLINE) {
-            printf("[DEBUG] parseSourceWithContext: Consuming newline\n");
+            // printf("[DEBUG] parseSourceWithContext: Consuming newline\n");
             fflush(stdout);
             nextToken(ctx);
             continue;
         }
         if (t.type == TOKEN_COMMA) {
             // Skip commas between statements (for comma-separated variable declarations)
-            printf("[DEBUG] parseSourceWithContext: Consuming comma\n");
+            // printf("[DEBUG] parseSourceWithContext: Consuming comma\n");
             fflush(stdout);
             nextToken(ctx);
             continue;
@@ -2025,32 +2038,32 @@ ASTNode* parseSourceWithContext(ParserContext* ctx, const char* source) {
             return NULL;
         }
         
-        printf("[DEBUG] parseSourceWithContext: About to parse statement for token type %d\n", t.type);
+        // printf("[DEBUG] parseSourceWithContext: About to parse statement for token type %d\n", t.type);
         fflush(stdout);
         
         ASTNode* stmt = parseStatement(ctx);
         if (!stmt) {
-            printf("[DEBUG] parseSourceWithContext: parseStatement returned NULL\n");
+            // printf("[DEBUG] parseSourceWithContext: parseStatement returned NULL\n");
             fflush(stdout);
             return NULL;
         }
         
-        printf("[DEBUG] parseSourceWithContext: Statement parsed successfully\n");
+        // printf("[DEBUG] parseSourceWithContext: Statement parsed successfully\n");
         fflush(stdout);
         
         addStatement(ctx, &statements, &count, &capacity, stmt);
         
-        printf("[DEBUG] parseSourceWithContext: Statement added to list\n");
+        // printf("[DEBUG] parseSourceWithContext: Statement added to list\n");
         fflush(stdout);
     }
     
-    printf("[DEBUG] parseSourceWithContext: Loop completed, creating program node\n");
+    // printf("[DEBUG] parseSourceWithContext: Loop completed, creating program node\n");
     fflush(stdout);
     
     // Create program node even if empty (valid empty program)
     ASTNode* root = new_node(ctx);
     
-    printf("[DEBUG] parseSourceWithContext: Program node created\n");
+    // printf("[DEBUG] parseSourceWithContext: Program node created\n");
     fflush(stdout);
     root->type = NODE_PROGRAM;
     root->program.declarations = statements;
@@ -2059,7 +2072,7 @@ ASTNode* parseSourceWithContext(ParserContext* ctx, const char* source) {
     root->location.column = 1;
     root->dataType = NULL;
     
-    printf("[DEBUG] parseSourceWithContext: Returning program node\n");
+    // printf("[DEBUG] parseSourceWithContext: Returning program node\n");
     fflush(stdout);
     
     return root;

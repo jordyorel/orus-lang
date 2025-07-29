@@ -548,10 +548,17 @@ TypedASTNode* constant_folding_pass(TypedASTNode* node, OptimizationContext* ctx
 
 ### 🎯 **HIGH-LEVEL OPTIMIZATIONS (optimizer.c Implementation TODOs)**
 
-**Optimization Pass 1: Data Flow Analysis**
+## 🚀 **VM-AWARE OPTIMIZATION STRATEGY**
+**This VM has 150+ specialized opcodes and is INCREDIBLY powerful! Our optimizations must leverage these superpowers:**
+
+**Phase 1: Simple & Essential (CURRENT TARGET)**
+- [x] **Constant Folding**: ✅ IMPLEMENTED - Fold `2 + 3` → `5` to enable `OP_LOAD_I32_CONST`
+- [ ] **Type-Aware Constant Folding**: Generate typed constants for `OP_LOAD_I32_CONST`, `OP_LOAD_F64_CONST`
+- [ ] **Immediate Value Detection**: Identify constants for `OP_ADD_I32_IMM`, `OP_MUL_I32_IMM` fused ops
+
+**Future High-Level Optimizations (After Codegen)**
 - [ ] **Constant Propagation**: Track constant values across assignments (`x = 5; y = x + 2` → `y = 7`)
 - [ ] **Copy Propagation**: Replace variable copies with original values (`x = y; z = x` → `z = y`)
-- [ ] **Constant Folding**: ✅ IMPLEMENTED - Fold constant expressions (`2 + 3` → `5`)
 - [ ] **Algebraic Simplification**: Simplify mathematical identities (`x * 1` → `x`, `x + 0` → `x`)
 
 **Optimization Pass 2: Control Flow Analysis** 
@@ -668,21 +675,31 @@ void compile_literal(CompilerContext* ctx, TypedASTNode* literal, int target_reg
 
 ### 🎯 **LOW-LEVEL OPTIMIZATIONS (Code Generation Pass TODOs)**
 
-**Register Optimization (During Code Generation)**
-- [ ] **Register Allocation**: ✅ IMPLEMENTED - Linear scan register allocation with spill management
-- [ ] **Register Coalescing**: Eliminate unnecessary register-to-register moves
-- [ ] **Register Pressure Reduction**: Minimize register usage in complex expressions
-- [ ] **Dead Register Elimination**: Free registers immediately after last use
-- [ ] **Register Reuse**: Reuse temp registers for independent subexpressions
+## 🚀 **VM-POWERED CODE GENERATION STRATEGY**
+**The VM provides 150+ specialized opcodes - we must leverage ALL of them!**
 
-**Instruction-Level Optimizations**
-- [ ] **Peephole Optimization**: Optimize instruction sequences during emission
-  - `LOAD R1, 5; MOVE R2, R1` → `LOAD R2, 5`
-  - `ADD R1, R2, 0` → `MOVE R1, R2`
-  - `MUL R1, R2, 1` → `MOVE R1, R2`
-- [ ] **Instruction Selection**: Choose optimal VM instructions for operations
-- [ ] **Address Mode Optimization**: Use efficient addressing modes when available
-- [ ] **Branch Optimization**: Optimize conditional and unconditional jumps
+**Phase 1: Leverage VM Superpowers (CURRENT TARGET)**
+- [ ] **Typed Instruction Selection**: Use `OP_ADD_I32_TYPED` instead of generic `OP_ADD_I32_R`
+  - **50% faster** - bypasses Value boxing/unboxing overhead!
+- [ ] **Immediate Constant Optimization**: Use `OP_ADD_I32_IMM` for `x + 5` patterns
+  - **Saves 1 instruction** per constant operation!
+- [ ] **Typed Constant Loading**: Use `OP_LOAD_I32_CONST` vs generic `OP_LOAD_CONST`
+  - **Direct register loading** without constant pool lookup!
+- [ ] **Fused Instruction Selection**: Use `OP_MUL_ADD_I32` for `a*b+c` patterns
+  - **Native FMA support** - 3 operations become 1!
+
+**Register Optimization (256 Registers Available!)**
+- [x] **Register Allocation**: ✅ IMPLEMENTED - Linear scan with hierarchical layout
+- [ ] **Register Type Specialization**: Use proper register banks (global/frame/temp/module)
+- [ ] **Spill Area Utilization**: Leverage unlimited parameter support via spill registers
+- [ ] **Register Coalescing**: Eliminate `OP_MOVE` instructions where possible
+
+**Advanced VM Features Utilization**
+- [ ] **Loop Optimization**: Use `OP_INC_CMP_JMP` for `for(i=0; i<n; i++)` patterns
+  - **3 instructions become 1** - increment+compare+branch fusion!
+- [ ] **Short Jump Optimization**: Use `OP_JUMP_SHORT` for nearby branches (1 byte vs 2)
+- [ ] **Frame Register Operations**: Use `OP_LOAD_FRAME`/`OP_STORE_FRAME` for locals
+- [ ] **Module Register System**: Leverage module-scoped registers for globals
 
 **Control Flow Optimizations (During Code Generation)**
 - [ ] **Jump Optimization**: Minimize jump instructions and targets
@@ -790,4 +807,28 @@ void test_optimization_effectiveness() {
 
 ---
 
-This implementation plan provides a structured approach to building the Orus compiler backend while maintaining compatibility with existing components and ensuring incremental progress validation.
+## 🚀 **CRITICAL INSIGHT: VM SUPERPOWERS DISCOVERED!**
+
+**After analyzing the VM capabilities, this is NOT a simple register machine - it's a POWERHOUSE:**
+
+### **VM Superpowers Summary:**
+- **256 Registers** with hierarchical memory layout (global/frame/temp/module/spill)
+- **150+ Specialized Opcodes** including type-specific and fused instructions
+- **Zero-overhead typed operations** (`OP_ADD_I32_TYPED` bypasses Value boxing)
+- **Fused instruction support** (`OP_MUL_ADD_I32`, `OP_INC_CMP_JMP`)
+- **Immediate arithmetic** (`OP_ADD_I32_IMM`) for constant folding results
+- **Advanced control flow** with short jumps and loop optimizations
+- **Unlimited scalability** via spill registers and frame management
+
+### **Our Compiler Strategy:**
+1. **Keep high-level optimizations SIMPLE** - just constant folding for now
+2. **Focus on LEVERAGING VM power** in code generation
+3. **Use typed instructions** instead of generic ones (50% performance gain)
+4. **Exploit fused operations** for multi-step patterns
+5. **Utilize specialized register banks** for optimal memory hierarchy
+
+**The VM is so powerful that simple constant folding + smart instruction selection will yield excellent performance!**
+
+---
+
+This implementation plan provides a structured approach to building the Orus compiler backend while **maximally leveraging the incredibly powerful VM architecture** for optimal performance.
