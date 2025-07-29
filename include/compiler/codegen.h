@@ -37,7 +37,7 @@ uint8_t select_optimal_opcode(const char* op, Type* type);
 void emit_constant_optimized(CompilerContext* ctx, int reg, Value constant, Type* type);
 
 // Bytecode-level optimizations (applied after initial code generation)
-void apply_peephole_optimizations(CompilerContext* ctx);
-void apply_register_coalescing(CompilerContext* ctx);
+bool apply_peephole_optimizations(CompilerContext* ctx);
+bool apply_register_coalescing(CompilerContext* ctx);
 
 #endif // CODEGEN_H

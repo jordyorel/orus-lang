@@ -927,6 +927,45 @@ static TypedASTNode* generate_typed_ast_recursive(ASTNode* ast, TypeEnv* type_en
             }
             break;
 
+        case NODE_PRINT:
+            // Create TypedAST nodes for print arguments
+            if (ast->print.count > 0) {
+                typed->typed.print.values = malloc(sizeof(TypedASTNode*) * ast->print.count);
+                if (!typed->typed.print.values) {
+                    free_typed_ast_node(typed);
+                    return NULL;
+                }
+                typed->typed.print.count = ast->print.count;
+                for (int i = 0; i < ast->print.count; i++) {
+                    typed->typed.print.values[i] = generate_typed_ast_recursive(ast->print.values[i], type_env);
+                    if (!typed->typed.print.values[i]) {
+                        // Cleanup on failure
+                        for (int j = 0; j < i; j++) {
+                            free_typed_ast_node(typed->typed.print.values[j]);
+                        }
+                        free(typed->typed.print.values);
+                        free_typed_ast_node(typed);
+                        return NULL;
+                    }
+                }
+            }
+            // Handle separator if present
+            if (ast->print.separator) {
+                typed->typed.print.separator = generate_typed_ast_recursive(ast->print.separator, type_env);
+                if (!typed->typed.print.separator) {
+                    // Cleanup values if separator fails
+                    if (typed->typed.print.values) {
+                        for (int i = 0; i < typed->typed.print.count; i++) {
+                            free_typed_ast_node(typed->typed.print.values[i]);
+                        }
+                        free(typed->typed.print.values);
+                    }
+                    free_typed_ast_node(typed);
+                    return NULL;
+                }
+            }
+            break;
+
         default:
             // For other node types that don't have children, we're done
             break;

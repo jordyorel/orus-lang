@@ -1,4 +1,5 @@
 #include "compiler/codegen.h"
+#include "compiler/codegen/peephole.h"
 #include "compiler/typed_ast.h"
 #include "compiler/compiler.h"
 #include "compiler/register_allocator.h"
@@ -7,16 +8,13 @@
 #include <stdlib.h>
 #include <string.h>
 
-// ===== PRODUCTION-READY CODE GENERATOR =====
-// Leverages VM's specialized opcodes for maximum performance
-// Features:
-// - Type-aware instruction selection
-// - Optimal register allocation
-// - Constant folding integration
-// - VM superpower utilization
+// ===== CODE GENERATION COORDINATOR =====
+// Orchestrates bytecode generation and low-level optimizations
+// Delegates to specific codegen algorithms
 
-// Symbol table for variable-to-register mapping
-typedef struct {
+// ===== SYMBOL TABLE MANAGEMENT =====
+
+typedef struct Variable {
     char* name;
     int register_number;
     Type* type;
@@ -25,8 +23,6 @@ typedef struct {
 static Variable* variables = NULL;
 static int variable_count = 0;
 static int variable_capacity = 0;
-
-// ===== SYMBOL TABLE MANAGEMENT =====
 
 int lookup_variable(const char* name) {
     for (int i = 0; i < variable_count; i++) {
@@ -256,10 +252,52 @@ void compile_assignment(CompilerContext* ctx, TypedASTNode* assign) {
 void compile_print_statement(CompilerContext* ctx, TypedASTNode* print) {
     if (!ctx || !print) return;
     
-    // For now, emit a simple print instruction
-    // TODO: Implement proper print handling for multiple arguments
-    emit_instruction_to_buffer(ctx->bytecode, OP_PRINT_R, 0, 0, 0);
-    printf("[CODEGEN] Emitted OP_PRINT_R\n");
+    // Use the VM's builtin print implementation through OP_PRINT_R
+    // This integrates with handle_print() which calls builtin_print()
+    
+    if (print->typed.print.count == 0) {
+        // Print with no arguments - use register 0 (standard behavior)
+        emit_instruction_to_buffer(ctx->bytecode, OP_PRINT_R, 0, 0, 0);
+        printf("[CODEGEN] Emitted OP_PRINT_R R0 (no arguments)\n");
+    } else if (print->typed.print.count == 1) {
+        // Single expression print - compile expression and emit print
+        TypedASTNode* expr = print->typed.print.values[0];
+        int reg = compile_expression(ctx, expr);
+        
+        if (reg != -1) {
+            // Use OP_PRINT_R which calls handle_print() -> builtin_print()
+            emit_instruction_to_buffer(ctx->bytecode, OP_PRINT_R, reg, 0, 0);
+            printf("[CODEGEN] Emitted OP_PRINT_R R%d (single expression)\n", reg);
+            
+            // Free the temporary register
+            mp_free_temp_register(ctx->allocator, reg);
+        }
+    } else {
+        // Multiple expressions - use OP_PRINT_MULTI_R for efficiency
+        // Compile all expressions and emit multi-print instruction
+        int first_reg = -1;
+        int expressions_compiled = 0;
+        
+        for (int i = 0; i < print->typed.print.count; i++) {
+            TypedASTNode* expr = print->typed.print.values[i];
+            int reg = compile_expression(ctx, expr);
+            
+            if (reg != -1) {
+                if (first_reg == -1) {
+                    first_reg = reg;
+                }
+                expressions_compiled++;
+            }
+        }
+        
+        if (first_reg != -1 && expressions_compiled > 0) {
+            // Use OP_PRINT_MULTI_R which calls handle_print_multi() -> builtin_print()
+            emit_instruction_to_buffer(ctx->bytecode, OP_PRINT_MULTI_R, 
+                                     first_reg, expressions_compiled, 1); // 1 = newline
+            printf("[CODEGEN] Emitted OP_PRINT_MULTI_R R%d, count=%d (multiple expressions)\n", 
+                   first_reg, expressions_compiled);
+        }
+    }
 }
 
 // ===== MAIN CODE GENERATION ENTRY POINT =====
@@ -294,7 +332,6 @@ bool generate_bytecode_from_ast(CompilerContext* ctx) {
     // PHASE 1: Apply bytecode-level optimizations (peephole, register coalescing)
     printf("[CODEGEN] 🔧 Applying bytecode optimizations...\n");
     apply_peephole_optimizations(ctx);
-    apply_register_coalescing(ctx);
     
     // Emit HALT instruction to complete the program
     emit_instruction_to_buffer(ctx->bytecode, OP_HALT, 0, 0, 0);
@@ -310,86 +347,4 @@ bool generate_bytecode_from_ast(CompilerContext* ctx) {
     }
     
     return true;
-}
-
-// ===== BYTECODE-LEVEL OPTIMIZATIONS =====
-
-void apply_peephole_optimizations(CompilerContext* ctx) {
-    if (!ctx || !ctx->bytecode) return;
-    
-    printf("[CODEGEN] 🔧 Applying peephole optimizations...\n");
-    
-    int optimizations_applied = 0;
-    BytecodeBuffer* bytecode = ctx->bytecode;
-    
-    // Pattern 1: LOAD_CONST + MOVE → Direct LOAD_CONST to target
-    // Before: LOAD_CONST R192, 5; MOVE R64, R192
-    // After:  LOAD_CONST R64, 5
-    for (int i = 0; i < bytecode->count - 4; i += 4) {
-        if (i + 7 < bytecode->count) {
-            uint8_t op1 = bytecode->instructions[i];
-            uint8_t op2 = bytecode->instructions[i + 4];
-            
-            // Check for LOAD_CONST followed by MOVE pattern
-            if (op1 == 0xAB && op2 == 0xAE) { // OP_LOAD_I32_CONST + OP_MOVE_I32
-                uint8_t load_reg = bytecode->instructions[i + 1];
-                uint8_t move_dst = bytecode->instructions[i + 5];
-                uint8_t move_src = bytecode->instructions[i + 6];
-                
-                // If MOVE is copying from the LOAD target
-                if (load_reg == move_src) {
-                    // Optimize: change LOAD target to final destination
-                    bytecode->instructions[i + 1] = move_dst;
-                    
-                    // Remove the MOVE instruction by shifting remaining instructions
-                    for (int j = i + 4; j < bytecode->count - 4; j++) {
-                        bytecode->instructions[j] = bytecode->instructions[j + 4];
-                    }
-                    bytecode->count -= 4;
-                    
-                    optimizations_applied++;
-                    printf("[CODEGEN] ✅ Optimized LOAD+MOVE pattern: R%d directly loaded to R%d\n", 
-                           load_reg, move_dst);
-                }
-            }
-        }
-    }
-    
-    printf("[CODEGEN] ✅ Peephole optimizations: %d patterns optimized\n", optimizations_applied);
-}
-
-void apply_register_coalescing(CompilerContext* ctx) {
-    if (!ctx || !ctx->bytecode) return;
-    
-    printf("[CODEGEN] 🔧 Applying register coalescing...\n");
-    
-    int moves_eliminated = 0;
-    BytecodeBuffer* bytecode = ctx->bytecode;
-    
-    // Pattern: Eliminate redundant moves where src == dst
-    // MOVE R64, R64 → (remove instruction)
-    for (int i = 0; i < bytecode->count - 4; i += 4) {
-        if (i + 3 < bytecode->count) {
-            uint8_t opcode = bytecode->instructions[i];
-            
-            if (opcode == 0xAE) { // OP_MOVE_I32
-                uint8_t dst = bytecode->instructions[i + 1];
-                uint8_t src = bytecode->instructions[i + 2];
-                
-                // If moving register to itself, eliminate the instruction
-                if (dst == src) {
-                    // Shift remaining instructions left
-                    for (int j = i; j < bytecode->count - 4; j++) {
-                        bytecode->instructions[j] = bytecode->instructions[j + 4];
-                    }
-                    bytecode->count -= 4;
-                    moves_eliminated++;
-                    i -= 4; // Check this position again
-                    printf("[CODEGEN] ✅ Eliminated redundant move R%d → R%d\n", src, dst);
-                }
-            }
-        }
-    }
-    
-    printf("[CODEGEN] ✅ Register coalescing: %d redundant moves eliminated\n", moves_eliminated);
 }

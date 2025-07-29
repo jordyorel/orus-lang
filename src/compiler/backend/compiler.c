@@ -1,64 +1,17 @@
-// compiler.c - Multi-pass compiler implementation
+// compiler.c - Multi-pass compiler pipeline coordinator
 #include "compiler/compiler.h"
 #include "compiler/register_allocator.h"
 #include "compiler/typed_ast_visualizer.h"
 #include "compiler/optimizer.h"
 #include "compiler/codegen.h"
-#include "compiler/parser.h"
 #include "runtime/memory.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-// ===== LEGACY SINGLE-PASS COMPILER =====
-
-void initCompiler(Compiler* compiler, Chunk* chunk, const char* fileName, const char* source) {
-    compiler->chunk = chunk;
-    compiler->fileName = fileName;
-    compiler->source = source;
-    compiler->nextRegister = 0;
-}
-
-void freeCompiler(Compiler* compiler) {
-    (void)compiler; // Suppress unused parameter warning
-    // No dynamic memory to free in this simple implementation
-}
-
-bool compileProgram(ASTNode* ast, Compiler* compiler, bool isModule) {
-    (void)isModule; // Suppress unused parameter warning
-    if (!ast || !compiler) {
-        return false;
-    }
-    
-    // Simple compilation: just emit a placeholder
-    // In a real implementation, this would traverse the AST and emit bytecode
-    printf("[DEBUG] compileProgram: Compiling AST node type %d\n", ast->type);
-    
-    // Emit a simple instruction sequence for testing
-    // First, add the literal value to the constants table
-    Value literalValue = I32_VAL(42);
-    int constantIndex = addConstant(compiler->chunk, literalValue);
-    
-    printf("[DEBUG] compileProgram: Added constant %d to table at index %d\n", 42, constantIndex);
-    
-    emitByte(compiler, OP_LOAD_I32_CONST);  // Load constant
-    emitByte(compiler, 0);                   // Register 0
-    emitByte(compiler, (constantIndex >> 8) & 0xFF);  // High byte of constant index
-    emitByte(compiler, constantIndex & 0xFF);         // Low byte of constant index
-    
-    emitByte(compiler, OP_PRINT_R);          // Print register
-    emitByte(compiler, 0);                   // Register 0
-    
-    return true;
-}
-
-void emitByte(Compiler* compiler, uint8_t byte) {
-    if (compiler && compiler->chunk) {
-        writeChunk(compiler->chunk, byte, 0, 0); // Line and column will be 0 for now
-    }
-}
-
-// ===== NEW MULTI-PASS COMPILER INFRASTRUCTURE =====
+// ===== MULTI-PASS COMPILER PIPELINE COORDINATOR =====
+// Orchestrates the entire compilation process:
+// TypedAST → Optimization → CodeGeneration → Bytecode
 
 // BytecodeBuffer implementation
 BytecodeBuffer* init_bytecode_buffer(void) {
@@ -175,24 +128,37 @@ bool compile_to_bytecode(CompilerContext* ctx) {
     if (!ctx || !ctx->input_ast) return false;
     
     printf("[MULTI_COMPILER] Starting compilation pipeline...\n");
+    fflush(stdout);
     
     // Phase 1: Visualization (if enabled)
+    printf("[MULTI_COMPILER] Phase 1: Visualization...\n");
+    fflush(stdout);
     if (ctx->enable_visualization) {
         fprintf(ctx->debug_output, "\n=== INPUT TYPED AST ===\n");
         visualize_typed_ast(ctx->input_ast, ctx->debug_output);
     }
+    printf("[MULTI_COMPILER] Phase 1: Visualization completed\n");
+    fflush(stdout);
     
     // Phase 2: Optimization Pass
+    printf("[MULTI_COMPILER] Phase 2: About to start optimization pass...\n");
+    fflush(stdout);
     if (!run_optimization_pass(ctx)) {
         printf("[MULTI_COMPILER] Optimization pass failed\n");
         return false;
     }
+    printf("[MULTI_COMPILER] Phase 2: Optimization pass completed\n");
+    fflush(stdout);
     
     // Phase 3: Code Generation Pass  
+    printf("[MULTI_COMPILER] Phase 3: About to start code generation pass...\n");
+    fflush(stdout);
     if (!run_codegen_pass(ctx)) {
         printf("[MULTI_COMPILER] Code generation pass failed\n");
         return false;
     }
+    printf("[MULTI_COMPILER] Phase 3: Code generation pass completed\n");
+    fflush(stdout);
     
     printf("[MULTI_COMPILER] Compilation completed successfully, generated %d instructions\n", 
            ctx->bytecode->count);
@@ -333,4 +299,38 @@ void free_compiler_context(CompilerContext* ctx) {
     // TODO: Free other components as we implement them
     
     free(ctx);
+}
+
+// ===== LEGACY COMPATIBILITY STUBS =====
+// These functions are still called by vm.c and should be removed in the future
+
+void initCompiler(Compiler* compiler, Chunk* chunk, const char* fileName, const char* source) {
+    // Legacy compatibility - minimal initialization
+    if (compiler) {
+        compiler->chunk = chunk;
+        compiler->fileName = fileName;
+        compiler->source = source;
+        compiler->nextRegister = 0;
+    }
+}
+
+void freeCompiler(Compiler* compiler) {
+    // Legacy compatibility - no cleanup needed
+    (void)compiler;
+}
+
+bool compileProgram(ASTNode* ast, Compiler* compiler, bool isModule) {
+    // Legacy compatibility - should not be used with new multi-pass compiler
+    (void)ast;
+    (void)compiler;
+    (void)isModule;
+    printf("[LEGACY] compileProgram stub called - this should be replaced with multi-pass compiler\n");
+    return true;
+}
+
+void emitByte(Compiler* compiler, uint8_t byte) {
+    // Legacy compatibility - minimal implementation
+    if (compiler && compiler->chunk) {
+        writeChunk(compiler->chunk, byte, 0, 0);
+    }
 }
