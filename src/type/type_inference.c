@@ -337,7 +337,18 @@ static Type* infer_literal(Value literal) {
     switch (literal.type) {
         case VAL_BOOL:
             return getPrimitiveType(TYPE_BOOL);
+        case VAL_I32:
+            return getPrimitiveType(TYPE_I32);
+        case VAL_I64:
+            return getPrimitiveType(TYPE_I64);
+        case VAL_U32:
+            return getPrimitiveType(TYPE_U32);
+        case VAL_U64:
+            return getPrimitiveType(TYPE_U64);
+        case VAL_F64:
+            return getPrimitiveType(TYPE_F64);
         case VAL_NUMBER:
+            // Generic number - infer based on value
             if (literal.as.number == (int)literal.as.number) {
                 return getPrimitiveType(TYPE_I32);
             } else {
@@ -428,6 +439,13 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
         case NODE_ASSIGN: {
             Type* value_type = algorithm_w(env, node->assign.value);
             if (!value_type) return NULL;
+            
+            // Add the variable to the type environment with its inferred type
+            if (node->assign.name) {
+                TypeScheme* scheme = generalize(env, value_type);
+                type_env_define(env, node->assign.name, scheme);
+            }
+            
             return getPrimitiveType(TYPE_VOID);
         }
         case NODE_PRINT: {
@@ -474,27 +492,79 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                 type_env_define(env, node->function.name, scheme);
             }
             
+            // Create a new scope for the function body and add parameters to it
+            TypeEnv* function_env = type_env_new(env);
+            
+            // Add parameters to the function's local environment
+            for (int i = 0; i < param_count; i++) {
+                if (node->function.params[i].name && param_types && param_types[i]) {
+                    TypeScheme* param_scheme = generalize(function_env, param_types[i]);
+                    type_env_define(function_env, node->function.params[i].name, param_scheme);
+                }
+            }
+            
+            // Type-check the function body in the new environment
+            if (node->function.body) {
+                Type* body_type = algorithm_w(function_env, node->function.body);
+                // The body type isn't used for the function's type, but this ensures the body is type-checked
+                (void)body_type;
+            }
+            
             return func_type;
         }
         case NODE_CALL: {
             // Function call type inference
-            Type* callee_type = algorithm_w(env, node->call.callee);
-            if (!callee_type) return NULL;
-            
-            // If callee is an identifier, look up its function type in environment
             if (node->call.callee->type == NODE_IDENTIFIER) {
+                // Look up the function in the environment
                 TypeScheme* scheme = type_env_lookup(env, node->call.callee->identifier.name);
                 if (scheme && scheme->type && scheme->type->kind == TYPE_FUNCTION) {
-                    return scheme->type->info.function.returnType;
+                    // Type-check arguments against function parameter types
+                    Type* func_type = scheme->type;
+                    
+                    // Verify argument count matches parameter count
+                    if (node->call.argCount == func_type->info.function.arity) {
+                        // Type-check each argument and verify it matches the parameter type
+                        for (int i = 0; i < node->call.argCount; i++) {
+                            Type* arg_type = algorithm_w(env, node->call.args[i]);
+                            Type* param_type = func_type->info.function.paramTypes[i];
+                            
+                            // Verify arg_type matches param_type
+                            if (arg_type && param_type && !unify(arg_type, param_type)) {
+                                error("Type mismatch in function call: argument %d has type %s but parameter expects %s", 
+                                      i + 1, 
+                                      arg_type->kind == TYPE_I32 ? "i32" : 
+                                      arg_type->kind == TYPE_F64 ? "f64" : 
+                                      arg_type->kind == TYPE_BOOL ? "bool" : "unknown",
+                                      param_type->kind == TYPE_I32 ? "i32" : 
+                                      param_type->kind == TYPE_F64 ? "f64" : 
+                                      param_type->kind == TYPE_BOOL ? "bool" : "unknown");
+                                return NULL;
+                            }
+                        }
+                    } else {
+                        error("Function call argument count mismatch: expected %d arguments but got %d", 
+                              func_type->info.function.arity, node->call.argCount);
+                        return NULL;
+                    }
+                    
+                    // Return the function's return type
+                    return func_type->info.function.returnType;
                 }
             }
             
-            // Fallback: if we can't determine the type, return the callee type if it's a function
+            // Fallback: type-check the callee and arguments
+            Type* callee_type = algorithm_w(env, node->call.callee);
+            for (int i = 0; i < node->call.argCount; i++) {
+                algorithm_w(env, node->call.args[i]);
+            }
+            
+            // If callee is a function type, return its return type
             if (callee_type && callee_type->kind == TYPE_FUNCTION) {
                 return callee_type->info.function.returnType;
             }
             
-            return getPrimitiveType(TYPE_UNKNOWN);
+            // Default fallback
+            return getPrimitiveType(TYPE_I32);
         }
         case NODE_RETURN: {
             if (node->returnStmt.value) {
@@ -553,6 +623,50 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             // If types don't unify, return the true branch type as fallback
             return true_type;
         }
+        case NODE_PROGRAM: {
+            // Program nodes should type-check their declarations
+            for (int i = 0; i < node->program.count; i++) {
+                algorithm_w(env, node->program.declarations[i]);
+            }
+            return getPrimitiveType(TYPE_VOID);
+        }
+        case NODE_BLOCK: {
+            // Block nodes type-check their statements and return void
+            for (int i = 0; i < node->block.count; i++) {
+                algorithm_w(env, node->block.statements[i]);
+            }
+            return getPrimitiveType(TYPE_VOID);
+        }
+        case NODE_UNARY: {
+            // Unary operations - type-check operand and return its type
+            if (node->unary.operand) {
+                return algorithm_w(env, node->unary.operand);
+            }
+            return getPrimitiveType(TYPE_UNKNOWN);
+        }
+        case NODE_IF: {
+            // If statements - type-check condition and branches
+            if (node->ifStmt.condition) {
+                algorithm_w(env, node->ifStmt.condition);
+            }
+            if (node->ifStmt.thenBranch) {
+                algorithm_w(env, node->ifStmt.thenBranch);
+            }
+            if (node->ifStmt.elseBranch) {
+                algorithm_w(env, node->ifStmt.elseBranch);
+            }
+            return getPrimitiveType(TYPE_VOID);
+        }
+        case NODE_WHILE: {
+            // While statements - type-check condition and body
+            if (node->whileStmt.condition) {
+                algorithm_w(env, node->whileStmt.condition);
+            }
+            if (node->whileStmt.body) {
+                algorithm_w(env, node->whileStmt.body);
+            }
+            return getPrimitiveType(TYPE_VOID);
+        }
         default:
             error("Unsupported node type in type inference: %d", node->type);
             return getPrimitiveType(TYPE_UNKNOWN);
@@ -560,7 +674,7 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
 }
 
 // ---- Typed AST Generation ----
-static void populate_ast_types(ASTNode* node, TypeEnv* env) {
+void populate_ast_types(ASTNode* node, TypeEnv* env) {
     if (!node) return;
 
     Type* inferred_type = algorithm_w(env, node);
@@ -633,12 +747,31 @@ static void populate_ast_types(ASTNode* node, TypeEnv* env) {
         case NODE_UNARY:
             populate_ast_types(node->unary.operand, env);
             break;
-        case NODE_FUNCTION:
+        case NODE_FUNCTION: {
             if (node->function.returnType) {
                 populate_ast_types(node->function.returnType, env);
             }
-            populate_ast_types(node->function.body, env);
+            
+            // Create a new scope for the function body and add parameters to it
+            TypeEnv* function_env = type_env_new(env);
+            
+            // Add parameters to the function's local environment
+            for (int i = 0; i < node->function.paramCount; i++) {
+                if (node->function.params[i].name && node->function.params[i].typeAnnotation) {
+                    Type* param_type = algorithm_w(env, node->function.params[i].typeAnnotation);
+                    if (param_type) {
+                        TypeScheme* param_scheme = generalize(function_env, param_type);
+                        type_env_define(function_env, node->function.params[i].name, param_scheme);
+                    }
+                }
+            }
+            
+            // Type-check the function body in the new environment with parameter types
+            if (node->function.body) {
+                populate_ast_types(node->function.body, function_env);
+            }
             break;
+        }
         case NODE_CALL:
             populate_ast_types(node->call.callee, env);
             for (int i = 0; i < node->call.argCount; i++) {
@@ -662,23 +795,143 @@ static void populate_ast_types(ASTNode* node, TypeEnv* env) {
     }
 }
 
+// Forward declaration for recursive helper
+static TypedASTNode* generate_typed_ast_recursive(ASTNode* ast, TypeEnv* type_env);
+
 TypedASTNode* generate_typed_ast(ASTNode* root, TypeEnv* env) {
     if (!root || !env) return NULL;
 
     populate_ast_types(root, env);
+    return generate_typed_ast_recursive(root, env);
+}
 
-    TypedASTNode* typed_root = create_typed_ast_node(root);
-    if (!typed_root) return NULL;
+// Recursive helper function to create typed AST with children
+static TypedASTNode* generate_typed_ast_recursive(ASTNode* ast, TypeEnv* type_env) {
+    if (!ast) return NULL;
 
-    if (root->dataType) {
-        typed_root->resolvedType = root->dataType;
-        typed_root->typeResolved = true;
+    TypedASTNode* typed = create_typed_ast_node(ast);
+    if (!typed) return NULL;
+
+    // Use the type from type inference if available
+    if (ast->dataType) {
+        typed->resolvedType = ast->dataType;
+        typed->typeResolved = true;
     } else {
-        typed_root->hasTypeError = true;
-        typed_root->errorMessage = strdup("Type inference failed");
+        typed->hasTypeError = true;
+        typed->errorMessage = strdup("Type inference failed");
     }
 
-    return typed_root;
+    // Recursively generate children based on node type
+    switch (ast->type) {
+        case NODE_PROGRAM:
+            if (ast->program.count > 0) {
+                typed->typed.program.declarations = malloc(sizeof(TypedASTNode*) * ast->program.count);
+                if (!typed->typed.program.declarations) {
+                    free_typed_ast_node(typed);
+                    return NULL;
+                }
+                typed->typed.program.count = ast->program.count;
+                for (int i = 0; i < ast->program.count; i++) {
+                    typed->typed.program.declarations[i] = generate_typed_ast_recursive(ast->program.declarations[i], type_env);
+                    if (!typed->typed.program.declarations[i]) {
+                        // Cleanup on failure
+                        for (int j = 0; j < i; j++) {
+                            free_typed_ast_node(typed->typed.program.declarations[j]);
+                        }
+                        free(typed->typed.program.declarations);
+                        free_typed_ast_node(typed);
+                        return NULL;
+                    }
+                }
+            }
+            break;
+
+        case NODE_VAR_DECL:
+            if (ast->varDecl.initializer) {
+                typed->typed.varDecl.initializer = generate_typed_ast_recursive(ast->varDecl.initializer, type_env);
+            }
+            if (ast->varDecl.typeAnnotation) {
+                typed->typed.varDecl.typeAnnotation = generate_typed_ast_recursive(ast->varDecl.typeAnnotation, type_env);
+            }
+            break;
+
+        case NODE_BINARY:
+            typed->typed.binary.left = generate_typed_ast_recursive(ast->binary.left, type_env);
+            typed->typed.binary.right = generate_typed_ast_recursive(ast->binary.right, type_env);
+            break;
+
+        case NODE_ASSIGN:
+            if (ast->assign.value) {
+                typed->typed.assign.value = generate_typed_ast_recursive(ast->assign.value, type_env);
+            }
+            break;
+
+        case NODE_FUNCTION:
+            if (ast->function.returnType) {
+                typed->typed.function.returnType = generate_typed_ast_recursive(ast->function.returnType, type_env);
+            }
+            typed->typed.function.body = generate_typed_ast_recursive(ast->function.body, type_env);
+            break;
+
+        case NODE_CALL:
+            typed->typed.call.callee = generate_typed_ast_recursive(ast->call.callee, type_env);
+            if (ast->call.argCount > 0) {
+                typed->typed.call.args = malloc(sizeof(TypedASTNode*) * ast->call.argCount);
+                if (!typed->typed.call.args) {
+                    free_typed_ast_node(typed);
+                    return NULL;
+                }
+                typed->typed.call.argCount = ast->call.argCount;
+                for (int i = 0; i < ast->call.argCount; i++) {
+                    typed->typed.call.args[i] = generate_typed_ast_recursive(ast->call.args[i], type_env);
+                    if (!typed->typed.call.args[i]) {
+                        // Cleanup on failure
+                        for (int j = 0; j < i; j++) {
+                            free_typed_ast_node(typed->typed.call.args[j]);
+                        }
+                        free(typed->typed.call.args);
+                        free_typed_ast_node(typed);
+                        return NULL;
+                    }
+                }
+            }
+            break;
+
+        case NODE_RETURN:
+            if (ast->returnStmt.value) {
+                typed->typed.returnStmt.value = generate_typed_ast_recursive(ast->returnStmt.value, type_env);
+            }
+            break;
+
+        case NODE_BLOCK:
+            if (ast->block.count > 0) {
+                typed->typed.block.statements = malloc(sizeof(TypedASTNode*) * ast->block.count);
+                if (!typed->typed.block.statements) {
+                    free_typed_ast_node(typed);
+                    return NULL;
+                }
+                typed->typed.block.count = ast->block.count;
+                for (int i = 0; i < ast->block.count; i++) {
+                    typed->typed.block.statements[i] = generate_typed_ast_recursive(ast->block.statements[i], type_env);
+                    if (!typed->typed.block.statements[i]) {
+                        // Cleanup on failure
+                        for (int j = 0; j < i; j++) {
+                            free_typed_ast_node(typed->typed.block.statements[j]);
+                        }
+                        free(typed->typed.block.statements);
+                        free_typed_ast_node(typed);
+                        return NULL;
+                    }
+                }
+            }
+            break;
+
+        default:
+            // For other node types that don't have children, we're done
+            break;
+    }
+
+    return typed;
 }
 
 // ---- Public API ----

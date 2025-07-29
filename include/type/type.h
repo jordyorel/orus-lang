@@ -7,6 +7,7 @@
 typedef struct Obj Obj;
 typedef struct ObjString ObjString;
 typedef struct Type Type;
+typedef struct TypeEnv TypeEnv;
 
 // Use existing TypeKind from vm.h - just add missing types
 // (The TypeKind enum is already defined in vm.h)
@@ -140,6 +141,8 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node);
 // Typed AST Generation
 typedef struct TypedASTNode TypedASTNode;  // Forward declaration
 TypedASTNode* generate_typed_ast(ASTNode* root, TypeEnv* env);
+void populate_ast_types(ASTNode* node, TypeEnv* env);
+TypeEnv* type_env_new(TypeEnv* parent);
 Type* make_var_type(TypeEnv* env);
 Type* fresh_type(Type* t, HashMap* mapping);
 Type* prune(Type* t);

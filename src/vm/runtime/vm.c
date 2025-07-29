@@ -226,7 +226,8 @@ InterpretResult interpret(const char* source) {
         
         // Create a basic type environment for testing
         // Note: This would normally be created by the type system
-        TypeEnv* type_env = NULL; // Placeholder - would be properly initialized
+        extern TypeEnv* type_env_new(TypeEnv* parent);
+        TypeEnv* type_env = type_env_new(NULL); // Create root type environment
         
         // Generate typed AST (this will populate the dataType fields)
         TypedASTNode* typed_ast = generate_typed_ast(ast, type_env);

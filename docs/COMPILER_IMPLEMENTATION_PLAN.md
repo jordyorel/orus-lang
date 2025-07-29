@@ -546,6 +546,32 @@ TypedASTNode* constant_folding_pass(TypedASTNode* node, OptimizationContext* ctx
 }
 ```
 
+### 🎯 **HIGH-LEVEL OPTIMIZATIONS (optimizer.c Implementation TODOs)**
+
+**Optimization Pass 1: Data Flow Analysis**
+- [ ] **Constant Propagation**: Track constant values across assignments (`x = 5; y = x + 2` → `y = 7`)
+- [ ] **Copy Propagation**: Replace variable copies with original values (`x = y; z = x` → `z = y`)
+- [ ] **Constant Folding**: ✅ IMPLEMENTED - Fold constant expressions (`2 + 3` → `5`)
+- [ ] **Algebraic Simplification**: Simplify mathematical identities (`x * 1` → `x`, `x + 0` → `x`)
+
+**Optimization Pass 2: Control Flow Analysis** 
+- [ ] **Dead Code Elimination**: Remove unreachable code after returns/breaks
+- [ ] **Branch Optimization**: Optimize constant conditions (`if (true)` → remove else branch)
+- [ ] **Loop Invariant Code Motion (LICM)**: Move loop-invariant expressions outside loops
+- [ ] **Jump Threading**: Optimize chain of conditional branches
+
+**Optimization Pass 3: Function-Level Optimizations**
+- [ ] **Inlining**: Inline small functions at call sites
+- [ ] **Tail Recursion Optimization**: Convert tail recursive calls to loops
+- [ ] **Dead Parameter Elimination**: Remove unused function parameters
+- [ ] **Return Value Optimization**: Optimize multiple return statements
+
+**Optimization Pass 4: Memory & Storage Optimizations**
+- [ ] **Common Subexpression Elimination**: Reuse identical expression results
+- [ ] **Strength Reduction**: Replace expensive operations (`x * 2` → `x << 1`)
+- [ ] **Load/Store Optimization**: Minimize memory operations
+- [ ] **Variable Lifetime Analysis**: Optimize variable scope and reuse
+
 ### Phase 2B: Integration with Pipeline
 - Update `run_optimization_pass()` to use real optimization
 - Add optimization statistics reporting
@@ -639,6 +665,36 @@ void compile_literal(CompilerContext* ctx, TypedASTNode* literal, int target_reg
     }
 }
 ```
+
+### 🎯 **LOW-LEVEL OPTIMIZATIONS (Code Generation Pass TODOs)**
+
+**Register Optimization (During Code Generation)**
+- [ ] **Register Allocation**: ✅ IMPLEMENTED - Linear scan register allocation with spill management
+- [ ] **Register Coalescing**: Eliminate unnecessary register-to-register moves
+- [ ] **Register Pressure Reduction**: Minimize register usage in complex expressions
+- [ ] **Dead Register Elimination**: Free registers immediately after last use
+- [ ] **Register Reuse**: Reuse temp registers for independent subexpressions
+
+**Instruction-Level Optimizations**
+- [ ] **Peephole Optimization**: Optimize instruction sequences during emission
+  - `LOAD R1, 5; MOVE R2, R1` → `LOAD R2, 5`
+  - `ADD R1, R2, 0` → `MOVE R1, R2`
+  - `MUL R1, R2, 1` → `MOVE R1, R2`
+- [ ] **Instruction Selection**: Choose optimal VM instructions for operations
+- [ ] **Address Mode Optimization**: Use efficient addressing modes when available
+- [ ] **Branch Optimization**: Optimize conditional and unconditional jumps
+
+**Control Flow Optimizations (During Code Generation)**
+- [ ] **Jump Optimization**: Minimize jump instructions and targets
+- [ ] **Basic Block Optimization**: Optimize instruction ordering within blocks
+- [ ] **Branch Prediction Hints**: Add hints for likely/unlikely branches
+- [ ] **Loop Optimization**: Optimize loop entry/exit and loop bodies
+
+**Memory Access Optimizations**
+- [ ] **Load/Store Scheduling**: Reorder memory operations for efficiency
+- [ ] **Constant Pool Optimization**: Efficient management of literal constants
+- [ ] **Stack Frame Optimization**: Minimize stack frame size and access patterns
+- [ ] **Memory Coalescing**: Combine adjacent memory operations when possible
 
 ---
 
