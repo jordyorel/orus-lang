@@ -1,4 +1,4 @@
-#include "compiler/codegen.h"
+#include "compiler/codegen/codegen.h"
 #include "compiler/codegen/peephole.h"
 #include "compiler/typed_ast.h"
 #include "compiler/compiler.h"

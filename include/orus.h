@@ -19,7 +19,7 @@
 #include "compiler/parser.h"
 #include "compiler/compiler.h"
 #include "compiler/ast.h"
-#include "compiler/symbol_table.h"
+// #include "compiler/symbol_table.h"
 
 // Virtual machine subsystem
 #include "vm/vm.h"

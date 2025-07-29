@@ -1,4 +1,4 @@
-#include "compiler/optimizer.h"
+#include "compiler/optimization/optimizer.h"
 #include "compiler/optimization/constantfold.h"
 #include "runtime/memory.h"
 #include <stdio.h>

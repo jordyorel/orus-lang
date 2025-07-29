@@ -19,6 +19,7 @@
         "typeinfo": "cpp",
         "hybrid_compiler.h": "c",
         "shared_node_compilation.h": "c",
-        "vm.h": "c"
+        "vm.h": "c",
+        "constantfold.h": "c"
     }
 }

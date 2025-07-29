@@ -2,7 +2,7 @@
 #define CONSTANTFOLD_H
 
 #include "compiler/typed_ast.h"
-#include "compiler/optimizer.h"
+#include "compiler/optimization/constantfold.h"
 
 // Constant folding algorithm implementation
 // Transforms binary expressions with literal operands into single literals

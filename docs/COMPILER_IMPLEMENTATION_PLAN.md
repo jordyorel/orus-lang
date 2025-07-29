@@ -14,12 +14,36 @@ This document outlines the detailed implementation plan for building the Orus co
 - **VM Target**: 256-register VM with comprehensive instruction set
 - **Integration Points**: Pipeline hooks in `src/vm/runtime/vm.c`
 
-#### ❌ **What's Missing (Our Implementation Target)**
-- **Optimization Pass**: `src/compiler/backend/optimizer.c`
-- **Code Generation Pass**: `src/compiler/backend/codegen.c`  
-- **Pipeline Coordination**: `src/compiler/backend/compiler.c`
-- **Register Allocation**: `src/compiler/backend/register_allocator.c`
-- **Bytecode Emission**: Infrastructure for VM instruction generation
+#### ✅ **What's Now Implemented**
+- **✅ Optimization Pass**: `src/compiler/backend/optimization/optimizer.c` + `constantfold.c`
+- **✅ Code Generation Pass**: `src/compiler/backend/codegen/codegen.c` + `peephole.c`  
+- **✅ Pipeline Coordination**: `src/compiler/backend/compiler.c`
+- **✅ Register Allocation**: `src/compiler/backend/register_allocator.c`
+- **✅ Bytecode Emission**: Variable-length instruction generation matching VM format
+
+#### 🚨 **What's Still Missing (85% of Production Compiler)**
+
+**CRITICAL LANGUAGE FEATURES (HIGH PRIORITY)**
+- **Expression Types**: Binary ops (+,-,*,/), comparisons (<,>,==), logical (and,or), unary ops (-,not,++)
+- **Control Flow**: if/elif/else statements, for/while loops, break/continue, match statements
+- **Functions**: fn definitions, calls, parameters, return statements, recursion
+- **Data Types**: String/array/object literals, all numeric types (f64, u32, u64), booleans
+- **Variable System**: Immutable/mut declarations, proper scoping, identifier resolution
+
+**OPTIMIZATION PIPELINE (MEDIUM PRIORITY)**
+- **Advanced Constant Folding**: Type-aware folding, immediate value detection, algebraic simplification
+- **Control Flow Optimization**: Dead code elimination, branch optimization, loop invariant code motion
+- **Register Optimization**: Type specialization, spill utilization, coalescing, advanced allocation
+
+**INFRASTRUCTURE & TOOLING (HIGH PRIORITY)**
+- **Symbol Tables**: Variable→register mapping, scope management, function symbols
+- **Error System**: Compiler-specific errors, recovery, source location tracking, diagnostics
+- **Testing Framework**: Unit tests, integration tests, performance benchmarks, 90% coverage
+
+**VM FEATURE UTILIZATION (MEDIUM PRIORITY)**
+- **Specialized Instructions**: OP_ADD_I32_TYPED, OP_ADD_I32_IMM, OP_MUL_ADD_I32 fused ops
+- **Advanced VM Features**: Loop fusion (OP_INC_CMP_JMP), short jumps, frame registers
+- **Memory Optimization**: Load/store scheduling, constant pools, stack frame optimization
 
 ### Architecture Overview
 
@@ -34,19 +58,34 @@ Source → Lexer → Parser → AST → HM → TypedAST → OptimizationPass →
 ```
 src/compiler/
 ├── typed_ast.c                    ✅ (Exists - TypedAST data structures)
-├── backend/
-│   ├── compiler.c                 ❌ Phase 1 - Pipeline coordination
-│   ├── optimizer.c                ❌ Phase 2 - TypedAST optimization  
-│   ├── codegen.c                  ❌ Phase 3 - Bytecode generation
-│   ├── register_allocator.c       ❌ Phase 1 - Register management
-│   └── typed_ast_visualizer.c     ✅ (Exists - Debugging support)
+├── frontend/
+│   ├── lexer.c                    ✅ (Exists - Tokenization)
+│   └── parser.c                   ✅ (Exists - AST generation)
+└── backend/
+    ├── compiler.c                 ✅ (Implemented - Pipeline coordination)
+    ├── register_allocator.c       ✅ (Implemented - Register management)
+    ├── typed_ast_visualizer.c     ✅ (Exists - Debugging support)
+    ├── optimization/
+    │   ├── optimizer.c             ✅ (Implemented - Optimization pipeline)
+    │   └── constantfold.c          ✅ (Implemented - Constant folding)
+    └── codegen/
+        ├── codegen.c               ✅ (Implemented - Bytecode generation)
+        └── peephole.c              ✅ (Implemented - Peephole optimization)
 
 include/compiler/
-├── typed_ast.h                    ✅ (Exists)
-├── compiler.h                     ❌ Phase 1 - Main compiler API
-├── optimizer.h                    ❌ Phase 2 - Optimization API
-├── codegen.h                      ❌ Phase 3 - Codegen API
-└── register_allocator.h           ❌ Phase 1 - Register allocation API
+├── ast.h                          ✅ (Exists - AST definitions)
+├── typed_ast.h                    ✅ (Exists - TypedAST definitions)
+├── typed_ast_visualizer.h         ✅ (Exists - Visualization API)
+├── lexer.h                        ✅ (Exists - Lexer API)
+├── parser.h                       ✅ (Exists - Parser API)
+├── compiler.h                     ✅ (Implemented - Main compiler API)
+├── register_allocator.h           ✅ (Implemented - Register allocation API)
+├── optimizer.h                    ✅ (Implemented - Optimization API)
+├── codegen.h                      ✅ (Implemented - Codegen API)
+├── optimization/
+│   └── constantfold.h             ✅ (Implemented - Constant folding API)
+└── codegen/
+    └── peephole.h                 ✅ (Implemented - Peephole optimization API)
 ```
 
 ---
@@ -772,40 +811,99 @@ void compile_literal(CompilerContext* ctx, TypedASTNode* literal, int target_reg
 
 ---
 
-## Phase 4: Testing & Integration (Week 4)
-**Goal**: Comprehensive testing and performance validation
+## Phase 4: Testing & Infrastructure (Week 4) ⚠️ **PENDING**
+**Goal**: Build testing framework and core infrastructure missing from Phases 1-3
 
-### Phase 4A: Test Suite
+### 🚨 **PHASE 4 CRITICAL DELIVERABLES**
+- **✅ Multi-pass Pipeline**: Working but limited to simple literals
+- **❌ Symbol Table System**: Required for variable resolution (currently placeholder)
+- **❌ Comprehensive Testing**: Unit tests, integration tests, performance benchmarks
+- **❌ Error Recovery System**: Production-quality error handling and diagnostics
+- **❌ Code Coverage**: 90% test coverage requirement
+
+### Phase 4A: Symbol Table & Scope Management Infrastructure
 ```c
-// tests/compiler/integration_tests.c
+// include/compiler/symbol_table.h
+typedef struct SymbolTable {
+    struct Symbol* symbols;       // Hash table of symbols
+    struct SymbolTable* parent;   // Parent scope
+    int scope_depth;              // Nesting level
+    int symbol_count;             // Number of symbols
+    int capacity;                 // Hash table capacity
+} SymbolTable;
 
-void test_simple_arithmetic() {
-    // Test: x = 2 + 3
-    // Expected: Constant folding → x = 5
-    // Expected bytecode: LOAD_CONST_I32 R0, 5
-}
+typedef struct Symbol {
+    char* name;                   // Variable name
+    int register_id;              // Assigned register
+    Type* type;                   // Variable type
+    bool is_mutable;              // Can be reassigned
+    bool is_initialized;          // Has been assigned
+    SrcLocation location;         // Declaration location
+} Symbol;
 
-void test_variable_assignment() {
-    // Test: x = 42; y = x
-    // Expected bytecode: LOAD_CONST_I32 R0, 42; MOVE R1, R0
-}
-
-void test_optimization_effectiveness() {
-    // Measure optimization impact
-    // Verify constant folding reduces instruction count
-    // Verify dead code elimination removes unused code
-}
+// Core symbol table operations
+SymbolTable* create_symbol_table(SymbolTable* parent);
+Symbol* declare_symbol(SymbolTable* table, const char* name, Type* type, bool mutable);
+Symbol* resolve_symbol(SymbolTable* table, const char* name);
+void free_symbol_table(SymbolTable* table);
 ```
 
-### Phase 4B: Performance Benchmarking
-- Measure compilation speed (target: >10,000 lines/second)
-- Measure generated code quality (register efficiency)
-- Compare against baseline (current single-pass compiler)
+### Phase 4B: Comprehensive Testing Framework
+```c
+// tests/compiler/test_framework.h
+typedef struct TestSuite {
+    const char* name;
+    void (*setup)(void);
+    void (*teardown)(void);
+    struct TestCase* tests;
+    int test_count;
+} TestSuite;
 
-### Phase 4C: Error Handling Integration
-- Connect with existing error reporting system
-- Add compiler-specific error messages
-- Validate error recovery
+// Unit tests for each compiler component
+void test_register_allocation(void);     // Register allocator correctness
+void test_constant_folding(void);        // Optimization effectiveness  
+void test_bytecode_generation(void);     // Code generation accuracy
+void test_symbol_resolution(void);       // Symbol table operations
+void test_error_recovery(void);          // Error handling robustness
+
+// Integration tests for full pipeline
+void test_simple_expressions(void);      // x = 2 + 3 * 4
+void test_variable_assignment(void);     // x = 42, y = x
+void test_print_statements(void);        // print(expression)
+void test_complex_programs(void);        // Multi-statement programs
+
+// Performance benchmarks
+void benchmark_compilation_speed(void);   // Lines/second measurement
+void benchmark_code_quality(void);       // Generated bytecode efficiency
+void benchmark_memory_usage(void);       // Compiler memory footprint
+```
+
+### Phase 4C: Enhanced Error System
+```c
+// include/compiler/compiler_errors.h
+typedef enum CompilerErrorType {
+    COMPILER_ERROR_SYNTAX,          // Parse errors
+    COMPILER_ERROR_TYPE_MISMATCH,   // Type system violations
+    COMPILER_ERROR_UNDEFINED_VAR,   // Undeclared variables
+    COMPILER_ERROR_REGISTER_SPILL,  // Register allocation failure
+    COMPILER_ERROR_OPTIMIZATION,    // Optimization pass failure
+    COMPILER_ERROR_CODEGEN         // Code generation failure
+} CompilerErrorType;
+
+typedef struct CompilerError {
+    CompilerErrorType type;
+    SrcLocation location;
+    char* message;
+    char* suggestion;              // How to fix the error
+    int severity;                  // 0=warning, 1=error, 2=fatal
+} CompilerError;
+
+// Error reporting and recovery
+void report_compiler_error(CompilerContext* ctx, CompilerErrorType type, 
+                          SrcLocation loc, const char* format, ...);
+bool has_compiler_errors(CompilerContext* ctx);
+void print_compiler_errors(CompilerContext* ctx);
+```
 
 ---
 
@@ -828,8 +926,19 @@ void test_optimization_effectiveness() {
 - [ ] **90% test coverage** for new compiler components ⚠️ **PENDING**
 - [x] **Comprehensive documentation** for each phase ✅ **COMPLETED**
 
-### 🎯 **CURRENT OVERALL STATUS: 75% COMPLETE**
-**Major milestone achieved**: Multi-pass compiler successfully generates and executes bytecode for basic programs. Ready for Phase 4 comprehensive testing and feature expansion.
+### 🎯 **CURRENT OVERALL STATUS: 15% COMPLETE** 
+**Major milestone achieved**: Multi-pass compiler infrastructure and basic pipeline working.
+**Reality check**: Only simple literals implemented - vast majority of language features missing.
+
+### 📊 **COMPLETION BREAKDOWN**
+- **✅ Phase 1-3 Infrastructure (15%)**: Pipeline, basic optimization, simple codegen
+- **❌ Phase 4 Testing & Symbols (10%)**: Symbol tables, comprehensive testing, error handling  
+- **❌ Phase 5 Core Language (35%)**: Expressions, variables, basic control flow
+- **❌ Phase 6 Advanced Control (20%)**: Loops, functions, complex constructs
+- **❌ Phase 7 Advanced Optimization (10%)**: Sophisticated optimization passes
+- **❌ Phase 8 VM Utilization (10%)**: Leverage VM's 150+ specialized opcodes
+
+**Next Priority**: Phase 4 (Symbol Tables) → Phase 5A (Expression System)
 
 ---
 
@@ -847,7 +956,249 @@ void test_optimization_effectiveness() {
 
 ---
 
-## Future Extensions (Beyond Phase 4)
+## Phase 5: Core Language Features (Week 5-8) ❌ **NOT STARTED**
+**Goal**: Implement essential language constructs for practical programming
+
+### 🎯 **PHASE 5 SCOPE: EXPRESSIONS & BASIC STATEMENTS**
+
+#### Phase 5A: Expression System (Week 5)
+```c
+// Binary operations support
+NODE_BINARY:
+    BinaryOp op                     // +, -, *, /, %, <, <=, >, >=, ==, !=, and, or
+    TypedASTNode* left
+    TypedASTNode* right
+    Type* result_type               // Type inference result
+
+// Unary operations support  
+NODE_UNARY:
+    UnaryOp op                      // -, +, not, ~, ++, --
+    TypedASTNode* operand
+    bool is_prefix                  // ++x vs x++
+    Type* result_type
+
+// Variable references
+NODE_IDENTIFIER:
+    char* name                      // Variable name
+    Symbol* symbol                  // Resolved symbol from symbol table
+    int register_id                 // Assigned register
+```
+
+**Deliverables:**
+- [ ] **Binary Expression Compilation**: All arithmetic, comparison, logical operators
+- [ ] **Unary Expression Compilation**: Prefix/postfix increment, negation, logical not
+- [ ] **Variable Resolution**: Symbol table integration for identifier lookup
+- [ ] **Type Checking**: Ensure operation compatibility between operand types
+- [ ] **Code Generation**: Emit appropriate VM opcodes for each operation type
+
+#### Phase 5B: Variable System (Week 6)
+```c
+// Variable declarations
+NODE_VARIABLE_DECL:
+    char* name                      // Variable name
+    Type* type                      // Declared type (may be inferred)
+    TypedASTNode* initializer       // Initial value expression
+    bool is_mutable                 // immutable vs mut
+    int register_id                 // Assigned register
+
+// Assignment statements
+NODE_ASSIGNMENT:
+    TypedASTNode* target            // Left-hand side (variable)
+    TypedASTNode* value             // Right-hand side (expression)
+    AssignmentOp op                 // =, +=, -=, *=, /=, %=
+```
+
+**Deliverables:**
+- [ ] **Variable Declarations**: `x = value`, `mut y = value`
+- [ ] **Assignment Operations**: `x = y`, `x += 5`, `x *= 2`
+- [ ] **Scope Management**: Proper lexical scoping with nested blocks
+- [ ] **Type Inference**: Automatic type deduction for `x = 42`
+- [ ] **Mutability Checking**: Prevent assignment to immutable variables
+
+#### Phase 5C: Basic Control Flow (Week 7)
+```c
+// If statements
+NODE_IF:
+    TypedASTNode* condition         // Boolean expression
+    TypedASTNode* then_stmt         // Statement to execute if true
+    TypedASTNode* else_stmt         // Optional else statement
+    int then_label                  // Jump target for true branch
+    int else_label                  // Jump target for false branch
+    int end_label                   // Jump target after if-else
+
+// Block statements
+NODE_BLOCK:
+    TypedASTNode** statements       // Array of statements
+    int statement_count
+    SymbolTable* scope              // Local symbol table
+```
+
+**Deliverables:**
+- [ ] **If Statements**: `if condition: body`, `if-else`, `elif` chains
+- [ ] **Block Statements**: Indentation-based blocks with proper scoping
+- [ ] **Jump Generation**: Conditional branches using VM jump instructions
+- [ ] **Label Management**: Forward/backward jump patching
+- [ ] **Scope Nesting**: Proper variable visibility in nested blocks
+
+#### Phase 5D: Advanced Expressions (Week 8)
+```c
+// Function calls
+NODE_CALL:
+    TypedASTNode* function          // Function expression
+    TypedASTNode** arguments        // Argument expressions
+    int argument_count
+    Type* return_type               // Function return type
+    int* arg_registers              // Allocated argument registers
+
+// Array access
+NODE_ARRAY_ACCESS:
+    TypedASTNode* array             // Array expression
+    TypedASTNode* index             // Index expression
+    Type* element_type              // Array element type
+```
+
+**Deliverables:**
+- [ ] **Function Calls**: `func(arg1, arg2)` with parameter passing
+- [ ] **Array Operations**: `arr[index]` access and assignment
+- [ ] **String Operations**: String concatenation, indexing, methods
+- [ ] **Type Casting**: `value as type` explicit type conversions
+- [ ] **Ternary Operator**: `condition ? true_val : false_val`
+
+---
+
+## Phase 6: Advanced Control Flow (Week 9-10) ❌ **NOT STARTED**
+**Goal**: Implement loops, functions, and complex control structures
+
+### Phase 6A: Loop Constructs (Week 9)
+```c
+// For loops
+NODE_FOR:
+    TypedASTNode* range             // Range expression (0..10)
+    char* iterator_name             // Loop variable name
+    TypedASTNode* body              // Loop body statement
+    int loop_start_label            // Jump target for loop start
+    int loop_end_label              // Jump target for loop exit
+    int continue_label              // Jump target for continue
+
+// While loops
+NODE_WHILE:
+    TypedASTNode* condition         // Loop condition
+    TypedASTNode* body              // Loop body
+    int loop_start_label
+    int loop_end_label
+    int continue_label
+```
+
+**Deliverables:**
+- [ ] **For Loops**: `for i in 0..n: ...`
+- [ ] **While Loops**: `while condition: ...`
+- [ ] **Range Loops**: `for i in 0..10..2: ...` (with step)
+- [ ] **Break/Continue**: Loop control statements with proper jump targets
+- [ ] **Nested Loops**: Support for loops within loops with correct label management
+
+### Phase 6B: Function System (Week 10)
+```c
+// Function definitions
+NODE_FUNCTION:
+    char* name                      // Function name
+    Parameter* parameters           // Function parameters
+    int parameter_count
+    Type* return_type               // Function return type
+    TypedASTNode* body              // Function body
+    int entry_label                 // Function entry point
+    SymbolTable* local_scope        // Function local variables
+
+// Return statements
+NODE_RETURN:
+    TypedASTNode* value             // Optional return value
+    Type* value_type                // Return value type
+```
+
+**Deliverables:**
+- [ ] **Function Definitions**: `fn name(param1: type1, param2: type2) -> return_type: ...`
+- [ ] **Parameter Handling**: Function parameter passing and local variable allocation
+- [ ] **Return Statements**: `return value` with type checking (or implicit return)
+- [ ] **Function Calls**: Complete call/return mechanism with stack frame management
+- [ ] **Recursion Support**: Proper stack management for recursive function calls
+
+---
+
+## Phase 7: Advanced Optimizations (Week 11-12) ❌ **NOT STARTED**
+**Goal**: Implement sophisticated optimization passes leveraging VM superpowers
+
+### Phase 7A: Advanced Constant Folding & Propagation
+```c
+// Enhanced optimization context
+typedef struct AdvancedOptimizationContext {
+    // Constant tracking
+    HashMap* constant_values;        // Variable -> constant value mapping
+    HashMap* copy_relations;         // Variable -> copied from mapping
+    
+    // Control flow analysis
+    BasicBlock** basic_blocks;       // Control flow graph
+    int block_count;
+    
+    // Data flow analysis
+    LivenessInfo* liveness;          // Variable liveness analysis
+    ReachingDefinitions* reaching;   // Reaching definitions analysis
+} AdvancedOptimizationContext;
+```
+
+**Deliverables:**
+- [ ] **Constant Propagation**: Track constants across assignments (`x = 5` `y = x + 2` → `y = 7`)
+- [ ] **Copy Propagation**: Replace copies with originals (`x = y` `z = x` → `z = y`)
+- [ ] **Algebraic Simplification**: Mathematical identities (`x * 1` → `x`, `x + 0` → `x`)
+- [ ] **Strength Reduction**: Expensive ops to cheaper ones (`x * 2` → `x << 1`)
+- [ ] **Common Subexpression Elimination**: Reuse identical computations
+
+### Phase 7B: Control Flow Optimizations
+**Deliverables:**
+- [ ] **Dead Code Elimination**: Remove unreachable code after returns/breaks
+- [ ] **Branch Optimization**: Constant condition folding (`if true:` → unconditional)
+- [ ] **Jump Threading**: Optimize chains of conditional branches
+- [ ] **Loop Invariant Code Motion**: Move loop-invariant expressions outside
+- [ ] **Loop Unrolling**: Expand small loops for better performance
+
+---
+
+## Phase 8: VM Feature Utilization (Week 13-14) ❌ **NOT STARTED**
+**Goal**: Leverage VM's 150+ specialized opcodes for maximum performance
+
+### Phase 8A: Specialized Instruction Selection
+```c
+// VM-aware code generation
+typedef struct VMCodeGenContext {
+    // Instruction selection
+    bool use_typed_instructions;     // OP_ADD_I32_TYPED vs OP_ADD_I32_R
+    bool use_immediate_ops;          // OP_ADD_I32_IMM for constants
+    bool use_fused_ops;              // OP_MUL_ADD_I32 for a*b+c patterns
+    
+    // Register specialization
+    RegisterBank* global_bank;       // R0-R63 global variables
+    RegisterBank* frame_bank;        // R64-R191 function locals
+    RegisterBank* temp_bank;         // R192-R239 temporaries
+    RegisterBank* module_bank;       // R240-R255 module scope
+} VMCodeGenContext;
+```
+
+**Deliverables:**
+- [ ] **Typed Instructions**: Use `OP_ADD_I32_TYPED` (50% faster than generic)
+- [ ] **Immediate Operations**: Use `OP_ADD_I32_IMM` for constant operands
+- [ ] **Fused Instructions**: Use `OP_MUL_ADD_I32` for compound expressions
+- [ ] **Loop Fusion**: Use `OP_INC_CMP_JMP` for simple loops (3→1 instructions)
+- [ ] **Register Bank Specialization**: Optimal register allocation per scope type
+
+### Phase 8B: Advanced VM Feature Utilization
+**Deliverables:**
+- [ ] **Short Jump Optimization**: Use `OP_JUMP_SHORT` for nearby branches (1 vs 2 bytes)
+- [ ] **Frame Register Operations**: Use `OP_LOAD_FRAME`/`OP_STORE_FRAME` for locals
+- [ ] **Spill Area Utilization**: Leverage unlimited parameters via spill registers
+- [ ] **Memory Coalescing**: Combine adjacent memory operations
+- [ ] **Branch Prediction**: Add hints for likely/unlikely branches
+
+---
+
+## Future Extensions (Beyond Phase 8)
 
 ### Advanced Optimizations
 - Loop invariant code motion
