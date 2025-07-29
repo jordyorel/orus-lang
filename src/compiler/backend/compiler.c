@@ -2,8 +2,9 @@
 #include "compiler/compiler.h"
 #include "compiler/register_allocator.h"
 #include "compiler/typed_ast_visualizer.h"
-#include "compiler/optimizer.h"
-#include "compiler/codegen.h"
+#include "compiler/optimization/optimizer.h"
+#include "compiler/codegen/codegen.h"
+#include "compiler/symbol_table.h"
 #include "runtime/memory.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -109,14 +110,16 @@ CompilerContext* init_compiler_context(TypedASTNode* typed_ast) {
     ctx->enable_visualization = false;  // Default off
     ctx->debug_output = stdout;
     
+    // Initialize symbol table for variable tracking
+    ctx->symbols = create_symbol_table(NULL);  // Global scope
+    
     // TODO: Initialize these in later phases
-    ctx->symbols = NULL;      // Will implement in Phase 2
     ctx->scopes = NULL;       // Will implement in Phase 2  
     ctx->constants = NULL;    // Will implement in Phase 2
     ctx->errors = NULL;       // Will implement in Phase 2
     ctx->opt_ctx = NULL;      // Will implement in Phase 2
     
-    if (!ctx->allocator || !ctx->bytecode) {
+    if (!ctx->allocator || !ctx->bytecode || !ctx->symbols) {
         free_compiler_context(ctx);
         return NULL;
     }
@@ -289,6 +292,11 @@ void free_compiler_context(CompilerContext* ctx) {
     
     free_mp_register_allocator(ctx->allocator);
     free_bytecode_buffer(ctx->bytecode);
+    
+    // Free symbol table
+    if (ctx->symbols) {
+        free_symbol_table(ctx->symbols);
+    }
     
     // Free optimization context if it was created
     if (ctx->opt_ctx) {

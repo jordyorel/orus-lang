@@ -3,6 +3,7 @@
 #include "compiler/typed_ast.h"
 #include "compiler/compiler.h"
 #include "compiler/register_allocator.h"
+#include "compiler/symbol_table.h"
 #include "vm/vm.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,37 +13,27 @@
 // Orchestrates bytecode generation and low-level optimizations
 // Delegates to specific codegen algorithms
 
-// ===== SYMBOL TABLE MANAGEMENT =====
+// ===== SYMBOL TABLE INTEGRATION =====
+// Now using the proper symbol table system instead of static arrays
 
-typedef struct Variable {
-    char* name;
-    int register_number;
-    Type* type;
-} Variable;
-
-static Variable* variables = NULL;
-static int variable_count = 0;
-static int variable_capacity = 0;
-
-int lookup_variable(const char* name) {
-    for (int i = 0; i < variable_count; i++) {
-        if (strcmp(variables[i].name, name) == 0) {
-            return variables[i].register_number;
-        }
+int lookup_variable(CompilerContext* ctx, const char* name) {
+    if (!ctx || !ctx->symbols || !name) return -1;
+    
+    Symbol* symbol = resolve_symbol(ctx->symbols, name);
+    if (symbol) {
+        return symbol->register_id;
     }
+    
     return -1; // Variable not found
 }
 
-void register_variable(const char* name, int reg, Type* type) {
-    if (variable_count >= variable_capacity) {
-        variable_capacity = variable_capacity == 0 ? 16 : variable_capacity * 2;
-        variables = realloc(variables, variable_capacity * sizeof(Variable));
-    }
+void register_variable(CompilerContext* ctx, const char* name, int reg, Type* type, bool is_mutable) {
+    if (!ctx || !ctx->symbols || !name) return;
     
-    variables[variable_count].name = strdup(name);
-    variables[variable_count].register_number = reg;
-    variables[variable_count].type = type;
-    variable_count++;
+    Symbol* symbol = declare_symbol(ctx->symbols, name, type, is_mutable, reg);
+    if (!symbol) {
+        printf("[CODEGEN] Error: Failed to register variable %s\n", name);
+    }
 }
 
 // ===== VM OPCODE SELECTION =====
@@ -96,6 +87,13 @@ void emit_load_constant(CompilerContext* ctx, int reg, Value constant) {
             // Boolean constants as i32
             emit_instruction_to_buffer(ctx->bytecode, OP_LOAD_I32_CONST, reg, 0, AS_BOOL(constant) ? 1 : 0);
             printf("[CODEGEN] Emitted OP_LOAD_I32_CONST R%d, %s\n", reg, AS_BOOL(constant) ? "true" : "false");
+            break;
+            
+        case VAL_STRING:
+            // String constants using VM's string support
+            // VM has VAL_STRING=7 support, using OP_LOAD_CONST
+            emit_instruction_to_buffer(ctx->bytecode, OP_LOAD_CONST, reg, 0, 0);
+            printf("[CODEGEN] Emitted OP_LOAD_CONST R%d, \"%s\"\n", reg, AS_STRING(constant)->chars);
             break;
             
         default:
@@ -157,7 +155,7 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
         
         case NODE_IDENTIFIER: {
             // Look up variable in symbol table
-            int reg = lookup_variable(expr->original->identifier.name);
+            int reg = lookup_variable(ctx, expr->original->identifier.name);
             if (reg == -1) {
                 printf("[CODEGEN] Error: Unbound variable %s\n", expr->original->identifier.name);
                 return -1;
@@ -237,8 +235,8 @@ void compile_assignment(CompilerContext* ctx, TypedASTNode* assign) {
         return;
     }
     
-    // Register the variable in symbol table
-    register_variable(var_name, var_reg, assign->resolvedType);
+    // Register the variable in symbol table (assuming mutable by default)
+    register_variable(ctx, var_name, var_reg, assign->resolvedType, true);
     
     // Move value to variable register
     emit_move(ctx, var_reg, value_reg);
