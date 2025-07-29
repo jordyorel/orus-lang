@@ -394,7 +394,8 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             if (strcmp(node->binary.op, "+") == 0 ||
                 strcmp(node->binary.op, "-") == 0 ||
                 strcmp(node->binary.op, "*") == 0 ||
-                strcmp(node->binary.op, "/") == 0) {
+                strcmp(node->binary.op, "/") == 0 ||
+                strcmp(node->binary.op, "%") == 0) {
                 // Arithmetic operations - return the type of the operands
                 if (!unify(l, r)) {
                     error("Type mismatch in arithmetic operation");
