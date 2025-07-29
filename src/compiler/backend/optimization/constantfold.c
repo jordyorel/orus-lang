@@ -1,6 +1,6 @@
 #include "compiler/optimization/constantfold.h"
 #include "compiler/typed_ast.h"
-#include "compiler/optimizer.h"
+#include "compiler/optimization/optimizer.h"
 #include "vm/vm.h"
 #include <stdio.h>
 #include <stdlib.h>

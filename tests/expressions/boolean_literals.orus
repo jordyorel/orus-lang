@@ -1,0 +1,14 @@
+// Boolean literals test
+a = true
+b = false
+
+// Boolean comparisons
+same = a == a
+different = a == b
+not_same = b == b
+
+print("true =", a)
+print("false =", b)
+print("true == true =", same)
+print("true == false =", different)
+print("false == false =", not_same)

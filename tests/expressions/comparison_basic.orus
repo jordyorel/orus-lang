@@ -1,0 +1,15 @@
+// Basic comparison operations test
+x = 10
+y = 5
+z = 10
+
+// Comparison operations
+gt_result = x > y
+lt_result = x < y
+eq_result = x == z
+ne_result = x == y
+
+print("10 > 5 =", gt_result)
+print("10 < 5 =", lt_result)
+print("10 == 10 =", eq_result)
+print("10 == 5 =", ne_result)

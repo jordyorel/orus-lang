@@ -43,18 +43,38 @@ uint8_t select_optimal_opcode(const char* op, Type* type) {
     
     // Leverage VM's type-specific opcodes for 50% performance boost
     if (type->kind == TYPE_I32) {
+        // Arithmetic operators
         if (strcmp(op, "+") == 0) return OP_ADD_I32_TYPED;
         if (strcmp(op, "-") == 0) return OP_SUB_I32_TYPED;
         if (strcmp(op, "*") == 0) return OP_MUL_I32_TYPED;
         if (strcmp(op, "/") == 0) return OP_DIV_I32_TYPED;
         if (strcmp(op, "%") == 0) return OP_MOD_I32_TYPED;
+        
+        // Comparison operators (result is boolean)
+        if (strcmp(op, "<") == 0) return OP_LT_I32_R;
+        if (strcmp(op, ">") == 0) return OP_GT_I32_R;
+        if (strcmp(op, "<=") == 0) return OP_LT_I32_R;  // TODO: Implement LE_I32_R
+        if (strcmp(op, ">=") == 0) return OP_GT_I32_R;  // TODO: Implement GE_I32_R  
+        if (strcmp(op, "==") == 0) return OP_EQ_R;
+        if (strcmp(op, "!=") == 0) return OP_EQ_R;      // TODO: Implement NE_R
     }
     else if (type->kind == TYPE_F64) {
+        // Arithmetic operators
         if (strcmp(op, "+") == 0) return OP_ADD_F64_TYPED;
         if (strcmp(op, "-") == 0) return OP_SUB_F64_TYPED;
         if (strcmp(op, "*") == 0) return OP_MUL_F64_TYPED;
         if (strcmp(op, "/") == 0) return OP_DIV_F64_TYPED;
+        
+        // Comparison operators (result is boolean)
+        if (strcmp(op, "<") == 0) return OP_LT_F64_R;
+        if (strcmp(op, ">") == 0) return OP_GT_F64_R;
+        if (strcmp(op, "==") == 0) return OP_EQ_R;
+        if (strcmp(op, "!=") == 0) return OP_EQ_R;      // TODO: Implement NE_R
     }
+    
+    // Generic equality for all types
+    if (strcmp(op, "==") == 0) return OP_EQ_R;
+    if (strcmp(op, "!=") == 0) return OP_EQ_R;          // TODO: Implement NE_R
     
     // Fallback to generic opcodes if type-specific not available
     printf("[CODEGEN] Warning: Using generic opcode for %s on type %d\n", op, type->kind);
@@ -70,12 +90,22 @@ void emit_typed_instruction(CompilerContext* ctx, uint8_t opcode, int dst, int s
 void emit_load_constant(CompilerContext* ctx, int reg, Value constant) {
     // Use VM's specialized constant loading for optimal performance
     switch (constant.type) {
-        case VAL_I32:
-            // OP_LOAD_I32_CONST: Direct register loading without constant pool lookup!
-            emit_instruction_to_buffer(ctx->bytecode, OP_LOAD_I32_CONST, reg, 
-                                     (AS_I32(constant) >> 8) & 0xFF, AS_I32(constant) & 0xFF);
-            printf("[CODEGEN] Emitted OP_LOAD_I32_CONST R%d, %d\n", reg, AS_I32(constant));
+        case VAL_I32: {
+            // OP_LOAD_I32_CONST: Add to constant pool and reference by index
+            int const_index = add_constant(ctx->constants, constant);
+            if (const_index >= 0) {
+                // OP_LOAD_I32_CONST format: opcode + register + 2-byte constant index
+                emit_byte_to_buffer(ctx->bytecode, OP_LOAD_I32_CONST);
+                emit_byte_to_buffer(ctx->bytecode, reg);
+                emit_byte_to_buffer(ctx->bytecode, (const_index >> 8) & 0xFF); // High byte
+                emit_byte_to_buffer(ctx->bytecode, const_index & 0xFF);        // Low byte
+                printf("[CODEGEN] Emitted OP_LOAD_I32_CONST R%d, #%d (%d)\n", 
+                       reg, const_index, AS_I32(constant));
+            } else {
+                printf("[CODEGEN] Error: Failed to add i32 constant to pool\n");
+            }
             break;
+        }
             
         case VAL_F64:
             // TODO: Implement F64 constant loading
@@ -83,18 +113,44 @@ void emit_load_constant(CompilerContext* ctx, int reg, Value constant) {
             printf("[CODEGEN] Emitted OP_LOAD_F64_CONST R%d, %.2f\n", reg, AS_F64(constant));
             break;
             
-        case VAL_BOOL:
-            // Boolean constants as i32
-            emit_instruction_to_buffer(ctx->bytecode, OP_LOAD_I32_CONST, reg, 0, AS_BOOL(constant) ? 1 : 0);
-            printf("[CODEGEN] Emitted OP_LOAD_I32_CONST R%d, %s\n", reg, AS_BOOL(constant) ? "true" : "false");
-            break;
+        case VAL_BOOL: {
+            // Boolean constants stored as i32 in constant pool
+            Value bool_as_i32;
+            bool_as_i32.type = VAL_I32;
+            bool_as_i32.as.i32 = AS_BOOL(constant) ? 1 : 0;
             
-        case VAL_STRING:
-            // String constants using VM's string support
-            // VM has VAL_STRING=7 support, using OP_LOAD_CONST
-            emit_instruction_to_buffer(ctx->bytecode, OP_LOAD_CONST, reg, 0, 0);
-            printf("[CODEGEN] Emitted OP_LOAD_CONST R%d, \"%s\"\n", reg, AS_STRING(constant)->chars);
+            int const_index = add_constant(ctx->constants, bool_as_i32);
+            if (const_index >= 0) {
+                // OP_LOAD_I32_CONST format: opcode + register + 2-byte constant index
+                emit_byte_to_buffer(ctx->bytecode, OP_LOAD_I32_CONST);
+                emit_byte_to_buffer(ctx->bytecode, reg);
+                emit_byte_to_buffer(ctx->bytecode, (const_index >> 8) & 0xFF); // High byte
+                emit_byte_to_buffer(ctx->bytecode, const_index & 0xFF);        // Low byte
+                printf("[CODEGEN] Emitted OP_LOAD_I32_CONST R%d, #%d (%s)\n", 
+                       reg, const_index, AS_BOOL(constant) ? "true" : "false");
+            } else {
+                printf("[CODEGEN] Error: Failed to add boolean constant to pool\n");
+            }
             break;
+        }
+            
+        case VAL_STRING: {
+            // String constants using VM's string support with constant pool
+            // Add string to constant pool and get index
+            int const_index = add_constant(ctx->constants, constant);
+            if (const_index >= 0) {
+                // OP_LOAD_CONST format: opcode + register + 2-byte constant index
+                emit_byte_to_buffer(ctx->bytecode, OP_LOAD_CONST);
+                emit_byte_to_buffer(ctx->bytecode, reg);
+                emit_byte_to_buffer(ctx->bytecode, (const_index >> 8) & 0xFF); // High byte
+                emit_byte_to_buffer(ctx->bytecode, const_index & 0xFF);        // Low byte
+                printf("[CODEGEN] Emitted OP_LOAD_CONST R%d, #%d \"%s\"\n", 
+                       reg, const_index, AS_STRING(constant)->chars);
+            } else {
+                printf("[CODEGEN] Error: Failed to add string constant to pool\n");
+            }
+            break;
+        }
             
         default:
             printf("[CODEGEN] Warning: Unsupported constant type %d\n", constant.type);
@@ -102,18 +158,30 @@ void emit_load_constant(CompilerContext* ctx, int reg, Value constant) {
     }
 }
 
-void emit_arithmetic_op(CompilerContext* ctx, const char* op, Type* type, int dst, int src1, int src2) {
-    uint8_t opcode = select_optimal_opcode(op, type);
+void emit_binary_op(CompilerContext* ctx, const char* op, Type* operand_type, int dst, int src1, int src2) {
+    uint8_t opcode = select_optimal_opcode(op, operand_type);
     if (opcode != OP_HALT) {
         emit_typed_instruction(ctx, opcode, dst, src1, src2);
-        printf("[CODEGEN] Emitted %s_TYPED R%d, R%d, R%d\n", op, dst, src1, src2);
+        
+        // Check if this is a comparison operation (returns boolean)
+        bool is_comparison = (strcmp(op, "<") == 0 || strcmp(op, ">") == 0 || 
+                             strcmp(op, "<=") == 0 || strcmp(op, ">=") == 0 ||
+                             strcmp(op, "==") == 0 || strcmp(op, "!=") == 0);
+        
+        if (is_comparison) {
+            printf("[CODEGEN] Emitted %s_CMP R%d, R%d, R%d (result: boolean)\n", op, dst, src1, src2);
+        } else {
+            printf("[CODEGEN] Emitted %s_TYPED R%d, R%d, R%d\n", op, dst, src1, src2);
+        }
     }
 }
 
 void emit_move(CompilerContext* ctx, int dst, int src) {
-    // Use type-specific move for better performance
-    emit_instruction_to_buffer(ctx->bytecode, OP_MOVE_I32, dst, src, 0);
-    printf("[CODEGEN] Emitted OP_MOVE_I32 R%d, R%d\n", dst, src);
+    // OP_MOVE format: opcode + dst_reg + src_reg (3 bytes total)
+    emit_byte_to_buffer(ctx->bytecode, OP_MOVE);
+    emit_byte_to_buffer(ctx->bytecode, dst);
+    emit_byte_to_buffer(ctx->bytecode, src);
+    printf("[CODEGEN] Emitted OP_MOVE R%d, R%d (3 bytes)\n", dst, src);
 }
 
 // ===== EXPRESSION COMPILATION =====
@@ -188,9 +256,9 @@ void compile_binary_op(CompilerContext* ctx, TypedASTNode* binary, int target_re
         return;
     }
     
-    // Emit type-specific arithmetic instruction
-    emit_arithmetic_op(ctx, binary->original->binary.op, binary->resolvedType, 
-                      target_reg, left_reg, right_reg);
+    // Emit type-specific binary instruction (arithmetic or comparison)
+    emit_binary_op(ctx, binary->original->binary.op, binary->typed.binary.left->resolvedType, 
+                   target_reg, left_reg, right_reg);
 }
 
 // ===== STATEMENT COMPILATION =====
@@ -275,30 +343,58 @@ void compile_print_statement(CompilerContext* ctx, TypedASTNode* print) {
             mp_free_temp_register(ctx->allocator, reg);
         }
     } else {
-        // Multiple expressions - use OP_PRINT_MULTI_R for efficiency
-        // Compile all expressions and emit multi-print instruction
-        int first_reg = -1;
+        // Multiple expressions - need consecutive registers for OP_PRINT_MULTI_R
+        // Allocate consecutive temp registers and move values there
+        int* expression_regs = malloc(print->typed.print.count * sizeof(int));
+        int first_consecutive_reg = -1;
         int expressions_compiled = 0;
         
+        // Compile all expressions first
         for (int i = 0; i < print->typed.print.count; i++) {
             TypedASTNode* expr = print->typed.print.values[i];
             int reg = compile_expression(ctx, expr);
             
             if (reg != -1) {
-                if (first_reg == -1) {
-                    first_reg = reg;
-                }
+                expression_regs[expressions_compiled] = reg;
                 expressions_compiled++;
             }
         }
         
-        if (first_reg != -1 && expressions_compiled > 0) {
-            // Use OP_PRINT_MULTI_R which calls handle_print_multi() -> builtin_print()
-            emit_instruction_to_buffer(ctx->bytecode, OP_PRINT_MULTI_R, 
-                                     first_reg, expressions_compiled, 1); // 1 = newline
-            printf("[CODEGEN] Emitted OP_PRINT_MULTI_R R%d, count=%d (multiple expressions)\n", 
-                   first_reg, expressions_compiled);
+        if (expressions_compiled > 0) {
+            // Allocate consecutive temp registers for the print operation
+            first_consecutive_reg = mp_allocate_temp_register(ctx->allocator);
+            if (first_consecutive_reg != -1) {
+                // Move/copy all values to consecutive registers starting from first_consecutive_reg
+                for (int i = 0; i < expressions_compiled; i++) {
+                    int target_reg = first_consecutive_reg + i;
+                    int source_reg = expression_regs[i];
+                    
+                    if (source_reg != target_reg) {
+                        // Move the value to the consecutive register
+                        emit_move(ctx, target_reg, source_reg);
+                        printf("[CODEGEN] Moved R%d -> R%d for consecutive print\n", source_reg, target_reg);
+                    }
+                    
+                    // Free the original register if it was temporary
+                    if (source_reg >= MP_TEMP_REG_START && source_reg <= MP_TEMP_REG_END) {
+                        mp_free_temp_register(ctx->allocator, source_reg);
+                    }
+                }
+                
+                // Now emit the print instruction with consecutive registers
+                emit_instruction_to_buffer(ctx->bytecode, OP_PRINT_MULTI_R, 
+                                         first_consecutive_reg, expressions_compiled, 1); // 1 = newline
+                printf("[CODEGEN] Emitted OP_PRINT_MULTI_R R%d, count=%d (consecutive registers)\n", 
+                       first_consecutive_reg, expressions_compiled);
+                
+                // Free the consecutive temp registers
+                for (int i = 0; i < expressions_compiled; i++) {
+                    mp_free_temp_register(ctx->allocator, first_consecutive_reg + i);
+                }
+            }
         }
+        
+        free(expression_regs);
     }
 }
 

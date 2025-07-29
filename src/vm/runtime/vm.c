@@ -306,19 +306,15 @@ InterpretResult interpret(const char* source) {
                     printf("[VM] Allocated chunk memory: %p, size: %d\n", chunk.code, chunk.count);
                     fflush(stdout);
                     
-                    // QUICK FIX: Add constant 42 to the constants table for the test
-                    // This should be done properly by the multi-pass compiler in the future
-                    // Add dummy constants to reach index 42
-                    while (chunk.constants.count <= 42) {
-                        addConstant(&chunk, I32_VAL(0)); // Fill with zeros
-                    }
-                    // Set the actual constant at index 42
-                    if (chunk.constants.count > 42) {
-                        chunk.constants.values[42] = I32_VAL(42);
+                    // Copy constants from compiler's constant pool to chunk's constants
+                    if (multi_compiler->constants && multi_compiler->constants->count > 0) {
+                        for (int i = 0; i < multi_compiler->constants->count; i++) {
+                            addConstant(&chunk, multi_compiler->constants->values[i]);
+                        }
+                        printf("[VM] Copied %d constants from compiler to chunk\n", multi_compiler->constants->count);
                     } else {
-                        addConstant(&chunk, I32_VAL(42));
+                        printf("[VM] No constants to copy from compiler\n");
                     }
-                    printf("[VM] Added constant 42 to constants table at index 42\n");
                     fflush(stdout);
                     
                     if (chunk.code) {

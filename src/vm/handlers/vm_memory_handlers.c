@@ -179,7 +179,6 @@ static inline void handle_store_global(void) {
 static inline void handle_load_i32_const(void) {
     uint8_t reg = READ_BYTE();
     uint16_t constantIndex = READ_SHORT();
-    // Store in the standard register system where comparison operations expect values
     vm.registers[reg] = READ_CONSTANT(constantIndex);
 }
 
@@ -216,12 +215,6 @@ static inline void handle_load_f64_const(void) {
 static inline void handle_move_i32(void) {
     uint8_t dst = READ_BYTE();
     uint8_t src = READ_BYTE();
-    // Read from the standard register system where OP_LOAD_CONST stores values
-    if (!IS_I32(vm.registers[src])) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Source register must contain i32 value");
-        return;
-    }
-    // Store the value in the destination register in the standard register system
     vm.registers[dst] = vm.registers[src];
 }
 

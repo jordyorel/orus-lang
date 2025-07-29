@@ -1,0 +1,19 @@
+// Mixed type operations test
+num = 42
+flag = true
+zero = 0
+
+// Numeric comparisons
+is_positive = num > zero
+is_equal = num == 42
+is_true = flag == true
+
+// Boolean to number comparison
+bool_as_num = flag == 1
+false_check = zero == false
+
+print("42 > 0 =", is_positive)
+print("42 == 42 =", is_equal)
+print("true == true =", is_true)
+print("true == 1 =", bool_as_num)
+print("0 == false =", false_check)

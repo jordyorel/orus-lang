@@ -48,6 +48,87 @@ void free_bytecode_buffer(BytecodeBuffer* buffer) {
     free(buffer);
 }
 
+// ===== CONSTANT POOL IMPLEMENTATION =====
+
+ConstantPool* init_constant_pool(void) {
+    ConstantPool* pool = malloc(sizeof(ConstantPool));
+    if (!pool) return NULL;
+    
+    pool->capacity = 16;  // Initial capacity
+    pool->count = 0;
+    pool->values = malloc(pool->capacity * sizeof(Value));
+    
+    if (!pool->values) {
+        free(pool);
+        return NULL;
+    }
+    
+    printf("[CONSTANT_POOL] Created constant pool (capacity=%d)\n", pool->capacity);
+    return pool;
+}
+
+void free_constant_pool(ConstantPool* pool) {
+    if (!pool) return;
+    
+    free(pool->values);
+    free(pool);
+    
+    printf("[CONSTANT_POOL] Freed constant pool\n");
+}
+
+int add_constant(ConstantPool* pool, Value value) {
+    if (!pool) return -1;
+    
+    // Check if constant already exists (for deduplication)
+    for (int i = 0; i < pool->count; i++) {
+        Value existing = pool->values[i];
+        if (existing.type == value.type) {
+            // Simple equality check for basic types
+            if (value.type == VAL_I32 && AS_I32(existing) == AS_I32(value)) {
+                printf("[CONSTANT_POOL] Reusing existing i32 constant %d at index %d\n", AS_I32(value), i);
+                return i;
+            }
+            if (value.type == VAL_STRING && AS_STRING(existing) == AS_STRING(value)) {
+                printf("[CONSTANT_POOL] Reusing existing string constant at index %d\n", i);
+                return i;
+            }
+        }
+    }
+    
+    // Resize if needed
+    if (pool->count >= pool->capacity) {
+        pool->capacity *= 2;
+        pool->values = realloc(pool->values, pool->capacity * sizeof(Value));
+        if (!pool->values) return -1;
+        printf("[CONSTANT_POOL] Resized to capacity %d\n", pool->capacity);
+    }
+    
+    // Add new constant
+    pool->values[pool->count] = value;
+    int index = pool->count;
+    pool->count++;
+    
+    if (value.type == VAL_I32) {
+        printf("[CONSTANT_POOL] Added i32 constant %d at index %d\n", AS_I32(value), index);
+    } else if (value.type == VAL_STRING) {
+        printf("[CONSTANT_POOL] Added string constant \"%s\" at index %d\n", AS_STRING(value)->chars, index);
+    } else {
+        printf("[CONSTANT_POOL] Added constant (type=%d) at index %d\n", value.type, index);
+    }
+    
+    return index;
+}
+
+Value get_constant(ConstantPool* pool, int index) {
+    if (!pool || index < 0 || index >= pool->count) {
+        // Return a default value for invalid indices
+        Value nil = {.type = VAL_BOOL, .as.boolean = false};
+        return nil;
+    }
+    
+    return pool->values[index];
+}
+
 void emit_byte_to_buffer(BytecodeBuffer* buffer, uint8_t byte) {
     if (!buffer) return;
     
@@ -106,6 +187,9 @@ CompilerContext* init_compiler_context(TypedASTNode* typed_ast) {
     // Initialize bytecode output
     ctx->bytecode = init_bytecode_buffer();
     
+    // Initialize constant pool
+    ctx->constants = init_constant_pool();
+    
     // Initialize debugging
     ctx->enable_visualization = false;  // Default off
     ctx->debug_output = stdout;
@@ -115,11 +199,10 @@ CompilerContext* init_compiler_context(TypedASTNode* typed_ast) {
     
     // TODO: Initialize these in later phases
     ctx->scopes = NULL;       // Will implement in Phase 2  
-    ctx->constants = NULL;    // Will implement in Phase 2
     ctx->errors = NULL;       // Will implement in Phase 2
     ctx->opt_ctx = NULL;      // Will implement in Phase 2
     
-    if (!ctx->allocator || !ctx->bytecode || !ctx->symbols) {
+    if (!ctx->allocator || !ctx->bytecode || !ctx->constants || !ctx->symbols) {
         free_compiler_context(ctx);
         return NULL;
     }
@@ -292,6 +375,7 @@ void free_compiler_context(CompilerContext* ctx) {
     
     free_mp_register_allocator(ctx->allocator);
     free_bytecode_buffer(ctx->bytecode);
+    free_constant_pool(ctx->constants);
     
     // Free symbol table
     if (ctx->symbols) {

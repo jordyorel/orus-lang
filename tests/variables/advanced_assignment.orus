@@ -1,0 +1,22 @@
+// Advanced variable assignment test
+// Testing symbol table and register allocation
+
+// Multiple assignments
+x = 10
+y = x + 5
+z = y * 2
+
+// Chained assignments
+a = b = c = 100
+
+// Variable reuse
+temp = x
+x = y
+y = temp
+
+print("x =", x)
+print("y =", y)
+print("z =", z)
+print("a =", a)
+print("b =", b)
+print("c =", c)

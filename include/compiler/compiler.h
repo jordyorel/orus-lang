@@ -22,7 +22,12 @@ void emitByte(Compiler* compiler, uint8_t byte);
 typedef struct MultiPassRegisterAllocator MultiPassRegisterAllocator;
 typedef struct SymbolTable SymbolTable;
 typedef struct ScopeStack ScopeStack;
-typedef struct ConstantPool ConstantPool;
+// Simple constant pool matching VM's Chunk constants structure
+typedef struct ConstantPool {
+    int count;
+    int capacity;
+    Value* values;
+} ConstantPool;
 typedef struct ErrorReporter ErrorReporter;
 typedef struct OptimizationContext OptimizationContext;
 
@@ -84,6 +89,12 @@ void emit_byte_to_buffer(BytecodeBuffer* buffer, uint8_t byte);
 void emit_instruction_to_buffer(BytecodeBuffer* buffer, uint8_t opcode, uint8_t reg1, uint8_t reg2, uint8_t reg3);
 int emit_jump_placeholder(BytecodeBuffer* buffer, uint8_t jump_opcode);
 void patch_jump(BytecodeBuffer* buffer, int jump_offset, int target_offset);
+
+// Constant pool functions
+ConstantPool* init_constant_pool(void);
+void free_constant_pool(ConstantPool* pool);
+int add_constant(ConstantPool* pool, Value value);
+Value get_constant(ConstantPool* pool, int index);
 
 // Main multi-pass compilation functions
 CompilerContext* init_compiler_context(TypedASTNode* typed_ast);

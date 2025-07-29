@@ -1,0 +1,22 @@
+// Edge cases test
+// Zero operations
+zero = 0
+ten = 10
+
+add_zero = ten + zero
+sub_zero = ten - zero  
+mul_zero = ten * zero
+zero_add = zero + ten
+
+// Large numbers
+large1 = 1000
+large2 = 999
+large_sum = large1 + large2
+large_diff = large1 - large2
+
+print("10 + 0 =", add_zero)
+print("10 - 0 =", sub_zero)
+print("10 * 0 =", mul_zero)
+print("0 + 10 =", zero_add)
+print("1000 + 999 =", large_sum)
+print("1000 - 999 =", large_diff)

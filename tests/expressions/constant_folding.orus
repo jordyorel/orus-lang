@@ -1,0 +1,17 @@
+// Constant folding optimization test
+// These should be optimized at compile time
+
+// Complex expressions with operator precedence
+complex1 = 2 + 3 * 4
+complex2 = 10 - 6 / 2
+complex3 = 15 % 4 + 1
+
+// Nested operations
+nested1 = (5 + 3) * 2
+nested2 = 20 / (2 + 3)
+
+print("2 + 3 * 4 =", complex1)
+print("10 - 6 / 2 =", complex2)
+print("15 % 4 + 1 =", complex3)
+print("(5 + 3) * 2 =", nested1)
+print("20 / (2 + 3) =", nested2)
