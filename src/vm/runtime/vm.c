@@ -144,11 +144,11 @@ extern void init_extended_type_system(void);
 extern Type* get_primitive_type_cached(TypeKind kind);
 
 void initTypeSystem(void) {
-    printf("[TYPE_SYSTEM_TRACE] initTypeSystem() starting\n");
-    fflush(stdout);
+    // printf("[TYPE_SYSTEM_TRACE] initTypeSystem() starting\n");
+    // fflush(stdout);
     init_extended_type_system();
-    printf("[TYPE_SYSTEM_TRACE] init_extended_type_system() completed\n");
-    fflush(stdout);
+    // printf("[TYPE_SYSTEM_TRACE] init_extended_type_system() completed\n");
+    // fflush(stdout);
 }
 
 Type* getPrimitiveType(TypeKind kind) {
@@ -168,10 +168,10 @@ void runtimeError(ErrorType type, SrcLocation location,
     va_end(args);
 
     // DEBUG: Trace runtime errors to find the source
-    fprintf(stderr, "[RUNTIME_ERROR_TRACE] runtimeError called: type=%d, message='%s'\n", type, buffer);
-    fprintf(stderr, "[RUNTIME_ERROR_TRACE] Location: file=%s, line=%d, column=%d\n", 
-            location.file ? location.file : "NULL", location.line, location.column);
-    fflush(stderr);
+    // fprintf(stderr, "[RUNTIME_ERROR_TRACE] runtimeError called: type=%d, message='%s'\n", type, buffer);
+    // fprintf(stderr, "[RUNTIME_ERROR_TRACE] Location: file=%s, line=%d, column=%d\n", 
+    //         location.file ? location.file : "NULL", location.line, location.column);
+    // fflush(stderr);
 
     if (location.file == NULL && vm.filePath) {
         location.file = vm.filePath;
@@ -196,8 +196,8 @@ static InterpretResult run(void) {
 InterpretResult interpret(const char* source) {
     // Source text is now set in main.c with proper error handling
     // set_source_text(source, strlen(source)) is called before interpret()
-    printf("[DEBUG] interpret: Starting with source length %zu\n", strlen(source));
-    fflush(stdout);
+    // printf("[DEBUG] interpret: Starting with source length %zu\n", strlen(source));
+    // fflush(stdout);
     // Create a chunk for the compiled bytecode
     Chunk chunk;
     initChunk(&chunk);
@@ -207,30 +207,30 @@ InterpretResult interpret(const char* source) {
 
     // Parse the source into an AST
     ASTNode* ast = parseSource(source);
-    printf("[DEBUG] interpret: parseSource returned, ast = %p\n", (void*)ast);
-    fflush(stdout);
+    // printf("[DEBUG] interpret: parseSource returned, ast = %p\n", (void*)ast);
+    // fflush(stdout);
  
     if (!ast) {
-        printf("[DEBUG] interpret: ast is NULL, returning error\n");
-        fflush(stdout);
+        // printf("[DEBUG] interpret: ast is NULL, returning error\n");
+        // fflush(stdout);
         freeCompiler(&compiler);
         freeChunk(&chunk);
         return INTERPRET_COMPILE_ERROR;
     }
     
-    printf("[DEBUG] interpret: ast is valid, continuing\n");
-    fflush(stdout);
+    // printf("[DEBUG] interpret: ast is valid, continuing\n");
+    // fflush(stdout);
 
     // Check if typed AST visualization is enabled
-    printf("[DEBUG] interpret: About to check config\n");
-    fflush(stdout);
+    // printf("[DEBUG] interpret: About to check config\n");
+    // fflush(stdout);
     
     const OrusConfig* config = config_get_global();
-    printf("[DEBUG] interpret: config = %p\n", (void*)config);
-    fflush(stdout);
+    // printf("[DEBUG] interpret: config = %p\n", (void*)config);
+    // fflush(stdout);
     
-    printf("[DEBUG] interpret: About to start multi-pass compiler section\n");
-    fflush(stdout);
+    // printf("[DEBUG] interpret: About to start multi-pass compiler section\n");
+    // fflush(stdout);
     
     // Disable verbose parser debug output from this point forward to clean up typed AST output
     if (config && config->show_typed_ast) {
@@ -249,19 +249,19 @@ InterpretResult interpret(const char* source) {
         
         // Create a basic type environment for testing
         // Note: This would normally be created by the type system
-        printf("[DEBUG] interpret: About to create type environment\n");
-        fflush(stdout);
+        // printf("[DEBUG] interpret: About to create type environment\n");
+        // fflush(stdout);
         extern TypeEnv* type_env_new(TypeEnv* parent);
         TypeEnv* type_env = type_env_new(NULL); // Create root type environment
-        printf("[DEBUG] interpret: Type environment created\n");
-        fflush(stdout);
+        // printf("[DEBUG] interpret: Type environment created\n");
+        // fflush(stdout);
         
         // Generate typed AST (this will populate the dataType fields)
-        printf("[DEBUG] interpret: About to generate typed AST\n");
-        fflush(stdout);
+        // printf("[DEBUG] interpret: About to generate typed AST\n");
+        // fflush(stdout);
         TypedASTNode* typed_ast = generate_typed_ast(ast, type_env);
-        printf("[DEBUG] interpret: Typed AST generated: %p\n", (void*)typed_ast);
-        fflush(stdout);
+        // printf("[DEBUG] interpret: Typed AST generated: %p\n", (void*)typed_ast);
+        // fflush(stdout);
         
         if (typed_ast) {
             if (show_visualization) {
@@ -280,46 +280,46 @@ InterpretResult interpret(const char* source) {
             }
             
             // ===== TEST NEW MULTI-PASS COMPILER (Phase 1) =====
-            printf("[VM] Testing new multi-pass compiler...\n");
+            // printf("[VM] Testing new multi-pass compiler...\n");
             
             CompilerContext* multi_compiler = init_compiler_context(typed_ast);
             if (multi_compiler) {
                 multi_compiler->enable_visualization = show_visualization;  // Enable debug output only if visualization enabled
                 
                 if (compile_to_bytecode(multi_compiler)) {
-                    printf("[VM] ✅ Multi-pass compiler succeeded!\n");
-                    printf("[VM] Generated %d bytecode instructions\n", 
-                           multi_compiler->bytecode->count);
-                    fflush(stdout);
+                    // printf("[VM] ✅ Multi-pass compiler succeeded!\n");
+                    // printf("[VM] Generated %d bytecode instructions\n", 
+                    //        multi_compiler->bytecode->count);
+                    // fflush(stdout);
                     
                     // Execute the bytecode from the multi-pass compiler
-                    printf("[VM] Executing multi-pass compiler bytecode...\n");
-                    fflush(stdout);
+                    // printf("[VM] Executing multi-pass compiler bytecode...\n");
+                    // fflush(stdout);
                     
                     // Convert BytecodeBuffer to Chunk format for VM execution
-                    printf("[VM] About to convert BytecodeBuffer to Chunk...\n");
-                    fflush(stdout);
+                    // printf("[VM] About to convert BytecodeBuffer to Chunk...\n");
+                    // fflush(stdout);
                     chunk.count = multi_compiler->bytecode->count;
                     chunk.capacity = multi_compiler->bytecode->capacity;
                     free(chunk.code); // Free the old empty chunk
                     chunk.code = malloc(chunk.count);
-                    printf("[VM] Allocated chunk memory: %p, size: %d\n", chunk.code, chunk.count);
-                    fflush(stdout);
+                    // printf("[VM] Allocated chunk memory: %p, size: %d\n", chunk.code, chunk.count);
+                    // fflush(stdout);
                     
                     // Copy constants from compiler's constant pool to chunk's constants
                     if (multi_compiler->constants && multi_compiler->constants->count > 0) {
                         for (int i = 0; i < multi_compiler->constants->count; i++) {
                             addConstant(&chunk, multi_compiler->constants->values[i]);
                         }
-                        printf("[VM] Copied %d constants from compiler to chunk\n", multi_compiler->constants->count);
+                        // printf("[VM] Copied %d constants from compiler to chunk\n", multi_compiler->constants->count);
                     } else {
-                        printf("[VM] No constants to copy from compiler\n");
+                        // printf("[VM] No constants to copy from compiler\n");
                     }
                     fflush(stdout);
                     
                     if (chunk.code) {
                         memcpy(chunk.code, multi_compiler->bytecode->instructions, chunk.count);
-                        printf("[VM] Copied bytecode to chunk\n");
+                        // printf("[VM] Copied bytecode to chunk\n");
                         
                         // Dump the bytecode for debugging
                         printf("[VM] Bytecode dump (%d bytes):\n", chunk.count);
@@ -332,24 +332,24 @@ InterpretResult interpret(const char* source) {
                         fflush(stdout);
                         
                         // Set up VM state for execution
-                        printf("[VM] Setting up VM state for execution...\n");
-                        fflush(stdout);
+                        // printf("[VM] Setting up VM state for execution...\n");
+                        // fflush(stdout);
                         vm.chunk = &chunk;
                         vm.ip = chunk.code;
-                        printf("[VM] VM state set up, about to call run()...\n");
-                        fflush(stdout);
+                        // printf("[VM] VM state set up, about to call run()...\n");
+                        // fflush(stdout);
                         
                         // Execute the bytecode
-                        printf("[VM] About to call run() function...\n");
-                        fflush(stdout);
+                        // printf("[VM] About to call run() function...\n");
+                        // fflush(stdout);
                         InterpretResult exec_result = run();
-                        printf("[VM] run() function returned with result: %d\n", exec_result);
-                        fflush(stdout);
-                        printf("[VM] Bytecode execution completed with result: %d\n", exec_result);
-                        fflush(stdout);
+                        // printf("[VM] run() function returned with result: %d\n", exec_result);
+                        // fflush(stdout);
+                        // printf("[VM] Bytecode execution completed with result: %d\n", exec_result);
+                        // fflush(stdout);
                         
                         if (exec_result == INTERPRET_OK) {
-                            printf("[VM] ✅ Program executed successfully!\n");
+                            // printf("[VM] ✅ Program executed successfully!\n");
                             // Set the global result to success and skip legacy compiler
                             freeAST(ast);
                             freeCompiler(&compiler);
@@ -357,8 +357,8 @@ InterpretResult interpret(const char* source) {
                             free_compiler_context(multi_compiler);
                             return INTERPRET_OK;
                         } else {
-                            printf("[VM] ⚠️  Program executed with runtime warnings (result: %d)\n", exec_result);
-                            printf("[VM] ✅ Output was produced correctly - print functionality working!\n");
+                            // printf("[VM] ⚠️  Program executed with runtime warnings (result: %d)\n", exec_result);
+                            // printf("[VM] ✅ Output was produced correctly - print functionality working!\n");
                             // For now, treat this as success since the core functionality works
                             freeAST(ast);
                             freeCompiler(&compiler);
@@ -367,15 +367,15 @@ InterpretResult interpret(const char* source) {
                             return INTERPRET_OK;
                         }
                     } else {
-                        printf("[VM] ❌ Failed to allocate memory for bytecode execution\n");
+                        // printf("[VM] ❌ Failed to allocate memory for bytecode execution\n");
                     }
                 } else {
-                    printf("[VM] ❌ Multi-pass compiler failed\n");
+                    // printf("[VM] ❌  Multi-pass compiler failed\n");
                 }
                 
                 free_compiler_context(multi_compiler);
             } else {
-                printf("[VM] ❌ Failed to initialize multi-pass compiler\n");
+                // printf("[VM] ❌ Failed to initialize multi-pass compiler\n");
             }
             
             // Clean up typed AST

@@ -262,7 +262,7 @@ static ASTNode* parseStatement(ParserContext* ctx) {
     Token t = peekToken(ctx);
 
     if (t.type == TOKEN_PRINT || t.type == TOKEN_PRINT_NO_NL || t.type == TOKEN_PRINT_SEP) {
-        printf("[DEBUG] parseStatement: Parsing print statement\n");
+        // printf("[DEBUG] parseStatement: Parsing print statement\n");
         return parsePrintStatement(ctx);
     }
     if (t.type == TOKEN_APOSTROPHE) {

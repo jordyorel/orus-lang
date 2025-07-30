@@ -7,6 +7,10 @@
 #include <stdio.h>
 #include <stdbool.h>
 
+// Forward declarations for dual register system
+struct DualRegisterAllocator;
+struct RegisterAllocation;
+
 // ===== EXISTING SINGLE-PASS COMPILER (LEGACY) =====
 // Compiler structure is defined in vm/vm.h
 
@@ -57,8 +61,9 @@ typedef struct CompilerContext {
     TypedASTNode* input_ast;           // Input from HM type inference
     TypedASTNode* optimized_ast;       // After optimization pass
     
-    // Register allocation
-    MultiPassRegisterAllocator* allocator;
+    // Register allocation - DUAL SYSTEM
+    MultiPassRegisterAllocator* allocator;        // Legacy allocator (compatibility)
+    struct DualRegisterAllocator* dual_allocator; // New dual system (forward declaration)
     int next_temp_register;            // R192-R239 temps
     int next_local_register;           // R64-R191 locals
     int next_global_register;          // R0-R63 globals
@@ -87,6 +92,15 @@ BytecodeBuffer* init_bytecode_buffer(void);
 void free_bytecode_buffer(BytecodeBuffer* buffer);
 void emit_byte_to_buffer(BytecodeBuffer* buffer, uint8_t byte);
 void emit_instruction_to_buffer(BytecodeBuffer* buffer, uint8_t opcode, uint8_t reg1, uint8_t reg2, uint8_t reg3);
+
+// DUAL REGISTER SYSTEM - Smart Instruction Emission
+void emit_arithmetic_instruction_smart(CompilerContext* ctx, const char* op, 
+                                     struct RegisterAllocation* dst, 
+                                     struct RegisterAllocation* left, 
+                                     struct RegisterAllocation* right);
+
+OpCode get_typed_opcode(const char* op, RegisterType type);
+OpCode get_standard_opcode(const char* op, RegisterType type);
 int emit_jump_placeholder(BytecodeBuffer* buffer, uint8_t jump_opcode);
 void patch_jump(BytecodeBuffer* buffer, int jump_offset, int target_offset);
 

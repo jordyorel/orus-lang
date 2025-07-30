@@ -178,8 +178,9 @@ CompilerContext* init_compiler_context(TypedASTNode* typed_ast) {
     ctx->input_ast = typed_ast;
     ctx->optimized_ast = NULL;
     
-    // Initialize register allocation
-    ctx->allocator = init_mp_register_allocator();
+    // Initialize register allocation - DUAL SYSTEM
+    ctx->allocator = init_mp_register_allocator();           // Legacy compatibility
+    ctx->dual_allocator = init_dual_register_allocator();    // New dual system
     ctx->next_temp_register = MP_TEMP_REG_START;
     ctx->next_local_register = MP_FRAME_REG_START;
     ctx->next_global_register = MP_GLOBAL_REG_START;
@@ -202,7 +203,7 @@ CompilerContext* init_compiler_context(TypedASTNode* typed_ast) {
     ctx->errors = NULL;       // Will implement in Phase 2
     ctx->opt_ctx = NULL;      // Will implement in Phase 2
     
-    if (!ctx->allocator || !ctx->bytecode || !ctx->constants || !ctx->symbols) {
+    if (!ctx->allocator || !ctx->dual_allocator || !ctx->bytecode || !ctx->constants || !ctx->symbols) {
         free_compiler_context(ctx);
         return NULL;
     }
@@ -374,6 +375,7 @@ void free_compiler_context(CompilerContext* ctx) {
     if (!ctx) return;
     
     free_mp_register_allocator(ctx->allocator);
+    free_dual_register_allocator(ctx->dual_allocator);  // Clean up dual system
     free_bytecode_buffer(ctx->bytecode);
     free_constant_pool(ctx->constants);
     
@@ -425,4 +427,167 @@ void emitByte(Compiler* compiler, uint8_t byte) {
     if (compiler && compiler->chunk) {
         writeChunk(compiler->chunk, byte, 0, 0);
     }
+}
+
+// ====== DUAL REGISTER SYSTEM - Smart Instruction Emission ======
+
+// Get the appropriate typed opcode for an operation and type
+OpCode get_typed_opcode(const char* op, RegisterType type) {
+    if (strcmp(op, "+") == 0) {
+        switch (type) {
+            case REG_TYPE_I32: return OP_ADD_I32_TYPED;
+            case REG_TYPE_I64: return OP_ADD_I64_TYPED;
+            case REG_TYPE_F64: return OP_ADD_F64_TYPED;
+            case REG_TYPE_U32: return OP_ADD_U32_TYPED;
+            case REG_TYPE_U64: return OP_ADD_U64_TYPED;
+            default: return OP_HALT; // Invalid
+        }
+    }
+    else if (strcmp(op, "-") == 0) {
+        switch (type) {
+            case REG_TYPE_I32: return OP_SUB_I32_TYPED;
+            case REG_TYPE_I64: return OP_SUB_I64_TYPED;
+            case REG_TYPE_F64: return OP_SUB_F64_TYPED;
+            case REG_TYPE_U32: return OP_SUB_U32_TYPED;
+            case REG_TYPE_U64: return OP_SUB_U64_TYPED;
+            default: return OP_HALT; // Invalid
+        }
+    }
+    else if (strcmp(op, "*") == 0) {
+        switch (type) {
+            case REG_TYPE_I32: return OP_MUL_I32_TYPED;
+            case REG_TYPE_I64: return OP_MUL_I64_TYPED;
+            case REG_TYPE_F64: return OP_MUL_F64_TYPED;
+            case REG_TYPE_U32: return OP_MUL_U32_TYPED;
+            case REG_TYPE_U64: return OP_MUL_U64_TYPED;
+            default: return OP_HALT; // Invalid
+        }
+    }
+    else if (strcmp(op, "/") == 0) {
+        switch (type) {
+            case REG_TYPE_I32: return OP_DIV_I32_TYPED;
+            case REG_TYPE_I64: return OP_DIV_I64_TYPED;
+            case REG_TYPE_F64: return OP_DIV_F64_TYPED;
+            case REG_TYPE_U32: return OP_DIV_U32_TYPED;
+            case REG_TYPE_U64: return OP_DIV_U64_TYPED;
+            default: return OP_HALT; // Invalid
+        }
+    }
+    else if (strcmp(op, "%") == 0) {
+        switch (type) {
+            case REG_TYPE_I32: return OP_MOD_I32_TYPED;
+            case REG_TYPE_I64: return OP_MOD_I64_TYPED;
+            case REG_TYPE_F64: return OP_MOD_F64_TYPED;
+            case REG_TYPE_U32: return OP_MOD_U32_TYPED;
+            case REG_TYPE_U64: return OP_MOD_U64_TYPED;
+            default: return OP_HALT; // Invalid
+        }
+    }
+    
+    return OP_HALT; // Invalid operation
+}
+
+// Get the appropriate standard opcode for an operation and type
+OpCode get_standard_opcode(const char* op, RegisterType type) {
+    if (strcmp(op, "+") == 0) {
+        switch (type) {
+            case REG_TYPE_I32: return OP_ADD_I32_R;
+            case REG_TYPE_I64: return OP_ADD_I64_R;
+            case REG_TYPE_F64: return OP_ADD_F64_R;
+            case REG_TYPE_U32: return OP_ADD_U32_R;
+            case REG_TYPE_U64: return OP_ADD_U64_R;
+            default: return OP_HALT; // Invalid
+        }
+    }
+    else if (strcmp(op, "-") == 0) {
+        switch (type) {
+            case REG_TYPE_I32: return OP_SUB_I32_R;
+            case REG_TYPE_I64: return OP_SUB_I64_R;
+            case REG_TYPE_F64: return OP_SUB_F64_R;
+            case REG_TYPE_U32: return OP_SUB_U32_R;
+            case REG_TYPE_U64: return OP_SUB_U64_R;
+            default: return OP_HALT; // Invalid
+        }
+    }
+    else if (strcmp(op, "*") == 0) {
+        switch (type) {
+            case REG_TYPE_I32: return OP_MUL_I32_R;
+            case REG_TYPE_I64: return OP_MUL_I64_R;
+            case REG_TYPE_F64: return OP_MUL_F64_R;
+            case REG_TYPE_U32: return OP_MUL_U32_R;
+            case REG_TYPE_U64: return OP_MUL_U64_R;
+            default: return OP_HALT; // Invalid
+        }
+    }
+    else if (strcmp(op, "/") == 0) {
+        switch (type) {
+            case REG_TYPE_I32: return OP_DIV_I32_R;
+            case REG_TYPE_I64: return OP_DIV_I64_R;
+            case REG_TYPE_F64: return OP_DIV_F64_R;
+            case REG_TYPE_U32: return OP_DIV_U32_R;
+            case REG_TYPE_U64: return OP_DIV_U64_R;
+            default: return OP_HALT; // Invalid
+        }
+    }
+    else if (strcmp(op, "%") == 0) {
+        switch (type) {
+            case REG_TYPE_I32: return OP_MOD_I32_R;
+            case REG_TYPE_I64: return OP_MOD_I64_R;
+            case REG_TYPE_F64: return OP_MOD_F64_R;
+            case REG_TYPE_U32: return OP_MOD_U32_R;
+            case REG_TYPE_U64: return OP_MOD_U64_R;
+            default: return OP_HALT; // Invalid
+        }
+    }
+    
+    return OP_HALT; // Invalid operation
+}
+
+// Smart instruction emission that chooses between typed and standard opcodes
+void emit_arithmetic_instruction_smart(CompilerContext* ctx, const char* op, 
+                                     struct RegisterAllocation* dst, 
+                                     struct RegisterAllocation* left, 
+                                     struct RegisterAllocation* right) {
+    if (!ctx || !dst || !left || !right) {
+        printf("[SMART_EMIT] Error: NULL parameters\n");
+        return;
+    }
+    
+    // Ensure all registers use the same strategy for compatibility
+    RegisterStrategy strategy = dst->strategy;
+    if (left->strategy != strategy || right->strategy != strategy) {
+        printf("[SMART_EMIT] Warning: Mixed register strategies, forcing standard\n");
+        strategy = REG_STRATEGY_STANDARD;
+    }
+    
+    OpCode opcode;
+    uint8_t reg1, reg2, reg3;
+    
+    if (strategy == REG_STRATEGY_TYPED) {
+        // Use typed instruction (performance optimized)
+        opcode = get_typed_opcode(op, dst->physical_type);
+        reg1 = (uint8_t)dst->physical_id;
+        reg2 = (uint8_t)left->physical_id;
+        reg3 = (uint8_t)right->physical_id;
+        
+        printf("[SMART_EMIT] Using TYPED instruction: %s (opcode=%d) dst=%d, left=%d, right=%d\n", 
+               op, opcode, reg1, reg2, reg3);
+    } else {
+        // Use standard instruction (compatibility)
+        opcode = get_standard_opcode(op, dst->physical_type);
+        reg1 = (uint8_t)dst->logical_id;
+        reg2 = (uint8_t)left->logical_id;
+        reg3 = (uint8_t)right->logical_id;
+        
+        printf("[SMART_EMIT] Using STANDARD instruction: %s (opcode=%d) dst=%d, left=%d, right=%d\n", 
+               op, opcode, reg1, reg2, reg3);
+    }
+    
+    if (opcode == OP_HALT) {
+        printf("[SMART_EMIT] Error: Invalid opcode for operation '%s' and type %d\n", op, dst->physical_type);
+        return;
+    }
+    
+    // Emit the instruction
+    emit_instruction_to_buffer(ctx->bytecode, opcode, reg1, reg2, reg3);
 }

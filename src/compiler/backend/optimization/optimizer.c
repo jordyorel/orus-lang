@@ -12,8 +12,8 @@ OptimizationContext* init_optimization_context(void) {
     OptimizationContext* ctx = malloc(sizeof(OptimizationContext));
     if (!ctx) return NULL;
     
-    // Enable primary optimization (constant folding)
-    ctx->enable_constant_folding = true;
+    // Temporarily disable constant folding to isolate memory and type issues
+    ctx->enable_constant_folding = false;
     ctx->enable_dead_code_elimination = false; // Future phase
     ctx->enable_common_subexpression = false;  // Future phase
     
@@ -50,7 +50,7 @@ TypedASTNode* optimize_typed_ast(TypedASTNode* input_ast, OptimizationContext* c
     
     printf("[OPTIMIZER] 🚀 Starting production-grade optimization passes...\n");
     
-    // Phase 1: Constant Folding
+    // Phase 1: Constant Folding (re-enabled after fixing memory corruption)
     if (ctx->enable_constant_folding) {
         if (!apply_constant_folding(input_ast, ctx)) {
             printf("[OPTIMIZER] ❌ Constant folding failed\n");

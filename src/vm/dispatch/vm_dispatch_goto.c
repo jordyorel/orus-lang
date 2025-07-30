@@ -50,7 +50,7 @@
 static uint64_t instruction_start_time = 0;
 
 InterpretResult vm_run_dispatch(void) {
-    printf("[DISPATCH_TRACE] vm_run_dispatch() entry\n");
+    // printf("[DISPATCH_TRACE] vm_run_dispatch() entry\n");
     fflush(stdout);
 
     double start_time = get_time_vm();
@@ -62,10 +62,10 @@ InterpretResult vm_run_dispatch(void) {
 
     // Initialize dispatch table with label addresses - this only runs ONCE per process
     static bool global_dispatch_initialized = false;
-    printf("[DISPATCH_TRACE] global_dispatch_initialized = %s\n", global_dispatch_initialized ? "true" : "false");
+    // printf("[DISPATCH_TRACE] global_dispatch_initialized = %s\n", global_dispatch_initialized ? "true" : "false");
     fflush(stdout);
     if (!global_dispatch_initialized) {
-        printf("[DISPATCH_TRACE] Initializing dispatch table...\n");
+        // printf("[DISPATCH_TRACE] Initializing dispatch table...\n");
         fflush(stdout);
         // Phase 1.3 Optimization: Hot opcodes first for better cache locality
         // Most frequently used typed operations (hot path)
@@ -250,13 +250,13 @@ InterpretResult vm_run_dispatch(void) {
         
         // Mark dispatch table as initialized to prevent re-initialization
         global_dispatch_initialized = true;
-        printf("[DISPATCH_TRACE] Dispatch table initialization completed\n");
+        // printf("[DISPATCH_TRACE] Dispatch table initialization completed\n");
         fflush(stdout);
     }
 
     uint8_t instruction;
     
-    printf("[DISPATCH_TRACE] About to start bytecode execution loop\n");
+    // printf("[DISPATCH_TRACE] About to start bytecode execution loop\n");
     fflush(stdout);
 
     // Phase 1.1 Optimization: Fast DISPATCH macro for production builds
@@ -2467,10 +2467,10 @@ InterpretResult vm_run_dispatch(void) {
     }
 
     LABEL_OP_HALT:
-        printf("[DISPATCH_TRACE] OP_HALT reached - program should terminate\n");
+        // printf("[DISPATCH_TRACE] OP_HALT reached - program should terminate\n");
         fflush(stdout);
         vm.lastExecutionTime = get_time_vm() - start_time;
-        printf("[DISPATCH_TRACE] About to return INTERPRET_OK from OP_HALT\n");
+        // printf("[DISPATCH_TRACE] About to return INTERPRET_OK from OP_HALT\n");
         fflush(stdout);
         RETURN(INTERPRET_OK);
 

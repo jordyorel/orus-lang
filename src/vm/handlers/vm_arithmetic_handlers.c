@@ -15,8 +15,7 @@
 
 // ====== I32 Typed Arithmetic Handlers ======
 
-static inline void handle_add_i32_typed(void) __attribute__((unused)); 
-static inline void handle_add_i32_typed(void) {
+void handle_add_i32_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
@@ -31,7 +30,7 @@ static inline void handle_add_i32_typed(void) {
     vm.registers[dst] = I32_VAL(result);
 }
 
-static inline void handle_sub_i32_typed(void) {
+void handle_sub_i32_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
@@ -46,7 +45,7 @@ static inline void handle_sub_i32_typed(void) {
     vm.registers[dst] = I32_VAL(result);
 }
 
-static inline void handle_mul_i32_typed(void) {
+void handle_mul_i32_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
@@ -61,7 +60,7 @@ static inline void handle_mul_i32_typed(void) {
     vm.registers[dst] = I32_VAL(result);
 }
 
-static inline void handle_div_i32_typed(void) {
+void handle_div_i32_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
@@ -82,7 +81,7 @@ static inline void handle_div_i32_typed(void) {
     vm.registers[dst] = I32_VAL(result);
 }
 
-static inline void handle_mod_i32_typed(void) {
+void handle_mod_i32_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
@@ -105,57 +104,96 @@ static inline void handle_mod_i32_typed(void) {
 
 // ====== I64 Typed Arithmetic Handlers ======
 
-static inline void handle_add_i64_typed(void) {
+void handle_add_i64_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
-    vm.typed_regs.i64_regs[dst] = vm.typed_regs.i64_regs[left] + vm.typed_regs.i64_regs[right];
-    vm.typed_regs.reg_types[dst] = REG_TYPE_I64;
+    
+    // Use standard register system for consistency with load/move operations
+    if (!IS_I64(vm.registers[left]) || !IS_I64(vm.registers[right])) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i64");
+        return;
+    }
+    
+    int64_t result = AS_I64(vm.registers[left]) + AS_I64(vm.registers[right]);
+    vm.registers[dst] = I64_VAL(result);
 }
 
-static inline void handle_sub_i64_typed(void) {
+void handle_sub_i64_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
-    vm.typed_regs.i64_regs[dst] = vm.typed_regs.i64_regs[left] - vm.typed_regs.i64_regs[right];
-    vm.typed_regs.reg_types[dst] = REG_TYPE_I64;
+    
+    // Use standard register system for consistency with load/move operations
+    if (!IS_I64(vm.registers[left]) || !IS_I64(vm.registers[right])) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i64");
+        return;
+    }
+    
+    int64_t result = AS_I64(vm.registers[left]) - AS_I64(vm.registers[right]);
+    vm.registers[dst] = I64_VAL(result);
 }
 
-static inline void handle_mul_i64_typed(void) {
+void handle_mul_i64_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
-    vm.typed_regs.i64_regs[dst] = vm.typed_regs.i64_regs[left] * vm.typed_regs.i64_regs[right];
-    vm.typed_regs.reg_types[dst] = REG_TYPE_I64;
+    
+    // Use standard register system for consistency with load/move operations
+    if (!IS_I64(vm.registers[left]) || !IS_I64(vm.registers[right])) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i64");
+        return;
+    }
+    
+    int64_t result = AS_I64(vm.registers[left]) * AS_I64(vm.registers[right]);
+    vm.registers[dst] = I64_VAL(result);
 }
 
-static inline void handle_div_i64_typed(void) {
+void handle_div_i64_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
-    if (vm.typed_regs.i64_regs[right] == 0) {
+    
+    // Use standard register system for consistency with load/move operations
+    if (!IS_I64(vm.registers[left]) || !IS_I64(vm.registers[right])) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i64");
+        return;
+    }
+    
+    int64_t divisor = AS_I64(vm.registers[right]);
+    if (divisor == 0) {
         runtimeError(ERROR_RUNTIME, (SrcLocation){NULL,0,0}, "Division by zero");
         return;
     }
-    vm.typed_regs.i64_regs[dst] = vm.typed_regs.i64_regs[left] / vm.typed_regs.i64_regs[right];
-    vm.typed_regs.reg_types[dst] = REG_TYPE_I64;
+    
+    int64_t result = AS_I64(vm.registers[left]) / divisor;
+    vm.registers[dst] = I64_VAL(result);
 }
 
-static inline void handle_mod_i64_typed(void) {
+void handle_mod_i64_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
-    if (vm.typed_regs.i64_regs[right] == 0) {
+    
+    // Use standard register system for consistency with load/move operations
+    if (!IS_I64(vm.registers[left]) || !IS_I64(vm.registers[right])) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i64");
+        return;
+    }
+    
+    int64_t divisor = AS_I64(vm.registers[right]);
+    if (divisor == 0) {
         runtimeError(ERROR_RUNTIME, (SrcLocation){NULL,0,0}, "Division by zero");
         return;
     }
-    vm.typed_regs.i64_regs[dst] = vm.typed_regs.i64_regs[left] % vm.typed_regs.i64_regs[right];
-    vm.typed_regs.reg_types[dst] = REG_TYPE_I64;
+    
+    int64_t result = AS_I64(vm.registers[left]) % divisor;
+    vm.registers[dst] = I64_VAL(result);
 }
 
 // ====== F64 Typed Arithmetic Handlers ======
 
-static inline void handle_add_f64_typed(void) {
+void handle_add_f64_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
@@ -170,7 +208,7 @@ static inline void handle_add_f64_typed(void) {
     vm.registers[dst] = F64_VAL(result);
 }
 
-static inline void handle_sub_f64_typed(void) {
+void handle_sub_f64_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
@@ -185,7 +223,7 @@ static inline void handle_sub_f64_typed(void) {
     vm.registers[dst] = F64_VAL(result);
 }
 
-static inline void handle_mul_f64_typed(void) {
+void handle_mul_f64_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
@@ -200,7 +238,7 @@ static inline void handle_mul_f64_typed(void) {
     vm.registers[dst] = F64_VAL(result);
 }
 
-static inline void handle_div_f64_typed(void) {
+void handle_div_f64_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
@@ -221,7 +259,7 @@ static inline void handle_div_f64_typed(void) {
     vm.registers[dst] = F64_VAL(result);
 }
 
-static inline void handle_mod_f64_typed(void) {
+void handle_mod_f64_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();

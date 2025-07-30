@@ -9,18 +9,18 @@
 // ====== Arithmetic Operation Handlers ======
 
 // I32 arithmetic operations
-static inline void handle_add_i32_typed(void);
-static inline void handle_sub_i32_typed(void);
-static inline void handle_mul_i32_typed(void);
-static inline void handle_div_i32_typed(void);
-static inline void handle_mod_i32_typed(void);
+void handle_add_i32_typed(void);
+void handle_sub_i32_typed(void);
+void handle_mul_i32_typed(void);
+void handle_div_i32_typed(void);
+void handle_mod_i32_typed(void);
 
 // I64 arithmetic operations
-static inline void handle_add_i64_typed(void);
-static inline void handle_sub_i64_typed(void);
-static inline void handle_mul_i64_typed(void);
-static inline void handle_div_i64_typed(void);
-static inline void handle_mod_i64_typed(void);
+void handle_add_i64_typed(void);
+void handle_sub_i64_typed(void);
+void handle_mul_i64_typed(void);
+void handle_div_i64_typed(void);
+void handle_mod_i64_typed(void);
 
 // U32 arithmetic operations
 static inline void handle_add_u32_typed(void);
@@ -37,11 +37,11 @@ static inline void handle_div_u64_typed(void);
 static inline void handle_mod_u64_typed(void);
 
 // F64 arithmetic operations
-static inline void handle_add_f64_typed(void);
-static inline void handle_sub_f64_typed(void);
-static inline void handle_mul_f64_typed(void);
-static inline void handle_div_f64_typed(void);
-static inline void handle_mod_f64_typed(void);
+void handle_add_f64_typed(void);
+void handle_sub_f64_typed(void);
+void handle_mul_f64_typed(void);
+void handle_div_f64_typed(void);
+void handle_mod_f64_typed(void);
 
 // ====== Memory Operation Handlers ======
 

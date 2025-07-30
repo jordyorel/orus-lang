@@ -2,17 +2,30 @@
 #define SYMBOL_TABLE_H
 
 #include "compiler/typed_ast.h"
+#include "compiler/register_allocator.h"  // For dual register system integration
 #include "public/common.h"
 #include <stdbool.h>
 
-// Simple symbol for variable storage
+// Enhanced symbol for dual register system
 typedef struct Symbol {
     char* name;                     // Variable name (owned by symbol table)
-    int register_id;                // Assigned VM register
+    
+    // DUAL REGISTER SYSTEM INTEGRATION
+    struct RegisterAllocation* reg_allocation;  // Register allocation info
+    int legacy_register_id;         // Legacy register ID (compatibility)
+    
+    // Variable metadata
     Type* type;                     // Variable type
     bool is_mutable;                // Can be reassigned (mut vs immutable)
     bool is_initialized;            // Has been assigned a value
+    bool is_arithmetic_heavy;       // Used in arithmetic operations frequently
+    
+    // Symbol table management
     struct Symbol* next;            // Hash table collision chain
+    
+    // Optimization hints
+    int usage_count;                // Number of times symbol is accessed
+    bool is_loop_variable;          // Used as loop induction variable
 } Symbol;
 
 // Simple hash table symbol table
@@ -28,11 +41,18 @@ typedef struct SymbolTable {
 SymbolTable* create_symbol_table(SymbolTable* parent);
 void free_symbol_table(SymbolTable* table);
 
-// Symbol management
-Symbol* declare_symbol(SymbolTable* table, const char* name, Type* type, 
-                      bool is_mutable, int register_id);
+// Symbol management - DUAL REGISTER SYSTEM
+Symbol* declare_symbol_with_allocation(SymbolTable* table, const char* name, Type* type, 
+                                      bool is_mutable, struct RegisterAllocation* reg_alloc);
+Symbol* declare_symbol_legacy(SymbolTable* table, const char* name, Type* type, 
+                             bool is_mutable, int register_id);  // Compatibility
 Symbol* resolve_symbol(SymbolTable* table, const char* name);
 Symbol* resolve_symbol_local_only(SymbolTable* table, const char* name);
+
+// Symbol optimization hints
+void mark_symbol_arithmetic_heavy(Symbol* symbol);
+void increment_symbol_usage(Symbol* symbol);
+void mark_symbol_as_loop_variable(Symbol* symbol);
 
 // Symbol operations
 bool symbol_exists(SymbolTable* table, const char* name);

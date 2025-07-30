@@ -44,6 +44,8 @@ void free_symbol_table(SymbolTable* table) {
         while (symbol) {
             Symbol* next = symbol->next;
             free(symbol->name);
+            // Note: We don't free reg_allocation here because it's managed by DualRegisterAllocator
+            // The allocator owns the RegisterAllocation structs
             free(symbol);
             symbol = next;
         }
@@ -74,17 +76,21 @@ Symbol* declare_symbol(SymbolTable* table, const char* name, Type* type,
     if (!symbol) return NULL;
     
     symbol->name = strdup(name);
-    symbol->register_id = register_id;
+    symbol->legacy_register_id = register_id;  // Legacy compatibility
+    symbol->reg_allocation = NULL;             // Will be set by dual register system
     symbol->type = type;
     symbol->is_mutable = is_mutable;
-    symbol->is_initialized = true;  // Assume initialized when declared
+    symbol->is_initialized = true;             // Assume initialized when declared
+    symbol->is_arithmetic_heavy = false;       // Default to false
+    symbol->usage_count = 0;                   // Track usage
+    symbol->is_loop_variable = false;          // Default to false
     
     // Insert at head of chain
     symbol->next = table->symbols[index];
     table->symbols[index] = symbol;
     table->symbol_count++;
     
-    printf("[SYMBOL_TABLE] Declared symbol '%s' -> R%d (%s, %s)\n", 
+    printf("[SYMBOL_TABLE] Declared symbol '%s' -> R%d (legacy) (%s, %s)\n", 
            name, register_id, 
            is_mutable ? "mutable" : "immutable",
            type ? "typed" : "untyped");
@@ -115,8 +121,18 @@ Symbol* resolve_symbol(SymbolTable* table, const char* name) {
     // Try current scope first
     Symbol* symbol = resolve_symbol_local_only(table, name);
     if (symbol) {
-        printf("[SYMBOL_TABLE] Resolved symbol '%s' -> R%d (local scope)\n", 
-               name, symbol->register_id);
+        // Increment usage count for optimization hints
+        increment_symbol_usage(symbol);
+        
+        if (symbol->reg_allocation) {
+            printf("[SYMBOL_TABLE] Resolved symbol '%s' -> %s R%d (physical R%d) (local scope)\n", 
+                   name, 
+                   symbol->reg_allocation->strategy == REG_STRATEGY_TYPED ? "TYPED" : "STANDARD",
+                   symbol->reg_allocation->logical_id, symbol->reg_allocation->physical_id);
+        } else {
+            printf("[SYMBOL_TABLE] Resolved symbol '%s' -> R%d (legacy) (local scope)\n", 
+                   name, symbol->legacy_register_id);
+        }
         return symbol;
     }
     
@@ -124,8 +140,18 @@ Symbol* resolve_symbol(SymbolTable* table, const char* name) {
     if (table->parent) {
         symbol = resolve_symbol(table->parent, name);
         if (symbol) {
-            printf("[SYMBOL_TABLE] Resolved symbol '%s' -> R%d (parent scope)\n", 
-                   name, symbol->register_id);
+            // Increment usage count for optimization hints
+            increment_symbol_usage(symbol);
+            
+            if (symbol->reg_allocation) {
+                printf("[SYMBOL_TABLE] Resolved symbol '%s' -> %s R%d (physical R%d) (parent scope)\n", 
+                       name, 
+                       symbol->reg_allocation->strategy == REG_STRATEGY_TYPED ? "TYPED" : "STANDARD",
+                       symbol->reg_allocation->logical_id, symbol->reg_allocation->physical_id);
+            } else {
+                printf("[SYMBOL_TABLE] Resolved symbol '%s' -> R%d (legacy) (parent scope)\n", 
+                       name, symbol->legacy_register_id);
+            }
             return symbol;
         }
     }
@@ -152,9 +178,27 @@ void print_symbol_table(SymbolTable* table, int indent) {
         Symbol* symbol = table->symbols[i];
         while (symbol) {
             for (int j = 0; j < indent + 1; j++) printf("  ");
-            printf("- %s -> R%d (%s)\n", 
-                   symbol->name, symbol->register_id,
-                   symbol->is_mutable ? "mut" : "immut");
+            
+            if (symbol->reg_allocation) {
+                printf("- %s -> %s R%d (physical R%d) (%s, usage=%d)%s%s\n", 
+                       symbol->name, 
+                       symbol->reg_allocation->strategy == REG_STRATEGY_TYPED ? "TYPED" : "STANDARD",
+                       symbol->reg_allocation->logical_id, 
+                       symbol->reg_allocation->physical_id,
+                       symbol->is_mutable ? "mut" : "immut",
+                       symbol->usage_count,
+                       symbol->is_arithmetic_heavy ? " [ARITH]" : "",
+                       symbol->is_loop_variable ? " [LOOP]" : "");
+            } else {
+                printf("- %s -> R%d (legacy) (%s, usage=%d)%s%s\n", 
+                       symbol->name, 
+                       symbol->legacy_register_id,
+                       symbol->is_mutable ? "mut" : "immut",
+                       symbol->usage_count,
+                       symbol->is_arithmetic_heavy ? " [ARITH]" : "",
+                       symbol->is_loop_variable ? " [LOOP]" : "");
+            }
+            
             symbol = symbol->next;
         }
     }
@@ -162,4 +206,76 @@ void print_symbol_table(SymbolTable* table, int indent) {
 
 int symbol_table_size(SymbolTable* table) {
     return table ? table->symbol_count : 0;
+}
+
+// ===== DUAL REGISTER SYSTEM INTEGRATION =====
+
+Symbol* declare_symbol_with_allocation(SymbolTable* table, const char* name, Type* type, 
+                                      bool is_mutable, struct RegisterAllocation* reg_alloc) {
+    if (!table || !name || !reg_alloc) return NULL;
+    
+    // Check if symbol already exists in local scope
+    if (resolve_symbol_local_only(table, name)) {
+        printf("[SYMBOL_TABLE] Error: Symbol '%s' already declared in current scope\n", name);
+        return NULL;
+    }
+    
+    // Calculate hash and find bucket
+    unsigned int hash = hash_string(name);
+    int index = hash % table->capacity;
+    
+    // Create new symbol
+    Symbol* symbol = malloc(sizeof(Symbol));
+    if (!symbol) return NULL;
+    
+    symbol->name = strdup(name);
+    symbol->reg_allocation = reg_alloc;        // Dual register system allocation
+    symbol->legacy_register_id = reg_alloc->logical_id;  // Compatibility
+    symbol->type = type;
+    symbol->is_mutable = is_mutable;
+    symbol->is_initialized = true;             // Assume initialized when declared
+    symbol->is_arithmetic_heavy = false;       // Default to false
+    symbol->usage_count = 0;                   // Track usage
+    symbol->is_loop_variable = false;          // Default to false
+    
+    // Insert at head of chain
+    symbol->next = table->symbols[index];
+    table->symbols[index] = symbol;
+    table->symbol_count++;
+    
+    printf("[SYMBOL_TABLE] Declared symbol '%s' -> %s R%d (physical R%d) (%s, %s)\n", 
+           name, 
+           reg_alloc->strategy == REG_STRATEGY_TYPED ? "TYPED" : "STANDARD",
+           reg_alloc->logical_id, reg_alloc->physical_id,
+           is_mutable ? "mutable" : "immutable",
+           type ? "typed" : "untyped");
+    
+    return symbol;
+}
+
+Symbol* declare_symbol_legacy(SymbolTable* table, const char* name, Type* type, 
+                             bool is_mutable, int register_id) {
+    // Legacy compatibility wrapper
+    return declare_symbol(table, name, type, is_mutable, register_id);
+}
+
+void mark_symbol_arithmetic_heavy(Symbol* symbol) {
+    if (!symbol) return;
+    
+    symbol->is_arithmetic_heavy = true;
+    printf("[SYMBOL_TABLE] Marked symbol '%s' as arithmetic-heavy\n", symbol->name);
+}
+
+void increment_symbol_usage(Symbol* symbol) {
+    if (!symbol) return;
+    
+    symbol->usage_count++;
+    printf("[SYMBOL_TABLE] Symbol '%s' usage count: %d\n", symbol->name, symbol->usage_count);
+}
+
+void mark_symbol_as_loop_variable(Symbol* symbol) {
+    if (!symbol) return;
+    
+    symbol->is_loop_variable = true;
+    printf("[SYMBOL_TABLE] Marked symbol '%s' as loop variable\n", symbol->name);
 }

@@ -386,6 +386,9 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
         }
         case NODE_LITERAL:
             return infer_literal(node->literal.value);
+        case NODE_TIME_STAMP:
+            // time_stamp() returns f64 (seconds as double)
+            return getPrimitiveType(TYPE_F64);
         case NODE_BINARY: {
             Type* l = algorithm_w(env, node->binary.left);
             Type* r = algorithm_w(env, node->binary.right);
@@ -429,12 +432,30 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                 if (!anno_type) return NULL;
             }
 
+            Type* var_type = NULL;
             if (init_type && anno_type) {
                 if (!unify(init_type, anno_type)) {
                     error("Type annotation does not match initializer type");
                     return NULL;
                 }
+                var_type = init_type;
+            } else if (init_type) {
+                var_type = init_type;
+            } else if (anno_type) {
+                var_type = anno_type;
+            } else {
+                error("Variable declaration must have either initializer or type annotation");
+                return NULL;
             }
+
+            // Add the variable to the type environment
+            if (node->varDecl.name && var_type) {
+                TypeScheme* scheme = generalize(env, var_type);
+                if (scheme) {
+                    type_env_define(env, node->varDecl.name, scheme);
+                }
+            }
+
             return getPrimitiveType(TYPE_VOID);
         }
         case NODE_ASSIGN: {
@@ -857,8 +878,12 @@ static TypedASTNode* generate_typed_ast_recursive(ASTNode* ast, TypeEnv* type_en
             break;
 
         case NODE_BINARY:
+            printf("[TYPE_INFERENCE] NODE_BINARY: ast->binary.left=%p, ast->binary.right=%p\n", 
+                   (void*)ast->binary.left, (void*)ast->binary.right);
             typed->typed.binary.left = generate_typed_ast_recursive(ast->binary.left, type_env);
             typed->typed.binary.right = generate_typed_ast_recursive(ast->binary.right, type_env);
+            printf("[TYPE_INFERENCE] NODE_BINARY: typed->typed.binary.left=%p, typed->typed.binary.right=%p\n", 
+                   (void*)typed->typed.binary.left, (void*)typed->typed.binary.right);
             break;
 
         case NODE_ASSIGN:
@@ -1027,6 +1052,9 @@ Type* infer_type(TypeInferer* inferer, ASTNode* expr) {
     switch (expr->type) {
         case NODE_LITERAL:
             return infer_literal(expr->literal.value);
+        case NODE_TIME_STAMP:
+            // time_stamp() returns f64 (seconds as double)  
+            return getPrimitiveType(TYPE_F64);
         case NODE_IDENTIFIER:
             return getPrimitiveType(TYPE_ANY);
         case NODE_BINARY:

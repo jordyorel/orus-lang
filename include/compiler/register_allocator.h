@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "vm/vm.h"  // For RegisterType enum
 
 // Multi-pass compiler register ranges (custom for our compiler)
 #define MP_GLOBAL_REG_START    0     // R0-R63: Global variables
@@ -49,5 +50,75 @@ void mp_free_temp_register(MultiPassRegisterAllocator* allocator, int reg);
 // Utilities
 bool mp_is_register_free(MultiPassRegisterAllocator* allocator, int reg);
 const char* mp_register_type_name(int reg);
+
+// ====== DUAL REGISTER SYSTEM IMPLEMENTATION ======
+
+// Register allocation strategies
+typedef enum RegisterStrategy {
+    REG_STRATEGY_STANDARD,    // Use vm.registers[] with OP_*_R instructions
+    REG_STRATEGY_TYPED,      // Use vm.typed_regs.* with OP_*_TYPED instructions  
+    REG_STRATEGY_AUTO        // Compiler decides based on usage pattern
+} RegisterStrategy;
+
+// Register allocation record
+typedef struct RegisterAllocation {
+    int logical_id;           // R0-R255 logical register ID (for standard)
+    RegisterType physical_type; // Which physical bank (REG_TYPE_I32, etc.)
+    int physical_id;          // Physical register within typed bank (0-31)
+    RegisterStrategy strategy; // Which instruction set to use
+    bool is_active;           // Whether allocation is currently active
+} RegisterAllocation;
+
+// Enhanced register allocator with dual system support
+typedef struct DualRegisterAllocator {
+    // Legacy allocator for compatibility
+    MultiPassRegisterAllocator* legacy_allocator;
+    
+    // Standard register tracking (R0-R255) - for general purpose
+    bool standard_regs[256];
+    
+    // Typed register tracking (R0-R31 per type) - for performance
+    bool typed_i32_regs[32];
+    bool typed_i64_regs[32]; 
+    bool typed_f64_regs[32];
+    bool typed_u32_regs[32];
+    bool typed_u64_regs[32];
+    bool typed_bool_regs[32];
+    
+    // Allocation tracking
+    RegisterAllocation allocations[256];
+    int allocation_count;
+    
+    // Performance heuristics
+    int arithmetic_operation_count;  // Track arithmetic intensity
+    bool prefer_typed_registers;     // Heuristic: prefer typed when beneficial
+} DualRegisterAllocator;
+
+// ====== DUAL REGISTER ALLOCATOR API ======
+
+// Initialization and cleanup
+DualRegisterAllocator* init_dual_register_allocator(void);
+void free_dual_register_allocator(DualRegisterAllocator* allocator);
+
+// Smart register allocation
+RegisterAllocation* allocate_register_smart(DualRegisterAllocator* allocator, 
+                                           RegisterType type, 
+                                           bool is_arithmetic_hot_path);
+
+RegisterAllocation* allocate_typed_register(DualRegisterAllocator* allocator, 
+                                          RegisterType type);
+
+RegisterAllocation* allocate_standard_register(DualRegisterAllocator* allocator, 
+                                             RegisterType type, 
+                                             int scope_preference);
+
+// Register deallocation
+void free_register_allocation(DualRegisterAllocator* allocator, 
+                            RegisterAllocation* allocation);
+
+// Utilities
+bool is_arithmetic_heavy_context(DualRegisterAllocator* allocator);
+const char* register_strategy_name(RegisterStrategy strategy);
+void print_register_allocation_stats(DualRegisterAllocator* allocator);
 
 #endif // REGISTER_ALLOCATOR_H

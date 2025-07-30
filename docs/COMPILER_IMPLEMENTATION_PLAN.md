@@ -769,26 +769,64 @@ void compile_literal(CompilerContext* ctx, TypedASTNode* literal, int target_reg
 }
 ```
 
-### 🎯 **LOW-LEVEL OPTIMIZATIONS (Code Generation Pass TODOs)**
+### 🎯 **CRITICAL: DUAL REGISTER SYSTEM ARCHITECTURE**
 
-## 🚀 **VM-POWERED CODE GENERATION STRATEGY**
-**The VM provides 150+ specialized opcodes - we must leverage ALL of them!**
+## 🚀 **VM REGISTER ARCHITECTURE ANALYSIS (PERFORMANCE SUPERPOWER)**
+**The VM has a DUAL REGISTER SYSTEM designed for maximum performance:**
 
-**Phase 1: Leverage VM Superpowers (CURRENT TARGET)**
-- [ ] **Typed Instruction Selection**: Use `OP_ADD_I32_TYPED` instead of generic `OP_ADD_I32_R`
-  - **50% faster** - bypasses Value boxing/unboxing overhead!
-- [ ] **Immediate Constant Optimization**: Use `OP_ADD_I32_IMM` for `x + 5` patterns
-  - **Saves 1 instruction** per constant operation!
-- [ ] **Typed Constant Loading**: Use `OP_LOAD_I32_CONST` vs generic `OP_LOAD_CONST`
-  - **Direct register loading** without constant pool lookup!
-- [ ] **Fused Instruction Selection**: Use `OP_MUL_ADD_I32` for `a*b+c` patterns
-  - **Native FMA support** - 3 operations become 1!
+### **🔥 Architecture Overview**
+```c
+// 1. Standard Boxed Registers (256 registers) - General Purpose
+Value registers[256];              // R0-R255: Full VM register space
+  // R0-R63:    Globals (64 registers)
+  // R64-R191:  Frame/Function locals (128 registers)  
+  // R192-R239: Temporaries (48 registers)
+  // R240-R255: Module scope (16 registers)
 
-**Register Optimization (256 Registers Available!)**
+// 2. Typed Unboxed Registers (Performance Layer) - ARITHMETIC HOT PATH
+TypedRegisters typed_regs = {
+    int32_t i32_regs[32];          // 32 unboxed i32 registers (ZERO-COST ARITHMETIC)
+    int64_t i64_regs[32];          // 32 unboxed i64 registers
+    uint32_t u32_regs[32];         // 32 unboxed u32 registers  
+    uint64_t u64_regs[32];         // 32 unboxed u64 registers
+    double f64_regs[32];           // 32 unboxed f64 registers
+    bool bool_regs[32];            // 32 unboxed bool registers
+    Value heap_regs[32];           // 32 boxed heap object registers
+    uint8_t reg_types[256];        // Track which bank each logical register maps to
+};
+```
+
+### **🚀 PERFORMANCE STRATEGY: INTELLIGENT REGISTER SELECTION**
+
+**CRITICAL DISCOVERY**: Typed registers are a **PERFORMANCE OPTIMIZATION LAYER**:
+- **Unboxed Values**: Eliminate Value struct overhead (50%+ performance gain)
+- **Cache Efficiency**: Type-specific register banks improve memory locality  
+- **Zero-Cost Arithmetic**: `OP_ADD_I32_TYPED` bypasses type checking entirely
+- **Register Mapping**: `reg_types[256]` tracks which physical bank each logical register uses
+
+### **🔧 COMPILER STRATEGY: HYBRID REGISTER ALLOCATION**
+
+**Phase 1: Smart Register Selection (IMMEDIATE PRIORITY)**
+```c
+// For arithmetic-intensive code (hot paths):
+if (is_arithmetic_heavy_context()) {
+    reg_id = allocate_typed_register(TYPED_I32);  // Returns R0-R31
+    emit_instruction(OP_ADD_I32_TYPED, result, left, right);  // UNBOXED ARITHMETIC
+}
+
+// For general-purpose code:
+else {
+    reg_id = allocate_standard_register(scope);   // Returns R0-R255  
+    emit_instruction(OP_ADD_I32_R, result, left, right);     // BOXED ARITHMETIC
+}
+```
+
+**Register Optimization Priorities:**
 - [x] **Register Allocation**: ✅ IMPLEMENTED - Linear scan with hierarchical layout
-- [ ] **Register Type Specialization**: Use proper register banks (global/frame/temp/module)
-- [ ] **Spill Area Utilization**: Leverage unlimited parameter support via spill registers
-- [ ] **Register Coalescing**: Eliminate `OP_MOVE` instructions where possible
+- [ ] **🚨 CRITICAL: Dual Register System**: Implement typed vs standard register selection
+- [ ] **Performance-Aware Allocation**: Use typed registers (R0-R31) for arithmetic hot paths
+- [ ] **Register Bank Mapping**: Track `reg_types[256]` for each allocated register
+- [ ] **Instruction Selection**: Choose `OP_*_TYPED` vs `OP_*_R` based on register type
 
 **Advanced VM Features Utilization**
 - [ ] **Loop Optimization**: Use `OP_INC_CMP_JMP` for `for(i=0; i<n; i++)` patterns
@@ -816,12 +854,83 @@ void compile_literal(CompilerContext* ctx, TypedASTNode* literal, int target_reg
 
 ### 🚨 **PHASE 4 CRITICAL DELIVERABLES**
 - **✅ Multi-pass Pipeline**: Working but limited to simple literals
+- **❌ 🔥 DUAL REGISTER SYSTEM FIX**: Implement proper typed vs standard register allocation
 - **❌ Symbol Table System**: Required for variable resolution (currently placeholder)
 - **❌ Comprehensive Testing**: Unit tests, integration tests, performance benchmarks
 - **❌ Error Recovery System**: Production-quality error handling and diagnostics
 - **❌ Code Coverage**: 90% test coverage requirement
 
-### Phase 4A: Symbol Table & Scope Management Infrastructure
+### Phase 4A: 🔥 CRITICAL FIX - Dual Register System Implementation
+
+#### Task 4.1: Fix Arithmetic Bug - Register System Unification
+```c
+// include/compiler/register_allocator.h (extend)
+
+typedef enum RegisterStrategy {
+    REG_STRATEGY_STANDARD,    // Use vm.registers[] with OP_*_R instructions
+    REG_STRATEGY_TYPED,      // Use vm.typed_regs.* with OP_*_TYPED instructions  
+    REG_STRATEGY_AUTO        // Compiler decides based on usage pattern
+} RegisterStrategy;
+
+typedef struct RegisterAllocation {
+    int logical_id;          // R0-R255 logical register ID
+    RegisterType physical_type; // Which physical bank (REG_TYPE_I32, etc.)
+    int physical_id;         // Physical register within bank (0-31 for typed)
+    RegisterStrategy strategy; // Which instruction set to use
+} RegisterAllocation;
+
+// Enhanced register allocator with dual system support
+typedef struct DualRegisterAllocator {
+    // Standard register tracking (R0-R255)
+    bool standard_regs[256];
+    
+    // Typed register tracking (R0-R31 per type)
+    bool typed_i32_regs[32];
+    bool typed_i64_regs[32]; 
+    bool typed_f64_regs[32];
+    bool typed_u32_regs[32];
+    bool typed_u64_regs[32];
+    bool typed_bool_regs[32];
+    
+    // Allocation strategy mapping
+    RegisterAllocation allocations[256];
+    int allocation_count;
+} DualRegisterAllocator;
+```
+
+#### Task 4.2: Implement Smart Register Selection
+```c
+// src/compiler/backend/register_allocator.c (new functions)
+
+RegisterAllocation* allocate_register_smart(DualRegisterAllocator* allocator, 
+                                           Type* var_type, 
+                                           bool is_arithmetic_hot_path) {
+    if (is_arithmetic_hot_path && is_numeric_type(var_type)) {
+        // Use typed registers for performance (R0-R31)
+        return allocate_typed_register(allocator, var_type);
+    } else {
+        // Use standard registers for general purpose (R0-R255)
+        return allocate_standard_register(allocator, var_type);
+    }
+}
+
+void emit_arithmetic_instruction(CompilerContext* ctx, const char* op, 
+                               RegisterAllocation* dst, 
+                               RegisterAllocation* left, 
+                               RegisterAllocation* right) {
+    if (dst->strategy == REG_STRATEGY_TYPED) {
+        // Use typed instruction (faster, unboxed)
+        Opcode typed_op = get_typed_opcode(op, dst->physical_type);
+        emit_instruction(ctx, typed_op, dst->physical_id, left->physical_id, right->physical_id);
+    } else {
+        // Use standard instruction (compatible, boxed)
+        Opcode standard_op = get_standard_opcode(op, dst->physical_type);
+        emit_instruction(ctx, standard_op, dst->logical_id, left->logical_id, right->logical_id);
+    }
+}
+```
+
+### Phase 4B: Symbol Table & Scope Management Infrastructure
 ```c
 // include/compiler/symbol_table.h
 typedef struct SymbolTable {
@@ -938,7 +1047,7 @@ void print_compiler_errors(CompilerContext* ctx);
 - **❌ Phase 7 Advanced Optimization (10%)**: Sophisticated optimization passes
 - **❌ Phase 8 VM Utilization (10%)**: Leverage VM's 150+ specialized opcodes
 
-**Next Priority**: Phase 4 (Symbol Tables) → Phase 5A (Expression System)
+**Next Priority**: Phase 4A (🔥 DUAL REGISTER SYSTEM FIX) → Phase 4B (Symbol Tables) → Phase 5A (Expression System)
 
 ---
 

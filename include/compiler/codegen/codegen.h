@@ -19,7 +19,7 @@ bool generate_bytecode_from_ast(CompilerContext* ctx);
 int compile_expression(CompilerContext* ctx, TypedASTNode* expr);
 void compile_statement(CompilerContext* ctx, TypedASTNode* stmt);
 void compile_literal(CompilerContext* ctx, TypedASTNode* literal, int target_reg);
-void compile_binary_op(CompilerContext* ctx, TypedASTNode* binary, int target_reg);
+void compile_binary_op(CompilerContext* ctx, TypedASTNode* binary, int target_reg, int left_reg, int right_reg);
 
 // Instruction emission helpers leveraging VM superpowers
 void emit_load_constant(CompilerContext* ctx, int reg, Value constant);

@@ -82,8 +82,8 @@ void runtimeError(ErrorType type, SrcLocation location, const char* format, ...)
     #else
         #define DISPATCH() do { \
             uint8_t inst = *vm.ip++; \
-            printf("[INSTRUCTION_TRACE] Executing instruction: 0x%02X (%d)\n", inst, inst); \
-            fflush(stdout); \
+            /* printf("[INSTRUCTION_TRACE] Executing instruction: 0x%02X (%d)\n", inst, inst); */ \
+            /* fflush(stdout); */ \
             PROFILE_INC(inst); \
             if (g_profiling.isActive && instruction_start_time > 0) { \
                 uint64_t cycles = getTimestamp() - instruction_start_time; \

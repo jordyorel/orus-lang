@@ -118,10 +118,13 @@ bool fold_binary_expression(TypedASTNode* node) {
     Value result = evaluate_binary_operation(left, op, right);
     printf("[CONSTANTFOLD] Evaluation completed\n");
     
-    // Memory-safe in-place transformation
+    // Transform the original AST node to a literal
     node->original->type = NODE_LITERAL;
     node->original->literal.value = result;
     node->original->literal.hasExplicitSuffix = false;
+    
+    // Do NOT modify the typed AST structure - leave it intact
+    // The codegen will handle folded nodes by checking if original->type is NODE_LITERAL
     
     // Update statistics
     fold_stats.optimizations_applied++;
@@ -139,6 +142,7 @@ bool fold_binary_expression(TypedASTNode* node) {
 
 bool is_foldable_binary(TypedASTNode* node) {
     if (!node || node->original->type != NODE_BINARY) {
+        printf("[CONSTANTFOLD] is_foldable_binary: Not a binary node\n");
         return false;
     }
     
@@ -146,9 +150,22 @@ bool is_foldable_binary(TypedASTNode* node) {
     TypedASTNode* left = node->typed.binary.left;
     TypedASTNode* right = node->typed.binary.right;
     
-    return left && right && 
-           left->original->type == NODE_LITERAL && 
-           right->original->type == NODE_LITERAL;
+    printf("[CONSTANTFOLD] is_foldable_binary: left=%p, right=%p\n", (void*)left, (void*)right);
+    
+    if (!left || !right) {
+        printf("[CONSTANTFOLD] is_foldable_binary: Missing operands\n");
+        return false;
+    }
+    
+    printf("[CONSTANTFOLD] is_foldable_binary: left->original->type=%d, right->original->type=%d\n", 
+           left->original->type, right->original->type);
+    printf("[CONSTANTFOLD] is_foldable_binary: NODE_LITERAL=%d, NODE_IDENTIFIER=%d\n", 
+           NODE_LITERAL, NODE_IDENTIFIER);
+    
+    bool is_foldable = left->original->type == NODE_LITERAL && right->original->type == NODE_LITERAL;
+    printf("[CONSTANTFOLD] is_foldable_binary: result=%s\n", is_foldable ? "true" : "false");
+    
+    return is_foldable;
 }
 
 Value evaluate_binary_operation(Value left, const char* op, Value right) {
