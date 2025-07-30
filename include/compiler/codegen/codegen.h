@@ -28,6 +28,7 @@ void emit_move(CompilerContext* ctx, int dst, int src);
 
 // Advanced code generation functions
 void compile_assignment(CompilerContext* ctx, TypedASTNode* assign);
+void compile_variable_declaration(CompilerContext* ctx, TypedASTNode* var_decl);
 void compile_print_statement(CompilerContext* ctx, TypedASTNode* print);
 void compile_variable_access(CompilerContext* ctx, TypedASTNode* var, int target_reg);
 

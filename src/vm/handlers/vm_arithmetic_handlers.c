@@ -159,48 +159,87 @@ static inline void handle_add_f64_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
-    vm.typed_regs.f64_regs[dst] = vm.typed_regs.f64_regs[left] + vm.typed_regs.f64_regs[right];
-    vm.typed_regs.reg_types[dst] = REG_TYPE_F64;
+    
+    // Use standard register system for consistency with load/move operations
+    if (!IS_F64(vm.registers[left]) || !IS_F64(vm.registers[right])) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be f64");
+        return;
+    }
+    
+    double result = AS_F64(vm.registers[left]) + AS_F64(vm.registers[right]);
+    vm.registers[dst] = F64_VAL(result);
 }
 
 static inline void handle_sub_f64_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
-    vm.typed_regs.f64_regs[dst] = vm.typed_regs.f64_regs[left] - vm.typed_regs.f64_regs[right];
-    vm.typed_regs.reg_types[dst] = REG_TYPE_F64;
+    
+    // Use standard register system for consistency with load/move operations
+    if (!IS_F64(vm.registers[left]) || !IS_F64(vm.registers[right])) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be f64");
+        return;
+    }
+    
+    double result = AS_F64(vm.registers[left]) - AS_F64(vm.registers[right]);
+    vm.registers[dst] = F64_VAL(result);
 }
 
 static inline void handle_mul_f64_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
-    vm.typed_regs.f64_regs[dst] = vm.typed_regs.f64_regs[left] * vm.typed_regs.f64_regs[right];
-    vm.typed_regs.reg_types[dst] = REG_TYPE_F64;
+    
+    // Use standard register system for consistency with load/move operations
+    if (!IS_F64(vm.registers[left]) || !IS_F64(vm.registers[right])) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be f64");
+        return;
+    }
+    
+    double result = AS_F64(vm.registers[left]) * AS_F64(vm.registers[right]);
+    vm.registers[dst] = F64_VAL(result);
 }
 
 static inline void handle_div_f64_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
-    if (vm.typed_regs.f64_regs[right] == 0.0) {
+    
+    // Use standard register system for consistency with load/move operations
+    if (!IS_F64(vm.registers[left]) || !IS_F64(vm.registers[right])) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be f64");
+        return;
+    }
+    
+    double divisor = AS_F64(vm.registers[right]);
+    if (divisor == 0.0) {
         runtimeError(ERROR_RUNTIME, (SrcLocation){NULL,0,0}, "Division by zero");
         return;
     }
-    vm.typed_regs.f64_regs[dst] = vm.typed_regs.f64_regs[left] / vm.typed_regs.f64_regs[right];
-    vm.typed_regs.reg_types[dst] = REG_TYPE_F64;
+    
+    double result = AS_F64(vm.registers[left]) / divisor;
+    vm.registers[dst] = F64_VAL(result);
 }
 
 static inline void handle_mod_f64_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
-    if (vm.typed_regs.f64_regs[right] == 0.0) {
+    
+    // Use standard register system for consistency with load/move operations
+    if (!IS_F64(vm.registers[left]) || !IS_F64(vm.registers[right])) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be f64");
+        return;
+    }
+    
+    double divisor = AS_F64(vm.registers[right]);
+    if (divisor == 0.0) {
         runtimeError(ERROR_RUNTIME, (SrcLocation){NULL,0,0}, "Division by zero");
         return;
     }
-    vm.typed_regs.f64_regs[dst] = fmod(vm.typed_regs.f64_regs[left], vm.typed_regs.f64_regs[right]);
-    vm.typed_regs.reg_types[dst] = REG_TYPE_F64;
+    
+    double result = fmod(AS_F64(vm.registers[left]), divisor);
+    vm.registers[dst] = F64_VAL(result);
 }
 
 // ====== U32 Typed Arithmetic Handlers ======

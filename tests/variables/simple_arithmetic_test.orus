@@ -1,0 +1,30 @@
+// Test basic arithmetic operations that should work
+a: i64 = 1000000
+b: i64 = 500000
+total = a + b
+product = a * 2
+division = a / 1000
+remainder = a % 7
+
+print("Addition:", total)
+print("Multiplication:", product) 
+print("Division:", division)
+print("Remainder:", remainder)
+
+// Test f64 operations
+x: f64 = 1.5
+y: f64 = 2.5
+sum = x + y
+product_f = x * y
+division_f = x / y
+
+print("F64 sum:", sum)
+print("F64 product:", product_f)
+print("F64 division:", division_f)
+
+// Test mixed precision
+large_f: f64 = 1e10
+small_f: f64 = 1e-10
+mixed = large_f * small_f
+
+print("Mixed precision:", mixed)

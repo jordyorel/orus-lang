@@ -58,6 +58,48 @@ uint8_t select_optimal_opcode(const char* op, Type* type) {
         if (strcmp(op, "==") == 0) return OP_EQ_R;
         if (strcmp(op, "!=") == 0) return OP_EQ_R;      // TODO: Implement NE_R
     }
+    else if (type->kind == TYPE_I64) {
+        // Arithmetic operators
+        if (strcmp(op, "+") == 0) return OP_ADD_I64_TYPED;
+        if (strcmp(op, "-") == 0) return OP_SUB_I64_TYPED;
+        if (strcmp(op, "*") == 0) return OP_MUL_I64_TYPED;
+        if (strcmp(op, "/") == 0) return OP_DIV_I64_TYPED;
+        if (strcmp(op, "%") == 0) return OP_MOD_I64_TYPED;
+        
+        // Comparison operators (result is boolean)
+        if (strcmp(op, "<") == 0) return OP_LT_I64_R;
+        if (strcmp(op, ">") == 0) return OP_GT_I64_R;
+        if (strcmp(op, "==") == 0) return OP_EQ_R;
+        if (strcmp(op, "!=") == 0) return OP_EQ_R;      // TODO: Implement NE_R
+    }
+    else if (type->kind == TYPE_U32) {
+        // Arithmetic operators
+        if (strcmp(op, "+") == 0) return OP_ADD_U32_TYPED;
+        if (strcmp(op, "-") == 0) return OP_SUB_U32_TYPED;
+        if (strcmp(op, "*") == 0) return OP_MUL_U32_TYPED;
+        if (strcmp(op, "/") == 0) return OP_DIV_U32_TYPED;
+        if (strcmp(op, "%") == 0) return OP_MOD_U32_TYPED;
+        
+        // Comparison operators (result is boolean)
+        if (strcmp(op, "<") == 0) return OP_LT_U32_R;
+        if (strcmp(op, ">") == 0) return OP_GT_U32_R;
+        if (strcmp(op, "==") == 0) return OP_EQ_R;
+        if (strcmp(op, "!=") == 0) return OP_EQ_R;      // TODO: Implement NE_R
+    }
+    else if (type->kind == TYPE_U64) {
+        // Arithmetic operators
+        if (strcmp(op, "+") == 0) return OP_ADD_U64_TYPED;
+        if (strcmp(op, "-") == 0) return OP_SUB_U64_TYPED;
+        if (strcmp(op, "*") == 0) return OP_MUL_U64_TYPED;
+        if (strcmp(op, "/") == 0) return OP_DIV_U64_TYPED;
+        if (strcmp(op, "%") == 0) return OP_MOD_U64_TYPED;
+        
+        // Comparison operators (result is boolean) 
+        if (strcmp(op, "<") == 0) return OP_LT_U64_R;
+        if (strcmp(op, ">") == 0) return OP_GT_U64_R;
+        if (strcmp(op, "==") == 0) return OP_EQ_R;
+        if (strcmp(op, "!=") == 0) return OP_EQ_R;      // TODO: Implement NE_R
+    }
     else if (type->kind == TYPE_F64) {
         // Arithmetic operators
         if (strcmp(op, "+") == 0) return OP_ADD_F64_TYPED;
@@ -107,11 +149,73 @@ void emit_load_constant(CompilerContext* ctx, int reg, Value constant) {
             break;
         }
             
-        case VAL_F64:
-            // TODO: Implement F64 constant loading
-            emit_instruction_to_buffer(ctx->bytecode, OP_LOAD_F64_CONST, reg, 0, 0);
-            printf("[CODEGEN] Emitted OP_LOAD_F64_CONST R%d, %.2f\n", reg, AS_F64(constant));
+        case VAL_I64: {
+            // OP_LOAD_I64_CONST: Add to constant pool and reference by index
+            int const_index = add_constant(ctx->constants, constant);
+            if (const_index >= 0) {
+                // OP_LOAD_I64_CONST format: opcode + register + 2-byte constant index
+                emit_byte_to_buffer(ctx->bytecode, OP_LOAD_I64_CONST);
+                emit_byte_to_buffer(ctx->bytecode, reg);
+                emit_byte_to_buffer(ctx->bytecode, (const_index >> 8) & 0xFF); // High byte
+                emit_byte_to_buffer(ctx->bytecode, const_index & 0xFF);        // Low byte
+                printf("[CODEGEN] Emitted OP_LOAD_I64_CONST R%d, #%d (%lld)\n", 
+                       reg, const_index, (long long)AS_I64(constant));
+            } else {
+                printf("[CODEGEN] Error: Failed to add i64 constant to pool\n");
+            }
             break;
+        }
+            
+        case VAL_U32: {
+            // Use generic OP_LOAD_CONST for u32 - no specialized opcode available
+            int const_index = add_constant(ctx->constants, constant);
+            if (const_index >= 0) {
+                // OP_LOAD_CONST format: opcode + register + 2-byte constant index
+                emit_byte_to_buffer(ctx->bytecode, OP_LOAD_CONST);
+                emit_byte_to_buffer(ctx->bytecode, reg);
+                emit_byte_to_buffer(ctx->bytecode, (const_index >> 8) & 0xFF); // High byte
+                emit_byte_to_buffer(ctx->bytecode, const_index & 0xFF);        // Low byte
+                printf("[CODEGEN] Emitted OP_LOAD_CONST R%d, #%d (%u)\n", 
+                       reg, const_index, AS_U32(constant));
+            } else {
+                printf("[CODEGEN] Error: Failed to add u32 constant to pool\n");
+            }
+            break;
+        }
+            
+        case VAL_U64: {
+            // Use generic OP_LOAD_CONST for u64 - no specialized opcode available
+            int const_index = add_constant(ctx->constants, constant);
+            if (const_index >= 0) {
+                // OP_LOAD_CONST format: opcode + register + 2-byte constant index
+                emit_byte_to_buffer(ctx->bytecode, OP_LOAD_CONST);
+                emit_byte_to_buffer(ctx->bytecode, reg);
+                emit_byte_to_buffer(ctx->bytecode, (const_index >> 8) & 0xFF); // High byte
+                emit_byte_to_buffer(ctx->bytecode, const_index & 0xFF);        // Low byte
+                printf("[CODEGEN] Emitted OP_LOAD_CONST R%d, #%d (%llu)\n", 
+                       reg, const_index, (unsigned long long)AS_U64(constant));
+            } else {
+                printf("[CODEGEN] Error: Failed to add u64 constant to pool\n");
+            }
+            break;
+        }
+            
+        case VAL_F64: {
+            // OP_LOAD_F64_CONST: Add to constant pool and reference by index
+            int const_index = add_constant(ctx->constants, constant);
+            if (const_index >= 0) {
+                // OP_LOAD_F64_CONST format: opcode + register + 2-byte constant index
+                emit_byte_to_buffer(ctx->bytecode, OP_LOAD_F64_CONST);
+                emit_byte_to_buffer(ctx->bytecode, reg);
+                emit_byte_to_buffer(ctx->bytecode, (const_index >> 8) & 0xFF); // High byte
+                emit_byte_to_buffer(ctx->bytecode, const_index & 0xFF);        // Low byte
+                printf("[CODEGEN] Emitted OP_LOAD_F64_CONST R%d, #%d (%.2f)\n", 
+                       reg, const_index, AS_F64(constant));
+            } else {
+                printf("[CODEGEN] Error: Failed to add f64 constant to pool\n");
+            }
+            break;
+        }
             
         case VAL_BOOL: {
             // Boolean constants stored as i32 in constant pool
@@ -273,6 +377,10 @@ void compile_statement(CompilerContext* ctx, TypedASTNode* stmt) {
             compile_assignment(ctx, stmt);
             break;
             
+        case NODE_VAR_DECL:
+            compile_variable_declaration(ctx, stmt);
+            break;
+            
         case NODE_PRINT:
             compile_print_statement(ctx, stmt);
             break;
@@ -281,6 +389,55 @@ void compile_statement(CompilerContext* ctx, TypedASTNode* stmt) {
             printf("[CODEGEN] Warning: Unsupported statement type: %d\n", stmt->original->type);
             break;
     }
+}
+
+void compile_variable_declaration(CompilerContext* ctx, TypedASTNode* var_decl) {
+    if (!ctx || !var_decl) return;
+    
+    // Get variable information from AST
+    const char* var_name = var_decl->original->varDecl.name;
+    ASTNode* initializer = var_decl->original->varDecl.initializer;
+    bool is_mutable = var_decl->original->varDecl.isMutable;
+    
+    printf("[CODEGEN] Compiling variable declaration: %s (mutable=%s)\n", 
+           var_name, is_mutable ? "true" : "false");
+    
+    // Compile the initializer expression if it exists
+    int value_reg = -1;
+    if (initializer) {
+        // Need to find the typed version of the initializer
+        // For now, compile the original initializer
+        TypedASTNode temp_typed = {
+            .original = initializer,
+            .resolvedType = var_decl->resolvedType  // Use the variable's resolved type
+        };
+        value_reg = compile_expression(ctx, &temp_typed);
+        if (value_reg == -1) {
+            printf("[CODEGEN] Error: Failed to compile variable initializer\n");
+            return;
+        }
+    }
+    
+    // Allocate register for the variable
+    int var_reg = mp_allocate_frame_register(ctx->allocator);
+    if (var_reg == -1) {
+        printf("[CODEGEN] Error: Failed to allocate register for variable %s\n", var_name);
+        if (value_reg != -1) {
+            mp_free_temp_register(ctx->allocator, value_reg);
+        }
+        return;
+    }
+    
+    // Register the variable in symbol table
+    register_variable(ctx, var_name, var_reg, var_decl->resolvedType, is_mutable);
+    
+    // Move the initial value to the variable register if we have one
+    if (value_reg != -1) {
+        emit_move(ctx, var_reg, value_reg);
+        mp_free_temp_register(ctx->allocator, value_reg);
+    }
+    
+    printf("[CODEGEN] Declared variable %s -> R%d\n", var_name, var_reg);
 }
 
 void compile_assignment(CompilerContext* ctx, TypedASTNode* assign) {
