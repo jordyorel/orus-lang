@@ -339,6 +339,11 @@ static void visualize_node_recursive(TypedASTNode* node, int depth, bool is_last
                 printf(" [const]");
             }
             break;
+        case NODE_ASSIGN:
+            if (node->typed.assign.name) {
+                printf(" name='%s'", node->typed.assign.name);
+            }
+            break;
         case NODE_FUNCTION:
             if (node->original->function.name) {
                 printf(" name='%s'", node->original->function.name);

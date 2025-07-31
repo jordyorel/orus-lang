@@ -10,6 +10,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+// Disable all debug output for clean program execution
+#define COMPILER_DEBUG 0
+#if COMPILER_DEBUG == 0
+#define printf(...) ((void)0)
+#endif
+
 // ===== MULTI-PASS COMPILER PIPELINE COORDINATOR =====
 // Orchestrates the entire compilation process:
 // TypedAST → Optimization → CodeGeneration → Bytecode

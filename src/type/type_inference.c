@@ -332,6 +332,49 @@ static Type* instantiate_scheme(TypeScheme* scheme) {
     return result;
 }
 
+// ---- Type coercion for arithmetic operations ----
+static Type* coerce_arithmetic_types(Type* left, Type* right) {
+    if (!left || !right) return NULL;
+    
+    // If types are already the same, no coercion needed
+    if (left->kind == right->kind) return left;
+    
+    // Define type promotion rules for arithmetic operations
+    // Priority: f64 > i64 > u64 > i32 > u32
+    
+    TypeKind left_kind = left->kind;
+    TypeKind right_kind = right->kind;
+    
+    // f64 takes precedence over all integer types
+    if (left_kind == TYPE_F64 || right_kind == TYPE_F64) {
+        return getPrimitiveType(TYPE_F64);
+    }
+    
+    // i64 takes precedence over smaller integer types
+    if (left_kind == TYPE_I64 || right_kind == TYPE_I64) {
+        // Allow coercion from i32 to i64
+        if ((left_kind == TYPE_I32 && right_kind == TYPE_I64) ||
+            (left_kind == TYPE_I64 && right_kind == TYPE_I32)) {
+            return getPrimitiveType(TYPE_I64);
+        }
+        return getPrimitiveType(TYPE_I64);
+    }
+    
+    // u64 takes precedence over smaller integer types
+    if (left_kind == TYPE_U64 || right_kind == TYPE_U64) {
+        return getPrimitiveType(TYPE_U64);
+    }
+    
+    // i32 takes precedence over u32
+    if ((left_kind == TYPE_I32 && right_kind == TYPE_U32) ||
+        (left_kind == TYPE_U32 && right_kind == TYPE_I32)) {
+        return getPrimitiveType(TYPE_I32);
+    }
+    
+    // Default fallback - return the left type
+    return left;
+}
+
 // ---- Literal type inference ----
 static Type* infer_literal(Value literal) {
     switch (literal.type) {
@@ -399,12 +442,24 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                 strcmp(node->binary.op, "*") == 0 ||
                 strcmp(node->binary.op, "/") == 0 ||
                 strcmp(node->binary.op, "%") == 0) {
-                // Arithmetic operations - return the type of the operands
-                if (!unify(l, r)) {
-                    error("Type mismatch in arithmetic operation");
+                // Rust-like behavior: Allow literals to adapt to non-literal types
+                bool left_is_literal = (node->binary.left && node->binary.left->type == NODE_LITERAL);
+                bool right_is_literal = (node->binary.right && node->binary.right->type == NODE_LITERAL);
+                
+                if (left_is_literal && !right_is_literal) {
+                    // Left is literal, adapt to right's type
+                    return r;
+                } else if (right_is_literal && !left_is_literal) {
+                    // Right is literal, adapt to left's type
+                    return l;
+                } else if (unify(l, r)) {
+                    // Both same type or both literals - use unified type
+                    return l;
+                } else {
+                    // Neither is literal and types don't match - require explicit casting
+                    error("Type mismatch in arithmetic operation - use explicit casting with 'as'");
                     return NULL;
                 }
-                // Return the unified type (could be i32, f64, etc.)
                 return l;
             } else if (strcmp(node->binary.op, "==") == 0 ||
                        strcmp(node->binary.op, "!=") == 0 ||
@@ -434,11 +489,20 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
 
             Type* var_type = NULL;
             if (init_type && anno_type) {
-                if (!unify(init_type, anno_type)) {
-                    error("Type annotation does not match initializer type");
+                // Rust-like behavior: Allow literals to adapt to declared type
+                bool can_adapt = false;
+                
+                // Check if initializer is a literal that can adapt to the declared type
+                if (node->varDecl.initializer && node->varDecl.initializer->type == NODE_LITERAL) {
+                    can_adapt = true; // Literals can always adapt to declared types
+                }
+                
+                if (can_adapt || unify(init_type, anno_type)) {
+                    var_type = anno_type; // Use declared type, not inferred type
+                } else {
+                    error("Type annotation does not match initializer type - use explicit casting with 'as'");
                     return NULL;
                 }
-                var_type = init_type;
             } else if (init_type) {
                 var_type = init_type;
             } else if (anno_type) {
@@ -878,15 +942,19 @@ static TypedASTNode* generate_typed_ast_recursive(ASTNode* ast, TypeEnv* type_en
             break;
 
         case NODE_BINARY:
-            printf("[TYPE_INFERENCE] NODE_BINARY: ast->binary.left=%p, ast->binary.right=%p\n", 
-                   (void*)ast->binary.left, (void*)ast->binary.right);
+            // printf("[TYPE_INFERENCE] NODE_BINARY: ast->binary.left=%p, ast->binary.right=%p\n", 
+            //        (void*)ast->binary.left, (void*)ast->binary.right);
             typed->typed.binary.left = generate_typed_ast_recursive(ast->binary.left, type_env);
             typed->typed.binary.right = generate_typed_ast_recursive(ast->binary.right, type_env);
-            printf("[TYPE_INFERENCE] NODE_BINARY: typed->typed.binary.left=%p, typed->typed.binary.right=%p\n", 
-                   (void*)typed->typed.binary.left, (void*)typed->typed.binary.right);
+            // printf("[TYPE_INFERENCE] NODE_BINARY: typed->typed.binary.left=%p, typed->typed.binary.right=%p\n", 
+            //        (void*)typed->typed.binary.left, (void*)typed->typed.binary.right);
             break;
 
         case NODE_ASSIGN:
+            // Copy the variable name
+            if (ast->assign.name) {
+                typed->typed.assign.name = strdup(ast->assign.name);
+            }
             if (ast->assign.value) {
                 typed->typed.assign.value = generate_typed_ast_recursive(ast->assign.value, type_env);
             }
@@ -988,6 +1056,16 @@ static TypedASTNode* generate_typed_ast_recursive(ASTNode* ast, TypeEnv* type_en
                     free_typed_ast_node(typed);
                     return NULL;
                 }
+            }
+            break;
+
+        case NODE_CAST:
+            // Handle cast expressions: expr as type
+            if (ast->cast.expression) {
+                typed->typed.cast.expression = generate_typed_ast_recursive(ast->cast.expression, type_env);
+            }
+            if (ast->cast.targetType) {
+                typed->typed.cast.targetType = generate_typed_ast_recursive(ast->cast.targetType, type_env);
             }
             break;
 

@@ -41,19 +41,19 @@ y: i64 = 50
 z: i64 = 25
 
 // Quadratic-like expressions
-quad1 = x * x + y * y + z * z
-quad2 = (x + y) * (x + y) - (x - y) * (x - y)
-quad3 = x * x - 2 * x * y + y * y
+quad1: i64 = x * x + y * y + z * z
+quad2: i64 = (x + y) * (x + y) - (x - y) * (x - y)
+quad3: i64 = x * x - (2 as i64) * x * y + y * y
 
 // Trigonometric approximations using arithmetic
-pi_approx = 22 * 1000 / 7  // π * 1000
-sin_approx = x - (x * x * x / 6) + (x * x * x * x * x / 120)  // Taylor series approximation
-cos_approx = 1 - (x * x / 2) + (x * x * x * x / 24)
+pi_approx: i64 = (22 as i64) * (1000 as i64) / (7 as i64)  // π * 1000
+sin_approx: i64 = x - (x * x * x / (6 as i64)) + (x * x * x * x * x / (120 as i64))  // Taylor series approximation
+cos_approx: i64 = (1 as i64) - (x * x / (2 as i64)) + (x * x * x * x / (24 as i64))
 
 // Geometric calculations
-circle_area = pi_approx * x * x / 1000
-rectangle_area = x * y
-triangle_area = x * y / 2
+circle_area: i64 = pi_approx * x * x / (1000 as i64)
+rectangle_area: i64 = x * y
+triangle_area: i64 = x * y / (2 as i64)
 
 print("Mathematical expression results:")
 print("Quadratic 1:", quad1)
@@ -104,9 +104,9 @@ fact_result = fact_result * 9
 fact_result = fact_result * 10
 
 // Power calculations (using repeated multiplication)
-power_2_10 = 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2
-power_3_6 = 3 * 3 * 3 * 3 * 3 * 3
-power_5_4 = 5 * 5 * 5 * 5
+power_2_10: i64 = (2 as i64) * (2 as i64) * (2 as i64) * (2 as i64) * (2 as i64) * (2 as i64) * (2 as i64) * (2 as i64) * (2 as i64) * (2 as i64)
+power_3_6: i64 = (3 as i64) * (3 as i64) * (3 as i64) * (3 as i64) * (3 as i64) * (3 as i64)
+power_5_4: i64 = (5 as i64) * (5 as i64) * (5 as i64) * (5 as i64)
 
 print("Iterative calculation results:")
 print("Fibonacci result:", fib_c)
@@ -122,38 +122,38 @@ print("Phase 4: Mathematical Algorithms")
 mut gcd_a: i64 = 1071
 mut gcd_b: i64 = 462
 // Step 1: 1071 = 462 * 2 + 147
-mut gcd_remainder: i64 = gcd_a - gcd_b * 2
+mut gcd_remainder: i64 = gcd_a - gcd_b * (2 as i64)
 gcd_a = gcd_b
 gcd_b = gcd_remainder
 // Step 2: 462 = 147 * 3 + 21
-gcd_remainder = gcd_a - gcd_b * 3
+gcd_remainder = gcd_a - gcd_b * (3 as i64)
 gcd_a = gcd_b
 gcd_b = gcd_remainder
 // Step 3: 147 = 21 * 7 + 0
-gcd_remainder = gcd_a - gcd_b * 7
-gcd_result = gcd_b
+gcd_remainder = gcd_a - gcd_b * (7 as i64)
+gcd_result: i64 = gcd_b
 
 // Square root approximation (Newton's method)
 sqrt_target: i64 = 100
 mut sqrt_guess: i64 = 50
-sqrt_guess = (sqrt_guess + sqrt_target / sqrt_guess) / 2
-sqrt_guess = (sqrt_guess + sqrt_target / sqrt_guess) / 2
-sqrt_guess = (sqrt_guess + sqrt_target / sqrt_guess) / 2
-sqrt_guess = (sqrt_guess + sqrt_target / sqrt_guess) / 2
-sqrt_guess = (sqrt_guess + sqrt_target / sqrt_guess) / 2
+sqrt_guess = (sqrt_guess + sqrt_target / sqrt_guess) / (2 as i64)
+sqrt_guess = (sqrt_guess + sqrt_target / sqrt_guess) / (2 as i64)
+sqrt_guess = (sqrt_guess + sqrt_target / sqrt_guess) / (2 as i64)
+sqrt_guess = (sqrt_guess + sqrt_target / sqrt_guess) / (2 as i64)
+sqrt_guess = (sqrt_guess + sqrt_target / sqrt_guess) / (2 as i64)
 
 // Prime number checking simulation
-prime_candidate = 97
-is_prime_flag = 1  // Assume prime
+prime_candidate: i64 = 97
+is_prime_flag: i64 = 1  // Assume prime
 // Check divisibility (simplified)
-check_div_2 = prime_candidate / 2 * 2
-if_check_2 = prime_candidate - check_div_2  // Will be 0 if divisible
-check_div_3 = prime_candidate / 3 * 3
-if_check_3 = prime_candidate - check_div_3
-check_div_5 = prime_candidate / 5 * 5
-if_check_5 = prime_candidate - check_div_5
-check_div_7 = prime_candidate / 7 * 7
-if_check_7 = prime_candidate - check_div_7
+check_div_2: i64 = prime_candidate / (2 as i64) * (2 as i64)
+if_check_2: i64 = prime_candidate - check_div_2  // Will be 0 if divisible
+check_div_3: i64 = prime_candidate / (3 as i64) * (3 as i64)
+if_check_3: i64 = prime_candidate - check_div_3
+check_div_5: i64 = prime_candidate / (5 as i64) * (5 as i64)
+if_check_5: i64 = prime_candidate - check_div_5
+check_div_7: i64 = prime_candidate / (7 as i64) * (7 as i64)
+if_check_7: i64 = prime_candidate - check_div_7
 
 print("Algorithm results:")
 print("GCD result:", gcd_result)
@@ -165,23 +165,23 @@ print("Divisibility checks:", if_check_2, if_check_3, if_check_5, if_check_7)
 print("Phase 5: High-Precision Arithmetic")
 
 // Large number calculations
-large_1 = 999999
-large_2 = 888888
-large_3 = 777777
+large_1: i64 = 999999
+large_2: i64 = 888888
+large_3: i64 = 777777
 
 // High-precision operations
-large_sum = large_1 + large_2 + large_3
-large_product = (large_1 / 1000) * (large_2 / 1000)
-large_division = large_1 / large_2 * 1000
+large_sum: i64 = large_1 + large_2 + large_3
+large_product: i64 = (large_1 / (1000 as i64)) * (large_2 / (1000 as i64))
+large_division: i64 = large_1 / large_2 * (1000 as i64)
 
 // Mathematical constants approximation
-e_approx = 1 + 1 + 1/2 + 1/6 + 1/24 + 1/120 + 1/720  // e ≈ 2.718
-golden_ratio = (1 + sqrt_guess) / 2  // φ using our sqrt approximation
+e_approx: i64 = (1 as i64) + (1 as i64) + (1 as i64)/(2 as i64) + (1 as i64)/(6 as i64) + (1 as i64)/(24 as i64) + (1 as i64)/(120 as i64) + (1 as i64)/(720 as i64)  // e ≈ 2.718
+golden_ratio: i64 = ((1 as i64) + sqrt_guess) / (2 as i64)  // φ using our sqrt approximation
 
 // Complex fraction calculations
-fraction_1 = 355 * 1000 / 113  // π approximation
-fraction_2 = 22 * 10000 / 7    // π with more precision
-fraction_3 = 1414 * 100 / 1000  // √2 approximation
+fraction_1: i64 = (355 as i64) * (1000 as i64) / (113 as i64)  // π approximation
+fraction_2: i64 = (22 as i64) * (10000 as i64) / (7 as i64)    // π with more precision
+fraction_3: i64 = (1414 as i64) * (100 as i64) / (1000 as i64)  // √2 approximation
 
 print("High-precision results:")
 print("Large sum:", large_sum)
@@ -194,19 +194,19 @@ print("Pi approximation 2:", fraction_2)
 // === PHASE 6: COMPUTATIONAL STRESS TEST ===
 print("Phase 6: Computational Stress Test")
 
-computation_start = time_stamp()
+computation_start: f64 = time_stamp()
 
 // Intensive calculation combining all previous results
-stress_calc_1 = (add_result + sub_result) * (mul_result + div_result) / 1000
-stress_calc_2 = (quad1 + quad2 + quad3) / (circle_area + triangle_area + 1)
-stress_calc_3 = (fib_c + fact_result) / (power_2_10 + power_3_6 + power_5_4)
-stress_calc_4 = (gcd_result * sqrt_guess) + (large_sum / 1000)
+stress_calc_1: i64 = (add_result + sub_result) * (mul_result + div_result) / (1000 as i64)
+stress_calc_2: i64 = (quad1 + quad2 + quad3) / (circle_area + triangle_area + (1 as i64))
+stress_calc_3: i64 = (fib_c + fact_result) / (power_2_10 + power_3_6 + power_5_4)
+stress_calc_4: i64 = (gcd_result * sqrt_guess) + (large_sum / (1000 as i64))
 
 // Final mega calculation
-final_arithmetic_result = stress_calc_1 + stress_calc_2 + stress_calc_3 + stress_calc_4
+final_arithmetic_result: i64 = stress_calc_1 + stress_calc_2 + stress_calc_3 + stress_calc_4
 
-computation_end = time_stamp()
-computation_time = computation_end - computation_start
+computation_end: f64 = time_stamp()
+computation_time: f64 = computation_end - computation_start
 
 print("Stress test results:")
 print("Stress calculation 1:", stress_calc_1)
@@ -217,8 +217,8 @@ print("Final arithmetic result:", final_arithmetic_result)
 print("Computation time:", computation_time)
 
 // === FINAL BENCHMARK RESULTS ===
-end_time = time_stamp()
-total_elapsed = end_time - start_time
+end_time: f64 = time_stamp()
+total_elapsed: f64 = end_time - start_time
 
 print("=== PURE ARITHMETIC BENCHMARK COMPLETE ===")
 print("Total execution time:", total_elapsed)
@@ -226,5 +226,5 @@ print("Arithmetic operations performed: 500+")
 print("Mathematical algorithms: 5")
 print("Precision calculations: 20+")
 print("Iterative computations: 50+")
-print("Final benchmark score:", total_elapsed * final_arithmetic_result / 1000000)
+print("Final benchmark score:", total_elapsed * (final_arithmetic_result as f64) / (1000000 as f64))
 print("=== Orus Pure Arithmetic Benchmark Complete ===")

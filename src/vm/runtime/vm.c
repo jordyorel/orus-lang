@@ -321,15 +321,15 @@ InterpretResult interpret(const char* source) {
                         memcpy(chunk.code, multi_compiler->bytecode->instructions, chunk.count);
                         // printf("[VM] Copied bytecode to chunk\n");
                         
-                        // Dump the bytecode for debugging
-                        printf("[VM] Bytecode dump (%d bytes):\n", chunk.count);
-                        for (int i = 0; i < chunk.count; i += 4) {
-                            if (i + 3 < chunk.count) {
-                                printf("[VM]   %04d: %02X %02X %02X %02X\n", i, 
-                                       chunk.code[i], chunk.code[i+1], chunk.code[i+2], chunk.code[i+3]);
-                            }
-                        }
-                        fflush(stdout);
+                        // Bytecode dump disabled for clean program execution
+                        // printf("[VM] Bytecode dump (%d bytes):\n", chunk.count);
+                        // for (int i = 0; i < chunk.count; i += 4) {
+                        //     if (i + 3 < chunk.count) {
+                        //         printf("[VM]   %04d: %02X %02X %02X %02X\n", i, 
+                        //                chunk.code[i], chunk.code[i+1], chunk.code[i+2], chunk.code[i+3]);
+                        //     }
+                        // }
+                        // fflush(stdout);
                         
                         // Set up VM state for execution
                         // printf("[VM] Setting up VM state for execution...\n");

@@ -40,7 +40,8 @@ struct TypedASTNode {
             TypedASTNode* right;
         } binary;
         struct {
-            TypedASTNode* value;
+            char* name;              // Variable name being assigned to
+            TypedASTNode* value;     // Expression being assigned
         } assign;
         struct {
             TypedASTNode** values;

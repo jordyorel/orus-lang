@@ -143,6 +143,9 @@ void free_typed_ast_node(TypedASTNode* node) {
             free_typed_ast_node(node->typed.binary.right);
             break;
         case NODE_ASSIGN:
+            if (node->typed.assign.name) {
+                free(node->typed.assign.name);
+            }
             free_typed_ast_node(node->typed.assign.value);
             break;
         case NODE_PRINT:

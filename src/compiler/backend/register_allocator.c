@@ -3,6 +3,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+// Disable all debug output for clean program execution
+#define REGISTER_ALLOCATOR_DEBUG 0
+#if REGISTER_ALLOCATOR_DEBUG == 0
+#define printf(...) ((void)0)
+#endif
+
 // ====== DUAL REGISTER SYSTEM IMPLEMENTATION ======
 
 MultiPassRegisterAllocator* init_mp_register_allocator(void) {

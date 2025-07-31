@@ -21,14 +21,20 @@ This document outlines the detailed implementation plan for building the Orus co
 - **✅ Register Allocation**: `src/compiler/backend/register_allocator.c`
 - **✅ Bytecode Emission**: Variable-length instruction generation matching VM format
 
-#### 🚨 **What's Still Missing (85% of Production Compiler)**
+#### 🚨 **What's Still Missing (80% of Production Compiler)**
+
+**🔥 CRITICAL TYPE SYSTEM FIXES (HIGHEST PRIORITY)**
+- **❌ BROKEN: Rust-like Type Inference**: Literals should adapt to declared types (`x: i64 = 5` should work)
+- **❌ BROKEN: Default i32 Inference**: `x = 5` should infer i32, not require explicit casting
+- **❌ BROKEN: Mutability System**: Rust-like `mut` keyword behavior (`x = 5` immutable, `mut x = 5` mutable)
+- **❌ BROKEN: Smart Type Coercion**: Only require `as` casting for actual type mismatches between variables
 
 **CRITICAL LANGUAGE FEATURES (HIGH PRIORITY)**
 - **Expression Types**: Binary ops (+,-,*,/), comparisons (<,>,==), logical (and,or), unary ops (-,not,++)
 - **Control Flow**: if/elif/else statements, for/while loops, break/continue, match statements
 - **Functions**: fn definitions, calls, parameters, return statements, recursion
 - **Data Types**: String/array/object literals, all numeric types (f64, u32, u64), booleans
-- **Variable System**: Immutable/mut declarations, proper scoping, identifier resolution
+- **Variable System**: ✅ Basic declarations working, need proper scoping and identifier resolution
 
 **OPTIMIZATION PIPELINE (MEDIUM PRIORITY)**
 - **Advanced Constant Folding**: Type-aware folding, immediate value detection, algebraic simplification

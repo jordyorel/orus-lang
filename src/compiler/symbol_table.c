@@ -30,8 +30,8 @@ SymbolTable* create_symbol_table(SymbolTable* parent) {
     table->parent = parent;
     table->scope_depth = parent ? parent->scope_depth + 1 : 0;
     
-    printf("[SYMBOL_TABLE] Created symbol table (depth=%d, capacity=%d)\n", 
-           table->scope_depth, table->capacity);
+    // printf("[SYMBOL_TABLE] Created symbol table (depth=%d, capacity=%d)\n", 
+    //        table->scope_depth, table->capacity);
     return table;
 }
 
@@ -54,7 +54,7 @@ void free_symbol_table(SymbolTable* table) {
     free(table->symbols);
     free(table);
     
-    printf("[SYMBOL_TABLE] Freed symbol table\n");
+    // printf("[SYMBOL_TABLE] Freed symbol table\n");
 }
 
 Symbol* declare_symbol(SymbolTable* table, const char* name, Type* type, 
@@ -63,7 +63,7 @@ Symbol* declare_symbol(SymbolTable* table, const char* name, Type* type,
     
     // Check if symbol already exists in local scope
     if (resolve_symbol_local_only(table, name)) {
-        printf("[SYMBOL_TABLE] Error: Symbol '%s' already declared in current scope\n", name);
+        // printf("[SYMBOL_TABLE] Error: Symbol '%s' already declared in current scope\n", name);
         return NULL;
     }
     
@@ -90,10 +90,10 @@ Symbol* declare_symbol(SymbolTable* table, const char* name, Type* type,
     table->symbols[index] = symbol;
     table->symbol_count++;
     
-    printf("[SYMBOL_TABLE] Declared symbol '%s' -> R%d (legacy) (%s, %s)\n", 
-           name, register_id, 
-           is_mutable ? "mutable" : "immutable",
-           type ? "typed" : "untyped");
+    // printf("[SYMBOL_TABLE] Declared symbol '%s' -> R%d (legacy) (%s, %s)\n", 
+    //        name, register_id, 
+    //        is_mutable ? "mutable" : "immutable",
+    //        type ? "typed" : "untyped");
     
     return symbol;
 }
@@ -125,13 +125,13 @@ Symbol* resolve_symbol(SymbolTable* table, const char* name) {
         increment_symbol_usage(symbol);
         
         if (symbol->reg_allocation) {
-            printf("[SYMBOL_TABLE] Resolved symbol '%s' -> %s R%d (physical R%d) (local scope)\n", 
-                   name, 
-                   symbol->reg_allocation->strategy == REG_STRATEGY_TYPED ? "TYPED" : "STANDARD",
-                   symbol->reg_allocation->logical_id, symbol->reg_allocation->physical_id);
+            // printf("[SYMBOL_TABLE] Resolved symbol '%s' -> %s R%d (physical R%d) (local scope)\n", 
+            //        name, 
+            //        symbol->reg_allocation->strategy == REG_STRATEGY_TYPED ? "TYPED" : "STANDARD",
+            //        symbol->reg_allocation->logical_id, symbol->reg_allocation->physical_id);
         } else {
-            printf("[SYMBOL_TABLE] Resolved symbol '%s' -> R%d (legacy) (local scope)\n", 
-                   name, symbol->legacy_register_id);
+            // printf("[SYMBOL_TABLE] Resolved symbol '%s' -> R%d (legacy) (local scope)\n", 
+            //        name, symbol->legacy_register_id);
         }
         return symbol;
     }
@@ -144,19 +144,19 @@ Symbol* resolve_symbol(SymbolTable* table, const char* name) {
             increment_symbol_usage(symbol);
             
             if (symbol->reg_allocation) {
-                printf("[SYMBOL_TABLE] Resolved symbol '%s' -> %s R%d (physical R%d) (parent scope)\n", 
-                       name, 
-                       symbol->reg_allocation->strategy == REG_STRATEGY_TYPED ? "TYPED" : "STANDARD",
-                       symbol->reg_allocation->logical_id, symbol->reg_allocation->physical_id);
+                // printf("[SYMBOL_TABLE] Resolved symbol '%s' -> %s R%d (physical R%d) (parent scope)\n", 
+                //        name, 
+                //        symbol->reg_allocation->strategy == REG_STRATEGY_TYPED ? "TYPED" : "STANDARD",
+                //        symbol->reg_allocation->logical_id, symbol->reg_allocation->physical_id);
             } else {
-                printf("[SYMBOL_TABLE] Resolved symbol '%s' -> R%d (legacy) (parent scope)\n", 
-                       name, symbol->legacy_register_id);
+                // printf("[SYMBOL_TABLE] Resolved symbol '%s' -> R%d (legacy) (parent scope)\n", 
+                //        name, symbol->legacy_register_id);
             }
             return symbol;
         }
     }
     
-    printf("[SYMBOL_TABLE] Symbol '%s' not found in any scope\n", name);
+    // printf("[SYMBOL_TABLE] Symbol '%s' not found in any scope\n", name);
     return NULL;
 }
 
@@ -216,7 +216,7 @@ Symbol* declare_symbol_with_allocation(SymbolTable* table, const char* name, Typ
     
     // Check if symbol already exists in local scope
     if (resolve_symbol_local_only(table, name)) {
-        printf("[SYMBOL_TABLE] Error: Symbol '%s' already declared in current scope\n", name);
+        // printf("[SYMBOL_TABLE] Error: Symbol '%s' already declared in current scope\n", name);
         return NULL;
     }
     
@@ -243,12 +243,12 @@ Symbol* declare_symbol_with_allocation(SymbolTable* table, const char* name, Typ
     table->symbols[index] = symbol;
     table->symbol_count++;
     
-    printf("[SYMBOL_TABLE] Declared symbol '%s' -> %s R%d (physical R%d) (%s, %s)\n", 
-           name, 
-           reg_alloc->strategy == REG_STRATEGY_TYPED ? "TYPED" : "STANDARD",
-           reg_alloc->logical_id, reg_alloc->physical_id,
-           is_mutable ? "mutable" : "immutable",
-           type ? "typed" : "untyped");
+    // printf("[SYMBOL_TABLE] Declared symbol '%s' -> %s R%d (physical R%d) (%s, %s)\n", 
+    //        name, 
+    //        reg_alloc->strategy == REG_STRATEGY_TYPED ? "TYPED" : "STANDARD",
+    //        reg_alloc->logical_id, reg_alloc->physical_id,
+    //        is_mutable ? "mutable" : "immutable",
+    //        type ? "typed" : "untyped");
     
     return symbol;
 }
@@ -263,19 +263,19 @@ void mark_symbol_arithmetic_heavy(Symbol* symbol) {
     if (!symbol) return;
     
     symbol->is_arithmetic_heavy = true;
-    printf("[SYMBOL_TABLE] Marked symbol '%s' as arithmetic-heavy\n", symbol->name);
+    // printf("[SYMBOL_TABLE] Marked symbol '%s' as arithmetic-heavy\n", symbol->name);
 }
 
 void increment_symbol_usage(Symbol* symbol) {
     if (!symbol) return;
     
     symbol->usage_count++;
-    printf("[SYMBOL_TABLE] Symbol '%s' usage count: %d\n", symbol->name, symbol->usage_count);
+    // printf("[SYMBOL_TABLE] Symbol '%s' usage count: %d\n", symbol->name, symbol->usage_count);
 }
 
 void mark_symbol_as_loop_variable(Symbol* symbol) {
     if (!symbol) return;
     
     symbol->is_loop_variable = true;
-    printf("[SYMBOL_TABLE] Marked symbol '%s' as loop variable\n", symbol->name);
+    // printf("[SYMBOL_TABLE] Marked symbol '%s' as loop variable\n", symbol->name);
 }

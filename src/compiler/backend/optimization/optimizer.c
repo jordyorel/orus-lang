@@ -4,6 +4,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+// Disable all debug output for clean program execution
+#define OPTIMIZER_DEBUG 0
+#if OPTIMIZER_DEBUG == 0
+#define printf(...) ((void)0)
+#endif
+
 // ===== OPTIMIZATION COORDINATOR =====
 // Orchestrates high-level AST optimizations
 // Delegates to specific optimization algorithms

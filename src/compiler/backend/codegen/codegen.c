@@ -9,6 +9,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+// Disable all debug output for clean program execution
+#define CODEGEN_DEBUG 1
+#if CODEGEN_DEBUG == 0
+#define printf(...) ((void)0)
+#endif
+
 // ===== CODE GENERATION COORDINATOR =====
 // Orchestrates bytecode generation and low-level optimizations
 // Delegates to specific codegen algorithms
@@ -550,17 +556,42 @@ void compile_variable_declaration(CompilerContext* ctx, TypedASTNode* var_decl) 
 void compile_assignment(CompilerContext* ctx, TypedASTNode* assign) {
     if (!ctx || !assign) return;
     
-    // Get variable name
-    const char* var_name = assign->original->assign.name;
+    // Get variable name from typed AST
+    const char* var_name = assign->typed.assign.name;
     
     // Look up existing variable in symbol table
     Symbol* symbol = resolve_symbol(ctx->symbols, var_name);
     if (!symbol) {
-        printf("[CODEGEN] Error: Assignment to undefined variable %s\n", var_name);
+        // Variable doesn't exist - create a new one (Orus implicit variable declaration)
+        printf("[CODEGEN] Creating new variable %s (Orus implicit declaration)\n", var_name);
+        
+        // Compile the value expression first to get its type
+        int value_reg = compile_expression(ctx, assign->typed.assign.value);
+        if (value_reg == -1) {
+            printf("[CODEGEN] Error: Failed to compile assignment value for new variable\n");
+            return;
+        }
+        
+        // Allocate register for the new variable
+        int var_reg = mp_allocate_frame_register(ctx->allocator);
+        if (var_reg == -1) {
+            printf("[CODEGEN] Error: Failed to allocate register for new variable %s\n", var_name);
+            mp_free_temp_register(ctx->allocator, value_reg);
+            return;
+        }
+        
+        // Register the new variable in symbol table (default to mutable for assignments)
+        register_variable(ctx, var_name, var_reg, assign->resolvedType, true);
+        
+        // Move the value to the variable register
+        emit_move(ctx, var_reg, value_reg);
+        mp_free_temp_register(ctx->allocator, value_reg);
+        
+        printf("[CODEGEN] Created and assigned variable %s -> R%d\n", var_name, var_reg);
         return;
     }
     
-    // Check if variable is mutable
+    // Variable exists - check if it's mutable
     if (!symbol->is_mutable) {
         printf("[CODEGEN] Error: Cannot assign to immutable variable %s\n", var_name);
         return;

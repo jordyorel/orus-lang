@@ -1,0 +1,27 @@
+print("=== Simple Arithmetic Test ===")
+
+// Basic variables
+a: i64 = (1000 as i64)
+b: i64 = (999 as i64)
+c: i64 = (998 as i64)
+
+// Basic arithmetic
+add_result: i64 = a + b + c
+print("Addition result:", add_result)
+
+sub_result: i64 = a - b + c  
+print("Subtraction result:", sub_result)
+
+mul_result: i64 = (a / (100 as i64)) * (b / (100 as i64))
+print("Multiplication result:", mul_result)
+
+div_result: i64 = a / (2 as i64)
+print("Division result:", div_result)
+
+// Test explicit casting
+x: i64 = (100 as i64)
+y: i64 = (50 as i64)
+cast_result: i64 = x + (y as i64)  
+print("Cast result:", cast_result)
+
+print("=== Simple Test Complete ===")

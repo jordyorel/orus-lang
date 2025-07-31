@@ -4,6 +4,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+// Disable all debug output for clean program execution
+#define PEEPHOLE_DEBUG 0
+#if PEEPHOLE_DEBUG == 0
+#define printf(...) ((void)0)
+#endif
+
 // Global context for tracking statistics
 static PeepholeContext peephole_stats;
 
