@@ -154,6 +154,7 @@ InterpretResult vm_run_dispatch(void) {
         vm_dispatch_table[OP_I32_TO_U32_R] = &&LABEL_OP_I32_TO_U32_R;
         vm_dispatch_table[OP_I32_TO_BOOL_R] = &&LABEL_OP_I32_TO_BOOL_R;
         vm_dispatch_table[OP_U32_TO_I32_R] = &&LABEL_OP_U32_TO_I32_R;
+        vm_dispatch_table[OP_I64_TO_I32_R] = &&LABEL_OP_I64_TO_I32_R;
         vm_dispatch_table[OP_ADD_F64_R] = &&LABEL_OP_ADD_F64_R;
         vm_dispatch_table[OP_SUB_F64_R] = &&LABEL_OP_SUB_F64_R;
         vm_dispatch_table[OP_MUL_F64_R] = &&LABEL_OP_MUL_F64_R;
@@ -176,6 +177,20 @@ InterpretResult vm_run_dispatch(void) {
         vm_dispatch_table[OP_I64_TO_F64_R] = &&LABEL_OP_I64_TO_F64_R;
         vm_dispatch_table[OP_F64_TO_I32_R] = &&LABEL_OP_F64_TO_I32_R;
         vm_dispatch_table[OP_F64_TO_I64_R] = &&LABEL_OP_F64_TO_I64_R;
+        
+        // U64 cast handlers
+        vm_dispatch_table[OP_I32_TO_U64_R] = &&LABEL_OP_I32_TO_U64_R;
+        vm_dispatch_table[OP_I64_TO_U64_R] = &&LABEL_OP_I64_TO_U64_R;
+        vm_dispatch_table[OP_U64_TO_I32_R] = &&LABEL_OP_U64_TO_I32_R;
+        vm_dispatch_table[OP_U64_TO_I64_R] = &&LABEL_OP_U64_TO_I64_R;
+        vm_dispatch_table[OP_U32_TO_U64_R] = &&LABEL_OP_U32_TO_U64_R;
+        vm_dispatch_table[OP_U64_TO_U32_R] = &&LABEL_OP_U64_TO_U32_R;
+        vm_dispatch_table[OP_F64_TO_U64_R] = &&LABEL_OP_F64_TO_U64_R;
+        vm_dispatch_table[OP_U64_TO_F64_R] = &&LABEL_OP_U64_TO_F64_R;
+        
+        // Additional cast handlers for u32<->f64
+        vm_dispatch_table[OP_U32_TO_F64_R] = &&LABEL_OP_U32_TO_F64_R;
+        vm_dispatch_table[OP_F64_TO_U32_R] = &&LABEL_OP_F64_TO_U32_R;
         vm_dispatch_table[OP_LT_I32_R] = &&LABEL_OP_LT_I32_R;
         vm_dispatch_table[OP_LE_I32_R] = &&LABEL_OP_LE_I32_R;
         vm_dispatch_table[OP_GT_I32_R] = &&LABEL_OP_GT_I32_R;
@@ -1080,6 +1095,7 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_I32_TO_I64_R: {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
+            READ_BYTE(); // Skip third operand (unused)
             if (!IS_I32(vm.registers[src])) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i32");
             }
@@ -1090,6 +1106,7 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_I32_TO_U32_R: {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
+            READ_BYTE(); // Skip third operand (unused)
             if (!IS_I32(vm.registers[src])) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i32");
             }
@@ -1100,6 +1117,7 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_I32_TO_BOOL_R: {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
+            READ_BYTE(); // Skip third operand (unused)
             if (!IS_I32(vm.registers[src])) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i32");
             }
@@ -1111,10 +1129,22 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_U32_TO_I32_R: {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
+            READ_BYTE(); // Skip third operand (unused)
             if (!IS_U32(vm.registers[src])) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u32");
             }
             vm.registers[dst] = I32_VAL((int32_t)AS_U32(vm.registers[src]));
+            DISPATCH();
+        }
+
+    LABEL_OP_I64_TO_I32_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src = READ_BYTE();
+            READ_BYTE(); // Skip third operand (unused)
+            if (!IS_I64(vm.registers[src])) {
+                VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i64");
+            }
+            vm.registers[dst] = I32_VAL((int32_t)AS_I64(vm.registers[src]));
             DISPATCH();
         }
 
@@ -1293,6 +1323,7 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_I32_TO_F64_R: {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
+            READ_BYTE(); // Skip third operand (unused)
             if (!IS_I32(vm.registers[src])) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i32");
             }
@@ -1303,6 +1334,7 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_I64_TO_F64_R: {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
+            READ_BYTE(); // Skip third operand (unused)
             if (!IS_I64(vm.registers[src])) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i64");
             }
@@ -1313,6 +1345,7 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_F64_TO_I32_R: {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
+            READ_BYTE(); // Skip third operand (unused)
             if (!IS_F64(vm.registers[src])) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be f64");
             }
@@ -1323,10 +1356,150 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_F64_TO_I64_R: {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
+            READ_BYTE(); // Skip third operand (unused)
             if (!IS_F64(vm.registers[src])) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be f64");
             }
             vm.registers[dst] = I64_VAL((int64_t)AS_F64(vm.registers[src]));
+            DISPATCH();
+        }
+
+    // U64 cast handlers
+    LABEL_OP_I32_TO_U64_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src = READ_BYTE();
+            READ_BYTE(); // Skip third operand (unused)
+            if (!IS_I32(vm.registers[src])) {
+                VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i32");
+            }
+            int32_t val = AS_I32(vm.registers[src]);
+            if (val < 0) {
+                VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Cannot convert negative i32 to u64");
+            }
+            vm.registers[dst] = U64_VAL((uint64_t)val);
+            DISPATCH();
+        }
+
+    LABEL_OP_I64_TO_U64_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src = READ_BYTE();
+            READ_BYTE(); // Skip third operand (unused)
+            if (!IS_I64(vm.registers[src])) {
+                VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i64");
+            }
+            int64_t val = AS_I64(vm.registers[src]);
+            if (val < 0) {
+                VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Cannot convert negative i64 to u64");
+            }
+            vm.registers[dst] = U64_VAL((uint64_t)val);
+            DISPATCH();
+        }
+
+    LABEL_OP_U64_TO_I32_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src = READ_BYTE();
+            READ_BYTE(); // Skip third operand (unused)
+            if (!IS_U64(vm.registers[src])) {
+                VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u64");
+            }
+            uint64_t val = AS_U64(vm.registers[src]);
+            if (val > (uint64_t)INT32_MAX) {
+                VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "u64 value too large for i32");
+            }
+            vm.registers[dst] = I32_VAL((int32_t)val);
+            DISPATCH();
+        }
+
+    LABEL_OP_U64_TO_I64_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src = READ_BYTE();
+            READ_BYTE(); // Skip third operand (unused)
+            if (!IS_U64(vm.registers[src])) {
+                VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u64");
+            }
+            uint64_t val = AS_U64(vm.registers[src]);
+            if (val > (uint64_t)INT64_MAX) {
+                VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "u64 value too large for i64");
+            }
+            vm.registers[dst] = I64_VAL((int64_t)val);
+            DISPATCH();
+        }
+
+    LABEL_OP_U32_TO_U64_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src = READ_BYTE();
+            READ_BYTE(); // Skip third operand (unused)
+            if (!IS_U32(vm.registers[src])) {
+                VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u32");
+            }
+            vm.registers[dst] = U64_VAL((uint64_t)AS_U32(vm.registers[src]));
+            DISPATCH();
+        }
+
+    LABEL_OP_U64_TO_U32_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src = READ_BYTE();
+            READ_BYTE(); // Skip third operand (unused)
+            if (!IS_U64(vm.registers[src])) {
+                VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u64");
+            }
+            uint64_t val = AS_U64(vm.registers[src]);
+            if (val > (uint64_t)UINT32_MAX) {
+                VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "u64 value too large for u32");
+            }
+            vm.registers[dst] = U32_VAL((uint32_t)val);
+            DISPATCH();
+        }
+
+    LABEL_OP_F64_TO_U64_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src = READ_BYTE();
+            READ_BYTE(); // Skip third operand (unused)
+            if (!IS_F64(vm.registers[src])) {
+                VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be f64");
+            }
+            double val = AS_F64(vm.registers[src]);
+            if (val < 0.0 || val > (double)UINT64_MAX) {
+                VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "f64 value out of u64 range");
+            }
+            vm.registers[dst] = U64_VAL((uint64_t)val);
+            DISPATCH();
+        }
+
+    LABEL_OP_U64_TO_F64_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src = READ_BYTE();
+            READ_BYTE(); // Skip third operand (unused)
+            if (!IS_U64(vm.registers[src])) {
+                VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u64");
+            }
+            vm.registers[dst] = F64_VAL((double)AS_U64(vm.registers[src]));
+            DISPATCH();
+        }
+
+    LABEL_OP_U32_TO_F64_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src = READ_BYTE();
+            READ_BYTE(); // Skip third operand (unused)
+            if (!IS_U32(vm.registers[src])) {
+                VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u32");
+            }
+            vm.registers[dst] = F64_VAL((double)AS_U32(vm.registers[src]));
+            DISPATCH();
+        }
+
+    LABEL_OP_F64_TO_U32_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src = READ_BYTE();
+            READ_BYTE(); // Skip third operand (unused)
+            if (!IS_F64(vm.registers[src])) {
+                VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be f64");
+            }
+            double val = AS_F64(vm.registers[src]);
+            if (val < 0.0 || val > (double)UINT32_MAX) {
+                VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "f64 value out of u32 range");
+            }
+            vm.registers[dst] = U32_VAL((uint32_t)val);
             DISPATCH();
         }
 

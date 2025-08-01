@@ -384,7 +384,7 @@ static Token number_ctx(LexerContext* ctx) {
                 advance_ctx(ctx);
             }
         }
-        if (PEEK(ctx) == 'u' || PEEK(ctx) == 'U') advance_ctx(ctx);
+        /* Hexadecimal suffix removed - type inference handles numeric types */
         return make_token_ctx(ctx, TOKEN_NUMBER);
     }
 
@@ -439,30 +439,7 @@ static Token number_ctx(LexerContext* ctx) {
         }
     }
 
-    /* Optional suffixes */
-    if (match_sequence_ctx(ctx, "i32")) {
-        advance_ctx(ctx);
-        advance_ctx(ctx);
-        advance_ctx(ctx);
-    } else if (match_sequence_ctx(ctx, "i64")) {
-        advance_ctx(ctx);
-        advance_ctx(ctx);
-        advance_ctx(ctx);
-    } else if (match_sequence_ctx(ctx, "u32")) {
-        advance_ctx(ctx);
-        advance_ctx(ctx);
-        advance_ctx(ctx);
-    } else if (match_sequence_ctx(ctx, "u64")) {
-        advance_ctx(ctx);
-        advance_ctx(ctx);
-        advance_ctx(ctx);
-    } else if (match_sequence_ctx(ctx, "f64")) {
-        advance_ctx(ctx);
-        advance_ctx(ctx);
-        advance_ctx(ctx);
-    } else if (PEEK(ctx) == 'u' || PEEK(ctx) == 'U') {
-        advance_ctx(ctx);
-    }
+    /* Suffix annotations removed from Orus language - type inference handles numeric types */
 
     return make_token_ctx(ctx, TOKEN_NUMBER);
 }
@@ -486,7 +463,7 @@ static Token number() {
                 advance();
             }
         }
-        if (*lexer.current == 'u' || *lexer.current == 'U') advance();
+        /* Hexadecimal suffix removed - type inference handles numeric types */
         return make_token(TOKEN_NUMBER);
     }
 
@@ -541,30 +518,7 @@ static Token number() {
         }
     }
 
-    /* Optional suffixes */
-    if (match_sequence("i32")) {
-        advance();
-        advance();
-        advance();
-    } else if (match_sequence("i64")) {
-        advance();
-        advance();
-        advance();
-    } else if (match_sequence("u32")) {
-        advance();
-        advance();
-        advance();
-    } else if (match_sequence("u64")) {
-        advance();
-        advance();
-        advance();
-    } else if (match_sequence("f64")) {
-        advance();
-        advance();
-        advance();
-    } else if (*lexer.current == 'u' || *lexer.current == 'U') {
-        advance();
-    }
+    /* Suffix annotations removed from Orus language - type inference handles numeric types */
 
     return make_token(TOKEN_NUMBER);
 }

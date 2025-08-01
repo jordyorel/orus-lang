@@ -179,9 +179,9 @@ static ASTNode* parseNumberLiteral(ParserContext* ctx, Token token);
 
 // Number parsing helper functions
 static void preprocessNumberToken(const char* tokenStart, int tokenLength, char* numStr, int* processedLength);
-static bool detectNumberSuffix(char* numStr, int* length, bool* isF64, bool* isU32, bool* isU64, bool* isI32, bool* isI64, bool* hasExplicitSuffix);
+// Suffix detection removed - type inference handles numeric types
 static bool isFloatingPointNumber(const char* numStr, int length);
-static Value parseNumberValue(const char* numStr, bool isF64, bool isU32, bool isU64, bool isI32, bool isI64);
+static Value parseNumberValue(const char* numStr, int length);
 
 static ASTNode* parseStringLiteral(ParserContext* ctx, Token token);
 static ASTNode* parseBooleanLiteral(ParserContext* ctx, Token token);
@@ -425,27 +425,13 @@ static ASTNode* parseVariableDeclaration(ParserContext* ctx, bool isMutable, Tok
         return NULL;
     }
 
-    // Check for redundant type annotation with literal suffix
+    // Suffix redundancy checks removed - type inference handles all type conflicts
     if (typeNode && initializer->type == NODE_LITERAL) {
         const char* declaredType = typeNode->typeAnnotation.name;
         ValueType literalType = initializer->literal.value.type;
         
-        bool isRedundant = false;
-        if (initializer->literal.hasExplicitSuffix &&
-            ((strcmp(declaredType, "u32") == 0 && literalType == VAL_U32) ||
-             (strcmp(declaredType, "u64") == 0 && literalType == VAL_U64) ||
-             (strcmp(declaredType, "i64") == 0 && literalType == VAL_I64) ||
-             (strcmp(declaredType, "f64") == 0 && literalType == VAL_F64))) {
-            isRedundant = true;
-        }
-
-        if (isRedundant) {
-            printf("Warning: Redundant type annotation at line %d:%d. "
-                   "Literal already has type suffix matching declared type '%s'. "
-                   "Consider using just 'x = value%s' instead of 'x: %s = value%s'.\n",
-                   nameToken.line, nameToken.column, declaredType,
-                   declaredType, declaredType, declaredType);
-        } else {
+        // Check for type mismatches (without suffix logic)
+        {
             bool mismatch = true;
             if (strcmp(declaredType, "i32") == 0 && literalType == VAL_I32)
                 mismatch = false;
@@ -1429,46 +1415,7 @@ static void preprocessNumberToken(const char* tokenStart, int tokenLength, char*
     *processedLength = j;
 }
 
-static bool detectNumberSuffix(char* numStr, int* length, bool* isF64, bool* isU32, bool* isU64, bool* isI32, bool* isI64, bool* hasExplicitSuffix) {
-    int j = *length;
-    
-    *isF64 = *isU32 = *isU64 = *isI32 = *isI64 = *hasExplicitSuffix = false;
-    
-    if (j >= 3 && strcmp(numStr + j - 3, "f64") == 0) {
-        *isF64 = true;
-        *hasExplicitSuffix = true;
-        j -= 3;
-        numStr[j] = '\0';
-    } else if (j >= 3 && strcmp(numStr + j - 3, "u32") == 0) {
-        *isU32 = true;
-        *hasExplicitSuffix = true;
-        j -= 3;
-        numStr[j] = '\0';
-    } else if (j >= 3 && strcmp(numStr + j - 3, "u64") == 0) {
-        *isU64 = true;
-        *hasExplicitSuffix = true;
-        j -= 3;
-        numStr[j] = '\0';
-    } else if (j >= 3 && strcmp(numStr + j - 3, "i32") == 0) {
-        *isI32 = true;
-        *hasExplicitSuffix = true;
-        j -= 3;
-        numStr[j] = '\0';
-    } else if (j >= 3 && strcmp(numStr + j - 3, "i64") == 0) {
-        *isI64 = true;
-        *hasExplicitSuffix = true;
-        j -= 3;
-        numStr[j] = '\0';
-    } else if (j >= 1 && numStr[j - 1] == 'u') {
-        *isU64 = true;
-        *hasExplicitSuffix = true;
-        j -= 1;
-        numStr[j] = '\0';
-    }
-    
-    *length = j;
-    return *hasExplicitSuffix;
-}
+// detectNumberSuffix function removed - type inference handles numeric types
 
 static bool isFloatingPointNumber(const char* numStr, int length) {
     for (int i = 0; i < length; i++) {
@@ -1479,22 +1426,15 @@ static bool isFloatingPointNumber(const char* numStr, int length) {
     return false;
 }
 
-static Value parseNumberValue(const char* numStr, bool isF64, bool isU32, bool isU64, bool isI32, bool isI64) {
-    if (isF64) {
+static Value parseNumberValue(const char* numStr, int length) {
+    // Check if it's a floating point number
+    if (isFloatingPointNumber(numStr, length)) {
         double val = strtod(numStr, NULL);
         return F64_VAL(val);
-    } else if (isU32) {
-        uint32_t val = (uint32_t)strtoul(numStr, NULL, 0);
-        return U32_VAL(val);
-    } else if (isU64) {
-        uint64_t val = strtoull(numStr, NULL, 0);
-        return U64_VAL(val);
-    } else if (isI32) {
-        int32_t val = (int32_t)strtol(numStr, NULL, 0);
-        return I32_VAL(val);
     } else {
+        // Integer - use i32 as default, let type inference decide if promotion needed
         long long value = strtoll(numStr, NULL, 0);
-        if (isI64 || value > INT32_MAX || value < INT32_MIN) {
+        if (value > INT32_MAX || value < INT32_MIN) {
             return I64_VAL(value);
         } else {
             return I32_VAL((int32_t)value);
@@ -1511,18 +1451,9 @@ static ASTNode* parseNumberLiteral(ParserContext* ctx, Token token) {
     int length;
     preprocessNumberToken(token.start, token.length, numStr, &length);
 
-    // Detect and handle type suffixes
-    bool isF64, isU32, isU64, isI32, isI64, hasExplicitSuffix;
-    detectNumberSuffix(numStr, &length, &isF64, &isU32, &isU64, &isI32, &isI64, &hasExplicitSuffix);
-
-    // Check for floating point notation if no explicit type suffix
-    if (!hasExplicitSuffix && isFloatingPointNumber(numStr, length)) {
-        isF64 = true;
-    }
-
-    // Parse the numeric value
-    node->literal.value = parseNumberValue(numStr, isF64, isU32, isU64, isI32, isI64);
-    node->literal.hasExplicitSuffix = hasExplicitSuffix;
+    // Parse the numeric value (no suffix handling - type inference decides)
+    node->literal.value = parseNumberValue(numStr, length);
+    node->literal.hasExplicitSuffix = false; // No suffixes in language
     node->location.line = token.line;
     node->location.column = token.column;
     node->dataType = NULL;

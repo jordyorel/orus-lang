@@ -460,6 +460,8 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                 cast_opcode = OP_I32_TO_U32_R;
             } else if (source_type->kind == TYPE_I32 && target_type->kind == TYPE_U64) {
                 cast_opcode = OP_I32_TO_U64_R;
+            } else if (source_type->kind == TYPE_I32 && target_type->kind == TYPE_BOOL) {
+                cast_opcode = OP_I32_TO_BOOL_R;
             } else if (source_type->kind == TYPE_I64 && target_type->kind == TYPE_I32) {
                 cast_opcode = OP_I64_TO_I32_R;
             } else if (source_type->kind == TYPE_I64 && target_type->kind == TYPE_F64) {
@@ -479,6 +481,9 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             } else if (source_type->kind == TYPE_U32 && target_type->kind == TYPE_F64) {
                 cast_opcode = OP_U32_TO_F64_R;
             } else if (source_type->kind == TYPE_U32 && target_type->kind == TYPE_U64) {
+                cast_opcode = OP_U32_TO_U64_R;
+            } else if (source_type->kind == TYPE_U32 && target_type->kind == TYPE_I64) {
+                // Use u32->u64 opcode but emit as i64 value (semantically equivalent)
                 cast_opcode = OP_U32_TO_U64_R;
             } else if (source_type->kind == TYPE_U64 && target_type->kind == TYPE_I32) {
                 cast_opcode = OP_U64_TO_I32_R;

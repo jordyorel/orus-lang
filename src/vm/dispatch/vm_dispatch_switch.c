@@ -767,6 +767,7 @@ InterpretResult vm_run_dispatch(void) {
                 case OP_I32_TO_I64_R: {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
+                    READ_BYTE(); // Skip third operand (unused)
                     if (!IS_I32(vm.registers[src])) {
                         VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i32");
                     }
@@ -777,6 +778,7 @@ InterpretResult vm_run_dispatch(void) {
                 case OP_I32_TO_U32_R: {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
+                    READ_BYTE(); // Skip third operand (unused)
                     if (!IS_I32(vm.registers[src])) {
                         VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i32");
                     }
@@ -787,6 +789,7 @@ InterpretResult vm_run_dispatch(void) {
                 case OP_I32_TO_BOOL_R: {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
+                    READ_BYTE(); // Skip third operand (unused)
                     if (!IS_I32(vm.registers[src])) {
                         VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i32");
                     }
@@ -798,6 +801,7 @@ InterpretResult vm_run_dispatch(void) {
                 case OP_U32_TO_I32_R: {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
+                    READ_BYTE(); // Skip third operand (unused)
                     if (!IS_U32(vm.registers[src])) {
                         VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u32");
                     }
@@ -805,9 +809,21 @@ InterpretResult vm_run_dispatch(void) {
                     break;
                 }
 
+                case OP_I64_TO_I32_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src = READ_BYTE();
+                    READ_BYTE(); // Skip third operand (unused)
+                    if (!IS_I64(vm.registers[src])) {
+                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i64");
+                    }
+                    vm.registers[dst] = I32_VAL((int32_t)AS_I64(vm.registers[src]));
+                    break;
+                }
+
                 case OP_F64_TO_U32_R: {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
+                    READ_BYTE(); // Skip third operand (unused)
                     if (!IS_F64(vm.registers[src])) {
                         VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be f64");
                     }
@@ -822,6 +838,7 @@ InterpretResult vm_run_dispatch(void) {
                 case OP_U32_TO_F64_R: {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
+                    READ_BYTE(); // Skip third operand (unused)
                     if (!IS_U32(vm.registers[src])) {
                         VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u32");
                     }
@@ -832,6 +849,7 @@ InterpretResult vm_run_dispatch(void) {
                 case OP_I32_TO_U64_R: {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
+                    READ_BYTE(); // Skip third operand (unused)
                     if (!IS_I32(vm.registers[src])) {
                         VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i32");
                     }
@@ -846,6 +864,7 @@ InterpretResult vm_run_dispatch(void) {
                 case OP_I64_TO_U64_R: {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
+                    READ_BYTE(); // Skip third operand (unused)
                     if (!IS_I64(vm.registers[src])) {
                         VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i64");
                     }
@@ -860,6 +879,7 @@ InterpretResult vm_run_dispatch(void) {
                 case OP_U64_TO_I32_R: {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
+                    READ_BYTE(); // Skip third operand (unused)
                     if (!IS_U64(vm.registers[src])) {
                         VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u64");
                     }
@@ -874,6 +894,7 @@ InterpretResult vm_run_dispatch(void) {
                 case OP_U64_TO_I64_R: {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
+                    READ_BYTE(); // Skip third operand (unused)
                     if (!IS_U64(vm.registers[src])) {
                         VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u64");
                     }
@@ -888,6 +909,7 @@ InterpretResult vm_run_dispatch(void) {
                 case OP_U32_TO_U64_R: {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
+                    READ_BYTE(); // Skip third operand (unused)
                     if (!IS_U32(vm.registers[src])) {
                         VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u32");
                     }
@@ -898,6 +920,7 @@ InterpretResult vm_run_dispatch(void) {
                 case OP_U64_TO_U32_R: {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
+                    READ_BYTE(); // Skip third operand (unused)
                     if (!IS_U64(vm.registers[src])) {
                         VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u64");
                     }
@@ -912,6 +935,7 @@ InterpretResult vm_run_dispatch(void) {
                 case OP_F64_TO_U64_R: {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
+                    READ_BYTE(); // Skip third operand (unused)
                     if (!IS_F64(vm.registers[src])) {
                         VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be f64");
                     }
@@ -926,6 +950,7 @@ InterpretResult vm_run_dispatch(void) {
                 case OP_U64_TO_F64_R: {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
+                    READ_BYTE(); // Skip third operand (unused)
                     if (!IS_U64(vm.registers[src])) {
                         VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u64");
                     }
@@ -1119,6 +1144,7 @@ InterpretResult vm_run_dispatch(void) {
                 case OP_I32_TO_F64_R: {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
+                    READ_BYTE(); // Skip third operand (unused)
                     if (!IS_I32(vm.registers[src])) {
                         VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i32");
                         return INTERPRET_RUNTIME_ERROR;
@@ -1130,6 +1156,7 @@ InterpretResult vm_run_dispatch(void) {
                 case OP_I64_TO_F64_R: {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
+                    READ_BYTE(); // Skip third operand (unused)
                     if (!IS_I64(vm.registers[src])) {
                         VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i64");
                         return INTERPRET_RUNTIME_ERROR;
@@ -1141,6 +1168,7 @@ InterpretResult vm_run_dispatch(void) {
                 case OP_F64_TO_I32_R: {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
+                    READ_BYTE(); // Skip third operand (unused)
                     if (!IS_F64(vm.registers[src])) {
                         VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be f64");
                         return INTERPRET_RUNTIME_ERROR;
@@ -1152,6 +1180,7 @@ InterpretResult vm_run_dispatch(void) {
                 case OP_F64_TO_I64_R: {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
+                    READ_BYTE(); // Skip third operand (unused)
                     if (!IS_F64(vm.registers[src])) {
                         VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be f64");
                         return INTERPRET_RUNTIME_ERROR;
