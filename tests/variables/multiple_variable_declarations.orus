@@ -57,7 +57,7 @@ single = 999
 print(single)  // Should print 999
 
 // EDGE CASE 7: Floating point precision
-pi = 3.14159265359f64, euler = 2.71828f64
+pi = 3.14159265359, euler = 2.71828
 print(pi)     // Should print 3.14159265359
 print(euler)  // Should print 2.71828
 

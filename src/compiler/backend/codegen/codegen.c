@@ -112,7 +112,7 @@ uint8_t select_optimal_opcode(const char* op, Type* type) {
         if (strcmp(op, "<") == 0) return OP_LT_I32_R;
         if (strcmp(op, ">") == 0) return OP_GT_I32_R;
         if (strcmp(op, "==") == 0) return OP_EQ_R;
-        if (strcmp(op, "!=") == 0) return OP_EQ_R;      // TODO: Implement NE_R
+        if (strcmp(op, "!=") == 0) return OP_NE_R;
     }
     
     // Check for arithmetic operations on i64
@@ -133,7 +133,7 @@ uint8_t select_optimal_opcode(const char* op, Type* type) {
         if (strcmp(op, "<") == 0) return OP_LT_I64_R;
         if (strcmp(op, ">") == 0) return OP_GT_I64_R;
         if (strcmp(op, "==") == 0) return OP_EQ_R;
-        if (strcmp(op, "!=") == 0) return OP_EQ_R;      // TODO: Implement NE_R
+        if (strcmp(op, "!=") == 0) return OP_NE_R;
     }
     
     // Check for arithmetic operations on f64
@@ -151,7 +151,7 @@ uint8_t select_optimal_opcode(const char* op, Type* type) {
         if (strcmp(op, "<") == 0) return OP_LT_F64_R;
         if (strcmp(op, ">") == 0) return OP_GT_F64_R;
         if (strcmp(op, "==") == 0) return OP_EQ_R;
-        if (strcmp(op, "!=") == 0) return OP_EQ_R;      // TODO: Implement NE_R
+        if (strcmp(op, "!=") == 0) return OP_NE_R;
     }
     
     // For other types, use existing logic but simplified for debugging
@@ -547,13 +547,31 @@ void compile_binary_op(CompilerContext* ctx, TypedASTNode* binary, int target_re
     // Get the operator and operand type
     const char* op = binary->original->binary.op;
     
-    // Try to get the type from the binary expression itself first, then from operands
-    Type* operand_type = binary->resolvedType;
-    if (!operand_type && binary->typed.binary.left) {
-        operand_type = binary->typed.binary.left->resolvedType;
-    }
-    if (!operand_type && binary->typed.binary.right) {
-        operand_type = binary->typed.binary.right->resolvedType;
+    // Check if this is a comparison operation
+    bool is_comparison = (strcmp(op, "<") == 0 || strcmp(op, ">") == 0 || 
+                         strcmp(op, "<=") == 0 || strcmp(op, ">=") == 0 ||
+                         strcmp(op, "==") == 0 || strcmp(op, "!=") == 0);
+    
+    Type* operand_type = NULL;
+    
+    if (is_comparison) {
+        // For comparison operations, we need the operand type (not the result type)
+        // The result type is always TYPE_BOOL, but we need the operand type for opcode selection
+        if (binary->typed.binary.left) {
+            operand_type = binary->typed.binary.left->resolvedType;
+        }
+        if (!operand_type && binary->typed.binary.right) {
+            operand_type = binary->typed.binary.right->resolvedType;
+        }
+    } else {
+        // For arithmetic operations, we can use the binary expression result type
+        operand_type = binary->resolvedType;
+        if (!operand_type && binary->typed.binary.left) {
+            operand_type = binary->typed.binary.left->resolvedType;
+        }
+        if (!operand_type && binary->typed.binary.right) {
+            operand_type = binary->typed.binary.right->resolvedType;
+        }
     }
     
     // TEMPORARY FALLBACK: If type is still NULL, try to infer from the operands based on their values
@@ -579,8 +597,9 @@ void compile_binary_op(CompilerContext* ctx, TypedASTNode* binary, int target_re
         }
     }
     
-    printf("[CODEGEN] Emitting binary operation: %s (target=R%d, left=R%d, right=R%d, type=%d)\n", 
-           op, target_reg, left_reg, right_reg, operand_type ? operand_type->kind : -1);
+    printf("[CODEGEN] Emitting binary operation: %s (target=R%d, left=R%d, right=R%d, type=%d)%s\n", 
+           op, target_reg, left_reg, right_reg, operand_type ? operand_type->kind : -1,
+           is_comparison ? " [COMPARISON]" : " [ARITHMETIC]");
     
     // Emit type-specific binary instruction (arithmetic or comparison)
     emit_binary_op(ctx, op, operand_type, target_reg, left_reg, right_reg);

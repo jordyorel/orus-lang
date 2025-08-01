@@ -1,0 +1,103 @@
+// Comprehensive Arithmetic Test Suite for Orus Language
+// Tests all arithmetic operations, comparisons, precedence, and type interactions
+
+print("=== COMPREHENSIVE ORUS ARITHMETIC TEST ===")
+
+// === BASIC ARITHMETIC OPERATIONS ===
+print("1. Basic Integer Arithmetic (i32):")
+a: i32 = 15
+b: i32 = 4
+print("  15 + 4 =", a + b, "Expected: 19")
+print("  15 - 4 =", a - b, "Expected: 11") 
+print("  15 * 4 =", a * b, "Expected: 60")
+print("  15 / 4 =", a / b, "Expected: 3")
+print("  15 % 4 =", a % b, "Expected: 3")
+
+// === COMPARISON OPERATIONS ===
+print("2. Comparison Operations:")
+x: i32 = 10
+y: i32 = 5
+z: i32 = 10
+print("  10 > 5 =", x > y, "Expected: true")
+print("  10 < 5 =", x < y, "Expected: false")
+print("  10 >= 10 =", x >= z, "Expected: true")
+print("  10 <= 5 =", x <= y, "Expected: false")
+print("  10 == 10 =", x == z, "Expected: true")
+print("  10 != 5 =", x != y, "Expected: true")
+
+// === OPERATOR PRECEDENCE ===
+print("3. Operator Precedence:")
+print("  2 + 3 * 4 =", 2 + 3 * 4, "Expected: 14")
+print("  (2 + 3) * 4 =", (2 + 3) * 4, "Expected: 20")
+print("  20 - 6 / 2 =", 20 - 6 / 2, "Expected: 17")
+print("  (20 - 6) / 2 =", (20 - 6) / 2, "Expected: 7")
+print("  15 % 4 + 1 =", 15 % 4 + 1, "Expected: 4")
+print("  15 % (4 + 1) =", 15 % (4 + 1), "Expected: 0")
+
+// === COMPLEX NESTED EXPRESSIONS ===
+print("4. Complex Nested Expressions:")
+print("  (5 + 3) * 2 - 1 =", (5 + 3) * 2 - 1, "Expected: 15")
+print("  20 / (2 + 3) + 1 =", 20 / (2 + 3) + 1, "Expected: 5")
+print("  ((10 + 5) * 2) / 3 =", ((10 + 5) * 2) / 3, "Expected: 10")
+print("  2 * 3 + 4 * 5 - 1 =", 2 * 3 + 4 * 5 - 1, "Expected: 25")
+
+// === FLOATING POINT ARITHMETIC ===
+print("5. Floating Point Arithmetic (f64):")
+fa: f64 = 3.14
+fb: f64 = 2.5
+print("  3.14 + 2.5 =", fa + fb, "Expected: 5.64")
+print("  3.14 - 2.5 =", fa - fb, "Expected: 0.64")
+print("  3.14 * 2.5 =", fa * fb, "Expected: 7.85")
+print("  3.14 / 2.0 =", fa / 2.0, "Expected: 1.57")
+
+// === FLOATING POINT COMPARISONS ===
+print("6. Floating Point Comparisons:")
+print("  3.14 > 2.5 =", fa > fb, "Expected: true")
+print("  3.14 < 2.5 =", fa < fb, "Expected: false")
+print("  3.14 == 3.14 =", fa == fa, "Expected: true")
+print("  3.14 != 2.5 =", fa != fb, "Expected: true")
+
+// === INTEGER TYPE VARIATIONS ===
+print("7. Different Integer Types:")
+i32_val: i32 = 100
+i64_val: i64 = 200
+u32_val: u32 = 50
+u64_val: u64 = 75
+
+print("  i32 arithmetic: 100 + 25 =", i32_val + 25, "Expected: 125")
+print("  i64 arithmetic: 200 - 50 =", i64_val - 50, "Expected: 150")
+print("  u32 arithmetic: 50 * 2 =", u32_val * 2, "Expected: 100")
+print("  u64 arithmetic: 75 / 3 =", u64_val / 3, "Expected: 25")
+
+// === TYPE CASTING ARITHMETIC ===
+print("8. Type Casting in Arithmetic:")
+iv: i32 = 42
+print("  (42 as i64) + 8 =", (iv as i64) + 8, "Expected: 50")
+print("  (42 as f64) * 1.5 =", (iv as f64) * 1.5, "Expected: 63")
+print("  (42 as u32) % 5 =", (iv as u32) % 5, "Expected: 2")
+
+// === BOOLEAN OPERATIONS WITH COMPARISONS ===
+print("9. Boolean Logic with Comparisons:")
+result1: bool = (10 > 5)
+result2: bool = (3 == 3)
+result3: bool = (7 != 8)
+print("  (10 > 5) =", result1, "Expected: true")
+print("  (3 == 3) =", result2, "Expected: true") 
+print("  (7 != 8) =", result3, "Expected: true")
+
+// === EDGE CASES ===
+print("10. Edge Cases:")
+print("  Division by 1: 42 / 1 =", 42 / 1, "Expected: 42")
+print("  Modulo by 1: 42 % 1 =", 42 % 1, "Expected: 0")
+print("  Zero operations: 0 + 5 =", 0 + 5, "Expected: 5")
+print("  Zero operations: 5 * 0 =", 5 * 0, "Expected: 0")
+
+// === LARGE NUMBERS ===
+print("11. Large Numbers:")
+large1: i64 = 1000000
+large2: i64 = 2000000
+print("  1M + 2M =", large1 + large2, "Expected: 3000000")
+print("  2M - 1M =", large2 - large1, "Expected: 1000000")
+
+print("=== ALL ARITHMETIC TESTS COMPLETED ===")
+print("If all values match expected results, arithmetic is working correctly!")
