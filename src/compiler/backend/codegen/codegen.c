@@ -411,6 +411,102 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             return reg;
         }
         
+        case NODE_CAST: {
+            printf("[CODEGEN] NODE_CAST: Compiling cast expression\n");
+            
+            // Compile the expression being cast
+            int source_reg = compile_expression(ctx, expr->typed.cast.expression);
+            if (source_reg == -1) {
+                printf("[CODEGEN] Error: Failed to compile cast source expression\n");
+                return -1;
+            }
+            
+            // Get source type from the expression being cast
+            Type* source_type = expr->typed.cast.expression->resolvedType;
+            Type* target_type = expr->resolvedType; // Target type from cast
+            
+            if (!source_type || !target_type) {
+                printf("[CODEGEN] Error: Missing type information for cast (source=%p, target=%p)\n", 
+                       (void*)source_type, (void*)target_type);
+                mp_free_temp_register(ctx->allocator, source_reg);
+                return -1;
+            }
+            
+            printf("[CODEGEN] NODE_CAST: Casting from type %d to type %d\n", source_type->kind, target_type->kind);
+            
+            // If source and target types are the same, no cast needed
+            if (source_type->kind == target_type->kind) {
+                printf("[CODEGEN] NODE_CAST: Same types, no cast needed\n");
+                return source_reg;
+            }
+            
+            // Always allocate a new register for cast result to avoid register conflicts
+            int target_reg = mp_allocate_temp_register(ctx->allocator);
+            if (target_reg == -1) {
+                printf("[CODEGEN] Error: Failed to allocate register for cast result\n");
+                mp_free_temp_register(ctx->allocator, source_reg);
+                return -1;
+            }
+            
+            // Emit cast instruction based on source and target type combination
+            uint8_t cast_opcode = 0;
+            
+            // Map type combinations to cast opcodes
+            if (source_type->kind == TYPE_I32 && target_type->kind == TYPE_I64) {
+                cast_opcode = OP_I32_TO_I64_R;
+            } else if (source_type->kind == TYPE_I32 && target_type->kind == TYPE_F64) {
+                cast_opcode = OP_I32_TO_F64_R;
+            } else if (source_type->kind == TYPE_I32 && target_type->kind == TYPE_U32) {
+                cast_opcode = OP_I32_TO_U32_R;
+            } else if (source_type->kind == TYPE_I32 && target_type->kind == TYPE_U64) {
+                cast_opcode = OP_I32_TO_U64_R;
+            } else if (source_type->kind == TYPE_I64 && target_type->kind == TYPE_I32) {
+                cast_opcode = OP_I64_TO_I32_R;
+            } else if (source_type->kind == TYPE_I64 && target_type->kind == TYPE_F64) {
+                cast_opcode = OP_I64_TO_F64_R;
+            } else if (source_type->kind == TYPE_I64 && target_type->kind == TYPE_U64) {
+                cast_opcode = OP_I64_TO_U64_R;
+            } else if (source_type->kind == TYPE_F64 && target_type->kind == TYPE_I32) {
+                cast_opcode = OP_F64_TO_I32_R;
+            } else if (source_type->kind == TYPE_F64 && target_type->kind == TYPE_I64) {
+                cast_opcode = OP_F64_TO_I64_R;
+            } else if (source_type->kind == TYPE_F64 && target_type->kind == TYPE_U32) {
+                cast_opcode = OP_F64_TO_U32_R;
+            } else if (source_type->kind == TYPE_F64 && target_type->kind == TYPE_U64) {
+                cast_opcode = OP_F64_TO_U64_R;
+            } else if (source_type->kind == TYPE_U32 && target_type->kind == TYPE_I32) {
+                cast_opcode = OP_U32_TO_I32_R;
+            } else if (source_type->kind == TYPE_U32 && target_type->kind == TYPE_F64) {
+                cast_opcode = OP_U32_TO_F64_R;
+            } else if (source_type->kind == TYPE_U32 && target_type->kind == TYPE_U64) {
+                cast_opcode = OP_U32_TO_U64_R;
+            } else if (source_type->kind == TYPE_U64 && target_type->kind == TYPE_I32) {
+                cast_opcode = OP_U64_TO_I32_R;
+            } else if (source_type->kind == TYPE_U64 && target_type->kind == TYPE_I64) {
+                cast_opcode = OP_U64_TO_I64_R;
+            } else if (source_type->kind == TYPE_U64 && target_type->kind == TYPE_F64) {
+                cast_opcode = OP_U64_TO_F64_R;
+            } else if (source_type->kind == TYPE_U64 && target_type->kind == TYPE_U32) {
+                cast_opcode = OP_U64_TO_U32_R;
+            } else {
+                printf("[CODEGEN] Error: Unsupported cast from type %d to type %d\n", 
+                       source_type->kind, target_type->kind);
+                mp_free_temp_register(ctx->allocator, source_reg);
+                mp_free_temp_register(ctx->allocator, target_reg);
+                return -1;
+            }
+            
+            // Emit the cast instruction
+            emit_instruction_to_buffer(ctx->bytecode, cast_opcode, target_reg, source_reg, 0);
+            printf("[CODEGEN] NODE_CAST: Emitted cast opcode %d from R%d to R%d\n", 
+                   cast_opcode, source_reg, target_reg);
+            
+            // Free source register
+            mp_free_temp_register(ctx->allocator, source_reg);
+            
+            return target_reg;
+        }
+        
         case NODE_TIME_STAMP: {
             // Generate time_stamp() call - returns f64
             int reg = mp_allocate_temp_register(ctx->allocator);
@@ -419,8 +515,9 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                 return -1;
             }
             
-            // Emit OP_TIME_STAMP instruction
-            emit_instruction_to_buffer(ctx->bytecode, OP_TIME_STAMP, reg, 0, 0);
+            // Emit OP_TIME_STAMP instruction (variable-length format: opcode + register)
+            emit_byte_to_buffer(ctx->bytecode, OP_TIME_STAMP);
+            emit_byte_to_buffer(ctx->bytecode, reg);
             printf("[CODEGEN] Emitted OP_TIME_STAMP R%d (returns f64)\n", reg);
             
             return reg;

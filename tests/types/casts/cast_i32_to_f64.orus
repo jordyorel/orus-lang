@@ -1,0 +1,5 @@
+// Simple i32 to f64 cast test
+print("=== i32 to f64 Cast Test ===")
+result: f64 = (42 as f64)
+print("(42 as f64):", result)
+print("=== Test Complete ===")

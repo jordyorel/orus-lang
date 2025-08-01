@@ -1,7 +1,0 @@
-// Test explicit casting with 'as' keyword
-a: i64 = 1000
-b: i32 = 100
-
-// This should work with explicit casting
-result: i64 = a + (b as i64)
-print("Cast result:", result)

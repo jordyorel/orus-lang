@@ -1,0 +1,6 @@
+// Simple i64 to i32 cast test
+print("=== i64 to i32 Cast Test ===")
+val: i64 = 100
+result: i32 = (val as i32)
+print("(100 as i32):", result)
+print("=== Test Complete ===")

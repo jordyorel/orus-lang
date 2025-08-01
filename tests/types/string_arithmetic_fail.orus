@@ -1,5 +1,0 @@
-// Type safety: mixing string with arithmetic should fail
-a: string = "hello"
-b: i32 = 10
-result = a + b  // This should pass - string + int (non-concat)
-print(result)

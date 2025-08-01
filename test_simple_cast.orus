@@ -1,0 +1,3 @@
+// Minimal cast test
+a: i64 = (42 as i64)
+print("Result:", a)

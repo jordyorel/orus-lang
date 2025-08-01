@@ -1,0 +1,5 @@
+// Same type cast test (should be no-op)
+print("=== Same Type Cast Test ===")
+result: i32 = (42 as i32)
+print("(42 as i32):", result)
+print("=== Test Complete ===")
