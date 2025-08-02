@@ -32,6 +32,10 @@ void compile_variable_declaration(CompilerContext* ctx, TypedASTNode* var_decl);
 void compile_print_statement(CompilerContext* ctx, TypedASTNode* print);
 void compile_variable_access(CompilerContext* ctx, TypedASTNode* var, int target_reg);
 
+// Control flow compilation functions
+void compile_if_statement(CompilerContext* ctx, TypedASTNode* if_stmt);
+void compile_block_with_scope(CompilerContext* ctx, TypedASTNode* block);
+
 // VM-specific optimization helpers
 void emit_typed_instruction(CompilerContext* ctx, uint8_t opcode, int dst, int src1, int src2);
 uint8_t select_optimal_opcode(const char* op, Type* type);

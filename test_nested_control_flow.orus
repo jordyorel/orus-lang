@@ -1,0 +1,25 @@
+// Test deeply nested control flow
+x = 10
+y = 5
+z = 3
+
+if x > 5:
+    print("x is greater than 5")
+    if y > 3:
+        print("y is greater than 3")
+        if z > 1:
+            print("z is greater than 1")
+            if z == 3:
+                print("z equals 3")
+                result = "deeply nested success"
+                print(result)
+            else:
+                print("z does not equal 3")
+        else:
+            print("z is not greater than 1")
+    else:
+        print("y is not greater than 3")
+else:
+    print("x is not greater than 5")
+
+print("nested test complete")

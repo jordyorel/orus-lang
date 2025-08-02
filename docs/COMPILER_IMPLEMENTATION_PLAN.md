@@ -31,7 +31,7 @@ This document outlines the detailed implementation plan for building the Orus co
 
 **CRITICAL LANGUAGE FEATURES (HIGH PRIORITY)**
 - **Expression Types**: Binary ops (+,-,*,/), comparisons (<,>,==), logical (and,or), unary ops (-,not,++)
-- **Control Flow**: if/elif/else statements, for/while loops, break/continue, match statements
+- **Control Flow**: ✅ if/elif/else statements (COMPLETED), for/while loops, break/continue, match statements
 - **Functions**: fn definitions, calls, parameters, return statements, recursion
 - **Data Types**: String/array/object literals, all numeric types (f64, u32, u64), booleans
 - **Variable System**: ✅ Basic declarations working, need proper scoping and identifier resolution
@@ -1308,7 +1308,7 @@ NODE_ASSIGNMENT:
 - [ ] **Type Inference**: Automatic type deduction for `x = 42`
 - [ ] **Mutability Checking**: Prevent assignment to immutable variables
 
-#### Phase 5C: Basic Control Flow (Week 7)
+#### Phase 5C: Basic Control Flow (Week 7) ✅ **COMPLETED**
 ```c
 // If statements
 NODE_IF:
@@ -1327,11 +1327,11 @@ NODE_BLOCK:
 ```
 
 **Deliverables:**
-- [ ] **If Statements**: `if condition: body`, `if-else`, `elif` chains
-- [ ] **Block Statements**: Indentation-based blocks with proper scoping
-- [ ] **Jump Generation**: Conditional branches using VM jump instructions
-- [ ] **Label Management**: Forward/backward jump patching
-- [ ] **Scope Nesting**: Proper variable visibility in nested blocks
+- [x] **If Statements**: `if condition: body`, `if-else`, `elif` chains ✅ **COMPLETED**
+- [x] **Block Statements**: Indentation-based blocks with proper scoping ✅ **COMPLETED**
+- [x] **Jump Generation**: Conditional branches using VM jump instructions ✅ **COMPLETED**
+- [x] **Label Management**: Forward/backward jump patching ✅ **COMPLETED**
+- [x] **Scope Nesting**: Proper variable visibility in nested blocks ✅ **COMPLETED**
 
 #### Phase 5D: Advanced Expressions (Week 8)
 ```c

@@ -1,0 +1,12 @@
+// Basic if statement tests
+x = 0
+
+// Test true condition
+if x == 0:
+    print("zero")
+
+// Test false condition  
+if x == 1:
+    print("one")
+
+print("done")

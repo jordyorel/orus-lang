@@ -1,0 +1,36 @@
+// Test complex nested control flow with elif chains
+score = 85
+grade = "unknown"
+
+if score >= 90:
+    grade = "A"
+    if score >= 95:
+        print("Excellent work!")
+        // mut bonus = "extra credit"
+    else:
+        print("Great job!")
+        bonus = "good effort"
+elif score >= 80:
+    grade = "B"
+    if score >= 85:
+        print("Very good work!")
+        if score == 85:
+            print("Exactly 85!")
+            special = "perfect score"
+        else:
+            print("Above 85!")
+            special = "above average"
+    else:
+        print("Good work!")
+        special = "solid performance"
+elif score >= 70:
+    grade = "C"
+    print("Acceptable work")
+    special = "passing grade"
+else:
+    grade = "F"
+    print("Needs improvement")
+    special = "study more"
+
+print(grade)
+print(special)

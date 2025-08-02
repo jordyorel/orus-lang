@@ -1,0 +1,37 @@
+// Test complex conditional expressions
+a = 10
+b = 5
+c = 15
+
+// Complex comparisons
+if a > b:
+    print("a greater than b")
+    if c > a:
+        print("c is largest")
+        max_val = c
+    else:
+        print("a is largest") 
+        max_val = a
+    print(max_val)
+
+// Arithmetic in conditions
+sum = a + b
+if sum == c:
+    print("sum equals c")
+elif sum > c:
+    print("sum greater than c")
+else:
+    print("sum less than c")
+
+// Multiple elif with arithmetic
+difference = a - b
+if difference == 0:
+    print("equal")
+elif difference < 3:
+    print("close")
+elif difference < 8:
+    print("moderate")
+else:
+    print("far apart")
+
+print("complex conditions complete")

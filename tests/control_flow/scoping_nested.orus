@@ -1,0 +1,21 @@
+// Test nested scoping with block-local variables
+x = 8
+y = 3
+
+if x > 5:
+    outer_var = "outer block"
+    print(outer_var)
+    
+    if y > 0:
+        inner_var = "inner block"
+        combined = x + y
+        print(inner_var)
+        print(combined)
+    
+    // inner_var not accessible here (would error if uncommented)
+    // print(inner_var)
+    
+    // But outer_var and combined are accessible
+    print(outer_var)
+
+print("nested scoping complete")

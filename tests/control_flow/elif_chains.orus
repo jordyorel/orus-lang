@@ -1,0 +1,24 @@
+// Test elif chains with multiple conditions
+score = 85
+
+if score >= 90:
+    print("A grade")
+elif score >= 80:
+    print("B grade")
+elif score >= 70:
+    print("C grade")
+elif score >= 60:
+    print("D grade")
+else:
+    print("F grade")
+
+// Test different elif chain
+value = -5
+if value > 0:
+    print("positive")
+elif value == 0:
+    print("zero")
+else:
+    print("negative")
+
+print("grading complete")

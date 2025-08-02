@@ -1,0 +1,13 @@
+// Test simple nested elif
+score = 85
+
+if score >= 90:
+    print("A grade")
+elif score >= 80:
+    print("B grade")
+    if score == 85:
+        print("Exactly 85")
+else:
+    print("Lower grade")
+
+print("done")

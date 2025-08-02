@@ -1069,6 +1069,19 @@ static TypedASTNode* generate_typed_ast_recursive(ASTNode* ast, TypeEnv* type_en
             }
             break;
 
+        case NODE_IF:
+            // Handle if statements: condition, thenBranch, elseBranch
+            if (ast->ifStmt.condition) {
+                typed->typed.ifStmt.condition = generate_typed_ast_recursive(ast->ifStmt.condition, type_env);
+            }
+            if (ast->ifStmt.thenBranch) {
+                typed->typed.ifStmt.thenBranch = generate_typed_ast_recursive(ast->ifStmt.thenBranch, type_env);
+            }
+            if (ast->ifStmt.elseBranch) {
+                typed->typed.ifStmt.elseBranch = generate_typed_ast_recursive(ast->ifStmt.elseBranch, type_env);
+            }
+            break;
+
         default:
             // For other node types that don't have children, we're done
             break;

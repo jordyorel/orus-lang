@@ -1,0 +1,16 @@
+// Test basic scoping behavior
+x = 10
+mut result = "unknown"
+
+if x > 5:
+    temp = "inside if block"
+    result = "greater than 5"
+    print(temp)
+    print(result)
+
+// temp should not be accessible here (would cause error if uncommented)
+// print(temp)  
+
+// result should still be accessible and modified
+print(result)
+print("scoping test complete")

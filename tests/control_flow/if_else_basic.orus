@@ -1,0 +1,17 @@
+// Basic if-else statement tests
+x = 1
+
+// Test else branch execution
+if x == 0:
+    print("zero")
+else:
+    print("not zero")
+
+// Test then branch execution
+y = 5
+if y > 0:
+    print("positive")
+else:
+    print("non-positive")
+
+print("complete")

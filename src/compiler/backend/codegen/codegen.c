@@ -813,6 +813,10 @@ void compile_statement(CompilerContext* ctx, TypedASTNode* stmt) {
             compile_print_statement(ctx, stmt);
             break;
             
+        case NODE_IF:
+            compile_if_statement(ctx, stmt);
+            break;
+            
         default:
             printf("[CODEGEN] Warning: Unsupported statement type: %d\n", stmt->original->type);
             break;
@@ -1056,4 +1060,114 @@ bool generate_bytecode_from_ast(CompilerContext* ctx) {
     }
     
     return true;
+}
+
+// ===== CONTROL FLOW COMPILATION =====
+
+void compile_if_statement(CompilerContext* ctx, TypedASTNode* if_stmt) {
+    if (!ctx || !if_stmt) return;
+    
+    printf("[CODEGEN] Compiling if statement\n");
+    
+    // Compile condition expression
+    int condition_reg = compile_expression(ctx, if_stmt->typed.ifStmt.condition);
+    if (condition_reg == -1) {
+        printf("[CODEGEN] Error: Failed to compile if condition\n");
+        return;
+    }
+    
+    // Emit conditional jump - if condition is false, jump to else/end
+    // OP_JUMP_IF_NOT_R format: opcode + condition_reg + jump_offset (3 bytes)
+    int else_jump_addr = ctx->bytecode->count;
+    emit_instruction_to_buffer(ctx->bytecode, OP_JUMP_IF_NOT_R, condition_reg, 0, 0);
+    printf("[CODEGEN] Emitted OP_JUMP_IF_NOT_R R%d at offset %d (will patch)\n", 
+           condition_reg, else_jump_addr);
+    
+    // Free condition register
+    if (condition_reg >= MP_TEMP_REG_START && condition_reg <= MP_TEMP_REG_END) {
+        mp_free_temp_register(ctx->allocator, condition_reg);
+    }
+    
+    // Compile then branch with new scope
+    compile_block_with_scope(ctx, if_stmt->typed.ifStmt.thenBranch);
+    
+    // If there's an else branch, emit unconditional jump to skip it
+    int end_jump_addr = -1;
+    if (if_stmt->typed.ifStmt.elseBranch) {
+        end_jump_addr = ctx->bytecode->count;
+        emit_byte_to_buffer(ctx->bytecode, OP_JUMP_SHORT);
+        emit_byte_to_buffer(ctx->bytecode, 0);  // placeholder offset
+        printf("[CODEGEN] Emitted OP_JUMP_SHORT at offset %d (will patch to end)\n", end_jump_addr);
+    }
+    
+    // Patch the else jump to current position
+    int else_target = ctx->bytecode->count;
+    // VM's ip points to byte after the 4-byte jump instruction when executing
+    int else_offset = else_target - (else_jump_addr + 4);
+    if (else_offset < -32768 || else_offset > 32767) {
+        printf("[CODEGEN] Error: Jump offset %d out of range for OP_JUMP_IF_NOT_R (-32768 to 32767)\n", else_offset);
+        return;
+    }
+    ctx->bytecode->instructions[else_jump_addr + 2] = (uint8_t)((else_offset >> 8) & 0xFF);
+    ctx->bytecode->instructions[else_jump_addr + 3] = (uint8_t)(else_offset & 0xFF);
+    printf("[CODEGEN] Patched else jump: offset %d (from %d to %d)\n", 
+           else_offset, else_jump_addr, else_target);
+    
+    // Compile else branch if present
+    if (if_stmt->typed.ifStmt.elseBranch) {
+        compile_block_with_scope(ctx, if_stmt->typed.ifStmt.elseBranch);
+        
+        // Patch the end jump
+        int end_target = ctx->bytecode->count;
+        // OP_JUMP_SHORT is 2 bytes, VM's ip points after instruction when executing
+        int end_offset = end_target - (end_jump_addr + 2);
+        if (end_offset < 0 || end_offset > 255) {
+            printf("[CODEGEN] Error: Jump offset %d out of range for OP_JUMP_SHORT (0-255)\n", end_offset);
+            return;
+        }
+        ctx->bytecode->instructions[end_jump_addr + 1] = (uint8_t)(end_offset & 0xFF);
+        printf("[CODEGEN] Patched end jump: offset %d (from %d to %d)\n", 
+               end_offset, end_jump_addr, end_target);
+    }
+    
+    printf("[CODEGEN] If statement compilation completed\n");
+}
+
+void compile_block_with_scope(CompilerContext* ctx, TypedASTNode* block) {
+    if (!ctx || !block) return;
+    
+    printf("[CODEGEN] Entering new scope (depth %d)\n", ctx->symbols->scope_depth + 1);
+    
+    // Create new scope
+    SymbolTable* old_scope = ctx->symbols;
+    ctx->symbols = create_symbol_table(old_scope);
+    if (!ctx->symbols) {
+        printf("[CODEGEN] Error: Failed to create new scope\n");
+        ctx->symbols = old_scope;
+        return;
+    }
+    
+    // Compile the block content
+    if (block->original->type == NODE_BLOCK) {
+        // Multiple statements in block
+        for (int i = 0; i < block->typed.block.count; i++) {
+            TypedASTNode* stmt = block->typed.block.statements[i];
+            if (stmt) {
+                compile_statement(ctx, stmt);
+            }
+        }
+    } else {
+        // Single statement
+        compile_statement(ctx, block);
+    }
+    
+    // Clean up scope and free block-local variables
+    printf("[CODEGEN] Exiting scope (depth %d)\n", ctx->symbols->scope_depth);
+    
+    // TODO: Free registers allocated to block-local variables
+    // This would involve iterating through the symbol table and freeing temp registers
+    
+    // Restore previous scope
+    free_symbol_table(ctx->symbols);
+    ctx->symbols = old_scope;
 }

@@ -1,0 +1,31 @@
+// Test edge cases and boundary conditions
+
+// Single statement blocks
+x = 1
+if x == 1: print("single statement if")
+
+// Empty-looking conditions with valid expressions
+zero = 0
+if zero == 0:
+    print("zero comparison works")
+
+// Negative numbers
+neg = -10
+if neg < 0:
+    print("negative number detected")
+    abs_val = 0 - neg
+    print(abs_val)
+
+// Large numbers
+large = 1000000
+if large > 999999:
+    print("large number test")
+
+// Boundary arithmetic
+edge = 5
+if edge * 2 == 10:
+    print("multiplication in condition")
+    if edge + edge == edge * 2:
+        print("addition equals multiplication")
+
+print("edge cases complete")
