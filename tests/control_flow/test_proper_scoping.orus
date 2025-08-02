@@ -1,12 +1,14 @@
-// Test complex nested control flow with elif chains
+// Test proper scoping - declare variables before if statement
 score = 85
-grade = "unknown"
+mut grade = "unknown"
+mut special = "not set"
+mut bonus = "not set"
 
 if score >= 90:
     grade = "A"
     if score >= 95:
         print("Excellent work!")
-        // mut bonus = "extra credit"
+        bonus = "extra credit"
     else:
         print("Great job!")
         bonus = "good effort"
