@@ -111,6 +111,8 @@ uint8_t select_optimal_opcode(const char* op, Type* type) {
         // Comparison operators (result is boolean)
         if (strcmp(op, "<") == 0) return OP_LT_I32_R;
         if (strcmp(op, ">") == 0) return OP_GT_I32_R;
+        if (strcmp(op, "<=") == 0) return OP_LE_I32_R;
+        if (strcmp(op, ">=") == 0) return OP_GE_I32_R;
         if (strcmp(op, "==") == 0) return OP_EQ_R;
         if (strcmp(op, "!=") == 0) return OP_NE_R;
     }
@@ -132,6 +134,48 @@ uint8_t select_optimal_opcode(const char* op, Type* type) {
         // Comparison operators (result is boolean)
         if (strcmp(op, "<") == 0) return OP_LT_I64_R;
         if (strcmp(op, ">") == 0) return OP_GT_I64_R;
+        if (strcmp(op, "<=") == 0) return OP_LE_I64_R;
+        if (strcmp(op, ">=") == 0) return OP_GE_I64_R;
+        if (strcmp(op, "==") == 0) return OP_EQ_R;
+        if (strcmp(op, "!=") == 0) return OP_NE_R;
+    }
+    
+    // Check for arithmetic operations on u32
+    if (reg_type == REG_TYPE_U32) {
+        printf("[CODEGEN] Handling REG_TYPE_U32 arithmetic operation: %s\n", op);
+        
+        // Arithmetic operators
+        if (strcmp(op, "+") == 0) return OP_ADD_U32_TYPED;
+        if (strcmp(op, "-") == 0) return OP_SUB_U32_TYPED;
+        if (strcmp(op, "*") == 0) return OP_MUL_U32_TYPED;
+        if (strcmp(op, "/") == 0) return OP_DIV_U32_TYPED;
+        if (strcmp(op, "%") == 0) return OP_MOD_U32_TYPED;
+        
+        // Comparison operators (result is boolean)
+        if (strcmp(op, "<") == 0) return OP_LT_U32_R;
+        if (strcmp(op, ">") == 0) return OP_GT_U32_R;
+        if (strcmp(op, "<=") == 0) return OP_LE_U32_R;
+        if (strcmp(op, ">=") == 0) return OP_GE_U32_R;
+        if (strcmp(op, "==") == 0) return OP_EQ_R;
+        if (strcmp(op, "!=") == 0) return OP_NE_R;
+    }
+    
+    // Check for arithmetic operations on u64
+    if (reg_type == REG_TYPE_U64) {
+        printf("[CODEGEN] Handling REG_TYPE_U64 arithmetic operation: %s\n", op);
+        
+        // Arithmetic operators
+        if (strcmp(op, "+") == 0) return OP_ADD_U64_TYPED;
+        if (strcmp(op, "-") == 0) return OP_SUB_U64_TYPED;
+        if (strcmp(op, "*") == 0) return OP_MUL_U64_TYPED;
+        if (strcmp(op, "/") == 0) return OP_DIV_U64_TYPED;
+        if (strcmp(op, "%") == 0) return OP_MOD_U64_TYPED;
+        
+        // Comparison operators (result is boolean)
+        if (strcmp(op, "<") == 0) return OP_LT_U64_R;
+        if (strcmp(op, ">") == 0) return OP_GT_U64_R;
+        if (strcmp(op, "<=") == 0) return OP_LE_U64_R;
+        if (strcmp(op, ">=") == 0) return OP_GE_U64_R;
         if (strcmp(op, "==") == 0) return OP_EQ_R;
         if (strcmp(op, "!=") == 0) return OP_NE_R;
     }
@@ -150,6 +194,8 @@ uint8_t select_optimal_opcode(const char* op, Type* type) {
         // Comparison operators (result is boolean)
         if (strcmp(op, "<") == 0) return OP_LT_F64_R;
         if (strcmp(op, ">") == 0) return OP_GT_F64_R;
+        if (strcmp(op, "<=") == 0) return OP_LE_F64_R;
+        if (strcmp(op, ">=") == 0) return OP_GE_F64_R;
         if (strcmp(op, "==") == 0) return OP_EQ_R;
         if (strcmp(op, "!=") == 0) return OP_NE_R;
     }
@@ -157,6 +203,72 @@ uint8_t select_optimal_opcode(const char* op, Type* type) {
     // For other types, use existing logic but simplified for debugging
     printf("[CODEGEN] Warning: Unhandled register type %d for operation %s\n", reg_type, op);
     return OP_HALT;
+}
+
+// Helper function to get cast opcode for type coercion
+uint8_t get_cast_opcode(TypeKind from_type, TypeKind to_type) {
+    // Handle same-type (no cast needed)
+    if (from_type == to_type) {
+        return OP_HALT; // No cast needed
+    }
+    
+    // i32 source casts
+    if (from_type == TYPE_I32) {
+        switch (to_type) {
+            case TYPE_I64: return OP_I32_TO_I64_R;
+            case TYPE_F64: return OP_I32_TO_F64_R;
+            case TYPE_U32: return OP_I32_TO_U32_R;
+            case TYPE_U64: return OP_I32_TO_U64_R;
+            case TYPE_BOOL: return OP_I32_TO_BOOL_R;
+            default: break;
+        }
+    }
+    
+    // i64 source casts
+    if (from_type == TYPE_I64) {
+        switch (to_type) {
+            case TYPE_I32: return OP_I64_TO_I32_R;
+            case TYPE_F64: return OP_I64_TO_F64_R;
+            case TYPE_U64: return OP_I64_TO_U64_R;
+            default: break;
+        }
+    }
+    
+    // u32 source casts
+    if (from_type == TYPE_U32) {
+        switch (to_type) {
+            case TYPE_I32: return OP_U32_TO_I32_R;
+            case TYPE_F64: return OP_U32_TO_F64_R;
+            case TYPE_U64: return OP_U32_TO_U64_R;
+            case TYPE_I64: return OP_U32_TO_U64_R; // Treat as u64 then interpret as i64
+            default: break;
+        }
+    }
+    
+    // u64 source casts
+    if (from_type == TYPE_U64) {
+        switch (to_type) {
+            case TYPE_I32: return OP_U64_TO_I32_R;
+            case TYPE_I64: return OP_U64_TO_I64_R;
+            case TYPE_F64: return OP_U64_TO_F64_R;
+            case TYPE_U32: return OP_U64_TO_U32_R;
+            default: break;
+        }
+    }
+    
+    // f64 source casts
+    if (from_type == TYPE_F64) {
+        switch (to_type) {
+            case TYPE_I32: return OP_F64_TO_I32_R;
+            case TYPE_I64: return OP_F64_TO_I64_R;
+            case TYPE_U32: return OP_F64_TO_U32_R;
+            case TYPE_U64: return OP_F64_TO_U64_R;
+            default: break;
+        }
+    }
+    
+    printf("[CODEGEN] Warning: No cast opcode for %d -> %d\n", from_type, to_type);
+    return OP_HALT; // Unsupported cast
 }
 
 // ===== INSTRUCTION EMISSION =====
@@ -394,9 +506,14 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             // Call the fixed compile_binary_op with all required parameters
             compile_binary_op(ctx, expr, result_reg, left_reg, right_reg);
             
-            // Free temp registers for optimal register usage
-            mp_free_temp_register(ctx->allocator, left_reg);
-            mp_free_temp_register(ctx->allocator, right_reg);
+            // CRITICAL FIX: Only free operand registers if they are temp registers
+            // Don't free frame registers (variables) - only free temp registers
+            if (left_reg >= MP_TEMP_REG_START && left_reg <= MP_TEMP_REG_END) {
+                mp_free_temp_register(ctx->allocator, left_reg);
+            }
+            if (right_reg >= MP_TEMP_REG_START && right_reg <= MP_TEMP_REG_END) {
+                mp_free_temp_register(ctx->allocator, right_reg);
+            }
             
             return result_reg;
         }
@@ -428,7 +545,10 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             if (!source_type || !target_type) {
                 printf("[CODEGEN] Error: Missing type information for cast (source=%p, target=%p)\n", 
                        (void*)source_type, (void*)target_type);
-                mp_free_temp_register(ctx->allocator, source_reg);
+                // Only free if it's a temp register
+                if (source_reg >= MP_TEMP_REG_START && source_reg <= MP_TEMP_REG_END) {
+                    mp_free_temp_register(ctx->allocator, source_reg);
+                }
                 return -1;
             }
             
@@ -444,7 +564,10 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             int target_reg = mp_allocate_temp_register(ctx->allocator);
             if (target_reg == -1) {
                 printf("[CODEGEN] Error: Failed to allocate register for cast result\n");
-                mp_free_temp_register(ctx->allocator, source_reg);
+                // Only free if it's a temp register
+                if (source_reg >= MP_TEMP_REG_START && source_reg <= MP_TEMP_REG_END) {
+                    mp_free_temp_register(ctx->allocator, source_reg);
+                }
                 return -1;
             }
             
@@ -496,8 +619,13 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             } else {
                 printf("[CODEGEN] Error: Unsupported cast from type %d to type %d\n", 
                        source_type->kind, target_type->kind);
-                mp_free_temp_register(ctx->allocator, source_reg);
-                mp_free_temp_register(ctx->allocator, target_reg);
+                // Only free if they're temp registers
+                if (source_reg >= MP_TEMP_REG_START && source_reg <= MP_TEMP_REG_END) {
+                    mp_free_temp_register(ctx->allocator, source_reg);
+                }
+                if (target_reg >= MP_TEMP_REG_START && target_reg <= MP_TEMP_REG_END) {
+                    mp_free_temp_register(ctx->allocator, target_reg);
+                }
                 return -1;
             }
             
@@ -506,8 +634,10 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             printf("[CODEGEN] NODE_CAST: Emitted cast opcode %d from R%d to R%d\n", 
                    cast_opcode, source_reg, target_reg);
             
-            // Free source register
-            mp_free_temp_register(ctx->allocator, source_reg);
+            // Free source register only if it's a temp register
+            if (source_reg >= MP_TEMP_REG_START && source_reg <= MP_TEMP_REG_END) {
+                mp_free_temp_register(ctx->allocator, source_reg);
+            }
             
             return target_reg;
         }
@@ -544,65 +674,119 @@ void compile_literal(CompilerContext* ctx, TypedASTNode* literal, int target_reg
 void compile_binary_op(CompilerContext* ctx, TypedASTNode* binary, int target_reg, int left_reg, int right_reg) {
     if (!ctx || !binary || target_reg < 0 || left_reg < 0 || right_reg < 0) return;
     
-    // Get the operator and operand type
+    // Get the operator and operand types
     const char* op = binary->original->binary.op;
+    
+    // Get operand types from the typed AST nodes
+    Type* left_type = binary->typed.binary.left ? binary->typed.binary.left->resolvedType : NULL;
+    Type* right_type = binary->typed.binary.right ? binary->typed.binary.right->resolvedType : NULL;
+    
+    if (!left_type || !right_type) {
+        printf("[CODEGEN] Error: Missing operand types for binary operation %s\n", op);
+        return;
+    }
+    
+    printf("[CODEGEN] Binary operation: %s, left_type=%d, right_type=%d\n", op, left_type->kind, right_type->kind);
     
     // Check if this is a comparison operation
     bool is_comparison = (strcmp(op, "<") == 0 || strcmp(op, ">") == 0 || 
                          strcmp(op, "<=") == 0 || strcmp(op, ">=") == 0 ||
                          strcmp(op, "==") == 0 || strcmp(op, "!=") == 0);
     
-    Type* operand_type = NULL;
+    // Determine the result type and handle type coercion
+    Type* result_type = NULL;
+    int coerced_left_reg = left_reg;
+    int coerced_right_reg = right_reg;
     
     if (is_comparison) {
-        // For comparison operations, we need the operand type (not the result type)
-        // The result type is always TYPE_BOOL, but we need the operand type for opcode selection
-        if (binary->typed.binary.left) {
-            operand_type = binary->typed.binary.left->resolvedType;
-        }
-        if (!operand_type && binary->typed.binary.right) {
-            operand_type = binary->typed.binary.right->resolvedType;
-        }
+        // For comparisons, result is always bool, but we need operands to be the same type
+        result_type = binary->resolvedType; // Should be TYPE_BOOL
     } else {
-        // For arithmetic operations, we can use the binary expression result type
-        operand_type = binary->resolvedType;
-        if (!operand_type && binary->typed.binary.left) {
-            operand_type = binary->typed.binary.left->resolvedType;
-        }
-        if (!operand_type && binary->typed.binary.right) {
-            operand_type = binary->typed.binary.right->resolvedType;
-        }
+        // For arithmetic, result type comes from the binary expression
+        result_type = binary->resolvedType;
     }
     
-    // TEMPORARY FALLBACK: If type is still NULL, try to infer from the operands based on their values
-    if (!operand_type) {
-        printf("[CODEGEN] Warning: No type resolved for binary operation, attempting inference\n");
+    // Type coercion rules: promote to the "larger" type
+    if (left_type->kind != right_type->kind) {
+        printf("[CODEGEN] Type mismatch detected: %d vs %d, applying coercion\n", left_type->kind, right_type->kind);
         
-        // Look up the symbols to see if we can infer the type
-        if (binary->original->binary.left && binary->original->binary.left->type == NODE_IDENTIFIER) {
-            Symbol* left_symbol = resolve_symbol(ctx->symbols, binary->original->binary.left->identifier.name);
-            if (left_symbol && left_symbol->type) {
-                operand_type = left_symbol->type;
-                printf("[CODEGEN] Inferred type from left operand symbol: %d\n", operand_type->kind);
+        // Determine the promoted type following standard rules
+        TypeKind promoted_type = TYPE_I32; // Default fallback
+        
+        // Promotion hierarchy: i32 < i64 < f64, u32 < u64 < f64
+        if ((left_type->kind == TYPE_I32 && right_type->kind == TYPE_I64) ||
+            (left_type->kind == TYPE_I64 && right_type->kind == TYPE_I32)) {
+            promoted_type = TYPE_I64;
+        } else if ((left_type->kind == TYPE_U32 && right_type->kind == TYPE_U64) ||
+                   (left_type->kind == TYPE_U64 && right_type->kind == TYPE_U32)) {
+            promoted_type = TYPE_U64;
+        } else if ((left_type->kind == TYPE_I32 && right_type->kind == TYPE_U32) ||
+                   (left_type->kind == TYPE_U32 && right_type->kind == TYPE_I32)) {
+            // Mixed signed/unsigned of same size - promote to larger signed type
+            promoted_type = TYPE_I64;
+        } else if (left_type->kind == TYPE_F64 || right_type->kind == TYPE_F64) {
+            promoted_type = TYPE_F64;
+        } else {
+            // Default: promote to i64 for safety
+            promoted_type = TYPE_I64;
+        }
+        
+        printf("[CODEGEN] Promoting to type: %d\n", promoted_type);
+        
+        // Insert cast instruction for left operand if needed
+        if (left_type->kind != promoted_type) {
+            int cast_reg = mp_allocate_temp_register(ctx->allocator);
+            printf("[CODEGEN] Casting left operand from %d to %d (R%d -> R%d)\n", 
+                   left_type->kind, promoted_type, left_reg, cast_reg);
+            
+            // Emit appropriate cast instruction
+            uint8_t cast_opcode = get_cast_opcode(left_type->kind, promoted_type);
+            if (cast_opcode != OP_HALT) {
+                emit_instruction_to_buffer(ctx->bytecode, cast_opcode, cast_reg, left_reg, 0);
+                coerced_left_reg = cast_reg;
             }
         }
         
-        // If still no type, check right operand
-        if (!operand_type && binary->original->binary.right && binary->original->binary.right->type == NODE_IDENTIFIER) {
-            Symbol* right_symbol = resolve_symbol(ctx->symbols, binary->original->binary.right->identifier.name);
-            if (right_symbol && right_symbol->type) {
-                operand_type = right_symbol->type;
-                printf("[CODEGEN] Inferred type from right operand symbol: %d\n", operand_type->kind);
+        // Insert cast instruction for right operand if needed
+        if (right_type->kind != promoted_type) {
+            int cast_reg = mp_allocate_temp_register(ctx->allocator);
+            printf("[CODEGEN] Casting right operand from %d to %d (R%d -> R%d)\n", 
+                   right_type->kind, promoted_type, right_reg, cast_reg);
+            
+            // Emit appropriate cast instruction
+            uint8_t cast_opcode = get_cast_opcode(right_type->kind, promoted_type);
+            if (cast_opcode != OP_HALT) {
+                emit_instruction_to_buffer(ctx->bytecode, cast_opcode, cast_reg, right_reg, 0);
+                coerced_right_reg = cast_reg;
             }
         }
+        
+        // Update the operation type to the promoted type
+        Type promoted_type_obj = {.kind = promoted_type};
+        result_type = &promoted_type_obj;
+    }
+    
+    // Use the operand type (not the result type) for opcode selection
+    Type* opcode_type = result_type;
+    if (is_comparison) {
+        // For comparisons, use the (promoted) operand type
+        opcode_type = left_type->kind == right_type->kind ? left_type : result_type;
     }
     
     printf("[CODEGEN] Emitting binary operation: %s (target=R%d, left=R%d, right=R%d, type=%d)%s\n", 
-           op, target_reg, left_reg, right_reg, operand_type ? operand_type->kind : -1,
+           op, target_reg, coerced_left_reg, coerced_right_reg, opcode_type->kind,
            is_comparison ? " [COMPARISON]" : " [ARITHMETIC]");
     
     // Emit type-specific binary instruction (arithmetic or comparison)
-    emit_binary_op(ctx, op, operand_type, target_reg, left_reg, right_reg);
+    emit_binary_op(ctx, op, opcode_type, target_reg, coerced_left_reg, coerced_right_reg);
+    
+    // Free any temporary cast registers
+    if (coerced_left_reg != left_reg && coerced_left_reg >= MP_TEMP_REG_START && coerced_left_reg <= MP_TEMP_REG_END) {
+        mp_free_temp_register(ctx->allocator, coerced_left_reg);
+    }
+    if (coerced_right_reg != right_reg && coerced_right_reg >= MP_TEMP_REG_START && coerced_right_reg <= MP_TEMP_REG_END) {
+        mp_free_temp_register(ctx->allocator, coerced_right_reg);
+    }
 }
 
 // ===== STATEMENT COMPILATION =====
@@ -766,57 +950,49 @@ void compile_print_statement(CompilerContext* ctx, TypedASTNode* print) {
         }
     } else {
         // Multiple expressions - need consecutive registers for OP_PRINT_MULTI_R
-        // Allocate consecutive temp registers and move values there
-        int* expression_regs = malloc(print->typed.print.count * sizeof(int));
-        int first_consecutive_reg = -1;
-        int expressions_compiled = 0;
+        // FIXED: Allocate consecutive registers FIRST to prevent register conflicts
+        int first_consecutive_reg = mp_allocate_temp_register(ctx->allocator);
+        if (first_consecutive_reg == -1) {
+            printf("[CODEGEN] Error: Failed to allocate consecutive registers for print\n");
+            return;
+        }
         
-        // Compile all expressions first
+        // Reserve additional consecutive registers
+        for (int i = 1; i < print->typed.print.count; i++) {
+            int next_reg = mp_allocate_temp_register(ctx->allocator);
+            if (next_reg != first_consecutive_reg + i) {
+                printf("[CODEGEN] Warning: Non-consecutive register allocated: R%d (expected R%d)\n", 
+                       next_reg, first_consecutive_reg + i);
+            }
+        }
+        
+        // Now compile expressions directly into the consecutive registers
         for (int i = 0; i < print->typed.print.count; i++) {
             TypedASTNode* expr = print->typed.print.values[i];
-            int reg = compile_expression(ctx, expr);
+            int target_reg = first_consecutive_reg + i;
             
-            if (reg != -1) {
-                expression_regs[expressions_compiled] = reg;
-                expressions_compiled++;
-            }
-        }
-        
-        if (expressions_compiled > 0) {
-            // Allocate consecutive temp registers for the print operation
-            first_consecutive_reg = mp_allocate_temp_register(ctx->allocator);
-            if (first_consecutive_reg != -1) {
-                // Move/copy all values to consecutive registers starting from first_consecutive_reg
-                for (int i = 0; i < expressions_compiled; i++) {
-                    int target_reg = first_consecutive_reg + i;
-                    int source_reg = expression_regs[i];
-                    
-                    if (source_reg != target_reg) {
-                        // Move the value to the consecutive register
-                        emit_move(ctx, target_reg, source_reg);
-                        printf("[CODEGEN] Moved R%d -> R%d for consecutive print\n", source_reg, target_reg);
-                    }
-                    
-                    // Free the original register if it was temporary
-                    if (source_reg >= MP_TEMP_REG_START && source_reg <= MP_TEMP_REG_END) {
-                        mp_free_temp_register(ctx->allocator, source_reg);
-                    }
-                }
+            // Compile expression and move to target register if different
+            int expr_reg = compile_expression(ctx, expr);
+            if (expr_reg != -1 && expr_reg != target_reg) {
+                emit_move(ctx, target_reg, expr_reg);
                 
-                // Now emit the print instruction with consecutive registers
-                emit_instruction_to_buffer(ctx->bytecode, OP_PRINT_MULTI_R, 
-                                         first_consecutive_reg, expressions_compiled, 1); // 1 = newline
-                printf("[CODEGEN] Emitted OP_PRINT_MULTI_R R%d, count=%d (consecutive registers)\n", 
-                       first_consecutive_reg, expressions_compiled);
-                
-                // Free the consecutive temp registers
-                for (int i = 0; i < expressions_compiled; i++) {
-                    mp_free_temp_register(ctx->allocator, first_consecutive_reg + i);
+                // Free the original temp register
+                if (expr_reg >= MP_TEMP_REG_START && expr_reg <= MP_TEMP_REG_END) {
+                    mp_free_temp_register(ctx->allocator, expr_reg);
                 }
             }
         }
         
-        free(expression_regs);
+        // Emit the print instruction with consecutive registers
+        emit_instruction_to_buffer(ctx->bytecode, OP_PRINT_MULTI_R, 
+                                 first_consecutive_reg, print->typed.print.count, 1); // 1 = newline
+        printf("[CODEGEN] Emitted OP_PRINT_MULTI_R R%d, count=%d (consecutive registers)\n", 
+               first_consecutive_reg, print->typed.print.count);
+        
+        // Free the consecutive temp registers
+        for (int i = 0; i < print->typed.print.count; i++) {
+            mp_free_temp_register(ctx->allocator, first_consecutive_reg + i);
+        }
     }
 }
 

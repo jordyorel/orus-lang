@@ -74,21 +74,22 @@ int mp_allocate_frame_register(MultiPassRegisterAllocator* allocator) {
 int mp_allocate_temp_register(MultiPassRegisterAllocator* allocator) {
     if (!allocator) return -1;
     
-    // Try to reuse from stack first (for register recycling)
-    if (allocator->temp_stack_top >= 0) {
-        int reused_reg = allocator->temp_stack[allocator->temp_stack_top--];
-        printf("[REGISTER_ALLOCATOR] Reusing temp register R%d\n", reused_reg);
-        return reused_reg;
-    }
-    
-    // Find next free temp register
+    // Find next free temp register (don't reuse from stack for better register isolation)
+    // This prevents register conflicts in nested expressions
     for (int i = 0; i < 48; i++) {
         if (!allocator->temp_regs[i]) {
             allocator->temp_regs[i] = true;
             int reg = MP_TEMP_REG_START + i;
-            printf("[REGISTER_ALLOCATOR] Allocated temp register R%d\n", reg);
+            printf("[REGISTER_ALLOCATOR] Allocated temp register R%d (sequential allocation)\n", reg);
             return reg;
         }
+    }
+    
+    // If no sequential register available, try to reuse from stack  
+    if (allocator->temp_stack_top >= 0) {
+        int reused_reg = allocator->temp_stack[allocator->temp_stack_top--];
+        printf("[REGISTER_ALLOCATOR] Reusing temp register R%d (from stack)\n", reused_reg);
+        return reused_reg;
     }
     
     // No free temp registers
