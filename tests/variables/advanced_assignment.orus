@@ -2,8 +2,8 @@
 // Testing symbol table and register allocation
 
 // Multiple assignments
-x = 10
-y = x + 5
+mut x = 10
+mut y = x + 5
 z = y * 2
 
 // Chained assignments

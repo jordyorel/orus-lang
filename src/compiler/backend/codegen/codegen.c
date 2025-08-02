@@ -10,7 +10,7 @@
 #include <string.h>
 
 // Disable all debug output for clean program execution
-#define CODEGEN_DEBUG 1
+#define CODEGEN_DEBUG 0
 #if CODEGEN_DEBUG == 0
 #define printf(...) ((void)0)
 #endif
@@ -889,8 +889,8 @@ void compile_assignment(CompilerContext* ctx, TypedASTNode* assign) {
             return;
         }
         
-        // Register the new variable in symbol table (default to mutable for assignments)
-        register_variable(ctx, var_name, var_reg, assign->resolvedType, true);
+        // Register the new variable in symbol table (default to immutable like Rust)
+        register_variable(ctx, var_name, var_reg, assign->resolvedType, false);
         
         // Move the value to the variable register
         emit_move(ctx, var_reg, value_reg);
@@ -903,6 +903,7 @@ void compile_assignment(CompilerContext* ctx, TypedASTNode* assign) {
     // Variable exists - check if it's mutable
     if (!symbol->is_mutable) {
         printf("[CODEGEN] Error: Cannot assign to immutable variable %s\n", var_name);
+        ctx->has_compilation_errors = true;  // Signal compilation failure
         return;
     }
     
@@ -1046,6 +1047,12 @@ bool generate_bytecode_from_ast(CompilerContext* ctx) {
     if (saved_instructions > 0) {
         printf("[CODEGEN] 🚀 Bytecode optimizations saved %d instructions (%.1f%% reduction)\n", 
                saved_instructions, (float)saved_instructions / initial_count * 100);
+    }
+    
+    // Check for compilation errors
+    if (ctx->has_compilation_errors) {
+        printf("[CODEGEN] ❌ Code generation failed due to compilation errors\n");
+        return false;
     }
     
     return true;

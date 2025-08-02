@@ -370,7 +370,13 @@ InterpretResult interpret(const char* source) {
                         // printf("[VM] ❌ Failed to allocate memory for bytecode execution\n");
                     }
                 } else {
-                    // printf("[VM] ❌  Multi-pass compiler failed\n");
+                    printf("[VM] ❌ Multi-pass compiler failed due to compilation errors\n");
+                    free_compiler_context(multi_compiler);
+                    free_typed_ast_node(typed_ast);
+                    freeAST(ast);
+                    freeCompiler(&compiler);
+                    freeChunk(&chunk);
+                    return INTERPRET_COMPILE_ERROR;
                 }
                 
                 free_compiler_context(multi_compiler);

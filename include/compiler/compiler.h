@@ -78,6 +78,7 @@ typedef struct CompilerContext {
     
     // Error handling (TODO: implement in Phase 2)
     ErrorReporter* errors;             // Compilation error tracking
+    bool has_compilation_errors;       // Track if any compilation errors occurred
     
     // Debugging
     bool enable_visualization;         // Show TypedAST between passes

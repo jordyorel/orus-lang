@@ -1,5 +1,0 @@
-start = time_stamp()
-print("Start time:", start)
-end = time_stamp()
-print("End time:", end)
-print("Duration:", end - start)

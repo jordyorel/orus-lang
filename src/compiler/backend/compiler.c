@@ -207,6 +207,7 @@ CompilerContext* init_compiler_context(TypedASTNode* typed_ast) {
     // TODO: Initialize these in later phases
     ctx->scopes = NULL;       // Will implement in Phase 2  
     ctx->errors = NULL;       // Will implement in Phase 2
+    ctx->has_compilation_errors = false;  // Initialize error tracking
     ctx->opt_ctx = NULL;      // Will implement in Phase 2
     
     if (!ctx->allocator || !ctx->dual_allocator || !ctx->bytecode || !ctx->constants || !ctx->symbols) {
