@@ -357,14 +357,13 @@ InterpretResult interpret(const char* source) {
                             free_compiler_context(multi_compiler);
                             return INTERPRET_OK;
                         } else {
-                            // printf("[VM] ⚠️  Program executed with runtime warnings (result: %d)\n", exec_result);
-                            // printf("[VM] ✅ Output was produced correctly - print functionality working!\n");
-                            // For now, treat this as success since the core functionality works
+                            // printf("[VM] ⚠️  Program executed with runtime error (result: %d)\n", exec_result);
+                            // Return the actual error result instead of treating as success
                             freeAST(ast);
                             freeCompiler(&compiler);
                             free_typed_ast_node(typed_ast);
                             free_compiler_context(multi_compiler);
-                            return INTERPRET_OK;
+                            return exec_result;
                         }
                     } else {
                         // printf("[VM] ❌ Failed to allocate memory for bytecode execution\n");

@@ -1020,6 +1020,184 @@ bool has_compiler_errors(CompilerContext* ctx);
 void print_compiler_errors(CompilerContext* ctx);
 ```
 
+### Phase 4D: 🚨 Cast Warning System (HIGH PRIORITY SAFETY FEATURE)
+**Goal**: Implement Rust-like cast safety warnings for potentially unsafe type conversions
+
+#### **Problem**: Unsafe Casts in Current System
+```rust
+// Currently allowed without warnings - potentially unsafe:
+large_f64: f64 = 3.14159265359
+truncated: i32 = large_f64 as i32  // ⚠️ Precision loss
+big_int: i64 = 9223372036854775807  
+overflow: i32 = big_int as i32      // ⚠️ Potential overflow
+negative: i32 = -100
+unsigned: u32 = negative as u32     // ⚠️ Becomes very large number
+```
+
+#### **Solution**: Comprehensive Cast Warning Infrastructure
+
+```c
+// include/compiler/cast_warnings.h
+typedef enum CastSafety {
+    CAST_SAFE,           // i32 → i64 (always safe)
+    CAST_LOSSY,          // f64 → i32 (precision loss)
+    CAST_OVERFLOW_RISK,  // i64 → i32 (overflow risk)
+    CAST_SIGN_CHANGE,    // i32 → u32 (signedness change)
+    CAST_TRUNCATING      // Large → small type
+} CastSafety;
+
+typedef enum WarningLevel {
+    WARNING_ALLOW,       // No warning
+    WARNING_WARN,        // Show warning but continue
+    WARNING_ERROR        // Treat as compilation error
+} WarningLevel;
+
+typedef struct CastWarningConfig {
+    WarningLevel unsafe_casts;     // General unsafe cast setting
+    WarningLevel precision_loss;   // f64 → integer warnings
+    WarningLevel overflow_risk;    // Large → small integer warnings
+    WarningLevel sign_change;      // Signed ↔ unsigned warnings
+    WarningLevel truncation;       // String/array length changes
+} CastWarningConfig;
+
+typedef struct CompilerWarning {
+    WarningLevel level;
+    SrcLocation location;
+    CastSafety safety_issue;
+    Type* from_type;
+    Type* to_type;
+    const char* message;
+    const char* suggestion;
+} CompilerWarning;
+```
+
+#### **Cast Safety Analysis System**
+```c
+// src/compiler/backend/cast_warnings.c
+
+CastSafety analyze_cast_safety(Type* from, Type* to) {
+    // Precision loss detection
+    if (is_floating_point(from) && is_integer(to)) {
+        return CAST_LOSSY;  // f64 → i32 loses precision
+    }
+    
+    // Overflow risk detection  
+    if (get_type_size(from) > get_type_size(to)) {
+        return CAST_OVERFLOW_RISK;  // i64 → i32 potential overflow
+    }
+    
+    // Sign change detection
+    if (is_signed(from) != is_signed(to)) {
+        return CAST_SIGN_CHANGE;  // i32 ↔ u32 signedness change
+    }
+    
+    // Safe conversions
+    return CAST_SAFE;  // i32 → i64, u32 → u64, etc.
+}
+
+void emit_cast_warning(CompilerContext* ctx, CastSafety safety, 
+                      Type* from, Type* to, SrcLocation loc) {
+    CastWarningConfig* config = &ctx->cast_warnings;
+    WarningLevel level = get_warning_level(config, safety);
+    
+    if (level == WARNING_ALLOW) return;
+    
+    CompilerWarning warning = {
+        .level = level,
+        .location = loc,
+        .safety_issue = safety,
+        .from_type = from,
+        .to_type = to,
+        .message = generate_warning_message(safety, from, to),
+        .suggestion = generate_warning_suggestion(safety, from, to)
+    };
+    
+    report_cast_warning(ctx, &warning);
+}
+```
+
+#### **Integration with Type Coercion System**
+```c
+// Modify src/compiler/backend/codegen/codegen.c
+
+void compile_cast_expression(CompilerContext* ctx, TypedASTNode* cast) {
+    Type* from_type = cast->typed.cast.operand->resolvedType;
+    Type* to_type = cast->resolvedType;
+    SrcLocation loc = cast->original->location;
+    
+    // 1. Analyze cast safety
+    CastSafety safety = analyze_cast_safety(from_type, to_type);
+    
+    // 2. Emit warning if needed
+    emit_cast_warning(ctx, safety, from_type, to_type, loc);
+    
+    // 3. Generate cast code (existing logic)
+    generate_cast_bytecode(ctx, cast);
+}
+```
+
+#### **Warning Configuration System**
+```c
+// Allow users to configure warning levels
+// In CLAUDE.md or config system:
+[warnings]
+unsafe_casts = "error"     // error, warn, allow
+precision_loss = "warn"    // f64 → integer conversions
+overflow_risk = "warn"     // Large → small integer conversions
+sign_change = "allow"      // Signed ↔ unsigned conversions
+truncation = "warn"        // String/array operations
+
+// Runtime configuration
+void configure_cast_warnings(CompilerContext* ctx, const char* config_path);
+```
+
+#### **Phase 4D Implementation Plan**
+
+**Week 1: Infrastructure**
+- [ ] **Cast Safety Analysis**: Implement `analyze_cast_safety()` function
+- [ ] **Warning Infrastructure**: Create warning reporting and configuration system
+- [ ] **Configuration System**: Add warning level configuration (error/warn/allow)
+
+**Week 2: Integration**  
+- [ ] **Codegen Integration**: Add cast warnings to explicit cast compilation
+- [ ] **Type Coercion Integration**: Add warnings to automatic type coercion
+- [ ] **Error Reporting**: Enhance error messages with cast safety suggestions
+
+**Week 3: Advanced Features**
+- [ ] **Compile-time Value Analysis**: Detect obvious overflow in literal values
+- [ ] **Flow-sensitive Analysis**: Track value ranges through expressions
+- [ ] **Configuration File Support**: Allow `.orus-warnings.toml` configuration
+
+#### **Expected Warning Examples**
+```rust
+// Precision loss warning
+value: f64 = 3.14159
+int_val: i32 = value as i32
+// ⚠️  Warning: Casting f64 to i32 may lose precision
+// 💡 Suggestion: Use explicit rounding (round(), floor(), ceil())
+
+// Overflow risk warning  
+big: i64 = 9223372036854775807
+small: i32 = big as i32
+// ⚠️  Warning: Casting i64 to i32 may overflow
+// 💡 Suggestion: Check value range or use checked_cast()
+
+// Sign change warning
+negative: i32 = -100
+positive: u32 = negative as u32
+// ⚠️  Warning: Casting signed to unsigned with negative value
+// 💡 Suggestion: Ensure value is non-negative before cast
+```
+
+#### **Benefits for Orus Safety**
+- **🛡️  Rust-like Safety**: Prevents common casting bugs at compile time
+- **🎯 User Education**: Teaches developers about type conversion safety
+- **⚙️  Configurable**: Teams can set their own safety requirements  
+- **🚀 Zero Runtime Cost**: All analysis happens at compile time
+- **📊 Gradual Adoption**: Warnings don't break existing code
+
+**This enhancement makes Orus significantly safer while maintaining its excellent performance characteristics.**
+
 ---
 
 ## Success Criteria

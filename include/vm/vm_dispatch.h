@@ -95,6 +95,20 @@ void runtimeError(ErrorType type, SrcLocation location, const char* format, ...)
             goto *vm_dispatch_table[inst]; \
         } while(0)
         #define DISPATCH_TYPED() DISPATCH()
+        
+        // Check for runtime errors after handler execution
+        #define CHECK_RUNTIME_ERROR() do { \
+            if (IS_ERROR(vm.lastError)) { \
+                if (vm.tryFrameCount > 0) { \
+                    TryFrame frame = vm.tryFrames[--vm.tryFrameCount]; \
+                    vm.ip = frame.handler; \
+                    vm.globals[frame.varIndex] = vm.lastError; \
+                    vm.lastError = BOOL_VAL(false); \
+                } else { \
+                    RETURN(INTERPRET_RUNTIME_ERROR); \
+                } \
+            } \
+        } while (0)
     #endif
 #else
     // Switch-based dispatch doesn't use these macros

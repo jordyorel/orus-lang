@@ -2265,11 +2265,13 @@ InterpretResult vm_run_dispatch(void) {
 
     LABEL_OP_DIV_I32_TYPED: {
         handle_div_i32_typed();
+        CHECK_RUNTIME_ERROR();
         DISPATCH_TYPED();
     }
 
     LABEL_OP_MOD_I32_TYPED: {
         handle_mod_i32_typed();
+        CHECK_RUNTIME_ERROR();
         DISPATCH_TYPED();
     }
 
@@ -2290,11 +2292,13 @@ InterpretResult vm_run_dispatch(void) {
 
     LABEL_OP_DIV_I64_TYPED: {
         handle_div_i64_typed();
+        CHECK_RUNTIME_ERROR();
         DISPATCH_TYPED();
     }
 
     LABEL_OP_MOD_I64_TYPED: {
         handle_mod_i64_typed();
+        CHECK_RUNTIME_ERROR();
         DISPATCH_TYPED();
     }
 
@@ -2315,11 +2319,13 @@ InterpretResult vm_run_dispatch(void) {
 
     LABEL_OP_DIV_F64_TYPED: {
         handle_div_f64_typed();
+        CHECK_RUNTIME_ERROR();
         DISPATCH_TYPED();
     }
 
     LABEL_OP_MOD_F64_TYPED: {
         handle_mod_f64_typed();
+        CHECK_RUNTIME_ERROR();
         DISPATCH_TYPED();
     }
 
@@ -2391,11 +2397,13 @@ InterpretResult vm_run_dispatch(void) {
 
     LABEL_OP_DIV_U32_TYPED: {
         handle_div_u32_typed();
+        CHECK_RUNTIME_ERROR();
         DISPATCH_TYPED();
     }
 
     LABEL_OP_MOD_U32_TYPED: {
         handle_mod_u32_typed();
+        CHECK_RUNTIME_ERROR();
         DISPATCH_TYPED();
     }
 
@@ -2417,11 +2425,13 @@ InterpretResult vm_run_dispatch(void) {
 
     LABEL_OP_DIV_U64_TYPED: {
         handle_div_u64_typed();
+        CHECK_RUNTIME_ERROR();
         DISPATCH_TYPED();
     }
 
     LABEL_OP_MOD_U64_TYPED: {
         handle_mod_u64_typed();
+        CHECK_RUNTIME_ERROR();
         DISPATCH_TYPED();
     }
 
