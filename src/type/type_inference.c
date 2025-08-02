@@ -19,10 +19,12 @@
 #include "runtime/memory.h"
 #include "type/type.h"
 #include "vm/vm.h"
+#include "errors/features/type_errors.h"
+#include "errors/features/variable_errors.h"
 
 // ---- Arena and utilities ----
 static TypeArena* type_arena = NULL;
-static void* arena_alloc(size_t size) {
+static void* type_arena_alloc(size_t size) {
     size = (size + ARENA_ALIGNMENT - 1) & ~(ARENA_ALIGNMENT - 1);
     if (!type_arena || type_arena->used + size > type_arena->size) {
         size_t chunk = size > ARENA_SIZE ? size : ARENA_SIZE;
@@ -53,7 +55,7 @@ typedef struct TypeVar {
 static int next_var_id = 0;
 
 static TypeVar* new_type_var_node(void) {
-    TypeVar* tv = arena_alloc(sizeof(TypeVar));
+    TypeVar* tv = type_arena_alloc(sizeof(TypeVar));
     if (!tv) return NULL;
     tv->id = next_var_id++;
     tv->parent = tv;
@@ -71,7 +73,7 @@ Type* make_var_type(TypeEnv* env) {
     (void)env;  // Unused parameter
     TypeVar* tv = new_type_var_node();
     if (!tv) return NULL;
-    Type* t = arena_alloc(sizeof(Type));
+    Type* t = type_arena_alloc(sizeof(Type));
     if (!t) return NULL;
     t->kind = TYPE_VAR;
     t->info.var.var = tv;
@@ -96,7 +98,7 @@ Type* fresh_type(Type* t, HashMap* mapping) {
             return nv;
         }
         case TYPE_FUNCTION: {
-            Type** ps = arena_alloc(sizeof(Type*) * t->info.function.arity);
+            Type** ps = type_arena_alloc(sizeof(Type*) * t->info.function.arity);
             if (!ps) return t;
             for (int i = 0; i < t->info.function.arity; i++) {
                 ps[i] = fresh_type(t->info.function.paramTypes[i], mapping);
@@ -210,7 +212,7 @@ typedef struct TypeEnv {
 } TypeEnv;
 
 TypeEnv* type_env_new(TypeEnv* parent) {
-    TypeEnv* env = arena_alloc(sizeof(TypeEnv));
+    TypeEnv* env = type_arena_alloc(sizeof(TypeEnv));
     if (!env) return NULL;
     env->entries = NULL;
     env->parent = parent;
@@ -221,10 +223,10 @@ static void type_env_define(TypeEnv* env, const char* name,
                             TypeScheme* scheme) {
     if (!env || !name || !scheme) return;
 
-    TypeEnvEntry* entry = arena_alloc(sizeof(TypeEnvEntry));
+    TypeEnvEntry* entry = type_arena_alloc(sizeof(TypeEnvEntry));
     if (!entry) return;
 
-    entry->name = arena_alloc(strlen(name) + 1);
+    entry->name = type_arena_alloc(strlen(name) + 1);
     if (!entry->name) return;
     strcpy(entry->name, name);
 
@@ -256,17 +258,17 @@ typedef struct TypeScheme {
 
 static TypeScheme* type_scheme_new(Type* type, char** bound_vars,
                                    int bound_count) {
-    TypeScheme* scheme = arena_alloc(sizeof(TypeScheme));
+    TypeScheme* scheme = type_arena_alloc(sizeof(TypeScheme));
     if (!scheme) return NULL;
 
     scheme->type = type;
     scheme->bound_count = bound_count;
 
     if (bound_count > 0) {
-        scheme->bound_vars = arena_alloc(sizeof(char*) * bound_count);
+        scheme->bound_vars = type_arena_alloc(sizeof(char*) * bound_count);
         if (!scheme->bound_vars) return NULL;
         for (int i = 0; i < bound_count; i++) {
-            scheme->bound_vars[i] = arena_alloc(strlen(bound_vars[i]) + 1);
+            scheme->bound_vars[i] = type_arena_alloc(strlen(bound_vars[i]) + 1);
             if (!scheme->bound_vars[i]) return NULL;
             strcpy(scheme->bound_vars[i], bound_vars[i]);
         }
@@ -405,13 +407,19 @@ static Type* infer_literal(Value literal) {
 }
 
 // ---- Error reporting ----
-static void error(const char* format, ...) {
-    va_list args;
-    va_start(args, format);
-    fprintf(stderr, "Type Error: ");
-    vfprintf(stderr, format, args);
-    fprintf(stderr, "\n");
-    va_end(args);
+// Global error tracking for type inference
+static bool type_inference_has_errors = false;
+
+static void set_type_error(void) {
+    type_inference_has_errors = true;
+}
+
+bool has_type_inference_errors(void) {
+    return type_inference_has_errors;
+}
+
+void reset_type_inference_errors(void) {
+    type_inference_has_errors = false;
 }
 
 // ---- Algorithm W ----
@@ -422,7 +430,8 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
         case NODE_IDENTIFIER: {
             TypeScheme* sch = type_env_lookup(env, node->identifier.name);
             if (!sch) {
-                error("Unbound variable %s", node->identifier.name);
+                report_undefined_variable(node->location, node->identifier.name);
+                set_type_error();
                 return NULL;
             }
             return instantiate_scheme(sch);
@@ -457,7 +466,8 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                     return l;
                 } else {
                     // Neither is literal and types don't match - require explicit casting
-                    error("Type mismatch in arithmetic operation - use explicit casting with 'as'");
+                    report_type_mismatch(node->location, "numeric types", "incompatible types");
+                    set_type_error();
                     return NULL;
                 }
                 return l;
@@ -470,7 +480,8 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                 // Comparison operations always return bool
                 return getPrimitiveType(TYPE_BOOL);
             }
-            error("Unknown binary operator: %s", node->binary.op);
+            report_unsupported_operation(node->location, node->binary.op, "binary");
+            set_type_error();
             return NULL;
         }
         case NODE_VAR_DECL: {
@@ -500,7 +511,8 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                 if (can_adapt || unify(init_type, anno_type)) {
                     var_type = anno_type; // Use declared type, not inferred type
                 } else {
-                    error("Type annotation does not match initializer type - use explicit casting with 'as'");
+                    report_type_mismatch(node->location, "declared type", "initializer type");
+                    set_type_error();
                     return NULL;
                 }
             } else if (init_type) {
@@ -508,7 +520,8 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             } else if (anno_type) {
                 var_type = anno_type;
             } else {
-                error("Variable declaration must have either initializer or type annotation");
+                report_type_annotation_required(node->location, "variable declaration");
+                set_type_error();
                 return NULL;
             }
 
@@ -559,7 +572,7 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             int param_count = node->function.paramCount;
             
             if (param_count > 0) {
-                param_types = arena_alloc(sizeof(Type*) * param_count);
+                param_types = type_arena_alloc(sizeof(Type*) * param_count);
                 for (int i = 0; i < param_count; i++) {
                     if (node->function.params[i].typeAnnotation) {
                         param_types[i] = algorithm_w(env, node->function.params[i].typeAnnotation);
@@ -616,20 +629,14 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                             
                             // Verify arg_type matches param_type
                             if (arg_type && param_type && !unify(arg_type, param_type)) {
-                                error("Type mismatch in function call: argument %d has type %s but parameter expects %s", 
-                                      i + 1, 
-                                      arg_type->kind == TYPE_I32 ? "i32" : 
-                                      arg_type->kind == TYPE_F64 ? "f64" : 
-                                      arg_type->kind == TYPE_BOOL ? "bool" : "unknown",
-                                      param_type->kind == TYPE_I32 ? "i32" : 
-                                      param_type->kind == TYPE_F64 ? "f64" : 
-                                      param_type->kind == TYPE_BOOL ? "bool" : "unknown");
+                                report_type_mismatch(node->location, "function parameter", "argument type");
+                                set_type_error();
                                 return NULL;
                             }
                         }
                     } else {
-                        error("Function call argument count mismatch: expected %d arguments but got %d", 
-                              func_type->info.function.arity, node->call.argCount);
+                        report_type_mismatch(node->location, "function signature", "argument count");
+                        set_type_error();
                         return NULL;
                     }
                     
@@ -754,7 +761,8 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             return getPrimitiveType(TYPE_VOID);
         }
         default:
-            error("Unsupported node type in type inference: %d", node->type);
+            report_unsupported_operation(node->location, "type inference", "node type");
+            set_type_error();
             return getPrimitiveType(TYPE_UNKNOWN);
     }
 }
@@ -763,122 +771,13 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
 void populate_ast_types(ASTNode* node, TypeEnv* env) {
     if (!node) return;
 
+    // Only call algorithm_w on the root node - it handles recursion internally
     Type* inferred_type = algorithm_w(env, node);
     if (inferred_type) {
         node->dataType = inferred_type;
     }
-
-    switch (node->type) {
-        case NODE_PROGRAM:
-            for (int i = 0; i < node->program.count; i++) {
-                populate_ast_types(node->program.declarations[i], env);
-            }
-            break;
-        case NODE_VAR_DECL:
-            if (node->varDecl.initializer) {
-                populate_ast_types(node->varDecl.initializer, env);
-            }
-            if (node->varDecl.typeAnnotation) {
-                populate_ast_types(node->varDecl.typeAnnotation, env);
-            }
-            break;
-        case NODE_BINARY:
-            populate_ast_types(node->binary.left, env);
-            populate_ast_types(node->binary.right, env);
-            break;
-        case NODE_ASSIGN:
-            populate_ast_types(node->assign.value, env);
-            break;
-        case NODE_PRINT:
-            for (int i = 0; i < node->print.count; i++) {
-                populate_ast_types(node->print.values[i], env);
-            }
-            if (node->print.separator) {
-                populate_ast_types(node->print.separator, env);
-            }
-            break;
-        case NODE_IF:
-            populate_ast_types(node->ifStmt.condition, env);
-            populate_ast_types(node->ifStmt.thenBranch, env);
-            if (node->ifStmt.elseBranch) {
-                populate_ast_types(node->ifStmt.elseBranch, env);
-            }
-            break;
-        case NODE_WHILE:
-            populate_ast_types(node->whileStmt.condition, env);
-            populate_ast_types(node->whileStmt.body, env);
-            break;
-        case NODE_FOR_RANGE:
-            populate_ast_types(node->forRange.start, env);
-            populate_ast_types(node->forRange.end, env);
-            if (node->forRange.step) {
-                populate_ast_types(node->forRange.step, env);
-            }
-            populate_ast_types(node->forRange.body, env);
-            break;
-        case NODE_FOR_ITER:
-            populate_ast_types(node->forIter.iterable, env);
-            populate_ast_types(node->forIter.body, env);
-            break;
-        case NODE_BLOCK:
-            for (int i = 0; i < node->block.count; i++) {
-                populate_ast_types(node->block.statements[i], env);
-            }
-            break;
-        case NODE_TERNARY:
-            populate_ast_types(node->ternary.condition, env);
-            populate_ast_types(node->ternary.trueExpr, env);
-            populate_ast_types(node->ternary.falseExpr, env);
-            break;
-        case NODE_UNARY:
-            populate_ast_types(node->unary.operand, env);
-            break;
-        case NODE_FUNCTION: {
-            if (node->function.returnType) {
-                populate_ast_types(node->function.returnType, env);
-            }
-            
-            // Create a new scope for the function body and add parameters to it
-            TypeEnv* function_env = type_env_new(env);
-            
-            // Add parameters to the function's local environment
-            for (int i = 0; i < node->function.paramCount; i++) {
-                if (node->function.params[i].name && node->function.params[i].typeAnnotation) {
-                    Type* param_type = algorithm_w(env, node->function.params[i].typeAnnotation);
-                    if (param_type) {
-                        TypeScheme* param_scheme = generalize(function_env, param_type);
-                        type_env_define(function_env, node->function.params[i].name, param_scheme);
-                    }
-                }
-            }
-            
-            // Type-check the function body in the new environment with parameter types
-            if (node->function.body) {
-                populate_ast_types(node->function.body, function_env);
-            }
-            break;
-        }
-        case NODE_CALL:
-            populate_ast_types(node->call.callee, env);
-            for (int i = 0; i < node->call.argCount; i++) {
-                populate_ast_types(node->call.args[i], env);
-            }
-            break;
-        case NODE_RETURN:
-            if (node->returnStmt.value) {
-                populate_ast_types(node->returnStmt.value, env);
-            }
-            break;
-        case NODE_CAST:
-            populate_ast_types(node->cast.expression, env);
-            populate_ast_types(node->cast.targetType, env);
-            break;
-        case NODE_TYPE:
-            // Type annotation nodes don't need child processing
-            break;
-        default:
-            break;
-    }
+    
+    // No recursive calls needed - algorithm_w already handles all child nodes
 }
 
 // Forward declaration for recursive helper
@@ -887,7 +786,18 @@ static TypedASTNode* generate_typed_ast_recursive(ASTNode* ast, TypeEnv* type_en
 TypedASTNode* generate_typed_ast(ASTNode* root, TypeEnv* env) {
     if (!root || !env) return NULL;
 
+    // Reset error tracking
+    reset_type_inference_errors();
+    
+    // Run type inference once
     populate_ast_types(root, env);
+    
+    // If there were type errors, return NULL to halt compilation
+    if (has_type_inference_errors()) {
+        return NULL;
+    }
+    
+    // Generate typed AST without re-running type inference
     return generate_typed_ast_recursive(root, env);
 }
 

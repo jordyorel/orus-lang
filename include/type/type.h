@@ -142,6 +142,10 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node);
 typedef struct TypedASTNode TypedASTNode;  // Forward declaration
 TypedASTNode* generate_typed_ast(ASTNode* root, TypeEnv* env);
 void populate_ast_types(ASTNode* node, TypeEnv* env);
+
+// Error tracking functions
+bool has_type_inference_errors(void);
+void reset_type_inference_errors(void);
 TypeEnv* type_env_new(TypeEnv* parent);
 Type* make_var_type(TypeEnv* env);
 Type* fresh_type(Type* t, HashMap* mapping);

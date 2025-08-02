@@ -5,6 +5,7 @@
 #include "compiler/register_allocator.h"
 #include "compiler/symbol_table.h"
 #include "vm/vm.h"
+#include "errors/features/variable_errors.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -906,7 +907,9 @@ void compile_assignment(CompilerContext* ctx, TypedASTNode* assign) {
     
     // Variable exists - check if it's mutable
     if (!symbol->is_mutable) {
-        printf("[CODEGEN] Error: Cannot assign to immutable variable %s\n", var_name);
+        // Use proper error reporting instead of printf
+        SrcLocation location = assign->original->location;
+        report_immutable_variable_assignment(location, var_name);
         ctx->has_compilation_errors = true;  // Signal compilation failure
         return;
     }

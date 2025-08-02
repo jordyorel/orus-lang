@@ -1,0 +1,4 @@
+x = 42      // i32
+y = "hello" // string
+result = x + y  // This should trigger type mismatch error
+print(result)
