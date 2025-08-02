@@ -710,10 +710,10 @@ void compile_binary_op(CompilerContext* ctx, TypedASTNode* binary, int target_re
     if (left_type->kind != right_type->kind) {
         printf("[CODEGEN] Type mismatch detected: %d vs %d, applying coercion\n", left_type->kind, right_type->kind);
         
-        // Determine the promoted type following standard rules
+        // Determine the promoted type following simpler, safer rules
         TypeKind promoted_type = TYPE_I32; // Default fallback
         
-        // Promotion hierarchy: i32 < i64 < f64, u32 < u64 < f64
+        // FIXED: Simpler promotion rules to avoid problematic casts
         if ((left_type->kind == TYPE_I32 && right_type->kind == TYPE_I64) ||
             (left_type->kind == TYPE_I64 && right_type->kind == TYPE_I32)) {
             promoted_type = TYPE_I64;
@@ -722,13 +722,17 @@ void compile_binary_op(CompilerContext* ctx, TypedASTNode* binary, int target_re
             promoted_type = TYPE_U64;
         } else if ((left_type->kind == TYPE_I32 && right_type->kind == TYPE_U32) ||
                    (left_type->kind == TYPE_U32 && right_type->kind == TYPE_I32)) {
-            // Mixed signed/unsigned of same size - promote to larger signed type
-            promoted_type = TYPE_I64;
+            // FIXED: For u32 + i32, promote to u32 to avoid complex casts
+            promoted_type = TYPE_U32;
         } else if (left_type->kind == TYPE_F64 || right_type->kind == TYPE_F64) {
             promoted_type = TYPE_F64;
         } else {
-            // Default: promote to i64 for safety
-            promoted_type = TYPE_I64;
+            // Default: use the larger type
+            if (left_type->kind > right_type->kind) {
+                promoted_type = left_type->kind;
+            } else {
+                promoted_type = right_type->kind;
+            }
         }
         
         printf("[CODEGEN] Promoting to type: %d\n", promoted_type);

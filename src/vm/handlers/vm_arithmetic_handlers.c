@@ -282,100 +282,179 @@ void handle_mod_f64_typed(void) {
 
 // ====== U32 Typed Arithmetic Handlers ======
 
-static inline void handle_add_u32_typed(void) {
+void handle_add_u32_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
-    vm.typed_regs.u32_regs[dst] = vm.typed_regs.u32_regs[left] + vm.typed_regs.u32_regs[right];
-    vm.typed_regs.reg_types[dst] = REG_TYPE_U32;
+    
+    // Use standard register system for consistency with load/move operations
+    if (!IS_U32(vm.registers[left]) || !IS_U32(vm.registers[right])) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u32");
+        return;
+    }
+    
+    uint32_t result = AS_U32(vm.registers[left]) + AS_U32(vm.registers[right]);
+    vm.registers[dst] = U32_VAL(result);
 }
 
-static inline void handle_sub_u32_typed(void) {
+void handle_sub_u32_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
-    vm.typed_regs.u32_regs[dst] = vm.typed_regs.u32_regs[left] - vm.typed_regs.u32_regs[right];
-    vm.typed_regs.reg_types[dst] = REG_TYPE_U32;
+    
+    // Use standard register system for consistency with load/move operations
+    if (!IS_U32(vm.registers[left]) || !IS_U32(vm.registers[right])) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u32");
+        return;
+    }
+    
+    uint32_t result = AS_U32(vm.registers[left]) - AS_U32(vm.registers[right]);
+    vm.registers[dst] = U32_VAL(result);
 }
 
-static inline void handle_mul_u32_typed(void) {
+void handle_mul_u32_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
-    vm.typed_regs.u32_regs[dst] = vm.typed_regs.u32_regs[left] * vm.typed_regs.u32_regs[right];
-    vm.typed_regs.reg_types[dst] = REG_TYPE_U32;
+    
+    // Use standard register system for consistency with load/move operations
+    if (!IS_U32(vm.registers[left]) || !IS_U32(vm.registers[right])) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u32");
+        return;
+    }
+    
+    uint32_t result = AS_U32(vm.registers[left]) * AS_U32(vm.registers[right]);
+    vm.registers[dst] = U32_VAL(result);
 }
 
-static inline void handle_div_u32_typed(void) {
+void handle_div_u32_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
-    if (vm.typed_regs.u32_regs[right] == 0) {
+    
+    // Use standard register system for consistency with load/move operations
+    if (!IS_U32(vm.registers[left]) || !IS_U32(vm.registers[right])) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u32");
+        return;
+    }
+    
+    uint32_t right_val = AS_U32(vm.registers[right]);
+    if (right_val == 0) {
         runtimeError(ERROR_RUNTIME, (SrcLocation){NULL,0,0}, "Division by zero");
         return;
     }
-    vm.typed_regs.u32_regs[dst] = vm.typed_regs.u32_regs[left] / vm.typed_regs.u32_regs[right];
-    vm.typed_regs.reg_types[dst] = REG_TYPE_U32;
+    
+    uint32_t result = AS_U32(vm.registers[left]) / right_val;
+    vm.registers[dst] = U32_VAL(result);
 }
 
-static inline void handle_mod_u32_typed(void) {
+void handle_mod_u32_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
-    if (vm.typed_regs.u32_regs[right] == 0) {
+    
+    // Use standard register system for consistency with load/move operations
+    if (!IS_U32(vm.registers[left]) || !IS_U32(vm.registers[right])) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u32");
+        return;
+    }
+    
+    uint32_t right_val = AS_U32(vm.registers[right]);
+    if (right_val == 0) {
         runtimeError(ERROR_RUNTIME, (SrcLocation){NULL,0,0}, "Division by zero");
         return;
     }
-    vm.typed_regs.u32_regs[dst] = vm.typed_regs.u32_regs[left] % vm.typed_regs.u32_regs[right];
-    vm.typed_regs.reg_types[dst] = REG_TYPE_U32;
+    
+    uint32_t result = AS_U32(vm.registers[left]) % right_val;
+    vm.registers[dst] = U32_VAL(result);
 }
 
 // ====== U64 Typed Arithmetic Handlers ======
 
-static inline void handle_add_u64_typed(void) {
+void handle_add_u64_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
-    vm.typed_regs.u64_regs[dst] = vm.typed_regs.u64_regs[left] + vm.typed_regs.u64_regs[right];
-    vm.typed_regs.reg_types[dst] = REG_TYPE_U64;
+    
+    // Use standard register system for consistency with load/move operations
+    if (!IS_U64(vm.registers[left]) || !IS_U64(vm.registers[right])) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u64");
+        return;
+    }
+    
+    uint64_t result = AS_U64(vm.registers[left]) + AS_U64(vm.registers[right]);
+    vm.registers[dst] = U64_VAL(result);
 }
 
-static inline void handle_sub_u64_typed(void) {
+void handle_sub_u64_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
-    vm.typed_regs.u64_regs[dst] = vm.typed_regs.u64_regs[left] - vm.typed_regs.u64_regs[right];
-    vm.typed_regs.reg_types[dst] = REG_TYPE_U64;
+    
+    // Use standard register system for consistency with load/move operations
+    if (!IS_U64(vm.registers[left]) || !IS_U64(vm.registers[right])) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u64");
+        return;
+    }
+    
+    uint64_t result = AS_U64(vm.registers[left]) - AS_U64(vm.registers[right]);
+    vm.registers[dst] = U64_VAL(result);
 }
 
-static inline void handle_mul_u64_typed(void) {
+void handle_mul_u64_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
-    vm.typed_regs.u64_regs[dst] = vm.typed_regs.u64_regs[left] * vm.typed_regs.u64_regs[right];
-    vm.typed_regs.reg_types[dst] = REG_TYPE_U64;
+    
+    // Use standard register system for consistency with load/move operations
+    if (!IS_U64(vm.registers[left]) || !IS_U64(vm.registers[right])) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u64");
+        return;
+    }
+    
+    uint64_t result = AS_U64(vm.registers[left]) * AS_U64(vm.registers[right]);
+    vm.registers[dst] = U64_VAL(result);
 }
 
-static inline void handle_div_u64_typed(void) {
+void handle_div_u64_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
-    if (vm.typed_regs.u64_regs[right] == 0) {
+    
+    // Use standard register system for consistency with load/move operations
+    if (!IS_U64(vm.registers[left]) || !IS_U64(vm.registers[right])) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u64");
+        return;
+    }
+    
+    uint64_t right_val = AS_U64(vm.registers[right]);
+    if (right_val == 0) {
+        printf("[DEBUG] u64 division by zero: right_val = %llu\n", (unsigned long long)right_val);
         runtimeError(ERROR_RUNTIME, (SrcLocation){NULL,0,0}, "Division by zero");
         return;
     }
-    vm.typed_regs.u64_regs[dst] = vm.typed_regs.u64_regs[left] / vm.typed_regs.u64_regs[right];
-    vm.typed_regs.reg_types[dst] = REG_TYPE_U64;
+    
+    uint64_t result = AS_U64(vm.registers[left]) / right_val;
+    vm.registers[dst] = U64_VAL(result);
 }
 
-static inline void handle_mod_u64_typed(void) {
+void handle_mod_u64_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
-    if (vm.typed_regs.u64_regs[right] == 0) {
+    
+    // Use standard register system for consistency with load/move operations
+    if (!IS_U64(vm.registers[left]) || !IS_U64(vm.registers[right])) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u64");
+        return;
+    }
+    
+    uint64_t right_val = AS_U64(vm.registers[right]);
+    if (right_val == 0) {
         runtimeError(ERROR_RUNTIME, (SrcLocation){NULL,0,0}, "Division by zero");
         return;
     }
-    vm.typed_regs.u64_regs[dst] = vm.typed_regs.u64_regs[left] % vm.typed_regs.u64_regs[right];
-    vm.typed_regs.reg_types[dst] = REG_TYPE_U64;
+    
+    uint64_t result = AS_U64(vm.registers[left]) % right_val;
+    vm.registers[dst] = U64_VAL(result);
 }
