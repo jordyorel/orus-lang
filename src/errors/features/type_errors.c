@@ -6,45 +6,45 @@
 static const FeatureErrorInfo type_errors[] = {
     {
         .code = E2001_TYPE_MISMATCH,
-        .title = "This value isn't what we expected",
-        .help = "You can convert between types using conversion functions if appropriate.",
-        .note = "Different types can't be mixed directly for safety reasons."
+        .title = "Type mismatch found",
+        .help = "Try converting one value to match the other's type, like `x as string` or `y as i32`.",
+        .note = "Orus keeps types separate to help prevent unexpected behavior and bugs."
     },
     {
         .code = E2002_INCOMPATIBLE_TYPES,
-        .title = "These types don't work together",
-        .help = "Check if you meant to use the same type for both values.",
-        .note = "Type compatibility ensures your program behaves predictably."
+        .title = "Types need to be compatible",
+        .help = "Consider converting one value to match the other, or check if you meant to use the same type.",
+        .note = "Type compatibility helps your program behave predictably."
     },
     {
         .code = E2003_UNDEFINED_TYPE,
-        .title = "This type doesn't exist",
-        .help = "Check the spelling or make sure the type is available in this scope.",
-        .note = "Orus supports: i32, i64, u32, u64, f64, bool, string."
+        .title = "Type not recognized",
+        .help = "Double-check the spelling, or choose from Orus's available types below.",
+        .note = "Available types: i32, i64, u32, u64, f64, bool, string."
     },
     {
         .code = E2004_MIXED_ARITHMETIC,
-        .title = "Can't mix these number types directly",
+        .title = "Number types need alignment",
         .help = "Use explicit conversion like (value as i64) or (value as f64) to make your intent clear.",
-        .note = "Explicit type conversion prevents accidental precision loss."
+        .note = "Explicit type conversion helps prevent unexpected precision loss."
     },
     {
         .code = E2005_INVALID_CAST,
-        .title = "Can't convert to this type",
-        .help = "Check if this conversion is supported, or try a different approach.",
-        .note = "Some type conversions aren't allowed to prevent data loss or confusion."
+        .title = "This conversion isn't supported",
+        .help = "Try a different conversion approach, or check if there's a safer way to transform this value.",
+        .note = "Orus prevents certain conversions to help protect your data from loss or corruption."
     },
     {
         .code = E2006_TYPE_ANNOTATION_REQUIRED,
-        .title = "Need to specify the type here",
-        .help = "Add a type annotation like ': i32' to clarify what type you want.",
-        .note = "Type annotations help both you and the compiler understand your intent."
+        .title = "Type annotation needed",
+        .help = "Add a type annotation like ': i32' to help Orus understand what type you want.",
+        .note = "Type annotations make your code clearer for both you and Orus."
     },
     {
         .code = E2007_UNSUPPORTED_OPERATION,
-        .title = "This operation isn't supported for this type",
-        .help = "Check the documentation for supported operations on this type.",
-        .note = "Different types support different operations for safety and clarity."
+        .title = "This operation needs a different approach",
+        .help = "Try a different operation, or check what operations work with this type.",
+        .note = "Each type supports specific operations to keep your code safe and clear."
     },
     {
         .code = E2008_IMMUTABLE_ASSIGNMENT,

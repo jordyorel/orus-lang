@@ -434,7 +434,16 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                 set_type_error();
                 return NULL;
             }
-            return instantiate_scheme(sch);
+            
+            Type* var_type = instantiate_scheme(sch);
+            
+            // If variable has ERROR type, don't propagate the error further
+            // This prevents cascade "undefined variable" errors
+            if (var_type && var_type->kind == TYPE_ERROR) {
+                return var_type; // Return error type but don't set error flag again
+            }
+            
+            return var_type;
         }
         case NODE_LITERAL:
             return infer_literal(node->literal.value);
@@ -466,7 +475,22 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                     return l;
                 } else {
                     // Neither is literal and types don't match - require explicit casting
-                    report_type_mismatch(node->location, "numeric types", "incompatible types");
+                    // Show actual types for better error messages
+                    const char* left_type = getTypeName(l->kind);
+                    const char* right_type = getTypeName(r->kind);
+                    
+                    // Create a more helpful error message showing the actual operation
+                    char error_context[256];
+                    snprintf(error_context, sizeof(error_context), 
+                            "Cannot %s %s and %s", 
+                            (strcmp(node->binary.op, "+") == 0) ? "add" :
+                            (strcmp(node->binary.op, "-") == 0) ? "subtract" :
+                            (strcmp(node->binary.op, "*") == 0) ? "multiply" :
+                            (strcmp(node->binary.op, "/") == 0) ? "divide" :
+                            (strcmp(node->binary.op, "%") == 0) ? "modulo" : "operate on",
+                            left_type, right_type);
+                    
+                    report_type_mismatch(node->location, left_type, right_type);
                     set_type_error();
                     return NULL;
                 }
@@ -537,13 +561,23 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
         }
         case NODE_ASSIGN: {
             Type* value_type = algorithm_w(env, node->assign.value);
-            if (!value_type) return NULL;
             
-            // Add the variable to the type environment with its inferred type
+            // Always create the variable, even if type inference fails
             if (node->assign.name) {
-                TypeScheme* scheme = generalize(env, value_type);
+                Type* assigned_type;
+                if (!value_type) {
+                    // If value type inference failed, assign ERROR type to variable
+                    assigned_type = getPrimitiveType(TYPE_ERROR);
+                } else {
+                    assigned_type = value_type;
+                }
+                
+                TypeScheme* scheme = generalize(env, assigned_type);
                 type_env_define(env, node->assign.name, scheme);
             }
+            
+            // Return NULL if value inference failed to propagate the error
+            if (!value_type) return NULL;
             
             return getPrimitiveType(TYPE_VOID);
         }

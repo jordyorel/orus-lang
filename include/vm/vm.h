@@ -186,6 +186,7 @@ typedef struct {
 // Type system
 typedef enum {
     TYPE_UNKNOWN,
+    TYPE_ERROR,    // Special error type for failed type inference
     TYPE_I32,
     TYPE_I64,
     TYPE_U32,
@@ -196,7 +197,6 @@ typedef enum {
     TYPE_VOID,
     TYPE_ARRAY,
     TYPE_FUNCTION,
-    TYPE_ERROR,
     TYPE_ANY,
     TYPE_VAR,
     TYPE_GENERIC,
