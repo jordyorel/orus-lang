@@ -794,6 +794,14 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             }
             return getPrimitiveType(TYPE_VOID);
         }
+        case NODE_BREAK: {
+            // Break statements have void type
+            return getPrimitiveType(TYPE_VOID);
+        }
+        case NODE_CONTINUE: {
+            // Continue statements have void type
+            return getPrimitiveType(TYPE_VOID);
+        }
         default:
             report_unsupported_operation(node->location, "type inference", "node type");
             set_type_error();

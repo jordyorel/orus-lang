@@ -1,0 +1,53 @@
+// While loop break and continue tests
+print("=== While Loop Break and Continue Tests ===")
+
+// Test 1: Break statement
+print("Test 1: Break statement")
+i = 0
+while i < 10:
+    if i == 3:
+        print("Breaking at i =", i)
+        break
+    print("i =", i)
+    i = i + 1
+print("Break test complete")
+
+// Test 2: Continue statement
+print("Test 2: Continue statement")
+j = 0
+while j < 5:
+    j = j + 1
+    if j == 3:
+        print("Skipping j =", j)
+        continue
+    print("j =", j)
+print("Continue test complete")
+
+// Test 3: Multiple breaks and continues
+print("Test 3: Complex break/continue")
+k = 0
+while k < 8:
+    k = k + 1
+    if k == 2:
+        continue  // Skip 2
+    if k == 4:
+        continue  // Skip 4
+    if k == 6:
+        print("Breaking at k =", k)
+        break     // Break at 6
+    print("k =", k)
+print("Complex test complete")
+
+// Test 4: Break in nested conditional
+print("Test 4: Break in nested conditional")
+m = 0
+while m < 5:
+    if m == 2:
+        if true:
+            print("Nested break at m =", m)
+            break
+    print("m =", m)
+    m = m + 1
+print("Nested break test complete")
+
+print("=== All Break/Continue Tests Complete ===")

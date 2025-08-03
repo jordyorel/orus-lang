@@ -210,6 +210,10 @@ CompilerContext* init_compiler_context(TypedASTNode* typed_ast) {
     ctx->has_compilation_errors = false;  // Initialize error tracking
     ctx->opt_ctx = NULL;      // Will implement in Phase 2
     
+    // Initialize loop control context
+    ctx->current_loop_start = -1;  // No current loop
+    ctx->current_loop_end = -1;    // No current loop
+    
     if (!ctx->allocator || !ctx->dual_allocator || !ctx->bytecode || !ctx->constants || !ctx->symbols) {
         free_compiler_context(ctx);
         return NULL;

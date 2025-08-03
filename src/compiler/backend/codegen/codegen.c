@@ -818,6 +818,18 @@ void compile_statement(CompilerContext* ctx, TypedASTNode* stmt) {
             compile_if_statement(ctx, stmt);
             break;
             
+        case NODE_WHILE:
+            compile_while_statement(ctx, stmt);
+            break;
+            
+        case NODE_BREAK:
+            compile_break_statement(ctx, stmt);
+            break;
+            
+        case NODE_CONTINUE:
+            compile_continue_statement(ctx, stmt);
+            break;
+            
         default:
             printf("[CODEGEN] Warning: Unsupported statement type: %d\n", stmt->original->type);
             break;
@@ -1134,6 +1146,148 @@ void compile_if_statement(CompilerContext* ctx, TypedASTNode* if_stmt) {
     }
     
     printf("[CODEGEN] If statement compilation completed\n");
+}
+
+void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
+    if (!ctx || !while_stmt) return;
+    
+    printf("[CODEGEN] Compiling while statement\n");
+    
+    // Remember current loop context to support nested loops
+    int prev_loop_start = ctx->current_loop_start;
+    int prev_loop_end = ctx->current_loop_end;
+    
+    // Set up loop labels
+    int loop_start = ctx->bytecode->count;
+    ctx->current_loop_start = loop_start;
+    
+    printf("[CODEGEN] While loop start at offset %d\n", loop_start);
+    
+    // Compile condition expression
+    int condition_reg = compile_expression(ctx, while_stmt->typed.whileStmt.condition);
+    if (condition_reg == -1) {
+        printf("[CODEGEN] Error: Failed to compile while condition\n");
+        return;
+    }
+    
+    // Emit conditional jump - if condition is false, jump to end of loop
+    // OP_JUMP_IF_NOT_R format: opcode + condition_reg + jump_offset (4 bytes)
+    int end_jump_addr = ctx->bytecode->count;
+    emit_instruction_to_buffer(ctx->bytecode, OP_JUMP_IF_NOT_R, condition_reg, 0, 0);
+    printf("[CODEGEN] Emitted OP_JUMP_IF_NOT_R R%d at offset %d (will patch to end)\n", 
+           condition_reg, end_jump_addr);
+    
+    // Free condition register
+    if (condition_reg >= MP_TEMP_REG_START && condition_reg <= MP_TEMP_REG_END) {
+        mp_free_temp_register(ctx->allocator, condition_reg);
+    }
+    
+    // Compile loop body with new scope
+    compile_block_with_scope(ctx, while_stmt->typed.whileStmt.body);
+    
+    // Emit unconditional jump back to loop start
+    // OP_JUMP_SHORT for short backward jumps (more efficient)
+    int back_jump_offset = loop_start - (ctx->bytecode->count + 2);
+    if (back_jump_offset >= -128 && back_jump_offset <= 127) {
+        // Use short jump (2 bytes)
+        emit_byte_to_buffer(ctx->bytecode, OP_JUMP_SHORT);
+        emit_byte_to_buffer(ctx->bytecode, (uint8_t)(back_jump_offset & 0xFF));
+        printf("[CODEGEN] Emitted OP_JUMP_SHORT with offset %d (back to start)\n", back_jump_offset);
+    } else {
+        // Use regular jump (4 bytes) 
+        back_jump_offset = loop_start - (ctx->bytecode->count + 4);
+        emit_instruction_to_buffer(ctx->bytecode, OP_JUMP, 0, 
+                                  (back_jump_offset >> 8) & 0xFF, 
+                                  back_jump_offset & 0xFF);
+        printf("[CODEGEN] Emitted OP_JUMP with offset %d (back to start)\n", back_jump_offset);
+    }
+    
+    // Patch the end jump to current position (after the loop)
+    int end_target = ctx->bytecode->count;
+    ctx->current_loop_end = end_target;
+    
+    // VM's ip points to byte after the 4-byte jump instruction when executing
+    int end_offset = end_target - (end_jump_addr + 4);
+    if (end_offset < -32768 || end_offset > 32767) {
+        printf("[CODEGEN] Error: Jump offset %d out of range for OP_JUMP_IF_NOT_R (-32768 to 32767)\n", end_offset);
+        return;
+    }
+    ctx->bytecode->instructions[end_jump_addr + 2] = (uint8_t)((end_offset >> 8) & 0xFF);
+    ctx->bytecode->instructions[end_jump_addr + 3] = (uint8_t)(end_offset & 0xFF);
+    printf("[CODEGEN] Patched end jump: offset %d (from %d to %d)\n", 
+           end_offset, end_jump_addr, end_target);
+    
+    // Restore previous loop context
+    ctx->current_loop_start = prev_loop_start;
+    ctx->current_loop_end = prev_loop_end;
+    
+    printf("[CODEGEN] While statement compilation completed\n");
+}
+
+void compile_break_statement(CompilerContext* ctx, TypedASTNode* break_stmt) {
+    if (!ctx || !break_stmt) return;
+    
+    printf("[CODEGEN] Compiling break statement\n");
+    
+    // Check if we're inside a loop
+    if (ctx->current_loop_end == -1) {
+        printf("[CODEGEN] Error: break statement outside of loop\n");
+        ctx->has_compilation_errors = true;
+        return;
+    }
+    
+    // Emit jump to end of current loop
+    // We'll use OP_JUMP_SHORT if possible, otherwise OP_JUMP
+    int jump_offset = ctx->current_loop_end - (ctx->bytecode->count + 2);
+    
+    if (jump_offset >= -128 && jump_offset <= 127) {
+        // Use short jump (2 bytes)
+        emit_byte_to_buffer(ctx->bytecode, OP_JUMP_SHORT);
+        emit_byte_to_buffer(ctx->bytecode, (uint8_t)(jump_offset & 0xFF));
+        printf("[CODEGEN] Emitted OP_JUMP_SHORT for break with offset %d\n", jump_offset);
+    } else {
+        // Use regular jump (4 bytes)
+        jump_offset = ctx->current_loop_end - (ctx->bytecode->count + 4);
+        emit_instruction_to_buffer(ctx->bytecode, OP_JUMP, 0,
+                                  (jump_offset >> 8) & 0xFF,
+                                  jump_offset & 0xFF);
+        printf("[CODEGEN] Emitted OP_JUMP for break with offset %d\n", jump_offset);
+    }
+    
+    printf("[CODEGEN] Break statement compilation completed\n");
+}
+
+void compile_continue_statement(CompilerContext* ctx, TypedASTNode* continue_stmt) {
+    if (!ctx || !continue_stmt) return;
+    
+    printf("[CODEGEN] Compiling continue statement\n");
+    
+    // Check if we're inside a loop
+    if (ctx->current_loop_start == -1) {
+        printf("[CODEGEN] Error: continue statement outside of loop\n");
+        ctx->has_compilation_errors = true;
+        return;
+    }
+    
+    // Emit jump to start of current loop
+    // We'll use OP_JUMP_SHORT if possible, otherwise OP_JUMP
+    int jump_offset = ctx->current_loop_start - (ctx->bytecode->count + 2);
+    
+    if (jump_offset >= -128 && jump_offset <= 127) {
+        // Use short jump (2 bytes)
+        emit_byte_to_buffer(ctx->bytecode, OP_JUMP_SHORT);
+        emit_byte_to_buffer(ctx->bytecode, (uint8_t)(jump_offset & 0xFF));
+        printf("[CODEGEN] Emitted OP_JUMP_SHORT for continue with offset %d\n", jump_offset);
+    } else {
+        // Use regular jump (4 bytes)
+        jump_offset = ctx->current_loop_start - (ctx->bytecode->count + 4);
+        emit_instruction_to_buffer(ctx->bytecode, OP_JUMP, 0,
+                                  (jump_offset >> 8) & 0xFF,
+                                  jump_offset & 0xFF);
+        printf("[CODEGEN] Emitted OP_JUMP for continue with offset %d\n", jump_offset);
+    }
+    
+    printf("[CODEGEN] Continue statement compilation completed\n");
 }
 
 void compile_block_with_scope(CompilerContext* ctx, TypedASTNode* block) {

@@ -34,6 +34,10 @@ void compile_variable_access(CompilerContext* ctx, TypedASTNode* var, int target
 
 // Control flow compilation functions
 void compile_if_statement(CompilerContext* ctx, TypedASTNode* if_stmt);
+
+void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt);
+void compile_break_statement(CompilerContext* ctx, TypedASTNode* break_stmt);
+void compile_continue_statement(CompilerContext* ctx, TypedASTNode* continue_stmt);
 void compile_block_with_scope(CompilerContext* ctx, TypedASTNode* block);
 
 // VM-specific optimization helpers

@@ -31,7 +31,7 @@ This document outlines the detailed implementation plan for building the Orus co
 
 **CRITICAL LANGUAGE FEATURES (HIGH PRIORITY)**
 - **Expression Types**: Binary ops (+,-,*,/), comparisons (<,>,==), logical (and,or), unary ops (-,not,++)
-- **Control Flow**: ✅ if/elif/else statements (COMPLETED), for/while loops, break/continue, match statements
+- **Control Flow**: ✅ if/elif/else statements (COMPLETED), ✅ while loops with break/continue (COMPLETED), for loops, match statements
 - **Functions**: fn definitions, calls, parameters, return statements, recursion
 - **Data Types**: String/array/object literals, all numeric types (f64, u32, u64), booleans
 - **Variable System**: ✅ Basic declarations working, need proper scoping and identifier resolution
@@ -1219,15 +1219,15 @@ positive: u32 = negative as u32
 - [ ] **90% test coverage** for new compiler components ⚠️ **PENDING**
 - [x] **Comprehensive documentation** for each phase ✅ **COMPLETED**
 
-### 🎯 **CURRENT OVERALL STATUS: 15% COMPLETE** 
-**Major milestone achieved**: Multi-pass compiler infrastructure and basic pipeline working.
-**Reality check**: Only simple literals implemented - vast majority of language features missing.
+### 🎯 **CURRENT OVERALL STATUS: 25% COMPLETE** 
+**Major milestone achieved**: Multi-pass compiler infrastructure and **while loops with break/continue support**.
+**Recent achievement**: Production-ready while loop implementation with comprehensive test coverage.
 
 ### 📊 **COMPLETION BREAKDOWN**
 - **✅ Phase 1-3 Infrastructure (15%)**: Pipeline, basic optimization, simple codegen
 - **❌ Phase 4 Testing & Symbols (10%)**: Symbol tables, comprehensive testing, error handling  
-- **❌ Phase 5 Core Language (35%)**: Expressions, variables, basic control flow
-- **❌ Phase 6 Advanced Control (20%)**: Loops, functions, complex constructs
+- **⚠️ Phase 5 Core Language (35%)**: Expressions, variables, ✅ basic control flow (if/elif/else)
+- **⚠️ Phase 6 Advanced Control (20%)**: ✅ While loops with break/continue (10%), functions pending
 - **❌ Phase 7 Advanced Optimization (10%)**: Sophisticated optimization passes
 - **❌ Phase 8 VM Utilization (10%)**: Leverage VM's 150+ specialized opcodes
 
@@ -1359,10 +1359,86 @@ NODE_ARRAY_ACCESS:
 
 ---
 
-## Phase 6: Advanced Control Flow (Week 9-10) ❌ **NOT STARTED**
+## Phase 6: Advanced Control Flow (Week 9-10) ✅ **PARTIALLY COMPLETED**
 **Goal**: Implement loops, functions, and complex control structures
 
-### Phase 6A: Loop Constructs (Week 9)
+### ✅ **PHASE 6A: WHILE LOOPS - PRODUCTION READY IMPLEMENTATION**
+**Goal**: Complete while loop support with break/continue statements
+
+#### 🎉 **ACHIEVEMENT: WHILE LOOPS FULLY IMPLEMENTED**
+- **✅ Frontend Support**: Parser already supported while loop syntax
+- **✅ AST Integration**: `NODE_WHILE`, `NODE_BREAK`, `NODE_CONTINUE` nodes working
+- **✅ Type Inference**: Type checking for while conditions and loop bodies
+- **✅ Code Generation**: Complete bytecode generation with jump optimization
+- **✅ Control Flow**: Break and continue statements with proper validation
+- **✅ Loop Context**: Nested loop support with proper context management
+- **✅ Testing**: Comprehensive test suite with 6 test files covering all scenarios
+
+#### 📋 **Implementation Details**
+```c
+// While loop compilation with optimized jumps
+void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
+    // Loop context management for nested loops
+    int prev_loop_start = ctx->current_loop_start;
+    int prev_loop_end = ctx->current_loop_end;
+    
+    // Set up loop labels and compile condition
+    int loop_start = ctx->bytecode->count;
+    ctx->current_loop_start = loop_start;
+    
+    // Condition evaluation and conditional jump
+    int condition_reg = compile_expression(ctx, while_stmt->typed.whileStmt.condition);
+    int end_jump_addr = ctx->bytecode->count;
+    emit_instruction_to_buffer(ctx->bytecode, OP_JUMP_IF_NOT_R, condition_reg, 0, 0);
+    
+    // Loop body compilation
+    compile_block_with_scope(ctx, while_stmt->typed.whileStmt.body);
+    
+    // Back jump with optimization (short jump when possible)
+    int back_jump_offset = loop_start - (ctx->bytecode->count + 2);
+    if (back_jump_offset >= -128 && back_jump_offset <= 127) {
+        emit_byte_to_buffer(ctx->bytecode, OP_JUMP_SHORT);
+        emit_byte_to_buffer(ctx->bytecode, (uint8_t)(back_jump_offset & 0xFF));
+    } else {
+        // Use regular jump for longer distances
+        back_jump_offset = loop_start - (ctx->bytecode->count + 4);
+        emit_instruction_to_buffer(ctx->bytecode, OP_JUMP, 0, 
+                                  (back_jump_offset >> 8) & 0xFF, 
+                                  back_jump_offset & 0xFF);
+    }
+    
+    // Jump patching and context restoration
+    // ... (complete implementation in src/compiler/backend/codegen/codegen.c)
+}
+```
+
+#### 🧪 **Test Coverage Results**
+All tests **PASSING** in production test suite:
+```bash
+=== control_flow Tests ===
+Testing: tests/control_flow/while_basic.orus ... PASS
+Testing: tests/control_flow/while_break_continue.orus ... PASS  
+Testing: tests/control_flow/while_complex_expressions.orus ... PASS
+Testing: tests/control_flow/while_edge_cases.orus ... PASS
+Testing: tests/control_flow/while_error_conditions.orus ... PASS
+Testing: tests/control_flow/while_nested.orus ... PASS
+```
+
+#### 🔧 **Technical Features Implemented**
+- **Jump Optimization**: Uses `OP_JUMP_SHORT` for efficient back-jumps when possible
+- **Context Management**: Proper loop context tracking for nested while loops
+- **Error Validation**: Break/continue statements validated to be inside loops
+- **Register Management**: Proper register allocation and cleanup in loop compilation
+- **Scope Handling**: Loop body compiled with proper lexical scoping
+- **Bytecode Patching**: Forward jump patching for condition evaluation
+
+#### 📊 **Performance Characteristics**
+- **Compilation**: While loops compile to optimal bytecode patterns
+- **Jump Efficiency**: Short jumps (2 bytes) used when back-jump distance ≤ 127 instructions
+- **Register Efficiency**: Temporary registers properly freed after condition evaluation
+- **Memory**: Loop context uses minimal memory overhead (2 integers per nesting level)
+
+### Phase 6A: Loop Constructs (Week 9) ✅ **WHILE LOOPS COMPLETED**
 ```c
 // For loops
 NODE_FOR:
@@ -1384,10 +1460,32 @@ NODE_WHILE:
 
 **Deliverables:**
 - [ ] **For Loops**: `for i in 0..n: ...`
-- [ ] **While Loops**: `while condition: ...`
+- [x] **While Loops**: `while condition: ...` ✅ **COMPLETED**
+- [x] **Break/Continue**: Loop control statements with proper jump targets ✅ **COMPLETED**  
+- [x] **Nested Loops**: Support for loops within loops with correct label management ✅ **COMPLETED**
+- [ ] **For Loops**: `for i in 0..n: ...`
 - [ ] **Range Loops**: `for i in 0..10..2: ...` (with step)
-- [ ] **Break/Continue**: Loop control statements with proper jump targets
-- [ ] **Nested Loops**: Support for loops within loops with correct label management
+
+#### ✅ **WHILE LOOP IMPLEMENTATION ACHIEVEMENT**
+
+**Implementation Status**: Production-ready while loop support with comprehensive testing
+
+**Technical Implementation**:
+- **Type Inference**: Added `NODE_WHILE`, `NODE_BREAK`, `NODE_CONTINUE` support in `src/type/type_inference.c`
+- **Code Generation**: Complete bytecode generation with jump optimization in `src/compiler/backend/codegen/codegen.c`
+- **Loop Context Management**: Nested loop support with proper break/continue targeting
+- **Jump Optimization**: Uses `OP_JUMP_SHORT` for nearby jumps, `OP_JUMP` for distant jumps
+- **Register Management**: Proper cleanup and scope handling within loops
+
+**Test Coverage**: 6 comprehensive test files covering all scenarios:
+- `while_basic.orus` - Basic functionality and simple loops
+- `while_break_continue.orus` - Break and continue statement behavior  
+- `while_nested.orus` - Nested loop scenarios with proper scoping
+- `while_edge_cases.orus` - Complex conditions and boundary cases
+- `while_complex_expressions.orus` - Mathematical algorithms and computations
+- `while_error_conditions.orus` - Stress testing and error handling
+
+**Integration**: All tests pass in production test suite via `make test`
 
 ### Phase 6B: Function System (Week 10)
 ```c

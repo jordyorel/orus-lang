@@ -86,6 +86,10 @@ typedef struct CompilerContext {
     
     // Optimization settings (TODO: implement in Phase 2)
     OptimizationContext* opt_ctx;
+    
+    // Loop control context for break/continue statements
+    int current_loop_start;            // Bytecode offset of current loop start
+    int current_loop_end;              // Bytecode offset of current loop end
 } CompilerContext;
 
 // Bytecode emission functions

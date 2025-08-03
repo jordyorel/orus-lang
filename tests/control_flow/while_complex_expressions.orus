@@ -1,0 +1,89 @@
+// While loops with complex expressions and computations
+print("=== While Loop Complex Expression Tests ===")
+
+// Test 1: Mathematical computations in while loop
+print("Test 1: Mathematical computations")
+n = 10
+factorial = 1
+original = n
+while n > 0:
+    factorial = factorial * n
+    print("n =", n, "factorial so far =", factorial)
+    n = n - 1
+print("Factorial of", original, "is", factorial)
+
+// Test 2: Fibonacci sequence generation
+print("Test 2: Fibonacci sequence")
+a = 0
+b = 1
+count = 0
+limit = 8
+print("Fibonacci sequence:")
+while count < limit:
+    print(a)
+    temp = a + b
+    a = b
+    b = temp
+    count = count + 1
+print("Fibonacci generation complete")
+
+// Test 3: Prime number checking with while
+print("Test 3: Prime number checking")
+num = 17
+is_prime = true
+divisor = 2
+if num < 2:
+    is_prime = false
+else:
+    while divisor * divisor <= num:
+        if num % divisor == 0:
+            is_prime = false
+            print("Found divisor:", divisor)
+            break
+        divisor = divisor + 1
+if is_prime:
+    print(num, "is prime")
+else:
+    print(num, "is not prime")
+
+// Test 4: String-like operations with numbers
+print("Test 4: Number sequence processing")
+sequence = 12345
+digit_sum = 0
+temp_num = sequence
+while temp_num > 0:
+    digit = temp_num % 10
+    digit_sum = digit_sum + digit
+    print("Processing digit:", digit)
+    temp_num = temp_num / 10  // Integer division
+print("Sum of digits in", sequence, "is", digit_sum)
+
+// Test 5: Convergence algorithm simulation
+print("Test 5: Convergence simulation")
+value = 100.0
+target = 1.0
+iteration = 0
+tolerance = 0.1
+while abs(value - target) > tolerance and iteration < 10:
+    value = value * 0.8  // Decay factor
+    iteration = iteration + 1
+    print("Iteration", iteration, "value =", value)
+print("Converged after", iteration, "iterations")
+
+// Test 6: Complex nested computation
+print("Test 6: Matrix-like computation")
+rows = 3
+cols = 3
+i = 0
+while i < rows:
+    print("Row", i, ":")
+    j = 0
+    while j < cols:
+        element = (i * cols) + j + 1
+        product = element * element
+        print("  Element[", i, ",", j, "] =", element, "^2 =", product)
+        j = j + 1
+    i = i + 1
+print("Matrix computation complete")
+
+print("=== All Complex Expression Tests Complete ===")

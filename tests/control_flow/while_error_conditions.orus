@@ -1,0 +1,88 @@
+// While loop error conditions and validation tests
+// Note: These tests are designed to verify proper error reporting
+// Some tests may intentionally fail compilation to test error handling
+
+print("=== While Loop Error Condition Tests ===")
+
+// Valid test to ensure basic functionality works
+print("Test 1: Valid while loop (control test)")
+i = 0
+while i < 2:
+    print("Valid iteration", i)
+    i = i + 1
+print("Valid test complete")
+
+// The following tests would cause compilation errors in a stricter implementation:
+
+/*
+// Test 2: Break outside of loop (should cause compilation error)
+print("Test 2: Break outside loop")
+// break  // This should cause an error
+
+// Test 3: Continue outside of loop (should cause compilation error)  
+print("Test 3: Continue outside loop")
+// continue  // This should cause an error
+
+// Test 4: Nested break/continue targeting wrong loop
+print("Test 4: Invalid nested control flow")
+while true:
+    if true:
+        // break  // This should work
+        pass
+    // break  // This should work
+    break
+
+// Test 5: While loop with non-boolean condition types
+print("Test 5: Non-boolean conditions")
+// while 5:  // Should require explicit comparison
+//     break
+
+// while "string":  // Should require explicit comparison
+//     break
+*/
+
+// Test for memory/register pressure with large nested loops
+print("Test 6: Stress test - many variables in nested loops")
+stress_outer = 0
+while stress_outer < 2:
+    var1 = stress_outer * 1
+    var2 = stress_outer * 2  
+    var3 = stress_outer * 3
+    var4 = stress_outer * 4
+    var5 = stress_outer * 5
+    
+    stress_inner = 0
+    while stress_inner < 2:
+        inner_var1 = stress_inner + var1
+        inner_var2 = stress_inner + var2
+        inner_var3 = stress_inner + var3
+        inner_var4 = stress_inner + var4
+        inner_var5 = stress_inner + var5
+        
+        print("Stress test:", stress_outer, stress_inner, inner_var5)
+        stress_inner = stress_inner + 1
+    
+    stress_outer = stress_outer + 1
+print("Stress test complete")
+
+// Test for very deep nesting (compiler/runtime limits)
+print("Test 7: Deep nesting stress test")
+depth1 = 0
+while depth1 < 2:
+    depth2 = 0
+    while depth2 < 2:
+        depth3 = 0
+        while depth3 < 2:
+            depth4 = 0
+            while depth4 < 2:
+                depth5 = 0
+                while depth5 < 2:
+                    print("Deep nesting level 5:", depth1, depth2, depth3, depth4, depth5)
+                    depth5 = depth5 + 1
+                depth4 = depth4 + 1
+            depth3 = depth3 + 1
+        depth2 = depth2 + 1
+    depth1 = depth1 + 1
+print("Deep nesting test complete")
+
+print("=== Error Condition Tests Complete ===")

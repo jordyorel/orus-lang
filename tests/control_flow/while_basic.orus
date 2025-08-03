@@ -1,0 +1,39 @@
+// Basic while loop tests
+print("=== Basic While Loop Tests ===")
+
+// Test 1: Simple counting loop
+print("Test 1: Simple counting loop")
+i = 0
+while i < 3:
+    print(i)
+    i = i + 1
+print("Counting complete")
+
+// Test 2: While loop with false condition (should not execute)
+print("Test 2: False condition")
+while false:
+    print("This should never print")
+print("False condition test complete")
+
+// Test 3: While loop with true condition and break
+print("Test 3: True condition with break")
+counter = 0
+while true:
+    print(counter)
+    counter = counter + 1
+    if counter >= 2:
+        break
+print("Break test complete")
+
+// Test 4: Variable scope within while loop
+print("Test 4: Variable scope")
+outer = 10
+j = 0
+while j < 2:
+    inner = j * 2
+    print(inner)
+    print(outer)
+    j = j + 1
+print("Scope test complete")
+
+print("=== All Basic Tests Complete ===")
