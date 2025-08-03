@@ -425,31 +425,35 @@ void reset_type_inference_errors(void) {
 // ---- Algorithm W ----
 Type* algorithm_w(TypeEnv* env, ASTNode* node) {
     if (!node) return NULL;
-
+    
+    // Simple recursion protection
+    static bool in_error = false;
+    if (in_error) {
+        return getPrimitiveType(TYPE_ERROR);
+    }
+    
     switch (node->type) {
-        case NODE_IDENTIFIER: {
-            TypeScheme* sch = type_env_lookup(env, node->identifier.name);
-            if (!sch) {
-                report_undefined_variable(node->location, node->identifier.name);
-                set_type_error();
-                return NULL;
-            }
-            
-            Type* var_type = instantiate_scheme(sch);
-            
-            // If variable has ERROR type, don't propagate the error further
-            // This prevents cascade "undefined variable" errors
-            if (var_type && var_type->kind == TYPE_ERROR) {
-                return var_type; // Return error type but don't set error flag again
-            }
-            
-            return var_type;
-        }
         case NODE_LITERAL:
-            return infer_literal(node->literal.value);
-        case NODE_TIME_STAMP:
-            // time_stamp() returns f64 (seconds as double)
-            return getPrimitiveType(TYPE_F64);
+            switch (node->literal.value.type) {
+                case VAL_I32: return getPrimitiveType(TYPE_I32);
+                case VAL_I64: return getPrimitiveType(TYPE_I64);
+                case VAL_U32: return getPrimitiveType(TYPE_U32);
+                case VAL_U64: return getPrimitiveType(TYPE_U64);
+                case VAL_F64: return getPrimitiveType(TYPE_F64);
+                case VAL_BOOL: return getPrimitiveType(TYPE_BOOL);
+                case VAL_STRING: return getPrimitiveType(TYPE_STRING);
+                default: return getPrimitiveType(TYPE_UNKNOWN);
+            }
+        case NODE_IDENTIFIER: {
+            TypeScheme* scheme = type_env_lookup(env, node->identifier.name);
+            if (scheme) {
+                return instantiate(scheme, env);
+            }
+            report_undefined_variable(node->location, node->identifier.name);
+            set_type_error();
+            return NULL;
+        }
+
         case NODE_BINARY: {
             Type* l = algorithm_w(env, node->binary.left);
             Type* r = algorithm_w(env, node->binary.right);
@@ -502,6 +506,20 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                        strcmp(node->binary.op, ">") == 0 ||
                        strcmp(node->binary.op, ">=") == 0) {
                 // Comparison operations always return bool
+                return getPrimitiveType(TYPE_BOOL);
+            } else if (strcmp(node->binary.op, "and") == 0 ||
+                       strcmp(node->binary.op, "or") == 0) {
+                // Logical operations: both operands should be bool, result is bool
+                if (l->kind != TYPE_BOOL) {
+                    report_type_mismatch(node->location, "bool", getTypeName(l->kind));
+                    set_type_error();
+                    return NULL;
+                }
+                if (r->kind != TYPE_BOOL) {
+                    report_type_mismatch(node->location, "bool", getTypeName(r->kind));
+                    set_type_error();
+                    return NULL;
+                }
                 return getPrimitiveType(TYPE_BOOL);
             }
             report_unsupported_operation(node->location, node->binary.op, "binary");
@@ -813,13 +831,119 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
 void populate_ast_types(ASTNode* node, TypeEnv* env) {
     if (!node) return;
 
-    // Only call algorithm_w on the root node - it handles recursion internally
+    // Run type inference on this node - this will recursively type-check children
     Type* inferred_type = algorithm_w(env, node);
     if (inferred_type) {
         node->dataType = inferred_type;
     }
     
-    // No recursive calls needed - algorithm_w already handles all child nodes
+    // Recursively populate types for all child nodes
+    // We need to call populate_ast_types on children because algorithm_w only sets
+    // the dataType on the current node, not on child nodes
+    switch (node->type) {
+        case NODE_PROGRAM:
+            for (int i = 0; i < node->program.count; i++) {
+                populate_ast_types(node->program.declarations[i], env);
+            }
+            break;
+        case NODE_BINARY:
+            populate_ast_types(node->binary.left, env);
+            populate_ast_types(node->binary.right, env);
+            break;
+        case NODE_UNARY:
+            if (node->unary.operand) {
+                populate_ast_types(node->unary.operand, env);
+            }
+            break;
+        case NODE_VAR_DECL:
+            if (node->varDecl.initializer) {
+                populate_ast_types(node->varDecl.initializer, env);
+            }
+            if (node->varDecl.typeAnnotation) {
+                populate_ast_types(node->varDecl.typeAnnotation, env);
+            }
+            break;
+        case NODE_ASSIGN:
+            if (node->assign.value) {
+                populate_ast_types(node->assign.value, env);
+            }
+            break;
+        case NODE_FUNCTION:
+            if (node->function.returnType) {
+                populate_ast_types(node->function.returnType, env);
+            }
+            if (node->function.body) {
+                populate_ast_types(node->function.body, env);
+            }
+            break;
+        case NODE_CALL:
+            if (node->call.callee) {
+                populate_ast_types(node->call.callee, env);
+            }
+            for (int i = 0; i < node->call.argCount; i++) {
+                populate_ast_types(node->call.args[i], env);
+            }
+            break;
+        case NODE_RETURN:
+            if (node->returnStmt.value) {
+                populate_ast_types(node->returnStmt.value, env);
+            }
+            break;
+        case NODE_BLOCK:
+            for (int i = 0; i < node->block.count; i++) {
+                populate_ast_types(node->block.statements[i], env);
+            }
+            break;
+        case NODE_PRINT:
+            for (int i = 0; i < node->print.count; i++) {
+                populate_ast_types(node->print.values[i], env);
+            }
+            if (node->print.separator) {
+                populate_ast_types(node->print.separator, env);
+            }
+            break;
+        case NODE_CAST:
+            if (node->cast.expression) {
+                populate_ast_types(node->cast.expression, env);
+            }
+            if (node->cast.targetType) {
+                populate_ast_types(node->cast.targetType, env);
+            }
+            break;
+        case NODE_IF:
+            if (node->ifStmt.condition) {
+                populate_ast_types(node->ifStmt.condition, env);
+            }
+            if (node->ifStmt.thenBranch) {
+                populate_ast_types(node->ifStmt.thenBranch, env);
+            }
+            if (node->ifStmt.elseBranch) {
+                populate_ast_types(node->ifStmt.elseBranch, env);
+            }
+            break;
+        case NODE_WHILE:
+            if (node->whileStmt.condition) {
+                populate_ast_types(node->whileStmt.condition, env);
+            }
+            if (node->whileStmt.body) {
+                populate_ast_types(node->whileStmt.body, env);
+            }
+            break;
+        case NODE_TERNARY:
+            if (node->ternary.condition) {
+                populate_ast_types(node->ternary.condition, env);
+            }
+            if (node->ternary.trueExpr) {
+                populate_ast_types(node->ternary.trueExpr, env);
+            }
+            if (node->ternary.falseExpr) {
+                populate_ast_types(node->ternary.falseExpr, env);
+            }
+            break;
+        default:
+            // For leaf nodes (literals, identifiers, etc.) no children to process
+            break;
+    }
 }
 
 // Forward declaration for recursive helper
@@ -1032,6 +1156,24 @@ static TypedASTNode* generate_typed_ast_recursive(ASTNode* ast, TypeEnv* type_en
             if (ast->ifStmt.elseBranch) {
                 typed->typed.ifStmt.elseBranch = generate_typed_ast_recursive(ast->ifStmt.elseBranch, type_env);
             }
+            break;
+
+        case NODE_WHILE:
+            // Handle while statements: condition and body
+            if (ast->whileStmt.condition) {
+                typed->typed.whileStmt.condition = generate_typed_ast_recursive(ast->whileStmt.condition, type_env);
+            }
+            if (ast->whileStmt.body) {
+                typed->typed.whileStmt.body = generate_typed_ast_recursive(ast->whileStmt.body, type_env);
+            }
+            break;
+
+        case NODE_BREAK:
+            // Break statements have no children to process
+            break;
+
+        case NODE_CONTINUE:
+            // Continue statements have no children to process  
             break;
 
         default:

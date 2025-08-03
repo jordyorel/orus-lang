@@ -1523,9 +1523,13 @@ static ASTNode* parseStringLiteral(ParserContext* ctx, Token token) {
 }
 
 static ASTNode* parseBooleanLiteral(ParserContext* ctx, Token token) {
+    printf("[DEBUG] parseBooleanLiteral: Creating boolean literal for token type %d\n", token.type);
     ASTNode* node = new_node(ctx);
     node->type = NODE_LITERAL;
-    node->literal.value = BOOL_VAL(token.type == TOKEN_TRUE);
+    bool boolValue = (token.type == TOKEN_TRUE);
+    printf("[DEBUG] parseBooleanLiteral: boolValue = %s\n", boolValue ? "true" : "false");
+    node->literal.value = BOOL_VAL(boolValue);
+    printf("[DEBUG] parseBooleanLiteral: Created value with type %d\n", node->literal.value.type);
     node->literal.hasExplicitSuffix = false;
     node->location.line = token.line;
     node->location.column = token.column;

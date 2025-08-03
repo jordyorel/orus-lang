@@ -3,7 +3,7 @@ print("=== Basic While Loop Tests ===")
 
 // Test 1: Simple counting loop
 print("Test 1: Simple counting loop")
-i = 0
+mut i = 0
 while i < 3:
     print(i)
     i = i + 1
@@ -17,7 +17,7 @@ print("False condition test complete")
 
 // Test 3: While loop with true condition and break
 print("Test 3: True condition with break")
-counter = 0
+mut counter = 0
 while true:
     print(counter)
     counter = counter + 1
@@ -28,7 +28,7 @@ print("Break test complete")
 // Test 4: Variable scope within while loop
 print("Test 4: Variable scope")
 outer = 10
-j = 0
+mut j = 0
 while j < 2:
     inner = j * 2
     print(inner)

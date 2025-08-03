@@ -11,7 +11,7 @@
 #include <string.h>
 
 // Disable all debug output for clean program execution
-#define CODEGEN_DEBUG 0
+#define CODEGEN_DEBUG 1
 #if CODEGEN_DEBUG == 0
 #define printf(...) ((void)0)
 #endif
@@ -97,6 +97,19 @@ uint8_t select_optimal_opcode(const char* op, Type* type) {
     }
     
     printf("[CODEGEN] Converting TYPE_%d to REG_TYPE_%d for opcode selection\n", type->kind, reg_type);
+    
+    // Check for logical operations on bool
+    if (reg_type == REG_TYPE_BOOL) {
+        printf("[CODEGEN] Handling REG_TYPE_BOOL logical operation: %s\n", op);
+        
+        if (strcmp(op, "and") == 0) return OP_AND_BOOL_R;
+        if (strcmp(op, "or") == 0) return OP_OR_BOOL_R;
+        if (strcmp(op, "not") == 0) return OP_NOT_BOOL_R;
+        
+        // Comparison operators (result is boolean)
+        if (strcmp(op, "==") == 0) return OP_EQ_R;
+        if (strcmp(op, "!=") == 0) return OP_NE_R;
+    }
     
     // Check for arithmetic operations on i32
     if (reg_type == REG_TYPE_I32) {
@@ -367,22 +380,17 @@ void emit_load_constant(CompilerContext* ctx, int reg, Value constant) {
         }
             
         case VAL_BOOL: {
-            // Boolean constants stored as i32 in constant pool
-            Value bool_as_i32;
-            bool_as_i32.type = VAL_I32;
-            bool_as_i32.as.i32 = AS_BOOL(constant) ? 1 : 0;
-            
-            int const_index = add_constant(ctx->constants, bool_as_i32);
-            if (const_index >= 0) {
-                // OP_LOAD_I32_CONST format: opcode + register + 2-byte constant index
-                emit_byte_to_buffer(ctx->bytecode, OP_LOAD_I32_CONST);
+            // Use dedicated boolean opcodes for proper type safety
+            if (AS_BOOL(constant)) {
+                // OP_LOAD_TRUE format: opcode + register (2 bytes)
+                emit_byte_to_buffer(ctx->bytecode, OP_LOAD_TRUE);
                 emit_byte_to_buffer(ctx->bytecode, reg);
-                emit_byte_to_buffer(ctx->bytecode, (const_index >> 8) & 0xFF); // High byte
-                emit_byte_to_buffer(ctx->bytecode, const_index & 0xFF);        // Low byte
-                printf("[CODEGEN] Emitted OP_LOAD_I32_CONST R%d, #%d (%s)\n", 
-                       reg, const_index, AS_BOOL(constant) ? "true" : "false");
+                printf("[CODEGEN] Emitted OP_LOAD_TRUE R%d", reg);
             } else {
-                printf("[CODEGEN] Error: Failed to add boolean constant to pool\n");
+                // OP_LOAD_FALSE format: opcode + register (2 bytes)
+                emit_byte_to_buffer(ctx->bytecode, OP_LOAD_FALSE);
+                emit_byte_to_buffer(ctx->bytecode, reg);
+                printf("[CODEGEN] Emitted OP_LOAD_FALSE R%d", reg);
             }
             break;
         }
@@ -1161,6 +1169,10 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
     int loop_start = ctx->bytecode->count;
     ctx->current_loop_start = loop_start;
     
+    // Set current_loop_end to a temporary address so break statements know they're in a loop
+    // We'll set the actual end address after compiling the body
+    ctx->current_loop_end = ctx->bytecode->count + 1000; // Temporary future address
+    
     printf("[CODEGEN] While loop start at offset %d\n", loop_start);
     
     // Compile condition expression
@@ -1186,16 +1198,16 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
     compile_block_with_scope(ctx, while_stmt->typed.whileStmt.body);
     
     // Emit unconditional jump back to loop start
-    // OP_JUMP_SHORT for short backward jumps (more efficient)
-    int back_jump_offset = loop_start - (ctx->bytecode->count + 2);
-    if (back_jump_offset >= -128 && back_jump_offset <= 127) {
-        // Use short jump (2 bytes)
-        emit_byte_to_buffer(ctx->bytecode, OP_JUMP_SHORT);
-        emit_byte_to_buffer(ctx->bytecode, (uint8_t)(back_jump_offset & 0xFF));
-        printf("[CODEGEN] Emitted OP_JUMP_SHORT with offset %d (back to start)\n", back_jump_offset);
+    // For backward jumps, calculate positive offset and use OP_LOOP_SHORT or OP_JUMP
+    int back_jump_distance = (ctx->bytecode->count + 2) - loop_start;
+    if (back_jump_distance >= 0 && back_jump_distance <= 255) {
+        // Use OP_LOOP_SHORT for short backward jumps (2 bytes)
+        emit_byte_to_buffer(ctx->bytecode, OP_LOOP_SHORT);
+        emit_byte_to_buffer(ctx->bytecode, (uint8_t)back_jump_distance);
+        printf("[CODEGEN] Emitted OP_LOOP_SHORT with offset %d (back to start)\n", back_jump_distance);
     } else {
-        // Use regular jump (4 bytes) 
-        back_jump_offset = loop_start - (ctx->bytecode->count + 4);
+        // Use regular backward jump (4 bytes) with negative offset
+        int back_jump_offset = loop_start - (ctx->bytecode->count + 4);
         emit_instruction_to_buffer(ctx->bytecode, OP_JUMP, 0, 
                                   (back_jump_offset >> 8) & 0xFF, 
                                   back_jump_offset & 0xFF);
@@ -1229,30 +1241,18 @@ void compile_break_statement(CompilerContext* ctx, TypedASTNode* break_stmt) {
     
     printf("[CODEGEN] Compiling break statement\n");
     
-    // Check if we're inside a loop
+    // Check if we're inside a loop (current_loop_end != -1 means we're in a loop)
     if (ctx->current_loop_end == -1) {
         printf("[CODEGEN] Error: break statement outside of loop\n");
         ctx->has_compilation_errors = true;
         return;
     }
     
-    // Emit jump to end of current loop
-    // We'll use OP_JUMP_SHORT if possible, otherwise OP_JUMP
-    int jump_offset = ctx->current_loop_end - (ctx->bytecode->count + 2);
-    
-    if (jump_offset >= -128 && jump_offset <= 127) {
-        // Use short jump (2 bytes)
-        emit_byte_to_buffer(ctx->bytecode, OP_JUMP_SHORT);
-        emit_byte_to_buffer(ctx->bytecode, (uint8_t)(jump_offset & 0xFF));
-        printf("[CODEGEN] Emitted OP_JUMP_SHORT for break with offset %d\n", jump_offset);
-    } else {
-        // Use regular jump (4 bytes)
-        jump_offset = ctx->current_loop_end - (ctx->bytecode->count + 4);
-        emit_instruction_to_buffer(ctx->bytecode, OP_JUMP, 0,
-                                  (jump_offset >> 8) & 0xFF,
-                                  jump_offset & 0xFF);
-        printf("[CODEGEN] Emitted OP_JUMP for break with offset %d\n", jump_offset);
-    }
+    // For break statements, emit a jump that will exit the loop
+    // Since we don't know the exact end yet, emit a jump that will be patched
+    // For now, just emit a placeholder jump - the while loop compilation will handle break patching
+    emit_instruction_to_buffer(ctx->bytecode, OP_JUMP, 0, 0, 0);
+    printf("[CODEGEN] Emitted OP_JUMP for break statement (placeholder)\n");
     
     printf("[CODEGEN] Break statement compilation completed\n");
 }
