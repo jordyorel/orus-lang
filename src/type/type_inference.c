@@ -434,21 +434,32 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
     
     switch (node->type) {
         case NODE_LITERAL:
+            printf("[TYPE_INFERENCE] Processing literal with value type %d\n", (int)node->literal.value.type);
             switch (node->literal.value.type) {
-                case VAL_I32: return getPrimitiveType(TYPE_I32);
+                case VAL_I32: 
+                    printf("[TYPE_INFERENCE] VAL_I32 -> TYPE_I32\n");
+                    return getPrimitiveType(TYPE_I32);
                 case VAL_I64: return getPrimitiveType(TYPE_I64);
                 case VAL_U32: return getPrimitiveType(TYPE_U32);
                 case VAL_U64: return getPrimitiveType(TYPE_U64);
                 case VAL_F64: return getPrimitiveType(TYPE_F64);
-                case VAL_BOOL: return getPrimitiveType(TYPE_BOOL);
+                case VAL_BOOL: 
+                    printf("[TYPE_INFERENCE] VAL_BOOL -> TYPE_BOOL\n");
+                    return getPrimitiveType(TYPE_BOOL);
                 case VAL_STRING: return getPrimitiveType(TYPE_STRING);
-                default: return getPrimitiveType(TYPE_UNKNOWN);
+                default: 
+                    printf("[TYPE_INFERENCE] Unknown value type %d -> TYPE_UNKNOWN\n", (int)node->literal.value.type);
+                    return getPrimitiveType(TYPE_UNKNOWN);
             }
         case NODE_IDENTIFIER: {
+            printf("[TYPE_INFERENCE] Looking up identifier '%s'\\n", node->identifier.name);
             TypeScheme* scheme = type_env_lookup(env, node->identifier.name);
             if (scheme) {
-                return instantiate(scheme, env);
+                printf("[TYPE_INFERENCE] Found scheme for '%s', type kind: %d\\n", 
+                       node->identifier.name, (int)scheme->type->kind);
+                return scheme->type;
             }
+            printf("[TYPE_INFERENCE] Identifier '%s' not found in type environment\\n", node->identifier.name);
             report_undefined_variable(node->location, node->identifier.name);
             set_type_error();
             return NULL;
@@ -510,16 +521,23 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             } else if (strcmp(node->binary.op, "and") == 0 ||
                        strcmp(node->binary.op, "or") == 0) {
                 // Logical operations: both operands should be bool, result is bool
+                printf("[TYPE_INFERENCE] Processing logical operator '%s'\n", node->binary.op);
+                printf("[TYPE_INFERENCE] Left operand type: %s (kind=%d)\n", getTypeName(l->kind), (int)l->kind);
+                printf("[TYPE_INFERENCE] Right operand type: %s (kind=%d)\n", getTypeName(r->kind), (int)r->kind);
+                
                 if (l->kind != TYPE_BOOL) {
+                    printf("[TYPE_INFERENCE] Error: Left operand is not bool\n");
                     report_type_mismatch(node->location, "bool", getTypeName(l->kind));
                     set_type_error();
                     return NULL;
                 }
                 if (r->kind != TYPE_BOOL) {
+                    printf("[TYPE_INFERENCE] Error: Right operand is not bool\n");
                     report_type_mismatch(node->location, "bool", getTypeName(r->kind));
                     set_type_error();
                     return NULL;
                 }
+                printf("[TYPE_INFERENCE] Both operands are bool, returning TYPE_BOOL\n");
                 return getPrimitiveType(TYPE_BOOL);
             }
             report_unsupported_operation(node->location, node->binary.op, "binary");

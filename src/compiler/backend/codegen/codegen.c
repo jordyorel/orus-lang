@@ -1156,6 +1156,35 @@ void compile_if_statement(CompilerContext* ctx, TypedASTNode* if_stmt) {
     printf("[CODEGEN] If statement compilation completed\n");
 }
 
+// Helper function to add a break statement location for later patching
+static void add_break_statement(CompilerContext* ctx, int offset) {
+    if (ctx->break_count >= ctx->break_capacity) {
+        ctx->break_capacity = ctx->break_capacity == 0 ? 4 : ctx->break_capacity * 2;
+        ctx->break_statements = realloc(ctx->break_statements, 
+                                       ctx->break_capacity * sizeof(int));
+    }
+    ctx->break_statements[ctx->break_count++] = offset;
+}
+
+// Helper function to patch all break statements to jump to end
+static void patch_break_statements(CompilerContext* ctx, int end_target) {
+    for (int i = 0; i < ctx->break_count; i++) {
+        int break_offset = ctx->break_statements[i];
+        // VM's ip points to byte after the 4-byte jump instruction when executing
+        int jump_offset = end_target - (break_offset + 4);
+        if (jump_offset < -32768 || jump_offset > 32767) {
+            printf("[CODEGEN] Error: Break jump offset %d out of range\n", jump_offset);
+            continue;
+        }
+        ctx->bytecode->instructions[break_offset + 2] = (uint8_t)((jump_offset >> 8) & 0xFF);
+        ctx->bytecode->instructions[break_offset + 3] = (uint8_t)(jump_offset & 0xFF);
+        printf("[CODEGEN] Patched break statement at offset %d to jump to %d\n", 
+               break_offset, end_target);
+    }
+    // Clear break statements for this loop
+    ctx->break_count = 0;
+}
+
 void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
     if (!ctx || !while_stmt) return;
     
@@ -1218,6 +1247,9 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
     int end_target = ctx->bytecode->count;
     ctx->current_loop_end = end_target;
     
+    // Patch all break statements to jump to end of loop
+    patch_break_statements(ctx, end_target);
+    
     // VM's ip points to byte after the 4-byte jump instruction when executing
     int end_offset = end_target - (end_jump_addr + 4);
     if (end_offset < -32768 || end_offset > 32767) {
@@ -1248,11 +1280,11 @@ void compile_break_statement(CompilerContext* ctx, TypedASTNode* break_stmt) {
         return;
     }
     
-    // For break statements, emit a jump that will exit the loop
-    // Since we don't know the exact end yet, emit a jump that will be patched
-    // For now, just emit a placeholder jump - the while loop compilation will handle break patching
+    // Emit a break jump and track it for later patching
+    int break_offset = ctx->bytecode->count;
     emit_instruction_to_buffer(ctx->bytecode, OP_JUMP, 0, 0, 0);
-    printf("[CODEGEN] Emitted OP_JUMP for break statement (placeholder)\n");
+    add_break_statement(ctx, break_offset);
+    printf("[CODEGEN] Emitted OP_JUMP for break statement at offset %d (will be patched)\n", break_offset);
     
     printf("[CODEGEN] Break statement compilation completed\n");
 }

@@ -213,6 +213,9 @@ CompilerContext* init_compiler_context(TypedASTNode* typed_ast) {
     // Initialize loop control context
     ctx->current_loop_start = -1;  // No current loop
     ctx->current_loop_end = -1;    // No current loop
+    ctx->break_statements = NULL;  // No break statements yet
+    ctx->break_count = 0;
+    ctx->break_capacity = 0;
     
     if (!ctx->allocator || !ctx->dual_allocator || !ctx->bytecode || !ctx->constants || !ctx->symbols) {
         free_compiler_context(ctx);
@@ -398,6 +401,11 @@ void free_compiler_context(CompilerContext* ctx) {
     // Free optimization context if it was created
     if (ctx->opt_ctx) {
         free_optimization_context(ctx->opt_ctx);
+    }
+    
+    // Free break statement tracking
+    if (ctx->break_statements) {
+        free(ctx->break_statements);
     }
     
     // Note: Don't free input_ast - it's owned by caller
