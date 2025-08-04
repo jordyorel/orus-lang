@@ -3,8 +3,8 @@ print("=== While Loop Edge Cases ===")
 
 // Test 1: While loop with complex boolean expressions
 print("Test 1: Complex boolean conditions")
-x = 5
-y = 10
+mut x = 5
+mut y = 10
 while x < 8 and y > 7:
     print("x =", x, "y =", y)
     x = x + 1
@@ -13,7 +13,7 @@ print("Complex condition test complete")
 
 // Test 2: While loop modifying condition variable in complex ways
 print("Test 2: Complex condition variable modification")
-counter = 1
+mut counter = 1
 while counter < 100:
     print("counter =", counter)
     counter = counter * 2  // 1, 2, 4, 8, 16, 32, 64, 128 (stops)
@@ -21,9 +21,9 @@ print("Complex modification test complete")
 
 // Test 3: While loop with early termination patterns
 print("Test 3: Early termination patterns")
-search = 0
-target = 7
-found = false
+mut search = 0
+mut target = 7
+mut found = false
 while search < 10 and not found:
     if search == target:
         print("Found target at", search)
@@ -35,8 +35,8 @@ print("Search test complete")
 
 // Test 4: While loop with variable reassignment affecting condition
 print("Test 4: Variable reassignment in condition")
-limit = 3
-count = 0
+mut limit = 3
+mut count = 0
 while count < limit:
     print("count =", count, "limit =", limit)
     count = count + 1
@@ -46,10 +46,10 @@ print("Variable reassignment test complete")
 
 // Test 5: Deeply nested break/continue combinations
 print("Test 5: Deep nesting with mixed control flow")
-outer = 0
+mut outer = 0
 while outer < 3:
     print("Outer:", outer)
-    inner = 0
+    mut inner = 0
     while inner < 4:
         inner = inner + 1
         if inner == 2:
@@ -66,7 +66,7 @@ print("Deep nesting test complete")
 
 // Test 6: While loop with zero iterations
 print("Test 6: Zero iteration loop")
-never_true = false
+mut never_true = false
 while never_true:
     print("This should never execute")
 print("Zero iteration test complete")

@@ -82,8 +82,6 @@ void runtimeError(ErrorType type, SrcLocation location, const char* format, ...)
     #else
         #define DISPATCH() do { \
             uint8_t inst = *vm.ip++; \
-            /* printf("[INSTRUCTION_TRACE] Executing instruction: 0x%02X (%d)\n", inst, inst); */ \
-            /* fflush(stdout); */ \
             PROFILE_INC(inst); \
             if (g_profiling.isActive && instruction_start_time > 0) { \
                 uint64_t cycles = getTimestamp() - instruction_start_time; \
@@ -91,6 +89,11 @@ void runtimeError(ErrorType type, SrcLocation location, const char* format, ...)
             } \
             if (g_profiling.isActive) { \
                 instruction_start_time = getTimestamp(); \
+            } \
+            if (inst > OP_HALT || vm_dispatch_table[inst] == NULL) { \
+                printf("[DISPATCH_ERROR] Invalid opcode %d (0x%02X) or NULL dispatch entry!\n", inst, inst); \
+                fflush(stdout); \
+                goto LABEL_UNKNOWN; \
             } \
             goto *vm_dispatch_table[inst]; \
         } while(0)

@@ -828,14 +828,11 @@ static ASTNode* parseIfStatement(ParserContext* ctx) {
 }
 
 static ASTNode* parseWhileStatement(ParserContext* ctx) {
-    printf("[DEBUG] parseWhileStatement: Starting to parse while statement\n");
     Token whileTok = nextToken(ctx);
     if (whileTok.type != TOKEN_WHILE) return NULL;
 
     // Parse condition with error checking
-    printf("[DEBUG] parseWhileStatement: About to parse condition expression\n");
     ASTNode* condition = parseExpression(ctx);
-    printf("[DEBUG] parseWhileStatement: Condition expression parsed\n");
     if (!condition) {
         SrcLocation location = {NULL, whileTok.line, whileTok.column};
         report_empty_condition(location, "while");
@@ -863,16 +860,12 @@ static ASTNode* parseWhileStatement(ParserContext* ctx) {
     
     if (next.type == TOKEN_NEWLINE) {
         // Block-style while: while condition:\n    statement
-        printf("[DEBUG] parseWhileStatement: Processing block-style while loop\n");
         nextToken(ctx); // consume newline
         if (nextToken(ctx).type != TOKEN_INDENT) return NULL;
-        printf("[DEBUG] parseWhileStatement: About to parse block\n");
         body = parseBlock(ctx);
-        printf("[DEBUG] parseWhileStatement: Block parsing completed\n");
         if (!body) return NULL;
     } else {
         // Single-line while: while condition: statement
-        printf("[DEBUG] parseWhileStatement: Processing single-line while loop\n");
         body = parseStatement(ctx);
         if (!body) return NULL;
     }

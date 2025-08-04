@@ -1,0 +1,10 @@
+// Simple break test
+print("Testing break...")
+mut i = 0
+while i < 10:
+    if i == 3:
+        print("Breaking at", i)  
+        break
+    print("i =", i)
+    i = i + 1
+print("Done!")

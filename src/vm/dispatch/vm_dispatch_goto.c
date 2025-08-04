@@ -65,8 +65,13 @@ InterpretResult vm_run_dispatch(void) {
     // printf("[DISPATCH_TRACE] global_dispatch_initialized = %s\n", global_dispatch_initialized ? "true" : "false");
     fflush(stdout);
     if (!global_dispatch_initialized) {
-        // printf("[DISPATCH_TRACE] Initializing dispatch table...\n");
+        printf("[DISPATCH_DEBUG] Initializing dispatch table...\n");
         fflush(stdout);
+        
+        // Initialize all entries to NULL first to catch missing mappings
+        for (int i = 0; i < 300; i++) {
+            vm_dispatch_table[i] = NULL;
+        }
         // Phase 1.3 Optimization: Hot opcodes first for better cache locality
         // Most frequently used typed operations (hot path)
         vm_dispatch_table[OP_ADD_I32_TYPED] = &&LABEL_OP_ADD_I32_TYPED;
@@ -265,7 +270,15 @@ InterpretResult vm_run_dispatch(void) {
         
         // Mark dispatch table as initialized to prevent re-initialization
         global_dispatch_initialized = true;
-        // printf("[DISPATCH_TRACE] Dispatch table initialization completed\n");
+        
+        // Check for NULL entries in critical opcodes only
+        int critical_opcodes[] = {39, 41, 92, 126, 171, -1}; // OP_EQ_R, OP_LT_I32_R, OP_JUMP_IF_NOT_R, OP_ADD_I32_TYPED, etc.
+        for (int i = 0; critical_opcodes[i] != -1; i++) {
+            int opcode = critical_opcodes[i];
+            if (opcode < 300 && vm_dispatch_table[opcode] == NULL) {
+                printf("[DISPATCH_WARNING] Critical opcode %d (0x%02X) has NULL dispatch entry!\n", opcode, opcode);
+            }
+        }
         fflush(stdout);
     }
 

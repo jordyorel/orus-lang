@@ -1100,9 +1100,12 @@ void compile_if_statement(CompilerContext* ctx, TypedASTNode* if_stmt) {
     }
     
     // Emit conditional jump - if condition is false, jump to else/end
-    // OP_JUMP_IF_NOT_R format: opcode + condition_reg + jump_offset (3 bytes)
+    // OP_JUMP_IF_NOT_R format: opcode + condition_reg + 2-byte offset (4 bytes total for patching)
     int else_jump_addr = ctx->bytecode->count;
-    emit_instruction_to_buffer(ctx->bytecode, OP_JUMP_IF_NOT_R, condition_reg, 0, 0);
+    emit_byte_to_buffer(ctx->bytecode, OP_JUMP_IF_NOT_R);
+    emit_byte_to_buffer(ctx->bytecode, condition_reg);
+    emit_byte_to_buffer(ctx->bytecode, 0);  // placeholder offset high byte
+    emit_byte_to_buffer(ctx->bytecode, 0);  // placeholder offset low byte
     printf("[CODEGEN] Emitted OP_JUMP_IF_NOT_R R%d at offset %d (will patch)\n", 
            condition_reg, else_jump_addr);
     
@@ -1212,9 +1215,12 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
     }
     
     // Emit conditional jump - if condition is false, jump to end of loop
-    // OP_JUMP_IF_NOT_R format: opcode + condition_reg + jump_offset (4 bytes)
+    // OP_JUMP_IF_NOT_R format: opcode + condition_reg + 2-byte offset (4 bytes total for patching)
     int end_jump_addr = ctx->bytecode->count;
-    emit_instruction_to_buffer(ctx->bytecode, OP_JUMP_IF_NOT_R, condition_reg, 0, 0);
+    emit_byte_to_buffer(ctx->bytecode, OP_JUMP_IF_NOT_R);
+    emit_byte_to_buffer(ctx->bytecode, condition_reg);
+    emit_byte_to_buffer(ctx->bytecode, 0);  // placeholder offset high byte
+    emit_byte_to_buffer(ctx->bytecode, 0);  // placeholder offset low byte
     printf("[CODEGEN] Emitted OP_JUMP_IF_NOT_R R%d at offset %d (will patch to end)\n", 
            condition_reg, end_jump_addr);
     
@@ -1235,11 +1241,11 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
         emit_byte_to_buffer(ctx->bytecode, (uint8_t)back_jump_distance);
         printf("[CODEGEN] Emitted OP_LOOP_SHORT with offset %d (back to start)\n", back_jump_distance);
     } else {
-        // Use regular backward jump (4 bytes) with negative offset
-        int back_jump_offset = loop_start - (ctx->bytecode->count + 4);
-        emit_instruction_to_buffer(ctx->bytecode, OP_JUMP, 0, 
-                                  (back_jump_offset >> 8) & 0xFF, 
-                                  back_jump_offset & 0xFF);
+        // Use regular backward jump (3 bytes) - OP_JUMP format: opcode + 2-byte offset
+        int back_jump_offset = loop_start - (ctx->bytecode->count + 3);
+        emit_byte_to_buffer(ctx->bytecode, OP_JUMP);
+        emit_byte_to_buffer(ctx->bytecode, (back_jump_offset >> 8) & 0xFF);  // high byte
+        emit_byte_to_buffer(ctx->bytecode, back_jump_offset & 0xFF);         // low byte
         printf("[CODEGEN] Emitted OP_JUMP with offset %d (back to start)\n", back_jump_offset);
     }
     
@@ -1250,10 +1256,11 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
     // Patch all break statements to jump to end of loop
     patch_break_statements(ctx, end_target);
     
-    // VM's ip points to byte after the 4-byte jump instruction when executing
-    int end_offset = end_target - (end_jump_addr + 4);
-    if (end_offset < -32768 || end_offset > 32767) {
-        printf("[CODEGEN] Error: Jump offset %d out of range for OP_JUMP_IF_NOT_R (-32768 to 32767)\n", end_offset);
+    // CF_JUMP_IF_NOT expects unsigned offset: vm.ip = vm.ip + offset (forward jump only)
+    // The VM reads the offset AFTER moving past the 4-byte instruction
+    uint16_t end_offset = end_target - (end_jump_addr + 4);
+    if (end_offset > 65535) {
+        printf("[CODEGEN] Error: Jump offset %u out of range for OP_JUMP_IF_NOT_R (0 to 65535)\n", end_offset);
         return;
     }
     ctx->bytecode->instructions[end_jump_addr + 2] = (uint8_t)((end_offset >> 8) & 0xFF);
@@ -1281,8 +1288,11 @@ void compile_break_statement(CompilerContext* ctx, TypedASTNode* break_stmt) {
     }
     
     // Emit a break jump and track it for later patching
+    // OP_JUMP format: opcode + 2-byte offset (3 bytes total)
     int break_offset = ctx->bytecode->count;
-    emit_instruction_to_buffer(ctx->bytecode, OP_JUMP, 0, 0, 0);
+    emit_byte_to_buffer(ctx->bytecode, OP_JUMP);
+    emit_byte_to_buffer(ctx->bytecode, 0);  // placeholder offset high byte
+    emit_byte_to_buffer(ctx->bytecode, 0);  // placeholder offset low byte
     add_break_statement(ctx, break_offset);
     printf("[CODEGEN] Emitted OP_JUMP for break statement at offset %d (will be patched)\n", break_offset);
     
@@ -1311,11 +1321,11 @@ void compile_continue_statement(CompilerContext* ctx, TypedASTNode* continue_stm
         emit_byte_to_buffer(ctx->bytecode, (uint8_t)(jump_offset & 0xFF));
         printf("[CODEGEN] Emitted OP_JUMP_SHORT for continue with offset %d\n", jump_offset);
     } else {
-        // Use regular jump (4 bytes)
-        jump_offset = ctx->current_loop_start - (ctx->bytecode->count + 4);
-        emit_instruction_to_buffer(ctx->bytecode, OP_JUMP, 0,
-                                  (jump_offset >> 8) & 0xFF,
-                                  jump_offset & 0xFF);
+        // Use regular jump (3 bytes) - OP_JUMP format: opcode + 2-byte offset
+        jump_offset = ctx->current_loop_start - (ctx->bytecode->count + 3);
+        emit_byte_to_buffer(ctx->bytecode, OP_JUMP);
+        emit_byte_to_buffer(ctx->bytecode, (jump_offset >> 8) & 0xFF);  // high byte
+        emit_byte_to_buffer(ctx->bytecode, jump_offset & 0xFF);         // low byte
         printf("[CODEGEN] Emitted OP_JUMP for continue with offset %d\n", jump_offset);
     }
     

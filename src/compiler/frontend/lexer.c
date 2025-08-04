@@ -338,9 +338,8 @@ static Token identifier() {
         advance();
     }
     int length = (int)(lexer.current - lexer.start);
-    printf("[DEBUG] identifier: Processing '%.*s' (length=%d)\n", length, lexer.start, length);
+    // printf("[DEBUG] identifier: Processing '%.*s' (length=%d)\n", length, lexer.start, length);
     TokenType type = identifier_type(lexer.start, length);
-    printf("[DEBUG] identifier: identifier_type returned token type %d\n", (int)type);
     return make_token(type);
 }
 
