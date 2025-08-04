@@ -1,0 +1,14 @@
+print("=== UNARY OPERATORS TEST ===")
+
+// Test NOT operator
+print("Testing NOT operator:")
+print("not true =", not true, "Expected: false")
+print("not false =", not false, "Expected: true")
+
+// Test with variables
+p = true
+q = false
+print("not p =", not p, "Expected: false")
+print("not q =", not q, "Expected: true")
+
+print("=== UNARY OPERATORS TEST COMPLETE ===")

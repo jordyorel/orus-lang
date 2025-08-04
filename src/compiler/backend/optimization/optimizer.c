@@ -18,8 +18,8 @@ OptimizationContext* init_optimization_context(void) {
     OptimizationContext* ctx = malloc(sizeof(OptimizationContext));
     if (!ctx) return NULL;
     
-    // Temporarily disable constant folding to isolate memory and type issues
-    ctx->enable_constant_folding = false;
+    // Enable constant folding now that logical operators are implemented
+    ctx->enable_constant_folding = true;
     ctx->enable_dead_code_elimination = false; // Future phase
     ctx->enable_common_subexpression = false;  // Future phase
     

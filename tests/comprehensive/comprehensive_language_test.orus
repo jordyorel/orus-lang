@@ -1,0 +1,333 @@
+print("========================================")
+print("=== COMPREHENSIVE ORUS LANGUAGE TEST ===")
+print("========================================")
+
+// ===== LITERALS TEST =====
+print("\n1. LITERALS TEST:")
+print("String literal:", "Hello, Orus!")
+print("Integer literal:", 42)
+print("Boolean literal (true):", true)
+print("Boolean literal (false):", false)
+
+// ===== VARIABLE DECLARATIONS =====
+print("\n2. VARIABLE DECLARATIONS:")
+
+// Immutable variables
+immutable_int = 100
+immutable_str = "Immutable string"
+immutable_bool = true
+
+print("Immutable int:", immutable_int)
+print("Immutable string:", immutable_str)
+print("Immutable bool:", immutable_bool)
+
+// Mutable variables
+mut mutable_int = 200
+mut mutable_str = "Initial string"
+mut mutable_bool = false
+
+print("Initial mutable int:", mutable_int)
+print("Initial mutable string:", mutable_str)
+print("Initial mutable bool:", mutable_bool)
+
+// Modify mutable variables
+mutable_int = mutable_int + 50
+mutable_str = "Updated string"
+mutable_bool = not mutable_bool
+
+print("Updated mutable int:", mutable_int)
+print("Updated mutable string:", mutable_str)
+print("Updated mutable bool:", mutable_bool)
+
+// ===== ARITHMETIC EXPRESSIONS =====
+print("\n3. ARITHMETIC EXPRESSIONS:")
+a = 10
+b = 3
+
+print("a + b =", a + b, "Expected: 13")
+print("a - b =", a - b, "Expected: 7")
+print("a * b =", a * b, "Expected: 30")
+print("a / b =", a / b, "Expected: 3")
+print("a % b =", a % b, "Expected: 1")
+
+// Complex arithmetic
+complex_result = (a + b) * 2 - (a - b) / 2
+print("Complex: (a + b) * 2 - (a - b) / 2 =", complex_result)
+
+// ===== COMPARISON EXPRESSIONS =====
+print("\n4. COMPARISON EXPRESSIONS:")
+x = 15
+y = 10
+
+print("x > y =", x > y, "Expected: true")
+print("x < y =", x < y, "Expected: false")
+print("x >= y =", x >= y, "Expected: true")
+print("x <= y =", x <= y, "Expected: false")
+print("x == y =", x == y, "Expected: false")
+print("x != y =", x != y, "Expected: true")
+
+// ===== LOGICAL EXPRESSIONS =====
+print("\n5. LOGICAL EXPRESSIONS:")
+p = true
+q = false
+
+print("p and q =", p and q, "Expected: false")
+print("p or q =", p or q, "Expected: true")
+print("not p =", not p, "Expected: false")
+print("not q =", not q, "Expected: true")
+
+// Complex logical expression
+complex_logical = (x > y) and (p or q) and not (x == y)
+print("Complex logical: (x > y) and (p or q) and not (x == y) =", complex_logical, "Expected: true")
+
+// ===== IF CONDITIONS =====
+print("\n6. CONDITIONAL STATEMENTS:")
+
+// Simple if
+if x > y:
+    print("x is greater than y (correct)")
+
+// If-else
+if x < y:
+    print("This should not print")
+else:
+    print("x is not less than y (correct)")
+
+// Nested conditions
+if p:
+    if x > 5:
+        print("p is true and x > 5 (correct)")
+    else:
+        print("This should not print")
+else:
+    print("This should not print")
+
+// Complex condition
+if (x > y) and (p or not q):
+    print("Complex condition passed (correct)")
+
+// ===== WHILE LOOPS =====
+print("\n7. WHILE LOOP TESTS:")
+
+// Simple counting loop
+print("Simple counting loop:")
+mut counter = 0
+while counter < 3:
+    print("  Counter:", counter)
+    counter = counter + 1
+
+// While loop with break
+print("While loop with break:")
+mut i = 0
+while i < 10:
+    if i == 3:
+        print("  Breaking at i =", i)
+        break
+    print("  i =", i)
+    i = i + 1
+
+// While loop with continue
+print("While loop with continue:")
+mut j = 0
+while j < 5:
+    j = j + 1
+    if j == 3:
+        print("  Skipping j =", j)
+        continue
+    print("  j =", j)
+
+// ===== NESTED WHILE LOOPS =====
+print("\n8. NESTED WHILE LOOPS:")
+mut outer = 0
+while outer < 2:
+    print("Outer loop:", outer)
+    mut inner = 0
+    while inner < 2:
+        print("  Inner loop:", inner)
+        inner = inner + 1
+    outer = outer + 1
+
+// ===== VARIABLE SCOPING =====
+print("\n9. VARIABLE SCOPING:")
+global_var = "Global"
+print("Global variable:", global_var)
+
+mut scope_test = 0
+while scope_test < 1:
+    local_var = "Local in while loop"
+    print("Local variable:", local_var)
+    print("Global from inside loop:", global_var)
+    scope_test = scope_test + 1
+
+// ===== COMPLEX MIXED EXPRESSIONS =====
+print("\n10. COMPLEX MIXED EXPRESSIONS:")
+
+// Boolean expression with arithmetic and comparisons
+result1 = (10 + 5) > (8 * 2) or (20 / 4) == 5
+print("Mixed expression 1:", result1, "Expected: true")
+
+// Nested arithmetic in conditions
+mut complex_counter = 0
+while (complex_counter * 2) < (10 - 4):
+    if (complex_counter + 1) % 2 == 0:
+        print("Even iteration:", complex_counter + 1)
+    else:
+        print("Odd iteration:", complex_counter + 1)
+    complex_counter = complex_counter + 1
+
+// ===== TYPE CASTING TESTS =====
+print("\n11. TYPE CASTING WITH 'as' KEYWORD:")
+
+// Test type inference with literals
+int_val = 42
+print("Integer literal (inferred i32):", int_val)
+
+// Test explicit type declarations
+declared_int: i32 = 100
+print("Explicitly declared i32:", declared_int)
+
+// Test type adaptation (literals adapt to declared types)
+adaptation_test: i32 = 5
+print("Literal adapts to declared type:", adaptation_test)
+
+// Test 'as' keyword casting
+cast_i32_to_i64: i64 = (int_val as i64)
+print("i32 cast to i64:", cast_i32_to_i64, "Expected: 42")
+
+cast_bool_to_i32: i32 = (true as i32)
+print("bool cast to i32:", cast_bool_to_i32, "Expected: 1")
+
+cast_zero_bool: bool = (0 as bool)
+cast_nonzero_bool: bool = (int_val as bool)
+print("0 as bool:", cast_zero_bool, "Expected: false")
+print("42 as bool:", cast_nonzero_bool, "Expected: true")
+
+// Test chained casting
+chained_cast: i32 = ((int_val as i64) as i32)
+print("Chained cast (i32->i64->i32):", chained_cast, "Expected: 42")
+
+// Test mutability system
+immutable_var = 50
+mut mutable_var = 60
+print("Immutable variable:", immutable_var)
+print("Initial mutable variable:", mutable_var)
+
+mutable_var = mutable_var + 10
+print("Modified mutable variable:", mutable_var)
+
+// Test type coercion in operations
+coercion_result = declared_int + adaptation_test
+print("Type coercion in arithmetic:", coercion_result, "Expected: 105")
+
+// Test casting in expressions
+cast_in_expr = (declared_int as i64) + (adaptation_test as i64)
+print("Casting in expressions:", cast_in_expr, "Expected: 105")
+
+// ===== TYPE MIXING TESTS =====
+print("\n12. TYPE INTERACTIONS:")
+
+// String and numeric types
+name = "Orus"
+version = 1
+print("Language:", name)
+print("Version:", version)
+
+// Boolean in arithmetic contexts (testing type system)
+bool_to_use = true
+mut result_val = 0
+if bool_to_use:
+    result_val = 42
+else:
+    result_val = 0
+print("Conditional assignment result:", result_val)
+
+// ===== STRESS TEST WITH NESTED STRUCTURES =====
+print("\n13. STRESS TEST - NESTED STRUCTURES:")
+
+mut outer_stress = 0
+while outer_stress < 2:
+    print("Stress test outer:", outer_stress)
+    
+    mut inner_stress = 0
+    while inner_stress < 2:
+        if (outer_stress + inner_stress) % 2 == 0:
+            print("  Even sum:", outer_stress + inner_stress)
+            if outer_stress == inner_stress:
+                print("    Diagonal element")
+            else:
+                print("    Off-diagonal element")
+        else:
+            print("  Odd sum:", outer_stress + inner_stress)
+            mut continue_flag = false
+            if not continue_flag:
+                print("    Processing odd sum")
+        
+        inner_stress = inner_stress + 1
+    
+    outer_stress = outer_stress + 1
+
+// ===== FINAL COMPREHENSIVE TEST =====
+print("\n14. FINAL COMPREHENSIVE INTEGRATION:")
+
+// Initialize test data
+mut test_passed = 0
+mut test_total = 0
+
+// Test 1: Arithmetic and comparison
+test_total = test_total + 1
+if (5 + 3) == 8 and (10 - 4) == 6:
+    test_passed = test_passed + 1
+    print("Test 1 PASSED: Basic arithmetic")
+else:
+    print("Test 1 FAILED: Basic arithmetic")
+
+// Test 2: Logical operations
+test_total = test_total + 1
+if (true or false) and not (false and true):
+    test_passed = test_passed + 1
+    print("Test 2 PASSED: Logical operations")
+else:
+    print("Test 2 FAILED: Logical operations")
+
+// Test 3: Control flow
+test_total = test_total + 1
+mut control_flow_result = 0
+mut cf_i = 0
+while cf_i < 3:
+    if cf_i == 1:
+        cf_i = cf_i + 1
+        continue
+    control_flow_result = control_flow_result + cf_i
+    cf_i = cf_i + 1
+
+if control_flow_result == 2:  // 0 + 2 (skipped 1)
+    test_passed = test_passed + 1
+    print("Test 3 PASSED: Control flow with continue")
+else:
+    print("Test 3 FAILED: Control flow with continue")
+
+// Test 4: Variable mutation
+test_total = test_total + 1
+mut mut_test = 10
+mut_test = mut_test * 2
+mut_test = mut_test - 5
+if mut_test == 15:
+    test_passed = test_passed + 1
+    print("Test 4 PASSED: Variable mutation")
+else:
+    print("Test 4 FAILED: Variable mutation")
+
+// Final results
+print("\n========================================")
+print("COMPREHENSIVE TEST RESULTS:")
+print("Tests passed:", test_passed)
+print("Tests total:", test_total)
+
+if test_passed == test_total:
+    print("🎉 ALL TESTS PASSED! Orus language is working perfectly!")
+else:
+    print("❌ Some tests failed. Orus language needs attention.")
+
+print("========================================")
+print("=== COMPREHENSIVE TEST COMPLETE ===")
+print("========================================")

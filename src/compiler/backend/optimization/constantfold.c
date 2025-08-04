@@ -73,6 +73,41 @@ bool apply_constant_folding_recursive(TypedASTNode* ast) {
             fold_binary_expression(ast);
             break;
             
+        case NODE_UNARY:
+            printf("[CONSTANTFOLD] Analyzing unary expression: %s\n", 
+                   ast->original->unary.op ? ast->original->unary.op : "unknown");
+            
+            // For unary expressions, we need to access the operand through the original AST
+            // since the typed AST structure might not be fully populated for unary nodes
+            if (ast->original->unary.operand) {
+                printf("[CONSTANTFOLD] Found unary operand, attempting to create typed node for folding\n");
+                
+                // Create a temporary typed AST node for the operand to enable folding
+                TypedASTNode* operand_typed = create_typed_ast_node(ast->original->unary.operand);
+                if (operand_typed) {
+                    // Set the resolved type if available
+                    if (ast->original->unary.operand->dataType) {
+                        operand_typed->resolvedType = ast->original->unary.operand->dataType;
+                    }
+                    
+                    // Apply constant folding recursively to the operand
+                    apply_constant_folding_recursive(operand_typed);
+                    
+                    // If the operand was folded, update the original AST  
+                    if (operand_typed->original->type == NODE_LITERAL) {
+                        printf("[CONSTANTFOLD] Unary operand was folded, updating original AST\n");
+                        ast->original->unary.operand->type = NODE_LITERAL;
+                        ast->original->unary.operand->literal = operand_typed->original->literal;
+                    }
+                    
+                    // Clean up the temporary typed node
+                    free_typed_ast_node(operand_typed);
+                } else {
+                    printf("[CONSTANTFOLD] Failed to create typed AST for unary operand\n");
+                }
+            }
+            break;
+            
         case NODE_PRINT:
             // Print nodes don't have child expressions to fold in current implementation
             break;
@@ -99,12 +134,14 @@ bool fold_binary_expression(TypedASTNode* node) {
     // Print values using basic formatting
     if (left.type == VAL_I32) printf("%d", AS_I32(left));
     else if (left.type == VAL_F64) printf("%.2f", AS_F64(left));
+    else if (left.type == VAL_BOOL) printf("%s", AS_BOOL(left) ? "true" : "false");
     else printf("(value)");
     
     printf(" %s ", op);
     
     if (right.type == VAL_I32) printf("%d", AS_I32(right));
     else if (right.type == VAL_F64) printf("%.2f", AS_F64(right));
+    else if (right.type == VAL_BOOL) printf("%s", AS_BOOL(right) ? "true" : "false");
     else printf("(value)");
     printf("\n");
     
@@ -134,6 +171,7 @@ bool fold_binary_expression(TypedASTNode* node) {
     printf("[CONSTANTFOLD] ✅ Successfully folded to: ");
     if (result.type == VAL_I32) printf("%d", AS_I32(result));
     else if (result.type == VAL_F64) printf("%.2f", AS_F64(result));
+    else if (result.type == VAL_BOOL) printf("%s", AS_BOOL(result) ? "true" : "false");
     else printf("(value)");
     printf(" (memory-safe transformation)\n");
     
@@ -213,6 +251,72 @@ Value evaluate_binary_operation(Value left, const char* op, Value right) {
                 return left; // Return unchanged
             }
             return I32_VAL(AS_I32(left) % AS_I32(right));
+        }
+    }
+    // Logical operations
+    else if (strcmp(op, "and") == 0) {
+        if (left.type == VAL_BOOL && right.type == VAL_BOOL) {
+            return BOOL_VAL(AS_BOOL(left) && AS_BOOL(right));
+        }
+    }
+    else if (strcmp(op, "or") == 0) {
+        if (left.type == VAL_BOOL && right.type == VAL_BOOL) {
+            return BOOL_VAL(AS_BOOL(left) || AS_BOOL(right));
+        }
+    }
+    // Comparison operations
+    else if (strcmp(op, "==") == 0) {
+        if (left.type == VAL_BOOL && right.type == VAL_BOOL) {
+            return BOOL_VAL(AS_BOOL(left) == AS_BOOL(right));
+        }
+        if (left.type == VAL_I32 && right.type == VAL_I32) {
+            return BOOL_VAL(AS_I32(left) == AS_I32(right));
+        }
+        if (left.type == VAL_F64 && right.type == VAL_F64) {
+            return BOOL_VAL(AS_F64(left) == AS_F64(right));
+        }
+    }
+    else if (strcmp(op, "!=") == 0) {
+        if (left.type == VAL_BOOL && right.type == VAL_BOOL) {
+            return BOOL_VAL(AS_BOOL(left) != AS_BOOL(right));
+        }
+        if (left.type == VAL_I32 && right.type == VAL_I32) {
+            return BOOL_VAL(AS_I32(left) != AS_I32(right));
+        }
+        if (left.type == VAL_F64 && right.type == VAL_F64) {
+            return BOOL_VAL(AS_F64(left) != AS_F64(right));
+        }
+    }
+    else if (strcmp(op, "<") == 0) {
+        if (left.type == VAL_I32 && right.type == VAL_I32) {
+            return BOOL_VAL(AS_I32(left) < AS_I32(right));
+        }
+        if (left.type == VAL_F64 && right.type == VAL_F64) {
+            return BOOL_VAL(AS_F64(left) < AS_F64(right));
+        }
+    }
+    else if (strcmp(op, ">") == 0) {
+        if (left.type == VAL_I32 && right.type == VAL_I32) {
+            return BOOL_VAL(AS_I32(left) > AS_I32(right));
+        }  
+        if (left.type == VAL_F64 && right.type == VAL_F64) {
+            return BOOL_VAL(AS_F64(left) > AS_F64(right));
+        }
+    }
+    else if (strcmp(op, "<=") == 0) {
+        if (left.type == VAL_I32 && right.type == VAL_I32) {
+            return BOOL_VAL(AS_I32(left) <= AS_I32(right));
+        }
+        if (left.type == VAL_F64 && right.type == VAL_F64) {
+            return BOOL_VAL(AS_F64(left) <= AS_F64(right));
+        }
+    }
+    else if (strcmp(op, ">=") == 0) {
+        if (left.type == VAL_I32 && right.type == VAL_I32) {
+            return BOOL_VAL(AS_I32(left) >= AS_I32(right));
+        }
+        if (left.type == VAL_F64 && right.type == VAL_F64) {
+            return BOOL_VAL(AS_F64(left) >= AS_F64(right));
         }
     }
     

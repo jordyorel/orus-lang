@@ -485,14 +485,23 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             // FIXED: Check if this binary expression was folded into a literal by constant folding
             if (!expr->typed.binary.left || !expr->typed.binary.right) {
                 printf("[CODEGEN] NODE_BINARY: Binary expression was constant-folded, treating as literal\n");
-                // This binary expression was folded into a literal - treat it as such
-                int reg = mp_allocate_temp_register(ctx->allocator);
-                if (reg == -1) {
-                    printf("[CODEGEN] Error: Failed to allocate register for folded literal\n");
+                // This binary expression was folded into a literal by constant folding
+                // The original AST node was transformed to NODE_LITERAL with the folded value
+                if (expr->original->type == NODE_LITERAL) {
+                    int reg = mp_allocate_temp_register(ctx->allocator);
+                    if (reg == -1) {
+                        printf("[CODEGEN] Error: Failed to allocate register for folded literal\n");
+                        return -1;
+                    }
+                    // Use the folded literal value directly from the original AST
+                    Value folded_value = expr->original->literal.value;
+                    emit_load_constant(ctx, reg, folded_value);
+                    printf("[CODEGEN] Successfully loaded constant-folded value\n");
+                    return reg;
+                } else {
+                    printf("[CODEGEN] Error: Expected folded binary to be NODE_LITERAL, got %d\n", expr->original->type);
                     return -1;
                 }
-                compile_literal(ctx, expr, reg);
-                return reg;
             }
             
             printf("[CODEGEN] NODE_BINARY: Compiling left operand (type %d)\n", expr->typed.binary.left->original->type);
@@ -665,6 +674,66 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             printf("[CODEGEN] Emitted OP_TIME_STAMP R%d (returns f64)\n", reg);
             
             return reg;
+        }
+        
+        case NODE_UNARY: {
+            printf("[CODEGEN] NODE_UNARY: Compiling unary expression\n");
+            printf("[CODEGEN] NODE_UNARY: expr=%p\n", (void*)expr);
+            printf("[CODEGEN] NODE_UNARY: expr->original=%p\n", (void*)expr->original);
+            printf("[CODEGEN] NODE_UNARY: expr->original->unary.operand=%p\n", (void*)(expr->original ? expr->original->unary.operand : NULL));
+            
+            if (!expr->original || !expr->original->unary.operand) {
+                printf("[CODEGEN] Error: Unary operand is NULL in original AST\n");
+                return -1;
+            }
+            
+            // Create a typed AST node for the operand  
+            TypedASTNode* operand_typed = create_typed_ast_node(expr->original->unary.operand);
+            if (!operand_typed) {
+                printf("[CODEGEN] Error: Failed to create typed AST for unary operand\n");  
+                return -1;
+            }
+            
+            // Copy the resolved type if available
+            operand_typed->resolvedType = expr->original->unary.operand->dataType;
+            
+            // Compile the operand
+            int operand_reg = compile_expression(ctx, operand_typed);
+            if (operand_reg == -1) {
+                printf("[CODEGEN] Error: Failed to compile unary operand\n");
+                free_typed_ast_node(operand_typed);
+                return -1;
+            }
+            
+            // Clean up
+            free_typed_ast_node(operand_typed);
+            
+            // Allocate result register
+            int result_reg = mp_allocate_temp_register(ctx->allocator);
+            if (result_reg == -1) {
+                printf("[CODEGEN] Error: Failed to allocate register for unary result\n");
+                return -1;
+            }
+            
+            // Handle different unary operators
+            const char* op = expr->original->unary.op;
+            if (strcmp(op, "not") == 0) {
+                // Logical NOT operation - only works on boolean values
+                emit_byte_to_buffer(ctx->bytecode, OP_NOT_BOOL_R);
+                emit_byte_to_buffer(ctx->bytecode, result_reg);
+                emit_byte_to_buffer(ctx->bytecode, operand_reg);
+                printf("[CODEGEN] Emitted OP_NOT_BOOL_R R%d, R%d (logical NOT)\n", result_reg, operand_reg);
+            } else {
+                printf("[CODEGEN] Error: Unsupported unary operator: %s\n", op);
+                return -1;
+            }
+            
+            // Free operand register if it's a temporary
+            if (operand_reg >= MP_TEMP_REG_START && operand_reg <= MP_TEMP_REG_END) {
+                mp_free_temp_register(ctx->allocator, operand_reg);
+            }
+            
+            return result_reg;
         }
         
         default:

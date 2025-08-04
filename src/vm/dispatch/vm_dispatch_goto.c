@@ -1784,8 +1784,6 @@ InterpretResult vm_run_dispatch(void) {
             src_bool = AS_U64(vm.registers[src]) != 0;
         } else if (IS_F64(vm.registers[src])) {
             src_bool = AS_F64(vm.registers[src]) != 0.0;
-        } else if (IS_BOOL(vm.registers[src])) {
-            src_bool = false;
         } else {
             src_bool = true; // Objects, strings, etc. are truthy
         }

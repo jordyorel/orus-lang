@@ -1,0 +1,48 @@
+print("=== Logical Operators Test ===")
+
+// Test AND operator
+print("Testing AND operator:")
+print("true and true =", true and true, "Expected: true")
+print("true and false =", true and false, "Expected: false")
+print("false and true =", false and true, "Expected: false")
+print("false and false =", false and false, "Expected: false")
+
+// Test OR operator
+print("Testing OR operator:")
+print("true or true =", true or true, "Expected: true")
+print("true or false =", true or false, "Expected: true")
+print("false or true =", false or true, "Expected: true")
+print("false or false =", false or false, "Expected: false")
+
+// Test NOT operator
+print("Testing NOT operator:")
+print("not true =", not true, "Expected: false")
+print("not false =", not false, "Expected: true")
+
+// Test complex expressions
+print("Testing complex logical expressions:")
+a = true
+b = false
+c = true
+
+print("a and b =", a and b, "Expected: false")
+print("a or b =", a or b, "Expected: true")
+print("not a =", not a, "Expected: false")
+print("not b =", not b, "Expected: true")
+
+// Test nested expressions
+print("a and (b or c) =", a and (b or c), "Expected: true")
+print("(a and b) or c =", (a and b) or c, "Expected: true")
+print("not (a and b) =", not (a and b), "Expected: true")
+print("not a or not b =", not a or not b, "Expected: true")
+
+// Test with comparisons
+x = 10
+y = 20
+
+print("Testing logical operators with comparisons:")
+print("x < y and x > 0 =", x < y and x > 0, "Expected: true")
+print("x > y or x < 50 =", x > y or x < 50, "Expected: true")
+print("not (x > y) =", not (x > y), "Expected: true")
+
+print("=== All Logical Operator Tests Complete ===")

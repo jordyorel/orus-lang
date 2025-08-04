@@ -1,0 +1,22 @@
+// Test the failing logical operations with variables instead of constants
+print("Testing logical operations with variables...")
+
+// Use variables instead of literals to avoid constant folding issues
+t = true
+f = false
+
+// Test the exact same logic as the comprehensive test, but with variables
+condition1 = t or f      // true or false -> true
+condition2 = f and t     // false and true -> false  
+condition3 = not condition2  // not false -> true
+result = condition1 and condition3  // true and true -> true
+
+print("(true or false) =", condition1, "Expected: true")
+print("(false and true) =", condition2, "Expected: false") 
+print("not (false and true) =", condition3, "Expected: true")
+print("Final result =", result, "Expected: true")
+
+if result:
+    print("Test 2 PASSED: Logical operations")
+else:
+    print("Test 2 FAILED: Logical operations")

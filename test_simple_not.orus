@@ -1,0 +1,9 @@
+// Simple NOT test
+print("Testing simple NOT...")
+result = not false
+print("not false =", result)
+print("Expected: true")
+
+result2 = not true
+print("not true =", result2)
+print("Expected: false")

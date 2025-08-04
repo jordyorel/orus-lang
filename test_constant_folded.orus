@@ -1,0 +1,10 @@
+// Test to see if constant folding works
+print("Testing constant folding...")
+
+// Direct constant folding
+direct = false and true
+print("false and true =", direct, "Expected: false")
+
+// Constant folding in NOT expression
+indirect = not (false and true)
+print("not (false and true) =", indirect, "Expected: true")
