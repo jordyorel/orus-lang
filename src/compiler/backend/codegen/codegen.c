@@ -1173,15 +1173,17 @@ static void add_break_statement(CompilerContext* ctx, int offset) {
 static void patch_break_statements(CompilerContext* ctx, int end_target) {
     for (int i = 0; i < ctx->break_count; i++) {
         int break_offset = ctx->break_statements[i];
-        // VM's ip points to byte after the 4-byte jump instruction when executing
-        int jump_offset = end_target - (break_offset + 4);
+        // OP_JUMP is 3 bytes: opcode + 2-byte offset
+        // VM's ip points to byte after the 3-byte jump instruction when executing
+        int jump_offset = end_target - (break_offset + 3);
         if (jump_offset < -32768 || jump_offset > 32767) {
             printf("[CODEGEN] Error: Break jump offset %d out of range\n", jump_offset);
             continue;
         }
-        ctx->bytecode->instructions[break_offset + 2] = (uint8_t)((jump_offset >> 8) & 0xFF);
-        ctx->bytecode->instructions[break_offset + 3] = (uint8_t)(jump_offset & 0xFF);
-        printf("[CODEGEN] Patched break statement at offset %d to jump to %d\n", 
+        // Patch the 2-byte offset at positions +1 and +2 (after the opcode)
+        ctx->bytecode->instructions[break_offset + 1] = (uint8_t)((jump_offset >> 8) & 0xFF);
+        ctx->bytecode->instructions[break_offset + 2] = (uint8_t)(jump_offset & 0xFF);
+        printf("[CODEGEN] Patched break statement at offset %d to jump to %d (3-byte OP_JUMP)\n", 
                break_offset, end_target);
     }
     // Clear break statements for this loop

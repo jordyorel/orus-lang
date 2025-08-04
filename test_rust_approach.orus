@@ -1,5 +1,0 @@
-x = 42
-y = "hello"
-result = x + y    // Type error - but result should still be "declared"
-z = result + 10   // This should work with ERROR type, no cascade error
-print("test")     // This should work

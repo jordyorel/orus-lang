@@ -1,4 +1,0 @@
-print("before")
-while false:
-    print("inside")
-print("after")

@@ -275,8 +275,12 @@ InterpretResult vm_run_dispatch(void) {
         int critical_opcodes[] = {39, 41, 92, 126, 171, -1}; // OP_EQ_R, OP_LT_I32_R, OP_JUMP_IF_NOT_R, OP_ADD_I32_TYPED, etc.
         for (int i = 0; critical_opcodes[i] != -1; i++) {
             int opcode = critical_opcodes[i];
-            if (opcode < 300 && vm_dispatch_table[opcode] == NULL) {
-                printf("[DISPATCH_WARNING] Critical opcode %d (0x%02X) has NULL dispatch entry!\n", opcode, opcode);
+            if (opcode < 300) {
+                if (vm_dispatch_table[opcode] == NULL) {
+                    printf("[DISPATCH_ERROR] Critical opcode %d (0x%02X) has NULL dispatch entry!\n", opcode, opcode);
+                } else {
+                    printf("[DISPATCH_DEBUG] Opcode %d -> %p\n", opcode, vm_dispatch_table[opcode]);
+                }
             }
         }
         fflush(stdout);
