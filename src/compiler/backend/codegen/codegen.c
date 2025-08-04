@@ -1314,21 +1314,21 @@ void compile_continue_statement(CompilerContext* ctx, TypedASTNode* continue_stm
     }
     
     // Emit jump to start of current loop
-    // We'll use OP_JUMP_SHORT if possible, otherwise OP_JUMP
-    int jump_offset = ctx->current_loop_start - (ctx->bytecode->count + 2);
+    // Continue statements jump backward, same pattern as end-of-loop jumps
+    int back_jump_distance = (ctx->bytecode->count + 2) - ctx->current_loop_start;
     
-    if (jump_offset >= -128 && jump_offset <= 127) {
-        // Use short jump (2 bytes)
-        emit_byte_to_buffer(ctx->bytecode, OP_JUMP_SHORT);
-        emit_byte_to_buffer(ctx->bytecode, (uint8_t)(jump_offset & 0xFF));
-        printf("[CODEGEN] Emitted OP_JUMP_SHORT for continue with offset %d\n", jump_offset);
+    if (back_jump_distance >= 0 && back_jump_distance <= 255) {
+        // Use OP_LOOP_SHORT for short backward jumps (2 bytes)
+        emit_byte_to_buffer(ctx->bytecode, OP_LOOP_SHORT);
+        emit_byte_to_buffer(ctx->bytecode, (uint8_t)back_jump_distance);
+        printf("[CODEGEN] Emitted OP_LOOP_SHORT for continue with distance %d\n", back_jump_distance);
     } else {
-        // Use regular jump (3 bytes) - OP_JUMP format: opcode + 2-byte offset
-        jump_offset = ctx->current_loop_start - (ctx->bytecode->count + 3);
+        // Use regular backward jump (3 bytes) - OP_JUMP format: opcode + 2-byte offset
+        int back_jump_offset = ctx->current_loop_start - (ctx->bytecode->count + 3);
         emit_byte_to_buffer(ctx->bytecode, OP_JUMP);
-        emit_byte_to_buffer(ctx->bytecode, (jump_offset >> 8) & 0xFF);  // high byte
-        emit_byte_to_buffer(ctx->bytecode, jump_offset & 0xFF);         // low byte
-        printf("[CODEGEN] Emitted OP_JUMP for continue with offset %d\n", jump_offset);
+        emit_byte_to_buffer(ctx->bytecode, (back_jump_offset >> 8) & 0xFF);  // high byte
+        emit_byte_to_buffer(ctx->bytecode, back_jump_offset & 0xFF);         // low byte
+        printf("[CODEGEN] Emitted OP_JUMP for continue with offset %d\n", back_jump_offset);
     }
     
     printf("[CODEGEN] Continue statement compilation completed\n");
