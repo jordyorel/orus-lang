@@ -21,6 +21,8 @@ bool apply_constant_folding_recursive(TypedASTNode* ast);
 
 // Individual folding functions
 bool fold_binary_expression(TypedASTNode* node);
+bool fold_unary_expression(TypedASTNode* node);
+void fold_ast_node_directly(ASTNode* node);
 bool fold_arithmetic_operation(TypedASTNode* node);
 bool fold_comparison_operation(TypedASTNode* node);
 

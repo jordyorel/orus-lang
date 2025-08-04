@@ -171,7 +171,7 @@ test: $(ORUS)
 	@echo "Running Comprehensive Test Suite..."
 	@echo "==================================="
 	@passed=0; failed=0; current_dir=""; \
-	SUBDIRS="arithmetic benchmarks comments control_flow edge_cases expressions formatting functions literals register_file scope_analysis strings type_safety_fails types/f64 types/i32 types/i64 variables"; \
+	SUBDIRS="arithmetic benchmarks comments comprehensive control_flow edge_cases expressions formatting functions literals register_file scope_analysis strings type_safety_fails types/f64 types/i32 types/i64 variables"; \
 	for subdir in $$SUBDIRS; do \
 		for test_file in $$(find $(TESTDIR)/$$subdir -type f -name "*.orus" | sort); do \
 			if [ -f "$$test_file" ]; then \
