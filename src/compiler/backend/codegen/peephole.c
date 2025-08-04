@@ -98,6 +98,7 @@ int optimize_redundant_operations(CompilerContext* ctx) {
 int optimize_constant_propagation(CompilerContext* ctx) {
     // TODO: Implement constant propagation optimizations
     // This would track register values and replace register loads with constants
+    (void)ctx; // Suppress unused parameter warning
     return 0;
 }
 
@@ -143,6 +144,8 @@ void modify_instruction_register(CompilerContext* ctx, int offset, int reg_field
 }
 
 void print_peephole_statistics(PeepholeContext* ctx) {
+    // Suppress unused parameter warning (though ctx is clearly used)
+    (void)ctx;
     printf("[PEEPHOLE] ✅ Peephole optimizations: %d patterns optimized\n", ctx->patterns_optimized);
     printf("[PEEPHOLE] 📊 LOAD+MOVE fusions: %d\n", ctx->load_move_fusions);
     printf("[PEEPHOLE] 📊 Redundant moves eliminated: %d\n", ctx->redundant_moves);

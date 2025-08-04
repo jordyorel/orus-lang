@@ -319,14 +319,11 @@ bool run_codegen_pass(CompilerContext* ctx) {
                 if (i + 3 < ctx->bytecode->count) {
                     uint8_t opcode = ctx->bytecode->instructions[i];
                     uint8_t reg1 = ctx->bytecode->instructions[i + 1];
-                    uint8_t reg2 = ctx->bytecode->instructions[i + 2];
-                    uint8_t reg3 = ctx->bytecode->instructions[i + 3];
                     
                     printf("%04d: %02X", i, opcode);
                     
                     // Decode common opcodes for better readability
                     if (opcode == 0xAB) { // OP_LOAD_I32_CONST
-                        int32_t value = (reg2 << 8) | reg3;
                         printf(" (OP_LOAD_I32_CONST) reg=R%d, value=%d", reg1, value);
                     } else if (opcode == 0xAE) { // OP_MOVE_I32
                         printf(" (OP_MOVE_I32) dst=R%d, src=R%d", reg1, reg2);
@@ -337,6 +334,9 @@ bool run_codegen_pass(CompilerContext* ctx) {
                     } else {
                         printf(" (OPCODE_%02X) R%d, R%d, R%d", opcode, reg1, reg2, reg3);
                     }
+                    
+                    // Suppress unused variable warnings
+                    (void)reg1;
                     
                     printf("\n");
                 }
@@ -353,12 +353,10 @@ bool run_codegen_pass(CompilerContext* ctx) {
                 if (i + 3 < ctx->bytecode->count) {
                     uint8_t opcode = ctx->bytecode->instructions[i];
                     uint8_t reg1 = ctx->bytecode->instructions[i + 1];
-                    uint8_t reg2 = ctx->bytecode->instructions[i + 2];
-                    uint8_t reg3 = ctx->bytecode->instructions[i + 3];
                     
                     // Clean, optimized format showing register reuse and specialization
                     if (opcode == 0xAB) { // OP_LOAD_I32_CONST
-                        int32_t value = (reg2 << 8) | reg3;
+                        // int32_t value = (reg2 << 8) | reg3;
                         printf("  LOAD_CONST  R%-3d ← %d\n", reg1, value);
                     } else if (opcode == 0xAE) { // OP_MOVE_I32
                         printf("  MOVE        R%-3d ← R%d\n", reg1, reg2);
@@ -369,6 +367,9 @@ bool run_codegen_pass(CompilerContext* ctx) {
                     } else {
                         printf("  OP_%02X       R%-3d, R%-3d, R%-3d\n", opcode, reg1, reg2, reg3);
                     }
+                    
+                    // Suppress unused variable warnings
+                    (void)reg1;
                 }
             }
             

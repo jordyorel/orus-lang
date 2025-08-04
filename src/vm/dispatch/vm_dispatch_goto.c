@@ -286,15 +286,13 @@ InterpretResult vm_run_dispatch(void) {
         fflush(stdout);
     }
 
-    uint8_t instruction;
+    uint8_t instruction = 0;
     
     // printf("[DISPATCH_TRACE] About to start bytecode execution loop\n");
     fflush(stdout);
 
     // Phase 1.1 Optimization: Fast DISPATCH macro for production builds
     // Macros are defined in vm_dispatch.h to avoid redefinition warnings
-    
-    int instruction_count = 0;
     
     // Profiling hook: Initialize timing for first instruction
     if (g_profiling.isActive) {

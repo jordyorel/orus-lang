@@ -343,26 +343,6 @@ static Token identifier() {
     return make_token(type);
 }
 
-/* -------------------------------------------------------------------------- */
-/*                               Sequence matching */
-/* -------------------------------------------------------------------------- */
-
-static inline bool match_sequence_ctx(LexerContext* ctx, const char* seq) {
-    const char* p = ctx->lexer.current;
-    while (*seq) {
-        if (*p++ != *seq++) return false;
-    }
-    return true;
-}
-
-// Backward compatibility version
-static inline bool match_sequence(const char* seq) {
-    const char* p = lexer.current;
-    while (*seq) {
-        if (*p++ != *seq++) return false;
-    }
-    return true;
-}
 
 /* -------------------------------------------------------------------------- */
 /*                          Number literal scanning                           */

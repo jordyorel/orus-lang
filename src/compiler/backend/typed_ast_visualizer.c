@@ -32,7 +32,7 @@ typedef struct {
 
 // Forward declarations
 static void visualize_node_recursive(TypedASTNode* node, int depth, bool is_last, const VisualizerConfig* config);
-static void print_indent(int depth, bool is_last, VisualizerConfig* config);
+static void print_indent(int depth, bool is_last, const VisualizerConfig* config);
 
 // ANSI color codes for terminal output
 #define COLOR_RESET     "\033[0m"
@@ -185,7 +185,7 @@ static const char* get_type_name(Type* type) {
 }
 
 // Helper function to print indentation
-static void print_indent(int depth, bool is_last, VisualizerConfig* config) {
+static void print_indent(int depth, bool is_last, const VisualizerConfig* config) {
     if (config->compact_mode) {
         for (int i = 0; i < depth; i++) {
             printf("  ");

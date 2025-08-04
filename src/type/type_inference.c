@@ -279,36 +279,6 @@ static TypeScheme* type_scheme_new(Type* type, char** bound_vars,
     return scheme;
 }
 
-// ---- Free type variables ----
-static void collect_free_vars(Type* type, HashMap* vars) {
-    if (!type || !vars) return;
-
-    type = prune(type);
-
-    if (type->kind == TYPE_VAR) {
-        TypeVar* v = find_var((TypeVar*)type->info.var.var);
-        if (v) {
-            char key[32];
-            snprintf(key, sizeof(key), "%d", v->id);
-            hashmap_set(vars, key, v);
-        }
-        return;
-    }
-
-    switch (type->kind) {
-        case TYPE_FUNCTION:
-            collect_free_vars(type->info.function.returnType, vars);
-            for (int i = 0; i < type->info.function.arity; i++) {
-                collect_free_vars(type->info.function.paramTypes[i], vars);
-            }
-            break;
-        case TYPE_ARRAY:
-            collect_free_vars(type->info.array.elementType, vars);
-            break;
-        default:
-            break;
-    }
-}
 
 // ---- Generalization ----
 static TypeScheme* generalize(TypeEnv* env, Type* type) {
@@ -321,61 +291,6 @@ static TypeScheme* generalize(TypeEnv* env, Type* type) {
     return type_scheme_new(type, NULL, 0);
 }
 
-// ---- Instantiation ----
-static Type* instantiate_scheme(TypeScheme* scheme) {
-    if (!scheme) return NULL;
-
-    HashMap* mapping = hashmap_new();
-    if (!mapping) return scheme->type;
-
-    Type* result = fresh_type(scheme->type, mapping);
-    hashmap_free(mapping);
-
-    return result;
-}
-
-// ---- Type coercion for arithmetic operations ----
-static Type* coerce_arithmetic_types(Type* left, Type* right) {
-    if (!left || !right) return NULL;
-    
-    // If types are already the same, no coercion needed
-    if (left->kind == right->kind) return left;
-    
-    // Define type promotion rules for arithmetic operations
-    // Priority: f64 > i64 > u64 > i32 > u32
-    
-    TypeKind left_kind = left->kind;
-    TypeKind right_kind = right->kind;
-    
-    // f64 takes precedence over all integer types
-    if (left_kind == TYPE_F64 || right_kind == TYPE_F64) {
-        return getPrimitiveType(TYPE_F64);
-    }
-    
-    // i64 takes precedence over smaller integer types
-    if (left_kind == TYPE_I64 || right_kind == TYPE_I64) {
-        // Allow coercion from i32 to i64
-        if ((left_kind == TYPE_I32 && right_kind == TYPE_I64) ||
-            (left_kind == TYPE_I64 && right_kind == TYPE_I32)) {
-            return getPrimitiveType(TYPE_I64);
-        }
-        return getPrimitiveType(TYPE_I64);
-    }
-    
-    // u64 takes precedence over smaller integer types
-    if (left_kind == TYPE_U64 || right_kind == TYPE_U64) {
-        return getPrimitiveType(TYPE_U64);
-    }
-    
-    // i32 takes precedence over u32
-    if ((left_kind == TYPE_I32 && right_kind == TYPE_U32) ||
-        (left_kind == TYPE_U32 && right_kind == TYPE_I32)) {
-        return getPrimitiveType(TYPE_I32);
-    }
-    
-    // Default fallback - return the left type
-    return left;
-}
 
 // ---- Literal type inference ----
 static Type* infer_literal(Value literal) {

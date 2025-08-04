@@ -430,4 +430,8 @@ void print_register_allocation_stats(DualRegisterAllocator* allocator) {
     
     printf("[DUAL_REGISTER_ALLOCATOR] Stats: %d typed, %d standard, %d arithmetic ops\n", 
            typed_count, standard_count, allocator->arithmetic_operation_count);
+    
+    // Explicitly mark variables as used to avoid compiler warnings
+    (void)typed_count;
+    (void)standard_count;
 }
