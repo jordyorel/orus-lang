@@ -18,6 +18,7 @@
 #include "public/version.h"
 #include "config/config.h"
 #include "vm/vm_profiling.h"
+#include "debug/debug_config.h"
 
 // Bytecode debugging function
 void dumpBytecode(Chunk* chunk);
@@ -133,6 +134,9 @@ int main(int argc, const char* argv[]) {
     // Initialize VM profiling system
     initVMProfiling();
     
+    // Initialize debug system
+    debug_init();
+    
     // Create and initialize configuration
     OrusConfig* config = config_create();
     if (!config) {
@@ -157,6 +161,9 @@ int main(int argc, const char* argv[]) {
         free_string_table(&globalStringTable);
         return 0; // Help/version shown, normal exit
     }
+    
+    // Apply debug settings from configuration to debug system
+    config_apply_debug_settings(config);
     
     // Validate configuration
     if (!config_validate(config)) {

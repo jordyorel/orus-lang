@@ -6,15 +6,10 @@
 #include "compiler/codegen/codegen.h"
 #include "compiler/symbol_table.h"
 #include "runtime/memory.h"
+#include "debug/debug_config.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-// Disable all debug output for clean program execution
-#define COMPILER_DEBUG 0
-#if COMPILER_DEBUG == 0
-#define printf(...) ((void)0)
-#endif
 
 // ===== MULTI-PASS COMPILER PIPELINE COORDINATOR =====
 // Orchestrates the entire compilation process:
@@ -69,7 +64,7 @@ ConstantPool* init_constant_pool(void) {
         return NULL;
     }
     
-    printf("[CONSTANT_POOL] Created constant pool (capacity=%d)\n", pool->capacity);
+    DEBUG_CODEGEN_PRINT("Created constant pool (capacity=%d)\n", pool->capacity);
     return pool;
 }
 
@@ -79,7 +74,7 @@ void free_constant_pool(ConstantPool* pool) {
     free(pool->values);
     free(pool);
     
-    printf("[CONSTANT_POOL] Freed constant pool\n");
+    DEBUG_CODEGEN_PRINT("Freed constant pool\n");
 }
 
 int add_constant(ConstantPool* pool, Value value) {
@@ -91,11 +86,11 @@ int add_constant(ConstantPool* pool, Value value) {
         if (existing.type == value.type) {
             // Simple equality check for basic types
             if (value.type == VAL_I32 && AS_I32(existing) == AS_I32(value)) {
-                printf("[CONSTANT_POOL] Reusing existing i32 constant %d at index %d\n", AS_I32(value), i);
+                DEBUG_CODEGEN_PRINT("Reusing existing i32 constant %d at index %d\n", AS_I32(value), i);
                 return i;
             }
             if (value.type == VAL_STRING && AS_STRING(existing) == AS_STRING(value)) {
-                printf("[CONSTANT_POOL] Reusing existing string constant at index %d\n", i);
+                DEBUG_CODEGEN_PRINT("Reusing existing string constant at index %d\n", i);
                 return i;
             }
         }
@@ -106,7 +101,7 @@ int add_constant(ConstantPool* pool, Value value) {
         pool->capacity *= 2;
         pool->values = realloc(pool->values, pool->capacity * sizeof(Value));
         if (!pool->values) return -1;
-        printf("[CONSTANT_POOL] Resized to capacity %d\n", pool->capacity);
+        DEBUG_CODEGEN_PRINT("Resized to capacity %d\n", pool->capacity);
     }
     
     // Add new constant
@@ -115,11 +110,11 @@ int add_constant(ConstantPool* pool, Value value) {
     pool->count++;
     
     if (value.type == VAL_I32) {
-        printf("[CONSTANT_POOL] Added i32 constant %d at index %d\n", AS_I32(value), index);
+        DEBUG_CODEGEN_PRINT("Added i32 constant %d at index %d\n", AS_I32(value), index);
     } else if (value.type == VAL_STRING) {
-        printf("[CONSTANT_POOL] Added string constant \"%s\" at index %d\n", AS_STRING(value)->chars, index);
+        DEBUG_CODEGEN_PRINT("Added string constant \"%s\" at index %d\n", AS_STRING(value)->chars, index);
     } else {
-        printf("[CONSTANT_POOL] Added constant (type=%d) at index %d\n", value.type, index);
+        DEBUG_CODEGEN_PRINT("Added constant (type=%d) at index %d\n", value.type, index);
     }
     
     return index;
@@ -228,51 +223,44 @@ CompilerContext* init_compiler_context(TypedASTNode* typed_ast) {
 bool compile_to_bytecode(CompilerContext* ctx) {
     if (!ctx || !ctx->input_ast) return false;
     
-    printf("[MULTI_COMPILER] Starting compilation pipeline...\n");
-    fflush(stdout);
+    DEBUG_CODEGEN_PRINT("Starting compilation pipeline...\n");
     
     // Phase 1: Visualization (if enabled)
-    printf("[MULTI_COMPILER] Phase 1: Visualization...\n");
-    fflush(stdout);
+    DEBUG_CODEGEN_PRINT("Phase 1: Visualization...\n");
     if (ctx->enable_visualization) {
         fprintf(ctx->debug_output, "\n=== INPUT TYPED AST ===\n");
         visualize_typed_ast(ctx->input_ast, ctx->debug_output);
     }
-    printf("[MULTI_COMPILER] Phase 1: Visualization completed\n");
-    fflush(stdout);
+    DEBUG_CODEGEN_PRINT("Phase 1: Visualization completed\n");
     
     // Phase 2: Optimization Pass
-    printf("[MULTI_COMPILER] Phase 2: About to start optimization pass...\n");
-    fflush(stdout);
+    DEBUG_CODEGEN_PRINT("Phase 2: About to start optimization pass...\n");
     if (!run_optimization_pass(ctx)) {
-        printf("[MULTI_COMPILER] Optimization pass failed\n");
+        DEBUG_CODEGEN_PRINT("Optimization pass failed\n");
         return false;
     }
-    printf("[MULTI_COMPILER] Phase 2: Optimization pass completed\n");
-    fflush(stdout);
+    DEBUG_CODEGEN_PRINT("Phase 2: Optimization pass completed\n");
     
     // Phase 3: Code Generation Pass  
-    printf("[MULTI_COMPILER] Phase 3: About to start code generation pass...\n");
-    fflush(stdout);
+    DEBUG_CODEGEN_PRINT("Phase 3: About to start code generation pass...\n");
     if (!run_codegen_pass(ctx)) {
-        printf("[MULTI_COMPILER] Code generation pass failed\n");
+        DEBUG_CODEGEN_PRINT("Code generation pass failed\n");
         return false;
     }
-    printf("[MULTI_COMPILER] Phase 3: Code generation pass completed\n");
-    fflush(stdout);
+    DEBUG_CODEGEN_PRINT("Phase 3: Code generation pass completed\n");
     
-    printf("[MULTI_COMPILER] Compilation completed successfully, generated %d instructions\n", 
+    DEBUG_CODEGEN_PRINT("Compilation completed successfully, generated %d instructions\n", 
            ctx->bytecode->count);
     return true;
 }
 
 bool run_optimization_pass(CompilerContext* ctx) {
-    printf("[MULTI_COMPILER] 🚀 Running optimization pass...\n");
+    DEBUG_OPTIMIZER_PRINT("🚀 Running optimization pass...\n");
     
     // Initialize optimization context
     OptimizationContext* opt_ctx = init_optimization_context();
     if (!opt_ctx) {
-        printf("[MULTI_COMPILER] ❌ Failed to initialize optimization context\n");
+        DEBUG_OPTIMIZER_PRINT("❌ Failed to initialize optimization context\n");
         return false;
     }
     
@@ -280,7 +268,7 @@ bool run_optimization_pass(CompilerContext* ctx) {
     ctx->optimized_ast = optimize_typed_ast(ctx->input_ast, opt_ctx);
     
     if (!ctx->optimized_ast) {
-        printf("[MULTI_COMPILER] ❌ Optimization failed\n");
+        DEBUG_OPTIMIZER_PRINT("❌ Optimization failed\n");
         free_optimization_context(opt_ctx);
         return false;
     }
@@ -295,18 +283,18 @@ bool run_optimization_pass(CompilerContext* ctx) {
     // Store the optimization context for potential use in codegen
     ctx->opt_ctx = opt_ctx;
     
-    printf("[MULTI_COMPILER] ✅ Optimization pass completed with real optimizations!\n");
+    DEBUG_OPTIMIZER_PRINT("✅ Optimization pass completed with real optimizations!\n");
     return true;
 }
 
 bool run_codegen_pass(CompilerContext* ctx) {
-    printf("[MULTI_COMPILER] Running production-grade code generation pass...\n");
+    DEBUG_CODEGEN_PRINT("Running production-grade code generation pass...\n");
     
     // Use the new production-ready code generator
     bool success = generate_bytecode_from_ast(ctx);
     
     if (success) {
-        printf("[MULTI_COMPILER] ✅ Code generation completed, %d instructions generated\n", 
+        DEBUG_CODEGEN_PRINT("✅ Code generation completed, %d instructions generated\n", 
                ctx->bytecode->count);
         
         // Add bytecode visualization if enabled
@@ -319,11 +307,14 @@ bool run_codegen_pass(CompilerContext* ctx) {
                 if (i + 3 < ctx->bytecode->count) {
                     uint8_t opcode = ctx->bytecode->instructions[i];
                     uint8_t reg1 = ctx->bytecode->instructions[i + 1];
+                    uint8_t reg2 = ctx->bytecode->instructions[i + 2];
+                    uint8_t reg3 = ctx->bytecode->instructions[i + 3];
                     
                     printf("%04d: %02X", i, opcode);
                     
                     // Decode common opcodes for better readability
                     if (opcode == 0xAB) { // OP_LOAD_I32_CONST
+                        int32_t value = (reg2 << 8) | reg3;
                         printf(" (OP_LOAD_I32_CONST) reg=R%d, value=%d", reg1, value);
                     } else if (opcode == 0xAE) { // OP_MOVE_I32
                         printf(" (OP_MOVE_I32) dst=R%d, src=R%d", reg1, reg2);
@@ -353,10 +344,12 @@ bool run_codegen_pass(CompilerContext* ctx) {
                 if (i + 3 < ctx->bytecode->count) {
                     uint8_t opcode = ctx->bytecode->instructions[i];
                     uint8_t reg1 = ctx->bytecode->instructions[i + 1];
+                    uint8_t reg2 = ctx->bytecode->instructions[i + 2];
+                    uint8_t reg3 = ctx->bytecode->instructions[i + 3];
                     
                     // Clean, optimized format showing register reuse and specialization
                     if (opcode == 0xAB) { // OP_LOAD_I32_CONST
-                        // int32_t value = (reg2 << 8) | reg3;
+                        int32_t value = (reg2 << 8) | reg3;
                         printf("  LOAD_CONST  R%-3d ← %d\n", reg1, value);
                     } else if (opcode == 0xAE) { // OP_MOVE_I32
                         printf("  MOVE        R%-3d ← R%d\n", reg1, reg2);
@@ -380,7 +373,7 @@ bool run_codegen_pass(CompilerContext* ctx) {
             printf("   - Specialized opcodes: OP_LOAD_I32_CONST, OP_MOVE_I32\n\n");
         }
     } else {
-        printf("[MULTI_COMPILER] ❌ Code generation failed\n");
+        DEBUG_CODEGEN_PRINT("❌ Code generation failed\n");
     }
     
     return success;
@@ -438,7 +431,7 @@ bool compileProgram(ASTNode* ast, Compiler* compiler, bool isModule) {
     (void)ast;
     (void)compiler;
     (void)isModule;
-    printf("[LEGACY] compileProgram stub called - this should be replaced with multi-pass compiler\n");
+    DEBUG_CODEGEN_PRINT("[LEGACY] compileProgram stub called - this should be replaced with multi-pass compiler\n");
     return true;
 }
 
@@ -569,14 +562,14 @@ void emit_arithmetic_instruction_smart(CompilerContext* ctx, const char* op,
                                      struct RegisterAllocation* left, 
                                      struct RegisterAllocation* right) {
     if (!ctx || !dst || !left || !right) {
-        printf("[SMART_EMIT] Error: NULL parameters\n");
+        DEBUG_CODEGEN_PRINT("Error: NULL parameters\n");
         return;
     }
     
     // Ensure all registers use the same strategy for compatibility
     RegisterStrategy strategy = dst->strategy;
     if (left->strategy != strategy || right->strategy != strategy) {
-        printf("[SMART_EMIT] Warning: Mixed register strategies, forcing standard\n");
+        DEBUG_CODEGEN_PRINT("Warning: Mixed register strategies, forcing standard\n");
         strategy = REG_STRATEGY_STANDARD;
     }
     
@@ -590,7 +583,7 @@ void emit_arithmetic_instruction_smart(CompilerContext* ctx, const char* op,
         reg2 = (uint8_t)left->physical_id;
         reg3 = (uint8_t)right->physical_id;
         
-        printf("[SMART_EMIT] Using TYPED instruction: %s (opcode=%d) dst=%d, left=%d, right=%d\n", 
+        DEBUG_CODEGEN_PRINT("Using TYPED instruction: %s (opcode=%d) dst=%d, left=%d, right=%d\n", 
                op, opcode, reg1, reg2, reg3);
     } else {
         // Use standard instruction (compatibility)
@@ -599,12 +592,12 @@ void emit_arithmetic_instruction_smart(CompilerContext* ctx, const char* op,
         reg2 = (uint8_t)left->logical_id;
         reg3 = (uint8_t)right->logical_id;
         
-        printf("[SMART_EMIT] Using STANDARD instruction: %s (opcode=%d) dst=%d, left=%d, right=%d\n", 
+        DEBUG_CODEGEN_PRINT("Using STANDARD instruction: %s (opcode=%d) dst=%d, left=%d, right=%d\n", 
                op, opcode, reg1, reg2, reg3);
     }
     
     if (opcode == OP_HALT) {
-        printf("[SMART_EMIT] Error: Invalid opcode for operation '%s' and type %d\n", op, dst->physical_type);
+        DEBUG_CODEGEN_PRINT("Error: Invalid opcode for operation '%s' and type %d\n", op, dst->physical_type);
         return;
     }
     

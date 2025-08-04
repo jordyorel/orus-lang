@@ -4,6 +4,9 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+// Forward declarations
+struct DebugConfig;
+
 /**
  * Orus Language Configuration System
  * 
@@ -55,6 +58,13 @@ typedef struct {
     bool show_optimization_stats;  // Show optimization statistics (--show-opt-stats)
     bool benchmark_mode;           // Enable benchmarking (--benchmark)
     
+    // Debug System Configuration
+    const char* debug_categories;  // Debug categories to enable (--debug-categories)
+    bool debug_colors;             // Enable colored debug output (--debug-colors, --no-debug-colors)
+    bool debug_timestamps;         // Show timestamps in debug output (--debug-timestamps)
+    bool debug_file_location;      // Show file:line in debug output (--debug-file-location)
+    int debug_verbosity;           // Debug verbosity level (--debug-verbosity)
+    
     // File paths
     const char* input_file;        // Input file path
     const char* output_file;       // Output file path (if applicable)
@@ -98,10 +108,14 @@ void config_print_errors(const OrusConfig* config);
 
 // Configuration access
 const OrusConfig* config_get_global(void);
+
+// Debug system integration
+void config_apply_debug_settings(const OrusConfig* config);
 void config_set_global(OrusConfig* config);
 
 // Configuration utilities
 void config_print_help(const char* program_name);
+void config_print_debug_help(void);
 void config_print_version(void);
 void config_print_current(const OrusConfig* config);
 void config_save_to_file(const OrusConfig* config, const char* filename);

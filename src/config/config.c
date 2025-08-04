@@ -1,5 +1,6 @@
 // config.c - Orus Language Configuration System Implementation
 #include "config/config.h"
+#include "debug/debug_config.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -82,6 +83,13 @@ void config_reset_to_defaults(OrusConfig* config) {
     config->show_tokens = false;
     config->show_optimization_stats = false;
     config->benchmark_mode = false;
+    
+    // Debug System Configuration
+    config->debug_categories = NULL;      // No debug categories by default
+    config->debug_colors = true;          // Enable colors by default (if TTY supports)
+    config->debug_timestamps = false;     // No timestamps by default
+    config->debug_file_location = false;  // No file location by default
+    config->debug_verbosity = 1;          // Normal verbosity by default
     
     // File paths
     config->input_file = NULL;
@@ -361,6 +369,25 @@ bool config_parse_args(OrusConfig* config, int argc, const char* argv[]) {
             if (val > 0) config->parser_max_depth = val;
         }
         
+        // Debug System options
+        else if (strncmp(arg, "--debug-categories=", 19) == 0) {
+            config->debug_categories = arg + 19;
+        } else if (strcmp(arg, "--debug-colors") == 0) {
+            config->debug_colors = true;
+        } else if (strcmp(arg, "--no-debug-colors") == 0) {
+            config->debug_colors = false;
+        } else if (strcmp(arg, "--debug-timestamps") == 0) {
+            config->debug_timestamps = true;
+        } else if (strcmp(arg, "--debug-file-location") == 0) {
+            config->debug_file_location = true;
+        } else if (strncmp(arg, "--debug-verbosity=", 18) == 0) {
+            int val = atoi(arg + 18);
+            if (val >= 0 && val <= 3) config->debug_verbosity = val;
+        } else if (strcmp(arg, "--debug-help") == 0) {
+            config_print_debug_help();
+            return false; // Signal to exit
+        }
+        
         // Unknown option starting with -
         else if (arg[0] == '-') {
             fprintf(stderr, "Unknown option: %s\n", arg);
@@ -494,6 +521,14 @@ void config_print_help(const char* program_name) {
     printf("\nParser Options:\n");
     printf("  --strict                Enable strict parsing mode\n");
     printf("  --parser-depth=N        Set parser recursion depth (default: %d)\n", DEFAULT_PARSER_MAX_DEPTH);
+    printf("\nDebug System:\n");
+    printf("  --debug-categories=LIST Debug categories (e.g., codegen,constantfold,parser)\n");
+    printf("  --debug-colors          Enable colored debug output\n");
+    printf("  --no-debug-colors       Disable colored debug output\n");
+    printf("  --debug-timestamps      Show timestamps in debug output\n");
+    printf("  --debug-file-location   Show file:line in debug output\n");
+    printf("  --debug-verbosity=N     Set debug verbosity (0-3, default: 1)\n");
+    printf("  --debug-help            Show detailed debug system help\n");
     printf("\nFile Options:\n");
     printf("  --config=FILE           Load configuration from file\n");
     printf("  --output=FILE           Set output file\n");
@@ -504,6 +539,84 @@ void config_print_help(const char* program_name) {
     printf("  ORUS_MAX_RECURSION, ORUS_REGISTER_COUNT, ORUS_STACK_SIZE\n");
     printf("  ORUS_GC_ENABLED, ORUS_GC_THRESHOLD, ORUS_GC_STRATEGY\n");
     printf("  ORUS_ERROR_FORMAT, ORUS_ERROR_COLORS, ORUS_OPTIMIZATION_LEVEL\n");
+    printf("  ORUS_DEBUG, ORUS_DEBUG_COLORS, ORUS_DEBUG_TIMESTAMPS\n");
+}
+
+void config_print_debug_help(void) {
+    printf("Orus Debug System Help\n");
+    printf("======================\n\n");
+    
+    printf("The Orus debug system provides centralized, configurable debug output\n");
+    printf("across all compiler and VM components.\n\n");
+    
+    printf("Available Debug Categories:\n");
+    printf("  codegen        - Code generation and bytecode emission\n");
+    printf("  constantfold   - Constant folding optimization\n");
+    printf("  type           - Type system and inference\n");
+    printf("  parser         - Parser debug output\n");
+    printf("  lexer          - Lexer/tokenizer debug\n");
+    printf("  vm             - Virtual machine execution\n");
+    printf("  dispatch       - VM instruction dispatch\n");
+    printf("  regalloc       - Register allocation\n");
+    printf("  optimizer      - General optimization passes\n");
+    printf("  peephole       - Peephole optimizations\n");
+    printf("  symbols        - Symbol table operations\n");
+    printf("  memory         - Memory management\n");
+    printf("  gc             - Garbage collection\n");
+    printf("  runtime        - Runtime system\n");
+    printf("  profiling      - Performance profiling\n");
+    printf("  error          - Error handling\n");
+    printf("  config         - Configuration system\n");
+    printf("  main           - Main program flow\n");
+    printf("  repl           - REPL interface\n");
+    printf("  logging        - Internal logging\n");
+    printf("  typed_ast      - Typed AST operations\n\n");
+    
+    printf("Special Category Combinations:\n");
+    printf("  all            - Enable all debug categories\n");
+    printf("  compiler       - Enable all compiler-related categories\n");
+    printf("  vm             - Enable all VM-related categories\n\n");
+    
+    printf("Usage Examples:\n");
+    printf("  Command Line:\n");
+    printf("    --debug-categories=codegen,constantfold\n");
+    printf("    --debug-categories=all --no-debug-colors\n");
+    printf("    --debug-categories=compiler --debug-timestamps\n\n");
+    
+    printf("  Environment Variables:\n");
+    printf("    ORUS_DEBUG=codegen,constantfold\n");
+    printf("    ORUS_DEBUG=all ORUS_DEBUG_COLORS=0\n");
+    printf("    ORUS_DEBUG=compiler ORUS_DEBUG_TIMESTAMPS=1\n\n");
+    
+    printf("Debug Verbosity Levels:\n");
+    printf("  0 - Minimal output (errors only)\n");
+    printf("  1 - Normal output (default)\n");
+    printf("  2 - Verbose output\n");
+    printf("  3 - Very verbose output\n\n");
+    
+    printf("Note: Command-line options override environment variables.\n");
+}
+
+void config_apply_debug_settings(const OrusConfig* config) {
+    if (!config) return;
+    
+    // Apply debug categories from command line
+    if (config->debug_categories) {
+        unsigned int categories = debug_parse_categories(config->debug_categories);
+        debug_set_categories(categories);
+    }
+    
+    // Apply debug colors setting
+    debug_set_colors(config->debug_colors);
+    
+    // Apply debug timestamps setting
+    debug_set_timestamps(config->debug_timestamps);
+    
+    // Apply debug file location setting
+    debug_set_file_location(config->debug_file_location);
+    
+    // Apply debug verbosity setting
+    debug_set_verbosity(config->debug_verbosity);
 }
 
 void config_print_version(void) {
