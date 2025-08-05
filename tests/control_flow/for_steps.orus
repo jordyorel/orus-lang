@@ -1,0 +1,42 @@
+// For loop step tests
+print("=== For Loop Step Tests ===")
+
+// Basic step tests
+print("Test 1: Basic steps")
+print("0..10..2 (even numbers):")
+for i in 0..10..2:
+    print(i)
+
+print("1..10..2 (odd numbers):")
+for j in 1..10..2:
+    print(j)
+
+print("Test 2: Different step sizes")
+print("0..15..3:")
+for k in 0..15..3:
+    print(k)
+
+print("0..20..5:")
+for m in 0..20..5:
+    print(m)
+
+print("Test 3: Steps with inclusive ranges")
+print("0..=10..2:")
+for a in 0..=10..2:
+    print(a)
+
+print("1..=9..2:")
+for b in 1..=9..2:
+    print(b)
+
+print("Test 4: Large steps")
+print("0..100..25:")
+for x in 0..100..25:
+    print(x)
+
+print("Test 5: Step of 1 (equivalent to no step)")
+print("5..8..1:")
+for y in 5..8..1:
+    print(y)
+
+print("All step tests completed!")

@@ -1,0 +1,21 @@
+// Basic for loop tests
+print("=== Basic For Loop Tests ===")
+
+// Simple exclusive range
+print("Test 1: Simple exclusive range (1..4)")
+for i in 1..4:
+    print(i)
+
+print("Test 2: Simple inclusive range (1..=3)")
+for j in 1..=3:
+    print(j)
+
+print("Test 3: Single iteration (5..=5)")
+for k in 5..=5:
+    print(k)
+
+print("Test 4: Empty range (10..10)")
+for m in 10..10:
+    print(m)  // Should not print anything
+
+print("All basic for loop tests completed!")

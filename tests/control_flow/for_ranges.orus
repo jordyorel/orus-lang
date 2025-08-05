@@ -1,0 +1,44 @@
+// For loop range tests (inclusive vs exclusive)
+print("=== For Loop Range Tests ===")
+
+// Exclusive ranges
+print("Test 1: Exclusive ranges")
+print("0..3:")
+for i in 0..3:
+    print(i)
+
+print("10..13:")
+for j in 10..13:
+    print(j)
+
+// Inclusive ranges
+print("Test 2: Inclusive ranges")
+print("0..=2:")
+for k in 0..=2:
+    print(k)
+
+print("10..=12:")
+for m in 10..=12:
+    print(m)
+
+// Compare exclusive vs inclusive with same numbers
+print("Test 3: Compare exclusive vs inclusive")
+print("Exclusive 5..8:")
+for a in 5..8:
+    print(a)
+
+print("Inclusive 5..=7:")
+for b in 5..=7:
+    print(b)
+
+// Edge cases
+print("Test 4: Edge cases") 
+print("Large numbers 100..=102:")
+for x in 100..=102:
+    print(x)
+
+print("Negative to positive -2..=1:")
+for y in -2..=1:
+    print(y)
+
+print("All range tests completed!")
