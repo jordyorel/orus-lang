@@ -1,0 +1,10 @@
+// Basic nested test
+print("Basic nested test:")
+
+for i in 0..2:
+    print("Outer i =", i)
+    for j in 0..2:
+        print("  Inner j =", j)
+    print("Outer done")
+
+print("All done")

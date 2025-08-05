@@ -1,0 +1,55 @@
+// Comprehensive test of nested loops with break/continue
+print("=== Comprehensive Nested Loop Test ===")
+
+print("\n1. For-While nesting with continue:")
+for i in 0..2:
+    print("For i =", i)
+    mut j = 0
+    while j < 3:
+        j = j + 1
+        if j == 2:
+            print("  While continue j =", j)
+            continue
+        print("  While j =", j)
+
+print("\n2. While-For nesting with break:")
+mut a = 0
+while a < 2:
+    a = a + 1
+    print("While a =", a)
+    for b in 0..4:
+        if b == 2:
+            print("  For break b =", b)
+            break
+        print("  For b =", b)
+
+print("\n3. Triple nesting (For-For-While):")
+for x in 0..2:
+    print("Outer x =", x)
+    for y in 0..2:
+        print("  Middle y =", y)
+        mut z = 0
+        while z < 3:
+            z = z + 1
+            if z == 2 and y == 1:
+                print("    Inner continue z =", z)
+                continue
+            if z == 3 and x == 1:
+                print("    Inner break z =", z)
+                break
+            print("    Inner z =", z)
+
+print("\n4. Mixed break/continue in same loop:")
+for i in 0..8:
+    if i < 2:
+        print("Low i =", i)
+    elif i == 3 or i == 5:
+        print("Skip i =", i)
+        continue
+    elif i == 7:
+        print("Break i =", i)
+        break
+    else:
+        print("Process i =", i)
+
+print("\n=== Test Complete ===")

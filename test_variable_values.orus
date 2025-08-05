@@ -1,0 +1,19 @@
+// Test variable values in different contexts
+print("Variable values test:")
+
+print("Test A - Simple loop:")
+for i in 0..3:
+    print("A: i =", i)
+
+print("Test B - Loop with continue:")
+for i in 0..5:
+    if i == 2:
+        continue
+    print("B: i =", i)
+
+print("Test C - Nested loops:")
+for i in 0..3:
+    for j in 0..2:
+        print("C: i =", i, "j =", j)
+
+print("Done")

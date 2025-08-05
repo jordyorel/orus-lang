@@ -1,0 +1,7 @@
+// Most basic iteration test
+print("Basic iteration test:")
+
+for i in 0..3:
+    print("i =", i)
+
+print("Done")

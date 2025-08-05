@@ -1,0 +1,40 @@
+// Comprehensive test for auto-mutable loop variables
+// Tests both unrolled and normal loops with various scenarios
+
+// Test 1: Basic loop with auto-mutable variables
+print("=== Test 1: Auto-mutable in simple loop ===")
+for i in 1..4:
+    temp = i * 10
+    result = temp + i
+    print("Iteration", i, ":", "temp =", temp, "result =", result)
+
+// Test 2: Nested loops with auto-mutable
+print("\n=== Test 2: Nested loops with auto-mutable ===")
+for outer in 1..3:
+    outer_var = outer * 100
+    for inner in 1..3:
+        inner_var = inner * 10
+        combined = outer_var + inner_var
+        print("Outer", outer, "Inner", inner, "Combined:", combined)
+
+// Test 3: Loop with invariant expressions (LICM candidates)
+print("\n=== Test 3: Loop with invariant expressions ===")
+constant = 42
+for i in 1..4:
+    expensive_calc = constant * 2
+    simple_temp = expensive_calc + i
+    print("i =", i, "expensive =", expensive_calc, "temp =", simple_temp)
+
+// Test 4: Variables defined outside loop remain immutable
+print("\n=== Test 4: Outside variables remain immutable ===")
+outside_var = 999
+print("Outside variable:", outside_var)
+
+// Test 5: Loop variables with type casting
+print("\n=== Test 5: Auto-mutable with type casting ===")
+for i in 1..3:
+    as_float = (i as f64)
+    doubled = as_float * 2.5
+    print("i =", i, "as_float =", as_float, "doubled =", doubled)
+
+print("\n✅ All auto-mutable tests completed successfully!")

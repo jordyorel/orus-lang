@@ -1,0 +1,11 @@
+// Simple while loop break test
+print("Simple while break:")
+
+mut k = 0
+while k < 3:
+    print("k =", k)
+    if k == 2:
+        break
+    print("after if")
+    k = k + 1
+print("done")

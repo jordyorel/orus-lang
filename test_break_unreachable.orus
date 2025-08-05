@@ -1,0 +1,13 @@
+// Test if code after break is executed
+print("Testing break with unreachable code:")
+
+for i in 0..3:
+    print("i =", i)
+    if i == 1:
+        print("Breaking at i =", i)
+        break
+        print("This should not be printed!")
+    print("This should be printed for i != 1")
+    mut j = i + 10
+    print("j =", j)
+print("Done")

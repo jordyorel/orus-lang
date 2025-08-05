@@ -1,0 +1,9 @@
+// Simple continue test for debugging
+print("Debug continue test:")
+
+for i in 0..2:
+    print("i =", i)
+    if i == 1:
+        continue
+    print("Processing i =", i)
+print("Done")

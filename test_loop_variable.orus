@@ -1,0 +1,6 @@
+// Test if loop variable is accessible with new fix
+print("Testing loop variable access:")
+
+for k in 0..3:
+    print("k =", k)  // This should work if k is accessible
+print("Done")

@@ -1,0 +1,10 @@
+// Test continue in while loop to make sure it still works
+print("Testing continue in while loop:")
+mut i = 0
+while i < 8:
+    i = i + 1
+    if i == 3 or i == 6:
+        print("Skipping i =", i)
+        continue
+    print("Processing i =", i)
+print("After while loop")

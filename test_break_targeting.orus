@@ -1,0 +1,15 @@
+// Test break statement targeting
+print("Break targeting test:")
+
+for i in 0..3:
+    print("Outer i =", i)
+    
+    for j in 0..4:
+        print("  Inner j =", j)
+        if j == 2:
+            print("  Breaking inner")
+            break  // This should only break the inner loop
+        print("  Inner continues")
+    
+    print("Outer continues") // This should always execute
+print("All done")

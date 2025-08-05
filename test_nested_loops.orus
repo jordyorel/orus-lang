@@ -1,0 +1,14 @@
+// Test nested for loops with break/continue
+print("Testing nested for loops:")
+for i in 0..3:
+    print("Outer loop i =", i) 
+    for j in 0..5:
+        if j == 2:
+            print("  Inner continue at j =", j)
+            continue
+        if j == 4:
+            print("  Inner break at j =", j)
+            break
+        print("  Inner loop j =", j)
+    print("  Outer loop continues")
+print("Done")

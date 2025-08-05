@@ -1,0 +1,6 @@
+// Test if for loop iterations work correctly
+print("Testing for loop iterations:")
+
+for i in 0..3:
+    print("Iteration i =", i)
+print("Done")

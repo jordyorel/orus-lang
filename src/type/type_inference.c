@@ -381,6 +381,12 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             return NULL;
         }
 
+        case NODE_TIME_STAMP: {
+            // time_stamp() returns f64 (seconds as double)
+            DEBUG_TYPE_INFERENCE_PRINT("Processing NODE_TIME_STAMP, returning TYPE_F64");
+            return getPrimitiveType(TYPE_F64);
+        }
+
         case NODE_BINARY: {
             Type* l = algorithm_w(env, node->binary.left);
             Type* r = algorithm_w(env, node->binary.right);

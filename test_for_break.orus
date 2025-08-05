@@ -1,0 +1,8 @@
+// Test break in for loop
+print("Testing break in for loop:")
+for i in 0..10:
+    if i == 5:
+        print("Breaking at i =", i)
+        break
+    print("i =", i)
+print("After for loop")

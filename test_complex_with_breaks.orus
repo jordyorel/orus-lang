@@ -1,0 +1,27 @@
+// Complex with breaks/continues
+print("Complex with breaks test:")
+
+for i in 0..2:
+    print("Level 1: i =", i)
+    
+    mut j = 0
+    while j < 3:
+        j = j + 1
+        print("  Level 2: j =", j)
+        
+        if j == 2:
+            print("    Level 2 continue")
+            continue
+            
+        for k in 0..3:
+            print("    Level 3: k =", k)
+            
+            if k == 1:
+                print("      Level 3 continue")
+                continue
+            if k == 2 and j == 3:
+                print("      Level 3 break")
+                break
+        print("    Level 3 done")
+    print("  Level 2 done")
+print("All done")

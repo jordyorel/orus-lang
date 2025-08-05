@@ -90,9 +90,13 @@ typedef struct CompilerContext {
     // Loop control context for break/continue statements
     int current_loop_start;            // Bytecode offset of current loop start
     int current_loop_end;              // Bytecode offset of current loop end
+    int current_loop_continue;         // Bytecode offset for continue statements (for for-loops)
     int* break_statements;             // Array of break statement bytecode offsets to patch
     int break_count;                   // Number of break statements in current loop
     int break_capacity;                // Capacity of break_statements array
+    int* continue_statements;          // Array of continue statement bytecode offsets to patch
+    int continue_count;                // Number of continue statements in current loop
+    int continue_capacity;             // Capacity of continue_statements array
 } CompilerContext;
 
 // Bytecode emission functions

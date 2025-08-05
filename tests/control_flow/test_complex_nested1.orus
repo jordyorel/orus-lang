@@ -1,0 +1,39 @@
+// Test complex nested with specific conditions
+print("Testing complex nested:")
+
+for i in 0..2:
+    print("Level 1: i =", i)
+    
+    mut j = 0
+    while j < 3:
+        j = j + 1
+        print("  Level 2: j =", j)
+        
+        if j == 2:
+            print("    Level 2 continue")
+            continue
+            
+        for k in 0..3:
+            print("    Level 3: k =", k)
+            
+            if k == 1:
+                print("      Level 3 continue")
+                continue
+            if k == 2 and j == 3:
+                print("      Level 3 break")
+                break
+                
+            mut l = 0
+            while l < 2:
+                l = l + 1
+                print("      Level 4: l =", l)
+                
+                if l == 1 and k == 0:
+                    print("        Level 4 continue")
+                    continue
+                    
+                print("        Level 4 processing")
+            print("      Level 4 done")
+        print("    Level 3 done")
+    print("  Level 2 done")
+print("All complete")

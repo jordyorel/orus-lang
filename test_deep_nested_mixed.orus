@@ -1,0 +1,49 @@
+// Test deeply nested mixed loops with break/continue
+print("Testing deeply nested mixed loops:")
+
+// Outer for loop
+for i in 0..3:
+    print("Level 1 (for): i =", i)
+    
+    // Inner while loop
+    mut j = 0
+    while j < 4:
+        j = j + 1
+        print("  Level 2 (while): j =", j)
+        
+        if j == 2:
+            print("    Level 2 continue at j =", j)
+            continue
+        if j == 4 and i == 2:
+            print("    Level 2 break at j =", j, "when i =", i)
+            break
+            
+        // Innermost for loop
+        for k in 0..3:
+            print("    Level 3 (for): k =", k)
+            
+            if k == 1 and j == 1:
+                print("      Level 3 continue at k =", k, "when j =", j)
+                continue
+            if k == 2 and j == 3:
+                print("      Level 3 break at k =", k, "when j =", j)
+                break
+                
+            // Deepest while loop
+            mut l = 0
+            while l < 2:
+                l = l + 1
+                print("      Level 4 (while): l =", l)
+                
+                if l == 1 and k == 0 and j == 1:
+                    print("        Level 4 continue at l =", l)
+                    continue
+                if l == 2 and k == 2 and j == 1:
+                    print("        Level 4 break at l =", l)
+                    break
+                    
+                print("        Level 4 processing complete")
+            print("      Level 4 while done")
+        print("    Level 3 for done")
+    print("  Level 2 while done")
+print("All levels complete!")

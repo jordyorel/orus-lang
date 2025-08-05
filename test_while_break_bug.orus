@@ -1,0 +1,15 @@
+// Test if while loops have the same break issue
+print("Testing while break:")
+
+mut i = 0
+while i < 3:
+    i = i + 1
+    print("i =", i)
+    
+    if i == 2:
+        print("Breaking at i =", i)
+        break
+        
+    mut j = i + 10
+    print("j =", j)
+print("Done")

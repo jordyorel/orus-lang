@@ -1,0 +1,18 @@
+// Isolated test case 4
+print("Test case 4 isolated:")
+
+for i in 0..8:
+    print("Start i =", i)
+    if i < 2:
+        print("Low i =", i)
+    elif i == 3 or i == 5:
+        print("Skip i =", i)
+        continue
+    elif i == 7:
+        print("Break i =", i)
+        break
+    else:
+        print("Process i =", i)
+    print("End i =", i)
+
+print("Done")

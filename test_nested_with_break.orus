@@ -1,0 +1,13 @@
+// Nested with break test
+print("Nested with break test:")
+
+for i in 0..3:
+    print("Outer i =", i)
+    for j in 0..4:
+        print("  Inner j =", j)
+        if j == 2:
+            print("  Breaking inner at j =", j)
+            break
+    print("Outer continues")
+
+print("All done")

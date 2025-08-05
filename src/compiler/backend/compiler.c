@@ -206,11 +206,15 @@ CompilerContext* init_compiler_context(TypedASTNode* typed_ast) {
     ctx->opt_ctx = NULL;      // Will implement in Phase 2
     
     // Initialize loop control context
-    ctx->current_loop_start = -1;  // No current loop
-    ctx->current_loop_end = -1;    // No current loop
-    ctx->break_statements = NULL;  // No break statements yet
+    ctx->current_loop_start = -1;     // No current loop
+    ctx->current_loop_end = -1;       // No current loop
+    ctx->current_loop_continue = -1;  // No current loop
+    ctx->break_statements = NULL;     // No break statements yet
     ctx->break_count = 0;
     ctx->break_capacity = 0;
+    ctx->continue_statements = NULL;  // No continue statements yet
+    ctx->continue_count = 0;
+    ctx->continue_capacity = 0;
     
     if (!ctx->allocator || !ctx->dual_allocator || !ctx->bytecode || !ctx->constants || !ctx->symbols) {
         free_compiler_context(ctx);

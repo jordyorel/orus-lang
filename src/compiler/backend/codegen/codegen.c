@@ -1262,6 +1262,36 @@ static void patch_break_statements(CompilerContext* ctx, int end_target) {
     ctx->break_count = 0;
 }
 
+// Helper function to add a continue statement location for later patching
+static void add_continue_statement(CompilerContext* ctx, int offset) {
+    if (ctx->continue_count >= ctx->continue_capacity) {
+        ctx->continue_capacity = ctx->continue_capacity == 0 ? 4 : ctx->continue_capacity * 2;
+        ctx->continue_statements = realloc(ctx->continue_statements, 
+                                          ctx->continue_capacity * sizeof(int));
+    }
+    ctx->continue_statements[ctx->continue_count++] = offset;
+}
+
+// Helper function to patch all continue statements to jump to continue target
+static void patch_continue_statements(CompilerContext* ctx, int continue_target) {
+    for (int i = 0; i < ctx->continue_count; i++) {
+        int continue_offset = ctx->continue_statements[i];
+        // OP_JUMP is 3 bytes: opcode + 2-byte offset
+        int jump_offset = continue_target - (continue_offset + 3);
+        if (jump_offset < -32768 || jump_offset > 32767) {
+            DEBUG_CODEGEN_PRINT("Error: Continue jump offset %d out of range\n", jump_offset);
+            continue;
+        }
+        // Patch the 2-byte offset at positions +1 and +2 (after the opcode)
+        ctx->bytecode->instructions[continue_offset + 1] = (uint8_t)((jump_offset >> 8) & 0xFF);
+        ctx->bytecode->instructions[continue_offset + 2] = (uint8_t)(jump_offset & 0xFF);
+        DEBUG_CODEGEN_PRINT("Patched continue statement at offset %d to jump to %d (3-byte OP_JUMP)\n", 
+               continue_offset, continue_target);
+    }
+    // Clear continue statements for this loop
+    ctx->continue_count = 0;
+}
+
 void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
     if (!ctx || !while_stmt) return;
     
@@ -1270,10 +1300,20 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
     // Remember current loop context to support nested loops
     int prev_loop_start = ctx->current_loop_start;
     int prev_loop_end = ctx->current_loop_end;
+    int prev_loop_continue = ctx->current_loop_continue;
+    
+    // Save break statement context for nested loops
+    int* prev_break_statements = ctx->break_statements;
+    int prev_break_count = ctx->break_count;
+    int prev_break_capacity = ctx->break_capacity;
+    ctx->break_statements = NULL;
+    ctx->break_count = 0;
+    ctx->break_capacity = 0;
     
     // Set up loop labels
     int loop_start = ctx->bytecode->count;
     ctx->current_loop_start = loop_start;
+    ctx->current_loop_continue = loop_start; // For while loops, continue jumps to start
     
     // Set current_loop_end to a temporary address so break statements know they're in a loop
     // We'll set the actual end address after compiling the body
@@ -1345,6 +1385,12 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
     // Restore previous loop context
     ctx->current_loop_start = prev_loop_start;
     ctx->current_loop_end = prev_loop_end;
+    ctx->current_loop_continue = prev_loop_continue;
+    
+    // Restore break statement context
+    ctx->break_statements = prev_break_statements;
+    ctx->break_count = prev_break_count;
+    ctx->break_capacity = prev_break_capacity;
     
     DEBUG_CODEGEN_PRINT("While statement compilation completed");
 }
@@ -1384,6 +1430,15 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     // Remember current loop context to support nested loops
     int prev_loop_start = ctx->current_loop_start;
     int prev_loop_end = ctx->current_loop_end;
+    int prev_loop_continue = ctx->current_loop_continue;
+    
+    // Save break statement context for nested loops
+    int* prev_break_statements = ctx->break_statements;
+    int prev_break_count = ctx->break_count;
+    int prev_break_capacity = ctx->break_capacity;
+    ctx->break_statements = NULL;
+    ctx->break_count = 0;
+    ctx->break_capacity = 0;
     
     // WORKAROUND: Use values from original AST (since typed AST is corrupted by optimization)
     DEBUG_CODEGEN_PRINT("Reading actual values from original AST");
@@ -1457,6 +1512,7 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     // Set up loop labels
     int loop_start = ctx->bytecode->count;
     ctx->current_loop_start = loop_start;
+    ctx->current_loop_continue = -1; // Will be set to increment section later
     ctx->current_loop_end = ctx->bytecode->count + 1000; // Temporary future address
     
     DEBUG_CODEGEN_PRINT("For range loop start at offset %d\n", loop_start);
@@ -1485,19 +1541,13 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     // Free condition register
     mp_free_temp_register(ctx->allocator, condition_reg);
     
-    // Compile loop body (without new scope to keep loop variable visible)
-    if (for_stmt->typed.forRange.body->original->type == NODE_BLOCK) {
-        // Multiple statements in block
-        for (int i = 0; i < for_stmt->typed.forRange.body->typed.block.count; i++) {
-            TypedASTNode* stmt = for_stmt->typed.forRange.body->typed.block.statements[i];
-            if (stmt) {
-                compile_statement(ctx, stmt);
-            }
-        }
-    } else {
-        // Single statement
-        compile_statement(ctx, for_stmt->typed.forRange.body);
-    }
+    // Compile loop body with scope (like while loops do)
+    compile_block_with_scope(ctx, for_stmt->typed.forRange.body);
+    
+    // Set continue target to increment section and patch continue statements
+    int continue_target = ctx->bytecode->count;
+    ctx->current_loop_continue = continue_target;
+    patch_continue_statements(ctx, continue_target);
     
     // Increment loop variable: loop_var = loop_var + step
     emit_byte_to_buffer(ctx->bytecode, OP_ADD_I32_R);
@@ -1519,19 +1569,18 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
         DEBUG_CODEGEN_PRINT("Emitted OP_JUMP with offset %d (back to start)\n", back_jump_offset);
     }
     
-    // Patch the end jump to current position
+    // Patch the conditional jump to current position  
     int end_target = ctx->bytecode->count;
     ctx->current_loop_end = end_target;
     
-    // Patch all break statements to jump to end of loop
-    patch_break_statements(ctx, end_target);
-    
-    // Patch the conditional jump
     uint16_t end_offset = end_target - (end_jump_addr + 4);
     ctx->bytecode->instructions[end_jump_addr + 2] = (uint8_t)((end_offset >> 8) & 0xFF);
     ctx->bytecode->instructions[end_jump_addr + 3] = (uint8_t)(end_offset & 0xFF);
-    DEBUG_CODEGEN_PRINT("Patched end jump: offset %d (from %d to %d)\n", 
+    DEBUG_CODEGEN_PRINT("Patched conditional jump: offset %d (from %d to %d)\n", 
            end_offset, end_jump_addr, end_target);
+    
+    // Patch all break statements to jump to end of loop (do this LAST)
+    patch_break_statements(ctx, end_target);
     
     // Free temporary registers
     if (start_reg >= MP_TEMP_REG_START && start_reg <= MP_TEMP_REG_END) {
@@ -1547,6 +1596,12 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     // Restore previous loop context
     ctx->current_loop_start = prev_loop_start;
     ctx->current_loop_end = prev_loop_end;
+    ctx->current_loop_continue = prev_loop_continue;
+    
+    // Restore break statement context
+    ctx->break_statements = prev_break_statements;
+    ctx->break_count = prev_break_count;
+    ctx->break_capacity = prev_break_capacity;
     
     DEBUG_CODEGEN_PRINT("For range statement compilation completed");
 }
@@ -1559,6 +1614,15 @@ void compile_for_iter_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     // Remember current loop context to support nested loops
     int prev_loop_start = ctx->current_loop_start;
     int prev_loop_end = ctx->current_loop_end;
+    int prev_loop_continue = ctx->current_loop_continue;
+    
+    // Save break statement context for nested loops
+    int* prev_break_statements = ctx->break_statements;
+    int prev_break_count = ctx->break_count;
+    int prev_break_capacity = ctx->break_capacity;
+    ctx->break_statements = NULL;
+    ctx->break_count = 0;
+    ctx->break_capacity = 0;
     
     // Compile iterable expression
     int iterable_reg = compile_expression(ctx, for_stmt->typed.forIter.iterable);
@@ -1599,6 +1663,7 @@ void compile_for_iter_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     // Set up loop labels
     int loop_start = ctx->bytecode->count;
     ctx->current_loop_start = loop_start;
+    ctx->current_loop_continue = loop_start; // For for-iter loops, continue can jump to iterator advancement (at start)
     ctx->current_loop_end = ctx->bytecode->count + 1000; // Temporary future address
     
     DEBUG_CODEGEN_PRINT("For iteration loop start at offset %d\n", loop_start);
@@ -1619,19 +1684,8 @@ void compile_for_iter_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     DEBUG_CODEGEN_PRINT("Emitted OP_JUMP_IF_NOT_R R%d at offset %d (will patch to end)\n", 
            has_value_reg, end_jump_addr);
     
-    // Compile loop body (without new scope to keep loop variable visible)
-    if (for_stmt->typed.forIter.body->original->type == NODE_BLOCK) {
-        // Multiple statements in block
-        for (int i = 0; i < for_stmt->typed.forIter.body->typed.block.count; i++) {
-            TypedASTNode* stmt = for_stmt->typed.forIter.body->typed.block.statements[i];
-            if (stmt) {
-                compile_statement(ctx, stmt);
-            }
-        }
-    } else {
-        // Single statement
-        compile_statement(ctx, for_stmt->typed.forIter.body);
-    }
+    // Compile loop body with scope (like while loops do)
+    compile_block_with_scope(ctx, for_stmt->typed.forIter.body);
     
     // Emit unconditional jump back to loop start
     int back_jump_distance = (ctx->bytecode->count + 2) - loop_start;
@@ -1647,19 +1701,18 @@ void compile_for_iter_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
         DEBUG_CODEGEN_PRINT("Emitted OP_JUMP with offset %d (back to start)\n", back_jump_offset);
     }
     
-    // Patch the end jump to current position
+    // Patch the conditional jump to current position  
     int end_target = ctx->bytecode->count;
     ctx->current_loop_end = end_target;
     
-    // Patch all break statements to jump to end of loop
-    patch_break_statements(ctx, end_target);
-    
-    // Patch the conditional jump
     uint16_t end_offset = end_target - (end_jump_addr + 4);
     ctx->bytecode->instructions[end_jump_addr + 2] = (uint8_t)((end_offset >> 8) & 0xFF);
     ctx->bytecode->instructions[end_jump_addr + 3] = (uint8_t)(end_offset & 0xFF);
-    DEBUG_CODEGEN_PRINT("Patched end jump: offset %d (from %d to %d)\n", 
+    DEBUG_CODEGEN_PRINT("Patched conditional jump: offset %d (from %d to %d)\n", 
            end_offset, end_jump_addr, end_target);
+    
+    // Patch all break statements to jump to end of loop (do this LAST)
+    patch_break_statements(ctx, end_target);
     
     // Free temporary registers
     if (iterable_reg >= MP_TEMP_REG_START && iterable_reg <= MP_TEMP_REG_END) {
@@ -1675,6 +1728,12 @@ void compile_for_iter_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     // Restore previous loop context
     ctx->current_loop_start = prev_loop_start;
     ctx->current_loop_end = prev_loop_end;
+    ctx->current_loop_continue = prev_loop_continue;
+    
+    // Restore break statement context
+    ctx->break_statements = prev_break_statements;
+    ctx->break_count = prev_break_count;
+    ctx->break_capacity = prev_break_capacity;
     
     DEBUG_CODEGEN_PRINT("For iteration statement compilation completed");
 }
@@ -1715,22 +1774,35 @@ void compile_continue_statement(CompilerContext* ctx, TypedASTNode* continue_stm
         return;
     }
     
-    // Emit jump to start of current loop
-    // Continue statements jump backward, same pattern as end-of-loop jumps
-    int back_jump_distance = (ctx->bytecode->count + 2) - ctx->current_loop_start;
-    
-    if (back_jump_distance >= 0 && back_jump_distance <= 255) {
-        // Use OP_LOOP_SHORT for short backward jumps (2 bytes)
-        emit_byte_to_buffer(ctx->bytecode, OP_LOOP_SHORT);
-        emit_byte_to_buffer(ctx->bytecode, (uint8_t)back_jump_distance);
-        DEBUG_CODEGEN_PRINT("Emitted OP_LOOP_SHORT for continue with distance %d\n", back_jump_distance);
-    } else {
-        // Use regular backward jump (3 bytes) - OP_JUMP format: opcode + 2-byte offset
-        int back_jump_offset = ctx->current_loop_start - (ctx->bytecode->count + 3);
+    // For for loops, use patching system. For while loops, emit directly.
+    if (ctx->current_loop_continue != ctx->current_loop_start) {
+        // This is a for loop - continue target will be set later, use patching
+        DEBUG_CODEGEN_PRINT("Continue in for loop - using patching system");
+        int continue_offset = ctx->bytecode->count;
         emit_byte_to_buffer(ctx->bytecode, OP_JUMP);
-        emit_byte_to_buffer(ctx->bytecode, (back_jump_offset >> 8) & 0xFF);  // high byte
-        emit_byte_to_buffer(ctx->bytecode, back_jump_offset & 0xFF);         // low byte
-        DEBUG_CODEGEN_PRINT("Emitted OP_JUMP for continue with offset %d\n", back_jump_offset);
+        emit_byte_to_buffer(ctx->bytecode, 0);  // placeholder offset high byte
+        emit_byte_to_buffer(ctx->bytecode, 0);  // placeholder offset low byte
+        add_continue_statement(ctx, continue_offset);
+        DEBUG_CODEGEN_PRINT("Emitted OP_JUMP for continue statement at offset %d (will be patched)\n", continue_offset);
+    } else {
+        // This is a while loop - emit jump directly to loop start
+        DEBUG_CODEGEN_PRINT("Continue in while loop - jumping to start");
+        int continue_target = ctx->current_loop_start;
+        int back_jump_distance = (ctx->bytecode->count + 2) - continue_target;
+        
+        if (back_jump_distance >= 0 && back_jump_distance <= 255) {
+            // Use OP_LOOP_SHORT for short backward jumps (2 bytes)
+            emit_byte_to_buffer(ctx->bytecode, OP_LOOP_SHORT);
+            emit_byte_to_buffer(ctx->bytecode, (uint8_t)back_jump_distance);
+            DEBUG_CODEGEN_PRINT("Emitted OP_LOOP_SHORT for continue with distance %d\n", back_jump_distance);
+        } else {
+            // Use regular backward jump (3 bytes)
+            int back_jump_offset = continue_target - (ctx->bytecode->count + 3);
+            emit_byte_to_buffer(ctx->bytecode, OP_JUMP);
+            emit_byte_to_buffer(ctx->bytecode, (back_jump_offset >> 8) & 0xFF);
+            emit_byte_to_buffer(ctx->bytecode, back_jump_offset & 0xFF);
+            DEBUG_CODEGEN_PRINT("Emitted OP_JUMP for continue with offset %d\n", back_jump_offset);
+        }
     }
     
     DEBUG_CODEGEN_PRINT("Continue statement compilation completed");
