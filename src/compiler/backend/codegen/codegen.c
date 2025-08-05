@@ -1399,6 +1399,16 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     if (!ctx || !for_stmt) return;
     
     DEBUG_CODEGEN_PRINT("Compiling for range statement");
+    
+    // Create new scope for loop variable to prevent conflicts with subsequent loops using same name
+    SymbolTable* old_scope = ctx->symbols;
+    ctx->symbols = create_symbol_table(old_scope);
+    if (!ctx->symbols) {
+        DEBUG_CODEGEN_PRINT("Error: Failed to create loop scope");
+        ctx->symbols = old_scope;
+        return;
+    }
+    DEBUG_CODEGEN_PRINT("Created new scope for for loop (depth %d)", ctx->symbols->scope_depth);
     DEBUG_CODEGEN_PRINT("for_stmt->typed.forRange.varName = '%s'\n", 
            for_stmt->typed.forRange.varName ? for_stmt->typed.forRange.varName : "(null)");
     DEBUG_CODEGEN_PRINT("for_stmt->original->forRange.varName = '%s'\n", 
@@ -1592,6 +1602,28 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     if (step_reg >= MP_TEMP_REG_START && step_reg <= MP_TEMP_REG_END) {
         mp_free_temp_register(ctx->allocator, step_reg);
     }
+    
+    // Clean up loop scope and free loop variable register
+    DEBUG_CODEGEN_PRINT("Cleaning up for loop scope (depth %d)", ctx->symbols->scope_depth);
+    
+    // Free registers allocated to loop variables before destroying scope
+    for (int i = 0; i < ctx->symbols->capacity; i++) {
+        Symbol* symbol = ctx->symbols->symbols[i];
+        while (symbol) {
+            if (symbol->legacy_register_id >= MP_FRAME_REG_START && 
+                symbol->legacy_register_id <= MP_FRAME_REG_END) {
+                DEBUG_CODEGEN_PRINT("Freeing loop variable register R%d for variable '%s'", 
+                       symbol->legacy_register_id, symbol->name);
+                mp_free_register(ctx->allocator, symbol->legacy_register_id);
+            }
+            symbol = symbol->next;
+        }
+    }
+    
+    // Restore previous scope (this automatically cleans up loop variable symbols)
+    free_symbol_table(ctx->symbols);
+    ctx->symbols = old_scope;
+    DEBUG_CODEGEN_PRINT("Restored previous scope");
     
     // Restore previous loop context
     ctx->current_loop_start = prev_loop_start;
@@ -1839,8 +1871,20 @@ void compile_block_with_scope(CompilerContext* ctx, TypedASTNode* block) {
     // Clean up scope and free block-local variables
     DEBUG_CODEGEN_PRINT("Exiting scope (depth %d)\n", ctx->symbols->scope_depth);
     
-    // TODO: Free registers allocated to block-local variables
-    // This would involve iterating through the symbol table and freeing temp registers
+    // Free registers allocated to block-local variables
+    DEBUG_CODEGEN_PRINT("Freeing block-local variable registers");
+    for (int i = 0; i < ctx->symbols->capacity; i++) {
+        Symbol* symbol = ctx->symbols->symbols[i];
+        while (symbol) {
+            if (symbol->legacy_register_id >= MP_FRAME_REG_START && 
+                symbol->legacy_register_id <= MP_FRAME_REG_END) {
+                DEBUG_CODEGEN_PRINT("Freeing frame register R%d for variable '%s'", 
+                       symbol->legacy_register_id, symbol->name);
+                mp_free_register(ctx->allocator, symbol->legacy_register_id);
+            }
+            symbol = symbol->next;
+        }
+    }
     
     // Restore previous scope
     free_symbol_table(ctx->symbols);

@@ -1,0 +1,13 @@
+// Test extreme nesting with all control flow - clean version
+print("Extreme nesting test:")
+for i in 0..2:
+    print("Level 1 i =", i)
+    for j in 0..3:
+        if j == 0:
+            continue
+        print("  Level 2 j =", j)
+        for k in 0..3:
+            if k == 2:
+                break
+            print("    Level 3 k =", k)
+print("Test completed!")

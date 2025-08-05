@@ -1,0 +1,6 @@
+print("Simple for loop with continue:")
+for i in 0..5:
+    if i == 2:
+        print("Skipping", i)
+        continue
+    print("Processing", i)

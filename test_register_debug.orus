@@ -1,0 +1,8 @@
+// Test to understand register allocation with continue
+for i in 0..3:
+    j = i * 10
+    print("Before continue: i =", i, "j =", j)
+    if i == 1:
+        continue
+    print("After continue check: i =", i, "j =", j)
+print("Done")

@@ -1,0 +1,19 @@
+print("Test with unique variable names:")
+
+print("1. First loop:")
+for i1 in 0..2:
+    print("For i1 =", i1)
+
+print("2. Second loop:")
+for i2 in 0..8:
+    if i2 < 2:
+        print("Low i2 =", i2)
+    elif i2 == 3 or i2 == 5:
+        print("Skip i2 =", i2)
+        continue
+    elif i2 == 7:
+        print("Break i2 =", i2)
+        break
+    else:
+        print("Process i2 =", i2)
+print("Done")
