@@ -262,7 +262,6 @@ static ASTNode* parseStatement(ParserContext* ctx) {
     Token t = peekToken(ctx);
 
     if (t.type == TOKEN_PRINT || t.type == TOKEN_PRINT_NO_NL || t.type == TOKEN_PRINT_SEP) {
-        // printf("[DEBUG] parseStatement: Parsing print statement\n");
         return parsePrintStatement(ctx);
     }
     if (t.type == TOKEN_APOSTROPHE) {
@@ -1516,13 +1515,10 @@ static ASTNode* parseStringLiteral(ParserContext* ctx, Token token) {
 }
 
 static ASTNode* parseBooleanLiteral(ParserContext* ctx, Token token) {
-    printf("[DEBUG] parseBooleanLiteral: Creating boolean literal for token type %d\n", token.type);
     ASTNode* node = new_node(ctx);
     node->type = NODE_LITERAL;
     bool boolValue = (token.type == TOKEN_TRUE);
-    printf("[DEBUG] parseBooleanLiteral: boolValue = %s\n", boolValue ? "true" : "false");
     node->literal.value = BOOL_VAL(boolValue);
-    printf("[DEBUG] parseBooleanLiteral: Created value with type %d\n", node->literal.value.type);
     node->literal.hasExplicitSuffix = false;
     node->location.line = token.line;
     node->location.column = token.column;
@@ -1923,38 +1919,29 @@ void set_parser_debug(bool enabled) {
 ASTNode* parseSourceWithContext(ParserContext* ctx, const char* source) {
     if (!ctx) return NULL;
     
-    // PARSER_DEBUG_PRINTF("[DEBUG] parseSourceWithContext: Starting with source: '%s'\n", source);
-    
     parser_context_reset(ctx);
-    // PARSER_DEBUG_PRINTF("[DEBUG] parseSourceWithContext: Context reset complete\n");
     
     init_scanner(source);
-    // PARSER_DEBUG_PRINTF("[DEBUG] parseSourceWithContext: Scanner initialized\n");
     
     ASTNode** statements = NULL;
     int count = 0;
     int capacity = 0;
     
     while (true) {
-        // printf("[DEBUG] parseSourceWithContext: About to peek token\n");
         fflush(stdout);
         
         Token t = peekToken(ctx);
-        // printf("[DEBUG] parseSourceWithContext: Got token type %d\n", t.type);
         fflush(stdout);
         
-        // printf("[DEBUG] parseSourceWithContext: TOKEN_EOF value = %d, t.type = %d\n", TOKEN_EOF, t.type);
         fflush(stdout);
         if (t.type == TOKEN_EOF) break;
         if (t.type == TOKEN_NEWLINE) {
-            // printf("[DEBUG] parseSourceWithContext: Consuming newline\n");
             fflush(stdout);
             nextToken(ctx);
             continue;
         }
         if (t.type == TOKEN_COMMA) {
             // Skip commas between statements (for comma-separated variable declarations)
-            // printf("[DEBUG] parseSourceWithContext: Consuming comma\n");
             fflush(stdout);
             nextToken(ctx);
             continue;
@@ -1966,32 +1953,26 @@ ASTNode* parseSourceWithContext(ParserContext* ctx, const char* source) {
             return NULL;
         }
         
-        // printf("[DEBUG] parseSourceWithContext: About to parse statement for token type %d\n", t.type);
         fflush(stdout);
         
         ASTNode* stmt = parseStatement(ctx);
         if (!stmt) {
-            // printf("[DEBUG] parseSourceWithContext: parseStatement returned NULL\n");
             fflush(stdout);
             return NULL;
         }
         
-        // printf("[DEBUG] parseSourceWithContext: Statement parsed successfully\n");
         fflush(stdout);
         
         addStatement(ctx, &statements, &count, &capacity, stmt);
         
-        // printf("[DEBUG] parseSourceWithContext: Statement added to list\n");
         fflush(stdout);
     }
     
-    // printf("[DEBUG] parseSourceWithContext: Loop completed, creating program node\n");
     fflush(stdout);
     
     // Create program node even if empty (valid empty program)
     ASTNode* root = new_node(ctx);
     
-    // printf("[DEBUG] parseSourceWithContext: Program node created\n");
     fflush(stdout);
     root->type = NODE_PROGRAM;
     root->program.declarations = statements;
@@ -2000,7 +1981,6 @@ ASTNode* parseSourceWithContext(ParserContext* ctx, const char* source) {
     root->location.column = 1;
     root->dataType = NULL;
     
-    // printf("[DEBUG] parseSourceWithContext: Returning program node\n");
     fflush(stdout);
     
     return root;

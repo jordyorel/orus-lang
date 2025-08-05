@@ -338,7 +338,6 @@ static Token identifier() {
         advance();
     }
     int length = (int)(lexer.current - lexer.start);
-    // printf("[DEBUG] identifier: Processing '%.*s' (length=%d)\n", length, lexer.start, length);
     TokenType type = identifier_type(lexer.start, length);
     return make_token(type);
 }
@@ -809,7 +808,6 @@ Token scan_token() {
     lexer.start = lexer.current;
 
     if (is_at_end()) {
-        // printf("[DEBUG] scan_token: At end, current char = %d, indentTop = %d\n", *lexer.current, lexer.indentTop);
         fflush(stdout);
         if (lexer.indentTop > 0) {
             lexer.indentTop--;
@@ -819,7 +817,6 @@ Token scan_token() {
     }
 
     char c = advance();
-    // printf("[DEBUG] scan_token: Processing character '%c' (ASCII %d)\n", c >= 32 && c <= 126 ? c : '?', (int)c);
     fflush(stdout);
 
     /* Single‐char or 2‐char tokens */

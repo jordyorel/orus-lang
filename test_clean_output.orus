@@ -1,0 +1,15 @@
+// Test file to verify clean output
+x: i32 = 42
+y: i32 = 13
+result: i32 = x + y
+print(result)
+
+// Test logical operators that were producing debug output
+a: bool = true
+b: bool = false
+logical_result: bool = a and b
+print(logical_result)
+
+// Test for range loop that was producing debug output
+for i in 1..3:
+    print(i)

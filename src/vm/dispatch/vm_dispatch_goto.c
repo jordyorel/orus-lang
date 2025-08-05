@@ -10,6 +10,7 @@
 #include "vm/vm_opcode_handlers.h"
 #include "vm/register_file.h"
 #include "vm/vm_profiling.h"
+#include "debug/debug_config.h"
 
 #include <math.h>
 
@@ -50,7 +51,7 @@
 static uint64_t instruction_start_time = 0;
 
 InterpretResult vm_run_dispatch(void) {
-    // printf("[DISPATCH_TRACE] vm_run_dispatch() entry\n");
+    // printf("[DISPATCH_TRACE] vm_run_dispatch() entry");
     fflush(stdout);
 
     double start_time = get_time_vm();
@@ -65,7 +66,7 @@ InterpretResult vm_run_dispatch(void) {
     // printf("[DISPATCH_TRACE] global_dispatch_initialized = %s\n", global_dispatch_initialized ? "true" : "false");
     fflush(stdout);
     if (!global_dispatch_initialized) {
-        printf("[DISPATCH_DEBUG] Initializing dispatch table...\n");
+        DEBUG_VM_DISPATCH_PRINT("Initializing dispatch table...");
         fflush(stdout);
         
         // Initialize all entries to NULL first to catch missing mappings
@@ -279,7 +280,7 @@ InterpretResult vm_run_dispatch(void) {
                 if (vm_dispatch_table[opcode] == NULL) {
                     printf("[DISPATCH_ERROR] Critical opcode %d (0x%02X) has NULL dispatch entry!\n", opcode, opcode);
                 } else {
-                    printf("[DISPATCH_DEBUG] Opcode %d -> %p\n", opcode, vm_dispatch_table[opcode]);
+                    DEBUG_VM_DISPATCH_PRINT("Opcode %d -> %p\n", opcode, vm_dispatch_table[opcode]);
                 }
             }
         }
@@ -288,7 +289,7 @@ InterpretResult vm_run_dispatch(void) {
 
     uint8_t instruction = 0;
     
-    // printf("[DISPATCH_TRACE] About to start bytecode execution loop\n");
+    // printf("[DISPATCH_TRACE] About to start bytecode execution loop");
     fflush(stdout);
 
     // Phase 1.1 Optimization: Fast DISPATCH macro for production builds
@@ -2124,7 +2125,7 @@ InterpretResult vm_run_dispatch(void) {
                 CallFrame* frame = &vm.frames[--vm.frameCount];
                 
                 // Close upvalues before restoring registers to prevent corruption
-                printf("DEBUG VM: Closing upvalues before return\n");
+                printf("DEBUG VM: Closing upvalues before return");
                 closeUpvalues(&vm.registers[frame->parameterBaseRegister]);
                 
                 // Restore saved registers - simple approach
@@ -2147,7 +2148,7 @@ InterpretResult vm_run_dispatch(void) {
                 CallFrame* frame = &vm.frames[--vm.frameCount];
                 
                 // Close upvalues before restoring registers to prevent corruption
-                printf("DEBUG VM: Closing upvalues before void return\n");
+                printf("DEBUG VM: Closing upvalues before void return");
                 closeUpvalues(&vm.registers[frame->parameterBaseRegister]);
                 
                 // Restore saved registers - simple approach
@@ -2627,7 +2628,7 @@ InterpretResult vm_run_dispatch(void) {
         
         ObjClosure* closure = AS_CLOSURE(vm.registers[0]); // Current closure
         if (closure == NULL || upvalueIndex >= closure->function->upvalueCount) {
-            printf("DEBUG VM: ERROR - Invalid upvalue access!\n");
+            printf("DEBUG VM: ERROR - Invalid upvalue access!");
             VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(), "Invalid upvalue access");
         }
         
@@ -2663,10 +2664,10 @@ InterpretResult vm_run_dispatch(void) {
     }
 
     LABEL_OP_HALT:
-        // printf("[DISPATCH_TRACE] OP_HALT reached - program should terminate\n");
+        // printf("[DISPATCH_TRACE] OP_HALT reached - program should terminate");
         fflush(stdout);
         vm.lastExecutionTime = get_time_vm() - start_time;
-        // printf("[DISPATCH_TRACE] About to return INTERPRET_OK from OP_HALT\n");
+        // printf("[DISPATCH_TRACE] About to return INTERPRET_OK from OP_HALT");
         fflush(stdout);
         RETURN(INTERPRET_OK);
 

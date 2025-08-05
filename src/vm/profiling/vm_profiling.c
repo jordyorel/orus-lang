@@ -22,7 +22,7 @@ void initVMProfiling(void) {
     
     clock_gettime(CLOCK_MONOTONIC, &g_profiling.startTime);
     
-    printf("VM Profiling system initialized\n");
+    // printf("VM Profiling system initialized\n");
 }
 
 void enableProfiling(ProfilingFlags flags) {

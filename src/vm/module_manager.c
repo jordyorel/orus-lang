@@ -1,4 +1,4 @@
-// module_manager.c - Phase 3: Module Register System Implementation
+// module_manager.c - Module Register System Implementation
 #include "vm/module_manager.h"
 #include "vm/vm_constants.h"
 #include "runtime/memory.h"

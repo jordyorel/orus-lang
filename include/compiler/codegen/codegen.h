@@ -36,6 +36,8 @@ void compile_variable_access(CompilerContext* ctx, TypedASTNode* var, int target
 void compile_if_statement(CompilerContext* ctx, TypedASTNode* if_stmt);
 
 void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt);
+void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt);
+void compile_for_iter_statement(CompilerContext* ctx, TypedASTNode* for_stmt);
 void compile_break_statement(CompilerContext* ctx, TypedASTNode* break_stmt);
 void compile_continue_statement(CompilerContext* ctx, TypedASTNode* continue_stmt);
 void compile_block_with_scope(CompilerContext* ctx, TypedASTNode* block);

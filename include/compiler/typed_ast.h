@@ -58,14 +58,19 @@ struct TypedASTNode {
             TypedASTNode* body;
         } whileStmt;
         struct {
+            char* varName;
             TypedASTNode* start;
             TypedASTNode* end;
             TypedASTNode* step;
+            bool inclusive;
             TypedASTNode* body;
+            char* label;
         } forRange;
         struct {
+            char* varName;
             TypedASTNode* iterable;
             TypedASTNode* body;
+            char* label;
         } forIter;
         struct {
             TypedASTNode** statements;

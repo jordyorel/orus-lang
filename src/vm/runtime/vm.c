@@ -196,7 +196,6 @@ static InterpretResult run(void) {
 InterpretResult interpret(const char* source) {
     // Source text is now set in main.c with proper error handling
     // set_source_text(source, strlen(source)) is called before interpret()
-    // printf("[DEBUG] interpret: Starting with source length %zu\n", strlen(source));
     // fflush(stdout);
     // Create a chunk for the compiled bytecode
     Chunk chunk;
@@ -207,29 +206,21 @@ InterpretResult interpret(const char* source) {
 
     // Parse the source into an AST
     ASTNode* ast = parseSource(source);
-    // printf("[DEBUG] interpret: parseSource returned, ast = %p\n", (void*)ast);
     // fflush(stdout);
  
     if (!ast) {
-        // printf("[DEBUG] interpret: ast is NULL, returning error\n");
         // fflush(stdout);
         freeCompiler(&compiler);
         freeChunk(&chunk);
         return INTERPRET_COMPILE_ERROR;
     }
     
-    // printf("[DEBUG] interpret: ast is valid, continuing\n");
     // fflush(stdout);
 
     // Check if typed AST visualization is enabled
-    // printf("[DEBUG] interpret: About to check config\n");
     // fflush(stdout);
     
     const OrusConfig* config = config_get_global();
-    // printf("[DEBUG] interpret: config = %p\n", (void*)config);
-    // fflush(stdout);
-    
-    // printf("[DEBUG] interpret: About to start multi-pass compiler section\n");
     // fflush(stdout);
     
     // Disable verbose parser debug output from this point forward to clean up typed AST output
@@ -242,25 +233,20 @@ InterpretResult interpret(const char* source) {
     {
         bool show_visualization = (config && config->show_typed_ast);
         if (show_visualization) {
-            // printf("[DEBUG] interpret: Typed AST visualization enabled\n");
             fflush(stdout);
         }
         // Type inference system is integrated with AST parsing
         
         // Create a basic type environment for testing
         // Note: This would normally be created by the type system
-        // printf("[DEBUG] interpret: About to create type environment\n");
         // fflush(stdout);
         extern TypeEnv* type_env_new(TypeEnv* parent);
         TypeEnv* type_env = type_env_new(NULL); // Create root type environment
-        // printf("[DEBUG] interpret: Type environment created\n");
         // fflush(stdout);
         
         // Generate typed AST (this will populate the dataType fields)
-        // printf("[DEBUG] interpret: About to generate typed AST\n");
         // fflush(stdout);
         TypedASTNode* typed_ast = generate_typed_ast(ast, type_env);
-        // printf("[DEBUG] interpret: Typed AST generated: %p\n", (void*)typed_ast);
         // fflush(stdout);
         
         if (typed_ast) {
@@ -389,17 +375,13 @@ InterpretResult interpret(const char* source) {
             printf("[WARNING] interpret: Failed to generate typed AST\n");
         }
         
-        printf("[DEBUG] interpret: Typed AST visualization completed\n");
     }
 
-    printf("[DEBUG] interpret: About to call legacy compileProgram\n");
     fflush(stdout);
     
     // Compile the AST to bytecode
     bool compilation_result = compileProgram(ast, &compiler, false);
-    printf("[DEBUG] interpret: Legacy compileProgram completed\n");
     fflush(stdout);
-    printf("[DEBUG] interpret: compileProgram returned %s\n", compilation_result ? "true" : "false");
     fflush(stdout);
     
     if (!compilation_result) {
@@ -410,12 +392,9 @@ InterpretResult interpret(const char* source) {
         return INTERPRET_COMPILE_ERROR;
     }
     
-    printf("[DEBUG] interpret: Compilation completed, chunk.count = %d\n", chunk.count);
 
     // Add a halt instruction at the end
     emitByte(&compiler, OP_HALT);
-    
-    printf("[DEBUG] interpret: Compilation complete, about to dump bytecode\n");
 
 // DEBUG: Dump bytecode before execution (ENABLED for debugging)
 #if 1
@@ -472,26 +451,20 @@ InterpretResult interpret(const char* source) {
     printf("=== END BYTECODE ===\n\n");
 #endif
 
-    printf("[DEBUG] interpret: About to execute bytecode\n");
-    printf("[DEBUG] interpret: chunk.count after OP_HALT = %d\n", chunk.count);
-
     // Execute the chunk
     vm.chunk = &chunk;
     vm.ip = chunk.code;
     vm.frameCount = 0;
     
-    printf("[DEBUG] interpret: VM setup complete, calling run()\n");
     fflush(stdout);
 
     // Debug output: disassemble chunk if in dev mode
     if (vm.devMode) {
         disassembleChunk(&chunk, "main");
     }
-
-    printf("[DEBUG] interpret: About to call legacy run() function\n");
+    
     fflush(stdout);
     InterpretResult result = run();
-    printf("[DEBUG] interpret: Legacy run() returned with result: %d\n", result);
     fflush(stdout);
   
     freeAST(ast);

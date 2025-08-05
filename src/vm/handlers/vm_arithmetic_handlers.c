@@ -105,19 +105,12 @@ void handle_mod_i32_typed(void) {
 // ====== I64 Typed Arithmetic Handlers ======
 
 void handle_add_i64_typed(void) {
-    printf("[DEBUG] handle_add_i64_typed called - THIS SHOULD NOT HAPPEN FOR I32 OPERATIONS!\n");
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
     
-    printf("[DEBUG] i64 handler: dst=R%d, left=R%d, right=R%d\n", dst, left, right);
-    printf("[DEBUG] i64 handler: left_type=%d, right_type=%d\n", 
-           vm.registers[left].type, vm.registers[right].type);
-    printf("[DEBUG] i64 handler: Expected opcode 131, but got called instead of opcode 126\n");
-    
     // Use standard register system for consistency with load/move operations
     if (!IS_I64(vm.registers[left]) || !IS_I64(vm.registers[right])) {
-        printf("[DEBUG] i64 handler: Type check failed - as expected since we have i32 values!\n");
         runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i64");
         return;
     }
@@ -379,18 +372,12 @@ void handle_mod_u32_typed(void) {
 // ====== U64 Typed Arithmetic Handlers ======
 
 void handle_add_u64_typed(void) {
-    printf("[DEBUG] handle_add_u64_typed called - THIS SHOULD NOT HAPPEN FOR I32 OPERATIONS!\n");
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
     
-    printf("[DEBUG] u64 handler: dst=R%d, left=R%d, right=R%d\n", dst, left, right);
-    printf("[DEBUG] u64 handler: left_type=%d, right_type=%d\n", 
-           vm.registers[left].type, vm.registers[right].type);
-    
     // Use standard register system for consistency with load/move operations
     if (!IS_U64(vm.registers[left]) || !IS_U64(vm.registers[right])) {
-        printf("[DEBUG] u64 handler: Type check failed - as expected since we have i32 values!\n");
         runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u64");
         return;
     }
@@ -442,7 +429,6 @@ void handle_div_u64_typed(void) {
     
     uint64_t right_val = AS_U64(vm.registers[right]);
     if (right_val == 0) {
-        printf("[DEBUG] u64 division by zero: right_val = %llu\n", (unsigned long long)right_val);
         runtimeError(ERROR_RUNTIME, (SrcLocation){NULL,0,0}, "Division by zero");
         return;
     }

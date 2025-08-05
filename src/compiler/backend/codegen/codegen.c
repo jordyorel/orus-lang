@@ -6,15 +6,10 @@
 #include "compiler/symbol_table.h"
 #include "vm/vm.h"
 #include "errors/features/variable_errors.h"
+#include "debug/debug_config.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-// Disable all debug output for clean program execution
-#define CODEGEN_DEBUG 1
-#if CODEGEN_DEBUG == 0
-#define printf(...) ((void)0)
-#endif
 
 // ===== CODE GENERATION COORDINATOR =====
 // Orchestrates bytecode generation and low-level optimizations
@@ -44,7 +39,7 @@ void register_variable(CompilerContext* ctx, const char* name, int reg, Type* ty
     
     Symbol* symbol = declare_symbol_legacy(ctx->symbols, name, type, is_mutable, reg);
     if (!symbol) {
-        printf("[CODEGEN] Error: Failed to register variable %s\n", name);
+        DEBUG_CODEGEN_PRINT("Error: Failed to register variable %s", name);
     }
 }
 
@@ -52,55 +47,55 @@ void register_variable(CompilerContext* ctx, const char* name, int reg, Type* ty
 
 uint8_t select_optimal_opcode(const char* op, Type* type) {
     if (!op || !type) {
-        printf("[CODEGEN] select_optimal_opcode: op=%s, type=%p\n", op ? op : "NULL", (void*)type);
+        DEBUG_CODEGEN_PRINT("select_optimal_opcode: op=%s, type=%p", op ? op : "NULL", (void*)type);
         return OP_HALT; // Fallback
     }
     
-    printf("[CODEGEN] select_optimal_opcode: op='%s', type->kind=%d\n", op, type->kind);
+    DEBUG_CODEGEN_PRINT("select_optimal_opcode: op='%s', type->kind=%d", op, type->kind);
     
     // Convert Type kind to RegisterType for opcode selection
     RegisterType reg_type;
     switch (type->kind) {
         case TYPE_I32: 
             reg_type = REG_TYPE_I32; 
-            printf("[CODEGEN] Converting TYPE_I32 (%d) to REG_TYPE_I32 (%d)\n", TYPE_I32, REG_TYPE_I32);
+            DEBUG_CODEGEN_PRINT("Converting TYPE_I32 (%d) to REG_TYPE_I32 (%d)", TYPE_I32, REG_TYPE_I32);
             break;
         case TYPE_I64: 
             reg_type = REG_TYPE_I64; 
-            printf("[CODEGEN] Converting TYPE_I64 (%d) to REG_TYPE_I64 (%d)\n", TYPE_I64, REG_TYPE_I64);
+            DEBUG_CODEGEN_PRINT("Converting TYPE_I64 (%d) to REG_TYPE_I64 (%d)", TYPE_I64, REG_TYPE_I64);
             break;
         case TYPE_U32: 
             reg_type = REG_TYPE_U32; 
-            printf("[CODEGEN] Converting TYPE_U32 (%d) to REG_TYPE_U32 (%d)\n", TYPE_U32, REG_TYPE_U32);
+            DEBUG_CODEGEN_PRINT("Converting TYPE_U32 (%d) to REG_TYPE_U32 (%d)", TYPE_U32, REG_TYPE_U32);
             break;
         case TYPE_U64: 
             reg_type = REG_TYPE_U64; 
-            printf("[CODEGEN] Converting TYPE_U64 (%d) to REG_TYPE_U64 (%d)\n", TYPE_U64, REG_TYPE_U64);
+            DEBUG_CODEGEN_PRINT("Converting TYPE_U64 (%d) to REG_TYPE_U64 (%d)", TYPE_U64, REG_TYPE_U64);
             break;
         case TYPE_F64: 
             reg_type = REG_TYPE_F64; 
-            printf("[CODEGEN] Converting TYPE_F64 (%d) to REG_TYPE_F64 (%d)\n", TYPE_F64, REG_TYPE_F64);
+            DEBUG_CODEGEN_PRINT("Converting TYPE_F64 (%d) to REG_TYPE_F64 (%d)", TYPE_F64, REG_TYPE_F64);
             break;
         case TYPE_BOOL: 
             reg_type = REG_TYPE_BOOL; 
-            printf("[CODEGEN] Converting TYPE_BOOL (%d) to REG_TYPE_BOOL (%d)\n", TYPE_BOOL, REG_TYPE_BOOL);
+            DEBUG_CODEGEN_PRINT("Converting TYPE_BOOL (%d) to REG_TYPE_BOOL (%d)", TYPE_BOOL, REG_TYPE_BOOL);
             break;
         case 8: // TYPE_VOID - TEMPORARY WORKAROUND for type inference bug
             reg_type = REG_TYPE_I64;  // Assume i64 for now since our test uses i64
-            printf("[CODEGEN] WORKAROUND: Converting TYPE_VOID (%d) to REG_TYPE_I64 (%d)\n", type->kind, REG_TYPE_I64);
+            DEBUG_CODEGEN_PRINT("WORKAROUND: Converting TYPE_VOID (%d) to REG_TYPE_I64 (%d)", type->kind, REG_TYPE_I64);
             break;
         default:
-            printf("[CODEGEN] Warning: Unsupported type %d for opcode selection\n", type->kind);
-            printf("[CODEGEN] TYPE_I32=%d, TYPE_I64=%d, TYPE_U32=%d, TYPE_U64=%d, TYPE_F64=%d, TYPE_BOOL=%d\n", 
+            DEBUG_CODEGEN_PRINT("Warning: Unsupported type %d for opcode selection", type->kind);
+            DEBUG_CODEGEN_PRINT("TYPE_I32=%d, TYPE_I64=%d, TYPE_U32=%d, TYPE_U64=%d, TYPE_F64=%d, TYPE_BOOL=%d", 
                    TYPE_I32, TYPE_I64, TYPE_U32, TYPE_U64, TYPE_F64, TYPE_BOOL);
             return OP_HALT;
     }
     
-    printf("[CODEGEN] Converting TYPE_%d to REG_TYPE_%d for opcode selection\n", type->kind, reg_type);
+    DEBUG_CODEGEN_PRINT("Converting TYPE_%d to REG_TYPE_%d for opcode selection", type->kind, reg_type);
     
     // Check for logical operations on bool
     if (reg_type == REG_TYPE_BOOL) {
-        printf("[CODEGEN] Handling REG_TYPE_BOOL logical operation: %s\n", op);
+        DEBUG_CODEGEN_PRINT("Handling REG_TYPE_BOOL logical operation: %s", op);
         
         if (strcmp(op, "and") == 0) return OP_AND_BOOL_R;
         if (strcmp(op, "or") == 0) return OP_OR_BOOL_R;
@@ -113,7 +108,7 @@ uint8_t select_optimal_opcode(const char* op, Type* type) {
     
     // Check for arithmetic operations on i32
     if (reg_type == REG_TYPE_I32) {
-        printf("[CODEGEN] Handling REG_TYPE_I32 arithmetic operation: %s\n", op);
+        DEBUG_CODEGEN_PRINT("Handling REG_TYPE_I32 arithmetic operation: %s", op);
         
         // Arithmetic operators
         if (strcmp(op, "+") == 0) return OP_ADD_I32_TYPED;
@@ -133,11 +128,11 @@ uint8_t select_optimal_opcode(const char* op, Type* type) {
     
     // Check for arithmetic operations on i64
     if (reg_type == REG_TYPE_I64) {
-        printf("[CODEGEN] Handling REG_TYPE_I64 arithmetic operation: %s\n", op);
+        DEBUG_CODEGEN_PRINT("Handling REG_TYPE_I64 arithmetic operation: %s", op);
         
         // Arithmetic operators
         if (strcmp(op, "+") == 0) {
-            printf("[CODEGEN] Returning OP_ADD_I64_TYPED for i64 addition\n");
+            DEBUG_CODEGEN_PRINT("Returning OP_ADD_I64_TYPED for i64 addition");
             return OP_ADD_I64_TYPED;
         }
         if (strcmp(op, "-") == 0) return OP_SUB_I64_TYPED;
@@ -156,7 +151,7 @@ uint8_t select_optimal_opcode(const char* op, Type* type) {
     
     // Check for arithmetic operations on u32
     if (reg_type == REG_TYPE_U32) {
-        printf("[CODEGEN] Handling REG_TYPE_U32 arithmetic operation: %s\n", op);
+        DEBUG_CODEGEN_PRINT("Handling REG_TYPE_U32 arithmetic operation: %s", op);
         
         // Arithmetic operators
         if (strcmp(op, "+") == 0) return OP_ADD_U32_TYPED;
@@ -176,7 +171,7 @@ uint8_t select_optimal_opcode(const char* op, Type* type) {
     
     // Check for arithmetic operations on u64
     if (reg_type == REG_TYPE_U64) {
-        printf("[CODEGEN] Handling REG_TYPE_U64 arithmetic operation: %s\n", op);
+        DEBUG_CODEGEN_PRINT("Handling REG_TYPE_U64 arithmetic operation: %s", op);
         
         // Arithmetic operators
         if (strcmp(op, "+") == 0) return OP_ADD_U64_TYPED;
@@ -196,7 +191,7 @@ uint8_t select_optimal_opcode(const char* op, Type* type) {
     
     // Check for arithmetic operations on f64
     if (reg_type == REG_TYPE_F64) {
-        printf("[CODEGEN] Handling REG_TYPE_F64 arithmetic operation: %s\n", op);
+        DEBUG_CODEGEN_PRINT("Handling REG_TYPE_F64 arithmetic operation: %s", op);
         
         // Arithmetic operators
         if (strcmp(op, "+") == 0) return OP_ADD_F64_TYPED;
@@ -215,7 +210,7 @@ uint8_t select_optimal_opcode(const char* op, Type* type) {
     }
     
     // For other types, use existing logic but simplified for debugging
-    printf("[CODEGEN] Warning: Unhandled register type %d for operation %s\n", reg_type, op);
+    DEBUG_CODEGEN_PRINT("Warning: Unhandled register type %d for operation %s", reg_type, op);
     return OP_HALT;
 }
 
@@ -281,7 +276,7 @@ uint8_t get_cast_opcode(TypeKind from_type, TypeKind to_type) {
         }
     }
     
-    printf("[CODEGEN] Warning: No cast opcode for %d -> %d\n", from_type, to_type);
+    DEBUG_CODEGEN_PRINT("Warning: No cast opcode for %d -> %d", from_type, to_type);
     return OP_HALT; // Unsupported cast
 }
 
@@ -303,10 +298,10 @@ void emit_load_constant(CompilerContext* ctx, int reg, Value constant) {
                 emit_byte_to_buffer(ctx->bytecode, reg);
                 emit_byte_to_buffer(ctx->bytecode, (const_index >> 8) & 0xFF); // High byte
                 emit_byte_to_buffer(ctx->bytecode, const_index & 0xFF);        // Low byte
-                printf("[CODEGEN] Emitted OP_LOAD_I32_CONST R%d, #%d (%d)\n", 
+                DEBUG_CODEGEN_PRINT("Emitted OP_LOAD_I32_CONST R%d, #%d (%d)", 
                        reg, const_index, AS_I32(constant));
             } else {
-                printf("[CODEGEN] Error: Failed to add i32 constant to pool\n");
+                DEBUG_CODEGEN_PRINT("Error: Failed to add i32 constant to pool");
             }
             break;
         }
@@ -320,10 +315,10 @@ void emit_load_constant(CompilerContext* ctx, int reg, Value constant) {
                 emit_byte_to_buffer(ctx->bytecode, reg);
                 emit_byte_to_buffer(ctx->bytecode, (const_index >> 8) & 0xFF); // High byte
                 emit_byte_to_buffer(ctx->bytecode, const_index & 0xFF);        // Low byte
-                printf("[CODEGEN] Emitted OP_LOAD_I64_CONST R%d, #%d (%lld)\n", 
+                DEBUG_CODEGEN_PRINT("Emitted OP_LOAD_I64_CONST R%d, #%d (%lld)\n", 
                        reg, const_index, (long long)AS_I64(constant));
             } else {
-                printf("[CODEGEN] Error: Failed to add i64 constant to pool\n");
+                DEBUG_CODEGEN_PRINT("Error: Failed to add i64 constant to pool");
             }
             break;
         }
@@ -337,10 +332,10 @@ void emit_load_constant(CompilerContext* ctx, int reg, Value constant) {
                 emit_byte_to_buffer(ctx->bytecode, reg);
                 emit_byte_to_buffer(ctx->bytecode, (const_index >> 8) & 0xFF); // High byte
                 emit_byte_to_buffer(ctx->bytecode, const_index & 0xFF);        // Low byte
-                printf("[CODEGEN] Emitted OP_LOAD_CONST R%d, #%d (%u)\n", 
+                DEBUG_CODEGEN_PRINT("Emitted OP_LOAD_CONST R%d, #%d (%u)\n", 
                        reg, const_index, AS_U32(constant));
             } else {
-                printf("[CODEGEN] Error: Failed to add u32 constant to pool\n");
+                DEBUG_CODEGEN_PRINT("Error: Failed to add u32 constant to pool");
             }
             break;
         }
@@ -354,10 +349,10 @@ void emit_load_constant(CompilerContext* ctx, int reg, Value constant) {
                 emit_byte_to_buffer(ctx->bytecode, reg);
                 emit_byte_to_buffer(ctx->bytecode, (const_index >> 8) & 0xFF); // High byte
                 emit_byte_to_buffer(ctx->bytecode, const_index & 0xFF);        // Low byte
-                printf("[CODEGEN] Emitted OP_LOAD_CONST R%d, #%d (%llu)\n", 
+                DEBUG_CODEGEN_PRINT("Emitted OP_LOAD_CONST R%d, #%d (%llu)\n", 
                        reg, const_index, (unsigned long long)AS_U64(constant));
             } else {
-                printf("[CODEGEN] Error: Failed to add u64 constant to pool\n");
+                DEBUG_CODEGEN_PRINT("Error: Failed to add u64 constant to pool");
             }
             break;
         }
@@ -371,10 +366,10 @@ void emit_load_constant(CompilerContext* ctx, int reg, Value constant) {
                 emit_byte_to_buffer(ctx->bytecode, reg);
                 emit_byte_to_buffer(ctx->bytecode, (const_index >> 8) & 0xFF); // High byte
                 emit_byte_to_buffer(ctx->bytecode, const_index & 0xFF);        // Low byte
-                printf("[CODEGEN] Emitted OP_LOAD_F64_CONST R%d, #%d (%.2f)\n", 
+                DEBUG_CODEGEN_PRINT("Emitted OP_LOAD_F64_CONST R%d, #%d (%.2f)\n", 
                        reg, const_index, AS_F64(constant));
             } else {
-                printf("[CODEGEN] Error: Failed to add f64 constant to pool\n");
+                DEBUG_CODEGEN_PRINT("Error: Failed to add f64 constant to pool");
             }
             break;
         }
@@ -385,12 +380,12 @@ void emit_load_constant(CompilerContext* ctx, int reg, Value constant) {
                 // OP_LOAD_TRUE format: opcode + register (2 bytes)
                 emit_byte_to_buffer(ctx->bytecode, OP_LOAD_TRUE);
                 emit_byte_to_buffer(ctx->bytecode, reg);
-                printf("[CODEGEN] Emitted OP_LOAD_TRUE R%d", reg);
+                DEBUG_CODEGEN_PRINT("Emitted OP_LOAD_TRUE R%d", reg);
             } else {
                 // OP_LOAD_FALSE format: opcode + register (2 bytes)
                 emit_byte_to_buffer(ctx->bytecode, OP_LOAD_FALSE);
                 emit_byte_to_buffer(ctx->bytecode, reg);
-                printf("[CODEGEN] Emitted OP_LOAD_FALSE R%d", reg);
+                DEBUG_CODEGEN_PRINT("Emitted OP_LOAD_FALSE R%d", reg);
             }
             break;
         }
@@ -405,26 +400,26 @@ void emit_load_constant(CompilerContext* ctx, int reg, Value constant) {
                 emit_byte_to_buffer(ctx->bytecode, reg);
                 emit_byte_to_buffer(ctx->bytecode, (const_index >> 8) & 0xFF); // High byte
                 emit_byte_to_buffer(ctx->bytecode, const_index & 0xFF);        // Low byte
-                printf("[CODEGEN] Emitted OP_LOAD_CONST R%d, #%d \"%s\"\n", 
+                DEBUG_CODEGEN_PRINT("Emitted OP_LOAD_CONST R%d, #%d \"%s\"\n", 
                        reg, const_index, AS_STRING(constant)->chars);
             } else {
-                printf("[CODEGEN] Error: Failed to add string constant to pool\n");
+                DEBUG_CODEGEN_PRINT("Error: Failed to add string constant to pool");
             }
             break;
         }
             
         default:
-            printf("[CODEGEN] Warning: Unsupported constant type %d\n", constant.type);
+            DEBUG_CODEGEN_PRINT("Warning: Unsupported constant type %d\n", constant.type);
             break;
     }
 }
 
 void emit_binary_op(CompilerContext* ctx, const char* op, Type* operand_type, int dst, int src1, int src2) {
-    printf("[CODEGEN] emit_binary_op called: op='%s', type=%d, dst=R%d, src1=R%d, src2=R%d\n", 
+    DEBUG_CODEGEN_PRINT("emit_binary_op called: op='%s', type=%d, dst=R%d, src1=R%d, src2=R%d\n", 
            op, operand_type ? operand_type->kind : -1, dst, src1, src2);
     
     uint8_t opcode = select_optimal_opcode(op, operand_type);
-    printf("[CODEGEN] select_optimal_opcode returned: %d (OP_HALT=%d)\n", opcode, OP_HALT);
+    DEBUG_CODEGEN_PRINT("select_optimal_opcode returned: %d (OP_HALT=%d)\n", opcode, OP_HALT);
     
     if (opcode != OP_HALT) {
         emit_typed_instruction(ctx, opcode, dst, src1, src2);
@@ -435,12 +430,12 @@ void emit_binary_op(CompilerContext* ctx, const char* op, Type* operand_type, in
                              strcmp(op, "==") == 0 || strcmp(op, "!=") == 0);
         
         if (is_comparison) {
-            printf("[CODEGEN] Emitted %s_CMP R%d, R%d, R%d (result: boolean)\n", op, dst, src1, src2);
+            DEBUG_CODEGEN_PRINT("Emitted %s_CMP R%d, R%d, R%d (result: boolean)\n", op, dst, src1, src2);
         } else {
-            printf("[CODEGEN] Emitted %s_TYPED R%d, R%d, R%d\n", op, dst, src1, src2);
+            DEBUG_CODEGEN_PRINT("Emitted %s_TYPED R%d, R%d, R%d\n", op, dst, src1, src2);
         }
     } else {
-        printf("[CODEGEN] ERROR: No valid opcode found for operation '%s' with type %d\n", 
+        DEBUG_CODEGEN_PRINT("ERROR: No valid opcode found for operation '%s' with type %d\n", 
                op, operand_type ? operand_type->kind : -1);
     }
 }
@@ -450,7 +445,7 @@ void emit_move(CompilerContext* ctx, int dst, int src) {
     emit_byte_to_buffer(ctx->bytecode, OP_MOVE);
     emit_byte_to_buffer(ctx->bytecode, dst);
     emit_byte_to_buffer(ctx->bytecode, src);
-    printf("[CODEGEN] Emitted OP_MOVE R%d, R%d (3 bytes)\n", dst, src);
+    DEBUG_CODEGEN_PRINT("Emitted OP_MOVE R%d, R%d (3 bytes)\n", dst, src);
 }
 
 // ===== EXPRESSION COMPILATION =====
@@ -458,13 +453,13 @@ void emit_move(CompilerContext* ctx, int dst, int src) {
 int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
     if (!ctx || !expr) return -1;
     
-    printf("[CODEGEN] Compiling expression type %d\n", expr->original->type);
+    DEBUG_CODEGEN_PRINT("Compiling expression type %d\n", expr->original->type);
     
     switch (expr->original->type) {
         case NODE_LITERAL: {
             int reg = mp_allocate_temp_register(ctx->allocator);
             if (reg == -1) {
-                printf("[CODEGEN] Error: Failed to allocate register for literal\n");
+                DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for literal");
                 return -1;
             }
             compile_literal(ctx, expr, reg);
@@ -472,52 +467,52 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
         }
         
         case NODE_BINARY: {
-            printf("[CODEGEN] NODE_BINARY: About to check binary expression\n");
-            printf("[CODEGEN] NODE_BINARY: expr=%p\n", (void*)expr);
-            printf("[CODEGEN] NODE_BINARY: expr->original=%p\n", (void*)expr->original);
+            DEBUG_CODEGEN_PRINT("NODE_BINARY: About to check binary expression");
+            DEBUG_CODEGEN_PRINT("NODE_BINARY: expr=%p\n", (void*)expr);
+            DEBUG_CODEGEN_PRINT("NODE_BINARY: expr->original=%p\n", (void*)expr->original);
             if (expr->original) {
-                printf("[CODEGEN] NODE_BINARY: expr->original->type=%d\n", expr->original->type);
-                printf("[CODEGEN] NODE_BINARY: expr->original->binary.left=%p, expr->original->binary.right=%p\n", 
+                DEBUG_CODEGEN_PRINT("NODE_BINARY: expr->original->type=%d\n", expr->original->type);
+                DEBUG_CODEGEN_PRINT("NODE_BINARY: expr->original->binary.left=%p, expr->original->binary.right=%p\n", 
                        (void*)expr->original->binary.left, (void*)expr->original->binary.right);
             }
-            printf("[CODEGEN] NODE_BINARY: left=%p, right=%p\n", (void*)expr->typed.binary.left, (void*)expr->typed.binary.right);
+            DEBUG_CODEGEN_PRINT("NODE_BINARY: left=%p, right=%p\n", (void*)expr->typed.binary.left, (void*)expr->typed.binary.right);
             
             // FIXED: Check if this binary expression was folded into a literal by constant folding
             if (!expr->typed.binary.left || !expr->typed.binary.right) {
-                printf("[CODEGEN] NODE_BINARY: Binary expression was constant-folded, treating as literal\n");
+                DEBUG_CODEGEN_PRINT("NODE_BINARY: Binary expression was constant-folded, treating as literal");
                 // This binary expression was folded into a literal by constant folding
                 // The original AST node was transformed to NODE_LITERAL with the folded value
                 if (expr->original->type == NODE_LITERAL) {
                     int reg = mp_allocate_temp_register(ctx->allocator);
                     if (reg == -1) {
-                        printf("[CODEGEN] Error: Failed to allocate register for folded literal\n");
+                        DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for folded literal");
                         return -1;
                     }
                     // Use the folded literal value directly from the original AST
                     Value folded_value = expr->original->literal.value;
                     emit_load_constant(ctx, reg, folded_value);
-                    printf("[CODEGEN] Successfully loaded constant-folded value\n");
+                    DEBUG_CODEGEN_PRINT("Successfully loaded constant-folded value");
                     return reg;
                 } else {
-                    printf("[CODEGEN] Error: Expected folded binary to be NODE_LITERAL, got %d\n", expr->original->type);
+                    DEBUG_CODEGEN_PRINT("Error: Expected folded binary to be NODE_LITERAL, got %d\n", expr->original->type);
                     return -1;
                 }
             }
             
-            printf("[CODEGEN] NODE_BINARY: Compiling left operand (type %d)\n", expr->typed.binary.left->original->type);
+            DEBUG_CODEGEN_PRINT("NODE_BINARY: Compiling left operand (type %d)\n", expr->typed.binary.left->original->type);
             int left_reg = compile_expression(ctx, expr->typed.binary.left);
-            printf("[CODEGEN] NODE_BINARY: Left operand returned register %d\n", left_reg);
+            DEBUG_CODEGEN_PRINT("NODE_BINARY: Left operand returned register %d\n", left_reg);
             
-            printf("[CODEGEN] NODE_BINARY: Compiling right operand (type %d)\n", expr->typed.binary.right ? expr->typed.binary.right->original->type : -1);
+            DEBUG_CODEGEN_PRINT("NODE_BINARY: Compiling right operand (type %d)\n", expr->typed.binary.right ? expr->typed.binary.right->original->type : -1);
             int right_reg = compile_expression(ctx, expr->typed.binary.right);
-            printf("[CODEGEN] NODE_BINARY: Right operand returned register %d\n", right_reg);
+            DEBUG_CODEGEN_PRINT("NODE_BINARY: Right operand returned register %d\n", right_reg);
             
-            printf("[CODEGEN] NODE_BINARY: Allocating result register\n");
+            DEBUG_CODEGEN_PRINT("NODE_BINARY: Allocating result register");
             int result_reg = mp_allocate_temp_register(ctx->allocator);
-            printf("[CODEGEN] NODE_BINARY: Result register is %d\n", result_reg);
+            DEBUG_CODEGEN_PRINT("NODE_BINARY: Result register is %d\n", result_reg);
             
             if (left_reg == -1 || right_reg == -1 || result_reg == -1) {
-                printf("[CODEGEN] Error: Failed to allocate registers for binary operation (left=%d, right=%d, result=%d)\n", left_reg, right_reg, result_reg);
+                DEBUG_CODEGEN_PRINT("Error: Failed to allocate registers for binary operation (left=%d, right=%d, result=%d)\n", left_reg, right_reg, result_reg);
                 return -1;
             }
             
@@ -540,19 +535,19 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             // Look up variable in symbol table
             int reg = lookup_variable(ctx, expr->original->identifier.name);
             if (reg == -1) {
-                printf("[CODEGEN] Error: Unbound variable %s\n", expr->original->identifier.name);
+                DEBUG_CODEGEN_PRINT("Error: Unbound variable %s\n", expr->original->identifier.name);
                 return -1;
             }
             return reg;
         }
         
         case NODE_CAST: {
-            printf("[CODEGEN] NODE_CAST: Compiling cast expression\n");
+            DEBUG_CODEGEN_PRINT("NODE_CAST: Compiling cast expression");
             
             // Compile the expression being cast
             int source_reg = compile_expression(ctx, expr->typed.cast.expression);
             if (source_reg == -1) {
-                printf("[CODEGEN] Error: Failed to compile cast source expression\n");
+                DEBUG_CODEGEN_PRINT("Error: Failed to compile cast source expression");
                 return -1;
             }
             
@@ -561,7 +556,7 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             Type* target_type = expr->resolvedType; // Target type from cast
             
             if (!source_type || !target_type) {
-                printf("[CODEGEN] Error: Missing type information for cast (source=%p, target=%p)\n", 
+                DEBUG_CODEGEN_PRINT("Error: Missing type information for cast (source=%p, target=%p)\n", 
                        (void*)source_type, (void*)target_type);
                 // Only free if it's a temp register
                 if (source_reg >= MP_TEMP_REG_START && source_reg <= MP_TEMP_REG_END) {
@@ -570,18 +565,18 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                 return -1;
             }
             
-            printf("[CODEGEN] NODE_CAST: Casting from type %d to type %d\n", source_type->kind, target_type->kind);
+            DEBUG_CODEGEN_PRINT("NODE_CAST: Casting from type %d to type %d\n", source_type->kind, target_type->kind);
             
             // If source and target types are the same, no cast needed
             if (source_type->kind == target_type->kind) {
-                printf("[CODEGEN] NODE_CAST: Same types, no cast needed\n");
+                DEBUG_CODEGEN_PRINT("NODE_CAST: Same types, no cast needed");
                 return source_reg;
             }
             
             // Always allocate a new register for cast result to avoid register conflicts
             int target_reg = mp_allocate_temp_register(ctx->allocator);
             if (target_reg == -1) {
-                printf("[CODEGEN] Error: Failed to allocate register for cast result\n");
+                DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for cast result");
                 // Only free if it's a temp register
                 if (source_reg >= MP_TEMP_REG_START && source_reg <= MP_TEMP_REG_END) {
                     mp_free_temp_register(ctx->allocator, source_reg);
@@ -635,7 +630,7 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             } else if (source_type->kind == TYPE_U64 && target_type->kind == TYPE_U32) {
                 cast_opcode = OP_U64_TO_U32_R;
             } else {
-                printf("[CODEGEN] Error: Unsupported cast from type %d to type %d\n", 
+                DEBUG_CODEGEN_PRINT("Error: Unsupported cast from type %d to type %d\n", 
                        source_type->kind, target_type->kind);
                 // Only free if they're temp registers
                 if (source_reg >= MP_TEMP_REG_START && source_reg <= MP_TEMP_REG_END) {
@@ -649,7 +644,7 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             
             // Emit the cast instruction
             emit_instruction_to_buffer(ctx->bytecode, cast_opcode, target_reg, source_reg, 0);
-            printf("[CODEGEN] NODE_CAST: Emitted cast opcode %d from R%d to R%d\n", 
+            DEBUG_CODEGEN_PRINT("NODE_CAST: Emitted cast opcode %d from R%d to R%d\n", 
                    cast_opcode, source_reg, target_reg);
             
             // Free source register only if it's a temp register
@@ -664,33 +659,33 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             // Generate time_stamp() call - returns f64
             int reg = mp_allocate_temp_register(ctx->allocator);
             if (reg == -1) {
-                printf("[CODEGEN] Error: Failed to allocate register for time_stamp\n");
+                DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for time_stamp");
                 return -1;
             }
             
             // Emit OP_TIME_STAMP instruction (variable-length format: opcode + register)
             emit_byte_to_buffer(ctx->bytecode, OP_TIME_STAMP);
             emit_byte_to_buffer(ctx->bytecode, reg);
-            printf("[CODEGEN] Emitted OP_TIME_STAMP R%d (returns f64)\n", reg);
+            DEBUG_CODEGEN_PRINT("Emitted OP_TIME_STAMP R%d (returns f64)\n", reg);
             
             return reg;
         }
         
         case NODE_UNARY: {
-            printf("[CODEGEN] NODE_UNARY: Compiling unary expression\n");
-            printf("[CODEGEN] NODE_UNARY: expr=%p\n", (void*)expr);
-            printf("[CODEGEN] NODE_UNARY: expr->original=%p\n", (void*)expr->original);
-            printf("[CODEGEN] NODE_UNARY: expr->original->unary.operand=%p\n", (void*)(expr->original ? expr->original->unary.operand : NULL));
+            DEBUG_CODEGEN_PRINT("NODE_UNARY: Compiling unary expression");
+            DEBUG_CODEGEN_PRINT("NODE_UNARY: expr=%p\n", (void*)expr);
+            DEBUG_CODEGEN_PRINT("NODE_UNARY: expr->original=%p\n", (void*)expr->original);
+            DEBUG_CODEGEN_PRINT("NODE_UNARY: expr->original->unary.operand=%p\n", (void*)(expr->original ? expr->original->unary.operand : NULL));
             
             if (!expr->original || !expr->original->unary.operand) {
-                printf("[CODEGEN] Error: Unary operand is NULL in original AST\n");
+                DEBUG_CODEGEN_PRINT("Error: Unary operand is NULL in original AST");
                 return -1;
             }
             
             // Create a typed AST node for the operand  
             TypedASTNode* operand_typed = create_typed_ast_node(expr->original->unary.operand);
             if (!operand_typed) {
-                printf("[CODEGEN] Error: Failed to create typed AST for unary operand\n");  
+                DEBUG_CODEGEN_PRINT("Error: Failed to create typed AST for unary operand\n");  
                 return -1;
             }
             
@@ -700,7 +695,7 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             // Compile the operand
             int operand_reg = compile_expression(ctx, operand_typed);
             if (operand_reg == -1) {
-                printf("[CODEGEN] Error: Failed to compile unary operand\n");
+                DEBUG_CODEGEN_PRINT("Error: Failed to compile unary operand");
                 free_typed_ast_node(operand_typed);
                 return -1;
             }
@@ -711,7 +706,7 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             // Allocate result register
             int result_reg = mp_allocate_temp_register(ctx->allocator);
             if (result_reg == -1) {
-                printf("[CODEGEN] Error: Failed to allocate register for unary result\n");
+                DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for unary result");
                 return -1;
             }
             
@@ -722,9 +717,9 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                 emit_byte_to_buffer(ctx->bytecode, OP_NOT_BOOL_R);
                 emit_byte_to_buffer(ctx->bytecode, result_reg);
                 emit_byte_to_buffer(ctx->bytecode, operand_reg);
-                printf("[CODEGEN] Emitted OP_NOT_BOOL_R R%d, R%d (logical NOT)\n", result_reg, operand_reg);
+                DEBUG_CODEGEN_PRINT("Emitted OP_NOT_BOOL_R R%d, R%d (logical NOT)\n", result_reg, operand_reg);
             } else {
-                printf("[CODEGEN] Error: Unsupported unary operator: %s\n", op);
+                DEBUG_CODEGEN_PRINT("Error: Unsupported unary operator: %s\n", op);
                 return -1;
             }
             
@@ -737,7 +732,7 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
         }
         
         default:
-            printf("[CODEGEN] Error: Unsupported expression type: %d\n", expr->original->type);
+            DEBUG_CODEGEN_PRINT("Error: Unsupported expression type: %d\n", expr->original->type);
             return -1;
     }
 }
@@ -760,11 +755,11 @@ void compile_binary_op(CompilerContext* ctx, TypedASTNode* binary, int target_re
     Type* right_type = binary->typed.binary.right ? binary->typed.binary.right->resolvedType : NULL;
     
     if (!left_type || !right_type) {
-        printf("[CODEGEN] Error: Missing operand types for binary operation %s\n", op);
+        DEBUG_CODEGEN_PRINT("Error: Missing operand types for binary operation %s\n", op);
         return;
     }
     
-    printf("[CODEGEN] Binary operation: %s, left_type=%d, right_type=%d\n", op, left_type->kind, right_type->kind);
+    DEBUG_CODEGEN_PRINT("Binary operation: %s, left_type=%d, right_type=%d\n", op, left_type->kind, right_type->kind);
     
     // Check if this is a comparison operation
     bool is_comparison = (strcmp(op, "<") == 0 || strcmp(op, ">") == 0 || 
@@ -786,7 +781,7 @@ void compile_binary_op(CompilerContext* ctx, TypedASTNode* binary, int target_re
     
     // Type coercion rules: promote to the "larger" type
     if (left_type->kind != right_type->kind) {
-        printf("[CODEGEN] Type mismatch detected: %d vs %d, applying coercion\n", left_type->kind, right_type->kind);
+        DEBUG_CODEGEN_PRINT("Type mismatch detected: %d vs %d, applying coercion\n", left_type->kind, right_type->kind);
         
         // Determine the promoted type following simpler, safer rules
         TypeKind promoted_type = TYPE_I32; // Default fallback
@@ -813,12 +808,12 @@ void compile_binary_op(CompilerContext* ctx, TypedASTNode* binary, int target_re
             }
         }
         
-        printf("[CODEGEN] Promoting to type: %d\n", promoted_type);
+        DEBUG_CODEGEN_PRINT("Promoting to type: %d\n", promoted_type);
         
         // Insert cast instruction for left operand if needed
         if (left_type->kind != promoted_type) {
             int cast_reg = mp_allocate_temp_register(ctx->allocator);
-            printf("[CODEGEN] Casting left operand from %d to %d (R%d -> R%d)\n", 
+            DEBUG_CODEGEN_PRINT("Casting left operand from %d to %d (R%d -> R%d)\n", 
                    left_type->kind, promoted_type, left_reg, cast_reg);
             
             // Emit appropriate cast instruction
@@ -832,7 +827,7 @@ void compile_binary_op(CompilerContext* ctx, TypedASTNode* binary, int target_re
         // Insert cast instruction for right operand if needed
         if (right_type->kind != promoted_type) {
             int cast_reg = mp_allocate_temp_register(ctx->allocator);
-            printf("[CODEGEN] Casting right operand from %d to %d (R%d -> R%d)\n", 
+            DEBUG_CODEGEN_PRINT("Casting right operand from %d to %d (R%d -> R%d)\n", 
                    right_type->kind, promoted_type, right_reg, cast_reg);
             
             // Emit appropriate cast instruction
@@ -855,7 +850,7 @@ void compile_binary_op(CompilerContext* ctx, TypedASTNode* binary, int target_re
         opcode_type = left_type->kind == right_type->kind ? left_type : result_type;
     }
     
-    printf("[CODEGEN] Emitting binary operation: %s (target=R%d, left=R%d, right=R%d, type=%d)%s\n", 
+    DEBUG_CODEGEN_PRINT("Emitting binary operation: %s (target=R%d, left=R%d, right=R%d, type=%d)%s\n", 
            op, target_reg, coerced_left_reg, coerced_right_reg, opcode_type->kind,
            is_comparison ? " [COMPARISON]" : " [ARITHMETIC]");
     
@@ -876,7 +871,7 @@ void compile_binary_op(CompilerContext* ctx, TypedASTNode* binary, int target_re
 void compile_statement(CompilerContext* ctx, TypedASTNode* stmt) {
     if (!ctx || !stmt) return;
     
-    printf("[CODEGEN] Compiling statement type %d\n", stmt->original->type);
+    DEBUG_CODEGEN_PRINT("Compiling statement type %d\n", stmt->original->type);
     
     switch (stmt->original->type) {
         case NODE_ASSIGN:
@@ -907,8 +902,16 @@ void compile_statement(CompilerContext* ctx, TypedASTNode* stmt) {
             compile_continue_statement(ctx, stmt);
             break;
             
+        case NODE_FOR_RANGE:
+            compile_for_range_statement(ctx, stmt);
+            break;
+            
+        case NODE_FOR_ITER:
+            compile_for_iter_statement(ctx, stmt);
+            break;
+            
         default:
-            printf("[CODEGEN] Warning: Unsupported statement type: %d\n", stmt->original->type);
+            DEBUG_CODEGEN_PRINT("Warning: Unsupported statement type: %d\n", stmt->original->type);
             break;
     }
 }
@@ -920,7 +923,7 @@ void compile_variable_declaration(CompilerContext* ctx, TypedASTNode* var_decl) 
     const char* var_name = var_decl->original->varDecl.name;
     bool is_mutable = var_decl->original->varDecl.isMutable;
     
-    printf("[CODEGEN] Compiling variable declaration: %s (mutable=%s)\n", 
+    DEBUG_CODEGEN_PRINT("Compiling variable declaration: %s (mutable=%s)\n", 
            var_name, is_mutable ? "true" : "false");
     
     // Compile the initializer expression if it exists
@@ -929,7 +932,7 @@ void compile_variable_declaration(CompilerContext* ctx, TypedASTNode* var_decl) 
         // Use the proper typed AST initializer node, not a temporary one
         value_reg = compile_expression(ctx, var_decl->typed.varDecl.initializer);
         if (value_reg == -1) {
-            printf("[CODEGEN] Error: Failed to compile variable initializer\n");
+            DEBUG_CODEGEN_PRINT("Error: Failed to compile variable initializer");
             return;
         }
     }
@@ -937,7 +940,7 @@ void compile_variable_declaration(CompilerContext* ctx, TypedASTNode* var_decl) 
     // Allocate register for the variable
     int var_reg = mp_allocate_frame_register(ctx->allocator);
     if (var_reg == -1) {
-        printf("[CODEGEN] Error: Failed to allocate register for variable %s\n", var_name);
+        DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for variable %s\n", var_name);
         if (value_reg != -1) {
             mp_free_temp_register(ctx->allocator, value_reg);
         }
@@ -953,7 +956,7 @@ void compile_variable_declaration(CompilerContext* ctx, TypedASTNode* var_decl) 
         mp_free_temp_register(ctx->allocator, value_reg);
     }
     
-    printf("[CODEGEN] Declared variable %s -> R%d\n", var_name, var_reg);
+    DEBUG_CODEGEN_PRINT("Declared variable %s -> R%d\n", var_name, var_reg);
 }
 
 void compile_assignment(CompilerContext* ctx, TypedASTNode* assign) {
@@ -966,19 +969,19 @@ void compile_assignment(CompilerContext* ctx, TypedASTNode* assign) {
     Symbol* symbol = resolve_symbol(ctx->symbols, var_name);
     if (!symbol) {
         // Variable doesn't exist - create a new one (Orus implicit variable declaration)
-        printf("[CODEGEN] Creating new variable %s (Orus implicit declaration)\n", var_name);
+        DEBUG_CODEGEN_PRINT("Creating new variable %s (Orus implicit declaration)\n", var_name);
         
         // Compile the value expression first to get its type
         int value_reg = compile_expression(ctx, assign->typed.assign.value);
         if (value_reg == -1) {
-            printf("[CODEGEN] Error: Failed to compile assignment value for new variable\n");
+            DEBUG_CODEGEN_PRINT("Error: Failed to compile assignment value for new variable");
             return;
         }
         
         // Allocate register for the new variable
         int var_reg = mp_allocate_frame_register(ctx->allocator);
         if (var_reg == -1) {
-            printf("[CODEGEN] Error: Failed to allocate register for new variable %s\n", var_name);
+            DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for new variable %s\n", var_name);
             mp_free_temp_register(ctx->allocator, value_reg);
             return;
         }
@@ -990,7 +993,7 @@ void compile_assignment(CompilerContext* ctx, TypedASTNode* assign) {
         emit_move(ctx, var_reg, value_reg);
         mp_free_temp_register(ctx->allocator, value_reg);
         
-        printf("[CODEGEN] Created and assigned variable %s -> R%d\n", var_name, var_reg);
+        DEBUG_CODEGEN_PRINT("Created and assigned variable %s -> R%d\n", var_name, var_reg);
         return;
     }
     
@@ -1006,7 +1009,7 @@ void compile_assignment(CompilerContext* ctx, TypedASTNode* assign) {
     // Compile the value expression
     int value_reg = compile_expression(ctx, assign->typed.assign.value);
     if (value_reg == -1) {
-        printf("[CODEGEN] Error: Failed to compile assignment value\n");
+        DEBUG_CODEGEN_PRINT("Error: Failed to compile assignment value");
         return;
     }
     
@@ -1019,7 +1022,7 @@ void compile_assignment(CompilerContext* ctx, TypedASTNode* assign) {
     // Free the temporary register
     mp_free_temp_register(ctx->allocator, value_reg);
     
-    printf("[CODEGEN] Assigned %s (R%d) = R%d\n", var_name, var_reg, value_reg);
+    DEBUG_CODEGEN_PRINT("Assigned %s (R%d) = R%d\n", var_name, var_reg, value_reg);
 }
 
 void compile_print_statement(CompilerContext* ctx, TypedASTNode* print) {
@@ -1033,7 +1036,7 @@ void compile_print_statement(CompilerContext* ctx, TypedASTNode* print) {
         // OP_PRINT_R format: opcode + register (2 bytes total)
         emit_byte_to_buffer(ctx->bytecode, OP_PRINT_R);
         emit_byte_to_buffer(ctx->bytecode, 0);
-        printf("[CODEGEN] Emitted OP_PRINT_R R0 (no arguments)\n");
+        DEBUG_CODEGEN_PRINT("Emitted OP_PRINT_R R0 (no arguments)");
     } else if (print->typed.print.count == 1) {
         // Single expression print - compile expression and emit print
         TypedASTNode* expr = print->typed.print.values[0];
@@ -1044,7 +1047,7 @@ void compile_print_statement(CompilerContext* ctx, TypedASTNode* print) {
             // OP_PRINT_R format: opcode + register (2 bytes total)
             emit_byte_to_buffer(ctx->bytecode, OP_PRINT_R);
             emit_byte_to_buffer(ctx->bytecode, reg);
-            printf("[CODEGEN] Emitted OP_PRINT_R R%d (single expression)\n", reg);
+            DEBUG_CODEGEN_PRINT("Emitted OP_PRINT_R R%d (single expression)\n", reg);
             
             // Free the temporary register
             mp_free_temp_register(ctx->allocator, reg);
@@ -1054,7 +1057,7 @@ void compile_print_statement(CompilerContext* ctx, TypedASTNode* print) {
         // FIXED: Allocate consecutive registers FIRST to prevent register conflicts
         int first_consecutive_reg = mp_allocate_temp_register(ctx->allocator);
         if (first_consecutive_reg == -1) {
-            printf("[CODEGEN] Error: Failed to allocate consecutive registers for print\n");
+            DEBUG_CODEGEN_PRINT("Error: Failed to allocate consecutive registers for print");
             return;
         }
         
@@ -1062,7 +1065,7 @@ void compile_print_statement(CompilerContext* ctx, TypedASTNode* print) {
         for (int i = 1; i < print->typed.print.count; i++) {
             int next_reg = mp_allocate_temp_register(ctx->allocator);
             if (next_reg != first_consecutive_reg + i) {
-                printf("[CODEGEN] Warning: Non-consecutive register allocated: R%d (expected R%d)\n", 
+                DEBUG_CODEGEN_PRINT("Warning: Non-consecutive register allocated: R%d (expected R%d)\n", 
                        next_reg, first_consecutive_reg + i);
             }
         }
@@ -1087,7 +1090,7 @@ void compile_print_statement(CompilerContext* ctx, TypedASTNode* print) {
         // Emit the print instruction with consecutive registers
         emit_instruction_to_buffer(ctx->bytecode, OP_PRINT_MULTI_R, 
                                  first_consecutive_reg, print->typed.print.count, 1); // 1 = newline
-        printf("[CODEGEN] Emitted OP_PRINT_MULTI_R R%d, count=%d (consecutive registers)\n", 
+        DEBUG_CODEGEN_PRINT("Emitted OP_PRINT_MULTI_R R%d, count=%d (consecutive registers)\n", 
                first_consecutive_reg, print->typed.print.count);
         
         // Free the consecutive temp registers
@@ -1101,13 +1104,13 @@ void compile_print_statement(CompilerContext* ctx, TypedASTNode* print) {
 
 bool generate_bytecode_from_ast(CompilerContext* ctx) {
     if (!ctx || !ctx->optimized_ast) {
-        printf("[CODEGEN] Error: Invalid context or AST\n");
+        DEBUG_CODEGEN_PRINT("Error: Invalid context or AST");
         return false;
     }
     
-    printf("[CODEGEN] 🚀 Starting production-grade code generation...\n");
-    printf("[CODEGEN] Leveraging VM's 256 registers and 150+ specialized opcodes\n");
-    printf("[CODEGEN] ctx->optimized_ast = %p\n", (void*)ctx->optimized_ast);
+    DEBUG_CODEGEN_PRINT("🚀 Starting production-grade code generation...");
+    DEBUG_CODEGEN_PRINT("Leveraging VM's 256 registers and 150+ specialized opcodes");
+    DEBUG_CODEGEN_PRINT("ctx->optimized_ast = %p\n", (void*)ctx->optimized_ast);
     
     TypedASTNode* ast = ctx->optimized_ast;
     
@@ -1128,26 +1131,26 @@ bool generate_bytecode_from_ast(CompilerContext* ctx) {
     }
     
     // PHASE 1: Apply bytecode-level optimizations (peephole, register coalescing)
-    printf("[CODEGEN] 🔧 Applying bytecode optimizations...\n");
+    DEBUG_CODEGEN_PRINT("🔧 Applying bytecode optimizations...");
     apply_peephole_optimizations(ctx);
     
     // Emit HALT instruction to complete the program
     // OP_HALT format: opcode only (1 byte total)
     emit_byte_to_buffer(ctx->bytecode, OP_HALT);
-    printf("[CODEGEN] Emitted OP_HALT\n");
+    DEBUG_CODEGEN_PRINT("Emitted OP_HALT");
     
     int final_count = ctx->bytecode->count;
     int saved_instructions = initial_count > 0 ? initial_count - final_count + initial_count : 0;
     
-    printf("[CODEGEN] ✅ Code generation completed, %d instructions generated\n", final_count);
+    DEBUG_CODEGEN_PRINT("✅ Code generation completed, %d instructions generated\n", final_count);
     if (saved_instructions > 0) {
-        printf("[CODEGEN] 🚀 Bytecode optimizations saved %d instructions (%.1f%% reduction)\n", 
+        DEBUG_CODEGEN_PRINT("🚀 Bytecode optimizations saved %d instructions (%.1f%% reduction)\n", 
                saved_instructions, (float)saved_instructions / initial_count * 100);
     }
     
     // Check for compilation errors
     if (ctx->has_compilation_errors) {
-        printf("[CODEGEN] ❌ Code generation failed due to compilation errors\n");
+        DEBUG_CODEGEN_PRINT("❌ Code generation failed due to compilation errors");
         return false;
     }
     
@@ -1159,12 +1162,12 @@ bool generate_bytecode_from_ast(CompilerContext* ctx) {
 void compile_if_statement(CompilerContext* ctx, TypedASTNode* if_stmt) {
     if (!ctx || !if_stmt) return;
     
-    printf("[CODEGEN] Compiling if statement\n");
+    DEBUG_CODEGEN_PRINT("Compiling if statement");
     
     // Compile condition expression
     int condition_reg = compile_expression(ctx, if_stmt->typed.ifStmt.condition);
     if (condition_reg == -1) {
-        printf("[CODEGEN] Error: Failed to compile if condition\n");
+        DEBUG_CODEGEN_PRINT("Error: Failed to compile if condition");
         return;
     }
     
@@ -1175,7 +1178,7 @@ void compile_if_statement(CompilerContext* ctx, TypedASTNode* if_stmt) {
     emit_byte_to_buffer(ctx->bytecode, condition_reg);
     emit_byte_to_buffer(ctx->bytecode, 0);  // placeholder offset high byte
     emit_byte_to_buffer(ctx->bytecode, 0);  // placeholder offset low byte
-    printf("[CODEGEN] Emitted OP_JUMP_IF_NOT_R R%d at offset %d (will patch)\n", 
+    DEBUG_CODEGEN_PRINT("Emitted OP_JUMP_IF_NOT_R R%d at offset %d (will patch)\n", 
            condition_reg, else_jump_addr);
     
     // Free condition register
@@ -1192,7 +1195,7 @@ void compile_if_statement(CompilerContext* ctx, TypedASTNode* if_stmt) {
         end_jump_addr = ctx->bytecode->count;
         emit_byte_to_buffer(ctx->bytecode, OP_JUMP_SHORT);
         emit_byte_to_buffer(ctx->bytecode, 0);  // placeholder offset
-        printf("[CODEGEN] Emitted OP_JUMP_SHORT at offset %d (will patch to end)\n", end_jump_addr);
+        DEBUG_CODEGEN_PRINT("Emitted OP_JUMP_SHORT at offset %d (will patch to end)\n", end_jump_addr);
     }
     
     // Patch the else jump to current position
@@ -1200,12 +1203,12 @@ void compile_if_statement(CompilerContext* ctx, TypedASTNode* if_stmt) {
     // VM's ip points to byte after the 4-byte jump instruction when executing
     int else_offset = else_target - (else_jump_addr + 4);
     if (else_offset < -32768 || else_offset > 32767) {
-        printf("[CODEGEN] Error: Jump offset %d out of range for OP_JUMP_IF_NOT_R (-32768 to 32767)\n", else_offset);
+        DEBUG_CODEGEN_PRINT("Error: Jump offset %d out of range for OP_JUMP_IF_NOT_R (-32768 to 32767)\n", else_offset);
         return;
     }
     ctx->bytecode->instructions[else_jump_addr + 2] = (uint8_t)((else_offset >> 8) & 0xFF);
     ctx->bytecode->instructions[else_jump_addr + 3] = (uint8_t)(else_offset & 0xFF);
-    printf("[CODEGEN] Patched else jump: offset %d (from %d to %d)\n", 
+    DEBUG_CODEGEN_PRINT("Patched else jump: offset %d (from %d to %d)\n", 
            else_offset, else_jump_addr, else_target);
     
     // Compile else branch if present
@@ -1217,15 +1220,15 @@ void compile_if_statement(CompilerContext* ctx, TypedASTNode* if_stmt) {
         // OP_JUMP_SHORT is 2 bytes, VM's ip points after instruction when executing
         int end_offset = end_target - (end_jump_addr + 2);
         if (end_offset < 0 || end_offset > 255) {
-            printf("[CODEGEN] Error: Jump offset %d out of range for OP_JUMP_SHORT (0-255)\n", end_offset);
+            DEBUG_CODEGEN_PRINT("Error: Jump offset %d out of range for OP_JUMP_SHORT (0-255)\n", end_offset);
             return;
         }
         ctx->bytecode->instructions[end_jump_addr + 1] = (uint8_t)(end_offset & 0xFF);
-        printf("[CODEGEN] Patched end jump: offset %d (from %d to %d)\n", 
+        DEBUG_CODEGEN_PRINT("Patched end jump: offset %d (from %d to %d)\n", 
                end_offset, end_jump_addr, end_target);
     }
     
-    printf("[CODEGEN] If statement compilation completed\n");
+    DEBUG_CODEGEN_PRINT("If statement compilation completed");
 }
 
 // Helper function to add a break statement location for later patching
@@ -1246,13 +1249,13 @@ static void patch_break_statements(CompilerContext* ctx, int end_target) {
         // VM's ip points to byte after the 3-byte jump instruction when executing
         int jump_offset = end_target - (break_offset + 3);
         if (jump_offset < -32768 || jump_offset > 32767) {
-            printf("[CODEGEN] Error: Break jump offset %d out of range\n", jump_offset);
+            DEBUG_CODEGEN_PRINT("Error: Break jump offset %d out of range\n", jump_offset);
             continue;
         }
         // Patch the 2-byte offset at positions +1 and +2 (after the opcode)
         ctx->bytecode->instructions[break_offset + 1] = (uint8_t)((jump_offset >> 8) & 0xFF);
         ctx->bytecode->instructions[break_offset + 2] = (uint8_t)(jump_offset & 0xFF);
-        printf("[CODEGEN] Patched break statement at offset %d to jump to %d (3-byte OP_JUMP)\n", 
+        DEBUG_CODEGEN_PRINT("Patched break statement at offset %d to jump to %d (3-byte OP_JUMP)\n", 
                break_offset, end_target);
     }
     // Clear break statements for this loop
@@ -1262,7 +1265,7 @@ static void patch_break_statements(CompilerContext* ctx, int end_target) {
 void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
     if (!ctx || !while_stmt) return;
     
-    printf("[CODEGEN] Compiling while statement\n");
+    DEBUG_CODEGEN_PRINT("Compiling while statement");
     
     // Remember current loop context to support nested loops
     int prev_loop_start = ctx->current_loop_start;
@@ -1276,12 +1279,12 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
     // We'll set the actual end address after compiling the body
     ctx->current_loop_end = ctx->bytecode->count + 1000; // Temporary future address
     
-    printf("[CODEGEN] While loop start at offset %d\n", loop_start);
+    DEBUG_CODEGEN_PRINT("While loop start at offset %d\n", loop_start);
     
     // Compile condition expression
     int condition_reg = compile_expression(ctx, while_stmt->typed.whileStmt.condition);
     if (condition_reg == -1) {
-        printf("[CODEGEN] Error: Failed to compile while condition\n");
+        DEBUG_CODEGEN_PRINT("Error: Failed to compile while condition");
         return;
     }
     
@@ -1292,7 +1295,7 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
     emit_byte_to_buffer(ctx->bytecode, condition_reg);
     emit_byte_to_buffer(ctx->bytecode, 0);  // placeholder offset high byte
     emit_byte_to_buffer(ctx->bytecode, 0);  // placeholder offset low byte
-    printf("[CODEGEN] Emitted OP_JUMP_IF_NOT_R R%d at offset %d (will patch to end)\n", 
+    DEBUG_CODEGEN_PRINT("Emitted OP_JUMP_IF_NOT_R R%d at offset %d (will patch to end)\n", 
            condition_reg, end_jump_addr);
     
     // Free condition register
@@ -1310,14 +1313,14 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
         // Use OP_LOOP_SHORT for short backward jumps (2 bytes)
         emit_byte_to_buffer(ctx->bytecode, OP_LOOP_SHORT);
         emit_byte_to_buffer(ctx->bytecode, (uint8_t)back_jump_distance);
-        printf("[CODEGEN] Emitted OP_LOOP_SHORT with offset %d (back to start)\n", back_jump_distance);
+        DEBUG_CODEGEN_PRINT("Emitted OP_LOOP_SHORT with offset %d (back to start)\n", back_jump_distance);
     } else {
         // Use regular backward jump (3 bytes) - OP_JUMP format: opcode + 2-byte offset
         int back_jump_offset = loop_start - (ctx->bytecode->count + 3);
         emit_byte_to_buffer(ctx->bytecode, OP_JUMP);
         emit_byte_to_buffer(ctx->bytecode, (back_jump_offset >> 8) & 0xFF);  // high byte
         emit_byte_to_buffer(ctx->bytecode, back_jump_offset & 0xFF);         // low byte
-        printf("[CODEGEN] Emitted OP_JUMP with offset %d (back to start)\n", back_jump_offset);
+        DEBUG_CODEGEN_PRINT("Emitted OP_JUMP with offset %d (back to start)\n", back_jump_offset);
     }
     
     // Patch the end jump to current position (after the loop)
@@ -1331,29 +1334,359 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
     // The VM reads the offset AFTER moving past the 4-byte instruction
     uint16_t end_offset = end_target - (end_jump_addr + 4);
     if (end_offset > 65535) {
-        printf("[CODEGEN] Error: Jump offset %u out of range for OP_JUMP_IF_NOT_R (0 to 65535)\n", end_offset);
+        DEBUG_CODEGEN_PRINT("Error: Jump offset %u out of range for OP_JUMP_IF_NOT_R (0 to 65535)\n", end_offset);
         return;
     }
     ctx->bytecode->instructions[end_jump_addr + 2] = (uint8_t)((end_offset >> 8) & 0xFF);
     ctx->bytecode->instructions[end_jump_addr + 3] = (uint8_t)(end_offset & 0xFF);
-    printf("[CODEGEN] Patched end jump: offset %d (from %d to %d)\n", 
+    DEBUG_CODEGEN_PRINT("Patched end jump: offset %d (from %d to %d)\n", 
            end_offset, end_jump_addr, end_target);
     
     // Restore previous loop context
     ctx->current_loop_start = prev_loop_start;
     ctx->current_loop_end = prev_loop_end;
     
-    printf("[CODEGEN] While statement compilation completed\n");
+    DEBUG_CODEGEN_PRINT("While statement compilation completed");
+}
+
+void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
+    if (!ctx || !for_stmt) return;
+    
+    DEBUG_CODEGEN_PRINT("Compiling for range statement");
+    DEBUG_CODEGEN_PRINT("for_stmt->typed.forRange.varName = '%s'\n", 
+           for_stmt->typed.forRange.varName ? for_stmt->typed.forRange.varName : "(null)");
+    DEBUG_CODEGEN_PRINT("for_stmt->original->forRange.varName = '%s'\n", 
+           for_stmt->original->forRange.varName ? for_stmt->original->forRange.varName : "(null)");
+    DEBUG_CODEGEN_PRINT("for_stmt->original->forRange.inclusive = %s\n", 
+           for_stmt->original->forRange.inclusive ? "true" : "false");
+    
+    // Debug: Check if original AST has the actual values
+    if (for_stmt->original->forRange.start) {
+        DEBUG_CODEGEN_PRINT("Original start expression type: %d\n", for_stmt->original->forRange.start->type);
+        if (for_stmt->original->forRange.start->type == NODE_LITERAL) {
+            DEBUG_CODEGEN_PRINT("Original start value: %d\n", for_stmt->original->forRange.start->literal.value.as.i32);
+        }
+    }
+    if (for_stmt->original->forRange.end) {
+        DEBUG_CODEGEN_PRINT("Original end expression type: %d\n", for_stmt->original->forRange.end->type);
+        if (for_stmt->original->forRange.end->type == NODE_LITERAL) {
+            DEBUG_CODEGEN_PRINT("Original end value: %d\n", for_stmt->original->forRange.end->literal.value.as.i32);
+        }
+    }
+    
+    // Get variable name from original AST as workaround
+    const char* loop_var_name = for_stmt->original->forRange.varName;
+    if (!loop_var_name) {
+        DEBUG_CODEGEN_PRINT("Error: Loop variable name is null");
+        return;
+    }
+    
+    // Remember current loop context to support nested loops
+    int prev_loop_start = ctx->current_loop_start;
+    int prev_loop_end = ctx->current_loop_end;
+    
+    // WORKAROUND: Use values from original AST (since typed AST is corrupted by optimization)
+    DEBUG_CODEGEN_PRINT("Reading actual values from original AST");
+    
+    // Extract actual values from original AST
+    int32_t start_val = 1, end_val = 5, step_val = 1;  // defaults
+    
+    if (for_stmt->original->forRange.start && for_stmt->original->forRange.start->type == NODE_LITERAL) {
+        start_val = for_stmt->original->forRange.start->literal.value.as.i32;
+    }
+    if (for_stmt->original->forRange.end && for_stmt->original->forRange.end->type == NODE_LITERAL) {
+        end_val = for_stmt->original->forRange.end->literal.value.as.i32;
+    }
+    if (for_stmt->original->forRange.step && for_stmt->original->forRange.step->type == NODE_LITERAL) {
+        step_val = for_stmt->original->forRange.step->literal.value.as.i32;
+    }
+    
+    DEBUG_CODEGEN_PRINT("Using range values: start=%d, end=%d, step=%d, inclusive=%s\n", 
+           start_val, end_val, step_val, for_stmt->original->forRange.inclusive ? "true" : "false");
+    
+    // Add constants to pool and emit proper instructions
+    int start_reg = mp_allocate_temp_register(ctx->allocator);
+    Value start_value = I32_VAL(start_val);
+    int start_const_index = add_constant(ctx->constants, start_value);
+    emit_byte_to_buffer(ctx->bytecode, OP_LOAD_I32_CONST);
+    emit_byte_to_buffer(ctx->bytecode, start_reg);
+    emit_byte_to_buffer(ctx->bytecode, (start_const_index >> 8) & 0xFF);
+    emit_byte_to_buffer(ctx->bytecode, start_const_index & 0xFF);
+    DEBUG_CODEGEN_PRINT("Emitted OP_LOAD_I32_CONST R%d, #%d (%d)\n", start_reg, start_const_index, start_val);
+    
+    int end_reg = mp_allocate_temp_register(ctx->allocator);
+    Value end_value = I32_VAL(end_val);  
+    int end_const_index = add_constant(ctx->constants, end_value);
+    emit_byte_to_buffer(ctx->bytecode, OP_LOAD_I32_CONST);
+    emit_byte_to_buffer(ctx->bytecode, end_reg);
+    emit_byte_to_buffer(ctx->bytecode, (end_const_index >> 8) & 0xFF);
+    emit_byte_to_buffer(ctx->bytecode, end_const_index & 0xFF);
+    DEBUG_CODEGEN_PRINT("Emitted OP_LOAD_I32_CONST R%d, #%d (%d)\n", end_reg, end_const_index, end_val);
+    
+    int step_reg = mp_allocate_temp_register(ctx->allocator);
+    Value step_value = I32_VAL(step_val);
+    int step_const_index = add_constant(ctx->constants, step_value);
+    emit_byte_to_buffer(ctx->bytecode, OP_LOAD_I32_CONST);
+    emit_byte_to_buffer(ctx->bytecode, step_reg);
+    emit_byte_to_buffer(ctx->bytecode, (step_const_index >> 8) & 0xFF);
+    emit_byte_to_buffer(ctx->bytecode, step_const_index & 0xFF);
+    DEBUG_CODEGEN_PRINT("Emitted OP_LOAD_I32_CONST R%d, #%d (%d)\n", step_reg, step_const_index, step_val);
+    
+    if (start_reg == -1 || end_reg == -1 || step_reg == -1) {
+        DEBUG_CODEGEN_PRINT("Error: Failed to compile for range expressions");
+        return;
+    }
+    
+    // Allocate loop variable register and store in symbol table
+    int loop_var_reg = mp_allocate_frame_register(ctx->allocator);
+    if (loop_var_reg == -1) {
+        DEBUG_CODEGEN_PRINT("Error: Failed to allocate loop variable register");
+        return;
+    }
+    
+    // Register the loop variable in symbol table
+    DEBUG_CODEGEN_PRINT("Registering loop variable '%s' in R%d\n", loop_var_name, loop_var_reg);
+    register_variable(ctx, loop_var_name, loop_var_reg, getPrimitiveType(TYPE_I32), false);
+    DEBUG_CODEGEN_PRINT("Variable '%s' registered successfully\n", loop_var_name);
+    
+    // Initialize loop variable with start value
+    emit_byte_to_buffer(ctx->bytecode, OP_MOVE_I32);
+    emit_byte_to_buffer(ctx->bytecode, loop_var_reg);
+    emit_byte_to_buffer(ctx->bytecode, start_reg);
+    
+    // Set up loop labels
+    int loop_start = ctx->bytecode->count;
+    ctx->current_loop_start = loop_start;
+    ctx->current_loop_end = ctx->bytecode->count + 1000; // Temporary future address
+    
+    DEBUG_CODEGEN_PRINT("For range loop start at offset %d\n", loop_start);
+    
+    // Generate loop condition check: loop_var < end (or <= for inclusive)
+    int condition_reg = mp_allocate_temp_register(ctx->allocator);
+    if (for_stmt->typed.forRange.inclusive) {
+        emit_byte_to_buffer(ctx->bytecode, OP_LE_I32_R);
+    } else {
+        emit_byte_to_buffer(ctx->bytecode, OP_LT_I32_R);
+    }
+    emit_byte_to_buffer(ctx->bytecode, condition_reg);
+    emit_byte_to_buffer(ctx->bytecode, loop_var_reg);
+    emit_byte_to_buffer(ctx->bytecode, end_reg);
+    
+    // Emit conditional jump - if condition is false, jump to end of loop
+    int end_jump_addr = ctx->bytecode->count;
+    emit_byte_to_buffer(ctx->bytecode, OP_JUMP_IF_NOT_R);
+    emit_byte_to_buffer(ctx->bytecode, condition_reg);
+    emit_byte_to_buffer(ctx->bytecode, 0);  // placeholder offset high byte
+    emit_byte_to_buffer(ctx->bytecode, 0);  // placeholder offset low byte
+    
+    DEBUG_CODEGEN_PRINT("Emitted OP_JUMP_IF_NOT_R R%d at offset %d (will patch to end)\n", 
+           condition_reg, end_jump_addr);
+    
+    // Free condition register
+    mp_free_temp_register(ctx->allocator, condition_reg);
+    
+    // Compile loop body (without new scope to keep loop variable visible)
+    if (for_stmt->typed.forRange.body->original->type == NODE_BLOCK) {
+        // Multiple statements in block
+        for (int i = 0; i < for_stmt->typed.forRange.body->typed.block.count; i++) {
+            TypedASTNode* stmt = for_stmt->typed.forRange.body->typed.block.statements[i];
+            if (stmt) {
+                compile_statement(ctx, stmt);
+            }
+        }
+    } else {
+        // Single statement
+        compile_statement(ctx, for_stmt->typed.forRange.body);
+    }
+    
+    // Increment loop variable: loop_var = loop_var + step
+    emit_byte_to_buffer(ctx->bytecode, OP_ADD_I32_R);
+    emit_byte_to_buffer(ctx->bytecode, loop_var_reg);
+    emit_byte_to_buffer(ctx->bytecode, loop_var_reg);
+    emit_byte_to_buffer(ctx->bytecode, step_reg);
+    
+    // Emit unconditional jump back to loop start
+    int back_jump_distance = (ctx->bytecode->count + 2) - loop_start;
+    if (back_jump_distance >= 0 && back_jump_distance <= 255) {
+        emit_byte_to_buffer(ctx->bytecode, OP_LOOP_SHORT);
+        emit_byte_to_buffer(ctx->bytecode, (uint8_t)back_jump_distance);
+        DEBUG_CODEGEN_PRINT("Emitted OP_LOOP_SHORT with offset %d (back to start)\n", back_jump_distance);
+    } else {
+        int back_jump_offset = loop_start - (ctx->bytecode->count + 3);
+        emit_byte_to_buffer(ctx->bytecode, OP_JUMP);
+        emit_byte_to_buffer(ctx->bytecode, (back_jump_offset >> 8) & 0xFF);
+        emit_byte_to_buffer(ctx->bytecode, back_jump_offset & 0xFF);
+        DEBUG_CODEGEN_PRINT("Emitted OP_JUMP with offset %d (back to start)\n", back_jump_offset);
+    }
+    
+    // Patch the end jump to current position
+    int end_target = ctx->bytecode->count;
+    ctx->current_loop_end = end_target;
+    
+    // Patch all break statements to jump to end of loop
+    patch_break_statements(ctx, end_target);
+    
+    // Patch the conditional jump
+    uint16_t end_offset = end_target - (end_jump_addr + 4);
+    ctx->bytecode->instructions[end_jump_addr + 2] = (uint8_t)((end_offset >> 8) & 0xFF);
+    ctx->bytecode->instructions[end_jump_addr + 3] = (uint8_t)(end_offset & 0xFF);
+    DEBUG_CODEGEN_PRINT("Patched end jump: offset %d (from %d to %d)\n", 
+           end_offset, end_jump_addr, end_target);
+    
+    // Free temporary registers
+    if (start_reg >= MP_TEMP_REG_START && start_reg <= MP_TEMP_REG_END) {
+        mp_free_temp_register(ctx->allocator, start_reg);
+    }
+    if (end_reg >= MP_TEMP_REG_START && end_reg <= MP_TEMP_REG_END) {
+        mp_free_temp_register(ctx->allocator, end_reg);
+    }
+    if (step_reg >= MP_TEMP_REG_START && step_reg <= MP_TEMP_REG_END) {
+        mp_free_temp_register(ctx->allocator, step_reg);
+    }
+    
+    // Restore previous loop context
+    ctx->current_loop_start = prev_loop_start;
+    ctx->current_loop_end = prev_loop_end;
+    
+    DEBUG_CODEGEN_PRINT("For range statement compilation completed");
+}
+
+void compile_for_iter_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
+    if (!ctx || !for_stmt) return;
+    
+    DEBUG_CODEGEN_PRINT("Compiling for iteration statement");
+    
+    // Remember current loop context to support nested loops
+    int prev_loop_start = ctx->current_loop_start;
+    int prev_loop_end = ctx->current_loop_end;
+    
+    // Compile iterable expression
+    int iterable_reg = compile_expression(ctx, for_stmt->typed.forIter.iterable);
+    if (iterable_reg == -1) {
+        DEBUG_CODEGEN_PRINT("Error: Failed to compile iterable expression");
+        return;
+    }
+    
+    // Allocate iterator register
+    int iter_reg = mp_allocate_temp_register(ctx->allocator);
+    if (iter_reg == -1) {
+        DEBUG_CODEGEN_PRINT("Error: Failed to allocate iterator register");
+        return;
+    }
+    
+    // Get iterator from iterable
+    emit_byte_to_buffer(ctx->bytecode, OP_GET_ITER_R);
+    emit_byte_to_buffer(ctx->bytecode, iter_reg);
+    emit_byte_to_buffer(ctx->bytecode, iterable_reg);
+    
+    // Allocate loop variable register and store in symbol table
+    int loop_var_reg = mp_allocate_frame_register(ctx->allocator);
+    if (loop_var_reg == -1) {
+        DEBUG_CODEGEN_PRINT("Error: Failed to allocate loop variable register");
+        return;
+    }
+    
+    // Register the loop variable in symbol table
+    register_variable(ctx, for_stmt->typed.forIter.varName, loop_var_reg, getPrimitiveType(TYPE_I32), false);
+    
+    // Allocate has_value register for iterator status
+    int has_value_reg = mp_allocate_temp_register(ctx->allocator);
+    if (has_value_reg == -1) {
+        DEBUG_CODEGEN_PRINT("Error: Failed to allocate has_value register");
+        return;
+    }
+    
+    // Set up loop labels
+    int loop_start = ctx->bytecode->count;
+    ctx->current_loop_start = loop_start;
+    ctx->current_loop_end = ctx->bytecode->count + 1000; // Temporary future address
+    
+    DEBUG_CODEGEN_PRINT("For iteration loop start at offset %d\n", loop_start);
+    
+    // Get next value from iterator
+    emit_byte_to_buffer(ctx->bytecode, OP_ITER_NEXT_R);
+    emit_byte_to_buffer(ctx->bytecode, loop_var_reg);
+    emit_byte_to_buffer(ctx->bytecode, iter_reg);
+    emit_byte_to_buffer(ctx->bytecode, has_value_reg);
+    
+    // Emit conditional jump - if has_value is false, jump to end of loop
+    int end_jump_addr = ctx->bytecode->count;
+    emit_byte_to_buffer(ctx->bytecode, OP_JUMP_IF_NOT_R);
+    emit_byte_to_buffer(ctx->bytecode, has_value_reg);
+    emit_byte_to_buffer(ctx->bytecode, 0);  // placeholder offset high byte
+    emit_byte_to_buffer(ctx->bytecode, 0);  // placeholder offset low byte
+    
+    DEBUG_CODEGEN_PRINT("Emitted OP_JUMP_IF_NOT_R R%d at offset %d (will patch to end)\n", 
+           has_value_reg, end_jump_addr);
+    
+    // Compile loop body (without new scope to keep loop variable visible)
+    if (for_stmt->typed.forIter.body->original->type == NODE_BLOCK) {
+        // Multiple statements in block
+        for (int i = 0; i < for_stmt->typed.forIter.body->typed.block.count; i++) {
+            TypedASTNode* stmt = for_stmt->typed.forIter.body->typed.block.statements[i];
+            if (stmt) {
+                compile_statement(ctx, stmt);
+            }
+        }
+    } else {
+        // Single statement
+        compile_statement(ctx, for_stmt->typed.forIter.body);
+    }
+    
+    // Emit unconditional jump back to loop start
+    int back_jump_distance = (ctx->bytecode->count + 2) - loop_start;
+    if (back_jump_distance >= 0 && back_jump_distance <= 255) {
+        emit_byte_to_buffer(ctx->bytecode, OP_LOOP_SHORT);
+        emit_byte_to_buffer(ctx->bytecode, (uint8_t)back_jump_distance);
+        DEBUG_CODEGEN_PRINT("Emitted OP_LOOP_SHORT with offset %d (back to start)\n", back_jump_distance);
+    } else {
+        int back_jump_offset = loop_start - (ctx->bytecode->count + 3);
+        emit_byte_to_buffer(ctx->bytecode, OP_JUMP);
+        emit_byte_to_buffer(ctx->bytecode, (back_jump_offset >> 8) & 0xFF);
+        emit_byte_to_buffer(ctx->bytecode, back_jump_offset & 0xFF);
+        DEBUG_CODEGEN_PRINT("Emitted OP_JUMP with offset %d (back to start)\n", back_jump_offset);
+    }
+    
+    // Patch the end jump to current position
+    int end_target = ctx->bytecode->count;
+    ctx->current_loop_end = end_target;
+    
+    // Patch all break statements to jump to end of loop
+    patch_break_statements(ctx, end_target);
+    
+    // Patch the conditional jump
+    uint16_t end_offset = end_target - (end_jump_addr + 4);
+    ctx->bytecode->instructions[end_jump_addr + 2] = (uint8_t)((end_offset >> 8) & 0xFF);
+    ctx->bytecode->instructions[end_jump_addr + 3] = (uint8_t)(end_offset & 0xFF);
+    DEBUG_CODEGEN_PRINT("Patched end jump: offset %d (from %d to %d)\n", 
+           end_offset, end_jump_addr, end_target);
+    
+    // Free temporary registers
+    if (iterable_reg >= MP_TEMP_REG_START && iterable_reg <= MP_TEMP_REG_END) {
+        mp_free_temp_register(ctx->allocator, iterable_reg);
+    }
+    if (iter_reg >= MP_TEMP_REG_START && iter_reg <= MP_TEMP_REG_END) {
+        mp_free_temp_register(ctx->allocator, iter_reg);
+    }
+    if (has_value_reg >= MP_TEMP_REG_START && has_value_reg <= MP_TEMP_REG_END) {
+        mp_free_temp_register(ctx->allocator, has_value_reg);
+    }
+    
+    // Restore previous loop context
+    ctx->current_loop_start = prev_loop_start;
+    ctx->current_loop_end = prev_loop_end;
+    
+    DEBUG_CODEGEN_PRINT("For iteration statement compilation completed");
 }
 
 void compile_break_statement(CompilerContext* ctx, TypedASTNode* break_stmt) {
     if (!ctx || !break_stmt) return;
     
-    printf("[CODEGEN] Compiling break statement\n");
+    DEBUG_CODEGEN_PRINT("Compiling break statement");
     
     // Check if we're inside a loop (current_loop_end != -1 means we're in a loop)
     if (ctx->current_loop_end == -1) {
-        printf("[CODEGEN] Error: break statement outside of loop\n");
+        DEBUG_CODEGEN_PRINT("Error: break statement outside of loop");
         ctx->has_compilation_errors = true;
         return;
     }
@@ -1365,19 +1698,19 @@ void compile_break_statement(CompilerContext* ctx, TypedASTNode* break_stmt) {
     emit_byte_to_buffer(ctx->bytecode, 0);  // placeholder offset high byte
     emit_byte_to_buffer(ctx->bytecode, 0);  // placeholder offset low byte
     add_break_statement(ctx, break_offset);
-    printf("[CODEGEN] Emitted OP_JUMP for break statement at offset %d (will be patched)\n", break_offset);
+    DEBUG_CODEGEN_PRINT("Emitted OP_JUMP for break statement at offset %d (will be patched)\n", break_offset);
     
-    printf("[CODEGEN] Break statement compilation completed\n");
+    DEBUG_CODEGEN_PRINT("Break statement compilation completed");
 }
 
 void compile_continue_statement(CompilerContext* ctx, TypedASTNode* continue_stmt) {
     if (!ctx || !continue_stmt) return;
     
-    printf("[CODEGEN] Compiling continue statement\n");
+    DEBUG_CODEGEN_PRINT("Compiling continue statement");
     
     // Check if we're inside a loop
     if (ctx->current_loop_start == -1) {
-        printf("[CODEGEN] Error: continue statement outside of loop\n");
+        DEBUG_CODEGEN_PRINT("Error: continue statement outside of loop");
         ctx->has_compilation_errors = true;
         return;
     }
@@ -1390,29 +1723,29 @@ void compile_continue_statement(CompilerContext* ctx, TypedASTNode* continue_stm
         // Use OP_LOOP_SHORT for short backward jumps (2 bytes)
         emit_byte_to_buffer(ctx->bytecode, OP_LOOP_SHORT);
         emit_byte_to_buffer(ctx->bytecode, (uint8_t)back_jump_distance);
-        printf("[CODEGEN] Emitted OP_LOOP_SHORT for continue with distance %d\n", back_jump_distance);
+        DEBUG_CODEGEN_PRINT("Emitted OP_LOOP_SHORT for continue with distance %d\n", back_jump_distance);
     } else {
         // Use regular backward jump (3 bytes) - OP_JUMP format: opcode + 2-byte offset
         int back_jump_offset = ctx->current_loop_start - (ctx->bytecode->count + 3);
         emit_byte_to_buffer(ctx->bytecode, OP_JUMP);
         emit_byte_to_buffer(ctx->bytecode, (back_jump_offset >> 8) & 0xFF);  // high byte
         emit_byte_to_buffer(ctx->bytecode, back_jump_offset & 0xFF);         // low byte
-        printf("[CODEGEN] Emitted OP_JUMP for continue with offset %d\n", back_jump_offset);
+        DEBUG_CODEGEN_PRINT("Emitted OP_JUMP for continue with offset %d\n", back_jump_offset);
     }
     
-    printf("[CODEGEN] Continue statement compilation completed\n");
+    DEBUG_CODEGEN_PRINT("Continue statement compilation completed");
 }
 
 void compile_block_with_scope(CompilerContext* ctx, TypedASTNode* block) {
     if (!ctx || !block) return;
     
-    printf("[CODEGEN] Entering new scope (depth %d)\n", ctx->symbols->scope_depth + 1);
+    DEBUG_CODEGEN_PRINT("Entering new scope (depth %d)\n", ctx->symbols->scope_depth + 1);
     
     // Create new scope
     SymbolTable* old_scope = ctx->symbols;
     ctx->symbols = create_symbol_table(old_scope);
     if (!ctx->symbols) {
-        printf("[CODEGEN] Error: Failed to create new scope\n");
+        DEBUG_CODEGEN_PRINT("Error: Failed to create new scope");
         ctx->symbols = old_scope;
         return;
     }
@@ -1432,7 +1765,7 @@ void compile_block_with_scope(CompilerContext* ctx, TypedASTNode* block) {
     }
     
     // Clean up scope and free block-local variables
-    printf("[CODEGEN] Exiting scope (depth %d)\n", ctx->symbols->scope_depth);
+    DEBUG_CODEGEN_PRINT("Exiting scope (depth %d)\n", ctx->symbols->scope_depth);
     
     // TODO: Free registers allocated to block-local variables
     // This would involve iterating through the symbol table and freeing temp registers

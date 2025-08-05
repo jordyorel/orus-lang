@@ -21,6 +21,7 @@
 #include "vm/vm.h"
 #include "errors/features/type_errors.h"
 #include "errors/features/variable_errors.h"
+#include "debug/debug_config.h"
 
 // ---- Arena and utilities ----
 static TypeArena* type_arena = NULL;
@@ -349,32 +350,32 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
     
     switch (node->type) {
         case NODE_LITERAL:
-            printf("[TYPE_INFERENCE] Processing literal with value type %d\n", (int)node->literal.value.type);
+            DEBUG_TYPE_INFERENCE_PRINT("Processing literal with value type %d", (int)node->literal.value.type);
             switch (node->literal.value.type) {
                 case VAL_I32: 
-                    printf("[TYPE_INFERENCE] VAL_I32 -> TYPE_I32\n");
+                    DEBUG_TYPE_INFERENCE_PRINT("VAL_I32 -> TYPE_I32");
                     return getPrimitiveType(TYPE_I32);
                 case VAL_I64: return getPrimitiveType(TYPE_I64);
                 case VAL_U32: return getPrimitiveType(TYPE_U32);
                 case VAL_U64: return getPrimitiveType(TYPE_U64);
                 case VAL_F64: return getPrimitiveType(TYPE_F64);
                 case VAL_BOOL: 
-                    printf("[TYPE_INFERENCE] VAL_BOOL -> TYPE_BOOL\n");
+                    DEBUG_TYPE_INFERENCE_PRINT("VAL_BOOL -> TYPE_BOOL");
                     return getPrimitiveType(TYPE_BOOL);
                 case VAL_STRING: return getPrimitiveType(TYPE_STRING);
                 default: 
-                    printf("[TYPE_INFERENCE] Unknown value type %d -> TYPE_UNKNOWN\n", (int)node->literal.value.type);
+                    DEBUG_TYPE_INFERENCE_PRINT("Unknown value type %d -> TYPE_UNKNOWN", (int)node->literal.value.type);
                     return getPrimitiveType(TYPE_UNKNOWN);
             }
         case NODE_IDENTIFIER: {
-            printf("[TYPE_INFERENCE] Looking up identifier '%s'\\n", node->identifier.name);
+            DEBUG_TYPE_INFERENCE_PRINT("Looking up identifier '%s'", node->identifier.name);
             TypeScheme* scheme = type_env_lookup(env, node->identifier.name);
             if (scheme) {
-                printf("[TYPE_INFERENCE] Found scheme for '%s', type kind: %d\\n", 
+                DEBUG_TYPE_INFERENCE_PRINT("Found scheme for '%s', type kind: %d", 
                        node->identifier.name, (int)scheme->type->kind);
                 return scheme->type;
             }
-            printf("[TYPE_INFERENCE] Identifier '%s' not found in type environment\\n", node->identifier.name);
+            DEBUG_TYPE_INFERENCE_PRINT("Identifier '%s' not found in type environment", node->identifier.name);
             report_undefined_variable(node->location, node->identifier.name);
             set_type_error();
             return NULL;
@@ -436,23 +437,23 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             } else if (strcmp(node->binary.op, "and") == 0 ||
                        strcmp(node->binary.op, "or") == 0) {
                 // Logical operations: both operands should be bool, result is bool
-                printf("[TYPE_INFERENCE] Processing logical operator '%s'\n", node->binary.op);
-                printf("[TYPE_INFERENCE] Left operand type: %s (kind=%d)\n", getTypeName(l->kind), (int)l->kind);
-                printf("[TYPE_INFERENCE] Right operand type: %s (kind=%d)\n", getTypeName(r->kind), (int)r->kind);
+                DEBUG_TYPE_INFERENCE_PRINT("Processing logical operator '%s'", node->binary.op);
+                DEBUG_TYPE_INFERENCE_PRINT("Left operand type: %s (kind=%d)", getTypeName(l->kind), (int)l->kind);
+                DEBUG_TYPE_INFERENCE_PRINT("Right operand type: %s (kind=%d)", getTypeName(r->kind), (int)r->kind);
                 
                 if (l->kind != TYPE_BOOL) {
-                    printf("[TYPE_INFERENCE] Error: Left operand is not bool\n");
+                    DEBUG_TYPE_INFERENCE_PRINT("Error: Left operand is not bool");
                     report_type_mismatch(node->location, "bool", getTypeName(l->kind));
                     set_type_error();
                     return NULL;
                 }
                 if (r->kind != TYPE_BOOL) {
-                    printf("[TYPE_INFERENCE] Error: Right operand is not bool\n");
+                    DEBUG_TYPE_INFERENCE_PRINT("Error: Right operand is not bool");
                     report_type_mismatch(node->location, "bool", getTypeName(r->kind));
                     set_type_error();
                     return NULL;
                 }
-                printf("[TYPE_INFERENCE] Both operands are bool, returning TYPE_BOOL\n");
+                DEBUG_TYPE_INFERENCE_PRINT("Both operands are bool, returning TYPE_BOOL");
                 return getPrimitiveType(TYPE_BOOL);
             }
             report_unsupported_operation(node->location, node->binary.op, "binary");
@@ -753,6 +754,65 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             // Continue statements have void type
             return getPrimitiveType(TYPE_VOID);
         }
+        case NODE_FOR_RANGE: {
+            // For range loops: for var in start..end or start..=end
+            // Type-check start, end, and optional step expressions
+            if (node->forRange.start) {
+                Type* start_type = algorithm_w(env, node->forRange.start);
+                if (!start_type) return NULL;
+            }
+            if (node->forRange.end) {
+                Type* end_type = algorithm_w(env, node->forRange.end);
+                if (!end_type) return NULL;
+            }
+            if (node->forRange.step) {
+                Type* step_type = algorithm_w(env, node->forRange.step);
+                if (!step_type) return NULL;
+            }
+            
+            // Add loop variable to environment with integer type
+            if (node->forRange.varName) {
+                TypeScheme* var_scheme = type_arena_alloc(sizeof(TypeScheme));
+                var_scheme->type = getPrimitiveType(TYPE_I32);
+                var_scheme->bound_vars = NULL;
+                var_scheme->bound_count = 0;
+                type_env_define(env, node->forRange.varName, var_scheme);
+            }
+            
+            // Type-check body
+            if (node->forRange.body) {
+                Type* body_type = algorithm_w(env, node->forRange.body);
+                if (!body_type) return NULL;
+            }
+            
+            return getPrimitiveType(TYPE_VOID);
+        }
+        case NODE_FOR_ITER: {
+            // For iteration loops: for var in iterable
+            // Type-check iterable expression
+            if (node->forIter.iterable) {
+                Type* iterable_type = algorithm_w(env, node->forIter.iterable);
+                if (!iterable_type) return NULL;
+                
+                // Add loop variable to environment with appropriate type
+                // For now, assume iterable elements are i32 (can be enhanced later)
+                if (node->forIter.varName) {
+                    TypeScheme* var_scheme = type_arena_alloc(sizeof(TypeScheme));
+                    var_scheme->type = getPrimitiveType(TYPE_I32);
+                    var_scheme->bound_vars = NULL;
+                    var_scheme->bound_count = 0;
+                    type_env_define(env, node->forIter.varName, var_scheme);
+                }
+            }
+            
+            // Type-check body
+            if (node->forIter.body) {
+                Type* body_type = algorithm_w(env, node->forIter.body);
+                if (!body_type) return NULL;
+            }
+            
+            return getPrimitiveType(TYPE_VOID);
+        }
         default:
             report_unsupported_operation(node->location, "type inference", "node type");
             set_type_error();
@@ -873,6 +933,28 @@ void populate_ast_types(ASTNode* node, TypeEnv* env) {
                 populate_ast_types(node->ternary.falseExpr, env);
             }
             break;
+        case NODE_FOR_RANGE:
+            if (node->forRange.start) {
+                populate_ast_types(node->forRange.start, env);
+            }
+            if (node->forRange.end) {
+                populate_ast_types(node->forRange.end, env);
+            }
+            if (node->forRange.step) {
+                populate_ast_types(node->forRange.step, env);
+            }
+            if (node->forRange.body) {
+                populate_ast_types(node->forRange.body, env);
+            }
+            break;
+        case NODE_FOR_ITER:
+            if (node->forIter.iterable) {
+                populate_ast_types(node->forIter.iterable, env);
+            }
+            if (node->forIter.body) {
+                populate_ast_types(node->forIter.body, env);
+            }
+            break;
         default:
             // For leaf nodes (literals, identifiers, etc.) no children to process
             break;
@@ -951,11 +1033,11 @@ static TypedASTNode* generate_typed_ast_recursive(ASTNode* ast, TypeEnv* type_en
             break;
 
         case NODE_BINARY:
-            // printf("[TYPE_INFERENCE] NODE_BINARY: ast->binary.left=%p, ast->binary.right=%p\n", 
+            // DEBUG_TYPE_INFERENCE_PRINT("NODE_BINARY: ast->binary.left=%p, ast->binary.right=%p\n", 
             //        (void*)ast->binary.left, (void*)ast->binary.right);
             typed->typed.binary.left = generate_typed_ast_recursive(ast->binary.left, type_env);
             typed->typed.binary.right = generate_typed_ast_recursive(ast->binary.right, type_env);
-            // printf("[TYPE_INFERENCE] NODE_BINARY: typed->typed.binary.left=%p, typed->typed.binary.right=%p\n", 
+            // DEBUG_TYPE_INFERENCE_PRINT("NODE_BINARY: typed->typed.binary.left=%p, typed->typed.binary.right=%p\n", 
             //        (void*)typed->typed.binary.left, (void*)typed->typed.binary.right);
             break;
 
@@ -1107,6 +1189,48 @@ static TypedASTNode* generate_typed_ast_recursive(ASTNode* ast, TypeEnv* type_en
 
         case NODE_CONTINUE:
             // Continue statements have no children to process  
+            break;
+
+        case NODE_FOR_RANGE:
+            // Handle for range loops: varName, start, end, step, body
+            DEBUG_TYPE_INFERENCE_PRINT("Processing NODE_FOR_RANGE, varName='%s'", 
+                   ast->forRange.varName ? ast->forRange.varName : "(null)");
+            if (ast->forRange.varName) {
+                typed->typed.forRange.varName = strdup(ast->forRange.varName);
+                DEBUG_TYPE_INFERENCE_PRINT("Copied varName='%s' to typed AST", typed->typed.forRange.varName);
+            }
+            if (ast->forRange.start) {
+                typed->typed.forRange.start = generate_typed_ast_recursive(ast->forRange.start, type_env);
+            }
+            if (ast->forRange.end) {
+                typed->typed.forRange.end = generate_typed_ast_recursive(ast->forRange.end, type_env);
+            }
+            if (ast->forRange.step) {
+                typed->typed.forRange.step = generate_typed_ast_recursive(ast->forRange.step, type_env);
+            }
+            if (ast->forRange.body) {
+                typed->typed.forRange.body = generate_typed_ast_recursive(ast->forRange.body, type_env);
+            }
+            typed->typed.forRange.inclusive = ast->forRange.inclusive;
+            if (ast->forRange.label) {
+                typed->typed.forRange.label = strdup(ast->forRange.label);
+            }
+            break;
+
+        case NODE_FOR_ITER:
+            // Handle for iteration loops: varName, iterable, body
+            if (ast->forIter.varName) {
+                typed->typed.forIter.varName = strdup(ast->forIter.varName);
+            }
+            if (ast->forIter.iterable) {
+                typed->typed.forIter.iterable = generate_typed_ast_recursive(ast->forIter.iterable, type_env);
+            }
+            if (ast->forIter.body) {
+                typed->typed.forIter.body = generate_typed_ast_recursive(ast->forIter.body, type_env);
+            }
+            if (ast->forIter.label) {
+                typed->typed.forIter.label = strdup(ast->forIter.label);
+            }
             break;
 
         default:
