@@ -1,0 +1,7 @@
+// Test: Mixed arithmetic error - i32 + i64
+// Expected: Friendly error message about explicit conversion
+
+a: i32 = 100
+b: i64 = 200
+result = a - b
+print(result)

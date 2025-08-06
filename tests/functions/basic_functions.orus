@@ -1,0 +1,31 @@
+// Basic function tests
+
+// Simple addition function
+fn add(a, b) -> i32:
+    return a + b
+
+// Simple subtraction function  
+fn sub(x, y) -> i32:
+    return x - y
+
+// Function with no parameters
+fn get_constant() -> i32:
+    return 42
+
+// Function that calls another function
+fn double_add(a, b) -> i32:
+    result = add(a, b)
+    return result + result
+
+// Test basic function calls
+result1 = add(5, 3)
+print("5 + 3 =", result1)
+
+result2 = sub(10, 4)  
+print("10 - 4 =", result2)
+
+result3 = get_constant()
+print("Constant =", result3)
+
+result4 = double_add(2, 3)
+print("Double of (2 + 3) =", result4)

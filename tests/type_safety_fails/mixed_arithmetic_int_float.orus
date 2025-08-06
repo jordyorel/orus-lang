@@ -1,0 +1,7 @@
+// Test: Mixed arithmetic error - i32 + f64
+// Expected: Friendly error message with explicit casting guidance
+
+a: i32 = 10
+b: f64 = 3.14
+result = a + b
+print(result)

@@ -1,0 +1,6 @@
+// Minimal function test
+fn simple_add(a, b) -> i32:
+    return a + b
+
+result = simple_add(10, 20)
+print(result)

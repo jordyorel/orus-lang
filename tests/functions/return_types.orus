@@ -1,0 +1,36 @@
+// Test different return types
+
+// Function returning i32
+fn return_i32() -> i32:
+    return 123
+
+// Function returning i64  
+fn return_i64() -> i64:
+    return 1234567890
+
+// Function returning f64
+fn return_f64() -> f64:
+    return 3.14159
+
+// Function returning bool
+fn return_bool() -> bool:
+    return true
+
+// Function with void return (no explicit return)
+fn print_message() -> void:
+    print("Hello from void function!")
+
+// Test each return type
+val_i32 = return_i32()
+print("i32 return:", val_i32)
+
+val_i64 = return_i64()  
+print("i64 return:", val_i64)
+
+val_f64 = return_f64()
+print("f64 return:", val_f64)
+
+val_bool = return_bool()
+print("bool return:", val_bool)
+
+print_message()

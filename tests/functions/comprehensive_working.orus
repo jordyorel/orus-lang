@@ -1,0 +1,35 @@
+// Comprehensive working function test
+
+// Basic arithmetic functions
+fn add(a, b) -> i32:
+    return a + b
+
+fn multiply(x, y) -> i32:
+    return x * y
+
+// Function with no parameters
+fn get_seven() -> i32:
+    return 7
+
+// Function that calls other functions
+fn complex_calc(a, b, c) -> i32:
+    sum = add(a, b)
+    product = multiply(sum, c)
+    return product
+
+// Test all functions
+print("Testing basic add:")
+result1 = add(15, 25)
+print(result1)
+
+print("Testing multiply:")
+result2 = multiply(6, 7)
+print(result2)
+
+print("Testing no parameters:")  
+result3 = get_seven()
+print(result3)
+
+print("Testing function composition:")
+result4 = complex_calc(3, 4, 5)
+print(result4)

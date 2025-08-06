@@ -339,6 +339,43 @@ void reset_type_inference_errors(void) {
 }
 
 // ---- Algorithm W ----
+// ---- Cast validation ----
+static bool is_numeric_type(Type* type) {
+    if (!type) return false;
+    return type->kind == TYPE_I32 || type->kind == TYPE_I64 ||
+           type->kind == TYPE_U32 || type->kind == TYPE_U64 ||
+           type->kind == TYPE_F64;
+}
+
+static bool is_cast_allowed(Type* from, Type* to) {
+    if (!from || !to) return false;
+    
+    // Same types are always allowed
+    if (type_equals_extended(from, to)) return true;
+    
+    // Allowed numeric conversions
+    if (is_numeric_type(from) && is_numeric_type(to)) {
+        return true;
+    }
+    
+    // Bool conversions
+    if (from->kind == TYPE_BOOL || to->kind == TYPE_BOOL) {
+        // Only bool <-> numeric conversions are allowed, not string
+        if (is_numeric_type(from) || is_numeric_type(to)) {
+            return true;
+        }
+    }
+    
+    // String conversions - very restricted
+    if (from->kind == TYPE_STRING || to->kind == TYPE_STRING) {
+        // Only allow string -> string (identity) or between string and character types
+        // No automatic conversions from string to numbers or bools
+        return false;
+    }
+    
+    return false;
+}
+
 Type* algorithm_w(TypeEnv* env, ASTNode* node) {
     if (!node) return NULL;
     
@@ -682,12 +719,34 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             return getPrimitiveType(TYPE_UNKNOWN);
         }
         case NODE_CAST: {
-            // Cast expressions take the type of their target type
-            if (node->cast.targetType) {
-                Type* target_type = algorithm_w(env, node->cast.targetType);
-                return target_type;
+            // Cast expressions - validate that the cast is allowed
+            Type* source_type = NULL;
+            Type* target_type = NULL;
+            
+            if (node->cast.expression) {
+                source_type = algorithm_w(env, node->cast.expression);
             }
-            return getPrimitiveType(TYPE_UNKNOWN);
+            
+            if (node->cast.targetType) {
+                target_type = algorithm_w(env, node->cast.targetType);
+            }
+            
+            if (!source_type || !target_type) {
+                return getPrimitiveType(TYPE_UNKNOWN);
+            }
+            
+            // Check if cast is allowed
+            if (!is_cast_allowed(source_type, target_type)) {
+                const char* source_name = getTypeName(source_type->kind);
+                const char* target_name = getTypeName(target_type->kind);
+                
+                // Report cast error
+                report_type_mismatch(node->location, target_name, source_name);
+                set_type_error();
+                return NULL;
+            }
+            
+            return target_type;
         }
         case NODE_TERNARY: {
             // Ternary expressions: condition ? true_expr : false_expr
@@ -716,16 +775,32 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             return getPrimitiveType(TYPE_VOID);
         }
         case NODE_BLOCK: {
-            // Block nodes type-check their statements and return void
+            // Block nodes create a new scope and type-check their statements
+            TypeEnv* block_env = type_env_new(env);
             for (int i = 0; i < node->block.count; i++) {
-                algorithm_w(env, node->block.statements[i]);
+                algorithm_w(block_env, node->block.statements[i]);
             }
             return getPrimitiveType(TYPE_VOID);
         }
         case NODE_UNARY: {
-            // Unary operations - type-check operand and return its type
+            // Unary operations - type-check operand and validate operation
             if (node->unary.operand) {
-                return algorithm_w(env, node->unary.operand);
+                Type* operand_type = algorithm_w(env, node->unary.operand);
+                if (!operand_type) return NULL;
+                
+                // Check if the unary operator is valid for the operand type
+                if (node->unary.op && strcmp(node->unary.op, "-") == 0) {
+                    // Unary minus: only allowed on numeric types
+                    if (!is_numeric_type(operand_type)) {
+                        const char* type_name = getTypeName(operand_type->kind);
+                        report_type_mismatch(node->location, "numeric type", type_name);
+                        set_type_error();
+                        return NULL;
+                    }
+                }
+                // Add more unary operator validations here if needed
+                
+                return operand_type;
             }
             return getPrimitiveType(TYPE_UNKNOWN);
         }
@@ -776,18 +851,21 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                 if (!step_type) return NULL;
             }
             
-            // Add loop variable to environment with integer type
+            // Create new scope for loop body and loop variable
+            TypeEnv* loop_env = type_env_new(env);
+            
+            // Add loop variable to loop environment with integer type
             if (node->forRange.varName) {
                 TypeScheme* var_scheme = type_arena_alloc(sizeof(TypeScheme));
                 var_scheme->type = getPrimitiveType(TYPE_I32);
                 var_scheme->bound_vars = NULL;
                 var_scheme->bound_count = 0;
-                type_env_define(env, node->forRange.varName, var_scheme);
+                type_env_define(loop_env, node->forRange.varName, var_scheme);
             }
             
-            // Type-check body
+            // Type-check body in loop environment
             if (node->forRange.body) {
-                Type* body_type = algorithm_w(env, node->forRange.body);
+                Type* body_type = algorithm_w(loop_env, node->forRange.body);
                 if (!body_type) return NULL;
             }
             
@@ -800,21 +878,24 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                 Type* iterable_type = algorithm_w(env, node->forIter.iterable);
                 if (!iterable_type) return NULL;
                 
-                // Add loop variable to environment with appropriate type
+                // Create new scope for loop body and loop variable
+                TypeEnv* loop_env = type_env_new(env);
+                
+                // Add loop variable to loop environment with appropriate type
                 // For now, assume iterable elements are i32 (can be enhanced later)
                 if (node->forIter.varName) {
                     TypeScheme* var_scheme = type_arena_alloc(sizeof(TypeScheme));
                     var_scheme->type = getPrimitiveType(TYPE_I32);
                     var_scheme->bound_vars = NULL;
                     var_scheme->bound_count = 0;
-                    type_env_define(env, node->forIter.varName, var_scheme);
+                    type_env_define(loop_env, node->forIter.varName, var_scheme);
                 }
-            }
-            
-            // Type-check body
-            if (node->forIter.body) {
-                Type* body_type = algorithm_w(env, node->forIter.body);
-                if (!body_type) return NULL;
+                
+                // Type-check body in loop environment
+                if (node->forIter.body) {
+                    Type* body_type = algorithm_w(loop_env, node->forIter.body);
+                    if (!body_type) return NULL;
+                }
             }
             
             return getPrimitiveType(TYPE_VOID);

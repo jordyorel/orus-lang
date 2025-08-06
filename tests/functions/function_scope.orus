@@ -1,0 +1,41 @@
+// Test function variable scoping
+
+// Global variable
+mut global_var = 100
+
+// Function that uses global variable
+fn use_global() -> i32:
+    return global_var + 10
+
+// Function with local variable that shadows global
+fn shadow_global() -> i32:
+    global_var = 50  // This should be local to the function
+    return global_var * 2
+
+// Function that modifies local variables
+fn local_vars() -> i32:
+    x = 10
+    y = 20  
+    z = x + y
+    return z
+
+// Function with parameter that shadows global
+fn param_shadow(global_var) -> i32:
+    return global_var * 3
+
+// Test scoping
+result1 = use_global()
+print("Using global (100 + 10):", result1)
+
+result2 = shadow_global()
+print("Shadowed global (50 * 2):", result2)
+
+// Global should still be 100
+result3 = use_global()
+print("Global after shadow (should be 100 + 10):", result3)
+
+result4 = local_vars()
+print("Local vars (10 + 20):", result4)
+
+result5 = param_shadow(25)
+print("Parameter shadow (25 * 3):", result5)

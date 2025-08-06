@@ -373,6 +373,11 @@ InterpretResult interpret(const char* source) {
             free_typed_ast_node(typed_ast);
         } else {
             printf("[WARNING] interpret: Failed to generate typed AST\n");
+            // Type inference failed - return compilation error
+            freeAST(ast);
+            freeCompiler(&compiler);
+            freeChunk(&chunk);
+            return INTERPRET_COMPILE_ERROR;
         }
         
     }

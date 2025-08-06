@@ -1,0 +1,4 @@
+// Test to verify parser rejects direct cast chains
+a: i32 = 10
+result: string = a as bool as string  // This should fail at parse time
+print(result)

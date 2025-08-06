@@ -119,7 +119,7 @@ static void runFile(const char* path) {
 int main(int argc, const char* argv[]) {
     // Initialize logging system first (can be configured via environment variables)
     initLogger(LOG_INFO);
-    LOG_INFO("Orus Language Interpreter starting up");
+    // LOG_INFO("Orus Language Interpreter starting up");
 
     // Strict leak-free: initialize global string table first
     init_string_table(&globalStringTable);
@@ -221,7 +221,7 @@ int main(int argc, const char* argv[]) {
     // For now, we'll just set the trace and debug flags
     
     if (config->verbose && !config->quiet) {
-        printf("Orus Language Interpreter starting...\n");
+        // printf("Orus Language Interpreter starting...\n");
         if (config->show_ast || config->show_bytecode || config->show_tokens || config->show_optimization_stats) {
             printf("Development tools enabled: ");
             if (config->show_ast) printf("AST ");
@@ -266,7 +266,7 @@ int main(int argc, const char* argv[]) {
     freeVM();
     config_destroy(config);
     
-    LOG_INFO("Orus Language Interpreter shutting down");
+    // LOG_INFO("Orus Language Interpreter shutting down");
     shutdownLogger();
     return 0;
 }

@@ -1,0 +1,5 @@
+// Type safety: mixing integers and floats should fail
+a: i32 = 10
+b: f64 = 3.14
+result = a + b  // This should fail
+print(result)

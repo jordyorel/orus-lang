@@ -1,0 +1,5 @@
+// Type safety: mixing different integer types should fail
+a: i32 = 10
+b: u32 = 20
+result = a + b  // This should fail
+print(result)
