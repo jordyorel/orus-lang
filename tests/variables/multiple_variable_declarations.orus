@@ -30,7 +30,7 @@ print(min_val)  // Should print -1000000
 print(max_val)  // Should print 1000000
 
 // EDGE CASE 2: Different numeric types in one line
-small: u32 = 0, large = 18446744073709551615u
+small: u32 = 0, large = 18446744073709551615
 print(small)  // Should print 0
 print(large)  // Should print 18446744073709551615
 

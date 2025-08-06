@@ -775,10 +775,9 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             return getPrimitiveType(TYPE_VOID);
         }
         case NODE_BLOCK: {
-            // Block nodes create a new scope and type-check their statements
-            TypeEnv* block_env = type_env_new(env);
+            // Block nodes type-check their statements (no new scope for now)
             for (int i = 0; i < node->block.count; i++) {
-                algorithm_w(block_env, node->block.statements[i]);
+                algorithm_w(env, node->block.statements[i]);
             }
             return getPrimitiveType(TYPE_VOID);
         }
@@ -851,10 +850,10 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                 if (!step_type) return NULL;
             }
             
-            // Create new scope for loop body and loop variable
+            // Create a new scope for the loop and its variable
             TypeEnv* loop_env = type_env_new(env);
             
-            // Add loop variable to loop environment with integer type
+            // Add loop variable to the loop scope only
             if (node->forRange.varName) {
                 TypeScheme* var_scheme = type_arena_alloc(sizeof(TypeScheme));
                 var_scheme->type = getPrimitiveType(TYPE_I32);
@@ -863,7 +862,7 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                 type_env_define(loop_env, node->forRange.varName, var_scheme);
             }
             
-            // Type-check body in loop environment
+            // Type-check body in the loop environment 
             if (node->forRange.body) {
                 Type* body_type = algorithm_w(loop_env, node->forRange.body);
                 if (!body_type) return NULL;
@@ -878,22 +877,19 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                 Type* iterable_type = algorithm_w(env, node->forIter.iterable);
                 if (!iterable_type) return NULL;
                 
-                // Create new scope for loop body and loop variable
-                TypeEnv* loop_env = type_env_new(env);
-                
-                // Add loop variable to loop environment with appropriate type
+                // Add loop variable to environment with appropriate type
                 // For now, assume iterable elements are i32 (can be enhanced later)
                 if (node->forIter.varName) {
                     TypeScheme* var_scheme = type_arena_alloc(sizeof(TypeScheme));
                     var_scheme->type = getPrimitiveType(TYPE_I32);
                     var_scheme->bound_vars = NULL;
                     var_scheme->bound_count = 0;
-                    type_env_define(loop_env, node->forIter.varName, var_scheme);
+                    type_env_define(env, node->forIter.varName, var_scheme);
                 }
                 
-                // Type-check body in loop environment
+                // Type-check body
                 if (node->forIter.body) {
-                    Type* body_type = algorithm_w(loop_env, node->forIter.body);
+                    Type* body_type = algorithm_w(env, node->forIter.body);
                     if (!body_type) return NULL;
                 }
             }

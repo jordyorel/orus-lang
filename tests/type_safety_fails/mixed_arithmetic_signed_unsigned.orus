@@ -2,6 +2,6 @@
 // Expected: Friendly error message about type safety
 
 a: i32 = 10
-b: u32 = 20u32
+b: u32 = 20
 result = a * b
 print(result)

@@ -6,7 +6,7 @@ a: i32 = 10
 b = a as i64
 print(b)
 
-c: i64 = 100i64
+c: i64 = 100
 d = c as i32
 print(d)
 
@@ -20,7 +20,7 @@ h = g as f64
 print(h)
 
 // Unsigned type casts
-i: u32 = 50u32
+i: u32 = 50
 j = i as i32
 print(j)
 
