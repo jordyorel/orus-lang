@@ -1,0 +1,28 @@
+// Comprehensive test of automatic mutability in loops
+print("=== Complete Mutability Test ===")
+
+// Variables outside loops require explicit mut
+mut outside_var = 1
+outside_var = outside_var + 1
+print("Outside loop (explicit mut):", outside_var)
+
+for i in 0..2:
+    print("Loop iteration:", i)
+    
+    // Loop variable 'i' is automatically mutable
+    original_i = i
+    i = i * 100
+    print("  Modified loop var i:", original_i, "->", i)
+    
+    // Variables declared inside loop are automatically mutable
+    inner_var = 5
+    inner_var = inner_var * 2  // No 'mut' needed!
+    print("  Inner var (auto-mutable):", inner_var)
+    
+    // Nested loops work too
+    for j in 0..1:
+        nested_var = 99
+        nested_var = nested_var + 1  // Also auto-mutable!
+        print("    Nested var (auto-mutable):", nested_var)
+
+print("Test completed successfully!")

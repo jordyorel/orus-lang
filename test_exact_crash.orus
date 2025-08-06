@@ -1,0 +1,23 @@
+// Find exact crash point
+print("Starting test")
+for a in 0..1:
+    print("Level 1")
+    for b in 0..1:
+        print("Level 2")
+        for c in 0..1:
+            print("Level 3")
+            for d in 0..1:
+                print("Level 4")
+                for e in 0..1:
+                    print("Level 5")
+                    for f in 0..1:
+                        print("Level 6")
+                        for g in 0..1:
+                            print("Level 7")
+                            for h in 0..1:
+                                print("Level 8")
+                                for ii in 0..1:
+                                    print("Level 9")
+                                    for j in 0..1:
+                                        print("Level 10 - about to crash?")
+print("Should this print?")

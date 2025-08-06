@@ -1,8 +1,0 @@
-// Test that variables get fresh values after continue
-for i in 0..2:
-    j = i + 100  // Should be unique each iteration  
-    print("i =", i, "j =", j)
-    if i == 0:
-        continue
-    print("After continue check: i =", i, "j =", j)
-print("Done")

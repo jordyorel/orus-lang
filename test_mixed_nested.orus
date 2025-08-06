@@ -1,0 +1,12 @@
+// Mixed nested with for and while
+for i in 0..2:
+    print("i =", i)
+    for j in 0..2:
+        print("  j =", j)
+        mut k = 0
+        while k < 2:
+            k = k + 1
+            if k == 1:
+                continue
+            print("    k =", k)
+print("Done")

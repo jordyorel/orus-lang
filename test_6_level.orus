@@ -1,0 +1,10 @@
+// Test 6-level nesting
+print("Testing 6-level:")
+for a in 0..1:
+    for b in 0..1:
+        for c in 0..1:
+            for d in 0..1:
+                for e in 0..1:
+                    for f in 0..1:
+                        print("Level 6 reached")
+print("Done")

@@ -1,0 +1,10 @@
+// Verify loop variables are implicitly mutable
+print("Testing loop variable mutability:")
+
+// This should work without explicit 'mut' declaration
+for i in 0..3:
+    print("Original i =", i)
+    i = i + 10  // Should work - no 'mut' needed
+    print("Modified i =", i)
+
+print("Test passed!")

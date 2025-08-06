@@ -1,7 +1,0 @@
-// Simple test for continue
-print("Testing simple continue:")
-for i in 0..5:
-    if i == 2:
-        continue
-    print("i =", i)
-print("Done")

@@ -1,0 +1,20 @@
+// Test that variables declared inside WHILE loops are automatically mutable
+print("Testing while loop variable mutability:")
+
+mut counter = 0
+while counter < 2:
+    print("While iteration:", counter)
+    
+    // This variable 'w' is declared inside the while loop
+    // It should NOT require 'mut' declaration to be mutable
+    w = 10
+    print("Initial w =", w)
+    
+    // This should work without explicit 'mut' - proving w is automatically mutable
+    w = w * 2
+    print("Modified w =", w)
+    
+    counter = counter + 1
+    print("---")
+
+print("While test completed!")

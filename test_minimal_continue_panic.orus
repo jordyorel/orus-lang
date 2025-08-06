@@ -1,9 +1,0 @@
-// Minimal continue panic test
-print("Minimal continue panic test:")
-
-for i in 0..2:
-    for j in 0..3:
-        if j == 1:
-            continue
-        print("j =", j)
-print("Done")

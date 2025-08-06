@@ -1,8 +1,0 @@
-// Test continue in for loop
-print("Testing continue in for loop:")
-for i in 0..10:
-    if i == 3 or i == 7:
-        print("Skipping i =", i)
-        continue
-    print("Processing i =", i)
-print("After for loop")

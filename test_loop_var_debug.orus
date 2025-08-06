@@ -1,8 +1,0 @@
-// Debug loop variable values with continue
-for i in 0..5:
-    print("Loop iteration i =", i)
-    if i == 2:
-        print("About to continue at i =", i)
-        continue
-    print("After continue check i =", i)
-print("Done")

@@ -986,8 +986,14 @@ void compile_assignment(CompilerContext* ctx, TypedASTNode* assign) {
             return;
         }
         
-        // Register the new variable in symbol table (default to immutable like Rust)
-        register_variable(ctx, var_name, var_reg, assign->resolvedType, false);
+        // Variables declared inside loops are automatically mutable for convenience
+        bool is_in_loop = (ctx->current_loop_start != -1);
+        bool auto_mutable = is_in_loop;
+        
+        DEBUG_CODEGEN_PRINT("Variable '%s' auto-mutability: %s (in_loop=%s)", 
+               var_name, auto_mutable ? "true" : "false", is_in_loop ? "true" : "false");
+        
+        register_variable(ctx, var_name, var_reg, assign->resolvedType, auto_mutable);
         
         // Move the value to the variable register
         emit_move(ctx, var_reg, value_reg);
@@ -1509,10 +1515,10 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
         return;
     }
     
-    // Register the loop variable in symbol table
+    // Register the loop variable in symbol table (loop variables are implicitly mutable)
     DEBUG_CODEGEN_PRINT("Registering loop variable '%s' in R%d\n", loop_var_name, loop_var_reg);
-    register_variable(ctx, loop_var_name, loop_var_reg, getPrimitiveType(TYPE_I32), false);
-    DEBUG_CODEGEN_PRINT("Variable '%s' registered successfully\n", loop_var_name);
+    register_variable(ctx, loop_var_name, loop_var_reg, getPrimitiveType(TYPE_I32), true);
+    DEBUG_CODEGEN_PRINT("Variable '%s' registered successfully as mutable\n", loop_var_name);
     
     // Initialize loop variable with start value
     emit_byte_to_buffer(ctx->bytecode, OP_MOVE_I32);
@@ -1682,8 +1688,8 @@ void compile_for_iter_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
         return;
     }
     
-    // Register the loop variable in symbol table
-    register_variable(ctx, for_stmt->typed.forIter.varName, loop_var_reg, getPrimitiveType(TYPE_I32), false);
+    // Register the loop variable in symbol table (loop variables are implicitly mutable)
+    register_variable(ctx, for_stmt->typed.forIter.varName, loop_var_reg, getPrimitiveType(TYPE_I32), true);
     
     // Allocate has_value register for iterator status
     int has_value_reg = mp_allocate_temp_register(ctx->allocator);

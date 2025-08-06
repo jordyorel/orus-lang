@@ -1,0 +1,20 @@
+// Test deep nesting with break/continue
+print("Testing deep nesting with break/continue:")
+for i in 0..2:
+    print("Level 1: i =", i)
+    for j in 0..3:
+        if j == 2:
+            print("  Level 2: breaking at j =", j)
+            break
+        print("  Level 2: j =", j)
+        for k in 0..3:
+            if k == 1:
+                print("    Level 3: continuing at k =", k)
+                continue
+            print("    Level 3: k =", k)
+            for l in 0..3:
+                if l == 1:
+                    print("      Level 4: breaking at l =", l)
+                    break
+                print("      Level 4: l =", l)
+print("Done")

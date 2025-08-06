@@ -1,9 +1,0 @@
-// Simplest possible break test
-print("Simple break test:")
-
-for k in 0..5:
-    print("k =", k)
-    if k == 2:
-        break
-    print("after if")
-print("done")

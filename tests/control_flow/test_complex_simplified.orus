@@ -1,7 +1,7 @@
 // Simplified version of complex nested
 print("Complex simplified test:")
 
-for i in 0..2:
+for i in 0..=3:
     print("Level 1: i =", i)
     
     mut j = 0
