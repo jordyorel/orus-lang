@@ -22,6 +22,10 @@ typedef struct MultiPassRegisterAllocator {
     bool temp_regs[48];        // R192-R239 usage
     bool module_regs[16];      // R240-R255 usage
     
+    // Scope-aware temp register allocation (NEW)
+    bool scope_temp_regs[6][8]; // 6 scope levels, 8 registers each (R192-R239)
+    int current_scope_level;     // Current nesting level (0-5)
+    
     // Allocation state
     int next_global;           // Next available global register
     int next_frame;            // Next available frame register
@@ -42,6 +46,12 @@ int mp_allocate_global_register(MultiPassRegisterAllocator* allocator);
 int mp_allocate_frame_register(MultiPassRegisterAllocator* allocator);  
 int mp_allocate_temp_register(MultiPassRegisterAllocator* allocator);
 int mp_allocate_module_register(MultiPassRegisterAllocator* allocator);
+
+// Scope-aware register allocation (NEW)
+int mp_allocate_scoped_temp_register(MultiPassRegisterAllocator* allocator, int scope_level);
+void mp_enter_scope(MultiPassRegisterAllocator* allocator);
+void mp_exit_scope(MultiPassRegisterAllocator* allocator);
+void mp_free_scoped_temp_register(MultiPassRegisterAllocator* allocator, int reg, int scope_level);
 
 // Register deallocation
 void mp_free_register(MultiPassRegisterAllocator* allocator, int reg);

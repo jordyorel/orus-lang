@@ -1582,6 +1582,25 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
         DEBUG_CODEGEN_PRINT("Warning: Could not allocate fresh registers, using existing\n");
         fresh_loop_var_reg = loop_var_reg;
         fresh_step_reg = step_reg;
+        
+        // CRITICAL FIX: When using existing registers, reload step value from constants
+        // to ensure proper i32 type and avoid "Operands must be the same type" error
+        Value step_safety_value = I32_VAL(step_val);
+        int step_safety_const_index = add_constant(ctx->constants, step_safety_value);
+        emit_byte_to_buffer(ctx->bytecode, OP_LOAD_I32_CONST);
+        emit_byte_to_buffer(ctx->bytecode, fresh_step_reg);
+        emit_byte_to_buffer(ctx->bytecode, (step_safety_const_index >> 8) & 0xFF);
+        emit_byte_to_buffer(ctx->bytecode, step_safety_const_index & 0xFF);
+        DEBUG_CODEGEN_PRINT("Reloaded step value for type safety: R%d = %d\n", fresh_step_reg, step_val);
+        
+        // Also ensure loop variable has proper i32 type by using OP_MOVE_I32
+        // This forces i32 interpretation even if the source register is corrupted
+        if (fresh_loop_var_reg != loop_var_reg) {
+            emit_byte_to_buffer(ctx->bytecode, OP_MOVE_I32);
+            emit_byte_to_buffer(ctx->bytecode, fresh_loop_var_reg);
+            emit_byte_to_buffer(ctx->bytecode, loop_var_reg);
+            DEBUG_CODEGEN_PRINT("Copied loop variable with i32 type enforcement: R%d -> R%d\n", loop_var_reg, fresh_loop_var_reg);
+        }
     } else {
         // Copy current loop variable value to fresh register
         emit_byte_to_buffer(ctx->bytecode, OP_MOVE_I32);

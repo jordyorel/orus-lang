@@ -21,6 +21,10 @@ MultiPassRegisterAllocator* init_mp_register_allocator(void) {
     memset(allocator->temp_regs, false, sizeof(allocator->temp_regs));
     memset(allocator->module_regs, false, sizeof(allocator->module_regs));
     
+    // Initialize scope-aware temp registers
+    memset(allocator->scope_temp_regs, false, sizeof(allocator->scope_temp_regs));
+    allocator->current_scope_level = 0;
+    
     // Initialize allocation pointers
     allocator->next_global = MP_GLOBAL_REG_START;
     allocator->next_frame = MP_FRAME_REG_START;
@@ -111,6 +115,75 @@ int mp_allocate_module_register(MultiPassRegisterAllocator* allocator) {
     // No free module registers
     printf("[REGISTER_ALLOCATOR] Warning: No free module registers\n");
     return -1;
+}
+
+// ============= SCOPE-AWARE REGISTER ALLOCATION (NEW) =============
+
+int mp_allocate_scoped_temp_register(MultiPassRegisterAllocator* allocator, int scope_level) {
+    if (!allocator) return -1;
+    if (scope_level < 0 || scope_level >= 6) {
+        printf("[REGISTER_ALLOCATOR] Error: Invalid scope level %d (must be 0-5)\n", scope_level);
+        return -1;
+    }
+    
+    // Each scope level gets 8 registers: R192+scope_level*8 to R192+scope_level*8+7
+    int base_reg = MP_TEMP_REG_START + (scope_level * 8);
+    
+    // Find next free register in this scope level
+    for (int i = 0; i < 8; i++) {
+        if (!allocator->scope_temp_regs[scope_level][i]) {
+            allocator->scope_temp_regs[scope_level][i] = true;
+            int reg = base_reg + i;
+            printf("[REGISTER_ALLOCATOR] Allocated scoped temp register R%d (scope level %d, slot %d)\n", 
+                   reg, scope_level, i);
+            return reg;
+        }
+    }
+    
+    // No free registers in this scope level
+    printf("[REGISTER_ALLOCATOR] Warning: No free temp registers in scope level %d\n", scope_level);
+    return -1;
+}
+
+void mp_enter_scope(MultiPassRegisterAllocator* allocator) {
+    if (!allocator) return;
+    
+    if (allocator->current_scope_level < 5) {
+        allocator->current_scope_level++;
+        printf("[REGISTER_ALLOCATOR] Entered scope level %d\n", allocator->current_scope_level);
+    } else {
+        printf("[REGISTER_ALLOCATOR] Warning: Maximum scope depth (5) reached\n");
+    }
+}
+
+void mp_exit_scope(MultiPassRegisterAllocator* allocator) {
+    if (!allocator) return;
+    
+    if (allocator->current_scope_level > 0) {
+        // Free all registers in current scope level
+        int scope = allocator->current_scope_level;
+        for (int i = 0; i < 8; i++) {
+            allocator->scope_temp_regs[scope][i] = false;
+        }
+        
+        printf("[REGISTER_ALLOCATOR] Exited scope level %d (freed %d registers)\n", scope, 8);
+        allocator->current_scope_level--;
+    } else {
+        printf("[REGISTER_ALLOCATOR] Warning: Already at root scope level\n");
+    }
+}
+
+void mp_free_scoped_temp_register(MultiPassRegisterAllocator* allocator, int reg, int scope_level) {
+    if (!allocator) return;
+    if (scope_level < 0 || scope_level >= 6) return;
+    
+    int base_reg = MP_TEMP_REG_START + (scope_level * 8);
+    if (reg >= base_reg && reg < base_reg + 8) {
+        int slot = reg - base_reg;
+        allocator->scope_temp_regs[scope_level][slot] = false;
+        printf("[REGISTER_ALLOCATOR] Freed scoped temp register R%d (scope level %d, slot %d)\n", 
+               reg, scope_level, slot);
+    }
 }
 
 void mp_free_register(MultiPassRegisterAllocator* allocator, int reg) {
