@@ -216,6 +216,13 @@ CompilerContext* init_compiler_context(TypedASTNode* typed_ast) {
     ctx->continue_count = 0;
     ctx->continue_capacity = 0;
     
+    // Initialize function compilation context (NEW)
+    ctx->current_function_index = -1;    // Global scope initially
+    ctx->function_chunks = NULL;         // No function chunks yet
+    ctx->function_arities = NULL;        // No function arities yet
+    ctx->function_count = 0;
+    ctx->function_capacity = 0;
+    
     if (!ctx->allocator || !ctx->dual_allocator || !ctx->bytecode || !ctx->constants || !ctx->symbols) {
         free_compiler_context(ctx);
         return NULL;
@@ -300,6 +307,11 @@ bool run_codegen_pass(CompilerContext* ctx) {
     if (success) {
         DEBUG_CODEGEN_PRINT("✅ Code generation completed, %d instructions generated\n", 
                ctx->bytecode->count);
+        
+        // Copy compiled functions to the VM
+        if (ctx->function_count > 0) {
+            finalize_functions_to_vm(ctx);
+        }
         
         // Add bytecode visualization if enabled
         if (ctx->enable_visualization) {
@@ -404,6 +416,26 @@ void free_compiler_context(CompilerContext* ctx) {
     // Free break statement tracking
     if (ctx->break_statements) {
         free(ctx->break_statements);
+    }
+    
+    // Free continue statement tracking
+    if (ctx->continue_statements) {
+        free(ctx->continue_statements);
+    }
+    
+    // Free function compilation resources (NEW)
+    if (ctx->function_chunks) {
+        for (int i = 0; i < ctx->function_count; i++) {
+            if (ctx->function_chunks[i]) {
+                free_bytecode_buffer(ctx->function_chunks[i]);
+            }
+        }
+        free(ctx->function_chunks);
+    }
+    
+    // Free function arities array
+    if (ctx->function_arities) {
+        free(ctx->function_arities);
     }
     
     // Note: Don't free input_ast - it's owned by caller

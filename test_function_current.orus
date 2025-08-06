@@ -1,0 +1,6 @@
+// Test current function support
+fn add(a: i32, b: i32) -> i32:
+    return a + b
+
+result = add(5, 3)
+print("Result:", result)

@@ -97,6 +97,13 @@ typedef struct CompilerContext {
     int* continue_statements;          // Array of continue statement bytecode offsets to patch
     int continue_count;                // Number of continue statements in current loop
     int continue_capacity;             // Capacity of continue_statements array
+    
+    // Function compilation context (NEW)
+    int current_function_index;        // Currently compiling function index (-1 if global)
+    BytecodeBuffer** function_chunks;  // Separate bytecode for each function
+    int* function_arities;             // Arities for each function
+    int function_count;                // Number of functions compiled
+    int function_capacity;             // Capacity of function_chunks array
 } CompilerContext;
 
 // Bytecode emission functions
@@ -130,5 +137,10 @@ void free_compiler_context(CompilerContext* ctx);
 // Pipeline coordination
 bool run_optimization_pass(CompilerContext* ctx);
 bool run_codegen_pass(CompilerContext* ctx);
+
+// Function compilation management (NEW)
+int register_function(CompilerContext* ctx, const char* name, int arity, BytecodeBuffer* chunk);
+BytecodeBuffer* get_function_chunk(CompilerContext* ctx, int function_index);
+void finalize_functions_to_vm(CompilerContext* ctx); // Copy compiled functions to VM
 
 #endif // ORUS_COMPILER_H

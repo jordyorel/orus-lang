@@ -872,7 +872,23 @@ void populate_ast_types(ASTNode* node, TypeEnv* env) {
                 populate_ast_types(node->function.returnType, env);
             }
             if (node->function.body) {
-                populate_ast_types(node->function.body, env);
+                // Create function environment with parameters - same logic as algorithm_w
+                TypeEnv* function_env = type_env_new(env);
+                
+                // Add parameters to the function's local environment using the same logic as algorithm_w
+                for (int i = 0; i < node->function.paramCount; i++) {
+                    if (node->function.params[i].name) {
+                        Type* param_type = getPrimitiveType(TYPE_I32); // Default
+                        if (node->function.params[i].typeAnnotation) {
+                            param_type = algorithm_w(env, node->function.params[i].typeAnnotation);
+                            if (!param_type) param_type = getPrimitiveType(TYPE_I32);
+                        }
+                        TypeScheme* param_scheme = generalize(function_env, param_type);
+                        type_env_define(function_env, node->function.params[i].name, param_scheme);
+                    }
+                }
+                
+                populate_ast_types(node->function.body, function_env);
             }
             break;
         case NODE_CALL:

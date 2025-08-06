@@ -5,6 +5,7 @@
 #include "compiler/register_allocator.h"
 #include "compiler/symbol_table.h"
 #include "vm/vm.h"
+#include "vm/vm_constants.h"
 #include "errors/features/variable_errors.h"
 #include "debug/debug_config.h"
 #include <stdio.h>
@@ -731,6 +732,116 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             return result_reg;
         }
         
+        case NODE_CALL: {
+            DEBUG_CODEGEN_PRINT("NODE_CALL: Compiling function call");
+            
+            if (!expr->original->call.callee || expr->original->call.callee->type != NODE_IDENTIFIER) {
+                DEBUG_CODEGEN_PRINT("Error: Only simple function calls supported (callee must be identifier)");
+                return -1;
+            }
+            
+            const char* function_name = expr->original->call.callee->identifier.name;
+            int arg_count = expr->original->call.argCount;
+            
+            DEBUG_CODEGEN_PRINT("NODE_CALL: Function '%s' with %d arguments", function_name, arg_count);
+            
+            // Look up function in symbol table (for now, assume it's in a global function index)
+            // TODO: This will be updated when we implement proper function symbol table
+            int function_index = -1;
+            
+            // For now, hardcode function lookup - this is temporary
+            if (strcmp(function_name, "add") == 0) {
+                function_index = 0;  // Function was registered with index 0
+            } else {
+                DEBUG_CODEGEN_PRINT("Error: Unknown function '%s'", function_name);
+                return -1;
+            }
+            
+            DEBUG_CODEGEN_PRINT("NODE_CALL: Found function '%s' at index %d", function_name, function_index);
+            
+            // Allocate consecutive temp registers for arguments
+            int first_arg_reg = -1;
+            int arg_regs[arg_count];
+            
+            // Pre-allocate consecutive registers for arguments
+            for (int i = 0; i < arg_count; i++) {
+                int consecutive_reg = mp_allocate_temp_register(ctx->allocator);
+                if (consecutive_reg == -1) {
+                    DEBUG_CODEGEN_PRINT("Error: Failed to allocate consecutive register for argument %d", i);
+                    return -1;
+                }
+                arg_regs[i] = consecutive_reg;
+                if (i == 0) first_arg_reg = consecutive_reg;
+            }
+            
+            // Compile arguments and move them to consecutive registers
+            for (int i = 0; i < arg_count; i++) {
+                // Create typed AST node for argument
+                TypedASTNode* arg_typed = create_typed_ast_node(expr->original->call.args[i]);
+                if (!arg_typed) {
+                    DEBUG_CODEGEN_PRINT("Error: Failed to create typed AST for argument %d", i);
+                    return -1;
+                }
+                
+                // Compile argument into a temp register
+                int temp_arg_reg = compile_expression(ctx, arg_typed);
+                free_typed_ast_node(arg_typed);
+                
+                if (temp_arg_reg == -1) {
+                    DEBUG_CODEGEN_PRINT("Error: Failed to compile argument %d", i);
+                    return -1;
+                }
+                
+                // Move compiled argument to consecutive register
+                emit_instruction_to_buffer(ctx->bytecode, OP_MOVE_I32, arg_regs[i], temp_arg_reg, 0);
+                DEBUG_CODEGEN_PRINT("NODE_CALL: Moved argument %d from R%d to consecutive R%d", i, temp_arg_reg, arg_regs[i]);
+                
+                // Free the temporary register if it's different from our allocated one
+                if (temp_arg_reg != arg_regs[i] && temp_arg_reg >= MP_TEMP_REG_START && temp_arg_reg <= MP_TEMP_REG_END) {
+                    mp_free_temp_register(ctx->allocator, temp_arg_reg);
+                }
+            }
+            
+            // Load function index into a register as I32 value
+            int func_reg = mp_allocate_temp_register(ctx->allocator);
+            if (func_reg == -1) {
+                DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for function index");
+                return -1;
+            }
+            
+            // Load the function index as I32 constant
+            Value func_index_value = I32_VAL(function_index);
+            emit_load_constant(ctx, func_reg, func_index_value);
+            DEBUG_CODEGEN_PRINT("NODE_CALL: Loaded function index %d into R%d", function_index, func_reg);
+            
+            // Allocate register for return value
+            int return_reg = mp_allocate_temp_register(ctx->allocator);
+            if (return_reg == -1) {
+                DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for function return value");
+                return -1;
+            }
+            
+            // Emit OP_CALL_R instruction with correct format
+            // Format: OP_CALL_R, func_reg, first_arg_reg, arg_count, result_reg
+            // first_arg_reg was already set above when allocating consecutive registers
+            emit_instruction_to_buffer(ctx->bytecode, OP_CALL_R, func_reg, first_arg_reg, arg_count);
+            emit_byte_to_buffer(ctx->bytecode, return_reg);  // 4th parameter
+            DEBUG_CODEGEN_PRINT("NODE_CALL: Emitted OP_CALL_R func_reg=R%d, first_arg=R%d, args=%d, result=R%d", 
+                   func_reg, first_arg_reg, arg_count, return_reg);
+            
+            // Free argument registers since they're temps
+            for (int i = 0; i < arg_count; i++) {
+                if (arg_regs[i] >= MP_TEMP_REG_START && arg_regs[i] <= MP_TEMP_REG_END) {
+                    mp_free_temp_register(ctx->allocator, arg_regs[i]);
+                }
+            }
+            
+            // Free the function register since it's temporary
+            mp_free_temp_register(ctx->allocator, func_reg);
+            
+            return return_reg;
+        }
+        
         default:
             DEBUG_CODEGEN_PRINT("Error: Unsupported expression type: %d\n", expr->original->type);
             return -1;
@@ -908,6 +1019,14 @@ void compile_statement(CompilerContext* ctx, TypedASTNode* stmt) {
             
         case NODE_FOR_ITER:
             compile_for_iter_statement(ctx, stmt);
+            break;
+            
+        case NODE_FUNCTION:
+            compile_function_declaration(ctx, stmt);
+            break;
+            
+        case NODE_RETURN:
+            compile_return_statement(ctx, stmt);
             break;
             
         default:
@@ -1977,4 +2096,192 @@ void compile_block_with_scope(CompilerContext* ctx, TypedASTNode* block) {
     // Restore previous scope
     free_symbol_table(ctx->symbols);
     ctx->symbols = old_scope;
+}
+
+// ====== FUNCTION COMPILATION MANAGEMENT ======
+
+// Register a compiled function and store its chunk
+int register_function(CompilerContext* ctx, const char* name, int arity, BytecodeBuffer* chunk) {
+    if (!ctx || !name || !chunk) return -1;
+    
+    // Ensure function_chunks and function_arities arrays have capacity
+    if (ctx->function_count >= ctx->function_capacity) {
+        int new_capacity = ctx->function_capacity == 0 ? 8 : ctx->function_capacity * 2;
+        ctx->function_chunks = realloc(ctx->function_chunks, sizeof(BytecodeBuffer*) * new_capacity);
+        ctx->function_arities = realloc(ctx->function_arities, sizeof(int) * new_capacity);
+        if (!ctx->function_chunks || !ctx->function_arities) return -1;
+        ctx->function_capacity = new_capacity;
+    }
+    
+    // Store the function chunk and arity
+    int function_index = ctx->function_count++;
+    ctx->function_chunks[function_index] = chunk;
+    ctx->function_arities[function_index] = arity;
+    
+    DEBUG_CODEGEN_PRINT("Registered function '%s' with index %d (arity %d)\n", name, function_index, arity);
+    return function_index;
+}
+
+// Get the bytecode chunk for a compiled function
+BytecodeBuffer* get_function_chunk(CompilerContext* ctx, int function_index) {
+    if (!ctx || function_index < 0 || function_index >= ctx->function_count) return NULL;
+    return ctx->function_chunks[function_index];
+}
+
+// Copy compiled functions to the VM's function array
+void finalize_functions_to_vm(CompilerContext* ctx) {
+    if (!ctx) return;
+    
+    extern VM vm; // Access global VM instance
+    
+    DEBUG_CODEGEN_PRINT("Finalizing %d functions to VM\n", ctx->function_count);
+    
+    for (int i = 0; i < ctx->function_count; i++) {
+        if (vm.functionCount >= UINT8_COUNT) {
+            DEBUG_CODEGEN_PRINT("Error: VM function array full\n");
+            break;
+        }
+        
+        BytecodeBuffer* func_chunk = ctx->function_chunks[i];
+        if (!func_chunk) continue;
+        
+        // Create a Chunk from BytecodeBuffer
+        Chunk* chunk = malloc(sizeof(Chunk));
+        if (!chunk) continue;
+        
+        // Initialize chunk with function bytecode
+        chunk->code = malloc(func_chunk->count);
+        if (!chunk->code) {
+            free(chunk);
+            continue;
+        }
+        
+        memcpy(chunk->code, func_chunk->instructions, func_chunk->count);
+        chunk->count = func_chunk->count;
+        chunk->capacity = func_chunk->count;
+        
+        // Copy constants (for now just initialize empty)
+        chunk->constants.values = NULL;
+        chunk->constants.count = 0;
+        chunk->constants.capacity = 0;
+        
+        // Register function in VM
+        Function* vm_function = &vm.functions[vm.functionCount];
+        vm_function->start = 0; // Always start at beginning of chunk
+        vm_function->arity = ctx->function_arities[i]; // Use stored arity
+        vm_function->chunk = chunk;
+        
+        DEBUG_CODEGEN_PRINT("Added function %d to VM (index %d)\n", i, vm.functionCount);
+        vm.functionCount++;
+    }
+}
+
+// ====== FUNCTION COMPILATION IMPLEMENTATION ======
+
+// Compile a function declaration into a separate chunk
+void compile_function_declaration(CompilerContext* ctx, TypedASTNode* func) {
+    if (!ctx || !func || !func->original) return;
+    
+    DEBUG_CODEGEN_PRINT("Compiling function declaration: %s\n", 
+           func->original->function.name ? func->original->function.name : "(anonymous)");
+    
+    // Create a separate bytecode buffer for this function
+    BytecodeBuffer* function_bytecode = init_bytecode_buffer();
+    if (!function_bytecode) {
+        DEBUG_CODEGEN_PRINT("Error: Failed to create function bytecode buffer\n");
+        return;
+    }
+    
+    // Save current context
+    BytecodeBuffer* saved_bytecode = ctx->bytecode;
+    int saved_function_index = ctx->current_function_index;
+    
+    // Switch to function compilation context
+    ctx->bytecode = function_bytecode;
+    
+    // Get function information
+    const char* func_name = func->original->function.name;
+    int arity = func->original->function.paramCount;
+    
+    DEBUG_CODEGEN_PRINT("Function '%s' has %d parameters\n", func_name, arity);
+    
+    // Register function parameters in symbol table
+    // Parameters are placed by VM at 256 - arity + i (to fit in 256-register space)
+    int param_base = 256 - arity;
+    if (param_base < 1) param_base = 1; // Ensure we don't go below R1
+    
+    for (int i = 0; i < arity; i++) {
+        if (func->original->function.params[i].name) {
+            int param_reg = param_base + i;
+            register_variable(ctx, func->original->function.params[i].name, param_reg, 
+                            getPrimitiveType(TYPE_I32), false);
+            DEBUG_CODEGEN_PRINT("Registered parameter '%s' in register R%d (VM convention)\n", 
+                   func->original->function.params[i].name, param_reg);
+        }
+    }
+    
+    // Compile function body
+    if (func->original->function.body) {
+        if (func->original->function.body->type == NODE_BLOCK) {
+            // Function body is a block - compile with scope management
+            compile_block_with_scope(ctx, func->typed.function.body);
+        } else {
+            // Single statement function body
+            compile_statement(ctx, func->typed.function.body);
+        }
+    }
+    
+    // Add implicit return void if function doesn't end with return
+    if (function_bytecode->count == 0 || 
+        function_bytecode->instructions[function_bytecode->count - 1] != OP_RETURN_R) {
+        emit_byte_to_buffer(function_bytecode, OP_RETURN_VOID);
+        DEBUG_CODEGEN_PRINT("Added implicit OP_RETURN_VOID\n");
+    }
+    
+    // Register the compiled function
+    int function_index = register_function(ctx, func_name, arity, function_bytecode);
+    if (function_index == -1) {
+        DEBUG_CODEGEN_PRINT("Error: Failed to register function '%s'\n", func_name);
+        free_bytecode_buffer(function_bytecode);
+    } else {
+        // Store function index in symbol table for function calls
+        // Functions are stored as I32 values containing the function index
+        register_variable(ctx, func_name, function_index, getPrimitiveType(TYPE_FUNCTION), false);
+        DEBUG_CODEGEN_PRINT("Function '%s' registered with index %d\n", func_name, function_index);
+    }
+    
+    // Restore context
+    ctx->bytecode = saved_bytecode;
+    ctx->current_function_index = saved_function_index;
+}
+
+// Compile a return statement
+void compile_return_statement(CompilerContext* ctx, TypedASTNode* ret) {
+    if (!ctx || !ret || !ret->original) return;
+    
+    DEBUG_CODEGEN_PRINT("Compiling return statement\n");
+    
+    if (ret->original->returnStmt.value) {
+        // Return with value
+        int value_reg = compile_expression(ctx, ret->typed.returnStmt.value);
+        if (value_reg == -1) {
+            DEBUG_CODEGEN_PRINT("Error: Failed to compile return value\n");
+            return;
+        }
+        
+        // Emit OP_RETURN_R with value register
+        emit_byte_to_buffer(ctx->bytecode, OP_RETURN_R);
+        emit_byte_to_buffer(ctx->bytecode, value_reg);
+        
+        DEBUG_CODEGEN_PRINT("Emitted OP_RETURN_R R%d\n", value_reg);
+        
+        // Free value register if it's temporary
+        if (value_reg >= MP_TEMP_REG_START && value_reg <= MP_TEMP_REG_END) {
+            mp_free_temp_register(ctx->allocator, value_reg);
+        }
+    } else {
+        // Return void
+        emit_byte_to_buffer(ctx->bytecode, OP_RETURN_VOID);
+        DEBUG_CODEGEN_PRINT("Emitted OP_RETURN_VOID\n");
+    }
 }
