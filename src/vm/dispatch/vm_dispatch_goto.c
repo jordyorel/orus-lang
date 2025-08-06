@@ -2667,6 +2667,7 @@ InterpretResult vm_run_dispatch(void) {
         // printf("[DISPATCH_TRACE] OP_HALT reached - program should terminate");
         fflush(stdout);
         vm.lastExecutionTime = get_time_vm() - start_time;
+        vm.isShuttingDown = true;  // Set shutdown flag before returning
         // printf("[DISPATCH_TRACE] About to return INTERPRET_OK from OP_HALT");
         fflush(stdout);
         RETURN(INTERPRET_OK);

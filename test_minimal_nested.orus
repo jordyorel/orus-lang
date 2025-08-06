@@ -1,8 +1,0 @@
-// Minimal nested test to isolate panic
-for i in 0..1:
-    for j in 0..1:
-        for k in 0..1:
-            if k == 0:
-                continue
-            print("k =", k)
-print("Done")

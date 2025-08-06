@@ -79,9 +79,13 @@ void initVM(void) {
 
     vm.chunk = NULL;
     vm.ip = NULL;
+    vm.isShuttingDown = false;  // Initialize shutdown flag
 }
 
 void freeVM(void) {
+    // Set shutdown flag to indicate VM is in cleanup phase
+    vm.isShuttingDown = true;
+    
     // Phase 1: Free register file resources
     free_register_file(&vm.register_file);
     

@@ -144,7 +144,7 @@ print("Array has items", len(items))
 - [*] **Done**: Implement if/else statements with nested conditions and `elif`, including jump patching and scoped blocks.
 - [*] **Done**: Add basic dead code elimination for unreachable branches
 - [*] **Done**: Implement constant folding for compile-time known conditions
-- [ ] **Todo**: If/else and loops should create new scopes in Orus no need 'mut' inside loop or if statement
+- [*] **Todo**: If/else and loops should create new scopes in Orus no need 'mut' inside loop or if statement
 
 ```orus
 // Target syntax:
@@ -156,7 +156,7 @@ else:
     // block
 
 print("ok") if x == 1 elif x == 2 else print("fallback")
-- [*] // Ternary operator 
+- [ ] // Ternary operator 
 result = x > 0 ? "positive" : "non-positive"
 ```
 
@@ -210,14 +210,14 @@ if something:
 - [x] **DONE**: For loop with range syntax (`0..5`, `0..=5`, `0..10..2`) and bounds checking
 - [ ] **TODO**: For loop with iterator syntax (`for item in collection`) with zero-copy iteration
 - [x] **DONE**: Break and continue statements with proper scope handling and jump table optimization
-- [x] **DONE**: Replace fixed-size break/continue jump arrays with dynamic vectors
+- [ ] **DONE**: Replace fixed-size break/continue jump arrays with dynamic vectors
 - [ ] **TODO**: Nested loop support with labeled break/continue for arbitrary loop depth
 - [x] **DONE**: Loop variable scoping, lifetime management, and register allocation optimization
 - [x] **DONE**: Advanced Orus Range Syntax: `start..end..step` with direction validation
 
 **Performance & Safety Requirements (Progressive Implementation):**
-- [x] **DONE**: Loop invariant code motion (LICM) optimization with full expression replacement system *(Elegant auto-mutable variables + hoisting)*
-- [x] **DONE**: Loop unrolling for small, known iteration counts (implemented with comprehensive optimization)
+- [ ] **DONE**: Loop invariant code motion (LICM) optimization with full expression replacement system *(Elegant auto-mutable variables + hoisting)*
+- [ ] **DONE**: Loop unrolling for small, known iteration counts (implemented with comprehensive optimization)
 - [ ] **TODO**: Strength reduction for induction variables (foundation for advanced math optimizations)
 - [ ] **TODO**: Dead code elimination within loop bodies (enables advanced type system optimizations)
 - [ ] **TODO**: Bounds check elimination for provably safe ranges (requires type system)
@@ -242,10 +242,10 @@ for i in start..end..step:
 * **`step`**: Optional stride (must be non-zero, defaults to 1)
 
 **Compile-Time Optimizations:**
-- [x] Constant range folding for known bounds
-- [x] Loop unrolling for small iteration counts (≤ 8 iterations)
-- [x] Strength reduction for power-of-2 steps (framework implemented)
-- [x] Dead iteration elimination for unreachable ranges
+- [ ] Constant range folding for known bounds
+- [ ] Loop unrolling for small iteration counts (≤ 8 iterations)
+- [ ] Strength reduction for power-of-2 steps (framework implemented)
+- [ ] Dead iteration elimination for unreachable ranges
 
 ---
 
@@ -833,9 +833,9 @@ enum Status:
 ```orus
 // Match expressions
 match value:
-    0: print("zero")
-    1: print("one")
-    _: print("other")
+    0 -> print("zero")
+    1 -> print("one")
+    _ -> print("other")
 ```
 
 ### 5.3 Advanced Generic Features & Monomorphization

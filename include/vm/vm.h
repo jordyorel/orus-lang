@@ -971,6 +971,7 @@ typedef struct {
     bool devMode;
     bool suppressWarnings;
     bool promotionHints;
+    bool isShuttingDown;  // Flag to indicate VM is in cleanup/shutdown phase
 } VM;
 
 // Global VM instance

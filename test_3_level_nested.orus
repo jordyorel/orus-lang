@@ -1,9 +1,0 @@
-// Test 3-level nested for loops
-print("Testing 3-level nesting:")
-for i in 0..2:
-    print("Level 1: i =", i)
-    for j in 0..2:
-        print("  Level 2: j =", j)
-        for k in 0..2:
-            print("    Level 3: k =", k)
-print("Done")

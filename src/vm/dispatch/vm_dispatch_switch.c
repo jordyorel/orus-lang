@@ -2228,6 +2228,7 @@ InterpretResult vm_run_dispatch(void) {
 
                 case OP_HALT:
                     vm.lastExecutionTime = get_time_vm() - start_time;
+                    vm.isShuttingDown = true;  // Set shutdown flag before returning
                     RETURN(INTERPRET_OK);
 
                 // Extended opcodes for 16-bit register access (Phase 2)
