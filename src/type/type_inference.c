@@ -340,6 +340,9 @@ void reset_type_inference_errors(void) {
 
 // ---- Algorithm W ----
 // ---- Cast validation ----
+// ---- Scope tracking for variable violations ----
+
+
 static bool is_numeric_type(Type* type) {
     if (!type) return false;
     return type->kind == TYPE_I32 || type->kind == TYPE_I64 ||
@@ -775,7 +778,8 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             return getPrimitiveType(TYPE_VOID);
         }
         case NODE_BLOCK: {
-            // Block nodes type-check their statements (no new scope for now)
+            // Block nodes should share the same environment as their parent
+            // Only loops should create isolated scopes for their variables
             for (int i = 0; i < node->block.count; i++) {
                 algorithm_w(env, node->block.statements[i]);
             }
@@ -877,19 +881,21 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                 Type* iterable_type = algorithm_w(env, node->forIter.iterable);
                 if (!iterable_type) return NULL;
                 
-                // Add loop variable to environment with appropriate type
-                // For now, assume iterable elements are i32 (can be enhanced later)
+                // Create a new scope for the loop and its variable
+                TypeEnv* loop_env = type_env_new(env);
+                
+                // Add loop variable to the loop scope only
                 if (node->forIter.varName) {
                     TypeScheme* var_scheme = type_arena_alloc(sizeof(TypeScheme));
                     var_scheme->type = getPrimitiveType(TYPE_I32);
                     var_scheme->bound_vars = NULL;
                     var_scheme->bound_count = 0;
-                    type_env_define(env, node->forIter.varName, var_scheme);
+                    type_env_define(loop_env, node->forIter.varName, var_scheme);
                 }
                 
-                // Type-check body
+                // Type-check body in the loop environment
                 if (node->forIter.body) {
-                    Type* body_type = algorithm_w(env, node->forIter.body);
+                    Type* body_type = algorithm_w(loop_env, node->forIter.body);
                     if (!body_type) return NULL;
                 }
             }
@@ -982,6 +988,8 @@ void populate_ast_types(ASTNode* node, TypeEnv* env) {
             }
             break;
         case NODE_BLOCK:
+            // Block nodes should share the same environment as their parent
+            // Only loops should create isolated scopes for their variables
             for (int i = 0; i < node->block.count; i++) {
                 populate_ast_types(node->block.statements[i], env);
             }
@@ -1043,7 +1051,19 @@ void populate_ast_types(ASTNode* node, TypeEnv* env) {
                 populate_ast_types(node->forRange.step, env);
             }
             if (node->forRange.body) {
-                populate_ast_types(node->forRange.body, env);
+                // Create a new scope for the loop and its variable - same as algorithm_w
+                TypeEnv* loop_env = type_env_new(env);
+                
+                // Add loop variable to the loop scope only - same as algorithm_w
+                if (node->forRange.varName) {
+                    TypeScheme* var_scheme = type_arena_alloc(sizeof(TypeScheme));
+                    var_scheme->type = getPrimitiveType(TYPE_I32);
+                    var_scheme->bound_vars = NULL;
+                    var_scheme->bound_count = 0;
+                    type_env_define(loop_env, node->forRange.varName, var_scheme);
+                }
+                
+                populate_ast_types(node->forRange.body, loop_env);
             }
             break;
         case NODE_FOR_ITER:
@@ -1051,7 +1071,19 @@ void populate_ast_types(ASTNode* node, TypeEnv* env) {
                 populate_ast_types(node->forIter.iterable, env);
             }
             if (node->forIter.body) {
-                populate_ast_types(node->forIter.body, env);
+                // Create a new scope for the loop and its variable - same as algorithm_w
+                TypeEnv* loop_env = type_env_new(env);
+                
+                // Add loop variable to the loop scope only - same as algorithm_w
+                if (node->forIter.varName) {
+                    TypeScheme* var_scheme = type_arena_alloc(sizeof(TypeScheme));
+                    var_scheme->type = getPrimitiveType(TYPE_I32);
+                    var_scheme->bound_vars = NULL;
+                    var_scheme->bound_count = 0;
+                    type_env_define(loop_env, node->forIter.varName, var_scheme);
+                }
+                
+                populate_ast_types(node->forIter.body, loop_env);
             }
             break;
         default:

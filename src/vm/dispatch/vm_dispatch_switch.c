@@ -24,15 +24,15 @@
 //     }
 // }
 
-// static inline void vm_set_register_safe(uint16_t id, Value value) {
-//     if (id < 256) {
-//         // Legacy global registers
-//         vm.registers[id] = value;
-//     } else {
-//         // Use register file for frame/spill registers
-//         set_register(&vm.register_file, id, value);
-//     }
-// }
+static inline void vm_set_register_safe(uint16_t id, Value value) {
+    if (id < 256) {
+        // Legacy global registers
+        vm.registers[id] = value;
+    } else {
+        // Use register file for frame/spill registers
+        set_register(&vm.register_file, id, value);
+    }
+}
 
 // ✅ Auto-detect computed goto support
 #ifndef USE_COMPUTED_GOTO
@@ -1642,7 +1642,7 @@ InterpretResult vm_run_dispatch(void) {
                         // Simple parameter base calculation to match compiler
                         uint8_t paramBase = 256 - function->arity;
                         if (paramBase < 1) paramBase = 1;
-                        frame->parameterBaseRegister = paramBase;
+                        frame->parameterBaseRegister = (uint16_t)paramBase;
                         
                         // Save registers that will be overwritten by parameters
                         frame->savedRegisterCount = argCount < 64 ? argCount : 64;
@@ -1756,9 +1756,9 @@ InterpretResult vm_run_dispatch(void) {
                     if (vm.frameCount > 0) {
                         CallFrame* frame = &vm.frames[--vm.frameCount];
                         
-                        // Restore saved registers using dynamic parameter base and bridge functions
+                        // Restore saved registers directly
                         for (int i = 0; i < frame->savedRegisterCount; i++) {
-                            vm_set_register_safe(frame->parameterBaseRegister + i, frame->savedRegisters[i]);
+                            vm.registers[frame->parameterBaseRegister + i] = frame->savedRegisters[i];
                         }
                         
                         vm.chunk = frame->previousChunk;
@@ -1778,9 +1778,9 @@ InterpretResult vm_run_dispatch(void) {
                     if (vm.frameCount > 0) {
                         CallFrame* frame = &vm.frames[--vm.frameCount];
                         
-                        // Restore saved registers using dynamic parameter base and bridge functions
+                        // Restore saved registers directly
                         for (int i = 0; i < frame->savedRegisterCount; i++) {
-                            vm_set_register_safe(frame->parameterBaseRegister + i, frame->savedRegisters[i]);
+                            vm.registers[frame->parameterBaseRegister + i] = frame->savedRegisters[i];
                         }
                         
                         vm.chunk = frame->previousChunk;

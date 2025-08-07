@@ -745,14 +745,9 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             
             DEBUG_CODEGEN_PRINT("NODE_CALL: Function '%s' with %d arguments", function_name, arg_count);
             
-            // Look up function in symbol table (for now, assume it's in a global function index)
-            // TODO: This will be updated when we implement proper function symbol table
-            int function_index = -1;
-            
-            // For now, hardcode function lookup - this is temporary
-            if (strcmp(function_name, "add") == 0) {
-                function_index = 0;  // Function was registered with index 0
-            } else {
+            // Look up function in symbol table
+            int function_index = lookup_variable(ctx, function_name);
+            if (function_index == -1) {
                 DEBUG_CODEGEN_PRINT("Error: Unknown function '%s'", function_name);
                 return -1;
             }
@@ -761,44 +756,58 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             
             // Allocate consecutive temp registers for arguments
             int first_arg_reg = -1;
-            int arg_regs[arg_count];
+            int* arg_regs = NULL;
             
-            // Pre-allocate consecutive registers for arguments
-            for (int i = 0; i < arg_count; i++) {
-                int consecutive_reg = mp_allocate_temp_register(ctx->allocator);
-                if (consecutive_reg == -1) {
-                    DEBUG_CODEGEN_PRINT("Error: Failed to allocate consecutive register for argument %d", i);
+            if (arg_count > 0) {
+                arg_regs = malloc(sizeof(int) * arg_count);
+                if (!arg_regs) {
+                    DEBUG_CODEGEN_PRINT("Error: Failed to allocate memory for argument registers");
                     return -1;
                 }
-                arg_regs[i] = consecutive_reg;
-                if (i == 0) first_arg_reg = consecutive_reg;
+                
+                // Pre-allocate consecutive registers for arguments
+                for (int i = 0; i < arg_count; i++) {
+                    int consecutive_reg = mp_allocate_temp_register(ctx->allocator);
+                    if (consecutive_reg == -1) {
+                        DEBUG_CODEGEN_PRINT("Error: Failed to allocate consecutive register for argument %d", i);
+                        free(arg_regs);
+                        return -1;
+                    }
+                    arg_regs[i] = consecutive_reg;
+                    if (i == 0) first_arg_reg = consecutive_reg;
+                }
             }
             
             // Compile arguments and move them to consecutive registers
-            for (int i = 0; i < arg_count; i++) {
-                // Create typed AST node for argument
-                TypedASTNode* arg_typed = create_typed_ast_node(expr->original->call.args[i]);
-                if (!arg_typed) {
-                    DEBUG_CODEGEN_PRINT("Error: Failed to create typed AST for argument %d", i);
-                    return -1;
-                }
-                
-                // Compile argument into a temp register
-                int temp_arg_reg = compile_expression(ctx, arg_typed);
-                free_typed_ast_node(arg_typed);
-                
-                if (temp_arg_reg == -1) {
-                    DEBUG_CODEGEN_PRINT("Error: Failed to compile argument %d", i);
-                    return -1;
-                }
-                
-                // Move compiled argument to consecutive register
-                emit_instruction_to_buffer(ctx->bytecode, OP_MOVE_I32, arg_regs[i], temp_arg_reg, 0);
-                DEBUG_CODEGEN_PRINT("NODE_CALL: Moved argument %d from R%d to consecutive R%d", i, temp_arg_reg, arg_regs[i]);
-                
-                // Free the temporary register if it's different from our allocated one
-                if (temp_arg_reg != arg_regs[i] && temp_arg_reg >= MP_TEMP_REG_START && temp_arg_reg <= MP_TEMP_REG_END) {
-                    mp_free_temp_register(ctx->allocator, temp_arg_reg);
+            if (arg_regs) {
+                for (int i = 0; i < arg_count; i++) {
+                    // Create typed AST node for argument
+                    TypedASTNode* arg_typed = create_typed_ast_node(expr->original->call.args[i]);
+                    if (!arg_typed) {
+                        DEBUG_CODEGEN_PRINT("Error: Failed to create typed AST for argument %d", i);
+                        free(arg_regs);
+                        return -1;
+                    }
+                    
+                    // Compile argument into a temp register
+                    int temp_arg_reg = compile_expression(ctx, arg_typed);
+                    free_typed_ast_node(arg_typed);
+                    
+                    if (temp_arg_reg == -1) {
+                        DEBUG_CODEGEN_PRINT("Error: Failed to compile argument %d", i);
+                        free(arg_regs);
+                        return -1;
+                    }
+                    
+                    // Move compiled argument to consecutive register
+                    // Use generic move to preserve type information without enforcing specific types
+                    emit_move(ctx, arg_regs[i], temp_arg_reg);
+                    DEBUG_CODEGEN_PRINT("NODE_CALL: Moved argument %d from R%d to consecutive R%d", i, temp_arg_reg, arg_regs[i]);
+                    
+                    // Free the temporary register if it's different from our allocated one
+                    if (temp_arg_reg != arg_regs[i] && temp_arg_reg >= MP_TEMP_REG_START && temp_arg_reg <= MP_TEMP_REG_END) {
+                        mp_free_temp_register(ctx->allocator, temp_arg_reg);
+                    }
                 }
             }
             
@@ -823,17 +832,21 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             
             // Emit OP_CALL_R instruction with correct format
             // Format: OP_CALL_R, func_reg, first_arg_reg, arg_count, result_reg
-            // first_arg_reg was already set above when allocating consecutive registers
-            emit_instruction_to_buffer(ctx->bytecode, OP_CALL_R, func_reg, first_arg_reg, arg_count);
+            // For 0-argument functions, use register 0 as dummy (it won't be accessed by VM)
+            int actual_first_arg = (arg_count > 0) ? first_arg_reg : 0;
+            emit_instruction_to_buffer(ctx->bytecode, OP_CALL_R, func_reg, actual_first_arg, arg_count);
             emit_byte_to_buffer(ctx->bytecode, return_reg);  // 4th parameter
             DEBUG_CODEGEN_PRINT("NODE_CALL: Emitted OP_CALL_R func_reg=R%d, first_arg=R%d, args=%d, result=R%d", 
-                   func_reg, first_arg_reg, arg_count, return_reg);
+                   func_reg, actual_first_arg, arg_count, return_reg);
             
             // Free argument registers since they're temps
-            for (int i = 0; i < arg_count; i++) {
-                if (arg_regs[i] >= MP_TEMP_REG_START && arg_regs[i] <= MP_TEMP_REG_END) {
-                    mp_free_temp_register(ctx->allocator, arg_regs[i]);
+            if (arg_regs) {
+                for (int i = 0; i < arg_count; i++) {
+                    if (arg_regs[i] >= MP_TEMP_REG_START && arg_regs[i] <= MP_TEMP_REG_END) {
+                        mp_free_temp_register(ctx->allocator, arg_regs[i]);
+                    }
                 }
+                free(arg_regs);
             }
             
             // Free the function register since it's temporary
@@ -1441,6 +1454,14 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
     ctx->break_count = 0;
     ctx->break_capacity = 0;
     
+    // Save continue statement context for nested loops
+    int* prev_continue_statements = ctx->continue_statements;
+    int prev_continue_count = ctx->continue_count;
+    int prev_continue_capacity = ctx->continue_capacity;
+    ctx->continue_statements = NULL;
+    ctx->continue_count = 0;
+    ctx->continue_capacity = 0;
+    
     // Set up loop labels
     int loop_start = ctx->bytecode->count;
     ctx->current_loop_start = loop_start;
@@ -1523,6 +1544,11 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
     ctx->break_count = prev_break_count;
     ctx->break_capacity = prev_break_capacity;
     
+    // Restore continue statement context
+    ctx->continue_statements = prev_continue_statements;
+    ctx->continue_count = prev_continue_count;
+    ctx->continue_capacity = prev_continue_capacity;
+    
     DEBUG_CODEGEN_PRINT("While statement compilation completed");
 }
 
@@ -1580,6 +1606,14 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     ctx->break_statements = NULL;
     ctx->break_count = 0;
     ctx->break_capacity = 0;
+    
+    // Save continue statement context for nested loops
+    int* prev_continue_statements = ctx->continue_statements;
+    int prev_continue_count = ctx->continue_count;
+    int prev_continue_capacity = ctx->continue_capacity;
+    ctx->continue_statements = NULL;
+    ctx->continue_count = 0;
+    ctx->continue_capacity = 0;
     
     // WORKAROUND: Use values from original AST (since typed AST is corrupted by optimization)
     DEBUG_CODEGEN_PRINT("Reading actual values from original AST");
@@ -1841,6 +1875,11 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     ctx->break_statements = prev_break_statements;
     ctx->break_count = prev_break_count;
     ctx->break_capacity = prev_break_capacity;
+    
+    // Restore continue statement context
+    ctx->continue_statements = prev_continue_statements;
+    ctx->continue_count = prev_continue_count;
+    ctx->continue_capacity = prev_continue_capacity;
     
     DEBUG_CODEGEN_PRINT("For range statement compilation completed");
 }
@@ -2160,10 +2199,23 @@ void finalize_functions_to_vm(CompilerContext* ctx) {
         chunk->count = func_chunk->count;
         chunk->capacity = func_chunk->count;
         
-        // Copy constants (for now just initialize empty)
-        chunk->constants.values = NULL;
-        chunk->constants.count = 0;
-        chunk->constants.capacity = 0;
+        // Copy constants from main context
+        if (ctx->constants && ctx->constants->count > 0) {
+            chunk->constants.count = ctx->constants->count;
+            chunk->constants.capacity = ctx->constants->capacity;
+            chunk->constants.values = malloc(sizeof(Value) * chunk->constants.capacity);
+            if (chunk->constants.values) {
+                memcpy(chunk->constants.values, ctx->constants->values, sizeof(Value) * ctx->constants->count);
+            } else {
+                // Fallback to empty constants if allocation fails
+                chunk->constants.count = 0;
+                chunk->constants.capacity = 0;
+            }
+        } else {
+            chunk->constants.values = NULL;
+            chunk->constants.count = 0;
+            chunk->constants.capacity = 0;
+        }
         
         // Register function in VM
         Function* vm_function = &vm.functions[vm.functionCount];
