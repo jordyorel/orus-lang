@@ -496,8 +496,27 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                                                          (val.type == VAL_I64) ? TYPE_I64 :
                                                          (val.type == VAL_F64) ? TYPE_F64 :
                                                          (val.type == VAL_BOOL) ? TYPE_BOOL : TYPE_I32;
+                    } else if (expr->original->binary.left->type == NODE_IDENTIFIER) {
+                        // For identifiers, look up type from symbol table
+                        const char* var_name = expr->original->binary.left->identifier.name;
+                        int var_reg = lookup_variable(ctx, var_name);
+                        if (var_reg != -1) {
+                            // Look up symbol to get type information
+                            Symbol* symbol = resolve_symbol(ctx->symbols, var_name);
+                            if (symbol && symbol->type) {
+                                left_typed->resolvedType = symbol->type;
+                            } else {
+                                // Default to i32 if no type info available
+                                left_typed->resolvedType = malloc(sizeof(Type));
+                                left_typed->resolvedType->kind = TYPE_I32;
+                            }
+                        } else {
+                            // Variable not found, default to i32
+                            left_typed->resolvedType = malloc(sizeof(Type));
+                            left_typed->resolvedType->kind = TYPE_I32;
+                        }
                     } else {
-                        // Default to i32 for identifiers without explicit type info
+                        // Default to i32 for other node types without explicit type info
                         left_typed->resolvedType = malloc(sizeof(Type));
                         left_typed->resolvedType->kind = TYPE_I32;
                     }
@@ -518,8 +537,27 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                                                          (val.type == VAL_I64) ? TYPE_I64 :
                                                          (val.type == VAL_F64) ? TYPE_F64 :
                                                          (val.type == VAL_BOOL) ? TYPE_BOOL : TYPE_I32;
+                    } else if (expr->original->binary.right->type == NODE_IDENTIFIER) {
+                        // For identifiers, look up type from symbol table
+                        const char* var_name = expr->original->binary.right->identifier.name;
+                        int var_reg = lookup_variable(ctx, var_name);
+                        if (var_reg != -1) {
+                            // Look up symbol to get type information
+                            Symbol* symbol = resolve_symbol(ctx->symbols, var_name);
+                            if (symbol && symbol->type) {
+                                right_typed->resolvedType = symbol->type;
+                            } else {
+                                // Default to i32 if no type info available
+                                right_typed->resolvedType = malloc(sizeof(Type));
+                                right_typed->resolvedType->kind = TYPE_I32;
+                            }
+                        } else {
+                            // Variable not found, default to i32
+                            right_typed->resolvedType = malloc(sizeof(Type));
+                            right_typed->resolvedType->kind = TYPE_I32;
+                        }
                     } else {
-                        // Default to i32 for identifiers without explicit type info
+                        // Default to i32 for other node types without explicit type info
                         right_typed->resolvedType = malloc(sizeof(Type));
                         right_typed->resolvedType->kind = TYPE_I32;
                     }
@@ -846,37 +884,54 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                 }
             }
             
-            // Compile arguments and move them to consecutive registers
-            if (arg_regs) {
+            // FIXED: First evaluate ALL arguments into temporary storage to avoid register corruption
+            int* temp_arg_regs = NULL;
+            if (arg_count > 0) {
+                temp_arg_regs = malloc(sizeof(int) * arg_count);
+                if (!temp_arg_regs) {
+                    DEBUG_CODEGEN_PRINT("Error: Failed to allocate temporary argument storage");
+                    free(arg_regs);
+                    return -1;
+                }
+                
+                // First pass: Compile all arguments into temporary registers
+                // This prevents parameter register corruption during argument evaluation
                 for (int i = 0; i < arg_count; i++) {
-                    // Create typed AST node for argument
-                    TypedASTNode* arg_typed = create_typed_ast_node(expr->original->call.args[i]);
+                    // Use the already-typed argument from the call node
+                    TypedASTNode* arg_typed = expr->typed.call.args[i];
                     if (!arg_typed) {
-                        DEBUG_CODEGEN_PRINT("Error: Failed to create typed AST for argument %d", i);
+                        DEBUG_CODEGEN_PRINT("Error: Missing typed argument %d", i);
                         free(arg_regs);
+                        free(temp_arg_regs);
                         return -1;
                     }
                     
                     // Compile argument into a temp register
                     int temp_arg_reg = compile_expression(ctx, arg_typed);
-                    free_typed_ast_node(arg_typed);
                     
                     if (temp_arg_reg == -1) {
                         DEBUG_CODEGEN_PRINT("Error: Failed to compile argument %d", i);
                         free(arg_regs);
+                        free(temp_arg_regs);
                         return -1;
                     }
                     
-                    // Move compiled argument to consecutive register
-                    // Use generic move to preserve type information without enforcing specific types
-                    emit_move(ctx, arg_regs[i], temp_arg_reg);
-                    DEBUG_CODEGEN_PRINT("NODE_CALL: Moved argument %d from R%d to consecutive R%d", i, temp_arg_reg, arg_regs[i]);
+                    temp_arg_regs[i] = temp_arg_reg;
+                    DEBUG_CODEGEN_PRINT("NODE_CALL: Compiled argument %d into temporary R%d", i, temp_arg_reg);
+                }
+                
+                // Second pass: Move all compiled arguments to consecutive registers
+                for (int i = 0; i < arg_count; i++) {
+                    emit_move(ctx, arg_regs[i], temp_arg_regs[i]);
+                    DEBUG_CODEGEN_PRINT("NODE_CALL: Moved argument %d from R%d to consecutive R%d", i, temp_arg_regs[i], arg_regs[i]);
                     
                     // Free the temporary register if it's different from our allocated one
-                    if (temp_arg_reg != arg_regs[i] && temp_arg_reg >= MP_TEMP_REG_START && temp_arg_reg <= MP_TEMP_REG_END) {
-                        mp_free_temp_register(ctx->allocator, temp_arg_reg);
+                    if (temp_arg_regs[i] != arg_regs[i] && temp_arg_regs[i] >= MP_TEMP_REG_START && temp_arg_regs[i] <= MP_TEMP_REG_END) {
+                        mp_free_temp_register(ctx->allocator, temp_arg_regs[i]);
                     }
                 }
+                
+                free(temp_arg_regs);
             }
             
             // Load function index into a register as I32 value

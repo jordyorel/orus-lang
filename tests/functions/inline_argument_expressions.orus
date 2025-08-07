@@ -1,0 +1,37 @@
+// Test inline expressions as function arguments
+// This tests that complex expressions work correctly when used as function call arguments
+
+// Simple functions for testing
+fn add(x, y) -> i32:
+    return x + y
+
+fn subtract(a, b) -> i32:
+    return a - b
+
+fn multiply(x, y, z) -> i32:
+    return x * y * z
+
+// Test variables
+mut a = 2
+mut b = 3
+mut c = 5
+
+// Test 1: Simple inline expressions
+result1 = add(a + 1, b + 1)
+print("add(a+1, b+1) =", result1)  // Should be 7
+
+// Test 2: More complex expressions
+result2 = subtract(c * 2, a + b)
+print("subtract(c*2, a+b) =", result2)  // Should be 5
+
+// Test 3: Nested expressions with parentheses
+result3 = multiply(a + 1, b * 2, c - 1)
+print("multiply(a+1, b*2, c-1) =", result3)  // Should be 3 * 6 * 4 = 72
+
+// Test 4: Mixed literals and expressions
+result4 = add(10, b * 4)
+print("add(10, b*4) =", result4)  // Should be 22
+
+// Test 5: Function call as argument (nested calls)
+result5 = add(add(1, 2), subtract(10, 5))
+print("add(add(1,2), subtract(10,5)) =", result5)  // Should be 8
