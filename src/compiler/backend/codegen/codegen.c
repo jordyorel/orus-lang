@@ -478,34 +478,94 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             }
             DEBUG_CODEGEN_PRINT("NODE_BINARY: left=%p, right=%p\n", (void*)expr->typed.binary.left, (void*)expr->typed.binary.right);
             
-            // FIXED: Check if this binary expression was folded into a literal by constant folding
-            if (!expr->typed.binary.left || !expr->typed.binary.right) {
-                DEBUG_CODEGEN_PRINT("NODE_BINARY: Binary expression was constant-folded, treating as literal");
-                // This binary expression was folded into a literal by constant folding
-                // The original AST node was transformed to NODE_LITERAL with the folded value
-                if (expr->original->type == NODE_LITERAL) {
-                    int reg = mp_allocate_temp_register(ctx->allocator);
-                    if (reg == -1) {
-                        DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for folded literal");
-                        return -1;
+            // Check if typed AST nodes are missing - create them if needed
+            TypedASTNode* left_typed = expr->typed.binary.left;
+            TypedASTNode* right_typed = expr->typed.binary.right;
+            
+            if (!left_typed && expr->original->binary.left) {
+                left_typed = create_typed_ast_node(expr->original->binary.left);
+                if (left_typed) {
+                    // Infer type from the original AST node - use dataType if available, otherwise infer from content
+                    if (expr->original->binary.left->dataType) {
+                        left_typed->resolvedType = expr->original->binary.left->dataType;
+                    } else if (expr->original->binary.left->type == NODE_LITERAL) {
+                        // For literals, infer type from the value
+                        Value val = expr->original->binary.left->literal.value;
+                        left_typed->resolvedType = malloc(sizeof(Type));
+                        left_typed->resolvedType->kind = (val.type == VAL_I32) ? TYPE_I32 :
+                                                         (val.type == VAL_I64) ? TYPE_I64 :
+                                                         (val.type == VAL_F64) ? TYPE_F64 :
+                                                         (val.type == VAL_BOOL) ? TYPE_BOOL : TYPE_I32;
+                    } else {
+                        // Default to i32 for identifiers without explicit type info
+                        left_typed->resolvedType = malloc(sizeof(Type));
+                        left_typed->resolvedType->kind = TYPE_I32;
                     }
-                    // Use the folded literal value directly from the original AST
-                    Value folded_value = expr->original->literal.value;
-                    emit_load_constant(ctx, reg, folded_value);
-                    DEBUG_CODEGEN_PRINT("Successfully loaded constant-folded value");
-                    return reg;
-                } else {
-                    DEBUG_CODEGEN_PRINT("Error: Expected folded binary to be NODE_LITERAL, got %d\n", expr->original->type);
-                    return -1;
                 }
             }
             
-            DEBUG_CODEGEN_PRINT("NODE_BINARY: Compiling left operand (type %d)\n", expr->typed.binary.left->original->type);
-            int left_reg = compile_expression(ctx, expr->typed.binary.left);
+            if (!right_typed && expr->original->binary.right) {
+                right_typed = create_typed_ast_node(expr->original->binary.right);
+                if (right_typed) {
+                    // Infer type from the original AST node - use dataType if available, otherwise infer from content
+                    if (expr->original->binary.right->dataType) {
+                        right_typed->resolvedType = expr->original->binary.right->dataType;
+                    } else if (expr->original->binary.right->type == NODE_LITERAL) {
+                        // For literals, infer type from the value
+                        Value val = expr->original->binary.right->literal.value;
+                        right_typed->resolvedType = malloc(sizeof(Type));
+                        right_typed->resolvedType->kind = (val.type == VAL_I32) ? TYPE_I32 :
+                                                         (val.type == VAL_I64) ? TYPE_I64 :
+                                                         (val.type == VAL_F64) ? TYPE_F64 :
+                                                         (val.type == VAL_BOOL) ? TYPE_BOOL : TYPE_I32;
+                    } else {
+                        // Default to i32 for identifiers without explicit type info
+                        right_typed->resolvedType = malloc(sizeof(Type));
+                        right_typed->resolvedType->kind = TYPE_I32;
+                    }
+                }
+            }
+            
+            if (!left_typed || !right_typed) {
+                DEBUG_CODEGEN_PRINT("Error: Failed to create typed AST nodes for binary operands");
+                return -1;
+            }
+            
+            // Ensure the binary expression itself has type information for compile_binary_op
+            if (!expr->resolvedType && left_typed->resolvedType && right_typed->resolvedType) {
+                expr->resolvedType = malloc(sizeof(Type));
+                // For arithmetic operations, use the "larger" type; for comparison operations, use bool
+                const char* op = expr->original->binary.op;
+                bool is_comparison = (strcmp(op, "<") == 0 || strcmp(op, ">") == 0 || 
+                                     strcmp(op, "<=") == 0 || strcmp(op, ">=") == 0 ||
+                                     strcmp(op, "==") == 0 || strcmp(op, "!=") == 0);
+                
+                if (is_comparison) {
+                    expr->resolvedType->kind = TYPE_BOOL;
+                } else {
+                    // Use the promoted type for arithmetic operations
+                    TypeKind left_kind = left_typed->resolvedType->kind;
+                    TypeKind right_kind = right_typed->resolvedType->kind;
+                    
+                    if (left_kind == right_kind) {
+                        expr->resolvedType->kind = left_kind;
+                    } else if ((left_kind == TYPE_I32 && right_kind == TYPE_I64) || 
+                               (left_kind == TYPE_I64 && right_kind == TYPE_I32)) {
+                        expr->resolvedType->kind = TYPE_I64;
+                    } else if (left_kind == TYPE_F64 || right_kind == TYPE_F64) {
+                        expr->resolvedType->kind = TYPE_F64;
+                    } else {
+                        expr->resolvedType->kind = TYPE_I32; // Default
+                    }
+                }
+            }
+            
+            DEBUG_CODEGEN_PRINT("NODE_BINARY: Compiling left operand (type %d)\n", left_typed->original->type);
+            int left_reg = compile_expression(ctx, left_typed);
             DEBUG_CODEGEN_PRINT("NODE_BINARY: Left operand returned register %d\n", left_reg);
             
-            DEBUG_CODEGEN_PRINT("NODE_BINARY: Compiling right operand (type %d)\n", expr->typed.binary.right ? expr->typed.binary.right->original->type : -1);
-            int right_reg = compile_expression(ctx, expr->typed.binary.right);
+            DEBUG_CODEGEN_PRINT("NODE_BINARY: Compiling right operand (type %d)\n", right_typed->original->type);
+            int right_reg = compile_expression(ctx, right_typed);
             DEBUG_CODEGEN_PRINT("NODE_BINARY: Right operand returned register %d\n", right_reg);
             
             DEBUG_CODEGEN_PRINT("NODE_BINARY: Allocating result register");
@@ -527,6 +587,14 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             }
             if (right_reg >= MP_TEMP_REG_START && right_reg <= MP_TEMP_REG_END) {
                 mp_free_temp_register(ctx->allocator, right_reg);
+            }
+            
+            // Clean up temporary typed nodes if we created them
+            if (left_typed != expr->typed.binary.left) {
+                free_typed_ast_node(left_typed);
+            }
+            if (right_typed != expr->typed.binary.right) {
+                free_typed_ast_node(right_typed);
             }
             
             return result_reg;

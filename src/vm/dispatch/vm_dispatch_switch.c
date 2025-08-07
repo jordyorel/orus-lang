@@ -24,15 +24,7 @@
 //     }
 // }
 
-static inline void vm_set_register_safe(uint16_t id, Value value) {
-    if (id < 256) {
-        // Legacy global registers
-        vm.registers[id] = value;
-    } else {
-        // Use register file for frame/spill registers
-        set_register(&vm.register_file, id, value);
-    }
-}
+
 
 // ✅ Auto-detect computed goto support
 #ifndef USE_COMPUTED_GOTO
