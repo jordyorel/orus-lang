@@ -1,0 +1,14 @@
+fn void_function() -> void:
+    print("This is from void function")
+
+fn returning_function() -> i32:
+    print("This is from returning function")
+    return 42
+
+print("Testing void function:")
+void_function()
+print("Void function call completed")
+
+print("Testing returning function:")
+result = returning_function()
+print("Returning function result:", result)

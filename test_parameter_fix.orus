@@ -1,0 +1,33 @@
+// Test the parameter passing fix
+
+fn one_param(a: i32) -> i32:
+    return a
+
+fn two_param(a: i32, b: i32) -> i32:
+    return a + b
+
+fn three_param(a: i32, b: i32, c: i32) -> i32:
+    return a + b + c
+
+fn four_param(a: i32, b: i32, c: i32, d: i32) -> i32:
+    return a + b + c + d
+
+fn five_param(a: i32, b: i32, c: i32, d: i32, e: i32) -> i32:
+    return a + b + c + d + e
+
+// Test with simple literals
+print("=== Testing parameter count fix ===")
+mut result1 = one_param(5)
+print("one_param(5) =", result1, "(expected: 5)")
+
+mut result2 = two_param(2, 3)
+print("two_param(2, 3) =", result2, "(expected: 5)")
+
+mut result3 = three_param(1, 2, 3)
+print("three_param(1, 2, 3) =", result3, "(expected: 6)")
+
+mut result4 = four_param(1, 2, 3, 4)
+print("four_param(1, 2, 3, 4) =", result4, "(expected: 10)")
+
+mut result5 = five_param(1, 2, 3, 4, 5)
+print("five_param(1, 2, 3, 4, 5) =", result5, "(expected: 15)")

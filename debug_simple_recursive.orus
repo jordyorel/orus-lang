@@ -1,0 +1,17 @@
+// Simple recursive function test
+fn factorial(n: i32) -> i32:
+    print("factorial called with", n)
+    if n <= 1:
+        print("Base case, returning 1")
+        return 1
+    else:
+        print("Making recursive call with", n - 1)
+        result = factorial(n - 1)
+        print("Recursive call returned:", result)
+        print("Returning", n, "*", result)
+        return n * result
+
+print("Testing simple recursion:")
+f = factorial(3)
+print("Final factorial result:", f)
+EOF < /dev/null

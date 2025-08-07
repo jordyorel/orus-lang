@@ -1,0 +1,9 @@
+fn debug_three_params(a, b, c) -> i32:
+    print("a =", a)
+    print("b =", b)  
+    print("c =", c)
+    print("a + b + c =", a + b + c)
+    return a + b + c
+
+mut result = debug_three_params(1, 2, 3)
+print("Final result:", result)

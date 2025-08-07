@@ -1,0 +1,14 @@
+fn test_self_call(n: i32) -> i32:
+    print("Called with n =", n)
+    if n <= 0:
+        print("Base case, returning 42")
+        return 42
+    else:
+        print("Recursive case, calling self with n-1")
+        result = test_self_call(n - 1)
+        print("Self call returned:", result)
+        return result + 1
+
+print("Testing self call:")
+final = test_self_call(2)
+print("Final result:", final)

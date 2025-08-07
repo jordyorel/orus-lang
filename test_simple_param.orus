@@ -1,0 +1,7 @@
+// Very simple parameter test
+fn debug_param(x) -> i32:
+    print("Function received x =", x)
+    return x
+
+mut result = debug_param(42)
+print("Result =", result)

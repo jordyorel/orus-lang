@@ -1,0 +1,5 @@
+fn add(a, b) -> i32:
+    return a + b
+
+result1 = add(5, 3)
+print("5 + 3 =", result1)

@@ -1,0 +1,13 @@
+fn helper_function(x: i32) -> i32:
+    print("Helper called with", x)
+    return x + 1
+
+fn caller_function(n: i32) -> i32:
+    print("Calling helper with", n)
+    result = helper_function(n)
+    print("Helper returned", result)
+    return result * 2
+
+print("Testing function calls:")
+final_result = caller_function(5)
+print("Final:", final_result)

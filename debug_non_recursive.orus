@@ -1,0 +1,9 @@
+fn factorial(n) -> i32:
+    if n <= 1:
+        return 1
+    else:
+        return n * 2  // Just return n*2 instead of recursive call
+
+fact5 = factorial(5)
+print("5\! =", fact5)
+EOF < /dev/null

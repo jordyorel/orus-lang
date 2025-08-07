@@ -1,0 +1,18 @@
+fn square(x) -> i32:
+    return x * x
+
+fn multiply(a, b) -> i32:
+    return a * b
+
+fn sum_three(x, y, z) -> i32:
+    print("sum_three received: x =", x, "y =", y, "z =", z)
+    return x + y + z
+
+result1 = square(7)
+print("7^2 =", result1)
+
+result2 = multiply(6, 8)
+print("6 * 8 =", result2)
+
+result3 = sum_three(1, 2, 3)
+print("1 + 2 + 3 =", result3)

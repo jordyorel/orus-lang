@@ -1,0 +1,9 @@
+fn simple_rec(n) -> i32:
+    if n <= 0:
+        return 1
+    else:
+        return simple_rec(n - 1)
+
+result = simple_rec(2)
+print("Result:", result)
+EOF < /dev/null

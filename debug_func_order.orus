@@ -1,0 +1,14 @@
+// Define functions in different order
+fn helper() -> i32:
+    print("Helper called")
+    return 10
+
+fn main_func() -> i32:
+    print("Main func calling helper")
+    result = helper()
+    print("Helper returned:", result)
+    return result * 2
+
+print("Testing function order:")
+final = main_func()
+print("Final:", final)

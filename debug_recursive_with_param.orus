@@ -1,0 +1,14 @@
+fn recursive_with_param(n: i32) -> i32:
+    print("Recursive called with n =", n)
+    if n <= 1:
+        print("Base case, returning 1")
+        return 1
+    else:
+        print("Making recursive call with", n - 1)
+        result = recursive_with_param(n - 1)
+        print("Recursive call returned:", result)
+        return n + result
+
+print("Testing recursive with param:")
+final = recursive_with_param(3)
+print("Final result:", final)

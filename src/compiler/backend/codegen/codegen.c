@@ -1165,6 +1165,11 @@ void compile_statement(CompilerContext* ctx, TypedASTNode* stmt) {
             compile_return_statement(ctx, stmt);
             break;
             
+        case NODE_CALL:
+            // Compile function call as statement (void return type)
+            compile_expression(ctx, stmt);
+            break;
+            
         default:
             DEBUG_CODEGEN_PRINT("Warning: Unsupported statement type: %d\n", stmt->original->type);
             break;
@@ -1220,7 +1225,7 @@ void compile_assignment(CompilerContext* ctx, TypedASTNode* assign) {
     // Get variable name from typed AST
     const char* var_name = assign->typed.assign.name;
     
-    // Look up existing variable in symbol table
+    // Look up existing variable (search up scope chain for assignments)
     Symbol* symbol = resolve_symbol(ctx->symbols, var_name);
     if (!symbol) {
         // Variable doesn't exist - create a new one (Orus implicit variable declaration)
@@ -2264,7 +2269,7 @@ void compile_block_with_scope(CompilerContext* ctx, TypedASTNode* block) {
 
 // Register a compiled function and store its chunk
 int register_function(CompilerContext* ctx, const char* name, int arity, BytecodeBuffer* chunk) {
-    if (!ctx || !name || !chunk) return -1;
+    if (!ctx || !name) return -1;
     
     // Ensure function_chunks and function_arities arrays have capacity
     if (ctx->function_count >= ctx->function_capacity) {
@@ -2275,13 +2280,24 @@ int register_function(CompilerContext* ctx, const char* name, int arity, Bytecod
         ctx->function_capacity = new_capacity;
     }
     
-    // Store the function chunk and arity
+    // Store the function chunk and arity (chunk can be NULL for pre-registration)
     int function_index = ctx->function_count++;
     ctx->function_chunks[function_index] = chunk;
     ctx->function_arities[function_index] = arity;
     
-    DEBUG_CODEGEN_PRINT("Registered function '%s' with index %d (arity %d)\n", name, function_index, arity);
+    DEBUG_CODEGEN_PRINT("Registered function '%s' with index %d (arity %d)\\n", name, function_index, arity);
     return function_index;
+}
+
+void update_function_bytecode(CompilerContext* ctx, int function_index, BytecodeBuffer* chunk) {
+    if (!ctx || function_index < 0 || function_index >= ctx->function_count || !chunk) {
+        DEBUG_CODEGEN_PRINT("Error: Invalid function update (index=%d, count=%d)\\n", function_index, ctx->function_count);
+        return;
+    }
+    
+    // Update the bytecode for the already registered function
+    ctx->function_chunks[function_index] = chunk;
+    DEBUG_CODEGEN_PRINT("Updated function index %d with compiled bytecode\\n", function_index);
 }
 
 // Get the bytecode chunk for a compiled function
@@ -2380,26 +2396,70 @@ void compile_function_declaration(CompilerContext* ctx, TypedASTNode* func) {
     
     DEBUG_CODEGEN_PRINT("Function '%s' has %d parameters\n", func_name, arity);
     
-    // Register function parameters in symbol table
-    // Parameters are placed by VM at 256 - arity + i (to fit in 256-register space)
-    int param_base = 256 - arity;
-    if (param_base < 1) param_base = 1; // Ensure we don't go below R1
-    
-    for (int i = 0; i < arity; i++) {
-        if (func->original->function.params[i].name) {
-            int param_reg = param_base + i;
-            register_variable(ctx, func->original->function.params[i].name, param_reg, 
-                            getPrimitiveType(TYPE_I32), false);
-            DEBUG_CODEGEN_PRINT("Registered parameter '%s' in register R%d (VM convention)\n", 
-                   func->original->function.params[i].name, param_reg);
-        }
+    // Pre-register function for recursive calls (will be replaced with actual bytecode later)
+    int function_index = register_function(ctx, func_name, arity, NULL);  
+    if (function_index == -1) {
+        DEBUG_CODEGEN_PRINT("Error: Failed to pre-register function '%s'\n", func_name);
+        free_bytecode_buffer(function_bytecode);
+        ctx->bytecode = saved_bytecode;
+        ctx->current_function_index = saved_function_index;
+        return;
     }
     
-    // Compile function body
+    // Store function index in symbol table for function calls
+    register_variable(ctx, func_name, function_index, getPrimitiveType(TYPE_FUNCTION), false);
+    DEBUG_CODEGEN_PRINT("Function '%s' pre-registered with index %d\n", func_name, function_index);
+    
+    // Compile function body with isolated scope for parameters
     if (func->original->function.body) {
         if (func->original->function.body->type == NODE_BLOCK) {
-            // Function body is a block - compile with scope management
-            compile_block_with_scope(ctx, func->typed.function.body);
+            // Create function scope and register parameters within it
+            DEBUG_CODEGEN_PRINT("Entering new scope (depth %d)\n", ctx->symbols->scope_depth + 1);
+            
+            // Create new scope for function
+            SymbolTable* old_scope = ctx->symbols;
+            ctx->symbols = create_symbol_table(old_scope);
+            if (!ctx->symbols) {
+                DEBUG_CODEGEN_PRINT("Error: Failed to create function scope");
+                ctx->symbols = old_scope;
+                return;
+            }
+            
+            // Register function parameters in function scope
+            // Parameters are placed by VM at 256 - arity + i (to fit in 256-register space)
+            int param_base = 256 - arity;
+            if (param_base < 1) param_base = 1; // Ensure we don't go below R1
+            
+            for (int i = 0; i < arity; i++) {
+                if (func->original->function.params[i].name) {
+                    int param_reg = param_base + i;
+                    register_variable(ctx, func->original->function.params[i].name, param_reg, 
+                                    getPrimitiveType(TYPE_I32), false);
+                    DEBUG_CODEGEN_PRINT("Registered parameter '%s' in register R%d (VM convention)\n", 
+                           func->original->function.params[i].name, param_reg);
+                }
+            }
+            
+            // Compile function body
+            if (func->typed.function.body->original->type == NODE_BLOCK) {
+                // Multiple statements in block
+                for (int i = 0; i < func->typed.function.body->typed.block.count; i++) {
+                    TypedASTNode* stmt = func->typed.function.body->typed.block.statements[i];
+                    if (stmt) {
+                        compile_statement(ctx, stmt);
+                    }
+                }
+            } else {
+                // Single statement
+                compile_statement(ctx, func->typed.function.body);
+            }
+            
+            DEBUG_CODEGEN_PRINT("Exiting scope (depth %d)\n", ctx->symbols->scope_depth);
+            DEBUG_CODEGEN_PRINT("Freeing block-local variable registers");
+            
+            // Restore previous scope
+            free_symbol_table(ctx->symbols);
+            ctx->symbols = old_scope;
         } else {
             // Single statement function body
             compile_statement(ctx, func->typed.function.body);
@@ -2413,17 +2473,8 @@ void compile_function_declaration(CompilerContext* ctx, TypedASTNode* func) {
         DEBUG_CODEGEN_PRINT("Added implicit OP_RETURN_VOID\n");
     }
     
-    // Register the compiled function
-    int function_index = register_function(ctx, func_name, arity, function_bytecode);
-    if (function_index == -1) {
-        DEBUG_CODEGEN_PRINT("Error: Failed to register function '%s'\n", func_name);
-        free_bytecode_buffer(function_bytecode);
-    } else {
-        // Store function index in symbol table for function calls
-        // Functions are stored as I32 values containing the function index
-        register_variable(ctx, func_name, function_index, getPrimitiveType(TYPE_FUNCTION), false);
-        DEBUG_CODEGEN_PRINT("Function '%s' registered with index %d\n", func_name, function_index);
-    }
+    // Update the pre-registered function with compiled bytecode
+    update_function_bytecode(ctx, function_index, function_bytecode);
     
     // Restore context
     ctx->bytecode = saved_bytecode;

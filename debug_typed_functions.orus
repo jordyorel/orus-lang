@@ -1,0 +1,23 @@
+fn square(x: i32) -> i32:
+    return x * x
+
+fn multiply(a: i32, b: i32) -> i32:
+    return a * b
+
+fn sum_three(x: i32, y: i32, z: i32) -> i32:
+    return x + y + z
+
+fn sum_four(a: i32, b: i32, c: i32, d: i32) -> i32:
+    return a + b + c + d
+
+result1 = square(7)
+print("7^2 =", result1)
+
+result2 = multiply(6, 8)
+print("6 * 8 =", result2)
+
+result3 = sum_three(1, 2, 3)
+print("1 + 2 + 3 =", result3)
+
+result4 = sum_four(1, 2, 3, 4)
+print("1 + 2 + 3 + 4 =", result4)

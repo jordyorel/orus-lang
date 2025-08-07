@@ -1,0 +1,11 @@
+fn test_simple_if(n: i32) -> i32:
+    if n > 5:
+        return 10
+    else:
+        return 1
+
+result1 = test_simple_if(7)
+print("test_simple_if(7) =", result1, "(should be 10)")
+
+result2 = test_simple_if(3)
+print("test_simple_if(3) =", result2, "(should be 1)")

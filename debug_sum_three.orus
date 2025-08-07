@@ -1,0 +1,5 @@
+fn sum_three(x, y, z) -> i32:
+    return x + y + z
+
+mut result3 = sum_three(1, 2, 3)
+print("1 + 2 + 3 =", result3)

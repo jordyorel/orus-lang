@@ -1,0 +1,50 @@
+print("========================================")
+print("=== COMPREHENSIVE ORUS LANGUAGE TEST ===")
+print("========================================")
+
+// ===== LITERALS TEST =====
+print("\n1. LITERALS TEST:")
+print("String literal:", "Hello, Orus!")
+print("Integer literal:", 42)
+print("Boolean literal (true):", true)
+print("Boolean literal (false):", false)
+
+// ===== VARIABLE DECLARATIONS =====
+print("\n2. VARIABLE DECLARATIONS:")
+
+// Immutable variables
+immutable_int = 100
+immutable_str = "Immutable string"
+immutable_bool = true
+
+print("Immutable int:", immutable_int)
+print("Immutable string:", immutable_str)
+print("Immutable bool:", immutable_bool)
+
+// Mutable variables
+mut mutable_int = 200
+mut mutable_str = "Initial string"
+mut mutable_bool = false
+
+print("Initial mutable int:", mutable_int)
+print("Initial mutable string:", mutable_str)
+print("Initial mutable bool:", mutable_bool)
+
+// Modify mutable variables
+mutable_int = mutable_int + 50
+mutable_str = "Updated string"
+mutable_bool = not mutable_bool
+
+print("Updated mutable int:", mutable_int)
+print("Updated mutable string:", mutable_str)
+print("Updated mutable bool:", mutable_bool)
+
+// ===== ARITHMETIC EXPRESSIONS =====
+print("\n3. ARITHMETIC EXPRESSIONS:")
+a = 10
+b = 3
+
+print("a + b =", a + b, "Expected: 13")
+print("a - b =", a - b, "Expected: 7")
+print("a * b =", a * b, "Expected: 30")
+print("a / b =", a / b, "Expected: 3")

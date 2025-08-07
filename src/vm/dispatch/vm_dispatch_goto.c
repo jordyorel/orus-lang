@@ -2003,6 +2003,7 @@ InterpretResult vm_run_dispatch(void) {
                 DISPATCH();
             } else if (IS_I32(funcValue)) {
                 int functionIndex = AS_I32(funcValue);
+                fprintf(stderr, "CALL: func_index=%d, args=%d\n", functionIndex, argCount);
                 
                 if (functionIndex < 0 || functionIndex >= vm.functionCount) {
                     vm.registers[resultReg] = BOOL_VAL(false);
