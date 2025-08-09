@@ -203,6 +203,7 @@ CompilerContext* init_compiler_context(TypedASTNode* typed_ast) {
     ctx->scopes = NULL;       // Will implement in Phase 2  
     ctx->errors = NULL;       // Will implement in Phase 2
     ctx->has_compilation_errors = false;  // Initialize error tracking
+    ctx->compiling_function = false;      // Initialize function compilation flag
     ctx->opt_ctx = NULL;      // Will implement in Phase 2
     
     // Initialize loop control context

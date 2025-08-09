@@ -1,0 +1,18 @@
+fn fibonacci(n) -> i32:
+    print("fibonacci(", n, ") called")
+    if n <= 1:
+        print("  base case, returning", n)
+        return n
+    else:
+        print("  calculating fibonacci(", n-1, ") + fibonacci(", n-2, ")")
+        left = fibonacci(n - 1)
+        print("  fibonacci(", n-1, ") returned", left)
+        right = fibonacci(n - 2)
+        print("  fibonacci(", n-2, ") returned", right)
+        result = left + right
+        print("  fibonacci(", n, ") = ", left, "+", right, "=", result)
+        return result
+
+print("Computing fibonacci(5):")
+result = fibonacci(5)
+print("Final result:", result)

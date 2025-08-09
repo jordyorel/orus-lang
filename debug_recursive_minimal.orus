@@ -1,8 +1,0 @@
-fn factorial(n) -> i32:
-    if n <= 1:
-        return 1
-    else:
-        return n * factorial(n - 1)
-
-result = factorial(3)
-print("Result:", result)

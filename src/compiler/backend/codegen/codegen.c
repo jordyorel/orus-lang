@@ -1225,11 +1225,24 @@ void compile_assignment(CompilerContext* ctx, TypedASTNode* assign) {
     // Get variable name from typed AST
     const char* var_name = assign->typed.assign.name;
     
-    // Look up existing variable (search up scope chain for assignments)
-    Symbol* symbol = resolve_symbol(ctx->symbols, var_name);
+    // Look up existing variable with proper scoping for functions
+    Symbol* symbol;
+    if (ctx->compiling_function) {
+        // In function context: prefer local variables to enable shadowing
+        symbol = resolve_symbol_local_only(ctx->symbols, var_name);
+        if (!symbol) {
+            // No local exists - for assignments, create a new local rather than using global
+            // This implements proper shadowing semantics
+            symbol = NULL; // Force local creation
+        }
+    } else {
+        // At global scope: normal resolution
+        symbol = resolve_symbol(ctx->symbols, var_name);
+    }
+    
     if (!symbol) {
-        // Variable doesn't exist - create a new one (Orus implicit variable declaration)
-        DEBUG_CODEGEN_PRINT("Creating new variable %s (Orus implicit declaration)\n", var_name);
+        // Variable doesn't exist in local scope - create a new local one 
+        DEBUG_CODEGEN_PRINT("Creating new local variable %s (Orus implicit declaration)\n", var_name);
         
         // Compile the value expression first to get its type
         int value_reg = compile_expression(ctx, assign->typed.assign.value);
@@ -1259,7 +1272,7 @@ void compile_assignment(CompilerContext* ctx, TypedASTNode* assign) {
         emit_move(ctx, var_reg, value_reg);
         mp_free_temp_register(ctx->allocator, value_reg);
         
-        DEBUG_CODEGEN_PRINT("Created and assigned variable %s -> R%d\n", var_name, var_reg);
+        DEBUG_CODEGEN_PRINT("Created and assigned local variable %s -> R%d\n", var_name, var_reg);
         return;
     }
     
@@ -2418,7 +2431,9 @@ void compile_function_declaration(CompilerContext* ctx, TypedASTNode* func) {
             
             // Create new scope for function
             SymbolTable* old_scope = ctx->symbols;
+            bool old_compiling_function = ctx->compiling_function;
             ctx->symbols = create_symbol_table(old_scope);
+            ctx->compiling_function = true;  // Mark that we're compiling inside a function
             if (!ctx->symbols) {
                 DEBUG_CODEGEN_PRINT("Error: Failed to create function scope");
                 ctx->symbols = old_scope;
@@ -2460,6 +2475,7 @@ void compile_function_declaration(CompilerContext* ctx, TypedASTNode* func) {
             // Restore previous scope
             free_symbol_table(ctx->symbols);
             ctx->symbols = old_scope;
+            ctx->compiling_function = old_compiling_function;  // Restore function flag
         } else {
             // Single statement function body
             compile_statement(ctx, func->typed.function.body);

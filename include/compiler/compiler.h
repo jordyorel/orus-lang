@@ -80,6 +80,9 @@ typedef struct CompilerContext {
     ErrorReporter* errors;             // Compilation error tracking
     bool has_compilation_errors;       // Track if any compilation errors occurred
     
+    // Function compilation context
+    bool compiling_function;           // Are we currently compiling inside a function?
+    
     // Debugging
     bool enable_visualization;         // Show TypedAST between passes
     FILE* debug_output;               // Where to output debug info

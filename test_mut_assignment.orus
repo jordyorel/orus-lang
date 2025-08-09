@@ -1,7 +1,0 @@
-print("Testing mutable assignment:")
-mut counter = 0
-print("Initial counter:", counter)
-counter = counter + 1
-print("After increment:", counter)
-counter = 5
-print("After setting to 5:", counter)

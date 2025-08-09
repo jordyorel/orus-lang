@@ -1,8 +1,22 @@
-fn fibonacci(n) -> i32:
+fn fib_debug(n) -> i32:
+    print("fib_debug(", n, ") called")
     if n <= 1:
+        print("  base case: returning", n)
         return n
     else:
-        return fibonacci(n - 1) + fibonacci(n - 2)
+        print("  making first recursive call: fib_debug(", n-1, ")")
+        left = fib_debug(n - 1)
+        print("  first result: left =", left)
+        
+        print("  making second recursive call: fib_debug(", n-2, ")")
+        right = fib_debug(n - 2)
+        print("  second result: right =", right)
+        
+        print("  before addition: left =", left, ", right =", right)
+        result = left + right
+        print("  fib_debug(", n, ") =", result)
+        return result
 
-result = fibonacci(5)
-print("Fibonacci(5) =", result)
+print("Computing fib_debug(4):")
+result = fib_debug(4)
+print("Final result:", result, "(should be 3)")

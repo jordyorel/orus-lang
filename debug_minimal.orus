@@ -1,6 +1,0 @@
-fn simple() -> i32:
-    return 42
-
-result = simple()
-print("Result:", result)
-EOF < /dev/null

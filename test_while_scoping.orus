@@ -1,9 +1,0 @@
-print("Testing while loop variable access:")
-mut counter = 0
-print("Before while:", counter)
-while counter < 1:
-    print("Inside while - counter:", counter)
-    print("About to increment...")
-    counter = 99
-    print("Set counter to 99, now:", counter)
-print("After while:", counter)

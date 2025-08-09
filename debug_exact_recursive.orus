@@ -1,9 +1,0 @@
-fn test_rec(n) -> i32:
-    if n <= 1:
-        return 1
-    else:
-        return test_rec(n - 1)
-
-result = test_rec(2)
-print("Result:", result)
-EOF < /dev/null

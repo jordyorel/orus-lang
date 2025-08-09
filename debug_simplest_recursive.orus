@@ -1,9 +1,0 @@
-fn count_down(n: i32) -> i32:
-    if n <= 0:
-        return 0
-    else:
-        return count_down(n - 1)
-
-result = count_down(3)
-print("Result:", result)
-EOF < /dev/null
