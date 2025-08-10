@@ -1,0 +1,17 @@
+fn test_self_recursive(n) -> i32:
+    print("=== test_self_recursive(", n, ") START ===")
+    
+    if n <= 0:
+        print("Base case: returning", n)
+        return n
+    
+    print("Making first recursive call...")
+    left = test_self_recursive(n - 1)
+    print("First recursive call returned:", left)
+    
+    print("Before return: left =", left)
+    print("=== test_self_recursive(", n, ") RETURNING", left, " ===")
+    return left
+
+x = test_self_recursive(2)
+print("Final:", x, "(should be 0)")

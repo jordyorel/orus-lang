@@ -1,0 +1,7 @@
+fn test_registers() -> i32:
+    x = 42
+    y = 100
+    return x + y
+
+result = test_registers()
+print("Result:", result)

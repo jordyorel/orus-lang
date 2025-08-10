@@ -1,0 +1,7 @@
+fn test(n) -> i32:
+    left = n + 10
+    right = n + 20
+    return left + right
+
+result = test(5)
+print("Result:", result)

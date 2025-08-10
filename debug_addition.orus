@@ -1,0 +1,9 @@
+fn test_addition(a, b) -> i32:
+    print("Adding", a, "+", b)
+    result = a + b
+    print("Result:", result)
+    return result
+
+print("Testing simple addition:")
+x = test_addition(2, 1)
+print("Final result:", x)

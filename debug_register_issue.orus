@@ -1,0 +1,23 @@
+fn fib(n) -> i32:
+    print("=== ENTER fib(", n, ") ===")
+    if n <= 1:
+        print("BASE: returning", n)
+        return n
+    
+    print("STEP 1: About to call fib(", n-1, ")")
+    left = fib(n - 1)
+    print("STEP 2: fib(", n-1, ") returned, left =", left)
+    
+    print("STEP 3: About to call fib(", n-2, ")")
+    right = fib(n - 2)
+    print("STEP 4: fib(", n-2, ") returned, right =", right)
+    
+    print("STEP 5: left =", left, ", right =", right)
+    result = left + right
+    print("STEP 6: result = left + right =", result)
+    print("=== EXIT fib(", n, ") returning", result, " ===")
+    return result
+
+print("Testing fib(4):")
+x = fib(4)
+print("FINAL RESULT:", x)

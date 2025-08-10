@@ -1,0 +1,23 @@
+fn get_value(n) -> i32:
+    print("get_value(", n, ") called")
+    return n
+
+fn test_two_calls() -> i32:
+    print("=== Starting test_two_calls ===")
+    
+    print("Making first call...")
+    left = get_value(2)
+    print("First call returned:", left)
+    
+    print("Making second call...")
+    right = get_value(1)
+    print("Second call returned:", right)
+    
+    print("Before addition: left =", left, ", right =", right)
+    result = left + right
+    print("After addition: result =", result)
+    
+    return result
+
+x = test_two_calls()
+print("Final:", x, "(should be 3)")

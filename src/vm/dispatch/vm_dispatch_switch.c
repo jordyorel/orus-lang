@@ -26,6 +26,7 @@
 
 
 
+
 // ✅ Auto-detect computed goto support
 #ifndef USE_COMPUTED_GOTO
   #if defined(__GNUC__) || defined(__clang__)
@@ -1558,6 +1559,7 @@ InterpretResult vm_run_dispatch(void) {
 
                 // Function operations
                 case OP_CALL_R: {
+                    printf("DEBUG: OP_CALL_R executed\n");
                     uint8_t funcReg = READ_BYTE();
                     uint8_t firstArgReg = READ_BYTE();
                     uint8_t argCount = READ_BYTE();
@@ -1636,10 +1638,17 @@ InterpretResult vm_run_dispatch(void) {
                         if (paramBase < 1) paramBase = 1;
                         frame->parameterBaseRegister = (uint16_t)paramBase;
                         
-                        // Save registers that will be overwritten by parameters
-                        frame->savedRegisterCount = argCount < 64 ? argCount : 64;
+                        // Save all frame registers (R256-R319) to prevent corruption during recursive calls
+                        frame->savedRegisterCount = 64;  // FRAME_REGISTERS = 64 (R256-R319)
                         for (int i = 0; i < frame->savedRegisterCount; i++) {
-                            frame->savedRegisters[i] = vm.registers[paramBase + i];
+                            frame->savedRegisters[i] = vm.registers[FRAME_REG_START + i];
+                            // Debug: Print saved values for first few registers
+                            if (i < 8) {
+                                printf("SAVE R%d (type=%d)\n", FRAME_REG_START + i, vm.registers[FRAME_REG_START + i].type);
+                                if (vm.registers[FRAME_REG_START + i].type == VALUE_I32) {
+                                    printf("  value = %d\n", AS_I32(vm.registers[FRAME_REG_START + i]));
+                                }
+                            }
                         }
                         
                         // Copy arguments to parameter registers
@@ -1748,9 +1757,16 @@ InterpretResult vm_run_dispatch(void) {
                     if (vm.frameCount > 0) {
                         CallFrame* frame = &vm.frames[--vm.frameCount];
                         
-                        // Restore saved registers directly
+                        // Restore all saved frame registers (R256-R319)
                         for (int i = 0; i < frame->savedRegisterCount; i++) {
-                            vm.registers[frame->parameterBaseRegister + i] = frame->savedRegisters[i];
+                            vm.registers[FRAME_REG_START + i] = frame->savedRegisters[i];
+                            // Debug: Print restored values for first few registers
+                            if (i < 8) {
+                                printf("RESTORE R%d (type=%d)\n", FRAME_REG_START + i, frame->savedRegisters[i].type);
+                                if (frame->savedRegisters[i].type == VALUE_I32) {
+                                    printf("  value = %d\n", AS_I32(frame->savedRegisters[i]));
+                                }
+                            }
                         }
                         
                         vm.chunk = frame->previousChunk;
@@ -1770,9 +1786,16 @@ InterpretResult vm_run_dispatch(void) {
                     if (vm.frameCount > 0) {
                         CallFrame* frame = &vm.frames[--vm.frameCount];
                         
-                        // Restore saved registers directly
+                        // Restore all saved frame registers (R256-R319)
                         for (int i = 0; i < frame->savedRegisterCount; i++) {
-                            vm.registers[frame->parameterBaseRegister + i] = frame->savedRegisters[i];
+                            vm.registers[FRAME_REG_START + i] = frame->savedRegisters[i];
+                            // Debug: Print restored values for first few registers
+                            if (i < 8) {
+                                printf("RESTORE R%d (type=%d)\n", FRAME_REG_START + i, frame->savedRegisters[i].type);
+                                if (frame->savedRegisters[i].type == VALUE_I32) {
+                                    printf("  value = %d\n", AS_I32(frame->savedRegisters[i]));
+                                }
+                            }
                         }
                         
                         vm.chunk = frame->previousChunk;

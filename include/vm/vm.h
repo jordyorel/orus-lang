@@ -283,6 +283,7 @@ typedef struct CallFrame {
     uint8_t functionIndex;
     uint16_t parameterBaseRegister;       // Base register for function parameters (frame/spill space)
     uint8_t savedRegisterCount;           // Number of saved registers
+    uint16_t savedRegisterStart;          // Starting register index for saved registers
     Value savedRegisters[64];             // Saved registers overwritten by parameters (increased limit)
 } CallFrame;
 

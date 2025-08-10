@@ -1,0 +1,16 @@
+fn fib(n) -> i32:
+    print("fib(", n, ") called")
+    if n <= 1:
+        print("  returning", n)
+        return n
+    else:
+        left = fib(n - 1) 
+        print("  fib(", n-1, ") returned", left)
+        right = fib(n - 2)
+        print("  fib(", n-2, ") returned", right)
+        result = left + right
+        print("  fib(", n, ") = ", left, "+", right, "=", result)
+        return result
+
+result = fib(4)
+print("Final: fib(4) =", result)

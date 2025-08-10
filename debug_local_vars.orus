@@ -1,0 +1,7 @@
+fn test_locals(n) -> i32:
+    a = n + 1
+    b = n + 2
+    return a + b
+
+result = test_locals(5)
+print("Result:", result)

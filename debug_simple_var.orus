@@ -1,0 +1,14 @@
+fn dummy() -> i32:
+    y = 99
+    print("In dummy: y =", y)
+    return y
+
+fn test_var() -> i32:
+    x = 42
+    print("Before call: x =", x)
+    dummy()
+    print("After call: x =", x, "(should still be 42)")
+    return x
+
+result = test_var()
+print("Final result:", result)

@@ -1,0 +1,10 @@
+fn test_return() -> i32:
+    a = 2
+    b = 1
+    print("a =", a, ", b =", b)
+    result = a + b
+    print("result = a + b =", result)
+    return result
+
+x = test_return()
+print("Returned value:", x)
