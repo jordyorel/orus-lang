@@ -2037,10 +2037,12 @@ InterpretResult vm_run_dispatch(void) {
                 if (paramBase < 1) paramBase = 1;
                 frame->parameterBaseRegister = paramBase;
                 
-                // Save registers that will be overwritten by parameters
-                frame->savedRegisterCount = argCount < 64 ? argCount : 64;
+                // Save registers extensively to prevent local variable corruption
+                // Save from R200 through R263 to cover all possible local variable ranges
+                frame->savedRegisterCount = 64;  // Maximum we can save
+                frame->savedRegisterStart = 200;  // Start well before parameters and locals
                 for (int i = 0; i < frame->savedRegisterCount; i++) {
-                    frame->savedRegisters[i] = vm.registers[paramBase + i];
+                    frame->savedRegisters[i] = vm.registers[frame->savedRegisterStart + i];
                 }
                 
                 // Copy arguments to parameter registers
@@ -2120,9 +2122,9 @@ InterpretResult vm_run_dispatch(void) {
                 // Close upvalues before restoring registers to prevent corruption
                 closeUpvalues(&vm.registers[frame->parameterBaseRegister]);
                 
-                // Restore saved registers - simple approach
+                // Restore saved registers using stored start position
                 for (int i = 0; i < frame->savedRegisterCount; i++) {
-                    vm.registers[frame->parameterBaseRegister + i] = frame->savedRegisters[i];
+                    vm.registers[frame->savedRegisterStart + i] = frame->savedRegisters[i];
                 }
                 
                 vm.chunk = frame->previousChunk;
@@ -2142,9 +2144,9 @@ InterpretResult vm_run_dispatch(void) {
                 // Close upvalues before restoring registers to prevent corruption
                 closeUpvalues(&vm.registers[frame->parameterBaseRegister]);
                 
-                // Restore saved registers - simple approach
+                // Restore saved registers using stored start position
                 for (int i = 0; i < frame->savedRegisterCount; i++) {
-                    vm.registers[frame->parameterBaseRegister + i] = frame->savedRegisters[i];
+                    vm.registers[frame->savedRegisterStart + i] = frame->savedRegisters[i];
                 }
                 
                 vm.chunk = frame->previousChunk;

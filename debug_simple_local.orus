@@ -1,0 +1,13 @@
+fn test(n) -> i32:
+    local_var = n * 10
+    print("Before call: local_var =", local_var)
+    if n > 1:
+        result = test(n - 1)
+        print("After call: local_var =", local_var, ", result =", result)
+        return local_var + result
+    else:
+        print("Base case: local_var =", local_var)
+        return local_var
+
+final = test(3)
+print("Final:", final)
