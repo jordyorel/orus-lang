@@ -1,0 +1,23 @@
+fn fibonacci(n) -> i32:
+    print("=== fibonacci(", n, ") START ===")
+    
+    if n <= 1:
+        print("BASE: returning", n)
+        return n
+    
+    print("CALL 1: fibonacci(", n-1, ")")
+    left = fibonacci(n - 1)
+    print("RESULT 1: left =", left)
+    
+    print("CALL 2: fibonacci(", n-2, ")")  
+    right = fibonacci(n - 2)
+    print("RESULT 2: right =", right)
+    
+    print("CHECK: left =", left, ", right =", right)
+    sum = left + right
+    print("SUM:", sum)
+    print("=== fibonacci(", n, ") RETURNING", sum, " ===")
+    return sum
+
+result = fibonacci(4)
+print("Final: Fibonacci(4) =", result, "(should be 3)")

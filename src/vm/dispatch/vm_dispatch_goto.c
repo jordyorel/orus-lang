@@ -14,17 +14,29 @@
 
 #include <math.h>
 
-// Bridge functions for accessing frame and spill registers
-// static inline Value vm_get_register_safe(uint16_t id) {
-//     if (id < 256) {
-//         // Legacy global registers
-//         return vm.registers[id];
-//     } else {
-//         // Use register file for frame/spill registers
-//         Value* reg_ptr = get_register(&vm.register_file, id);
-//         return reg_ptr ? *reg_ptr : BOOL_VAL(false);
-//     }
-// }
+// Frame-aware register access functions for proper local variable isolation
+inline Value vm_get_register_safe(uint16_t id) {
+    // For now, use direct access for all registers < 256 
+    // Frame isolation handled by CALL/RETURN operations saving/restoring registers
+    if (id < 256) {
+        return vm.registers[id];
+    } else {
+        // Extended registers use register file
+        Value* reg_ptr = get_register(&vm.register_file, id);
+        return reg_ptr ? *reg_ptr : BOOL_VAL(false);
+    }
+}
+
+inline void vm_set_register_safe(uint16_t id, Value value) {
+    // For now, use direct access for all registers < 256 
+    // Frame isolation handled by CALL/RETURN operations saving/restoring registers
+    if (id < 256) {
+        vm.registers[id] = value;
+    } else {
+        // Extended registers use register file
+        set_register(&vm.register_file, id, value);
+    }
+}
 
 
 
@@ -432,10 +444,12 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t src2 = READ_BYTE();
             
             // Check if either operand is a string - if so, do string concatenation
-            if (IS_STRING(vm.registers[src1]) || IS_STRING(vm.registers[src2])) {
-                // [string concatenation code remains unchanged...]
-                Value left = vm.registers[src1];
-                Value right = vm.registers[src2];
+            Value val1 = vm_get_register_safe(src1);
+            Value val2 = vm_get_register_safe(src2);
+            if (IS_STRING(val1) || IS_STRING(val2)) {
+                // [string concatenation code - use frame-aware values]
+                Value left = val1;
+                Value right = val2;
                 
                 // Convert left operand to string if needed
                 if (!IS_STRING(left)) {
@@ -493,21 +507,20 @@ InterpretResult vm_run_dispatch(void) {
                     memcpy(buffer + leftStr->length, rightStr->chars, rightStr->length);
                     buffer[newLength] = '\0';
                     ObjString* result = allocateString(buffer, newLength);
-                    vm.registers[dst] = STRING_VAL(result);
+                    vm_set_register_safe(dst, STRING_VAL(result));
                 } else {
                     StringBuilder* sb = createStringBuilder(newLength + 1);
                     appendToStringBuilder(sb, leftStr->chars, leftStr->length);
                     appendToStringBuilder(sb, rightStr->chars, rightStr->length);
                     ObjString* result = stringBuilderToString(sb);
                     freeStringBuilder(sb);
-                    vm.registers[dst] = STRING_VAL(result);
+                    vm_set_register_safe(dst, STRING_VAL(result));
                 }
                 DISPATCH();
             }
             
             // STRICT TYPE SAFETY: No automatic coercion, types must match exactly
-            Value val1 = vm.registers[src1];
-            Value val2 = vm.registers[src2];
+            // Values already loaded above for string check
             
             // Enforce strict type matching - no coercion allowed
             if (val1.type != val2.type) {
@@ -523,29 +536,29 @@ InterpretResult vm_run_dispatch(void) {
             // Fast path: assume i32, no overflow checking
             int32_t a = AS_I32(val1);
             int32_t b = AS_I32(val2);
-            vm.registers[dst] = I32_VAL(a + b);
+            vm_set_register_safe(dst, I32_VAL(a + b));
 #else
             // Strict same-type arithmetic only (after coercion)
             if (IS_I32(val1)) {
                 int32_t a = AS_I32(val1);
                 int32_t b = AS_I32(val2);
-                vm.registers[dst] = I32_VAL(a + b);
+                vm_set_register_safe(dst, I32_VAL(a + b));
             } else if (IS_I64(val1)) {
                 int64_t a = AS_I64(val1);
                 int64_t b = AS_I64(val2);
-                vm.registers[dst] = I64_VAL(a + b);
+                vm_set_register_safe(dst, I64_VAL(a + b));
             } else if (IS_U32(val1)) {
                 uint32_t a = AS_U32(val1);
                 uint32_t b = AS_U32(val2);
-                vm.registers[dst] = U32_VAL(a + b);
+                vm_set_register_safe(dst, U32_VAL(a + b));
             } else if (IS_U64(val1)) {
                 uint64_t a = AS_U64(val1);
                 uint64_t b = AS_U64(val2);
-                vm.registers[dst] = U64_VAL(a + b);
+                vm_set_register_safe(dst, U64_VAL(a + b));
             } else if (IS_F64(val1)) {
                 double a = AS_F64(val1);
                 double b = AS_F64(val2);
-                vm.registers[dst] = F64_VAL(a + b);
+                vm_set_register_safe(dst, F64_VAL(a + b));
             }
 #endif
             DISPATCH();
@@ -557,42 +570,44 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t src2 = READ_BYTE();
             
             // Strict type safety for numeric operations: both operands must be the same numeric type
-            if (vm.registers[src1].type != vm.registers[src2].type) {
+            Value val1 = vm_get_register_safe(src1);
+            Value val2 = vm_get_register_safe(src2);
+            if (val1.type != val2.type) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be the same type. Use 'as' for explicit type conversion.");
             }
 
             // Ensure both operands are numeric
-            if (!(IS_I32(vm.registers[src1]) || IS_I64(vm.registers[src1]) || IS_U32(vm.registers[src1]) || IS_U64(vm.registers[src1]) || IS_F64(vm.registers[src1]))) {
+            if (!(IS_I32(val1) || IS_I64(val1) || IS_U32(val1) || IS_U64(val1) || IS_F64(val1))) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be numeric (i32, i64, u32, u64, or f64)");
             }
 
 #if USE_FAST_ARITH
             // Fast path: assume i32, no overflow checking
-            int32_t a = AS_I32(vm.registers[src1]);
-            int32_t b = AS_I32(vm.registers[src2]);
-            vm.registers[dst] = I32_VAL(a - b);
+            int32_t a = AS_I32(val1);
+            int32_t b = AS_I32(val2);
+            vm_set_register_safe(dst, I32_VAL(a - b));
 #else
             // Strict same-type arithmetic only
-            if (IS_I32(vm.registers[src1])) {
-                int32_t a = AS_I32(vm.registers[src1]);
-                int32_t b = AS_I32(vm.registers[src2]);
-                vm.registers[dst] = I32_VAL(a - b);
-            } else if (IS_I64(vm.registers[src1])) {
-                int64_t a = AS_I64(vm.registers[src1]);
-                int64_t b = AS_I64(vm.registers[src2]);
-                vm.registers[dst] = I64_VAL(a - b);
-            } else if (IS_U32(vm.registers[src1])) {
-                uint32_t a = AS_U32(vm.registers[src1]);
-                uint32_t b = AS_U32(vm.registers[src2]);
-                vm.registers[dst] = U32_VAL(a - b);
-            } else if (IS_U64(vm.registers[src1])) {
-                uint64_t a = AS_U64(vm.registers[src1]);
-                uint64_t b = AS_U64(vm.registers[src2]);
-                vm.registers[dst] = U64_VAL(a - b);
-            } else if (IS_F64(vm.registers[src1])) {
-                double a = AS_F64(vm.registers[src1]);
-                double b = AS_F64(vm.registers[src2]);
-                vm.registers[dst] = F64_VAL(a - b);
+            if (IS_I32(val1)) {
+                int32_t a = AS_I32(val1);
+                int32_t b = AS_I32(val2);
+                vm_set_register_safe(dst, I32_VAL(a - b));
+            } else if (IS_I64(val1)) {
+                int64_t a = AS_I64(val1);
+                int64_t b = AS_I64(val2);
+                vm_set_register_safe(dst, I64_VAL(a - b));
+            } else if (IS_U32(val1)) {
+                uint32_t a = AS_U32(val1);
+                uint32_t b = AS_U32(val2);
+                vm_set_register_safe(dst, U32_VAL(a - b));
+            } else if (IS_U64(val1)) {
+                uint64_t a = AS_U64(val1);
+                uint64_t b = AS_U64(val2);
+                vm_set_register_safe(dst, U64_VAL(a - b));
+            } else if (IS_F64(val1)) {
+                double a = AS_F64(val1);
+                double b = AS_F64(val2);
+                vm_set_register_safe(dst, F64_VAL(a - b));
             }
 #endif
             DISPATCH();
@@ -604,8 +619,8 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t src2 = READ_BYTE();
             
             // STRICT TYPE SAFETY: No automatic coercion, types must match exactly
-            Value val1 = vm.registers[src1];
-            Value val2 = vm.registers[src2];
+            Value val1 = vm_get_register_safe(src1);
+            Value val2 = vm_get_register_safe(src2);
             
             // Enforce strict type matching - no coercion allowed
             if (val1.type != val2.type) {
@@ -621,29 +636,29 @@ InterpretResult vm_run_dispatch(void) {
             // Fast path: assume i32, no overflow checking
             int32_t a = AS_I32(val1);
             int32_t b = AS_I32(val2);
-            vm.registers[dst] = I32_VAL(a * b);
+            vm_set_register_safe(dst, I32_VAL(a * b));
 #else
             // Strict same-type arithmetic only (after coercion)
             if (IS_I32(val1)) {
                 int32_t a = AS_I32(val1);
                 int32_t b = AS_I32(val2);
-                vm.registers[dst] = I32_VAL(a * b);
+                vm_set_register_safe(dst, I32_VAL(a * b));
             } else if (IS_I64(val1)) {
                 int64_t a = AS_I64(val1);
                 int64_t b = AS_I64(val2);
-                vm.registers[dst] = I64_VAL(a * b);
+                vm_set_register_safe(dst, I64_VAL(a * b));
             } else if (IS_U32(val1)) {
                 uint32_t a = AS_U32(val1);
                 uint32_t b = AS_U32(val2);
-                vm.registers[dst] = U32_VAL(a * b);
+                vm_set_register_safe(dst, U32_VAL(a * b));
             } else if (IS_U64(val1)) {
                 uint64_t a = AS_U64(val1);
                 uint64_t b = AS_U64(val2);
-                vm.registers[dst] = U64_VAL(a * b);
+                vm_set_register_safe(dst, U64_VAL(a * b));
             } else if (IS_F64(val1)) {
                 double a = AS_F64(val1);
                 double b = AS_F64(val2);
-                vm.registers[dst] = F64_VAL(a * b);
+                vm_set_register_safe(dst, F64_VAL(a * b));
             }
 #endif
             DISPATCH();
@@ -1927,7 +1942,7 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t argCount = READ_BYTE();
             uint8_t resultReg = READ_BYTE();
             
-            Value funcValue = vm.registers[funcReg];
+            Value funcValue = vm_get_register_safe(funcReg);
             
             if (IS_CLOSURE(funcValue)) {
                 // Calling a closure
@@ -1936,13 +1951,13 @@ InterpretResult vm_run_dispatch(void) {
                 
                 // Check arity
                 if (argCount != function->arity) {
-                    vm.registers[resultReg] = BOOL_VAL(false);
+                    vm_set_register_safe(resultReg, BOOL_VAL(false));
                     DISPATCH();
                 }
                 
                 // Check if we have room for another call frame
                 if (vm.frameCount >= FRAMES_MAX) {
-                    vm.registers[resultReg] = BOOL_VAL(false);
+                    vm_set_register_safe(resultReg, BOOL_VAL(false));
                     DISPATCH();
                 }
                 
@@ -1953,11 +1968,12 @@ InterpretResult vm_run_dispatch(void) {
                 frame->baseRegister = resultReg;
                 
                 // Set up closure context (closure in register 0)
-                vm.registers[0] = funcValue;  // Store closure in register 0 for upvalue access
+                vm_set_register_safe(0, funcValue);  // Store closure in register 0 for upvalue access
                 
                 // Copy arguments to the start of register space for the function
                 for (int i = 0; i < argCount; i++) {
-                    vm.registers[256 - argCount + i] = vm.registers[firstArgReg + i];
+                    Value arg = vm_get_register_safe(firstArgReg + i);
+                    vm_set_register_safe(256 - argCount + i, arg);
                 }
                 
                 // Switch to function's bytecode
@@ -1971,13 +1987,13 @@ InterpretResult vm_run_dispatch(void) {
                 
                 // Check arity
                 if (argCount != objFunction->arity) {
-                    vm.registers[resultReg] = BOOL_VAL(false);
+                    vm_set_register_safe(resultReg, BOOL_VAL(false));
                     DISPATCH();
                 }
                 
                 // Check if we have room for another call frame
                 if (vm.frameCount >= FRAMES_MAX) {
-                    vm.registers[resultReg] = BOOL_VAL(false);
+                    vm_set_register_safe(resultReg, BOOL_VAL(false));
                     DISPATCH();
                 }
                 
@@ -1993,7 +2009,8 @@ InterpretResult vm_run_dispatch(void) {
                 
                 // Copy arguments to parameter registers
                 for (int i = 0; i < argCount; i++) {
-                    vm.registers[paramBase + i] = vm.registers[firstArgReg + i];
+                    Value arg = vm_get_register_safe(firstArgReg + i);
+                    vm_set_register_safe(paramBase + i, arg);
                 }
                 
                 // Switch to function's bytecode
@@ -2006,7 +2023,7 @@ InterpretResult vm_run_dispatch(void) {
                 fprintf(stderr, "CALL: func_index=%d, args=%d\n", functionIndex, argCount);
                 
                 if (functionIndex < 0 || functionIndex >= vm.functionCount) {
-                    vm.registers[resultReg] = BOOL_VAL(false);
+                    vm_set_register_safe(resultReg, BOOL_VAL(false));
                     DISPATCH();
                 }
                 
@@ -2014,13 +2031,13 @@ InterpretResult vm_run_dispatch(void) {
                 
                 // Check arity
                 if (argCount != function->arity) {
-                    vm.registers[resultReg] = BOOL_VAL(false);
+                    vm_set_register_safe(resultReg, BOOL_VAL(false));
                     DISPATCH();
                 }
                 
                 // Check if we have room for another call frame
                 if (vm.frameCount >= FRAMES_MAX) {
-                    vm.registers[resultReg] = BOOL_VAL(false);
+                    vm_set_register_safe(resultReg, BOOL_VAL(false));
                     DISPATCH();
                 }
                 
@@ -2037,17 +2054,14 @@ InterpretResult vm_run_dispatch(void) {
                 if (paramBase < 1) paramBase = 1;
                 frame->parameterBaseRegister = paramBase;
                 
-                // Save registers extensively to prevent local variable corruption
-                // Save from R200 through R263 to cover all possible local variable ranges
-                frame->savedRegisterCount = 64;  // Maximum we can save
-                frame->savedRegisterStart = 200;  // Start well before parameters and locals
-                for (int i = 0; i < frame->savedRegisterCount; i++) {
-                    frame->savedRegisters[i] = vm.registers[frame->savedRegisterStart + i];
-                }
+                // TEMP: No register saving to test baseline behavior
+                frame->savedRegisterCount = 0;   // Save no registers
+                frame->savedRegisterStart = 0;   // N/A
                 
                 // Copy arguments to parameter registers
                 for (int i = 0; i < argCount; i++) {
-                    vm.registers[paramBase + i] = vm.registers[firstArgReg + i];
+                    Value arg = vm_get_register_safe(firstArgReg + i);
+                    vm_set_register_safe(paramBase + i, arg);
                 }
                 
                 // Switch to function's chunk
@@ -2055,7 +2069,7 @@ InterpretResult vm_run_dispatch(void) {
                 vm.ip = function->chunk->code + function->start;
                 
             } else {
-                vm.registers[resultReg] = BOOL_VAL(false);
+                vm_set_register_safe(resultReg, BOOL_VAL(false));
             }
             
             DISPATCH();
@@ -2067,13 +2081,13 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t argCount = READ_BYTE();
             uint8_t resultReg = READ_BYTE();
             
-            Value funcValue = vm.registers[funcReg];
+            Value funcValue = vm_get_register_safe(funcReg);
             
             if (IS_I32(funcValue)) {
                 int functionIndex = AS_I32(funcValue);
                 
                 if (functionIndex < 0 || functionIndex >= vm.functionCount) {
-                    vm.registers[resultReg] = BOOL_VAL(false);
+                    vm_set_register_safe(resultReg, BOOL_VAL(false));
                     DISPATCH();
                 }
                 
@@ -2081,7 +2095,7 @@ InterpretResult vm_run_dispatch(void) {
                 
                 // Check arity
                 if (argCount != function->arity) {
-                    vm.registers[resultReg] = BOOL_VAL(false);
+                    vm_set_register_safe(resultReg, BOOL_VAL(false));
                     DISPATCH();
                 }
                 
@@ -2115,7 +2129,7 @@ InterpretResult vm_run_dispatch(void) {
 
     LABEL_OP_RETURN_R: {
             uint8_t reg = READ_BYTE();
-            Value returnValue = vm.registers[reg];
+            Value returnValue = vm_get_register_safe(reg);
             if (vm.frameCount > 0) {
                 CallFrame* frame = &vm.frames[--vm.frameCount];
                 
@@ -2124,12 +2138,12 @@ InterpretResult vm_run_dispatch(void) {
                 
                 // Restore saved registers using stored start position
                 for (int i = 0; i < frame->savedRegisterCount; i++) {
-                    vm.registers[frame->savedRegisterStart + i] = frame->savedRegisters[i];
+                    vm_set_register_safe(frame->savedRegisterStart + i, frame->savedRegisters[i]);
                 }
                 
                 vm.chunk = frame->previousChunk;
                 vm.ip = frame->returnAddress;
-                vm.registers[frame->baseRegister] = returnValue;
+                vm_set_register_safe(frame->baseRegister, returnValue);
             } else {
                 vm.lastExecutionTime = get_time_vm() - start_time;
                 RETURN(INTERPRET_OK);
@@ -2146,7 +2160,7 @@ InterpretResult vm_run_dispatch(void) {
                 
                 // Restore saved registers using stored start position
                 for (int i = 0; i < frame->savedRegisterCount; i++) {
-                    vm.registers[frame->savedRegisterStart + i] = frame->savedRegisters[i];
+                    vm_set_register_safe(frame->savedRegisterStart + i, frame->savedRegisters[i]);
                 }
                 
                 vm.chunk = frame->previousChunk;

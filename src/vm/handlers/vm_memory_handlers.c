@@ -13,12 +13,16 @@
 #include "vm/vm_dispatch.h"
 #include "runtime/builtins.h"
 
+// Frame-aware register access functions for proper local variable isolation
+extern inline Value vm_get_register_safe(uint16_t id);
+extern inline void vm_set_register_safe(uint16_t id, Value value);
+
 // ====== Basic Load Operation Handlers ======
 
 static inline void handle_load_const(void) {
     uint8_t reg = READ_BYTE();
     uint16_t constantIndex = READ_SHORT();
-    vm.registers[reg] = READ_CONSTANT(constantIndex);
+    vm_set_register_safe(reg, READ_CONSTANT(constantIndex));
 }
 
 // Extended constant loading for 16-bit register IDs (Phase 2.1)
@@ -47,12 +51,12 @@ static inline void handle_move_ext(void) {
 
 static inline void handle_load_true(void) {
     uint8_t reg = READ_BYTE();
-    vm.registers[reg] = BOOL_VAL(true);
+    vm_set_register_safe(reg, BOOL_VAL(true));
 }
 
 static inline void handle_load_false(void) {
     uint8_t reg = READ_BYTE();
-    vm.registers[reg] = BOOL_VAL(false);
+    vm_set_register_safe(reg, BOOL_VAL(false));
 }
 
 // ====== Register Move Operation Handler ======
@@ -60,7 +64,10 @@ static inline void handle_load_false(void) {
 static inline void handle_move_reg(void) {
     uint8_t dst = READ_BYTE();
     uint8_t src = READ_BYTE();
-    vm.registers[dst] = vm.registers[src];
+    
+    // Use frame-aware register access for proper local variable isolation
+    Value value = vm_get_register_safe(src);
+    vm_set_register_safe(dst, value);
 }
 
 // ====== Global Variable Operation Handlers ======

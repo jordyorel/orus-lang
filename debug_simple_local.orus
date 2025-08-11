@@ -1,13 +1,10 @@
-fn test(n) -> i32:
-    local_var = n * 10
-    print("Before call: local_var =", local_var)
-    if n > 1:
-        result = test(n - 1)
-        print("After call: local_var =", local_var, ", result =", result)
-        return local_var + result
-    else:
-        print("Base case: local_var =", local_var)
-        return local_var
+fn test_local(n) -> i32:
+    local_val = n + 1
+    print("local_val after assignment:", local_val)
+    another_val = local_val + 10  
+    print("another_val:", another_val)
+    print("local_val after second assignment:", local_val)
+    return local_val
 
-final = test(3)
-print("Final:", final)
+result = test_local(5)
+print("Final result:", result)
