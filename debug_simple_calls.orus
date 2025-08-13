@@ -1,0 +1,9 @@
+fn add_numbers(a, b):
+    return a + b
+
+fn test_calls():
+    x = add_numbers(1, 1)
+    y = add_numbers(1, 0)
+    return add_numbers(x, y)
+
+print("test_calls():", test_calls())

@@ -290,7 +290,7 @@ InterpretResult vm_run_dispatch(void) {
             int opcode = critical_opcodes[i];
             if (opcode < 300) {
                 if (vm_dispatch_table[opcode] == NULL) {
-                    printf("[DISPATCH_ERROR] Critical opcode %d (0x%02X) has NULL dispatch entry!\n", opcode, opcode);
+                    DEBUG_VM_PRINT("[DISPATCH_ERROR] Critical opcode %d (0x%02X) has NULL dispatch entry!\n", opcode, opcode);
                 } else {
                     DEBUG_VM_DISPATCH_PRINT("Opcode %d -> %p\n", opcode, vm_dispatch_table[opcode]);
                 }
@@ -2120,7 +2120,7 @@ InterpretResult vm_run_dispatch(void) {
                 DISPATCH();
             } else if (IS_I32(funcValue)) {
                 int functionIndex = AS_I32(funcValue);
-                fprintf(stderr, "CALL: func_index=%d, args=%d\n", functionIndex, argCount);
+                DEBUG_VM_PRINT("CALL: func_index=%d, args=%d\n", functionIndex, argCount);
                 
                 if (functionIndex < 0 || functionIndex >= vm.functionCount) {
                     vm_set_register_safe(resultReg, BOOL_VAL(false));

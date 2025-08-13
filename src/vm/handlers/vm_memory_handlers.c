@@ -267,14 +267,21 @@ static inline void handle_move_f64(void) {
 
 static inline void handle_print(void) {
     uint8_t reg = READ_BYTE();
-    builtin_print(&vm.registers[reg], 1, true, NULL);
+    Value temp_value = vm_get_register_safe(reg);
+    builtin_print(&temp_value, 1, true, NULL);
 }
 
 static inline void handle_print_multi(void) {
     uint8_t first = READ_BYTE();
     uint8_t count = READ_BYTE();
     uint8_t nl = READ_BYTE();
-    builtin_print(&vm.registers[first], count, nl != 0, NULL);
+    
+    // Copy values to temporary array using frame-aware access
+    Value temp_values[256];  // Max possible count
+    for (int i = 0; i < count; i++) {
+        temp_values[i] = vm_get_register_safe(first + i);
+    }
+    builtin_print(temp_values, count, nl != 0, NULL);
 }
 
 static inline void handle_print_multi_sep(void) {
@@ -282,12 +289,20 @@ static inline void handle_print_multi_sep(void) {
     uint8_t count = READ_BYTE();
     uint8_t sep_reg = READ_BYTE();
     uint8_t nl = READ_BYTE();
-    builtin_print_with_sep_value(&vm.registers[first], count, nl != 0, vm.registers[sep_reg]);
+    
+    // Copy values to temporary array using frame-aware access
+    Value temp_values[256];  // Max possible count
+    for (int i = 0; i < count; i++) {
+        temp_values[i] = vm_get_register_safe(first + i);
+    }
+    Value sep_value = vm_get_register_safe(sep_reg);
+    builtin_print_with_sep_value(temp_values, count, nl != 0, sep_value);
 }
 
 static inline void handle_print_no_nl(void) {
     uint8_t reg = READ_BYTE();
-    builtin_print(&vm.registers[reg], 1, false, NULL);
+    Value temp_value = vm_get_register_safe(reg);
+    builtin_print(&temp_value, 1, false, NULL);
 }
 
 // ====== Utility Operation Handlers ======

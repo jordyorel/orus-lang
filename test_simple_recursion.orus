@@ -1,15 +1,10 @@
-// Simple recursion test to verify register isolation
-print("Simple recursion test:")
+fn test_add(a, b):
+    return a + b
 
-// Simple addition recursive function
-fn add_recursive(n, acc) {
-    print("add_recursive called with n =", n, "acc =", acc)
-    if n <= 0 {
-        return acc
-    }
-    return add_recursive(n - 1, acc + 1)
-}
+fn test_recursive(n):
+    if n <= 1:
+        return n
+    return test_add(n-1, n-2)
 
-result = add_recursive(3, 0)
-print("Result:", result)
-print("Should be 3")
+print("test_recursive(6):")
+print(test_recursive(6))

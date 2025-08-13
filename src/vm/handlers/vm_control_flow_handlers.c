@@ -28,11 +28,12 @@ static inline void handle_jump_back_short(void) {
 static inline void handle_jump_if_not_short(void) {
     uint8_t reg = READ_BYTE();
     uint8_t offset = READ_BYTE();
-    if (!IS_BOOL(vm.registers[reg])) {
+    Value condition = vm_get_register_safe(reg);
+    if (!IS_BOOL(condition)) {
         runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Condition must be boolean");
         return;
     }
-    if (!AS_BOOL(vm.registers[reg])) {
+    if (!AS_BOOL(condition)) {
         CF_JUMP_SHORT(offset);
     }
 }
@@ -47,11 +48,12 @@ static inline void handle_loop_short(void) {
 static inline void handle_jump_if_false(void) {
     uint8_t reg = READ_BYTE();
     uint16_t offset = READ_SHORT();
-    if (!IS_BOOL(vm.registers[reg])) {
+    Value condition = vm_get_register_safe(reg);
+    if (!IS_BOOL(condition)) {
         runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Condition must be boolean");
         return;
     }
-    if (!AS_BOOL(vm.registers[reg])) {
+    if (!AS_BOOL(condition)) {
         CF_JUMP(offset);
     }
 }
@@ -59,8 +61,9 @@ static inline void handle_jump_if_false(void) {
 static inline void handle_jump_if_true(void) {
     uint8_t reg = READ_BYTE();
     uint16_t offset = READ_SHORT();
-    if (IS_BOOL(vm.registers[reg])) {
-        if (AS_BOOL(vm.registers[reg])) {
+    Value condition = vm_get_register_safe(reg);
+    if (IS_BOOL(condition)) {
+        if (AS_BOOL(condition)) {
             CF_JUMP(offset);
         }
     } else {
@@ -79,11 +82,12 @@ static inline void handle_jump_long(void) {
 static inline void handle_jump_if_not_long(void) {
     uint8_t reg = READ_BYTE();
     uint16_t offset = READ_SHORT();
-    if (!IS_BOOL(vm.registers[reg])) {
+    Value condition = vm_get_register_safe(reg);
+    if (!IS_BOOL(condition)) {
         runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Condition must be boolean");
         return;
     }
-    if (!AS_BOOL(vm.registers[reg])) {
+    if (!AS_BOOL(condition)) {
         CF_JUMP(offset);
     }
 }
