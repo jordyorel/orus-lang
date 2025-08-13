@@ -1,0 +1,9 @@
+a = 2
+b = 2  
+result = a - b
+print("2 - 2 =", result, "(should be 0)")
+
+c = 5
+d = 3
+result2 = c - d  
+print("5 - 3 =", result2, "(should be 2)")

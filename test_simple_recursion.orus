@@ -1,0 +1,15 @@
+// Simple recursion test to verify register isolation
+print("Simple recursion test:")
+
+// Simple addition recursive function
+fn add_recursive(n, acc) {
+    print("add_recursive called with n =", n, "acc =", acc)
+    if n <= 0 {
+        return acc
+    }
+    return add_recursive(n - 1, acc + 1)
+}
+
+result = add_recursive(3, 0)
+print("Result:", result)
+print("Should be 3")

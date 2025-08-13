@@ -1,0 +1,30 @@
+// Non-recursive fibonacci for comparison
+fn fibonacci_iterative(n) -> i32:
+    if n <= 1:
+        return n
+    
+    a = 0
+    b = 1
+    for i in 2..n:
+        temp = a + b
+        a = b
+        b = temp
+    
+    return b
+
+// Test both approaches
+print("=== ITERATIVE FIBONACCI ===")
+for i in 0..8:
+    result = fibonacci_iterative(i)
+    print("fib(", i, ") =", result)
+
+print("")
+print("=== EXPECTED VALUES ===")
+print("fib(0) = 0")
+print("fib(1) = 1") 
+print("fib(2) = 1")
+print("fib(3) = 2")
+print("fib(4) = 3")
+print("fib(5) = 5")
+print("fib(6) = 8")
+print("fib(7) = 13")

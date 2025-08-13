@@ -108,10 +108,10 @@ bool apply_constant_folding_recursive(TypedASTNode* ast) {
                         binary_operand->literal.hasExplicitSuffix = false;
                         
                         DEBUG_CONSTANTFOLD_PRINT("Folded binary operand to: ");
-                        if (binary_result.type == VAL_BOOL) printf("%s", AS_BOOL(binary_result) ? "true" : "false");
-                        else if (binary_result.type == VAL_I32) printf("%d", AS_I32(binary_result));
-                        else printf("(value)");
-                        printf("\n");
+                        if (binary_result.type == VAL_BOOL) DEBUG_CONSTANTFOLD_PRINT("%s", AS_BOOL(binary_result) ? "true" : "false");
+                        else if (binary_result.type == VAL_I32) DEBUG_CONSTANTFOLD_PRINT("%d", AS_I32(binary_result));
+                        else DEBUG_CONSTANTFOLD_PRINT("(value)");
+                        DEBUG_CONSTANTFOLD_PRINT("\n");
                         
                         fold_stats.optimizations_applied++;
                         fold_stats.constants_folded++;
@@ -172,18 +172,18 @@ bool fold_binary_expression(TypedASTNode* node) {
     
     DEBUG_CONSTANTFOLD_PRINT("Found foldable constants: ");
     // Print values using basic formatting
-    if (left.type == VAL_I32) printf("%d", AS_I32(left));
-    else if (left.type == VAL_F64) printf("%.2f", AS_F64(left));
-    else if (left.type == VAL_BOOL) printf("%s", AS_BOOL(left) ? "true" : "false");
-    else printf("(value)");
+    if (left.type == VAL_I32) DEBUG_CONSTANTFOLD_PRINT("%d", AS_I32(left));
+    else if (left.type == VAL_F64) DEBUG_CONSTANTFOLD_PRINT("%.2f", AS_F64(left));
+    else if (left.type == VAL_BOOL) DEBUG_CONSTANTFOLD_PRINT("%s", AS_BOOL(left) ? "true" : "false");
+    else DEBUG_CONSTANTFOLD_PRINT("(value)");
     
-    printf(" %s ", op);
+    DEBUG_CONSTANTFOLD_PRINT(" %s ", op);
     
-    if (right.type == VAL_I32) printf("%d", AS_I32(right));
-    else if (right.type == VAL_F64) printf("%.2f", AS_F64(right));
-    else if (right.type == VAL_BOOL) printf("%s", AS_BOOL(right) ? "true" : "false");
-    else printf("(value)");
-    printf("\n");
+    if (right.type == VAL_I32) DEBUG_CONSTANTFOLD_PRINT("%d", AS_I32(right));
+    else if (right.type == VAL_F64) DEBUG_CONSTANTFOLD_PRINT("%.2f", AS_F64(right));
+    else if (right.type == VAL_BOOL) DEBUG_CONSTANTFOLD_PRINT("%s", AS_BOOL(right) ? "true" : "false");
+    else DEBUG_CONSTANTFOLD_PRINT("(value)");
+    DEBUG_CONSTANTFOLD_PRINT("\n");
     
     // Check for overflow before evaluation
     if (has_overflow(left, op, right)) {
@@ -209,11 +209,11 @@ bool fold_binary_expression(TypedASTNode* node) {
     fold_stats.binary_expressions_folded++;
     
     DEBUG_CONSTANTFOLD_PRINT("✅ Successfully folded to: ");
-    if (result.type == VAL_I32) printf("%d", AS_I32(result));
-    else if (result.type == VAL_F64) printf("%.2f", AS_F64(result));
-    else if (result.type == VAL_BOOL) printf("%s", AS_BOOL(result) ? "true" : "false");
-    else printf("(value)");
-    printf(" (memory-safe transformation)\n");
+    if (result.type == VAL_I32) DEBUG_CONSTANTFOLD_PRINT("%d", AS_I32(result));
+    else if (result.type == VAL_F64) DEBUG_CONSTANTFOLD_PRINT("%.2f", AS_F64(result));
+    else if (result.type == VAL_BOOL) DEBUG_CONSTANTFOLD_PRINT("%s", AS_BOOL(result) ? "true" : "false");
+    else DEBUG_CONSTANTFOLD_PRINT("(value)");
+    DEBUG_CONSTANTFOLD_PRINT(" (memory-safe transformation)\n");
     
     return true;
 }
@@ -240,14 +240,14 @@ void fold_ast_node_directly(ASTNode* node) {
                 const char* op = node->binary.op;
                 
                 DEBUG_CONSTANTFOLD_PRINT("Direct folding: ");
-                if (left.type == VAL_BOOL) printf("%s", AS_BOOL(left) ? "true" : "false");
-                else if (left.type == VAL_I32) printf("%d", AS_I32(left));
-                else printf("(value)");
-                printf(" %s ", op);
-                if (right.type == VAL_BOOL) printf("%s", AS_BOOL(right) ? "true" : "false");
-                else if (right.type == VAL_I32) printf("%d", AS_I32(right));
-                else printf("(value)");
-                printf("\n");
+                if (left.type == VAL_BOOL) DEBUG_CONSTANTFOLD_PRINT("%s", AS_BOOL(left) ? "true" : "false");
+                else if (left.type == VAL_I32) DEBUG_CONSTANTFOLD_PRINT("%d", AS_I32(left));
+                else DEBUG_CONSTANTFOLD_PRINT("(value)");
+                DEBUG_CONSTANTFOLD_PRINT(" %s ", op);
+                if (right.type == VAL_BOOL) DEBUG_CONSTANTFOLD_PRINT("%s", AS_BOOL(right) ? "true" : "false");
+                else if (right.type == VAL_I32) DEBUG_CONSTANTFOLD_PRINT("%d", AS_I32(right));
+                else DEBUG_CONSTANTFOLD_PRINT("(value)");
+                DEBUG_CONSTANTFOLD_PRINT("\n");
                 
                 Value result = evaluate_binary_operation(left, op, right);
                 
@@ -261,10 +261,10 @@ void fold_ast_node_directly(ASTNode* node) {
                 fold_stats.binary_expressions_folded++;
                 
                 DEBUG_CONSTANTFOLD_PRINT("Direct folded to: ");
-                if (result.type == VAL_BOOL) printf("%s", AS_BOOL(result) ? "true" : "false");
-                else if (result.type == VAL_I32) printf("%d", AS_I32(result));
-                else printf("(value)");
-                printf("\n");
+                if (result.type == VAL_BOOL) DEBUG_CONSTANTFOLD_PRINT("%s", AS_BOOL(result) ? "true" : "false");
+                else if (result.type == VAL_I32) DEBUG_CONSTANTFOLD_PRINT("%d", AS_I32(result));
+                else DEBUG_CONSTANTFOLD_PRINT("(value)");
+                DEBUG_CONSTANTFOLD_PRINT("\n");
             }
             break;
             
@@ -280,10 +280,10 @@ void fold_ast_node_directly(ASTNode* node) {
                 const char* op = node->unary.op;
                 
                 DEBUG_CONSTANTFOLD_PRINT("Direct unary folding: %s ", op);
-                if (operand.type == VAL_BOOL) printf("%s", AS_BOOL(operand) ? "true" : "false");
-                else if (operand.type == VAL_I32) printf("%d", AS_I32(operand));
-                else printf("(value)");
-                printf("\n");
+                if (operand.type == VAL_BOOL) DEBUG_CONSTANTFOLD_PRINT("%s", AS_BOOL(operand) ? "true" : "false");
+                else if (operand.type == VAL_I32) DEBUG_CONSTANTFOLD_PRINT("%d", AS_I32(operand));
+                else DEBUG_CONSTANTFOLD_PRINT("(value)");
+                DEBUG_CONSTANTFOLD_PRINT("\n");
                 
                 Value result;
                 bool can_fold = false;
@@ -313,10 +313,10 @@ void fold_ast_node_directly(ASTNode* node) {
                     fold_stats.constants_folded++;
                     
                     DEBUG_CONSTANTFOLD_PRINT("Direct unary folded to: ");
-                    if (result.type == VAL_BOOL) printf("%s", AS_BOOL(result) ? "true" : "false");
-                    else if (result.type == VAL_I32) printf("%d", AS_I32(result));
-                    else printf("(value)");
-                    printf("\n");
+                    if (result.type == VAL_BOOL) DEBUG_CONSTANTFOLD_PRINT("%s", AS_BOOL(result) ? "true" : "false");
+                    else if (result.type == VAL_I32) DEBUG_CONSTANTFOLD_PRINT("%d", AS_I32(result));
+                    else DEBUG_CONSTANTFOLD_PRINT("(value)");
+                    DEBUG_CONSTANTFOLD_PRINT("\n");
                 }
             }
             break;
@@ -341,11 +341,11 @@ bool fold_unary_expression(TypedASTNode* node) {
     const char* op = node->original->unary.op;
     
     DEBUG_CONSTANTFOLD_PRINT("Found foldable unary constant: %s ", op);
-    if (operand.type == VAL_I32) printf("%d", AS_I32(operand));
-    else if (operand.type == VAL_F64) printf("%.2f", AS_F64(operand));
-    else if (operand.type == VAL_BOOL) printf("%s", AS_BOOL(operand) ? "true" : "false");
-    else printf("(value)");
-    printf("\n");
+    if (operand.type == VAL_I32) DEBUG_CONSTANTFOLD_PRINT("%d", AS_I32(operand));
+    else if (operand.type == VAL_F64) DEBUG_CONSTANTFOLD_PRINT("%.2f", AS_F64(operand));
+    else if (operand.type == VAL_BOOL) DEBUG_CONSTANTFOLD_PRINT("%s", AS_BOOL(operand) ? "true" : "false");
+    else DEBUG_CONSTANTFOLD_PRINT("(value)");
+    DEBUG_CONSTANTFOLD_PRINT("\n");
     
     Value result;
     
@@ -387,11 +387,11 @@ bool fold_unary_expression(TypedASTNode* node) {
     fold_stats.constants_folded++;
     
     DEBUG_CONSTANTFOLD_PRINT("✅ Successfully folded unary to: ");
-    if (result.type == VAL_I32) printf("%d", AS_I32(result));
-    else if (result.type == VAL_F64) printf("%.2f", AS_F64(result));
-    else if (result.type == VAL_BOOL) printf("%s", AS_BOOL(result) ? "true" : "false");
-    else printf("(value)");
-    printf(" (memory-safe transformation)\n");
+    if (result.type == VAL_I32) DEBUG_CONSTANTFOLD_PRINT("%d", AS_I32(result));
+    else if (result.type == VAL_F64) DEBUG_CONSTANTFOLD_PRINT("%.2f", AS_F64(result));
+    else if (result.type == VAL_BOOL) DEBUG_CONSTANTFOLD_PRINT("%s", AS_BOOL(result) ? "true" : "false");
+    else DEBUG_CONSTANTFOLD_PRINT("(value)");
+    DEBUG_CONSTANTFOLD_PRINT(" (memory-safe transformation)\n");
     
     return true;
 }

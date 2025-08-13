@@ -1,0 +1,17 @@
+// Test subtraction operations that fibonacci uses
+fn test_sub(n) -> i32:
+    print("test_sub(", n, ") called")
+    result1 = n - 1
+    print("n - 1 =", result1)
+    result2 = n - 2  
+    print("n - 2 =", result2)
+    return result1
+
+print("=== Testing subtraction in recursive context ===")
+print("test_sub(3):")
+result3 = test_sub(3)
+print("Returned:", result3)
+
+print("test_sub(2):")
+result2 = test_sub(2)  
+print("Returned:", result2)

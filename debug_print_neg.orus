@@ -1,0 +1,8 @@
+// Test print with negation step by step
+print("Step 1: Basic print")
+num = 42
+print("Step 2: Print positive number", num)
+neg_num = -num  
+print("Step 3: Print negative number", neg_num)
+print("Step 4: Direct negative")
+print(-42)

@@ -1,0 +1,13 @@
+// Test fibonacci recursion with our comprehensive register fixes
+fn fibonacci(n):
+    if n <= 1:
+        return n
+    return fibonacci(n - 1) + fibonacci(n - 2)
+
+print("Testing fibonacci after comprehensive register fixes:")
+print("fibonacci(0) =", fibonacci(0))
+print("fibonacci(1) =", fibonacci(1))
+print("fibonacci(2) =", fibonacci(2))
+print("fibonacci(3) =", fibonacci(3))
+print("fibonacci(4) =", fibonacci(4))
+print("fibonacci(5) =", fibonacci(5))

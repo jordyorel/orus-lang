@@ -1,0 +1,20 @@
+// Minimal recursive test
+fn fibonacci(n) -> i32:
+    print("fibonacci(", n, ") called")
+    if n <= 1:
+        print("Base case: returning", n)
+        return n
+    
+    print("Calculating fib(", n-1, ") + fib(", n-2, ")")
+    left = fibonacci(n-1)
+    print("Got left =", left, "for n-1 =", n-1)
+    right = fibonacci(n-2) 
+    print("Got right =", right, "for n-2 =", n-2)
+    result = left + right
+    print("fibonacci(", n, ") =", result)
+    return result
+
+// Test with small input
+print("=== Testing fibonacci(2) ===")
+result = fibonacci(2)
+print("Final result:", result)

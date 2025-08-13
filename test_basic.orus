@@ -1,0 +1,6 @@
+// Basic functionality test
+print("Basic test:")
+a = 5
+b = 3
+result = a + b
+print("5 + 3 =", result)

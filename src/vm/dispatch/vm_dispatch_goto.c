@@ -19,6 +19,10 @@ inline Value vm_get_register_safe(uint16_t id) {
     // For now, use direct access for all registers < 256 
     // Frame isolation handled by CALL/RETURN operations saving/restoring registers
     if (id < 256) {
+        // Debug: track which registers are being accessed (disabled)
+        // if (id >= 60 && id <= 80) {
+        //     fprintf(stderr, "[REG_DEBUG] GET R%d = %d (type:%d)\n", id, IS_I32(vm.registers[id]) ? AS_I32(vm.registers[id]) : 0, vm.registers[id].type);
+        // }
         return vm.registers[id];
     } else {
         // Extended registers use register file
@@ -31,6 +35,10 @@ inline void vm_set_register_safe(uint16_t id, Value value) {
     // For now, use direct access for all registers < 256 
     // Frame isolation handled by CALL/RETURN operations saving/restoring registers
     if (id < 256) {
+        // Debug: track which registers are being set (disabled)
+        // if (id >= 60 && id <= 80) {
+        //     fprintf(stderr, "[REG_DEBUG] SET R%d = %d (type:%d)\n", id, IS_I32(value) ? AS_I32(value) : 0, value.type);
+        // }
         vm.registers[id] = value;
     } else {
         // Extended registers use register file
@@ -334,7 +342,7 @@ InterpretResult vm_run_dispatch(void) {
             if (globalIndex >= vm.variableCount || vm.globalTypes[globalIndex] == NULL) {
                 VM_ERROR_RETURN(ERROR_NAME, CURRENT_LOCATION(), "Undefined variable");
             }
-            vm.registers[reg] = vm.globals[globalIndex];
+            vm_set_register_safe(reg, vm.globals[globalIndex]);
             DISPATCH();
         }
 
@@ -670,52 +678,55 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t src2 = READ_BYTE();
 
             // Strict type safety for numeric operations
-            if (vm.registers[src1].type != vm.registers[src2].type) {
+            Value val1 = vm_get_register_safe(src1);
+            Value val2 = vm_get_register_safe(src2);
+            
+            if (val1.type != val2.type) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be the same type. Use 'as' for explicit type conversion.");
             }
 
-            if (!(IS_I32(vm.registers[src1]) || IS_I64(vm.registers[src1]) ||
-                  IS_U32(vm.registers[src1]) || IS_U64(vm.registers[src1]) || IS_F64(vm.registers[src1]))) {
+            if (!(IS_I32(val1) || IS_I64(val1) ||
+                  IS_U32(val1) || IS_U64(val1) || IS_F64(val1))) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be numeric (i32, i64, u32, u64, or f64)");
             }
 
-            if (IS_I32(vm.registers[src1])) {
-                int32_t a = AS_I32(vm.registers[src1]);
-                int32_t b = AS_I32(vm.registers[src2]);
+            if (IS_I32(val1)) {
+                int32_t a = AS_I32(val1);
+                int32_t b = AS_I32(val2);
                 if (b == 0) {
                     VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Division by zero");
                 }
                 if (a == INT32_MIN && b == -1) {
                     VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow");
                 }
-                vm.registers[dst] = I32_VAL(a / b);
-            } else if (IS_I64(vm.registers[src1])) {
-                int64_t a = AS_I64(vm.registers[src1]);
-                int64_t b = AS_I64(vm.registers[src2]);
+                vm_set_register_safe(dst, I32_VAL(a / b));
+            } else if (IS_I64(val1)) {
+                int64_t a = AS_I64(val1);
+                int64_t b = AS_I64(val2);
                 if (b == 0) {
                     VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Division by zero");
                 }
                 if (a == INT64_MIN && b == -1) {
                     VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow");
                 }
-                vm.registers[dst] = I64_VAL(a / b);
-            } else if (IS_U32(vm.registers[src1])) {
-                uint32_t a = AS_U32(vm.registers[src1]);
-                uint32_t b = AS_U32(vm.registers[src2]);
+                vm_set_register_safe(dst, I64_VAL(a / b));
+            } else if (IS_U32(val1)) {
+                uint32_t a = AS_U32(val1);
+                uint32_t b = AS_U32(val2);
                 if (b == 0) {
                     VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Division by zero");
                 }
-                vm.registers[dst] = U32_VAL(a / b);
-            } else if (IS_U64(vm.registers[src1])) {
-                uint64_t a = AS_U64(vm.registers[src1]);
-                uint64_t b = AS_U64(vm.registers[src2]);
+                vm_set_register_safe(dst, U32_VAL(a / b));
+            } else if (IS_U64(val1)) {
+                uint64_t a = AS_U64(val1);
+                uint64_t b = AS_U64(val2);
                 if (b == 0) {
                     VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Division by zero");
                 }
-                vm.registers[dst] = U64_VAL(a / b);
+                vm_set_register_safe(dst, U64_VAL(a / b));
             } else {
-                double a = AS_F64(vm.registers[src1]);
-                double b = AS_F64(vm.registers[src2]);
+                double a = AS_F64(val1);
+                double b = AS_F64(val2);
                 if (b == 0.0) {
                     VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Division by zero");
                 }
@@ -723,7 +734,7 @@ InterpretResult vm_run_dispatch(void) {
                 if (!isfinite(res)) {
                     VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Floating-point overflow");
                 }
-                vm.registers[dst] = F64_VAL(res);
+                vm_set_register_safe(dst, F64_VAL(res));
             }
             DISPATCH();
         }
@@ -734,52 +745,55 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t src2 = READ_BYTE();
 
             // Strict type safety for numeric operations
-            if (vm.registers[src1].type != vm.registers[src2].type) {
+            Value val1 = vm_get_register_safe(src1);
+            Value val2 = vm_get_register_safe(src2);
+            
+            if (val1.type != val2.type) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be the same type. Use 'as' for explicit type conversion.");
             }
 
-            if (!(IS_I32(vm.registers[src1]) || IS_I64(vm.registers[src1]) ||
-                  IS_U32(vm.registers[src1]) || IS_U64(vm.registers[src1]) || IS_F64(vm.registers[src1]))) {
+            if (!(IS_I32(val1) || IS_I64(val1) ||
+                  IS_U32(val1) || IS_U64(val1) || IS_F64(val1))) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be numeric (i32, i64, u32, u64, or f64)");
             }
 
-            if (IS_I32(vm.registers[src1])) {
-                int32_t a = AS_I32(vm.registers[src1]);
-                int32_t b = AS_I32(vm.registers[src2]);
+            if (IS_I32(val1)) {
+                int32_t a = AS_I32(val1);
+                int32_t b = AS_I32(val2);
                 if (b == 0) {
                     VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Division by zero");
                 }
                 if (a == INT32_MIN && b == -1) {
                     VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow");
                 }
-                vm.registers[dst] = I32_VAL(a % b);
-            } else if (IS_I64(vm.registers[src1])) {
-                int64_t a = AS_I64(vm.registers[src1]);
-                int64_t b = AS_I64(vm.registers[src2]);
+                vm_set_register_safe(dst, I32_VAL(a % b));
+            } else if (IS_I64(val1)) {
+                int64_t a = AS_I64(val1);
+                int64_t b = AS_I64(val2);
                 if (b == 0) {
                     VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Division by zero");
                 }
                 if (a == INT64_MIN && b == -1) {
                     VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow");
                 }
-                vm.registers[dst] = I64_VAL(a % b);
-            } else if (IS_U32(vm.registers[src1])) {
-                uint32_t a = AS_U32(vm.registers[src1]);
-                uint32_t b = AS_U32(vm.registers[src2]);
+                vm_set_register_safe(dst, I64_VAL(a % b));
+            } else if (IS_U32(val1)) {
+                uint32_t a = AS_U32(val1);
+                uint32_t b = AS_U32(val2);
                 if (b == 0) {
                     VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Division by zero");
                 }
-                vm.registers[dst] = U32_VAL(a % b);
-            } else if (IS_U64(vm.registers[src1])) {
-                uint64_t a = AS_U64(vm.registers[src1]);
-                uint64_t b = AS_U64(vm.registers[src2]);
+                vm_set_register_safe(dst, U32_VAL(a % b));
+            } else if (IS_U64(val1)) {
+                uint64_t a = AS_U64(val1);
+                uint64_t b = AS_U64(val2);
                 if (b == 0) {
                     VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Division by zero");
                 }
-                vm.registers[dst] = U64_VAL(a % b);
+                vm_set_register_safe(dst, U64_VAL(a % b));
             } else {
-                double a = AS_F64(vm.registers[src1]);
-                double b = AS_F64(vm.registers[src2]);
+                double a = AS_F64(val1);
+                double b = AS_F64(val2);
                 if (b == 0.0) {
                     VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Division by zero");
                 }
@@ -787,7 +801,7 @@ InterpretResult vm_run_dispatch(void) {
                 if (!isfinite(res)) {
                     VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Floating-point overflow");
                 }
-                vm.registers[dst] = F64_VAL(res);
+                vm_set_register_safe(dst, F64_VAL(res));
             }
             DISPATCH();
         }
@@ -795,14 +809,16 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_INC_I32_R: {
             uint8_t reg = READ_BYTE();
     #if USE_FAST_ARITH
-            vm.registers[reg] = I32_VAL(AS_I32(vm.registers[reg]) + 1);
+            Value val = vm_get_register_safe(reg);
+            vm_set_register_safe(reg, I32_VAL(AS_I32(val) + 1));
     #else
-            int32_t val = AS_I32(vm.registers[reg]);
+            Value val_reg = vm_get_register_safe(reg);
+            int32_t val = AS_I32(val_reg);
             int32_t result;
             if (__builtin_add_overflow(val, 1, &result)) {
                 VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow");
             }
-            vm.registers[reg] = I32_VAL(result);
+            vm_set_register_safe(reg, I32_VAL(result));
     #endif
             DISPATCH();
         }
@@ -810,14 +826,16 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_DEC_I32_R: {
             uint8_t reg = READ_BYTE();
     #if USE_FAST_ARITH
-            vm.registers[reg] = I32_VAL(AS_I32(vm.registers[reg]) - 1);
+            Value val = vm_get_register_safe(reg);
+            vm_set_register_safe(reg, I32_VAL(AS_I32(val) - 1));
     #else
-            int32_t val = AS_I32(vm.registers[reg]);
+            Value val_reg = vm_get_register_safe(reg);
+            int32_t val = AS_I32(val_reg);
             int32_t result;
             if (__builtin_sub_overflow(val, 1, &result)) {
                 VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow");
             }
-            vm.registers[reg] = I32_VAL(result);
+            vm_set_register_safe(reg, I32_VAL(result));
     #endif
             DISPATCH();
         }
@@ -827,34 +845,46 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t src = READ_BYTE();
             
             // Type safety: negation only works on numeric types
-            if (!(IS_I32(vm.registers[src]) || IS_I64(vm.registers[src]) || IS_U32(vm.registers[src]) || IS_U64(vm.registers[src]) || IS_F64(vm.registers[src]))) {
+            Value val = vm_get_register_safe(src);
+            if (!(IS_I32(val) || IS_I64(val) || IS_U32(val) || IS_U64(val) || IS_F64(val))) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Unary minus only works on numeric types (i32, i64, u32, u64, f64)");
             }
             
     #if USE_FAST_ARITH
-            vm.registers[dst] = I32_VAL(-AS_I32(vm.registers[src]));
+            // Handle the detected type appropriately in fast path too
+            if (IS_I32(val)) {
+                vm_set_register_safe(dst, I32_VAL(-AS_I32(val)));
+            } else if (IS_I64(val)) {
+                vm_set_register_safe(dst, I64_VAL(-AS_I64(val)));
+            } else if (IS_U32(val)) {
+                vm_set_register_safe(dst, I32_VAL(-((int32_t)AS_U32(val))));
+            } else if (IS_U64(val)) {
+                vm_set_register_safe(dst, I64_VAL(-((int64_t)AS_U64(val))));
+            } else if (IS_F64(val)) {
+                vm_set_register_safe(dst, F64_VAL(-AS_F64(val)));
+            }
     #else
             // Handle different numeric types appropriately
-            if (IS_I32(vm.registers[src])) {
-                int32_t val = AS_I32(vm.registers[src]);
-                if (val == INT32_MIN) {
+            if (IS_I32(val)) {
+                int32_t int_val = AS_I32(val);
+                if (int_val == INT32_MIN) {
                     VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow: cannot negate INT32_MIN");
                 }
-                vm.registers[dst] = I32_VAL(-val);
-            } else if (IS_I64(vm.registers[src])) {
-                int64_t val = AS_I64(vm.registers[src]);
-                vm.registers[dst] = I64_VAL(-val);
-            } else if (IS_U32(vm.registers[src])) {
-                uint32_t val = AS_U32(vm.registers[src]);
+                vm_set_register_safe(dst, I32_VAL(-int_val));
+            } else if (IS_I64(val)) {
+                int64_t int_val = AS_I64(val);
+                vm_set_register_safe(dst, I64_VAL(-int_val));
+            } else if (IS_U32(val)) {
+                uint32_t int_val = AS_U32(val);
                 // Convert to signed for negation
-                vm.registers[dst] = I32_VAL(-((int32_t)val));
-            } else if (IS_U64(vm.registers[src])) {
-                uint64_t val = AS_U64(vm.registers[src]);
+                vm_set_register_safe(dst, I32_VAL(-((int32_t)int_val)));
+            } else if (IS_U64(val)) {
+                uint64_t int_val = AS_U64(val);
                 // Convert to signed for negation
-                vm.registers[dst] = I64_VAL(-((int64_t)val));
-            } else if (IS_F64(vm.registers[src])) {
-                double val = AS_F64(vm.registers[src]);
-                vm.registers[dst] = F64_VAL(-val);
+                vm_set_register_safe(dst, I64_VAL(-((int64_t)int_val)));
+            } else if (IS_F64(val)) {
+                double double_val = AS_F64(val);
+                vm_set_register_safe(dst, F64_VAL(-double_val));
             }
     #endif
             DISPATCH();
@@ -864,19 +894,21 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t dst = READ_BYTE();
             uint8_t src1 = READ_BYTE();
             uint8_t src2 = READ_BYTE();
-            if (!IS_I64(vm.registers[src1]) || !IS_I64(vm.registers[src2])) {
+            Value val1 = vm_get_register_safe(src1);
+            Value val2 = vm_get_register_safe(src2);
+            if (!IS_I64(val1) || !IS_I64(val2)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be i64");
             }
-            int64_t a = AS_I64(vm.registers[src1]);
-            int64_t b = AS_I64(vm.registers[src2]);
+            int64_t a = AS_I64(val1);
+            int64_t b = AS_I64(val2);
     #if USE_FAST_ARITH
-            vm.registers[dst] = I64_VAL(a + b);
+            vm_set_register_safe(dst, I64_VAL(a + b));
     #else
             int64_t result;
             if (__builtin_add_overflow(a, b, &result)) {
                 VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow");
             }
-            vm.registers[dst] = I64_VAL(result);
+            vm_set_register_safe(dst, I64_VAL(result));
     #endif
             DISPATCH();
         }
@@ -885,19 +917,21 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t dst = READ_BYTE();
             uint8_t src1 = READ_BYTE();
             uint8_t src2 = READ_BYTE();
-            if (!IS_I64(vm.registers[src1]) || !IS_I64(vm.registers[src2])) {
+            Value val1 = vm_get_register_safe(src1);
+            Value val2 = vm_get_register_safe(src2);
+            if (!IS_I64(val1) || !IS_I64(val2)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be i64");
             }
-            int64_t a = AS_I64(vm.registers[src1]);
-            int64_t b = AS_I64(vm.registers[src2]);
+            int64_t a = AS_I64(val1);
+            int64_t b = AS_I64(val2);
     #if USE_FAST_ARITH
-            vm.registers[dst] = I64_VAL(a - b);
+            vm_set_register_safe(dst, I64_VAL(a - b));
     #else
             int64_t result;
             if (__builtin_sub_overflow(a, b, &result)) {
                 VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow");
             }
-            vm.registers[dst] = I64_VAL(result);
+            vm_set_register_safe(dst, I64_VAL(result));
     #endif
             DISPATCH();
         }
@@ -909,16 +943,16 @@ InterpretResult vm_run_dispatch(void) {
             if (!IS_I64(vm.registers[src1]) || !IS_I64(vm.registers[src2])) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be i64");
             }
-            int64_t a = AS_I64(vm.registers[src1]);
-            int64_t b = AS_I64(vm.registers[src2]);
+            int64_t a = AS_I64(vm_get_register_safe(src1));
+            int64_t b = AS_I64(vm_get_register_safe(src2));
     #if USE_FAST_ARITH
-            vm.registers[dst] = I64_VAL(a * b);
+            vm_set_register_safe(dst, I64_VAL(a * b));
     #else
             int64_t result;
             if (__builtin_mul_overflow(a, b, &result)) {
                 VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow");
             }
-            vm.registers[dst] = I64_VAL(result);
+            vm_set_register_safe(dst, I64_VAL(result));
     #endif
             DISPATCH();
         }
@@ -930,11 +964,11 @@ InterpretResult vm_run_dispatch(void) {
             if (!IS_I64(vm.registers[src1]) || !IS_I64(vm.registers[src2])) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be i64");
             }
-            int64_t b = AS_I64(vm.registers[src2]);
+            int64_t b = AS_I64(vm_get_register_safe(src2));
             if (b == 0) {
                 VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Division by zero");
             }
-            vm.registers[dst] = I64_VAL(AS_I64(vm.registers[src1]) / b);
+            vm_set_register_safe(dst, I64_VAL(AS_I64(vm_get_register_safe(src1)) / b));
             DISPATCH();
         }
 
@@ -945,11 +979,11 @@ InterpretResult vm_run_dispatch(void) {
             if (!IS_I64(vm.registers[src1]) || !IS_I64(vm.registers[src2])) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be i64");
             }
-            int64_t b = AS_I64(vm.registers[src2]);
+            int64_t b = AS_I64(vm_get_register_safe(src2));
             if (b == 0) {
                 VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Division by zero");
             }
-            vm.registers[dst] = I64_VAL(AS_I64(vm.registers[src1]) % b);
+            vm_set_register_safe(dst, I64_VAL(AS_I64(vm_get_register_safe(src1)) % b));
             DISPATCH();
         }
 
@@ -957,10 +991,12 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t dst = READ_BYTE();
             uint8_t src1 = READ_BYTE();
             uint8_t src2 = READ_BYTE();
-            if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
+            Value val1 = vm_get_register_safe(src1);
+            Value val2 = vm_get_register_safe(src2);
+            if (!IS_U32(val1) || !IS_U32(val2)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be u32");
             }
-            vm.registers[dst] = U32_VAL(AS_U32(vm.registers[src1]) + AS_U32(vm.registers[src2]));
+            vm_set_register_safe(dst, U32_VAL(AS_U32(val1) + AS_U32(val2)));
             DISPATCH();
         }
 
@@ -968,10 +1004,12 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t dst = READ_BYTE();
             uint8_t src1 = READ_BYTE();
             uint8_t src2 = READ_BYTE();
-            if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
+            Value val1 = vm_get_register_safe(src1);
+            Value val2 = vm_get_register_safe(src2);
+            if (!IS_U32(val1) || !IS_U32(val2)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be u32");
             }
-            vm.registers[dst] = U32_VAL(AS_U32(vm.registers[src1]) - AS_U32(vm.registers[src2]));
+            vm_set_register_safe(dst, U32_VAL(AS_U32(val1) - AS_U32(val2)));
             DISPATCH();
         }
 
@@ -979,10 +1017,12 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t dst = READ_BYTE();
             uint8_t src1 = READ_BYTE();
             uint8_t src2 = READ_BYTE();
-            if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
+            Value val1 = vm_get_register_safe(src1);
+            Value val2 = vm_get_register_safe(src2);
+            if (!IS_U32(val1) || !IS_U32(val2)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be u32");
             }
-            vm.registers[dst] = U32_VAL(AS_U32(vm.registers[src1]) * AS_U32(vm.registers[src2]));
+            vm_set_register_safe(dst, U32_VAL(AS_U32(val1) * AS_U32(val2)));
             DISPATCH();
         }
 
@@ -990,14 +1030,16 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t dst = READ_BYTE();
             uint8_t src1 = READ_BYTE();
             uint8_t src2 = READ_BYTE();
-            if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
+            Value val1 = vm_get_register_safe(src1);
+            Value val2 = vm_get_register_safe(src2);
+            if (!IS_U32(val1) || !IS_U32(val2)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be u32");
             }
-            uint32_t b = AS_U32(vm.registers[src2]);
+            uint32_t b = AS_U32(val2);
             if (b == 0) {
                 VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Division by zero");
             }
-            vm.registers[dst] = U32_VAL(AS_U32(vm.registers[src1]) / b);
+            vm_set_register_safe(dst, U32_VAL(AS_U32(val1) / b));
             DISPATCH();
         }
 
@@ -1005,14 +1047,16 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t dst = READ_BYTE();
             uint8_t src1 = READ_BYTE();
             uint8_t src2 = READ_BYTE();
-            if (!IS_U32(vm.registers[src1]) || !IS_U32(vm.registers[src2])) {
+            Value val1 = vm_get_register_safe(src1);
+            Value val2 = vm_get_register_safe(src2);
+            if (!IS_U32(val1) || !IS_U32(val2)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be u32");
             }
-            uint32_t b = AS_U32(vm.registers[src2]);
+            uint32_t b = AS_U32(val2);
             if (b == 0) {
                 VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Division by zero");
             }
-            vm.registers[dst] = U32_VAL(AS_U32(vm.registers[src1]) % b);
+            vm_set_register_safe(dst, U32_VAL(AS_U32(val1) % b));
             DISPATCH();
         }
 
@@ -1033,7 +1077,7 @@ InterpretResult vm_run_dispatch(void) {
                 VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "u64 addition overflow");
             }
 
-            vm.registers[dst] = U64_VAL(a + b);
+            vm_set_register_safe(dst, U64_VAL(a + b));
             DISPATCH();
         }
 
@@ -1054,7 +1098,7 @@ InterpretResult vm_run_dispatch(void) {
                 VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "u64 subtraction underflow");
             }
 
-            vm.registers[dst] = U64_VAL(a - b);
+            vm_set_register_safe(dst, U64_VAL(a - b));
             DISPATCH();
         }
 
@@ -1075,7 +1119,7 @@ InterpretResult vm_run_dispatch(void) {
                 VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "u64 multiplication overflow");
             }
 
-            vm.registers[dst] = U64_VAL(a * b);
+            vm_set_register_safe(dst, U64_VAL(a * b));
             DISPATCH();
         }
 
@@ -1088,12 +1132,12 @@ InterpretResult vm_run_dispatch(void) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be u64");
             }
 
-            uint64_t b = AS_U64(vm.registers[src2]);
+            uint64_t b = AS_U64(vm_get_register_safe(src2));
             if (b == 0) {
                 VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Division by zero");
             }
 
-            vm.registers[dst] = U64_VAL(AS_U64(vm.registers[src1]) / b);
+            vm_set_register_safe(dst, U64_VAL(AS_U64(vm_get_register_safe(src1)) / b));
             DISPATCH();
         }
 
@@ -1106,12 +1150,12 @@ InterpretResult vm_run_dispatch(void) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be u64");
             }
 
-            uint64_t b = AS_U64(vm.registers[src2]);
+            uint64_t b = AS_U64(vm_get_register_safe(src2));
             if (b == 0) {
                 VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Division by zero");
             }
 
-            vm.registers[dst] = U64_VAL(AS_U64(vm.registers[src1]) % b);
+            vm_set_register_safe(dst, U64_VAL(AS_U64(vm_get_register_safe(src1)) % b));
             DISPATCH();
         }
 
@@ -1119,10 +1163,11 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
             READ_BYTE(); // Skip third operand (unused)
-            if (!IS_I32(vm.registers[src])) {
+            Value src_val = vm_get_register_safe(src);
+            if (!IS_I32(src_val)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i32");
             }
-            vm.registers[dst] = I64_VAL((int64_t)AS_I32(vm.registers[src]));
+            vm_set_register_safe(dst, I64_VAL((int64_t)AS_I32(src_val)));
             DISPATCH();
         }
 
@@ -1130,10 +1175,11 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
             READ_BYTE(); // Skip third operand (unused)
-            if (!IS_I32(vm.registers[src])) {
+            Value src_val = vm_get_register_safe(src);
+            if (!IS_I32(src_val)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i32");
             }
-            vm.registers[dst] = U32_VAL((uint32_t)AS_I32(vm.registers[src]));
+            vm_set_register_safe(dst, U32_VAL((uint32_t)AS_I32(src_val)));
             DISPATCH();
         }
 
@@ -1141,11 +1187,12 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
             READ_BYTE(); // Skip third operand (unused)
-            if (!IS_I32(vm.registers[src])) {
+            Value src_val = vm_get_register_safe(src);
+            if (!IS_I32(src_val)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i32");
             }
             // Convert i32 to bool: 0 -> false, non-zero -> true
-            vm.registers[dst] = BOOL_VAL(AS_I32(vm.registers[src]) != 0);
+            vm_set_register_safe(dst, BOOL_VAL(AS_I32(src_val) != 0));
             DISPATCH();
         }
 
@@ -1153,10 +1200,11 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
             READ_BYTE(); // Skip third operand (unused)
-            if (!IS_U32(vm.registers[src])) {
+            Value src_val = vm_get_register_safe(src);
+            if (!IS_U32(src_val)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u32");
             }
-            vm.registers[dst] = I32_VAL((int32_t)AS_U32(vm.registers[src]));
+            vm_set_register_safe(dst, I32_VAL((int32_t)AS_U32(src_val)));
             DISPATCH();
         }
 
@@ -1164,10 +1212,11 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
             READ_BYTE(); // Skip third operand (unused)
-            if (!IS_I64(vm.registers[src])) {
+            Value src_val = vm_get_register_safe(src);
+            if (!IS_I64(src_val)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i64");
             }
-            vm.registers[dst] = I32_VAL((int32_t)AS_I64(vm.registers[src]));
+            vm_set_register_safe(dst, I32_VAL((int32_t)AS_I64(src_val)));
             DISPATCH();
         }
 
@@ -1176,10 +1225,12 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t dst = READ_BYTE();
             uint8_t src1 = READ_BYTE();
             uint8_t src2 = READ_BYTE();
-            if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
+            Value val1 = vm_get_register_safe(src1);
+            Value val2 = vm_get_register_safe(src2);
+            if (!IS_F64(val1) || !IS_F64(val2)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be f64");
             }
-            vm.registers[dst] = F64_VAL(AS_F64(vm.registers[src1]) + AS_F64(vm.registers[src2]));
+            vm_set_register_safe(dst, F64_VAL(AS_F64(val1) + AS_F64(val2)));
             DISPATCH();
         }
 
@@ -1187,10 +1238,12 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t dst = READ_BYTE();
             uint8_t src1 = READ_BYTE();
             uint8_t src2 = READ_BYTE();
-            if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
+            Value val1 = vm_get_register_safe(src1);
+            Value val2 = vm_get_register_safe(src2);
+            if (!IS_F64(val1) || !IS_F64(val2)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be f64");
             }
-            vm.registers[dst] = F64_VAL(AS_F64(vm.registers[src1]) - AS_F64(vm.registers[src2]));
+            vm_set_register_safe(dst, F64_VAL(AS_F64(val1) - AS_F64(val2)));
             DISPATCH();
         }
 
@@ -1198,10 +1251,12 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t dst = READ_BYTE();
             uint8_t src1 = READ_BYTE();
             uint8_t src2 = READ_BYTE();
-            if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
+            Value val1 = vm_get_register_safe(src1);
+            Value val2 = vm_get_register_safe(src2);
+            if (!IS_F64(val1) || !IS_F64(val2)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be f64");
             }
-            vm.registers[dst] = F64_VAL(AS_F64(vm.registers[src1]) * AS_F64(vm.registers[src2]));
+            vm_set_register_safe(dst, F64_VAL(AS_F64(val1) * AS_F64(val2)));
             DISPATCH();
         }
 
@@ -1209,18 +1264,20 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t dst = READ_BYTE();
             uint8_t src1 = READ_BYTE();
             uint8_t src2 = READ_BYTE();
-            if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
+            Value val1 = vm_get_register_safe(src1);
+            Value val2 = vm_get_register_safe(src2);
+            if (!IS_F64(val1) || !IS_F64(val2)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be f64");
             }
-            double a = AS_F64(vm.registers[src1]);
-            double b = AS_F64(vm.registers[src2]);
+            double a = AS_F64(val1);
+            double b = AS_F64(val2);
             
             // IEEE 754 compliant: division by zero produces infinity, not error
             double result = a / b;
             
             // The result may be infinity, -infinity, or NaN
             // These are valid f64 values according to IEEE 754
-            vm.registers[dst] = F64_VAL(result);
+            vm_set_register_safe(dst, F64_VAL(result));
             DISPATCH();
         }
 
@@ -1228,18 +1285,20 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t dst = READ_BYTE();
             uint8_t src1 = READ_BYTE();
             uint8_t src2 = READ_BYTE();
-            if (!IS_F64(vm.registers[src1]) || !IS_F64(vm.registers[src2])) {
+            Value val1 = vm_get_register_safe(src1);
+            Value val2 = vm_get_register_safe(src2);
+            if (!IS_F64(val1) || !IS_F64(val2)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be f64");
             }
-            double a = AS_F64(vm.registers[src1]);
-            double b = AS_F64(vm.registers[src2]);
+            double a = AS_F64(val1);
+            double b = AS_F64(val2);
             
             // IEEE 754 compliant: use fmod for floating point modulo
             double result = fmod(a, b);
             
             // The result may be infinity, -infinity, or NaN
             // These are valid f64 values according to IEEE 754
-            vm.registers[dst] = F64_VAL(result);
+            vm_set_register_safe(dst, F64_VAL(result));
             DISPATCH();
         }
 
@@ -1248,10 +1307,12 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t dst = READ_BYTE();
             uint8_t src1 = READ_BYTE();
             uint8_t src2 = READ_BYTE();
-            if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
+            Value val1 = vm_get_register_safe(src1);
+            Value val2 = vm_get_register_safe(src2);
+            if (!IS_I32(val1) || !IS_I32(val2)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be i32");
             }
-            vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) & AS_I32(vm.registers[src2]));
+            vm_set_register_safe(dst, I32_VAL(AS_I32(val1) & AS_I32(val2)));
             DISPATCH();
         }
 
@@ -1259,10 +1320,12 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t dst = READ_BYTE();
             uint8_t src1 = READ_BYTE();
             uint8_t src2 = READ_BYTE();
-            if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
+            Value val1 = vm_get_register_safe(src1);
+            Value val2 = vm_get_register_safe(src2);
+            if (!IS_I32(val1) || !IS_I32(val2)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be i32");
             }
-            vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) | AS_I32(vm.registers[src2]));
+            vm_set_register_safe(dst, I32_VAL(AS_I32(val1) | AS_I32(val2)));
             DISPATCH();
         }
 
@@ -1270,20 +1333,23 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t dst = READ_BYTE();
             uint8_t src1 = READ_BYTE();
             uint8_t src2 = READ_BYTE();
-            if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
+            Value val1 = vm_get_register_safe(src1);
+            Value val2 = vm_get_register_safe(src2);
+            if (!IS_I32(val1) || !IS_I32(val2)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be i32");
             }
-            vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) ^ AS_I32(vm.registers[src2]));
+            vm_set_register_safe(dst, I32_VAL(AS_I32(val1) ^ AS_I32(val2)));
             DISPATCH();
         }
 
     LABEL_OP_NOT_I32_R: {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
-            if (!IS_I32(vm.registers[src])) {
+            Value src_val = vm_get_register_safe(src);
+            if (!IS_I32(src_val)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operand must be i32");
             }
-            vm.registers[dst] = I32_VAL(~AS_I32(vm.registers[src]));
+            vm_set_register_safe(dst, I32_VAL(~AS_I32(src_val)));
             DISPATCH();
         }
 
@@ -1291,10 +1357,12 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t dst = READ_BYTE();
             uint8_t src1 = READ_BYTE();
             uint8_t src2 = READ_BYTE();
-            if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
+            Value val1 = vm_get_register_safe(src1);
+            Value val2 = vm_get_register_safe(src2);
+            if (!IS_I32(val1) || !IS_I32(val2)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be i32");
             }
-            vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) << AS_I32(vm.registers[src2]));
+            vm_set_register_safe(dst, I32_VAL(AS_I32(val1) << AS_I32(val2)));
             DISPATCH();
         }
 
@@ -1302,10 +1370,12 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t dst = READ_BYTE();
             uint8_t src1 = READ_BYTE();
             uint8_t src2 = READ_BYTE();
-            if (!IS_I32(vm.registers[src1]) || !IS_I32(vm.registers[src2])) {
+            Value val1 = vm_get_register_safe(src1);
+            Value val2 = vm_get_register_safe(src2);
+            if (!IS_I32(val1) || !IS_I32(val2)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be i32");
             }
-            vm.registers[dst] = I32_VAL(AS_I32(vm.registers[src1]) >> AS_I32(vm.registers[src2]));
+            vm_set_register_safe(dst, I32_VAL(AS_I32(val1) >> AS_I32(val2)));
             DISPATCH();
         }
 
@@ -1347,10 +1417,11 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
             READ_BYTE(); // Skip third operand (unused)
-            if (!IS_I32(vm.registers[src])) {
+            Value src_val = vm_get_register_safe(src);
+            if (!IS_I32(src_val)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i32");
             }
-            vm.registers[dst] = F64_VAL((double)AS_I32(vm.registers[src]));
+            vm_set_register_safe(dst, F64_VAL((double)AS_I32(src_val)));
             DISPATCH();
         }
 
@@ -1358,10 +1429,11 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
             READ_BYTE(); // Skip third operand (unused)
-            if (!IS_I64(vm.registers[src])) {
+            Value src_val = vm_get_register_safe(src);
+            if (!IS_I64(src_val)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i64");
             }
-            vm.registers[dst] = F64_VAL((double)AS_I64(vm.registers[src]));
+            vm_set_register_safe(dst, F64_VAL((double)AS_I64(src_val)));
             DISPATCH();
         }
 
@@ -1369,10 +1441,11 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
             READ_BYTE(); // Skip third operand (unused)
-            if (!IS_F64(vm.registers[src])) {
+            Value src_val = vm_get_register_safe(src);
+            if (!IS_F64(src_val)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be f64");
             }
-            vm.registers[dst] = I32_VAL((int32_t)AS_F64(vm.registers[src]));
+            vm_set_register_safe(dst, I32_VAL((int32_t)AS_F64(src_val)));
             DISPATCH();
         }
 
@@ -1380,10 +1453,11 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
             READ_BYTE(); // Skip third operand (unused)
-            if (!IS_F64(vm.registers[src])) {
+            Value src_val = vm_get_register_safe(src);
+            if (!IS_F64(src_val)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be f64");
             }
-            vm.registers[dst] = I64_VAL((int64_t)AS_F64(vm.registers[src]));
+            vm_set_register_safe(dst, I64_VAL((int64_t)AS_F64(src_val)));
             DISPATCH();
         }
 
@@ -1392,14 +1466,15 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
             READ_BYTE(); // Skip third operand (unused)
-            if (!IS_I32(vm.registers[src])) {
+            Value src_val = vm_get_register_safe(src);
+            if (!IS_I32(src_val)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i32");
             }
-            int32_t val = AS_I32(vm.registers[src]);
+            int32_t val = AS_I32(src_val);
             if (val < 0) {
                 VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Cannot convert negative i32 to u64");
             }
-            vm.registers[dst] = U64_VAL((uint64_t)val);
+            vm_set_register_safe(dst, U64_VAL((uint64_t)val));
             DISPATCH();
         }
 
@@ -1407,14 +1482,15 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
             READ_BYTE(); // Skip third operand (unused)
-            if (!IS_I64(vm.registers[src])) {
+            Value src_val = vm_get_register_safe(src);
+            if (!IS_I64(src_val)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i64");
             }
-            int64_t val = AS_I64(vm.registers[src]);
+            int64_t val = AS_I64(src_val);
             if (val < 0) {
                 VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Cannot convert negative i64 to u64");
             }
-            vm.registers[dst] = U64_VAL((uint64_t)val);
+            vm_set_register_safe(dst, U64_VAL((uint64_t)val));
             DISPATCH();
         }
 
@@ -1422,14 +1498,15 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
             READ_BYTE(); // Skip third operand (unused)
-            if (!IS_U64(vm.registers[src])) {
+            Value src_val = vm_get_register_safe(src);
+            if (!IS_U64(src_val)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u64");
             }
-            uint64_t val = AS_U64(vm.registers[src]);
+            uint64_t val = AS_U64(src_val);
             if (val > (uint64_t)INT32_MAX) {
                 VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "u64 value too large for i32");
             }
-            vm.registers[dst] = I32_VAL((int32_t)val);
+            vm_set_register_safe(dst, I32_VAL((int32_t)val));
             DISPATCH();
         }
 
@@ -1437,14 +1514,15 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
             READ_BYTE(); // Skip third operand (unused)
-            if (!IS_U64(vm.registers[src])) {
+            Value src_val = vm_get_register_safe(src);
+            if (!IS_U64(src_val)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u64");
             }
-            uint64_t val = AS_U64(vm.registers[src]);
+            uint64_t val = AS_U64(src_val);
             if (val > (uint64_t)INT64_MAX) {
                 VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "u64 value too large for i64");
             }
-            vm.registers[dst] = I64_VAL((int64_t)val);
+            vm_set_register_safe(dst, I64_VAL((int64_t)val));
             DISPATCH();
         }
 
@@ -1452,10 +1530,11 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
             READ_BYTE(); // Skip third operand (unused)
-            if (!IS_U32(vm.registers[src])) {
+            Value src_val = vm_get_register_safe(src);
+            if (!IS_U32(src_val)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u32");
             }
-            vm.registers[dst] = U64_VAL((uint64_t)AS_U32(vm.registers[src]));
+            vm_set_register_safe(dst, U64_VAL((uint64_t)AS_U32(src_val)));
             DISPATCH();
         }
 
@@ -1463,14 +1542,15 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
             READ_BYTE(); // Skip third operand (unused)
-            if (!IS_U64(vm.registers[src])) {
+            Value src_val = vm_get_register_safe(src);
+            if (!IS_U64(src_val)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u64");
             }
-            uint64_t val = AS_U64(vm.registers[src]);
+            uint64_t val = AS_U64(src_val);
             if (val > (uint64_t)UINT32_MAX) {
                 VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "u64 value too large for u32");
             }
-            vm.registers[dst] = U32_VAL((uint32_t)val);
+            vm_set_register_safe(dst, U32_VAL((uint32_t)val));
             DISPATCH();
         }
 
@@ -1478,14 +1558,15 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
             READ_BYTE(); // Skip third operand (unused)
-            if (!IS_F64(vm.registers[src])) {
+            Value src_val = vm_get_register_safe(src);
+            if (!IS_F64(src_val)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be f64");
             }
-            double val = AS_F64(vm.registers[src]);
+            double val = AS_F64(src_val);
             if (val < 0.0 || val > (double)UINT64_MAX) {
                 VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "f64 value out of u64 range");
             }
-            vm.registers[dst] = U64_VAL((uint64_t)val);
+            vm_set_register_safe(dst, U64_VAL((uint64_t)val));
             DISPATCH();
         }
 
@@ -1493,10 +1574,11 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
             READ_BYTE(); // Skip third operand (unused)
-            if (!IS_U64(vm.registers[src])) {
+            Value src_val = vm_get_register_safe(src);
+            if (!IS_U64(src_val)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u64");
             }
-            vm.registers[dst] = F64_VAL((double)AS_U64(vm.registers[src]));
+            vm_set_register_safe(dst, F64_VAL((double)AS_U64(src_val)));
             DISPATCH();
         }
 
@@ -1504,10 +1586,11 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
             READ_BYTE(); // Skip third operand (unused)
-            if (!IS_U32(vm.registers[src])) {
+            Value src_val = vm_get_register_safe(src);
+            if (!IS_U32(src_val)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u32");
             }
-            vm.registers[dst] = F64_VAL((double)AS_U32(vm.registers[src]));
+            vm_set_register_safe(dst, F64_VAL((double)AS_U32(src_val)));
             DISPATCH();
         }
 
@@ -1515,14 +1598,15 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
             READ_BYTE(); // Skip third operand (unused)
-            if (!IS_F64(vm.registers[src])) {
+            Value src_val = vm_get_register_safe(src);
+            if (!IS_F64(src_val)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be f64");
             }
-            double val = AS_F64(vm.registers[src]);
+            double val = AS_F64(src_val);
             if (val < 0.0 || val > (double)UINT32_MAX) {
                 VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "f64 value out of u32 range");
             }
-            vm.registers[dst] = U32_VAL((uint32_t)val);
+            vm_set_register_safe(dst, U32_VAL((uint32_t)val));
             DISPATCH();
         }
 
@@ -1717,7 +1801,7 @@ InterpretResult vm_run_dispatch(void) {
             right_bool = true; // Objects, strings, etc. are truthy
         }
         
-        vm.registers[dst] = BOOL_VAL(left_bool && right_bool);
+        vm_set_register_safe(dst, BOOL_VAL(left_bool && right_bool));
         DISPATCH();
     }
 
@@ -1768,7 +1852,7 @@ InterpretResult vm_run_dispatch(void) {
             right_bool = true; // Objects, strings, etc. are truthy
         }
         
-        vm.registers[dst] = BOOL_VAL(left_bool || right_bool);
+        vm_set_register_safe(dst, BOOL_VAL(left_bool || right_bool));
         DISPATCH();
     }
 
@@ -1794,7 +1878,7 @@ InterpretResult vm_run_dispatch(void) {
             src_bool = true; // Objects, strings, etc. are truthy
         }
         
-        vm.registers[dst] = BOOL_VAL(!src_bool);
+        vm_set_register_safe(dst, BOOL_VAL(!src_bool));
         DISPATCH();
     }
 
@@ -1814,7 +1898,7 @@ InterpretResult vm_run_dispatch(void) {
         buf[newLen] = '\0';
         ObjString* res = allocateString(buf, newLen);
         free(buf);
-        vm.registers[dst] = STRING_VAL(res);
+        vm_set_register_safe(dst, STRING_VAL(res));
         DISPATCH();
     }
 
@@ -1838,14 +1922,14 @@ InterpretResult vm_run_dispatch(void) {
             snprintf(buffer, sizeof(buffer), "%s", AS_BOOL(val) ? "true" : "false");
         } else if (IS_STRING(val)) {
             // Already a string, just copy
-            vm.registers[dst] = val;
+            vm_set_register_safe(dst, val);
             DISPATCH();
         } else {
             snprintf(buffer, sizeof(buffer), "nil");
         }
         
         ObjString* result = allocateString(buffer, (int)strlen(buffer));
-        vm.registers[dst] = STRING_VAL(result);
+        vm_set_register_safe(dst, STRING_VAL(result));
         DISPATCH();
     }
 
@@ -1881,11 +1965,11 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_GET_ITER_R: {
         uint8_t dst = READ_BYTE();
         uint8_t src = READ_BYTE();
-        Value v = vm.registers[src];
+        Value v = vm_get_register_safe(src);
         if (!IS_RANGE_ITERATOR(v)) {
             VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Value not iterable");
         }
-        vm.registers[dst] = v;
+        vm_set_register_safe(dst, v);
         DISPATCH();
     }
 
@@ -1893,16 +1977,17 @@ InterpretResult vm_run_dispatch(void) {
         uint8_t dst = READ_BYTE();
         uint8_t iterReg = READ_BYTE();
         uint8_t hasReg = READ_BYTE();
-        if (!IS_RANGE_ITERATOR(vm.registers[iterReg])) {
+        Value iterValue = vm_get_register_safe(iterReg);
+        if (!IS_RANGE_ITERATOR(iterValue)) {
             VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Invalid iterator");
         }
-        ObjRangeIterator* it = AS_RANGE_ITERATOR(vm.registers[iterReg]);
+        ObjRangeIterator* it = AS_RANGE_ITERATOR(iterValue);
         if (it->current >= it->end) {
-            vm.registers[hasReg] = BOOL_VAL(false);
+            vm_set_register_safe(hasReg, BOOL_VAL(false));
         } else {
-            vm.registers[dst] = I64_VAL(it->current);
+            vm_set_register_safe(dst, I64_VAL(it->current));
             it->current++;
-            vm.registers[hasReg] = BOOL_VAL(true);
+            vm_set_register_safe(hasReg, BOOL_VAL(true));
         }
         DISPATCH();
     }
@@ -1911,7 +1996,13 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t first = READ_BYTE();
             uint8_t count = READ_BYTE();
             uint8_t nl = READ_BYTE();
-            builtin_print(&vm.registers[first], count, nl != 0, NULL);
+            
+            // Copy values to temporary array using frame-aware access
+            Value temp_values[256];  // Max possible count
+            for (int i = 0; i < count; i++) {
+                temp_values[i] = vm_get_register_safe(first + i);
+            }
+            builtin_print(temp_values, count, nl != 0, NULL);
             DISPATCH();
         }
 
@@ -1920,19 +2011,28 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t count = READ_BYTE();
             uint8_t sep_reg = READ_BYTE();
             uint8_t nl = READ_BYTE();
-            builtin_print_with_sep_value(&vm.registers[first], count, nl != 0, vm.registers[sep_reg]);
+            
+            // Copy values to temporary array using frame-aware access
+            Value temp_values[256];  // Max possible count
+            for (int i = 0; i < count; i++) {
+                temp_values[i] = vm_get_register_safe(first + i);
+            }
+            Value separator = vm_get_register_safe(sep_reg);
+            builtin_print_with_sep_value(temp_values, count, nl != 0, separator);
             DISPATCH();
         }
 
     LABEL_OP_PRINT_R: {
             uint8_t reg = READ_BYTE();
-            builtin_print(&vm.registers[reg], 1, true, NULL);
+            Value temp_value = vm_get_register_safe(reg);
+            builtin_print(&temp_value, 1, true, NULL);
             DISPATCH();
         }
 
     LABEL_OP_PRINT_NO_NL_R: {
             uint8_t reg = READ_BYTE();
-            builtin_print(&vm.registers[reg], 1, false, NULL);
+            Value temp_value = vm_get_register_safe(reg);
+            builtin_print(&temp_value, 1, false, NULL);
             DISPATCH();
         }
 
@@ -2054,9 +2154,19 @@ InterpretResult vm_run_dispatch(void) {
                 if (paramBase < 1) paramBase = 1;
                 frame->parameterBaseRegister = paramBase;
                 
-                // TEMP: No register saving to test baseline behavior
-                frame->savedRegisterCount = 0;   // Save no registers
-                frame->savedRegisterStart = 0;   // N/A
+                // Save both local variables (R65-R79) and parameters (R240-R255) = 31 total
+                frame->savedRegisterCount = 31;
+                frame->savedRegisterStart = 65; // For tracking purposes
+                
+                // Save local variable registers R65-R79 (15 registers)
+                for (int i = 0; i < 15; i++) {
+                    frame->savedRegisters[i] = vm_get_register_safe(65 + i);
+                }
+                
+                // Save parameter registers R240-R255 (16 registers)  
+                for (int i = 0; i < 16; i++) {
+                    frame->savedRegisters[15 + i] = vm_get_register_safe(240 + i);
+                }
                 
                 // Copy arguments to parameter registers
                 for (int i = 0; i < argCount; i++) {
@@ -2121,7 +2231,7 @@ InterpretResult vm_run_dispatch(void) {
                 vm.ip = function->chunk->code + function->start;
                 
             } else {
-                vm.registers[resultReg] = BOOL_VAL(false);
+                vm_set_register_safe(resultReg, BOOL_VAL(false));
             }
             
             DISPATCH();
@@ -2136,9 +2246,20 @@ InterpretResult vm_run_dispatch(void) {
                 // Close upvalues before restoring registers to prevent corruption
                 closeUpvalues(&vm.registers[frame->parameterBaseRegister]);
                 
-                // Restore saved registers using stored start position
-                for (int i = 0; i < frame->savedRegisterCount; i++) {
-                    vm_set_register_safe(frame->savedRegisterStart + i, frame->savedRegisters[i]);
+                // Restore saved local variable registers (R65-R79) and parameter registers (R240-R255)
+                if (frame->savedRegisterCount == 31) {  // New dual-range format
+                    // Restore local variable registers R65-R79 (15 registers)
+                    for (int i = 0; i < 15; i++) {
+                        vm_set_register_safe(65 + i, frame->savedRegisters[i]);
+                    }
+                    // Restore parameter registers R240-R255 (16 registers)  
+                    for (int i = 0; i < 16; i++) {
+                        vm_set_register_safe(240 + i, frame->savedRegisters[15 + i]);
+                    }
+                } else {  // Legacy single-range format for backward compatibility
+                    for (int i = 0; i < frame->savedRegisterCount; i++) {
+                        vm_set_register_safe(frame->savedRegisterStart + i, frame->savedRegisters[i]);
+                    }
                 }
                 
                 vm.chunk = frame->previousChunk;
@@ -2178,7 +2299,7 @@ InterpretResult vm_run_dispatch(void) {
         uint8_t frame_offset = READ_BYTE();
         uint16_t frame_reg_id = FRAME_REG_START + frame_offset;
         Value* src = get_register(&vm.register_file, frame_reg_id);
-        vm.registers[reg] = *src;
+        vm_set_register_safe(reg, *src);
         DISPATCH();
     }
 
@@ -2206,7 +2327,8 @@ InterpretResult vm_run_dispatch(void) {
         uint8_t frame_offset = READ_BYTE();
         uint8_t reg = READ_BYTE();
         uint16_t frame_reg_id = FRAME_REG_START + frame_offset;
-        set_register(&vm.register_file, frame_reg_id, vm.registers[reg]);
+        Value val = vm_get_register_safe(reg);
+        set_register(&vm.register_file, frame_reg_id, val);
         DISPATCH();
     }
 
@@ -2467,7 +2589,7 @@ InterpretResult vm_run_dispatch(void) {
         // Store in both typed register and regular register for compatibility
         vm.typed_regs.f64_regs[dst] = timestamp;
         vm.typed_regs.reg_types[dst] = REG_TYPE_F64;
-        vm.registers[dst] = F64_VAL(timestamp);
+        vm_set_register_safe(dst, F64_VAL(timestamp));
         
         DISPATCH();
     }
@@ -2485,7 +2607,7 @@ InterpretResult vm_run_dispatch(void) {
         }
         
         int32_t result = AS_I32(vm.registers[src]) + imm;
-        vm.registers[dst] = I32_VAL(result);
+        vm_set_register_safe(dst, I32_VAL(result));
         
         DISPATCH_TYPED();
     }
@@ -2497,12 +2619,13 @@ InterpretResult vm_run_dispatch(void) {
         vm.ip += 4;
         
         // Compiler ensures this is only emitted for i32 operations, so trust it
-        if (!IS_I32(vm.registers[src])) {
+        Value val = vm_get_register_safe(src);
+        if (!IS_I32(val)) {
             VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operand must be i32");
         }
         
-        int32_t result = AS_I32(vm.registers[src]) - imm;
-        vm.registers[dst] = I32_VAL(result);
+        int32_t result = AS_I32(val) - imm;
+        vm_set_register_safe(dst, I32_VAL(result));
         
         DISPATCH_TYPED();
     }
@@ -2519,7 +2642,7 @@ InterpretResult vm_run_dispatch(void) {
         }
         
         int32_t result = AS_I32(vm.registers[src]) * imm;
-        vm.registers[dst] = I32_VAL(result);
+        vm_set_register_safe(dst, I32_VAL(result));
         
         DISPATCH_TYPED();
     }
@@ -2547,7 +2670,7 @@ InterpretResult vm_run_dispatch(void) {
         }
         
         int32_t incremented = AS_I32(vm.registers[reg]) + 1;
-        vm.registers[reg] = I32_VAL(incremented);
+        vm_set_register_safe(reg, I32_VAL(incremented));
         if (incremented < AS_I32(vm.registers[limit_reg])) {
             vm.ip += offset;
         }

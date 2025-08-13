@@ -1,0 +1,3 @@
+// Test simple unary negation
+result = -42
+print("Result:", result)

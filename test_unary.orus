@@ -1,0 +1,8 @@
+// Test unary negation
+print("Testing unary negation:")
+print(-42)
+print(-1)
+print(-0)
+
+a = 5
+print(-a)

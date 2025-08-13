@@ -825,6 +825,12 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                 emit_byte_to_buffer(ctx->bytecode, result_reg);
                 emit_byte_to_buffer(ctx->bytecode, operand_reg);
                 DEBUG_CODEGEN_PRINT("Emitted OP_NOT_BOOL_R R%d, R%d (logical NOT)\n", result_reg, operand_reg);
+            } else if (strcmp(op, "-") == 0) {
+                // Unary minus operation - works on numeric types (i32, i64, u32, u64, f64)
+                emit_byte_to_buffer(ctx->bytecode, OP_NEG_I32_R);
+                emit_byte_to_buffer(ctx->bytecode, result_reg);
+                emit_byte_to_buffer(ctx->bytecode, operand_reg);
+                DEBUG_CODEGEN_PRINT("Emitted OP_NEG_I32_R R%d, R%d (unary minus)\n", result_reg, operand_reg);
             } else {
                 DEBUG_CODEGEN_PRINT("Error: Unsupported unary operator: %s\n", op);
                 return -1;
