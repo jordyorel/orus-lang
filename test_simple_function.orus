@@ -1,0 +1,5 @@
+fn add_simple(a, b):
+    return a + b
+
+result = add_simple(2, 3)
+print("Result:", result)

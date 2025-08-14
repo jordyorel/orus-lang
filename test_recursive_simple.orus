@@ -1,0 +1,8 @@
+fn countdown(n):
+    print("countdown:", n)
+    if n <= 0:
+        return 0
+    return countdown(n - 1)
+
+result = countdown(2)
+print("Final result:", result)

@@ -416,10 +416,12 @@ void emit_load_constant(CompilerContext* ctx, int reg, Value constant) {
 }
 
 void emit_binary_op(CompilerContext* ctx, const char* op, Type* operand_type, int dst, int src1, int src2) {
+    // Debug output removed
     DEBUG_CODEGEN_PRINT("emit_binary_op called: op='%s', type=%d, dst=R%d, src1=R%d, src2=R%d\n", 
            op, operand_type ? operand_type->kind : -1, dst, src1, src2);
     
     uint8_t opcode = select_optimal_opcode(op, operand_type);
+    // Debug output removed
     DEBUG_CODEGEN_PRINT("select_optimal_opcode returned: %d (OP_HALT=%d)\n", opcode, OP_HALT);
     
     if (opcode != OP_HALT) {
@@ -600,10 +602,12 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             
             DEBUG_CODEGEN_PRINT("NODE_BINARY: Compiling left operand (type %d)\n", left_typed->original->type);
             int left_reg = compile_expression(ctx, left_typed);
+            // Debug output removed
             DEBUG_CODEGEN_PRINT("NODE_BINARY: Left operand returned register %d\n", left_reg);
             
             DEBUG_CODEGEN_PRINT("NODE_BINARY: Compiling right operand (type %d)\n", right_typed->original->type);
             int right_reg = compile_expression(ctx, right_typed);
+            // Debug output removed
             DEBUG_CODEGEN_PRINT("NODE_BINARY: Right operand returned register %d\n", right_reg);
             
             DEBUG_CODEGEN_PRINT("NODE_BINARY: Allocating result register");
@@ -616,6 +620,7 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             }
             
             // Call the fixed compile_binary_op with all required parameters
+            // Debug output removed
             compile_binary_op(ctx, expr, result_reg, left_reg, right_reg);
             
             // CRITICAL FIX: Only free operand registers if they are temp registers
@@ -964,7 +969,7 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             // For 0-argument functions, use register 0 as dummy (it won't be accessed by VM)
             int actual_first_arg = (arg_count > 0) ? first_arg_reg : 0;
             emit_instruction_to_buffer(ctx->bytecode, OP_CALL_R, func_reg, actual_first_arg, arg_count);
-            emit_byte_to_buffer(ctx->bytecode, return_reg);  // 4th parameter
+            emit_byte_to_buffer(ctx->bytecode, return_reg);  // 4th parameter (16-bit)
             DEBUG_CODEGEN_PRINT("NODE_CALL: Emitted OP_CALL_R func_reg=R%d, first_arg=R%d, args=%d, result=R%d", 
                    func_reg, actual_first_arg, arg_count, return_reg);
             

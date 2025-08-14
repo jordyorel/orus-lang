@@ -1,0 +1,5 @@
+fn get_one():
+    return 1
+
+result = get_one() + 2
+print("get_one() + 2 =", result)

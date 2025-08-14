@@ -1,0 +1,20 @@
+fn return_one():
+    print("return_one called")
+    return 1
+
+fn return_two():  
+    print("return_two called")
+    return 1
+
+print("Testing step by step:")
+a = return_one()
+print("a =", a)
+b = return_two() 
+print("b =", b)
+sum = a + b
+print("a + b =", sum)
+
+print()
+print("Testing direct:")
+direct = return_one() + return_two()
+print("return_one() + return_two() =", direct)

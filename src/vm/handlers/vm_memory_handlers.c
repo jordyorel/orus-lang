@@ -79,7 +79,7 @@ static inline void handle_load_global(void) {
         runtimeError(ERROR_NAME, (SrcLocation){NULL,0,0}, "Undefined variable");
         return;
     }
-    vm.registers[reg] = vm.globals[globalIndex];
+    vm_set_register_safe(reg, vm.globals[globalIndex]);
 }
 
 static inline void handle_store_global(void) {
@@ -88,7 +88,7 @@ static inline void handle_store_global(void) {
     
     // CREATIVE SOLUTION: Type safety enforcement with intelligent literal coercion
     // This maintains single-pass design while being flexible for compatible types
-    Value valueToStore = vm.registers[reg];
+    Value valueToStore = vm_get_register_safe(reg);
     Type* declaredType = vm.globalTypes[globalIndex];
     
     // Check if the value being stored matches the declared type
@@ -186,35 +186,35 @@ static inline void handle_store_global(void) {
 static inline void handle_load_i32_const(void) {
     uint8_t reg = READ_BYTE();
     uint16_t constantIndex = READ_SHORT();
-    vm.registers[reg] = READ_CONSTANT(constantIndex);
+    vm_set_register_safe(reg, READ_CONSTANT(constantIndex));
 }
 
 static inline void handle_load_i64_const(void) {
     uint8_t reg = READ_BYTE();
     uint16_t constantIndex = READ_SHORT();
     // Store in the standard register system where comparison operations expect values
-    vm.registers[reg] = READ_CONSTANT(constantIndex);
+    vm_set_register_safe(reg, READ_CONSTANT(constantIndex));
 }
 
 static inline void handle_load_u32_const(void) {
     uint8_t reg = READ_BYTE();
     uint16_t constantIndex = READ_SHORT();
     // Store in the standard register system where comparison operations expect values
-    vm.registers[reg] = READ_CONSTANT(constantIndex);
+    vm_set_register_safe(reg, READ_CONSTANT(constantIndex));
 }
 
 static inline void handle_load_u64_const(void) {
     uint8_t reg = READ_BYTE();
     uint16_t constantIndex = READ_SHORT();
     // Store in the standard register system where comparison operations expect values
-    vm.registers[reg] = READ_CONSTANT(constantIndex);
+    vm_set_register_safe(reg, READ_CONSTANT(constantIndex));
 }
 
 static inline void handle_load_f64_const(void) {
     uint8_t reg = READ_BYTE();
     uint16_t constantIndex = READ_SHORT();
     // Store in the standard register system where comparison operations expect values
-    vm.registers[reg] = READ_CONSTANT(constantIndex);
+    vm_set_register_safe(reg, READ_CONSTANT(constantIndex));
 }
 
 // ====== Typed Move Operation Handlers ======
@@ -222,19 +222,20 @@ static inline void handle_load_f64_const(void) {
 static inline void handle_move_i32(void) {
     uint8_t dst = READ_BYTE();
     uint8_t src = READ_BYTE();
-    vm.registers[dst] = vm.registers[src];
+    vm_set_register_safe(dst, vm_get_register_safe(src));
 }
 
 static inline void handle_move_i64(void) {
     uint8_t dst = READ_BYTE();
     uint8_t src = READ_BYTE();
     // Read from the standard register system where OP_LOAD_CONST stores values
-    if (!IS_I64(vm.registers[src])) {
+    Value src_val = vm_get_register_safe(src);
+    if (!IS_I64(src_val)) {
         runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Source register must contain i64 value");
         return;
     }
     // Store the value in the destination register in the standard register system
-    vm.registers[dst] = vm.registers[src];
+    vm_set_register_safe(dst, vm_get_register_safe(src));
 }
 
 static inline void handle_move_u32(void) {
@@ -255,12 +256,13 @@ static inline void handle_move_f64(void) {
     uint8_t dst = READ_BYTE();
     uint8_t src = READ_BYTE();
     // Read from the standard register system where OP_LOAD_CONST stores values
-    if (!IS_F64(vm.registers[src])) {
+    Value src_val = vm_get_register_safe(src);
+    if (!IS_F64(src_val)) {
         runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Source register must contain f64 value");
         return;
     }
     // Store the value in the destination register in the standard register system
-    vm.registers[dst] = vm.registers[src];
+    vm_set_register_safe(dst, vm_get_register_safe(src));
 }
 
 // ====== Print Operation Handlers ======

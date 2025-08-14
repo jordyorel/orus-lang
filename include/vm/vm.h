@@ -279,7 +279,7 @@ typedef struct CallFrame {
     // Legacy compatibility
     uint8_t* returnAddress;
     Chunk* previousChunk;
-    uint8_t baseRegister;                 // Base register for this frame
+    uint8_t baseRegister;                // Base register for this frame (16-bit for extended registers)
     uint8_t functionIndex;
     uint16_t parameterBaseRegister;       // Base register for function parameters (frame/spill space)
     uint8_t savedRegisterCount;           // Number of saved registers
@@ -973,6 +973,11 @@ typedef struct {
     bool suppressWarnings;
     bool promotionHints;
     bool isShuttingDown;  // Flag to indicate VM is in cleanup/shutdown phase
+    
+    // Call frame stack pointers
+    CallFrame* callFrames;     // Array of call frames (for legacy compatibility)
+    CallFrame* currentCallFrame; // Current active call frame
+    CallFrame* frameStack;     // Stack of call frames
 } VM;
 
 // Global VM instance

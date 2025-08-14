@@ -22,7 +22,7 @@ Value* get_register_internal(RegisterFile* rf, uint16_t id) {
     }
     
     // Frame registers (256-319)
-    if (__builtin_expect(id < FRAME_REG_START + FRAME_REGISTERS, 1)) {
+    if (__builtin_expect(id >= FRAME_REG_START && id < FRAME_REG_START + FRAME_REGISTERS, 1)) {
         if (rf->current_frame) {
             return &rf->current_frame->registers[id - FRAME_REG_START];
         }
@@ -71,7 +71,7 @@ void set_register_internal(RegisterFile* rf, uint16_t id, Value value) {
     }
     
     // Frame registers (256-319)
-    if (__builtin_expect(id < FRAME_REG_START + FRAME_REGISTERS, 1)) {
+    if (__builtin_expect(id >= FRAME_REG_START && id < FRAME_REG_START + FRAME_REGISTERS, 1)) {
         if (rf->current_frame) {
             rf->current_frame->registers[id - FRAME_REG_START] = value;
             return;

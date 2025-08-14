@@ -1,0 +1,5 @@
+fn get_val():
+    return 1
+
+result = get_val() + get_val()
+print("Result:", result)

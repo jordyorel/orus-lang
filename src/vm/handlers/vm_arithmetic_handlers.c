@@ -25,12 +25,15 @@ void handle_add_i32_typed(void) {
     Value left_val = vm_get_register_safe(left);
     Value right_val = vm_get_register_safe(right);
     
+    // DEBUG: Print what values we're actually getting - REMOVED
+    
     if (!IS_I32(left_val) || !IS_I32(right_val)) {
         runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i32");
         return;
     }
     
     int32_t result = AS_I32(left_val) + AS_I32(right_val);
+    // Debug output removed
     vm_set_register_safe(dst, I32_VAL(result));
 }
 

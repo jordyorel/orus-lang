@@ -10,8 +10,8 @@
 #define MP_GLOBAL_REG_END      255
 #define MP_FRAME_REG_START     256   // R256-R319: Function locals/params (matches VM)
 #define MP_FRAME_REG_END       319
-#define MP_TEMP_REG_START      320   // R320-R351: Expression temps (matches VM)
-#define MP_TEMP_REG_END        351
+#define MP_TEMP_REG_START      192   // R192-R239: Expression temps (matches VM architecture)
+#define MP_TEMP_REG_END        239
 #define MP_MODULE_REG_START    352   // R352-R479: Module scope (matches VM)
 #define MP_MODULE_REG_END      479
 
@@ -19,11 +19,11 @@ typedef struct MultiPassRegisterAllocator {
     // Register usage tracking (updated to match new ranges)
     bool global_regs[256];      // R0-R255 usage (expanded for VM compatibility)
     bool frame_regs[64];        // R256-R319 usage (matches FRAME_REGISTERS)
-    bool temp_regs[32];         // R320-R351 usage (matches TEMP_REGISTERS) 
+    bool temp_regs[48];         // R192-R239 usage (matches TEMP_REGISTERS) 
     bool module_regs[128];      // R352-R479 usage (matches MODULE_REGISTERS)
     
     // Scope-aware temp register allocation (updated ranges)
-    bool scope_temp_regs[6][8]; // 6 scope levels, 8 registers each (R320-R351)
+    bool scope_temp_regs[6][8]; // 6 scope levels, 8 registers each (R192-R239)
     int current_scope_level;     // Current nesting level (0-5)
     
     // Allocation state
@@ -33,7 +33,7 @@ typedef struct MultiPassRegisterAllocator {
     int next_module;           // Next available module register
     
     // Stack for temp register reuse
-    int temp_stack[32];        // Reusable temp registers (updated for new range)
+    int temp_stack[48];        // Reusable temp registers (updated for new range)
     int temp_stack_top;        // Top of temp stack
 } MultiPassRegisterAllocator;
 

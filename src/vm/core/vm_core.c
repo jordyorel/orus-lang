@@ -80,6 +80,10 @@ void initVM(void) {
     vm.chunk = NULL;
     vm.ip = NULL;
     vm.isShuttingDown = false;  // Initialize shutdown flag
+    
+    // Initialize register file frame pointers
+    vm.register_file.current_frame = NULL;
+    vm.register_file.frame_stack = NULL;
 }
 
 void freeVM(void) {

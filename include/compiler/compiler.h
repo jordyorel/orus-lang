@@ -113,6 +113,8 @@ typedef struct CompilerContext {
 BytecodeBuffer* init_bytecode_buffer(void);
 void free_bytecode_buffer(BytecodeBuffer* buffer);
 void emit_byte_to_buffer(BytecodeBuffer* buffer, uint8_t byte);
+
+void emit_word_to_buffer(BytecodeBuffer* buffer, uint16_t word);
 void emit_instruction_to_buffer(BytecodeBuffer* buffer, uint8_t opcode, uint8_t reg1, uint8_t reg2, uint8_t reg3);
 
 // DUAL REGISTER SYSTEM - Smart Instruction Emission

@@ -147,6 +147,12 @@ void emit_byte_to_buffer(BytecodeBuffer* buffer, uint8_t byte) {
     buffer->count++;
 }
 
+void emit_word_to_buffer(BytecodeBuffer* buffer, uint16_t word) {
+    // Emit 16-bit value as high byte, low byte (matches constant pool pattern)
+    emit_byte_to_buffer(buffer, (word >> 8) & 0xFF);  // High byte
+    emit_byte_to_buffer(buffer, word & 0xFF);         // Low byte
+}
+
 void emit_instruction_to_buffer(BytecodeBuffer* buffer, uint8_t opcode, uint8_t reg1, uint8_t reg2, uint8_t reg3) {
     emit_byte_to_buffer(buffer, opcode);
     emit_byte_to_buffer(buffer, reg1);
