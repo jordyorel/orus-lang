@@ -1,7 +1,0 @@
-fn simple_return():
-    print("inside function")
-    return 42
-
-print("Before call")
-result = simple_return()
-print("After call, result is:", result)

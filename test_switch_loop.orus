@@ -1,5 +1,0 @@
-// Test loop with switch dispatch
-print("Testing loop with switch dispatch:")
-for i in 0..3:
-    print("i =", i)
-print("Loop completed!")

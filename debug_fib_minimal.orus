@@ -1,8 +1,0 @@
-fn fibonacci(n):
-    if n <= 1:
-        return n
-    a = fibonacci(n - 1)
-    b = fibonacci(n - 2)
-    return a + b
-
-print(fibonacci(3))

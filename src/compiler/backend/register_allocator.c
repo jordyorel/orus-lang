@@ -62,17 +62,33 @@ int mp_allocate_global_register(MultiPassRegisterAllocator* allocator) {
 int mp_allocate_frame_register(MultiPassRegisterAllocator* allocator) {
     if (!allocator) return -1;
     
-    // Find next free frame register
-    for (int i = 0; i < 128; i++) {
+    // Find next free frame register starting from R256 (MP_FRAME_REG_START)
+    // Note: Parameter registers are 256-arity to 255, so we start at 256 for locals
+    for (int i = 0; i < 64; i++) {  // R256-R319 range
         if (!allocator->frame_regs[i]) {
             allocator->frame_regs[i] = true;
-            return MP_FRAME_REG_START + i;
+            return MP_FRAME_REG_START + i;  // R256 + i
         }
     }
     
     // No free frame registers
     printf("[REGISTER_ALLOCATOR] Warning: No free frame registers\n");
     return -1;
+}
+
+// Reset frame registers for function compilation isolation
+void mp_reset_frame_registers(MultiPassRegisterAllocator* allocator) {
+    if (!allocator) return;
+    
+    // Reset all frame register tracking
+    for (int i = 0; i < 64; i++) {
+        allocator->frame_regs[i] = false;
+    }
+    
+    // Reset frame allocation counter
+    allocator->next_frame = MP_FRAME_REG_START;
+    
+    printf("[REGISTER_ALLOCATOR] Reset frame registers for new function\n");
 }
 
 int mp_allocate_temp_register(MultiPassRegisterAllocator* allocator) {

@@ -1,5 +1,0 @@
-// Test loops after comprehensive register fixes
-print("Testing loops with register fixes:")
-for i in 0..5:
-    print("Loop iteration:", i)
-print("Loop test complete!")

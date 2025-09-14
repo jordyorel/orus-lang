@@ -1,6 +1,0 @@
-fn get_one():
-    print("get_one called")
-    return 1
-
-result = get_one()
-print("Function result:", result)

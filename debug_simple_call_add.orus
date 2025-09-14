@@ -1,6 +1,0 @@
-fn return_five():
-    return 5
-
-// Simple test to isolate the exact issue
-result = return_five() + 3
-print(result)

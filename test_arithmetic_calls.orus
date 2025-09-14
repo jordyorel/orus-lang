@@ -1,8 +1,0 @@
-fn return_one():
-    return 1
-
-fn return_two():
-    return 2
-
-result = return_one() + return_two()
-print("1 + 2 =", result)

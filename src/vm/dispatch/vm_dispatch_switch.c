@@ -1630,16 +1630,34 @@ InterpretResult vm_run_dispatch(void) {
                         if (paramBase < 1) paramBase = 1;
                         frame->parameterBaseRegister = (uint16_t)paramBase;
                         
-                        // Save all frame registers (R256-R319) to prevent corruption during recursive calls
-                        frame->savedRegisterCount = 64;  // FRAME_REGISTERS = 64 (R256-R319)
-                        for (int i = 0; i < frame->savedRegisterCount; i++) {
+                        // Save all frame registers (R256-R319) AND temp registers (R192-R239) to prevent corruption during recursive calls
+                        // CRITICAL FIX: Also save temp registers to fix fibonacci/recursive function register corruption
+                        int temp_reg_start = 192;  // MP_TEMP_REG_START
+                        int temp_reg_count = 48;   // R192-R239 (48 registers)
+                        frame->savedRegisterCount = 64 + temp_reg_count;  // FRAME_REGISTERS + TEMP_REGISTERS
+                        
+                        // Save frame registers (R256-R319)
+                        for (int i = 0; i < 64; i++) {
                             frame->savedRegisters[i] = vm_get_register_safe(FRAME_REG_START + i);
                             // Debug: Print saved values for first few registers
                             if (i < 8) {
-                                DEBUG_VM_PRINT("SAVE R%d (type=%d)
+                                DEBUG_VM_PRINT("SAVE FRAME R%d (type=%d)
 ", FRAME_REG_START + i, vm_get_register_safe(FRAME_REG_START + i).type);
                                 if (vm_get_register_safe(FRAME_REG_START + i).type == VALUE_I32) {
                                     DEBUG_VM_PRINT("  value = %d\n", AS_I32(vm_get_register_safe(FRAME_REG_START + i)));
+                                }
+                            }
+                        }
+                        
+                        // Save temp registers (R192-R239) - CRITICAL FIX for recursive function register corruption
+                        for (int i = 0; i < temp_reg_count; i++) {
+                            frame->savedRegisters[64 + i] = vm_get_register_safe(temp_reg_start + i);
+                            // Debug: Print saved temp register values for first few
+                            if (i < 8) {
+                                DEBUG_VM_PRINT("SAVE TEMP R%d (type=%d)
+", temp_reg_start + i, vm_get_register_safe(temp_reg_start + i).type);
+                                if (vm_get_register_safe(temp_reg_start + i).type == VALUE_I32) {
+                                    DEBUG_VM_PRINT("  value = %d\n", AS_I32(vm_get_register_safe(temp_reg_start + i)));
                                 }
                             }
                         }

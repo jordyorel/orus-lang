@@ -44,6 +44,8 @@ void free_mp_register_allocator(MultiPassRegisterAllocator* allocator);
 // Register allocation by type
 int mp_allocate_global_register(MultiPassRegisterAllocator* allocator);
 int mp_allocate_frame_register(MultiPassRegisterAllocator* allocator);  
+
+void mp_reset_frame_registers(MultiPassRegisterAllocator* allocator);
 int mp_allocate_temp_register(MultiPassRegisterAllocator* allocator);
 int mp_allocate_module_register(MultiPassRegisterAllocator* allocator);
 

@@ -13,6 +13,9 @@
 #include "vm/vm_dispatch.h"
 #include "vm/vm_control_flow.h"
 
+// Ensure correct return type is known to the compiler
+extern Value vm_get_register_safe(uint8_t reg);
+
 // ====== Jump Operation Handlers ======
 
 static inline void handle_jump_short(void) {

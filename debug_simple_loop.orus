@@ -1,6 +1,0 @@
-// Test basic for loop
-print("Testing simple for loop:")
-for i in 0..3:
-    print("i =", i)
-    
-print("Done!")

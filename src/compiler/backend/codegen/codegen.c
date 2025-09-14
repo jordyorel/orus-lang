@@ -602,31 +602,51 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             
             DEBUG_CODEGEN_PRINT("NODE_BINARY: Compiling left operand (type %d)\n", left_typed->original->type);
             int left_reg = compile_expression(ctx, left_typed);
-            // Debug output removed
             DEBUG_CODEGEN_PRINT("NODE_BINARY: Left operand returned register %d\n", left_reg);
+            
+            // CRITICAL FIX: If left operand is a function call (temp register) and right operand is also a function call,
+            // move left result to a frame register to protect it from being corrupted during right operand evaluation
+            bool left_is_temp = (left_reg >= MP_TEMP_REG_START && left_reg <= MP_TEMP_REG_END);
+            bool right_is_function_call = (right_typed->original->type == NODE_CALL);
+            int protected_left_reg = left_reg;
+            
+            if (left_is_temp && right_is_function_call) {
+                // Allocate a frame register to protect the left operand result
+                int frame_protection_reg = mp_allocate_frame_register(ctx->allocator);
+                if (frame_protection_reg != -1) {
+                    emit_move(ctx, frame_protection_reg, left_reg);
+                    DEBUG_CODEGEN_PRINT("NODE_BINARY: Protected left operand R%d -> R%d (frame register)\n", left_reg, frame_protection_reg);
+                    
+                    // Free the original temp register
+                    mp_free_temp_register(ctx->allocator, left_reg);
+                    protected_left_reg = frame_protection_reg;
+                } else {
+                    DEBUG_CODEGEN_PRINT("Warning: Could not allocate frame register for operand protection\n");
+                }
+            }
             
             DEBUG_CODEGEN_PRINT("NODE_BINARY: Compiling right operand (type %d)\n", right_typed->original->type);
             int right_reg = compile_expression(ctx, right_typed);
-            // Debug output removed
             DEBUG_CODEGEN_PRINT("NODE_BINARY: Right operand returned register %d\n", right_reg);
             
             DEBUG_CODEGEN_PRINT("NODE_BINARY: Allocating result register");
             int result_reg = mp_allocate_temp_register(ctx->allocator);
             DEBUG_CODEGEN_PRINT("NODE_BINARY: Result register is %d\n", result_reg);
             
-            if (left_reg == -1 || right_reg == -1 || result_reg == -1) {
-                DEBUG_CODEGEN_PRINT("Error: Failed to allocate registers for binary operation (left=%d, right=%d, result=%d)\n", left_reg, right_reg, result_reg);
+            if (protected_left_reg == -1 || right_reg == -1 || result_reg == -1) {
+                DEBUG_CODEGEN_PRINT("Error: Failed to allocate registers for binary operation (left=%d, right=%d, result=%d)\n", protected_left_reg, right_reg, result_reg);
                 return -1;
             }
             
             // Call the fixed compile_binary_op with all required parameters
-            // Debug output removed
-            compile_binary_op(ctx, expr, result_reg, left_reg, right_reg);
+            compile_binary_op(ctx, expr, result_reg, protected_left_reg, right_reg);
             
-            // CRITICAL FIX: Only free operand registers if they are temp registers
-            // Don't free frame registers (variables) - only free temp registers
-            if (left_reg >= MP_TEMP_REG_START && left_reg <= MP_TEMP_REG_END) {
-                mp_free_temp_register(ctx->allocator, left_reg);
+            // CRITICAL FIX: Free operand registers appropriately
+            // The protected_left_reg might be either a temp or frame register depending on the protection logic
+            if (protected_left_reg >= MP_TEMP_REG_START && protected_left_reg <= MP_TEMP_REG_END) {
+                mp_free_temp_register(ctx->allocator, protected_left_reg);
+            } else if (protected_left_reg >= MP_FRAME_REG_START && protected_left_reg <= MP_FRAME_REG_END) {
+                mp_free_register(ctx->allocator, protected_left_reg);
             }
             if (right_reg >= MP_TEMP_REG_START && right_reg <= MP_TEMP_REG_END) {
                 mp_free_temp_register(ctx->allocator, right_reg);
@@ -2399,6 +2419,9 @@ void compile_function_declaration(CompilerContext* ctx, TypedASTNode* func) {
     
     DEBUG_CODEGEN_PRINT("Compiling function declaration: %s\n", 
            func->original->function.name ? func->original->function.name : "(anonymous)");
+    
+    // Reset frame registers for function compilation isolation (fixes recursive function register collision)
+    mp_reset_frame_registers(ctx->allocator);
     
     // Create a separate bytecode buffer for this function
     BytecodeBuffer* function_bytecode = init_bytecode_buffer();

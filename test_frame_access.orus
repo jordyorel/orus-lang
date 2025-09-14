@@ -1,7 +1,0 @@
-fn test_frame(n) -> i32:
-    local_val = n + 100
-    print("local_val =", local_val)
-    return local_val
-
-result = test_frame(5)
-print("Result:", result)
