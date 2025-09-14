@@ -1,3 +1,4 @@
+#define _POSIX_C_SOURCE 199309L
 #include "vm/vm_profiling.h"
 #include <stdio.h>
 #include <stdlib.h>

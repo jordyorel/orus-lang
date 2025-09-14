@@ -44,8 +44,7 @@ InterpretResult vm_run_dispatch(void) {
                     printValue(vm_get_register_safe(i));
                     DEBUG_VM_PRINT(" ]");
                 }
-                DEBUG_VM_PRINT("
-");
+                DEBUG_VM_PRINT("\n");
 
                 disassembleInstruction(vm.chunk, (int)(vm.ip - vm.chunk->code));
             }
@@ -1550,8 +1549,7 @@ InterpretResult vm_run_dispatch(void) {
 
                 // Function operations
                 case OP_CALL_R: {
-                    DEBUG_VM_PRINT("OP_CALL_R executed
-");
+                    DEBUG_VM_PRINT("OP_CALL_R executed");
                     uint8_t funcReg = READ_BYTE();
                     uint8_t firstArgReg = READ_BYTE();
                     uint8_t argCount = READ_BYTE();
@@ -1641,8 +1639,7 @@ InterpretResult vm_run_dispatch(void) {
                             frame->savedRegisters[i] = vm_get_register_safe(FRAME_REG_START + i);
                             // Debug: Print saved values for first few registers
                             if (i < 8) {
-                                DEBUG_VM_PRINT("SAVE FRAME R%d (type=%d)
-", FRAME_REG_START + i, vm_get_register_safe(FRAME_REG_START + i).type);
+                                DEBUG_VM_PRINT("SAVE FRAME R%d (type=%d)", FRAME_REG_START + i, vm_get_register_safe(FRAME_REG_START + i).type);
                                 if (vm_get_register_safe(FRAME_REG_START + i).type == VALUE_I32) {
                                     DEBUG_VM_PRINT("  value = %d\n", AS_I32(vm_get_register_safe(FRAME_REG_START + i)));
                                 }
@@ -1654,8 +1651,7 @@ InterpretResult vm_run_dispatch(void) {
                             frame->savedRegisters[64 + i] = vm_get_register_safe(temp_reg_start + i);
                             // Debug: Print saved temp register values for first few
                             if (i < 8) {
-                                DEBUG_VM_PRINT("SAVE TEMP R%d (type=%d)
-", temp_reg_start + i, vm_get_register_safe(temp_reg_start + i).type);
+                                DEBUG_VM_PRINT("SAVE TEMP R%d (type=%d)", temp_reg_start + i, vm_get_register_safe(temp_reg_start + i).type);
                                 if (vm_get_register_safe(temp_reg_start + i).type == VALUE_I32) {
                                     DEBUG_VM_PRINT("  value = %d\n", AS_I32(vm_get_register_safe(temp_reg_start + i)));
                                 }
@@ -1773,11 +1769,9 @@ InterpretResult vm_run_dispatch(void) {
                             vm_set_register_safe(FRAME_REG_START + i, frame->savedRegisters[i]);
                             // Debug: Print restored values for first few registers
                             if (i < 8) {
-                                DEBUG_VM_PRINT("RESTORE R%d (type=%d)
-", FRAME_REG_START + i, frame->savedRegisters[i].type);
+                                DEBUG_VM_PRINT("RESTORE R%d (type=%d)", FRAME_REG_START + i, frame->savedRegisters[i].type);
                                 if (frame->savedRegisters[i].type == VALUE_I32) {
-                                    DEBUG_VM_PRINT("  value = %d
-", AS_I32(vm_get_register_safe(FRAME_REG_START + i)));
+                                    DEBUG_VM_PRINT("  value = %d", AS_I32(vm_get_register_safe(FRAME_REG_START + i)));
                                 }
                             }
                         }
@@ -1804,11 +1798,9 @@ InterpretResult vm_run_dispatch(void) {
                             vm_set_register_safe(FRAME_REG_START + i, frame->savedRegisters[i]);
                             // Debug: Print restored values for first few registers
                             if (i < 8) {
-                                DEBUG_VM_PRINT("RESTORE R%d (type=%d)
-", FRAME_REG_START + i, frame->savedRegisters[i].type);
+                                DEBUG_VM_PRINT("RESTORE R%d (type=%d)", FRAME_REG_START + i, frame->savedRegisters[i].type);
                                 if (frame->savedRegisters[i].type == VALUE_I32) {
-                                    DEBUG_VM_PRINT("  value = %d
-", AS_I32(vm_get_register_safe(FRAME_REG_START + i)));
+                                    DEBUG_VM_PRINT("  value = %d", AS_I32(vm_get_register_safe(FRAME_REG_START + i)));
                                 }
                             }
                         }
