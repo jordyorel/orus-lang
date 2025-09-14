@@ -1591,17 +1591,30 @@ static void patch_continue_statements(CompilerContext* ctx, int continue_target)
         int continue_offset = ctx->continue_statements[i];
         // OP_JUMP is 3 bytes: opcode + 2-byte offset
         int jump_offset = continue_target - (continue_offset + 3);
-        DEBUG_CODEGEN_PRINT("Continue statement patching: offset %d -> target %d (jump_offset=%d)\n", 
+        DEBUG_CODEGEN_PRINT("Continue statement patching: offset %d -> target %d (jump_offset=%d)\n",
                continue_offset, continue_target, jump_offset);
-        if (jump_offset < -32768 || jump_offset > 32767) {
-            DEBUG_CODEGEN_PRINT("Error: Continue jump offset %d out of range - using 16-bit wrap\n", jump_offset);
-            // Instead of skipping, patch with wrapped 16-bit value
-            // The VM bounds checking will handle invalid jumps gracefully
+
+        if (jump_offset < 0) {
+            // Negative offset indicates a backward jump.  Our placeholder was
+            // an OP_JUMP, but backward jumps must use OP_LOOP semantics.
+            int back_distance = -jump_offset;
+            ctx->bytecode->instructions[continue_offset] = OP_LOOP;
+            ctx->bytecode->instructions[continue_offset + 1] = (uint8_t)((back_distance >> 8) & 0xFF);
+            ctx->bytecode->instructions[continue_offset + 2] = (uint8_t)(back_distance & 0xFF);
+            DEBUG_CODEGEN_PRINT("Patched continue statement at offset %d to LOOP back %d bytes\n",
+                   continue_offset, back_distance);
+            continue;
         }
+
+        if (jump_offset > 65535) {
+            DEBUG_CODEGEN_PRINT("Error: Continue jump offset %d out of range - truncating\n", jump_offset);
+            jump_offset &= 0xFFFF;
+        }
+
         // Patch the 2-byte offset at positions +1 and +2 (after the opcode)
         ctx->bytecode->instructions[continue_offset + 1] = (uint8_t)((jump_offset >> 8) & 0xFF);
         ctx->bytecode->instructions[continue_offset + 2] = (uint8_t)(jump_offset & 0xFF);
-        DEBUG_CODEGEN_PRINT("Patched continue statement at offset %d to jump to %d (3-byte OP_JUMP)\n", 
+        DEBUG_CODEGEN_PRINT("Patched continue statement at offset %d to jump to %d (3-byte OP_JUMP)\n",
                continue_offset, continue_target);
     }
     // Clear continue statements for this loop
@@ -1896,85 +1909,27 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     int continue_target = ctx->bytecode->count;
     ctx->current_loop_continue = continue_target;
     
-    // CRITICAL FIX: Complete register state restoration before increment
-    // The issue is that nested breaks may corrupt register types
-    // Solution: Use fresh temporary registers for the increment operation
-    
-    int fresh_loop_var_reg = mp_allocate_temp_register(ctx->allocator);
-    int fresh_step_reg = mp_allocate_temp_register(ctx->allocator);
-    
-    if (fresh_loop_var_reg == -1 || fresh_step_reg == -1) {
-        DEBUG_CODEGEN_PRINT("Warning: Could not allocate fresh registers, using existing\n");
-        fresh_loop_var_reg = loop_var_reg;
-        fresh_step_reg = step_reg;
-        
-        // CRITICAL FIX: When using existing registers, reload step value from constants
-        // to ensure proper i32 type and avoid "Operands must be the same type" error
-        Value step_safety_value = I32_VAL(step_val);
-        int step_safety_const_index = add_constant(ctx->constants, step_safety_value);
-        emit_byte_to_buffer(ctx->bytecode, OP_LOAD_I32_CONST);
-        emit_byte_to_buffer(ctx->bytecode, fresh_step_reg);
-        emit_byte_to_buffer(ctx->bytecode, (step_safety_const_index >> 8) & 0xFF);
-        emit_byte_to_buffer(ctx->bytecode, step_safety_const_index & 0xFF);
-        DEBUG_CODEGEN_PRINT("Reloaded step value for type safety: R%d = %d\n", fresh_step_reg, step_val);
-        
-        // Also ensure loop variable has proper i32 type by using OP_MOVE_I32
-        // This forces i32 interpretation even if the source register is corrupted
-        if (fresh_loop_var_reg != loop_var_reg) {
-            emit_byte_to_buffer(ctx->bytecode, OP_MOVE_I32);
-            emit_byte_to_buffer(ctx->bytecode, fresh_loop_var_reg);
-            emit_byte_to_buffer(ctx->bytecode, loop_var_reg);
-            DEBUG_CODEGEN_PRINT("Copied loop variable with i32 type enforcement: R%d -> R%d\n", loop_var_reg, fresh_loop_var_reg);
-        }
-    } else {
-        // Copy current loop variable value to fresh register
-        emit_byte_to_buffer(ctx->bytecode, OP_MOVE_I32);
-        emit_byte_to_buffer(ctx->bytecode, fresh_loop_var_reg);
-        emit_byte_to_buffer(ctx->bytecode, loop_var_reg);
-        
-        // Load step value into fresh register
-        Value reload_step_value = I32_VAL(step_val);
-        int reload_step_const_index = add_constant(ctx->constants, reload_step_value);
-        emit_byte_to_buffer(ctx->bytecode, OP_LOAD_I32_CONST);
-        emit_byte_to_buffer(ctx->bytecode, fresh_step_reg);
-        emit_byte_to_buffer(ctx->bytecode, (reload_step_const_index >> 8) & 0xFF);
-        emit_byte_to_buffer(ctx->bytecode, reload_step_const_index & 0xFF);
-        
-        // CRITICAL: Also reload end value register to prevent corruption
-        // The end register may have been reused during nested loop execution
-        Value reload_end_value = I32_VAL(end_val);
-        int reload_end_const_index = add_constant(ctx->constants, reload_end_value);
-        emit_byte_to_buffer(ctx->bytecode, OP_LOAD_I32_CONST);
-        emit_byte_to_buffer(ctx->bytecode, end_reg);
-        emit_byte_to_buffer(ctx->bytecode, (reload_end_const_index >> 8) & 0xFF);
-        emit_byte_to_buffer(ctx->bytecode, reload_end_const_index & 0xFF);
-        DEBUG_CODEGEN_PRINT("Reloaded end value register R%d for condition check safety\n", end_reg);
-        
-        DEBUG_CODEGEN_PRINT("Using fresh registers R%d, R%d for type safety\n", 
-               fresh_loop_var_reg, fresh_step_reg);
-    }
-    
-    // Perform increment using fresh registers and copy result back
+    // Reload step and end values in case nested loops modified these registers
+    Value reload_step_value = I32_VAL(step_val);
+    int reload_step_const_index = add_constant(ctx->constants, reload_step_value);
+    emit_byte_to_buffer(ctx->bytecode, OP_LOAD_I32_CONST);
+    emit_byte_to_buffer(ctx->bytecode, step_reg);
+    emit_byte_to_buffer(ctx->bytecode, (reload_step_const_index >> 8) & 0xFF);
+    emit_byte_to_buffer(ctx->bytecode, reload_step_const_index & 0xFF);
+
+    Value reload_end_value = I32_VAL(end_val);
+    int reload_end_const_index = add_constant(ctx->constants, reload_end_value);
+    emit_byte_to_buffer(ctx->bytecode, OP_LOAD_I32_CONST);
+    emit_byte_to_buffer(ctx->bytecode, end_reg);
+    emit_byte_to_buffer(ctx->bytecode, (reload_end_const_index >> 8) & 0xFF);
+    emit_byte_to_buffer(ctx->bytecode, reload_end_const_index & 0xFF);
+
+    // Perform increment directly on loop variable
     emit_byte_to_buffer(ctx->bytecode, OP_ADD_I32_R);
-    emit_byte_to_buffer(ctx->bytecode, fresh_loop_var_reg);
-    emit_byte_to_buffer(ctx->bytecode, fresh_loop_var_reg);
-    emit_byte_to_buffer(ctx->bytecode, fresh_step_reg);
-    
-    // Copy result back to original loop variable register
-    emit_byte_to_buffer(ctx->bytecode, OP_MOVE_I32);
     emit_byte_to_buffer(ctx->bytecode, loop_var_reg);
-    emit_byte_to_buffer(ctx->bytecode, fresh_loop_var_reg);
-    
-    // Free fresh registers if they were allocated
-    if (fresh_loop_var_reg != loop_var_reg && fresh_loop_var_reg >= MP_TEMP_REG_START) {
-        mp_free_temp_register(ctx->allocator, fresh_loop_var_reg);
-    }
-    if (fresh_step_reg != step_reg && fresh_step_reg >= MP_TEMP_REG_START) {
-        mp_free_temp_register(ctx->allocator, fresh_step_reg);
-    }
-    
-    DEBUG_CODEGEN_PRINT("Increment completed with register type safety\n");
-    
+    emit_byte_to_buffer(ctx->bytecode, loop_var_reg);
+    emit_byte_to_buffer(ctx->bytecode, step_reg);
+
     // Patch continue statements AFTER emitting the increment instruction
     patch_continue_statements(ctx, continue_target);
     

@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "internal/strutil.h"
 
 #define SYMBOL_TABLE_INITIAL_CAPACITY 16
 
@@ -75,7 +76,7 @@ Symbol* declare_symbol(SymbolTable* table, const char* name, Type* type,
     Symbol* symbol = malloc(sizeof(Symbol));
     if (!symbol) return NULL;
     
-    symbol->name = strdup(name);
+    symbol->name = orus_strdup(name);
     symbol->legacy_register_id = register_id;  // Legacy compatibility
     symbol->reg_allocation = NULL;             // Will be set by dual register system
     symbol->type = type;
@@ -228,7 +229,7 @@ Symbol* declare_symbol_with_allocation(SymbolTable* table, const char* name, Typ
     Symbol* symbol = malloc(sizeof(Symbol));
     if (!symbol) return NULL;
     
-    symbol->name = strdup(name);
+    symbol->name = orus_strdup(name);
     symbol->reg_allocation = reg_alloc;        // Dual register system allocation
     symbol->legacy_register_id = reg_alloc->logical_id;  // Compatibility
     symbol->type = type;
