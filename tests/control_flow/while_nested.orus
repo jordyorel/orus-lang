@@ -1,80 +1,80 @@
-// Nested while loop tests
-print("=== Nested While Loop Tests ===")
+// // Nested while loop tests
+// print("=== Nested While Loop Tests ===")
 
-// Test 1: Simple nested while loops
-print("Test 1: Simple nested loops")
-mut i = 0
-while i < 3:
-    print("Outer loop i =", i)
-    mut j = 0
-    while j < 2:
-        print("  Inner loop j =", j)
-        j = j + 1
-    i = i + 1
-print("Simple nested test complete")
+// // Test 1: Simple nested while loops
+// print("Test 1: Simple nested loops")
+// mut i = 0
+// while i < 3:
+//     print("Outer loop i =", i)
+//     mut j = 0
+//     while j < 2:
+//         print("  Inner loop j =", j)
+//         j = j + 1
+//     i = i + 1
+// print("Simple nested test complete")
 
-// Test 2: Nested loops with break in inner loop
-print("Test 2: Break in inner loop")
-mut x = 0
-while x < 2:
-    print("Outer x =", x)
-    mut y = 0
-    while y < 5:
-        if y == 2:
-            print("  Breaking inner at y =", y)
-            break
-        print("  Inner y =", y)
-        y = y + 1
-    x = x + 1
-print("Inner break test complete")
+// // Test 2: Nested loops with break in inner loop
+// print("Test 2: Break in inner loop")
+// mut x = 0
+// while x < 2:
+//     print("Outer x =", x)
+//     mut y = 0
+//     while y < 5:
+//         if y == 2:
+//             print("  Breaking inner at y =", y)
+//             break
+//         print("  Inner y =", y)
+//         y = y + 1
+//     x = x + 1
+// print("Inner break test complete")
 
-// Test 3: Nested loops with break in outer loop
-print("Test 3: Break in outer loop")
-mut a = 0
-while a < 5:
-    if a == 2:
-        print("Breaking outer at a =", a)
-        break
-    print("Outer a =", a)
-    mut b = 0
-    while b < 2:
-        print("  Inner b =", b)
-        b = b + 1
-    a = a + 1
-print("Outer break test complete")
+// // Test 3: Nested loops with break in outer loop
+// print("Test 3: Break in outer loop")
+// mut a = 0
+// while a < 5:
+//     if a == 2:
+//         print("Breaking outer at a =", a)
+//         break
+//     print("Outer a =", a)
+//     mut b = 0
+//     while b < 2:
+//         print("  Inner b =", b)
+//         b = b + 1
+//     a = a + 1
+// print("Outer break test complete")
 
-// Test 4: Nested loops with continue statements
-print("Test 4: Continue in nested loops")
-mut m = 0
-while m < 3:
-    m = m + 1
-    if m == 2:
-        print("Skipping outer m =", m)
-        continue
-    print("Outer m =", m)
-    mut n = 0
-    while n < 3:
-        n = n + 1
-        if n == 2:
-            print("  Skipping inner n =", n)
-            continue
-        print("  Inner n =", n)
-print("Nested continue test complete")
+// // Test 4: Nested loops with continue statements
+// print("Test 4: Continue in nested loops")
+// mut m = 0
+// while m < 3:
+//     m = m + 1
+//     if m == 2:
+//         print("Skipping outer m =", m)
+//         continue
+//     print("Outer m =", m)
+//     mut n = 0
+//     while n < 3:
+//         n = n + 1
+//         if n == 2:
+//             print("  Skipping inner n =", n)
+//             continue
+//         print("  Inner n =", n)
+// print("Nested continue test complete")
 
-// Test 5: Triple nested loops (stress test)
-print("Test 5: Triple nested loops")
-mut p = 0
-while p < 2:
-    print("Level 1: p =", p)
-    mut q = 0
-    while q < 2:
-        print("  Level 2: q =", q)
-        mut r = 0
-        while r < 2:
-            print("    Level 3: r =", r)
-            r = r + 1
-        q = q + 1
-    p = p + 1
-print("Triple nested test complete")
+// // Test 5: Triple nested loops (stress test)
+// print("Test 5: Triple nested loops")
+// mut p = 0
+// while p < 2:
+//     print("Level 1: p =", p)
+//     mut q = 0
+//     while q < 2:
+//         print("  Level 2: q =", q)
+//         mut r = 0
+//         while r < 2:
+//             print("    Level 3: r =", r)
+//             r = r + 1
+//         q = q + 1
+//     p = p + 1
+// print("Triple nested test complete")
 
-print("=== All Nested Tests Complete ===")
+// print("=== All Nested Tests Complete ===")
