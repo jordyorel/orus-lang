@@ -641,12 +641,13 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             // Call the fixed compile_binary_op with all required parameters
             compile_binary_op(ctx, expr, result_reg, protected_left_reg, right_reg);
             
-            // CRITICAL FIX: Free operand registers appropriately
-            // The protected_left_reg might be either a temp or frame register depending on the protection logic
+            // Free operand registers if they are temporary values. Frame registers
+            // represent named variables and must remain allocated after the
+            // operation; freeing them corrupts variable state in subsequent
+            // expressions (e.g. comparisons). Only temporary registers should be
+            // released here.
             if (protected_left_reg >= MP_TEMP_REG_START && protected_left_reg <= MP_TEMP_REG_END) {
                 mp_free_temp_register(ctx->allocator, protected_left_reg);
-            } else if (protected_left_reg >= MP_FRAME_REG_START && protected_left_reg <= MP_FRAME_REG_END) {
-                mp_free_register(ctx->allocator, protected_left_reg);
             }
             if (right_reg >= MP_TEMP_REG_START && right_reg <= MP_TEMP_REG_END) {
                 mp_free_temp_register(ctx->allocator, right_reg);
