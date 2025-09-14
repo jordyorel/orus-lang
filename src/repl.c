@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "internal/strutil.h"
 #include <stdbool.h>
 #include <ctype.h>
 #include <time.h>
@@ -86,7 +87,7 @@ static void history_add(History *h, const char *line) {
         memmove(h->items, h->items + 1, (h->capacity - 1) * sizeof(char*));
         h->count--;
     }
-    h->items[h->count++] = strdup(line);
+    h->items[h->count++] = orus_strdup(line);
     h->current = h->count;
 }
 

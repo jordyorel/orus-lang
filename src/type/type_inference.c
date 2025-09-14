@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "internal/strutil.h"
 
 #include "compiler/ast.h"
 #include "compiler/typed_ast.h"
@@ -1126,7 +1127,7 @@ static TypedASTNode* generate_typed_ast_recursive(ASTNode* ast, TypeEnv* type_en
         typed->typeResolved = true;
     } else {
         typed->hasTypeError = true;
-        typed->errorMessage = strdup("Type inference failed");
+        typed->errorMessage = orus_strdup("Type inference failed");
     }
 
     // Recursively generate children based on node type
@@ -1175,7 +1176,7 @@ static TypedASTNode* generate_typed_ast_recursive(ASTNode* ast, TypeEnv* type_en
         case NODE_ASSIGN:
             // Copy the variable name
             if (ast->assign.name) {
-                typed->typed.assign.name = strdup(ast->assign.name);
+                typed->typed.assign.name = orus_strdup(ast->assign.name);
             }
             if (ast->assign.value) {
                 typed->typed.assign.value = generate_typed_ast_recursive(ast->assign.value, type_env);
@@ -1327,7 +1328,7 @@ static TypedASTNode* generate_typed_ast_recursive(ASTNode* ast, TypeEnv* type_en
             DEBUG_TYPE_INFERENCE_PRINT("Processing NODE_FOR_RANGE, varName='%s'", 
                    ast->forRange.varName ? ast->forRange.varName : "(null)");
             if (ast->forRange.varName) {
-                typed->typed.forRange.varName = strdup(ast->forRange.varName);
+                typed->typed.forRange.varName = orus_strdup(ast->forRange.varName);
                 DEBUG_TYPE_INFERENCE_PRINT("Copied varName='%s' to typed AST", typed->typed.forRange.varName);
             }
             if (ast->forRange.start) {
@@ -1344,14 +1345,14 @@ static TypedASTNode* generate_typed_ast_recursive(ASTNode* ast, TypeEnv* type_en
             }
             typed->typed.forRange.inclusive = ast->forRange.inclusive;
             if (ast->forRange.label) {
-                typed->typed.forRange.label = strdup(ast->forRange.label);
+                typed->typed.forRange.label = orus_strdup(ast->forRange.label);
             }
             break;
 
         case NODE_FOR_ITER:
             // Handle for iteration loops: varName, iterable, body
             if (ast->forIter.varName) {
-                typed->typed.forIter.varName = strdup(ast->forIter.varName);
+                typed->typed.forIter.varName = orus_strdup(ast->forIter.varName);
             }
             if (ast->forIter.iterable) {
                 typed->typed.forIter.iterable = generate_typed_ast_recursive(ast->forIter.iterable, type_env);
@@ -1360,7 +1361,7 @@ static TypedASTNode* generate_typed_ast_recursive(ASTNode* ast, TypeEnv* type_en
                 typed->typed.forIter.body = generate_typed_ast_recursive(ast->forIter.body, type_env);
             }
             if (ast->forIter.label) {
-                typed->typed.forIter.label = strdup(ast->forIter.label);
+                typed->typed.forIter.label = orus_strdup(ast->forIter.label);
             }
             break;
 

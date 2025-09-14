@@ -1,6 +1,7 @@
 #include "debug/debug_config.h"
 #include <stdarg.h>
 #include <string.h>
+#include "internal/strutil.h"
 #include <stdlib.h>
 #include <time.h>
 
@@ -163,7 +164,7 @@ unsigned int debug_parse_categories(const char* categories_str) {
     if (!categories_str) return DEBUG_NONE;
     
     unsigned int result = DEBUG_NONE;
-    char* str_copy = strdup(categories_str);
+    char* str_copy = orus_strdup(categories_str);
     if (!str_copy) return DEBUG_NONE;
     
     // Handle special cases

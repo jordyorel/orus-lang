@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "internal/strutil.h"
 
 #include "runtime/memory.h"
 #include "type/type.h"
@@ -236,7 +237,7 @@ TypedASTNode* copy_typed_ast_node(TypedASTNode* node) {
     copy->spillable = node->spillable;
 
     if (node->errorMessage) {
-        copy->errorMessage = strdup(node->errorMessage);
+        copy->errorMessage = orus_strdup(node->errorMessage);
     }
 
     // Note: Children are not copied here - this is a shallow copy
