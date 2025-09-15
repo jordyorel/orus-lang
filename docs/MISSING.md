@@ -410,7 +410,7 @@ fn greet(name: string):
 - [x] **COMPLETE**: Higher-order functions (functions as parameters/return values) ✅
 - [x] **COMPLETE**: Closure capture and upvalues ✅
 - [x] **COMPLETE**: Lambda/anonymous function syntax ✅
-- [ ] **NEXT**: Generic constraints for higher-order functions
+- [x] **COMPLETE**: Generic constraints for higher-order functions ✅
 
 **Parameter Support:**
 - ✅ **Parameters 1-64**: Frame registers (optimal performance)
