@@ -123,13 +123,30 @@ make clean && make debug && make release && make profiling
 - Run benchmarks before submitting
 - Update documentation as needed
 
+### Branching Workflow
+- Keep `main` release‑ready and protected from direct pushes.
+- Your personal branch: `dev/hierat` for day‑to‑day work.
+- Optional feature branches from your personal branch: `feat/<short-desc>` or `fix/<short-desc>`.
+- Keep up to date:
+  - `git switch main && git pull`
+  - `git switch dev/hierat && git rebase main` (or `merge` if preferred)
+- Open PRs:
+  - From `dev/hierat` (or `feat/*`) → `main` when ready.
+
+### Protect `main`
+- GitHub: Settings → Branches → Add rule → Branch name: `main`
+  - Require pull request before merging
+  - Optionally require status checks to pass
+  - Restrict who can push (set to no one)
+- GitLab: Settings → Repository → Protected branches → Protect `main` and disallow direct pushes
+
 ### Submitting Changes
 1. Fork the repository
-2. Create feature branch
+2. Create a branch on top of `dev/hierat` (e.g. `feat/<short-desc>`) or work directly on `dev/hierat`
 3. Make changes with tests
 4. Verify with: `make test && make benchmark && make analyze`
 5. Test all profiles: `make clean && make debug && make release && make profiling`
-6. Submit pull request
+6. Submit a pull request to `main`
 
 **Pre-submission Checklist:**
 - ✅ All tests pass (`make test`)
