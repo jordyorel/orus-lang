@@ -466,10 +466,26 @@ void emit_load_constant(CompilerContext* ctx, int reg, Value constant) {
                 emit_byte_to_buffer(ctx->bytecode, reg);
                 emit_byte_to_buffer(ctx->bytecode, (const_index >> 8) & 0xFF); // High byte
                 emit_byte_to_buffer(ctx->bytecode, const_index & 0xFF);        // Low byte
-                DEBUG_CODEGEN_PRINT("Emitted OP_LOAD_CONST R%d, #%d \"%s\"\n", 
+                DEBUG_CODEGEN_PRINT("Emitted OP_LOAD_CONST R%d, #%d \"%s\"\n",
                        reg, const_index, AS_STRING(constant)->chars);
             } else {
                 DEBUG_CODEGEN_PRINT("Error: Failed to add string constant to pool");
+            }
+            break;
+        }
+
+        case VAL_FUNCTION:
+        case VAL_CLOSURE: {
+            int const_index = add_constant(ctx->constants, constant);
+            if (const_index >= 0) {
+                emit_byte_to_buffer(ctx->bytecode, OP_LOAD_CONST);
+                emit_byte_to_buffer(ctx->bytecode, reg);
+                emit_byte_to_buffer(ctx->bytecode, (const_index >> 8) & 0xFF); // High byte
+                emit_byte_to_buffer(ctx->bytecode, const_index & 0xFF);        // Low byte
+                DEBUG_CODEGEN_PRINT("Emitted OP_LOAD_CONST R%d, #%d (function)\n",
+                       reg, const_index);
+            } else {
+                DEBUG_CODEGEN_PRINT("Error: Failed to add function constant to pool");
             }
             break;
         }
@@ -2493,6 +2509,9 @@ void compile_function_declaration(CompilerContext* ctx, TypedASTNode* func) {
         free(function_upvalues);
         return;
     }
+    // Initialize chunk fields to avoid uninitialized memory
+    initChunk(chunk);
+
     chunk->code = malloc(function_bytecode->count);
     if (!chunk->code) {
         free(chunk);
