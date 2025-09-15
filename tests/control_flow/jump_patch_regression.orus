@@ -1,0 +1,27 @@
+// Regression program to ensure patched jumps execute correctly
+print("jump patch regression start")
+
+mut count = 0
+
+if count == 0:
+    count = count + 1
+else:
+    count = 100
+
+while count < 4:
+    if count == 2:
+        count = count + 1
+        continue
+    if count == 3:
+        break
+    count = count + 1
+
+for idx in 0..=3:
+    if idx == 1:
+        continue
+    if idx == 2:
+        break
+    count = count + idx
+
+print(count)
+print("jump patch regression end")

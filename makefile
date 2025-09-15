@@ -112,8 +112,9 @@ TEST_RUNNER_OBJ = $(TEST_RUNNER_SRC:$(TESTDIR)/%.c=$(BUILDDIR)/tests/%.o)
 # Target (profile-specific)
 ORUS = orus$(SUFFIX)
 UNIT_TEST_RUNNER = test_runner$(SUFFIX)
+BYTECODE_TEST_BIN = $(BUILDDIR)/tests/test_jump_patch
 
-.PHONY: all clean test unit-test benchmark help debug release profiling analyze install
+.PHONY: all clean test unit-test test-control-flow benchmark help debug release profiling analyze install bytecode-jump-tests
 
 all: build-info $(ORUS)
 
@@ -207,12 +208,44 @@ test: $(ORUS)
 	echo ""
 	@echo "\033[36m=== Error Reporting Tests ===\033[0m"
 	@python3 tests/error_reporting/run_error_tests.py ./$(ORUS)
+	@echo ""
+	@echo "\033[36m=== Bytecode Jump Patch Tests ===\033[0m"
+	@$(MAKE) bytecode-jump-tests
 
 # Run unit tests
 unit-test: $(UNIT_TEST_RUNNER)
 	@echo "Running Unit Test Suite..."
 	@echo "=========================="
 	@./$(UNIT_TEST_RUNNER)
+
+$(BYTECODE_TEST_BIN): tests/unit/test_jump_patch.c $(COMPILER_OBJS) $(VM_OBJS)
+	@mkdir -p $(dir $@)
+	@echo "Compiling bytecode jump patch tests..."
+	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+
+bytecode-jump-tests: $(BYTECODE_TEST_BIN)
+	@echo "Running bytecode jump patch tests..."
+	@./$(BYTECODE_TEST_BIN)
+
+test-control-flow: $(ORUS)
+	@echo "Running Control Flow Tests..."
+	@passed=0; failed=0; \
+	for test_file in $$(find $(TESTDIR)/control_flow -type f -name "*.orus" | sort); do \
+	printf "Testing: $$test_file ... "; \
+	if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
+	printf "\033[32mPASS\033[0m\n"; \
+	passed=$$((passed + 1)); \
+	else \
+	printf "\033[31mFAIL\033[0m\n"; \
+	failed=$$((failed + 1)); \
+	fi; \
+	done; \
+	echo ""; \
+	if [ $$failed -eq 0 ]; then \
+	echo "\033[32m✓ Control flow tests passed ($$passed)\033[0m"; \
+	else \
+	echo "\033[31m✗ $$failed control flow test(s) failed\033[0m"; \
+	fi
 
 # CI test target: Build with warnings as errors and run full test suite
 ci-test: 

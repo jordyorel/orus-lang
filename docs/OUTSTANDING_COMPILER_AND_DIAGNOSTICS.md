@@ -52,31 +52,34 @@ the VM and diagnostic shell can surface precise locations.
 - [x] Run `make test` (plus `python3 tests/error_reporting/run_error_tests.py
   ./orus_debug`) to ensure the new metadata does not regress existing tests.
 
-### Jump patching infrastructure
+### Jump patching infrastructure ✅
 
-**Current issue.** `emit_jump_placeholder` and `patch_jump` only spit out dummy
-offsets today. Without a patch table, forward jumps in control flow constructs
-stay broken or rely on bespoke manual patching.
+**Resolution.** `emit_jump_placeholder` and `patch_jump` now maintain a
+first-class patch table on `BytecodeBuffer`. Each placeholder records the opcode
+offset, operand span, and chosen opcode so that forward and backward jumps can be
+rewritten without bespoke manual patching. The new infrastructure powers
+`compile_if_statement`, `compile_while_statement`, and both `for` compilers.
 
 **Implementation steps.**
-- Flesh out the `JumpPatch` bookkeeping that already lives inside
-  `BytecodeBuffer`. On placeholder emission, record the instruction offset and a
-  symbolic label/target slot.
-- When the target offset becomes known, patch every pending entry by computing
-  the signed delta relative to the jump instruction.
-- Update `compile_if_statement`, `compile_while_statement`, and the range /
-  iterator `for` compilers in `codegen.c` to register placeholders and trigger
-  patching at the end of each construct.
-- Ensure the infrastructure handles both 8-bit (`OP_JUMP_SHORT`) and 16-bit
+- [x] Flesh out the `JumpPatch` bookkeeping inside `BytecodeBuffer` so each
+  placeholder records the opcode location, operand span, and eventual target.
+- [x] Patch pending entries by computing the relative delta at the moment the
+  target offset becomes known, automatically rewriting backward `OP_JUMP`
+  placeholders into the matching `OP_LOOP` form when required.
+- [x] Update `compile_if_statement`, `compile_while_statement`, and both range /
+  iterator `for` compilers in `codegen.c` to allocate placeholders and patch
+  them instead of mutating raw instruction bytes.
+- [x] Ensure the infrastructure handles both 8-bit (`OP_JUMP_SHORT`) and 16-bit
   (`OP_JUMP`) encodings.
 
 **Testing.**
-- Introduce bytecode-level assertions that compile simple `if`, `while`, and
-  nested `for` loops and inspect the patched offsets directly.
-- Add control-flow programs in `tests/control_flow/` that would previously fall
-  off the end of a block; the VM should now execute them correctly.
-- Run the control-flow slice of the suite once the Makefile exposes a
-  `test-control-flow` target.
+- [x] Added bytecode-level assertions in
+  `tests/unit/test_jump_patch.c` covering conditional, short, and backward jump
+  scenarios.
+- [x] Added `tests/control_flow/jump_patch_regression.orus` to exercise
+  control-flow programs that rely on patched offsets.
+- [x] Exposed a `make test-control-flow` target and run it alongside the
+  comprehensive suite to cover the control-flow slice.
 
 ### Per-compilation state tracking
 
