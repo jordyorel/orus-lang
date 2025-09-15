@@ -13,6 +13,7 @@ This document outlines the detailed implementation plan for building the Orus co
 - **TypedAST Visualization**: `src/compiler/backend/typed_ast_visualizer.c`
 - **VM Target**: 256-register VM with comprehensive instruction set
 - **Integration Points**: Pipeline hooks in `src/vm/runtime/vm.c`
+- **Closure Support**: Upvalue capture and closure creation for nested functions
 
 #### ✅ **What's Now Implemented**
 - **✅ Optimization Pass**: `src/compiler/backend/optimization/optimizer.c` + `constantfold.c`
@@ -32,7 +33,7 @@ This document outlines the detailed implementation plan for building the Orus co
 **CRITICAL LANGUAGE FEATURES (HIGH PRIORITY)**
 - **✅ Expression Types**: ✅ Binary ops (+,-,*,/,%), ✅ comparisons (<,>,<=,>=,==,!=), ✅ logical (and,or,not), unary ops (-,not,++) (COMPLETED)
 - **✅ Control Flow**: ✅ if/elif/else statements (COMPLETED), ✅ while loops with break/continue (COMPLETED), ❌ for loops, match statements
-- **Functions**: fn definitions, calls, parameters, return statements, recursion
+- **Functions**: fn definitions, calls, parameters, return statements, recursion, closures with upvalue capture
 - **✅ Data Types**: ✅ String literals, all numeric types (i32), ✅ booleans (COMPLETED)
 - **✅ Variable System**: ✅ Mutable/immutable declarations, ✅ proper scoping and identifier resolution (COMPLETED)
 

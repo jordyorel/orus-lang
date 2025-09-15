@@ -406,7 +406,7 @@ fn greet(name: string):
 - [x] **COMPLETE**: Support for 250+ function parameters ✅
 - [x] **COMPLETE**: Function objects as first-class values ✅
 - [x] **COMPLETE**: Higher-order functions (functions as parameters/return values) ✅
-- [ ] **IN PROGRESS**: Closure capture and upvalues 🔧
+- [x] **COMPLETE**: Closure capture and upvalues ✅
 - [ ] **NEXT**: Lambda/anonymous function syntax
 - [ ] **NEXT**: Generic constraints for higher-order functions
 
@@ -456,7 +456,7 @@ fn applyTwice(func, value):
 addFunc = add
 result = addFunc(5, 3)
 
-// 🔧 IN PROGRESS: Closure capture
+// ✅ WORKING: Closure capture
 fn makeCounter(start):
     count = start
     

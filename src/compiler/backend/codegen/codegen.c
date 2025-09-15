@@ -8,6 +8,7 @@
 #include "vm/vm_constants.h"
 #include "errors/features/variable_errors.h"
 #include "debug/debug_config.h"
+#include "runtime/memory.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -42,6 +43,70 @@ void register_variable(CompilerContext* ctx, const char* name, int reg, Type* ty
     if (!symbol) {
         DEBUG_CODEGEN_PRINT("Error: Failed to register variable %s", name);
     }
+}
+
+// Add or reuse an upvalue for the current function
+static int add_upvalue(CompilerContext* ctx, bool isLocal, uint8_t index) {
+    if (!ctx) return -1;
+
+    // Check if upvalue already exists
+    for (int i = 0; i < ctx->upvalue_count; i++) {
+        if (ctx->upvalues[i].isLocal == isLocal && ctx->upvalues[i].index == index) {
+            return i;
+        }
+    }
+
+    // Ensure capacity
+    if (ctx->upvalue_count >= ctx->upvalue_capacity) {
+        int new_cap = ctx->upvalue_capacity == 0 ? 8 : ctx->upvalue_capacity * 2;
+        ctx->upvalues = realloc(ctx->upvalues, sizeof(UpvalueInfo) * new_cap);
+        if (!ctx->upvalues) {
+            ctx->upvalue_capacity = ctx->upvalue_count = 0;
+            return -1;
+        }
+        ctx->upvalue_capacity = new_cap;
+    }
+
+    ctx->upvalues[ctx->upvalue_count].isLocal = isLocal;
+    ctx->upvalues[ctx->upvalue_count].index = index;
+    return ctx->upvalue_count++;
+}
+
+// Resolve variable access, tracking upvalues if needed
+static int resolve_variable_or_upvalue(CompilerContext* ctx, const char* name,
+                                       bool* is_upvalue, int* upvalue_index) {
+    if (!ctx || !ctx->symbols || !name) return -1;
+
+    // Traverse current function's scopes to find a regular variable
+    SymbolTable* table = ctx->symbols;
+    while (table && table->scope_depth >= ctx->function_scope_depth) {
+        Symbol* local = resolve_symbol_local_only(table, name);
+        if (local) {
+            if (is_upvalue) *is_upvalue = false;
+            if (upvalue_index) *upvalue_index = -1;
+            return local->reg_allocation ?
+                local->reg_allocation->logical_id : local->legacy_register_id;
+        }
+        table = table->parent;
+    }
+
+    // If compiling a function, search outer scopes as potential upvalues
+    if (ctx->compiling_function) {
+        while (table) {
+            Symbol* symbol = resolve_symbol_local_only(table, name);
+            if (symbol) {
+                if (is_upvalue) *is_upvalue = true;
+                int reg = symbol->reg_allocation ?
+                    symbol->reg_allocation->logical_id : symbol->legacy_register_id;
+                int index = add_upvalue(ctx, true, (uint8_t)reg);
+                if (upvalue_index) *upvalue_index = index;
+                return reg;
+            }
+            table = table->parent;
+        }
+    }
+
+    return -1; // Not found
 }
 
 // ===== VM OPCODE SELECTION =====
@@ -661,12 +726,27 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
         }
         
         case NODE_IDENTIFIER: {
-            // Look up variable in symbol table
-            int reg = lookup_variable(ctx, expr->original->identifier.name);
+            bool is_upvalue = false;
+            int upvalue_index = -1;
+            int reg = resolve_variable_or_upvalue(ctx, expr->original->identifier.name,
+                                                  &is_upvalue, &upvalue_index);
             if (reg == -1) {
                 DEBUG_CODEGEN_PRINT("Error: Unbound variable %s\n", expr->original->identifier.name);
                 return -1;
             }
+
+            if (is_upvalue) {
+                int temp = mp_allocate_temp_register(ctx->allocator);
+                if (temp == -1) {
+                    DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for upvalue access");
+                    return -1;
+                }
+                emit_byte_to_buffer(ctx->bytecode, OP_GET_UPVALUE_R);
+                emit_byte_to_buffer(ctx->bytecode, temp);
+                emit_byte_to_buffer(ctx->bytecode, upvalue_index);
+                return temp;
+            }
+
             return reg;
         }
         
@@ -868,26 +948,16 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
         
         case NODE_CALL: {
             DEBUG_CODEGEN_PRINT("NODE_CALL: Compiling function call");
-            
-            if (!expr->original->call.callee || expr->original->call.callee->type != NODE_IDENTIFIER) {
-                DEBUG_CODEGEN_PRINT("Error: Only simple function calls supported (callee must be identifier)");
-                return -1;
-            }
-            
-            const char* function_name = expr->original->call.callee->identifier.name;
+
             int arg_count = expr->original->call.argCount;
-            
-            DEBUG_CODEGEN_PRINT("NODE_CALL: Function '%s' with %d arguments", function_name, arg_count);
-            
-            // Look up function in symbol table
-            int function_index = lookup_variable(ctx, function_name);
-            if (function_index == -1) {
-                DEBUG_CODEGEN_PRINT("Error: Unknown function '%s'", function_name);
+
+            // Compile callee expression (can be function or closure)
+            int callee_reg = compile_expression(ctx, expr->typed.call.callee);
+            if (callee_reg == -1) {
+                DEBUG_CODEGEN_PRINT("Error: Failed to compile call callee");
                 return -1;
             }
-            
-            DEBUG_CODEGEN_PRINT("NODE_CALL: Found function '%s' at index %d", function_name, function_index);
-            
+
             // Allocate consecutive temp registers for arguments
             int first_arg_reg = -1;
             int* arg_regs = NULL;
@@ -962,34 +1032,20 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                 free(temp_arg_regs);
             }
             
-            // Load function index into a register as I32 value
-            int func_reg = mp_allocate_temp_register(ctx->allocator);
-            if (func_reg == -1) {
-                DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for function index");
-                return -1;
-            }
-            
-            // Load the function index as I32 constant
-            Value func_index_value = I32_VAL(function_index);
-            emit_load_constant(ctx, func_reg, func_index_value);
-            DEBUG_CODEGEN_PRINT("NODE_CALL: Loaded function index %d into R%d", function_index, func_reg);
-            
             // Allocate register for return value
             int return_reg = mp_allocate_temp_register(ctx->allocator);
             if (return_reg == -1) {
                 DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for function return value");
                 return -1;
             }
-            
-            // Emit OP_CALL_R instruction with correct format
-            // Format: OP_CALL_R, func_reg, first_arg_reg, arg_count, result_reg
-            // For 0-argument functions, use register 0 as dummy (it won't be accessed by VM)
+
+            // Emit OP_CALL_R instruction
             int actual_first_arg = (arg_count > 0) ? first_arg_reg : 0;
-            emit_instruction_to_buffer(ctx->bytecode, OP_CALL_R, func_reg, actual_first_arg, arg_count);
-            emit_byte_to_buffer(ctx->bytecode, return_reg);  // 4th parameter (16-bit)
-            DEBUG_CODEGEN_PRINT("NODE_CALL: Emitted OP_CALL_R func_reg=R%d, first_arg=R%d, args=%d, result=R%d", 
-                   func_reg, actual_first_arg, arg_count, return_reg);
-            
+            emit_instruction_to_buffer(ctx->bytecode, OP_CALL_R, callee_reg, actual_first_arg, arg_count);
+            emit_byte_to_buffer(ctx->bytecode, return_reg);
+            DEBUG_CODEGEN_PRINT("NODE_CALL: Emitted OP_CALL_R callee=R%d, first_arg=R%d, args=%d, result=R%d",
+                   callee_reg, actual_first_arg, arg_count, return_reg);
+
             // Free argument registers since they're temps
             if (arg_regs) {
                 for (int i = 0; i < arg_count; i++) {
@@ -999,10 +1055,12 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                 }
                 free(arg_regs);
             }
-            
-            // Free the function register since it's temporary
-            mp_free_temp_register(ctx->allocator, func_reg);
-            
+
+            // Free callee register if temporary
+            if (callee_reg >= MP_TEMP_REG_START && callee_reg <= MP_TEMP_REG_END) {
+                mp_free_temp_register(ctx->allocator, callee_reg);
+            }
+
             return return_reg;
         }
         
@@ -1249,87 +1307,59 @@ void compile_variable_declaration(CompilerContext* ctx, TypedASTNode* var_decl) 
 
 void compile_assignment(CompilerContext* ctx, TypedASTNode* assign) {
     if (!ctx || !assign) return;
-    
-    // Get variable name from typed AST
+
     const char* var_name = assign->typed.assign.name;
-    
-    // Look up existing variable with proper scoping for functions
-    Symbol* symbol;
-    if (ctx->compiling_function) {
-        // In function context: prefer local variables to enable shadowing
-        symbol = resolve_symbol_local_only(ctx->symbols, var_name);
-        if (!symbol) {
-            // No local exists - for assignments, create a new local rather than using global
-            // This implements proper shadowing semantics
-            symbol = NULL; // Force local creation
-        }
-    } else {
-        // At global scope: normal resolution
-        symbol = resolve_symbol(ctx->symbols, var_name);
-    }
-    
+    Symbol* symbol = resolve_symbol(ctx->symbols, var_name);
+    bool is_local = resolve_symbol_local_only(ctx->symbols, var_name) != NULL;
+    bool is_upvalue = false;
+    int upvalue_index = -1;
+
     if (!symbol) {
-        // Variable doesn't exist in local scope - create a new local one 
-        DEBUG_CODEGEN_PRINT("Creating new local variable %s (Orus implicit declaration)\n", var_name);
-        
-        // Compile the value expression first to get its type
+        DEBUG_CODEGEN_PRINT("Creating new local variable %s (implicit)\n", var_name);
+
         int value_reg = compile_expression(ctx, assign->typed.assign.value);
-        if (value_reg == -1) {
-            DEBUG_CODEGEN_PRINT("Error: Failed to compile assignment value for new variable");
-            return;
-        }
-        
-        // Allocate register for the new variable
+        if (value_reg == -1) return;
+
         int var_reg = mp_allocate_frame_register(ctx->allocator);
         if (var_reg == -1) {
-            DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for new variable %s\n", var_name);
             mp_free_temp_register(ctx->allocator, value_reg);
             return;
         }
-        
-        // Variables declared inside loops are automatically mutable for convenience
+
         bool is_in_loop = (ctx->current_loop_start != -1);
-        bool auto_mutable = is_in_loop;
-        
-        DEBUG_CODEGEN_PRINT("Variable '%s' auto-mutability: %s (in_loop=%s)", 
-               var_name, auto_mutable ? "true" : "false", is_in_loop ? "true" : "false");
-        
-        register_variable(ctx, var_name, var_reg, assign->resolvedType, auto_mutable);
-        
-        // Move the value to the variable register
+        register_variable(ctx, var_name, var_reg, assign->resolvedType, is_in_loop);
         emit_move(ctx, var_reg, value_reg);
         mp_free_temp_register(ctx->allocator, value_reg);
-        
-        DEBUG_CODEGEN_PRINT("Created and assigned local variable %s -> R%d\n", var_name, var_reg);
         return;
     }
-    
-    // Variable exists - check if it's mutable
+
+    if (!is_local && ctx->compiling_function) {
+        is_upvalue = true;
+        int reg = symbol->reg_allocation ? symbol->reg_allocation->logical_id : symbol->legacy_register_id;
+        upvalue_index = add_upvalue(ctx, true, (uint8_t)reg);
+    }
+
     if (!symbol->is_mutable) {
-        // Use proper error reporting instead of printf
         SrcLocation location = assign->original->location;
         report_immutable_variable_assignment(location, var_name);
-        ctx->has_compilation_errors = true;  // Signal compilation failure
+        ctx->has_compilation_errors = true;
         return;
     }
-    
-    // Compile the value expression
+
     int value_reg = compile_expression(ctx, assign->typed.assign.value);
-    if (value_reg == -1) {
-        DEBUG_CODEGEN_PRINT("Error: Failed to compile assignment value");
+    if (value_reg == -1) return;
+
+    if (is_upvalue) {
+        emit_byte_to_buffer(ctx->bytecode, OP_SET_UPVALUE_R);
+        emit_byte_to_buffer(ctx->bytecode, upvalue_index);
+        emit_byte_to_buffer(ctx->bytecode, value_reg);
+        mp_free_temp_register(ctx->allocator, value_reg);
         return;
     }
-    
-    // Get the existing variable register
-    int var_reg = symbol->legacy_register_id;
-    
-    // Move value to variable register
+
+    int var_reg = symbol->reg_allocation ? symbol->reg_allocation->logical_id : symbol->legacy_register_id;
     emit_move(ctx, var_reg, value_reg);
-    
-    // Free the temporary register
     mp_free_temp_register(ctx->allocator, value_reg);
-    
-    DEBUG_CODEGEN_PRINT("Assigned %s (R%d) = R%d\n", var_name, var_reg, value_reg);
 }
 
 void compile_print_statement(CompilerContext* ctx, TypedASTNode* print) {
@@ -2365,122 +2395,145 @@ void finalize_functions_to_vm(CompilerContext* ctx) {
 
 // ====== FUNCTION COMPILATION IMPLEMENTATION ======
 
-// Compile a function declaration into a separate chunk
+// Compile a function declaration and emit closure creation
 void compile_function_declaration(CompilerContext* ctx, TypedASTNode* func) {
     if (!ctx || !func || !func->original) return;
-    
-    DEBUG_CODEGEN_PRINT("Compiling function declaration: %s\n", 
-           func->original->function.name ? func->original->function.name : "(anonymous)");
-    
-    // Reset frame registers for function compilation isolation (fixes recursive function register collision)
-    mp_reset_frame_registers(ctx->allocator);
-    
-    // Create a separate bytecode buffer for this function
-    BytecodeBuffer* function_bytecode = init_bytecode_buffer();
-    if (!function_bytecode) {
-        DEBUG_CODEGEN_PRINT("Error: Failed to create function bytecode buffer\n");
-        return;
-    }
-    
-    // Save current context
-    BytecodeBuffer* saved_bytecode = ctx->bytecode;
-    int saved_function_index = ctx->current_function_index;
-    
-    // Switch to function compilation context
-    ctx->bytecode = function_bytecode;
-    
-    // Get function information
+
     const char* func_name = func->original->function.name;
     int arity = func->original->function.paramCount;
-    
-    DEBUG_CODEGEN_PRINT("Function '%s' has %d parameters\n", func_name, arity);
-    
-    // Pre-register function for recursive calls (will be replaced with actual bytecode later)
-    int function_index = register_function(ctx, func_name, arity, NULL);  
-    if (function_index == -1) {
-        DEBUG_CODEGEN_PRINT("Error: Failed to pre-register function '%s'\n", func_name);
-        free_bytecode_buffer(function_bytecode);
-        ctx->bytecode = saved_bytecode;
-        ctx->current_function_index = saved_function_index;
-        return;
+
+    DEBUG_CODEGEN_PRINT("Compiling function declaration: %s\n",
+           func_name ? func_name : "(anonymous)");
+
+    // Allocate register for function variable (global or local)
+    int func_reg = ctx->compiling_function ?
+        mp_allocate_frame_register(ctx->allocator) :
+        mp_allocate_global_register(ctx->allocator);
+    if (func_reg == -1) return;
+
+    register_variable(ctx, func_name, func_reg, getPrimitiveType(TYPE_FUNCTION), false);
+
+    // Save current upvalue context and reset for this function
+    UpvalueInfo* saved_upvalues = ctx->upvalues;
+    int saved_upvalue_count = ctx->upvalue_count;
+    int saved_upvalue_capacity = ctx->upvalue_capacity;
+    ctx->upvalues = NULL;
+    ctx->upvalue_count = 0;
+    ctx->upvalue_capacity = 0;
+
+    // Reset frame registers for isolated compilation
+    mp_reset_frame_registers(ctx->allocator);
+
+    BytecodeBuffer* function_bytecode = init_bytecode_buffer();
+    if (!function_bytecode) return;
+
+    // Save outer compilation state
+    BytecodeBuffer* saved_bytecode = ctx->bytecode;
+    SymbolTable* old_scope = ctx->symbols;
+    bool old_compiling_function = ctx->compiling_function;
+    int saved_function_scope_depth = ctx->function_scope_depth;
+
+    // Switch to function compilation context
+    ctx->bytecode = function_bytecode;
+    ctx->symbols = create_symbol_table(old_scope);
+    ctx->compiling_function = true;
+    ctx->function_scope_depth = ctx->symbols->scope_depth;
+
+    // Make function name visible inside its own body for recursion
+    register_variable(ctx, func_name, func_reg, getPrimitiveType(TYPE_FUNCTION), false);
+
+    // Register parameters
+    int param_base = 256 - arity;
+    if (param_base < 1) param_base = 1;
+    for (int i = 0; i < arity; i++) {
+        if (func->original->function.params[i].name) {
+            int param_reg = param_base + i;
+            register_variable(ctx, func->original->function.params[i].name, param_reg,
+                              getPrimitiveType(TYPE_I32), false);
+        }
     }
-    
-    // Store function index in symbol table for function calls
-    register_variable(ctx, func_name, function_index, getPrimitiveType(TYPE_FUNCTION), false);
-    DEBUG_CODEGEN_PRINT("Function '%s' pre-registered with index %d\n", func_name, function_index);
-    
-    // Compile function body with isolated scope for parameters
-    if (func->original->function.body) {
-        if (func->original->function.body->type == NODE_BLOCK) {
-            // Create function scope and register parameters within it
-            DEBUG_CODEGEN_PRINT("Entering new scope (depth %d)\n", ctx->symbols->scope_depth + 1);
-            
-            // Create new scope for function
-            SymbolTable* old_scope = ctx->symbols;
-            bool old_compiling_function = ctx->compiling_function;
-            ctx->symbols = create_symbol_table(old_scope);
-            ctx->compiling_function = true;  // Mark that we're compiling inside a function
-            if (!ctx->symbols) {
-                DEBUG_CODEGEN_PRINT("Error: Failed to create function scope");
-                ctx->symbols = old_scope;
-                return;
+
+    // Compile function body
+    if (func->typed.function.body) {
+        if (func->typed.function.body->original->type == NODE_BLOCK) {
+            for (int i = 0; i < func->typed.function.body->typed.block.count; i++) {
+                TypedASTNode* stmt = func->typed.function.body->typed.block.statements[i];
+                if (stmt) compile_statement(ctx, stmt);
             }
-            
-            // Register function parameters in function scope
-            // Parameters are placed by VM at 256 - arity + i (to fit in 256-register space)
-            int param_base = 256 - arity;
-            if (param_base < 1) param_base = 1; // Ensure we don't go below R1
-            
-            for (int i = 0; i < arity; i++) {
-                if (func->original->function.params[i].name) {
-                    int param_reg = param_base + i;
-                    register_variable(ctx, func->original->function.params[i].name, param_reg, 
-                                    getPrimitiveType(TYPE_I32), false);
-                    DEBUG_CODEGEN_PRINT("Registered parameter '%s' in register R%d (VM convention)\n", 
-                           func->original->function.params[i].name, param_reg);
-                }
-            }
-            
-            // Compile function body
-            if (func->typed.function.body->original->type == NODE_BLOCK) {
-                // Multiple statements in block
-                for (int i = 0; i < func->typed.function.body->typed.block.count; i++) {
-                    TypedASTNode* stmt = func->typed.function.body->typed.block.statements[i];
-                    if (stmt) {
-                        compile_statement(ctx, stmt);
-                    }
-                }
-            } else {
-                // Single statement
-                compile_statement(ctx, func->typed.function.body);
-            }
-            
-            DEBUG_CODEGEN_PRINT("Exiting scope (depth %d)\n", ctx->symbols->scope_depth);
-            DEBUG_CODEGEN_PRINT("Freeing block-local variable registers");
-            
-            // Restore previous scope
-            free_symbol_table(ctx->symbols);
-            ctx->symbols = old_scope;
-            ctx->compiling_function = old_compiling_function;  // Restore function flag
         } else {
-            // Single statement function body
             compile_statement(ctx, func->typed.function.body);
         }
     }
-    
-    // Add implicit return void if function doesn't end with return
-    if (function_bytecode->count == 0 || 
+
+    // Ensure function ends with return
+    if (function_bytecode->count == 0 ||
         function_bytecode->instructions[function_bytecode->count - 1] != OP_RETURN_R) {
         emit_byte_to_buffer(function_bytecode, OP_RETURN_VOID);
-        DEBUG_CODEGEN_PRINT("Added implicit OP_RETURN_VOID\n");
     }
-    
-    // Update the pre-registered function with compiled bytecode
-    update_function_bytecode(ctx, function_index, function_bytecode);
-    
-    // Restore context
+
+    // Capture generated upvalues
+    UpvalueInfo* function_upvalues = ctx->upvalues;
+    int function_upvalue_count = ctx->upvalue_count;
+
+    // Restore outer compilation state
+    ctx->upvalues = saved_upvalues;
+    ctx->upvalue_count = saved_upvalue_count;
+    ctx->upvalue_capacity = saved_upvalue_capacity;
+
     ctx->bytecode = saved_bytecode;
-    ctx->current_function_index = saved_function_index;
+    free_symbol_table(ctx->symbols);
+    ctx->symbols = old_scope;
+    ctx->compiling_function = old_compiling_function;
+    ctx->function_scope_depth = saved_function_scope_depth;
+
+    // Build chunk for function
+    Chunk* chunk = malloc(sizeof(Chunk));
+    if (!chunk) {
+        free(function_bytecode);
+        free(function_upvalues);
+        return;
+    }
+    chunk->code = malloc(function_bytecode->count);
+    if (!chunk->code) {
+        free(chunk);
+        free(function_bytecode);
+        free(function_upvalues);
+        return;
+    }
+    memcpy(chunk->code, function_bytecode->instructions, function_bytecode->count);
+    chunk->count = function_bytecode->count;
+    chunk->capacity = function_bytecode->count;
+
+    // Copy constants from parent context
+    chunk->constants.count = ctx->constants->count;
+    chunk->constants.capacity = ctx->constants->capacity;
+    chunk->constants.values = malloc(sizeof(Value) * chunk->constants.capacity);
+    if (chunk->constants.values) {
+        memcpy(chunk->constants.values, ctx->constants->values,
+               sizeof(Value) * ctx->constants->count);
+    }
+
+    // Create ObjFunction
+    ObjFunction* obj = allocateFunction();
+    obj->arity = arity;
+    obj->chunk = chunk;
+    obj->upvalueCount = function_upvalue_count;
+    obj->name = NULL;
+
+    // Emit closure creation in outer bytecode
+    Value func_val = FUNCTION_VAL(obj);
+    emit_load_constant(ctx, func_reg, func_val);
+    emit_byte_to_buffer(ctx->bytecode, OP_CLOSURE_R);
+    emit_byte_to_buffer(ctx->bytecode, func_reg);   // dst
+    emit_byte_to_buffer(ctx->bytecode, func_reg);   // function
+    emit_byte_to_buffer(ctx->bytecode, function_upvalue_count);
+    for (int i = 0; i < function_upvalue_count; i++) {
+        emit_byte_to_buffer(ctx->bytecode, function_upvalues[i].isLocal ? 1 : 0);
+        emit_byte_to_buffer(ctx->bytecode, function_upvalues[i].index);
+    }
+
+    free(function_upvalues);
+    free_bytecode_buffer(function_bytecode);
 }
 
 // Compile a return statement
