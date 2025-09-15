@@ -490,8 +490,6 @@ void emit_load_constant(CompilerContext* ctx, int reg, Value constant) {
             break;
         }
             
-        case VAL_FUNCTION:
-        case VAL_CLOSURE:
         case VAL_ARRAY:
         case VAL_ERROR:
         case VAL_RANGE_ITERATOR:
