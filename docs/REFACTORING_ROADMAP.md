@@ -168,6 +168,22 @@ This roadmap addresses the architectural improvements needed to transform Orus f
 - ✅ Zero functionality loss (all 70 tests passing)
 - ✅ 81% reduction in largest parser function complexity
 
+### 2.4 Call Frame and Constant Handling ✅ COMPLETED
+**Target**: VM call frame preservation and constant emission for functions
+**Current Issues**:
+- Segmentation faults from missing frame/temporary preservation
+- Constant loader failed on functions and complex objects
+
+**Tasks**:
+- [x] Expand call frames to save frame and temporary registers
+- [x] Implement generic constant-loading fallback for all value types
+- [x] Add closure call handling in VM dispatch
+
+**Completed Impact**:
+- ✅ Functions and closures execute without segmentation faults
+- ✅ All constants, including functions, load reliably
+- ✅ VM dispatch fully supports closure calls
+
 ## Phase 3: Configurability Enhancement (Priority: MEDIUM)
 
 ### 3.1 Configuration System Architecture ✅ COMPLETED
@@ -279,6 +295,7 @@ This roadmap addresses the architectural improvements needed to transform Orus f
 ### Medium-term (1-2 months)
 - **Phase 2.2**: ✅ Compiler expression handling (COMPLETED)
 - **Phase 2.3**: ✅ Parser expression handling (COMPLETED)
+- **Phase 2.4**: ✅ Call frame and constant handling (COMPLETED)
 - **Phase 3.1**: ✅ Configuration system architecture (COMPLETED)
 - **Phase 3.2**: ✅ Build system enhancement (COMPLETED)
 
@@ -307,6 +324,8 @@ This roadmap addresses the architectural improvements needed to transform Orus f
 - [x] Better code organization (✅ Phase 2.2 COMPLETED - 6 specialized handlers)
 - [x] Parser number literal function < 50 lines (✅ Phase 2.3 COMPLETED - 26 lines)
 - [x] Modular parser architecture (✅ Phase 2.3 COMPLETED - all parsers optimized)
+- [x] Stable call frame management (✅ Phase 2.4 COMPLETED)
+- [x] Generic constant loading for functions and closures (✅ Phase 2.4 COMPLETED)
 
 ### Phase 3 Success
 - [x] Runtime configuration system (✅ Phase 3.1 COMPLETED)
@@ -364,9 +383,14 @@ This roadmap provides a systematic approach to improving the Orus language imple
 - Zero performance regression (19.4ms avg, competitive with Lua and LuaJIT)
 - Enhanced maintainability and debugging capabilities
 
-**Current Status**: 
-- **Grade**: A- (Significant architectural improvements completed)
-- **Strengths**: Context-based architecture, modular VM dispatch, maintained performance
-- **Remaining**: Function decomposition in compiler/parser, configuration system, unit testing
+**Phase 2.2–2.4 (Compiler/Parser Decomposition & Call Frame Stability): ✅ COMPLETED**
+- Expression compilation and parsing modularized for clarity
+- Call frame preservation and constant handling fixed segmentation faults
+- Closure calls fully supported in VM dispatch
+
+**Current Status**:
+- **Grade**: A (Major refactoring and runtime stability improvements)
+- **Strengths**: Context-based architecture, modular VM dispatch, reliable call frames
+- **Remaining**: Unit testing infrastructure and advanced improvements
 
 The phased approach has proven successful, ensuring continuous functionality while making incremental improvements, with clear success metrics and risk mitigation strategies at each stage. The foundation is now significantly stronger for the remaining phases.

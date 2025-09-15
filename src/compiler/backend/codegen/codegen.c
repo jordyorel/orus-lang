@@ -490,9 +490,27 @@ void emit_load_constant(CompilerContext* ctx, int reg, Value constant) {
             break;
         }
             
-        default:
-            DEBUG_CODEGEN_PRINT("Warning: Unsupported constant type %d\n", constant.type);
+        case VAL_FUNCTION:
+        case VAL_CLOSURE:
+        case VAL_ARRAY:
+        case VAL_ERROR:
+        case VAL_RANGE_ITERATOR:
+        default: {
+            // Fallback for complex or object types - use generic constant loader
+            int const_index = add_constant(ctx->constants, constant);
+            if (const_index >= 0) {
+                emit_byte_to_buffer(ctx->bytecode, OP_LOAD_CONST);
+                emit_byte_to_buffer(ctx->bytecode, reg);
+                emit_byte_to_buffer(ctx->bytecode, (const_index >> 8) & 0xFF);
+                emit_byte_to_buffer(ctx->bytecode, const_index & 0xFF);
+                DEBUG_CODEGEN_PRINT("Emitted OP_LOAD_CONST R%d, #%d (type=%d)\n",
+                       reg, const_index, constant.type);
+            } else {
+                DEBUG_CODEGEN_PRINT("Error: Failed to add constant of type %d to pool\n",
+                       constant.type);
+            }
             break;
+        }
     }
 }
 
@@ -2509,7 +2527,7 @@ void compile_function_declaration(CompilerContext* ctx, TypedASTNode* func) {
         free(function_upvalues);
         return;
     }
-    // Initialize chunk fields to avoid uninitialized memory
+
     initChunk(chunk);
 
     chunk->code = malloc(function_bytecode->count);
@@ -2523,13 +2541,15 @@ void compile_function_declaration(CompilerContext* ctx, TypedASTNode* func) {
     chunk->count = function_bytecode->count;
     chunk->capacity = function_bytecode->count;
 
-    // Copy constants from parent context
+    // Copy only the constants actually used
     chunk->constants.count = ctx->constants->count;
-    chunk->constants.capacity = ctx->constants->capacity;
-    chunk->constants.values = malloc(sizeof(Value) * chunk->constants.capacity);
-    if (chunk->constants.values) {
-        memcpy(chunk->constants.values, ctx->constants->values,
-               sizeof(Value) * ctx->constants->count);
+    chunk->constants.capacity = ctx->constants->count;
+    if (chunk->constants.count > 0) {
+        chunk->constants.values = malloc(sizeof(Value) * chunk->constants.count);
+        if (chunk->constants.values) {
+            memcpy(chunk->constants.values, ctx->constants->values,
+                   sizeof(Value) * chunk->constants.count);
+        }
     }
 
     // Create ObjFunction

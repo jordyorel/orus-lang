@@ -19,6 +19,8 @@ Build a language that combines Python's readability, Rust's safety, and Lua's pe
 - **Control Flow**: if/else, loops with type-aware scoping
 - **String System**: Full string operations with type-safe concatenation
 - **Type Coercion**: Automatic and explicit type conversions
+- **Constant System**: Generic constant loading supports functions and complex values
+- **Call Frame Management**: VM preserves temporary registers and handles closures correctly
 
 ### 🔄 **Partially Complete**
 - **Generic System**: Foundation implemented, needs completion

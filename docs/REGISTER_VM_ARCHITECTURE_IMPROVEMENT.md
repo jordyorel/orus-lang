@@ -393,6 +393,7 @@ This register-based VM architecture roadmap provides a clear path to solve Orus'
 - **Backward compatibility**: All 132 existing tests continue to pass
 - **Memory efficiency**: Arena allocation and object pooling
 - **Modular architecture**: Clean separation of concerns
+- **Robust runtime**: Constant loading and call frame management support functions and closures reliably
 
 ### Technical Highlights
 - **register_file.c**: Unified register access with cache integration

@@ -2048,38 +2048,54 @@ InterpretResult vm_run_dispatch(void) {
                 // Calling a closure
                 ObjClosure* closure = AS_CLOSURE(funcValue);
                 ObjFunction* function = closure->function;
-                
+
                 // Check arity
                 if (argCount != function->arity) {
                     vm_set_register_safe(resultReg, BOOL_VAL(false));
                     DISPATCH();
                 }
-                
+
                 // Check if we have room for another call frame
                 if (vm.frameCount >= FRAMES_MAX) {
                     vm_set_register_safe(resultReg, BOOL_VAL(false));
                     DISPATCH();
                 }
-                
+
                 // Create new call frame with closure context
                 CallFrame* frame = &vm.frames[vm.frameCount++];
                 frame->returnAddress = vm.ip;
                 frame->previousChunk = vm.chunk;
                 frame->baseRegister = resultReg;
-                
+
+                // Determine parameter base register
+                uint8_t paramBase = 256 - function->arity;
+                if (paramBase < 1) paramBase = 1;
+                frame->parameterBaseRegister = (uint16_t)paramBase;
+
+                // Save frame and temp registers
+                const int temp_reg_start = 192; // MP_TEMP_REG_START
+                const int temp_reg_count = 48;  // R192-R239
+                frame->savedRegisterCount = 64 + temp_reg_count;
+                for (int i = 0; i < 64; i++) {
+                    frame->savedRegisters[i] = vm_get_register_safe(FRAME_REG_START + i);
+                }
+                for (int i = 0; i < temp_reg_count; i++) {
+                    frame->savedRegisters[64 + i] = vm_get_register_safe(temp_reg_start + i);
+                }
+
                 // Set up closure context (closure in register 0)
                 vm_set_register_safe(0, funcValue);  // Store closure in register 0 for upvalue access
-                
-                // Copy arguments to the start of register space for the function
+
+                // Copy arguments to parameter registers
                 for (int i = 0; i < argCount; i++) {
                     Value arg = vm_get_register_safe(firstArgReg + i);
-                    vm_set_register_safe(256 - argCount + i, arg);
+                    vm_set_register_safe(paramBase + i, arg);
                 }
-                
+
                 // Switch to function's bytecode
                 vm.chunk = function->chunk;
                 vm.ip = function->chunk->code;
-                
+
                 DISPATCH();
             } else if (IS_FUNCTION(funcValue)) {
                 // Calling a function object directly
