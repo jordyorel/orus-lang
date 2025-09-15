@@ -595,10 +595,13 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                         // For literals, infer type from the value
                         Value val = expr->original->binary.left->literal.value;
                         left_typed->resolvedType = malloc(sizeof(Type));
-                        left_typed->resolvedType->kind = (val.type == VAL_I32) ? TYPE_I32 :
-                                                         (val.type == VAL_I64) ? TYPE_I64 :
-                                                         (val.type == VAL_F64) ? TYPE_F64 :
-                                                         (val.type == VAL_BOOL) ? TYPE_BOOL : TYPE_I32;
+                        if (left_typed->resolvedType) {
+                            memset(left_typed->resolvedType, 0, sizeof(Type));
+                            left_typed->resolvedType->kind = (val.type == VAL_I32) ? TYPE_I32 :
+                                                             (val.type == VAL_I64) ? TYPE_I64 :
+                                                             (val.type == VAL_F64) ? TYPE_F64 :
+                                                             (val.type == VAL_BOOL) ? TYPE_BOOL : TYPE_I32;
+                        }
                     } else if (expr->original->binary.left->type == NODE_IDENTIFIER) {
                         // For identifiers, look up type from symbol table
                         const char* var_name = expr->original->binary.left->identifier.name;
@@ -611,17 +614,26 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                             } else {
                                 // Default to i32 if no type info available
                                 left_typed->resolvedType = malloc(sizeof(Type));
-                                left_typed->resolvedType->kind = TYPE_I32;
+                                if (left_typed->resolvedType) {
+                                    memset(left_typed->resolvedType, 0, sizeof(Type));
+                                    left_typed->resolvedType->kind = TYPE_I32;
+                                }
                             }
                         } else {
                             // Variable not found, default to i32
                             left_typed->resolvedType = malloc(sizeof(Type));
-                            left_typed->resolvedType->kind = TYPE_I32;
+                            if (left_typed->resolvedType) {
+                                memset(left_typed->resolvedType, 0, sizeof(Type));
+                                left_typed->resolvedType->kind = TYPE_I32;
+                            }
                         }
                     } else {
                         // Default to i32 for other node types without explicit type info
                         left_typed->resolvedType = malloc(sizeof(Type));
-                        left_typed->resolvedType->kind = TYPE_I32;
+                        if (left_typed->resolvedType) {
+                            memset(left_typed->resolvedType, 0, sizeof(Type));
+                            left_typed->resolvedType->kind = TYPE_I32;
+                        }
                     }
                 }
             }
@@ -636,10 +648,13 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                         // For literals, infer type from the value
                         Value val = expr->original->binary.right->literal.value;
                         right_typed->resolvedType = malloc(sizeof(Type));
-                        right_typed->resolvedType->kind = (val.type == VAL_I32) ? TYPE_I32 :
-                                                         (val.type == VAL_I64) ? TYPE_I64 :
-                                                         (val.type == VAL_F64) ? TYPE_F64 :
-                                                         (val.type == VAL_BOOL) ? TYPE_BOOL : TYPE_I32;
+                        if (right_typed->resolvedType) {
+                            memset(right_typed->resolvedType, 0, sizeof(Type));
+                            right_typed->resolvedType->kind = (val.type == VAL_I32) ? TYPE_I32 :
+                                                             (val.type == VAL_I64) ? TYPE_I64 :
+                                                             (val.type == VAL_F64) ? TYPE_F64 :
+                                                             (val.type == VAL_BOOL) ? TYPE_BOOL : TYPE_I32;
+                        }
                     } else if (expr->original->binary.right->type == NODE_IDENTIFIER) {
                         // For identifiers, look up type from symbol table
                         const char* var_name = expr->original->binary.right->identifier.name;
@@ -652,17 +667,26 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                             } else {
                                 // Default to i32 if no type info available
                                 right_typed->resolvedType = malloc(sizeof(Type));
-                                right_typed->resolvedType->kind = TYPE_I32;
+                                if (right_typed->resolvedType) {
+                                    memset(right_typed->resolvedType, 0, sizeof(Type));
+                                    right_typed->resolvedType->kind = TYPE_I32;
+                                }
                             }
                         } else {
                             // Variable not found, default to i32
                             right_typed->resolvedType = malloc(sizeof(Type));
-                            right_typed->resolvedType->kind = TYPE_I32;
+                            if (right_typed->resolvedType) {
+                                memset(right_typed->resolvedType, 0, sizeof(Type));
+                                right_typed->resolvedType->kind = TYPE_I32;
+                            }
                         }
                     } else {
                         // Default to i32 for other node types without explicit type info
                         right_typed->resolvedType = malloc(sizeof(Type));
-                        right_typed->resolvedType->kind = TYPE_I32;
+                        if (right_typed->resolvedType) {
+                            memset(right_typed->resolvedType, 0, sizeof(Type));
+                            right_typed->resolvedType->kind = TYPE_I32;
+                        }
                     }
                 }
             }
@@ -675,6 +699,9 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             // Ensure the binary expression itself has type information for compile_binary_op
             if (!expr->resolvedType && left_typed->resolvedType && right_typed->resolvedType) {
                 expr->resolvedType = malloc(sizeof(Type));
+                if (expr->resolvedType) {
+                    memset(expr->resolvedType, 0, sizeof(Type));
+                }
                 // For arithmetic operations, use the "larger" type; for comparison operations, use bool
                 const char* op = expr->original->binary.op;
                 bool is_comparison = (strcmp(op, "<") == 0 || strcmp(op, ">") == 0 || 

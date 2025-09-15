@@ -374,20 +374,21 @@ Type* instantiateGeneric(Type* templ, Type** args) {
     if (!templ || templ->kind != TYPE_GENERIC) return templ;
     if (templ->info.generic.paramCount <= 0) return templ;
     if (!args) return templ;
-    
+
     Type* inst = arena_alloc(sizeof(Type));
     if (!inst) return templ;
-    
+
+    memset(inst, 0, sizeof(Type));
     inst->kind = TYPE_INSTANCE;
     inst->info.instance.base = templ;
     inst->info.instance.args = arena_alloc(sizeof(Type*) * templ->info.generic.paramCount);
     if (!inst->info.instance.args) return templ;
-    
+
     inst->info.instance.argCount = templ->info.generic.paramCount;
     for (int i = 0; i < templ->info.generic.paramCount; i++) {
         inst->info.instance.args[i] = args[i];
     }
-    
+
     return inst;
 }
 
@@ -470,74 +471,78 @@ Type* type_intersection_extended(Type* a, Type* b) {
 // ---- Context-based type creation functions ----
 Type* createArrayType_ctx(TypeContext* ctx, Type* elementType) {
     if (!ctx || !elementType) return NULL;
-    
+
     Type* array_type = arena_alloc_ctx(ctx, sizeof(Type));
     if (!array_type) return NULL;
-    
+
+    memset(array_type, 0, sizeof(Type));
     array_type->kind = TYPE_ARRAY;
     array_type->info.array.elementType = elementType;
-    
+
     return array_type;
 }
 
 // ---- Type creation functions (backward compatibility) ----
 Type* createArrayType(Type* elementType) {
     if (!elementType) return NULL;
-    
+
     Type* array_type = arena_alloc(sizeof(Type));
     if (!array_type) return NULL;
-    
+
+    memset(array_type, 0, sizeof(Type));
     array_type->kind = TYPE_ARRAY;
     array_type->info.array.elementType = elementType;
-    
+
     return array_type;
 }
 
 Type* createFunctionType_ctx(TypeContext* ctx, Type* returnType, Type** paramTypes, int paramCount) {
     if (!ctx || !returnType || (paramCount > 0 && !paramTypes)) return NULL;
-    
+
     Type* func_type = arena_alloc_ctx(ctx, sizeof(Type));
     if (!func_type) return NULL;
-    
+
+    memset(func_type, 0, sizeof(Type));
     func_type->kind = TYPE_FUNCTION;
     func_type->info.function.returnType = returnType;
     func_type->info.function.arity = paramCount;
-    
+
     if (paramCount > 0) {
         func_type->info.function.paramTypes = arena_alloc_ctx(ctx, paramCount * sizeof(Type*));
         if (!func_type->info.function.paramTypes) return NULL;
-        
+
         for (int i = 0; i < paramCount; i++) {
             func_type->info.function.paramTypes[i] = paramTypes[i];
         }
     } else {
         func_type->info.function.paramTypes = NULL;
     }
-    
+
     return func_type;
 }
 
 Type* createFunctionType(Type* returnType, Type** paramTypes, int paramCount) {
     if (!returnType || (paramCount > 0 && !paramTypes)) return NULL;
-    
+
     Type* func_type = arena_alloc(sizeof(Type));
     if (!func_type) return NULL;
-    
+
+    memset(func_type, 0, sizeof(Type));
     func_type->kind = TYPE_FUNCTION;
     func_type->info.function.returnType = returnType;
     func_type->info.function.arity = paramCount;
-    
+
     if (paramCount > 0) {
         func_type->info.function.paramTypes = arena_alloc(paramCount * sizeof(Type*));
         if (!func_type->info.function.paramTypes) return NULL;
-        
+
         for (int i = 0; i < paramCount; i++) {
             func_type->info.function.paramTypes[i] = paramTypes[i];
         }
     } else {
         func_type->info.function.paramTypes = NULL;
     }
-    
+
     return func_type;
 }
 
@@ -624,21 +629,28 @@ Type* infer_literal_type_extended(Value* value) {
 
 // ---- Type extension management ----
 TypeExtension* get_type_extension(Type* type) {
-    // TODO: Implement type extension retrieval
-    (void)type;
-    return NULL;
+    if (!type) return NULL;
+    return type->ext;
 }
 
 void set_type_extension(Type* type, TypeExtension* ext) {
-    // TODO: Implement type extension storage
-    (void)type;
-    (void)ext;
+    if (!type) return;
+    type->ext = ext;
 }
 
 Type* create_generic_type(const char* name, Type* constraint) {
-    // TODO: Implement generic type creation with constraints
-    (void)constraint;
-    return createGeneric(name, 0);
+    Type* t = createGeneric(name, 0);
+    if (!t) return NULL;
+
+    if (constraint) {
+        TypeExtension* ext = arena_alloc(sizeof(TypeExtension));
+        if (!ext) return t;
+        memset(ext, 0, sizeof(TypeExtension));
+        ext->extended.generic.constraint = constraint;
+        set_type_extension(t, ext);
+    }
+
+    return t;
 }
 
 // ---- Bridge functions ----

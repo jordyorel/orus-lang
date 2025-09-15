@@ -1494,6 +1494,17 @@ Type* primitive_type(TypeKind kind);
 Type* array_type(Type* element);
 Type* function_type(Type** params, int count, Type* ret);
 Type* generic_type(const char* name, Type* constraint);
+
+static inline Type* make_constrained_hof(Type* ret, Type** params,
+                                         int paramCount, Type* constraint) {
+    Type* fn = createFunctionType(ret, params, paramCount);
+    if (!fn) return NULL;
+    TypeExtension* ext = arena_alloc(sizeof(TypeExtension));
+    memset(ext, 0, sizeof(TypeExtension));
+    ext->extended.generic.constraint = constraint;
+    set_type_extension(fn, ext);
+    return fn;
+}
 ```
 
 #### Type Inference Engine

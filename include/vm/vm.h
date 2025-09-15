@@ -209,6 +209,7 @@ typedef struct TypeScheme TypeScheme;
 typedef struct TypeEnv TypeEnv;
 typedef struct TypeArena TypeArena;
 typedef struct HashMap HashMap;
+typedef struct TypeExtension TypeExtension;
 
 // Type Arena structure
 struct TypeArena {
@@ -246,6 +247,7 @@ struct Type {
             int argCount;
         } instance;
     } info;
+    TypeExtension* ext;
 };
 
 // Function

@@ -77,6 +77,7 @@ Type* make_var_type(TypeEnv* env) {
     if (!tv) return NULL;
     Type* t = type_arena_alloc(sizeof(Type));
     if (!t) return NULL;
+    memset(t, 0, sizeof(Type));
     t->kind = TYPE_VAR;
     t->info.var.var = tv;
     return t;
