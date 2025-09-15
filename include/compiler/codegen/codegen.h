@@ -42,7 +42,7 @@ void compile_break_statement(CompilerContext* ctx, TypedASTNode* break_stmt);
 void compile_continue_statement(CompilerContext* ctx, TypedASTNode* continue_stmt);
 
 // Function compilation (NEW)
-void compile_function_declaration(CompilerContext* ctx, TypedASTNode* func);
+int compile_function_declaration(CompilerContext* ctx, TypedASTNode* func);
 void compile_return_statement(CompilerContext* ctx, TypedASTNode* ret);
 void compile_block_with_scope(CompilerContext* ctx, TypedASTNode* block);
 

@@ -172,6 +172,7 @@ static ASTNode* parseForStatement(ParserContext* ctx);
 static ASTNode* parseBreakStatement(ParserContext* ctx);
 static ASTNode* parseContinueStatement(ParserContext* ctx);
 static ASTNode* parseFunctionDefinition(ParserContext* ctx);
+static ASTNode* parseFunctionExpression(ParserContext* ctx, Token fnToken);
 static ASTNode* parseReturnStatement(ParserContext* ctx);
 
 // Primary expression handlers
@@ -1600,10 +1601,108 @@ static ASTNode* parsePrimaryExpression(ParserContext* ctx) {
             return parseTimeStampExpression(ctx, token);
         case TOKEN_LEFT_PAREN:
             return parseParenthesizedExpressionToken(ctx, token);
+        case TOKEN_FN:
+            return parseFunctionExpression(ctx, token);
         default:
             return NULL;
     }
 }
+
+static ASTNode* parseFunctionExpression(ParserContext* ctx, Token fnToken) {
+    // Parameters
+    if (nextToken(ctx).type != TOKEN_LEFT_PAREN) {
+        return NULL;
+    }
+
+    FunctionParam* params = NULL;
+    int paramCount = 0;
+    int paramCapacity = 0;
+
+    if (peekToken(ctx).type != TOKEN_RIGHT_PAREN) {
+        while (true) {
+            Token paramTok = nextToken(ctx);
+            if (paramTok.type != TOKEN_IDENTIFIER) {
+                return NULL;
+            }
+
+            int paramLen = paramTok.length;
+            char* paramName = parser_arena_alloc(ctx, paramLen + 1);
+            strncpy(paramName, paramTok.start, paramLen);
+            paramName[paramLen] = '\0';
+
+            ASTNode* paramType = NULL;
+            if (peekToken(ctx).type == TOKEN_COLON) {
+                nextToken(ctx);
+                paramType = parseTypeAnnotation(ctx);
+                if (!paramType) return NULL;
+            }
+
+            if (paramCount + 1 > paramCapacity) {
+                int newCap = paramCapacity == 0 ? 4 : (paramCapacity * 2);
+                FunctionParam* newParams = parser_arena_alloc(ctx, sizeof(FunctionParam) * newCap);
+                if (paramCapacity > 0) {
+                    memcpy(newParams, params, sizeof(FunctionParam) * paramCount);
+                }
+                params = newParams;
+                paramCapacity = newCap;
+            }
+            params[paramCount].name = paramName;
+            params[paramCount].typeAnnotation = paramType;
+            paramCount++;
+
+            if (peekToken(ctx).type != TOKEN_COMMA) break;
+            nextToken(ctx);
+        }
+    }
+
+    if (nextToken(ctx).type != TOKEN_RIGHT_PAREN) {
+        return NULL;
+    }
+
+    ASTNode* returnType = NULL;
+    if (peekToken(ctx).type == TOKEN_ARROW) {
+        nextToken(ctx);
+        Token typeTok = peekToken(ctx);
+        if (typeTok.type == TOKEN_FN) {
+            returnType = parseFunctionType(ctx);
+            if (!returnType) return NULL;
+        } else {
+            returnType = parseTypeAnnotation(ctx);
+            if (!returnType) return NULL;
+        }
+    }
+
+    if (nextToken(ctx).type != TOKEN_COLON) {
+        return NULL;
+    }
+
+    if (nextToken(ctx).type != TOKEN_NEWLINE) {
+        return NULL;
+    }
+
+    if (nextToken(ctx).type != TOKEN_INDENT) {
+        return NULL;
+    }
+
+    ASTNode* body = parseBlock(ctx);
+    if (!body) {
+        return NULL;
+    }
+
+    ASTNode* function = new_node(ctx);
+    function->type = NODE_FUNCTION;
+    function->function.name = NULL;
+    function->function.params = params;
+    function->function.paramCount = paramCount;
+    function->function.returnType = returnType;
+    function->function.body = body;
+    function->location.line = fnToken.line;
+    function->location.column = fnToken.column;
+    function->dataType = NULL;
+
+    return function;
+}
+
 static ASTNode* parseFunctionDefinition(ParserContext* ctx) {
     // Consume 'fn' token
     nextToken(ctx);

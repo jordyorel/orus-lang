@@ -5219,3 +5219,14 @@ This comprehensive roadmap consolidates all documentation into a single referenc
 ### Versioning
 
 All Orus releases adhere to [Semantic Versioning 2.0.0](VERSIONING.md). The header `include/version.h` defines `ORUS_VERSION_MAJOR`, `ORUS_VERSION_MINOR`, and `ORUS_VERSION_PATCH` macros that encode the interpreter version. The `showVersion()` helper in `src/main.c` prints this version information for command line users.
+
+### Lambda Function Compilation
+
+```c
+int compile_function_expression(CompilerContext* ctx, TypedASTNode* func) {
+    int reg = mp_allocate_temp_register(ctx->allocator);
+    if (reg == -1) return -1;
+    /* compile body and emit OP_CLOSURE_R */
+    return reg;
+}
+```
