@@ -184,18 +184,165 @@ void emit_instruction_to_buffer(BytecodeBuffer* buffer, uint8_t opcode, uint8_t 
     emit_byte_to_buffer(buffer, reg3);
 }
 
-int emit_jump_placeholder(BytecodeBuffer* buffer, uint8_t jump_opcode) {
-    // TODO: Implement jump patching in Phase 2
-    emit_byte_to_buffer(buffer, jump_opcode);
-    emit_byte_to_buffer(buffer, 0);  // Placeholder offset
-    return buffer->count - 1;  // Return offset for patching
+static inline int determine_prefix_size(uint8_t opcode) {
+    switch (opcode) {
+        case OP_JUMP_IF_NOT_R:
+        case OP_JUMP_IF_R:
+            return 2;  // opcode + condition register
+        case OP_JUMP_IF_NOT_SHORT:
+            return 2;  // opcode + condition register
+        default:
+            return 1;  // opcode only
+    }
 }
 
-void patch_jump(BytecodeBuffer* buffer, int jump_offset, int target_offset) {
-    // TODO: Implement jump patching in Phase 2
-    (void)buffer;
-    (void)jump_offset;
-    (void)target_offset;
+static inline int determine_operand_size(uint8_t opcode) {
+    switch (opcode) {
+        case OP_JUMP_SHORT:
+        case OP_JUMP_BACK_SHORT:
+        case OP_JUMP_IF_NOT_SHORT:
+        case OP_LOOP_SHORT:
+            return 1;
+        default:
+            return 2;
+    }
+}
+
+int emit_jump_placeholder(BytecodeBuffer* buffer, uint8_t jump_opcode) {
+    if (!buffer) {
+        return -1;
+    }
+
+    int operand_size = determine_operand_size(jump_opcode);
+    int prefix_size = determine_prefix_size(jump_opcode);
+
+    int operand_offset = buffer->count;
+    for (int i = 0; i < operand_size; i++) {
+        emit_byte_to_buffer(buffer, 0);
+    }
+
+    if (buffer->patch_count >= buffer->patch_capacity) {
+        int new_capacity = buffer->patch_capacity == 0 ? 8 : buffer->patch_capacity * 2;
+        JumpPatch* new_patches = realloc(buffer->patches, new_capacity * sizeof(JumpPatch));
+        if (!new_patches) {
+            return -1;
+        }
+        buffer->patches = new_patches;
+        buffer->patch_capacity = new_capacity;
+    }
+
+    JumpPatch* patch = &buffer->patches[buffer->patch_count];
+    patch->opcode = jump_opcode;
+    patch->operand_size = operand_size;
+    patch->operand_offset = operand_offset;
+    patch->instruction_offset = operand_offset - prefix_size;
+    if (patch->instruction_offset < 0) {
+        patch->instruction_offset = 0;
+    }
+    patch->target_label = -1;
+
+    return buffer->patch_count++;
+}
+
+static inline void write_u16(BytecodeBuffer* buffer, int offset, uint16_t value) {
+    buffer->instructions[offset] = (uint8_t)((value >> 8) & 0xFF);
+    buffer->instructions[offset + 1] = (uint8_t)(value & 0xFF);
+}
+
+bool patch_jump(BytecodeBuffer* buffer, int patch_index, int target_offset) {
+    if (!buffer || patch_index < 0 || patch_index >= buffer->patch_count) {
+        return false;
+    }
+
+    JumpPatch* patch = &buffer->patches[patch_index];
+    if (patch->operand_size <= 0) {
+        return false;
+    }
+
+    int next_ip = patch->operand_offset + patch->operand_size;
+    int32_t relative = 0;
+
+    switch (patch->opcode) {
+        case OP_JUMP_IF_NOT_R:
+        case OP_JUMP_IF_R:
+        {
+            relative = target_offset - next_ip;
+            if (relative < 0 || relative > 0xFFFF) {
+                return false;
+            }
+            write_u16(buffer, patch->operand_offset, (uint16_t)relative);
+            break;
+        }
+        case OP_JUMP_IF_NOT_SHORT:
+        {
+            relative = target_offset - next_ip;
+            if (relative < 0 || relative > 0xFF) {
+                return false;
+            }
+            buffer->instructions[patch->operand_offset] = (uint8_t)relative;
+            break;
+        }
+        case OP_JUMP_SHORT:
+        {
+            relative = target_offset - next_ip;
+            if (relative < 0 || relative > 0xFF) {
+                return false;
+            }
+            buffer->instructions[patch->operand_offset] = (uint8_t)relative;
+            break;
+        }
+        case OP_JUMP_BACK_SHORT:
+        case OP_LOOP_SHORT:
+        {
+            relative = next_ip - target_offset;
+            if (relative < 0 || relative > 0xFF) {
+                return false;
+            }
+            buffer->instructions[patch->operand_offset] = (uint8_t)relative;
+            break;
+        }
+        case OP_LOOP:
+        {
+            relative = next_ip - target_offset;
+            if (relative < 0 || relative > 0xFFFF) {
+                return false;
+            }
+            write_u16(buffer, patch->operand_offset, (uint16_t)relative);
+            break;
+        }
+        case OP_JUMP:
+        {
+            relative = target_offset - next_ip;
+            if (relative >= 0) {
+                if (relative > 0xFFFF) {
+                    return false;
+                }
+                write_u16(buffer, patch->operand_offset, (uint16_t)relative);
+            } else {
+                int32_t distance = next_ip - target_offset;
+                if (distance < 0 || distance > 0xFFFF) {
+                    return false;
+                }
+                buffer->instructions[patch->instruction_offset] = OP_LOOP;
+                patch->opcode = OP_LOOP;
+                write_u16(buffer, patch->operand_offset, (uint16_t)distance);
+            }
+            break;
+        }
+        default:
+        {
+            // Treat unknown opcodes as forward 16-bit jumps
+            relative = target_offset - next_ip;
+            if (relative < 0 || relative > 0xFFFF) {
+                return false;
+            }
+            write_u16(buffer, patch->operand_offset, (uint16_t)relative);
+            break;
+        }
+    }
+
+    patch->target_label = target_offset;
+    return true;
 }
 
 // CompilerContext implementation

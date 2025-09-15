@@ -1598,13 +1598,16 @@ void compile_if_statement(CompilerContext* ctx, TypedASTNode* if_stmt) {
     // Emit conditional jump - if condition is false, jump to else/end
     // OP_JUMP_IF_NOT_R format: opcode + condition_reg + 2-byte offset (4 bytes total for patching)
     set_location_from_node(ctx, if_stmt);
-    int else_jump_addr = ctx->bytecode->count;
     emit_byte_to_buffer(ctx->bytecode, OP_JUMP_IF_NOT_R);
     emit_byte_to_buffer(ctx->bytecode, condition_reg);
-    emit_byte_to_buffer(ctx->bytecode, 0);  // placeholder offset high byte
-    emit_byte_to_buffer(ctx->bytecode, 0);  // placeholder offset low byte
-    DEBUG_CODEGEN_PRINT("Emitted OP_JUMP_IF_NOT_R R%d at offset %d (will patch)\n", 
-           condition_reg, else_jump_addr);
+    int else_patch = emit_jump_placeholder(ctx->bytecode, OP_JUMP_IF_NOT_R);
+    if (else_patch < 0) {
+        DEBUG_CODEGEN_PRINT("Error: Failed to allocate else jump placeholder\n");
+        ctx->has_compilation_errors = true;
+        return;
+    }
+    DEBUG_CODEGEN_PRINT("Emitted OP_JUMP_IF_NOT_R R%d (placeholder index %d)\n",
+           condition_reg, else_patch);
     
     // Free condition register
     if (condition_reg >= MP_TEMP_REG_START && condition_reg <= MP_TEMP_REG_END) {
@@ -1615,123 +1618,91 @@ void compile_if_statement(CompilerContext* ctx, TypedASTNode* if_stmt) {
     compile_block_with_scope(ctx, if_stmt->typed.ifStmt.thenBranch);
     
     // If there's an else branch, emit unconditional jump to skip it
-    int end_jump_addr = -1;
+    int end_patch = -1;
     if (if_stmt->typed.ifStmt.elseBranch) {
         set_location_from_node(ctx, if_stmt);
-        end_jump_addr = ctx->bytecode->count;
         emit_byte_to_buffer(ctx->bytecode, OP_JUMP_SHORT);
-        emit_byte_to_buffer(ctx->bytecode, 0);  // placeholder offset
-        DEBUG_CODEGEN_PRINT("Emitted OP_JUMP_SHORT at offset %d (will patch to end)\n", end_jump_addr);
+        end_patch = emit_jump_placeholder(ctx->bytecode, OP_JUMP_SHORT);
+        if (end_patch < 0) {
+            DEBUG_CODEGEN_PRINT("Error: Failed to allocate end jump placeholder\n");
+            ctx->has_compilation_errors = true;
+            return;
+        }
+        DEBUG_CODEGEN_PRINT("Emitted OP_JUMP_SHORT (placeholder index %d)\n", end_patch);
     }
-    
+
     // Patch the else jump to current position
     int else_target = ctx->bytecode->count;
-    // VM's ip points to byte after the 4-byte jump instruction when executing
-    int else_offset = else_target - (else_jump_addr + 4);
-    if (else_offset < -32768 || else_offset > 32767) {
-        DEBUG_CODEGEN_PRINT("Error: Jump offset %d out of range for OP_JUMP_IF_NOT_R (-32768 to 32767)\n", else_offset);
+    if (!patch_jump(ctx->bytecode, else_patch, else_target)) {
+        DEBUG_CODEGEN_PRINT("Error: Failed to patch else jump to target %d\n", else_target);
+        ctx->has_compilation_errors = true;
         return;
     }
-    ctx->bytecode->instructions[else_jump_addr + 2] = (uint8_t)((else_offset >> 8) & 0xFF);
-    ctx->bytecode->instructions[else_jump_addr + 3] = (uint8_t)(else_offset & 0xFF);
-    DEBUG_CODEGEN_PRINT("Patched else jump: offset %d (from %d to %d)\n", 
-           else_offset, else_jump_addr, else_target);
+    DEBUG_CODEGEN_PRINT("Patched else jump to %d\n", else_target);
     
     // Compile else branch if present
     if (if_stmt->typed.ifStmt.elseBranch) {
         compile_block_with_scope(ctx, if_stmt->typed.ifStmt.elseBranch);
         
-        // Patch the end jump
         int end_target = ctx->bytecode->count;
-        // OP_JUMP_SHORT is 2 bytes, VM's ip points after instruction when executing
-        int end_offset = end_target - (end_jump_addr + 2);
-        if (end_offset < 0 || end_offset > 255) {
-            DEBUG_CODEGEN_PRINT("Error: Jump offset %d out of range for OP_JUMP_SHORT (0-255)\n", end_offset);
+        if (!patch_jump(ctx->bytecode, end_patch, end_target)) {
+            DEBUG_CODEGEN_PRINT("Error: Failed to patch end jump to target %d\n", end_target);
+            ctx->has_compilation_errors = true;
             return;
         }
-        ctx->bytecode->instructions[end_jump_addr + 1] = (uint8_t)(end_offset & 0xFF);
-        DEBUG_CODEGEN_PRINT("Patched end jump: offset %d (from %d to %d)\n", 
-               end_offset, end_jump_addr, end_target);
+        DEBUG_CODEGEN_PRINT("Patched end jump to %d\n", end_target);
     }
     
     DEBUG_CODEGEN_PRINT("If statement compilation completed");
 }
 
 // Helper function to add a break statement location for later patching
-static void add_break_statement(CompilerContext* ctx, int offset) {
+static void add_break_statement(CompilerContext* ctx, int patch_index) {
     if (ctx->break_count >= ctx->break_capacity) {
         ctx->break_capacity = ctx->break_capacity == 0 ? 4 : ctx->break_capacity * 2;
-        ctx->break_statements = realloc(ctx->break_statements, 
+        ctx->break_statements = realloc(ctx->break_statements,
                                        ctx->break_capacity * sizeof(int));
     }
-    ctx->break_statements[ctx->break_count++] = offset;
+    ctx->break_statements[ctx->break_count++] = patch_index;
 }
 
 // Helper function to patch all break statements to jump to end
 static void patch_break_statements(CompilerContext* ctx, int end_target) {
     for (int i = 0; i < ctx->break_count; i++) {
-        int break_offset = ctx->break_statements[i];
-        // OP_JUMP is 3 bytes: opcode + 2-byte offset
-        // VM's ip points to byte after the 3-byte jump instruction when executing
-        int jump_offset = end_target - (break_offset + 3);
-        DEBUG_CODEGEN_PRINT("Break statement patching: offset %d -> target %d (jump_offset=%d)\n", 
-               break_offset, end_target, jump_offset);
-        if (jump_offset < -32768 || jump_offset > 32767) {
-            DEBUG_CODEGEN_PRINT("Error: Break jump offset %d out of range - using 16-bit wrap\n", jump_offset);
-            // Instead of skipping, patch with wrapped 16-bit value
-            // The VM bounds checking will handle invalid jumps gracefully
+        int patch_index = ctx->break_statements[i];
+        if (!patch_jump(ctx->bytecode, patch_index, end_target)) {
+            DEBUG_CODEGEN_PRINT("Error: Failed to patch break jump (index %d) to %d\n",
+                   patch_index, end_target);
+            ctx->has_compilation_errors = true;
+        } else {
+            DEBUG_CODEGEN_PRINT("Patched break jump index %d to %d\n", patch_index, end_target);
         }
-        // Patch the 2-byte offset at positions +1 and +2 (after the opcode)
-        ctx->bytecode->instructions[break_offset + 1] = (uint8_t)((jump_offset >> 8) & 0xFF);
-        ctx->bytecode->instructions[break_offset + 2] = (uint8_t)(jump_offset & 0xFF);
-        DEBUG_CODEGEN_PRINT("Patched break statement at offset %d to jump to %d (3-byte OP_JUMP)\n", 
-               break_offset, end_target);
     }
     // Clear break statements for this loop
     ctx->break_count = 0;
 }
 
 // Helper function to add a continue statement location for later patching
-static void add_continue_statement(CompilerContext* ctx, int offset) {
+static void add_continue_statement(CompilerContext* ctx, int patch_index) {
     if (ctx->continue_count >= ctx->continue_capacity) {
         ctx->continue_capacity = ctx->continue_capacity == 0 ? 4 : ctx->continue_capacity * 2;
-        ctx->continue_statements = realloc(ctx->continue_statements, 
+        ctx->continue_statements = realloc(ctx->continue_statements,
                                           ctx->continue_capacity * sizeof(int));
     }
-    ctx->continue_statements[ctx->continue_count++] = offset;
+    ctx->continue_statements[ctx->continue_count++] = patch_index;
 }
 
 // Helper function to patch all continue statements to jump to continue target
 static void patch_continue_statements(CompilerContext* ctx, int continue_target) {
     for (int i = 0; i < ctx->continue_count; i++) {
-        int continue_offset = ctx->continue_statements[i];
-        // OP_JUMP is 3 bytes: opcode + 2-byte offset
-        int jump_offset = continue_target - (continue_offset + 3);
-        DEBUG_CODEGEN_PRINT("Continue statement patching: offset %d -> target %d (jump_offset=%d)\n",
-               continue_offset, continue_target, jump_offset);
-
-        if (jump_offset < 0) {
-            // Negative offset indicates a backward jump.  Our placeholder was
-            // an OP_JUMP, but backward jumps must use OP_LOOP semantics.
-            int back_distance = -jump_offset;
-            ctx->bytecode->instructions[continue_offset] = OP_LOOP;
-            ctx->bytecode->instructions[continue_offset + 1] = (uint8_t)((back_distance >> 8) & 0xFF);
-            ctx->bytecode->instructions[continue_offset + 2] = (uint8_t)(back_distance & 0xFF);
-            DEBUG_CODEGEN_PRINT("Patched continue statement at offset %d to LOOP back %d bytes\n",
-                   continue_offset, back_distance);
-            continue;
+        int patch_index = ctx->continue_statements[i];
+        if (!patch_jump(ctx->bytecode, patch_index, continue_target)) {
+            DEBUG_CODEGEN_PRINT("Error: Failed to patch continue jump (index %d) to %d\n",
+                   patch_index, continue_target);
+            ctx->has_compilation_errors = true;
+        } else {
+            DEBUG_CODEGEN_PRINT("Patched continue jump index %d to %d\n", patch_index, continue_target);
         }
-
-        if (jump_offset > 65535) {
-            DEBUG_CODEGEN_PRINT("Error: Continue jump offset %d out of range - truncating\n", jump_offset);
-            jump_offset &= 0xFFFF;
-        }
-
-        // Patch the 2-byte offset at positions +1 and +2 (after the opcode)
-        ctx->bytecode->instructions[continue_offset + 1] = (uint8_t)((jump_offset >> 8) & 0xFF);
-        ctx->bytecode->instructions[continue_offset + 2] = (uint8_t)(jump_offset & 0xFF);
-        DEBUG_CODEGEN_PRINT("Patched continue statement at offset %d to jump to %d (3-byte OP_JUMP)\n",
-               continue_offset, continue_target);
     }
     // Clear continue statements for this loop
     ctx->continue_count = 0;
@@ -1784,13 +1755,17 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
     // Emit conditional jump - if condition is false, jump to end of loop
     // OP_JUMP_IF_NOT_R format: opcode + condition_reg + 2-byte offset (4 bytes total for patching)
     set_location_from_node(ctx, while_stmt);
-    int end_jump_addr = ctx->bytecode->count;
+    int end_patch = -1;
     emit_byte_to_buffer(ctx->bytecode, OP_JUMP_IF_NOT_R);
     emit_byte_to_buffer(ctx->bytecode, condition_reg);
-    emit_byte_to_buffer(ctx->bytecode, 0);  // placeholder offset high byte
-    emit_byte_to_buffer(ctx->bytecode, 0);  // placeholder offset low byte
-    DEBUG_CODEGEN_PRINT("Emitted OP_JUMP_IF_NOT_R R%d at offset %d (will patch to end)\n", 
-           condition_reg, end_jump_addr);
+    end_patch = emit_jump_placeholder(ctx->bytecode, OP_JUMP_IF_NOT_R);
+    if (end_patch < 0) {
+        DEBUG_CODEGEN_PRINT("Error: Failed to allocate while-loop end placeholder\n");
+        ctx->has_compilation_errors = true;
+        return;
+    }
+    DEBUG_CODEGEN_PRINT("Emitted OP_JUMP_IF_NOT_R R%d (placeholder index %d)\n",
+           condition_reg, end_patch);
     
     // Free condition register
     if (condition_reg >= MP_TEMP_REG_START && condition_reg <= MP_TEMP_REG_END) {
@@ -1826,17 +1801,12 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
     // Patch all break statements to jump to end of loop
     patch_break_statements(ctx, end_target);
     
-    // CF_JUMP_IF_NOT expects unsigned offset: vm.ip = vm.ip + offset (forward jump only)
-    // The VM reads the offset AFTER moving past the 4-byte instruction
-    uint16_t end_offset = end_target - (end_jump_addr + 4);
-    if (end_offset > 65535) {
-        DEBUG_CODEGEN_PRINT("Error: Jump offset %u out of range for OP_JUMP_IF_NOT_R (0 to 65535)\n", end_offset);
+    if (!patch_jump(ctx->bytecode, end_patch, end_target)) {
+        DEBUG_CODEGEN_PRINT("Error: Failed to patch while-loop end jump to %d\n", end_target);
+        ctx->has_compilation_errors = true;
         return;
     }
-    ctx->bytecode->instructions[end_jump_addr + 2] = (uint8_t)((end_offset >> 8) & 0xFF);
-    ctx->bytecode->instructions[end_jump_addr + 3] = (uint8_t)(end_offset & 0xFF);
-    DEBUG_CODEGEN_PRINT("Patched end jump: offset %d (from %d to %d)\n", 
-           end_offset, end_jump_addr, end_target);
+    DEBUG_CODEGEN_PRINT("Patched end jump to %d\n", end_target);
     
     // Restore previous loop context
     ctx->current_loop_start = prev_loop_start;
@@ -2015,14 +1985,18 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
 
     // Emit conditional jump - if condition is false, jump to end of loop
     set_location_from_node(ctx, for_stmt);
-    int end_jump_addr = ctx->bytecode->count;
+    int end_patch = -1;
     emit_byte_to_buffer(ctx->bytecode, OP_JUMP_IF_NOT_R);
     emit_byte_to_buffer(ctx->bytecode, condition_reg);
-    emit_byte_to_buffer(ctx->bytecode, 0);  // placeholder offset high byte
-    emit_byte_to_buffer(ctx->bytecode, 0);  // placeholder offset low byte
-    
-    DEBUG_CODEGEN_PRINT("Emitted OP_JUMP_IF_NOT_R R%d at offset %d (will patch to end)\n", 
-           condition_reg, end_jump_addr);
+    end_patch = emit_jump_placeholder(ctx->bytecode, OP_JUMP_IF_NOT_R);
+    if (end_patch < 0) {
+        DEBUG_CODEGEN_PRINT("Error: Failed to allocate for-loop end placeholder\n");
+        ctx->has_compilation_errors = true;
+        return;
+    }
+
+    DEBUG_CODEGEN_PRINT("Emitted OP_JUMP_IF_NOT_R R%d (placeholder index %d)\n",
+           condition_reg, end_patch);
     
     // Free condition register
     mp_free_temp_register(ctx->allocator, condition_reg);
@@ -2082,11 +2056,12 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     int end_target = ctx->bytecode->count;
     ctx->current_loop_end = end_target;
     
-    uint16_t end_offset = end_target - (end_jump_addr + 4);
-    ctx->bytecode->instructions[end_jump_addr + 2] = (uint8_t)((end_offset >> 8) & 0xFF);
-    ctx->bytecode->instructions[end_jump_addr + 3] = (uint8_t)(end_offset & 0xFF);
-    DEBUG_CODEGEN_PRINT("Patched conditional jump: offset %d (from %d to %d)\n", 
-           end_offset, end_jump_addr, end_target);
+    if (!patch_jump(ctx->bytecode, end_patch, end_target)) {
+        DEBUG_CODEGEN_PRINT("Error: Failed to patch for-loop end jump to %d\n", end_target);
+        ctx->has_compilation_errors = true;
+        return;
+    }
+    DEBUG_CODEGEN_PRINT("Patched conditional jump to %d\n", end_target);
     
     // Patch all break statements to jump to end of loop (do this LAST)
     patch_break_statements(ctx, end_target);
@@ -2214,14 +2189,18 @@ void compile_for_iter_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
 
     // Emit conditional jump - if has_value is false, jump to end of loop
     set_location_from_node(ctx, for_stmt);
-    int end_jump_addr = ctx->bytecode->count;
+    int end_patch = -1;
     emit_byte_to_buffer(ctx->bytecode, OP_JUMP_IF_NOT_R);
     emit_byte_to_buffer(ctx->bytecode, has_value_reg);
-    emit_byte_to_buffer(ctx->bytecode, 0);  // placeholder offset high byte
-    emit_byte_to_buffer(ctx->bytecode, 0);  // placeholder offset low byte
-    
-    DEBUG_CODEGEN_PRINT("Emitted OP_JUMP_IF_NOT_R R%d at offset %d (will patch to end)\n", 
-           has_value_reg, end_jump_addr);
+    end_patch = emit_jump_placeholder(ctx->bytecode, OP_JUMP_IF_NOT_R);
+    if (end_patch < 0) {
+        DEBUG_CODEGEN_PRINT("Error: Failed to allocate iterator loop end placeholder\n");
+        ctx->has_compilation_errors = true;
+        return;
+    }
+
+    DEBUG_CODEGEN_PRINT("Emitted OP_JUMP_IF_NOT_R R%d (placeholder index %d)\n",
+           has_value_reg, end_patch);
     
     // Compile loop body with scope (like while loops do)
     compile_block_with_scope(ctx, for_stmt->typed.forIter.body);
@@ -2246,11 +2225,12 @@ void compile_for_iter_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     int end_target = ctx->bytecode->count;
     ctx->current_loop_end = end_target;
     
-    uint16_t end_offset = end_target - (end_jump_addr + 4);
-    ctx->bytecode->instructions[end_jump_addr + 2] = (uint8_t)((end_offset >> 8) & 0xFF);
-    ctx->bytecode->instructions[end_jump_addr + 3] = (uint8_t)(end_offset & 0xFF);
-    DEBUG_CODEGEN_PRINT("Patched conditional jump: offset %d (from %d to %d)\n", 
-           end_offset, end_jump_addr, end_target);
+    if (!patch_jump(ctx->bytecode, end_patch, end_target)) {
+        DEBUG_CODEGEN_PRINT("Error: Failed to patch iterator loop end jump to %d\n", end_target);
+        ctx->has_compilation_errors = true;
+        return;
+    }
+    DEBUG_CODEGEN_PRINT("Patched conditional jump to %d\n", end_target);
     
     // Patch all break statements to jump to end of loop (do this LAST)
     patch_break_statements(ctx, end_target);
@@ -2294,12 +2274,15 @@ void compile_break_statement(CompilerContext* ctx, TypedASTNode* break_stmt) {
     // Emit a break jump and track it for later patching
     // OP_JUMP format: opcode + 2-byte offset (3 bytes total)
     set_location_from_node(ctx, break_stmt);
-    int break_offset = ctx->bytecode->count;
     emit_byte_to_buffer(ctx->bytecode, OP_JUMP);
-    emit_byte_to_buffer(ctx->bytecode, 0);  // placeholder offset high byte
-    emit_byte_to_buffer(ctx->bytecode, 0);  // placeholder offset low byte
-    add_break_statement(ctx, break_offset);
-    DEBUG_CODEGEN_PRINT("Emitted OP_JUMP for break statement at offset %d (will be patched)\n", break_offset);
+    int break_patch = emit_jump_placeholder(ctx->bytecode, OP_JUMP);
+    if (break_patch < 0) {
+        DEBUG_CODEGEN_PRINT("Error: Failed to allocate break jump placeholder\n");
+        ctx->has_compilation_errors = true;
+        return;
+    }
+    add_break_statement(ctx, break_patch);
+    DEBUG_CODEGEN_PRINT("Emitted OP_JUMP for break statement (placeholder index %d)\n", break_patch);
     
     DEBUG_CODEGEN_PRINT("Break statement compilation completed");
 }
@@ -2321,12 +2304,15 @@ void compile_continue_statement(CompilerContext* ctx, TypedASTNode* continue_stm
         // This is a for loop - continue target will be set later, use patching
         DEBUG_CODEGEN_PRINT("Continue in for loop - using patching system");
         set_location_from_node(ctx, continue_stmt);
-        int continue_offset = ctx->bytecode->count;
         emit_byte_to_buffer(ctx->bytecode, OP_JUMP);
-        emit_byte_to_buffer(ctx->bytecode, 0);  // placeholder offset high byte
-        emit_byte_to_buffer(ctx->bytecode, 0);  // placeholder offset low byte
-        add_continue_statement(ctx, continue_offset);
-        DEBUG_CODEGEN_PRINT("Emitted OP_JUMP for continue statement at offset %d (will be patched)\n", continue_offset);
+        int continue_patch = emit_jump_placeholder(ctx->bytecode, OP_JUMP);
+        if (continue_patch < 0) {
+            DEBUG_CODEGEN_PRINT("Error: Failed to allocate continue jump placeholder\n");
+            ctx->has_compilation_errors = true;
+            return;
+        }
+        add_continue_statement(ctx, continue_patch);
+        DEBUG_CODEGEN_PRINT("Emitted OP_JUMP for continue statement (placeholder index %d)\n", continue_patch);
     } else {
         // This is a while loop - emit jump directly to loop start
         DEBUG_CODEGEN_PRINT("Continue in while loop - jumping to start");

@@ -50,14 +50,17 @@ typedef struct BytecodeBuffer {
     bool has_current_location;
 
     // Jump patching
-    struct JumpPatch* patches; // Forward jump patches
+    struct JumpPatch* patches; // Forward/backward jump patches
     int patch_count;
     int patch_capacity;
 } BytecodeBuffer;
 
 typedef struct JumpPatch {
-    int instruction_offset;    // Where the jump instruction is
-    int target_label;          // Label to patch to
+    int instruction_offset;    // Offset of the jump opcode
+    int operand_offset;        // Offset of the encoded jump operand
+    int operand_size;          // Number of bytes reserved for the operand
+    int target_label;          // Resolved target (for diagnostics)
+    uint8_t opcode;            // Original opcode emitted for the jump
 } JumpPatch;
 
 // Upvalue capture information for closures
@@ -146,7 +149,7 @@ void emit_arithmetic_instruction_smart(CompilerContext* ctx, const char* op,
 OpCode get_typed_opcode(const char* op, RegisterType type);
 OpCode get_standard_opcode(const char* op, RegisterType type);
 int emit_jump_placeholder(BytecodeBuffer* buffer, uint8_t jump_opcode);
-void patch_jump(BytecodeBuffer* buffer, int jump_offset, int target_offset);
+bool patch_jump(BytecodeBuffer* buffer, int patch_index, int target_offset);
 
 // Constant pool functions
 ConstantPool* init_constant_pool(void);
