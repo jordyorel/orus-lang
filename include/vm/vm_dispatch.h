@@ -28,6 +28,16 @@ double get_time_vm(void);
 extern void* vm_dispatch_table[OP_HALT + 1];
 #endif
 
+static inline void vm_update_source_location(size_t offset) {
+    if (!vm.chunk || offset >= (size_t)vm.chunk->count) {
+        vm.currentLine = -1;
+        vm.currentColumn = -1;
+        return;
+    }
+    vm.currentLine = vm.chunk->lines ? vm.chunk->lines[offset] : -1;
+    vm.currentColumn = vm.chunk->columns ? vm.chunk->columns[offset] : -1;
+}
+
 // Common macros used by both dispatch implementations
 #define READ_BYTE() (*vm.ip++)
 #define READ_SHORT() \
@@ -72,6 +82,7 @@ void runtimeError(ErrorType type, SrcLocation location, const char* format, ...)
                 } \
                 vm.instruction_count++; \
                 instruction = READ_BYTE(); \
+                vm_update_source_location((size_t)((vm.ip - vm.chunk->code) - 1)); \
                 PROFILE_INC(instruction); \
                 if (instruction > OP_HALT || vm_dispatch_table[instruction] == NULL) { \
                     goto LABEL_UNKNOWN; \
@@ -82,6 +93,7 @@ void runtimeError(ErrorType type, SrcLocation location, const char* format, ...)
     #else
         #define DISPATCH() do { \
             uint8_t inst = *vm.ip++; \
+            vm_update_source_location((size_t)((vm.ip - vm.chunk->code) - 1)); \
             PROFILE_INC(inst); \
             if (g_profiling.isActive && instruction_start_time > 0) { \
                 uint64_t cycles = getTimestamp() - instruction_start_time; \

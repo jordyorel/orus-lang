@@ -40,11 +40,15 @@ typedef struct BytecodeBuffer {
     uint8_t* instructions;     // VM instruction bytes
     int capacity;              // Buffer capacity
     int count;                 // Current instruction count
-    
+
     // Metadata for debugging
-    int* source_lines;         // Line numbers for each instruction  
+    int* source_lines;         // Line numbers for each instruction
     int* source_columns;       // Column numbers for each instruction
-    
+
+    // Current emission location (threaded from AST nodes)
+    SrcLocation current_location;
+    bool has_current_location;
+
     // Jump patching
     struct JumpPatch* patches; // Forward jump patches
     int patch_count;
@@ -125,6 +129,10 @@ typedef struct CompilerContext {
 BytecodeBuffer* init_bytecode_buffer(void);
 void free_bytecode_buffer(BytecodeBuffer* buffer);
 void emit_byte_to_buffer(BytecodeBuffer* buffer, uint8_t byte);
+
+// Location helpers for bytecode emission metadata
+void bytecode_set_location(BytecodeBuffer* buffer, SrcLocation location);
+void bytecode_set_synthetic_location(BytecodeBuffer* buffer);
 
 void emit_word_to_buffer(BytecodeBuffer* buffer, uint16_t word);
 void emit_instruction_to_buffer(BytecodeBuffer* buffer, uint8_t opcode, uint8_t reg1, uint8_t reg2, uint8_t reg3);

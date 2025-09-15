@@ -12,6 +12,28 @@
 #include <stdlib.h>
 #include <string.h>
 
+static inline void set_location_from_node(CompilerContext* ctx, TypedASTNode* node) {
+    if (!ctx || !ctx->bytecode) {
+        return;
+    }
+    if (node && node->original) {
+        bytecode_set_location(ctx->bytecode, node->original->location);
+    } else {
+        bytecode_set_synthetic_location(ctx->bytecode);
+    }
+}
+
+static inline void set_location_from_ast(CompilerContext* ctx, ASTNode* node) {
+    if (!ctx || !ctx->bytecode) {
+        return;
+    }
+    if (node) {
+        bytecode_set_location(ctx->bytecode, node->location);
+    } else {
+        bytecode_set_synthetic_location(ctx->bytecode);
+    }
+}
+
 // ===== CODE GENERATION COORDINATOR =====
 // Orchestrates bytecode generation and low-level optimizations
 // Delegates to specific codegen algorithms
@@ -804,6 +826,7 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                     DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for upvalue access");
                     return -1;
                 }
+                set_location_from_node(ctx, expr);
                 emit_byte_to_buffer(ctx->bytecode, OP_GET_UPVALUE_R);
                 emit_byte_to_buffer(ctx->bytecode, temp);
                 emit_byte_to_buffer(ctx->bytecode, upvalue_index);
@@ -913,10 +936,11 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                 }
                 return -1;
             }
-            
+
             // Emit the cast instruction
+            set_location_from_node(ctx, expr);
             emit_instruction_to_buffer(ctx->bytecode, cast_opcode, target_reg, source_reg, 0);
-            DEBUG_CODEGEN_PRINT("NODE_CAST: Emitted cast opcode %d from R%d to R%d\n", 
+            DEBUG_CODEGEN_PRINT("NODE_CAST: Emitted cast opcode %d from R%d to R%d\n",
                    cast_opcode, source_reg, target_reg);
             
             // Free source register only if it's a temp register
@@ -936,6 +960,7 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             }
             
             // Emit OP_TIME_STAMP instruction (variable-length format: opcode + register)
+            set_location_from_node(ctx, expr);
             emit_byte_to_buffer(ctx->bytecode, OP_TIME_STAMP);
             emit_byte_to_buffer(ctx->bytecode, reg);
             DEBUG_CODEGEN_PRINT("Emitted OP_TIME_STAMP R%d (returns f64)\n", reg);
@@ -986,12 +1011,14 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             const char* op = expr->original->unary.op;
             if (strcmp(op, "not") == 0) {
                 // Logical NOT operation - only works on boolean values
+                set_location_from_node(ctx, expr);
                 emit_byte_to_buffer(ctx->bytecode, OP_NOT_BOOL_R);
                 emit_byte_to_buffer(ctx->bytecode, result_reg);
                 emit_byte_to_buffer(ctx->bytecode, operand_reg);
                 DEBUG_CODEGEN_PRINT("Emitted OP_NOT_BOOL_R R%d, R%d (logical NOT)\n", result_reg, operand_reg);
             } else if (strcmp(op, "-") == 0) {
                 // Unary minus operation - works on numeric types (i32, i64, u32, u64, f64)
+                set_location_from_node(ctx, expr);
                 emit_byte_to_buffer(ctx->bytecode, OP_NEG_I32_R);
                 emit_byte_to_buffer(ctx->bytecode, result_reg);
                 emit_byte_to_buffer(ctx->bytecode, operand_reg);
@@ -1139,8 +1166,9 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
 
 void compile_literal(CompilerContext* ctx, TypedASTNode* literal, int target_reg) {
     if (!ctx || !literal || target_reg < 0) return;
-    
+
     Value value = literal->original->literal.value;
+    set_location_from_node(ctx, literal);
     emit_load_constant(ctx, target_reg, value);
 }
 
@@ -1255,6 +1283,7 @@ void compile_binary_op(CompilerContext* ctx, TypedASTNode* binary, int target_re
            is_comparison ? " [COMPARISON]" : " [ARITHMETIC]");
     
     // Emit type-specific binary instruction (arithmetic or comparison)
+    set_location_from_node(ctx, binary);
     emit_binary_op(ctx, op, opcode_type, target_reg, coerced_left_reg, coerced_right_reg);
     
     // Free any temporary cast registers
@@ -1365,6 +1394,7 @@ void compile_variable_declaration(CompilerContext* ctx, TypedASTNode* var_decl) 
     
     // Move the initial value to the variable register if we have one
     if (value_reg != -1) {
+        set_location_from_node(ctx, var_decl);
         emit_move(ctx, var_reg, value_reg);
         mp_free_temp_register(ctx->allocator, value_reg);
     }
@@ -1393,6 +1423,7 @@ void compile_assignment(CompilerContext* ctx, TypedASTNode* assign) {
 
         bool is_in_loop = (ctx->current_loop_start != -1);
         register_variable(ctx, var_name, var_reg, assign->resolvedType, is_in_loop);
+        set_location_from_node(ctx, assign);
         emit_move(ctx, var_reg, value_reg);
         mp_free_temp_register(ctx->allocator, value_reg);
         return;
@@ -1408,6 +1439,7 @@ void compile_assignment(CompilerContext* ctx, TypedASTNode* assign) {
     int value_reg = compile_expression(ctx, assign->typed.assign.value);
     if (value_reg == -1) return;
     int var_reg = symbol->reg_allocation ? symbol->reg_allocation->logical_id : symbol->legacy_register_id;
+    set_location_from_node(ctx, assign);
     emit_move(ctx, var_reg, value_reg);
     mp_free_temp_register(ctx->allocator, value_reg);
 }
@@ -1421,6 +1453,7 @@ void compile_print_statement(CompilerContext* ctx, TypedASTNode* print) {
     if (print->typed.print.count == 0) {
         // Print with no arguments - use register 0 (standard behavior)
         // OP_PRINT_R format: opcode + register (2 bytes total)
+        set_location_from_node(ctx, print);
         emit_byte_to_buffer(ctx->bytecode, OP_PRINT_R);
         emit_byte_to_buffer(ctx->bytecode, 0);
         DEBUG_CODEGEN_PRINT("Emitted OP_PRINT_R R0 (no arguments)");
@@ -1428,10 +1461,11 @@ void compile_print_statement(CompilerContext* ctx, TypedASTNode* print) {
         // Single expression print - compile expression and emit print
         TypedASTNode* expr = print->typed.print.values[0];
         int reg = compile_expression(ctx, expr);
-        
+
         if (reg != -1) {
             // Use OP_PRINT_R which calls handle_print() -> builtin_print()
             // OP_PRINT_R format: opcode + register (2 bytes total)
+            set_location_from_node(ctx, print);
             emit_byte_to_buffer(ctx->bytecode, OP_PRINT_R);
             emit_byte_to_buffer(ctx->bytecode, reg);
             DEBUG_CODEGEN_PRINT("Emitted OP_PRINT_R R%d (single expression)\n", reg);
@@ -1465,19 +1499,21 @@ void compile_print_statement(CompilerContext* ctx, TypedASTNode* print) {
             // Compile expression and move to target register if different
             int expr_reg = compile_expression(ctx, expr);
             if (expr_reg != -1 && expr_reg != target_reg) {
+                set_location_from_node(ctx, expr);
                 emit_move(ctx, target_reg, expr_reg);
-                
+
                 // Free the original temp register
                 if (expr_reg >= MP_TEMP_REG_START && expr_reg <= MP_TEMP_REG_END) {
                     mp_free_temp_register(ctx->allocator, expr_reg);
                 }
             }
         }
-        
+
         // Emit the print instruction with consecutive registers
-        emit_instruction_to_buffer(ctx->bytecode, OP_PRINT_MULTI_R, 
+        set_location_from_node(ctx, print);
+        emit_instruction_to_buffer(ctx->bytecode, OP_PRINT_MULTI_R,
                                  first_consecutive_reg, print->typed.print.count, 1); // 1 = newline
-        DEBUG_CODEGEN_PRINT("Emitted OP_PRINT_MULTI_R R%d, count=%d (consecutive registers)\n", 
+        DEBUG_CODEGEN_PRINT("Emitted OP_PRINT_MULTI_R R%d, count=%d (consecutive registers)\n",
                first_consecutive_reg, print->typed.print.count);
         
         // Free the consecutive temp registers
@@ -1523,6 +1559,7 @@ bool generate_bytecode_from_ast(CompilerContext* ctx) {
     
     // Emit HALT instruction to complete the program
     // OP_HALT format: opcode only (1 byte total)
+    bytecode_set_synthetic_location(ctx->bytecode);
     emit_byte_to_buffer(ctx->bytecode, OP_HALT);
     DEBUG_CODEGEN_PRINT("Emitted OP_HALT");
     
@@ -1560,6 +1597,7 @@ void compile_if_statement(CompilerContext* ctx, TypedASTNode* if_stmt) {
     
     // Emit conditional jump - if condition is false, jump to else/end
     // OP_JUMP_IF_NOT_R format: opcode + condition_reg + 2-byte offset (4 bytes total for patching)
+    set_location_from_node(ctx, if_stmt);
     int else_jump_addr = ctx->bytecode->count;
     emit_byte_to_buffer(ctx->bytecode, OP_JUMP_IF_NOT_R);
     emit_byte_to_buffer(ctx->bytecode, condition_reg);
@@ -1579,6 +1617,7 @@ void compile_if_statement(CompilerContext* ctx, TypedASTNode* if_stmt) {
     // If there's an else branch, emit unconditional jump to skip it
     int end_jump_addr = -1;
     if (if_stmt->typed.ifStmt.elseBranch) {
+        set_location_from_node(ctx, if_stmt);
         end_jump_addr = ctx->bytecode->count;
         emit_byte_to_buffer(ctx->bytecode, OP_JUMP_SHORT);
         emit_byte_to_buffer(ctx->bytecode, 0);  // placeholder offset
@@ -1744,6 +1783,7 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
     
     // Emit conditional jump - if condition is false, jump to end of loop
     // OP_JUMP_IF_NOT_R format: opcode + condition_reg + 2-byte offset (4 bytes total for patching)
+    set_location_from_node(ctx, while_stmt);
     int end_jump_addr = ctx->bytecode->count;
     emit_byte_to_buffer(ctx->bytecode, OP_JUMP_IF_NOT_R);
     emit_byte_to_buffer(ctx->bytecode, condition_reg);
@@ -1765,12 +1805,14 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
     int back_jump_distance = (ctx->bytecode->count + 2) - loop_start;
     if (back_jump_distance >= 0 && back_jump_distance <= 255) {
         // Use OP_LOOP_SHORT for short backward jumps (2 bytes)
+        set_location_from_node(ctx, while_stmt);
         emit_byte_to_buffer(ctx->bytecode, OP_LOOP_SHORT);
         emit_byte_to_buffer(ctx->bytecode, (uint8_t)back_jump_distance);
         DEBUG_CODEGEN_PRINT("Emitted OP_LOOP_SHORT with offset %d (back to start)\n", back_jump_distance);
     } else {
         // Use regular backward jump (3 bytes) - OP_JUMP format: opcode + 2-byte offset
         int back_jump_offset = loop_start - (ctx->bytecode->count + 3);
+        set_location_from_node(ctx, while_stmt);
         emit_byte_to_buffer(ctx->bytecode, OP_JUMP);
         emit_byte_to_buffer(ctx->bytecode, (back_jump_offset >> 8) & 0xFF);  // high byte
         emit_byte_to_buffer(ctx->bytecode, back_jump_offset & 0xFF);         // low byte
@@ -1900,6 +1942,7 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     int start_reg = mp_allocate_temp_register(ctx->allocator);
     Value start_value = I32_VAL(start_val);
     int start_const_index = add_constant(ctx->constants, start_value);
+    set_location_from_node(ctx, for_stmt);
     emit_byte_to_buffer(ctx->bytecode, OP_LOAD_I32_CONST);
     emit_byte_to_buffer(ctx->bytecode, start_reg);
     emit_byte_to_buffer(ctx->bytecode, (start_const_index >> 8) & 0xFF);
@@ -1907,8 +1950,9 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     DEBUG_CODEGEN_PRINT("Emitted OP_LOAD_I32_CONST R%d, #%d (%d)\n", start_reg, start_const_index, start_val);
     
     int end_reg = mp_allocate_temp_register(ctx->allocator);
-    Value end_value = I32_VAL(end_val);  
+    Value end_value = I32_VAL(end_val);
     int end_const_index = add_constant(ctx->constants, end_value);
+    set_location_from_node(ctx, for_stmt);
     emit_byte_to_buffer(ctx->bytecode, OP_LOAD_I32_CONST);
     emit_byte_to_buffer(ctx->bytecode, end_reg);
     emit_byte_to_buffer(ctx->bytecode, (end_const_index >> 8) & 0xFF);
@@ -1918,6 +1962,7 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     int step_reg = mp_allocate_temp_register(ctx->allocator);
     Value step_value = I32_VAL(step_val);
     int step_const_index = add_constant(ctx->constants, step_value);
+    set_location_from_node(ctx, for_stmt);
     emit_byte_to_buffer(ctx->bytecode, OP_LOAD_I32_CONST);
     emit_byte_to_buffer(ctx->bytecode, step_reg);
     emit_byte_to_buffer(ctx->bytecode, (step_const_index >> 8) & 0xFF);
@@ -1940,8 +1985,9 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     DEBUG_CODEGEN_PRINT("Registering loop variable '%s' in R%d\n", loop_var_name, loop_var_reg);
     register_variable(ctx, loop_var_name, loop_var_reg, getPrimitiveType(TYPE_I32), true);
     DEBUG_CODEGEN_PRINT("Variable '%s' registered successfully as mutable\n", loop_var_name);
-    
+
     // Initialize loop variable with start value
+    set_location_from_node(ctx, for_stmt);
     emit_byte_to_buffer(ctx->bytecode, OP_MOVE_I32);
     emit_byte_to_buffer(ctx->bytecode, loop_var_reg);
     emit_byte_to_buffer(ctx->bytecode, start_reg);
@@ -1957,15 +2003,18 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     // Generate loop condition check: loop_var < end (or <= for inclusive)
     int condition_reg = mp_allocate_temp_register(ctx->allocator);
     if (for_stmt->typed.forRange.inclusive) {
+        set_location_from_node(ctx, for_stmt);
         emit_byte_to_buffer(ctx->bytecode, OP_LE_I32_R);
     } else {
+        set_location_from_node(ctx, for_stmt);
         emit_byte_to_buffer(ctx->bytecode, OP_LT_I32_R);
     }
     emit_byte_to_buffer(ctx->bytecode, condition_reg);
     emit_byte_to_buffer(ctx->bytecode, loop_var_reg);
     emit_byte_to_buffer(ctx->bytecode, end_reg);
-    
+
     // Emit conditional jump - if condition is false, jump to end of loop
+    set_location_from_node(ctx, for_stmt);
     int end_jump_addr = ctx->bytecode->count;
     emit_byte_to_buffer(ctx->bytecode, OP_JUMP_IF_NOT_R);
     emit_byte_to_buffer(ctx->bytecode, condition_reg);
@@ -1980,15 +2029,16 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     
     // Compile loop body with scope (like while loops do)
     compile_block_with_scope(ctx, for_stmt->typed.forRange.body);
-    
+
     // Increment loop variable: loop_var = loop_var + step
     // Set continue target to increment section FIRST (before patching)
     int continue_target = ctx->bytecode->count;
     ctx->current_loop_continue = continue_target;
-    
+
     // Reload step and end values in case nested loops modified these registers
     Value reload_step_value = I32_VAL(step_val);
     int reload_step_const_index = add_constant(ctx->constants, reload_step_value);
+    set_location_from_node(ctx, for_stmt);
     emit_byte_to_buffer(ctx->bytecode, OP_LOAD_I32_CONST);
     emit_byte_to_buffer(ctx->bytecode, step_reg);
     emit_byte_to_buffer(ctx->bytecode, (reload_step_const_index >> 8) & 0xFF);
@@ -1996,12 +2046,14 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
 
     Value reload_end_value = I32_VAL(end_val);
     int reload_end_const_index = add_constant(ctx->constants, reload_end_value);
+    set_location_from_node(ctx, for_stmt);
     emit_byte_to_buffer(ctx->bytecode, OP_LOAD_I32_CONST);
     emit_byte_to_buffer(ctx->bytecode, end_reg);
     emit_byte_to_buffer(ctx->bytecode, (reload_end_const_index >> 8) & 0xFF);
     emit_byte_to_buffer(ctx->bytecode, reload_end_const_index & 0xFF);
 
     // Perform increment directly on loop variable
+    set_location_from_node(ctx, for_stmt);
     emit_byte_to_buffer(ctx->bytecode, OP_ADD_I32_R);
     emit_byte_to_buffer(ctx->bytecode, loop_var_reg);
     emit_byte_to_buffer(ctx->bytecode, loop_var_reg);
@@ -2013,11 +2065,13 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     // Emit unconditional jump back to loop start
     int back_jump_distance = (ctx->bytecode->count + 2) - loop_start;
     if (back_jump_distance >= 0 && back_jump_distance <= 255) {
+        set_location_from_node(ctx, for_stmt);
         emit_byte_to_buffer(ctx->bytecode, OP_LOOP_SHORT);
         emit_byte_to_buffer(ctx->bytecode, (uint8_t)back_jump_distance);
         DEBUG_CODEGEN_PRINT("Emitted OP_LOOP_SHORT with offset %d (back to start)\n", back_jump_distance);
     } else {
         int back_jump_offset = loop_start - (ctx->bytecode->count + 3);
+        set_location_from_node(ctx, for_stmt);
         emit_byte_to_buffer(ctx->bytecode, OP_JUMP);
         emit_byte_to_buffer(ctx->bytecode, (back_jump_offset >> 8) & 0xFF);
         emit_byte_to_buffer(ctx->bytecode, back_jump_offset & 0xFF);
@@ -2119,8 +2173,9 @@ void compile_for_iter_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
         DEBUG_CODEGEN_PRINT("Error: Failed to allocate iterator register");
         return;
     }
-    
+
     // Get iterator from iterable
+    set_location_from_node(ctx, for_stmt);
     emit_byte_to_buffer(ctx->bytecode, OP_GET_ITER_R);
     emit_byte_to_buffer(ctx->bytecode, iter_reg);
     emit_byte_to_buffer(ctx->bytecode, iterable_reg);
@@ -2149,14 +2204,16 @@ void compile_for_iter_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     ctx->current_loop_end = ctx->bytecode->count + 1000; // Temporary future address
     
     DEBUG_CODEGEN_PRINT("For iteration loop start at offset %d\n", loop_start);
-    
+
     // Get next value from iterator
+    set_location_from_node(ctx, for_stmt);
     emit_byte_to_buffer(ctx->bytecode, OP_ITER_NEXT_R);
     emit_byte_to_buffer(ctx->bytecode, loop_var_reg);
     emit_byte_to_buffer(ctx->bytecode, iter_reg);
     emit_byte_to_buffer(ctx->bytecode, has_value_reg);
-    
+
     // Emit conditional jump - if has_value is false, jump to end of loop
+    set_location_from_node(ctx, for_stmt);
     int end_jump_addr = ctx->bytecode->count;
     emit_byte_to_buffer(ctx->bytecode, OP_JUMP_IF_NOT_R);
     emit_byte_to_buffer(ctx->bytecode, has_value_reg);
@@ -2172,11 +2229,13 @@ void compile_for_iter_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     // Emit unconditional jump back to loop start
     int back_jump_distance = (ctx->bytecode->count + 2) - loop_start;
     if (back_jump_distance >= 0 && back_jump_distance <= 255) {
+        set_location_from_node(ctx, for_stmt);
         emit_byte_to_buffer(ctx->bytecode, OP_LOOP_SHORT);
         emit_byte_to_buffer(ctx->bytecode, (uint8_t)back_jump_distance);
         DEBUG_CODEGEN_PRINT("Emitted OP_LOOP_SHORT with offset %d (back to start)\n", back_jump_distance);
     } else {
         int back_jump_offset = loop_start - (ctx->bytecode->count + 3);
+        set_location_from_node(ctx, for_stmt);
         emit_byte_to_buffer(ctx->bytecode, OP_JUMP);
         emit_byte_to_buffer(ctx->bytecode, (back_jump_offset >> 8) & 0xFF);
         emit_byte_to_buffer(ctx->bytecode, back_jump_offset & 0xFF);
@@ -2234,6 +2293,7 @@ void compile_break_statement(CompilerContext* ctx, TypedASTNode* break_stmt) {
     
     // Emit a break jump and track it for later patching
     // OP_JUMP format: opcode + 2-byte offset (3 bytes total)
+    set_location_from_node(ctx, break_stmt);
     int break_offset = ctx->bytecode->count;
     emit_byte_to_buffer(ctx->bytecode, OP_JUMP);
     emit_byte_to_buffer(ctx->bytecode, 0);  // placeholder offset high byte
@@ -2260,6 +2320,7 @@ void compile_continue_statement(CompilerContext* ctx, TypedASTNode* continue_stm
     if (ctx->current_loop_continue != ctx->current_loop_start) {
         // This is a for loop - continue target will be set later, use patching
         DEBUG_CODEGEN_PRINT("Continue in for loop - using patching system");
+        set_location_from_node(ctx, continue_stmt);
         int continue_offset = ctx->bytecode->count;
         emit_byte_to_buffer(ctx->bytecode, OP_JUMP);
         emit_byte_to_buffer(ctx->bytecode, 0);  // placeholder offset high byte
@@ -2274,12 +2335,14 @@ void compile_continue_statement(CompilerContext* ctx, TypedASTNode* continue_stm
         
         if (back_jump_distance >= 0 && back_jump_distance <= 255) {
             // Use OP_LOOP_SHORT for short backward jumps (2 bytes)
+            set_location_from_node(ctx, continue_stmt);
             emit_byte_to_buffer(ctx->bytecode, OP_LOOP_SHORT);
             emit_byte_to_buffer(ctx->bytecode, (uint8_t)back_jump_distance);
             DEBUG_CODEGEN_PRINT("Emitted OP_LOOP_SHORT for continue with distance %d\n", back_jump_distance);
         } else {
             // Use regular backward jump (3 bytes)
             int back_jump_offset = continue_target - (ctx->bytecode->count + 3);
+            set_location_from_node(ctx, continue_stmt);
             emit_byte_to_buffer(ctx->bytecode, OP_JUMP);
             emit_byte_to_buffer(ctx->bytecode, (back_jump_offset >> 8) & 0xFF);
             emit_byte_to_buffer(ctx->bytecode, back_jump_offset & 0xFF);
@@ -2402,17 +2465,25 @@ void finalize_functions_to_vm(CompilerContext* ctx) {
         // Create a Chunk from BytecodeBuffer
         Chunk* chunk = malloc(sizeof(Chunk));
         if (!chunk) continue;
-        
+
         // Initialize chunk with function bytecode
         chunk->code = malloc(func_chunk->count);
         if (!chunk->code) {
             free(chunk);
             continue;
         }
-        
+
         memcpy(chunk->code, func_chunk->instructions, func_chunk->count);
         chunk->count = func_chunk->count;
         chunk->capacity = func_chunk->count;
+        chunk->lines = func_chunk->count > 0 ? malloc(sizeof(int) * func_chunk->count) : NULL;
+        chunk->columns = func_chunk->count > 0 ? malloc(sizeof(int) * func_chunk->count) : NULL;
+        if (chunk->lines && func_chunk->source_lines) {
+            memcpy(chunk->lines, func_chunk->source_lines, sizeof(int) * func_chunk->count);
+        }
+        if (chunk->columns && func_chunk->source_columns) {
+            memcpy(chunk->columns, func_chunk->source_columns, sizeof(int) * func_chunk->count);
+        }
         
         // Copy constants from main context
         if (ctx->constants && ctx->constants->count > 0) {
@@ -2553,8 +2624,9 @@ void compile_return_statement(CompilerContext* ctx, TypedASTNode* ret) {
             DEBUG_CODEGEN_PRINT("Error: Failed to compile return value\n");
             return;
         }
-        
+
         // Emit OP_RETURN_R with value register
+        set_location_from_node(ctx, ret);
         emit_byte_to_buffer(ctx->bytecode, OP_RETURN_R);
         emit_byte_to_buffer(ctx->bytecode, value_reg);
         
@@ -2566,6 +2638,7 @@ void compile_return_statement(CompilerContext* ctx, TypedASTNode* ret) {
         }
     } else {
         // Return void
+        set_location_from_node(ctx, ret);
         emit_byte_to_buffer(ctx->bytecode, OP_RETURN_VOID);
         DEBUG_CODEGEN_PRINT("Emitted OP_RETURN_VOID\n");
     }

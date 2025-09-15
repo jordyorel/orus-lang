@@ -58,5 +58,15 @@
       "-- RUNTIME PANIC: This operation isn't allowed here",
       "Invalid upvalue access"
     ]
+  },
+  {
+    "name": "runtime_division_by_zero_location",
+    "source": "runtime_division_by_zero.orus",
+    "description": "Runtime division by zero should report the correct source location.",
+    "expected_exit": 70,
+    "expected": [
+      "tests/error_reporting/runtime_division_by_zero.orus:4:13",
+      "Division by zero"
+    ]
   }
 ]
