@@ -88,15 +88,16 @@ management and for the structured `ErrorReporter`. Without them the compiler
 cannot surface scope errors, track loop depth, or aggregate diagnostics.
 
 **Implementation steps.**
-- Initialize `ScopeStack` and `ErrorReporter` instances inside
+- [x] Initialize `ScopeStack` and `ErrorReporter` instances inside
   `init_compiler_context`, and plumb them through the statement and expression
   compilers.
-- Teach `compile_block_with_scope` to push/pop lexical scopes so that locals,
-  temporaries, and loop nesting depth become observable.
-- Replace ad-hoc booleans with explicit helper APIs (`enter_loop_context`,
+- [x] Teach `compile_block_with_scope` to push/pop lexical scopes so that
+  locals, temporaries, and loop nesting depth become observable.
+- [x] Replace ad-hoc booleans with explicit helper APIs (`enter_loop_context`,
   `leave_loop_context`) that record `current_loop_start`, `end`, and
   `continue` offsets and publish them to the diagnostic layer.
-- Ensure `free_compiler_context` tears down every allocation to avoid leaks.
+- [x] Ensure `free_compiler_context` tears down every allocation to avoid
+  leaks.
 
 **Testing.**
 - Craft parser-level fixtures that declare variables in nested scopes and

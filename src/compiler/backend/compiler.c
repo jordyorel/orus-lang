@@ -5,6 +5,8 @@
 #include "compiler/optimization/optimizer.h"
 #include "compiler/codegen/codegen.h"
 #include "compiler/symbol_table.h"
+#include "compiler/scope_stack.h"
+#include "compiler/error_reporter.h"
 #include "runtime/memory.h"
 #include "debug/debug_config.h"
 #include <stdio.h>
@@ -375,13 +377,11 @@ CompilerContext* init_compiler_context(TypedASTNode* typed_ast) {
     
     // Initialize symbol table for variable tracking
     ctx->symbols = create_symbol_table(NULL);  // Global scope
-    
-    // TODO: Initialize these in later phases
-    ctx->scopes = NULL;       // Will implement in Phase 2
-    ctx->errors = NULL;       // Will implement in Phase 2
+    ctx->scopes = scope_stack_create();
+    ctx->errors = error_reporter_create();
     ctx->has_compilation_errors = false;  // Initialize error tracking
     ctx->compiling_function = false;      // Initialize function compilation flag
-    ctx->function_scope_depth = ctx->symbols->scope_depth; // Track function root depth
+    ctx->function_scope_depth = ctx->symbols ? ctx->symbols->scope_depth : 0; // Track function root depth
     ctx->opt_ctx = NULL;      // Will implement in Phase 2
     
     // Initialize loop control context
@@ -407,7 +407,8 @@ CompilerContext* init_compiler_context(TypedASTNode* typed_ast) {
     ctx->upvalue_count = 0;
     ctx->upvalue_capacity = 0;
     
-    if (!ctx->allocator || !ctx->dual_allocator || !ctx->bytecode || !ctx->constants || !ctx->symbols) {
+    if (!ctx->allocator || !ctx->dual_allocator || !ctx->bytecode || !ctx->constants ||
+        !ctx->symbols || !ctx->scopes || !ctx->errors) {
         free_compiler_context(ctx);
         return NULL;
     }
@@ -417,7 +418,12 @@ CompilerContext* init_compiler_context(TypedASTNode* typed_ast) {
 
 bool compile_to_bytecode(CompilerContext* ctx) {
     if (!ctx || !ctx->input_ast) return false;
-    
+
+    if (ctx->errors) {
+        error_reporter_reset(ctx->errors);
+    }
+    ctx->has_compilation_errors = false;
+
     DEBUG_CODEGEN_PRINT("Starting compilation pipeline...\n");
     
     // Phase 1: Visualization (if enabled)
@@ -591,6 +597,14 @@ void free_compiler_context(CompilerContext* ctx) {
     if (ctx->symbols) {
         free_symbol_table(ctx->symbols);
     }
+
+    if (ctx->scopes) {
+        scope_stack_destroy(ctx->scopes);
+    }
+
+    if (ctx->errors) {
+        error_reporter_destroy(ctx->errors);
+    }
     
     // Free optimization context if it was created
     if (ctx->opt_ctx) {
@@ -627,8 +641,7 @@ void free_compiler_context(CompilerContext* ctx) {
     }
     
     // Note: Don't free input_ast - it's owned by caller
-    // TODO: Free other components as we implement them
-    
+
     free(ctx);
 }
 

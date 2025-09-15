@@ -4,9 +4,12 @@
 #include "compiler/compiler.h"
 #include "compiler/register_allocator.h"
 #include "compiler/symbol_table.h"
+#include "compiler/scope_stack.h"
+#include "compiler/error_reporter.h"
 #include "vm/vm.h"
 #include "vm/vm_constants.h"
 #include "errors/features/variable_errors.h"
+#include "errors/features/control_flow_errors.h"
 #include "debug/debug_config.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -31,6 +34,109 @@ static inline void set_location_from_ast(CompilerContext* ctx, ASTNode* node) {
         bytecode_set_location(ctx->bytecode, node->location);
     } else {
         bytecode_set_synthetic_location(ctx->bytecode);
+    }
+}
+
+static void record_control_flow_error(CompilerContext* ctx,
+                                      ErrorCode code,
+                                      SrcLocation location,
+                                      const char* message,
+                                      const char* help) {
+    if (!ctx || !ctx->errors) {
+        return;
+    }
+    error_reporter_add(ctx->errors, code, SEVERITY_ERROR, location, message, help, NULL);
+}
+
+static ScopeFrame* enter_loop_context(CompilerContext* ctx, int loop_start) {
+    if (!ctx || !ctx->scopes) {
+        return NULL;
+    }
+
+    ScopeFrame* frame = scope_stack_push(ctx->scopes, SCOPE_KIND_LOOP);
+    if (!frame) {
+        return NULL;
+    }
+
+    frame->start_offset = loop_start;
+    frame->end_offset = -1;
+    frame->continue_offset = loop_start;
+    frame->prev_loop_start = ctx->current_loop_start;
+    frame->prev_loop_end = ctx->current_loop_end;
+    frame->prev_loop_continue = ctx->current_loop_continue;
+    frame->saved_break_statements = ctx->break_statements;
+    frame->saved_break_count = ctx->break_count;
+    frame->saved_break_capacity = ctx->break_capacity;
+    frame->saved_continue_statements = ctx->continue_statements;
+    frame->saved_continue_count = ctx->continue_count;
+    frame->saved_continue_capacity = ctx->continue_capacity;
+
+    ctx->current_loop_start = loop_start;
+    ctx->current_loop_end = loop_start;
+    ctx->current_loop_continue = loop_start;
+
+    ctx->break_statements = NULL;
+    ctx->break_count = 0;
+    ctx->break_capacity = 0;
+    ctx->continue_statements = NULL;
+    ctx->continue_count = 0;
+    ctx->continue_capacity = 0;
+
+    return frame;
+}
+
+static void update_loop_continue_target(CompilerContext* ctx, ScopeFrame* frame, int continue_target) {
+    if (!ctx) {
+        return;
+    }
+    ctx->current_loop_continue = continue_target;
+    if (frame) {
+        frame->continue_offset = continue_target;
+    }
+}
+
+static void leave_loop_context(CompilerContext* ctx, ScopeFrame* frame, int end_offset) {
+    if (!ctx) {
+        return;
+    }
+
+    if (frame && end_offset >= 0) {
+        frame->end_offset = end_offset;
+    }
+
+    if (ctx->break_statements && (!frame || ctx->break_statements != frame->saved_break_statements)) {
+        free(ctx->break_statements);
+    }
+    if (ctx->continue_statements && (!frame || ctx->continue_statements != frame->saved_continue_statements)) {
+        free(ctx->continue_statements);
+    }
+
+    if (frame) {
+        ctx->break_statements = frame->saved_break_statements;
+        ctx->break_count = frame->saved_break_count;
+        ctx->break_capacity = frame->saved_break_capacity;
+
+        ctx->continue_statements = frame->saved_continue_statements;
+        ctx->continue_count = frame->saved_continue_count;
+        ctx->continue_capacity = frame->saved_continue_capacity;
+
+        ctx->current_loop_start = frame->prev_loop_start;
+        ctx->current_loop_end = frame->prev_loop_end;
+        ctx->current_loop_continue = frame->prev_loop_continue;
+
+        if (ctx->scopes) {
+            scope_stack_pop(ctx->scopes);
+        }
+    } else {
+        ctx->break_statements = NULL;
+        ctx->break_count = 0;
+        ctx->break_capacity = 0;
+        ctx->continue_statements = NULL;
+        ctx->continue_count = 0;
+        ctx->continue_capacity = 0;
+        ctx->current_loop_start = -1;
+        ctx->current_loop_end = -1;
+        ctx->current_loop_continue = -1;
     }
 }
 
@@ -1710,48 +1816,28 @@ static void patch_continue_statements(CompilerContext* ctx, int continue_target)
 
 void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
     if (!ctx || !while_stmt) return;
-    
+
     DEBUG_CODEGEN_PRINT("Compiling while statement");
-    
-    // Remember current loop context to support nested loops
-    int prev_loop_start = ctx->current_loop_start;
-    int prev_loop_end = ctx->current_loop_end;
-    int prev_loop_continue = ctx->current_loop_continue;
-    
-    // Save break statement context for nested loops
-    int* prev_break_statements = ctx->break_statements;
-    int prev_break_count = ctx->break_count;
-    int prev_break_capacity = ctx->break_capacity;
-    ctx->break_statements = NULL;
-    ctx->break_count = 0;
-    ctx->break_capacity = 0;
-    
-    // Save continue statement context for nested loops
-    int* prev_continue_statements = ctx->continue_statements;
-    int prev_continue_count = ctx->continue_count;
-    int prev_continue_capacity = ctx->continue_capacity;
-    ctx->continue_statements = NULL;
-    ctx->continue_count = 0;
-    ctx->continue_capacity = 0;
-    
-    // Set up loop labels
+
     int loop_start = ctx->bytecode->count;
-    ctx->current_loop_start = loop_start;
-    ctx->current_loop_continue = loop_start; // For while loops, continue jumps to start
-    
-    // Set current_loop_end to a temporary address so break statements know they're in a loop
-    // We'll set the actual end address after compiling the body
-    ctx->current_loop_end = ctx->bytecode->count + 1000; // Temporary future address
-    
+    ScopeFrame* loop_frame = enter_loop_context(ctx, loop_start);
+    if (!loop_frame) {
+        DEBUG_CODEGEN_PRINT("Error: Failed to enter loop context");
+        ctx->has_compilation_errors = true;
+        return;
+    }
+
     DEBUG_CODEGEN_PRINT("While loop start at offset %d\n", loop_start);
-    
+
     // Compile condition expression
     int condition_reg = compile_expression(ctx, while_stmt->typed.whileStmt.condition);
     if (condition_reg == -1) {
         DEBUG_CODEGEN_PRINT("Error: Failed to compile while condition");
+        ctx->has_compilation_errors = true;
+        leave_loop_context(ctx, loop_frame, loop_start);
         return;
     }
-    
+
     // Emit conditional jump - if condition is false, jump to end of loop
     // OP_JUMP_IF_NOT_R format: opcode + condition_reg + 2-byte offset (4 bytes total for patching)
     set_location_from_node(ctx, while_stmt);
@@ -1762,19 +1848,23 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
     if (end_patch < 0) {
         DEBUG_CODEGEN_PRINT("Error: Failed to allocate while-loop end placeholder\n");
         ctx->has_compilation_errors = true;
+        if (condition_reg >= MP_TEMP_REG_START && condition_reg <= MP_TEMP_REG_END) {
+            mp_free_temp_register(ctx->allocator, condition_reg);
+        }
+        leave_loop_context(ctx, loop_frame, ctx->bytecode->count);
         return;
     }
     DEBUG_CODEGEN_PRINT("Emitted OP_JUMP_IF_NOT_R R%d (placeholder index %d)\n",
            condition_reg, end_patch);
-    
+
     // Free condition register
     if (condition_reg >= MP_TEMP_REG_START && condition_reg <= MP_TEMP_REG_END) {
         mp_free_temp_register(ctx->allocator, condition_reg);
     }
-    
+
     // Compile loop body with new scope
     compile_block_with_scope(ctx, while_stmt->typed.whileStmt.body);
-    
+
     // Emit unconditional jump back to loop start
     // For backward jumps, calculate positive offset and use OP_LOOP_SHORT or OP_JUMP
     int back_jump_distance = (ctx->bytecode->count + 2) - loop_start;
@@ -1793,36 +1883,27 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
         emit_byte_to_buffer(ctx->bytecode, back_jump_offset & 0xFF);         // low byte
         DEBUG_CODEGEN_PRINT("Emitted OP_JUMP with offset %d (back to start)\n", back_jump_offset);
     }
-    
+
     // Patch the end jump to current position (after the loop)
     int end_target = ctx->bytecode->count;
     ctx->current_loop_end = end_target;
-    
+    if (loop_frame) {
+        loop_frame->end_offset = end_target;
+    }
+
     // Patch all break statements to jump to end of loop
     patch_break_statements(ctx, end_target);
-    
+
     if (!patch_jump(ctx->bytecode, end_patch, end_target)) {
         DEBUG_CODEGEN_PRINT("Error: Failed to patch while-loop end jump to %d\n", end_target);
         ctx->has_compilation_errors = true;
+        leave_loop_context(ctx, loop_frame, end_target);
         return;
     }
     DEBUG_CODEGEN_PRINT("Patched end jump to %d\n", end_target);
-    
-    // Restore previous loop context
-    ctx->current_loop_start = prev_loop_start;
-    ctx->current_loop_end = prev_loop_end;
-    ctx->current_loop_continue = prev_loop_continue;
-    
-    // Restore break statement context
-    ctx->break_statements = prev_break_statements;
-    ctx->break_count = prev_break_count;
-    ctx->break_capacity = prev_break_capacity;
-    
-    // Restore continue statement context
-    ctx->continue_statements = prev_continue_statements;
-    ctx->continue_count = prev_continue_count;
-    ctx->continue_capacity = prev_continue_capacity;
-    
+
+    leave_loop_context(ctx, loop_frame, end_target);
+
     DEBUG_CODEGEN_PRINT("While statement compilation completed");
 }
 
@@ -1830,15 +1911,34 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     if (!ctx || !for_stmt) return;
     
     DEBUG_CODEGEN_PRINT("Compiling for range statement");
-    
+
     // Create new scope for loop variable to prevent conflicts with subsequent loops using same name
     SymbolTable* old_scope = ctx->symbols;
     ctx->symbols = create_symbol_table(old_scope);
     if (!ctx->symbols) {
         DEBUG_CODEGEN_PRINT("Error: Failed to create loop scope");
         ctx->symbols = old_scope;
+        ctx->has_compilation_errors = true;
         return;
     }
+    if (ctx->allocator) {
+        mp_enter_scope(ctx->allocator);
+    }
+    ScopeFrame* scope_frame = NULL;
+    if (ctx->scopes) {
+        scope_frame = scope_stack_push(ctx->scopes, SCOPE_KIND_LEXICAL);
+        if (scope_frame) {
+            scope_frame->symbols = ctx->symbols;
+            scope_frame->start_offset = ctx->bytecode ? ctx->bytecode->count : 0;
+            scope_frame->end_offset = scope_frame->start_offset;
+        }
+    }
+    ScopeFrame* loop_frame = NULL;
+    bool success = false;
+    int start_reg = -1;
+    int end_reg = -1;
+    int step_reg = -1;
+    int loop_var_reg = -1;
     DEBUG_CODEGEN_PRINT("Created new scope for for loop (depth %d)", ctx->symbols->scope_depth);
     DEBUG_CODEGEN_PRINT("for_stmt->typed.forRange.varName = '%s'\n", 
            for_stmt->typed.forRange.varName ? for_stmt->typed.forRange.varName : "(null)");
@@ -1865,29 +1965,9 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     const char* loop_var_name = for_stmt->original->forRange.varName;
     if (!loop_var_name) {
         DEBUG_CODEGEN_PRINT("Error: Loop variable name is null");
-        return;
+        ctx->has_compilation_errors = true;
+        goto cleanup;
     }
-    
-    // Remember current loop context to support nested loops
-    int prev_loop_start = ctx->current_loop_start;
-    int prev_loop_end = ctx->current_loop_end;
-    int prev_loop_continue = ctx->current_loop_continue;
-    
-    // Save break statement context for nested loops
-    int* prev_break_statements = ctx->break_statements;
-    int prev_break_count = ctx->break_count;
-    int prev_break_capacity = ctx->break_capacity;
-    ctx->break_statements = NULL;
-    ctx->break_count = 0;
-    ctx->break_capacity = 0;
-    
-    // Save continue statement context for nested loops
-    int* prev_continue_statements = ctx->continue_statements;
-    int prev_continue_count = ctx->continue_count;
-    int prev_continue_capacity = ctx->continue_capacity;
-    ctx->continue_statements = NULL;
-    ctx->continue_count = 0;
-    ctx->continue_capacity = 0;
     
     // WORKAROUND: Use values from original AST (since typed AST is corrupted by optimization)
     DEBUG_CODEGEN_PRINT("Reading actual values from original AST");
@@ -1909,7 +1989,7 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
            start_val, end_val, step_val, for_stmt->original->forRange.inclusive ? "true" : "false");
     
     // Add constants to pool and emit proper instructions
-    int start_reg = mp_allocate_temp_register(ctx->allocator);
+    start_reg = mp_allocate_temp_register(ctx->allocator);
     Value start_value = I32_VAL(start_val);
     int start_const_index = add_constant(ctx->constants, start_value);
     set_location_from_node(ctx, for_stmt);
@@ -1919,7 +1999,7 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     emit_byte_to_buffer(ctx->bytecode, start_const_index & 0xFF);
     DEBUG_CODEGEN_PRINT("Emitted OP_LOAD_I32_CONST R%d, #%d (%d)\n", start_reg, start_const_index, start_val);
     
-    int end_reg = mp_allocate_temp_register(ctx->allocator);
+    end_reg = mp_allocate_temp_register(ctx->allocator);
     Value end_value = I32_VAL(end_val);
     int end_const_index = add_constant(ctx->constants, end_value);
     set_location_from_node(ctx, for_stmt);
@@ -1929,7 +2009,7 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     emit_byte_to_buffer(ctx->bytecode, end_const_index & 0xFF);
     DEBUG_CODEGEN_PRINT("Emitted OP_LOAD_I32_CONST R%d, #%d (%d)\n", end_reg, end_const_index, end_val);
     
-    int step_reg = mp_allocate_temp_register(ctx->allocator);
+    step_reg = mp_allocate_temp_register(ctx->allocator);
     Value step_value = I32_VAL(step_val);
     int step_const_index = add_constant(ctx->constants, step_value);
     set_location_from_node(ctx, for_stmt);
@@ -1941,14 +2021,16 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     
     if (start_reg == -1 || end_reg == -1 || step_reg == -1) {
         DEBUG_CODEGEN_PRINT("Error: Failed to compile for range expressions");
-        return;
+        ctx->has_compilation_errors = true;
+        goto cleanup;
     }
     
     // Allocate loop variable register and store in symbol table
-    int loop_var_reg = mp_allocate_frame_register(ctx->allocator);
+    loop_var_reg = mp_allocate_frame_register(ctx->allocator);
     if (loop_var_reg == -1) {
         DEBUG_CODEGEN_PRINT("Error: Failed to allocate loop variable register");
-        return;
+        ctx->has_compilation_errors = true;
+        goto cleanup;
     }
     
     // Register the loop variable in symbol table (loop variables are implicitly mutable)
@@ -1964,10 +2046,15 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     
     // Set up loop labels
     int loop_start = ctx->bytecode->count;
-    ctx->current_loop_start = loop_start;
+    loop_frame = enter_loop_context(ctx, loop_start);
+    if (!loop_frame) {
+        DEBUG_CODEGEN_PRINT("Error: Failed to enter for-range loop context");
+        ctx->has_compilation_errors = true;
+        goto cleanup;
+    }
     ctx->current_loop_continue = -1; // Will be set to increment section later
-    ctx->current_loop_end = ctx->bytecode->count + 1000; // Temporary future address
-    
+    loop_frame->continue_offset = -1;
+
     DEBUG_CODEGEN_PRINT("For range loop start at offset %d\n", loop_start);
     
     // Generate loop condition check: loop_var < end (or <= for inclusive)
@@ -1992,7 +2079,7 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     if (end_patch < 0) {
         DEBUG_CODEGEN_PRINT("Error: Failed to allocate for-loop end placeholder\n");
         ctx->has_compilation_errors = true;
-        return;
+        goto cleanup;
     }
 
     DEBUG_CODEGEN_PRINT("Emitted OP_JUMP_IF_NOT_R R%d (placeholder index %d)\n",
@@ -2007,7 +2094,7 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     // Increment loop variable: loop_var = loop_var + step
     // Set continue target to increment section FIRST (before patching)
     int continue_target = ctx->bytecode->count;
-    ctx->current_loop_continue = continue_target;
+    update_loop_continue_target(ctx, loop_frame, continue_target);
 
     // Reload step and end values in case nested loops modified these registers
     Value reload_step_value = I32_VAL(step_val);
@@ -2059,94 +2146,104 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     if (!patch_jump(ctx->bytecode, end_patch, end_target)) {
         DEBUG_CODEGEN_PRINT("Error: Failed to patch for-loop end jump to %d\n", end_target);
         ctx->has_compilation_errors = true;
-        return;
+        goto cleanup;
     }
     DEBUG_CODEGEN_PRINT("Patched conditional jump to %d\n", end_target);
     
     // Patch all break statements to jump to end of loop (do this LAST)
     patch_break_statements(ctx, end_target);
     
-    // Free temporary registers
+    leave_loop_context(ctx, loop_frame, end_target);
+    loop_frame = NULL;
+    success = true;
+
+cleanup:
+    if (loop_frame) {
+        leave_loop_context(ctx, loop_frame, ctx->bytecode ? ctx->bytecode->count : loop_start);
+        loop_frame = NULL;
+    }
+
     if (start_reg >= MP_TEMP_REG_START && start_reg <= MP_TEMP_REG_END) {
         mp_free_temp_register(ctx->allocator, start_reg);
+        start_reg = -1;
     }
     if (end_reg >= MP_TEMP_REG_START && end_reg <= MP_TEMP_REG_END) {
         mp_free_temp_register(ctx->allocator, end_reg);
+        end_reg = -1;
     }
     if (step_reg >= MP_TEMP_REG_START && step_reg <= MP_TEMP_REG_END) {
         mp_free_temp_register(ctx->allocator, step_reg);
+        step_reg = -1;
     }
-    
-    // Clean up loop scope and free loop variable register
-    DEBUG_CODEGEN_PRINT("Cleaning up for loop scope (depth %d)", ctx->symbols->scope_depth);
-    
-    // Free registers allocated to loop variables before destroying scope
-    for (int i = 0; i < ctx->symbols->capacity; i++) {
-        Symbol* symbol = ctx->symbols->symbols[i];
-        while (symbol) {
-            if (symbol->legacy_register_id >= MP_FRAME_REG_START && 
-                symbol->legacy_register_id <= MP_FRAME_REG_END) {
-                DEBUG_CODEGEN_PRINT("Freeing loop variable register R%d for variable '%s'", 
-                       symbol->legacy_register_id, symbol->name);
-                mp_free_register(ctx->allocator, symbol->legacy_register_id);
+
+    if (ctx->symbols) {
+        DEBUG_CODEGEN_PRINT("Cleaning up for loop scope (depth %d)", ctx->symbols->scope_depth);
+        for (int i = 0; i < ctx->symbols->capacity; i++) {
+            Symbol* symbol = ctx->symbols->symbols[i];
+            while (symbol) {
+                if (symbol->legacy_register_id >= MP_FRAME_REG_START &&
+                    symbol->legacy_register_id <= MP_FRAME_REG_END) {
+                    DEBUG_CODEGEN_PRINT("Freeing loop variable register R%d for variable '%s'",
+                           symbol->legacy_register_id, symbol->name);
+                    mp_free_register(ctx->allocator, symbol->legacy_register_id);
+                }
+                symbol = symbol->next;
             }
-            symbol = symbol->next;
         }
     }
-    
-    // Restore previous scope (this automatically cleans up loop variable symbols)
-    free_symbol_table(ctx->symbols);
+
+    if (scope_frame) {
+        scope_frame->end_offset = ctx->bytecode ? ctx->bytecode->count : scope_frame->start_offset;
+        if (ctx->scopes) {
+            scope_stack_pop(ctx->scopes);
+        }
+        scope_frame = NULL;
+    }
+
+    if (ctx->allocator) {
+        mp_exit_scope(ctx->allocator);
+    }
+
+    if (ctx->symbols) {
+        free_symbol_table(ctx->symbols);
+    }
     ctx->symbols = old_scope;
-    DEBUG_CODEGEN_PRINT("Restored previous scope");
-    
-    // Restore previous loop context
-    ctx->current_loop_start = prev_loop_start;
-    ctx->current_loop_end = prev_loop_end;
-    ctx->current_loop_continue = prev_loop_continue;
-    
-    // Restore break statement context
-    ctx->break_statements = prev_break_statements;
-    ctx->break_count = prev_break_count;
-    ctx->break_capacity = prev_break_capacity;
-    
-    // Restore continue statement context
-    ctx->continue_statements = prev_continue_statements;
-    ctx->continue_count = prev_continue_count;
-    ctx->continue_capacity = prev_continue_capacity;
-    
-    DEBUG_CODEGEN_PRINT("For range statement compilation completed");
+
+    if (success) {
+        DEBUG_CODEGEN_PRINT("For range statement compilation completed");
+    }
+
+    if (!success) {
+        DEBUG_CODEGEN_PRINT("For range statement aborted");
+    }
 }
 
 void compile_for_iter_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     if (!ctx || !for_stmt) return;
-    
+
     DEBUG_CODEGEN_PRINT("Compiling for iteration statement");
-    
-    // Remember current loop context to support nested loops
-    int prev_loop_start = ctx->current_loop_start;
-    int prev_loop_end = ctx->current_loop_end;
-    int prev_loop_continue = ctx->current_loop_continue;
-    
-    // Save break statement context for nested loops
-    int* prev_break_statements = ctx->break_statements;
-    int prev_break_count = ctx->break_count;
-    int prev_break_capacity = ctx->break_capacity;
-    ctx->break_statements = NULL;
-    ctx->break_count = 0;
-    ctx->break_capacity = 0;
-    
+
+    ScopeFrame* loop_frame = NULL;
+    bool success = false;
+    int iterable_reg = -1;
+    int iter_reg = -1;
+    int loop_var_reg = -1;
+    int has_value_reg = -1;
+
     // Compile iterable expression
-    int iterable_reg = compile_expression(ctx, for_stmt->typed.forIter.iterable);
+    iterable_reg = compile_expression(ctx, for_stmt->typed.forIter.iterable);
     if (iterable_reg == -1) {
         DEBUG_CODEGEN_PRINT("Error: Failed to compile iterable expression");
-        return;
+        ctx->has_compilation_errors = true;
+        goto cleanup;
     }
-    
+
     // Allocate iterator register
-    int iter_reg = mp_allocate_temp_register(ctx->allocator);
+    iter_reg = mp_allocate_temp_register(ctx->allocator);
     if (iter_reg == -1) {
         DEBUG_CODEGEN_PRINT("Error: Failed to allocate iterator register");
-        return;
+        ctx->has_compilation_errors = true;
+        goto cleanup;
     }
 
     // Get iterator from iterable
@@ -2156,28 +2253,33 @@ void compile_for_iter_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     emit_byte_to_buffer(ctx->bytecode, iterable_reg);
     
     // Allocate loop variable register and store in symbol table
-    int loop_var_reg = mp_allocate_frame_register(ctx->allocator);
+    loop_var_reg = mp_allocate_frame_register(ctx->allocator);
     if (loop_var_reg == -1) {
         DEBUG_CODEGEN_PRINT("Error: Failed to allocate loop variable register");
-        return;
+        ctx->has_compilation_errors = true;
+        goto cleanup;
     }
     
     // Register the loop variable in symbol table (loop variables are implicitly mutable)
     register_variable(ctx, for_stmt->typed.forIter.varName, loop_var_reg, getPrimitiveType(TYPE_I32), true);
     
     // Allocate has_value register for iterator status
-    int has_value_reg = mp_allocate_temp_register(ctx->allocator);
+    has_value_reg = mp_allocate_temp_register(ctx->allocator);
     if (has_value_reg == -1) {
         DEBUG_CODEGEN_PRINT("Error: Failed to allocate has_value register");
-        return;
+        ctx->has_compilation_errors = true;
+        goto cleanup;
     }
     
     // Set up loop labels
     int loop_start = ctx->bytecode->count;
-    ctx->current_loop_start = loop_start;
-    ctx->current_loop_continue = loop_start; // For for-iter loops, continue can jump to iterator advancement (at start)
-    ctx->current_loop_end = ctx->bytecode->count + 1000; // Temporary future address
-    
+    loop_frame = enter_loop_context(ctx, loop_start);
+    if (!loop_frame) {
+        DEBUG_CODEGEN_PRINT("Error: Failed to enter for-iter loop context");
+        ctx->has_compilation_errors = true;
+        goto cleanup;
+    }
+
     DEBUG_CODEGEN_PRINT("For iteration loop start at offset %d\n", loop_start);
 
     // Get next value from iterator
@@ -2196,7 +2298,7 @@ void compile_for_iter_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     if (end_patch < 0) {
         DEBUG_CODEGEN_PRINT("Error: Failed to allocate iterator loop end placeholder\n");
         ctx->has_compilation_errors = true;
-        return;
+        goto cleanup;
     }
 
     DEBUG_CODEGEN_PRINT("Emitted OP_JUMP_IF_NOT_R R%d (placeholder index %d)\n",
@@ -2228,46 +2330,64 @@ void compile_for_iter_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     if (!patch_jump(ctx->bytecode, end_patch, end_target)) {
         DEBUG_CODEGEN_PRINT("Error: Failed to patch iterator loop end jump to %d\n", end_target);
         ctx->has_compilation_errors = true;
-        return;
+        goto cleanup;
     }
     DEBUG_CODEGEN_PRINT("Patched conditional jump to %d\n", end_target);
-    
+
     // Patch all break statements to jump to end of loop (do this LAST)
     patch_break_statements(ctx, end_target);
-    
-    // Free temporary registers
+
+    leave_loop_context(ctx, loop_frame, end_target);
+    loop_frame = NULL;
+    success = true;
+
+cleanup:
+    if (loop_frame) {
+        leave_loop_context(ctx, loop_frame, ctx->bytecode ? ctx->bytecode->count : loop_start);
+        loop_frame = NULL;
+    }
+
     if (iterable_reg >= MP_TEMP_REG_START && iterable_reg <= MP_TEMP_REG_END) {
         mp_free_temp_register(ctx->allocator, iterable_reg);
+        iterable_reg = -1;
     }
     if (iter_reg >= MP_TEMP_REG_START && iter_reg <= MP_TEMP_REG_END) {
         mp_free_temp_register(ctx->allocator, iter_reg);
+        iter_reg = -1;
     }
     if (has_value_reg >= MP_TEMP_REG_START && has_value_reg <= MP_TEMP_REG_END) {
         mp_free_temp_register(ctx->allocator, has_value_reg);
+        has_value_reg = -1;
     }
-    
-    // Restore previous loop context
-    ctx->current_loop_start = prev_loop_start;
-    ctx->current_loop_end = prev_loop_end;
-    ctx->current_loop_continue = prev_loop_continue;
-    
-    // Restore break statement context
-    ctx->break_statements = prev_break_statements;
-    ctx->break_count = prev_break_count;
-    ctx->break_capacity = prev_break_capacity;
-    
-    DEBUG_CODEGEN_PRINT("For iteration statement compilation completed");
+
+    if (loop_var_reg >= MP_FRAME_REG_START && loop_var_reg <= MP_FRAME_REG_END) {
+        mp_free_register(ctx->allocator, loop_var_reg);
+        loop_var_reg = -1;
+    }
+
+    if (success) {
+        DEBUG_CODEGEN_PRINT("For iteration statement compilation completed");
+    } else {
+        DEBUG_CODEGEN_PRINT("For iteration statement aborted");
+    }
 }
 
 void compile_break_statement(CompilerContext* ctx, TypedASTNode* break_stmt) {
     if (!ctx || !break_stmt) return;
     
     DEBUG_CODEGEN_PRINT("Compiling break statement");
-    
+
     // Check if we're inside a loop (current_loop_end != -1 means we're in a loop)
     if (ctx->current_loop_end == -1) {
         DEBUG_CODEGEN_PRINT("Error: break statement outside of loop");
         ctx->has_compilation_errors = true;
+        SrcLocation location = break_stmt->original ? break_stmt->original->location : (SrcLocation){NULL, 0, 0};
+        record_control_flow_error(ctx,
+                                  E1401_BREAK_OUTSIDE_LOOP,
+                                  location,
+                                  "'break' can only be used inside a loop",
+                                  "Move this 'break' into a loop body such as while or for.");
+        report_break_outside_loop(location);
         return;
     }
     
@@ -2296,6 +2416,13 @@ void compile_continue_statement(CompilerContext* ctx, TypedASTNode* continue_stm
     if (ctx->current_loop_start == -1) {
         DEBUG_CODEGEN_PRINT("Error: continue statement outside of loop");
         ctx->has_compilation_errors = true;
+        SrcLocation location = continue_stmt->original ? continue_stmt->original->location : (SrcLocation){NULL, 0, 0};
+        record_control_flow_error(ctx,
+                                  E1402_CONTINUE_OUTSIDE_LOOP,
+                                  location,
+                                  "'continue' can only be used inside a loop",
+                                  "Move this 'continue' into a loop body such as while or for.");
+        report_continue_outside_loop(location);
         return;
     }
     
@@ -2341,9 +2468,9 @@ void compile_continue_statement(CompilerContext* ctx, TypedASTNode* continue_stm
 
 void compile_block_with_scope(CompilerContext* ctx, TypedASTNode* block) {
     if (!ctx || !block) return;
-    
+
     DEBUG_CODEGEN_PRINT("Entering new scope (depth %d)\n", ctx->symbols->scope_depth + 1);
-    
+
     // Create new scope
     SymbolTable* old_scope = ctx->symbols;
     ctx->symbols = create_symbol_table(old_scope);
@@ -2352,7 +2479,21 @@ void compile_block_with_scope(CompilerContext* ctx, TypedASTNode* block) {
         ctx->symbols = old_scope;
         return;
     }
-    
+
+    if (ctx->allocator) {
+        mp_enter_scope(ctx->allocator);
+    }
+
+    ScopeFrame* lexical_frame = NULL;
+    if (ctx->scopes) {
+        lexical_frame = scope_stack_push(ctx->scopes, SCOPE_KIND_LEXICAL);
+        if (lexical_frame) {
+            lexical_frame->symbols = ctx->symbols;
+            lexical_frame->start_offset = ctx->bytecode ? ctx->bytecode->count : 0;
+            lexical_frame->end_offset = lexical_frame->start_offset;
+        }
+    }
+
     // Compile the block content
     if (block->original->type == NODE_BLOCK) {
         // Multiple statements in block
@@ -2366,10 +2507,10 @@ void compile_block_with_scope(CompilerContext* ctx, TypedASTNode* block) {
         // Single statement
         compile_statement(ctx, block);
     }
-    
+
     // Clean up scope and free block-local variables
     DEBUG_CODEGEN_PRINT("Exiting scope (depth %d)\n", ctx->symbols->scope_depth);
-    
+
     // Free registers allocated to block-local variables
     DEBUG_CODEGEN_PRINT("Freeing block-local variable registers");
     for (int i = 0; i < ctx->symbols->capacity; i++) {
@@ -2384,7 +2525,18 @@ void compile_block_with_scope(CompilerContext* ctx, TypedASTNode* block) {
             symbol = symbol->next;
         }
     }
-    
+
+    if (lexical_frame) {
+        lexical_frame->end_offset = ctx->bytecode ? ctx->bytecode->count : lexical_frame->start_offset;
+        if (ctx->scopes) {
+            scope_stack_pop(ctx->scopes);
+        }
+    }
+
+    if (ctx->allocator) {
+        mp_exit_scope(ctx->allocator);
+    }
+
     // Restore previous scope
     free_symbol_table(ctx->symbols);
     ctx->symbols = old_scope;
