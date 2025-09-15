@@ -611,18 +611,14 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             int protected_left_reg = left_reg;
             
             if (left_is_temp && right_is_function_call) {
-                // Allocate a frame register to protect the left operand result
-                int frame_protection_reg = mp_allocate_frame_register(ctx->allocator);
-                if (frame_protection_reg != -1) {
-                    emit_move(ctx, frame_protection_reg, left_reg);
-                    DEBUG_CODEGEN_PRINT("NODE_BINARY: Protected left operand R%d -> R%d (frame register)\n", left_reg, frame_protection_reg);
-                    
-                    // Free the original temp register
-                    mp_free_temp_register(ctx->allocator, left_reg);
-                    protected_left_reg = frame_protection_reg;
-                } else {
-                    DEBUG_CODEGEN_PRINT("Warning: Could not allocate frame register for operand protection\n");
-                }
+                // Use a dedicated parameter register (R240) to preserve left operand
+                int frame_protection_reg = 240;  // R240 is preserved across function calls
+                emit_move(ctx, frame_protection_reg, left_reg);
+                DEBUG_CODEGEN_PRINT("NODE_BINARY: Protected left operand R%d -> R%d (param register)\n", left_reg, frame_protection_reg);
+
+                // Free the original temp register
+                mp_free_temp_register(ctx->allocator, left_reg);
+                protected_left_reg = frame_protection_reg;
             }
             
             DEBUG_CODEGEN_PRINT("NODE_BINARY: Compiling right operand (type %d)\n", right_typed->original->type);
