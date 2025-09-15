@@ -206,10 +206,11 @@ CompilerContext* init_compiler_context(TypedASTNode* typed_ast) {
     ctx->symbols = create_symbol_table(NULL);  // Global scope
     
     // TODO: Initialize these in later phases
-    ctx->scopes = NULL;       // Will implement in Phase 2  
+    ctx->scopes = NULL;       // Will implement in Phase 2
     ctx->errors = NULL;       // Will implement in Phase 2
     ctx->has_compilation_errors = false;  // Initialize error tracking
     ctx->compiling_function = false;      // Initialize function compilation flag
+    ctx->function_scope_depth = ctx->symbols->scope_depth; // Track function root depth
     ctx->opt_ctx = NULL;      // Will implement in Phase 2
     
     // Initialize loop control context
@@ -229,6 +230,11 @@ CompilerContext* init_compiler_context(TypedASTNode* typed_ast) {
     ctx->function_arities = NULL;        // No function arities yet
     ctx->function_count = 0;
     ctx->function_capacity = 0;
+
+    // Initialize closure context
+    ctx->upvalues = NULL;
+    ctx->upvalue_count = 0;
+    ctx->upvalue_capacity = 0;
     
     if (!ctx->allocator || !ctx->dual_allocator || !ctx->bytecode || !ctx->constants || !ctx->symbols) {
         free_compiler_context(ctx);
@@ -443,6 +449,10 @@ void free_compiler_context(CompilerContext* ctx) {
     // Free function arities array
     if (ctx->function_arities) {
         free(ctx->function_arities);
+    }
+
+    if (ctx->upvalues) {
+        free(ctx->upvalues);
     }
     
     // Note: Don't free input_ast - it's owned by caller

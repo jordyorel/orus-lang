@@ -56,6 +56,12 @@ typedef struct JumpPatch {
     int target_label;          // Label to patch to
 } JumpPatch;
 
+// Upvalue capture information for closures
+typedef struct {
+    bool isLocal;   // Captured variable comes from enclosing function's locals
+    uint8_t index;  // Register index or upvalue slot in enclosing function
+} UpvalueInfo;
+
 // Main compilation context for multi-pass compiler
 typedef struct CompilerContext {
     TypedASTNode* input_ast;           // Input from HM type inference
@@ -79,9 +85,10 @@ typedef struct CompilerContext {
     // Error handling (TODO: implement in Phase 2)
     ErrorReporter* errors;             // Compilation error tracking
     bool has_compilation_errors;       // Track if any compilation errors occurred
-    
+
     // Function compilation context
     bool compiling_function;           // Are we currently compiling inside a function?
+    int function_scope_depth;          // Scope depth of current function's root
     
     // Debugging
     bool enable_visualization;         // Show TypedAST between passes
@@ -107,6 +114,11 @@ typedef struct CompilerContext {
     int* function_arities;             // Arities for each function
     int function_count;                // Number of functions compiled
     int function_capacity;             // Capacity of function_chunks array
+
+    // Closure compilation context
+    UpvalueInfo* upvalues;             // Captured variables for current function
+    int upvalue_count;                 // Number of captured upvalues
+    int upvalue_capacity;              // Capacity of upvalues array
 } CompilerContext;
 
 // Bytecode emission functions
