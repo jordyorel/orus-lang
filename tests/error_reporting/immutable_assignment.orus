@@ -1,0 +1,3 @@
+// Reassigning an immutable binding should produce a helpful diagnostic
+value = 1
+value = 2

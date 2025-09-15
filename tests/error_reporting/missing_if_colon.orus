@@ -1,0 +1,3 @@
+// Forgetting the colon after an if statement should raise a syntax diagnostic
+if true
+    print("missing colon")
