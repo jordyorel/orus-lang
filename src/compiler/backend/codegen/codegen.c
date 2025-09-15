@@ -8,7 +8,6 @@
 #include "vm/vm_constants.h"
 #include "errors/features/variable_errors.h"
 #include "debug/debug_config.h"
-#include "runtime/memory.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -95,9 +94,14 @@ static int resolve_variable_or_upvalue(CompilerContext* ctx, const char* name,
         while (table) {
             Symbol* symbol = resolve_symbol_local_only(table, name);
             if (symbol) {
-                if (is_upvalue) *is_upvalue = true;
                 int reg = symbol->reg_allocation ?
                     symbol->reg_allocation->logical_id : symbol->legacy_register_id;
+                if (table->parent == NULL) {
+                    if (is_upvalue) *is_upvalue = false;
+                    if (upvalue_index) *upvalue_index = -1;
+                    return reg;
+                }
+                if (is_upvalue) *is_upvalue = true;
                 int index = add_upvalue(ctx, true, (uint8_t)reg);
                 if (upvalue_index) *upvalue_index = index;
                 return reg;
@@ -978,6 +982,10 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             return result_reg;
         }
         
+        case NODE_FUNCTION: {
+            return compile_function_declaration(ctx, expr);
+        }
+
         case NODE_CALL: {
             DEBUG_CODEGEN_PRINT("NODE_CALL: Compiling function call");
 
@@ -1343,10 +1351,8 @@ void compile_assignment(CompilerContext* ctx, TypedASTNode* assign) {
     const char* var_name = assign->typed.assign.name;
     Symbol* symbol = resolve_symbol(ctx->symbols, var_name);
     bool is_local = resolve_symbol_local_only(ctx->symbols, var_name) != NULL;
-    bool is_upvalue = false;
-    int upvalue_index = -1;
 
-    if (!symbol) {
+    if (!symbol || (!is_local && ctx->compiling_function)) {
         DEBUG_CODEGEN_PRINT("Creating new local variable %s (implicit)\n", var_name);
 
         int value_reg = compile_expression(ctx, assign->typed.assign.value);
@@ -1365,12 +1371,6 @@ void compile_assignment(CompilerContext* ctx, TypedASTNode* assign) {
         return;
     }
 
-    if (!is_local && ctx->compiling_function) {
-        is_upvalue = true;
-        int reg = symbol->reg_allocation ? symbol->reg_allocation->logical_id : symbol->legacy_register_id;
-        upvalue_index = add_upvalue(ctx, true, (uint8_t)reg);
-    }
-
     if (!symbol->is_mutable) {
         SrcLocation location = assign->original->location;
         report_immutable_variable_assignment(location, var_name);
@@ -1380,15 +1380,6 @@ void compile_assignment(CompilerContext* ctx, TypedASTNode* assign) {
 
     int value_reg = compile_expression(ctx, assign->typed.assign.value);
     if (value_reg == -1) return;
-
-    if (is_upvalue) {
-        emit_byte_to_buffer(ctx->bytecode, OP_SET_UPVALUE_R);
-        emit_byte_to_buffer(ctx->bytecode, upvalue_index);
-        emit_byte_to_buffer(ctx->bytecode, value_reg);
-        mp_free_temp_register(ctx->allocator, value_reg);
-        return;
-    }
-
     int var_reg = symbol->reg_allocation ? symbol->reg_allocation->logical_id : symbol->legacy_register_id;
     emit_move(ctx, var_reg, value_reg);
     mp_free_temp_register(ctx->allocator, value_reg);
@@ -2427,9 +2418,11 @@ void finalize_functions_to_vm(CompilerContext* ctx) {
 
 // ====== FUNCTION COMPILATION IMPLEMENTATION ======
 
-// Compile a function declaration and emit closure creation
-void compile_function_declaration(CompilerContext* ctx, TypedASTNode* func) {
-    if (!ctx || !func || !func->original) return;
+// Compile a function declaration or expression and return a register
+// containing the function index. Closures and upvalues are not yet
+// supported for anonymous functions.
+int compile_function_declaration(CompilerContext* ctx, TypedASTNode* func) {
+    if (!ctx || !func || !func->original) return -1;
 
     const char* func_name = func->original->function.name;
     int arity = func->original->function.paramCount;
@@ -2437,27 +2430,21 @@ void compile_function_declaration(CompilerContext* ctx, TypedASTNode* func) {
     DEBUG_CODEGEN_PRINT("Compiling function declaration: %s\n",
            func_name ? func_name : "(anonymous)");
 
-    // Allocate register for function variable (global or local)
-    int func_reg = ctx->compiling_function ?
-        mp_allocate_frame_register(ctx->allocator) :
-        mp_allocate_global_register(ctx->allocator);
-    if (func_reg == -1) return;
-
-    register_variable(ctx, func_name, func_reg, getPrimitiveType(TYPE_FUNCTION), false);
-
-    // Save current upvalue context and reset for this function
-    UpvalueInfo* saved_upvalues = ctx->upvalues;
-    int saved_upvalue_count = ctx->upvalue_count;
-    int saved_upvalue_capacity = ctx->upvalue_capacity;
-    ctx->upvalues = NULL;
-    ctx->upvalue_count = 0;
-    ctx->upvalue_capacity = 0;
-
-    // Reset frame registers for isolated compilation
-    mp_reset_frame_registers(ctx->allocator);
+    int func_reg;
+    if (func_name) {
+        func_reg = ctx->compiling_function ?
+            mp_allocate_frame_register(ctx->allocator) :
+            mp_allocate_global_register(ctx->allocator);
+        if (func_reg == -1) return -1;
+        register_variable(ctx, func_name, func_reg, getPrimitiveType(TYPE_FUNCTION), false);
+        mp_reset_frame_registers(ctx->allocator);
+    } else {
+        func_reg = mp_allocate_temp_register(ctx->allocator);
+        if (func_reg == -1) return -1;
+    }
 
     BytecodeBuffer* function_bytecode = init_bytecode_buffer();
-    if (!function_bytecode) return;
+    if (!function_bytecode) return -1;
 
     // Save outer compilation state
     BytecodeBuffer* saved_bytecode = ctx->bytecode;
@@ -2472,7 +2459,9 @@ void compile_function_declaration(CompilerContext* ctx, TypedASTNode* func) {
     ctx->function_scope_depth = ctx->symbols->scope_depth;
 
     // Make function name visible inside its own body for recursion
-    register_variable(ctx, func_name, func_reg, getPrimitiveType(TYPE_FUNCTION), false);
+    if (func_name) {
+        register_variable(ctx, func_name, func_reg, getPrimitiveType(TYPE_FUNCTION), false);
+    }
 
     // Register parameters
     int param_base = 256 - arity;
@@ -2499,78 +2488,29 @@ void compile_function_declaration(CompilerContext* ctx, TypedASTNode* func) {
 
     // Ensure function ends with return
     if (function_bytecode->count == 0 ||
-        function_bytecode->instructions[function_bytecode->count - 1] != OP_RETURN_R) {
+        (function_bytecode->count >= 2 &&
+         function_bytecode->instructions[function_bytecode->count - 2] != OP_RETURN_R)) {
         emit_byte_to_buffer(function_bytecode, OP_RETURN_VOID);
     }
 
-    // Capture generated upvalues
-    UpvalueInfo* function_upvalues = ctx->upvalues;
-    int function_upvalue_count = ctx->upvalue_count;
-
     // Restore outer compilation state
-    ctx->upvalues = saved_upvalues;
-    ctx->upvalue_count = saved_upvalue_count;
-    ctx->upvalue_capacity = saved_upvalue_capacity;
-
     ctx->bytecode = saved_bytecode;
     free_symbol_table(ctx->symbols);
     ctx->symbols = old_scope;
     ctx->compiling_function = old_compiling_function;
     ctx->function_scope_depth = saved_function_scope_depth;
 
-    // Build chunk for function
-    Chunk* chunk = malloc(sizeof(Chunk));
-    if (!chunk) {
-        free(function_bytecode);
-        free(function_upvalues);
-        return;
+    // Register function for VM finalization and get index
+    int function_index = register_function(ctx, func_name ? func_name : "(lambda)",
+                                          arity, function_bytecode);
+    if (function_index < 0) {
+        free_bytecode_buffer(function_bytecode);
+        return -1;
     }
 
-    initChunk(chunk);
-
-    chunk->code = malloc(function_bytecode->count);
-    if (!chunk->code) {
-        free(chunk);
-        free(function_bytecode);
-        free(function_upvalues);
-        return;
-    }
-    memcpy(chunk->code, function_bytecode->instructions, function_bytecode->count);
-    chunk->count = function_bytecode->count;
-    chunk->capacity = function_bytecode->count;
-
-    // Copy only the constants actually used
-    chunk->constants.count = ctx->constants->count;
-    chunk->constants.capacity = ctx->constants->count;
-    if (chunk->constants.count > 0) {
-        chunk->constants.values = malloc(sizeof(Value) * chunk->constants.count);
-        if (chunk->constants.values) {
-            memcpy(chunk->constants.values, ctx->constants->values,
-                   sizeof(Value) * chunk->constants.count);
-        }
-    }
-
-    // Create ObjFunction
-    ObjFunction* obj = allocateFunction();
-    obj->arity = arity;
-    obj->chunk = chunk;
-    obj->upvalueCount = function_upvalue_count;
-    obj->name = NULL;
-
-    // Emit closure creation in outer bytecode
-    Value func_val = FUNCTION_VAL(obj);
-    emit_load_constant(ctx, func_reg, func_val);
-    emit_byte_to_buffer(ctx->bytecode, OP_CLOSURE_R);
-    emit_byte_to_buffer(ctx->bytecode, func_reg);   // dst
-    emit_byte_to_buffer(ctx->bytecode, func_reg);   // function
-    emit_byte_to_buffer(ctx->bytecode, function_upvalue_count);
-    for (int i = 0; i < function_upvalue_count; i++) {
-        emit_byte_to_buffer(ctx->bytecode, function_upvalues[i].isLocal ? 1 : 0);
-        emit_byte_to_buffer(ctx->bytecode, function_upvalues[i].index);
-    }
-
-    free(function_upvalues);
-    free_bytecode_buffer(function_bytecode);
+    // Load function index into target register
+    emit_load_constant(ctx, func_reg, I32_VAL(function_index));
+    return func_reg;
 }
 
 // Compile a return statement

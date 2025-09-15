@@ -409,7 +409,7 @@ fn greet(name: string):
 - [x] **COMPLETE**: Function objects as first-class values ✅
 - [x] **COMPLETE**: Higher-order functions (functions as parameters/return values) ✅
 - [x] **COMPLETE**: Closure capture and upvalues ✅
-- [ ] **NEXT**: Lambda/anonymous function syntax
+- [x] **COMPLETE**: Lambda/anonymous function syntax ✅
 - [ ] **NEXT**: Generic constraints for higher-order functions
 
 **Parameter Support:**
@@ -441,7 +441,7 @@ fn greet(name: string):
 - [ ] **NEXT**: Closure variable mutability support
 - [ ] **NEXT**: Closure bytecode generation optimization (OP_CLOSURE_R)
 - [ ] **NEXT**: Multiple upvalue capture optimization
-- [ ] **NEXT**: Lambda/anonymous function syntax
+- [x] **COMPLETE**: Lambda/anonymous function syntax ✅
 - [ ] **NEXT**: Complex closure scenarios (multiple nesting levels)
 - [ ] **NEXT**: TODO: Implement proper mutability tracking for upvalues
 
@@ -457,6 +457,11 @@ fn applyTwice(func, value):
 // ✅ WORKING: First-class functions
 addFunc = add
 result = addFunc(5, 3)
+
+// ✅ NEW: Lambda function
+square = fn(n):
+    n * n
+print(square(4))  // Should print 16
 
 // ✅ WORKING: Closure capture
 fn makeCounter(start):
