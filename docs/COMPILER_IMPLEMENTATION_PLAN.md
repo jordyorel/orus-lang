@@ -21,7 +21,7 @@ This document outlines the detailed implementation plan for building the Orus co
 - **✅ Register Allocation**: `src/compiler/backend/register_allocator.c`
 - **✅ Bytecode Emission**: Variable-length instruction generation matching VM format
 
-#### 🚨 **What's Still Missing (35% of Production Compiler)**
+#### 🚨 **What's Still Missing (updated status)**
 
 **✅ CRITICAL TYPE SYSTEM - FULLY IMPLEMENTED**
 - **✅ WORKING: Rust-like Type Inference**: Literals adapt to declared types (`x: i64 = 5` works perfectly)
@@ -30,11 +30,12 @@ This document outlines the detailed implementation plan for building the Orus co
 - **✅ WORKING: Smart Type Coercion**: `as` casting works for type conversions between variables
 
 **CRITICAL LANGUAGE FEATURES (HIGH PRIORITY)**
-- **✅ Expression Types**: ✅ Binary ops (+,-,*,/,%), ✅ comparisons (<,>,<=,>=,==,!=), ✅ logical (and,or,not), unary ops (-,not,++) (COMPLETED)
-- **✅ Control Flow**: ✅ if/elif/else statements (COMPLETED), ✅ while loops with break/continue (COMPLETED), ❌ for loops, match statements
-- **Functions**: fn definitions, calls, parameters, return statements, recursion
-- **✅ Data Types**: ✅ String literals, all numeric types (i32), ✅ booleans (COMPLETED)
-- **✅ Variable System**: ✅ Mutable/immutable declarations, ✅ proper scoping and identifier resolution (COMPLETED)
+- ✅ Expression Types: binary (+,-,*,/,%), comparisons (<,>,<=,>=,==,!=), logical (and,or,not), unary ops (-,not,++)
+- ✅ Control Flow: if/elif/else, while with break/continue, for loops (range and iter) — implemented end‑to‑end
+- ❌ Pattern Matching: `match` syntax parsing + codegen not yet implemented (lexer token exists)
+- ✅ Functions: function declarations, calls, returns — basic support in codegen; advanced features TBD
+- ✅ Data Types: string, numeric (i32/i64/u32/u64/f64), booleans
+- ✅ Variable System: mut/immut declarations, scoping and identifier resolution
 
 **OPTIMIZATION PIPELINE (MEDIUM PRIORITY)**
 - **Advanced Constant Folding**: Type-aware folding, immediate value detection, algebraic simplification
@@ -42,14 +43,27 @@ This document outlines the detailed implementation plan for building the Orus co
 - **Register Optimization**: Type specialization, spill utilization, coalescing, advanced allocation
 
 **INFRASTRUCTURE & TOOLING (HIGH PRIORITY)**
-- **Symbol Tables**: Variable→register mapping, scope management, function symbols
-- **Error System**: Compiler-specific errors, recovery, source location tracking, diagnostics
-- **Testing Framework**: Unit tests, integration tests, performance benchmarks, 90% coverage
+- ✅ Symbol Tables: Variable→register mapping, scope management, dual‑register metadata (`src/compiler/symbol_table.c`)
+- ◻ Error System: Compiler‑pass‑specific diagnostics integration ongoing (immut assignment checks present; expand for passes)
+- ◻ Testing Framework: Tests exist under `tests/`; broaden coverage + add compiler‑pass unit tests
 
 **VM FEATURE UTILIZATION (MEDIUM PRIORITY)**
-- **Specialized Instructions**: OP_ADD_I32_TYPED, OP_ADD_I32_IMM, OP_MUL_ADD_I32 fused ops
-- **Advanced VM Features**: Loop fusion (OP_INC_CMP_JMP), short jumps, frame registers
-- **Memory Optimization**: Load/store scheduling, constant pools, stack frame optimization
+- ✅ Specialized typed arithmetic: OP_ADD_*_TYPED selected by type in codegen
+- ◻ Immediate/fused ops: Increase use of OP_ADD_I32_IMM and OP_INC_CMP_JMP in codegen patterns
+- ✅ Short jumps: OP_JUMP_SHORT/OP_LOOP_SHORT emitted where applicable
+- ◻ Memory/frames: Further scheduling and frame/register coalescing opportunities
+
+---
+
+### Status Update (Sep 2025)
+
+- For‑loops: Implemented in parser and codegen (range and iter variants) with short‑jump backpatching.
+- Symbol Table: Implemented with dual‑register allocation metadata and scope chains.
+- Optimizations: Constant folding active; DCE/propagation/CSE/LICM not yet implemented.
+- VM fused ops: VM supports OP_INC_CMP_JMP and OP_ADD_I32_IMM; codegen usage still limited.
+- Jump patching: Generic `emit_jump_placeholder/patch_jump` remains TODO; codegen does localized backpatching.
+- Pattern Matching: Lexer token present; parser + codegen not implemented.
+- Visualization: Typed AST visualizer complete; bytecode debug dumper should be updated for variable‑length instructions.
 
 ### Architecture Overview
 
