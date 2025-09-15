@@ -205,6 +205,8 @@ test: $(ORUS)
 		echo "\033[31m✗ $$failed test(s) failed, $$passed test(s) passed.\033[0m"; \
 	fi; \
 	echo ""
+	@echo "\033[36m=== Error Reporting Tests ===\033[0m"
+	@python3 tests/error_reporting/run_error_tests.py ./$(ORUS)
 
 # Run unit tests
 unit-test: $(UNIT_TEST_RUNNER)

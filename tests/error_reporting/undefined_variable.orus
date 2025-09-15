@@ -1,0 +1,2 @@
+// Accessing an undeclared variable should trigger a friendly syntax error
+print(missing_value)

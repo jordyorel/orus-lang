@@ -1,0 +1,62 @@
+[
+  {
+    "name": "undefined_variable",
+    "source": "undefined_variable.orus",
+    "description": "Accessing an undeclared variable should produce a helpful undefined-variable diagnostic.",
+    "expected_exit": 65,
+    "expected": [
+      "-- SYNTAX ERROR: Can't find this variable",
+      "Undefined variable 'missing_value'. Variables must be declared before use.",
+      "help: Make sure you've declared the variable before using it, or check the spelling.",
+      "note: Variables must be declared before they can be used in Orus.",
+      "Compilation failed for \"tests/error_reporting/undefined_variable.orus\"."
+    ]
+  },
+  {
+    "name": "immutable_assignment",
+    "source": "immutable_assignment.orus",
+    "description": "Reassigning an immutable binding should ask for the 'mut' keyword.",
+    "expected_exit": 65,
+    "expected": [
+      "-- SYNTAX ERROR: This variable needs to be mutable",
+      "Cannot assign to immutable variable 'value'. Add 'mut' when declaring it.",
+      "help: Add 'mut' before the variable name when declaring it: 'mut variable_name = value'",
+      "note: Variables are immutable by default in Orus for safety and predictability.",
+      "Compilation failed for \"tests/error_reporting/immutable_assignment.orus\"."
+    ]
+  },
+  {
+    "name": "function_argument_mismatch",
+    "source": "function_argument_mismatch.orus",
+    "description": "Calling a function with the wrong number of arguments should emit a type mismatch.",
+    "expected_exit": 65,
+    "expected": [
+      "-- TYPE MISMATCH: Type mismatch found",
+      "this is a `argument count`, but `function signature` was expected",
+      "help: Try converting one value to match the other's type, like `x as string` or `y as i32`.",
+      "note: Orus keeps types separate to help prevent unexpected behavior and bugs.",
+      "Compilation failed for \"tests/error_reporting/function_argument_mismatch.orus\"."
+    ]
+  },
+  {
+    "name": "missing_if_colon",
+    "source": "missing_if_colon.orus",
+    "description": "If statements without a colon should surface a syntax error with context.",
+    "expected_exit": 65,
+    "expected": [
+      "-- SYNTAX ERROR: Something went wrong",
+      "Expected ':' after if statement",
+      "Compilation failed for \"tests/error_reporting/missing_if_colon.orus\"."
+    ]
+  },
+  {
+    "name": "closure_invalid_upvalue",
+    "source": "closure_invalid_upvalue.orus",
+    "description": "Mutating a captured immutable variable inside a closure currently triggers a runtime panic.",
+    "expected_exit": 70,
+    "expected": [
+      "-- RUNTIME PANIC: This operation isn't allowed here",
+      "Invalid upvalue access"
+    ]
+  }
+]

@@ -1,0 +1,10 @@
+// Capturing a non-mutable variable in a closure and trying to reassign it should
+// currently trigger a runtime panic from the VM's upvalue handling.
+fn outer() -> fn() -> i32:
+    value = 0
+    return fn() -> i32:
+        value = value + 1
+        return value
+
+counter = outer()
+print(counter())
