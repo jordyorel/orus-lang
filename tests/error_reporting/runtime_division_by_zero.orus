@@ -1,0 +1,4 @@
+print("runtime location metadata")
+value: i32 = 42
+zero: i32 = 0
+print(value / zero)

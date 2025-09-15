@@ -25,23 +25,28 @@ BytecodeBuffer* init_bytecode_buffer(void) {
     buffer->instructions = malloc(buffer->capacity);
     buffer->source_lines = malloc(buffer->capacity * sizeof(int));
     buffer->source_columns = malloc(buffer->capacity * sizeof(int));
-    
+
     if (!buffer->instructions || !buffer->source_lines || !buffer->source_columns) {
         free_bytecode_buffer(buffer);
         return NULL;
     }
-    
+
+    buffer->current_location.file = NULL;
+    buffer->current_location.line = -1;
+    buffer->current_location.column = -1;
+    buffer->has_current_location = false;
+
     // Initialize jump patching
     buffer->patches = NULL;
     buffer->patch_count = 0;
     buffer->patch_capacity = 0;
-    
+
     return buffer;
 }
 
 void free_bytecode_buffer(BytecodeBuffer* buffer) {
     if (!buffer) return;
-    
+
     free(buffer->instructions);
     free(buffer->source_lines);
     free(buffer->source_columns);
@@ -132,7 +137,7 @@ Value get_constant(ConstantPool* pool, int index) {
 
 void emit_byte_to_buffer(BytecodeBuffer* buffer, uint8_t byte) {
     if (!buffer) return;
-    
+
     // Resize if needed
     if (buffer->count >= buffer->capacity) {
         buffer->capacity *= 2;
@@ -140,11 +145,30 @@ void emit_byte_to_buffer(BytecodeBuffer* buffer, uint8_t byte) {
         buffer->source_lines = realloc(buffer->source_lines, buffer->capacity * sizeof(int));
         buffer->source_columns = realloc(buffer->source_columns, buffer->capacity * sizeof(int));
     }
-    
+
     buffer->instructions[buffer->count] = byte;
-    buffer->source_lines[buffer->count] = 0;    // TODO: Add source location tracking
-    buffer->source_columns[buffer->count] = 0;  // TODO: Add source location tracking
+    if (buffer->has_current_location) {
+        buffer->source_lines[buffer->count] = buffer->current_location.line;
+        buffer->source_columns[buffer->count] = buffer->current_location.column;
+    } else {
+        buffer->source_lines[buffer->count] = -1;
+        buffer->source_columns[buffer->count] = -1;
+    }
     buffer->count++;
+}
+
+void bytecode_set_location(BytecodeBuffer* buffer, SrcLocation location) {
+    if (!buffer) return;
+    buffer->current_location = location;
+    buffer->has_current_location = true;
+}
+
+void bytecode_set_synthetic_location(BytecodeBuffer* buffer) {
+    if (!buffer) return;
+    buffer->current_location.file = NULL;
+    buffer->current_location.line = -1;
+    buffer->current_location.column = -1;
+    buffer->has_current_location = true;
 }
 
 void emit_word_to_buffer(BytecodeBuffer* buffer, uint16_t word) {

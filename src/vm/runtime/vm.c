@@ -288,10 +288,20 @@ InterpretResult interpret(const char* source) {
                     chunk.count = multi_compiler->bytecode->count;
                     chunk.capacity = multi_compiler->bytecode->capacity;
                     free(chunk.code); // Free the old empty chunk
+                    free(chunk.lines);
+                    free(chunk.columns);
                     chunk.code = malloc(chunk.count);
+                    chunk.lines = chunk.count > 0 ? malloc(sizeof(int) * chunk.count) : NULL;
+                    chunk.columns = chunk.count > 0 ? malloc(sizeof(int) * chunk.count) : NULL;
+                    if (chunk.count > 0 && (!chunk.lines || !chunk.columns)) {
+                        free(chunk.lines);
+                        free(chunk.columns);
+                        chunk.lines = NULL;
+                        chunk.columns = NULL;
+                    }
                     // printf("[VM] Allocated chunk memory: %p, size: %d\n", chunk.code, chunk.count);
                     // fflush(stdout);
-                    
+
                     // Copy constants from compiler's constant pool to chunk's constants
                     if (multi_compiler->constants && multi_compiler->constants->count > 0) {
                         for (int i = 0; i < multi_compiler->constants->count; i++) {
@@ -302,9 +312,17 @@ InterpretResult interpret(const char* source) {
                         // printf("[VM] No constants to copy from compiler\n");
                     }
                     fflush(stdout);
-                    
+
                     if (chunk.code) {
                         memcpy(chunk.code, multi_compiler->bytecode->instructions, chunk.count);
+                        if (chunk.lines && multi_compiler->bytecode->source_lines) {
+                            memcpy(chunk.lines, multi_compiler->bytecode->source_lines,
+                                   sizeof(int) * chunk.count);
+                        }
+                        if (chunk.columns && multi_compiler->bytecode->source_columns) {
+                            memcpy(chunk.columns, multi_compiler->bytecode->source_columns,
+                                   sizeof(int) * chunk.count);
+                        }
                         // printf("[VM] Copied bytecode to chunk\n");
                         
                         // Bytecode dump disabled for clean program execution
