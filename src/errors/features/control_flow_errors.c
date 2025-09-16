@@ -1,5 +1,6 @@
 #include "errors/features/control_flow_errors.h"
 #include "errors/error_interface.h"
+#include "compiler/scope_stack.h"
 #include <string.h>
 #include <limits.h>
 
@@ -253,18 +254,47 @@ ErrorReportResult report_loop_performance_warning(SrcLocation location, const ch
 // Validation Helpers
 // ============================================================================
 
-// Note: These would need to integrate with the compiler's loop context tracking
+static ScopeStack* active_scope_stack = NULL;
+static int parser_loop_depth = 0;
+
+static bool scope_stack_has_loop_context(void) {
+    return active_scope_stack && scope_stack_is_in_loop(active_scope_stack);
+}
+
+void control_flow_register_scope_stack(ScopeStack* stack) {
+    active_scope_stack = stack;
+}
+
+void control_flow_unregister_scope_stack(ScopeStack* stack) {
+    if (active_scope_stack == stack) {
+        active_scope_stack = NULL;
+    }
+}
+
+void control_flow_reset_validation_state(void) {
+    parser_loop_depth = 0;
+    active_scope_stack = NULL;
+}
+
+void control_flow_enter_loop_context(void) {
+    parser_loop_depth++;
+}
+
+void control_flow_leave_loop_context(void) {
+    if (parser_loop_depth > 0) {
+        parser_loop_depth--;
+    }
+}
+
 bool is_valid_loop_context(void) {
-    // This would check the compiler's loop depth or context stack
-    // For now, return true as a placeholder
-    return true;
+    if (scope_stack_has_loop_context()) {
+        return true;
+    }
+    return parser_loop_depth > 0;
 }
 
 bool is_valid_break_continue_context(void) {
-    // This would check if we're inside a loop that allows break/continue
-    // For now, always return true to avoid blocking valid break/continue in loops
-    // TODO: Implement proper loop context tracking
-    return true;
+    return is_valid_loop_context();
 }
 
 bool is_boolean_expression_type(const char* type_name) {

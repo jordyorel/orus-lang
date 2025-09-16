@@ -716,6 +716,39 @@ static LoopContext* getLoopByLabel(Compiler* c, const char* label) {
 }
 ```
 
+#### Loop Context Diagnostics
+
+Parser and backend diagnostics now share a common loop-depth tracker. The parser
+increments the depth before parsing a loop body and decrements it afterwards,
+ensuring `break`/`continue` checks have the proper context even before the
+typed AST exists.
+
+```c
+static void parser_enter_loop(ParserContext* ctx) {
+    control_flow_enter_loop_context();
+    ctx->loop_depth++;
+}
+
+static void parser_leave_loop(ParserContext* ctx) {
+    control_flow_leave_loop_context();
+    if (ctx->loop_depth > 0) {
+        ctx->loop_depth--;
+    }
+}
+```
+
+When the multi-pass compiler spins up, it registers its `ScopeStack` with the
+control-flow helpers so that backend diagnostics share the same state:
+
+```c
+ctx->scopes = scope_stack_create();
+control_flow_register_scope_stack(ctx->scopes);
+```
+
+With the shared tracker in place, `is_valid_break_continue_context()` returns
+`false` whenever neither the parser nor the compiler are inside an active loop,
+allowing both phases to reject misplaced control-flow statements consistently.
+
 #### For Loop with Range
 ```c
 static void compileForRange(Compiler* compiler, ASTNode* node) {

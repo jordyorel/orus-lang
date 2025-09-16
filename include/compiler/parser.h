@@ -24,10 +24,13 @@ typedef struct {
 typedef struct ParserContext {
     // Arena for AST node allocation
     Arena arena;
-    
+
     // Recursion depth tracking
     int recursion_depth;
-    
+
+    // Loop context tracking for break/continue validation
+    int loop_depth;
+
     // Token lookahead management
     Token peeked_token;
     bool has_peeked_token;

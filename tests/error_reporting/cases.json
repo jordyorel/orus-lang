@@ -13,6 +13,37 @@
     ]
   },
   {
+    "name": "break_outside_loop",
+    "source": "break_outside_loop.orus",
+    "description": "Using 'break' outside of a loop should report a control-flow diagnostic.",
+    "expected_exit": 65,
+    "expected": [
+      "'break' can only be used inside a loop",
+      "Compilation failed for \"tests/error_reporting/break_outside_loop.orus\"."
+    ]
+  },
+  {
+    "name": "continue_outside_loop",
+    "source": "continue_outside_loop.orus",
+    "description": "Using 'continue' outside of a loop should report a control-flow diagnostic.",
+    "expected_exit": 65,
+    "expected": [
+      "'continue' can only be used inside a loop",
+      "Compilation failed for \"tests/error_reporting/continue_outside_loop.orus\"."
+    ]
+  },
+  {
+    "name": "loop_control_valid",
+    "source": "loop_control_valid.orus",
+    "description": "Legal break/continue usage should compile without diagnostics.",
+    "expected_exit": 0,
+    "expected": [
+      "loop control success",
+      "break at 4",
+      "loop control done"
+    ]
+  },
+  {
     "name": "immutable_assignment",
     "source": "immutable_assignment.orus",
     "description": "Reassigning an immutable binding should ask for the 'mut' keyword.",

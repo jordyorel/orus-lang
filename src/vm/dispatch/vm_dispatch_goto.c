@@ -2873,22 +2873,41 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_GET_UPVALUE_R: {
         uint8_t dstReg = READ_BYTE();
         uint8_t upvalueIndex = READ_BYTE();
-        
-        ObjClosure* closure = AS_CLOSURE(vm.registers[0]); // Current closure
-        if (closure == NULL || upvalueIndex >= closure->function->upvalueCount) {
+
+        Value closureValue = vm.registers[0];
+        if (!IS_CLOSURE(closureValue)) {
             VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(), "Invalid upvalue access");
         }
-        
-        Value upvalue = *closure->upvalues[upvalueIndex]->location;
-        vm.registers[dstReg] = upvalue;
+
+        ObjClosure* closure = AS_CLOSURE(closureValue); // Current closure
+        if (closure == NULL || closure->upvalues == NULL ||
+            upvalueIndex >= closure->upvalueCount ||
+            closure->upvalues[upvalueIndex] == NULL ||
+            closure->upvalues[upvalueIndex]->location == NULL) {
+            VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(), "Invalid upvalue access");
+        }
+
+        vm.registers[dstReg] = *closure->upvalues[upvalueIndex]->location;
         DISPATCH();
     }
 
     LABEL_OP_SET_UPVALUE_R: {
         uint8_t upvalueIndex = READ_BYTE();
         uint8_t valueReg = READ_BYTE();
-        
-        ObjClosure* closure = AS_CLOSURE(vm.registers[0]); // Current closure
+
+        Value closureValue = vm.registers[0];
+        if (!IS_CLOSURE(closureValue)) {
+            VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(), "Invalid upvalue access");
+        }
+
+        ObjClosure* closure = AS_CLOSURE(closureValue); // Current closure
+        if (closure == NULL || closure->upvalues == NULL ||
+            upvalueIndex >= closure->upvalueCount ||
+            closure->upvalues[upvalueIndex] == NULL ||
+            closure->upvalues[upvalueIndex]->location == NULL) {
+            VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(), "Invalid upvalue access");
+        }
+
         *closure->upvalues[upvalueIndex]->location = vm.registers[valueReg];
         DISPATCH();
     }

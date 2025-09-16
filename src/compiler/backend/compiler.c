@@ -7,6 +7,7 @@
 #include "compiler/symbol_table.h"
 #include "compiler/scope_stack.h"
 #include "compiler/error_reporter.h"
+#include "errors/features/control_flow_errors.h"
 #include "runtime/memory.h"
 #include "debug/debug_config.h"
 #include <stdio.h>
@@ -378,6 +379,7 @@ CompilerContext* init_compiler_context(TypedASTNode* typed_ast) {
     // Initialize symbol table for variable tracking
     ctx->symbols = create_symbol_table(NULL);  // Global scope
     ctx->scopes = scope_stack_create();
+    control_flow_register_scope_stack(ctx->scopes);
     ctx->errors = error_reporter_create();
     ctx->has_compilation_errors = false;  // Initialize error tracking
     ctx->compiling_function = false;      // Initialize function compilation flag
@@ -601,6 +603,7 @@ void free_compiler_context(CompilerContext* ctx) {
     }
 
     if (ctx->scopes) {
+        control_flow_unregister_scope_stack(ctx->scopes);
         scope_stack_destroy(ctx->scopes);
     }
 

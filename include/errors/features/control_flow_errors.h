@@ -31,6 +31,8 @@ ErrorReportResult report_missing_condition(SrcLocation location, const char* sta
 ErrorReportResult report_invalid_indentation(SrcLocation location, const char* statement_type, int expected, int found);
 ErrorReportResult report_empty_block(SrcLocation location, const char* statement_type);
 
+struct ScopeStack;
+
 // Loop Variable Error Reporting
 ErrorReportResult report_invalid_loop_variable(SrcLocation location, const char* variable_name, const char* issue);
 ErrorReportResult report_loop_variable_redeclaration(SrcLocation location, const char* variable_name);
@@ -59,5 +61,12 @@ bool is_valid_break_continue_context(void);
 bool is_boolean_expression_type(const char* type_name);
 bool is_valid_range_bounds(int start, int end, int step);
 const char* get_control_flow_suggestion(const char* error_type);
+
+// Loop context coordination
+void control_flow_register_scope_stack(struct ScopeStack* stack);
+void control_flow_unregister_scope_stack(struct ScopeStack* stack);
+void control_flow_reset_validation_state(void);
+void control_flow_enter_loop_context(void);
+void control_flow_leave_loop_context(void);
 
 #endif // CONTROL_FLOW_ERRORS_H
