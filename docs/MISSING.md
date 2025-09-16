@@ -21,6 +21,7 @@ Build a language that combines Python's readability, Rust's safety, and Lua's pe
 - **Type Coercion**: Automatic and explicit type conversions
 - **Constant System**: Generic constant loading supports functions and complex values
 - **Call Frame Management**: VM preserves temporary registers and handles closures correctly
+- **Loop Diagnostics**: Parser and backend flag `break`/`continue` usage outside valid loop scopes
 
 ### 🔄 **Partially Complete**
 - **Generic System**: Foundation implemented, needs completion

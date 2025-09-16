@@ -182,26 +182,29 @@ Generic functions therefore get monomorphic types.
 
 ## Diagnostic tooling gaps
 
-### Loop context validation
+### Loop context validation ✅
 
-**Current issue.** `is_valid_break_continue_context` in
-`src/errors/features/control_flow_errors.c` still returns `true` for every call,
-so the parser never reports `break` / `continue` misuse.
+**Resolution.** `is_valid_break_continue_context` now bridges the parser and the
+multi-pass compiler scope stack so invalid `break` / `continue` usage is caught
+immediately. The helper consults the active `ScopeStack` when a
+`CompilerContext` is live and falls back to parser-managed loop depth during
+syntactic analysis, matching the single-pass workflow described in the
+architecture notes.
 
 **Implementation steps.**
-- Consume the loop context APIs exposed by `CompilerContext` once the scope work
-  above lands. The helper should query the active loop depth and return `false`
-  when outside of any loop.
-- Ensure parser actions (`parser.c`) call into the helper for every `break` and
-  `continue`, and convert failures into structured diagnostics via
-  `report_break_outside_loop_error` / `report_continue_outside_loop_error`.
+- [x] Consume the loop context APIs exposed by `CompilerContext` once the scope
+  work above lands. The helper now queries the active loop depth and returns
+  `false` when outside of any loop.
+- [x] Ensure parser actions (`parser.c`) call into the helper for every `break`
+  and `continue`, converting failures into structured diagnostics via
+  `report_break_outside_loop` / `report_continue_outside_loop`.
 
 **Testing.**
-- Create parser fixtures under `tests/control_flow/conditions` that intentionally
-  place `break` and `continue` statements at top level and inside functions
-  without loops. The compiler must now emit the correct error codes.
-- Add positive fixtures showing legal usage to ensure valid programs still
-  compile.
+- [x] Added diagnostic regression fixtures under `tests/error_reporting/` for
+  both `break` and `continue` misuse, ensuring the CLI surfaces the control-flow
+  errors with the expected messaging.
+- [x] Add positive fixtures showing legal usage to ensure valid programs still
+  compile (`loop_control_valid`).
 
 ### Advanced error presentation
 

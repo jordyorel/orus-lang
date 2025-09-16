@@ -1,0 +1,18 @@
+// Valid break/continue usage should compile and run without diagnostics
+print("loop control success")
+
+mut i = 0
+mut total = 0
+
+while i < 5:
+    i = i + 1
+    if i == 2:
+        continue
+    total = total + i
+    if total >= 7:
+        print("break at", i)
+        break
+    print("continue with", i)
+
+print("after while:", total)
+print("loop control done")

@@ -67,6 +67,20 @@ static void parser_arena_reset(ParserContext* ctx) {
     a->head->next = NULL;
 }
 
+static void parser_enter_loop(ParserContext* ctx) {
+    control_flow_enter_loop_context();
+    if (ctx) {
+        ctx->loop_depth++;
+    }
+}
+
+static void parser_leave_loop(ParserContext* ctx) {
+    control_flow_leave_loop_context();
+    if (ctx && ctx->loop_depth > 0) {
+        ctx->loop_depth--;
+    }
+}
+
 static ASTNode* new_node(ParserContext* ctx) { return parser_arena_alloc(ctx, sizeof(ASTNode)); }
 
 static void addStatement(ParserContext* ctx, ASTNode*** list, int* count, int* capacity, ASTNode* stmt) {
@@ -86,16 +100,17 @@ static void addStatement(ParserContext* ctx, ASTNode*** list, int* count, int* c
 ParserContext* parser_context_create(void) {
     ParserContext* ctx = malloc(sizeof(ParserContext));
     if (!ctx) return NULL;
-    
+
     // Initialize arena
     arena_init(&ctx->arena, PARSER_ARENA_SIZE);
-    
+
     // Initialize state
     ctx->recursion_depth = 0;
+    ctx->loop_depth = 0;
     ctx->has_peeked_token = false;
     ctx->has_peeked_token2 = false;
     ctx->max_recursion_depth = MAX_RECURSION_DEPTH;
-    
+
     return ctx;
 }
 
@@ -116,9 +131,10 @@ void parser_context_destroy(ParserContext* ctx) {
 
 void parser_context_reset(ParserContext* ctx) {
     if (!ctx) return;
-    
+
     parser_arena_reset(ctx);
     ctx->recursion_depth = 0;
+    ctx->loop_depth = 0;
     ctx->has_peeked_token = false;
     ctx->has_peeked_token2 = false;
 }
@@ -857,17 +873,28 @@ static ASTNode* parseWhileStatement(ParserContext* ctx) {
     // Check if this is a single-line while or block while
     Token next = peekToken(ctx);
     ASTNode* body = NULL;
-    
+    bool entered_loop = false;
+
     if (next.type == TOKEN_NEWLINE) {
         // Block-style while: while condition:\n    statement
         nextToken(ctx); // consume newline
         if (nextToken(ctx).type != TOKEN_INDENT) return NULL;
+        parser_enter_loop(ctx);
+        entered_loop = true;
         body = parseBlock(ctx);
-        if (!body) return NULL;
     } else {
         // Single-line while: while condition: statement
+        parser_enter_loop(ctx);
+        entered_loop = true;
         body = parseStatement(ctx);
-        if (!body) return NULL;
+    }
+
+    if (entered_loop) {
+        parser_leave_loop(ctx);
+    }
+
+    if (!body) {
+        return NULL;
     }
     if (peekToken(ctx).type == TOKEN_NEWLINE) nextToken(ctx);
 
@@ -1027,7 +1054,9 @@ static ASTNode* parseForStatement(ParserContext* ctx) {
         return NULL;
     }
 
+    parser_enter_loop(ctx);
     ASTNode* body = parseBlock(ctx);
+    parser_leave_loop(ctx);
     if (!body) {
         SrcLocation location = {NULL, indent.line, indent.column};
         report_empty_block(location, "for loop");
@@ -2017,11 +2046,12 @@ void set_parser_debug(bool enabled) {
 // Context-based parsing interface - new implementation
 ASTNode* parseSourceWithContext(ParserContext* ctx, const char* source) {
     if (!ctx) return NULL;
-    
+
     parser_context_reset(ctx);
-    
+    control_flow_reset_validation_state();
+
     init_scanner(source);
-    
+
     ASTNode** statements = NULL;
     int count = 0;
     int capacity = 0;
