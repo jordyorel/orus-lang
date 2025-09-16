@@ -1,0 +1,56 @@
+// Stress the register allocator with many locals and overlapping function calls
+print("=== Register pressure function tests ===")
+
+fn stress_registers(a, b, c, d, e, f, g, h, i, j) -> i32:
+    sum1 = a + b
+    sum2 = c + d
+    sum3 = e + f
+    sum4 = g + h
+    sum5 = i + j
+    double1 = sum1 * 2
+    triple2 = sum2 * 3
+    mix1 = sum3 + sum4
+    square_last = sum5 * sum5
+    combined = double1 + triple2 + mix1
+    adjust = square_last - sum2
+    total = combined + adjust
+    step1 = total + a
+    step2 = step1 - b
+    step3 = step2 + c
+    step4 = step3 - d
+    step5 = step4 + e
+    step6 = step5 - f
+    step7 = step6 + g
+    step8 = step7 - h
+    result = step8 + i + j
+    return result
+
+first_result = stress_registers(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+print("stress_registers(1..10) =", first_result)
+
+second_result = stress_registers(2, 3, 4, 5, 6, 7, 8, 9, 10, 11)
+print("stress_registers(2..11) =", second_result)
+
+mid_result = stress_registers(5, 6, 7, 8, 9, 10, 11, 12, 13, 14)
+print("stress_registers(5..14) =", mid_result)
+
+extended_mid = stress_registers(6, 7, 8, 9, 10, 11, 12, 13, 14, 15)
+print("stress_registers(6..15) =", extended_mid)
+
+third_result = stress_registers(9, 10, 11, 12, 13, 14, 15, 16, 17, 18)
+print("stress_registers(9..18) =", third_result)
+
+fourth_result = stress_registers(10, 11, 12, 13, 14, 15, 16, 17, 18, 19)
+print("stress_registers(10..19) =", fourth_result)
+
+agg_seed1 = first_result + mid_result + third_result
+print("aggregated_values(1) =", agg_seed1)
+
+agg_seed2 = second_result + extended_mid + fourth_result
+print("aggregated_values(2) =", agg_seed2)
+
+difference = agg_seed2 - agg_seed1
+print("aggregated(2) - aggregated(1) =", difference)
+
+total = agg_seed1 + mid_result
+print("aggregated(1) + stress_registers(5..14) =", total)

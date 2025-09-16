@@ -1552,8 +1552,13 @@ void compile_variable_declaration(CompilerContext* ctx, TypedASTNode* var_decl) 
         }
     }
     
-    // Allocate register for the variable
-    int var_reg = mp_allocate_frame_register(ctx->allocator);
+    // Allocate register based on scope
+    int var_reg;
+    if (ctx->compiling_function) {
+        var_reg = mp_allocate_frame_register(ctx->allocator);
+    } else {
+        var_reg = mp_allocate_global_register(ctx->allocator);
+    }
     if (var_reg == -1) {
         DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for variable %s\n", var_name);
         if (value_reg != -1) {
