@@ -1,0 +1,111 @@
+// Complex call graph exercising loops, helper functions, and global reads
+print("=== Complex function call graph tests ===")
+
+mut global_adjust = 7
+
+fn square(x: i32) -> i32:
+    return x * x
+
+fn cube(x: i32) -> i32:
+    return x * x * x
+
+fn sum_of_squares(n: i32) -> i32:
+    mut total = 0
+    mut i = 1
+    while i <= n:
+        total = total + (i * i)
+        i = i + 1
+    return total
+
+fn alternating_sum(n: i32) -> i32:
+    mut total = 0
+    mut i = 1
+    mut sign = 1
+    while i <= n:
+        total = total + (sign * i)
+        sign = sign * -1
+        i = i + 1
+    return total
+
+fn combined_metric(x: i32, y: i32, limit: i32) -> i32:
+    sq = square(x)
+    cu = cube(y)
+    base = sq + cu
+    squares = sum_of_squares(limit)
+    alt = alternating_sum(limit)
+    return base + squares + alt
+
+fn staircase_sum(levels: i32) -> i32:
+    mut level = 1
+    mut total = 0
+    while level <= levels:
+        mut step = 1
+        mut level_sum = 0
+        while step <= level:
+            level_sum = level_sum + (level * step)
+            step = step + 1
+        total = total + level_sum
+        level = level + 1
+    return total
+
+fn apply_adjustment(value: i32) -> i32:
+    return value + global_adjust
+
+fn chain_evaluation(a: i32, b: i32) -> i32:
+    combined = combined_metric(a, b, a + 1)
+    preserved = combined
+    stairs = staircase_sum(b)
+    alt = alternating_sum(a + b)
+    mut total = preserved
+    total = total + stairs
+    total = total + alt
+    total = total + global_adjust
+    return total
+
+fn iterative_transform(start: i32, steps: i32) -> i32:
+    mut current = start
+    mut index = 1
+    mut delta = 0
+    mut product = 0
+    mut alt_value = 0
+    mut step_square = 0
+    mut prev_current = 0
+    while index <= steps:
+        prev_current = current
+        product = prev_current * index
+        alt_value = alternating_sum(index)
+        delta = product - alt_value
+        step_square = index * index
+        current = prev_current + delta - step_square
+        index = index + 1
+    return current
+
+squares_6 = sum_of_squares(6)
+print("sum_of_squares(6) =", squares_6)
+
+squares_4 = sum_of_squares(4)
+print("sum_of_squares(4) =", squares_4)
+
+alt_7 = alternating_sum(7)
+print("alternating_sum(7) =", alt_7)
+
+alt_4 = alternating_sum(4)
+print("alternating_sum(4) =", alt_4)
+
+metric = combined_metric(3, 2, 4)
+print("combined_metric(3, 2, 4) =", metric)
+
+stairs_4 = staircase_sum(4)
+print("staircase_sum(4) =", stairs_4)
+
+chain = chain_evaluation(3, 4)
+print("chain_evaluation(3, 4) =", chain)
+
+transform_a = iterative_transform(2, 4)
+print("iterative_transform(2, 4) =", transform_a)
+
+transform_b = iterative_transform(3, 3)
+print("iterative_transform(3, 3) =", transform_b)
+
+adjusted_total = apply_adjustment(squares_6 + alt_7)
+print("apply_adjustment(sum_of_squares(6) + alternating_sum(7)) =", adjusted_total)
