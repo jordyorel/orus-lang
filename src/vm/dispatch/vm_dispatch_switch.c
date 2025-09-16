@@ -747,6 +747,61 @@ InterpretResult vm_run_dispatch(void) {
                     break;
                 }
 
+                case OP_BOOL_TO_I32_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src = READ_BYTE();
+                    READ_BYTE(); // Skip third operand (unused)
+                    if (!IS_BOOL(vm_get_register_safe(src))) {
+                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be bool");
+                    }
+                    vm_set_register_safe(dst, I32_VAL(AS_BOOL(vm_get_register_safe(src)) ? 1 : 0));
+                    break;
+                }
+
+                case OP_BOOL_TO_I64_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src = READ_BYTE();
+                    READ_BYTE(); // Skip third operand (unused)
+                    if (!IS_BOOL(vm_get_register_safe(src))) {
+                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be bool");
+                    }
+                    vm_set_register_safe(dst, I64_VAL(AS_BOOL(vm_get_register_safe(src)) ? 1 : 0));
+                    break;
+                }
+
+                case OP_BOOL_TO_U32_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src = READ_BYTE();
+                    READ_BYTE(); // Skip third operand (unused)
+                    if (!IS_BOOL(vm_get_register_safe(src))) {
+                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be bool");
+                    }
+                    vm_set_register_safe(dst, U32_VAL(AS_BOOL(vm_get_register_safe(src)) ? 1u : 0u));
+                    break;
+                }
+
+                case OP_BOOL_TO_U64_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src = READ_BYTE();
+                    READ_BYTE(); // Skip third operand (unused)
+                    if (!IS_BOOL(vm_get_register_safe(src))) {
+                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be bool");
+                    }
+                    vm_set_register_safe(dst, U64_VAL(AS_BOOL(vm_get_register_safe(src)) ? 1ull : 0ull));
+                    break;
+                }
+
+                case OP_BOOL_TO_F64_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src = READ_BYTE();
+                    READ_BYTE(); // Skip third operand (unused)
+                    if (!IS_BOOL(vm_get_register_safe(src))) {
+                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be bool");
+                    }
+                    vm_set_register_safe(dst, F64_VAL(AS_BOOL(vm_get_register_safe(src)) ? 1.0 : 0.0));
+                    break;
+                }
+
                 case OP_I32_TO_I64_R: {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
@@ -800,6 +855,17 @@ InterpretResult vm_run_dispatch(void) {
                         VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i64");
                     }
                     vm_set_register_safe(dst, I32_VAL((int32_t)AS_I64(vm_get_register_safe(src))));
+                    break;
+                }
+
+                case OP_I64_TO_BOOL_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src = READ_BYTE();
+                    READ_BYTE(); // Skip third operand (unused)
+                    if (!IS_I64(vm_get_register_safe(src))) {
+                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i64");
+                    }
+                    vm_set_register_safe(dst, BOOL_VAL(AS_I64(vm_get_register_safe(src)) != 0));
                     break;
                 }
 
@@ -889,6 +955,17 @@ InterpretResult vm_run_dispatch(void) {
                     break;
                 }
 
+                case OP_U32_TO_BOOL_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src = READ_BYTE();
+                    READ_BYTE(); // Skip third operand (unused)
+                    if (!IS_U32(vm_get_register_safe(src))) {
+                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u32");
+                    }
+                    vm_set_register_safe(dst, BOOL_VAL(AS_U32(vm_get_register_safe(src)) != 0));
+                    break;
+                }
+
                 case OP_U32_TO_U64_R: {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
@@ -938,6 +1015,28 @@ InterpretResult vm_run_dispatch(void) {
                         VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u64");
                     }
                     vm_set_register_safe(dst, F64_VAL((double)AS_U64(vm_get_register_safe(src))));
+                    break;
+                }
+
+                case OP_U64_TO_BOOL_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src = READ_BYTE();
+                    READ_BYTE(); // Skip third operand (unused)
+                    if (!IS_U64(vm_get_register_safe(src))) {
+                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u64");
+                    }
+                    vm_set_register_safe(dst, BOOL_VAL(AS_U64(vm_get_register_safe(src)) != 0));
+                    break;
+                }
+
+                case OP_F64_TO_BOOL_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src = READ_BYTE();
+                    READ_BYTE(); // Skip third operand (unused)
+                    if (!IS_F64(vm_get_register_safe(src))) {
+                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be f64");
+                    }
+                    vm_set_register_safe(dst, BOOL_VAL(AS_F64(vm_get_register_safe(src)) != 0.0));
                     break;
                 }
 

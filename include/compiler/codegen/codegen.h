@@ -44,7 +44,7 @@ void compile_continue_statement(CompilerContext* ctx, TypedASTNode* continue_stm
 // Function compilation (NEW)
 int compile_function_declaration(CompilerContext* ctx, TypedASTNode* func);
 void compile_return_statement(CompilerContext* ctx, TypedASTNode* ret);
-void compile_block_with_scope(CompilerContext* ctx, TypedASTNode* block);
+void compile_block_with_scope(CompilerContext* ctx, TypedASTNode* block, bool create_scope);
 
 // VM-specific optimization helpers
 void emit_typed_instruction(CompilerContext* ctx, uint8_t opcode, int dst, int src1, int src2);

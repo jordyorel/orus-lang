@@ -680,6 +680,55 @@ void emit_move(CompilerContext* ctx, int dst, int src) {
     DEBUG_CODEGEN_PRINT("Emitted OP_MOVE R%d, R%d (3 bytes)\n", dst, src);
 }
 
+static bool evaluate_constant_i32(TypedASTNode* node, int32_t* out_value) {
+    if (!node || !out_value || !node->original) {
+        return false;
+    }
+
+    ASTNode* original = node->original;
+    switch (original->type) {
+        case NODE_LITERAL: {
+            Value val = original->literal.value;
+            switch (val.type) {
+                case VAL_I32:
+                    *out_value = val.as.i32;
+                    return true;
+                case VAL_I64:
+                    *out_value = (int32_t)val.as.i64;
+                    return true;
+                case VAL_U32:
+                    *out_value = (int32_t)val.as.u32;
+                    return true;
+                case VAL_U64:
+                    *out_value = (int32_t)val.as.u64;
+                    return true;
+                case VAL_NUMBER:
+                    *out_value = (int32_t)val.as.number;
+                    return true;
+                default:
+                    return false;
+            }
+        }
+        case NODE_UNARY: {
+            if (!original->unary.op || strcmp(original->unary.op, "-") != 0) {
+                return false;
+            }
+            TypedASTNode* operand = node->typed.unary.operand;
+            if (!operand) {
+                return false;
+            }
+            int32_t inner = 0;
+            if (!evaluate_constant_i32(operand, &inner)) {
+                return false;
+            }
+            *out_value = -inner;
+            return true;
+        }
+        default:
+            return false;
+    }
+}
+
 // ===== EXPRESSION COMPILATION =====
 
 int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
@@ -999,12 +1048,24 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                 cast_opcode = OP_I32_TO_U64_R;
             } else if (source_type->kind == TYPE_I32 && target_type->kind == TYPE_BOOL) {
                 cast_opcode = OP_I32_TO_BOOL_R;
+            } else if (source_type->kind == TYPE_BOOL && target_type->kind == TYPE_I32) {
+                cast_opcode = OP_BOOL_TO_I32_R;
+            } else if (source_type->kind == TYPE_BOOL && target_type->kind == TYPE_I64) {
+                cast_opcode = OP_BOOL_TO_I64_R;
+            } else if (source_type->kind == TYPE_BOOL && target_type->kind == TYPE_U32) {
+                cast_opcode = OP_BOOL_TO_U32_R;
+            } else if (source_type->kind == TYPE_BOOL && target_type->kind == TYPE_U64) {
+                cast_opcode = OP_BOOL_TO_U64_R;
+            } else if (source_type->kind == TYPE_BOOL && target_type->kind == TYPE_F64) {
+                cast_opcode = OP_BOOL_TO_F64_R;
             } else if (source_type->kind == TYPE_I64 && target_type->kind == TYPE_I32) {
                 cast_opcode = OP_I64_TO_I32_R;
             } else if (source_type->kind == TYPE_I64 && target_type->kind == TYPE_F64) {
                 cast_opcode = OP_I64_TO_F64_R;
             } else if (source_type->kind == TYPE_I64 && target_type->kind == TYPE_U64) {
                 cast_opcode = OP_I64_TO_U64_R;
+            } else if (source_type->kind == TYPE_I64 && target_type->kind == TYPE_BOOL) {
+                cast_opcode = OP_I64_TO_BOOL_R;
             } else if (source_type->kind == TYPE_F64 && target_type->kind == TYPE_I32) {
                 cast_opcode = OP_F64_TO_I32_R;
             } else if (source_type->kind == TYPE_F64 && target_type->kind == TYPE_I64) {
@@ -1013,6 +1074,8 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                 cast_opcode = OP_F64_TO_U32_R;
             } else if (source_type->kind == TYPE_F64 && target_type->kind == TYPE_U64) {
                 cast_opcode = OP_F64_TO_U64_R;
+            } else if (source_type->kind == TYPE_F64 && target_type->kind == TYPE_BOOL) {
+                cast_opcode = OP_F64_TO_BOOL_R;
             } else if (source_type->kind == TYPE_U32 && target_type->kind == TYPE_I32) {
                 cast_opcode = OP_U32_TO_I32_R;
             } else if (source_type->kind == TYPE_U32 && target_type->kind == TYPE_F64) {
@@ -1022,6 +1085,8 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             } else if (source_type->kind == TYPE_U32 && target_type->kind == TYPE_I64) {
                 // Use u32->u64 opcode but emit as i64 value (semantically equivalent)
                 cast_opcode = OP_U32_TO_U64_R;
+            } else if (source_type->kind == TYPE_U32 && target_type->kind == TYPE_BOOL) {
+                cast_opcode = OP_U32_TO_BOOL_R;
             } else if (source_type->kind == TYPE_U64 && target_type->kind == TYPE_I32) {
                 cast_opcode = OP_U64_TO_I32_R;
             } else if (source_type->kind == TYPE_U64 && target_type->kind == TYPE_I64) {
@@ -1030,6 +1095,8 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                 cast_opcode = OP_U64_TO_F64_R;
             } else if (source_type->kind == TYPE_U64 && target_type->kind == TYPE_U32) {
                 cast_opcode = OP_U64_TO_U32_R;
+            } else if (source_type->kind == TYPE_U64 && target_type->kind == TYPE_BOOL) {
+                cast_opcode = OP_U64_TO_BOOL_R;
             } else {
                 DEBUG_CODEGEN_PRINT("Error: Unsupported cast from type %d to type %d\n", 
                        source_type->kind, target_type->kind);
@@ -1528,7 +1595,8 @@ void compile_assignment(CompilerContext* ctx, TypedASTNode* assign) {
         }
 
         bool is_in_loop = (ctx->current_loop_start != -1);
-        register_variable(ctx, var_name, var_reg, assign->resolvedType, is_in_loop);
+        bool should_be_mutable = is_in_loop || ctx->branch_depth > 0;
+        register_variable(ctx, var_name, var_reg, assign->resolvedType, should_be_mutable);
         set_location_from_node(ctx, assign);
         emit_move(ctx, var_reg, value_reg);
         mp_free_temp_register(ctx->allocator, value_reg);
@@ -1721,7 +1789,9 @@ void compile_if_statement(CompilerContext* ctx, TypedASTNode* if_stmt) {
     }
     
     // Compile then branch with new scope
-    compile_block_with_scope(ctx, if_stmt->typed.ifStmt.thenBranch);
+    ctx->branch_depth++;
+    compile_block_with_scope(ctx, if_stmt->typed.ifStmt.thenBranch, false);
+    ctx->branch_depth--;
     
     // If there's an else branch, emit unconditional jump to skip it
     int end_patch = -1;
@@ -1748,7 +1818,9 @@ void compile_if_statement(CompilerContext* ctx, TypedASTNode* if_stmt) {
     
     // Compile else branch if present
     if (if_stmt->typed.ifStmt.elseBranch) {
-        compile_block_with_scope(ctx, if_stmt->typed.ifStmt.elseBranch);
+        ctx->branch_depth++;
+        compile_block_with_scope(ctx, if_stmt->typed.ifStmt.elseBranch, false);
+        ctx->branch_depth--;
         
         int end_target = ctx->bytecode->count;
         if (!patch_jump(ctx->bytecode, end_patch, end_target)) {
@@ -1863,7 +1935,7 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
     }
 
     // Compile loop body with new scope
-    compile_block_with_scope(ctx, while_stmt->typed.whileStmt.body);
+    compile_block_with_scope(ctx, while_stmt->typed.whileStmt.body, false);
 
     // Emit unconditional jump back to loop start
     // For backward jumps, calculate positive offset and use OP_LOOP_SHORT or OP_JUMP
@@ -1907,23 +1979,28 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
     DEBUG_CODEGEN_PRINT("While statement compilation completed");
 }
 
+
 void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
-    if (!ctx || !for_stmt) return;
-    
+    if (!ctx || !for_stmt) {
+        return;
+    }
+
     DEBUG_CODEGEN_PRINT("Compiling for range statement");
 
-    // Create new scope for loop variable to prevent conflicts with subsequent loops using same name
     SymbolTable* old_scope = ctx->symbols;
+    bool created_scope = false;
     ctx->symbols = create_symbol_table(old_scope);
     if (!ctx->symbols) {
-        DEBUG_CODEGEN_PRINT("Error: Failed to create loop scope");
         ctx->symbols = old_scope;
         ctx->has_compilation_errors = true;
         return;
     }
+    created_scope = true;
+
     if (ctx->allocator) {
         mp_enter_scope(ctx->allocator);
     }
+
     ScopeFrame* scope_frame = NULL;
     if (ctx->scopes) {
         scope_frame = scope_stack_push(ctx->scopes, SCOPE_KIND_LEXICAL);
@@ -1933,236 +2010,282 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
             scope_frame->end_offset = scope_frame->start_offset;
         }
     }
+
     ScopeFrame* loop_frame = NULL;
     bool success = false;
+
     int start_reg = -1;
     int end_reg = -1;
     int step_reg = -1;
     int loop_var_reg = -1;
-    DEBUG_CODEGEN_PRINT("Created new scope for for loop (depth %d)", ctx->symbols->scope_depth);
-    DEBUG_CODEGEN_PRINT("for_stmt->typed.forRange.varName = '%s'\n", 
-           for_stmt->typed.forRange.varName ? for_stmt->typed.forRange.varName : "(null)");
-    DEBUG_CODEGEN_PRINT("for_stmt->original->forRange.varName = '%s'\n", 
-           for_stmt->original->forRange.varName ? for_stmt->original->forRange.varName : "(null)");
-    DEBUG_CODEGEN_PRINT("for_stmt->original->forRange.inclusive = %s\n", 
-           for_stmt->original->forRange.inclusive ? "true" : "false");
-    
-    // Debug: Check if original AST has the actual values
-    if (for_stmt->original->forRange.start) {
-        DEBUG_CODEGEN_PRINT("Original start expression type: %d\n", for_stmt->original->forRange.start->type);
-        if (for_stmt->original->forRange.start->type == NODE_LITERAL) {
-            DEBUG_CODEGEN_PRINT("Original start value: %d\n", for_stmt->original->forRange.start->literal.value.as.i32);
-        }
+    int condition_reg = -1;
+    int condition_neg_reg = -1;
+    int step_nonneg_reg = -1;
+    int zero_reg = -1;
+
+    const char* loop_var_name = NULL;
+    if (for_stmt->original && for_stmt->original->forRange.varName) {
+        loop_var_name = for_stmt->original->forRange.varName;
+    } else if (for_stmt->typed.forRange.varName) {
+        loop_var_name = for_stmt->typed.forRange.varName;
     }
-    if (for_stmt->original->forRange.end) {
-        DEBUG_CODEGEN_PRINT("Original end expression type: %d\n", for_stmt->original->forRange.end->type);
-        if (for_stmt->original->forRange.end->type == NODE_LITERAL) {
-            DEBUG_CODEGEN_PRINT("Original end value: %d\n", for_stmt->original->forRange.end->literal.value.as.i32);
-        }
-    }
-    
-    // Get variable name from original AST as workaround
-    const char* loop_var_name = for_stmt->original->forRange.varName;
+
     if (!loop_var_name) {
-        DEBUG_CODEGEN_PRINT("Error: Loop variable name is null");
         ctx->has_compilation_errors = true;
         goto cleanup;
     }
-    
-    // WORKAROUND: Use values from original AST (since typed AST is corrupted by optimization)
-    DEBUG_CODEGEN_PRINT("Reading actual values from original AST");
-    
-    // Extract actual values from original AST
-    int32_t start_val = 1, end_val = 5, step_val = 1;  // defaults
-    
-    if (for_stmt->original->forRange.start && for_stmt->original->forRange.start->type == NODE_LITERAL) {
-        start_val = for_stmt->original->forRange.start->literal.value.as.i32;
-    }
-    if (for_stmt->original->forRange.end && for_stmt->original->forRange.end->type == NODE_LITERAL) {
-        end_val = for_stmt->original->forRange.end->literal.value.as.i32;
-    }
-    if (for_stmt->original->forRange.step && for_stmt->original->forRange.step->type == NODE_LITERAL) {
-        step_val = for_stmt->original->forRange.step->literal.value.as.i32;
-    }
-    
-    DEBUG_CODEGEN_PRINT("Using range values: start=%d, end=%d, step=%d, inclusive=%s\n", 
-           start_val, end_val, step_val, for_stmt->original->forRange.inclusive ? "true" : "false");
-    
-    // Add constants to pool and emit proper instructions
-    start_reg = mp_allocate_temp_register(ctx->allocator);
-    Value start_value = I32_VAL(start_val);
-    int start_const_index = add_constant(ctx->constants, start_value);
-    set_location_from_node(ctx, for_stmt);
-    emit_byte_to_buffer(ctx->bytecode, OP_LOAD_I32_CONST);
-    emit_byte_to_buffer(ctx->bytecode, start_reg);
-    emit_byte_to_buffer(ctx->bytecode, (start_const_index >> 8) & 0xFF);
-    emit_byte_to_buffer(ctx->bytecode, start_const_index & 0xFF);
-    DEBUG_CODEGEN_PRINT("Emitted OP_LOAD_I32_CONST R%d, #%d (%d)\n", start_reg, start_const_index, start_val);
-    
-    end_reg = mp_allocate_temp_register(ctx->allocator);
-    Value end_value = I32_VAL(end_val);
-    int end_const_index = add_constant(ctx->constants, end_value);
-    set_location_from_node(ctx, for_stmt);
-    emit_byte_to_buffer(ctx->bytecode, OP_LOAD_I32_CONST);
-    emit_byte_to_buffer(ctx->bytecode, end_reg);
-    emit_byte_to_buffer(ctx->bytecode, (end_const_index >> 8) & 0xFF);
-    emit_byte_to_buffer(ctx->bytecode, end_const_index & 0xFF);
-    DEBUG_CODEGEN_PRINT("Emitted OP_LOAD_I32_CONST R%d, #%d (%d)\n", end_reg, end_const_index, end_val);
-    
-    step_reg = mp_allocate_temp_register(ctx->allocator);
-    Value step_value = I32_VAL(step_val);
-    int step_const_index = add_constant(ctx->constants, step_value);
-    set_location_from_node(ctx, for_stmt);
-    emit_byte_to_buffer(ctx->bytecode, OP_LOAD_I32_CONST);
-    emit_byte_to_buffer(ctx->bytecode, step_reg);
-    emit_byte_to_buffer(ctx->bytecode, (step_const_index >> 8) & 0xFF);
-    emit_byte_to_buffer(ctx->bytecode, step_const_index & 0xFF);
-    DEBUG_CODEGEN_PRINT("Emitted OP_LOAD_I32_CONST R%d, #%d (%d)\n", step_reg, step_const_index, step_val);
-    
-    if (start_reg == -1 || end_reg == -1 || step_reg == -1) {
-        DEBUG_CODEGEN_PRINT("Error: Failed to compile for range expressions");
+
+    TypedASTNode* start_node = for_stmt->typed.forRange.start;
+    TypedASTNode* end_node = for_stmt->typed.forRange.end;
+    TypedASTNode* step_node = for_stmt->typed.forRange.step;
+
+    if (!start_node || !end_node) {
         ctx->has_compilation_errors = true;
         goto cleanup;
     }
-    
-    // Allocate loop variable register and store in symbol table
+
+    start_reg = compile_expression(ctx, start_node);
+    if (start_reg == -1) {
+        ctx->has_compilation_errors = true;
+        goto cleanup;
+    }
+
+    end_reg = compile_expression(ctx, end_node);
+    if (end_reg == -1) {
+        ctx->has_compilation_errors = true;
+        goto cleanup;
+    }
+
+    bool step_known_positive = false;
+    bool step_known_negative = false;
+
+    if (step_node) {
+        step_reg = compile_expression(ctx, step_node);
+        if (step_reg == -1) {
+            ctx->has_compilation_errors = true;
+            goto cleanup;
+        }
+
+        int32_t step_constant = 0;
+        if (evaluate_constant_i32(step_node, &step_constant)) {
+            if (step_constant >= 0) {
+                step_known_positive = true;
+            } else {
+                step_known_negative = true;
+            }
+        }
+    } else {
+        step_reg = mp_allocate_temp_register(ctx->allocator);
+        if (step_reg == -1) {
+            ctx->has_compilation_errors = true;
+            goto cleanup;
+        }
+        set_location_from_node(ctx, for_stmt);
+        emit_load_constant(ctx, step_reg, I32_VAL(1));
+        step_known_positive = true;
+    }
+
+    if (!step_known_positive && !step_known_negative) {
+        zero_reg = mp_allocate_temp_register(ctx->allocator);
+        if (zero_reg == -1) {
+            ctx->has_compilation_errors = true;
+            goto cleanup;
+        }
+        set_location_from_node(ctx, for_stmt);
+        emit_load_constant(ctx, zero_reg, I32_VAL(0));
+
+        step_nonneg_reg = mp_allocate_temp_register(ctx->allocator);
+        if (step_nonneg_reg == -1) {
+            ctx->has_compilation_errors = true;
+            goto cleanup;
+        }
+        set_location_from_node(ctx, for_stmt);
+        emit_byte_to_buffer(ctx->bytecode, OP_GE_I32_R);
+        emit_byte_to_buffer(ctx->bytecode, step_nonneg_reg);
+        emit_byte_to_buffer(ctx->bytecode, step_reg);
+        emit_byte_to_buffer(ctx->bytecode, zero_reg);
+
+        if (zero_reg >= MP_TEMP_REG_START && zero_reg <= MP_TEMP_REG_END) {
+            mp_free_temp_register(ctx->allocator, zero_reg);
+        }
+        zero_reg = -1;
+    }
+
     loop_var_reg = mp_allocate_frame_register(ctx->allocator);
     if (loop_var_reg == -1) {
-        DEBUG_CODEGEN_PRINT("Error: Failed to allocate loop variable register");
         ctx->has_compilation_errors = true;
         goto cleanup;
     }
-    
-    // Register the loop variable in symbol table (loop variables are implicitly mutable)
-    DEBUG_CODEGEN_PRINT("Registering loop variable '%s' in R%d\n", loop_var_name, loop_var_reg);
-    register_variable(ctx, loop_var_name, loop_var_reg, getPrimitiveType(TYPE_I32), true);
-    DEBUG_CODEGEN_PRINT("Variable '%s' registered successfully as mutable\n", loop_var_name);
 
-    // Initialize loop variable with start value
+    register_variable(ctx, loop_var_name, loop_var_reg, getPrimitiveType(TYPE_I32), true);
+
     set_location_from_node(ctx, for_stmt);
     emit_byte_to_buffer(ctx->bytecode, OP_MOVE_I32);
     emit_byte_to_buffer(ctx->bytecode, loop_var_reg);
     emit_byte_to_buffer(ctx->bytecode, start_reg);
-    
-    // Set up loop labels
-    int loop_start = ctx->bytecode->count;
+
+    if (start_reg >= MP_TEMP_REG_START && start_reg <= MP_TEMP_REG_END) {
+        mp_free_temp_register(ctx->allocator, start_reg);
+        start_reg = -1;
+    }
+
+    int loop_start = ctx->bytecode ? ctx->bytecode->count : 0;
     loop_frame = enter_loop_context(ctx, loop_start);
     if (!loop_frame) {
-        DEBUG_CODEGEN_PRINT("Error: Failed to enter for-range loop context");
         ctx->has_compilation_errors = true;
         goto cleanup;
     }
-    ctx->current_loop_continue = -1; // Will be set to increment section later
+    ctx->current_loop_continue = -1;
     loop_frame->continue_offset = -1;
 
-    DEBUG_CODEGEN_PRINT("For range loop start at offset %d\n", loop_start);
-    
-    // Generate loop condition check: loop_var < end (or <= for inclusive)
-    int condition_reg = mp_allocate_temp_register(ctx->allocator);
+    condition_reg = mp_allocate_temp_register(ctx->allocator);
+    if (condition_reg == -1) {
+        ctx->has_compilation_errors = true;
+        goto cleanup;
+    }
+
+    set_location_from_node(ctx, for_stmt);
     if (for_stmt->typed.forRange.inclusive) {
-        set_location_from_node(ctx, for_stmt);
         emit_byte_to_buffer(ctx->bytecode, OP_LE_I32_R);
     } else {
-        set_location_from_node(ctx, for_stmt);
         emit_byte_to_buffer(ctx->bytecode, OP_LT_I32_R);
     }
     emit_byte_to_buffer(ctx->bytecode, condition_reg);
     emit_byte_to_buffer(ctx->bytecode, loop_var_reg);
     emit_byte_to_buffer(ctx->bytecode, end_reg);
 
-    // Emit conditional jump - if condition is false, jump to end of loop
+    if (!step_known_positive) {
+        condition_neg_reg = mp_allocate_temp_register(ctx->allocator);
+        if (condition_neg_reg == -1) {
+            ctx->has_compilation_errors = true;
+            goto cleanup;
+        }
+
+        set_location_from_node(ctx, for_stmt);
+        if (for_stmt->typed.forRange.inclusive) {
+            emit_byte_to_buffer(ctx->bytecode, OP_GE_I32_R);
+        } else {
+            emit_byte_to_buffer(ctx->bytecode, OP_GT_I32_R);
+        }
+        emit_byte_to_buffer(ctx->bytecode, condition_neg_reg);
+        emit_byte_to_buffer(ctx->bytecode, loop_var_reg);
+        emit_byte_to_buffer(ctx->bytecode, end_reg);
+    }
+
+    int select_neg_patch = -1;
+    int skip_neg_patch = -1;
+
+    if (step_known_negative) {
+        set_location_from_node(ctx, for_stmt);
+        emit_move(ctx, condition_reg, condition_neg_reg);
+    } else if (!step_known_positive) {
+        if (step_nonneg_reg == -1) {
+            ctx->has_compilation_errors = true;
+            goto cleanup;
+        }
+
+        set_location_from_node(ctx, for_stmt);
+        emit_byte_to_buffer(ctx->bytecode, OP_JUMP_IF_NOT_R);
+        emit_byte_to_buffer(ctx->bytecode, step_nonneg_reg);
+        select_neg_patch = emit_jump_placeholder(ctx->bytecode, OP_JUMP_IF_NOT_R);
+        if (select_neg_patch < 0) {
+            ctx->has_compilation_errors = true;
+            goto cleanup;
+        }
+
+        set_location_from_node(ctx, for_stmt);
+        emit_byte_to_buffer(ctx->bytecode, OP_JUMP);
+        skip_neg_patch = emit_jump_placeholder(ctx->bytecode, OP_JUMP);
+        if (skip_neg_patch < 0) {
+            ctx->has_compilation_errors = true;
+            goto cleanup;
+        }
+
+        if (!patch_jump(ctx->bytecode, select_neg_patch, ctx->bytecode->count)) {
+            ctx->has_compilation_errors = true;
+            goto cleanup;
+        }
+
+        set_location_from_node(ctx, for_stmt);
+        emit_move(ctx, condition_reg, condition_neg_reg);
+
+        if (!patch_jump(ctx->bytecode, skip_neg_patch, ctx->bytecode->count)) {
+            ctx->has_compilation_errors = true;
+            goto cleanup;
+        }
+    }
+
     set_location_from_node(ctx, for_stmt);
-    int end_patch = -1;
     emit_byte_to_buffer(ctx->bytecode, OP_JUMP_IF_NOT_R);
     emit_byte_to_buffer(ctx->bytecode, condition_reg);
-    end_patch = emit_jump_placeholder(ctx->bytecode, OP_JUMP_IF_NOT_R);
+    int end_patch = emit_jump_placeholder(ctx->bytecode, OP_JUMP_IF_NOT_R);
     if (end_patch < 0) {
-        DEBUG_CODEGEN_PRINT("Error: Failed to allocate for-loop end placeholder\n");
         ctx->has_compilation_errors = true;
         goto cleanup;
     }
 
-    DEBUG_CODEGEN_PRINT("Emitted OP_JUMP_IF_NOT_R R%d (placeholder index %d)\n",
-           condition_reg, end_patch);
-    
-    // Free condition register
-    mp_free_temp_register(ctx->allocator, condition_reg);
-    
-    // Compile loop body with scope (like while loops do)
-    compile_block_with_scope(ctx, for_stmt->typed.forRange.body);
+    compile_block_with_scope(ctx, for_stmt->typed.forRange.body, true);
 
-    // Increment loop variable: loop_var = loop_var + step
-    // Set continue target to increment section FIRST (before patching)
     int continue_target = ctx->bytecode->count;
     update_loop_continue_target(ctx, loop_frame, continue_target);
 
-    // Reload step and end values in case nested loops modified these registers
-    Value reload_step_value = I32_VAL(step_val);
-    int reload_step_const_index = add_constant(ctx->constants, reload_step_value);
-    set_location_from_node(ctx, for_stmt);
-    emit_byte_to_buffer(ctx->bytecode, OP_LOAD_I32_CONST);
-    emit_byte_to_buffer(ctx->bytecode, step_reg);
-    emit_byte_to_buffer(ctx->bytecode, (reload_step_const_index >> 8) & 0xFF);
-    emit_byte_to_buffer(ctx->bytecode, reload_step_const_index & 0xFF);
-
-    Value reload_end_value = I32_VAL(end_val);
-    int reload_end_const_index = add_constant(ctx->constants, reload_end_value);
-    set_location_from_node(ctx, for_stmt);
-    emit_byte_to_buffer(ctx->bytecode, OP_LOAD_I32_CONST);
-    emit_byte_to_buffer(ctx->bytecode, end_reg);
-    emit_byte_to_buffer(ctx->bytecode, (reload_end_const_index >> 8) & 0xFF);
-    emit_byte_to_buffer(ctx->bytecode, reload_end_const_index & 0xFF);
-
-    // Perform increment directly on loop variable
     set_location_from_node(ctx, for_stmt);
     emit_byte_to_buffer(ctx->bytecode, OP_ADD_I32_R);
     emit_byte_to_buffer(ctx->bytecode, loop_var_reg);
     emit_byte_to_buffer(ctx->bytecode, loop_var_reg);
     emit_byte_to_buffer(ctx->bytecode, step_reg);
 
-    // Patch continue statements AFTER emitting the increment instruction
     patch_continue_statements(ctx, continue_target);
-    
-    // Emit unconditional jump back to loop start
+
     int back_jump_distance = (ctx->bytecode->count + 2) - loop_start;
     if (back_jump_distance >= 0 && back_jump_distance <= 255) {
         set_location_from_node(ctx, for_stmt);
         emit_byte_to_buffer(ctx->bytecode, OP_LOOP_SHORT);
         emit_byte_to_buffer(ctx->bytecode, (uint8_t)back_jump_distance);
-        DEBUG_CODEGEN_PRINT("Emitted OP_LOOP_SHORT with offset %d (back to start)\n", back_jump_distance);
     } else {
         int back_jump_offset = loop_start - (ctx->bytecode->count + 3);
         set_location_from_node(ctx, for_stmt);
         emit_byte_to_buffer(ctx->bytecode, OP_JUMP);
         emit_byte_to_buffer(ctx->bytecode, (back_jump_offset >> 8) & 0xFF);
         emit_byte_to_buffer(ctx->bytecode, back_jump_offset & 0xFF);
-        DEBUG_CODEGEN_PRINT("Emitted OP_JUMP with offset %d (back to start)\n", back_jump_offset);
     }
-    
-    // Patch the conditional jump to current position  
+
     int end_target = ctx->bytecode->count;
     ctx->current_loop_end = end_target;
-    
+
     if (!patch_jump(ctx->bytecode, end_patch, end_target)) {
-        DEBUG_CODEGEN_PRINT("Error: Failed to patch for-loop end jump to %d\n", end_target);
         ctx->has_compilation_errors = true;
         goto cleanup;
     }
-    DEBUG_CODEGEN_PRINT("Patched conditional jump to %d\n", end_target);
-    
-    // Patch all break statements to jump to end of loop (do this LAST)
+
     patch_break_statements(ctx, end_target);
-    
+
     leave_loop_context(ctx, loop_frame, end_target);
     loop_frame = NULL;
     success = true;
 
 cleanup:
     if (loop_frame) {
-        leave_loop_context(ctx, loop_frame, ctx->bytecode ? ctx->bytecode->count : loop_start);
+        leave_loop_context(ctx, loop_frame, ctx->bytecode ? ctx->bytecode->count : 0);
         loop_frame = NULL;
     }
 
+    if (condition_reg >= MP_TEMP_REG_START && condition_reg <= MP_TEMP_REG_END) {
+        mp_free_temp_register(ctx->allocator, condition_reg);
+        condition_reg = -1;
+    }
+    if (condition_neg_reg >= MP_TEMP_REG_START && condition_neg_reg <= MP_TEMP_REG_END) {
+        mp_free_temp_register(ctx->allocator, condition_neg_reg);
+        condition_neg_reg = -1;
+    }
+    if (step_nonneg_reg >= MP_TEMP_REG_START && step_nonneg_reg <= MP_TEMP_REG_END) {
+        mp_free_temp_register(ctx->allocator, step_nonneg_reg);
+        step_nonneg_reg = -1;
+    }
+    if (zero_reg >= MP_TEMP_REG_START && zero_reg <= MP_TEMP_REG_END) {
+        mp_free_temp_register(ctx->allocator, zero_reg);
+        zero_reg = -1;
+    }
     if (start_reg >= MP_TEMP_REG_START && start_reg <= MP_TEMP_REG_END) {
         mp_free_temp_register(ctx->allocator, start_reg);
         start_reg = -1;
@@ -2176,15 +2299,12 @@ cleanup:
         step_reg = -1;
     }
 
-    if (ctx->symbols) {
-        DEBUG_CODEGEN_PRINT("Cleaning up for loop scope (depth %d)", ctx->symbols->scope_depth);
+    if (created_scope && ctx->symbols) {
         for (int i = 0; i < ctx->symbols->capacity; i++) {
             Symbol* symbol = ctx->symbols->symbols[i];
             while (symbol) {
                 if (symbol->legacy_register_id >= MP_FRAME_REG_START &&
                     symbol->legacy_register_id <= MP_FRAME_REG_END) {
-                    DEBUG_CODEGEN_PRINT("Freeing loop variable register R%d for variable '%s'",
-                           symbol->legacy_register_id, symbol->name);
                     mp_free_register(ctx->allocator, symbol->legacy_register_id);
                 }
                 symbol = symbol->next;
@@ -2200,20 +2320,20 @@ cleanup:
         scope_frame = NULL;
     }
 
-    if (ctx->allocator) {
+    if (created_scope && ctx->allocator) {
         mp_exit_scope(ctx->allocator);
     }
 
-    if (ctx->symbols) {
+    if (created_scope && ctx->symbols) {
         free_symbol_table(ctx->symbols);
     }
-    ctx->symbols = old_scope;
+    if (created_scope) {
+        ctx->symbols = old_scope;
+    }
 
     if (success) {
         DEBUG_CODEGEN_PRINT("For range statement compilation completed");
-    }
-
-    if (!success) {
+    } else {
         DEBUG_CODEGEN_PRINT("For range statement aborted");
     }
 }
@@ -2305,7 +2425,7 @@ void compile_for_iter_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
            has_value_reg, end_patch);
     
     // Compile loop body with scope (like while loops do)
-    compile_block_with_scope(ctx, for_stmt->typed.forIter.body);
+    compile_block_with_scope(ctx, for_stmt->typed.forIter.body, true);
     
     // Emit unconditional jump back to loop start
     int back_jump_distance = (ctx->bytecode->count + 2) - loop_start;
@@ -2466,37 +2586,40 @@ void compile_continue_statement(CompilerContext* ctx, TypedASTNode* continue_stm
     DEBUG_CODEGEN_PRINT("Continue statement compilation completed");
 }
 
-void compile_block_with_scope(CompilerContext* ctx, TypedASTNode* block) {
+void compile_block_with_scope(CompilerContext* ctx, TypedASTNode* block, bool create_scope) {
     if (!ctx || !block) return;
 
-    DEBUG_CODEGEN_PRINT("Entering new scope (depth %d)\n", ctx->symbols->scope_depth + 1);
-
-    // Create new scope
     SymbolTable* old_scope = ctx->symbols;
-    ctx->symbols = create_symbol_table(old_scope);
-    if (!ctx->symbols) {
-        DEBUG_CODEGEN_PRINT("Error: Failed to create new scope");
-        ctx->symbols = old_scope;
-        return;
-    }
-
-    if (ctx->allocator) {
-        mp_enter_scope(ctx->allocator);
-    }
-
     ScopeFrame* lexical_frame = NULL;
-    if (ctx->scopes) {
-        lexical_frame = scope_stack_push(ctx->scopes, SCOPE_KIND_LEXICAL);
-        if (lexical_frame) {
-            lexical_frame->symbols = ctx->symbols;
-            lexical_frame->start_offset = ctx->bytecode ? ctx->bytecode->count : 0;
-            lexical_frame->end_offset = lexical_frame->start_offset;
+    if (create_scope) {
+        DEBUG_CODEGEN_PRINT("Entering new scope (depth %d)\n", ctx->symbols->scope_depth + 1);
+
+        ctx->symbols = create_symbol_table(old_scope);
+        if (!ctx->symbols) {
+            DEBUG_CODEGEN_PRINT("Error: Failed to create new scope");
+            ctx->symbols = old_scope;
+            return;
         }
+
+        if (ctx->allocator) {
+            mp_enter_scope(ctx->allocator);
+        }
+
+        if (ctx->scopes) {
+            lexical_frame = scope_stack_push(ctx->scopes, SCOPE_KIND_LEXICAL);
+            if (lexical_frame) {
+                lexical_frame->symbols = ctx->symbols;
+                lexical_frame->start_offset = ctx->bytecode ? ctx->bytecode->count : 0;
+                lexical_frame->end_offset = lexical_frame->start_offset;
+            }
+        }
+    } else {
+        DEBUG_CODEGEN_PRINT("Compiling block without introducing new scope (depth %d)\n",
+               ctx->symbols ? ctx->symbols->scope_depth : -1);
     }
 
     // Compile the block content
     if (block->original->type == NODE_BLOCK) {
-        // Multiple statements in block
         for (int i = 0; i < block->typed.block.count; i++) {
             TypedASTNode* stmt = block->typed.block.statements[i];
             if (stmt) {
@@ -2504,42 +2627,39 @@ void compile_block_with_scope(CompilerContext* ctx, TypedASTNode* block) {
             }
         }
     } else {
-        // Single statement
         compile_statement(ctx, block);
     }
 
-    // Clean up scope and free block-local variables
-    DEBUG_CODEGEN_PRINT("Exiting scope (depth %d)\n", ctx->symbols->scope_depth);
-
-    // Free registers allocated to block-local variables
-    DEBUG_CODEGEN_PRINT("Freeing block-local variable registers");
-    for (int i = 0; i < ctx->symbols->capacity; i++) {
-        Symbol* symbol = ctx->symbols->symbols[i];
-        while (symbol) {
-            if (symbol->legacy_register_id >= MP_FRAME_REG_START && 
-                symbol->legacy_register_id <= MP_FRAME_REG_END) {
-                DEBUG_CODEGEN_PRINT("Freeing frame register R%d for variable '%s'", 
-                       symbol->legacy_register_id, symbol->name);
-                mp_free_register(ctx->allocator, symbol->legacy_register_id);
+    if (create_scope) {
+        DEBUG_CODEGEN_PRINT("Exiting scope (depth %d)\n", ctx->symbols->scope_depth);
+        DEBUG_CODEGEN_PRINT("Freeing block-local variable registers");
+        for (int i = 0; i < ctx->symbols->capacity; i++) {
+            Symbol* symbol = ctx->symbols->symbols[i];
+            while (symbol) {
+                if (symbol->legacy_register_id >= MP_FRAME_REG_START &&
+                    symbol->legacy_register_id <= MP_FRAME_REG_END) {
+                    DEBUG_CODEGEN_PRINT("Freeing frame register R%d for variable '%s'",
+                           symbol->legacy_register_id, symbol->name);
+                    mp_free_register(ctx->allocator, symbol->legacy_register_id);
+                }
+                symbol = symbol->next;
             }
-            symbol = symbol->next;
         }
-    }
 
-    if (lexical_frame) {
-        lexical_frame->end_offset = ctx->bytecode ? ctx->bytecode->count : lexical_frame->start_offset;
-        if (ctx->scopes) {
-            scope_stack_pop(ctx->scopes);
+        if (lexical_frame) {
+            lexical_frame->end_offset = ctx->bytecode ? ctx->bytecode->count : lexical_frame->start_offset;
+            if (ctx->scopes) {
+                scope_stack_pop(ctx->scopes);
+            }
         }
-    }
 
-    if (ctx->allocator) {
-        mp_exit_scope(ctx->allocator);
-    }
+        if (ctx->allocator) {
+            mp_exit_scope(ctx->allocator);
+        }
 
-    // Restore previous scope
-    free_symbol_table(ctx->symbols);
-    ctx->symbols = old_scope;
+        free_symbol_table(ctx->symbols);
+        ctx->symbols = old_scope;
+    }
 }
 
 // ====== FUNCTION COMPILATION MANAGEMENT ======

@@ -394,6 +394,8 @@ CompilerContext* init_compiler_context(TypedASTNode* typed_ast) {
     ctx->continue_statements = NULL;  // No continue statements yet
     ctx->continue_count = 0;
     ctx->continue_capacity = 0;
+
+    ctx->branch_depth = 0;            // Not inside any conditional branches
     
     // Initialize function compilation context (NEW)
     ctx->current_function_index = -1;    // Global scope initially
