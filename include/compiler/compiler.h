@@ -114,6 +114,9 @@ typedef struct CompilerContext {
     int* continue_statements;          // Array of continue statement bytecode offsets to patch
     int continue_count;                // Number of continue statements in current loop
     int continue_capacity;             // Capacity of continue_statements array
+
+    // Branch tracking for conditional initialization semantics
+    int branch_depth;
     
     // Function compilation context (NEW)
     int current_function_index;        // Currently compiling function index (-1 if global)
