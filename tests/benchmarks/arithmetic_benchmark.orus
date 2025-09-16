@@ -14,6 +14,8 @@ c: i64 = 998
 d: i64 = 997
 e: i64 = 996
 
+two: i64 = 2
+
 // Addition chain
 add_result: i64 = a + b + c + d + e + a + b + c + d + e + a + b + c + d + e + a + b + c + d + e
 
@@ -24,7 +26,8 @@ sub_result: i64 = a - b - c + d + e - a + b - c + d - e + a - b + c - d + e - a 
 mul_result: i64 = (a / 100) * (b / 100) * (c / 100) * (d / 100) * (e / 100)
 
 // Division chain
-div_result: i64 = a / 2 / 2 / 2 / 2 / 2 * b / 2 / 2 / 2 / 2 / 2
+// div_result: i64 = a / 2 / 2 / 2 / 2 / 2 * b / 2 / 2 / 2 / 2 / 2
+div_result: i64 = a / two / two / two / two / two * b / two / two / two / two / two
 
 print("Basic arithmetic results:")
 print("Addition chain:", add_result)
@@ -93,15 +96,15 @@ fib_c = fib_a + fib_b
 
 // Factorial-like calculations
 mut fact_result: i64 = 1
-fact_result = fact_result * 2
-fact_result = fact_result * 3
-fact_result = fact_result * 4
-fact_result = fact_result * 5
-fact_result = fact_result * 6
-fact_result = fact_result * 7
-fact_result = fact_result * 8
-fact_result = fact_result * 9
-fact_result = fact_result * 10
+fact_result = fact_result * (2 as i64)
+fact_result = fact_result * (3 as i64)
+fact_result = fact_result * (4 as i64)
+fact_result = fact_result * (5 as i64)
+fact_result = fact_result * (6 as i64)
+fact_result = fact_result * (7 as i64)
+fact_result = fact_result * (8 as i64)
+fact_result = fact_result * (9 as i64)
+fact_result = fact_result * (10 as i64)
 
 // Power calculations (using repeated multiplication)
 power_2_10: i64 = (2 as i64) * (2 as i64) * (2 as i64) * (2 as i64) * (2 as i64) * (2 as i64) * (2 as i64) * (2 as i64) * (2 as i64) * (2 as i64)
