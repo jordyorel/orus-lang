@@ -63,6 +63,7 @@ static const char* get_node_type_name(NodeType type) {
         case NODE_LITERAL: return "Literal";
         case NODE_ARRAY_LITERAL: return "ArrayLiteral";
         case NODE_INDEX_ACCESS: return "IndexAccess";
+        case NODE_ARRAY_SLICE: return "ArraySlice";
         case NODE_BINARY: return "Binary";
         case NODE_ASSIGN: return "Assign";
         case NODE_ARRAY_ASSIGN: return "ArrayAssign";
@@ -362,6 +363,9 @@ static void visualize_node_recursive(TypedASTNode* node, int depth, bool is_last
         case NODE_ARRAY_ASSIGN:
             printf(" [array_assign]");
             break;
+        case NODE_ARRAY_SLICE:
+            printf(" [array_slice]");
+            break;
         default:
             break;
     }
@@ -443,6 +447,17 @@ static void visualize_node_recursive(TypedASTNode* node, int depth, bool is_last
             }
             if (node->typed.indexAccess.index) {
                 visualize_node_recursive(node->typed.indexAccess.index, depth + 1, true, config);
+            }
+            break;
+        case NODE_ARRAY_SLICE:
+            if (node->typed.arraySlice.array) {
+                visualize_node_recursive(node->typed.arraySlice.array, depth + 1, false, config);
+            }
+            if (node->typed.arraySlice.start) {
+                visualize_node_recursive(node->typed.arraySlice.start, depth + 1, false, config);
+            }
+            if (node->typed.arraySlice.end) {
+                visualize_node_recursive(node->typed.arraySlice.end, depth + 1, true, config);
             }
             break;
         case NODE_CALL:

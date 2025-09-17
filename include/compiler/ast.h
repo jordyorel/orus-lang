@@ -26,6 +26,7 @@ typedef enum {
     NODE_BINARY,
     NODE_ASSIGN,
     NODE_ARRAY_ASSIGN,
+    NODE_ARRAY_SLICE,
     NODE_PRINT,
     NODE_TIME_STAMP,
     NODE_IF,
@@ -89,6 +90,11 @@ struct ASTNode {
             ASTNode* target;   // NODE_INDEX_ACCESS target
             ASTNode* value;    // Value being assigned
         } arrayAssign;
+        struct {
+            ASTNode* array;
+            ASTNode* start;
+            ASTNode* end;
+        } arraySlice;
         struct {
             ASTNode** values;
             int count;

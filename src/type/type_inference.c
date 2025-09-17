@@ -830,6 +830,43 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             return target_type;
         }
 
+        case NODE_ARRAY_SLICE: {
+            Type* array_type = algorithm_w(env, node->arraySlice.array);
+            Type* start_type = algorithm_w(env, node->arraySlice.start);
+            Type* end_type = algorithm_w(env, node->arraySlice.end);
+            if (!array_type || !start_type || !end_type) {
+                return NULL;
+            }
+
+            if (array_type->kind != TYPE_ARRAY) {
+                report_type_mismatch(node->arraySlice.array->location, "array",
+                                     getTypeName(array_type->kind));
+                set_type_error();
+                return NULL;
+            }
+
+            if (!is_integer_type(start_type)) {
+                report_type_mismatch(node->arraySlice.start->location, "integer index",
+                                     getTypeName(start_type->kind));
+                set_type_error();
+                return NULL;
+            }
+
+            if (!is_integer_type(end_type)) {
+                report_type_mismatch(node->arraySlice.end->location, "integer index",
+                                     getTypeName(end_type->kind));
+                set_type_error();
+                return NULL;
+            }
+
+            Type* element_type = array_type->info.array.elementType;
+            if (!element_type) {
+                element_type = getPrimitiveType(TYPE_ANY);
+            }
+
+            return createArrayType(element_type);
+        }
+
         case NODE_TIME_STAMP: {
             // time_stamp() returns f64 (seconds as double)
             DEBUG_TYPE_INFERENCE_PRINT("Processing NODE_TIME_STAMP, returning TYPE_F64");
@@ -1411,6 +1448,17 @@ void populate_ast_types(ASTNode* node, TypeEnv* env) {
         case NODE_ARRAY_LITERAL:
             for (int i = 0; i < node->arrayLiteral.count; i++) {
                 populate_ast_types(node->arrayLiteral.elements[i], env);
+            }
+            break;
+        case NODE_ARRAY_SLICE:
+            if (node->arraySlice.array) {
+                populate_ast_types(node->arraySlice.array, env);
+            }
+            if (node->arraySlice.start) {
+                populate_ast_types(node->arraySlice.start, env);
+            }
+            if (node->arraySlice.end) {
+                populate_ast_types(node->arraySlice.end, env);
             }
             break;
         case NODE_CAST:

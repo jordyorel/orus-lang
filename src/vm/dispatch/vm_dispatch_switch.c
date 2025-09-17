@@ -1725,6 +1725,57 @@ InterpretResult vm_run_dispatch(void) {
                     break;
                 }
 
+                case OP_ARRAY_SLICE_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t array_reg = READ_BYTE();
+                    uint8_t start_reg = READ_BYTE();
+                    uint8_t end_reg = READ_BYTE();
+
+                    Value array_value = vm_get_register_safe(array_reg);
+                    if (!IS_ARRAY(array_value)) {
+                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Value is not an array");
+                    }
+
+                    int start_index;
+                    if (!value_to_index(vm_get_register_safe(start_reg), &start_index)) {
+                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Array slice start must be a non-negative integer");
+                    }
+
+                    int end_index;
+                    if (!value_to_index(vm_get_register_safe(end_reg), &end_index)) {
+                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Array slice end must be a non-negative integer");
+                    }
+
+                    ObjArray* array = AS_ARRAY(array_value);
+                    if (start_index < 0 || start_index > array->length) {
+                        VM_ERROR_RETURN(ERROR_INDEX, CURRENT_LOCATION(), "Array slice start out of bounds");
+                    }
+                    if (end_index < start_index) {
+                        VM_ERROR_RETURN(ERROR_INDEX, CURRENT_LOCATION(), "Array slice end before start");
+                    }
+                    if (end_index > array->length) {
+                        VM_ERROR_RETURN(ERROR_INDEX, CURRENT_LOCATION(), "Array slice end out of bounds");
+                    }
+
+                    int slice_length = end_index - start_index;
+                    ObjArray* result = allocateArray(slice_length);
+                    if (!result) {
+                        VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(), "Failed to allocate array slice");
+                    }
+
+                    if (slice_length > 0) {
+                        arrayEnsureCapacity(result, slice_length);
+                        for (int i = 0; i < slice_length; i++) {
+                            result->elements[i] = array->elements[start_index + i];
+                        }
+                    }
+                    result->length = slice_length;
+
+                    Value slice_value = {.type = VAL_ARRAY, .as.obj = (Obj*)result};
+                    vm_set_register_safe(dst, slice_value);
+                    break;
+                }
+
                 case OP_GET_ITER_R: {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();

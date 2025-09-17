@@ -489,7 +489,7 @@ print(counter())  // Should print 2
     - [x] `array[index]` expressions compile to bounds-checked reads.
     - [x] `array[index] = value` assignments emit bounds-checked stores.
     - [x] Iteration over arrays using `for value in array:`.
-    - [ ] Array slicing (`array[start..end]`).
+    - [x] Array slicing (`array[start..end]`).
     - [ ] Array comprehensions and higher-order operations (`[x for x in array]`).
 - [ ] **NEW**: Design arrays with generic type support in mind (prepares for advanced features)
 - [ ] **NEW**: Implement basic generic syntax parsing for arrays ([T])

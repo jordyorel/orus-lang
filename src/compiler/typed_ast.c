@@ -118,6 +118,11 @@ TypedASTNode* create_typed_ast_node(ASTNode* original) {
             typed->typed.arrayAssign.target = NULL;
             typed->typed.arrayAssign.value = NULL;
             break;
+        case NODE_ARRAY_SLICE:
+            typed->typed.arraySlice.array = NULL;
+            typed->typed.arraySlice.start = NULL;
+            typed->typed.arraySlice.end = NULL;
+            break;
         default:
             // For leaf nodes (IDENTIFIER, LITERAL, etc.), no additional
             // initialization needed
@@ -240,6 +245,11 @@ void free_typed_ast_node(TypedASTNode* node) {
             free_typed_ast_node(node->typed.arrayAssign.target);
             free_typed_ast_node(node->typed.arrayAssign.value);
             break;
+        case NODE_ARRAY_SLICE:
+            free_typed_ast_node(node->typed.arraySlice.array);
+            free_typed_ast_node(node->typed.arraySlice.start);
+            free_typed_ast_node(node->typed.arraySlice.end);
+            break;
         default:
             // Leaf nodes have no children to free
             break;
@@ -317,6 +327,10 @@ bool validate_typed_ast(TypedASTNode* root) {
         case NODE_ARRAY_ASSIGN:
             return validate_typed_ast(root->typed.arrayAssign.target) &&
                    validate_typed_ast(root->typed.arrayAssign.value);
+        case NODE_ARRAY_SLICE:
+            return validate_typed_ast(root->typed.arraySlice.array) &&
+                   validate_typed_ast(root->typed.arraySlice.start) &&
+                   validate_typed_ast(root->typed.arraySlice.end);
         case NODE_INDEX_ACCESS:
             return validate_typed_ast(root->typed.indexAccess.array) &&
                    validate_typed_ast(root->typed.indexAccess.index);
@@ -418,6 +432,9 @@ void print_typed_ast(TypedASTNode* node, int indent) {
             break;
         case NODE_ARRAY_ASSIGN:
             nodeTypeStr = "ArrayAssign";
+            break;
+        case NODE_ARRAY_SLICE:
+            nodeTypeStr = "ArraySlice";
             break;
         case NODE_PRINT:
             nodeTypeStr = "Print";
@@ -607,6 +624,11 @@ void print_typed_ast(TypedASTNode* node, int indent) {
         case NODE_ARRAY_ASSIGN:
             print_typed_ast(node->typed.arrayAssign.target, indent + 1);
             print_typed_ast(node->typed.arrayAssign.value, indent + 1);
+            break;
+        case NODE_ARRAY_SLICE:
+            print_typed_ast(node->typed.arraySlice.array, indent + 1);
+            print_typed_ast(node->typed.arraySlice.start, indent + 1);
+            print_typed_ast(node->typed.arraySlice.end, indent + 1);
             break;
         default:
             break;

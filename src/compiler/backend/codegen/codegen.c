@@ -1359,6 +1359,110 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             return compile_array_assignment(ctx, expr, true);
         }
 
+        case NODE_ARRAY_SLICE: {
+            TypedASTNode* array_node = expr->typed.arraySlice.array;
+            TypedASTNode* start_node = expr->typed.arraySlice.start;
+            TypedASTNode* end_node = expr->typed.arraySlice.end;
+
+            bool free_array_node = false;
+            bool free_start_node = false;
+            bool free_end_node = false;
+
+            if (!array_node && expr->original && expr->original->arraySlice.array) {
+                array_node = create_typed_ast_node(expr->original->arraySlice.array);
+                free_array_node = (array_node != NULL);
+            }
+            if (!start_node && expr->original && expr->original->arraySlice.start) {
+                start_node = create_typed_ast_node(expr->original->arraySlice.start);
+                free_start_node = (start_node != NULL);
+            }
+            if (!end_node && expr->original && expr->original->arraySlice.end) {
+                end_node = create_typed_ast_node(expr->original->arraySlice.end);
+                free_end_node = (end_node != NULL);
+            }
+
+            if (!array_node || !start_node || !end_node) {
+                if (free_array_node) free_typed_ast_node(array_node);
+                if (free_start_node) free_typed_ast_node(start_node);
+                if (free_end_node) free_typed_ast_node(end_node);
+                return -1;
+            }
+
+            int array_reg = compile_expression(ctx, array_node);
+            if (array_reg == -1) {
+                if (free_array_node) free_typed_ast_node(array_node);
+                if (free_start_node) free_typed_ast_node(start_node);
+                if (free_end_node) free_typed_ast_node(end_node);
+                return -1;
+            }
+
+            int start_reg = compile_expression(ctx, start_node);
+            if (start_reg == -1) {
+                if (array_reg >= MP_TEMP_REG_START && array_reg <= MP_TEMP_REG_END) {
+                    mp_free_temp_register(ctx->allocator, array_reg);
+                }
+                if (free_array_node) free_typed_ast_node(array_node);
+                if (free_start_node) free_typed_ast_node(start_node);
+                if (free_end_node) free_typed_ast_node(end_node);
+                return -1;
+            }
+
+            int end_reg = compile_expression(ctx, end_node);
+            if (end_reg == -1) {
+                if (start_reg >= MP_TEMP_REG_START && start_reg <= MP_TEMP_REG_END) {
+                    mp_free_temp_register(ctx->allocator, start_reg);
+                }
+                if (array_reg >= MP_TEMP_REG_START && array_reg <= MP_TEMP_REG_END) {
+                    mp_free_temp_register(ctx->allocator, array_reg);
+                }
+                if (free_array_node) free_typed_ast_node(array_node);
+                if (free_start_node) free_typed_ast_node(start_node);
+                if (free_end_node) free_typed_ast_node(end_node);
+                return -1;
+            }
+
+            int result_reg = mp_allocate_temp_register(ctx->allocator);
+            if (result_reg == -1) {
+                DEBUG_CODEGEN_PRINT("Error: Failed to allocate result register for array slice\n");
+                if (end_reg >= MP_TEMP_REG_START && end_reg <= MP_TEMP_REG_END) {
+                    mp_free_temp_register(ctx->allocator, end_reg);
+                }
+                if (start_reg >= MP_TEMP_REG_START && start_reg <= MP_TEMP_REG_END) {
+                    mp_free_temp_register(ctx->allocator, start_reg);
+                }
+                if (array_reg >= MP_TEMP_REG_START && array_reg <= MP_TEMP_REG_END) {
+                    mp_free_temp_register(ctx->allocator, array_reg);
+                }
+                if (free_array_node) free_typed_ast_node(array_node);
+                if (free_start_node) free_typed_ast_node(start_node);
+                if (free_end_node) free_typed_ast_node(end_node);
+                return -1;
+            }
+
+            set_location_from_node(ctx, expr);
+            emit_byte_to_buffer(ctx->bytecode, OP_ARRAY_SLICE_R);
+            emit_byte_to_buffer(ctx->bytecode, result_reg);
+            emit_byte_to_buffer(ctx->bytecode, array_reg);
+            emit_byte_to_buffer(ctx->bytecode, start_reg);
+            emit_byte_to_buffer(ctx->bytecode, end_reg);
+
+            if (end_reg >= MP_TEMP_REG_START && end_reg <= MP_TEMP_REG_END) {
+                mp_free_temp_register(ctx->allocator, end_reg);
+            }
+            if (start_reg >= MP_TEMP_REG_START && start_reg <= MP_TEMP_REG_END) {
+                mp_free_temp_register(ctx->allocator, start_reg);
+            }
+            if (array_reg >= MP_TEMP_REG_START && array_reg <= MP_TEMP_REG_END) {
+                mp_free_temp_register(ctx->allocator, array_reg);
+            }
+
+            if (free_array_node) free_typed_ast_node(array_node);
+            if (free_start_node) free_typed_ast_node(start_node);
+            if (free_end_node) free_typed_ast_node(end_node);
+
+            return result_reg;
+        }
+
         case NODE_IDENTIFIER: {
             const char* name = expr->original->identifier.name;
             SrcLocation location = expr->original->location;
