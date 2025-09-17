@@ -1,5 +1,7 @@
 # Orus Programming Language
 
+[![Version](https://img.shields.io/badge/version-0.3.0-blue.svg)](CHANGELOG.md)
+
 Fast, elegant programming language with Python's readability and Rust's safety.
 
 ## Overview

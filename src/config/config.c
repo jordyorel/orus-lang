@@ -1,5 +1,6 @@
 // config.c - Orus Language Configuration System Implementation
 #include "config/config.h"
+#include "public/version.h"
 #include "debug/debug_config.h"
 #include <stdlib.h>
 #include <string.h>
@@ -620,7 +621,7 @@ void config_apply_debug_settings(const OrusConfig* config) {
 }
 
 void config_print_version(void) {
-    printf("Orus Language Interpreter v1.0.0\n");
+    printf("Orus Language Interpreter v%s\n", ORUS_VERSION_STRING);
     printf("Built with comprehensive configuration system\n");
     printf("Register-based virtual machine with garbage collection\n");
     
