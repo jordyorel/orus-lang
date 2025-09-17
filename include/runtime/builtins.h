@@ -26,6 +26,24 @@ void builtin_print(Value* args, int count, bool newline, const char* separator);
 void builtin_print_with_sep_value(Value* args, int count, bool newline, Value separator_value);
 
 /**
+ * Push a value onto an array, growing the backing store when needed.
+ *
+ * @param array_value Value containing the target array.
+ * @param element     Value to append.
+ * @return true when the value was appended successfully.
+ */
+bool builtin_array_push(Value array_value, Value element);
+
+/**
+ * Pop a value from the end of an array.
+ *
+ * @param array_value Value containing the target array.
+ * @param out_value   Receives the popped value on success.
+ * @return true when a value was popped successfully.
+ */
+bool builtin_array_pop(Value array_value, Value* out_value);
+
+/**
  * Obtain a monotonic timestamp in milliseconds.
  *
  * The epoch is unspecified but monotonically increasing for the

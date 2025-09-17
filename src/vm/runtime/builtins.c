@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 #include "runtime/builtins.h"
+#include "runtime/memory.h"
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
@@ -204,14 +205,32 @@ void builtin_print(Value* args, int count, bool newline, const char* separator) 
 
 void builtin_print_with_sep_value(Value* args, int count, bool newline, Value separator_value) {
     const char* sep = " "; // default
-    
+
     // Extract separator string from Value
     if (IS_STRING(separator_value)) {
         ObjString* sepObj = AS_STRING(separator_value);
         sep = sepObj->chars;
     }
-    
+
     builtin_print(args, count, newline, sep);
+}
+
+bool builtin_array_push(Value array_value, Value element) {
+    if (!IS_ARRAY(array_value)) {
+        return false;
+    }
+
+    ObjArray* array = AS_ARRAY(array_value);
+    return arrayPush(array, element);
+}
+
+bool builtin_array_pop(Value array_value, Value* out_value) {
+    if (!IS_ARRAY(array_value)) {
+        return false;
+    }
+
+    ObjArray* array = AS_ARRAY(array_value);
+    return arrayPop(array, out_value);
 }
 
 // Cross-platform high-precision timestamp function

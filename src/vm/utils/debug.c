@@ -187,6 +187,51 @@ int disassembleInstruction(Chunk* chunk, int offset) {
             return offset + 2;
         }
 
+        case OP_MAKE_ARRAY_R: {
+            uint8_t dst = chunk->code[offset + 1];
+            uint8_t first = chunk->code[offset + 2];
+            uint8_t count = chunk->code[offset + 3];
+            printf("%-16s R%d, R%d, count=%d\n", "MAKE_ARRAY", dst, first, count);
+            return offset + 4;
+        }
+
+        case OP_ARRAY_GET_R: {
+            uint8_t dst = chunk->code[offset + 1];
+            uint8_t array_reg = chunk->code[offset + 2];
+            uint8_t index_reg = chunk->code[offset + 3];
+            printf("%-16s R%d, R%d, R%d\n", "ARRAY_GET", dst, array_reg, index_reg);
+            return offset + 4;
+        }
+
+        case OP_ARRAY_SET_R: {
+            uint8_t array_reg = chunk->code[offset + 1];
+            uint8_t index_reg = chunk->code[offset + 2];
+            uint8_t value_reg = chunk->code[offset + 3];
+            printf("%-16s R%d, R%d, R%d\n", "ARRAY_SET", array_reg, index_reg, value_reg);
+            return offset + 4;
+        }
+
+        case OP_ARRAY_LEN_R: {
+            uint8_t dst = chunk->code[offset + 1];
+            uint8_t array_reg = chunk->code[offset + 2];
+            printf("%-16s R%d, R%d\n", "ARRAY_LEN", dst, array_reg);
+            return offset + 3;
+        }
+
+        case OP_ARRAY_PUSH_R: {
+            uint8_t array_reg = chunk->code[offset + 1];
+            uint8_t value_reg = chunk->code[offset + 2];
+            printf("%-16s R%d, R%d\n", "ARRAY_PUSH", array_reg, value_reg);
+            return offset + 3;
+        }
+
+        case OP_ARRAY_POP_R: {
+            uint8_t dst = chunk->code[offset + 1];
+            uint8_t array_reg = chunk->code[offset + 2];
+            printf("%-16s R%d, R%d\n", "ARRAY_POP", dst, array_reg);
+            return offset + 3;
+        }
+
         case OP_CALL_NATIVE_R: {
             uint8_t native_index = chunk->code[offset + 1];
             uint8_t first_arg = chunk->code[offset + 2];

@@ -1,6 +1,7 @@
 #ifndef ORUS_MEMORY_H
 #define ORUS_MEMORY_H
 
+#include <stdbool.h>
 #include <stddef.h>
 
 #define GROW_CAPACITY(capacity) ((capacity) < 8 ? 8 : (capacity) * 2)
@@ -21,6 +22,11 @@ void resumeGC(void);
 
 ObjString* allocateString(const char* chars, int length);
 ObjArray* allocateArray(int capacity);
+void arrayEnsureCapacity(ObjArray* array, int minCapacity);
+bool arrayPush(ObjArray* array, Value value);
+bool arrayPop(ObjArray* array, Value* outValue);
+bool arrayGet(const ObjArray* array, int index, Value* outValue);
+bool arraySet(ObjArray* array, int index, Value value);
 ObjError* allocateError(ErrorType type, const char* message, SrcLocation location);
 ObjRangeIterator* allocateRangeIterator(int64_t start, int64_t end);
 ObjFunction* allocateFunction(void);
