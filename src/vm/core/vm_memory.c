@@ -342,6 +342,7 @@ void initChunk(Chunk* chunk) {
     chunk->code = NULL;
     chunk->lines = NULL;
     chunk->columns = NULL;
+    chunk->files = NULL;
     chunk->constants.count = 0;
     chunk->constants.capacity = 0;
     chunk->constants.values = NULL;
@@ -351,11 +352,12 @@ void freeChunk(Chunk* chunk) {
     FREE_ARRAY(uint8_t, chunk->code, chunk->capacity);
     FREE_ARRAY(int, chunk->lines, chunk->capacity);
     FREE_ARRAY(int, chunk->columns, chunk->capacity);
+    free(chunk->files);
     FREE_ARRAY(Value, chunk->constants.values, chunk->constants.capacity);
     initChunk(chunk);
 }
 
-void writeChunk(Chunk* chunk, uint8_t byte, int line, int column) {
+void writeChunk(Chunk* chunk, uint8_t byte, int line, int column, const char* file) {
     if (chunk->capacity < chunk->count + 1) {
         int oldCapacity = chunk->capacity;
         chunk->capacity = GROW_CAPACITY(oldCapacity);
@@ -365,11 +367,16 @@ void writeChunk(Chunk* chunk, uint8_t byte, int line, int column) {
             GROW_ARRAY(int, chunk->lines, oldCapacity, chunk->capacity);
         chunk->columns =
             GROW_ARRAY(int, chunk->columns, oldCapacity, chunk->capacity);
+        chunk->files =
+            GROW_ARRAY(const char*, chunk->files, oldCapacity, chunk->capacity);
     }
 
     chunk->code[chunk->count] = byte;
     chunk->lines[chunk->count] = line;
     chunk->columns[chunk->count] = column;
+    if (chunk->files) {
+        chunk->files[chunk->count] = file;
+    }
     chunk->count++;
 }
 

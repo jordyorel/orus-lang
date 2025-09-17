@@ -44,6 +44,7 @@ typedef struct BytecodeBuffer {
     // Metadata for debugging
     int* source_lines;         // Line numbers for each instruction
     int* source_columns;       // Column numbers for each instruction
+    const char** source_files; // Source file for each instruction (optional)
 
     // Current emission location (threaded from AST nodes)
     SrcLocation current_location;

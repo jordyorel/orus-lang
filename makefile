@@ -113,8 +113,9 @@ TEST_RUNNER_OBJ = $(TEST_RUNNER_SRC:$(TESTDIR)/%.c=$(BUILDDIR)/tests/%.o)
 ORUS = orus$(SUFFIX)
 UNIT_TEST_RUNNER = test_runner$(SUFFIX)
 BYTECODE_TEST_BIN = $(BUILDDIR)/tests/test_jump_patch
+SOURCE_MAP_TEST_BIN = $(BUILDDIR)/tests/test_source_mapping
 
-.PHONY: all clean test unit-test test-control-flow benchmark help debug release profiling analyze install bytecode-jump-tests
+.PHONY: all clean test unit-test test-control-flow benchmark help debug release profiling analyze install bytecode-jump-tests source-map-tests
 
 all: build-info $(ORUS)
 
@@ -211,6 +212,9 @@ test: $(ORUS)
 	@echo ""
 	@echo "\033[36m=== Bytecode Jump Patch Tests ===\033[0m"
 	@$(MAKE) bytecode-jump-tests
+	@echo ""
+	@echo "\033[36m=== Source Mapping Tests ===\033[0m"
+	@$(MAKE) source-map-tests
 
 # Run unit tests
 unit-test: $(UNIT_TEST_RUNNER)
@@ -226,6 +230,15 @@ $(BYTECODE_TEST_BIN): tests/unit/test_jump_patch.c $(COMPILER_OBJS) $(VM_OBJS)
 bytecode-jump-tests: $(BYTECODE_TEST_BIN)
 	@echo "Running bytecode jump patch tests..."
 	@./$(BYTECODE_TEST_BIN)
+
+$(SOURCE_MAP_TEST_BIN): tests/unit/test_source_mapping.c $(COMPILER_OBJS) $(VM_OBJS)
+	@mkdir -p $(dir $@)
+	@echo "Compiling source mapping tests..."
+	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+
+source-map-tests: $(SOURCE_MAP_TEST_BIN)
+	@echo "Running source mapping tests..."
+	@./$(SOURCE_MAP_TEST_BIN)
 
 test-control-flow: $(ORUS)
 	@echo "Running Control Flow Tests..."
