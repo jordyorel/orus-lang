@@ -25,9 +25,19 @@
 BytecodeBuffer* init_bytecode_buffer(void) {
     BytecodeBuffer* buffer = malloc(sizeof(BytecodeBuffer));
     if (!buffer) return NULL;
-    
-    buffer->capacity = 256;  // Initial capacity
+
+    // Ensure all fields are initialized before any allocation so cleanup paths
+    // can safely free partially constructed buffers.
+    buffer->instructions = NULL;
+    buffer->source_lines = NULL;
+    buffer->source_columns = NULL;
+    buffer->source_files = NULL;
+    buffer->patches = NULL;
     buffer->count = 0;
+    buffer->capacity = 256;  // Initial capacity
+    buffer->patch_count = 0;
+    buffer->patch_capacity = 0;
+
     buffer->instructions = malloc(buffer->capacity);
     buffer->source_lines = malloc(buffer->capacity * sizeof(int));
     buffer->source_columns = malloc(buffer->capacity * sizeof(int));
@@ -43,11 +53,6 @@ BytecodeBuffer* init_bytecode_buffer(void) {
     buffer->current_location.line = -1;
     buffer->current_location.column = -1;
     buffer->has_current_location = false;
-
-    // Initialize jump patching
-    buffer->patches = NULL;
-    buffer->patch_count = 0;
-    buffer->patch_capacity = 0;
 
     return buffer;
 }
