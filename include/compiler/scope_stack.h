@@ -48,5 +48,6 @@ ScopeFrame* scope_stack_current_loop(ScopeStack* stack);
 int scope_stack_depth(const ScopeStack* stack);
 int scope_stack_loop_depth(const ScopeStack* stack);
 bool scope_stack_is_in_loop(const ScopeStack* stack);
+ScopeFrame* scope_stack_get_frame(ScopeStack* stack, int index);
 
 #endif // ORUS_COMPILER_SCOPE_STACK_H
