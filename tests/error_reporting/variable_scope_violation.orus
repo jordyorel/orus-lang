@@ -1,0 +1,7 @@
+// Using a variable outside of the block where it was declared should report a scope violation
+fn demo() -> i32:
+    if true:
+        mut temp = 10
+    return temp
+
+demo()

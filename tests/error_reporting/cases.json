@@ -91,6 +91,49 @@
     ]
   },
   {
+    "name": "variable_redefinition",
+    "source": "variable_redefinition.orus",
+    "description": "Declaring the same variable twice in one scope should report a redefinition error.",
+    "expected_exit": 65,
+    "expected_diagnostic_count": 1,
+    "expected_diagnostics": [
+      {
+        "title": "This variable name is already taken",
+        "message_contains": "already defined on line",
+        "help_contains": "Choose a different name",
+        "note_contains": "Each variable can only be declared once"
+      }
+    ],
+    "expected": [
+      "-- SYNTAX ERROR: This variable name is already taken",
+      "Variable 'value' is already defined on line 2",
+      "help: Choose a different name for this variable, or use assignment to change the existing one.",
+      "note: Each variable can only be declared once in the same scope.",
+      "Compilation failed for \"tests/error_reporting/variable_redefinition.orus\"."
+    ]
+  },
+  {
+    "name": "variable_scope_violation",
+    "source": "variable_scope_violation.orus",
+    "description": "Referencing a block-local variable outside of its scope should surface an undefined-variable diagnostic.",
+    "expected_exit": 65,
+    "expected_diagnostic_count": 1,
+    "expected_diagnostics": [
+      {
+        "title": "Can't find this variable",
+        "message_contains": "Undefined variable 'temp'",
+        "help_contains": "Make sure you've declared the variable before using it"
+      }
+    ],
+    "expected": [
+      "-- SYNTAX ERROR: Can't find this variable",
+      "Undefined variable 'temp'. Variables must be declared before use.",
+      "help: Make sure you've declared the variable before using it, or check the spelling.",
+      "note: Variables must be declared before they can be used in Orus.",
+      "Compilation failed for \"tests/error_reporting/variable_scope_violation.orus\"."
+    ]
+  },
+  {
     "name": "function_argument_mismatch",
     "source": "function_argument_mismatch.orus",
     "description": "Calling a function with the wrong number of arguments should emit a type mismatch.",
@@ -135,19 +178,23 @@
   {
     "name": "closure_invalid_upvalue",
     "source": "closure_invalid_upvalue.orus",
-    "description": "Mutating a captured immutable variable inside a closure currently triggers a runtime panic.",
-    "expected_exit": 70,
+    "description": "Mutating a captured immutable variable inside a closure is now caught at compile time.",
+    "expected_exit": 65,
     "expected_diagnostic_count": 1,
     "expected_diagnostics": [
       {
-        "category": "RUNTIME PANIC",
-        "title": "This operation isn't allowed here",
-        "message_contains": "Invalid upvalue access"
+        "title": "This variable needs to be mutable",
+        "message_contains": "Cannot assign to immutable variable",
+        "help_contains": "Add 'mut' before the variable name",
+        "note_contains": "Variables are immutable by default"
       }
     ],
     "expected": [
-      "-- RUNTIME PANIC: This operation isn't allowed here",
-      "Invalid upvalue access"
+      "-- SYNTAX ERROR: This variable needs to be mutable",
+      "Cannot assign to immutable variable 'value'. Add 'mut' when declaring it.",
+      "help: Add 'mut' before the variable name when declaring it: 'mut variable_name = value'",
+      "note: Variables are immutable by default in Orus for safety and predictability.",
+      "Compilation failed for \"tests/error_reporting/closure_invalid_upvalue.orus\"."
     ]
   },
   {
