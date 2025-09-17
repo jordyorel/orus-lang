@@ -4,6 +4,7 @@ b = 5
 c = 15
 
 // Complex comparisons
+mut max_val = 0
 if a > b:
     print("a greater than b")
     if c > a:
@@ -12,7 +13,7 @@ if a > b:
     else:
         print("a is largest") 
         max_val = a
-        print(max_val)
+    print("Max value:", max_val)
 
 // Arithmetic in conditions
 sum = a + b
