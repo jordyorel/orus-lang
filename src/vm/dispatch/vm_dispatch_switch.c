@@ -1,6 +1,7 @@
 #include "vm/vm_dispatch.h"
 #include "vm/spill_manager.h"
 #include "runtime/builtins.h"
+#include "runtime/memory.h"
 #include "vm/vm_constants.h"
 #include "vm/vm_string_ops.h"
 #include "vm/vm_arithmetic.h"
@@ -11,8 +12,45 @@
 #include "vm/register_file.h"
 #include "vm/vm_profiling.h"
 #include <math.h>
+#include <limits.h>
 
 // Frame-aware register access functions are declared in vm_comparison.h
+
+static inline bool value_to_index(Value value, int* out_index) {
+    if (IS_I32(value)) {
+        int32_t idx = AS_I32(value);
+        if (idx < 0) {
+            return false;
+        }
+        *out_index = idx;
+        return true;
+    }
+    if (IS_I64(value)) {
+        int64_t idx = AS_I64(value);
+        if (idx < 0 || idx > INT_MAX) {
+            return false;
+        }
+        *out_index = (int)idx;
+        return true;
+    }
+    if (IS_U32(value)) {
+        uint32_t idx = AS_U32(value);
+        if (idx > (uint32_t)INT_MAX) {
+            return false;
+        }
+        *out_index = (int)idx;
+        return true;
+    }
+    if (IS_U64(value)) {
+        uint64_t idx = AS_U64(value);
+        if (idx > (uint64_t)INT_MAX) {
+            return false;
+        }
+        *out_index = (int)idx;
+        return true;
+    }
+    return false;
+}
 
 
 
@@ -1574,6 +1612,116 @@ InterpretResult vm_run_dispatch(void) {
                     ObjString* res = allocateString(buf, newLen);
                     free(buf);
                     vm_set_register_safe(dst, STRING_VAL(res));
+                    break;
+                }
+
+                case OP_MAKE_ARRAY_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t first = READ_BYTE();
+                    uint8_t count = READ_BYTE();
+
+                    ObjArray* array = allocateArray(count);
+                    if (!array) {
+                        VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(), "Failed to allocate array");
+                    }
+
+                    for (uint8_t i = 0; i < count; i++) {
+                        arrayEnsureCapacity(array, i + 1);
+                        array->elements[i] = vm_get_register_safe(first + i);
+                    }
+                    array->length = count;
+                    Value new_array = {.type = VAL_ARRAY, .as.obj = (Obj*)array};
+                    vm_set_register_safe(dst, new_array);
+                    break;
+                }
+
+                case OP_ARRAY_GET_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t array_reg = READ_BYTE();
+                    uint8_t index_reg = READ_BYTE();
+
+                    Value array_value = vm_get_register_safe(array_reg);
+                    if (!IS_ARRAY(array_value)) {
+                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Value is not an array");
+                    }
+
+                    int index;
+                    if (!value_to_index(vm_get_register_safe(index_reg), &index)) {
+                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Array index must be a non-negative integer");
+                    }
+
+                    Value element;
+                    if (!arrayGet(AS_ARRAY(array_value), index, &element)) {
+                        VM_ERROR_RETURN(ERROR_INDEX, CURRENT_LOCATION(), "Array index out of bounds");
+                    }
+
+                    vm_set_register_safe(dst, element);
+                    break;
+                }
+
+                case OP_ARRAY_SET_R: {
+                    uint8_t array_reg = READ_BYTE();
+                    uint8_t index_reg = READ_BYTE();
+                    uint8_t value_reg = READ_BYTE();
+
+                    Value array_value = vm_get_register_safe(array_reg);
+                    if (!IS_ARRAY(array_value)) {
+                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Value is not an array");
+                    }
+
+                    int index;
+                    if (!value_to_index(vm_get_register_safe(index_reg), &index)) {
+                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Array index must be a non-negative integer");
+                    }
+
+                    Value value = vm_get_register_safe(value_reg);
+                    if (!arraySet(AS_ARRAY(array_value), index, value)) {
+                        VM_ERROR_RETURN(ERROR_INDEX, CURRENT_LOCATION(), "Array index out of bounds");
+                    }
+                    break;
+                }
+
+                case OP_ARRAY_LEN_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t array_reg = READ_BYTE();
+
+                    Value array_value = vm_get_register_safe(array_reg);
+                    if (!IS_ARRAY(array_value)) {
+                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Value is not an array");
+                    }
+
+                    vm_set_register_safe(dst, I32_VAL(AS_ARRAY(array_value)->length));
+                    break;
+                }
+
+                case OP_ARRAY_PUSH_R: {
+                    uint8_t array_reg = READ_BYTE();
+                    uint8_t value_reg = READ_BYTE();
+
+                    Value array_value = vm_get_register_safe(array_reg);
+                    if (!builtin_array_push(array_value, vm_get_register_safe(value_reg))) {
+                        if (!IS_ARRAY(array_value)) {
+                            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Value is not an array");
+                        }
+                        VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(), "Failed to push value onto array");
+                    }
+                    break;
+                }
+
+                case OP_ARRAY_POP_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t array_reg = READ_BYTE();
+
+                    Value array_value = vm_get_register_safe(array_reg);
+                    Value popped;
+                    if (!builtin_array_pop(array_value, &popped)) {
+                        if (!IS_ARRAY(array_value)) {
+                            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Value is not an array");
+                        }
+                        VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Cannot pop from an empty array");
+                    }
+
+                    vm_set_register_safe(dst, popped);
                     break;
                 }
 

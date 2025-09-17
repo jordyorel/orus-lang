@@ -99,6 +99,84 @@ ObjArray* allocateArray(int capacity) {
     return array;
 }
 
+void arrayEnsureCapacity(ObjArray* array, int minCapacity) {
+    if (!array) {
+        return;
+    }
+
+    if (minCapacity <= array->capacity) {
+        return;
+    }
+
+    int newCapacity = array->capacity;
+    while (newCapacity < minCapacity) {
+        newCapacity = newCapacity < 8 ? 8 : newCapacity * 2;
+        if (newCapacity < 0) {
+            newCapacity = minCapacity;
+            break;
+        }
+    }
+
+    Value* newElements = (Value*)reallocate(
+        array->elements,
+        sizeof(Value) * array->capacity,
+        sizeof(Value) * newCapacity);
+    if (!newElements) {
+        return;
+    }
+
+    array->elements = newElements;
+    array->capacity = newCapacity;
+}
+
+bool arrayPush(ObjArray* array, Value value) {
+    if (!array) {
+        return false;
+    }
+
+    if (array->length >= array->capacity) {
+        arrayEnsureCapacity(array, array->length + 1);
+        if (array->length >= array->capacity) {
+            return false;
+        }
+    }
+
+    array->elements[array->length++] = value;
+    return true;
+}
+
+bool arrayPop(ObjArray* array, Value* outValue) {
+    if (!array || array->length == 0) {
+        return false;
+    }
+
+    array->length--;
+    if (outValue) {
+        *outValue = array->elements[array->length];
+    }
+    return true;
+}
+
+bool arrayGet(const ObjArray* array, int index, Value* outValue) {
+    if (!array || index < 0 || index >= array->length) {
+        return false;
+    }
+
+    if (outValue) {
+        *outValue = array->elements[index];
+    }
+    return true;
+}
+
+bool arraySet(ObjArray* array, int index, Value value) {
+    if (!array || index < 0 || index >= array->length) {
+        return false;
+    }
+
+    array->elements[index] = value;
+    return true;
+}
+
 ObjError* allocateError(ErrorType type, const char* message, SrcLocation location) {
     ObjError* error = (ObjError*)allocateObject(sizeof(ObjError), OBJ_ERROR);
     error->type = type;

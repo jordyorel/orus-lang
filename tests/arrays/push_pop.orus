@@ -1,0 +1,23 @@
+// Array push/pop smoke test for the Orus VM runtime.
+//
+// This program exercises the built-in push/pop operations exposed by the VM.
+// It builds an array, pushes a series of values, then pops them back off while
+// printing the observed order and remaining length after each operation.
+
+print("-- array push/pop builtin smoke --")
+mut numbers = []
+
+// Push a few values
+push(numbers, 1)
+push(numbers, 2)
+push(numbers, 3)
+print("after pushes:", numbers)
+print("length:", len(numbers))
+
+last = pop(numbers)
+print("popped value:", last)
+print("after pop:", numbers)
+print("length:", len(numbers))
+
+push(numbers, 42)
+print("final state:", numbers)
