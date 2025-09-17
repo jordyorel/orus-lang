@@ -278,10 +278,18 @@ static inline void handle_print_multi(void) {
     uint8_t count = READ_BYTE();
     uint8_t nl = READ_BYTE();
     
+    // Validate bounds to avoid out-of-range register access
+    if ((int)first + (int)count > 256) {
+        runtimeError(ERROR_RUNTIME, (SrcLocation){NULL,0,0},
+                     "PRINT_MULTI out of bounds: first=%d, count=%d",
+                     first, count);
+        return;
+    }
+
     // Copy values to temporary array using frame-aware access
     Value temp_values[256];  // Max possible count
     for (int i = 0; i < count; i++) {
-        temp_values[i] = vm_get_register_safe(first + i);
+        temp_values[i] = vm_get_register_safe((uint16_t)(first + i));
     }
     builtin_print(temp_values, count, nl != 0, NULL);
 }
