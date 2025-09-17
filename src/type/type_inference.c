@@ -70,6 +70,8 @@ static TypeVar* find_var(TypeVar* v) {
     return v->parent == v ? v : (v->parent = find_var(v->parent));
 }
 
+static void register_builtin_functions(TypeEnv* env);
+
 // ---- Type constructors ----
 Type* make_var_type(TypeEnv* env) {
     (void)env;  // Unused parameter
@@ -206,6 +208,10 @@ bool unify(Type* a, Type* b) {
 
     if (b->kind == TYPE_VAR) return unify(b, a);
 
+    if (a->kind == TYPE_ANY || b->kind == TYPE_ANY) {
+        return true;
+    }
+
     if (a->kind != b->kind) return false;
 
     switch (a->kind) {
@@ -245,6 +251,9 @@ TypeEnv* type_env_new(TypeEnv* parent) {
     if (!env) return NULL;
     env->entries = NULL;
     env->parent = parent;
+    if (!parent) {
+        register_builtin_functions(env);
+    }
     return env;
 }
 
@@ -523,6 +532,67 @@ static TypeScheme* generalize(TypeEnv* env, Type* type) {
     return type_scheme_new(type, bound_names, actual_bound);
 }
 
+static void define_builtin_function(TypeEnv* env, const char* name,
+                                    Type* return_type, Type** params,
+                                    int param_count) {
+    if (!env || !name || !return_type) {
+        return;
+    }
+
+    Type** param_copy = NULL;
+    if (param_count > 0) {
+        param_copy = type_arena_alloc(sizeof(Type*) * param_count);
+        if (!param_copy) {
+            return;
+        }
+        for (int i = 0; i < param_count; i++) {
+            param_copy[i] = params[i];
+        }
+    }
+
+    Type* func_type = createFunctionType(return_type, param_copy, param_count);
+    if (!func_type) {
+        return;
+    }
+
+    TypeScheme* scheme = generalize(env, func_type);
+    if (!scheme) {
+        return;
+    }
+
+    type_env_define(env, name, scheme);
+}
+
+static void register_builtin_functions(TypeEnv* env) {
+    if (!env) {
+        return;
+    }
+
+    Type* any_type = getPrimitiveType(TYPE_ANY);
+
+    // len(array) -> i32
+    Type* len_array = createArrayType(any_type);
+    if (len_array) {
+        Type* len_params[1] = {len_array};
+        define_builtin_function(env, "len", getPrimitiveType(TYPE_I32),
+                                len_params, 1);
+    }
+
+    // push(array, value) -> array
+    Type* push_array = createArrayType(any_type);
+    if (push_array) {
+        Type* push_params[2] = {push_array, any_type};
+        define_builtin_function(env, "push", push_array, push_params, 2);
+    }
+
+    // pop(array) -> value
+    Type* pop_array = createArrayType(any_type);
+    if (pop_array) {
+        Type* pop_params[1] = {pop_array};
+        define_builtin_function(env, "pop", any_type, pop_params, 1);
+    }
+}
+
 static Type* instantiate_type_scheme(TypeScheme* scheme) {
     if (!scheme) return NULL;
     if (scheme->bound_count <= 0) {
@@ -646,7 +716,7 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
         case NODE_LITERAL:
             DEBUG_TYPE_INFERENCE_PRINT("Processing literal with value type %d", (int)node->literal.value.type);
             switch (node->literal.value.type) {
-                case VAL_I32: 
+                case VAL_I32:
                     DEBUG_TYPE_INFERENCE_PRINT("VAL_I32 -> TYPE_I32");
                     return getPrimitiveType(TYPE_I32);
                 case VAL_I64: return getPrimitiveType(TYPE_I64);
@@ -661,6 +731,39 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                     DEBUG_TYPE_INFERENCE_PRINT("Unknown value type %d -> TYPE_UNKNOWN", (int)node->literal.value.type);
                     return getPrimitiveType(TYPE_UNKNOWN);
             }
+        case NODE_ARRAY_LITERAL: {
+            if (node->arrayLiteral.count == 0) {
+                return createArrayType(getPrimitiveType(TYPE_ANY));
+            }
+
+            Type* element_type = NULL;
+            for (int i = 0; i < node->arrayLiteral.count; i++) {
+                Type* current_type = algorithm_w(env, node->arrayLiteral.elements[i]);
+                if (!current_type) {
+                    return NULL;
+                }
+
+                if (!element_type) {
+                    element_type = current_type;
+                    continue;
+                }
+
+                if (!unify(element_type, current_type)) {
+                    const char* expected = getTypeName(element_type->kind);
+                    const char* found = getTypeName(current_type->kind);
+                    report_type_mismatch(node->arrayLiteral.elements[i]->location,
+                                         expected, found);
+                    set_type_error();
+                    return NULL;
+                }
+            }
+
+            if (!element_type) {
+                element_type = getPrimitiveType(TYPE_ANY);
+            }
+
+            return createArrayType(element_type);
+        }
         case NODE_IDENTIFIER: {
             DEBUG_TYPE_INFERENCE_PRINT("Looking up identifier '%s'", node->identifier.name);
             TypeScheme* scheme = type_env_lookup(env, node->identifier.name);
@@ -1254,6 +1357,11 @@ void populate_ast_types(ASTNode* node, TypeEnv* env) {
                 populate_ast_types(node->print.separator, env);
             }
             break;
+        case NODE_ARRAY_LITERAL:
+            for (int i = 0; i < node->arrayLiteral.count; i++) {
+                populate_ast_types(node->arrayLiteral.elements[i], env);
+            }
+            break;
         case NODE_CAST:
             if (node->cast.expression) {
                 populate_ast_types(node->cast.expression, env);
@@ -1529,6 +1637,28 @@ static TypedASTNode* generate_typed_ast_recursive(ASTNode* ast, TypeEnv* type_en
                     }
                     free_typed_ast_node(typed);
                     return NULL;
+                }
+            }
+            break;
+
+        case NODE_ARRAY_LITERAL:
+            if (ast->arrayLiteral.count > 0) {
+                typed->typed.arrayLiteral.elements = malloc(sizeof(TypedASTNode*) * ast->arrayLiteral.count);
+                if (!typed->typed.arrayLiteral.elements) {
+                    free_typed_ast_node(typed);
+                    return NULL;
+                }
+                typed->typed.arrayLiteral.count = ast->arrayLiteral.count;
+                for (int i = 0; i < ast->arrayLiteral.count; i++) {
+                    typed->typed.arrayLiteral.elements[i] = generate_typed_ast_recursive(ast->arrayLiteral.elements[i], type_env);
+                    if (!typed->typed.arrayLiteral.elements[i]) {
+                        for (int j = 0; j < i; j++) {
+                            free_typed_ast_node(typed->typed.arrayLiteral.elements[j]);
+                        }
+                        free(typed->typed.arrayLiteral.elements);
+                        free_typed_ast_node(typed);
+                        return NULL;
+                    }
                 }
             }
             break;

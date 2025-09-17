@@ -99,6 +99,10 @@ TypedASTNode* create_typed_ast_node(ASTNode* original) {
             typed->typed.call.args = NULL;
             typed->typed.call.argCount = 0;
             break;
+        case NODE_ARRAY_LITERAL:
+            typed->typed.arrayLiteral.elements = NULL;
+            typed->typed.arrayLiteral.count = 0;
+            break;
         case NODE_RETURN:
             typed->typed.returnStmt.value = NULL;
             break;
@@ -203,6 +207,14 @@ void free_typed_ast_node(TypedASTNode* node) {
                     free_typed_ast_node(node->typed.call.args[i]);
                 }
                 free(node->typed.call.args);
+            }
+            break;
+        case NODE_ARRAY_LITERAL:
+            if (node->typed.arrayLiteral.elements) {
+                for (int i = 0; i < node->typed.arrayLiteral.count; i++) {
+                    free_typed_ast_node(node->typed.arrayLiteral.elements[i]);
+                }
+                free(node->typed.arrayLiteral.elements);
             }
             break;
         case NODE_RETURN:
@@ -370,6 +382,9 @@ void print_typed_ast(TypedASTNode* node, int indent) {
         case NODE_LITERAL:
             nodeTypeStr = "Literal";
             break;
+        case NODE_ARRAY_LITERAL:
+            nodeTypeStr = "ArrayLiteral";
+            break;
         case NODE_BINARY:
             nodeTypeStr = "Binary";
             break;
@@ -489,6 +504,13 @@ void print_typed_ast(TypedASTNode* node, int indent) {
             }
             if (node->typed.print.separator) {
                 print_typed_ast(node->typed.print.separator, indent + 1);
+            }
+            break;
+        case NODE_ARRAY_LITERAL:
+            if (node->typed.arrayLiteral.elements) {
+                for (int i = 0; i < node->typed.arrayLiteral.count; i++) {
+                    print_typed_ast(node->typed.arrayLiteral.elements[i], indent + 1);
+                }
             }
             break;
         case NODE_IF:

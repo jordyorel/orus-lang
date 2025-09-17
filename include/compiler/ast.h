@@ -21,6 +21,7 @@ typedef enum {
     NODE_VAR_DECL,
     NODE_IDENTIFIER,
     NODE_LITERAL,
+    NODE_ARRAY_LITERAL,
     NODE_BINARY,
     NODE_ASSIGN,
     NODE_PRINT,
@@ -65,6 +66,10 @@ struct ASTNode {
             Value value;
             bool hasExplicitSuffix;
         } literal;
+        struct {
+            ASTNode** elements;
+            int count;
+        } arrayLiteral;
         struct {
             char* op;
             ASTNode* left;
