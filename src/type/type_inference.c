@@ -152,6 +152,29 @@ bool occurs_in_type(TypeVar* var, Type* type) {
             return false;
         case TYPE_ARRAY:
             return occurs_in_type(var, type->info.array.elementType);
+        case TYPE_STRUCT: {
+            TypeExtension* ext = get_type_extension(type);
+            if (!ext || !ext->extended.structure.fields) return false;
+            for (int i = 0; i < ext->extended.structure.fieldCount; i++) {
+                if (occurs_in_type(var, ext->extended.structure.fields[i].type)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        case TYPE_ENUM: {
+            TypeExtension* ext = get_type_extension(type);
+            if (!ext || !ext->extended.enum_.variants) return false;
+            for (int i = 0; i < ext->extended.enum_.variant_count; i++) {
+                Variant* variant = &ext->extended.enum_.variants[i];
+                for (int j = 0; j < variant->field_count; j++) {
+                    if (occurs_in_type(var, variant->field_types[j])) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
         default:
             return false;
     }
@@ -197,6 +220,9 @@ bool unify(Type* a, Type* b) {
                          b->info.function.returnType);
         case TYPE_ARRAY:
             return unify(a->info.array.elementType, b->info.array.elementType);
+        case TYPE_STRUCT:
+        case TYPE_ENUM:
+            return equalsType(a, b);
         default:
             return true;
     }
@@ -367,6 +393,27 @@ static void collect_free_type_vars_internal(Type* type, IntSet* set,
             if (type->info.generic.params) {
                 for (int i = 0; i < type->info.generic.paramCount; i++) {
                     collect_free_type_vars_internal(type->info.generic.params[i], set,
+                                                    bound_vars, bound_count);
+                }
+            }
+            break;
+        }
+        case TYPE_STRUCT: {
+            TypeExtension* ext = get_type_extension(type);
+            if (!ext || !ext->extended.structure.fields) break;
+            for (int i = 0; i < ext->extended.structure.fieldCount; i++) {
+                collect_free_type_vars_internal(ext->extended.structure.fields[i].type,
+                                                set, bound_vars, bound_count);
+            }
+            break;
+        }
+        case TYPE_ENUM: {
+            TypeExtension* ext = get_type_extension(type);
+            if (!ext || !ext->extended.enum_.variants) break;
+            for (int i = 0; i < ext->extended.enum_.variant_count; i++) {
+                Variant* variant = &ext->extended.enum_.variants[i];
+                for (int j = 0; j < variant->field_count; j++) {
+                    collect_free_type_vars_internal(variant->field_types[j], set,
                                                     bound_vars, bound_count);
                 }
             }

@@ -37,6 +37,10 @@ typedef struct TypeExtension {
     // Extended union data for new type kinds
     union {
         struct {
+            int length;
+            bool has_length;
+        } array;
+        struct {
             ObjString* name;
             FieldInfo* fields;
             int fieldCount;
@@ -64,6 +68,7 @@ Type* createSizedArrayType(Type* elementType, int length);
 Type* createFunctionType(Type* returnType, Type** paramTypes, int paramCount);
 Type* createStructType(ObjString* name, FieldInfo* fields, int fieldCount,
                        ObjString** generics, int genericCount);
+Type* createEnumType(ObjString* name, Variant* variants, int variant_count);
 Type* createGenericType(ObjString* name);
 Type* findStructType(const char* name);
 void freeType(Type* type);

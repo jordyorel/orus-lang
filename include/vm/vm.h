@@ -198,6 +198,8 @@ typedef enum {
     TYPE_VOID,
     TYPE_ARRAY,
     TYPE_FUNCTION,
+    TYPE_STRUCT,
+    TYPE_ENUM,
     TYPE_ANY,
     TYPE_VAR,
     TYPE_GENERIC,
