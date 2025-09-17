@@ -100,6 +100,7 @@ typedef struct CompilerContext {
     
     // Debugging
     bool enable_visualization;         // Show TypedAST between passes
+    bool dump_bytecode;                // Emit bytecode dumps when requested
     FILE* debug_output;               // Where to output debug info
     
     // Optimization settings (TODO: implement in Phase 2)

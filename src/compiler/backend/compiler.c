@@ -387,6 +387,7 @@ CompilerContext* init_compiler_context(TypedASTNode* typed_ast) {
     
     // Initialize debugging
     ctx->enable_visualization = false;  // Default off
+    ctx->dump_bytecode = false;
     ctx->debug_output = stdout;
     
     // Initialize symbol table for variable tracking
@@ -521,10 +522,11 @@ bool run_codegen_pass(CompilerContext* ctx) {
         }
         
         // Add bytecode visualization if enabled
-        if (ctx->enable_visualization) {
-            printf("\n=== BYTECODE DUMP ===\n");
-            printf("Instructions: %d\n", ctx->bytecode->count);
-            
+        if (ctx->dump_bytecode) {
+            FILE* out = ctx->debug_output ? ctx->debug_output : stdout;
+            fprintf(out, "\n=== BYTECODE DUMP ===\n");
+            fprintf(out, "Instructions: %d\n", ctx->bytecode->count);
+
             // Decode and display each instruction
             for (int i = 0; i < ctx->bytecode->count; i += 4) {
                 if (i + 3 < ctx->bytecode->count) {
@@ -532,36 +534,36 @@ bool run_codegen_pass(CompilerContext* ctx) {
                     uint8_t reg1 = ctx->bytecode->instructions[i + 1];
                     uint8_t reg2 = ctx->bytecode->instructions[i + 2];
                     uint8_t reg3 = ctx->bytecode->instructions[i + 3];
-                    
-                    printf("%04d: %02X", i, opcode);
-                    
+
+                    fprintf(out, "%04d: %02X", i, opcode);
+
                     // Decode common opcodes for better readability
                     if (opcode == 0xAB) { // OP_LOAD_I32_CONST
                         int32_t value = (reg2 << 8) | reg3;
-                        printf(" (OP_LOAD_I32_CONST) reg=R%d, value=%d", reg1, value);
+                        fprintf(out, " (OP_LOAD_I32_CONST) reg=R%d, value=%d", reg1, value);
                     } else if (opcode == 0xAE) { // OP_MOVE_I32
-                        printf(" (OP_MOVE_I32) dst=R%d, src=R%d", reg1, reg2);
+                        fprintf(out, " (OP_MOVE_I32) dst=R%d, src=R%d", reg1, reg2);
                     } else if (opcode == 0x78) { // OP_PRINT_R
-                        printf(" (OP_PRINT_R) reg=R%d", reg1);
+                        fprintf(out, " (OP_PRINT_R) reg=R%d", reg1);
                     } else if (opcode == 0xC4) { // OP_HALT
-                        printf(" (OP_HALT)");
+                        fprintf(out, " (OP_HALT)");
                     } else {
-                        printf(" (OPCODE_%02X) R%d, R%d, R%d", opcode, reg1, reg2, reg3);
+                        fprintf(out, " (OPCODE_%02X) R%d, R%d, R%d", opcode, reg1, reg2, reg3);
                     }
-                    
+
                     // Suppress unused variable warnings
                     (void)reg1;
-                    
-                    printf("\n");
+
+                    fprintf(out, "\n");
                 }
             }
-            
-            printf("=== END BYTECODE ===\n\n");
-            
+
+            fprintf(out, "=== END BYTECODE ===\n\n");
+
             // Add optimized bytecode version
-            printf("=== OPTIMIZED BYTECODE ===\n");
-            printf("Register-optimized instruction sequence:\n");
-            
+            fprintf(out, "=== OPTIMIZED BYTECODE ===\n");
+            fprintf(out, "Register-optimized instruction sequence:\n");
+
             // Decode and display optimized instructions with cleaner formatting
             for (int i = 0; i < ctx->bytecode->count; i += 4) {
                 if (i + 3 < ctx->bytecode->count) {
@@ -569,31 +571,31 @@ bool run_codegen_pass(CompilerContext* ctx) {
                     uint8_t reg1 = ctx->bytecode->instructions[i + 1];
                     uint8_t reg2 = ctx->bytecode->instructions[i + 2];
                     uint8_t reg3 = ctx->bytecode->instructions[i + 3];
-                    
+
                     // Clean, optimized format showing register reuse and specialization
                     if (opcode == 0xAB) { // OP_LOAD_I32_CONST
                         int32_t value = (reg2 << 8) | reg3;
-                        printf("  LOAD_CONST  R%-3d ← %d\n", reg1, value);
+                        fprintf(out, "  LOAD_CONST  R%-3d ← %d\n", reg1, value);
                     } else if (opcode == 0xAE) { // OP_MOVE_I32
-                        printf("  MOVE        R%-3d ← R%d\n", reg1, reg2);
+                        fprintf(out, "  MOVE        R%-3d ← R%d\n", reg1, reg2);
                     } else if (opcode == 0x78) { // OP_PRINT_R
-                        printf("  PRINT       R%-3d\n", reg1);
+                        fprintf(out, "  PRINT       R%-3d\n", reg1);
                     } else if (opcode == 0xC4) { // OP_HALT
-                        printf("  HALT\n");
+                        fprintf(out, "  HALT\n");
                     } else {
-                        printf("  OP_%02X       R%-3d, R%-3d, R%-3d\n", opcode, reg1, reg2, reg3);
+                        fprintf(out, "  OP_%02X       R%-3d, R%-3d, R%-3d\n", opcode, reg1, reg2, reg3);
                     }
-                    
+
                     // Suppress unused variable warnings
                     (void)reg1;
                 }
             }
-            
-            printf("=== END OPTIMIZED BYTECODE ===\n\n");
-            printf("🚀 Register Allocation Summary:\n");
-            printf("   - Temp registers (R192-R239): Used for intermediate values\n");
-            printf("   - Frame registers (R64-R191): Used for variables\n");
-            printf("   - Specialized opcodes: OP_LOAD_I32_CONST, OP_MOVE_I32\n\n");
+
+            fprintf(out, "=== END OPTIMIZED BYTECODE ===\n\n");
+            fprintf(out, "🚀 Register Allocation Summary:\n");
+            fprintf(out, "   - Temp registers (R192-R239): Used for intermediate values\n");
+            fprintf(out, "   - Frame registers (R64-R191): Used for variables\n");
+            fprintf(out, "   - Specialized opcodes: OP_LOAD_I32_CONST, OP_MOVE_I32\n\n");
         }
     } else {
         DEBUG_CODEGEN_PRINT("❌ Code generation failed\n");
@@ -844,7 +846,8 @@ bool compileProgram(ASTNode* ast, Compiler* compiler, bool isModule) {
         error_reporter_set_use_colors(ctx->errors, config ? config->error_colors : true);
     }
 
-    ctx->enable_visualization = show_typed_ast || show_bytecode;
+    ctx->enable_visualization = show_typed_ast;
+    ctx->dump_bytecode = show_bytecode;
     ctx->debug_output = stdout;
 
     bool success = compile_to_bytecode(ctx);
