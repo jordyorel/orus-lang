@@ -103,6 +103,17 @@ void printValue(Value value) {
                    (long long)it->end);
             break;
         }
+        case VAL_ARRAY_ITERATOR: {
+            ObjArrayIterator* it = AS_ARRAY_ITERATOR(value);
+            int index = it ? it->index : 0;
+            int remaining = 0;
+            if (it && it->array) {
+                remaining = it->array->length - index;
+                if (remaining < 0) remaining = 0;
+            }
+            printf("array_iter(index=%d, remaining=%d)", index, remaining);
+            break;
+        }
         default:
             printf("<unknown>");
     }
@@ -128,6 +139,10 @@ bool valuesEqual(Value a, Value b) {
             return AS_STRING(a) == AS_STRING(b);
         case VAL_ARRAY:
             return AS_ARRAY(a) == AS_ARRAY(b);
+        case VAL_RANGE_ITERATOR:
+            return AS_RANGE_ITERATOR(a) == AS_RANGE_ITERATOR(b);
+        case VAL_ARRAY_ITERATOR:
+            return AS_ARRAY_ITERATOR(a) == AS_ARRAY_ITERATOR(b);
         case VAL_ERROR:
             return AS_ERROR(a) == AS_ERROR(b);
         default:

@@ -970,6 +970,8 @@ Type* infer_literal_type_extended_ctx(TypeContext* ctx, Value* value) {
         return getPrimitive_ctx(ctx, TYPE_ERROR);
     case VAL_RANGE_ITERATOR:
         return getPrimitive_ctx(ctx, TYPE_UNKNOWN);
+    case VAL_ARRAY_ITERATOR:
+        return getPrimitive_ctx(ctx, TYPE_UNKNOWN);
     case VAL_FUNCTION:
     case VAL_CLOSURE:
         return getPrimitive_ctx(ctx, TYPE_FUNCTION);
@@ -1001,6 +1003,8 @@ Type* infer_literal_type_extended(Value* value) {
     case VAL_ERROR:
         return getPrimitive(TYPE_ERROR);
     case VAL_RANGE_ITERATOR:
+        return getPrimitive(TYPE_UNKNOWN);
+    case VAL_ARRAY_ITERATOR:
         return getPrimitive(TYPE_UNKNOWN);
     case VAL_FUNCTION:
     case VAL_CLOSURE:
@@ -1049,6 +1053,7 @@ TypeKind value_type_to_type_kind(ValueType value_type) {
     case VAL_ARRAY: return TYPE_ARRAY;
     case VAL_ERROR: return TYPE_ERROR;
     case VAL_RANGE_ITERATOR: return TYPE_UNKNOWN;
+    case VAL_ARRAY_ITERATOR: return TYPE_UNKNOWN;
     case VAL_FUNCTION:
     case VAL_CLOSURE: return TYPE_FUNCTION;
     default: return TYPE_UNKNOWN;
