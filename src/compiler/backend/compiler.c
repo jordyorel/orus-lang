@@ -7,8 +7,11 @@
 #include "compiler/symbol_table.h"
 #include "compiler/scope_stack.h"
 #include "compiler/error_reporter.h"
+#include "config/config.h"
 #include "errors/features/control_flow_errors.h"
+#include "internal/error_reporting.h"
 #include "runtime/memory.h"
+#include "type/type.h"
 #include "debug/debug_config.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -28,8 +31,10 @@ BytecodeBuffer* init_bytecode_buffer(void) {
     buffer->instructions = malloc(buffer->capacity);
     buffer->source_lines = malloc(buffer->capacity * sizeof(int));
     buffer->source_columns = malloc(buffer->capacity * sizeof(int));
+    buffer->source_files = malloc(buffer->capacity * sizeof(const char*));
 
-    if (!buffer->instructions || !buffer->source_lines || !buffer->source_columns) {
+    if (!buffer->instructions || !buffer->source_lines || !buffer->source_columns ||
+        !buffer->source_files) {
         free_bytecode_buffer(buffer);
         return NULL;
     }
@@ -53,6 +58,7 @@ void free_bytecode_buffer(BytecodeBuffer* buffer) {
     free(buffer->instructions);
     free(buffer->source_lines);
     free(buffer->source_columns);
+    free(buffer->source_files);
     free(buffer->patches);
     free(buffer);
 }
@@ -147,15 +153,22 @@ void emit_byte_to_buffer(BytecodeBuffer* buffer, uint8_t byte) {
         buffer->instructions = realloc(buffer->instructions, buffer->capacity);
         buffer->source_lines = realloc(buffer->source_lines, buffer->capacity * sizeof(int));
         buffer->source_columns = realloc(buffer->source_columns, buffer->capacity * sizeof(int));
+        buffer->source_files = realloc(buffer->source_files, buffer->capacity * sizeof(const char*));
     }
 
     buffer->instructions[buffer->count] = byte;
     if (buffer->has_current_location) {
         buffer->source_lines[buffer->count] = buffer->current_location.line;
         buffer->source_columns[buffer->count] = buffer->current_location.column;
+        if (buffer->source_files) {
+            buffer->source_files[buffer->count] = buffer->current_location.file;
+        }
     } else {
         buffer->source_lines[buffer->count] = -1;
         buffer->source_columns[buffer->count] = -1;
+        if (buffer->source_files) {
+            buffer->source_files[buffer->count] = NULL;
+        }
     }
     buffer->count++;
 }
@@ -668,19 +681,194 @@ void freeCompiler(Compiler* compiler) {
     (void)compiler;
 }
 
-bool compileProgram(ASTNode* ast, Compiler* compiler, bool isModule) {
-    // Legacy compatibility - should not be used with new multi-pass compiler
-    (void)ast;
-    (void)compiler;
-    (void)isModule;
-    DEBUG_CODEGEN_PRINT("[LEGACY] compileProgram stub called - this should be replaced with multi-pass compiler\n");
+static void report_compiler_diagnostics(const CompilerContext* ctx) {
+    if (!ctx || !ctx->errors) {
+        return;
+    }
+
+    size_t diagnostic_count = error_reporter_count(ctx->errors);
+    const CompilerDiagnostic* diagnostics = error_reporter_diagnostics(ctx->errors);
+    if (diagnostic_count == 0 || !diagnostics) {
+        return;
+    }
+
+    for (size_t i = 0; i < diagnostic_count; ++i) {
+        const CompilerDiagnostic* diagnostic = &diagnostics[i];
+        SrcLocation location = diagnostic->location;
+        if (!location.file && ctx->input_ast && ctx->input_ast->original) {
+            location = ctx->input_ast->original->location;
+        }
+
+        int caret_start = location.column > 0 ? location.column - 1 : 0;
+        int caret_end = location.column > 0 ? location.column : 0;
+
+        const char* category = get_error_category(diagnostic->code);
+        const char* title = get_error_title(diagnostic->code);
+        const char* help = diagnostic->help ? diagnostic->help : get_error_help(diagnostic->code);
+        const char* note = diagnostic->note ? diagnostic->note : get_error_note(diagnostic->code);
+
+        const char* message = diagnostic->message ? diagnostic->message : title;
+
+        EnhancedError error = {
+            .code = diagnostic->code,
+            .severity = diagnostic->severity,
+            .category = category,
+            .title = title,
+            .message = message,
+            .help = help,
+            .note = note,
+            .location = location,
+            .source_line = NULL,
+            .caret_start = caret_start,
+            .caret_end = caret_end,
+        };
+
+        report_enhanced_error(&error);
+    }
+}
+
+static bool copy_compiled_bytecode(Compiler* legacy_compiler, CompilerContext* ctx) {
+    if (!legacy_compiler || !legacy_compiler->chunk || !ctx || !ctx->bytecode) {
+        return false;
+    }
+
+    Chunk* chunk = legacy_compiler->chunk;
+    BytecodeBuffer* bytecode = ctx->bytecode;
+
+    // Reset any previous chunk contents so stale bytecode cannot escape on failures
+    freeChunk(chunk);
+
+    chunk->count = bytecode->count;
+    chunk->capacity = bytecode->count;
+
+    if (bytecode->count > 0) {
+        chunk->code = (uint8_t*)reallocate(NULL, 0, (size_t)bytecode->count);
+        chunk->lines = (int*)reallocate(NULL, 0, sizeof(int) * (size_t)bytecode->count);
+        chunk->columns = (int*)reallocate(NULL, 0, sizeof(int) * (size_t)bytecode->count);
+        chunk->files = (const char**)reallocate(NULL, 0, sizeof(const char*) * (size_t)bytecode->count);
+
+        memcpy(chunk->code, bytecode->instructions, (size_t)bytecode->count);
+
+        if (bytecode->source_lines) {
+            memcpy(chunk->lines, bytecode->source_lines, sizeof(int) * (size_t)bytecode->count);
+        } else {
+            for (int i = 0; i < bytecode->count; ++i) {
+                chunk->lines[i] = -1;
+            }
+        }
+
+        if (bytecode->source_columns) {
+            memcpy(chunk->columns, bytecode->source_columns, sizeof(int) * (size_t)bytecode->count);
+        } else {
+            for (int i = 0; i < bytecode->count; ++i) {
+                chunk->columns[i] = -1;
+            }
+        }
+
+        if (chunk->files && bytecode->source_files) {
+            memcpy(chunk->files, bytecode->source_files, sizeof(const char*) * (size_t)bytecode->count);
+        } else if (chunk->files) {
+            for (int i = 0; i < bytecode->count; ++i) {
+                chunk->files[i] = NULL;
+            }
+        }
+    } else {
+        chunk->code = NULL;
+        chunk->lines = NULL;
+        chunk->columns = NULL;
+        chunk->files = NULL;
+    }
+
+    // Copy constants into the VM chunk using the existing helper so GC accounting remains correct
+    if (ctx->constants && ctx->constants->count > 0) {
+        for (int i = 0; i < ctx->constants->count; ++i) {
+            addConstant(chunk, ctx->constants->values[i]);
+        }
+    }
+
     return true;
+}
+
+bool compileProgram(ASTNode* ast, Compiler* compiler, bool isModule) {
+    (void)isModule;
+
+    if (!ast || !compiler || !compiler->chunk) {
+        return false;
+    }
+
+    const OrusConfig* config = config_get_global();
+    bool show_typed_ast = config && config->show_typed_ast;
+    bool show_bytecode = config && config->show_bytecode;
+
+    // Ensure the target chunk starts from a clean slate even if compilation fails
+    freeChunk(compiler->chunk);
+
+    init_type_inference();
+
+    TypeEnv* type_env = type_env_new(NULL);
+    if (!type_env) {
+        report_compile_error(E9003_COMPILER_BUG, ast->location,
+                             "failed to allocate type environment for compilation");
+        cleanup_type_inference();
+        return false;
+    }
+
+    TypedASTNode* typed_ast = generate_typed_ast(ast, type_env);
+    if (!typed_ast) {
+        cleanup_type_inference();
+        return false;
+    }
+
+    if (show_typed_ast && compiler->source) {
+        printf("\n=== TYPED AST VISUALIZATION ===\n");
+        if (compiler->fileName) {
+            printf("Source: %s\n", compiler->fileName);
+        }
+        printf("================================\n");
+        if (terminal_supports_color()) {
+            visualize_typed_ast_colored(typed_ast, stdout);
+        } else {
+            visualize_typed_ast_detailed(typed_ast, stdout, true, true);
+        }
+        printf("\n=== END TYPED AST ===\n\n");
+    }
+
+    CompilerContext* ctx = init_compiler_context(typed_ast);
+    if (!ctx) {
+        free_typed_ast_node(typed_ast);
+        cleanup_type_inference();
+        return false;
+    }
+
+    if (ctx->errors) {
+        error_reporter_set_use_colors(ctx->errors, config ? config->error_colors : true);
+    }
+
+    ctx->enable_visualization = show_typed_ast || show_bytecode;
+    ctx->debug_output = stdout;
+
+    bool success = compile_to_bytecode(ctx);
+    if (!success || ctx->has_compilation_errors) {
+        report_compiler_diagnostics(ctx);
+        free_compiler_context(ctx);
+        free_typed_ast_node(typed_ast);
+        cleanup_type_inference();
+        return false;
+    }
+
+    bool copied = copy_compiled_bytecode(compiler, ctx);
+
+    free_compiler_context(ctx);
+    free_typed_ast_node(typed_ast);
+    cleanup_type_inference();
+
+    return copied;
 }
 
 void emitByte(Compiler* compiler, uint8_t byte) {
     // Legacy compatibility - minimal implementation
     if (compiler && compiler->chunk) {
-        writeChunk(compiler->chunk, byte, 0, 0);
+        writeChunk(compiler->chunk, byte, 0, 0, NULL);
     }
 }
 

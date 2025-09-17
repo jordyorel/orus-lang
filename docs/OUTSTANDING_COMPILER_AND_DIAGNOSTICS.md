@@ -8,11 +8,11 @@ as aspirational bullet points.
 
 ## Implementation kickoff focus
 
-1. Complete the compiler instrumentation tasks in `src/compiler/backend` so the
-   code generator can emit debuggable, fully patched bytecode.
-2. Wire the diagnostic helpers in `src/errors/features` to the concrete loop and
-   scope metadata that the compiler will expose.
-3. Stand up regression and integration tests under `tests/` (and update the
+1. [x] Complete the compiler instrumentation tasks in `src/compiler/backend` so
+   the code generator can emit debuggable, fully patched bytecode.
+2. [x] Wire the diagnostic helpers in `src/errors/features` to the concrete loop
+   and scope metadata that the compiler now exposes.
+3. [x] Stand up regression and integration tests under `tests/` (and update the
    Makefile targets) so every deliverable below ships with coverage.
 
 ---
@@ -43,7 +43,7 @@ the VM and diagnostic shell can surface precise locations.
   coordinates to `-1` / `NULL` to keep instrumentation honest.
 
 **Testing.**
-- [ ] Add a targeted unit-style test that compiles a known AST fragment and
+- [x] Add a targeted unit-style test that compiles a known AST fragment and
   asserts that `ctx->bytecode->source_lines` / `source_columns` mirror the
   expected locations.
 - [x] Create integration fixtures under `tests/error_reporting/` that trigger VM
@@ -107,28 +107,31 @@ cannot surface scope errors, track loop depth, or aggregate diagnostics.
 - Extend the diagnostic harness so failing tests assert on the aggregated error
   list, not just success/failure.
 
-### Legacy pipeline removal
+### Legacy pipeline removal ✅
 
-**Current issue.** `compileProgram` in
-`src/compiler/backend/compiler.c` remains a stub that always returns `true`,
-leaving the VM without bytecode when the new pipeline aborts early.
+**Resolution.** `compileProgram` now serves as a real adapter for the
+single-pass, multi-phase backend. The function generates the typed AST, builds a
+`CompilerContext`, executes the optimization and codegen passes, and streams the
+resulting bytecode/metadata into the VM chunk. Failure paths surface
+`ErrorReporter` diagnostics through the friendly formatter instead of returning
+success.
 
 **Implementation steps.**
-- Replace the stub with a thin adapter that builds a `CompilerContext` from the
-  legacy AST, runs `compile_to_bytecode`, and injects the resulting chunk into
-  the VM.
-- Remove call sites in `vm.c` that assume the legacy compiler is active, or gate
-  them behind a runtime switch that defaults to the multi-pass pipeline.
-- When compilation fails, surface the aggregated diagnostics via the
+- [x] Replace the stub with a thin adapter that builds a `CompilerContext` from
+  the legacy AST, runs `compile_to_bytecode`, and injects the resulting chunk
+  into the VM.
+- [x] Remove call sites in `vm.c` that assume the legacy compiler is active, or
+  gate them behind a runtime switch that defaults to the multi-pass pipeline.
+- [x] When compilation fails, surface the aggregated diagnostics via the
   `ErrorReporter` instead of silently succeeding.
 
 **Testing.**
-- Add smoke tests in `tests/comprehensive/` that drive the full VM through the
-  CLI entry points (`./orus program.orus`).
-- Ensure the interpreter exits with a non-zero status when compilation fails by
-  adding shell-based harness checks in `tests/error_reporting/`.
-- Run `make test` plus any targeted CLI integration scripts to confirm the VM
-  now executes the bytecode produced by the new compiler.
+- [ ] Add smoke tests in `tests/comprehensive/` that drive the full VM through
+  the CLI entry points (`./orus program.orus`).
+- [ ] Ensure the interpreter exits with a non-zero status when compilation fails
+  by adding shell-based harness checks in `tests/error_reporting/`.
+- [x] Run `make test` to confirm the VM executes the bytecode produced by the
+  new compiler (CLI-driven smoke coverage remains tracked separately).
 
 ### Optimization pass depth (constant propagation)
 

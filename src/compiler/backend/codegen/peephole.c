@@ -131,6 +131,9 @@ void eliminate_instruction_sequence(CompilerContext* ctx, int start_offset, int 
         bytecode->instructions[j] = bytecode->instructions[j + length];
         bytecode->source_lines[j] = bytecode->source_lines[j + length];
         bytecode->source_columns[j] = bytecode->source_columns[j + length];
+        if (bytecode->source_files) {
+            bytecode->source_files[j] = bytecode->source_files[j + length];
+        }
     }
     bytecode->count -= length;
 }

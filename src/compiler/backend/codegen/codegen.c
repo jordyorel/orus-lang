@@ -45,7 +45,29 @@ static void record_control_flow_error(CompilerContext* ctx,
     if (!ctx || !ctx->errors) {
         return;
     }
-    error_reporter_add(ctx->errors, code, SEVERITY_ERROR, location, message, help, NULL);
+    const char* note = NULL;
+    char note_buffer[128];
+
+    if (ctx->scopes) {
+        int loop_depth = scope_stack_loop_depth(ctx->scopes);
+        if (loop_depth <= 0) {
+            snprintf(note_buffer, sizeof(note_buffer),
+                     "Compiler scope stack reports no active loops at this point.");
+            note = note_buffer;
+        } else {
+            ScopeFrame* active_loop = scope_stack_current_loop(ctx->scopes);
+            if (active_loop) {
+                snprintf(note_buffer, sizeof(note_buffer),
+                         "Innermost loop bytecode span: start=%d, continue=%d, end=%d.",
+                         active_loop->start_offset,
+                         active_loop->continue_offset,
+                         active_loop->end_offset);
+                note = note_buffer;
+            }
+        }
+    }
+
+    error_reporter_add(ctx->errors, code, SEVERITY_ERROR, location, message, help, note);
 }
 
 static ScopeFrame* enter_loop_context(CompilerContext* ctx, int loop_start) {
@@ -57,6 +79,8 @@ static ScopeFrame* enter_loop_context(CompilerContext* ctx, int loop_start) {
     if (!frame) {
         return NULL;
     }
+
+    control_flow_enter_loop_context();
 
     frame->start_offset = loop_start;
     frame->end_offset = -1;
@@ -138,6 +162,8 @@ static void leave_loop_context(CompilerContext* ctx, ScopeFrame* frame, int end_
         ctx->current_loop_end = -1;
         ctx->current_loop_continue = -1;
     }
+
+    control_flow_leave_loop_context();
 }
 
 // ===== CODE GENERATION COORDINATOR =====
@@ -2741,13 +2767,21 @@ void finalize_functions_to_vm(CompilerContext* ctx) {
         chunk->capacity = func_chunk->count;
         chunk->lines = func_chunk->count > 0 ? malloc(sizeof(int) * func_chunk->count) : NULL;
         chunk->columns = func_chunk->count > 0 ? malloc(sizeof(int) * func_chunk->count) : NULL;
+        chunk->files = func_chunk->count > 0 ? malloc(sizeof(const char*) * func_chunk->count) : NULL;
         if (chunk->lines && func_chunk->source_lines) {
             memcpy(chunk->lines, func_chunk->source_lines, sizeof(int) * func_chunk->count);
         }
         if (chunk->columns && func_chunk->source_columns) {
             memcpy(chunk->columns, func_chunk->source_columns, sizeof(int) * func_chunk->count);
         }
-        
+        if (chunk->files && func_chunk->source_files) {
+            memcpy(chunk->files, func_chunk->source_files, sizeof(const char*) * func_chunk->count);
+        } else if (chunk->files) {
+            for (int j = 0; j < func_chunk->count; ++j) {
+                chunk->files[j] = NULL;
+            }
+        }
+
         // Copy constants from main context
         if (ctx->constants && ctx->constants->count > 0) {
             chunk->constants.count = ctx->constants->count;
