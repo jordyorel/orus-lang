@@ -37,6 +37,9 @@ static inline void set_location_from_ast(CompilerContext* ctx, ASTNode* node) {
     }
 }
 
+static int compile_assignment_internal(CompilerContext* ctx, TypedASTNode* assign,
+                                       bool as_expression);
+
 static void record_control_flow_error(CompilerContext* ctx,
                                       ErrorCode code,
                                       SrcLocation location,
@@ -189,14 +192,15 @@ int lookup_variable(CompilerContext* ctx, const char* name) {
     return -1; // Variable not found
 }
 
-static Symbol* register_variable(CompilerContext* ctx, const char* name, int reg,
-                                 Type* type, bool is_mutable,
-                                 SrcLocation location, bool is_initialized) {
-    if (!ctx || !ctx->symbols || !name) {
+static Symbol* register_variable(CompilerContext* ctx, SymbolTable* scope,
+                                 const char* name, int reg, Type* type,
+                                 bool is_mutable, SrcLocation location,
+                                 bool is_initialized) {
+    if (!ctx || !scope || !name) {
         return NULL;
     }
 
-    Symbol* existing = resolve_symbol_local_only(ctx->symbols, name);
+    Symbol* existing = resolve_symbol_local_only(scope, name);
     if (existing) {
         report_variable_redefinition(location, name,
                                      existing->declaration_location.line);
@@ -204,7 +208,7 @@ static Symbol* register_variable(CompilerContext* ctx, const char* name, int reg
         return NULL;
     }
 
-    Symbol* symbol = declare_symbol_legacy(ctx->symbols, name, type, is_mutable, reg,
+    Symbol* symbol = declare_symbol_legacy(scope, name, type, is_mutable, reg,
                                            location, is_initialized);
     if (!symbol) {
         DEBUG_CODEGEN_PRINT("Error: Failed to register variable %s", name);
@@ -1005,7 +1009,12 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             
             return result_reg;
         }
-        
+
+        case NODE_ASSIGN: {
+            int reg = compile_assignment_internal(ctx, expr, true);
+            return reg;
+        }
+
         case NODE_IDENTIFIER: {
             const char* name = expr->original->identifier.name;
             SrcLocation location = expr->original->location;
@@ -1629,6 +1638,9 @@ void compile_variable_declaration(CompilerContext* ctx, TypedASTNode* var_decl) 
         var_reg = mp_allocate_frame_register(ctx->allocator);
     } else {
         var_reg = mp_allocate_global_register(ctx->allocator);
+        if (var_reg == -1) {
+            var_reg = mp_allocate_frame_register(ctx->allocator);
+        }
     }
     if (var_reg == -1) {
         DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for variable %s\n", var_name);
@@ -1637,11 +1649,13 @@ void compile_variable_declaration(CompilerContext* ctx, TypedASTNode* var_decl) 
         }
         return;
     }
-    
+
     // Register the variable in symbol table
-    Symbol* symbol = register_variable(ctx, var_name, var_reg, var_decl->resolvedType,
+    Symbol* symbol = register_variable(ctx, ctx->symbols, var_name, var_reg,
+                                       var_decl->resolvedType,
                                        is_mutable, decl_location, value_reg != -1);
     if (!symbol) {
+        mp_free_register(ctx->allocator, var_reg);
         if (value_reg != -1) {
             mp_free_temp_register(ctx->allocator, value_reg);
         }
@@ -1660,36 +1674,61 @@ void compile_variable_declaration(CompilerContext* ctx, TypedASTNode* var_decl) 
     DEBUG_CODEGEN_PRINT("Declared variable %s -> R%d\n", var_name, var_reg);
 }
 
-void compile_assignment(CompilerContext* ctx, TypedASTNode* assign) {
-    if (!ctx || !assign) return;
+static int compile_assignment_internal(CompilerContext* ctx, TypedASTNode* assign,
+                                       bool as_expression) {
+    if (!ctx || !assign) return -1;
 
     const char* var_name = assign->typed.assign.name;
     SrcLocation location = assign->original->location;
     Symbol* symbol = resolve_symbol(ctx->symbols, var_name);
     if (!symbol) {
         int value_reg = compile_expression(ctx, assign->typed.assign.value);
-        if (value_reg == -1) return;
+        if (value_reg == -1) return -1;
 
-        int var_reg = ctx->compiling_function ?
-            mp_allocate_frame_register(ctx->allocator) :
-            mp_allocate_global_register(ctx->allocator);
+        int var_reg = -1;
+        if (ctx->compiling_function) {
+            var_reg = mp_allocate_frame_register(ctx->allocator);
+        } else {
+            var_reg = mp_allocate_global_register(ctx->allocator);
+            if (var_reg == -1) {
+                var_reg = mp_allocate_frame_register(ctx->allocator);
+            }
+        }
+
         if (var_reg == -1) {
             mp_free_temp_register(ctx->allocator, value_reg);
-            return;
+            return -1;
         }
 
         bool is_in_loop = (ctx->current_loop_start != -1);
         bool should_be_mutable = is_in_loop || ctx->branch_depth > 0;
-        if (!register_variable(ctx, var_name, var_reg, assign->resolvedType,
-                               should_be_mutable, location, true)) {
+
+        SymbolTable* target_scope = ctx->symbols;
+        if (ctx->branch_depth > 0 && target_scope) {
+            SymbolTable* candidate = target_scope;
+            int remaining = ctx->branch_depth;
+            while (remaining > 0 && candidate && candidate->parent &&
+                   candidate->scope_depth > ctx->function_scope_depth) {
+                candidate = candidate->parent;
+                remaining--;
+            }
+            if (candidate) {
+                target_scope = candidate;
+            }
+        }
+
+        if (!register_variable(ctx, target_scope, var_name, var_reg,
+                               assign->resolvedType, should_be_mutable,
+                               location, true)) {
+            mp_free_register(ctx->allocator, var_reg);
             mp_free_temp_register(ctx->allocator, value_reg);
-            return;
+            return -1;
         }
 
         set_location_from_node(ctx, assign);
         emit_move(ctx, var_reg, value_reg);
         mp_free_temp_register(ctx->allocator, value_reg);
-        return;
+        return var_reg;
     }
 
     bool is_upvalue = false;
@@ -1700,18 +1739,20 @@ void compile_assignment(CompilerContext* ctx, TypedASTNode* assign) {
                                get_variable_scope_info(var_name, ctx->symbols->scope_depth));
         ctx->has_compilation_errors = true;
         compile_expression(ctx, assign->typed.assign.value);
-        return;
+        return -1;
     }
 
     if (!symbol->is_mutable) {
         report_immutable_variable_assignment(location, var_name);
         ctx->has_compilation_errors = true;
-        return;
+        return -1;
     }
 
     int value_reg = compile_expression(ctx, assign->typed.assign.value);
-    if (value_reg == -1) return;
+    if (value_reg == -1) return -1;
     bool value_is_temp = value_reg >= MP_TEMP_REG_START && value_reg <= MP_TEMP_REG_END;
+
+    int result_reg = -1;
 
     if (is_upvalue) {
         if (upvalue_index < 0) {
@@ -1721,12 +1762,13 @@ void compile_assignment(CompilerContext* ctx, TypedASTNode* assign) {
             if (value_is_temp) {
                 mp_free_temp_register(ctx->allocator, value_reg);
             }
-            return;
+            return -1;
         }
         set_location_from_node(ctx, assign);
         emit_byte_to_buffer(ctx->bytecode, OP_SET_UPVALUE_R);
         emit_byte_to_buffer(ctx->bytecode, (uint8_t)upvalue_index);
         emit_byte_to_buffer(ctx->bytecode, (uint8_t)value_reg);
+        result_reg = value_reg;
     } else {
         int var_reg = resolved_reg;
         if (var_reg < 0) {
@@ -1735,13 +1777,20 @@ void compile_assignment(CompilerContext* ctx, TypedASTNode* assign) {
         }
         set_location_from_node(ctx, assign);
         emit_move(ctx, var_reg, value_reg);
+        result_reg = var_reg;
     }
 
-    if (value_is_temp) {
+    if (value_is_temp && !(as_expression && is_upvalue)) {
         mp_free_temp_register(ctx->allocator, value_reg);
     }
     symbol->is_initialized = true;
     symbol->last_assignment_location = location;
+
+    return result_reg;
+}
+
+void compile_assignment(CompilerContext* ctx, TypedASTNode* assign) {
+    compile_assignment_internal(ctx, assign, false);
 }
 
 void compile_print_statement(CompilerContext* ctx, TypedASTNode* print) {
@@ -2243,7 +2292,7 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
         goto cleanup;
     }
 
-    if (!register_variable(ctx, loop_var_name, loop_var_reg,
+    if (!register_variable(ctx, ctx->symbols, loop_var_name, loop_var_reg,
                            getPrimitiveType(TYPE_I32), true,
                            for_stmt->original->location, true)) {
         ctx->has_compilation_errors = true;
@@ -2512,7 +2561,7 @@ void compile_for_iter_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     }
     
     // Register the loop variable in symbol table (loop variables are implicitly mutable)
-    if (!register_variable(ctx, for_stmt->typed.forIter.varName,
+    if (!register_variable(ctx, ctx->symbols, for_stmt->typed.forIter.varName,
                            loop_var_reg, getPrimitiveType(TYPE_I32), true,
                            for_stmt->original->location, true)) {
         ctx->has_compilation_errors = true;
@@ -2936,7 +2985,7 @@ int compile_function_declaration(CompilerContext* ctx, TypedASTNode* func) {
             mp_allocate_frame_register(ctx->allocator) :
             mp_allocate_global_register(ctx->allocator);
         if (func_reg == -1) return -1;
-        if (!register_variable(ctx, func_name, func_reg,
+        if (!register_variable(ctx, ctx->symbols, func_name, func_reg,
                                getPrimitiveType(TYPE_FUNCTION), false,
                                func->original->location, true)) {
             return -1;
@@ -2964,7 +3013,7 @@ int compile_function_declaration(CompilerContext* ctx, TypedASTNode* func) {
 
     // Make function name visible inside its own body for recursion
     if (func_name) {
-        if (!register_variable(ctx, func_name, func_reg,
+        if (!register_variable(ctx, ctx->symbols, func_name, func_reg,
                                getPrimitiveType(TYPE_FUNCTION), false,
                                func->original->location, true)) {
             ctx->has_compilation_errors = true;
@@ -2978,7 +3027,7 @@ int compile_function_declaration(CompilerContext* ctx, TypedASTNode* func) {
     for (int i = 0; i < arity; i++) {
         if (func->original->function.params[i].name) {
             int param_reg = param_base + i;
-            if (!register_variable(ctx,
+            if (!register_variable(ctx, ctx->symbols,
                                    func->original->function.params[i].name,
                                    param_reg, getPrimitiveType(TYPE_I32), false,
                                    func->original->location, true)) {
