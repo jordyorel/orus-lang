@@ -58,10 +58,11 @@ void free_symbol_table(SymbolTable* table) {
     // printf("[SYMBOL_TABLE] Freed symbol table\n");
 }
 
-Symbol* declare_symbol(SymbolTable* table, const char* name, Type* type, 
-                      bool is_mutable, int register_id) {
+Symbol* declare_symbol(SymbolTable* table, const char* name, Type* type,
+                      bool is_mutable, int register_id,
+                      SrcLocation location, bool is_initialized) {
     if (!table || !name) return NULL;
-    
+
     // Check if symbol already exists in local scope
     if (resolve_symbol_local_only(table, name)) {
         // printf("[SYMBOL_TABLE] Error: Symbol '%s' already declared in current scope\n", name);
@@ -81,11 +82,14 @@ Symbol* declare_symbol(SymbolTable* table, const char* name, Type* type,
     symbol->reg_allocation = NULL;             // Will be set by dual register system
     symbol->type = type;
     symbol->is_mutable = is_mutable;
-    symbol->is_initialized = true;             // Assume initialized when declared
+    symbol->is_initialized = is_initialized;
     symbol->is_arithmetic_heavy = false;       // Default to false
     symbol->usage_count = 0;                   // Track usage
     symbol->is_loop_variable = false;          // Default to false
-    
+    symbol->declaration_location = location;
+    symbol->last_assignment_location = is_initialized ? location : (SrcLocation){NULL, 0, 0};
+    symbol->has_been_read = false;
+
     // Insert at head of chain
     symbol->next = table->symbols[index];
     table->symbols[index] = symbol;
@@ -211,10 +215,11 @@ int symbol_table_size(SymbolTable* table) {
 
 // ===== DUAL REGISTER SYSTEM INTEGRATION =====
 
-Symbol* declare_symbol_with_allocation(SymbolTable* table, const char* name, Type* type, 
-                                      bool is_mutable, struct RegisterAllocation* reg_alloc) {
+Symbol* declare_symbol_with_allocation(SymbolTable* table, const char* name, Type* type,
+                                      bool is_mutable, struct RegisterAllocation* reg_alloc,
+                                      SrcLocation location, bool is_initialized) {
     if (!table || !name || !reg_alloc) return NULL;
-    
+
     // Check if symbol already exists in local scope
     if (resolve_symbol_local_only(table, name)) {
         // printf("[SYMBOL_TABLE] Error: Symbol '%s' already declared in current scope\n", name);
@@ -234,11 +239,14 @@ Symbol* declare_symbol_with_allocation(SymbolTable* table, const char* name, Typ
     symbol->legacy_register_id = reg_alloc->logical_id;  // Compatibility
     symbol->type = type;
     symbol->is_mutable = is_mutable;
-    symbol->is_initialized = true;             // Assume initialized when declared
+    symbol->is_initialized = is_initialized;
     symbol->is_arithmetic_heavy = false;       // Default to false
     symbol->usage_count = 0;                   // Track usage
     symbol->is_loop_variable = false;          // Default to false
-    
+    symbol->declaration_location = location;
+    symbol->last_assignment_location = is_initialized ? location : (SrcLocation){NULL, 0, 0};
+    symbol->has_been_read = false;
+
     // Insert at head of chain
     symbol->next = table->symbols[index];
     table->symbols[index] = symbol;
@@ -254,10 +262,11 @@ Symbol* declare_symbol_with_allocation(SymbolTable* table, const char* name, Typ
     return symbol;
 }
 
-Symbol* declare_symbol_legacy(SymbolTable* table, const char* name, Type* type, 
-                             bool is_mutable, int register_id) {
+Symbol* declare_symbol_legacy(SymbolTable* table, const char* name, Type* type,
+                             bool is_mutable, int register_id,
+                             SrcLocation location, bool is_initialized) {
     // Legacy compatibility wrapper
-    return declare_symbol(table, name, type, is_mutable, register_id);
+    return declare_symbol(table, name, type, is_mutable, register_id, location, is_initialized);
 }
 
 void mark_symbol_arithmetic_heavy(Symbol* symbol) {

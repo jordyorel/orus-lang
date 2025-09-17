@@ -1,0 +1,3 @@
+// Declaring the same variable twice in one scope should trigger a redefinition diagnostic
+mut value = 1
+mut value = 2
