@@ -1,257 +1,486 @@
-# Orus Programming Language – Development Roadmap
+# Orus Programming Language - Development Roadmap
 
-_Last reviewed: v0.3.0 (September 2025)_
-
-This roadmap tracks the gap between the current Orus implementation and the
-next set of language and tooling goals. It consolidates the real state of the
-multi-pass typed-AST compiler pipeline, runtime, and diagnostics so new
-contributors can immediately see what is finished, what is underway, and what
-still needs design work.
+## 🎯 Vision & Goals
+Build a language that combines Python's readability, Rust's safety, and Lua's performance through a register-based VM with static typing and modern features.
 
 ---
 
-## 📌 Current Snapshot
-- ✅ **End-to-end toolchain** – Source code flows through the lexer, parser,
-  Hindley–Milner type inference, the multi-pass typed-AST compiler (optimization
-  followed by bytecode generation), and the 256-register VM via `interpret()`
-  and `compileProgram()`.
-- ✅ **Core language surface** – Functions, variables (`mut` + inference),
-  arithmetic/logical expressions, conditionals, and `while`/`for` loops execute
-  reliably (see `tests/comprehensive/comprehensive_language_test.orus`).
-- ✅ **Data model** – Strings, booleans, integers (`i32/i64/u32/u64`), doubles,
-  and heap-backed arrays (push/pop/slicing/iteration) are fully wired through
-  the type system and VM runtime.
-- ✅ **Polymorphism** – Hindley–Milner generalization works for reusable
-  functions (e.g., `tests/types/polymorphic_identity.orus`), though first-class
-  generic syntax (`fn foo<T>`) is not yet exposed.
-- ⚠️ **Diagnostics** – Loop/context validation and scope tracking ship, but the
-  planned rich Rust-style error formatter and variable lifecycle diagnostics are
-  still pending (`docs/OUTSTANDING_COMPILER_AND_DIAGNOSTICS.md`).
-- ⚠️ **Module system** – Runtime hooks exist (`interpret_module` and module
-  loaders), yet the surface syntax and packaging workflow remain to be
-  implemented and tested.
-- 🚧 **Pattern matching** – Parser groundwork exists for `match` keywords, but
-  expression lowering and exhaustiveness checks are still outstanding (see
-  TODO below).
+## 📊 Current Status Assessment
+
+### ✅ **What's Complete**
+- **VM Foundation**: Register-based with 256 registers, 100+ opcodes
+- **Lexer System**: Full tokenization with all language constructs  
+- **Advanced Parser**: Precedence climbing with complex expressions
+- **Variable System**: Declarations (`x = 42`) with type inference
+- **Memory Management**: Garbage collector with object pooling
+- **Build System**: Clean makefile with comprehensive benchmarking
+- **Type System**: Advanced Hindley-Milner type inference with arena allocation
+- **Function System**: Complete function definitions and calls with type checking
+- **Control Flow**: if/else, loops with type-aware scoping
+- **String System**: Full string operations with type-safe concatenation
+- **Type Coercion**: Automatic and explicit type conversions
+- **Constant System**: Generic constant loading supports functions and complex values
+- **Call Frame Management**: VM preserves temporary registers and handles closures correctly
+- **Loop Diagnostics**: Parser and backend flag `break`/`continue` usage outside valid loop scopes
+
+### 🔄 **Partially Complete**
+- **Generic System**: Foundation implemented, needs completion
+- **Array System**: Type inference ready, needs collection implementation
+- **Error Handling**: Basic framework, needs enhanced diagnostics
+
+- [x] Variable assignments (`x = value`)
+- [x] Control flow (`if`, `while`, `for`)
+- [x] Functions (`fn name:`)
+- [ ] Advanced type inference
+- [ ] Arrays and collections (type system ready)
+- [ ] Struct definitions and methods
+- [ ] Pattern matching and enums
+- [ ] Module system
 
 ---
 
-## ✅ Completed Milestones
+## 📋 Phase 1: Core Language Foundation & Basic Type System (Weeks 1-4)
 
-### Frontend & Type System
-- Full tokenization and indentation-aware parsing for the current language
-  syntax, covering functions, control flow, and expressions.
-- Hindley–Milner inference with constraint solving, explicit annotations, casts,
-  numeric literals with suffixes, and polymorphic generalization.
-- Typed AST visualization tooling (`--show-typed-ast`) to inspect inference
-  results during development.
+### 1.1 Complete Basic Data Types & Early Type Infrastructure
+**Priority: 🔥 Critical**
+- [x] **DONE**: Fix string support and add proper boolean operations to complete the basic type system.
+- [ ] **NEW**: Build minimal type representation system (prepares for advanced features)
+
+**Implementation Steps:**
+
+- [*] Fix VALUE type conflicts for strings
+- [ ] Implement string object allocation in compiler
+- [*] Add string concatenation operator (`+`)
+- [ ] Implement string comparison operators
+- [*] **NEW**: Add basic TYPE enum and type checking infrastructure
+- [*] **NEW**: Implement type annotation parsing (`x: i32 = 42`)
+- [*] **NEW**: Add type mismatch error reporting foundation
+
+### 1.2 Built-in Functions (Print & I/O)
+**Priority: 🔥 Critical**
+- [x] **DONE**: Basic `print(value)` statement implemented for program output.
 
 ```orus
-fn identity(value):
-    return value
+// Basic print function
+print("Hello, World!")
+print(42)
+print(true)
 
-print(identity(123))
-print(identity(true))
-print(identity("orus"))
+// Print with string interpolation
+name = "Orus"
+version = 1
+print("Welcome to", name, "version", version)
+
+// Multiple values
+print("Values:", 1, 2, 3, "done")
+
+// Print with newline (default) and without
+print("Line 1")
+print("Line 2")
+print_no_newline("Same line: ")
+print("continues here")
 ```
 
-### Compiler & Optimization Pipeline
-- `compileProgram()` drives typed AST generation, register allocation, constant
-  propagation, and bytecode emission into VM chunks.
-- Peephole optimizer deduplicates redundant loads and boolean immediates.
-- Jump patching infrastructure and source-location metadata power reliable
-  control-flow codegen and diagnostics.
-- CI fixtures cover arithmetic, control flow, functions, arrays, strings, and
-  polymorphic type behaviour across `tests/`.
+**Implementation Requirements:**
+- [x] Basic `print(value)` statement with newline
+- [x] Parse `print()` function calls with variable arguments
+- [x] Support printing all basic types (i32, f64, bool, string)
+- [x] Implement string interpolation with placeholders
+- [*] Handle escape sequences (`\n`, `\t`, `\"`, `\\`)
+- [ ] Format numbers and booleans for display
 
-### Runtime & Tooling
-- 256-register VM with dedicated banks for globals, frames, temporaries, and
-  future module imports; dispatch tables ship in both `goto` and `switch`
-  variants.
-- Built-in printing, string interpolation, numeric formatting, and array
-  helpers are available in the runtime (`src/vm/runtime/builtins.c`).
-- CLI, REPL, and configuration layers share the same compiler/runtime path and
-  expose toggles for bytecode dumps, typed AST, and profiling.
+### 1.3 String Interpolation System
+**Priority: 🔥 High**
+- [x] **DONE**: Implement full string interpolation with format specifiers and expressions.
 
 ```orus
-numbers = [1, 2, 3, 4]
-mut total = 0
+// Basic interpolation
+x = 42
+print("The answer is", x)
 
-for n in 0..len(numbers):
-    total = total + numbers[n]
+// Multiple placeholders
+a = 10
+b = 20
+print(a, "+", b, "=", a + b)
 
-print("sum:", total)
+// Format specifiers
+pi = 3.14159
+print("Pi rounded: ", pi)  // "Pi rounded: 3.14"
+
+// Expression interpolation
+items = [1, 2, 3]
+print("Array has items", len(items))
+```
+
+### 1.4 Variable Assignments & Basic Type Checking
+**Priority: 🔥 Critical**
+- [x] **DONE**: Basic assignment operations implemented.
+- [*] **NEW**: Add compile-time type checking for assignments
+
+**Features to Implement:**
+- [x] `x = value` syntax parsing
+- [*] Mutable vs immutable variables (`mut x = 42`)
+- [*] Compound assignments (`+=`, `-=`, `*=`, `/=`)
+- [x] Type annotations (`x: i32 = 42`)
+- [x] **DONE**: Unary operators (`-x`, `not x`) and negative literal parsing
+- [x] **DONE**: Runtime string concatenation for variables and expressions
+- [ ] **NEW**: Type coercion rules for numeric types
+
+### 1.5 Boolean and Comparison Operations
+**Priority: 🔥 Critical**
+- [x] **DONE**: Added logical operators and comparison operations.
+
+### 1.6 Fundamental Error Reporting Infrastructure
+**Priority: 🔥 Critical**
+- [ ] **NEW**: Implement basic structured error reporting (foundation for advanced features)
+- [ ] **NEW**: Add source location tracking in parser
+- [ ] **NEW**: Create error severity levels (Error, Warning, Info)
+- [ ] **NEW**: Implement multi-line error display with context
+- [ ] **NEW**: Add "Did you mean?" suggestion framework
+
+---
+
+## 📋 Phase 2: Control Flow & Progressive Optimization (Weeks 5-8)
+
+### 2.1 Conditional Statements & Basic Optimization
+**Priority: 🔥 High**
+- [*] **Done**: Implement if/else statements with nested conditions and `elif`, including jump patching and scoped blocks.
+- [*] **Done**: Add basic dead code elimination for unreachable branches
+- [*] **Done**: Implement constant folding for compile-time known conditions
+- [*] **Todo**: If/else and loops should create new scopes in Orus no need 'mut' inside loop or if statement
+
+```orus
+// Target syntax:
+if condition:
+    // block
+elif other_condition:
+    // block  
+else:
+    // block
+
+print("ok") if x == 1 elif x == 2 else print("fallback")
+- [ ] // Ternary operator 
+result = x > 0 ? "positive" : "non-positive"
+```
+
+** ✅ Correct behavior: temp and other live only inside their blocks.
+** ✅ result was declared outside and mutated — no need to redeclare mut
+
+```orus
+mut result = 0
+
+if condition:
+    result = 42  // ✅ Assigning existing mutable variable
+    mut temp = 99  // ✅ Declared only inside the if-block
+else:
+    result = -1
+    mut other = 123
+
+print(result)         // ✅ OK
+print(temp)           // ❌ Error: temp is out of scope
+print(other)          // ❌ Error: other is out of scope
+```
+
+** ✅ Loop body has its own scope — variables declared inside are local to each iteration.
+```orus
+mut sum = 0
+
+for i in 0..5:
+    sum = sum + i  // ✅ Using outer variable
+    mut loop_val = i * 10
+    print(loop_val)
+
+print(sum)        // ✅ OK
+print(loop_val)   // ❌ Error: loop_val is out of scope
+```
+
+** ✅ Encourages clarity: no shadowing unless explicitly intended via a new block.
+```orus
+mut x = 10
+
+if something:
+    x = 20         // ✅ Assign
+    mut x = 30     // ❌ Error: can't redeclare `x` in the same scope hierarchy
+```
+
+### 2.2 Loop Constructs & Performance Foundations
+**Priority: 🔥 High**
+- [x] **DONE**: Implement high-performance loop constructs with progressive optimization features.
+- [x] **DONE**: Build optimization framework that supports advanced features
+
+**Core Implementation Requirements:**
+- [x] **DONE**: While loop syntax parsing and basic compilation with condition hoisting
+- [x] **DONE**: For loop with range syntax (`0..5`, `0..=5`, `0..10..2`) and bounds checking
+- [ ] **TODO**: For loop with iterator syntax (`for item in collection`) with zero-copy iteration
+- [x] **DONE**: Break and continue statements with proper scope handling and jump table optimization
+- [ ] **DONE**: Replace fixed-size break/continue jump arrays with dynamic vectors
+- [ ] **TODO**: Nested loop support with labeled break/continue for arbitrary loop depth
+- [x] **DONE**: Loop variable scoping, lifetime management, and register allocation optimization
+- [x] **DONE**: Advanced Orus Range Syntax: `start..end..step` with direction validation
+
+**Performance & Safety Requirements (Progressive Implementation):**
+- [ ] **DONE**: Loop invariant code motion (LICM) optimization with full expression replacement system *(Elegant auto-mutable variables + hoisting)*
+- [ ] **DONE**: Loop unrolling for small, known iteration counts (implemented with comprehensive optimization)
+- [ ] **TODO**: Strength reduction for induction variables (foundation for advanced math optimizations)
+- [ ] **TODO**: Dead code elimination within loop bodies (enables advanced type system optimizations)
+- [ ] **TODO**: Bounds check elimination for provably safe ranges (requires type system)
+- [ ] **Phase 6**: Memory allocation minimization in loop constructs (enables advanced memory management)
+- [ ] **Phase 6**: Branch prediction hints for common loop patterns (enables advanced profiling)
+
+
+## 🎯 Orus Range Syntax: `start..end..step`
+
+**High-Performance Range Implementation Requirements:**
+
+### ✅ Core Syntax
+
+```orus
+for i in start..end..step:
+    // Loop body executes with optimized iteration
+```
+
+**Range Components:**
+* **`start`**: Inclusive start value (compile-time or runtime expression)
+* **`end`**: Exclusive upper bound (bounds-checked for safety)
+* **`step`**: Optional stride (must be non-zero, defaults to 1)
+
+**Compile-Time Optimizations:**
+- [ ] Constant range folding for known bounds
+- [ ] Loop unrolling for small iteration counts (≤ 8 iterations)
+- [ ] Strength reduction for power-of-2 steps (framework implemented)
+- [ ] Dead iteration elimination for unreachable ranges
+
+---
+
+### ✅ Performance-Optimized Examples
+
+```orus
+# Constant range (compile-time optimized)
+for i in 0..5:          // Unrolled: 0, 1, 2, 3, 4
+    process_fast(i)
+
+# Power-of-2 step (strength reduction)
+for i in 0..16..2:      // Optimized: 0, 2, 4, 6, 8, 10, 12, 14
+    handle_even(i)
+
+# Reverse iteration (direction-aware)
+for i in 10..0..-2:     // Countdown: 10, 8, 6, 4, 2
+    countdown_step(i)
+
+# Runtime bounds with bounds checking
+n = get_array_size()
+for i in 0..n:          // Bounds-checked at runtime
+    if is_valid_index(i):
+        process_array_element(i)
+
+# Large range with memory efficiency
+for i in 0..1000000:    // Iterator-based, O(1) memory
+    if should_process(i):
+        handle_large_dataset_item(i)
+
+# Nested ranges with optimization
+for row in 0..height:
+    for col in 0..width..2:  // Inner loop optimized for even columns
+        process_matrix_cell(row, col)
 ```
 
 ---
 
-## 🚧 Active Work (Q4 2025)
-| Area | Status | Notes |
-| --- | --- | --- |
-| Rich error presentation | In progress | Implement the structured renderer from `docs/ERROR_FORMAT_REPORTING.md` across CLI/REPL. |
-| Variable lifecycle diagnostics | In progress | Use scope metadata to flag duplicate declarations, use-before-init, and const mutations. |
-| Iterator-style `for item in collection` | Design | Parser/codegen support pending; VM array iterators are ready. |
-| Module packaging | Design | Module manager + loader stubs exist; surface syntax and tests still missing. |
-| Print formatting polish | Backlog | Finish escape handling and numeric formatting for the print APIs. |
+### 🛑 Compile-Time Validation & Runtime Safety
+
+**Static Analysis Rules:**
+* `step` cannot be `0` — **compile-time error** with helpful suggestion
+* Direction consistency enforced at compile-time when bounds are constant:
+  * `start < end` → `step > 0` (ascending iteration)
+  * `start > end` → `step < 0` (descending iteration)
+  * `start == end` → empty iteration (compile-time warning)
+
+**Runtime Safety Mechanisms:**
+* Overflow detection for large ranges and steps
+* Stack depth monitoring for deeply nested loops
+* Iteration count limits to prevent runaway loops
+* Memory allocation tracking for range objects
+
+```orus
+// ❌ Compile-time errors with enhanced diagnostics
+for i in 0..5..0:      // Error: "Step cannot be zero. Did you mean step=1?"
+for i in 0..5..-1:     // Error: "Negative step in ascending range (0 < 5). Use positive step or reverse bounds."
+for i in 5..0..1:      // Error: "Positive step in descending range (5 > 0). Use negative step or reverse bounds."
+
+# ⚠️ Compile-time warnings for suspicious patterns
+for i in 0..0:         // Warning: "Empty range (start == end). Loop body will never execute."
+for i in 0..MAX_INT:   // Warning: "Very large range detected. Consider chunking for memory efficiency."
+
+# ✅ Runtime safety with graceful handling
+for i in get_start()..get_end()..get_step():  // Runtime validation with fallback
+    if not is_safe_iteration(i):
+        break  // Safe termination on overflow/underflow
+    process_dynamic_range(i)
+```
+
+### 🔍 Edge Case Behavior & Performance Characteristics
+
+**Empty Range Handling:**
+* `for i in 0..0`: Loop body skips entirely (O(1) detection)
+* `for i in 5..5`: Same behavior, consistent with mathematical intervals
+
+**Boundary Conditions:**
+* Integer overflow/underflow detection with safe fallback
+* Maximum iteration count enforcement (configurable limit)
+* Step size validation for numeric stability
+
+**Memory & Performance:**
+* Small constant ranges: Unrolled at compile-time
+* Large ranges: Iterator pattern with O(1) memory usage  
+* Runtime ranges: Bounds checking with branch prediction optimization
+* Negative steps: Optimized reverse iteration without temporary storage
+
+**Optimization Guarantees:**
+* No heap allocation for simple integer ranges
+* SIMD vectorization hints for numerical processing loops
+* Loop-invariant code motion for expressions outside iteration variable
+* Automatic parallelization detection for independent iterations
+
+
+### 2.3 Scope and Symbol Tables & Early Generic Preparation
+**Priority: 🔥 High**
+- [ ] **TODO**: Implement enterprise-grade lexical scoping with high-performance symbol resolution.
+- [ ] **NEW**: Design symbol table structure to support generics and advanced type features
+
+**Core Scoping Requirements:**
+- [ ] Lexical scoping with proper variable shadowing semantics
+- [ ] Nested scope management with O(1) scope entry/exit
+- [ ] Symbol table optimization with hash-based lookup (< 5ns average)
+- [ ] **NEW**: Compile-time scope analysis and variable lifetime tracking
+- [ ] **NEW**: Register allocation optimization across scope boundaries
+- [ ] **NEW**: Closure capture analysis for upvalue optimization *(Comprehensive analysis of variable capture patterns across scope boundaries, with heap allocation optimization and register prioritization)*
+- [ ] **NEW**: Dead variable elimination in complex scope hierarchies *(Conservative dead code elimination with complex lifetime analysis, write-only variable detection, and register reclamation)*
+
+**Advanced Symbol Table Features:**
+- [ ] Interned string keys for symbol names (memory deduplication)
+- [ ] Scope-aware variable type inference and propagation
+- [ ] Cross-scope optimization for frequently accessed variables
+- [ ] Debugging symbol preservation with source location mapping
+- [ ] Hot path optimization for global and local variable access
+- [ ] Memory layout optimization for stack-allocated variables
+- [ ] Scope pollution detection and prevention
 
 ---
 
-## 🎯 Near-Term Targets
-1. Ship the structured diagnostic renderer with regression snapshots.
-2. Complete variable lifecycle analysis and wire the results into the feature
-   error reporters.
-3. Extend the parser/typechecker/codegen to support iterator-style `for` loops
-   using array iterators.
-4. Define and implement module declarations/import syntax, backed by the
-   existing loader.
-5. Document and stabilize the printing APIs once formatting is finalized.
+## 📋 Phase 3: Functions & First-Class Values (Weeks 9-12)
+
+### 3.1 Function Definition and Calls
+**Priority: 🔥 High**
+- [x] **COMPLETE**: Function declarations, calls, and return values implemented ✅
+
+** Implementation Status:**
+- [x] Function syntax parsing: `fn name(params) -> return_type:` ✅
+- [x] Parameter type annotations: `a: i32, b: string` ✅
+- [x] Return type annotations: `-> i32` ✅
+- [x] Function calls with arguments: `add(1, 2)` ✅
+- [x] Multiple parameter functions work correctly ✅
+- [x] Void functions: functions without return type ✅
+- [x] Basic bytecode generation for OP_CALL_R and OP_RETURN_R ✅
+- [x] Function object types (ObjFunction, VAL_FUNCTION) ✅
+- [x] Memory management for function objects ✅
+- [x] Type system integration for VAL_FUNCTION ✅
+- [x] Forward references between functions ✅
+- [x] Comprehensive test suite: basic/, edge_cases/ ✅
+- [x] **COMPLETE**: Register allocation optimization for function parameters ✅
+- [x] **COMPLETE**: Support for 250+ function parameters (480% improvement) ✅
+
+```orus
+// Basic function
+fn add(a: i32, b: i32) -> i32:
+    a + b
+
+fn greet(name: string):
+    print("Hello ", name)
+```
+
+** Function System Status:**
+- [x] Function definitions with parameter and return types ✅
+- [x] Function calls with argument passing (all parameters work correctly) ✅
+- [x] Type inference for function parameters and return values ✅
+- [x] Basic recursion support (simple cases working) ✅
+- [x] Forward function references ✅
+- [x] **COMPLETE**: Register allocation optimization for function parameters ✅
+- [x] **COMPLETE**: Hierarchical register system (frame + spill registers) ✅
+- [x] **COMPLETE**: Support for 250+ function parameters ✅
+- [x] **COMPLETE**: Function objects as first-class values ✅
+- [x] **COMPLETE**: Higher-order functions (functions as parameters/return values) ✅
+- [x] **COMPLETE**: Closure capture and upvalues ✅
+- [x] **COMPLETE**: Lambda/anonymous function syntax ✅
+- [x] **COMPLETE**: Generic constraints for higher-order functions ✅
+
+**Parameter Support:**
+- ✅ **Parameters 1-64**: Frame registers (optimal performance)
+- ✅ **Parameters 65-250+**: Spill registers (HashMap storage)
+- ⚠️ **Parameters 300+**: Known issue (investigation pending)
+- 🏗️ **Architecture**: Supports unlimited parameters by design
+
+### 3.2 Advanced Type System Features
+**Priority: 🔥 High**
+- [x] **COMPLETE**: Advanced Hindley-Milner type inference system ✅
+- [x] **COMPLETE**: Arena-based type object management ✅
+- [x] **COMPLETE**: Constraint-based solving with error reporting ✅
+- [x] **COMPLETE**: Type variable unification with occurs check ✅
+- [x] **COMPLETE**: Polymorphic type schemes for generic programming ✅
+- [x] **COMPLETE**: Primitive type conversions and coercion ✅
+- [ ] **NEW**: Complete generic system implementation
+- [ ] **NEW**: Enhanced error diagnostics with type information
+
+### 3.3 Closures and Upvalues (Partially Complete)
+**Priority: 🔥 High**
+- [x] **COMPLETE**: VM-level closure infrastructure (ObjClosure, ObjUpvalue, opcodes) ✅
+- [x] **COMPLETE**: Basic function system with first-class functions ✅
+- [x] **COMPLETE**: Higher-order functions (functions as parameters/return values) ✅
+- [x] **COMPLETE**: Basic closure capture analysis (outer scope variable lookup) ✅
+- [x] **COMPLETE**: Upvalue access compilation (OP_GET_UPVALUE_R, OP_SET_UPVALUE_R) ✅
+- [x] **WORKING**: Simple closure scenarios (function parameter capture) ✅
+- [ ] **PARTIAL**: Complex closure scenarios (local variable capture needs refinement) 🔧
+- [ ] **NEXT**: Closure variable mutability support
+- [ ] **NEXT**: Closure bytecode generation optimization (OP_CLOSURE_R)
+- [ ] **NEXT**: Multiple upvalue capture optimization
+- [x] **COMPLETE**: Lambda/anonymous function syntax ✅
+- [ ] **NEXT**: Complex closure scenarios (multiple nesting levels)
+- [ ] **NEXT**: TODO: Implement proper mutability tracking for upvalues
+
+```orus
+// ✅ WORKING: Basic functions with type checking
+fn add(a: i32, b: i32) -> i32:
+    a + b
+
+// ✅ WORKING: Higher-order functions  
+fn applyTwice(func, value):
+    return func(func(value))
+
+// ✅ WORKING: First-class functions
+addFunc = add
+result = addFunc(5, 3)
+
+// ✅ NEW: Lambda function
+square = fn(n):
+    n * n
+print(square(4))  // Should print 16
+
+// ✅ WORKING: Closure capture
+fn makeCounter(start):
+    count = start
+    
+    fn increment():         // Nested function
+        count = count + 1   // ← Captures 'count' from outer scope
+        return count
+    
+    return increment
+
+counter = makeCounter(0)
+print(counter())  // Should print 1
+print(counter())  // Should print 2
+```
 
 ---
 
-## 🔭 Deferred & Future Initiatives
-- **First-class generics** – Parse `<T>` parameters, monomorphize function and
-  struct definitions, and enforce trait/constraint checking.
-
-  ```orus
-  // Generic functions
-  fn identity[T](value: T) -> T:
-      value
-
-  // Generic structs
-  struct Box[T]:
-      value: T
-
-  // Generic constraints
-  fn add[T: Numeric](a: T, b: T) -> T:
-      a + b
-
-  fn min[T: Comparable](a: T, b: T) -> T:
-      a if a < b else b
-
-  fn main():
-      count = identity[i32](5)
-      greeting: Box[str] = Box{ value: "hi" }
-      total = add[i32](10, 20)
-      print(count, greeting.value, total)
-  ```
-- **Standard library** – Curate a minimal module set (math, arrays, strings)
-  once the module system is stable.
-- **Advanced optimizations** – Loop-invariant code motion, loop unrolling, and
-  strength reduction passes once diagnostics are solid.
-- **Performance telemetry** – Expand VM profiling to collect per-opcode
-  statistics and surface them in tooling.
-
-### Planned Language Constructs
-Each of the following surface features is scoped for post-v0.3.0 delivery once
-module packaging lands. The intent is to slot them into the existing
-multi-pass typed-AST compiler pipeline—leveraging the typed AST produced by
-Hindley–Milner inference, the optimization pass, and the bytecode generation
-pass—without introducing additional intermediate representations.
-
-1. **Struct definitions** – Extend the parser with record literals, allocate
-   contiguous register frames for fields, and integrate field access in the
-   type checker.
-
-   ```orus
-   struct Point:
-       x: i32
-       y: i32
-
-   fn origin():
-       return Point{ x: 0, y: 0 }
-
-   fn shift(p: Point, dx: i32, dy: i32):
-       Point{ x: p.x + dx, y: p.y + dy }
-   ```
-
-2. **Enum + tagged unions** – Model discriminated unions via tagged payloads in
-   the VM, add pattern exhaustiveness checks, and reuse Hindley–Milner type
-   inference to propagate variant data.
-
-   ```orus
-   enum Result[T]:
-       Ok(value: T)
-       Err(message: str)
-
-   fn parse_number(text: str): Result[i32]:
-       if text == "":
-           return Result.Err("empty input")
-       Result.Ok(to_i32(text))
-   ```
-
-3. **`impl` blocks and methods** – Allow attaching functions to struct/enum
-   types, synthesize method receivers as the first parameter, and support
-   namespaced lookup during codegen.
-
-   ```orus
-   impl Point:
-       fn magnitude(self):
-           sqrt(self.x * self.x + self.y * self.y)
-
-   fn demo():
-       p = Point{ x: 3, y: 4 }
-       print(p.magnitude())
-   ```
-
-4. **Pattern matching** – Provide a `match` expression with exhaustive checking
-   for enums, tuples, and primitive guards while compiling each arm into linear
-   control flow blocks.
-
-  ```orus
-  match parse_number(input):
-      Result.Ok(value):
-          print("parsed", value)
-      Result.Err(msg):
-          print("failed:", msg)
-  ```
-
-   - [ ] **TODO**: Implement match expressions with destructuring patterns.
-
-     ```orus
-     match value:
-         0 -> print("zero")
-         1 -> print("one")
-         _ -> print("other")
-     ```
-
-5. **Module system** – Finalize module declarations, `use` statements, and
-   namespace resolution so compiled bytecode can map to the existing module
-   loader API.
-
-   ```orus
-   # geometry/points.orus
-   pub struct Point:
-       x: i32
-       y: i32
-
-   pub fn distance(a: Point, b: Point):
-       dx = a.x - b.x
-       dy = a.y - b.y
-       sqrt(dx * dx + dy * dy)
-
-   # main.orus
-   use geometry.points: Point, distance
-
-   fn main():
-       origin = Point{ x: 0, y: 0 }
-       target = Point{ x: 3, y: 4 }
-       print(distance(origin, target))
-   ```
-
----
-
-## ✅ Test Coverage Overview
-- `tests/comprehensive/` – CLI smoke coverage for the core language surface.
-- `tests/functions/`, `tests/control_flow/`, `tests/variables/` – Focused suites
-  for semantics, scoping, and register pressure.
-- `tests/types/` – Positive and negative fixtures validating inference,
-  polymorphism, and casting behaviour.
-- `tests/error_reporting/` – Ensures current diagnostics (loop misuse, syntax
-  failures) surface correct locations and messages.
-
-Keep this roadmap in sync whenever functionality lands or priorities change so
-contributors can quickly align on the next set of deliverables.
-=======
 ## 📋 Phase 4: Collections & Advanced Type Features (Weeks 13-16)
 
 ### 4.1 Basic Array Implementation & Generic Type Preparation
@@ -1150,4 +1379,3 @@ Only legal way to change type is `as`. All other conversions are errors.
 - [x] Phase 3: Compiler Type Resolution ✅ COMPLETED
 - [x] Phase 4: Binary Operation Rules ✅ COMPLETED
 - [x] Phase 5: Casting Rules ✅ COMPLETED
-
