@@ -103,12 +103,20 @@ TypedASTNode* create_typed_ast_node(ASTNode* original) {
             typed->typed.arrayLiteral.elements = NULL;
             typed->typed.arrayLiteral.count = 0;
             break;
+        case NODE_INDEX_ACCESS:
+            typed->typed.indexAccess.array = NULL;
+            typed->typed.indexAccess.index = NULL;
+            break;
         case NODE_RETURN:
             typed->typed.returnStmt.value = NULL;
             break;
         case NODE_CAST:
             typed->typed.cast.expression = NULL;
             typed->typed.cast.targetType = NULL;
+            break;
+        case NODE_ARRAY_ASSIGN:
+            typed->typed.arrayAssign.target = NULL;
+            typed->typed.arrayAssign.value = NULL;
             break;
         default:
             // For leaf nodes (IDENTIFIER, LITERAL, etc.), no additional
@@ -217,12 +225,20 @@ void free_typed_ast_node(TypedASTNode* node) {
                 free(node->typed.arrayLiteral.elements);
             }
             break;
+        case NODE_INDEX_ACCESS:
+            free_typed_ast_node(node->typed.indexAccess.array);
+            free_typed_ast_node(node->typed.indexAccess.index);
+            break;
         case NODE_RETURN:
             free_typed_ast_node(node->typed.returnStmt.value);
             break;
         case NODE_CAST:
             free_typed_ast_node(node->typed.cast.expression);
             free_typed_ast_node(node->typed.cast.targetType);
+            break;
+        case NODE_ARRAY_ASSIGN:
+            free_typed_ast_node(node->typed.arrayAssign.target);
+            free_typed_ast_node(node->typed.arrayAssign.value);
             break;
         default:
             // Leaf nodes have no children to free
@@ -298,6 +314,12 @@ bool validate_typed_ast(TypedASTNode* root) {
             break;
         case NODE_ASSIGN:
             return validate_typed_ast(root->typed.assign.value);
+        case NODE_ARRAY_ASSIGN:
+            return validate_typed_ast(root->typed.arrayAssign.target) &&
+                   validate_typed_ast(root->typed.arrayAssign.value);
+        case NODE_INDEX_ACCESS:
+            return validate_typed_ast(root->typed.indexAccess.array) &&
+                   validate_typed_ast(root->typed.indexAccess.index);
         case NODE_PRINT:
             for (int i = 0; i < root->typed.print.count; i++) {
                 if (!validate_typed_ast(root->typed.print.values[i])) {
@@ -385,11 +407,17 @@ void print_typed_ast(TypedASTNode* node, int indent) {
         case NODE_ARRAY_LITERAL:
             nodeTypeStr = "ArrayLiteral";
             break;
+        case NODE_INDEX_ACCESS:
+            nodeTypeStr = "IndexAccess";
+            break;
         case NODE_BINARY:
             nodeTypeStr = "Binary";
             break;
         case NODE_ASSIGN:
             nodeTypeStr = "Assign";
+            break;
+        case NODE_ARRAY_ASSIGN:
+            nodeTypeStr = "ArrayAssign";
             break;
         case NODE_PRINT:
             nodeTypeStr = "Print";
@@ -513,6 +541,10 @@ void print_typed_ast(TypedASTNode* node, int indent) {
                 }
             }
             break;
+        case NODE_INDEX_ACCESS:
+            print_typed_ast(node->typed.indexAccess.array, indent + 1);
+            print_typed_ast(node->typed.indexAccess.index, indent + 1);
+            break;
         case NODE_IF:
             print_typed_ast(node->typed.ifStmt.condition, indent + 1);
             print_typed_ast(node->typed.ifStmt.thenBranch, indent + 1);
@@ -571,6 +603,10 @@ void print_typed_ast(TypedASTNode* node, int indent) {
         case NODE_CAST:
             print_typed_ast(node->typed.cast.expression, indent + 1);
             print_typed_ast(node->typed.cast.targetType, indent + 1);
+            break;
+        case NODE_ARRAY_ASSIGN:
+            print_typed_ast(node->typed.arrayAssign.target, indent + 1);
+            print_typed_ast(node->typed.arrayAssign.value, indent + 1);
             break;
         default:
             break;

@@ -1333,6 +1333,25 @@ typedef enum {
 } ArrayOpcodes;
 ```
 
+#### Array Indexing Codegen
+```c
+// arr[idx] → bounds-checked load
+int array_reg = compile_expression(ctx, array_expr);
+int index_reg = compile_expression(ctx, index_expr);
+int result_reg = mp_allocate_temp_register(ctx->allocator);
+
+emit_byte_to_buffer(ctx->bytecode, OP_ARRAY_GET_R);
+emit_byte_to_buffer(ctx->bytecode, result_reg);
+emit_byte_to_buffer(ctx->bytecode, array_reg);
+emit_byte_to_buffer(ctx->bytecode, index_reg);
+
+// arr[idx] = value → bounds-checked store
+emit_byte_to_buffer(ctx->bytecode, OP_ARRAY_SET_R);
+emit_byte_to_buffer(ctx->bytecode, array_reg);
+emit_byte_to_buffer(ctx->bytecode, index_reg);
+emit_byte_to_buffer(ctx->bytecode, value_reg);
+```
+
 #### Array Compilation
 ```c
 // Array literal compilation

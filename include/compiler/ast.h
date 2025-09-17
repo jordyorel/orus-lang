@@ -22,8 +22,10 @@ typedef enum {
     NODE_IDENTIFIER,
     NODE_LITERAL,
     NODE_ARRAY_LITERAL,
+    NODE_INDEX_ACCESS,
     NODE_BINARY,
     NODE_ASSIGN,
+    NODE_ARRAY_ASSIGN,
     NODE_PRINT,
     NODE_TIME_STAMP,
     NODE_IF,
@@ -71,6 +73,10 @@ struct ASTNode {
             int count;
         } arrayLiteral;
         struct {
+            ASTNode* array;
+            ASTNode* index;
+        } indexAccess;
+        struct {
             char* op;
             ASTNode* left;
             ASTNode* right;
@@ -79,6 +85,10 @@ struct ASTNode {
             char* name;
             ASTNode* value;
         } assign;
+        struct {
+            ASTNode* target;   // NODE_INDEX_ACCESS target
+            ASTNode* value;    // Value being assigned
+        } arrayAssign;
         struct {
             ASTNode** values;
             int count;

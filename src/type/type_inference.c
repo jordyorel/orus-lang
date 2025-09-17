@@ -674,6 +674,12 @@ static bool is_numeric_type(Type* type) {
            type->kind == TYPE_F64;
 }
 
+static bool is_integer_type(Type* type) {
+    if (!type) return false;
+    return type->kind == TYPE_I32 || type->kind == TYPE_I64 ||
+           type->kind == TYPE_U32 || type->kind == TYPE_U64;
+}
+
 static bool is_cast_allowed(Type* from, Type* to) {
     if (!from || !to) return false;
     
@@ -764,6 +770,33 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
 
             return createArrayType(element_type);
         }
+        case NODE_INDEX_ACCESS: {
+            Type* array_type = algorithm_w(env, node->indexAccess.array);
+            Type* index_type = algorithm_w(env, node->indexAccess.index);
+            if (!array_type || !index_type) {
+                return NULL;
+            }
+
+            if (array_type->kind != TYPE_ARRAY) {
+                report_type_mismatch(node->indexAccess.array->location, "array",
+                                     getTypeName(array_type->kind));
+                set_type_error();
+                return NULL;
+            }
+
+            if (!is_integer_type(index_type)) {
+                report_type_mismatch(node->indexAccess.index->location, "integer index",
+                                     getTypeName(index_type->kind));
+                set_type_error();
+                return NULL;
+            }
+
+            Type* element_type = array_type->info.array.elementType;
+            if (!element_type) {
+                element_type = getPrimitiveType(TYPE_ANY);
+            }
+            return element_type;
+        }
         case NODE_IDENTIFIER: {
             DEBUG_TYPE_INFERENCE_PRINT("Looking up identifier '%s'", node->identifier.name);
             TypeScheme* scheme = type_env_lookup(env, node->identifier.name);
@@ -777,6 +810,24 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             report_undefined_variable(node->location, node->identifier.name);
             set_type_error();
             return NULL;
+        }
+
+        case NODE_ARRAY_ASSIGN: {
+            Type* target_type = algorithm_w(env, node->arrayAssign.target);
+            Type* value_type = algorithm_w(env, node->arrayAssign.value);
+            if (!target_type || !value_type) {
+                return NULL;
+            }
+
+            if (!unify(target_type, value_type)) {
+                const char* expected = getTypeName(target_type->kind);
+                const char* found = getTypeName(value_type->kind);
+                report_type_mismatch(node->arrayAssign.value->location, expected, found);
+                set_type_error();
+                return NULL;
+            }
+
+            return target_type;
         }
 
         case NODE_TIME_STAMP: {
@@ -1662,6 +1713,19 @@ static TypedASTNode* generate_typed_ast_recursive(ASTNode* ast, TypeEnv* type_en
                 }
             }
             break;
+        case NODE_INDEX_ACCESS:
+            typed->typed.indexAccess.array = generate_typed_ast_recursive(ast->indexAccess.array, type_env);
+            if (!typed->typed.indexAccess.array) {
+                free_typed_ast_node(typed);
+                return NULL;
+            }
+            typed->typed.indexAccess.index = generate_typed_ast_recursive(ast->indexAccess.index, type_env);
+            if (!typed->typed.indexAccess.index) {
+                free_typed_ast_node(typed->typed.indexAccess.array);
+                free_typed_ast_node(typed);
+                return NULL;
+            }
+            break;
 
         case NODE_CAST:
             // Handle cast expressions: expr as type
@@ -1670,6 +1734,23 @@ static TypedASTNode* generate_typed_ast_recursive(ASTNode* ast, TypeEnv* type_en
             }
             if (ast->cast.targetType) {
                 typed->typed.cast.targetType = generate_typed_ast_recursive(ast->cast.targetType, type_env);
+            }
+            break;
+        case NODE_ARRAY_ASSIGN:
+            if (ast->arrayAssign.target) {
+                typed->typed.arrayAssign.target = generate_typed_ast_recursive(ast->arrayAssign.target, type_env);
+                if (!typed->typed.arrayAssign.target) {
+                    free_typed_ast_node(typed);
+                    return NULL;
+                }
+            }
+            if (ast->arrayAssign.value) {
+                typed->typed.arrayAssign.value = generate_typed_ast_recursive(ast->arrayAssign.value, type_env);
+                if (!typed->typed.arrayAssign.value) {
+                    free_typed_ast_node(typed->typed.arrayAssign.target);
+                    free_typed_ast_node(typed);
+                    return NULL;
+                }
             }
             break;
 

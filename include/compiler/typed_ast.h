@@ -98,12 +98,20 @@ struct TypedASTNode {
             int count;
         } arrayLiteral;
         struct {
+            TypedASTNode* array;
+            TypedASTNode* index;
+        } indexAccess;
+        struct {
             TypedASTNode* value;
         } returnStmt;
         struct {
             TypedASTNode* expression;
             TypedASTNode* targetType;
         } cast;
+        struct {
+            TypedASTNode* target;  // NODE_INDEX_ACCESS in typed form
+            TypedASTNode* value;
+        } arrayAssign;
     } typed;
 };
 
