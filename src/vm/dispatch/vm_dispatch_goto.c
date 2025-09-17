@@ -2298,6 +2298,33 @@ InterpretResult vm_run_dispatch(void) {
         Value v = vm_get_register_safe(src);
         if (IS_RANGE_ITERATOR(v)) {
             vm_set_register_safe(dst, v);
+        } else if (IS_I32(v) || IS_I64(v) || IS_U32(v) || IS_U64(v)) {
+            int64_t count = 0;
+            if (IS_I32(v)) {
+                count = (int64_t)AS_I32(v);
+            } else if (IS_I64(v)) {
+                count = AS_I64(v);
+            } else if (IS_U32(v)) {
+                count = (int64_t)AS_U32(v);
+            } else {
+                uint64_t unsigned_count = AS_U64(v);
+                if (unsigned_count > (uint64_t)INT64_MAX) {
+                    VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Integer too large to iterate");
+                }
+                count = (int64_t)unsigned_count;
+            }
+
+            if (count < 0) {
+                VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Cannot iterate negative integer");
+            }
+
+            ObjRangeIterator* iterator = allocateRangeIterator(0, count);
+            if (!iterator) {
+                VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(), "Failed to allocate range iterator");
+            }
+
+            Value iterator_value = {.type = VAL_RANGE_ITERATOR, .as.obj = (Obj*)iterator};
+            vm_set_register_safe(dst, iterator_value);
         } else if (IS_ARRAY(v)) {
             ObjArrayIterator* iterator = allocateArrayIterator(AS_ARRAY(v));
             if (!iterator) {
