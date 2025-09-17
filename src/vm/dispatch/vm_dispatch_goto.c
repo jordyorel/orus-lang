@@ -82,7 +82,7 @@ InterpretResult vm_run_dispatch(void) {
         fflush(stdout);
         
         // Initialize all entries to NULL first to catch missing mappings
-        for (int i = 0; i < 300; i++) {
+        for (int i = 0; i < VM_DISPATCH_TABLE_SIZE; i++) {
             vm_dispatch_table[i] = NULL;
         }
         // Phase 1.3 Optimization: Hot opcodes first for better cache locality
@@ -297,7 +297,7 @@ InterpretResult vm_run_dispatch(void) {
         int critical_opcodes[] = {39, 41, 92, 126, 171, -1}; // OP_EQ_R, OP_LT_I32_R, OP_JUMP_IF_NOT_R, OP_ADD_I32_TYPED, etc.
         for (int i = 0; critical_opcodes[i] != -1; i++) {
             int opcode = critical_opcodes[i];
-            if (opcode < 300) {
+            if (opcode < VM_DISPATCH_TABLE_SIZE) {
                 if (vm_dispatch_table[opcode] == NULL) {
                     DEBUG_VM_PRINT("[DISPATCH_ERROR] Critical opcode %d (0x%02X) has NULL dispatch entry!\n", opcode, opcode);
                 } else {
