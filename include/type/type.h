@@ -73,6 +73,7 @@ Type* createGenericType(ObjString* name);
 Type* findStructType(const char* name);
 void freeType(Type* type);
 bool typesEqual(Type* a, Type* b);
+bool equalsType(Type* a, Type* b);
 const char* getTypeName(TypeKind kind);
 void initTypeSystem(void);
 void freeTypeSystem(void);  // Add this

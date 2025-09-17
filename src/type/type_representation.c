@@ -411,12 +411,50 @@ Type* instantiateGeneric(Type* templ, Type** args) {
 }
 
 // ---- Type equality ----
+static bool array_length_matches(Type* a, Type* b) {
+    TypeExtension* aext = get_type_extension(a);
+    TypeExtension* bext = get_type_extension(b);
+
+    bool a_has_length = aext && aext->extended.array.has_length;
+    bool b_has_length = bext && bext->extended.array.has_length;
+
+    if (a_has_length || b_has_length) {
+        if (!a_has_length || !b_has_length) {
+            return false;
+        }
+        return aext->extended.array.length == bext->extended.array.length;
+    }
+
+    return true;
+}
+
+static bool array_length_assignable(Type* from, Type* to) {
+    TypeExtension* from_ext = get_type_extension(from);
+    TypeExtension* to_ext = get_type_extension(to);
+
+    bool from_has_length = from_ext && from_ext->extended.array.has_length;
+    bool to_has_length = to_ext && to_ext->extended.array.has_length;
+
+    if (!to_has_length) {
+        return true;
+    }
+
+    if (!from_has_length) {
+        return false;
+    }
+
+    return from_ext->extended.array.length == to_ext->extended.array.length;
+}
+
 bool equalsType(Type* a, Type* b) {
     if (a == b) return true;
     if (!a || !b || a->kind != b->kind) return false;
-    
+
     switch (a->kind) {
     case TYPE_ARRAY:
+        if (!array_length_matches(a, b)) {
+            return false;
+        }
         return equalsType(a->info.array.elementType, b->info.array.elementType);
     case TYPE_FUNCTION:
         if (a->info.function.arity != b->info.function.arity) return false;
@@ -513,6 +551,9 @@ bool type_assignable_to_extended(Type* from, Type* to) {
 
     // Array covariance (for now, simplified)
     if (from->kind == TYPE_ARRAY && to->kind == TYPE_ARRAY) {
+        if (!array_length_assignable(from, to)) {
+            return false;
+        }
         return type_assignable_to_extended(from->info.array.elementType, to->info.array.elementType);
     }
 

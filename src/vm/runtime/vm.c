@@ -237,60 +237,59 @@ InterpretResult interpret(const char* source) {
         return INTERPRET_COMPILE_ERROR;
     }
 
-// DEBUG: Dump bytecode before execution (ENABLED for debugging)
-#if 1
-    printf("\n=== BYTECODE DUMP ===\n");
-    printf("Instructions: %d\n", chunk.count);
-    printf("Constants: %d\n", chunk.constants.count);
-    for(int c = 0; c < chunk.constants.count; c++) {
-        printf("  const[%d] = ", c);
-        printValue(chunk.constants.values[c]);
-        printf("\n");
-    }
-    
-    for (int i = 0; i < chunk.count; i++) {
-        printf("%04d: %02X", i, chunk.code[i]);
-        
-        // Try to identify opcodes
-        switch (chunk.code[i]) {
-            case OP_LOAD_I32_CONST:
-                printf(" (OP_LOAD_I32_CONST)");
-                if (i + 3 < chunk.count) {
-                    uint16_t constantIndex = (chunk.code[i+2] << 8) | chunk.code[i+3];
-                    printf(" reg=%d, constantIndex=%d", chunk.code[i+1], constantIndex);
-                    if (constantIndex < chunk.constants.count) {
-                        printf(" actualValue=");
-                        printValue(chunk.constants.values[constantIndex]);
-                    }
-                    i += 3;
-                }
-                break;
-            case OP_GT_I32_R:
-                printf(" (OP_GT_I32_R)");
-                if (i + 3 < chunk.count) {
-                    printf(" dst=%d, src1=%d, src2=%d", 
-                           chunk.code[i+1], chunk.code[i+2], chunk.code[i+3]);
-                    i += 3;
-                }
-                break;
-            case OP_PRINT_R:
-                printf(" (OP_PRINT_R)");
-                if (i + 1 < chunk.count) {
-                    printf(" reg=%d", chunk.code[i+1]);
-                    i += 1;
-                }
-                break;
-            case OP_HALT:
-                printf(" (OP_HALT)");
-                break;
-            default:
-                printf(" (UNKNOWN_%02X)", chunk.code[i]);
-                break;
+    if (config && config->show_bytecode) {
+        printf("\n=== BYTECODE DUMP ===\n");
+        printf("Instructions: %d\n", chunk.count);
+        printf("Constants: %d\n", chunk.constants.count);
+        for (int c = 0; c < chunk.constants.count; c++) {
+            printf("  const[%d] = ", c);
+            printValue(chunk.constants.values[c]);
+            printf("\n");
         }
-        printf("\n");
+
+        for (int i = 0; i < chunk.count; i++) {
+            printf("%04d: %02X", i, chunk.code[i]);
+
+            // Try to identify opcodes
+            switch (chunk.code[i]) {
+                case OP_LOAD_I32_CONST:
+                    printf(" (OP_LOAD_I32_CONST)");
+                    if (i + 3 < chunk.count) {
+                        uint16_t constantIndex = (chunk.code[i + 2] << 8) | chunk.code[i + 3];
+                        printf(" reg=%d, constantIndex=%d", chunk.code[i + 1], constantIndex);
+                        if (constantIndex < chunk.constants.count) {
+                            printf(" actualValue=");
+                            printValue(chunk.constants.values[constantIndex]);
+                        }
+                        i += 3;
+                    }
+                    break;
+                case OP_GT_I32_R:
+                    printf(" (OP_GT_I32_R)");
+                    if (i + 3 < chunk.count) {
+                        printf(" dst=%d, src1=%d, src2=%d",
+                               chunk.code[i + 1], chunk.code[i + 2], chunk.code[i + 3]);
+                        i += 3;
+                    }
+                    break;
+                case OP_PRINT_R:
+                    printf(" (OP_PRINT_R)");
+                    if (i + 1 < chunk.count) {
+                        printf(" reg=%d", chunk.code[i + 1]);
+                        i += 1;
+                    }
+                    break;
+                case OP_HALT:
+                    printf(" (OP_HALT)");
+                    break;
+                default:
+                    printf(" (UNKNOWN_%02X)", chunk.code[i]);
+                    break;
+            }
+            printf("\n");
+        }
+        printf("=== END BYTECODE ===\n\n");
     }
-    printf("=== END BYTECODE ===\n\n");
-#endif
 
     // Execute the chunk
     vm.chunk = &chunk;
