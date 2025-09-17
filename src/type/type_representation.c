@@ -19,6 +19,8 @@ static TypeArena* type_arena = NULL;  // Keep for backward compatibility
 // Primitive type cache for performance
 static HashMap* primitive_cache = NULL;  // Keep for backward compatibility
 static bool type_system_initialized = false;  // Keep for backward compatibility
+static HashMap* struct_type_registry = NULL;
+static HashMap* enum_type_registry = NULL;
 
 // Forward declarations for context functions
 static void* arena_alloc_ctx(TypeContext* ctx, size_t size);
@@ -65,9 +67,12 @@ void type_context_init(TypeContext* ctx) {
     
     // Initialize primitive types
     for (TypeKind k = TYPE_UNKNOWN; k <= TYPE_ANY; k++) {
+        if (k == TYPE_STRUCT || k == TYPE_ENUM) {
+            continue;
+        }
         Type* t = arena_alloc_ctx(ctx, sizeof(Type));
         if (!t) continue;
-        
+
         memset(t, 0, sizeof(Type));
         t->kind = k;
         
@@ -262,9 +267,19 @@ void* hashmap_get(HashMap* map, const char* key) {
 
 void hashmap_set(HashMap* map, const char* key, void* value) {
     if (!map || !key) return;
-    
+
     int hash_key = (int)hash_string(key);
     hashmap_set_int(map, hash_key, value);
+}
+
+static TypeExtension* allocate_type_extension(void) {
+    TypeExtension* ext = calloc(1, sizeof(TypeExtension));
+    if (!ext) {
+        return NULL;
+    }
+    ext->is_mutable = false;
+    ext->is_nullable = false;
+    return ext;
 }
 
 // ---- Context-based type system initialization ----
@@ -281,9 +296,12 @@ void init_type_representation(void) {
     
     // Initialize primitive types
     for (TypeKind k = TYPE_UNKNOWN; k <= TYPE_ANY; k++) {
+        if (k == TYPE_STRUCT || k == TYPE_ENUM) {
+            continue;
+        }
         Type* t = arena_alloc(sizeof(Type));
         if (!t) continue;
-        
+
         memset(t, 0, sizeof(Type));
         t->kind = k;
         
@@ -420,6 +438,60 @@ bool equalsType(Type* a, Type* b) {
             if (!equalsType(a->info.instance.args[i], b->info.instance.args[i])) return false;
         }
         return true;
+    case TYPE_STRUCT: {
+        TypeExtension* aext = get_type_extension(a);
+        TypeExtension* bext = get_type_extension(b);
+        if (!aext || !bext) return false;
+
+        ObjString* aname = aext->extended.structure.name;
+        ObjString* bname = bext->extended.structure.name;
+        if (!aname || !bname) return false;
+        if (aname != bname) {
+            if (aname->length != bname->length) return false;
+            if (strncmp(aname->chars, bname->chars, aname->length) != 0) return false;
+        }
+
+        if (aext->extended.structure.fieldCount != bext->extended.structure.fieldCount) return false;
+        for (int i = 0; i < aext->extended.structure.fieldCount; i++) {
+            FieldInfo* af = &aext->extended.structure.fields[i];
+            FieldInfo* bf = &bext->extended.structure.fields[i];
+            if (af->name && bf->name && af->name != bf->name) {
+                if (af->name->length != bf->name->length) return false;
+                if (strncmp(af->name->chars, bf->name->chars, af->name->length) != 0) return false;
+            }
+            if (!equalsType(af->type, bf->type)) return false;
+        }
+        if (aext->extended.structure.genericCount != bext->extended.structure.genericCount) return false;
+        return true;
+    }
+    case TYPE_ENUM: {
+        TypeExtension* aext = get_type_extension(a);
+        TypeExtension* bext = get_type_extension(b);
+        if (!aext || !bext) return false;
+
+        ObjString* aname = aext->extended.enum_.name;
+        ObjString* bname = bext->extended.enum_.name;
+        if (!aname || !bname) return false;
+        if (aname != bname) {
+            if (aname->length != bname->length) return false;
+            if (strncmp(aname->chars, bname->chars, aname->length) != 0) return false;
+        }
+
+        if (aext->extended.enum_.variant_count != bext->extended.enum_.variant_count) return false;
+        for (int i = 0; i < aext->extended.enum_.variant_count; i++) {
+            Variant* av = &aext->extended.enum_.variants[i];
+            Variant* bv = &bext->extended.enum_.variants[i];
+            if (av->name && bv->name && av->name != bv->name) {
+                if (av->name->length != bv->name->length) return false;
+                if (strncmp(av->name->chars, bv->name->chars, av->name->length) != 0) return false;
+            }
+            if (av->field_count != bv->field_count) return false;
+            for (int j = 0; j < av->field_count; j++) {
+                if (!equalsType(av->field_types[j], bv->field_types[j])) return false;
+            }
+        }
+        return true;
+    }
     default:
         return true; // Primitive types are equal if kinds match
     }
@@ -438,13 +510,138 @@ bool type_assignable_to_extended(Type* from, Type* to) {
     if (from->kind == TYPE_U32 && to->kind == TYPE_U64) return true;
     if (from->kind == TYPE_I32 && to->kind == TYPE_F64) return true;
     if (from->kind == TYPE_I64 && to->kind == TYPE_F64) return true;
-    
+
     // Array covariance (for now, simplified)
     if (from->kind == TYPE_ARRAY && to->kind == TYPE_ARRAY) {
         return type_assignable_to_extended(from->info.array.elementType, to->info.array.elementType);
     }
-    
+
+    if ((from->kind == TYPE_STRUCT && to->kind == TYPE_STRUCT) ||
+        (from->kind == TYPE_ENUM && to->kind == TYPE_ENUM)) {
+        return equalsType(from, to);
+    }
+
     return false;
+}
+
+static bool match_generic_name(const char* generic_name, ObjString* candidate) {
+    if (!generic_name || !candidate) return false;
+    if ((size_t)candidate->length != strlen(generic_name)) return false;
+    return strncmp(generic_name, candidate->chars, candidate->length) == 0;
+}
+
+static Type* substitute_generics_internal(Type* type, ObjString** names,
+                                          Type** subs, int count) {
+    if (!type || !names || !subs || count <= 0) {
+        return type;
+    }
+
+    switch (type->kind) {
+    case TYPE_GENERIC:
+        for (int i = 0; i < count; i++) {
+            if (match_generic_name(type->info.generic.name, names[i])) {
+                return subs[i];
+            }
+        }
+        return type;
+    case TYPE_ARRAY: {
+        Type* replaced = substitute_generics_internal(type->info.array.elementType,
+                                                      names, subs, count);
+        if (replaced == type->info.array.elementType) {
+            return type;
+        }
+        TypeExtension* ext = get_type_extension(type);
+        if (ext && ext->extended.array.has_length) {
+            return createSizedArrayType(replaced, ext->extended.array.length);
+        }
+        return createArrayType(replaced);
+    }
+    case TYPE_FUNCTION: {
+        int arity = type->info.function.arity;
+        bool changed = false;
+        Type** params = NULL;
+        if (arity > 0 && type->info.function.paramTypes) {
+            params = arena_alloc(sizeof(Type*) * arity);
+            if (!params) return type;
+            for (int i = 0; i < arity; i++) {
+                params[i] = substitute_generics_internal(
+                    type->info.function.paramTypes[i], names, subs, count);
+                if (params[i] != type->info.function.paramTypes[i]) {
+                    changed = true;
+                }
+            }
+        }
+        Type* returnType = substitute_generics_internal(
+            type->info.function.returnType, names, subs, count);
+        if (!changed && returnType == type->info.function.returnType) {
+            return type;
+        }
+        return createFunctionType(returnType, params, arity);
+    }
+    case TYPE_INSTANCE: {
+        bool changed = false;
+        Type* base = substitute_generics_internal(type->info.instance.base, names,
+                                                  subs, count);
+        if (base != type->info.instance.base) {
+            changed = true;
+        }
+        int argCount = type->info.instance.argCount;
+        Type** args = NULL;
+        if (argCount > 0 && type->info.instance.args) {
+            args = arena_alloc(sizeof(Type*) * argCount);
+            if (!args) return type;
+            for (int i = 0; i < argCount; i++) {
+                args[i] = substitute_generics_internal(type->info.instance.args[i],
+                                                       names, subs, count);
+                if (args[i] != type->info.instance.args[i]) {
+                    changed = true;
+                }
+            }
+        }
+        if (!changed) {
+            return type;
+        }
+
+        Type* inst = arena_alloc(sizeof(Type));
+        if (!inst) return type;
+        memset(inst, 0, sizeof(Type));
+        inst->kind = TYPE_INSTANCE;
+        inst->info.instance.base = base;
+        inst->info.instance.argCount = argCount;
+        inst->info.instance.args = args;
+        return inst;
+    }
+    default:
+        return type;
+    }
+}
+
+Type* substituteGenerics(Type* type, ObjString** names, Type** subs, int count) {
+    return substitute_generics_internal(type, names, subs, count);
+}
+
+Type* instantiateStructType(Type* base, Type** args, int argCount) {
+    if (!base || base->kind != TYPE_STRUCT) {
+        return NULL;
+    }
+
+    Type* inst = arena_alloc(sizeof(Type));
+    if (!inst) return NULL;
+
+    memset(inst, 0, sizeof(Type));
+    inst->kind = TYPE_INSTANCE;
+    inst->info.instance.base = base;
+    inst->info.instance.argCount = argCount;
+    if (argCount > 0 && args) {
+        inst->info.instance.args = arena_alloc(sizeof(Type*) * argCount);
+        if (!inst->info.instance.args) return NULL;
+        for (int i = 0; i < argCount; i++) {
+            inst->info.instance.args[i] = args[i];
+        }
+    } else {
+        inst->info.instance.args = NULL;
+    }
+    return inst;
 }
 
 // ---- Type operations ----
@@ -496,6 +693,24 @@ Type* createArrayType(Type* elementType) {
     return array_type;
 }
 
+Type* createSizedArrayType(Type* elementType, int length) {
+    Type* array_type = createArrayType(elementType);
+    if (!array_type) return NULL;
+
+    TypeExtension* ext = get_type_extension(array_type);
+    if (!ext) {
+        ext = allocate_type_extension();
+        if (!ext) {
+            return array_type;
+        }
+        set_type_extension(array_type, ext);
+    }
+
+    ext->extended.array.length = length;
+    ext->extended.array.has_length = length >= 0;
+    return array_type;
+}
+
 Type* createFunctionType_ctx(TypeContext* ctx, Type* returnType, Type** paramTypes, int paramCount) {
     if (!ctx || !returnType || (paramCount > 0 && !paramTypes)) return NULL;
 
@@ -544,6 +759,133 @@ Type* createFunctionType(Type* returnType, Type** paramTypes, int paramCount) {
     }
 
     return func_type;
+}
+
+static void ensure_type_registries(void) {
+    if (!struct_type_registry) {
+        struct_type_registry = hashmap_new();
+    }
+    if (!enum_type_registry) {
+        enum_type_registry = hashmap_new();
+    }
+}
+
+static void copy_generic_params(TypeExtension* ext, ObjString** generics,
+                                int genericCount) {
+    ext->extended.structure.genericParams = NULL;
+    ext->extended.structure.genericCount = 0;
+    if (!generics || genericCount <= 0) {
+        return;
+    }
+
+    ext->extended.structure.genericParams = malloc(sizeof(ObjString*) * genericCount);
+    if (!ext->extended.structure.genericParams) {
+        return;
+    }
+
+    for (int i = 0; i < genericCount; i++) {
+        ext->extended.structure.genericParams[i] = generics[i];
+    }
+    ext->extended.structure.genericCount = genericCount;
+}
+
+Type* createStructType(ObjString* name, FieldInfo* fields, int fieldCount,
+                       ObjString** generics, int genericCount) {
+    if (!name) return NULL;
+
+    ensure_type_registries();
+    Type* existing = findStructType(name->chars);
+    if (existing) {
+        return existing;
+    }
+
+    Type* type = arena_alloc(sizeof(Type));
+    if (!type) return NULL;
+
+    memset(type, 0, sizeof(Type));
+    type->kind = TYPE_STRUCT;
+
+    TypeExtension* ext = allocate_type_extension();
+    if (!ext) {
+        return type;
+    }
+
+    ext->extended.structure.name = name;
+    ext->extended.structure.fields = fields;
+    ext->extended.structure.fieldCount = fieldCount;
+    ext->extended.structure.methods = NULL;
+    ext->extended.structure.methodCount = 0;
+    copy_generic_params(ext, generics, genericCount);
+
+    set_type_extension(type, ext);
+
+    if (struct_type_registry) {
+        hashmap_set(struct_type_registry, name->chars, type);
+    }
+    return type;
+}
+
+Type* createEnumType(ObjString* name, Variant* variants, int variant_count) {
+    if (!name) return NULL;
+
+    ensure_type_registries();
+
+    Type* type = arena_alloc(sizeof(Type));
+    if (!type) return NULL;
+
+    memset(type, 0, sizeof(Type));
+    type->kind = TYPE_ENUM;
+
+    TypeExtension* ext = allocate_type_extension();
+    if (!ext) {
+        return type;
+    }
+
+    ext->extended.enum_.name = name;
+    ext->extended.enum_.variants = variants;
+    ext->extended.enum_.variant_count = variant_count;
+    set_type_extension(type, ext);
+
+    if (enum_type_registry) {
+        hashmap_set(enum_type_registry, name->chars, type);
+    }
+    return type;
+}
+
+Type* createGenericType(ObjString* name) {
+    if (!name) return NULL;
+
+    Type* type = arena_alloc(sizeof(Type));
+    if (!type) return NULL;
+
+    memset(type, 0, sizeof(Type));
+    type->kind = TYPE_GENERIC;
+
+    size_t len = (size_t)name->length;
+    type->info.generic.name = arena_alloc(len + 1);
+    if (!type->info.generic.name) return NULL;
+    memcpy(type->info.generic.name, name->chars, len);
+    type->info.generic.name[len] = '\0';
+    type->info.generic.paramCount = 0;
+    type->info.generic.params = NULL;
+    return type;
+}
+
+Type* findStructType(const char* name) {
+    if (!name || !struct_type_registry) return NULL;
+    return hashmap_get(struct_type_registry, name);
+}
+
+void freeType(Type* type) {
+    if (!type) return;
+    if (type->ext) {
+        if (type->kind == TYPE_STRUCT &&
+            type->ext->extended.structure.genericParams) {
+            free(type->ext->extended.structure.genericParams);
+        }
+        free(type->ext);
+        type->ext = NULL;
+    }
 }
 
 Type* createPrimitiveType_ctx(TypeContext* ctx, TypeKind kind) {
@@ -684,6 +1026,9 @@ ValueType type_kind_to_value_type(TypeKind type_kind) {
     case TYPE_ARRAY: return VAL_ARRAY;
     case TYPE_ERROR: return VAL_ERROR;
     case TYPE_FUNCTION: return VAL_FUNCTION;
+    case TYPE_STRUCT:
+    case TYPE_ENUM:
+        return VAL_BOOL;
     case TYPE_ANY: return VAL_BOOL; // No direct ValueType equivalent
     case TYPE_UNKNOWN: return VAL_BOOL;
     case TYPE_VOID: return VAL_BOOL;
@@ -703,7 +1048,16 @@ Type* get_primitive_type_cached(TypeKind kind) {
 void freeTypeSystem(void) {
     hashmap_free(primitive_cache);
     primitive_cache = NULL;
-    
+
+    if (struct_type_registry) {
+        hashmap_free(struct_type_registry);
+        struct_type_registry = NULL;
+    }
+    if (enum_type_registry) {
+        hashmap_free(enum_type_registry);
+        enum_type_registry = NULL;
+    }
+
     while (type_arena) {
         TypeArena* next = type_arena->next;
         free(type_arena->memory);
@@ -733,6 +1087,8 @@ const char* getTypeName(TypeKind kind) {
         case TYPE_VOID: return "void";
         case TYPE_ARRAY: return "array";
         case TYPE_FUNCTION: return "function";
+        case TYPE_STRUCT: return "struct";
+        case TYPE_ENUM: return "enum";
         case TYPE_ERROR: return "error";
         case TYPE_ANY: return "any";
         case TYPE_VAR: return "type_var";
