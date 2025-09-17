@@ -1,0 +1,11 @@
+// Ensure that even with polymorphic identity functions we still reject
+// ill-typed arithmetic that mixes unrelated instantiations.
+
+fn identity(value):
+    return value
+
+number_value = identity(10)
+text_value = identity("ten")
+invalid_sum = number_value + text_value
+
+print(invalid_sum)

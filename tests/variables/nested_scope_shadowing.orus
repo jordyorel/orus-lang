@@ -1,0 +1,13 @@
+// Nested scope tracking ensures per-compilation state handles lexical blocks
+mut outer_value = 10
+print("outer before:", outer_value)
+
+if true:
+    mut outer_value = 20  // Should shadow the outer value
+    print("inner shadow:", outer_value)
+    if true:
+        mut outer_value = 30
+        print("deep shadow:", outer_value)
+    print("inner after:", outer_value)
+
+print("outer after:", outer_value)

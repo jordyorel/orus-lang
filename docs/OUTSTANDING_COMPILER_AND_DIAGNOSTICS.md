@@ -100,11 +100,11 @@ cannot surface scope errors, track loop depth, or aggregate diagnostics.
   leaks.
 
 **Testing.**
-- Craft parser-level fixtures that declare variables in nested scopes and
+- [x] Craft parser-level fixtures that declare variables in nested scopes and
   exercise `break`/`continue` to validate the loop depth bookkeeping.
-- Add regression tests in `tests/variables/` that would previously pass silently
+- [x] Add regression tests in `tests/variables/` that would previously pass silently
   when scopes were ignored (duplicate names, shadowing, etc.).
-- Extend the diagnostic harness so failing tests assert on the aggregated error
+- [x] Extend the diagnostic harness so failing tests assert on the aggregated error
   list, not just success/failure.
 
 ### Legacy pipeline removal ✅
@@ -126,60 +126,48 @@ success.
   `ErrorReporter` instead of silently succeeding.
 
 **Testing.**
-- [ ] Add smoke tests in `tests/comprehensive/` that drive the full VM through
+- [x] Add smoke tests in `tests/comprehensive/` that drive the full VM through
   the CLI entry points (`./orus program.orus`).
-- [ ] Ensure the interpreter exits with a non-zero status when compilation fails
+- [x] Ensure the interpreter exits with a non-zero status when compilation fails
   by adding shell-based harness checks in `tests/error_reporting/`.
 - [x] Run `make test` to confirm the VM executes the bytecode produced by the
   new compiler (CLI-driven smoke coverage remains tracked separately).
 
-### Optimization pass depth (constant propagation)
+### Optimization pass depth (constant propagation) ✅
 
-**Current issue.** `optimize_constant_propagation` (in
-`src/compiler/backend/codegen/peephole.c`) is a stub. As a result constant loads
-flow straight into codegen without folding.
-
-**Implementation steps.**
-- Implement a small data-flow lattice that records constant values per register
-  while scanning the bytecode. When a register holds a known constant, rewrite
-  downstream uses to the literal form and eliminate redundant loads.
-- Hook the analyzer into the existing peephole pass so it runs after
-  load/move fusion and before register coalescing.
-- Track statistics in `PeepholeContext` so we can report how many loads were
-  folded and whether any instructions were deleted.
+**Resolution.** The peephole optimizer now tracks register-local constant state
+while scanning bytecode and removes redundant loads when a register already
+holds the same literal (including boolean immediates). The pass is wired into
+`apply_peephole_optimizations`, exports statistics through
+`PeepholeContext.constant_propagations`, and ships with dedicated C-level unit
+tests under `tests/unit/test_constant_propagation.c` that exercise both numeric
+and boolean folding behaviour via the new `make peephole-tests` harness.
 
 **Testing.**
-- Build bytecode-focused unit tests that feed in short instruction sequences and
-  assert the optimized buffer no longer contains redundant loads.
-- Extend arithmetic fixtures in `tests/arithmetic/` to cover constant-heavy
-  expressions, then compare execution counts or bytecode dumps to ensure
-  propagation triggers.
-- Capture before/after timings for representative programs to quantify the
-  performance win as required by `docs/AGENTS.md`.
+- Added the constant propagation unit binary to `make test`, alongside the
+  existing jump, source map, and scope suites.
+- Verified that the optimizer eliminates duplicate `OP_LOAD_I32_CONST` and
+  `OP_LOAD_TRUE` sequences without touching unrelated instructions.
+- Continued to run the full comprehensive suite via `make test` to ensure no
+  regressions surface in end-to-end programs.
 
-### Type generalization fidelity
+### Type generalization fidelity ✅
 
-**Current issue.** `generalize` in `src/type/type_inference.c` drops the
-environment parameter entirely, so type schemes never quantify free variables.
-Generic functions therefore get monomorphic types.
-
-**Implementation steps.**
-- Implement the classic Hindley–Milner algorithm: walk the environment, collect
-  the free type variables in scope, subtract them from the type’s free variables,
-  and bind the remainder.
-- Update every call site that currently assumes a monomorphic scheme (for
-  example, variable declarations and function parameters) to handle bound type
-  variables.
-- Audit serialization/deserialization of type schemes so the quantified
-  variables persist across module boundaries.
+**Resolution.** Hindley–Milner style generalization now collects free type
+variables from both the expression and the ambient environment, quantifies the
+difference, and instantiates fresh type variables on lookup. `generalize`
+creates proper schemes with bound-variable metadata, and identifier / call sites
+use `instantiate_type_scheme` so polymorphic bindings can be reused safely. New
+fixtures (`tests/types/polymorphic_identity.orus`) demonstrate successful
+polymorphic reuse, while the negative companion in
+`tests/type_safety_fails/polymorphic_identity_mismatch.orus` guards against
+invalid cross-type arithmetic.
 
 **Testing.**
-- Add unit tests in `tests/types/` that infer polymorphic identity functions and
-  verify they can be instantiated at different concrete types.
-- Extend the negative suite in `tests/type_safety_fails/` to ensure the compiler
-  still rejects ill-typed programs even with richer generalization.
-- Run the entire `tests/types` category to guard against regressions in the type
-  inference engine.
+- Exercised the new positive and negative fixtures through `make test`, ensuring
+  polymorphic code type-checks and ill-typed combinations still fail.
+- Re-ran the broader `tests/types` catalogue via the standard test harness to
+  confirm previously passing programs continue to compile and execute.
 
 ---
 

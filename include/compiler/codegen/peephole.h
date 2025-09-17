@@ -11,6 +11,7 @@ typedef struct PeepholeContext {
     int instructions_eliminated;
     int load_move_fusions;
     int redundant_moves;
+    int constant_propagations;
 } PeepholeContext;
 
 // Main peephole optimization function

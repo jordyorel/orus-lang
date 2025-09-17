@@ -9,11 +9,104 @@ import os
 import re
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, List, Tuple
+from typing import Iterable, List, Optional, Tuple
 
 
 ANSI_ESCAPE = re.compile(r"\x1B\[[0-9;]*m")
+DIAGNOSTIC_HEADER = re.compile(r"^-- (?P<category>[^:]+): (?P<title>.+?) -+ (?P<location>.+)$")
+
+
+@dataclass
+class Diagnostic:
+    category: str
+    title: str
+    location: str
+    message: Optional[str]
+    help_text: Optional[str]
+    note_text: Optional[str]
+
+
+def parse_diagnostics(text: str) -> List[Diagnostic]:
+    lines = text.splitlines()
+    diagnostics: List[Diagnostic] = []
+    i = 0
+
+    while i < len(lines):
+        header_match = DIAGNOSTIC_HEADER.match(lines[i])
+        if not header_match:
+            i += 1
+            continue
+
+        category = header_match.group("category").strip()
+        title = header_match.group("title").strip()
+        location = header_match.group("location").strip()
+
+        i += 1
+        message: Optional[str] = None
+        help_text: Optional[str] = None
+        note_text: Optional[str] = None
+
+        while i < len(lines) and not lines[i].startswith("-- "):
+            current = lines[i].strip()
+            if "^" in lines[i] and "|" in lines[i]:
+                caret_parts = current.split("^", 1)
+                if len(caret_parts) == 2:
+                    caret_message = caret_parts[1].strip()
+                    if caret_message and message is None:
+                        message = caret_message
+            if current.startswith("= "):
+                payload = current[2:].strip()
+                if payload.startswith("help: "):
+                    help_text = payload[len("help: "):].strip()
+                elif payload.startswith("note: "):
+                    note_text = payload[len("note: "):].strip()
+                elif payload:
+                    if message is None:
+                        message = payload
+            i += 1
+
+        diagnostics.append(
+            Diagnostic(
+                category=category,
+                title=title,
+                location=location,
+                message=message,
+                help_text=help_text,
+                note_text=note_text,
+            )
+        )
+
+    return diagnostics
+
+
+def match_diagnostic(expected: dict, actual: Diagnostic) -> bool:
+    title = expected.get("title")
+    if title and title not in actual.title:
+        return False
+
+    category = expected.get("category")
+    if category and category not in actual.category:
+        return False
+
+    location_substring = expected.get("location_contains")
+    if location_substring and location_substring not in actual.location:
+        return False
+
+    message_snippet = expected.get("message_contains")
+    if message_snippet and (not actual.message or message_snippet not in actual.message):
+        return False
+
+    help_snippet = expected.get("help_contains")
+    if help_snippet and (not actual.help_text or help_snippet not in actual.help_text):
+        return False
+
+    note_snippet = expected.get("note_contains")
+    if note_snippet and (not actual.note_text or note_snippet not in actual.note_text):
+        return False
+
+    return True
 
 
 def load_cases(cases_path: Path) -> List[dict]:
@@ -59,6 +152,27 @@ def run_case(binary: str, repo_root: Path, cases_dir: Path, case: dict) -> Tuple
     for snippet in case.get("expected", []):
         if snippet not in plain_output:
             errors.append(f"Missing expected text: {snippet}")
+
+    diagnostics = parse_diagnostics(plain_output)
+
+    expected_diag_count = case.get("expected_diagnostic_count")
+    if expected_diag_count is not None and expected_diag_count != len(diagnostics):
+        errors.append(
+            f"Expected {expected_diag_count} diagnostics, but observed {len(diagnostics)}"
+        )
+
+    for expected in case.get("expected_diagnostics", []):
+        matches = [diag for diag in diagnostics if match_diagnostic(expected, diag)]
+        expected_count = expected.get("count")
+        if expected_count is not None:
+            if len(matches) != expected_count:
+                summary = (
+                    f"Expected {expected_count} diagnostics matching {expected}, "
+                    f"but found {len(matches)}"
+                )
+                errors.append(summary)
+        elif not matches:
+            errors.append(f"No diagnostic matched: {expected}")
 
     if errors:
         errors.append("Command: " + " ".join(cmd))

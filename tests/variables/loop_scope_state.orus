@@ -1,0 +1,13 @@
+// Loop scope tracking with break/continue ensures per-compilation state stays balanced
+mut total = 0
+for outer in 0..4:
+    mut local = outer
+    for inner in 0..4:
+        if inner == 1:
+            continue
+        if inner == 3:
+            break
+        local = local + inner
+    total = total + local
+
+print("loop total:", total)
