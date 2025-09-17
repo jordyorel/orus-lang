@@ -2241,10 +2241,20 @@ InterpretResult vm_run_dispatch(void) {
         uint8_t dst = READ_BYTE();
         uint8_t src = READ_BYTE();
         Value v = vm_get_register_safe(src);
-        if (!IS_RANGE_ITERATOR(v)) {
+        if (IS_RANGE_ITERATOR(v)) {
+            vm_set_register_safe(dst, v);
+        } else if (IS_ARRAY(v)) {
+            ObjArrayIterator* iterator = allocateArrayIterator(AS_ARRAY(v));
+            if (!iterator) {
+                VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(), "Failed to allocate array iterator");
+            }
+            Value iterator_value = {.type = VAL_ARRAY_ITERATOR, .as.obj = (Obj*)iterator};
+            vm_set_register_safe(dst, iterator_value);
+        } else if (IS_ARRAY_ITERATOR(v)) {
+            vm_set_register_safe(dst, v);
+        } else {
             VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Value not iterable");
         }
-        vm_set_register_safe(dst, v);
         DISPATCH();
     }
 
@@ -2253,16 +2263,27 @@ InterpretResult vm_run_dispatch(void) {
         uint8_t iterReg = READ_BYTE();
         uint8_t hasReg = READ_BYTE();
         Value iterValue = vm_get_register_safe(iterReg);
-        if (!IS_RANGE_ITERATOR(iterValue)) {
-            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Invalid iterator");
-        }
-        ObjRangeIterator* it = AS_RANGE_ITERATOR(iterValue);
-        if (it->current >= it->end) {
-            vm_set_register_safe(hasReg, BOOL_VAL(false));
+        if (IS_RANGE_ITERATOR(iterValue)) {
+            ObjRangeIterator* it = AS_RANGE_ITERATOR(iterValue);
+            if (it->current >= it->end) {
+                vm_set_register_safe(hasReg, BOOL_VAL(false));
+            } else {
+                vm_set_register_safe(dst, I64_VAL(it->current));
+                it->current++;
+                vm_set_register_safe(hasReg, BOOL_VAL(true));
+            }
+        } else if (IS_ARRAY_ITERATOR(iterValue)) {
+            ObjArrayIterator* it = AS_ARRAY_ITERATOR(iterValue);
+            ObjArray* array = it ? it->array : NULL;
+            if (!array || it->index >= array->length) {
+                vm_set_register_safe(hasReg, BOOL_VAL(false));
+            } else {
+                vm_set_register_safe(dst, array->elements[it->index]);
+                it->index++;
+                vm_set_register_safe(hasReg, BOOL_VAL(true));
+            }
         } else {
-            vm_set_register_safe(dst, I64_VAL(it->current));
-            it->current++;
-            vm_set_register_safe(hasReg, BOOL_VAL(true));
+            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Invalid iterator");
         }
         DISPATCH();
     }

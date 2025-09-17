@@ -99,6 +99,14 @@ ObjArray* allocateArray(int capacity) {
     return array;
 }
 
+ObjArrayIterator* allocateArrayIterator(ObjArray* array) {
+    ObjArrayIterator* iterator =
+        (ObjArrayIterator*)allocateObject(sizeof(ObjArrayIterator), OBJ_ARRAY_ITERATOR);
+    iterator->array = array;
+    iterator->index = 0;
+    return iterator;
+}
+
 void arrayEnsureCapacity(ObjArray* array, int minCapacity) {
     if (!array) {
         return;
@@ -245,6 +253,13 @@ void markObject(Obj* object) {
         }
         case OBJ_RANGE_ITERATOR:
             break;
+        case OBJ_ARRAY_ITERATOR: {
+            ObjArrayIterator* it = (ObjArrayIterator*)object;
+            if (it->array) {
+                markObject((Obj*)it->array);
+            }
+            break;
+        }
         case OBJ_FUNCTION: {
             ObjFunction* func = (ObjFunction*)object;
             markObject((Obj*)func->name);
@@ -273,6 +288,7 @@ void markValue(Value value) {
         case VAL_ARRAY:
         case VAL_ERROR:
         case VAL_RANGE_ITERATOR:
+        case VAL_ARRAY_ITERATOR:
         case VAL_FUNCTION:
         case VAL_CLOSURE:
             markObject(value.as.obj);
@@ -340,6 +356,9 @@ static void freeObject(Obj* object) {
         }
         case OBJ_RANGE_ITERATOR:
             vm.bytesAllocated -= sizeof(ObjRangeIterator);
+            break;
+        case OBJ_ARRAY_ITERATOR:
+            vm.bytesAllocated -= sizeof(ObjArrayIterator);
             break;
         case OBJ_FUNCTION: {
             ObjFunction* func = (ObjFunction*)object;

@@ -22,6 +22,7 @@ void resumeGC(void);
 
 ObjString* allocateString(const char* chars, int length);
 ObjArray* allocateArray(int capacity);
+ObjArrayIterator* allocateArrayIterator(ObjArray* array);
 void arrayEnsureCapacity(ObjArray* array, int minCapacity);
 bool arrayPush(ObjArray* array, Value value);
 bool arrayPop(ObjArray* array, Value* outValue);

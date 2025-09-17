@@ -1,0 +1,18 @@
+// Array iteration smoke test ensuring `for ... in array` executes over
+// every element and integrates with push/len helpers.
+
+print("-- array iteration --")
+values = [1, 2, 3, 4]
+mut total = 0
+
+for item in values:
+    total = total + item
+
+print("sum:", total)
+
+mut collected = []
+for element in values:
+    push(collected, element)
+
+print("collected:", collected)
+print("count:", len(collected))

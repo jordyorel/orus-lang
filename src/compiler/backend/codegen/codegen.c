@@ -683,6 +683,7 @@ void emit_load_constant(CompilerContext* ctx, int reg, Value constant) {
         case VAL_ARRAY:
         case VAL_ERROR:
         case VAL_RANGE_ITERATOR:
+        case VAL_ARRAY_ITERATOR:
         default: {
             // Fallback for complex or object types - use generic constant loader
             int const_index = add_constant(ctx->constants, constant);
