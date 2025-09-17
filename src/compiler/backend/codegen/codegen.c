@@ -37,6 +37,13 @@ static inline void set_location_from_ast(CompilerContext* ctx, ASTNode* node) {
     }
 }
 
+static inline ScopeFrame* get_scope_frame_by_index(CompilerContext* ctx, int index) {
+    if (!ctx || !ctx->scopes || index < 0) {
+        return NULL;
+    }
+    return scope_stack_get_frame(ctx->scopes, index);
+}
+
 static int compile_assignment_internal(CompilerContext* ctx, TypedASTNode* assign,
                                        bool as_expression);
 
@@ -2068,6 +2075,7 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
 
     int loop_start = ctx->bytecode->count;
     ScopeFrame* loop_frame = enter_loop_context(ctx, loop_start);
+    int loop_frame_index = loop_frame ? loop_frame->lexical_depth : -1;
     if (!loop_frame) {
         DEBUG_CODEGEN_PRINT("Error: Failed to enter loop context");
         ctx->has_compilation_errors = true;
@@ -2112,6 +2120,10 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
     // Compile loop body with new scope
     compile_block_with_scope(ctx, while_stmt->typed.whileStmt.body, false);
 
+    if (loop_frame_index >= 0) {
+        loop_frame = get_scope_frame_by_index(ctx, loop_frame_index);
+    }
+
     // Emit unconditional jump back to loop start
     // For backward jumps, calculate positive offset and use OP_LOOP_SHORT or OP_JUMP
     int back_jump_distance = (ctx->bytecode->count + 2) - loop_start;
@@ -2150,6 +2162,8 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
     DEBUG_CODEGEN_PRINT("Patched end jump to %d\n", end_target);
 
     leave_loop_context(ctx, loop_frame, end_target);
+    loop_frame = NULL;
+    loop_frame_index = -1;
 
     DEBUG_CODEGEN_PRINT("While statement compilation completed");
 }
@@ -2177,16 +2191,19 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     }
 
     ScopeFrame* scope_frame = NULL;
+    int scope_frame_index = -1;
     if (ctx->scopes) {
         scope_frame = scope_stack_push(ctx->scopes, SCOPE_KIND_LEXICAL);
         if (scope_frame) {
             scope_frame->symbols = ctx->symbols;
             scope_frame->start_offset = ctx->bytecode ? ctx->bytecode->count : 0;
             scope_frame->end_offset = scope_frame->start_offset;
+            scope_frame_index = scope_frame->lexical_depth;
         }
     }
 
     ScopeFrame* loop_frame = NULL;
+    int loop_frame_index = -1;
     bool success = false;
 
     int start_reg = -1;
@@ -2315,6 +2332,7 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
         ctx->has_compilation_errors = true;
         goto cleanup;
     }
+    loop_frame_index = loop_frame->lexical_depth;
     ctx->current_loop_continue = -1;
     loop_frame->continue_offset = -1;
 
@@ -2406,6 +2424,10 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
 
     compile_block_with_scope(ctx, for_stmt->typed.forRange.body, true);
 
+    if (loop_frame_index >= 0) {
+        loop_frame = get_scope_frame_by_index(ctx, loop_frame_index);
+    }
+
     int continue_target = ctx->bytecode->count;
     update_loop_continue_target(ctx, loop_frame, continue_target);
 
@@ -2442,12 +2464,16 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
 
     leave_loop_context(ctx, loop_frame, end_target);
     loop_frame = NULL;
+    loop_frame_index = -1;
     success = true;
 
 cleanup:
     if (loop_frame) {
-        leave_loop_context(ctx, loop_frame, ctx->bytecode ? ctx->bytecode->count : 0);
+        ScopeFrame* refreshed = get_scope_frame_by_index(ctx, loop_frame_index);
+        leave_loop_context(ctx, refreshed,
+                           ctx->bytecode ? ctx->bytecode->count : 0);
         loop_frame = NULL;
+        loop_frame_index = -1;
     }
 
     if (condition_reg >= MP_TEMP_REG_START && condition_reg <= MP_TEMP_REG_END) {
@@ -2493,11 +2519,15 @@ cleanup:
     }
 
     if (scope_frame) {
-        scope_frame->end_offset = ctx->bytecode ? ctx->bytecode->count : scope_frame->start_offset;
+        ScopeFrame* refreshed = get_scope_frame_by_index(ctx, scope_frame_index);
+        if (refreshed) {
+            refreshed->end_offset = ctx->bytecode ? ctx->bytecode->count : refreshed->start_offset;
+        }
         if (ctx->scopes) {
             scope_stack_pop(ctx->scopes);
         }
         scope_frame = NULL;
+        scope_frame_index = -1;
     }
 
     if (created_scope && ctx->allocator) {
@@ -2524,6 +2554,7 @@ void compile_for_iter_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     DEBUG_CODEGEN_PRINT("Compiling for iteration statement");
 
     ScopeFrame* loop_frame = NULL;
+    int loop_frame_index = -1;
     bool success = false;
     int iterable_reg = -1;
     int iter_reg = -1;
@@ -2584,6 +2615,7 @@ void compile_for_iter_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
         ctx->has_compilation_errors = true;
         goto cleanup;
     }
+    loop_frame_index = loop_frame->lexical_depth;
 
     DEBUG_CODEGEN_PRINT("For iteration loop start at offset %d\n", loop_start);
 
@@ -2611,6 +2643,10 @@ void compile_for_iter_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     
     // Compile loop body with scope (like while loops do)
     compile_block_with_scope(ctx, for_stmt->typed.forIter.body, true);
+
+    if (loop_frame_index >= 0) {
+        loop_frame = get_scope_frame_by_index(ctx, loop_frame_index);
+    }
     
     // Emit unconditional jump back to loop start
     int back_jump_distance = (ctx->bytecode->count + 2) - loop_start;
@@ -2644,12 +2680,16 @@ void compile_for_iter_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
 
     leave_loop_context(ctx, loop_frame, end_target);
     loop_frame = NULL;
+    loop_frame_index = -1;
     success = true;
 
 cleanup:
     if (loop_frame) {
-        leave_loop_context(ctx, loop_frame, ctx->bytecode ? ctx->bytecode->count : loop_start);
+        ScopeFrame* refreshed = get_scope_frame_by_index(ctx, loop_frame_index);
+        leave_loop_context(ctx, refreshed,
+                           ctx->bytecode ? ctx->bytecode->count : loop_start);
         loop_frame = NULL;
+        loop_frame_index = -1;
     }
 
     if (iterable_reg >= MP_TEMP_REG_START && iterable_reg <= MP_TEMP_REG_END) {
@@ -2776,6 +2816,7 @@ void compile_block_with_scope(CompilerContext* ctx, TypedASTNode* block, bool cr
 
     SymbolTable* old_scope = ctx->symbols;
     ScopeFrame* lexical_frame = NULL;
+    int lexical_frame_index = -1;
     if (create_scope) {
         DEBUG_CODEGEN_PRINT("Entering new scope (depth %d)\n", ctx->symbols->scope_depth + 1);
 
@@ -2796,6 +2837,7 @@ void compile_block_with_scope(CompilerContext* ctx, TypedASTNode* block, bool cr
                 lexical_frame->symbols = ctx->symbols;
                 lexical_frame->start_offset = ctx->bytecode ? ctx->bytecode->count : 0;
                 lexical_frame->end_offset = lexical_frame->start_offset;
+                lexical_frame_index = lexical_frame->lexical_depth;
             }
         }
     } else {
@@ -2832,7 +2874,10 @@ void compile_block_with_scope(CompilerContext* ctx, TypedASTNode* block, bool cr
         }
 
         if (lexical_frame) {
-            lexical_frame->end_offset = ctx->bytecode ? ctx->bytecode->count : lexical_frame->start_offset;
+            ScopeFrame* refreshed = get_scope_frame_by_index(ctx, lexical_frame_index);
+            if (refreshed) {
+                refreshed->end_offset = ctx->bytecode ? ctx->bytecode->count : refreshed->start_offset;
+            }
             if (ctx->scopes) {
                 scope_stack_pop(ctx->scopes);
             }

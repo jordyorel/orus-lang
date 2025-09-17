@@ -121,3 +121,10 @@ int scope_stack_loop_depth(const ScopeStack* stack) {
 bool scope_stack_is_in_loop(const ScopeStack* stack) {
     return scope_stack_loop_depth(stack) > 0;
 }
+
+ScopeFrame* scope_stack_get_frame(ScopeStack* stack, int index) {
+    if (!stack || index < 0 || index >= stack->count) {
+        return NULL;
+    }
+    return &stack->frames[index];
+}
