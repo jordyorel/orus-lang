@@ -218,6 +218,8 @@ static ASTNode* parseBlock(ParserContext* ctx);
 static ASTNode* parseFunctionDefinition(ParserContext* ctx);
 static ASTNode* parseReturnStatement(ParserContext* ctx);
 static ASTNode* parseCallExpression(ParserContext* ctx, ASTNode* callee);
+static ASTNode* parseIndexExpression(ParserContext* ctx, ASTNode* arrayExpr, Token openToken);
+static ASTNode* parsePostfixExpressions(ParserContext* ctx, ASTNode* expr);
 static ASTNode* parseFunctionType(ParserContext* ctx);
 static ASTNode* parseTypeAnnotation(ParserContext* ctx);
 
@@ -1310,14 +1312,29 @@ static ASTNode* parseAssignment(ParserContext* ctx) {
             }
             value = binary;
         }
-        if (!value || left->type != NODE_IDENTIFIER) return NULL;
-        ASTNode* node = new_node(ctx);
-        node->type = NODE_ASSIGN;
-        node->assign.name = left->identifier.name;
-        node->assign.value = value;
-        node->location = left->location;
-        node->dataType = NULL;
-        return node;
+        if (!value) return NULL;
+
+        if (left->type == NODE_IDENTIFIER) {
+            ASTNode* node = new_node(ctx);
+            node->type = NODE_ASSIGN;
+            node->assign.name = left->identifier.name;
+            node->assign.value = value;
+            node->location = left->location;
+            node->dataType = NULL;
+            return node;
+        }
+
+        if (t == TOKEN_EQUAL && left->type == NODE_INDEX_ACCESS) {
+            ASTNode* node = new_node(ctx);
+            node->type = NODE_ARRAY_ASSIGN;
+            node->arrayAssign.target = left;
+            node->arrayAssign.value = value;
+            node->location = left->location;
+            node->dataType = NULL;
+            return node;
+        }
+
+        return NULL;
     }
     ASTNode* expr = parseTernary(ctx, left);
     if (!expr) return NULL;
@@ -1569,12 +1586,6 @@ static ASTNode* parseIdentifierExpression(ParserContext* ctx, Token token) {
     node->location.line = token.line;
     node->location.column = token.column;
     node->dataType = NULL;
-    
-    // Check if this is a function call
-    if (peekToken(ctx).type == TOKEN_LEFT_PAREN) {
-        return parseCallExpression(ctx, node);
-    }
-    
     return node;
 }
 
@@ -1611,33 +1622,48 @@ static ASTNode* parseParenthesizedExpressionToken(ParserContext* ctx, Token toke
         expr->cast.parenthesized = true;
     }
     
-    return expr;
+    return parsePostfixExpressions(ctx, expr);
 }
 
 static ASTNode* parsePrimaryExpression(ParserContext* ctx) {
     Token token = nextToken(ctx);
+    ASTNode* node = NULL;
 
     switch (token.type) {
         case TOKEN_NUMBER:
-            return parseNumberLiteral(ctx, token);
+            node = parseNumberLiteral(ctx, token);
+            break;
         case TOKEN_STRING:
-            return parseStringLiteral(ctx, token);
+            node = parseStringLiteral(ctx, token);
+            break;
         case TOKEN_TRUE:
         case TOKEN_FALSE:
-            return parseBooleanLiteral(ctx, token);
+            node = parseBooleanLiteral(ctx, token);
+            break;
         case TOKEN_IDENTIFIER:
-            return parseIdentifierExpression(ctx, token);
+            node = parseIdentifierExpression(ctx, token);
+            break;
         case TOKEN_TIME_STAMP:
-            return parseTimeStampExpression(ctx, token);
+            node = parseTimeStampExpression(ctx, token);
+            break;
         case TOKEN_LEFT_PAREN:
-            return parseParenthesizedExpressionToken(ctx, token);
+            node = parseParenthesizedExpressionToken(ctx, token);
+            break;
         case TOKEN_LEFT_BRACKET:
-            return parseArrayLiteral(ctx, token);
+            node = parseArrayLiteral(ctx, token);
+            break;
         case TOKEN_FN:
-            return parseFunctionExpression(ctx, token);
+            node = parseFunctionExpression(ctx, token);
+            break;
         default:
             return NULL;
     }
+
+    if (!node) {
+        return NULL;
+    }
+
+    return parsePostfixExpressions(ctx, node);
 }
 
 static ASTNode* parseArrayLiteral(ParserContext* ctx, Token leftToken) {
@@ -1973,6 +1999,62 @@ static ASTNode* parseCallExpression(ParserContext* ctx, ASTNode* callee) {
     call->dataType = NULL;
     
     return call;
+}
+
+static ASTNode* parseIndexExpression(ParserContext* ctx, ASTNode* arrayExpr, Token openToken) {
+    while (peekToken(ctx).type == TOKEN_NEWLINE) {
+        nextToken(ctx);
+    }
+
+    ASTNode* indexExpr = parseExpression(ctx);
+    if (!indexExpr) {
+        return NULL;
+    }
+
+    while (peekToken(ctx).type == TOKEN_NEWLINE) {
+        nextToken(ctx);
+    }
+
+    Token close = nextToken(ctx);
+    if (close.type != TOKEN_RIGHT_BRACKET) {
+        return NULL;
+    }
+
+    ASTNode* indexNode = new_node(ctx);
+    indexNode->type = NODE_INDEX_ACCESS;
+    indexNode->indexAccess.array = arrayExpr;
+    indexNode->indexAccess.index = indexExpr;
+    indexNode->location.line = openToken.line;
+    indexNode->location.column = openToken.column;
+    indexNode->dataType = NULL;
+
+    return indexNode;
+}
+
+static ASTNode* parsePostfixExpressions(ParserContext* ctx, ASTNode* expr) {
+    if (!expr) {
+        return NULL;
+    }
+
+    while (true) {
+        Token next = peekToken(ctx);
+        if (next.type == TOKEN_LEFT_PAREN) {
+            expr = parseCallExpression(ctx, expr);
+            if (!expr) {
+                return NULL;
+            }
+        } else if (next.type == TOKEN_LEFT_BRACKET) {
+            Token openToken = nextToken(ctx);
+            expr = parseIndexExpression(ctx, expr, openToken);
+            if (!expr) {
+                return NULL;
+            }
+        } else {
+            break;
+        }
+    }
+
+    return expr;
 }
 
 // Parse function type: fn(param_types...) -> return_type

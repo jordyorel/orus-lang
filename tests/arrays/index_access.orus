@@ -1,0 +1,19 @@
+// Array indexing and assignment smoke test for Orus.
+//
+// Verifies that indexing expressions compile to OP_ARRAY_GET and that
+// assignments compile to OP_ARRAY_SET with bounds checking.
+
+print("-- array indexing and assignment --")
+mut values = [10, 20, 30]
+
+first = values[0]
+second = values[1]
+third = values[2]
+print("initial:", first, second, third)
+
+values[1] = 42
+print("after set:", values[0], values[1], values[2])
+
+// Index expression in larger arithmetic context
+result = values[0] + values[1]
+print("sum:", result)

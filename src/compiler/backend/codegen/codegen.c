@@ -46,6 +46,8 @@ static inline ScopeFrame* get_scope_frame_by_index(CompilerContext* ctx, int ind
 
 static int compile_assignment_internal(CompilerContext* ctx, TypedASTNode* assign,
                                        bool as_expression);
+static int compile_array_assignment(CompilerContext* ctx, TypedASTNode* assign,
+                                    bool as_expression);
 
 static int compile_builtin_array_push(CompilerContext* ctx, TypedASTNode* call);
 static int compile_builtin_array_pop(CompilerContext* ctx, TypedASTNode* call);
@@ -1086,6 +1088,49 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             free(element_regs);
             return result_reg;
         }
+        case NODE_INDEX_ACCESS: {
+            TypedASTNode* array_node = expr->typed.indexAccess.array;
+            TypedASTNode* index_node = expr->typed.indexAccess.index;
+            int array_reg = compile_expression(ctx, array_node);
+            if (array_reg == -1) {
+                return -1;
+            }
+
+            int index_reg = compile_expression(ctx, index_node);
+            if (index_reg == -1) {
+                if (array_reg >= MP_TEMP_REG_START && array_reg <= MP_TEMP_REG_END) {
+                    mp_free_temp_register(ctx->allocator, array_reg);
+                }
+                return -1;
+            }
+
+            int result_reg = mp_allocate_temp_register(ctx->allocator);
+            if (result_reg == -1) {
+                DEBUG_CODEGEN_PRINT("Error: Failed to allocate result register for array access\n");
+                if (index_reg >= MP_TEMP_REG_START && index_reg <= MP_TEMP_REG_END) {
+                    mp_free_temp_register(ctx->allocator, index_reg);
+                }
+                if (array_reg >= MP_TEMP_REG_START && array_reg <= MP_TEMP_REG_END) {
+                    mp_free_temp_register(ctx->allocator, array_reg);
+                }
+                return -1;
+            }
+
+            set_location_from_node(ctx, expr);
+            emit_byte_to_buffer(ctx->bytecode, OP_ARRAY_GET_R);
+            emit_byte_to_buffer(ctx->bytecode, result_reg);
+            emit_byte_to_buffer(ctx->bytecode, array_reg);
+            emit_byte_to_buffer(ctx->bytecode, index_reg);
+
+            if (index_reg >= MP_TEMP_REG_START && index_reg <= MP_TEMP_REG_END) {
+                mp_free_temp_register(ctx->allocator, index_reg);
+            }
+            if (array_reg >= MP_TEMP_REG_START && array_reg <= MP_TEMP_REG_END) {
+                mp_free_temp_register(ctx->allocator, array_reg);
+            }
+
+            return result_reg;
+        }
 
         case NODE_BINARY: {
             DEBUG_CODEGEN_PRINT("NODE_BINARY: About to check binary expression");
@@ -1308,6 +1353,9 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
         case NODE_ASSIGN: {
             int reg = compile_assignment_internal(ctx, expr, true);
             return reg;
+        }
+        case NODE_ARRAY_ASSIGN: {
+            return compile_array_assignment(ctx, expr, true);
         }
 
         case NODE_IDENTIFIER: {
@@ -1860,6 +1908,9 @@ void compile_statement(CompilerContext* ctx, TypedASTNode* stmt) {
         case NODE_ASSIGN:
             compile_assignment(ctx, stmt);
             break;
+        case NODE_ARRAY_ASSIGN:
+            compile_array_assignment(ctx, stmt, false);
+            break;
             
         case NODE_VAR_DECL:
             compile_variable_declaration(ctx, stmt);
@@ -1986,6 +2037,66 @@ void compile_variable_declaration(CompilerContext* ctx, TypedASTNode* var_decl) 
     }
 
     DEBUG_CODEGEN_PRINT("Declared variable %s -> R%d\n", var_name, var_reg);
+}
+
+static int compile_array_assignment(CompilerContext* ctx, TypedASTNode* assign,
+                                    bool as_expression) {
+    if (!ctx || !assign) {
+        return -1;
+    }
+
+    TypedASTNode* target = assign->typed.arrayAssign.target;
+    TypedASTNode* value_node = assign->typed.arrayAssign.value;
+    if (!target || !value_node || !target->typed.indexAccess.array ||
+        !target->typed.indexAccess.index) {
+        return -1;
+    }
+
+    int array_reg = compile_expression(ctx, target->typed.indexAccess.array);
+    if (array_reg == -1) {
+        return -1;
+    }
+
+    int index_reg = compile_expression(ctx, target->typed.indexAccess.index);
+    if (index_reg == -1) {
+        if (array_reg >= MP_TEMP_REG_START && array_reg <= MP_TEMP_REG_END) {
+            mp_free_temp_register(ctx->allocator, array_reg);
+        }
+        return -1;
+    }
+
+    int value_reg = compile_expression(ctx, value_node);
+    if (value_reg == -1) {
+        if (index_reg >= MP_TEMP_REG_START && index_reg <= MP_TEMP_REG_END) {
+            mp_free_temp_register(ctx->allocator, index_reg);
+        }
+        if (array_reg >= MP_TEMP_REG_START && array_reg <= MP_TEMP_REG_END) {
+            mp_free_temp_register(ctx->allocator, array_reg);
+        }
+        return -1;
+    }
+
+    set_location_from_node(ctx, assign);
+    emit_byte_to_buffer(ctx->bytecode, OP_ARRAY_SET_R);
+    emit_byte_to_buffer(ctx->bytecode, array_reg);
+    emit_byte_to_buffer(ctx->bytecode, index_reg);
+    emit_byte_to_buffer(ctx->bytecode, value_reg);
+
+    if (index_reg >= MP_TEMP_REG_START && index_reg <= MP_TEMP_REG_END) {
+        mp_free_temp_register(ctx->allocator, index_reg);
+    }
+    if (array_reg >= MP_TEMP_REG_START && array_reg <= MP_TEMP_REG_END) {
+        mp_free_temp_register(ctx->allocator, array_reg);
+    }
+
+    bool value_is_temp = value_reg >= MP_TEMP_REG_START && value_reg <= MP_TEMP_REG_END;
+    int result_reg = value_reg;
+
+    if (!as_expression && value_is_temp) {
+        mp_free_temp_register(ctx->allocator, value_reg);
+    }
+
+    return result_reg;
 }
 
 static int compile_assignment_internal(CompilerContext* ctx, TypedASTNode* assign,

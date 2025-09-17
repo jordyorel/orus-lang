@@ -61,8 +61,11 @@ static const char* get_node_type_name(NodeType type) {
         case NODE_VAR_DECL: return "VarDecl";
         case NODE_IDENTIFIER: return "Identifier";
         case NODE_LITERAL: return "Literal";
+        case NODE_ARRAY_LITERAL: return "ArrayLiteral";
+        case NODE_INDEX_ACCESS: return "IndexAccess";
         case NODE_BINARY: return "Binary";
         case NODE_ASSIGN: return "Assign";
+        case NODE_ARRAY_ASSIGN: return "ArrayAssign";
         case NODE_PRINT: return "Print";
         case NODE_TIME_STAMP: return "TimeStamp";
         case NODE_IF: return "If";
@@ -353,6 +356,12 @@ static void visualize_node_recursive(TypedASTNode* node, int depth, bool is_last
         case NODE_CALL:
             printf(" args=%d", node->original->call.argCount);
             break;
+        case NODE_INDEX_ACCESS:
+            printf(" [index]");
+            break;
+        case NODE_ARRAY_ASSIGN:
+            printf(" [array_assign]");
+            break;
         default:
             break;
     }
@@ -417,6 +426,23 @@ static void visualize_node_recursive(TypedASTNode* node, int depth, bool is_last
         case NODE_ASSIGN:
             if (node->typed.assign.value) {
                 visualize_node_recursive(node->typed.assign.value, depth + 1, true, config);
+            }
+            break;
+        case NODE_ARRAY_ASSIGN:
+            if (node->typed.arrayAssign.target) {
+                visualize_node_recursive(node->typed.arrayAssign.target, depth + 1,
+                                         node->typed.arrayAssign.value == NULL, config);
+            }
+            if (node->typed.arrayAssign.value) {
+                visualize_node_recursive(node->typed.arrayAssign.value, depth + 1, true, config);
+            }
+            break;
+        case NODE_INDEX_ACCESS:
+            if (node->typed.indexAccess.array) {
+                visualize_node_recursive(node->typed.indexAccess.array, depth + 1, false, config);
+            }
+            if (node->typed.indexAccess.index) {
+                visualize_node_recursive(node->typed.indexAccess.index, depth + 1, true, config);
             }
             break;
         case NODE_CALL:
