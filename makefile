@@ -13,18 +13,31 @@ UNAME_S := $(shell uname -s)
 BASE_CFLAGS = -Wall -Wextra -std=c11
 
 # Architecture-specific optimizations
-ifeq ($(UNAME_M),arm64)
-    # Apple Silicon (M1/M2/M3) optimizations
-    ARCH_FLAGS = -mcpu=apple-m1 -mtune=apple-m1 -march=armv8.4-a+simd+crypto+sha3
-    ARCH_DEFINES = -DUSE_COMPUTED_GOTO=1
-else ifeq ($(UNAME_M),x86_64)
-    # Intel/AMD x86_64 optimizations
-    ARCH_FLAGS = -march=native -mtune=native
+# Set PORTABLE=1 to build without aggressive CPU-specific tuning (safer on some macOS setups)
+ifeq ($(PORTABLE),1)
+    # Portable build avoids micro-arch specific flags that can trigger kernel kills on some systems
+    ifeq ($(UNAME_M),arm64)
+        ARCH_FLAGS = -arch arm64
+    else ifeq ($(UNAME_M),x86_64)
+        ARCH_FLAGS = -arch x86_64
+    else
+        ARCH_FLAGS =
+    endif
     ARCH_DEFINES = -DUSE_COMPUTED_GOTO=1
 else
-    # Generic fallback
-    ARCH_FLAGS = 
-    ARCH_DEFINES = 
+    ifeq ($(UNAME_M),arm64)
+        # Apple Silicon (M1/M2/M3) optimizations
+        ARCH_FLAGS = -mcpu=apple-m1 -mtune=apple-m1 -march=armv8.4-a+simd+crypto+sha3
+        ARCH_DEFINES = -DUSE_COMPUTED_GOTO=1
+    else ifeq ($(UNAME_M),x86_64)
+        # Intel/AMD x86_64 optimizations
+        ARCH_FLAGS = -march=native -mtune=native
+        ARCH_DEFINES = -DUSE_COMPUTED_GOTO=1
+    else
+        # Generic fallback
+        ARCH_FLAGS =
+        ARCH_DEFINES =
+    endif
 endif
 
 # Profile-specific configurations
