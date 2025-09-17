@@ -26,16 +26,7 @@ static inline void set_location_from_node(CompilerContext* ctx, TypedASTNode* no
     }
 }
 
-static inline void set_location_from_ast(CompilerContext* ctx, ASTNode* node) {
-    if (!ctx || !ctx->bytecode) {
-        return;
-    }
-    if (node) {
-        bytecode_set_location(ctx->bytecode, node->location);
-    } else {
-        bytecode_set_synthetic_location(ctx->bytecode);
-    }
-}
+// Removed unused helper set_location_from_ast to avoid -Wunused-function warnings
 
 static inline ScopeFrame* get_scope_frame_by_index(CompilerContext* ctx, int index) {
     if (!ctx || !ctx->scopes || index < 0) {

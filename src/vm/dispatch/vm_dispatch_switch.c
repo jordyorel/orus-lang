@@ -16,6 +16,8 @@
 
 // Frame-aware register access functions are declared in vm_comparison.h
 
+// Only needed for the switch-dispatch backend
+#if !USE_COMPUTED_GOTO
 static inline bool value_to_index(Value value, int* out_index) {
     if (IS_I32(value)) {
         int32_t idx = AS_I32(value);
@@ -51,6 +53,7 @@ static inline bool value_to_index(Value value, int* out_index) {
     }
     return false;
 }
+#endif
 
 
 

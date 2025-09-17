@@ -572,6 +572,7 @@ bool has_overflow(Value left, const char* op, Value right) {
 }
 
 void print_constant_fold_statistics(ConstantFoldContext* ctx) {
+    (void)ctx; // Suppress unused parameter warning when DEBUG output is disabled
     DEBUG_CONSTANTFOLD_PRINT("\n=== CONSTANT FOLDING OPTIMIZATION STATISTICS ===\n");
     DEBUG_CONSTANTFOLD_PRINT("Total optimizations applied: %d\n", ctx->optimizations_applied);
     DEBUG_CONSTANTFOLD_PRINT("Constants folded: %d\n", ctx->constants_folded);
