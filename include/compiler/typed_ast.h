@@ -112,6 +112,11 @@ struct TypedASTNode {
             TypedASTNode* target;  // NODE_INDEX_ACCESS in typed form
             TypedASTNode* value;
         } arrayAssign;
+        struct {
+            TypedASTNode* array;
+            TypedASTNode* start;
+            TypedASTNode* end;
+        } arraySlice;
     } typed;
 };
 

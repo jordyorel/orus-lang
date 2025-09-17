@@ -2006,13 +2006,34 @@ static ASTNode* parseIndexExpression(ParserContext* ctx, ASTNode* arrayExpr, Tok
         nextToken(ctx);
     }
 
-    ASTNode* indexExpr = parseExpression(ctx);
-    if (!indexExpr) {
+    ASTNode* firstExpr = parseExpression(ctx);
+    if (!firstExpr) {
         return NULL;
     }
 
     while (peekToken(ctx).type == TOKEN_NEWLINE) {
         nextToken(ctx);
+    }
+
+    bool isSlice = false;
+    ASTNode* endExpr = NULL;
+
+    if (peekToken(ctx).type == TOKEN_DOT_DOT) {
+        isSlice = true;
+        nextToken(ctx); // consume '..'
+
+        while (peekToken(ctx).type == TOKEN_NEWLINE) {
+            nextToken(ctx);
+        }
+
+        endExpr = parseExpression(ctx);
+        if (!endExpr) {
+            return NULL;
+        }
+
+        while (peekToken(ctx).type == TOKEN_NEWLINE) {
+            nextToken(ctx);
+        }
     }
 
     Token close = nextToken(ctx);
@@ -2021,12 +2042,20 @@ static ASTNode* parseIndexExpression(ParserContext* ctx, ASTNode* arrayExpr, Tok
     }
 
     ASTNode* indexNode = new_node(ctx);
-    indexNode->type = NODE_INDEX_ACCESS;
-    indexNode->indexAccess.array = arrayExpr;
-    indexNode->indexAccess.index = indexExpr;
     indexNode->location.line = openToken.line;
     indexNode->location.column = openToken.column;
     indexNode->dataType = NULL;
+
+    if (isSlice) {
+        indexNode->type = NODE_ARRAY_SLICE;
+        indexNode->arraySlice.array = arrayExpr;
+        indexNode->arraySlice.start = firstExpr;
+        indexNode->arraySlice.end = endExpr;
+    } else {
+        indexNode->type = NODE_INDEX_ACCESS;
+        indexNode->indexAccess.array = arrayExpr;
+        indexNode->indexAccess.index = firstExpr;
+    }
 
     return indexNode;
 }

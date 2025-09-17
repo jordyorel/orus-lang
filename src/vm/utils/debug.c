@@ -232,6 +232,15 @@ int disassembleInstruction(Chunk* chunk, int offset) {
             return offset + 3;
         }
 
+        case OP_ARRAY_SLICE_R: {
+            uint8_t dst = chunk->code[offset + 1];
+            uint8_t array_reg = chunk->code[offset + 2];
+            uint8_t start_reg = chunk->code[offset + 3];
+            uint8_t end_reg = chunk->code[offset + 4];
+            printf("%-16s R%d, R%d, R%d, R%d\n", "ARRAY_SLICE", dst, array_reg, start_reg, end_reg);
+            return offset + 5;
+        }
+
         case OP_CALL_NATIVE_R: {
             uint8_t native_index = chunk->code[offset + 1];
             uint8_t first_arg = chunk->code[offset + 2];

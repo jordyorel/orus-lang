@@ -1,0 +1,17 @@
+// Array slicing smoke test validating `[start..end]` syntax.
+// Ensures slices respect end-exclusive semantics and preserve element order.
+
+print("-- array slicing --")
+values = [5, 6, 7, 8, 9]
+
+head = values[0..2]
+print("head:", head)
+
+mid = values[1..4]
+print("mid:", mid)
+
+full = values[0..len(values)]
+print("full:", full)
+
+empty = values[3..3]
+print("empty:", empty)
