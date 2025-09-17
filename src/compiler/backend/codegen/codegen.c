@@ -2052,7 +2052,11 @@ void compile_statement(CompilerContext* ctx, TypedASTNode* stmt) {
             // Compile function call as statement (void return type)
             compile_expression(ctx, stmt);
             break;
-            
+        case NODE_STRUCT_DECL:
+        case NODE_IMPL_BLOCK:
+            // No bytecode emitted for type or impl declarations
+            break;
+
         default:
             DEBUG_CODEGEN_PRINT("Warning: Unsupported statement type: %d\n", stmt->original->type);
             break;

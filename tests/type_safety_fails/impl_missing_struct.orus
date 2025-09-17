@@ -1,0 +1,4 @@
+// Expect undefined type error when impl targets missing struct
+impl Missing:
+    fn stub(x: Missing) -> Missing:
+        return x

@@ -15,6 +15,13 @@ typedef struct {
     ASTNode* typeAnnotation;  // Optional type annotation
 } FunctionParam;
 
+// Struct field representation
+typedef struct {
+    char* name;
+    ASTNode* typeAnnotation;  // Field type annotation (required)
+    ASTNode* defaultValue;    // Optional default value expression
+} StructField;
+
 // Different kinds of AST nodes supported in the minimal language
 typedef enum {
     NODE_PROGRAM,
@@ -42,7 +49,9 @@ typedef enum {
     NODE_FUNCTION,
     NODE_CALL,
     NODE_RETURN,
-    NODE_CAST        // Add cast node for 'as' operator
+    NODE_CAST,       // Add cast node for 'as' operator
+    NODE_STRUCT_DECL,
+    NODE_IMPL_BLOCK
 } NodeType;
 
 struct ASTNode {
@@ -169,6 +178,18 @@ struct ASTNode {
             ASTNode* targetType;           // Target type
             bool parenthesized;            // Whether the cast was explicitly parenthesized
         } cast;
+        struct {
+            char* name;                    // Struct name
+            bool isPublic;                 // Whether the struct is public
+            StructField* fields;           // Struct field definitions
+            int fieldCount;                // Number of fields
+        } structDecl;
+        struct {
+            char* structName;              // Name of struct being implemented
+            bool isPublic;                 // Whether the impl block is public
+            ASTNode** methods;             // Method definitions (function nodes)
+            int methodCount;               // Number of methods
+        } implBlock;
     };
 };
 

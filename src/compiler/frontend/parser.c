@@ -216,6 +216,8 @@ static ASTNode* parseBreakStatement(ParserContext* ctx);
 static ASTNode* parseContinueStatement(ParserContext* ctx);
 static ASTNode* parseBlock(ParserContext* ctx);
 static ASTNode* parseFunctionDefinition(ParserContext* ctx);
+static ASTNode* parseStructDefinition(ParserContext* ctx, bool isPublic);
+static ASTNode* parseImplBlock(ParserContext* ctx, bool isPublic);
 static ASTNode* parseReturnStatement(ParserContext* ctx);
 static ASTNode* parseCallExpression(ParserContext* ctx, ASTNode* callee);
 static ASTNode* parseIndexExpression(ParserContext* ctx, ASTNode* arrayExpr, Token openToken);
@@ -307,6 +309,18 @@ static ASTNode* parseStatement(ParserContext* ctx) {
         }
         return stmt;
     }
+    if (t.type == TOKEN_PUB) {
+        nextToken(ctx);
+        Token afterPub = peekToken(ctx);
+        if (afterPub.type == TOKEN_STRUCT) {
+            return parseStructDefinition(ctx, true);
+        } else if (afterPub.type == TOKEN_IMPL) {
+            return parseImplBlock(ctx, true);
+        } else if (afterPub.type == TOKEN_FN) {
+            return parseFunctionDefinition(ctx);
+        }
+        return NULL;
+    }
     if (t.type == TOKEN_MUT) {
         nextToken(ctx); // consume TOKEN_MUT
         Token nameTok = nextToken(ctx); // get identifier
@@ -315,6 +329,12 @@ static ASTNode* parseStatement(ParserContext* ctx) {
             return parseVariableDeclaration(ctx, true, nameTok);
         }
         return parseAssignOrVarList(ctx, true, nameTok);
+    }
+    if (t.type == TOKEN_STRUCT) {
+        return parseStructDefinition(ctx, false);
+    }
+    if (t.type == TOKEN_IMPL) {
+        return parseImplBlock(ctx, false);
     }
     if (t.type == TOKEN_IDENTIFIER) {
         Token second = peekSecondToken(ctx);
@@ -1925,8 +1945,196 @@ static ASTNode* parseFunctionDefinition(ParserContext* ctx) {
     function->location.line = nameTok.line;
     function->location.column = nameTok.column;
     function->dataType = NULL;
-    
+
     return function;
+}
+
+static ASTNode* parseStructDefinition(ParserContext* ctx, bool isPublic) {
+    Token structTok = nextToken(ctx);
+    if (structTok.type != TOKEN_STRUCT) {
+        return NULL;
+    }
+
+    Token nameTok = nextToken(ctx);
+    if (nameTok.type != TOKEN_IDENTIFIER) {
+        return NULL;
+    }
+
+    int nameLen = nameTok.length;
+    char* structName = parser_arena_alloc(ctx, nameLen + 1);
+    strncpy(structName, nameTok.start, nameLen);
+    structName[nameLen] = '\0';
+
+    Token colonTok = nextToken(ctx);
+    if (colonTok.type != TOKEN_COLON) {
+        return NULL;
+    }
+
+    if (peekToken(ctx).type != TOKEN_NEWLINE) {
+        return NULL;
+    }
+    nextToken(ctx);
+
+    Token indentTok = nextToken(ctx);
+    if (indentTok.type != TOKEN_INDENT) {
+        return NULL;
+    }
+
+    StructField* fields = NULL;
+    int fieldCount = 0;
+    int fieldCapacity = 0;
+
+    while (true) {
+        Token lookahead = peekToken(ctx);
+        if (lookahead.type == TOKEN_DEDENT) {
+            nextToken(ctx);
+            break;
+        }
+        if (lookahead.type == TOKEN_NEWLINE) {
+            nextToken(ctx);
+            continue;
+        }
+
+        Token fieldNameTok = nextToken(ctx);
+        if (fieldNameTok.type != TOKEN_IDENTIFIER) {
+            return NULL;
+        }
+
+        int fieldNameLen = fieldNameTok.length;
+        char* fieldName = parser_arena_alloc(ctx, fieldNameLen + 1);
+        strncpy(fieldName, fieldNameTok.start, fieldNameLen);
+        fieldName[fieldNameLen] = '\0';
+
+        Token separatorTok = nextToken(ctx);
+        if (separatorTok.type != TOKEN_COLON) {
+            return NULL;
+        }
+
+        ASTNode* typeAnnotation = parseTypeAnnotation(ctx);
+        if (!typeAnnotation) {
+            return NULL;
+        }
+
+        ASTNode* defaultValue = NULL;
+        if (peekToken(ctx).type == TOKEN_EQUAL) {
+            nextToken(ctx);
+            defaultValue = parseExpression(ctx);
+            if (!defaultValue) {
+                return NULL;
+            }
+        }
+
+        if (fieldCount + 1 > fieldCapacity) {
+            int newCap = fieldCapacity == 0 ? 4 : fieldCapacity * 2;
+            StructField* newFields = parser_arena_alloc(ctx, sizeof(StructField) * newCap);
+            if (fieldCapacity > 0) {
+                memcpy(newFields, fields, sizeof(StructField) * fieldCount);
+            }
+            fields = newFields;
+            fieldCapacity = newCap;
+        }
+
+        fields[fieldCount].name = fieldName;
+        fields[fieldCount].typeAnnotation = typeAnnotation;
+        fields[fieldCount].defaultValue = defaultValue;
+        fieldCount++;
+
+        if (peekToken(ctx).type == TOKEN_NEWLINE) {
+            nextToken(ctx);
+        }
+    }
+
+    ASTNode* node = new_node(ctx);
+    node->type = NODE_STRUCT_DECL;
+    node->structDecl.name = structName;
+    node->structDecl.isPublic = isPublic;
+    node->structDecl.fields = fields;
+    node->structDecl.fieldCount = fieldCount;
+    node->location.line = structTok.line;
+    node->location.column = structTok.column;
+    node->dataType = NULL;
+
+    return node;
+}
+
+static ASTNode* parseImplBlock(ParserContext* ctx, bool isPublic) {
+    Token implTok = nextToken(ctx);
+    if (implTok.type != TOKEN_IMPL) {
+        return NULL;
+    }
+
+    Token nameTok = nextToken(ctx);
+    if (nameTok.type != TOKEN_IDENTIFIER) {
+        return NULL;
+    }
+
+    int nameLen = nameTok.length;
+    char* structName = parser_arena_alloc(ctx, nameLen + 1);
+    strncpy(structName, nameTok.start, nameLen);
+    structName[nameLen] = '\0';
+
+    Token colonTok = nextToken(ctx);
+    if (colonTok.type != TOKEN_COLON) {
+        return NULL;
+    }
+
+    if (peekToken(ctx).type != TOKEN_NEWLINE) {
+        return NULL;
+    }
+    nextToken(ctx);
+
+    Token indentTok = nextToken(ctx);
+    if (indentTok.type != TOKEN_INDENT) {
+        return NULL;
+    }
+
+    ASTNode** methods = NULL;
+    int methodCount = 0;
+    int methodCapacity = 0;
+
+    while (true) {
+        Token lookahead = peekToken(ctx);
+        if (lookahead.type == TOKEN_DEDENT) {
+            nextToken(ctx);
+            break;
+        }
+        if (lookahead.type == TOKEN_NEWLINE) {
+            nextToken(ctx);
+            continue;
+        }
+
+        if (lookahead.type == TOKEN_PUB) {
+            nextToken(ctx);
+            lookahead = peekToken(ctx);
+        }
+
+        if (lookahead.type != TOKEN_FN) {
+            return NULL;
+        }
+
+        ASTNode* method = parseFunctionDefinition(ctx);
+        if (!method) {
+            return NULL;
+        }
+
+        addStatement(ctx, &methods, &methodCount, &methodCapacity, method);
+
+        if (peekToken(ctx).type == TOKEN_NEWLINE) {
+            nextToken(ctx);
+        }
+    }
+
+    ASTNode* node = new_node(ctx);
+    node->type = NODE_IMPL_BLOCK;
+    node->implBlock.structName = structName;
+    node->implBlock.isPublic = isPublic;
+    node->implBlock.methods = methods;
+    node->implBlock.methodCount = methodCount;
+    node->location.line = implTok.line;
+    node->location.column = implTok.column;
+    node->dataType = NULL;
+
+    return node;
 }
 
 // Parse return statement: return [expression]

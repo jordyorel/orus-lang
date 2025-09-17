@@ -183,6 +183,12 @@ pass—without introducing additional intermediate representations.
    types, synthesize method receivers as the first parameter, and support
    namespaced lookup during codegen.
 
+   - ✅ Parser, typed AST, and Hindley–Milner registration hook struct
+     declarations into the global type registry and attach impl methods to the
+     struct metadata.
+   - 🚧 Remaining: bytecode generation for method bodies and runtime dispatch,
+     plus value construction and field access semantics.
+
    ```orus
    impl Point:
        fn magnitude(self):

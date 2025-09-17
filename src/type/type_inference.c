@@ -24,6 +24,65 @@
 #include "errors/features/variable_errors.h"
 #include "debug/debug_config.h"
 
+// ---- Helpers for struct and impl bookkeeping ----
+static ObjString* create_compiler_string(const char* text) {
+    if (!text) {
+        return NULL;
+    }
+
+    size_t length = strlen(text);
+    ObjString* string = malloc(sizeof(ObjString));
+    if (!string) {
+        return NULL;
+    }
+
+    string->obj.type = OBJ_STRING;
+    string->obj.next = NULL;
+    string->obj.isMarked = false;
+    string->length = (int)length;
+    string->chars = copyString(text, (int)length);
+    if (!string->chars) {
+        free(string);
+        return NULL;
+    }
+    string->rope = NULL;
+    string->hash = 0;
+    return string;
+}
+
+static void free_compiler_string(ObjString* string) {
+    if (!string) {
+        return;
+    }
+    if (string->chars) {
+        free(string->chars);
+    }
+    free(string);
+}
+
+static void cleanup_field_info(FieldInfo* fields, int fieldCount) {
+    if (!fields) {
+        return;
+    }
+
+    for (int i = 0; i < fieldCount; i++) {
+        free_compiler_string(fields[i].name);
+    }
+    free(fields);
+}
+
+static void cleanup_new_methods(Method* methods, int start, int end) {
+    if (!methods) {
+        return;
+    }
+
+    for (int i = start; i < end; i++) {
+        free_compiler_string(methods[i].name);
+        methods[i].name = NULL;
+        methods[i].type = NULL;
+    }
+}
+
 // ---- Arena and utilities ----
 static TypeArena* type_arena = NULL;
 static void* type_arena_alloc(size_t size) {
@@ -1142,27 +1201,38 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             return getPrimitiveType(TYPE_VOID);
         }
         case NODE_TYPE: {
-            // Type annotation nodes - convert type name to actual Type*
-            if (node->typeAnnotation.name) {
-                if (strcmp(node->typeAnnotation.name, "i32") == 0) {
-                    return getPrimitiveType(TYPE_I32);
-                } else if (strcmp(node->typeAnnotation.name, "i64") == 0) {
-                    return getPrimitiveType(TYPE_I64);
-                } else if (strcmp(node->typeAnnotation.name, "u32") == 0) {
-                    return getPrimitiveType(TYPE_U32);
-                } else if (strcmp(node->typeAnnotation.name, "u64") == 0) {
-                    return getPrimitiveType(TYPE_U64);
-                } else if (strcmp(node->typeAnnotation.name, "f64") == 0) {
-                    return getPrimitiveType(TYPE_F64);
-                } else if (strcmp(node->typeAnnotation.name, "bool") == 0) {
-                    return getPrimitiveType(TYPE_BOOL);
-                } else if (strcmp(node->typeAnnotation.name, "string") == 0) {
-                    return getPrimitiveType(TYPE_STRING);
-                } else if (strcmp(node->typeAnnotation.name, "void") == 0) {
-                    return getPrimitiveType(TYPE_VOID);
-                }
+            if (!node->typeAnnotation.name) {
+                return getPrimitiveType(TYPE_UNKNOWN);
             }
-            return getPrimitiveType(TYPE_UNKNOWN);
+
+            const char* type_name = node->typeAnnotation.name;
+
+            if (strcmp(type_name, "i32") == 0) {
+                return getPrimitiveType(TYPE_I32);
+            } else if (strcmp(type_name, "i64") == 0) {
+                return getPrimitiveType(TYPE_I64);
+            } else if (strcmp(type_name, "u32") == 0) {
+                return getPrimitiveType(TYPE_U32);
+            } else if (strcmp(type_name, "u64") == 0) {
+                return getPrimitiveType(TYPE_U64);
+            } else if (strcmp(type_name, "f64") == 0) {
+                return getPrimitiveType(TYPE_F64);
+            } else if (strcmp(type_name, "bool") == 0) {
+                return getPrimitiveType(TYPE_BOOL);
+            } else if (strcmp(type_name, "string") == 0) {
+                return getPrimitiveType(TYPE_STRING);
+            } else if (strcmp(type_name, "void") == 0) {
+                return getPrimitiveType(TYPE_VOID);
+            }
+
+            Type* struct_type = findStructType(type_name);
+            if (struct_type) {
+                return struct_type;
+            }
+
+            report_undefined_type(node->location, type_name);
+            set_type_error();
+            return NULL;
         }
         case NODE_CAST: {
             // Cast expressions - validate that the cast is allowed
@@ -1279,6 +1349,144 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
         }
         case NODE_CONTINUE: {
             // Continue statements have void type
+            return getPrimitiveType(TYPE_VOID);
+        }
+        case NODE_STRUCT_DECL: {
+            Type* existing = findStructType(node->structDecl.name);
+            bool creating_new = (existing == NULL);
+            FieldInfo* fields = NULL;
+
+            if (creating_new && node->structDecl.fieldCount > 0) {
+                fields = calloc((size_t)node->structDecl.fieldCount, sizeof(FieldInfo));
+                if (!fields) {
+                    set_type_error();
+                    return NULL;
+                }
+            }
+
+            for (int i = 0; i < node->structDecl.fieldCount; i++) {
+                ASTNode* typeAnno = node->structDecl.fields[i].typeAnnotation;
+                ASTNode* defaultValue = node->structDecl.fields[i].defaultValue;
+                Type* field_type = NULL;
+
+                if (typeAnno) {
+                    field_type = algorithm_w(env, typeAnno);
+                    if (!field_type) {
+                        cleanup_field_info(fields, node->structDecl.fieldCount);
+                        return NULL;
+                    }
+                } else {
+                    field_type = getPrimitiveType(TYPE_UNKNOWN);
+                }
+
+                if (defaultValue) {
+                    Type* default_type = algorithm_w(env, defaultValue);
+                    if (!default_type) {
+                        cleanup_field_info(fields, node->structDecl.fieldCount);
+                        return NULL;
+                    }
+                    if (field_type && default_type && !unify(field_type, default_type)) {
+                        report_type_mismatch(defaultValue->location, getTypeName(field_type->kind),
+                                             getTypeName(default_type->kind));
+                        set_type_error();
+                        cleanup_field_info(fields, node->structDecl.fieldCount);
+                        return NULL;
+                    }
+                }
+
+                if (creating_new && fields) {
+                    fields[i].type = field_type;
+                    fields[i].name = create_compiler_string(node->structDecl.fields[i].name);
+                    if (!fields[i].name) {
+                        set_type_error();
+                        cleanup_field_info(fields, node->structDecl.fieldCount);
+                        return NULL;
+                    }
+                }
+            }
+
+            Type* struct_type = existing;
+            if (creating_new) {
+                ObjString* name = create_compiler_string(node->structDecl.name);
+                if (!name) {
+                    set_type_error();
+                    cleanup_field_info(fields, node->structDecl.fieldCount);
+                    return NULL;
+                }
+
+                struct_type = createStructType(name, fields, node->structDecl.fieldCount, NULL, 0);
+                if (!struct_type) {
+                    set_type_error();
+                    free_compiler_string(name);
+                    cleanup_field_info(fields, node->structDecl.fieldCount);
+                    return NULL;
+                }
+            }
+
+            if (struct_type) {
+                node->dataType = struct_type;
+            }
+
+            return getPrimitiveType(TYPE_VOID);
+        }
+        case NODE_IMPL_BLOCK: {
+            Type* struct_type = findStructType(node->implBlock.structName);
+            if (!struct_type) {
+                report_undefined_type(node->location, node->implBlock.structName);
+                set_type_error();
+                return NULL;
+            }
+
+            TypeExtension* ext = get_type_extension(struct_type);
+            if (!ext) {
+                ext = calloc(1, sizeof(TypeExtension));
+                if (!ext) {
+                    set_type_error();
+                    return NULL;
+                }
+                ext->extended.structure.name = create_compiler_string(node->implBlock.structName);
+                if (!ext->extended.structure.name) {
+                    free(ext);
+                    set_type_error();
+                    return NULL;
+                }
+                set_type_extension(struct_type, ext);
+            }
+
+            int existing_methods = ext->extended.structure.methodCount;
+            if (node->implBlock.methodCount > 0) {
+                Method* resized = realloc(ext->extended.structure.methods,
+                                          sizeof(Method) * (existing_methods + node->implBlock.methodCount));
+                if (!resized) {
+                    set_type_error();
+                    return NULL;
+                }
+                ext->extended.structure.methods = resized;
+
+                for (int i = 0; i < node->implBlock.methodCount; i++) {
+                    Type* method_type = algorithm_w(env, node->implBlock.methods[i]);
+                    if (!method_type) {
+                        cleanup_new_methods(resized, existing_methods, existing_methods + i);
+                        ext->extended.structure.methodCount = existing_methods;
+                        return NULL;
+                    }
+
+                    ObjString* method_name = create_compiler_string(node->implBlock.methods[i]->function.name);
+                    if (!method_name) {
+                        cleanup_new_methods(resized, existing_methods, existing_methods + i);
+                        ext->extended.structure.methodCount = existing_methods;
+                        set_type_error();
+                        return NULL;
+                    }
+
+                    resized[existing_methods + i].name = method_name;
+                    resized[existing_methods + i].type = method_type;
+                }
+
+                ext->extended.structure.methodCount = existing_methods + node->implBlock.methodCount;
+            }
+
+            node->dataType = struct_type;
             return getPrimitiveType(TYPE_VOID);
         }
         case NODE_FOR_RANGE: {
@@ -1543,6 +1751,25 @@ void populate_ast_types(ASTNode* node, TypeEnv* env) {
                 }
                 
                 populate_ast_types(node->forIter.body, loop_env);
+            }
+            break;
+        case NODE_STRUCT_DECL:
+            if (node->structDecl.fieldCount > 0 && node->structDecl.fields) {
+                for (int i = 0; i < node->structDecl.fieldCount; i++) {
+                    if (node->structDecl.fields[i].typeAnnotation) {
+                        populate_ast_types(node->structDecl.fields[i].typeAnnotation, env);
+                    }
+                    if (node->structDecl.fields[i].defaultValue) {
+                        populate_ast_types(node->structDecl.fields[i].defaultValue, env);
+                    }
+                }
+            }
+            break;
+        case NODE_IMPL_BLOCK:
+            if (node->implBlock.methodCount > 0 && node->implBlock.methods) {
+                for (int i = 0; i < node->implBlock.methodCount; i++) {
+                    populate_ast_types(node->implBlock.methods[i], env);
+                }
             }
             break;
         default:
@@ -1872,6 +2099,75 @@ static TypedASTNode* generate_typed_ast_recursive(ASTNode* ast, TypeEnv* type_en
             }
             if (ast->forIter.label) {
                 typed->typed.forIter.label = orus_strdup(ast->forIter.label);
+            }
+            break;
+        case NODE_STRUCT_DECL:
+            typed->typed.structDecl.name = ast->structDecl.name;
+            typed->typed.structDecl.isPublic = ast->structDecl.isPublic;
+            typed->typed.structDecl.fieldCount = ast->structDecl.fieldCount;
+            if (ast->structDecl.fieldCount > 0 && ast->structDecl.fields) {
+                typed->typed.structDecl.fields = malloc(sizeof(TypedStructField) * ast->structDecl.fieldCount);
+                if (!typed->typed.structDecl.fields) {
+                    free_typed_ast_node(typed);
+                    return NULL;
+                }
+                for (int i = 0; i < ast->structDecl.fieldCount; i++) {
+                    typed->typed.structDecl.fields[i].name = ast->structDecl.fields[i].name;
+                    typed->typed.structDecl.fields[i].typeAnnotation = NULL;
+                    typed->typed.structDecl.fields[i].defaultValue = NULL;
+                    if (ast->structDecl.fields[i].typeAnnotation) {
+                        typed->typed.structDecl.fields[i].typeAnnotation =
+                            generate_typed_ast_recursive(ast->structDecl.fields[i].typeAnnotation, type_env);
+                        if (!typed->typed.structDecl.fields[i].typeAnnotation) {
+                            for (int j = 0; j < i; j++) {
+                                free_typed_ast_node(typed->typed.structDecl.fields[j].typeAnnotation);
+                                free_typed_ast_node(typed->typed.structDecl.fields[j].defaultValue);
+                            }
+                            free(typed->typed.structDecl.fields);
+                            free_typed_ast_node(typed);
+                            return NULL;
+                        }
+                    }
+                    if (ast->structDecl.fields[i].defaultValue) {
+                        typed->typed.structDecl.fields[i].defaultValue =
+                            generate_typed_ast_recursive(ast->structDecl.fields[i].defaultValue, type_env);
+                        if (!typed->typed.structDecl.fields[i].defaultValue) {
+                            for (int j = 0; j <= i; j++) {
+                                free_typed_ast_node(typed->typed.structDecl.fields[j].typeAnnotation);
+                                if (j < i) {
+                                    free_typed_ast_node(typed->typed.structDecl.fields[j].defaultValue);
+                                }
+                            }
+                            free(typed->typed.structDecl.fields);
+                            free_typed_ast_node(typed);
+                            return NULL;
+                        }
+                    }
+                }
+            }
+            break;
+        case NODE_IMPL_BLOCK:
+            typed->typed.implBlock.structName = ast->implBlock.structName;
+            typed->typed.implBlock.isPublic = ast->implBlock.isPublic;
+            typed->typed.implBlock.methodCount = ast->implBlock.methodCount;
+            if (ast->implBlock.methodCount > 0 && ast->implBlock.methods) {
+                typed->typed.implBlock.methods = malloc(sizeof(TypedASTNode*) * ast->implBlock.methodCount);
+                if (!typed->typed.implBlock.methods) {
+                    free_typed_ast_node(typed);
+                    return NULL;
+                }
+                for (int i = 0; i < ast->implBlock.methodCount; i++) {
+                    typed->typed.implBlock.methods[i] =
+                        generate_typed_ast_recursive(ast->implBlock.methods[i], type_env);
+                    if (!typed->typed.implBlock.methods[i]) {
+                        for (int j = 0; j < i; j++) {
+                            free_typed_ast_node(typed->typed.implBlock.methods[j]);
+                        }
+                        free(typed->typed.implBlock.methods);
+                        free_typed_ast_node(typed);
+                        return NULL;
+                    }
+                }
             }
             break;
 

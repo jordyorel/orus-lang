@@ -1,0 +1,3 @@
+// Expect type mismatch when struct default value disagrees with annotation
+struct Broken:
+    value: i32 = "oops"
