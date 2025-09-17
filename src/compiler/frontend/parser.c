@@ -180,6 +180,7 @@ static ASTNode* parsePrintStatement(ParserContext* ctx);
 static ASTNode* parseExpression(ParserContext* ctx);
 static ASTNode* parseBinaryExpression(ParserContext* ctx, int minPrec);
 static ASTNode* parsePrimaryExpression(ParserContext* ctx);
+static ASTNode* parseArrayLiteral(ParserContext* ctx, Token leftToken);
 
 // Control flow parsing functions
 static ASTNode* parseIfStatement(ParserContext* ctx);
@@ -1630,11 +1631,63 @@ static ASTNode* parsePrimaryExpression(ParserContext* ctx) {
             return parseTimeStampExpression(ctx, token);
         case TOKEN_LEFT_PAREN:
             return parseParenthesizedExpressionToken(ctx, token);
+        case TOKEN_LEFT_BRACKET:
+            return parseArrayLiteral(ctx, token);
         case TOKEN_FN:
             return parseFunctionExpression(ctx, token);
         default:
             return NULL;
     }
+}
+
+static ASTNode* parseArrayLiteral(ParserContext* ctx, Token leftToken) {
+    ASTNode** elements = NULL;
+    int count = 0;
+    int capacity = 0;
+
+    while (peekToken(ctx).type == TOKEN_NEWLINE) {
+        nextToken(ctx);
+    }
+
+    if (peekToken(ctx).type != TOKEN_RIGHT_BRACKET) {
+        while (true) {
+            ASTNode* element = parseExpression(ctx);
+            if (!element) {
+                return NULL;
+            }
+            addStatement(ctx, &elements, &count, &capacity, element);
+
+            Token next = peekToken(ctx);
+            if (next.type != TOKEN_COMMA) {
+                break;
+            }
+
+            nextToken(ctx); // consume comma
+
+            while (peekToken(ctx).type == TOKEN_NEWLINE) {
+                nextToken(ctx);
+            }
+
+            // Allow trailing comma before closing bracket
+            if (peekToken(ctx).type == TOKEN_RIGHT_BRACKET) {
+                break;
+            }
+        }
+    }
+
+    Token close = nextToken(ctx);
+    if (close.type != TOKEN_RIGHT_BRACKET) {
+        return NULL;
+    }
+
+    ASTNode* node = new_node(ctx);
+    node->type = NODE_ARRAY_LITERAL;
+    node->arrayLiteral.elements = elements;
+    node->arrayLiteral.count = count;
+    node->location.line = leftToken.line;
+    node->location.column = leftToken.column;
+    node->dataType = NULL;
+    return node;
 }
 
 static ASTNode* parseFunctionExpression(ParserContext* ctx, Token fnToken) {

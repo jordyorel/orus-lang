@@ -94,6 +94,10 @@ struct TypedASTNode {
             int argCount;
         } call;
         struct {
+            TypedASTNode** elements;
+            int count;
+        } arrayLiteral;
+        struct {
             TypedASTNode* value;
         } returnStmt;
         struct {

@@ -47,6 +47,10 @@ static inline ScopeFrame* get_scope_frame_by_index(CompilerContext* ctx, int ind
 static int compile_assignment_internal(CompilerContext* ctx, TypedASTNode* assign,
                                        bool as_expression);
 
+static int compile_builtin_array_push(CompilerContext* ctx, TypedASTNode* call);
+static int compile_builtin_array_pop(CompilerContext* ctx, TypedASTNode* call);
+static int compile_builtin_array_len(CompilerContext* ctx, TypedASTNode* call);
+
 static void record_control_flow_error(CompilerContext* ctx,
                                       ErrorCode code,
                                       SrcLocation location,
@@ -732,6 +736,182 @@ void emit_move(CompilerContext* ctx, int dst, int src) {
     DEBUG_CODEGEN_PRINT("Emitted OP_MOVE R%d, R%d (3 bytes)\n", dst, src);
 }
 
+static TypedASTNode* get_call_argument_node(TypedASTNode* call, int index,
+                                            bool* should_free) {
+    if (should_free) {
+        *should_free = false;
+    }
+    if (!call || !call->original) {
+        return NULL;
+    }
+
+    if (call->typed.call.args && index < call->typed.call.argCount) {
+        return call->typed.call.args[index];
+    }
+
+    if (call->original->call.args && index < call->original->call.argCount) {
+        if (should_free) {
+            *should_free = true;
+        }
+        return create_typed_ast_node(call->original->call.args[index]);
+    }
+
+    return NULL;
+}
+
+static int compile_builtin_array_push(CompilerContext* ctx, TypedASTNode* call) {
+    if (!ctx || !call || !call->original) {
+        return -1;
+    }
+
+    if (call->original->call.argCount != 2) {
+        DEBUG_CODEGEN_PRINT("Error: push() expects 2 arguments, got %d\n",
+                            call->original->call.argCount);
+        ctx->has_compilation_errors = true;
+        return -1;
+    }
+
+    bool free_array = false;
+    bool free_value = false;
+    TypedASTNode* array_arg = get_call_argument_node(call, 0, &free_array);
+    TypedASTNode* value_arg = get_call_argument_node(call, 1, &free_value);
+    if (!array_arg || !value_arg) {
+        if (free_array && array_arg) free_typed_ast_node(array_arg);
+        if (free_value && value_arg) free_typed_ast_node(value_arg);
+        return -1;
+    }
+
+    int array_reg = compile_expression(ctx, array_arg);
+    if (array_reg == -1) {
+        if (free_array) free_typed_ast_node(array_arg);
+        if (free_value) free_typed_ast_node(value_arg);
+        return -1;
+    }
+
+    int value_reg = compile_expression(ctx, value_arg);
+    if (value_reg == -1) {
+        if (array_reg >= MP_TEMP_REG_START && array_reg <= MP_TEMP_REG_END) {
+            mp_free_temp_register(ctx->allocator, array_reg);
+        }
+        if (free_array) free_typed_ast_node(array_arg);
+        if (free_value) free_typed_ast_node(value_arg);
+        return -1;
+    }
+
+    set_location_from_node(ctx, call);
+    emit_byte_to_buffer(ctx->bytecode, OP_ARRAY_PUSH_R);
+    emit_byte_to_buffer(ctx->bytecode, array_reg);
+    emit_byte_to_buffer(ctx->bytecode, value_reg);
+
+    if (value_reg != array_reg &&
+        value_reg >= MP_TEMP_REG_START && value_reg <= MP_TEMP_REG_END) {
+        mp_free_temp_register(ctx->allocator, value_reg);
+    }
+
+    if (free_array) free_typed_ast_node(array_arg);
+    if (free_value) free_typed_ast_node(value_arg);
+
+    return array_reg;
+}
+
+static int compile_builtin_array_pop(CompilerContext* ctx, TypedASTNode* call) {
+    if (!ctx || !call || !call->original) {
+        return -1;
+    }
+
+    if (call->original->call.argCount != 1) {
+        DEBUG_CODEGEN_PRINT("Error: pop() expects 1 argument, got %d\n",
+                            call->original->call.argCount);
+        ctx->has_compilation_errors = true;
+        return -1;
+    }
+
+    bool free_array = false;
+    TypedASTNode* array_arg = get_call_argument_node(call, 0, &free_array);
+    if (!array_arg) {
+        if (free_array) free_typed_ast_node(array_arg);
+        return -1;
+    }
+
+    int array_reg = compile_expression(ctx, array_arg);
+    if (array_reg == -1) {
+        if (free_array) free_typed_ast_node(array_arg);
+        return -1;
+    }
+
+    int result_reg = mp_allocate_temp_register(ctx->allocator);
+    if (result_reg == -1) {
+        DEBUG_CODEGEN_PRINT("Error: Failed to allocate result register for pop() builtin\n");
+        if (array_reg >= MP_TEMP_REG_START && array_reg <= MP_TEMP_REG_END) {
+            mp_free_temp_register(ctx->allocator, array_reg);
+        }
+        if (free_array) free_typed_ast_node(array_arg);
+        return -1;
+    }
+
+    set_location_from_node(ctx, call);
+    emit_byte_to_buffer(ctx->bytecode, OP_ARRAY_POP_R);
+    emit_byte_to_buffer(ctx->bytecode, result_reg);
+    emit_byte_to_buffer(ctx->bytecode, array_reg);
+
+    if (array_reg >= MP_TEMP_REG_START && array_reg <= MP_TEMP_REG_END) {
+        mp_free_temp_register(ctx->allocator, array_reg);
+    }
+
+    if (free_array) free_typed_ast_node(array_arg);
+
+    return result_reg;
+}
+
+static int compile_builtin_array_len(CompilerContext* ctx, TypedASTNode* call) {
+    if (!ctx || !call || !call->original) {
+        return -1;
+    }
+
+    if (call->original->call.argCount != 1) {
+        DEBUG_CODEGEN_PRINT("Error: len() expects 1 argument, got %d\n",
+                            call->original->call.argCount);
+        ctx->has_compilation_errors = true;
+        return -1;
+    }
+
+    bool free_array = false;
+    TypedASTNode* array_arg = get_call_argument_node(call, 0, &free_array);
+    if (!array_arg) {
+        if (free_array) free_typed_ast_node(array_arg);
+        return -1;
+    }
+
+    int array_reg = compile_expression(ctx, array_arg);
+    if (array_reg == -1) {
+        if (free_array) free_typed_ast_node(array_arg);
+        return -1;
+    }
+
+    int result_reg = mp_allocate_temp_register(ctx->allocator);
+    if (result_reg == -1) {
+        DEBUG_CODEGEN_PRINT("Error: Failed to allocate result register for len() builtin\n");
+        if (array_reg >= MP_TEMP_REG_START && array_reg <= MP_TEMP_REG_END) {
+            mp_free_temp_register(ctx->allocator, array_reg);
+        }
+        if (free_array) free_typed_ast_node(array_arg);
+        return -1;
+    }
+
+    set_location_from_node(ctx, call);
+    emit_byte_to_buffer(ctx->bytecode, OP_ARRAY_LEN_R);
+    emit_byte_to_buffer(ctx->bytecode, result_reg);
+    emit_byte_to_buffer(ctx->bytecode, array_reg);
+
+    if (array_reg >= MP_TEMP_REG_START && array_reg <= MP_TEMP_REG_END) {
+        mp_free_temp_register(ctx->allocator, array_reg);
+    }
+
+    if (free_array) free_typed_ast_node(array_arg);
+
+    return result_reg;
+}
+
 static bool evaluate_constant_i32(TypedASTNode* node, int32_t* out_value) {
     if (!node || !out_value || !node->original) {
         return false;
@@ -798,7 +978,115 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             compile_literal(ctx, expr, reg);
             return reg;
         }
-        
+
+        case NODE_ARRAY_LITERAL: {
+            int element_count = expr->original->arrayLiteral.count;
+            int result_reg = mp_allocate_temp_register(ctx->allocator);
+            if (result_reg == -1) {
+                DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for array literal result\n");
+                return -1;
+            }
+
+            if (element_count == 0) {
+                set_location_from_node(ctx, expr);
+                emit_byte_to_buffer(ctx->bytecode, OP_MAKE_ARRAY_R);
+                emit_byte_to_buffer(ctx->bytecode, result_reg);
+                emit_byte_to_buffer(ctx->bytecode, 0);
+                emit_byte_to_buffer(ctx->bytecode, 0);
+                return result_reg;
+            }
+
+            int* element_regs = malloc(sizeof(int) * element_count);
+            if (!element_regs) {
+                mp_free_temp_register(ctx->allocator, result_reg);
+                DEBUG_CODEGEN_PRINT("Error: Failed to allocate element register list for array literal\n");
+                return -1;
+            }
+
+            bool allocation_failed = false;
+            for (int i = 0; i < element_count; i++) {
+                element_regs[i] = mp_allocate_temp_register(ctx->allocator);
+                if (element_regs[i] == -1) {
+                    allocation_failed = true;
+                    break;
+                }
+            }
+
+            if (allocation_failed) {
+                for (int i = 0; i < element_count; i++) {
+                    if (element_regs[i] >= MP_TEMP_REG_START && element_regs[i] <= MP_TEMP_REG_END) {
+                        mp_free_temp_register(ctx->allocator, element_regs[i]);
+                    }
+                }
+                free(element_regs);
+                mp_free_temp_register(ctx->allocator, result_reg);
+                DEBUG_CODEGEN_PRINT("Error: Failed to allocate temp registers for array elements\n");
+                return -1;
+            }
+
+            bool success = true;
+            for (int i = 0; i < element_count; i++) {
+                TypedASTNode* element_node = NULL;
+                if (expr->typed.arrayLiteral.elements && i < expr->typed.arrayLiteral.count) {
+                    element_node = expr->typed.arrayLiteral.elements[i];
+                }
+
+                if (!element_node && expr->original->arrayLiteral.elements &&
+                    i < expr->original->arrayLiteral.count) {
+                    element_node = create_typed_ast_node(expr->original->arrayLiteral.elements[i]);
+                }
+
+                if (!element_node) {
+                    success = false;
+                    break;
+                }
+
+                int value_reg = compile_expression(ctx, element_node);
+                if (expr->typed.arrayLiteral.elements == NULL && element_node) {
+                    free_typed_ast_node(element_node);
+                }
+
+                if (value_reg == -1) {
+                    success = false;
+                    break;
+                }
+
+                if (value_reg != element_regs[i]) {
+                    emit_move(ctx, element_regs[i], value_reg);
+                    if (value_reg >= MP_TEMP_REG_START && value_reg <= MP_TEMP_REG_END) {
+                        mp_free_temp_register(ctx->allocator, value_reg);
+                    }
+                }
+            }
+
+            if (!success) {
+                for (int i = 0; i < element_count; i++) {
+                    if (element_regs[i] >= MP_TEMP_REG_START && element_regs[i] <= MP_TEMP_REG_END) {
+                        mp_free_temp_register(ctx->allocator, element_regs[i]);
+                    }
+                }
+                free(element_regs);
+                mp_free_temp_register(ctx->allocator, result_reg);
+                DEBUG_CODEGEN_PRINT("Error: Failed to compile array literal element\n");
+                return -1;
+            }
+
+            set_location_from_node(ctx, expr);
+            emit_byte_to_buffer(ctx->bytecode, OP_MAKE_ARRAY_R);
+            emit_byte_to_buffer(ctx->bytecode, result_reg);
+            emit_byte_to_buffer(ctx->bytecode, element_regs[0]);
+            emit_byte_to_buffer(ctx->bytecode, element_count);
+
+            for (int i = 0; i < element_count; i++) {
+                if (element_regs[i] >= MP_TEMP_REG_START && element_regs[i] <= MP_TEMP_REG_END) {
+                    mp_free_temp_register(ctx->allocator, element_regs[i]);
+                }
+            }
+
+            free(element_regs);
+            return result_reg;
+        }
+
         case NODE_BINARY: {
             DEBUG_CODEGEN_PRINT("NODE_BINARY: About to check binary expression");
             DEBUG_CODEGEN_PRINT("NODE_BINARY: expr=%p\n", (void*)expr);
@@ -1289,6 +1577,25 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
 
         case NODE_CALL: {
             DEBUG_CODEGEN_PRINT("NODE_CALL: Compiling function call");
+
+            const char* builtin_name = NULL;
+            if (expr->typed.call.callee && expr->typed.call.callee->original &&
+                expr->typed.call.callee->original->type == NODE_IDENTIFIER) {
+                builtin_name = expr->typed.call.callee->original->identifier.name;
+            } else if (expr->original->call.callee &&
+                       expr->original->call.callee->type == NODE_IDENTIFIER) {
+                builtin_name = expr->original->call.callee->identifier.name;
+            }
+
+            if (builtin_name) {
+                if (strcmp(builtin_name, "push") == 0) {
+                    return compile_builtin_array_push(ctx, expr);
+                } else if (strcmp(builtin_name, "pop") == 0) {
+                    return compile_builtin_array_pop(ctx, expr);
+                } else if (strcmp(builtin_name, "len") == 0) {
+                    return compile_builtin_array_len(ctx, expr);
+                }
+            }
 
             int arg_count = expr->original->call.argCount;
 
