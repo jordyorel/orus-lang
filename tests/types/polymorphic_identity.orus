@@ -1,0 +1,14 @@
+// Validate Hindley-Milner generalization by reusing the same function at
+// multiple concrete types. The test passes when the compiler accepts all calls
+// and the runtime produces the expected output values.
+
+fn identity(value):
+    return value
+
+i32_value = identity(123)
+bool_value = identity(true)
+string_value = identity("orus")
+
+print("identity(123) =", i32_value)
+print("identity(true) =", bool_value)
+print("identity(\"orus\") =", string_value)

@@ -259,6 +259,140 @@ typedef struct TypeScheme {
     Type* type;
 } TypeScheme;
 
+typedef struct {
+    int count;
+    int capacity;
+    int* values;
+} IntSet;
+
+static IntSet* int_set_create(void) {
+    IntSet* set = type_arena_alloc(sizeof(IntSet));
+    if (!set) return NULL;
+    set->count = 0;
+    set->capacity = 8;
+    set->values = type_arena_alloc(sizeof(int) * set->capacity);
+    if (!set->values) {
+        set->capacity = 0;
+    }
+    return set;
+}
+
+static bool int_set_contains(const IntSet* set, int value) {
+    if (!set || !set->values) return false;
+    for (int i = 0; i < set->count; i++) {
+        if (set->values[i] == value) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void int_set_add(IntSet* set, int value) {
+    if (!set) return;
+    if (int_set_contains(set, value)) return;
+
+    if (set->count >= set->capacity) {
+        int new_capacity = set->capacity > 0 ? set->capacity * 2 : 4;
+        int* new_values = type_arena_alloc(sizeof(int) * new_capacity);
+        if (!new_values) return;
+        if (set->values && set->count > 0) {
+            memcpy(new_values, set->values, sizeof(int) * set->count);
+        }
+        set->values = new_values;
+        set->capacity = new_capacity;
+    }
+
+    if (set->values) {
+        set->values[set->count++] = value;
+    }
+}
+
+static bool is_var_bound(char** bound_vars, int bound_count, int var_id) {
+    if (!bound_vars || bound_count <= 0) return false;
+    for (int i = 0; i < bound_count; i++) {
+        if (!bound_vars[i]) continue;
+        if (atoi(bound_vars[i]) == var_id) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void collect_free_type_vars_internal(Type* type, IntSet* set,
+                                            char** bound_vars, int bound_count) {
+    if (!type || !set) return;
+
+    type = prune(type);
+    if (!type) return;
+
+    switch (type->kind) {
+        case TYPE_VAR: {
+            TypeVar* var = find_var((TypeVar*)type->info.var.var);
+            if (!var) return;
+            if (var->instance) {
+                collect_free_type_vars_internal(var->instance, set, bound_vars,
+                                                bound_count);
+            } else if (!is_var_bound(bound_vars, bound_count, var->id)) {
+                int_set_add(set, var->id);
+            }
+            break;
+        }
+        case TYPE_FUNCTION: {
+            if (type->info.function.paramTypes) {
+                for (int i = 0; i < type->info.function.arity; i++) {
+                    collect_free_type_vars_internal(type->info.function.paramTypes[i],
+                                                    set, bound_vars, bound_count);
+                }
+            }
+            collect_free_type_vars_internal(type->info.function.returnType, set,
+                                            bound_vars, bound_count);
+            break;
+        }
+        case TYPE_ARRAY:
+            collect_free_type_vars_internal(type->info.array.elementType, set,
+                                            bound_vars, bound_count);
+            break;
+        case TYPE_INSTANCE: {
+            collect_free_type_vars_internal(type->info.instance.base, set,
+                                            bound_vars, bound_count);
+            if (type->info.instance.args) {
+                for (int i = 0; i < type->info.instance.argCount; i++) {
+                    collect_free_type_vars_internal(type->info.instance.args[i], set,
+                                                    bound_vars, bound_count);
+                }
+            }
+            break;
+        }
+        case TYPE_GENERIC: {
+            if (type->info.generic.params) {
+                for (int i = 0; i < type->info.generic.paramCount; i++) {
+                    collect_free_type_vars_internal(type->info.generic.params[i], set,
+                                                    bound_vars, bound_count);
+                }
+            }
+            break;
+        }
+        default:
+            break;
+    }
+}
+
+static void collect_free_type_vars_env(TypeEnv* env, IntSet* set) {
+    if (!env || !set) return;
+
+    for (TypeEnv* current = env; current; current = current->parent) {
+        TypeEnvEntry* entry = current->entries;
+        while (entry) {
+            if (entry->scheme && entry->scheme->type) {
+                collect_free_type_vars_internal(entry->scheme->type, set,
+                                                entry->scheme->bound_vars,
+                                                entry->scheme->bound_count);
+            }
+            entry = entry->next;
+        }
+    }
+}
+
 static TypeScheme* type_scheme_new(Type* type, char** bound_vars,
                                    int bound_count) {
     TypeScheme* scheme = type_arena_alloc(sizeof(TypeScheme));
@@ -287,11 +421,82 @@ static TypeScheme* type_scheme_new(Type* type, char** bound_vars,
 static TypeScheme* generalize(TypeEnv* env, Type* type) {
     if (!type) return NULL;
 
-    // Simplified generalization - for now just wrap type without bound
-    // variables
-    (void)env;  // TODO: Implement proper environment variable collection
+    IntSet* free_in_type = int_set_create();
+    if (free_in_type) {
+        collect_free_type_vars_internal(type, free_in_type, NULL, 0);
+    }
 
-    return type_scheme_new(type, NULL, 0);
+    IntSet* free_in_env = int_set_create();
+    if (free_in_env) {
+        collect_free_type_vars_env(env, free_in_env);
+    }
+
+    int quantifiable = 0;
+    if (free_in_type && free_in_type->values) {
+        for (int i = 0; i < free_in_type->count; i++) {
+            int var_id = free_in_type->values[i];
+            if (!int_set_contains(free_in_env, var_id)) {
+                quantifiable++;
+            }
+        }
+    }
+
+    if (quantifiable == 0) {
+        return type_scheme_new(type, NULL, 0);
+    }
+
+    char** bound_names = type_arena_alloc(sizeof(char*) * quantifiable);
+    if (!bound_names) {
+        return type_scheme_new(type, NULL, 0);
+    }
+
+    int actual_bound = 0;
+    if (free_in_type && free_in_type->values) {
+        for (int i = 0; i < free_in_type->count; i++) {
+            int var_id = free_in_type->values[i];
+            if (int_set_contains(free_in_env, var_id)) {
+                continue;
+            }
+
+            char buffer[32];
+            snprintf(buffer, sizeof(buffer), "%d", var_id);
+            char* name = type_arena_alloc(strlen(buffer) + 1);
+            if (!name) {
+                continue;
+            }
+            strcpy(name, buffer);
+            bound_names[actual_bound++] = name;
+        }
+    }
+
+    if (actual_bound == 0) {
+        return type_scheme_new(type, NULL, 0);
+    }
+
+    return type_scheme_new(type, bound_names, actual_bound);
+}
+
+static Type* instantiate_type_scheme(TypeScheme* scheme) {
+    if (!scheme) return NULL;
+    if (scheme->bound_count <= 0) {
+        return scheme->type;
+    }
+
+    HashMap* mapping = hashmap_new();
+    if (!mapping) {
+        return scheme->type;
+    }
+
+    for (int i = 0; i < scheme->bound_count; i++) {
+        if (!scheme->bound_vars || !scheme->bound_vars[i]) continue;
+        Type* fresh = make_var_type(NULL);
+        if (!fresh) continue;
+        hashmap_set(mapping, scheme->bound_vars[i], fresh);
+    }
+
+    Type* instantiated = fresh_type(scheme->type, mapping);
+    hashmap_free(mapping);
+    return instantiated ? instantiated : scheme->type;
 }
 
 
@@ -413,9 +618,10 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             DEBUG_TYPE_INFERENCE_PRINT("Looking up identifier '%s'", node->identifier.name);
             TypeScheme* scheme = type_env_lookup(env, node->identifier.name);
             if (scheme) {
-                DEBUG_TYPE_INFERENCE_PRINT("Found scheme for '%s', type kind: %d", 
-                       node->identifier.name, (int)scheme->type->kind);
-                return scheme->type;
+                Type* instantiated = instantiate_type_scheme(scheme);
+                DEBUG_TYPE_INFERENCE_PRINT("Found scheme for '%s', type kind: %d",
+                       node->identifier.name, (int)(instantiated ? instantiated->kind : scheme->type->kind));
+                return instantiated ? instantiated : scheme->type;
             }
             DEBUG_TYPE_INFERENCE_PRINT("Identifier '%s' not found in type environment", node->identifier.name);
             report_undefined_variable(node->location, node->identifier.name);
@@ -650,32 +856,29 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             if (node->call.callee->type == NODE_IDENTIFIER) {
                 // Look up the function in the environment
                 TypeScheme* scheme = type_env_lookup(env, node->call.callee->identifier.name);
-                if (scheme && scheme->type && scheme->type->kind == TYPE_FUNCTION) {
-                    // Type-check arguments against function parameter types
-                    Type* func_type = scheme->type;
-                    
-                    // Verify argument count matches parameter count
-                    if (node->call.argCount == func_type->info.function.arity) {
-                        // Type-check each argument and verify it matches the parameter type
-                        for (int i = 0; i < node->call.argCount; i++) {
-                            Type* arg_type = algorithm_w(env, node->call.args[i]);
-                            Type* param_type = func_type->info.function.paramTypes[i];
-                            
-                            // Verify arg_type matches param_type
-                            if (arg_type && param_type && !unify(arg_type, param_type)) {
-                                report_type_mismatch(node->location, "function parameter", "argument type");
-                                set_type_error();
-                                return NULL;
+                if (scheme && scheme->type) {
+                    Type* func_type = instantiate_type_scheme(scheme);
+                    if (func_type && func_type->kind == TYPE_FUNCTION) {
+                        // Type-check arguments against function parameter types
+                        if (node->call.argCount == func_type->info.function.arity) {
+                            for (int i = 0; i < node->call.argCount; i++) {
+                                Type* arg_type = algorithm_w(env, node->call.args[i]);
+                                Type* param_type = func_type->info.function.paramTypes[i];
+
+                                if (arg_type && param_type && !unify(arg_type, param_type)) {
+                                    report_type_mismatch(node->location, "function parameter", "argument type");
+                                    set_type_error();
+                                    return NULL;
+                                }
                             }
+                        } else {
+                            report_type_mismatch(node->location, "function signature", "argument count");
+                            set_type_error();
+                            return NULL;
                         }
-                    } else {
-                        report_type_mismatch(node->location, "function signature", "argument count");
-                        set_type_error();
-                        return NULL;
+
+                        return func_type->info.function.returnType;
                     }
-                    
-                    // Return the function's return type
-                    return func_type->info.function.returnType;
                 }
             }
             

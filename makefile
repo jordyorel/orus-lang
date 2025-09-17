@@ -114,8 +114,10 @@ ORUS = orus$(SUFFIX)
 UNIT_TEST_RUNNER = test_runner$(SUFFIX)
 BYTECODE_TEST_BIN = $(BUILDDIR)/tests/test_jump_patch
 SOURCE_MAP_TEST_BIN = $(BUILDDIR)/tests/test_source_mapping
+SCOPE_TRACKING_TEST_BIN = $(BUILDDIR)/tests/test_scope_tracking
+PEEPHOLE_TEST_BIN = $(BUILDDIR)/tests/test_constant_propagation
 
-.PHONY: all clean test unit-test test-control-flow benchmark help debug release profiling analyze install bytecode-jump-tests source-map-tests
+.PHONY: all clean test unit-test test-control-flow benchmark help debug release profiling analyze install bytecode-jump-tests source-map-tests scope-tracking-tests peephole-tests cli-smoke-tests
 
 all: build-info $(ORUS)
 
@@ -215,6 +217,15 @@ test: $(ORUS)
 	@echo ""
 	@echo "\033[36m=== Source Mapping Tests ===\033[0m"
 	@$(MAKE) source-map-tests
+	@echo ""
+	@echo "\033[36m=== Scope Tracking Tests ===\033[0m"
+	@$(MAKE) scope-tracking-tests
+	@echo ""
+	@echo "\033[36m=== Peephole Constant Propagation Tests ===\033[0m"
+	@$(MAKE) peephole-tests
+	@echo ""
+	@echo "\033[36m=== CLI Smoke Tests ===\033[0m"
+	@python3 tests/comprehensive/run_cli_smoke_tests.py ./$(ORUS)
 
 # Run unit tests
 unit-test: $(UNIT_TEST_RUNNER)
@@ -239,6 +250,27 @@ $(SOURCE_MAP_TEST_BIN): tests/unit/test_source_mapping.c $(COMPILER_OBJS) $(VM_O
 source-map-tests: $(SOURCE_MAP_TEST_BIN)
 	@echo "Running source mapping tests..."
 	@./$(SOURCE_MAP_TEST_BIN)
+
+$(SCOPE_TRACKING_TEST_BIN): tests/unit/test_scope_stack.c $(COMPILER_OBJS) $(VM_OBJS)
+	@mkdir -p $(dir $@)
+	@echo "Compiling scope tracking tests..."
+	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+
+scope-tracking-tests: $(SCOPE_TRACKING_TEST_BIN)
+	@echo "Running scope tracking tests..."
+	@./$(SCOPE_TRACKING_TEST_BIN)
+
+$(PEEPHOLE_TEST_BIN): tests/unit/test_constant_propagation.c $(COMPILER_OBJS) $(VM_OBJS)
+	@mkdir -p $(dir $@)
+	@echo "Compiling constant propagation tests..."
+	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+
+peephole-tests: $(PEEPHOLE_TEST_BIN)
+	@echo "Running constant propagation tests..."
+	@./$(PEEPHOLE_TEST_BIN)
+
+cli-smoke-tests:
+	@python3 tests/comprehensive/run_cli_smoke_tests.py ./$(ORUS)
 
 test-control-flow: $(ORUS)
 	@echo "Running Control Flow Tests..."

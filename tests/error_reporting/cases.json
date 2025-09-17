@@ -4,6 +4,16 @@
     "source": "undefined_variable.orus",
     "description": "Accessing an undeclared variable should produce a helpful undefined-variable diagnostic.",
     "expected_exit": 65,
+    "expected_diagnostic_count": 3,
+    "expected_diagnostics": [
+      {
+        "title": "Can't find this variable",
+        "message_contains": "Undefined variable 'missing_value'. Variables must be declared before use.",
+        "help_contains": "Make sure you've declared the variable before using it",
+        "note_contains": "Variables must be declared before they can be used in Orus.",
+        "count": 3
+      }
+    ],
     "expected": [
       "-- SYNTAX ERROR: Can't find this variable",
       "Undefined variable 'missing_value'. Variables must be declared before use.",
@@ -17,6 +27,13 @@
     "source": "break_outside_loop.orus",
     "description": "Using 'break' outside of a loop should report a control-flow diagnostic.",
     "expected_exit": 65,
+    "expected_diagnostic_count": 1,
+    "expected_diagnostics": [
+      {
+        "title": "Something went wrong",
+        "message_contains": "'break' can only be used inside a loop"
+      }
+    ],
     "expected": [
       "'break' can only be used inside a loop",
       "Compilation failed for \"tests/error_reporting/break_outside_loop.orus\"."
@@ -27,6 +44,13 @@
     "source": "continue_outside_loop.orus",
     "description": "Using 'continue' outside of a loop should report a control-flow diagnostic.",
     "expected_exit": 65,
+    "expected_diagnostic_count": 1,
+    "expected_diagnostics": [
+      {
+        "title": "Something went wrong",
+        "message_contains": "'continue' can only be used inside a loop"
+      }
+    ],
     "expected": [
       "'continue' can only be used inside a loop",
       "Compilation failed for \"tests/error_reporting/continue_outside_loop.orus\"."
@@ -37,6 +61,7 @@
     "source": "loop_control_valid.orus",
     "description": "Legal break/continue usage should compile without diagnostics.",
     "expected_exit": 0,
+    "expected_diagnostic_count": 0,
     "expected": [
       "loop control success",
       "break at 4",
@@ -48,6 +73,15 @@
     "source": "immutable_assignment.orus",
     "description": "Reassigning an immutable binding should ask for the 'mut' keyword.",
     "expected_exit": 65,
+    "expected_diagnostic_count": 1,
+    "expected_diagnostics": [
+      {
+        "title": "This variable needs to be mutable",
+        "message_contains": "Cannot assign to immutable variable 'value'. Add 'mut' when declaring it.",
+        "help_contains": "Add 'mut' before the variable name when declaring it",
+        "note_contains": "Variables are immutable by default"
+      }
+    ],
     "expected": [
       "-- SYNTAX ERROR: This variable needs to be mutable",
       "Cannot assign to immutable variable 'value'. Add 'mut' when declaring it.",
@@ -61,6 +95,17 @@
     "source": "function_argument_mismatch.orus",
     "description": "Calling a function with the wrong number of arguments should emit a type mismatch.",
     "expected_exit": 65,
+    "expected_diagnostic_count": 3,
+    "expected_diagnostics": [
+      {
+        "category": "TYPE MISMATCH",
+        "title": "Type mismatch found",
+        "message_contains": "this is a `argument count`, but `function signature` was expected",
+        "help_contains": "Try converting one value to match the other's type",
+        "note_contains": "Orus keeps types separate",
+        "count": 3
+      }
+    ],
     "expected": [
       "-- TYPE MISMATCH: Type mismatch found",
       "this is a `argument count`, but `function signature` was expected",
@@ -74,6 +119,13 @@
     "source": "missing_if_colon.orus",
     "description": "If statements without a colon should surface a syntax error with context.",
     "expected_exit": 65,
+    "expected_diagnostic_count": 1,
+    "expected_diagnostics": [
+      {
+        "title": "Something went wrong",
+        "message_contains": "Expected ':' after if statement"
+      }
+    ],
     "expected": [
       "-- SYNTAX ERROR: Something went wrong",
       "Expected ':' after if statement",
@@ -85,6 +137,14 @@
     "source": "closure_invalid_upvalue.orus",
     "description": "Mutating a captured immutable variable inside a closure currently triggers a runtime panic.",
     "expected_exit": 70,
+    "expected_diagnostic_count": 1,
+    "expected_diagnostics": [
+      {
+        "category": "RUNTIME PANIC",
+        "title": "This operation isn't allowed here",
+        "message_contains": "Invalid upvalue access"
+      }
+    ],
     "expected": [
       "-- RUNTIME PANIC: This operation isn't allowed here",
       "Invalid upvalue access"
@@ -95,6 +155,14 @@
     "source": "runtime_division_by_zero.orus",
     "description": "Runtime division by zero should report the correct source location.",
     "expected_exit": 70,
+    "expected_diagnostic_count": 1,
+    "expected_diagnostics": [
+      {
+        "category": "RUNTIME PANIC",
+        "message_contains": "Division by zero",
+        "location_contains": "runtime_division_by_zero.orus:4:13"
+      }
+    ],
     "expected": [
       "tests/error_reporting/runtime_division_by_zero.orus:4:13",
       "Division by zero"
