@@ -8,7 +8,7 @@ TRIALS: i32 = 10          // number of trials
 mut trial: i32 = 0
 mut total_time: f64 = 0.0
 
-for trials in TRIALS:
+while trial < TRIALS:
     start: f64 = time_stamp()
 
     mut sum: i64 = 0
