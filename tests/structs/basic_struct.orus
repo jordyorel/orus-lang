@@ -1,0 +1,10 @@
+// Ensures struct declarations, defaults, and impl blocks type-check
+pub struct Counter:
+    value: i32 = 0
+
+impl Counter:
+    fn increment(counter: Counter) -> Counter:
+        return counter
+
+fn main():
+    print(0)

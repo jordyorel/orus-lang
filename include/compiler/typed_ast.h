@@ -7,6 +7,12 @@
 // Forward declarations
 typedef struct TypedASTNode TypedASTNode;
 
+typedef struct {
+    const char* name;
+    TypedASTNode* typeAnnotation;
+    TypedASTNode* defaultValue;
+} TypedStructField;
+
 // Typed AST node that contains the original AST plus resolved type information
 struct TypedASTNode {
     ASTNode* original;       // Original AST node from parser
@@ -117,6 +123,18 @@ struct TypedASTNode {
             TypedASTNode* start;
             TypedASTNode* end;
         } arraySlice;
+        struct {
+            const char* name;
+            bool isPublic;
+            TypedStructField* fields;
+            int fieldCount;
+        } structDecl;
+        struct {
+            const char* structName;
+            bool isPublic;
+            TypedASTNode** methods;
+            int methodCount;
+        } implBlock;
     } typed;
 };
 

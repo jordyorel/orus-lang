@@ -123,6 +123,18 @@ TypedASTNode* create_typed_ast_node(ASTNode* original) {
             typed->typed.arraySlice.start = NULL;
             typed->typed.arraySlice.end = NULL;
             break;
+        case NODE_STRUCT_DECL:
+            typed->typed.structDecl.name = original->structDecl.name;
+            typed->typed.structDecl.isPublic = original->structDecl.isPublic;
+            typed->typed.structDecl.fields = NULL;
+            typed->typed.structDecl.fieldCount = 0;
+            break;
+        case NODE_IMPL_BLOCK:
+            typed->typed.implBlock.structName = original->implBlock.structName;
+            typed->typed.implBlock.isPublic = original->implBlock.isPublic;
+            typed->typed.implBlock.methods = NULL;
+            typed->typed.implBlock.methodCount = 0;
+            break;
         default:
             // For leaf nodes (IDENTIFIER, LITERAL, etc.), no additional
             // initialization needed
@@ -250,6 +262,23 @@ void free_typed_ast_node(TypedASTNode* node) {
             free_typed_ast_node(node->typed.arraySlice.start);
             free_typed_ast_node(node->typed.arraySlice.end);
             break;
+        case NODE_STRUCT_DECL:
+            if (node->typed.structDecl.fields) {
+                for (int i = 0; i < node->typed.structDecl.fieldCount; i++) {
+                    free_typed_ast_node(node->typed.structDecl.fields[i].typeAnnotation);
+                    free_typed_ast_node(node->typed.structDecl.fields[i].defaultValue);
+                }
+                free(node->typed.structDecl.fields);
+            }
+            break;
+        case NODE_IMPL_BLOCK:
+            if (node->typed.implBlock.methods) {
+                for (int i = 0; i < node->typed.implBlock.methodCount; i++) {
+                    free_typed_ast_node(node->typed.implBlock.methods[i]);
+                }
+                free(node->typed.implBlock.methods);
+            }
+            break;
         default:
             // Leaf nodes have no children to free
             break;
@@ -331,6 +360,29 @@ bool validate_typed_ast(TypedASTNode* root) {
             return validate_typed_ast(root->typed.arraySlice.array) &&
                    validate_typed_ast(root->typed.arraySlice.start) &&
                    validate_typed_ast(root->typed.arraySlice.end);
+        case NODE_STRUCT_DECL:
+            if (root->typed.structDecl.fields) {
+                for (int i = 0; i < root->typed.structDecl.fieldCount; i++) {
+                    if (root->typed.structDecl.fields[i].typeAnnotation &&
+                        !validate_typed_ast(root->typed.structDecl.fields[i].typeAnnotation)) {
+                        return false;
+                    }
+                    if (root->typed.structDecl.fields[i].defaultValue &&
+                        !validate_typed_ast(root->typed.structDecl.fields[i].defaultValue)) {
+                        return false;
+                    }
+                }
+            }
+            break;
+        case NODE_IMPL_BLOCK:
+            if (root->typed.implBlock.methods) {
+                for (int i = 0; i < root->typed.implBlock.methodCount; i++) {
+                    if (!validate_typed_ast(root->typed.implBlock.methods[i])) {
+                        return false;
+                    }
+                }
+            }
+            break;
         case NODE_INDEX_ACCESS:
             return validate_typed_ast(root->typed.indexAccess.array) &&
                    validate_typed_ast(root->typed.indexAccess.index);
@@ -471,6 +523,12 @@ void print_typed_ast(TypedASTNode* node, int indent) {
             break;
         case NODE_CAST:
             nodeTypeStr = "Cast";
+            break;
+        case NODE_STRUCT_DECL:
+            nodeTypeStr = "StructDecl";
+            break;
+        case NODE_IMPL_BLOCK:
+            nodeTypeStr = "ImplBlock";
             break;
         case NODE_BREAK:
             nodeTypeStr = "Break";
@@ -629,6 +687,27 @@ void print_typed_ast(TypedASTNode* node, int indent) {
             print_typed_ast(node->typed.arraySlice.array, indent + 1);
             print_typed_ast(node->typed.arraySlice.start, indent + 1);
             print_typed_ast(node->typed.arraySlice.end, indent + 1);
+            break;
+        case NODE_STRUCT_DECL:
+            if (node->typed.structDecl.fields) {
+                for (int i = 0; i < node->typed.structDecl.fieldCount; i++) {
+                    if (node->typed.structDecl.fields[i].typeAnnotation) {
+                        print_typed_ast(node->typed.structDecl.fields[i].typeAnnotation,
+                                        indent + 1);
+                    }
+                    if (node->typed.structDecl.fields[i].defaultValue) {
+                        print_typed_ast(node->typed.structDecl.fields[i].defaultValue,
+                                        indent + 1);
+                    }
+                }
+            }
+            break;
+        case NODE_IMPL_BLOCK:
+            if (node->typed.implBlock.methods) {
+                for (int i = 0; i < node->typed.implBlock.methodCount; i++) {
+                    print_typed_ast(node->typed.implBlock.methods[i], indent + 1);
+                }
+            }
             break;
         default:
             break;

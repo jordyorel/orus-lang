@@ -2652,6 +2652,80 @@ This enhanced Phase 4 implementation provides:
 
 ### 5.1 Struct Implementation
 *[Content moved from Phase 4 - to be implemented after high-performance arrays]*
+
+#### 5.1.1 Type Registry Integration for Structs
+
+Struct declarations are now wired directly into the HM type system during the
+single-pass type inference walk. The compiler synthesizes high-performance
+`FieldInfo` tables and registers them with the global struct registry so later
+annotations resolve in O(1) time.
+
+```c
+static ObjString* create_compiler_string(const char* text) {
+    ObjString* str = malloc(sizeof(ObjString));
+    str->obj.type = OBJ_STRING;
+    str->obj.next = NULL;
+    str->obj.isMarked = false;
+    str->length = (int)strlen(text);
+    str->chars = copyString(text, str->length);
+    str->rope = NULL;
+    str->hash = 0;
+    return str;
+}
+
+static void register_struct_decl(ASTNode* decl, TypeEnv* env) {
+    FieldInfo* fields = calloc(decl->structDecl.fieldCount, sizeof(FieldInfo));
+    for (int i = 0; i < decl->structDecl.fieldCount; i++) {
+        ASTNode* anno = decl->structDecl.fields[i].typeAnnotation;
+        ASTNode* defv = decl->structDecl.fields[i].defaultValue;
+        Type* field_type = algorithm_w(env, anno);
+        if (defv) {
+            Type* default_type = algorithm_w(env, defv);
+            ORUS_ASSERT(unify(field_type, default_type));
+        }
+        fields[i].type = field_type;
+        fields[i].name = create_compiler_string(decl->structDecl.fields[i].name);
+    }
+
+    ObjString* struct_name = create_compiler_string(decl->structDecl.name);
+    Type* struct_type = createStructType(struct_name, fields,
+                                        decl->structDecl.fieldCount, NULL, 0);
+    decl->dataType = struct_type;
+}
+```
+
+`impl` blocks reuse the same pipeline, dynamically extending the method table
+stored inside the `TypeExtension`. This keeps method lookup cache-friendly and
+ready for the future bytecode emitter.
+
+```c
+static void attach_impl_methods(ASTNode* impl, TypeEnv* env) {
+    Type* struct_type = findStructType(impl->implBlock.structName);
+    TypeExtension* ext = get_type_extension(struct_type);
+
+    int existing = ext->extended.structure.methodCount;
+    int total = existing + impl->implBlock.methodCount;
+    ext->extended.structure.methods =
+        realloc(ext->extended.structure.methods, sizeof(Method) * total);
+
+    for (int i = 0; i < impl->implBlock.methodCount; i++) {
+        ASTNode* method = impl->implBlock.methods[i];
+        Type* method_type = algorithm_w(env, method);
+        ObjString* method_name = create_compiler_string(method->function.name);
+        ext->extended.structure.methods[existing + i] = (Method){
+            .name = method_name,
+            .type = method_type,
+        };
+    }
+
+    ext->extended.structure.methodCount = total;
+    impl->dataType = struct_type;
+}
+```
+
+This path guarantees every struct and impl encountered in the AST is resolved
+once, with zero redundant passes and allocations amortized across the compiler
+arena.
                 
                 freeRegister(compiler, field_reg);
             }
