@@ -829,6 +829,64 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
 
             return createArrayType(element_type);
         }
+        case NODE_STRUCT_LITERAL: {
+            if (!node->structLiteral.structName) {
+                set_type_error();
+                return NULL;
+            }
+
+            Type* struct_type = findStructType(node->structLiteral.structName);
+            if (!struct_type) {
+                report_undefined_type(node->location, node->structLiteral.structName);
+                set_type_error();
+                return NULL;
+            }
+
+            TypeExtension* ext = get_type_extension(struct_type);
+            if (!ext) {
+                report_type_mismatch(node->location, node->structLiteral.structName, "struct");
+                set_type_error();
+                return NULL;
+            }
+
+            for (int i = 0; i < node->structLiteral.fieldCount; i++) {
+                StructLiteralField* field = &node->structLiteral.fields[i];
+                bool matched = false;
+                Type* field_type = NULL;
+
+                if (ext->extended.structure.fields) {
+                    for (int j = 0; j < ext->extended.structure.fieldCount; j++) {
+                        FieldInfo* defined = &ext->extended.structure.fields[j];
+                        if (defined->name && defined->name->chars &&
+                            strcmp(defined->name->chars, field->name) == 0) {
+                            matched = true;
+                            field_type = defined->type;
+                            break;
+                        }
+                    }
+                }
+
+                if (!matched) {
+                    report_undefined_variable(node->location, field->name);
+                    set_type_error();
+                    return NULL;
+                }
+
+                Type* value_type = algorithm_w(env, field->value);
+                if (!value_type) {
+                    return NULL;
+                }
+
+                if (field_type && !unify(field_type, value_type)) {
+                    report_type_mismatch(field->value->location, getTypeName(field_type->kind),
+                                         getTypeName(value_type->kind));
+                    set_type_error();
+                    return NULL;
+                }
+            }
+
+            return struct_type;
+        }
         case NODE_INDEX_ACCESS: {
             Type* array_type = algorithm_w(env, node->indexAccess.array);
             Type* index_type = algorithm_w(env, node->indexAccess.index);
@@ -856,6 +914,60 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             }
             return element_type;
         }
+        case NODE_MEMBER_ACCESS: {
+            Type* object_type = algorithm_w(env, node->member.object);
+            if (!object_type) {
+                return NULL;
+            }
+
+            Type* struct_type = object_type;
+            if (struct_type->kind == TYPE_INSTANCE && struct_type->info.instance.base) {
+                struct_type = struct_type->info.instance.base;
+            }
+
+            if (struct_type->kind != TYPE_STRUCT) {
+                report_type_mismatch(node->location, "struct", getTypeName(struct_type->kind));
+                set_type_error();
+                return NULL;
+            }
+
+            TypeExtension* ext = get_type_extension(struct_type);
+            if (!ext) {
+                report_type_mismatch(node->location, "struct", "unknown");
+                set_type_error();
+                return NULL;
+            }
+
+            // Look for matching field
+            if (ext->extended.structure.fields) {
+                for (int i = 0; i < ext->extended.structure.fieldCount; i++) {
+                    FieldInfo* field = &ext->extended.structure.fields[i];
+                    if (field->name && field->name->chars &&
+                        strcmp(field->name->chars, node->member.member) == 0) {
+                        node->member.isMethod = false;
+                        node->member.isInstanceMethod = false;
+                        return field->type ? field->type : getPrimitiveType(TYPE_UNKNOWN);
+                    }
+                }
+            }
+
+            // Look for matching method
+            if (ext->extended.structure.methods) {
+                for (int i = 0; i < ext->extended.structure.methodCount; i++) {
+                    Method* method = &ext->extended.structure.methods[i];
+                    if (method->name && method->name->chars &&
+                        strcmp(method->name->chars, node->member.member) == 0) {
+                        node->member.isMethod = true;
+                        node->member.isInstanceMethod = method->isInstance;
+                        return method->type;
+                    }
+                }
+            }
+
+            report_undefined_variable(node->location, node->member.member);
+            set_type_error();
+            return NULL;
+        }
         case NODE_IDENTIFIER: {
             DEBUG_TYPE_INFERENCE_PRINT("Looking up identifier '%s'", node->identifier.name);
             TypeScheme* scheme = type_env_lookup(env, node->identifier.name);
@@ -864,6 +976,11 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                 DEBUG_TYPE_INFERENCE_PRINT("Found scheme for '%s', type kind: %d",
                        node->identifier.name, (int)(instantiated ? instantiated->kind : scheme->type->kind));
                 return instantiated ? instantiated : scheme->type;
+            }
+            Type* struct_type = findStructType(node->identifier.name);
+            if (struct_type) {
+                DEBUG_TYPE_INFERENCE_PRINT("Identifier '%s' resolved as struct type", node->identifier.name);
+                return struct_type;
             }
             DEBUG_TYPE_INFERENCE_PRINT("Identifier '%s' not found in type environment", node->identifier.name);
             report_undefined_variable(node->location, node->identifier.name);
@@ -887,6 +1004,38 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             }
 
             return target_type;
+        }
+        case NODE_MEMBER_ASSIGN: {
+            if (!node->memberAssign.target) {
+                set_type_error();
+                return NULL;
+            }
+
+            Type* target_type = algorithm_w(env, node->memberAssign.target);
+            if (!target_type) {
+                return NULL;
+            }
+
+            if (node->memberAssign.target->type != NODE_MEMBER_ACCESS ||
+                node->memberAssign.target->member.isMethod) {
+                report_type_mismatch(node->location, "struct field", "method");
+                set_type_error();
+                return NULL;
+            }
+
+            Type* value_type = algorithm_w(env, node->memberAssign.value);
+            if (!value_type) {
+                return NULL;
+            }
+
+            if (!unify(target_type, value_type)) {
+                report_type_mismatch(node->location, getTypeName(target_type->kind),
+                                     getTypeName(value_type->kind));
+                set_type_error();
+                return NULL;
+            }
+
+            return getPrimitiveType(TYPE_VOID);
         }
 
         case NODE_ARRAY_SLICE: {
@@ -1098,20 +1247,41 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
         case NODE_FUNCTION: {
             // For function declarations, get the actual return type from type annotation
             Type* return_type = getPrimitiveType(TYPE_VOID); // Default to void
-            
+
             if (node->function.returnType) {
                 return_type = algorithm_w(env, node->function.returnType);
                 if (!return_type) return_type = getPrimitiveType(TYPE_VOID);
             }
-            
+
+            Type* receiver_type = NULL;
+            if (node->function.isMethod && node->function.methodStructName) {
+                receiver_type = findStructType(node->function.methodStructName);
+                if (!receiver_type) {
+                    report_undefined_type(node->location, node->function.methodStructName);
+                    set_type_error();
+                    return NULL;
+                }
+            }
+
             // Process parameters and their types
             Type** param_types = NULL;
             int param_count = node->function.paramCount;
-            
+
             if (param_count > 0) {
                 param_types = type_arena_alloc(sizeof(Type*) * param_count);
                 for (int i = 0; i < param_count; i++) {
-                    if (node->function.params[i].typeAnnotation) {
+                    if (node->function.isMethod && node->function.isInstanceMethod && i == 0) {
+                        param_types[i] = receiver_type ? receiver_type : getPrimitiveType(TYPE_UNKNOWN);
+                        if (node->function.params[i].typeAnnotation) {
+                            Type* annotated = algorithm_w(env, node->function.params[i].typeAnnotation);
+                            if (annotated && param_types[i] && !unify(param_types[i], annotated)) {
+                                report_type_mismatch(node->location, node->function.methodStructName,
+                                                     node->function.params[i].name);
+                                set_type_error();
+                                return NULL;
+                            }
+                        }
+                    } else if (node->function.params[i].typeAnnotation) {
                         param_types[i] = algorithm_w(env, node->function.params[i].typeAnnotation);
                         if (!param_types[i]) param_types[i] = getPrimitiveType(TYPE_I32);
                     } else {
@@ -1119,18 +1289,18 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                     }
                 }
             }
-            
+
             Type* func_type = createFunctionType(return_type, param_types, param_count);
-            
+
             // Add function to environment if it has a name
             if (node->function.name) {
                 TypeScheme* scheme = generalize(env, func_type);
                 type_env_define(env, node->function.name, scheme);
             }
-            
+
             // Create a new scope for the function body and add parameters to it
             TypeEnv* function_env = type_env_new(env);
-            
+
             // Add parameters to the function's local environment
             for (int i = 0; i < param_count; i++) {
                 if (node->function.params[i].name && param_types && param_types[i]) {
@@ -1138,59 +1308,91 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                     type_env_define(function_env, node->function.params[i].name, param_scheme);
                 }
             }
-            
+
             // Type-check the function body in the new environment
             if (node->function.body) {
                 Type* body_type = algorithm_w(function_env, node->function.body);
                 // The body type isn't used for the function's type, but this ensures the body is type-checked
                 (void)body_type;
             }
-            
+
             return func_type;
         }
         case NODE_CALL: {
-            // Function call type inference
+            bool is_member_call = (node->call.callee->type == NODE_MEMBER_ACCESS);
+            bool is_method_call = false;
+            bool is_instance_method = false;
+            if (is_member_call) {
+                is_method_call = node->call.callee->member.isMethod;
+                is_instance_method = node->call.callee->member.isInstanceMethod;
+            }
+
+            Type* callee_type = NULL;
             if (node->call.callee->type == NODE_IDENTIFIER) {
-                // Look up the function in the environment
                 TypeScheme* scheme = type_env_lookup(env, node->call.callee->identifier.name);
                 if (scheme && scheme->type) {
-                    Type* func_type = instantiate_type_scheme(scheme);
-                    if (func_type && func_type->kind == TYPE_FUNCTION) {
-                        // Type-check arguments against function parameter types
-                        if (node->call.argCount == func_type->info.function.arity) {
-                            for (int i = 0; i < node->call.argCount; i++) {
-                                Type* arg_type = algorithm_w(env, node->call.args[i]);
-                                Type* param_type = func_type->info.function.paramTypes[i];
+                    callee_type = instantiate_type_scheme(scheme);
+                }
+            }
 
-                                if (arg_type && param_type && !unify(arg_type, param_type)) {
-                                    report_type_mismatch(node->location, "function parameter", "argument type");
-                                    set_type_error();
-                                    return NULL;
-                                }
-                            }
-                        } else {
-                            report_type_mismatch(node->location, "function signature", "argument count");
-                            set_type_error();
-                            return NULL;
-                        }
+            if (!callee_type) {
+                callee_type = algorithm_w(env, node->call.callee);
+            }
 
-                        return func_type->info.function.returnType;
+            Type** arg_types = NULL;
+            if (node->call.argCount > 0) {
+                arg_types = malloc(sizeof(Type*) * node->call.argCount);
+                if (!arg_types) {
+                    set_type_error();
+                    return NULL;
+                }
+                for (int i = 0; i < node->call.argCount; i++) {
+                    arg_types[i] = algorithm_w(env, node->call.args[i]);
+                    if (!arg_types[i]) {
+                        free(arg_types);
+                        return NULL;
                     }
                 }
             }
-            
-            // Fallback: type-check the callee and arguments
-            Type* callee_type = algorithm_w(env, node->call.callee);
-            for (int i = 0; i < node->call.argCount; i++) {
-                algorithm_w(env, node->call.args[i]);
-            }
-            
-            // If callee is a function type, return its return type
+
             if (callee_type && callee_type->kind == TYPE_FUNCTION) {
-                return callee_type->info.function.returnType;
+                int total_params = callee_type->info.function.arity;
+                int offset = 0;
+                if (is_member_call && is_method_call && is_instance_method && total_params > 0) {
+                    offset = 1;
+                }
+                int expected_args = total_params - offset;
+                if (expected_args < 0) expected_args = 0;
+
+                if (node->call.argCount != expected_args) {
+                    if (arg_types) free(arg_types);
+                    report_type_mismatch(node->location, "function signature", "argument count");
+                    set_type_error();
+                    return NULL;
+                }
+
+                for (int i = 0; i < node->call.argCount; i++) {
+                    Type* param_type = NULL;
+                    if (callee_type->info.function.paramTypes && (i + offset) < callee_type->info.function.arity) {
+                        param_type = callee_type->info.function.paramTypes[i + offset];
+                    }
+                    Type* arg_type = arg_types ? arg_types[i] : NULL;
+                    if (arg_type && param_type && !unify(arg_type, param_type)) {
+                        if (arg_types) free(arg_types);
+                        report_type_mismatch(node->call.args[i]->location,
+                                             getTypeName(param_type->kind),
+                                             getTypeName(arg_type->kind));
+                        set_type_error();
+                        return NULL;
+                    }
+                }
+
+                Type* return_type = callee_type->info.function.returnType;
+                if (arg_types) free(arg_types);
+                return return_type;
             }
-            
-            // Default fallback
+
+            if (arg_types) free(arg_types);
             return getPrimitiveType(TYPE_I32);
         }
         case NODE_RETURN: {
@@ -1471,6 +1673,18 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                         return NULL;
                     }
 
+                    if (node->implBlock.methods[i]->function.isInstanceMethod) {
+                        if (!method_type || method_type->kind != TYPE_FUNCTION ||
+                            method_type->info.function.arity < 1) {
+                            report_type_mismatch(node->implBlock.methods[i]->location,
+                                                 "instance method", "invalid receiver");
+                            cleanup_new_methods(resized, existing_methods, existing_methods + i);
+                            ext->extended.structure.methodCount = existing_methods;
+                            set_type_error();
+                            return NULL;
+                        }
+                    }
+
                     ObjString* method_name = create_compiler_string(node->implBlock.methods[i]->function.name);
                     if (!method_name) {
                         cleanup_new_methods(resized, existing_methods, existing_methods + i);
@@ -1481,6 +1695,9 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
 
                     resized[existing_methods + i].name = method_name;
                     resized[existing_methods + i].type = method_type;
+                    bool is_instance = node->implBlock.methods[i]->function.isInstanceMethod;
+                    resized[existing_methods + i].isInstance = is_instance;
+                    resized[existing_methods + i].isStatic = !is_instance;
                 }
 
                 ext->extended.structure.methodCount = existing_methods + node->implBlock.methodCount;
@@ -1763,6 +1980,28 @@ void populate_ast_types(ASTNode* node, TypeEnv* env) {
                         populate_ast_types(node->structDecl.fields[i].defaultValue, env);
                     }
                 }
+            }
+            break;
+        case NODE_STRUCT_LITERAL:
+            if (node->structLiteral.fieldCount > 0 && node->structLiteral.fields) {
+                for (int i = 0; i < node->structLiteral.fieldCount; i++) {
+                    if (node->structLiteral.fields[i].value) {
+                        populate_ast_types(node->structLiteral.fields[i].value, env);
+                    }
+                }
+            }
+            break;
+        case NODE_MEMBER_ACCESS:
+            if (node->member.object) {
+                populate_ast_types(node->member.object, env);
+            }
+            break;
+        case NODE_MEMBER_ASSIGN:
+            if (node->memberAssign.target) {
+                populate_ast_types(node->memberAssign.target, env);
+            }
+            if (node->memberAssign.value) {
+                populate_ast_types(node->memberAssign.value, env);
             }
             break;
         case NODE_IMPL_BLOCK:
@@ -2143,6 +2382,64 @@ static TypedASTNode* generate_typed_ast_recursive(ASTNode* ast, TypeEnv* type_en
                             return NULL;
                         }
                     }
+                }
+            }
+            break;
+        case NODE_STRUCT_LITERAL:
+            typed->typed.structLiteral.structName = ast->structLiteral.structName;
+            typed->typed.structLiteral.fieldCount = ast->structLiteral.fieldCount;
+            typed->typed.structLiteral.fields = ast->structLiteral.fields;
+            if (ast->structLiteral.fieldCount > 0 && ast->structLiteral.fields) {
+                typed->typed.structLiteral.values = malloc(sizeof(TypedASTNode*) * ast->structLiteral.fieldCount);
+                if (!typed->typed.structLiteral.values) {
+                    free_typed_ast_node(typed);
+                    return NULL;
+                }
+                for (int i = 0; i < ast->structLiteral.fieldCount; i++) {
+                    typed->typed.structLiteral.values[i] = NULL;
+                    if (ast->structLiteral.fields[i].value) {
+                        typed->typed.structLiteral.values[i] =
+                            generate_typed_ast_recursive(ast->structLiteral.fields[i].value, type_env);
+                        if (!typed->typed.structLiteral.values[i]) {
+                            for (int j = 0; j < i; j++) {
+                                free_typed_ast_node(typed->typed.structLiteral.values[j]);
+                            }
+                            free(typed->typed.structLiteral.values);
+                            typed->typed.structLiteral.values = NULL;
+                            free_typed_ast_node(typed);
+                            return NULL;
+                        }
+                    }
+                }
+            }
+            break;
+        case NODE_MEMBER_ACCESS:
+            typed->typed.member.member = ast->member.member;
+            typed->typed.member.isMethod = ast->member.isMethod;
+            typed->typed.member.isInstanceMethod = ast->member.isInstanceMethod;
+            if (ast->member.object) {
+                typed->typed.member.object = generate_typed_ast_recursive(ast->member.object, type_env);
+                if (!typed->typed.member.object) {
+                    free_typed_ast_node(typed);
+                    return NULL;
+                }
+            }
+            break;
+        case NODE_MEMBER_ASSIGN:
+            if (ast->memberAssign.target) {
+                typed->typed.memberAssign.target = generate_typed_ast_recursive(ast->memberAssign.target, type_env);
+                if (!typed->typed.memberAssign.target) {
+                    free_typed_ast_node(typed);
+                    return NULL;
+                }
+            }
+            if (ast->memberAssign.value) {
+                typed->typed.memberAssign.value = generate_typed_ast_recursive(ast->memberAssign.value, type_env);
+                if (!typed->typed.memberAssign.value) {
+                    free_typed_ast_node(typed->typed.memberAssign.target);
+                    typed->typed.memberAssign.target = NULL;
+                    free_typed_ast_node(typed);
+                    return NULL;
                 }
             }
             break;

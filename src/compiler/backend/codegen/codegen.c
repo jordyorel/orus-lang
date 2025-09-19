@@ -6,6 +6,7 @@
 #include "compiler/symbol_table.h"
 #include "compiler/scope_stack.h"
 #include "compiler/error_reporter.h"
+#include "type/type.h"
 #include "vm/vm.h"
 #include "vm/vm_constants.h"
 #include "errors/features/variable_errors.h"
@@ -39,6 +40,8 @@ static int compile_assignment_internal(CompilerContext* ctx, TypedASTNode* assig
                                        bool as_expression);
 static int compile_array_assignment(CompilerContext* ctx, TypedASTNode* assign,
                                     bool as_expression);
+static int compile_member_assignment(CompilerContext* ctx, TypedASTNode* assign,
+                                     bool as_expression);
 
 static int compile_builtin_array_push(CompilerContext* ctx, TypedASTNode* call);
 static int compile_builtin_array_pop(CompilerContext* ctx, TypedASTNode* call);
@@ -171,6 +174,61 @@ static void leave_loop_context(CompilerContext* ctx, ScopeFrame* frame, int end_
     }
 
     control_flow_leave_loop_context();
+}
+
+static Type* unwrap_struct_type(Type* type) {
+    if (!type) {
+        return NULL;
+    }
+
+    if (type->kind == TYPE_INSTANCE && type->info.instance.base) {
+        return type->info.instance.base;
+    }
+
+    return type;
+}
+
+static int resolve_struct_field_index(Type* struct_type, const char* field_name) {
+    if (!struct_type || !field_name) {
+        return -1;
+    }
+
+    Type* base = unwrap_struct_type(struct_type);
+    if (!base || base->kind != TYPE_STRUCT) {
+        return -1;
+    }
+
+    TypeExtension* ext = get_type_extension(base);
+    if (!ext || !ext->extended.structure.fields) {
+        return -1;
+    }
+
+    for (int i = 0; i < ext->extended.structure.fieldCount; i++) {
+        FieldInfo* info = &ext->extended.structure.fields[i];
+        if (info && info->name && info->name->chars &&
+            strcmp(info->name->chars, field_name) == 0) {
+            return i;
+        }
+    }
+
+    return -1;
+}
+
+static TypedASTNode* find_struct_literal_value(TypedASTNode* literal,
+                                               const char* field_name) {
+    if (!literal || !field_name || !literal->typed.structLiteral.values ||
+        !literal->typed.structLiteral.fields) {
+        return NULL;
+    }
+
+    for (int i = 0; i < literal->typed.structLiteral.fieldCount; i++) {
+        StructLiteralField* field = &literal->typed.structLiteral.fields[i];
+        if (field && field->name && strcmp(field->name, field_name) == 0) {
+            return literal->typed.structLiteral.values[i];
+        }
+    }
+
+    return NULL;
 }
 
 // ===== CODE GENERATION COORDINATOR =====
@@ -1080,6 +1138,135 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             free(element_regs);
             return result_reg;
         }
+        case NODE_STRUCT_LITERAL: {
+            const char* struct_name = expr->typed.structLiteral.structName;
+            Type* struct_type = expr->resolvedType;
+            if (!struct_type && struct_name) {
+                struct_type = findStructType(struct_name);
+            }
+            Type* base_struct = unwrap_struct_type(struct_type);
+            TypeExtension* ext = base_struct ? get_type_extension(base_struct) : NULL;
+
+            int field_count = 0;
+            if (ext && ext->extended.structure.fieldCount > 0) {
+                field_count = ext->extended.structure.fieldCount;
+            } else if (expr->typed.structLiteral.fieldCount > 0) {
+                field_count = expr->typed.structLiteral.fieldCount;
+            }
+
+            int result_reg = mp_allocate_temp_register(ctx->allocator);
+            if (result_reg == -1) {
+                DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for struct literal result\n");
+                return -1;
+            }
+
+            if (field_count <= 0) {
+                set_location_from_node(ctx, expr);
+                emit_byte_to_buffer(ctx->bytecode, OP_MAKE_ARRAY_R);
+                emit_byte_to_buffer(ctx->bytecode, result_reg);
+                emit_byte_to_buffer(ctx->bytecode, 0);
+                emit_byte_to_buffer(ctx->bytecode, 0);
+                return result_reg;
+            }
+
+            int* field_regs = malloc(sizeof(int) * field_count);
+            if (!field_regs) {
+                mp_free_temp_register(ctx->allocator, result_reg);
+                DEBUG_CODEGEN_PRINT("Error: Failed to allocate register list for struct fields\n");
+                return -1;
+            }
+
+            bool allocation_failed = false;
+            for (int i = 0; i < field_count; i++) {
+                field_regs[i] = mp_allocate_temp_register(ctx->allocator);
+                if (field_regs[i] == -1) {
+                    allocation_failed = true;
+                    break;
+                }
+            }
+
+            if (allocation_failed) {
+                for (int i = 0; i < field_count; i++) {
+                    if (field_regs[i] >= MP_TEMP_REG_START && field_regs[i] <= MP_TEMP_REG_END) {
+                        mp_free_temp_register(ctx->allocator, field_regs[i]);
+                    }
+                }
+                free(field_regs);
+                mp_free_temp_register(ctx->allocator, result_reg);
+                DEBUG_CODEGEN_PRINT("Error: Failed to allocate struct field registers\n");
+                return -1;
+            }
+
+            bool success = true;
+            for (int i = 0; i < field_count; i++) {
+                const char* field_name = NULL;
+                if (ext && ext->extended.structure.fields &&
+                    i < ext->extended.structure.fieldCount) {
+                    FieldInfo* info = &ext->extended.structure.fields[i];
+                    if (info && info->name) {
+                        field_name = info->name->chars;
+                    }
+                }
+                if (!field_name && expr->typed.structLiteral.fields &&
+                    i < expr->typed.structLiteral.fieldCount) {
+                    field_name = expr->typed.structLiteral.fields[i].name;
+                }
+
+                TypedASTNode* value_node = NULL;
+                if (field_name) {
+                    value_node = find_struct_literal_value(expr, field_name);
+                }
+                if (!value_node && expr->typed.structLiteral.values &&
+                    i < expr->typed.structLiteral.fieldCount) {
+                    value_node = expr->typed.structLiteral.values[i];
+                }
+
+                if (!value_node) {
+                    DEBUG_CODEGEN_PRINT("Error: Missing value for struct field %d\n", i);
+                    success = false;
+                    break;
+                }
+
+                int value_reg = compile_expression(ctx, value_node);
+                if (value_reg == -1) {
+                    success = false;
+                    break;
+                }
+
+                if (value_reg != field_regs[i]) {
+                    emit_move(ctx, field_regs[i], value_reg);
+                    if (value_reg >= MP_TEMP_REG_START && value_reg <= MP_TEMP_REG_END) {
+                        mp_free_temp_register(ctx->allocator, value_reg);
+                    }
+                }
+            }
+
+            if (!success) {
+                for (int i = 0; i < field_count; i++) {
+                    if (field_regs[i] >= MP_TEMP_REG_START && field_regs[i] <= MP_TEMP_REG_END) {
+                        mp_free_temp_register(ctx->allocator, field_regs[i]);
+                    }
+                }
+                free(field_regs);
+                mp_free_temp_register(ctx->allocator, result_reg);
+                return -1;
+            }
+
+            set_location_from_node(ctx, expr);
+            emit_byte_to_buffer(ctx->bytecode, OP_MAKE_ARRAY_R);
+            emit_byte_to_buffer(ctx->bytecode, result_reg);
+            emit_byte_to_buffer(ctx->bytecode, field_regs[0]);
+            emit_byte_to_buffer(ctx->bytecode, field_count);
+
+            for (int i = 0; i < field_count; i++) {
+                if (field_regs[i] >= MP_TEMP_REG_START && field_regs[i] <= MP_TEMP_REG_END) {
+                    mp_free_temp_register(ctx->allocator, field_regs[i]);
+                }
+            }
+
+            free(field_regs);
+            return result_reg;
+        }
         case NODE_INDEX_ACCESS: {
             TypedASTNode* array_node = expr->typed.indexAccess.array;
             TypedASTNode* index_node = expr->typed.indexAccess.index;
@@ -1348,6 +1535,9 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
         }
         case NODE_ARRAY_ASSIGN: {
             return compile_array_assignment(ctx, expr, true);
+        }
+        case NODE_MEMBER_ASSIGN: {
+            return compile_member_assignment(ctx, expr, true);
         }
 
         case NODE_ARRAY_SLICE: {
@@ -1719,6 +1909,73 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             return compile_function_declaration(ctx, expr);
         }
 
+        case NODE_MEMBER_ACCESS: {
+            if (!expr->typed.member.object) {
+                return -1;
+            }
+
+            if (expr->typed.member.isMethod) {
+                DEBUG_CODEGEN_PRINT("Error: Method access is not yet supported in codegen\n");
+                ctx->has_compilation_errors = true;
+                return -1;
+            }
+
+            int field_index = resolve_struct_field_index(expr->typed.member.object->resolvedType,
+                                                         expr->typed.member.member);
+            if (field_index < 0) {
+                if (ctx->errors) {
+                    error_reporter_add(ctx->errors, ERROR_TYPE, SEVERITY_ERROR,
+                                       expr->original->location,
+                                       "Unknown struct field",
+                                       expr->typed.member.member ? expr->typed.member.member : "<unknown>",
+                                       NULL);
+                }
+                ctx->has_compilation_errors = true;
+                return -1;
+            }
+
+            int object_reg = compile_expression(ctx, expr->typed.member.object);
+            if (object_reg == -1) {
+                return -1;
+            }
+
+            int index_reg = mp_allocate_temp_register(ctx->allocator);
+            if (index_reg == -1) {
+                if (object_reg >= MP_TEMP_REG_START && object_reg <= MP_TEMP_REG_END) {
+                    mp_free_temp_register(ctx->allocator, object_reg);
+                }
+                return -1;
+            }
+
+            emit_load_constant(ctx, index_reg, I32_VAL(field_index));
+
+            int result_reg = mp_allocate_temp_register(ctx->allocator);
+            if (result_reg == -1) {
+                if (index_reg >= MP_TEMP_REG_START && index_reg <= MP_TEMP_REG_END) {
+                    mp_free_temp_register(ctx->allocator, index_reg);
+                }
+                if (object_reg >= MP_TEMP_REG_START && object_reg <= MP_TEMP_REG_END) {
+                    mp_free_temp_register(ctx->allocator, object_reg);
+                }
+                return -1;
+            }
+
+            set_location_from_node(ctx, expr);
+            emit_byte_to_buffer(ctx->bytecode, OP_ARRAY_GET_R);
+            emit_byte_to_buffer(ctx->bytecode, result_reg);
+            emit_byte_to_buffer(ctx->bytecode, object_reg);
+            emit_byte_to_buffer(ctx->bytecode, index_reg);
+
+            if (index_reg >= MP_TEMP_REG_START && index_reg <= MP_TEMP_REG_END) {
+                mp_free_temp_register(ctx->allocator, index_reg);
+            }
+            if (object_reg >= MP_TEMP_REG_START && object_reg <= MP_TEMP_REG_END) {
+                mp_free_temp_register(ctx->allocator, object_reg);
+            }
+
+            return result_reg;
+        }
+
         case NODE_CALL: {
             DEBUG_CODEGEN_PRINT("NODE_CALL: Compiling function call");
 
@@ -2007,7 +2264,10 @@ void compile_statement(CompilerContext* ctx, TypedASTNode* stmt) {
         case NODE_ARRAY_ASSIGN:
             compile_array_assignment(ctx, stmt, false);
             break;
-            
+        case NODE_MEMBER_ASSIGN:
+            compile_member_assignment(ctx, stmt, false);
+            break;
+
         case NODE_VAR_DECL:
             compile_variable_declaration(ctx, stmt);
             break;
@@ -2197,6 +2457,91 @@ static int compile_array_assignment(CompilerContext* ctx, TypedASTNode* assign,
     }
 
     return result_reg;
+}
+
+static int compile_member_assignment(CompilerContext* ctx, TypedASTNode* assign,
+                                     bool as_expression) {
+    if (!ctx || !assign || assign->original->type != NODE_MEMBER_ASSIGN) {
+        return -1;
+    }
+
+    TypedASTNode* target = assign->typed.memberAssign.target;
+    TypedASTNode* value_node = assign->typed.memberAssign.value;
+    if (!target || !value_node || !target->typed.member.object) {
+        return -1;
+    }
+
+    if (target->typed.member.isMethod) {
+        if (ctx->errors) {
+            error_reporter_add(ctx->errors, ERROR_TYPE, SEVERITY_ERROR,
+                               assign->original->location,
+                               "Cannot assign to method reference",
+                               "Only struct fields can appear on the left-hand side",
+                               NULL);
+        }
+        ctx->has_compilation_errors = true;
+        return -1;
+    }
+
+    int field_index = resolve_struct_field_index(target->typed.member.object->resolvedType,
+                                                 target->typed.member.member);
+    if (field_index < 0) {
+        if (ctx->errors) {
+            error_reporter_add(ctx->errors, ERROR_TYPE, SEVERITY_ERROR,
+                               assign->original->location,
+                               "Unknown struct field",
+                               target->typed.member.member ? target->typed.member.member : "<unknown>",
+                               NULL);
+        }
+        ctx->has_compilation_errors = true;
+        return -1;
+    }
+
+    int object_reg = compile_expression(ctx, target->typed.member.object);
+    if (object_reg == -1) {
+        return -1;
+    }
+
+    int index_reg = mp_allocate_temp_register(ctx->allocator);
+    if (index_reg == -1) {
+        if (object_reg >= MP_TEMP_REG_START && object_reg <= MP_TEMP_REG_END) {
+            mp_free_temp_register(ctx->allocator, object_reg);
+        }
+        return -1;
+    }
+
+    emit_load_constant(ctx, index_reg, I32_VAL(field_index));
+
+    int value_reg = compile_expression(ctx, value_node);
+    if (value_reg == -1) {
+        if (index_reg >= MP_TEMP_REG_START && index_reg <= MP_TEMP_REG_END) {
+            mp_free_temp_register(ctx->allocator, index_reg);
+        }
+        if (object_reg >= MP_TEMP_REG_START && object_reg <= MP_TEMP_REG_END) {
+            mp_free_temp_register(ctx->allocator, object_reg);
+        }
+        return -1;
+    }
+
+    set_location_from_node(ctx, assign);
+    emit_byte_to_buffer(ctx->bytecode, OP_ARRAY_SET_R);
+    emit_byte_to_buffer(ctx->bytecode, object_reg);
+    emit_byte_to_buffer(ctx->bytecode, index_reg);
+    emit_byte_to_buffer(ctx->bytecode, value_reg);
+
+    if (index_reg >= MP_TEMP_REG_START && index_reg <= MP_TEMP_REG_END) {
+        mp_free_temp_register(ctx->allocator, index_reg);
+    }
+    if (object_reg >= MP_TEMP_REG_START && object_reg <= MP_TEMP_REG_END) {
+        mp_free_temp_register(ctx->allocator, object_reg);
+    }
+
+    bool value_is_temp = value_reg >= MP_TEMP_REG_START && value_reg <= MP_TEMP_REG_END;
+    if (!as_expression && value_is_temp) {
+        mp_free_temp_register(ctx->allocator, value_reg);
+    }
+
+    return value_reg;
 }
 
 static int compile_assignment_internal(CompilerContext* ctx, TypedASTNode* assign,
