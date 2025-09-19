@@ -1681,6 +1681,49 @@ InterpretResult vm_run_dispatch(void) {
                     break;
                 }
 
+                case OP_ENUM_TAG_EQ_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t enum_reg = READ_BYTE();
+                    uint8_t variantIndex = READ_BYTE();
+
+                    Value value = vm_get_register_safe(enum_reg);
+                    if (!IS_ENUM(value)) {
+                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Match subject is not an enum value");
+                    }
+
+                    ObjEnumInstance* instance = AS_ENUM(value);
+                    bool match = (instance && instance->variantIndex == variantIndex);
+                    vm_set_register_safe(dst, BOOL_VAL(match));
+                    break;
+                }
+
+                case OP_ENUM_PAYLOAD_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t enum_reg = READ_BYTE();
+                    uint8_t variantIndex = READ_BYTE();
+                    uint8_t fieldIndex = READ_BYTE();
+
+                    Value value = vm_get_register_safe(enum_reg);
+                    if (!IS_ENUM(value)) {
+                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Attempted to destructure a non-enum value");
+                    }
+
+                    ObjEnumInstance* instance = AS_ENUM(value);
+                    if (!instance || instance->variantIndex != variantIndex) {
+                        const char* typeName = instance && instance->typeName ? instance->typeName->chars : "enum";
+                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(),
+                                        "Match arm expected %s variant index %u", typeName, variantIndex);
+                    }
+
+                    ObjArray* payload = instance->payload;
+                    if (!payload || fieldIndex >= payload->length) {
+                        VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(), "Enum payload index out of range");
+                    }
+
+                    vm_set_register_safe(dst, payload->elements[fieldIndex]);
+                    break;
+                }
+
                 case OP_ARRAY_GET_R: {
                     uint8_t dst = READ_BYTE();
                     uint8_t array_reg = READ_BYTE();

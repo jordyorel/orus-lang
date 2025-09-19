@@ -1,0 +1,10 @@
+enum Status:
+    Ready
+    Busy(reason: str)
+
+fn handle(status: Status):
+    match status:
+        Status.Idle:
+            print("idle")
+        Status.Busy(message):
+            print("busy", message)

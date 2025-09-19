@@ -2827,6 +2827,30 @@ During execution the dispatcher reads those operands, allocates an
 writes the result back with `ENUM_VAL`. Variants with zero payloads collapse to
 the same opcode with a payload count of zero and no extra register traffic.
 
+### Lightweight Variant Checks
+
+For ergonomics, the parser now recognizes the `matches` keyword as syntactic
+sugar for equality against payload-free enum variants. This keeps the high-level
+syntax aligned with the roadmap examples (`flag matches Flag.On`) while reusing
+the existing equality lowering path, so no new VM surface area was required.
+
+### Match Statement Lowering
+
+Match statements now support destructuring payload-bearing variants directly.
+During parsing the subject expression is stored in a scoped temporary and each
+arm lowers to an `if` guard plus an optional sequence of pattern bindings. The
+guard emits a dedicated `OP_ENUM_TAG_EQ_R` instruction that checks the enum
+discriminant without inspecting payload data. When the pattern introduces
+bindings the parser inserts synthetic variable declarations whose initialisers
+compile to `OP_ENUM_PAYLOAD_R`, pulling fields out of the enum instance into the
+current block. Wildcard arms still fall through to the final `else` branch so
+control flow remains linear.
+
+To preserve safety the parser also appends an internal `NODE_ENUM_MATCH_CHECK`
+statement that type inference uses to report missing or duplicate variants.
+Exhaustive matches or a trailing `_` arm silence the diagnostic while still
+benefiting from the destructuring lowering.
+
 ### Emitting Struct Method Calls
 
 Method dispatch now lowers to plain function calls while injecting the

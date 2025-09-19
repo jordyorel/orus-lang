@@ -227,8 +227,26 @@ ErrorReportResult report_elif_after_else(SrcLocation location) {
 }
 
 ErrorReportResult report_standalone_else(SrcLocation location) {
-    return report_feature_error_f(E1405_MISSING_COLON, location, 
+    return report_feature_error_f(E1405_MISSING_COLON, location,
         "'else' clause found without a preceding 'if' statement");
+}
+
+ErrorReportResult report_non_exhaustive_match(SrcLocation location, const char* enum_name, const char* missing_variants) {
+    const char* name = enum_name ? enum_name : "enum";
+    if (missing_variants && *missing_variants) {
+        return report_feature_error_f(E1410_NON_EXHAUSTIVE_MATCH, location,
+            "Match on %s is missing variant%s: %s",
+            name, strchr(missing_variants, ',') ? "s" : "", missing_variants);
+    }
+    return report_feature_error_f(E1410_NON_EXHAUSTIVE_MATCH, location,
+        "Match on %s is missing one or more variants", name);
+}
+
+ErrorReportResult report_duplicate_match_arm(SrcLocation location, const char* enum_name, const char* variant_name) {
+    const char* name = enum_name ? enum_name : "enum";
+    const char* variant = variant_name ? variant_name : "variant";
+    return report_feature_error_f(E1411_DUPLICATE_MATCH_ARM, location,
+        "%s.%s arm appears more than once", name, variant);
 }
 
 // ============================================================================

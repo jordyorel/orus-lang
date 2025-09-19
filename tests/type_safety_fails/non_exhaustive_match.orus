@@ -1,0 +1,10 @@
+enum Flag:
+    On
+    Off
+
+fn check(flag: Flag):
+    match flag:
+        Flag.On:
+            print("on")
+
+check(Flag.Off)

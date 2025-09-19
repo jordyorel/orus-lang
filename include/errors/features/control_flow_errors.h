@@ -49,6 +49,8 @@ ErrorReportResult report_missing_else_branch(SrcLocation location, const char* s
 ErrorReportResult report_duplicate_else_clause(SrcLocation location);
 ErrorReportResult report_elif_after_else(SrcLocation location);
 ErrorReportResult report_standalone_else(SrcLocation location);
+ErrorReportResult report_non_exhaustive_match(SrcLocation location, const char* enum_name, const char* missing_variants);
+ErrorReportResult report_duplicate_match_arm(SrcLocation location, const char* enum_name, const char* variant_name);
 
 // Advanced Control Flow Errors
 ErrorReportResult report_nested_loop_depth_exceeded(SrcLocation location, int max_depth);

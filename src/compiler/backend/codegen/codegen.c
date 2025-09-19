@@ -47,6 +47,8 @@ static int compile_member_assignment(CompilerContext* ctx, TypedASTNode* assign,
 static int ensure_string_constant(CompilerContext* ctx, const char* text);
 static int compile_enum_variant_access(CompilerContext* ctx, TypedASTNode* expr);
 static int compile_enum_constructor_call(CompilerContext* ctx, TypedASTNode* call);
+static int compile_enum_match_test(CompilerContext* ctx, TypedASTNode* expr);
+static int compile_enum_payload_extract(CompilerContext* ctx, TypedASTNode* expr);
 
 static int compile_builtin_array_push(CompilerContext* ctx, TypedASTNode* call);
 static int compile_builtin_array_pop(CompilerContext* ctx, TypedASTNode* call);
@@ -1460,6 +1462,84 @@ cleanup:
     return result_reg;
 }
 
+static int compile_enum_match_test(CompilerContext* ctx, TypedASTNode* expr) {
+    if (!ctx || !expr || !expr->typed.enumMatchTest.value) {
+        return -1;
+    }
+
+    int variant_index = expr->typed.enumMatchTest.variantIndex;
+    if (variant_index < 0 || variant_index > 255) {
+        ctx->has_compilation_errors = true;
+        return -1;
+    }
+
+    int enum_reg = compile_expression(ctx, expr->typed.enumMatchTest.value);
+    if (enum_reg == -1) {
+        return -1;
+    }
+
+    int result_reg = mp_allocate_temp_register(ctx->allocator);
+    if (result_reg == -1) {
+        ctx->has_compilation_errors = true;
+        if (enum_reg >= MP_TEMP_REG_START && enum_reg <= MP_TEMP_REG_END) {
+            mp_free_temp_register(ctx->allocator, enum_reg);
+        }
+        return -1;
+    }
+
+    set_location_from_node(ctx, expr);
+    emit_byte_to_buffer(ctx->bytecode, OP_ENUM_TAG_EQ_R);
+    emit_byte_to_buffer(ctx->bytecode, (uint8_t)result_reg);
+    emit_byte_to_buffer(ctx->bytecode, (uint8_t)enum_reg);
+    emit_byte_to_buffer(ctx->bytecode, (uint8_t)variant_index);
+
+    if (enum_reg >= MP_TEMP_REG_START && enum_reg <= MP_TEMP_REG_END) {
+        mp_free_temp_register(ctx->allocator, enum_reg);
+    }
+
+    return result_reg;
+}
+
+static int compile_enum_payload_extract(CompilerContext* ctx, TypedASTNode* expr) {
+    if (!ctx || !expr || !expr->typed.enumPayload.value) {
+        return -1;
+    }
+
+    int variant_index = expr->typed.enumPayload.variantIndex;
+    int field_index = expr->typed.enumPayload.fieldIndex;
+    if (variant_index < 0 || variant_index > 255 || field_index < 0 || field_index > 255) {
+        ctx->has_compilation_errors = true;
+        return -1;
+    }
+
+    int enum_reg = compile_expression(ctx, expr->typed.enumPayload.value);
+    if (enum_reg == -1) {
+        return -1;
+    }
+
+    int result_reg = mp_allocate_temp_register(ctx->allocator);
+    if (result_reg == -1) {
+        ctx->has_compilation_errors = true;
+        if (enum_reg >= MP_TEMP_REG_START && enum_reg <= MP_TEMP_REG_END) {
+            mp_free_temp_register(ctx->allocator, enum_reg);
+        }
+        return -1;
+    }
+
+    set_location_from_node(ctx, expr);
+    emit_byte_to_buffer(ctx->bytecode, OP_ENUM_PAYLOAD_R);
+    emit_byte_to_buffer(ctx->bytecode, (uint8_t)result_reg);
+    emit_byte_to_buffer(ctx->bytecode, (uint8_t)enum_reg);
+    emit_byte_to_buffer(ctx->bytecode, (uint8_t)variant_index);
+    emit_byte_to_buffer(ctx->bytecode, (uint8_t)field_index);
+
+    if (enum_reg >= MP_TEMP_REG_START && enum_reg <= MP_TEMP_REG_END) {
+        mp_free_temp_register(ctx->allocator, enum_reg);
+    }
+
+    return result_reg;
+}
+
 static bool evaluate_constant_i32(TypedASTNode* node, int32_t* out_value) {
     if (!node || !out_value || !node->original) {
         return false;
@@ -1634,6 +1714,10 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             free(element_regs);
             return result_reg;
         }
+        case NODE_ENUM_MATCH_TEST:
+            return compile_enum_match_test(ctx, expr);
+        case NODE_ENUM_PAYLOAD:
+            return compile_enum_payload_extract(ctx, expr);
         case NODE_STRUCT_LITERAL: {
             const char* struct_name = expr->typed.structLiteral.structName;
             Type* struct_type = expr->resolvedType;
@@ -2827,6 +2911,9 @@ void compile_statement(CompilerContext* ctx, TypedASTNode* stmt) {
         case NODE_CALL:
             // Compile function call as statement (void return type)
             compile_expression(ctx, stmt);
+            break;
+        case NODE_ENUM_MATCH_CHECK:
+            // Compile-time exhaustiveness checks generate this node; no runtime emission required.
             break;
         case NODE_STRUCT_DECL:
         case NODE_ENUM_DECL:

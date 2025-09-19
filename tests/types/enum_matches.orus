@@ -1,0 +1,16 @@
+enum Flag:
+    On
+    Off
+
+fn is_on(flag: Flag) -> bool:
+    return flag matches Flag.On
+
+mut status: Flag = Flag.Off
+if status matches Flag.On:
+    print("unexpected branch")
+
+status = Flag.On
+if is_on(status):
+    print("matches recognizes variant")
+
+print("enum matches ok")

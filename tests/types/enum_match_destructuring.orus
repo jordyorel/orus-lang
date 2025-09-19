@@ -1,0 +1,24 @@
+enum Option[T]:
+    Some(value: T)
+    None()
+
+enum Pair:
+    First(left: i32, right: i32)
+    Second
+
+fn describe(opt: Option[i32]):
+    match opt:
+        Option.Some(value):
+            print("some", value)
+        Option.None():
+            print("none")
+
+pair = Pair.First(7, 9)
+match pair:
+    Pair.First(_, right):
+        print("right", right)
+    Pair.Second:
+        print("second")
+
+describe(Option.Some(42))
+describe(Option.None())

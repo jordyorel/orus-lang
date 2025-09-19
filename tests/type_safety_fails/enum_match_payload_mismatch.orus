@@ -1,0 +1,10 @@
+enum Shape:
+    Point(x: i32, y: i32)
+    Line(length: i32)
+
+fn describe(shape: Shape):
+    match shape:
+        Shape.Point(x):
+            print("point", x)
+        Shape.Line(length):
+            print("line", length)

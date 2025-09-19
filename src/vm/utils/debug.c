@@ -206,6 +206,22 @@ int disassembleInstruction(Chunk* chunk, int offset) {
                    "ENUM_NEW", dst, variant, payload, start, typeConst, variantConst);
             return offset + 9;
         }
+        case OP_ENUM_TAG_EQ_R: {
+            uint8_t dst = chunk->code[offset + 1];
+            uint8_t enumReg = chunk->code[offset + 2];
+            uint8_t variant = chunk->code[offset + 3];
+            printf("%-16s R%d, enum=R%d, variant=%d\n", "ENUM_TAG_EQ", dst, enumReg, variant);
+            return offset + 4;
+        }
+        case OP_ENUM_PAYLOAD_R: {
+            uint8_t dst = chunk->code[offset + 1];
+            uint8_t enumReg = chunk->code[offset + 2];
+            uint8_t variant = chunk->code[offset + 3];
+            uint8_t field = chunk->code[offset + 4];
+            printf("%-16s R%d, enum=R%d, variant=%d, field=%d\n",
+                   "ENUM_PAYLOAD", dst, enumReg, variant, field);
+            return offset + 5;
+        }
 
         case OP_ARRAY_GET_R: {
             uint8_t dst = chunk->code[offset + 1];

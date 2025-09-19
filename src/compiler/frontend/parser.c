@@ -11,6 +11,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <limits.h>
+#include <stdio.h>
 
 // ArenaBlock and Arena are now defined in parser.h
 // This eliminates the redefinition error
@@ -204,6 +205,7 @@ static ASTNode* parseContinueStatement(ParserContext* ctx);
 static ASTNode* parseFunctionDefinition(ParserContext* ctx);
 static ASTNode* parseFunctionExpression(ParserContext* ctx, Token fnToken);
 static ASTNode* parseReturnStatement(ParserContext* ctx);
+static ASTNode* parseMatchStatement(ParserContext* ctx);
 
 // Primary expression handlers
 static ASTNode* parseNumberLiteral(ParserContext* ctx, Token token);
@@ -233,6 +235,7 @@ static ASTNode* parseEnumDefinition(ParserContext* ctx, bool isPublic);
 static ASTNode* parseStructDefinition(ParserContext* ctx, bool isPublic);
 static ASTNode* parseImplBlock(ParserContext* ctx, bool isPublic);
 static ASTNode* parseReturnStatement(ParserContext* ctx);
+static ASTNode* parseMatchStatement(ParserContext* ctx);
 static ASTNode* parseCallExpression(ParserContext* ctx, ASTNode* callee);
 static ASTNode* parseIndexExpression(ParserContext* ctx, ASTNode* arrayExpr, Token openToken);
 static ASTNode* parsePostfixExpressions(ParserContext* ctx, ASTNode* expr);
@@ -258,6 +261,7 @@ static int getOperatorPrecedence(TokenType type) {
         case TOKEN_GREATER:
         case TOKEN_LESS_EQUAL:
         case TOKEN_GREATER_EQUAL:
+        case TOKEN_MATCHES:
             return PREC_COMPARISON;
         case TOKEN_AND:
             return PREC_AND;
@@ -276,6 +280,7 @@ static const char* getOperatorString(TokenType type) {
         case TOKEN_SLASH: return "/";
         case TOKEN_MODULO: return "%";
         case TOKEN_EQUAL_EQUAL: return "==";
+        case TOKEN_MATCHES: return "==";
         case TOKEN_BANG_EQUAL: return "!=";
         case TOKEN_LESS: return "<";
         case TOKEN_GREATER: return ">";
@@ -357,6 +362,9 @@ static ASTNode* parseStatement(ParserContext* ctx) {
     if (t.type == TOKEN_IMPL) {
         return parseImplBlock(ctx, false);
     }
+    if (t.type == TOKEN_MATCH) {
+        return parseMatchStatement(ctx);
+    }
     if (t.type == TOKEN_IDENTIFIER) {
         Token second = peekSecondToken(ctx);
         if (second.type == TOKEN_COLON) {
@@ -384,6 +392,458 @@ static ASTNode* parseStatement(ParserContext* ctx) {
     } else {
         return parseExpression(ctx);
     }
+}
+
+typedef struct {
+    bool isWildcard;
+    char* enumTypeName;
+    char* variantName;
+    char** payloadNames;
+    int payloadCount;
+    ASTNode* body;
+    SrcLocation location;
+} MatchCaseInfo;
+
+static void addMatchCase(ParserContext* ctx, MatchCaseInfo** list, int* count, int* capacity, MatchCaseInfo info) {
+    if (*count + 1 > *capacity) {
+        int newCap = *capacity == 0 ? 4 : (*capacity * 2);
+        MatchCaseInfo* newArr = parser_arena_alloc(ctx, sizeof(MatchCaseInfo) * newCap);
+        if (*capacity > 0) {
+            memcpy(newArr, *list, sizeof(MatchCaseInfo) * (*count));
+        }
+        *list = newArr;
+        *capacity = newCap;
+    }
+    (*list)[(*count)++] = info;
+}
+
+static void addStringEntry(ParserContext* ctx, char*** list, int* count, int* capacity, char* value) {
+    if (!value) return;
+    if (*count + 1 > *capacity) {
+        int newCap = *capacity == 0 ? 4 : (*capacity * 2);
+        char** newArr = parser_arena_alloc(ctx, sizeof(char*) * newCap);
+        if (*capacity > 0 && *list) {
+            memcpy(newArr, *list, sizeof(char*) * (*count));
+        }
+        *list = newArr;
+        *capacity = newCap;
+    }
+    (*list)[(*count)++] = value;
+}
+
+static char* copy_token_text(ParserContext* ctx, Token token) {
+    char* text = parser_arena_alloc(ctx, (size_t)token.length + 1);
+    memcpy(text, token.start, (size_t)token.length);
+    text[token.length] = '\0';
+    return text;
+}
+
+static ASTNode* wrap_statement_in_block(ParserContext* ctx, ASTNode* stmt) {
+    if (!stmt) return NULL;
+    ASTNode** statements = parser_arena_alloc(ctx, sizeof(ASTNode*));
+    statements[0] = stmt;
+    ASTNode* block = new_node(ctx);
+    block->type = NODE_BLOCK;
+    block->block.statements = statements;
+    block->block.count = 1;
+    block->location = stmt->location;
+    block->dataType = NULL;
+    return block;
+}
+
+static ASTNode* create_identifier_node(ParserContext* ctx, const char* name, SrcLocation location) {
+    ASTNode* node = new_node(ctx);
+    node->type = NODE_IDENTIFIER;
+    node->identifier.name = (char*)name;
+    node->location = location;
+    node->dataType = NULL;
+    return node;
+}
+
+static ASTNode* create_member_access(ParserContext* ctx, ASTNode* object, const char* member, SrcLocation location) {
+    ASTNode* memberNode = new_node(ctx);
+    memberNode->type = NODE_MEMBER_ACCESS;
+    memberNode->member.object = object;
+    memberNode->member.member = (char*)member;
+    memberNode->member.isMethod = false;
+    memberNode->member.isInstanceMethod = false;
+    memberNode->member.resolvesToEnum = false;
+    memberNode->member.resolvesToEnumVariant = false;
+    memberNode->member.enumVariantIndex = -1;
+    memberNode->member.enumVariantArity = 0;
+    memberNode->member.enumTypeName = NULL;
+    memberNode->location = location;
+    memberNode->dataType = NULL;
+    return memberNode;
+}
+
+static ASTNode* create_binary_equals(ParserContext* ctx, ASTNode* left, ASTNode* right, SrcLocation location) {
+    ASTNode* node = new_node(ctx);
+    node->type = NODE_BINARY;
+    node->binary.left = left;
+    node->binary.right = right;
+    node->binary.op = "==";
+    node->location = location;
+    node->dataType = NULL;
+    return node;
+}
+
+static ASTNode* create_enum_match_test(ParserContext* ctx, ASTNode* value, MatchCaseInfo* info) {
+    if (!ctx || !value || !info) return NULL;
+    ASTNode* node = new_node(ctx);
+    node->type = NODE_ENUM_MATCH_TEST;
+    node->enumMatchTest.value = value;
+    node->enumMatchTest.enumTypeName = info->enumTypeName;
+    node->enumMatchTest.variantName = info->variantName;
+    node->enumMatchTest.variantIndex = -1;
+    node->enumMatchTest.expectedPayloadCount = info->payloadCount;
+    node->location = info->location;
+    node->dataType = NULL;
+    return node;
+}
+
+static ASTNode* create_enum_payload_access(ParserContext* ctx, ASTNode* value, MatchCaseInfo* info, int fieldIndex) {
+    if (!ctx || !value || !info || fieldIndex < 0) return NULL;
+    ASTNode* node = new_node(ctx);
+    node->type = NODE_ENUM_PAYLOAD;
+    node->enumPayload.value = value;
+    node->enumPayload.enumTypeName = info->enumTypeName;
+    node->enumPayload.variantName = info->variantName;
+    node->enumPayload.variantIndex = -1;
+    node->enumPayload.fieldIndex = fieldIndex;
+    node->location = info->location;
+    node->dataType = NULL;
+    return node;
+}
+
+static ASTNode* create_var_decl_with_initializer(ParserContext* ctx, char* name, ASTNode* initializer, SrcLocation location) {
+    ASTNode* decl = new_node(ctx);
+    decl->type = NODE_VAR_DECL;
+    decl->varDecl.name = name;
+    decl->varDecl.isPublic = false;
+    decl->varDecl.initializer = initializer;
+    decl->varDecl.typeAnnotation = NULL;
+    decl->varDecl.isConst = false;
+    decl->varDecl.isMutable = false;
+    decl->location = location;
+    decl->dataType = NULL;
+    return decl;
+}
+
+static ASTNode* create_enum_match_check(ParserContext* ctx,
+                                        const char* tempName,
+                                        char* enumTypeName,
+                                        char** variantNames,
+                                        int variantCount,
+                                        bool hasWildcard,
+                                        SrcLocation location) {
+    ASTNode* node = new_node(ctx);
+    node->type = NODE_ENUM_MATCH_CHECK;
+    node->enumMatchCheck.value = create_identifier_node(ctx, tempName, location);
+    node->enumMatchCheck.enumTypeName = enumTypeName;
+    node->enumMatchCheck.variantNames = variantNames;
+    node->enumMatchCheck.variantCount = variantCount;
+    node->enumMatchCheck.hasWildcard = hasWildcard;
+    node->location = location;
+    node->dataType = NULL;
+    return node;
+}
+
+static int generate_match_temp_id(void) {
+    static int counter = 0;
+    return counter++;
+}
+
+static ASTNode* parseMatchStatement(ParserContext* ctx) {
+    Token matchTok = nextToken(ctx);
+    if (matchTok.type != TOKEN_MATCH) {
+        return NULL;
+    }
+
+    ASTNode* subject = parseExpression(ctx);
+    if (!subject) {
+        return NULL;
+    }
+
+    Token colon = nextToken(ctx);
+    if (colon.type != TOKEN_COLON) {
+        return NULL;
+    }
+
+    if (peekToken(ctx).type == TOKEN_NEWLINE) {
+        nextToken(ctx);
+    }
+
+    Token indent = nextToken(ctx);
+    if (indent.type != TOKEN_INDENT) {
+        return NULL;
+    }
+
+    MatchCaseInfo* cases = NULL;
+    int caseCount = 0;
+    int caseCapacity = 0;
+
+    while (true) {
+        Token next = peekToken(ctx);
+        if (next.type == TOKEN_DEDENT) {
+            break;
+        }
+        if (next.type == TOKEN_NEWLINE) {
+            nextToken(ctx);
+            continue;
+        }
+
+        Token patternTok = nextToken(ctx);
+        if (patternTok.type != TOKEN_IDENTIFIER) {
+            return NULL;
+        }
+
+        bool isWildcard = false;
+        char* enumTypeName = NULL;
+        char* variantName = NULL;
+        char** payloadNames = NULL;
+        int payloadCount = 0;
+        int payloadCapacity = 0;
+
+        if (patternTok.length == 1 && patternTok.start[0] == '_') {
+            isWildcard = true;
+        } else {
+            enumTypeName = copy_token_text(ctx, patternTok);
+            if (peekToken(ctx).type != TOKEN_DOT) {
+                return NULL;
+            }
+            nextToken(ctx);
+            Token variantTok = nextToken(ctx);
+            if (variantTok.type != TOKEN_IDENTIFIER) {
+                return NULL;
+            }
+            variantName = copy_token_text(ctx, variantTok);
+
+            if (peekToken(ctx).type == TOKEN_LEFT_PAREN) {
+                nextToken(ctx);
+                if (peekToken(ctx).type == TOKEN_RIGHT_PAREN) {
+                    nextToken(ctx);
+                } else {
+                    while (true) {
+                        Token payloadTok = nextToken(ctx);
+                        if (payloadTok.type != TOKEN_IDENTIFIER) {
+                            return NULL;
+                        }
+                        char* bindingName = NULL;
+                        if (!(payloadTok.length == 1 && payloadTok.start[0] == '_')) {
+                            bindingName = copy_token_text(ctx, payloadTok);
+                        }
+                        if (payloadCount + 1 > payloadCapacity) {
+                            int newCap = payloadCapacity == 0 ? 4 : (payloadCapacity * 2);
+                            char** newArr = parser_arena_alloc(ctx, sizeof(char*) * newCap);
+                            if (payloadCapacity > 0 && payloadNames) {
+                                memcpy(newArr, payloadNames, sizeof(char*) * payloadCount);
+                            }
+                            payloadNames = newArr;
+                            payloadCapacity = newCap;
+                        }
+                        payloadNames[payloadCount++] = bindingName;
+
+                        Token delim = peekToken(ctx);
+                        if (delim.type == TOKEN_COMMA) {
+                            nextToken(ctx);
+                            continue;
+                        }
+                        if (delim.type == TOKEN_RIGHT_PAREN) {
+                            nextToken(ctx);
+                            break;
+                        }
+                        return NULL;
+                    }
+                }
+            }
+        }
+
+        Token caseColon = nextToken(ctx);
+        if (caseColon.type != TOKEN_COLON) {
+            return NULL;
+        }
+
+        ASTNode* body = NULL;
+        Token afterColon = peekToken(ctx);
+        if (afterColon.type == TOKEN_NEWLINE) {
+            nextToken(ctx);
+            Token bodyIndent = nextToken(ctx);
+            if (bodyIndent.type != TOKEN_INDENT) {
+                return NULL;
+            }
+            body = parseBlock(ctx);
+            if (!body) {
+                return NULL;
+            }
+        } else {
+            body = parseStatement(ctx);
+            if (!body) {
+                return NULL;
+            }
+            if (body->type != NODE_BLOCK) {
+                body = wrap_statement_in_block(ctx, body);
+            }
+        }
+
+        if (peekToken(ctx).type == TOKEN_NEWLINE) {
+            nextToken(ctx);
+        }
+
+        MatchCaseInfo info = {isWildcard, enumTypeName, variantName, payloadNames,
+                              payloadCount, body, {NULL, patternTok.line, patternTok.column}};
+        addMatchCase(ctx, &cases, &caseCount, &caseCapacity, info);
+    }
+
+    Token dedentTok = nextToken(ctx);
+    if (dedentTok.type != TOKEN_DEDENT) {
+        return NULL;
+    }
+
+    if (caseCount == 0) {
+        return NULL;
+    }
+
+    char tempNameBuffer[32];
+    int tempId = generate_match_temp_id();
+    snprintf(tempNameBuffer, sizeof(tempNameBuffer), "__match_tmp_%d", tempId);
+    size_t tempLen = strlen(tempNameBuffer);
+    char* tempName = parser_arena_alloc(ctx, tempLen + 1);
+    memcpy(tempName, tempNameBuffer, tempLen + 1);
+
+    ASTNode* tempVarDecl = new_node(ctx);
+    tempVarDecl->type = NODE_VAR_DECL;
+    tempVarDecl->varDecl.name = tempName;
+    tempVarDecl->varDecl.isPublic = false;
+    tempVarDecl->varDecl.initializer = subject;
+    tempVarDecl->varDecl.typeAnnotation = NULL;
+    tempVarDecl->varDecl.isConst = false;
+    tempVarDecl->varDecl.isMutable = false;
+    tempVarDecl->location.line = matchTok.line;
+    tempVarDecl->location.column = matchTok.column;
+    tempVarDecl->dataType = NULL;
+
+    ASTNode* rootIf = NULL;
+    ASTNode* currentIf = NULL;
+    ASTNode* wildcardBlock = NULL;
+    bool hasWildcardCase = false;
+    char** handledVariants = NULL;
+    int handledVariantCount = 0;
+    int handledVariantCapacity = 0;
+    char* declaredEnumType = NULL;
+
+    for (int i = 0; i < caseCount; i++) {
+        MatchCaseInfo* info = &cases[i];
+        if (info->isWildcard) {
+            wildcardBlock = info->body;
+            hasWildcardCase = true;
+            continue;
+        }
+
+        if (!declaredEnumType && info->enumTypeName) {
+            declaredEnumType = info->enumTypeName;
+        }
+
+        ASTNode* tempIdentifier = create_identifier_node(ctx, tempName, info->location);
+        ASTNode* condition = create_enum_match_test(ctx, tempIdentifier, info);
+
+        ASTNode* thenBlock = info->body;
+        if (thenBlock && thenBlock->type != NODE_BLOCK) {
+            thenBlock = wrap_statement_in_block(ctx, thenBlock);
+        }
+
+        int bindingCount = 0;
+        if (info->payloadCount > 0 && info->payloadNames && thenBlock && thenBlock->type == NODE_BLOCK) {
+            for (int j = 0; j < info->payloadCount; j++) {
+                if (info->payloadNames[j]) {
+                    bindingCount++;
+                }
+            }
+
+            if (bindingCount > 0) {
+                int totalStatements = bindingCount + thenBlock->block.count;
+                ASTNode** combined = parser_arena_alloc(ctx, sizeof(ASTNode*) * totalStatements);
+                int idx = 0;
+                for (int j = 0; j < info->payloadCount; j++) {
+                    if (!info->payloadNames[j]) {
+                        continue;
+                    }
+                    ASTNode* payloadSource = create_identifier_node(ctx, tempName, info->location);
+                    ASTNode* payloadExpr = create_enum_payload_access(ctx, payloadSource, info, j);
+                    ASTNode* bindingDecl = create_var_decl_with_initializer(ctx, info->payloadNames[j], payloadExpr, info->location);
+                    combined[idx++] = bindingDecl;
+                }
+                for (int j = 0; j < thenBlock->block.count; j++) {
+                    combined[idx++] = thenBlock->block.statements[j];
+                }
+
+                ASTNode* expandedBlock = new_node(ctx);
+                expandedBlock->type = NODE_BLOCK;
+                expandedBlock->block.statements = combined;
+                expandedBlock->block.count = bindingCount + thenBlock->block.count;
+                expandedBlock->location = thenBlock->location;
+                expandedBlock->dataType = NULL;
+                thenBlock = expandedBlock;
+            }
+        }
+
+        addStringEntry(ctx, &handledVariants, &handledVariantCount, &handledVariantCapacity, info->variantName);
+
+        ASTNode* ifNode = new_node(ctx);
+        ifNode->type = NODE_IF;
+        ifNode->ifStmt.condition = condition;
+        ifNode->ifStmt.thenBranch = thenBlock;
+        ifNode->ifStmt.elseBranch = NULL;
+        ifNode->location = info->location;
+        ifNode->dataType = NULL;
+
+        if (!rootIf) {
+            rootIf = ifNode;
+        } else {
+            currentIf->ifStmt.elseBranch = ifNode;
+        }
+        currentIf = ifNode;
+    }
+
+    if (currentIf && wildcardBlock) {
+        currentIf->ifStmt.elseBranch = wildcardBlock;
+    }
+
+    ASTNode** statements = NULL;
+    int statementCount = 0;
+    int statementCapacity = 0;
+    addStatement(ctx, &statements, &statementCount, &statementCapacity, tempVarDecl);
+
+    if (rootIf) {
+        addStatement(ctx, &statements, &statementCount, &statementCapacity, rootIf);
+    } else if (wildcardBlock && wildcardBlock->type == NODE_BLOCK) {
+        for (int i = 0; i < wildcardBlock->block.count; i++) {
+            addStatement(ctx, &statements, &statementCount, &statementCapacity,
+                         wildcardBlock->block.statements[i]);
+        }
+    }
+
+    SrcLocation checkLocation = {NULL, matchTok.line, matchTok.column};
+    ASTNode* matchCheck = create_enum_match_check(ctx, tempName, declaredEnumType,
+                                                 handledVariants, handledVariantCount,
+                                                 hasWildcardCase, checkLocation);
+    if (matchCheck) {
+        addStatement(ctx, &statements, &statementCount, &statementCapacity, matchCheck);
+    }
+
+    ASTNode* matchBlock = new_node(ctx);
+    matchBlock->type = NODE_BLOCK;
+    matchBlock->block.statements = statements;
+    matchBlock->block.count = statementCount;
+    matchBlock->location.line = matchTok.line;
+    matchBlock->location.column = matchTok.column;
+    matchBlock->dataType = NULL;
+
+    if (peekToken(ctx).type == TOKEN_NEWLINE) {
+        nextToken(ctx);
+    }
+
+    return matchBlock;
 }
 
 static ASTNode* parsePrintStatement(ParserContext* ctx) {

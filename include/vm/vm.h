@@ -510,6 +510,8 @@ typedef enum {
     // Array operations
     OP_MAKE_ARRAY_R,  // dst, start_reg, count
     OP_ENUM_NEW_R,    // dst, variant_idx, payload_count, payload_start, type_const
+    OP_ENUM_TAG_EQ_R, // dst, enum_reg, variant_idx
+    OP_ENUM_PAYLOAD_R,// dst, enum_reg, variant_idx, field_idx
     OP_ARRAY_GET_R,   // dst, array_reg, index_reg
     OP_ARRAY_SET_R,   // array_reg, index_reg, value_reg
     OP_ARRAY_LEN_R,   // dst, array_reg
