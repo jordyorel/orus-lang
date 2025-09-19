@@ -1,0 +1,18 @@
+// Validates struct field mutation within iterative control flow.
+pub struct Accumulator:
+    total: i32
+    increment: i32
+
+impl Accumulator:
+    fn run(counter: Accumulator, steps: i32) -> Accumulator:
+        mut current = counter
+        mut remaining = steps
+        while remaining > 0:
+            current.total = current.total + current.increment
+            remaining = remaining - 1
+        return current
+
+start = Accumulator{ total: 5, increment: 2 }
+result = Accumulator.run(start, 4)
+print(result.total)
+print(result.increment)
