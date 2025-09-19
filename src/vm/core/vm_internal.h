@@ -17,7 +17,7 @@ void runtimeError(ErrorType type, SrcLocation location, const char* format, ...)
 #define VM_ERROR_RETURN(type, loc, msg, ...) \
     do { \
         runtimeError(type, loc, msg, ##__VA_ARGS__); \
-        RETURN(INTERPRET_RUNTIME_ERROR); \
+        goto HANDLE_RUNTIME_ERROR; \
     } while (0)
 
 #define VM_TYPE_CHECK(cond, msg) \

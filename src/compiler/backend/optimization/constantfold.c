@@ -151,7 +151,16 @@ bool apply_constant_folding_recursive(TypedASTNode* ast) {
                 apply_constant_folding_recursive(ast->typed.ifStmt.elseBranch);
             }
             break;
-            
+
+        case NODE_TRY:
+            if (ast->typed.tryStmt.tryBlock) {
+                apply_constant_folding_recursive(ast->typed.tryStmt.tryBlock);
+            }
+            if (ast->typed.tryStmt.catchBlock) {
+                apply_constant_folding_recursive(ast->typed.tryStmt.catchBlock);
+            }
+            break;
+
         default:
             // No folding needed for other node types
             break;

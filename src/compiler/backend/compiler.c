@@ -209,6 +209,7 @@ static inline int determine_prefix_size(uint8_t opcode) {
     switch (opcode) {
         case OP_JUMP_IF_NOT_R:
         case OP_JUMP_IF_R:
+        case OP_TRY_BEGIN:
             return 2;  // opcode + condition register
         case OP_JUMP_IF_NOT_SHORT:
             return 2;  // opcode + condition register
@@ -224,6 +225,8 @@ static inline int determine_operand_size(uint8_t opcode) {
         case OP_JUMP_IF_NOT_SHORT:
         case OP_LOOP_SHORT:
             return 1;
+        case OP_TRY_BEGIN:
+            return 2;
         default:
             return 2;
     }
@@ -286,6 +289,7 @@ bool patch_jump(BytecodeBuffer* buffer, int patch_index, int target_offset) {
     switch (patch->opcode) {
         case OP_JUMP_IF_NOT_R:
         case OP_JUMP_IF_R:
+        case OP_TRY_BEGIN:
         {
             relative = target_offset - next_ip;
             if (relative < 0 || relative > 0xFFFF) {

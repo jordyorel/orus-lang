@@ -198,6 +198,8 @@ static ASTNode* parseArrayLiteral(ParserContext* ctx, Token leftToken);
 
 // Control flow parsing functions
 static ASTNode* parseIfStatement(ParserContext* ctx);
+static ASTNode* parseTryStatement(ParserContext* ctx);
+static ASTNode* parseThrowStatement(ParserContext* ctx);
 static ASTNode* parseWhileStatement(ParserContext* ctx);
 static ASTNode* parseForStatement(ParserContext* ctx);
 static ASTNode* parseBreakStatement(ParserContext* ctx);
@@ -226,6 +228,8 @@ static ASTNode* parseVariableDeclaration(ParserContext* ctx, bool isMutable, Tok
 static ASTNode* parseAssignOrVarList(ParserContext* ctx, bool isMutable, Token nameToken);
 static ASTNode* parseStatement(ParserContext* ctx);
 static ASTNode* parseIfStatement(ParserContext* ctx);
+static ASTNode* parseTryStatement(ParserContext* ctx);
+static ASTNode* parseThrowStatement(ParserContext* ctx);
 static ASTNode* parseWhileStatement(ParserContext* ctx);
 static ASTNode* parseForStatement(ParserContext* ctx);
 static ASTNode* parseBreakStatement(ParserContext* ctx);
@@ -375,6 +379,12 @@ static ASTNode* parseStatement(ParserContext* ctx) {
             nextToken(ctx);
             return parseAssignOrVarList(ctx, false, t);
         }
+    }
+    if (t.type == TOKEN_TRY) {
+        return parseTryStatement(ctx);
+    }
+    if (t.type == TOKEN_THROW) {
+        return parseThrowStatement(ctx);
     }
     if (t.type == TOKEN_IF) {
         return parseIfStatement(ctx);
@@ -1672,6 +1682,131 @@ static ASTNode* parseWhileStatement(ParserContext* ctx) {
     node->whileStmt.label = NULL;
     node->location.line = whileTok.line;
     node->location.column = whileTok.column;
+    node->dataType = NULL;
+    return node;
+}
+
+static ASTNode* parseTryStatement(ParserContext* ctx) {
+    Token tryTok = nextToken(ctx);
+    if (tryTok.type != TOKEN_TRY) return NULL;
+
+    Token colon = nextToken(ctx);
+    if (colon.type != TOKEN_COLON) {
+        SrcLocation location = {NULL, colon.line, colon.column};
+        report_missing_colon(location, "try");
+        return NULL;
+    }
+
+    ASTNode* tryBlock = NULL;
+    Token next = peekToken(ctx);
+    if (next.type == TOKEN_NEWLINE) {
+        nextToken(ctx);  // consume newline
+        Token indentToken = nextToken(ctx);
+        if (indentToken.type != TOKEN_INDENT) {
+            SrcLocation location = {NULL, indentToken.line, indentToken.column};
+            report_invalid_indentation(location, "try", 4, 0);
+            return NULL;
+        }
+        tryBlock = parseBlock(ctx);
+        if (!tryBlock) {
+            SrcLocation location = {NULL, tryTok.line, tryTok.column};
+            report_empty_block(location, "try");
+            return NULL;
+        }
+    } else {
+        tryBlock = parseStatement(ctx);
+        if (!tryBlock) {
+            SrcLocation location = {NULL, tryTok.line, tryTok.column};
+            report_empty_block(location, "try");
+            return NULL;
+        }
+    }
+
+    Token lookahead = peekToken(ctx);
+    while (lookahead.type == TOKEN_NEWLINE) {
+        nextToken(ctx);
+        lookahead = peekToken(ctx);
+    }
+
+    if (lookahead.type != TOKEN_CATCH) {
+        SrcLocation location = {NULL, lookahead.line, lookahead.column};
+        report_compile_error(E1006_INVALID_SYNTAX, location, "expected 'catch' after try block");
+        return NULL;
+    }
+
+    Token catchTok = nextToken(ctx); // consume 'catch'
+
+    Token nameTok = nextToken(ctx);
+    char* catchName = NULL;
+    Token catchColon = nameTok;
+    if (nameTok.type == TOKEN_IDENTIFIER) {
+        catchName = copy_token_text(ctx, nameTok);
+        catchColon = nextToken(ctx);
+    }
+
+    if (catchColon.type != TOKEN_COLON) {
+        SrcLocation location = {NULL, catchColon.line, catchColon.column};
+        report_missing_colon(location, "catch");
+        return NULL;
+    }
+
+    ASTNode* catchBlock = NULL;
+    Token afterCatch = peekToken(ctx);
+    if (afterCatch.type == TOKEN_NEWLINE) {
+        nextToken(ctx);
+        Token indentToken = nextToken(ctx);
+        if (indentToken.type != TOKEN_INDENT) {
+            SrcLocation location = {NULL, indentToken.line, indentToken.column};
+            report_invalid_indentation(location, "catch", 4, 0);
+            return NULL;
+        }
+        catchBlock = parseBlock(ctx);
+        if (!catchBlock) {
+            SrcLocation location = {NULL, catchTok.line, catchTok.column};
+            report_empty_block(location, "catch");
+            return NULL;
+        }
+    } else {
+        catchBlock = parseStatement(ctx);
+        if (!catchBlock) {
+            SrcLocation location = {NULL, catchTok.line, catchTok.column};
+            report_empty_block(location, "catch");
+            return NULL;
+        }
+    }
+
+    ASTNode* node = new_node(ctx);
+    node->type = NODE_TRY;
+    node->tryStmt.tryBlock = tryBlock;
+    node->tryStmt.catchBlock = catchBlock;
+    node->tryStmt.catchVar = catchName;
+    node->location.line = tryTok.line;
+    node->location.column = tryTok.column;
+    node->dataType = NULL;
+    return node;
+}
+
+static ASTNode* parseThrowStatement(ParserContext* ctx) {
+    Token throwTok = nextToken(ctx);
+    if (throwTok.type != TOKEN_THROW) return NULL;
+
+    Token next = peekToken(ctx);
+    if (next.type == TOKEN_NEWLINE || next.type == TOKEN_EOF || next.type == TOKEN_DEDENT) {
+        SrcLocation location = {NULL, throwTok.line, throwTok.column};
+        report_compile_error(E1006_INVALID_SYNTAX, location, "expected expression after 'throw'");
+        return NULL;
+    }
+
+    ASTNode* value = parseExpression(ctx);
+    if (!value) {
+        return NULL;
+    }
+
+    ASTNode* node = new_node(ctx);
+    node->type = NODE_THROW;
+    node->throwStmt.value = value;
+    node->location.line = throwTok.line;
+    node->location.column = throwTok.column;
     node->dataType = NULL;
     return node;
 }

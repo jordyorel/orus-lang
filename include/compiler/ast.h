@@ -56,6 +56,8 @@ typedef enum {
     NODE_WHILE,
     NODE_FOR_RANGE,
     NODE_FOR_ITER,
+    NODE_TRY,
+    NODE_THROW,
     NODE_BLOCK,
     NODE_TERNARY,
     NODE_UNARY,
@@ -174,6 +176,14 @@ struct ASTNode {
             ASTNode* body;
             char* label;
         } forIter;
+        struct {
+            ASTNode* tryBlock;
+            char* catchVar;
+            ASTNode* catchBlock;
+        } tryStmt;
+        struct {
+            ASTNode* value;
+        } throwStmt;
         struct {
             ASTNode** statements;
             int count;

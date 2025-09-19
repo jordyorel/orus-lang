@@ -391,6 +391,27 @@ int disassembleInstruction(Chunk* chunk, int offset) {
             return offset + 3;
         }
 
+        case OP_TRY_BEGIN: {
+            uint8_t reg = chunk->code[offset + 1];
+            uint16_t jump = (uint16_t)((chunk->code[offset + 2] << 8) | chunk->code[offset + 3]);
+            if (reg == 0xFF) {
+                printf("%-16s catch=<none>, +%d\n", "TRY_BEGIN", jump);
+            } else {
+                printf("%-16s catch=R%u, +%d\n", "TRY_BEGIN", reg, jump);
+            }
+            return offset + 4;
+        }
+
+        case OP_TRY_END:
+            printf("%-16s\n", "TRY_END");
+            return offset + 1;
+
+        case OP_THROW: {
+            uint8_t reg = chunk->code[offset + 1];
+            printf("%-16s R%u\n", "THROW", reg);
+            return offset + 2;
+        }
+
         case OP_JUMP: {
             uint16_t jump = (uint16_t)((chunk->code[offset + 1] << 8) | chunk->code[offset + 2]);
             printf("%-16s +%d\n", "JUMP", jump);

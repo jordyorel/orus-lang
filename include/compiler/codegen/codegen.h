@@ -38,6 +38,8 @@ void compile_if_statement(CompilerContext* ctx, TypedASTNode* if_stmt);
 void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt);
 void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt);
 void compile_for_iter_statement(CompilerContext* ctx, TypedASTNode* for_stmt);
+void compile_try_statement(CompilerContext* ctx, TypedASTNode* try_stmt);
+void compile_throw_statement(CompilerContext* ctx, TypedASTNode* throw_stmt);
 void compile_break_statement(CompilerContext* ctx, TypedASTNode* break_stmt);
 void compile_continue_statement(CompilerContext* ctx, TypedASTNode* continue_stmt);
 
