@@ -1,0 +1,94 @@
+// Orus Control Flow & Types Max-Stress Benchmark
+// Merges and extends: control_flow_benchmark.orus + loop.orus
+
+print("=== Orus Max Control Flow + Types Benchmark ===")
+
+start_ns = time_stamp()
+
+// Tunable parameters (kept reasonable for cross-language runs)
+N1: i32 = 2_000_000   // simple loop iterations
+O2: i32 = 1000        // outer loop for nested (O2*I2 = 1,000,000)
+I2: i32 = 1000        // inner loop for nested
+N3: i32 = 1_000_000   // stepping-range base (2M even-sum iterations)
+
+// Phase A: Simple for-loop sum with inclusive range and casts
+print("Phase A: simple sum loop (inclusive range)")
+mut sum1: i64 = 0
+for i in 1..=N1:
+    sum1 = sum1 + (i as i64)
+
+// Phase B: Nested loops + parity branch, exercising dense branches
+print("Phase B: nested loops with parity branch")
+mut acc2: i64 = 0
+for i in 0..O2:
+    for j in 0..I2:
+        t: i64 = (i as i64) + (j as i64)
+        if (t % (2 as i64)) == (0 as i64):
+            acc2 = acc2 + t
+        else:
+            acc2 = acc2 - (1 as i64)
+
+// Phase C: Stepped range (sum evens), exercising 3-part for-range syntax
+print("Phase C: stepped range loop (sum evens)")
+mut sum3: i64 = 0
+for k in 0..(N3*2)..2:
+    sum3 = sum3 + (k as i64)
+
+// Phase D: While loop with conditional hits
+print("Phase D: while loop with conditional hits")
+mut while_counter: i32 = 0
+mut condition_hits: i64 = 0
+while while_counter < 100000:
+    if (while_counter % 2) == 0:
+        condition_hits = condition_hits + 1
+    while_counter = while_counter + 1
+
+// Phase E: Dense independent conditionals to stress short jumps
+print("Phase E: dense conditionals (2,3,5,7)")
+mut dense_total: i64 = 0
+for i in 0..20000:
+    ii: i64 = i as i64
+    if (ii % (2 as i64)) == (0 as i64):
+        dense_total = dense_total + 1
+    if (ii % (3 as i64)) == (0 as i64):
+        dense_total = dense_total + 2
+    if (ii % (5 as i64)) == (0 as i64):
+        dense_total = dense_total + 3
+    if (ii % (7 as i64)) == (0 as i64):
+        dense_total = dense_total + 4
+
+// Phase F: Tight triple-nested loops to stress short loop jumps
+print("Phase F: tight triple-nested loops")
+mut tight_total: i64 = 0
+for a in 0..200:
+    for b in 0..200:
+        for c in 0..5:
+            tight_total = tight_total + 1
+
+// Phase G: Mixed control flow (for + while + nested if/else)
+print("Phase G: mixed control flow (for + while + nested if)")
+mut mixed_total: i64 = 0
+for outer in 0..100:
+    mut inner: i32 = 0
+    while inner < 50:
+        if (inner % 3) == 0:
+            if (outer % 2) == 0:
+                mixed_total = mixed_total + 1
+            else:
+                mixed_total = mixed_total + 2
+        else:
+            mixed_total = mixed_total + 1
+        inner = inner + 1
+
+// Aggregate checksum to avoid DCE and validate consistency
+checksum: i64 = sum1 + acc2 + sum3 + condition_hits + dense_total + tight_total + mixed_total
+
+end_ns = time_stamp()
+elapsed_ns = end_ns - start_ns
+elapsed_ms = elapsed_ns / 1000000
+
+print("Checksum:", checksum)
+print("Total time (nanoseconds):", elapsed_ns)
+print("Total time (milliseconds):", elapsed_ms)
+print("=== Orus Max Control Flow Benchmark Complete ===")
+

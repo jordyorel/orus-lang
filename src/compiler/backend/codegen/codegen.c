@@ -3367,6 +3367,7 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     int condition_neg_reg = -1;
     int step_nonneg_reg = -1;
     int zero_reg = -1;
+    int limit_temp_reg = -1; // temp for inclusive fused limit (end+1)
 
     const char* loop_var_name = NULL;
     if (for_stmt->original && for_stmt->original->forRange.varName) {
@@ -3403,6 +3404,7 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
 
     bool step_known_positive = false;
     bool step_known_negative = false;
+    bool step_is_one = false; // Enable fused loop fast-path when true
 
     if (step_node) {
         step_reg = compile_expression(ctx, step_node);
@@ -3418,6 +3420,9 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
             } else {
                 step_known_negative = true;
             }
+            if (step_constant == 1) {
+                step_is_one = true;
+            }
         }
     } else {
         step_reg = mp_allocate_temp_register(ctx->allocator);
@@ -3428,6 +3433,7 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
         set_location_from_node(ctx, for_stmt);
         emit_load_constant(ctx, step_reg, I32_VAL(1));
         step_known_positive = true;
+        step_is_one = true;
     }
 
     if (!step_known_positive && !step_known_negative) {
@@ -3495,15 +3501,42 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
         goto cleanup;
     }
 
+    // If we can use fused INC_CMP_JMP, adjust top-test to strict < with a possibly adjusted limit
+    int limit_reg_used = end_reg;
+    bool can_fuse_inc_cmp = step_known_positive && step_is_one;
+    if (can_fuse_inc_cmp && for_stmt->typed.forRange.inclusive) {
+        // Compute (end + 1) into a temp to preserve inclusive semantics
+        limit_temp_reg = mp_allocate_temp_register(ctx->allocator);
+        if (limit_temp_reg == -1) {
+            ctx->has_compilation_errors = true;
+            goto cleanup;
+        }
+        set_location_from_node(ctx, for_stmt);
+        // OP_ADD_I32_IMM: dst, src, imm(4 bytes)
+        emit_byte_to_buffer(ctx->bytecode, OP_ADD_I32_IMM);
+        emit_byte_to_buffer(ctx->bytecode, (uint8_t)limit_temp_reg);
+        emit_byte_to_buffer(ctx->bytecode, (uint8_t)end_reg);
+        int32_t one = 1;
+        emit_byte_to_buffer(ctx->bytecode, (uint8_t)((one) & 0xFF));
+        emit_byte_to_buffer(ctx->bytecode, (uint8_t)((one >> 8) & 0xFF));
+        emit_byte_to_buffer(ctx->bytecode, (uint8_t)((one >> 16) & 0xFF));
+        emit_byte_to_buffer(ctx->bytecode, (uint8_t)((one >> 24) & 0xFF));
+        limit_reg_used = limit_temp_reg;
+    }
+
     set_location_from_node(ctx, for_stmt);
-    if (for_stmt->typed.forRange.inclusive) {
-        emit_byte_to_buffer(ctx->bytecode, OP_LE_I32_R);
-    } else {
+    if (can_fuse_inc_cmp) {
         emit_byte_to_buffer(ctx->bytecode, OP_LT_I32_R);
+    } else {
+        if (for_stmt->typed.forRange.inclusive) {
+            emit_byte_to_buffer(ctx->bytecode, OP_LE_I32_R);
+        } else {
+            emit_byte_to_buffer(ctx->bytecode, OP_LT_I32_R);
+        }
     }
     emit_byte_to_buffer(ctx->bytecode, condition_reg);
     emit_byte_to_buffer(ctx->bytecode, loop_var_reg);
-    emit_byte_to_buffer(ctx->bytecode, end_reg);
+    emit_byte_to_buffer(ctx->bytecode, (uint8_t) (can_fuse_inc_cmp ? limit_reg_used : end_reg));
 
     if (!step_known_positive) {
         condition_neg_reg = mp_allocate_temp_register(ctx->allocator);
@@ -3584,25 +3617,40 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     int continue_target = ctx->bytecode->count;
     update_loop_continue_target(ctx, loop_frame, continue_target);
 
-    set_location_from_node(ctx, for_stmt);
-    emit_byte_to_buffer(ctx->bytecode, OP_ADD_I32_R);
-    emit_byte_to_buffer(ctx->bytecode, loop_var_reg);
-    emit_byte_to_buffer(ctx->bytecode, loop_var_reg);
-    emit_byte_to_buffer(ctx->bytecode, step_reg);
+    if (can_fuse_inc_cmp) {
+        // Continue statements should jump here to execute fused inc+cmp+jmp
+        patch_continue_statements(ctx, continue_target);
 
-    patch_continue_statements(ctx, continue_target);
-
-    int back_jump_distance = (ctx->bytecode->count + 2) - loop_start;
-    if (back_jump_distance >= 0 && back_jump_distance <= 255) {
         set_location_from_node(ctx, for_stmt);
-        emit_byte_to_buffer(ctx->bytecode, OP_LOOP_SHORT);
-        emit_byte_to_buffer(ctx->bytecode, (uint8_t)back_jump_distance);
+        emit_byte_to_buffer(ctx->bytecode, OP_INC_CMP_JMP);
+        emit_byte_to_buffer(ctx->bytecode, (uint8_t)loop_var_reg);
+        emit_byte_to_buffer(ctx->bytecode, (uint8_t)limit_reg_used);
+        // back offset is relative to address after the 2-byte offset we emit now
+        int back_off = loop_start - (ctx->bytecode->count + 2);
+        // OP_INC_CMP_JMP reads offset as native int16 (little-endian on our targets)
+        emit_byte_to_buffer(ctx->bytecode, (uint8_t)(back_off & 0xFF));
+        emit_byte_to_buffer(ctx->bytecode, (uint8_t)((back_off >> 8) & 0xFF));
     } else {
-        int back_jump_offset = loop_start - (ctx->bytecode->count + 3);
         set_location_from_node(ctx, for_stmt);
-        emit_byte_to_buffer(ctx->bytecode, OP_JUMP);
-        emit_byte_to_buffer(ctx->bytecode, (back_jump_offset >> 8) & 0xFF);
-        emit_byte_to_buffer(ctx->bytecode, back_jump_offset & 0xFF);
+        emit_byte_to_buffer(ctx->bytecode, OP_ADD_I32_R);
+        emit_byte_to_buffer(ctx->bytecode, loop_var_reg);
+        emit_byte_to_buffer(ctx->bytecode, loop_var_reg);
+        emit_byte_to_buffer(ctx->bytecode, step_reg);
+
+        patch_continue_statements(ctx, continue_target);
+
+        int back_jump_distance = (ctx->bytecode->count + 2) - loop_start;
+        if (back_jump_distance >= 0 && back_jump_distance <= 255) {
+            set_location_from_node(ctx, for_stmt);
+            emit_byte_to_buffer(ctx->bytecode, OP_LOOP_SHORT);
+            emit_byte_to_buffer(ctx->bytecode, (uint8_t)back_jump_distance);
+        } else {
+            int back_jump_offset = loop_start - (ctx->bytecode->count + 3);
+            set_location_from_node(ctx, for_stmt);
+            emit_byte_to_buffer(ctx->bytecode, OP_JUMP);
+            emit_byte_to_buffer(ctx->bytecode, (back_jump_offset >> 8) & 0xFF);
+            emit_byte_to_buffer(ctx->bytecode, back_jump_offset & 0xFF);
+        }
     }
 
     int end_target = ctx->bytecode->count;
@@ -3652,6 +3700,10 @@ cleanup:
     if (end_reg >= MP_TEMP_REG_START && end_reg <= MP_TEMP_REG_END) {
         mp_free_temp_register(ctx->allocator, end_reg);
         end_reg = -1;
+    }
+    if (limit_temp_reg >= MP_TEMP_REG_START && limit_temp_reg <= MP_TEMP_REG_END) {
+        mp_free_temp_register(ctx->allocator, limit_temp_reg);
+        limit_temp_reg = -1;
     }
     if (step_reg >= MP_TEMP_REG_START && step_reg <= MP_TEMP_REG_END) {
         mp_free_temp_register(ctx->allocator, step_reg);
