@@ -1,0 +1,45 @@
+// Additional try/catch regression tests
+print("== try/catch edge cases ==")
+
+print("-- nested try inside catch --")
+try:
+    print("outer before failure")
+    result = 10 / 0
+catch outer_err:
+    print("outer handler running")
+    print(outer_err)
+    try:
+        print("inner before success")
+        inner_value = 8 / 2
+        print("inner succeeded", inner_value)
+    catch inner_err:
+        print("inner handler running")
+        print(inner_err)
+    print("after inner handler")
+print("after nested catch scenario")
+
+print("-- catch variable shadowing --")
+try:
+    failure = 4 / 0
+catch err:
+    print("outer caught", err)
+    try:
+        print("inner before failure")
+        inner = 2 / 0
+    catch err:
+        print("inner caught shadow", err)
+    print("outer still has", err)
+print("after shadow scenario")
+
+print("-- outer success with inner failure --")
+try:
+    print("outer success path")
+    try:
+        print("inner handles failure")
+        inner_result = 3 / 0
+    catch inner_err:
+        print("inner handled", inner_err)
+    print("outer after inner handling")
+catch outer_err:
+    print("unexpected outer failure", outer_err)
+print("after success with inner failure")
