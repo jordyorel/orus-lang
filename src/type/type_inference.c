@@ -1245,6 +1245,13 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             return getPrimitiveType(TYPE_VOID);
         }
         case NODE_FUNCTION: {
+            if (node->function.isMethod && !node->function.isInstanceMethod &&
+                node->function.paramCount > 0 && node->function.params &&
+                node->function.params[0].name &&
+                strcmp(node->function.params[0].name, "self") == 0) {
+                node->function.isInstanceMethod = true;
+            }
+
             // For function declarations, get the actual return type from type annotation
             Type* return_type = getPrimitiveType(TYPE_VOID); // Default to void
 
@@ -1320,12 +1327,6 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
         }
         case NODE_CALL: {
             bool is_member_call = (node->call.callee->type == NODE_MEMBER_ACCESS);
-            bool is_method_call = false;
-            bool is_instance_method = false;
-            if (is_member_call) {
-                is_method_call = node->call.callee->member.isMethod;
-                is_instance_method = node->call.callee->member.isInstanceMethod;
-            }
 
             Type* callee_type = NULL;
             if (node->call.callee->type == NODE_IDENTIFIER) {
@@ -1337,6 +1338,13 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
 
             if (!callee_type) {
                 callee_type = algorithm_w(env, node->call.callee);
+            }
+
+            bool is_method_call = false;
+            bool is_instance_method = false;
+            if (is_member_call) {
+                is_method_call = node->call.callee->member.isMethod;
+                is_instance_method = node->call.callee->member.isInstanceMethod;
             }
 
             Type** arg_types = NULL;
@@ -1818,30 +1826,49 @@ void populate_ast_types(ASTNode* node, TypeEnv* env) {
                 populate_ast_types(node->assign.value, env);
             }
             break;
-        case NODE_FUNCTION:
+        case NODE_FUNCTION: {
+            if (node->function.isMethod && !node->function.isInstanceMethod &&
+                node->function.paramCount > 0 && node->function.params &&
+                node->function.params[0].name &&
+                strcmp(node->function.params[0].name, "self") == 0) {
+                node->function.isInstanceMethod = true;
+            }
+
             if (node->function.returnType) {
                 populate_ast_types(node->function.returnType, env);
             }
             if (node->function.body) {
                 // Create function environment with parameters - same logic as algorithm_w
                 TypeEnv* function_env = type_env_new(env);
-                
+                Type* receiver_type = NULL;
+                if (node->function.isMethod && node->function.methodStructName) {
+                    receiver_type = findStructType(node->function.methodStructName);
+                }
+
                 // Add parameters to the function's local environment using the same logic as algorithm_w
                 for (int i = 0; i < node->function.paramCount; i++) {
-                    if (node->function.params[i].name) {
-                        Type* param_type = getPrimitiveType(TYPE_I32); // Default
-                        if (node->function.params[i].typeAnnotation) {
-                            param_type = algorithm_w(env, node->function.params[i].typeAnnotation);
-                            if (!param_type) param_type = getPrimitiveType(TYPE_I32);
-                        }
-                        TypeScheme* param_scheme = generalize(function_env, param_type);
-                        type_env_define(function_env, node->function.params[i].name, param_scheme);
+                    if (!node->function.params[i].name) {
+                        continue;
                     }
+
+                    Type* param_type = getPrimitiveType(TYPE_I32); // Default
+                    if (node->function.isMethod && node->function.isInstanceMethod && i == 0) {
+                        param_type = receiver_type ? receiver_type : getPrimitiveType(TYPE_UNKNOWN);
+                    } else if (node->function.params[i].typeAnnotation) {
+                        param_type = algorithm_w(env, node->function.params[i].typeAnnotation);
+                        if (!param_type) {
+                            param_type = getPrimitiveType(TYPE_I32);
+                        }
+                    }
+
+                    TypeScheme* param_scheme = generalize(function_env, param_type);
+                    type_env_define(function_env, node->function.params[i].name, param_scheme);
                 }
-                
+
                 populate_ast_types(node->function.body, function_env);
             }
             break;
+        }
         case NODE_CALL:
             if (node->call.callee) {
                 populate_ast_types(node->call.callee, env);

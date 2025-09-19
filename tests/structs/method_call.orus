@@ -1,0 +1,11 @@
+// Validates bytecode emission for struct methods with implicit self.
+pub struct Counter:
+    value: i32
+
+impl Counter:
+    fn increment(counter: Counter, delta: i32) -> Counter:
+        return Counter{ value: counter.value + delta }
+
+start = Counter{ value: 7 }
+updated = Counter.increment(start, 5)
+print(updated.value)

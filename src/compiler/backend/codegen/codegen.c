@@ -46,6 +46,9 @@ static int compile_member_assignment(CompilerContext* ctx, TypedASTNode* assign,
 static int compile_builtin_array_push(CompilerContext* ctx, TypedASTNode* call);
 static int compile_builtin_array_pop(CompilerContext* ctx, TypedASTNode* call);
 static int compile_builtin_array_len(CompilerContext* ctx, TypedASTNode* call);
+int lookup_variable(CompilerContext* ctx, const char* name);
+static char* create_method_symbol_name(const char* struct_name, const char* method_name);
+static int compile_struct_method_call(CompilerContext* ctx, TypedASTNode* call);
 
 static void record_control_flow_error(CompilerContext* ctx,
                                       ErrorCode code,
@@ -229,6 +232,275 @@ static TypedASTNode* find_struct_literal_value(TypedASTNode* literal,
     }
 
     return NULL;
+}
+
+static char* create_method_symbol_name(const char* struct_name, const char* method_name) {
+    if (!struct_name || !method_name) {
+        return NULL;
+    }
+
+    size_t struct_len = strlen(struct_name);
+    size_t method_len = strlen(method_name);
+    size_t total = struct_len + 1 + method_len + 1;
+
+    char* combined = malloc(total);
+    if (!combined) {
+        return NULL;
+    }
+
+    snprintf(combined, total, "%s.%s", struct_name, method_name);
+    return combined;
+}
+
+static int compile_struct_method_call(CompilerContext* ctx, TypedASTNode* call) {
+    if (!ctx || !call || !call->typed.call.callee || !call->original) {
+        return -1;
+    }
+
+    TypedASTNode* callee = call->typed.call.callee;
+    if (!callee->original || callee->original->type != NODE_MEMBER_ACCESS) {
+        return -1;
+    }
+
+    const char* method_name = callee->typed.member.member;
+    TypedASTNode* object_node = callee->typed.member.object;
+    bool is_instance_method = callee->typed.member.isInstanceMethod;
+
+    const char* struct_name = NULL;
+    Type* object_type = object_node ? object_node->resolvedType : NULL;
+    if (!object_type && object_node && object_node->original) {
+        object_type = object_node->original->dataType;
+    }
+    Type* base_struct = unwrap_struct_type(object_type);
+    if (base_struct) {
+        TypeExtension* ext = get_type_extension(base_struct);
+        if (ext && ext->extended.structure.name && ext->extended.structure.name->chars) {
+            struct_name = ext->extended.structure.name->chars;
+        }
+    }
+
+    if (!struct_name && object_node && object_node->original &&
+        object_node->original->type == NODE_IDENTIFIER) {
+        struct_name = object_node->original->identifier.name;
+    }
+
+    if (!struct_name) {
+        if (ctx->errors) {
+            error_reporter_add(ctx->errors, ERROR_TYPE, SEVERITY_ERROR,
+                               call->original->location,
+                               "Cannot resolve struct for method call",
+                               "Ensure the method is called on a struct instance or type.",
+                               NULL);
+        }
+        ctx->has_compilation_errors = true;
+        return -1;
+    }
+
+    char* mangled_name = create_method_symbol_name(struct_name, method_name);
+    if (!mangled_name) {
+        DEBUG_CODEGEN_PRINT("Error: Failed to allocate method symbol name buffer\n");
+        return -1;
+    }
+
+    int callee_reg = lookup_variable(ctx, mangled_name);
+    if (callee_reg == -1 && method_name) {
+        callee_reg = lookup_variable(ctx, method_name);
+    }
+
+    if (callee_reg == -1) {
+        if (ctx->errors) {
+            char message[256];
+            snprintf(message, sizeof(message),
+                     "Unknown method '%s' on struct '%s'",
+                     method_name ? method_name : "<unknown>", struct_name);
+            error_reporter_add(ctx->errors, ERROR_TYPE, SEVERITY_ERROR,
+                               call->original->location,
+                               message,
+                               "Define the method in an impl block before calling it.",
+                               NULL);
+        }
+        ctx->has_compilation_errors = true;
+        free(mangled_name);
+        return -1;
+    }
+
+    int explicit_arg_count = call->original->call.argCount;
+    int total_args = explicit_arg_count + (is_instance_method ? 1 : 0);
+
+    int* arg_regs = NULL;
+    int* temp_arg_regs = NULL;
+    int first_arg_reg = 0;
+
+    if (total_args > 0) {
+        arg_regs = malloc(sizeof(int) * total_args);
+        if (!arg_regs) {
+            free(mangled_name);
+            return -1;
+        }
+
+        for (int i = 0; i < total_args; i++) {
+            arg_regs[i] = mp_allocate_temp_register(ctx->allocator);
+            if (arg_regs[i] == -1) {
+                for (int j = 0; j < i; j++) {
+                    if (arg_regs[j] >= MP_TEMP_REG_START && arg_regs[j] <= MP_TEMP_REG_END) {
+                        mp_free_temp_register(ctx->allocator, arg_regs[j]);
+                    }
+                }
+                free(arg_regs);
+                free(mangled_name);
+                return -1;
+            }
+            if (i == 0) {
+                first_arg_reg = arg_regs[i];
+            }
+        }
+
+        temp_arg_regs = malloc(sizeof(int) * total_args);
+        if (!temp_arg_regs) {
+            for (int i = 0; i < total_args; i++) {
+                if (arg_regs[i] >= MP_TEMP_REG_START && arg_regs[i] <= MP_TEMP_REG_END) {
+                    mp_free_temp_register(ctx->allocator, arg_regs[i]);
+                }
+            }
+            free(arg_regs);
+            free(mangled_name);
+            return -1;
+        }
+    }
+
+    int compiled_count = 0;
+
+    if (is_instance_method) {
+        if (!object_node) {
+            if (temp_arg_regs) free(temp_arg_regs);
+            if (arg_regs) {
+                for (int i = 0; i < total_args; i++) {
+                    if (arg_regs[i] >= MP_TEMP_REG_START && arg_regs[i] <= MP_TEMP_REG_END) {
+                        mp_free_temp_register(ctx->allocator, arg_regs[i]);
+                    }
+                }
+                free(arg_regs);
+            }
+            free(mangled_name);
+            return -1;
+        }
+
+        int self_reg = compile_expression(ctx, object_node);
+        if (self_reg == -1) {
+            if (temp_arg_regs) free(temp_arg_regs);
+            if (arg_regs) {
+                for (int i = 0; i < total_args; i++) {
+                    if (arg_regs[i] >= MP_TEMP_REG_START && arg_regs[i] <= MP_TEMP_REG_END) {
+                        mp_free_temp_register(ctx->allocator, arg_regs[i]);
+                    }
+                }
+                free(arg_regs);
+            }
+            free(mangled_name);
+            return -1;
+        }
+        if (temp_arg_regs) {
+            temp_arg_regs[compiled_count++] = self_reg;
+        }
+    }
+
+    for (int i = 0; i < explicit_arg_count; i++) {
+        TypedASTNode* arg_node = (call->typed.call.args && i < call->typed.call.argCount)
+                                 ? call->typed.call.args[i]
+                                 : NULL;
+        if (!arg_node) {
+            if (temp_arg_regs) {
+                for (int j = 0; j < compiled_count; j++) {
+                    int reg = temp_arg_regs[j];
+                    if (reg >= MP_TEMP_REG_START && reg <= MP_TEMP_REG_END) {
+                        mp_free_temp_register(ctx->allocator, reg);
+                    }
+                }
+                free(temp_arg_regs);
+            }
+            if (arg_regs) {
+                for (int j = 0; j < total_args; j++) {
+                    if (arg_regs[j] >= MP_TEMP_REG_START && arg_regs[j] <= MP_TEMP_REG_END) {
+                        mp_free_temp_register(ctx->allocator, arg_regs[j]);
+                    }
+                }
+                free(arg_regs);
+            }
+            free(mangled_name);
+            return -1;
+        }
+
+        int arg_reg = compile_expression(ctx, arg_node);
+        if (arg_reg == -1) {
+            if (temp_arg_regs) {
+                for (int j = 0; j < compiled_count; j++) {
+                    int reg = temp_arg_regs[j];
+                    if (reg >= MP_TEMP_REG_START && reg <= MP_TEMP_REG_END) {
+                        mp_free_temp_register(ctx->allocator, reg);
+                    }
+                }
+                free(temp_arg_regs);
+            }
+            if (arg_regs) {
+                for (int j = 0; j < total_args; j++) {
+                    if (arg_regs[j] >= MP_TEMP_REG_START && arg_regs[j] <= MP_TEMP_REG_END) {
+                        mp_free_temp_register(ctx->allocator, arg_regs[j]);
+                    }
+                }
+                free(arg_regs);
+            }
+            free(mangled_name);
+            return -1;
+        }
+
+        if (temp_arg_regs) {
+            temp_arg_regs[compiled_count++] = arg_reg;
+        }
+    }
+
+    if (total_args > 0 && temp_arg_regs) {
+        for (int i = 0; i < total_args; i++) {
+            if (temp_arg_regs[i] != arg_regs[i]) {
+                emit_move(ctx, arg_regs[i], temp_arg_regs[i]);
+                if (temp_arg_regs[i] >= MP_TEMP_REG_START && temp_arg_regs[i] <= MP_TEMP_REG_END) {
+                    mp_free_temp_register(ctx->allocator, temp_arg_regs[i]);
+                }
+            }
+        }
+        free(temp_arg_regs);
+        temp_arg_regs = NULL;
+    }
+
+    int return_reg = mp_allocate_temp_register(ctx->allocator);
+    if (return_reg == -1) {
+        if (arg_regs) {
+            for (int i = 0; i < total_args; i++) {
+                if (arg_regs[i] >= MP_TEMP_REG_START && arg_regs[i] <= MP_TEMP_REG_END) {
+                    mp_free_temp_register(ctx->allocator, arg_regs[i]);
+                }
+            }
+            free(arg_regs);
+        }
+        free(mangled_name);
+        return -1;
+    }
+
+    set_location_from_node(ctx, call);
+    int actual_first_arg = (total_args > 0) ? first_arg_reg : 0;
+    emit_instruction_to_buffer(ctx->bytecode, OP_CALL_R, callee_reg, actual_first_arg, total_args);
+    emit_byte_to_buffer(ctx->bytecode, return_reg);
+
+    if (arg_regs) {
+        for (int i = 0; i < total_args; i++) {
+            if (arg_regs[i] >= MP_TEMP_REG_START && arg_regs[i] <= MP_TEMP_REG_END) {
+                mp_free_temp_register(ctx->allocator, arg_regs[i]);
+            }
+        }
+        free(arg_regs);
+    }
+
+    free(mangled_name);
+    return return_reg;
 }
 
 // ===== CODE GENERATION COORDINATOR =====
@@ -1979,6 +2251,16 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
         case NODE_CALL: {
             DEBUG_CODEGEN_PRINT("NODE_CALL: Compiling function call");
 
+            if (expr->typed.call.callee && expr->typed.call.callee->original &&
+                expr->typed.call.callee->original->type == NODE_MEMBER_ACCESS &&
+                expr->typed.call.callee->typed.member.isMethod) {
+                int result = compile_struct_method_call(ctx, expr);
+                if (result == -1) {
+                    DEBUG_CODEGEN_PRINT("Error: Failed to compile struct method call");
+                }
+                return result;
+            }
+
             const char* builtin_name = NULL;
             if (expr->typed.call.callee && expr->typed.call.callee->original &&
                 expr->typed.call.callee->original->type == NODE_IDENTIFIER) {
@@ -2314,7 +2596,15 @@ void compile_statement(CompilerContext* ctx, TypedASTNode* stmt) {
             break;
         case NODE_STRUCT_DECL:
         case NODE_IMPL_BLOCK:
-            // No bytecode emitted for type or impl declarations
+            // Emit bytecode for methods inside impl blocks
+            if (stmt->original->type == NODE_IMPL_BLOCK &&
+                stmt->typed.implBlock.methodCount > 0) {
+                for (int i = 0; i < stmt->typed.implBlock.methodCount; i++) {
+                    if (stmt->typed.implBlock.methods[i]) {
+                        compile_function_declaration(ctx, stmt->typed.implBlock.methods[i]);
+                    }
+                }
+            }
             break;
 
         default:
@@ -3882,6 +4172,8 @@ int compile_function_declaration(CompilerContext* ctx, TypedASTNode* func) {
     if (!ctx || !func || !func->original) return -1;
 
     const char* func_name = func->original->function.name;
+    const char* method_struct = func->original->function.methodStructName;
+    bool is_method = func->original->function.isMethod;
     int arity = func->original->function.paramCount;
 
     DEBUG_CODEGEN_PRINT("Compiling function declaration: %s\n",
@@ -3897,6 +4189,19 @@ int compile_function_declaration(CompilerContext* ctx, TypedASTNode* func) {
                                getPrimitiveType(TYPE_FUNCTION), false,
                                func->original->location, true)) {
             return -1;
+        }
+        if (is_method && method_struct) {
+            char* alias_name = create_method_symbol_name(method_struct, func_name);
+            if (!alias_name) {
+                return -1;
+            }
+            if (!register_variable(ctx, ctx->symbols, alias_name, func_reg,
+                                   getPrimitiveType(TYPE_FUNCTION), false,
+                                   func->original->location, true)) {
+                free(alias_name);
+                return -1;
+            }
+            free(alias_name);
         }
         mp_reset_frame_registers(ctx->allocator);
     } else {
@@ -3972,11 +4277,26 @@ int compile_function_declaration(CompilerContext* ctx, TypedASTNode* func) {
     ctx->function_scope_depth = saved_function_scope_depth;
 
     // Register function for VM finalization and get index
-    int function_index = register_function(ctx, func_name ? func_name : "(lambda)",
-                                          arity, function_bytecode);
+    const char* debug_name = func_name ? func_name : "(lambda)";
+    char* mangled_debug = NULL;
+    if (is_method && method_struct && func_name) {
+        mangled_debug = create_method_symbol_name(method_struct, func_name);
+        if (mangled_debug) {
+            debug_name = mangled_debug;
+        }
+    }
+
+    int function_index = register_function(ctx, debug_name, arity, function_bytecode);
     if (function_index < 0) {
+        if (mangled_debug) {
+            free(mangled_debug);
+        }
         free_bytecode_buffer(function_bytecode);
         return -1;
+    }
+
+    if (mangled_debug) {
+        free(mangled_debug);
     }
 
     // Load function index into target register
