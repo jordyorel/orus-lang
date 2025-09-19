@@ -71,6 +71,26 @@ static void cleanup_field_info(FieldInfo* fields, int fieldCount) {
     free(fields);
 }
 
+static void cleanup_variant_info(Variant* variants, int variantCount) {
+    if (!variants) {
+        return;
+    }
+
+    for (int i = 0; i < variantCount; i++) {
+        free_compiler_string(variants[i].name);
+        if (variants[i].field_names) {
+            for (int j = 0; j < variants[i].field_count; j++) {
+                free_compiler_string(variants[i].field_names[j]);
+            }
+            free(variants[i].field_names);
+        }
+        if (variants[i].field_types) {
+            free(variants[i].field_types);
+        }
+    }
+    free(variants);
+}
+
 static void cleanup_new_methods(Method* methods, int start, int end) {
     if (!methods) {
         return;
@@ -915,56 +935,122 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             return element_type;
         }
         case NODE_MEMBER_ACCESS: {
+            node->member.resolvesToEnum = false;
+            node->member.resolvesToEnumVariant = false;
+            node->member.enumVariantIndex = -1;
+            node->member.enumVariantArity = 0;
+            node->member.enumTypeName = NULL;
             Type* object_type = algorithm_w(env, node->member.object);
             if (!object_type) {
                 return NULL;
             }
 
-            Type* struct_type = object_type;
-            if (struct_type->kind == TYPE_INSTANCE && struct_type->info.instance.base) {
-                struct_type = struct_type->info.instance.base;
+            Type* base_type = object_type;
+            if (base_type->kind == TYPE_INSTANCE && base_type->info.instance.base) {
+                base_type = base_type->info.instance.base;
             }
 
-            if (struct_type->kind != TYPE_STRUCT) {
-                report_type_mismatch(node->location, "struct", getTypeName(struct_type->kind));
+            if (base_type->kind == TYPE_STRUCT) {
+                TypeExtension* ext = get_type_extension(base_type);
+                if (!ext) {
+                    report_type_mismatch(node->location, "struct", "unknown");
+                    set_type_error();
+                    return NULL;
+                }
+
+                // Look for matching field
+                if (ext->extended.structure.fields) {
+                    for (int i = 0; i < ext->extended.structure.fieldCount; i++) {
+                        FieldInfo* field = &ext->extended.structure.fields[i];
+                        if (field->name && field->name->chars &&
+                            strcmp(field->name->chars, node->member.member) == 0) {
+                            node->member.isMethod = false;
+                            node->member.isInstanceMethod = false;
+                            return field->type ? field->type : getPrimitiveType(TYPE_UNKNOWN);
+                        }
+                    }
+                }
+
+                // Look for matching method
+                if (ext->extended.structure.methods) {
+                    for (int i = 0; i < ext->extended.structure.methodCount; i++) {
+                        Method* method = &ext->extended.structure.methods[i];
+                        if (method->name && method->name->chars &&
+                            strcmp(method->name->chars, node->member.member) == 0) {
+                            node->member.isMethod = true;
+                            node->member.isInstanceMethod = method->isInstance;
+                            return method->type;
+                        }
+                    }
+                }
+
+                report_undefined_variable(node->location, node->member.member);
                 set_type_error();
                 return NULL;
             }
 
-            TypeExtension* ext = get_type_extension(struct_type);
-            if (!ext) {
-                report_type_mismatch(node->location, "struct", "unknown");
-                set_type_error();
-                return NULL;
-            }
+            if (base_type->kind == TYPE_ENUM) {
+                TypeExtension* ext = get_type_extension(base_type);
+                if (!ext || !ext->extended.enum_.variants) {
+                    report_type_mismatch(node->location, "enum", "unknown");
+                    set_type_error();
+                    return NULL;
+                }
 
-            // Look for matching field
-            if (ext->extended.structure.fields) {
-                for (int i = 0; i < ext->extended.structure.fieldCount; i++) {
-                    FieldInfo* field = &ext->extended.structure.fields[i];
-                    if (field->name && field->name->chars &&
-                        strcmp(field->name->chars, node->member.member) == 0) {
+                node->member.resolvesToEnum = true;
+                if (ext->extended.enum_.name && ext->extended.enum_.name->chars) {
+                    node->member.enumTypeName = ext->extended.enum_.name->chars;
+                }
+
+                for (int i = 0; i < ext->extended.enum_.variant_count; i++) {
+                    Variant* variant = &ext->extended.enum_.variants[i];
+                    if (variant->name && variant->name->chars &&
+                        strcmp(variant->name->chars, node->member.member) == 0) {
                         node->member.isMethod = false;
                         node->member.isInstanceMethod = false;
-                        return field->type ? field->type : getPrimitiveType(TYPE_UNKNOWN);
+                        node->member.resolvesToEnumVariant = true;
+                        node->member.enumVariantIndex = i;
+                        node->member.enumVariantArity = variant->field_count;
+
+                        if (variant->field_count == 0) {
+                            return base_type;
+                        }
+
+                        if (!variant->field_types && variant->field_count > 0) {
+                            // Construct a default parameter type list of unknowns
+                            Type** defaults = calloc((size_t)variant->field_count, sizeof(Type*));
+                            if (!defaults) {
+                                set_type_error();
+                                return NULL;
+                            }
+                            for (int j = 0; j < variant->field_count; j++) {
+                                defaults[j] = getPrimitiveType(TYPE_UNKNOWN);
+                            }
+                            Type* constructor_type = createFunctionType(base_type, defaults, variant->field_count);
+                            free(defaults);
+                            if (!constructor_type) {
+                                set_type_error();
+                                return NULL;
+                            }
+                            return constructor_type;
+                        }
+
+                        Type* constructor_type =
+                            createFunctionType(base_type, variant->field_types, variant->field_count);
+                        if (!constructor_type) {
+                            set_type_error();
+                            return NULL;
+                        }
+                        return constructor_type;
                     }
                 }
+
+                report_undefined_variable(node->location, node->member.member);
+                set_type_error();
+                return NULL;
             }
 
-            // Look for matching method
-            if (ext->extended.structure.methods) {
-                for (int i = 0; i < ext->extended.structure.methodCount; i++) {
-                    Method* method = &ext->extended.structure.methods[i];
-                    if (method->name && method->name->chars &&
-                        strcmp(method->name->chars, node->member.member) == 0) {
-                        node->member.isMethod = true;
-                        node->member.isInstanceMethod = method->isInstance;
-                        return method->type;
-                    }
-                }
-            }
-
-            report_undefined_variable(node->location, node->member.member);
+            report_type_mismatch(node->location, "struct or enum", getTypeName(base_type->kind));
             set_type_error();
             return NULL;
         }
@@ -981,6 +1067,11 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             if (struct_type) {
                 DEBUG_TYPE_INFERENCE_PRINT("Identifier '%s' resolved as struct type", node->identifier.name);
                 return struct_type;
+            }
+            Type* enum_type = findEnumType(node->identifier.name);
+            if (enum_type) {
+                DEBUG_TYPE_INFERENCE_PRINT("Identifier '%s' resolved as enum type", node->identifier.name);
+                return enum_type;
             }
             DEBUG_TYPE_INFERENCE_PRINT("Identifier '%s' not found in type environment", node->identifier.name);
             report_undefined_variable(node->location, node->identifier.name);
@@ -1440,6 +1531,11 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                 return struct_type;
             }
 
+            Type* enum_type = findEnumType(type_name);
+            if (enum_type) {
+                return enum_type;
+            }
+
             report_undefined_type(node->location, type_name);
             set_type_error();
             return NULL;
@@ -1635,6 +1731,137 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
 
             if (struct_type) {
                 node->dataType = struct_type;
+            }
+
+            return getPrimitiveType(TYPE_VOID);
+        }
+        case NODE_ENUM_DECL: {
+            Type* existing = NULL;
+            if (node->enumDecl.name) {
+                existing = findEnumType(node->enumDecl.name);
+            }
+            bool creating_new = (existing == NULL);
+            Variant* variants = NULL;
+
+            if (creating_new && node->enumDecl.variantCount > 0) {
+                variants = calloc((size_t)node->enumDecl.variantCount, sizeof(Variant));
+                if (!variants) {
+                    set_type_error();
+                    return NULL;
+                }
+            }
+
+            for (int i = 0; i < node->enumDecl.variantCount; i++) {
+                int fieldCount = node->enumDecl.variants[i].fieldCount;
+                Type** fieldTypes = NULL;
+                ObjString** fieldNames = NULL;
+
+                if (creating_new && variants && fieldCount > 0) {
+                    fieldTypes = calloc((size_t)fieldCount, sizeof(Type*));
+                    fieldNames = calloc((size_t)fieldCount, sizeof(ObjString*));
+                    if (!fieldTypes || !fieldNames) {
+                        if (fieldTypes) free(fieldTypes);
+                        if (fieldNames) free(fieldNames);
+                        set_type_error();
+                        cleanup_variant_info(variants, node->enumDecl.variantCount);
+                        return NULL;
+                    }
+                }
+
+                for (int j = 0; j < fieldCount; j++) {
+                    ASTNode* typeAnno = node->enumDecl.variants[i].fields[j].typeAnnotation;
+                    Type* fieldType = NULL;
+                    if (typeAnno) {
+                        fieldType = algorithm_w(env, typeAnno);
+                        if (!fieldType) {
+                            if (fieldTypes) free(fieldTypes);
+                            if (fieldNames) {
+                                for (int k = 0; k < j; k++) {
+                                    free_compiler_string(fieldNames[k]);
+                                }
+                                free(fieldNames);
+                            }
+                            cleanup_variant_info(variants, node->enumDecl.variantCount);
+                            return NULL;
+                        }
+                    } else {
+                        fieldType = getPrimitiveType(TYPE_UNKNOWN);
+                    }
+
+                    if (fieldTypes) {
+                        fieldTypes[j] = fieldType;
+                    }
+
+                    if (fieldNames) {
+                        const char* fieldNameSource = node->enumDecl.variants[i].fields[j].name;
+                        if (fieldNameSource) {
+                            fieldNames[j] = create_compiler_string(fieldNameSource);
+                            if (!fieldNames[j]) {
+                                for (int k = 0; k < j; k++) {
+                                    free_compiler_string(fieldNames[k]);
+                                }
+                                free(fieldNames);
+                                if (fieldTypes) free(fieldTypes);
+                                set_type_error();
+                                cleanup_variant_info(variants, node->enumDecl.variantCount);
+                                return NULL;
+                            }
+                        } else {
+                            fieldNames[j] = NULL;
+                        }
+                    }
+                }
+
+                if (creating_new && variants) {
+                    variants[i].field_types = fieldTypes;
+                    variants[i].field_names = fieldNames;
+                    variants[i].field_count = fieldCount;
+                    variants[i].name = create_compiler_string(node->enumDecl.variants[i].name);
+                    if (!variants[i].name) {
+                        set_type_error();
+                        if (fieldNames) {
+                            for (int j = 0; j < fieldCount; j++) {
+                                free_compiler_string(fieldNames[j]);
+                            }
+                            free(fieldNames);
+                        }
+                        if (fieldTypes) free(fieldTypes);
+                        cleanup_variant_info(variants, node->enumDecl.variantCount);
+                        return NULL;
+                    }
+                } else {
+                    if (fieldTypes) {
+                        free(fieldTypes);
+                    }
+                    if (fieldNames) {
+                        for (int j = 0; j < fieldCount; j++) {
+                            free_compiler_string(fieldNames[j]);
+                        }
+                        free(fieldNames);
+                    }
+                }
+            }
+
+            Type* enum_type = existing;
+            if (creating_new) {
+                ObjString* name = create_compiler_string(node->enumDecl.name);
+                if (!name) {
+                    set_type_error();
+                    cleanup_variant_info(variants, node->enumDecl.variantCount);
+                    return NULL;
+                }
+
+                enum_type = createEnumType(name, variants, node->enumDecl.variantCount);
+                if (!enum_type) {
+                    set_type_error();
+                    free_compiler_string(name);
+                    cleanup_variant_info(variants, node->enumDecl.variantCount);
+                    return NULL;
+                }
+            }
+
+            if (enum_type) {
+                node->dataType = enum_type;
             }
 
             return getPrimitiveType(TYPE_VOID);
@@ -2005,6 +2232,20 @@ void populate_ast_types(ASTNode* node, TypeEnv* env) {
                     }
                     if (node->structDecl.fields[i].defaultValue) {
                         populate_ast_types(node->structDecl.fields[i].defaultValue, env);
+                    }
+                }
+            }
+            break;
+        case NODE_ENUM_DECL:
+            if (node->enumDecl.variantCount > 0 && node->enumDecl.variants) {
+                for (int i = 0; i < node->enumDecl.variantCount; i++) {
+                    if (node->enumDecl.variants[i].fieldCount > 0 &&
+                        node->enumDecl.variants[i].fields) {
+                        for (int j = 0; j < node->enumDecl.variants[i].fieldCount; j++) {
+                            if (node->enumDecl.variants[i].fields[j].typeAnnotation) {
+                                populate_ast_types(node->enumDecl.variants[i].fields[j].typeAnnotation, env);
+                            }
+                        }
                     }
                 }
             }
@@ -2412,6 +2653,69 @@ static TypedASTNode* generate_typed_ast_recursive(ASTNode* ast, TypeEnv* type_en
                 }
             }
             break;
+        case NODE_ENUM_DECL:
+            typed->typed.enumDecl.name = ast->enumDecl.name;
+            typed->typed.enumDecl.isPublic = ast->enumDecl.isPublic;
+            typed->typed.enumDecl.variantCount = ast->enumDecl.variantCount;
+            if (ast->enumDecl.variantCount > 0 && ast->enumDecl.variants) {
+                typed->typed.enumDecl.variants = malloc(sizeof(TypedEnumVariant) * ast->enumDecl.variantCount);
+                if (!typed->typed.enumDecl.variants) {
+                    free_typed_ast_node(typed);
+                    return NULL;
+                }
+                for (int i = 0; i < ast->enumDecl.variantCount; i++) {
+                    typed->typed.enumDecl.variants[i].name = ast->enumDecl.variants[i].name;
+                    typed->typed.enumDecl.variants[i].fieldCount = ast->enumDecl.variants[i].fieldCount;
+                    typed->typed.enumDecl.variants[i].fields = NULL;
+                    if (ast->enumDecl.variants[i].fieldCount > 0 && ast->enumDecl.variants[i].fields) {
+                        typed->typed.enumDecl.variants[i].fields =
+                            malloc(sizeof(TypedEnumVariantField) * ast->enumDecl.variants[i].fieldCount);
+                        if (!typed->typed.enumDecl.variants[i].fields) {
+                            for (int j = 0; j < i; j++) {
+                                if (typed->typed.enumDecl.variants[j].fields) {
+                                    for (int k = 0; k < typed->typed.enumDecl.variants[j].fieldCount; k++) {
+                                        free_typed_ast_node(typed->typed.enumDecl.variants[j].fields[k].typeAnnotation);
+                                    }
+                                    free(typed->typed.enumDecl.variants[j].fields);
+                                }
+                            }
+                            free(typed->typed.enumDecl.variants);
+                            free_typed_ast_node(typed);
+                            return NULL;
+                        }
+                        for (int j = 0; j < ast->enumDecl.variants[i].fieldCount; j++) {
+                            typed->typed.enumDecl.variants[i].fields[j].name =
+                                ast->enumDecl.variants[i].fields[j].name;
+                            typed->typed.enumDecl.variants[i].fields[j].typeAnnotation = NULL;
+                            if (ast->enumDecl.variants[i].fields[j].typeAnnotation) {
+                                typed->typed.enumDecl.variants[i].fields[j].typeAnnotation =
+                                    generate_typed_ast_recursive(ast->enumDecl.variants[i].fields[j].typeAnnotation, type_env);
+                                if (!typed->typed.enumDecl.variants[i].fields[j].typeAnnotation) {
+                                    for (int k = 0; k <= j; k++) {
+                                        if (typed->typed.enumDecl.variants[i].fields[k].typeAnnotation) {
+                                            free_typed_ast_node(typed->typed.enumDecl.variants[i].fields[k].typeAnnotation);
+                                        }
+                                    }
+                                    for (int prev = 0; prev < i; prev++) {
+                                        if (typed->typed.enumDecl.variants[prev].fields) {
+                                            for (int k = 0; k < typed->typed.enumDecl.variants[prev].fieldCount; k++) {
+                                                free_typed_ast_node(
+                                                    typed->typed.enumDecl.variants[prev].fields[k].typeAnnotation);
+                                            }
+                                            free(typed->typed.enumDecl.variants[prev].fields);
+                                        }
+                                    }
+                                    free(typed->typed.enumDecl.variants[i].fields);
+                                    free(typed->typed.enumDecl.variants);
+                                    free_typed_ast_node(typed);
+                                    return NULL;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            break;
         case NODE_STRUCT_LITERAL:
             typed->typed.structLiteral.structName = ast->structLiteral.structName;
             typed->typed.structLiteral.fieldCount = ast->structLiteral.fieldCount;
@@ -2444,6 +2748,11 @@ static TypedASTNode* generate_typed_ast_recursive(ASTNode* ast, TypeEnv* type_en
             typed->typed.member.member = ast->member.member;
             typed->typed.member.isMethod = ast->member.isMethod;
             typed->typed.member.isInstanceMethod = ast->member.isInstanceMethod;
+            typed->typed.member.resolvesToEnum = ast->member.resolvesToEnum;
+            typed->typed.member.resolvesToEnumVariant = ast->member.resolvesToEnumVariant;
+            typed->typed.member.enumVariantIndex = ast->member.enumVariantIndex;
+            typed->typed.member.enumVariantArity = ast->member.enumVariantArity;
+            typed->typed.member.enumTypeName = ast->member.enumTypeName;
             if (ast->member.object) {
                 typed->typed.member.object = generate_typed_ast_recursive(ast->member.object, type_env);
                 if (!typed->typed.member.object) {

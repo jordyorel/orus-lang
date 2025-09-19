@@ -187,12 +187,15 @@ void free_string_table(StringInternTable* table) {
     if (!table || !table->interned) return;
     HashMapIterator it;
     hashmap_iterator_init(table->interned, &it);
+    bool skip_object_free = vm.isShuttingDown;
     while (hashmap_iterator_has_next(&it)) {
         ObjString* s = (ObjString*)hashmap_iterator_next_value(&it);
         if (s) {
-            if (s->rope) free_rope(s->rope);
-            free(s->chars);
-            free(s);
+            if (!skip_object_free) {
+                if (s->rope) free_rope(s->rope);
+                free(s->chars);
+                free(s);
+            }
         }
     }
     hashmap_free(table->interned);

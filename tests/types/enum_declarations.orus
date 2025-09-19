@@ -1,0 +1,19 @@
+enum Status:
+    Ok
+    Error(message: string)
+
+struct Response:
+    status: Status
+    retries: i32 = 0
+
+fn describe(status: Status):
+    print("inspecting status")
+
+enum Result:
+    Ok(value: i32)
+    Err(message: string)
+
+fn consume(result: Result):
+    print("result placeholder")
+
+print("enum declarations validated")

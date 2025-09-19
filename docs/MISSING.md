@@ -173,6 +173,18 @@ pass—without introducing additional intermediate representations.
    the VM, add pattern exhaustiveness checks, and reuse Hindley–Milner type
    inference to propagate variant data.
 
+   - ✅ Parser and typed AST generation understand enum declarations, including
+     tuple-style variant payloads.
+   - ✅ Hindley–Milner inference registers enum variants in the global type
+     registry and materializes `TYPE_ENUM` metadata for downstream compiler
+     phases.
+   - ✅ Enum metadata now preserves variant payload field names, enabling
+     upcoming pattern matching exhaustiveness and destructuring analysis.
+   - ✅ Wire up the standard `Result.Ok`/`Result.Err` constructors so they
+     allocate concrete tagged values once bytecode lowering is available.
+   - ✅ Lower enum constructors in the bytecode backend (variant pattern tests
+     remain to be implemented).
+
    ```orus
    enum Result[T]:
        Ok(value: T)

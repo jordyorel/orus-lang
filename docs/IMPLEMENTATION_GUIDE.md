@@ -2727,6 +2727,106 @@ This path guarantees every struct and impl encountered in the AST is resolved
 once, with zero redundant passes and allocations amortized across the compiler
 arena.
 
+### 5.2 Enum Integration
+
+Enum declarations now use the exact same single-pass flow. During type
+inference the compiler allocates a compact `Variant` table, resolves payload
+types with Algorithm W, and registers the fully-populated metadata in the enum
+type registry.
+
+```c
+static Type* register_enum_decl(ASTNode* decl, TypeEnv* env) {
+    Variant* variants = calloc(decl->enumDecl.variantCount, sizeof(Variant));
+    for (int i = 0; i < decl->enumDecl.variantCount; i++) {
+        EnumVariant* variant = &decl->enumDecl.variants[i];
+        variants[i].name = create_compiler_string(variant->name);
+        variants[i].field_count = variant->fieldCount;
+        variants[i].field_types = calloc(variant->fieldCount, sizeof(Type*));
+        variants[i].field_names = calloc(variant->fieldCount, sizeof(ObjString*));
+        for (int j = 0; j < variant->fieldCount; j++) {
+            variants[i].field_types[j] =
+                algorithm_w(env, variant->fields[j].typeAnnotation);
+            if (variant->fields[j].name) {
+                variants[i].field_names[j] =
+                    create_compiler_string(variant->fields[j].name);
+            }
+        }
+    }
+
+    ObjString* enum_name = create_compiler_string(decl->enumDecl.name);
+    return createEnumType(enum_name, variants, decl->enumDecl.variantCount);
+}
+```
+
+The typed AST mirrors the parser data, hoisting variant payload annotations so
+register allocation and bytecode selection can treat enum constructors exactly
+like regular function calls.
+
+Member-access inference also records the resolved enum metadata directly on the
+AST node so later lowering stages do not need to repeat lookups in the type
+registry. Each successful variant hit caches the enum name, variant slot, and
+payload arity which will be consumed by the bytecode emitter when constructing
+tagged values.
+
+```c
+case NODE_MEMBER_ACCESS: {
+    node->member.resolvesToEnum = false;
+    node->member.resolvesToEnumVariant = false;
+
+    Type* object_type = algorithm_w(env, node->member.object);
+    if (!object_type) return NULL;
+
+    Type* base_type = object_type;
+    if (base_type->kind == TYPE_INSTANCE && base_type->info.instance.base) {
+        base_type = base_type->info.instance.base;
+    }
+
+    if (base_type->kind == TYPE_ENUM) {
+        TypeExtension* ext = get_type_extension(base_type);
+        node->member.resolvesToEnum = true;
+        node->member.enumTypeName = ext->extended.enum_.name->chars;
+
+        for (int i = 0; i < ext->extended.enum_.variant_count; i++) {
+            Variant* variant = &ext->extended.enum_.variants[i];
+            if (strcmp(variant->name->chars, node->member.member) == 0) {
+                node->member.resolvesToEnumVariant = true;
+                node->member.enumVariantIndex = i;
+                node->member.enumVariantArity = variant->field_count;
+                return createFunctionType(base_type, variant->field_types,
+                                         variant->field_count);
+            }
+        }
+    }
+
+    /* ... existing struct/method resolution ... */
+}
+```
+
+### Emitting Enum Constructors
+
+Lowering an enum constructor now uses a dedicated `OP_ENUM_NEW_R` opcode that
+mirrors function-call semantics while carrying enough metadata for the runtime
+to allocate tagged union instances. Codegen interns the enum and variant names,
+then writes the opcode followed by the destination register, variant index,
+payload arity, payload register base, and two constant-pool indices:
+
+```c
+emit_byte_to_buffer(ctx->bytecode, OP_ENUM_NEW_R);
+emit_byte_to_buffer(ctx->bytecode, result_reg);
+emit_byte_to_buffer(ctx->bytecode, variant_index);
+emit_byte_to_buffer(ctx->bytecode, payload_count);
+emit_byte_to_buffer(ctx->bytecode, payload_start);
+emit_byte_to_buffer(ctx->bytecode, (type_const >> 8) & 0xFF);
+emit_byte_to_buffer(ctx->bytecode, type_const & 0xFF);
+emit_byte_to_buffer(ctx->bytecode, (variant_const >> 8) & 0xFF);
+emit_byte_to_buffer(ctx->bytecode, variant_const & 0xFF);
+```
+
+During execution the dispatcher reads those operands, allocates an
+`ObjEnumInstance`, copies any payload registers into a compact heap array, and
+writes the result back with `ENUM_VAL`. Variants with zero payloads collapse to
+the same opcode with a payload count of zero and no extra register traffic.
+
 ### Emitting Struct Method Calls
 
 Method dispatch now lowers to plain function calls while injecting the

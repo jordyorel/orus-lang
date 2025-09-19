@@ -195,6 +195,18 @@ int disassembleInstruction(Chunk* chunk, int offset) {
             return offset + 4;
         }
 
+        case OP_ENUM_NEW_R: {
+            uint8_t dst = chunk->code[offset + 1];
+            uint8_t variant = chunk->code[offset + 2];
+            uint8_t payload = chunk->code[offset + 3];
+            uint8_t start = chunk->code[offset + 4];
+            uint16_t typeConst = (uint16_t)((chunk->code[offset + 5] << 8) | chunk->code[offset + 6]);
+            uint16_t variantConst = (uint16_t)((chunk->code[offset + 7] << 8) | chunk->code[offset + 8]);
+            printf("%-16s R%d, variant=%d, count=%d, start=R%d, typeConst=%d, variantConst=%d\n",
+                   "ENUM_NEW", dst, variant, payload, start, typeConst, variantConst);
+            return offset + 9;
+        }
+
         case OP_ARRAY_GET_R: {
             uint8_t dst = chunk->code[offset + 1];
             uint8_t array_reg = chunk->code[offset + 2];

@@ -9,6 +9,7 @@
 #include "type/type.h"
 #include "vm/vm.h"
 #include "vm/vm_constants.h"
+#include "vm/vm_string_ops.h"
 #include "errors/features/variable_errors.h"
 #include "errors/features/control_flow_errors.h"
 #include "debug/debug_config.h"
@@ -42,6 +43,10 @@ static int compile_array_assignment(CompilerContext* ctx, TypedASTNode* assign,
                                     bool as_expression);
 static int compile_member_assignment(CompilerContext* ctx, TypedASTNode* assign,
                                      bool as_expression);
+
+static int ensure_string_constant(CompilerContext* ctx, const char* text);
+static int compile_enum_variant_access(CompilerContext* ctx, TypedASTNode* expr);
+static int compile_enum_constructor_call(CompilerContext* ctx, TypedASTNode* call);
 
 static int compile_builtin_array_push(CompilerContext* ctx, TypedASTNode* call);
 static int compile_builtin_array_pop(CompilerContext* ctx, TypedASTNode* call);
@@ -1236,6 +1241,225 @@ static int compile_builtin_array_len(CompilerContext* ctx, TypedASTNode* call) {
     return result_reg;
 }
 
+static int ensure_string_constant(CompilerContext* ctx, const char* text) {
+    if (!ctx || !ctx->constants || !text) {
+        return -1;
+    }
+
+    ObjString* interned = intern_string(text, (int)strlen(text));
+    if (!interned) {
+        return -1;
+    }
+
+    Value value = STRING_VAL(interned);
+    return add_constant(ctx->constants, value);
+}
+
+static int compile_enum_variant_access(CompilerContext* ctx, TypedASTNode* expr) {
+    if (!ctx || !expr || !expr->original) {
+        return -1;
+    }
+
+    if (expr->typed.member.enumVariantArity > 0) {
+        if (ctx->errors) {
+            char message[160];
+            const char* variant = expr->typed.member.member ? expr->typed.member.member : "<variant>";
+            int arity = expr->typed.member.enumVariantArity;
+            snprintf(message, sizeof(message),
+                     "Enum variant '%s' expects %d argument%s", variant, arity,
+                     arity == 1 ? "" : "s");
+            error_reporter_add(ctx->errors, ERROR_TYPE, SEVERITY_ERROR,
+                               expr->original->location,
+                               message,
+                               "Call the variant with parentheses and the required arguments.",
+                               NULL);
+        }
+        ctx->has_compilation_errors = true;
+        return -1;
+    }
+
+    const char* typeName = expr->typed.member.enumTypeName;
+    if (!typeName && expr->typed.member.object && expr->typed.member.object->original &&
+        expr->typed.member.object->original->type == NODE_IDENTIFIER) {
+        typeName = expr->typed.member.object->original->identifier.name;
+    }
+    const char* variantName = expr->typed.member.member;
+
+    if (!typeName || !variantName) {
+        ctx->has_compilation_errors = true;
+        return -1;
+    }
+
+    int typeConstIndex = ensure_string_constant(ctx, typeName);
+    int variantConstIndex = ensure_string_constant(ctx, variantName);
+    if (typeConstIndex < 0 || variantConstIndex < 0) {
+        ctx->has_compilation_errors = true;
+        return -1;
+    }
+
+    int result_reg = mp_allocate_temp_register(ctx->allocator);
+    if (result_reg == -1) {
+        ctx->has_compilation_errors = true;
+        return -1;
+    }
+
+    set_location_from_node(ctx, expr);
+    emit_byte_to_buffer(ctx->bytecode, OP_ENUM_NEW_R);
+    emit_byte_to_buffer(ctx->bytecode, (uint8_t)result_reg);
+    emit_byte_to_buffer(ctx->bytecode, (uint8_t)expr->typed.member.enumVariantIndex);
+    emit_byte_to_buffer(ctx->bytecode, 0); // payload count
+    emit_byte_to_buffer(ctx->bytecode, 0); // payload start register
+    emit_byte_to_buffer(ctx->bytecode, (typeConstIndex >> 8) & 0xFF);
+    emit_byte_to_buffer(ctx->bytecode, typeConstIndex & 0xFF);
+    emit_byte_to_buffer(ctx->bytecode, (variantConstIndex >> 8) & 0xFF);
+    emit_byte_to_buffer(ctx->bytecode, variantConstIndex & 0xFF);
+
+    return result_reg;
+}
+
+static int compile_enum_constructor_call(CompilerContext* ctx, TypedASTNode* call) {
+    if (!ctx || !call || !call->original || !call->typed.call.callee) {
+        return -1;
+    }
+
+    TypedASTNode* callee = call->typed.call.callee;
+    int expectedArgs = callee->typed.member.enumVariantArity;
+    int providedArgs = call->original->call.argCount;
+    if (providedArgs != expectedArgs) {
+        if (ctx->errors) {
+            char message[160];
+            const char* variant = callee->typed.member.member ? callee->typed.member.member : "<variant>";
+            snprintf(message, sizeof(message),
+                     "Enum variant '%s' expects %d argument%s but got %d",
+                     variant, expectedArgs, expectedArgs == 1 ? "" : "s", providedArgs);
+            error_reporter_add(ctx->errors, ERROR_TYPE, SEVERITY_ERROR,
+                               call->original->location,
+                               message,
+                               "Adjust the constructor call to pass the correct number of arguments.",
+                               NULL);
+        }
+        ctx->has_compilation_errors = true;
+        return -1;
+    }
+
+    const char* typeName = callee->typed.member.enumTypeName;
+    if (!typeName && callee->typed.member.object && callee->typed.member.object->original &&
+        callee->typed.member.object->original->type == NODE_IDENTIFIER) {
+        typeName = callee->typed.member.object->original->identifier.name;
+    }
+    const char* variantName = callee->typed.member.member;
+
+    if (!typeName || !variantName) {
+        ctx->has_compilation_errors = true;
+        return -1;
+    }
+
+    int typeConstIndex = ensure_string_constant(ctx, typeName);
+    int variantConstIndex = ensure_string_constant(ctx, variantName);
+    if (typeConstIndex < 0 || variantConstIndex < 0) {
+        ctx->has_compilation_errors = true;
+        return -1;
+    }
+
+    int result_reg = mp_allocate_temp_register(ctx->allocator);
+    if (result_reg == -1) {
+        ctx->has_compilation_errors = true;
+        return -1;
+    }
+
+    int* arg_regs = NULL;
+    int* temp_arg_regs = NULL;
+    int payloadStart = 0;
+    bool success = false;
+
+    if (expectedArgs > 0) {
+        arg_regs = calloc((size_t)expectedArgs, sizeof(int));
+        temp_arg_regs = calloc((size_t)expectedArgs, sizeof(int));
+        if (!arg_regs || !temp_arg_regs) {
+            ctx->has_compilation_errors = true;
+            goto cleanup;
+        }
+
+        for (int i = 0; i < expectedArgs; i++) {
+            arg_regs[i] = mp_allocate_temp_register(ctx->allocator);
+            if (arg_regs[i] == -1) {
+                ctx->has_compilation_errors = true;
+                goto cleanup;
+            }
+        }
+
+        payloadStart = arg_regs[0];
+
+        for (int i = 0; i < expectedArgs; i++) {
+            TypedASTNode* argNode = call->typed.call.args[i];
+            if (!argNode) {
+                ctx->has_compilation_errors = true;
+                goto cleanup;
+            }
+            int tempReg = compile_expression(ctx, argNode);
+            if (tempReg == -1) {
+                ctx->has_compilation_errors = true;
+                goto cleanup;
+            }
+            temp_arg_regs[i] = tempReg;
+        }
+
+        for (int i = 0; i < expectedArgs; i++) {
+            if (temp_arg_regs[i] != arg_regs[i]) {
+                emit_move(ctx, arg_regs[i], temp_arg_regs[i]);
+                if (temp_arg_regs[i] >= MP_TEMP_REG_START && temp_arg_regs[i] <= MP_TEMP_REG_END) {
+                    mp_free_temp_register(ctx->allocator, temp_arg_regs[i]);
+                    temp_arg_regs[i] = arg_regs[i];
+                }
+            }
+        }
+    }
+
+    set_location_from_node(ctx, call);
+    emit_byte_to_buffer(ctx->bytecode, OP_ENUM_NEW_R);
+    emit_byte_to_buffer(ctx->bytecode, (uint8_t)result_reg);
+    emit_byte_to_buffer(ctx->bytecode, (uint8_t)callee->typed.member.enumVariantIndex);
+    emit_byte_to_buffer(ctx->bytecode, (uint8_t)expectedArgs);
+    emit_byte_to_buffer(ctx->bytecode, expectedArgs > 0 ? (uint8_t)payloadStart : 0);
+    emit_byte_to_buffer(ctx->bytecode, (typeConstIndex >> 8) & 0xFF);
+    emit_byte_to_buffer(ctx->bytecode, typeConstIndex & 0xFF);
+    emit_byte_to_buffer(ctx->bytecode, (variantConstIndex >> 8) & 0xFF);
+    emit_byte_to_buffer(ctx->bytecode, variantConstIndex & 0xFF);
+
+    success = true;
+
+cleanup:
+    if (temp_arg_regs) {
+        if (!success) {
+            for (int i = 0; i < expectedArgs; i++) {
+                if (temp_arg_regs[i] >= MP_TEMP_REG_START && temp_arg_regs[i] <= MP_TEMP_REG_END &&
+                    (!arg_regs || temp_arg_regs[i] != arg_regs[i])) {
+                    mp_free_temp_register(ctx->allocator, temp_arg_regs[i]);
+                }
+            }
+        }
+        free(temp_arg_regs);
+    }
+
+    if (arg_regs) {
+        for (int i = 0; i < expectedArgs; i++) {
+            if (arg_regs[i] >= MP_TEMP_REG_START && arg_regs[i] <= MP_TEMP_REG_END) {
+                mp_free_temp_register(ctx->allocator, arg_regs[i]);
+            }
+        }
+        free(arg_regs);
+    }
+
+    if (!success) {
+        if (result_reg >= MP_TEMP_REG_START && result_reg <= MP_TEMP_REG_END) {
+            mp_free_temp_register(ctx->allocator, result_reg);
+        }
+        return -1;
+    }
+
+    return result_reg;
+}
+
 static bool evaluate_constant_i32(TypedASTNode* node, int32_t* out_value) {
     if (!node || !out_value || !node->original) {
         return false;
@@ -2182,6 +2406,10 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
         }
 
         case NODE_MEMBER_ACCESS: {
+            if (expr->typed.member.resolvesToEnumVariant) {
+                return compile_enum_variant_access(ctx, expr);
+            }
+
             if (!expr->typed.member.object) {
                 return -1;
             }
@@ -2259,6 +2487,12 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                     DEBUG_CODEGEN_PRINT("Error: Failed to compile struct method call");
                 }
                 return result;
+            }
+
+            if (expr->typed.call.callee && expr->typed.call.callee->original &&
+                expr->typed.call.callee->original->type == NODE_MEMBER_ACCESS &&
+                expr->typed.call.callee->typed.member.resolvesToEnumVariant) {
+                return compile_enum_constructor_call(ctx, expr);
             }
 
             const char* builtin_name = NULL;
@@ -2595,6 +2829,7 @@ void compile_statement(CompilerContext* ctx, TypedASTNode* stmt) {
             compile_expression(ctx, stmt);
             break;
         case NODE_STRUCT_DECL:
+        case NODE_ENUM_DECL:
         case NODE_IMPL_BLOCK:
             // Emit bytecode for methods inside impl blocks
             if (stmt->original->type == NODE_IMPL_BLOCK &&

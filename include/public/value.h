@@ -12,6 +12,7 @@ typedef struct ObjIntArray ObjIntArray;
 typedef struct ObjError ObjError;
 typedef struct ObjRangeIterator ObjRangeIterator;
 typedef struct ObjArrayIterator ObjArrayIterator;
+typedef struct ObjEnumInstance ObjEnumInstance;
 typedef struct Value Value;
 
 // Base object type for the garbage collector
@@ -24,6 +25,7 @@ typedef enum {
     OBJ_ERROR,
     OBJ_RANGE_ITERATOR,
     OBJ_ARRAY_ITERATOR,
+    OBJ_ENUM_INSTANCE,
 } ObjType;
 
 struct Obj {
@@ -41,6 +43,7 @@ typedef enum {
     VAL_BOOL,
     VAL_STRING,
     VAL_ARRAY,
+    VAL_ENUM,
     VAL_ERROR,
     VAL_RANGE_ITERATOR,
     VAL_ARRAY_ITERATOR,
@@ -77,6 +80,14 @@ typedef struct ObjArrayIterator {
     int index;
 } ObjArrayIterator;
 
+typedef struct ObjEnumInstance {
+    Obj obj;
+    ObjString* typeName;
+    ObjString* variantName;
+    int variantIndex;
+    ObjArray* payload;
+} ObjEnumInstance;
+
 typedef ObjString String;
 typedef ObjArray Array;
 
@@ -107,10 +118,11 @@ typedef struct Value {
 #define BOOL_VAL(value)  ((Value){VAL_BOOL, {.boolean = value}})
 #define STRING_VAL(value) ((Value){VAL_STRING, {.string = value}})
 #define ARRAY_VAL(obj)   ((Value){VAL_ARRAY, {.array = obj}})
+#define ENUM_VAL(enumObj)    ((Value){VAL_ENUM, {.obj = (Obj*)enumObj}})
 #define ERROR_VAL(obj)   ((Value){VAL_ERROR, {.error = obj}})
 #define RANGE_ITERATOR_VAL(obj) ((Value){VAL_RANGE_ITERATOR, {.rangeIter = obj}})
 #ifndef ARRAY_ITERATOR_VAL
-#define ARRAY_ITERATOR_VAL(obj) ((Value){VAL_ARRAY_ITERATOR, {.obj = (Obj*)obj}})
+#define ARRAY_ITERATOR_VAL(iteratorObj) ((Value){VAL_ARRAY_ITERATOR, {.obj = (Obj*)iteratorObj}})
 #endif
 
 // Value checking macros
@@ -122,6 +134,7 @@ typedef struct Value {
 #define IS_BOOL(value)   ((value).type == VAL_BOOL)
 #define IS_STRING(value) ((value).type == VAL_STRING)
 #define IS_ARRAY(value)  ((value).type == VAL_ARRAY)
+#define IS_ENUM(value)   ((value).type == VAL_ENUM)
 #define IS_ERROR(value)  ((value).type == VAL_ERROR)
 #define IS_RANGE_ITERATOR(value) ((value).type == VAL_RANGE_ITERATOR)
 #ifndef IS_ARRAY_ITERATOR
@@ -137,6 +150,7 @@ typedef struct Value {
 #define AS_BOOL(value)   ((value).as.boolean)
 #define AS_STRING(value) ((value).as.string)
 #define AS_ARRAY(value)  ((value).as.array)
+#define AS_ENUM(value)   ((ObjEnumInstance*)(value).as.obj)
 #define AS_ERROR(value)  ((value).as.error)
 #define AS_RANGE_ITERATOR(value) ((value).as.rangeIter)
 #ifndef AS_ARRAY_ITERATOR

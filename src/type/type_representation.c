@@ -525,6 +525,15 @@ bool equalsType(Type* a, Type* b) {
             }
             if (av->field_count != bv->field_count) return false;
             for (int j = 0; j < av->field_count; j++) {
+                ObjString* afn = (av->field_names && j < av->field_count) ? av->field_names[j] : NULL;
+                ObjString* bfn = (bv->field_names && j < bv->field_count) ? bv->field_names[j] : NULL;
+                if (afn || bfn) {
+                    if (!afn || !bfn) return false;
+                    if (afn != bfn) {
+                        if (afn->length != bfn->length) return false;
+                        if (strncmp(afn->chars, bfn->chars, afn->length) != 0) return false;
+                    }
+                }
                 if (!equalsType(av->field_types[j], bv->field_types[j])) return false;
             }
         }
@@ -915,6 +924,11 @@ Type* createGenericType(ObjString* name) {
 Type* findStructType(const char* name) {
     if (!name || !struct_type_registry) return NULL;
     return hashmap_get(struct_type_registry, name);
+}
+
+Type* findEnumType(const char* name) {
+    if (!name || !enum_type_registry) return NULL;
+    return hashmap_get(enum_type_registry, name);
 }
 
 void freeType(Type* type) {

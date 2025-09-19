@@ -146,10 +146,21 @@ TypedASTNode* create_typed_ast_node(ASTNode* original) {
             typed->typed.member.member = original->member.member;
             typed->typed.member.isMethod = original->member.isMethod;
             typed->typed.member.isInstanceMethod = original->member.isInstanceMethod;
+            typed->typed.member.resolvesToEnum = original->member.resolvesToEnum;
+            typed->typed.member.resolvesToEnumVariant = original->member.resolvesToEnumVariant;
+            typed->typed.member.enumVariantIndex = original->member.enumVariantIndex;
+            typed->typed.member.enumVariantArity = original->member.enumVariantArity;
+            typed->typed.member.enumTypeName = original->member.enumTypeName;
             break;
         case NODE_MEMBER_ASSIGN:
             typed->typed.memberAssign.target = NULL;
             typed->typed.memberAssign.value = NULL;
+            break;
+        case NODE_ENUM_DECL:
+            typed->typed.enumDecl.name = original->enumDecl.name;
+            typed->typed.enumDecl.isPublic = original->enumDecl.isPublic;
+            typed->typed.enumDecl.variants = NULL;
+            typed->typed.enumDecl.variantCount = 0;
             break;
         default:
             // For leaf nodes (IDENTIFIER, LITERAL, etc.), no additional
@@ -310,6 +321,19 @@ void free_typed_ast_node(TypedASTNode* node) {
             free_typed_ast_node(node->typed.memberAssign.target);
             free_typed_ast_node(node->typed.memberAssign.value);
             break;
+        case NODE_ENUM_DECL:
+            if (node->typed.enumDecl.variants) {
+                for (int i = 0; i < node->typed.enumDecl.variantCount; i++) {
+                    if (node->typed.enumDecl.variants[i].fields) {
+                        for (int j = 0; j < node->typed.enumDecl.variants[i].fieldCount; j++) {
+                            free_typed_ast_node(node->typed.enumDecl.variants[i].fields[j].typeAnnotation);
+                        }
+                        free(node->typed.enumDecl.variants[i].fields);
+                    }
+                }
+                free(node->typed.enumDecl.variants);
+            }
+            break;
         default:
             // Leaf nodes have no children to free
             break;
@@ -340,6 +364,14 @@ TypedASTNode* copy_typed_ast_node(TypedASTNode* node) {
 
     // Note: Children are not copied here - this is a shallow copy
     // Full deep copy would require recursive copying of all children
+
+    if (node->original->type == NODE_MEMBER_ACCESS) {
+        copy->typed.member.resolvesToEnum = node->typed.member.resolvesToEnum;
+        copy->typed.member.resolvesToEnumVariant = node->typed.member.resolvesToEnumVariant;
+        copy->typed.member.enumVariantIndex = node->typed.member.enumVariantIndex;
+        copy->typed.member.enumVariantArity = node->typed.member.enumVariantArity;
+        copy->typed.member.enumTypeName = node->typed.member.enumTypeName;
+    }
 
     return copy;
 }
@@ -415,6 +447,20 @@ bool validate_typed_ast(TypedASTNode* root) {
                 for (int i = 0; i < root->typed.structLiteral.fieldCount; i++) {
                     if (!validate_typed_ast(root->typed.structLiteral.values[i])) {
                         return false;
+                    }
+                }
+            }
+            break;
+        case NODE_ENUM_DECL:
+            if (root->typed.enumDecl.variants) {
+                for (int i = 0; i < root->typed.enumDecl.variantCount; i++) {
+                    if (root->typed.enumDecl.variants[i].fields) {
+                        for (int j = 0; j < root->typed.enumDecl.variants[i].fieldCount; j++) {
+                            if (root->typed.enumDecl.variants[i].fields[j].typeAnnotation &&
+                                !validate_typed_ast(root->typed.enumDecl.variants[i].fields[j].typeAnnotation)) {
+                                return false;
+                            }
+                        }
                     }
                 }
             }
@@ -581,6 +627,9 @@ void print_typed_ast(TypedASTNode* node, int indent) {
         case NODE_STRUCT_LITERAL:
             nodeTypeStr = "StructLiteral";
             break;
+        case NODE_ENUM_DECL:
+            nodeTypeStr = "EnumDecl";
+            break;
         case NODE_IMPL_BLOCK:
             nodeTypeStr = "ImplBlock";
             break;
@@ -627,6 +676,23 @@ void print_typed_ast(TypedASTNode* node, int indent) {
 
     if (!node->spillable) {
         printf(" [NO_SPILL]");
+    }
+
+    if (node->original->type == NODE_MEMBER_ACCESS) {
+        const char* memberName = node->typed.member.member ? node->typed.member.member : "<unknown>";
+        printf(" [member=%s", memberName);
+        if (node->typed.member.isMethod) {
+            printf(" method%s", node->typed.member.isInstanceMethod ? "(instance)" : "(static)");
+        }
+        if (node->typed.member.resolvesToEnumVariant) {
+            const char* enumName = node->typed.member.enumTypeName ? node->typed.member.enumTypeName : "<anon-enum>";
+            printf(" enum=%s variant=%d arity=%d", enumName, node->typed.member.enumVariantIndex,
+                   node->typed.member.enumVariantArity);
+        } else if (node->typed.member.resolvesToEnum) {
+            const char* enumName = node->typed.member.enumTypeName ? node->typed.member.enumTypeName : "<anon-enum>";
+            printf(" enum=%s", enumName);
+        }
+        printf("]");
     }
 
     printf("\n");
@@ -778,6 +844,31 @@ void print_typed_ast(TypedASTNode* node, int indent) {
                         print_typed_ast(fieldValue, indent + 2);
                     } else {
                         print_typed_ast(fieldValue, indent + 1);
+                    }
+                }
+            }
+            break;
+        case NODE_ENUM_DECL:
+            if (node->typed.enumDecl.variants) {
+                for (int i = 0; i < node->typed.enumDecl.variantCount; i++) {
+                    if (node->typed.enumDecl.variants[i].fields) {
+                        for (int j = 0; j < node->typed.enumDecl.variants[i].fieldCount; j++) {
+                            if (node->typed.enumDecl.variants[i].fields[j].typeAnnotation) {
+                                for (int k = 0; k < indent + 1; k++) {
+                                    printf("  ");
+                                }
+                                const char* fieldName = node->typed.enumDecl.variants[i].fields[j].name;
+                                if (fieldName) {
+                                    printf("Variant %s field %s:\n", node->typed.enumDecl.variants[i].name,
+                                           fieldName);
+                                } else {
+                                    printf("Variant %s field %d:\n", node->typed.enumDecl.variants[i].name,
+                                           j);
+                                }
+                                print_typed_ast(node->typed.enumDecl.variants[i].fields[j].typeAnnotation,
+                                                indent + 2);
+                            }
+                        }
                     }
                 }
             }

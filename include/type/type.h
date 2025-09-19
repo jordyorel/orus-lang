@@ -20,6 +20,7 @@ typedef struct FieldInfo {
 // Extended type system structures (complement the existing Type in vm.h)
 typedef struct Variant {
     ObjString* name;
+    ObjString** field_names;
     struct Type** field_types;
     int field_count;
 } Variant;
@@ -73,6 +74,7 @@ Type* createStructType(ObjString* name, FieldInfo* fields, int fieldCount,
 Type* createEnumType(ObjString* name, Variant* variants, int variant_count);
 Type* createGenericType(ObjString* name);
 Type* findStructType(const char* name);
+Type* findEnumType(const char* name);
 void freeType(Type* type);
 bool typesEqual(Type* a, Type* b);
 bool equalsType(Type* a, Type* b);

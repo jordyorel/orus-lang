@@ -251,6 +251,7 @@ static TokenType identifier_type(const char* start, int length) {
         case 'e':
             if (length == 4 && memcmp(start, "else", 4) == 0) return TOKEN_ELSE;
             if (length == 4 && memcmp(start, "elif", 4) == 0) return TOKEN_ELIF;
+            if (length == 4 && memcmp(start, "enum", 4) == 0) return TOKEN_ENUM;
             break;
         case 'f':
             if (length == 5 && memcmp(start, "false", 5) == 0)
