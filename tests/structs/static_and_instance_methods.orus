@@ -1,0 +1,18 @@
+// Exercises static constructors returning structs and subsequent instance dispatch.
+pub struct Point:
+    x: i32
+    y: i32
+
+impl Point:
+    fn origin() -> Point:
+        return Point{ x: 0, y: 0 }
+
+    fn offset(self, dx: i32, dy: i32) -> Point:
+        return Point{ x: self.x + dx, y: self.y + dy }
+
+    fn manhattan(self) -> i32:
+        return self.x + self.y
+
+start = Point.origin()
+shifted = start.offset(4, 9)
+print(shifted.manhattan())

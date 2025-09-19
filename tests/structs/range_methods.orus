@@ -1,0 +1,26 @@
+// Covers boolean-returning instance methods and static helpers operating on structs.
+pub struct Range:
+    start: i32
+    end: i32
+
+impl Range:
+    fn contains(self, value: i32) -> bool:
+        if value < self.start:
+            return false
+        if value > self.end:
+            return false
+        return true
+
+    fn clamp(range: Range, value: i32) -> i32:
+        if value < range.start:
+            return range.start
+        if value > range.end:
+            return range.end
+        return value
+
+segment = Range{ start: 5, end: 12 }
+print(segment.contains(7))
+print(segment.contains(15))
+print(Range.clamp(segment, 2))
+print(Range.clamp(segment, 10))
+print(Range.clamp(segment, 20))
