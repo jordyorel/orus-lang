@@ -14,19 +14,17 @@
 #include "runtime/builtins.h"
 
 // Frame-aware register access functions for proper local variable isolation
-extern inline Value vm_get_register_safe(uint16_t id);
-extern inline void vm_set_register_safe(uint16_t id, Value value);
 
 // ====== Basic Load Operation Handlers ======
 
-static inline void handle_load_const(void) {
+void handle_load_const(void) {
     uint8_t reg = READ_BYTE();
     uint16_t constantIndex = READ_SHORT();
     vm_set_register_safe(reg, READ_CONSTANT(constantIndex));
 }
 
 // Extended constant loading for 16-bit register IDs (Phase 2.1)
-static inline void handle_load_const_ext(void) {
+void handle_load_const_ext(void) {
     uint16_t reg = READ_SHORT();      // 16-bit register ID
     uint16_t constantIndex = READ_SHORT(); // 16-bit constant index
     Value constant = READ_CONSTANT(constantIndex);
@@ -36,7 +34,7 @@ static inline void handle_load_const_ext(void) {
 }
 
 // Extended register move for 16-bit register IDs (Phase 2.2)
-static inline void handle_move_ext(void) {
+void handle_move_ext(void) {
     uint16_t dst_reg = READ_SHORT();  // 16-bit destination register
     uint16_t src_reg = READ_SHORT();  // 16-bit source register
     
@@ -49,19 +47,19 @@ static inline void handle_move_ext(void) {
 }
 
 
-static inline void handle_load_true(void) {
+void handle_load_true(void) {
     uint8_t reg = READ_BYTE();
     vm_set_register_safe(reg, BOOL_VAL(true));
 }
 
-static inline void handle_load_false(void) {
+void handle_load_false(void) {
     uint8_t reg = READ_BYTE();
     vm_set_register_safe(reg, BOOL_VAL(false));
 }
 
 // ====== Register Move Operation Handler ======
 
-static inline void handle_move_reg(void) {
+void handle_move_reg(void) {
     uint8_t dst = READ_BYTE();
     uint8_t src = READ_BYTE();
     
@@ -72,7 +70,7 @@ static inline void handle_move_reg(void) {
 
 // ====== Global Variable Operation Handlers ======
 
-static inline void handle_load_global(void) {
+void handle_load_global(void) {
     uint8_t reg = READ_BYTE();
     uint8_t globalIndex = READ_BYTE();
     if (globalIndex >= vm.variableCount || vm.globalTypes[globalIndex] == NULL) {
@@ -82,7 +80,7 @@ static inline void handle_load_global(void) {
     vm_set_register_safe(reg, vm.globals[globalIndex]);
 }
 
-static inline void handle_store_global(void) {
+void handle_store_global(void) {
     uint8_t globalIndex = READ_BYTE();
     uint8_t reg = READ_BYTE();
     
@@ -183,34 +181,34 @@ static inline void handle_store_global(void) {
 
 // ====== Typed Constant Load Handlers ======
 
-static inline void handle_load_i32_const(void) {
+void handle_load_i32_const(void) {
     uint8_t reg = READ_BYTE();
     uint16_t constantIndex = READ_SHORT();
     vm_set_register_safe(reg, READ_CONSTANT(constantIndex));
 }
 
-static inline void handle_load_i64_const(void) {
-    uint8_t reg = READ_BYTE();
-    uint16_t constantIndex = READ_SHORT();
-    // Store in the standard register system where comparison operations expect values
-    vm_set_register_safe(reg, READ_CONSTANT(constantIndex));
-}
-
-static inline void handle_load_u32_const(void) {
+void handle_load_i64_const(void) {
     uint8_t reg = READ_BYTE();
     uint16_t constantIndex = READ_SHORT();
     // Store in the standard register system where comparison operations expect values
     vm_set_register_safe(reg, READ_CONSTANT(constantIndex));
 }
 
-static inline void handle_load_u64_const(void) {
+void handle_load_u32_const(void) {
     uint8_t reg = READ_BYTE();
     uint16_t constantIndex = READ_SHORT();
     // Store in the standard register system where comparison operations expect values
     vm_set_register_safe(reg, READ_CONSTANT(constantIndex));
 }
 
-static inline void handle_load_f64_const(void) {
+void handle_load_u64_const(void) {
+    uint8_t reg = READ_BYTE();
+    uint16_t constantIndex = READ_SHORT();
+    // Store in the standard register system where comparison operations expect values
+    vm_set_register_safe(reg, READ_CONSTANT(constantIndex));
+}
+
+void handle_load_f64_const(void) {
     uint8_t reg = READ_BYTE();
     uint16_t constantIndex = READ_SHORT();
     // Store in the standard register system where comparison operations expect values
@@ -219,13 +217,13 @@ static inline void handle_load_f64_const(void) {
 
 // ====== Typed Move Operation Handlers ======
 
-static inline void handle_move_i32(void) {
+void handle_move_i32(void) {
     uint8_t dst = READ_BYTE();
     uint8_t src = READ_BYTE();
     vm_set_register_safe(dst, vm_get_register_safe(src));
 }
 
-static inline void handle_move_i64(void) {
+void handle_move_i64(void) {
     uint8_t dst = READ_BYTE();
     uint8_t src = READ_BYTE();
     // Read from the standard register system where OP_LOAD_CONST stores values
@@ -238,21 +236,21 @@ static inline void handle_move_i64(void) {
     vm_set_register_safe(dst, vm_get_register_safe(src));
 }
 
-static inline void handle_move_u32(void) {
+void handle_move_u32(void) {
     uint8_t dst = READ_BYTE();
     uint8_t src = READ_BYTE();
     vm.typed_regs.u32_regs[dst] = vm.typed_regs.u32_regs[src];
     vm.typed_regs.reg_types[dst] = REG_TYPE_U32;
 }
 
-static inline void handle_move_u64(void) {
+void handle_move_u64(void) {
     uint8_t dst = READ_BYTE();
     uint8_t src = READ_BYTE();
     vm.typed_regs.u64_regs[dst] = vm.typed_regs.u64_regs[src];
     vm.typed_regs.reg_types[dst] = REG_TYPE_U64;
 }
 
-static inline void handle_move_f64(void) {
+void handle_move_f64(void) {
     uint8_t dst = READ_BYTE();
     uint8_t src = READ_BYTE();
     // Read from the standard register system where OP_LOAD_CONST stores values
@@ -267,13 +265,13 @@ static inline void handle_move_f64(void) {
 
 // ====== Print Operation Handlers ======
 
-static inline void handle_print(void) {
+void handle_print(void) {
     uint8_t reg = READ_BYTE();
     Value temp_value = vm_get_register_safe(reg);
     builtin_print(&temp_value, 1, true, NULL);
 }
 
-static inline void handle_print_multi(void) {
+void handle_print_multi(void) {
     uint8_t first = READ_BYTE();
     uint8_t count = READ_BYTE();
     uint8_t nl = READ_BYTE();
@@ -294,7 +292,7 @@ static inline void handle_print_multi(void) {
     builtin_print(temp_values, count, nl != 0, NULL);
 }
 
-static inline void handle_print_multi_sep(void) {
+void handle_print_multi_sep(void) {
     uint8_t first = READ_BYTE();
     uint8_t count = READ_BYTE();
     uint8_t sep_reg = READ_BYTE();
@@ -309,7 +307,7 @@ static inline void handle_print_multi_sep(void) {
     builtin_print_with_sep_value(temp_values, count, nl != 0, sep_value);
 }
 
-static inline void handle_print_no_nl(void) {
+void handle_print_no_nl(void) {
     uint8_t reg = READ_BYTE();
     Value temp_value = vm_get_register_safe(reg);
     builtin_print(&temp_value, 1, false, NULL);
@@ -317,12 +315,12 @@ static inline void handle_print_no_nl(void) {
 
 // ====== Utility Operation Handlers ======
 
-static inline void handle_halt(void) {
+void handle_halt(void) {
     // Halt operation - handled by dispatch loop
     // This is a placeholder for consistency
 }
 
-static inline void handle_time_stamp(void) {
+void handle_time_stamp(void) {
     // Time stamp operation - implementation depends on VM requirements
     // This is a placeholder for consistency
 }

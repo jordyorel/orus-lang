@@ -2,10 +2,26 @@
 #define ORUS_VM_COMPARISON_H
 
 #include "../../src/vm/core/vm_internal.h"
+#include "vm/register_file.h"
 
-// Forward declarations for frame-aware register access
-extern inline Value vm_get_register_safe(uint16_t id);
-extern inline void vm_set_register_safe(uint16_t id, Value value);
+// Frame-aware register access helpers shared across dispatch implementations
+static inline Value vm_get_register_safe(uint16_t id) {
+    if (id < 256) {
+        return vm.registers[id];
+    }
+
+    Value* reg_ptr = get_register(&vm.register_file, id);
+    return reg_ptr ? *reg_ptr : BOOL_VAL(false);
+}
+
+static inline void vm_set_register_safe(uint16_t id, Value value) {
+    if (id < 256) {
+        vm.registers[id] = value;
+        return;
+    }
+
+    set_register(&vm.register_file, id, value);
+}
 
 // Equality comparisons
 #define CMP_EQ(dst, a, b) \

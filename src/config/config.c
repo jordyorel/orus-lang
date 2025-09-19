@@ -434,7 +434,7 @@ bool config_validate(const OrusConfig* config) {
         return false;
     }
     
-    if (config->optimization_level < 0 || config->optimization_level > 2) {
+    if (config->optimization_level > 2) {
         return false;
     }
     
@@ -752,9 +752,18 @@ bool config_load_from_file(OrusConfig* config, const char* filename) {
         if (line[0] == '\0' || line[0] == '#') continue;
         
         // Check for section headers
-        if (line[0] == '[' && line[strlen(line)-1] == ']') {
-            strncpy(section, line + 1, sizeof(section) - 1);
-            section[strlen(section) - 1] = '\0'; // Remove closing ]
+        if (line[0] == '[') {
+            size_t len = strlen(line);
+            if (len > 1 && line[len - 1] == ']') {
+                size_t copy_len = len > 2 ? len - 2 : 0;
+                if (copy_len >= sizeof(section)) {
+                    copy_len = sizeof(section) - 1;
+                }
+                memcpy(section, line + 1, copy_len);
+                section[copy_len] = '\0';
+            } else {
+                section[0] = '\0';
+            }
             continue;
         }
         

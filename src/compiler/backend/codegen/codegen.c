@@ -1034,8 +1034,10 @@ void emit_load_constant(CompilerContext* ctx, int reg, Value constant) {
 
 void emit_binary_op(CompilerContext* ctx, const char* op, Type* operand_type, int dst, int src1, int src2) {
     // Debug output removed
-    DEBUG_CODEGEN_PRINT("emit_binary_op called: op='%s', type=%d, dst=R%d, src1=R%d, src2=R%d\n", 
-           op, operand_type ? operand_type->kind : -1, dst, src1, src2);
+    int operand_kind = operand_type ? (int)operand_type->kind : -1;
+    DEBUG_CODEGEN_PRINT("emit_binary_op called: op='%s', type=%d, dst=R%d, src1=R%d, src2=R%d\n",
+           op, operand_kind, dst, src1, src2);
+    (void)operand_kind;
     
     uint8_t opcode = select_optimal_opcode(op, operand_type);
     // Debug output removed
@@ -1055,8 +1057,8 @@ void emit_binary_op(CompilerContext* ctx, const char* op, Type* operand_type, in
             DEBUG_CODEGEN_PRINT("Emitted %s_TYPED R%d, R%d, R%d\n", op, dst, src1, src2);
         }
     } else {
-        DEBUG_CODEGEN_PRINT("ERROR: No valid opcode found for operation '%s' with type %d\n", 
-               op, operand_type ? operand_type->kind : -1);
+        DEBUG_CODEGEN_PRINT("ERROR: No valid opcode found for operation '%s' with type %d\n",
+               op, operand_kind);
     }
 }
 
@@ -1271,7 +1273,7 @@ static int compile_enum_variant_access(CompilerContext* ctx, TypedASTNode* expr)
             snprintf(message, sizeof(message),
                      "Enum variant '%s' expects %d argument%s", variant, arity,
                      arity == 1 ? "" : "s");
-            error_reporter_add(ctx->errors, ERROR_TYPE, SEVERITY_ERROR,
+            error_reporter_add(ctx->errors, map_error_type_to_code(ERROR_TYPE), SEVERITY_ERROR,
                                expr->original->location,
                                message,
                                "Call the variant with parentheses and the required arguments.",
@@ -1335,7 +1337,7 @@ static int compile_enum_constructor_call(CompilerContext* ctx, TypedASTNode* cal
             snprintf(message, sizeof(message),
                      "Enum variant '%s' expects %d argument%s but got %d",
                      variant, expectedArgs, expectedArgs == 1 ? "" : "s", providedArgs);
-            error_reporter_add(ctx->errors, ERROR_TYPE, SEVERITY_ERROR,
+            error_reporter_add(ctx->errors, map_error_type_to_code(ERROR_TYPE), SEVERITY_ERROR,
                                call->original->location,
                                message,
                                "Adjust the constructor call to pass the correct number of arguments.",
@@ -1889,97 +1891,102 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                 emit_byte_to_buffer(ctx->bytecode, 0);
                 emit_byte_to_buffer(ctx->bytecode, 0);
                 return result_reg;
-            }
-
-            int* element_regs = malloc(sizeof(int) * element_count);
-            if (!element_regs) {
-                mp_free_temp_register(ctx->allocator, result_reg);
-                DEBUG_CODEGEN_PRINT("Error: Failed to allocate element register list for array literal\n");
-                return -1;
-            }
-
-            bool allocation_failed = false;
-            for (int i = 0; i < element_count; i++) {
-                element_regs[i] = mp_allocate_temp_register(ctx->allocator);
-                if (element_regs[i] == -1) {
-                    allocation_failed = true;
-                    break;
+            } else {
+                int* element_regs = malloc(sizeof(int) * element_count);
+                if (!element_regs) {
+                    mp_free_temp_register(ctx->allocator, result_reg);
+                    DEBUG_CODEGEN_PRINT("Error: Failed to allocate element register list for array literal\n");
+                    return -1;
                 }
-            }
 
-            if (allocation_failed) {
+                bool allocation_failed = false;
+                for (int i = 0; i < element_count; i++) {
+                    element_regs[i] = mp_allocate_temp_register(ctx->allocator);
+                    if (element_regs[i] == -1) {
+                        allocation_failed = true;
+                        break;
+                    }
+                }
+
+                if (allocation_failed) {
+                    for (int i = 0; i < element_count; i++) {
+                        if (element_regs[i] >= MP_TEMP_REG_START && element_regs[i] <= MP_TEMP_REG_END) {
+                            mp_free_temp_register(ctx->allocator, element_regs[i]);
+                        }
+                    }
+                    free(element_regs);
+                    mp_free_temp_register(ctx->allocator, result_reg);
+                    DEBUG_CODEGEN_PRINT("Error: Failed to allocate temp registers for array elements\n");
+                    return -1;
+                }
+
+                bool success = true;
+                for (int i = 0; i < element_count; i++) {
+                    TypedASTNode* element_node = NULL;
+                    if (expr->typed.arrayLiteral.elements && i < expr->typed.arrayLiteral.count) {
+                        element_node = expr->typed.arrayLiteral.elements[i];
+                    }
+
+                    if (!element_node && expr->original->arrayLiteral.elements &&
+                        i < expr->original->arrayLiteral.count) {
+                        element_node = create_typed_ast_node(expr->original->arrayLiteral.elements[i]);
+                    }
+
+                    if (!element_node) {
+                        success = false;
+                        break;
+                    }
+
+                    int value_reg = compile_expression(ctx, element_node);
+                    if (expr->typed.arrayLiteral.elements == NULL && element_node) {
+                        free_typed_ast_node(element_node);
+                    }
+
+                    if (value_reg == -1) {
+                        success = false;
+                        break;
+                    }
+
+                    if (value_reg != element_regs[i]) {
+                        emit_move(ctx, element_regs[i], value_reg);
+                        if (value_reg >= MP_TEMP_REG_START && value_reg <= MP_TEMP_REG_END) {
+                            mp_free_temp_register(ctx->allocator, value_reg);
+                        }
+                    }
+                }
+
+                if (!success) {
+                    for (int i = 0; i < element_count; i++) {
+                        if (element_regs[i] >= MP_TEMP_REG_START && element_regs[i] <= MP_TEMP_REG_END) {
+                            mp_free_temp_register(ctx->allocator, element_regs[i]);
+                        }
+                    }
+                    free(element_regs);
+                    mp_free_temp_register(ctx->allocator, result_reg);
+                    DEBUG_CODEGEN_PRINT("Error: Failed to compile array literal element\n");
+                    return -1;
+                }
+
+                int first_element_reg = element_regs[0];
+                if (element_count <= 0) {
+                    first_element_reg = result_reg;
+                }
+
+                set_location_from_node(ctx, expr);
+                emit_byte_to_buffer(ctx->bytecode, OP_MAKE_ARRAY_R);
+                emit_byte_to_buffer(ctx->bytecode, result_reg);
+                emit_byte_to_buffer(ctx->bytecode, first_element_reg);
+                emit_byte_to_buffer(ctx->bytecode, element_count);
+
                 for (int i = 0; i < element_count; i++) {
                     if (element_regs[i] >= MP_TEMP_REG_START && element_regs[i] <= MP_TEMP_REG_END) {
                         mp_free_temp_register(ctx->allocator, element_regs[i]);
                     }
                 }
+
                 free(element_regs);
-                mp_free_temp_register(ctx->allocator, result_reg);
-                DEBUG_CODEGEN_PRINT("Error: Failed to allocate temp registers for array elements\n");
-                return -1;
+                return result_reg;
             }
-
-            bool success = true;
-            for (int i = 0; i < element_count; i++) {
-                TypedASTNode* element_node = NULL;
-                if (expr->typed.arrayLiteral.elements && i < expr->typed.arrayLiteral.count) {
-                    element_node = expr->typed.arrayLiteral.elements[i];
-                }
-
-                if (!element_node && expr->original->arrayLiteral.elements &&
-                    i < expr->original->arrayLiteral.count) {
-                    element_node = create_typed_ast_node(expr->original->arrayLiteral.elements[i]);
-                }
-
-                if (!element_node) {
-                    success = false;
-                    break;
-                }
-
-                int value_reg = compile_expression(ctx, element_node);
-                if (expr->typed.arrayLiteral.elements == NULL && element_node) {
-                    free_typed_ast_node(element_node);
-                }
-
-                if (value_reg == -1) {
-                    success = false;
-                    break;
-                }
-
-                if (value_reg != element_regs[i]) {
-                    emit_move(ctx, element_regs[i], value_reg);
-                    if (value_reg >= MP_TEMP_REG_START && value_reg <= MP_TEMP_REG_END) {
-                        mp_free_temp_register(ctx->allocator, value_reg);
-                    }
-                }
-            }
-
-            if (!success) {
-                for (int i = 0; i < element_count; i++) {
-                    if (element_regs[i] >= MP_TEMP_REG_START && element_regs[i] <= MP_TEMP_REG_END) {
-                        mp_free_temp_register(ctx->allocator, element_regs[i]);
-                    }
-                }
-                free(element_regs);
-                mp_free_temp_register(ctx->allocator, result_reg);
-                DEBUG_CODEGEN_PRINT("Error: Failed to compile array literal element\n");
-                return -1;
-            }
-
-            set_location_from_node(ctx, expr);
-            emit_byte_to_buffer(ctx->bytecode, OP_MAKE_ARRAY_R);
-            emit_byte_to_buffer(ctx->bytecode, result_reg);
-            emit_byte_to_buffer(ctx->bytecode, element_regs[0]);
-            emit_byte_to_buffer(ctx->bytecode, element_count);
-
-            for (int i = 0; i < element_count; i++) {
-                if (element_regs[i] >= MP_TEMP_REG_START && element_regs[i] <= MP_TEMP_REG_END) {
-                    mp_free_temp_register(ctx->allocator, element_regs[i]);
-                }
-            }
-
-            free(element_regs);
-            return result_reg;
         }
         case NODE_ENUM_MATCH_TEST:
             return compile_enum_match_test(ctx, expr);

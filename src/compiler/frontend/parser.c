@@ -473,23 +473,6 @@ static ASTNode* create_identifier_node(ParserContext* ctx, const char* name, Src
     return node;
 }
 
-static ASTNode* create_member_access(ParserContext* ctx, ASTNode* object, const char* member, SrcLocation location) {
-    ASTNode* memberNode = new_node(ctx);
-    memberNode->type = NODE_MEMBER_ACCESS;
-    memberNode->member.object = object;
-    memberNode->member.member = (char*)member;
-    memberNode->member.isMethod = false;
-    memberNode->member.isInstanceMethod = false;
-    memberNode->member.resolvesToEnum = false;
-    memberNode->member.resolvesToEnumVariant = false;
-    memberNode->member.enumVariantIndex = -1;
-    memberNode->member.enumVariantArity = 0;
-    memberNode->member.enumTypeName = NULL;
-    memberNode->location = location;
-    memberNode->dataType = NULL;
-    return memberNode;
-}
-
 static ASTNode* create_binary_equals(ParserContext* ctx, ASTNode* left, ASTNode* right, SrcLocation location) {
     ASTNode* node = new_node(ctx);
     node->type = NODE_BINARY;

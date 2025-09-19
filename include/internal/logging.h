@@ -6,6 +6,10 @@
 #ifndef ORUS_LOGGING_H
 #define ORUS_LOGGING_H
 
+#ifndef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 200809L
+#endif
+
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdbool.h>

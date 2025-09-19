@@ -252,7 +252,7 @@ uint16_t allocate_temp_register(RegisterFile* rf) {
 
 // Phase 1: Register type checking for debugging
 bool is_global_register(uint16_t id) {
-    return id >= GLOBAL_REG_START && id < FRAME_REG_START;
+    return id < FRAME_REG_START;
 }
 
 bool is_frame_register(uint16_t id) {
