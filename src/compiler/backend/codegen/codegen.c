@@ -49,6 +49,7 @@ static int compile_enum_variant_access(CompilerContext* ctx, TypedASTNode* expr)
 static int compile_enum_constructor_call(CompilerContext* ctx, TypedASTNode* call);
 static int compile_enum_match_test(CompilerContext* ctx, TypedASTNode* expr);
 static int compile_enum_payload_extract(CompilerContext* ctx, TypedASTNode* expr);
+static int compile_match_expression(CompilerContext* ctx, TypedASTNode* expr);
 
 static int compile_builtin_array_push(CompilerContext* ctx, TypedASTNode* call);
 static int compile_builtin_array_pop(CompilerContext* ctx, TypedASTNode* call);
@@ -1540,6 +1541,272 @@ static int compile_enum_payload_extract(CompilerContext* ctx, TypedASTNode* expr
     return result_reg;
 }
 
+static int compile_match_expression(CompilerContext* ctx, TypedASTNode* expr) {
+    if (!ctx || !expr || !expr->typed.matchExpr.subject || expr->typed.matchExpr.armCount <= 0) {
+        return -1;
+    }
+
+    int scrutinee_reg = compile_expression(ctx, expr->typed.matchExpr.subject);
+    if (scrutinee_reg == -1) {
+        return -1;
+    }
+
+    int result_reg = mp_allocate_temp_register(ctx->allocator);
+    if (result_reg == -1) {
+        if (scrutinee_reg >= MP_TEMP_REG_START && scrutinee_reg <= MP_TEMP_REG_END) {
+            mp_free_temp_register(ctx->allocator, scrutinee_reg);
+        }
+        return -1;
+    }
+
+    SymbolTable* parent_scope = ctx->symbols;
+    SymbolTable* match_scope = create_symbol_table(parent_scope);
+    if (!match_scope) {
+        mp_free_temp_register(ctx->allocator, result_reg);
+        if (scrutinee_reg >= MP_TEMP_REG_START && scrutinee_reg <= MP_TEMP_REG_END) {
+            mp_free_temp_register(ctx->allocator, scrutinee_reg);
+        }
+        return -1;
+    }
+
+    ScopeFrame* match_frame = NULL;
+    int match_frame_index = -1;
+
+    ctx->symbols = match_scope;
+    if (ctx->allocator) {
+        mp_enter_scope(ctx->allocator);
+    }
+    if (ctx->scopes) {
+        match_frame = scope_stack_push(ctx->scopes, SCOPE_KIND_LEXICAL);
+        if (match_frame) {
+            match_frame->symbols = match_scope;
+            match_frame->start_offset = ctx->bytecode ? ctx->bytecode->count : 0;
+            match_frame->end_offset = match_frame->start_offset;
+            match_frame_index = match_frame->lexical_depth;
+        }
+    }
+
+    if (expr->typed.matchExpr.tempName) {
+        Type* scrutinee_type = expr->typed.matchExpr.subject ? expr->typed.matchExpr.subject->resolvedType : NULL;
+        if (!register_variable(ctx, ctx->symbols, expr->typed.matchExpr.tempName, scrutinee_reg,
+                               scrutinee_type, false, expr->original->location, true)) {
+            if (ctx->allocator) {
+                mp_exit_scope(ctx->allocator);
+            }
+            free_symbol_table(match_scope);
+            ctx->symbols = parent_scope;
+            if (match_frame && ctx->scopes) {
+                scope_stack_pop(ctx->scopes);
+            }
+            mp_free_temp_register(ctx->allocator, result_reg);
+            if (scrutinee_reg >= MP_TEMP_REG_START && scrutinee_reg <= MP_TEMP_REG_END) {
+                mp_free_temp_register(ctx->allocator, scrutinee_reg);
+            }
+            return -1;
+        }
+    }
+
+    int arm_count = expr->typed.matchExpr.armCount;
+    int* false_jumps = NULL;
+    int* end_jumps = NULL;
+    bool success = true;
+
+    if (arm_count > 0) {
+        false_jumps = calloc((size_t)arm_count, sizeof(int));
+        end_jumps = calloc((size_t)arm_count, sizeof(int));
+        if (!false_jumps || !end_jumps) {
+            success = false;
+        }
+        if (false_jumps) {
+            for (int i = 0; i < arm_count; i++) {
+                false_jumps[i] = -1;
+            }
+        }
+        if (end_jumps) {
+            for (int i = 0; i < arm_count; i++) {
+                end_jumps[i] = -1;
+            }
+        }
+    }
+
+    for (int i = 0; success && i < arm_count; i++) {
+        TypedMatchArm* arm = &expr->typed.matchExpr.arms[i];
+
+        int false_patch = -1;
+        if (arm->condition) {
+            int condition_reg = compile_expression(ctx, arm->condition);
+            if (condition_reg == -1) {
+                success = false;
+            } else {
+                set_location_from_node(ctx, arm->condition);
+                emit_byte_to_buffer(ctx->bytecode, OP_JUMP_IF_NOT_R);
+                emit_byte_to_buffer(ctx->bytecode, (uint8_t)condition_reg);
+                false_patch = emit_jump_placeholder(ctx->bytecode, OP_JUMP_IF_NOT_R);
+                if (false_patch < 0) {
+                    success = false;
+                }
+                if (condition_reg >= MP_TEMP_REG_START && condition_reg <= MP_TEMP_REG_END) {
+                    mp_free_temp_register(ctx->allocator, condition_reg);
+                }
+            }
+        }
+
+        SymbolTable* branch_parent = ctx->symbols;
+        SymbolTable* branch_scope = create_symbol_table(branch_parent);
+        ScopeFrame* branch_frame = NULL;
+        int branch_frame_index = -1;
+        if (!branch_scope) {
+            success = false;
+        } else {
+            ctx->symbols = branch_scope;
+            if (ctx->allocator) {
+                mp_enter_scope(ctx->allocator);
+            }
+            if (ctx->scopes) {
+                branch_frame = scope_stack_push(ctx->scopes, SCOPE_KIND_LEXICAL);
+                if (branch_frame) {
+                    branch_frame->symbols = branch_scope;
+                    branch_frame->start_offset = ctx->bytecode ? ctx->bytecode->count : 0;
+                    branch_frame->end_offset = branch_frame->start_offset;
+                    branch_frame_index = branch_frame->lexical_depth;
+                }
+            }
+
+            if (arm->payloadAccesses && arm->payloadCount > 0) {
+                for (int j = 0; success && j < arm->payloadCount; j++) {
+                    TypedASTNode* payload_node = arm->payloadAccesses[j];
+                    const char* binding = (arm->payloadNames && j < arm->payloadCount) ? arm->payloadNames[j] : NULL;
+                    if (!payload_node) {
+                        continue;
+                    }
+                    int payload_reg = compile_expression(ctx, payload_node);
+                    if (payload_reg == -1) {
+                        success = false;
+                        break;
+                    }
+                    if (binding) {
+                        if (!register_variable(ctx, ctx->symbols, binding, payload_reg,
+                                               payload_node->resolvedType, false,
+                                               payload_node->original ? payload_node->original->location
+                                                                      : expr->original->location,
+                                               true)) {
+                            success = false;
+                            if (payload_reg >= MP_TEMP_REG_START && payload_reg <= MP_TEMP_REG_END) {
+                                mp_free_temp_register(ctx->allocator, payload_reg);
+                            }
+                            break;
+                        }
+                    } else {
+                        if (payload_reg >= MP_TEMP_REG_START && payload_reg <= MP_TEMP_REG_END) {
+                            mp_free_temp_register(ctx->allocator, payload_reg);
+                        }
+                    }
+                }
+            }
+
+            int body_reg = -1;
+            if (success && arm->body) {
+                body_reg = compile_expression(ctx, arm->body);
+                if (body_reg == -1) {
+                    success = false;
+                }
+            }
+
+            if (success) {
+                if (body_reg != result_reg) {
+                    set_location_from_node(ctx, arm->body ? arm->body : expr);
+                    emit_move(ctx, result_reg, body_reg);
+                    if (body_reg >= MP_TEMP_REG_START && body_reg <= MP_TEMP_REG_END) {
+                        mp_free_temp_register(ctx->allocator, body_reg);
+                    }
+                }
+            }
+
+            if (branch_frame) {
+                ScopeFrame* refreshed = get_scope_frame_by_index(ctx, branch_frame_index);
+                if (refreshed) {
+                    refreshed->end_offset = ctx->bytecode ? ctx->bytecode->count : refreshed->start_offset;
+                }
+                if (ctx->scopes) {
+                    scope_stack_pop(ctx->scopes);
+                }
+            }
+            if (ctx->allocator) {
+                mp_exit_scope(ctx->allocator);
+            }
+            free_symbol_table(branch_scope);
+            ctx->symbols = branch_parent;
+        }
+
+        if (!success) {
+            break;
+        }
+
+        set_location_from_node(ctx, expr);
+        emit_byte_to_buffer(ctx->bytecode, OP_JUMP_SHORT);
+        int end_patch = emit_jump_placeholder(ctx->bytecode, OP_JUMP_SHORT);
+        if (end_patch < 0) {
+            success = false;
+            break;
+        }
+        if (end_jumps) {
+            end_jumps[i] = end_patch;
+        }
+
+        if (false_patch != -1) {
+            if (!patch_jump(ctx->bytecode, false_patch, ctx->bytecode->count)) {
+                success = false;
+                break;
+            }
+        }
+    }
+
+    if (success && end_jumps) {
+        int end_target = ctx->bytecode->count;
+        for (int i = 0; i < arm_count; i++) {
+            if (end_jumps[i] != -1) {
+                if (!patch_jump(ctx->bytecode, end_jumps[i], end_target)) {
+                    success = false;
+                    break;
+                }
+            }
+        }
+    }
+
+    if (end_jumps) {
+        free(end_jumps);
+    }
+    if (false_jumps) {
+        free(false_jumps);
+    }
+
+    if (match_frame) {
+        ScopeFrame* refreshed = get_scope_frame_by_index(ctx, match_frame_index);
+        if (refreshed) {
+            refreshed->end_offset = ctx->bytecode ? ctx->bytecode->count : refreshed->start_offset;
+        }
+        if (ctx->scopes) {
+            scope_stack_pop(ctx->scopes);
+        }
+    }
+    if (ctx->allocator) {
+        mp_exit_scope(ctx->allocator);
+    }
+    free_symbol_table(match_scope);
+    ctx->symbols = parent_scope;
+
+    if (!success) {
+        mp_free_temp_register(ctx->allocator, result_reg);
+        if (scrutinee_reg >= MP_TEMP_REG_START && scrutinee_reg <= MP_TEMP_REG_END) {
+            mp_free_temp_register(ctx->allocator, scrutinee_reg);
+        }
+        ctx->has_compilation_errors = true;
+        return -1;
+    }
+
+    return result_reg;
+}
+
 static bool evaluate_constant_i32(TypedASTNode* node, int32_t* out_value) {
     if (!node || !out_value || !node->original) {
         return false;
@@ -1716,6 +1983,8 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
         }
         case NODE_ENUM_MATCH_TEST:
             return compile_enum_match_test(ctx, expr);
+        case NODE_MATCH_EXPRESSION:
+            return compile_match_expression(ctx, expr);
         case NODE_ENUM_PAYLOAD:
             return compile_enum_payload_extract(ctx, expr);
         case NODE_STRUCT_LITERAL: {

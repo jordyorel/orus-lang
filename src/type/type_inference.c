@@ -158,6 +158,73 @@ static void cleanup_new_methods(Method* methods, int start, int end) {
     }
 }
 
+static bool literal_values_equal(Value a, Value b) {
+    if (a.type != b.type) {
+        return false;
+    }
+
+    switch (a.type) {
+        case VAL_BOOL:
+            return AS_BOOL(a) == AS_BOOL(b);
+        case VAL_I32:
+            return AS_I32(a) == AS_I32(b);
+        case VAL_I64:
+            return AS_I64(a) == AS_I64(b);
+        case VAL_U32:
+            return AS_U32(a) == AS_U32(b);
+        case VAL_U64:
+            return AS_U64(a) == AS_U64(b);
+        case VAL_F64:
+            return AS_F64(a) == AS_F64(b);
+        case VAL_STRING: {
+            ObjString* left = AS_STRING(a);
+            ObjString* right = AS_STRING(b);
+            if (!left || !right || !left->chars || !right->chars) {
+                return left == right;
+            }
+            return strcmp(left->chars, right->chars) == 0;
+        }
+        default:
+            return false;
+    }
+}
+
+static void format_literal_value(Value value, char* buffer, size_t size) {
+    if (!buffer || size == 0) {
+        return;
+    }
+
+    switch (value.type) {
+        case VAL_BOOL:
+            snprintf(buffer, size, "%s", AS_BOOL(value) ? "true" : "false");
+            break;
+        case VAL_I32:
+            snprintf(buffer, size, "%d", AS_I32(value));
+            break;
+        case VAL_I64:
+            snprintf(buffer, size, "%lld", (long long)AS_I64(value));
+            break;
+        case VAL_U32:
+            snprintf(buffer, size, "%u", AS_U32(value));
+            break;
+        case VAL_U64:
+            snprintf(buffer, size, "%llu", (unsigned long long)AS_U64(value));
+            break;
+        case VAL_F64:
+            snprintf(buffer, size, "%g", AS_F64(value));
+            break;
+        case VAL_STRING: {
+            ObjString* str = AS_STRING(value);
+            const char* chars = (str && str->chars) ? str->chars : "";
+            snprintf(buffer, size, "\"%s\"", chars);
+            break;
+        }
+        default:
+            snprintf(buffer, size, "<literal>");
+            break;
+    }
+}
+
 // ---- Arena and utilities ----
 static TypeArena* type_arena = NULL;
 static void* type_arena_alloc(size_t size) {
@@ -2147,6 +2214,252 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             node->dataType = getPrimitiveType(TYPE_VOID);
             return node->dataType;
         }
+        case NODE_MATCH_EXPRESSION: {
+            if (!node->matchExpr.arms || node->matchExpr.armCount == 0) {
+                set_type_error();
+                node->dataType = getPrimitiveType(TYPE_UNKNOWN);
+                return node->dataType;
+            }
+
+            Type* scrutinee_type = algorithm_w(env, node->matchExpr.subject);
+            if (!scrutinee_type) {
+                return NULL;
+            }
+
+            Type* base_type = scrutinee_type;
+            if (base_type->kind == TYPE_INSTANCE && base_type->info.instance.base) {
+                base_type = base_type->info.instance.base;
+            }
+
+            bool subject_is_enum = (base_type->kind == TYPE_ENUM);
+            TypeExtension* enum_ext = subject_is_enum ? get_type_extension(base_type) : NULL;
+            int variant_total = (enum_ext) ? enum_ext->extended.enum_.variant_count : 0;
+            bool* seen_variants = NULL;
+            if (subject_is_enum && variant_total > 0) {
+                seen_variants = calloc((size_t)variant_total, sizeof(bool));
+            }
+
+            TypeEnv* match_env = type_env_new(env);
+            if (!match_env) {
+                if (seen_variants) free(seen_variants);
+                set_type_error();
+                return NULL;
+            }
+
+            if (node->matchExpr.tempName) {
+                TypeScheme* scrutinee_scheme = generalize(match_env, scrutinee_type);
+                type_env_define(match_env, node->matchExpr.tempName, scrutinee_scheme);
+            }
+
+            typedef struct {
+                Value value;
+            } LiteralCase;
+
+            LiteralCase* literal_cases = NULL;
+            int literal_count = 0;
+            int literal_capacity = 0;
+
+            Type* result_type = NULL;
+            bool encountered_error = false;
+            bool has_enum_arm = false;
+
+            for (int i = 0; i < node->matchExpr.armCount; i++) {
+                MatchArm* arm = &node->matchExpr.arms[i];
+
+                TypeEnv* branch_env = type_env_new(match_env);
+                if (!branch_env) {
+                    encountered_error = true;
+                    break;
+                }
+
+                if (arm->isEnumCase) {
+                    has_enum_arm = true;
+                    if (!subject_is_enum) {
+                        report_type_mismatch(arm->location, "enum", getTypeName(base_type->kind));
+                        encountered_error = true;
+                    } else {
+                        const char* canonical_name = get_enum_type_name(base_type);
+                        if (arm->enumTypeName && canonical_name &&
+                            strcmp(arm->enumTypeName, canonical_name) != 0) {
+                            report_type_mismatch(arm->location, canonical_name, arm->enumTypeName);
+                            encountered_error = true;
+                        }
+
+                        int variant_index = -1;
+                        Variant* variant = lookup_enum_variant(base_type, arm->variantName, &variant_index);
+                        if (!variant) {
+                            report_undefined_variable(arm->location,
+                                                      arm->variantName ? arm->variantName : "<variant>");
+                            encountered_error = true;
+                        } else {
+                            if (arm->payloadCount >= 0 && variant->field_count != arm->payloadCount) {
+                                char expected[64];
+                                char found[64];
+                                snprintf(expected, sizeof(expected), "%d field%s",
+                                         variant->field_count, variant->field_count == 1 ? "" : "s");
+                                snprintf(found, sizeof(found), "%d binding%s",
+                                         arm->payloadCount, arm->payloadCount == 1 ? "" : "s");
+                                report_type_mismatch(arm->location, expected, found);
+                                encountered_error = true;
+                            }
+                            arm->variantIndex = variant_index;
+                            if (seen_variants && variant_index >= 0) {
+                                if (seen_variants[variant_index]) {
+                                    const char* canonical = get_enum_type_name(base_type);
+                                    report_duplicate_match_arm(arm->location, canonical, arm->variantName);
+                                    encountered_error = true;
+                                } else {
+                                    seen_variants[variant_index] = true;
+                                }
+                            }
+
+                            if (variant && variant->field_types && arm->payloadNames) {
+                                for (int j = 0; j < arm->payloadCount && j < variant->field_count; j++) {
+                                    if (!arm->payloadNames[j]) {
+                                        continue;
+                                    }
+                                    Type* field_type = variant->field_types[j];
+                                    if (!field_type) {
+                                        field_type = getPrimitiveType(TYPE_UNKNOWN);
+                                    }
+                                    TypeScheme* field_scheme = generalize(branch_env, field_type);
+                                    type_env_define(branch_env, arm->payloadNames[j], field_scheme);
+                                }
+                            }
+                        }
+                    }
+                } else if (arm->valuePattern) {
+                    Type* pattern_type = algorithm_w(match_env, arm->valuePattern);
+                    if (pattern_type && !unify(scrutinee_type, pattern_type)) {
+                        report_type_mismatch(arm->valuePattern->location,
+                                             getTypeName(scrutinee_type->kind),
+                                             getTypeName(pattern_type->kind));
+                        encountered_error = true;
+                    }
+
+                    if (arm->valuePattern->type == NODE_LITERAL) {
+                        Value literal_value = arm->valuePattern->literal.value;
+                        bool duplicate_literal = false;
+                        for (int j = 0; j < literal_count; j++) {
+                            if (literal_values_equal(literal_cases[j].value, literal_value)) {
+                                duplicate_literal = true;
+                                break;
+                            }
+                        }
+                        if (duplicate_literal) {
+                            char repr[128];
+                            format_literal_value(literal_value, repr, sizeof(repr));
+                            report_duplicate_literal_match_arm(arm->location, repr);
+                            encountered_error = true;
+                        } else {
+                            if (literal_count + 1 > literal_capacity) {
+                                int new_cap = literal_capacity == 0 ? 4 : literal_capacity * 2;
+                                LiteralCase* new_arr = realloc(literal_cases, sizeof(LiteralCase) * new_cap);
+                                if (!new_arr) {
+                                    encountered_error = true;
+                                } else {
+                                    literal_cases = new_arr;
+                                    literal_capacity = new_cap;
+                                }
+                            }
+                            if (literal_count + 1 <= literal_capacity && literal_cases) {
+                                literal_cases[literal_count++].value = literal_value;
+                            }
+                        }
+                    }
+                }
+
+                if (arm->condition) {
+                    Type* cond_type = algorithm_w(match_env, arm->condition);
+                    if (cond_type && !unify(cond_type, getPrimitiveType(TYPE_BOOL))) {
+                        report_type_mismatch(arm->condition->location, "bool",
+                                             getTypeName(cond_type->kind));
+                        encountered_error = true;
+                    }
+                }
+
+                if (arm->payloadAccesses) {
+                    for (int j = 0; j < arm->payloadCount; j++) {
+                        if (arm->payloadAccesses[j]) {
+                            algorithm_w(match_env, arm->payloadAccesses[j]);
+                        }
+                    }
+                }
+
+                Type* branch_type = NULL;
+                if (arm->body) {
+                    branch_type = algorithm_w(branch_env, arm->body);
+                }
+                if (!branch_type) {
+                    encountered_error = true;
+                } else if (!result_type) {
+                    result_type = branch_type;
+                } else if (!unify(result_type, branch_type)) {
+                    report_type_mismatch(arm->location,
+                                         getTypeName(result_type->kind),
+                                         getTypeName(branch_type->kind));
+                    encountered_error = true;
+                }
+            }
+
+            if (!encountered_error && subject_is_enum && has_enum_arm && !node->matchExpr.hasWildcard &&
+                seen_variants && enum_ext) {
+                int missing_count = 0;
+                size_t buffer_len = 0;
+                for (int i = 0; i < variant_total; i++) {
+                    if (!seen_variants[i]) {
+                        missing_count++;
+                        Variant* variant = &enum_ext->extended.enum_.variants[i];
+                        if (variant && variant->name && variant->name->chars) {
+                            buffer_len += strlen(variant->name->chars) + 2;
+                        }
+                    }
+                }
+                if (missing_count > 0) {
+                    char* buffer = NULL;
+                    if (buffer_len > 0) {
+                        buffer = malloc(buffer_len + 1);
+                    }
+                    if (buffer) {
+                        buffer[0] = '\0';
+                        bool first = true;
+                        for (int i = 0; i < variant_total; i++) {
+                            if (!seen_variants[i]) {
+                                Variant* variant = &enum_ext->extended.enum_.variants[i];
+                                if (variant && variant->name && variant->name->chars) {
+                                    if (!first) {
+                                        strcat(buffer, ", ");
+                                    }
+                                    strcat(buffer, variant->name->chars);
+                                    first = false;
+                                }
+                            }
+                        }
+                    }
+
+                    const char* canonical = get_enum_type_name(base_type);
+                    report_non_exhaustive_match(node->location, canonical, buffer);
+                    if (buffer) {
+                        free(buffer);
+                    }
+                    encountered_error = true;
+                }
+            }
+
+            if (seen_variants) {
+                free(seen_variants);
+            }
+            if (literal_cases) {
+                free(literal_cases);
+            }
+
+            if (encountered_error) {
+                set_type_error();
+            }
+
+            node->dataType = result_type ? result_type : getPrimitiveType(TYPE_UNKNOWN);
+            return node->dataType;
+        }
         case NODE_IMPL_BLOCK: {
             Type* struct_type = findStructType(node->implBlock.structName);
             if (!struct_type) {
@@ -2551,6 +2864,32 @@ void populate_ast_types(ASTNode* node, TypeEnv* env) {
             }
             if (node->memberAssign.value) {
                 populate_ast_types(node->memberAssign.value, env);
+            }
+            break;
+        case NODE_MATCH_EXPRESSION:
+            if (node->matchExpr.subject) {
+                populate_ast_types(node->matchExpr.subject, env);
+            }
+            if (node->matchExpr.arms) {
+                for (int i = 0; i < node->matchExpr.armCount; i++) {
+                    MatchArm* arm = &node->matchExpr.arms[i];
+                    if (arm->valuePattern) {
+                        populate_ast_types(arm->valuePattern, env);
+                    }
+                    if (arm->condition) {
+                        populate_ast_types(arm->condition, env);
+                    }
+                    if (arm->payloadAccesses) {
+                        for (int j = 0; j < arm->payloadCount; j++) {
+                            if (arm->payloadAccesses[j]) {
+                                populate_ast_types(arm->payloadAccesses[j], env);
+                            }
+                        }
+                    }
+                    if (arm->body) {
+                        populate_ast_types(arm->body, env);
+                    }
+                }
             }
             break;
         case NODE_IMPL_BLOCK:
@@ -3107,6 +3446,156 @@ static TypedASTNode* generate_typed_ast_recursive(ASTNode* ast, TypeEnv* type_en
                     names[i] = ast->enumMatchCheck.variantNames[i];
                 }
                 typed->typed.enumMatchCheck.variantNames = names;
+            }
+            break;
+        case NODE_MATCH_EXPRESSION:
+            typed->typed.matchExpr.tempName = ast->matchExpr.tempName;
+            typed->typed.matchExpr.hasWildcard = ast->matchExpr.hasWildcard;
+            typed->typed.matchExpr.armCount = ast->matchExpr.armCount;
+            if (ast->matchExpr.subject) {
+                typed->typed.matchExpr.subject = generate_typed_ast_recursive(ast->matchExpr.subject, type_env);
+                if (!typed->typed.matchExpr.subject) {
+                    free_typed_ast_node(typed);
+                    return NULL;
+                }
+            }
+            if (ast->matchExpr.armCount > 0 && ast->matchExpr.arms) {
+                TypedMatchArm* arms = malloc(sizeof(TypedMatchArm) * ast->matchExpr.armCount);
+                if (!arms) {
+                    free_typed_ast_node(typed);
+                    return NULL;
+                }
+                for (int i = 0; i < ast->matchExpr.armCount; i++) {
+                    MatchArm* armAst = &ast->matchExpr.arms[i];
+                    TypedMatchArm* arm = &arms[i];
+                    arm->isWildcard = armAst->isWildcard;
+                    arm->isEnumCase = armAst->isEnumCase;
+                    arm->enumTypeName = armAst->enumTypeName;
+                    arm->variantName = armAst->variantName;
+                    arm->variantIndex = armAst->variantIndex;
+                    arm->expectedPayloadCount = armAst->payloadCount;
+                    arm->payloadNames = (const char**)armAst->payloadNames;
+                    arm->payloadCount = armAst->payloadCount;
+                    arm->location = armAst->location;
+                    arm->valuePattern = NULL;
+                    arm->body = NULL;
+                    arm->condition = NULL;
+                    arm->payloadAccesses = NULL;
+                    if (armAst->valuePattern) {
+                        arm->valuePattern = generate_typed_ast_recursive(armAst->valuePattern, type_env);
+                        if (!arm->valuePattern) {
+                            for (int j = 0; j < i; j++) {
+                                free_typed_ast_node(arms[j].valuePattern);
+                                free_typed_ast_node(arms[j].body);
+                                free_typed_ast_node(arms[j].condition);
+                                if (arms[j].payloadAccesses) {
+                                    for (int k = 0; k < arms[j].payloadCount; k++) {
+                                        free_typed_ast_node(arms[j].payloadAccesses[k]);
+                                    }
+                                    free(arms[j].payloadAccesses);
+                                }
+                            }
+                            free(arms);
+                            free_typed_ast_node(typed);
+                            return NULL;
+                        }
+                    }
+                    if (armAst->body) {
+                        arm->body = generate_typed_ast_recursive(armAst->body, type_env);
+                        if (!arm->body) {
+                            free_typed_ast_node(arm->valuePattern);
+                            for (int j = 0; j < i; j++) {
+                                free_typed_ast_node(arms[j].valuePattern);
+                                free_typed_ast_node(arms[j].body);
+                                free_typed_ast_node(arms[j].condition);
+                                if (arms[j].payloadAccesses) {
+                                    for (int k = 0; k < arms[j].payloadCount; k++) {
+                                        free_typed_ast_node(arms[j].payloadAccesses[k]);
+                                    }
+                                    free(arms[j].payloadAccesses);
+                                }
+                            }
+                            free(arms);
+                            free_typed_ast_node(typed);
+                            return NULL;
+                        }
+                    }
+                    if (armAst->condition) {
+                        arm->condition = generate_typed_ast_recursive(armAst->condition, type_env);
+                        if (!arm->condition) {
+                            free_typed_ast_node(arm->valuePattern);
+                            free_typed_ast_node(arm->body);
+                            for (int j = 0; j < i; j++) {
+                                free_typed_ast_node(arms[j].valuePattern);
+                                free_typed_ast_node(arms[j].body);
+                                free_typed_ast_node(arms[j].condition);
+                                if (arms[j].payloadAccesses) {
+                                    for (int k = 0; k < arms[j].payloadCount; k++) {
+                                        free_typed_ast_node(arms[j].payloadAccesses[k]);
+                                    }
+                                    free(arms[j].payloadAccesses);
+                                }
+                            }
+                            free(arms);
+                            free_typed_ast_node(typed);
+                            return NULL;
+                        }
+                    }
+                    if (armAst->payloadCount > 0 && armAst->payloadAccesses) {
+                        arm->payloadAccesses = malloc(sizeof(TypedASTNode*) * armAst->payloadCount);
+                        if (!arm->payloadAccesses) {
+                            free_typed_ast_node(arm->valuePattern);
+                            free_typed_ast_node(arm->body);
+                            free_typed_ast_node(arm->condition);
+                            for (int j = 0; j < i; j++) {
+                                free_typed_ast_node(arms[j].valuePattern);
+                                free_typed_ast_node(arms[j].body);
+                                free_typed_ast_node(arms[j].condition);
+                                if (arms[j].payloadAccesses) {
+                                    for (int k = 0; k < arms[j].payloadCount; k++) {
+                                        free_typed_ast_node(arms[j].payloadAccesses[k]);
+                                    }
+                                    free(arms[j].payloadAccesses);
+                                }
+                            }
+                            free(arms);
+                            free_typed_ast_node(typed);
+                            return NULL;
+                        }
+                        for (int j = 0; j < armAst->payloadCount; j++) {
+                            if (armAst->payloadAccesses[j]) {
+                                arm->payloadAccesses[j] =
+                                    generate_typed_ast_recursive(armAst->payloadAccesses[j], type_env);
+                                if (!arm->payloadAccesses[j]) {
+                                    for (int k = 0; k < j; k++) {
+                                        free_typed_ast_node(arm->payloadAccesses[k]);
+                                    }
+                                    free(arm->payloadAccesses);
+                                    free_typed_ast_node(arm->valuePattern);
+                                    free_typed_ast_node(arm->body);
+                                    free_typed_ast_node(arm->condition);
+                                    for (int m = 0; m < i; m++) {
+                                        free_typed_ast_node(arms[m].valuePattern);
+                                        free_typed_ast_node(arms[m].body);
+                                        free_typed_ast_node(arms[m].condition);
+                                        if (arms[m].payloadAccesses) {
+                                            for (int n = 0; n < arms[m].payloadCount; n++) {
+                                                free_typed_ast_node(arms[m].payloadAccesses[n]);
+                                            }
+                                            free(arms[m].payloadAccesses);
+                                        }
+                                    }
+                                    free(arms);
+                                    free_typed_ast_node(typed);
+                                    return NULL;
+                                }
+                            } else {
+                                arm->payloadAccesses[j] = NULL;
+                            }
+                        }
+                    }
+                }
+                typed->typed.matchExpr.arms = arms;
             }
             break;
         case NODE_IMPL_BLOCK:

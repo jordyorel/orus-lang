@@ -10,6 +10,7 @@
 - `tests/type_safety_fails/impl_missing_struct.orus` – Verifies impl blocks require a previously-declared struct.
 - `tests/type_safety_fails/non_exhaustive_match.orus` – Confirms non-exhaustive enum matches raise diagnostics instead of compiling.
 - `tests/type_safety_fails/duplicate_match_arm.orus` – Guards against duplicate enum match arms by requiring diagnostics when variants repeat.
+- `tests/type_safety_fails/duplicate_literal_match_arm.orus` – Validates that duplicate literal arms in expression-form matches report diagnostics instead of compiling.
 - `tests/type_safety_fails/enum_match_payload_mismatch.orus` – Ensures destructuring patterns bind the exact payload arity before bodies execute.
 - `tests/type_safety_fails/enum_match_unknown_variant.orus` – Validates that referencing undeclared enum variants inside `match` arms reports errors.
 
@@ -20,6 +21,7 @@
 - `tests/types/enum_match_statement.orus` – Exercises the `match` lowering by ensuring payload-free variants and wildcard arms dispatch correctly.
 - `tests/types/enum_match_destructuring.orus` – Verifies destructuring patterns bind enum payload fields and ignore `_` placeholders while emitting the expected runtime values.
 - `tests/types/enum_match_patterns.orus` – Demonstrates multi-arm destructuring, `_` placeholders, and fallbacks across enums with differing payload shapes.
+- `tests/types/match_expression_values.orus` – Exercises expression-form `match` arms that return values across enum payloads and literal fallbacks.
 
 ## Comprehensive
 - `tests/comprehensive/enum_runtime.orus` – Confirms enum constructors lower to runtime values by constructing and reassigning variants before printing.
