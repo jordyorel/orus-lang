@@ -2265,7 +2265,9 @@ InterpretResult vm_run_dispatch(void) {
 
     LABEL_OP_JUMP: {
             uint16_t offset = READ_SHORT();
-            CF_JUMP(offset);
+            if (!CF_JUMP(offset)) {
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
             DISPATCH();
         }
 
@@ -2280,15 +2282,17 @@ InterpretResult vm_run_dispatch(void) {
 
     LABEL_OP_LOOP: {
         uint16_t offset = READ_SHORT();
-        
+
         // Hot path detection: Profile loop iterations
         if (g_profiling.isActive && (g_profiling.enabledFlags & PROFILE_HOT_PATHS)) {
             static uint64_t loop_iterations = 0;
             loop_iterations++;
             profileHotPath((void*)(vm.ip - vm.chunk->code), loop_iterations);
         }
-        
-        CF_LOOP(offset);
+
+        if (!CF_LOOP(offset)) {
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
         DISPATCH();
     }
 
@@ -2751,13 +2755,17 @@ InterpretResult vm_run_dispatch(void) {
     // Short jump optimizations for performance
     LABEL_OP_JUMP_SHORT: {
         uint8_t offset = READ_BYTE();
-        CF_JUMP_SHORT(offset);
+        if (!CF_JUMP_SHORT(offset)) {
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
         DISPATCH();
     }
 
     LABEL_OP_JUMP_BACK_SHORT: {
         uint8_t offset = READ_BYTE();
-        CF_JUMP_BACK_SHORT(offset);
+        if (!CF_JUMP_BACK_SHORT(offset)) {
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
         DISPATCH();
     }
 
@@ -2780,7 +2788,9 @@ InterpretResult vm_run_dispatch(void) {
             profileHotPath((void*)(vm.ip - vm.chunk->code), short_loop_iterations);
         }
         
-        CF_LOOP_SHORT(offset);
+        if (!CF_LOOP_SHORT(offset)) {
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
         DISPATCH();
     }
 

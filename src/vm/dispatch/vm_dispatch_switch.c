@@ -1893,7 +1893,9 @@ InterpretResult vm_run_dispatch(void) {
                 // Control flow
                 case OP_JUMP: {
                     uint16_t offset = READ_SHORT();
-                    CF_JUMP(offset);
+                    if (!CF_JUMP(offset)) {
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
                     break;
                 }
 
@@ -1908,7 +1910,9 @@ InterpretResult vm_run_dispatch(void) {
 
                 case OP_LOOP: {
                     uint16_t offset = READ_SHORT();
-                    CF_LOOP(offset);
+                    if (!CF_LOOP(offset)) {
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
                     break;
                 }
 
@@ -2327,13 +2331,17 @@ InterpretResult vm_run_dispatch(void) {
                 // Short jump optimizations for performance  
                 case OP_JUMP_SHORT: {
                     uint8_t offset = READ_BYTE();
-                    CF_JUMP_SHORT(offset);
+                    if (!CF_JUMP_SHORT(offset)) {
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
                     break;
                 }
 
                 case OP_JUMP_BACK_SHORT: {
                     uint8_t offset = READ_BYTE();
-                    CF_JUMP_BACK_SHORT(offset);
+                    if (!CF_JUMP_BACK_SHORT(offset)) {
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
                     break;
                 }
 
@@ -2348,7 +2356,9 @@ InterpretResult vm_run_dispatch(void) {
 
                 case OP_LOOP_SHORT: {
                     uint8_t offset = READ_BYTE();
-                    CF_LOOP_SHORT(offset);
+                    if (!CF_LOOP_SHORT(offset)) {
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
                     break;
                 }
 
