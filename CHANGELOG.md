@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
+## [0.5.1] - 2025-09-21
+
+### Changed
+- Bumped version to 0.5.1.
+
 ## [0.5.0] - 2025-09-20
 
 ### Changed
