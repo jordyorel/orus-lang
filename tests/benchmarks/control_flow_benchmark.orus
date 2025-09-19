@@ -1,0 +1,45 @@
+// Control Flow (For Loop) Benchmark - Orus Language
+// Focus: tight loops, nested loops, simple branching inside loops
+print("=== Orus Control Flow (For Loop) Benchmark ===")
+
+start_time = time_stamp()
+
+// Parameters tuned to keep runs sub-second across languages
+N1: i32 = 2_000_000   // simple loop iterations
+O2: i32 = 1000        // outer loop for nested
+I2: i32 = 1000        // inner loop for nested (O2*I2 = 1,000,000)
+N3: i32 = 1_000_000   // while-style iterations
+
+// Phase 1: simple for-loop sum
+print("Phase 1: simple sum loop")
+mut sum1: i64 = 0
+for i in 1..=N1:
+    sum1 = sum1 + (i as i64)
+
+// Phase 2: nested loops with branch
+print("Phase 2: nested loops with branch")
+mut acc2: i64 = 0
+for i in 0..O2:
+    for j in 0..I2:
+        t: i64 = (i as i64) + (j as i64)
+        // Branching based on parity
+        if (t % (2 as i64)) == (0 as i64):
+            acc2 = acc2 + t
+        else:
+            acc2 = acc2 - (1 as i64)
+
+// Phase 3: while-like loop using for-range stepping
+print("Phase 3: even sum with stepping loop")
+mut sum3: i64 = 0
+for k in 0..(N3*2)..2:  // step by 2, sum evens
+    sum3 = sum3 + (k as i64)
+
+// Compute final checksum to avoid DCE
+checksum: i64 = sum1 + acc2 + sum3
+
+end_time: f64 = time_stamp()
+elapsed: f64 = end_time - start_time
+
+print("Checksum:", checksum)
+print("Total execution time:", elapsed)
+print("=== Orus Control Flow Benchmark Complete ===")

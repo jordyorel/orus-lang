@@ -300,7 +300,7 @@ run_benchmark_category "Pure Arithmetic Performance" "arithmetic_benchmark.orus"
 # TODO: Uncomment when implemented
 # run_benchmark_category "Comprehensive Performance" "comprehensive_benchmark.orus"
 # run_benchmark_category "Extreme Performance" "extreme_benchmark.orus"
-# run_benchmark_category "Control Flow Performance" "licm_benchmark.orus"
+run_benchmark_category "Control Flow Performance" "control_flow_benchmark.orus"
 
 echo -e "${BLUE}=================================================================${NC}"
 echo -e "${GREEN}✨ Benchmark comparison complete!${NC}"
