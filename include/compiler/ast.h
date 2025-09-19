@@ -71,7 +71,10 @@ typedef enum {
     NODE_STRUCT_LITERAL,
     NODE_MEMBER_ACCESS,
     NODE_MEMBER_ASSIGN,
-    NODE_ENUM_DECL
+    NODE_ENUM_DECL,
+    NODE_ENUM_MATCH_TEST,
+    NODE_ENUM_PAYLOAD,
+    NODE_ENUM_MATCH_CHECK
 } NodeType;
 
 struct ASTNode {
@@ -239,6 +242,27 @@ struct ASTNode {
             EnumVariant* variants; // Declared variants
             int variantCount;      // Number of variants
         } enumDecl;
+        struct {
+            ASTNode* value;           // Enum expression being tested
+            char* enumTypeName;       // Declared enum type name in the pattern
+            char* variantName;        // Variant name being tested
+            int variantIndex;         // Resolved variant slot (filled during typing)
+            int expectedPayloadCount; // Expected payload arity from the pattern
+        } enumMatchTest;
+        struct {
+            ASTNode* value;       // Enum expression providing payload
+            char* enumTypeName;   // Enum type name from the pattern
+            char* variantName;    // Variant supplying the payload
+            int variantIndex;     // Resolved variant index (set during typing)
+            int fieldIndex;       // Payload slot to extract
+        } enumPayload;
+        struct {
+            ASTNode* value;       // Enum expression being matched
+            char* enumTypeName;   // Enum type referenced by the pattern (if explicit)
+            char** variantNames;  // Variants explicitly handled
+            int variantCount;     // Number of explicit variant arms
+            bool hasWildcard;     // Whether a wildcard arm exists
+        } enumMatchCheck;
     };
 };
 

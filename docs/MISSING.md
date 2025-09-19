@@ -30,9 +30,10 @@ still needs design work.
 - ⚠️ **Module system** – Runtime hooks exist (`interpret_module` and module
   loaders), yet the surface syntax and packaging workflow remain to be
   implemented and tested.
-- 🚧 **Pattern matching** – Parser groundwork exists for `match` keywords, but
-  expression lowering and exhaustiveness checks are still outstanding (see
-  TODO below).
+- ✅ **Pattern matching** – Enum `match` statements lower through scoped
+  temporaries with chained `if` statements, including destructuring payloads,
+  `_` wildcards, and an exhaustiveness check that surfaces missing or duplicate
+  variants during type inference.
 
 ---
 
@@ -184,6 +185,8 @@ pass—without introducing additional intermediate representations.
      allocate concrete tagged values once bytecode lowering is available.
    - ✅ Lower enum constructors in the bytecode backend (variant pattern tests
      remain to be implemented).
+   - ✅ Added `matches` syntax sugar so payload-free enum variants can be
+     compared ergonomically while keeping parity with equality semantics.
 
    ```orus
    enum Result[T]:
@@ -234,7 +237,12 @@ pass—without introducing additional intermediate representations.
           print("failed:", msg)
   ```
 
-   - [ ] **TODO**: Implement match expressions with destructuring patterns.
+   - ✅ Parser lowers payload-free enum arms (including `_` wildcards) into
+     scoped temporaries and chained `if` statements so control-flow works today.
+   - ✅ Implemented match expressions with destructuring patterns and
+     exhaustiveness checking for enum variants, lowering each arm into a tagged
+     comparison plus payload extraction and emitting diagnostics when variants
+     are missing or duplicated.
 
      ```orus
      match value:
@@ -375,7 +383,7 @@ evens = [x for x in nums if x % 2 == 0]
 - [ ] **Generic constraint solving**: Type parameter unification with bounds
 - [ ] **Monomorphization**: Generate specialized concrete implementations
 - [ ] **Type aliases**: `type UserId = i64` syntax and semantics
-- [ ] **Pattern matching types**: Exhaustiveness checking for enum variants
+- [x] **Pattern matching types**: Exhaustiveness checking for enum variants
 - [ ] **Associated types**: Types associated with traits/interfaces
 - [ ] **Higher-kinded types (future)**: Types that take type parameters
 - [ ] **Dependent types (future)**: Types that depend on runtime values
@@ -637,7 +645,8 @@ enum Status:
 
 ### 5.2 Pattern Matching
 **Priority: 📋 Medium**
-- [ ] **TODO**: Implement match expressions with destructuring patterns.
+- ✅ Implement match expressions with destructuring patterns and runtime payload
+  extraction backed by dedicated bytecode instructions.
 
 ```orus
 // Match expressions

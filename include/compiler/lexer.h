@@ -76,6 +76,7 @@ typedef enum {
     TOKEN_USE,
     TOKEN_AS,
     TOKEN_MATCH,
+    TOKEN_MATCHES,
     TOKEN_PUB,
     TOKEN_STATIC,
 

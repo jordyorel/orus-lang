@@ -176,6 +176,27 @@ struct TypedASTNode {
             TypedEnumVariant* variants;
             int variantCount;
         } enumDecl;
+        struct {
+            TypedASTNode* value;
+            const char* enumTypeName;
+            const char* variantName;
+            int variantIndex;
+            int expectedPayloadCount;
+        } enumMatchTest;
+        struct {
+            TypedASTNode* value;
+            const char* enumTypeName;
+            const char* variantName;
+            int variantIndex;
+            int fieldIndex;
+        } enumPayload;
+        struct {
+            TypedASTNode* value;
+            const char* enumTypeName;
+            const char** variantNames;
+            int variantCount;
+            bool hasWildcard;
+        } enumMatchCheck;
     } typed;
 };
 

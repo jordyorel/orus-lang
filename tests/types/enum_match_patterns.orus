@@ -1,0 +1,41 @@
+enum Result:
+    Ok(value: i32)
+    Err(code: i32, message: str)
+    Pending
+    Cancelled(reason: str)
+
+enum MaybePair:
+    Pair(left: i32, right: i32)
+    Lone(value: i32)
+    Missing
+
+fn describe(result: Result):
+    match result:
+        Result.Ok(value):
+            print("ok", value)
+        Result.Err(code, _):
+            print("error", code)
+        Result.Cancelled(reason):
+            print("cancelled", reason)
+        _:
+            print("other")
+
+fn sum_pair(option: MaybePair) -> i32:
+    mut total = -1
+    match option:
+        MaybePair.Pair(left, right):
+            total = left + right
+        MaybePair.Lone(value):
+            total = value
+        _:
+            total = 0
+    return total
+
+print(sum_pair(MaybePair.Pair(5, 9)))
+print(sum_pair(MaybePair.Lone(12)))
+print(sum_pair(MaybePair.Missing))
+
+describe(Result.Ok(42))
+describe(Result.Err(404, "not found"))
+describe(Result.Pending)
+describe(Result.Cancelled("user"))

@@ -1,0 +1,14 @@
+enum Mode:
+    Read
+    Write
+
+fn handle(mode: Mode):
+    match mode:
+        Mode.Read:
+            print("first read")
+        Mode.Read:
+            print("duplicate read")
+        Mode.Write:
+            print("write")
+
+handle(Mode.Read)

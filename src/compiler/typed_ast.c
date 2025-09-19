@@ -162,6 +162,27 @@ TypedASTNode* create_typed_ast_node(ASTNode* original) {
             typed->typed.enumDecl.variants = NULL;
             typed->typed.enumDecl.variantCount = 0;
             break;
+        case NODE_ENUM_MATCH_TEST:
+            typed->typed.enumMatchTest.value = NULL;
+            typed->typed.enumMatchTest.enumTypeName = original->enumMatchTest.enumTypeName;
+            typed->typed.enumMatchTest.variantName = original->enumMatchTest.variantName;
+            typed->typed.enumMatchTest.variantIndex = original->enumMatchTest.variantIndex;
+            typed->typed.enumMatchTest.expectedPayloadCount = original->enumMatchTest.expectedPayloadCount;
+            break;
+        case NODE_ENUM_PAYLOAD:
+            typed->typed.enumPayload.value = NULL;
+            typed->typed.enumPayload.enumTypeName = original->enumPayload.enumTypeName;
+            typed->typed.enumPayload.variantName = original->enumPayload.variantName;
+            typed->typed.enumPayload.variantIndex = original->enumPayload.variantIndex;
+            typed->typed.enumPayload.fieldIndex = original->enumPayload.fieldIndex;
+            break;
+        case NODE_ENUM_MATCH_CHECK:
+            typed->typed.enumMatchCheck.value = NULL;
+            typed->typed.enumMatchCheck.enumTypeName = original->enumMatchCheck.enumTypeName;
+            typed->typed.enumMatchCheck.variantNames = NULL;
+            typed->typed.enumMatchCheck.variantCount = original->enumMatchCheck.variantCount;
+            typed->typed.enumMatchCheck.hasWildcard = original->enumMatchCheck.hasWildcard;
+            break;
         default:
             // For leaf nodes (IDENTIFIER, LITERAL, etc.), no additional
             // initialization needed
@@ -334,6 +355,18 @@ void free_typed_ast_node(TypedASTNode* node) {
                 free(node->typed.enumDecl.variants);
             }
             break;
+        case NODE_ENUM_MATCH_TEST:
+            free_typed_ast_node(node->typed.enumMatchTest.value);
+            break;
+        case NODE_ENUM_PAYLOAD:
+            free_typed_ast_node(node->typed.enumPayload.value);
+            break;
+        case NODE_ENUM_MATCH_CHECK:
+            free_typed_ast_node(node->typed.enumMatchCheck.value);
+            if (node->typed.enumMatchCheck.variantNames) {
+                free((void*)node->typed.enumMatchCheck.variantNames);
+            }
+            break;
         default:
             // Leaf nodes have no children to free
             break;
@@ -465,6 +498,12 @@ bool validate_typed_ast(TypedASTNode* root) {
                 }
             }
             break;
+        case NODE_ENUM_MATCH_TEST:
+            return validate_typed_ast(root->typed.enumMatchTest.value);
+        case NODE_ENUM_PAYLOAD:
+            return validate_typed_ast(root->typed.enumPayload.value);
+        case NODE_ENUM_MATCH_CHECK:
+            return validate_typed_ast(root->typed.enumMatchCheck.value);
         case NODE_IMPL_BLOCK:
             if (root->typed.implBlock.methods) {
                 for (int i = 0; i < root->typed.implBlock.methodCount; i++) {

@@ -280,6 +280,8 @@ InterpretResult vm_run_dispatch(void) {
         vm_dispatch_table[OP_CONCAT_R] = &&LABEL_OP_CONCAT_R;
         vm_dispatch_table[OP_MAKE_ARRAY_R] = &&LABEL_OP_MAKE_ARRAY_R;
         vm_dispatch_table[OP_ENUM_NEW_R] = &&LABEL_OP_ENUM_NEW_R;
+        vm_dispatch_table[OP_ENUM_TAG_EQ_R] = &&LABEL_OP_ENUM_TAG_EQ_R;
+        vm_dispatch_table[OP_ENUM_PAYLOAD_R] = &&LABEL_OP_ENUM_PAYLOAD_R;
         vm_dispatch_table[OP_ARRAY_GET_R] = &&LABEL_OP_ARRAY_GET_R;
         vm_dispatch_table[OP_ARRAY_SET_R] = &&LABEL_OP_ARRAY_SET_R;
         vm_dispatch_table[OP_ARRAY_LEN_R] = &&LABEL_OP_ARRAY_LEN_R;
@@ -2125,6 +2127,49 @@ InterpretResult vm_run_dispatch(void) {
         }
 
         vm_set_register_safe(dst, ENUM_VAL(instance));
+        DISPATCH();
+    }
+
+    LABEL_OP_ENUM_TAG_EQ_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t enum_reg = READ_BYTE();
+        uint8_t variantIndex = READ_BYTE();
+
+        Value value = vm_get_register_safe(enum_reg);
+        if (!IS_ENUM(value)) {
+            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Match subject is not an enum value");
+        }
+
+        ObjEnumInstance* instance = AS_ENUM(value);
+        bool match = (instance && instance->variantIndex == variantIndex);
+        vm_set_register_safe(dst, BOOL_VAL(match));
+        DISPATCH();
+    }
+
+    LABEL_OP_ENUM_PAYLOAD_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t enum_reg = READ_BYTE();
+        uint8_t variantIndex = READ_BYTE();
+        uint8_t fieldIndex = READ_BYTE();
+
+        Value value = vm_get_register_safe(enum_reg);
+        if (!IS_ENUM(value)) {
+            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Attempted to destructure a non-enum value");
+        }
+
+        ObjEnumInstance* instance = AS_ENUM(value);
+        if (!instance || instance->variantIndex != variantIndex) {
+            const char* typeName = instance && instance->typeName ? instance->typeName->chars : "enum";
+            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(),
+                            "Match arm expected %s variant index %u", typeName, variantIndex);
+        }
+
+        ObjArray* payload = instance->payload;
+        if (!payload || fieldIndex >= payload->length) {
+            VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(), "Enum payload index out of range");
+        }
+
+        vm_set_register_safe(dst, payload->elements[fieldIndex]);
         DISPATCH();
     }
 

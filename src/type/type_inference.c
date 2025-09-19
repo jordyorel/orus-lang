@@ -22,6 +22,7 @@
 #include "vm/vm.h"
 #include "errors/features/type_errors.h"
 #include "errors/features/variable_errors.h"
+#include "errors/features/control_flow_errors.h"
 #include "debug/debug_config.h"
 
 // ---- Helpers for struct and impl bookkeeping ----
@@ -48,6 +49,60 @@ static ObjString* create_compiler_string(const char* text) {
     string->rope = NULL;
     string->hash = 0;
     return string;
+}
+
+static Variant* lookup_enum_variant(Type* enum_type, const char* variant_name, int* out_index) {
+    if (!enum_type || !variant_name) {
+        return NULL;
+    }
+
+    Type* base_type = enum_type;
+    if (base_type->kind == TYPE_INSTANCE && base_type->info.instance.base) {
+        base_type = base_type->info.instance.base;
+    }
+
+    if (base_type->kind != TYPE_ENUM) {
+        return NULL;
+    }
+
+    TypeExtension* ext = get_type_extension(base_type);
+    if (!ext || !ext->extended.enum_.variants) {
+        return NULL;
+    }
+
+    for (int i = 0; i < ext->extended.enum_.variant_count; i++) {
+        Variant* variant = &ext->extended.enum_.variants[i];
+        if (variant->name && variant->name->chars && strcmp(variant->name->chars, variant_name) == 0) {
+            if (out_index) {
+                *out_index = i;
+            }
+            return variant;
+        }
+    }
+
+    return NULL;
+}
+
+static const char* get_enum_type_name(Type* enum_type) {
+    if (!enum_type) {
+        return NULL;
+    }
+
+    Type* base_type = enum_type;
+    if (base_type->kind == TYPE_INSTANCE && base_type->info.instance.base) {
+        base_type = base_type->info.instance.base;
+    }
+
+    if (base_type->kind != TYPE_ENUM) {
+        return NULL;
+    }
+
+    TypeExtension* ext = get_type_extension(base_type);
+    if (!ext || !ext->extended.enum_.name) {
+        return NULL;
+    }
+
+    return ext->extended.enum_.name->chars;
 }
 
 static void free_compiler_string(ObjString* string) {
@@ -1866,6 +1921,232 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
 
             return getPrimitiveType(TYPE_VOID);
         }
+        case NODE_ENUM_MATCH_TEST: {
+            Type* enum_type = algorithm_w(env, node->enumMatchTest.value);
+            if (!enum_type) {
+                return NULL;
+            }
+
+            Type* base_type = enum_type;
+            if (base_type->kind == TYPE_INSTANCE && base_type->info.instance.base) {
+                base_type = base_type->info.instance.base;
+            }
+
+            if (base_type->kind != TYPE_ENUM) {
+                report_type_mismatch(node->enumMatchTest.value->location, "enum",
+                                     getTypeName(base_type->kind));
+                set_type_error();
+                return NULL;
+            }
+
+            const char* variant_name = node->enumMatchTest.variantName;
+            int variant_index = -1;
+            Variant* variant = lookup_enum_variant(base_type, variant_name, &variant_index);
+            if (!variant) {
+                report_undefined_variable(node->location, variant_name ? variant_name : "<variant>");
+                set_type_error();
+                return NULL;
+            }
+
+            if (node->enumMatchTest.expectedPayloadCount >= 0 &&
+                variant->field_count != node->enumMatchTest.expectedPayloadCount) {
+                char expected[64];
+                char found[64];
+                snprintf(expected, sizeof(expected), "%d field%s",
+                         variant->field_count, variant->field_count == 1 ? "" : "s");
+                snprintf(found, sizeof(found), "%d binding%s",
+                         node->enumMatchTest.expectedPayloadCount,
+                         node->enumMatchTest.expectedPayloadCount == 1 ? "" : "s");
+                report_type_mismatch(node->location, expected, found);
+                set_type_error();
+                return NULL;
+            }
+
+            node->enumMatchTest.variantIndex = variant_index;
+            if (!node->enumMatchTest.enumTypeName) {
+                node->enumMatchTest.enumTypeName = (char*)get_enum_type_name(base_type);
+            }
+
+            Type* bool_type = getPrimitiveType(TYPE_BOOL);
+            node->dataType = bool_type;
+            return bool_type;
+        }
+        case NODE_ENUM_PAYLOAD: {
+            Type* enum_type = algorithm_w(env, node->enumPayload.value);
+            if (!enum_type) {
+                return NULL;
+            }
+
+            Type* base_type = enum_type;
+            if (base_type->kind == TYPE_INSTANCE && base_type->info.instance.base) {
+                base_type = base_type->info.instance.base;
+            }
+
+            if (base_type->kind != TYPE_ENUM) {
+                report_type_mismatch(node->enumPayload.value->location, "enum",
+                                     getTypeName(base_type->kind));
+                set_type_error();
+                return NULL;
+            }
+
+            int variant_index = -1;
+            Variant* variant = lookup_enum_variant(base_type, node->enumPayload.variantName, &variant_index);
+            if (!variant) {
+                report_undefined_variable(node->location,
+                                          node->enumPayload.variantName ? node->enumPayload.variantName : "<variant>");
+                set_type_error();
+                return NULL;
+            }
+
+            int field_index = node->enumPayload.fieldIndex;
+            if (field_index < 0 || field_index >= variant->field_count) {
+                report_type_mismatch(node->location, "variant payload", "pattern binding");
+                set_type_error();
+                return NULL;
+            }
+
+            node->enumPayload.variantIndex = variant_index;
+            if (!node->enumPayload.enumTypeName) {
+                node->enumPayload.enumTypeName = (char*)get_enum_type_name(base_type);
+            }
+
+            Type* field_type = NULL;
+            if (variant->field_types && field_index < variant->field_count) {
+                field_type = variant->field_types[field_index];
+            }
+            if (!field_type) {
+                field_type = getPrimitiveType(TYPE_UNKNOWN);
+            }
+
+            node->dataType = field_type;
+            return field_type;
+        }
+        case NODE_ENUM_MATCH_CHECK: {
+            Type* enum_type = algorithm_w(env, node->enumMatchCheck.value);
+            if (!enum_type) {
+                return NULL;
+            }
+
+            Type* base_type = enum_type;
+            if (base_type->kind == TYPE_INSTANCE && base_type->info.instance.base) {
+                base_type = base_type->info.instance.base;
+            }
+
+            if (base_type->kind != TYPE_ENUM) {
+                report_type_mismatch(node->location, "enum", getTypeName(base_type->kind));
+                set_type_error();
+                return getPrimitiveType(TYPE_VOID);
+            }
+
+            TypeExtension* ext = get_type_extension(base_type);
+            if (!ext) {
+                set_type_error();
+                return getPrimitiveType(TYPE_VOID);
+            }
+
+            const char* canonical_name = get_enum_type_name(base_type);
+            if (node->enumMatchCheck.enumTypeName && canonical_name &&
+                strcmp(node->enumMatchCheck.enumTypeName, canonical_name) != 0) {
+                report_type_mismatch(node->location, canonical_name, node->enumMatchCheck.enumTypeName);
+                set_type_error();
+                return getPrimitiveType(TYPE_VOID);
+            }
+            if (!node->enumMatchCheck.enumTypeName && canonical_name) {
+                node->enumMatchCheck.enumTypeName = (char*)canonical_name;
+            }
+
+            int variant_total = ext->extended.enum_.variant_count;
+            bool* seen = NULL;
+            if (variant_total > 0) {
+                seen = calloc((size_t)variant_total, sizeof(bool));
+                if (!seen) {
+                    set_type_error();
+                    return getPrimitiveType(TYPE_VOID);
+                }
+            }
+
+            bool encountered_error = false;
+
+            for (int i = 0; i < node->enumMatchCheck.variantCount; i++) {
+                const char* name = NULL;
+                if (node->enumMatchCheck.variantNames && node->enumMatchCheck.variantNames[i]) {
+                    name = node->enumMatchCheck.variantNames[i];
+                }
+                if (!name) {
+                    continue;
+                }
+
+                int variant_index = -1;
+                Variant* variant = lookup_enum_variant(base_type, name, &variant_index);
+                if (!variant) {
+                    report_undefined_variable(node->location, name);
+                    encountered_error = true;
+                    continue;
+                }
+                if (variant_index >= 0 && seen) {
+                    if (seen[variant_index]) {
+                        report_duplicate_match_arm(node->location, canonical_name, name);
+                        encountered_error = true;
+                        continue;
+                    }
+                    seen[variant_index] = true;
+                }
+            }
+
+            if (!node->enumMatchCheck.hasWildcard && seen && variant_total > 0) {
+                int missing_count = 0;
+                size_t buffer_len = 0;
+                for (int i = 0; i < variant_total; i++) {
+                    if (!seen[i]) {
+                        missing_count++;
+                        Variant* variant = &ext->extended.enum_.variants[i];
+                        if (variant && variant->name && variant->name->chars) {
+                            buffer_len += strlen(variant->name->chars) + 2;
+                        }
+                    }
+                }
+
+                if (missing_count > 0) {
+                    char* buffer = NULL;
+                    if (buffer_len > 0) {
+                        buffer = malloc(buffer_len + 1);
+                    }
+                    if (buffer) {
+                        buffer[0] = '\0';
+                        bool first = true;
+                        for (int i = 0; i < variant_total; i++) {
+                            if (!seen[i]) {
+                                Variant* variant = &ext->extended.enum_.variants[i];
+                                if (variant && variant->name && variant->name->chars) {
+                                    if (!first) {
+                                        strcat(buffer, ", ");
+                                    }
+                                    strcat(buffer, variant->name->chars);
+                                    first = false;
+                                }
+                            }
+                        }
+                    }
+
+                    report_non_exhaustive_match(node->location, canonical_name, buffer);
+                    if (buffer) {
+                        free(buffer);
+                    }
+                    encountered_error = true;
+                }
+            }
+
+            if (seen) {
+                free(seen);
+            }
+
+            if (encountered_error) {
+                set_type_error();
+            }
+
+            node->dataType = getPrimitiveType(TYPE_VOID);
+            return node->dataType;
+        }
         case NODE_IMPL_BLOCK: {
             Type* struct_type = findStructType(node->implBlock.structName);
             if (!struct_type) {
@@ -2777,6 +3058,55 @@ static TypedASTNode* generate_typed_ast_recursive(ASTNode* ast, TypeEnv* type_en
                     free_typed_ast_node(typed);
                     return NULL;
                 }
+            }
+            break;
+        case NODE_ENUM_MATCH_TEST:
+            if (ast->enumMatchTest.value) {
+                typed->typed.enumMatchTest.value = generate_typed_ast_recursive(ast->enumMatchTest.value, type_env);
+                if (!typed->typed.enumMatchTest.value) {
+                    free_typed_ast_node(typed);
+                    return NULL;
+                }
+            }
+            typed->typed.enumMatchTest.enumTypeName = ast->enumMatchTest.enumTypeName;
+            typed->typed.enumMatchTest.variantName = ast->enumMatchTest.variantName;
+            typed->typed.enumMatchTest.variantIndex = ast->enumMatchTest.variantIndex;
+            typed->typed.enumMatchTest.expectedPayloadCount = ast->enumMatchTest.expectedPayloadCount;
+            break;
+        case NODE_ENUM_PAYLOAD:
+            if (ast->enumPayload.value) {
+                typed->typed.enumPayload.value = generate_typed_ast_recursive(ast->enumPayload.value, type_env);
+                if (!typed->typed.enumPayload.value) {
+                    free_typed_ast_node(typed);
+                    return NULL;
+                }
+            }
+            typed->typed.enumPayload.enumTypeName = ast->enumPayload.enumTypeName;
+            typed->typed.enumPayload.variantName = ast->enumPayload.variantName;
+            typed->typed.enumPayload.variantIndex = ast->enumPayload.variantIndex;
+            typed->typed.enumPayload.fieldIndex = ast->enumPayload.fieldIndex;
+            break;
+        case NODE_ENUM_MATCH_CHECK:
+            if (ast->enumMatchCheck.value) {
+                typed->typed.enumMatchCheck.value = generate_typed_ast_recursive(ast->enumMatchCheck.value, type_env);
+                if (!typed->typed.enumMatchCheck.value) {
+                    free_typed_ast_node(typed);
+                    return NULL;
+                }
+            }
+            typed->typed.enumMatchCheck.enumTypeName = ast->enumMatchCheck.enumTypeName;
+            typed->typed.enumMatchCheck.hasWildcard = ast->enumMatchCheck.hasWildcard;
+            typed->typed.enumMatchCheck.variantCount = ast->enumMatchCheck.variantCount;
+            if (ast->enumMatchCheck.variantCount > 0 && ast->enumMatchCheck.variantNames) {
+                const char** names = malloc(sizeof(char*) * ast->enumMatchCheck.variantCount);
+                if (!names) {
+                    free_typed_ast_node(typed);
+                    return NULL;
+                }
+                for (int i = 0; i < ast->enumMatchCheck.variantCount; i++) {
+                    names[i] = ast->enumMatchCheck.variantNames[i];
+                }
+                typed->typed.enumMatchCheck.variantNames = names;
             }
             break;
         case NODE_IMPL_BLOCK:

@@ -1,0 +1,22 @@
+enum Flag:
+    On
+    Off
+
+fn describe(flag: Flag) -> string:
+    match flag:
+        Flag.On:
+            return "on"
+        Flag.Off:
+            return "off"
+
+fn describe_with_default(flag: Flag) -> string:
+    match flag:
+        Flag.On:
+            return "active"
+        _:
+            return "inactive"
+
+print(describe(Flag.On))
+print(describe(Flag.Off))
+print(describe_with_default(Flag.On))
+print(describe_with_default(Flag.Off))
