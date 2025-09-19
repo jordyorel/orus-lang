@@ -8,16 +8,16 @@ enum Pair:
 
 fn describe(opt: Option[i32]):
     match opt:
-        Option.Some(value):
+        Option.Some(value) ->
             print("some", value)
-        Option.None():
+        Option.None() ->
             print("none")
 
 pair = Pair.First(7, 9)
 match pair:
-    Pair.First(_, right):
+    Pair.First(_, right) ->
         print("right", right)
-    Pair.Second:
+    Pair.Second ->
         print("second")
 
 describe(Option.Some(42))

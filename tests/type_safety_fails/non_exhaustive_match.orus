@@ -4,7 +4,7 @@ enum Flag:
 
 fn check(flag: Flag):
     match flag:
-        Flag.On:
+        Flag.On ->
             print("on")
 
 check(Flag.Off)

@@ -4,7 +4,7 @@ enum Status:
 
 fn handle(status: Status):
     match status:
-        Status.Idle:
+        Status.Idle ->
             print("idle")
-        Status.Busy(message):
+        Status.Busy(message) ->
             print("busy", message)

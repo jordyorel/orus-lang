@@ -34,7 +34,7 @@ Build a language that combines Python's readability, Rust's safety, and Lua's pe
 - [ ] Advanced type inference
 - [ ] Arrays and collections (type system ready)
 - [ ] Struct definitions and methods
-- [ ] Pattern matching and enums
+- [*] Pattern matching and enums (statement form shipped, expression form pending)
 - [ ] Module system
 
 ---
@@ -678,8 +678,10 @@ enum Result<T, E>:
 
 fn handle_result<T, E>(result: Result<T, E>) -> T:
     match result:
-        Ok(value): value
-        Error(err): panic("Error: ", err)
+        Ok(value) ->
+            return value
+        Error(err) ->
+            panic("Error: ", err)
 
 // Advanced inference with generic collections
 numbers = [1, 2, 3]               // Inferred as [i32]
@@ -1218,7 +1220,7 @@ pub fn with_file<T>(path: string, mode: OpenMode, callback: fn(File) -> T) -> Re
 
 ### **Quarter 2: Data & Types (Weeks 13-24)**
 - [ ] **Weeks 13-16**: Arrays, collections, basic type system, enhanced error reporting
-- [ ] **Weeks 17-20**: Pattern matching, structs, enums
+- [*] **Weeks 17-20**: Pattern matching, structs, enums (match statements merged; expression form + module-aware structs still pending)
 - [ ] **Weeks 21-24**: Module system, standard library core
 
 ### **Quarter 3: Production Ready (Weeks 25-36)**
@@ -1251,7 +1253,7 @@ pub fn with_file<T>(path: string, mode: OpenMode, callback: fn(File) -> T) -> Re
 - [ ] **Module System** - Code organization and library support
 - [ ] **Advanced Type System** - Generics, inference, and safety
 - [ ] **Error Handling** - Result types and exception management
-- [ ] **Pattern Matching** - Modern language feature for data handling
+- [*] **Pattern Matching** - Statement-oriented matcher ships; expression-yielding form and literal-duplicate diagnostics remain
 
 This roadmap progresses systematically from basic language features to advanced capabilities, ensuring each phase builds solid foundations for the next. The register-based VM and existing infrastructure provide an excellent platform for rapid feature development.
 

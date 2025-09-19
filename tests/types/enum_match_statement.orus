@@ -4,16 +4,16 @@ enum Flag:
 
 fn describe(flag: Flag) -> string:
     match flag:
-        Flag.On:
+        Flag.On ->
             return "on"
-        Flag.Off:
+        Flag.Off ->
             return "off"
 
 fn describe_with_default(flag: Flag) -> string:
     match flag:
-        Flag.On:
+        Flag.On ->
             return "active"
-        _:
+        _ ->
             return "inactive"
 
 print(describe(Flag.On))

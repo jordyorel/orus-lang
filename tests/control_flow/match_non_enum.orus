@@ -1,0 +1,26 @@
+fn describe(value: i32) -> string:
+    match value:
+        0 -> return "zero"
+        1 ->
+            return "one"
+        2 ->
+            return "two"
+        _ ->
+            return "other"
+
+fn log_value(value: i32):
+    match value:
+        0 -> print("zero inline")
+        1 ->
+            print("one block")
+            print("still one")
+        _ ->
+            print("fallback")
+
+print(describe(0))
+print(describe(1))
+print(describe(2))
+print(describe(3))
+log_value(0)
+log_value(1)
+log_value(7)
