@@ -184,6 +184,18 @@ pass—without introducing additional intermediate representations.
      allocate concrete tagged values once bytecode lowering is available.
    - ✅ Lower enum constructors in the bytecode backend (variant pattern tests
      remain to be implemented).
+   - ⚠️ Author regression tests that exercise lowering through variant
+     patterns once pattern matching lands, ensuring constructor payloads round
+     trip correctly. Target scenarios include tuple-style payload capture,
+     nested enum payload propagation, and mixtures of literal plus wildcard
+     arms so we can verify both the codegen paths and the exhaustiveness
+     diagnostics.
+   - ⚠️ Full enum ergonomics are blocked on the pending `match` work below—until
+     destructuring and exhaustiveness checks ship, enum pattern matching
+     remains incomplete. The implementation plan couples the matcher to the
+     Hindley–Milner exhaustiveness checker so variant tags and payload arity
+     data flow through to bytecode lowering without resorting to ad-hoc tag
+     tables.
 
    ```orus
    enum Result[T]:
@@ -234,7 +246,19 @@ pass—without introducing additional intermediate representations.
           print("failed:", msg)
   ```
 
-   - [ ] **TODO**: Implement match expressions with destructuring patterns.
+   - [ ] **TODO**: Implement match expressions with destructuring patterns and
+     exhaustiveness checking for enum variants so regression coverage can be
+     added for the constructors above. This entails:
+     - [ ] Parser support for variant, tuple, and literal arms plus `_`
+           wildcards.
+     - [ ] Type inference propagation of payload bindings (tying into the
+           existing enum metadata) and exhaustiveness analysis that rejects
+           missing variants.
+     - [ ] Bytecode lowering that evaluates the scrutinee once, routes control
+           flow for each arm, and reuses the enum constructor payload layout so
+           destructured bindings inhabit the correct registers.
+     - [ ] Regression tests that cover success, non-exhaustive arm sets, and
+           redundant pattern diagnostics.
 
      ```orus
      match value:
