@@ -1,0 +1,10 @@
+// Ensures implicit instance method dispatch injects the self receiver.
+pub struct Counter:
+    value: i32
+
+impl Counter:
+    fn increment(self, delta: i32) -> i32:
+        return self.value + delta
+
+start = Counter{ value: 3 }
+print(start.increment(9))

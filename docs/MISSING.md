@@ -191,14 +191,14 @@ pass—without introducing additional intermediate representations.
    - ✅ Parser, typed AST, and Hindley–Milner registration hook struct
      declarations into the global type registry and attach impl methods to the
      struct metadata.
-   - ✅ Type inference distinguishes static (`Point.new`) and instance
-     (`p.move_by`) method calls, wiring the implicit `self` receiver and field
-     mutations through `self`.
+   - ✅ Type inference now marks implicit receivers after resolving the callee,
+     so both namespaced (`Point.new`) and instance (`p.move_by`) method calls
+     wire the hidden `self` argument automatically.
    - ✅ Codegen emits struct literals and lowers field loads/stores by
      reusing the array allocation opcodes, so instance methods can mutate
      `self`'s backing storage.
-   - 🚧 Remaining: bytecode generation for method call dispatch and wiring the
-     implicit `self` argument into compiled method bodies.
+   - ✅ Codegen now dispatches struct methods, injecting the implicit `self`
+     register for instance receivers while honoring namespaced method symbols.
 
    ```orus
    impl Point:
