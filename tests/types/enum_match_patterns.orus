@@ -11,23 +11,23 @@ enum MaybePair:
 
 fn describe(result: Result):
     match result:
-        Result.Ok(value):
+        Result.Ok(value) ->
             print("ok", value)
-        Result.Err(code, _):
+        Result.Err(code, _) ->
             print("error", code)
-        Result.Cancelled(reason):
+        Result.Cancelled(reason) ->
             print("cancelled", reason)
-        _:
+        _ ->
             print("other")
 
 fn sum_pair(option: MaybePair) -> i32:
     mut total = -1
     match option:
-        MaybePair.Pair(left, right):
+        MaybePair.Pair(left, right) ->
             total = left + right
-        MaybePair.Lone(value):
+        MaybePair.Lone(value) ->
             total = value
-        _:
+        _ ->
             total = 0
     return total
 

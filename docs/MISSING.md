@@ -30,10 +30,11 @@ still needs design work.
 - ⚠️ **Module system** – Runtime hooks exist (`interpret_module` and module
   loaders), yet the surface syntax and packaging workflow remain to be
   implemented and tested.
-- ✅ **Pattern matching** – Enum `match` statements lower through scoped
-  temporaries with chained `if` statements, including destructuring payloads,
-  `_` wildcards, and an exhaustiveness check that surfaces missing or duplicate
-  variants during type inference.
+- ✅ **Pattern matching** – `match` now supports enums and literal values using
+  the unified `pattern ->` arm syntax. Lowering reuses scoped temporaries and
+  chained `if` statements, preserving payload destructuring, `_` wildcards, and
+  exhaustiveness diagnostics for enums. Expression-style matches that yield a
+  value remain outstanding.
 
 ---
 
@@ -238,37 +239,33 @@ pass—without introducing additional intermediate representations.
        print(p.magnitude())
    ```
 
-4. **Pattern matching** – Provide a `match` expression with exhaustive checking
-   for enums, tuples, and primitive guards while compiling each arm into linear
-   control flow blocks.
+4. **Pattern matching** – Finish the expression form of `match`, keeping the
+   existing single-pass lowering strategy while broadening diagnostics for
+   literal arms.
 
   ```orus
   match parse_number(input):
-      Result.Ok(value):
-          print("parsed", value)
-      Result.Err(msg):
-          print("failed:", msg)
+      Result.Ok(value) -> print("parsed", value)
+      Result.Err(msg) -> print("failed:", msg)
   ```
-   - ✅ Parser lowers payload-free enum arms (including `_` wildcards) into
-     scoped temporaries and chained `if` statements so control-flow works today.
-   - ✅ Implemented match expressions with destructuring patterns and
-     exhaustiveness checking for enum variants, lowering each arm into a tagged
-     comparison plus payload extraction and emitting diagnostics when variants
-     are missing or duplicated.
 
-   - [ ] **TODO**: Implement match expressions with destructuring patterns and
-     exhaustiveness checking for enum variants so regression coverage can be
-     added for the constructors above. This entails:
-     - [ ] Parser support for variant, tuple, and literal arms plus `_`
-           wildcards.
-     - [ ] Type inference propagation of payload bindings (tying into the
-           existing enum metadata) and exhaustiveness analysis that rejects
-           missing variants.
-     - [ ] Bytecode lowering that evaluates the scrutinee once, routes control
-           flow for each arm, and reuses the enum constructor payload layout so
-           destructured bindings inhabit the correct registers.
-     - [ ] Regression tests that cover success, non-exhaustive arm sets, and
-           redundant pattern diagnostics.
+   - ✅ Statement-oriented matches support enums, literals, and wildcards with
+     scoped temporaries plus exhaustiveness checks for enum variants.
+   - ✅ Payload destructuring for enum arms automatically inserts bindings into
+     the branch scope before executing the arm body.
+   - [ ] **TODO**: Allow `match` to be used as an expression that evaluates to a
+     value while unifying branch types and reporting duplicate literal arms.
+     Completing this requires:
+    - [ ] Parser/lowering updates so the scrutinee is evaluated once and branch
+          bodies can assign into a synthesized result slot without introducing
+          extra IR.
+    - [ ] Type inference enhancements that unify branch result types, surface
+          duplicate literal arms, and continue honouring enum exhaustiveness
+          guarantees.
+    - [ ] Backend support that threads the synthesized result register through
+          the chained `if` lowering and exposes the expression value to callers.
+    - [ ] Regression tests that cover successful expression matches, duplicate
+          literal detection, and mixed enum/literal fallbacks.
 
      ```orus
      match value:
@@ -512,8 +509,10 @@ enum Result<T, E>:
 
 fn handle_result<T, E>(result: Result<T, E>) -> T:
     match result:
-        Ok(value): value
-        Error(err): panic("Error: ", err)
+        Ok(value) ->
+            return value
+        Error(err) ->
+            panic("Error: ", err)
 
 // Advanced inference with generic collections
 numbers = [1, 2, 3]               // Inferred as [i32]

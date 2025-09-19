@@ -3904,9 +3904,9 @@ fn binary_search<T: Comparable>(arr: [T], target: T) -> Option<i32>:
     while left <= right:
         mid = (left + right) / 2
         match compare(arr[mid], target):
-            Ordering.Less: left = mid + 1
-            Ordering.Greater: right = mid - 1
-            Ordering.Equal: return Some(mid)
+            Ordering.Less -> left = mid + 1
+            Ordering.Greater -> right = mid - 1
+            Ordering.Equal -> return Some(mid)
     
     None
 
@@ -4246,36 +4246,36 @@ pub enum Result<T, E>:
 impl<T, E> Result<T, E>:
     pub fn is_ok(self) -> bool:
         match self:
-            Result.Ok(_): true
-            Result.Err(_): false
+            Result.Ok(_) -> true
+            Result.Err(_) -> false
     
     pub fn is_err(self) -> bool:
         not self.is_ok()
     
     pub fn unwrap(self) -> T:
         match self:
-            Result.Ok(v): v
-            Result.Err(e): panic("Unwrap on Err:", e)
+            Result.Ok(v) -> v
+            Result.Err(e) -> panic("Unwrap on Err:", e)
     
     pub fn unwrap_or(self, default: T) -> T:
         match self:
-            Result.Ok(v): v
-            Result.Err(_): default
+            Result.Ok(v) -> v
+            Result.Err(_) -> default
     
     pub fn map<U>(self, f: fn(T) -> U) -> Result<U, E>:
         match self:
-            Result.Ok(v): Result.Ok(f(v))
-            Result.Err(e): Result.Err(e)
+            Result.Ok(v) -> Result.Ok(f(v))
+            Result.Err(e) -> Result.Err(e)
     
     pub fn map_err<F>(self, f: fn(E) -> F) -> Result<T, F>:
         match self:
-            Result.Ok(v): Result.Ok(v)
-            Result.Err(e): Result.Err(f(e))
+            Result.Ok(v) -> Result.Ok(v)
+            Result.Err(e) -> Result.Err(f(e))
     
     pub fn and_then<U>(self, f: fn(T) -> Result<U, E>) -> Result<U, E>:
         match self:
-            Result.Ok(v): f(v)
-            Result.Err(e): Result.Err(e)
+            Result.Ok(v) -> f(v)
+            Result.Err(e) -> Result.Err(e)
 ```
 
 ---

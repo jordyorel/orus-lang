@@ -4,11 +4,11 @@ enum Mode:
 
 fn handle(mode: Mode):
     match mode:
-        Mode.Read:
+        Mode.Read ->
             print("first read")
-        Mode.Read:
+        Mode.Read ->
             print("duplicate read")
-        Mode.Write:
+        Mode.Write ->
             print("write")
 
 handle(Mode.Read)

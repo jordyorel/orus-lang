@@ -4,7 +4,7 @@ enum Shape:
 
 fn describe(shape: Shape):
     match shape:
-        Shape.Point(x):
+        Shape.Point(x) ->
             print("point", x)
-        Shape.Line(length):
+        Shape.Line(length) ->
             print("line", length)
