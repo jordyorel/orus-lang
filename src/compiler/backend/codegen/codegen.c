@@ -286,7 +286,7 @@ static int compile_struct_method_call(CompilerContext* ctx, TypedASTNode* call) 
 
     if (!struct_name) {
         if (ctx->errors) {
-            error_reporter_add(ctx->errors, ERROR_TYPE, SEVERITY_ERROR,
+            error_reporter_add(ctx->errors, map_error_type_to_code(ERROR_TYPE), SEVERITY_ERROR,
                                call->original->location,
                                "Cannot resolve struct for method call",
                                "Ensure the method is called on a struct instance or type.",
@@ -313,7 +313,7 @@ static int compile_struct_method_call(CompilerContext* ctx, TypedASTNode* call) 
             snprintf(message, sizeof(message),
                      "Unknown method '%s' on struct '%s'",
                      method_name ? method_name : "<unknown>", struct_name);
-            error_reporter_add(ctx->errors, ERROR_TYPE, SEVERITY_ERROR,
+            error_reporter_add(ctx->errors, map_error_type_to_code(ERROR_TYPE), SEVERITY_ERROR,
                                call->original->location,
                                message,
                                "Define the method in an impl block before calling it.",
@@ -2196,7 +2196,7 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                                                          expr->typed.member.member);
             if (field_index < 0) {
                 if (ctx->errors) {
-                    error_reporter_add(ctx->errors, ERROR_TYPE, SEVERITY_ERROR,
+                    error_reporter_add(ctx->errors, map_error_type_to_code(ERROR_TYPE), SEVERITY_ERROR,
                                        expr->original->location,
                                        "Unknown struct field",
                                        expr->typed.member.member ? expr->typed.member.member : "<unknown>",
@@ -2763,7 +2763,7 @@ static int compile_member_assignment(CompilerContext* ctx, TypedASTNode* assign,
 
     if (target->typed.member.isMethod) {
         if (ctx->errors) {
-            error_reporter_add(ctx->errors, ERROR_TYPE, SEVERITY_ERROR,
+            error_reporter_add(ctx->errors, map_error_type_to_code(ERROR_TYPE), SEVERITY_ERROR,
                                assign->original->location,
                                "Cannot assign to method reference",
                                "Only struct fields can appear on the left-hand side",
@@ -2777,7 +2777,7 @@ static int compile_member_assignment(CompilerContext* ctx, TypedASTNode* assign,
                                                  target->typed.member.member);
     if (field_index < 0) {
         if (ctx->errors) {
-            error_reporter_add(ctx->errors, ERROR_TYPE, SEVERITY_ERROR,
+            error_reporter_add(ctx->errors, map_error_type_to_code(ERROR_TYPE), SEVERITY_ERROR,
                                assign->original->location,
                                "Unknown struct field",
                                target->typed.member.member ? target->typed.member.member : "<unknown>",
