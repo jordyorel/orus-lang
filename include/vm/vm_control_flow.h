@@ -1,13 +1,7 @@
 #ifndef ORUS_VM_CONTROL_FLOW_H
 #define ORUS_VM_CONTROL_FLOW_H
 
-#include "../../src/vm/core/vm_internal.h"
-
-// Forward declarations for safe register access helpers implemented in the
-// computed-goto dispatch unit. These provide bounds-checked access to the
-// unified register file without exposing the underlying representation here.
-Value vm_get_register_safe(uint16_t id);
-void vm_set_register_safe(uint16_t id, Value value);
+#include "vm/vm_comparison.h"
 
 static inline bool CF_JUMP(uint16_t offset) {
     // If VM is shutting down or chunk is invalid, ignore jump

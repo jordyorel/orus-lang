@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <inttypes.h>
 
 // Forward declarations for register file internal functions
 Value* get_register_internal(RegisterFile* rf, uint16_t id);
@@ -320,19 +321,19 @@ void print_cache_stats(RegisterCache* cache) {
     if (!cache) return;
     
     printf("=== Register Cache Statistics ===\n");
-    printf("Total Accesses: %llu\n", cache->total_accesses);
-    printf("Cache Hits: %llu\n", cache->cache_hits);
-    printf("Cache Misses: %llu\n", cache->cache_misses);
-    printf("L1 Hits: %llu\n", cache->l1_hits);
-    printf("L1 Misses: %llu\n", cache->l1_misses);
-    printf("L2 Hits: %llu\n", cache->l2_hits);
-    printf("L2 Misses: %llu\n", cache->l2_misses);
-    printf("Prefetch Hits: %llu\n", cache->prefetch_hits);
-    printf("Writebacks: %llu\n", cache->writebacks);
+    printf("Total Accesses: %" PRIu64 "\n", cache->total_accesses);
+    printf("Cache Hits: %" PRIu64 "\n", cache->cache_hits);
+    printf("Cache Misses: %" PRIu64 "\n", cache->cache_misses);
+    printf("L1 Hits: %" PRIu64 "\n", cache->l1_hits);
+    printf("L1 Misses: %" PRIu64 "\n", cache->l1_misses);
+    printf("L2 Hits: %" PRIu64 "\n", cache->l2_hits);
+    printf("L2 Misses: %" PRIu64 "\n", cache->l2_misses);
+    printf("Prefetch Hits: %" PRIu64 "\n", cache->prefetch_hits);
+    printf("Writebacks: %" PRIu64 "\n", cache->writebacks);
     
     if (cache->total_accesses > 0) {
         uint64_t hit_rate = (cache->cache_hits * 100) / cache->total_accesses;
-        printf("Hit Rate: %llu%%\n", hit_rate);
+        printf("Hit Rate: %" PRIu64 "%%\n", hit_rate);
     }
 }
 

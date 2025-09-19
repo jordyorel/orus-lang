@@ -128,14 +128,14 @@ static uint16_t read_u16(BytecodeBuffer* bytecode, int offset) {
 
 static bool can_eliminate_load(RegisterConstant* state, uint8_t reg,
                                uint8_t opcode, uint16_t constant_index) {
-    if (!state || (unsigned)reg >= VM_MAX_REGISTERS) return false;
+    if (!state) return false;
     return state[reg].known && state[reg].opcode == opcode &&
            state[reg].constant_index == constant_index;
 }
 
 static void remember_constant(RegisterConstant* state, uint8_t reg,
                               uint8_t opcode, uint16_t constant_index) {
-    if (!state || (unsigned)reg >= VM_MAX_REGISTERS) return;
+    if (!state) return;
     state[reg].known = true;
     state[reg].opcode = opcode;
     state[reg].constant_index = constant_index;

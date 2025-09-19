@@ -15,38 +15,7 @@
 
 #include <math.h>
 #include <limits.h>
-
-// Frame-aware register access functions for proper local variable isolation
-inline Value vm_get_register_safe(uint16_t id) {
-    // For now, use direct access for all registers < 256 
-    // Frame isolation handled by CALL/RETURN operations saving/restoring registers
-    if (id < 256) {
-        // Debug: track which registers are being accessed (disabled)
-        // if (id >= 60 && id <= 80) {
-        //     fprintf(stderr, "[REG_DEBUG] GET R%d = %d (type:%d)\n", id, IS_I32(vm.registers[id]) ? AS_I32(vm.registers[id]) : 0, vm.registers[id].type);
-        // }
-        return vm.registers[id];
-    } else {
-        // Extended registers use register file
-        Value* reg_ptr = get_register(&vm.register_file, id);
-        return reg_ptr ? *reg_ptr : BOOL_VAL(false);
-    }
-}
-
-inline void vm_set_register_safe(uint16_t id, Value value) {
-    // For now, use direct access for all registers < 256 
-    // Frame isolation handled by CALL/RETURN operations saving/restoring registers
-    if (id < 256) {
-        // Debug: track which registers are being set (disabled)
-        // if (id >= 60 && id <= 80) {
-        //     fprintf(stderr, "[REG_DEBUG] SET R%d = %d (type:%d)\n", id, IS_I32(value) ? AS_I32(value) : 0, value.type);
-        // }
-        vm.registers[id] = value;
-    } else {
-        // Extended registers use register file
-        set_register(&vm.register_file, id, value);
-    }
-}
+#include <inttypes.h>
 
 static inline bool value_to_index(Value value, int* out_index) {
     if (IS_I32(value)) {
@@ -525,11 +494,11 @@ InterpretResult vm_run_dispatch(void) {
                     if (IS_I32(left)) {
                         snprintf(buffer, sizeof(buffer), "%d", AS_I32(left));
                     } else if (IS_I64(left)) {
-                        snprintf(buffer, sizeof(buffer), "%lld", AS_I64(left));
+                        snprintf(buffer, sizeof(buffer), "%" PRId64, (int64_t)AS_I64(left));
                     } else if (IS_U32(left)) {
                         snprintf(buffer, sizeof(buffer), "%u", AS_U32(left));
                     } else if (IS_U64(left)) {
-                        snprintf(buffer, sizeof(buffer), "%llu", AS_U64(left));
+                        snprintf(buffer, sizeof(buffer), "%" PRIu64, (uint64_t)AS_U64(left));
                     } else if (IS_F64(left)) {
                         snprintf(buffer, sizeof(buffer), "%.6g", AS_F64(left));
                     } else if (IS_BOOL(left)) {
@@ -547,11 +516,11 @@ InterpretResult vm_run_dispatch(void) {
                     if (IS_I32(right)) {
                         snprintf(buffer, sizeof(buffer), "%d", AS_I32(right));
                     } else if (IS_I64(right)) {
-                        snprintf(buffer, sizeof(buffer), "%lld", AS_I64(right));
+                        snprintf(buffer, sizeof(buffer), "%" PRId64, (int64_t)AS_I64(right));
                     } else if (IS_U32(right)) {
                         snprintf(buffer, sizeof(buffer), "%u", AS_U32(right));
                     } else if (IS_U64(right)) {
-                        snprintf(buffer, sizeof(buffer), "%llu", AS_U64(right));
+                        snprintf(buffer, sizeof(buffer), "%" PRIu64, (uint64_t)AS_U64(right));
                     } else if (IS_F64(right)) {
                         snprintf(buffer, sizeof(buffer), "%.6g", AS_F64(right));
                     } else if (IS_BOOL(right)) {
@@ -1222,7 +1191,7 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_BOOL_TO_I32_R: {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
-            READ_BYTE(); // Skip third operand (unused)
+             (void)READ_BYTE(); // Skip third operand (unused)
             Value src_val = vm_get_register_safe(src);
             if (!IS_BOOL(src_val)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be bool");
@@ -1234,7 +1203,7 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_BOOL_TO_I64_R: {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
-            READ_BYTE(); // Skip third operand (unused)
+             (void)READ_BYTE(); // Skip third operand (unused)
             Value src_val = vm_get_register_safe(src);
             if (!IS_BOOL(src_val)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be bool");
@@ -1246,7 +1215,7 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_BOOL_TO_U32_R: {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
-            READ_BYTE(); // Skip third operand (unused)
+             (void)READ_BYTE(); // Skip third operand (unused)
             Value src_val = vm_get_register_safe(src);
             if (!IS_BOOL(src_val)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be bool");
@@ -1258,7 +1227,7 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_BOOL_TO_U64_R: {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
-            READ_BYTE(); // Skip third operand (unused)
+             (void)READ_BYTE(); // Skip third operand (unused)
             Value src_val = vm_get_register_safe(src);
             if (!IS_BOOL(src_val)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be bool");
@@ -1270,7 +1239,7 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_BOOL_TO_F64_R: {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
-            READ_BYTE(); // Skip third operand (unused)
+             (void)READ_BYTE(); // Skip third operand (unused)
             Value src_val = vm_get_register_safe(src);
             if (!IS_BOOL(src_val)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be bool");
@@ -1282,7 +1251,7 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_I32_TO_I64_R: {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
-            READ_BYTE(); // Skip third operand (unused)
+             (void)READ_BYTE(); // Skip third operand (unused)
             Value src_val = vm_get_register_safe(src);
             if (!IS_I32(src_val)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i32");
@@ -1294,7 +1263,7 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_I32_TO_U32_R: {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
-            READ_BYTE(); // Skip third operand (unused)
+             (void)READ_BYTE(); // Skip third operand (unused)
             Value src_val = vm_get_register_safe(src);
             if (!IS_I32(src_val)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i32");
@@ -1306,7 +1275,7 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_I32_TO_BOOL_R: {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
-            READ_BYTE(); // Skip third operand (unused)
+             (void)READ_BYTE(); // Skip third operand (unused)
             Value src_val = vm_get_register_safe(src);
             if (!IS_I32(src_val)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i32");
@@ -1319,7 +1288,7 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_U32_TO_I32_R: {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
-            READ_BYTE(); // Skip third operand (unused)
+             (void)READ_BYTE(); // Skip third operand (unused)
             Value src_val = vm_get_register_safe(src);
             if (!IS_U32(src_val)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u32");
@@ -1331,7 +1300,7 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_I64_TO_I32_R: {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
-            READ_BYTE(); // Skip third operand (unused)
+             (void)READ_BYTE(); // Skip third operand (unused)
             Value src_val = vm_get_register_safe(src);
             if (!IS_I64(src_val)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i64");
@@ -1343,7 +1312,7 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_I64_TO_BOOL_R: {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
-            READ_BYTE(); // Skip third operand (unused)
+             (void)READ_BYTE(); // Skip third operand (unused)
             Value src_val = vm_get_register_safe(src);
             if (!IS_I64(src_val)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i64");
@@ -1548,7 +1517,7 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_I32_TO_F64_R: {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
-            READ_BYTE(); // Skip third operand (unused)
+             (void)READ_BYTE(); // Skip third operand (unused)
             Value src_val = vm_get_register_safe(src);
             if (!IS_I32(src_val)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i32");
@@ -1560,7 +1529,7 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_I64_TO_F64_R: {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
-            READ_BYTE(); // Skip third operand (unused)
+             (void)READ_BYTE(); // Skip third operand (unused)
             Value src_val = vm_get_register_safe(src);
             if (!IS_I64(src_val)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i64");
@@ -1572,7 +1541,7 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_F64_TO_I32_R: {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
-            READ_BYTE(); // Skip third operand (unused)
+             (void)READ_BYTE(); // Skip third operand (unused)
             Value src_val = vm_get_register_safe(src);
             if (!IS_F64(src_val)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be f64");
@@ -1584,7 +1553,7 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_F64_TO_I64_R: {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
-            READ_BYTE(); // Skip third operand (unused)
+             (void)READ_BYTE(); // Skip third operand (unused)
             Value src_val = vm_get_register_safe(src);
             if (!IS_F64(src_val)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be f64");
@@ -1597,7 +1566,7 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_I32_TO_U64_R: {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
-            READ_BYTE(); // Skip third operand (unused)
+             (void)READ_BYTE(); // Skip third operand (unused)
             Value src_val = vm_get_register_safe(src);
             if (!IS_I32(src_val)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i32");
@@ -1613,7 +1582,7 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_I64_TO_U64_R: {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
-            READ_BYTE(); // Skip third operand (unused)
+             (void)READ_BYTE(); // Skip third operand (unused)
             Value src_val = vm_get_register_safe(src);
             if (!IS_I64(src_val)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i64");
@@ -1629,7 +1598,7 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_U64_TO_I32_R: {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
-            READ_BYTE(); // Skip third operand (unused)
+             (void)READ_BYTE(); // Skip third operand (unused)
             Value src_val = vm_get_register_safe(src);
             if (!IS_U64(src_val)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u64");
@@ -1645,7 +1614,7 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_U64_TO_I64_R: {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
-            READ_BYTE(); // Skip third operand (unused)
+             (void)READ_BYTE(); // Skip third operand (unused)
             Value src_val = vm_get_register_safe(src);
             if (!IS_U64(src_val)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u64");
@@ -1661,7 +1630,7 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_U32_TO_BOOL_R: {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
-            READ_BYTE(); // Skip third operand (unused)
+             (void)READ_BYTE(); // Skip third operand (unused)
             Value src_val = vm_get_register_safe(src);
             if (!IS_U32(src_val)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u32");
@@ -1673,7 +1642,7 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_U32_TO_U64_R: {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
-            READ_BYTE(); // Skip third operand (unused)
+             (void)READ_BYTE(); // Skip third operand (unused)
             Value src_val = vm_get_register_safe(src);
             if (!IS_U32(src_val)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u32");
@@ -1685,7 +1654,7 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_U64_TO_U32_R: {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
-            READ_BYTE(); // Skip third operand (unused)
+             (void)READ_BYTE(); // Skip third operand (unused)
             Value src_val = vm_get_register_safe(src);
             if (!IS_U64(src_val)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u64");
@@ -1701,7 +1670,7 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_F64_TO_U64_R: {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
-            READ_BYTE(); // Skip third operand (unused)
+             (void)READ_BYTE(); // Skip third operand (unused)
             Value src_val = vm_get_register_safe(src);
             if (!IS_F64(src_val)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be f64");
@@ -1717,7 +1686,7 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_U64_TO_F64_R: {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
-            READ_BYTE(); // Skip third operand (unused)
+             (void)READ_BYTE(); // Skip third operand (unused)
             Value src_val = vm_get_register_safe(src);
             if (!IS_U64(src_val)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u64");
@@ -1729,7 +1698,7 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_U64_TO_BOOL_R: {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
-            READ_BYTE(); // Skip third operand (unused)
+             (void)READ_BYTE(); // Skip third operand (unused)
             Value src_val = vm_get_register_safe(src);
             if (!IS_U64(src_val)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u64");
@@ -1741,7 +1710,7 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_F64_TO_BOOL_R: {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
-            READ_BYTE(); // Skip third operand (unused)
+             (void)READ_BYTE(); // Skip third operand (unused)
             Value src_val = vm_get_register_safe(src);
             if (!IS_F64(src_val)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be f64");
@@ -1753,7 +1722,7 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_U32_TO_F64_R: {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
-            READ_BYTE(); // Skip third operand (unused)
+             (void)READ_BYTE(); // Skip third operand (unused)
             Value src_val = vm_get_register_safe(src);
             if (!IS_U32(src_val)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u32");
@@ -1765,7 +1734,7 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_F64_TO_U32_R: {
             uint8_t dst = READ_BYTE();
             uint8_t src = READ_BYTE();
-            READ_BYTE(); // Skip third operand (unused)
+             (void)READ_BYTE(); // Skip third operand (unused)
             Value src_val = vm_get_register_safe(src);
             if (!IS_F64(src_val)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be f64");

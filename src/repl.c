@@ -207,10 +207,11 @@ static bool process_command(const char* input){
     }
     if(strcmp(input,":clear")==0){
 #ifdef _WIN32
-        system("cls");
+        int clear_status = system("cls");
 #else
-        system("clear");
+        int clear_status = system("clear");
 #endif
+        (void)clear_status;
         return true;
     }
     if(strncmp(input,":timing ",COMMAND_TIMING_PREFIX_LEN)==0){

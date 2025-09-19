@@ -4,6 +4,7 @@
 // Description: Implementation of configurable logging system
 
 #include "internal/logging.h"
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
