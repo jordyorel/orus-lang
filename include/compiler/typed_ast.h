@@ -13,6 +13,17 @@ typedef struct {
     TypedASTNode* defaultValue;
 } TypedStructField;
 
+typedef struct {
+    const char* name;
+    TypedASTNode* typeAnnotation;
+} TypedEnumVariantField;
+
+typedef struct {
+    const char* name;
+    TypedEnumVariantField* fields;
+    int fieldCount;
+} TypedEnumVariant;
+
 // Typed AST node that contains the original AST plus resolved type information
 struct TypedASTNode {
     ASTNode* original;       // Original AST node from parser
@@ -149,11 +160,22 @@ struct TypedASTNode {
             const char* member;
             bool isMethod;
             bool isInstanceMethod;
+            bool resolvesToEnum;
+            bool resolvesToEnumVariant;
+            int enumVariantIndex;
+            int enumVariantArity;
+            const char* enumTypeName;
         } member;
         struct {
             TypedASTNode* target;
             TypedASTNode* value;
         } memberAssign;
+        struct {
+            const char* name;
+            bool isPublic;
+            TypedEnumVariant* variants;
+            int variantCount;
+        } enumDecl;
     } typed;
 };
 

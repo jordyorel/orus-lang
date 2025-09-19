@@ -1,0 +1,24 @@
+enum Flag:
+    On
+    Off
+
+enum Result:
+    Ok(value: i32)
+    Err(message: string)
+
+fn flip(flag: Flag) -> Flag:
+    return Flag.Off if flag == Flag.On else Flag.On
+
+fn make_ok(value: i32) -> Result:
+    return Result.Ok(value)
+
+fn make_err(text: string) -> Result:
+    return Result.Err(text)
+
+mut status: Flag = Flag.On
+status = flip(status)
+
+mut outcome: Result = make_ok(7)
+outcome = make_err("boom")
+
+print("enum constructors resolved")

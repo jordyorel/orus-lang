@@ -8,3 +8,10 @@
 ## Type Safety Fails
 - `tests/type_safety_fails/struct_field_type_mismatch.orus` – Ensures mismatched default triggers a type error.
 - `tests/type_safety_fails/impl_missing_struct.orus` – Verifies impl blocks require a previously-declared struct.
+
+## Types
+- `tests/types/enum_declarations.orus` – Validates that enum declarations, payload annotations, and cross-type references resolve in the type system.
+- `tests/types/enum_constructors.orus` – Ensures enum variant constructors type-check for both payload-free and payload-carrying variants.
+
+## Comprehensive
+- `tests/comprehensive/enum_runtime.orus` – Confirms enum constructors lower to runtime values by constructing and reassigning variants before printing.

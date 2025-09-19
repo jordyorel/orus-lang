@@ -232,6 +232,15 @@ ObjUpvalue* allocateUpvalue(Value* slot) {
     return upvalue;
 }
 
+ObjEnumInstance* allocateEnumInstance(ObjString* typeName, ObjString* variantName, int variantIndex, ObjArray* payload) {
+    ObjEnumInstance* instance = (ObjEnumInstance*)allocateObject(sizeof(ObjEnumInstance), OBJ_ENUM_INSTANCE);
+    instance->typeName = typeName;
+    instance->variantName = variantName;
+    instance->variantIndex = variantIndex;
+    instance->payload = payload;
+    return instance;
+}
+
 void markValue(Value value);
 
 void markObject(Obj* object) {
@@ -260,6 +269,13 @@ void markObject(Obj* object) {
             }
             break;
         }
+        case OBJ_ENUM_INSTANCE: {
+            ObjEnumInstance* inst = (ObjEnumInstance*)object;
+            if (inst->typeName) markObject((Obj*)inst->typeName);
+            if (inst->variantName) markObject((Obj*)inst->variantName);
+            if (inst->payload) markObject((Obj*)inst->payload);
+            break;
+        }
         case OBJ_FUNCTION: {
             ObjFunction* func = (ObjFunction*)object;
             markObject((Obj*)func->name);
@@ -286,6 +302,7 @@ void markValue(Value value) {
     switch (value.type) {
         case VAL_STRING:
         case VAL_ARRAY:
+        case VAL_ENUM:
         case VAL_ERROR:
         case VAL_RANGE_ITERATOR:
         case VAL_ARRAY_ITERATOR:
@@ -359,6 +376,9 @@ static void freeObject(Obj* object) {
             break;
         case OBJ_ARRAY_ITERATOR:
             vm.bytesAllocated -= sizeof(ObjArrayIterator);
+            break;
+        case OBJ_ENUM_INSTANCE:
+            vm.bytesAllocated -= sizeof(ObjEnumInstance);
             break;
         case OBJ_FUNCTION: {
             ObjFunction* func = (ObjFunction*)object;

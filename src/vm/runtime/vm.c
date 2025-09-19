@@ -93,6 +93,21 @@ void printValue(Value value) {
             printf("]");
             break;
         }
+        case VAL_ENUM: {
+            ObjEnumInstance* inst = AS_ENUM(value);
+            const char* typeName = (inst && inst->typeName) ? inst->typeName->chars : "<enum>";
+            const char* variantName = (inst && inst->variantName) ? inst->variantName->chars : "<variant>";
+            printf("%s.%s", typeName, variantName);
+            if (inst && inst->payload && inst->payload->length > 0) {
+                printf("(");
+                for (int i = 0; i < inst->payload->length; i++) {
+                    if (i > 0) printf(", ");
+                    printValue(inst->payload->elements[i]);
+                }
+                printf(")");
+            }
+            break;
+        }
         case VAL_ERROR:
             printf("Error: %s", AS_ERROR(value)->message->chars);
             break;
@@ -139,6 +154,24 @@ bool valuesEqual(Value a, Value b) {
             return AS_STRING(a) == AS_STRING(b);
         case VAL_ARRAY:
             return AS_ARRAY(a) == AS_ARRAY(b);
+        case VAL_ENUM: {
+            ObjEnumInstance* left = AS_ENUM(a);
+            ObjEnumInstance* right = AS_ENUM(b);
+            if (!left || !right) return false;
+            if (left->typeName != right->typeName) return false;
+            if (left->variantIndex != right->variantIndex) return false;
+
+            int left_len = left->payload ? left->payload->length : 0;
+            int right_len = right->payload ? right->payload->length : 0;
+            if (left_len != right_len) return false;
+
+            for (int i = 0; i < left_len; i++) {
+                if (!valuesEqual(left->payload->elements[i], right->payload->elements[i])) {
+                    return false;
+                }
+            }
+            return true;
+        }
         case VAL_RANGE_ITERATOR:
             return AS_RANGE_ITERATOR(a) == AS_RANGE_ITERATOR(b);
         case VAL_ARRAY_ITERATOR:

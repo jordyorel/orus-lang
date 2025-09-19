@@ -279,6 +279,7 @@ InterpretResult vm_run_dispatch(void) {
         vm_dispatch_table[OP_NOT_BOOL_R] = &&LABEL_OP_NOT_BOOL_R;
         vm_dispatch_table[OP_CONCAT_R] = &&LABEL_OP_CONCAT_R;
         vm_dispatch_table[OP_MAKE_ARRAY_R] = &&LABEL_OP_MAKE_ARRAY_R;
+        vm_dispatch_table[OP_ENUM_NEW_R] = &&LABEL_OP_ENUM_NEW_R;
         vm_dispatch_table[OP_ARRAY_GET_R] = &&LABEL_OP_ARRAY_GET_R;
         vm_dispatch_table[OP_ARRAY_SET_R] = &&LABEL_OP_ARRAY_SET_R;
         vm_dispatch_table[OP_ARRAY_LEN_R] = &&LABEL_OP_ARRAY_LEN_R;
@@ -2081,6 +2082,49 @@ InterpretResult vm_run_dispatch(void) {
         array->length = count;
         Value new_array = {.type = VAL_ARRAY, .as.obj = (Obj*)array};
         vm_set_register_safe(dst, new_array);
+        DISPATCH();
+    }
+
+    LABEL_OP_ENUM_NEW_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t variantIndex = READ_BYTE();
+        uint8_t payloadCount = READ_BYTE();
+        uint8_t payloadStart = READ_BYTE();
+        uint16_t typeConstIndex = READ_SHORT();
+        uint16_t variantConstIndex = READ_SHORT();
+
+        Value typeConst = READ_CONSTANT(typeConstIndex);
+        if (!IS_STRING(typeConst)) {
+            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(),
+                            "Enum constructor requires string type name constant");
+        }
+
+        ObjString* typeName = AS_STRING(typeConst);
+        ObjString* variantName = NULL;
+        Value variantConst = READ_CONSTANT(variantConstIndex);
+        if (IS_STRING(variantConst)) {
+            variantName = AS_STRING(variantConst);
+        }
+
+        ObjArray* payload = NULL;
+        if (payloadCount > 0) {
+            payload = allocateArray(payloadCount);
+            if (!payload) {
+                VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(), "Failed to allocate enum payload");
+            }
+            for (uint8_t i = 0; i < payloadCount; i++) {
+                arrayEnsureCapacity(payload, i + 1);
+                payload->elements[i] = vm_get_register_safe(payloadStart + i);
+            }
+            payload->length = payloadCount;
+        }
+
+        ObjEnumInstance* instance = allocateEnumInstance(typeName, variantName, variantIndex, payload);
+        if (!instance) {
+            VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(), "Failed to allocate enum instance");
+        }
+
+        vm_set_register_safe(dst, ENUM_VAL(instance));
         DISPATCH();
     }
 

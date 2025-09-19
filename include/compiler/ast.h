@@ -27,6 +27,17 @@ typedef struct {
     ASTNode* value;
 } StructLiteralField;
 
+typedef struct {
+    char* name;
+    ASTNode* typeAnnotation;  // Payload type for the variant field (optional)
+} EnumVariantField;
+
+typedef struct {
+    char* name;
+    EnumVariantField* fields;
+    int fieldCount;
+} EnumVariant;
+
 // Different kinds of AST nodes supported in the minimal language
 typedef enum {
     NODE_PROGRAM,
@@ -59,7 +70,8 @@ typedef enum {
     NODE_IMPL_BLOCK,
     NODE_STRUCT_LITERAL,
     NODE_MEMBER_ACCESS,
-    NODE_MEMBER_ASSIGN
+    NODE_MEMBER_ASSIGN,
+    NODE_ENUM_DECL
 } NodeType;
 
 struct ASTNode {
@@ -211,11 +223,22 @@ struct ASTNode {
             char* member;                  // Member name
             bool isMethod;                 // True if member resolves to method
             bool isInstanceMethod;         // True if method expects implicit self
+            bool resolvesToEnum;           // True if the lookup hit an enum type/value
+            bool resolvesToEnumVariant;    // True if the member is an enum variant
+            int enumVariantIndex;          // Variant slot inside the enum definition
+            int enumVariantArity;          // Number of payload fields the variant expects
+            const char* enumTypeName;      // Cached enum type name for backend lowering
         } member;
         struct {
             ASTNode* target;               // Member access node
             ASTNode* value;                // Assigned value
         } memberAssign;
+        struct {
+            char* name;            // Enum name
+            bool isPublic;         // Whether the enum is public
+            EnumVariant* variants; // Declared variants
+            int variantCount;      // Number of variants
+        } enumDecl;
     };
 };
 

@@ -32,6 +32,7 @@ ObjError* allocateError(ErrorType type, const char* message, SrcLocation locatio
 ObjRangeIterator* allocateRangeIterator(int64_t start, int64_t end);
 ObjFunction* allocateFunction(void);
 ObjClosure* allocateClosure(ObjFunction* function);
+ObjEnumInstance* allocateEnumInstance(ObjString* typeName, ObjString* variantName, int variantIndex, ObjArray* payload);
 char* copyString(const char* chars, int length);
 
 #endif

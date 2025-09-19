@@ -70,6 +70,7 @@ typedef enum {
     TOKEN_IN,
     TOKEN_BOOL,
     TOKEN_STRUCT,
+    TOKEN_ENUM,
     TOKEN_IMPL,
     TOKEN_IMPORT,
     TOKEN_USE,

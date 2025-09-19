@@ -96,6 +96,19 @@ static void addStatement(ParserContext* ctx, ASTNode*** list, int* count, int* c
     (*list)[(*count)++] = stmt;
 }
 
+static void add_enum_variant(ParserContext* ctx, EnumVariant** list, int* count, int* capacity, EnumVariant variant) {
+    if (*count + 1 > *capacity) {
+        int newCap = *capacity == 0 ? 4 : (*capacity * 2);
+        EnumVariant* newArr = parser_arena_alloc(ctx, sizeof(EnumVariant) * newCap);
+        if (*capacity > 0) {
+            memcpy(newArr, *list, sizeof(EnumVariant) * (*count));
+        }
+        *list = newArr;
+        *capacity = newCap;
+    }
+    (*list)[(*count)++] = variant;
+}
+
 // Parser context lifecycle functions
 ParserContext* parser_context_create(void) {
     ParserContext* ctx = malloc(sizeof(ParserContext));
@@ -216,6 +229,7 @@ static ASTNode* parseBreakStatement(ParserContext* ctx);
 static ASTNode* parseContinueStatement(ParserContext* ctx);
 static ASTNode* parseBlock(ParserContext* ctx);
 static ASTNode* parseFunctionDefinition(ParserContext* ctx);
+static ASTNode* parseEnumDefinition(ParserContext* ctx, bool isPublic);
 static ASTNode* parseStructDefinition(ParserContext* ctx, bool isPublic);
 static ASTNode* parseImplBlock(ParserContext* ctx, bool isPublic);
 static ASTNode* parseReturnStatement(ParserContext* ctx);
@@ -316,6 +330,8 @@ static ASTNode* parseStatement(ParserContext* ctx) {
         Token afterPub = peekToken(ctx);
         if (afterPub.type == TOKEN_STRUCT) {
             return parseStructDefinition(ctx, true);
+        } else if (afterPub.type == TOKEN_ENUM) {
+            return parseEnumDefinition(ctx, true);
         } else if (afterPub.type == TOKEN_IMPL) {
             return parseImplBlock(ctx, true);
         } else if (afterPub.type == TOKEN_FN) {
@@ -334,6 +350,9 @@ static ASTNode* parseStatement(ParserContext* ctx) {
     }
     if (t.type == TOKEN_STRUCT) {
         return parseStructDefinition(ctx, false);
+    }
+    if (t.type == TOKEN_ENUM) {
+        return parseEnumDefinition(ctx, false);
     }
     if (t.type == TOKEN_IMPL) {
         return parseImplBlock(ctx, false);
@@ -420,12 +439,14 @@ static ASTNode* parsePrintStatement(ParserContext* ctx) {
     return node;
 }
 
-static ASTNode* parseTypeAnnotation(ParserContext* ctx) {
-    Token typeTok = nextToken(ctx);
-    if (typeTok.type != TOKEN_IDENTIFIER && typeTok.type != TOKEN_INT &&
-        typeTok.type != TOKEN_I64 && typeTok.type != TOKEN_U32 &&
-        typeTok.type != TOKEN_U64 && typeTok.type != TOKEN_F64 &&
-        typeTok.type != TOKEN_BOOL && typeTok.type != TOKEN_STRING) {
+static bool token_can_start_type(TokenType type) {
+    return type == TOKEN_IDENTIFIER || type == TOKEN_INT || type == TOKEN_I64 ||
+           type == TOKEN_U32 || type == TOKEN_U64 || type == TOKEN_F64 ||
+           type == TOKEN_BOOL || type == TOKEN_STRING;
+}
+
+static ASTNode* build_type_annotation_node(ParserContext* ctx, Token typeTok) {
+    if (!token_can_start_type(typeTok.type)) {
         return NULL;
     }
 
@@ -438,6 +459,19 @@ static ASTNode* parseTypeAnnotation(ParserContext* ctx) {
     typeNode->type = NODE_TYPE;
     typeNode->typeAnnotation.name = typeName;
     typeNode->typeAnnotation.isNullable = false;
+    typeNode->location.line = typeTok.line;
+    typeNode->location.column = typeTok.column;
+    typeNode->dataType = NULL;
+
+    return typeNode;
+}
+
+static ASTNode* parseTypeAnnotation(ParserContext* ctx) {
+    Token typeTok = nextToken(ctx);
+    ASTNode* typeNode = build_type_annotation_node(ctx, typeTok);
+    if (!typeNode) {
+        return NULL;
+    }
 
     if (peekToken(ctx).type == TOKEN_QUESTION) {
         nextToken(ctx);
@@ -1967,6 +2001,158 @@ static ASTNode* parseFunctionDefinition(ParserContext* ctx) {
     return function;
 }
 
+static ASTNode* parseEnumDefinition(ParserContext* ctx, bool isPublic) {
+    Token enumTok = nextToken(ctx);
+    if (enumTok.type != TOKEN_ENUM) {
+        return NULL;
+    }
+
+    Token nameTok = nextToken(ctx);
+    if (nameTok.type != TOKEN_IDENTIFIER) {
+        return NULL;
+    }
+
+    int nameLen = nameTok.length;
+    char* enumName = parser_arena_alloc(ctx, nameLen + 1);
+    strncpy(enumName, nameTok.start, nameLen);
+    enumName[nameLen] = '\0';
+
+    Token colonTok = nextToken(ctx);
+    if (colonTok.type != TOKEN_COLON) {
+        return NULL;
+    }
+
+    if (peekToken(ctx).type != TOKEN_NEWLINE) {
+        return NULL;
+    }
+    nextToken(ctx);
+
+    Token indentTok = nextToken(ctx);
+    if (indentTok.type != TOKEN_INDENT) {
+        return NULL;
+    }
+
+    EnumVariant* variants = NULL;
+    int variantCount = 0;
+    int variantCapacity = 0;
+
+    while (true) {
+        Token lookahead = peekToken(ctx);
+        if (lookahead.type == TOKEN_DEDENT) {
+            nextToken(ctx);
+            break;
+        }
+        if (lookahead.type == TOKEN_NEWLINE) {
+            nextToken(ctx);
+            continue;
+        }
+
+        Token variantNameTok = nextToken(ctx);
+        if (variantNameTok.type != TOKEN_IDENTIFIER) {
+            return NULL;
+        }
+
+        int variantLen = variantNameTok.length;
+        char* variantName = parser_arena_alloc(ctx, variantLen + 1);
+        strncpy(variantName, variantNameTok.start, variantLen);
+        variantName[variantLen] = '\0';
+
+        EnumVariantField* fields = NULL;
+        int fieldCount = 0;
+        int fieldCapacity = 0;
+
+        if (peekToken(ctx).type == TOKEN_LEFT_PAREN) {
+            nextToken(ctx);
+
+            if (peekToken(ctx).type == TOKEN_RIGHT_PAREN) {
+                nextToken(ctx);
+            } else {
+                while (true) {
+                    Token firstTok = nextToken(ctx);
+                    if (!token_can_start_type(firstTok.type) &&
+                        firstTok.type != TOKEN_IDENTIFIER) {
+                        return NULL;
+                    }
+
+                    ASTNode* fieldType = NULL;
+                    char* fieldName = NULL;
+
+                    if (peekToken(ctx).type == TOKEN_COLON) {
+                        if (firstTok.type != TOKEN_IDENTIFIER) {
+                            return NULL;
+                        }
+                        int fieldNameLen = firstTok.length;
+                        fieldName = parser_arena_alloc(ctx, fieldNameLen + 1);
+                        strncpy(fieldName, firstTok.start, fieldNameLen);
+                        fieldName[fieldNameLen] = '\0';
+                        nextToken(ctx);
+                        fieldType = parseTypeAnnotation(ctx);
+                        if (!fieldType) {
+                            return NULL;
+                        }
+                    } else {
+                        fieldType = build_type_annotation_node(ctx, firstTok);
+                        if (!fieldType) {
+                            return NULL;
+                        }
+                        if (peekToken(ctx).type == TOKEN_QUESTION) {
+                            nextToken(ctx);
+                            fieldType->typeAnnotation.isNullable = true;
+                        }
+                    }
+
+                    if (fieldCount + 1 > fieldCapacity) {
+                        int newCap = fieldCapacity == 0 ? 2 : fieldCapacity * 2;
+                        EnumVariantField* newFields = parser_arena_alloc(ctx, sizeof(EnumVariantField) * newCap);
+                        if (fieldCapacity > 0) {
+                            memcpy(newFields, fields, sizeof(EnumVariantField) * fieldCount);
+                        }
+                        fields = newFields;
+                        fieldCapacity = newCap;
+                    }
+
+                    fields[fieldCount].name = fieldName;
+                    fields[fieldCount].typeAnnotation = fieldType;
+                    fieldCount++;
+
+                    if (peekToken(ctx).type != TOKEN_COMMA) {
+                        break;
+                    }
+                    nextToken(ctx);
+                }
+
+                Token closeTok = nextToken(ctx);
+                if (closeTok.type != TOKEN_RIGHT_PAREN) {
+                    return NULL;
+                }
+            }
+        }
+
+        EnumVariant variant = {
+            .name = variantName,
+            .fields = fields,
+            .fieldCount = fieldCount,
+        };
+        add_enum_variant(ctx, &variants, &variantCount, &variantCapacity, variant);
+
+        if (peekToken(ctx).type == TOKEN_NEWLINE) {
+            nextToken(ctx);
+        }
+    }
+
+    ASTNode* node = new_node(ctx);
+    node->type = NODE_ENUM_DECL;
+    node->enumDecl.name = enumName;
+    node->enumDecl.isPublic = isPublic;
+    node->enumDecl.variants = variants;
+    node->enumDecl.variantCount = variantCount;
+    node->location.line = enumTok.line;
+    node->location.column = enumTok.column;
+    node->dataType = NULL;
+
+    return node;
+}
+
 static ASTNode* parseStructDefinition(ParserContext* ctx, bool isPublic) {
     Token structTok = nextToken(ctx);
     if (structTok.type != TOKEN_STRUCT) {
@@ -2321,6 +2507,11 @@ static ASTNode* parseMemberAccess(ParserContext* ctx, ASTNode* objectExpr) {
     node->member.member = memberName;
     node->member.isMethod = false;
     node->member.isInstanceMethod = false;
+    node->member.resolvesToEnum = false;
+    node->member.resolvesToEnumVariant = false;
+    node->member.enumVariantIndex = -1;
+    node->member.enumVariantArity = 0;
+    node->member.enumTypeName = NULL;
     node->location.line = memberTok.line;
     node->location.column = memberTok.column;
     node->dataType = NULL;

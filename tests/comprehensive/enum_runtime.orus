@@ -1,0 +1,25 @@
+enum Flag:
+    On
+    Off
+
+enum Result:
+    Ok(value: i32)
+    Err(message: string)
+
+fn flip(flag: Flag) -> Flag:
+    return Flag.Off if flag == Flag.On else Flag.On
+
+fn produce(value: i32) -> Result:
+    return Result.Ok(value)
+
+fn fail(text: string) -> Result:
+    return Result.Err(text)
+
+fn main():
+    mut status: Flag = Flag.On
+    status = flip(status)
+
+    mut outcome: Result = produce(7)
+    outcome = fail("boom")
+
+    print("enum runtime ok")
