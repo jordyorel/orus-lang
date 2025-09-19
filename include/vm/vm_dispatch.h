@@ -11,6 +11,7 @@
 #endif
 
 #include "vm.h"
+#include "vm_control_flow.h"
 #include "public/common.h"
 #include "vm/vm_profiling.h"
 
@@ -38,6 +39,25 @@ static inline void vm_update_source_location(size_t offset) {
     vm.currentColumn = vm.chunk->columns ? vm.chunk->columns[offset] : -1;
 }
 
+static inline bool vm_handle_pending_error(void) {
+    if (!IS_ERROR(vm.lastError)) {
+        return true;
+    }
+
+    if (vm.tryFrameCount > 0) {
+        TryFrame frame = vm.tryFrames[--vm.tryFrameCount];
+        vm_unwind_to_stack_depth(frame.stackDepth);
+        vm.ip = frame.handler;
+        if (frame.catchRegister != TRY_CATCH_REGISTER_NONE) {
+            vm_set_register_safe(frame.catchRegister, vm.lastError);
+        }
+        vm.lastError = BOOL_VAL(false);
+        return true;
+    }
+
+    return false;
+}
+
 // Common macros used by both dispatch implementations
 #define READ_BYTE() (*vm.ip++)
 #define READ_SHORT() \
@@ -61,12 +81,7 @@ void runtimeError(ErrorType type, SrcLocation location, const char* format, ...)
         #define DISPATCH() \
             do { \
                 if (IS_ERROR(vm.lastError)) { \
-                    if (vm.tryFrameCount > 0) { \
-                        TryFrame frame = vm.tryFrames[--vm.tryFrameCount]; \
-                        vm.ip = frame.handler; \
-                        vm.globals[frame.varIndex] = vm.lastError; \
-                        vm.lastError = BOOL_VAL(false); \
-                    } else { \
+                    if (!vm_handle_pending_error()) { \
                         RETURN(INTERPRET_RUNTIME_ERROR); \
                     } \
                 } \
@@ -114,14 +129,7 @@ void runtimeError(ErrorType type, SrcLocation location, const char* format, ...)
         // Check for runtime errors after handler execution
         #define CHECK_RUNTIME_ERROR() do { \
             if (IS_ERROR(vm.lastError)) { \
-                if (vm.tryFrameCount > 0) { \
-                    TryFrame frame = vm.tryFrames[--vm.tryFrameCount]; \
-                    vm.ip = frame.handler; \
-                    vm.globals[frame.varIndex] = vm.lastError; \
-                    vm.lastError = BOOL_VAL(false); \
-                } else { \
-                    RETURN(INTERPRET_RUNTIME_ERROR); \
-                } \
+                goto HANDLE_RUNTIME_ERROR; \
             } \
         } while (0)
     #endif

@@ -1771,6 +1771,56 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             }
             return getPrimitiveType(TYPE_VOID);
         }
+        case NODE_TRY: {
+            if (node->tryStmt.tryBlock) {
+                algorithm_w(env, node->tryStmt.tryBlock);
+            }
+
+            if (node->tryStmt.catchBlock) {
+                TypeEnv* catch_env = type_env_new(env);
+                if (!catch_env) {
+                    set_type_error();
+                    return NULL;
+                }
+
+                if (node->tryStmt.catchVar) {
+                    TypeScheme* error_scheme = type_arena_alloc(sizeof(TypeScheme));
+                    if (!error_scheme) {
+                        set_type_error();
+                        return NULL;
+                    }
+                    error_scheme->type = getPrimitiveType(TYPE_ERROR);
+                    error_scheme->bound_vars = NULL;
+                    error_scheme->bound_count = 0;
+                    type_env_define(catch_env, node->tryStmt.catchVar, error_scheme);
+                }
+
+                algorithm_w(catch_env, node->tryStmt.catchBlock);
+            }
+
+            node->dataType = getPrimitiveType(TYPE_VOID);
+            return node->dataType;
+        }
+        case NODE_THROW: {
+            if (!node->throwStmt.value) {
+                return getPrimitiveType(TYPE_VOID);
+            }
+
+            Type* thrown_type = algorithm_w(env, node->throwStmt.value);
+            if (!thrown_type) {
+                return NULL;
+            }
+
+            Type* error_type = getPrimitiveType(TYPE_ERROR);
+            if (!unify(thrown_type, error_type)) {
+                report_type_mismatch(node->throwStmt.value->location, "error",
+                                     getTypeName(thrown_type->kind));
+                set_type_error();
+                return NULL;
+            }
+
+            return getPrimitiveType(TYPE_VOID);
+        }
         case NODE_BREAK: {
             // Break statements have void type
             return getPrimitiveType(TYPE_VOID);
@@ -2761,6 +2811,26 @@ void populate_ast_types(ASTNode* node, TypeEnv* env) {
                 populate_ast_types(node->whileStmt.body, env);
             }
             break;
+        case NODE_TRY:
+            if (node->tryStmt.tryBlock) {
+                populate_ast_types(node->tryStmt.tryBlock, env);
+            }
+            if (node->tryStmt.catchBlock) {
+                TypeEnv* catch_env = type_env_new(env);
+                if (!catch_env) {
+                    catch_env = env;
+                } else if (node->tryStmt.catchVar) {
+                    TypeScheme* var_scheme = type_arena_alloc(sizeof(TypeScheme));
+                    if (var_scheme) {
+                        var_scheme->type = getPrimitiveType(TYPE_ERROR);
+                        var_scheme->bound_vars = NULL;
+                        var_scheme->bound_count = 0;
+                        type_env_define(catch_env, node->tryStmt.catchVar, var_scheme);
+                    }
+                }
+                populate_ast_types(node->tryStmt.catchBlock, catch_env);
+            }
+            break;
         case NODE_TERNARY:
             if (node->ternary.condition) {
                 populate_ast_types(node->ternary.condition, env);
@@ -3176,6 +3246,18 @@ static TypedASTNode* generate_typed_ast_recursive(ASTNode* ast, TypeEnv* type_en
             }
             if (ast->whileStmt.body) {
                 typed->typed.whileStmt.body = generate_typed_ast_recursive(ast->whileStmt.body, type_env);
+            }
+            break;
+
+        case NODE_TRY:
+            if (ast->tryStmt.tryBlock) {
+                typed->typed.tryStmt.tryBlock = generate_typed_ast_recursive(ast->tryStmt.tryBlock, type_env);
+            }
+            if (ast->tryStmt.catchBlock) {
+                typed->typed.tryStmt.catchBlock = generate_typed_ast_recursive(ast->tryStmt.catchBlock, type_env);
+            }
+            if (ast->tryStmt.catchVar) {
+                typed->typed.tryStmt.catchVarName = orus_strdup(ast->tryStmt.catchVar);
             }
             break;
 

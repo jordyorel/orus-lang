@@ -3152,7 +3152,14 @@ void compile_statement(CompilerContext* ctx, TypedASTNode* stmt) {
         case NODE_WHILE:
             compile_while_statement(ctx, stmt);
             break;
-            
+
+        case NODE_TRY:
+            compile_try_statement(ctx, stmt);
+            break;
+        case NODE_THROW:
+            compile_throw_statement(ctx, stmt);
+            break;
+
         case NODE_BREAK:
             compile_break_statement(ctx, stmt);
             break;
@@ -3685,7 +3692,7 @@ bool generate_bytecode_from_ast(CompilerContext* ctx) {
 
 void compile_if_statement(CompilerContext* ctx, TypedASTNode* if_stmt) {
     if (!ctx || !if_stmt) return;
-    
+
     DEBUG_CODEGEN_PRINT("Compiling if statement");
     
     // Compile condition expression
@@ -3758,6 +3765,195 @@ void compile_if_statement(CompilerContext* ctx, TypedASTNode* if_stmt) {
     }
     
     DEBUG_CODEGEN_PRINT("If statement compilation completed");
+}
+
+void compile_try_statement(CompilerContext* ctx, TypedASTNode* try_stmt) {
+    if (!ctx || !try_stmt) {
+        return;
+    }
+
+    DEBUG_CODEGEN_PRINT("Compiling try/catch statement");
+
+    bool has_catch_block = try_stmt->typed.tryStmt.catchBlock != NULL;
+    bool has_catch_var = try_stmt->typed.tryStmt.catchVarName != NULL;
+
+    int catch_reg = -1;
+    bool catch_reg_allocated = false;
+    bool catch_reg_bound = false;
+    uint8_t catch_operand = 0xFF; // Sentinel indicating no catch register
+
+    if (has_catch_var) {
+        catch_reg = mp_allocate_frame_register(ctx->allocator);
+        if (catch_reg == -1) {
+            DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for catch variable");
+            ctx->has_compilation_errors = true;
+            return;
+        }
+        catch_reg_allocated = true;
+        catch_operand = (uint8_t)catch_reg;
+    }
+
+    set_location_from_node(ctx, try_stmt);
+    emit_byte_to_buffer(ctx->bytecode, OP_TRY_BEGIN);
+    emit_byte_to_buffer(ctx->bytecode, catch_operand);
+    int handler_patch = emit_jump_placeholder(ctx->bytecode, OP_TRY_BEGIN);
+    if (handler_patch < 0) {
+        DEBUG_CODEGEN_PRINT("Error: Failed to allocate jump placeholder for catch handler");
+        ctx->has_compilation_errors = true;
+        if (catch_reg_allocated && !catch_reg_bound) {
+            mp_free_register(ctx->allocator, catch_reg);
+        }
+        return;
+    }
+
+    if (try_stmt->typed.tryStmt.tryBlock) {
+        compile_block_with_scope(ctx, try_stmt->typed.tryStmt.tryBlock, true);
+    }
+
+    set_location_from_node(ctx, try_stmt);
+    emit_byte_to_buffer(ctx->bytecode, OP_TRY_END);
+
+    set_location_from_node(ctx, try_stmt);
+    emit_byte_to_buffer(ctx->bytecode, OP_JUMP);
+    int end_patch = emit_jump_placeholder(ctx->bytecode, OP_JUMP);
+    if (end_patch < 0) {
+        DEBUG_CODEGEN_PRINT("Error: Failed to allocate jump placeholder for try end");
+        ctx->has_compilation_errors = true;
+        if (catch_reg_allocated && !catch_reg_bound) {
+            mp_free_register(ctx->allocator, catch_reg);
+        }
+        return;
+    }
+
+    int catch_start = ctx->bytecode ? ctx->bytecode->count : 0;
+    if (!patch_jump(ctx->bytecode, handler_patch, catch_start)) {
+        DEBUG_CODEGEN_PRINT("Error: Failed to patch catch handler jump to %d\n", catch_start);
+        ctx->has_compilation_errors = true;
+        if (catch_reg_allocated && !catch_reg_bound) {
+            mp_free_register(ctx->allocator, catch_reg);
+        }
+        return;
+    }
+
+    SymbolTable* saved_scope = ctx->symbols;
+    ScopeFrame* lexical_frame = NULL;
+    int lexical_frame_index = -1;
+
+    if (has_catch_block) {
+        ctx->symbols = create_symbol_table(saved_scope);
+        if (!ctx->symbols) {
+            DEBUG_CODEGEN_PRINT("Error: Failed to create catch scope symbol table");
+            ctx->symbols = saved_scope;
+            ctx->has_compilation_errors = true;
+            if (catch_reg_allocated && !catch_reg_bound) {
+                mp_free_register(ctx->allocator, catch_reg);
+            }
+            return;
+        }
+
+        if (ctx->allocator) {
+            mp_enter_scope(ctx->allocator);
+        }
+
+        if (ctx->scopes) {
+            lexical_frame = scope_stack_push(ctx->scopes, SCOPE_KIND_LEXICAL);
+            if (lexical_frame) {
+                lexical_frame->symbols = ctx->symbols;
+                lexical_frame->start_offset = catch_start;
+                lexical_frame->end_offset = catch_start;
+                lexical_frame_index = lexical_frame->lexical_depth;
+            }
+        }
+
+        if (has_catch_var) {
+            if (!register_variable(ctx, ctx->symbols, try_stmt->typed.tryStmt.catchVarName,
+                                   catch_reg, getPrimitiveType(TYPE_ERROR), true,
+                                   try_stmt->original->location, true)) {
+                DEBUG_CODEGEN_PRINT("Error: Failed to register catch variable '%s'",
+                       try_stmt->typed.tryStmt.catchVarName);
+                if (ctx->allocator) {
+                    mp_exit_scope(ctx->allocator);
+                }
+                free_symbol_table(ctx->symbols);
+                ctx->symbols = saved_scope;
+                ctx->has_compilation_errors = true;
+                if (catch_reg_allocated && !catch_reg_bound) {
+                    mp_free_register(ctx->allocator, catch_reg);
+                }
+                if (lexical_frame && ctx->scopes) {
+                    scope_stack_pop(ctx->scopes);
+                }
+                return;
+            }
+            catch_reg_bound = true;
+        }
+
+        if (try_stmt->typed.tryStmt.catchBlock) {
+            compile_block_with_scope(ctx, try_stmt->typed.tryStmt.catchBlock, false);
+        }
+
+        DEBUG_CODEGEN_PRINT("Exiting catch scope");
+        if (ctx->symbols) {
+            for (int i = 0; i < ctx->symbols->capacity; i++) {
+                Symbol* symbol = ctx->symbols->symbols[i];
+                while (symbol) {
+                    if (symbol->legacy_register_id >= MP_FRAME_REG_START &&
+                        symbol->legacy_register_id <= MP_FRAME_REG_END) {
+                        mp_free_register(ctx->allocator, symbol->legacy_register_id);
+                    }
+                    symbol = symbol->next;
+                }
+            }
+        }
+
+        if (lexical_frame) {
+            ScopeFrame* refreshed = get_scope_frame_by_index(ctx, lexical_frame_index);
+            if (refreshed) {
+                refreshed->end_offset = ctx->bytecode ? ctx->bytecode->count : catch_start;
+            }
+            if (ctx->scopes) {
+                scope_stack_pop(ctx->scopes);
+            }
+        }
+
+        if (ctx->allocator) {
+            mp_exit_scope(ctx->allocator);
+        }
+
+        free_symbol_table(ctx->symbols);
+        ctx->symbols = saved_scope;
+    } else if (catch_reg_allocated && !catch_reg_bound) {
+        mp_free_register(ctx->allocator, catch_reg);
+        catch_reg_allocated = false;
+    }
+
+    if (!patch_jump(ctx->bytecode, end_patch, ctx->bytecode->count)) {
+        DEBUG_CODEGEN_PRINT("Error: Failed to patch end jump for try statement");
+        ctx->has_compilation_errors = true;
+    }
+}
+
+void compile_throw_statement(CompilerContext* ctx, TypedASTNode* throw_stmt) {
+    if (!ctx || !throw_stmt) {
+        return;
+    }
+
+    if (!throw_stmt->typed.throwStmt.value) {
+        return;
+    }
+
+    int value_reg = compile_expression(ctx, throw_stmt->typed.throwStmt.value);
+    if (value_reg == -1) {
+        return;
+    }
+
+    set_location_from_node(ctx, throw_stmt);
+    emit_byte_to_buffer(ctx->bytecode, OP_THROW);
+    emit_byte_to_buffer(ctx->bytecode, (uint8_t)value_reg);
+
+    if (value_reg >= MP_TEMP_REG_START && value_reg <= MP_TEMP_REG_END) {
+        mp_free_temp_register(ctx->allocator, value_reg);
+    }
 }
 
 // Helper function to add a break statement location for later patching

@@ -232,6 +232,30 @@ void runtimeError(ErrorType type, SrcLocation location,
     vm.lastError = ERROR_VAL(err);
 }
 
+void vm_unwind_to_stack_depth(int targetDepth) {
+    while (vm.frameCount > targetDepth) {
+        CallFrame* frame = &vm.frames[--vm.frameCount];
+
+        closeUpvalues(&vm.registers[frame->parameterBaseRegister]);
+
+        if (frame->savedRegisterCount == 31) {
+            for (int i = 0; i < 15; i++) {
+                vm_set_register_safe(65 + i, frame->savedRegisters[i]);
+            }
+            for (int i = 0; i < 16; i++) {
+                vm_set_register_safe(240 + i, frame->savedRegisters[15 + i]);
+            }
+        } else {
+            for (int i = 0; i < frame->savedRegisterCount; i++) {
+                vm_set_register_safe(frame->savedRegisterStart + i, frame->savedRegisters[i]);
+            }
+        }
+
+        vm.chunk = frame->previousChunk;
+        vm.ip = frame->returnAddress;
+    }
+}
+
 // Debug operations
 // Main execution engine
 static InterpretResult run(void) {

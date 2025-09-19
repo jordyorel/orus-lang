@@ -64,6 +64,7 @@ typedef enum {
     TOKEN_CONST,
     TOKEN_WHILE,
     TOKEN_TRY,
+    TOKEN_THROW,
     TOKEN_CATCH,
     TOKEN_INT,
     TOKEN_I64,

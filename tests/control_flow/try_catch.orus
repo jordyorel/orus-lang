@@ -1,0 +1,51 @@
+fn fail_in_function():
+    value = 100 / 0
+
+// Basic try/catch execution paths
+print("== try/catch smoke test ==")
+
+print("-- success path --")
+try:
+    value = 6 / 3
+    print("computed", value)
+catch err:
+    print("unexpected", err)
+print("after success")
+
+print("-- failure with catch var --")
+try:
+    print("before failure")
+    failing = 1 / 0
+    print("unreachable")
+catch err:
+    print("caught runtime error")
+    print(err)
+print("after catch var")
+
+print("-- failure without catch var --")
+try:
+    print("before second failure")
+    another = 2 / 0
+catch:
+    print("caught without variable")
+print("after catch without var")
+
+print("-- propagation across function boundary --")
+try:
+    fail_in_function()
+catch err:
+    print("caught from function")
+    print(err)
+print("after function propagation")
+
+print("-- rethrow from catch --")
+try:
+    try:
+        temp = 5 / 0
+    catch err:
+        print("inner catch, rethrowing")
+        throw err
+catch outer:
+    print("outer caught rethrow")
+    print(outer)
+print("after rethrow")

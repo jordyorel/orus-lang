@@ -289,6 +289,9 @@ InterpretResult vm_run_dispatch(void) {
         vm_dispatch_table[OP_ARRAY_POP_R] = &&LABEL_OP_ARRAY_POP_R;
         vm_dispatch_table[OP_ARRAY_SLICE_R] = &&LABEL_OP_ARRAY_SLICE_R;
         vm_dispatch_table[OP_TO_STRING_R] = &&LABEL_OP_TO_STRING_R;
+        vm_dispatch_table[OP_TRY_BEGIN] = &&LABEL_OP_TRY_BEGIN;
+        vm_dispatch_table[OP_TRY_END] = &&LABEL_OP_TRY_END;
+        vm_dispatch_table[OP_THROW] = &&LABEL_OP_THROW;
         vm_dispatch_table[OP_JUMP] = &&LABEL_OP_JUMP;
         vm_dispatch_table[OP_JUMP_IF_NOT_R] = &&LABEL_OP_JUMP_IF_NOT_R;
         vm_dispatch_table[OP_LOOP] = &&LABEL_OP_LOOP;
@@ -2352,6 +2355,37 @@ InterpretResult vm_run_dispatch(void) {
         DISPATCH();
     }
 
+    LABEL_OP_TRY_BEGIN: {
+            uint8_t reg = READ_BYTE();
+            uint16_t offset = READ_SHORT();
+            if (vm.tryFrameCount >= TRY_MAX) {
+                VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(), "Too many nested try blocks");
+            }
+            TryFrame* frame = &vm.tryFrames[vm.tryFrameCount++];
+            frame->handler = vm.ip + offset;
+            frame->catchRegister = (reg == 0xFF) ? TRY_CATCH_REGISTER_NONE : (uint16_t)reg;
+            frame->stackDepth = vm.frameCount;
+            DISPATCH();
+        }
+
+    LABEL_OP_TRY_END: {
+            if (vm.tryFrameCount <= 0) {
+                VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(), "TRY_END without matching TRY_BEGIN");
+            }
+            vm.tryFrameCount--;
+            DISPATCH();
+        }
+
+    LABEL_OP_THROW: {
+            uint8_t reg = READ_BYTE();
+            Value err = vm_get_register_safe(reg);
+            if (!IS_ERROR(err)) {
+                VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "throw expects an error value");
+            }
+            vm.lastError = err;
+            goto HANDLE_RUNTIME_ERROR;
+        }
+
     LABEL_OP_JUMP: {
             uint16_t offset = READ_SHORT();
             if (!CF_JUMP(offset)) {
@@ -3286,6 +3320,12 @@ InterpretResult vm_run_dispatch(void) {
         // printf("[DISPATCH_TRACE] About to return INTERPRET_OK from OP_HALT");
         fflush(stdout);
         RETURN(INTERPRET_OK);
+
+    HANDLE_RUNTIME_ERROR: __attribute__((unused))
+        if (!vm_handle_pending_error()) {
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        DISPATCH();
 
     LABEL_UNKNOWN: __attribute__((unused))
         VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(), "Unknown opcode: %d", instruction);

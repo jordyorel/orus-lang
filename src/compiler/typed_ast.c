@@ -78,6 +78,14 @@ TypedASTNode* create_typed_ast_node(ASTNode* original) {
             typed->typed.forIter.iterable = NULL;
             typed->typed.forIter.body = NULL;
             break;
+        case NODE_TRY:
+            typed->typed.tryStmt.tryBlock = NULL;
+            typed->typed.tryStmt.catchBlock = NULL;
+            typed->typed.tryStmt.catchVarName = NULL;
+            break;
+        case NODE_THROW:
+            typed->typed.throwStmt.value = NULL;
+            break;
         case NODE_BLOCK:
             typed->typed.block.statements = NULL;
             typed->typed.block.count = 0;
@@ -259,6 +267,16 @@ void free_typed_ast_node(TypedASTNode* node) {
         case NODE_FOR_ITER:
             free_typed_ast_node(node->typed.forIter.iterable);
             free_typed_ast_node(node->typed.forIter.body);
+            break;
+        case NODE_TRY:
+            free_typed_ast_node(node->typed.tryStmt.tryBlock);
+            free_typed_ast_node(node->typed.tryStmt.catchBlock);
+            if (node->typed.tryStmt.catchVarName) {
+                free(node->typed.tryStmt.catchVarName);
+            }
+            break;
+        case NODE_THROW:
+            free_typed_ast_node(node->typed.throwStmt.value);
             break;
         case NODE_BLOCK:
             if (node->typed.block.statements) {
@@ -580,6 +598,18 @@ bool validate_typed_ast(TypedASTNode* root) {
                 return false;
             }
             break;
+        case NODE_TRY:
+            if (root->typed.tryStmt.tryBlock &&
+                !validate_typed_ast(root->typed.tryStmt.tryBlock)) {
+                return false;
+            }
+            if (root->typed.tryStmt.catchBlock &&
+                !validate_typed_ast(root->typed.tryStmt.catchBlock)) {
+                return false;
+            }
+            break;
+        case NODE_THROW:
+            return validate_typed_ast(root->typed.throwStmt.value);
         default:
             // For leaf nodes, just check if type is resolved
             break;
@@ -691,6 +721,12 @@ void print_typed_ast(TypedASTNode* node, int indent) {
             break;
         case NODE_FOR_ITER:
             nodeTypeStr = "ForIter";
+            break;
+        case NODE_TRY:
+            nodeTypeStr = "Try";
+            break;
+        case NODE_THROW:
+            nodeTypeStr = "Throw";
             break;
         case NODE_BLOCK:
             nodeTypeStr = "Block";
@@ -860,6 +896,17 @@ void print_typed_ast(TypedASTNode* node, int indent) {
         case NODE_FOR_ITER:
             print_typed_ast(node->typed.forIter.iterable, indent + 1);
             print_typed_ast(node->typed.forIter.body, indent + 1);
+            break;
+        case NODE_TRY:
+            if (node->typed.tryStmt.tryBlock) {
+                print_typed_ast(node->typed.tryStmt.tryBlock, indent + 1);
+            }
+            if (node->typed.tryStmt.catchBlock) {
+                print_typed_ast(node->typed.tryStmt.catchBlock, indent + 1);
+            }
+            break;
+        case NODE_THROW:
+            print_typed_ast(node->typed.throwStmt.value, indent + 1);
             break;
         case NODE_BLOCK:
             if (node->typed.block.statements) {

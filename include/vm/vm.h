@@ -355,9 +355,11 @@ typedef struct RegisterMetadata {
 // Try frame
 typedef struct {
     uint8_t* handler;
-    uint8_t varIndex;
+    uint16_t catchRegister;
     int stackDepth;
 } TryFrame;
+
+#define TRY_CATCH_REGISTER_NONE 0xFFFF
 
 // Module system
 typedef struct {
@@ -520,6 +522,9 @@ typedef enum {
     OP_ARRAY_SLICE_R, // dst, array_reg, start_reg, end_reg
 
     // Control flow
+    OP_TRY_BEGIN,
+    OP_TRY_END,
+    OP_THROW,
     OP_JUMP,
     OP_JUMP_IF_R,      // condition_reg, offset
     OP_JUMP_IF_NOT_R,  // condition_reg, offset
@@ -1122,6 +1127,7 @@ void freeObjects(void);
 // Upvalue management
 ObjUpvalue* captureUpvalue(Value* local);
 void closeUpvalues(Value* last);
+void vm_unwind_to_stack_depth(int targetDepth);
 
 // Type system
 void initTypeSystem(void);

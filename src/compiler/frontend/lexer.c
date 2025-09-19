@@ -306,6 +306,7 @@ static TokenType identifier_type(const char* start, int length) {
         case 't':
             if (length == 4 && memcmp(start, "true", 4) == 0) return TOKEN_TRUE;
             if (length == 3 && memcmp(start, "try", 3) == 0) return TOKEN_TRY;
+            if (length == 5 && memcmp(start, "throw", 5) == 0) return TOKEN_THROW;
             if (length == 10 && memcmp(start, "time_stamp", 10) == 0) return TOKEN_TIME_STAMP;
             break;
         case 'u':
@@ -961,6 +962,7 @@ const char* token_type_to_string(TokenType type) {
         case TOKEN_CONST: return "CONST";
         case TOKEN_WHILE: return "WHILE";
         case TOKEN_TRY: return "TRY";
+        case TOKEN_THROW: return "THROW";
         case TOKEN_CATCH: return "CATCH";
         case TOKEN_INT: return "INT";
         case TOKEN_I64: return "I64";

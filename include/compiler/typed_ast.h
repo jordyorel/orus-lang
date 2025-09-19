@@ -106,6 +106,14 @@ struct TypedASTNode {
             char* label;
         } forIter;
         struct {
+            TypedASTNode* tryBlock;
+            TypedASTNode* catchBlock;
+            char* catchVarName;
+        } tryStmt;
+        struct {
+            TypedASTNode* value;
+        } throwStmt;
+        struct {
             TypedASTNode** statements;
             int count;
         } block;

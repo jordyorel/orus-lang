@@ -73,6 +73,8 @@ static const char* get_node_type_name(NodeType type) {
         case NODE_WHILE: return "While";
         case NODE_FOR_RANGE: return "ForRange";
         case NODE_FOR_ITER: return "ForIter";
+        case NODE_TRY: return "Try";
+        case NODE_THROW: return "Throw";
         case NODE_BLOCK: return "Block";
         case NODE_TERNARY: return "Ternary";
         case NODE_UNARY: return "Unary";
@@ -552,11 +554,25 @@ static void visualize_node_recursive(TypedASTNode* node, int depth, bool is_last
             break;
         case NODE_FOR_ITER:
             if (node->typed.forIter.iterable) {
-                visualize_node_recursive(node->typed.forIter.iterable, depth + 1, 
+                visualize_node_recursive(node->typed.forIter.iterable, depth + 1,
                                        !node->typed.forIter.body, config);
             }
             if (node->typed.forIter.body) {
                 visualize_node_recursive(node->typed.forIter.body, depth + 1, true, config);
+            }
+            break;
+        case NODE_TRY:
+            if (node->typed.tryStmt.tryBlock) {
+                visualize_node_recursive(node->typed.tryStmt.tryBlock, depth + 1,
+                                       !node->typed.tryStmt.catchBlock, config);
+            }
+            if (node->typed.tryStmt.catchBlock) {
+                visualize_node_recursive(node->typed.tryStmt.catchBlock, depth + 1, true, config);
+            }
+            break;
+        case NODE_THROW:
+            if (node->typed.throwStmt.value) {
+                visualize_node_recursive(node->typed.throwStmt.value, depth + 1, true, config);
             }
             break;
         case NODE_FUNCTION:

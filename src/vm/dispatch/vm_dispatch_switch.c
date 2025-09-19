@@ -1977,6 +1977,37 @@ InterpretResult vm_run_dispatch(void) {
                 }
 
                 // Control flow
+                case OP_TRY_BEGIN: {
+                    uint8_t reg = READ_BYTE();
+                    uint16_t offset = READ_SHORT();
+                    if (vm.tryFrameCount >= TRY_MAX) {
+                        VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(), "Too many nested try blocks");
+                    }
+                    TryFrame* frame = &vm.tryFrames[vm.tryFrameCount++];
+                    frame->handler = vm.ip + offset;
+                    frame->catchRegister = (reg == 0xFF) ? TRY_CATCH_REGISTER_NONE : (uint16_t)reg;
+                    frame->stackDepth = vm.frameCount;
+                    break;
+                }
+
+                case OP_TRY_END: {
+                    if (vm.tryFrameCount <= 0) {
+                        VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(), "TRY_END without matching TRY_BEGIN");
+                    }
+                    vm.tryFrameCount--;
+                    break;
+                }
+
+                case OP_THROW: {
+                    uint8_t reg = READ_BYTE();
+                    Value err = vm_get_register_safe(reg);
+                    if (!IS_ERROR(err)) {
+                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "throw expects an error value");
+                    }
+                    vm.lastError = err;
+                    goto handle_runtime_error;
+                }
+
                 case OP_JUMP: {
                     uint16_t offset = READ_SHORT();
                     if (!CF_JUMP(offset)) {
@@ -2771,22 +2802,14 @@ InterpretResult vm_run_dispatch(void) {
 
                 default:
                     VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(), "Unknown opcode: %d", instruction);
-                    vm.lastExecutionTime = get_time_vm() - start_time;
-                    RETURN(INTERPRET_RUNTIME_ERROR);
             }
+            continue;
 
-            if (IS_ERROR(vm.lastError)) {
-                // Handle runtime errors
-                if (vm.tryFrameCount > 0) {
-                    // Exception handling
-                    TryFrame frame = vm.tryFrames[--vm.tryFrameCount];
-                    vm.ip = frame.handler;
-                    vm.globals[frame.varIndex] = vm.lastError;
-                    vm.lastError = BOOL_VAL(false);
-                } else {
-                    RETURN(INTERPRET_RUNTIME_ERROR);
-                }
+        handle_runtime_error:
+            if (!vm_handle_pending_error()) {
+                RETURN(INTERPRET_RUNTIME_ERROR);
             }
+            continue;
         }
     #undef RETURN
 }
