@@ -14,31 +14,46 @@ BASE_CFLAGS = -Wall -Wextra -std=c11
 
 # Architecture-specific optimizations
 # Set PORTABLE=1 to build without aggressive CPU-specific tuning (safer on some macOS setups)
+ARCH_FLAGS =
+ARCH_DEFINES =
+
 ifeq ($(PORTABLE),1)
     # Portable build avoids micro-arch specific flags that can trigger kernel kills on some systems
     ifeq ($(UNAME_M),arm64)
         ARCH_FLAGS = -arch arm64
     else ifeq ($(UNAME_M),x86_64)
         ARCH_FLAGS = -arch x86_64
-    else
-        ARCH_FLAGS =
     endif
-    ARCH_DEFINES = -DUSE_COMPUTED_GOTO=1
 else
     ifeq ($(UNAME_M),arm64)
         # Apple Silicon (M1/M2/M3) optimizations
         ARCH_FLAGS = -mcpu=apple-m1 -mtune=apple-m1 -march=armv8.4-a+simd+crypto+sha3
-        ARCH_DEFINES = -DUSE_COMPUTED_GOTO=1
     else ifeq ($(UNAME_M),x86_64)
         # Intel/AMD x86_64 optimizations
         ARCH_FLAGS = -march=native -mtune=native
-        ARCH_DEFINES = -DUSE_COMPUTED_GOTO=1
-    else
-        # Generic fallback
-        ARCH_FLAGS =
-        ARCH_DEFINES =
     endif
 endif
+
+# Dispatch selection: prefer computed goto on Linux/macOS, fall back to switch elsewhere
+DISPATCH_MODE ?= auto
+
+ifeq ($(DISPATCH_MODE),auto)
+    ifeq ($(UNAME_S),Linux)
+        DISPATCH_DEFINE = -DUSE_COMPUTED_GOTO=1
+    else ifeq ($(UNAME_S),Darwin)
+        DISPATCH_DEFINE = -DUSE_COMPUTED_GOTO=1
+    else
+        DISPATCH_DEFINE = -DUSE_COMPUTED_GOTO=0
+    endif
+else ifeq ($(DISPATCH_MODE),goto)
+    DISPATCH_DEFINE = -DUSE_COMPUTED_GOTO=1
+else ifeq ($(DISPATCH_MODE),switch)
+    DISPATCH_DEFINE = -DUSE_COMPUTED_GOTO=0
+else
+    $(error Invalid DISPATCH_MODE: $(DISPATCH_MODE). Use auto, goto, or switch)
+endif
+
+ARCH_DEFINES += $(DISPATCH_DEFINE)
 
 # Profile-specific configurations
 ifeq ($(PROFILE),debug)
@@ -335,11 +350,11 @@ analyze:
 # Cross-compilation targets
 cross-linux:
 	@echo "Cross-compiling for Linux x86_64..."
-	@$(MAKE) CC=x86_64-linux-gnu-gcc PROFILE=release
+	@$(MAKE) CC=x86_64-linux-gnu-gcc PROFILE=release DISPATCH_MODE=goto
 
 cross-windows:
 	@echo "Cross-compiling for Windows x86_64..."
-	@$(MAKE) CC=x86_64-w64-mingw32-gcc PROFILE=release LDFLAGS="-lm -static"
+	@$(MAKE) CC=x86_64-w64-mingw32-gcc PROFILE=release DISPATCH_MODE=switch LDFLAGS="-lm -static"
 
 # Installation
 install: release
