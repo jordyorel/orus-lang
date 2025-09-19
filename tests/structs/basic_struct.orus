@@ -6,5 +6,4 @@ impl Counter:
     fn increment(counter: Counter) -> Counter:
         return counter
 
-fn main():
-    print(0)
+print(0)
