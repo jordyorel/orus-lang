@@ -27,6 +27,8 @@ typedef struct Variant {
 typedef struct Method {
     ObjString* name;
     struct Type* type;
+    bool isStatic;
+    bool isInstance;
 } Method;
 
 // Extended type information (can be attached to existing Type struct)

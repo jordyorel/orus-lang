@@ -22,6 +22,11 @@ typedef struct {
     ASTNode* defaultValue;    // Optional default value expression
 } StructField;
 
+typedef struct {
+    char* name;
+    ASTNode* value;
+} StructLiteralField;
+
 // Different kinds of AST nodes supported in the minimal language
 typedef enum {
     NODE_PROGRAM,
@@ -51,7 +56,10 @@ typedef enum {
     NODE_RETURN,
     NODE_CAST,       // Add cast node for 'as' operator
     NODE_STRUCT_DECL,
-    NODE_IMPL_BLOCK
+    NODE_IMPL_BLOCK,
+    NODE_STRUCT_LITERAL,
+    NODE_MEMBER_ACCESS,
+    NODE_MEMBER_ASSIGN
 } NodeType;
 
 struct ASTNode {
@@ -164,6 +172,9 @@ struct ASTNode {
             int paramCount;                // Number of parameters
             ASTNode* returnType;           // Optional return type annotation
             ASTNode* body;                 // Function body (block)
+            bool isMethod;                 // Whether function is defined in impl block
+            bool isInstanceMethod;         // Whether method has implicit self receiver
+            char* methodStructName;        // Owning struct for methods
         } function;
         struct {
             ASTNode* callee;               // Function expression
@@ -190,6 +201,21 @@ struct ASTNode {
             ASTNode** methods;             // Method definitions (function nodes)
             int methodCount;               // Number of methods
         } implBlock;
+        struct {
+            char* structName;              // Name of the struct being instantiated
+            StructLiteralField* fields;    // Field assignments
+            int fieldCount;
+        } structLiteral;
+        struct {
+            ASTNode* object;               // Base expression or type identifier
+            char* member;                  // Member name
+            bool isMethod;                 // True if member resolves to method
+            bool isInstanceMethod;         // True if method expects implicit self
+        } member;
+        struct {
+            ASTNode* target;               // Member access node
+            ASTNode* value;                // Assigned value
+        } memberAssign;
     };
 };
 

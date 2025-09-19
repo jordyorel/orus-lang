@@ -135,6 +135,22 @@ TypedASTNode* create_typed_ast_node(ASTNode* original) {
             typed->typed.implBlock.methods = NULL;
             typed->typed.implBlock.methodCount = 0;
             break;
+        case NODE_STRUCT_LITERAL:
+            typed->typed.structLiteral.structName = original->structLiteral.structName;
+            typed->typed.structLiteral.fields = original->structLiteral.fields;
+            typed->typed.structLiteral.fieldCount = original->structLiteral.fieldCount;
+            typed->typed.structLiteral.values = NULL;
+            break;
+        case NODE_MEMBER_ACCESS:
+            typed->typed.member.object = NULL;
+            typed->typed.member.member = original->member.member;
+            typed->typed.member.isMethod = original->member.isMethod;
+            typed->typed.member.isInstanceMethod = original->member.isInstanceMethod;
+            break;
+        case NODE_MEMBER_ASSIGN:
+            typed->typed.memberAssign.target = NULL;
+            typed->typed.memberAssign.value = NULL;
+            break;
         default:
             // For leaf nodes (IDENTIFIER, LITERAL, etc.), no additional
             // initialization needed
@@ -279,6 +295,21 @@ void free_typed_ast_node(TypedASTNode* node) {
                 free(node->typed.implBlock.methods);
             }
             break;
+        case NODE_STRUCT_LITERAL:
+            if (node->typed.structLiteral.values) {
+                for (int i = 0; i < node->typed.structLiteral.fieldCount; i++) {
+                    free_typed_ast_node(node->typed.structLiteral.values[i]);
+                }
+                free(node->typed.structLiteral.values);
+            }
+            break;
+        case NODE_MEMBER_ACCESS:
+            free_typed_ast_node(node->typed.member.object);
+            break;
+        case NODE_MEMBER_ASSIGN:
+            free_typed_ast_node(node->typed.memberAssign.target);
+            free_typed_ast_node(node->typed.memberAssign.value);
+            break;
         default:
             // Leaf nodes have no children to free
             break;
@@ -360,6 +391,11 @@ bool validate_typed_ast(TypedASTNode* root) {
             return validate_typed_ast(root->typed.arraySlice.array) &&
                    validate_typed_ast(root->typed.arraySlice.start) &&
                    validate_typed_ast(root->typed.arraySlice.end);
+        case NODE_MEMBER_ASSIGN:
+            return validate_typed_ast(root->typed.memberAssign.target) &&
+                   validate_typed_ast(root->typed.memberAssign.value);
+        case NODE_MEMBER_ACCESS:
+            return validate_typed_ast(root->typed.member.object);
         case NODE_STRUCT_DECL:
             if (root->typed.structDecl.fields) {
                 for (int i = 0; i < root->typed.structDecl.fieldCount; i++) {
@@ -369,6 +405,15 @@ bool validate_typed_ast(TypedASTNode* root) {
                     }
                     if (root->typed.structDecl.fields[i].defaultValue &&
                         !validate_typed_ast(root->typed.structDecl.fields[i].defaultValue)) {
+                        return false;
+                    }
+                }
+            }
+            break;
+        case NODE_STRUCT_LITERAL:
+            if (root->typed.structLiteral.values) {
+                for (int i = 0; i < root->typed.structLiteral.fieldCount; i++) {
+                    if (!validate_typed_ast(root->typed.structLiteral.values[i])) {
                         return false;
                     }
                 }
@@ -441,6 +486,12 @@ const char* typed_node_type_string(TypedASTNode* node) {
             return "generic";
         case TYPE_INSTANCE:
             return "instance";
+        case TYPE_STRUCT:
+            return "struct";
+        case TYPE_ENUM:
+            return "enum";
+        case TYPE_UNKNOWN:
+            return "unknown";
         default:
             return "unknown";
     }
@@ -527,8 +578,17 @@ void print_typed_ast(TypedASTNode* node, int indent) {
         case NODE_STRUCT_DECL:
             nodeTypeStr = "StructDecl";
             break;
+        case NODE_STRUCT_LITERAL:
+            nodeTypeStr = "StructLiteral";
+            break;
         case NODE_IMPL_BLOCK:
             nodeTypeStr = "ImplBlock";
+            break;
+        case NODE_MEMBER_ACCESS:
+            nodeTypeStr = "MemberAccess";
+            break;
+        case NODE_MEMBER_ASSIGN:
+            nodeTypeStr = "MemberAssign";
             break;
         case NODE_BREAK:
             nodeTypeStr = "Break";
@@ -702,11 +762,44 @@ void print_typed_ast(TypedASTNode* node, int indent) {
                 }
             }
             break;
+        case NODE_STRUCT_LITERAL:
+            if (node->typed.structLiteral.values) {
+                for (int i = 0; i < node->typed.structLiteral.fieldCount; i++) {
+                    TypedASTNode* fieldValue = node->typed.structLiteral.values[i];
+                    if (!fieldValue) {
+                        continue;
+                    }
+                    if (node->typed.structLiteral.fields &&
+                        node->typed.structLiteral.fields[i].name) {
+                        for (int j = 0; j < indent + 1; j++) {
+                            printf("  ");
+                        }
+                        printf("Field %s:\n", node->typed.structLiteral.fields[i].name);
+                        print_typed_ast(fieldValue, indent + 2);
+                    } else {
+                        print_typed_ast(fieldValue, indent + 1);
+                    }
+                }
+            }
+            break;
         case NODE_IMPL_BLOCK:
             if (node->typed.implBlock.methods) {
                 for (int i = 0; i < node->typed.implBlock.methodCount; i++) {
                     print_typed_ast(node->typed.implBlock.methods[i], indent + 1);
                 }
+            }
+            break;
+        case NODE_MEMBER_ACCESS:
+            if (node->typed.member.object) {
+                print_typed_ast(node->typed.member.object, indent + 1);
+            }
+            break;
+        case NODE_MEMBER_ASSIGN:
+            if (node->typed.memberAssign.target) {
+                print_typed_ast(node->typed.memberAssign.target, indent + 1);
+            }
+            if (node->typed.memberAssign.value) {
+                print_typed_ast(node->typed.memberAssign.value, indent + 1);
             }
             break;
         default:

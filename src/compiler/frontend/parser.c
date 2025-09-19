@@ -224,6 +224,8 @@ static ASTNode* parseIndexExpression(ParserContext* ctx, ASTNode* arrayExpr, Tok
 static ASTNode* parsePostfixExpressions(ParserContext* ctx, ASTNode* expr);
 static ASTNode* parseFunctionType(ParserContext* ctx);
 static ASTNode* parseTypeAnnotation(ParserContext* ctx);
+static ASTNode* parseStructLiteral(ParserContext* ctx, ASTNode* typeExpr, Token leftBrace);
+static ASTNode* parseMemberAccess(ParserContext* ctx, ASTNode* objectExpr);
 
 static int getOperatorPrecedence(TokenType type) {
     switch (type) {
@@ -1297,7 +1299,7 @@ static ASTNode* parseAssignment(ParserContext* ctx) {
 
     TokenType t = peekToken(ctx).type;
     if (t == TOKEN_EQUAL || t == TOKEN_PLUS_EQUAL || t == TOKEN_MINUS_EQUAL ||
-        t == TOKEN_STAR_EQUAL || t == TOKEN_SLASH_EQUAL) {
+        t == TOKEN_STAR_EQUAL || t == TOKEN_SLASH_EQUAL || t == TOKEN_MODULO_EQUAL) {
         nextToken(ctx);
         ASTNode* value = NULL;
 
@@ -1308,7 +1310,6 @@ static ASTNode* parseAssignment(ParserContext* ctx) {
         } else {
             ASTNode* right = parseAssignment(ctx);
             if (!right) return NULL;
-            if (left->type != NODE_IDENTIFIER) return NULL;
             ASTNode* binary = new_node(ctx);
             binary->type = NODE_BINARY;
             binary->binary.left = left;
@@ -1326,6 +1327,9 @@ static ASTNode* parseAssignment(ParserContext* ctx) {
                 case TOKEN_SLASH_EQUAL:
                     binary->binary.op = "/";
                     break;
+                case TOKEN_MODULO_EQUAL:
+                    binary->binary.op = "%";
+                    break;
                 default:
                     binary->binary.op = "+";
                     break;
@@ -1339,6 +1343,14 @@ static ASTNode* parseAssignment(ParserContext* ctx) {
             node->type = NODE_ASSIGN;
             node->assign.name = left->identifier.name;
             node->assign.value = value;
+            node->location = left->location;
+            node->dataType = NULL;
+            return node;
+        } else if (left->type == NODE_MEMBER_ACCESS) {
+            ASTNode* node = new_node(ctx);
+            node->type = NODE_MEMBER_ASSIGN;
+            node->memberAssign.target = left;
+            node->memberAssign.value = value;
             node->location = left->location;
             node->dataType = NULL;
             return node;
@@ -1824,6 +1836,9 @@ static ASTNode* parseFunctionExpression(ParserContext* ctx, Token fnToken) {
     function->function.paramCount = paramCount;
     function->function.returnType = returnType;
     function->function.body = body;
+    function->function.isMethod = false;
+    function->function.isInstanceMethod = false;
+    function->function.methodStructName = NULL;
     function->location.line = fnToken.line;
     function->location.column = fnToken.column;
     function->dataType = NULL;
@@ -1942,6 +1957,9 @@ static ASTNode* parseFunctionDefinition(ParserContext* ctx) {
     function->function.paramCount = paramCount;
     function->function.returnType = returnType;
     function->function.body = body;
+    function->function.isMethod = false;
+    function->function.isInstanceMethod = false;
+    function->function.methodStructName = NULL;
     function->location.line = nameTok.line;
     function->location.column = nameTok.column;
     function->dataType = NULL;
@@ -2117,6 +2135,17 @@ static ASTNode* parseImplBlock(ParserContext* ctx, bool isPublic) {
             return NULL;
         }
 
+        method->function.isMethod = true;
+        method->function.methodStructName = structName;
+        bool instance = false;
+        if (method->function.paramCount > 0 && method->function.params &&
+            method->function.params[0].name) {
+            if (strcmp(method->function.params[0].name, "self") == 0) {
+                instance = true;
+            }
+        }
+        method->function.isInstanceMethod = instance;
+
         addStatement(ctx, &methods, &methodCount, &methodCapacity, method);
 
         if (peekToken(ctx).type == TOKEN_NEWLINE) {
@@ -2268,6 +2297,125 @@ static ASTNode* parseIndexExpression(ParserContext* ctx, ASTNode* arrayExpr, Tok
     return indexNode;
 }
 
+static ASTNode* parseMemberAccess(ParserContext* ctx, ASTNode* objectExpr) {
+    if (!objectExpr) {
+        return NULL;
+    }
+
+    Token dot = nextToken(ctx);
+    (void)dot; // Dot token consumed
+
+    Token memberTok = nextToken(ctx);
+    if (memberTok.type != TOKEN_IDENTIFIER) {
+        return NULL;
+    }
+
+    int nameLen = memberTok.length;
+    char* memberName = parser_arena_alloc(ctx, nameLen + 1);
+    strncpy(memberName, memberTok.start, nameLen);
+    memberName[nameLen] = '\0';
+
+    ASTNode* node = new_node(ctx);
+    node->type = NODE_MEMBER_ACCESS;
+    node->member.object = objectExpr;
+    node->member.member = memberName;
+    node->member.isMethod = false;
+    node->member.isInstanceMethod = false;
+    node->location.line = memberTok.line;
+    node->location.column = memberTok.column;
+    node->dataType = NULL;
+
+    return node;
+}
+
+static ASTNode* parseStructLiteral(ParserContext* ctx, ASTNode* typeExpr, Token leftBrace) {
+    if (!typeExpr || typeExpr->type != NODE_IDENTIFIER) {
+        return NULL;
+    }
+
+    char* structName = typeExpr->identifier.name;
+
+    StructLiteralField* fields = NULL;
+    int fieldCount = 0;
+    int fieldCapacity = 0;
+
+    while (peekToken(ctx).type == TOKEN_NEWLINE) {
+        nextToken(ctx);
+    }
+
+    if (peekToken(ctx).type != TOKEN_RIGHT_BRACE) {
+        while (true) {
+            Token fieldTok = nextToken(ctx);
+            if (fieldTok.type != TOKEN_IDENTIFIER) {
+                return NULL;
+            }
+
+            int fieldLen = fieldTok.length;
+            char* fieldName = parser_arena_alloc(ctx, fieldLen + 1);
+            strncpy(fieldName, fieldTok.start, fieldLen);
+            fieldName[fieldLen] = '\0';
+
+            if (nextToken(ctx).type != TOKEN_COLON) {
+                return NULL;
+            }
+
+            ASTNode* valueExpr = parseExpression(ctx);
+            if (!valueExpr) {
+                return NULL;
+            }
+
+            if (fieldCount + 1 > fieldCapacity) {
+                int newCap = fieldCapacity == 0 ? 4 : fieldCapacity * 2;
+                StructLiteralField* newFields = parser_arena_alloc(ctx, sizeof(StructLiteralField) * newCap);
+                if (fieldCapacity > 0 && fields) {
+                    memcpy(newFields, fields, sizeof(StructLiteralField) * fieldCount);
+                }
+                fields = newFields;
+                fieldCapacity = newCap;
+            }
+
+            fields[fieldCount].name = fieldName;
+            fields[fieldCount].value = valueExpr;
+            fieldCount++;
+
+            Token nextTok = peekToken(ctx);
+            if (nextTok.type == TOKEN_COMMA) {
+                nextToken(ctx);
+                while (peekToken(ctx).type == TOKEN_NEWLINE) {
+                    nextToken(ctx);
+                }
+                if (peekToken(ctx).type == TOKEN_RIGHT_BRACE) {
+                    break;
+                }
+            } else if (nextTok.type == TOKEN_NEWLINE) {
+                nextToken(ctx);
+                while (peekToken(ctx).type == TOKEN_NEWLINE) {
+                    nextToken(ctx);
+                }
+                if (peekToken(ctx).type == TOKEN_RIGHT_BRACE) {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+    }
+
+    if (nextToken(ctx).type != TOKEN_RIGHT_BRACE) {
+        return NULL;
+    }
+
+    typeExpr->type = NODE_STRUCT_LITERAL;
+    typeExpr->structLiteral.structName = structName;
+    typeExpr->structLiteral.fields = fields;
+    typeExpr->structLiteral.fieldCount = fieldCount;
+    typeExpr->location.line = leftBrace.line;
+    typeExpr->location.column = leftBrace.column;
+    typeExpr->dataType = NULL;
+
+    return typeExpr;
+}
+
 static ASTNode* parsePostfixExpressions(ParserContext* ctx, ASTNode* expr) {
     if (!expr) {
         return NULL;
@@ -2283,6 +2431,17 @@ static ASTNode* parsePostfixExpressions(ParserContext* ctx, ASTNode* expr) {
         } else if (next.type == TOKEN_LEFT_BRACKET) {
             Token openToken = nextToken(ctx);
             expr = parseIndexExpression(ctx, expr, openToken);
+            if (!expr) {
+                return NULL;
+            }
+        } else if (next.type == TOKEN_DOT) {
+            expr = parseMemberAccess(ctx, expr);
+            if (!expr) {
+                return NULL;
+            }
+        } else if (next.type == TOKEN_LEFT_BRACE) {
+            Token leftBrace = nextToken(ctx);
+            expr = parseStructLiteral(ctx, expr, leftBrace);
             if (!expr) {
                 return NULL;
             }

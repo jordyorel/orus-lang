@@ -93,6 +93,9 @@ struct TypedASTNode {
         struct {
             TypedASTNode* returnType;
             TypedASTNode* body;
+            bool isMethod;
+            bool isInstanceMethod;
+            const char* methodStructName;
         } function;
         struct {
             TypedASTNode* callee;
@@ -135,6 +138,22 @@ struct TypedASTNode {
             TypedASTNode** methods;
             int methodCount;
         } implBlock;
+        struct {
+            const char* structName;
+            StructLiteralField* fields;
+            int fieldCount;
+            TypedASTNode** values;
+        } structLiteral;
+        struct {
+            TypedASTNode* object;
+            const char* member;
+            bool isMethod;
+            bool isInstanceMethod;
+        } member;
+        struct {
+            TypedASTNode* target;
+            TypedASTNode* value;
+        } memberAssign;
     } typed;
 };
 

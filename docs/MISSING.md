@@ -151,6 +151,11 @@ pass—without introducing additional intermediate representations.
 1. **Struct definitions** – Extend the parser with record literals, allocate
    contiguous register frames for fields, and integrate field access in the
    type checker.
+   - ✅ Parser, typed AST, and Hindley–Milner inference now understand struct
+     literals, dot-based field access, and field assignments (including nested
+     member chains).
+   - 🚧 Bytecode emission for struct construction and field loads/stores is
+     still pending in the backend.
 
    ```orus
    struct Point:
@@ -186,8 +191,14 @@ pass—without introducing additional intermediate representations.
    - ✅ Parser, typed AST, and Hindley–Milner registration hook struct
      declarations into the global type registry and attach impl methods to the
      struct metadata.
-   - 🚧 Remaining: bytecode generation for method bodies and runtime dispatch,
-     plus value construction and field access semantics.
+   - ✅ Type inference distinguishes static (`Point.new`) and instance
+     (`p.move_by`) method calls, wiring the implicit `self` receiver and field
+     mutations through `self`.
+   - ✅ Codegen emits struct literals and lowers field loads/stores by
+     reusing the array allocation opcodes, so instance methods can mutate
+     `self`'s backing storage.
+   - 🚧 Remaining: bytecode generation for method call dispatch and wiring the
+     implicit `self` argument into compiled method bodies.
 
    ```orus
    impl Point:
