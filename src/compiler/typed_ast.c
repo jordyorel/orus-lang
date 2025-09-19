@@ -183,6 +183,13 @@ TypedASTNode* create_typed_ast_node(ASTNode* original) {
             typed->typed.enumMatchCheck.variantCount = original->enumMatchCheck.variantCount;
             typed->typed.enumMatchCheck.hasWildcard = original->enumMatchCheck.hasWildcard;
             break;
+        case NODE_MATCH_EXPRESSION:
+            typed->typed.matchExpr.subject = NULL;
+            typed->typed.matchExpr.tempName = original->matchExpr.tempName;
+            typed->typed.matchExpr.arms = NULL;
+            typed->typed.matchExpr.armCount = original->matchExpr.armCount;
+            typed->typed.matchExpr.hasWildcard = original->matchExpr.hasWildcard;
+            break;
         default:
             // For leaf nodes (IDENTIFIER, LITERAL, etc.), no additional
             // initialization needed
@@ -367,6 +374,24 @@ void free_typed_ast_node(TypedASTNode* node) {
                 free((void*)node->typed.enumMatchCheck.variantNames);
             }
             break;
+        case NODE_MATCH_EXPRESSION:
+            free_typed_ast_node(node->typed.matchExpr.subject);
+            if (node->typed.matchExpr.arms) {
+                for (int i = 0; i < node->typed.matchExpr.armCount; i++) {
+                    TypedMatchArm* arm = &node->typed.matchExpr.arms[i];
+                    free_typed_ast_node(arm->valuePattern);
+                    free_typed_ast_node(arm->body);
+                    free_typed_ast_node(arm->condition);
+                    if (arm->payloadAccesses) {
+                        for (int j = 0; j < arm->payloadCount; j++) {
+                            free_typed_ast_node(arm->payloadAccesses[j]);
+                        }
+                        free(arm->payloadAccesses);
+                    }
+                }
+                free(node->typed.matchExpr.arms);
+            }
+            break;
         default:
             // Leaf nodes have no children to free
             break;
@@ -504,6 +529,34 @@ bool validate_typed_ast(TypedASTNode* root) {
             return validate_typed_ast(root->typed.enumPayload.value);
         case NODE_ENUM_MATCH_CHECK:
             return validate_typed_ast(root->typed.enumMatchCheck.value);
+        case NODE_MATCH_EXPRESSION:
+            if (root->typed.matchExpr.subject &&
+                !validate_typed_ast(root->typed.matchExpr.subject)) {
+                return false;
+            }
+            if (root->typed.matchExpr.arms) {
+                for (int i = 0; i < root->typed.matchExpr.armCount; i++) {
+                    TypedMatchArm* arm = &root->typed.matchExpr.arms[i];
+                    if (arm->valuePattern && !validate_typed_ast(arm->valuePattern)) {
+                        return false;
+                    }
+                    if (arm->condition && !validate_typed_ast(arm->condition)) {
+                        return false;
+                    }
+                    if (arm->payloadAccesses) {
+                        for (int j = 0; j < arm->payloadCount; j++) {
+                            if (arm->payloadAccesses[j] &&
+                                !validate_typed_ast(arm->payloadAccesses[j])) {
+                                return false;
+                            }
+                        }
+                    }
+                    if (arm->body && !validate_typed_ast(arm->body)) {
+                        return false;
+                    }
+                }
+            }
+            break;
         case NODE_IMPL_BLOCK:
             if (root->typed.implBlock.methods) {
                 for (int i = 0; i < root->typed.implBlock.methodCount; i++) {

@@ -1,0 +1,7 @@
+fn categorize(n: i32) -> string:
+    match n:
+        0 -> "zero"
+        0 -> "again"
+        _ -> "other"
+
+print(categorize(0))

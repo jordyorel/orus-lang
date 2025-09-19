@@ -194,11 +194,16 @@ impl Status:
 
 ## 🔄 Pattern Matching
 
+Match arms now yield expressions, letting you bind or return results directly while
+still supporting the statement-style bodies used in earlier phases.
+
 ```orus
-match value:
-    0: print("zero")
-    1: print("one")
-    _: print("other")
+label: string = match value:
+    0 -> "zero"
+    1 -> "one"
+    _ -> "other"
+
+print(label)
 ```
 
 ---

@@ -24,6 +24,22 @@ typedef struct {
     int fieldCount;
 } TypedEnumVariant;
 
+typedef struct {
+    bool isWildcard;
+    bool isEnumCase;
+    const char* enumTypeName;
+    const char* variantName;
+    int variantIndex;
+    int expectedPayloadCount;
+    const char** payloadNames;
+    int payloadCount;
+    TypedASTNode* valuePattern;
+    TypedASTNode* body;
+    TypedASTNode* condition;
+    TypedASTNode** payloadAccesses;
+    SrcLocation location;
+} TypedMatchArm;
+
 // Typed AST node that contains the original AST plus resolved type information
 struct TypedASTNode {
     ASTNode* original;       // Original AST node from parser
@@ -197,6 +213,13 @@ struct TypedASTNode {
             int variantCount;
             bool hasWildcard;
         } enumMatchCheck;
+        struct {
+            TypedASTNode* subject;
+            const char* tempName;
+            TypedMatchArm* arms;
+            int armCount;
+            bool hasWildcard;
+        } matchExpr;
     } typed;
 };
 

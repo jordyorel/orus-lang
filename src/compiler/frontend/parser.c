@@ -206,6 +206,7 @@ static ASTNode* parseFunctionDefinition(ParserContext* ctx);
 static ASTNode* parseFunctionExpression(ParserContext* ctx, Token fnToken);
 static ASTNode* parseReturnStatement(ParserContext* ctx);
 static ASTNode* parseMatchStatement(ParserContext* ctx);
+static ASTNode* parseMatchExpression(ParserContext* ctx, Token matchTok);
 
 // Primary expression handlers
 static ASTNode* parseNumberLiteral(ParserContext* ctx, Token token);
@@ -874,6 +875,223 @@ static ASTNode* parseMatchStatement(ParserContext* ctx) {
     }
 
     return matchBlock;
+}
+
+static ASTNode* parseMatchExpression(ParserContext* ctx, Token matchTok) {
+    ASTNode* subject = parseExpression(ctx);
+    if (!subject) {
+        return NULL;
+    }
+
+    Token colon = nextToken(ctx);
+    if (colon.type != TOKEN_COLON) {
+        return NULL;
+    }
+
+    if (peekToken(ctx).type == TOKEN_NEWLINE) {
+        nextToken(ctx);
+    }
+
+    Token indent = nextToken(ctx);
+    if (indent.type != TOKEN_INDENT) {
+        return NULL;
+    }
+
+    MatchCaseInfo* cases = NULL;
+    int caseCount = 0;
+    int caseCapacity = 0;
+    bool hasWildcard = false;
+
+    while (true) {
+        Token next = peekToken(ctx);
+        if (next.type == TOKEN_DEDENT) {
+            break;
+        }
+        if (next.type == TOKEN_NEWLINE) {
+            nextToken(ctx);
+            continue;
+        }
+
+        Token patternStart = peekToken(ctx);
+        if (patternStart.type == TOKEN_EOF) {
+            return NULL;
+        }
+
+        SrcLocation patternLocation = {NULL, patternStart.line, patternStart.column};
+        bool isWildcard = false;
+        bool isEnumCase = false;
+        char* enumTypeName = NULL;
+        char* variantName = NULL;
+        char** payloadNames = NULL;
+        int payloadCount = 0;
+        int payloadCapacity = 0;
+        ASTNode* valuePattern = NULL;
+
+        if (patternStart.type == TOKEN_IDENTIFIER && patternStart.length == 1 &&
+            patternStart.start[0] == '_') {
+            nextToken(ctx);
+            isWildcard = true;
+            hasWildcard = true;
+        } else if (patternStart.type == TOKEN_IDENTIFIER &&
+                   peekSecondToken(ctx).type == TOKEN_DOT) {
+            isEnumCase = true;
+            Token enumTok = nextToken(ctx);
+            enumTypeName = copy_token_text(ctx, enumTok);
+            nextToken(ctx);
+            Token variantTok = nextToken(ctx);
+            if (variantTok.type != TOKEN_IDENTIFIER) {
+                return NULL;
+            }
+            variantName = copy_token_text(ctx, variantTok);
+
+            if (peekToken(ctx).type == TOKEN_LEFT_PAREN) {
+                nextToken(ctx);
+                if (peekToken(ctx).type == TOKEN_RIGHT_PAREN) {
+                    nextToken(ctx);
+                } else {
+                    while (true) {
+                        Token payloadTok = nextToken(ctx);
+                        if (payloadTok.type != TOKEN_IDENTIFIER) {
+                            return NULL;
+                        }
+                        char* bindingName = NULL;
+                        if (!(payloadTok.length == 1 && payloadTok.start[0] == '_')) {
+                            bindingName = copy_token_text(ctx, payloadTok);
+                        }
+                        if (payloadCount + 1 > payloadCapacity) {
+                            int newCap = payloadCapacity == 0 ? 4 : (payloadCapacity * 2);
+                            char** newArr = parser_arena_alloc(ctx, sizeof(char*) * newCap);
+                            if (payloadCapacity > 0 && payloadNames) {
+                                memcpy(newArr, payloadNames, sizeof(char*) * payloadCount);
+                            }
+                            payloadNames = newArr;
+                            payloadCapacity = newCap;
+                        }
+                        payloadNames[payloadCount++] = bindingName;
+
+                        Token delim = peekToken(ctx);
+                        if (delim.type == TOKEN_COMMA) {
+                            nextToken(ctx);
+                            continue;
+                        }
+                        if (delim.type == TOKEN_RIGHT_PAREN) {
+                            nextToken(ctx);
+                            break;
+                        }
+                        return NULL;
+                    }
+                }
+            }
+        } else {
+            valuePattern = parseExpression(ctx);
+            if (!valuePattern) {
+                return NULL;
+            }
+        }
+
+        Token arrow = nextToken(ctx);
+        if (arrow.type != TOKEN_ARROW) {
+            return NULL;
+        }
+
+        ASTNode* body = parseExpression(ctx);
+        if (!body) {
+            return NULL;
+        }
+
+        if (peekToken(ctx).type == TOKEN_NEWLINE) {
+            nextToken(ctx);
+        }
+
+        MatchCaseInfo info = {isWildcard,       isEnumCase,       enumTypeName,
+                              variantName,     payloadNames,     payloadCount,
+                              valuePattern,    body,             patternLocation};
+        addMatchCase(ctx, &cases, &caseCount, &caseCapacity, info);
+    }
+
+    Token dedentTok = nextToken(ctx);
+    if (dedentTok.type != TOKEN_DEDENT) {
+        return NULL;
+    }
+
+    if (caseCount == 0) {
+        return NULL;
+    }
+
+    char tempNameBuffer[32];
+    int tempId = generate_match_temp_id();
+    snprintf(tempNameBuffer, sizeof(tempNameBuffer), "__match_tmp_%d", tempId);
+    size_t tempLen = strlen(tempNameBuffer);
+    char* tempName = parser_arena_alloc(ctx, tempLen + 1);
+    memcpy(tempName, tempNameBuffer, tempLen + 1);
+
+    MatchArm* arms = parser_arena_alloc(ctx, sizeof(MatchArm) * caseCount);
+    for (int i = 0; i < caseCount; i++) {
+        MatchCaseInfo* info = &cases[i];
+        MatchArm arm = {0};
+        arm.isWildcard = info->isWildcard;
+        arm.isEnumCase = info->isEnumCase;
+        arm.enumTypeName = info->enumTypeName;
+        arm.variantName = info->variantName;
+        arm.payloadNames = info->payloadNames;
+        arm.payloadCount = info->payloadCount;
+        arm.variantIndex = -1;
+        arm.valuePattern = info->valuePattern;
+        arm.body = info->body;
+        arm.location = info->location;
+
+        ASTNode* tempIdentifier = create_identifier_node(ctx, tempName, info->location);
+        if (info->isWildcard) {
+            arm.condition = NULL;
+            arm.payloadAccesses = NULL;
+        } else if (info->isEnumCase) {
+            arm.condition = create_enum_match_test(ctx, tempIdentifier, info);
+            if (!arm.condition) {
+                return NULL;
+            }
+            if (info->payloadCount > 0) {
+                arm.payloadAccesses = parser_arena_alloc(ctx, sizeof(ASTNode*) * info->payloadCount);
+                for (int j = 0; j < info->payloadCount; j++) {
+                    if (info->payloadNames && info->payloadNames[j]) {
+                        ASTNode* payloadSource = create_identifier_node(ctx, tempName, info->location);
+                        arm.payloadAccesses[j] = create_enum_payload_access(ctx, payloadSource, info, j);
+                        if (!arm.payloadAccesses[j]) {
+                            return NULL;
+                        }
+                    } else {
+                        arm.payloadAccesses[j] = NULL;
+                    }
+                }
+            } else {
+                arm.payloadAccesses = NULL;
+            }
+        } else {
+            arm.condition = create_binary_equals(ctx, tempIdentifier, info->valuePattern, info->location);
+            if (!arm.condition) {
+                return NULL;
+            }
+            arm.payloadAccesses = NULL;
+        }
+
+        arms[i] = arm;
+    }
+
+    ASTNode* node = new_node(ctx);
+    node->type = NODE_MATCH_EXPRESSION;
+    node->matchExpr.subject = subject;
+    node->matchExpr.tempName = tempName;
+    node->matchExpr.arms = arms;
+    node->matchExpr.armCount = caseCount;
+    node->matchExpr.hasWildcard = hasWildcard;
+    node->location.line = matchTok.line;
+    node->location.column = matchTok.column;
+    node->dataType = NULL;
+
+    if (peekToken(ctx).type == TOKEN_NEWLINE) {
+        nextToken(ctx);
+    }
+
+    return node;
 }
 
 static ASTNode* parsePrintStatement(ParserContext* ctx) {
@@ -2210,6 +2428,9 @@ static ASTNode* parsePrimaryExpression(ParserContext* ctx) {
             break;
         case TOKEN_FN:
             node = parseFunctionExpression(ctx, token);
+            break;
+        case TOKEN_MATCH:
+            node = parseMatchExpression(ctx, token);
             break;
         default:
             return NULL;

@@ -249,6 +249,12 @@ ErrorReportResult report_duplicate_match_arm(SrcLocation location, const char* e
         "%s.%s arm appears more than once", name, variant);
 }
 
+ErrorReportResult report_duplicate_literal_match_arm(SrcLocation location, const char* literal_text) {
+    const char* literal = literal_text ? literal_text : "literal";
+    return report_feature_error_f(E1411_DUPLICATE_MATCH_ARM, location,
+        "Literal pattern %s appears more than once", literal);
+}
+
 // ============================================================================
 // Advanced Control Flow Errors
 // ============================================================================

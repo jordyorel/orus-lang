@@ -74,8 +74,24 @@ typedef enum {
     NODE_ENUM_DECL,
     NODE_ENUM_MATCH_TEST,
     NODE_ENUM_PAYLOAD,
-    NODE_ENUM_MATCH_CHECK
+    NODE_ENUM_MATCH_CHECK,
+    NODE_MATCH_EXPRESSION
 } NodeType;
+
+typedef struct MatchArm {
+    bool isWildcard;
+    bool isEnumCase;
+    char* enumTypeName;
+    char* variantName;
+    char** payloadNames;
+    int payloadCount;
+    int variantIndex;
+    ASTNode* valuePattern;
+    ASTNode* body;
+    ASTNode* condition;
+    ASTNode** payloadAccesses;
+    SrcLocation location;
+} MatchArm;
 
 struct ASTNode {
     NodeType type;
@@ -263,6 +279,13 @@ struct ASTNode {
             int variantCount;     // Number of explicit variant arms
             bool hasWildcard;     // Whether a wildcard arm exists
         } enumMatchCheck;
+        struct {
+            ASTNode* subject;     // Expression being matched
+            char* tempName;       // Synthesized binding for the scrutinee
+            MatchArm* arms;       // Parsed match arms
+            int armCount;         // Number of match arms
+            bool hasWildcard;     // Whether a wildcard arm exists
+        } matchExpr;
     };
 };
 

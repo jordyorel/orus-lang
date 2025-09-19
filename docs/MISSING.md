@@ -30,11 +30,12 @@ still needs design work.
 - ⚠️ **Module system** – Runtime hooks exist (`interpret_module` and module
   loaders), yet the surface syntax and packaging workflow remain to be
   implemented and tested.
-- ✅ **Pattern matching** – `match` now supports enums and literal values using
-  the unified `pattern ->` arm syntax. Lowering reuses scoped temporaries and
+- ✅ **Pattern matching** – `match` supports enums and literal values using the
+  unified `pattern ->` arm syntax. Lowering reuses scoped temporaries and
   chained `if` statements, preserving payload destructuring, `_` wildcards, and
-  exhaustiveness diagnostics for enums. Expression-style matches that yield a
-  value remain outstanding.
+  exhaustiveness diagnostics for enums. Expression-form matches now evaluate to
+  values, reusing a shared scrutinee binding and unifying branch result types so
+  match expressions can flow into surrounding computations.
 
 ---
 
@@ -239,9 +240,8 @@ pass—without introducing additional intermediate representations.
        print(p.magnitude())
    ```
 
-4. **Pattern matching** – Finish the expression form of `match`, keeping the
-   existing single-pass lowering strategy while broadening diagnostics for
-   literal arms.
+4. **Pattern matching** – Statement and expression forms share the single-pass
+   lowering strategy while diagnostics for literal arms continue to expand.
 
   ```orus
   match parse_number(input):
@@ -253,19 +253,21 @@ pass—without introducing additional intermediate representations.
      scoped temporaries plus exhaustiveness checks for enum variants.
    - ✅ Payload destructuring for enum arms automatically inserts bindings into
      the branch scope before executing the arm body.
-   - [ ] **TODO**: Allow `match` to be used as an expression that evaluates to a
-     value while unifying branch types and reporting duplicate literal arms.
-     Completing this requires:
-    - [ ] Parser/lowering updates so the scrutinee is evaluated once and branch
-          bodies can assign into a synthesized result slot without introducing
+  - ✅ Completed: Allow `match` to be used as an expression that evaluates to a
+    value while unifying branch types and reporting duplicate literal arms.
+    Recent work delivered:
+    - ✅ Parser/lowering updates so the scrutinee is evaluated once and branch
+          bodies assign into a synthesized result slot without introducing
           extra IR.
-    - [ ] Type inference enhancements that unify branch result types, surface
+    - ✅ Type inference enhancements that unify branch result types, surface
           duplicate literal arms, and continue honouring enum exhaustiveness
           guarantees.
-    - [ ] Backend support that threads the synthesized result register through
+    - ✅ Backend support that threads the synthesized result register through
           the chained `if` lowering and exposes the expression value to callers.
-    - [ ] Regression tests that cover successful expression matches, duplicate
-          literal detection, and mixed enum/literal fallbacks.
+    - ✅ Regression tests covering successful expression matches, duplicate
+          literal detection, and mixes of enum and literal fallbacks.
+    - 🔭 Backlog: Evaluate guard clauses and `pattern1 | pattern2` sugar once the
+          ergonomics and diagnostic strategy are finalized.
 
      ```orus
      match value:

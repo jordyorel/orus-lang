@@ -34,7 +34,8 @@ Build a language that combines Python's readability, Rust's safety, and Lua's pe
 - [ ] Advanced type inference
 - [ ] Arrays and collections (type system ready)
 - [ ] Struct definitions and methods
-- [*] Pattern matching and enums (statement form shipped, expression form pending)
+- [x] Pattern matching and enums (statement and expression forms share the
+      single-pass lowering with unified diagnostics)
 - [ ] Module system
 
 ---
@@ -1220,7 +1221,8 @@ pub fn with_file<T>(path: string, mode: OpenMode, callback: fn(File) -> T) -> Re
 
 ### **Quarter 2: Data & Types (Weeks 13-24)**
 - [ ] **Weeks 13-16**: Arrays, collections, basic type system, enhanced error reporting
-- [*] **Weeks 17-20**: Pattern matching, structs, enums (match statements merged; expression form + module-aware structs still pending)
+- [x] **Weeks 17-20**: Pattern matching, structs, enums (match statements and
+      expression form now share the lowering; module-aware structs still pending)
 - [ ] **Weeks 21-24**: Module system, standard library core
 
 ### **Quarter 3: Production Ready (Weeks 25-36)**
@@ -1253,7 +1255,8 @@ pub fn with_file<T>(path: string, mode: OpenMode, callback: fn(File) -> T) -> Re
 - [ ] **Module System** - Code organization and library support
 - [ ] **Advanced Type System** - Generics, inference, and safety
 - [ ] **Error Handling** - Result types and exception management
-- [*] **Pattern Matching** - Statement-oriented matcher ships; expression-yielding form and literal-duplicate diagnostics remain
+- [x] **Pattern Matching** - Statement and expression match forms share scoped
+      temporaries, unified branch typing, and duplicate literal diagnostics
 
 This roadmap progresses systematically from basic language features to advanced capabilities, ensuring each phase builds solid foundations for the next. The register-based VM and existing infrastructure provide an excellent platform for rapid feature development.
 
