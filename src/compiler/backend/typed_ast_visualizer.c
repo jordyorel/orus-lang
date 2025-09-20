@@ -352,6 +352,11 @@ static void visualize_node_recursive(TypedASTNode* node, int depth, bool is_last
                 printf(" [public]");
             }
             break;
+        case NODE_PROGRAM:
+            if (node->typed.program.hasModuleDeclaration && node->typed.program.moduleName) {
+                printf(" module='%s'", node->typed.program.moduleName);
+            }
+            break;
         case NODE_IMPORT:
             if (node->original->import.moduleName) {
                 printf(" module='%s'", node->original->import.moduleName);

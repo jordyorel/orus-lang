@@ -21,6 +21,7 @@
 ## Modules
 - `tests/modules/module_imports.orus` – Demonstrates using public globals and functions from a sibling module.
 - `tests/modules/module_import_alias.orus` – Exercises selective `use` with aliases for globals and functions.
+- `tests/modules/package_import.orus` – Verifies dotted package imports resolve to nested module files and load colon-based module bodies.
 
 ## Types
 - `tests/types/enum_declarations.orus` – Validates that enum declarations, payload annotations, and cross-type references resolve in the type system.

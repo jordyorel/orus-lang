@@ -111,6 +111,83 @@ static void add_enum_variant(ParserContext* ctx, EnumVariant** list, int* count,
     (*list)[(*count)++] = variant;
 }
 
+static Token peekToken(ParserContext* ctx);
+static Token nextToken(ParserContext* ctx);
+
+static bool append_token(Token** tokens, int* count, int* capacity, Token token) {
+    if (*count >= *capacity) {
+        int new_capacity = *capacity == 0 ? 4 : (*capacity * 2);
+        Token* resized = realloc(*tokens, sizeof(Token) * (size_t)new_capacity);
+        if (!resized) {
+            return false;
+        }
+        *tokens = resized;
+        *capacity = new_capacity;
+    }
+    (*tokens)[(*count)++] = token;
+    return true;
+}
+
+static char* parse_qualified_name(ParserContext* ctx, Token firstToken, const char* missingMessage) {
+    Token* parts = NULL;
+    int partCount = 0;
+    int partCapacity = 0;
+
+    if (firstToken.type != TOKEN_IDENTIFIER) {
+        SrcLocation location = {NULL, firstToken.line, firstToken.column};
+        report_compile_error(E1006_INVALID_SYNTAX, location, missingMessage);
+        return NULL;
+    }
+
+    if (!append_token(&parts, &partCount, &partCapacity, firstToken)) {
+        free(parts);
+        return NULL;
+    }
+
+    while (peekToken(ctx).type == TOKEN_DOT) {
+        nextToken(ctx); // consume '.'
+        Token segment = nextToken(ctx);
+        if (segment.type != TOKEN_IDENTIFIER) {
+            SrcLocation location = {NULL, segment.line, segment.column};
+            report_compile_error(E1006_INVALID_SYNTAX, location,
+                                 "expected identifier after '.' in module name");
+            free(parts);
+            return NULL;
+        }
+        if (!append_token(&parts, &partCount, &partCapacity, segment)) {
+            free(parts);
+            return NULL;
+        }
+    }
+
+    size_t totalLength = 0;
+    for (int i = 0; i < partCount; i++) {
+        totalLength += (size_t)parts[i].length;
+        if (i + 1 < partCount) {
+            totalLength += 1; // for '.'
+        }
+    }
+
+    char* result = parser_arena_alloc(ctx, totalLength + 1);
+    if (!result) {
+        free(parts);
+        return NULL;
+    }
+
+    char* writePtr = result;
+    for (int i = 0; i < partCount; i++) {
+        memcpy(writePtr, parts[i].start, (size_t)parts[i].length);
+        writePtr += parts[i].length;
+        if (i + 1 < partCount) {
+            *writePtr++ = '.';
+        }
+    }
+    *writePtr = '\0';
+
+    free(parts);
+    return result;
+}
+
 // Parser context lifecycle functions
 ParserContext* parser_context_create(void) {
     ParserContext* ctx = malloc(sizeof(ParserContext));
@@ -313,6 +390,13 @@ ASTNode* parseSource(const char* source) {
 
 static ASTNode* parseStatement(ParserContext* ctx) {
     Token t = peekToken(ctx);
+
+    if (t.type == TOKEN_MODULE) {
+        SrcLocation location = {NULL, t.line, t.column};
+        report_compile_error(E1006_INVALID_SYNTAX, location,
+                             "'module' declarations must appear at the start of a file");
+        return NULL;
+    }
 
     if (t.type == TOKEN_PRINT || t.type == TOKEN_PRINT_NO_NL || t.type == TOKEN_PRINT_SEP) {
         return parsePrintStatement(ctx);
@@ -1450,16 +1534,10 @@ static ASTNode* parseImportStatement(ParserContext* ctx) {
     }
 
     Token moduleTok = nextToken(ctx);
-    if (moduleTok.type != TOKEN_IDENTIFIER) {
-        SrcLocation location = {NULL, moduleTok.line, moduleTok.column};
-        report_compile_error(E1006_INVALID_SYNTAX, location, "expected module name after 'use'");
+    char* moduleName = parse_qualified_name(ctx, moduleTok, "expected module name after 'use'");
+    if (!moduleName) {
         return NULL;
     }
-
-    int moduleLen = moduleTok.length;
-    char* moduleName = parser_arena_alloc(ctx, moduleLen + 1);
-    strncpy(moduleName, moduleTok.start, moduleLen);
-    moduleName[moduleLen] = '\0';
 
     char* moduleAlias = NULL;
     if (peekToken(ctx).type == TOKEN_AS) {
@@ -3880,63 +3958,129 @@ ASTNode* parseSourceWithContext(ParserContext* ctx, const char* source) {
     ASTNode** statements = NULL;
     int count = 0;
     int capacity = 0;
-    
+
+    bool moduleDeclared = false;
+    char* moduleName = NULL;
+
     while (true) {
-        fflush(stdout);
-        
         Token t = peekToken(ctx);
-        fflush(stdout);
-        
-        fflush(stdout);
         if (t.type == TOKEN_EOF) break;
         if (t.type == TOKEN_NEWLINE) {
-            fflush(stdout);
             nextToken(ctx);
             continue;
         }
         if (t.type == TOKEN_COMMA) {
             // Skip commas between statements (for comma-separated variable declarations)
-            fflush(stdout);
             nextToken(ctx);
             continue;
         }
         if (t.type == TOKEN_SEMICOLON) {
             SrcLocation location = {NULL, t.line, t.column};
-            report_compile_error(E1007_SEMICOLON_NOT_ALLOWED, location, 
+            report_compile_error(E1007_SEMICOLON_NOT_ALLOWED, location,
                                "found ';' here");
             return NULL;
         }
-        
-        fflush(stdout);
-        
-        ASTNode* stmt = parseStatement(ctx);
-        if (!stmt) {
-            fflush(stdout);
+
+        if (!moduleDeclared && t.type == TOKEN_MODULE) {
+            nextToken(ctx); // consume 'module'
+            Token nameTok = nextToken(ctx);
+            moduleName = parse_qualified_name(ctx, nameTok, "expected module name after 'module'");
+            if (!moduleName) {
+                return NULL;
+            }
+            moduleDeclared = true;
+
+            bool colonForm = false;
+            if (peekToken(ctx).type == TOKEN_COLON) {
+                colonForm = true;
+                nextToken(ctx);
+            }
+
+            Token afterDecl = peekToken(ctx);
+            if (afterDecl.type == TOKEN_NEWLINE) {
+                nextToken(ctx);
+            } else if (afterDecl.type != TOKEN_EOF) {
+                SrcLocation location = {NULL, afterDecl.line, afterDecl.column};
+                report_compile_error(E1006_INVALID_SYNTAX, location,
+                                     "expected newline after module declaration");
+                return NULL;
+            }
+
+            if (colonForm) {
+                while (peekToken(ctx).type == TOKEN_NEWLINE) {
+                    nextToken(ctx);
+                }
+                Token indentTok = nextToken(ctx);
+                if (indentTok.type != TOKEN_INDENT) {
+                    SrcLocation location = {NULL, indentTok.line, indentTok.column};
+                    report_compile_error(E1006_INVALID_SYNTAX, location,
+                                         "expected indented module body after ':'");
+                    return NULL;
+                }
+
+                int savedDepth = ctx->block_depth;
+                ctx->block_depth--;
+                ASTNode* bodyBlock = parseBlock(ctx);
+                ctx->block_depth = savedDepth;
+                if (!bodyBlock) {
+                    return NULL;
+                }
+
+                if (bodyBlock->type != NODE_BLOCK) {
+                    SrcLocation location = {NULL, indentTok.line, indentTok.column};
+                    report_compile_error(E1006_INVALID_SYNTAX, location,
+                                         "invalid module body");
+                    return NULL;
+                }
+
+                for (int i = 0; i < bodyBlock->block.count; i++) {
+                    addStatement(ctx, &statements, &count, &capacity, bodyBlock->block.statements[i]);
+                }
+
+                while (peekToken(ctx).type == TOKEN_NEWLINE) {
+                    nextToken(ctx);
+                }
+
+                if (peekToken(ctx).type != TOKEN_EOF) {
+                    Token extra = peekToken(ctx);
+                    SrcLocation location = {NULL, extra.line, extra.column};
+                    report_compile_error(E1006_INVALID_SYNTAX, location,
+                                         "module block must contain the entire file");
+                    return NULL;
+                }
+                break;
+            }
+
+            continue;
+        }
+
+        if (t.type == TOKEN_MODULE) {
+            SrcLocation location = {NULL, t.line, t.column};
+            report_compile_error(E1006_INVALID_SYNTAX, location,
+                                 "duplicate module declaration");
             return NULL;
         }
-        
-        fflush(stdout);
-        
+
+        ASTNode* stmt = parseStatement(ctx);
+        if (!stmt) {
+            return NULL;
+        }
+
         addStatement(ctx, &statements, &count, &capacity, stmt);
-        
-        fflush(stdout);
     }
-    
-    fflush(stdout);
-    
+
     // Create program node even if empty (valid empty program)
     ASTNode* root = new_node(ctx);
-    
-    fflush(stdout);
+
     root->type = NODE_PROGRAM;
     root->program.declarations = statements;
     root->program.count = count;
+    root->program.moduleName = moduleName;
+    root->program.hasModuleDeclaration = moduleDeclared;
     root->location.line = 1;
     root->location.column = 1;
     root->dataType = NULL;
-    
-    fflush(stdout);
-    
+
     return root;
 }
 

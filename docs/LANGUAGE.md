@@ -299,6 +299,27 @@ fn min<T: Comparable>(a: T, b: T) -> T:
 
 ## 📂 Modules
 
+Every file may start with an optional `module` declaration. A bare declaration
+(`module math_utils`) marks the file as the `math_utils` module while keeping
+the rest of the file at module scope. A colon form (`module geometry.points:`)
+uses an indented block for the module body; the contents of the block become
+the file's top-level declarations.
+
+```orus
+module geometry.points:
+
+    pub struct Point:
+        x: i32
+        y: i32
+
+    pub fn origin() -> Point:
+        Point{ x: 0, y: 0 }
+```
+
+Dotted module names map directly to nested paths relative to the importing
+file. The example above should live in `geometry/points.orus`, and the runtime
+will eagerly load that file before compiling a dependent module.
+
 Bringing an entire module into scope (all public globals/functions):
 
 ```orus
