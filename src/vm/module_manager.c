@@ -8,6 +8,145 @@
 
 #define MODULE_REGISTRY_INITIAL_CAPACITY 16
 
+static char* duplicate_string(const char* src) {
+    if (!src) {
+        return NULL;
+    }
+    size_t len = strlen(src);
+    char* copy = (char*)malloc(len + 1);
+    if (!copy) {
+        return NULL;
+    }
+    memcpy(copy, src, len + 1);
+    return copy;
+}
+
+void module_free_export_type(Type* type);
+
+Type* module_clone_export_type(const Type* source) {
+    if (!source) {
+        return NULL;
+    }
+
+    Type* copy = (Type*)malloc(sizeof(Type));
+    if (!copy) {
+        return NULL;
+    }
+    memset(copy, 0, sizeof(Type));
+    copy->kind = source->kind;
+    copy->ext = NULL;
+
+    switch (source->kind) {
+        case TYPE_ARRAY:
+            copy->info.array.elementType = module_clone_export_type(source->info.array.elementType);
+            break;
+        case TYPE_FUNCTION: {
+            copy->info.function.arity = source->info.function.arity;
+            if (copy->info.function.arity > 0) {
+                copy->info.function.paramTypes = (Type**)malloc(sizeof(Type*) * (size_t)copy->info.function.arity);
+                if (!copy->info.function.paramTypes) {
+                    free(copy);
+                    return NULL;
+                }
+                for (int i = 0; i < copy->info.function.arity; i++) {
+                    copy->info.function.paramTypes[i] = module_clone_export_type(source->info.function.paramTypes ?
+                                                                                  source->info.function.paramTypes[i] : NULL);
+                }
+            } else {
+                copy->info.function.paramTypes = NULL;
+            }
+            copy->info.function.returnType = module_clone_export_type(source->info.function.returnType);
+            break;
+        }
+        case TYPE_GENERIC:
+            copy->info.generic.paramCount = source->info.generic.paramCount;
+            copy->info.generic.name = duplicate_string(source->info.generic.name);
+            if (copy->info.generic.paramCount > 0) {
+                copy->info.generic.params = (Type**)malloc(sizeof(Type*) * (size_t)copy->info.generic.paramCount);
+                if (!copy->info.generic.params) {
+                    free(copy->info.generic.name);
+                    free(copy);
+                    return NULL;
+                }
+                for (int i = 0; i < copy->info.generic.paramCount; i++) {
+                    copy->info.generic.params[i] = module_clone_export_type(source->info.generic.params ?
+                                                                             source->info.generic.params[i] : NULL);
+                }
+            } else {
+                copy->info.generic.params = NULL;
+            }
+            break;
+        case TYPE_INSTANCE:
+            copy->info.instance.argCount = source->info.instance.argCount;
+            copy->info.instance.base = module_clone_export_type(source->info.instance.base);
+            if (copy->info.instance.argCount > 0) {
+                copy->info.instance.args = (Type**)malloc(sizeof(Type*) * (size_t)copy->info.instance.argCount);
+                if (!copy->info.instance.args) {
+                    module_free_export_type(copy->info.instance.base);
+                    free(copy);
+                    return NULL;
+                }
+                for (int i = 0; i < copy->info.instance.argCount; i++) {
+                    copy->info.instance.args[i] = module_clone_export_type(source->info.instance.args ?
+                                                                           source->info.instance.args[i] : NULL);
+                }
+            } else {
+                copy->info.instance.args = NULL;
+            }
+            break;
+        case TYPE_VAR:
+            copy->info.var.var = NULL;
+            break;
+        default:
+            break;
+    }
+
+    return copy;
+}
+
+void module_free_export_type(Type* type) {
+    if (!type) {
+        return;
+    }
+
+    switch (type->kind) {
+        case TYPE_ARRAY:
+            module_free_export_type(type->info.array.elementType);
+            break;
+        case TYPE_FUNCTION:
+            if (type->info.function.paramTypes) {
+                for (int i = 0; i < type->info.function.arity; i++) {
+                    module_free_export_type(type->info.function.paramTypes[i]);
+                }
+                free(type->info.function.paramTypes);
+            }
+            module_free_export_type(type->info.function.returnType);
+            break;
+        case TYPE_GENERIC:
+            if (type->info.generic.params) {
+                for (int i = 0; i < type->info.generic.paramCount; i++) {
+                    module_free_export_type(type->info.generic.params[i]);
+                }
+                free(type->info.generic.params);
+            }
+            free(type->info.generic.name);
+            break;
+        case TYPE_INSTANCE:
+            module_free_export_type(type->info.instance.base);
+            if (type->info.instance.args) {
+                for (int i = 0; i < type->info.instance.argCount; i++) {
+                    module_free_export_type(type->info.instance.args[i]);
+                }
+                free(type->info.instance.args);
+            }
+            break;
+        default:
+            break;
+    }
+
+    free(type);
+}
+
 // Phase 3: Create module manager
 ModuleManager* create_module_manager(void) {
     ModuleManager* manager = (ModuleManager*)malloc(sizeof(ModuleManager));
@@ -40,9 +179,16 @@ void free_module_manager(ModuleManager* manager) {
         if (current->exports.exported_names) {
             for (uint16_t i = 0; i < current->exports.export_count; i++) {
                 free(current->exports.exported_names[i]);
+                if (current->exports.exported_types && i < current->exports.export_count) {
+                    module_free_export_type(current->exports.exported_types[i]);
+                }
             }
             free(current->exports.exported_names);
-            free(current->exports.exported_registers);
+        }
+        free(current->exports.exported_registers);
+        free(current->exports.exported_kinds);
+        if (current->exports.exported_types) {
+            free(current->exports.exported_types);
         }
         
         // Free module imports
@@ -98,6 +244,8 @@ RegisterModule* load_module(ModuleManager* manager, const char* module_name) {
     // Initialize exports
     module->exports.exported_names = NULL;
     module->exports.exported_registers = NULL;
+    module->exports.exported_kinds = NULL;
+    module->exports.exported_types = NULL;
     module->exports.export_count = 0;
     
     // Initialize imports
@@ -174,22 +322,111 @@ uint16_t allocate_module_register(ModuleManager* manager, const char* module_nam
 }
 
 // Phase 3: Export variable from module
-bool export_variable(RegisterModule* module, const char* var_name, uint16_t reg_id) {
-    if (!module || !var_name) return false;
-    
-    // Resize export arrays if needed
-    module->exports.exported_names = (char**)realloc(module->exports.exported_names,
-                                                    (module->exports.export_count + 1) * sizeof(char*));
-    module->exports.exported_registers = (uint16_t*)realloc(module->exports.exported_registers,
-                                                           (module->exports.export_count + 1) * sizeof(uint16_t));
-    
-    // Add export
-    module->exports.exported_names[module->exports.export_count] = (char*)malloc(strlen(var_name) + 1);
-    strcpy(module->exports.exported_names[module->exports.export_count], var_name);
-    module->exports.exported_registers[module->exports.export_count] = reg_id;
-    module->exports.export_count++;
-    
+bool register_module_export(RegisterModule* module, const char* name, ModuleExportKind kind, int register_index,
+                            Type* type) {
+    if (!module || !name) {
+        return false;
+    }
+
+    uint16_t stored_register = MODULE_EXPORT_NO_REGISTER;
+    if (register_index >= 0 && register_index < MODULE_EXPORT_NO_REGISTER) {
+        stored_register = (uint16_t)register_index;
+    }
+
+    Type* adopted_type = type;
+
+    // Update existing entry if it already exists
+    for (uint16_t i = 0; i < module->exports.export_count; i++) {
+        if (module->exports.exported_names[i] && strcmp(module->exports.exported_names[i], name) == 0) {
+            module->exports.exported_registers[i] = stored_register;
+            module->exports.exported_kinds[i] = kind;
+            if (module->exports.exported_types) {
+                module_free_export_type(module->exports.exported_types[i]);
+                module->exports.exported_types[i] = adopted_type;
+            } else if (adopted_type) {
+                module->exports.exported_types = (Type**)calloc(module->exports.export_count, sizeof(Type*));
+                if (!module->exports.exported_types) {
+                    return false;
+                }
+                module->exports.exported_types[i] = adopted_type;
+            }
+            return true;
+        }
+    }
+
+    uint16_t new_count = module->exports.export_count + 1;
+
+    char** names = (char**)realloc(module->exports.exported_names, new_count * sizeof(char*));
+    if (!names) {
+        return false;
+    }
+    module->exports.exported_names = names;
+
+    uint16_t* registers = (uint16_t*)realloc(module->exports.exported_registers, new_count * sizeof(uint16_t));
+    if (!registers) {
+        return false;
+    }
+    module->exports.exported_registers = registers;
+
+    ModuleExportKind* kinds = (ModuleExportKind*)realloc(module->exports.exported_kinds, new_count * sizeof(ModuleExportKind));
+    if (!kinds) {
+        return false;
+    }
+    module->exports.exported_kinds = kinds;
+
+    Type** types = (Type**)realloc(module->exports.exported_types, new_count * sizeof(Type*));
+    if (!types) {
+        return false;
+    }
+    module->exports.exported_types = types;
+
+    char* copy = (char*)malloc(strlen(name) + 1);
+    if (!copy) {
+        return false;
+    }
+    strcpy(copy, name);
+
+    module->exports.exported_names[module->exports.export_count] = copy;
+    module->exports.exported_registers[module->exports.export_count] = stored_register;
+    module->exports.exported_kinds[module->exports.export_count] = kind;
+    module->exports.exported_types[module->exports.export_count] = adopted_type;
+    module->exports.export_count = new_count;
+
     return true;
+}
+
+bool module_manager_resolve_export(ModuleManager* manager, const char* module_name, const char* symbol_name,
+                                   ModuleExportKind* out_kind, uint16_t* out_register, Type** out_type) {
+    if (!manager || !module_name || !symbol_name) {
+        return false;
+    }
+
+    RegisterModule* module = find_module(manager, module_name);
+    if (!module) {
+        return false;
+    }
+
+    for (uint16_t i = 0; i < module->exports.export_count; i++) {
+        if (module->exports.exported_names[i] &&
+            strcmp(module->exports.exported_names[i], symbol_name) == 0) {
+            if (out_kind) {
+                *out_kind = module->exports.exported_kinds[i];
+            }
+            if (out_register) {
+                *out_register = module->exports.exported_registers[i];
+            }
+            if (out_type) {
+                if (module->exports.exported_types && i < module->exports.export_count) {
+                    *out_type = module->exports.exported_types[i];
+                } else {
+                    *out_type = NULL;
+                }
+            }
+            return true;
+        }
+    }
+
+    return false;
 }
 
 // Phase 3: Import variable into module
@@ -201,7 +438,11 @@ bool import_variable(RegisterModule* dest_module, const char* var_name, Register
     bool found = false;
     for (uint16_t i = 0; i < src_module->exports.export_count; i++) {
         if (strcmp(src_module->exports.exported_names[i], var_name) == 0) {
-            src_reg_id = src_module->exports.exported_registers[i];
+            uint16_t candidate = src_module->exports.exported_registers[i];
+            if (candidate == MODULE_EXPORT_NO_REGISTER) {
+                continue;
+            }
+            src_reg_id = candidate;
             found = true;
             break;
         }
@@ -225,6 +466,15 @@ bool import_variable(RegisterModule* dest_module, const char* var_name, Register
     dest_module->imports.import_count++;
     
     return true;
+}
+
+uint16_t resolve_import(ModuleManager* manager, const char* module_name, const char* var_name) {
+    ModuleExportKind kind = MODULE_EXPORT_KIND_GLOBAL;
+    uint16_t reg = MODULE_EXPORT_NO_REGISTER;
+    if (!module_manager_resolve_export(manager, module_name, var_name, &kind, &reg, NULL)) {
+        return MODULE_EXPORT_NO_REGISTER;
+    }
+    return reg;
 }
 
 // Phase 3: Get module register access

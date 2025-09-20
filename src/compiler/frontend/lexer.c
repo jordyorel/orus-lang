@@ -260,14 +260,15 @@ static TokenType identifier_type(const char* start, int length) {
             if (length == 2 && start[1] == 'n') return TOKEN_FN;
             if (length == 3 && memcmp(start, "f64", 3) == 0) return TOKEN_F64;
             break;
+        case 'g':
+            if (length == 6 && memcmp(start, "global", 6) == 0) return TOKEN_GLOBAL;
+            break;
         case 'i':
             if (length == 2 && memcmp(start, "if", 2) == 0) return TOKEN_IF;
             if (length == 2 && memcmp(start, "in", 2) == 0) return TOKEN_IN;
             if (length == 3 && memcmp(start, "i32", 3) == 0) return TOKEN_INT;
             if (length == 3 && memcmp(start, "i64", 3) == 0) return TOKEN_I64;
             if (length == 4 && memcmp(start, "impl", 4) == 0) return TOKEN_IMPL;
-            if (length == 6 && memcmp(start, "import", 6) == 0)
-                return TOKEN_IMPORT;
             break;
         case 'l':
             break;
@@ -310,7 +311,7 @@ static TokenType identifier_type(const char* start, int length) {
             if (length == 10 && memcmp(start, "time_stamp", 10) == 0) return TOKEN_TIME_STAMP;
             break;
         case 'u':
-            if (length == 3 && memcmp(start, "use", 3) == 0) return TOKEN_USE;
+            if (length == 3 && memcmp(start, "use", 3) == 0) return TOKEN_IMPORT;
             if (length == 3 && memcmp(start, "u32", 3) == 0) return TOKEN_U32;
             if (length == 3 && memcmp(start, "u64", 3) == 0) return TOKEN_U64;
             break;
@@ -970,12 +971,12 @@ const char* token_type_to_string(TokenType type) {
         case TOKEN_BOOL: return "BOOL";
         case TOKEN_STRUCT: return "STRUCT";
         case TOKEN_IMPL: return "IMPL";
-        case TOKEN_IMPORT: return "IMPORT";
-        case TOKEN_USE: return "USE";
+        case TOKEN_IMPORT: return "USE";
         case TOKEN_AS: return "AS";
         case TOKEN_MATCH: return "MATCH";
         case TOKEN_MATCHES: return "MATCHES";
         case TOKEN_PUB: return "PUB";
+        case TOKEN_GLOBAL: return "GLOBAL";
         case TOKEN_STATIC: return "STATIC";
         case TOKEN_U32: return "U32";
         case TOKEN_U64: return "U64";

@@ -10,12 +10,19 @@
 #include "vm/vm.h"
 #include "vm/vm_constants.h"
 #include "vm/vm_string_ops.h"
+#include "vm/module_manager.h"
 #include "errors/features/variable_errors.h"
 #include "errors/features/control_flow_errors.h"
+#include "internal/error_reporting.h"
 #include "debug/debug_config.h"
+#include "internal/strutil.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+static Symbol* register_variable(CompilerContext* ctx, SymbolTable* scope,
+                                 const char* name, int reg, Type* type,
+                                 bool is_mutable, SrcLocation location, bool is_import);
 
 static inline void set_location_from_node(CompilerContext* ctx, TypedASTNode* node) {
     if (!ctx || !ctx->bytecode) {
@@ -37,6 +44,203 @@ static inline ScopeFrame* get_scope_frame_by_index(CompilerContext* ctx, int ind
     return scope_stack_get_frame(ctx->scopes, index);
 }
 
+static ModuleExportEntry* find_module_export_entry(const CompilerContext* ctx, const char* name) {
+    if (!ctx || !name) {
+        return NULL;
+    }
+    for (int i = 0; i < ctx->module_export_count; i++) {
+        if (ctx->module_exports[i].name && strcmp(ctx->module_exports[i].name, name) == 0) {
+            return &ctx->module_exports[i];
+        }
+    }
+    return NULL;
+}
+
+static void record_module_export(CompilerContext* ctx, const char* name, ModuleExportKind kind, Type* type) {
+    if (!ctx || !ctx->is_module || !name) {
+        return;
+    }
+
+    ModuleExportEntry* existing = find_module_export_entry(ctx, name);
+    if (existing) {
+        if (type && !existing->type) {
+            Type* cloned = module_clone_export_type(type);
+            if (cloned) {
+                existing->type = cloned;
+            }
+        }
+        return;
+    }
+
+    if (ctx->module_export_count >= ctx->module_export_capacity) {
+        int new_cap = ctx->module_export_capacity == 0 ? 4 : ctx->module_export_capacity * 2;
+        ModuleExportEntry* new_exports = realloc(ctx->module_exports, sizeof(ModuleExportEntry) * new_cap);
+        if (!new_exports) {
+            return;
+        }
+        ctx->module_exports = new_exports;
+        ctx->module_export_capacity = new_cap;
+    }
+
+    char* copy = orus_strdup(name);
+    if (!copy) {
+        return;
+    }
+
+    ctx->module_exports[ctx->module_export_count].name = copy;
+    ctx->module_exports[ctx->module_export_count].kind = kind;
+    ctx->module_exports[ctx->module_export_count].register_index = -1;
+    Type* cloned_type = NULL;
+    if (type) {
+        cloned_type = module_clone_export_type(type);
+    }
+
+    ctx->module_exports[ctx->module_export_count].type = cloned_type;
+    ctx->module_export_count++;
+}
+
+static void set_module_export_metadata(CompilerContext* ctx, const char* name, int reg, Type* type) {
+    if (!ctx || !ctx->is_module || !name || reg < 0) {
+        return;
+    }
+
+    ModuleExportEntry* entry = find_module_export_entry(ctx, name);
+    if (!entry) {
+        return;
+    }
+
+    entry->register_index = reg;
+    if (type && !entry->type) {
+        Type* cloned = module_clone_export_type(type);
+        if (cloned) {
+            entry->type = cloned;
+        }
+    }
+}
+
+static bool module_import_exists(const CompilerContext* ctx, const char* module_name, const char* symbol_name) {
+    if (!ctx) {
+        return false;
+    }
+
+    for (int i = 0; i < ctx->module_import_count; i++) {
+        ModuleImportEntry* entry = &ctx->module_imports[i];
+        bool module_match = (!module_name && !entry->module_name) ||
+                            (module_name && entry->module_name && strcmp(module_name, entry->module_name) == 0);
+        bool symbol_match = (!symbol_name && !entry->symbol_name) ||
+                            (symbol_name && entry->symbol_name && strcmp(symbol_name, entry->symbol_name) == 0);
+        if (module_match && symbol_match) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static bool record_module_import(CompilerContext* ctx, const char* module_name, const char* symbol_name,
+                                 const char* alias_name, ModuleExportKind kind, uint16_t register_index) {
+    if (!ctx || !ctx->is_module) {
+        return false;
+    }
+
+    if (module_import_exists(ctx, module_name, symbol_name)) {
+        return true;
+    }
+
+    if (ctx->module_import_count >= ctx->module_import_capacity) {
+        int new_cap = ctx->module_import_capacity == 0 ? 4 : ctx->module_import_capacity * 2;
+        ModuleImportEntry* expanded = realloc(ctx->module_imports, sizeof(ModuleImportEntry) * new_cap);
+        if (!expanded) {
+            return false;
+        }
+        ctx->module_imports = expanded;
+        ctx->module_import_capacity = new_cap;
+    }
+
+    ModuleImportEntry* entry = &ctx->module_imports[ctx->module_import_count];
+    entry->module_name = module_name ? orus_strdup(module_name) : NULL;
+    entry->symbol_name = symbol_name ? orus_strdup(symbol_name) : NULL;
+    entry->alias_name = alias_name ? orus_strdup(alias_name) : NULL;
+    if ((module_name && !entry->module_name) || (symbol_name && !entry->symbol_name)) {
+        free(entry->module_name);
+        free(entry->symbol_name);
+        free(entry->alias_name);
+        entry->module_name = NULL;
+        entry->symbol_name = NULL;
+        entry->alias_name = NULL;
+        return false;
+    }
+    entry->kind = kind;
+    entry->register_index = (int)register_index;
+    ctx->module_import_count++;
+    return true;
+}
+
+static bool finalize_import_symbol(CompilerContext* ctx, const char* module_name, const char* symbol_name,
+                                   const char* alias_name, ModuleExportKind kind, uint16_t register_index,
+                                   Type* exported_type, SrcLocation location) {
+    if (!ctx || !symbol_name) {
+        return false;
+    }
+
+    if (register_index == MODULE_EXPORT_NO_REGISTER) {
+        report_compile_error(E3004_IMPORT_FAILED, location,
+                             "module '%s' export '%s' is not a value and cannot be used yet",
+                             module_name ? module_name : "<unknown>", symbol_name);
+        ctx->has_compilation_errors = true;
+        return false;
+    }
+
+    if (kind != MODULE_EXPORT_KIND_GLOBAL && kind != MODULE_EXPORT_KIND_FUNCTION) {
+        report_compile_error(E3004_IMPORT_FAILED, location,
+                             "using type '%s' from module '%s' is not supported yet",
+                             symbol_name, module_name ? module_name : "<unknown>");
+        ctx->has_compilation_errors = true;
+        return false;
+    }
+
+    int reg = (int)register_index;
+    mp_reserve_global_register(ctx->allocator, reg);
+
+    const char* binding_name = alias_name ? alias_name : symbol_name;
+
+    Type* resolved_type = exported_type;
+    if (!resolved_type) {
+        resolved_type = getPrimitiveType(kind == MODULE_EXPORT_KIND_FUNCTION ? TYPE_FUNCTION : TYPE_ANY);
+    }
+    bool is_mutable = (kind == MODULE_EXPORT_KIND_GLOBAL);
+    if (!register_variable(ctx, ctx->symbols, binding_name, reg, resolved_type,
+                           is_mutable, location, true)) {
+        ctx->has_compilation_errors = true;
+        return false;
+    }
+
+    record_module_import(ctx, module_name, symbol_name, alias_name, kind, register_index);
+    return true;
+}
+
+static bool import_symbol_by_name(CompilerContext* ctx, ModuleManager* manager, const char* module_name,
+                                  const char* symbol_name, const char* alias_name,
+                                  SrcLocation location) {
+    if (!manager || !module_name || !symbol_name) {
+        return false;
+    }
+
+    ModuleExportKind kind = MODULE_EXPORT_KIND_GLOBAL;
+    uint16_t register_index = MODULE_EXPORT_NO_REGISTER;
+    Type* exported_type = NULL;
+    if (!module_manager_resolve_export(manager, module_name, symbol_name, &kind, &register_index,
+                                       &exported_type)) {
+        report_compile_error(E3004_IMPORT_FAILED, location,
+                             "module '%s' does not export '%s'", module_name, symbol_name);
+        ctx->has_compilation_errors = true;
+        return false;
+    }
+
+    return finalize_import_symbol(ctx, module_name, symbol_name, alias_name, kind, register_index,
+                                  exported_type, location);
+}
+
 static int compile_assignment_internal(CompilerContext* ctx, TypedASTNode* assign,
                                        bool as_expression);
 static int compile_array_assignment(CompilerContext* ctx, TypedASTNode* assign,
@@ -50,6 +254,7 @@ static int compile_enum_constructor_call(CompilerContext* ctx, TypedASTNode* cal
 static int compile_enum_match_test(CompilerContext* ctx, TypedASTNode* expr);
 static int compile_enum_payload_extract(CompilerContext* ctx, TypedASTNode* expr);
 static int compile_match_expression(CompilerContext* ctx, TypedASTNode* expr);
+static void compile_import_statement(CompilerContext* ctx, TypedASTNode* stmt);
 
 static int compile_builtin_array_push(CompilerContext* ctx, TypedASTNode* call);
 static int compile_builtin_array_pop(CompilerContext* ctx, TypedASTNode* call);
@@ -3126,6 +3331,71 @@ void compile_binary_op(CompilerContext* ctx, TypedASTNode* binary, int target_re
     }
 }
 
+static void compile_import_statement(CompilerContext* ctx, TypedASTNode* stmt) {
+    if (!ctx || !stmt || !stmt->original) {
+        return;
+    }
+
+    ModuleManager* manager = vm.register_file.module_manager;
+    const char* module_name = stmt->original->import.moduleName;
+    SrcLocation location = stmt->original->location;
+
+    if (!manager) {
+        report_compile_error(E3004_IMPORT_FAILED, location, "module manager is not initialized");
+        ctx->has_compilation_errors = true;
+        return;
+    }
+
+    if (!module_name) {
+        report_compile_error(E3004_IMPORT_FAILED, location, "expected module name for use statement");
+        ctx->has_compilation_errors = true;
+        return;
+    }
+
+    RegisterModule* module_entry = find_module(manager, module_name);
+    if (!module_entry) {
+        report_compile_error(E3003_MODULE_NOT_FOUND, location,
+                             "module '%s' is not loaded", module_name);
+        ctx->has_compilation_errors = true;
+        return;
+    }
+
+    if (stmt->original->import.importAll || stmt->original->import.symbolCount == 0) {
+        bool imported_any = false;
+        for (uint16_t i = 0; i < module_entry->exports.export_count; i++) {
+            const char* symbol_name = module_entry->exports.exported_names[i];
+            if (!symbol_name) {
+                continue;
+            }
+            ModuleExportKind kind = module_entry->exports.exported_kinds[i];
+            uint16_t reg = module_entry->exports.exported_registers[i];
+            Type* exported_type = NULL;
+            if (module_entry->exports.exported_types && i < module_entry->exports.export_count) {
+                exported_type = module_entry->exports.exported_types[i];
+            }
+            if (finalize_import_symbol(ctx, module_name, symbol_name, NULL, kind, reg,
+                                       exported_type, location)) {
+                imported_any = true;
+            }
+        }
+
+        if (!imported_any) {
+            report_compile_error(E3004_IMPORT_FAILED, location,
+                                 "module '%s' has no usable globals or functions", module_name);
+            ctx->has_compilation_errors = true;
+        }
+        return;
+    }
+
+    for (int i = 0; i < stmt->original->import.symbolCount; i++) {
+        ImportSymbol* symbol = &stmt->original->import.symbols[i];
+        if (!symbol->name) {
+            continue;
+        }
+        import_symbol_by_name(ctx, manager, module_name, symbol->name, symbol->alias, location);
+    }
+}
+
 // ===== STATEMENT COMPILATION =====
 
 void compile_statement(CompilerContext* ctx, TypedASTNode* stmt) {
@@ -3145,6 +3415,17 @@ void compile_statement(CompilerContext* ctx, TypedASTNode* stmt) {
             break;
 
         case NODE_VAR_DECL:
+            if (!ctx->compiling_function && stmt->original->varDecl.isPublic &&
+                stmt->original->varDecl.isGlobal && stmt->original->varDecl.name) {
+                Type* export_type = NULL;
+                if (stmt->typed.varDecl.initializer && stmt->typed.varDecl.initializer->resolvedType) {
+                    export_type = stmt->typed.varDecl.initializer->resolvedType;
+                } else if (stmt->resolvedType) {
+                    export_type = stmt->resolvedType;
+                }
+                record_module_export(ctx, stmt->original->varDecl.name, MODULE_EXPORT_KIND_GLOBAL,
+                                     export_type);
+            }
             compile_variable_declaration(ctx, stmt);
             break;
             
@@ -3184,9 +3465,18 @@ void compile_statement(CompilerContext* ctx, TypedASTNode* stmt) {
             break;
             
         case NODE_FUNCTION:
+            if (!ctx->compiling_function && stmt->original->function.isPublic &&
+                !stmt->original->function.isMethod && stmt->original->function.name) {
+                record_module_export(ctx, stmt->original->function.name, MODULE_EXPORT_KIND_FUNCTION,
+                                     stmt->resolvedType);
+            }
             compile_function_declaration(ctx, stmt);
             break;
-            
+
+        case NODE_IMPORT:
+            compile_import_statement(ctx, stmt);
+            break;
+
         case NODE_RETURN:
             compile_return_statement(ctx, stmt);
             break;
@@ -3199,7 +3489,19 @@ void compile_statement(CompilerContext* ctx, TypedASTNode* stmt) {
             // Compile-time exhaustiveness checks generate this node; no runtime emission required.
             break;
         case NODE_STRUCT_DECL:
+            if (!ctx->compiling_function && stmt->original->structDecl.isPublic &&
+                stmt->original->structDecl.name) {
+                record_module_export(ctx, stmt->original->structDecl.name, MODULE_EXPORT_KIND_STRUCT,
+                                     NULL);
+            }
+            break;
         case NODE_ENUM_DECL:
+            if (!ctx->compiling_function && stmt->original->type == NODE_ENUM_DECL &&
+                stmt->original->enumDecl.isPublic && stmt->original->enumDecl.name) {
+                record_module_export(ctx, stmt->original->enumDecl.name, MODULE_EXPORT_KIND_ENUM,
+                                     NULL);
+            }
+            break;
         case NODE_IMPL_BLOCK:
             // Emit bytecode for methods inside impl blocks
             if (stmt->original->type == NODE_IMPL_BLOCK &&
@@ -3253,14 +3555,17 @@ void compile_variable_declaration(CompilerContext* ctx, TypedASTNode* var_decl) 
     }
     
     // Allocate register based on scope
+    bool wants_global = var_decl->original->varDecl.isGlobal;
+    bool use_global_register = !ctx->compiling_function || wants_global;
+
     int var_reg;
-    if (ctx->compiling_function) {
-        var_reg = mp_allocate_frame_register(ctx->allocator);
-    } else {
+    if (use_global_register) {
         var_reg = mp_allocate_global_register(ctx->allocator);
         if (var_reg == -1) {
             var_reg = mp_allocate_frame_register(ctx->allocator);
         }
+    } else {
+        var_reg = mp_allocate_frame_register(ctx->allocator);
     }
     if (var_reg == -1) {
         DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for variable %s\n", var_name);
@@ -3280,6 +3585,11 @@ void compile_variable_declaration(CompilerContext* ctx, TypedASTNode* var_decl) 
             mp_free_temp_register(ctx->allocator, value_reg);
         }
         return;
+    }
+
+    if (!ctx->compiling_function && ctx->is_module && var_name &&
+        var_decl->original->varDecl.isPublic && var_decl->original->varDecl.isGlobal) {
+        set_module_export_metadata(ctx, var_name, var_reg, var_decl->resolvedType);
     }
 
     // Move the initial value to the variable register if we have one
@@ -5025,6 +5335,8 @@ int compile_function_declaration(CompilerContext* ctx, TypedASTNode* func) {
     DEBUG_CODEGEN_PRINT("Compiling function declaration: %s\n",
            func_name ? func_name : "(anonymous)");
 
+    Type* function_type = func->resolvedType ? func->resolvedType : getPrimitiveType(TYPE_FUNCTION);
+
     int func_reg;
     if (func_name) {
         func_reg = ctx->compiling_function ?
@@ -5032,9 +5344,13 @@ int compile_function_declaration(CompilerContext* ctx, TypedASTNode* func) {
             mp_allocate_global_register(ctx->allocator);
         if (func_reg == -1) return -1;
         if (!register_variable(ctx, ctx->symbols, func_name, func_reg,
-                               getPrimitiveType(TYPE_FUNCTION), false,
+                               function_type, false,
                                func->original->location, true)) {
             return -1;
+        }
+        if (!ctx->compiling_function && ctx->is_module &&
+            func->original->function.isPublic && !func->original->function.isMethod && func_name) {
+            set_module_export_metadata(ctx, func_name, func_reg, function_type);
         }
         if (is_method && method_struct) {
             char* alias_name = create_method_symbol_name(method_struct, func_name);
@@ -5042,7 +5358,7 @@ int compile_function_declaration(CompilerContext* ctx, TypedASTNode* func) {
                 return -1;
             }
             if (!register_variable(ctx, ctx->symbols, alias_name, func_reg,
-                                   getPrimitiveType(TYPE_FUNCTION), false,
+                                   function_type, false,
                                    func->original->location, true)) {
                 free(alias_name);
                 return -1;
@@ -5073,7 +5389,7 @@ int compile_function_declaration(CompilerContext* ctx, TypedASTNode* func) {
     // Make function name visible inside its own body for recursion
     if (func_name) {
         if (!register_variable(ctx, ctx->symbols, func_name, func_reg,
-                               getPrimitiveType(TYPE_FUNCTION), false,
+                               function_type, false,
                                func->original->location, true)) {
             ctx->has_compilation_errors = true;
             return -1;

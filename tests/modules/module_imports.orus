@@ -1,0 +1,5 @@
+use math_module: PI, bump
+
+print("PI:", PI)
+print("First bump:", bump())
+print("Second bump:", bump())

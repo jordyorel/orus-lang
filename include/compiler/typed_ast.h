@@ -40,6 +40,11 @@ typedef struct {
     SrcLocation location;
 } TypedMatchArm;
 
+typedef struct TypedImportSymbol {
+    const char* name;
+    const char* alias;
+} TypedImportSymbol;
+
 // Typed AST node that contains the original AST plus resolved type information
 struct TypedASTNode {
     ASTNode* original;       // Original AST node from parser
@@ -67,7 +72,16 @@ struct TypedASTNode {
         struct {
             TypedASTNode* initializer;
             TypedASTNode* typeAnnotation;
+            bool isGlobal;
+            bool isPublic;
         } varDecl;
+        struct {
+            const char* moduleName;
+            const char* moduleAlias;
+            TypedImportSymbol* symbols;
+            int symbolCount;
+            bool importAll;
+        } import;
         struct {
             TypedASTNode* left;
             TypedASTNode* right;
@@ -128,6 +142,7 @@ struct TypedASTNode {
         struct {
             TypedASTNode* returnType;
             TypedASTNode* body;
+            bool isPublic;
             bool isMethod;
             bool isInstanceMethod;
             const char* methodStructName;

@@ -74,11 +74,17 @@ typedef enum {
     NODE_MEMBER_ACCESS,
     NODE_MEMBER_ASSIGN,
     NODE_ENUM_DECL,
+    NODE_IMPORT,
     NODE_ENUM_MATCH_TEST,
     NODE_ENUM_PAYLOAD,
     NODE_ENUM_MATCH_CHECK,
     NODE_MATCH_EXPRESSION
 } NodeType;
+
+typedef struct ImportSymbol {
+    char* name;
+    char* alias;
+} ImportSymbol;
 
 typedef struct MatchArm {
     bool isWildcard;
@@ -107,11 +113,19 @@ struct ASTNode {
         struct {
             char* name;
             bool isPublic;
+            bool isGlobal;
             ASTNode* initializer;
             ASTNode* typeAnnotation;
             bool isConst;
             bool isMutable;
         } varDecl;
+        struct {
+            char* moduleName;
+            char* moduleAlias;
+            ImportSymbol* symbols;
+            int symbolCount;
+            bool importAll;
+        } import;
         struct {
             char* name;
         } identifier;
@@ -213,6 +227,7 @@ struct ASTNode {
             int paramCount;                // Number of parameters
             ASTNode* returnType;           // Optional return type annotation
             ASTNode* body;                 // Function body (block)
+            bool isPublic;                 // Whether function is public
             bool isMethod;                 // Whether function is defined in impl block
             bool isInstanceMethod;         // Whether method has implicit self receiver
             char* methodStructName;        // Owning struct for methods

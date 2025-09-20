@@ -1,0 +1,8 @@
+use alias_provider: OFFSET as START, add_offset as bump
+use math_module: double as twice
+
+bumped = bump(START)
+doubled = twice(bumped)
+print("start", START)
+print("bumped", bumped)
+print("doubled", doubled)

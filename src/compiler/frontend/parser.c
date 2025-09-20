@@ -12,6 +12,7 @@
 #include <stdint.h>
 #include <limits.h>
 #include <stdio.h>
+#include <ctype.h>
 
 // ArenaBlock and Arena are now defined in parser.h
 // This eliminates the redefinition error
@@ -121,6 +122,7 @@ ParserContext* parser_context_create(void) {
     // Initialize state
     ctx->recursion_depth = 0;
     ctx->loop_depth = 0;
+    ctx->block_depth = 0;
     ctx->has_peeked_token = false;
     ctx->has_peeked_token2 = false;
     ctx->max_recursion_depth = MAX_RECURSION_DEPTH;
@@ -149,6 +151,7 @@ void parser_context_reset(ParserContext* ctx) {
     parser_arena_reset(ctx);
     ctx->recursion_depth = 0;
     ctx->loop_depth = 0;
+    ctx->block_depth = 0;
     ctx->has_peeked_token = false;
     ctx->has_peeked_token2 = false;
 }
@@ -204,7 +207,7 @@ static ASTNode* parseWhileStatement(ParserContext* ctx);
 static ASTNode* parseForStatement(ParserContext* ctx);
 static ASTNode* parseBreakStatement(ParserContext* ctx);
 static ASTNode* parseContinueStatement(ParserContext* ctx);
-static ASTNode* parseFunctionDefinition(ParserContext* ctx);
+static ASTNode* parseFunctionDefinition(ParserContext* ctx, bool isPublic);
 static ASTNode* parseFunctionExpression(ParserContext* ctx, Token fnToken);
 static ASTNode* parseReturnStatement(ParserContext* ctx);
 static ASTNode* parseMatchStatement(ParserContext* ctx);
@@ -226,6 +229,8 @@ static ASTNode* parseTimeStampExpression(ParserContext* ctx, Token token);
 static ASTNode* parseParenthesizedExpressionToken(ParserContext* ctx, Token token);
 static ASTNode* parseVariableDeclaration(ParserContext* ctx, bool isMutable, Token nameToken);
 static ASTNode* parseAssignOrVarList(ParserContext* ctx, bool isMutable, Token nameToken);
+static ASTNode* parseGlobalVariable(ParserContext* ctx, bool isPublic);
+static ASTNode* parseImportStatement(ParserContext* ctx);
 static ASTNode* parseStatement(ParserContext* ctx);
 static ASTNode* parseIfStatement(ParserContext* ctx);
 static ASTNode* parseTryStatement(ParserContext* ctx);
@@ -235,7 +240,7 @@ static ASTNode* parseForStatement(ParserContext* ctx);
 static ASTNode* parseBreakStatement(ParserContext* ctx);
 static ASTNode* parseContinueStatement(ParserContext* ctx);
 static ASTNode* parseBlock(ParserContext* ctx);
-static ASTNode* parseFunctionDefinition(ParserContext* ctx);
+static ASTNode* parseFunctionDefinition(ParserContext* ctx, bool isPublic);
 static ASTNode* parseEnumDefinition(ParserContext* ctx, bool isPublic);
 static ASTNode* parseStructDefinition(ParserContext* ctx, bool isPublic);
 static ASTNode* parseImplBlock(ParserContext* ctx, bool isPublic);
@@ -336,6 +341,12 @@ static ASTNode* parseStatement(ParserContext* ctx) {
         return stmt;
     }
     if (t.type == TOKEN_PUB) {
+        if (ctx->block_depth > 0) {
+            SrcLocation location = {NULL, t.line, t.column};
+            report_compile_error(E1006_INVALID_SYNTAX, location,
+                                 "'pub' declarations are only allowed at module scope");
+            return NULL;
+        }
         nextToken(ctx);
         Token afterPub = peekToken(ctx);
         if (afterPub.type == TOKEN_STRUCT) {
@@ -345,9 +356,20 @@ static ASTNode* parseStatement(ParserContext* ctx) {
         } else if (afterPub.type == TOKEN_IMPL) {
             return parseImplBlock(ctx, true);
         } else if (afterPub.type == TOKEN_FN) {
-            return parseFunctionDefinition(ctx);
+            return parseFunctionDefinition(ctx, true);
+        } else if (afterPub.type == TOKEN_GLOBAL) {
+            return parseGlobalVariable(ctx, true);
         }
         return NULL;
+    }
+    if (t.type == TOKEN_IMPORT) {
+        if (ctx->block_depth > 0) {
+            SrcLocation location = {NULL, t.line, t.column};
+            report_compile_error(E1006_INVALID_SYNTAX, location,
+                                 "'use' declarations are only allowed at module scope");
+            return NULL;
+        }
+        return parseImportStatement(ctx);
     }
     if (t.type == TOKEN_MUT) {
         nextToken(ctx); // consume TOKEN_MUT
@@ -357,6 +379,15 @@ static ASTNode* parseStatement(ParserContext* ctx) {
             return parseVariableDeclaration(ctx, true, nameTok);
         }
         return parseAssignOrVarList(ctx, true, nameTok);
+    }
+    if (t.type == TOKEN_GLOBAL) {
+        if (ctx->block_depth > 0) {
+            SrcLocation location = {NULL, t.line, t.column};
+            report_compile_error(E1006_INVALID_SYNTAX, location,
+                                 "'global' declarations are only allowed at module scope");
+            return NULL;
+        }
+        return parseGlobalVariable(ctx, false);
     }
     if (t.type == TOKEN_STRUCT) {
         return parseStructDefinition(ctx, false);
@@ -397,7 +428,7 @@ static ASTNode* parseStatement(ParserContext* ctx) {
     } else if (t.type == TOKEN_CONTINUE) {
         return parseContinueStatement(ctx);
     } else if (t.type == TOKEN_FN) {
-        return parseFunctionDefinition(ctx);
+        return parseFunctionDefinition(ctx, false);
     } else if (t.type == TOKEN_RETURN) {
         return parseReturnStatement(ctx);
     } else {
@@ -517,6 +548,7 @@ static ASTNode* create_var_decl_with_initializer(ParserContext* ctx, char* name,
     decl->type = NODE_VAR_DECL;
     decl->varDecl.name = name;
     decl->varDecl.isPublic = false;
+    decl->varDecl.isGlobal = false;
     decl->varDecl.initializer = initializer;
     decl->varDecl.typeAnnotation = NULL;
     decl->varDecl.isConst = false;
@@ -524,6 +556,25 @@ static ASTNode* create_var_decl_with_initializer(ParserContext* ctx, char* name,
     decl->location = location;
     decl->dataType = NULL;
     return decl;
+}
+
+static bool is_uppercase_identifier(const char* name) {
+    if (!name) {
+        return false;
+    }
+
+    bool has_alpha = false;
+    for (const char* ch = name; *ch; ++ch) {
+        unsigned char c = (unsigned char)*ch;
+        if (isalpha(c)) {
+            has_alpha = true;
+            if (!isupper(c)) {
+                return false;
+            }
+        }
+    }
+
+    return has_alpha;
 }
 
 static ASTNode* create_enum_match_check(ParserContext* ctx,
@@ -726,6 +777,7 @@ static ASTNode* parseMatchStatement(ParserContext* ctx) {
     tempVarDecl->type = NODE_VAR_DECL;
     tempVarDecl->varDecl.name = tempName;
     tempVarDecl->varDecl.isPublic = false;
+    tempVarDecl->varDecl.isGlobal = false;
     tempVarDecl->varDecl.initializer = subject;
     tempVarDecl->varDecl.typeAnnotation = NULL;
     tempVarDecl->varDecl.isConst = false;
@@ -1311,6 +1363,7 @@ static ASTNode* parseVariableDeclaration(ParserContext* ctx, bool isMutable, Tok
 
     varNode->varDecl.name = name;
     varNode->varDecl.isPublic = false;
+    varNode->varDecl.isGlobal = false;
     varNode->varDecl.initializer = initializer;
     varNode->varDecl.typeAnnotation = typeNode;
     varNode->varDecl.isConst = false;
@@ -1319,6 +1372,208 @@ static ASTNode* parseVariableDeclaration(ParserContext* ctx, bool isMutable, Tok
     // For multiple variable declarations separated by commas,
     // only parse the first one and let the main parser handle the rest
     return varNode;
+}
+
+static ASTNode* parseGlobalVariable(ParserContext* ctx, bool isPublic) {
+    Token globalTok = nextToken(ctx);
+    if (globalTok.type != TOKEN_GLOBAL) {
+        return NULL;
+    }
+
+    bool isMutable = false;
+    if (peekToken(ctx).type == TOKEN_MUT) {
+        nextToken(ctx);
+        isMutable = true;
+    }
+
+    Token nameTok = nextToken(ctx);
+    if (nameTok.type != TOKEN_IDENTIFIER) {
+        return NULL;
+    }
+
+    int len = nameTok.length;
+    char* name = parser_arena_alloc(ctx, len + 1);
+    strncpy(name, nameTok.start, len);
+    name[len] = '\0';
+
+    if (!is_valid_variable_name(name)) {
+        const char* reason = get_variable_name_violation_reason(name);
+        SrcLocation location = {NULL, nameTok.line, nameTok.column};
+        report_invalid_variable_name(location, name, reason);
+        return NULL;
+    }
+
+    if (!is_uppercase_identifier(name)) {
+        SrcLocation location = {NULL, nameTok.line, nameTok.column};
+        report_invalid_variable_name(location, name,
+                                     "global variable names must be uppercase");
+        return NULL;
+    }
+
+    ASTNode* typeNode = NULL;
+    if (peekToken(ctx).type == TOKEN_COLON) {
+        nextToken(ctx);
+        typeNode = parseTypeAnnotation(ctx);
+        if (!typeNode) return NULL;
+    }
+
+    Token equalToken = nextToken(ctx);
+    if (equalToken.type != TOKEN_EQUAL) {
+        return NULL;
+    }
+
+    ASTNode* initializer = parseExpression(ctx);
+    if (!initializer) {
+        return NULL;
+    }
+
+    ASTNode* varNode = new_node(ctx);
+    varNode->type = NODE_VAR_DECL;
+    varNode->location.line = nameTok.line;
+    varNode->location.column = nameTok.column;
+    varNode->dataType = NULL;
+    varNode->varDecl.name = name;
+    varNode->varDecl.isPublic = isPublic;
+    varNode->varDecl.isGlobal = true;
+    varNode->varDecl.initializer = initializer;
+    varNode->varDecl.typeAnnotation = typeNode;
+    varNode->varDecl.isConst = false;
+    varNode->varDecl.isMutable = isMutable;
+
+    return varNode;
+}
+
+static ASTNode* parseImportStatement(ParserContext* ctx) {
+    Token importTok = nextToken(ctx);
+    if (importTok.type != TOKEN_IMPORT) {
+        return NULL;
+    }
+
+    Token moduleTok = nextToken(ctx);
+    if (moduleTok.type != TOKEN_IDENTIFIER) {
+        SrcLocation location = {NULL, moduleTok.line, moduleTok.column};
+        report_compile_error(E1006_INVALID_SYNTAX, location, "expected module name after 'use'");
+        return NULL;
+    }
+
+    int moduleLen = moduleTok.length;
+    char* moduleName = parser_arena_alloc(ctx, moduleLen + 1);
+    strncpy(moduleName, moduleTok.start, moduleLen);
+    moduleName[moduleLen] = '\0';
+
+    char* moduleAlias = NULL;
+    if (peekToken(ctx).type == TOKEN_AS) {
+        nextToken(ctx); // consume 'as'
+        Token aliasTok = nextToken(ctx);
+        if (aliasTok.type != TOKEN_IDENTIFIER) {
+            SrcLocation location = {NULL, aliasTok.line, aliasTok.column};
+            report_compile_error(E1006_INVALID_SYNTAX, location, "expected identifier after 'as'");
+            return NULL;
+        }
+
+        int aliasLen = aliasTok.length;
+        moduleAlias = parser_arena_alloc(ctx, aliasLen + 1);
+        strncpy(moduleAlias, aliasTok.start, aliasLen);
+        moduleAlias[aliasLen] = '\0';
+    }
+
+    bool importAll = true;
+    ImportSymbol* finalSymbols = NULL;
+    int symbolCount = 0;
+
+    if (peekToken(ctx).type == TOKEN_COLON) {
+        nextToken(ctx); // consume ':'
+
+        Token nextTok = peekToken(ctx);
+        if (nextTok.type == TOKEN_STAR) {
+            nextToken(ctx);
+            importAll = true;
+        } else {
+            importAll = false;
+            ImportSymbol* tempSymbols = NULL;
+            int tempCount = 0;
+            int tempCapacity = 0;
+
+            while (true) {
+                Token symTok = nextToken(ctx);
+                if (symTok.type != TOKEN_IDENTIFIER) {
+                    SrcLocation location = {NULL, symTok.line, symTok.column};
+                    report_compile_error(E1006_INVALID_SYNTAX, location, "expected symbol name in use list");
+                    free(tempSymbols);
+                    return NULL;
+                }
+
+                int symLen = symTok.length;
+                char* symbolName = parser_arena_alloc(ctx, symLen + 1);
+                strncpy(symbolName, symTok.start, symLen);
+                symbolName[symLen] = '\0';
+
+                char* aliasName = NULL;
+                if (peekToken(ctx).type == TOKEN_AS) {
+                    nextToken(ctx); // consume 'as'
+                    Token aliasTok = nextToken(ctx);
+                    if (aliasTok.type != TOKEN_IDENTIFIER) {
+                        SrcLocation location = {NULL, aliasTok.line, aliasTok.column};
+                        report_compile_error(E1006_INVALID_SYNTAX, location, "expected alias name after 'as'");
+                        free(tempSymbols);
+                        return NULL;
+                    }
+
+                    int aliasLen = aliasTok.length;
+                    aliasName = parser_arena_alloc(ctx, aliasLen + 1);
+                    strncpy(aliasName, aliasTok.start, aliasLen);
+                    aliasName[aliasLen] = '\0';
+                }
+
+                if (tempCount >= tempCapacity) {
+                    tempCapacity = tempCapacity == 0 ? 4 : tempCapacity * 2;
+                    ImportSymbol* resized = realloc(tempSymbols, sizeof(ImportSymbol) * (size_t)tempCapacity);
+                    if (!resized) {
+                        free(tempSymbols);
+                        return NULL;
+                    }
+                    tempSymbols = resized;
+                }
+
+                tempSymbols[tempCount].name = symbolName;
+                tempSymbols[tempCount].alias = aliasName;
+                tempCount++;
+
+                if (peekToken(ctx).type == TOKEN_COMMA) {
+                    nextToken(ctx);
+                    continue;
+                }
+                break;
+            }
+
+            if (tempCount == 0) {
+                SrcLocation location = {NULL, moduleTok.line, moduleTok.column};
+                report_compile_error(E1006_INVALID_SYNTAX, location, "expected at least one symbol after ':'");
+                free(tempSymbols);
+                return NULL;
+            }
+
+            symbolCount = tempCount;
+            finalSymbols = parser_arena_alloc(ctx, sizeof(ImportSymbol) * (size_t)symbolCount);
+            for (int i = 0; i < symbolCount; i++) {
+                finalSymbols[i] = tempSymbols[i];
+            }
+            free(tempSymbols);
+        }
+    }
+
+    ASTNode* node = new_node(ctx);
+    node->type = NODE_IMPORT;
+    node->location.line = importTok.line;
+    node->location.column = importTok.column;
+    node->dataType = NULL;
+    node->import.moduleName = moduleName;
+    node->import.moduleAlias = moduleAlias;
+    node->import.symbols = finalSymbols;
+    node->import.symbolCount = symbolCount;
+    node->import.importAll = importAll || symbolCount == 0;
+
+    return node;
 }
 
 static ASTNode* parseAssignOrVarList(ParserContext* ctx, bool isMutable, Token nameToken) {
@@ -1437,6 +1692,7 @@ static ASTNode* parseAssignOrVarList(ParserContext* ctx, bool isMutable, Token n
 
     varNode->varDecl.name = name;
     varNode->varDecl.isPublic = false;
+    varNode->varDecl.isGlobal = false;
     varNode->varDecl.initializer = initializer;
     varNode->varDecl.typeAnnotation = NULL;
     varNode->varDecl.isConst = false;
@@ -1451,7 +1707,9 @@ static ASTNode* parseBlock(ParserContext* ctx) {
     if (vm.devMode) {
         fprintf(stderr, "Debug: Entering parseBlock\n");
     }
-    
+
+    ctx->block_depth++;
+
     ASTNode** statements = NULL;
     int count = 0;
     int capacity = 0;
@@ -1468,8 +1726,9 @@ static ASTNode* parseBlock(ParserContext* ctx) {
         }
         if (t.type == TOKEN_SEMICOLON) {
             SrcLocation location = {NULL, t.line, t.column};
-            report_compile_error(E1007_SEMICOLON_NOT_ALLOWED, location, 
+            report_compile_error(E1007_SEMICOLON_NOT_ALLOWED, location,
                                "found ';' here");
+            ctx->block_depth--;
             return NULL;
         }
         ASTNode* stmt = parseStatement(ctx);
@@ -1477,6 +1736,7 @@ static ASTNode* parseBlock(ParserContext* ctx) {
             if (vm.devMode) {
                 fprintf(stderr, "Debug: parseBlock failed to parse statement\n");
             }
+            ctx->block_depth--;
             return NULL;
         }
         addStatement(ctx, &statements, &count, &capacity, stmt);
@@ -1485,13 +1745,17 @@ static ASTNode* parseBlock(ParserContext* ctx) {
             nextToken(ctx);
         } else if (t.type == TOKEN_SEMICOLON) {
             SrcLocation location = {NULL, t.line, t.column};
-            report_compile_error(E1007_SEMICOLON_NOT_ALLOWED, location, 
+            report_compile_error(E1007_SEMICOLON_NOT_ALLOWED, location,
                                "found ';' here");
+            ctx->block_depth--;
             return NULL;
         }
     }
     Token dedent = nextToken(ctx);
-    if (dedent.type != TOKEN_DEDENT) return NULL;
+    if (dedent.type != TOKEN_DEDENT) {
+        ctx->block_depth--;
+        return NULL;
+    }
 
     ASTNode* block = new_node(ctx);
     block->type = NODE_BLOCK;
@@ -1500,6 +1764,7 @@ static ASTNode* parseBlock(ParserContext* ctx) {
     block->location.line = dedent.line;
     block->location.column = dedent.column;
     block->dataType = NULL;
+    ctx->block_depth--;
     return block;
 }
 
@@ -2699,6 +2964,7 @@ static ASTNode* parseFunctionExpression(ParserContext* ctx, Token fnToken) {
     function->function.paramCount = paramCount;
     function->function.returnType = returnType;
     function->function.body = body;
+    function->function.isPublic = false;
     function->function.isMethod = false;
     function->function.isInstanceMethod = false;
     function->function.methodStructName = NULL;
@@ -2709,7 +2975,7 @@ static ASTNode* parseFunctionExpression(ParserContext* ctx, Token fnToken) {
     return function;
 }
 
-static ASTNode* parseFunctionDefinition(ParserContext* ctx) {
+static ASTNode* parseFunctionDefinition(ParserContext* ctx, bool isPublic) {
     // Consume 'fn' token
     nextToken(ctx);
     
@@ -2820,6 +3086,7 @@ static ASTNode* parseFunctionDefinition(ParserContext* ctx) {
     function->function.paramCount = paramCount;
     function->function.returnType = returnType;
     function->function.body = body;
+    function->function.isPublic = isPublic;
     function->function.isMethod = false;
     function->function.isInstanceMethod = false;
     function->function.methodStructName = NULL;
@@ -3136,8 +3403,10 @@ static ASTNode* parseImplBlock(ParserContext* ctx, bool isPublic) {
             continue;
         }
 
+        bool methodIsPublic = false;
         if (lookahead.type == TOKEN_PUB) {
             nextToken(ctx);
+            methodIsPublic = true;
             lookahead = peekToken(ctx);
         }
 
@@ -3145,12 +3414,13 @@ static ASTNode* parseImplBlock(ParserContext* ctx, bool isPublic) {
             return NULL;
         }
 
-        ASTNode* method = parseFunctionDefinition(ctx);
+        ASTNode* method = parseFunctionDefinition(ctx, methodIsPublic);
         if (!method) {
             return NULL;
         }
 
         method->function.isMethod = true;
+        method->function.isPublic = methodIsPublic;
         method->function.methodStructName = structName;
         bool instance = false;
         if (method->function.paramCount > 0 && method->function.params &&
@@ -3567,7 +3837,11 @@ static ASTNode* parseFunctionType(ParserContext* ctx) {
     funcType->function.paramCount = paramCount;
     funcType->function.returnType = returnType;
     funcType->function.body = NULL; // No body for function types
-    
+    funcType->function.isPublic = false;
+    funcType->function.isMethod = false;
+    funcType->function.isInstanceMethod = false;
+    funcType->function.methodStructName = NULL;
+
     return funcType;
 }
 

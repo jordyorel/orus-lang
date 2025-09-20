@@ -13,6 +13,14 @@
 - `tests/type_safety_fails/duplicate_literal_match_arm.orus` – Validates that duplicate literal arms in expression-form matches report diagnostics instead of compiling.
 - `tests/type_safety_fails/enum_match_payload_mismatch.orus` – Ensures destructuring patterns bind the exact payload arity before bodies execute.
 - `tests/type_safety_fails/enum_match_unknown_variant.orus` – Validates that referencing undeclared enum variants inside `match` arms reports errors.
+- `tests/type_safety_fails/global_lowercase_fail.orus` – Fails compilation when a `global` name violates the enforced uppercase convention.
+- `tests/type_safety_fails/pub_inside_block_fail.orus` – Confirms `'pub'` declarations trigger diagnostics if they appear outside of module scope.
+- `tests/type_safety_fails/import_missing_symbol_fail.orus` – Emits a compile error when a `use` clause references a symbol the target module does not export.
+- `tests/type_safety_fails/import_alias_type_mismatch_fail.orus` – Ensures aliased `use` clauses retain their function type information and reject mismatched argument types.
+
+## Modules
+- `tests/modules/module_imports.orus` – Demonstrates using public globals and functions from a sibling module.
+- `tests/modules/module_import_alias.orus` – Exercises selective `use` with aliases for globals and functions.
 
 ## Types
 - `tests/types/enum_declarations.orus` – Validates that enum declarations, payload annotations, and cross-type references resolve in the type system.

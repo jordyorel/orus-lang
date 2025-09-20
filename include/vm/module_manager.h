@@ -16,8 +16,10 @@ typedef struct RegisterModule {
     
     // Import/Export management
     struct {
-        char** exported_names;            // Names of exported variables
-        uint16_t* exported_registers;     // Register IDs of exports
+        char** exported_names;            // Names of exported symbols
+        uint16_t* exported_registers;     // Register IDs of exports (or MODULE_EXPORT_NO_REGISTER)
+        ModuleExportKind* exported_kinds; // Kind of each exported symbol
+        Type** exported_types;            // Type metadata for exports
         uint16_t export_count;            // Number of exports
     } exports;
     
@@ -65,9 +67,16 @@ uint16_t allocate_module_register(ModuleManager* manager, const char* module_nam
 bool free_module_register(ModuleManager* manager, const char* module_name, uint16_t reg_id);
 
 // Phase 3: Import/Export functionality
-bool export_variable(RegisterModule* module, const char* var_name, uint16_t reg_id);
+bool register_module_export(RegisterModule* module, const char* name, ModuleExportKind kind, int register_index,
+                            Type* type);
 bool import_variable(RegisterModule* dest_module, const char* var_name, RegisterModule* src_module);
 uint16_t resolve_import(ModuleManager* manager, const char* module_name, const char* var_name);
+bool module_manager_resolve_export(ModuleManager* manager, const char* module_name, const char* symbol_name,
+                                   ModuleExportKind* out_kind, uint16_t* out_register, Type** out_type);
+
+// Type metadata helpers for module exports
+Type* module_clone_export_type(const Type* source);
+void module_free_export_type(Type* type);
 
 // Phase 3: Module register access
 Value* get_module_register(ModuleManager* manager, uint8_t module_id, uint16_t reg_offset);

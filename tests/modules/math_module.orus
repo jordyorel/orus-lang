@@ -1,0 +1,10 @@
+pub global PI = 314
+
+pub fn double(value):
+    return value * 2
+
+global mut COUNTER = 0
+
+pub fn bump():
+    COUNTER = COUNTER + 1
+    return COUNTER

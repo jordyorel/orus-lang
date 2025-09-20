@@ -67,6 +67,10 @@ void initVM(void) {
     vm.currentLine = 0;
     vm.currentColumn = 1;
     vm.moduleCount = 0;
+    vm.loadingModuleCount = 0;
+    for (int i = 0; i < UINT8_COUNT; i++) {
+        vm.loadingModules[i] = NULL;
+    }
     vm.nativeFunctionCount = 0;
     vm.gcCount = 0;
     vm.lastExecutionTime = 0.0;

@@ -13,9 +13,36 @@
 #include "runtime/memory.h"
 #include "type/type.h"
 #include "debug/debug_config.h"
+#include "internal/strutil.h"
+#include "vm/module_manager.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+static void reserve_existing_module_globals(CompilerContext* ctx) {
+    if (!ctx || !ctx->allocator) {
+        return;
+    }
+
+    extern VM vm;
+    ModuleManager* manager = vm.register_file.module_manager;
+    if (!manager) {
+        return;
+    }
+
+    RegisterModule* module = manager->modules;
+    while (module) {
+        if (module->exports.exported_registers) {
+            for (uint16_t i = 0; i < module->exports.export_count; ++i) {
+                uint16_t reg = module->exports.exported_registers[i];
+                if (reg != MODULE_EXPORT_NO_REGISTER) {
+                    mp_reserve_global_register(ctx->allocator, reg);
+                }
+            }
+        }
+        module = module->next;
+    }
+}
 
 // ===== MULTI-PASS COMPILER PIPELINE COORDINATOR =====
 // Orchestrates the entire compilation process:
@@ -433,7 +460,16 @@ CompilerContext* init_compiler_context(TypedASTNode* typed_ast) {
     ctx->upvalues = NULL;
     ctx->upvalue_count = 0;
     ctx->upvalue_capacity = 0;
-    
+
+    // Module export tracking
+    ctx->is_module = false;
+    ctx->module_exports = NULL;
+    ctx->module_export_count = 0;
+    ctx->module_export_capacity = 0;
+    ctx->module_imports = NULL;
+    ctx->module_import_count = 0;
+    ctx->module_import_capacity = 0;
+
     if (!ctx->allocator || !ctx->dual_allocator || !ctx->bytecode || !ctx->constants ||
         !ctx->symbols || !ctx->scopes || !ctx->errors) {
         free_compiler_context(ctx);
@@ -668,7 +704,27 @@ void free_compiler_context(CompilerContext* ctx) {
     if (ctx->upvalues) {
         free(ctx->upvalues);
     }
-    
+
+    if (ctx->module_exports) {
+        for (int i = 0; i < ctx->module_export_count; i++) {
+            free(ctx->module_exports[i].name);
+            if (ctx->module_exports[i].type) {
+                module_free_export_type(ctx->module_exports[i].type);
+                ctx->module_exports[i].type = NULL;
+            }
+        }
+        free(ctx->module_exports);
+    }
+
+    if (ctx->module_imports) {
+        for (int i = 0; i < ctx->module_import_count; i++) {
+            free(ctx->module_imports[i].module_name);
+            free(ctx->module_imports[i].symbol_name);
+            free(ctx->module_imports[i].alias_name);
+        }
+        free(ctx->module_imports);
+    }
+
     // Note: Don't free input_ast - it's owned by caller
 
     free(ctx);
@@ -684,12 +740,28 @@ void initCompiler(Compiler* compiler, Chunk* chunk, const char* fileName, const 
         compiler->fileName = fileName;
         compiler->source = source;
         compiler->nextRegister = 0;
+        compiler->isModule = false;
+        compiler->exportCount = 0;
+        compiler->importCount = 0;
+        for (int i = 0; i < UINT8_COUNT; ++i) {
+            compiler->exports[i].name = NULL;
+            compiler->exports[i].kind = MODULE_EXPORT_KIND_GLOBAL;
+            compiler->exports[i].register_index = -1;
+            compiler->exports[i].type = NULL;
+            compiler->imports[i].module_name = NULL;
+            compiler->imports[i].symbol_name = NULL;
+            compiler->imports[i].alias_name = NULL;
+            compiler->imports[i].kind = MODULE_EXPORT_KIND_GLOBAL;
+            compiler->imports[i].register_index = -1;
+        }
     }
 }
 
 void freeCompiler(Compiler* compiler) {
-    // Legacy compatibility - no cleanup needed
-    (void)compiler;
+    if (!compiler) {
+        return;
+    }
+    compiler_reset_exports(compiler);
 }
 
 static void report_compiler_diagnostics(const CompilerContext* ctx) {
@@ -797,6 +869,62 @@ static bool copy_compiled_bytecode(Compiler* legacy_compiler, CompilerContext* c
         }
     }
 
+    // Copy module export metadata for module compilations
+    if (legacy_compiler) {
+        compiler_reset_exports(legacy_compiler);
+        legacy_compiler->isModule = ctx->is_module;
+
+        if (ctx->module_export_count > 0) {
+            int limit = ctx->module_export_count < UINT8_COUNT ? ctx->module_export_count : UINT8_COUNT;
+            for (int i = 0; i < limit; ++i) {
+                legacy_compiler->exports[i].kind = ctx->module_exports[i].kind;
+                if (ctx->module_exports[i].name) {
+                    legacy_compiler->exports[i].name = orus_strdup(ctx->module_exports[i].name);
+                } else {
+                    legacy_compiler->exports[i].name = NULL;
+                }
+                legacy_compiler->exports[i].register_index = ctx->module_exports[i].register_index;
+                legacy_compiler->exports[i].type = ctx->module_exports[i].type;
+                ctx->module_exports[i].type = NULL;
+                if (!legacy_compiler->exports[i].name && ctx->module_exports[i].name) {
+                    legacy_compiler->exportCount = i;
+                    break;
+                }
+                legacy_compiler->exportCount = i + 1;
+            }
+        }
+
+        if (ctx->module_import_count > 0) {
+            int limit = ctx->module_import_count < UINT8_COUNT ? ctx->module_import_count : UINT8_COUNT;
+            for (int i = 0; i < limit; ++i) {
+                legacy_compiler->imports[i].kind = ctx->module_imports[i].kind;
+                if (ctx->module_imports[i].module_name) {
+                    legacy_compiler->imports[i].module_name = orus_strdup(ctx->module_imports[i].module_name);
+                } else {
+                    legacy_compiler->imports[i].module_name = NULL;
+                }
+                if (ctx->module_imports[i].symbol_name) {
+                    legacy_compiler->imports[i].symbol_name = orus_strdup(ctx->module_imports[i].symbol_name);
+                } else {
+                    legacy_compiler->imports[i].symbol_name = NULL;
+                }
+                if (ctx->module_imports[i].alias_name) {
+                    legacy_compiler->imports[i].alias_name = orus_strdup(ctx->module_imports[i].alias_name);
+                } else {
+                    legacy_compiler->imports[i].alias_name = NULL;
+                }
+                legacy_compiler->imports[i].register_index = ctx->module_imports[i].register_index;
+                if ((ctx->module_imports[i].module_name && !legacy_compiler->imports[i].module_name) ||
+                    (ctx->module_imports[i].symbol_name && !legacy_compiler->imports[i].symbol_name) ||
+                    (ctx->module_imports[i].alias_name && !legacy_compiler->imports[i].alias_name)) {
+                    legacy_compiler->importCount = i;
+                    break;
+                }
+                legacy_compiler->importCount = i + 1;
+            }
+        }
+    }
+
     return true;
 }
 
@@ -851,8 +979,14 @@ bool compileProgram(ASTNode* ast, Compiler* compiler, bool isModule) {
         return false;
     }
 
+    ctx->is_module = isModule;
+
     if (ctx->errors) {
         error_reporter_set_use_colors(ctx->errors, config ? config->error_colors : true);
+    }
+
+    if (ctx->is_module) {
+        reserve_existing_module_globals(ctx);
     }
 
     ctx->enable_visualization = show_typed_ast;

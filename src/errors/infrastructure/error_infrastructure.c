@@ -987,9 +987,9 @@ const char* get_error_title(ErrorCode code) {
         
         // Module errors (E3xxx)
         case E3001_FILE_NOT_FOUND: return "Can't find the file you're looking for";
-        case E3002_CYCLIC_IMPORT: return "Modules are importing each other in a circle";
+        case E3002_CYCLIC_IMPORT: return "Modules are using each other in a circle";
         case E3003_MODULE_NOT_FOUND: return "Can't find this module";
-        case E3004_IMPORT_FAILED: return "Failed to import this module";
+        case E3004_IMPORT_FAILED: return "Failed to use this module";
         
         // Internal errors (E9xxx)
         case E9001_INTERNAL_PANIC: return "Internal compiler error (this is our bug!)";

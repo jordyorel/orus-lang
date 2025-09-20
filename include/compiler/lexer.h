@@ -74,11 +74,11 @@ typedef enum {
     TOKEN_ENUM,
     TOKEN_IMPL,
     TOKEN_IMPORT,
-    TOKEN_USE,
     TOKEN_AS,
     TOKEN_MATCH,
     TOKEN_MATCHES,
     TOKEN_PUB,
+    TOKEN_GLOBAL,
     TOKEN_STATIC,
 
     // Add type tokens

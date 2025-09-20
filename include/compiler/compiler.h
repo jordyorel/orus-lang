@@ -131,6 +131,15 @@ typedef struct CompilerContext {
     UpvalueInfo* upvalues;             // Captured variables for current function
     int upvalue_count;                 // Number of captured upvalues
     int upvalue_capacity;              // Capacity of upvalues array
+
+    // Module export tracking
+    bool is_module;                    // Whether we're compiling a module
+    ModuleExportEntry* module_exports; // Collected exports
+    int module_export_count;           // Number of collected exports
+    int module_export_capacity;        // Allocated capacity for exports
+    ModuleImportEntry* module_imports; // Collected imports
+    int module_import_count;           // Number of collected imports
+    int module_import_capacity;        // Allocated capacity for imports
 } CompilerContext;
 
 // Bytecode emission functions
