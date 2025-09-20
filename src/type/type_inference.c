@@ -735,11 +735,14 @@ static TypeScheme* generalize(TypeEnv* env, Type* type) {
     return type_scheme_new(type, bound_names, actual_bound);
 }
 
-static bool type_env_define_import_binding(TypeEnv* env, const char* name, ModuleExportKind kind,
+static bool type_env_define_import_binding(TypeEnv* env, const char* binding_name,
+                                          const char* original_name, ModuleExportKind kind,
                                           Type* exported_type) {
-    if (!env || !name) {
+    if (!env || !binding_name) {
         return false;
     }
+
+    const char* lookup_name = original_name ? original_name : binding_name;
 
     Type* resolved_type = exported_type;
     if (!resolved_type) {
@@ -750,6 +753,12 @@ static bool type_env_define_import_binding(TypeEnv* env, const char* name, Modul
             case MODULE_EXPORT_KIND_FUNCTION:
                 resolved_type = getPrimitiveType(TYPE_FUNCTION);
                 break;
+            case MODULE_EXPORT_KIND_STRUCT:
+                resolved_type = findStructType(lookup_name);
+                break;
+            case MODULE_EXPORT_KIND_ENUM:
+                resolved_type = findEnumType(lookup_name);
+                break;
             default:
                 return false;
         }
@@ -759,12 +768,18 @@ static bool type_env_define_import_binding(TypeEnv* env, const char* name, Modul
         return false;
     }
 
+    if (kind == MODULE_EXPORT_KIND_STRUCT) {
+        registerStructTypeAlias(binding_name, resolved_type);
+    } else if (kind == MODULE_EXPORT_KIND_ENUM) {
+        registerEnumTypeAlias(binding_name, resolved_type);
+    }
+
     TypeScheme* scheme = generalize(env, resolved_type);
     if (!scheme) {
         return false;
     }
 
-    type_env_define(env, name, scheme);
+    type_env_define(env, binding_name, scheme);
     return true;
 }
 
@@ -2722,9 +2737,9 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                         exported_type = module_entry->exports.exported_types[i];
                     }
 
-                    if (type_env_define_import_binding(env, symbol_name, kind, exported_type)) {
+                    if (type_env_define_import_binding(env, symbol_name, symbol_name, kind, exported_type)) {
                         imported_value = true;
-                    } else if (kind == MODULE_EXPORT_KIND_GLOBAL || kind == MODULE_EXPORT_KIND_FUNCTION) {
+                    } else {
                         report_compile_error(E3004_IMPORT_FAILED, node->location,
                                              "failed to use '%s' from module '%s'",
                                              symbol_name, module_name);
@@ -2734,7 +2749,7 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
 
                 if (!imported_value) {
                     report_compile_error(E3004_IMPORT_FAILED, node->location,
-                                         "module '%s' has no usable globals or functions",
+                                         "module '%s' has no usable globals, functions, or types",
                                          module_name);
                     set_type_error();
                 }
@@ -2759,16 +2774,10 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
 
                     const char* binding_name = symbol->alias ? symbol->alias : symbol->name;
 
-                    if (!type_env_define_import_binding(env, binding_name, kind, exported_type)) {
-                        if (kind != MODULE_EXPORT_KIND_GLOBAL && kind != MODULE_EXPORT_KIND_FUNCTION) {
-                            report_compile_error(E3004_IMPORT_FAILED, node->location,
-                                                 "using type '%s' from module '%s' is not supported yet",
-                                                 symbol->name, module_name);
-                        } else {
-                            report_compile_error(E3004_IMPORT_FAILED, node->location,
-                                                 "failed to use '%s' from module '%s'",
-                                                 symbol->name, module_name);
-                        }
+                    if (!type_env_define_import_binding(env, binding_name, symbol->name, kind, exported_type)) {
+                        report_compile_error(E3004_IMPORT_FAILED, node->location,
+                                             "failed to use '%s' from module '%s'",
+                                             symbol->name, module_name);
                         set_type_error();
                         continue;
                     }

@@ -28,6 +28,10 @@ Type* module_clone_export_type(const Type* source) {
         return NULL;
     }
 
+    if (source->kind == TYPE_STRUCT || source->kind == TYPE_ENUM) {
+        return (Type*)source;
+    }
+
     Type* copy = (Type*)malloc(sizeof(Type));
     if (!copy) {
         return NULL;
@@ -106,6 +110,10 @@ Type* module_clone_export_type(const Type* source) {
 
 void module_free_export_type(Type* type) {
     if (!type) {
+        return;
+    }
+
+    if (type->kind == TYPE_STRUCT || type->kind == TYPE_ENUM) {
         return;
     }
 

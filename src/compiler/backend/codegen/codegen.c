@@ -183,9 +183,16 @@ static bool finalize_import_symbol(CompilerContext* ctx, const char* module_name
         return false;
     }
 
+    const char* binding_name = alias_name ? alias_name : symbol_name;
+
+    if (kind == MODULE_EXPORT_KIND_STRUCT || kind == MODULE_EXPORT_KIND_ENUM) {
+        record_module_import(ctx, module_name, symbol_name, alias_name, kind, MODULE_EXPORT_NO_REGISTER);
+        return true;
+    }
+
     if (register_index == MODULE_EXPORT_NO_REGISTER) {
         report_compile_error(E3004_IMPORT_FAILED, location,
-                             "module '%s' export '%s' is not a value and cannot be used yet",
+                             "module '%s' export '%s' is not a value and cannot be used",
                              module_name ? module_name : "<unknown>", symbol_name);
         ctx->has_compilation_errors = true;
         return false;
@@ -193,16 +200,14 @@ static bool finalize_import_symbol(CompilerContext* ctx, const char* module_name
 
     if (kind != MODULE_EXPORT_KIND_GLOBAL && kind != MODULE_EXPORT_KIND_FUNCTION) {
         report_compile_error(E3004_IMPORT_FAILED, location,
-                             "using type '%s' from module '%s' is not supported yet",
-                             symbol_name, module_name ? module_name : "<unknown>");
+                             "module '%s' export '%s' is not a loadable value",
+                             module_name ? module_name : "<unknown>", symbol_name);
         ctx->has_compilation_errors = true;
         return false;
     }
 
     int reg = (int)register_index;
     mp_reserve_global_register(ctx->allocator, reg);
-
-    const char* binding_name = alias_name ? alias_name : symbol_name;
 
     Type* resolved_type = exported_type;
     if (!resolved_type) {
@@ -3381,7 +3386,7 @@ static void compile_import_statement(CompilerContext* ctx, TypedASTNode* stmt) {
 
         if (!imported_any) {
             report_compile_error(E3004_IMPORT_FAILED, location,
-                                 "module '%s' has no usable globals or functions", module_name);
+                                 "module '%s' has no usable globals, functions, or types", module_name);
             ctx->has_compilation_errors = true;
         }
         return;
@@ -3491,15 +3496,17 @@ void compile_statement(CompilerContext* ctx, TypedASTNode* stmt) {
         case NODE_STRUCT_DECL:
             if (!ctx->compiling_function && stmt->original->structDecl.isPublic &&
                 stmt->original->structDecl.name) {
+                Type* struct_type = findStructType(stmt->original->structDecl.name);
                 record_module_export(ctx, stmt->original->structDecl.name, MODULE_EXPORT_KIND_STRUCT,
-                                     NULL);
+                                     struct_type);
             }
             break;
         case NODE_ENUM_DECL:
             if (!ctx->compiling_function && stmt->original->type == NODE_ENUM_DECL &&
                 stmt->original->enumDecl.isPublic && stmt->original->enumDecl.name) {
+                Type* enum_type = findEnumType(stmt->original->enumDecl.name);
                 record_module_export(ctx, stmt->original->enumDecl.name, MODULE_EXPORT_KIND_ENUM,
-                                     NULL);
+                                     enum_type);
             }
             break;
         case NODE_IMPL_BLOCK:
