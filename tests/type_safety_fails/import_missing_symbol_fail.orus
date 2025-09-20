@@ -1,0 +1,1 @@
+use import_missing_symbol_module: DOES_NOT_EXIST

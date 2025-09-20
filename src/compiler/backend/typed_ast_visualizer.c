@@ -85,6 +85,7 @@ static const char* get_node_type_name(NodeType type) {
         case NODE_CALL: return "Call";
         case NODE_RETURN: return "Return";
         case NODE_CAST: return "Cast";
+        case NODE_IMPORT: return "Import";
         default: return "Unknown";
     }
 }
@@ -344,6 +345,37 @@ static void visualize_node_recursive(TypedASTNode* node, int depth, bool is_last
             if (node->original->varDecl.isConst) {
                 printf(" [const]");
             }
+            if (node->original->varDecl.isGlobal) {
+                printf(" [global]");
+            }
+            if (node->original->varDecl.isPublic) {
+                printf(" [public]");
+            }
+            break;
+        case NODE_IMPORT:
+            if (node->original->import.moduleName) {
+                printf(" module='%s'", node->original->import.moduleName);
+            }
+            if (node->original->import.moduleAlias) {
+                printf(" as %s", node->original->import.moduleAlias);
+            }
+            if (node->original->import.importAll) {
+                printf(" symbols=*");
+            } else if (node->original->import.symbolCount > 0) {
+                printf(" symbols=[");
+                for (int i = 0; i < node->original->import.symbolCount; i++) {
+                    ImportSymbol* symbol = &node->original->import.symbols[i];
+                    if (symbol->alias) {
+                        printf("%s as %s", symbol->name, symbol->alias);
+                    } else {
+                        printf("%s", symbol->name);
+                    }
+                    if (i != node->original->import.symbolCount - 1) {
+                        printf(", ");
+                    }
+                }
+                printf("]");
+            }
             break;
         case NODE_ASSIGN:
             if (node->typed.assign.name) {
@@ -355,6 +387,9 @@ static void visualize_node_recursive(TypedASTNode* node, int depth, bool is_last
                 printf(" name='%s'", node->original->function.name);
             }
             printf(" params=%d", node->original->function.paramCount);
+            if (node->original->function.isPublic) {
+                printf(" [public]");
+            }
             break;
         case NODE_CALL:
             printf(" args=%d", node->original->call.argCount);
@@ -422,12 +457,14 @@ static void visualize_node_recursive(TypedASTNode* node, int depth, bool is_last
             break;
         case NODE_VAR_DECL:
             if (node->typed.varDecl.typeAnnotation) {
-                visualize_node_recursive(node->typed.varDecl.typeAnnotation, depth + 1, 
+                visualize_node_recursive(node->typed.varDecl.typeAnnotation, depth + 1,
                                        !node->typed.varDecl.initializer, config);
             }
             if (node->typed.varDecl.initializer) {
                 visualize_node_recursive(node->typed.varDecl.initializer, depth + 1, true, config);
             }
+            break;
+        case NODE_IMPORT:
             break;
         case NODE_ASSIGN:
             if (node->typed.assign.value) {

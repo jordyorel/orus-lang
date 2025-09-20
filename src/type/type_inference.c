@@ -20,6 +20,8 @@
 #include "runtime/memory.h"
 #include "type/type.h"
 #include "vm/vm.h"
+#include "vm/module_manager.h"
+#include "internal/error_reporting.h"
 #include "errors/features/type_errors.h"
 #include "errors/features/variable_errors.h"
 #include "errors/features/control_flow_errors.h"
@@ -733,6 +735,39 @@ static TypeScheme* generalize(TypeEnv* env, Type* type) {
     return type_scheme_new(type, bound_names, actual_bound);
 }
 
+static bool type_env_define_import_binding(TypeEnv* env, const char* name, ModuleExportKind kind,
+                                          Type* exported_type) {
+    if (!env || !name) {
+        return false;
+    }
+
+    Type* resolved_type = exported_type;
+    if (!resolved_type) {
+        switch (kind) {
+            case MODULE_EXPORT_KIND_GLOBAL:
+                resolved_type = getPrimitiveType(TYPE_ANY);
+                break;
+            case MODULE_EXPORT_KIND_FUNCTION:
+                resolved_type = getPrimitiveType(TYPE_FUNCTION);
+                break;
+            default:
+                return false;
+        }
+    }
+
+    if (!resolved_type) {
+        return false;
+    }
+
+    TypeScheme* scheme = generalize(env, resolved_type);
+    if (!scheme) {
+        return false;
+    }
+
+    type_env_define(env, name, scheme);
+    return true;
+}
+
 static void define_builtin_function(TypeEnv* env, const char* name,
                                     Type* return_type, Type** params,
                                     int param_count) {
@@ -912,7 +947,7 @@ static bool is_cast_allowed(Type* from, Type* to) {
 
 Type* algorithm_w(TypeEnv* env, ASTNode* node) {
     if (!node) return NULL;
-    
+
     // Simple recursion protection
     static bool in_error = false;
     if (in_error) {
@@ -2646,7 +2681,102 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                     if (!body_type) return NULL;
                 }
             }
-            
+
+            return getPrimitiveType(TYPE_VOID);
+        }
+        case NODE_IMPORT: {
+            ModuleManager* manager = vm.register_file.module_manager;
+            const char* module_name = node->import.moduleName;
+
+            if (!manager) {
+                report_compile_error(E3004_IMPORT_FAILED, node->location,
+                                     "module manager is not initialized");
+                set_type_error();
+                return getPrimitiveType(TYPE_UNKNOWN);
+            }
+
+            if (!module_name) {
+                return getPrimitiveType(TYPE_VOID);
+            }
+
+            RegisterModule* module_entry = find_module(manager, module_name);
+            if (!module_entry) {
+                report_compile_error(E3003_MODULE_NOT_FOUND, node->location,
+                                     "module '%s' is not loaded", module_name);
+                set_type_error();
+                return getPrimitiveType(TYPE_UNKNOWN);
+            }
+
+            bool imported_value = false;
+            if (node->import.importAll || node->import.symbolCount == 0) {
+                for (uint16_t i = 0; i < module_entry->exports.export_count; i++) {
+                    const char* symbol_name = module_entry->exports.exported_names[i];
+                    ModuleExportKind kind = module_entry->exports.exported_kinds[i];
+                    if (!symbol_name) {
+                        continue;
+                    }
+
+                    Type* exported_type = NULL;
+                    if (module_entry->exports.exported_types &&
+                        i < module_entry->exports.export_count) {
+                        exported_type = module_entry->exports.exported_types[i];
+                    }
+
+                    if (type_env_define_import_binding(env, symbol_name, kind, exported_type)) {
+                        imported_value = true;
+                    } else if (kind == MODULE_EXPORT_KIND_GLOBAL || kind == MODULE_EXPORT_KIND_FUNCTION) {
+                        report_compile_error(E3004_IMPORT_FAILED, node->location,
+                                             "failed to use '%s' from module '%s'",
+                                             symbol_name, module_name);
+                        set_type_error();
+                    }
+                }
+
+                if (!imported_value) {
+                    report_compile_error(E3004_IMPORT_FAILED, node->location,
+                                         "module '%s' has no usable globals or functions",
+                                         module_name);
+                    set_type_error();
+                }
+            } else {
+                for (int i = 0; i < node->import.symbolCount; i++) {
+                    ImportSymbol* symbol = &node->import.symbols[i];
+                    if (!symbol->name) {
+                        continue;
+                    }
+
+                    ModuleExportKind kind = MODULE_EXPORT_KIND_GLOBAL;
+                    uint16_t register_index = MODULE_EXPORT_NO_REGISTER;
+                    Type* exported_type = NULL;
+                    if (!module_manager_resolve_export(manager, module_name, symbol->name, &kind,
+                                                       &register_index, &exported_type)) {
+                        report_compile_error(E3004_IMPORT_FAILED, node->location,
+                                             "module '%s' does not export '%s'",
+                                             module_name, symbol->name);
+                        set_type_error();
+                        continue;
+                    }
+
+                    const char* binding_name = symbol->alias ? symbol->alias : symbol->name;
+
+                    if (!type_env_define_import_binding(env, binding_name, kind, exported_type)) {
+                        if (kind != MODULE_EXPORT_KIND_GLOBAL && kind != MODULE_EXPORT_KIND_FUNCTION) {
+                            report_compile_error(E3004_IMPORT_FAILED, node->location,
+                                                 "using type '%s' from module '%s' is not supported yet",
+                                                 symbol->name, module_name);
+                        } else {
+                            report_compile_error(E3004_IMPORT_FAILED, node->location,
+                                                 "failed to use '%s' from module '%s'",
+                                                 symbol->name, module_name);
+                        }
+                        set_type_error();
+                        continue;
+                    }
+
+                    imported_value = true;
+                }
+            }
+
             return getPrimitiveType(TYPE_VOID);
         }
         default:

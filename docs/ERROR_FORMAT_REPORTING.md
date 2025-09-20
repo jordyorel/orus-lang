@@ -78,7 +78,7 @@ Whenever possible, error messages:
 | E0000–0999 | Runtime errors | Division by zero, null access   |
 | E1000–1999 | Syntax errors  | Missing colon, unexpected token |
 | E2000–2999 | Type errors    | Mismatched types                |
-| E3000–3999 | Module/import  | File not found, cyclic import   |
+| E3000–3999 | Module/use     | File not found, cyclic use      |
 | E9000–9999 | Internal bugs  | Internal panic, VM crash        |
 
 ---
@@ -98,7 +98,7 @@ Whenever possible, error messages:
 * Type mismatches with clear "found vs expected"
 * Syntax missing required colon or indent
 * Out-of-range indexing
-* Unused imports, unreachable code (optional warnings)
+* Unused `use` clauses, unreachable code (optional warnings)
 
 ---
 

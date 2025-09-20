@@ -30,6 +30,11 @@ still needs design work.
 - ⚠️ **Module system** – Runtime hooks exist (`interpret_module` and module
   loaders), yet the surface syntax and packaging workflow remain to be
   implemented and tested.
+- ⚠️ **Module visibility** – Parser enforces uppercase `global` declarations,
+  tracks `pub` exports for globals, functions, structs, and enums, and the
+  runtime now registers those exports with the module loader. Modules can use
+  public globals and functions from sibling files via `use`, including
+  renaming support; pulling type declarations via `use` remains future work.
 - ✅ **Pattern matching** – `match` supports enums and literal values using the
   unified `pattern ->` arm syntax. Lowering reuses scoped temporaries and
   chained `if` statements, preserving payload destructuring, `_` wildcards, and
@@ -69,7 +74,7 @@ print(identity("orus"))
 
 ### Runtime & Tooling
 - 256-register VM with dedicated banks for globals, frames, temporaries, and
-  future module imports; dispatch tables ship in both `goto` and `switch`
+  future module uses; dispatch tables ship in both `goto` and `switch`
   variants.
 - Built-in printing, string interpolation, numeric formatting, and array
   helpers are available in the runtime (`src/vm/runtime/builtins.c`).
@@ -96,6 +101,7 @@ print("sum:", total)
 | Iterator-style `for item in collection` | Design | Parser/codegen support pending; VM array iterators are ready. |
 | Module packaging | Design | Module manager + loader stubs exist; surface syntax and tests still missing. |
 | Print formatting polish | Backlog | Finish escape handling and numeric formatting for the print APIs. |
+| Module use resolution | In progress | `use` loads sibling modules and binds their exported globals/functions with type metadata and aliasing; importing type declarations is still open. |
 
 ---
 
@@ -105,7 +111,7 @@ print("sum:", total)
    error reporters.
 3. Extend the parser/typechecker/codegen to support iterator-style `for` loops
    using array iterators.
-4. Define and implement module declarations/import syntax, backed by the
+4. Define and implement module declarations/`use` syntax, backed by the
    existing loader.
 5. Document and stabilize the printing APIs once formatting is finalized.
 
@@ -858,7 +864,7 @@ for i in 0..huge_array.length():
 
 ### 6.1 Module System & Advanced Optimization
 **Priority: 📋 Medium-High**
-- [ ] **TODO**: Add import/export functionality with module loading.
+- [ ] **TODO**: Add use/export functionality with module loading.
 - [ ] **NEW**: Implement cross-module optimization using type system knowledge
 - [ ] **NEW**: Add SIMD vectorization support for numerical loops
 - [ ] **NEW**: Implement advanced loop optimizations (fusion, parallelization)

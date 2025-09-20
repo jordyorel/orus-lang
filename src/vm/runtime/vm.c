@@ -18,6 +18,7 @@
 
 #include "vm/vm.h"
 #include "vm/vm_dispatch.h"
+#include "vm/module_manager.h"
 #include "runtime/builtins.h"
 #include "public/common.h"
 #include "compiler/parser.h"
@@ -56,6 +57,9 @@ void* vm_dispatch_table[OP_HALT + 1] = {0};
 static InterpretResult run(void);
 void runtimeError(ErrorType type, SrcLocation location,
                    const char* format, ...);
+static bool collect_module_imports(ASTNode* ast, char*** out_names, int* out_count);
+static void free_module_imports(char** names, int count);
+static bool load_module_list(const char* current_path, char** module_names, int module_count);
 
 // Memory allocation handled in vm_memory.c
 
@@ -224,6 +228,21 @@ void runtimeError(ErrorType type, SrcLocation location,
         location.column = vm.currentColumn;
     }
 
+    if (vm.chunk && vm.ip) {
+        size_t offset = (size_t)(vm.ip - vm.chunk->code);
+        if (offset > 0) {
+            offset--;
+        }
+        if (offset < (size_t)vm.chunk->count) {
+            if ((location.line <= 0 || location.line == -1) && vm.chunk->lines) {
+                location.line = vm.chunk->lines[offset];
+            }
+            if ((location.column <= 0 || location.column == -1) && vm.chunk->columns) {
+                location.column = vm.chunk->columns[offset];
+            }
+        }
+    }
+
     // Use enhanced error reporting
     ErrorCode code = map_error_type_to_code(type);
     report_runtime_error(code, location, "%s", buffer);
@@ -263,6 +282,7 @@ static InterpretResult run(void) {
 }
 // Main interpretation functions
 InterpretResult interpret(const char* source) {
+    InterpretResult result = INTERPRET_COMPILE_ERROR;
     // Source text is now set in main.c with proper error handling
     // set_source_text(source, strlen(source)) is called before interpret()
     // fflush(stdout);
@@ -276,14 +296,11 @@ InterpretResult interpret(const char* source) {
     // Parse the source into an AST
     ASTNode* ast = parseSource(source);
     // fflush(stdout);
- 
+
     if (!ast) {
-        // fflush(stdout);
-        freeCompiler(&compiler);
-        freeChunk(&chunk);
-        return INTERPRET_COMPILE_ERROR;
+        goto cleanup;
     }
-    
+
     // fflush(stdout);
 
     // Check if typed AST visualization is enabled
@@ -298,15 +315,38 @@ InterpretResult interpret(const char* source) {
         set_parser_debug(false);  // Disable parser debug for cleaner typed AST output
     }
     
+    const char* current_path = vm.filePath ? vm.filePath : ".";
+    char** import_names = NULL;
+    int import_count = 0;
+    if (!collect_module_imports(ast, &import_names, &import_count)) {
+        goto cleanup;
+    }
+
+    if (import_count > 0) {
+        freeAST(ast);
+        ast = NULL;
+        if (!load_module_list(current_path, import_names, import_count)) {
+            free_module_imports(import_names, import_count);
+            goto cleanup;
+        }
+        free_module_imports(import_names, import_count);
+        import_names = NULL;
+
+        ast = parseSource(source);
+        if (!ast) {
+            goto cleanup;
+        }
+    } else {
+        free_module_imports(import_names, import_count);
+        import_names = NULL;
+    }
+
     // Compile the AST to bytecode using the unified multi-pass pipeline
     bool compilation_result = compileProgram(ast, &compiler, false);
 
     if (!compilation_result) {
         printf("[ERROR] interpret: Compilation failed\n");
-        freeAST(ast);
-        freeCompiler(&compiler);
-        freeChunk(&chunk);
-        return INTERPRET_COMPILE_ERROR;
+        goto cleanup;
     }
 
     if (config && config->show_bytecode) {
@@ -376,13 +416,16 @@ InterpretResult interpret(const char* source) {
     }
     
     fflush(stdout);
-    InterpretResult result = run();
+    result = run();
     fflush(stdout);
   
-    freeAST(ast);
+cleanup:
+    if (ast) {
+        freeAST(ast);
+    }
     freeCompiler(&compiler);
     freeChunk(&chunk);
-    
+
     return result;
 }
 
@@ -446,59 +489,253 @@ static void addLoadedModule(const char* path) {
     }
 }
 
+static bool isModuleLoading(const char* path) {
+    for (int i = 0; i < vm.loadingModuleCount; i++) {
+        if (vm.loadingModules[i] && strcmp(vm.loadingModules[i]->chars, path) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void pushLoadingModule(const char* path) {
+    if (!path) {
+        return;
+    }
+    if (vm.loadingModuleCount < UINT8_COUNT) {
+        vm.loadingModules[vm.loadingModuleCount] = allocateString(path, strlen(path));
+        vm.loadingModuleCount++;
+    }
+}
+
+static void popLoadingModule(const char* path) {
+    if (!path || vm.loadingModuleCount == 0) {
+        return;
+    }
+    for (int i = 0; i < vm.loadingModuleCount; i++) {
+        if (vm.loadingModules[i] && strcmp(vm.loadingModules[i]->chars, path) == 0) {
+            vm.loadingModuleCount--;
+            vm.loadingModules[i] = vm.loadingModules[vm.loadingModuleCount];
+            vm.loadingModules[vm.loadingModuleCount] = NULL;
+            return;
+        }
+    }
+}
+
+static char* build_module_path(const char* base_path, const char* module_name) {
+    if (!module_name) {
+        return NULL;
+    }
+
+    size_t module_len = strlen(module_name);
+    const char* forward = strrchr(base_path, '/');
+    const char* backward = strrchr(base_path, '\\');
+    const char* sep = forward;
+    if (backward && (!sep || backward > sep)) {
+        sep = backward;
+    }
+
+    size_t dir_len = sep ? (size_t)(sep - base_path + 1) : 0;
+    const char* suffix = ".orus";
+    size_t suffix_len = strlen(suffix);
+    bool has_extension = module_len >= suffix_len && strcmp(module_name + module_len - suffix_len, suffix) == 0;
+    size_t total = dir_len + module_len + (has_extension ? 1 : suffix_len + 1);
+    char* result = (char*)malloc(total);
+    if (!result) {
+        return NULL;
+    }
+
+    if (dir_len > 0) {
+        memcpy(result, base_path, dir_len);
+    }
+    memcpy(result + dir_len, module_name, module_len);
+    if (has_extension) {
+        result[dir_len + module_len] = '\0';
+    } else {
+        memcpy(result + dir_len + module_len, suffix, suffix_len + 1);
+    }
+    return result;
+}
+
+static void free_module_imports(char** names, int count) {
+    if (!names) {
+        return;
+    }
+    for (int i = 0; i < count; i++) {
+        free(names[i]);
+    }
+    free(names);
+}
+
+static bool collect_module_imports(ASTNode* ast, char*** out_names, int* out_count) {
+    if (!out_names || !out_count) {
+        return false;
+    }
+
+    *out_names = NULL;
+    *out_count = 0;
+
+    if (!ast || ast->type != NODE_PROGRAM) {
+        return true;
+    }
+
+    char** names = NULL;
+    int count = 0;
+
+    for (int i = 0; i < ast->program.count; i++) {
+        ASTNode* decl = ast->program.declarations[i];
+        if (!decl || decl->type != NODE_IMPORT || !decl->import.moduleName) {
+            continue;
+        }
+
+        char* copy = strdup(decl->import.moduleName);
+        if (!copy) {
+            free_module_imports(names, count);
+            return false;
+        }
+
+        char** resized = (char**)realloc(names, sizeof(char*) * (size_t)(count + 1));
+        if (!resized) {
+            free(copy);
+            free_module_imports(names, count);
+            return false;
+        }
+
+        names = resized;
+        names[count++] = copy;
+    }
+
+    *out_names = names;
+    *out_count = count;
+    return true;
+}
+
+static bool load_module_list(const char* current_path, char** module_names, int module_count) {
+    if (!module_names || module_count == 0) {
+        return true;
+    }
+
+    for (int i = 0; i < module_count; i++) {
+        char* dep_path = build_module_path(current_path, module_names[i]);
+        if (!dep_path) {
+            return false;
+        }
+
+        InterpretResult result = interpret_module(dep_path);
+        free(dep_path);
+        if (result != INTERPRET_OK) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 InterpretResult interpret_module(const char* path) {
-    
+    InterpretResult result = INTERPRET_COMPILE_ERROR;
+    bool pushed = false;
+    bool chunk_initialized = false;
+    bool compiler_initialized = false;
+    Chunk chunk;
+    Compiler compiler;
+    ASTNode* ast = NULL;
+    char* source = NULL;
+    char* module_name = NULL;
+    RegisterModule* module_entry = NULL;
+
     if (!path) {
         fprintf(stderr, "Module path cannot be null.\n");
-        return INTERPRET_COMPILE_ERROR;
+        return result;
     }
-    
-    // Check if module is already loaded to prevent circular dependencies
+
     if (isModuleLoaded(path)) {
-        // Module already loaded, return success
         return INTERPRET_OK;
     }
-    
-    // Read the module file
 
-    char* source = readFile(path);
-  
-    if (!source) {
-        return INTERPRET_COMPILE_ERROR;
+    if (isModuleLoading(path)) {
+        fprintf(stderr, "Cyclic module dependency detected while processing use: %s\n", path);
+        return result;
     }
-    
+
+    pushLoadingModule(path);
+    pushed = true;
+
+    source = readFile(path);
+
+    if (!source) {
+        goto cleanup;
+    }
+
     // Create a chunk for the compiled bytecode
-    Chunk chunk;
     initChunk(&chunk);
+    chunk_initialized = true;
     
     // Extract module name from path (filename without extension)
     const char* fileName = strrchr(path, '/');
     if (!fileName) fileName = strrchr(path, '\\'); // Windows path separator
     if (!fileName) fileName = path;
     else fileName++; // Skip the separator
-    
+
+    module_name = NULL;
+    if (fileName) {
+        size_t name_len = strlen(fileName);
+        module_name = (char*)malloc(name_len + 1);
+        if (module_name) {
+            memcpy(module_name, fileName, name_len + 1);
+            char* dot = strrchr(module_name, '.');
+            if (dot) {
+                *dot = '\0';
+            }
+        }
+    }
+
     // Create compiler for the module
-    Compiler compiler;
     initCompiler(&compiler, &chunk, fileName, source);
+    compiler_initialized = true;
 
     // Parse the module source into an AST
-    ASTNode* ast = parseSource(source);
+    ast = parseSource(source);
 
     if (!ast) {
         fprintf(stderr, "Failed to parse module: %s\n", path);
-        free(source);
-        freeCompiler(&compiler);
-        freeChunk(&chunk);
-        return INTERPRET_COMPILE_ERROR;
+        goto cleanup;
     }
-    
+
+    char** module_imports = NULL;
+    int module_import_count = 0;
+    if (!collect_module_imports(ast, &module_imports, &module_import_count)) {
+        fprintf(stderr, "Failed to gather module uses for: %s\n", path);
+        goto cleanup;
+    }
+
+    if (module_import_count > 0) {
+        freeAST(ast);
+        ast = NULL;
+        if (!load_module_list(path, module_imports, module_import_count)) {
+            free_module_imports(module_imports, module_import_count);
+            fprintf(stderr, "Failed to preload dependencies for module: %s\n", path);
+            goto cleanup;
+        }
+        free_module_imports(module_imports, module_import_count);
+        module_imports = NULL;
+
+        ast = parseSource(source);
+        if (!ast) {
+            fprintf(stderr, "Failed to parse module: %s\n", path);
+            goto cleanup;
+        }
+    } else {
+        free_module_imports(module_imports, module_import_count);
+        module_imports = NULL;
+    }
+
     if (!compileProgram(ast, &compiler, true)) {
         fprintf(stderr, "Failed to compile module: %s\n", path);
-        freeAST(ast);
-        free(source);
-        freeCompiler(&compiler);
-        freeChunk(&chunk);
-        return INTERPRET_COMPILE_ERROR;
+        goto cleanup;
+    }
+
+    if (vm.register_file.module_manager && module_name) {
+        module_entry = load_module(vm.register_file.module_manager, module_name);
     }
 
     // Store current VM state
@@ -516,7 +753,7 @@ InterpretResult interpret_module(const char* path) {
         disassembleChunk(&chunk, fileName);
     }
     
-    InterpretResult result = run();
+    result = run();
     
     // Restore VM state
     vm.chunk = oldChunk;
@@ -526,15 +763,71 @@ InterpretResult interpret_module(const char* path) {
     // Add module to loaded modules list if successful
     if (result == INTERPRET_OK) {
         addLoadedModule(path);
+        if (compiler.isModule && module_entry) {
+            for (int i = 0; i < compiler.exportCount; i++) {
+                ModuleExportEntry* entry = &compiler.exports[i];
+                if (!entry->name) {
+                    continue;
+                }
+
+                Type* exported_type = entry->type;
+                bool registered = register_module_export(module_entry, entry->name, entry->kind,
+                                                        entry->register_index, exported_type);
+                if (!registered && exported_type) {
+                    module_free_export_type(exported_type);
+                    exported_type = NULL;
+                }
+                entry->type = NULL;
+
+                if (entry->kind == MODULE_EXPORT_KIND_GLOBAL &&
+                    entry->register_index >= 0 && entry->register_index < UINT8_COUNT) {
+                    vm.publicGlobals[entry->register_index] = true;
+                    if (entry->register_index >= vm.variableCount) {
+                        vm.variableCount = entry->register_index + 1;
+                    }
+                    if (vm.globalTypes[entry->register_index] == NULL) {
+                        vm.globalTypes[entry->register_index] = exported_type ? exported_type : getPrimitiveType(TYPE_ANY);
+                    } else if (exported_type) {
+                        vm.globalTypes[entry->register_index] = exported_type;
+                    }
+                }
+            }
+
+            if (compiler.importCount > 0 && vm.register_file.module_manager) {
+                for (int i = 0; i < compiler.importCount; i++) {
+                    ModuleImportEntry* entry = &compiler.imports[i];
+                    if (!entry->module_name || !entry->symbol_name) {
+                        continue;
+                    }
+                    RegisterModule* source_module = find_module(vm.register_file.module_manager, entry->module_name);
+                    if (!source_module) {
+                        continue;
+                    }
+                    import_variable(module_entry, entry->symbol_name, source_module);
+                }
+            }
+        }
     } else {
         fprintf(stderr, "Runtime error in module: %s\n", path);
     }
-    
-    // Clean up
-    freeAST(ast);
+
+cleanup:
+    if (ast) {
+        freeAST(ast);
+    }
     free(source);
-    freeCompiler(&compiler);
-    freeChunk(&chunk);
+    if (compiler_initialized) {
+        freeCompiler(&compiler);
+    }
+    if (chunk_initialized) {
+        freeChunk(&chunk);
+    }
+
+    free(module_name);
+
+    if (pushed) {
+        popLoadingModule(path);
+    }
 
     return result;
 }

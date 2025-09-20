@@ -368,6 +368,30 @@ typedef struct {
     int index;
 } Export;
 
+typedef enum {
+    MODULE_EXPORT_KIND_GLOBAL = 0,
+    MODULE_EXPORT_KIND_FUNCTION = 1,
+    MODULE_EXPORT_KIND_STRUCT = 2,
+    MODULE_EXPORT_KIND_ENUM = 3,
+} ModuleExportKind;
+
+typedef struct {
+    char* name;
+    ModuleExportKind kind;
+    int register_index;
+    Type* type;
+} ModuleExportEntry;
+
+#define MODULE_EXPORT_NO_REGISTER UINT16_MAX
+
+typedef struct {
+    char* module_name;
+    char* symbol_name;
+    char* alias_name;
+    ModuleExportKind kind;
+    int register_index;
+} ModuleImportEntry;
+
 typedef struct {
     char* name;
     char* module_name;
@@ -906,7 +930,47 @@ typedef struct {
     
     // Phase 2.3: Comprehensive lifetime analysis and register reuse system
     struct LifetimeAnalyzer* lifetimeAnalyzer;  // Smart register reuse and lifetime tracking
+
+    // Module export metadata (set when compiling with isModule=true)
+    bool isModule;
+    ModuleExportEntry exports[UINT8_COUNT];
+    int exportCount;
+    ModuleImportEntry imports[UINT8_COUNT];
+    int importCount;
 } Compiler;
+
+// Forward declarations for module export metadata helpers (implemented in module_manager.c)
+void module_free_export_type(Type* type);
+
+// Convenience accessor for compiler export metadata
+static inline void compiler_reset_exports(Compiler* compiler) {
+    if (!compiler) {
+        return;
+    }
+    for (int i = 0; i < compiler->exportCount; ++i) {
+        free(compiler->exports[i].name);
+        compiler->exports[i].name = NULL;
+        compiler->exports[i].kind = MODULE_EXPORT_KIND_GLOBAL;
+        compiler->exports[i].register_index = -1;
+        if (compiler->exports[i].type) {
+            module_free_export_type(compiler->exports[i].type);
+            compiler->exports[i].type = NULL;
+        }
+    }
+    compiler->exportCount = 0;
+    for (int i = 0; i < compiler->importCount; ++i) {
+        free(compiler->imports[i].module_name);
+        free(compiler->imports[i].symbol_name);
+        free(compiler->imports[i].alias_name);
+        compiler->imports[i].module_name = NULL;
+        compiler->imports[i].symbol_name = NULL;
+        compiler->imports[i].alias_name = NULL;
+        compiler->imports[i].kind = MODULE_EXPORT_KIND_GLOBAL;
+        compiler->imports[i].register_index = -1;
+    }
+    compiler->importCount = 0;
+    compiler->isModule = false;
+}
 
 // Typed registers for optimization (unboxed values)
 typedef struct {
@@ -989,6 +1053,8 @@ typedef struct {
     // Module system
     ObjString* loadedModules[UINT8_COUNT];
     int moduleCount;
+    ObjString* loadingModules[UINT8_COUNT];
+    int loadingModuleCount;
 
     // Memory management
     Obj* objects;

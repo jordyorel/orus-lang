@@ -35,6 +35,26 @@ commas. Semicolons are **not** allowed; use a newline to terminate statements.
 x = 1, y = 2, z = 3  # declares three variables
 ```
 
+### Global Variables and Module Exports
+
+Global storage is opt-in. Use the `global` keyword when a value must live for
+the duration of the program. Global identifiers **must** be written in
+`SCREAMING_SNAKE_CASE`; the parser enforces this convention. Globals are module
+private by default, mirroring functions, structs, and enums. Prepend `pub` to
+export a declaration from the current module. Both `global` and `pub`
+modifiers are only valid at module scope—using them inside a function, loop, or
+any nested block is rejected during parsing.
+
+```orus
+global mut CACHE_SIZE: i32 = 1024      // private module global
+pub global REGISTER_COUNT: i64 = 256   // exported global with explicit type
+pub global SEED = 42                   // exported global with inferred type
+```
+
+Global declarations always require an initializer. Optional type annotations can
+appear after the name and before the `=` sign. Mutability works the same as for
+locals via the `mut` keyword.
+
 ### Lexical Scoping
 
 Orus uses lexical scoping. A variable declared inside a block is visible only
@@ -154,6 +174,20 @@ print("Pi rounded:", pi)
 
 ```
 
+Module-level declarations are private unless marked `pub`. The `pub` modifier
+works with `fn`, `global`, `struct`, and `enum` definitions.
+
+```orus
+pub fn helper():
+    print("exported helper")
+
+pub struct Vec2:
+    x: f64
+    y: f64
+
+pub enum Axis: X, Y
+```
+
 ---
 
 ## 🪛 Structs and Methods
@@ -265,49 +299,45 @@ fn min<T: Comparable>(a: T, b: T) -> T:
 
 ## 📂 Modules
 
-Importing entire modules:
+Bringing an entire module into scope (all public globals/functions):
 
 ```orus
 use math
-use datetime as dt
+use datetime: *
 
-dt.now()
-math.pi
+print(datetime.now())
+print(math.PI)
 ```
 
-Wildcard import:
-
-```orus
-use math:*
-sin(0.5)
-cos(1.0)
-```
-
-Selective import:
+Selective use:
 
 ```orus
 use math: sin, cos, tan
 print(sin(0.5))
 ```
 
-Module aliases:
+Renaming imported symbols to avoid collisions:
 
 ```orus
-use utils.helpers as h
-h.do_something()
+use math: sin as sine, cos
+
+print(sine(0.5))
 ```
 
-Public function or struct in module:
+Public function or global in module:
 
 ```orus
 # utils.orus
 pub fn helper():
     print("from helper")
 
-# main.orus
-use utils
+pub global VERSION = 1
 
-utils.helper()
+# main.orus
+use utils: helper, VERSION
+
+helper()
+print("version", VERSION)
 ```
 
 ---

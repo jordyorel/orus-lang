@@ -1,0 +1,4 @@
+use alias_provider: add_offset as bump
+
+// Passing a string should fail because bump expects i32
+bump("oops")

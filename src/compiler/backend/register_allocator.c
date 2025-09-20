@@ -45,7 +45,7 @@ void free_mp_register_allocator(MultiPassRegisterAllocator* allocator) {
 
 int mp_allocate_global_register(MultiPassRegisterAllocator* allocator) {
     if (!allocator) return -1;
-    
+
     // Find next free global register
     for (int i = 0; i < 64; i++) {
         if (!allocator->global_regs[i]) {
@@ -53,10 +53,24 @@ int mp_allocate_global_register(MultiPassRegisterAllocator* allocator) {
             return MP_GLOBAL_REG_START + i;
         }
     }
-    
+
     // No free global registers
     printf("[REGISTER_ALLOCATOR] Warning: No free global registers\n");
     return -1;
+}
+
+bool mp_reserve_global_register(MultiPassRegisterAllocator* allocator, int reg) {
+    if (!allocator) {
+        return false;
+    }
+
+    if (reg < MP_GLOBAL_REG_START || reg > MP_GLOBAL_REG_END) {
+        return false;
+    }
+
+    int index = reg - MP_GLOBAL_REG_START;
+    allocator->global_regs[index] = true;
+    return true;
 }
 
 int mp_allocate_frame_register(MultiPassRegisterAllocator* allocator) {

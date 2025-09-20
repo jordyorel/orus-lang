@@ -46,6 +46,24 @@ TypedASTNode* create_typed_ast_node(ASTNode* original) {
         case NODE_VAR_DECL:
             typed->typed.varDecl.initializer = NULL;
             typed->typed.varDecl.typeAnnotation = NULL;
+            typed->typed.varDecl.isGlobal = original->varDecl.isGlobal;
+            typed->typed.varDecl.isPublic = original->varDecl.isPublic;
+            break;
+        case NODE_IMPORT:
+            typed->typed.import.moduleName = original->import.moduleName;
+            typed->typed.import.moduleAlias = original->import.moduleAlias;
+            typed->typed.import.symbolCount = original->import.symbolCount;
+            typed->typed.import.importAll = original->import.importAll;
+            typed->typed.import.symbols = NULL;
+            if (original->import.symbolCount > 0 && original->import.symbols) {
+                typed->typed.import.symbols = malloc(sizeof(TypedImportSymbol) * (size_t)original->import.symbolCount);
+                if (typed->typed.import.symbols) {
+                    for (int i = 0; i < original->import.symbolCount; i++) {
+                        typed->typed.import.symbols[i].name = original->import.symbols[i].name;
+                        typed->typed.import.symbols[i].alias = original->import.symbols[i].alias;
+                    }
+                }
+            }
             break;
         case NODE_BINARY:
             typed->typed.binary.left = NULL;
@@ -101,6 +119,10 @@ TypedASTNode* create_typed_ast_node(ASTNode* original) {
         case NODE_FUNCTION:
             typed->typed.function.returnType = NULL;
             typed->typed.function.body = NULL;
+            typed->typed.function.isPublic = original->function.isPublic;
+            typed->typed.function.isMethod = original->function.isMethod;
+            typed->typed.function.isInstanceMethod = original->function.isInstanceMethod;
+            typed->typed.function.methodStructName = original->function.methodStructName;
             break;
         case NODE_CALL:
             typed->typed.call.callee = NULL;
@@ -392,6 +414,11 @@ void free_typed_ast_node(TypedASTNode* node) {
                 free((void*)node->typed.enumMatchCheck.variantNames);
             }
             break;
+        case NODE_IMPORT:
+            if (node->typed.import.symbols) {
+                free(node->typed.import.symbols);
+            }
+            break;
         case NODE_MATCH_EXPRESSION:
             free_typed_ast_node(node->typed.matchExpr.subject);
             if (node->typed.matchExpr.arms) {
@@ -547,6 +574,8 @@ bool validate_typed_ast(TypedASTNode* root) {
             return validate_typed_ast(root->typed.enumPayload.value);
         case NODE_ENUM_MATCH_CHECK:
             return validate_typed_ast(root->typed.enumMatchCheck.value);
+        case NODE_IMPORT:
+            return true;
         case NODE_MATCH_EXPRESSION:
             if (root->typed.matchExpr.subject &&
                 !validate_typed_ast(root->typed.matchExpr.subject)) {

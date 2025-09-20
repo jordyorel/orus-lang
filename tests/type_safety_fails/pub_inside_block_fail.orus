@@ -1,0 +1,5 @@
+// The `pub` modifier is limited to module scope. Using it inside any nested
+// block should surface a parse error.
+
+fn main():
+    pub global COUNTER = 1

@@ -31,6 +31,9 @@ typedef struct ParserContext {
     // Loop context tracking for break/continue validation
     int loop_depth;
 
+    // Track nested block depth so we can validate module-only constructs
+    int block_depth;
+
     // Token lookahead management
     Token peeked_token;
     bool has_peeked_token;
