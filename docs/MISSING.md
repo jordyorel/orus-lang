@@ -30,11 +30,11 @@ still needs design work.
 - ✅ **Module system** – Source files can declare `module` headers (with optional
   block bodies), and dotted `use` paths resolve to nested module packages loaded
   through the runtime module manager.
-- ⚠️ **Module visibility** – Parser enforces uppercase `global` declarations,
+- ✅ **Module visibility** – Parser enforces uppercase `global` declarations,
   tracks `pub` exports for globals, functions, structs, and enums, and the
-  runtime now registers those exports with the module loader. Modules can use
-  public globals and functions from sibling files via `use`, including
-  renaming support; pulling type declarations via `use` remains future work.
+  runtime registers those exports with the module loader. Modules can use
+  public globals, functions, and type declarations from sibling files via
+  `use`, including renaming support for structs and enums.
 - ✅ **Pattern matching** – `match` supports enums and literal values using the
   unified `pattern ->` arm syntax. Lowering reuses scoped temporaries and
   chained `if` statements, preserving payload destructuring, `_` wildcards, and
@@ -101,7 +101,7 @@ print("sum:", total)
 | Iterator-style `for item in collection` | Design | Parser/codegen support pending; VM array iterators are ready. |
 | Module packaging | Completed | Module declarations and dotted `use` paths map to nested files and are covered by regression tests. |
 | Print formatting polish | Backlog | Finish escape handling and numeric formatting for the print APIs. |
-| Module use resolution | In progress | `use` loads sibling modules and binds their exported globals/functions with type metadata and aliasing; importing type declarations is still open. |
+| Module use resolution | Completed | `use` loads sibling modules and binds their exported globals, functions, structs, and enums—including aliased type declarations—via the module loader. |
 
 ---
 

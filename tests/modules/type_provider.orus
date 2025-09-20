@@ -1,0 +1,18 @@
+module type_provider
+
+pub struct Point:
+    x: i32
+    y: i32
+
+pub enum Color:
+    Red
+    Rgb(r: i32, g: i32, b: i32)
+
+pub fn origin() -> Point:
+    return Point{ x: 0, y: 0 }
+
+pub fn tint(point: Point, shade: Color) -> string:
+    if shade == Color.Red:
+        return "red"
+
+    return "rgb"

@@ -931,6 +931,32 @@ Type* findEnumType(const char* name) {
     return hashmap_get(enum_type_registry, name);
 }
 
+void registerStructTypeAlias(const char* alias, Type* type) {
+    if (!alias || !type) {
+        return;
+    }
+
+    ensure_type_registries();
+    if (!struct_type_registry) {
+        return;
+    }
+
+    hashmap_set(struct_type_registry, alias, type);
+}
+
+void registerEnumTypeAlias(const char* alias, Type* type) {
+    if (!alias || !type) {
+        return;
+    }
+
+    ensure_type_registries();
+    if (!enum_type_registry) {
+        return;
+    }
+
+    hashmap_set(enum_type_registry, alias, type);
+}
+
 void freeType(Type* type) {
     if (!type) return;
     if (type->ext) {

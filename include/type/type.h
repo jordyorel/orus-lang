@@ -75,6 +75,8 @@ Type* createEnumType(ObjString* name, Variant* variants, int variant_count);
 Type* createGenericType(ObjString* name);
 Type* findStructType(const char* name);
 Type* findEnumType(const char* name);
+void registerStructTypeAlias(const char* alias, Type* type);
+void registerEnumTypeAlias(const char* alias, Type* type);
 void freeType(Type* type);
 bool typesEqual(Type* a, Type* b);
 bool equalsType(Type* a, Type* b);

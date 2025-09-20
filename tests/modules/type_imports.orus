@@ -1,0 +1,23 @@
+use type_provider: Point as P, Color, origin
+
+fn add(point: P) -> i32:
+    return point.x + point.y
+
+fn magnitude(hue: Color) -> i32:
+    match hue:
+        Color.Red ->
+            return 255
+        Color.Rgb(r, g, b) ->
+            return r + g + b
+
+mut center: P = origin()
+print(add(center))
+
+mut shade: Color = Color.Red
+print(magnitude(shade))
+
+shade = Color.Rgb(3, 5, 8)
+print(magnitude(shade))
+
+mut offset: P = P{ x: center.x + 1, y: center.y + 2 }
+print(add(offset))
