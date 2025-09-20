@@ -68,6 +68,8 @@ struct TypedASTNode {
         struct {
             TypedASTNode** declarations;
             int count;
+            const char* moduleName;
+            bool hasModuleDeclaration;
         } program;
         struct {
             TypedASTNode* initializer;

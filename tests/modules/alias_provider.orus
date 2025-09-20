@@ -1,3 +1,5 @@
+module alias_provider
+
 pub global OFFSET: i32 = 7
 
 pub fn add_offset(value: i32) -> i32:

@@ -42,6 +42,8 @@ TypedASTNode* create_typed_ast_node(ASTNode* original) {
         case NODE_PROGRAM:
             typed->typed.program.declarations = NULL;
             typed->typed.program.count = 0;
+            typed->typed.program.moduleName = original->program.moduleName;
+            typed->typed.program.hasModuleDeclaration = original->program.hasModuleDeclaration;
             break;
         case NODE_VAR_DECL:
             typed->typed.varDecl.initializer = NULL;

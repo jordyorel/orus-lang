@@ -1,0 +1,7 @@
+use pkg.stats: add, sum_three, ZERO
+
+pair_sum = add(4, 5)
+triple_sum = sum_three(ZERO, pair_sum, 6)
+
+print("pair", pair_sum)
+print("triple", triple_sum)

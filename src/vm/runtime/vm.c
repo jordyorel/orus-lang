@@ -548,11 +548,20 @@ static char* build_module_path(const char* base_path, const char* module_name) {
     if (dir_len > 0) {
         memcpy(result, base_path, dir_len);
     }
-    memcpy(result + dir_len, module_name, module_len);
+    size_t base_len = has_extension ? module_len - suffix_len : module_len;
+    for (size_t i = 0; i < base_len; i++) {
+        char ch = module_name[i];
+        if (ch == '.') {
+            result[dir_len + i] = '/';
+        } else {
+            result[dir_len + i] = ch;
+        }
+    }
+
     if (has_extension) {
-        result[dir_len + module_len] = '\0';
+        memcpy(result + dir_len + base_len, module_name + base_len, suffix_len + 1);
     } else {
-        memcpy(result + dir_len + module_len, suffix, suffix_len + 1);
+        memcpy(result + dir_len + base_len, suffix, suffix_len + 1);
     }
     return result;
 }
@@ -727,6 +736,15 @@ InterpretResult interpret_module(const char* path) {
     } else {
         free_module_imports(module_imports, module_import_count);
         module_imports = NULL;
+    }
+
+    if (ast && ast->type == NODE_PROGRAM && ast->program.moduleName) {
+        free(module_name);
+        module_name = strdup(ast->program.moduleName);
+        if (!module_name) {
+            fprintf(stderr, "Failed to allocate module name for: %s\n", path);
+            goto cleanup;
+        }
     }
 
     if (!compileProgram(ast, &compiler, true)) {

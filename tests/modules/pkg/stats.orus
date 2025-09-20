@@ -1,0 +1,9 @@
+module pkg.stats:
+
+    pub global ZERO = 0
+
+    pub fn add(a: i32, b: i32) -> i32:
+        return a + b
+
+    pub fn sum_three(a: i32, b: i32, c: i32) -> i32:
+        return add(add(a, b), c)
