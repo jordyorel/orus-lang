@@ -19,6 +19,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
+#include <limits.h>
 
 static Symbol* register_variable(CompilerContext* ctx, SymbolTable* scope,
                                  const char* name, int reg, Type* type,
@@ -2019,8 +2021,15 @@ static int compile_match_expression(CompilerContext* ctx, TypedASTNode* expr) {
     return result_reg;
 }
 
-static bool evaluate_constant_i32(TypedASTNode* node, int32_t* out_value) {
-    if (!node || !out_value || !node->original) {
+typedef struct IntegerConstantInfo {
+    bool is_signed;
+    int64_t signed_value;
+    uint64_t unsigned_value;
+} IntegerConstantInfo;
+
+static bool evaluate_constant_integer(TypedASTNode* node,
+                                      IntegerConstantInfo* out_info) {
+    if (!node || !out_info || !node->original) {
         return false;
     }
 
@@ -2030,19 +2039,29 @@ static bool evaluate_constant_i32(TypedASTNode* node, int32_t* out_value) {
             Value val = original->literal.value;
             switch (val.type) {
                 case VAL_I32:
-                    *out_value = val.as.i32;
+                    out_info->is_signed = true;
+                    out_info->signed_value = (int64_t)val.as.i32;
+                    out_info->unsigned_value = (uint64_t)(uint32_t)val.as.i32;
                     return true;
                 case VAL_I64:
-                    *out_value = (int32_t)val.as.i64;
+                    out_info->is_signed = true;
+                    out_info->signed_value = val.as.i64;
+                    out_info->unsigned_value = (uint64_t)val.as.i64;
                     return true;
                 case VAL_U32:
-                    *out_value = (int32_t)val.as.u32;
+                    out_info->is_signed = false;
+                    out_info->unsigned_value = (uint64_t)val.as.u32;
+                    out_info->signed_value = (int64_t)val.as.u32;
                     return true;
                 case VAL_U64:
-                    *out_value = (int32_t)val.as.u64;
+                    out_info->is_signed = false;
+                    out_info->unsigned_value = val.as.u64;
+                    out_info->signed_value = (int64_t)val.as.u64;
                     return true;
                 case VAL_NUMBER:
-                    *out_value = (int32_t)val.as.number;
+                    out_info->is_signed = true;
+                    out_info->signed_value = (int64_t)val.as.number;
+                    out_info->unsigned_value = (uint64_t)out_info->signed_value;
                     return true;
                 default:
                     return false;
@@ -2056,11 +2075,39 @@ static bool evaluate_constant_i32(TypedASTNode* node, int32_t* out_value) {
             if (!operand) {
                 return false;
             }
-            int32_t inner = 0;
-            if (!evaluate_constant_i32(operand, &inner)) {
+
+            IntegerConstantInfo inner = {0};
+            if (!evaluate_constant_integer(operand, &inner)) {
                 return false;
             }
-            *out_value = -inner;
+
+            out_info->is_signed = true;
+            out_info->unsigned_value = 0;
+
+            if (inner.is_signed) {
+                if (inner.signed_value == INT64_MIN) {
+                    return false; // cannot negate without overflow
+                }
+                out_info->signed_value = -inner.signed_value;
+                return true;
+            }
+
+            if (inner.unsigned_value == 0) {
+                out_info->signed_value = 0;
+                return true;
+            }
+
+            uint64_t magnitude = inner.unsigned_value;
+            uint64_t max_plus_one = (uint64_t)INT64_MAX + 1ULL;
+            if (magnitude > max_plus_one) {
+                return false; // outside signed range after negation
+            }
+
+            if (magnitude == max_plus_one) {
+                out_info->signed_value = INT64_MIN;
+            } else {
+                out_info->signed_value = -(int64_t)magnitude;
+            }
             return true;
         }
         default:
@@ -4433,6 +4480,36 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
 }
 
 
+static bool loop_type_supported(TypeKind kind) {
+    switch (kind) {
+        case TYPE_I32:
+        case TYPE_I64:
+        case TYPE_U32:
+        case TYPE_U64:
+            return true;
+        default:
+            return false;
+    }
+}
+
+static bool loop_type_is_signed(TypeKind kind) {
+    return (kind == TYPE_I32) || (kind == TYPE_I64);
+}
+
+static Value loop_make_constant(TypeKind kind, int64_t value) {
+    switch (kind) {
+        case TYPE_I64:
+            return I64_VAL(value);
+        case TYPE_U32:
+            return U32_VAL((uint32_t)value);
+        case TYPE_U64:
+            return U64_VAL((uint64_t)value);
+        case TYPE_I32:
+        default:
+            return I32_VAL((int32_t)value);
+    }
+}
+
 void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     if (!ctx || !for_stmt) {
         return;
@@ -4479,6 +4556,7 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     int step_nonneg_reg = -1;
     int zero_reg = -1;
     int limit_temp_reg = -1; // temp for inclusive fused limit (end+1)
+    int limit_const_reg = -1; // helper constant register for fused path
 
     const char* loop_var_name = NULL;
     if (for_stmt->original && for_stmt->original->forRange.varName) {
@@ -4513,7 +4591,23 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
         goto cleanup;
     }
 
-    bool step_known_positive = false;
+    // Determine loop variable numeric type
+    Type* loop_type = getPrimitiveType(TYPE_I32);
+    TypeKind loop_kind = TYPE_I32;
+    if (start_node && start_node->resolvedType &&
+        loop_type_supported(start_node->resolvedType->kind)) {
+        loop_type = start_node->resolvedType;
+        loop_kind = loop_type->kind;
+    } else if (end_node && end_node->resolvedType &&
+               loop_type_supported(end_node->resolvedType->kind)) {
+        loop_type = end_node->resolvedType;
+        loop_kind = loop_type->kind;
+    }
+
+    bool loop_is_signed = loop_type_is_signed(loop_kind);
+    bool loop_is_i32 = (loop_kind == TYPE_I32);
+
+    bool step_known_positive = !loop_is_signed; // unsigned types can't be negative
     bool step_known_negative = false;
     bool step_is_one = false; // Enable fused loop fast-path when true
 
@@ -4524,15 +4618,23 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
             goto cleanup;
         }
 
-        int32_t step_constant = 0;
-        if (evaluate_constant_i32(step_node, &step_constant)) {
-            if (step_constant >= 0) {
-                step_known_positive = true;
+        IntegerConstantInfo step_constant = {0};
+        if (evaluate_constant_integer(step_node, &step_constant)) {
+            if (step_constant.is_signed) {
+                if (step_constant.signed_value >= 0) {
+                    step_known_positive = true;
+                } else {
+                    step_known_positive = false;
+                    step_known_negative = true;
+                }
+                if (step_constant.signed_value == 1) {
+                    step_is_one = true;
+                }
             } else {
-                step_known_negative = true;
-            }
-            if (step_constant == 1) {
-                step_is_one = true;
+                step_known_positive = true;
+                if (step_constant.unsigned_value == 1) {
+                    step_is_one = true;
+                }
             }
         }
     } else {
@@ -4542,19 +4644,19 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
             goto cleanup;
         }
         set_location_from_node(ctx, for_stmt);
-        emit_load_constant(ctx, step_reg, I32_VAL(1));
+        emit_load_constant(ctx, step_reg, loop_make_constant(loop_kind, 1));
         step_known_positive = true;
         step_is_one = true;
     }
 
-    if (!step_known_positive && !step_known_negative) {
+    if (loop_is_signed && !step_known_positive && !step_known_negative) {
         zero_reg = mp_allocate_temp_register(ctx->allocator);
         if (zero_reg == -1) {
             ctx->has_compilation_errors = true;
             goto cleanup;
         }
         set_location_from_node(ctx, for_stmt);
-        emit_load_constant(ctx, zero_reg, I32_VAL(0));
+        emit_load_constant(ctx, zero_reg, loop_make_constant(loop_kind, 0));
 
         step_nonneg_reg = mp_allocate_temp_register(ctx->allocator);
         if (step_nonneg_reg == -1) {
@@ -4562,10 +4664,7 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
             goto cleanup;
         }
         set_location_from_node(ctx, for_stmt);
-        emit_byte_to_buffer(ctx->bytecode, OP_GE_I32_R);
-        emit_byte_to_buffer(ctx->bytecode, step_nonneg_reg);
-        emit_byte_to_buffer(ctx->bytecode, step_reg);
-        emit_byte_to_buffer(ctx->bytecode, zero_reg);
+        emit_binary_op(ctx, ">=", loop_type, step_nonneg_reg, step_reg, zero_reg);
 
         if (zero_reg >= MP_TEMP_REG_START && zero_reg <= MP_TEMP_REG_END) {
             mp_free_temp_register(ctx->allocator, zero_reg);
@@ -4580,16 +4679,14 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     }
 
     if (!register_variable(ctx, ctx->symbols, loop_var_name, loop_var_reg,
-                           getPrimitiveType(TYPE_I32), true,
+                           loop_type, true,
                            for_stmt->original->location, true)) {
         ctx->has_compilation_errors = true;
         goto cleanup;
     }
 
     set_location_from_node(ctx, for_stmt);
-    emit_byte_to_buffer(ctx->bytecode, OP_MOVE_I32);
-    emit_byte_to_buffer(ctx->bytecode, loop_var_reg);
-    emit_byte_to_buffer(ctx->bytecode, start_reg);
+    emit_move(ctx, loop_var_reg, start_reg);
 
     if (start_reg >= MP_TEMP_REG_START && start_reg <= MP_TEMP_REG_END) {
         mp_free_temp_register(ctx->allocator, start_reg);
@@ -4614,42 +4711,40 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
 
     // If we can use fused INC_CMP_JMP, adjust top-test to strict < with a possibly adjusted limit
     int limit_reg_used = end_reg;
-    bool can_fuse_inc_cmp = step_known_positive && step_is_one;
+    bool can_fuse_inc_cmp = step_known_positive && step_is_one && loop_is_i32;
     if (can_fuse_inc_cmp && for_stmt->typed.forRange.inclusive) {
-        // Compute (end + 1) into a temp to preserve inclusive semantics
         limit_temp_reg = mp_allocate_temp_register(ctx->allocator);
         if (limit_temp_reg == -1) {
             ctx->has_compilation_errors = true;
             goto cleanup;
         }
+        limit_const_reg = mp_allocate_temp_register(ctx->allocator);
+        if (limit_const_reg == -1) {
+            ctx->has_compilation_errors = true;
+            goto cleanup;
+        }
         set_location_from_node(ctx, for_stmt);
-        // OP_ADD_I32_IMM: dst, src, imm(4 bytes)
-        emit_byte_to_buffer(ctx->bytecode, OP_ADD_I32_IMM);
-        emit_byte_to_buffer(ctx->bytecode, (uint8_t)limit_temp_reg);
-        emit_byte_to_buffer(ctx->bytecode, (uint8_t)end_reg);
-        int32_t one = 1;
-        emit_byte_to_buffer(ctx->bytecode, (uint8_t)((one) & 0xFF));
-        emit_byte_to_buffer(ctx->bytecode, (uint8_t)((one >> 8) & 0xFF));
-        emit_byte_to_buffer(ctx->bytecode, (uint8_t)((one >> 16) & 0xFF));
-        emit_byte_to_buffer(ctx->bytecode, (uint8_t)((one >> 24) & 0xFF));
+        emit_move(ctx, limit_temp_reg, end_reg);
+        set_location_from_node(ctx, for_stmt);
+        emit_load_constant(ctx, limit_const_reg, loop_make_constant(loop_kind, 1));
+        set_location_from_node(ctx, for_stmt);
+        emit_binary_op(ctx, "+", loop_type, limit_temp_reg, limit_temp_reg, limit_const_reg);
+        if (limit_const_reg >= MP_TEMP_REG_START && limit_const_reg <= MP_TEMP_REG_END) {
+            mp_free_temp_register(ctx->allocator, limit_const_reg);
+        }
+        limit_const_reg = -1;
         limit_reg_used = limit_temp_reg;
     }
 
     set_location_from_node(ctx, for_stmt);
     if (can_fuse_inc_cmp) {
-        emit_byte_to_buffer(ctx->bytecode, OP_LT_I32_R);
+        emit_binary_op(ctx, "<", loop_type, condition_reg, loop_var_reg, limit_reg_used);
     } else {
-        if (for_stmt->typed.forRange.inclusive) {
-            emit_byte_to_buffer(ctx->bytecode, OP_LE_I32_R);
-        } else {
-            emit_byte_to_buffer(ctx->bytecode, OP_LT_I32_R);
-        }
+        const char* cmp_op = for_stmt->typed.forRange.inclusive ? "<=" : "<";
+        emit_binary_op(ctx, cmp_op, loop_type, condition_reg, loop_var_reg, end_reg);
     }
-    emit_byte_to_buffer(ctx->bytecode, condition_reg);
-    emit_byte_to_buffer(ctx->bytecode, loop_var_reg);
-    emit_byte_to_buffer(ctx->bytecode, (uint8_t) (can_fuse_inc_cmp ? limit_reg_used : end_reg));
 
-    if (!step_known_positive) {
+    if (loop_is_signed && !step_known_positive) {
         condition_neg_reg = mp_allocate_temp_register(ctx->allocator);
         if (condition_neg_reg == -1) {
             ctx->has_compilation_errors = true;
@@ -4657,14 +4752,8 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
         }
 
         set_location_from_node(ctx, for_stmt);
-        if (for_stmt->typed.forRange.inclusive) {
-            emit_byte_to_buffer(ctx->bytecode, OP_GE_I32_R);
-        } else {
-            emit_byte_to_buffer(ctx->bytecode, OP_GT_I32_R);
-        }
-        emit_byte_to_buffer(ctx->bytecode, condition_neg_reg);
-        emit_byte_to_buffer(ctx->bytecode, loop_var_reg);
-        emit_byte_to_buffer(ctx->bytecode, end_reg);
+        const char* neg_cmp = for_stmt->typed.forRange.inclusive ? ">=" : ">";
+        emit_binary_op(ctx, neg_cmp, loop_type, condition_neg_reg, loop_var_reg, end_reg);
     }
 
     int select_neg_patch = -1;
@@ -4673,7 +4762,7 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     if (step_known_negative) {
         set_location_from_node(ctx, for_stmt);
         emit_move(ctx, condition_reg, condition_neg_reg);
-    } else if (!step_known_positive) {
+    } else if (loop_is_signed && !step_known_positive) {
         if (step_nonneg_reg == -1) {
             ctx->has_compilation_errors = true;
             goto cleanup;
@@ -4743,10 +4832,7 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
         emit_byte_to_buffer(ctx->bytecode, (uint8_t)((back_off >> 8) & 0xFF));
     } else {
         set_location_from_node(ctx, for_stmt);
-        emit_byte_to_buffer(ctx->bytecode, OP_ADD_I32_R);
-        emit_byte_to_buffer(ctx->bytecode, loop_var_reg);
-        emit_byte_to_buffer(ctx->bytecode, loop_var_reg);
-        emit_byte_to_buffer(ctx->bytecode, step_reg);
+        emit_binary_op(ctx, "+", loop_type, loop_var_reg, loop_var_reg, step_reg);
 
         patch_continue_statements(ctx, continue_target);
 
@@ -4815,6 +4901,10 @@ cleanup:
     if (limit_temp_reg >= MP_TEMP_REG_START && limit_temp_reg <= MP_TEMP_REG_END) {
         mp_free_temp_register(ctx->allocator, limit_temp_reg);
         limit_temp_reg = -1;
+    }
+    if (limit_const_reg >= MP_TEMP_REG_START && limit_const_reg <= MP_TEMP_REG_END) {
+        mp_free_temp_register(ctx->allocator, limit_const_reg);
+        limit_const_reg = -1;
     }
     if (step_reg >= MP_TEMP_REG_START && step_reg <= MP_TEMP_REG_END) {
         mp_free_temp_register(ctx->allocator, step_reg);
