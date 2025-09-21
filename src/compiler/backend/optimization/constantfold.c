@@ -12,6 +12,71 @@
 // Global context for tracking statistics
 static ConstantFoldContext fold_stats;
 
+// Helper to safely recurse into optional child nodes
+static void fold_child(TypedASTNode* node) {
+    if (node) {
+        apply_constant_folding_recursive(node);
+    }
+}
+
+// Helper to recurse into arrays of child nodes
+static void fold_children(TypedASTNode** nodes, int count) {
+    if (!nodes || count <= 0) {
+        return;
+    }
+
+    for (int i = 0; i < count; i++) {
+        if (nodes[i]) {
+            apply_constant_folding_recursive(nodes[i]);
+        }
+    }
+}
+
+// Helper to recurse through struct field metadata
+static void fold_struct_fields(TypedStructField* fields, int count) {
+    if (!fields || count <= 0) {
+        return;
+    }
+
+    for (int i = 0; i < count; i++) {
+        fold_child(fields[i].typeAnnotation);
+        fold_child(fields[i].defaultValue);
+    }
+}
+
+// Helper to recurse through enum variant field metadata
+static void fold_enum_variants(TypedEnumVariant* variants, int count) {
+    if (!variants || count <= 0) {
+        return;
+    }
+
+    for (int i = 0; i < count; i++) {
+        TypedEnumVariant* variant = &variants[i];
+        if (!variant->fields || variant->fieldCount <= 0) {
+            continue;
+        }
+
+        for (int j = 0; j < variant->fieldCount; j++) {
+            fold_child(variant->fields[j].typeAnnotation);
+        }
+    }
+}
+
+// Helper to recurse through match expression arms
+static void fold_match_arms(TypedMatchArm* arms, int count) {
+    if (!arms || count <= 0) {
+        return;
+    }
+
+    for (int i = 0; i < count; i++) {
+        TypedMatchArm* arm = &arms[i];
+        fold_child(arm->valuePattern);
+        fold_child(arm->body);
+        fold_child(arm->condition);
+        fold_children(arm->payloadAccesses, arm->payloadCount);
+    }
+}
+
 void init_constant_fold_context(ConstantFoldContext* ctx) {
     ctx->optimizations_applied = 0;
     ctx->constants_folded = 0;
@@ -44,40 +109,42 @@ bool apply_constant_folding_recursive(TypedASTNode* ast) {
     
     switch (ast->original->type) {
         case NODE_PROGRAM:
-            if (ast->typed.program.declarations) {
-                for (int i = 0; i < ast->typed.program.count; i++) {
-                    if (ast->typed.program.declarations[i]) {
-                        apply_constant_folding_recursive(ast->typed.program.declarations[i]);
-                    }
-                }
-            }
+            fold_children(ast->typed.program.declarations, ast->typed.program.count);
             break;
-            
+
+        case NODE_FUNCTION:
+            fold_child(ast->typed.function.returnType);
+            fold_child(ast->typed.function.body);
+            break;
+
+        case NODE_BLOCK:
+            fold_children(ast->typed.block.statements, ast->typed.block.count);
+            break;
+
+        case NODE_VAR_DECL:
+            fold_child(ast->typed.varDecl.initializer);
+            fold_child(ast->typed.varDecl.typeAnnotation);
+            break;
+
         case NODE_ASSIGN:
-            if (ast->typed.assign.value) {
-                apply_constant_folding_recursive(ast->typed.assign.value);
-            }
+            fold_child(ast->typed.assign.value);
             break;
-            
+
         case NODE_BINARY:
             DEBUG_CONSTANTFOLD_PRINT("Analyzing binary expression: %s\n", ast->original->binary.op);
-            
+
             // Recursively fold child expressions first
-            if (ast->typed.binary.left) {
-                apply_constant_folding_recursive(ast->typed.binary.left);
-            }
-            if (ast->typed.binary.right) {
-                apply_constant_folding_recursive(ast->typed.binary.right);
-            }
-            
+            fold_child(ast->typed.binary.left);
+            fold_child(ast->typed.binary.right);
+
             // Try to fold this binary expression
             fold_binary_expression(ast);
             break;
-            
+
         case NODE_UNARY:
-            DEBUG_CONSTANTFOLD_PRINT("Analyzing unary expression: %s\n", 
+            DEBUG_CONSTANTFOLD_PRINT("Analyzing unary expression: %s\n",
                    ast->original->unary.op ? ast->original->unary.op : "unknown");
-            
+
             // First recursively fold the operand using the typed AST if available
             if (ast->typed.unary.operand) {
                 DEBUG_CONSTANTFOLD_PRINT("Recursively folding unary operand via typed AST\n");
@@ -125,12 +192,18 @@ bool apply_constant_folding_recursive(TypedASTNode* ast) {
             break;
             
         case NODE_PRINT:
-            // Print nodes don't have child expressions to fold in current implementation
+            fold_children(ast->typed.print.values, ast->typed.print.count);
+            fold_child(ast->typed.print.separator);
             break;
-            
+
+        case NODE_INDEX_ACCESS:
+            fold_child(ast->typed.indexAccess.array);
+            fold_child(ast->typed.indexAccess.index);
+            break;
+
         case NODE_IF:
             DEBUG_CONSTANTFOLD_PRINT("Analyzing if statement\n");
-            
+
             // Fold the condition expression using typed AST if available
             if (ast->typed.ifStmt.condition) {
                 DEBUG_CONSTANTFOLD_PRINT("Folding if condition via typed AST\n");
@@ -142,23 +215,113 @@ bool apply_constant_folding_recursive(TypedASTNode* ast) {
             }
             
             // Fold the then branch
-            if (ast->typed.ifStmt.thenBranch) {
-                apply_constant_folding_recursive(ast->typed.ifStmt.thenBranch);
-            }
-            
+            fold_child(ast->typed.ifStmt.thenBranch);
+
             // Fold the else branch if it exists
-            if (ast->typed.ifStmt.elseBranch) {
-                apply_constant_folding_recursive(ast->typed.ifStmt.elseBranch);
-            }
+            fold_child(ast->typed.ifStmt.elseBranch);
+            break;
+
+        case NODE_WHILE:
+            fold_child(ast->typed.whileStmt.condition);
+            fold_child(ast->typed.whileStmt.body);
+            break;
+
+        case NODE_FOR_RANGE:
+            fold_child(ast->typed.forRange.start);
+            fold_child(ast->typed.forRange.end);
+            fold_child(ast->typed.forRange.step);
+            fold_child(ast->typed.forRange.body);
+            break;
+
+        case NODE_FOR_ITER:
+            fold_child(ast->typed.forIter.iterable);
+            fold_child(ast->typed.forIter.body);
+            break;
+
+        case NODE_RETURN:
+            fold_child(ast->typed.returnStmt.value);
+            break;
+
+        case NODE_CALL:
+            fold_child(ast->typed.call.callee);
+            fold_children(ast->typed.call.args, ast->typed.call.argCount);
+            break;
+
+        case NODE_THROW:
+            fold_child(ast->typed.throwStmt.value);
+            break;
+
+        case NODE_ARRAY_LITERAL:
+            fold_children(ast->typed.arrayLiteral.elements, ast->typed.arrayLiteral.count);
+            break;
+
+        case NODE_ARRAY_ASSIGN:
+            fold_child(ast->typed.arrayAssign.target);
+            fold_child(ast->typed.arrayAssign.value);
+            break;
+
+        case NODE_ARRAY_SLICE:
+            fold_child(ast->typed.arraySlice.array);
+            fold_child(ast->typed.arraySlice.start);
+            fold_child(ast->typed.arraySlice.end);
+            break;
+
+        case NODE_TERNARY:
+            fold_child(ast->typed.ternary.condition);
+            fold_child(ast->typed.ternary.trueExpr);
+            fold_child(ast->typed.ternary.falseExpr);
+            break;
+
+        case NODE_CAST:
+            fold_child(ast->typed.cast.expression);
+            fold_child(ast->typed.cast.targetType);
             break;
 
         case NODE_TRY:
-            if (ast->typed.tryStmt.tryBlock) {
-                apply_constant_folding_recursive(ast->typed.tryStmt.tryBlock);
-            }
-            if (ast->typed.tryStmt.catchBlock) {
-                apply_constant_folding_recursive(ast->typed.tryStmt.catchBlock);
-            }
+            fold_child(ast->typed.tryStmt.tryBlock);
+            fold_child(ast->typed.tryStmt.catchBlock);
+            break;
+
+        case NODE_MEMBER_ACCESS:
+            fold_child(ast->typed.member.object);
+            break;
+
+        case NODE_MEMBER_ASSIGN:
+            fold_child(ast->typed.memberAssign.target);
+            fold_child(ast->typed.memberAssign.value);
+            break;
+
+        case NODE_STRUCT_LITERAL:
+            fold_children(ast->typed.structLiteral.values, ast->typed.structLiteral.fieldCount);
+            break;
+
+        case NODE_STRUCT_DECL:
+            fold_struct_fields(ast->typed.structDecl.fields, ast->typed.structDecl.fieldCount);
+            break;
+
+        case NODE_IMPL_BLOCK:
+            fold_children(ast->typed.implBlock.methods, ast->typed.implBlock.methodCount);
+            break;
+
+        case NODE_ENUM_DECL:
+            fold_enum_variants(ast->typed.enumDecl.variants, ast->typed.enumDecl.variantCount);
+            break;
+
+        case NODE_ENUM_MATCH_TEST:
+            fold_child(ast->typed.enumMatchTest.value);
+            break;
+
+        case NODE_ENUM_PAYLOAD:
+            fold_child(ast->typed.enumPayload.value);
+            break;
+
+        case NODE_ENUM_MATCH_CHECK:
+            fold_child(ast->typed.enumMatchCheck.value);
+            break;
+
+        case NODE_MATCH_EXPRESSION:
+            fold_child(ast->typed.matchExpr.subject);
+            fold_match_arms(ast->typed.matchExpr.arms, ast->typed.matchExpr.armCount);
             break;
 
         default:
