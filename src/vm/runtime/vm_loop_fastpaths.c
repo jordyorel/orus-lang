@@ -27,19 +27,15 @@ bool vm_try_branch_bool_fast_hot(uint16_t reg, bool* out_value) {
     return false;
 }
 
-bool vm_try_branch_bool_fast_cold(uint16_t reg, bool* out_value) {
+VMBoolBranchResult vm_try_branch_bool_fast_cold(uint16_t reg, bool* out_value) {
     if (!out_value) {
-        return false;
-    }
-
-    if (!vm.config.enable_bool_branch_fastpath) {
-        return false;
+        return VM_BOOL_BRANCH_RESULT_FAIL;
     }
 
     bool fast_value = false;
     if (vm_try_branch_bool_fast_hot(reg, &fast_value)) {
         *out_value = fast_value;
-        return true;
+        return VM_BOOL_BRANCH_RESULT_TYPED;
     }
 
     Value condition = vm_get_register_safe(reg);
@@ -48,11 +44,11 @@ bool vm_try_branch_bool_fast_cold(uint16_t reg, bool* out_value) {
         if (vm.config.enable_licm_typed_metadata) {
             vm_trace_loop_event(LOOP_TRACE_LICM_GUARD_DEMOTION);
         }
-        return false;
+        return VM_BOOL_BRANCH_RESULT_FAIL;
     }
 
     *out_value = AS_BOOL(condition);
-    return false;
+    return VM_BOOL_BRANCH_RESULT_BOXED;
 }
 
 bool vm_exec_inc_i32_checked(uint16_t reg) {

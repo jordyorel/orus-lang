@@ -2503,20 +2503,23 @@ InterpretResult vm_run_dispatch(void) {
             vm_trace_loop_event(LOOP_TRACE_ITER_FALLBACK);
         } else if (IS_ARRAY(v)) {
             ObjArray* array = AS_ARRAY(v);
-            if (!vm.config.force_boxed_iterators && vm_typed_iterator_bind_array(dst, array)) {
+            if (!vm.config.force_boxed_iterators) {
                 vm_set_register_safe(dst, v);
-                vm_trace_loop_event(LOOP_TRACE_TYPED_HIT);
-                vm_trace_loop_event(LOOP_TRACE_ITER_SAVED_ALLOCATIONS);
-            } else {
-                ObjArrayIterator* iterator = allocateArrayIterator(array);
-                if (!iterator) {
-                    VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(), "Failed to allocate array iterator");
+                if (vm_typed_iterator_bind_array(dst, array)) {
+                    vm_trace_loop_event(LOOP_TRACE_TYPED_HIT);
+                    vm_trace_loop_event(LOOP_TRACE_ITER_SAVED_ALLOCATIONS);
+                    DISPATCH();
                 }
-                Value iterator_value = {.type = VAL_ARRAY_ITERATOR, .as.obj = (Obj*)iterator};
-                vm_set_register_safe(dst, iterator_value);
-                vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
-                vm_trace_loop_event(LOOP_TRACE_ITER_FALLBACK);
             }
+
+            ObjArrayIterator* iterator = allocateArrayIterator(array);
+            if (!iterator) {
+                VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(), "Failed to allocate array iterator");
+            }
+            Value iterator_value = {.type = VAL_ARRAY_ITERATOR, .as.obj = (Obj*)iterator};
+            vm_set_register_safe(dst, iterator_value);
+            vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+            vm_trace_loop_event(LOOP_TRACE_ITER_FALLBACK);
         } else if (IS_ARRAY_ITERATOR(v)) {
             vm_set_register_safe(dst, v);
         } else {

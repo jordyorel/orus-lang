@@ -7,6 +7,20 @@
 
 static LICMStats g_licm_stats;
 
+static bool type_is_bool(const Type* type) {
+    return type && type->kind == TYPE_BOOL;
+}
+
+static bool has_stable_bool_witness(const TypedASTNode* node) {
+    if (!node) {
+        return false;
+    }
+    if (!node->typeResolved || node->hasTypeError) {
+        return false;
+    }
+    return type_is_bool(node->resolvedType);
+}
+
 static void licm_mark_loop_metadata(TypedASTNode* node, int hoisted_guards) {
     if (!node) {
         return;
@@ -535,13 +549,25 @@ static bool is_supported_loop_node(const TypedASTNode* node) {
     }
 }
 
+static bool expression_is_boolean(const TypedASTNode* node) {
+    if (!node) {
+        return false;
+    }
+    return type_is_bool(node->resolvedType);
+}
+
 static bool is_hoistable_statement(const TypedASTNode* node,
                                    const NameSet* locals,
                                    const NameSet* mutated,
                                    const NameCounter* mutation_counts,
-                                   NameSet* hoisted_names) {
+                                   NameSet* hoisted_names,
+                                   bool* out_is_guard) {
     if (!node || !node->original) {
         return false;
+    }
+
+    if (out_is_guard) {
+        *out_is_guard = false;
     }
 
     switch (node->original->type) {
@@ -562,6 +588,15 @@ static bool is_hoistable_statement(const TypedASTNode* node,
             TypedASTNode* initializer = node->typed.varDecl.initializer;
             if (!initializer) {
                 return false;
+            }
+
+            if (expression_is_boolean(initializer)) {
+                if (!has_stable_bool_witness(initializer)) {
+                    return false;
+                }
+                if (out_is_guard) {
+                    *out_is_guard = true;
+                }
             }
 
             if (!is_invariant_expression(initializer, locals, mutated, hoisted_names)) {
@@ -590,6 +625,15 @@ static bool is_hoistable_statement(const TypedASTNode* node,
             TypedASTNode* value = node->typed.assign.value;
             if (!value) {
                 return false;
+            }
+
+            if (expression_is_boolean(value)) {
+                if (!has_stable_bool_witness(value)) {
+                    return false;
+                }
+                if (out_is_guard) {
+                    *out_is_guard = true;
+                }
             }
 
             if (!is_invariant_expression(value, locals, mutated, hoisted_names)) {
@@ -625,9 +669,14 @@ static TypedASTNode* get_loop_body(TypedASTNode* loop_node) {
 
 static int hoist_invariants_from_loop(TypedASTNode*** parent_array_ptr,
                                       int* parent_count_ptr,
-                                      int loop_index) {
+                                      int loop_index,
+                                      int* hoisted_guard_count) {
     if (!parent_array_ptr || !parent_count_ptr || loop_index < 0) {
         return 0;
+    }
+
+    if (hoisted_guard_count) {
+        *hoisted_guard_count = 0;
     }
 
     TypedASTNode** parent_statements = *parent_array_ptr;
@@ -677,14 +726,20 @@ static int hoist_invariants_from_loop(TypedASTNode*** parent_array_ptr,
     }
 
     int hoistable_count = 0;
+    int guard_hoist_count = 0;
     for (int i = 0; i < body_count; i++) {
+        bool is_guard = false;
         if (is_hoistable_statement(body_statements[i],
                                    &locals,
                                    &mutated,
                                    &mutation_counts,
-                                   &hoisted_names)) {
+                                   &hoisted_names,
+                                   &is_guard)) {
             hoist_flags[i] = true;
             hoistable_count++;
+            if (is_guard) {
+                guard_hoist_count++;
+            }
         }
     }
 
@@ -694,6 +749,9 @@ static int hoist_invariants_from_loop(TypedASTNode*** parent_array_ptr,
         namecounter_free(&mutation_counts);
         nameset_free(&mutated);
         nameset_free(&locals);
+        if (hoisted_guard_count) {
+            *hoisted_guard_count = 0;
+        }
         return 0;
     }
 
@@ -777,6 +835,9 @@ static int hoist_invariants_from_loop(TypedASTNode*** parent_array_ptr,
     namecounter_free(&mutation_counts);
     nameset_free(&mutated);
     nameset_free(&locals);
+    if (hoisted_guard_count) {
+        *hoisted_guard_count = guard_hoist_count;
+    }
     return hoistable_count;
 }
 
@@ -814,13 +875,17 @@ static bool process_statement_array(TypedASTNode*** array_ptr, int* count_ptr) {
 
         if (is_supported_loop_node(stmt)) {
             TypedASTNode* original_loop = stmt;
-            int hoisted = hoist_invariants_from_loop(array_ptr, count_ptr, index);
+            int hoisted_guard_count = 0;
+            int hoisted = hoist_invariants_from_loop(array_ptr,
+                                                    count_ptr,
+                                                    index,
+                                                    &hoisted_guard_count);
             if (hoisted > 0) {
                 changed = true;
                 g_licm_stats.changed = true;
                 g_licm_stats.invariants_hoisted += hoisted;
                 g_licm_stats.loops_optimized++;
-                licm_mark_loop_metadata(original_loop, hoisted);
+                licm_mark_loop_metadata(original_loop, hoisted_guard_count);
 
                 statements = *array_ptr;
                 index += hoisted;
