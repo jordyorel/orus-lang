@@ -8,6 +8,7 @@
 #include "vm/vm_control_flow.h"
 #include "vm/vm_comparison.h"
 #include "vm/vm_typed_ops.h"
+#include "vm/vm_loop_fastpaths.h"
 #include "vm/vm_opcode_handlers.h"
 #include "vm/register_file.h"
 #include "vm/vm_profiling.h"
@@ -1915,9 +1916,35 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
                     Value iterable = vm_get_register_safe(src);
+                    vm_typed_iterator_invalidate(dst);
 
                     if (IS_RANGE_ITERATOR(iterable)) {
                         vm_set_register_safe(dst, iterable);
+                    } else if (!vm.config.force_boxed_iterators &&
+                               (IS_I32(iterable) || IS_I64(iterable) || IS_U32(iterable) || IS_U64(iterable))) {
+                        int64_t count = 0;
+                        if (IS_I32(iterable)) {
+                            count = (int64_t)AS_I32(iterable);
+                        } else if (IS_I64(iterable)) {
+                            count = AS_I64(iterable);
+                        } else if (IS_U32(iterable)) {
+                            count = (int64_t)AS_U32(iterable);
+                        } else {
+                            uint64_t unsigned_count = AS_U64(iterable);
+                            if (unsigned_count > (uint64_t)INT64_MAX) {
+                                VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Integer too large to iterate");
+                            }
+                            count = (int64_t)unsigned_count;
+                        }
+
+                        if (count < 0) {
+                            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Cannot iterate negative integer");
+                        }
+
+                        vm_set_register_safe(dst, I64_VAL(0));
+                        vm_typed_iterator_bind_range(dst, 0, count);
+                        vm_trace_loop_event(LOOP_TRACE_TYPED_HIT);
+                        vm_trace_loop_event(LOOP_TRACE_ITER_SAVED_ALLOCATIONS);
                     } else if (IS_I32(iterable) || IS_I64(iterable) || IS_U32(iterable) || IS_U64(iterable)) {
                         int64_t count = 0;
                         if (IS_I32(iterable)) {
@@ -1945,13 +1972,24 @@ InterpretResult vm_run_dispatch(void) {
 
                         Value iterator_value = {.type = VAL_RANGE_ITERATOR, .as.obj = (Obj*)iterator};
                         vm_set_register_safe(dst, iterator_value);
+                        vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+                        vm_trace_loop_event(LOOP_TRACE_ITER_FALLBACK);
                     } else if (IS_ARRAY(iterable)) {
-                        ObjArrayIterator* iterator = allocateArrayIterator(AS_ARRAY(iterable));
-                        if (!iterator) {
-                            VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(), "Failed to allocate array iterator");
+                        ObjArray* array = AS_ARRAY(iterable);
+                        if (!vm.config.force_boxed_iterators && vm_typed_iterator_bind_array(dst, array)) {
+                            vm_set_register_safe(dst, iterable);
+                            vm_trace_loop_event(LOOP_TRACE_TYPED_HIT);
+                            vm_trace_loop_event(LOOP_TRACE_ITER_SAVED_ALLOCATIONS);
+                        } else {
+                            ObjArrayIterator* iterator = allocateArrayIterator(array);
+                            if (!iterator) {
+                                VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(), "Failed to allocate array iterator");
+                            }
+                            Value iterator_value = {.type = VAL_ARRAY_ITERATOR, .as.obj = (Obj*)iterator};
+                            vm_set_register_safe(dst, iterator_value);
+                            vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+                            vm_trace_loop_event(LOOP_TRACE_ITER_FALLBACK);
                         }
-                        Value iterator_value = {.type = VAL_ARRAY_ITERATOR, .as.obj = (Obj*)iterator};
-                        vm_set_register_safe(dst, iterator_value);
                     } else if (IS_ARRAY_ITERATOR(iterable)) {
                         vm_set_register_safe(dst, iterable);
                     } else {
@@ -1966,7 +2004,14 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t has_reg = READ_BYTE();
                     Value iterator_value = vm_get_register_safe(iter_reg);
 
-                    if (IS_RANGE_ITERATOR(iterator_value)) {
+                    Value typed_next;
+                    bool typed_iter_was_active = vm_typed_iterator_is_active(iter_reg);
+                    if (typed_iter_was_active && vm_typed_iterator_next(iter_reg, &typed_next)) {
+                        vm_set_register_safe(dst, typed_next);
+                        vm_set_register_safe(has_reg, BOOL_VAL(true));
+                    } else if (typed_iter_was_active && !vm_typed_iterator_is_active(iter_reg)) {
+                        vm_set_register_safe(has_reg, BOOL_VAL(false));
+                    } else if (IS_RANGE_ITERATOR(iterator_value)) {
                         ObjRangeIterator* it = AS_RANGE_ITERATOR(iterator_value);
                         if (it->current >= it->end) {
                             vm_set_register_safe(has_reg, BOOL_VAL(false));

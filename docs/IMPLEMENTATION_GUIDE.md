@@ -1013,158 +1013,228 @@ boxed safety net and LICM correctness guarantees.
      `make test-loop-telemetry` target diffs `build/loop_telemetry/*.log`
      against `tests/golden/loop_telemetry/*.log`.
      ```c
-     static inline void vm_trace_loop_event(LoopTraceKind kind) {
-         if (!vm.config.trace_typed_fallbacks) return;
-         switch (kind) {
-             case LOOP_TRACE_TYPED_HIT:
-                 vm.profile.loop_trace.typed_hit++;
-                 break;
-             case LOOP_TRACE_TYPED_MISS:
-                 vm.profile.loop_trace.typed_miss++;
-                 break;
-             case LOOP_TRACE_TYPE_MISMATCH:
-                 vm.profile.loop_trace.boxed_type_mismatch++;
-                 break;
-             case LOOP_TRACE_OVERFLOW_GUARD:
-                 vm.profile.loop_trace.boxed_overflow_guard++;
-                 break;
-             default:
-                 break;
-         }
-     }
+    static inline void vm_trace_loop_event(LoopTraceKind kind) {
+        if (!vm.config.trace_typed_fallbacks) return;
+        switch (kind) {
+            case LOOP_TRACE_TYPED_HIT:
+                vm.profile.loop_trace.typed_hit++;
+                break;
+            case LOOP_TRACE_TYPED_MISS:
+                vm.profile.loop_trace.typed_miss++;
+                break;
+            case LOOP_TRACE_TYPE_MISMATCH:
+                vm.profile.loop_trace.boxed_type_mismatch++;
+                break;
+            case LOOP_TRACE_OVERFLOW_GUARD:
+                vm.profile.loop_trace.boxed_overflow_guard++;
+                break;
+            case LOOP_TRACE_BRANCH_FAST_HIT:
+                vm.profile.loop_trace.typed_branch_fast_hits++;
+                break;
+            case LOOP_TRACE_BRANCH_FAST_MISS:
+                vm.profile.loop_trace.typed_branch_fast_misses++;
+                break;
+            case LOOP_TRACE_INC_OVERFLOW_BAILOUT:
+                vm.profile.loop_trace.inc_overflow_bailouts++;
+                break;
+            case LOOP_TRACE_INC_TYPE_INSTABILITY:
+                vm.profile.loop_trace.inc_type_instability++;
+                break;
+            case LOOP_TRACE_ITER_SAVED_ALLOCATIONS:
+                vm.profile.loop_trace.iter_allocations_saved++;
+                break;
+            case LOOP_TRACE_ITER_FALLBACK:
+                vm.profile.loop_trace.iter_fallbacks++;
+                break;
+            case LOOP_TRACE_LICM_GUARD_FUSION:
+                vm.profile.loop_trace.licm_guard_fusions++;
+                break;
+            case LOOP_TRACE_LICM_GUARD_DEMOTION:
+                vm.profile.loop_trace.licm_guard_demotions++;
+                break;
+            default:
+                break;
+        }
+    }
 
-     void vm_dump_loop_trace(FILE* out) {
-         if (!out || !vm.config.trace_typed_fallbacks) return;
-         fprintf(out,
-                 "[loop-trace] typed_hit=%" PRIu64 " typed_miss=%" PRIu64
-                 " boxed_type_mismatch=%" PRIu64 " boxed_overflow_guard=%" PRIu64 "\n",
-                 vm.profile.loop_trace.typed_hit,
-                 vm.profile.loop_trace.typed_miss,
-                 vm.profile.loop_trace.boxed_type_mismatch,
-                 vm.profile.loop_trace.boxed_overflow_guard);
-     }
+    void vm_dump_loop_trace(FILE* out) {
+        if (!out || !vm.config.trace_typed_fallbacks) return;
+        fprintf(out,
+                "[loop-trace] typed_hit=%" PRIu64 " typed_miss=%" PRIu64
+                " boxed_type_mismatch=%" PRIu64 " boxed_overflow_guard=%" PRIu64
+                " branch_fast_hits=%" PRIu64 " branch_fast_misses=%" PRIu64
+                " inc_overflow_bailouts=%" PRIu64 " inc_type_instability=%" PRIu64
+                " iter_alloc_saved=%" PRIu64 " iter_fallbacks=%" PRIu64
+                " licm_guard_fusions=%" PRIu64 " licm_guard_demotions=%" PRIu64 "\n",
+                vm.profile.loop_trace.typed_hit,
+                vm.profile.loop_trace.typed_miss,
+                vm.profile.loop_trace.boxed_type_mismatch,
+                vm.profile.loop_trace.boxed_overflow_guard,
+                vm.profile.loop_trace.typed_branch_fast_hits,
+                vm.profile.loop_trace.typed_branch_fast_misses,
+                vm.profile.loop_trace.inc_overflow_bailouts,
+                vm.profile.loop_trace.inc_type_instability,
+                vm.profile.loop_trace.iter_allocations_saved,
+                vm.profile.loop_trace.iter_fallbacks,
+                vm.profile.loop_trace.licm_guard_fusions,
+                vm.profile.loop_trace.licm_guard_demotions);
+    }
      ```
 
 2. **Phase 1 – Typed boolean branches (Day 1-3)**
    - **Goal**: Remove boxed boolean reads from `OP_JUMP_IF_NOT_R` when typed
-     caches are valid.
+     caches are valid and keep the change controllable via
+     `ORUS_DISABLE_BOOL_BRANCH_FASTPATH` (the fast path is on by default, and
+     `ORUS_EXPERIMENT_BOOL_BRANCH_FASTPATH` still forces it on in bespoke
+     testing sandboxes).
    - **Tasks**:
-     - Add `vm_try_branch_bool_fast` helper with fault reporting integrated into
-       the existing error system.
-     - Teach the dispatch tables (`vm_dispatch_{goto,switch}.c`) to call the new
-       helper before falling back to `CF_JUMP_IF_NOT`.
-     - Update LICM to tag hoisted boolean guards as immutably typed so branch
-       caches survive motion.
-   - **Safety net**: On cache miss, reuse the legacy boxed path to keep existing
-     type errors.
+     - Add `vm_try_branch_bool_fast_{hot,cold}` helpers with telemetry updates
+       and LICM guard metadata tracking.
+     - Teach `CF_JUMP_IF_NOT` to call the cold helper before falling back to the
+       boxed path.
+     - Wire `vm.config.enable_licm_typed_metadata` so LICM can preserve guard
+       witnesses and increment fusion/demotion counters.
+   - **Safety net**: Cache misses reuse the boxed path and keep existing type
+     errors; operators can set `ORUS_DISABLE_BOOL_BRANCH_FASTPATH=1` to fall
+     back to the legacy behavior during regressions.
    - **Sample implementation**:
-     ```c
-     static inline bool vm_try_branch_bool_fast(VM* vm, uint16_t cond,
-                                                int32_t* out) {
-         if (vm_try_read_bool_typed(cond, out)) {
-             vm_trace_loop_event(vm, LOOP_TRACE_TYPED_HIT);
-             return true;
-         }
+    ```c
+    static inline bool vm_try_branch_bool_fast_cold(uint16_t reg,
+                                                    bool* out_value) {
+        if (!out_value || !vm.config.enable_bool_branch_fastpath) {
+            return false;
+        }
 
-         Value boxed = vm_get_register_safe(cond);
-         if (!IS_BOOL(boxed)) {
-             vm_trace_loop_event(vm, LOOP_TRACE_TYPE_MISMATCH);
-             runtimeError(ERROR_TYPE, SRC_LOC_NONE,
-                          "Loop condition must evaluate to bool");
-             return false;
-         }
+        if (vm_try_branch_bool_fast_hot(reg, out_value)) {
+            return true;
+        }
 
-         *out = AS_BOOL(boxed);
-         vm_cache_bool_typed(cond, *out);
-         vm_trace_loop_event(vm, LOOP_TRACE_TYPED_MISS);
-         return true;
-     }
-     ```
+        Value condition = vm_get_register_safe(reg);
+        if (!IS_BOOL(condition)) {
+            vm_trace_loop_event(LOOP_TRACE_TYPE_MISMATCH);
+            if (vm.config.enable_licm_typed_metadata) {
+                vm_trace_loop_event(LOOP_TRACE_LICM_GUARD_DEMOTION);
+            }
+            return false;
+        }
+
+        *out_value = AS_BOOL(condition);
+        return false;
+    }
+    ```
 
 3. **Phase 2 – Overflow-safe typed increments (Day 3-6)**
    - **Goal**: Replace the generic `OP_ADD_I32_R` loop increments with a fused
-     overflow-checked typed opcode.
+     overflow-checked typed opcode that can be disabled via
+     `ORUS_DISABLE_INC_TYPED_FASTPATH`.
    - **Tasks**:
      - Implement `vm_exec_inc_i32_checked` using `__builtin_add_overflow` so the
-       VM aborts on overflow exactly as the boxed arithmetic path does.
-     - Update the compiler range-loop lowering to emit the fused opcode whenever
-       the loop variable, limit, and step are inferred as `i32`.
-     - Annotate the register allocator with `typed_increment_candidate`
-       metadata so the optimizer can keep the counter resident in the typed
-       bank.
+       VM records `LOOP_TRACE_INC_OVERFLOW_BAILOUT` before falling back to the
+       boxed path (which still raises on overflow).
+     - Update the dispatch tables to call the helper and surface `typed_miss`
+       events when the counter is not resident in the typed bank.
+     - Extend telemetry with `inc_overflow_bailouts` and
+       `inc_type_instability` counters for roll-up reporting.
    - **Sample implementation**:
      ```c
-     static inline bool vm_exec_inc_i32_checked(VM* vm, uint16_t dst,
-                                                uint16_t step) {
-         int32_t counter;
-         int32_t step_val;
-
-         if (!vm_try_read_i32_typed(dst, &counter) ||
-             !vm_try_read_i32_typed(step, &step_val)) {
-             vm_trace_loop_event(vm, LOOP_TRACE_TYPED_MISS);
+     static inline bool vm_exec_inc_i32_checked(uint16_t reg) {
+         if (vm.config.disable_inc_typed_fastpath) {
+             vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
              return false;
          }
 
-         int32_t result;
-         if (__builtin_add_overflow(counter, step_val, &result)) {
-             vm_trace_loop_event(vm, LOOP_TRACE_OVERFLOW_GUARD);
-             runtimeError(ERROR_ARITHMETIC, SRC_LOC_NONE,
-                          "loop counter overflowed i32 range");
-             return false;
+         if (vm_typed_reg_in_range(reg) && vm.typed_regs.reg_types[reg] == REG_TYPE_I32) {
+             int32_t current = vm.typed_regs.i32_regs[reg];
+             int32_t next_value;
+             if (__builtin_add_overflow(current, 1, &next_value)) {
+                 vm_trace_loop_event(LOOP_TRACE_INC_OVERFLOW_BAILOUT);
+                 vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+                 return false;
+             }
+             vm.typed_regs.i32_regs[reg] = next_value;
+             vm_set_register_safe(reg, I32_VAL(next_value));
+             vm_trace_loop_event(LOOP_TRACE_TYPED_HIT);
+             return true;
          }
 
-         vm_store_i32_register(dst, result);
-         vm_trace_loop_event(vm, LOOP_TRACE_TYPED_HIT);
-         return true;
+         vm_trace_loop_event(LOOP_TRACE_INC_TYPE_INSTABILITY);
+         vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+         return false;
      }
      ```
 
 4. **Phase 3 – Zero-allocation iterators (Day 6-9)**
    - **Goal**: Allow array and range iterators to live entirely in typed scratch
-     registers.
+     registers using `TypedIteratorDescriptor` state.
    - **Tasks**:
-     - Define `TypedIteratorDescriptor` with raw pointer, length, index, and
-       element stride fields.
-     - Extend `OP_GET_ITER_R` to detect the supported iterable shapes and stash
-       the descriptor in `vm->typed_regs.iterators` without touching the heap.
-     - Harden `OP_ITER_NEXT_R` so it performs bounds checks using the typed
-       descriptor first and only falls back to boxed objects when the descriptor
-       is invalidated.
+     - Define `TypedIteratorDescriptor` with discriminated union for range and
+       array iterators.
+     - Extend `OP_GET_ITER_R` to detect supported iterable shapes, initialise
+       the descriptor, and emit `LOOP_TRACE_ITER_SAVED_ALLOCATIONS`.
+     - Harden `OP_ITER_NEXT_R` so it consumes typed descriptors first and only
+       falls back to boxed objects when the descriptor is invalidated.
    - **Sample implementation**:
      ```c
+     typedef enum {
+         TYPED_ITER_NONE = 0,
+         TYPED_ITER_RANGE_I64,
+         TYPED_ITER_ARRAY_SLICE
+     } TypedIteratorKind;
+
      typedef struct {
-         const uint8_t* base;
-         uint32_t length;
-         uint32_t index;
-         uint32_t stride;
+         TypedIteratorKind kind;
+         union {
+             struct {
+                 int64_t current;
+                 int64_t end;
+             } range_i64;
+             struct {
+                 ObjArray* array;
+                 uint32_t index;
+             } array;
+         } data;
      } TypedIteratorDescriptor;
 
-     static inline bool vm_iter_next_typed(VM* vm, uint16_t iter_reg,
-                                           uint16_t dst_reg) {
-         TypedIteratorDescriptor* it =
-             vm_typed_iterator_descriptor(vm, iter_reg);
-         if (!it || it->index >= it->length) {
-             vm_trace_loop_event(vm, LOOP_TRACE_TYPED_MISS);
+     static inline bool vm_typed_iterator_next(uint16_t reg, Value* out) {
+         if (!vm_typed_iterator_is_active(reg) || !out) {
              return false;
          }
 
-         const uint8_t* addr = it->base + it->index * it->stride;
-         int32_t value = *(const int32_t*)addr;
-         vm_store_i32_register(dst_reg, value);
-         it->index++;
-         vm_trace_loop_event(vm, LOOP_TRACE_TYPED_HIT);
-         return true;
+         TypedIteratorDescriptor* desc = &vm.typed_iterators[reg];
+         if (desc->kind == TYPED_ITER_RANGE_I64) {
+             if (desc->data.range_i64.current >= desc->data.range_i64.end) {
+                 vm_typed_iterator_invalidate(reg);
+                 return false;
+             }
+             *out = I64_VAL(desc->data.range_i64.current++);
+             return true;
+         }
+
+        if (desc->kind == TYPED_ITER_ARRAY_SLICE) {
+             ObjArray* array = desc->data.array.array;
+             uint32_t idx = desc->data.array.index;
+             if (!array || idx >= (uint32_t)array->length) {
+                 vm_typed_iterator_invalidate(reg);
+                 return false;
+             }
+             *out = array->elements[idx];
+             desc->data.array.index = idx + 1;
+             return true;
+         }
+
+         return false;
      }
      ```
 
 5. **Phase 4 – LICM & optimizer integration (Day 9-11)**
    - **Goal**: Ensure LICM cooperates with the new fast paths without breaking
-     safety invariants.
+     safety invariants while emitting guard fusion/demotion telemetry.
    - **Tasks**:
-     - Augment LICM metadata with `typed_escape_mask` so hoisted expressions
-       record whether they depend on typed cache residency.
-     - Add verification passes that rerun LICM on the optimized IR and confirm
-       no typed-dependent value was hoisted outside of its guard.
+     - Augment LICM metadata with `typed_escape_mask`, `typed_guard_witness`,
+       and `typed_metadata_stable` so hoisted expressions record whether they
+       depend on typed cache residency.
+     - Mark loops that successfully hoist invariants via `licm_mark_loop_metadata`
+       so runtime counters can distinguish fused guards from demoted ones.
      - Introduce optimizer unit tests that combine hoisted bounds checks with
        the typed iterators to guarantee early exits still occur.
 

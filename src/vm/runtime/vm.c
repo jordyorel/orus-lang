@@ -865,9 +865,21 @@ void vm_dump_loop_trace(FILE* out) {
 
     fprintf(out,
             "[loop-trace] typed_hit=%" PRIu64 " typed_miss=%" PRIu64
-            " boxed_type_mismatch=%" PRIu64 " boxed_overflow_guard=%" PRIu64 "\n",
+            " boxed_type_mismatch=%" PRIu64 " boxed_overflow_guard=%" PRIu64
+            " branch_fast_hits=%" PRIu64 " branch_fast_misses=%" PRIu64
+            " inc_overflow_bailouts=%" PRIu64 " inc_type_instability=%" PRIu64
+            " iter_alloc_saved=%" PRIu64 " iter_fallbacks=%" PRIu64
+            " licm_guard_fusions=%" PRIu64 " licm_guard_demotions=%" PRIu64 "\n",
             (uint64_t)vm.profile.loop_trace.typed_hit,
             (uint64_t)vm.profile.loop_trace.typed_miss,
             (uint64_t)vm.profile.loop_trace.boxed_type_mismatch,
-            (uint64_t)vm.profile.loop_trace.boxed_overflow_guard);
+            (uint64_t)vm.profile.loop_trace.boxed_overflow_guard,
+            (uint64_t)vm.profile.loop_trace.typed_branch_fast_hits,
+            (uint64_t)vm.profile.loop_trace.typed_branch_fast_misses,
+            (uint64_t)vm.profile.loop_trace.inc_overflow_bailouts,
+            (uint64_t)vm.profile.loop_trace.inc_type_instability,
+            (uint64_t)vm.profile.loop_trace.iter_allocations_saved,
+            (uint64_t)vm.profile.loop_trace.iter_fallbacks,
+            (uint64_t)vm.profile.loop_trace.licm_guard_fusions,
+            (uint64_t)vm.profile.loop_trace.licm_guard_demotions);
 }

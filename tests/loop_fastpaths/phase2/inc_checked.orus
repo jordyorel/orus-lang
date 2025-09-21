@@ -1,0 +1,14 @@
+mut total = 0
+mut i = 0
+while i < 6:
+    total = total + i
+    i = i + 1
+
+mut mixed = 0
+mut step = 0
+while mixed < 5:
+    mixed = mixed + step
+    step = step + 1
+    mixed = mixed + 1
+
+print("phase2-ok", total, mixed)

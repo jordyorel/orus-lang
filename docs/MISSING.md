@@ -102,7 +102,7 @@ print("sum:", total)
 | Rich error presentation | In progress | Implement the structured renderer from `docs/ERROR_FORMAT_REPORTING.md` across CLI/REPL. |
 | Variable lifecycle diagnostics | In progress | Use scope metadata to flag duplicate declarations, use-before-init, and const mutations. |
 | Iterator-style `for item in collection` | Design | Parser/codegen support pending; VM array iterators are ready. |
-| Typed loop fast paths & LICM safety fences | In progress | Phase 0 telemetry landed (`vm_trace_loop_event`, loop counter dumps); next steps: bool-branch cache, overflow-checked increments, and LICM effect guards while keeping boxed fallbacks available. |
+| Typed loop fast paths & LICM safety fences | ✅ Completed | Bool branch caches, overflow-checked `inc_i32`, typed iterators, and LICM guard metadata are live behind feature flags with expanded telemetry + golden tests. |
 | Module packaging | Completed | Module declarations and dotted `use` paths map to nested files and are covered by regression tests. |
 | Print formatting polish | Backlog | Finish escape handling and numeric formatting for the print APIs. |
 | Module use resolution | Completed | `use` loads sibling modules and binds their exported globals, functions, structs, and enums—including aliased type declarations—via the module loader. |
@@ -118,6 +118,7 @@ print("sum:", total)
 4. ✅ Define and implement module declarations/`use` syntax backed by the
    existing loader.
 5. Document and stabilize the printing APIs once formatting is finalized.
+6. Automate loop telemetry dashboards and CI perf digests for the new fast paths.
 
 ---
 

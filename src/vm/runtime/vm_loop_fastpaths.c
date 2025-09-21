@@ -1,0 +1,115 @@
+#include "vm/vm_loop_fastpaths.h"
+#include "vm/vm_comparison.h"
+
+bool vm_try_branch_bool_fast_hot(uint16_t reg, bool* out_value) {
+    if (!out_value) {
+        return false;
+    }
+
+    if (!vm.config.enable_bool_branch_fastpath || !vm_typed_reg_in_range(reg)) {
+        vm_trace_loop_event(LOOP_TRACE_BRANCH_FAST_MISS);
+        return false;
+    }
+
+    if (vm.typed_regs.reg_types[reg] == REG_TYPE_BOOL) {
+        *out_value = vm.typed_regs.bool_regs[reg];
+        vm_trace_loop_event(LOOP_TRACE_BRANCH_FAST_HIT);
+        if (vm.config.enable_licm_typed_metadata) {
+            vm_trace_loop_event(LOOP_TRACE_LICM_GUARD_FUSION);
+        }
+        return true;
+    }
+
+    vm_trace_loop_event(LOOP_TRACE_BRANCH_FAST_MISS);
+    if (vm.config.enable_licm_typed_metadata) {
+        vm_trace_loop_event(LOOP_TRACE_LICM_GUARD_DEMOTION);
+    }
+    return false;
+}
+
+bool vm_try_branch_bool_fast_cold(uint16_t reg, bool* out_value) {
+    if (!out_value) {
+        return false;
+    }
+
+    if (!vm.config.enable_bool_branch_fastpath) {
+        return false;
+    }
+
+    bool fast_value = false;
+    if (vm_try_branch_bool_fast_hot(reg, &fast_value)) {
+        *out_value = fast_value;
+        return true;
+    }
+
+    Value condition = vm_get_register_safe(reg);
+    if (!IS_BOOL(condition)) {
+        vm_trace_loop_event(LOOP_TRACE_TYPE_MISMATCH);
+        if (vm.config.enable_licm_typed_metadata) {
+            vm_trace_loop_event(LOOP_TRACE_LICM_GUARD_DEMOTION);
+        }
+        return false;
+    }
+
+    *out_value = AS_BOOL(condition);
+    return false;
+}
+
+bool vm_exec_inc_i32_checked(uint16_t reg) {
+    if (vm.config.disable_inc_typed_fastpath) {
+        vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+        return false;
+    }
+
+    if (vm_typed_reg_in_range(reg) && vm.typed_regs.reg_types[reg] == REG_TYPE_I32) {
+        int32_t current = vm.typed_regs.i32_regs[reg];
+        int32_t next_value;
+        if (__builtin_add_overflow(current, 1, &next_value)) {
+            vm_trace_loop_event(LOOP_TRACE_INC_OVERFLOW_BAILOUT);
+            vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+            return false;
+        }
+        vm.typed_regs.i32_regs[reg] = next_value;
+        vm_set_register_safe(reg, I32_VAL(next_value));
+        vm_trace_loop_event(LOOP_TRACE_TYPED_HIT);
+        return true;
+    }
+
+    vm_trace_loop_event(LOOP_TRACE_INC_TYPE_INSTABILITY);
+    vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+    return false;
+}
+
+bool vm_typed_iterator_next(uint16_t reg, Value* out_value) {
+    if (!vm_typed_iterator_is_active(reg) || !out_value) {
+        return false;
+    }
+
+    TypedIteratorDescriptor* descriptor = &vm.typed_iterators[reg];
+    switch (descriptor->kind) {
+        case TYPED_ITER_RANGE_I64:
+            if (descriptor->data.range_i64.current >= descriptor->data.range_i64.end) {
+                vm_typed_iterator_invalidate(reg);
+                return false;
+            }
+            *out_value = I64_VAL(descriptor->data.range_i64.current);
+            descriptor->data.range_i64.current++;
+            return true;
+        case TYPED_ITER_ARRAY_SLICE: {
+            ObjArray* array = descriptor->data.array.array;
+            uint32_t index = descriptor->data.array.index;
+            if (!array || index >= (uint32_t)array->length) {
+                vm_typed_iterator_invalidate(reg);
+                return false;
+            }
+            *out_value = array->elements[index];
+            descriptor->data.array.index = index + 1;
+            return true;
+        }
+        case TYPED_ITER_NONE:
+        default:
+            break;
+    }
+
+    return false;
+}

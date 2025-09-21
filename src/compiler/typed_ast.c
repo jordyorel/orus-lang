@@ -33,9 +33,12 @@ TypedASTNode* create_typed_ast_node(ASTNode* original) {
     typed->hasTypeError = false;
     typed->errorMessage = NULL;
     typed->isConstant = false;
-    typed->canInline = false;
-    typed->suggestedRegister = -1;
-    typed->spillable = true;
+   typed->canInline = false;
+   typed->suggestedRegister = -1;
+   typed->spillable = true;
+    typed->typed_escape_mask = 0;
+    typed->typed_guard_witness = false;
+    typed->typed_metadata_stable = false;
 
     // Initialize union based on node type
     switch (original->type) {
