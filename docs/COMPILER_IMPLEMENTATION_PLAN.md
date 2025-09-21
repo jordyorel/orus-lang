@@ -551,7 +551,7 @@ void test_basic_compilation() {
 - **✅ Statistics Reporting**: Optimization metrics and performance tracking
 - **✅ Function & Loop Coverage**: Folding now walks functions, blocks, and loop bodies so invariant arithmetic is simplified ahead of LICM.
 - **✅ Advanced Node Coverage**: Struct literals, member access chains, and match arms now feed the folder so constants propagate through complex control flow.
-- **⚠️  Limited Scope**: Currently handles arithmetic/logical folding; algebraic simplification still pending
+- **✅ Algebraic Simplification**: Handles identity-driven cases (e.g., `expr * 0`, `expr and false`, `expr or true`) alongside arithmetic/logical folding
 
 ### 🎯 **CRITICAL REQUIREMENT**: Optimized TypedAST Visualization  
 **This phase is crucial for progression to code generation. We MUST:**
