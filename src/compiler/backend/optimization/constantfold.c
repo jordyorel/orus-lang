@@ -77,6 +77,123 @@ static void fold_match_arms(TypedMatchArm* arms, int count) {
     }
 }
 
+static bool is_numeric_zero_literal(const ASTNode* node) {
+    if (!node || node->type != NODE_LITERAL) {
+        return false;
+    }
+
+    Value value = node->literal.value;
+    switch (value.type) {
+        case VAL_I32:
+            return AS_I32(value) == 0;
+        case VAL_I64:
+            return AS_I64(value) == 0;
+        case VAL_U32:
+            return AS_U32(value) == 0;
+        case VAL_U64:
+            return AS_U64(value) == 0;
+        case VAL_F64:
+            return AS_F64(value) == 0.0;
+        default:
+            return false;
+    }
+}
+
+static bool is_bool_literal_with_value(const ASTNode* node, bool expected) {
+    if (!node || node->type != NODE_LITERAL) {
+        return false;
+    }
+
+    Value value = node->literal.value;
+    return value.type == VAL_BOOL && AS_BOOL(value) == expected;
+}
+
+static void copy_literal_value(ASTNode* target, const ASTNode* source_literal) {
+    if (!target || !source_literal || source_literal->type != NODE_LITERAL) {
+        return;
+    }
+
+    target->type = NODE_LITERAL;
+    target->literal = source_literal->literal;
+    target->literal.hasExplicitSuffix = false;
+}
+
+static bool simplify_algebraic_binary_ast(ASTNode* node) {
+    if (!node || node->type != NODE_BINARY || !node->binary.op) {
+        return false;
+    }
+
+    ASTNode* left = node->binary.left;
+    ASTNode* right = node->binary.right;
+    if (!left || !right) {
+        return false;
+    }
+
+    if (strcmp(node->binary.op, "*") == 0) {
+        const ASTNode* zero_literal = NULL;
+        if (is_numeric_zero_literal(left)) {
+            zero_literal = left;
+        } else if (is_numeric_zero_literal(right)) {
+            zero_literal = right;
+        }
+
+        if (zero_literal) {
+            DEBUG_CONSTANTFOLD_PRINT("Applying algebraic simplification: expr * 0 -> 0\n");
+            copy_literal_value(node, zero_literal);
+            return true;
+        }
+    } else if (strcmp(node->binary.op, "and") == 0) {
+        const ASTNode* false_literal = NULL;
+        if (is_bool_literal_with_value(left, false)) {
+            false_literal = left;
+        } else if (is_bool_literal_with_value(right, false)) {
+            false_literal = right;
+        }
+
+        if (false_literal) {
+            DEBUG_CONSTANTFOLD_PRINT("Applying algebraic simplification: expr and false -> false\n");
+            copy_literal_value(node, false_literal);
+            return true;
+        }
+    } else if (strcmp(node->binary.op, "or") == 0) {
+        const ASTNode* true_literal = NULL;
+        if (is_bool_literal_with_value(left, true)) {
+            true_literal = left;
+        } else if (is_bool_literal_with_value(right, true)) {
+            true_literal = right;
+        }
+
+        if (true_literal) {
+            DEBUG_CONSTANTFOLD_PRINT("Applying algebraic simplification: expr or true -> true\n");
+            copy_literal_value(node, true_literal);
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static bool simplify_algebraic_binary_typed(TypedASTNode* node) {
+    if (!node || !node->original || node->original->type != NODE_BINARY) {
+        return false;
+    }
+
+    if (!simplify_algebraic_binary_ast(node->original)) {
+        return false;
+    }
+
+    node->isConstant = true;
+    node->typed.binary.left = NULL;
+    node->typed.binary.right = NULL;
+
+    fold_stats.optimizations_applied++;
+    fold_stats.constants_folded++;
+    fold_stats.binary_expressions_folded++;
+    fold_stats.nodes_eliminated++;
+
+    return true;
+}
+
 void init_constant_fold_context(ConstantFoldContext* ctx) {
     ctx->optimizations_applied = 0;
     ctx->constants_folded = 0;
@@ -138,7 +255,10 @@ bool apply_constant_folding_recursive(TypedASTNode* ast) {
             fold_child(ast->typed.binary.right);
 
             // Try to fold this binary expression
-            fold_binary_expression(ast);
+            bool folded = fold_binary_expression(ast);
+            if (!folded) {
+                simplify_algebraic_binary_typed(ast);
+            }
             break;
 
         case NODE_UNARY:
@@ -406,11 +526,11 @@ void fold_ast_node_directly(ASTNode* node) {
             if (node->binary.left && node->binary.right &&
                 node->binary.left->type == NODE_LITERAL &&
                 node->binary.right->type == NODE_LITERAL) {
-                
+
                 Value left = node->binary.left->literal.value;
                 Value right = node->binary.right->literal.value;
                 const char* op = node->binary.op;
-                
+
                 DEBUG_CONSTANTFOLD_PRINT("Direct folding: ");
                 if (left.type == VAL_BOOL) DEBUG_CONSTANTFOLD_PRINT("%s", AS_BOOL(left) ? "true" : "false");
                 else if (left.type == VAL_I32) DEBUG_CONSTANTFOLD_PRINT("%d", AS_I32(left));
@@ -431,12 +551,17 @@ void fold_ast_node_directly(ASTNode* node) {
                 fold_stats.optimizations_applied++;
                 fold_stats.constants_folded++;
                 fold_stats.binary_expressions_folded++;
-                
+
                 DEBUG_CONSTANTFOLD_PRINT("Direct folded to: ");
                 if (result.type == VAL_BOOL) DEBUG_CONSTANTFOLD_PRINT("%s", AS_BOOL(result) ? "true" : "false");
                 else if (result.type == VAL_I32) DEBUG_CONSTANTFOLD_PRINT("%d", AS_I32(result));
                 else DEBUG_CONSTANTFOLD_PRINT("(value)");
                 DEBUG_CONSTANTFOLD_PRINT("\n");
+            } else if (simplify_algebraic_binary_ast(node)) {
+                fold_stats.optimizations_applied++;
+                fold_stats.constants_folded++;
+                fold_stats.binary_expressions_folded++;
+                fold_stats.nodes_eliminated++;
             }
             break;
             
