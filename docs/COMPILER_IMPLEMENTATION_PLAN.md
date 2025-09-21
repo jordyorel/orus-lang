@@ -52,6 +52,50 @@ This document outlines the detailed implementation plan for building the Orus co
 - **Advanced VM Features**: Loop fusion (OP_INC_CMP_JMP), short jumps, frame registers
 - **Memory Optimization**: Load/store scheduling, constant pools, stack frame optimization
 
+### Loop typed-execution acceleration roadmap
+
+To close the loop performance gap without compromising safety we execute the
+following staged roadmap. Each stage lands independently testable artifacts and
+keeps the interpreter correct even if later stages are delayed.
+
+1. **Instrumentation baseline (Phase 0, Day 0-1)**
+   - Add `VM_TRACE_TYPED_FALLBACKS` plumbing and loop profiler counters for
+     typed hits/misses and boxed fallback reasons.
+   - Deliver `make test-loop-telemetry` harness + golden counter snapshots.
+   - Owner: VM runtime team.
+   - ✅ Status: Implemented via `vm.profile.loop_trace`, `vm_dump_loop_trace()`,
+     and the `tests/golden/loop_telemetry` baseline consumed by
+     `make test-loop-telemetry`.
+
+2. **Typed boolean branching (Phase 1, Day 1-3)**
+   - Implement `vm_try_branch_bool_fast` and update dispatch tables.
+   - Teach LICM to preserve boolean typed caches during hoisting.
+   - Owner: VM + optimizer pairing session.
+
+3. **Overflow-checked typed increments (Phase 2, Day 3-6)**
+   - Introduce `vm_exec_inc_i32_checked` fused opcode + compiler lowering.
+   - Annotate register allocator with typed increment residency hints.
+   - Owner: Compiler backend team.
+
+4. **Zero-allocation typed iterators (Phase 3, Day 6-9)**
+   - Create `TypedIteratorDescriptor` and extend iterator opcodes to use it.
+   - Provide fallbacks for unsupported iterables to retain boxed safety.
+   - Owner: VM runtime team with compiler support.
+
+5. **LICM & optimizer integration (Phase 4, Day 9-11)**
+   - Track `typed_escape_mask` metadata and verify hoisted guards.
+   - Add regression tests mixing hoisted checks with typed fast paths.
+   - Owner: Optimizer team.
+
+6. **Regression & performance gates (Phase 5, Day 11-14)**
+   - Extend `loop_typed_fastpath_correctness.orus` suite + new telemetry tests.
+   - Stand up `scripts/benchmarks/loop_perf.py` and wire perf thresholds in CI.
+   - Owner: Tooling + QA team.
+
+**Exit criteria**: Typed hit ratio ≥90% on range loops, no correctness
+regressions across `make test`, telemetry baseline stored, and perf benchmark
+improves ≥3× over current boxed path for i32 counters.
+
 ### Architecture Overview
 
 ```
@@ -814,13 +858,13 @@ Value registers[256];              // R0-R255: Full VM register space
 
 // 2. Typed Unboxed Registers (Performance Layer) - ARITHMETIC HOT PATH
 TypedRegisters typed_regs = {
-    int32_t i32_regs[32];          // 32 unboxed i32 registers (ZERO-COST ARITHMETIC)
-    int64_t i64_regs[32];          // 32 unboxed i64 registers
-    uint32_t u32_regs[32];         // 32 unboxed u32 registers  
-    uint64_t u64_regs[32];         // 32 unboxed u64 registers
-    double f64_regs[32];           // 32 unboxed f64 registers
-    bool bool_regs[32];            // 32 unboxed bool registers
-    Value heap_regs[32];           // 32 boxed heap object registers
+    int32_t i32_regs[256];         // Unboxed i32 registers (ZERO-COST ARITHMETIC)
+    int64_t i64_regs[256];         // Unboxed i64 registers
+    uint32_t u32_regs[256];        // Unboxed u32 registers
+    uint64_t u64_regs[256];        // Unboxed u64 registers
+    double f64_regs[256];          // Unboxed f64 registers
+    bool bool_regs[256];           // Unboxed bool registers
+    Value heap_regs[256];          // Boxed heap object registers
     uint8_t reg_types[256];        // Track which bank each logical register maps to
 };
 ```
@@ -839,21 +883,21 @@ TypedRegisters typed_regs = {
 ```c
 // For arithmetic-intensive code (hot paths):
 if (is_arithmetic_heavy_context()) {
-    reg_id = allocate_typed_register(TYPED_I32);  // Returns R0-R31
+    reg_id = allocate_typed_register(TYPED_I32);  // Returns R0-R255 in the typed bank
     emit_instruction(OP_ADD_I32_TYPED, result, left, right);  // UNBOXED ARITHMETIC
 }
 
 // For general-purpose code:
 else {
     reg_id = allocate_standard_register(scope);   // Returns R0-R255  
-    emit_instruction(OP_ADD_I32_R, result, left, right);     // BOXED ARITHMETIC
+    emit_instruction(OP_ADD_I32_R, result, left, right);     // BOXED ARITHMETIC (fallback)
 }
 ```
 
 **Register Optimization Priorities:**
 - [x] **Register Allocation**: ✅ IMPLEMENTED - Linear scan with hierarchical layout
 - [ ] **🚨 CRITICAL: Dual Register System**: Implement typed vs standard register selection
-- [ ] **Performance-Aware Allocation**: Use typed registers (R0-R31) for arithmetic hot paths
+- [ ] **Performance-Aware Allocation**: Use typed registers (R0-R255) for arithmetic hot paths
 - [ ] **Register Bank Mapping**: Track `reg_types[256]` for each allocated register
 - [ ] **Instruction Selection**: Choose `OP_*_TYPED` vs `OP_*_R` based on register type
 
@@ -913,7 +957,7 @@ typedef struct DualRegisterAllocator {
     // Standard register tracking (R0-R255)
     bool standard_regs[256];
     
-    // Typed register tracking (R0-R31 per type)
+    // Typed register tracking (R0-R255 per type)
     bool typed_i32_regs[32];
     bool typed_i64_regs[32]; 
     bool typed_f64_regs[32];
@@ -935,7 +979,7 @@ RegisterAllocation* allocate_register_smart(DualRegisterAllocator* allocator,
                                            Type* var_type, 
                                            bool is_arithmetic_hot_path) {
     if (is_arithmetic_hot_path && is_numeric_type(var_type)) {
-        // Use typed registers for performance (R0-R31)
+        // Use typed registers for performance (R0-R255)
         return allocate_typed_register(allocator, var_type);
     } else {
         // Use standard registers for general purpose (R0-R255)
@@ -1417,7 +1461,7 @@ for i in 0..3:
 2. **Runtime Failure Point**:
    - Error: `"Operands must be the same type. Use 'as' for explicit type conversion"`
    - Location: `OP_ADD_I32_R` instruction during loop increment after continue jump
-   - Cause: Loop variable register contains string value instead of i32
+   - Cause: Loop variable register contains string value instead of i32 (now eliminated by switching range increments to `OP_ADD_I32_TYPED`)
 
 #### 🔧 **Implemented Solutions & Architecture Improvements**
 

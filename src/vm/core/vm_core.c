@@ -75,11 +75,17 @@ void initVM(void) {
     vm.gcCount = 0;
     vm.lastExecutionTime = 0.0;
     memset(&vm.profile, 0, sizeof(VMProfile));
+    vm_reset_loop_trace();
 
     vm.openUpvalues = NULL;
 
     const char* envTrace = getenv("ORUS_TRACE");
     vm.trace = envTrace && envTrace[0] != '\0';
+
+    vm.config.trace_typed_fallbacks = false;
+#ifdef VM_TRACE_TYPED_FALLBACKS
+    vm.config.trace_typed_fallbacks = true;
+#endif
 
     vm.chunk = NULL;
     vm.ip = NULL;
