@@ -303,7 +303,9 @@ Every file may start with an optional `module` declaration. A bare declaration
 (`module math_utils`) marks the file as the `math_utils` module while keeping
 the rest of the file at module scope. A colon form (`module geometry.points:`)
 uses an indented block for the module body; the contents of the block become
-the file's top-level declarations.
+the file's top-level declarations. Only one `module` declaration is allowed and
+it must appear at the top of the file. For the colon form, the module block must
+contain the entire file.
 
 ```orus
 module geometry.points:
@@ -316,34 +318,35 @@ module geometry.points:
         Point{ x: 0, y: 0 }
 ```
 
-Dotted module names map directly to nested paths relative to the importing
-file. The example above should live in `geometry/points.orus`, and the runtime
-will eagerly load that file before compiling a dependent module.
+Path mapping: dotted names map to nested paths relative to the importing file.
+The example above should live in `geometry/points.orus`. The runtime eagerly
+loads dependencies (via `use`) before compiling a dependent module and detects
+cyclic dependencies.
 
-Bringing an entire module into scope (all public globals/functions):
+Module-scope rules:
+- Declarations are private by default. Mark with `pub` to export (`pub fn`, `pub struct`, `pub enum`, `pub global`).
+- `pub` and `global` are only valid at module scope; using them inside a block/function is rejected.
+- Globals must be uppercase and must have an initializer (enforced by the parser).
 
-```orus
-use math
-use datetime: *
+Importing with `use` (module scope only):
+- Import all exports into current scope:
+  ```orus
+  use math          # binds math's public symbols by name (no namespace)
+  use math: *       # equivalent to the line above
+  print(PI)
+  print(sin(0.5))
+  ```
+- Selective import and aliasing:
+  ```orus
+  use math: sin, cos as cosine
+  print(sin(0.5))
+  print(cosine(0.5))
+  ```
 
-print(datetime.now())
-print(math.PI)
-```
-
-Selective use:
-
-```orus
-use math: sin, cos, tan
-print(sin(0.5))
-```
-
-Renaming imported symbols to avoid collisions:
-
-```orus
-use math: sin as sine, cos
-
-print(sine(0.5))
-```
+Important notes:
+- No namespace object is injected today. `use math` does not create a `math.*` namespace; it brings exports directly into scope. Prefer selective imports or ensure names don’t clash.
+- `use module as alias` is parsed but a module-namespace binding is not yet available in codegen/VM; aliasing individual symbols with `as` works.
+- Errors during `use` are reported with helpful diagnostics (e.g., missing module or symbol, cyclic dependencies).
 
 Public function or global in module:
 

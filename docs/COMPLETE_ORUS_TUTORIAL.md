@@ -1101,6 +1101,76 @@ print("Monte Carlo result:", monte_carlo_sum / 10000000)
 
 ---
 
+## 📂 Modules & Imports
+
+Organize code across files with modules, and import what you need using `use`.
+
+### Declaring a Module
+
+- Place an optional `module` declaration at the top of a file. Use either a bare name (`module math_utils`) or a block form (`module geometry.points:`) whose body is the entire file.
+- Only one module declaration per file; it must appear first. The block form must contain the full file.
+- Dotted names map to nested paths relative to the importing file (e.g., `geometry.points` → `geometry/points.orus`).
+
+Example (`geometry/points.orus`):
+
+```orus
+module geometry.points:
+
+    pub struct Point:
+        x: i32
+        y: i32
+
+    pub fn origin() -> Point:
+        Point{ x: 0, y: 0 }
+```
+
+### Visibility and Exports
+
+- Declarations are private by default. Use `pub` to export (`pub fn`, `pub struct`, `pub enum`, `pub global`).
+- `pub` and `global` are only allowed at module scope. Globals must be uppercase and initialized:
+
+```orus
+pub global SEED = 42
+global mut CACHE_SIZE: i32 = 1024
+```
+
+### Importing with `use`
+
+Use `use` at module scope to bring exports into the current scope.
+
+Import all exports (no namespace object is created):
+
+```orus
+use geometry.points
+use math
+
+p = origin()           # from geometry.points
+print(PI)              # from math
+print(sin(0.5))        # from math
+```
+
+Wildcard form is equivalent to the above:
+
+```orus
+use math: *
+print(PI)
+```
+
+Selective import and aliasing:
+
+```orus
+use math: sin, cos as cosine
+print(sin(0.5))
+print(cosine(0.5))
+```
+
+Notes:
+- No `math.*` namespace binding yet; `use` binds names directly into scope.
+- `use module as alias` is parsed but not yet wired to a namespace; prefer `as` on symbols.
+- The runtime preloads dependencies referenced by `use` and detects cycles, with clear errors (E3003/E3004) on missing modules/symbols.
+
+---
+
 ## 🏁 Complete Language Reference
 
 ### Keywords
