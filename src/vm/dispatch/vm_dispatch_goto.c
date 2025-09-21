@@ -837,35 +837,65 @@ InterpretResult vm_run_dispatch(void) {
 
     LABEL_OP_INC_I32_R: {
             uint8_t reg = READ_BYTE();
+            const uint8_t typed_limit = (uint8_t)(sizeof(vm.typed_regs.i32_regs) / sizeof(vm.typed_regs.i32_regs[0]));
+
+            if (reg < typed_limit && vm.typed_regs.reg_types[reg] == REG_TYPE_I32) {
     #if USE_FAST_ARITH
-            Value val = vm_get_register_safe(reg);
-            vm_set_register_safe(reg, I32_VAL(AS_I32(val) + 1));
+                int32_t result = vm.typed_regs.i32_regs[reg] + 1;
     #else
-            Value val_reg = vm_get_register_safe(reg);
-            int32_t val = AS_I32(val_reg);
-            int32_t result;
-            if (__builtin_add_overflow(val, 1, &result)) {
-                VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow");
-            }
-            vm_set_register_safe(reg, I32_VAL(result));
+                int32_t result;
+                if (__builtin_add_overflow(vm.typed_regs.i32_regs[reg], 1, &result)) {
+                    VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow");
+                }
     #endif
+                vm.typed_regs.i32_regs[reg] = result;
+                vm_set_register_safe(reg, I32_VAL(result));
+            } else {
+    #if USE_FAST_ARITH
+                Value val = vm_get_register_safe(reg);
+                vm_set_register_safe(reg, I32_VAL(AS_I32(val) + 1));
+    #else
+                Value val_reg = vm_get_register_safe(reg);
+                int32_t val = AS_I32(val_reg);
+                int32_t result;
+                if (__builtin_add_overflow(val, 1, &result)) {
+                    VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow");
+                }
+                vm_set_register_safe(reg, I32_VAL(result));
+    #endif
+            }
             DISPATCH();
         }
 
     LABEL_OP_DEC_I32_R: {
             uint8_t reg = READ_BYTE();
+            const uint8_t typed_limit = (uint8_t)(sizeof(vm.typed_regs.i32_regs) / sizeof(vm.typed_regs.i32_regs[0]));
+
+            if (reg < typed_limit && vm.typed_regs.reg_types[reg] == REG_TYPE_I32) {
     #if USE_FAST_ARITH
-            Value val = vm_get_register_safe(reg);
-            vm_set_register_safe(reg, I32_VAL(AS_I32(val) - 1));
+                int32_t result = vm.typed_regs.i32_regs[reg] - 1;
     #else
-            Value val_reg = vm_get_register_safe(reg);
-            int32_t val = AS_I32(val_reg);
-            int32_t result;
-            if (__builtin_sub_overflow(val, 1, &result)) {
-                VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow");
-            }
-            vm_set_register_safe(reg, I32_VAL(result));
+                int32_t result;
+                if (__builtin_sub_overflow(vm.typed_regs.i32_regs[reg], 1, &result)) {
+                    VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow");
+                }
     #endif
+                vm.typed_regs.i32_regs[reg] = result;
+                vm_set_register_safe(reg, I32_VAL(result));
+            } else {
+    #if USE_FAST_ARITH
+                Value val = vm_get_register_safe(reg);
+                vm_set_register_safe(reg, I32_VAL(AS_I32(val) - 1));
+    #else
+                Value val_reg = vm_get_register_safe(reg);
+                int32_t val = AS_I32(val_reg);
+                int32_t result;
+                if (__builtin_sub_overflow(val, 1, &result)) {
+                    VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow");
+                }
+                vm_set_register_safe(reg, I32_VAL(result));
+    #endif
+            }
             DISPATCH();
         }
 
