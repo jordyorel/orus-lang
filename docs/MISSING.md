@@ -102,6 +102,7 @@ print("sum:", total)
 | Rich error presentation | In progress | Implement the structured renderer from `docs/ERROR_FORMAT_REPORTING.md` across CLI/REPL. |
 | Variable lifecycle diagnostics | In progress | Use scope metadata to flag duplicate declarations, use-before-init, and const mutations. |
 | Iterator-style `for item in collection` | Design | Parser/codegen support pending; VM array iterators are ready. |
+| Typed loop fast paths & LICM safety fences | In progress | Phase 0 telemetry landed (`vm_trace_loop_event`, loop counter dumps); next steps: bool-branch cache, overflow-checked increments, and LICM effect guards while keeping boxed fallbacks available. |
 | Module packaging | Completed | Module declarations and dotted `use` paths map to nested files and are covered by regression tests. |
 | Print formatting polish | Backlog | Finish escape handling and numeric formatting for the print APIs. |
 | Module use resolution | Completed | `use` loads sibling modules and binds their exported globals, functions, structs, and enums—including aliased type declarations—via the module loader. |
@@ -741,11 +742,14 @@ fn main:
 ### 5.4 Advanced Loop Optimizations (Moved to Phase 6)
 **Note: These advanced features have been moved to Phase 6 for better integration with the module system and production features:**
 - [ ] **Phase 6**: SIMD vectorization support for numerical loops
-- [ ] **Phase 6**: Loop fusion optimization for adjacent compatible loops  
+- [ ] **Phase 6**: Loop fusion optimization for adjacent compatible loops
 - [ ] **Phase 6**: Profiling integration for hot loop identification
 - [ ] **Phase 6**: Iterator protocol for custom collection types
 - [ ] **Phase 6**: Generator-style lazy evaluation for large ranges
 - [ ] **Phase 6**: Parallel loop execution hints (`@parallel for i in range`)
+- ✅ Range loop comparisons now emit typed opcodes to bypass boxed `Value` checks in tight counters.
+- ✅ Range loop increments use typed addition to avoid the `OP_ADD_I32_R` string-concatenation slow path.
+- [ ] Iterator-based `for` loops must eliminate per-iteration allocator churn by keeping iteration state in typed registers.
 
  
 ```orus

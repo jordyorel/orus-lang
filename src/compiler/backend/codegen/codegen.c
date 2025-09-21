@@ -915,10 +915,10 @@ uint8_t select_optimal_opcode(const char* op, Type* type) {
         if (strcmp(op, "%") == 0) return OP_MOD_I32_TYPED;
         
         // Comparison operators (result is boolean)
-        if (strcmp(op, "<") == 0) return OP_LT_I32_R;
-        if (strcmp(op, ">") == 0) return OP_GT_I32_R;
-        if (strcmp(op, "<=") == 0) return OP_LE_I32_R;
-        if (strcmp(op, ">=") == 0) return OP_GE_I32_R;
+        if (strcmp(op, "<") == 0) return OP_LT_I32_TYPED;
+        if (strcmp(op, ">") == 0) return OP_GT_I32_TYPED;
+        if (strcmp(op, "<=") == 0) return OP_LE_I32_TYPED;
+        if (strcmp(op, ">=") == 0) return OP_GE_I32_TYPED;
         if (strcmp(op, "==") == 0) return OP_EQ_R;
         if (strcmp(op, "!=") == 0) return OP_NE_R;
     }
@@ -938,10 +938,10 @@ uint8_t select_optimal_opcode(const char* op, Type* type) {
         if (strcmp(op, "%") == 0) return OP_MOD_I64_TYPED;
         
         // Comparison operators (result is boolean)
-        if (strcmp(op, "<") == 0) return OP_LT_I64_R;
-        if (strcmp(op, ">") == 0) return OP_GT_I64_R;
-        if (strcmp(op, "<=") == 0) return OP_LE_I64_R;
-        if (strcmp(op, ">=") == 0) return OP_GE_I64_R;
+        if (strcmp(op, "<") == 0) return OP_LT_I64_TYPED;
+        if (strcmp(op, ">") == 0) return OP_GT_I64_TYPED;
+        if (strcmp(op, "<=") == 0) return OP_LE_I64_TYPED;
+        if (strcmp(op, ">=") == 0) return OP_GE_I64_TYPED;
         if (strcmp(op, "==") == 0) return OP_EQ_R;
         if (strcmp(op, "!=") == 0) return OP_NE_R;
     }
@@ -958,10 +958,10 @@ uint8_t select_optimal_opcode(const char* op, Type* type) {
         if (strcmp(op, "%") == 0) return OP_MOD_U32_TYPED;
         
         // Comparison operators (result is boolean)
-        if (strcmp(op, "<") == 0) return OP_LT_U32_R;
-        if (strcmp(op, ">") == 0) return OP_GT_U32_R;
-        if (strcmp(op, "<=") == 0) return OP_LE_U32_R;
-        if (strcmp(op, ">=") == 0) return OP_GE_U32_R;
+        if (strcmp(op, "<") == 0) return OP_LT_U32_TYPED;
+        if (strcmp(op, ">") == 0) return OP_GT_U32_TYPED;
+        if (strcmp(op, "<=") == 0) return OP_LE_U32_TYPED;
+        if (strcmp(op, ">=") == 0) return OP_GE_U32_TYPED;
         if (strcmp(op, "==") == 0) return OP_EQ_R;
         if (strcmp(op, "!=") == 0) return OP_NE_R;
     }
@@ -978,10 +978,10 @@ uint8_t select_optimal_opcode(const char* op, Type* type) {
         if (strcmp(op, "%") == 0) return OP_MOD_U64_TYPED;
         
         // Comparison operators (result is boolean)
-        if (strcmp(op, "<") == 0) return OP_LT_U64_R;
-        if (strcmp(op, ">") == 0) return OP_GT_U64_R;
-        if (strcmp(op, "<=") == 0) return OP_LE_U64_R;
-        if (strcmp(op, ">=") == 0) return OP_GE_U64_R;
+        if (strcmp(op, "<") == 0) return OP_LT_U64_TYPED;
+        if (strcmp(op, ">") == 0) return OP_GT_U64_TYPED;
+        if (strcmp(op, "<=") == 0) return OP_LE_U64_TYPED;
+        if (strcmp(op, ">=") == 0) return OP_GE_U64_TYPED;
         if (strcmp(op, "==") == 0) return OP_EQ_R;
         if (strcmp(op, "!=") == 0) return OP_NE_R;
     }
@@ -998,10 +998,10 @@ uint8_t select_optimal_opcode(const char* op, Type* type) {
         if (strcmp(op, "%") == 0) return OP_MOD_F64_TYPED;
         
         // Comparison operators (result is boolean)
-        if (strcmp(op, "<") == 0) return OP_LT_F64_R;
-        if (strcmp(op, ">") == 0) return OP_GT_F64_R;
-        if (strcmp(op, "<=") == 0) return OP_LE_F64_R;
-        if (strcmp(op, ">=") == 0) return OP_GE_F64_R;
+        if (strcmp(op, "<") == 0) return OP_LT_F64_TYPED;
+        if (strcmp(op, ">") == 0) return OP_GT_F64_TYPED;
+        if (strcmp(op, "<=") == 0) return OP_LE_F64_TYPED;
+        if (strcmp(op, ">=") == 0) return OP_GE_F64_TYPED;
         if (strcmp(op, "==") == 0) return OP_EQ_R;
         if (strcmp(op, "!=") == 0) return OP_NE_R;
     }

@@ -77,7 +77,7 @@ typedef enum RegisterStrategy {
 typedef struct RegisterAllocation {
     int logical_id;           // R0-R255 logical register ID (for standard)
     RegisterType physical_type; // Which physical bank (REG_TYPE_I32, etc.)
-    int physical_id;          // Physical register within typed bank (0-31)
+    int physical_id;          // Physical register within typed bank (0-255)
     RegisterStrategy strategy; // Which instruction set to use
     bool is_active;           // Whether allocation is currently active
 } RegisterAllocation;
@@ -90,13 +90,13 @@ typedef struct DualRegisterAllocator {
     // Standard register tracking (R0-R255) - for general purpose
     bool standard_regs[256];
     
-    // Typed register tracking (R0-R31 per type) - for performance
-    bool typed_i32_regs[32];
-    bool typed_i64_regs[32]; 
-    bool typed_f64_regs[32];
-    bool typed_u32_regs[32];
-    bool typed_u64_regs[32];
-    bool typed_bool_regs[32];
+    // Typed register tracking (R0-R255 per type) - for performance
+    bool typed_i32_regs[256];
+    bool typed_i64_regs[256];
+    bool typed_f64_regs[256];
+    bool typed_u32_regs[256];
+    bool typed_u64_regs[256];
+    bool typed_bool_regs[256];
     
     // Allocation tracking
     RegisterAllocation allocations[256];

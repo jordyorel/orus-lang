@@ -5,7 +5,7 @@
 #include "vm/register_file.h"
 
 #define VM_TYPED_REGISTER_LIMIT \
-    ((uint8_t)(sizeof(((TypedRegisters*)0)->i32_regs) / sizeof(int32_t)))
+    ((uint16_t)(sizeof(((TypedRegisters*)0)->i32_regs) / sizeof(int32_t)))
 
 // Frame-aware register access helpers shared across dispatch implementations
 
@@ -347,238 +347,458 @@ static inline void vm_store_bool_register(uint16_t id, bool value) {
 // Signed 32-bit comparisons
 #define CMP_I32_LT(dst, a, b) \
     do { \
-        Value val_a = vm_get_register_safe(a); \
-        Value val_b = vm_get_register_safe(b); \
-        if (!IS_I32(val_a) || !IS_I32(val_b)) { \
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i32"); \
-            RETURN(INTERPRET_RUNTIME_ERROR); \
+        int32_t val_a_i32; \
+        int32_t val_b_i32; \
+        bool left_typed = vm_try_read_i32_typed(a, &val_a_i32); \
+        bool right_typed = vm_try_read_i32_typed(b, &val_b_i32); \
+        if (left_typed && right_typed) { \
+            vm_trace_loop_event(LOOP_TRACE_TYPED_HIT); \
+            vm_store_bool_register((dst), val_a_i32 < val_b_i32); \
+        } else { \
+            Value val_a = vm_get_register_safe(a); \
+            Value val_b = vm_get_register_safe(b); \
+            if (!IS_I32(val_a) || !IS_I32(val_b)) { \
+                vm_trace_loop_event(LOOP_TRACE_TYPE_MISMATCH); \
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i32"); \
+                RETURN(INTERPRET_RUNTIME_ERROR); \
+            } \
+            vm_trace_loop_event(LOOP_TRACE_TYPED_MISS); \
+            val_a_i32 = AS_I32(val_a); \
+            val_b_i32 = AS_I32(val_b); \
+            vm_cache_i32_typed(a, val_a_i32); \
+            vm_cache_i32_typed(b, val_b_i32); \
+            vm_store_bool_register((dst), val_a_i32 < val_b_i32); \
         } \
-        vm_set_register_safe((dst), BOOL_VAL(AS_I32(val_a) < AS_I32(val_b))); \
     } while (0)
 
 #define CMP_I32_LE(dst, a, b) \
     do { \
-        Value val_a = vm_get_register_safe(a); \
-        Value val_b = vm_get_register_safe(b); \
-        if (!IS_I32(val_a) || !IS_I32(val_b)) { \
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i32"); \
-            RETURN(INTERPRET_RUNTIME_ERROR); \
+        int32_t val_a_i32; \
+        int32_t val_b_i32; \
+        bool left_typed = vm_try_read_i32_typed(a, &val_a_i32); \
+        bool right_typed = vm_try_read_i32_typed(b, &val_b_i32); \
+        if (left_typed && right_typed) { \
+            vm_trace_loop_event(LOOP_TRACE_TYPED_HIT); \
+            vm_store_bool_register((dst), val_a_i32 <= val_b_i32); \
+        } else { \
+            Value val_a = vm_get_register_safe(a); \
+            Value val_b = vm_get_register_safe(b); \
+            if (!IS_I32(val_a) || !IS_I32(val_b)) { \
+                vm_trace_loop_event(LOOP_TRACE_TYPE_MISMATCH); \
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i32"); \
+                RETURN(INTERPRET_RUNTIME_ERROR); \
+            } \
+            vm_trace_loop_event(LOOP_TRACE_TYPED_MISS); \
+            val_a_i32 = AS_I32(val_a); \
+            val_b_i32 = AS_I32(val_b); \
+            vm_cache_i32_typed(a, val_a_i32); \
+            vm_cache_i32_typed(b, val_b_i32); \
+            vm_store_bool_register((dst), val_a_i32 <= val_b_i32); \
         } \
-        vm_set_register_safe((dst), BOOL_VAL(AS_I32(val_a) <= AS_I32(val_b))); \
     } while (0)
 
 #define CMP_I32_GT(dst, a, b) \
     do { \
-        Value val_a = vm_get_register_safe(a); \
-        Value val_b = vm_get_register_safe(b); \
-        if (!IS_I32(val_a) || !IS_I32(val_b)) { \
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i32"); \
-            RETURN(INTERPRET_RUNTIME_ERROR); \
+        int32_t val_a_i32; \
+        int32_t val_b_i32; \
+        bool left_typed = vm_try_read_i32_typed(a, &val_a_i32); \
+        bool right_typed = vm_try_read_i32_typed(b, &val_b_i32); \
+        if (left_typed && right_typed) { \
+            vm_trace_loop_event(LOOP_TRACE_TYPED_HIT); \
+            vm_store_bool_register((dst), val_a_i32 > val_b_i32); \
+        } else { \
+            Value val_a = vm_get_register_safe(a); \
+            Value val_b = vm_get_register_safe(b); \
+            if (!IS_I32(val_a) || !IS_I32(val_b)) { \
+                vm_trace_loop_event(LOOP_TRACE_TYPE_MISMATCH); \
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i32"); \
+                RETURN(INTERPRET_RUNTIME_ERROR); \
+            } \
+            vm_trace_loop_event(LOOP_TRACE_TYPED_MISS); \
+            val_a_i32 = AS_I32(val_a); \
+            val_b_i32 = AS_I32(val_b); \
+            vm_cache_i32_typed(a, val_a_i32); \
+            vm_cache_i32_typed(b, val_b_i32); \
+            vm_store_bool_register((dst), val_a_i32 > val_b_i32); \
         } \
-        vm_set_register_safe((dst), BOOL_VAL(AS_I32(val_a) > AS_I32(val_b))); \
     } while (0)
 
 #define CMP_I32_GE(dst, a, b) \
     do { \
-        Value val_a = vm_get_register_safe(a); \
-        Value val_b = vm_get_register_safe(b); \
-        if (!IS_I32(val_a) || !IS_I32(val_b)) { \
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i32"); \
-            RETURN(INTERPRET_RUNTIME_ERROR); \
+        int32_t val_a_i32; \
+        int32_t val_b_i32; \
+        bool left_typed = vm_try_read_i32_typed(a, &val_a_i32); \
+        bool right_typed = vm_try_read_i32_typed(b, &val_b_i32); \
+        if (left_typed && right_typed) { \
+            vm_trace_loop_event(LOOP_TRACE_TYPED_HIT); \
+            vm_store_bool_register((dst), val_a_i32 >= val_b_i32); \
+        } else { \
+            Value val_a = vm_get_register_safe(a); \
+            Value val_b = vm_get_register_safe(b); \
+            if (!IS_I32(val_a) || !IS_I32(val_b)) { \
+                vm_trace_loop_event(LOOP_TRACE_TYPE_MISMATCH); \
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i32"); \
+                RETURN(INTERPRET_RUNTIME_ERROR); \
+            } \
+            vm_trace_loop_event(LOOP_TRACE_TYPED_MISS); \
+            val_a_i32 = AS_I32(val_a); \
+            val_b_i32 = AS_I32(val_b); \
+            vm_cache_i32_typed(a, val_a_i32); \
+            vm_cache_i32_typed(b, val_b_i32); \
+            vm_store_bool_register((dst), val_a_i32 >= val_b_i32); \
         } \
-        vm_set_register_safe((dst), BOOL_VAL(AS_I32(val_a) >= AS_I32(val_b))); \
     } while (0)
 
 // Signed 64-bit comparisons
 #define CMP_I64_LT(dst, a, b) \
     do { \
-        Value val_a = vm_get_register_safe(a); \
-        Value val_b = vm_get_register_safe(b); \
-        if (!IS_I64(val_a) || !IS_I64(val_b)) { \
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i64"); \
-            RETURN(INTERPRET_RUNTIME_ERROR); \
+        int64_t val_a_i64; \
+        int64_t val_b_i64; \
+        if (vm_try_read_i64_typed(a, &val_a_i64) && vm_try_read_i64_typed(b, &val_b_i64)) { \
+            vm_store_bool_register((dst), val_a_i64 < val_b_i64); \
+        } else { \
+            Value val_a = vm_get_register_safe(a); \
+            Value val_b = vm_get_register_safe(b); \
+            if (!IS_I64(val_a) || !IS_I64(val_b)) { \
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i64"); \
+                RETURN(INTERPRET_RUNTIME_ERROR); \
+            } \
+            val_a_i64 = AS_I64(val_a); \
+            val_b_i64 = AS_I64(val_b); \
+            vm_cache_i64_typed(a, val_a_i64); \
+            vm_cache_i64_typed(b, val_b_i64); \
+            vm_store_bool_register((dst), val_a_i64 < val_b_i64); \
         } \
-        vm_set_register_safe((dst), BOOL_VAL(AS_I64(val_a) < AS_I64(val_b))); \
     } while (0)
 
 #define CMP_I64_LE(dst, a, b) \
     do { \
-        Value val_a = vm_get_register_safe(a); \
-        Value val_b = vm_get_register_safe(b); \
-        if (!IS_I64(val_a) || !IS_I64(val_b)) { \
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i64"); \
-            RETURN(INTERPRET_RUNTIME_ERROR); \
+        int64_t val_a_i64; \
+        int64_t val_b_i64; \
+        if (vm_try_read_i64_typed(a, &val_a_i64) && vm_try_read_i64_typed(b, &val_b_i64)) { \
+            vm_store_bool_register((dst), val_a_i64 <= val_b_i64); \
+        } else { \
+            Value val_a = vm_get_register_safe(a); \
+            Value val_b = vm_get_register_safe(b); \
+            if (!IS_I64(val_a) || !IS_I64(val_b)) { \
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i64"); \
+                RETURN(INTERPRET_RUNTIME_ERROR); \
+            } \
+            val_a_i64 = AS_I64(val_a); \
+            val_b_i64 = AS_I64(val_b); \
+            vm_cache_i64_typed(a, val_a_i64); \
+            vm_cache_i64_typed(b, val_b_i64); \
+            vm_store_bool_register((dst), val_a_i64 <= val_b_i64); \
         } \
-        vm_set_register_safe((dst), BOOL_VAL(AS_I64(val_a) <= AS_I64(val_b))); \
     } while (0)
 
 #define CMP_I64_GT(dst, a, b) \
     do { \
-        Value val_a = vm_get_register_safe(a); \
-        Value val_b = vm_get_register_safe(b); \
-        if (!IS_I64(val_a) || !IS_I64(val_b)) { \
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i64"); \
-            RETURN(INTERPRET_RUNTIME_ERROR); \
+        int64_t val_a_i64; \
+        int64_t val_b_i64; \
+        if (vm_try_read_i64_typed(a, &val_a_i64) && vm_try_read_i64_typed(b, &val_b_i64)) { \
+            vm_store_bool_register((dst), val_a_i64 > val_b_i64); \
+        } else { \
+            Value val_a = vm_get_register_safe(a); \
+            Value val_b = vm_get_register_safe(b); \
+            if (!IS_I64(val_a) || !IS_I64(val_b)) { \
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i64"); \
+                RETURN(INTERPRET_RUNTIME_ERROR); \
+            } \
+            val_a_i64 = AS_I64(val_a); \
+            val_b_i64 = AS_I64(val_b); \
+            vm_cache_i64_typed(a, val_a_i64); \
+            vm_cache_i64_typed(b, val_b_i64); \
+            vm_store_bool_register((dst), val_a_i64 > val_b_i64); \
         } \
-        vm_set_register_safe((dst), BOOL_VAL(AS_I64(val_a) > AS_I64(val_b))); \
     } while (0)
 
 #define CMP_I64_GE(dst, a, b) \
     do { \
-        Value val_a = vm_get_register_safe(a); \
-        Value val_b = vm_get_register_safe(b); \
-        if (!IS_I64(val_a) || !IS_I64(val_b)) { \
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i64"); \
-            RETURN(INTERPRET_RUNTIME_ERROR); \
+        int64_t val_a_i64; \
+        int64_t val_b_i64; \
+        if (vm_try_read_i64_typed(a, &val_a_i64) && vm_try_read_i64_typed(b, &val_b_i64)) { \
+            vm_store_bool_register((dst), val_a_i64 >= val_b_i64); \
+        } else { \
+            Value val_a = vm_get_register_safe(a); \
+            Value val_b = vm_get_register_safe(b); \
+            if (!IS_I64(val_a) || !IS_I64(val_b)) { \
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i64"); \
+                RETURN(INTERPRET_RUNTIME_ERROR); \
+            } \
+            val_a_i64 = AS_I64(val_a); \
+            val_b_i64 = AS_I64(val_b); \
+            vm_cache_i64_typed(a, val_a_i64); \
+            vm_cache_i64_typed(b, val_b_i64); \
+            vm_store_bool_register((dst), val_a_i64 >= val_b_i64); \
         } \
-        vm_set_register_safe((dst), BOOL_VAL(AS_I64(val_a) >= AS_I64(val_b))); \
     } while (0)
 
 // Unsigned 32-bit comparisons
 #define CMP_U32_LT(dst, a, b) \
     do { \
-        Value val_a = vm_get_register_safe(a); \
-        Value val_b = vm_get_register_safe(b); \
-        if (!IS_U32(val_a) || !IS_U32(val_b)) { \
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u32"); \
-            RETURN(INTERPRET_RUNTIME_ERROR); \
+        uint32_t val_a_u32; \
+        uint32_t val_b_u32; \
+        if (vm_try_read_u32_typed(a, &val_a_u32) && vm_try_read_u32_typed(b, &val_b_u32)) { \
+            vm_store_bool_register((dst), val_a_u32 < val_b_u32); \
+        } else { \
+            Value val_a = vm_get_register_safe(a); \
+            Value val_b = vm_get_register_safe(b); \
+            if (!IS_U32(val_a) || !IS_U32(val_b)) { \
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u32"); \
+                RETURN(INTERPRET_RUNTIME_ERROR); \
+            } \
+            val_a_u32 = AS_U32(val_a); \
+            val_b_u32 = AS_U32(val_b); \
+            vm_cache_u32_typed(a, val_a_u32); \
+            vm_cache_u32_typed(b, val_b_u32); \
+            vm_store_bool_register((dst), val_a_u32 < val_b_u32); \
         } \
-        vm_set_register_safe((dst), BOOL_VAL(AS_U32(val_a) < AS_U32(val_b))); \
     } while (0)
 
 #define CMP_U32_LE(dst, a, b) \
     do { \
-        Value val_a = vm_get_register_safe(a); \
-        Value val_b = vm_get_register_safe(b); \
-        if (!IS_U32(val_a) || !IS_U32(val_b)) { \
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u32"); \
-            RETURN(INTERPRET_RUNTIME_ERROR); \
+        uint32_t val_a_u32; \
+        uint32_t val_b_u32; \
+        if (vm_try_read_u32_typed(a, &val_a_u32) && vm_try_read_u32_typed(b, &val_b_u32)) { \
+            vm_store_bool_register((dst), val_a_u32 <= val_b_u32); \
+        } else { \
+            Value val_a = vm_get_register_safe(a); \
+            Value val_b = vm_get_register_safe(b); \
+            if (!IS_U32(val_a) || !IS_U32(val_b)) { \
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u32"); \
+                RETURN(INTERPRET_RUNTIME_ERROR); \
+            } \
+            val_a_u32 = AS_U32(val_a); \
+            val_b_u32 = AS_U32(val_b); \
+            vm_cache_u32_typed(a, val_a_u32); \
+            vm_cache_u32_typed(b, val_b_u32); \
+            vm_store_bool_register((dst), val_a_u32 <= val_b_u32); \
         } \
-        vm_set_register_safe((dst), BOOL_VAL(AS_U32(val_a) <= AS_U32(val_b))); \
     } while (0)
 
 #define CMP_U32_GT(dst, a, b) \
     do { \
-        Value val_a = vm_get_register_safe(a); \
-        Value val_b = vm_get_register_safe(b); \
-        if (!IS_U32(val_a) || !IS_U32(val_b)) { \
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u32"); \
-            RETURN(INTERPRET_RUNTIME_ERROR); \
+        uint32_t val_a_u32; \
+        uint32_t val_b_u32; \
+        if (vm_try_read_u32_typed(a, &val_a_u32) && vm_try_read_u32_typed(b, &val_b_u32)) { \
+            vm_store_bool_register((dst), val_a_u32 > val_b_u32); \
+        } else { \
+            Value val_a = vm_get_register_safe(a); \
+            Value val_b = vm_get_register_safe(b); \
+            if (!IS_U32(val_a) || !IS_U32(val_b)) { \
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u32"); \
+                RETURN(INTERPRET_RUNTIME_ERROR); \
+            } \
+            val_a_u32 = AS_U32(val_a); \
+            val_b_u32 = AS_U32(val_b); \
+            vm_cache_u32_typed(a, val_a_u32); \
+            vm_cache_u32_typed(b, val_b_u32); \
+            vm_store_bool_register((dst), val_a_u32 > val_b_u32); \
         } \
-        vm_set_register_safe((dst), BOOL_VAL(AS_U32(val_a) > AS_U32(val_b))); \
     } while (0)
 
 #define CMP_U32_GE(dst, a, b) \
     do { \
-        Value val_a = vm_get_register_safe(a); \
-        Value val_b = vm_get_register_safe(b); \
-        if (!IS_U32(val_a) || !IS_U32(val_b)) { \
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u32"); \
-            RETURN(INTERPRET_RUNTIME_ERROR); \
+        uint32_t val_a_u32; \
+        uint32_t val_b_u32; \
+        if (vm_try_read_u32_typed(a, &val_a_u32) && vm_try_read_u32_typed(b, &val_b_u32)) { \
+            vm_store_bool_register((dst), val_a_u32 >= val_b_u32); \
+        } else { \
+            Value val_a = vm_get_register_safe(a); \
+            Value val_b = vm_get_register_safe(b); \
+            if (!IS_U32(val_a) || !IS_U32(val_b)) { \
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u32"); \
+                RETURN(INTERPRET_RUNTIME_ERROR); \
+            } \
+            val_a_u32 = AS_U32(val_a); \
+            val_b_u32 = AS_U32(val_b); \
+            vm_cache_u32_typed(a, val_a_u32); \
+            vm_cache_u32_typed(b, val_b_u32); \
+            vm_store_bool_register((dst), val_a_u32 >= val_b_u32); \
         } \
-        vm_set_register_safe((dst), BOOL_VAL(AS_U32(val_a) >= AS_U32(val_b))); \
     } while (0)
 
 // Unsigned 64-bit comparisons
 #define CMP_U64_LT(dst, a, b) \
     do { \
-        Value val_a = vm_get_register_safe(a); \
-        Value val_b = vm_get_register_safe(b); \
-        if (!IS_U64(val_a) || !IS_U64(val_b)) { \
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u64"); \
-            RETURN(INTERPRET_RUNTIME_ERROR); \
+        uint64_t val_a_u64; \
+        uint64_t val_b_u64; \
+        if (vm_try_read_u64_typed(a, &val_a_u64) && vm_try_read_u64_typed(b, &val_b_u64)) { \
+            vm_store_bool_register((dst), val_a_u64 < val_b_u64); \
+        } else { \
+            Value val_a = vm_get_register_safe(a); \
+            Value val_b = vm_get_register_safe(b); \
+            if (!IS_U64(val_a) || !IS_U64(val_b)) { \
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u64"); \
+                RETURN(INTERPRET_RUNTIME_ERROR); \
+            } \
+            val_a_u64 = AS_U64(val_a); \
+            val_b_u64 = AS_U64(val_b); \
+            vm_cache_u64_typed(a, val_a_u64); \
+            vm_cache_u64_typed(b, val_b_u64); \
+            vm_store_bool_register((dst), val_a_u64 < val_b_u64); \
         } \
-        vm_set_register_safe((dst), BOOL_VAL(AS_U64(val_a) < AS_U64(val_b))); \
     } while (0)
 
 #define CMP_U64_LE(dst, a, b) \
     do { \
-        Value val_a = vm_get_register_safe(a); \
-        Value val_b = vm_get_register_safe(b); \
-        if (!IS_U64(val_a) || !IS_U64(val_b)) { \
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u64"); \
-            RETURN(INTERPRET_RUNTIME_ERROR); \
+        uint64_t val_a_u64; \
+        uint64_t val_b_u64; \
+        if (vm_try_read_u64_typed(a, &val_a_u64) && vm_try_read_u64_typed(b, &val_b_u64)) { \
+            vm_store_bool_register((dst), val_a_u64 <= val_b_u64); \
+        } else { \
+            Value val_a = vm_get_register_safe(a); \
+            Value val_b = vm_get_register_safe(b); \
+            if (!IS_U64(val_a) || !IS_U64(val_b)) { \
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u64"); \
+                RETURN(INTERPRET_RUNTIME_ERROR); \
+            } \
+            val_a_u64 = AS_U64(val_a); \
+            val_b_u64 = AS_U64(val_b); \
+            vm_cache_u64_typed(a, val_a_u64); \
+            vm_cache_u64_typed(b, val_b_u64); \
+            vm_store_bool_register((dst), val_a_u64 <= val_b_u64); \
         } \
-        vm_set_register_safe((dst), BOOL_VAL(AS_U64(val_a) <= AS_U64(val_b))); \
     } while (0)
 
 #define CMP_U64_GT(dst, a, b) \
     do { \
-        Value val_a = vm_get_register_safe(a); \
-        Value val_b = vm_get_register_safe(b); \
-        if (!IS_U64(val_a) || !IS_U64(val_b)) { \
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u64"); \
-            RETURN(INTERPRET_RUNTIME_ERROR); \
+        uint64_t val_a_u64; \
+        uint64_t val_b_u64; \
+        if (vm_try_read_u64_typed(a, &val_a_u64) && vm_try_read_u64_typed(b, &val_b_u64)) { \
+            vm_store_bool_register((dst), val_a_u64 > val_b_u64); \
+        } else { \
+            Value val_a = vm_get_register_safe(a); \
+            Value val_b = vm_get_register_safe(b); \
+            if (!IS_U64(val_a) || !IS_U64(val_b)) { \
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u64"); \
+                RETURN(INTERPRET_RUNTIME_ERROR); \
+            } \
+            val_a_u64 = AS_U64(val_a); \
+            val_b_u64 = AS_U64(val_b); \
+            vm_cache_u64_typed(a, val_a_u64); \
+            vm_cache_u64_typed(b, val_b_u64); \
+            vm_store_bool_register((dst), val_a_u64 > val_b_u64); \
         } \
-        vm_set_register_safe((dst), BOOL_VAL(AS_U64(val_a) > AS_U64(val_b))); \
     } while (0)
 
 #define CMP_U64_GE(dst, a, b) \
     do { \
-        Value val_a = vm_get_register_safe(a); \
-        Value val_b = vm_get_register_safe(b); \
-        if (!IS_U64(val_a) || !IS_U64(val_b)) { \
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u64"); \
-            RETURN(INTERPRET_RUNTIME_ERROR); \
+        uint64_t val_a_u64; \
+        uint64_t val_b_u64; \
+        if (vm_try_read_u64_typed(a, &val_a_u64) && vm_try_read_u64_typed(b, &val_b_u64)) { \
+            vm_store_bool_register((dst), val_a_u64 >= val_b_u64); \
+        } else { \
+            Value val_a = vm_get_register_safe(a); \
+            Value val_b = vm_get_register_safe(b); \
+            if (!IS_U64(val_a) || !IS_U64(val_b)) { \
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u64"); \
+                RETURN(INTERPRET_RUNTIME_ERROR); \
+            } \
+            val_a_u64 = AS_U64(val_a); \
+            val_b_u64 = AS_U64(val_b); \
+            vm_cache_u64_typed(a, val_a_u64); \
+            vm_cache_u64_typed(b, val_b_u64); \
+            vm_store_bool_register((dst), val_a_u64 >= val_b_u64); \
         } \
-        vm_set_register_safe((dst), BOOL_VAL(AS_U64(val_a) >= AS_U64(val_b))); \
     } while (0)
 
 // Double comparisons
 #define CMP_F64_LT(dst, a, b) \
     do { \
-        Value val_a = vm_get_register_safe(a); \
-        Value val_b = vm_get_register_safe(b); \
-        if (!IS_F64(val_a) || !IS_F64(val_b)) { \
-            fprintf(stderr, "[F64_LT_ERROR_TRACE] CMP_F64_LT triggered: dst=%d, a=%d, b=%d\n", (dst), (a), (b)); \
-            fprintf(stderr, "[F64_LT_ERROR_TRACE] Register[%d] type: %d, Register[%d] type: %d\n", (a), val_a.type, (b), val_b.type); \
-            fflush(stderr); \
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be f64"); \
-            RETURN(INTERPRET_RUNTIME_ERROR); \
+        double val_a_f64; \
+        double val_b_f64; \
+        if (vm_try_read_f64_typed(a, &val_a_f64) && vm_try_read_f64_typed(b, &val_b_f64)) { \
+            vm_store_bool_register((dst), val_a_f64 < val_b_f64); \
+        } else { \
+            Value val_a = vm_get_register_safe(a); \
+            Value val_b = vm_get_register_safe(b); \
+            if (!IS_F64(val_a) || !IS_F64(val_b)) { \
+                fprintf(stderr, "[F64_LT_ERROR_TRACE] CMP_F64_LT triggered: dst=%d, a=%d, b=%d\n", (dst), (a), (b)); \
+                fprintf(stderr, "[F64_LT_ERROR_TRACE] Register[%d] type: %d, Register[%d] type: %d\n", (a), val_a.type, (b), val_b.type); \
+                fflush(stderr); \
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be f64"); \
+                RETURN(INTERPRET_RUNTIME_ERROR); \
+            } \
+            val_a_f64 = AS_F64(val_a); \
+            val_b_f64 = AS_F64(val_b); \
+            vm_cache_f64_typed(a, val_a_f64); \
+            vm_cache_f64_typed(b, val_b_f64); \
+            vm_store_bool_register((dst), val_a_f64 < val_b_f64); \
         } \
-        vm_set_register_safe((dst), BOOL_VAL(AS_F64(val_a) < AS_F64(val_b))); \
     } while (0)
 
 #define CMP_F64_LE(dst, a, b) \
     do { \
-        Value val_a = vm_get_register_safe(a); \
-        Value val_b = vm_get_register_safe(b); \
-        if (!IS_F64(val_a) || !IS_F64(val_b)) { \
-            fprintf(stderr, "[F64_LE_ERROR_TRACE] CMP_F64_LE triggered: dst=%d, a=%d, b=%d\n", (dst), (a), (b)); \
-            fprintf(stderr, "[F64_LE_ERROR_TRACE] Register[%d] type: %d, Register[%d] type: %d\n", (a), val_a.type, (b), val_b.type); \
-            fflush(stderr); \
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be f64"); \
-            RETURN(INTERPRET_RUNTIME_ERROR); \
+        double val_a_f64; \
+        double val_b_f64; \
+        if (vm_try_read_f64_typed(a, &val_a_f64) && vm_try_read_f64_typed(b, &val_b_f64)) { \
+            vm_store_bool_register((dst), val_a_f64 <= val_b_f64); \
+        } else { \
+            Value val_a = vm_get_register_safe(a); \
+            Value val_b = vm_get_register_safe(b); \
+            if (!IS_F64(val_a) || !IS_F64(val_b)) { \
+                fprintf(stderr, "[F64_LE_ERROR_TRACE] CMP_F64_LE triggered: dst=%d, a=%d, b=%d\n", (dst), (a), (b)); \
+                fprintf(stderr, "[F64_LE_ERROR_TRACE] Register[%d] type: %d, Register[%d] type: %d\n", (a), val_a.type, (b), val_b.type); \
+                fflush(stderr); \
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be f64"); \
+                RETURN(INTERPRET_RUNTIME_ERROR); \
+            } \
+            val_a_f64 = AS_F64(val_a); \
+            val_b_f64 = AS_F64(val_b); \
+            vm_cache_f64_typed(a, val_a_f64); \
+            vm_cache_f64_typed(b, val_b_f64); \
+            vm_store_bool_register((dst), val_a_f64 <= val_b_f64); \
         } \
-        vm_set_register_safe((dst), BOOL_VAL(AS_F64(val_a) <= AS_F64(val_b))); \
     } while (0)
 
 #define CMP_F64_GT(dst, a, b) \
     do { \
-        Value val_a = vm_get_register_safe(a); \
-        Value val_b = vm_get_register_safe(b); \
-        if (!IS_F64(val_a) || !IS_F64(val_b)) { \
-            fprintf(stderr, "[F64_GT_ERROR_TRACE] CMP_F64_GT triggered: dst=%d, a=%d, b=%d\n", (dst), (a), (b)); \
-            fprintf(stderr, "[F64_GT_ERROR_TRACE] Register[%d] type: %d, Register[%d] type: %d\n", (a), val_a.type, (b), val_b.type); \
-            fflush(stderr); \
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be f64"); \
-            RETURN(INTERPRET_RUNTIME_ERROR); \
+        double val_a_f64; \
+        double val_b_f64; \
+        if (vm_try_read_f64_typed(a, &val_a_f64) && vm_try_read_f64_typed(b, &val_b_f64)) { \
+            vm_store_bool_register((dst), val_a_f64 > val_b_f64); \
+        } else { \
+            Value val_a = vm_get_register_safe(a); \
+            Value val_b = vm_get_register_safe(b); \
+            if (!IS_F64(val_a) || !IS_F64(val_b)) { \
+                fprintf(stderr, "[F64_GT_ERROR_TRACE] CMP_F64_GT triggered: dst=%d, a=%d, b=%d\n", (dst), (a), (b)); \
+                fprintf(stderr, "[F64_GT_ERROR_TRACE] Register[%d] type: %d, Register[%d] type: %d\n", (a), val_a.type, (b), val_b.type); \
+                fflush(stderr); \
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be f64"); \
+                RETURN(INTERPRET_RUNTIME_ERROR); \
+            } \
+            val_a_f64 = AS_F64(val_a); \
+            val_b_f64 = AS_F64(val_b); \
+            vm_cache_f64_typed(a, val_a_f64); \
+            vm_cache_f64_typed(b, val_b_f64); \
+            vm_store_bool_register((dst), val_a_f64 > val_b_f64); \
         } \
-        vm_set_register_safe((dst), BOOL_VAL(AS_F64(val_a) > AS_F64(val_b))); \
     } while (0)
 
 #define CMP_F64_GE(dst, a, b) \
     do { \
-        Value val_a = vm_get_register_safe(a); \
-        Value val_b = vm_get_register_safe(b); \
-        if (!IS_F64(val_a) || !IS_F64(val_b)) { \
-            fprintf(stderr, "[F64_GE_ERROR_TRACE] CMP_F64_GE triggered: dst=%d, a=%d, b=%d\n", (dst), (a), (b)); \
-            fprintf(stderr, "[F64_GE_ERROR_TRACE] Register[%d] type: %d, Register[%d] type: %d\n", (a), val_a.type, (b), val_b.type); \
-            fflush(stderr); \
-            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be f64"); \
-            RETURN(INTERPRET_RUNTIME_ERROR); \
+        double val_a_f64; \
+        double val_b_f64; \
+        if (vm_try_read_f64_typed(a, &val_a_f64) && vm_try_read_f64_typed(b, &val_b_f64)) { \
+            vm_store_bool_register((dst), val_a_f64 >= val_b_f64); \
+        } else { \
+            Value val_a = vm_get_register_safe(a); \
+            Value val_b = vm_get_register_safe(b); \
+            if (!IS_F64(val_a) || !IS_F64(val_b)) { \
+                fprintf(stderr, "[F64_GE_ERROR_TRACE] CMP_F64_GE triggered: dst=%d, a=%d, b=%d\n", (dst), (a), (b)); \
+                fprintf(stderr, "[F64_GE_ERROR_TRACE] Register[%d] type: %d, Register[%d] type: %d\n", (a), val_a.type, (b), val_b.type); \
+                fflush(stderr); \
+                runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be f64"); \
+                RETURN(INTERPRET_RUNTIME_ERROR); \
+            } \
+            val_a_f64 = AS_F64(val_a); \
+            val_b_f64 = AS_F64(val_b); \
+            vm_cache_f64_typed(a, val_a_f64); \
+            vm_cache_f64_typed(b, val_b_f64); \
+            vm_store_bool_register((dst), val_a_f64 >= val_b_f64); \
         } \
-        vm_set_register_safe((dst), BOOL_VAL(AS_F64(val_a) >= AS_F64(val_b))); \
     } while (0)
 
 #endif // ORUS_VM_COMPARISON_H

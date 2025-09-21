@@ -975,15 +975,15 @@ static inline void compiler_reset_exports(Compiler* compiler) {
 // Typed registers for optimization (unboxed values)
 typedef struct {
     // Numeric registers (unboxed for performance)
-    int32_t i32_regs[32];
-    int64_t i64_regs[32];
-    uint32_t u32_regs[32];
-    uint64_t u64_regs[32];
-    double f64_regs[32];
-    bool bool_regs[32];
+    int32_t i32_regs[256];
+    int64_t i64_regs[256];
+    uint32_t u32_regs[256];
+    uint64_t u64_regs[256];
+    double f64_regs[256];
+    bool bool_regs[256];
 
     // Heap object registers (boxed)
-    Value heap_regs[32];
+    Value heap_regs[256];
 
     // Register type tracking (for debugging/safety)
     uint8_t reg_types[256];  // Track which register bank each logical register maps to
@@ -1001,10 +1001,32 @@ typedef enum {
     REG_TYPE_HEAP
 } RegisterType;
 
+// Loop telemetry counters for typed fast paths
+typedef enum {
+    LOOP_TRACE_TYPED_HIT = 0,
+    LOOP_TRACE_TYPED_MISS,
+    LOOP_TRACE_TYPE_MISMATCH,
+    LOOP_TRACE_OVERFLOW_GUARD,
+    LOOP_TRACE_KIND_COUNT
+} LoopTraceKind;
+
+typedef struct {
+    uint64_t typed_hit;
+    uint64_t typed_miss;
+    uint64_t boxed_type_mismatch;
+    uint64_t boxed_overflow_guard;
+} LoopTraceCounters;
+
 // Profiling counters
 typedef struct {
     uint64_t instruction_counts[VM_DISPATCH_TABLE_SIZE];
+    LoopTraceCounters loop_trace;
 } VMProfile;
+
+// Runtime configuration toggles
+typedef struct {
+    bool trace_typed_fallbacks;
+} VMRuntimeOptions;
 
 // Phase 1: Register access functions (forward declarations)
 // These are implemented in register_file.c
@@ -1084,6 +1106,7 @@ typedef struct {
     bool suppressWarnings;
     bool promotionHints;
     bool isShuttingDown;  // Flag to indicate VM is in cleanup/shutdown phase
+    VMRuntimeOptions config;
     
     // Call frame stack pointers
     CallFrame* callFrames;     // Array of call frames (for legacy compatibility)
@@ -1093,6 +1116,33 @@ typedef struct {
 
 // Global VM instance
 extern VM vm;
+
+void vm_reset_loop_trace(void);
+void vm_dump_loop_trace(FILE* out);
+
+static inline void vm_trace_loop_event(LoopTraceKind kind) {
+    if (!vm.config.trace_typed_fallbacks) {
+        return;
+    }
+
+    switch (kind) {
+        case LOOP_TRACE_TYPED_HIT:
+            vm.profile.loop_trace.typed_hit++;
+            break;
+        case LOOP_TRACE_TYPED_MISS:
+            vm.profile.loop_trace.typed_miss++;
+            break;
+        case LOOP_TRACE_TYPE_MISMATCH:
+            vm.profile.loop_trace.boxed_type_mismatch++;
+            break;
+        case LOOP_TRACE_OVERFLOW_GUARD:
+            vm.profile.loop_trace.boxed_overflow_guard++;
+            break;
+        case LOOP_TRACE_KIND_COUNT:
+        default:
+            break;
+    }
+}
 
 // Interpretation results
 typedef enum {

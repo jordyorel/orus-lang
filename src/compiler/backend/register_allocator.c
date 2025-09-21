@@ -304,7 +304,7 @@ DualRegisterAllocator* init_dual_register_allocator(void) {
     // Initialize standard register tracking (R0-R255)
     memset(allocator->standard_regs, false, sizeof(allocator->standard_regs));
     
-    // Initialize typed register tracking (R0-R31 per type)
+    // Initialize typed register tracking (R0-R255 per type)
     memset(allocator->typed_i32_regs, false, sizeof(allocator->typed_i32_regs));
     memset(allocator->typed_i64_regs, false, sizeof(allocator->typed_i64_regs));
     memset(allocator->typed_f64_regs, false, sizeof(allocator->typed_f64_regs));
@@ -352,8 +352,8 @@ static int find_free_typed_register(DualRegisterAllocator* allocator, RegisterTy
         default: return -1;
     }
     
-    // Find first free register in the bank (R0-R31)
-    for (int i = 0; i < 32; i++) {
+    // Find first free register in the bank (R0-R255)
+    for (int i = 0; i < 256; i++) {
         if (!regs[i]) {
             regs[i] = true;
             return i;
@@ -484,9 +484,9 @@ void free_register_allocation(DualRegisterAllocator* allocator, RegisterAllocati
             default: break;
         }
         
-        if (regs && allocation->physical_id >= 0 && allocation->physical_id < 32) {
+        if (regs && allocation->physical_id >= 0 && allocation->physical_id < 256) {
             regs[allocation->physical_id] = false;
-            printf("[DUAL_REGISTER_ALLOCATOR] Freed typed register: type=%d, physical_id=%d\n", 
+            printf("[DUAL_REGISTER_ALLOCATOR] Freed typed register: type=%d, physical_id=%d\n",
                    allocation->physical_type, allocation->physical_id);
         }
     } else if (allocation->strategy == REG_STRATEGY_STANDARD) {

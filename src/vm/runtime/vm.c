@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <inttypes.h>
 
 // ✅ Phase 1: Auto-detect computed goto support
 #ifndef USE_COMPUTED_GOTO
@@ -283,6 +284,9 @@ static InterpretResult run(void) {
 // Main interpretation functions
 InterpretResult interpret(const char* source) {
     InterpretResult result = INTERPRET_COMPILE_ERROR;
+    if (vm.config.trace_typed_fallbacks) {
+        vm_reset_loop_trace();
+    }
     // Source text is now set in main.c with proper error handling
     // set_source_text(source, strlen(source)) is called before interpret()
     // fflush(stdout);
@@ -848,4 +852,22 @@ cleanup:
     }
 
     return result;
+}
+
+void vm_reset_loop_trace(void) {
+    memset(&vm.profile.loop_trace, 0, sizeof(LoopTraceCounters));
+}
+
+void vm_dump_loop_trace(FILE* out) {
+    if (!out || !vm.config.trace_typed_fallbacks) {
+        return;
+    }
+
+    fprintf(out,
+            "[loop-trace] typed_hit=%" PRIu64 " typed_miss=%" PRIu64
+            " boxed_type_mismatch=%" PRIu64 " boxed_overflow_guard=%" PRIu64 "\n",
+            (uint64_t)vm.profile.loop_trace.typed_hit,
+            (uint64_t)vm.profile.loop_trace.typed_miss,
+            (uint64_t)vm.profile.loop_trace.boxed_type_mismatch,
+            (uint64_t)vm.profile.loop_trace.boxed_overflow_guard);
 }

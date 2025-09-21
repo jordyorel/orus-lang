@@ -279,7 +279,7 @@ static void compileAssignment(Compiler* compiler, ASTNode* node) {
         // Perform operation
         switch (assign->compound_op) {
             case TOKEN_PLUS_EQUAL:
-                emitByte(compiler, OP_ADD_I32_R);
+                emitByte(compiler, OP_ADD_I32_TYPED);
                 break;
             case TOKEN_MINUS_EQUAL:
                 emitByte(compiler, OP_SUB_I32_R);
@@ -321,7 +321,7 @@ typedef enum {
     // Comparison operations
     OP_EQ_R,               // dst, left, right (polymorphic)
     OP_NE_R,               // dst, left, right
-    OP_LT_I32_R,           // dst, left, right (type-specific)
+    OP_LT_I32_TYPED,       // dst, left, right (type-specific)
     OP_LE_I32_R,           // dst, left, right
     OP_GT_I32_R,           // dst, left, right
     OP_GE_I32_R,           // dst, left, right
@@ -782,7 +782,7 @@ static void compileForRange(Compiler* compiler, ASTNode* node) {
     
     // Check condition: loop_var < end (or <= when inclusive)
     uint8_t cond_reg = allocateRegister(compiler);
-    emitByte(compiler, for_stmt->inclusive ? OP_LE_I32_R : OP_LT_I32_R);
+    emitByte(compiler, for_stmt->inclusive ? OP_LE_I32_TYPED : OP_LT_I32_TYPED);
     emitByte(compiler, cond_reg);
     emitByte(compiler, loop_var);
     emitByte(compiler, end_reg);
@@ -799,7 +799,7 @@ static void compileForRange(Compiler* compiler, ASTNode* node) {
     
     // Increment loop variable by step (default 1)
     if (for_stmt->step) {
-        emitByte(compiler, OP_ADD_I32_R);
+        emitByte(compiler, OP_ADD_I32_TYPED);
         emitByte(compiler, loop_var);
         emitByte(compiler, loop_var);
         emitByte(compiler, step_reg);
@@ -858,6 +858,330 @@ static void compileForIter(Compiler* compiler, ASTNode* node) {
     exitScope(compiler);
 }
 ```
+
+#### Typed loop condition fast path
+```c
+static inline bool range_condition_lt(uint16_t dst, uint16_t left, uint16_t right) {
+    int32_t left_i32;
+    int32_t right_i32;
+
+    if (vm_try_read_i32_typed(left, &left_i32) &&
+        vm_try_read_i32_typed(right, &right_i32)) {
+        vm_store_bool_register(dst, left_i32 < right_i32);
+        return left_i32 < right_i32;
+    }
+
+    Value left_boxed = vm_get_register_safe(left);
+    Value right_boxed = vm_get_register_safe(right);
+    if (!IS_I32(left_boxed) || !IS_I32(right_boxed)) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i32");
+        return false;
+    }
+
+    left_i32 = AS_I32(left_boxed);
+    right_i32 = AS_I32(right_boxed);
+    vm_cache_i32_typed(left, left_i32);
+    vm_cache_i32_typed(right, right_i32);
+    vm_store_bool_register(dst, left_i32 < right_i32);
+    return left_i32 < right_i32;
+}
+
+static inline void range_increment_i32(uint16_t reg, uint16_t step_reg) {
+    int32_t loop_val;
+    int32_t step_val;
+
+    if (!vm_try_read_i32_typed(reg, &loop_val)) {
+        Value boxed = vm_get_register_safe(reg);
+        loop_val = AS_I32(boxed);
+        vm_cache_i32_typed(reg, loop_val);
+    }
+
+    if (!vm_try_read_i32_typed(step_reg, &step_val)) {
+        Value boxed = vm_get_register_safe(step_reg);
+        step_val = AS_I32(boxed);
+        vm_cache_i32_typed(step_reg, step_val);
+    }
+
+    vm_store_i32_register(reg, loop_val + step_val);
+}
+```
+
+#### Loop hot-path optimization and safety roadmap
+
+Even after introducing typed comparisons, profiling shows that tight loops still
+pay for repeated boxed register synchronization, iterator allocation, and
+runtime guard traffic. The VM must keep its security invariants—type tags stay
+authoritative, traps fire on misuse, and the interpreter never reads
+uninitialized registers—while carving out a lower-latency execution path. The
+next rounds of work focus on three fronts:
+
+1. **Typed-branch integrity** – Extend `OP_JUMP_IF_NOT_R` with a dual-mode
+   implementation. When the condition register owns a valid typed boolean cache
+   we can branch directly on the cached integer without fetching the boxed
+   `Value`. On cache misses we fall back to the current slow path. Safety is
+   preserved by revalidating the type tag before entering the fast branch.
+   ```c
+   static inline bool vm_try_branch_bool(uint16_t cond, int32_t* out) {
+       if (vm_try_read_bool_typed(cond, out)) {
+           return true;
+       }
+       Value boxed = vm_get_register_safe(cond);
+       if (!IS_BOOL(boxed)) {
+           runtimeError(ERROR_TYPE, SRC_LOC_NONE,
+                        "Loop condition must evaluate to bool");
+           return false;
+       }
+       *out = AS_BOOL(boxed);
+       vm_cache_bool_typed(cond, *out);
+       return true;
+   }
+   ```
+   The helper guarantees that typed and boxed views stay synchronized, so the
+   legacy instruction set still observes correct booleans even after the fast
+   branch fires.
+
+2. **Arithmetic fusion with overflow discipline** – Replace the generic
+   `OP_ADD_I32_R` increment in range loops with a fused
+   `OP_INC_I32_TYPED_SAFE` opcode that: (a) reads the counter and step from typed
+   caches, (b) performs a single overflow-checked addition, and (c) stores the
+   result through both typed and boxed channels. If overflow is detected the
+   helper raises the existing arithmetic exception, maintaining language
+   safety. The fallback path reuses the boxed arithmetic handler so there is no
+   observable behaviour change.
+
+3. **Iterator correctness fencing** – For collection loops we need a fast path
+   that skips heap allocation when the iterable is a range object or a known
+   array. A lightweight iterator descriptor (struct of base pointer, length, and
+   index) stored in typed scratch registers avoids touching the allocator. We
+   still run bounds checks on every iteration and invalidate the descriptor if
+   the collection escapes or is mutated, preventing use-after-free bugs.
+
+##### Coordination with LICM
+Loop-invariant code motion should only hoist expressions when all hoisted reads
+are side-effect free and stable across iterations. Before we widen the hoister
+to cover more arithmetic, we will:
+
+- Track per-expression `effects_mask` metadata during typed AST lowering so the
+  LICM pass refuses to move computations that can throw, allocate, or mutate
+  state.
+- Emit verifier assertions in the optimizer to guarantee that hoisted values
+  land in registers marked as immutable for the duration of the loop.
+- Add regression tests that combine LICM with typed branch/increment fast paths
+  to ensure safety checks still fire (e.g., invalid iterator use should abort
+  even when the guard is hoisted).
+
+##### Telemetry and regression harness
+To keep the VM secure while iterating on these optimizations we will introduce a
+`VM_TRACE_TYPED_FALLBACKS` build flag. When enabled, the VM logs every time a
+typed loop instruction bails out to the boxed slow path and captures the reason
+(`missing bool cache`, `overflow`, `type mismatch`). Coupled with the existing
+`tests/control_flow/loop_typed_fastpath_correctness.orus` program, this gives us
+automated coverage for both correctness and guard-rail enforcement.
+
+##### Detailed delivery roadmap
+The loop rework spans the VM, compiler backend, optimizer, and test harness. To
+keep the effort on schedule we split the initiative into incremental, testable
+milestones with clear ownership and back-out strategies. Each milestone
+increments the amount of work executed in typed registers while preserving the
+boxed safety net and LICM correctness guarantees.
+
+1. **Phase 0 – Instrumentation & diagnostics (Day 0-1)**
+   - **Goal**: Capture authoritative telemetry before changing control flow.
+   - **Tasks**:
+     - Wire the `VM_TRACE_TYPED_FALLBACKS` flag into `vm_init` and pipe the
+       counters through the existing profiler struct.
+     - Extend loop profiling to emit `typed_hit`, `typed_miss`, and
+       `boxed_fallback_reason` so we can detect regressions immediately.
+     - Add a `make test-loop-telemetry` target that runs the control-flow suite
+       with tracing enabled and diffs the counters against the golden values.
+   - **Sample implementation**:
+     ```c
+     typedef struct {
+         uint64_t typed_hit;
+         uint64_t typed_miss;
+         uint64_t boxed_type_mismatch;
+         uint64_t boxed_overflow_guard;
+     } LoopTraceCounters;
+
+     static inline void vm_trace_loop_event(VM* vm, LoopTraceKind kind) {
+         if (!vm->config.trace_typed_fallbacks) return;
+         vm->loop_trace[kind]++;
+     }
+     ```
+   - **Status**: Landed. `vm.profile.loop_trace` now records per-loop counters,
+     `vm_dump_loop_trace(stderr)` emits `[loop-trace]` summaries, and the new
+     `make test-loop-telemetry` target diffs `build/loop_telemetry/*.log`
+     against `tests/golden/loop_telemetry/*.log`.
+     ```c
+     static inline void vm_trace_loop_event(LoopTraceKind kind) {
+         if (!vm.config.trace_typed_fallbacks) return;
+         switch (kind) {
+             case LOOP_TRACE_TYPED_HIT:
+                 vm.profile.loop_trace.typed_hit++;
+                 break;
+             case LOOP_TRACE_TYPED_MISS:
+                 vm.profile.loop_trace.typed_miss++;
+                 break;
+             case LOOP_TRACE_TYPE_MISMATCH:
+                 vm.profile.loop_trace.boxed_type_mismatch++;
+                 break;
+             case LOOP_TRACE_OVERFLOW_GUARD:
+                 vm.profile.loop_trace.boxed_overflow_guard++;
+                 break;
+             default:
+                 break;
+         }
+     }
+
+     void vm_dump_loop_trace(FILE* out) {
+         if (!out || !vm.config.trace_typed_fallbacks) return;
+         fprintf(out,
+                 "[loop-trace] typed_hit=%" PRIu64 " typed_miss=%" PRIu64
+                 " boxed_type_mismatch=%" PRIu64 " boxed_overflow_guard=%" PRIu64 "\n",
+                 vm.profile.loop_trace.typed_hit,
+                 vm.profile.loop_trace.typed_miss,
+                 vm.profile.loop_trace.boxed_type_mismatch,
+                 vm.profile.loop_trace.boxed_overflow_guard);
+     }
+     ```
+
+2. **Phase 1 – Typed boolean branches (Day 1-3)**
+   - **Goal**: Remove boxed boolean reads from `OP_JUMP_IF_NOT_R` when typed
+     caches are valid.
+   - **Tasks**:
+     - Add `vm_try_branch_bool_fast` helper with fault reporting integrated into
+       the existing error system.
+     - Teach the dispatch tables (`vm_dispatch_{goto,switch}.c`) to call the new
+       helper before falling back to `CF_JUMP_IF_NOT`.
+     - Update LICM to tag hoisted boolean guards as immutably typed so branch
+       caches survive motion.
+   - **Safety net**: On cache miss, reuse the legacy boxed path to keep existing
+     type errors.
+   - **Sample implementation**:
+     ```c
+     static inline bool vm_try_branch_bool_fast(VM* vm, uint16_t cond,
+                                                int32_t* out) {
+         if (vm_try_read_bool_typed(cond, out)) {
+             vm_trace_loop_event(vm, LOOP_TRACE_TYPED_HIT);
+             return true;
+         }
+
+         Value boxed = vm_get_register_safe(cond);
+         if (!IS_BOOL(boxed)) {
+             vm_trace_loop_event(vm, LOOP_TRACE_TYPE_MISMATCH);
+             runtimeError(ERROR_TYPE, SRC_LOC_NONE,
+                          "Loop condition must evaluate to bool");
+             return false;
+         }
+
+         *out = AS_BOOL(boxed);
+         vm_cache_bool_typed(cond, *out);
+         vm_trace_loop_event(vm, LOOP_TRACE_TYPED_MISS);
+         return true;
+     }
+     ```
+
+3. **Phase 2 – Overflow-safe typed increments (Day 3-6)**
+   - **Goal**: Replace the generic `OP_ADD_I32_R` loop increments with a fused
+     overflow-checked typed opcode.
+   - **Tasks**:
+     - Implement `vm_exec_inc_i32_checked` using `__builtin_add_overflow` so the
+       VM aborts on overflow exactly as the boxed arithmetic path does.
+     - Update the compiler range-loop lowering to emit the fused opcode whenever
+       the loop variable, limit, and step are inferred as `i32`.
+     - Annotate the register allocator with `typed_increment_candidate`
+       metadata so the optimizer can keep the counter resident in the typed
+       bank.
+   - **Sample implementation**:
+     ```c
+     static inline bool vm_exec_inc_i32_checked(VM* vm, uint16_t dst,
+                                                uint16_t step) {
+         int32_t counter;
+         int32_t step_val;
+
+         if (!vm_try_read_i32_typed(dst, &counter) ||
+             !vm_try_read_i32_typed(step, &step_val)) {
+             vm_trace_loop_event(vm, LOOP_TRACE_TYPED_MISS);
+             return false;
+         }
+
+         int32_t result;
+         if (__builtin_add_overflow(counter, step_val, &result)) {
+             vm_trace_loop_event(vm, LOOP_TRACE_OVERFLOW_GUARD);
+             runtimeError(ERROR_ARITHMETIC, SRC_LOC_NONE,
+                          "loop counter overflowed i32 range");
+             return false;
+         }
+
+         vm_store_i32_register(dst, result);
+         vm_trace_loop_event(vm, LOOP_TRACE_TYPED_HIT);
+         return true;
+     }
+     ```
+
+4. **Phase 3 – Zero-allocation iterators (Day 6-9)**
+   - **Goal**: Allow array and range iterators to live entirely in typed scratch
+     registers.
+   - **Tasks**:
+     - Define `TypedIteratorDescriptor` with raw pointer, length, index, and
+       element stride fields.
+     - Extend `OP_GET_ITER_R` to detect the supported iterable shapes and stash
+       the descriptor in `vm->typed_regs.iterators` without touching the heap.
+     - Harden `OP_ITER_NEXT_R` so it performs bounds checks using the typed
+       descriptor first and only falls back to boxed objects when the descriptor
+       is invalidated.
+   - **Sample implementation**:
+     ```c
+     typedef struct {
+         const uint8_t* base;
+         uint32_t length;
+         uint32_t index;
+         uint32_t stride;
+     } TypedIteratorDescriptor;
+
+     static inline bool vm_iter_next_typed(VM* vm, uint16_t iter_reg,
+                                           uint16_t dst_reg) {
+         TypedIteratorDescriptor* it =
+             vm_typed_iterator_descriptor(vm, iter_reg);
+         if (!it || it->index >= it->length) {
+             vm_trace_loop_event(vm, LOOP_TRACE_TYPED_MISS);
+             return false;
+         }
+
+         const uint8_t* addr = it->base + it->index * it->stride;
+         int32_t value = *(const int32_t*)addr;
+         vm_store_i32_register(dst_reg, value);
+         it->index++;
+         vm_trace_loop_event(vm, LOOP_TRACE_TYPED_HIT);
+         return true;
+     }
+     ```
+
+5. **Phase 4 – LICM & optimizer integration (Day 9-11)**
+   - **Goal**: Ensure LICM cooperates with the new fast paths without breaking
+     safety invariants.
+   - **Tasks**:
+     - Augment LICM metadata with `typed_escape_mask` so hoisted expressions
+       record whether they depend on typed cache residency.
+     - Add verification passes that rerun LICM on the optimized IR and confirm
+       no typed-dependent value was hoisted outside of its guard.
+     - Introduce optimizer unit tests that combine hoisted bounds checks with
+       the typed iterators to guarantee early exits still occur.
+
+6. **Phase 5 – Regression suites & performance gates (Day 11-14)**
+   - **Goal**: Lock in correctness while tracking performance deltas.
+   - **Tasks**:
+     - Expand `tests/control_flow/loop_typed_fastpath_correctness.orus` with new
+       scenarios: mixed positive/negative steps, overflow triggers, iterator
+       invalidation, and LICM-hoisted guards.
+     - Create `scripts/benchmarks/loop_perf.py` to run microbenchmarks and emit
+       CSV output with typed hit ratios and iteration throughput.
+     - Wire the benchmark into CI as a non-blocking check that fails when the
+       throughput regresses by >5% compared to the recorded baseline.
+
+Each phase concludes with a documentation update (implementation guide +
+roadmap) and a telemetry snapshot so we can roll back if the runtime deviates
+from the safety envelope.
 
 ### 2.3 Main Function Entry Point
 

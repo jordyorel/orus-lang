@@ -1,0 +1,47 @@
+// Ensure typed loop fast paths preserve semantics
+
+fn trigger_failure():
+    _ = 1 / 0
+
+print("=== Typed Loop Correctness ===")
+
+mut forward_sum = 0
+for i in 0..=4:
+    forward_sum = forward_sum + i
+
+if forward_sum != 10:
+    print("Forward range sum mismatch:", forward_sum)
+    trigger_failure()
+
+mut backward_sum = 0
+for j in 5..=1..-2:
+    backward_sum = backward_sum + j
+
+if backward_sum != 9:
+    print("Backward range sum mismatch:", backward_sum)
+    trigger_failure()
+
+mut limit = 3
+mut exclusive_sum = 0
+for k in 1..limit:
+    exclusive_sum = exclusive_sum + k
+
+if exclusive_sum != 3:
+    print("Exclusive upper bound mismatch:", exclusive_sum)
+    trigger_failure()
+
+mut idx = 0
+mut while_sum = 0
+while idx < 4:
+    while_sum = while_sum + idx
+    idx = idx + 1
+
+if idx != 4:
+    print("While loop index mismatch:", idx)
+    trigger_failure()
+
+if while_sum != 6:
+    print("While loop sum mismatch:", while_sum)
+    trigger_failure()
+
+print("All typed loop correctness checks passed!")
