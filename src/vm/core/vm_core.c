@@ -6,6 +6,7 @@
 #include "vm/register_file.h"
 #include "type/type.h"
 #include <string.h>
+#include <stdlib.h>
 
 VM vm; // Global VM instance
 
@@ -46,6 +47,7 @@ void initVM(void) {
     for (int i = 0; i < 256; i++) {
         vm.typed_regs.reg_types[i] = REG_TYPE_NONE;
     }
+    memset(vm.typed_iterators, 0, sizeof(vm.typed_iterators));
 
     for (int i = 0; i < UINT8_COUNT; i++) {
         vm.globals[i] = BOOL_VAL(false); // Default value instead of NIL_VAL
@@ -86,6 +88,35 @@ void initVM(void) {
 #ifdef VM_TRACE_TYPED_FALLBACKS
     vm.config.trace_typed_fallbacks = true;
 #endif
+    vm.config.enable_bool_branch_fastpath = true;
+    vm.config.disable_inc_typed_fastpath = false;
+    vm.config.force_boxed_iterators = false;
+    vm.config.enable_licm_typed_metadata = false;
+
+    const char* disable_bool_fast_env = getenv("ORUS_DISABLE_BOOL_BRANCH_FASTPATH");
+    if (disable_bool_fast_env && disable_bool_fast_env[0] && disable_bool_fast_env[0] != '0') {
+        vm.config.enable_bool_branch_fastpath = false;
+    }
+
+    const char* bool_fast_env = getenv("ORUS_EXPERIMENT_BOOL_BRANCH_FASTPATH");
+    if (bool_fast_env && bool_fast_env[0] && bool_fast_env[0] != '0') {
+        vm.config.enable_bool_branch_fastpath = true;
+    }
+
+    const char* disable_inc_env = getenv("ORUS_DISABLE_INC_TYPED_FASTPATH");
+    if (disable_inc_env && disable_inc_env[0] && disable_inc_env[0] != '0') {
+        vm.config.disable_inc_typed_fastpath = true;
+    }
+
+    const char* force_boxed_env = getenv("ORUS_FORCE_BOXED_ITERATORS");
+    if (force_boxed_env && force_boxed_env[0] && force_boxed_env[0] != '0') {
+        vm.config.force_boxed_iterators = true;
+    }
+
+    const char* licm_typed_env = getenv("ORUS_ENABLE_LICM_TYPED_GUARDS");
+    if (licm_typed_env && licm_typed_env[0] && licm_typed_env[0] != '0') {
+        vm.config.enable_licm_typed_metadata = true;
+    }
 
     vm.chunk = NULL;
     vm.ip = NULL;

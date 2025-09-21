@@ -1,0 +1,44 @@
+mut hits = 0
+mut idx = 0
+while idx < 8:
+    if (idx % 2) == 0:
+        hits = hits + 1
+    idx = idx + 1
+
+mut gating = true
+mut laps = 0
+while gating:
+    if laps > 3:
+        gating = false
+    laps = laps + 1
+
+mut and_hits = 0
+mut and_idx = 0
+while and_idx < 16:
+    if (and_idx < 8) and ((and_idx % 2) == 0):
+        and_hits = and_hits + 1
+    and_idx = and_idx + 1
+
+mut keep_running = true
+mut guard = 0
+while keep_running and (guard < 6):
+    guard = guard + 1
+    if guard >= 4:
+        keep_running = false
+
+mut or_ticks = 0
+mut or_gate = false
+mut or_idx = 0
+while or_gate or (or_idx < 5):
+    if (or_idx % 2) == 1:
+        or_ticks = or_ticks + 1
+    if or_idx >= 2:
+        or_gate = true
+    or_idx = or_idx + 1
+    if or_idx > 7:
+        or_gate = false
+
+if hits != 4 or laps != 5 or and_hits != 4 or guard != 4 or or_ticks != 4 or or_idx != 8:
+    print("phase1-mismatch", hits, laps, and_hits, guard, or_ticks, or_idx)
+else:
+    print("phase1-ok")

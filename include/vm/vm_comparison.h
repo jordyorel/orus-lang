@@ -3,6 +3,7 @@
 
 #include "../../src/vm/core/vm_internal.h"
 #include "vm/register_file.h"
+#include "vm/vm_loop_fastpaths.h"
 
 #define VM_TYPED_REGISTER_LIMIT \
     ((uint16_t)(sizeof(((TypedRegisters*)0)->i32_regs) / sizeof(int32_t)))
@@ -110,11 +111,13 @@ static inline Value vm_get_register_safe(uint16_t id) {
 
 static inline void vm_set_register_safe(uint16_t id, Value value) {
     if (id < 256) {
+        vm_typed_iterator_invalidate(id);
         vm.registers[id] = value;
         vm_update_typed_register(id, value);
         return;
     }
 
+    vm_typed_iterator_invalidate(id);
     set_register(&vm.register_file, id, value);
 }
 

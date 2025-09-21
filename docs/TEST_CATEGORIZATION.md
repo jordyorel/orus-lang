@@ -34,3 +34,11 @@
 
 ## Comprehensive
 - `tests/comprehensive/enum_runtime.orus` – Confirms enum constructors lower to runtime values by constructing and reassigning variants before printing.
+
+## Loop Fast Paths
+- `tests/control_flow/loop_typed_fastpath_correctness.orus` – Baseline regression for typed loop semantics and telemetry.
+- `tests/loop_fastpaths/phase1/bool_branch_short_circuit.orus` – Exercises the typed boolean branch cache under short-circuit `and`/`or` loops and mixed boolean guards.
+- `tests/loop_fastpaths/phase2/inc_checked.orus` – Covers overflow-checked `inc_i32` fast paths and typed-miss fallbacks.
+- `tests/loop_fastpaths/phase3/iterator_zero_alloc.orus` – Verifies zero-allocation iterators across numeric ranges and arrays.
+- `tests/optimizer/loop_typed_phase4/licm_guard.orus` – Ensures LICM-hoisted guards cooperate with typed metadata.
+- `tests/loop_fastpaths/phase5/telemetry_smoke.orus` – Smoke test mixing typed and boxed fallbacks for telemetry drift detection.

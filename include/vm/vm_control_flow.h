@@ -2,6 +2,7 @@
 #define ORUS_VM_CONTROL_FLOW_H
 
 #include "vm/vm_comparison.h"
+#include "vm/vm_loop_fastpaths.h"
 
 static inline bool CF_JUMP(uint16_t offset) {
     // If VM is shutting down or chunk is invalid, ignore jump
@@ -48,6 +49,14 @@ static inline bool CF_JUMP_IF_NOT(uint8_t reg, uint16_t offset) {
     // If VM is shutting down or chunk is invalid, ignore jump
     if (vm.isShuttingDown || !vm.chunk || !vm.chunk->code) {
         return true;  // Silently ignore jump during cleanup
+    }
+
+    bool fast_condition = false;
+    if (vm_try_branch_bool_fast_cold(reg, &fast_condition)) {
+        if (!fast_condition) {
+            return CF_JUMP(offset);
+        }
+        return true;
     }
 
     Value condition = vm_get_register_safe(reg);

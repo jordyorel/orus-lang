@@ -68,29 +68,114 @@ keeps the interpreter correct even if later stages are delayed.
      `make test-loop-telemetry`.
 
 2. **Typed boolean branching (Phase 1, Day 1-3)**
-   - Implement `vm_try_branch_bool_fast` and update dispatch tables.
-   - Teach LICM to preserve boolean typed caches during hoisting.
-   - Owner: VM + optimizer pairing session.
+   - **Implementation**
+     - Land `vm_try_branch_bool_fast` with dual entrypoints: one for hot loops
+       and one for cold fallback so we can experiment without retuning the
+       interpreter dispatch yet.
+     - Extend the boolean opcode dispatch table and threaded interpreter labels
+       so that a typed success does not exit the loop body.
+     - Update LICM to treat boolean guard caches as hoistable invariants only
+       when the guarding expression has a stable type witness.
+   - **Tooling & Telemetry**
+     - Augment the loop profiler with `typed_branch_fast_hits` and
+       `typed_branch_fast_misses` counters.
+     - Add golden traces for short-circuit `and`/`or` loops to
+       `tests/golden/loop_telemetry/phase1`.
+   - **Rollout & Risk Mitigation**
+     - Ship behind `ORUS_EXPERIMENT_BOOL_BRANCH_FASTPATH` env flag for the
+       first day to capture telemetry deltas before enabling by default.
+     - Regression guard: run `make test-loop-telemetry` and
+       `make test-optimizer` per commit.
+   - **Status**
+     - ✅ Fast branch caches wired through `CF_JUMP_IF_NOT{,_SHORT}` with
+       telemetry captured by the expanded
+       `tests/loop_fastpaths/phase1/bool_branch_short_circuit.orus` short-
+       circuit `and`/`or` loops and now enabled by default (use
+       `ORUS_DISABLE_BOOL_BRANCH_FASTPATH=1` to opt out for regression
+       triage).
+   - **Owner**: VM + optimizer pairing session.
 
 3. **Overflow-checked typed increments (Phase 2, Day 3-6)**
-   - Introduce `vm_exec_inc_i32_checked` fused opcode + compiler lowering.
-   - Annotate register allocator with typed increment residency hints.
-   - Owner: Compiler backend team.
+   - **Implementation**
+     - Introduce `vm_exec_inc_i32_checked` fused opcode with explicit slow path
+       for overflow + type mismatch, emitting the existing boxed increment when
+       the fast path fails.
+     - Lower `for`-like desugared loops in the compiler to the new opcode when
+       the induction variable has a proven i32 type.
+     - Annotate the register allocator with residency hints so the induction
+       variable and bound stay resident in typed registers across backedges.
+   - **Tooling & Telemetry**
+     - Extend telemetry to track overflow bailouts and induction variable type
+       instability counts.
+     - Add targeted integration tests in `tests/loop_fastpaths/phase2` covering
+       wrap-around, negative steps, and mixed-type increments.
+   - **Rollout & Risk Mitigation**
+     - Provide a compiler flag `--disable-inc-typed-fastpath` to unblock users
+       if unexpected regressions surface.
+     - Require `make test-loop-telemetry`, `make test-compiler`, and a targeted
+       microbenchmark run using `scripts/benchmarks/loop_perf.py --phase=2`.
+   - **Owner**: Compiler backend team.
 
 4. **Zero-allocation typed iterators (Phase 3, Day 6-9)**
-   - Create `TypedIteratorDescriptor` and extend iterator opcodes to use it.
-   - Provide fallbacks for unsupported iterables to retain boxed safety.
-   - Owner: VM runtime team with compiler support.
+   - **Implementation**
+     - Define `TypedIteratorDescriptor` alongside the existing iterator frame
+       data and retrofit the VM iterator opcodes to consult the descriptor
+       before allocating boxed iterator state.
+     - Support range iterators and array slices in the first cut, emitting typed
+       load/stores with no heap churn.
+     - Maintain boxed fallbacks for unsupported iterables so semantics are
+       unchanged when the fast path cannot be engaged.
+   - **Tooling & Telemetry**
+     - Extend loop telemetry with `typed_iter_allocations_saved` and
+       `typed_iter_fallbacks` counters to capture allocation savings.
+     - Create stress cases in `tests/loop_fastpaths/phase3` verifying mixed
+       typed/boxed iterator interop.
+   - **Rollout & Risk Mitigation**
+     - Profile memory usage via `scripts/benchmarks/loop_perf.py --phase=3` and
+       gate rollout on ≥40% reduction in allocator calls for canonical loops.
+     - Add a VM runtime knob `vm.flags.force_boxed_iterators` for rapid
+       bisects.
+   - **Owner**: VM runtime team with compiler support.
 
 5. **LICM & optimizer integration (Phase 4, Day 9-11)**
-   - Track `typed_escape_mask` metadata and verify hoisted guards.
-   - Add regression tests mixing hoisted checks with typed fast paths.
-   - Owner: Optimizer team.
+   - **Implementation**
+     - Track `typed_escape_mask` metadata through LICM so hoisted guards retain
+       their typed witnesses and still dominate the loop header.
+     - Teach the optimizer to fuse adjacent typed guards and convert redundant
+       checks into counter increments recorded in telemetry.
+     - Validate that typed loop metadata survives SSA reconstruction and
+       register allocation without clobbering fast path bindings.
+   - **Tooling & Telemetry**
+     - Add regression tests under `tests/optimizer/loop_typed_phase4` mixing
+       hoisted checks, nested loops, and fallback exits.
+     - Expand the telemetry golden files with LICM on/off comparisons to ensure
+       typed hit ratios stay ≥90%.
+   - **Rollout & Risk Mitigation**
+     - Require paired review from VM and optimizer owners before enabling the
+       LICM enhancement flag by default.
+     - Run `make test-loop-telemetry`, `make test-optimizer`, and phase-specific
+       benchmarks with `scripts/benchmarks/loop_perf.py --phase=4`.
+   - **Owner**: Optimizer team.
 
 6. **Regression & performance gates (Phase 5, Day 11-14)**
-   - Extend `loop_typed_fastpath_correctness.orus` suite + new telemetry tests.
-   - Stand up `scripts/benchmarks/loop_perf.py` and wire perf thresholds in CI.
-   - Owner: Tooling + QA team.
+   - **Implementation**
+     - Extend the `loop_typed_fastpath_correctness.orus` suite and author new
+       randomized fuzzers that mix typed and boxed transitions.
+     - Stand up `scripts/benchmarks/loop_perf.py` with per-phase scenario
+       presets, publishing comparison dashboards for CI.
+     - Wire performance thresholds into CI to block regressions >5% on the
+       phase benchmark set.
+   - **Telemetry & Reporting**
+     - Automate telemetry snapshots post-benchmark and archive them under
+       `tests/golden/loop_telemetry/phase5` for drift detection.
+     - Emit weekly perf digest summarizing hit ratios, bailout causes, and
+       allocator counts.
+   - **Rollout & Risk Mitigation**
+     - Establish a rollback SOP referencing the telemetry diff and CI trend
+       dashboards so we can revert within an hour.
+     - Ensure QA sign-off after running `make test-all`, loop perf benchmarks,
+       and long-running endurance tests on ARM64 and x86-64 targets.
+   - **Owner**: Tooling + QA team.
 
 **Exit criteria**: Typed hit ratio ≥90% on range loops, no correctness
 regressions across `make test`, telemetry baseline stored, and perf benchmark

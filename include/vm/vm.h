@@ -1001,12 +1001,40 @@ typedef enum {
     REG_TYPE_HEAP
 } RegisterType;
 
+typedef enum {
+    TYPED_ITER_NONE = 0,
+    TYPED_ITER_RANGE_I64,
+    TYPED_ITER_ARRAY_SLICE
+} TypedIteratorKind;
+
+typedef struct {
+    TypedIteratorKind kind;
+    union {
+        struct {
+            int64_t current;
+            int64_t end;
+        } range_i64;
+        struct {
+            ObjArray* array;
+            uint32_t index;
+        } array;
+    } data;
+} TypedIteratorDescriptor;
+
 // Loop telemetry counters for typed fast paths
 typedef enum {
     LOOP_TRACE_TYPED_HIT = 0,
     LOOP_TRACE_TYPED_MISS,
     LOOP_TRACE_TYPE_MISMATCH,
     LOOP_TRACE_OVERFLOW_GUARD,
+    LOOP_TRACE_BRANCH_FAST_HIT,
+    LOOP_TRACE_BRANCH_FAST_MISS,
+    LOOP_TRACE_INC_OVERFLOW_BAILOUT,
+    LOOP_TRACE_INC_TYPE_INSTABILITY,
+    LOOP_TRACE_ITER_SAVED_ALLOCATIONS,
+    LOOP_TRACE_ITER_FALLBACK,
+    LOOP_TRACE_LICM_GUARD_FUSION,
+    LOOP_TRACE_LICM_GUARD_DEMOTION,
     LOOP_TRACE_KIND_COUNT
 } LoopTraceKind;
 
@@ -1015,6 +1043,14 @@ typedef struct {
     uint64_t typed_miss;
     uint64_t boxed_type_mismatch;
     uint64_t boxed_overflow_guard;
+    uint64_t typed_branch_fast_hits;
+    uint64_t typed_branch_fast_misses;
+    uint64_t inc_overflow_bailouts;
+    uint64_t inc_type_instability;
+    uint64_t iter_allocations_saved;
+    uint64_t iter_fallbacks;
+    uint64_t licm_guard_fusions;
+    uint64_t licm_guard_demotions;
 } LoopTraceCounters;
 
 // Profiling counters
@@ -1026,6 +1062,10 @@ typedef struct {
 // Runtime configuration toggles
 typedef struct {
     bool trace_typed_fallbacks;
+    bool enable_bool_branch_fastpath;
+    bool disable_inc_typed_fastpath;
+    bool force_boxed_iterators;
+    bool enable_licm_typed_metadata;
 } VMRuntimeOptions;
 
 // Phase 1: Register access functions (forward declarations)
@@ -1041,6 +1081,9 @@ typedef struct {
     
     // Typed registers for performance optimization
     TypedRegisters typed_regs;
+
+    // Typed iterator descriptors
+    TypedIteratorDescriptor typed_iterators[REGISTER_COUNT];
 
     // Call frames
     CallFrame frames[FRAMES_MAX];
@@ -1137,6 +1180,30 @@ static inline void vm_trace_loop_event(LoopTraceKind kind) {
             break;
         case LOOP_TRACE_OVERFLOW_GUARD:
             vm.profile.loop_trace.boxed_overflow_guard++;
+            break;
+        case LOOP_TRACE_BRANCH_FAST_HIT:
+            vm.profile.loop_trace.typed_branch_fast_hits++;
+            break;
+        case LOOP_TRACE_BRANCH_FAST_MISS:
+            vm.profile.loop_trace.typed_branch_fast_misses++;
+            break;
+        case LOOP_TRACE_INC_OVERFLOW_BAILOUT:
+            vm.profile.loop_trace.inc_overflow_bailouts++;
+            break;
+        case LOOP_TRACE_INC_TYPE_INSTABILITY:
+            vm.profile.loop_trace.inc_type_instability++;
+            break;
+        case LOOP_TRACE_ITER_SAVED_ALLOCATIONS:
+            vm.profile.loop_trace.iter_allocations_saved++;
+            break;
+        case LOOP_TRACE_ITER_FALLBACK:
+            vm.profile.loop_trace.iter_fallbacks++;
+            break;
+        case LOOP_TRACE_LICM_GUARD_FUSION:
+            vm.profile.loop_trace.licm_guard_fusions++;
+            break;
+        case LOOP_TRACE_LICM_GUARD_DEMOTION:
+            vm.profile.loop_trace.licm_guard_demotions++;
             break;
         case LOOP_TRACE_KIND_COUNT:
         default:

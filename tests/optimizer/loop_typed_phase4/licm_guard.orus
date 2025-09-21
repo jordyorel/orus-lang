@@ -1,0 +1,8 @@
+mut result = 0
+mut guard = 1
+while guard < 6:
+    if guard > 0 and guard < 10:
+        result = result + guard
+    guard = guard + 1
+
+print("phase4-ok", result)

@@ -8,6 +8,7 @@
 #include "vm/vm_control_flow.h"
 #include "vm/vm_comparison.h"
 #include "vm/vm_typed_ops.h"
+#include "vm/vm_loop_fastpaths.h"
 #include "vm/vm_opcode_handlers.h"
 #include "vm/register_file.h"
 #include "vm/vm_profiling.h"
@@ -869,20 +870,7 @@ InterpretResult vm_run_dispatch(void) {
 
     LABEL_OP_INC_I32_R: {
             uint8_t reg = READ_BYTE();
-            const uint8_t typed_limit = (uint8_t)(sizeof(vm.typed_regs.i32_regs) / sizeof(vm.typed_regs.i32_regs[0]));
-
-            if (reg < typed_limit && vm.typed_regs.reg_types[reg] == REG_TYPE_I32) {
-    #if USE_FAST_ARITH
-                int32_t result = vm.typed_regs.i32_regs[reg] + 1;
-    #else
-                int32_t result;
-                if (__builtin_add_overflow(vm.typed_regs.i32_regs[reg], 1, &result)) {
-                    VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow");
-                }
-    #endif
-                vm.typed_regs.i32_regs[reg] = result;
-                vm_set_register_safe(reg, I32_VAL(result));
-            } else {
+            if (!vm_exec_inc_i32_checked(reg)) {
     #if USE_FAST_ARITH
                 Value val = vm_get_register_safe(reg);
                 vm_set_register_safe(reg, I32_VAL(AS_I32(val) + 1));
@@ -891,6 +879,7 @@ InterpretResult vm_run_dispatch(void) {
                 int32_t val = AS_I32(val_reg);
                 int32_t result;
                 if (__builtin_add_overflow(val, 1, &result)) {
+                    vm_trace_loop_event(LOOP_TRACE_OVERFLOW_GUARD);
                     VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow");
                 }
                 vm_set_register_safe(reg, I32_VAL(result));
@@ -2454,8 +2443,35 @@ InterpretResult vm_run_dispatch(void) {
         uint8_t dst = READ_BYTE();
         uint8_t src = READ_BYTE();
         Value v = vm_get_register_safe(src);
+        vm_typed_iterator_invalidate(dst);
+
         if (IS_RANGE_ITERATOR(v)) {
             vm_set_register_safe(dst, v);
+        } else if (!vm.config.force_boxed_iterators &&
+                   (IS_I32(v) || IS_I64(v) || IS_U32(v) || IS_U64(v))) {
+            int64_t count = 0;
+            if (IS_I32(v)) {
+                count = (int64_t)AS_I32(v);
+            } else if (IS_I64(v)) {
+                count = AS_I64(v);
+            } else if (IS_U32(v)) {
+                count = (int64_t)AS_U32(v);
+            } else {
+                uint64_t unsigned_count = AS_U64(v);
+                if (unsigned_count > (uint64_t)INT64_MAX) {
+                    VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Integer too large to iterate");
+                }
+                count = (int64_t)unsigned_count;
+            }
+
+            if (count < 0) {
+                VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Cannot iterate negative integer");
+            }
+
+            vm_set_register_safe(dst, I64_VAL(0));
+            vm_typed_iterator_bind_range(dst, 0, count);
+            vm_trace_loop_event(LOOP_TRACE_TYPED_HIT);
+            vm_trace_loop_event(LOOP_TRACE_ITER_SAVED_ALLOCATIONS);
         } else if (IS_I32(v) || IS_I64(v) || IS_U32(v) || IS_U64(v)) {
             int64_t count = 0;
             if (IS_I32(v)) {
@@ -2483,13 +2499,24 @@ InterpretResult vm_run_dispatch(void) {
 
             Value iterator_value = {.type = VAL_RANGE_ITERATOR, .as.obj = (Obj*)iterator};
             vm_set_register_safe(dst, iterator_value);
+            vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+            vm_trace_loop_event(LOOP_TRACE_ITER_FALLBACK);
         } else if (IS_ARRAY(v)) {
-            ObjArrayIterator* iterator = allocateArrayIterator(AS_ARRAY(v));
-            if (!iterator) {
-                VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(), "Failed to allocate array iterator");
+            ObjArray* array = AS_ARRAY(v);
+            if (!vm.config.force_boxed_iterators && vm_typed_iterator_bind_array(dst, array)) {
+                vm_set_register_safe(dst, v);
+                vm_trace_loop_event(LOOP_TRACE_TYPED_HIT);
+                vm_trace_loop_event(LOOP_TRACE_ITER_SAVED_ALLOCATIONS);
+            } else {
+                ObjArrayIterator* iterator = allocateArrayIterator(array);
+                if (!iterator) {
+                    VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(), "Failed to allocate array iterator");
+                }
+                Value iterator_value = {.type = VAL_ARRAY_ITERATOR, .as.obj = (Obj*)iterator};
+                vm_set_register_safe(dst, iterator_value);
+                vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+                vm_trace_loop_event(LOOP_TRACE_ITER_FALLBACK);
             }
-            Value iterator_value = {.type = VAL_ARRAY_ITERATOR, .as.obj = (Obj*)iterator};
-            vm_set_register_safe(dst, iterator_value);
         } else if (IS_ARRAY_ITERATOR(v)) {
             vm_set_register_safe(dst, v);
         } else {
@@ -2502,6 +2529,17 @@ InterpretResult vm_run_dispatch(void) {
         uint8_t dst = READ_BYTE();
         uint8_t iterReg = READ_BYTE();
         uint8_t hasReg = READ_BYTE();
+        Value out_value;
+        bool typed_iter_was_active = vm_typed_iterator_is_active(iterReg);
+        if (typed_iter_was_active && vm_typed_iterator_next(iterReg, &out_value)) {
+            vm_set_register_safe(dst, out_value);
+            vm_set_register_safe(hasReg, BOOL_VAL(true));
+            DISPATCH();
+        }
+        if (typed_iter_was_active && !vm_typed_iterator_is_active(iterReg)) {
+            vm_set_register_safe(hasReg, BOOL_VAL(false));
+            DISPATCH();
+        }
         Value iterValue = vm_get_register_safe(iterReg);
         if (IS_RANGE_ITERATOR(iterValue)) {
             ObjRangeIterator* it = AS_RANGE_ITERATOR(iterValue);
@@ -2775,7 +2813,7 @@ InterpretResult vm_run_dispatch(void) {
                 for (int i = 0; i < argCount; i++) {
                     uint16_t frame_reg_id = FRAME_REG_START + i;
                     set_register(&vm.register_file, frame_reg_id, tempArgs[i]);
-                    vm.registers[200 + i] = tempArgs[i];  // Use safe parameter register range
+                    vm_set_register_safe(200 + i, tempArgs[i]);  // Use safe parameter register range
                 }
                 
                 // Switch to function's chunk - reuse current frame
@@ -2861,7 +2899,7 @@ InterpretResult vm_run_dispatch(void) {
         uint8_t spill_id_low = READ_BYTE();
         uint16_t spill_id = (spill_id_high << 8) | spill_id_low;
         Value* src = get_register(&vm.register_file, spill_id);
-        vm.registers[reg] = *src;
+        vm_set_register_safe(reg, *src);
         DISPATCH();
     }
 
@@ -3386,7 +3424,7 @@ InterpretResult vm_run_dispatch(void) {
             }
         }
         
-        vm.registers[dstReg] = CLOSURE_VAL(closure);
+        vm_set_register_safe(dstReg, CLOSURE_VAL(closure));
         DISPATCH();
     }
 
@@ -3407,7 +3445,7 @@ InterpretResult vm_run_dispatch(void) {
             VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(), "Invalid upvalue access");
         }
 
-        vm.registers[dstReg] = *closure->upvalues[upvalueIndex]->location;
+        vm_set_register_safe(dstReg, *closure->upvalues[upvalueIndex]->location);
         DISPATCH();
     }
 

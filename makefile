@@ -117,7 +117,7 @@ COMPILER_BACKEND_SRCS = $(SRCDIR)/compiler/backend/typed_ast_visualizer.c $(SRCD
 
 # Combined simplified compiler sources  
 COMPILER_SRCS = $(COMPILER_FRONTEND_SRCS) $(COMPILER_BACKEND_SRCS) $(SRCDIR)/compiler/typed_ast.c $(SRCDIR)/debug/debug_config.c
-VM_SRCS = $(SRCDIR)/vm/core/vm_core.c $(SRCDIR)/vm/runtime/vm.c $(SRCDIR)/vm/core/vm_memory.c $(SRCDIR)/vm/utils/debug.c $(SRCDIR)/vm/runtime/builtins.c $(SRCDIR)/vm/operations/vm_arithmetic.c $(SRCDIR)/vm/operations/vm_control_flow.c $(SRCDIR)/vm/operations/vm_typed_ops.c $(SRCDIR)/vm/operations/vm_string_ops.c $(SRCDIR)/vm/operations/vm_comparison.c $(SRCDIR)/vm/dispatch/vm_dispatch_switch.c $(SRCDIR)/vm/dispatch/vm_dispatch_goto.c $(SRCDIR)/vm/core/vm_validation.c $(SRCDIR)/vm/register_file.c $(SRCDIR)/vm/spill_manager.c $(SRCDIR)/vm/module_manager.c $(SRCDIR)/vm/register_cache.c $(SRCDIR)/vm/profiling/vm_profiling.c $(SRCDIR)/vm/vm_config.c $(SRCDIR)/type/type_representation.c $(SRCDIR)/type/type_inference.c $(SRCDIR)/errors/infrastructure/error_infrastructure.c $(SRCDIR)/errors/core/error_base.c $(SRCDIR)/errors/features/type_errors.c $(SRCDIR)/errors/features/variable_errors.c $(SRCDIR)/errors/features/control_flow_errors.c $(SRCDIR)/config/config.c $(SRCDIR)/internal/logging.c
+VM_SRCS = $(SRCDIR)/vm/core/vm_core.c $(SRCDIR)/vm/runtime/vm.c $(SRCDIR)/vm/runtime/vm_loop_fastpaths.c $(SRCDIR)/vm/core/vm_memory.c $(SRCDIR)/vm/utils/debug.c $(SRCDIR)/vm/runtime/builtins.c $(SRCDIR)/vm/operations/vm_arithmetic.c $(SRCDIR)/vm/operations/vm_control_flow.c $(SRCDIR)/vm/operations/vm_typed_ops.c $(SRCDIR)/vm/operations/vm_string_ops.c $(SRCDIR)/vm/operations/vm_comparison.c $(SRCDIR)/vm/dispatch/vm_dispatch_switch.c $(SRCDIR)/vm/dispatch/vm_dispatch_goto.c $(SRCDIR)/vm/core/vm_validation.c $(SRCDIR)/vm/register_file.c $(SRCDIR)/vm/spill_manager.c $(SRCDIR)/vm/module_manager.c $(SRCDIR)/vm/register_cache.c $(SRCDIR)/vm/profiling/vm_profiling.c $(SRCDIR)/vm/vm_config.c $(SRCDIR)/type/type_representation.c $(SRCDIR)/type/type_inference.c $(SRCDIR)/errors/infrastructure/error_infrastructure.c $(SRCDIR)/errors/core/error_base.c $(SRCDIR)/errors/features/type_errors.c $(SRCDIR)/errors/features/variable_errors.c $(SRCDIR)/errors/features/control_flow_errors.c $(SRCDIR)/config/config.c $(SRCDIR)/internal/logging.c
 REPL_SRC = $(SRCDIR)/repl.c
 MAIN_SRC = $(SRCDIR)/main.c
 
@@ -324,14 +324,28 @@ test-loop-telemetry: $(ORUS)
 	@echo "Running loop telemetry baseline..."
 	@mkdir -p build/loop_telemetry
 	@passed=0; failed=0; \
-	for test_file in tests/control_flow/loop_typed_fastpath_correctness.orus; do \
-		name=$$(basename $$test_file .orus); \
-		out=build/loop_telemetry/$$name.log; \
-		if ORUS_TRACE_TYPED_FALLBACKS=1 ./$(ORUS) "$$test_file" >/dev/null 2>"$$out"; then \
-			if diff -u tests/golden/loop_telemetry/$$name.log "$$out" >/dev/null; then \
-				printf "\033[32mPASS\033[0m %s\n" "$$test_file"; \
-				passed=$$((passed + 1)); \
-			else \
+        for test_file in \
+                tests/control_flow/loop_typed_fastpath_correctness.orus \
+                tests/loop_fastpaths/phase1/bool_branch_short_circuit.orus \
+                tests/loop_fastpaths/phase2/inc_checked.orus \
+                tests/loop_fastpaths/phase3/iterator_zero_alloc.orus \
+                tests/optimizer/loop_typed_phase4/licm_guard.orus \
+                tests/loop_fastpaths/phase5/telemetry_smoke.orus; do \
+                name=$$(basename $$test_file .orus); \
+                out=build/loop_telemetry/$$name.log; \
+                env_args="ORUS_TRACE_TYPED_FALLBACKS=1"; \
+                case "$$test_file" in \
+                        *phase1*) env_args="$$env_args ORUS_EXPERIMENT_BOOL_BRANCH_FASTPATH=1" ;; \
+                        *phase3*) env_args="$$env_args ORUS_FORCE_BOXED_ITERATORS=0" ;; \
+                        *phase4*) env_args="$$env_args ORUS_ENABLE_LICM_TYPED_GUARDS=1 ORUS_EXPERIMENT_BOOL_BRANCH_FASTPATH=1" ;; \
+                        *phase5*) env_args="$$env_args ORUS_FORCE_BOXED_ITERATORS=1 ORUS_ENABLE_LICM_TYPED_GUARDS=1" ;; \
+                        *) env_args="$$env_args" ;; \
+                esac; \
+                if env $$env_args ./$(ORUS) "$$test_file" >/dev/null 2>"$$out"; then \
+                        if diff -u tests/golden/loop_telemetry/$$name.log "$$out" >/dev/null; then \
+                                printf "\033[32mPASS\033[0m %s\n" "$$test_file"; \
+                                passed=$$((passed + 1)); \
+                        else \
 				printf "\033[31mFAIL\033[0m %s (telemetry mismatch)\n" "$$test_file"; \
 				diff -u tests/golden/loop_telemetry/$$name.log "$$out" || true; \
 				failed=$$((failed + 1)); \

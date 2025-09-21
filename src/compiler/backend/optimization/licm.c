@@ -7,6 +7,20 @@
 
 static LICMStats g_licm_stats;
 
+static void licm_mark_loop_metadata(TypedASTNode* node, int hoisted_guards) {
+    if (!node) {
+        return;
+    }
+
+    if (hoisted_guards > 0) {
+        node->typed_guard_witness = true;
+        node->typed_metadata_stable = true;
+        node->typed_escape_mask |= (uint32_t)hoisted_guards;
+    } else {
+        node->typed_metadata_stable = false;
+    }
+}
+
 typedef struct {
     const char** items;
     int count;
@@ -799,12 +813,14 @@ static bool process_statement_array(TypedASTNode*** array_ptr, int* count_ptr) {
         }
 
         if (is_supported_loop_node(stmt)) {
+            TypedASTNode* original_loop = stmt;
             int hoisted = hoist_invariants_from_loop(array_ptr, count_ptr, index);
             if (hoisted > 0) {
                 changed = true;
                 g_licm_stats.changed = true;
                 g_licm_stats.invariants_hoisted += hoisted;
                 g_licm_stats.loops_optimized++;
+                licm_mark_loop_metadata(original_loop, hoisted);
 
                 statements = *array_ptr;
                 index += hoisted;
@@ -812,6 +828,10 @@ static bool process_statement_array(TypedASTNode*** array_ptr, int* count_ptr) {
                     break;
                 }
                 stmt = statements[index];
+            }
+
+            if (hoisted == 0) {
+                licm_mark_loop_metadata(stmt, 0);
             }
 
             if (stmt && stmt->original && is_supported_loop_node(stmt)) {

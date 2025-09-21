@@ -1,0 +1,5 @@
+mut count = 0
+for k in 6:
+    count = count + 1
+
+print("phase3-ok", count)
