@@ -1099,14 +1099,14 @@ boxed safety net and LICM correctness guarantees.
      back to the legacy behavior during regressions.
    - **Sample implementation**:
     ```c
-    static inline bool vm_try_branch_bool_fast_cold(uint16_t reg,
+    VMBoolBranchResult vm_try_branch_bool_fast_cold(uint16_t reg,
                                                     bool* out_value) {
-        if (!out_value || !vm.config.enable_bool_branch_fastpath) {
-            return false;
+        if (!out_value) {
+            return VM_BOOL_BRANCH_RESULT_FAIL;
         }
 
         if (vm_try_branch_bool_fast_hot(reg, out_value)) {
-            return true;
+            return VM_BOOL_BRANCH_RESULT_TYPED;
         }
 
         Value condition = vm_get_register_safe(reg);
@@ -1115,11 +1115,11 @@ boxed safety net and LICM correctness guarantees.
             if (vm.config.enable_licm_typed_metadata) {
                 vm_trace_loop_event(LOOP_TRACE_LICM_GUARD_DEMOTION);
             }
-            return false;
+            return VM_BOOL_BRANCH_RESULT_FAIL;
         }
 
         *out_value = AS_BOOL(condition);
-        return false;
+        return VM_BOOL_BRANCH_RESULT_BOXED;
     }
     ```
 

@@ -52,24 +52,41 @@ static inline bool CF_JUMP_IF_NOT(uint8_t reg, uint16_t offset) {
     }
 
     bool fast_condition = false;
-    if (vm_try_branch_bool_fast_cold(reg, &fast_condition)) {
+    VMBoolBranchResult branch_result = vm_try_branch_bool_fast_cold(reg, &fast_condition);
+    if (branch_result == VM_BOOL_BRANCH_RESULT_TYPED ||
+        branch_result == VM_BOOL_BRANCH_RESULT_BOXED) {
         if (!fast_condition) {
-            return CF_JUMP(offset);
+            if (!CF_JUMP(offset)) {
+                return false;
+            }
         }
         return true;
     }
 
-    Value condition = vm_get_register_safe(reg);
-    if (!IS_BOOL(condition)) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Condition must be boolean");
-        return false;
+    runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Condition must be boolean");
+    return false;
+}
+
+static inline bool CF_JUMP_IF(uint8_t reg, uint16_t offset) {
+    // If VM is shutting down or chunk is invalid, ignore jump
+    if (vm.isShuttingDown || !vm.chunk || !vm.chunk->code) {
+        return true;  // Silently ignore jump during cleanup
     }
-    if (!AS_BOOL(condition)) {
-        if (!CF_JUMP(offset)) {
-            return false;
+
+    bool fast_condition = false;
+    VMBoolBranchResult branch_result = vm_try_branch_bool_fast_cold(reg, &fast_condition);
+    if (branch_result == VM_BOOL_BRANCH_RESULT_TYPED ||
+        branch_result == VM_BOOL_BRANCH_RESULT_BOXED) {
+        if (fast_condition) {
+            if (!CF_JUMP(offset)) {
+                return false;
+            }
         }
+        return true;
     }
-    return true;
+
+    runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Condition must be boolean");
+    return false;
 }
 
 #define CF_LOOP(offset) CF_JUMP_BACK(offset)
@@ -77,6 +94,7 @@ static inline bool CF_JUMP_IF_NOT(uint8_t reg, uint16_t offset) {
 #define CF_JUMP_SHORT(offset) CF_JUMP((uint16_t)(offset))
 #define CF_JUMP_BACK_SHORT(offset) CF_JUMP_BACK((uint16_t)(offset))
 #define CF_JUMP_IF_NOT_SHORT(reg, offset) CF_JUMP_IF_NOT(reg, (uint16_t)(offset))
+#define CF_JUMP_IF_SHORT(reg, offset) CF_JUMP_IF(reg, (uint16_t)(offset))
 #define CF_LOOP_SHORT(offset) CF_LOOP((uint16_t)(offset))
 
 #endif // ORUS_VM_CONTROL_FLOW_H

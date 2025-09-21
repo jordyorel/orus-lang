@@ -93,6 +93,9 @@ keeps the interpreter correct even if later stages are delayed.
        circuit `and`/`or` loops and now enabled by default (use
        `ORUS_DISABLE_BOOL_BRANCH_FASTPATH=1` to opt out for regression
        triage).
+     - ✅ Regression guard runs (`make test`, `make test-loop-telemetry`) pass
+       on the latest build, so Phase 1 exit criteria are met and the backlog is
+       clear to begin Phase 2 overflow-checked increments.
    - **Owner**: VM + optimizer pairing session.
 
 3. **Overflow-checked typed increments (Phase 2, Day 3-6)**

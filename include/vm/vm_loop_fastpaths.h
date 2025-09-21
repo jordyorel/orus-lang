@@ -10,6 +10,12 @@
 extern "C" {
 #endif
 
+typedef enum {
+    VM_BOOL_BRANCH_RESULT_FAIL = 0,
+    VM_BOOL_BRANCH_RESULT_BOXED = 1,
+    VM_BOOL_BRANCH_RESULT_TYPED = 2,
+} VMBoolBranchResult;
+
 static inline void vm_typed_iterator_invalidate(uint16_t reg) {
     if (reg >= REGISTER_COUNT) {
         return;
@@ -45,7 +51,7 @@ static inline bool vm_typed_iterator_bind_array(uint16_t reg, ObjArray* array) {
 }
 
 bool vm_try_branch_bool_fast_hot(uint16_t reg, bool* out_value);
-bool vm_try_branch_bool_fast_cold(uint16_t reg, bool* out_value);
+VMBoolBranchResult vm_try_branch_bool_fast_cold(uint16_t reg, bool* out_value);
 bool vm_exec_inc_i32_checked(uint16_t reg);
 bool vm_typed_iterator_next(uint16_t reg, Value* out_value);
 
