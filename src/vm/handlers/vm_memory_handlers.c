@@ -11,6 +11,7 @@
 
 #include "vm/vm_opcode_handlers.h"
 #include "vm/vm_dispatch.h"
+#include "vm/vm_comparison.h"
 #include "runtime/builtins.h"
 
 // Frame-aware register access functions for proper local variable isolation
@@ -49,12 +50,12 @@ void handle_move_ext(void) {
 
 void handle_load_true(void) {
     uint8_t reg = READ_BYTE();
-    vm_set_register_safe(reg, BOOL_VAL(true));
+    vm_store_bool_register(reg, true);
 }
 
 void handle_load_false(void) {
     uint8_t reg = READ_BYTE();
-    vm_set_register_safe(reg, BOOL_VAL(false));
+    vm_store_bool_register(reg, false);
 }
 
 // ====== Register Move Operation Handler ======
@@ -62,10 +63,38 @@ void handle_load_false(void) {
 void handle_move_reg(void) {
     uint8_t dst = READ_BYTE();
     uint8_t src = READ_BYTE();
-    
+
     // Use frame-aware register access for proper local variable isolation
     Value value = vm_get_register_safe(src);
-    vm_set_register_safe(dst, value);
+    switch (value.type) {
+        case VAL_I32:
+            vm_cache_i32_typed(src, AS_I32(value));
+            vm_store_i32_register(dst, AS_I32(value));
+            break;
+        case VAL_I64:
+            vm_cache_i64_typed(src, AS_I64(value));
+            vm_store_i64_register(dst, AS_I64(value));
+            break;
+        case VAL_U32:
+            vm_cache_u32_typed(src, AS_U32(value));
+            vm_store_u32_register(dst, AS_U32(value));
+            break;
+        case VAL_U64:
+            vm_cache_u64_typed(src, AS_U64(value));
+            vm_store_u64_register(dst, AS_U64(value));
+            break;
+        case VAL_F64:
+            vm_cache_f64_typed(src, AS_F64(value));
+            vm_store_f64_register(dst, AS_F64(value));
+            break;
+        case VAL_BOOL:
+            vm_cache_bool_typed(src, AS_BOOL(value));
+            vm_store_bool_register(dst, AS_BOOL(value));
+            break;
+        default:
+            vm_set_register_safe(dst, value);
+            break;
+    }
 }
 
 // ====== Global Variable Operation Handlers ======
@@ -184,35 +213,60 @@ void handle_store_global(void) {
 void handle_load_i32_const(void) {
     uint8_t reg = READ_BYTE();
     uint16_t constantIndex = READ_SHORT();
-    vm_set_register_safe(reg, READ_CONSTANT(constantIndex));
+    Value constant = READ_CONSTANT(constantIndex);
+    if (!IS_I32(constant)) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Constant must be i32");
+        return;
+    }
+    vm_store_i32_register(reg, AS_I32(constant));
 }
 
 void handle_load_i64_const(void) {
     uint8_t reg = READ_BYTE();
     uint16_t constantIndex = READ_SHORT();
     // Store in the standard register system where comparison operations expect values
-    vm_set_register_safe(reg, READ_CONSTANT(constantIndex));
+    Value constant = READ_CONSTANT(constantIndex);
+    if (!IS_I64(constant)) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Constant must be i64");
+        return;
+    }
+    vm_store_i64_register(reg, AS_I64(constant));
 }
 
 void handle_load_u32_const(void) {
     uint8_t reg = READ_BYTE();
     uint16_t constantIndex = READ_SHORT();
     // Store in the standard register system where comparison operations expect values
-    vm_set_register_safe(reg, READ_CONSTANT(constantIndex));
+    Value constant = READ_CONSTANT(constantIndex);
+    if (!IS_U32(constant)) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Constant must be u32");
+        return;
+    }
+    vm_store_u32_register(reg, AS_U32(constant));
 }
 
 void handle_load_u64_const(void) {
     uint8_t reg = READ_BYTE();
     uint16_t constantIndex = READ_SHORT();
     // Store in the standard register system where comparison operations expect values
-    vm_set_register_safe(reg, READ_CONSTANT(constantIndex));
+    Value constant = READ_CONSTANT(constantIndex);
+    if (!IS_U64(constant)) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Constant must be u64");
+        return;
+    }
+    vm_store_u64_register(reg, AS_U64(constant));
 }
 
 void handle_load_f64_const(void) {
     uint8_t reg = READ_BYTE();
     uint16_t constantIndex = READ_SHORT();
     // Store in the standard register system where comparison operations expect values
-    vm_set_register_safe(reg, READ_CONSTANT(constantIndex));
+    Value constant = READ_CONSTANT(constantIndex);
+    if (!IS_F64(constant)) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Constant must be f64");
+        return;
+    }
+    vm_store_f64_register(reg, AS_F64(constant));
 }
 
 // ====== Typed Move Operation Handlers ======
@@ -220,7 +274,13 @@ void handle_load_f64_const(void) {
 void handle_move_i32(void) {
     uint8_t dst = READ_BYTE();
     uint8_t src = READ_BYTE();
-    vm_set_register_safe(dst, vm_get_register_safe(src));
+    Value src_val = vm_get_register_safe(src);
+    if (!IS_I32(src_val)) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Source register must contain i32 value");
+        return;
+    }
+    vm_cache_i32_typed(src, AS_I32(src_val));
+    vm_store_i32_register(dst, AS_I32(src_val));
 }
 
 void handle_move_i64(void) {
@@ -232,22 +292,32 @@ void handle_move_i64(void) {
         runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Source register must contain i64 value");
         return;
     }
-    // Store the value in the destination register in the standard register system
-    vm_set_register_safe(dst, vm_get_register_safe(src));
+    vm_cache_i64_typed(src, AS_I64(src_val));
+    vm_store_i64_register(dst, AS_I64(src_val));
 }
 
 void handle_move_u32(void) {
     uint8_t dst = READ_BYTE();
     uint8_t src = READ_BYTE();
-    vm.typed_regs.u32_regs[dst] = vm.typed_regs.u32_regs[src];
-    vm.typed_regs.reg_types[dst] = REG_TYPE_U32;
+    Value src_val = vm_get_register_safe(src);
+    if (!IS_U32(src_val)) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Source register must contain u32 value");
+        return;
+    }
+    vm_cache_u32_typed(src, AS_U32(src_val));
+    vm_store_u32_register(dst, AS_U32(src_val));
 }
 
 void handle_move_u64(void) {
     uint8_t dst = READ_BYTE();
     uint8_t src = READ_BYTE();
-    vm.typed_regs.u64_regs[dst] = vm.typed_regs.u64_regs[src];
-    vm.typed_regs.reg_types[dst] = REG_TYPE_U64;
+    Value src_val = vm_get_register_safe(src);
+    if (!IS_U64(src_val)) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Source register must contain u64 value");
+        return;
+    }
+    vm_cache_u64_typed(src, AS_U64(src_val));
+    vm_store_u64_register(dst, AS_U64(src_val));
 }
 
 void handle_move_f64(void) {
@@ -259,8 +329,8 @@ void handle_move_f64(void) {
         runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Source register must contain f64 value");
         return;
     }
-    // Store the value in the destination register in the standard register system
-    vm_set_register_safe(dst, vm_get_register_safe(src));
+    vm_cache_f64_typed(src, AS_F64(src_val));
+    vm_store_f64_register(dst, AS_F64(src_val));
 }
 
 // ====== Print Operation Handlers ======

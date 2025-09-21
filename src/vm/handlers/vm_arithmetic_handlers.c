@@ -20,105 +20,160 @@ void handle_add_i32_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
-    
-    // Use frame-aware register access for consistency with recursive function calls
-    Value left_val = vm_get_register_safe(left);
-    Value right_val = vm_get_register_safe(right);
-    
-    // DEBUG: Print what values we're actually getting - REMOVED
-    
-    if (!IS_I32(left_val) || !IS_I32(right_val)) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i32");
-        return;
+
+    int32_t left_val;
+    if (!vm_try_read_i32_typed(left, &left_val)) {
+        Value boxed = vm_get_register_safe(left);
+        if (!IS_I32(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i32");
+            return;
+        }
+        left_val = AS_I32(boxed);
+        vm_cache_i32_typed(left, left_val);
     }
-    
-    int32_t result = AS_I32(left_val) + AS_I32(right_val);
-    // Debug output removed
-    vm_set_register_safe(dst, I32_VAL(result));
+
+    int32_t right_val;
+    if (!vm_try_read_i32_typed(right, &right_val)) {
+        Value boxed = vm_get_register_safe(right);
+        if (!IS_I32(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i32");
+            return;
+        }
+        right_val = AS_I32(boxed);
+        vm_cache_i32_typed(right, right_val);
+    }
+
+    vm_store_i32_register(dst, left_val + right_val);
 }
 
 void handle_sub_i32_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
-    
-    // Use frame-aware register access for consistency with recursive function calls
-    Value left_val = vm_get_register_safe(left);
-    Value right_val = vm_get_register_safe(right);
-    
-    if (!IS_I32(left_val) || !IS_I32(right_val)) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i32");
-        return;
+
+    int32_t left_val;
+    if (!vm_try_read_i32_typed(left, &left_val)) {
+        Value boxed = vm_get_register_safe(left);
+        if (!IS_I32(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i32");
+            return;
+        }
+        left_val = AS_I32(boxed);
+        vm_cache_i32_typed(left, left_val);
     }
-    
-    int32_t result = AS_I32(left_val) - AS_I32(right_val);
-    vm_set_register_safe(dst, I32_VAL(result));
+
+    int32_t right_val;
+    if (!vm_try_read_i32_typed(right, &right_val)) {
+        Value boxed = vm_get_register_safe(right);
+        if (!IS_I32(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i32");
+            return;
+        }
+        right_val = AS_I32(boxed);
+        vm_cache_i32_typed(right, right_val);
+    }
+
+    vm_store_i32_register(dst, left_val - right_val);
 }
 
 void handle_mul_i32_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
-    
-    // Use frame-aware register access for consistency with recursive function calls
-    Value left_val = vm_get_register_safe(left);
-    Value right_val = vm_get_register_safe(right);
-    
-    if (!IS_I32(left_val) || !IS_I32(right_val)) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i32");
-        return;
+
+    int32_t left_val;
+    if (!vm_try_read_i32_typed(left, &left_val)) {
+        Value boxed = vm_get_register_safe(left);
+        if (!IS_I32(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i32");
+            return;
+        }
+        left_val = AS_I32(boxed);
+        vm_cache_i32_typed(left, left_val);
     }
-    
-    int32_t result = AS_I32(left_val) * AS_I32(right_val);
-    vm_set_register_safe(dst, I32_VAL(result));
+
+    int32_t right_val;
+    if (!vm_try_read_i32_typed(right, &right_val)) {
+        Value boxed = vm_get_register_safe(right);
+        if (!IS_I32(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i32");
+            return;
+        }
+        right_val = AS_I32(boxed);
+        vm_cache_i32_typed(right, right_val);
+    }
+
+    vm_store_i32_register(dst, left_val * right_val);
 }
 
 void handle_div_i32_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
-    
-    // Use frame-aware register access for consistency with recursive function calls
-    Value left_val = vm_get_register_safe(left);
-    Value right_val = vm_get_register_safe(right);
-    
-    if (!IS_I32(left_val) || !IS_I32(right_val)) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i32");
-        return;
+
+    int32_t left_val;
+    if (!vm_try_read_i32_typed(left, &left_val)) {
+        Value boxed = vm_get_register_safe(left);
+        if (!IS_I32(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i32");
+            return;
+        }
+        left_val = AS_I32(boxed);
+        vm_cache_i32_typed(left, left_val);
     }
-    
-    int32_t divisor = AS_I32(right_val);
-    if (divisor == 0) {
+
+    int32_t right_val;
+    if (!vm_try_read_i32_typed(right, &right_val)) {
+        Value boxed = vm_get_register_safe(right);
+        if (!IS_I32(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i32");
+            return;
+        }
+        right_val = AS_I32(boxed);
+        vm_cache_i32_typed(right, right_val);
+    }
+
+    if (right_val == 0) {
         runtimeError(ERROR_RUNTIME, (SrcLocation){NULL,0,0}, "Division by zero");
         return;
     }
-    
-    int32_t result = AS_I32(left_val) / divisor;
-    vm_set_register_safe(dst, I32_VAL(result));
+
+    vm_store_i32_register(dst, left_val / right_val);
 }
 
 void handle_mod_i32_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
-    
-    // Use frame-aware register access for consistency with recursive function calls
-    Value left_val = vm_get_register_safe(left);
-    Value right_val = vm_get_register_safe(right);
-    
-    if (!IS_I32(left_val) || !IS_I32(right_val)) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i32");
-        return;
+
+    int32_t left_val;
+    if (!vm_try_read_i32_typed(left, &left_val)) {
+        Value boxed = vm_get_register_safe(left);
+        if (!IS_I32(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i32");
+            return;
+        }
+        left_val = AS_I32(boxed);
+        vm_cache_i32_typed(left, left_val);
     }
-    
-    int32_t divisor = AS_I32(right_val);
-    if (divisor == 0) {
+
+    int32_t right_val;
+    if (!vm_try_read_i32_typed(right, &right_val)) {
+        Value boxed = vm_get_register_safe(right);
+        if (!IS_I32(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i32");
+            return;
+        }
+        right_val = AS_I32(boxed);
+        vm_cache_i32_typed(right, right_val);
+    }
+
+    if (right_val == 0) {
         runtimeError(ERROR_RUNTIME, (SrcLocation){NULL,0,0}, "Division by zero");
         return;
     }
-    
-    int32_t result = AS_I32(left_val) % divisor;
-    vm_set_register_safe(dst, I32_VAL(result));
+
+    vm_store_i32_register(dst, left_val % right_val);
 }
 
 // ====== I64 Typed Arithmetic Handlers ======
@@ -127,102 +182,160 @@ void handle_add_i64_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
-    
-    // Use frame-aware register access for consistency with recursive function calls
-    Value left_val = vm_get_register_safe(left);
-    Value right_val = vm_get_register_safe(right);
-    
-    if (!IS_I64(left_val) || !IS_I64(right_val)) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i64");
-        return;
+
+    int64_t left_val;
+    if (!vm_try_read_i64_typed(left, &left_val)) {
+        Value boxed = vm_get_register_safe(left);
+        if (!IS_I64(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i64");
+            return;
+        }
+        left_val = AS_I64(boxed);
+        vm_cache_i64_typed(left, left_val);
     }
-    
-    int64_t result = AS_I64(left_val) + AS_I64(right_val);
-    vm_set_register_safe(dst, I64_VAL(result));
+
+    int64_t right_val;
+    if (!vm_try_read_i64_typed(right, &right_val)) {
+        Value boxed = vm_get_register_safe(right);
+        if (!IS_I64(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i64");
+            return;
+        }
+        right_val = AS_I64(boxed);
+        vm_cache_i64_typed(right, right_val);
+    }
+
+    vm_store_i64_register(dst, left_val + right_val);
 }
 
 void handle_sub_i64_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
-    
-    // Use frame-aware register access for consistency with recursive function calls
-    Value left_val = vm_get_register_safe(left);
-    Value right_val = vm_get_register_safe(right);
-    
-    if (!IS_I64(left_val) || !IS_I64(right_val)) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i64");
-        return;
+
+    int64_t left_val;
+    if (!vm_try_read_i64_typed(left, &left_val)) {
+        Value boxed = vm_get_register_safe(left);
+        if (!IS_I64(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i64");
+            return;
+        }
+        left_val = AS_I64(boxed);
+        vm_cache_i64_typed(left, left_val);
     }
-    
-    int64_t result = AS_I64(left_val) - AS_I64(right_val);
-    vm_set_register_safe(dst, I64_VAL(result));
+
+    int64_t right_val;
+    if (!vm_try_read_i64_typed(right, &right_val)) {
+        Value boxed = vm_get_register_safe(right);
+        if (!IS_I64(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i64");
+            return;
+        }
+        right_val = AS_I64(boxed);
+        vm_cache_i64_typed(right, right_val);
+    }
+
+    vm_store_i64_register(dst, left_val - right_val);
 }
 
 void handle_mul_i64_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
-    
-    // Use frame-aware register access for consistency with recursive function calls
-    Value left_val = vm_get_register_safe(left);
-    Value right_val = vm_get_register_safe(right);
-    
-    if (!IS_I64(left_val) || !IS_I64(right_val)) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i64");
-        return;
+
+    int64_t left_val;
+    if (!vm_try_read_i64_typed(left, &left_val)) {
+        Value boxed = vm_get_register_safe(left);
+        if (!IS_I64(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i64");
+            return;
+        }
+        left_val = AS_I64(boxed);
+        vm_cache_i64_typed(left, left_val);
     }
-    
-    int64_t result = AS_I64(left_val) * AS_I64(right_val);
-    vm_set_register_safe(dst, I64_VAL(result));
+
+    int64_t right_val;
+    if (!vm_try_read_i64_typed(right, &right_val)) {
+        Value boxed = vm_get_register_safe(right);
+        if (!IS_I64(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i64");
+            return;
+        }
+        right_val = AS_I64(boxed);
+        vm_cache_i64_typed(right, right_val);
+    }
+
+    vm_store_i64_register(dst, left_val * right_val);
 }
 
 void handle_div_i64_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
-    
-    // Use frame-aware register access for consistency with recursive function calls
-    Value left_val = vm_get_register_safe(left);
-    Value right_val = vm_get_register_safe(right);
-    
-    if (!IS_I64(left_val) || !IS_I64(right_val)) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i64");
-        return;
+
+    int64_t left_val;
+    if (!vm_try_read_i64_typed(left, &left_val)) {
+        Value boxed = vm_get_register_safe(left);
+        if (!IS_I64(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i64");
+            return;
+        }
+        left_val = AS_I64(boxed);
+        vm_cache_i64_typed(left, left_val);
     }
-    
-    int64_t divisor = AS_I64(right_val);
-    if (divisor == 0) {
+
+    int64_t right_val;
+    if (!vm_try_read_i64_typed(right, &right_val)) {
+        Value boxed = vm_get_register_safe(right);
+        if (!IS_I64(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i64");
+            return;
+        }
+        right_val = AS_I64(boxed);
+        vm_cache_i64_typed(right, right_val);
+    }
+
+    if (right_val == 0) {
         runtimeError(ERROR_RUNTIME, (SrcLocation){NULL,0,0}, "Division by zero");
         return;
     }
-    
-    int64_t result = AS_I64(left_val) / divisor;
-    vm_set_register_safe(dst, I64_VAL(result));
+
+    vm_store_i64_register(dst, left_val / right_val);
 }
 
 void handle_mod_i64_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
-    
-    // Use frame-aware register access for consistency with recursive function calls
-    Value left_val = vm_get_register_safe(left);
-    Value right_val = vm_get_register_safe(right);
-    
-    if (!IS_I64(left_val) || !IS_I64(right_val)) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i64");
-        return;
+
+    int64_t left_val;
+    if (!vm_try_read_i64_typed(left, &left_val)) {
+        Value boxed = vm_get_register_safe(left);
+        if (!IS_I64(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i64");
+            return;
+        }
+        left_val = AS_I64(boxed);
+        vm_cache_i64_typed(left, left_val);
     }
-    
-    int64_t divisor = AS_I64(right_val);
-    if (divisor == 0) {
+
+    int64_t right_val;
+    if (!vm_try_read_i64_typed(right, &right_val)) {
+        Value boxed = vm_get_register_safe(right);
+        if (!IS_I64(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i64");
+            return;
+        }
+        right_val = AS_I64(boxed);
+        vm_cache_i64_typed(right, right_val);
+    }
+
+    if (right_val == 0) {
         runtimeError(ERROR_RUNTIME, (SrcLocation){NULL,0,0}, "Division by zero");
         return;
     }
-    
-    int64_t result = AS_I64(left_val) % divisor;
-    vm_set_register_safe(dst, I64_VAL(result));
+
+    vm_store_i64_register(dst, left_val % right_val);
 }
 
 // ====== F64 Typed Arithmetic Handlers ======
@@ -231,102 +344,160 @@ void handle_add_f64_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
-    
-    // Use frame-aware register access for consistency with recursive function calls
-    Value left_val = vm_get_register_safe(left);
-    Value right_val = vm_get_register_safe(right);
-    
-    if (!IS_F64(left_val) || !IS_F64(right_val)) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be f64");
-        return;
+
+    double left_val;
+    if (!vm_try_read_f64_typed(left, &left_val)) {
+        Value boxed = vm_get_register_safe(left);
+        if (!IS_F64(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be f64");
+            return;
+        }
+        left_val = AS_F64(boxed);
+        vm_cache_f64_typed(left, left_val);
     }
-    
-    double result = AS_F64(left_val) + AS_F64(right_val);
-    vm_set_register_safe(dst, F64_VAL(result));
+
+    double right_val;
+    if (!vm_try_read_f64_typed(right, &right_val)) {
+        Value boxed = vm_get_register_safe(right);
+        if (!IS_F64(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be f64");
+            return;
+        }
+        right_val = AS_F64(boxed);
+        vm_cache_f64_typed(right, right_val);
+    }
+
+    vm_store_f64_register(dst, left_val + right_val);
 }
 
 void handle_sub_f64_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
-    
-    // Use frame-aware register access for consistency with recursive function calls
-    Value left_val = vm_get_register_safe(left);
-    Value right_val = vm_get_register_safe(right);
-    
-    if (!IS_F64(left_val) || !IS_F64(right_val)) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be f64");
-        return;
+
+    double left_val;
+    if (!vm_try_read_f64_typed(left, &left_val)) {
+        Value boxed = vm_get_register_safe(left);
+        if (!IS_F64(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be f64");
+            return;
+        }
+        left_val = AS_F64(boxed);
+        vm_cache_f64_typed(left, left_val);
     }
-    
-    double result = AS_F64(left_val) - AS_F64(right_val);
-    vm_set_register_safe(dst, F64_VAL(result));
+
+    double right_val;
+    if (!vm_try_read_f64_typed(right, &right_val)) {
+        Value boxed = vm_get_register_safe(right);
+        if (!IS_F64(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be f64");
+            return;
+        }
+        right_val = AS_F64(boxed);
+        vm_cache_f64_typed(right, right_val);
+    }
+
+    vm_store_f64_register(dst, left_val - right_val);
 }
 
 void handle_mul_f64_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
-    
-    // Use frame-aware register access for consistency with recursive function calls
-    Value left_val = vm_get_register_safe(left);
-    Value right_val = vm_get_register_safe(right);
-    
-    if (!IS_F64(left_val) || !IS_F64(right_val)) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be f64");
-        return;
+
+    double left_val;
+    if (!vm_try_read_f64_typed(left, &left_val)) {
+        Value boxed = vm_get_register_safe(left);
+        if (!IS_F64(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be f64");
+            return;
+        }
+        left_val = AS_F64(boxed);
+        vm_cache_f64_typed(left, left_val);
     }
-    
-    double result = AS_F64(left_val) * AS_F64(right_val);
-    vm_set_register_safe(dst, F64_VAL(result));
+
+    double right_val;
+    if (!vm_try_read_f64_typed(right, &right_val)) {
+        Value boxed = vm_get_register_safe(right);
+        if (!IS_F64(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be f64");
+            return;
+        }
+        right_val = AS_F64(boxed);
+        vm_cache_f64_typed(right, right_val);
+    }
+
+    vm_store_f64_register(dst, left_val * right_val);
 }
 
 void handle_div_f64_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
-    
-    // Use frame-aware register access for consistency with recursive function calls
-    Value left_val = vm_get_register_safe(left);
-    Value right_val = vm_get_register_safe(right);
-    
-    if (!IS_F64(left_val) || !IS_F64(right_val)) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be f64");
-        return;
+
+    double left_val;
+    if (!vm_try_read_f64_typed(left, &left_val)) {
+        Value boxed = vm_get_register_safe(left);
+        if (!IS_F64(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be f64");
+            return;
+        }
+        left_val = AS_F64(boxed);
+        vm_cache_f64_typed(left, left_val);
     }
-    
-    double divisor = AS_F64(right_val);
-    if (divisor == 0.0) {
+
+    double right_val;
+    if (!vm_try_read_f64_typed(right, &right_val)) {
+        Value boxed = vm_get_register_safe(right);
+        if (!IS_F64(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be f64");
+            return;
+        }
+        right_val = AS_F64(boxed);
+        vm_cache_f64_typed(right, right_val);
+    }
+
+    if (right_val == 0.0) {
         runtimeError(ERROR_RUNTIME, (SrcLocation){NULL,0,0}, "Division by zero");
         return;
     }
-    
-    double result = AS_F64(left_val) / divisor;
-    vm_set_register_safe(dst, F64_VAL(result));
+
+    vm_store_f64_register(dst, left_val / right_val);
 }
 
 void handle_mod_f64_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
-    
-    // Use frame-aware register access for consistency with recursive function calls
-    Value left_val = vm_get_register_safe(left);
-    Value right_val = vm_get_register_safe(right);
-    
-    if (!IS_F64(left_val) || !IS_F64(right_val)) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be f64");
-        return;
+
+    double left_val;
+    if (!vm_try_read_f64_typed(left, &left_val)) {
+        Value boxed = vm_get_register_safe(left);
+        if (!IS_F64(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be f64");
+            return;
+        }
+        left_val = AS_F64(boxed);
+        vm_cache_f64_typed(left, left_val);
     }
-    
-    double divisor = AS_F64(right_val);
-    if (divisor == 0.0) {
+
+    double right_val;
+    if (!vm_try_read_f64_typed(right, &right_val)) {
+        Value boxed = vm_get_register_safe(right);
+        if (!IS_F64(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be f64");
+            return;
+        }
+        right_val = AS_F64(boxed);
+        vm_cache_f64_typed(right, right_val);
+    }
+
+    if (right_val == 0.0) {
         runtimeError(ERROR_RUNTIME, (SrcLocation){NULL,0,0}, "Division by zero");
         return;
     }
-    
-    double result = fmod(AS_F64(left_val), divisor);
-    vm_set_register_safe(dst, F64_VAL(result));
+
+    vm_store_f64_register(dst, fmod(left_val, right_val));
 }
 
 // ====== U32 Typed Arithmetic Handlers ======
@@ -335,102 +506,160 @@ void handle_add_u32_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
-    
-    // Use frame-aware register access for consistency with recursive function calls
-    Value left_val = vm_get_register_safe(left);
-    Value right_val = vm_get_register_safe(right);
-    
-    if (!IS_U32(left_val) || !IS_U32(right_val)) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u32");
-        return;
+
+    uint32_t left_val;
+    if (!vm_try_read_u32_typed(left, &left_val)) {
+        Value boxed = vm_get_register_safe(left);
+        if (!IS_U32(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u32");
+            return;
+        }
+        left_val = AS_U32(boxed);
+        vm_cache_u32_typed(left, left_val);
     }
-    
-    uint32_t result = AS_U32(left_val) + AS_U32(right_val);
-    vm_set_register_safe(dst, U32_VAL(result));
+
+    uint32_t right_val;
+    if (!vm_try_read_u32_typed(right, &right_val)) {
+        Value boxed = vm_get_register_safe(right);
+        if (!IS_U32(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u32");
+            return;
+        }
+        right_val = AS_U32(boxed);
+        vm_cache_u32_typed(right, right_val);
+    }
+
+    vm_store_u32_register(dst, left_val + right_val);
 }
 
 void handle_sub_u32_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
-    
-    // Use frame-aware register access for consistency with recursive function calls
-    Value left_val = vm_get_register_safe(left);
-    Value right_val = vm_get_register_safe(right);
-    
-    if (!IS_U32(left_val) || !IS_U32(right_val)) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u32");
-        return;
+
+    uint32_t left_val;
+    if (!vm_try_read_u32_typed(left, &left_val)) {
+        Value boxed = vm_get_register_safe(left);
+        if (!IS_U32(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u32");
+            return;
+        }
+        left_val = AS_U32(boxed);
+        vm_cache_u32_typed(left, left_val);
     }
-    
-    uint32_t result = AS_U32(left_val) - AS_U32(right_val);
-    vm_set_register_safe(dst, U32_VAL(result));
+
+    uint32_t right_val;
+    if (!vm_try_read_u32_typed(right, &right_val)) {
+        Value boxed = vm_get_register_safe(right);
+        if (!IS_U32(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u32");
+            return;
+        }
+        right_val = AS_U32(boxed);
+        vm_cache_u32_typed(right, right_val);
+    }
+
+    vm_store_u32_register(dst, left_val - right_val);
 }
 
 void handle_mul_u32_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
-    
-    // Use frame-aware register access for consistency with recursive function calls
-    Value left_val = vm_get_register_safe(left);
-    Value right_val = vm_get_register_safe(right);
-    
-    if (!IS_U32(left_val) || !IS_U32(right_val)) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u32");
-        return;
+
+    uint32_t left_val;
+    if (!vm_try_read_u32_typed(left, &left_val)) {
+        Value boxed = vm_get_register_safe(left);
+        if (!IS_U32(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u32");
+            return;
+        }
+        left_val = AS_U32(boxed);
+        vm_cache_u32_typed(left, left_val);
     }
-    
-    uint32_t result = AS_U32(left_val) * AS_U32(right_val);
-    vm_set_register_safe(dst, U32_VAL(result));
+
+    uint32_t right_val;
+    if (!vm_try_read_u32_typed(right, &right_val)) {
+        Value boxed = vm_get_register_safe(right);
+        if (!IS_U32(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u32");
+            return;
+        }
+        right_val = AS_U32(boxed);
+        vm_cache_u32_typed(right, right_val);
+    }
+
+    vm_store_u32_register(dst, left_val * right_val);
 }
 
 void handle_div_u32_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
-    
-    // Use frame-aware register access for consistency with recursive function calls
-    Value left_val = vm_get_register_safe(left);
-    Value right_val = vm_get_register_safe(right);
-    
-    if (!IS_U32(left_val) || !IS_U32(right_val)) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u32");
-        return;
+
+    uint32_t left_val;
+    if (!vm_try_read_u32_typed(left, &left_val)) {
+        Value boxed = vm_get_register_safe(left);
+        if (!IS_U32(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u32");
+            return;
+        }
+        left_val = AS_U32(boxed);
+        vm_cache_u32_typed(left, left_val);
     }
-    
-    uint32_t right_val_u32 = AS_U32(right_val);
-    if (right_val_u32 == 0) {
+
+    uint32_t right_val;
+    if (!vm_try_read_u32_typed(right, &right_val)) {
+        Value boxed = vm_get_register_safe(right);
+        if (!IS_U32(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u32");
+            return;
+        }
+        right_val = AS_U32(boxed);
+        vm_cache_u32_typed(right, right_val);
+    }
+
+    if (right_val == 0) {
         runtimeError(ERROR_RUNTIME, (SrcLocation){NULL,0,0}, "Division by zero");
         return;
     }
-    
-    uint32_t result = AS_U32(left_val) / right_val_u32;
-    vm_set_register_safe(dst, U32_VAL(result));
+
+    vm_store_u32_register(dst, left_val / right_val);
 }
 
 void handle_mod_u32_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
-    
-    // Use frame-aware register access for consistency with recursive function calls
-    Value left_val = vm_get_register_safe(left);
-    Value right_val = vm_get_register_safe(right);
-    
-    if (!IS_U32(left_val) || !IS_U32(right_val)) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u32");
-        return;
+
+    uint32_t left_val;
+    if (!vm_try_read_u32_typed(left, &left_val)) {
+        Value boxed = vm_get_register_safe(left);
+        if (!IS_U32(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u32");
+            return;
+        }
+        left_val = AS_U32(boxed);
+        vm_cache_u32_typed(left, left_val);
     }
-    
-    uint32_t right_val_u32 = AS_U32(right_val);
-    if (right_val_u32 == 0) {
+
+    uint32_t right_val;
+    if (!vm_try_read_u32_typed(right, &right_val)) {
+        Value boxed = vm_get_register_safe(right);
+        if (!IS_U32(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u32");
+            return;
+        }
+        right_val = AS_U32(boxed);
+        vm_cache_u32_typed(right, right_val);
+    }
+
+    if (right_val == 0) {
         runtimeError(ERROR_RUNTIME, (SrcLocation){NULL,0,0}, "Division by zero");
         return;
     }
-    
-    uint32_t result = AS_U32(left_val) % right_val_u32;
-    vm_set_register_safe(dst, U32_VAL(result));
+
+    vm_store_u32_register(dst, left_val % right_val);
 }
 
 // ====== U64 Typed Arithmetic Handlers ======
@@ -439,100 +668,158 @@ void handle_add_u64_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
-    
-    // Use frame-aware register access for consistency with recursive function calls
-    Value left_val = vm_get_register_safe(left);
-    Value right_val = vm_get_register_safe(right);
-    
-    if (!IS_U64(left_val) || !IS_U64(right_val)) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u64");
-        return;
+
+    uint64_t left_val;
+    if (!vm_try_read_u64_typed(left, &left_val)) {
+        Value boxed = vm_get_register_safe(left);
+        if (!IS_U64(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u64");
+            return;
+        }
+        left_val = AS_U64(boxed);
+        vm_cache_u64_typed(left, left_val);
     }
-    
-    uint64_t result = AS_U64(left_val) + AS_U64(right_val);
-    vm_set_register_safe(dst, U64_VAL(result));
+
+    uint64_t right_val;
+    if (!vm_try_read_u64_typed(right, &right_val)) {
+        Value boxed = vm_get_register_safe(right);
+        if (!IS_U64(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u64");
+            return;
+        }
+        right_val = AS_U64(boxed);
+        vm_cache_u64_typed(right, right_val);
+    }
+
+    vm_store_u64_register(dst, left_val + right_val);
 }
 
 void handle_sub_u64_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
-    
-    // Use frame-aware register access for consistency with recursive function calls
-    Value left_val = vm_get_register_safe(left);
-    Value right_val = vm_get_register_safe(right);
-    
-    if (!IS_U64(left_val) || !IS_U64(right_val)) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u64");
-        return;
+
+    uint64_t left_val;
+    if (!vm_try_read_u64_typed(left, &left_val)) {
+        Value boxed = vm_get_register_safe(left);
+        if (!IS_U64(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u64");
+            return;
+        }
+        left_val = AS_U64(boxed);
+        vm_cache_u64_typed(left, left_val);
     }
-    
-    uint64_t result = AS_U64(left_val) - AS_U64(right_val);
-    vm_set_register_safe(dst, U64_VAL(result));
+
+    uint64_t right_val;
+    if (!vm_try_read_u64_typed(right, &right_val)) {
+        Value boxed = vm_get_register_safe(right);
+        if (!IS_U64(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u64");
+            return;
+        }
+        right_val = AS_U64(boxed);
+        vm_cache_u64_typed(right, right_val);
+    }
+
+    vm_store_u64_register(dst, left_val - right_val);
 }
 
 void handle_mul_u64_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
-    
-    // Use frame-aware register access for consistency with recursive function calls
-    Value left_val = vm_get_register_safe(left);
-    Value right_val = vm_get_register_safe(right);
-    
-    if (!IS_U64(left_val) || !IS_U64(right_val)) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u64");
-        return;
+
+    uint64_t left_val;
+    if (!vm_try_read_u64_typed(left, &left_val)) {
+        Value boxed = vm_get_register_safe(left);
+        if (!IS_U64(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u64");
+            return;
+        }
+        left_val = AS_U64(boxed);
+        vm_cache_u64_typed(left, left_val);
     }
-    
-    uint64_t result = AS_U64(left_val) * AS_U64(right_val);
-    vm_set_register_safe(dst, U64_VAL(result));
+
+    uint64_t right_val;
+    if (!vm_try_read_u64_typed(right, &right_val)) {
+        Value boxed = vm_get_register_safe(right);
+        if (!IS_U64(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u64");
+            return;
+        }
+        right_val = AS_U64(boxed);
+        vm_cache_u64_typed(right, right_val);
+    }
+
+    vm_store_u64_register(dst, left_val * right_val);
 }
 
 void handle_div_u64_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
-    
-    // Use frame-aware register access for consistency with recursive function calls
-    Value left_val = vm_get_register_safe(left);
-    Value right_val = vm_get_register_safe(right);
-    
-    if (!IS_U64(left_val) || !IS_U64(right_val)) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u64");
-        return;
+
+    uint64_t left_val;
+    if (!vm_try_read_u64_typed(left, &left_val)) {
+        Value boxed = vm_get_register_safe(left);
+        if (!IS_U64(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u64");
+            return;
+        }
+        left_val = AS_U64(boxed);
+        vm_cache_u64_typed(left, left_val);
     }
-    
-    uint64_t right_val_u64 = AS_U64(right_val);
-    if (right_val_u64 == 0) {
+
+    uint64_t right_val;
+    if (!vm_try_read_u64_typed(right, &right_val)) {
+        Value boxed = vm_get_register_safe(right);
+        if (!IS_U64(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u64");
+            return;
+        }
+        right_val = AS_U64(boxed);
+        vm_cache_u64_typed(right, right_val);
+    }
+
+    if (right_val == 0) {
         runtimeError(ERROR_RUNTIME, (SrcLocation){NULL,0,0}, "Division by zero");
         return;
     }
-    
-    uint64_t result = AS_U64(left_val) / right_val_u64;
-    vm_set_register_safe(dst, U64_VAL(result));
+
+    vm_store_u64_register(dst, left_val / right_val);
 }
 
 void handle_mod_u64_typed(void) {
     uint8_t dst = READ_BYTE();
     uint8_t left = READ_BYTE();
     uint8_t right = READ_BYTE();
-    
-    // Use frame-aware register access for consistency with recursive function calls
-    Value left_val = vm_get_register_safe(left);
-    Value right_val = vm_get_register_safe(right);
-    
-    if (!IS_U64(left_val) || !IS_U64(right_val)) {
-        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u64");
-        return;
+
+    uint64_t left_val;
+    if (!vm_try_read_u64_typed(left, &left_val)) {
+        Value boxed = vm_get_register_safe(left);
+        if (!IS_U64(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u64");
+            return;
+        }
+        left_val = AS_U64(boxed);
+        vm_cache_u64_typed(left, left_val);
     }
-    
-    uint64_t right_val_u64 = AS_U64(right_val);
-    if (right_val_u64 == 0) {
+
+    uint64_t right_val;
+    if (!vm_try_read_u64_typed(right, &right_val)) {
+        Value boxed = vm_get_register_safe(right);
+        if (!IS_U64(boxed)) {
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be u64");
+            return;
+        }
+        right_val = AS_U64(boxed);
+        vm_cache_u64_typed(right, right_val);
+    }
+
+    if (right_val == 0) {
         runtimeError(ERROR_RUNTIME, (SrcLocation){NULL,0,0}, "Division by zero");
         return;
     }
-    
-    uint64_t result = AS_U64(left_val) % right_val_u64;
-    vm_set_register_safe(dst, U64_VAL(result));
+
+    vm_store_u64_register(dst, left_val % right_val);
 }

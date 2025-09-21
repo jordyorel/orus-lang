@@ -4,6 +4,9 @@
 #include "../../src/vm/core/vm_internal.h"
 #include "vm/register_file.h"
 
+#define VM_TYPED_REGISTER_LIMIT \
+    ((uint8_t)(sizeof(((TypedRegisters*)0)->i32_regs) / sizeof(int32_t)))
+
 // Frame-aware register access helpers shared across dispatch implementations
 
 static inline uint16_t vm_typed_register_capacity(void) {
@@ -113,6 +116,221 @@ static inline void vm_set_register_safe(uint16_t id, Value value) {
     }
 
     set_register(&vm.register_file, id, value);
+}
+
+static inline bool vm_typed_reg_in_range(uint16_t id) {
+    return id < VM_TYPED_REGISTER_LIMIT;
+}
+
+static inline Value vm_peek_register(uint16_t id) {
+    if (id < REGISTER_COUNT) {
+        return vm.registers[id];
+    }
+    return vm_get_register_safe(id);
+}
+
+static inline bool vm_try_read_i32_typed(uint16_t id, int32_t* out) {
+    if (!vm_typed_reg_in_range(id) || vm.typed_regs.reg_types[id] != REG_TYPE_I32) {
+        return false;
+    }
+
+    Value current = vm_peek_register(id);
+    if (!IS_I32(current)) {
+        vm.typed_regs.reg_types[id] = REG_TYPE_NONE;
+        return false;
+    }
+
+    int32_t cached = vm.typed_regs.i32_regs[id];
+    int32_t value = AS_I32(current);
+    if (cached != value) {
+        vm.typed_regs.i32_regs[id] = value;
+        cached = value;
+    }
+
+    *out = cached;
+    return true;
+}
+
+static inline bool vm_try_read_i64_typed(uint16_t id, int64_t* out) {
+    if (!vm_typed_reg_in_range(id) || vm.typed_regs.reg_types[id] != REG_TYPE_I64) {
+        return false;
+    }
+
+    Value current = vm_peek_register(id);
+    if (!IS_I64(current)) {
+        vm.typed_regs.reg_types[id] = REG_TYPE_NONE;
+        return false;
+    }
+
+    int64_t cached = vm.typed_regs.i64_regs[id];
+    int64_t value = AS_I64(current);
+    if (cached != value) {
+        vm.typed_regs.i64_regs[id] = value;
+        cached = value;
+    }
+
+    *out = cached;
+    return true;
+}
+
+static inline bool vm_try_read_u32_typed(uint16_t id, uint32_t* out) {
+    if (!vm_typed_reg_in_range(id) || vm.typed_regs.reg_types[id] != REG_TYPE_U32) {
+        return false;
+    }
+
+    Value current = vm_peek_register(id);
+    if (!IS_U32(current)) {
+        vm.typed_regs.reg_types[id] = REG_TYPE_NONE;
+        return false;
+    }
+
+    uint32_t cached = vm.typed_regs.u32_regs[id];
+    uint32_t value = AS_U32(current);
+    if (cached != value) {
+        vm.typed_regs.u32_regs[id] = value;
+        cached = value;
+    }
+
+    *out = cached;
+    return true;
+}
+
+static inline bool vm_try_read_u64_typed(uint16_t id, uint64_t* out) {
+    if (!vm_typed_reg_in_range(id) || vm.typed_regs.reg_types[id] != REG_TYPE_U64) {
+        return false;
+    }
+
+    Value current = vm_peek_register(id);
+    if (!IS_U64(current)) {
+        vm.typed_regs.reg_types[id] = REG_TYPE_NONE;
+        return false;
+    }
+
+    uint64_t cached = vm.typed_regs.u64_regs[id];
+    uint64_t value = AS_U64(current);
+    if (cached != value) {
+        vm.typed_regs.u64_regs[id] = value;
+        cached = value;
+    }
+
+    *out = cached;
+    return true;
+}
+
+static inline bool vm_try_read_f64_typed(uint16_t id, double* out) {
+    if (!vm_typed_reg_in_range(id) || vm.typed_regs.reg_types[id] != REG_TYPE_F64) {
+        return false;
+    }
+
+    Value current = vm_peek_register(id);
+    if (!IS_F64(current)) {
+        vm.typed_regs.reg_types[id] = REG_TYPE_NONE;
+        return false;
+    }
+
+    double cached = vm.typed_regs.f64_regs[id];
+    double value = AS_F64(current);
+    if (cached != value) {
+        vm.typed_regs.f64_regs[id] = value;
+        cached = value;
+    }
+
+    *out = cached;
+    return true;
+}
+
+static inline bool vm_try_read_bool_typed(uint16_t id, bool* out) {
+    if (!vm_typed_reg_in_range(id) || vm.typed_regs.reg_types[id] != REG_TYPE_BOOL) {
+        return false;
+    }
+
+    Value current = vm_peek_register(id);
+    if (!IS_BOOL(current)) {
+        vm.typed_regs.reg_types[id] = REG_TYPE_NONE;
+        return false;
+    }
+
+    bool cached = vm.typed_regs.bool_regs[id];
+    bool value = AS_BOOL(current);
+    if (cached != value) {
+        vm.typed_regs.bool_regs[id] = value;
+        cached = value;
+    }
+
+    *out = cached;
+    return true;
+}
+
+static inline void vm_cache_i32_typed(uint16_t id, int32_t value) {
+    if (vm_typed_reg_in_range(id)) {
+        vm.typed_regs.i32_regs[id] = value;
+        vm.typed_regs.reg_types[id] = REG_TYPE_I32;
+    }
+}
+
+static inline void vm_cache_i64_typed(uint16_t id, int64_t value) {
+    if (vm_typed_reg_in_range(id)) {
+        vm.typed_regs.i64_regs[id] = value;
+        vm.typed_regs.reg_types[id] = REG_TYPE_I64;
+    }
+}
+
+static inline void vm_cache_u32_typed(uint16_t id, uint32_t value) {
+    if (vm_typed_reg_in_range(id)) {
+        vm.typed_regs.u32_regs[id] = value;
+        vm.typed_regs.reg_types[id] = REG_TYPE_U32;
+    }
+}
+
+static inline void vm_cache_u64_typed(uint16_t id, uint64_t value) {
+    if (vm_typed_reg_in_range(id)) {
+        vm.typed_regs.u64_regs[id] = value;
+        vm.typed_regs.reg_types[id] = REG_TYPE_U64;
+    }
+}
+
+static inline void vm_cache_f64_typed(uint16_t id, double value) {
+    if (vm_typed_reg_in_range(id)) {
+        vm.typed_regs.f64_regs[id] = value;
+        vm.typed_regs.reg_types[id] = REG_TYPE_F64;
+    }
+}
+
+static inline void vm_cache_bool_typed(uint16_t id, bool value) {
+    if (vm_typed_reg_in_range(id)) {
+        vm.typed_regs.bool_regs[id] = value;
+        vm.typed_regs.reg_types[id] = REG_TYPE_BOOL;
+    }
+}
+
+static inline void vm_store_i32_register(uint16_t id, int32_t value) {
+    vm_cache_i32_typed(id, value);
+    vm_set_register_safe(id, I32_VAL(value));
+}
+
+static inline void vm_store_i64_register(uint16_t id, int64_t value) {
+    vm_cache_i64_typed(id, value);
+    vm_set_register_safe(id, I64_VAL(value));
+}
+
+static inline void vm_store_u32_register(uint16_t id, uint32_t value) {
+    vm_cache_u32_typed(id, value);
+    vm_set_register_safe(id, U32_VAL(value));
+}
+
+static inline void vm_store_u64_register(uint16_t id, uint64_t value) {
+    vm_cache_u64_typed(id, value);
+    vm_set_register_safe(id, U64_VAL(value));
+}
+
+static inline void vm_store_f64_register(uint16_t id, double value) {
+    vm_cache_f64_typed(id, value);
+    vm_set_register_safe(id, F64_VAL(value));
+}
+
+static inline void vm_store_bool_register(uint16_t id, bool value) {
+    vm_cache_bool_typed(id, value);
+    vm_set_register_safe(id, BOOL_VAL(value));
 }
 
 // Equality comparisons
