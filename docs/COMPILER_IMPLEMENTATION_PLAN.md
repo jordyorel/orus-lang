@@ -546,10 +546,12 @@ void test_basic_compilation() {
 
 ### ✅ **PHASE 2 CURRENT STATUS**
 - **✅ Infrastructure**: OptimizationContext, pipeline coordination implemented
-- **✅ Constant Folding**: Basic constant folding optimization implemented 
+- **✅ Constant Folding**: Basic constant folding optimization implemented
 - **✅ Pipeline Integration**: Optimization pass integrated with multi-pass compiler
 - **✅ Statistics Reporting**: Optimization metrics and performance tracking
-- **⚠️  Limited Scope**: Currently handles simple constant folding only
+- **✅ Function & Loop Coverage**: Folding now walks functions, blocks, and loop bodies so invariant arithmetic is simplified ahead of LICM.
+- **✅ Advanced Node Coverage**: Struct literals, member access chains, and match arms now feed the folder so constants propagate through complex control flow.
+- **⚠️  Limited Scope**: Currently handles arithmetic/logical folding; algebraic simplification still pending
 
 ### 🎯 **CRITICAL REQUIREMENT**: Optimized TypedAST Visualization  
 **This phase is crucial for progression to code generation. We MUST:**
@@ -558,7 +560,12 @@ void test_basic_compilation() {
 - ✅ Verify optimization correctness through visualization
 - ✅ Enable debugging of optimization passes
 
-**Current Status**: Basic constant folding shows 0 optimizations on simple literals, ready for more complex expressions.
+**Current Status**: Constant folding now fires inside nested blocks (e.g., `fn main` assignments and loop bodies), producing folded constants that will seed the upcoming LICM pass.
+
+**Next Step (Phase 2B)**: Begin implementing Loop Invariant Code Motion (LICM) using the folded constants as anchors.
+- [ ] Identify loop-invariant candidates by reusing `TypedASTNode::isConstant` and the newly folded literal nodes.
+- [ ] Hoist invariants to the pre-header blocks emitted by the register allocator.
+- [ ] Re-run constant folding after hoisting to validate transformed loops.
 
 ### Phase 2A: Optimization Infrastructure
 
