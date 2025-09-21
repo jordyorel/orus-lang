@@ -16,7 +16,7 @@ This document outlines the detailed implementation plan for building the Orus co
 - **Closure Support**: Upvalue capture and closure creation for nested functions
 
 #### ✅ **What's Now Implemented**
-- **✅ Optimization Pass**: `src/compiler/backend/optimization/optimizer.c` + `constantfold.c`
+- **✅ Optimization Pass**: `src/compiler/backend/optimization/optimizer.c` + `constantfold.c` + `licm.c`
 - **✅ Code Generation Pass**: `src/compiler/backend/codegen/codegen.c` + `peephole.c`  
 - **✅ Pipeline Coordination**: `src/compiler/backend/compiler.c`
 - **✅ Register Allocation**: `src/compiler/backend/register_allocator.c`
@@ -39,7 +39,7 @@ This document outlines the detailed implementation plan for building the Orus co
 
 **OPTIMIZATION PIPELINE (MEDIUM PRIORITY)**
 - **Advanced Constant Folding**: Type-aware folding, immediate value detection, algebraic simplification
-- **Control Flow Optimization**: Dead code elimination, branch optimization, loop invariant code motion
+- **Control Flow Optimization**: Dead code elimination, branch optimization, loop unrolling, strength reduction
 - **Register Optimization**: Type specialization, spill utilization, coalescing, advanced allocation
 
 **INFRASTRUCTURE & TOOLING (HIGH PRIORITY)**
@@ -74,7 +74,8 @@ src/compiler/
     ├── typed_ast_visualizer.c     ✅ (Exists - Debugging support)
     ├── optimization/
     │   ├── optimizer.c             ✅ (Implemented - Optimization pipeline)
-    │   └── constantfold.c          ✅ (Implemented - Constant folding)
+    │   ├── constantfold.c          ✅ (Implemented - Constant folding)
+    │   └── licm.c                  ✅ (Implemented - Loop-invariant code motion)
     └── codegen/
         ├── codegen.c               ✅ (Implemented - Bytecode generation)
         └── peephole.c              ✅ (Implemented - Peephole optimization)
@@ -90,7 +91,8 @@ include/compiler/
 ├── optimizer.h                    ✅ (Implemented - Optimization API)
 ├── codegen.h                      ✅ (Implemented - Codegen API)
 ├── optimization/
-│   └── constantfold.h             ✅ (Implemented - Constant folding API)
+│   ├── constantfold.h             ✅ (Implemented - Constant folding API)
+│   └── licm.h                     ✅ (Implemented - Loop-invariant code motion API)
 └── codegen/
     └── peephole.h                 ✅ (Implemented - Peephole optimization API)
 ```
@@ -143,6 +145,12 @@ emit_byte_to_buffer(ctx->bytecode, OP_HALT);                       // 1 byte:  C
 - **Error Elimination**: Zero spurious type errors during execution
 
 **This fix ensures the multi-pass compiler generates bytecode that perfectly matches VM execution expectations.**
+
+### ✅ Loop-Invariant Code Motion Pass
+- Implemented in `src/compiler/backend/optimization/licm.c` and exposed through `compiler/optimization/licm.h`.
+- Hoists literal-backed local declarations from `while`, `for range`, and iterator `for` loops into the immediate parent scope.
+- Automatically re-runs constant folding on hoisted declarations to unlock additional simplifications before code generation.
+- `OptimizationContext` tracks LICM statistics so optimizer telemetry now reports loop coverage and invariant counts.
 
 ### Phase 1A: Header Files & Core Interfaces
 
@@ -566,6 +574,13 @@ void test_basic_compilation() {
 - [ ] Identify loop-invariant candidates by reusing `TypedASTNode::isConstant` and the newly folded literal nodes.
 - [ ] Hoist invariants to the pre-header blocks emitted by the register allocator.
 - [ ] Re-run constant folding after hoisting to validate transformed loops.
+
+**LICM Remaining Work (Roadmap Tracking)**
+- [ ] Extend invariance detection beyond literals, unary, and binary operators so member/index accesses, tuple destructures, and safe intrinsic calls can be hoisted when all operands are loop-invariant.
+- [ ] Introduce side-effect analysis that rejects expressions touching mutable references, user function calls, or aliasable memory (array/member assignments) until escape information is available.
+- [ ] Support nested loop promotion by separating per-loop metadata and preventing hoisted values from leaking across sibling loops.
+- [ ] Emit regression tests that cover declaration hoists, single-assignment hoists, and mixed invariant blocks to validate the pass across `while`, `for range`, and iterator loops.
+- [ ] Wire LICM statistics into the optimizer reports so remaining unsupported statement kinds appear in telemetry during benchmarking.
 
 ### Phase 2A: Optimization Infrastructure
 

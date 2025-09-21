@@ -65,8 +65,11 @@ print(identity("orus"))
 
 ### Compiler & Optimization Pipeline
 - `compileProgram()` drives typed AST generation, register allocation, constant
-  propagation, and bytecode emission into VM chunks.
+  propagation, loop-invariant hoisting, and bytecode emission into VM chunks.
 - Peephole optimizer deduplicates redundant loads and boolean immediates.
+- Loop-invariant code motion hoists literal-backed locals out of loops and
+  reruns constant folding on the promoted declarations to unlock more
+  simplification opportunities.
 - Jump patching infrastructure and source-location metadata power reliable
   control-flow codegen and diagnostics.
 - CI fixtures cover arithmetic, control flow, functions, arrays, strings, and
@@ -145,8 +148,8 @@ print("sum:", total)
   ```
 - **Standard library** – Curate a minimal module set (math, arrays, strings)
   once the module system is stable.
-- **Advanced optimizations** – Loop-invariant code motion, loop unrolling, and
-  strength reduction passes once diagnostics are solid.
+- **Advanced optimizations** – ✅ Loop-invariant code motion shipped; loop
+  unrolling and strength reduction passes remain once diagnostics are solid.
 - **Performance telemetry** – Expand VM profiling to collect per-opcode
   statistics and surface them in tooling.
 

@@ -16,11 +16,14 @@ Build a language that combines Python's readability, Rust's safety, and Lua's pe
 
 ### ✅ **What's Complete**
 - **VM Foundation**: Register-based with 256 registers, computed-goto dispatch
-- **Lexer System**: Full tokenization with all language constructs  
+- **Lexer System**: Full tokenization with all language constructs
 - **Basic Parser**: Precedence climbing with binary expressions
 - **Variable System**: Declarations (`x = 42`) and lookup
 - **Memory Management**: Mark-and-sweep GC with object pooling
 - **Performance**: 2x faster than Python, 3x faster than Node.js
+- **Optimization Pipeline**: Constant folding plus loop-invariant code motion
+  run over the typed AST before bytecode generation, updating optimization
+  telemetry in `OptimizationContext`.
 
 ### 🔄 **Partially Complete**
 - **String Support**: Parsing works, value representation needs fixing
@@ -5542,5 +5545,33 @@ int compile_function_expression(CompilerContext* ctx, TypedASTNode* func) {
     if (reg == -1) return -1;
     /* compile body and emit OP_CLOSURE_R */
     return reg;
+}
+```
+
+## Optimization Pipeline Enhancements
+
+### Loop-Invariant Code Motion
+- Execute after constant folding so hoisted locals reuse simplified literals.
+- Accumulate metrics with `OptimizationContext::loop_invariants_hoisted` and
+  `OptimizationContext::loops_optimized` for optimization telemetry.
+- Restrict hoisting to literal-backed locals to avoid aliasing or mutation
+  inside loop bodies.
+- Single-assignment statements targeting outer-scope variables can be hoisted
+  when their right-hand side is loop-invariant and the name is not reassigned
+  elsewhere in the loop.
+
+```c
+bool run_loop_invariant_pass(TypedASTNode* ast, OptimizationContext* ctx) {
+    if (!ast || !ctx || !ctx->enable_loop_invariant_code_motion) {
+        return false;
+    }
+
+    bool changed = apply_loop_invariant_code_motion(ast, ctx);
+    if (changed && ctx->verbose_output) {
+        printf("[OPT] LICM hoisted %d invariants across %d loop(s)\n",
+               ctx->loop_invariants_hoisted,
+               ctx->loops_optimized);
+    }
+    return changed;
 }
 ```

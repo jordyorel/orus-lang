@@ -11,9 +11,10 @@ typedef struct ExpressionCache ExpressionCache;
 
 typedef struct OptimizationContext {
     // Optimization flags
-    bool enable_constant_folding;      // Fold 2+3 → 5
-    bool enable_dead_code_elimination; // Remove unused variables
-    bool enable_common_subexpression;  // Eliminate duplicate expressions
+    bool enable_constant_folding;       // Fold 2+3 → 5
+    bool enable_dead_code_elimination;  // Remove unused variables
+    bool enable_common_subexpression;   // Eliminate duplicate expressions
+    bool enable_loop_invariant_code_motion; // Hoist loop-invariant declarations
     
     // Analysis results (TODO: implement in advanced phases)
     ConstantTable* constants;          // Known constant values
@@ -24,7 +25,9 @@ typedef struct OptimizationContext {
     int optimizations_applied;
     int nodes_eliminated;
     int constants_folded;
-    int binary_expressions_folded;     // Specific to constant folding
+    int binary_expressions_folded;      // Specific to constant folding
+    int loop_invariants_hoisted;        // LICM statistics
+    int loops_optimized;                // Number of loops transformed
     
     // Debug information
     bool verbose_output;               // Enable detailed optimization logging
