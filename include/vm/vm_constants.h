@@ -29,7 +29,7 @@
 
 // Performance tuning
 #define VM_DISPATCH_TABLE_SIZE (OP_HALT + 1)
-#define VM_TYPED_REGISTER_COUNT 64
+#define VM_TYPED_REGISTER_COUNT 256
 
 // Error handling
 #define VM_MAX_ERROR_MESSAGE_LENGTH 256

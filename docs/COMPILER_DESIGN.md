@@ -229,7 +229,7 @@ A visualization tool (`typed_ast_visualizer.c`) outputs the typed AST in a tree-
   Opcode select_arithmetic_opcode(const char* op, Type* type) {
       if (strcmp(op, "+") == 0) {
           switch (type->kind) {
-              case TYPE_I32: return OP_ADD_I32_R;
+              case TYPE_I32: return OP_ADD_I32_TYPED;
               case TYPE_F64: return OP_ADD_F64_R;
               case TYPE_STRING: return OP_STRING_CONCAT;
               default: return OP_INVALID;

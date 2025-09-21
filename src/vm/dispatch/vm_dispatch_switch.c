@@ -2773,8 +2773,8 @@ InterpretResult vm_run_dispatch(void) {
                     int32_t imm = *(int32_t*)vm.ip;
                     vm.ip += 4;
 
-                    vm.typed_regs.bool_regs[dst] = vm.typed_regs.i32_regs[src] < imm;
-                    vm.typed_regs.reg_types[dst] = REG_TYPE_BOOL;
+                    bool result = vm.typed_regs.i32_regs[src] < imm;
+                    vm_store_bool_register(dst, result);
                     break;
                 }
 

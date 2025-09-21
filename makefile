@@ -145,7 +145,7 @@ SOURCE_MAP_TEST_BIN = $(BUILDDIR)/tests/test_source_mapping
 SCOPE_TRACKING_TEST_BIN = $(BUILDDIR)/tests/test_scope_tracking
 PEEPHOLE_TEST_BIN = $(BUILDDIR)/tests/test_constant_propagation
 
-.PHONY: all clean test unit-test test-control-flow benchmark help debug release profiling analyze install bytecode-jump-tests source-map-tests scope-tracking-tests peephole-tests cli-smoke-tests
+.PHONY: all clean test unit-test test-control-flow test-loop-telemetry benchmark help debug release profiling analyze install bytecode-jump-tests source-map-tests scope-tracking-tests peephole-tests cli-smoke-tests
 
 all: build-info $(ORUS)
 
@@ -304,20 +304,48 @@ test-control-flow: $(ORUS)
 	@echo "Running Control Flow Tests..."
 	@passed=0; failed=0; \
 	for test_file in $$(find $(TESTDIR)/control_flow -type f -name "*.orus" | sort); do \
-	printf "Testing: $$test_file ... "; \
-	if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
-	printf "\033[32mPASS\033[0m\n"; \
-	passed=$$((passed + 1)); \
-	else \
-	printf "\033[31mFAIL\033[0m\n"; \
-	failed=$$((failed + 1)); \
-	fi; \
+		printf "Testing: $$test_file ... "; \
+		if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
+			printf "\033[32mPASS\033[0m\n"; \
+			passed=$$((passed + 1)); \
+		else \
+			printf "\033[31mFAIL\033[0m\n"; \
+			failed=$$((failed + 1)); \
+		fi; \
 	done; \
 	echo ""; \
 	if [ $$failed -eq 0 ]; then \
-	echo "\033[32m✓ Control flow tests passed ($$passed)\033[0m"; \
+		echo "\033[32m✓ Control flow tests passed ($$passed)\033[0m"; \
 	else \
-	echo "\033[31m✗ $$failed control flow test(s) failed\033[0m"; \
+		echo "\033[31m✗ $$failed control flow test(s) failed\033[0m"; \
+	fi
+
+test-loop-telemetry: $(ORUS)
+	@echo "Running loop telemetry baseline..."
+	@mkdir -p build/loop_telemetry
+	@passed=0; failed=0; \
+	for test_file in tests/control_flow/loop_typed_fastpath_correctness.orus; do \
+		name=$$(basename $$test_file .orus); \
+		out=build/loop_telemetry/$$name.log; \
+		if ORUS_TRACE_TYPED_FALLBACKS=1 ./$(ORUS) "$$test_file" >/dev/null 2>"$$out"; then \
+			if diff -u tests/golden/loop_telemetry/$$name.log "$$out" >/dev/null; then \
+				printf "\033[32mPASS\033[0m %s\n" "$$test_file"; \
+				passed=$$((passed + 1)); \
+			else \
+				printf "\033[31mFAIL\033[0m %s (telemetry mismatch)\n" "$$test_file"; \
+				diff -u tests/golden/loop_telemetry/$$name.log "$$out" || true; \
+				failed=$$((failed + 1)); \
+			fi; \
+		else \
+			printf "\033[31mFAIL\033[0m %s (runtime error)\n" "$$test_file"; \
+			failed=$$((failed + 1)); \
+		fi; \
+	done; \
+	if [ $$failed -eq 0 ]; then \
+		echo "\033[32m✓ Loop telemetry baseline verified ($$passed)\033[0m"; \
+	else \
+		echo "\033[31m✗ $$failed loop telemetry test(s) failed\033[0m"; \
+		exit 1; \
 	fi
 
 # CI test target: Build with warnings as errors and run full test suite
