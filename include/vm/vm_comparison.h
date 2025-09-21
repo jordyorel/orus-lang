@@ -5,6 +5,97 @@
 #include "vm/register_file.h"
 
 // Frame-aware register access helpers shared across dispatch implementations
+
+static inline uint16_t vm_typed_register_capacity(void) {
+    return (uint16_t)(sizeof(vm.typed_regs.i32_regs) / sizeof(vm.typed_regs.i32_regs[0]));
+}
+
+static inline RegisterType vm_register_type_from_value(Value value) {
+    switch (value.type) {
+        case VAL_I32:
+            return REG_TYPE_I32;
+        case VAL_I64:
+            return REG_TYPE_I64;
+        case VAL_U32:
+            return REG_TYPE_U32;
+        case VAL_U64:
+            return REG_TYPE_U64;
+        case VAL_F64:
+            return REG_TYPE_F64;
+        case VAL_BOOL:
+            return REG_TYPE_BOOL;
+        default:
+            return REG_TYPE_NONE;
+    }
+}
+
+static inline void vm_clear_typed_register_slot(uint16_t id, uint8_t reg_type) {
+    switch (reg_type) {
+        case REG_TYPE_I32:
+            vm.typed_regs.i32_regs[id] = 0;
+            break;
+        case REG_TYPE_I64:
+            vm.typed_regs.i64_regs[id] = 0;
+            break;
+        case REG_TYPE_U32:
+            vm.typed_regs.u32_regs[id] = 0;
+            break;
+        case REG_TYPE_U64:
+            vm.typed_regs.u64_regs[id] = 0;
+            break;
+        case REG_TYPE_F64:
+            vm.typed_regs.f64_regs[id] = 0.0;
+            break;
+        case REG_TYPE_BOOL:
+            vm.typed_regs.bool_regs[id] = false;
+            break;
+        default:
+            break;
+    }
+}
+
+static inline void vm_update_typed_register(uint16_t id, Value value) {
+    uint16_t capacity = vm_typed_register_capacity();
+    if (id >= capacity) {
+        return;
+    }
+
+    RegisterType new_type = vm_register_type_from_value(value);
+    if (new_type == REG_TYPE_NONE) {
+        return;
+    }
+
+    uint8_t old_type = vm.typed_regs.reg_types[id];
+    if (old_type != new_type) {
+        vm_clear_typed_register_slot(id, old_type);
+    }
+
+    switch (new_type) {
+        case REG_TYPE_I32:
+            vm.typed_regs.i32_regs[id] = AS_I32(value);
+            break;
+        case REG_TYPE_I64:
+            vm.typed_regs.i64_regs[id] = AS_I64(value);
+            break;
+        case REG_TYPE_U32:
+            vm.typed_regs.u32_regs[id] = AS_U32(value);
+            break;
+        case REG_TYPE_U64:
+            vm.typed_regs.u64_regs[id] = AS_U64(value);
+            break;
+        case REG_TYPE_F64:
+            vm.typed_regs.f64_regs[id] = AS_F64(value);
+            break;
+        case REG_TYPE_BOOL:
+            vm.typed_regs.bool_regs[id] = AS_BOOL(value);
+            break;
+        default:
+            return;
+    }
+
+    vm.typed_regs.reg_types[id] = (uint8_t)new_type;
+}
+
 static inline Value vm_get_register_safe(uint16_t id) {
     if (id < 256) {
         return vm.registers[id];
@@ -17,6 +108,7 @@ static inline Value vm_get_register_safe(uint16_t id) {
 static inline void vm_set_register_safe(uint16_t id, Value value) {
     if (id < 256) {
         vm.registers[id] = value;
+        vm_update_typed_register(id, value);
         return;
     }
 
