@@ -1,0 +1,53 @@
+// Control Flow Benchmark: Compare while vs for loop performance
+print("=== Orus While vs For Loop Benchmark ===")
+
+TRIALS: i32 = 5
+LOOP_COUNT: i32 = 3_000_000
+
+mut trial: i32 = 0
+mut total_for_time: f64 = 0.0
+mut total_while_time: f64 = 0.0
+
+while trial < TRIALS:
+    print("\n--- Trial", trial, "---")
+
+    // Phase 1: for-loop summation
+    for_start: f64 = time_stamp()
+    mut for_sum: i64 = 0
+    for i in 0..=LOOP_COUNT:
+        for_sum = for_sum + (i as i64)
+    for_end: f64 = time_stamp()
+    for_elapsed: f64 = for_end - for_start
+    total_for_time = total_for_time + for_elapsed
+
+    print("For loop sum:", for_sum)
+    print("For loop elapsed:", for_elapsed)
+
+    // Phase 2: while-loop summation
+    while_start: f64 = time_stamp()
+    mut while_sum: i64 = 0
+    mut idx: i32 = 0
+    while idx <= LOOP_COUNT:
+        while_sum = while_sum + (idx as i64)
+        idx = idx + 1
+    while_end: f64 = time_stamp()
+    while_elapsed: f64 = while_end - while_start
+    total_while_time = total_while_time + while_elapsed
+
+    print("While loop sum:", while_sum)
+    print("While loop elapsed:", while_elapsed)
+
+    trial = trial + 1
+
+avg_for: f64 = total_for_time / (TRIALS as f64)
+avg_while: f64 = total_while_time / (TRIALS as f64)
+
+speed_ratio: f64 = avg_while / avg_for
+
+print("\n=== Benchmark Summary ===")
+print("Trials:", TRIALS)
+print("Iterations per loop:", LOOP_COUNT + 1)
+print("Average for-loop time:", avg_for)
+print("Average while-loop time:", avg_while)
+print("While vs for ratio:", speed_ratio)
+print("=== Benchmark Complete ===")

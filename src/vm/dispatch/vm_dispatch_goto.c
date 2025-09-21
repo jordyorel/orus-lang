@@ -17,6 +17,22 @@
 #include <limits.h>
 #include <inttypes.h>
 
+static inline void store_i32_register(uint16_t id, int32_t value) {
+    if (id < REGISTER_COUNT) {
+        vm.registers[id].type = VAL_I32;
+        vm.registers[id].as.i32 = value;
+
+        const uint16_t typed_limit =
+            (uint16_t)(sizeof(vm.typed_regs.i32_regs) / sizeof(vm.typed_regs.i32_regs[0]));
+        if (id < typed_limit) {
+            vm.typed_regs.i32_regs[id] = value;
+            vm.typed_regs.reg_types[id] = REG_TYPE_I32;
+        }
+    } else {
+        set_register(&vm.register_file, id, I32_VAL(value));
+    }
+}
+
 static inline bool value_to_index(Value value, int* out_index) {
     if (IS_I32(value)) {
         int32_t idx = AS_I32(value);
@@ -3096,15 +3112,16 @@ InterpretResult vm_run_dispatch(void) {
         uint8_t src = *vm.ip++;
         int32_t imm = *(int32_t*)vm.ip;
         vm.ip += 4;
-        
+
         // Compiler ensures this is only emitted for i32 operations, so trust it
-        if (!IS_I32(vm.registers[src])) {
+        Value src_value = vm_get_register_safe(src);
+        if (!IS_I32(src_value)) {
             VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operand must be i32");
         }
-        
-        int32_t result = AS_I32(vm.registers[src]) + imm;
-        vm_set_register_safe(dst, I32_VAL(result));
-        
+
+        int32_t result = AS_I32(src_value) + imm;
+        store_i32_register(dst, result);
+
         DISPATCH_TYPED();
     }
 
@@ -3159,18 +3176,31 @@ InterpretResult vm_run_dispatch(void) {
         uint8_t limit_reg = *vm.ip++;
         int16_t offset = *(int16_t*)vm.ip;
         vm.ip += 2;
-        
-        // Compiler ensures this is only emitted for i32 operations, so trust it
-        if (!IS_I32(vm.registers[reg]) || !IS_I32(vm.registers[limit_reg])) {
-            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be i32");
+
+        const uint16_t typed_limit =
+            (uint16_t)(sizeof(vm.typed_regs.i32_regs) / sizeof(vm.typed_regs.i32_regs[0]));
+        if (reg < typed_limit && limit_reg < typed_limit &&
+            vm.typed_regs.reg_types[reg] == REG_TYPE_I32 &&
+            vm.typed_regs.reg_types[limit_reg] == REG_TYPE_I32) {
+            int32_t incremented = vm.typed_regs.i32_regs[reg] + 1;
+            store_i32_register(reg, incremented);
+            if (incremented < vm.typed_regs.i32_regs[limit_reg]) {
+                vm.ip += offset;
+            }
+        } else {
+            Value counter = vm_get_register_safe(reg);
+            Value limit = vm_get_register_safe(limit_reg);
+            if (!IS_I32(counter) || !IS_I32(limit)) {
+                VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be i32");
+            }
+
+            int32_t incremented = AS_I32(counter) + 1;
+            store_i32_register(reg, incremented);
+            if (incremented < AS_I32(limit)) {
+                vm.ip += offset;
+            }
         }
-        
-        int32_t incremented = AS_I32(vm.registers[reg]) + 1;
-        vm_set_register_safe(reg, I32_VAL(incremented));
-        if (incremented < AS_I32(vm.registers[limit_reg])) {
-            vm.ip += offset;
-        }
-        
+
         DISPATCH_TYPED();
     }
 
