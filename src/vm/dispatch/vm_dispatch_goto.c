@@ -117,6 +117,22 @@ InterpretResult vm_run_dispatch(void) {
         vm_dispatch_table[OP_LE_I32_TYPED] = &&LABEL_OP_LE_I32_TYPED;
         vm_dispatch_table[OP_GT_I32_TYPED] = &&LABEL_OP_GT_I32_TYPED;
         vm_dispatch_table[OP_GE_I32_TYPED] = &&LABEL_OP_GE_I32_TYPED;
+        vm_dispatch_table[OP_LT_I64_TYPED] = &&LABEL_OP_LT_I64_TYPED;
+        vm_dispatch_table[OP_LE_I64_TYPED] = &&LABEL_OP_LE_I64_TYPED;
+        vm_dispatch_table[OP_GT_I64_TYPED] = &&LABEL_OP_GT_I64_TYPED;
+        vm_dispatch_table[OP_GE_I64_TYPED] = &&LABEL_OP_GE_I64_TYPED;
+        vm_dispatch_table[OP_LT_F64_TYPED] = &&LABEL_OP_LT_F64_TYPED;
+        vm_dispatch_table[OP_LE_F64_TYPED] = &&LABEL_OP_LE_F64_TYPED;
+        vm_dispatch_table[OP_GT_F64_TYPED] = &&LABEL_OP_GT_F64_TYPED;
+        vm_dispatch_table[OP_GE_F64_TYPED] = &&LABEL_OP_GE_F64_TYPED;
+        vm_dispatch_table[OP_LT_U32_TYPED] = &&LABEL_OP_LT_U32_TYPED;
+        vm_dispatch_table[OP_LE_U32_TYPED] = &&LABEL_OP_LE_U32_TYPED;
+        vm_dispatch_table[OP_GT_U32_TYPED] = &&LABEL_OP_GT_U32_TYPED;
+        vm_dispatch_table[OP_GE_U32_TYPED] = &&LABEL_OP_GE_U32_TYPED;
+        vm_dispatch_table[OP_LT_U64_TYPED] = &&LABEL_OP_LT_U64_TYPED;
+        vm_dispatch_table[OP_LE_U64_TYPED] = &&LABEL_OP_LE_U64_TYPED;
+        vm_dispatch_table[OP_GT_U64_TYPED] = &&LABEL_OP_GT_U64_TYPED;
+        vm_dispatch_table[OP_GE_U64_TYPED] = &&LABEL_OP_GE_U64_TYPED;
         
         // Short jumps for tight loops
         vm_dispatch_table[OP_JUMP_SHORT] = &&LABEL_OP_JUMP_SHORT;
@@ -3031,6 +3047,86 @@ InterpretResult vm_run_dispatch(void) {
 
     LABEL_OP_GE_I32_TYPED: {
         VM_TYPED_CMP_OP(i32_regs, >=);
+        DISPATCH_TYPED();
+    }
+
+    LABEL_OP_LT_I64_TYPED: {
+        VM_TYPED_CMP_OP(i64_regs, <);
+        DISPATCH_TYPED();
+    }
+
+    LABEL_OP_LE_I64_TYPED: {
+        VM_TYPED_CMP_OP(i64_regs, <=);
+        DISPATCH_TYPED();
+    }
+
+    LABEL_OP_GT_I64_TYPED: {
+        VM_TYPED_CMP_OP(i64_regs, >);
+        DISPATCH_TYPED();
+    }
+
+    LABEL_OP_GE_I64_TYPED: {
+        VM_TYPED_CMP_OP(i64_regs, >=);
+        DISPATCH_TYPED();
+    }
+
+    LABEL_OP_LT_F64_TYPED: {
+        VM_TYPED_CMP_OP(f64_regs, <);
+        DISPATCH_TYPED();
+    }
+
+    LABEL_OP_LE_F64_TYPED: {
+        VM_TYPED_CMP_OP(f64_regs, <=);
+        DISPATCH_TYPED();
+    }
+
+    LABEL_OP_GT_F64_TYPED: {
+        VM_TYPED_CMP_OP(f64_regs, >);
+        DISPATCH_TYPED();
+    }
+
+    LABEL_OP_GE_F64_TYPED: {
+        VM_TYPED_CMP_OP(f64_regs, >=);
+        DISPATCH_TYPED();
+    }
+
+    LABEL_OP_LT_U32_TYPED: {
+        VM_TYPED_CMP_OP(u32_regs, <);
+        DISPATCH_TYPED();
+    }
+
+    LABEL_OP_LE_U32_TYPED: {
+        VM_TYPED_CMP_OP(u32_regs, <=);
+        DISPATCH_TYPED();
+    }
+
+    LABEL_OP_GT_U32_TYPED: {
+        VM_TYPED_CMP_OP(u32_regs, >);
+        DISPATCH_TYPED();
+    }
+
+    LABEL_OP_GE_U32_TYPED: {
+        VM_TYPED_CMP_OP(u32_regs, >=);
+        DISPATCH_TYPED();
+    }
+
+    LABEL_OP_LT_U64_TYPED: {
+        VM_TYPED_CMP_OP(u64_regs, <);
+        DISPATCH_TYPED();
+    }
+
+    LABEL_OP_LE_U64_TYPED: {
+        VM_TYPED_CMP_OP(u64_regs, <=);
+        DISPATCH_TYPED();
+    }
+
+    LABEL_OP_GT_U64_TYPED: {
+        VM_TYPED_CMP_OP(u64_regs, >);
+        DISPATCH_TYPED();
+    }
+
+    LABEL_OP_GE_U64_TYPED: {
+        VM_TYPED_CMP_OP(u64_regs, >=);
         DISPATCH_TYPED();
     }
 
