@@ -166,6 +166,19 @@ keeps the interpreter correct even if later stages are delayed.
        gate rollout on ≥40% reduction in allocator calls for canonical loops.
      - Add a VM runtime knob `vm.flags.force_boxed_iterators` for rapid
        bisects.
+   - **Status**
+     - ✅ VM iterator opcodes now hydrate `TypedIteratorDescriptor` entries for
+       numeric ranges and arrays, reusing register-resident state without heap
+       churn.
+     - ✅ Telemetry captures allocator savings and fallback counts via the new
+       `iter_alloc_saved`/`iter_fallbacks` counters and corresponding golden
+       baselines.
+     - ✅ New regression programs under `tests/loop_fastpaths/phase3`
+       differentiate range and array iterators while respecting the
+       `ORUS_FORCE_BOXED_ITERATORS` escape hatch.
+     - ✅ `scripts/benchmarks/loop_perf.py` exposes a `--phase=3` scenario with
+       typed-versus-boxed iterator variants consuming
+       `tests/benchmarks/loop_fastpath_phase3.orus`.
    - **Owner**: VM runtime team with compiler support.
 
 5. **LICM & optimizer integration (Phase 4, Day 9-11)**

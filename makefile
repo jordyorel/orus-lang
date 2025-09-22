@@ -330,6 +330,7 @@ test-loop-telemetry: $(ORUS)
                 tests/loop_fastpaths/phase2/inc_checked.orus \
                 tests/loop_fastpaths/phase2/inc_disable_fastpath.orus \
                 tests/loop_fastpaths/phase3/iterator_zero_alloc.orus \
+                tests/loop_fastpaths/phase3/iterator_array_zero_alloc.orus \
                 tests/optimizer/loop_typed_phase4/licm_guard.orus \
                 tests/loop_fastpaths/phase5/telemetry_smoke.orus; do \
                 name=$$(basename $$test_file .orus); \

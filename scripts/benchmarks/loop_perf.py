@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Loop microbenchmark harness for the Phase 2 typed increment fast path.
 
-This script runs the dedicated loop benchmark program with different runtime
-configurations to compare the typed increment fast path against its boxed
-fallback.  It reports iteration throughput as well as typed loop telemetry so we
-can spot regressions before rolling out new runtime changes.
+This script runs the dedicated loop benchmark programs with different runtime
+configurations to compare the typed fast paths against their boxed fallbacks.
+It reports iteration throughput as well as typed loop telemetry so we can spot
+regressions before rolling out new runtime changes.
 """
 
 from __future__ import annotations
@@ -21,19 +21,15 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-BENCH_SOURCE = REPO_ROOT / "tests" / "benchmarks" / "loop_fastpath_phase2.orus"
+PHASE_DEFAULT_BENCH: Dict[str, Path] = {
+    "2": REPO_ROOT / "tests" / "benchmarks" / "loop_fastpath_phase2.orus",
+    "3": REPO_ROOT / "tests" / "benchmarks" / "loop_fastpath_phase3.orus",
+}
 
 ELAPSED_PATTERN = re.compile(r"^elapsed:\s*([0-9]+(?:\.[0-9]+)?)$")
 TRIALS_PATTERN = re.compile(r"^trials:\s*(\d+)$")
 ITERATIONS_PATTERN = re.compile(r"^iterations:\s*(\d+)$")
 CHECKSUM_PATTERN = re.compile(r"^checksum:\s*(-?\d+)$")
-TRACE_PATTERN = re.compile(
-    r"typed_hit=(?P<hit>\d+)\s+typed_miss=(?P<miss>\d+)"
-    r".*inc_overflow_bailouts=(?P<overflow>\d+)"
-    r".*inc_type_instability=(?P<instability>\d+)"
-)
-
-
 @dataclass
 class Variant:
     """Benchmark configuration descriptor."""
@@ -68,6 +64,8 @@ class BenchmarkStats:
             str(self.telemetry.get("typed_miss", 0)),
             str(self.telemetry.get("inc_overflow_bailouts", 0)),
             str(self.telemetry.get("inc_type_instability", 0)),
+            str(self.telemetry.get("iter_alloc_saved", 0)),
+            str(self.telemetry.get("iter_fallbacks", 0)),
         ]
 
 
@@ -83,7 +81,19 @@ PHASE_VARIANTS: Dict[str, List[Variant]] = {
             description="Fast path disabled via ORUS_DISABLE_INC_TYPED_FASTPATH",
             env={"ORUS_DISABLE_INC_TYPED_FASTPATH": "1"},
         ),
-    ]
+    ],
+    "3": [
+        Variant(
+            name="typed-iter",
+            description="Zero-allocation typed iterators enabled",
+            env={"ORUS_FORCE_BOXED_ITERATORS": "0"},
+        ),
+        Variant(
+            name="force-boxed",
+            description="Typed iterators disabled via ORUS_FORCE_BOXED_ITERATORS",
+            env={"ORUS_FORCE_BOXED_ITERATORS": "1"},
+        ),
+    ],
 }
 
 CSV_HEADER = [
@@ -95,7 +105,14 @@ CSV_HEADER = [
     "typed_miss",
     "inc_overflow_bailouts",
     "inc_type_instability",
+    "iter_alloc_saved",
+    "iter_fallbacks",
 ]
+
+PHASE_HEADERS: Dict[str, str] = {
+    "2": "Phase 2 typed increment microbenchmark",
+    "3": "Phase 3 zero-allocation iterator microbenchmark",
+}
 
 
 def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
@@ -130,8 +147,7 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--bench",
         type=Path,
-        default=BENCH_SOURCE,
-        help="Path to the Orus loop benchmark source (default: phase 2 benchmark).",
+        help="Path to the Orus loop benchmark source (defaults per phase).",
     )
     return parser.parse_args(argv)
 
@@ -196,19 +212,19 @@ def parse_stdout(stdout: str) -> (List[float], Optional[int], Optional[int], Opt
 def parse_trace(stderr: str) -> Dict[str, int]:
     for raw_line in stderr.splitlines():
         line = raw_line.strip()
-        if not line:
+        if not line or not line.startswith("[loop-trace]"):
             continue
-        if "[loop-trace]" not in line:
-            continue
-        match = TRACE_PATTERN.search(line)
-        if not match:
-            continue
-        return {
-            "typed_hit": int(match.group("hit")),
-            "typed_miss": int(match.group("miss")),
-            "inc_overflow_bailouts": int(match.group("overflow")),
-            "inc_type_instability": int(match.group("instability")),
-        }
+        telemetry: Dict[str, int] = {}
+        for token in line.split()[1:]:
+            if "=" not in token:
+                continue
+            key, value = token.split("=", 1)
+            try:
+                telemetry[key] = int(value)
+            except ValueError:
+                continue
+        if telemetry:
+            return telemetry
     raise ValueError("Loop telemetry trace not found in stderr output.")
 
 
@@ -305,12 +321,8 @@ def collect_stats(
     )
 
 
-def emit_results(stats_list: List[BenchmarkStats], csv_path: Optional[Path]) -> None:
-    header = (
-        "Phase 2 typed increment microbenchmark"
-        if len(stats_list) == len(PHASE_VARIANTS["2"])
-        else "Loop microbenchmark results"
-    )
+def emit_results(stats_list: List[BenchmarkStats], csv_path: Optional[Path], phase: str) -> None:
+    header = PHASE_HEADERS.get(phase, "Loop microbenchmark results")
     iterations = stats_list[0].iterations_per_trial if stats_list else 0
     trials = stats_list[0].trials_per_run if stats_list else 0
     samples = stats_list[0].samples if stats_list else 0
@@ -354,7 +366,13 @@ def emit_results(stats_list: List[BenchmarkStats], csv_path: Optional[Path]) -> 
 def main(argv: Optional[Iterable[str]] = None) -> int:
     args = parse_args(argv)
     orus_binary = resolve_orus_binary(args.orus)
-    ensure_prerequisites(orus_binary, args.bench)
+    default_bench = PHASE_DEFAULT_BENCH.get(args.phase)
+    bench_source = args.bench or default_bench
+    if bench_source is None:
+        raise SystemExit(
+            f"No benchmark registered for phase {args.phase}. Provide --bench explicitly."
+        )
+    ensure_prerequisites(orus_binary, bench_source)
 
     variants = PHASE_VARIANTS.get(args.phase)
     if not variants:
@@ -364,7 +382,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
     expected_checksum: Optional[int] = None
 
     for variant in variants:
-        stats = collect_stats(variant, orus_binary, args.bench, args.runs)
+        stats = collect_stats(variant, orus_binary, bench_source, args.runs)
         if expected_checksum is None:
             expected_checksum = stats.checksum
         elif stats.checksum != expected_checksum:
@@ -373,7 +391,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             )
         stats_list.append(stats)
 
-    emit_results(stats_list, args.csv)
+    emit_results(stats_list, args.csv, args.phase)
     return 0
 
 
