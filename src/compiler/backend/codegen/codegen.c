@@ -4387,6 +4387,247 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
 
     DEBUG_CODEGEN_PRINT("Compiling while statement");
 
+    bool use_fused_inc = false;
+    bool fused_inclusive = false;
+    const char* fused_index_name = NULL;
+    TypedASTNode* fused_limit_node = NULL;
+    TypedASTNode* fused_increment_stmt = NULL;
+    TypedASTNode* while_body = while_stmt->typed.whileStmt.body;
+    bool fused_body_is_block = false;
+    int fused_block_count = 0;
+
+    TypedASTNode* condition_node = while_stmt->typed.whileStmt.condition;
+    if (condition_node && condition_node->original &&
+        condition_node->original->type == NODE_BINARY &&
+        condition_node->original->binary.op) {
+        const char* op = condition_node->original->binary.op;
+        if (strcmp(op, "<") == 0 || strcmp(op, "<=") == 0) {
+            fused_inclusive = (strcmp(op, "<=") == 0);
+            TypedASTNode* left = condition_node->typed.binary.left;
+            TypedASTNode* right = condition_node->typed.binary.right;
+            if (left && left->original && left->original->type == NODE_IDENTIFIER &&
+                left->original->identifier.name &&
+                left->resolvedType && left->resolvedType->kind == TYPE_I32 &&
+                right && right->resolvedType && right->resolvedType->kind == TYPE_I32) {
+                fused_index_name = left->original->identifier.name;
+                fused_limit_node = right;
+
+                if (while_body) {
+                    if (while_body->original && while_body->original->type == NODE_BLOCK) {
+                        fused_body_is_block = true;
+                        fused_block_count = while_body->typed.block.count;
+                        if (fused_block_count > 0) {
+                            fused_increment_stmt = while_body->typed.block.statements[fused_block_count - 1];
+                        }
+                    } else {
+                        fused_increment_stmt = while_body;
+                        fused_block_count = fused_increment_stmt ? 1 : 0;
+                    }
+                }
+            }
+        }
+    }
+
+    if (fused_increment_stmt && fused_increment_stmt->original &&
+        fused_increment_stmt->original->type == NODE_ASSIGN &&
+        fused_increment_stmt->typed.assign.name && fused_index_name &&
+        strcmp(fused_increment_stmt->typed.assign.name, fused_index_name) == 0) {
+        TypedASTNode* value = fused_increment_stmt->typed.assign.value;
+        if (value && value->original && value->original->type == NODE_BINARY &&
+            value->original->binary.op && strcmp(value->original->binary.op, "+") == 0) {
+            TypedASTNode* left = value->typed.binary.left;
+            TypedASTNode* right = value->typed.binary.right;
+            int32_t inc_constant = 0;
+            if (left && left->original && left->original->type == NODE_IDENTIFIER &&
+                left->original->identifier.name &&
+                strcmp(left->original->identifier.name, fused_index_name) == 0 &&
+                evaluate_constant_i32(right, &inc_constant) && inc_constant == 1) {
+                use_fused_inc = true;
+            } else if (right && right->original && right->original->type == NODE_IDENTIFIER &&
+                       right->original->identifier.name &&
+                       strcmp(right->original->identifier.name, fused_index_name) == 0 &&
+                       evaluate_constant_i32(left, &inc_constant) && inc_constant == 1) {
+                use_fused_inc = true;
+            }
+        }
+    }
+
+    Symbol* fused_symbol = NULL;
+    int fused_loop_reg = -1;
+    bool fused_limit_is_temp = false;
+    bool fused_limit_temp_is_temp = false;
+    int fused_limit_reg = -1;
+    int fused_limit_temp_reg = -1;
+    int fused_condition_reg = -1;
+
+    if (use_fused_inc) {
+        fused_symbol = resolve_symbol(ctx->symbols, fused_index_name);
+        bool is_upvalue = false;
+        int upvalue_index = -1;
+        fused_loop_reg = resolve_variable_or_upvalue(ctx, fused_index_name, &is_upvalue, &upvalue_index);
+        if (!fused_symbol || !fused_symbol->is_mutable ||
+            !fused_symbol->type || fused_symbol->type->kind != TYPE_I32 ||
+            fused_loop_reg < 0 || is_upvalue || !fused_limit_node) {
+            use_fused_inc = false;
+        }
+        if (use_fused_inc && (!fused_limit_node->resolvedType ||
+                              fused_limit_node->resolvedType->kind != TYPE_I32 ||
+                              !fused_limit_node->original ||
+                              (fused_limit_node->original->type != NODE_IDENTIFIER &&
+                               fused_limit_node->original->type != NODE_LITERAL))) {
+            use_fused_inc = false;
+        }
+    }
+
+    if (use_fused_inc) {
+        fused_limit_reg = compile_expression(ctx, fused_limit_node);
+        if (fused_limit_reg == -1) {
+            DEBUG_CODEGEN_PRINT("Error: Failed to compile while limit expression for fused path");
+            ctx->has_compilation_errors = true;
+            return;
+        }
+        fused_limit_is_temp = (fused_limit_reg >= MP_TEMP_REG_START &&
+                               fused_limit_reg <= MP_TEMP_REG_END);
+
+        if (fused_inclusive) {
+            fused_limit_temp_reg = mp_allocate_temp_register(ctx->allocator);
+            if (fused_limit_temp_reg == -1) {
+                DEBUG_CODEGEN_PRINT("Error: Failed to allocate temp register for inclusive while limit");
+                ctx->has_compilation_errors = true;
+                if (fused_limit_is_temp) {
+                    mp_free_temp_register(ctx->allocator, fused_limit_reg);
+                }
+                return;
+            }
+            fused_limit_temp_is_temp = true;
+            set_location_from_node(ctx, while_stmt);
+            emit_byte_to_buffer(ctx->bytecode, OP_ADD_I32_IMM);
+            emit_byte_to_buffer(ctx->bytecode, (uint8_t)fused_limit_temp_reg);
+            emit_byte_to_buffer(ctx->bytecode, (uint8_t)fused_limit_reg);
+            int32_t one = 1;
+            emit_byte_to_buffer(ctx->bytecode, (uint8_t)(one & 0xFF));
+            emit_byte_to_buffer(ctx->bytecode, (uint8_t)((one >> 8) & 0xFF));
+            emit_byte_to_buffer(ctx->bytecode, (uint8_t)((one >> 16) & 0xFF));
+            emit_byte_to_buffer(ctx->bytecode, (uint8_t)((one >> 24) & 0xFF));
+        }
+
+        fused_condition_reg = mp_allocate_temp_register(ctx->allocator);
+        if (fused_condition_reg == -1) {
+            DEBUG_CODEGEN_PRINT("Error: Failed to allocate condition register for fused while");
+            ctx->has_compilation_errors = true;
+            if (fused_limit_temp_is_temp) {
+                mp_free_temp_register(ctx->allocator, fused_limit_temp_reg);
+            }
+            if (fused_limit_is_temp) {
+                mp_free_temp_register(ctx->allocator, fused_limit_reg);
+            }
+            return;
+        }
+        int loop_start_fused = ctx->bytecode->count;
+        ScopeFrame* loop_frame_fused = enter_loop_context(ctx, loop_start_fused);
+        int loop_frame_index = loop_frame_fused ? loop_frame_fused->lexical_depth : -1;
+        if (!loop_frame_fused) {
+            DEBUG_CODEGEN_PRINT("Error: Failed to enter loop context");
+            ctx->has_compilation_errors = true;
+            mp_free_temp_register(ctx->allocator, fused_condition_reg);
+            if (fused_limit_temp_is_temp) {
+                mp_free_temp_register(ctx->allocator, fused_limit_temp_reg);
+            }
+            if (fused_limit_is_temp) {
+                mp_free_temp_register(ctx->allocator, fused_limit_reg);
+            }
+            return;
+        }
+
+        DEBUG_CODEGEN_PRINT("While loop start at offset %d\n", loop_start_fused);
+
+        set_location_from_node(ctx, while_stmt);
+        emit_byte_to_buffer(ctx->bytecode, OP_LT_I32_TYPED);
+        emit_byte_to_buffer(ctx->bytecode, (uint8_t)fused_condition_reg);
+        emit_byte_to_buffer(ctx->bytecode, (uint8_t)fused_loop_reg);
+        emit_byte_to_buffer(ctx->bytecode, (uint8_t)(fused_limit_temp_is_temp ? fused_limit_temp_reg : fused_limit_reg));
+
+        set_location_from_node(ctx, while_stmt);
+        emit_byte_to_buffer(ctx->bytecode, OP_JUMP_IF_NOT_R);
+        emit_byte_to_buffer(ctx->bytecode, (uint8_t)fused_condition_reg);
+        int end_patch = emit_jump_placeholder(ctx->bytecode, OP_JUMP_IF_NOT_R);
+        if (end_patch < 0) {
+            DEBUG_CODEGEN_PRINT("Error: Failed to allocate while-loop end placeholder\n");
+            ctx->has_compilation_errors = true;
+            leave_loop_context(ctx, loop_frame_fused, ctx->bytecode->count);
+            mp_free_temp_register(ctx->allocator, fused_condition_reg);
+            if (fused_limit_temp_is_temp) {
+                mp_free_temp_register(ctx->allocator, fused_limit_temp_reg);
+            }
+            if (fused_limit_is_temp) {
+                mp_free_temp_register(ctx->allocator, fused_limit_reg);
+            }
+            return;
+        }
+        mp_free_temp_register(ctx->allocator, fused_condition_reg);
+
+        if (fused_body_is_block && fused_block_count > 0) {
+            for (int i = 0; i < fused_block_count - 1; i++) {
+                TypedASTNode* stmt = while_body->typed.block.statements[i];
+                if (stmt) {
+                    compile_statement(ctx, stmt);
+                }
+            }
+        } else if (!fused_body_is_block && fused_block_count <= 1) {
+            // Single increment statement already handled, so nothing to compile
+        }
+
+        if (loop_frame_index >= 0) {
+            loop_frame_fused = get_scope_frame_by_index(ctx, loop_frame_index);
+        }
+
+        set_location_from_node(ctx, while_stmt);
+        emit_byte_to_buffer(ctx->bytecode, OP_INC_CMP_JMP);
+        emit_byte_to_buffer(ctx->bytecode, (uint8_t)fused_loop_reg);
+        emit_byte_to_buffer(ctx->bytecode, (uint8_t)(fused_limit_temp_is_temp ? fused_limit_temp_reg : fused_limit_reg));
+        int back_off = loop_start_fused - (ctx->bytecode->count + 2);
+        emit_byte_to_buffer(ctx->bytecode, (uint8_t)(back_off & 0xFF));
+        emit_byte_to_buffer(ctx->bytecode, (uint8_t)((back_off >> 8) & 0xFF));
+
+        int end_target = ctx->bytecode->count;
+        ctx->current_loop_end = end_target;
+        if (loop_frame_fused) {
+            loop_frame_fused->end_offset = end_target;
+        }
+        patch_break_statements(ctx, end_target);
+
+        if (!patch_jump(ctx->bytecode, end_patch, end_target)) {
+            DEBUG_CODEGEN_PRINT("Error: Failed to patch while-loop end jump to %d\n", end_target);
+            ctx->has_compilation_errors = true;
+            leave_loop_context(ctx, loop_frame_fused, end_target);
+            if (fused_limit_temp_is_temp) {
+                mp_free_temp_register(ctx->allocator, fused_limit_temp_reg);
+            }
+            if (fused_limit_is_temp) {
+                mp_free_temp_register(ctx->allocator, fused_limit_reg);
+            }
+            return;
+        }
+        DEBUG_CODEGEN_PRINT("Patched end jump to %d\n", end_target);
+
+        leave_loop_context(ctx, loop_frame_fused, end_target);
+
+        if (fused_limit_temp_is_temp) {
+            mp_free_temp_register(ctx->allocator, fused_limit_temp_reg);
+        }
+        if (fused_limit_is_temp) {
+            mp_free_temp_register(ctx->allocator, fused_limit_reg);
+        }
+
+        if (fused_symbol) {
+            mark_symbol_as_loop_variable(fused_symbol);
+            mark_symbol_arithmetic_heavy(fused_symbol);
+        }
+
+        DEBUG_CODEGEN_PRINT("While statement compilation completed (fused inc path)");
+        return;
+    }
+
     int loop_start = ctx->bytecode->count;
     ScopeFrame* loop_frame = enter_loop_context(ctx, loop_start);
     int loop_frame_index = loop_frame ? loop_frame->lexical_depth : -1;
@@ -4398,7 +4639,6 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
 
     DEBUG_CODEGEN_PRINT("While loop start at offset %d\n", loop_start);
 
-    // Compile condition expression
     int condition_reg = compile_expression(ctx, while_stmt->typed.whileStmt.condition);
     if (condition_reg == -1) {
         DEBUG_CODEGEN_PRINT("Error: Failed to compile while condition");
@@ -4407,8 +4647,6 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
         return;
     }
 
-    // Emit conditional jump - if condition is false, jump to end of loop
-    // OP_JUMP_IF_NOT_R format: opcode + condition_reg + 2-byte offset (4 bytes total for patching)
     set_location_from_node(ctx, while_stmt);
     int end_patch = -1;
     emit_byte_to_buffer(ctx->bytecode, OP_JUMP_IF_NOT_R);
@@ -4426,45 +4664,37 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
     DEBUG_CODEGEN_PRINT("Emitted OP_JUMP_IF_NOT_R R%d (placeholder index %d)\n",
            condition_reg, end_patch);
 
-    // Free condition register
     if (condition_reg >= MP_TEMP_REG_START && condition_reg <= MP_TEMP_REG_END) {
         mp_free_temp_register(ctx->allocator, condition_reg);
     }
 
-    // Compile loop body with new scope
-    compile_block_with_scope(ctx, while_stmt->typed.whileStmt.body, false);
+    compile_block_with_scope(ctx, while_body, false);
 
     if (loop_frame_index >= 0) {
         loop_frame = get_scope_frame_by_index(ctx, loop_frame_index);
     }
 
-    // Emit unconditional jump back to loop start
-    // For backward jumps, calculate positive offset and use OP_LOOP_SHORT or OP_JUMP
     int back_jump_distance = (ctx->bytecode->count + 2) - loop_start;
     if (back_jump_distance >= 0 && back_jump_distance <= 255) {
-        // Use OP_LOOP_SHORT for short backward jumps (2 bytes)
         set_location_from_node(ctx, while_stmt);
         emit_byte_to_buffer(ctx->bytecode, OP_LOOP_SHORT);
         emit_byte_to_buffer(ctx->bytecode, (uint8_t)back_jump_distance);
         DEBUG_CODEGEN_PRINT("Emitted OP_LOOP_SHORT with offset %d (back to start)\n", back_jump_distance);
     } else {
-        // Use regular backward jump (3 bytes) - OP_JUMP format: opcode + 2-byte offset
         int back_jump_offset = loop_start - (ctx->bytecode->count + 3);
         set_location_from_node(ctx, while_stmt);
         emit_byte_to_buffer(ctx->bytecode, OP_JUMP);
-        emit_byte_to_buffer(ctx->bytecode, (back_jump_offset >> 8) & 0xFF);  // high byte
-        emit_byte_to_buffer(ctx->bytecode, back_jump_offset & 0xFF);         // low byte
+        emit_byte_to_buffer(ctx->bytecode, (back_jump_offset >> 8) & 0xFF);
+        emit_byte_to_buffer(ctx->bytecode, back_jump_offset & 0xFF);
         DEBUG_CODEGEN_PRINT("Emitted OP_JUMP with offset %d (back to start)\n", back_jump_offset);
     }
 
-    // Patch the end jump to current position (after the loop)
     int end_target = ctx->bytecode->count;
     ctx->current_loop_end = end_target;
     if (loop_frame) {
         loop_frame->end_offset = end_target;
     }
 
-    // Patch all break statements to jump to end of loop
     patch_break_statements(ctx, end_target);
 
     if (!patch_jump(ctx->bytecode, end_patch, end_target)) {
@@ -4476,9 +4706,6 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
     DEBUG_CODEGEN_PRINT("Patched end jump to %d\n", end_target);
 
     leave_loop_context(ctx, loop_frame, end_target);
-    loop_frame = NULL;
-    loop_frame_index = -1;
-
     DEBUG_CODEGEN_PRINT("While statement compilation completed");
 }
 

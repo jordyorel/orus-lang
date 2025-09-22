@@ -6,7 +6,8 @@ LOOP_COUNT: i32 = 3_000_000
 
 mut trial: i32 = 0
 mut total_for_time: f64 = 0.0
-mut total_while_time: f64 = 0.0
+mut total_while_fused_time: f64 = 0.0
+mut total_while_fallback_time: f64 = 0.0
 
 while trial < TRIALS:
     print("\n--- Trial", trial, "---")
@@ -24,30 +25,49 @@ while trial < TRIALS:
     print("For loop elapsed:", for_elapsed)
 
     // Phase 2: while-loop summation
-    while_start: f64 = time_stamp()
-    mut while_sum: i64 = 0
+    while_fused_start: f64 = time_stamp()
+    mut while_fused_sum: i64 = 0
     mut idx: i32 = 0
     while idx <= LOOP_COUNT:
-        while_sum = while_sum + (idx as i64)
+        while_fused_sum = while_fused_sum + (idx as i64)
         idx = idx + 1
-    while_end: f64 = time_stamp()
-    while_elapsed: f64 = while_end - while_start
-    total_while_time = total_while_time + while_elapsed
+    while_fused_end: f64 = time_stamp()
+    while_fused_elapsed: f64 = while_fused_end - while_fused_start
+    total_while_fused_time = total_while_fused_time + while_fused_elapsed
 
-    print("While loop sum:", while_sum)
-    print("While loop elapsed:", while_elapsed)
+    print("While loop (fused) sum:", while_fused_sum)
+    print("While loop (fused) elapsed:", while_fused_elapsed)
+
+    // Phase 3: while-loop summation with fallback increment pattern (uses OP_ADD path)
+    while_fallback_start: f64 = time_stamp()
+    mut while_fallback_sum: i64 = 0
+    mut idx_fallback: i32 = 0
+    step: i32 = 1
+    while idx_fallback < LOOP_COUNT:
+        while_fallback_sum = while_fallback_sum + (idx_fallback as i64)
+        idx_fallback = idx_fallback + step
+    while_fallback_end: f64 = time_stamp()
+    while_fallback_elapsed: f64 = while_fallback_end - while_fallback_start
+    total_while_fallback_time = total_while_fallback_time + while_fallback_elapsed
+
+    print("While loop (fallback) sum:", while_fallback_sum)
+    print("While loop (fallback) elapsed:", while_fallback_elapsed)
 
     trial = trial + 1
 
 avg_for: f64 = total_for_time / (TRIALS as f64)
-avg_while: f64 = total_while_time / (TRIALS as f64)
+avg_while_fused: f64 = total_while_fused_time / (TRIALS as f64)
+avg_while_fallback: f64 = total_while_fallback_time / (TRIALS as f64)
 
-speed_ratio: f64 = avg_while / avg_for
+speed_ratio_fused: f64 = avg_while_fused / avg_for
+speed_ratio_fallback: f64 = avg_while_fallback / avg_for
 
 print("\n=== Benchmark Summary ===")
 print("Trials:", TRIALS)
 print("Iterations per loop:", LOOP_COUNT + 1)
 print("Average for-loop time:", avg_for)
-print("Average while-loop time:", avg_while)
-print("While vs for ratio:", speed_ratio)
+print("Average while-loop (fused) time:", avg_while_fused)
+print("Average while-loop (fallback) time:", avg_while_fallback)
+print("While (fused) vs for ratio:", speed_ratio_fused)
+print("While (fallback) vs for ratio:", speed_ratio_fallback)
 print("=== Benchmark Complete ===")
