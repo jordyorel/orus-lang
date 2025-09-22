@@ -328,6 +328,7 @@ test-loop-telemetry: $(ORUS)
                 tests/control_flow/loop_typed_fastpath_correctness.orus \
                 tests/loop_fastpaths/phase1/bool_branch_short_circuit.orus \
                 tests/loop_fastpaths/phase2/inc_checked.orus \
+                tests/loop_fastpaths/phase2/inc_disable_fastpath.orus \
                 tests/loop_fastpaths/phase3/iterator_zero_alloc.orus \
                 tests/optimizer/loop_typed_phase4/licm_guard.orus \
                 tests/loop_fastpaths/phase5/telemetry_smoke.orus; do \
@@ -336,6 +337,7 @@ test-loop-telemetry: $(ORUS)
                 env_args="ORUS_TRACE_TYPED_FALLBACKS=1"; \
                 case "$$test_file" in \
                         *phase1*) env_args="$$env_args ORUS_EXPERIMENT_BOOL_BRANCH_FASTPATH=1" ;; \
+                        *disable_fastpath*) env_args="$$env_args ORUS_DISABLE_INC_TYPED_FASTPATH=1" ;; \
                         *phase3*) env_args="$$env_args ORUS_FORCE_BOXED_ITERATORS=0" ;; \
                         *phase4*) env_args="$$env_args ORUS_ENABLE_LICM_TYPED_GUARDS=1 ORUS_EXPERIMENT_BOOL_BRANCH_FASTPATH=1" ;; \
                         *phase5*) env_args="$$env_args ORUS_FORCE_BOXED_ITERATORS=1 ORUS_ENABLE_LICM_TYPED_GUARDS=1" ;; \

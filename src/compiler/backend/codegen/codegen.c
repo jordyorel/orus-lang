@@ -3830,6 +3830,56 @@ static int compile_assignment_internal(CompilerContext* ctx, TypedASTNode* assig
         return -1;
     }
 
+    int var_reg_direct = -1;
+    if (!is_upvalue) {
+        var_reg_direct = resolved_reg;
+        if (var_reg_direct < 0 && symbol) {
+            var_reg_direct = symbol->reg_allocation ? symbol->reg_allocation->logical_id
+                                                    : symbol->legacy_register_id;
+        }
+    }
+
+    bool emitted_fast_inc = false;
+    if (!as_expression && !is_upvalue && var_reg_direct >= 0 && symbol &&
+        assign->resolvedType && assign->resolvedType->kind == TYPE_I32) {
+        TypedASTNode* value_node = assign->typed.assign.value;
+        if (value_node && value_node->original &&
+            value_node->original->type == NODE_BINARY &&
+            value_node->original->binary.op &&
+            strcmp(value_node->original->binary.op, "+") == 0) {
+            TypedASTNode* left = value_node->typed.binary.left;
+            TypedASTNode* right = value_node->typed.binary.right;
+            int32_t increment = 0;
+            bool matches_pattern = false;
+            if (left && left->original && left->original->type == NODE_IDENTIFIER &&
+                left->original->identifier.name &&
+                strcmp(left->original->identifier.name, var_name) == 0 &&
+                evaluate_constant_i32(right, &increment) && increment == 1) {
+                matches_pattern = true;
+            } else if (right && right->original &&
+                       right->original->type == NODE_IDENTIFIER &&
+                       right->original->identifier.name &&
+                       strcmp(right->original->identifier.name, var_name) == 0 &&
+                       evaluate_constant_i32(left, &increment) && increment == 1) {
+                matches_pattern = true;
+            }
+
+            if (matches_pattern) {
+                set_location_from_node(ctx, assign);
+                emit_byte_to_buffer(ctx->bytecode, OP_INC_I32_R);
+                emit_byte_to_buffer(ctx->bytecode, (uint8_t)var_reg_direct);
+                mark_symbol_arithmetic_heavy(symbol);
+                emitted_fast_inc = true;
+            }
+        }
+    }
+
+    if (emitted_fast_inc) {
+        symbol->is_initialized = true;
+        symbol->last_assignment_location = location;
+        return var_reg_direct;
+    }
+
     int value_reg = compile_expression(ctx, assign->typed.assign.value);
     if (value_reg == -1) return -1;
     bool value_is_temp = value_reg >= MP_TEMP_REG_START && value_reg <= MP_TEMP_REG_END;
@@ -3852,7 +3902,7 @@ static int compile_assignment_internal(CompilerContext* ctx, TypedASTNode* assig
         emit_byte_to_buffer(ctx->bytecode, (uint8_t)value_reg);
         result_reg = value_reg;
     } else {
-        int var_reg = resolved_reg;
+        int var_reg = var_reg_direct;
         if (var_reg < 0) {
             var_reg = symbol->reg_allocation ? symbol->reg_allocation->logical_id
                                              : symbol->legacy_register_id;
@@ -4579,12 +4629,16 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
         goto cleanup;
     }
 
-    if (!register_variable(ctx, ctx->symbols, loop_var_name, loop_var_reg,
-                           getPrimitiveType(TYPE_I32), true,
-                           for_stmt->original->location, true)) {
+    Symbol* loop_symbol = register_variable(ctx, ctx->symbols, loop_var_name,
+                                            loop_var_reg,
+                                            getPrimitiveType(TYPE_I32), true,
+                                            for_stmt->original->location, true);
+    if (!loop_symbol) {
         ctx->has_compilation_errors = true;
         goto cleanup;
     }
+    mark_symbol_as_loop_variable(loop_symbol);
+    mark_symbol_arithmetic_heavy(loop_symbol);
 
     set_location_from_node(ctx, for_stmt);
     emit_byte_to_buffer(ctx->bytecode, OP_MOVE_I32);

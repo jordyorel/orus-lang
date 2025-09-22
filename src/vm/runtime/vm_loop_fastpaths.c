@@ -57,23 +57,32 @@ bool vm_exec_inc_i32_checked(uint16_t reg) {
         return false;
     }
 
-    if (vm_typed_reg_in_range(reg) && vm.typed_regs.reg_types[reg] == REG_TYPE_I32) {
-        int32_t current = vm.typed_regs.i32_regs[reg];
-        int32_t next_value;
-        if (__builtin_add_overflow(current, 1, &next_value)) {
-            vm_trace_loop_event(LOOP_TRACE_INC_OVERFLOW_BAILOUT);
-            vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
-            return false;
-        }
-        vm.typed_regs.i32_regs[reg] = next_value;
-        vm_set_register_safe(reg, I32_VAL(next_value));
-        vm_trace_loop_event(LOOP_TRACE_TYPED_HIT);
-        return true;
+    if (!vm_typed_reg_in_range(reg)) {
+        vm_trace_loop_event(LOOP_TRACE_INC_TYPE_INSTABILITY);
+        vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+        return false;
     }
 
-    vm_trace_loop_event(LOOP_TRACE_INC_TYPE_INSTABILITY);
-    vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
-    return false;
+    if (vm.typed_regs.reg_types[reg] != REG_TYPE_I32) {
+        vm.typed_regs.reg_types[reg] = REG_TYPE_HEAP;
+        vm_trace_loop_event(LOOP_TRACE_INC_TYPE_INSTABILITY);
+        vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+        return false;
+    }
+
+    int32_t current = vm.typed_regs.i32_regs[reg];
+    int32_t next_value;
+    if (__builtin_add_overflow(current, 1, &next_value)) {
+        vm.typed_regs.reg_types[reg] = REG_TYPE_HEAP;
+        vm_trace_loop_event(LOOP_TRACE_INC_OVERFLOW_BAILOUT);
+        vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+        return false;
+    }
+
+    vm.typed_regs.i32_regs[reg] = next_value;
+    vm_set_register_safe(reg, I32_VAL(next_value));
+    vm_trace_loop_event(LOOP_TRACE_TYPED_HIT);
+    return true;
 }
 
 bool vm_typed_iterator_next(uint16_t reg, Value* out_value) {

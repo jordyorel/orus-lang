@@ -208,6 +208,7 @@ int main(int argc, const char* argv[]) {
     vm.trace = config->trace_execution;
     vm.devMode = config->debug_mode;
     vm.config.trace_typed_fallbacks = config->trace_typed_fallbacks;
+    vm.config.disable_inc_typed_fastpath = config->disable_inc_typed_fastpath;
     
     // Configure VM profiling based on command line options
     if (config->vm_profiling_enabled) {
