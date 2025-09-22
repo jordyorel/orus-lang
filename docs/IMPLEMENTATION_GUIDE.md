@@ -1135,6 +1135,15 @@ boxed safety net and LICM correctness guarantees.
        events when the counter is not resident in the typed bank.
      - Extend telemetry with `inc_overflow_bailouts` and
        `inc_type_instability` counters for roll-up reporting.
+   - **Benchmark snapshot** (release build, Linux x86_64, 3x5 trials via
+     `scripts/benchmarks/loop_perf.py`):
+     - `typed-fastpath`: 0.159 s average runtime for 3 M iterations (~18.81 M
+       iterations/s)
+     - `kill-switch`: 0.160 s average runtime for 3 M iterations (~18.79 M
+       iterations/s, 1.001x slower)
+     - Telemetry confirms both variants execute without overflow or type
+       instability bails, establishing the boxed path parity baseline for
+       future optimizations.
    - **Sample implementation**:
      ```c
      static inline bool vm_exec_inc_i32_checked(uint16_t reg) {

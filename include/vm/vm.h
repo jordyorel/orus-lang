@@ -432,6 +432,7 @@ typedef enum {
     OP_DIV_I32_R,
     OP_MOD_I32_R,
     OP_INC_I32_R,
+    OP_INC_I32_CHECKED,
     OP_DEC_I32_R,
 
     OP_ADD_I64_R,

@@ -21,10 +21,13 @@ typedef struct MultiPassRegisterAllocator {
     bool frame_regs[128];       // R64-R191 usage
     bool temp_regs[48];         // R192-R239 usage (matches TEMP_REGISTERS)
     bool module_regs[16];       // R240-R255 usage (module registers)
-    
+
     // Scope-aware temp register allocation (updated ranges)
     bool scope_temp_regs[6][8]; // 6 scope levels, 8 registers each (R192-R239)
     int current_scope_level;     // Current nesting level (0-5)
+
+    // Residency hints to keep typed values alive across hot backedges
+    bool typed_residency_hint[REGISTER_COUNT];
     
     // Allocation state
     int next_global;           // Next available global register
@@ -59,6 +62,10 @@ void mp_free_scoped_temp_register(MultiPassRegisterAllocator* allocator, int reg
 // Register deallocation
 void mp_free_register(MultiPassRegisterAllocator* allocator, int reg);
 void mp_free_temp_register(MultiPassRegisterAllocator* allocator, int reg);
+
+// Residency hint helpers
+void mp_set_typed_residency_hint(MultiPassRegisterAllocator* allocator, int reg, bool persistent);
+bool mp_has_typed_residency_hint(const MultiPassRegisterAllocator* allocator, int reg);
 
 // Utilities
 bool mp_is_register_free(MultiPassRegisterAllocator* allocator, int reg);

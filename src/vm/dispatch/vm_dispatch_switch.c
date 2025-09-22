@@ -15,6 +15,29 @@
 #include <math.h>
 #include <limits.h>
 
+#define VM_HANDLE_INC_I32_SLOW_PATH(reg) \
+    do { \
+        Value val_reg__ = vm_get_register_safe((reg)); \
+        if (!IS_I32(val_reg__)) { \
+            vm_trace_loop_event(LOOP_TRACE_TYPE_MISMATCH); \
+            if (vm_typed_reg_in_range((reg))) { \
+                vm.typed_regs.reg_types[(reg)] = REG_TYPE_HEAP; \
+            } \
+            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be i32"); \
+        } \
+        int32_t current__ = AS_I32(val_reg__); \
+        int32_t next_value__; \
+        if (__builtin_add_overflow(current__, 1, &next_value__)) { \
+            vm_trace_loop_event(LOOP_TRACE_OVERFLOW_GUARD); \
+            VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow"); \
+        } \
+        if (vm_typed_reg_in_range((reg)) && \
+            vm.typed_regs.reg_types[(reg)] == REG_TYPE_I32) { \
+            vm.typed_regs.i32_regs[(reg)] = next_value__; \
+        } \
+        vm_set_register_safe((reg), I32_VAL(next_value__)); \
+    } while (0)
+
 // Only needed for the switch-dispatch backend
 #if !USE_COMPUTED_GOTO
 static inline bool value_to_index(Value value, int* out_index) {
@@ -412,30 +435,19 @@ InterpretResult vm_run_dispatch(void) {
 
                 case OP_INC_I32_R: {
                     uint8_t reg = READ_BYTE();
-                    if (!vm_exec_inc_i32_checked(reg)) {
-                        Value val_reg = vm_get_register_safe(reg);
-                        if (!IS_I32(val_reg)) {
-                            vm_trace_loop_event(LOOP_TRACE_TYPE_MISMATCH);
-                            if (vm_typed_reg_in_range(reg)) {
-                                vm.typed_regs.reg_types[reg] = REG_TYPE_HEAP;
-                            }
-                            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be i32");
-                        }
-
-                        int32_t current = AS_I32(val_reg);
-                        int32_t next_value;
-                        if (__builtin_add_overflow(current, 1, &next_value)) {
-                            vm_trace_loop_event(LOOP_TRACE_OVERFLOW_GUARD);
-                            VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow");
-                        }
-
-                        if (vm_typed_reg_in_range(reg) &&
-                            vm.typed_regs.reg_types[reg] == REG_TYPE_I32) {
-                            vm.typed_regs.i32_regs[reg] = next_value;
-                        }
-
-                        vm_set_register_safe(reg, I32_VAL(next_value));
+                    if (vm_exec_inc_i32_checked(reg)) {
+                        break;
                     }
+                    VM_HANDLE_INC_I32_SLOW_PATH(reg);
+                    break;
+                }
+
+                case OP_INC_I32_CHECKED: {
+                    uint8_t reg = READ_BYTE();
+                    if (vm_exec_inc_i32_checked(reg)) {
+                        break;
+                    }
+                    VM_HANDLE_INC_I32_SLOW_PATH(reg);
                     break;
                 }
 
@@ -1924,7 +1936,6 @@ InterpretResult vm_run_dispatch(void) {
 
                         vm_set_register_safe(dst, I64_VAL(0));
                         vm_typed_iterator_bind_range(dst, 0, count);
-                        vm_trace_loop_event(LOOP_TRACE_TYPED_HIT);
                         vm_trace_loop_event(LOOP_TRACE_ITER_SAVED_ALLOCATIONS);
                     } else if (IS_I32(iterable) || IS_I64(iterable) || IS_U32(iterable) || IS_U64(iterable)) {
                         int64_t count = 0;
@@ -1960,7 +1971,6 @@ InterpretResult vm_run_dispatch(void) {
                         if (!vm.config.force_boxed_iterators) {
                             vm_set_register_safe(dst, iterable);
                             if (vm_typed_iterator_bind_array(dst, array)) {
-                                vm_trace_loop_event(LOOP_TRACE_TYPED_HIT);
                                 vm_trace_loop_event(LOOP_TRACE_ITER_SAVED_ALLOCATIONS);
                                 DISPATCH();
                             }
