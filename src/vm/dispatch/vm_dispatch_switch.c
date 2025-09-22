@@ -15,24 +15,6 @@
 #include <math.h>
 #include <limits.h>
 
-// Frame-aware register access functions are declared in vm_comparison.h
-
-static inline void store_i32_register(uint16_t id, int32_t value) {
-    if (id < REGISTER_COUNT) {
-        vm.registers[id].type = VAL_I32;
-        vm.registers[id].as.i32 = value;
-
-        const uint16_t typed_limit =
-            (uint16_t)(sizeof(vm.typed_regs.i32_regs) / sizeof(vm.typed_regs.i32_regs[0]));
-        if (id < typed_limit) {
-            vm.typed_regs.i32_regs[id] = value;
-            vm.typed_regs.reg_types[id] = REG_TYPE_I32;
-        }
-    } else {
-        set_register(&vm.register_file, id, I32_VAL(value));
-    }
-}
-
 // Only needed for the switch-dispatch backend
 #if !USE_COMPUTED_GOTO
 static inline bool value_to_index(Value value, int* out_index) {

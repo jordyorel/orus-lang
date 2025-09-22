@@ -64,32 +64,89 @@ void handle_move_reg(void) {
     uint8_t dst = READ_BYTE();
     uint8_t src = READ_BYTE();
 
+    if (vm_typed_reg_in_range(src)) {
+        switch (vm.typed_regs.reg_types[src]) {
+            case REG_TYPE_I32: {
+                int32_t cached;
+                if (vm_try_read_i32_typed(src, &cached)) {
+                    store_i32_register(dst, cached);
+                    return;
+                }
+                break;
+            }
+            case REG_TYPE_I64: {
+                int64_t cached;
+                if (vm_try_read_i64_typed(src, &cached)) {
+                    store_i64_register(dst, cached);
+                    return;
+                }
+                break;
+            }
+            case REG_TYPE_U32: {
+                uint32_t cached;
+                if (vm_try_read_u32_typed(src, &cached)) {
+                    store_u32_register(dst, cached);
+                    return;
+                }
+                break;
+            }
+            case REG_TYPE_U64: {
+                uint64_t cached;
+                if (vm_try_read_u64_typed(src, &cached)) {
+                    store_u64_register(dst, cached);
+                    return;
+                }
+                break;
+            }
+            case REG_TYPE_F64: {
+                double cached;
+                if (vm_try_read_f64_typed(src, &cached)) {
+                    store_f64_register(dst, cached);
+                    return;
+                }
+                break;
+            }
+            case REG_TYPE_BOOL: {
+                bool cached;
+                if (vm_try_read_bool_typed(src, &cached)) {
+                    store_bool_register(dst, cached);
+                    return;
+                }
+                break;
+            }
+            case REG_TYPE_HEAP:
+            case REG_TYPE_NONE:
+            default:
+                break;
+        }
+    }
+
     // Use frame-aware register access for proper local variable isolation
     Value value = vm_get_register_safe(src);
     switch (value.type) {
         case VAL_I32:
             vm_cache_i32_typed(src, AS_I32(value));
-            vm_store_i32_register(dst, AS_I32(value));
+            store_i32_register(dst, AS_I32(value));
             break;
         case VAL_I64:
             vm_cache_i64_typed(src, AS_I64(value));
-            vm_store_i64_register(dst, AS_I64(value));
+            store_i64_register(dst, AS_I64(value));
             break;
         case VAL_U32:
             vm_cache_u32_typed(src, AS_U32(value));
-            vm_store_u32_register(dst, AS_U32(value));
+            store_u32_register(dst, AS_U32(value));
             break;
         case VAL_U64:
             vm_cache_u64_typed(src, AS_U64(value));
-            vm_store_u64_register(dst, AS_U64(value));
+            store_u64_register(dst, AS_U64(value));
             break;
         case VAL_F64:
             vm_cache_f64_typed(src, AS_F64(value));
-            vm_store_f64_register(dst, AS_F64(value));
+            store_f64_register(dst, AS_F64(value));
             break;
         case VAL_BOOL:
             vm_cache_bool_typed(src, AS_BOOL(value));
-            vm_store_bool_register(dst, AS_BOOL(value));
+            store_bool_register(dst, AS_BOOL(value));
             break;
         default:
             vm_set_register_safe(dst, value);

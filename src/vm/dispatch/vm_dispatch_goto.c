@@ -18,22 +18,6 @@
 #include <limits.h>
 #include <inttypes.h>
 
-static inline void store_i32_register(uint16_t id, int32_t value) {
-    if (id < REGISTER_COUNT) {
-        vm.registers[id].type = VAL_I32;
-        vm.registers[id].as.i32 = value;
-
-        const uint16_t typed_limit =
-            (uint16_t)(sizeof(vm.typed_regs.i32_regs) / sizeof(vm.typed_regs.i32_regs[0]));
-        if (id < typed_limit) {
-            vm.typed_regs.i32_regs[id] = value;
-            vm.typed_regs.reg_types[id] = REG_TYPE_I32;
-        }
-    } else {
-        set_register(&vm.register_file, id, I32_VAL(value));
-    }
-}
-
 static inline bool value_to_index(Value value, int* out_index) {
     if (IS_I32(value)) {
         int32_t idx = AS_I32(value);
