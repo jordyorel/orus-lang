@@ -17,9 +17,10 @@ MultiPassRegisterAllocator* init_mp_register_allocator(void) {
     
     // Initialize all registers as free
     memset(allocator->global_regs, false, sizeof(allocator->global_regs));
-    memset(allocator->frame_regs, false, sizeof(allocator->frame_regs)); 
+    memset(allocator->frame_regs, false, sizeof(allocator->frame_regs));
     memset(allocator->temp_regs, false, sizeof(allocator->temp_regs));
     memset(allocator->module_regs, false, sizeof(allocator->module_regs));
+    memset(allocator->typed_residency_hint, false, sizeof(allocator->typed_residency_hint));
     
     // Initialize scope-aware temp registers
     memset(allocator->scope_temp_regs, false, sizeof(allocator->scope_temp_regs));
@@ -218,7 +219,12 @@ void mp_free_scoped_temp_register(MultiPassRegisterAllocator* allocator, int reg
 
 void mp_free_register(MultiPassRegisterAllocator* allocator, int reg) {
     if (!allocator) return;
-    
+
+    if (mp_has_typed_residency_hint(allocator, reg)) {
+        printf("[REGISTER_ALLOCATOR] Skipped freeing R%d due to typed residency hint\n", reg);
+        return;
+    }
+
     // Determine register type and free accordingly
     if (reg >= MP_GLOBAL_REG_START && reg <= MP_GLOBAL_REG_END) {
         int index = reg - MP_GLOBAL_REG_START;
@@ -244,11 +250,20 @@ void mp_free_register(MultiPassRegisterAllocator* allocator, int reg) {
 }
 
 void mp_free_temp_register(MultiPassRegisterAllocator* allocator, int reg) {
-    if (!allocator || reg < MP_TEMP_REG_START || reg > MP_TEMP_REG_END) {
+    if (!allocator) {
+        return;
+    }
+
+    if (mp_has_typed_residency_hint(allocator, reg)) {
+        printf("[REGISTER_ALLOCATOR] Skipped freeing temp R%d due to typed residency hint\n", reg);
+        return;
+    }
+
+    if (reg < MP_TEMP_REG_START || reg > MP_TEMP_REG_END) {
         printf("[REGISTER_ALLOCATOR] Warning: Invalid temp register R%d\n", reg);
         return;
     }
-    
+
     int index = reg - MP_TEMP_REG_START;
     allocator->temp_regs[index] = false;
     
@@ -259,6 +274,20 @@ void mp_free_temp_register(MultiPassRegisterAllocator* allocator, int reg) {
     } else {
         printf("[REGISTER_ALLOCATOR] Freed temp register R%d (reuse stack full)\n", reg);
     }
+}
+
+void mp_set_typed_residency_hint(MultiPassRegisterAllocator* allocator, int reg, bool persistent) {
+    if (!allocator || reg < 0 || reg >= REGISTER_COUNT) {
+        return;
+    }
+    allocator->typed_residency_hint[reg] = persistent;
+}
+
+bool mp_has_typed_residency_hint(const MultiPassRegisterAllocator* allocator, int reg) {
+    if (!allocator || reg < 0 || reg >= REGISTER_COUNT) {
+        return false;
+    }
+    return allocator->typed_residency_hint[reg];
 }
 
 bool mp_is_register_free(MultiPassRegisterAllocator* allocator, int reg) {

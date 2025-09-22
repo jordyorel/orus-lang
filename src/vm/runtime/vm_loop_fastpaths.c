@@ -98,6 +98,7 @@ bool vm_typed_iterator_next(uint16_t reg, Value* out_value) {
             }
             *out_value = I64_VAL(descriptor->data.range_i64.current);
             descriptor->data.range_i64.current++;
+            vm_trace_loop_event(LOOP_TRACE_TYPED_HIT);
             return true;
         case TYPED_ITER_ARRAY_SLICE: {
             ObjArray* array = descriptor->data.array.array;
@@ -108,6 +109,7 @@ bool vm_typed_iterator_next(uint16_t reg, Value* out_value) {
             }
             *out_value = array->elements[index];
             descriptor->data.array.index = index + 1;
+            vm_trace_loop_event(LOOP_TRACE_TYPED_HIT);
             return true;
         }
         case TYPED_ITER_NONE:

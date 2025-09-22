@@ -3866,7 +3866,7 @@ static int compile_assignment_internal(CompilerContext* ctx, TypedASTNode* assig
 
             if (matches_pattern) {
                 set_location_from_node(ctx, assign);
-                emit_byte_to_buffer(ctx->bytecode, OP_INC_I32_R);
+                emit_byte_to_buffer(ctx->bytecode, OP_INC_I32_CHECKED);
                 emit_byte_to_buffer(ctx->bytecode, (uint8_t)var_reg_direct);
                 mark_symbol_arithmetic_heavy(symbol);
                 emitted_fast_inc = true;
@@ -4756,6 +4756,8 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     int step_nonneg_reg = -1;
     int zero_reg = -1;
     int limit_temp_reg = -1; // temp for inclusive fused limit (end+1)
+    int typed_hint_loop_reg = -1;
+    int typed_hint_limit_reg = -1;
 
     const char* loop_var_name = NULL;
     if (for_stmt->original && for_stmt->original->forRange.varName) {
@@ -4864,6 +4866,10 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
         ctx->has_compilation_errors = true;
         goto cleanup;
     }
+    if (ctx->allocator) {
+        mp_set_typed_residency_hint(ctx->allocator, loop_var_reg, true);
+        typed_hint_loop_reg = loop_var_reg;
+    }
     mark_symbol_as_loop_variable(loop_symbol);
     mark_symbol_arithmetic_heavy(loop_symbol);
 
@@ -4914,6 +4920,11 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
         emit_byte_to_buffer(ctx->bytecode, (uint8_t)((one >> 16) & 0xFF));
         emit_byte_to_buffer(ctx->bytecode, (uint8_t)((one >> 24) & 0xFF));
         limit_reg_used = limit_temp_reg;
+    }
+
+    if (ctx->allocator && limit_reg_used >= 0) {
+        mp_set_typed_residency_hint(ctx->allocator, limit_reg_used, true);
+        typed_hint_limit_reg = limit_reg_used;
     }
 
     set_location_from_node(ctx, for_stmt);
@@ -5069,6 +5080,17 @@ cleanup:
         loop_frame_index = -1;
     }
 
+    if (ctx->allocator) {
+        if (typed_hint_loop_reg >= 0) {
+            mp_set_typed_residency_hint(ctx->allocator, typed_hint_loop_reg, false);
+            typed_hint_loop_reg = -1;
+        }
+        if (typed_hint_limit_reg >= 0) {
+            mp_set_typed_residency_hint(ctx->allocator, typed_hint_limit_reg, false);
+            typed_hint_limit_reg = -1;
+        }
+    }
+
     if (condition_reg >= MP_TEMP_REG_START && condition_reg <= MP_TEMP_REG_END) {
         mp_free_temp_register(ctx->allocator, condition_reg);
         condition_reg = -1;
@@ -5157,6 +5179,8 @@ void compile_for_iter_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     int iter_reg = -1;
     int loop_var_reg = -1;
     int has_value_reg = -1;
+    int typed_hint_iter_reg = -1;
+    int typed_hint_loop_reg = -1;
 
     // Compile iterable expression
     iterable_reg = compile_expression(ctx, for_stmt->typed.forIter.iterable);
@@ -5174,6 +5198,11 @@ void compile_for_iter_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
         goto cleanup;
     }
 
+    if (ctx->allocator) {
+        mp_set_typed_residency_hint(ctx->allocator, iter_reg, true);
+        typed_hint_iter_reg = iter_reg;
+    }
+
     // Get iterator from iterable
     set_location_from_node(ctx, for_stmt);
     emit_byte_to_buffer(ctx->bytecode, OP_GET_ITER_R);
@@ -5189,12 +5218,22 @@ void compile_for_iter_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     }
     
     // Register the loop variable in symbol table (loop variables are implicitly mutable)
-    if (!register_variable(ctx, ctx->symbols, for_stmt->typed.forIter.varName,
-                           loop_var_reg, getPrimitiveType(TYPE_I32), true,
-                           for_stmt->original->location, true)) {
+    Symbol* loop_symbol = register_variable(ctx, ctx->symbols,
+                                            for_stmt->typed.forIter.varName,
+                                            loop_var_reg,
+                                            getPrimitiveType(TYPE_I32), true,
+                                            for_stmt->original->location, true);
+    if (!loop_symbol) {
         ctx->has_compilation_errors = true;
         goto cleanup;
     }
+
+    if (ctx->allocator) {
+        mp_set_typed_residency_hint(ctx->allocator, loop_var_reg, true);
+        typed_hint_loop_reg = loop_var_reg;
+    }
+
+    mark_symbol_as_loop_variable(loop_symbol);
     
     // Allocate has_value register for iterator status
     has_value_reg = mp_allocate_temp_register(ctx->allocator);
@@ -5287,6 +5326,17 @@ cleanup:
                            ctx->bytecode ? ctx->bytecode->count : loop_start);
         loop_frame = NULL;
         loop_frame_index = -1;
+    }
+
+    if (ctx->allocator) {
+        if (typed_hint_iter_reg >= 0) {
+            mp_set_typed_residency_hint(ctx->allocator, typed_hint_iter_reg, false);
+            typed_hint_iter_reg = -1;
+        }
+        if (typed_hint_loop_reg >= 0) {
+            mp_set_typed_residency_hint(ctx->allocator, typed_hint_loop_reg, false);
+            typed_hint_loop_reg = -1;
+        }
     }
 
     if (iterable_reg >= MP_TEMP_REG_START && iterable_reg <= MP_TEMP_REG_END) {

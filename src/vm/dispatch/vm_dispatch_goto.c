@@ -18,6 +18,29 @@
 #include <limits.h>
 #include <inttypes.h>
 
+#define VM_HANDLE_INC_I32_SLOW_PATH(reg) \
+    do { \
+        Value val_reg__ = vm_get_register_safe((reg)); \
+        if (!IS_I32(val_reg__)) { \
+            vm_trace_loop_event(LOOP_TRACE_TYPE_MISMATCH); \
+            if (vm_typed_reg_in_range((reg))) { \
+                vm.typed_regs.reg_types[(reg)] = REG_TYPE_HEAP; \
+            } \
+            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be i32"); \
+        } \
+        int32_t current__ = AS_I32(val_reg__); \
+        int32_t next_value__; \
+        if (__builtin_add_overflow(current__, 1, &next_value__)) { \
+            vm_trace_loop_event(LOOP_TRACE_OVERFLOW_GUARD); \
+            VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow"); \
+        } \
+        if (vm_typed_reg_in_range((reg)) && \
+            vm.typed_regs.reg_types[(reg)] == REG_TYPE_I32) { \
+            vm.typed_regs.i32_regs[(reg)] = next_value__; \
+        } \
+        vm_set_register_safe((reg), I32_VAL(next_value__)); \
+    } while (0)
+
 static inline bool value_to_index(Value value, int* out_index) {
     if (IS_I32(value)) {
         int32_t idx = AS_I32(value);
@@ -127,6 +150,7 @@ InterpretResult vm_run_dispatch(void) {
         
         // Loop-critical operations
         vm_dispatch_table[OP_INC_I32_R] = &&LABEL_OP_INC_I32_R;
+        vm_dispatch_table[OP_INC_I32_CHECKED] = &&LABEL_OP_INC_I32_CHECKED;
         
         // Remaining typed operations
         vm_dispatch_table[OP_DIV_I32_TYPED] = &&LABEL_OP_DIV_I32_TYPED;
@@ -175,6 +199,7 @@ InterpretResult vm_run_dispatch(void) {
         vm_dispatch_table[OP_DIV_I32_R] = &&LABEL_OP_DIV_I32_R;
         vm_dispatch_table[OP_MOD_I32_R] = &&LABEL_OP_MOD_I32_R;
         vm_dispatch_table[OP_INC_I32_R] = &&LABEL_OP_INC_I32_R;
+        vm_dispatch_table[OP_INC_I32_CHECKED] = &&LABEL_OP_INC_I32_CHECKED;
         vm_dispatch_table[OP_DEC_I32_R] = &&LABEL_OP_DEC_I32_R;
         vm_dispatch_table[OP_NEG_I32_R] = &&LABEL_OP_NEG_I32_R;
         vm_dispatch_table[OP_ADD_I64_R] = &&LABEL_OP_ADD_I64_R;
@@ -854,30 +879,19 @@ InterpretResult vm_run_dispatch(void) {
 
     LABEL_OP_INC_I32_R: {
             uint8_t reg = READ_BYTE();
-            if (!vm_exec_inc_i32_checked(reg)) {
-                Value val_reg = vm_get_register_safe(reg);
-                if (!IS_I32(val_reg)) {
-                    vm_trace_loop_event(LOOP_TRACE_TYPE_MISMATCH);
-                    if (vm_typed_reg_in_range(reg)) {
-                        vm.typed_regs.reg_types[reg] = REG_TYPE_HEAP;
-                    }
-                    VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be i32");
-                }
-
-                int32_t current = AS_I32(val_reg);
-                int32_t next_value;
-                if (__builtin_add_overflow(current, 1, &next_value)) {
-                    vm_trace_loop_event(LOOP_TRACE_OVERFLOW_GUARD);
-                    VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow");
-                }
-
-                if (vm_typed_reg_in_range(reg) &&
-                    vm.typed_regs.reg_types[reg] == REG_TYPE_I32) {
-                    vm.typed_regs.i32_regs[reg] = next_value;
-                }
-
-                vm_set_register_safe(reg, I32_VAL(next_value));
+            if (vm_exec_inc_i32_checked(reg)) {
+                DISPATCH();
             }
+            VM_HANDLE_INC_I32_SLOW_PATH(reg);
+            DISPATCH();
+        }
+
+    LABEL_OP_INC_I32_CHECKED: {
+            uint8_t reg = READ_BYTE();
+            if (vm_exec_inc_i32_checked(reg)) {
+                DISPATCH();
+            }
+            VM_HANDLE_INC_I32_SLOW_PATH(reg);
             DISPATCH();
         }
 
@@ -2463,7 +2477,6 @@ InterpretResult vm_run_dispatch(void) {
 
             vm_set_register_safe(dst, I64_VAL(0));
             vm_typed_iterator_bind_range(dst, 0, count);
-            vm_trace_loop_event(LOOP_TRACE_TYPED_HIT);
             vm_trace_loop_event(LOOP_TRACE_ITER_SAVED_ALLOCATIONS);
         } else if (IS_I32(v) || IS_I64(v) || IS_U32(v) || IS_U64(v)) {
             int64_t count = 0;
@@ -2499,7 +2512,6 @@ InterpretResult vm_run_dispatch(void) {
             if (!vm.config.force_boxed_iterators) {
                 vm_set_register_safe(dst, v);
                 if (vm_typed_iterator_bind_array(dst, array)) {
-                    vm_trace_loop_event(LOOP_TRACE_TYPED_HIT);
                     vm_trace_loop_event(LOOP_TRACE_ITER_SAVED_ALLOCATIONS);
                     DISPATCH();
                 }
