@@ -93,9 +93,11 @@ keeps the interpreter correct even if later stages are delayed.
        circuit `and`/`or` loops and now enabled by default (use
        `ORUS_DISABLE_BOOL_BRANCH_FASTPATH=1` to opt out for regression
        triage).
-     - ✅ Regression guard runs (`make test`, `make test-loop-telemetry`) pass
-       on the latest build, so Phase 1 exit criteria are met and the backlog is
-       clear to begin Phase 2 overflow-checked increments.
+    - ✅ Regression guard runs (`make test`, `make test-loop-telemetry`) pass
+      on the latest build, so Phase 1 exit criteria are met.
+    - 🚀 Kickoff review for Phase 2 complete: compiler backend and VM owners
+      have synced on opcode semantics and telemetry extensions, authorizing
+      engineering time to start the overflow-checked increment fast path.
    - **Owner**: VM + optimizer pairing session.
 
 3. **Overflow-checked typed increments (Phase 2, Day 3-6)**
@@ -117,6 +119,25 @@ keeps the interpreter correct even if later stages are delayed.
        if unexpected regressions surface.
      - Require `make test-loop-telemetry`, `make test-compiler`, and a targeted
        microbenchmark run using `scripts/benchmarks/loop_perf.py --phase=2`.
+   - **Status**
+    - ✅ Overflow-checked increment opcode `vm_exec_inc_i32_checked` now
+      powers `OP_INC_I32_R` in the interpreter with compiler lowering for
+      i32 induction variables and a `--disable-inc-typed-fastpath` escape
+      hatch.
+    - ✅ Switch and computed-goto fallbacks mirror the typed register state
+      so the kill switch and bailouts keep loop metadata coherent while
+      still honouring the overflow guard.
+    - ✅ The interpreter fallbacks now emit the standard i32 type error and
+      telemetry when a loop variable changes type, preventing undefined
+      behavior when the fast path declines to run.
+    - ✅ Telemetry surfacing for overflow/type bailouts is live, and the
+      loop telemetry harness now runs a disable-fastpath regression to pin
+      the kill switch behavior.
+    - ✅ Loop microbenchmark tuning completed with
+      `scripts/benchmarks/loop_perf.py` comparing the typed fast path
+      against the kill switch before the rollout checklist closes.
+    - ✅ Phase 2 exit criteria fully satisfied; roadmap stage marked as
+      complete pending Phase 3 kickoff.
    - **Owner**: Compiler backend team.
 
 4. **Zero-allocation typed iterators (Phase 3, Day 6-9)**

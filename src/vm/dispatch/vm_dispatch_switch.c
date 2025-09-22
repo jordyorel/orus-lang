@@ -430,30 +430,29 @@ InterpretResult vm_run_dispatch(void) {
 
                 case OP_INC_I32_R: {
                     uint8_t reg = READ_BYTE();
-                    const uint8_t typed_limit = (uint8_t)(sizeof(vm.typed_regs.i32_regs) / sizeof(vm.typed_regs.i32_regs[0]));
+                    if (!vm_exec_inc_i32_checked(reg)) {
+                        Value val_reg = vm_get_register_safe(reg);
+                        if (!IS_I32(val_reg)) {
+                            vm_trace_loop_event(LOOP_TRACE_TYPE_MISMATCH);
+                            if (vm_typed_reg_in_range(reg)) {
+                                vm.typed_regs.reg_types[reg] = REG_TYPE_HEAP;
+                            }
+                            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be i32");
+                        }
 
-                    if (reg < typed_limit && vm.typed_regs.reg_types[reg] == REG_TYPE_I32) {
-    #if USE_FAST_ARITH
-                        int32_t result = vm.typed_regs.i32_regs[reg] + 1;
-    #else
-                        int32_t result;
-                        if (__builtin_add_overflow(vm.typed_regs.i32_regs[reg], 1, &result)) {
+                        int32_t current = AS_I32(val_reg);
+                        int32_t next_value;
+                        if (__builtin_add_overflow(current, 1, &next_value)) {
+                            vm_trace_loop_event(LOOP_TRACE_OVERFLOW_GUARD);
                             VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow");
                         }
-    #endif
-                        vm.typed_regs.i32_regs[reg] = result;
-                        vm_set_register_safe(reg, I32_VAL(result));
-                    } else {
-    #if USE_FAST_ARITH
-                        vm_set_register_safe(reg, I32_VAL(AS_I32(vm_get_register_safe(reg)) + 1));
-    #else
-                        int32_t val = AS_I32(vm_get_register_safe(reg));
-                        int32_t result;
-                        if (__builtin_add_overflow(val, 1, &result)) {
-                            VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow");
+
+                        if (vm_typed_reg_in_range(reg) &&
+                            vm.typed_regs.reg_types[reg] == REG_TYPE_I32) {
+                            vm.typed_regs.i32_regs[reg] = next_value;
                         }
-                        vm_set_register_safe(reg, I32_VAL(result));
-    #endif
+
+                        vm_set_register_safe(reg, I32_VAL(next_value));
                     }
                     break;
                 }
