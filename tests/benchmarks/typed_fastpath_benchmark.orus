@@ -1,0 +1,30 @@
+// Focused microbenchmark for typed arithmetic and move fast paths
+// Measures the steady-state throughput of i32 add/inc loops and register moves
+// while validating that cached primitives produce the correct checksum.
+
+TRIALS: i32 = 5
+ITERATIONS: i32 = 2_000_000
+
+mut trial: i32 = 0
+mut checksum: i64 = 0
+
+while trial < TRIALS:
+    start: f64 = time_stamp()
+    mut i: i32 = 0
+    mut acc: i32 = trial
+    mut sink: i32 = 0
+
+    while i < ITERATIONS:
+        acc = acc + 1
+        sink = acc
+        i = i + 1
+
+    elapsed: f64 = time_stamp() - start
+    print("typed-fastpath elapsed:", elapsed)
+
+    checksum = checksum + (acc as i64) + (sink as i64)
+    trial = trial + 1
+
+print("checksum:", checksum)
+print("trials:", TRIALS)
+print("iterations:", ITERATIONS)

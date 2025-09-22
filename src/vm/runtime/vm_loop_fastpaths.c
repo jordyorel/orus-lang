@@ -79,8 +79,7 @@ bool vm_exec_inc_i32_checked(uint16_t reg) {
         return false;
     }
 
-    vm.typed_regs.i32_regs[reg] = next_value;
-    vm_set_register_safe(reg, I32_VAL(next_value));
+    store_i32_register(reg, next_value);
     vm_trace_loop_event(LOOP_TRACE_TYPED_HIT);
     return true;
 }
