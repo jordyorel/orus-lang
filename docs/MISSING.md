@@ -750,7 +750,7 @@ fn main:
 - [ ] **Phase 6**: Parallel loop execution hints (`@parallel for i in range`)
 - ✅ Range loop comparisons now emit typed opcodes to bypass boxed `Value` checks in tight counters.
 - ✅ Range loop increments use typed addition to avoid the `OP_ADD_I32_R` string-concatenation slow path.
-- [ ] Iterator-based `for` loops must eliminate per-iteration allocator churn by keeping iteration state in typed registers.
+- ✅ Iterator-based `for` loops eliminate per-iteration allocator churn by storing range and array iteration state in typed registers with telemetry coverage.
 
  
 ```orus

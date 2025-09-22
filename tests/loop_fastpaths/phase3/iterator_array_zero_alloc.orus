@@ -1,0 +1,9 @@
+values = [2, 4, 6, 8]
+mut count = 0
+mut total = 0
+
+for element in values:
+    total = total + element
+    count = count + 1
+
+print("phase3-array", count, total)
