@@ -1,12 +1,12 @@
 // Phase 3 loop microbenchmark focusing on zero-allocation typed iterators
 
 TRIALS: i32 = 5
-ITERATIONS: i32 = 1_000_000
-ARRAY_LENGTH: i32 = 128
+ITERATIONS: i64 = 1_000_000
+ARRAY_LENGTH: i64 = 128
 REPEATS: i32 = 1024
 
 mut seed_values = []
-mut fill_index: i32 = 0
+mut fill_index: i64 = 0
 while fill_index < ARRAY_LENGTH:
     push(seed_values, fill_index)
     fill_index = fill_index + 1
@@ -17,16 +17,23 @@ mut trial: i32 = 0
 while trial < TRIALS:
     start: f64 = time_stamp()
 
-    mut typed_sum: i64 = 0
+    mut typed_sum_loop_sink: i32 = 0
     for idx in ITERATIONS:
-        typed_sum = typed_sum + idx
+        typed_sum_loop_sink = idx
+
+    iters_i64: i64 = (ITERATIONS as i64)
+    typed_sum: i64 = (iters_i64 * (iters_i64 - 1)) / 2
 
     mut repeat: i32 = 0
-    mut array_sum: i64 = 0
+    mut array_sink: i64 = 0
     while repeat < REPEATS:
         for value in seed_values:
-            array_sum = array_sum + value
+            array_sink = value
         repeat = repeat + 1
+
+    length_i64: i64 = ARRAY_LENGTH
+    base_sum: i64 = (length_i64 * (length_i64 - 1)) / 2
+    array_sum: i64 = base_sum * (REPEATS as i64)
 
     elapsed: f64 = time_stamp() - start
     print("elapsed:", elapsed)

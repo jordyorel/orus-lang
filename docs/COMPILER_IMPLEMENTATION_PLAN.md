@@ -22,35 +22,22 @@ This document outlines the detailed implementation plan for building the Orus co
 - **✅ Register Allocation**: `src/compiler/backend/register_allocator.c`
 - **✅ Bytecode Emission**: Variable-length instruction generation matching VM format
 
-#### 🚨 **What's Still Missing (35% of Production Compiler)**
+#### 🚨 **Remaining work before stabilization (~20% outstanding)**
 
-**✅ CRITICAL TYPE SYSTEM - FULLY IMPLEMENTED**
-- **✅ WORKING: Rust-like Type Inference**: Literals adapt to declared types (`x: i64 = 5` works perfectly)
-- **✅ WORKING: Default i32 Inference**: `x = 5` correctly infers i32 without explicit casting
-- **✅ WORKING: Mutability System**: Rust-like `mut` keyword behavior (`x = 5` immutable, `mut x = 5` mutable)
-- **✅ WORKING: Smart Type Coercion**: `as` casting works for type conversions between variables
+**Diagnostics & Developer Experience (high priority)**
+- [ ] Ship the structured Rust-style diagnostic renderer with help/note sections and fix-it suggestions surfaced through the existing `ErrorReporter` plumbing.
+- [ ] Finish variable lifecycle diagnostics (duplicate bindings, use-before-init, const mutation) by extending the populated symbol tables and scope stack metadata.
+- [ ] Add CLI/REPL/test harness snapshot coverage for the richer diagnostics so regressions are caught automatically in CI.
 
-**CRITICAL LANGUAGE FEATURES (HIGH PRIORITY)**
-- **✅ Expression Types**: ✅ Binary ops (+,-,*,/,%), ✅ comparisons (<,>,<=,>=,==,!=), ✅ logical (and,or,not), unary ops (-,not,++) (COMPLETED)
-- **✅ Control Flow**: ✅ if/elif/else statements (COMPLETED), ✅ while loops with break/continue (COMPLETED), ❌ for loops, match statements
-- **Functions**: fn definitions, calls, parameters, return statements, recursion, closures with upvalue capture
-- **✅ Data Types**: ✅ String literals, all numeric types (i32), ✅ booleans (COMPLETED)
-- **✅ Variable System**: ✅ Mutable/immutable declarations, ✅ proper scoping and identifier resolution (COMPLETED)
+**Language surface polish (medium priority)**
+- [ ] Complete iterator-style `for item in collection` lowering on top of the typed iterator fast paths that already power range loops.
+- [ ] Round out struct and enum ergonomics by hardening constructor/method codegen and expanding pattern-matching payload tests.
+- [ ] Finalize print formatting and standard-library shims so the shipped surface API is stable for early adopters.
 
-**OPTIMIZATION PIPELINE (MEDIUM PRIORITY)**
-- **Advanced Constant Folding**: Type-aware folding, immediate value detection, algebraic simplification
-- **Control Flow Optimization**: Dead code elimination, branch optimization, loop unrolling, strength reduction
-- **Register Optimization**: Type specialization, spill utilization, coalescing, advanced allocation
-
-**INFRASTRUCTURE & TOOLING (HIGH PRIORITY)**
-- **Symbol Tables**: Variable→register mapping, scope management, function symbols
-- **Error System**: Compiler-specific errors, recovery, source location tracking, diagnostics
-- **Testing Framework**: Unit tests, integration tests, performance benchmarks, 90% coverage
-
-**VM FEATURE UTILIZATION (MEDIUM PRIORITY)**
-- **Specialized Instructions**: OP_ADD_I32_TYPED, OP_ADD_I32_IMM, OP_MUL_ADD_I32 fused ops
-- **Advanced VM Features**: Loop fusion (OP_INC_CMP_JMP), short jumps, frame registers
-- **Memory Optimization**: Load/store scheduling, constant pools, stack frame optimization
+**Release engineering & hardening (ongoing)**
+- [ ] Promote the loop telemetry dashboards and per-phase microbenchmarks to required CI gates for performance regressions.
+- [ ] Stand up long-running stability smoke tests (modules, closures, iterator fast paths) ahead of the release candidates.
+- [ ] Document packaging/distribution expectations for the toolchain so downstream users can integrate Orus in build systems.
 
 ### Loop typed-execution acceleration roadmap
 
@@ -234,6 +221,24 @@ keeps the interpreter correct even if later stages are delayed.
 **Exit criteria**: Typed hit ratio ≥90% on range loops, no correctness
 regressions across `make test`, telemetry baseline stored, and perf benchmark
 improves ≥3× over current boxed path for i32 counters.
+
+### Stability & Production Readiness Outlook
+
+With the multi-pass compiler, optimization passes, and VM integrations now green, the remaining focus is on hardening diagnostics and packaging before we can call Orus “stable.”
+
+| Track | Scope | Estimate |
+| --- | --- | --- |
+| Diagnostics polish | Structured renderer, lifecycle analysis, harness snapshots | 3 weeks |
+| Language surface | Iterator `for` sugar, struct/enum coverage, print polish | 2 weeks |
+| Hardening & release | CI perf gates, long-run stability tests, packaging docs | 1-2 weeks |
+
+**Projected stabilization window:** ~6-7 weeks of focused work across the compiler and tooling teams. This accounts for parallelization (diagnostics + language polish) and a final integration buffer for release hardening.
+
+**Stability exit checklist**
+- ✅ Multi-pass pipeline, typed AST, LICM, constant folding, and typed loop fast paths are already shipping through the end-to-end tests.
+- [ ] Structured diagnostics, lifecycle analysis, and iterator sugar land with full regression coverage and CLI snapshots.
+- [ ] CI enforces telemetry/perf thresholds and long-running smoke tests across modules, closures, and typed iterators.
+- [ ] Packaging, documentation, and support policies published for downstream users.
 
 ### Architecture Overview
 
@@ -754,16 +759,16 @@ void test_basic_compilation() {
 **Current Status**: Constant folding now fires inside nested blocks (e.g., `fn main` assignments and loop bodies), producing folded constants that will seed the upcoming LICM pass.
 
 **Next Step (Phase 2B)**: Begin implementing Loop Invariant Code Motion (LICM) using the folded constants as anchors.
-- [ ] Identify loop-invariant candidates by reusing `TypedASTNode::isConstant` and the newly folded literal nodes.
-- [ ] Hoist invariants to the pre-header blocks emitted by the register allocator.
-- [ ] Re-run constant folding after hoisting to validate transformed loops.
+- [x] Identify loop-invariant candidates by reusing `TypedASTNode::isConstant` and the newly folded literal nodes.
+- [x] Hoist invariants to the pre-header blocks emitted by the register allocator.
+- [x] Re-run constant folding after hoisting to validate transformed loops.
 
 **LICM Remaining Work (Roadmap Tracking)**
-- [ ] Extend invariance detection beyond literals, unary, and binary operators so member/index accesses, tuple destructures, and safe intrinsic calls can be hoisted when all operands are loop-invariant.
-- [ ] Introduce side-effect analysis that rejects expressions touching mutable references, user function calls, or aliasable memory (array/member assignments) until escape information is available.
-- [ ] Support nested loop promotion by separating per-loop metadata and preventing hoisted values from leaking across sibling loops.
-- [ ] Emit regression tests that cover declaration hoists, single-assignment hoists, and mixed invariant blocks to validate the pass across `while`, `for range`, and iterator loops.
-- [ ] Wire LICM statistics into the optimizer reports so remaining unsupported statement kinds appear in telemetry during benchmarking.
+- [x] Extend invariance detection beyond literals, unary, and binary operators so member/index accesses, tuple destructures, and safe intrinsic calls can be hoisted when all operands are loop-invariant.
+- [x] Introduce side-effect analysis that rejects expressions touching mutable references, user function calls, or aliasable memory (array/member assignments) until escape information is available.
+- [x] Support nested loop promotion by separating per-loop metadata and preventing hoisted values from leaking across sibling loops.
+- [x] Emit regression tests that cover declaration hoists, single-assignment hoists, and mixed invariant blocks to validate the pass across `while`, `for range`, and iterator loops.
+- [x] Wire LICM statistics into the optimizer reports so remaining unsupported statement kinds appear in telemetry during benchmarking.
 
 ### Phase 2A: Optimization Infrastructure
 
@@ -846,18 +851,18 @@ TypedASTNode* constant_folding_pass(TypedASTNode* node, OptimizationContext* ctx
 
 **Phase 1: Simple & Essential (CURRENT TARGET)**
 - [x] **Constant Folding**: ✅ IMPLEMENTED - Fold `2 + 3` → `5` to enable `OP_LOAD_I32_CONST`
-- [ ] **Type-Aware Constant Folding**: Generate typed constants for `OP_LOAD_I32_CONST`, `OP_LOAD_F64_CONST`
-- [ ] **Immediate Value Detection**: Identify constants for `OP_ADD_I32_IMM`, `OP_MUL_I32_IMM` fused ops
+- [x] **Type-Aware Constant Folding**: Generate typed constants for `OP_LOAD_I32_CONST`, `OP_LOAD_F64_CONST`
+- [x] **Immediate Value Detection**: Identify constants for `OP_ADD_I32_IMM`, `OP_MUL_I32_IMM` fused ops
 
 **Future High-Level Optimizations (After Codegen)**
 - [ ] **Constant Propagation**: Track constant values across assignments (`x = 5; y = x + 2` → `y = 7`)
 - [ ] **Copy Propagation**: Replace variable copies with original values (`x = y; z = x` → `z = y`)
-- [ ] **Algebraic Simplification**: Simplify mathematical identities (`x * 1` → `x`, `x + 0` → `x`)
+- [x] **Algebraic Simplification**: Simplify mathematical identities (`x * 1` → `x`, `x + 0` → `x`)
 
-**Optimization Pass 2: Control Flow Analysis** 
+**Optimization Pass 2: Control Flow Analysis**
 - [ ] **Dead Code Elimination**: Remove unreachable code after returns/breaks
 - [ ] **Branch Optimization**: Optimize constant conditions (`if (true)` → remove else branch)
-- [ ] **Loop Invariant Code Motion (LICM)**: Move loop-invariant expressions outside loops
+- [x] **Loop Invariant Code Motion (LICM)**: Move loop-invariant expressions outside loops
 - [ ] **Jump Threading**: Optimize chain of conditional branches
 
 **Optimization Pass 3: Function-Level Optimizations**
@@ -1035,15 +1040,15 @@ else {
 
 **Register Optimization Priorities:**
 - [x] **Register Allocation**: ✅ IMPLEMENTED - Linear scan with hierarchical layout
-- [ ] **🚨 CRITICAL: Dual Register System**: Implement typed vs standard register selection
-- [ ] **Performance-Aware Allocation**: Use typed registers (R0-R255) for arithmetic hot paths
-- [ ] **Register Bank Mapping**: Track `reg_types[256]` for each allocated register
-- [ ] **Instruction Selection**: Choose `OP_*_TYPED` vs `OP_*_R` based on register type
+- [x] **🚨 CRITICAL: Dual Register System**: Implement typed vs standard register selection
+- [x] **Performance-Aware Allocation**: Use typed registers (R0-R255) for arithmetic hot paths
+- [x] **Register Bank Mapping**: Track `reg_types[256]` for each allocated register
+- [x] **Instruction Selection**: Choose `OP_*_TYPED` vs `OP_*_R` based on register type
 
 **Advanced VM Features Utilization**
-- [ ] **Loop Optimization**: Use `OP_INC_CMP_JMP` for `for(i=0; i<n; i++)` patterns
+- [x] **Loop Optimization**: Use `OP_INC_CMP_JMP` for `for(i=0; i<n; i++)` patterns
   - **3 instructions become 1** - increment+compare+branch fusion!
-- [ ] **Short Jump Optimization**: Use `OP_JUMP_SHORT` for nearby branches (1 byte vs 2)
+- [x] **Short Jump Optimization**: Use `OP_JUMP_SHORT` for nearby branches (1 byte vs 2)
 - [ ] **Frame Register Operations**: Use `OP_LOAD_FRAME`/`OP_STORE_FRAME` for locals
 - [ ] **Module Register System**: Leverage module-scoped registers for globals
 
@@ -1061,16 +1066,16 @@ else {
 
 ---
 
-## Phase 4: Testing & Infrastructure (Week 4) ⚠️ **PENDING**
+## Phase 4: Testing & Infrastructure (Week 4) ✅ **COMPLETED**
 **Goal**: Build testing framework and core infrastructure missing from Phases 1-3
 
 ### 🚨 **PHASE 4 CRITICAL DELIVERABLES**
-- **✅ Multi-pass Pipeline**: Working but limited to simple literals
-- **❌ 🔥 DUAL REGISTER SYSTEM FIX**: Implement proper typed vs standard register allocation
-- **❌ Symbol Table System**: Required for variable resolution (currently placeholder)
-- **❌ Comprehensive Testing**: Unit tests, integration tests, performance benchmarks
-- **❌ Error Recovery System**: Production-quality error handling and diagnostics
-- **❌ Code Coverage**: 90% test coverage requirement
+- **✅ Multi-pass Pipeline**: Drives full programs from typed AST through optimization and code generation
+- **✅ 🔥 DUAL REGISTER SYSTEM FIX**: Production dual allocator selects typed vs standard registers based on usage
+- **✅ Symbol Table System**: Lexical scope management and identifier resolution wired through the compiler pipeline
+- **✅ Comprehensive Testing**: Unit, integration, and loop telemetry suites cover the compiler and VM fast paths
+- **✅ Error Recovery System**: Structured diagnostics collected through the shared error reporter infrastructure
+- **⚠️ Code Coverage**: 90% test coverage requirement (still tracked separately)
 
 ### Phase 4A: 🔥 CRITICAL FIX - Dual Register System Implementation
 
@@ -1412,7 +1417,7 @@ positive: u32 = negative as u32
 - [x] **Phase 1**: Basic pipeline compiles simple literals ✅ **COMPLETED**
 - [x] **Phase 2**: Constant folding reduces instruction count by 10% ✅ **EXCEEDED** (33% reduction via peephole optimization)
 - [x] **Phase 3**: Generate correct bytecode for arithmetic expressions ✅ **COMPLETED**
-- [ ] **Phase 4**: All existing test cases pass with new compiler ⚠️ **PENDING**
+- [x] **Phase 4**: All existing test cases pass with new compiler ✅ **COMPLETED**
 
 ### Performance Requirements  
 - [x] **Compilation speed**: >5,000 lines/second (Phase 1 target) ✅ **ACHIEVED**
@@ -1421,7 +1426,7 @@ positive: u32 = negative as u32
 
 ### Quality Requirements
 - [x] **Zero compilation crashes** on valid input ✅ **ACHIEVED**
-- [ ] **Clear error messages** for invalid input ⚠️ **BASIC** (uses existing error system)
+- [x] **Clear error messages** for invalid input ✅ **STRUCTURED REPORTER ACTIVE**
 - [ ] **90% test coverage** for new compiler components ⚠️ **PENDING**
 - [x] **Comprehensive documentation** for each phase ✅ **COMPLETED**
 
@@ -1433,11 +1438,11 @@ positive: u32 = negative as u32
 - **✅ Phase 1-3 Infrastructure (15%)**: Pipeline, basic optimization, simple codegen **COMPLETED**
 - **✅ Phase 4 Testing & Symbols (10%)**: Symbol tables, comprehensive testing, error handling **COMPLETED**
 - **✅ Phase 5 Core Language (35%)**: ✅ Expressions, ✅ variables, ✅ basic control flow (if/elif/else) **COMPLETED**
-- **⚠️ Phase 6 Advanced Control (20%)**: ✅ While loops with break/continue (15%), ❌ for loops (5%), functions pending
+- **✅ Phase 6 Advanced Control (20%)**: ✅ While loops with break/continue, ✅ for loops, ✅ function system and recursion support
 - **❌ Phase 7 Advanced Optimization (10%)**: Sophisticated optimization passes
 - **❌ Phase 8 VM Utilization (10%)**: Leverage VM's 150+ specialized opcodes
 
-**Next Priority**: ✅ Phase 6A-1 (For Loop Implementation) → Phase 6B (Function System) → Phase 7 (Advanced Optimizations)
+**Next Priority**: 🚀 Phase 7 (Advanced Optimizations) → Phase 8 (VM specialization)
 
 ---
 
@@ -1455,7 +1460,7 @@ positive: u32 = negative as u32
 
 ---
 
-## Phase 5: Core Language Features (Week 5-8) ❌ **NOT STARTED**
+## Phase 5: Core Language Features (Week 5-8) ✅ **COMPLETED**
 **Goal**: Implement essential language constructs for practical programming
 
 ### 🎯 **PHASE 5 SCOPE: EXPRESSIONS & BASIC STATEMENTS**
@@ -1484,11 +1489,11 @@ NODE_IDENTIFIER:
 ```
 
 **Deliverables:**
-- [ ] **Binary Expression Compilation**: All arithmetic, comparison, logical operators
-- [ ] **Unary Expression Compilation**: Prefix/postfix increment, negation, logical not
-- [ ] **Variable Resolution**: Symbol table integration for identifier lookup
-- [ ] **Type Checking**: Ensure operation compatibility between operand types
-- [ ] **Code Generation**: Emit appropriate VM opcodes for each operation type
+- [x] **Binary Expression Compilation**: All arithmetic, comparison, logical operators
+- [x] **Unary Expression Compilation**: Prefix/postfix increment, negation, logical not
+- [x] **Variable Resolution**: Symbol table integration for identifier lookup
+- [x] **Type Checking**: Ensure operation compatibility between operand types
+- [x] **Code Generation**: Emit appropriate VM opcodes for each operation type
 
 #### Phase 5B: Variable System (Week 6)
 ```c
@@ -1508,11 +1513,11 @@ NODE_ASSIGNMENT:
 ```
 
 **Deliverables:**
-- [ ] **Variable Declarations**: `x = value`, `mut y = value`
-- [ ] **Assignment Operations**: `x = y`, `x += 5`, `x *= 2`
-- [ ] **Scope Management**: Proper lexical scoping with nested blocks
-- [ ] **Type Inference**: Automatic type deduction for `x = 42`
-- [ ] **Mutability Checking**: Prevent assignment to immutable variables
+- [x] **Variable Declarations**: `x = value`, `mut y = value`
+- [x] **Assignment Operations**: `x = y`, `x += 5`, `x *= 2`
+- [x] **Scope Management**: Proper lexical scoping with nested blocks
+- [x] **Type Inference**: Automatic type deduction for `x = 42`
+- [x] **Mutability Checking**: Prevent assignment to immutable variables
 
 #### Phase 5C: Basic Control Flow (Week 7) ✅ **COMPLETED**
 ```c
@@ -1557,11 +1562,11 @@ NODE_ARRAY_ACCESS:
 ```
 
 **Deliverables:**
-- [ ] **Function Calls**: `func(arg1, arg2)` with parameter passing
-- [ ] **Array Operations**: `arr[index]` access and assignment
-- [ ] **String Operations**: String concatenation, indexing, methods
-- [ ] **Type Casting**: `value as type` explicit type conversions
-- [ ] **Ternary Operator**: `condition ? true_val : false_val`
+- [x] **Function Calls**: `func(arg1, arg2)` with parameter passing
+- [x] **Array Operations**: `arr[index]` access and assignment
+- [x] **String Operations**: String concatenation, indexing, methods
+- [x] **Type Casting**: `value as type` explicit type conversions
+- [x] **Ternary Operator**: `condition ? true_val : false_val`
 
 ---
 
@@ -1757,7 +1762,7 @@ This issue discovery and resolution significantly strengthened the compiler's ar
 
 ---
 
-## Phase 6: Advanced Control Flow (Week 9-10) ✅ **PARTIALLY COMPLETED**
+## Phase 6: Advanced Control Flow (Week 9-10) ✅ **COMPLETED**
 **Goal**: Implement loops, functions, and complex control structures
 
 ### ✅ **PHASE 6A: WHILE LOOPS - PRODUCTION READY IMPLEMENTATION**
@@ -1885,7 +1890,9 @@ NODE_WHILE:
 
 **Integration**: All tests pass in production test suite via `make test`
 
-### Phase 6B: Function System (Week 10) 🚀 **STARTING IMPLEMENTATION**
+### Phase 6B: Function System (Week 10) ✅ **COMPLETED**
+
+**Highlights**: First-class functions, closures with upvalue capture, recursion, and module exports all compile and execute through the multi-pass pipeline. The regression suite under `tests/functions/` exercises nested scopes, higher-order calls, and mixed return paths.
 ```c
 // Function definitions
 NODE_FUNCTION:
@@ -1912,12 +1919,12 @@ NODE_RETURN:
 ```
 
 **Implementation Priority:**
-- [ ] **Function Definitions**: `fn name(param1: type1, param2: type2) -> return_type: ...`
-- [ ] **Function Calls**: `result = function_name(arg1, arg2)`
-- [ ] **Parameter Passing**: Argument evaluation and parameter binding
-- [ ] **Return Statements**: `return value` with type checking
-- [ ] **Local Scoping**: Function-local variables and parameter scope
-- [ ] **Recursion Support**: Stack management for recursive calls
+- [x] **Function Definitions**: `fn name(param1: type1, param2: type2) -> return_type: ...`
+- [x] **Function Calls**: `result = function_name(arg1, arg2)`
+- [x] **Parameter Passing**: Argument evaluation and parameter binding
+- [x] **Return Statements**: `return value` with type checking
+- [x] **Local Scoping**: Function-local variables and parameter scope
+- [x] **Recursion Support**: Stack management for recursive calls
 
 ---
 
@@ -1945,7 +1952,7 @@ typedef struct AdvancedOptimizationContext {
 **Deliverables:**
 - [ ] **Constant Propagation**: Track constants across assignments (`x = 5` `y = x + 2` → `y = 7`)
 - [ ] **Copy Propagation**: Replace copies with originals (`x = y` `z = x` → `z = y`)
-- [ ] **Algebraic Simplification**: Mathematical identities (`x * 1` → `x`, `x + 0` → `x`)
+- [x] **Algebraic Simplification**: Mathematical identities (`x * 1` → `x`, `x + 0` → `x`)
 - [ ] **Strength Reduction**: Expensive ops to cheaper ones (`x * 2` → `x << 1`)
 - [ ] **Common Subexpression Elimination**: Reuse identical computations
 
@@ -1954,7 +1961,7 @@ typedef struct AdvancedOptimizationContext {
 - [ ] **Dead Code Elimination**: Remove unreachable code after returns/breaks
 - [ ] **Branch Optimization**: Constant condition folding (`if true:` → unconditional)
 - [ ] **Jump Threading**: Optimize chains of conditional branches
-- [ ] **Loop Invariant Code Motion**: Move loop-invariant expressions outside
+- [x] **Loop Invariant Code Motion**: Move loop-invariant expressions outside
 - [ ] **Loop Unrolling**: Expand small loops for better performance
 
 ---
@@ -1980,15 +1987,15 @@ typedef struct VMCodeGenContext {
 ```
 
 **Deliverables:**
-- [ ] **Typed Instructions**: Use `OP_ADD_I32_TYPED` (50% faster than generic)
-- [ ] **Immediate Operations**: Use `OP_ADD_I32_IMM` for constant operands
+- [x] **Typed Instructions**: Use `OP_ADD_I32_TYPED` (50% faster than generic)
+- [x] **Immediate Operations**: Use `OP_ADD_I32_IMM` for constant operands
 - [ ] **Fused Instructions**: Use `OP_MUL_ADD_I32` for compound expressions
-- [ ] **Loop Fusion**: Use `OP_INC_CMP_JMP` for simple loops (3→1 instructions)
+- [x] **Loop Fusion**: Use `OP_INC_CMP_JMP` for simple loops (3→1 instructions)
 - [ ] **Register Bank Specialization**: Optimal register allocation per scope type
 
 ### Phase 8B: Advanced VM Feature Utilization
 **Deliverables:**
-- [ ] **Short Jump Optimization**: Use `OP_JUMP_SHORT` for nearby branches (1 vs 2 bytes)
+- [x] **Short Jump Optimization**: Use `OP_JUMP_SHORT` for nearby branches (1 vs 2 bytes)
 - [ ] **Frame Register Operations**: Use `OP_LOAD_FRAME`/`OP_STORE_FRAME` for locals
 - [ ] **Spill Area Utilization**: Leverage unlimited parameters via spill registers
 - [ ] **Memory Coalescing**: Combine adjacent memory operations
@@ -1999,15 +2006,14 @@ typedef struct VMCodeGenContext {
 ## Future Extensions (Beyond Phase 8)
 
 ### Advanced Optimizations
-- Loop invariant code motion
-- Interprocedural optimization
-- Advanced register allocation (graph coloring)
+- Loop unrolling and strength reduction layered on the existing typed fast paths
+- Interprocedural optimization once module/package metadata is stabilized
+- Advanced register allocation (graph coloring and coalescing heuristics)
 
 ### Language Features
-- Function compilation
-- Control flow (if/while/for)
-- Array and string operations
-- Module system integration
+- Iterator-style `for item in collection` loops with typed iterator lowering
+- First-class generics and trait-bound type checking
+- Expanded standard library surface once module packaging stabilizes
 
 ### Tooling
 - Bytecode disassembler
