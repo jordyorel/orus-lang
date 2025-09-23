@@ -43,35 +43,6 @@ flag = true
 message = "Line one\nLine two"
 ```
 
-<<<<<<< HEAD
-**Output:**
-```
-42
-The answer is 42
-42
-x y z
-1 2 3 4 5
-```
-
-Custom separators can be handled by preparing a formatted string yourself before
-calling `print()`:
-
-```orus
-separator = " :: "
-items = ["apple", "banana", "cherry"]
-message = separator.join(items)
-print(message)
-```
-
-**Output:**
-```
-apple :: banana :: cherry
-```
-
-### The `time_stamp` Builtin
-
-Orus provides a high-precision timing function for performance measurement and benchmarking:
-=======
 ## 4. Variables and Mutability
 - Bindings are immutable by default.
 - Prepend `mut` to allow reassignment.
@@ -91,7 +62,6 @@ mut retries += 1
 ### Globals and Exports
 - `global` is only permitted at module scope, requires an initializer, and the name must be uppercase. Use `mut` for writable globals.
 - `pub` exports `fn`, `global`, `struct`, `enum`, or `impl` declarations from the module; it is illegal inside nested blocks.
->>>>>>> 3aadbaa (Update LANGUAGE.md for Orus language reference and enhance built-in functions for time handling)
 
 ```orus
 pub global MAX_CONNECTIONS = 512
