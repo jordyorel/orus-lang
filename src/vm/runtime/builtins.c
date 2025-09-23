@@ -8,7 +8,7 @@
 
 #ifdef __APPLE__
 #include <mach/mach_time.h>
-#elif defined(__linux__)
+#elif defined(__linux__) || defined(__EMSCRIPTEN__)
 #include <time.h>
 #elif defined(_WIN32)
 #include <windows.h>

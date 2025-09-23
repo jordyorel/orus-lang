@@ -62,6 +62,8 @@ Makefile
 
 # Documentation build
 docs/_build/
+emscripten-cache/
+web/
 
 # Package files
 *.tar.gz

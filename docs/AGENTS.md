@@ -13,24 +13,25 @@ Before implementing ANYTHING, you MUST:
 
 **NEVER implement features without first understanding the existing architecture and roadmap!**
 
-### **🔥 CRITICAL REMINDER: Single-Pass Compiler Architecture (NEW)**
-**Orus uses a SINGLE-PASS COMPILER DESIGN inspired by Lua for optimal simplicity and performance:**
+### **🔥 CRITICAL REMINDER: Multi-Pass Compiler Architecture (CURRENT PLAN)**
+**Orus follows the multi-pass compiler blueprint captured in `docs/COMPILER_DESIGN.md`:**
 
-#### **✅ COMPLETED COMPONENTS**
+#### **✅ VALIDATED COMPONENTS**
 - ✅ **Lexer** - Complete tokenization with 105+ token types and type suffixes
 - ✅ **Parser** - Precedence-climbing parser with comprehensive AST (45+ node types)
+- ✅ **HM Type System** - Phase 5 complete with typed AST output and casting rules
+- ✅ **Typed AST Visualizer** - `typed_ast_visualizer.c` for post-pass inspection
 - ✅ **VM** - 256-register architecture with 135+ optimized opcodes
-- ✅ **Type System** - Phase 5 complete with comprehensive casting rules
 
-#### **❌ MISSING CRITICAL COMPONENT: COMPILER BACKEND**
-- ❌ **Compiler Backend**: AST-to-bytecode transformation (NEEDS IMPLEMENTATION)
+#### **❌ ACTIVE IMPLEMENTATION AREA: COMPILER PIPELINE**
+- ❌ **Compiler Pipeline**: Multi-pass transformation from typed AST to bytecode (optimization → codegen)
 
-#### **🎯 NEW COMPILER DESIGN (Lua-Inspired)**
-- ✅ **Single-Pass Compilation**: Direct AST-to-bytecode with no intermediate representations
-- ✅ **Register Allocation**: Optimal usage of 256 VM registers (globals, locals, temporaries)
-- ✅ **Type Integration**: Leverages existing Phase 5 type system for casting and validation
-- ✅ **Local Optimizations**: Peephole optimization and register reuse
-- ✅ **Performance Focus**: Zero-cost abstractions and efficient instruction selection
+#### **🎯 COMPILER PIPELINE PRINCIPLES**
+- ✅ **Typed AST as Source of Truth**: HM inference annotates every node before backend work begins
+- ✅ **Pass-Oriented Architecture**: Distinct passes handle typed AST optimization and bytecode emission
+- ✅ **Register-Aware Codegen**: Final pass aligns with the 256-register VM layout and calling conventions
+- ✅ **Visualization Hooks**: `typed_ast_visualizer.c` runs after HM inference and optimization passes
+- ✅ **Adaptive Backends**: FAST, OPTIMIZED, and HYBRID modes share the same frontend analysis but vary backend cost
 
 #### **🎯 Register Allocation Strategy**
 ```c
@@ -42,17 +43,17 @@ typedef enum {
     REGISTER_MODULE   = 240  // R240-R255: Module imports/exports (16 registers)
 } RegisterRange;
 
-// Example compilation: x = 42 + y
+// Example codegen output (final pass): x = 42 + y
 LOAD_CONST_I32 R192, 0    // Load 42 into temp register
 LOAD_LOCAL R193, y_slot   // Load y into temp register  
 ADD_I32_R R0, R192, R193  // Add and store in global x register
 ```
 
 **Why This Architecture Matters**: 
-- **Simplicity**: Single-pass design like Lua eliminates complexity
-- **Performance**: Direct AST-to-bytecode with optimal register usage
-- **Integration**: Leverages existing VM, type system, and parser
-- **Maintainability**: No intermediate representations to debug
+- **Separation of Concerns**: Multi-pass pipeline separates typed AST optimization from bytecode emission
+- **Performance**: Optimization passes operate on typed AST data to feed a register-aware emitter
+- **Integration**: Typed AST connects the HM type system to backend passes without additional IRs
+- **Observability**: Visualization hooks make every pass debuggable and auditable
 
 ### **⚡ Critical Implementation Priorities**
 Focus on these features in order for a functional Orus language:
@@ -68,109 +69,88 @@ Focus on these features in order for a functional Orus language:
 
 ## 🚀 **Core Performance Principles**
 
-### **0. Single-Pass Compiler Architecture (CRITICAL - NEW DESIGN)**
-**The Orus compiler uses a SINGLE-PASS DESIGN inspired by Lua for optimal simplicity and performance. This is NON-NEGOTIABLE.**
+### **0. Multi-Pass Compiler Architecture (CRITICAL - CURRENT DESIGN)**
+**The Orus compiler implements the multi-pass strategy defined in `docs/COMPILER_DESIGN.md`.**
 
-#### **📋 SINGLE-PASS COMPILER PRINCIPLES**
-- **DIRECT COMPILATION**: AST nodes directly generate bytecode instructions
-- **NO INTERMEDIATE REPRESENTATIONS**: Direct AST-to-bytecode transformation
-- **REGISTER-AWARE COMPILATION**: Optimal usage of 256 VM registers
-- **TYPE-INTEGRATED COMPILATION**: Uses existing Phase 5 type system
-- **LOCAL OPTIMIZATIONS**: Peephole optimization and register reuse
-- **PERFORMANCE-FIRST**: Zero-cost abstractions and efficient instruction selection
+#### **📋 MULTI-PASS COMPILER PRINCIPLES**
+- **TYPED AST FIRST**: HM inference produces the typed AST consumed by every backend pass
+- **STRUCTURED PASSES**: Optimization and bytecode emission run as distinct phases with shared typed AST
+- **BYTECODE BUFFER**: Final emission writes into a VM-aware `BytecodeBuffer` with constant pool support
+- **REGISTER PLANNING**: Register allocator coordinates global, frame, and temporary ranges before emission
+- **VISUALIZATION**: `typed_ast_visualizer.c` inspects the AST after HM inference and optimization passes
+- **ADAPTIVE MODES**: FAST/OPTIMIZED/HYBRID backends share the same frontend but vary the optimization depth
 
 ```c
-// ✅ CORRECT: Single-pass compilation of AST nodes
-int compileExpression(ASTNode* node, CompilerContext* ctx) {
-    // Use existing type system for type analysis
-    Type* nodeType = inferType(node, ctx->typeContext);
-    
-    switch (node->type) {
-        case NODE_LITERAL:
-            return compileLiteral(node, ctx);
-        case NODE_BINARY:
-            return compileBinaryExpression(node, ctx);
-        case NODE_IDENTIFIER:
-            return compileVariableReference(node, ctx);
-        case NODE_CAST:
-            return compileCastExpression(node, ctx);
-    }
+// ✅ CORRECT: Multi-pass compilation driver (COMPILER_DESIGN.md)
+CompilationResult compile_program(TypedASTNode* root, CompilerContext* ctx) {
+    visualize_typed_ast(ctx, root);              // Snapshot after HM inference
+    optimize_typed_ast(root, ctx->opt_ctx);      // Constant folding, peephole, register reuse
+    visualize_typed_ast(ctx, root);              // Optional post-optimization dump
+    return emit_bytecode(ctx, root);             // Register-aware bytecode emission
 }
 
-// ✅ CORRECT: Direct bytecode emission
-int compileBinaryExpression(ASTNode* node, CompilerContext* ctx) {
-    // Compile operands
-    int leftReg = compileExpression(node->binary.left, ctx);
-    int rightReg = compileExpression(node->binary.right, ctx);
-    
-    // Allocate result register
-    int resultReg = allocateTempRegister(ctx);
-    
-    // Select type-specific opcode
-    Opcode op = selectArithmeticOpcode(node->binary.op, node->dataType);
-    
-    // Emit instruction directly
-    emitInstruction(ctx, op, resultReg, leftReg, rightReg);
-    
-    return resultReg;
+// ✅ CORRECT: Optimization pass operating on typed nodes
+void optimize_typed_ast(TypedASTNode* root, OptimizationContext* opt) {
+    fold_constants(root, opt);
+    simplify_control_flow(root, opt);
+    reuse_registers(root, opt);
 }
 ```
 
 #### **🎯 COMPILER IMPLEMENTATION STRATEGY**
-- **Phase 1**: Basic expressions and literals (NODE_LITERAL, NODE_BINARY)
-- **Phase 2**: Variable declarations and assignments (NODE_VAR_DECL, NODE_ASSIGN)
-- **Phase 3**: Type casting integration (NODE_CAST with Phase 5 type system)
-- **Phase 4**: Control flow structures (NODE_IF, NODE_WHILE, NODE_FOR_RANGE)
-- **Phase 5**: Function calls and definitions (NODE_FUNCTION, NODE_CALL)
-- **Phase 6**: Local optimizations (peephole optimization, register reuse)
+- **Pass 0**: HM type inference (complete) generates the typed AST
+- **Pass 1**: Typed AST optimization applies constant folding, peephole rewrites, and register reuse strategies
+- **Pass 2**: Code generation emits bytecode into `BytecodeBuffer` using the shared `RegisterAllocator`
+- **Tooling**: Visualization hooks and metrics instrumentation run after Pass 0 and Pass 1
 
 ```c
-// ✅ CORRECT: Register allocation for different node types
-int allocateRegisterForNode(ASTNode* node, CompilerContext* ctx) {
-    switch (node->type) {
-        case NODE_VAR_DECL:
-            // Global variables get persistent registers
-            return allocateGlobalRegister(ctx, node->varDecl.name);
-            
-        case NODE_LITERAL:
-        case NODE_BINARY:
-            // Temporary expressions get temp registers
-            return allocateTempRegister(ctx);
-            
-        case NODE_FUNCTION:
-            // Function locals get frame registers
-            return allocateLocalRegister(ctx, node);
+// ✅ CORRECT: Register allocation consults shared allocator + symbol table
+int allocate_register_for_symbol(CompilerContext* ctx, const TypedSymbol* symbol) {
+    SymbolBinding* binding = lookup_symbol(ctx->symbols, symbol->name);
+    if (binding != NULL) {
+        return binding->reg;
     }
+    int reg = allocate_temp_register(&ctx->allocator);
+    register_symbol(ctx, symbol->name, reg, symbol->type);
+    return reg;
 }
 
-// ✅ CORRECT: Type-specific instruction selection
-Opcode selectArithmeticOpcode(const char* op, Type* type) {
-    if (strcmp(op, "+") == 0) {
-        switch (type->kind) {
-            case TYPE_I32: return OP_ADD_I32_R;
-            case TYPE_I64: return OP_ADD_I64_R;
-            case TYPE_F64: return OP_ADD_F64_R;
-            case TYPE_STRING: return OP_STRING_CONCAT;
-        }
+// ✅ CORRECT: Type-specific opcode selection using typed AST metadata
+Opcode select_arithmetic_opcode(BinaryOp op, const Type* type) {
+    switch (op) {
+        case BINOP_ADD:
+            switch (type->kind) {
+                case TYPE_I32: return OP_ADD_I32_R;
+                case TYPE_I64: return OP_ADD_I64_R;
+                case TYPE_F64: return OP_ADD_F64_R;
+                default:       return OP_INVALID;
+            }
+        case BINOP_SUB:
+            switch (type->kind) {
+                case TYPE_I32: return OP_SUB_I32_R;
+                case TYPE_I64: return OP_SUB_I64_R;
+                case TYPE_F64: return OP_SUB_F64_R;
+                default:       return OP_INVALID;
+            }
+        default:
+            return OP_INVALID;
     }
-    // Similar for -, *, /, %
 }
 ```
 
-**Why Single-Pass Design is Critical:**
-1. **Simplicity**: No complex intermediate representations to debug
-2. **Performance**: Direct AST-to-bytecode minimizes compilation overhead
-3. **Memory Efficiency**: No additional IR memory allocation
-4. **Integration**: Leverages existing parser and type system
-5. **Maintainability**: Lua-style architecture proven for decades
-6. **VM Optimization**: Direct register allocation for 256-register VM
+**Why Multi-Pass Design is Critical:**
+1. **Observability**: Typed AST visualization between passes prevents silent regressions
+2. **Performance**: Optimization passes run where they pay off without slowing the frontend
+3. **Safety**: HM annotations flow into bytecode generation with no lossy conversion
+4. **Maintainability**: Clear pass boundaries limit surface area per contribution
+5. **VM Alignment**: Register allocation decisions are prepared before emission, preventing ad hoc assignment
 
 **Implementation Requirements:**
-- **Direct Compilation**: Each AST node type has a corresponding compile function
-- **Register Management**: Smart allocation of global, local, and temporary registers
-- **Type Integration**: Use existing Phase 5 type system for instruction selection
-- **Local Optimization**: Peephole optimization and register reuse during emission
-- **Error Handling**: Integration with existing modular error system
+- **Pass Discipline**: Respect pass responsibilities—never mix optimization with emission logic
+- **Register Management**: Use the shared allocator and symbol bindings produced during optimization
+- **Type Integration**: Reference typed AST metadata for opcode selection and validation
+- **Instrumentation**: Update visualization hooks and metrics after each pass
+- **Error Handling**: Route diagnostics through the modular error system defined in `src/errors`
 
 ### **1. Zero-Cost Abstractions**
 - Every abstraction MUST compile to optimal assembly code
@@ -919,7 +899,7 @@ Every contribution MUST include documentation updates:
 
 1. **Update `COMPILER_DESIGN.md`** for architectural changes:
    - Update phase completion status (Phase 1, 2, 3, 4, 5, 6)
-   - Document single-pass compiler implementation progress
+   - Document multi-pass compiler implementation progress
    - Add new register allocation strategies and optimization decisions
    - Update VM-aware optimization strategies and bytecode generation
 
@@ -999,16 +979,16 @@ void complete_feature_implementation(Feature* feature) {
 ### **Required Documentation Flow:**
 ```
 1. Read LANGUAGE.md → Understand Orus specifications
-2. Check COMPILER_DESIGN.md → Understand current single-pass compiler architecture
+2. Check COMPILER_DESIGN.md → Understand current multi-pass compiler architecture
 3. Check MISSING.md → See what needs implementation  
 4. Study IMPLEMENTATION_GUIDE.md → Learn high-performance patterns
-5. Implement feature → Using single-pass AST-to-bytecode compilation
-6. Update COMPILER_DESIGN.md → Mark phase progress, document register allocation
+5. Implement feature → Following the multi-pass pipeline (optimization → bytecode emission)
+6. Update COMPILER_DESIGN.md → Mark phase progress, document register allocation decisions
 7. Update MISSING.md → Mark feature as completed
 8. Update IMPLEMENTATION_GUIDE.md → Add new patterns if applicable
 9. Update TEST_CATEGORIZATION.md → Categorize new tests
 10. Update Makefile → Add test targets for new categories
-11. Benchmark compiler → Performance characteristics of single-pass compilation
+11. Benchmark compiler → Performance characteristics of the multi-pass pipeline
 ```
 
 ### **Documentation Quality Requirements:**
