@@ -234,6 +234,8 @@ void emit_instruction_to_buffer(BytecodeBuffer* buffer, uint8_t opcode, uint8_t 
 
 static inline int determine_prefix_size(uint8_t opcode) {
     switch (opcode) {
+        case OP_JUMP_IF_NOT_I32_TYPED:
+            return 3;  // opcode + left_reg + right_reg
         case OP_JUMP_IF_NOT_R:
         case OP_JUMP_IF_R:
         case OP_TRY_BEGIN:
@@ -317,6 +319,7 @@ bool patch_jump(BytecodeBuffer* buffer, int patch_index, int target_offset) {
         case OP_JUMP_IF_NOT_R:
         case OP_JUMP_IF_R:
         case OP_TRY_BEGIN:
+        case OP_JUMP_IF_NOT_I32_TYPED:
         {
             relative = target_offset - next_ip;
             if (relative < 0 || relative > 0xFFFF) {

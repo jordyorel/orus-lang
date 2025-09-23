@@ -2110,6 +2110,16 @@ InterpretResult vm_run_dispatch(void) {
                     break;
                 }
 
+                case OP_JUMP_IF_NOT_I32_TYPED: {
+                    uint8_t left = READ_BYTE();
+                    uint8_t right = READ_BYTE();
+                    uint16_t offset = READ_SHORT();
+                    if (!CF_JUMP_IF_NOT_I32_TYPED(left, right, offset)) {
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    break;
+                }
+
                 case OP_LOOP: {
                     uint16_t offset = READ_SHORT();
                     if (!CF_LOOP(offset)) {

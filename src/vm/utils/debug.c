@@ -386,6 +386,14 @@ int disassembleInstruction(Chunk* chunk, int offset) {
             return offset + 4;
         }
 
+        case OP_JUMP_IF_NOT_I32_TYPED: {
+            uint8_t left = chunk->code[offset + 1];
+            uint8_t right = chunk->code[offset + 2];
+            uint16_t jump = (uint16_t)((chunk->code[offset + 3] << 8) | chunk->code[offset + 4]);
+            printf("%-16s R%d, R%d, +%d\n", "JUMP_IF_NOT_I32_TYPED", left, right, jump);
+            return offset + 5;
+        }
+
         case OP_LOOP: {
             uint16_t jump = (uint16_t)((chunk->code[offset + 1] << 8) | chunk->code[offset + 2]);
             printf("%-16s -%d\n", "LOOP", jump);
