@@ -155,8 +155,14 @@ bool valuesEqual(Value a, Value b) {
             return AS_U64(a) == AS_U64(b);
         case VAL_F64:
             return AS_F64(a) == AS_F64(b);
-        case VAL_STRING:
-            return AS_STRING(a) == AS_STRING(b);
+        case VAL_STRING: {
+            ObjString* left = AS_STRING(a);
+            ObjString* right = AS_STRING(b);
+            if (left == right) return true;
+            if (!left || !right) return false;
+            if (left->length != right->length) return false;
+            return memcmp(left->chars, right->chars, (size_t)left->length) == 0;
+        }
         case VAL_ARRAY:
             return AS_ARRAY(a) == AS_ARRAY(b);
         case VAL_ENUM: {
