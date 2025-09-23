@@ -1671,13 +1671,17 @@ static ASTNode* parseAssignOrVarList(ParserContext* ctx, bool isMutable, Token n
     Token opToken = nextToken(ctx);
     
     // Handle compound assignments (+=, -=, *=, /=, %=)
-    if (opToken.type == TOKEN_PLUS_EQUAL || opToken.type == TOKEN_MINUS_EQUAL || 
+    if (opToken.type == TOKEN_PLUS_EQUAL || opToken.type == TOKEN_MINUS_EQUAL ||
         opToken.type == TOKEN_STAR_EQUAL || opToken.type == TOKEN_SLASH_EQUAL ||
         opToken.type == TOKEN_MODULO_EQUAL) {
-        
+
         // Compound assignments are only valid for existing variables, not declarations
         if (isMutable) {
-            // This is actually a variable declaration with mut, not a compound assignment
+            // Provide a clear diagnostic instead of silently failing
+            char* name = copy_token_text(ctx, nameToken);
+            SrcLocation location = {NULL, nameToken.line, nameToken.column};
+            report_invalid_multiple_declaration(location, name,
+                                                "compound assignments cannot declare a new variable. Remove 'mut' to update an existing binding.");
             return NULL;
         }
         
