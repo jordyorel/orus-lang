@@ -1,0 +1,9 @@
+status = "ok"
+
+if status == "ok":
+    print("ready")
+elif status == "retry":
+    print("waiting")
+else:
+    print("failed")
+

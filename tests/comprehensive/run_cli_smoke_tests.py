@@ -3,7 +3,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Iterable, List, Tuple
+from typing import Iterable, List, Optional, Tuple
 
 
 class SmokeResult:
@@ -30,7 +30,12 @@ def resolve_binary(binary: str, repo_root: Path) -> Path:
     return candidate
 
 
-def run_smoke(binary: Path, program: Path, expect_success: bool) -> SmokeResult:
+def run_smoke(
+    binary: Path,
+    program: Path,
+    expect_success: bool,
+    expected_stdout: Optional[str] = None,
+) -> SmokeResult:
     name = f"{binary.name} {program.as_posix()}"
     try:
         completed = subprocess.run(
@@ -43,8 +48,16 @@ def run_smoke(binary: Path, program: Path, expect_success: bool) -> SmokeResult:
     except OSError as exc:  # pragma: no cover - defensive
         return SmokeResult(name, False, f"Failed to execute: {exc}")
 
-    passed = completed.returncode == 0 if expect_success else completed.returncode != 0
-    if passed:
+    exit_ok = completed.returncode == 0 if expect_success else completed.returncode != 0
+    if exit_ok and expect_success and expected_stdout is not None:
+        if completed.stdout != expected_stdout:
+            detail = (
+                f"Expected stdout {expected_stdout!r} but received {completed.stdout!r}."
+            )
+            if completed.stderr:
+                detail += f" Stderr:\n{completed.stderr.strip()}"
+            return SmokeResult(name, False, detail)
+    if exit_ok:
         return SmokeResult(name, True)
 
     output = completed.stdout + completed.stderr
@@ -55,10 +68,19 @@ def run_smoke(binary: Path, program: Path, expect_success: bool) -> SmokeResult:
     return SmokeResult(name, False, detail)
 
 
-def load_tests(repo_root: Path) -> List[Tuple[Path, bool]]:
+def load_tests(repo_root: Path) -> List[Tuple[Path, bool, Optional[str]]]:
     return [
-        (repo_root / "tests" / "comprehensive" / "comprehensive_language_test.orus", True),
-        (repo_root / "tests" / "error_reporting" / "undefined_variable.orus", False),
+        (
+            repo_root / "tests" / "comprehensive" / "comprehensive_language_test.orus",
+            True,
+            None,
+        ),
+        (repo_root / "tests" / "error_reporting" / "undefined_variable.orus", False, None),
+        (
+            repo_root / "tests" / "strings" / "string_equality_control_flow.orus",
+            True,
+            "ready\n",
+        ),
     ]
 
 
@@ -79,11 +101,11 @@ def main(argv: Iterable[str] | None = None) -> int:
     results: List[SmokeResult] = []
 
     print("Running CLI smoke tests...")
-    for program, expect_success in tests:
+    for program, expect_success, expected_stdout in tests:
         if not program.exists():
             results.append(SmokeResult(program.name, False, "Program file not found"))
             continue
-        results.append(run_smoke(binary_path, program, expect_success))
+        results.append(run_smoke(binary_path, program, expect_success, expected_stdout))
 
     failures = [result for result in results if not result.passed]
     for result in results:
