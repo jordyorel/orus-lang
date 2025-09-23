@@ -1,4 +1,7 @@
 #include "compiler/error_reporter.h"
+#include "errors/error_interface.h"
+#include "internal/error_reporting.h"
+#include "vm/vm.h"
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -128,6 +131,41 @@ bool error_reporter_add(ErrorReporter* reporter,
 
     reporter->count++;
     return true;
+}
+
+bool error_reporter_add_feature_error(ErrorReporter* reporter,
+                                      ErrorCode code,
+                                      SrcLocation location,
+                                      const char* format,
+                                      ...) {
+    if (!reporter || !format) {
+        return false;
+    }
+
+    char buffer[1024];
+    va_list args;
+    va_start(args, format);
+    int written = vsnprintf(buffer, sizeof(buffer), format, args);
+    va_end(args);
+
+    if (written < 0 || (size_t)written >= sizeof(buffer)) {
+        return false;
+    }
+
+    SrcLocation effective_location = location;
+    if (!effective_location.file) {
+        extern VM vm;
+        if (vm.filePath) {
+            effective_location.file = vm.filePath;
+        }
+    }
+
+    const FeatureErrorInfo* info = get_error_info(code);
+    const char* help = (info && info->help) ? info->help : get_error_help(code);
+    const char* note = (info && info->note) ? info->note : get_error_note(code);
+
+    return error_reporter_add(reporter, code, SEVERITY_ERROR,
+                              effective_location, buffer, help, note);
 }
 
 bool error_reporter_add_formatted(ErrorReporter* reporter,
