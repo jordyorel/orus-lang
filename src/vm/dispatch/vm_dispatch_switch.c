@@ -2928,15 +2928,15 @@ InterpretResult vm_run_dispatch(void) {
                         vm_typed_reg_in_range(limit_reg) &&
                         vm.typed_regs.reg_types[reg] == REG_TYPE_I32 &&
                         vm.typed_regs.reg_types[limit_reg] == REG_TYPE_I32) {
-                        int32_t incremented = vm.typed_regs.i32_regs[reg] + 1;
-                        vm_store_i32_typed_hot(reg, incremented);
-                        if (incremented < vm.typed_regs.i32_regs[limit_reg]) {
+                        bool should_continue = false;
+                        if (vm_exec_monotonic_inc_cmp_i32(reg, limit_reg,
+                                                          &should_continue)) {
+                            if (should_continue) {
                             vm.ip += offset;
                         }
                         break;
                     }
-
-                    if (vm_exec_inc_i32_checked(reg)) {
+                }                    if (vm_exec_inc_i32_checked(reg)) {
                         if (vm_typed_reg_in_range(limit_reg) &&
                             vm.typed_regs.reg_types[limit_reg] == REG_TYPE_I32) {
                             if (vm.typed_regs.i32_regs[reg] < vm.typed_regs.i32_regs[limit_reg]) {
