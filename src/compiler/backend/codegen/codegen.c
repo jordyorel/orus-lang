@@ -4458,7 +4458,6 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
     bool fused_limit_temp_is_temp = false;
     int fused_limit_reg = -1;
     int fused_limit_temp_reg = -1;
-    int fused_condition_reg = -1;
 
     if (use_fused_inc) {
         fused_symbol = resolve_symbol(ctx->symbols, fused_index_name);
@@ -4511,25 +4510,12 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
             emit_byte_to_buffer(ctx->bytecode, (uint8_t)((one >> 24) & 0xFF));
         }
 
-        fused_condition_reg = mp_allocate_temp_register(ctx->allocator);
-        if (fused_condition_reg == -1) {
-            DEBUG_CODEGEN_PRINT("Error: Failed to allocate condition register for fused while");
-            ctx->has_compilation_errors = true;
-            if (fused_limit_temp_is_temp) {
-                mp_free_temp_register(ctx->allocator, fused_limit_temp_reg);
-            }
-            if (fused_limit_is_temp) {
-                mp_free_temp_register(ctx->allocator, fused_limit_reg);
-            }
-            return;
-        }
         int loop_start_fused = ctx->bytecode->count;
         ScopeFrame* loop_frame_fused = enter_loop_context(ctx, loop_start_fused);
         int loop_frame_index = loop_frame_fused ? loop_frame_fused->lexical_depth : -1;
         if (!loop_frame_fused) {
             DEBUG_CODEGEN_PRINT("Error: Failed to enter loop context");
             ctx->has_compilation_errors = true;
-            mp_free_temp_register(ctx->allocator, fused_condition_reg);
             if (fused_limit_temp_is_temp) {
                 mp_free_temp_register(ctx->allocator, fused_limit_temp_reg);
             }
@@ -4542,20 +4528,14 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
         DEBUG_CODEGEN_PRINT("While loop start at offset %d\n", loop_start_fused);
 
         set_location_from_node(ctx, while_stmt);
-        emit_byte_to_buffer(ctx->bytecode, OP_LT_I32_TYPED);
-        emit_byte_to_buffer(ctx->bytecode, (uint8_t)fused_condition_reg);
+        emit_byte_to_buffer(ctx->bytecode, OP_JUMP_IF_NOT_I32_TYPED);
         emit_byte_to_buffer(ctx->bytecode, (uint8_t)fused_loop_reg);
         emit_byte_to_buffer(ctx->bytecode, (uint8_t)(fused_limit_temp_is_temp ? fused_limit_temp_reg : fused_limit_reg));
-
-        set_location_from_node(ctx, while_stmt);
-        emit_byte_to_buffer(ctx->bytecode, OP_JUMP_IF_NOT_R);
-        emit_byte_to_buffer(ctx->bytecode, (uint8_t)fused_condition_reg);
-        int end_patch = emit_jump_placeholder(ctx->bytecode, OP_JUMP_IF_NOT_R);
+        int end_patch = emit_jump_placeholder(ctx->bytecode, OP_JUMP_IF_NOT_I32_TYPED);
         if (end_patch < 0) {
             DEBUG_CODEGEN_PRINT("Error: Failed to allocate while-loop end placeholder\n");
             ctx->has_compilation_errors = true;
             leave_loop_context(ctx, loop_frame_fused, ctx->bytecode->count);
-            mp_free_temp_register(ctx->allocator, fused_condition_reg);
             if (fused_limit_temp_is_temp) {
                 mp_free_temp_register(ctx->allocator, fused_limit_temp_reg);
             }
@@ -4564,8 +4544,6 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
             }
             return;
         }
-        mp_free_temp_register(ctx->allocator, fused_condition_reg);
-
         if (fused_body_is_block && fused_block_count > 0) {
             for (int i = 0; i < fused_block_count - 1; i++) {
                 TypedASTNode* stmt = while_body->typed.block.statements[i];
@@ -4929,19 +4907,27 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
         typed_hint_limit_reg = limit_reg_used;
     }
 
+    int guard_patch = -1;
     set_location_from_node(ctx, for_stmt);
     if (can_fuse_inc_cmp) {
-        emit_byte_to_buffer(ctx->bytecode, OP_LT_I32_TYPED);
+        emit_byte_to_buffer(ctx->bytecode, OP_JUMP_IF_NOT_I32_TYPED);
+        emit_byte_to_buffer(ctx->bytecode, (uint8_t)loop_var_reg);
+        emit_byte_to_buffer(ctx->bytecode, (uint8_t)limit_reg_used);
+        guard_patch = emit_jump_placeholder(ctx->bytecode, OP_JUMP_IF_NOT_I32_TYPED);
+        if (guard_patch < 0) {
+            ctx->has_compilation_errors = true;
+            goto cleanup;
+        }
     } else {
         if (for_stmt->typed.forRange.inclusive) {
             emit_byte_to_buffer(ctx->bytecode, OP_LE_I32_TYPED);
         } else {
             emit_byte_to_buffer(ctx->bytecode, OP_LT_I32_TYPED);
         }
+        emit_byte_to_buffer(ctx->bytecode, condition_reg);
+        emit_byte_to_buffer(ctx->bytecode, loop_var_reg);
+        emit_byte_to_buffer(ctx->bytecode, (uint8_t)end_reg);
     }
-    emit_byte_to_buffer(ctx->bytecode, condition_reg);
-    emit_byte_to_buffer(ctx->bytecode, loop_var_reg);
-    emit_byte_to_buffer(ctx->bytecode, (uint8_t) (can_fuse_inc_cmp ? limit_reg_used : end_reg));
 
     if (!step_known_positive) {
         condition_neg_reg = mp_allocate_temp_register(ctx->allocator);
@@ -5004,13 +4990,18 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
         }
     }
 
-    set_location_from_node(ctx, for_stmt);
-    emit_byte_to_buffer(ctx->bytecode, OP_JUMP_IF_NOT_R);
-    emit_byte_to_buffer(ctx->bytecode, condition_reg);
-    int end_patch = emit_jump_placeholder(ctx->bytecode, OP_JUMP_IF_NOT_R);
-    if (end_patch < 0) {
-        ctx->has_compilation_errors = true;
-        goto cleanup;
+    int end_patch = -1;
+    if (can_fuse_inc_cmp) {
+        end_patch = guard_patch;
+    } else {
+        set_location_from_node(ctx, for_stmt);
+        emit_byte_to_buffer(ctx->bytecode, OP_JUMP_IF_NOT_R);
+        emit_byte_to_buffer(ctx->bytecode, condition_reg);
+        end_patch = emit_jump_placeholder(ctx->bytecode, OP_JUMP_IF_NOT_R);
+        if (end_patch < 0) {
+            ctx->has_compilation_errors = true;
+            goto cleanup;
+        }
     }
 
     compile_block_with_scope(ctx, for_stmt->typed.forRange.body, true);

@@ -554,6 +554,7 @@ typedef enum {
     OP_JUMP,
     OP_JUMP_IF_R,      // condition_reg, offset
     OP_JUMP_IF_NOT_R,  // condition_reg, offset
+    OP_JUMP_IF_NOT_I32_TYPED, // left_reg, right_reg, offset
     OP_LOOP,
     OP_GET_ITER_R,     // dst_iter, iterable_reg
     OP_ITER_NEXT_R,    // dst_value, iter_reg, has_value_reg
