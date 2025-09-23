@@ -1259,9 +1259,17 @@ static ASTNode* parsePrintStatement(ParserContext* ctx) {
             }
 
             SrcLocation location = {NULL, separator.line, separator.column};
-            report_compile_error(E1006_INVALID_SYNTAX, location,
-                                 "expected ',' or ')' after print argument but found %s",
-                                 token_type_to_string(separator.type));
+            if (separator.length > 0 && separator.start != NULL) {
+                report_compile_error(
+                    E1006_INVALID_SYNTAX, location,
+                    "missing comma between print arguments before '%.*s'.",
+                    separator.length, separator.start);
+            } else {
+                report_compile_error(
+                    E1006_INVALID_SYNTAX, location,
+                    "missing comma between print arguments before '%s'.",
+                    token_type_to_string(separator.type));
+            }
             return NULL;
         }
     }
