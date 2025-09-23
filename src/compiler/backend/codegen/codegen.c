@@ -730,7 +730,7 @@ static int compile_struct_method_call(CompilerContext* ctx, TypedASTNode* call) 
 
 int lookup_variable(CompilerContext* ctx, const char* name) {
     if (!ctx || !ctx->symbols || !name) return -1;
-    
+
     Symbol* symbol = resolve_symbol(ctx->symbols, name);
     if (symbol) {
         // Use dual register system if available, otherwise legacy
@@ -740,7 +740,7 @@ int lookup_variable(CompilerContext* ctx, const char* name) {
             return symbol->legacy_register_id;
         }
     }
-    
+
     return -1; // Variable not found
 }
 
@@ -754,8 +754,24 @@ static Symbol* register_variable(CompilerContext* ctx, SymbolTable* scope,
 
     Symbol* existing = resolve_symbol_local_only(scope, name);
     if (existing) {
-        report_variable_redefinition(location, name,
-                                     existing->declaration_location.line);
+        bool reported = false;
+        if (ctx && ctx->errors) {
+            if (existing->declaration_location.line > 0) {
+                reported = error_reporter_add_feature_error(ctx->errors, E1011_VARIABLE_REDEFINITION,
+                                                           location,
+                                                           "Variable '%s' is already defined on line %d",
+                                                           name, existing->declaration_location.line);
+            } else {
+                reported = error_reporter_add_feature_error(ctx->errors, E1011_VARIABLE_REDEFINITION,
+                                                           location,
+                                                           "Variable '%s' is already defined in this scope",
+                                                           name);
+            }
+        }
+        if (!reported) {
+            report_variable_redefinition(location, name,
+                                         existing->declaration_location.line);
+        }
         ctx->has_compilation_errors = true;
         return NULL;
     }
@@ -3541,8 +3557,24 @@ void compile_variable_declaration(CompilerContext* ctx, TypedASTNode* var_decl) 
 
     Symbol* existing = resolve_symbol_local_only(ctx->symbols, var_name);
     if (existing) {
-        report_variable_redefinition(decl_location, var_name,
-                                     existing->declaration_location.line);
+        bool reported = false;
+        if (ctx && ctx->errors) {
+            if (existing->declaration_location.line > 0) {
+                reported = error_reporter_add_feature_error(ctx->errors, E1011_VARIABLE_REDEFINITION,
+                                                           decl_location,
+                                                           "Variable '%s' is already defined on line %d",
+                                                           var_name, existing->declaration_location.line);
+            } else {
+                reported = error_reporter_add_feature_error(ctx->errors, E1011_VARIABLE_REDEFINITION,
+                                                           decl_location,
+                                                           "Variable '%s' is already defined in this scope",
+                                                           var_name);
+            }
+        }
+        if (!reported) {
+            report_variable_redefinition(decl_location, var_name,
+                                         existing->declaration_location.line);
+        }
         ctx->has_compilation_errors = true;
         if (var_decl->typed.varDecl.initializer) {
             compile_expression(ctx, var_decl->typed.varDecl.initializer);

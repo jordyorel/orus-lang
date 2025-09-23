@@ -28,6 +28,11 @@ bool error_reporter_add(ErrorReporter* reporter,
                         const char* message,
                         const char* help,
                         const char* note);
+bool error_reporter_add_feature_error(ErrorReporter* reporter,
+                                      ErrorCode code,
+                                      SrcLocation location,
+                                      const char* format,
+                                      ...);
 bool error_reporter_add_formatted(ErrorReporter* reporter,
                                   ErrorCode code,
                                   ErrorSeverity severity,
