@@ -1230,26 +1230,51 @@ static ASTNode* parsePrintStatement(ParserContext* ctx) {
 
     // Expect '('
     Token left = nextToken(ctx);
-    if (left.type != TOKEN_LEFT_PAREN) return NULL;
+    if (left.type != TOKEN_LEFT_PAREN) {
+        SrcLocation location = {NULL, left.line, left.column};
+        report_compile_error(E1003_MISSING_PARENTHESIS, location,
+                             "expected '(' after print but found %s",
+                             token_type_to_string(left.type));
+        return NULL;
+    }
 
     // Gather zero or more comma-separated expressions
     ASTNode** args = NULL;
     int count = 0, capacity = 0;
 
     if (peekToken(ctx).type != TOKEN_RIGHT_PAREN) {
-        // Parse remaining arguments (or all arguments for regular print)
-        while (peekToken(ctx).type != TOKEN_RIGHT_PAREN) {
+        while (true) {
             ASTNode* expr = parseExpression(ctx);
             if (!expr) return NULL;
             addStatement(ctx, &args, &count, &capacity, expr);
-            if (peekToken(ctx).type != TOKEN_COMMA) break;
-            nextToken(ctx);  // consume comma
+
+            Token separator = peekToken(ctx);
+            if (separator.type == TOKEN_COMMA) {
+                nextToken(ctx);  // consume comma and continue parsing arguments
+                continue;
+            }
+
+            if (separator.type == TOKEN_RIGHT_PAREN) {
+                break;  // End of argument list
+            }
+
+            SrcLocation location = {NULL, separator.line, separator.column};
+            report_compile_error(E1006_INVALID_SYNTAX, location,
+                                 "expected ',' or ')' after print argument but found %s",
+                                 token_type_to_string(separator.type));
+            return NULL;
         }
     }
 
     // Expect ')'
     Token close = nextToken(ctx);
-    if (close.type != TOKEN_RIGHT_PAREN) return NULL;
+    if (close.type != TOKEN_RIGHT_PAREN) {
+        SrcLocation location = {NULL, close.line, close.column};
+        report_compile_error(E1003_MISSING_PARENTHESIS, location,
+                             "expected ')' to close print arguments but found %s",
+                             token_type_to_string(close.type));
+        return NULL;
+    }
 
     // Build the NODE_PRINT AST node
     ASTNode* node = new_node(ctx);
