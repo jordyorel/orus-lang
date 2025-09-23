@@ -184,12 +184,16 @@
     "expected_diagnostics": [
       {
         "title": "Indentation looks off",
-        "message_contains": "Unexpected indentation. This line is indented but no block is currently open."
+        "message_contains": "It looks like this line is indented, but there's no open block above it.",
+        "help_contains": "If you meant to start a block",
+        "note_contains": "Blocks in Orus begin"
       }
     ],
     "expected": [
       "-- SYNTAX ERROR: Indentation looks off",
-      "Unexpected indentation. This line is indented but no block is currently open.",
+      "It looks like this line is indented, but there's no open block above it.",
+      "help: If you meant to start a block, add a ':' on the previous line or remove this extra indentation.",
+      "note: Blocks in Orus begin after lines ending with ':' and end when the indentation returns.",
       "Compilation failed for \"tests/error_reporting/unexpected_indent.orus\"."
     ]
   },

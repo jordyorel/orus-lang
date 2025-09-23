@@ -1822,7 +1822,7 @@ static ASTNode* parseBlock(ParserContext* ctx) {
         if (t.type == TOKEN_INDENT) {
             SrcLocation location = {NULL, t.line, t.column};
             report_compile_error(E1008_INVALID_INDENTATION, location,
-                                 "Unexpected indentation. This line is indented but no block is currently open.");
+                                 "It looks like this line is indented, but there's no open block above it.");
             ctx->block_depth--;
             return NULL;
         }
@@ -3996,7 +3996,7 @@ ASTNode* parseSourceWithContext(ParserContext* ctx, const char* source) {
         if (t.type == TOKEN_INDENT) {
             SrcLocation location = {NULL, t.line, t.column};
             report_compile_error(E1008_INVALID_INDENTATION, location,
-                                 "Unexpected indentation. This line is indented but no block is currently open.");
+                                 "It looks like this line is indented, but there's no open block above it.");
             return NULL;
         }
         if (t.type == TOKEN_COMMA) {
