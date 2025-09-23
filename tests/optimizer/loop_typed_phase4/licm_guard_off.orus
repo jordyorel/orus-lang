@@ -1,3 +1,4 @@
+// Baseline copy of licm_guard.orus used for LICM-disabled telemetry comparison
 mut threshold: i32 = 6
 mut base_guard: bool = threshold < 12
 mut result: i32 = 0
@@ -10,4 +11,4 @@ while index < threshold:
         result = result + index
     index = index + 1
 
-print("phase4-ok", result)
+print("phase4-off", result)

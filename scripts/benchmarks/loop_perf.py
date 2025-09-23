@@ -24,6 +24,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 PHASE_DEFAULT_BENCH: Dict[str, Path] = {
     "2": REPO_ROOT / "tests" / "benchmarks" / "loop_fastpath_phase2.orus",
     "3": REPO_ROOT / "tests" / "benchmarks" / "loop_fastpath_phase3.orus",
+    "4": REPO_ROOT / "tests" / "benchmarks" / "loop_fastpath_phase4.orus",
 }
 
 ELAPSED_PATTERN = re.compile(r"^elapsed:\s*([0-9]+(?:\.[0-9]+)?)$")
@@ -94,6 +95,24 @@ PHASE_VARIANTS: Dict[str, List[Variant]] = {
             env={"ORUS_FORCE_BOXED_ITERATORS": "1"},
         ),
     ],
+    "4": [
+        Variant(
+            name="licm-on",
+            description="LICM typed guards fused with fast path enabled",
+            env={
+                "ORUS_ENABLE_LICM_TYPED_GUARDS": "1",
+                "ORUS_EXPERIMENT_BOOL_BRANCH_FASTPATH": "1",
+            },
+        ),
+        Variant(
+            name="licm-off",
+            description="LICM typed guards disabled for comparison",
+            env={
+                "ORUS_ENABLE_LICM_TYPED_GUARDS": "0",
+                "ORUS_EXPERIMENT_BOOL_BRANCH_FASTPATH": "1",
+            },
+        ),
+    ],
 }
 
 CSV_HEADER = [
@@ -112,6 +131,7 @@ CSV_HEADER = [
 PHASE_HEADERS: Dict[str, str] = {
     "2": "Phase 2 typed increment microbenchmark",
     "3": "Phase 3 zero-allocation iterator microbenchmark",
+    "4": "Phase 4 LICM typed guard microbenchmark",
 }
 
 

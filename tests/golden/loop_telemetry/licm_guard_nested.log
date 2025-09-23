@@ -1,0 +1,1 @@
+[loop-trace] typed_hit=52 typed_miss=0 boxed_type_mismatch=0 boxed_overflow_guard=0 branch_fast_hits=41 branch_fast_misses=0 inc_overflow_bailouts=0 inc_type_instability=0 iter_alloc_saved=0 iter_fallbacks=0 licm_guard_fusions=41 licm_guard_demotions=0

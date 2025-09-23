@@ -1244,6 +1244,9 @@ boxed safety net and LICM correctness guarantees.
        depend on typed cache residency.
      - Mark loops that successfully hoist invariants via `licm_mark_loop_metadata`
        so runtime counters can distinguish fused guards from demoted ones.
+     - Rewrite redundant guard chains (e.g. `fused_guard = typed_guard and base_guard`)
+       so the hoisted initializer references the fused predecessor directly,
+       incrementing guard fusion counters without re-evaluating the base guard.
      - Introduce optimizer unit tests that combine hoisted bounds checks with
        the typed iterators to guarantee early exits still occur.
 

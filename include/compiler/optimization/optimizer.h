@@ -28,7 +28,9 @@ typedef struct OptimizationContext {
     int binary_expressions_folded;      // Specific to constant folding
     int loop_invariants_hoisted;        // LICM statistics
     int loops_optimized;                // Number of loops transformed
-    
+    int licm_guard_fusions;             // Count of guards hoisted + fused
+    int licm_redundant_guard_fusions;   // Count of redundant guard rewrites
+
     // Debug information
     bool verbose_output;               // Enable detailed optimization logging
 } OptimizationContext;

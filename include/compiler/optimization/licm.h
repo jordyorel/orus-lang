@@ -8,6 +8,8 @@
 typedef struct LICMStats {
     int invariants_hoisted;
     int loops_optimized;
+    int guard_fusions;
+    int redundant_guard_fusions;
     bool changed;
 } LICMStats;
 

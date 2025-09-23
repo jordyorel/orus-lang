@@ -37,6 +37,8 @@ OptimizationContext* init_optimization_context(void) {
     ctx->binary_expressions_folded = 0;
     ctx->loop_invariants_hoisted = 0;
     ctx->loops_optimized = 0;
+    ctx->licm_guard_fusions = 0;
+    ctx->licm_redundant_guard_fusions = 0;
     
     // Enable detailed logging
     ctx->verbose_output = true;
