@@ -729,6 +729,31 @@ Value evaluate_binary_operation(Value left, const char* op, Value right) {
         if (left.type == VAL_F64 && right.type == VAL_F64) {
             return F64_VAL(AS_F64(left) + AS_F64(right));
         }
+        if (left.type == VAL_STRING && right.type == VAL_STRING) {
+            ObjString* leftStr = AS_STRING(left);
+            ObjString* rightStr = AS_STRING(right);
+            int newLength = leftStr->length + rightStr->length;
+
+            char* buffer = (char*)malloc((size_t)newLength + 1);
+            if (!buffer) {
+                DEBUG_CONSTANTFOLD_PRINT("⚠️ Failed to allocate buffer for string folding\n");
+                return left;
+            }
+
+            memcpy(buffer, leftStr->chars, (size_t)leftStr->length);
+            memcpy(buffer + leftStr->length, rightStr->chars, (size_t)rightStr->length);
+            buffer[newLength] = '\0';
+
+            ObjString* resultStr = intern_string(buffer, newLength);
+            free(buffer);
+
+            if (!resultStr) {
+                DEBUG_CONSTANTFOLD_PRINT("⚠️ Failed to intern folded string\n");
+                return left;
+            }
+
+            return STRING_VAL(resultStr);
+        }
     }
     else if (strcmp(op, "-") == 0) {
         if (left.type == VAL_I32 && right.type == VAL_I32) {
