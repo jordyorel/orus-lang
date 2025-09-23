@@ -987,6 +987,9 @@ typedef struct {
     // Heap object registers (boxed)
     Value heap_regs[256];
 
+    // Dirty flags indicate when the boxed register copy is stale
+    bool dirty[256];
+
     // Register type tracking (for debugging/safety)
     uint8_t reg_types[256];  // Track which register bank each logical register maps to
 } TypedRegisters;

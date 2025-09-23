@@ -22,6 +22,7 @@
             vm_trace_loop_event(LOOP_TRACE_TYPE_MISMATCH); \
             if (vm_typed_reg_in_range((reg))) { \
                 vm.typed_regs.reg_types[(reg)] = REG_TYPE_HEAP; \
+                vm.typed_regs.dirty[(reg)] = false; \
             } \
             VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be i32"); \
         } \
@@ -34,6 +35,7 @@
         if (vm_typed_reg_in_range((reg)) && \
             vm.typed_regs.reg_types[(reg)] == REG_TYPE_I32) { \
             vm.typed_regs.i32_regs[(reg)] = next_value__; \
+            vm.typed_regs.dirty[(reg)] = false; \
         } \
         vm_set_register_safe((reg), I32_VAL(next_value__)); \
     } while (0)
@@ -2862,7 +2864,7 @@ InterpretResult vm_run_dispatch(void) {
                     }
 
                     int32_t result = AS_I32(src_value) + imm;
-                    store_i32_register(dst, result);
+                    vm_store_i32_typed_hot(dst, result);
                     break;
                 }
 
@@ -2977,7 +2979,9 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t zero_test = READ_BYTE();
                     int16_t offset = READ_SHORT();
 
-                    if (--vm.typed_regs.i32_regs[reg] > vm.typed_regs.i32_regs[zero_test]) {
+                    int32_t decremented = vm.typed_regs.i32_regs[reg] - 1;
+                    vm_store_i32_typed_hot(reg, decremented);
+                    if (decremented > vm.typed_regs.i32_regs[zero_test]) {
                         vm.ip += offset;
                     }
                     break;
@@ -2989,10 +2993,10 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t mul2 = READ_BYTE();
                     uint8_t add = READ_BYTE();
 
-                    vm.typed_regs.i32_regs[dst] =
+                    int32_t result =
                         vm.typed_regs.i32_regs[mul1] * vm.typed_regs.i32_regs[mul2] +
                         vm.typed_regs.i32_regs[add];
-                    vm.typed_regs.reg_types[dst] = REG_TYPE_I32;
+                    vm_store_i32_typed_hot(dst, result);
                     break;
                 }
 

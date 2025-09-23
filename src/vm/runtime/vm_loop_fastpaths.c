@@ -67,6 +67,7 @@ bool vm_exec_inc_i32_checked(uint16_t reg) {
 
     if (vm.typed_regs.reg_types[reg] != REG_TYPE_I32) {
         vm.typed_regs.reg_types[reg] = REG_TYPE_HEAP;
+        vm.typed_regs.dirty[reg] = false;
         vm_trace_loop_event(LOOP_TRACE_INC_TYPE_INSTABILITY);
         vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
         return false;
@@ -76,12 +77,13 @@ bool vm_exec_inc_i32_checked(uint16_t reg) {
     int32_t next_value;
     if (__builtin_add_overflow(current, 1, &next_value)) {
         vm.typed_regs.reg_types[reg] = REG_TYPE_HEAP;
+        vm.typed_regs.dirty[reg] = false;
         vm_trace_loop_event(LOOP_TRACE_INC_OVERFLOW_BAILOUT);
         vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
         return false;
     }
 
-    store_i32_register(reg, next_value);
+    vm_store_i32_typed_hot(reg, next_value);
     vm_trace_loop_event(LOOP_TRACE_TYPED_HIT);
     return true;
 }
@@ -118,7 +120,7 @@ bool vm_exec_monotonic_inc_cmp_i32(uint16_t counter_reg, uint16_t limit_reg,
     }
 
     int32_t next_value = current + 1;
-    store_i32_register(counter_reg, next_value);
+    vm_store_i32_typed_hot(counter_reg, next_value);
 
     int32_t limit_value = vm.typed_regs.i32_regs[limit_reg];
     if (out_should_continue) {

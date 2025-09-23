@@ -129,7 +129,7 @@ void handle_add_i32_typed(void) {
         vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
     }
 
-    store_i32_register(dst, left_val + right_val);
+    vm_store_i32_typed_hot(dst, left_val + right_val);
 }
 
 void handle_sub_i32_typed(void) {
@@ -159,7 +159,7 @@ void handle_sub_i32_typed(void) {
         vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
     }
 
-    store_i32_register(dst, left_val - right_val);
+    vm_store_i32_typed_hot(dst, left_val - right_val);
 }
 
 void handle_mul_i32_typed(void) {
@@ -189,7 +189,7 @@ void handle_mul_i32_typed(void) {
         vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
     }
 
-    store_i32_register(dst, left_val * right_val);
+    vm_store_i32_typed_hot(dst, left_val * right_val);
 }
 
 void handle_div_i32_typed(void) {
@@ -224,7 +224,7 @@ void handle_div_i32_typed(void) {
         vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
     }
 
-    store_i32_register(dst, left_val / right_val);
+    vm_store_i32_typed_hot(dst, left_val / right_val);
 }
 
 void handle_mod_i32_typed(void) {
@@ -259,7 +259,7 @@ void handle_mod_i32_typed(void) {
         vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
     }
 
-    store_i32_register(dst, left_val % right_val);
+    vm_store_i32_typed_hot(dst, left_val % right_val);
 }
 
 // ====== I64 Typed Arithmetic Handlers ======
