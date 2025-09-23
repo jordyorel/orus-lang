@@ -199,6 +199,16 @@ keeps the interpreter correct even if later stages are delayed.
        LICM enhancement flag by default.
      - Run `make test-loop-telemetry`, `make test-optimizer`, and phase-specific
        benchmarks with `scripts/benchmarks/loop_perf.py --phase=4`.
+   - **Status**
+     - ✅ `typed_escape_mask`, `typed_guard_witness`, and `typed_metadata_stable`
+       are preserved end-to-end through LICM, SSA reconstruction, and the
+       register allocator with dedicated unit coverage.
+     - ✅ Redundant guard chains are rewritten to reference their fused
+       predecessors, bumping the optimizer guard fusion statistics and the
+       telemetry counters without re-evaluating the base guard expression.
+     - ✅ Optimizer, telemetry, and benchmark suites exercise LICM on/off
+       comparisons with hoisted guards, nested loops, and fallback exits to
+       guarantee ≥90% typed hit ratios before rollout.
    - **Owner**: Optimizer team.
 
 6. **Regression & performance gates (Phase 5, Day 11-14)**

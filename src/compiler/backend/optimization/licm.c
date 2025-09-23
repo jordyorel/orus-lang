@@ -2,6 +2,7 @@
 #include "compiler/optimization/constantfold.h"
 #include "debug/debug_config.h"
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -21,17 +22,23 @@ static bool has_stable_bool_witness(const TypedASTNode* node) {
     return type_is_bool(node->resolvedType);
 }
 
-static void licm_mark_loop_metadata(TypedASTNode* node, int hoisted_guards) {
+static void licm_mark_loop_metadata(TypedASTNode* node,
+                                    uint32_t guard_mask,
+                                    int hoisted_guards) {
     if (!node) {
         return;
     }
 
-    if (hoisted_guards > 0) {
+    if (guard_mask != 0u && hoisted_guards > 0) {
         node->typed_guard_witness = true;
         node->typed_metadata_stable = true;
-        node->typed_escape_mask |= (uint32_t)hoisted_guards;
+        node->typed_escape_mask = guard_mask;
     } else {
+        if (guard_mask == 0u) {
+            node->typed_guard_witness = false;
+        }
         node->typed_metadata_stable = false;
+        node->typed_escape_mask = 0u;
     }
 }
 
@@ -556,6 +563,119 @@ static bool expression_is_boolean(const TypedASTNode* node) {
     return type_is_bool(node->resolvedType);
 }
 
+static const ASTNode* extract_guard_base_expression(const TypedASTNode* initializer) {
+    if (!initializer || !initializer->original) {
+        return NULL;
+    }
+
+    switch (initializer->original->type) {
+        case NODE_IDENTIFIER:
+            return initializer->original;
+        case NODE_BINARY: {
+            const char* op = initializer->original->binary.op;
+            if (!op) {
+                return NULL;
+            }
+            if (strcmp(op, "and") != 0) {
+                return NULL;
+            }
+
+            if (initializer->typed.binary.right) {
+                return extract_guard_base_expression(initializer->typed.binary.right);
+            }
+            return NULL;
+        }
+        default:
+            break;
+    }
+
+    return NULL;
+}
+
+static int fuse_hoisted_guard_initializers(TypedASTNode** hoisted_nodes,
+                                           int hoistable_count) {
+    if (!hoisted_nodes || hoistable_count <= 0) {
+        return 0;
+    }
+
+    const char* last_guard_name = NULL;
+    const ASTNode* last_guard_base = NULL;
+    const char* last_guard_base_name = NULL;
+    TypedASTNode* last_guard_initializer = NULL;
+    int redundant_rewrites = 0;
+
+    for (int i = 0; i < hoistable_count; ++i) {
+        TypedASTNode* node = hoisted_nodes[i];
+        if (!node || !node->original) {
+            continue;
+        }
+
+        if (node->original->type != NODE_VAR_DECL || !node->typed_guard_witness) {
+            last_guard_name = NULL;
+            last_guard_base = NULL;
+            last_guard_base_name = NULL;
+            last_guard_initializer = NULL;
+            continue;
+        }
+
+        const char* guard_name = node->original->varDecl.name;
+        TypedASTNode* initializer = node->typed.varDecl.initializer;
+        const ASTNode* guard_base = extract_guard_base_expression(initializer);
+        const char* guard_base_name = NULL;
+        if (guard_base && guard_base->type == NODE_IDENTIFIER) {
+            guard_base_name = guard_base->identifier.name;
+        }
+        TypedASTNode* previous_guard_initializer = last_guard_initializer;
+
+        if (last_guard_name && initializer && initializer->original &&
+            initializer->original->type == NODE_BINARY) {
+            const char* op = initializer->original->binary.op;
+            if (op && strcmp(op, "and") == 0) {
+                TypedASTNode* left = initializer->typed.binary.left;
+                TypedASTNode* right = initializer->typed.binary.right;
+                bool base_matches = false;
+                if (right && last_guard_base && right->original == last_guard_base) {
+                    base_matches = true;
+                } else if (right && right->original &&
+                           right->original->type == NODE_IDENTIFIER &&
+                           last_guard_base_name &&
+                           right->original->identifier.name &&
+                           strcmp(right->original->identifier.name, last_guard_base_name) == 0) {
+                    base_matches = true;
+                }
+                if (left && left->original && left->original->type == NODE_IDENTIFIER &&
+                    strcmp(left->original->identifier.name, last_guard_name) == 0 &&
+                    base_matches) {
+                    initializer->typed.binary.left = NULL;
+                    initializer->typed.binary.right = NULL;
+                    node->typed.varDecl.initializer = left;
+                    if (right && right != previous_guard_initializer) {
+                        free_typed_ast_node(right);
+                    }
+                    free_typed_ast_node(initializer);
+                    node->typed_metadata_stable = true;
+                    node->typed_guard_witness = true;
+                    guard_base = last_guard_base;
+                    guard_base_name = last_guard_base_name;
+                    last_guard_initializer = left;
+                    redundant_rewrites++;
+                    last_guard_name = guard_name;
+                    last_guard_base = guard_base;
+                    last_guard_base_name = guard_base_name;
+                    continue;
+                }
+            }
+        }
+
+        last_guard_name = guard_name;
+        last_guard_base = guard_base;
+        last_guard_base_name = guard_base_name;
+        last_guard_initializer = initializer;
+    }
+
+    return redundant_rewrites;
+}
+
 static bool is_hoistable_statement(const TypedASTNode* node,
                                    const NameSet* locals,
                                    const NameSet* mutated,
@@ -670,13 +790,17 @@ static TypedASTNode* get_loop_body(TypedASTNode* loop_node) {
 static int hoist_invariants_from_loop(TypedASTNode*** parent_array_ptr,
                                       int* parent_count_ptr,
                                       int loop_index,
-                                      int* hoisted_guard_count) {
+                                      int* hoisted_guard_count,
+                                      uint32_t* hoisted_guard_mask) {
     if (!parent_array_ptr || !parent_count_ptr || loop_index < 0) {
         return 0;
     }
 
     if (hoisted_guard_count) {
         *hoisted_guard_count = 0;
+    }
+    if (hoisted_guard_mask) {
+        *hoisted_guard_mask = 0u;
     }
 
     TypedASTNode** parent_statements = *parent_array_ptr;
@@ -717,11 +841,13 @@ static int hoist_invariants_from_loop(TypedASTNode*** parent_array_ptr,
     collect_loop_metadata(loop_body, &locals, &mutated, &mutation_counts);
 
     bool* hoist_flags = calloc(body_count, sizeof(bool));
-    if (!hoist_flags) {
+    bool* guard_flags = calloc(body_count, sizeof(bool));
+    if (!hoist_flags || !guard_flags) {
         nameset_free(&hoisted_names);
         namecounter_free(&mutation_counts);
         nameset_free(&mutated);
         nameset_free(&locals);
+        free(guard_flags);
         return 0;
     }
 
@@ -738,12 +864,14 @@ static int hoist_invariants_from_loop(TypedASTNode*** parent_array_ptr,
             hoist_flags[i] = true;
             hoistable_count++;
             if (is_guard) {
+                guard_flags[i] = true;
                 guard_hoist_count++;
             }
         }
     }
 
     if (hoistable_count == 0) {
+        free(guard_flags);
         free(hoist_flags);
         nameset_free(&hoisted_names);
         namecounter_free(&mutation_counts);
@@ -752,11 +880,15 @@ static int hoist_invariants_from_loop(TypedASTNode*** parent_array_ptr,
         if (hoisted_guard_count) {
             *hoisted_guard_count = 0;
         }
+        if (hoisted_guard_mask) {
+            *hoisted_guard_mask = 0u;
+        }
         return 0;
     }
 
     TypedASTNode** hoisted_nodes = malloc(sizeof(TypedASTNode*) * hoistable_count);
     if (!hoisted_nodes) {
+        free(guard_flags);
         free(hoist_flags);
         nameset_free(&hoisted_names);
         namecounter_free(&mutation_counts);
@@ -771,6 +903,7 @@ static int hoist_invariants_from_loop(TypedASTNode*** parent_array_ptr,
         new_body = malloc(sizeof(TypedASTNode*) * new_body_count);
         if (!new_body) {
             free(hoisted_nodes);
+            free(guard_flags);
             free(hoist_flags);
             nameset_free(&hoisted_names);
             namecounter_free(&mutation_counts);
@@ -782,14 +915,33 @@ static int hoist_invariants_from_loop(TypedASTNode*** parent_array_ptr,
 
     int hoisted_index = 0;
     int body_write_index = 0;
+    uint32_t guard_mask = 0u;
+    uint32_t next_guard_bit = 1u;
     for (int i = 0; i < body_count; i++) {
         TypedASTNode* stmt = body_statements[i];
         if (hoist_flags[i]) {
             hoisted_nodes[hoisted_index++] = stmt;
+            if (guard_flags[i]) {
+                uint32_t guard_bit = next_guard_bit;
+                if (next_guard_bit != 0u) {
+                    guard_mask |= guard_bit;
+                    if (next_guard_bit == 0x80000000u) {
+                        next_guard_bit = 0u;
+                    } else {
+                        next_guard_bit <<= 1u;
+                    }
+                }
+
+                stmt->typed_guard_witness = true;
+                stmt->typed_metadata_stable = true;
+                stmt->typed_escape_mask = guard_bit;
+            }
         } else if (new_body) {
             new_body[body_write_index++] = stmt;
         }
     }
+
+    int redundant_rewrites = fuse_hoisted_guard_initializers(hoisted_nodes, hoistable_count);
 
     TypedASTNode** new_parent = malloc(sizeof(TypedASTNode*) * (parent_count + hoistable_count));
     if (!new_parent) {
@@ -797,6 +949,7 @@ static int hoist_invariants_from_loop(TypedASTNode*** parent_array_ptr,
             free(new_body);
         }
         free(hoisted_nodes);
+        free(guard_flags);
         free(hoist_flags);
         nameset_free(&hoisted_names);
         namecounter_free(&mutation_counts);
@@ -830,6 +983,7 @@ static int hoist_invariants_from_loop(TypedASTNode*** parent_array_ptr,
     loop_body->typed.block.count = new_body_count;
 
     free(hoisted_nodes);
+    free(guard_flags);
     free(hoist_flags);
     nameset_free(&hoisted_names);
     namecounter_free(&mutation_counts);
@@ -837,6 +991,12 @@ static int hoist_invariants_from_loop(TypedASTNode*** parent_array_ptr,
     nameset_free(&locals);
     if (hoisted_guard_count) {
         *hoisted_guard_count = guard_hoist_count;
+    }
+    if (hoisted_guard_mask) {
+        *hoisted_guard_mask = guard_mask;
+    }
+    if (redundant_rewrites > 0) {
+        g_licm_stats.redundant_guard_fusions += redundant_rewrites;
     }
     return hoistable_count;
 }
@@ -876,16 +1036,19 @@ static bool process_statement_array(TypedASTNode*** array_ptr, int* count_ptr) {
         if (is_supported_loop_node(stmt)) {
             TypedASTNode* original_loop = stmt;
             int hoisted_guard_count = 0;
+            uint32_t hoisted_guard_mask = 0u;
             int hoisted = hoist_invariants_from_loop(array_ptr,
                                                     count_ptr,
                                                     index,
-                                                    &hoisted_guard_count);
+                                                    &hoisted_guard_count,
+                                                    &hoisted_guard_mask);
             if (hoisted > 0) {
                 changed = true;
                 g_licm_stats.changed = true;
                 g_licm_stats.invariants_hoisted += hoisted;
                 g_licm_stats.loops_optimized++;
-                licm_mark_loop_metadata(original_loop, hoisted_guard_count);
+                g_licm_stats.guard_fusions += hoisted_guard_count;
+                licm_mark_loop_metadata(original_loop, hoisted_guard_mask, hoisted_guard_count);
 
                 statements = *array_ptr;
                 index += hoisted;
@@ -896,7 +1059,7 @@ static bool process_statement_array(TypedASTNode*** array_ptr, int* count_ptr) {
             }
 
             if (hoisted == 0) {
-                licm_mark_loop_metadata(stmt, 0);
+                licm_mark_loop_metadata(stmt, 0u, 0);
             }
 
             if (stmt && stmt->original && is_supported_loop_node(stmt)) {
@@ -1077,6 +1240,8 @@ void init_licm_stats(LICMStats* stats) {
 
     stats->invariants_hoisted = 0;
     stats->loops_optimized = 0;
+    stats->guard_fusions = 0;
+    stats->redundant_guard_fusions = 0;
     stats->changed = false;
 }
 
@@ -1086,9 +1251,12 @@ void print_licm_statistics(const LICMStats* stats) {
     }
 
     if (stats->changed) {
-        DEBUG_OPTIMIZER_PRINT("[LICM] Hoisted %d invariant declarations across %d loop(s)\n",
-                              stats->invariants_hoisted,
-                              stats->loops_optimized);
+        DEBUG_OPTIMIZER_PRINT(
+            "[LICM] Hoisted %d invariant declarations across %d loop(s) with %d guard fusion(s) (%d redundant rewrites)\n",
+            stats->invariants_hoisted,
+            stats->loops_optimized,
+            stats->guard_fusions,
+            stats->redundant_guard_fusions);
     } else {
         DEBUG_OPTIMIZER_PRINT("[LICM] No loop-invariant declarations found\n");
     }
@@ -1108,6 +1276,8 @@ bool apply_loop_invariant_code_motion(TypedASTNode* ast, OptimizationContext* op
         opt_ctx->optimizations_applied += g_licm_stats.invariants_hoisted;
         opt_ctx->loop_invariants_hoisted += g_licm_stats.invariants_hoisted;
         opt_ctx->loops_optimized += g_licm_stats.loops_optimized;
+        opt_ctx->licm_guard_fusions += g_licm_stats.guard_fusions;
+        opt_ctx->licm_redundant_guard_fusions += g_licm_stats.redundant_guard_fusions;
     }
 
     print_licm_statistics(&g_licm_stats);

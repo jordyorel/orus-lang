@@ -144,8 +144,9 @@ BYTECODE_TEST_BIN = $(BUILDDIR)/tests/test_jump_patch
 SOURCE_MAP_TEST_BIN = $(BUILDDIR)/tests/test_source_mapping
 SCOPE_TRACKING_TEST_BIN = $(BUILDDIR)/tests/test_scope_tracking
 PEEPHOLE_TEST_BIN = $(BUILDDIR)/tests/test_constant_propagation
+LICM_METADATA_TEST_BIN = $(BUILDDIR)/tests/test_licm_typed_metadata
 
-.PHONY: all clean test unit-test test-control-flow test-loop-telemetry benchmark help debug release profiling analyze install bytecode-jump-tests source-map-tests scope-tracking-tests peephole-tests cli-smoke-tests
+.PHONY: all clean test unit-test test-control-flow test-loop-telemetry benchmark help debug release profiling analyze install bytecode-jump-tests source-map-tests scope-tracking-tests peephole-tests cli-smoke-tests licm-metadata-tests test-optimizer
 
 all: build-info $(ORUS)
 
@@ -297,6 +298,15 @@ peephole-tests: $(PEEPHOLE_TEST_BIN)
 	@echo "Running constant propagation tests..."
 	@./$(PEEPHOLE_TEST_BIN)
 
+$(LICM_METADATA_TEST_BIN): tests/unit/test_licm_typed_metadata.c $(COMPILER_OBJS) $(VM_OBJS)
+	@mkdir -p $(dir $@)
+	@echo "Compiling LICM typed metadata tests..."
+	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+
+licm-metadata-tests: $(LICM_METADATA_TEST_BIN)
+	@echo "Running LICM typed metadata tests..."
+	@./$(LICM_METADATA_TEST_BIN)
+
 cli-smoke-tests:
 	@python3 tests/comprehensive/run_cli_smoke_tests.py ./$(ORUS)
 
@@ -332,6 +342,9 @@ test-loop-telemetry: $(ORUS)
                 tests/loop_fastpaths/phase3/iterator_zero_alloc.orus \
                 tests/loop_fastpaths/phase3/iterator_array_zero_alloc.orus \
                 tests/optimizer/loop_typed_phase4/licm_guard.orus \
+                tests/optimizer/loop_typed_phase4/licm_guard_nested.orus \
+                tests/optimizer/loop_typed_phase4/licm_guard_fallback.orus \
+                tests/optimizer/loop_typed_phase4/licm_guard_off.orus \
                 tests/loop_fastpaths/phase5/telemetry_smoke.orus; do \
                 name=$$(basename $$test_file .orus); \
                 out=build/loop_telemetry/$$name.log; \
@@ -340,6 +353,7 @@ test-loop-telemetry: $(ORUS)
                         *phase1*) env_args="$$env_args ORUS_EXPERIMENT_BOOL_BRANCH_FASTPATH=1" ;; \
                         *disable_fastpath*) env_args="$$env_args ORUS_DISABLE_INC_TYPED_FASTPATH=1" ;; \
                         *phase3*) env_args="$$env_args ORUS_FORCE_BOXED_ITERATORS=0" ;; \
+                        *phase4*off.orus) env_args="$$env_args ORUS_EXPERIMENT_BOOL_BRANCH_FASTPATH=1 ORUS_ENABLE_LICM_TYPED_GUARDS=0" ;; \
                         *phase4*) env_args="$$env_args ORUS_ENABLE_LICM_TYPED_GUARDS=1 ORUS_EXPERIMENT_BOOL_BRANCH_FASTPATH=1" ;; \
                         *phase5*) env_args="$$env_args ORUS_FORCE_BOXED_ITERATORS=1 ORUS_ENABLE_LICM_TYPED_GUARDS=1" ;; \
                         *) env_args="$$env_args" ;; \
@@ -358,12 +372,14 @@ test-loop-telemetry: $(ORUS)
 			failed=$$((failed + 1)); \
 		fi; \
 	done; \
-	if [ $$failed -eq 0 ]; then \
-		echo "\033[32m✓ Loop telemetry baseline verified ($$passed)\033[0m"; \
-	else \
-		echo "\033[31m✗ $$failed loop telemetry test(s) failed\033[0m"; \
-		exit 1; \
-	fi
+        if [ $$failed -eq 0 ]; then \
+                echo "\033[32m✓ Loop telemetry baseline verified ($$passed)\033[0m"; \
+        else \
+                echo "\033[31m✗ $$failed loop telemetry test(s) failed\033[0m"; \
+                exit 1; \
+        fi
+
+test-optimizer: licm-metadata-tests
 
 # CI test target: Build with warnings as errors and run full test suite
 ci-test: 

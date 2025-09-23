@@ -1,0 +1,31 @@
+// Phase 4 LICM microbenchmark focusing on typed guard fusion
+
+TRIALS: i32 = 3
+ITERATIONS: i32 = 2_000_000
+
+mut checksum: i64 = 0
+mut trial: i32 = 0
+
+while trial < TRIALS:
+    start: f64 = time_stamp()
+    mut index: i32 = 0
+    mut limit: i32 = ITERATIONS
+    mut base_guard: bool = limit > 0
+    mut fused_hits: i64 = 0
+
+    while index < limit:
+        mut typed_guard: bool = base_guard
+        mut fused_guard: bool = typed_guard and base_guard
+        if fused_guard:
+            fused_hits = fused_hits + 1
+        index = index + 1
+
+    elapsed: f64 = time_stamp() - start
+    print("elapsed:", elapsed)
+
+    checksum = checksum + fused_hits
+    trial = trial + 1
+
+print("checksum:", checksum)
+print("trials:", TRIALS)
+print("iterations:", ITERATIONS)
