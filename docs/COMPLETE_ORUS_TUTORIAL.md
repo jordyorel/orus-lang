@@ -119,7 +119,7 @@ values = [1, 2, 3]
 for item in values:
     print("item", item)
 
-'outer: for row in 0..5:
+'outer: for row in 0..5: // not implemented
     for col in 0..5:
         if row == col:
             break 'outer
