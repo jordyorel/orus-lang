@@ -176,6 +176,28 @@
     ]
   },
   {
+    "name": "unexpected_indent",
+    "source": "unexpected_indent.orus",
+    "description": "Indented statements without a surrounding block should clearly report the indentation error.",
+    "expected_exit": 65,
+    "expected_diagnostic_count": 1,
+    "expected_diagnostics": [
+      {
+        "title": "Indentation looks off",
+        "message_contains": "It looks like this line is indented, but there's no open block above it.",
+        "help_contains": "If you meant to start a block",
+        "note_contains": "Blocks in Orus begin"
+      }
+    ],
+    "expected": [
+      "-- SYNTAX ERROR: Indentation looks off",
+      "It looks like this line is indented, but there's no open block above it.",
+      "help: If you meant to start a block, add a ':' on the previous line or remove this extra indentation.",
+      "note: Blocks in Orus begin after lines ending with ':' and end when the indentation returns.",
+      "Compilation failed for \"tests/error_reporting/unexpected_indent.orus\"."
+    ]
+  },
+  {
     "name": "closure_invalid_upvalue",
     "source": "closure_invalid_upvalue.orus",
     "description": "Mutating a captured immutable variable inside a closure is now caught at compile time.",
