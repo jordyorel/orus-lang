@@ -166,6 +166,7 @@ typedef struct {
     int* lines;
     int* columns;
     const char** files;
+    uint8_t* monotonic_range_flags;
     struct {
         int count;
         int capacity;

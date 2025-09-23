@@ -3347,33 +3347,62 @@ InterpretResult vm_run_dispatch(void) {
     }
 
     LABEL_OP_INC_CMP_JMP: {
+        bool has_chunk = vm.chunk && vm.chunk->code;
+        size_t opcode_offset = has_chunk ? (size_t)((vm.ip - vm.chunk->code) - 1) : 0;
         uint8_t reg = *vm.ip++;
         uint8_t limit_reg = *vm.ip++;
         int16_t offset = *(int16_t*)vm.ip;
         vm.ip += 2;
 
-        const uint16_t typed_limit =
-            (uint16_t)(sizeof(vm.typed_regs.i32_regs) / sizeof(vm.typed_regs.i32_regs[0]));
-        if (reg < typed_limit && limit_reg < typed_limit &&
+        bool monotonic_hint = false;
+        if (has_chunk && vm.chunk->monotonic_range_flags &&
+            opcode_offset < (size_t)vm.chunk->count) {
+            monotonic_hint = vm.chunk->monotonic_range_flags[opcode_offset] != 0;
+        }
+
+        if (monotonic_hint && vm_typed_reg_in_range(reg) &&
+            vm_typed_reg_in_range(limit_reg) &&
             vm.typed_regs.reg_types[reg] == REG_TYPE_I32 &&
             vm.typed_regs.reg_types[limit_reg] == REG_TYPE_I32) {
-            int32_t incremented = vm.typed_regs.i32_regs[reg] + 1;
-            vm_store_i32_typed_hot(reg, incremented);
-            if (incremented < vm.typed_regs.i32_regs[limit_reg]) {
-                vm.ip += offset;
+            bool should_continue = false;
+            if (vm_exec_monotonic_inc_cmp_i32(reg, limit_reg, &should_continue)) {
+                if (should_continue) {
+                    vm.ip += offset;
+                }
+                DISPATCH_TYPED();
             }
-        } else {
-            Value counter = vm_get_register_safe(reg);
+        }
+
+        if (vm_exec_inc_i32_checked(reg)) {
+            if (vm_typed_reg_in_range(limit_reg) &&
+                vm.typed_regs.reg_types[limit_reg] == REG_TYPE_I32) {
+                if (vm.typed_regs.i32_regs[reg] < vm.typed_regs.i32_regs[limit_reg]) {
+                    vm.ip += offset;
+                }
+                DISPATCH_TYPED();
+            }
+
             Value limit = vm_get_register_safe(limit_reg);
-            if (!IS_I32(counter) || !IS_I32(limit)) {
+            if (!IS_I32(limit)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be i32");
             }
 
-            int32_t incremented = AS_I32(counter) + 1;
-            vm_set_register_safe(reg, I32_VAL(incremented));
-            if (incremented < AS_I32(limit)) {
+            if (vm.typed_regs.i32_regs[reg] < AS_I32(limit)) {
                 vm.ip += offset;
             }
+            DISPATCH_TYPED();
+        }
+
+        Value counter = vm_get_register_safe(reg);
+        Value limit = vm_get_register_safe(limit_reg);
+        if (!IS_I32(counter) || !IS_I32(limit)) {
+            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be i32");
+        }
+
+        int32_t incremented = AS_I32(counter) + 1;
+        store_i32_register(reg, incremented);
+        if (incremented < AS_I32(limit)) {
+            vm.ip += offset;
         }
 
         DISPATCH_TYPED();
