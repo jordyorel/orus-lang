@@ -1,0 +1,8 @@
+score = 10
+mut retries = 0
+threshold: f64 = 0.75
+x = 1, mut y = 2, label: string = "ready"
+
+ retries += 1
+
+print(retries)

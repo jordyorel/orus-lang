@@ -1815,6 +1815,13 @@ static ASTNode* parseBlock(ParserContext* ctx) {
             nextToken(ctx);
             continue;
         }
+        if (t.type == TOKEN_INDENT) {
+            SrcLocation location = {NULL, t.line, t.column};
+            report_compile_error(E1008_INVALID_INDENTATION, location,
+                                 "Unexpected indentation. This line is indented but no block is currently open.");
+            ctx->block_depth--;
+            return NULL;
+        }
         if (t.type == TOKEN_SEMICOLON) {
             SrcLocation location = {NULL, t.line, t.column};
             report_compile_error(E1007_SEMICOLON_NOT_ALLOWED, location,
@@ -3981,6 +3988,12 @@ ASTNode* parseSourceWithContext(ParserContext* ctx, const char* source) {
         if (t.type == TOKEN_NEWLINE) {
             nextToken(ctx);
             continue;
+        }
+        if (t.type == TOKEN_INDENT) {
+            SrcLocation location = {NULL, t.line, t.column};
+            report_compile_error(E1008_INVALID_INDENTATION, location,
+                                 "Unexpected indentation. This line is indented but no block is currently open.");
+            return NULL;
         }
         if (t.type == TOKEN_COMMA) {
             // Skip commas between statements (for comma-separated variable declarations)
