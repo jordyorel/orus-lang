@@ -1,0 +1,15 @@
+// Ensure chained string concatenations preserve all segments
+part1 = "a"
+part2 = " :: "
+part3 = "b"
+part4 = " :: "
+part5 = "c"
+
+combined = part1 + part2 + part3 + part4 + part5
+expected = "a :: b :: c"
+
+if combined != expected:
+    print("Unexpected result: " + combined)
+    trigger = 1 / 0
+
+print(combined)
