@@ -984,6 +984,7 @@ const char* get_error_title(ErrorCode code) {
         case E1016_LOOP_VARIABLE_MODIFICATION: return "Loop variables can't be modified inside the loop";
         case E1017_IMMUTABLE_COMPOUND_ASSIGNMENT: return "Can't use compound assignment on immutable variables";
         case E1018_VARIABLE_NOT_INITIALIZED: return "This variable hasn't been given a value yet";
+        case E1019_MISSING_PRINT_SEPARATOR: return "Print arguments need commas between them";
         
         // Module errors (E3xxx)
         case E3001_FILE_NOT_FOUND: return "Can't find the file you're looking for";
@@ -1054,6 +1055,8 @@ const char* get_error_help(ErrorCode code) {
             return "Declare the variable as mutable with 'mut' if you need to modify it: 'mut var = value'";
         case E1018_VARIABLE_NOT_INITIALIZED:
             return "Initialize the variable with a value when declaring it: 'variable_name = value'";
+        case E1019_MISSING_PRINT_SEPARATOR:
+            return "Separate each value with a comma, like print(\"Hello\", name).";
         
         // Module errors (E3xxx)
         case E3001_FILE_NOT_FOUND:
@@ -1069,7 +1072,7 @@ const char* get_error_help(ErrorCode code) {
         case E2007_UNSUPPORTED_OPERATION:
         case E2008_IMMUTABLE_ASSIGNMENT:
             return NULL; // Handled by feature modules
-        
+
         default: return NULL;
     }
 }
@@ -1080,13 +1083,18 @@ const char* get_error_note(ErrorCode code) {
         // Runtime errors (E0xxx)
         case E0001_DIVISION_BY_ZERO:
             return "Division by zero is mathematically undefined.";
-        
+
         // Syntax errors (E1xxx)
         case E1007_SEMICOLON_NOT_ALLOWED:
             return "Orus uses newlines instead of semicolons to separate statements.";
+
+        case E1019_MISSING_PRINT_SEPARATOR:
+            return "Commas help Orus understand where one print value ends and the next one begins.";
+
         case E1008_INVALID_INDENTATION:
             return "Blocks in Orus begin after lines ending with ':' and end when the indentation returns.";
         
+
         // Type errors (E2xxx) - handled by feature modules, return NULL to use feature notes
         case E2001_TYPE_MISMATCH:
         case E2002_INCOMPATIBLE_TYPES:

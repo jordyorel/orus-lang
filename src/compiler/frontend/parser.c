@@ -1260,15 +1260,13 @@ static ASTNode* parsePrintStatement(ParserContext* ctx) {
 
             SrcLocation location = {NULL, separator.line, separator.column};
             if (separator.length > 0 && separator.start != NULL) {
-                report_compile_error(
-                    E1006_INVALID_SYNTAX, location,
-                    "missing comma between print arguments before '%.*s'.",
-                    separator.length, separator.start);
+                report_compile_error(E1019_MISSING_PRINT_SEPARATOR, location,
+                                     "I was expecting a comma before \"%.*s\" so the next value is clear.",
+                                     separator.length, separator.start);
             } else {
-                report_compile_error(
-                    E1006_INVALID_SYNTAX, location,
-                    "missing comma between print arguments before '%s'.",
-                    token_type_to_string(separator.type));
+                report_compile_error(E1019_MISSING_PRINT_SEPARATOR, location,
+                                     "I was expecting a comma before %s so the next value is clear.",
+                                     token_type_to_string(separator.type));
             }
             return NULL;
         }
