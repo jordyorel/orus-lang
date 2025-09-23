@@ -180,12 +180,11 @@ static void print_string_interpolated(ObjString* str, Value* args, int* arg_inde
     }
 }
 
-void builtin_print(Value* args, int count, bool newline, const char* separator) {
+void builtin_print(Value* args, int count, bool newline) {
     int consumed = 0;
     bool first_value = true;
-    
-    // Use default space separator if none provided
-    const char* sep = separator ? separator : " ";
+
+    const char* sep = " ";
     
     if (count > 0 && IS_STRING(args[0])) {
         ObjString* str = AS_STRING(args[0]);
@@ -201,18 +200,6 @@ void builtin_print(Value* args, int count, bool newline, const char* separator) 
     }
     if (newline) putchar('\n');
     fflush(stdout);
-}
-
-void builtin_print_with_sep_value(Value* args, int count, bool newline, Value separator_value) {
-    const char* sep = " "; // default
-
-    // Extract separator string from Value
-    if (IS_STRING(separator_value)) {
-        ObjString* sepObj = AS_STRING(separator_value);
-        sep = sepObj->chars;
-    }
-
-    builtin_print(args, count, newline, sep);
 }
 
 bool builtin_array_push(Value array_value, Value element) {

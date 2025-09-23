@@ -80,7 +80,6 @@ TypedASTNode* create_typed_ast_node(ASTNode* original) {
         case NODE_PRINT:
             typed->typed.print.values = NULL;
             typed->typed.print.count = 0;
-            typed->typed.print.separator = NULL;
             break;
         case NODE_IF:
             typed->typed.ifStmt.condition = NULL;
@@ -274,7 +273,6 @@ void free_typed_ast_node(TypedASTNode* node) {
                 }
                 free(node->typed.print.values);
             }
-            free_typed_ast_node(node->typed.print.separator);
             break;
         case NODE_IF:
             free_typed_ast_node(node->typed.ifStmt.condition);
@@ -627,10 +625,6 @@ bool validate_typed_ast(TypedASTNode* root) {
                     return false;
                 }
             }
-            if (root->typed.print.separator &&
-                !validate_typed_ast(root->typed.print.separator)) {
-                return false;
-            }
             break;
         case NODE_TRY:
             if (root->typed.tryStmt.tryBlock &&
@@ -892,9 +886,6 @@ void print_typed_ast(TypedASTNode* node, int indent) {
                 for (int i = 0; i < node->typed.print.count; i++) {
                     print_typed_ast(node->typed.print.values[i], indent + 1);
                 }
-            }
-            if (node->typed.print.separator) {
-                print_typed_ast(node->typed.print.separator, indent + 1);
             }
             break;
         case NODE_ARRAY_LITERAL:

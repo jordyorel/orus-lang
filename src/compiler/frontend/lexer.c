@@ -292,8 +292,6 @@ static TokenType identifier_type(const char* start, int length) {
                 return TOKEN_PRINT;
             if (length == 15 && memcmp(start, "print_no_newline", 15) == 0)
                 return TOKEN_PRINT_NO_NL;
-            if (length == 9 && memcmp(start, "print_sep", 9) == 0)
-                return TOKEN_PRINT_SEP;
             if (length == 3 && memcmp(start, "pub", 3) == 0) return TOKEN_PUB;
             break;
         case 'r':
@@ -957,7 +955,6 @@ const char* token_type_to_string(TokenType type) {
         case TOKEN_NOT: return "NOT";
         case TOKEN_PRINT: return "PRINT";
         case TOKEN_PRINT_NO_NL: return "PRINT_NO_NL";
-        case TOKEN_PRINT_SEP: return "PRINT_SEP";
         case TOKEN_TIME_STAMP: return "TIME_STAMP";
         case TOKEN_RETURN: return "RETURN";
         case TOKEN_TRUE: return "TRUE";

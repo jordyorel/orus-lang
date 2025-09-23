@@ -395,7 +395,7 @@ void handle_move_f64(void) {
 void handle_print(void) {
     uint8_t reg = READ_BYTE();
     Value temp_value = vm_get_register_safe(reg);
-    builtin_print(&temp_value, 1, true, NULL);
+    builtin_print(&temp_value, 1, true);
 }
 
 void handle_print_multi(void) {
@@ -416,28 +416,13 @@ void handle_print_multi(void) {
     for (int i = 0; i < count; i++) {
         temp_values[i] = vm_get_register_safe((uint16_t)(first + i));
     }
-    builtin_print(temp_values, count, nl != 0, NULL);
-}
-
-void handle_print_multi_sep(void) {
-    uint8_t first = READ_BYTE();
-    uint8_t count = READ_BYTE();
-    uint8_t sep_reg = READ_BYTE();
-    uint8_t nl = READ_BYTE();
-    
-    // Copy values to temporary array using frame-aware access
-    Value temp_values[256];  // Max possible count
-    for (int i = 0; i < count; i++) {
-        temp_values[i] = vm_get_register_safe(first + i);
-    }
-    Value sep_value = vm_get_register_safe(sep_reg);
-    builtin_print_with_sep_value(temp_values, count, nl != 0, sep_value);
+    builtin_print(temp_values, count, nl != 0);
 }
 
 void handle_print_no_nl(void) {
     uint8_t reg = READ_BYTE();
     Value temp_value = vm_get_register_safe(reg);
-    builtin_print(&temp_value, 1, false, NULL);
+    builtin_print(&temp_value, 1, false);
 }
 
 // ====== Utility Operation Handlers ======

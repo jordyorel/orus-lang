@@ -1501,10 +1501,6 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                 Type* t = algorithm_w(env, node->print.values[i]);
                 if (!t) return NULL;
             }
-            if (node->print.separator) {
-                Type* t = algorithm_w(env, node->print.separator);
-                if (!t) return NULL;
-            }
             return getPrimitiveType(TYPE_VOID);
         }
         case NODE_FUNCTION: {
@@ -2903,9 +2899,6 @@ void populate_ast_types(ASTNode* node, TypeEnv* env) {
             for (int i = 0; i < node->print.count; i++) {
                 populate_ast_types(node->print.values[i], env);
             }
-            if (node->print.separator) {
-                populate_ast_types(node->print.separator, env);
-            }
             break;
         case NODE_ARRAY_LITERAL:
             for (int i = 0; i < node->arrayLiteral.count; i++) {
@@ -3286,21 +3279,6 @@ static TypedASTNode* generate_typed_ast_recursive(ASTNode* ast, TypeEnv* type_en
                         free_typed_ast_node(typed);
                         return NULL;
                     }
-                }
-            }
-            // Handle separator if present
-            if (ast->print.separator) {
-                typed->typed.print.separator = generate_typed_ast_recursive(ast->print.separator, type_env);
-                if (!typed->typed.print.separator) {
-                    // Cleanup values if separator fails
-                    if (typed->typed.print.values) {
-                        for (int i = 0; i < typed->typed.print.count; i++) {
-                            free_typed_ast_node(typed->typed.print.values[i]);
-                        }
-                        free(typed->typed.print.values);
-                    }
-                    free_typed_ast_node(typed);
-                    return NULL;
                 }
             }
             break;

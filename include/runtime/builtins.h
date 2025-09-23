@@ -11,19 +11,8 @@
  * @param args   Array of values to print.
  * @param count  Number of values in the array.
  * @param newline When true, append a newline after printing.
- * @param separator String to use between values (NULL for default space).
  */
-void builtin_print(Value* args, int count, bool newline, const char* separator);
-
-/**
- * Print with separator from a Value (for runtime separator support).
- *
- * @param args   Array of values to print.
- * @param count  Number of values in the array.
- * @param newline When true, append a newline after printing.
- * @param separator_value Value containing separator string.
- */
-void builtin_print_with_sep_value(Value* args, int count, bool newline, Value separator_value);
+void builtin_print(Value* args, int count, bool newline);
 
 /**
  * Push a value onto an array, growing the backing store when needed.

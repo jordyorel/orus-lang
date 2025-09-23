@@ -313,7 +313,6 @@ bool apply_constant_folding_recursive(TypedASTNode* ast) {
             
         case NODE_PRINT:
             fold_children(ast->typed.print.values, ast->typed.print.count);
-            fold_child(ast->typed.print.separator);
             break;
 
         case NODE_INDEX_ACCESS:
