@@ -165,7 +165,6 @@ struct ASTNode {
             ASTNode** values;
             int count;
             bool newline;
-            ASTNode* separator;  // Expression for separator string (NULL for default)
         } print;
         struct {
             ASTNode* condition;

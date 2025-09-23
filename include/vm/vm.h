@@ -592,7 +592,6 @@ typedef enum {
 
     // I/O
     OP_PRINT_MULTI_R,     // first_reg, count, newline_flag
-    OP_PRINT_MULTI_SEP_R, // first_reg, count, sep_reg, newline_flag
     OP_PRINT_R,           // reg
     OP_PRINT_NO_NL_R,     // reg
 

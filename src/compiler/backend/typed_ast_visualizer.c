@@ -522,13 +522,10 @@ static void visualize_node_recursive(TypedASTNode* node, int depth, bool is_last
             if (node->typed.print.values) {
                 for (int i = 0; i < node->typed.print.count; i++) {
                     if (node->typed.print.values[i]) {
-                        bool is_last = (i == node->typed.print.count - 1) && !node->typed.print.separator;
+                        bool is_last = (i == node->typed.print.count - 1);
                         visualize_node_recursive(node->typed.print.values[i], depth + 1, is_last, config);
                     }
                 }
-            }
-            if (node->typed.print.separator) {
-                visualize_node_recursive(node->typed.print.separator, depth + 1, true, config);
             }
             break;
         case NODE_IF:

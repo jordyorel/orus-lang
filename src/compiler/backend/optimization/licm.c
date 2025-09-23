@@ -445,10 +445,6 @@ static void collect_loop_metadata(TypedASTNode* node,
                                              locals,
                                              mutated,
                                              mutation_counts);
-            collect_loop_metadata(node->typed.print.separator,
-                                 locals,
-                                 mutated,
-                                 mutation_counts);
             break;
         case NODE_RETURN:
             collect_loop_metadata(node->typed.returnStmt.value,

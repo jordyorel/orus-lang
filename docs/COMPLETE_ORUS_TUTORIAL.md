@@ -108,42 +108,19 @@ x y z
 1 2 3 4 5
 ```
 
-#### Custom Separator Print Function
-Use `print_sep` for custom formatting with any separator:
+Custom separators can be handled by preparing a formatted string yourself before
+calling `print()`:
 
 ```orus
-// Comma-separated values
-print_sep(", ", "apple", "banana", "cherry")
-
-// Pipe-separated values
-print_sep(" | ", "name", "age", "city")
-
-// No separator (concatenation)
-print_sep("", "hello", "world")
-
-// Custom separators
-print_sep(" -> ", "step1", "step2", "step3")
-print_sep("\n", "line1", "line2", "line3")
-
-// Variable separators
 separator = " :: "
-print_sep(separator, "custom", "format")
-
-// Expression separators
-print_sep(1 + 2, "number", "separator")
+items = ["apple", "banana", "cherry"]
+message = separator.join(items)
+print(message)
 ```
 
 **Output:**
 ```
-apple, banana, cherry
-name | age | city
-helloworld
-step1 -> step2 -> step3
-line1
-line2
-line3
-custom :: format
-number3separator
+apple :: banana :: cherry
 ```
 
 ### The `time_stamp` Builtin

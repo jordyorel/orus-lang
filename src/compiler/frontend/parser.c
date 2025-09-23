@@ -398,7 +398,7 @@ static ASTNode* parseStatement(ParserContext* ctx) {
         return NULL;
     }
 
-    if (t.type == TOKEN_PRINT || t.type == TOKEN_PRINT_NO_NL || t.type == TOKEN_PRINT_SEP) {
+    if (t.type == TOKEN_PRINT || t.type == TOKEN_PRINT_NO_NL) {
         return parsePrintStatement(ctx);
     }
     if (t.type == TOKEN_APOSTROPHE) {
@@ -1224,10 +1224,9 @@ static ASTNode* parseMatchExpression(ParserContext* ctx, Token matchTok) {
 }
 
 static ASTNode* parsePrintStatement(ParserContext* ctx) {
-    // Consume PRINT, PRINT_NO_NL, or PRINT_SEP
+    // Consume PRINT or PRINT_NO_NL
     Token printTok = nextToken(ctx);
     bool newline = (printTok.type == TOKEN_PRINT);
-    bool hasSeparator = (printTok.type == TOKEN_PRINT_SEP);
 
     // Expect '('
     Token left = nextToken(ctx);
@@ -1236,18 +1235,8 @@ static ASTNode* parsePrintStatement(ParserContext* ctx) {
     // Gather zero or more comma-separated expressions
     ASTNode** args = NULL;
     int count = 0, capacity = 0;
-    ASTNode* separator = NULL;
-    
+
     if (peekToken(ctx).type != TOKEN_RIGHT_PAREN) {
-        if (hasSeparator) {
-            // For print_sep, first argument is the separator
-            separator = parseExpression(ctx);
-            if (!separator) return NULL;
-            if (peekToken(ctx).type == TOKEN_COMMA) {
-                nextToken(ctx); // consume comma after separator
-            }
-        }
-        
         // Parse remaining arguments (or all arguments for regular print)
         while (peekToken(ctx).type != TOKEN_RIGHT_PAREN) {
             ASTNode* expr = parseExpression(ctx);
@@ -1268,7 +1257,6 @@ static ASTNode* parsePrintStatement(ParserContext* ctx) {
     node->print.values = args;
     node->print.count = count;
     node->print.newline = newline;
-    node->print.separator = separator;
     node->location.line = printTok.line;
     node->location.column = printTok.column;
     node->dataType = NULL;

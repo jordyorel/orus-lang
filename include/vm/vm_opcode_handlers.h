@@ -74,7 +74,6 @@ void handle_move_f64(void);
 // Print and debug operations
 void handle_print(void);
 void handle_print_multi(void);
-void handle_print_multi_sep(void);
 void handle_print_no_nl(void);
 void handle_halt(void);
 void handle_time_stamp(void);

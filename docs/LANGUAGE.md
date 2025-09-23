@@ -381,22 +381,8 @@ print(42, "is the answer")       // Output: 42 is the answer
 print("x =", x, "y =", y)        // Output: x = 5 y = 10
 ```
 
-#### Custom Separator Print
-Use `print_sep()` to specify a custom separator between arguments:
-
-```orus
-print_sep(", ", "a", "b", "c")           // Output: a, b, c
-print_sep(" | ", "x", "y", "z")          // Output: x | y | z
-print_sep("", "no", "space", "between")  // Output: nospacebetween
-print_sep(" -> ", "step1", "step2")      // Output: step1 -> step2
-```
-
-The separator can be any expression that evaluates to a string:
-```orus
-sep = " :: "
-print_sep(sep, "custom", "separator")    // Output: custom :: separator
-print_sep(1 + 2, "calculated", "sep")   // Output: calculated3sep
-```
+`print()` always uses a single space between values; for more specialized output,
+compose strings manually before printing.
 
 #### Format Specifiers
 Orus supports minimal formatting syntax using @ as a prefix in strings:

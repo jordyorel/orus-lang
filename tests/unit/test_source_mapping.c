@@ -40,7 +40,6 @@ static void annotate_ast_with_file(ASTNode* node, const char* file_name) {
             for (int i = 0; i < node->print.count; ++i) {
                 annotate_ast_with_file(node->print.values[i], file_name);
             }
-            annotate_ast_with_file(node->print.separator, file_name);
             break;
         case NODE_BINARY:
             annotate_ast_with_file(node->binary.left, file_name);

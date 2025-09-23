@@ -100,7 +100,6 @@ struct TypedASTNode {
         struct {
             TypedASTNode** values;
             int count;
-            TypedASTNode* separator;
         } print;
         struct {
             TypedASTNode* condition;
