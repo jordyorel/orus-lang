@@ -89,6 +89,56 @@ static inline bool CF_JUMP_IF(uint8_t reg, uint16_t offset) {
     return false;
 }
 
+static inline bool CF_JUMP_IF_NOT_I32_TYPED(uint8_t left_reg, uint8_t right_reg, uint16_t offset) {
+    if (vm.isShuttingDown || !vm.chunk || !vm.chunk->code) {
+        return true;
+    }
+
+    int32_t left_i32 = 0;
+    int32_t right_i32 = 0;
+    bool left_typed = vm_try_read_i32_typed(left_reg, &left_i32);
+    bool right_typed = vm_try_read_i32_typed(right_reg, &right_i32);
+
+    if (left_typed && right_typed) {
+        vm_trace_loop_event(LOOP_TRACE_TYPED_HIT);
+        vm_trace_loop_event(LOOP_TRACE_BRANCH_FAST_HIT);
+        if (vm.config.enable_licm_typed_metadata) {
+            vm_trace_loop_event(LOOP_TRACE_LICM_GUARD_FUSION);
+        }
+    } else {
+        Value left_value = vm_get_register_safe(left_reg);
+        Value right_value = vm_get_register_safe(right_reg);
+
+        if (!IS_I32(left_value) || !IS_I32(right_value)) {
+            vm_trace_loop_event(LOOP_TRACE_TYPE_MISMATCH);
+            vm_trace_loop_event(LOOP_TRACE_BRANCH_FAST_MISS);
+            if (vm.config.enable_licm_typed_metadata) {
+                vm_trace_loop_event(LOOP_TRACE_LICM_GUARD_DEMOTION);
+            }
+            runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i32");
+            return false;
+        }
+
+        vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+        vm_trace_loop_event(LOOP_TRACE_BRANCH_FAST_MISS);
+        if (vm.config.enable_licm_typed_metadata) {
+            vm_trace_loop_event(LOOP_TRACE_LICM_GUARD_DEMOTION);
+        }
+
+        left_i32 = AS_I32(left_value);
+        right_i32 = AS_I32(right_value);
+        vm_cache_i32_typed(left_reg, left_i32);
+        vm_cache_i32_typed(right_reg, right_i32);
+    }
+
+    if (!(left_i32 < right_i32)) {
+        if (!CF_JUMP(offset)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 #define CF_LOOP(offset) CF_JUMP_BACK(offset)
 
 #define CF_JUMP_SHORT(offset) CF_JUMP((uint16_t)(offset))
