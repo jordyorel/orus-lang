@@ -54,6 +54,9 @@ typedef struct BytecodeBuffer {
     struct JumpPatch* patches; // Forward/backward jump patches
     int patch_count;
     int patch_capacity;
+
+    // Instruction metadata (per-byte flags)
+    uint8_t* monotonic_range_flags; // Marks fused range loops eligible for monotonic fastpath
 } BytecodeBuffer;
 
 typedef struct JumpPatch {
@@ -164,6 +167,7 @@ OpCode get_typed_opcode(const char* op, RegisterType type);
 OpCode get_standard_opcode(const char* op, RegisterType type);
 int emit_jump_placeholder(BytecodeBuffer* buffer, uint8_t jump_opcode);
 bool patch_jump(BytecodeBuffer* buffer, int patch_index, int target_offset);
+void bytecode_mark_monotonic_range(BytecodeBuffer* buffer, int offset);
 
 // Constant pool functions
 ConstantPool* init_constant_pool(void);

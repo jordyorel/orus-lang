@@ -53,6 +53,7 @@ static inline bool vm_typed_iterator_bind_array(uint16_t reg, ObjArray* array) {
 bool vm_try_branch_bool_fast_hot(uint16_t reg, bool* out_value);
 VMBoolBranchResult vm_try_branch_bool_fast_cold(uint16_t reg, bool* out_value);
 bool vm_exec_inc_i32_checked(uint16_t reg);
+bool vm_exec_monotonic_inc_cmp_i32(uint16_t counter_reg, uint16_t limit_reg, bool* out_should_continue);
 bool vm_typed_iterator_next(uint16_t reg, Value* out_value);
 
 #ifdef __cplusplus
