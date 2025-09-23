@@ -887,12 +887,16 @@ uint8_t select_optimal_opcode(const char* op, Type* type) {
             reg_type = REG_TYPE_F64; 
             DEBUG_CODEGEN_PRINT("Converting TYPE_F64 (%d) to REG_TYPE_F64 (%d)", TYPE_F64, REG_TYPE_F64);
             break;
-        case TYPE_BOOL: 
-            reg_type = REG_TYPE_BOOL; 
+        case TYPE_BOOL:
+            reg_type = REG_TYPE_BOOL;
             DEBUG_CODEGEN_PRINT("Converting TYPE_BOOL (%d) to REG_TYPE_BOOL (%d)", TYPE_BOOL, REG_TYPE_BOOL);
             break;
-        case 8: // TYPE_VOID - TEMPORARY WORKAROUND for type inference bug
-            reg_type = REG_TYPE_I64;  // Assume i64 for now since our test uses i64
+        case TYPE_STRING:
+            reg_type = REG_TYPE_HEAP;
+            DEBUG_CODEGEN_PRINT("Converting TYPE_STRING (%d) to REG_TYPE_HEAP (%d)", TYPE_STRING, REG_TYPE_HEAP);
+            break;
+        case TYPE_VOID:
+            reg_type = REG_TYPE_I64;  // Void values should not reach arithmetic, but keep legacy fallback.
             DEBUG_CODEGEN_PRINT("WORKAROUND: Converting TYPE_VOID (%d) to REG_TYPE_I64 (%d)", type->kind, REG_TYPE_I64);
             break;
         default:
@@ -907,14 +911,31 @@ uint8_t select_optimal_opcode(const char* op, Type* type) {
     // Check for logical operations on bool
     if (reg_type == REG_TYPE_BOOL) {
         DEBUG_CODEGEN_PRINT("Handling REG_TYPE_BOOL logical operation: %s", op);
-        
+
         if (strcmp(op, "and") == 0) return OP_AND_BOOL_R;
         if (strcmp(op, "or") == 0) return OP_OR_BOOL_R;
         if (strcmp(op, "not") == 0) return OP_NOT_BOOL_R;
-        
+
         // Comparison operators (result is boolean)
         if (strcmp(op, "==") == 0) return OP_EQ_R;
         if (strcmp(op, "!=") == 0) return OP_NE_R;
+    }
+
+    // Heap-backed values (strings, arrays, etc.) use the boxed register path.
+    if (reg_type == REG_TYPE_HEAP) {
+        DEBUG_CODEGEN_PRINT("Handling REG_TYPE_HEAP operation: %s", op);
+
+        if (strcmp(op, "+") == 0) {
+            // OP_ADD_I32_R performs boxed addition and includes the string
+            // concatenation slow path used by the interpreter.
+            return OP_ADD_I32_R;
+        }
+
+        if (strcmp(op, "==") == 0) return OP_EQ_R;
+        if (strcmp(op, "!=") == 0) return OP_NE_R;
+
+        // Fall through for unsupported operations on heap values.
+        return OP_HALT;
     }
     
     // Check for arithmetic operations on i32
