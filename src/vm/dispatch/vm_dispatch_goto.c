@@ -307,6 +307,7 @@ InterpretResult vm_run_dispatch(void) {
         vm_dispatch_table[OP_THROW] = &&LABEL_OP_THROW;
         vm_dispatch_table[OP_JUMP] = &&LABEL_OP_JUMP;
         vm_dispatch_table[OP_JUMP_IF_NOT_R] = &&LABEL_OP_JUMP_IF_NOT_R;
+        vm_dispatch_table[OP_JUMP_IF_NOT_I32_TYPED] = &&LABEL_OP_JUMP_IF_NOT_I32_TYPED;
         vm_dispatch_table[OP_LOOP] = &&LABEL_OP_LOOP;
         vm_dispatch_table[OP_GET_ITER_R] = &&LABEL_OP_GET_ITER_R;
         vm_dispatch_table[OP_ITER_NEXT_R] = &&LABEL_OP_ITER_NEXT_R;
@@ -358,7 +359,8 @@ InterpretResult vm_run_dispatch(void) {
         global_dispatch_initialized = true;
         
         // Check for NULL entries in critical opcodes only
-        int critical_opcodes[] = {39, 41, 92, 126, 171, -1}; // OP_EQ_R, OP_LT_I32_R, OP_JUMP_IF_NOT_R, OP_ADD_I32_TYPED, etc.
+        int critical_opcodes[] = {OP_EQ_R, OP_LT_I32_R, OP_JUMP_IF_NOT_R,
+                                  OP_JUMP_IF_NOT_I32_TYPED, OP_ADD_I32_TYPED, -1};
         for (int i = 0; critical_opcodes[i] != -1; i++) {
             int opcode = critical_opcodes[i];
             if (opcode < VM_DISPATCH_TABLE_SIZE) {
@@ -2427,6 +2429,16 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t reg = READ_BYTE();
             uint16_t offset = READ_SHORT();
             if (!CF_JUMP_IF_NOT(reg, offset)) {
+                RETURN(INTERPRET_RUNTIME_ERROR);
+            }
+            DISPATCH();
+        }
+
+    LABEL_OP_JUMP_IF_NOT_I32_TYPED: {
+            uint8_t left = READ_BYTE();
+            uint8_t right = READ_BYTE();
+            uint16_t offset = READ_SHORT();
+            if (!CF_JUMP_IF_NOT_I32_TYPED(left, right, offset)) {
                 RETURN(INTERPRET_RUNTIME_ERROR);
             }
             DISPATCH();
