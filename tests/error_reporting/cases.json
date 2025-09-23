@@ -176,6 +176,24 @@
     ]
   },
   {
+    "name": "unexpected_indent",
+    "source": "unexpected_indent.orus",
+    "description": "Indented statements without a surrounding block should clearly report the indentation error.",
+    "expected_exit": 65,
+    "expected_diagnostic_count": 1,
+    "expected_diagnostics": [
+      {
+        "title": "Indentation looks off",
+        "message_contains": "Unexpected indentation. This line is indented but no block is currently open."
+      }
+    ],
+    "expected": [
+      "-- SYNTAX ERROR: Indentation looks off",
+      "Unexpected indentation. This line is indented but no block is currently open.",
+      "Compilation failed for \"tests/error_reporting/unexpected_indent.orus\"."
+    ]
+  },
+  {
     "name": "closure_invalid_upvalue",
     "source": "closure_invalid_upvalue.orus",
     "description": "Mutating a captured immutable variable inside a closure is now caught at compile time.",
