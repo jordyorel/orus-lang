@@ -1020,6 +1020,10 @@ void reset_type_inference_errors(void) {
 
 static bool is_numeric_type(Type* type) {
     if (!type) return false;
+
+    type = prune(type);
+    if (!type) return false;
+
     return type->kind == TYPE_I32 || type->kind == TYPE_I64 ||
            type->kind == TYPE_U32 || type->kind == TYPE_U64 ||
            type->kind == TYPE_F64;
@@ -1027,6 +1031,10 @@ static bool is_numeric_type(Type* type) {
 
 static bool is_integer_type(Type* type) {
     if (!type) return false;
+
+    type = prune(type);
+    if (!type) return false;
+
     return type->kind == TYPE_I32 || type->kind == TYPE_I64 ||
            type->kind == TYPE_U32 || type->kind == TYPE_U64;
 }
@@ -1189,6 +1197,9 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             if (!array_type || !index_type) {
                 return NULL;
             }
+
+            array_type = prune(array_type);
+            index_type = prune(index_type);
 
             if (array_type->kind != TYPE_ARRAY) {
                 report_type_mismatch(node->indexAccess.array->location, "array",
@@ -1410,6 +1421,8 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             if (!array_type) {
                 return NULL;
             }
+
+            array_type = prune(array_type);
 
             if (array_type->kind != TYPE_ARRAY) {
                 report_type_mismatch(node->arraySlice.array->location, "array",
@@ -3067,23 +3080,43 @@ void populate_ast_types(ASTNode* node, TypeEnv* env) {
                 }
 
                 // Add parameters to the function's local environment using the same logic as algorithm_w
+                Type* function_type = node->dataType;
+                Type** inferred_params = NULL;
+                int inferred_param_count = 0;
+                if (function_type && function_type->kind == TYPE_FUNCTION) {
+                    inferred_params = function_type->info.function.paramTypes;
+                    inferred_param_count = function_type->info.function.arity;
+                }
+
                 for (int i = 0; i < node->function.paramCount; i++) {
                     if (!node->function.params[i].name) {
                         continue;
                     }
 
-                    Type* param_type = getPrimitiveType(TYPE_I32); // Default
-                    if (node->function.isMethod && node->function.isInstanceMethod && i == 0) {
-                        param_type = receiver_type ? receiver_type : getPrimitiveType(TYPE_UNKNOWN);
-                    } else if (node->function.params[i].typeAnnotation) {
-                        param_type = algorithm_w(env, node->function.params[i].typeAnnotation);
-                        if (!param_type) {
-                            param_type = getPrimitiveType(TYPE_I32);
+                    Type* param_type = NULL;
+                    if (inferred_params && i < inferred_param_count) {
+                        param_type = inferred_params[i];
+                    }
+
+                    if (!param_type) {
+                        if (node->function.isMethod && node->function.isInstanceMethod && i == 0) {
+                            param_type = receiver_type ? receiver_type : getPrimitiveType(TYPE_UNKNOWN);
+                        } else if (node->function.params[i].typeAnnotation) {
+                            param_type = algorithm_w(env, node->function.params[i].typeAnnotation);
                         }
                     }
 
-                    TypeScheme* param_scheme = generalize(function_env, param_type);
-                    type_env_define(function_env, node->function.params[i].name, param_scheme);
+                    if (!param_type) {
+                        param_type = make_var_type(NULL);
+                        if (!param_type) {
+                            param_type = getPrimitiveType(TYPE_ANY);
+                        }
+                    }
+
+                    TypeScheme* param_scheme = type_scheme_new(param_type, NULL, 0);
+                    if (param_scheme) {
+                        type_env_define(function_env, node->function.params[i].name, param_scheme);
+                    }
                 }
 
                 populate_ast_types(node->function.body, function_env);
