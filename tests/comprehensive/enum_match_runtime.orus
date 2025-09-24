@@ -1,0 +1,24 @@
+enum Result:
+    Ok(value: i32)
+    Err(message: string)
+
+fn log_outcome(outcome: Result):
+    match outcome:
+        Result.Ok(value) ->
+            print("ok", value)
+        Result.Err(reason) ->
+            print("error", reason)
+
+success = Result.Ok(42)
+failure = Result.Err("boom")
+
+log_outcome(success)
+log_outcome(failure)
+
+match failure:
+    Result.Ok(value) ->
+        print("unexpected", value)
+    Result.Err(reason) ->
+        print("handled", reason)
+
+print("enum match runtime complete")

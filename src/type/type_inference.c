@@ -3078,32 +3078,84 @@ void populate_ast_types(ASTNode* node, TypeEnv* env) {
                 populate_ast_types(node->memberAssign.value, env);
             }
             break;
-        case NODE_MATCH_EXPRESSION:
+        case NODE_MATCH_EXPRESSION: {
             if (node->matchExpr.subject) {
                 populate_ast_types(node->matchExpr.subject, env);
             }
+
+            TypeEnv* match_env = type_env_new(env);
+            if (!match_env) {
+                break;
+            }
+
+            if (node->matchExpr.tempName) {
+                Type* scrutinee_type = NULL;
+                if (node->matchExpr.subject) {
+                    scrutinee_type = node->matchExpr.subject->dataType;
+                    if (!scrutinee_type) {
+                        scrutinee_type = algorithm_w(env, node->matchExpr.subject);
+                    }
+                }
+
+                if (scrutinee_type) {
+                    TypeScheme* scrutinee_scheme = generalize(match_env, scrutinee_type);
+                    if (scrutinee_scheme) {
+                        type_env_define(match_env, node->matchExpr.tempName, scrutinee_scheme);
+                    }
+                }
+            }
+
             if (node->matchExpr.arms) {
                 for (int i = 0; i < node->matchExpr.armCount; i++) {
                     MatchArm* arm = &node->matchExpr.arms[i];
+
                     if (arm->valuePattern) {
-                        populate_ast_types(arm->valuePattern, env);
+                        populate_ast_types(arm->valuePattern, match_env);
                     }
                     if (arm->condition) {
-                        populate_ast_types(arm->condition, env);
+                        populate_ast_types(arm->condition, match_env);
                     }
                     if (arm->payloadAccesses) {
                         for (int j = 0; j < arm->payloadCount; j++) {
                             if (arm->payloadAccesses[j]) {
-                                populate_ast_types(arm->payloadAccesses[j], env);
+                                populate_ast_types(arm->payloadAccesses[j], match_env);
                             }
                         }
                     }
+
+                    TypeEnv* branch_env = type_env_new(match_env);
+                    if (!branch_env) {
+                        branch_env = match_env;
+                    }
+
+                    if (arm->payloadNames && arm->payloadAccesses) {
+                        for (int j = 0; j < arm->payloadCount; j++) {
+                            if (!arm->payloadNames[j] || !arm->payloadAccesses[j]) {
+                                continue;
+                            }
+
+                            Type* payload_type = arm->payloadAccesses[j]->dataType;
+                            if (!payload_type) {
+                                payload_type = algorithm_w(match_env, arm->payloadAccesses[j]);
+                            }
+                            if (!payload_type) {
+                                continue;
+                            }
+
+                            TypeScheme* payload_scheme = generalize(branch_env, payload_type);
+                            if (payload_scheme) {
+                                type_env_define(branch_env, arm->payloadNames[j], payload_scheme);
+                            }
+                        }
+                    }
+
                     if (arm->body) {
-                        populate_ast_types(arm->body, env);
+                        populate_ast_types(arm->body, branch_env);
                     }
                 }
             }
             break;
+        }
         case NODE_IMPL_BLOCK:
             if (node->implBlock.methodCount > 0 && node->implBlock.methods) {
                 for (int i = 0; i < node->implBlock.methodCount; i++) {

@@ -3519,6 +3519,9 @@ void compile_statement(CompilerContext* ctx, TypedASTNode* stmt) {
         case NODE_IF:
             compile_if_statement(ctx, stmt);
             break;
+        case NODE_BLOCK:
+            compile_block_with_scope(ctx, stmt, true);
+            break;
             
         case NODE_WHILE:
             compile_while_statement(ctx, stmt);

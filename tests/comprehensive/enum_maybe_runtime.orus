@@ -1,0 +1,19 @@
+enum MaybeInt:
+    Some(value: i32)
+    None
+
+fn sum_maybe(first: MaybeInt, second: MaybeInt) -> i32:
+    left: i32 = match first:
+        MaybeInt.Some(value) -> value
+        MaybeInt.None -> 0
+
+    right: i32 = match second:
+        MaybeInt.Some(value) -> value
+        MaybeInt.None -> 0
+
+    return left + right
+
+print("sum some+none", sum_maybe(MaybeInt.Some(10), MaybeInt.None))
+print("sum some+some", sum_maybe(MaybeInt.Some(7), MaybeInt.Some(8)))
+print("sum none+none", sum_maybe(MaybeInt.None, MaybeInt.None))
+print("enum maybe runtime complete")
