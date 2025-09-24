@@ -3037,12 +3037,19 @@ static ASTNode* parseFunctionExpression(ParserContext* ctx, Token fnToken) {
 
     ASTNode* returnType = NULL;
     if (peekToken(ctx).type == TOKEN_ARROW) {
-        nextToken(ctx);
+        Token arrowTok = nextToken(ctx);
         Token typeTok = peekToken(ctx);
         if (typeTok.type == TOKEN_FN) {
             returnType = parseFunctionType(ctx);
             if (!returnType) return NULL;
         } else {
+            if (!token_can_start_type(typeTok.type)) {
+                SrcLocation location = {NULL, arrowTok.line, arrowTok.column};
+                report_compile_error(E1006_INVALID_SYNTAX, location,
+                                     "Expected return type after '->' in function expression, but found %s",
+                                     token_type_to_string(typeTok.type));
+                return NULL;
+            }
             returnType = parseTypeAnnotation(ctx);
             if (!returnType) return NULL;
         }
@@ -3155,12 +3162,20 @@ static ASTNode* parseFunctionDefinition(ParserContext* ctx, bool isPublic) {
     // Optional return type annotation
     ASTNode* returnType = NULL;
     if (peekToken(ctx).type == TOKEN_ARROW) {
-        nextToken(ctx); // consume '->'
+        Token arrowTok = nextToken(ctx); // consume '->'
         Token typeTok = peekToken(ctx);
         if (typeTok.type == TOKEN_FN) {
             returnType = parseFunctionType(ctx);
             if (!returnType) return NULL;
         } else {
+            if (!token_can_start_type(typeTok.type)) {
+                SrcLocation location = {NULL, arrowTok.line, arrowTok.column};
+                report_compile_error(E1006_INVALID_SYNTAX, location,
+                                     "Expected return type after '->' in function '%s', but found %s",
+                                     functionName,
+                                     token_type_to_string(typeTok.type));
+                return NULL;
+            }
             returnType = parseTypeAnnotation(ctx);
             if (!returnType) return NULL;
         }
@@ -3927,11 +3942,18 @@ static ASTNode* parseFunctionType(ParserContext* ctx) {
     // Parse return type
     ASTNode* returnType = NULL;
     if (peekToken(ctx).type == TOKEN_ARROW) {
-        nextToken(ctx); // consume '->'
+        Token arrowTok = nextToken(ctx); // consume '->'
         Token typeTok = peekToken(ctx);
         if (typeTok.type == TOKEN_FN) {
             returnType = parseFunctionType(ctx);
         } else {
+            if (!token_can_start_type(typeTok.type)) {
+                SrcLocation location = {NULL, arrowTok.line, arrowTok.column};
+                report_compile_error(E1006_INVALID_SYNTAX, location,
+                                     "Expected return type after '->' in function type, but found %s",
+                                     token_type_to_string(typeTok.type));
+                return NULL;
+            }
             returnType = parseTypeAnnotation(ctx);
             if (!returnType) return NULL;
         }
