@@ -2157,32 +2157,25 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                 emit_byte_to_buffer(ctx->bytecode, 0);
                 return result_reg;
             } else {
+                int base_reg = mp_allocate_consecutive_temp_registers(ctx->allocator, element_count);
+                if (base_reg == -1) {
+                    mp_free_temp_register(ctx->allocator, result_reg);
+                    DEBUG_CODEGEN_PRINT("Error: Failed to allocate consecutive registers for array literal\n");
+                    return -1;
+                }
+
                 int* element_regs = malloc(sizeof(int) * element_count);
                 if (!element_regs) {
+                    for (int i = 0; i < element_count; i++) {
+                        mp_free_temp_register(ctx->allocator, base_reg + i);
+                    }
                     mp_free_temp_register(ctx->allocator, result_reg);
                     DEBUG_CODEGEN_PRINT("Error: Failed to allocate element register list for array literal\n");
                     return -1;
                 }
 
-                bool allocation_failed = false;
                 for (int i = 0; i < element_count; i++) {
-                    element_regs[i] = mp_allocate_temp_register(ctx->allocator);
-                    if (element_regs[i] == -1) {
-                        allocation_failed = true;
-                        break;
-                    }
-                }
-
-                if (allocation_failed) {
-                    for (int i = 0; i < element_count; i++) {
-                        if (element_regs[i] >= MP_TEMP_REG_START && element_regs[i] <= MP_TEMP_REG_END) {
-                            mp_free_temp_register(ctx->allocator, element_regs[i]);
-                        }
-                    }
-                    free(element_regs);
-                    mp_free_temp_register(ctx->allocator, result_reg);
-                    DEBUG_CODEGEN_PRINT("Error: Failed to allocate temp registers for array elements\n");
-                    return -1;
+                    element_regs[i] = base_reg + i;
                 }
 
                 bool success = true;

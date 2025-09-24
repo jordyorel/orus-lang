@@ -108,7 +108,7 @@ void mp_reset_frame_registers(MultiPassRegisterAllocator* allocator) {
 
 int mp_allocate_temp_register(MultiPassRegisterAllocator* allocator) {
     if (!allocator) return -1;
-    
+
     // Find next free temp register (don't reuse from stack for better register isolation)
     // This prevents register conflicts in nested expressions
     for (int i = 0; i < 48; i++) {
@@ -119,16 +119,46 @@ int mp_allocate_temp_register(MultiPassRegisterAllocator* allocator) {
             return reg;
         }
     }
-    
-    // If no sequential register available, try to reuse from stack  
+
+    // If no sequential register available, try to reuse from stack
     if (allocator->temp_stack_top >= 0) {
         int reused_reg = allocator->temp_stack[allocator->temp_stack_top--];
         printf("[REGISTER_ALLOCATOR] Reusing temp register R%d (from stack)\n", reused_reg);
         return reused_reg;
     }
-    
+
     // No free temp registers
     printf("[REGISTER_ALLOCATOR] Error: No free temp registers (register spill needed)\n");
+    return -1;
+}
+
+int mp_allocate_consecutive_temp_registers(MultiPassRegisterAllocator* allocator, int count) {
+    if (!allocator || count <= 0 || count > 48) {
+        printf("[REGISTER_ALLOCATOR] Error: Invalid consecutive allocation request (%d)\n", count);
+        return -1;
+    }
+
+    for (int start = 0; start <= 48 - count; start++) {
+        bool available = true;
+        for (int offset = 0; offset < count; offset++) {
+            if (allocator->temp_regs[start + offset]) {
+                available = false;
+                break;
+            }
+        }
+
+        if (available) {
+            for (int offset = 0; offset < count; offset++) {
+                allocator->temp_regs[start + offset] = true;
+            }
+            int reg = MP_TEMP_REG_START + start;
+            printf("[REGISTER_ALLOCATOR] Allocated consecutive temp registers R%d-R%d\n",
+                   reg, reg + count - 1);
+            return reg;
+        }
+    }
+
+    printf("[REGISTER_ALLOCATOR] Error: Unable to allocate %d consecutive temp registers\n", count);
     return -1;
 }
 
