@@ -190,6 +190,8 @@
     "expected": [
       "-- SYNTAX ERROR: This syntax isn't quite right",
       "Expected return type after '->' in function 'add', but found COLON",
+      "help: Compare this syntax with a working example or check the docs to see what structure is expected here.",
+      "note: Orus expected a different structure here. Re-read the surrounding code to find the mismatch.",
       "Compilation failed for \"tests/error_reporting/missing_function_return_type.orus\"."
     ]
   },

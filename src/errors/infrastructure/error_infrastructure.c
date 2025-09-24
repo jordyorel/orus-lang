@@ -1031,6 +1031,8 @@ const char* get_error_help(ErrorCode code) {
             return "Try adding a ':' at the end of this line.";
         case E1003_MISSING_PARENTHESIS:
             return "Add a closing ')' to match the opening parenthesis.";
+        case E1006_INVALID_SYNTAX:
+            return "Compare this syntax with a working example or check the docs to see what structure is expected here.";
         case E1007_SEMICOLON_NOT_ALLOWED:
             return "Remove the semicolon - Orus doesn't need them to end statements.";
         case E1008_INVALID_INDENTATION:
@@ -1087,6 +1089,8 @@ const char* get_error_note(ErrorCode code) {
         // Syntax errors (E1xxx)
         case E1007_SEMICOLON_NOT_ALLOWED:
             return "Orus uses newlines instead of semicolons to separate statements.";
+        case E1006_INVALID_SYNTAX:
+            return "Orus expected a different structure here. Re-read the surrounding code to find the mismatch.";
 
         case E1019_MISSING_PRINT_SEPARATOR:
             return "Commas help Orus understand where one print value ends and the next one begins.";
