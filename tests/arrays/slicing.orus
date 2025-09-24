@@ -13,5 +13,17 @@ print("mid:", mid)
 full = values[0..len(values)]
 print("full:", full)
 
+upto_len = values[..len(values)]
+print("upto len:", upto_len)
+
+prefix = values[..3]
+print("prefix:", prefix)
+
+suffix = values[2..]
+print("suffix:", suffix)
+
+clone = values[..]
+print("clone:", clone)
+
 empty = values[3..3]
 print("empty:", empty)

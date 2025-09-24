@@ -1303,9 +1303,7 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
 
         case NODE_ARRAY_SLICE: {
             Type* array_type = algorithm_w(env, node->arraySlice.array);
-            Type* start_type = algorithm_w(env, node->arraySlice.start);
-            Type* end_type = algorithm_w(env, node->arraySlice.end);
-            if (!array_type || !start_type || !end_type) {
+            if (!array_type) {
                 return NULL;
             }
 
@@ -1316,18 +1314,30 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                 return NULL;
             }
 
-            if (!is_integer_type(start_type)) {
-                report_type_mismatch(node->arraySlice.start->location, "integer index",
-                                     getTypeName(start_type->kind));
-                set_type_error();
-                return NULL;
+            if (node->arraySlice.start) {
+                Type* start_type = algorithm_w(env, node->arraySlice.start);
+                if (!start_type) {
+                    return NULL;
+                }
+                if (!is_integer_type(start_type)) {
+                    report_type_mismatch(node->arraySlice.start->location, "integer index",
+                                         getTypeName(start_type->kind));
+                    set_type_error();
+                    return NULL;
+                }
             }
 
-            if (!is_integer_type(end_type)) {
-                report_type_mismatch(node->arraySlice.end->location, "integer index",
-                                     getTypeName(end_type->kind));
-                set_type_error();
-                return NULL;
+            if (node->arraySlice.end) {
+                Type* end_type = algorithm_w(env, node->arraySlice.end);
+                if (!end_type) {
+                    return NULL;
+                }
+                if (!is_integer_type(end_type)) {
+                    report_type_mismatch(node->arraySlice.end->location, "integer index",
+                                         getTypeName(end_type->kind));
+                    set_type_error();
+                    return NULL;
+                }
             }
 
             Type* element_type = array_type->info.array.elementType;
