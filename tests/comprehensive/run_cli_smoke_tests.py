@@ -77,6 +77,11 @@ def load_tests(repo_root: Path) -> List[Tuple[Path, bool, Optional[str]]]:
         ),
         (repo_root / "tests" / "error_reporting" / "undefined_variable.orus", False, None),
         (
+            repo_root / "tests" / "comprehensive" / "result_builtins_cli.orus",
+            True,
+            "result builtins done\n",
+        ),
+        (
             repo_root / "tests" / "strings" / "string_equality_control_flow.orus",
             True,
             "ready\n",
