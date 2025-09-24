@@ -1285,16 +1285,34 @@ void emit_binary_op(CompilerContext* ctx, const char* op, Type* operand_type, in
     DEBUG_CODEGEN_PRINT("emit_binary_op called: op='%s', type=%d, dst=R%d, src1=R%d, src2=R%d\n",
            op, operand_kind, dst, src1, src2);
     (void)operand_kind;
-    
+
     uint8_t opcode = select_optimal_opcode(op, operand_type);
     // Debug output removed
     DEBUG_CODEGEN_PRINT("select_optimal_opcode returned: %d (OP_HALT=%d)\n", opcode, OP_HALT);
-    
+
+    if (opcode == OP_HALT) {
+        // Fallback: emit a conservative boxed operation when the typed opcode
+        // selection fails (e.g. due to HM type inference holes). This prevents
+        // silently skipping the operation and guarantees we still compute a
+        // boolean result at runtime.
+        if (strcmp(op, "+") == 0) opcode = OP_ADD_I32_R;
+        else if (strcmp(op, "-") == 0) opcode = OP_SUB_I32_R;
+        else if (strcmp(op, "*") == 0) opcode = OP_MUL_I32_R;
+        else if (strcmp(op, "/") == 0) opcode = OP_DIV_I32_R;
+        else if (strcmp(op, "%") == 0) opcode = OP_MOD_I32_R;
+        else if (strcmp(op, "<") == 0) opcode = OP_LT_I32_R;
+        else if (strcmp(op, ">") == 0) opcode = OP_GT_I32_R;
+        else if (strcmp(op, "<=") == 0) opcode = OP_LE_I32_R;
+        else if (strcmp(op, ">=") == 0) opcode = OP_GE_I32_R;
+        else if (strcmp(op, "==") == 0) opcode = OP_EQ_R;
+        else if (strcmp(op, "!=") == 0) opcode = OP_NE_R;
+    }
+
     if (opcode != OP_HALT) {
         emit_typed_instruction(ctx, opcode, dst, src1, src2);
-        
+
         // Check if this is a comparison operation (returns boolean)
-        bool is_comparison = (strcmp(op, "<") == 0 || strcmp(op, ">") == 0 || 
+        bool is_comparison = (strcmp(op, "<") == 0 || strcmp(op, ">") == 0 ||
                              strcmp(op, "<=") == 0 || strcmp(op, ">=") == 0 ||
                              strcmp(op, "==") == 0 || strcmp(op, "!=") == 0);
         

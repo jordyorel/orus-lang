@@ -295,6 +295,10 @@ Type* fresh_type(Type* t, HashMap* mapping) {
             TypeVar* v = find_var((TypeVar*)t->info.var.var);
             if (!v) return t;
 
+            if (v->instance) {
+                return fresh_type(v->instance, mapping);
+            }
+
             char key[32];
             snprintf(key, sizeof(key), "%d", v->id);
             Type* existing = hashmap_get(mapping, key);
@@ -447,6 +451,7 @@ typedef struct TypeEnvEntry {
 typedef struct TypeEnv {
     TypeEnvEntry* entries;
     struct TypeEnv* parent;
+    Type* expected_return_type;
 } TypeEnv;
 
 TypeEnv* type_env_new(TypeEnv* parent) {
@@ -454,10 +459,20 @@ TypeEnv* type_env_new(TypeEnv* parent) {
     if (!env) return NULL;
     env->entries = NULL;
     env->parent = parent;
+    env->expected_return_type = parent ? parent->expected_return_type : NULL;
     if (!parent) {
         register_builtin_functions(env);
     }
     return env;
+}
+
+static Type* type_env_get_expected_return(TypeEnv* env) {
+    for (TypeEnv* current = env; current; current = current->parent) {
+        if (current->expected_return_type) {
+            return current->expected_return_type;
+        }
+    }
+    return NULL;
 }
 
 static void type_env_define(TypeEnv* env, const char* name,
@@ -821,26 +836,38 @@ static void register_builtin_functions(TypeEnv* env) {
 
     Type* any_type = getPrimitiveType(TYPE_ANY);
 
-    // len(array) -> i32
-    Type* len_array = createArrayType(any_type);
+    // len(array[T]) -> i32
+    Type* len_element = make_var_type(NULL);
+    if (!len_element) {
+        len_element = any_type;
+    }
+    Type* len_array = createArrayType(len_element);
     if (len_array) {
         Type* len_params[1] = {len_array};
         define_builtin_function(env, "len", getPrimitiveType(TYPE_I32),
                                 len_params, 1);
     }
 
-    // push(array, value) -> array
-    Type* push_array = createArrayType(any_type);
+    // push(array[T], T) -> array[T]
+    Type* push_element = make_var_type(NULL);
+    if (!push_element) {
+        push_element = any_type;
+    }
+    Type* push_array = createArrayType(push_element);
     if (push_array) {
-        Type* push_params[2] = {push_array, any_type};
+        Type* push_params[2] = {push_array, push_element};
         define_builtin_function(env, "push", push_array, push_params, 2);
     }
 
-    // pop(array) -> value
-    Type* pop_array = createArrayType(any_type);
+    // pop(array[T]) -> T
+    Type* pop_element = make_var_type(NULL);
+    if (!pop_element) {
+        pop_element = any_type;
+    }
+    Type* pop_array = createArrayType(pop_element);
     if (pop_array) {
         Type* pop_params[1] = {pop_array};
-        define_builtin_function(env, "pop", any_type, pop_params, 1);
+        define_builtin_function(env, "pop", pop_element, pop_params, 1);
     }
 }
 
@@ -990,7 +1017,11 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             }
         case NODE_ARRAY_LITERAL: {
             if (node->arrayLiteral.count == 0) {
-                return createArrayType(getPrimitiveType(TYPE_ANY));
+                Type* element_var = make_var_type(NULL);
+                if (!element_var) {
+                    element_var = getPrimitiveType(TYPE_ANY);
+                }
+                return createArrayType(element_var);
             }
 
             Type* element_type = NULL;
@@ -1369,10 +1400,22 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                 bool right_is_literal = (node->binary.right && node->binary.right->type == NODE_LITERAL);
                 
                 if (left_is_literal && !right_is_literal) {
-                    // Left is literal, adapt to right's type
+                    // Left is literal, adapt to right's type. When the right
+                    // hand side is a fresh type variable we still need to
+                    // unify it with the literal type so later uses of the
+                    // variable see a concrete numeric type.
+                    if (r && r->kind == TYPE_VAR) {
+                        unify(r, l);
+                    }
                     return r;
                 } else if (right_is_literal && !left_is_literal) {
-                    // Right is literal, adapt to left's type
+                    // Right is literal, adapt to left's type. Propagate the
+                    // literal's concrete type into the inferred variable when
+                    // possible so exported function signatures don't keep
+                    // unconstrained type variables.
+                    if (l && l->kind == TYPE_VAR) {
+                        unify(l, r);
+                    }
                     return l;
                 } else if (unify(l, r)) {
                     // Both same type or both literals - use unified type
@@ -1476,7 +1519,12 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
 
             // Add the variable to the type environment
             if (node->varDecl.name && var_type) {
-                TypeScheme* scheme = generalize(env, var_type);
+                TypeScheme* scheme = NULL;
+                if (node->varDecl.isMutable) {
+                    scheme = type_scheme_new(var_type, NULL, 0);
+                } else {
+                    scheme = generalize(env, var_type);
+                }
                 if (scheme) {
                     type_env_define(env, node->varDecl.name, scheme);
                 }
@@ -1522,11 +1570,21 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             }
 
             // For function declarations, get the actual return type from type annotation
-            Type* return_type = getPrimitiveType(TYPE_VOID); // Default to void
+            bool return_type_inferred = false;
+            Type* return_type = NULL;
 
             if (node->function.returnType) {
                 return_type = algorithm_w(env, node->function.returnType);
-                if (!return_type) return_type = getPrimitiveType(TYPE_VOID);
+                if (!return_type) {
+                    return_type = getPrimitiveType(TYPE_VOID);
+                }
+            } else {
+                return_type = make_var_type(NULL);
+                if (!return_type) {
+                    return_type = getPrimitiveType(TYPE_VOID);
+                } else {
+                    return_type_inferred = true;
+                }
             }
 
             Type* receiver_type = NULL;
@@ -1561,7 +1619,10 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                         param_types[i] = algorithm_w(env, node->function.params[i].typeAnnotation);
                         if (!param_types[i]) param_types[i] = getPrimitiveType(TYPE_I32);
                     } else {
-                        param_types[i] = getPrimitiveType(TYPE_I32); // Default fallback
+                        param_types[i] = make_var_type(NULL);
+                        if (!param_types[i]) {
+                            param_types[i] = getPrimitiveType(TYPE_ANY);
+                        }
                     }
                 }
             }
@@ -1576,11 +1637,17 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
 
             // Create a new scope for the function body and add parameters to it
             TypeEnv* function_env = type_env_new(env);
+            if (function_env) {
+                function_env->expected_return_type = return_type;
+            }
 
             // Add parameters to the function's local environment
             for (int i = 0; i < param_count; i++) {
                 if (node->function.params[i].name && param_types && param_types[i]) {
-                    TypeScheme* param_scheme = generalize(function_env, param_types[i]);
+                    // Parameters are monomorphic within the body, so bind them directly
+                    // without generalization. This lets any constraints inferred from the
+                    // body flow back into the function signature's parameter types.
+                    TypeScheme* param_scheme = type_scheme_new(param_types[i], NULL, 0);
                     type_env_define(function_env, node->function.params[i].name, param_scheme);
                 }
             }
@@ -1590,6 +1657,26 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                 Type* body_type = algorithm_w(function_env, node->function.body);
                 // The body type isn't used for the function's type, but this ensures the body is type-checked
                 (void)body_type;
+            }
+
+            // Prune the return and parameter types now that the body has been analyzed
+            Type* resolved_return = prune(return_type);
+            if (!resolved_return) {
+                resolved_return = getPrimitiveType(TYPE_VOID);
+            } else if (return_type_inferred && resolved_return->kind == TYPE_VAR) {
+                resolved_return = getPrimitiveType(TYPE_VOID);
+            }
+            func_type->info.function.returnType = resolved_return;
+
+            if (func_type->info.function.paramTypes && param_types) {
+                for (int i = 0; i < param_count; i++) {
+                    if (!param_types[i]) continue;
+                    Type* pruned = prune(param_types[i]);
+                    if (pruned) {
+                        func_type->info.function.paramTypes[i] = pruned;
+                        param_types[i] = pruned;
+                    }
+                }
             }
 
             return func_type;
@@ -1673,11 +1760,52 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             return getPrimitiveType(TYPE_I32);
         }
         case NODE_RETURN: {
+            Type* expected_return = type_env_get_expected_return(env);
+
             if (node->returnStmt.value) {
                 Type* value_type = algorithm_w(env, node->returnStmt.value);
-                return value_type; // Return statement takes the type of its value
+                if (!value_type) {
+                    return NULL;
+                }
+
+                if (expected_return) {
+                    bool expected_is_var = (expected_return->kind == TYPE_VAR);
+                    if (!unify(value_type, expected_return)) {
+                        bool literal_return = node->returnStmt.value &&
+                                              node->returnStmt.value->type == NODE_LITERAL;
+                        bool conditional_return = node->returnStmt.value &&
+                                                   node->returnStmt.value->type == NODE_IF;
+
+                        if (!expected_is_var && (literal_return || conditional_return)) {
+                            // Allow literals and expression-style if/else forms to adopt the
+                            // annotated return type, matching the lenient behavior used for
+                            // variable declarations and ternary expressions.
+                            return expected_return;
+                        }
+
+                        report_type_mismatch(node->returnStmt.value->location,
+                                             getTypeName(expected_return->kind),
+                                             getTypeName(value_type->kind));
+                        set_type_error();
+                        return NULL;
+                    }
+                    return expected_return;
+                }
+
+                return value_type; // No expected type, propagate value type
             }
-            return getPrimitiveType(TYPE_VOID);
+
+            Type* void_type = getPrimitiveType(TYPE_VOID);
+            if (expected_return) {
+                if (!unify(void_type, expected_return)) {
+                    report_type_mismatch(node->location, getTypeName(expected_return->kind),
+                                         getTypeName(void_type->kind));
+                    set_type_error();
+                    return NULL;
+                }
+                return expected_return;
+            }
+            return void_type;
         }
         case NODE_TYPE: {
             if (!node->typeAnnotation.name) {
@@ -1868,6 +1996,10 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             }
 
             Type* error_type = getPrimitiveType(TYPE_ERROR);
+            if (thrown_type->kind == TYPE_STRING) {
+                node->throwStmt.value->dataType = error_type;
+                return getPrimitiveType(TYPE_VOID);
+            }
             if (!unify(thrown_type, error_type)) {
                 report_type_mismatch(node->throwStmt.value->location, "error",
                                      getTypeName(thrown_type->kind));
