@@ -1846,7 +1846,7 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
 
                 if (node->call.argCount != expected_args) {
                     if (arg_types) free(arg_types);
-                    report_type_mismatch(node->location, "function signature", "argument count");
+                    report_argument_count_mismatch(node->location, expected_args, node->call.argCount);
                     set_type_error();
                     return NULL;
                 }
