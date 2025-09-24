@@ -274,6 +274,7 @@ static TypeVar* find_var(TypeVar* v) {
 }
 
 static void register_builtin_functions(TypeEnv* env);
+static void register_builtin_enums(void);
 
 // ---- Type constructors ----
 Type* make_var_type(TypeEnv* env) {
@@ -456,6 +457,7 @@ TypeEnv* type_env_new(TypeEnv* parent) {
     env->parent = parent;
     if (!parent) {
         register_builtin_functions(env);
+        register_builtin_enums();
     }
     return env;
 }
@@ -841,6 +843,77 @@ static void register_builtin_functions(TypeEnv* env) {
     if (pop_array) {
         Type* pop_params[1] = {pop_array};
         define_builtin_function(env, "pop", any_type, pop_params, 1);
+    }
+}
+
+static void register_builtin_enums(void) {
+    const char* enum_name = "Result";
+    if (findEnumType(enum_name)) {
+        return;
+    }
+
+    ObjString* name = create_compiler_string(enum_name);
+    if (!name) {
+        return;
+    }
+
+    Variant* variants = calloc(2, sizeof(Variant));
+    if (!variants) {
+        free_compiler_string(name);
+        return;
+    }
+
+    bool success = false;
+
+    do {
+        variants[0].name = create_compiler_string("Ok");
+        if (!variants[0].name) {
+            break;
+        }
+        variants[0].field_count = 1;
+        variants[0].field_types = calloc(1, sizeof(Type*));
+        if (!variants[0].field_types) {
+            break;
+        }
+        variants[0].field_types[0] = getPrimitiveType(TYPE_ANY);
+        variants[0].field_names = calloc(1, sizeof(ObjString*));
+        if (!variants[0].field_names) {
+            break;
+        }
+        variants[0].field_names[0] = create_compiler_string("value");
+        if (!variants[0].field_names[0]) {
+            break;
+        }
+
+        variants[1].name = create_compiler_string("Err");
+        if (!variants[1].name) {
+            break;
+        }
+        variants[1].field_count = 1;
+        variants[1].field_types = calloc(1, sizeof(Type*));
+        if (!variants[1].field_types) {
+            break;
+        }
+        variants[1].field_types[0] = getPrimitiveType(TYPE_STRING);
+        variants[1].field_names = calloc(1, sizeof(ObjString*));
+        if (!variants[1].field_names) {
+            break;
+        }
+        variants[1].field_names[0] = create_compiler_string("message");
+        if (!variants[1].field_names[0]) {
+            break;
+        }
+
+        if (!createEnumType(name, variants, 2)) {
+            break;
+        }
+
+        success = true;
+    } while (false);
+
+    if (!success) {
+        cleanup_variant_info(variants, 2);
+        free_compiler_string(name);
     }
 }
 

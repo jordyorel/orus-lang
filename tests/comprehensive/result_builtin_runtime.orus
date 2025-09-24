@@ -1,0 +1,16 @@
+success = Result.Ok(42)
+failure = Result.Err("boom")
+
+match success:
+    Result.Ok(value) ->
+        print("ok", value)
+    Result.Err(reason) ->
+        print("error", reason)
+
+match failure:
+    Result.Ok(value) ->
+        print("unexpected", value)
+    Result.Err(reason) ->
+        print("handled", reason)
+
+print("built-in result runtime complete")
