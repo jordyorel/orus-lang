@@ -1,0 +1,19 @@
+// Chained indexing should allow array elements to provide indexes for other lookups.
+//
+// Covers: value-from-array-as-index, arithmetic-derived indexes, and indirect lookups.
+print("-- chained array indexing --")
+
+numbers = [3, 1, 4, 1, 5]
+print("digits:", numbers[0], numbers[1], numbers[2], numbers[3], numbers[4])
+
+index_from_first = numbers[0]
+value_from_index = numbers[index_from_first]
+print("first chain:", index_from_first, value_from_index)
+
+second_index = numbers[2] - numbers[3]  // 4 - 1 => 3
+second_value = numbers[second_index]
+print("second chain:", second_index, second_value)
+
+third_index = numbers[second_value] - 1  // numbers[1] - 1 => 0
+print("third index:", third_index)
+print("third chain value:", numbers[third_index])
