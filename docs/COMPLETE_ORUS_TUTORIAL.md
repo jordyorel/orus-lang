@@ -130,7 +130,8 @@ for item in values:
 - `len(array)` returns an `i32` length.
 - `push(array, value)` appends and returns the array.
 - `pop(array)` removes and returns the last element.
-- Slices use `array[start..end]` with an exclusive end index.
+- Slices use `array[start..end]` with an inclusive end index. Passing the array length (or omitting the bound) includes the
+  final element.
 
 ```orus
 mut numbers = []
@@ -139,7 +140,7 @@ push(numbers, 2)
 push(numbers, 3)
 print("len", len(numbers))
 print("pop", pop(numbers))
-print("slice", numbers[0..len(numbers)])
+print("slice", numbers[0..1])
 ```
 
 ## 8. Functions and Higher-Order Code
