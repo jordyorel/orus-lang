@@ -3651,9 +3651,13 @@ static ASTNode* parseIndexExpression(ParserContext* ctx, ASTNode* arrayExpr, Tok
         nextToken(ctx);
     }
 
-    ASTNode* firstExpr = parseExpression(ctx);
-    if (!firstExpr) {
-        return NULL;
+    ASTNode* firstExpr = NULL;
+    TokenType nextType = peekToken(ctx).type;
+    if (nextType != TOKEN_DOT_DOT && nextType != TOKEN_RIGHT_BRACKET) {
+        firstExpr = parseExpression(ctx);
+        if (!firstExpr) {
+            return NULL;
+        }
     }
 
     while (peekToken(ctx).type == TOKEN_NEWLINE) {
@@ -3671,13 +3675,15 @@ static ASTNode* parseIndexExpression(ParserContext* ctx, ASTNode* arrayExpr, Tok
             nextToken(ctx);
         }
 
-        endExpr = parseExpression(ctx);
-        if (!endExpr) {
-            return NULL;
-        }
+        if (peekToken(ctx).type != TOKEN_RIGHT_BRACKET) {
+            endExpr = parseExpression(ctx);
+            if (!endExpr) {
+                return NULL;
+            }
 
-        while (peekToken(ctx).type == TOKEN_NEWLINE) {
-            nextToken(ctx);
+            while (peekToken(ctx).type == TOKEN_NEWLINE) {
+                nextToken(ctx);
+            }
         }
     }
 
@@ -3697,6 +3703,9 @@ static ASTNode* parseIndexExpression(ParserContext* ctx, ASTNode* arrayExpr, Tok
         indexNode->arraySlice.start = firstExpr;
         indexNode->arraySlice.end = endExpr;
     } else {
+        if (!firstExpr) {
+            return NULL;
+        }
         indexNode->type = NODE_INDEX_ACCESS;
         indexNode->indexAccess.array = arrayExpr;
         indexNode->indexAccess.index = firstExpr;

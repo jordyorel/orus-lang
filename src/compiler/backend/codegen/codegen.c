@@ -2665,7 +2665,11 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                 free_end_node = (end_node != NULL);
             }
 
-            if (!array_node || !start_node || !end_node) {
+            bool start_required = (expr->original && expr->original->arraySlice.start != NULL);
+            bool end_required = (expr->original && expr->original->arraySlice.end != NULL);
+
+            if (!array_node || (start_required && !start_node) ||
+                (end_required && !end_node)) {
                 if (free_array_node) free_typed_ast_node(array_node);
                 if (free_start_node) free_typed_ast_node(start_node);
                 if (free_end_node) free_typed_ast_node(end_node);
@@ -2680,29 +2684,66 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                 return -1;
             }
 
-            int start_reg = compile_expression(ctx, start_node);
-            if (start_reg == -1) {
-                if (array_reg >= MP_TEMP_REG_START && array_reg <= MP_TEMP_REG_END) {
-                    mp_free_temp_register(ctx->allocator, array_reg);
+            int start_reg = -1;
+            if (start_node) {
+                start_reg = compile_expression(ctx, start_node);
+                if (start_reg == -1) {
+                    if (array_reg >= MP_TEMP_REG_START && array_reg <= MP_TEMP_REG_END) {
+                        mp_free_temp_register(ctx->allocator, array_reg);
+                    }
+                    if (free_array_node) free_typed_ast_node(array_node);
+                    if (free_start_node) free_typed_ast_node(start_node);
+                    if (free_end_node) free_typed_ast_node(end_node);
+                    return -1;
                 }
-                if (free_array_node) free_typed_ast_node(array_node);
-                if (free_start_node) free_typed_ast_node(start_node);
-                if (free_end_node) free_typed_ast_node(end_node);
-                return -1;
+            } else {
+                start_reg = mp_allocate_temp_register(ctx->allocator);
+                if (start_reg == -1) {
+                    if (array_reg >= MP_TEMP_REG_START && array_reg <= MP_TEMP_REG_END) {
+                        mp_free_temp_register(ctx->allocator, array_reg);
+                    }
+                    if (free_array_node) free_typed_ast_node(array_node);
+                    if (free_start_node) free_typed_ast_node(start_node);
+                    if (free_end_node) free_typed_ast_node(end_node);
+                    return -1;
+                }
+                set_location_from_node(ctx, expr);
+                emit_load_constant(ctx, start_reg, I32_VAL(0));
             }
 
-            int end_reg = compile_expression(ctx, end_node);
-            if (end_reg == -1) {
-                if (start_reg >= MP_TEMP_REG_START && start_reg <= MP_TEMP_REG_END) {
-                    mp_free_temp_register(ctx->allocator, start_reg);
+            int end_reg = -1;
+            if (end_node) {
+                end_reg = compile_expression(ctx, end_node);
+                if (end_reg == -1) {
+                    if (start_reg >= MP_TEMP_REG_START && start_reg <= MP_TEMP_REG_END) {
+                        mp_free_temp_register(ctx->allocator, start_reg);
+                    }
+                    if (array_reg >= MP_TEMP_REG_START && array_reg <= MP_TEMP_REG_END) {
+                        mp_free_temp_register(ctx->allocator, array_reg);
+                    }
+                    if (free_array_node) free_typed_ast_node(array_node);
+                    if (free_start_node) free_typed_ast_node(start_node);
+                    if (free_end_node) free_typed_ast_node(end_node);
+                    return -1;
                 }
-                if (array_reg >= MP_TEMP_REG_START && array_reg <= MP_TEMP_REG_END) {
-                    mp_free_temp_register(ctx->allocator, array_reg);
+            } else {
+                end_reg = mp_allocate_temp_register(ctx->allocator);
+                if (end_reg == -1) {
+                    if (start_reg >= MP_TEMP_REG_START && start_reg <= MP_TEMP_REG_END) {
+                        mp_free_temp_register(ctx->allocator, start_reg);
+                    }
+                    if (array_reg >= MP_TEMP_REG_START && array_reg <= MP_TEMP_REG_END) {
+                        mp_free_temp_register(ctx->allocator, array_reg);
+                    }
+                    if (free_array_node) free_typed_ast_node(array_node);
+                    if (free_start_node) free_typed_ast_node(start_node);
+                    if (free_end_node) free_typed_ast_node(end_node);
+                    return -1;
                 }
-                if (free_array_node) free_typed_ast_node(array_node);
-                if (free_start_node) free_typed_ast_node(start_node);
-                if (free_end_node) free_typed_ast_node(end_node);
-                return -1;
+                set_location_from_node(ctx, expr);
+                emit_byte_to_buffer(ctx->bytecode, OP_ARRAY_LEN_R);
+                emit_byte_to_buffer(ctx->bytecode, end_reg);
+                emit_byte_to_buffer(ctx->bytecode, array_reg);
             }
 
             int result_reg = mp_allocate_temp_register(ctx->allocator);

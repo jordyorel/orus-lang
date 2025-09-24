@@ -526,9 +526,18 @@ bool validate_typed_ast(TypedASTNode* root) {
             return validate_typed_ast(root->typed.arrayAssign.target) &&
                    validate_typed_ast(root->typed.arrayAssign.value);
         case NODE_ARRAY_SLICE:
-            return validate_typed_ast(root->typed.arraySlice.array) &&
-                   validate_typed_ast(root->typed.arraySlice.start) &&
-                   validate_typed_ast(root->typed.arraySlice.end);
+            if (!validate_typed_ast(root->typed.arraySlice.array)) {
+                return false;
+            }
+            if (root->typed.arraySlice.start &&
+                !validate_typed_ast(root->typed.arraySlice.start)) {
+                return false;
+            }
+            if (root->typed.arraySlice.end &&
+                !validate_typed_ast(root->typed.arraySlice.end)) {
+                return false;
+            }
+            return true;
         case NODE_MEMBER_ASSIGN:
             return validate_typed_ast(root->typed.memberAssign.target) &&
                    validate_typed_ast(root->typed.memberAssign.value);
