@@ -2103,7 +2103,19 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t reg = READ_BYTE();
                     Value err = vm_get_register_safe(reg);
                     if (!IS_ERROR(err)) {
-                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "throw expects an error value");
+                        if (IS_STRING(err)) {
+                            ObjString* message = AS_STRING(err);
+                            ObjError* converted = allocateError(ERROR_RUNTIME, message->chars, CURRENT_LOCATION());
+                            if (!converted) {
+                                VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(),
+                                                "Failed to allocate error for throw");
+                            }
+                            err = ERROR_VAL(converted);
+                            vm_set_register_safe(reg, err);
+                        } else {
+                            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(),
+                                            "throw expects an error or string value");
+                        }
                     }
                     vm.lastError = err;
                     goto handle_runtime_error;
@@ -2393,15 +2405,36 @@ InterpretResult vm_run_dispatch(void) {
                     if (vm.frameCount > 0) {
                         CallFrame* frame = &vm.frames[--vm.frameCount];
                         
-                        // Restore all saved frame registers (R256-R319)
-                        for (int i = 0; i < frame->savedRegisterCount; i++) {
-                            vm_set_register_safe(FRAME_REG_START + i, frame->savedRegisters[i]);
-                            // Debug: Print restored values for first few registers
-                            if (i < 8) {
-                                DEBUG_VM_PRINT("RESTORE R%d (type=%d)", FRAME_REG_START + i, frame->savedRegisters[i].type);
-                                if (frame->savedRegisters[i].type == VALUE_I32) {
-                                    DEBUG_VM_PRINT("  value = %d", AS_I32(vm_get_register_safe(FRAME_REG_START + i)));
-                                }
+                        const int temp_reg_start = 192;
+                        const int temp_reg_count = 48;
+
+                        if (frame->savedRegisterCount == 64 + temp_reg_count) {
+                            for (int i = 0; i < 64; i++) {
+                                vm_set_register_safe(FRAME_REG_START + i, frame->savedRegisters[i]);
+                            }
+                            for (int i = 0; i < temp_reg_count; i++) {
+                                vm_set_register_safe(temp_reg_start + i, frame->savedRegisters[64 + i]);
+                            }
+                        } else if (frame->savedRegisterCount == 31) {
+                            for (int i = 0; i < 15; i++) {
+                                vm_set_register_safe(65 + i, frame->savedRegisters[i]);
+                            }
+                            for (int i = 0; i < 16; i++) {
+                                vm_set_register_safe(240 + i, frame->savedRegisters[15 + i]);
+                            }
+                        } else if (frame->savedRegisterCount == 31 + temp_reg_count) {
+                            for (int i = 0; i < 15; i++) {
+                                vm_set_register_safe(65 + i, frame->savedRegisters[i]);
+                            }
+                            for (int i = 0; i < 16; i++) {
+                                vm_set_register_safe(240 + i, frame->savedRegisters[15 + i]);
+                            }
+                            for (int i = 0; i < temp_reg_count; i++) {
+                                vm_set_register_safe(temp_reg_start + i, frame->savedRegisters[31 + i]);
+                            }
+                        } else {
+                            for (int i = 0; i < frame->savedRegisterCount; i++) {
+                                vm_set_register_safe(frame->savedRegisterStart + i, frame->savedRegisters[i]);
                             }
                         }
                         
@@ -2422,15 +2455,36 @@ InterpretResult vm_run_dispatch(void) {
                     if (vm.frameCount > 0) {
                         CallFrame* frame = &vm.frames[--vm.frameCount];
                         
-                        // Restore all saved frame registers (R256-R319)
-                        for (int i = 0; i < frame->savedRegisterCount; i++) {
-                            vm_set_register_safe(FRAME_REG_START + i, frame->savedRegisters[i]);
-                            // Debug: Print restored values for first few registers
-                            if (i < 8) {
-                                DEBUG_VM_PRINT("RESTORE R%d (type=%d)", FRAME_REG_START + i, frame->savedRegisters[i].type);
-                                if (frame->savedRegisters[i].type == VALUE_I32) {
-                                    DEBUG_VM_PRINT("  value = %d", AS_I32(vm_get_register_safe(FRAME_REG_START + i)));
-                                }
+                        const int temp_reg_start = 192;
+                        const int temp_reg_count = 48;
+
+                        if (frame->savedRegisterCount == 64 + temp_reg_count) {
+                            for (int i = 0; i < 64; i++) {
+                                vm_set_register_safe(FRAME_REG_START + i, frame->savedRegisters[i]);
+                            }
+                            for (int i = 0; i < temp_reg_count; i++) {
+                                vm_set_register_safe(temp_reg_start + i, frame->savedRegisters[64 + i]);
+                            }
+                        } else if (frame->savedRegisterCount == 31) {
+                            for (int i = 0; i < 15; i++) {
+                                vm_set_register_safe(65 + i, frame->savedRegisters[i]);
+                            }
+                            for (int i = 0; i < 16; i++) {
+                                vm_set_register_safe(240 + i, frame->savedRegisters[15 + i]);
+                            }
+                        } else if (frame->savedRegisterCount == 31 + temp_reg_count) {
+                            for (int i = 0; i < 15; i++) {
+                                vm_set_register_safe(65 + i, frame->savedRegisters[i]);
+                            }
+                            for (int i = 0; i < 16; i++) {
+                                vm_set_register_safe(240 + i, frame->savedRegisters[15 + i]);
+                            }
+                            for (int i = 0; i < temp_reg_count; i++) {
+                                vm_set_register_safe(temp_reg_start + i, frame->savedRegisters[31 + i]);
+                            }
+                        } else {
+                            for (int i = 0; i < frame->savedRegisterCount; i++) {
+                                vm_set_register_safe(frame->savedRegisterStart + i, frame->savedRegisters[i]);
                             }
                         }
                         

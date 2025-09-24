@@ -2424,7 +2424,19 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t reg = READ_BYTE();
             Value err = vm_get_register_safe(reg);
             if (!IS_ERROR(err)) {
-                VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "throw expects an error value");
+                if (IS_STRING(err)) {
+                    ObjString* message = AS_STRING(err);
+                    ObjError* converted = allocateError(ERROR_RUNTIME, message->chars, CURRENT_LOCATION());
+                    if (!converted) {
+                        VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(),
+                                        "Failed to allocate error for throw");
+                    }
+                    err = ERROR_VAL(converted);
+                    vm_set_register_safe(reg, err);
+                } else {
+                    VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(),
+                                    "throw expects an error or string value");
+                }
             }
             vm.lastError = err;
             goto HANDLE_RUNTIME_ERROR;
@@ -2763,19 +2775,29 @@ InterpretResult vm_run_dispatch(void) {
                 if (paramBase < 1) paramBase = 1;
                 frame->parameterBaseRegister = paramBase;
                 
-                // Save both local variables (R65-R79) and parameters (R240-R255) = 31 total
-                frame->savedRegisterCount = 31;
+                // Save both local variables (R65-R79) and parameters (R240-R255)
                 frame->savedRegisterStart = 65; // For tracking purposes
-                
+
+                const int temp_reg_start = 192; // Matches MP_TEMP_REG_START
+                const int temp_reg_count = 48;  // Covers R192-R239
+
                 // Save local variable registers R65-R79 (15 registers)
                 for (int i = 0; i < 15; i++) {
                     frame->savedRegisters[i] = vm_get_register_safe(65 + i);
                 }
-                
-                // Save parameter registers R240-R255 (16 registers)  
+
+                // Save parameter registers R240-R255 (16 registers)
                 for (int i = 0; i < 16; i++) {
                     frame->savedRegisters[15 + i] = vm_get_register_safe(240 + i);
                 }
+
+                // Save temp registers R192-R239 so caller temporaries survive the call
+                for (int i = 0; i < temp_reg_count; i++) {
+                    frame->savedRegisters[31 + i] = vm_get_register_safe(temp_reg_start + i);
+                }
+
+                frame->savedRegisterCount = 31 + temp_reg_count;
+
                 
                 // Copy arguments to parameter registers
                 for (int i = 0; i < argCount; i++) {
@@ -2855,15 +2877,34 @@ InterpretResult vm_run_dispatch(void) {
                 // Close upvalues before restoring registers to prevent corruption
                 closeUpvalues(&vm.registers[frame->parameterBaseRegister]);
                 
-                // Restore saved local variable registers (R65-R79) and parameter registers (R240-R255)
-                if (frame->savedRegisterCount == 31) {  // New dual-range format
-                    // Restore local variable registers R65-R79 (15 registers)
+                const int temp_reg_start = 192;
+                const int temp_reg_count = 48;
+
+                // Restore saved local variable registers (R65-R79), parameter registers (R240-R255),
+                // and any preserved temp registers (R192-R239)
+                if (frame->savedRegisterCount == 31) {  // Locals + parameters only
                     for (int i = 0; i < 15; i++) {
                         vm_set_register_safe(65 + i, frame->savedRegisters[i]);
                     }
-                    // Restore parameter registers R240-R255 (16 registers)  
                     for (int i = 0; i < 16; i++) {
                         vm_set_register_safe(240 + i, frame->savedRegisters[15 + i]);
+                    }
+                } else if (frame->savedRegisterCount == 31 + temp_reg_count) {  // Locals + parameters + temps
+                    for (int i = 0; i < 15; i++) {
+                        vm_set_register_safe(65 + i, frame->savedRegisters[i]);
+                    }
+                    for (int i = 0; i < 16; i++) {
+                        vm_set_register_safe(240 + i, frame->savedRegisters[15 + i]);
+                    }
+                    for (int i = 0; i < temp_reg_count; i++) {
+                        vm_set_register_safe(temp_reg_start + i, frame->savedRegisters[31 + i]);
+                    }
+                } else if (frame->savedRegisterCount == 64 + temp_reg_count) {  // Frame registers + temps (closures)
+                    for (int i = 0; i < 64; i++) {
+                        vm_set_register_safe(FRAME_REG_START + i, frame->savedRegisters[i]);
+                    }
+                    for (int i = 0; i < temp_reg_count; i++) {
+                        vm_set_register_safe(temp_reg_start + i, frame->savedRegisters[64 + i]);
                     }
                 } else {  // Legacy single-range format for backward compatibility
                     for (int i = 0; i < frame->savedRegisterCount; i++) {
@@ -2888,9 +2929,37 @@ InterpretResult vm_run_dispatch(void) {
                 // Close upvalues before restoring registers to prevent corruption
                 closeUpvalues(&vm.registers[frame->parameterBaseRegister]);
                 
-                // Restore saved registers using stored start position
-                for (int i = 0; i < frame->savedRegisterCount; i++) {
-                    vm_set_register_safe(frame->savedRegisterStart + i, frame->savedRegisters[i]);
+                const int temp_reg_start = 192;
+                const int temp_reg_count = 48;
+
+                if (frame->savedRegisterCount == 31) {
+                    for (int i = 0; i < 15; i++) {
+                        vm_set_register_safe(65 + i, frame->savedRegisters[i]);
+                    }
+                    for (int i = 0; i < 16; i++) {
+                        vm_set_register_safe(240 + i, frame->savedRegisters[15 + i]);
+                    }
+                } else if (frame->savedRegisterCount == 31 + temp_reg_count) {
+                    for (int i = 0; i < 15; i++) {
+                        vm_set_register_safe(65 + i, frame->savedRegisters[i]);
+                    }
+                    for (int i = 0; i < 16; i++) {
+                        vm_set_register_safe(240 + i, frame->savedRegisters[15 + i]);
+                    }
+                    for (int i = 0; i < temp_reg_count; i++) {
+                        vm_set_register_safe(temp_reg_start + i, frame->savedRegisters[31 + i]);
+                    }
+                } else if (frame->savedRegisterCount == 64 + temp_reg_count) {
+                    for (int i = 0; i < 64; i++) {
+                        vm_set_register_safe(FRAME_REG_START + i, frame->savedRegisters[i]);
+                    }
+                    for (int i = 0; i < temp_reg_count; i++) {
+                        vm_set_register_safe(temp_reg_start + i, frame->savedRegisters[64 + i]);
+                    }
+                } else {
+                    for (int i = 0; i < frame->savedRegisterCount; i++) {
+                        vm_set_register_safe(frame->savedRegisterStart + i, frame->savedRegisters[i]);
+                    }
                 }
                 
                 vm.chunk = frame->previousChunk;
