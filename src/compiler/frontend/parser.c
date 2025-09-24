@@ -2971,6 +2971,10 @@ static ASTNode* parseArrayLiteral(ParserContext* ctx, Token leftToken) {
 
     Token close = nextToken(ctx);
     if (close.type != TOKEN_RIGHT_BRACKET) {
+        SrcLocation location = {NULL, leftToken.line, leftToken.column};
+        report_compile_error(E1020_MISSING_BRACKET, location,
+                             "Expected ']' to close this array literal, but found %s instead.",
+                             token_type_to_string(close.type));
         return NULL;
     }
 
@@ -3689,6 +3693,10 @@ static ASTNode* parseIndexExpression(ParserContext* ctx, ASTNode* arrayExpr, Tok
 
     Token close = nextToken(ctx);
     if (close.type != TOKEN_RIGHT_BRACKET) {
+        SrcLocation location = {NULL, openToken.line, openToken.column};
+        report_compile_error(E1020_MISSING_BRACKET, location,
+                             "Expected ']' to close this bracket expression, but found %s instead.",
+                             token_type_to_string(close.type));
         return NULL;
     }
 

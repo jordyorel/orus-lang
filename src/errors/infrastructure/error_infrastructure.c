@@ -970,6 +970,7 @@ const char* get_error_title(ErrorCode code) {
         case E1002_MISSING_COLON: return "Something's missing here";
         case E1003_MISSING_PARENTHESIS: return "Missing closing parenthesis";
         case E1004_MISSING_BRACE: return "Missing closing brace";
+        case E1020_MISSING_BRACKET: return "Missing closing bracket";
         case E1005_UNEXPECTED_EOF: return "File ended unexpectedly";
         case E1006_INVALID_SYNTAX: return "This syntax isn't quite right";
         case E1007_SEMICOLON_NOT_ALLOWED: return "Semicolons aren't needed in Orus";
@@ -1031,6 +1032,8 @@ const char* get_error_help(ErrorCode code) {
             return "Try adding a ':' at the end of this line.";
         case E1003_MISSING_PARENTHESIS:
             return "Add a closing ')' to match the opening parenthesis.";
+        case E1020_MISSING_BRACKET:
+            return "Add a closing ']' to match the opening '[' and finish the expression.";
         case E1006_INVALID_SYNTAX:
             return "Compare this syntax with a working example or check the docs to see what structure is expected here.";
         case E1007_SEMICOLON_NOT_ALLOWED:
@@ -1091,6 +1094,9 @@ const char* get_error_note(ErrorCode code) {
             return "Orus uses newlines instead of semicolons to separate statements.";
         case E1006_INVALID_SYNTAX:
             return "Orus expected a different structure here. Re-read the surrounding code to find the mismatch.";
+
+        case E1020_MISSING_BRACKET:
+            return "Each '[' introduces a list or index expression that must be closed with a matching ']'.";
 
         case E1019_MISSING_PRINT_SEPARATOR:
             return "Commas help Orus understand where one print value ends and the next one begins.";
