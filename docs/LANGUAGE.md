@@ -82,7 +82,8 @@ print("Pi ~= @.2f", pi)
 
 ### Arrays
 - Array literals use brackets: `values = [1, 2, 3]`. Trailing commas are allowed.
-- Indexing uses `array[index]`. Slices create new arrays with `array[start..end]` (`end` is exclusive).
+- Indexing uses `array[index]`. Slices create new arrays with `array[start..end]` and treat `end` as inclusive. Passing the
+  array length as the end bound (or omitting it) includes the last element.
 - Built-ins:
   - `len(array)` returns an `i32` length.
   - `push(array, value)` appends in place and returns the array.
@@ -96,7 +97,7 @@ push(numbers, 3)
 print(len(numbers))        // 3
 last = pop(numbers)
 print("popped", last)
-window = numbers[0..len(numbers)]
+window = numbers[0..1]          // includes indices 0 and 1
 ```
 
 ### Control Flow

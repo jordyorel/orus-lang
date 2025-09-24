@@ -502,8 +502,8 @@ nums: [i32; 3] = [1, 2, 3]
 // Array fill expression (value; length)
 zeros = [0; 5]           // [i32; 5]
 
-// Slicing (end-exclusive)
-slice = nums[0..2]       // elements 0 and 1
+// Slicing (end-inclusive)
+slice = nums[0..2]       // elements 0, 1, and 2
 
 // Dynamic array (no length annotation)
 dynamic: [i32] = []

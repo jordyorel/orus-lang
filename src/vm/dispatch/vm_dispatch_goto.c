@@ -2325,17 +2325,31 @@ InterpretResult vm_run_dispatch(void) {
         }
 
         ObjArray* array = AS_ARRAY(array_value);
-        if (start_index < 0 || start_index > array->length) {
+        int array_length = array->length;
+        if (start_index < 0 || start_index > array_length) {
             VM_ERROR_RETURN(ERROR_INDEX, CURRENT_LOCATION(), "Array slice start out of bounds");
         }
-        if (end_index < start_index) {
+        if (end_index < 0) {
             VM_ERROR_RETURN(ERROR_INDEX, CURRENT_LOCATION(), "Array slice end before start");
         }
-        if (end_index > array->length) {
+        if (end_index > array_length) {
             VM_ERROR_RETURN(ERROR_INDEX, CURRENT_LOCATION(), "Array slice end out of bounds");
         }
 
-        int slice_length = end_index - start_index;
+        int slice_length = 0;
+        if (start_index == array_length) {
+            if (end_index != array_length) {
+                VM_ERROR_RETURN(ERROR_INDEX, CURRENT_LOCATION(), "Array slice end before start");
+            }
+            slice_length = 0;
+        } else {
+            int normalized_end = end_index == array_length ? array_length - 1 : end_index;
+            if (normalized_end < start_index) {
+                VM_ERROR_RETURN(ERROR_INDEX, CURRENT_LOCATION(), "Array slice end before start");
+            }
+            slice_length = normalized_end - start_index + 1;
+        }
+
         ObjArray* result = allocateArray(slice_length);
         if (!result) {
             VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(), "Failed to allocate array slice");

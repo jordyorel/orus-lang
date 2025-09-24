@@ -23,8 +23,9 @@ push(numbers, 42)
 print("final state:", numbers)
 
 // Validate slice shorthand on a mutated array.  Omitting the start bound
-// should default to zero, and omitting the end bound should default to the
-// array length, matching Python semantics.
+// should default to zero, and omitting the end bound should include the
+// final element.  Explicit end indices are inclusive.
+print("slice[0..1]:", numbers[0..1])
 print("slice[..len]:", numbers[..len(numbers)])
 print("slice[..]:", numbers[..])
 print("slice[1..]:", numbers[1..])
