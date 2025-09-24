@@ -1201,6 +1201,14 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             array_type = prune(array_type);
             index_type = prune(index_type);
 
+            if (index_type && index_type->kind == TYPE_VAR) {
+                Type* assumed_index = getPrimitiveType(TYPE_I32);
+                if (assumed_index) {
+                    unify(index_type, assumed_index);
+                    index_type = prune(index_type);
+                }
+            }
+
             if (array_type->kind != TYPE_ARRAY) {
                 report_type_mismatch(node->indexAccess.array->location, "array",
                                      getTypeName(array_type->kind));
