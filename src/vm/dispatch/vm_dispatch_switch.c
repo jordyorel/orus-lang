@@ -4,6 +4,7 @@
 #include "runtime/memory.h"
 #include "vm/vm_constants.h"
 #include "vm/vm_string_ops.h"
+#include "vm/vm_tagged_union.h"
 #include "vm/vm_arithmetic.h"
 #include "vm/vm_control_flow.h"
 #include "vm/vm_comparison.h"
@@ -1701,25 +1702,33 @@ InterpretResult vm_run_dispatch(void) {
                         variantName = AS_STRING(variantConst);
                     }
 
-                    ObjArray* payload = NULL;
+                    Value payload_values[UINT8_MAX];
+                    const Value* payload_ptr = NULL;
                     if (payloadCount > 0) {
-                        payload = allocateArray(payloadCount);
-                        if (!payload) {
-                            VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(), "Failed to allocate enum payload");
+                        if ((int)payloadStart + payloadCount > REGISTER_COUNT) {
+                            VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(),
+                                            "Enum constructor payload exceeds register bounds");
                         }
                         for (uint8_t i = 0; i < payloadCount; i++) {
-                            arrayEnsureCapacity(payload, i + 1);
-                            payload->elements[i] = vm_get_register_safe(payloadStart + i);
+                            payload_values[i] = vm_get_register_safe(payloadStart + i);
                         }
-                        payload->length = payloadCount;
+                        payload_ptr = payload_values;
                     }
 
-                    ObjEnumInstance* instance = allocateEnumInstance(typeName, variantName, variantIndex, payload);
-                    if (!instance) {
+                    TaggedUnionSpec spec = {
+                        .type_name = typeName->chars,
+                        .variant_name = variantName ? variantName->chars : NULL,
+                        .variant_index = variantIndex,
+                        .payload = payload_ptr,
+                        .payload_count = payloadCount,
+                    };
+
+                    Value enum_value;
+                    if (!vm_make_tagged_union(&spec, &enum_value)) {
                         VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(), "Failed to allocate enum instance");
                     }
 
-                    vm_set_register_safe(dst, ENUM_VAL(instance));
+                    vm_set_register_safe(dst, enum_value);
                     break;
                 }
 

@@ -1,0 +1,23 @@
+fn fail():
+    trigger = 1 / 0
+
+success = Result.Ok(99)
+failure = Result.Err("io error")
+
+match success:
+    Result.Ok(value) ->
+        if value != 99:
+            fail()
+    Result.Err(reason) ->
+        print("unexpected err", reason)
+        fail()
+
+match failure:
+    Result.Ok(value) ->
+        print("unexpected ok", value)
+        fail()
+    Result.Err(reason) ->
+        if reason != "io error":
+            fail()
+
+print("result builtins done")
