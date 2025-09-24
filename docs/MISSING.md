@@ -106,6 +106,7 @@ print("sum:", total)
 | Module packaging | Completed | Module declarations and dotted `use` paths map to nested files and are covered by regression tests. |
 | Print formatting polish | Backlog | Finish escape handling and numeric formatting for the print APIs. |
 | Module use resolution | Completed | `use` loads sibling modules and binds their exported globals, functions, structs, and enums—including aliased type declarations—via the module loader. |
+| Algorithm stress suite | In progress | Phase 1 bubble/insertion sort smoke fixtures added under `tests/algorithms/phase1/` with baseline instrumentation; merge/quick/heap variants queued next. |
 
 ---
 
@@ -118,7 +119,9 @@ print("sum:", total)
 4. ✅ Define and implement module declarations/`use` syntax backed by the
    existing loader.
 5. Document and stabilize the printing APIs once formatting is finalized.
-6. Automate loop telemetry dashboards and CI perf digests for the new fast paths.
+
+Detailed planning for the algorithm stress-test suite now lives in
+[`docs/ALGORITHM_STRESS_TEST_ROADMAP.md`](ALGORITHM_STRESS_TEST_ROADMAP.md).
 
 ---
 

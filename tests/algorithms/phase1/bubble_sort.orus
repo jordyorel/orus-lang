@@ -1,0 +1,125 @@
+// Phase 1 bubble sort baseline for the algorithm stress-test suite.
+print("== Phase 1: Bubble Sort Smoke ==")
+
+fn bubble_sort(label, values):
+    mut sorted = []
+    for value in values:
+        push(sorted, value)
+
+    mut pass_count = 0
+    mut comparison_count = 0
+    mut swap_count = 0
+    mut end = len(sorted)
+
+    if end <= 1:
+        print("bubble_sort", label, "passes:", pass_count, "comparisons:", comparison_count, "swaps:", swap_count)
+        return sorted
+
+    while end > 1:
+        pass_count = pass_count + 1
+        mut swapped = false
+        for i in 0..(end - 1):
+            next_index = i + 1
+            comparison_count = comparison_count + 1
+            if sorted[i] > sorted[next_index]:
+                temp = sorted[i]
+                sorted[i] = sorted[next_index]
+                sorted[next_index] = temp
+                swap_count = swap_count + 1
+                swapped = true
+        if swapped == false:
+            break
+        end = end - 1
+
+    print("bubble_sort", label, "passes:", pass_count, "comparisons:", comparison_count, "swaps:", swap_count)
+    return sorted
+
+unsorted = [5, 1, 4, 2, 8, 0]
+expected_unsorted = [0, 1, 2, 4, 5, 8]
+random_sorted = bubble_sort("random", unsorted)
+mut random_ok = true
+if len(random_sorted) != len(expected_unsorted):
+    random_ok = false
+else:
+    mut random_index = 0
+    while random_index < len(random_sorted):
+        if random_sorted[random_index] != expected_unsorted[random_index]:
+            random_ok = false
+        random_index = random_index + 1
+if random_ok:
+    print("random sorted", random_sorted)
+else:
+    print("FAIL random =>", random_sorted, "expected", expected_unsorted)
+
+ascending = [1, 2, 3, 4, 5]
+already_sorted = bubble_sort("already_sorted", ascending)
+mut ascending_ok = true
+if len(already_sorted) != len(ascending):
+    ascending_ok = false
+else:
+    mut asc_index = 0
+    while asc_index < len(already_sorted):
+        if already_sorted[asc_index] != ascending[asc_index]:
+            ascending_ok = false
+        asc_index = asc_index + 1
+if ascending_ok:
+    print("already_sorted sorted", already_sorted)
+else:
+    print("FAIL already_sorted =>", already_sorted, "expected", ascending)
+
+reversed = [9, 7, 5, 3, 1, -1]
+expected_reversed = [-1, 1, 3, 5, 7, 9]
+reversed_sorted = bubble_sort("reversed", reversed)
+mut reversed_ok = true
+if len(reversed_sorted) != len(expected_reversed):
+    reversed_ok = false
+else:
+    mut rev_index = 0
+    while rev_index < len(reversed_sorted):
+        if reversed_sorted[rev_index] != expected_reversed[rev_index]:
+            reversed_ok = false
+        rev_index = rev_index + 1
+if reversed_ok:
+    print("reversed sorted", reversed_sorted)
+else:
+    print("FAIL reversed =>", reversed_sorted, "expected", expected_reversed)
+
+duplicates = [3, 1, 2, 3, 1]
+expected_duplicates = [1, 1, 2, 3, 3]
+duplicates_sorted = bubble_sort("duplicates", duplicates)
+mut duplicates_ok = true
+if len(duplicates_sorted) != len(expected_duplicates):
+    duplicates_ok = false
+else:
+    mut dup_index = 0
+    while dup_index < len(duplicates_sorted):
+        if duplicates_sorted[dup_index] != expected_duplicates[dup_index]:
+            duplicates_ok = false
+        dup_index = dup_index + 1
+if duplicates_ok:
+    print("duplicates sorted", duplicates_sorted)
+else:
+    print("FAIL duplicates =>", duplicates_sorted, "expected", expected_duplicates)
+
+single = [42]
+single_sorted = bubble_sort("single", single)
+mut single_ok = true
+if len(single_sorted) != len(single):
+    single_ok = false
+else:
+    mut single_index = 0
+    while single_index < len(single_sorted):
+        if single_sorted[single_index] != single[single_index]:
+            single_ok = false
+        single_index = single_index + 1
+if single_ok:
+    print("single_element sorted", single_sorted)
+else:
+    print("FAIL single_element =>", single_sorted, "expected", single)
+
+empty = []
+empty_sorted = bubble_sort("empty", empty)
+if len(empty_sorted) == 0:
+    print("empty sorted []")
+else:
+    print("FAIL empty =>", empty_sorted, "expected", [])
