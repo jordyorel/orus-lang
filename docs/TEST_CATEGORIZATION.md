@@ -43,3 +43,7 @@
 - `tests/loop_fastpaths/phase3/iterator_array_zero_alloc.orus` – Confirms array-backed iterators stay in typed registers without heap churn.
 - `tests/optimizer/loop_typed_phase4/licm_guard.orus` – Ensures LICM-hoisted guards cooperate with typed metadata.
 - `tests/loop_fastpaths/phase5/telemetry_smoke.orus` – Smoke test mixing typed and boxed fallbacks for telemetry drift detection.
+
+## Algorithm Stress – Phase 1
+- `tests/algorithms/phase1/bubble_sort.orus` – Validates the adjacent-swap baseline with instrumentation for passes, comparisons, and swaps across varied datasets.
+- `tests/algorithms/phase1/insertion_sort.orus` – Exercises incremental inserts on partially sorted, duplicate, and negative inputs while tracking pass and shift counts.

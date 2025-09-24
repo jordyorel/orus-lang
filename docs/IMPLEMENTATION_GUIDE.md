@@ -5981,3 +5981,17 @@ bool run_loop_invariant_pass(TypedASTNode* ast, OptimizationContext* ctx) {
     return changed;
 }
 ```
+
+## Algorithm Stress Harness – Phase 1 Notes
+
+- **Bubble Sort Fixture (`tests/algorithms/phase1/bubble_sort.orus`)** – Copies
+  the seed data into a working array, tracks pass/comparison/swap counts, and
+  validates the results against pre-computed golden arrays for random, sorted,
+  reversed, duplicate-heavy, and single-element cases.
+- **Insertion Sort Fixture (`tests/algorithms/phase1/insertion_sort.orus`)** –
+  Mirrors the copy-and-verify strategy while logging outer pass and shift
+  totals so we can contrast partially sorted, negative, duplicate, and single
+  value inputs.
+- **Next Steps** – The verification blocks are currently duplicated between
+  fixtures; once additional algorithms land we should promote that logic into a
+  shared helper module and extend instrumentation to cover comparison counts.
