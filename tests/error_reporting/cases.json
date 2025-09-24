@@ -196,6 +196,21 @@
     ]
   },
   {
+    "name": "missing_closing_bracket",
+    "source": "missing_closing_bracket.orus",
+    "description": "Array literals without a closing ']' should report a clear syntax error with guidance.",
+    "expected_exit": 65,
+    "expected_diagnostic_count": 1,
+    "expected_diagnostics": [
+      {
+        "title": "Missing closing bracket",
+        "message_contains": "Expected ']' to close this array literal",
+        "help_contains": "Add a closing ']' to match the opening '['",
+        "note_contains": "Each '[' introduces"
+      }
+    ]
+  },
+  {
     "name": "unexpected_indent",
     "source": "unexpected_indent.orus",
     "description": "Indented statements without a surrounding block should clearly report the indentation error.",

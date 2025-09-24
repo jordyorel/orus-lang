@@ -1,0 +1,7 @@
+mut numbers = [
+push(numbers, 1)
+push(numbers, 2)
+push(numbers, 3)
+print("len", len(numbers))
+// print("pop", pop(numbers))
+print("slice", numbers[..])
