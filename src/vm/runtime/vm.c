@@ -90,12 +90,10 @@ void printValue(Value value) {
             break;
         case VAL_ARRAY: {
             ObjArray* array = AS_ARRAY(value);
-            printf("[");
             for (int i = 0; i < array->length; i++) {
                 if (i > 0) printf(", ");
                 printValue(array->elements[i]);
             }
-            printf("]");
             break;
         }
         case VAL_ENUM: {
