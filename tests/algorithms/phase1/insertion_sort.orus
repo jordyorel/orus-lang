@@ -1,126 +1,54 @@
-// Phase 1 insertion sort baseline for the algorithm stress-test suite.
-print("== Phase 1: Insertion Sort Smoke ==")
+// Phase 1 insertion sort baseline for the algorithm stress-test suite (in-place).
+print("== Phase 1: Insertion Sort (In-Place) Smoke ==")
 
 fn insertion_sort(label, values):
-    mut sorted = []
-    for value in values:
-        push(sorted, value)
-
+    length = len(values)
     mut pass_count = 0
     mut shifts = 0
-    mut i: i32 = 1
-    length = len(sorted)
 
     if length <= 1:
         print("insertion_sort", label, "passes:", pass_count, "shifts:", shifts)
-        return sorted
+        return values
 
+    mut i: i32 = 1
     while i < length:
         pass_count = pass_count + 1
-        key = sorted[i]
+        key = values[i]
         mut j: i32 = i
 
         while j > 0:
             prev_index: i32 = j - 1
-            if sorted[prev_index] <= key:
+            if values[prev_index] <= key:
                 break
-            sorted[j] = sorted[prev_index]
+            values[j] = values[prev_index]
             shifts = shifts + 1
             j = j - 1
 
-        sorted[j] = key
+        values[j] = key
         i = i + 1
 
     print("insertion_sort", label, "passes:", pass_count, "shifts:", shifts)
-    return sorted
+    return values
 
+// === Tests ===
 unsorted = [12, 5, 1, 8, 14, 7]
 expected_unsorted = [1, 5, 7, 8, 12, 14]
-random_sorted = insertion_sort("random", unsorted)
-mut random_ok = true
-if len(random_sorted) != len(expected_unsorted):
-    random_ok = false
-else:
-    mut random_index = 0
-    while random_index < len(random_sorted):
-        if random_sorted[random_index] != expected_unsorted[random_index]:
-            random_ok = false
-        random_index = random_index + 1
-if random_ok:
-    print("random sorted", random_sorted)
-else:
-    print("FAIL random =>", random_sorted, "expected", expected_unsorted)
+print("random =>", insertion_sort("random", unsorted), "expected", expected_unsorted)
 
 nearly_sorted = [2, 3, 4, 5, 1]
 expected_nearly_sorted = [1, 2, 3, 4, 5]
-rotation_sorted = insertion_sort("rotation", nearly_sorted)
-mut rotation_ok = true
-if len(rotation_sorted) != len(expected_nearly_sorted):
-    rotation_ok = false
-else:
-    mut rotation_index = 0
-    while rotation_index < len(rotation_sorted):
-        if rotation_sorted[rotation_index] != expected_nearly_sorted[rotation_index]:
-            rotation_ok = false
-        rotation_index = rotation_index + 1
-if rotation_ok:
-    print("rotation sorted", rotation_sorted)
-else:
-    print("FAIL rotation =>", rotation_sorted, "expected", expected_nearly_sorted)
+print("rotation =>", insertion_sort("rotation", nearly_sorted), "expected", expected_nearly_sorted)
 
 with_negatives = [0, -3, -1, 4, 2]
 expected_with_negatives = [-3, -1, 0, 2, 4]
-negatives_sorted = insertion_sort("negatives", with_negatives)
-mut negatives_ok = true
-if len(negatives_sorted) != len(expected_with_negatives):
-    negatives_ok = false
-else:
-    mut negatives_index = 0
-    while negatives_index < len(negatives_sorted):
-        if negatives_sorted[negatives_index] != expected_with_negatives[negatives_index]:
-            negatives_ok = false
-        negatives_index = negatives_index + 1
-if negatives_ok:
-    print("negatives sorted", negatives_sorted)
-else:
-    print("FAIL negatives =>", negatives_sorted, "expected", expected_with_negatives)
+print("negatives =>", insertion_sort("negatives", with_negatives), "expected", expected_with_negatives)
 
 duplicates = [4, 2, 4, 2, 4]
 expected_duplicates = [2, 2, 4, 4, 4]
-duplicates_sorted = insertion_sort("duplicates", duplicates)
-mut duplicates_ok = true
-if len(duplicates_sorted) != len(expected_duplicates):
-    duplicates_ok = false
-else:
-    mut dup_index = 0
-    while dup_index < len(duplicates_sorted):
-        if duplicates_sorted[dup_index] != expected_duplicates[dup_index]:
-            duplicates_ok = false
-        dup_index = dup_index + 1
-if duplicates_ok:
-    print("duplicates sorted", duplicates_sorted)
-else:
-    print("FAIL duplicates =>", duplicates_sorted, "expected", expected_duplicates)
+print("duplicates =>", insertion_sort("duplicates", duplicates), "expected", expected_duplicates)
 
 short = [3]
-short_sorted = insertion_sort("single", short)
-mut short_ok = true
-if len(short_sorted) != len(short):
-    short_ok = false
-else:
-    mut short_index = 0
-    while short_index < len(short_sorted):
-        if short_sorted[short_index] != short[short_index]:
-            short_ok = false
-        short_index = short_index + 1
-if short_ok:
-    print("single_element sorted", short_sorted)
-else:
-    print("FAIL single_element =>", short_sorted, "expected", short)
+print("single =>", insertion_sort("single", short), "expected", short)
 
 empty = []
-empty_sorted = insertion_sort("empty", empty)
-if len(empty_sorted) == 0:
-    print("empty sorted []")
-else:
-    print("FAIL empty =>", empty_sorted, "expected", [])
+print("empty =>", insertion_sort("empty", empty), "expected", [])

@@ -1,0 +1,121 @@
+// Phase 1 selection sort baseline for the algorithm stress-test suite (in-place, space efficient).
+print("== Phase 1: Selection Sort (In-Place) Smoke ==")
+
+fn selection_sort(label, values):
+    length = len(values)
+    mut pass_count = 0
+    mut swap_count = 0
+
+    if length <= 1:
+        print("selection_sort", label, "passes:", pass_count, "swaps:", swap_count)
+        return values
+
+    for i in 0..length:
+        pass_count = pass_count + 1
+        mut min_index = i
+        for j in (i + 1)..length:
+            if values[j] < values[min_index]:
+                min_index = j
+        if min_index != i:
+            temp = values[i]
+            values[i] = values[min_index]
+            values[min_index] = temp
+            swap_count = swap_count + 1
+
+    print("selection_sort", label, "passes:", pass_count, "swaps:", swap_count)
+    return values
+
+
+// === Tests ===
+
+// Random input
+unsorted = [64, 25, 12, 22, 11]
+expected_unsorted = [11, 12, 22, 25, 64]
+sorted_random = selection_sort("random", unsorted)
+mut ok_random = true
+if len(sorted_random) != len(expected_unsorted):
+    ok_random = false
+else:
+    mut i = 0
+    while i < len(sorted_random):
+        if sorted_random[i] != expected_unsorted[i]:
+            ok_random = false
+        i = i + 1
+if ok_random:
+    print("random sorted", sorted_random)
+else:
+    print("FAIL random =>", sorted_random, "expected", expected_unsorted)
+
+
+// Already sorted
+ascending = [1, 2, 3, 4, 5]
+sorted_ascending = selection_sort("already_sorted", ascending)
+mut ok_ascending = true
+if len(sorted_ascending) != len(ascending):
+    ok_ascending = false
+else:
+    mut i = 0
+    while i < len(sorted_ascending):
+        if sorted_ascending[i] != ascending[i]:
+            ok_ascending = false
+        i = i + 1
+if ok_ascending:
+    print("already_sorted sorted", sorted_ascending)
+else:
+    print("FAIL already_sorted =>", sorted_ascending, "expected", ascending)
+
+
+// Reversed
+reversed = [9, 7, 5, 3, 1, -1]
+expected_reversed = [-1, 1, 3, 5, 7, 9]
+sorted_reversed = selection_sort("reversed", reversed)
+mut ok_reversed = true
+if len(sorted_reversed) != len(expected_reversed):
+    ok_reversed = false
+else:
+    mut i = 0
+    while i < len(sorted_reversed):
+        if sorted_reversed[i] != expected_reversed[i]:
+            ok_reversed = false
+        i = i + 1
+if ok_reversed:
+    print("reversed sorted", sorted_reversed)
+else:
+    print("FAIL reversed =>", sorted_reversed, "expected", expected_reversed)
+
+
+// Duplicates
+duplicates = [3, 1, 2, 3, 1]
+expected_duplicates = [1, 1, 2, 3, 3]
+sorted_duplicates = selection_sort("duplicates", duplicates)
+mut ok_duplicates = true
+if len(sorted_duplicates) != len(expected_duplicates):
+    ok_duplicates = false
+else:
+    mut i = 0
+    while i < len(sorted_duplicates):
+        if sorted_duplicates[i] != expected_duplicates[i]:
+            ok_duplicates = false
+        i = i + 1
+if ok_duplicates:
+    print("duplicates sorted", sorted_duplicates)
+else:
+    print("FAIL duplicates =>", sorted_duplicates, "expected", expected_duplicates)
+
+
+// Single element
+single = [42]
+sorted_single = selection_sort("single", single)
+mut ok_single = true
+if len(sorted_single) != len(single):
+    ok_single = false
+else:
+    mut i = 0
+    while i < len(sorted_single):
+        if sorted_single[i] != single[i]:
+            ok_single = false
+        i = i + 1
+if ok_single:
+    print("single_element sorted", sorted_single)
+else:
+    print("FAIL single_element =>", sorted_single, "expected", single)
