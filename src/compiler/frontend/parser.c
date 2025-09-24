@@ -269,6 +269,13 @@ static Token nextToken(ParserContext* ctx) {
     return scan_token();
 }
 
+static Token consume_indent_token(ParserContext* ctx) {
+    while (peekToken(ctx).type == TOKEN_NEWLINE) {
+        nextToken(ctx);
+    }
+    return nextToken(ctx);
+}
+
 // Forward declarations - all now take ParserContext*
 static ASTNode* parsePrintStatement(ParserContext* ctx);
 static ASTNode* parseExpression(ParserContext* ctx);
@@ -705,7 +712,7 @@ static ASTNode* parseMatchStatement(ParserContext* ctx) {
         nextToken(ctx);
     }
 
-    Token indent = nextToken(ctx);
+    Token indent = consume_indent_token(ctx);
     if (indent.type != TOKEN_INDENT) {
         return NULL;
     }
@@ -810,7 +817,7 @@ static ASTNode* parseMatchStatement(ParserContext* ctx) {
         Token afterArrow = peekToken(ctx);
         if (afterArrow.type == TOKEN_NEWLINE) {
             nextToken(ctx);
-            Token bodyIndent = nextToken(ctx);
+            Token bodyIndent = consume_indent_token(ctx);
             if (bodyIndent.type != TOKEN_INDENT) {
                 return NULL;
             }
@@ -1021,7 +1028,7 @@ static ASTNode* parseMatchExpression(ParserContext* ctx, Token matchTok) {
         nextToken(ctx);
     }
 
-    Token indent = nextToken(ctx);
+    Token indent = consume_indent_token(ctx);
     if (indent.type != TOKEN_INDENT) {
         return NULL;
     }
@@ -1910,7 +1917,7 @@ static ASTNode* parseIfStatement(ParserContext* ctx) {
     if (next.type == TOKEN_NEWLINE) {
         // Block-style if statement: if condition:\n    statement
         nextToken(ctx); // consume newline
-        Token indentToken = nextToken(ctx);
+        Token indentToken = consume_indent_token(ctx);
         if (indentToken.type != TOKEN_INDENT) {
             SrcLocation location = {NULL, indentToken.line, indentToken.column};
             report_invalid_indentation(location, "if", 4, 0); // Assuming 4-space indentation
@@ -1954,7 +1961,8 @@ static ASTNode* parseIfStatement(ParserContext* ctx) {
         if (afterColon.type == TOKEN_NEWLINE) {
             // Block-style else: else:\n    statement
             nextToken(ctx); // consume newline
-            if (nextToken(ctx).type != TOKEN_INDENT) return NULL;
+            Token indentTok = consume_indent_token(ctx);
+            if (indentTok.type != TOKEN_INDENT) return NULL;
             elseBranch = parseBlock(ctx);
             if (!elseBranch) return NULL;
         } else {
@@ -2011,7 +2019,8 @@ static ASTNode* parseWhileStatement(ParserContext* ctx) {
     if (next.type == TOKEN_NEWLINE) {
         // Block-style while: while condition:\n    statement
         nextToken(ctx); // consume newline
-        if (nextToken(ctx).type != TOKEN_INDENT) return NULL;
+        Token indentTok = consume_indent_token(ctx);
+        if (indentTok.type != TOKEN_INDENT) return NULL;
         parser_enter_loop(ctx);
         entered_loop = true;
         body = parseBlock(ctx);
@@ -2057,7 +2066,7 @@ static ASTNode* parseTryStatement(ParserContext* ctx) {
     Token next = peekToken(ctx);
     if (next.type == TOKEN_NEWLINE) {
         nextToken(ctx);  // consume newline
-        Token indentToken = nextToken(ctx);
+        Token indentToken = consume_indent_token(ctx);
         if (indentToken.type != TOKEN_INDENT) {
             SrcLocation location = {NULL, indentToken.line, indentToken.column};
             report_invalid_indentation(location, "try", 4, 0);
@@ -2110,7 +2119,7 @@ static ASTNode* parseTryStatement(ParserContext* ctx) {
     Token afterCatch = peekToken(ctx);
     if (afterCatch.type == TOKEN_NEWLINE) {
         nextToken(ctx);
-        Token indentToken = nextToken(ctx);
+        Token indentToken = consume_indent_token(ctx);
         if (indentToken.type != TOKEN_INDENT) {
             SrcLocation location = {NULL, indentToken.line, indentToken.column};
             report_invalid_indentation(location, "catch", 4, 0);
@@ -2302,7 +2311,7 @@ static ASTNode* parseForStatement(ParserContext* ctx) {
         return NULL;
     }
     
-    Token indent = nextToken(ctx);
+    Token indent = consume_indent_token(ctx);
     if (indent.type != TOKEN_INDENT) {
         SrcLocation location = {NULL, newline.line, newline.column};
         report_invalid_indentation(location, "for", 4, 0);
@@ -3067,7 +3076,7 @@ static ASTNode* parseFunctionExpression(ParserContext* ctx, Token fnToken) {
         return NULL;
     }
 
-    if (nextToken(ctx).type != TOKEN_INDENT) {
+    if (consume_indent_token(ctx).type != TOKEN_INDENT) {
         return NULL;
     }
 
@@ -3196,7 +3205,7 @@ static ASTNode* parseFunctionDefinition(ParserContext* ctx, bool isPublic) {
     }
     
     // Expect indent for function body
-    if (nextToken(ctx).type != TOKEN_INDENT) {
+    if (consume_indent_token(ctx).type != TOKEN_INDENT) {
         return NULL;
     }
     
@@ -3250,7 +3259,7 @@ static ASTNode* parseEnumDefinition(ParserContext* ctx, bool isPublic) {
     }
     nextToken(ctx);
 
-    Token indentTok = nextToken(ctx);
+    Token indentTok = consume_indent_token(ctx);
     if (indentTok.type != TOKEN_INDENT) {
         return NULL;
     }
@@ -3402,7 +3411,7 @@ static ASTNode* parseStructDefinition(ParserContext* ctx, bool isPublic) {
     }
     nextToken(ctx);
 
-    Token indentTok = nextToken(ctx);
+    Token indentTok = consume_indent_token(ctx);
     if (indentTok.type != TOKEN_INDENT) {
         return NULL;
     }
@@ -3510,7 +3519,7 @@ static ASTNode* parseImplBlock(ParserContext* ctx, bool isPublic) {
     }
     nextToken(ctx);
 
-    Token indentTok = nextToken(ctx);
+    Token indentTok = consume_indent_token(ctx);
     if (indentTok.type != TOKEN_INDENT) {
         return NULL;
     }
@@ -4085,7 +4094,7 @@ ASTNode* parseSourceWithContext(ParserContext* ctx, const char* source) {
                 while (peekToken(ctx).type == TOKEN_NEWLINE) {
                     nextToken(ctx);
                 }
-                Token indentTok = nextToken(ctx);
+                Token indentTok = consume_indent_token(ctx);
                 if (indentTok.type != TOKEN_INDENT) {
                     SrcLocation location = {NULL, indentTok.line, indentTok.column};
                     report_compile_error(E1006_INVALID_SYNTAX, location,
