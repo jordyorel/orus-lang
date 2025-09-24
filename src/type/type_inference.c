@@ -1201,6 +1201,28 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             array_type = prune(array_type);
             index_type = prune(index_type);
 
+            if (array_type && array_type->kind == TYPE_VAR) {
+                Type* element_var = make_var_type(env);
+                if (!element_var) {
+                    set_type_error();
+                    return NULL;
+                }
+
+                Type* inferred_array = createArrayType(element_var);
+                if (!inferred_array) {
+                    set_type_error();
+                    return NULL;
+                }
+
+                if (!unify(array_type, inferred_array)) {
+                    report_type_mismatch(node->indexAccess.array->location, "array",
+                                         getTypeName(array_type->kind));
+                    set_type_error();
+                    return NULL;
+                }
+                array_type = prune(array_type);
+            }
+
             if (index_type && index_type->kind == TYPE_VAR) {
                 Type* assumed_index = getPrimitiveType(TYPE_I32);
                 if (assumed_index) {

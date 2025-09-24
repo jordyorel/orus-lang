@@ -1,0 +1,8 @@
+// Regression test: ensure array indexing infers the array type even without
+// explicit annotations or external calls. Previously this would fail during
+// type inference because the parameter `values` started as an unconstrained
+// type variable and indexing required an `array` type.
+fn stabilize(values):
+    mut idx = 0
+    current = values[idx]
+    values[idx] = current
