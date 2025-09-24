@@ -1,0 +1,19 @@
+// Indirect indexes can drive assignments and subsequent lookups without corrupting offsets.
+//
+// Ensures that mutating through an index derived from array contents preserves later reads.
+print("-- indirect index assignment --")
+
+mut digits = [0, 1, 2, 3, 4, 5]
+print("start:", digits[0], digits[1], digits[2], digits[3], digits[4], digits[5])
+
+mut target = digits[4] - 1  // 4 - 1 => 3
+print("target index:", target)
+
+digits[target] = 99
+print("after write:", digits[0], digits[1], digits[2], digits[3], digits[4], digits[5])
+
+target = digits[target] - 96  // 99 - 96 => 3
+print("recomputed target:", target)
+
+value = digits[target]
+print("final value:", value)

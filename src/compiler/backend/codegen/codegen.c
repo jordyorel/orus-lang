@@ -24,6 +24,60 @@ static Symbol* register_variable(CompilerContext* ctx, SymbolTable* scope,
                                  const char* name, int reg, Type* type,
                                  bool is_mutable, SrcLocation location, bool is_import);
 
+static TypeKind fallback_type_kind_from_value(Value value) {
+    switch (value.type) {
+        case VAL_I32:
+            return TYPE_I32;
+        case VAL_I64:
+            return TYPE_I64;
+        case VAL_U32:
+            return TYPE_U32;
+        case VAL_U64:
+            return TYPE_U64;
+        case VAL_F64:
+            return TYPE_F64;
+        case VAL_BOOL:
+            return TYPE_BOOL;
+        default:
+            return TYPE_I32;
+    }
+}
+
+static TypeKind fallback_type_kind_from_ast(const ASTNode* node) {
+    if (!node) {
+        return TYPE_I32;
+    }
+
+    if (node->dataType &&
+        node->dataType->kind != TYPE_ERROR &&
+        node->dataType->kind != TYPE_UNKNOWN) {
+        if (node->dataType->kind == TYPE_ARRAY &&
+            node->dataType->info.array.elementType) {
+            return node->dataType->info.array.elementType->kind;
+        }
+        return node->dataType->kind;
+    }
+
+    switch (node->type) {
+        case NODE_LITERAL:
+            return fallback_type_kind_from_value(node->literal.value);
+        case NODE_INDEX_ACCESS:
+            if (node->indexAccess.array) {
+                return fallback_type_kind_from_ast(node->indexAccess.array);
+            }
+            break;
+        case NODE_UNARY:
+            if (node->unary.operand) {
+                return fallback_type_kind_from_ast(node->unary.operand);
+            }
+            break;
+        default:
+            break;
+    }
+
+    return TYPE_I32;
+}
+
 static inline void set_location_from_node(CompilerContext* ctx, TypedASTNode* node) {
     if (!ctx || !ctx->bytecode) {
         return;
@@ -3307,33 +3361,50 @@ void compile_binary_op(CompilerContext* ctx, TypedASTNode* binary, int target_re
     
     // Get the operator and operand types
     const char* op = binary->original->binary.op;
-    
-    // Get operand types from the typed AST nodes
+
+    // Original AST nodes used for fallback type inference when the typed AST
+    // information is unavailable (e.g. the type checker failed earlier).
+    const ASTNode* left_ast = binary->original ? binary->original->binary.left : NULL;
+    const ASTNode* right_ast = binary->original ? binary->original->binary.right : NULL;
+
+    // Get operand types from the typed AST nodes and fall back to reasonable
+    // defaults when inference failed. We still want to emit bytecode even if the
+    // type analyzer could not resolve the types (they may be treated as dynamic
+    // values at runtime).
     Type* left_type = binary->typed.binary.left ? binary->typed.binary.left->resolvedType : NULL;
     Type* right_type = binary->typed.binary.right ? binary->typed.binary.right->resolvedType : NULL;
-    
-    if (!left_type || !right_type) {
-        DEBUG_CODEGEN_PRINT("Error: Missing operand types for binary operation %s\n", op);
-        return;
+
+    Type left_fallback = {.kind = fallback_type_kind_from_ast(left_ast)};
+    Type right_fallback = {.kind = fallback_type_kind_from_ast(right_ast)};
+
+    if (!left_type || left_type->kind == TYPE_ERROR || left_type->kind == TYPE_UNKNOWN) {
+        left_type = &left_fallback;
     }
-    
+    if (!right_type || right_type->kind == TYPE_ERROR || right_type->kind == TYPE_UNKNOWN) {
+        right_type = &right_fallback;
+    }
+
     DEBUG_CODEGEN_PRINT("Binary operation: %s, left_type=%d, right_type=%d\n", op, left_type->kind, right_type->kind);
-    
+
     // Check if this is a comparison operation
-    bool is_comparison = (strcmp(op, "<") == 0 || strcmp(op, ">") == 0 || 
+    bool is_comparison = (strcmp(op, "<") == 0 || strcmp(op, ">") == 0 ||
                          strcmp(op, "<=") == 0 || strcmp(op, ">=") == 0 ||
                          strcmp(op, "==") == 0 || strcmp(op, "!=") == 0);
-    
+
     // Determine the result type and handle type coercion
-    Type* result_type = NULL;
+    Type* result_type = binary->resolvedType;
+    bool result_type_valid = result_type &&
+                             result_type->kind != TYPE_ERROR &&
+                             result_type->kind != TYPE_UNKNOWN;
+    Type result_fallback = {.kind = is_comparison ? TYPE_BOOL : left_type->kind};
+    if (!result_type_valid) {
+        result_type = &result_fallback;
+    }
     int coerced_left_reg = left_reg;
     int coerced_right_reg = right_reg;
-    
-    if (is_comparison) {
-        // For comparisons, result is always bool, but we need operands to be the same type
-        result_type = binary->resolvedType; // Should be TYPE_BOOL
-    } else {
-        // For arithmetic, result type comes from the binary expression
+
+    if (is_comparison && result_type_valid) {
+        // Retain the original resolved type when it is trustworthy.
         result_type = binary->resolvedType;
     }
     
@@ -3408,10 +3479,10 @@ void compile_binary_op(CompilerContext* ctx, TypedASTNode* binary, int target_re
         opcode_type = left_type->kind == right_type->kind ? left_type : result_type;
     }
     
-    DEBUG_CODEGEN_PRINT("Emitting binary operation: %s (target=R%d, left=R%d, right=R%d, type=%d)%s\n", 
+    DEBUG_CODEGEN_PRINT("Emitting binary operation: %s (target=R%d, left=R%d, right=R%d, type=%d)%s\n",
            op, target_reg, coerced_left_reg, coerced_right_reg, opcode_type->kind,
            is_comparison ? " [COMPARISON]" : " [ARITHMETIC]");
-    
+
     // Emit type-specific binary instruction (arithmetic or comparison)
     set_location_from_node(ctx, binary);
     emit_binary_op(ctx, op, opcode_type, target_reg, coerced_left_reg, coerced_right_reg);
