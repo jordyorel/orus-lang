@@ -1846,7 +1846,19 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
 
                 if (node->call.argCount != expected_args) {
                     if (arg_types) free(arg_types);
-                    report_type_mismatch(node->location, "function signature", "argument count");
+                    if (!node->call.arity_error_reported) {
+                        const char* callee_name = NULL;
+                        if (node->call.callee->type == NODE_IDENTIFIER) {
+                            callee_name = node->call.callee->identifier.name;
+                        } else if (node->call.callee->type == NODE_MEMBER_ACCESS) {
+                            callee_name = node->call.callee->member.member;
+                        }
+                        report_argument_count_mismatch(node->location,
+                                                       callee_name,
+                                                       expected_args,
+                                                       node->call.argCount);
+                        node->call.arity_error_reported = true;
+                    }
                     set_type_error();
                     return NULL;
                 }

@@ -237,6 +237,7 @@ struct ASTNode {
             ASTNode* callee;               // Function expression
             ASTNode** args;                // Arguments
             int argCount;                  // Number of arguments
+            bool arity_error_reported;     // Tracks if we've already reported an arity error
         } call;
         struct {
             ASTNode* value;                // Return value (NULL for void return)

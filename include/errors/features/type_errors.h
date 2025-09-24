@@ -13,6 +13,10 @@ ErrorReportResult report_mixed_arithmetic(SrcLocation location, const char* left
 ErrorReportResult report_invalid_cast(SrcLocation location, const char* target_type, const char* source_type);
 ErrorReportResult report_undefined_type(SrcLocation location, const char* type_name);
 ErrorReportResult report_incompatible_types(SrcLocation location, const char* left_type, const char* right_type);
+ErrorReportResult report_argument_count_mismatch(SrcLocation location,
+                                                const char* function_name,
+                                                int expected,
+                                                int actual);
 ErrorReportResult report_type_annotation_required(SrcLocation location, const char* context);
 ErrorReportResult report_unsupported_operation(SrcLocation location, const char* operation, const char* type);
 ErrorReportResult report_immutable_assignment(SrcLocation location, const char* variable_name);

@@ -138,20 +138,20 @@
     "source": "function_argument_mismatch.orus",
     "description": "Calling a function with the wrong number of arguments should emit a type mismatch.",
     "expected_exit": 65,
-    "expected_diagnostic_count": 3,
+    "expected_diagnostic_count": 1,
     "expected_diagnostics": [
       {
         "category": "TYPE MISMATCH",
         "title": "Type mismatch found",
-        "message_contains": "this is a `argument count`, but `function signature` was expected",
+        "message_contains": "expects 2 arguments but received 1 argument",
         "help_contains": "Try converting one value to match the other's type",
         "note_contains": "Orus keeps types separate",
-        "count": 3
+        "count": 1
       }
     ],
     "expected": [
       "-- TYPE MISMATCH: Type mismatch found",
-      "this is a `argument count`, but `function signature` was expected",
+      "Function 'add' expects 2 arguments but received 1 argument",
       "help: Try converting one value to match the other's type, like `x as string` or `y as i32`.",
       "note: Orus keeps types separate to help prevent unexpected behavior and bugs.",
       "Compilation failed for \"tests/error_reporting/function_argument_mismatch.orus\"."

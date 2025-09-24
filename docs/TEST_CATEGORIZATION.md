@@ -47,3 +47,8 @@
 ## Algorithm Stress – Phase 1
 - `tests/algorithms/phase1/bubble_sort.orus` – Validates the adjacent-swap baseline with instrumentation for passes, comparisons, and swaps across varied datasets.
 - `tests/algorithms/phase1/insertion_sort.orus` – Exercises incremental inserts on partially sorted, duplicate, and negative inputs while tracking pass and shift counts.
+- `tests/algorithms/phase1/selection_sort.orus` – Tracks passes and swaps across diverse datasets to ensure the classic selection sort stays correct under the optimized VM pipeline.
+
+## Algorithm Regressions
+- `tests/algorithms/regressions/selection_sort_basic.orus` – Single-case regression to ensure the core selection sort implementation returns a sorted array for a representative dataset.
+- `tests/algorithms/regressions/selection_sort_metrics.orus` – Verifies the labelled selection sort variant emits telemetry and produces the expected ordering for a known input.
