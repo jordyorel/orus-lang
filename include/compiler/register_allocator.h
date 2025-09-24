@@ -51,6 +51,7 @@ bool mp_reserve_global_register(MultiPassRegisterAllocator* allocator, int reg);
 
 void mp_reset_frame_registers(MultiPassRegisterAllocator* allocator);
 int mp_allocate_temp_register(MultiPassRegisterAllocator* allocator);
+int mp_allocate_consecutive_temp_registers(MultiPassRegisterAllocator* allocator, int count);
 int mp_allocate_module_register(MultiPassRegisterAllocator* allocator);
 
 // Scope-aware register allocation (NEW)

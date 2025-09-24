@@ -71,6 +71,12 @@ static inline void vm_update_typed_register(uint16_t id, Value value) {
 
     RegisterType new_type = vm_register_type_from_value(value);
     if (new_type == REG_TYPE_NONE) {
+        uint8_t old_type = vm.typed_regs.reg_types[id];
+        if (old_type != REG_TYPE_NONE && old_type != REG_TYPE_HEAP) {
+            vm_clear_typed_register_slot(id, old_type);
+        }
+        vm.typed_regs.reg_types[id] = REG_TYPE_HEAP;
+        vm.typed_regs.dirty[id] = false;
         return;
     }
 
@@ -409,6 +415,13 @@ static inline void vm_store_i32_typed_hot(uint16_t id, int32_t value) {
     vm.typed_regs.i32_regs[id] = value;
     vm.typed_regs.reg_types[id] = REG_TYPE_I32;
     vm.typed_regs.dirty[id] = true;
+
+    Value boxed = I32_VAL(value);
+    if (id < REGISTER_COUNT) {
+        vm.registers[id] = boxed;
+    } else {
+        set_register(&vm.register_file, id, boxed);
+    }
 }
 
 static inline void store_i64_register(uint16_t id, int64_t value) {
