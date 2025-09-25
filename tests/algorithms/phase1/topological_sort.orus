@@ -1,0 +1,202 @@
+// Phase 2 topological sort implementation for the algorithm stress-test suite.
+// Kahn's algorithm using explicit indegree accounting to stress repeated array
+// updates and queue pressure in DAG workloads.
+
+print("== Phase 2: Topological Sort (Kahn's Algorithm) Smoke ==")
+
+global mut TOPO_ENQUEUES = 0
+global mut TOPO_DEQUEUES = 0
+global mut TOPO_EDGE_VISITS = 0
+global mut TOPO_MAX_QUEUE = 0
+
+fn topological_sort(label, graph):
+    TOPO_ENQUEUES = 0
+    TOPO_DEQUEUES = 0
+    TOPO_EDGE_VISITS = 0
+    TOPO_MAX_QUEUE = 0
+
+    node_count = len(graph)
+    indegree = []
+    mut zero_index = 0
+    while zero_index < node_count:
+        push(indegree, 0)
+        zero_index = zero_index + 1
+
+    mut i = 0
+    while i < node_count:
+        neighbors = graph[i]
+        mut j = 0
+        neighbor_count = len(neighbors)
+        while j < neighbor_count:
+            indegree[neighbors[j]] = indegree[neighbors[j]] + 1
+            TOPO_EDGE_VISITS = TOPO_EDGE_VISITS + 1
+            j = j + 1
+        i = i + 1
+
+    queue = []
+    mut front = 0
+    mut node = 0
+    while node < node_count:
+        if indegree[node] == 0:
+            push(queue, node)
+            TOPO_ENQUEUES = TOPO_ENQUEUES + 1
+        node = node + 1
+    TOPO_MAX_QUEUE = len(queue) - front
+
+    order = []
+    while front < len(queue):
+        current = queue[front]
+        front = front + 1
+        TOPO_DEQUEUES = TOPO_DEQUEUES + 1
+        push(order, current)
+
+        neighbors = graph[current]
+        mut edge_index = 0
+        neighbor_count = len(neighbors)
+        while edge_index < neighbor_count:
+            next = neighbors[edge_index]
+            indegree[next] = indegree[next] - 1
+            if indegree[next] == 0:
+                push(queue, next)
+                TOPO_ENQUEUES = TOPO_ENQUEUES + 1
+                queue_size = len(queue) - front
+                if queue_size > TOPO_MAX_QUEUE:
+                    TOPO_MAX_QUEUE = queue_size
+
+                mut insert_index = len(queue) - 1
+                while true:
+                    if insert_index == front:
+                        break
+                    previous_index = insert_index - 1
+                    previous_value = queue[previous_index]
+                    current_value = queue[insert_index]
+                    if previous_value <= current_value:
+                        break
+                    queue[previous_index] = current_value
+                    queue[insert_index] = previous_value
+                    insert_index = insert_index - 1
+            edge_index = edge_index + 1
+
+    print("topological_sort", label, "enqueues:", TOPO_ENQUEUES, "dequeues:", TOPO_DEQUEUES, "edge_visits:", TOPO_EDGE_VISITS, "max_queue:", TOPO_MAX_QUEUE)
+    return order
+
+fn assert_sequence(label, observed, expected):
+    if len(observed) != len(expected):
+        print("FAIL", label, "length mismatch", len(observed), "expected", len(expected))
+        return
+    mut i = 0
+    mut ok = true
+    while i < len(expected):
+        if observed[i] != expected[i]:
+            ok = false
+        i = i + 1
+    if ok:
+        print(label, "order", observed)
+    else:
+        print("FAIL", label, "=>", observed, "expected", expected)
+
+fn make_dag_linear():
+    mut graph = []
+
+    mut row0 = []
+    push(row0, 1)
+    push(row0, 2)
+    push(graph, row0)
+
+    mut row1 = []
+    push(row1, 3)
+    push(graph, row1)
+
+    mut row2 = []
+    push(row2, 3)
+    push(row2, 4)
+    push(graph, row2)
+
+    mut row3 = []
+    push(row3, 5)
+    push(graph, row3)
+
+    mut row4 = []
+    push(row4, 5)
+    push(graph, row4)
+
+    mut row5 = []
+    push(graph, row5)
+
+    return graph
+
+// === Tests ===
+dag = make_dag_linear()
+
+expected_order = [0, 1, 2, 3, 4, 5]
+assert_sequence("dag_linear", topological_sort("dag_linear", dag), expected_order)
+
+fn make_multiple_roots():
+    mut graph = []
+
+    mut row0 = []
+    push(row0, 3)
+    push(graph, row0)
+
+    mut row1 = []
+    push(row1, 3)
+    push(row1, 4)
+    push(graph, row1)
+
+    mut row2 = []
+    push(row2, 4)
+    push(graph, row2)
+
+    mut row3 = []
+    push(row3, 5)
+    push(graph, row3)
+
+    mut row4 = []
+    push(row4, 5)
+    push(graph, row4)
+
+    mut row5 = []
+    push(graph, row5)
+
+    return graph
+
+multiple_roots = make_multiple_roots()
+
+expected_multiple = [0, 1, 2, 3, 4, 5]
+assert_sequence("multiple_roots", topological_sort("multiple_roots", multiple_roots), expected_multiple)
+
+fn make_wide_dag():
+    mut graph = []
+
+    mut row0 = []
+    push(row0, 2)
+    push(row0, 3)
+    push(row0, 4)
+    push(graph, row0)
+
+    mut row1 = []
+    push(row1, 2)
+    push(row1, 4)
+    push(graph, row1)
+
+    mut row2 = []
+    push(row2, 5)
+    push(graph, row2)
+
+    mut row3 = []
+    push(row3, 5)
+    push(graph, row3)
+
+    mut row4 = []
+    push(row4, 5)
+    push(graph, row4)
+
+    mut row5 = []
+    push(graph, row5)
+
+    return graph
+
+wide_dag = make_wide_dag()
+
+expected_wide = [0, 1, 2, 3, 4, 5]
+assert_sequence("wide", topological_sort("wide", wide_dag), expected_wide)

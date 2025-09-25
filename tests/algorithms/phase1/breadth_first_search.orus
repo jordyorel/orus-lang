@@ -1,0 +1,118 @@
+// Phase 2 breadth-first search implementation for the algorithm stress-test suite.
+// Queue-driven traversal that records enqueue/dequeue counts, explored edges,
+// and breadth levels to exercise queue pressure inside the VM.
+
+print("== Phase 2: Breadth-First Search (Iterative) Smoke ==")
+
+global mut BFS_ENQUEUES = 0
+global mut BFS_DEQUEUES = 0
+global mut BFS_EDGE_CHECKS = 0
+global mut BFS_MAX_DEPTH = 0
+global mut BFS_MAX_QUEUE = 0
+
+fn make_bool_array(count):
+    mut result = []
+    mut i = 0
+    while i < count:
+        push(result, false)
+        i = i + 1
+    return result
+
+fn breadth_first_search(label, graph, start):
+    BFS_ENQUEUES = 0
+    BFS_DEQUEUES = 0
+    BFS_EDGE_CHECKS = 0
+    BFS_MAX_DEPTH = 0
+    BFS_MAX_QUEUE = 0
+
+    visited = make_bool_array(len(graph))
+    queue = []
+    queue_depths = []
+    mut front = 0
+
+    push(queue, start)
+    push(queue_depths, 0)
+    BFS_ENQUEUES = 1
+    visited[start] = true
+    BFS_MAX_QUEUE = 1
+
+    order = []
+    while front < len(queue):
+        node = queue[front]
+        depth = queue_depths[front]
+        front = front + 1
+        BFS_DEQUEUES = BFS_DEQUEUES + 1
+        if depth > BFS_MAX_DEPTH:
+            BFS_MAX_DEPTH = depth
+        push(order, node)
+
+        neighbors = graph[node]
+        mut i = 0
+        while i < len(neighbors):
+            neighbor = neighbors[i]
+            BFS_EDGE_CHECKS = BFS_EDGE_CHECKS + 1
+            if visited[neighbor] == false:
+                visited[neighbor] = true
+                push(queue, neighbor)
+                push(queue_depths, depth + 1)
+                BFS_ENQUEUES = BFS_ENQUEUES + 1
+                queue_size = len(queue) - front
+                if queue_size > BFS_MAX_QUEUE:
+                    BFS_MAX_QUEUE = queue_size
+            i = i + 1
+
+    print("bfs", label, "enqueues:", BFS_ENQUEUES, "dequeues:", BFS_DEQUEUES, "edge_checks:", BFS_EDGE_CHECKS, "max_depth:", BFS_MAX_DEPTH, "max_queue:", BFS_MAX_QUEUE)
+    return order
+
+fn assert_sequence(label, observed, expected):
+    if len(observed) != len(expected):
+        print("FAIL", label, "length mismatch", len(observed), "expected", len(expected))
+        return
+    mut i = 0
+    mut ok = true
+    while i < len(expected):
+        if observed[i] != expected[i]:
+            ok = false
+        i = i + 1
+    if ok:
+        print(label, "order", observed)
+    else:
+        print("FAIL", label, "=>", observed, "expected", expected)
+
+fn make_base_graph():
+    mut graph = []
+    push(graph, [1, 2])
+    push(graph, [2, 4])
+    push(graph, [3])
+    push(graph, [1, 4])
+    push(graph, [])
+    push(graph, [2, 3])
+    return graph
+
+// === Tests ===
+base_graph = make_base_graph()
+
+expected_component_a = [0, 1, 2, 4, 3]
+assert_sequence("component_a", breadth_first_search("component_a", base_graph, 0), expected_component_a)
+
+expected_component_b = [5, 2, 3, 1, 4]
+assert_sequence("component_b", breadth_first_search("component_b", base_graph, 5), expected_component_b)
+
+fn make_layered_graph():
+    mut graph = []
+    push(graph, [1, 2, 3])
+    push(graph, [4, 5])
+    push(graph, [6])
+    push(graph, [7, 8])
+    push(graph, [])
+    push(graph, [])
+    push(graph, [9])
+    push(graph, [])
+    push(graph, [])
+    push(graph, [])
+    return graph
+
+layered_graph = make_layered_graph()
+
+expected_layered_order = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+assert_sequence("layered_levels", breadth_first_search("layered_levels", layered_graph, 0), expected_layered_order)

@@ -68,3 +68,41 @@ three-argument call. The compiler now reserves contiguous temporary blocks for
 all call arguments, ensuring multi-argument helpers like `assert_sorted` keep
 their inputs intact during stress runs.
 
+
+## Phase 2 Kickoff – Graph Traversal & Shortest Paths
+
+The Phase 2 fixtures now live alongside the Phase 1 sort suite inside
+`tests/algorithms/phase1/` so that the harness can reuse the existing
+telemetry plumbing while we continue expanding coverage. The new graph
+programs focus on stressing recursion depth, queue pressure, and the
+compiler's ability to juggle dense numeric updates.
+
+- `depth_first_search.orus` introduces a recursive walker that counts
+  recursion depth, edge traversals, and order construction across
+  multi-component graphs. The tests exercise both a cyclic component and
+  a tree-shaped graph to drive the depth counter toward double digits.
+- `breadth_first_search.orus` mirrors those fixtures with a queue-backed
+  traversal that records enqueue/dequeue operations, edge checks, and the
+  high-water mark for queue occupancy. A layered graph fixture ensures we
+  observe steady growth in breadth levels.
+- `dijkstra.orus` uses an array-scanned priority selection so the VM's
+  register allocator sees repeated minimum searches and relaxation
+  updates. The script tracks how many nodes were settled and how many
+  times distances improved while covering connected and disconnected
+  graphs.
+- `bellman_ford.orus` adds negative edge handling with an explicit edge
+  list. The implementation logs total relaxation attempts and exposes the
+  early-out path when no updates occur before the full `V-1` passes.
+- `floyd_warshall.orus` stresses triple-nested loops and sentinel
+  `infinity` guards while counting how many matrix cells improved. A
+  follow-up fixture keeps unreachable nodes intact to confirm the guard
+  logic avoids overflow.
+- `topological_sort.orus` rounds out the phase with Kahn's algorithm,
+  capturing enqueue/dequeue counts, edge visits, and queue high-water
+  marks across DAGs with single roots, multiple roots, and wide fan-out.
+
+These additions give us depth-first, breadth-first, single-source, and
+all-pairs coverage along with DAG ordering. Combined with the Phase 1
+sorters we now touch recursion, queues, dense numeric loops, and
+conditional edge relaxations—enough variety to start capturing VM
+profiling snapshots for backend tuning.

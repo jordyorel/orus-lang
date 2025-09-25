@@ -1,0 +1,191 @@
+// Phase 2 Floyd-Warshall implementation for the algorithm stress-test suite.
+// Dense all-pairs shortest paths that stresses triple-nested loops and
+// conditional updates guarded by sentinel infinity values.
+
+print("== Phase 2: Floyd-Warshall All-Pairs Shortest Paths Smoke ==")
+
+global mut FLOYD_RELAXATIONS = 0
+
+fn clone_matrix(matrix, dimension):
+    mut result = []
+    mut i = 0
+    while i < dimension:
+        source_row = matrix[i]
+        mut copy = []
+        mut j = 0
+        while j < dimension:
+            push(copy, source_row[j])
+            j = j + 1
+        push(result, copy)
+        i = i + 1
+    return result
+
+fn floyd_warshall(label, matrix, dimension, infinity):
+    FLOYD_RELAXATIONS = 0
+    distances = clone_matrix(matrix, dimension)
+
+    mut k = 0
+    while k < dimension:
+        pivot_row = distances[k]
+        mut i = 0
+        while i < dimension:
+            current_row = distances[i]
+            mut j = 0
+            while j < dimension:
+                through_k = current_row[k]
+                via_k = pivot_row[j]
+                if through_k != infinity and via_k != infinity:
+                    candidate = through_k + via_k
+                    if candidate < current_row[j]:
+                        current_row[j] = candidate
+                        FLOYD_RELAXATIONS = FLOYD_RELAXATIONS + 1
+                j = j + 1
+            i = i + 1
+        k = k + 1
+
+    print("floyd_warshall", label, "relaxations:", FLOYD_RELAXATIONS)
+    return distances
+
+fn assert_matrix(label, observed, expected, dimension):
+    mut ok = true
+    mut i = 0
+    while i < dimension:
+        observed_row = observed[i]
+        expected_row = expected[i]
+        mut j = 0
+        while j < dimension:
+            if observed_row[j] != expected_row[j]:
+                ok = false
+            j = j + 1
+        i = i + 1
+    if ok:
+        print(label, "matrix", observed)
+    else:
+        print("FAIL", label, "=>", observed, "expected", expected)
+
+// === Tests ===
+infinity = 999999
+
+fn make_dense_matrix(infinity):
+    mut matrix = []
+
+    mut row0 = []
+    push(row0, 0)
+    push(row0, 3)
+    push(row0, infinity)
+    push(row0, 7)
+    push(matrix, row0)
+
+    mut row1 = []
+    push(row1, 8)
+    push(row1, 0)
+    push(row1, 2)
+    push(row1, infinity)
+    push(matrix, row1)
+
+    mut row2 = []
+    push(row2, 5)
+    push(row2, infinity)
+    push(row2, 0)
+    push(row2, 1)
+    push(matrix, row2)
+
+    mut row3 = []
+    push(row3, 2)
+    push(row3, infinity)
+    push(row3, infinity)
+    push(row3, 0)
+    push(matrix, row3)
+
+    return matrix
+
+fn make_dense_expected():
+    mut expected = []
+
+    mut row0 = []
+    push(row0, 0)
+    push(row0, 3)
+    push(row0, 5)
+    push(row0, 6)
+    push(expected, row0)
+
+    mut row1 = []
+    push(row1, 5)
+    push(row1, 0)
+    push(row1, 2)
+    push(row1, 3)
+    push(expected, row1)
+
+    mut row2 = []
+    push(row2, 3)
+    push(row2, 6)
+    push(row2, 0)
+    push(row2, 1)
+    push(expected, row2)
+
+    mut row3 = []
+    push(row3, 2)
+    push(row3, 5)
+    push(row3, 7)
+    push(row3, 0)
+    push(expected, row3)
+
+    return expected
+
+dense_dimension = 4
+dense_matrix = make_dense_matrix(infinity)
+dense_expected = make_dense_expected()
+
+assert_matrix("dense_fixture", floyd_warshall("dense_fixture", dense_matrix, dense_dimension, infinity), dense_expected, dense_dimension)
+
+fn make_disconnected_matrix(infinity):
+    mut matrix = []
+
+    mut row0 = []
+    push(row0, 0)
+    push(row0, infinity)
+    push(row0, infinity)
+    push(matrix, row0)
+
+    mut row1 = []
+    push(row1, infinity)
+    push(row1, 0)
+    push(row1, 4)
+    push(matrix, row1)
+
+    mut row2 = []
+    push(row2, infinity)
+    push(row2, infinity)
+    push(row2, 0)
+    push(matrix, row2)
+
+    return matrix
+
+fn make_disconnected_expected(infinity):
+    mut expected = []
+
+    mut row0 = []
+    push(row0, 0)
+    push(row0, infinity)
+    push(row0, infinity)
+    push(expected, row0)
+
+    mut row1 = []
+    push(row1, infinity)
+    push(row1, 0)
+    push(row1, 4)
+    push(expected, row1)
+
+    mut row2 = []
+    push(row2, infinity)
+    push(row2, infinity)
+    push(row2, 0)
+    push(expected, row2)
+
+    return expected
+
+disconnected_dimension = 3
+disconnected_matrix = make_disconnected_matrix(infinity)
+disconnected_expected = make_disconnected_expected(infinity)
+
+assert_matrix("disconnected", floyd_warshall("disconnected", disconnected_matrix, disconnected_dimension, infinity), disconnected_expected, disconnected_dimension)
