@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
+## [0.6.0] - 2025-09-24
+
+### Added
+- Support destructuring bindings, `const` declarations, and hexadecimal literals in the compiler front-end.
+- Ship built-in `Result` enum helpers with accompanying CLI smoke coverage.
+- Introduce additional algorithm stress suites, including N-Queens, Sudoku, heap sort, selection sort, and merge-sort fixtures for later phases.
+
+### Changed
+- Release builds now emit both native and WebAssembly artifacts from the same target.
+- Array and string formatting was polished for clearer runtime output.
+- Tightened loop execution performance with typed register dirty tracking, typed branch opcodes, and constant-folding enhancements.
+
+### Fixed
+- Corrected garbage collector root handling for call frames and chunk constants.
+- Resolved numerous interpreter regressions around array indexing, register allocation, and selection sort behavior.
+- Improved diagnostics for argument count mismatches, indentation issues, missing brackets, and print syntax errors.
+
 ## [0.5.2] - 2025-09-22
 
 ### Changed
@@ -57,6 +74,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 ## [0.2.2] - 2025-07-16
 - Introduced public `version.h` and initial 0.2.x series setup.
 
+[0.6.0]: https://github.com/jordyorel/orus-lang/compare/v0.5.2...v0.6.0
 [0.5.2]: https://github.com/jordyorel/orus-lang/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/jordyorel/orus-lang/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/jordyorel/orus-lang/compare/v0.4.0...v0.5.0
