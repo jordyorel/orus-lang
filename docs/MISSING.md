@@ -106,7 +106,7 @@ print("sum:", total)
 | Module packaging | Completed | Module declarations and dotted `use` paths map to nested files and are covered by regression tests. |
 | Print formatting polish | Backlog | Finish escape handling and numeric formatting for the print APIs. |
 | Module use resolution | Completed | `use` loads sibling modules and binds their exported globals, functions, structs, and enums—including aliased type declarations—via the module loader. |
-| Algorithm stress suite | In progress | Phase 1 bubble/insertion sort smoke fixtures added under `tests/algorithms/phase1/` with baseline instrumentation; merge/quick/heap variants queued next. |
+| Algorithm stress suite | In progress | Phase 1 sorters, Phase 2 graph traversals, and Phase 3 dynamic-programming/backtracking fixtures (Fibonacci, Knapsack, LCS, Edit Distance, N-Queens, Sudoku) now land with telemetry and golden validations; remaining work tracks Phase 4 numeric/probabilistic loads and shared helper extraction. |
 
 ---
 
