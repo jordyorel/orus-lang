@@ -20,6 +20,7 @@ ErrorReportResult report_argument_count_mismatch(SrcLocation location,
 ErrorReportResult report_type_annotation_required(SrcLocation location, const char* context);
 ErrorReportResult report_unsupported_operation(SrcLocation location, const char* operation, const char* type);
 ErrorReportResult report_immutable_assignment(SrcLocation location, const char* variable_name);
+ErrorReportResult report_argument_count_mismatch(SrcLocation location, int expected, int found);
 
 // Type error utilities
 const char* get_type_error_suggestion(ErrorCode code, const char* context);

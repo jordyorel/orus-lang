@@ -51,6 +51,12 @@ static const FeatureErrorInfo type_errors[] = {
         .title = "This variable is protected from changes",
         .help = "To modify this variable, declare it as mutable with 'mut' when you first create it: 'mut variable_name = value'",
         .note = "Variables are immutable by default to help prevent bugs and make your code more predictable."
+    },
+    {
+        .code = E2009_ARGUMENT_COUNT_MISMATCH,
+        .title = "Function call argument mismatch",
+        .help = "Add the missing arguments or remove the extras so the call matches the function definition.",
+        .note = "Orus checks function signatures strictly so calls must use the exact number of parameters."
     }
 };
 
@@ -124,8 +130,19 @@ ErrorReportResult report_unsupported_operation(SrcLocation location, const char*
 
 // Immutable assignment error
 ErrorReportResult report_immutable_assignment(SrcLocation location, const char* variable_name) {
-    return report_feature_error_f(E2008_IMMUTABLE_ASSIGNMENT, location, 
+    return report_feature_error_f(E2008_IMMUTABLE_ASSIGNMENT, location,
                                  "Variable '%s' is immutable and cannot be changed", variable_name);
+}
+
+ErrorReportResult report_argument_count_mismatch(SrcLocation location, int expected, int found) {
+    const char* prefix = (found < expected)
+                             ? "Not enough arguments for function call"
+                             : "Too many arguments for function call";
+    const char* expected_label = (expected == 1) ? "argument" : "arguments";
+
+    return report_feature_error_f(E2009_ARGUMENT_COUNT_MISMATCH, location,
+                                  "%s: expected %d %s but found %d.",
+                                  prefix, expected, expected_label, found);
 }
 
 // Get type-specific error suggestions
@@ -146,6 +163,8 @@ const char* get_type_error_suggestion(ErrorCode code, const char* context) {
             return "Check if this type conversion is allowed in Orus.";
         case E2008_IMMUTABLE_ASSIGNMENT:
             return "Try declaring the variable with 'mut' to make it changeable.";
+        case E2009_ARGUMENT_COUNT_MISMATCH:
+            return "Update the call so it passes the same number of arguments as the function defines.";
         default:
             return "Check the Orus documentation for type system rules.";
     }
