@@ -293,5 +293,3 @@ ratio = (count as f64) / 10.0
 - Pattern matching is exhaustive for enums and supports destructuring.
 - Modules require uppercase globals and `pub` exports for cross-file use.
 - `time_stamp()` alongside `print(...)` and `print_no_newline(...)` are the available runtime utilities.
-
-Keep these rules in mind when writing Orus code—the compiler enforces them exactly as described above.
