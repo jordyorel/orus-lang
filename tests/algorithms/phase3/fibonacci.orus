@@ -1,0 +1,91 @@
+// Phase 3 Fibonacci recursion stress cases for the algorithm stress-test suite.
+// Captures naive recursion depth/call growth alongside memoized cache hits.
+print("== Phase 3: Fibonacci Recursion Stress ==")
+
+global mut FIB_NAIVE_CALLS = 0
+global mut FIB_NAIVE_MAX_DEPTH = 0
+
+fn fib_naive_inner(n: i32, depth: i32) -> i32:
+    FIB_NAIVE_CALLS = FIB_NAIVE_CALLS + 1
+    if depth > FIB_NAIVE_MAX_DEPTH:
+        FIB_NAIVE_MAX_DEPTH = depth
+    if n <= 1:
+        return n
+    first = fib_naive_inner(n - 1, depth + 1)
+    second = fib_naive_inner(n - 2, depth + 1)
+    return first + second
+
+fn run_fib_naive(label, n: i32) -> i32:
+    FIB_NAIVE_CALLS = 0
+    FIB_NAIVE_MAX_DEPTH = 0
+    value = fib_naive_inner(n, 0)
+    print("fib_naive", label, "n:", n, "value:", value, "calls:", FIB_NAIVE_CALLS, "max_depth:", FIB_NAIVE_MAX_DEPTH)
+    return value
+
+global mut FIB_MEMO_CALLS = 0
+global mut FIB_MEMO_MAX_DEPTH = 0
+global mut FIB_MEMO_CACHE_HITS = 0
+global mut FIB_MEMO_CACHE_WRITES = 0
+
+fn fib_memo_inner(n: i32, cache_values, cache_filled, depth: i32) -> i32:
+    FIB_MEMO_CALLS = FIB_MEMO_CALLS + 1
+    if depth > FIB_MEMO_MAX_DEPTH:
+        FIB_MEMO_MAX_DEPTH = depth
+
+    if cache_filled[n]:
+        FIB_MEMO_CACHE_HITS = FIB_MEMO_CACHE_HITS + 1
+        return cache_values[n]
+
+    mut value: i32 = 0
+    if n <= 1:
+        value = n
+    else:
+        first = fib_memo_inner(n - 1, cache_values, cache_filled, depth + 1)
+        second = fib_memo_inner(n - 2, cache_values, cache_filled, depth + 1)
+        value = first + second
+
+    cache_values[n] = value
+    cache_filled[n] = true
+    FIB_MEMO_CACHE_WRITES = FIB_MEMO_CACHE_WRITES + 1
+    return value
+
+fn run_fib_memo(label, n: i32) -> i32:
+    FIB_MEMO_CALLS = 0
+    FIB_MEMO_MAX_DEPTH = 0
+    FIB_MEMO_CACHE_HITS = 0
+    FIB_MEMO_CACHE_WRITES = 0
+
+    cache_values = []
+    cache_filled = []
+    mut i: i32 = 0
+    limit: i32 = n
+    while i <= limit:
+        push(cache_values, 0)
+        push(cache_filled, false)
+        i = i + 1
+
+    cache_values[0] = 0
+    cache_filled[0] = true
+    if n >= 1:
+        cache_values[1] = 1
+        cache_filled[1] = true
+
+    value = fib_memo_inner(n, cache_values, cache_filled, 0)
+    print("fib_memo", label, "n:", n, "value:", value, "calls:", FIB_MEMO_CALLS, "max_depth:", FIB_MEMO_MAX_DEPTH, "cache_hits:", FIB_MEMO_CACHE_HITS, "cache_writes:", FIB_MEMO_CACHE_WRITES)
+    return value
+
+fn run_case(label, n: i32, expected: i32):
+    run_fib_naive(label, n)
+    memo_value = run_fib_memo(label, n)
+    print(label, "memo =>", memo_value, "expected", expected)
+
+run_case("n0", 0, 0)
+run_case("n1", 1, 1)
+run_case("n2", 2, 1)
+run_case("n5", 5, 5)
+run_case("n10", 10, 55)
+
+// Memoized stress: drive deeper recursion that would explode without caching.
+stress_n = 25
+memo_stress_value = run_fib_memo("stress", stress_n)
+print("stress memo =>", memo_stress_value, "expected", 75025)

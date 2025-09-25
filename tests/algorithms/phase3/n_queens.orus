@@ -1,0 +1,131 @@
+// Phase 3 N-Queens backtracking stress harness that instruments recursion
+// depth, conflict pruning, and solution reconstruction for classic board sizes.
+print("== Phase 3: N-Queens Stress ==")
+
+// === Metrics for the recursive backtracking solver ===
+global mut NQ_CALLS = 0
+global mut NQ_MAX_DEPTH = 0
+global mut NQ_CONFLICT_CHECKS = 0
+global mut NQ_CONFLICT_REJECTIONS = 0
+global mut NQ_PLACEMENTS = 0
+global mut NQ_BACKTRACKS = 0
+global mut NQ_SOLUTIONS = 0
+global mut NQ_LAST_POSITIONS = []
+
+fn reset_metrics():
+    NQ_CALLS = 0
+    NQ_MAX_DEPTH = 0
+    NQ_CONFLICT_CHECKS = 0
+    NQ_CONFLICT_REJECTIONS = 0
+    NQ_PLACEMENTS = 0
+    NQ_BACKTRACKS = 0
+    NQ_SOLUTIONS = 0
+    NQ_LAST_POSITIONS = []
+
+fn record_solution(n: i32, positions):
+    NQ_SOLUTIONS = NQ_SOLUTIONS + 1
+    NQ_LAST_POSITIONS = []
+
+    mut copy_index: i32 = 0
+    while copy_index < n:
+        push(NQ_LAST_POSITIONS, positions[copy_index])
+        copy_index = copy_index + 1
+
+    if NQ_SOLUTIONS <= 12:
+        print("n_queens solution", NQ_SOLUTIONS, "rows_by_column:", NQ_LAST_POSITIONS)
+    else:
+        if NQ_SOLUTIONS == 13:
+            print("n_queens solution_print_limit", NQ_SOLUTIONS - 1, "additional solutions omitted")
+
+fn solve_n_queens_inner(n: i32, column: i32, columns_used, diag_main_used, diag_anti_used, positions, depth: i32) -> i32:
+    NQ_CALLS = NQ_CALLS + 1
+    if depth > NQ_MAX_DEPTH:
+        NQ_MAX_DEPTH = depth
+
+    if column >= n:
+        record_solution(n, positions)
+        return 1
+
+    mut total: i32 = 0
+    mut row: i32 = 0
+    while row < n:
+        NQ_CONFLICT_CHECKS = NQ_CONFLICT_CHECKS + 1
+
+        main_index: i32 = row - column + n - 1
+        anti_index: i32 = row + column
+
+        conflict = false
+        if columns_used[row]:
+            conflict = true
+        else:
+            if diag_main_used[main_index]:
+                conflict = true
+            else:
+                if diag_anti_used[anti_index]:
+                    conflict = true
+
+        if conflict:
+            NQ_CONFLICT_REJECTIONS = NQ_CONFLICT_REJECTIONS + 1
+        else:
+            columns_used[row] = true
+            diag_main_used[main_index] = true
+            diag_anti_used[anti_index] = true
+            positions[column] = row
+            NQ_PLACEMENTS = NQ_PLACEMENTS + 1
+
+            total = total + solve_n_queens_inner(n, column + 1, columns_used, diag_main_used, diag_anti_used, positions, depth + 1)
+
+            columns_used[row] = false
+            diag_main_used[main_index] = false
+            diag_anti_used[anti_index] = false
+            positions[column] = -1
+            NQ_BACKTRACKS = NQ_BACKTRACKS + 1
+        row = row + 1
+
+    return total
+
+fn run_n_queens(label, n: i32, expected_solutions: i32) -> i32:
+    print("-- N-Queens dataset", label, "n:", n, "expected_solutions:", expected_solutions)
+
+    reset_metrics()
+
+    mut columns_used = []
+    mut init_index: i32 = 0
+    while init_index < n:
+        push(columns_used, false)
+        init_index = init_index + 1
+
+    diag_length: i32 = n + n - 1
+    mut diag_main_used = []
+    mut diag_anti_used = []
+    mut diag_index: i32 = 0
+    while diag_index < diag_length:
+        push(diag_main_used, false)
+        push(diag_anti_used, false)
+        diag_index = diag_index + 1
+
+    mut positions = []
+    mut pos_index: i32 = 0
+    while pos_index < n:
+        push(positions, -1)
+        pos_index = pos_index + 1
+
+    returned: i32 = solve_n_queens_inner(n, 0, columns_used, diag_main_used, diag_anti_used, positions, 0)
+    solutions: i32 = NQ_SOLUTIONS
+    if returned != solutions:
+        print("n_queens return_mismatch", label, "returned:", returned, "tracked:", solutions)
+
+    print("n_queens", label, "solutions:", solutions, "calls:", NQ_CALLS, "max_depth:", NQ_MAX_DEPTH, "conflict_checks:", NQ_CONFLICT_CHECKS, "conflict_rejections:", NQ_CONFLICT_REJECTIONS, "placements:", NQ_PLACEMENTS, "backtracks:", NQ_BACKTRACKS)
+    print("n_queens", label, "last_positions:", NQ_LAST_POSITIONS)
+    return solutions
+
+fn run_case(label, n: i32, expected: i32):
+    solutions = run_n_queens(label, n, expected)
+    print(label, "=>", solutions, "expected", expected)
+
+run_case("n1", 1, 1)
+run_case("n4", 4, 2)
+run_case("n5", 5, 10)
+
+// Stress run that highlights pruning effectiveness on the classic 8x8 board.
+run_n_queens("stress_n8", 8, 92)

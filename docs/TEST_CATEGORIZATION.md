@@ -52,3 +52,10 @@
 ## Algorithm Regressions
 - `tests/algorithms/regressions/selection_sort_basic.orus` – Single-case regression to ensure the core selection sort implementation returns a sorted array for a representative dataset.
 - `tests/algorithms/regressions/selection_sort_metrics.orus` – Verifies the labelled selection sort variant emits telemetry and produces the expected ordering for a known input.
+
+## Algorithm Stress – Phase 3
+- `tests/algorithms/phase3/fibonacci.orus` – Compares naive recursion against memoization while logging call counts, recursion depth, cache hits, and cache writes, and validates outputs against golden values plus a deeper stress case.
+- `tests/algorithms/phase3/knapsack.orus` – Contrasts the exponential recursion tree against a bottom-up DP table, reporting call/depth/split metrics for the naive version and table cell, transition, and reuse counts for the dynamic-programming path alongside shared golden validations and a DP-only stress run.
+- `tests/algorithms/phase3/lcs.orus` – Exercises longest common subsequence datasets with both the naive recursion tree and a DP table, recording call, depth, and branch metrics alongside DP cell, match, reuse, and tie counts while validating shared fixtures and a DP-only stress case.
+- `tests/algorithms/phase3/edit_distance.orus` – Benchmarks Levenshtein distance by pairing tri-branch naive recursion with the DP grid, logging call/depth/branch metrics and per-branch winners plus base initialization, cell fill, and tie counts for the DP path, validating packed operation scripts on manageable datasets, and printing a DP-only stress run.
+- `tests/algorithms/phase3/n_queens.orus` – Explores the N-Queens placement search while tracking recursive calls, maximum depth, pruning guard hits, successful placements, and backtracks before echoing the latest solution layout and stressing the classic 8×8 board.
