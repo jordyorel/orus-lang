@@ -5,26 +5,28 @@
 #include <stdbool.h>
 #include "vm/vm.h"  // For RegisterType enum
 
-// Multi-pass compiler register ranges (aligned with VM expectations)
-#define MP_GLOBAL_REG_START    0     // R0-R63:   Global variables
-#define MP_GLOBAL_REG_END      63
-#define MP_FRAME_REG_START     64    // R64-R191: Function locals/params
-#define MP_FRAME_REG_END       191
-#define MP_TEMP_REG_START      192   // R192-R239: Expression temps
-#define MP_TEMP_REG_END        239
-#define MP_MODULE_REG_START    240   // R240-R255: Module scope
-#define MP_MODULE_REG_END      255
+// Multi-pass compiler register ranges (mirrors VM register layout)
+#define MP_GLOBAL_REG_START    GLOBAL_REG_START
+#define MP_GLOBAL_REG_END      (GLOBAL_REG_START + GLOBAL_REGISTERS - 1)
+#define MP_FRAME_REG_START     FRAME_REG_START
+#define MP_FRAME_REG_END       (FRAME_REG_START + FRAME_REGISTERS - 1)
+#define MP_TEMP_REG_START      TEMP_REG_START
+#define MP_TEMP_REG_END        (TEMP_REG_START + TEMP_REGISTERS - 1)
+#define MP_MODULE_REG_START    MODULE_REG_START
+#define MP_MODULE_REG_END      (MODULE_REG_START + MODULE_REGISTERS - 1)
+
+#define MP_SCOPE_LEVEL_COUNT   (TEMP_REGISTERS / 8)
 
 typedef struct MultiPassRegisterAllocator {
     // Register usage tracking (updated to match new ranges)
-    bool global_regs[64];       // R0-R63 usage
-    bool frame_regs[128];       // R64-R191 usage
-    bool temp_regs[48];         // R192-R239 usage (matches TEMP_REGISTERS)
-    bool module_regs[16];       // R240-R255 usage (module registers)
+    bool global_regs[GLOBAL_REGISTERS];       // R0-R63 usage
+    bool frame_regs[FRAME_REGISTERS];         // R64-R191 usage
+    bool temp_regs[TEMP_REGISTERS];           // R192-R239 usage (matches TEMP_REGISTERS)
+    bool module_regs[MODULE_REGISTERS];       // R240-R255 usage (module registers)
 
     // Scope-aware temp register allocation (updated ranges)
-    bool scope_temp_regs[6][8]; // 6 scope levels, 8 registers each (R192-R239)
-    int current_scope_level;     // Current nesting level (0-5)
+    bool scope_temp_regs[MP_SCOPE_LEVEL_COUNT][8]; // Scope-aware temp allocation blocks
+    int current_scope_level;     // Current nesting level (0-(MP_SCOPE_LEVEL_COUNT-1))
 
     // Residency hints to keep typed values alive across hot backedges
     bool typed_residency_hint[REGISTER_COUNT];
@@ -36,7 +38,7 @@ typedef struct MultiPassRegisterAllocator {
     int next_module;           // Next available module register
     
     // Stack for temp register reuse
-    int temp_stack[48];        // Reusable temp registers (updated for new range)
+    int temp_stack[TEMP_REGISTERS];        // Reusable temp registers (updated for new range)
     int temp_stack_top;        // Top of temp stack
 } MultiPassRegisterAllocator;
 

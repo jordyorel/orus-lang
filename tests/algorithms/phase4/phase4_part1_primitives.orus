@@ -1,0 +1,78 @@
+print("== Phase 4 Part 1: Primitive helpers ==")
+
+global mut RNG_SEED: i32 = 0x13579BDF
+
+fn srand(seed: i32):
+    RNG_SEED = seed
+
+fn rand_u32() -> i32:
+    RNG_SEED = (RNG_SEED * 1664525) + 1013904223
+    return RNG_SEED
+
+fn rand_range(lo: i32, hi: i32) -> i32:
+    if hi <= lo:
+        return lo
+    span = hi - lo + 1
+    r = rand_u32()
+    mut m = r % span
+    if m < 0:
+        m = m + span
+    return lo + m
+
+fn rand_len(max_len: i32) -> i32:
+    return rand_range(0, max_len)
+
+fn copy_array(xs):
+    mut out = []
+    mut i: i32 = 0
+    while i < len(xs):
+        push(out, xs[i])
+        i = i + 1
+    return out
+
+fn concat(a, b):
+    mut out = []
+    mut i: i32 = 0
+    while i < len(a):
+        push(out, a[i])
+        i = i + 1
+    i = 0
+    while i < len(b):
+        push(out, b[i])
+        i = i + 1
+    return out
+
+fn add_k(xs, k: i32):
+    mut out = []
+    mut i: i32 = 0
+    while i < len(xs):
+        push(out, xs[i] + k)
+        i = i + 1
+    return out
+
+fn split_at(xs, mid: i32):
+    mut left = []
+    mut right = []
+    mut i: i32 = 0
+    while i < len(xs):
+        if i < mid:
+            push(left, xs[i])
+        else:
+            push(right, xs[i])
+        i = i + 1
+    return [left, right]
+
+srand(1792609982)
+print("rand_u32 sample", rand_u32())
+print("rand_range(-3, 3)", rand_range(-3, 3))
+print("rand_len(5)", rand_len(5))
+
+print("copy_array", copy_array([1, 2, 3]))
+print("concat", concat([1, 2], [3, 4]))
+print("add_k", add_k([1, -1, 5], 3))
+
+split_parts = split_at([1, 2, 3, 4], 2)
+print("split left", split_parts[0])
+print("split right", split_parts[1])
+
+print("== Done Part 1 ==")

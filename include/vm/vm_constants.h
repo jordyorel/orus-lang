@@ -8,20 +8,20 @@
 #define VM_MAX_UPVALUES 256
 
 // Phase 1: Register file architecture constants
-#define GLOBAL_REGISTERS 256    // Fast-access globals (preserve existing behavior)
-#define FRAME_REGISTERS 64      // Per-function registers (256-319)  
-#define TEMP_REGISTERS 32       // Scratch space
-#define MODULE_REGISTERS 128    // Per-module scope (Phase 3)
+#define GLOBAL_REGISTERS 64     // R0-R63: Fast-access globals
+#define FRAME_REGISTERS 128     // R64-R191: Function locals and parameters
+#define TEMP_REGISTERS 48       // R192-R239: Scratch space for expression temps
+#define MODULE_REGISTERS 16     // R240-R255: Module scope registers
 
 // Compiler limits - generous but practical limit
 #define MAX_LOCAL_VARIABLES 32768  // Maximum local variables per compilation unit (half of uint16_t range)
 
 // Register ID layout (as per roadmap)
 #define GLOBAL_REG_START 0
-#define FRAME_REG_START 256
-#define TEMP_REG_START 320
-#define MODULE_REG_START 352      // Module registers
-#define SPILL_REG_START 480       // Updated to accommodate module registers
+#define FRAME_REG_START 64
+#define TEMP_REG_START 192
+#define MODULE_REG_START 240      // Module registers
+#define SPILL_REG_START 256       // Registers beyond the primary window spill
 
 // String operation thresholds
 #define VM_SMALL_STRING_BUFFER 1024
