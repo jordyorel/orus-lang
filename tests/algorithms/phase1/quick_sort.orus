@@ -1,0 +1,100 @@
+// Phase 1 quick sort implementation for the algorithm stress-test suite.
+// Functional variant that returns a new array to stress recursion, pivot
+// selection, and dynamic array construction while tracking simple metrics.
+
+global mut QUICK_COMPARISONS = 0
+global mut QUICK_PARTITIONS = 0
+global mut QUICK_MAX_DEPTH = 0
+
+fn quick_sort_recursive(values, depth):
+    length = len(values)
+    if depth > QUICK_MAX_DEPTH:
+        QUICK_MAX_DEPTH = depth
+    if length <= 1:
+        return values
+
+    pivot = values[length / 2]
+    mut less = []
+    mut equal = []
+    mut greater = []
+
+    mut i = 0
+    while i < length:
+        current = values[i]
+        QUICK_COMPARISONS = QUICK_COMPARISONS + 1
+        if current < pivot:
+            push(less, current)
+        elif current > pivot:
+            QUICK_COMPARISONS = QUICK_COMPARISONS + 1
+            push(greater, current)
+        else:
+            push(equal, current)
+        i = i + 1
+
+    QUICK_PARTITIONS = QUICK_PARTITIONS + 1
+
+    sorted_less = quick_sort_recursive(less, depth + 1)
+    sorted_greater = quick_sort_recursive(greater, depth + 1)
+
+    mut result = []
+    mut li = 0
+    while li < len(sorted_less):
+        push(result, sorted_less[li])
+        li = li + 1
+
+    mut ei = 0
+    while ei < len(equal):
+        push(result, equal[ei])
+        ei = ei + 1
+
+    mut gi = 0
+    while gi < len(sorted_greater):
+        push(result, sorted_greater[gi])
+        gi = gi + 1
+
+    return result
+
+fn quick_sort(label, values):
+    QUICK_COMPARISONS = 0
+    QUICK_PARTITIONS = 0
+    QUICK_MAX_DEPTH = 0
+    sorted = quick_sort_recursive(values, 1)
+    print("quick_sort", label, "comparisons:", QUICK_COMPARISONS, "partitions:", QUICK_PARTITIONS, "max_depth:", QUICK_MAX_DEPTH)
+    return sorted
+
+fn assert_sorted(label, observed, expected):
+    if len(observed) != len(expected):
+        print("FAIL", label, "length mismatch", len(observed), "expected", len(expected))
+        return
+    mut i = 0
+    mut ok = true
+    while i < len(observed):
+        if observed[i] != expected[i]:
+            ok = false
+        i = i + 1
+    if ok:
+        print(label, "sorted", observed)
+    else:
+        print("FAIL", label, "=>", observed, "expected", expected)
+
+// === Tests ===
+unsorted = [33, 10, 55, 71, 29, 3, 18]
+expected_unsorted = [3, 10, 18, 29, 33, 55, 71]
+assert_sorted("random", quick_sort("random", unsorted), expected_unsorted)
+
+ascending = [2, 4, 6, 8, 10]
+assert_sorted("already_sorted", quick_sort("already_sorted", ascending), ascending)
+
+reversed = [9, 7, 5, 3, 1, -1]
+expected_reversed = [-1, 1, 3, 5, 7, 9]
+assert_sorted("reversed", quick_sort("reversed", reversed), expected_reversed)
+
+duplicates = [4, 2, 4, 1, 4, 3, 2]
+expected_duplicates = [1, 2, 2, 3, 4, 4, 4]
+assert_sorted("duplicates", quick_sort("duplicates", duplicates), expected_duplicates)
+
+single = [99]
+assert_sorted("single", quick_sort("single", single), single)
+
+empty = []
+assert_sorted("empty", quick_sort("empty", empty), [])
