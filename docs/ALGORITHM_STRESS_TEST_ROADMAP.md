@@ -10,7 +10,7 @@ runnable `.orus` fixtures plus harness coverage in `test-all`.
 | Phase | Focus | Representative Algorithms | Acceptance Criteria |
 | --- | --- | --- | --- |
 | Phase 0 | Test harness foundations | Shared helpers for timing, result assertions, and reproducible random seeds. | Reusable `assert_equals` and perf-logging utilities compiled into regression harnesses. |
-| Phase 1 | Iteration & sorting | Bubble/Insertion sort, Merge sort, Quick sort, Heap sort, Counting sort. | Stable outputs for sorted datasets, instrumentation for branch counts, and coverage of both recursive and iterative control flow. |
+| Phase 1 | Iteration & sorting | Bubble/Insertion sort, selection sort, Merge sort, Quick sort, Heap sort, Counting sort. | Stable outputs for sorted datasets, instrumentation for branch counts, and coverage of both recursive and iterative control flow. |
 | Phase 2 | Graph & traversal | DFS, BFS, Dijkstra, Bellman–Ford, Floyd–Warshall, Topological sort. | Valid shortest-path tables on weighted fixtures, queue/stack behaviour under stress, and VM profiling snapshots to watch register pressure. |
 | Phase 3 | Dynamic programming & combinatorics | Fibonacci (naïve + memoized), Knapsack, LCS, Edit distance, N-Queens, Sudoku solver. | Agreement with golden answers, memoization cache validation, and stress runs that highlight recursion-depth handling. |
 | Phase 4 | Numeric heavy + probabilistic | Sieve of Eratosthenes, Modular exponentiation, Miller–Rabin, Mandelbrot iterations, Conway’s Game of Life. | Deterministic prime tables, statistically sound primality checks across seeds, and float-heavy benchmarks without VM instability. |
