@@ -134,7 +134,7 @@ ErrorReportResult report_immutable_assignment(SrcLocation location, const char* 
                                  "Variable '%s' is immutable and cannot be changed", variable_name);
 }
 
-ErrorReportResult report_argument_count_mismatch(SrcLocation location, int expected, int found) {
+ErrorReportResult report_argument_count_mismatch_simple(SrcLocation location, int expected, int found) {
     const char* prefix = (found < expected)
                              ? "Not enough arguments for function call"
                              : "Too many arguments for function call";
