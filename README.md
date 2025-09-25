@@ -7,7 +7,7 @@ Fast, elegant programming language with Python's readability and Rust's safety.
 ## Overview
 
 Orus is a modern register-based VM language that combines performance with safety:
-- **High Performance**: 1.7× faster than Python, 2.3× faster than JavaScript, competitive with LuaJIT
+- **High Performance**: ~4× faster than CPython on our benchmark suite today and narrowing the gap with V8/HotSpot
 - **Type Safety**: Static typing with intelligent type inference and runtime safety checks
 - **Developer Experience**: Clean, readable syntax with comprehensive error reporting
 - **Cross-Platform**: Optimized builds for Apple Silicon, Intel, and ARM architectures
@@ -20,34 +20,28 @@ fn fibonacci(n: i32) -> i32:
 print("Result: ", fibonacci(10))
 ```
 
-## Performance (Jul 2025)
+## Performance (Sep 2025)
 
-*Benchmarks run on Apple M1 Pro with optimized builds (5-run average with statistical analysis)*
+Benchmarks were captured on a Linux x86_64 container (Intel Xeon Platinum 8370C, 5 vCPUs) using `EMCC=true make benchmark`. Each suite performs two warmup executions followed by five timed runs per language; we repeated the full benchmark three times and report the average ± standard deviation below.【ddf43a†L1-L9】【08cb02†L1-L26】【de3462†L1-L20】【7f8e93†L1-L23】【7ac006†L16-L22】【1f8a48†L12-L16】
 
-### Comprehensive Benchmark Results
+### Cross-language benchmark averages (3 suites × 5 iterations)
 
-| Language | **Mean Time** | **Range** | **Relative Performance** |
-|----------|---------------|-----------|--------------------------|
-| **LuaJIT** | **21.0ms** | 20.8-21.2ms | 1.0× (baseline) |
-| **Orus** | **21.0ms** | 20.5-21.5ms | 1.0× (tied for fastest) |
-| **Lua** | **21.1ms** | 20.8-21.2ms | 1.00× slower |
-| **Python** | **35.3ms** | 34.8-35.7ms | 1.68× slower |
-| **JavaScript** | **46.1ms** | 45.7-46.8ms | 2.20× slower |
-| **Java** | **72.1ms** | 67.0-75.5ms | 3.43× slower |
+| Language | **Arithmetic (ms)** | **Control Flow (ms)** | **Overall (ms)** | Notes |
+|----------|--------------------|-----------------------|------------------|-------|
+| **Orus** | **24.0 ± 4.0** | **297.3 ± 7.6** | **160.7 ± 4.0** | Release build with computed-goto dispatch |
+| **JavaScript (Node 20.19)** | 108.7 ± 9.9 | 119.3 ± 3.1 | 114.0 ± 3.5 | V8 JIT baseline |
+| **Java (OpenJDK 21.0.2)** | 136.0 ± 10.4 | — | 136.0 ± 10.4 | Arithmetic suite only |
+| **Python (3.12.10)** | 552.7 ± 42.0 | 720.7 ± 25.7 | 636.7 ± 13.3 | CPython reference interpreter |
+| **Lua / LuaJIT** | — | — | — | Interpreters unavailable in CI image |
 
-### Pure Arithmetic Performance
+Runtime versions: Node v20.19.4, Python 3.12.10, OpenJDK 21.0.2.【64b176†L1-L2】【2040da†L1-L2】【ba0f79†L1-L4】
 
-| Language | **Mean Time** | **Operations** | **Relative Performance** |
-|----------|---------------|----------------|--------------------------|
-| **Orus** | **5.2ms** | 500+ arithmetic ops | **13.5× faster than Java** |
-| **Java (HotSpot)** | **70.4ms** | 500+ arithmetic ops | 1.0× (JVM baseline) |
-
-**Performance Summary**:
-- **vs Python**: 1.7× faster (comprehensive) 
-- **vs JavaScript**: 2.2× faster (comprehensive)
-- **vs Java**: 3.4× faster (comprehensive), 13.5× faster (pure arithmetic)
-- **vs LuaJIT**: Tied for fastest
-- **vs Lua**: Tied for fastest
+**Performance Takeaways**
+- **vs Python**: Orus is ~4× faster overall and ~23× faster on pure arithmetic workloads.【7ac006†L16-L22】【1f8a48†L12-L16】
+- **vs JavaScript (V8)**: Orus is still ~1.4× slower overall, but leads on arithmetic-heavy code where the register VM shines.【7ac006†L16-L18】【1f8a48†L12-L13】
+- **vs Java (HotSpot)**: The JVM retains a small overall lead today, while Orus delivers ~5.7× faster arithmetic throughput.【7ac006†L17-L20】【1f8a48†L14-L14】
+- **Control Flow**: Loop-heavy code is our current bottleneck—Orus trails Node.js by ~2.5× but still halves CPython’s runtime. Optimization work in this area is ongoing.【7ac006†L20-L22】
+- **Lua family**: Lua and LuaJIT measurements are omitted because the interpreters are not available in the benchmark container.
 
 ## Quick Start
 
