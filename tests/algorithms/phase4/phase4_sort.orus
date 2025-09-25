@@ -1,7 +1,8 @@
 // ==============================
 // Orus Sorting Property Testbed
+// Phase 4 — multi-variant harness
 // ==============================
-print("== Phase 4: Sorting Property Tests (with Counting) ==")
+print("== Phase 4: Sorting Property Tests (multi-variant) ==")
 
 // ---------- Deterministic RNG ----------
 global mut RNG_SEED: i32 = 0x13579BDF
@@ -25,6 +26,7 @@ fn rand_len(max_len: i32) -> i32:
     v = rand_range(0, max_len)
     return v
 
+// ---------- Common helpers ----------
 fn copy_array(xs):
     mut out = []
     mut i: i32 = 0
@@ -59,6 +61,11 @@ fn split_at(xs, mid: i32):
         i = i + 1
     return [left, right]
 
+fn swap(xs, i: i32, j: i32):
+    tmp = xs[i]
+    xs[i] = xs[j]
+    xs[j] = tmp
+
 // ---------- Oracle merge sort (reference) ----------
 fn merge(a, b):
     mut out = []
@@ -84,7 +91,7 @@ fn oracle_merge_sort(xs):
     sr = oracle_merge_sort(right)
     return merge(sl, sr)
 
-// ---------- In-place insertion sort (for demo) ----------
+// ---------- Sorting algorithms ----------
 fn insertion_sort(label, values):
     n: i32 = len(values)
     mut i: i32 = 1
@@ -100,7 +107,78 @@ fn insertion_sort(label, values):
         i = i + 1
     return values
 
-// ---------- Counting sort (frequency table; returns new array) ----------
+fn bubble_sort(label, values):
+    n: i32 = len(values)
+    if n <= 1: return values
+    mut end: i32 = n
+    mut swapped: bool = true
+    while end > 1 and swapped:
+        swapped = false
+        mut i: i32 = 1
+        while i < end:
+            if values[i - 1] > values[i]:
+                swap(values, i - 1, i)
+                swapped = true
+            i = i + 1
+        end = end - 1
+    return values
+
+fn quick_partition(values, lo: i32, hi: i32) -> i32:
+    pivot = values[hi]
+    mut store: i32 = lo
+    mut i: i32 = lo
+    while i < hi:
+        if values[i] <= pivot:
+            swap(values, i, store)
+            store = store + 1
+        i = i + 1
+    swap(values, store, hi)
+    return store
+
+fn quick_sort_range(values, lo: i32, hi: i32):
+    if lo >= hi: return
+    pivot_idx = quick_partition(values, lo, hi)
+    quick_sort_range(values, lo, pivot_idx - 1)
+    quick_sort_range(values, pivot_idx + 1, hi)
+
+fn quick_sort(label, values):
+    n: i32 = len(values)
+    if n <= 1: return values
+    quick_sort_range(values, 0, n - 1)
+    return values
+
+fn sift_down(values, start: i32, end: i32):
+    mut root: i32 = start
+    while root <= end:
+        child: i32 = (root * 2) + 1
+        if child > end: return
+        mut swap_idx: i32 = root
+        if values[swap_idx] < values[child]: swap_idx = child
+        right: i32 = child + 1
+        if right <= end:
+            if values[swap_idx] < values[right]: swap_idx = right
+        if swap_idx == root: return
+        swap(values, root, swap_idx)
+        root = swap_idx
+
+fn heap_sort(label, values):
+    n: i32 = len(values)
+    if n <= 1: return values
+    mut start: i32 = (n / 2) - 1
+    while start >= 0:
+        sift_down(values, start, n - 1)
+        start = start - 1
+    mut end: i32 = n - 1
+    while end > 0:
+        swap(values, 0, end)
+        end = end - 1
+        sift_down(values, 0, end)
+    return values
+
+fn merge_sort_variant(label, values):
+    // Uses the same recursive merge sort as the oracle but routed through the harness.
+    return oracle_merge_sort(values)
+
 fn counting_sort(label, values):
     n: i32 = len(values)
     if n <= 1: return copy_array(values)
@@ -152,13 +230,21 @@ fn assert_prop(ok: bool, name, algo):
 
 // ---------- Algorithm registry ----------
 const ALG_INSERTION = 1
-const ALG_COUNTING  = 2
-const ALG_ORACLE    = 3    // reference; also used as differential oracle
+const ALG_BUBBLE    = 2
+const ALG_QUICK     = 3
+const ALG_HEAP      = 4
+const ALG_MERGE     = 5
+const ALG_COUNTING  = 6
+const ALG_ORACLE    = 7    // reference; also used as differential oracle
 
 fn apply_sort(algo_id: i32, label, xs):
     // Always pass a copy so in-place algos don't mutate test fixtures
     work = copy_array(xs)
     if algo_id == ALG_INSERTION: return insertion_sort(label, work)
+    if algo_id == ALG_BUBBLE:    return bubble_sort(label, work)
+    if algo_id == ALG_QUICK:     return quick_sort(label, work)
+    if algo_id == ALG_HEAP:      return heap_sort(label, work)
+    if algo_id == ALG_MERGE:     return merge_sort_variant(label, work)
     if algo_id == ALG_COUNTING:  return counting_sort(label, work)
     if algo_id == ALG_ORACLE:    return oracle_merge_sort(work)
     // default fallback
@@ -234,8 +320,10 @@ fn fixed_cases():
     return cases
 
 // ---------- Runner for one algorithm ----------
-fn run_props_for(algo_name, algo_id: i32, random_trials: i32):
-    print("-- props:", algo_name, "--")
+fn run_props_for(algo_name, algo_id: i32, random_trials: i32, seed: i32):
+    print("-- props:", algo_name, "(seed", seed, ") --")
+    srand(seed)
+
     // Fixed edge cases
     edge = fixed_cases()
     mut i: i32 = 0
@@ -251,10 +339,25 @@ fn run_props_for(algo_name, algo_id: i32, random_trials: i32):
         t = t + 1
 
 // ---------- Main ----------
-srand(0xCAFEBABE)
-run_props_for("insertion_sort (in-place)", ALG_INSERTION, 100)
-run_props_for("counting_sort (new array)",  ALG_COUNTING,  100)
-// Oracle should of course satisfy its own properties; also serves as control.
-run_props_for("oracle_merge_sort (reference)", ALG_ORACLE, 50)
+const RANDOM_TRIALS = 100
+const ORACLE_TRIALS = 50
+
+fn run_suite_for_seed(seed: i32):
+    print("== Running property suite (seed", seed, ") ==")
+    run_props_for("insertion_sort (in-place)", ALG_INSERTION, RANDOM_TRIALS, seed)
+    run_props_for("bubble_sort (in-place)",    ALG_BUBBLE,    RANDOM_TRIALS, seed)
+    run_props_for("quick_sort (recursive)",    ALG_QUICK,     RANDOM_TRIALS, seed)
+    run_props_for("heap_sort (in-place)",      ALG_HEAP,      RANDOM_TRIALS, seed)
+    run_props_for("merge_sort (divide & conquer)", ALG_MERGE, RANDOM_TRIALS, seed)
+    run_props_for("counting_sort (frequency)", ALG_COUNTING, RANDOM_TRIALS, seed)
+    // Oracle should of course satisfy its own properties; also serves as control.
+    run_props_for("oracle_merge_sort (reference)", ALG_ORACLE, ORACLE_TRIALS, seed)
+    print("== Completed seed", seed, "==")
+
+seeds = [0x1, 0x1234, 0xCAFEBABE, 0xFEEDFACE]
+mut si: i32 = 0
+while si < len(seeds):
+    run_suite_for_seed(seeds[si])
+    si = si + 1
 
 print("== Done: Sorting Property Tests ==")
