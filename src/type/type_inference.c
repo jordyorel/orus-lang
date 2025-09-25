@@ -1686,7 +1686,6 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             }
 
             // For function declarations, get the actual return type from type annotation
-            bool return_type_inferred = false;
             Type* return_type = NULL;
 
             if (node->function.returnType) {
@@ -1698,8 +1697,6 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                 return_type = make_var_type(NULL);
                 if (!return_type) {
                     return_type = getPrimitiveType(TYPE_VOID);
-                } else {
-                    return_type_inferred = true;
                 }
             }
 
