@@ -3246,17 +3246,25 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                     DEBUG_CODEGEN_PRINT("Error: Failed to allocate memory for argument registers");
                     return -1;
                 }
-                
-                // Pre-allocate consecutive registers for arguments
-                for (int i = 0; i < arg_count; i++) {
-                    int consecutive_reg = mp_allocate_temp_register(ctx->allocator);
-                    if (consecutive_reg == -1) {
-                        DEBUG_CODEGEN_PRINT("Error: Failed to allocate consecutive register for argument %d", i);
-                        free(arg_regs);
-                        return -1;
+
+                int consecutive_base = mp_allocate_consecutive_temp_registers(ctx->allocator, arg_count);
+                if (consecutive_base != -1) {
+                    first_arg_reg = consecutive_base;
+                    for (int i = 0; i < arg_count; i++) {
+                        arg_regs[i] = consecutive_base + i;
                     }
-                    arg_regs[i] = consecutive_reg;
-                    if (i == 0) first_arg_reg = consecutive_reg;
+                } else {
+                    // Fallback: allocate individually (older behavior)
+                    for (int i = 0; i < arg_count; i++) {
+                        int reg = mp_allocate_temp_register(ctx->allocator);
+                        if (reg == -1) {
+                            DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for argument %d", i);
+                            free(arg_regs);
+                            return -1;
+                        }
+                        arg_regs[i] = reg;
+                        if (i == 0) first_arg_reg = reg;
+                    }
                 }
             }
             

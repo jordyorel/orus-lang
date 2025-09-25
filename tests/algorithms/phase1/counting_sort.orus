@@ -1,0 +1,108 @@
+// Phase 1 counting sort implementation for the algorithm stress-test suite.
+// Iterative version that measures range sizing, counting passes, and emission
+// volume to stress array indexing, nested loops, and arithmetic on offsets.
+
+print("== Phase 1: Counting Sort (Frequency Table) Smoke ==")
+
+global mut COUNTING_EXTENT_SCANS = 0
+global mut COUNTING_RANGE_SLOTS = 0
+global mut COUNTING_COUNT_UPDATES = 0
+global mut COUNTING_OUTPUT_WRITES = 0
+
+fn counting_sort(label, values):
+    COUNTING_EXTENT_SCANS = 0
+    COUNTING_RANGE_SLOTS = 0
+    COUNTING_COUNT_UPDATES = 0
+    COUNTING_OUTPUT_WRITES = 0
+
+    length = len(values)
+    if length <= 1:
+        print("counting_sort", label, "range_size:", COUNTING_RANGE_SLOTS, "extent_scans:", COUNTING_EXTENT_SCANS, "count_updates:", COUNTING_COUNT_UPDATES, "output_writes:", COUNTING_OUTPUT_WRITES)
+        return values
+
+    mut min_value = values[0]
+    mut max_value = values[0]
+
+    mut i: i32 = 1
+    while i < length:
+        current = values[i]
+        if current < min_value:
+            min_value = current
+        if current > max_value:
+            max_value = current
+        COUNTING_EXTENT_SCANS = COUNTING_EXTENT_SCANS + 1
+        i = i + 1
+
+    range_size = (max_value - min_value) + 1
+    if range_size <= 0:
+        print("counting_sort", label, "range_size:", COUNTING_RANGE_SLOTS, "extent_scans:", COUNTING_EXTENT_SCANS, "count_updates:", COUNTING_COUNT_UPDATES, "output_writes:", COUNTING_OUTPUT_WRITES)
+        return values
+
+    COUNTING_RANGE_SLOTS = range_size
+
+    mut counts = []
+    mut slot: i32 = 0
+    while slot < range_size:
+        push(counts, 0)
+        slot = slot + 1
+
+    mut idx: i32 = 0
+    while idx < length:
+        value = values[idx]
+        counts[value - min_value] = counts[value - min_value] + 1
+        COUNTING_COUNT_UPDATES = COUNTING_COUNT_UPDATES + 1
+        idx = idx + 1
+
+    mut output = []
+    mut count_index: i32 = 0
+    while count_index < len(counts):
+        mut freq = counts[count_index]
+        while freq > 0:
+            push(output, count_index + min_value)
+            COUNTING_OUTPUT_WRITES = COUNTING_OUTPUT_WRITES + 1
+            freq = freq - 1
+        count_index = count_index + 1
+
+    print("counting_sort", label, "range_size:", COUNTING_RANGE_SLOTS, "extent_scans:", COUNTING_EXTENT_SCANS, "count_updates:", COUNTING_COUNT_UPDATES, "output_writes:", COUNTING_OUTPUT_WRITES)
+    return output
+
+fn assert_sorted(label, observed, expected):
+    if len(observed) != len(expected):
+        print("FAIL", label, "length mismatch", len(observed), "expected", len(expected))
+        return
+    mut i = 0
+    mut ok = true
+    while i < len(observed):
+        if observed[i] != expected[i]:
+            ok = false
+        i = i + 1
+    if ok:
+        print(label, "sorted", observed)
+    else:
+        print("FAIL", label, "=>", observed, "expected", expected)
+
+// === Tests ===
+random_values = [4, 2, 2, 8, 3, 3, 1]
+expected_random = [1, 2, 2, 3, 3, 4, 8]
+assert_sorted("random", counting_sort("random", random_values), expected_random)
+
+already_sorted = [1, 2, 3, 4, 5, 6]
+assert_sorted("already_sorted", counting_sort("already_sorted", already_sorted), already_sorted)
+
+reversed = [9, 7, 5, 3, 1, -1]
+expected_reversed = [-1, 1, 3, 5, 7, 9]
+assert_sorted("reversed", counting_sort("reversed", reversed), expected_reversed)
+
+with_duplicates = [5, 1, 3, 5, 2, 5, 1]
+expected_duplicates = [1, 1, 2, 3, 5, 5, 5]
+assert_sorted("duplicates", counting_sort("duplicates", with_duplicates), expected_duplicates)
+
+with_negatives = [0, -3, -1, 4, 2, -3]
+expected_negatives = [-3, -3, -1, 0, 2, 4]
+assert_sorted("negatives", counting_sort("negatives", with_negatives), expected_negatives)
+
+single = [42]
+assert_sorted("single", counting_sort("single", single), single)
+
+empty = []
+assert_sorted("empty", counting_sort("empty", empty), [])
