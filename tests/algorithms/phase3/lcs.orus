@@ -1,0 +1,242 @@
+// Phase 3 Longest Common Subsequence stress harness for the algorithm suite.
+// Compares the exponential recursion tree against a bottom-up DP table while
+// tracking instrumentation for both approaches and validating shared datasets.
+print("== Phase 3: Longest Common Subsequence Stress ==")
+
+// === Naive recursion metrics ===
+global mut LCS_NAIVE_CALLS = 0
+global mut LCS_NAIVE_MAX_DEPTH = 0
+global mut LCS_NAIVE_BRANCH_SPLITS = 0
+
+// Symbol codes for character sequences (ASCII values for readability).
+global LETTER_A = 65
+global LETTER_B = 66
+global LETTER_C = 67
+global LETTER_D = 68
+global LETTER_F = 70
+global LETTER_G = 71
+global LETTER_T = 84
+global LETTER_X = 88
+global LETTER_Y = 89
+global LETTER_Z = 90
+
+fn lcs_naive_inner(seq_a, len_a: i32, seq_b, len_b: i32, i: i32, j: i32, depth: i32) -> i32:
+    LCS_NAIVE_CALLS = LCS_NAIVE_CALLS + 1
+    if depth > LCS_NAIVE_MAX_DEPTH:
+        LCS_NAIVE_MAX_DEPTH = depth
+
+    if i >= len_a or j >= len_b:
+        return 0
+
+    if seq_a[i] == seq_b[j]:
+        match_result = 1 + lcs_naive_inner(seq_a, len_a, seq_b, len_b, i + 1, j + 1, depth + 1)
+        return match_result
+
+    LCS_NAIVE_BRANCH_SPLITS = LCS_NAIVE_BRANCH_SPLITS + 1
+    skip_a = lcs_naive_inner(seq_a, len_a, seq_b, len_b, i + 1, j, depth + 1)
+    skip_b = lcs_naive_inner(seq_a, len_a, seq_b, len_b, i, j + 1, depth + 1)
+    if skip_a > skip_b:
+        return skip_a
+    return skip_b
+
+fn run_lcs_naive(label, seq_a, seq_b) -> i32:
+    LCS_NAIVE_CALLS = 0
+    LCS_NAIVE_MAX_DEPTH = 0
+    LCS_NAIVE_BRANCH_SPLITS = 0
+
+    len_a: i32 = len(seq_a)
+    len_b: i32 = len(seq_b)
+    value = lcs_naive_inner(seq_a, len_a, seq_b, len_b, 0, 0, 0)
+    print("lcs_naive", label, "length:", value, "calls:", LCS_NAIVE_CALLS, "max_depth:", LCS_NAIVE_MAX_DEPTH, "branch_splits:", LCS_NAIVE_BRANCH_SPLITS)
+    return value
+
+// === Dynamic programming metrics ===
+global mut LCS_DP_CELLS = 0
+global mut LCS_DP_MATCH_EXTENDS = 0
+global mut LCS_DP_TOP_REUSES = 0
+global mut LCS_DP_LEFT_REUSES = 0
+global mut LCS_DP_TIES = 0
+global mut LCS_DP_LAST_LENGTH = 0
+
+fn build_lcs_dp_table(seq_a, seq_b):
+    LCS_DP_CELLS = 0
+    LCS_DP_MATCH_EXTENDS = 0
+    LCS_DP_TOP_REUSES = 0
+    LCS_DP_LEFT_REUSES = 0
+    LCS_DP_TIES = 0
+
+    len_a: i32 = len(seq_a)
+    len_b: i32 = len(seq_b)
+
+    mut dp = []
+    mut row_index: i32 = 0
+    while row_index <= len_a:
+        mut row = []
+        mut col_index: i32 = 0
+        while col_index <= len_b:
+            push(row, 0)
+            col_index = col_index + 1
+        push(dp, row)
+        row_index = row_index + 1
+
+    mut i: i32 = 1
+    while i <= len_a:
+        mut j: i32 = 1
+        while j <= len_b:
+            if seq_a[i - 1] == seq_b[j - 1]:
+                dp[i][j] = dp[i - 1][j - 1] + 1
+                LCS_DP_MATCH_EXTENDS = LCS_DP_MATCH_EXTENDS + 1
+            else:
+                top = dp[i - 1][j]
+                left = dp[i][j - 1]
+                if top > left:
+                    dp[i][j] = top
+                    LCS_DP_TOP_REUSES = LCS_DP_TOP_REUSES + 1
+                else:
+                    dp[i][j] = left
+                    if left > top:
+                        LCS_DP_LEFT_REUSES = LCS_DP_LEFT_REUSES + 1
+                    else:
+                        LCS_DP_TIES = LCS_DP_TIES + 1
+            LCS_DP_CELLS = LCS_DP_CELLS + 1
+            j = j + 1
+        i = i + 1
+
+    return dp
+
+fn reconstruct_lcs(seq_a, seq_b, dp):
+    mut i: i32 = len(seq_a)
+    mut j: i32 = len(seq_b)
+    mut reversed = []
+
+    while i > 0 and j > 0:
+        if seq_a[i - 1] == seq_b[j - 1]:
+            push(reversed, seq_a[i - 1])
+            i = i - 1
+            j = j - 1
+        else:
+            top = dp[i - 1][j]
+            left = dp[i][j - 1]
+            if top >= left:
+                i = i - 1
+            else:
+                j = j - 1
+
+    mut result = []
+    mut idx: i32 = len(reversed) - 1
+    while idx >= 0:
+        push(result, reversed[idx])
+        idx = idx - 1
+    return result
+
+fn code_to_label(code: i32) -> string:
+    if code == LETTER_A:
+        return "A"
+    if code == LETTER_B:
+        return "B"
+    if code == LETTER_C:
+        return "C"
+    if code == LETTER_D:
+        return "D"
+    if code == LETTER_F:
+        return "F"
+    if code == LETTER_G:
+        return "G"
+    if code == LETTER_T:
+        return "T"
+    if code == LETTER_X:
+        return "X"
+    if code == LETTER_Y:
+        return "Y"
+    if code == LETTER_Z:
+        return "Z"
+    return "?"
+
+fn codes_to_labels(seq):
+    labels = []
+    mut idx: i32 = 0
+    while idx < len(seq):
+        push(labels, code_to_label(seq[idx]))
+        idx = idx + 1
+    return labels
+
+fn run_lcs_dp(label, seq_a, seq_b):
+    dp = build_lcs_dp_table(seq_a, seq_b)
+    len_a: i32 = len(seq_a)
+    len_b: i32 = len(seq_b)
+    length = dp[len_a][len_b]
+    LCS_DP_LAST_LENGTH = length
+    subsequence = reconstruct_lcs(seq_a, seq_b, dp)
+    subsequence_labels = codes_to_labels(subsequence)
+    print("lcs_dp", label, "length:", length, "cells:", LCS_DP_CELLS, "match_extends:", LCS_DP_MATCH_EXTENDS, "top_reuses:", LCS_DP_TOP_REUSES, "left_reuses:", LCS_DP_LEFT_REUSES, "ties:", LCS_DP_TIES, "subsequence:", subsequence_labels)
+    return subsequence
+
+fn arrays_equal(first, second) -> bool:
+    if len(first) != len(second):
+        return false
+    mut index: i32 = 0
+    while index < len(first):
+        if first[index] != second[index]:
+            return false
+        index = index + 1
+    return true
+
+fn validate_length(label, algorithm, observed: i32, expected: i32):
+    if observed != expected:
+        print("FAIL", label, algorithm, "length", observed, "expected", expected)
+    else:
+        print(label, algorithm, "length ok ->", observed)
+
+fn validate_subsequence(label, observed, expected):
+    if arrays_equal(observed, expected):
+        print(label, "dp subsequence ok ->", codes_to_labels(observed))
+    else:
+        print("FAIL", label, "dp subsequence", codes_to_labels(observed), "expected", codes_to_labels(expected))
+
+fn run_case(label, seq_a, seq_b, expected_length: i32, expected_example, check_example: bool):
+    naive_length = run_lcs_naive(label, seq_a, seq_b)
+    validate_length(label, "naive", naive_length, expected_length)
+
+    subsequence = run_lcs_dp(label, seq_a, seq_b)
+    dp_length: i32 = LCS_DP_LAST_LENGTH
+    validate_length(label, "dp", dp_length, expected_length)
+
+    subseq_length: i32 = len(subsequence)
+    if subseq_length != expected_length:
+        print("FAIL", label, "dp subsequence length", subseq_length, "expected", expected_length)
+    else:
+        print(label, "dp subsequence length ok ->", subseq_length)
+
+    if check_example:
+        validate_subsequence(label, subsequence, expected_example)
+    else:
+        print(label, "dp subsequence ->", codes_to_labels(subsequence))
+
+// === Shared datasets ===
+baseline_a = [LETTER_A, LETTER_G, LETTER_G, LETTER_T, LETTER_A, LETTER_B]
+baseline_b = [LETTER_G, LETTER_X, LETTER_T, LETTER_X, LETTER_A, LETTER_Y, LETTER_B]
+baseline_expected = [LETTER_G, LETTER_T, LETTER_A, LETTER_B]
+run_case("baseline", baseline_a, baseline_b, 4, baseline_expected, true)
+
+prefix_overlap_a = [LETTER_A, LETTER_B, LETTER_C, LETTER_D, LETTER_A, LETTER_F]
+prefix_overlap_b = [LETTER_A, LETTER_C, LETTER_B, LETTER_C, LETTER_F]
+prefix_expected = [LETTER_A, LETTER_B, LETTER_C, LETTER_F]
+run_case("prefix_overlap", prefix_overlap_a, prefix_overlap_b, 4, prefix_expected, true)
+
+no_overlap_a = [LETTER_A, LETTER_B, LETTER_C]
+no_overlap_b = [LETTER_X, LETTER_Y, LETTER_Z]
+empty_expected = []
+run_case("no_overlap", no_overlap_a, no_overlap_b, 0, empty_expected, true)
+
+repeat_chars_a = [LETTER_A, LETTER_A, LETTER_B, LETTER_A]
+repeat_chars_b = [LETTER_A, LETTER_B, LETTER_A, LETTER_A]
+repeat_expected = [LETTER_A, LETTER_A, LETTER_A]
+run_case("repeat_chars", repeat_chars_a, repeat_chars_b, 3, repeat_expected, true)
+
+// DP-only stress: longer inputs that would overwhelm the naive recursion.
+stress_a = [LETTER_A, LETTER_B, LETTER_C, LETTER_B, LETTER_D, LETTER_A, LETTER_B, LETTER_A, LETTER_C, LETTER_D, LETTER_B, LETTER_C]
+stress_b = [LETTER_B, LETTER_D, LETTER_C, LETTER_A, LETTER_B, LETTER_A, LETTER_C, LETTER_B, LETTER_A, LETTER_B, LETTER_D, LETTER_C, LETTER_A]
+stress_expected = [LETTER_A, LETTER_B, LETTER_C, LETTER_B, LETTER_A, LETTER_B, LETTER_D, LETTER_C]
+run_case("dp_stress", stress_a, stress_b, 8, stress_expected, false)
+
+print("== Phase 3 LCS Stress Complete ==")

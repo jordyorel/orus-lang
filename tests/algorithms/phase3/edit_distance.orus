@@ -1,0 +1,437 @@
+// Phase 3 Edit Distance stress harness comparing naive recursion against
+// a bottom-up dynamic programming table while validating datasets and
+// reconstructing operation scripts.
+print("== Phase 3: Edit Distance Stress ==")
+
+// === Naive recursion metrics ===
+global mut EDIT_NAIVE_CALLS = 0
+global mut EDIT_NAIVE_MAX_DEPTH = 0
+global mut EDIT_NAIVE_BRANCH_SPLITS = 0
+global mut EDIT_NAIVE_MATCH_ADVANCES = 0
+global mut EDIT_NAIVE_SUBSTITUTIONS = 0
+global mut EDIT_NAIVE_INSERTIONS = 0
+global mut EDIT_NAIVE_DELETIONS = 0
+global mut EDIT_NAIVE_TIES = 0
+
+// Symbol codes for the uppercase character sequences (ASCII values).
+global LETTER_A = 65
+global LETTER_B = 66
+global LETTER_C = 67
+global LETTER_D = 68
+global LETTER_E = 69
+global LETTER_F = 70
+global LETTER_G = 71
+global LETTER_I = 73
+global LETTER_K = 75
+global LETTER_L = 76
+global LETTER_M = 77
+global LETTER_N = 78
+global LETTER_O = 79
+global LETTER_P = 80
+global LETTER_R = 82
+global LETTER_S = 83
+global LETTER_T = 84
+global LETTER_U = 85
+global LETTER_X = 88
+global LETTER_Y = 89
+global LETTER_Z = 90
+
+// Operation codes for packed script reconstruction.
+global EDIT_OP_MATCH = 0
+global EDIT_OP_SUBSTITUTE = 1
+global EDIT_OP_INSERT = 2
+global EDIT_OP_DELETE = 3
+
+fn edit_distance_naive_inner(seq_a, len_a: i32, seq_b, len_b: i32, i: i32, j: i32, depth: i32) -> i32:
+    EDIT_NAIVE_CALLS = EDIT_NAIVE_CALLS + 1
+    if depth > EDIT_NAIVE_MAX_DEPTH:
+        EDIT_NAIVE_MAX_DEPTH = depth
+
+    if i >= len_a:
+        return len_b - j
+    if j >= len_b:
+        return len_a - i
+
+    if seq_a[i] == seq_b[j]:
+        EDIT_NAIVE_MATCH_ADVANCES = EDIT_NAIVE_MATCH_ADVANCES + 1
+        return edit_distance_naive_inner(seq_a, len_a, seq_b, len_b, i + 1, j + 1, depth + 1)
+
+    EDIT_NAIVE_BRANCH_SPLITS = EDIT_NAIVE_BRANCH_SPLITS + 1
+
+    substitute_cost = edit_distance_naive_inner(seq_a, len_a, seq_b, len_b, i + 1, j + 1, depth + 1) + 1
+    insert_cost = edit_distance_naive_inner(seq_a, len_a, seq_b, len_b, i, j + 1, depth + 1) + 1
+    delete_cost = edit_distance_naive_inner(seq_a, len_a, seq_b, len_b, i + 1, j, depth + 1) + 1
+
+    mut best = substitute_cost
+    mut best_source: i32 = EDIT_OP_SUBSTITUTE
+
+    if insert_cost < best:
+        best = insert_cost
+        best_source = EDIT_OP_INSERT
+    else:
+        if insert_cost == best:
+            EDIT_NAIVE_TIES = EDIT_NAIVE_TIES + 1
+
+    if delete_cost < best:
+        best = delete_cost
+        best_source = EDIT_OP_DELETE
+    else:
+        if delete_cost == best:
+            EDIT_NAIVE_TIES = EDIT_NAIVE_TIES + 1
+
+    if best_source == EDIT_OP_SUBSTITUTE:
+        EDIT_NAIVE_SUBSTITUTIONS = EDIT_NAIVE_SUBSTITUTIONS + 1
+    else:
+        if best_source == EDIT_OP_INSERT:
+            EDIT_NAIVE_INSERTIONS = EDIT_NAIVE_INSERTIONS + 1
+        else:
+            EDIT_NAIVE_DELETIONS = EDIT_NAIVE_DELETIONS + 1
+
+    return best
+
+fn run_edit_naive(label, seq_a, seq_b) -> i32:
+    EDIT_NAIVE_CALLS = 0
+    EDIT_NAIVE_MAX_DEPTH = 0
+    EDIT_NAIVE_BRANCH_SPLITS = 0
+    EDIT_NAIVE_MATCH_ADVANCES = 0
+    EDIT_NAIVE_SUBSTITUTIONS = 0
+    EDIT_NAIVE_INSERTIONS = 0
+    EDIT_NAIVE_DELETIONS = 0
+    EDIT_NAIVE_TIES = 0
+
+    len_a: i32 = len(seq_a)
+    len_b: i32 = len(seq_b)
+    value = edit_distance_naive_inner(seq_a, len_a, seq_b, len_b, 0, 0, 0)
+
+    print("edit_naive", label, "distance:", value, "calls:", EDIT_NAIVE_CALLS, "max_depth:", EDIT_NAIVE_MAX_DEPTH, "branch_splits:", EDIT_NAIVE_BRANCH_SPLITS, "matches:", EDIT_NAIVE_MATCH_ADVANCES, "substitutions:", EDIT_NAIVE_SUBSTITUTIONS, "insertions:", EDIT_NAIVE_INSERTIONS, "deletions:", EDIT_NAIVE_DELETIONS, "ties:", EDIT_NAIVE_TIES)
+    return value
+
+// === Dynamic programming metrics ===
+global mut EDIT_DP_BASE_INITIALIZATIONS = 0
+global mut EDIT_DP_CELLS = 0
+global mut EDIT_DP_MATCH_COPIES = 0
+global mut EDIT_DP_SUBSTITUTIONS = 0
+global mut EDIT_DP_INSERTIONS = 0
+global mut EDIT_DP_DELETIONS = 0
+global mut EDIT_DP_TIES = 0
+global mut EDIT_DP_LAST_DISTANCE = 0
+global mut EDIT_DP_LAST_TABLE = []
+
+fn pack_operation(op: i32, from_code: i32, to_code: i32) -> i32:
+    return op * 10000 + from_code * 100 + to_code
+
+fn unpack_op_code(value: i32) -> i32:
+    return value / 10000
+
+fn unpack_from_code(value: i32) -> i32:
+    return (value / 100) % 100
+
+fn unpack_to_code(value: i32) -> i32:
+    return value % 100
+
+fn build_edit_dp_table(seq_a, seq_b):
+    EDIT_DP_BASE_INITIALIZATIONS = 0
+    EDIT_DP_CELLS = 0
+    EDIT_DP_MATCH_COPIES = 0
+    EDIT_DP_SUBSTITUTIONS = 0
+    EDIT_DP_INSERTIONS = 0
+    EDIT_DP_DELETIONS = 0
+    EDIT_DP_TIES = 0
+
+    len_a: i32 = len(seq_a)
+    len_b: i32 = len(seq_b)
+
+    mut dp = []
+    mut row_index: i32 = 0
+    while row_index <= len_a:
+        mut row = []
+        mut col_index: i32 = 0
+        while col_index <= len_b:
+            push(row, 0)
+            col_index = col_index + 1
+        push(dp, row)
+        row_index = row_index + 1
+
+    mut base_j: i32 = 0
+    while base_j <= len_b:
+        dp[0][base_j] = base_j
+        EDIT_DP_BASE_INITIALIZATIONS = EDIT_DP_BASE_INITIALIZATIONS + 1
+        base_j = base_j + 1
+
+    mut base_i: i32 = 0
+    while base_i <= len_a:
+        dp[base_i][0] = base_i
+        EDIT_DP_BASE_INITIALIZATIONS = EDIT_DP_BASE_INITIALIZATIONS + 1
+        base_i = base_i + 1
+
+    mut i: i32 = 1
+    while i <= len_a:
+        mut j: i32 = 1
+        while j <= len_b:
+            mut diag_cost: i32 = dp[i - 1][j - 1]
+            mut diag_from_match = false
+            if seq_a[i - 1] == seq_b[j - 1]:
+                diag_from_match = true
+            else:
+                diag_cost = diag_cost + 1
+
+            delete_cost: i32 = dp[i - 1][j] + 1
+            insert_cost: i32 = dp[i][j - 1] + 1
+
+            mut best = diag_cost
+            mut best_source: i32 = EDIT_OP_SUBSTITUTE
+            if diag_from_match:
+                best_source = EDIT_OP_MATCH
+
+            if delete_cost < best:
+                best = delete_cost
+                best_source = EDIT_OP_DELETE
+            else:
+                if delete_cost == best:
+                    EDIT_DP_TIES = EDIT_DP_TIES + 1
+
+            if insert_cost < best:
+                best = insert_cost
+                best_source = EDIT_OP_INSERT
+            else:
+                if insert_cost == best:
+                    EDIT_DP_TIES = EDIT_DP_TIES + 1
+
+            dp[i][j] = best
+
+            if best_source == EDIT_OP_MATCH:
+                EDIT_DP_MATCH_COPIES = EDIT_DP_MATCH_COPIES + 1
+            else:
+                if best_source == EDIT_OP_SUBSTITUTE:
+                    EDIT_DP_SUBSTITUTIONS = EDIT_DP_SUBSTITUTIONS + 1
+                else:
+                    if best_source == EDIT_OP_INSERT:
+                        EDIT_DP_INSERTIONS = EDIT_DP_INSERTIONS + 1
+                    else:
+                        EDIT_DP_DELETIONS = EDIT_DP_DELETIONS + 1
+
+            EDIT_DP_CELLS = EDIT_DP_CELLS + 1
+            j = j + 1
+        i = i + 1
+
+    EDIT_DP_LAST_DISTANCE = dp[len_a][len_b]
+    EDIT_DP_LAST_TABLE = dp
+    return dp
+
+fn op_code_to_label(op: i32) -> string:
+    if op == EDIT_OP_MATCH:
+        return "match"
+    if op == EDIT_OP_SUBSTITUTE:
+        return "substitute"
+    if op == EDIT_OP_INSERT:
+        return "insert"
+    return "delete"
+
+fn code_to_label(code: i32) -> string:
+    if code == LETTER_A:
+        return "A"
+    if code == LETTER_B:
+        return "B"
+    if code == LETTER_C:
+        return "C"
+    if code == LETTER_D:
+        return "D"
+    if code == LETTER_E:
+        return "E"
+    if code == LETTER_F:
+        return "F"
+    if code == LETTER_G:
+        return "G"
+    if code == LETTER_I:
+        return "I"
+    if code == LETTER_K:
+        return "K"
+    if code == LETTER_L:
+        return "L"
+    if code == LETTER_M:
+        return "M"
+    if code == LETTER_N:
+        return "N"
+    if code == LETTER_O:
+        return "O"
+    if code == LETTER_P:
+        return "P"
+    if code == LETTER_S:
+        return "S"
+    if code == LETTER_T:
+        return "T"
+    if code == LETTER_U:
+        return "U"
+    if code == LETTER_X:
+        return "X"
+    if code == LETTER_Y:
+        return "Y"
+    if code == LETTER_Z:
+        return "Z"
+    if code == 0:
+        return "-"
+    return "?"
+
+fn reconstruct_edit_script(seq_a, seq_b):
+    mut i: i32 = len(seq_a)
+    mut j: i32 = len(seq_b)
+    mut reversed = []
+
+    while i > 0 or j > 0:
+        current: i32 = EDIT_DP_LAST_TABLE[i][j]
+        mut resolved = false
+
+        if i > 0 and j > 0:
+            diag_value: i32 = EDIT_DP_LAST_TABLE[i - 1][j - 1]
+            if seq_a[i - 1] == seq_b[j - 1] and current == diag_value:
+                push(reversed, pack_operation(EDIT_OP_MATCH, seq_a[i - 1], seq_b[j - 1]))
+                i = i - 1
+                j = j - 1
+                resolved = true
+            else:
+                if current == diag_value + 1:
+                    push(reversed, pack_operation(EDIT_OP_SUBSTITUTE, seq_a[i - 1], seq_b[j - 1]))
+                    i = i - 1
+                    j = j - 1
+                    resolved = true
+
+        if not resolved and i > 0:
+            up_value: i32 = EDIT_DP_LAST_TABLE[i - 1][j]
+            if current == up_value + 1:
+                push(reversed, pack_operation(EDIT_OP_DELETE, seq_a[i - 1], 0))
+                i = i - 1
+                resolved = true
+
+        if not resolved and j > 0:
+            left_value: i32 = EDIT_DP_LAST_TABLE[i][j - 1]
+            push(reversed, pack_operation(EDIT_OP_INSERT, 0, seq_b[j - 1]))
+            j = j - 1
+            resolved = true
+
+        if not resolved:
+            break
+
+    mut script = []
+    mut idx: i32 = len(reversed) - 1
+    while idx >= 0:
+        push(script, reversed[idx])
+        idx = idx - 1
+    return script
+
+fn print_edit_script(label, script):
+    mut index: i32 = 0
+    while index < len(script):
+        step = script[index]
+        op = unpack_op_code(step)
+        from_code = unpack_from_code(step)
+        to_code = unpack_to_code(step)
+        if op == EDIT_OP_MATCH:
+            print(label, "step", index, "match", code_to_label(from_code))
+        else:
+            if op == EDIT_OP_SUBSTITUTE:
+                print(label, "step", index, "sub", code_to_label(from_code), "->", code_to_label(to_code))
+            else:
+                if op == EDIT_OP_INSERT:
+                    print(label, "step", index, "insert", code_to_label(to_code))
+                else:
+                    print(label, "step", index, "delete", code_to_label(from_code))
+        index = index + 1
+
+fn validate_distance(label, algo_label, value: i32, expected: i32):
+    if value != expected:
+        print("FAIL", label, algo_label, "distance", value, "expected", expected)
+    else:
+        print(label, algo_label, "distance ok ->", value)
+
+fn validate_script(label, script, expected):
+    if len(script) != len(expected):
+        print("FAIL", label, "script length", len(script), "expected", len(expected))
+        return
+
+    mut idx: i32 = 0
+    while idx < len(expected):
+        if script[idx] != expected[idx]:
+            print("FAIL", label, "script mismatch at", idx, "saw", script[idx], "expected", expected[idx])
+            return
+        idx = idx + 1
+    print(label, "script matches expected operations")
+
+fn run_edit_dp(label, seq_a, seq_b):
+    dp = build_edit_dp_table(seq_a, seq_b)
+    distance: i32 = EDIT_DP_LAST_DISTANCE
+    print("edit_dp", label, "distance:", distance, "cells:", EDIT_DP_CELLS, "match_copies:", EDIT_DP_MATCH_COPIES, "substitutions:", EDIT_DP_SUBSTITUTIONS, "insertions:", EDIT_DP_INSERTIONS, "deletions:", EDIT_DP_DELETIONS, "ties:", EDIT_DP_TIES, "base_inits:", EDIT_DP_BASE_INITIALIZATIONS)
+    return dp
+
+fn run_case(label, seq_a, seq_b, expected_distance: i32, check_naive: bool, expected_script, check_script: bool):
+    mut naive_distance: i32 = -1
+    if check_naive:
+        naive_distance = run_edit_naive(label, seq_a, seq_b)
+        validate_distance(label, "naive", naive_distance, expected_distance)
+
+    mut naive_result: i32 = naive_distance
+
+    run_edit_dp(label, seq_a, seq_b)
+    dp_distance: i32 = EDIT_DP_LAST_DISTANCE
+    validate_distance(label, "dp", dp_distance, expected_distance)
+
+    if check_naive and naive_result != dp_distance:
+        print("FAIL", label, "naive/dp disagreement", naive_result, dp_distance)
+    else:
+        if check_naive:
+            print(label, "naive/dp distances agree")
+
+    script = reconstruct_edit_script(seq_a, seq_b)
+    if check_script:
+        validate_script(label, script, expected_script)
+    else:
+        print_edit_script(label, script)
+
+// === Shared datasets ===
+baseline_source = [LETTER_K, LETTER_I, LETTER_T, LETTER_T, LETTER_E, LETTER_N]
+baseline_target = [LETTER_S, LETTER_I, LETTER_T, LETTER_T, LETTER_I, LETTER_N, LETTER_G]
+mut baseline_expected_script = []
+push(baseline_expected_script, pack_operation(EDIT_OP_SUBSTITUTE, LETTER_K, LETTER_S))
+push(baseline_expected_script, pack_operation(EDIT_OP_MATCH, LETTER_I, LETTER_I))
+push(baseline_expected_script, pack_operation(EDIT_OP_MATCH, LETTER_T, LETTER_T))
+push(baseline_expected_script, pack_operation(EDIT_OP_MATCH, LETTER_T, LETTER_T))
+push(baseline_expected_script, pack_operation(EDIT_OP_SUBSTITUTE, LETTER_E, LETTER_I))
+push(baseline_expected_script, pack_operation(EDIT_OP_MATCH, LETTER_N, LETTER_N))
+push(baseline_expected_script, pack_operation(EDIT_OP_INSERT, 0, LETTER_G))
+run_case("baseline", baseline_source, baseline_target, 3, true, baseline_expected_script, true)
+
+insertion_source = [LETTER_G, LETTER_U, LETTER_M]
+insertion_target = [LETTER_G, LETTER_U, LETTER_M, LETTER_B, LETTER_O]
+mut insertion_expected_script = []
+push(insertion_expected_script, pack_operation(EDIT_OP_MATCH, LETTER_G, LETTER_G))
+push(insertion_expected_script, pack_operation(EDIT_OP_MATCH, LETTER_U, LETTER_U))
+push(insertion_expected_script, pack_operation(EDIT_OP_MATCH, LETTER_M, LETTER_M))
+push(insertion_expected_script, pack_operation(EDIT_OP_INSERT, 0, LETTER_B))
+push(insertion_expected_script, pack_operation(EDIT_OP_INSERT, 0, LETTER_O))
+run_case("suffix_insert", insertion_source, insertion_target, 2, true, insertion_expected_script, true)
+
+deletion_source = [LETTER_P, LETTER_L, LETTER_A, LETTER_T, LETTER_E]
+deletion_target = [LETTER_P, LETTER_L, LETTER_A, LETTER_T]
+mut deletion_expected_script = []
+push(deletion_expected_script, pack_operation(EDIT_OP_MATCH, LETTER_P, LETTER_P))
+push(deletion_expected_script, pack_operation(EDIT_OP_MATCH, LETTER_L, LETTER_L))
+push(deletion_expected_script, pack_operation(EDIT_OP_MATCH, LETTER_A, LETTER_A))
+push(deletion_expected_script, pack_operation(EDIT_OP_MATCH, LETTER_T, LETTER_T))
+push(deletion_expected_script, pack_operation(EDIT_OP_DELETE, LETTER_E, 0))
+run_case("suffix_delete", deletion_source, deletion_target, 1, true, deletion_expected_script, true)
+
+swap_source = [LETTER_C, LETTER_A, LETTER_R, LETTER_D]
+swap_target = [LETTER_C, LETTER_A, LETTER_R, LETTER_D, LETTER_S]
+mut swap_expected_script = []
+push(swap_expected_script, pack_operation(EDIT_OP_MATCH, LETTER_C, LETTER_C))
+push(swap_expected_script, pack_operation(EDIT_OP_MATCH, LETTER_A, LETTER_A))
+push(swap_expected_script, pack_operation(EDIT_OP_MATCH, LETTER_R, LETTER_R))
+push(swap_expected_script, pack_operation(EDIT_OP_MATCH, LETTER_D, LETTER_D))
+push(swap_expected_script, pack_operation(EDIT_OP_INSERT, 0, LETTER_S))
+run_case("append_insert", swap_source, swap_target, 1, true, swap_expected_script, true)
+
+// DP-only stress: longer inputs that would overwhelm the naive recursion.
+stress_source = [LETTER_I, LETTER_N, LETTER_T, LETTER_E, LETTER_N, LETTER_T, LETTER_I, LETTER_O, LETTER_N]
+stress_target = [LETTER_E, LETTER_X, LETTER_E, LETTER_C, LETTER_U, LETTER_T, LETTER_I, LETTER_O, LETTER_N]
+run_case("dp_stress", stress_source, stress_target, 5, false, baseline_expected_script, false)
+
+print("== Phase 3 Edit Distance Stress Complete ==")
