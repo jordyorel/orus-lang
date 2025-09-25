@@ -17,6 +17,7 @@ typedef struct Symbol {
     // Variable metadata
     Type* type;                     // Variable type
     bool is_mutable;                // Can be reassigned (mut vs immutable)
+    bool declared_mutable;          // Was explicitly declared with 'mut'
     bool is_initialized;            // Has been assigned a value
     bool is_arithmetic_heavy;       // Used in arithmetic operations frequently
 

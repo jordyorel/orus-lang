@@ -1779,8 +1779,6 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             Type* resolved_return = prune(return_type);
             if (!resolved_return) {
                 resolved_return = getPrimitiveType(TYPE_VOID);
-            } else if (return_type_inferred && resolved_return->kind == TYPE_VAR) {
-                resolved_return = getPrimitiveType(TYPE_VOID);
             }
             func_type->info.function.returnType = resolved_return;
 
