@@ -1,0 +1,146 @@
+// Phase 2 Bellman-Ford implementation for the algorithm stress-test suite.
+// Iterative relaxation across an explicit edge list to surface negative edge
+// handling and early-out behaviour when no updates occur.
+
+print("== Phase 2: Bellman-Ford Shortest Paths (Edge Relaxation) Smoke ==")
+
+global mut BELLMAN_RELAXATIONS = 0
+global mut BELLMAN_ITERATIONS = 0
+
+fn make_distance_array(count, value):
+    mut result = []
+    mut i = 0
+    while i < count:
+        push(result, value)
+        i = i + 1
+    return result
+
+fn bellman_ford(label, vertex_count, edges, start, infinity):
+    BELLMAN_RELAXATIONS = 0
+    BELLMAN_ITERATIONS = 0
+
+    distances = make_distance_array(vertex_count, infinity)
+    distances[start] = 0
+
+    mut iteration = 0
+    while iteration < vertex_count - 1:
+        changed = false
+        mut e = 0
+        while e < len(edges):
+            from = edges[e]
+            to = edges[e + 1]
+            weight = edges[e + 2]
+            if distances[from] != infinity:
+                candidate = distances[from] + weight
+                if candidate < distances[to]:
+                    distances[to] = candidate
+                    BELLMAN_RELAXATIONS = BELLMAN_RELAXATIONS + 1
+                    changed = true
+            e = e + 3
+        BELLMAN_ITERATIONS = BELLMAN_ITERATIONS + 1
+        if changed == false:
+            break
+        iteration = iteration + 1
+
+    print("bellman_ford", label, "iterations:", BELLMAN_ITERATIONS, "relaxations:", BELLMAN_RELAXATIONS)
+    return distances
+
+fn assert_distances(label, observed, expected):
+    if len(observed) != len(expected):
+        print("FAIL", label, "length mismatch", len(observed), "expected", len(expected))
+        return
+    mut i = 0
+    mut ok = true
+    while i < len(expected):
+        if observed[i] != expected[i]:
+            ok = false
+        i = i + 1
+    if ok:
+        print(label, "distances", observed)
+    else:
+        print("FAIL", label, "=>", observed, "expected", expected)
+
+// === Tests ===
+fn make_main_edges():
+    mut edges = []
+    push(edges, 0)
+    push(edges, 1)
+    push(edges, 6)
+    push(edges, 0)
+    push(edges, 2)
+    push(edges, 7)
+    push(edges, 1)
+    push(edges, 2)
+    push(edges, 8)
+    push(edges, 1)
+    push(edges, 3)
+    push(edges, 5)
+    push(edges, 1)
+    push(edges, 4)
+    push(edges, -4)
+    push(edges, 2)
+    push(edges, 3)
+    push(edges, -3)
+    push(edges, 2)
+    push(edges, 4)
+    push(edges, 9)
+    push(edges, 3)
+    push(edges, 1)
+    push(edges, -2)
+    push(edges, 4)
+    push(edges, 0)
+    push(edges, 2)
+    push(edges, 4)
+    push(edges, 3)
+    push(edges, 7)
+    return edges
+
+fn make_sparse_edges():
+    mut edges = []
+    push(edges, 0)
+    push(edges, 1)
+    push(edges, 5)
+    push(edges, 1)
+    push(edges, 2)
+    push(edges, 3)
+    return edges
+
+fn make_expected_from_zero():
+    mut expected = []
+    push(expected, 0)
+    push(expected, 2)
+    push(expected, 7)
+    push(expected, 4)
+    push(expected, -2)
+    return expected
+
+fn make_expected_from_four():
+    mut expected = []
+    push(expected, 2)
+    push(expected, 4)
+    push(expected, 9)
+    push(expected, 6)
+    push(expected, 0)
+    return expected
+
+fn make_expected_sparse(infinity):
+    mut expected = []
+    push(expected, 0)
+    push(expected, 5)
+    push(expected, 8)
+    push(expected, infinity)
+    return expected
+
+infinity = 999999
+vertex_count = 5
+
+edges = make_main_edges()
+expected_from_zero = make_expected_from_zero()
+assert_distances("from_zero", bellman_ford("from_zero", vertex_count, edges, 0, infinity), expected_from_zero)
+
+expected_from_four = make_expected_from_four()
+assert_distances("from_four", bellman_ford("from_four", vertex_count, edges, 4, infinity), expected_from_four)
+
+sparse_edges = make_sparse_edges()
+expected_sparse = make_expected_sparse(infinity)
+assert_distances("sparse", bellman_ford("sparse", 4, sparse_edges, 0, infinity), expected_sparse)

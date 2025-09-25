@@ -1,0 +1,105 @@
+// Phase 2 depth-first search implementation for the algorithm stress-test suite.
+// Recursive traversal that measures recursion depth, edge exploration, and
+// overall visitation order for connected and disconnected graphs.
+
+print("== Phase 2: Depth-First Search (Recursive) Smoke ==")
+
+global mut DFS_RECURSIONS = 0
+global mut DFS_EDGES_EXPLORED = 0
+global mut DFS_MAX_DEPTH = 0
+
+fn make_bool_array(count):
+    mut result = []
+    mut i = 0
+    while i < count:
+        push(result, false)
+        i = i + 1
+    return result
+
+fn dfs_visit(graph, node, depth, visited, order):
+    visited[node] = true
+    DFS_RECURSIONS = DFS_RECURSIONS + 1
+    if depth > DFS_MAX_DEPTH:
+        DFS_MAX_DEPTH = depth
+    push(order, node)
+
+    neighbors = graph[node]
+    neighbor_count = len(neighbors)
+    mut snapshot = []
+    mut copy_index = 0
+    while copy_index < neighbor_count:
+        push(snapshot, neighbors[copy_index])
+        copy_index = copy_index + 1
+
+    mut i = 0
+    while i < neighbor_count:
+        next = snapshot[i]
+        DFS_EDGES_EXPLORED = DFS_EDGES_EXPLORED + 1
+        if visited[next] == false:
+            dfs_visit(graph, next, depth + 1, visited, order)
+        i = i + 1
+
+fn depth_first_search(label, graph, start):
+    DFS_RECURSIONS = 0
+    DFS_EDGES_EXPLORED = 0
+    DFS_MAX_DEPTH = 0
+
+    visited = make_bool_array(len(graph))
+    order = []
+    dfs_visit(graph, start, 1, visited, order)
+    print("dfs", label, "recursions:", DFS_RECURSIONS, "edges:", DFS_EDGES_EXPLORED, "max_depth:", DFS_MAX_DEPTH)
+    return order
+
+fn assert_sequence(label, observed, expected):
+    if len(observed) != len(expected):
+        print("FAIL", label, "length mismatch", len(observed), "expected", len(expected))
+        return
+    mut i = 0
+    mut ok = true
+    while i < len(expected):
+        if observed[i] != expected[i]:
+            ok = false
+        i = i + 1
+    if ok:
+        print(label, "order", observed)
+    else:
+        print("FAIL", label, "=>", observed, "expected", expected)
+
+fn make_base_graph():
+    mut graph = []
+    push(graph, [1, 2])      // 0 connects to two neighbours
+    push(graph, [2, 4])      // 1 has a shortcut back to 2 and a branch to 4
+    push(graph, [3])         // 2 leads deeper into the component
+    push(graph, [1, 4])      // 3 introduces a back-edge to 1 and forward edge to 4
+    push(graph, [])          // 4 terminates
+    push(graph, [2, 3])      // 5 forms a separate entry into the main component
+    return graph
+
+// === Tests ===
+base_graph = make_base_graph()
+
+expected_component_a = [0, 1, 2, 3, 4]
+assert_sequence("component_a", depth_first_search("component_a", base_graph, 0), expected_component_a)
+
+expected_component_b = [5, 2, 3, 1, 4]
+assert_sequence("component_b", depth_first_search("component_b", base_graph, 5), expected_component_b)
+
+// Stress a tree-shaped traversal to highlight depth growth.
+fn make_tree_graph():
+    mut graph = []
+    push(graph, [1, 2, 3])
+    push(graph, [4, 5])
+    push(graph, [6])
+    push(graph, [7, 8])
+    push(graph, [])
+    push(graph, [])
+    push(graph, [9])
+    push(graph, [])
+    push(graph, [])
+    push(graph, [])
+    return graph
+
+tree_graph = make_tree_graph()
+
+expected_tree_order = [0, 1, 4, 5, 2, 6, 9, 3, 7, 8]
+assert_sequence("tree_depth", depth_first_search("tree_depth", tree_graph, 0), expected_tree_order)

@@ -1,0 +1,144 @@
+// Phase 2 Dijkstra shortest-path implementation for the algorithm stress-test suite.
+// Array-based priority scanning that captures relaxation counts and selection
+// pressure without relying on a heap so we can observe register allocation
+// patterns in the VM.
+
+print("== Phase 2: Dijkstra Shortest Paths (Array Priority) Smoke ==")
+
+global mut DIJKSTRA_RELAXATIONS = 0
+global mut DIJKSTRA_SELECTIONS = 0
+
+fn dijkstra(label, graph, start, infinity):
+    DIJKSTRA_RELAXATIONS = 0
+    DIJKSTRA_SELECTIONS = 0
+
+    count = len(graph)
+    distances = []
+    mut distance_index = 0
+    while distance_index < count:
+        push(distances, infinity)
+        distance_index = distance_index + 1
+
+    visited = []
+    mut visit_index = 0
+    while visit_index < count:
+        push(visited, false)
+        visit_index = visit_index + 1
+    distances[start] = 0
+
+    mut processed = 0
+    while processed < count:
+        best_index = -1
+        best_distance = infinity
+        mut i = 0
+        while i < count:
+            if visited[i] == false:
+                if distances[i] < best_distance:
+                    best_distance = distances[i]
+                    best_index = i
+            i = i + 1
+
+        if best_index == -1:
+            break
+
+        visited[best_index] = true
+        DIJKSTRA_SELECTIONS = DIJKSTRA_SELECTIONS + 1
+        neighbors = graph[best_index]
+        mut j = 0
+        while j < len(neighbors):
+            neighbor = neighbors[j]
+            weight = neighbors[j + 1]
+            if distances[best_index] != infinity:
+                candidate = distances[best_index] + weight
+                if candidate < distances[neighbor]:
+                    distances[neighbor] = candidate
+                    DIJKSTRA_RELAXATIONS = DIJKSTRA_RELAXATIONS + 1
+            j = j + 2
+
+        processed = processed + 1
+
+    print("dijkstra", label, "relaxations:", DIJKSTRA_RELAXATIONS, "selections:", DIJKSTRA_SELECTIONS)
+    return distances
+
+fn assert_distances(label, observed, expected):
+    if len(observed) != len(expected):
+        print("FAIL", label, "length mismatch", len(observed), "expected", len(expected))
+        return
+    mut i = 0
+    mut ok = true
+    while i < len(expected):
+        if observed[i] != expected[i]:
+            ok = false
+        i = i + 1
+    if ok:
+        print(label, "distances", observed)
+    else:
+        print("FAIL", label, "=>", observed, "expected", expected)
+
+// === Tests ===
+infinity = 999999
+fn make_weighted_graph():
+    mut graph = []
+
+    mut node0 = []
+    push(node0, 1)
+    push(node0, 4)
+    push(node0, 2)
+    push(node0, 1)
+    push(graph, node0)
+
+    mut node1 = []
+    push(node1, 3)
+    push(node1, 1)
+    push(graph, node1)
+
+    mut node2 = []
+    push(node2, 1)
+    push(node2, 2)
+    push(node2, 3)
+    push(node2, 5)
+    push(graph, node2)
+
+    mut node3 = []
+    push(node3, 4)
+    push(node3, 3)
+    push(graph, node3)
+
+    mut node4 = []
+    push(graph, node4)
+
+    return graph
+
+weighted_graph = make_weighted_graph()
+
+expected_from_zero = [0, 3, 1, 4, 7]
+assert_distances("from_zero", dijkstra("from_zero", weighted_graph, 0, infinity), expected_from_zero)
+
+expected_from_two = [999999, 2, 0, 3, 6]
+assert_distances("from_two", dijkstra("from_two", weighted_graph, 2, infinity), expected_from_two)
+
+fn make_disconnected_graph():
+    mut graph = []
+
+    mut node0 = []
+    push(node0, 1)
+    push(node0, 2)
+    push(graph, node0)
+
+    mut node1 = []
+    push(graph, node1)
+
+    mut node2 = []
+    push(node2, 3)
+    push(node2, 1)
+    push(graph, node2)
+
+    mut node3 = []
+    push(graph, node3)
+
+    return graph
+
+disconnected_graph = make_disconnected_graph()
+
+expected_disconnected = [0, 2, 999999, 999999]
+assert_distances("disconnected", dijkstra("disconnected", disconnected_graph, 0, infinity), expected_disconnected)
