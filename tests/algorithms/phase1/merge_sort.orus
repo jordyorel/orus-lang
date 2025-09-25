@@ -1,0 +1,92 @@
+// Phase 1 merge sort implementation for the algorithm stress-test suite.
+// Functional style to exercise recursion depth, slicing, and array allocation
+// while tracking comparison counts, merge operations, and recursion depth.
+
+global mut MERGE_COMPARISONS = 0
+global mut MERGE_MERGES = 0
+global mut MERGE_MAX_DEPTH = 0
+
+fn merge(left, right):
+    MERGE_MERGES = MERGE_MERGES + 1
+    mut result = []
+    mut i = 0
+    mut j = 0
+
+    while i < len(left) and j < len(right):
+        MERGE_COMPARISONS = MERGE_COMPARISONS + 1
+        if left[i] <= right[j]:
+            push(result, left[i])
+            i = i + 1
+        else:
+            push(result, right[j])
+            j = j + 1
+
+    while i < len(left):
+        push(result, left[i])
+        i = i + 1
+
+    while j < len(right):
+        push(result, right[j])
+        j = j + 1
+
+    return result
+
+fn merge_sort_recursive(values, depth):
+    length = len(values)
+    if depth > MERGE_MAX_DEPTH:
+        MERGE_MAX_DEPTH = depth
+    if length <= 1:
+        return values
+
+    mid = length / 2
+    left = values[..(mid - 1)]
+    right = values[mid..]
+
+    sorted_left = merge_sort_recursive(left, depth + 1)
+    sorted_right = merge_sort_recursive(right, depth + 1)
+    return merge(sorted_left, sorted_right)
+
+fn merge_sort(label, values):
+    MERGE_COMPARISONS = 0
+    MERGE_MERGES = 0
+    MERGE_MAX_DEPTH = 0
+    sorted = merge_sort_recursive(values, 1)
+    print("merge_sort", label, "comparisons:", MERGE_COMPARISONS, "merges:", MERGE_MERGES, "max_depth:", MERGE_MAX_DEPTH)
+    return sorted
+
+fn assert_sorted(label, observed, expected):
+    if len(observed) != len(expected):
+        print("FAIL", label, "length mismatch", len(observed), "expected", len(expected))
+        return
+    mut i = 0
+    mut ok = true
+    while i < len(observed):
+        if observed[i] != expected[i]:
+            ok = false
+        i = i + 1
+    if ok:
+        print(label, "sorted", observed)
+    else:
+        print("FAIL", label, "=>", observed, "expected", expected)
+
+// === Tests ===
+unsorted = [38, 27, 43, 3, 9, 82, 10]
+expected_unsorted = [3, 9, 10, 27, 38, 43, 82]
+assert_sorted("random", merge_sort("random", unsorted), expected_unsorted)
+
+ascending = [1, 2, 3, 4, 5, 6]
+assert_sorted("already_sorted", merge_sort("already_sorted", ascending), ascending)
+
+reversed = [9, 7, 5, 3, 1, -1]
+expected_reversed = [-1, 1, 3, 5, 7, 9]
+assert_sorted("reversed", merge_sort("reversed", reversed), expected_reversed)
+
+duplicates = [5, 1, 3, 5, 2, 5, 1]
+expected_duplicates = [1, 1, 2, 3, 5, 5, 5]
+assert_sorted("duplicates", merge_sort("duplicates", duplicates), expected_duplicates)
+
+single = [42]
+assert_sorted("single", merge_sort("single", single), single)
+
+empty = []
+assert_sorted("empty", merge_sort("empty", empty), [])
