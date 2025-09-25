@@ -1,0 +1,374 @@
+// Phase 3 Sudoku solver harness for the algorithm stress-test suite.
+// Implements a backtracking solver with rich instrumentation to capture
+// recursion depth, candidate pruning behaviour, and validation of solved boards.
+print("== Phase 3: Sudoku Solver Stress ==")
+
+// === Grid constants ===
+global SUDOKU_SIZE: i32 = 9
+global SUDOKU_BLOCK: i32 = 3
+global SUDOKU_CELL_COUNT: i32 = 81
+
+// === Metrics captured during solving ===
+global mut SUDOKU_CALLS = 0
+global mut SUDOKU_MAX_DEPTH = 0
+global mut SUDOKU_EMPTY_CELLS_EXPLORED = 0
+global mut SUDOKU_VALUE_TRIES = 0
+global mut SUDOKU_VALID_PLACEMENTS = 0
+global mut SUDOKU_PRUNED_CANDIDATES = 0
+global mut SUDOKU_CONFLICT_CHECKS = 0
+global mut SUDOKU_BACKTRACKS = 0
+global mut SUDOKU_DEAD_ENDS = 0
+global mut SUDOKU_SOLUTIONS = 0
+global mut SUDOKU_LAST_SOLUTION = []
+
+fn reset_sudoku_metrics():
+    SUDOKU_CALLS = 0
+    SUDOKU_MAX_DEPTH = 0
+    SUDOKU_EMPTY_CELLS_EXPLORED = 0
+    SUDOKU_VALUE_TRIES = 0
+    SUDOKU_VALID_PLACEMENTS = 0
+    SUDOKU_PRUNED_CANDIDATES = 0
+    SUDOKU_CONFLICT_CHECKS = 0
+    SUDOKU_BACKTRACKS = 0
+    SUDOKU_DEAD_ENDS = 0
+    SUDOKU_SOLUTIONS = 0
+    SUDOKU_LAST_SOLUTION = []
+
+fn copy_board(board):
+    mut copy = []
+    mut idx: i32 = 0
+    limit: i32 = len(board)
+    while idx < limit:
+        push(copy, board[idx])
+        idx = idx + 1
+    return copy
+
+fn boards_equal(first, second) -> bool:
+    if len(first) != len(second):
+        return false
+    mut idx: i32 = 0
+    limit: i32 = len(first)
+    while idx < limit:
+        if first[idx] != second[idx]:
+            return false
+        idx = idx + 1
+    return true
+
+fn init_seen():
+    mut seen = []
+    mut idx: i32 = 0
+    while idx <= SUDOKU_SIZE:
+        push(seen, false)
+        idx = idx + 1
+    return seen
+
+fn sudoku_mark_seen(seen, value: i32) -> bool:
+    if value < 1 or value > 9:
+        return false
+    if seen[value]:
+        return false
+    seen[value] = true
+    return true
+
+fn board_rows_snapshot(board):
+    mut rows = []
+    if len(board) != SUDOKU_CELL_COUNT:
+        return rows
+    mut row: i32 = 0
+    while row < SUDOKU_SIZE:
+        mut row_values = []
+        mut col: i32 = 0
+        while col < SUDOKU_SIZE:
+            push(row_values, board[row * SUDOKU_SIZE + col])
+            col = col + 1
+        push(rows, row_values)
+        row = row + 1
+    return rows
+
+fn print_sudoku_board(board):
+    rows = board_rows_snapshot(board)
+    mut row_index: i32 = 0
+    while row_index < len(rows):
+        print("   row", row_index, rows[row_index])
+        row_index = row_index + 1
+
+fn sudoku_validate_solution(board) -> bool:
+    if len(board) != SUDOKU_CELL_COUNT:
+        return false
+
+    mut row: i32 = 0
+    while row < SUDOKU_SIZE:
+        seen = init_seen()
+        mut col: i32 = 0
+        while col < SUDOKU_SIZE:
+            row_value: i32 = board[row * SUDOKU_SIZE + col]
+            if not sudoku_mark_seen(seen, row_value):
+                return false
+            col = col + 1
+        row = row + 1
+
+    mut col_index: i32 = 0
+    while col_index < SUDOKU_SIZE:
+        seen = init_seen()
+        mut r: i32 = 0
+        while r < SUDOKU_SIZE:
+            column_value: i32 = board[r * SUDOKU_SIZE + col_index]
+            if not sudoku_mark_seen(seen, column_value):
+                return false
+            r = r + 1
+        col_index = col_index + 1
+
+    mut block_row: i32 = 0
+    while block_row < SUDOKU_SIZE:
+        mut block_col: i32 = 0
+        while block_col < SUDOKU_SIZE:
+            seen = init_seen()
+            mut r_off: i32 = 0
+            while r_off < SUDOKU_BLOCK:
+                mut c_off: i32 = 0
+                while c_off < SUDOKU_BLOCK:
+                    row_index: i32 = block_row + r_off
+                    col_index_inner: i32 = block_col + c_off
+                    block_value: i32 = board[row_index * SUDOKU_SIZE + col_index_inner]
+                    if not sudoku_mark_seen(seen, block_value):
+                        return false
+                    c_off = c_off + 1
+                r_off = r_off + 1
+            block_col = block_col + SUDOKU_BLOCK
+        block_row = block_row + SUDOKU_BLOCK
+
+    return true
+
+fn find_next_empty(board) -> i32:
+    mut idx: i32 = 0
+    limit: i32 = len(board)
+    while idx < limit:
+        if board[idx] == 0:
+            return idx
+        idx = idx + 1
+    return -1
+
+fn sudoku_can_place(board, row: i32, col: i32, value: i32) -> bool:
+    mut c: i32 = 0
+    base: i32 = row * SUDOKU_SIZE
+    while c < SUDOKU_SIZE:
+        SUDOKU_CONFLICT_CHECKS = SUDOKU_CONFLICT_CHECKS + 1
+        if board[base + c] == value:
+            return false
+        c = c + 1
+
+    mut r: i32 = 0
+    while r < SUDOKU_SIZE:
+        SUDOKU_CONFLICT_CHECKS = SUDOKU_CONFLICT_CHECKS + 1
+        if board[r * SUDOKU_SIZE + col] == value:
+            return false
+        r = r + 1
+
+    start_row: i32 = (row / SUDOKU_BLOCK) * SUDOKU_BLOCK
+    start_col: i32 = (col / SUDOKU_BLOCK) * SUDOKU_BLOCK
+    mut r_off: i32 = 0
+    while r_off < SUDOKU_BLOCK:
+        mut c_off: i32 = 0
+        while c_off < SUDOKU_BLOCK:
+            SUDOKU_CONFLICT_CHECKS = SUDOKU_CONFLICT_CHECKS + 1
+            idx: i32 = (start_row + r_off) * SUDOKU_SIZE + start_col + c_off
+            if board[idx] == value:
+                return false
+            c_off = c_off + 1
+        r_off = r_off + 1
+
+    return true
+
+fn record_sudoku_solution(board):
+    SUDOKU_SOLUTIONS = SUDOKU_SOLUTIONS + 1
+    SUDOKU_LAST_SOLUTION = []
+
+    mut idx: i32 = 0
+    while idx < len(board):
+        push(SUDOKU_LAST_SOLUTION, board[idx])
+        idx = idx + 1
+
+    if SUDOKU_SOLUTIONS <= 2:
+        print("sudoku solution", SUDOKU_SOLUTIONS)
+        print_sudoku_board(SUDOKU_LAST_SOLUTION)
+    else:
+        if SUDOKU_SOLUTIONS == 3:
+            print("sudoku solution_print_limit", SUDOKU_SOLUTIONS - 1, "additional solutions omitted")
+
+fn solve_sudoku_inner(board, depth: i32) -> i32:
+    SUDOKU_CALLS = SUDOKU_CALLS + 1
+    if depth > SUDOKU_MAX_DEPTH:
+        SUDOKU_MAX_DEPTH = depth
+
+    next_index: i32 = find_next_empty(board)
+    if next_index < 0:
+        record_sudoku_solution(board)
+        return 1
+
+    cell_index: i32 = next_index
+
+    SUDOKU_EMPTY_CELLS_EXPLORED = SUDOKU_EMPTY_CELLS_EXPLORED + 1
+
+    mut row: i32 = 0
+    mut offset: i32 = cell_index
+    while offset >= SUDOKU_SIZE:
+        offset = offset - SUDOKU_SIZE
+        row = row + 1
+    col: i32 = offset
+
+    mut candidate: i32 = 1
+    mut solutions: i32 = 0
+    mut placed_any = false
+
+    while candidate <= 9:
+        SUDOKU_VALUE_TRIES = SUDOKU_VALUE_TRIES + 1
+        if sudoku_can_place(board, row, col, candidate):
+            board[cell_index] = candidate
+            SUDOKU_VALID_PLACEMENTS = SUDOKU_VALID_PLACEMENTS + 1
+            placed_any = true
+            solutions = solutions + solve_sudoku_inner(board, depth + 1)
+            board[cell_index] = 0
+            SUDOKU_BACKTRACKS = SUDOKU_BACKTRACKS + 1
+        else:
+            SUDOKU_PRUNED_CANDIDATES = SUDOKU_PRUNED_CANDIDATES + 1
+        candidate = candidate + 1
+
+    if not placed_any:
+        SUDOKU_DEAD_ENDS = SUDOKU_DEAD_ENDS + 1
+
+    return solutions
+
+fn solve_sudoku(board) -> i32:
+    return solve_sudoku_inner(board, 0)
+
+fn flatten_rows(row0, row1, row2, row3, row4, row5, row6, row7, row8):
+    mut board = []
+
+    mut idx: i32 = 0
+    while idx < len(row0):
+        push(board, row0[idx])
+        idx = idx + 1
+
+    idx = 0
+    while idx < len(row1):
+        push(board, row1[idx])
+        idx = idx + 1
+
+    idx = 0
+    while idx < len(row2):
+        push(board, row2[idx])
+        idx = idx + 1
+
+    idx = 0
+    while idx < len(row3):
+        push(board, row3[idx])
+        idx = idx + 1
+
+    idx = 0
+    while idx < len(row4):
+        push(board, row4[idx])
+        idx = idx + 1
+
+    idx = 0
+    while idx < len(row5):
+        push(board, row5[idx])
+        idx = idx + 1
+
+    idx = 0
+    while idx < len(row6):
+        push(board, row6[idx])
+        idx = idx + 1
+
+    idx = 0
+    while idx < len(row7):
+        push(board, row7[idx])
+        idx = idx + 1
+
+    idx = 0
+    while idx < len(row8):
+        push(board, row8[idx])
+        idx = idx + 1
+
+    return board
+
+fn sudoku_dataset_classic():
+    row0 = [0, 0, 0, 2, 6, 0, 7, 0, 1]
+    row1 = [6, 8, 0, 0, 7, 0, 0, 9, 0]
+    row2 = [1, 9, 0, 0, 0, 4, 5, 0, 0]
+    row3 = [8, 2, 0, 1, 0, 0, 0, 4, 0]
+    row4 = [0, 0, 4, 6, 0, 2, 9, 0, 0]
+    row5 = [0, 5, 0, 0, 0, 3, 0, 2, 8]
+    row6 = [0, 0, 9, 3, 0, 0, 0, 7, 4]
+    row7 = [0, 4, 0, 0, 5, 0, 0, 3, 6]
+    row8 = [7, 0, 3, 0, 1, 8, 0, 0, 0]
+    return flatten_rows(row0, row1, row2, row3, row4, row5, row6, row7, row8)
+
+fn sudoku_solution_classic():
+    row0 = [4, 3, 5, 2, 6, 9, 7, 8, 1]
+    row1 = [6, 8, 2, 5, 7, 1, 4, 9, 3]
+    row2 = [1, 9, 7, 8, 3, 4, 5, 6, 2]
+    row3 = [8, 2, 6, 1, 9, 5, 3, 4, 7]
+    row4 = [3, 7, 4, 6, 8, 2, 9, 1, 5]
+    row5 = [9, 5, 1, 7, 4, 3, 6, 2, 8]
+    row6 = [5, 1, 9, 3, 2, 6, 8, 7, 4]
+    row7 = [2, 4, 8, 9, 5, 7, 1, 3, 6]
+    row8 = [7, 6, 3, 4, 1, 8, 2, 5, 9]
+    return flatten_rows(row0, row1, row2, row3, row4, row5, row6, row7, row8)
+
+fn sudoku_dataset_ai_escargot():
+    row0 = [1, 0, 0, 0, 0, 7, 0, 9, 0]
+    row1 = [0, 3, 0, 0, 2, 0, 0, 0, 8]
+    row2 = [0, 0, 9, 6, 0, 0, 5, 0, 0]
+    row3 = [0, 0, 5, 3, 0, 0, 9, 0, 0]
+    row4 = [0, 1, 0, 0, 8, 0, 0, 0, 2]
+    row5 = [6, 0, 0, 0, 0, 4, 0, 0, 0]
+    row6 = [3, 0, 0, 0, 0, 0, 0, 1, 0]
+    row7 = [0, 4, 0, 0, 0, 0, 0, 0, 7]
+    row8 = [0, 0, 7, 0, 0, 0, 3, 0, 0]
+    return flatten_rows(row0, row1, row2, row3, row4, row5, row6, row7, row8)
+
+fn sudoku_solution_ai_escargot():
+    row0 = [1, 6, 2, 8, 5, 7, 4, 9, 3]
+    row1 = [5, 3, 4, 1, 2, 9, 6, 7, 8]
+    row2 = [7, 8, 9, 6, 4, 3, 5, 2, 1]
+    row3 = [4, 7, 5, 3, 1, 2, 9, 8, 6]
+    row4 = [9, 1, 3, 5, 8, 6, 7, 4, 2]
+    row5 = [6, 2, 8, 7, 9, 4, 1, 3, 5]
+    row6 = [3, 5, 6, 4, 7, 8, 2, 1, 9]
+    row7 = [2, 4, 1, 9, 3, 5, 8, 6, 7]
+    row8 = [8, 9, 7, 2, 6, 1, 3, 5, 4]
+    return flatten_rows(row0, row1, row2, row3, row4, row5, row6, row7, row8)
+
+fn run_sudoku_case(label, puzzle, expected_solution, expected_solution_count: i32):
+    print("-- Sudoku dataset", label)
+    reset_sudoku_metrics()
+
+    board = copy_board(puzzle)
+    solutions = solve_sudoku(board)
+
+    if solutions != SUDOKU_SOLUTIONS:
+        print("FAIL", label, "returned_solutions", solutions, "tracked", SUDOKU_SOLUTIONS)
+
+    if solutions != expected_solution_count:
+        print("FAIL", label, "solution_count", solutions, "expected", expected_solution_count)
+
+    if expected_solution_count > 0:
+        if not sudoku_validate_solution(SUDOKU_LAST_SOLUTION):
+            print("FAIL", label, "last_solution_failed_validation")
+        else:
+            if len(expected_solution) == len(SUDOKU_LAST_SOLUTION):
+                if not boards_equal(SUDOKU_LAST_SOLUTION, expected_solution):
+                    print("FAIL", label, "last_solution_mismatch")
+
+    print("sudoku", label, "solutions:", solutions, "calls:", SUDOKU_CALLS, "max_depth:", SUDOKU_MAX_DEPTH, "empty_cells:", SUDOKU_EMPTY_CELLS_EXPLORED, "value_tries:", SUDOKU_VALUE_TRIES, "valid:", SUDOKU_VALID_PLACEMENTS, "pruned:", SUDOKU_PRUNED_CANDIDATES, "conflict_checks:", SUDOKU_CONFLICT_CHECKS, "backtracks:", SUDOKU_BACKTRACKS, "dead_ends:", SUDOKU_DEAD_ENDS)
+
+    if SUDOKU_SOLUTIONS > 0:
+        print("sudoku", label, "last_solution_rows:", board_rows_snapshot(SUDOKU_LAST_SOLUTION))
+
+classic_puzzle = sudoku_dataset_classic()
+classic_expected = sudoku_solution_classic()
+run_sudoku_case("classic_easy", classic_puzzle, classic_expected, 1)
+
+stress_puzzle = sudoku_dataset_ai_escargot()
+stress_expected = sudoku_solution_ai_escargot()
+run_sudoku_case("ai_escargot", stress_puzzle, stress_expected, 1)
