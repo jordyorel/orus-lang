@@ -48,7 +48,7 @@ int mp_allocate_global_register(MultiPassRegisterAllocator* allocator) {
     if (!allocator) return -1;
 
     // Find next free global register
-    for (int i = 0; i < 64; i++) {
+    for (int i = 0; i < GLOBAL_REGISTERS; i++) {
         if (!allocator->global_regs[i]) {
             allocator->global_regs[i] = true;
             return MP_GLOBAL_REG_START + i;
@@ -79,7 +79,7 @@ int mp_allocate_frame_register(MultiPassRegisterAllocator* allocator) {
     
     // Find next free frame register starting from R64 (MP_FRAME_REG_START)
     // Parameter registers occupy the upper range (R240-R255), so we start at 64 for locals
-    for (int i = 0; i < 128; i++) {  // R64-R191 range
+    for (int i = 0; i < FRAME_REGISTERS; i++) {  // Frame register window
         if (!allocator->frame_regs[i]) {
             allocator->frame_regs[i] = true;
             return MP_FRAME_REG_START + i;  // R64 + i
@@ -96,10 +96,10 @@ void mp_reset_frame_registers(MultiPassRegisterAllocator* allocator) {
     if (!allocator) return;
     
     // Reset all frame register tracking
-    for (int i = 0; i < 128; i++) {
+    for (int i = 0; i < FRAME_REGISTERS; i++) {
         allocator->frame_regs[i] = false;
     }
-    
+
     // Reset frame allocation counter
     allocator->next_frame = MP_FRAME_REG_START;
     
@@ -111,7 +111,7 @@ int mp_allocate_temp_register(MultiPassRegisterAllocator* allocator) {
 
     // Find next free temp register (don't reuse from stack for better register isolation)
     // This prevents register conflicts in nested expressions
-    for (int i = 0; i < 48; i++) {
+    for (int i = 0; i < TEMP_REGISTERS; i++) {
         if (!allocator->temp_regs[i]) {
             allocator->temp_regs[i] = true;
             int reg = MP_TEMP_REG_START + i;
@@ -133,12 +133,12 @@ int mp_allocate_temp_register(MultiPassRegisterAllocator* allocator) {
 }
 
 int mp_allocate_consecutive_temp_registers(MultiPassRegisterAllocator* allocator, int count) {
-    if (!allocator || count <= 0 || count > 48) {
+    if (!allocator || count <= 0 || count > TEMP_REGISTERS) {
         printf("[REGISTER_ALLOCATOR] Error: Invalid consecutive allocation request (%d)\n", count);
         return -1;
     }
 
-    for (int start = 0; start <= 48 - count; start++) {
+    for (int start = 0; start <= TEMP_REGISTERS - count; start++) {
         bool available = true;
         for (int offset = 0; offset < count; offset++) {
             if (allocator->temp_regs[start + offset]) {
@@ -166,7 +166,7 @@ int mp_allocate_module_register(MultiPassRegisterAllocator* allocator) {
     if (!allocator) return -1;
     
     // Find next free module register
-    for (int i = 0; i < 16; i++) {
+    for (int i = 0; i < MODULE_REGISTERS; i++) {
         if (!allocator->module_regs[i]) {
             allocator->module_regs[i] = true;
             return MP_MODULE_REG_START + i;
@@ -182,8 +182,9 @@ int mp_allocate_module_register(MultiPassRegisterAllocator* allocator) {
 
 int mp_allocate_scoped_temp_register(MultiPassRegisterAllocator* allocator, int scope_level) {
     if (!allocator) return -1;
-    if (scope_level < 0 || scope_level >= 6) {
-        printf("[REGISTER_ALLOCATOR] Error: Invalid scope level %d (must be 0-5)\n", scope_level);
+    if (scope_level < 0 || scope_level >= MP_SCOPE_LEVEL_COUNT) {
+        printf("[REGISTER_ALLOCATOR] Error: Invalid scope level %d (must be 0-%d)\n",
+               scope_level, MP_SCOPE_LEVEL_COUNT - 1);
         return -1;
     }
     
@@ -209,11 +210,12 @@ int mp_allocate_scoped_temp_register(MultiPassRegisterAllocator* allocator, int 
 void mp_enter_scope(MultiPassRegisterAllocator* allocator) {
     if (!allocator) return;
     
-    if (allocator->current_scope_level < 5) {
+    if (allocator->current_scope_level < MP_SCOPE_LEVEL_COUNT - 1) {
         allocator->current_scope_level++;
         printf("[REGISTER_ALLOCATOR] Entered scope level %d\n", allocator->current_scope_level);
     } else {
-        printf("[REGISTER_ALLOCATOR] Warning: Maximum scope depth (5) reached\n");
+        printf("[REGISTER_ALLOCATOR] Warning: Maximum scope depth (%d) reached\n",
+               MP_SCOPE_LEVEL_COUNT - 1);
     }
 }
 
@@ -226,7 +228,7 @@ void mp_exit_scope(MultiPassRegisterAllocator* allocator) {
         for (int i = 0; i < 8; i++) {
             allocator->scope_temp_regs[scope][i] = false;
         }
-        
+
         printf("[REGISTER_ALLOCATOR] Exited scope level %d (freed %d registers)\n", scope, 8);
         allocator->current_scope_level--;
     } else {
@@ -236,8 +238,8 @@ void mp_exit_scope(MultiPassRegisterAllocator* allocator) {
 
 void mp_free_scoped_temp_register(MultiPassRegisterAllocator* allocator, int reg, int scope_level) {
     if (!allocator) return;
-    if (scope_level < 0 || scope_level >= 6) return;
-    
+    if (scope_level < 0 || scope_level >= MP_SCOPE_LEVEL_COUNT) return;
+
     int base_reg = MP_TEMP_REG_START + (scope_level * 8);
     if (reg >= base_reg && reg < base_reg + 8) {
         int slot = reg - base_reg;
@@ -298,7 +300,7 @@ void mp_free_temp_register(MultiPassRegisterAllocator* allocator, int reg) {
     allocator->temp_regs[index] = false;
     
     // Add to reuse stack (LIFO for better cache locality)
-    if (allocator->temp_stack_top < 47) {
+    if (allocator->temp_stack_top < TEMP_REGISTERS - 1) {
         allocator->temp_stack[++allocator->temp_stack_top] = reg;
         printf("[REGISTER_ALLOCATOR] Freed temp register R%d (added to reuse stack)\n", reg);
     } else {

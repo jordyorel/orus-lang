@@ -1,0 +1,175 @@
+print("== Phase 4 Part 2: Algorithm smoke tests ==")
+
+global mut RNG_SEED: i32 = 0x13579BDF
+
+fn srand(seed: i32):
+    RNG_SEED = seed
+
+fn rand_u32() -> i32:
+    RNG_SEED = (RNG_SEED * 1664525) + 1013904223
+    return RNG_SEED
+
+fn rand_range(lo: i32, hi: i32) -> i32:
+    if hi <= lo:
+        return lo
+    span = hi - lo + 1
+    r = rand_u32()
+    mut m = r % span
+    if m < 0:
+        m = m + span
+    return lo + m
+
+fn copy_array(xs):
+    mut out = []
+    mut i: i32 = 0
+    while i < len(xs):
+        push(out, xs[i])
+        i = i + 1
+    return out
+
+fn split_at(xs, mid: i32):
+    mut left = []
+    mut right = []
+    mut i: i32 = 0
+    while i < len(xs):
+        if i < mid:
+            push(left, xs[i])
+        else:
+            push(right, xs[i])
+        i = i + 1
+    return [left, right]
+
+fn merge(a, b):
+    mut out = []
+    mut i: i32 = 0
+    mut j: i32 = 0
+    while i < len(a) and j < len(b):
+        if a[i] <= b[j]:
+            push(out, a[i])
+            i = i + 1
+        else:
+            push(out, b[j])
+            j = j + 1
+    while i < len(a):
+        push(out, a[i])
+        i = i + 1
+    while j < len(b):
+        push(out, b[j])
+        j = j + 1
+    return out
+
+fn oracle_merge_sort(xs):
+    n: i32 = len(xs)
+    if n <= 1:
+        return copy_array(xs)
+    mid: i32 = n / 2
+    parts = split_at(xs, mid)
+    left_sorted = oracle_merge_sort(parts[0])
+    right_sorted = oracle_merge_sort(parts[1])
+    return merge(left_sorted, right_sorted)
+
+fn insertion_sort(label, values):
+    n: i32 = len(values)
+    mut i: i32 = 1
+    while i < n:
+        key = values[i]
+        mut j: i32 = i
+        while j > 0:
+            prev: i32 = j - 1
+            if values[prev] <= key:
+                break
+            values[j] = values[prev]
+            j = j - 1
+        values[j] = key
+        i = i + 1
+    return values
+
+fn counting_sort(label, values):
+    n: i32 = len(values)
+    if n <= 1:
+        return copy_array(values)
+    mut min_v = values[0]
+    mut max_v = values[0]
+    mut i: i32 = 1
+    while i < n:
+        v = values[i]
+        if v < min_v:
+            min_v = v
+        if v > max_v:
+            max_v = v
+        i = i + 1
+    range_size: i32 = (max_v - min_v) + 1
+    mut counts = []
+    mut k: i32 = 0
+    while k < range_size:
+        push(counts, 0)
+        k = k + 1
+    i = 0
+    while i < n:
+        idx: i32 = values[i] - min_v
+        counts[idx] = counts[idx] + 1
+        i = i + 1
+    mut out = []
+    mut ci: i32 = 0
+    while ci < len(counts):
+        mut freq: i32 = counts[ci]
+        while freq > 0:
+            push(out, ci + min_v)
+            freq = freq - 1
+        ci = ci + 1
+    return out
+
+fn is_sorted(xs) -> bool:
+    mut i: i32 = 1
+    while i < len(xs):
+        if xs[i - 1] > xs[i]:
+            return false
+        i = i + 1
+    return true
+
+fn arrays_equal(a, b) -> bool:
+    if len(a) != len(b):
+        return false
+    mut i: i32 = 0
+    while i < len(a):
+        if a[i] != b[i]:
+            return false
+        i = i + 1
+    return true
+
+fn demo_case(label, values):
+    reference = oracle_merge_sort(values)
+    insertion = insertion_sort(label, copy_array(values))
+    counting = counting_sort(label, values)
+    print(label, "sorted?", is_sorted(reference))
+    print("insertion matches", arrays_equal(reference, insertion))
+    print("counting matches", arrays_equal(reference, counting))
+
+srand(1590702414)
+print("-- Merge primitives --")
+print(merge([1, 4, 9], [2, 2, 5]))
+print(oracle_merge_sort([5, 1, 4, 3, 2]))
+
+print("-- Algorithm smoke cases --")
+demo_case("ascending", [1, 2, 3, 4])
+demo_case("duplicates", [4, 2, 4, 1, 4, 3, 2])
+demo_case("negatives", [0, -3, -1, 4, 2, -3])
+
+demo_inputs = []
+mut idx: i32 = 0
+while idx < 5:
+    mut sample = []
+    mut j: i32 = 0
+    while j < 6:
+        push(sample, rand_range(-10, 10))
+        j = j + 1
+    push(demo_inputs, sample)
+    idx = idx + 1
+
+mut t: i32 = 0
+while t < len(demo_inputs):
+    print("random sample", t)
+    demo_case("rand", demo_inputs[t])
+    t = t + 1
+
+print("== Done Part 2 ==")

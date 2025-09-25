@@ -2215,19 +2215,19 @@ InterpretResult vm_run_dispatch(void) {
                         frame->baseRegister = resultReg;
 
                         // Determine parameter base register
-                        uint8_t paramBase = 256 - function->arity;
-                        if (paramBase < 1) paramBase = 1;
-                        frame->parameterBaseRegister = (uint16_t)paramBase;
+                        uint16_t paramBase = FRAME_REG_START + FRAME_REGISTERS - function->arity;
+                        if (paramBase < FRAME_REG_START) paramBase = FRAME_REG_START;
+                        frame->parameterBaseRegister = paramBase;
 
                         // Save frame and temp registers
-                        const int temp_reg_start = 192; // MP_TEMP_REG_START
-                        const int temp_reg_count = 48;  // R192-R239
-                        frame->savedRegisterCount = 64 + temp_reg_count;
-                        for (int i = 0; i < 64; i++) {
+                        const int temp_reg_start = TEMP_REG_START;
+                        const int temp_reg_count = TEMP_REGISTERS;
+                        frame->savedRegisterCount = FRAME_REGISTERS + temp_reg_count;
+                        for (int i = 0; i < FRAME_REGISTERS; i++) {
                             frame->savedRegisters[i] = vm_get_register_safe(FRAME_REG_START + i);
                         }
                         for (int i = 0; i < temp_reg_count; i++) {
-                            frame->savedRegisters[64 + i] = vm_get_register_safe(temp_reg_start + i);
+                            frame->savedRegisters[FRAME_REGISTERS + i] = vm_get_register_safe(temp_reg_start + i);
                         }
 
                         // Set up closure context (closure in register 0)
@@ -2274,18 +2274,18 @@ InterpretResult vm_run_dispatch(void) {
                         frame->functionIndex = functionIndex;
                         
                         // Simple parameter base calculation to match compiler
-                        uint8_t paramBase = 256 - function->arity;
-                        if (paramBase < 1) paramBase = 1;
-                        frame->parameterBaseRegister = (uint16_t)paramBase;
+                        uint16_t paramBase = FRAME_REG_START + FRAME_REGISTERS - function->arity;
+                        if (paramBase < FRAME_REG_START) paramBase = FRAME_REG_START;
+                        frame->parameterBaseRegister = paramBase;
                         
-                        // Save all frame registers (R256-R319) AND temp registers (R192-R239) to prevent corruption during recursive calls
+                        // Save all frame and temp registers to prevent corruption during recursive calls
                         // CRITICAL FIX: Also save temp registers to fix fibonacci/recursive function register corruption
-                        int temp_reg_start = 192;  // MP_TEMP_REG_START
-                        int temp_reg_count = 48;   // R192-R239 (48 registers)
-                        frame->savedRegisterCount = 64 + temp_reg_count;  // FRAME_REGISTERS + TEMP_REGISTERS
-                        
-                        // Save frame registers (R256-R319)
-                        for (int i = 0; i < 64; i++) {
+                        int temp_reg_start = TEMP_REG_START;  // MP_TEMP_REG_START
+                        int temp_reg_count = TEMP_REGISTERS;   // R192-R239 (48 registers)
+                        frame->savedRegisterCount = FRAME_REGISTERS + temp_reg_count;  // FRAME_REGISTERS + TEMP_REGISTERS
+
+                        // Save frame register window
+                        for (int i = 0; i < FRAME_REGISTERS; i++) {
                             frame->savedRegisters[i] = vm_get_register_safe(FRAME_REG_START + i);
                             // Debug: Print saved values for first few registers
                             if (i < 8) {
@@ -2296,9 +2296,9 @@ InterpretResult vm_run_dispatch(void) {
                             }
                         }
                         
-                        // Save temp registers (R192-R239) - CRITICAL FIX for recursive function register corruption
+                        // Save temp registers - CRITICAL FIX for recursive function register corruption
                         for (int i = 0; i < temp_reg_count; i++) {
-                            frame->savedRegisters[64 + i] = vm_get_register_safe(temp_reg_start + i);
+                            frame->savedRegisters[FRAME_REGISTERS + i] = vm_get_register_safe(temp_reg_start + i);
                             // Debug: Print saved temp register values for first few
                             if (i < 8) {
                                 DEBUG_VM_PRINT("SAVE TEMP R%d (type=%d)", temp_reg_start + i, vm_get_register_safe(temp_reg_start + i).type);
@@ -2340,8 +2340,8 @@ InterpretResult vm_run_dispatch(void) {
                         frame->baseRegister = resultReg;
                         
                         // Simple parameter base calculation to match compiler
-                        uint8_t paramBase = 256 - objFunction->arity;
-                        if (paramBase < 1) paramBase = 1;
+                        uint16_t paramBase = FRAME_REG_START + FRAME_REGISTERS - objFunction->arity;
+                        if (paramBase < FRAME_REG_START) paramBase = FRAME_REG_START;
                         
                         // Copy arguments to parameter registers
                         for (int i = 0; i < argCount; i++) {
@@ -2386,7 +2386,7 @@ InterpretResult vm_run_dispatch(void) {
                         
                         // Copy arguments to function's frame registers
                         // We need to be careful about overlapping registers
-                        Value tempArgs[256];
+                        Value tempArgs[FRAME_REGISTERS];
                         for (int i = 0; i < argCount; i++) {
                             tempArgs[i] = vm_get_register_safe(firstArgReg + i);
                         }
@@ -2395,7 +2395,7 @@ InterpretResult vm_run_dispatch(void) {
                         for (int i = 0; i < argCount; i++) {
                             uint16_t frame_reg_id = FRAME_REG_START + i;
                             set_register(&vm.register_file, frame_reg_id, tempArgs[i]);
-                            vm_set_register_safe(200 + i, tempArgs[i]);  // Use safe parameter register range
+                            vm_set_register_safe(frame_reg_id, tempArgs[i]);  // Mirror into frame window
                         }
                         
                         // Switch to function's chunk - reuse current frame
@@ -2414,32 +2414,15 @@ InterpretResult vm_run_dispatch(void) {
                     if (vm.frameCount > 0) {
                         CallFrame* frame = &vm.frames[--vm.frameCount];
                         
-                        const int temp_reg_start = 192;
-                        const int temp_reg_count = 48;
+                        const int temp_reg_start = TEMP_REG_START;
+                        const int temp_reg_count = TEMP_REGISTERS;
 
-                        if (frame->savedRegisterCount == 64 + temp_reg_count) {
-                            for (int i = 0; i < 64; i++) {
+                        if (frame->savedRegisterCount == FRAME_REGISTERS + temp_reg_count) {
+                            for (int i = 0; i < FRAME_REGISTERS; i++) {
                                 vm_set_register_safe(FRAME_REG_START + i, frame->savedRegisters[i]);
                             }
                             for (int i = 0; i < temp_reg_count; i++) {
-                                vm_set_register_safe(temp_reg_start + i, frame->savedRegisters[64 + i]);
-                            }
-                        } else if (frame->savedRegisterCount == 31) {
-                            for (int i = 0; i < 15; i++) {
-                                vm_set_register_safe(65 + i, frame->savedRegisters[i]);
-                            }
-                            for (int i = 0; i < 16; i++) {
-                                vm_set_register_safe(240 + i, frame->savedRegisters[15 + i]);
-                            }
-                        } else if (frame->savedRegisterCount == 31 + temp_reg_count) {
-                            for (int i = 0; i < 15; i++) {
-                                vm_set_register_safe(65 + i, frame->savedRegisters[i]);
-                            }
-                            for (int i = 0; i < 16; i++) {
-                                vm_set_register_safe(240 + i, frame->savedRegisters[15 + i]);
-                            }
-                            for (int i = 0; i < temp_reg_count; i++) {
-                                vm_set_register_safe(temp_reg_start + i, frame->savedRegisters[31 + i]);
+                                vm_set_register_safe(temp_reg_start + i, frame->savedRegisters[FRAME_REGISTERS + i]);
                             }
                         } else {
                             for (int i = 0; i < frame->savedRegisterCount; i++) {
@@ -2464,32 +2447,15 @@ InterpretResult vm_run_dispatch(void) {
                     if (vm.frameCount > 0) {
                         CallFrame* frame = &vm.frames[--vm.frameCount];
                         
-                        const int temp_reg_start = 192;
-                        const int temp_reg_count = 48;
+                        const int temp_reg_start = TEMP_REG_START;
+                        const int temp_reg_count = TEMP_REGISTERS;
 
-                        if (frame->savedRegisterCount == 64 + temp_reg_count) {
-                            for (int i = 0; i < 64; i++) {
+                        if (frame->savedRegisterCount == FRAME_REGISTERS + temp_reg_count) {
+                            for (int i = 0; i < FRAME_REGISTERS; i++) {
                                 vm_set_register_safe(FRAME_REG_START + i, frame->savedRegisters[i]);
                             }
                             for (int i = 0; i < temp_reg_count; i++) {
-                                vm_set_register_safe(temp_reg_start + i, frame->savedRegisters[64 + i]);
-                            }
-                        } else if (frame->savedRegisterCount == 31) {
-                            for (int i = 0; i < 15; i++) {
-                                vm_set_register_safe(65 + i, frame->savedRegisters[i]);
-                            }
-                            for (int i = 0; i < 16; i++) {
-                                vm_set_register_safe(240 + i, frame->savedRegisters[15 + i]);
-                            }
-                        } else if (frame->savedRegisterCount == 31 + temp_reg_count) {
-                            for (int i = 0; i < 15; i++) {
-                                vm_set_register_safe(65 + i, frame->savedRegisters[i]);
-                            }
-                            for (int i = 0; i < 16; i++) {
-                                vm_set_register_safe(240 + i, frame->savedRegisters[15 + i]);
-                            }
-                            for (int i = 0; i < temp_reg_count; i++) {
-                                vm_set_register_safe(temp_reg_start + i, frame->savedRegisters[31 + i]);
+                                vm_set_register_safe(temp_reg_start + i, frame->savedRegisters[FRAME_REGISTERS + i]);
                             }
                         } else {
                             for (int i = 0; i < frame->savedRegisterCount; i++) {

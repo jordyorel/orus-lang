@@ -319,10 +319,82 @@ static void markRoots() {
     for (int i = 0; i < REGISTER_COUNT; i++) {
         markValue(vm.registers[i]);
     }
+
+    // Mark any values stored in active VM call frames. During a call we copy
+    // the caller's frame and temporary registers into the frame's
+    // savedRegisters array so the callee can reuse the primary windows. If the
+    // garbage collector runs while a call is in progress those saved values are
+    // the only roots for the caller's arrays/strings. Failing to mark them lets
+    // the collector free live data, which later manifests as corrupted strings
+    // or "Value is not an array" errors when the caller resumes.
+    for (int frameIndex = 0; frameIndex < vm.frameCount; frameIndex++) {
+        CallFrame* frame = &vm.frames[frameIndex];
+
+        for (int reg = 0; reg < FRAME_REGISTERS; reg++) {
+            markValue(frame->registers[reg]);
+        }
+
+        int savedCount = frame->savedRegisterCount;
+        if (savedCount > FRAME_REGISTERS + TEMP_REGISTERS) {
+            savedCount = FRAME_REGISTERS + TEMP_REGISTERS;
+        }
+        for (int saved = 0; saved < savedCount; saved++) {
+            markValue(frame->savedRegisters[saved]);
+        }
+    }
+
+    // The register file maintains its own linked list of frames for the
+    // high-level ENTER/EXIT_FRAME instructions. These frames can also contain
+    // live values that must be treated as GC roots.
+    for (CallFrame* frame = vm.register_file.frame_stack; frame != NULL; frame = frame->next) {
+        for (int reg = 0; reg < FRAME_REGISTERS; reg++) {
+            markValue(frame->registers[reg]);
+        }
+
+        int savedCount = frame->savedRegisterCount;
+        if (savedCount > FRAME_REGISTERS + TEMP_REGISTERS) {
+            savedCount = FRAME_REGISTERS + TEMP_REGISTERS;
+        }
+        for (int saved = 0; saved < savedCount; saved++) {
+            markValue(frame->savedRegisters[saved]);
+        }
+    }
+
+    if (vm.chunk) {
+        for (int i = 0; i < vm.chunk->constants.count; i++) {
+            markValue(vm.chunk->constants.values[i]);
+        }
+    }
+
+    for (int i = 0; i < vm.functionCount; i++) {
+        Chunk* chunk = vm.functions[i].chunk;
+        if (!chunk) continue;
+        for (int c = 0; c < chunk->constants.count; c++) {
+            markValue(chunk->constants.values[c]);
+        }
+    }
+
     for (int i = 0; i < vm.variableCount; i++) {
         markValue(vm.globals[i]);
     }
     markValue(vm.lastError);
+
+    for (int i = 0; i < vm.moduleCount; i++) {
+        if (vm.loadedModules[i]) {
+            markObject((Obj*)vm.loadedModules[i]);
+        }
+    }
+    for (int i = 0; i < vm.loadingModuleCount; i++) {
+        if (vm.loadingModules[i]) {
+            markObject((Obj*)vm.loadingModules[i]);
+        }
+    }
+
+    for (int i = 0; i < vm.nativeFunctionCount; i++) {
+        if (vm.nativeFunctions[i].name) {
+            markObject((Obj*)vm.nativeFunctions[i].name);
+        }
+    }
     
     // Mark open upvalues
     for (ObjUpvalue* upvalue = vm.openUpvalues; upvalue != NULL; upvalue = upvalue->next) {

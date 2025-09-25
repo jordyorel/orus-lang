@@ -5925,8 +5925,8 @@ int compile_function_declaration(CompilerContext* ctx, TypedASTNode* func) {
     }
 
     // Register parameters
-    int param_base = 256 - arity;
-    if (param_base < 1) param_base = 1;
+    int param_base = FRAME_REG_START + FRAME_REGISTERS - arity;
+    if (param_base < FRAME_REG_START) param_base = FRAME_REG_START;
     for (int i = 0; i < arity; i++) {
         if (func->original->function.params[i].name) {
             int param_reg = param_base + i;

@@ -262,12 +262,12 @@ void vm_unwind_to_stack_depth(int targetDepth) {
 
         closeUpvalues(&vm.registers[frame->parameterBaseRegister]);
 
-        if (frame->savedRegisterCount == 31) {
-            for (int i = 0; i < 15; i++) {
-                vm_set_register_safe(65 + i, frame->savedRegisters[i]);
+        if (frame->savedRegisterCount == FRAME_REGISTERS + TEMP_REGISTERS) {
+            for (int i = 0; i < FRAME_REGISTERS; i++) {
+                vm_set_register_safe(FRAME_REG_START + i, frame->savedRegisters[i]);
             }
-            for (int i = 0; i < 16; i++) {
-                vm_set_register_safe(240 + i, frame->savedRegisters[15 + i]);
+            for (int i = 0; i < TEMP_REGISTERS; i++) {
+                vm_set_register_safe(TEMP_REG_START + i, frame->savedRegisters[FRAME_REGISTERS + i]);
             }
         } else {
             for (int i = 0; i < frame->savedRegisterCount; i++) {

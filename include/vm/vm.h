@@ -311,16 +311,16 @@ typedef struct CallFrame {
     uint16_t parameterBaseRegister;       // Base register for function parameters (frame/spill space)
     uint8_t savedRegisterCount;           // Number of saved registers
     uint16_t savedRegisterStart;          // Starting register index for saved registers
-    Value savedRegisters[112];            // Saved frame (64) + temp (48) registers
+    Value savedRegisters[FRAME_REGISTERS + TEMP_REGISTERS]; // Saved frame + temp registers
 } CallFrame;
 
 // Shared function for parameter register allocation (used by both compiler and VM)
 static inline uint16_t calculateParameterBaseRegister(int argCount) {
     // Hierarchical register allocation for unlimited parameters
-    // Always start parameters at frame register 256 regardless of count
+    // Always start parameters at the beginning of the frame window
     // Individual parameters beyond frame space will spill automatically
     (void)argCount; // Suppress unused parameter warning
-    return FRAME_REG_START;  // 256 - all parameters start here
+    return FRAME_REG_START;
 }
 
 // Phase 1: Register File Architecture
