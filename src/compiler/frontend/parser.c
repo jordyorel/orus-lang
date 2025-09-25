@@ -3652,10 +3652,11 @@ static ASTNode* parseCallExpression(ParserContext* ctx, ASTNode* callee) {
     call->call.callee = callee;
     call->call.args = args;
     call->call.argCount = argCount;
+    call->call.arity_error_reported = false;
     call->location.line = openParen.line;
     call->location.column = openParen.column;
     call->dataType = NULL;
-    
+
     return call;
 }
 

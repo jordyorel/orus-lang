@@ -91,9 +91,34 @@ ErrorReportResult report_incompatible_types(SrcLocation location, const char* le
     return report_feature_error(E2002_INCOMPATIBLE_TYPES, location, left_type, right_type);
 }
 
+ErrorReportResult report_argument_count_mismatch(SrcLocation location,
+                                                const char* function_name,
+                                                int expected,
+                                                int actual) {
+    const char* plural_expected = (expected == 1) ? "" : "s";
+    const char* plural_actual = (actual == 1) ? "" : "s";
+
+    if (function_name) {
+        return report_feature_error_f(E2001_TYPE_MISMATCH, location,
+                                      "Function '%s' expects %d argument%s but received %d argument%s",
+                                      function_name,
+                                      expected,
+                                      plural_expected,
+                                      actual,
+                                      plural_actual);
+    }
+
+    return report_feature_error_f(E2001_TYPE_MISMATCH, location,
+                                  "Function call expects %d argument%s but received %d argument%s",
+                                  expected,
+                                  plural_expected,
+                                  actual,
+                                  plural_actual);
+}
+
 // Type annotation required error
 ErrorReportResult report_type_annotation_required(SrcLocation location, const char* context) {
-    return report_feature_error_f(E2006_TYPE_ANNOTATION_REQUIRED, location, 
+    return report_feature_error_f(E2006_TYPE_ANNOTATION_REQUIRED, location,
                                  "Type annotation needed for %s", context);
 }
 

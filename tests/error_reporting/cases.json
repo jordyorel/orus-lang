@@ -138,10 +138,22 @@
     "source": "function_argument_mismatch.orus",
     "description": "Calling a function with the wrong number of arguments should emit a dedicated error.",
     "expected_exit": 65,
-    "expected_diagnostic_count": 3,
+    "expected_diagnostic_count": 1,
     "expected_diagnostics": [
       {
         "category": "TYPE MISMATCH",
+        "title": "Type mismatch found",
+        "message_contains": "expects 2 arguments but received 1 argument",
+        "help_contains": "Try converting one value to match the other's type",
+        "note_contains": "Orus keeps types separate",
+        "count": 1
+      }
+    ],
+    "expected": [
+      "-- TYPE MISMATCH: Type mismatch found",
+      "Function 'add' expects 2 arguments but received 1 argument",
+      "help: Try converting one value to match the other's type, like `x as string` or `y as i32`.",
+      "note: Orus keeps types separate to help prevent unexpected behavior and bugs.",
         "title": "Function call argument mismatch",
         "message_contains": "Not enough arguments for function call",
         "help_contains": "Add the missing arguments or remove the extras",
