@@ -1686,7 +1686,6 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             }
 
             // For function declarations, get the actual return type from type annotation
-            bool return_type_inferred = false;
             Type* return_type = NULL;
 
             if (node->function.returnType) {
@@ -1698,8 +1697,6 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                 return_type = make_var_type(NULL);
                 if (!return_type) {
                     return_type = getPrimitiveType(TYPE_VOID);
-                } else {
-                    return_type_inferred = true;
                 }
             }
 
@@ -1778,8 +1775,6 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             // Prune the return and parameter types now that the body has been analyzed
             Type* resolved_return = prune(return_type);
             if (!resolved_return) {
-                resolved_return = getPrimitiveType(TYPE_VOID);
-            } else if (return_type_inferred && resolved_return->kind == TYPE_VAR) {
                 resolved_return = getPrimitiveType(TYPE_VOID);
             }
             func_type->info.function.returnType = resolved_return;

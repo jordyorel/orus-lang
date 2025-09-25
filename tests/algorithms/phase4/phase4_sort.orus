@@ -57,7 +57,7 @@ fn split_at(xs, mid: i32):
         if i < mid: push(left, xs[i])
         else: push(right, xs[i])
         i = i + 1
-    return left, right
+    return [left, right]
 
 // ---------- Oracle merge sort (reference) ----------
 fn merge(a, b):
@@ -77,7 +77,9 @@ fn oracle_merge_sort(xs):
     n: i32 = len(xs)
     if n <= 1: return copy_array(xs)
     mid: i32 = n / 2
-    left, right = split_at(xs, mid)
+    parts = split_at(xs, mid)
+    left = parts[0]
+    right = parts[1]
     sl = oracle_merge_sort(left)
     sr = oracle_merge_sort(right)
     return merge(sl, sr)
@@ -183,7 +185,9 @@ fn run_sort_properties_once(algo_name, algo_id: i32, xs):
 
     // 5) metamorphic (concat & merge)
     mid: i32 = len(xs) / 2
-    left, right = split_at(xs, mid)
+    parts = split_at(xs, mid)
+    left  = parts[0]
+    right = parts[1]
     s_left  = apply_sort(algo_id, "m_left", left)
     s_right = apply_sort(algo_id, "m_right", right)
     merged  = merge(s_left, s_right)
