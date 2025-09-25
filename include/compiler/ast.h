@@ -202,6 +202,7 @@ struct ASTNode {
         struct {
             ASTNode** statements;
             int count;
+            bool createsScope;
         } block;
         struct {
             ASTNode* condition;

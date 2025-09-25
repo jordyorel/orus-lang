@@ -3609,9 +3609,14 @@ void compile_statement(CompilerContext* ctx, TypedASTNode* stmt) {
         case NODE_IF:
             compile_if_statement(ctx, stmt);
             break;
-        case NODE_BLOCK:
-            compile_block_with_scope(ctx, stmt, true);
+        case NODE_BLOCK: {
+            bool create_scope = true;
+            if (stmt->original && stmt->original->type == NODE_BLOCK) {
+                create_scope = stmt->original->block.createsScope;
+            }
+            compile_block_with_scope(ctx, stmt, create_scope);
             break;
+        }
             
         case NODE_WHILE:
             compile_while_statement(ctx, stmt);
@@ -3970,7 +3975,7 @@ static int compile_assignment_internal(CompilerContext* ctx, TypedASTNode* assig
         }
 
         bool is_in_loop = (ctx->current_loop_start != -1);
-        bool should_be_mutable = is_in_loop || ctx->branch_depth > 0;
+        bool should_be_mutable = is_in_loop || ctx->branch_depth > 0 || ctx->compiling_function;
 
         SymbolTable* target_scope = ctx->symbols;
         if (ctx->branch_depth > 0 && target_scope) {
