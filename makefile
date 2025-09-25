@@ -1,4 +1,5 @@
 CC = gcc
+EMCC ?= emcc
 
 # Build Profile Configuration
 # Usage: make PROFILE=debug|release|profiling|ci
@@ -99,6 +100,25 @@ ifeq ($(PROFILE),profiling)
     LDFLAGS += -pg
 endif
 
+# WebAssembly build configuration
+WASM_OUTPUT_DIR = web
+WASM_MODULE = orus_web$(SUFFIX)
+WASM_JS = $(WASM_OUTPUT_DIR)/$(WASM_MODULE).js
+WASM_WASM = $(WASM_OUTPUT_DIR)/$(WASM_MODULE).wasm
+WASM_SRCS = $(COMPILER_SRCS) $(VM_SRCS) $(REPL_SRC) $(MAIN_SRC)
+WASM_EXPORTED_FUNCTIONS = ["_main"]
+WASM_RUNTIME_METHODS = ["cwrap","ccall","UTF8ToString","lengthBytesUTF8"]
+WASM_CFLAGS = $(BASE_CFLAGS) $(DEFINES)
+
+ifeq ($(PROFILE),debug)
+    WASM_OPT_FLAGS = -O0 -g4 -sASSERTIONS=1
+else
+    WASM_OPT_FLAGS = -O3
+endif
+
+WASM_EMCC_FLAGS = $(WASM_OPT_FLAGS) -sWASM=1 -sMODULARIZE=1 -sEXPORT_ES6=1 -sALLOW_MEMORY_GROWTH=1 -sEXIT_RUNTIME=1 -sENVIRONMENT=web \
+                  -sEXPORTED_FUNCTIONS=$(WASM_EXPORTED_FUNCTIONS) -sEXPORTED_RUNTIME_METHODS=$(WASM_RUNTIME_METHODS)
+
 # Directories
 SRCDIR = src
 INCDIR = include
@@ -147,7 +167,7 @@ PEEPHOLE_TEST_BIN = $(BUILDDIR)/tests/test_constant_propagation
 LICM_METADATA_TEST_BIN = $(BUILDDIR)/tests/test_licm_typed_metadata
 TAGGED_UNION_TEST_BIN = $(BUILDDIR)/tests/test_vm_tagged_union
 
-.PHONY: all clean test unit-test test-control-flow test-loop-telemetry benchmark help debug release profiling analyze install bytecode-jump-tests source-map-tests scope-tracking-tests peephole-tests cli-smoke-tests licm-metadata-tests tagged-union-tests test-optimizer
+.PHONY: all clean test unit-test test-control-flow test-loop-telemetry benchmark help debug release profiling analyze install bytecode-jump-tests source-map-tests scope-tracking-tests peephole-tests cli-smoke-tests licm-metadata-tests tagged-union-tests test-optimizer wasm
 
 all: build-info $(ORUS)
 
@@ -164,7 +184,8 @@ debug:
 	@$(MAKE) PROFILE=debug
 
 release:
-	@$(MAKE) PROFILE=release
+	@$(MAKE) PROFILE=release all
+	@$(MAKE) PROFILE=release wasm
 
 profiling:
 	@$(MAKE) PROFILE=profiling
@@ -199,6 +220,20 @@ $(UNIT_TEST_RUNNER): $(TEST_RUNNER_OBJ) $(UNITY_OBJS) $(UNIT_TEST_OBJS) $(VM_OBJ
 	@echo "Linking unit test runner $(UNIT_TEST_RUNNER)..."
 	@$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 	@echo "✓ Unit test runner built: $(UNIT_TEST_RUNNER)"
+
+wasm: $(WASM_JS)
+	@echo "✓ WebAssembly artifacts ready: $(WASM_JS) and $(WASM_WASM)"
+
+$(WASM_JS): $(WASM_SRCS)
+	@mkdir -p $(WASM_OUTPUT_DIR)
+	@echo "Compiling WebAssembly target ($(PROFILE))..."
+	@command -v $(EMCC) >/dev/null 2>&1 || { \
+		echo "Emscripten compiler '$(EMCC)' not found. Install Emscripten SDK or set EMCC=<path>."; \
+		exit 1; \
+	}
+	@$(EMCC) $(WASM_CFLAGS) $(INCLUDES) $(WASM_EMCC_FLAGS) $(WASM_SRCS) -o $(WASM_JS)
+
+$(WASM_WASM): $(WASM_JS)
 
 # Run comprehensive test suite
 test: $(ORUS)
@@ -442,6 +477,7 @@ clean:
 	@rm -f orus orus_debug orus_profiling orus_ci
 	@rm -f test_runner test_runner_debug test_runner_profiling test_runner_ci
 	@rm -rf build/
+	@rm -rf web/
 	@echo "✓ Clean complete"
 
 # Help
