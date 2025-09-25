@@ -82,6 +82,7 @@ Symbol* declare_symbol(SymbolTable* table, const char* name, Type* type,
     symbol->reg_allocation = NULL;             // Will be set by dual register system
     symbol->type = type;
     symbol->is_mutable = is_mutable;
+    symbol->declared_mutable = is_mutable;
     symbol->is_initialized = is_initialized;
     symbol->is_arithmetic_heavy = false;       // Default to false
     symbol->usage_count = 0;                   // Track usage
@@ -239,6 +240,7 @@ Symbol* declare_symbol_with_allocation(SymbolTable* table, const char* name, Typ
     symbol->legacy_register_id = reg_alloc->logical_id;  // Compatibility
     symbol->type = type;
     symbol->is_mutable = is_mutable;
+    symbol->declared_mutable = is_mutable;
     symbol->is_initialized = is_initialized;
     symbol->is_arithmetic_heavy = false;       // Default to false
     symbol->usage_count = 0;                   // Track usage
