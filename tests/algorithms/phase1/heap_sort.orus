@@ -1,0 +1,116 @@
+// Phase 1 heap sort implementation for the algorithm stress-test suite.
+// In-place variant that exercises index arithmetic, parent/child math,
+// and nested loops while tracking heapify operations, comparisons,
+// swaps, and sift iterations.
+
+print("== Phase 1: Heap Sort (In-Place Max-Heap) Smoke ==")
+
+global mut HEAPIFY_CALLS = 0
+global mut HEAP_COMPARISONS = 0
+global mut HEAP_SWAPS = 0
+global mut HEAP_SIFTS = 0
+global mut HEAP_ACTIVE_COUNT = 0
+
+fn swap(values, i, j):
+    if i == j:
+        return
+    temp = values[i]
+    values[i] = values[j]
+    values[j] = temp
+    HEAP_SWAPS = HEAP_SWAPS + 1
+
+fn sift_down(values, start):
+    HEAPIFY_CALLS = HEAPIFY_CALLS + 1
+    mut root = start
+    while true:
+        child = (root * 2) + 1
+        if child >= HEAP_ACTIVE_COUNT:
+            break
+
+        mut largest = root
+        HEAP_COMPARISONS = HEAP_COMPARISONS + 1
+        if values[largest] < values[child]:
+            largest = child
+
+        right = child + 1
+        if right < HEAP_ACTIVE_COUNT:
+            HEAP_COMPARISONS = HEAP_COMPARISONS + 1
+            if values[largest] < values[right]:
+                largest = right
+
+        if largest == root:
+            break
+
+        swap(values, root, largest)
+        HEAP_SIFTS = HEAP_SIFTS + 1
+        root = largest
+
+fn heap_sort(label, values):
+    HEAPIFY_CALLS = 0
+    HEAP_COMPARISONS = 0
+    HEAP_SWAPS = 0
+    HEAP_SIFTS = 0
+
+    mut count: i32 = len(values)
+    if count <= 1:
+        print("heap_sort", label, "heapify_calls:", HEAPIFY_CALLS, "comparisons:", HEAP_COMPARISONS, "swaps:", HEAP_SWAPS, "sifts:", HEAP_SIFTS)
+        return values
+
+    mut start: i32 = (count / 2) - 1
+    while start >= 0:
+        HEAP_ACTIVE_COUNT = count
+        sift_down(values, start)
+        count = HEAP_ACTIVE_COUNT
+        start = start - 1
+
+    mut heap_size: i32 = count
+    while heap_size > 1:
+        swap(values, 0, heap_size - 1)
+        heap_size = heap_size - 1
+        HEAP_ACTIVE_COUNT = heap_size
+        sift_down(values, 0)
+        heap_size = HEAP_ACTIVE_COUNT
+
+    print("heap_sort", label, "heapify_calls:", HEAPIFY_CALLS, "comparisons:", HEAP_COMPARISONS, "swaps:", HEAP_SWAPS, "sifts:", HEAP_SIFTS)
+    return values
+
+fn assert_sorted(label, observed, expected):
+    if len(observed) != len(expected):
+        print("FAIL", label, "length mismatch", len(observed), "expected", len(expected))
+        return
+    mut i = 0
+    mut ok = true
+    while i < len(observed):
+        if observed[i] != expected[i]:
+            ok = false
+        i = i + 1
+    if ok:
+        print(label, "sorted", observed)
+    else:
+        print("FAIL", label, "=>", observed, "expected", expected)
+
+// === Tests ===
+unsorted = [12, 11, 13, 5, 6, 7]
+expected_unsorted = [5, 6, 7, 11, 12, 13]
+assert_sorted("random", heap_sort("random", unsorted), expected_unsorted)
+
+ascending = [1, 2, 3, 4, 5, 6]
+assert_sorted("already_sorted", heap_sort("already_sorted", ascending), ascending)
+
+reversed = [9, 7, 5, 3, 1, -1]
+expected_reversed = [-1, 1, 3, 5, 7, 9]
+assert_sorted("reversed", heap_sort("reversed", reversed), expected_reversed)
+
+duplicates = [4, 10, 4, 8, 4, 6, 4]
+expected_duplicates = [4, 4, 4, 4, 6, 8, 10]
+assert_sorted("duplicates", heap_sort("duplicates", duplicates), expected_duplicates)
+
+negatives = [0, -2, -5, 3, 2, -1]
+expected_negatives = [-5, -2, -1, 0, 2, 3]
+assert_sorted("negatives", heap_sort("negatives", negatives), expected_negatives)
+
+single = [42]
+assert_sorted("single", heap_sort("single", single), single)
+
+empty = []
+assert_sorted("empty", heap_sort("empty", empty), [])

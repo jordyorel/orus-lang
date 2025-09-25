@@ -51,3 +51,20 @@ step is to extend coverage to merge/quick/heap variants while promoting the
 duplicated verification code into reusable utilities for the remainder of the
 suite.
 
+Counting and heap sort now round out the Phase 1 fixtures. The
+`tests/algorithms/phase1/counting_sort.orus` script exercises range sizing,
+frequency table initialisation, and duplicate-heavy workloads while recording
+extent scans, slot allocations, count updates, and emission counts. The new
+`tests/algorithms/phase1/heap_sort.orus` companion keeps the algorithm in
+place to stress parent/child index arithmetic, repeated heapify passes, and
+swap-heavy sifts. Its instrumentation logs heapify calls, comparisons, swaps,
+and sift iterations so we can spot regressions in the optimiser’s arithmetic
+folding or the VM’s in-place mutation handling.
+
+While wiring that fixture we uncovered and fixed a long-standing interpreter
+bug: the register allocator occasionally handed function calls a non-consecutive
+set of argument registers, so the VM only saw the first two arguments of a
+three-argument call. The compiler now reserves contiguous temporary blocks for
+all call arguments, ensuring multi-argument helpers like `assert_sorted` keep
+their inputs intact during stress runs.
+
