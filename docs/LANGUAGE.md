@@ -67,7 +67,72 @@ use_cache = mode matches Mode.Cached
 mut remaining -= chunk
 ```
 
-### Strings and Printing
+### Strings
+- Strings are immutable sequences of UTF-8 bytes backed by a rope representation in the runtime. Concatenation reuses existing
+  buffers when possible, so building large strings from smaller pieces remains efficient.
+- String literals use double quotes and support `\n`, `\t`, `\\`, `\"`, `\r`, and `\0` escapes.
+- The `len(string)` builtin returns the length in bytes. For ASCII data this matches the number of human-readable characters.
+- Concatenation uses `+` and requires both operands to already be `string`. Mixed-type expressions must cast the other operand
+  explicitly.
+- Indexing (`text[index]`) produces a one-character string at zero-based byte offsets. Negative or out-of-range indices raise a
+  runtime error that can be handled with `try`/`catch`.
+- Strings participate in equality and inequality comparisons. Other relational operators are rejected by the type checker.
+- Explicit casts `as string` exist for all primitive scalars (`i32`, `i64`, `u32`, `u64`, `f64`, `bool`). Any other conversion
+  direction (for example `string as i32`) is illegal and emits a type error.
+
+```orus
+greeting = "Hello, Orus!"
+escaped = "Line one\nLine two\tTabbed"
+
+// Building longer strings by concatenating rope segments
+mut status = "Request"
+status = status + " " + "completed"
+
+print("ASCII length:", len(status))  // 17 bytes
+
+// Indexing always produces a one-character string
+letter_h = greeting[0]
+letter_bang = greeting[len(greeting) - 1]
+print("first", letter_h, "last", letter_bang)
+
+// Bounds errors throw catchable exceptions
+try:
+    print(greeting[-1])
+catch err:
+    print("caught", err)
+
+// Strings do not auto-coerce other values—cast explicitly when needed
+attempt = 3
+message = "Attempt " + (attempt as string) + " succeeded"
+print(message)
+```
+
+```orus
+// Conversions from primitives are explicit and safe
+value_i64: i64 = 1024
+flag = false
+ratio = 1.5
+
+as_text = [
+    value_i64 as string,
+    flag as string,
+    ratio as string,
+]
+
+print("converted:", as_text[0], as_text[1], as_text[2])
+```
+
+Strings often appear in pattern matching and error handling. Remember that the current implementation counts bytes: a
+non-ASCII glyph may span multiple indices even though it renders as a single character.
+
+```orus
+// Byte-oriented indexing with UTF-8 data
+wave = "Héllo"  // "é" occupies two bytes
+print(len(wave))         // 6 bytes
+print(wave[1] + wave[2]) // prints "é" by combining both byte slices
+```
+
+### Printing
 - `print(...)` writes arguments separated by a space and ends with a newline.
 - `print_no_newline(...)` omits the trailing newline.
 - A leading string literal may contain `@` format specifiers that consume the next argument (`@.2f`, `@x`, `@X`, `@b`, `@o`).
