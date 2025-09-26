@@ -41,6 +41,7 @@ typedef struct StringRope {
             size_t len;
             bool is_ascii;
             bool is_interned;
+            bool owns_data;
         } leaf;
         struct {
             struct StringRope* left;
@@ -69,10 +70,12 @@ extern StringInternTable globalStringTable;
 StringBuilder* createStringBuilder(size_t initial_capacity);
 void appendToStringBuilder(StringBuilder* sb, const char* str, size_t len);
 ObjString* stringBuilderToString(StringBuilder* sb);
+ObjString* stringBuilderToOwnedString(StringBuilder* sb);
 void freeStringBuilder(StringBuilder* sb);
 
 // Rope helpers
 StringRope* rope_from_cstr(const char* str, size_t len);
+StringRope* rope_from_buffer(char* buffer, size_t len, bool owns_data);
 char* rope_to_cstr(StringRope* rope);
 ObjString* rope_index_to_string(StringRope* rope, size_t index);
 

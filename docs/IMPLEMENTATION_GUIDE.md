@@ -50,11 +50,12 @@ Build a language that combines Python's readability, Rust's safety, and Lua's pe
 typedef struct StringRope {
     enum { LEAF, CONCAT, SUBSTRING } kind;
     union {
-        struct { 
-            char* data; 
-            size_t len; 
+        struct {
+            char* data;
+            size_t len;
             bool is_ascii;     // Fast path for ASCII
             bool is_interned;  // For string deduplication
+            bool owns_data;    // Indicates whether the rope frees the buffer
         } leaf;
         struct { 
             struct StringRope *left, *right; 
