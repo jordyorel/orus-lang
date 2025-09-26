@@ -403,6 +403,34 @@ void handle_move_f64(void) {
 
 // ====== Print Operation Handlers ======
 
+void handle_input(void) {
+    uint8_t dst = READ_BYTE();
+    uint8_t arg_count = READ_BYTE();
+    uint8_t prompt_reg = READ_BYTE();
+
+    if (arg_count > 1) {
+        SrcLocation loc = {vm.filePath, vm.currentLine, vm.currentColumn};
+        runtimeError(ERROR_ARGUMENT, loc, "input() accepts at most one argument");
+        return;
+    }
+
+    Value args_storage[1];
+    Value* args_ptr = NULL;
+    if (arg_count == 1) {
+        args_storage[0] = vm_get_register_safe(prompt_reg);
+        args_ptr = args_storage;
+    }
+
+    Value result;
+    if (!builtin_input(args_ptr, (int)arg_count, &result)) {
+        SrcLocation loc = {vm.filePath, vm.currentLine, vm.currentColumn};
+        runtimeError(ERROR_EOF, loc, "input() reached end of file");
+        return;
+    }
+
+    vm_set_register_safe(dst, result);
+}
+
 void handle_print(void) {
     uint8_t reg = READ_BYTE();
     Value temp_value = vm_get_register_safe(reg);

@@ -333,6 +333,7 @@ InterpretResult vm_run_dispatch(void) {
         vm_dispatch_table[OP_LOOP] = &&LABEL_OP_LOOP;
         vm_dispatch_table[OP_GET_ITER_R] = &&LABEL_OP_GET_ITER_R;
         vm_dispatch_table[OP_ITER_NEXT_R] = &&LABEL_OP_ITER_NEXT_R;
+        vm_dispatch_table[OP_INPUT_R] = &&LABEL_OP_INPUT_R;
         vm_dispatch_table[OP_PRINT_MULTI_R] = &&LABEL_OP_PRINT_MULTI_R;
         vm_dispatch_table[OP_PRINT_R] = &&LABEL_OP_PRINT_R;
         vm_dispatch_table[OP_PRINT_NO_NL_R] = &&LABEL_OP_PRINT_NO_NL_R;
@@ -2717,11 +2718,38 @@ InterpretResult vm_run_dispatch(void) {
         DISPATCH();
     }
 
+    LABEL_OP_INPUT_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t arg_count = READ_BYTE();
+        uint8_t prompt_reg = READ_BYTE();
+
+        if (arg_count > 1) {
+            VM_ERROR_RETURN(ERROR_ARGUMENT, CURRENT_LOCATION(),
+                            "input() accepts at most one argument");
+        }
+
+        Value args_storage[1];
+        Value* args_ptr = NULL;
+        if (arg_count == 1) {
+            args_storage[0] = vm_get_register_safe(prompt_reg);
+            args_ptr = args_storage;
+        }
+
+        Value result;
+        if (!builtin_input(args_ptr, (int)arg_count, &result)) {
+            VM_ERROR_RETURN(ERROR_EOF, CURRENT_LOCATION(),
+                            "input() reached end of file");
+        }
+
+        vm_set_register_safe(dst, result);
+        DISPATCH();
+    }
+
     LABEL_OP_PRINT_MULTI_R: {
             uint8_t first = READ_BYTE();
             uint8_t count = READ_BYTE();
             uint8_t nl = READ_BYTE();
-            
+
             // Copy values to temporary array using frame-aware access
             Value temp_values[256];  // Max possible count
             for (int i = 0; i < count; i++) {

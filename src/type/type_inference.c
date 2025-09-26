@@ -881,6 +881,13 @@ static void register_builtin_functions(TypeEnv* env) {
         Type* pop_params[1] = {pop_array};
         define_builtin_function(env, "pop", pop_element, pop_params, 1);
     }
+
+    // input(prompt: string = "") -> string
+    Type* prompt_type = getPrimitiveType(TYPE_STRING);
+    if (prompt_type) {
+        Type* input_params[1] = {prompt_type};
+        define_builtin_function(env, "input", prompt_type, input_params, 1);
+    }
 }
 
 static void register_builtin_enums(void) {
@@ -1818,11 +1825,13 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             bool is_member_call = (node->call.callee->type == NODE_MEMBER_ACCESS);
 
             Type* callee_type = NULL;
+            const char* callee_name = NULL;
             if (node->call.callee->type == NODE_IDENTIFIER) {
                 TypeScheme* scheme = type_env_lookup(env, node->call.callee->identifier.name);
                 if (scheme && scheme->type) {
                     callee_type = instantiate_type_scheme(scheme);
                 }
+                callee_name = node->call.callee->identifier.name;
             }
 
             if (!callee_type) {
@@ -1861,13 +1870,15 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                 int expected_args = total_params - offset;
                 if (expected_args < 0) expected_args = 0;
 
+                bool is_input_builtin = (callee_name && strcmp(callee_name, "input") == 0);
+                if (is_input_builtin && node->call.argCount == 0) {
+                    expected_args = 0;
+                }
+
                 if (node->call.argCount != expected_args) {
                     if (arg_types) free(arg_types);
                     if (!node->call.arity_error_reported) {
-                        const char* callee_name = NULL;
-                        if (node->call.callee->type == NODE_IDENTIFIER) {
-                            callee_name = node->call.callee->identifier.name;
-                        } else if (node->call.callee->type == NODE_MEMBER_ACCESS) {
+                        if (!callee_name && node->call.callee->type == NODE_MEMBER_ACCESS) {
                             callee_name = node->call.callee->member.member;
                         }
                         report_argument_count_mismatch(node->location,

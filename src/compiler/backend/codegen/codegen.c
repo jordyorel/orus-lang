@@ -332,6 +332,7 @@ static void compile_import_statement(CompilerContext* ctx, TypedASTNode* stmt);
 static int compile_builtin_array_push(CompilerContext* ctx, TypedASTNode* call);
 static int compile_builtin_array_pop(CompilerContext* ctx, TypedASTNode* call);
 static int compile_builtin_array_len(CompilerContext* ctx, TypedASTNode* call);
+static int compile_builtin_input(CompilerContext* ctx, TypedASTNode* call);
 int lookup_variable(CompilerContext* ctx, const char* name);
 static char* create_method_symbol_name(const char* struct_name, const char* method_name);
 static int compile_struct_method_call(CompilerContext* ctx, TypedASTNode* call);
@@ -1577,6 +1578,61 @@ static int compile_builtin_array_len(CompilerContext* ctx, TypedASTNode* call) {
     }
 
     if (free_array) free_typed_ast_node(array_arg);
+
+    return result_reg;
+}
+
+static int compile_builtin_input(CompilerContext* ctx, TypedASTNode* call) {
+    if (!ctx || !call || !call->original) {
+        return -1;
+    }
+
+    int arg_count = call->original->call.argCount;
+    if (arg_count < 0 || arg_count > 1) {
+        DEBUG_CODEGEN_PRINT("Error: input() expects 0 or 1 arguments, got %d\n", arg_count);
+        ctx->has_compilation_errors = true;
+        return -1;
+    }
+
+    bool free_prompt = false;
+    TypedASTNode* prompt_arg = NULL;
+    int prompt_reg = 0;
+
+    if (arg_count == 1) {
+        prompt_arg = get_call_argument_node(call, 0, &free_prompt);
+        if (!prompt_arg) {
+            if (free_prompt && prompt_arg) free_typed_ast_node(prompt_arg);
+            return -1;
+        }
+
+        prompt_reg = compile_expression(ctx, prompt_arg);
+        if (prompt_reg == -1) {
+            if (free_prompt && prompt_arg) free_typed_ast_node(prompt_arg);
+            return -1;
+        }
+    }
+
+    int result_reg = mp_allocate_temp_register(ctx->allocator);
+    if (result_reg == -1) {
+        DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for input() result\n");
+        if (arg_count == 1 && prompt_reg >= MP_TEMP_REG_START && prompt_reg <= MP_TEMP_REG_END) {
+            mp_free_temp_register(ctx->allocator, prompt_reg);
+        }
+        if (free_prompt && prompt_arg) free_typed_ast_node(prompt_arg);
+        return -1;
+    }
+
+    set_location_from_node(ctx, call);
+    emit_byte_to_buffer(ctx->bytecode, OP_INPUT_R);
+    emit_byte_to_buffer(ctx->bytecode, result_reg);
+    emit_byte_to_buffer(ctx->bytecode, (uint8_t)arg_count);
+    emit_byte_to_buffer(ctx->bytecode, (uint8_t)prompt_reg);
+
+    if (arg_count == 1 && prompt_reg >= MP_TEMP_REG_START && prompt_reg <= MP_TEMP_REG_END) {
+        mp_free_temp_register(ctx->allocator, prompt_reg);
+    }
+
+    if (free_prompt && prompt_arg) free_typed_ast_node(prompt_arg);
 
     return result_reg;
 }
@@ -3279,6 +3335,8 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                     return compile_builtin_array_pop(ctx, expr);
                 } else if (strcmp(builtin_name, "len") == 0) {
                     return compile_builtin_array_len(ctx, expr);
+                } else if (strcmp(builtin_name, "input") == 0) {
+                    return compile_builtin_input(ctx, expr);
                 }
             }
 

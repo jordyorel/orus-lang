@@ -1,9 +1,9 @@
 import argparse
-import os
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, List, Optional, Tuple
+from typing import Iterable, List, Optional
 
 
 class SmokeResult:
@@ -11,6 +11,14 @@ class SmokeResult:
         self.name = name
         self.passed = passed
         self.details = details
+
+
+@dataclass
+class SmokeCase:
+    program: Path
+    expect_success: bool
+    expected_stdout: Optional[str] = None
+    stdin_data: Optional[str] = None
 
 
 def resolve_binary(binary: str, repo_root: Path) -> Path:
@@ -30,16 +38,13 @@ def resolve_binary(binary: str, repo_root: Path) -> Path:
     return candidate
 
 
-def run_smoke(
-    binary: Path,
-    program: Path,
-    expect_success: bool,
-    expected_stdout: Optional[str] = None,
-) -> SmokeResult:
+def run_smoke(binary: Path, case: SmokeCase) -> SmokeResult:
+    program = case.program
     name = f"{binary.name} {program.as_posix()}"
     try:
         completed = subprocess.run(
             [str(binary), program.as_posix()],
+            input=case.stdin_data,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -48,11 +53,15 @@ def run_smoke(
     except OSError as exc:  # pragma: no cover - defensive
         return SmokeResult(name, False, f"Failed to execute: {exc}")
 
-    exit_ok = completed.returncode == 0 if expect_success else completed.returncode != 0
-    if exit_ok and expect_success and expected_stdout is not None:
-        if completed.stdout != expected_stdout:
+    exit_ok = (
+        completed.returncode == 0
+        if case.expect_success
+        else completed.returncode != 0
+    )
+    if exit_ok and case.expect_success and case.expected_stdout is not None:
+        if completed.stdout != case.expected_stdout:
             detail = (
-                f"Expected stdout {expected_stdout!r} but received {completed.stdout!r}."
+                f"Expected stdout {case.expected_stdout!r} but received {completed.stdout!r}."
             )
             if completed.stderr:
                 detail += f" Stderr:\n{completed.stderr.strip()}"
@@ -62,29 +71,39 @@ def run_smoke(
 
     output = completed.stdout + completed.stderr
     detail = (
-        f"Expected {'success' if expect_success else 'failure'}, "
+        f"Expected {'success' if case.expect_success else 'failure'}, "
         f"but exit code was {completed.returncode}.\n{output.strip()}"
     )
     return SmokeResult(name, False, detail)
 
 
-def load_tests(repo_root: Path) -> List[Tuple[Path, bool, Optional[str]]]:
+def load_tests(repo_root: Path) -> List[SmokeCase]:
     return [
-        (
+        SmokeCase(
             repo_root / "tests" / "comprehensive" / "comprehensive_language_test.orus",
             True,
             None,
         ),
-        (repo_root / "tests" / "error_reporting" / "undefined_variable.orus", False, None),
-        (
+        SmokeCase(
+            repo_root / "tests" / "error_reporting" / "undefined_variable.orus",
+            False,
+            None,
+        ),
+        SmokeCase(
             repo_root / "tests" / "comprehensive" / "result_builtins_cli.orus",
             True,
             "result builtins done\n",
         ),
-        (
+        SmokeCase(
             repo_root / "tests" / "strings" / "string_equality_control_flow.orus",
             True,
             "ready\n",
+        ),
+        SmokeCase(
+            repo_root / "tests" / "io" / "input_prompt_echo.orus",
+            True,
+            "Prompt> First:Hello\nSecond:<empty>\n",
+            stdin_data="Hello\n\n",
         ),
     ]
 
@@ -106,11 +125,11 @@ def main(argv: Iterable[str] | None = None) -> int:
     results: List[SmokeResult] = []
 
     print("Running CLI smoke tests...")
-    for program, expect_success, expected_stdout in tests:
-        if not program.exists():
-            results.append(SmokeResult(program.name, False, "Program file not found"))
+    for case in tests:
+        if not case.program.exists():
+            results.append(SmokeResult(case.program.name, False, "Program file not found"))
             continue
-        results.append(run_smoke(binary_path, program, expect_success, expected_stdout))
+        results.append(run_smoke(binary_path, case))
 
     failures = [result for result in results if not result.passed]
     for result in results:

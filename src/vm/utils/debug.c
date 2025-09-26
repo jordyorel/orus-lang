@@ -179,6 +179,14 @@ int disassembleInstruction(Chunk* chunk, int offset) {
             return offset + 4;
         }
 
+        case OP_INPUT_R: {
+            uint8_t dst = chunk->code[offset + 1];
+            uint8_t arg_count = chunk->code[offset + 2];
+            uint8_t prompt_reg = chunk->code[offset + 3];
+            printf("%-16s R%d, args=%d, prompt_reg=R%d\n", "INPUT", dst, arg_count, prompt_reg);
+            return offset + 4;
+        }
+
         case OP_PRINT_MULTI_R: {
             uint8_t first = chunk->code[offset + 1];
             uint8_t count = chunk->code[offset + 2];

@@ -1,47 +1,18 @@
 /*
  * Orus Language Project
  * ---------------------------------------------------------------------------
- * File: src/vm/runtime/builtins.c
+ * File: src/vm/runtime/builtin_print.c
  * Author: Jordy Orel KONDA
- * Copyright (c) 2025 Jordy Orel KONDA
- * License: MIT License (see LICENSE file in the project root)
- * Description: Registers and implements built-in runtime functions available to Orus
- *              programs.
+ * Description: Implements the builtin print routine for formatted output.
  */
 
-#define _POSIX_C_SOURCE 200809L
 #include "runtime/builtins.h"
-#include "runtime/memory.h"
-#include <stdio.h>
-#include <string.h>
+#include "vm/vm_constants.h"
 #include <ctype.h>
 #include <stdint.h>
-
-#ifdef __APPLE__
-#include <mach/mach_time.h>
-#elif defined(__linux__) || defined(__EMSCRIPTEN__)
-#include <time.h>
-#elif defined(_WIN32)
-#include <windows.h>
-#endif
-
-// High-precision timing infrastructure
-#ifdef __APPLE__
-static uint64_t timebase_numer = 0;
-static uint64_t timebase_denom = 0;
-static bool timebase_initialized = false;
-
-// Initialize mach timebase (called once)
-static void init_timebase() {
-    if (!timebase_initialized) {
-        mach_timebase_info_data_t info;
-        mach_timebase_info(&info);
-        timebase_numer = info.numer;
-        timebase_denom = info.denom;
-        timebase_initialized = true;
-    }
-}
-#endif
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 static void print_formatted_value(Value value, const char* spec);
 
@@ -144,7 +115,8 @@ static void print_formatted_value(Value value, const char* spec) {
     }
 }
 
-static void print_string_interpolated(ObjString* str, Value* args, int* arg_index, int arg_count) {
+static void print_string_interpolated(ObjString* str, Value* args, int* arg_index,
+                                      int arg_count) {
     for (int i = 0; i < str->length; i++) {
         char c = str->chars[i];
         if (c == '\\') {
@@ -173,7 +145,8 @@ static void print_string_interpolated(ObjString* str, Value* args, int* arg_inde
                     if (spec_len < 15) spec[spec_len++] = 'f';
                     j++;
                 }
-            } else if (j < str->length && (str->chars[j]=='x' || str->chars[j]=='X' || str->chars[j]=='b' || str->chars[j]=='o')) {
+            } else if (j < str->length && (str->chars[j] == 'x' || str->chars[j] == 'X' ||
+                                            str->chars[j] == 'b' || str->chars[j] == 'o')) {
                 if (spec_len < 15) spec[spec_len++] = str->chars[j];
                 j++;
             }
@@ -196,14 +169,14 @@ void builtin_print(Value* args, int count, bool newline) {
     bool first_value = true;
 
     const char* sep = " ";
-    
+
     if (count > 0 && IS_STRING(args[0])) {
         ObjString* str = AS_STRING(args[0]);
         print_string_interpolated(str, args + 1, &consumed, count - 1);
-        consumed += 1; // account for the format string
-        first_value = false; // We've already printed something
+        consumed += 1;  // account for the format string
+        first_value = false;  // We've already printed something
     }
-    
+
     for (int arg_index = consumed; arg_index < count; arg_index++) {
         if (!first_value) printf("%s", sep);
         printValue(args[arg_index]);
@@ -211,57 +184,4 @@ void builtin_print(Value* args, int count, bool newline) {
     }
     if (newline) putchar('\n');
     fflush(stdout);
-}
-
-bool builtin_array_push(Value array_value, Value element) {
-    if (!IS_ARRAY(array_value)) {
-        return false;
-    }
-
-    ObjArray* array = AS_ARRAY(array_value);
-    return arrayPush(array, element);
-}
-
-bool builtin_array_pop(Value array_value, Value* out_value) {
-    if (!IS_ARRAY(array_value)) {
-        return false;
-    }
-
-    ObjArray* array = AS_ARRAY(array_value);
-    return arrayPop(array, out_value);
-}
-
-// Cross-platform high-precision timestamp function
-// Returns SECONDS since an arbitrary but monotonic starting point (as double)
-double builtin_time_stamp() {
-#ifdef __APPLE__
-    // macOS: Use mach_absolute_time() → seconds (double)
-    init_timebase();
-    uint64_t abs_time = mach_absolute_time();
-    uint64_t nanoseconds = (abs_time * timebase_numer) / timebase_denom;
-    return (double)nanoseconds / 1e9;  // ns → s
-
-#elif defined(__linux__)
-    // Linux: Use clock_gettime → seconds (double)
-    struct timespec ts;
-    if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) {
-        return (double)ts.tv_sec + (double)ts.tv_nsec / 1e9;  // s + ns → s
-    }
-    return 0.0;  // Error fallback
-
-#elif defined(_WIN32)
-    // Windows: QueryPerformanceCounter → seconds (double)
-    static LARGE_INTEGER frequency = {0};
-    if (frequency.QuadPart == 0) {
-        QueryPerformanceFrequency(&frequency);
-    }
-
-    LARGE_INTEGER counter;
-    QueryPerformanceCounter(&counter);
-    return (double)counter.QuadPart / (double)frequency.QuadPart;  // counts → s
-
-#else
-    // Fallback: clock() → seconds (double)
-    return (double)clock() / (double)CLOCKS_PER_SEC;
-#endif
 }
