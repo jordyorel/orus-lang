@@ -92,12 +92,30 @@ static void* allocateObject(size_t size, ObjType type) {
 ObjString* allocateString(const char* chars, int length) {
     ObjString* string = (ObjString*)allocateObject(sizeof(ObjString), OBJ_STRING);
     string->length = length;
-    string->chars = (char*)reallocate(NULL, 0, length + 1);
+    string->chars = (char*)reallocate(NULL, 0, (size_t)length + 1);
     memcpy(string->chars, chars, length);
     string->chars[length] = '\0';
-    string->rope = rope_from_cstr(chars, length);
+    string->rope = rope_from_buffer(string->chars, (size_t)length, false);
     string->hash = 0;
-    vm.bytesAllocated += length + 1;
+    return string;
+}
+
+ObjString* allocateStringFromBuffer(char* buffer, size_t capacity, int length) {
+    if (!buffer) return NULL;
+
+    size_t desired = (size_t)length + 1;
+    if (capacity != desired) {
+        buffer = (char*)reallocate(buffer, capacity, desired);
+        capacity = desired;
+    }
+
+    buffer[length] = '\0';
+
+    ObjString* string = (ObjString*)allocateObject(sizeof(ObjString), OBJ_STRING);
+    string->length = length;
+    string->chars = buffer;
+    string->rope = rope_from_buffer(buffer, (size_t)length, false);
+    string->hash = 0;
     return string;
 }
 
@@ -438,8 +456,10 @@ static void freeObject(Obj* object) {
     switch (object->type) {
         case OBJ_STRING: {
             ObjString* s = (ObjString*)object;
-            vm.bytesAllocated -= sizeof(ObjString) + s->length + 1;
-            free(s->chars);
+            vm.bytesAllocated -= sizeof(ObjString);
+            if (s->chars) {
+                reallocate(s->chars, (size_t)s->length + 1, 0);
+            }
             if (s->rope) free_rope(s->rope);
             break;
         }

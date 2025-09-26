@@ -15,6 +15,7 @@
 #include "compiler/parser.h"
 #include "public/common.h"
 #include "vm/vm.h"
+#include "vm/vm_string_ops.h"
 #include "internal/error_reporting.h"
 #include "errors/features/variable_errors.h"
 #include "errors/features/control_flow_errors.h"
@@ -3040,58 +3041,52 @@ static ASTNode* parseNumberLiteral(ParserContext* ctx, Token token) {
 static ASTNode* parseStringLiteral(ParserContext* ctx, Token token) {
     ASTNode* node = new_node(ctx);
     node->type = NODE_LITERAL;
-    
+
     // Process escape sequences in string content
-    int rawLen = token.length - 2; // Remove quotes
-    const char* raw = token.start + 1; // Skip opening quote
-    
-    // Allocate buffer for processed content (may be smaller due to escape sequences)
-    char* content = parser_arena_alloc(ctx, rawLen + 1);
-    int processedLen = 0;
-    
+    int rawLen = token.length >= 2 ? token.length - 2 : 0; // Remove quotes
+    const char* raw = token.start + 1;                      // Skip opening quote
+
+    StringBuilder* sb = createStringBuilder((size_t)rawLen + 1);
+
     for (int i = 0; i < rawLen; i++) {
-        if (raw[i] == '\\' && i + 1 < rawLen) {
-            // Process escape sequence
-            switch (raw[i + 1]) {
+        char current = raw[i];
+        if (current == '\\' && i + 1 < rawLen) {
+            char escape = raw[i + 1];
+            switch (escape) {
                 case 'n':
-                    content[processedLen++] = '\n';
-                    i++; // Skip the next character
+                    current = '\n';
+                    i++;
                     break;
                 case 't':
-                    content[processedLen++] = '\t';
-                    i++; // Skip the next character
+                    current = '\t';
+                    i++;
                     break;
                 case '\\':
-                    content[processedLen++] = '\\';
-                    i++; // Skip the next character
+                    current = '\\';
+                    i++;
                     break;
                 case '"':
-                    content[processedLen++] = '"';
-                    i++; // Skip the next character
+                    current = '"';
+                    i++;
                     break;
                 case 'r':
-                    content[processedLen++] = '\r';
-                    i++; // Skip the next character
+                    current = '\r';
+                    i++;
                     break;
                 case '0':
-                    content[processedLen++] = '\0';
-                    i++; // Skip the next character
+                    current = '\0';
+                    i++;
                     break;
                 default:
-                    // Invalid escape sequence - just copy the backslash and character
-                    content[processedLen++] = raw[i];
-                    break;
+                    appendToStringBuilder(sb, &current, 1);
+                    continue;
             }
-        } else {
-            // Regular character
-            content[processedLen++] = raw[i];
         }
+        appendToStringBuilder(sb, &current, 1);
     }
-    
-    content[processedLen] = '\0';
-    ObjString* s = allocateString(content, processedLen);
-    node->literal.value.type = VAL_STRING;
-    node->literal.value.as.obj = (Obj*)s;
+
+    ObjString* s = stringBuilderToOwnedString(sb);
+    node->literal.value = STRING_VAL(s);
     node->literal.hasExplicitSuffix = false;
     node->location.line = token.line;
     node->location.column = token.column;

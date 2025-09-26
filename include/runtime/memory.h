@@ -31,6 +31,7 @@ void pauseGC(void);
 void resumeGC(void);
 
 ObjString* allocateString(const char* chars, int length);
+ObjString* allocateStringFromBuffer(char* buffer, size_t capacity, int length);
 ObjArray* allocateArray(int capacity);
 ObjArrayIterator* allocateArrayIterator(ObjArray* array);
 void arrayEnsureCapacity(ObjArray* array, int minCapacity);
