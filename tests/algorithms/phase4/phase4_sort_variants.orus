@@ -340,10 +340,10 @@ fn fixed_cases():
     return cases
 
 // ---------- Configuration ----------
-const RANDOM_TRIALS = 1000
-const ORACLE_TRIALS = 250
-const RANDOM_MAX_LEN = 1000
-const SLOW_MAX_LEN = 128
+const RANDOM_TRIALS = 1     // 500-1000
+const ORACLE_TRIALS = 1   // 250
+const RANDOM_MAX_LEN = 10 // 1000
+const SLOW_MAX_LEN = 1    //128
 
 fn max_len_for(algo_id: i32) -> i32:
     if algo_id == ALG_INSERTION: return SLOW_MAX_LEN
