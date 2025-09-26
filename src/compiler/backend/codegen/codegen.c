@@ -50,6 +50,8 @@ static TypeKind fallback_type_kind_from_value(Value value) {
             return TYPE_F64;
         case VAL_BOOL:
             return TYPE_BOOL;
+        case VAL_STRING:
+            return TYPE_STRING;
         default:
             return TYPE_I32;
     }
@@ -2477,8 +2479,42 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                 return -1;
             }
 
+            Type* container_type = array_node->resolvedType;
+            if (!container_type && array_node->original &&
+                array_node->original->dataType) {
+                container_type = array_node->original->dataType;
+            }
+
+            TypeKind container_kind = TYPE_UNKNOWN;
+            if (container_type) {
+                container_kind = container_type->kind;
+            }
+
+            if (container_kind != TYPE_STRING && container_kind != TYPE_ARRAY &&
+                array_node->original &&
+                array_node->original->type == NODE_IDENTIFIER) {
+                const char* ident_name = array_node->original->identifier.name;
+                Symbol* symbol = resolve_symbol(ctx->symbols, ident_name);
+                if (symbol && symbol->type) {
+                    container_kind = symbol->type->kind;
+                }
+            }
+
+            if (container_kind != TYPE_STRING && container_kind != TYPE_ARRAY &&
+                array_node->original) {
+                container_kind = fallback_type_kind_from_ast(array_node->original);
+                if (container_kind != TYPE_STRING &&
+                    array_node->original->type == NODE_LITERAL &&
+                    array_node->original->literal.value.type == VAL_STRING) {
+                    container_kind = TYPE_STRING;
+                }
+            }
+
+            uint8_t opcode = (container_kind == TYPE_STRING) ? OP_STRING_GET_R
+                                                             : OP_ARRAY_GET_R;
+
             set_location_from_node(ctx, expr);
-            emit_byte_to_buffer(ctx->bytecode, OP_ARRAY_GET_R);
+            emit_byte_to_buffer(ctx->bytecode, opcode);
             emit_byte_to_buffer(ctx->bytecode, result_reg);
             emit_byte_to_buffer(ctx->bytecode, array_reg);
             emit_byte_to_buffer(ctx->bytecode, index_reg);
@@ -4005,8 +4041,17 @@ static int compile_assignment_internal(CompilerContext* ctx, TypedASTNode* assig
             }
         }
 
+        Type* value_type = NULL;
+        if (assign->typed.assign.value) {
+            value_type = assign->typed.assign.value->resolvedType;
+            if (!value_type && assign->typed.assign.value->original) {
+                value_type = assign->typed.assign.value->original->dataType;
+            }
+        }
+
         if (!register_variable(ctx, target_scope, var_name, var_reg,
-                               assign->resolvedType, should_be_mutable, false,
+                               value_type ? value_type : assign->resolvedType,
+                               should_be_mutable, false,
                                location, true)) {
             mp_free_register(ctx->allocator, var_reg);
             mp_free_temp_register(ctx->allocator, value_reg);

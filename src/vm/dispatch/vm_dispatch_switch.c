@@ -1785,6 +1785,38 @@ InterpretResult vm_run_dispatch(void) {
                     break;
                 }
 
+                case OP_STRING_GET_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t string_reg = READ_BYTE();
+                    uint8_t index_reg = READ_BYTE();
+
+                    Value string_value = vm_get_register_safe(string_reg);
+                    if (!IS_STRING(string_value)) {
+                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Value is not a string");
+                    }
+
+                    int index;
+                    if (!value_to_index(vm_get_register_safe(index_reg), &index)) {
+                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(),
+                                        "String index must be a non-negative integer");
+                    }
+
+                    ObjString* source = AS_STRING(string_value);
+                    if (index < 0 || index >= source->length) {
+                        VM_ERROR_RETURN(ERROR_INDEX, CURRENT_LOCATION(),
+                                        "String index out of bounds");
+                    }
+
+                    ObjString* ch = string_char_at(source, (size_t)index);
+                    if (!ch) {
+                        VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(),
+                                        "Failed to extract string character");
+                    }
+
+                    vm_set_register_safe(dst, STRING_VAL(ch));
+                    break;
+                }
+
                 case OP_ARRAY_GET_R: {
                     uint8_t dst = READ_BYTE();
                     uint8_t array_reg = READ_BYTE();
