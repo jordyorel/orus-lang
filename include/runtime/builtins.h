@@ -19,11 +19,22 @@
 /**
  * Print the provided values to standard output.
  *
- * @param args   Array of values to print.
- * @param count  Number of values in the array.
+ * @param args    Array of values to print.
+ * @param count   Number of values in the array.
  * @param newline When true, append a newline after printing.
  */
 void builtin_print(Value* args, int count, bool newline);
+
+/**
+ * Read a line of input from standard input, optionally displaying a prompt.
+ *
+ * @param args      Optional array containing a single prompt value.
+ * @param count     Number of values provided in {@code args} (0 or 1).
+ * @param out_value Receives the captured input as a string value.
+ * @return true on success, false if input was unavailable or invalid arguments
+ *         were supplied.
+ */
+bool builtin_input(Value* args, int count, Value* out_value);
 
 /**
  * Push a value onto an array, growing the backing store when needed.
@@ -44,11 +55,11 @@ bool builtin_array_push(Value array_value, Value element);
 bool builtin_array_pop(Value array_value, Value* out_value);
 
 /**
- * Obtain a monotonic timestamp in milliseconds.
+ * Obtain a monotonic timestamp in seconds.
  *
  * The epoch is unspecified but monotonically increasing for the
  * duration of the process.
  */
-double builtin_time_stamp();
+double builtin_time_stamp(void);
 
 #endif // ORUS_BUILTINS_H

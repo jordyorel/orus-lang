@@ -609,6 +609,7 @@ typedef enum {
     OP_CLOSE_UPVALUE_R, // local_reg (close upvalue pointing to this local)
 
     // I/O
+    OP_INPUT_R,           // dst_reg, arg_count, prompt_reg
     OP_PRINT_MULTI_R,     // first_reg, count, newline_flag
     OP_PRINT_R,           // reg
     OP_PRINT_NO_NL_R,     // reg

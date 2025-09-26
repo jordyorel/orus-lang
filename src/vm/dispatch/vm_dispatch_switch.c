@@ -2245,6 +2245,11 @@ InterpretResult vm_run_dispatch(void) {
                 }
 
                 // I/O operations
+                case OP_INPUT_R: {
+                    handle_input();
+                    break;
+                }
+
                 case OP_PRINT_MULTI_R: {
                     handle_print_multi();
                     break;

@@ -1,0 +1,10 @@
+prompt = "Prompt> "
+first = input(prompt)
+second = input()
+
+print("First:" + first)
+
+if second == "":
+    print("Second:<empty>")
+else:
+    print("Second:" + second)

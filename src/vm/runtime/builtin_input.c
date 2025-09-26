@@ -1,0 +1,114 @@
+/*
+ * Orus Language Project
+ * ---------------------------------------------------------------------------
+ * File: src/vm/runtime/builtin_input.c
+ * Author: Jordy Orel KONDA
+ * Description: Implements the builtin input routine mirroring Python3 semantics.
+ */
+
+#include "runtime/builtins.h"
+#include "runtime/memory.h"
+
+#include <stdio.h>
+
+static char* read_line_dynamic(size_t* out_capacity, int* out_length) {
+    if (!out_capacity || !out_length) {
+        return NULL;
+    }
+
+    size_t capacity = 128;
+    char* buffer = (char*)reallocate(NULL, 0, capacity);
+    if (!buffer) {
+        return NULL;
+    }
+
+    size_t length = 0;
+    bool saw_character = false;
+
+    while (1) {
+        int ch = fgetc(stdin);
+        if (ch == EOF) {
+            if (ferror(stdin)) {
+                reallocate(buffer, capacity, 0);
+                return NULL;
+            }
+            if (!saw_character) {
+                reallocate(buffer, capacity, 0);
+                return NULL;
+            }
+            break;
+        }
+
+        saw_character = true;
+
+        if (ch == '\n') {
+            break;
+        }
+
+        if (ch == '\r') {
+            int next = fgetc(stdin);
+            if (next != '\n' && next != EOF) {
+                ungetc(next, stdin);
+            }
+            break;
+        }
+
+        if (length + 1 >= capacity) {
+            size_t new_capacity = capacity < 1024 ? capacity * 2 : capacity + capacity / 2;
+            char* new_buffer = (char*)reallocate(buffer, capacity, new_capacity);
+            if (!new_buffer) {
+                reallocate(buffer, capacity, 0);
+                return NULL;
+            }
+            buffer = new_buffer;
+            capacity = new_capacity;
+        }
+
+        buffer[length++] = (char)ch;
+    }
+
+    buffer[length] = '\0';
+
+    *out_capacity = capacity;
+    *out_length = (int)length;
+    return buffer;
+}
+
+bool builtin_input(Value* args, int count, Value* out_value) {
+    if (!out_value) {
+        return false;
+    }
+
+    if (count < 0 || count > 1) {
+        return false;
+    }
+
+    if (count == 1 && args) {
+        Value prompt = args[0];
+        if (IS_STRING(prompt)) {
+            ObjString* prompt_str = AS_STRING(prompt);
+            if (prompt_str && prompt_str->length > 0) {
+                fwrite(prompt_str->chars, sizeof(char), (size_t)prompt_str->length, stdout);
+            }
+        } else {
+            printValue(prompt);
+        }
+        fflush(stdout);
+    }
+
+    size_t capacity = 0;
+    int length = 0;
+    char* buffer = read_line_dynamic(&capacity, &length);
+    if (!buffer) {
+        return false;
+    }
+
+    ObjString* result = allocateStringFromBuffer(buffer, capacity, length);
+    if (!result) {
+        reallocate(buffer, capacity, 0);
+        return false;
+    }
+
+    *out_value = STRING_VAL(result);
+    return true;
+}
