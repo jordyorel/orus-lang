@@ -2,6 +2,7 @@
 
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -273,12 +274,92 @@ static bool test_builtin_input_writes_prompt(void) {
     return true;
 }
 
+static bool test_builtin_input_trims_crlf(void) {
+    initVM();
+
+    int saved_stdin_fd = -1;
+    FILE* temp_stdin = NULL;
+    if (!redirect_stdin_to_buffer("line\r\n", &saved_stdin_fd, &temp_stdin)) {
+        freeVM();
+        return false;
+    }
+
+    Value out = BOOL_VAL(false);
+    bool ok = builtin_input(NULL, 0, &out);
+
+    restore_stdin_from_buffer(saved_stdin_fd, temp_stdin);
+
+    if (!ok) {
+        freeVM();
+        return false;
+    }
+
+    ASSERT_TRUE(IS_STRING(out), "CRLF input should produce string value");
+    ObjString* str = AS_STRING(out);
+    ASSERT_TRUE(str != NULL, "Captured string should be allocated");
+    ASSERT_TRUE(str->length == 4, "CRLF terminator should be trimmed");
+    ASSERT_TRUE(strncmp(str->chars, "line", (size_t)str->length) == 0,
+                "Input should match characters before CRLF");
+
+    freeVM();
+    return true;
+}
+
+static bool test_builtin_input_handles_long_input(void) {
+    initVM();
+
+    const int repeat = 256;
+    const int chunk_len = 16;
+    const int total = repeat * chunk_len;
+    char* buffer = (char*)malloc((size_t)total + 2);
+    if (!buffer) {
+        freeVM();
+        return false;
+    }
+
+    for (int i = 0; i < repeat; i++) {
+        memset(buffer + (size_t)i * chunk_len, 'A' + (i % 10), (size_t)chunk_len);
+    }
+    buffer[total] = '\n';
+    buffer[total + 1] = '\0';
+
+    int saved_stdin_fd = -1;
+    FILE* temp_stdin = NULL;
+    bool redirected = redirect_stdin_to_buffer(buffer, &saved_stdin_fd, &temp_stdin);
+    free(buffer);
+    if (!redirected) {
+        freeVM();
+        return false;
+    }
+
+    Value out = BOOL_VAL(false);
+    bool ok = builtin_input(NULL, 0, &out);
+
+    restore_stdin_from_buffer(saved_stdin_fd, temp_stdin);
+
+    if (!ok) {
+        freeVM();
+        return false;
+    }
+
+    ASSERT_TRUE(IS_STRING(out), "Long input should produce string value");
+    ObjString* str = AS_STRING(out);
+    ASSERT_TRUE(str != NULL, "Captured string should be allocated");
+    ASSERT_TRUE(str->length == total,
+                "All characters before newline should be preserved");
+
+    freeVM();
+    return true;
+}
+
 int main(void) {
     bool (*tests[])(void) = {
         test_builtin_input_reads_line_without_prompt,
         test_builtin_input_allows_empty_line,
         test_builtin_input_returns_false_on_eof,
         test_builtin_input_writes_prompt,
+        test_builtin_input_trims_crlf,
+        test_builtin_input_handles_long_input,
     };
 
     const char* names[] = {
@@ -286,6 +367,8 @@ int main(void) {
         "builtin_input returns empty string for blank line",
         "builtin_input signals failure on EOF",
         "builtin_input writes prompt and captures response",
+        "builtin_input trims CRLF terminators",
+        "builtin_input handles long lines",
     };
 
     int passed = 0;

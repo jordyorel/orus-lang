@@ -9,6 +9,7 @@
 #include "runtime/builtins.h"
 #include "runtime/memory.h"
 
+#include <errno.h>
 #include <stdio.h>
 
 static char* read_line_dynamic(size_t* out_capacity, int* out_length) {
@@ -26,9 +27,15 @@ static char* read_line_dynamic(size_t* out_capacity, int* out_length) {
     bool saw_character = false;
 
     while (1) {
+        errno = 0;
         int ch = fgetc(stdin);
         if (ch == EOF) {
             if (ferror(stdin)) {
+                int err = errno;
+                if (err == EINTR) {
+                    clearerr(stdin);
+                    continue;
+                }
                 reallocate(buffer, capacity, 0);
                 return NULL;
             }
