@@ -2500,28 +2500,22 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                 }
             }
 
-            bool container_is_string = false;
-            const Type* base_type = resolved_container_type;
-            if (base_type && base_type->kind == TYPE_INSTANCE &&
-                base_type->info.instance.base) {
-                base_type = base_type->info.instance.base;
-            }
+            bool is_string_index = expr->typed.indexAccess.isStringIndex;
+            if (!is_string_index) {
+                const Type* base_type = resolved_container_type;
+                if (base_type && base_type->kind == TYPE_INSTANCE &&
+                    base_type->info.instance.base) {
+                    base_type = base_type->info.instance.base;
+                }
 
-            if (base_type && base_type->kind == TYPE_STRING) {
-                container_is_string = true;
-            } else if (!base_type && array_node->original) {
-                if (array_node->original->type == NODE_LITERAL &&
-                    array_node->original->literal.value.type == VAL_STRING) {
-                    container_is_string = true;
-                } else {
-                    container_is_string =
-                        fallback_type_kind_from_ast(array_node->original) ==
-                        TYPE_STRING;
+                if (base_type && base_type->kind == TYPE_STRING) {
+                    is_string_index = true;
+                } else if (!base_type && array_node->original &&
+                           array_node->original->type == NODE_LITERAL &&
+                           array_node->original->literal.value.type == VAL_STRING) {
+                    is_string_index = true;
                 }
             }
-
-            bool is_string_index = expr->typed.indexAccess.isStringIndex ||
-                                   container_is_string;
 
             set_location_from_node(ctx, expr);
             emit_byte_to_buffer(ctx->bytecode,
