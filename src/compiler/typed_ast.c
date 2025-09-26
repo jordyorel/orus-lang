@@ -150,6 +150,7 @@ TypedASTNode* create_typed_ast_node(ASTNode* original) {
         case NODE_INDEX_ACCESS:
             typed->typed.indexAccess.array = NULL;
             typed->typed.indexAccess.index = NULL;
+            typed->typed.indexAccess.isStringIndex = original->indexAccess.isStringIndex;
             break;
         case NODE_RETURN:
             typed->typed.returnStmt.value = NULL;

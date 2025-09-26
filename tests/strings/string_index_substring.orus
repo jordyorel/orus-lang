@@ -1,0 +1,11 @@
+// Build a substring via incremental concatenation and ensure indexing works on the derived rope leaf.
+source = "substring demo"
+mut part = ""
+mut i = 0
+while i < 6:
+    part = part + source[3 + i]
+    i = i + 1
+
+print("slice:", part)
+print("slice first:", part[0])
+print("slice mid:", part[2])

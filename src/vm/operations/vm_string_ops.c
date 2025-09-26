@@ -111,6 +111,65 @@ char* rope_to_cstr(StringRope* rope) {
     return result;
 }
 
+static size_t rope_length(StringRope* rope) {
+    if (!rope) return 0;
+    switch (rope->kind) {
+        case ROPE_LEAF:
+            return rope->as.leaf.len;
+        case ROPE_CONCAT: {
+            size_t left_len = rope_length(rope->as.concat.left);
+            size_t right_len = rope_length(rope->as.concat.right);
+            return left_len + right_len;
+        }
+        case ROPE_SUBSTRING:
+            return rope->as.substring.len;
+    }
+    return 0;
+}
+
+static bool rope_char_at(StringRope* rope, size_t index, char* out_char) {
+    if (!rope) {
+        return false;
+    }
+
+    switch (rope->kind) {
+        case ROPE_LEAF:
+            if (index >= rope->as.leaf.len) {
+                return false;
+            }
+            if (out_char) {
+                *out_char = rope->as.leaf.data[index];
+            }
+            return true;
+        case ROPE_CONCAT: {
+            size_t left_len = rope_length(rope->as.concat.left);
+            if (index < left_len) {
+                return rope_char_at(rope->as.concat.left, index, out_char);
+            }
+            return rope_char_at(rope->as.concat.right, index - left_len, out_char);
+        }
+        case ROPE_SUBSTRING: {
+            if (index >= rope->as.substring.len) {
+                return false;
+            }
+            return rope_char_at(rope->as.substring.base, rope->as.substring.start + index, out_char);
+        }
+    }
+    return false;
+}
+
+ObjString* rope_index_to_string(StringRope* rope, size_t index) {
+    char ch = '\0';
+    if (!rope_char_at(rope, index, &ch)) {
+        return NULL;
+    }
+
+    char buffer[2];
+    buffer[0] = ch;
+    buffer[1] = '\0';
+    return allocateString(buffer, 1);
+}
+
 StringInternTable globalStringTable;
 
 void init_string_table(StringInternTable* table) {

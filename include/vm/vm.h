@@ -545,6 +545,7 @@ typedef enum {
     // String operations
     OP_CONCAT_R,
     OP_TO_STRING_R,
+    OP_STRING_INDEX_R,
 
     // Array operations
     OP_MAKE_ARRAY_R,  // dst, start_reg, count

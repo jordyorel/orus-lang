@@ -74,6 +74,7 @@ void freeStringBuilder(StringBuilder* sb);
 // Rope helpers
 StringRope* rope_from_cstr(const char* str, size_t len);
 char* rope_to_cstr(StringRope* rope);
+ObjString* rope_index_to_string(StringRope* rope, size_t index);
 
 // Interning
 void init_string_table(StringInternTable* table);
