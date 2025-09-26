@@ -1,3 +1,14 @@
+/*
+ * Orus Language Project
+ * ---------------------------------------------------------------------------
+ * File: include/errors/error_types.h
+ * Author: Jordy Orel KONDA
+ * Copyright (c) 2025 Jordy Orel KONDA
+ * License: MIT License (see LICENSE file in the project root)
+ * Description: Enumerates core error categories and metadata shared by Orus
+ *              diagnostics.
+ */
+
 #ifndef ORUS_ERROR_TYPES_H
 #define ORUS_ERROR_TYPES_H
 

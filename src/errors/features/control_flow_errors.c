@@ -1,3 +1,14 @@
+/*
+ * Orus Language Project
+ * ---------------------------------------------------------------------------
+ * File: src/errors/features/control_flow_errors.c
+ * Author: Jordy Orel KONDA
+ * Copyright (c) 2025 Jordy Orel KONDA
+ * License: MIT License (see LICENSE file in the project root)
+ * Description: Implements diagnostics for control-flow related errors encountered
+ *              during compilation and execution.
+ */
+
 #include "errors/features/control_flow_errors.h"
 #include "errors/error_interface.h"
 #include "compiler/scope_stack.h"

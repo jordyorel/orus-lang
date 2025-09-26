@@ -1,3 +1,14 @@
+/*
+ * Orus Language Project
+ * ---------------------------------------------------------------------------
+ * File: src/vm/register_file.c
+ * Author: Jordy Orel KONDA
+ * Copyright (c) 2025 Jordy Orel KONDA
+ * License: MIT License (see LICENSE file in the project root)
+ * Description: Implements the VM register file storing execution state for each
+ *              frame.
+ */
+
 // register_file.c - Register File Architecture Implementation
 // Implementation of hierarchical register windows with dynamic spilling
 

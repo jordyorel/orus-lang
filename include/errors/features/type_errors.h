@@ -1,3 +1,14 @@
+/*
+ * Orus Language Project
+ * ---------------------------------------------------------------------------
+ * File: include/errors/features/type_errors.h
+ * Author: Jordy Orel KONDA
+ * Copyright (c) 2025 Jordy Orel KONDA
+ * License: MIT License (see LICENSE file in the project root)
+ * Description: Declares error helpers dedicated to static and dynamic type
+ *              diagnostics.
+ */
+
 #ifndef ORUS_TYPE_ERRORS_H
 #define ORUS_TYPE_ERRORS_H
 

@@ -1,3 +1,13 @@
+/*
+ * Orus Language Project
+ * ---------------------------------------------------------------------------
+ * File: include/runtime/memory.h
+ * Author: Jordy Orel KONDA
+ * Copyright (c) 2025 Jordy Orel KONDA
+ * License: MIT License (see LICENSE file in the project root)
+ * Description: Declares runtime memory management helpers and allocation APIs.
+ */
+
 #ifndef ORUS_MEMORY_H
 #define ORUS_MEMORY_H
 

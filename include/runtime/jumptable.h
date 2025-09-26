@@ -1,3 +1,14 @@
+/*
+ * Orus Language Project
+ * ---------------------------------------------------------------------------
+ * File: include/runtime/jumptable.h
+ * Author: Jordy Orel KONDA
+ * Copyright (c) 2025 Jordy Orel KONDA
+ * License: MIT License (see LICENSE file in the project root)
+ * Description: Declares bytecode jump table structures that accelerate opcode
+ *              dispatch.
+ */
+
 #ifndef ORUS_JUMPTABLE_H
 #define ORUS_JUMPTABLE_H
 

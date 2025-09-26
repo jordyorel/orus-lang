@@ -1,3 +1,14 @@
+/*
+ * Orus Language Project
+ * ---------------------------------------------------------------------------
+ * File: include/orus.h
+ * Author: Jordy Orel KONDA
+ * Copyright (c) 2025 Jordy Orel KONDA
+ * License: MIT License (see LICENSE file in the project root)
+ * Description: Umbrella header exposing the public Orus Language API for embedders
+ *              and tooling.
+ */
+
 /**
  * @file orus.h
  * @brief Main entry point for the Orus language implementation

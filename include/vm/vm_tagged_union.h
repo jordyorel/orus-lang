@@ -1,3 +1,13 @@
+/*
+ * Orus Language Project
+ * ---------------------------------------------------------------------------
+ * File: include/vm/vm_tagged_union.h
+ * Author: Jordy Orel KONDA
+ * Copyright (c) 2025 Jordy Orel KONDA
+ * License: MIT License (see LICENSE file in the project root)
+ * Description: Declares the tagged union representation for dynamically typed values.
+ */
+
 #ifndef ORUS_VM_TAGGED_UNION_H
 #define ORUS_VM_TAGGED_UNION_H
 

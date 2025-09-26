@@ -1,3 +1,14 @@
+/*
+ * Orus Language Project
+ * ---------------------------------------------------------------------------
+ * File: src/vm/runtime/builtins.c
+ * Author: Jordy Orel KONDA
+ * Copyright (c) 2025 Jordy Orel KONDA
+ * License: MIT License (see LICENSE file in the project root)
+ * Description: Registers and implements built-in runtime functions available to Orus
+ *              programs.
+ */
+
 #define _POSIX_C_SOURCE 200809L
 #include "runtime/builtins.h"
 #include "runtime/memory.h"

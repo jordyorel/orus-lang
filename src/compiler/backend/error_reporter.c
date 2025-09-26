@@ -1,3 +1,14 @@
+/*
+ * Orus Language Project
+ * ---------------------------------------------------------------------------
+ * File: src/compiler/backend/error_reporter.c
+ * Author: Jordy Orel KONDA
+ * Copyright (c) 2025 Jordy Orel KONDA
+ * License: MIT License (see LICENSE file in the project root)
+ * Description: Implements backend diagnostic emission for code generation and
+ *              optimization phases.
+ */
+
 #include "compiler/error_reporter.h"
 #include "errors/error_interface.h"
 #include "internal/error_reporting.h"

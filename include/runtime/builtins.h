@@ -1,3 +1,14 @@
+/*
+ * Orus Language Project
+ * ---------------------------------------------------------------------------
+ * File: include/runtime/builtins.h
+ * Author: Jordy Orel KONDA
+ * Copyright (c) 2025 Jordy Orel KONDA
+ * License: MIT License (see LICENSE file in the project root)
+ * Description: Declares runtime built-in functions and registration helpers for the
+ *              VM.
+ */
+
 #ifndef ORUS_BUILTINS_H
 #define ORUS_BUILTINS_H
 

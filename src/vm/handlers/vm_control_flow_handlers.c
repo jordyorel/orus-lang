@@ -1,4 +1,14 @@
 /*
+ * Orus Language Project
+ * ---------------------------------------------------------------------------
+ * File: src/vm/handlers/vm_control_flow_handlers.c
+ * Author: Jordy Orel KONDA
+ * Copyright (c) 2025 Jordy Orel KONDA
+ * License: MIT License (see LICENSE file in the project root)
+ * Description: Implements control-flow opcode handlers managing jumps and branches.
+ */
+
+/*
  * File: src/vm/handlers/vm_control_flow_handlers.c
  * High-performance control flow operation handlers for the Orus VM
  * 

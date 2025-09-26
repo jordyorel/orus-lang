@@ -1,3 +1,13 @@
+/*
+ * Orus Language Project
+ * ---------------------------------------------------------------------------
+ * File: include/vm/vm_control_flow.h
+ * Author: Jordy Orel KONDA
+ * Copyright (c) 2025 Jordy Orel KONDA
+ * License: MIT License (see LICENSE file in the project root)
+ * Description: Declares control-flow operation handlers for the Orus VM.
+ */
+
 #ifndef ORUS_VM_CONTROL_FLOW_H
 #define ORUS_VM_CONTROL_FLOW_H
 

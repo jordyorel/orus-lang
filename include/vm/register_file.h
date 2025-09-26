@@ -1,3 +1,13 @@
+/*
+ * Orus Language Project
+ * ---------------------------------------------------------------------------
+ * File: include/vm/register_file.h
+ * Author: Jordy Orel KONDA
+ * Copyright (c) 2025 Jordy Orel KONDA
+ * License: MIT License (see LICENSE file in the project root)
+ * Description: Declares the VM register file abstraction backing execution contexts.
+ */
+
 // register_file.h - Phase 1 & 2: Register File Architecture Header
 #ifndef REGISTER_FILE_H
 #define REGISTER_FILE_H

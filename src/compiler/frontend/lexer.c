@@ -1,3 +1,13 @@
+/*
+ * Orus Language Project
+ * ---------------------------------------------------------------------------
+ * File: src/compiler/frontend/lexer.c
+ * Author: Jordy Orel KONDA
+ * Copyright (c) 2025 Jordy Orel KONDA
+ * License: MIT License (see LICENSE file in the project root)
+ * Description: Implements the lexical analyzer that tokenizes Orus source files.
+ */
+
 // Lexer implementation for the Orus Language Compiler
 
 

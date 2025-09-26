@@ -1,3 +1,14 @@
+/*
+ * Orus Language Project
+ * ---------------------------------------------------------------------------
+ * File: src/errors/infrastructure/error_infrastructure.c
+ * Author: Jordy Orel KONDA
+ * Copyright (c) 2025 Jordy Orel KONDA
+ * License: MIT License (see LICENSE file in the project root)
+ * Description: Manages shared error infrastructure, including registries and
+ *              formatting pipelines.
+ */
+
 #include "internal/error_reporting.h"
 #include <stdio.h>
 #include <stdlib.h>

@@ -1,3 +1,14 @@
+/*
+ * Orus Language Project
+ * ---------------------------------------------------------------------------
+ * File: src/compiler/backend/optimization/constantfold.c
+ * Author: Jordy Orel KONDA
+ * Copyright (c) 2025 Jordy Orel KONDA
+ * License: MIT License (see LICENSE file in the project root)
+ * Description: Applies constant folding to expressions and instructions within the
+ *              backend IR.
+ */
+
 #include "compiler/optimization/constantfold.h"
 #include "compiler/typed_ast.h"
 #include "compiler/optimization/optimizer.h"

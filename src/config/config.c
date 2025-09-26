@@ -1,3 +1,14 @@
+/*
+ * Orus Language Project
+ * ---------------------------------------------------------------------------
+ * File: src/config/config.c
+ * Author: Jordy Orel KONDA
+ * Copyright (c) 2025 Jordy Orel KONDA
+ * License: MIT License (see LICENSE file in the project root)
+ * Description: Loads, validates, and applies configuration values for the Orus
+ *              toolchain.
+ */
+
 // config.c - Orus Language Configuration System Implementation
 #include "config/config.h"
 #include "public/version.h"

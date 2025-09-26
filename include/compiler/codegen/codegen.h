@@ -1,3 +1,14 @@
+/*
+ * Orus Language Project
+ * ---------------------------------------------------------------------------
+ * File: include/compiler/codegen/codegen.h
+ * Author: Jordy Orel KONDA
+ * Copyright (c) 2025 Jordy Orel KONDA
+ * License: MIT License (see LICENSE file in the project root)
+ * Description: Defines the interface for translating typed AST nodes into executable
+ *              Orus VM bytecode chunks.
+ */
+
 #ifndef CODEGEN_H  
 #define CODEGEN_H
 
