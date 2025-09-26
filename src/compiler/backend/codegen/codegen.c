@@ -50,6 +50,8 @@ static TypeKind fallback_type_kind_from_value(Value value) {
             return TYPE_F64;
         case VAL_BOOL:
             return TYPE_BOOL;
+        case VAL_STRING:
+            return TYPE_STRING;
         default:
             return TYPE_I32;
     }
@@ -4007,8 +4009,17 @@ static int compile_assignment_internal(CompilerContext* ctx, TypedASTNode* assig
             }
         }
 
+        Type* value_type = NULL;
+        if (assign->typed.assign.value) {
+            value_type = assign->typed.assign.value->resolvedType;
+            if (!value_type && assign->typed.assign.value->original) {
+                value_type = assign->typed.assign.value->original->dataType;
+            }
+        }
+
         if (!register_variable(ctx, target_scope, var_name, var_reg,
-                               assign->resolvedType, should_be_mutable, false,
+                               value_type ? value_type : assign->resolvedType,
+                               should_be_mutable, false,
                                location, true)) {
             mp_free_register(ctx->allocator, var_reg);
             mp_free_temp_register(ctx->allocator, value_reg);

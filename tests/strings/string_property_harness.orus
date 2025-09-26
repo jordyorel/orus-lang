@@ -1,0 +1,430 @@
+// ==============================
+// Orus Strings Property Harness
+// ==============================
+print("== String Property Harness ==")
+start_time: f64 = time_stamp()
+print("Start timestamp:", start_time)
+
+// ---------- Deterministic RNG ----------
+global mut RNG_SEED: i32 = 0x13579BDF
+
+fn srand(seed: i32): RNG_SEED = seed
+fn rand_u32() -> i32:
+    RNG_SEED = (RNG_SEED * 1664525) + 1013904223
+    return RNG_SEED
+
+fn rand_range(lo: i32, hi: i32) -> i32:
+    if hi <= lo: return lo
+    span = hi - lo + 1
+    r = rand_u32()
+    m = r % span
+    if m < 0: m = m + span
+    return lo + m
+
+fn rand_len(max_len: i32) -> i32:
+    return rand_range(0, max_len)
+
+// ---------- Common helpers ----------
+fn copy_array(xs):
+    mut out = []
+    mut i: i32 = 0
+    while i < len(xs):
+        push(out, xs[i])
+        i = i + 1
+    return out
+
+fn swap(xs, i: i32, j: i32):
+    temp = xs[i]
+    xs[i] = xs[j]
+    xs[j] = temp
+
+// Pool of ASCII-safe glyphs for deterministic generation.
+fn build_ascii_pool():
+    mut pool = []
+    push(pool, "a")
+    push(pool, "b")
+    push(pool, "c")
+    push(pool, "d")
+    push(pool, "e")
+    push(pool, "f")
+    push(pool, "g")
+    push(pool, "h")
+    push(pool, "i")
+    push(pool, "j")
+    push(pool, "k")
+    push(pool, "l")
+    push(pool, "m")
+    push(pool, "n")
+    push(pool, "o")
+    push(pool, "p")
+    push(pool, "q")
+    push(pool, "r")
+    push(pool, "s")
+    push(pool, "t")
+    push(pool, "u")
+    push(pool, "v")
+    push(pool, "w")
+    push(pool, "x")
+    push(pool, "y")
+    push(pool, "z")
+    push(pool, "A")
+    push(pool, "B")
+    push(pool, "C")
+    push(pool, "D")
+    push(pool, "E")
+    push(pool, "F")
+    push(pool, "G")
+    push(pool, "H")
+    push(pool, "I")
+    push(pool, "J")
+    push(pool, "K")
+    push(pool, "L")
+    push(pool, "M")
+    push(pool, "N")
+    push(pool, "O")
+    push(pool, "P")
+    push(pool, "Q")
+    push(pool, "R")
+    push(pool, "S")
+    push(pool, "T")
+    push(pool, "U")
+    push(pool, "V")
+    push(pool, "W")
+    push(pool, "X")
+    push(pool, "Y")
+    push(pool, "Z")
+    push(pool, "0")
+    push(pool, "1")
+    push(pool, "2")
+    push(pool, "3")
+    push(pool, "4")
+    push(pool, "5")
+    push(pool, "6")
+    push(pool, "7")
+    push(pool, "8")
+    push(pool, "9")
+    push(pool, "_")
+    push(pool, "-")
+    push(pool, ".")
+    push(pool, " ")
+    push(pool, ":")
+    push(pool, "/")
+    return pool
+
+ASCII_POOL = build_ascii_pool()
+
+fn ascii_index(ch) -> i32:
+    mut i: i32 = 0
+    while i < len(ASCII_POOL):
+        if ASCII_POOL[i] == ch: return i
+        i = i + 1
+    return 0
+
+fn rand_ascii_char():
+    idx: i32 = rand_range(0, len(ASCII_POOL) - 1)
+    return ASCII_POOL[idx]
+
+fn rand_ascii_chars(max_len: i32):
+    L: i32 = rand_len(max_len)
+    mut out = []
+    mut i: i32 = 0
+    while i < L:
+        push(out, rand_ascii_char())
+        i = i + 1
+    return out
+
+fn string_from_chars(chars) -> string:
+    mut out = ""
+    mut i: i32 = 0
+    while i < len(chars):
+        out = out + chars[i]
+        i = i + 1
+    return out
+
+fn generate_segments(max_segments: i32, max_len: i32):
+    count: i32 = rand_range(1, max_segments)
+    mut segments = []
+    mut i: i32 = 0
+    while i < count:
+        push(segments, rand_ascii_chars(max_len))
+        i = i + 1
+    return segments
+
+fn segments_to_strings(segments):
+    mut out = []
+    mut i: i32 = 0
+    while i < len(segments):
+        push(out, string_from_chars(segments[i]))
+        i = i + 1
+    return out
+
+fn join_segments(segments):
+    mut out = ""
+    mut i: i32 = 0
+    while i < len(segments):
+        segment = segments[i]
+        mut j: i32 = 0
+        while j < len(segment):
+            out = out + segment[j]
+            j = j + 1
+        i = i + 1
+    return out
+
+fn join_range(segments, start: i32, end: i32):
+    mut out = ""
+    mut i: i32 = start
+    while i < end:
+        segment = segments[i]
+        mut j: i32 = 0
+        while j < len(segment):
+            out = out + segment[j]
+            j = j + 1
+        i = i + 1
+    return out
+
+fn flatten_char_parts(segments):
+    mut flat = []
+    mut i: i32 = 0
+    while i < len(segments):
+        segment = segments[i]
+        mut j: i32 = 0
+        while j < len(segment):
+            push(flat, segment[j])
+            j = j + 1
+        i = i + 1
+    return flat
+
+fn fingerprint_chars(chars) -> i32:
+    mut total: i32 = len(chars) * 131
+    mut i: i32 = 0
+    while i < len(chars):
+        glyph = chars[i]
+        total = total + (ascii_index(glyph) * 17) + i
+        i = i + 1
+    return total
+
+fn bag_fingerprint(segments) -> i32:
+    mut total: i32 = len(segments) * 977
+    mut i: i32 = 0
+    while i < len(segments):
+        segment_score: i32 = fingerprint_chars(segments[i])
+        total = total + segment_score
+        total = total + (segment_score * segment_score)
+        i = i + 1
+    return total
+
+fn manual_char_accum(segments) -> string:
+    mut out = ""
+    mut i: i32 = 0
+    while i < len(segments):
+        piece = segments[i]
+        mut j: i32 = 0
+        while j < len(piece):
+            out = out + piece[j]
+            j = j + 1
+        i = i + 1
+    return out
+
+fn chunked_join(segments) -> string:
+    mut out = ""
+    mut idx: i32 = 0
+    while idx < len(segments):
+        mut chunk_end: i32 = idx + 3
+        if chunk_end > len(segments):
+            chunk_end = len(segments)
+        out = out + join_range(segments, idx, chunk_end)
+        idx = chunk_end
+    return out
+
+fn right_associative_concat(segments) -> string:
+    count: i32 = len(segments)
+    if count == 0: return ""
+    mut idx: i32 = count - 1
+    mut out = string_from_chars(segments[idx])
+    while idx > 0:
+        idx = idx - 1
+        out = string_from_chars(segments[idx]) + out
+    return out
+
+fn copy_nested_array(xs):
+    mut out = []
+    mut i: i32 = 0
+    while i < len(xs):
+        push(out, copy_array(xs[i]))
+        i = i + 1
+    return out
+
+fn shuffle_segments(segments):
+    n: i32 = len(segments)
+    if n <= 1: return segments
+    mut swaps: i32 = n * 2
+    mut k: i32 = 0
+    while k < swaps:
+        a: i32 = rand_range(0, n - 1)
+        b: i32 = rand_range(0, n - 1)
+        if a != b:
+            swap(segments, a, b)
+        k = k + 1
+    return segments
+
+fn slice_chars_from_parts(segments, start: i32, length: i32):
+    if length <= 0: return []
+    mut remaining_start: i32 = start
+    mut collected: i32 = 0
+    mut out = []
+    mut idx: i32 = 0
+    while idx < len(segments) and collected < length:
+        segment = segments[idx]
+        seg_len: i32 = len(segment)
+        if remaining_start >= seg_len:
+            remaining_start = remaining_start - seg_len
+        else:
+            mut local_index: i32 = remaining_start
+            while local_index < seg_len and collected < length:
+                push(out, segment[local_index])
+                local_index = local_index + 1
+                collected = collected + 1
+            remaining_start = 0
+        idx = idx + 1
+    return out
+
+fn manual_slice_from_segments(segments, start: i32, length: i32) -> string:
+    chars = slice_chars_from_parts(segments, start, length)
+    return string_from_chars(chars)
+
+fn slice_chars_from_flat(flat_chars, start: i32, length: i32):
+    if length <= 0: return []
+    mut out = []
+    mut i: i32 = 0
+    while i < length:
+        actual: i32 = start + i
+        if actual >= len(flat_chars): break
+        push(out, flat_chars[actual])
+        i = i + 1
+    return out
+
+// ---------- Property Phases ----------
+fn phase_multi_concat(seed: i32, trials: i32) -> i32:
+    print("-- Phase 1: chained concatenation vs manual joins (seed", seed, ") --")
+    srand(seed)
+    mut checksum: i32 = 0
+    mut t: i32 = 0
+    while t < trials:
+        segments = generate_segments(6, 12)
+        segment_strings = segments_to_strings(segments)
+        chained = string_from_chars(segments[0])
+        mut i: i32 = 1
+        while i < len(segments):
+            chained = chained + string_from_chars(segments[i])
+            i = i + 1
+        manual = join_segments(segments)
+        if chained != manual:
+            print("FAIL phase1 chained != manual", segment_strings, chained, manual)
+        mid: i32 = len(segments) / 2
+        left = join_range(segments, 0, mid)
+        right = join_range(segments, mid, len(segments))
+        if left + right != manual:
+            print("FAIL phase1 chunk mismatch", left + right, manual)
+        flat_chars = flatten_char_parts(segments)
+        checksum = checksum + (len(flat_chars) * 3) + len(segments)
+        checksum = checksum + fingerprint_chars(flat_chars)
+        t = t + 1
+    print("Phase 1 checksum:", checksum)
+    return checksum
+
+fn phase_loop_vs_batch(seed: i32, trials: i32) -> i32:
+    print("-- Phase 2: loop accumulation vs batch concatenation (seed", seed, ") --")
+    srand(seed)
+    mut checksum: i32 = 0
+    mut t: i32 = 0
+    while t < trials:
+        segments = generate_segments(8, 16)
+        segment_strings = segments_to_strings(segments)
+        looped = manual_char_accum(segments)
+        batch = join_segments(segments)
+        if looped != batch:
+            print("FAIL phase2 loop != batch", segment_strings, looped, batch)
+        tiered = chunked_join(segments)
+        if tiered != batch:
+            print("FAIL phase2 chunked != batch", tiered, batch)
+        flat_chars = flatten_char_parts(segments)
+        checksum = checksum + (len(flat_chars) * 7) + fingerprint_chars(flat_chars)
+        t = t + 1
+    print("Phase 2 checksum:", checksum)
+    return checksum
+
+fn phase_permutation_invariance(seed: i32, trials: i32) -> i32:
+    print("-- Phase 3: permutation invariants and associativity (seed", seed, ") --")
+    srand(seed)
+    mut checksum: i32 = 0
+    mut t: i32 = 0
+    while t < trials:
+        segments = generate_segments(7, 10)
+        segment_strings = segments_to_strings(segments)
+        base = join_segments(segments)
+        right = right_associative_concat(segments)
+        if base != right:
+            print("FAIL phase3 assoc inequality", base, right)
+        base_chars = flatten_char_parts(segments)
+        base_fingerprint: i32 = fingerprint_chars(base_chars)
+        perm = copy_nested_array(segments)
+        shuffle_segments(perm)
+        if bag_fingerprint(segments) != bag_fingerprint(perm):
+            print("FAIL phase3 bag mismatch", segment_strings, segments_to_strings(perm))
+        checksum = checksum + base_fingerprint + bag_fingerprint(perm)
+        checksum = checksum + len(segments)
+        t = t + 1
+    print("Phase 3 checksum:", checksum)
+    return checksum
+
+fn phase_metamorphic_slicing(seed: i32, trials: i32) -> i32:
+    print("-- Phase 4: concat/slice metamorphic checks (seed", seed, ") --")
+    srand(seed)
+    mut checksum: i32 = 0
+    mut t: i32 = 0
+    while t < trials:
+        segments = generate_segments(6, 14)
+        segment_strings = segments_to_strings(segments)
+        whole = join_segments(segments)
+        whole_chars = flatten_char_parts(segments)
+        mut offset: i32 = 0
+        mut i: i32 = 0
+        while i < len(segments):
+            seg_chars = segments[i]
+            seg = string_from_chars(seg_chars)
+            seg_len: i32 = len(seg_chars)
+            slice_chars = slice_chars_from_flat(whole_chars, offset, seg_len)
+            slice = string_from_chars(slice_chars)
+            if slice != seg:
+                print("FAIL phase4 slice != seg", i, offset, seg_len, slice, seg)
+            offset = offset + seg_len
+            i = i + 1
+        total_len: i32 = len(whole_chars)
+        if total_len > 0:
+            start = rand_range(0, total_len - 1)
+        else:
+            start = 0
+        max_span: i32 = total_len - start
+        span: i32 = rand_range(0, max_span)
+        direct_chars = slice_chars_from_flat(whole_chars, start, span)
+        direct = string_from_chars(direct_chars)
+        manual = manual_slice_from_segments(segments, start, span)
+        if direct != manual:
+            print("FAIL phase4 manual != direct", start, span, direct, manual, segment_strings)
+        checksum = checksum + (len(whole_chars) * 11)
+        checksum = checksum + fingerprint_chars(direct_chars)
+        t = t + 1
+    print("Phase 4 checksum:", checksum)
+    return checksum
+
+// ---------- Runner ----------
+const TRIALS = 64
+
+mut total_checksum: i32 = 0
+total_checksum = total_checksum + phase_multi_concat(0xA5A5, TRIALS)
+total_checksum = total_checksum + phase_loop_vs_batch(0xBEE5, TRIALS)
+total_checksum = total_checksum + phase_permutation_invariance(0xC0DE, TRIALS)
+total_checksum = total_checksum + phase_metamorphic_slicing(0xDADA, TRIALS)
+
+end_time: f64 = time_stamp()
+print("== String Property Harness Complete ==", "checksum:", total_checksum, "elapsed:", end_time - start_time)

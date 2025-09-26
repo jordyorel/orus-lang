@@ -6,6 +6,7 @@ Keeping the roadmap short and direct makes it easier for the team to track what 
 ## Delivered Capabilities
 - End-to-end toolchain: lexer → parser → Hindley–Milner inference → optimising compiler → 256-register VM.
 - Language surface: functions, `mut` variables, control flow, pattern matching, arrays, strings, numeric + boolean types.
+- Runtime now supports direct string indexing with bounds-checked `OP_STRING_INDEX_R` emission.
 - Modules: `module` headers, `use` imports with visibility checks and aliasing.
 - Diagnostics today: scope validation and control-flow checks (rich formatter still pending).
 

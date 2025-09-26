@@ -49,6 +49,16 @@ static bool buffer_is_ascii(const char* data, size_t len) {
     return true;
 }
 
+static bool buffer_is_ascii(const char* data, size_t len) {
+    if (!data) return true;
+    for (size_t i = 0; i < len; i++) {
+        if ((unsigned char)data[i] >= 0x80) {
+            return false;
+        }
+    }
+    return true;
+}
+
 StringBuilder* createStringBuilder(size_t initial_capacity) {
     size_t cap = initial_capacity > 0 ? initial_capacity : VM_SMALL_STRING_BUFFER;
     StringBuilder* sb = (StringBuilder*)reallocate(NULL, 0, sizeof(StringBuilder));
@@ -120,6 +130,69 @@ StringRope* rope_from_buffer(char* buffer, size_t len, bool owns_data) {
     return r;
 }
 
+static size_t rope_length_internal(const StringRope* rope) {
+    if (!rope) return 0;
+    switch (rope->kind) {
+        case ROPE_LEAF:
+            return rope->as.leaf.len;
+        case ROPE_CONCAT:
+            return rope_length_internal(rope->as.concat.left) +
+                   rope_length_internal(rope->as.concat.right);
+        case ROPE_SUBSTRING:
+            return rope->as.substring.len;
+    }
+    return 0;
+}
+
+size_t rope_length(const StringRope* rope) { return rope_length_internal(rope); }
+
+static bool rope_char_at_internal(const StringRope* rope, size_t index, char* out) {
+    if (!rope) return false;
+    switch (rope->kind) {
+        case ROPE_LEAF:
+            if (index >= rope->as.leaf.len) {
+                return false;
+            }
+            *out = rope->as.leaf.data[index];
+            return true;
+        case ROPE_CONCAT: {
+            size_t left_len = rope_length_internal(rope->as.concat.left);
+            if (index < left_len) {
+                return rope_char_at_internal(rope->as.concat.left, index, out);
+            }
+            return rope_char_at_internal(rope->as.concat.right, index - left_len, out);
+        }
+        case ROPE_SUBSTRING:
+            if (index >= rope->as.substring.len) {
+                return false;
+            }
+            return rope_char_at_internal(rope->as.substring.base,
+                                         rope->as.substring.start + index, out);
+    }
+    return false;
+}
+
+bool rope_char_at(const StringRope* rope, size_t index, char* out) {
+    if (!out) {
+        return false;
+    }
+    return rope_char_at_internal(rope, index, out);
+}
+
+ObjString* string_char_at(ObjString* string, size_t index) {
+    if (!string || !string->rope) {
+        return NULL;
+    }
+    char ch;
+    if (!rope_char_at_internal(string->rope, index, &ch)) {
+        return NULL;
+    }
+    char buffer[2];
+    buffer[0] = ch;
+    buffer[1] = '\0';
+    return allocateString(buffer, 1);
+}
+
 static void rope_flatten(StringRope* rope, StringBuilder* sb) {
     if (!rope) return;
     switch (rope->kind) {
@@ -146,53 +219,6 @@ char* rope_to_cstr(StringRope* rope) {
     char* result = sb->buffer;
     free(sb); // only free the struct, keep buffer
     return result;
-}
-
-static size_t rope_length(StringRope* rope) {
-    if (!rope) return 0;
-    switch (rope->kind) {
-        case ROPE_LEAF:
-            return rope->as.leaf.len;
-        case ROPE_CONCAT: {
-            size_t left_len = rope_length(rope->as.concat.left);
-            size_t right_len = rope_length(rope->as.concat.right);
-            return left_len + right_len;
-        }
-        case ROPE_SUBSTRING:
-            return rope->as.substring.len;
-    }
-    return 0;
-}
-
-static bool rope_char_at(StringRope* rope, size_t index, char* out_char) {
-    if (!rope) {
-        return false;
-    }
-
-    switch (rope->kind) {
-        case ROPE_LEAF:
-            if (index >= rope->as.leaf.len) {
-                return false;
-            }
-            if (out_char) {
-                *out_char = rope->as.leaf.data[index];
-            }
-            return true;
-        case ROPE_CONCAT: {
-            size_t left_len = rope_length(rope->as.concat.left);
-            if (index < left_len) {
-                return rope_char_at(rope->as.concat.left, index, out_char);
-            }
-            return rope_char_at(rope->as.concat.right, index - left_len, out_char);
-        }
-        case ROPE_SUBSTRING: {
-            if (index >= rope->as.substring.len) {
-                return false;
-            }
-            return rope_char_at(rope->as.substring.base, rope->as.substring.start + index, out_char);
-        }
-    }
-    return false;
 }
 
 ObjString* rope_index_to_string(StringRope* rope, size_t index) {
@@ -310,4 +336,3 @@ void free_string_table(StringInternTable* table) {
     table->interned = NULL;
     table->total_interned = 0;
 }
-

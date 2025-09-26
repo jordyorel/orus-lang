@@ -2312,6 +2312,9 @@ InterpretResult vm_run_dispatch(void) {
         DISPATCH();
     }
 
+        DISPATCH();
+    }
+
     LABEL_OP_ARRAY_LEN_R: {
         uint8_t dst = READ_BYTE();
         uint8_t array_reg = READ_BYTE();
