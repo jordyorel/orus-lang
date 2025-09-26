@@ -50,11 +50,12 @@ Build a language that combines Python's readability, Rust's safety, and Lua's pe
 typedef struct StringRope {
     enum { LEAF, CONCAT, SUBSTRING } kind;
     union {
-        struct { 
-            char* data; 
-            size_t len; 
+        struct {
+            char* data;
+            size_t len;
             bool is_ascii;     // Fast path for ASCII
             bool is_interned;  // For string deduplication
+            bool owns_data;    // Indicates whether the rope frees the buffer
         } leaf;
         struct { 
             struct StringRope *left, *right; 
@@ -1737,6 +1738,8 @@ typedef enum {
 
     // String operations
     OP_STRING_GET_R,       // dst, string, index
+    OP_STRING_INDEX_R,     // dst, string, index
+
     
     // Specialized operations
     OP_ARRAY_SUM_I32_R,    // dst, array (SIMD optimized)
@@ -1752,7 +1755,8 @@ int array_reg = compile_expression(ctx, array_expr);
 int index_reg = compile_expression(ctx, index_expr);
 int result_reg = mp_allocate_temp_register(ctx->allocator);
 
-uint8_t opcode = container_kind == TYPE_STRING ? OP_STRING_GET_R : OP_ARRAY_GET_R;
+uint8_t opcode = container_kind == TYPE_STRING ? OP_STRING_INDEX_R : OP_ARRAY_GET_R;
+
 emit_byte_to_buffer(ctx->bytecode, opcode);
 emit_byte_to_buffer(ctx->bytecode, result_reg);
 emit_byte_to_buffer(ctx->bytecode, array_reg);

@@ -1211,6 +1211,36 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             array_type = prune(array_type);
             index_type = prune(index_type);
 
+            if (index_type && index_type->kind == TYPE_VAR) {
+                Type* assumed_index = getPrimitiveType(TYPE_I32);
+                if (assumed_index) {
+                    unify(index_type, assumed_index);
+                    index_type = prune(index_type);
+                }
+            }
+
+            if (!is_integer_type(index_type)) {
+                report_type_mismatch(node->indexAccess.index->location, "integer index",
+                                     getTypeName(index_type->kind));
+                set_type_error();
+                return NULL;
+            }
+
+            if (index_type && index_type->kind == TYPE_VAR) {
+                Type* assumed_index = getPrimitiveType(TYPE_I32);
+                if (assumed_index) {
+                    unify(index_type, assumed_index);
+                    index_type = prune(index_type);
+                }
+            }
+
+            if (!is_integer_type(index_type)) {
+                report_type_mismatch(node->indexAccess.index->location, "integer index",
+                                     getTypeName(index_type->kind));
+                set_type_error();
+                return NULL;
+            }
+
             if (array_type && array_type->kind == TYPE_VAR) {
                 Type* element_var = make_var_type(env);
                 if (!element_var) {
@@ -1233,12 +1263,24 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                 array_type = prune(array_type);
             }
 
-            if (index_type && index_type->kind == TYPE_VAR) {
-                Type* assumed_index = getPrimitiveType(TYPE_I32);
-                if (assumed_index) {
-                    unify(index_type, assumed_index);
-                    index_type = prune(index_type);
-                }
+            bool is_string_type = (array_type->kind == TYPE_STRING);
+            bool is_string_instance = (array_type->kind == TYPE_INSTANCE && array_type->info.instance.base &&
+                                       array_type->info.instance.base->kind == TYPE_STRING);
+
+            if (is_string_type || is_string_instance) {
+                node->indexAccess.isStringIndex = true;
+                Type* char_type = getPrimitiveType(TYPE_STRING);
+                node->dataType = char_type;
+                return char_type;
+            if (array_type->kind == TYPE_STRING) {
+                node->indexAccess.isStringIndex = true;
+                return getPrimitiveType(TYPE_STRING);
+            }
+
+            if (array_type->kind == TYPE_INSTANCE && array_type->info.instance.base &&
+                array_type->info.instance.base->kind == TYPE_STRING) {
+                node->indexAccess.isStringIndex = true;
+                return getPrimitiveType(TYPE_STRING);
             }
 
             bool is_string_container = (array_type->kind == TYPE_STRING);
@@ -1251,11 +1293,9 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                 return NULL;
             }
 
-            if (!is_integer_type(index_type)) {
-                report_type_mismatch(node->indexAccess.index->location, "integer index",
-                                     getTypeName(index_type->kind));
-                set_type_error();
-                return NULL;
+            Type* element_type = array_type->info.array.elementType;
+            if (!element_type) {
+                element_type = getPrimitiveType(TYPE_ANY);
             }
 
             if (is_string_container) {
@@ -1264,6 +1304,8 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                 return char_type;
             }
 
+            node->dataType = element_type;
+            return element_type;
             Type* element_type = array_type->info.array.elementType;
             if (!element_type) {
                 element_type = getPrimitiveType(TYPE_ANY);
@@ -3673,6 +3715,7 @@ static TypedASTNode* generate_typed_ast_recursive(ASTNode* ast, TypeEnv* type_en
                 free_typed_ast_node(typed);
                 return NULL;
             }
+            typed->typed.indexAccess.isStringIndex = ast->indexAccess.isStringIndex;
             break;
 
         case NODE_CAST:

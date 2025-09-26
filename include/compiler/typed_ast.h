@@ -176,6 +176,7 @@ struct TypedASTNode {
         struct {
             TypedASTNode* array;
             TypedASTNode* index;
+            bool isStringIndex;
         } indexAccess;
         struct {
             TypedASTNode* value;

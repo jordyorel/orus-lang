@@ -39,6 +39,16 @@ struct HashMap {
 typedef struct HashMap HashMap;
 typedef struct HashMapEntry HashMapEntry;
 
+static bool buffer_is_ascii(const char* data, size_t len) {
+    if (!data) return true;
+    for (size_t i = 0; i < len; i++) {
+        if ((unsigned char)data[i] >= 0x80) {
+            return false;
+        }
+    }
+    return true;
+}
+
 StringBuilder* createStringBuilder(size_t initial_capacity) {
     size_t cap = initial_capacity > 0 ? initial_capacity : VM_SMALL_STRING_BUFFER;
     StringBuilder* sb = (StringBuilder*)reallocate(NULL, 0, sizeof(StringBuilder));
@@ -64,6 +74,18 @@ ObjString* stringBuilderToString(StringBuilder* sb) {
     return result;
 }
 
+ObjString* stringBuilderToOwnedString(StringBuilder* sb) {
+    if (!sb) return NULL;
+
+    sb->buffer[sb->length] = '\0';
+
+    ObjString* result = allocateStringFromBuffer(sb->buffer, sb->capacity, (int)sb->length);
+
+    // Release the builder structure but keep the buffer (now owned by the ObjString).
+    reallocate(sb, sizeof(StringBuilder), 0);
+    return result;
+}
+
 void freeStringBuilder(StringBuilder* sb) {
     reallocate(sb->buffer, sb->capacity, 0);
     reallocate(sb, sizeof(StringBuilder), 0);
@@ -76,8 +98,23 @@ StringRope* rope_from_cstr(const char* str, size_t len) {
     memcpy(r->as.leaf.data, str, len);
     r->as.leaf.data[len] = '\0';
     r->as.leaf.len = len;
-    r->as.leaf.is_ascii = true;
+    r->as.leaf.is_ascii = buffer_is_ascii(r->as.leaf.data, len);
     r->as.leaf.is_interned = false;
+    r->as.leaf.owns_data = true;
+    r->hash_valid = false;
+    r->hash_cache = 0;
+    return r;
+}
+
+StringRope* rope_from_buffer(char* buffer, size_t len, bool owns_data) {
+    if (!buffer) return NULL;
+    StringRope* r = (StringRope*)reallocate(NULL, 0, sizeof(StringRope));
+    r->kind = ROPE_LEAF;
+    r->as.leaf.data = buffer;
+    r->as.leaf.len = len;
+    r->as.leaf.is_ascii = buffer_is_ascii(buffer, len);
+    r->as.leaf.is_interned = false;
+    r->as.leaf.owns_data = owns_data;
     r->hash_valid = false;
     r->hash_cache = 0;
     return r;
@@ -174,6 +211,18 @@ char* rope_to_cstr(StringRope* rope) {
     return result;
 }
 
+ObjString* rope_index_to_string(StringRope* rope, size_t index) {
+    char ch = '\0';
+    if (!rope_char_at(rope, index, &ch)) {
+        return NULL;
+    }
+
+    char buffer[2];
+    buffer[0] = ch;
+    buffer[1] = '\0';
+    return allocateString(buffer, 1);
+}
+
 StringInternTable globalStringTable;
 
 void init_string_table(StringInternTable* table) {
@@ -205,7 +254,9 @@ void free_rope(StringRope* rope) {
     if (!rope) return;
     switch (rope->kind) {
         case ROPE_LEAF:
-            free(rope->as.leaf.data);
+            if (rope->as.leaf.owns_data && rope->as.leaf.data) {
+                free(rope->as.leaf.data);
+            }
             break;
         case ROPE_CONCAT:
             free_rope(rope->as.concat.left);
@@ -275,4 +326,3 @@ void free_string_table(StringInternTable* table) {
     table->interned = NULL;
     table->total_interned = 0;
 }
-
