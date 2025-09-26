@@ -1,3 +1,14 @@
+/*
+ * Orus Language Project
+ * ---------------------------------------------------------------------------
+ * File: include/compiler/optimization/licm.h
+ * Author: Jordy Orel KONDA
+ * Copyright (c) 2025 Jordy Orel KONDA
+ * License: MIT License (see LICENSE file in the project root)
+ * Description: Declares loop-invariant code motion utilities that hoist redundant
+ *              computations out of loops.
+ */
+
 #ifndef LICM_H
 #define LICM_H
 

@@ -1,3 +1,14 @@
+/*
+ * Orus Language Project
+ * ---------------------------------------------------------------------------
+ * File: include/vm/vm.h
+ * Author: Jordy Orel KONDA
+ * Copyright (c) 2025 Jordy Orel KONDA
+ * License: MIT License (see LICENSE file in the project root)
+ * Description: Primary VM interface exposing execution entry points and runtime
+ *              context structures.
+ */
+
 // register_vm.h - Register-based VM header
 #ifndef REGISTER_VM_H
 #define REGISTER_VM_H

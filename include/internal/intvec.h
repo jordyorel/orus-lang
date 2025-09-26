@@ -1,3 +1,14 @@
+/*
+ * Orus Language Project
+ * ---------------------------------------------------------------------------
+ * File: include/internal/intvec.h
+ * Author: Jordy Orel KONDA
+ * Copyright (c) 2025 Jordy Orel KONDA
+ * License: MIT License (see LICENSE file in the project root)
+ * Description: Defines a lightweight integer vector abstraction shared by the VM and
+ *              compiler.
+ */
+
 #ifndef ORUS_INTVEC_H
 #define ORUS_INTVEC_H
 

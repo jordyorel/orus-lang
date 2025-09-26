@@ -1,3 +1,14 @@
+/*
+ * Orus Language Project
+ * ---------------------------------------------------------------------------
+ * File: src/compiler/backend/codegen/peephole.c
+ * Author: Jordy Orel KONDA
+ * Copyright (c) 2025 Jordy Orel KONDA
+ * License: MIT License (see LICENSE file in the project root)
+ * Description: Implements peephole optimization passes that simplify generated
+ *              bytecode sequences.
+ */
+
 #include "compiler/codegen/peephole.h"
 #include "compiler/compiler.h"
 #include "vm/vm.h"

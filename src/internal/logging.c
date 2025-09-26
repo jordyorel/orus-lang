@@ -1,3 +1,13 @@
+/*
+ * Orus Language Project
+ * ---------------------------------------------------------------------------
+ * File: src/internal/logging.c
+ * Author: Jordy Orel KONDA
+ * Copyright (c) 2025 Jordy Orel KONDA
+ * License: MIT License (see LICENSE file in the project root)
+ * Description: Implements the structured logging backend used across the project.
+ */
+
 // logging.c
 // Author: Hierat
 // Date: 2023-10-01

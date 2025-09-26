@@ -1,3 +1,14 @@
+/*
+ * Orus Language Project
+ * ---------------------------------------------------------------------------
+ * File: include/compiler/typed_ast_visualizer.h
+ * Author: Jordy Orel KONDA
+ * Copyright (c) 2025 Jordy Orel KONDA
+ * License: MIT License (see LICENSE file in the project root)
+ * Description: Declares visualization helpers for inspecting typed AST structures
+ *              during debugging.
+ */
+
 #ifndef ORUS_TYPED_AST_VISUALIZER_H
 #define ORUS_TYPED_AST_VISUALIZER_H
 

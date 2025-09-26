@@ -1,3 +1,14 @@
+/*
+ * Orus Language Project
+ * ---------------------------------------------------------------------------
+ * File: src/vm/utils/debug.c
+ * Author: Jordy Orel KONDA
+ * Copyright (c) 2025 Jordy Orel KONDA
+ * License: MIT License (see LICENSE file in the project root)
+ * Description: Implements runtime debugging utilities and bytecode inspection
+ *              helpers.
+ */
+
 // debug.c - Debug utilities for the VM
 #include "tools/debug.h"
 #include "public/common.h"

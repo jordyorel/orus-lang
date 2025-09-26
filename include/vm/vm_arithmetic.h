@@ -1,3 +1,13 @@
+/*
+ * Orus Language Project
+ * ---------------------------------------------------------------------------
+ * File: include/vm/vm_arithmetic.h
+ * Author: Jordy Orel KONDA
+ * Copyright (c) 2025 Jordy Orel KONDA
+ * License: MIT License (see LICENSE file in the project root)
+ * Description: Declares arithmetic operation handlers for the Orus virtual machine.
+ */
+
 #ifndef ORUS_VM_ARITHMETIC_H
 #define ORUS_VM_ARITHMETIC_H
 

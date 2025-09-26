@@ -1,3 +1,14 @@
+/*
+ * Orus Language Project
+ * ---------------------------------------------------------------------------
+ * File: src/vm/core/vm_internal.h
+ * Author: Jordy Orel KONDA
+ * Copyright (c) 2025 Jordy Orel KONDA
+ * License: MIT License (see LICENSE file in the project root)
+ * Description: Defines internal VM structures and helper macros shared by core
+ *              components.
+ */
+
 // vm_internal.h - Shared internal helpers for the VM
 #ifndef VM_INTERNAL_H
 #define VM_INTERNAL_H

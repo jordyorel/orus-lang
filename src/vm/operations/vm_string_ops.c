@@ -1,3 +1,13 @@
+/*
+ * Orus Language Project
+ * ---------------------------------------------------------------------------
+ * File: src/vm/operations/vm_string_ops.c
+ * Author: Jordy Orel KONDA
+ * Copyright (c) 2025 Jordy Orel KONDA
+ * License: MIT License (see LICENSE file in the project root)
+ * Description: Provides helper functions implementing string bytecode operations.
+ */
+
 #include <stddef.h>
 // Forward declarations for HashMap and HashMapEntry
 typedef struct HashMap HashMap;

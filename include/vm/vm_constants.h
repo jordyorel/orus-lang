@@ -1,3 +1,13 @@
+/*
+ * Orus Language Project
+ * ---------------------------------------------------------------------------
+ * File: include/vm/vm_constants.h
+ * Author: Jordy Orel KONDA
+ * Copyright (c) 2025 Jordy Orel KONDA
+ * License: MIT License (see LICENSE file in the project root)
+ * Description: Defines VM opcode identifiers and supporting enumerations.
+ */
+
 // vm_constants.h - Shared VM configuration constants
 #ifndef VM_CONSTANTS_H
 #define VM_CONSTANTS_H

@@ -1,3 +1,14 @@
+/*
+ * Orus Language Project
+ * ---------------------------------------------------------------------------
+ * File: src/errors/features/type_errors.c
+ * Author: Jordy Orel KONDA
+ * Copyright (c) 2025 Jordy Orel KONDA
+ * License: MIT License (see LICENSE file in the project root)
+ * Description: Implements diagnostics for static and runtime type errors within Orus
+ *              programs.
+ */
+
 #include "errors/features/type_errors.h"
 #include "errors/error_interface.h"
 #include <string.h>

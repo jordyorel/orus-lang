@@ -1,3 +1,13 @@
+/*
+ * Orus Language Project
+ * ---------------------------------------------------------------------------
+ * File: src/repl.c
+ * Author: Jordy Orel KONDA
+ * Copyright (c) 2025 Jordy Orel KONDA
+ * License: MIT License (see LICENSE file in the project root)
+ * Description: Implements the interactive read-eval-print loop for Orus developers.
+ */
+
 #define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <stdlib.h>

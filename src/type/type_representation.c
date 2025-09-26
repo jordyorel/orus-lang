@@ -1,4 +1,15 @@
 /*
+ * Orus Language Project
+ * ---------------------------------------------------------------------------
+ * File: src/type/type_representation.c
+ * Author: Jordy Orel KONDA
+ * Copyright (c) 2025 Jordy Orel KONDA
+ * License: MIT License (see LICENSE file in the project root)
+ * Description: Implements helpers for representing, formatting, and comparing Orus
+ *              types.
+ */
+
+/*
  * File: src/type/type_representation.c
  * Advanced type representation with traits, generics, and dynamic extension
  * - Caching via arena for primitive types
