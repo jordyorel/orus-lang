@@ -575,6 +575,156 @@ static void addMatchCase(ParserContext* ctx, MatchCaseInfo** list, int* count, i
     (*list)[(*count)++] = info;
 }
 
+static bool parser_literal_is_numeric(Value value) {
+    switch (value.type) {
+        case VAL_I32:
+        case VAL_I64:
+        case VAL_U32:
+        case VAL_U64:
+        case VAL_F64:
+        case VAL_NUMBER:
+            return true;
+        default:
+            return false;
+    }
+}
+
+static long double parser_literal_to_long_double(Value value) {
+    switch (value.type) {
+        case VAL_I32:
+            return (long double)AS_I32(value);
+        case VAL_I64:
+            return (long double)AS_I64(value);
+        case VAL_U32:
+            return (long double)AS_U32(value);
+        case VAL_U64:
+            return (long double)AS_U64(value);
+        case VAL_F64:
+            return (long double)AS_F64(value);
+        case VAL_NUMBER:
+            return (long double)value.as.number;
+        default:
+            return 0.0L;
+    }
+}
+
+static bool parser_match_literals_equal(Value a, Value b) {
+    if (a.type == b.type) {
+        switch (a.type) {
+            case VAL_BOOL:
+                return AS_BOOL(a) == AS_BOOL(b);
+            case VAL_I32:
+                return AS_I32(a) == AS_I32(b);
+            case VAL_I64:
+                return AS_I64(a) == AS_I64(b);
+            case VAL_U32:
+                return AS_U32(a) == AS_U32(b);
+            case VAL_U64:
+                return AS_U64(a) == AS_U64(b);
+            case VAL_F64:
+                return AS_F64(a) == AS_F64(b);
+            case VAL_NUMBER:
+                return a.as.number == b.as.number;
+            case VAL_STRING: {
+                ObjString* left = AS_STRING(a);
+                ObjString* right = AS_STRING(b);
+                if (!left || !right || !left->chars || !right->chars) {
+                    return left == right;
+                }
+                return strcmp(left->chars, right->chars) == 0;
+            }
+            default:
+                return false;
+        }
+    }
+
+    if (parser_literal_is_numeric(a) && parser_literal_is_numeric(b)) {
+        return parser_literal_to_long_double(a) == parser_literal_to_long_double(b);
+    }
+
+    return false;
+}
+
+static void parser_format_match_literal(Value value, char* buffer, size_t size) {
+    if (!buffer || size == 0) {
+        return;
+    }
+
+    switch (value.type) {
+        case VAL_BOOL:
+            snprintf(buffer, size, "%s", AS_BOOL(value) ? "true" : "false");
+            break;
+        case VAL_I32:
+            snprintf(buffer, size, "%d", AS_I32(value));
+            break;
+        case VAL_I64:
+            snprintf(buffer, size, "%lld", (long long)AS_I64(value));
+            break;
+        case VAL_U32:
+            snprintf(buffer, size, "%u", AS_U32(value));
+            break;
+        case VAL_U64:
+            snprintf(buffer, size, "%llu", (unsigned long long)AS_U64(value));
+            break;
+        case VAL_F64:
+        case VAL_NUMBER:
+            snprintf(buffer, size, "%g",
+                     value.type == VAL_NUMBER ? value.as.number : AS_F64(value));
+            break;
+        case VAL_STRING: {
+            ObjString* str = AS_STRING(value);
+            const char* chars = (str && str->chars) ? str->chars : "";
+            snprintf(buffer, size, "\"%s\"", chars);
+            break;
+        }
+        default:
+            snprintf(buffer, size, "<literal>");
+            break;
+    }
+}
+
+static bool detect_duplicate_literal_cases(ParserContext* ctx, MatchCaseInfo* cases, int caseCount) {
+    (void)ctx;
+    if (!cases || caseCount <= 0) {
+        return true;
+    }
+
+    Value* seen_literals = malloc(sizeof(Value) * (size_t)caseCount);
+    if (!seen_literals) {
+        return true;
+    }
+
+    int seen_count = 0;
+    for (int i = 0; i < caseCount; i++) {
+        MatchCaseInfo* info = &cases[i];
+        if (!info->valuePattern || info->valuePattern->type != NODE_LITERAL) {
+            continue;
+        }
+
+        Value literal = info->valuePattern->literal.value;
+        bool duplicate = false;
+        for (int j = 0; j < seen_count; j++) {
+            if (parser_match_literals_equal(seen_literals[j], literal)) {
+                duplicate = true;
+                break;
+            }
+        }
+
+        if (duplicate) {
+            char repr[128];
+            parser_format_match_literal(literal, repr, sizeof(repr));
+            report_duplicate_literal_match_arm(info->location, repr);
+            free(seen_literals);
+            return false;
+        }
+
+        seen_literals[seen_count++] = literal;
+    }
+
+    free(seen_literals);
+    return true;
+}
+
 static void addStringEntry(ParserContext* ctx, char*** list, int* count, int* capacity, char* value) {
     if (!value) return;
     if (*count + 1 > *capacity) {
@@ -881,6 +1031,10 @@ static ASTNode* parseMatchStatement(ParserContext* ctx) {
         return NULL;
     }
 
+    if (!detect_duplicate_literal_cases(ctx, cases, caseCount)) {
+        return NULL;
+    }
+
     char tempNameBuffer[32];
     int tempId = generate_match_temp_id();
     snprintf(tempNameBuffer, sizeof(tempNameBuffer), "__match_tmp_%d", tempId);
@@ -1175,6 +1329,10 @@ static ASTNode* parseMatchExpression(ParserContext* ctx, Token matchTok) {
     }
 
     if (caseCount == 0) {
+        return NULL;
+    }
+
+    if (!detect_duplicate_literal_cases(ctx, cases, caseCount)) {
         return NULL;
     }
 
