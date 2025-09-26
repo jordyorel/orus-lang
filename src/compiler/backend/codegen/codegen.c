@@ -2477,8 +2477,10 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                 return -1;
             }
 
+            bool is_string_index = expr->typed.indexAccess.isStringIndex;
+
             set_location_from_node(ctx, expr);
-            emit_byte_to_buffer(ctx->bytecode, OP_ARRAY_GET_R);
+            emit_byte_to_buffer(ctx->bytecode, is_string_index ? OP_STRING_INDEX_R : OP_ARRAY_GET_R);
             emit_byte_to_buffer(ctx->bytecode, result_reg);
             emit_byte_to_buffer(ctx->bytecode, array_reg);
             emit_byte_to_buffer(ctx->bytecode, index_reg);

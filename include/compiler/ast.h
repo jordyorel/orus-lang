@@ -153,6 +153,7 @@ struct ASTNode {
         struct {
             ASTNode* array;
             ASTNode* index;
+            bool isStringIndex;
         } indexAccess;
         struct {
             char* op;

@@ -4019,6 +4019,7 @@ static ASTNode* parseIndexExpression(ParserContext* ctx, ASTNode* arrayExpr, Tok
         indexNode->type = NODE_INDEX_ACCESS;
         indexNode->indexAccess.array = arrayExpr;
         indexNode->indexAccess.index = firstExpr;
+        indexNode->indexAccess.isStringIndex = false;
     }
 
     return indexNode;

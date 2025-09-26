@@ -303,6 +303,7 @@ InterpretResult vm_run_dispatch(void) {
         vm_dispatch_table[OP_OR_BOOL_R] = &&LABEL_OP_OR_BOOL_R;
         vm_dispatch_table[OP_NOT_BOOL_R] = &&LABEL_OP_NOT_BOOL_R;
         vm_dispatch_table[OP_CONCAT_R] = &&LABEL_OP_CONCAT_R;
+        vm_dispatch_table[OP_STRING_INDEX_R] = &&LABEL_OP_STRING_INDEX_R;
         vm_dispatch_table[OP_MAKE_ARRAY_R] = &&LABEL_OP_MAKE_ARRAY_R;
         vm_dispatch_table[OP_ENUM_NEW_R] = &&LABEL_OP_ENUM_NEW_R;
         vm_dispatch_table[OP_ENUM_TAG_EQ_R] = &&LABEL_OP_ENUM_TAG_EQ_R;
@@ -2223,6 +2224,42 @@ InterpretResult vm_run_dispatch(void) {
         }
 
         vm_set_register_safe(dst, payload->elements[fieldIndex]);
+        DISPATCH();
+    }
+
+    LABEL_OP_STRING_INDEX_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t string_reg = READ_BYTE();
+        uint8_t index_reg = READ_BYTE();
+
+        Value string_value = vm_get_register_safe(string_reg);
+        if (!IS_STRING(string_value)) {
+            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Value is not a string");
+        }
+
+        int index;
+        if (!value_to_index(vm_get_register_safe(index_reg), &index)) {
+            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "String index must be a non-negative integer");
+        }
+
+        ObjString* source = AS_STRING(string_value);
+        if (!source || index < 0 || index >= source->length) {
+            VM_ERROR_RETURN(ERROR_INDEX, CURRENT_LOCATION(), "String index out of bounds");
+        }
+
+        ObjString* result = NULL;
+        if (source->rope) {
+            result = rope_index_to_string(source->rope, (size_t)index);
+        }
+
+        if (!result) {
+            char buffer[2];
+            buffer[0] = source->chars[index];
+            buffer[1] = '\0';
+            result = allocateString(buffer, 1);
+        }
+
+        vm_set_register_safe(dst, STRING_VAL(result));
         DISPATCH();
     }
 
