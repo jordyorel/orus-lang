@@ -39,6 +39,56 @@ This document outlines the detailed implementation plan for building the Orus co
 - [ ] Stand up long-running stability smoke tests (modules, closures, iterator fast paths) ahead of the release candidates.
 - [ ] Document packaging/distribution expectations for the toolchain so downstream users can integrate Orus in build systems.
 
+### String Handling Reference Plan
+
+Strings now participate in every stage of the pipeline—parsing, HM typing, optimization, and bytecode emission—so the backend
+must preserve both correctness and performance. The runtime stores strings as ropes (`StringRope`) whose leaves either own
+character buffers or reference slices of other nodes. That layout enables zero-copy concatenation and substring creation, but it
+requires the compiler to emit the correct opcodes and metadata so the VM can select the fast paths.
+
+**Frontend & Typing**
+- The lexer produces `TOKEN_STRING` with escape resolution before the parser interns the literal via `STRING_VAL`.
+- HM inference tracks `TYPE_STRING` and rejects implicit conversions. The only legal cast is `value as string` from primitive
+  scalars; the inverse direction emits diagnostics (see `tests/type_safety_fails/invalid_cast_string_to_int.orus`).
+
+**Optimization**
+- Constant folding concatenates adjacent literals inside the optimizer (`constantfold.c`) to reduce runtime rope depth.
+- LICM and other passes treat strings as immutable heap values; no pass should attempt to mutate rope nodes in place.
+
+**Code Generation Responsibilities**
+- String literals are loaded through the constant pool with `LOAD_CONST` + `REG_TYPE_HEAP` conversions when required.
+- Binary `+` on strings lowers to `OP_CONCAT_R`. The emitter guarantees both operands are in heap registers, inserting
+  `OP_TO_STRING_R` conversions when the AST indicates an explicit `as string` cast.
+- Index expressions on string containers resolve to `OP_STRING_INDEX_R` (new regression fix). The emitter must check the
+  container's inferred type or literal value to avoid falling back to the array indexing opcode, because that path does not raise
+  the correct runtime errors for negative indices.
+- Planned string slicing reuses `OP_STRING_SLICE_R` once surface syntax lands. The code generator will pass `(dst, base, start,
+  end)` registers so the VM can create lightweight substring rope nodes without copying data.
+
+**Runtime Semantics to Surface in Diagnostics**
+- Indexing is byte-oriented; each `OP_STRING_INDEX_R` lookup returns a one-character string. Runtime bounds errors bubble up as
+  catchable exceptions (`ERROR_RUNTIME`), matching `tests/strings/string_indexing.orus` expectations.
+- `len(string)` lowers to the VM's dedicated string-length opcode, returning the rope length in bytes. Optimizer passes should
+  preserve the builtin so the runtime can specialize it.
+
+**Testing & Documentation Hooks**
+- `tests/strings/*` exercise literals, concatenation, indexing, property-based joins, and error handling. Keep these harnesses in
+  sync with backend changes to avoid silent regressions.
+- Any future enhancement (e.g., UTF-8 grapheme iteration) must update this plan, `docs/LANGUAGE.md`, and the property harness to
+  capture byte-versus-glyph behavior.
+
+```orus
+// Expected lowering for string indexing
+fn first_char(text: string) -> string:
+    return text[0]
+
+// Emits roughly:
+//   LOAD_LOCAL       R192, text
+//   LOAD_CONST_I32   R193, 0
+//   OP_STRING_INDEX_R R192, R192, R193
+//   RETURN           R192
+```
+
 ### Loop typed-execution acceleration roadmap
 
 To close the loop performance gap without compromising safety we execute the

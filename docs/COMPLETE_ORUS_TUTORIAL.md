@@ -70,17 +70,71 @@ pub global mut CACHE_BYTES = 1_048_576
 
 ## 5. Strings and Printing
 
+Strings are immutable UTF-8 sequences managed by the runtime's rope engine. That design makes concatenation cheap and keeps
+indexing a constant-time operation on flat strings.
+
+### Literals and Escapes
+
 ```orus
 name = "Orus"
+banner = "Line one\nLine two\tTabbed"
+path = "C:\\tmp\\reports"
+quote = "She said: \"Ready\""
+emoji = "😀"
+```
+
+- Escape sequences: `\n`, `\t`, `\\`, `\"`, `\r`, and `\0`.
+- Multi-line strings are not yet supported—use `\n` to join lines.
+- Each literal is encoded as UTF-8; non-ASCII characters occupy multiple bytes.
+
+### Printing and Formatting
+
+```orus
 pi = 3.14159
 print("Hello", name)
 print("Pi ~= @.2f", pi)
 print_no_newline("Processing")
-combined = "a" + " :: " + "b" + " :: " + "c"
-print(combined)
+print("{", name, "}")
 ```
 
-Treat strings like any value: concatenate with `+` or convert numbers using casts (`value as string`).
+- `print` inserts spaces between arguments and appends a newline.
+- `print_no_newline` keeps the cursor on the same line—helpful for progress messages.
+- Format specifiers (`@.2f`, `@x`, `@b`, `@o`) inside the first literal format the following argument before concatenation.
+
+### Concatenation and Casting
+
+```orus
+combined = "a" + " :: " + "b" + " :: " + "c"
+score = 98
+report = "Score: " + (score as string)
+
+mut log = []
+push(log, "start")
+push(log, "stop")
+history = " | ".join(log) // once join() lands
+```
+
+- `+` produces a brand new string; the runtime reuses existing rope nodes to avoid copying the left-hand operand.
+- Cast other values explicitly with `as string`—no implicit conversions occur during concatenation.
+
+### Indexing and Length
+
+```orus
+greeting = "Hola"
+first = greeting[0]         // "H"
+last = greeting[len(greeting) - 1]
+
+emoji = "😀🎉"
+// Indexing operates on bytes, not Unicode scalars.
+first_byte = emoji[0]       // "\xF0"
+second_byte = emoji[1]      // "\x9F"
+```
+
+- `len(string)` returns the number of bytes; multi-byte characters increase the count accordingly.
+- `string[index]` emits `OP_STRING_INDEX_R` and returns a new single-byte string. The runtime bounds-checks the index and
+  reports `ERROR_INDEX` on failure.
+- Because indexing is byte-oriented, slicing multi-byte graphemes requires manual decoding; plan for a higher-level helper if
+  you need full Unicode awareness.
 
 ## 6. Branching and Loops
 
