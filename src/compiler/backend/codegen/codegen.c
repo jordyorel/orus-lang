@@ -36,6 +36,45 @@ static Symbol* register_variable(CompilerContext* ctx, SymbolTable* scope,
                                  bool is_mutable, bool declared_mutable,
                                  SrcLocation location, bool is_initialized);
 
+static void format_match_literal(Value value, char* buffer, size_t size) {
+    if (!buffer || size == 0) {
+        return;
+    }
+
+    switch (value.type) {
+        case VAL_BOOL:
+            snprintf(buffer, size, "%s", AS_BOOL(value) ? "true" : "false");
+            break;
+        case VAL_I32:
+            snprintf(buffer, size, "%d", AS_I32(value));
+            break;
+        case VAL_I64:
+            snprintf(buffer, size, "%lld", (long long)AS_I64(value));
+            break;
+        case VAL_U32:
+            snprintf(buffer, size, "%u", AS_U32(value));
+            break;
+        case VAL_U64:
+            snprintf(buffer, size, "%llu", (unsigned long long)AS_U64(value));
+            break;
+        case VAL_F64:
+            snprintf(buffer, size, "%g", AS_F64(value));
+            break;
+        case VAL_STRING: {
+            ObjString* str = AS_STRING(value);
+            if (str && str->chars) {
+                snprintf(buffer, size, "\"%s\"", str->chars);
+            } else {
+                snprintf(buffer, size, "<string>");
+            }
+            break;
+        }
+        default:
+            snprintf(buffer, size, "<literal>");
+            break;
+    }
+}
+
 static TypeKind fallback_type_kind_from_value(Value value) {
     switch (value.type) {
         case VAL_I32:
@@ -2004,6 +2043,14 @@ static int compile_match_expression(CompilerContext* ctx, TypedASTNode* expr) {
     int* end_jumps = NULL;
     bool success = true;
 
+    typedef struct MatchLiteralEntry {
+        Value value;
+    } MatchLiteralEntry;
+
+    MatchLiteralEntry* literal_entries = NULL;
+    int literal_count = 0;
+    int literal_capacity = 0;
+
     if (arm_count > 0) {
         false_jumps = calloc((size_t)arm_count, sizeof(int));
         end_jumps = calloc((size_t)arm_count, sizeof(int));
@@ -2024,6 +2071,47 @@ static int compile_match_expression(CompilerContext* ctx, TypedASTNode* expr) {
 
     for (int i = 0; success && i < arm_count; i++) {
         TypedMatchArm* arm = &expr->typed.matchExpr.arms[i];
+
+        if (arm->valuePattern && arm->valuePattern->original &&
+            arm->valuePattern->original->type == NODE_LITERAL) {
+            Value literal_value = arm->valuePattern->original->literal.value;
+            bool duplicate_literal = false;
+            for (int j = 0; j < literal_count; j++) {
+                if (valuesEqual(literal_entries[j].value, literal_value)) {
+                    duplicate_literal = true;
+                    break;
+                }
+            }
+
+            if (duplicate_literal) {
+                char repr[128];
+                format_match_literal(literal_value, repr, sizeof(repr));
+                report_duplicate_literal_match_arm(arm->location, repr);
+                ctx->has_compilation_errors = true;
+                success = false;
+            } else {
+                if (literal_count == literal_capacity) {
+                    int new_capacity = literal_capacity == 0 ? 4 : literal_capacity * 2;
+                    MatchLiteralEntry* resized =
+                        realloc(literal_entries, sizeof(MatchLiteralEntry) * (size_t)new_capacity);
+                    if (!resized) {
+                        ctx->has_compilation_errors = true;
+                        success = false;
+                    } else {
+                        literal_entries = resized;
+                        literal_capacity = new_capacity;
+                    }
+                }
+
+                if (success && literal_count < literal_capacity) {
+                    literal_entries[literal_count++].value = literal_value;
+                }
+            }
+        }
+
+        if (!success) {
+            break;
+        }
 
         int false_patch = -1;
         if (arm->condition) {
@@ -2152,6 +2240,10 @@ static int compile_match_expression(CompilerContext* ctx, TypedASTNode* expr) {
                 break;
             }
         }
+    }
+
+    if (literal_entries) {
+        free(literal_entries);
     }
 
     if (success && end_jumps) {
