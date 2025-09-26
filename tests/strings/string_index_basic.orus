@@ -1,0 +1,5 @@
+// Basic string indexing smoke test exercising dedicated opcode.
+text = "rope indexing"
+print("first:", text[0])
+print("middle:", text[5])
+print("last:", text[12])

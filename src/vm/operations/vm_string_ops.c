@@ -174,6 +174,18 @@ char* rope_to_cstr(StringRope* rope) {
     return result;
 }
 
+ObjString* rope_index_to_string(StringRope* rope, size_t index) {
+    char ch = '\0';
+    if (!rope_char_at(rope, index, &ch)) {
+        return NULL;
+    }
+
+    char buffer[2];
+    buffer[0] = ch;
+    buffer[1] = '\0';
+    return allocateString(buffer, 1);
+}
+
 StringInternTable globalStringTable;
 
 void init_string_table(StringInternTable* table) {
@@ -275,4 +287,3 @@ void free_string_table(StringInternTable* table) {
     table->interned = NULL;
     table->total_interned = 0;
 }
-

@@ -1,0 +1,9 @@
+// Guard against out-of-range string indexing and ensure runtime error is catchable.
+text = "guard"
+
+try:
+    print(text[10])
+    print("unreachable")
+catch err:
+    print("caught string index error")
+    print(err)

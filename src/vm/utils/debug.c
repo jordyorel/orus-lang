@@ -235,14 +235,13 @@ int disassembleInstruction(Chunk* chunk, int offset) {
             return offset + 5;
         }
 
-        case OP_STRING_GET_R: {
+        case OP_STRING_INDEX_R: {
             uint8_t dst = chunk->code[offset + 1];
             uint8_t string_reg = chunk->code[offset + 2];
             uint8_t index_reg = chunk->code[offset + 3];
-            printf("%-16s R%d, R%d, R%d\n", "STRING_GET", dst, string_reg, index_reg);
+            printf("%-16s R%d, R%d, R%d\n", "STRING_INDEX", dst, string_reg, index_reg);
             return offset + 4;
         }
-
         case OP_ARRAY_GET_R: {
             uint8_t dst = chunk->code[offset + 1];
             uint8_t array_reg = chunk->code[offset + 2];
