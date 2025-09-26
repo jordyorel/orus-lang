@@ -1785,6 +1785,38 @@ InterpretResult vm_run_dispatch(void) {
                     break;
                 }
 
+                case OP_STRING_GET_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t string_reg = READ_BYTE();
+                    uint8_t index_reg = READ_BYTE();
+
+                    Value string_value = vm_get_register_safe(string_reg);
+                    if (!IS_STRING(string_value)) {
+                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Value is not a string");
+                    }
+
+                    int index;
+                    if (!value_to_index(vm_get_register_safe(index_reg), &index)) {
+                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(),
+                                        "String index must be a non-negative integer");
+                    }
+
+                    ObjString* source = AS_STRING(string_value);
+                    if (index < 0 || index >= source->length) {
+                        VM_ERROR_RETURN(ERROR_INDEX, CURRENT_LOCATION(),
+                                        "String index out of bounds");
+                    }
+
+                    ObjString* ch = string_char_at(source, (size_t)index);
+                    if (!ch) {
+                        VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(),
+                                        "Failed to extract string character");
+                    }
+
+                    vm_set_register_safe(dst, STRING_VAL(ch));
+                    break;
+                }
+
                 case OP_ARRAY_GET_R: {
                     uint8_t dst = READ_BYTE();
                     uint8_t array_reg = READ_BYTE();
@@ -2630,6 +2662,7 @@ InterpretResult vm_run_dispatch(void) {
                 }
 
                 // Typed arithmetic operations for maximum performance (bypass Value boxing)
+#if ORUS_VM_ENABLE_TYPED_OPS
                 case OP_ADD_I32_TYPED: {
                     handle_add_i32_typed();
                     break;
@@ -2890,6 +2923,64 @@ InterpretResult vm_run_dispatch(void) {
                     break;
                 }
 
+#else
+                case OP_LOAD_I32_CONST:
+                case OP_LOAD_I64_CONST:
+                case OP_LOAD_F64_CONST:
+                case OP_MOVE_I32:
+                case OP_MOVE_I64:
+                case OP_MOVE_F64:
+                case OP_ADD_I32_TYPED:
+                case OP_SUB_I32_TYPED:
+                case OP_MUL_I32_TYPED:
+                case OP_DIV_I32_TYPED:
+                case OP_MOD_I32_TYPED:
+                case OP_ADD_I64_TYPED:
+                case OP_SUB_I64_TYPED:
+                case OP_MUL_I64_TYPED:
+                case OP_DIV_I64_TYPED:
+                case OP_MOD_I64_TYPED:
+                case OP_ADD_F64_TYPED:
+                case OP_SUB_F64_TYPED:
+                case OP_MUL_F64_TYPED:
+                case OP_DIV_F64_TYPED:
+                case OP_MOD_F64_TYPED:
+                case OP_ADD_U32_TYPED:
+                case OP_SUB_U32_TYPED:
+                case OP_MUL_U32_TYPED:
+                case OP_DIV_U32_TYPED:
+                case OP_MOD_U32_TYPED:
+                case OP_ADD_U64_TYPED:
+                case OP_SUB_U64_TYPED:
+                case OP_MUL_U64_TYPED:
+                case OP_DIV_U64_TYPED:
+                case OP_MOD_U64_TYPED:
+                case OP_LT_I32_TYPED:
+                case OP_LE_I32_TYPED:
+                case OP_GT_I32_TYPED:
+                case OP_GE_I32_TYPED:
+                case OP_LT_I64_TYPED:
+                case OP_LE_I64_TYPED:
+                case OP_GT_I64_TYPED:
+                case OP_GE_I64_TYPED:
+                case OP_LT_F64_TYPED:
+                case OP_LE_F64_TYPED:
+                case OP_GT_F64_TYPED:
+                case OP_GE_F64_TYPED:
+                case OP_LT_U32_TYPED:
+                case OP_LE_U32_TYPED:
+                case OP_GT_U32_TYPED:
+                case OP_GE_U32_TYPED:
+                case OP_LT_U64_TYPED:
+                case OP_LE_U64_TYPED:
+                case OP_GT_U64_TYPED:
+                case OP_GE_U64_TYPED: {
+                    VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(),
+                                    "Typed operations are disabled at build time");
+                    break;
+                }
+
+#endif
                 case OP_TIME_STAMP: {
                     uint8_t dst = READ_BYTE();
                     

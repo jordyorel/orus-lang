@@ -107,6 +107,14 @@ static inline bool value_to_index(Value value, int* out_index) {
 // Profiling timing variable accessible to DISPATCH macro
 static uint64_t instruction_start_time = 0;
 
+#if ORUS_VM_ENABLE_TYPED_OPS
+#define VM_REGISTER_TYPED_LABEL(opcode) \
+    vm_dispatch_table[(opcode)] = &&LABEL_##opcode
+#else
+#define VM_REGISTER_TYPED_LABEL(opcode) \
+    vm_dispatch_table[(opcode)] = &&LABEL_TYPED_OPS_UNAVAILABLE
+#endif
+
 InterpretResult vm_run_dispatch(void) {
     // printf("[DISPATCH_TRACE] vm_run_dispatch() entry");
     fflush(stdout);
@@ -132,29 +140,29 @@ InterpretResult vm_run_dispatch(void) {
         }
         // Phase 1.3 Optimization: Hot opcodes first for better cache locality
         // Most frequently used typed operations (hot path)
-        vm_dispatch_table[OP_ADD_I32_TYPED] = &&LABEL_OP_ADD_I32_TYPED;
-        vm_dispatch_table[OP_SUB_I32_TYPED] = &&LABEL_OP_SUB_I32_TYPED;
-        vm_dispatch_table[OP_MUL_I32_TYPED] = &&LABEL_OP_MUL_I32_TYPED;
-        vm_dispatch_table[OP_LT_I32_TYPED] = &&LABEL_OP_LT_I32_TYPED;
-        vm_dispatch_table[OP_LE_I32_TYPED] = &&LABEL_OP_LE_I32_TYPED;
-        vm_dispatch_table[OP_GT_I32_TYPED] = &&LABEL_OP_GT_I32_TYPED;
-        vm_dispatch_table[OP_GE_I32_TYPED] = &&LABEL_OP_GE_I32_TYPED;
-        vm_dispatch_table[OP_LT_I64_TYPED] = &&LABEL_OP_LT_I64_TYPED;
-        vm_dispatch_table[OP_LE_I64_TYPED] = &&LABEL_OP_LE_I64_TYPED;
-        vm_dispatch_table[OP_GT_I64_TYPED] = &&LABEL_OP_GT_I64_TYPED;
-        vm_dispatch_table[OP_GE_I64_TYPED] = &&LABEL_OP_GE_I64_TYPED;
-        vm_dispatch_table[OP_LT_F64_TYPED] = &&LABEL_OP_LT_F64_TYPED;
-        vm_dispatch_table[OP_LE_F64_TYPED] = &&LABEL_OP_LE_F64_TYPED;
-        vm_dispatch_table[OP_GT_F64_TYPED] = &&LABEL_OP_GT_F64_TYPED;
-        vm_dispatch_table[OP_GE_F64_TYPED] = &&LABEL_OP_GE_F64_TYPED;
-        vm_dispatch_table[OP_LT_U32_TYPED] = &&LABEL_OP_LT_U32_TYPED;
-        vm_dispatch_table[OP_LE_U32_TYPED] = &&LABEL_OP_LE_U32_TYPED;
-        vm_dispatch_table[OP_GT_U32_TYPED] = &&LABEL_OP_GT_U32_TYPED;
-        vm_dispatch_table[OP_GE_U32_TYPED] = &&LABEL_OP_GE_U32_TYPED;
-        vm_dispatch_table[OP_LT_U64_TYPED] = &&LABEL_OP_LT_U64_TYPED;
-        vm_dispatch_table[OP_LE_U64_TYPED] = &&LABEL_OP_LE_U64_TYPED;
-        vm_dispatch_table[OP_GT_U64_TYPED] = &&LABEL_OP_GT_U64_TYPED;
-        vm_dispatch_table[OP_GE_U64_TYPED] = &&LABEL_OP_GE_U64_TYPED;
+        VM_REGISTER_TYPED_LABEL(OP_ADD_I32_TYPED);
+        VM_REGISTER_TYPED_LABEL(OP_SUB_I32_TYPED);
+        VM_REGISTER_TYPED_LABEL(OP_MUL_I32_TYPED);
+        VM_REGISTER_TYPED_LABEL(OP_LT_I32_TYPED);
+        VM_REGISTER_TYPED_LABEL(OP_LE_I32_TYPED);
+        VM_REGISTER_TYPED_LABEL(OP_GT_I32_TYPED);
+        VM_REGISTER_TYPED_LABEL(OP_GE_I32_TYPED);
+        VM_REGISTER_TYPED_LABEL(OP_LT_I64_TYPED);
+        VM_REGISTER_TYPED_LABEL(OP_LE_I64_TYPED);
+        VM_REGISTER_TYPED_LABEL(OP_GT_I64_TYPED);
+        VM_REGISTER_TYPED_LABEL(OP_GE_I64_TYPED);
+        VM_REGISTER_TYPED_LABEL(OP_LT_F64_TYPED);
+        VM_REGISTER_TYPED_LABEL(OP_LE_F64_TYPED);
+        VM_REGISTER_TYPED_LABEL(OP_GT_F64_TYPED);
+        VM_REGISTER_TYPED_LABEL(OP_GE_F64_TYPED);
+        VM_REGISTER_TYPED_LABEL(OP_LT_U32_TYPED);
+        VM_REGISTER_TYPED_LABEL(OP_LE_U32_TYPED);
+        VM_REGISTER_TYPED_LABEL(OP_GT_U32_TYPED);
+        VM_REGISTER_TYPED_LABEL(OP_GE_U32_TYPED);
+        VM_REGISTER_TYPED_LABEL(OP_LT_U64_TYPED);
+        VM_REGISTER_TYPED_LABEL(OP_LE_U64_TYPED);
+        VM_REGISTER_TYPED_LABEL(OP_GT_U64_TYPED);
+        VM_REGISTER_TYPED_LABEL(OP_GE_U64_TYPED);
         
         // Short jumps for tight loops
         vm_dispatch_table[OP_JUMP_SHORT] = &&LABEL_OP_JUMP_SHORT;
@@ -167,38 +175,38 @@ InterpretResult vm_run_dispatch(void) {
         vm_dispatch_table[OP_INC_I32_CHECKED] = &&LABEL_OP_INC_I32_CHECKED;
         
         // Remaining typed operations
-        vm_dispatch_table[OP_DIV_I32_TYPED] = &&LABEL_OP_DIV_I32_TYPED;
-        vm_dispatch_table[OP_MOD_I32_TYPED] = &&LABEL_OP_MOD_I32_TYPED;
-        vm_dispatch_table[OP_ADD_I64_TYPED] = &&LABEL_OP_ADD_I64_TYPED;
-        vm_dispatch_table[OP_SUB_I64_TYPED] = &&LABEL_OP_SUB_I64_TYPED;
-        vm_dispatch_table[OP_MUL_I64_TYPED] = &&LABEL_OP_MUL_I64_TYPED;
-        vm_dispatch_table[OP_DIV_I64_TYPED] = &&LABEL_OP_DIV_I64_TYPED;
-        vm_dispatch_table[OP_MOD_I64_TYPED] = &&LABEL_OP_MOD_I64_TYPED;
-        vm_dispatch_table[OP_ADD_F64_TYPED] = &&LABEL_OP_ADD_F64_TYPED;
-        vm_dispatch_table[OP_SUB_F64_TYPED] = &&LABEL_OP_SUB_F64_TYPED;
-        vm_dispatch_table[OP_MUL_F64_TYPED] = &&LABEL_OP_MUL_F64_TYPED;
-        vm_dispatch_table[OP_DIV_F64_TYPED] = &&LABEL_OP_DIV_F64_TYPED;
-        vm_dispatch_table[OP_MOD_F64_TYPED] = &&LABEL_OP_MOD_F64_TYPED;
+        VM_REGISTER_TYPED_LABEL(OP_DIV_I32_TYPED);
+        VM_REGISTER_TYPED_LABEL(OP_MOD_I32_TYPED);
+        VM_REGISTER_TYPED_LABEL(OP_ADD_I64_TYPED);
+        VM_REGISTER_TYPED_LABEL(OP_SUB_I64_TYPED);
+        VM_REGISTER_TYPED_LABEL(OP_MUL_I64_TYPED);
+        VM_REGISTER_TYPED_LABEL(OP_DIV_I64_TYPED);
+        VM_REGISTER_TYPED_LABEL(OP_MOD_I64_TYPED);
+        VM_REGISTER_TYPED_LABEL(OP_ADD_F64_TYPED);
+        VM_REGISTER_TYPED_LABEL(OP_SUB_F64_TYPED);
+        VM_REGISTER_TYPED_LABEL(OP_MUL_F64_TYPED);
+        VM_REGISTER_TYPED_LABEL(OP_DIV_F64_TYPED);
+        VM_REGISTER_TYPED_LABEL(OP_MOD_F64_TYPED);
         
         // U32 and U64 typed operations
-        vm_dispatch_table[OP_ADD_U32_TYPED] = &&LABEL_OP_ADD_U32_TYPED;
-        vm_dispatch_table[OP_SUB_U32_TYPED] = &&LABEL_OP_SUB_U32_TYPED;
-        vm_dispatch_table[OP_MUL_U32_TYPED] = &&LABEL_OP_MUL_U32_TYPED;
-        vm_dispatch_table[OP_DIV_U32_TYPED] = &&LABEL_OP_DIV_U32_TYPED;
-        vm_dispatch_table[OP_MOD_U32_TYPED] = &&LABEL_OP_MOD_U32_TYPED;
-        
-        vm_dispatch_table[OP_ADD_U64_TYPED] = &&LABEL_OP_ADD_U64_TYPED;
-        vm_dispatch_table[OP_SUB_U64_TYPED] = &&LABEL_OP_SUB_U64_TYPED;
-        vm_dispatch_table[OP_MUL_U64_TYPED] = &&LABEL_OP_MUL_U64_TYPED;
-        vm_dispatch_table[OP_DIV_U64_TYPED] = &&LABEL_OP_DIV_U64_TYPED;
-        vm_dispatch_table[OP_MOD_U64_TYPED] = &&LABEL_OP_MOD_U64_TYPED;
+        VM_REGISTER_TYPED_LABEL(OP_ADD_U32_TYPED);
+        VM_REGISTER_TYPED_LABEL(OP_SUB_U32_TYPED);
+        VM_REGISTER_TYPED_LABEL(OP_MUL_U32_TYPED);
+        VM_REGISTER_TYPED_LABEL(OP_DIV_U32_TYPED);
+        VM_REGISTER_TYPED_LABEL(OP_MOD_U32_TYPED);
+
+        VM_REGISTER_TYPED_LABEL(OP_ADD_U64_TYPED);
+        VM_REGISTER_TYPED_LABEL(OP_SUB_U64_TYPED);
+        VM_REGISTER_TYPED_LABEL(OP_MUL_U64_TYPED);
+        VM_REGISTER_TYPED_LABEL(OP_DIV_U64_TYPED);
+        VM_REGISTER_TYPED_LABEL(OP_MOD_U64_TYPED);
         
         // TODO: Removed mixed-type op for Rust-style strict typing
         
         // Constant loading (also hot)
-        vm_dispatch_table[OP_LOAD_I32_CONST] = &&LABEL_OP_LOAD_I32_CONST;
-        vm_dispatch_table[OP_LOAD_I64_CONST] = &&LABEL_OP_LOAD_I64_CONST;
-        vm_dispatch_table[OP_LOAD_F64_CONST] = &&LABEL_OP_LOAD_F64_CONST;
+        VM_REGISTER_TYPED_LABEL(OP_LOAD_I32_CONST);
+        VM_REGISTER_TYPED_LABEL(OP_LOAD_I64_CONST);
+        VM_REGISTER_TYPED_LABEL(OP_LOAD_F64_CONST);
         
         // Standard operations (less hot)
         vm_dispatch_table[OP_LOAD_CONST] = &&LABEL_OP_LOAD_CONST;
@@ -307,6 +315,7 @@ InterpretResult vm_run_dispatch(void) {
         vm_dispatch_table[OP_ENUM_NEW_R] = &&LABEL_OP_ENUM_NEW_R;
         vm_dispatch_table[OP_ENUM_TAG_EQ_R] = &&LABEL_OP_ENUM_TAG_EQ_R;
         vm_dispatch_table[OP_ENUM_PAYLOAD_R] = &&LABEL_OP_ENUM_PAYLOAD_R;
+        vm_dispatch_table[OP_STRING_GET_R] = &&LABEL_OP_STRING_GET_R;
         vm_dispatch_table[OP_ARRAY_GET_R] = &&LABEL_OP_ARRAY_GET_R;
         vm_dispatch_table[OP_ARRAY_SET_R] = &&LABEL_OP_ARRAY_SET_R;
         vm_dispatch_table[OP_ARRAY_LEN_R] = &&LABEL_OP_ARRAY_LEN_R;
@@ -348,9 +357,9 @@ InterpretResult vm_run_dispatch(void) {
         
         // Note: Hot opcodes already assigned above for optimal cache locality
         
-        vm_dispatch_table[OP_MOVE_I32] = &&LABEL_OP_MOVE_I32;
-        vm_dispatch_table[OP_MOVE_I64] = &&LABEL_OP_MOVE_I64;
-        vm_dispatch_table[OP_MOVE_F64] = &&LABEL_OP_MOVE_F64;
+        VM_REGISTER_TYPED_LABEL(OP_MOVE_I32);
+        VM_REGISTER_TYPED_LABEL(OP_MOVE_I64);
+        VM_REGISTER_TYPED_LABEL(OP_MOVE_F64);
         
         // Phase 2.2: Fused instruction dispatch entries
         vm_dispatch_table[OP_ADD_I32_IMM] = &&LABEL_OP_ADD_I32_IMM;
@@ -2226,6 +2235,37 @@ InterpretResult vm_run_dispatch(void) {
         DISPATCH();
     }
 
+    LABEL_OP_STRING_GET_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t string_reg = READ_BYTE();
+        uint8_t index_reg = READ_BYTE();
+
+        Value string_value = vm_get_register_safe(string_reg);
+        if (!IS_STRING(string_value)) {
+            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Value is not a string");
+        }
+
+        int index;
+        if (!value_to_index(vm_get_register_safe(index_reg), &index)) {
+            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(),
+                            "String index must be a non-negative integer");
+        }
+
+        ObjString* source = AS_STRING(string_value);
+        if (index < 0 || index >= source->length) {
+            VM_ERROR_RETURN(ERROR_INDEX, CURRENT_LOCATION(), "String index out of bounds");
+        }
+
+        ObjString* ch = string_char_at(source, (size_t)index);
+        if (!ch) {
+            VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(),
+                            "Failed to extract string character");
+        }
+
+        vm_set_register_safe(dst, STRING_VAL(ch));
+        DISPATCH();
+    }
+
     LABEL_OP_ARRAY_GET_R: {
         uint8_t dst = READ_BYTE();
         uint8_t array_reg = READ_BYTE();
@@ -3052,6 +3092,7 @@ InterpretResult vm_run_dispatch(void) {
     }
 
     // Typed arithmetic operations for maximum performance (bypass Value boxing)
+#if ORUS_VM_ENABLE_TYPED_OPS
     LABEL_OP_ADD_I32_TYPED: {
         handle_add_i32_typed();
         DISPATCH_TYPED();
@@ -3263,7 +3304,6 @@ InterpretResult vm_run_dispatch(void) {
         DISPATCH();
     }
 
-    // U32 Typed Operations
     LABEL_OP_ADD_U32_TYPED: {
         handle_add_u32_typed();
         DISPATCH_TYPED();
@@ -3318,6 +3358,13 @@ InterpretResult vm_run_dispatch(void) {
         CHECK_RUNTIME_ERROR();
         DISPATCH_TYPED();
     }
+#else
+    LABEL_TYPED_OPS_UNAVAILABLE: {
+        VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(),
+                        "Typed operations are disabled at build time");
+        DISPATCH();
+    }
+#endif
 
     // TODO: Removed mixed-type op for Rust-style strict typing
 
@@ -3598,4 +3645,6 @@ InterpretResult vm_run_dispatch(void) {
 #include "../handlers/vm_arithmetic_handlers.c"
 #include "../handlers/vm_memory_handlers.c"
 #include "../handlers/vm_control_flow_handlers.c"
+
+#undef VM_REGISTER_TYPED_LABEL
 #endif // USE_COMPUTED_GOTO

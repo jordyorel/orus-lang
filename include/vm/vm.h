@@ -22,6 +22,10 @@
 #include "vm_constants.h"
 #include "vm_string_ops.h"
 
+#ifndef ORUS_VM_ENABLE_TYPED_OPS
+#define ORUS_VM_ENABLE_TYPED_OPS 1
+#endif
+
 // Register-based VM configuration
 #define REGISTER_COUNT VM_MAX_REGISTERS
 #define FRAMES_MAX VM_MAX_CALL_FRAMES
@@ -545,6 +549,7 @@ typedef enum {
     // String operations
     OP_CONCAT_R,
     OP_TO_STRING_R,
+    OP_STRING_GET_R,  // dst, string_reg, index_reg
 
     // Array operations
     OP_MAKE_ARRAY_R,  // dst, start_reg, count

@@ -1,0 +1,34 @@
+// Direct string indexing regression tests exercising VM opcode support
+print("== String indexing regression ==")
+
+fn assert_eq(label, actual, expected):
+    if actual != expected:
+        print("FAIL", label, actual, expected)
+    else:
+        print("ok", label)
+
+base = "Hello runtime!"
+assert_eq("base[0]", base[0], "H")
+assert_eq("base[6]", base[6], "r")
+assert_eq("base[12]", base[12], "e")
+assert_eq("base[13]", base[13], "!")
+
+rope = ("rope" + "-") + ("engine" + "ering")
+assert_eq("rope[0]", rope[0], "r")
+assert_eq("rope[4]", rope[4], "-")
+assert_eq("rope[9]", rope[9], "n")
+
+try:
+    value = base[-1]
+    print("FAIL", "negative", value)
+catch err:
+    print("ok error", "negative")
+    print(err)
+
+try:
+    value = base[99]
+    print("FAIL", "too large", value)
+catch err:
+    print("ok error", "too large")
+    print(err)
+print("== done ==")

@@ -83,6 +83,69 @@ StringRope* rope_from_cstr(const char* str, size_t len) {
     return r;
 }
 
+static size_t rope_length_internal(const StringRope* rope) {
+    if (!rope) return 0;
+    switch (rope->kind) {
+        case ROPE_LEAF:
+            return rope->as.leaf.len;
+        case ROPE_CONCAT:
+            return rope_length_internal(rope->as.concat.left) +
+                   rope_length_internal(rope->as.concat.right);
+        case ROPE_SUBSTRING:
+            return rope->as.substring.len;
+    }
+    return 0;
+}
+
+size_t rope_length(const StringRope* rope) { return rope_length_internal(rope); }
+
+static bool rope_char_at_internal(const StringRope* rope, size_t index, char* out) {
+    if (!rope) return false;
+    switch (rope->kind) {
+        case ROPE_LEAF:
+            if (index >= rope->as.leaf.len) {
+                return false;
+            }
+            *out = rope->as.leaf.data[index];
+            return true;
+        case ROPE_CONCAT: {
+            size_t left_len = rope_length_internal(rope->as.concat.left);
+            if (index < left_len) {
+                return rope_char_at_internal(rope->as.concat.left, index, out);
+            }
+            return rope_char_at_internal(rope->as.concat.right, index - left_len, out);
+        }
+        case ROPE_SUBSTRING:
+            if (index >= rope->as.substring.len) {
+                return false;
+            }
+            return rope_char_at_internal(rope->as.substring.base,
+                                         rope->as.substring.start + index, out);
+    }
+    return false;
+}
+
+bool rope_char_at(const StringRope* rope, size_t index, char* out) {
+    if (!out) {
+        return false;
+    }
+    return rope_char_at_internal(rope, index, out);
+}
+
+ObjString* string_char_at(ObjString* string, size_t index) {
+    if (!string || !string->rope) {
+        return NULL;
+    }
+    char ch;
+    if (!rope_char_at_internal(string->rope, index, &ch)) {
+        return NULL;
+    }
+    char buffer[2];
+    buffer[0] = ch;
+    buffer[1] = '\0';
+    return allocateString(buffer, 1);
+}
+
 static void rope_flatten(StringRope* rope, StringBuilder* sb) {
     if (!rope) return;
     switch (rope->kind) {
