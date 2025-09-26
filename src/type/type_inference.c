@@ -1283,9 +1283,12 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                 return getPrimitiveType(TYPE_STRING);
             }
 
-            if (array_type->kind != TYPE_ARRAY) {
-                report_type_mismatch(node->indexAccess.array->location, "array",
-                                     getTypeName(array_type->kind));
+            bool is_string_container = (array_type->kind == TYPE_STRING);
+            bool is_array_container = (array_type->kind == TYPE_ARRAY);
+
+            if (!is_array_container && !is_string_container) {
+                report_type_mismatch(node->indexAccess.array->location,
+                                     "array or string", getTypeName(array_type->kind));
                 set_type_error();
                 return NULL;
             }
@@ -1294,6 +1297,13 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             if (!element_type) {
                 element_type = getPrimitiveType(TYPE_ANY);
             }
+
+            if (is_string_container) {
+                Type* char_type = getPrimitiveType(TYPE_STRING);
+                node->dataType = char_type;
+                return char_type;
+            }
+
             node->dataType = element_type;
             return element_type;
             Type* element_type = array_type->info.array.elementType;

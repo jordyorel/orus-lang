@@ -2479,6 +2479,42 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                 return -1;
             }
 
+            Type* container_type = array_node->resolvedType;
+            if (!container_type && array_node->original &&
+                array_node->original->dataType) {
+                container_type = array_node->original->dataType;
+            }
+
+            TypeKind container_kind = TYPE_UNKNOWN;
+            if (container_type) {
+                container_kind = container_type->kind;
+            }
+
+            if (container_kind != TYPE_STRING && container_kind != TYPE_ARRAY &&
+                array_node->original &&
+                array_node->original->type == NODE_IDENTIFIER) {
+                const char* ident_name = array_node->original->identifier.name;
+                Symbol* symbol = resolve_symbol(ctx->symbols, ident_name);
+                if (symbol && symbol->type) {
+                    container_kind = symbol->type->kind;
+                }
+            }
+
+            if (container_kind != TYPE_STRING && container_kind != TYPE_ARRAY &&
+                array_node->original) {
+                container_kind = fallback_type_kind_from_ast(array_node->original);
+                if (container_kind != TYPE_STRING &&
+                    array_node->original->type == NODE_LITERAL &&
+                    array_node->original->literal.value.type == VAL_STRING) {
+                    container_kind = TYPE_STRING;
+                }
+            }
+
+            uint8_t opcode = (container_kind == TYPE_STRING) ? OP_STRING_GET_R
+                                                             : OP_ARRAY_GET_R;
+
+            set_location_from_node(ctx, expr);
+            emit_byte_to_buffer(ctx->bytecode, opcode);
             bool is_string_index = expr->typed.indexAccess.isStringIndex;
 
             set_location_from_node(ctx, expr);
