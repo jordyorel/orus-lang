@@ -3,6 +3,8 @@
 // Phase 4 — multi-variant harness
 // ==============================
 print("== Phase 4: Sorting Property Tests (multi-variant) ==")
+suite_start: f64 = time_stamp()
+print("Start timestamp:", suite_start)
 
 // ---------- Deterministic RNG ----------
 global mut RNG_SEED: i32 = 0x13579BDF
@@ -338,7 +340,7 @@ fn fixed_cases():
     return cases
 
 // ---------- Configuration ----------
-const RANDOM_TRIALS = 500
+const RANDOM_TRIALS = 1000
 const ORACLE_TRIALS = 250
 const RANDOM_MAX_LEN = 1000
 const SLOW_MAX_LEN = 128
@@ -370,7 +372,8 @@ fn run_props_for(algo_name, algo_id: i32, random_trials: i32, seed: i32):
 
 // ---------- Main ----------
 fn run_suite_for_seed(seed: i32):
-    print("== Running property suite (seed", seed, ") ==")
+    seed_start: f64 = time_stamp()
+    print("== Running property suite (seed", seed, ") ==", "start:", seed_start)
     run_props_for("insertion_sort (in-place)", ALG_INSERTION, RANDOM_TRIALS, seed)
     run_props_for("bubble_sort (in-place)",    ALG_BUBBLE,    RANDOM_TRIALS, seed)
     run_props_for("quick_sort (recursive)",    ALG_QUICK,     RANDOM_TRIALS, seed)
@@ -379,7 +382,8 @@ fn run_suite_for_seed(seed: i32):
     run_props_for("counting_sort (frequency)", ALG_COUNTING, RANDOM_TRIALS, seed)
     // Oracle should of course satisfy its own properties; also serves as control.
     run_props_for("oracle_merge_sort (reference)", ALG_ORACLE, ORACLE_TRIALS, seed)
-    print("== Completed seed", seed, "==")
+    seed_end: f64 = time_stamp()
+    print("== Completed seed", seed, "==", "elapsed:", seed_end - seed_start)
 
 seeds = [0x1, 0x1234, 0xCAFEBABE, 0xFEEDFACE]
 mut si: i32 = 0
@@ -387,4 +391,5 @@ while si < len(seeds):
     run_suite_for_seed(seeds[si])
     si = si + 1
 
-print("== Done: Sorting Property Tests ==")
+suite_end: f64 = time_stamp()
+print("== Done: Sorting Property Tests ==", "elapsed:", suite_end - suite_start)
