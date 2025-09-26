@@ -49,16 +49,6 @@ static bool buffer_is_ascii(const char* data, size_t len) {
     return true;
 }
 
-static bool buffer_is_ascii(const char* data, size_t len) {
-    if (!data) return true;
-    for (size_t i = 0; i < len; i++) {
-        if ((unsigned char)data[i] >= 0x80) {
-            return false;
-        }
-    }
-    return true;
-}
-
 StringBuilder* createStringBuilder(size_t initial_capacity) {
     size_t cap = initial_capacity > 0 ? initial_capacity : VM_SMALL_STRING_BUFFER;
     StringBuilder* sb = (StringBuilder*)reallocate(NULL, 0, sizeof(StringBuilder));
