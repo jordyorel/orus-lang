@@ -37,6 +37,25 @@ void builtin_print(Value* args, int count, bool newline);
  */
 bool builtin_input(Value* args, int count, Value* out_value);
 
+/**
+ * Obtain the textual runtime type for a value.
+ *
+ * @param value     Value whose runtime type name is requested.
+ * @param out_value Receives the resulting string value on success.
+ * @return true when the type name could be produced.
+ */
+bool builtin_type_of(Value value, Value* out_value);
+
+/**
+ * Determine whether a value's runtime type matches the provided identifier.
+ *
+ * @param value          Value to inspect.
+ * @param type_identifier Expected type name as a string value.
+ * @param out_value      Receives a boolean value indicating the result.
+ * @return true on success, false when the comparison could not be performed.
+ */
+bool builtin_is_type(Value value, Value type_identifier, Value* out_value);
+
 typedef enum {
     BUILTIN_PARSE_OK = 0,
     BUILTIN_PARSE_INVALID,

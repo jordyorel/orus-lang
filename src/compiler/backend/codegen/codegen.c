@@ -374,6 +374,8 @@ static int compile_builtin_array_len(CompilerContext* ctx, TypedASTNode* call);
 static int compile_builtin_input(CompilerContext* ctx, TypedASTNode* call);
 static int compile_builtin_int(CompilerContext* ctx, TypedASTNode* call);
 static int compile_builtin_float(CompilerContext* ctx, TypedASTNode* call);
+static int compile_builtin_type_of(CompilerContext* ctx, TypedASTNode* call);
+static int compile_builtin_is_type(CompilerContext* ctx, TypedASTNode* call);
 int lookup_variable(CompilerContext* ctx, const char* name);
 static char* create_method_symbol_name(const char* struct_name, const char* method_name);
 static int compile_struct_method_call(CompilerContext* ctx, TypedASTNode* call);
@@ -1772,6 +1774,132 @@ static int compile_builtin_float(CompilerContext* ctx, TypedASTNode* call) {
     }
 
     if (free_value && value_arg) free_typed_ast_node(value_arg);
+
+    return result_reg;
+}
+
+static int compile_builtin_type_of(CompilerContext* ctx, TypedASTNode* call) {
+    if (!ctx || !call || !call->original) {
+        return -1;
+    }
+
+    if (call->original->call.argCount != 1) {
+        DEBUG_CODEGEN_PRINT("Error: type_of() expects exactly 1 argument, got %d\n",
+                            call->original->call.argCount);
+        ctx->has_compilation_errors = true;
+        return -1;
+    }
+
+    bool free_value = false;
+    TypedASTNode* value_arg = get_call_argument_node(call, 0, &free_value);
+    if (!value_arg) {
+        if (free_value && value_arg) free_typed_ast_node(value_arg);
+        return -1;
+    }
+
+    int value_reg = compile_expression(ctx, value_arg);
+    if (value_reg == -1) {
+        if (free_value && value_arg) free_typed_ast_node(value_arg);
+        return -1;
+    }
+
+    int result_reg = mp_allocate_temp_register(ctx->allocator);
+    if (result_reg == -1) {
+        DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for type_of() result\n");
+        if (value_reg >= MP_TEMP_REG_START && value_reg <= MP_TEMP_REG_END) {
+            mp_free_temp_register(ctx->allocator, value_reg);
+        }
+        if (free_value && value_arg) free_typed_ast_node(value_arg);
+        return -1;
+    }
+
+    set_location_from_node(ctx, call);
+    emit_byte_to_buffer(ctx->bytecode, OP_TYPE_OF_R);
+    emit_byte_to_buffer(ctx->bytecode, result_reg);
+    emit_byte_to_buffer(ctx->bytecode, value_reg);
+
+    if (value_reg >= MP_TEMP_REG_START && value_reg <= MP_TEMP_REG_END) {
+        mp_free_temp_register(ctx->allocator, value_reg);
+    }
+
+    if (free_value && value_arg) free_typed_ast_node(value_arg);
+
+    return result_reg;
+}
+
+static int compile_builtin_is_type(CompilerContext* ctx, TypedASTNode* call) {
+    if (!ctx || !call || !call->original) {
+        return -1;
+    }
+
+    if (call->original->call.argCount != 2) {
+        DEBUG_CODEGEN_PRINT("Error: is_type() expects exactly 2 arguments, got %d\n",
+                            call->original->call.argCount);
+        ctx->has_compilation_errors = true;
+        return -1;
+    }
+
+    bool free_value = false;
+    TypedASTNode* value_arg = get_call_argument_node(call, 0, &free_value);
+    if (!value_arg) {
+        if (free_value && value_arg) free_typed_ast_node(value_arg);
+        return -1;
+    }
+
+    bool free_type = false;
+    TypedASTNode* type_arg = get_call_argument_node(call, 1, &free_type);
+    if (!type_arg) {
+        if (free_value && value_arg) free_typed_ast_node(value_arg);
+        if (free_type && type_arg) free_typed_ast_node(type_arg);
+        return -1;
+    }
+
+    int value_reg = compile_expression(ctx, value_arg);
+    if (value_reg == -1) {
+        if (free_value && value_arg) free_typed_ast_node(value_arg);
+        if (free_type && type_arg) free_typed_ast_node(type_arg);
+        return -1;
+    }
+
+    int type_reg = compile_expression(ctx, type_arg);
+    if (type_reg == -1) {
+        if (value_reg >= MP_TEMP_REG_START && value_reg <= MP_TEMP_REG_END) {
+            mp_free_temp_register(ctx->allocator, value_reg);
+        }
+        if (free_value && value_arg) free_typed_ast_node(value_arg);
+        if (free_type && type_arg) free_typed_ast_node(type_arg);
+        return -1;
+    }
+
+    int result_reg = mp_allocate_temp_register(ctx->allocator);
+    if (result_reg == -1) {
+        DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for is_type() result\n");
+        if (value_reg >= MP_TEMP_REG_START && value_reg <= MP_TEMP_REG_END) {
+            mp_free_temp_register(ctx->allocator, value_reg);
+        }
+        if (type_reg >= MP_TEMP_REG_START && type_reg <= MP_TEMP_REG_END) {
+            mp_free_temp_register(ctx->allocator, type_reg);
+        }
+        if (free_value && value_arg) free_typed_ast_node(value_arg);
+        if (free_type && type_arg) free_typed_ast_node(type_arg);
+        return -1;
+    }
+
+    set_location_from_node(ctx, call);
+    emit_byte_to_buffer(ctx->bytecode, OP_IS_TYPE_R);
+    emit_byte_to_buffer(ctx->bytecode, result_reg);
+    emit_byte_to_buffer(ctx->bytecode, value_reg);
+    emit_byte_to_buffer(ctx->bytecode, type_reg);
+
+    if (value_reg >= MP_TEMP_REG_START && value_reg <= MP_TEMP_REG_END) {
+        mp_free_temp_register(ctx->allocator, value_reg);
+    }
+    if (type_reg >= MP_TEMP_REG_START && type_reg <= MP_TEMP_REG_END) {
+        mp_free_temp_register(ctx->allocator, type_reg);
+    }
+
+    if (free_value && value_arg) free_typed_ast_node(value_arg);
+    if (free_type && type_arg) free_typed_ast_node(type_arg);
 
     return result_reg;
 }
@@ -3533,6 +3661,10 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                     return compile_builtin_int(ctx, expr);
                 } else if (strcmp(builtin_name, "float") == 0) {
                     return compile_builtin_float(ctx, expr);
+                } else if (strcmp(builtin_name, "type_of") == 0) {
+                    return compile_builtin_type_of(ctx, expr);
+                } else if (strcmp(builtin_name, "is_type") == 0) {
+                    return compile_builtin_is_type(ctx, expr);
                 }
             }
 

@@ -193,6 +193,21 @@ int disassembleInstruction(Chunk* chunk, int offset) {
             return offset + 3;
         }
 
+        case OP_TYPE_OF_R: {
+            uint8_t dst = chunk->code[offset + 1];
+            uint8_t value_reg = chunk->code[offset + 2];
+            printf("%-16s R%d, R%d\n", "TYPE_OF", dst, value_reg);
+            return offset + 3;
+        }
+
+        case OP_IS_TYPE_R: {
+            uint8_t dst = chunk->code[offset + 1];
+            uint8_t value_reg = chunk->code[offset + 2];
+            uint8_t type_reg = chunk->code[offset + 3];
+            printf("%-16s R%d, R%d, R%d\n", "IS_TYPE", dst, value_reg, type_reg);
+            return offset + 4;
+        }
+
         case OP_INPUT_R: {
             uint8_t dst = chunk->code[offset + 1];
             uint8_t arg_count = chunk->code[offset + 2];
