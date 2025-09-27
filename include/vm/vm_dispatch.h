@@ -35,6 +35,11 @@ InterpretResult vm_run_dispatch(void);
 // Timer utility shared with dispatch implementations
 double get_time_vm(void);
 
+// Deferred runtime error reporting control
+void vm_set_error_report_pending(bool pending);
+bool vm_get_error_report_pending(void);
+void vm_report_unhandled_error(void);
+
 // Dispatch table for computed goto (when enabled)
 #if USE_COMPUTED_GOTO
 extern void* vm_dispatch_table[OP_HALT + 1];
@@ -62,6 +67,7 @@ static inline bool vm_handle_pending_error(void) {
         if (frame.catchRegister != TRY_CATCH_REGISTER_NONE) {
             vm_set_register_safe(frame.catchRegister, vm.lastError);
         }
+        vm_set_error_report_pending(false);
         vm.lastError = BOOL_VAL(false);
         return true;
     }

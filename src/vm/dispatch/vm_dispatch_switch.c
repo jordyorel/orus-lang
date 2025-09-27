@@ -107,8 +107,12 @@ InterpretResult vm_run_dispatch(void) {
     double start_time = get_time_vm();
     #define RETURN(val) \
         do { \
+            InterpretResult _return_val = (val); \
+            if (_return_val == INTERPRET_RUNTIME_ERROR) { \
+                vm_report_unhandled_error(); \
+            } \
             vm.lastExecutionTime = get_time_vm() - start_time; \
-            return (val); \
+            return _return_val; \
         } while (0)
 
         for (;;) {
@@ -1141,7 +1145,7 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t src2 = READ_BYTE();
                     if (!IS_F64(vm_get_register_safe(src1)) || !IS_F64(vm_get_register_safe(src2))) {
                         VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be f64");
-                        return INTERPRET_RUNTIME_ERROR;
+                        RETURN(INTERPRET_RUNTIME_ERROR);
                     }
                     vm_set_register_safe(dst, F64_VAL(AS_F64(vm_get_register_safe(src1)) + AS_F64(vm_get_register_safe(src2))));
                     break;
@@ -1153,7 +1157,7 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t src2 = READ_BYTE();
                     if (!IS_F64(vm_get_register_safe(src1)) || !IS_F64(vm_get_register_safe(src2))) {
                         VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be f64");
-                        return INTERPRET_RUNTIME_ERROR;
+                        RETURN(INTERPRET_RUNTIME_ERROR);
                     }
                     vm_set_register_safe(dst, F64_VAL(AS_F64(vm_get_register_safe(src1)) - AS_F64(vm_get_register_safe(src2))));
                     break;
@@ -1165,7 +1169,7 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t src2 = READ_BYTE();
                     if (!IS_F64(vm_get_register_safe(src1)) || !IS_F64(vm_get_register_safe(src2))) {
                         VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be f64");
-                        return INTERPRET_RUNTIME_ERROR;
+                        RETURN(INTERPRET_RUNTIME_ERROR);
                     }
                     vm_set_register_safe(dst, F64_VAL(AS_F64(vm_get_register_safe(src1)) * AS_F64(vm_get_register_safe(src2))));
                     break;
@@ -1177,7 +1181,7 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t src2 = READ_BYTE();
                     if (!IS_F64(vm_get_register_safe(src1)) || !IS_F64(vm_get_register_safe(src2))) {
                         VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be f64");
-                        return INTERPRET_RUNTIME_ERROR;
+                        RETURN(INTERPRET_RUNTIME_ERROR);
                     }
                     double a = AS_F64(vm_get_register_safe(src1));
                     double b = AS_F64(vm_get_register_safe(src2));
@@ -1197,7 +1201,7 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t src2 = READ_BYTE();
                     if (!IS_F64(vm_get_register_safe(src1)) || !IS_F64(vm_get_register_safe(src2))) {
                         VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be f64");
-                        return INTERPRET_RUNTIME_ERROR;
+                        RETURN(INTERPRET_RUNTIME_ERROR);
                     }
                     double a = AS_F64(vm_get_register_safe(src1));
                     double b = AS_F64(vm_get_register_safe(src2));
@@ -1218,7 +1222,7 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t src2 = READ_BYTE();
                     if (!IS_I32(vm_get_register_safe(src1)) || !IS_I32(vm_get_register_safe(src2))) {
                         VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be i32");
-                        return INTERPRET_RUNTIME_ERROR;
+                        RETURN(INTERPRET_RUNTIME_ERROR);
                     }
                     vm_set_register_safe(dst, I32_VAL(AS_I32(vm_get_register_safe(src1)) & AS_I32(vm_get_register_safe(src2))));
                     break;
@@ -1230,7 +1234,7 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t src2 = READ_BYTE();
                     if (!IS_I32(vm_get_register_safe(src1)) || !IS_I32(vm_get_register_safe(src2))) {
                         VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be i32");
-                        return INTERPRET_RUNTIME_ERROR;
+                        RETURN(INTERPRET_RUNTIME_ERROR);
                     }
                     vm_set_register_safe(dst, I32_VAL(AS_I32(vm_get_register_safe(src1)) | AS_I32(vm_get_register_safe(src2))));
                     break;
@@ -1242,7 +1246,7 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t src2 = READ_BYTE();
                     if (!IS_I32(vm_get_register_safe(src1)) || !IS_I32(vm_get_register_safe(src2))) {
                         VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be i32");
-                        return INTERPRET_RUNTIME_ERROR;
+                        RETURN(INTERPRET_RUNTIME_ERROR);
                     }
                     vm_set_register_safe(dst, I32_VAL(AS_I32(vm_get_register_safe(src1)) ^ AS_I32(vm_get_register_safe(src2))));
                     break;
@@ -1253,7 +1257,7 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t src = READ_BYTE();
                     if (!IS_I32(vm_get_register_safe(src))) {
                         VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operand must be i32");
-                        return INTERPRET_RUNTIME_ERROR;
+                        RETURN(INTERPRET_RUNTIME_ERROR);
                     }
                     vm_set_register_safe(dst, I32_VAL(~AS_I32(vm_get_register_safe(src))));
                     break;
@@ -1265,7 +1269,7 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t src2 = READ_BYTE();
                     if (!IS_I32(vm_get_register_safe(src1)) || !IS_I32(vm_get_register_safe(src2))) {
                         VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be i32");
-                        return INTERPRET_RUNTIME_ERROR;
+                        RETURN(INTERPRET_RUNTIME_ERROR);
                     }
                     vm_set_register_safe(dst, I32_VAL(AS_I32(vm_get_register_safe(src1)) << AS_I32(vm_get_register_safe(src2))));
                     break;
@@ -1277,7 +1281,7 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t src2 = READ_BYTE();
                     if (!IS_I32(vm_get_register_safe(src1)) || !IS_I32(vm_get_register_safe(src2))) {
                         VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be i32");
-                        return INTERPRET_RUNTIME_ERROR;
+                        RETURN(INTERPRET_RUNTIME_ERROR);
                     }
                     vm_set_register_safe(dst, I32_VAL(AS_I32(vm_get_register_safe(src1)) >> AS_I32(vm_get_register_safe(src2))));
                     break;
@@ -1323,7 +1327,7 @@ InterpretResult vm_run_dispatch(void) {
                     READ_BYTE(); // Skip third operand (unused)
                     if (!IS_I32(vm_get_register_safe(src))) {
                         VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i32");
-                        return INTERPRET_RUNTIME_ERROR;
+                        RETURN(INTERPRET_RUNTIME_ERROR);
                     }
                     vm_set_register_safe(dst, F64_VAL((double)AS_I32(vm_get_register_safe(src))));
                     break;
@@ -1335,7 +1339,7 @@ InterpretResult vm_run_dispatch(void) {
                     READ_BYTE(); // Skip third operand (unused)
                     if (!IS_I64(vm_get_register_safe(src))) {
                         VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i64");
-                        return INTERPRET_RUNTIME_ERROR;
+                        RETURN(INTERPRET_RUNTIME_ERROR);
                     }
                     vm_set_register_safe(dst, F64_VAL((double)AS_I64(vm_get_register_safe(src))));
                     break;
@@ -1347,7 +1351,7 @@ InterpretResult vm_run_dispatch(void) {
                     READ_BYTE(); // Skip third operand (unused)
                     if (!IS_F64(vm_get_register_safe(src))) {
                         VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be f64");
-                        return INTERPRET_RUNTIME_ERROR;
+                        RETURN(INTERPRET_RUNTIME_ERROR);
                     }
                     vm_set_register_safe(dst, I32_VAL((int32_t)AS_F64(vm_get_register_safe(src))));
                     break;
@@ -1359,7 +1363,7 @@ InterpretResult vm_run_dispatch(void) {
                     READ_BYTE(); // Skip third operand (unused)
                     if (!IS_F64(vm_get_register_safe(src))) {
                         VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be f64");
-                        return INTERPRET_RUNTIME_ERROR;
+                        RETURN(INTERPRET_RUNTIME_ERROR);
                     }
                     vm_set_register_safe(dst, I64_VAL((int64_t)AS_F64(vm_get_register_safe(src))));
                     break;
@@ -2206,13 +2210,14 @@ InterpretResult vm_run_dispatch(void) {
                         }
                     }
                     vm.lastError = err;
+                    vm_set_error_report_pending(true);
                     goto handle_runtime_error;
                 }
 
                 case OP_JUMP: {
                     uint16_t offset = READ_SHORT();
                     if (!CF_JUMP(offset)) {
-                        return INTERPRET_RUNTIME_ERROR;
+                        RETURN(INTERPRET_RUNTIME_ERROR);
                     }
                     break;
                 }
@@ -2221,7 +2226,7 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t reg = READ_BYTE();
                     uint16_t offset = READ_SHORT();
                     if (!CF_JUMP_IF_NOT(reg, offset)) {
-                        return INTERPRET_RUNTIME_ERROR;
+                        RETURN(INTERPRET_RUNTIME_ERROR);
                     }
                     break;
                 }
@@ -2231,7 +2236,7 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t right = READ_BYTE();
                     uint16_t offset = READ_SHORT();
                     if (!CF_JUMP_IF_NOT_I32_TYPED(left, right, offset)) {
-                        return INTERPRET_RUNTIME_ERROR;
+                        RETURN(INTERPRET_RUNTIME_ERROR);
                     }
                     break;
                 }
@@ -2239,7 +2244,7 @@ InterpretResult vm_run_dispatch(void) {
                 case OP_LOOP: {
                     uint16_t offset = READ_SHORT();
                     if (!CF_LOOP(offset)) {
-                        return INTERPRET_RUNTIME_ERROR;
+                        RETURN(INTERPRET_RUNTIME_ERROR);
                     }
                     break;
                 }
@@ -2693,7 +2698,7 @@ InterpretResult vm_run_dispatch(void) {
                 case OP_JUMP_SHORT: {
                     uint8_t offset = READ_BYTE();
                     if (!CF_JUMP_SHORT(offset)) {
-                        return INTERPRET_RUNTIME_ERROR;
+                        RETURN(INTERPRET_RUNTIME_ERROR);
                     }
                     break;
                 }
@@ -2701,7 +2706,7 @@ InterpretResult vm_run_dispatch(void) {
                 case OP_JUMP_BACK_SHORT: {
                     uint8_t offset = READ_BYTE();
                     if (!CF_JUMP_BACK_SHORT(offset)) {
-                        return INTERPRET_RUNTIME_ERROR;
+                        RETURN(INTERPRET_RUNTIME_ERROR);
                     }
                     break;
                 }
@@ -2710,7 +2715,7 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t reg = READ_BYTE();
                     uint8_t offset = READ_BYTE();
                     if (!CF_JUMP_IF_NOT_SHORT(reg, offset)) {
-                        return INTERPRET_RUNTIME_ERROR;
+                        RETURN(INTERPRET_RUNTIME_ERROR);
                     }
                     break;
                 }
@@ -2718,7 +2723,7 @@ InterpretResult vm_run_dispatch(void) {
                 case OP_LOOP_SHORT: {
                     uint8_t offset = READ_BYTE();
                     if (!CF_LOOP_SHORT(offset)) {
-                        return INTERPRET_RUNTIME_ERROR;
+                        RETURN(INTERPRET_RUNTIME_ERROR);
                     }
                     break;
                 }
