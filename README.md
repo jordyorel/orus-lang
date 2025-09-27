@@ -75,6 +75,12 @@ make clean
 make help
 ```
 
+> **Apple Silicon note:** On macOS arm64 the build system now defaults to the
+> portable configuration when producing `orus` to avoid Apple Clang
+> mis-optimizations that could stop programs mid-run. Once you've confirmed your
+> toolchain is stable you can opt back into the tuned binary with
+> `make release PORTABLE=0`.
+
 **Build Features:**
 - **Release**: Maximum optimization (-O3, LTO, fast-math) for production use
 - **Debug**: Full debugging symbols (-O0, -g3) with assertions for development
