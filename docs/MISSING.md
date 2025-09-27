@@ -12,8 +12,8 @@ Keeping the roadmap short and direct makes it easier for the team to track what 
 - Diagnostics today: scope validation and control-flow checks (rich formatter still pending).
 
 ## Built-in Coverage
-- Shipped native helpers: `len`, `push`, `pop`, `timestamp`.
-- Pending runtime hooks: `substring`, `reserve`, `range`, `sum`, `min`, `max`, `type_of`, `is_type`, `input`, `int`, `float`, `sorted`, `module_name`, `module_path`.
+- Shipped native helpers: `len`, `push`, `pop`, `timestamp`, `input`, `float`, `int`
+- Pending runtime hooks: `substring`, `reserve`, `range`, `sum`, `min`, `max`, `type_of`, `is_type`, `sorted`, `module_name`, `module_path`.
 - Planned standard library math helpers: `pow`, `sqrt`.
 
 ## Active Work
