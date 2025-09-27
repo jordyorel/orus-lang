@@ -1,0 +1,3 @@
+print("runtime invalid int literal")
+value = "abc"
+print(int(value))

@@ -464,6 +464,50 @@ void handle_print_no_nl(void) {
     builtin_print(&temp_value, 1, false);
 }
 
+void handle_parse_int(void) {
+    uint8_t dst = READ_BYTE();
+    uint8_t value_reg = READ_BYTE();
+
+    Value source = vm_get_register_safe(value_reg);
+    Value result;
+    char message[128];
+    BuiltinParseResult status = builtin_parse_int(source, &result, message, sizeof(message));
+
+    if (status != BUILTIN_PARSE_OK) {
+        const char* fallback = (status == BUILTIN_PARSE_OVERFLOW)
+                                    ? "int() overflow"
+                                    : "int() conversion failed";
+        const char* text = message[0] ? message : fallback;
+        SrcLocation loc = {vm.filePath, vm.currentLine, vm.currentColumn};
+        runtimeError(ERROR_CONVERSION, loc, "%s", text);
+        return;
+    }
+
+    vm_set_register_safe(dst, result);
+}
+
+void handle_parse_float(void) {
+    uint8_t dst = READ_BYTE();
+    uint8_t value_reg = READ_BYTE();
+
+    Value source = vm_get_register_safe(value_reg);
+    Value result;
+    char message[128];
+    BuiltinParseResult status = builtin_parse_float(source, &result, message, sizeof(message));
+
+    if (status != BUILTIN_PARSE_OK) {
+        const char* fallback = (status == BUILTIN_PARSE_OVERFLOW)
+                                    ? "float() overflow"
+                                    : "float() conversion failed";
+        const char* text = message[0] ? message : fallback;
+        SrcLocation loc = {vm.filePath, vm.currentLine, vm.currentColumn};
+        runtimeError(ERROR_CONVERSION, loc, "%s", text);
+        return;
+    }
+
+    vm_set_register_safe(dst, result);
+}
+
 // ====== Utility Operation Handlers ======
 
 void handle_halt(void) {

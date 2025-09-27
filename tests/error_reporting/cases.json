@@ -255,6 +255,44 @@
     ]
   },
   {
+    "name": "runtime_invalid_int_literal",
+    "source": "runtime_invalid_int_literal.orus",
+    "description": "Calling int() on a non-numeric string should raise a conversion runtime panic with helpful guidance.",
+    "expected_exit": 70,
+    "expected_diagnostic_count": 1,
+    "expected_diagnostics": [
+      {
+        "category": "RUNTIME PANIC",
+        "message_contains": "int() argument must be an integer string",
+        "help_contains": "Ensure the text only contains digits",
+        "note_contains": "Only base-10 numbers are supported",
+        "location_contains": "runtime_invalid_int_literal.orus:3:10"
+      }
+    ],
+    "expected": [
+      "int() argument must be an integer string, got \"abc\""
+    ]
+  },
+  {
+    "name": "runtime_invalid_float_literal",
+    "source": "runtime_invalid_float_literal.orus",
+    "description": "Calling float() on a non-numeric string should surface a conversion runtime panic with guidance.",
+    "expected_exit": 70,
+    "expected_diagnostic_count": 1,
+    "expected_diagnostics": [
+      {
+        "category": "RUNTIME PANIC",
+        "message_contains": "float() argument must be a number",
+        "help_contains": "Ensure the text only contains digits",
+        "note_contains": "Only base-10 numbers are supported",
+        "location_contains": "runtime_invalid_float_literal.orus:3:12"
+      }
+    ],
+    "expected": [
+      "float() argument must be a number, got \"not-a-number\""
+    ]
+  },
+  {
     "name": "runtime_division_by_zero_location",
     "source": "runtime_division_by_zero.orus",
     "description": "Runtime division by zero should report the correct source location.",

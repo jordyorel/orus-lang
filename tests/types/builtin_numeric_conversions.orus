@@ -1,0 +1,13 @@
+print("== builtin numeric conversions ==")
+
+from_string = int("42")
+print("int from string:", from_string)
+
+from_float = int(7.0)
+print("int from float:", from_float)
+
+float_from_int = float(5)
+print("float from int:", float_from_int)
+
+float_from_string = float("3.125")
+print("float from string:", float_from_string)

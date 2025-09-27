@@ -958,6 +958,7 @@ ErrorCode map_error_type_to_code(ErrorType type) {
         case ERROR_INDEX: return E0002_INDEX_OUT_OF_BOUNDS;
         case ERROR_SYNTAX: return E1006_INVALID_SYNTAX;
         case ERROR_RUNTIME: return E0005_INVALID_OPERATION;
+        case ERROR_CONVERSION: return E0010_INVALID_LITERAL;
         case ERROR_IMPORT: return E3004_IMPORT_FAILED;
         default: return E9001_INTERNAL_PANIC;
     }
@@ -974,6 +975,7 @@ const char* get_error_title(ErrorCode code) {
         case E0004_ARITHMETIC_OVERFLOW: return "Number got too big to handle";
         case E0005_INVALID_OPERATION: return "This operation isn't allowed here";
         case E0006_MODULO_BY_ZERO: return "Can't find remainder when dividing by zero";
+        case E0010_INVALID_LITERAL: return "Couldn't parse this number";
         case E0007_TYPE_CONVERSION: return "Can't convert between these types";
         
         // Syntax errors (E1xxx)
@@ -1037,6 +1039,8 @@ const char* get_error_help(ErrorCode code) {
             return "Try using a larger number type like i64 or check for overflow before the operation.";
         case E0006_MODULO_BY_ZERO:
             return "Add a check to ensure the divisor isn't zero before using the modulo operator.";
+        case E0010_INVALID_LITERAL:
+            return "Ensure the text only contains digits (and an optional sign or decimal point) before calling int() or float().";
         
         // Syntax errors (E1xxx)
         case E1002_MISSING_COLON:
@@ -1099,6 +1103,8 @@ const char* get_error_note(ErrorCode code) {
         // Runtime errors (E0xxx)
         case E0001_DIVISION_BY_ZERO:
             return "Division by zero is mathematically undefined.";
+        case E0010_INVALID_LITERAL:
+            return "Only base-10 numbers are supported for int() and float() conversions.";
 
         // Syntax errors (E1xxx)
         case E1007_SEMICOLON_NOT_ALLOWED:

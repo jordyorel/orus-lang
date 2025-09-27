@@ -372,6 +372,8 @@ static int compile_builtin_array_push(CompilerContext* ctx, TypedASTNode* call);
 static int compile_builtin_array_pop(CompilerContext* ctx, TypedASTNode* call);
 static int compile_builtin_array_len(CompilerContext* ctx, TypedASTNode* call);
 static int compile_builtin_input(CompilerContext* ctx, TypedASTNode* call);
+static int compile_builtin_int(CompilerContext* ctx, TypedASTNode* call);
+static int compile_builtin_float(CompilerContext* ctx, TypedASTNode* call);
 int lookup_variable(CompilerContext* ctx, const char* name);
 static char* create_method_symbol_name(const char* struct_name, const char* method_name);
 static int compile_struct_method_call(CompilerContext* ctx, TypedASTNode* call);
@@ -1672,6 +1674,104 @@ static int compile_builtin_input(CompilerContext* ctx, TypedASTNode* call) {
     }
 
     if (free_prompt && prompt_arg) free_typed_ast_node(prompt_arg);
+
+    return result_reg;
+}
+
+static int compile_builtin_int(CompilerContext* ctx, TypedASTNode* call) {
+    if (!ctx || !call || !call->original) {
+        return -1;
+    }
+
+    if (call->original->call.argCount != 1) {
+        DEBUG_CODEGEN_PRINT("Error: int() expects exactly 1 argument, got %d\n",
+                            call->original->call.argCount);
+        ctx->has_compilation_errors = true;
+        return -1;
+    }
+
+    bool free_value = false;
+    TypedASTNode* value_arg = get_call_argument_node(call, 0, &free_value);
+    if (!value_arg) {
+        if (free_value && value_arg) free_typed_ast_node(value_arg);
+        return -1;
+    }
+
+    int value_reg = compile_expression(ctx, value_arg);
+    if (value_reg == -1) {
+        if (free_value && value_arg) free_typed_ast_node(value_arg);
+        return -1;
+    }
+
+    int result_reg = mp_allocate_temp_register(ctx->allocator);
+    if (result_reg == -1) {
+        DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for int() result\n");
+        if (value_reg >= MP_TEMP_REG_START && value_reg <= MP_TEMP_REG_END) {
+            mp_free_temp_register(ctx->allocator, value_reg);
+        }
+        if (free_value && value_arg) free_typed_ast_node(value_arg);
+        return -1;
+    }
+
+    set_location_from_node(ctx, call);
+    emit_byte_to_buffer(ctx->bytecode, OP_PARSE_INT_R);
+    emit_byte_to_buffer(ctx->bytecode, result_reg);
+    emit_byte_to_buffer(ctx->bytecode, value_reg);
+
+    if (value_reg >= MP_TEMP_REG_START && value_reg <= MP_TEMP_REG_END) {
+        mp_free_temp_register(ctx->allocator, value_reg);
+    }
+
+    if (free_value && value_arg) free_typed_ast_node(value_arg);
+
+    return result_reg;
+}
+
+static int compile_builtin_float(CompilerContext* ctx, TypedASTNode* call) {
+    if (!ctx || !call || !call->original) {
+        return -1;
+    }
+
+    if (call->original->call.argCount != 1) {
+        DEBUG_CODEGEN_PRINT("Error: float() expects exactly 1 argument, got %d\n",
+                            call->original->call.argCount);
+        ctx->has_compilation_errors = true;
+        return -1;
+    }
+
+    bool free_value = false;
+    TypedASTNode* value_arg = get_call_argument_node(call, 0, &free_value);
+    if (!value_arg) {
+        if (free_value && value_arg) free_typed_ast_node(value_arg);
+        return -1;
+    }
+
+    int value_reg = compile_expression(ctx, value_arg);
+    if (value_reg == -1) {
+        if (free_value && value_arg) free_typed_ast_node(value_arg);
+        return -1;
+    }
+
+    int result_reg = mp_allocate_temp_register(ctx->allocator);
+    if (result_reg == -1) {
+        DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for float() result\n");
+        if (value_reg >= MP_TEMP_REG_START && value_reg <= MP_TEMP_REG_END) {
+            mp_free_temp_register(ctx->allocator, value_reg);
+        }
+        if (free_value && value_arg) free_typed_ast_node(value_arg);
+        return -1;
+    }
+
+    set_location_from_node(ctx, call);
+    emit_byte_to_buffer(ctx->bytecode, OP_PARSE_FLOAT_R);
+    emit_byte_to_buffer(ctx->bytecode, result_reg);
+    emit_byte_to_buffer(ctx->bytecode, value_reg);
+
+    if (value_reg >= MP_TEMP_REG_START && value_reg <= MP_TEMP_REG_END) {
+        mp_free_temp_register(ctx->allocator, value_reg);
+    }
+
+    if (free_value && value_arg) free_typed_ast_node(value_arg);
 
     return result_reg;
 }
@@ -3429,6 +3529,10 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                     return compile_builtin_array_len(ctx, expr);
                 } else if (strcmp(builtin_name, "input") == 0) {
                     return compile_builtin_input(ctx, expr);
+                } else if (strcmp(builtin_name, "int") == 0) {
+                    return compile_builtin_int(ctx, expr);
+                } else if (strcmp(builtin_name, "float") == 0) {
+                    return compile_builtin_float(ctx, expr);
                 }
             }
 
