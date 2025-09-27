@@ -888,6 +888,21 @@ static void register_builtin_functions(TypeEnv* env) {
         Type* input_params[1] = {prompt_type};
         define_builtin_function(env, "input", prompt_type, input_params, 1);
     }
+
+    // int(value: any) -> i32
+    Type* any_param = getPrimitiveType(TYPE_ANY);
+    if (any_param) {
+        Type* int_params[1] = {any_param};
+        define_builtin_function(env, "int", getPrimitiveType(TYPE_I32),
+                                int_params, 1);
+    }
+
+    // float(value: any) -> f64
+    if (any_param) {
+        Type* float_params[1] = {any_param};
+        define_builtin_function(env, "float", getPrimitiveType(TYPE_F64),
+                                float_params, 1);
+    }
 }
 
 static void register_builtin_enums(void) {

@@ -2244,7 +2244,17 @@ InterpretResult vm_run_dispatch(void) {
                     break;
                 }
 
-                // I/O operations
+                // Conversion and I/O operations
+                case OP_PARSE_INT_R: {
+                    handle_parse_int();
+                    break;
+                }
+
+                case OP_PARSE_FLOAT_R: {
+                    handle_parse_float();
+                    break;
+                }
+
                 case OP_INPUT_R: {
                     handle_input();
                     break;

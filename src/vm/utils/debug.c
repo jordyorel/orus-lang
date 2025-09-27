@@ -179,6 +179,20 @@ int disassembleInstruction(Chunk* chunk, int offset) {
             return offset + 4;
         }
 
+        case OP_PARSE_INT_R: {
+            uint8_t dst = chunk->code[offset + 1];
+            uint8_t value_reg = chunk->code[offset + 2];
+            printf("%-16s R%d, R%d\n", "PARSE_INT", dst, value_reg);
+            return offset + 3;
+        }
+
+        case OP_PARSE_FLOAT_R: {
+            uint8_t dst = chunk->code[offset + 1];
+            uint8_t value_reg = chunk->code[offset + 2];
+            printf("%-16s R%d, R%d\n", "PARSE_FLOAT", dst, value_reg);
+            return offset + 3;
+        }
+
         case OP_INPUT_R: {
             uint8_t dst = chunk->code[offset + 1];
             uint8_t arg_count = chunk->code[offset + 2];

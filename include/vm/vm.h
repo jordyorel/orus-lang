@@ -142,6 +142,7 @@ typedef enum {
     ERROR_INDEX,
     ERROR_KEY,
     ERROR_VALUE,
+    ERROR_CONVERSION,
     ERROR_ARGUMENT,
     ERROR_IMPORT,
     ERROR_ATTRIBUTE,
@@ -608,7 +609,9 @@ typedef enum {
     OP_SET_UPVALUE_R,  // upvalue_index, value_reg
     OP_CLOSE_UPVALUE_R, // local_reg (close upvalue pointing to this local)
 
-    // I/O
+    // Conversions and I/O
+    OP_PARSE_INT_R,      // dst_reg, value_reg
+    OP_PARSE_FLOAT_R,    // dst_reg, value_reg
     OP_INPUT_R,           // dst_reg, arg_count, prompt_reg
     OP_PRINT_MULTI_R,     // first_reg, count, newline_flag
     OP_PRINT_R,           // reg
