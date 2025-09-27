@@ -13,8 +13,31 @@ UNAME_S := $(shell uname -s)
 # Base compiler flags
 BASE_CFLAGS = -Wall -Wextra -std=c11
 
+empty :=
+space := $(empty) $(empty)
+
 # Architecture-specific optimizations
 # Set PORTABLE=1 to build without aggressive CPU-specific tuning (safer on some macOS setups)
+# On Apple Silicon we default to the portable configuration because the aggressive
+# cpu-specific flags have been observed to cause truncated execution when Apple
+# Clang mis-optimizes hot dispatch loops. Users can opt back in with PORTABLE=0
+# once they have verified their toolchain.
+
+# Determine the default portability mode only if the caller did not specify it.
+ifeq ($(origin PORTABLE), undefined)
+    ifeq ($(UNAME_S),Darwin)
+        ifeq ($(UNAME_M),arm64)
+            PORTABLE := 1
+            PORTABLE_AUTO_REASON := (auto-enabled for macOS arm64 to avoid Apple Clang mis-optimizations)
+        endif
+    endif
+endif
+
+PORTABLE ?= 0
+
+PORTABLE_DESC = $(if $(filter 1,$(PORTABLE)),enabled,disabled)
+PORTABLE_NOTE = $(if $(and $(filter 1,$(PORTABLE)),$(PORTABLE_AUTO_REASON)),$(space)$(PORTABLE_AUTO_REASON),)
+
 ARCH_FLAGS =
 ARCH_DEFINES =
 
@@ -176,6 +199,7 @@ build-info:
 	@echo "Profile: $(PROFILE_DESC)"
 	@echo "Target: $(ORUS)"
 	@echo "Architecture: $(UNAME_S) $(UNAME_M)"
+	@echo "Portable mode: $(PORTABLE_DESC)$(PORTABLE_NOTE)"
 	@echo ""
 
 # Profile-specific build targets
