@@ -903,6 +903,20 @@ static void register_builtin_functions(TypeEnv* env) {
         define_builtin_function(env, "float", getPrimitiveType(TYPE_F64),
                                 float_params, 1);
     }
+
+    // type_of(value: any) -> string
+    Type* string_type = getPrimitiveType(TYPE_STRING);
+    if (any_param && string_type) {
+        Type* type_of_params[1] = {any_param};
+        define_builtin_function(env, "type_of", string_type, type_of_params, 1);
+    }
+
+    // is_type(value: any, type_name: string) -> bool
+    Type* bool_type = getPrimitiveType(TYPE_BOOL);
+    if (any_param && string_type && bool_type) {
+        Type* is_type_params[2] = {any_param, string_type};
+        define_builtin_function(env, "is_type", bool_type, is_type_params, 2);
+    }
 }
 
 static void register_builtin_enums(void) {

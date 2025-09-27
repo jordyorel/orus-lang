@@ -335,6 +335,8 @@ InterpretResult vm_run_dispatch(void) {
         vm_dispatch_table[OP_ITER_NEXT_R] = &&LABEL_OP_ITER_NEXT_R;
         vm_dispatch_table[OP_PARSE_INT_R] = &&LABEL_OP_PARSE_INT_R;
         vm_dispatch_table[OP_PARSE_FLOAT_R] = &&LABEL_OP_PARSE_FLOAT_R;
+        vm_dispatch_table[OP_TYPE_OF_R] = &&LABEL_OP_TYPE_OF_R;
+        vm_dispatch_table[OP_IS_TYPE_R] = &&LABEL_OP_IS_TYPE_R;
         vm_dispatch_table[OP_INPUT_R] = &&LABEL_OP_INPUT_R;
         vm_dispatch_table[OP_PRINT_MULTI_R] = &&LABEL_OP_PRINT_MULTI_R;
         vm_dispatch_table[OP_PRINT_R] = &&LABEL_OP_PRINT_R;
@@ -2756,6 +2758,36 @@ InterpretResult vm_run_dispatch(void) {
                                         : "float() conversion failed";
             const char* text = message[0] ? message : fallback;
             VM_ERROR_RETURN(ERROR_CONVERSION, CURRENT_LOCATION(), "%s", text);
+        }
+
+        vm_set_register_safe(dst, result);
+        DISPATCH();
+    }
+
+    LABEL_OP_TYPE_OF_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t value_reg = READ_BYTE();
+
+        Value value = vm_get_register_safe(value_reg);
+        Value result;
+        if (!builtin_type_of(value, &result)) {
+            VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(), "type_of() internal error");
+        }
+
+        vm_set_register_safe(dst, result);
+        DISPATCH();
+    }
+
+    LABEL_OP_IS_TYPE_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t value_reg = READ_BYTE();
+        uint8_t type_reg = READ_BYTE();
+
+        Value value = vm_get_register_safe(value_reg);
+        Value type_identifier = vm_get_register_safe(type_reg);
+        Value result;
+        if (!builtin_is_type(value, type_identifier, &result)) {
+            VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(), "is_type() internal error");
         }
 
         vm_set_register_safe(dst, result);

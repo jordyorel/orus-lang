@@ -612,6 +612,8 @@ typedef enum {
     // Conversions and I/O
     OP_PARSE_INT_R,      // dst_reg, value_reg
     OP_PARSE_FLOAT_R,    // dst_reg, value_reg
+    OP_TYPE_OF_R,        // dst_reg, value_reg
+    OP_IS_TYPE_R,        // dst_reg, value_reg, type_reg
     OP_INPUT_R,           // dst_reg, arg_count, prompt_reg
     OP_PRINT_MULTI_R,     // first_reg, count, newline_flag
     OP_PRINT_R,           // reg
