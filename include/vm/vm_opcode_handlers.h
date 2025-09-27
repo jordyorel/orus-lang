@@ -88,6 +88,8 @@ void handle_print_no_nl(void);
 void handle_input(void);
 void handle_parse_int(void);
 void handle_parse_float(void);
+void handle_type_of(void);
+void handle_is_type(void);
 void handle_halt(void);
 void handle_time_stamp(void);
 

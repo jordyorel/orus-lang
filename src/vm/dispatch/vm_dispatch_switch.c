@@ -2255,6 +2255,16 @@ InterpretResult vm_run_dispatch(void) {
                     break;
                 }
 
+                case OP_TYPE_OF_R: {
+                    handle_type_of();
+                    break;
+                }
+
+                case OP_IS_TYPE_R: {
+                    handle_is_type();
+                    break;
+                }
+
                 case OP_INPUT_R: {
                     handle_input();
                     break;
