@@ -665,7 +665,7 @@ void config_print_version(void) {
     printf("Built with comprehensive configuration system\n");
     printf("Register-based virtual machine with garbage collection\n");
     
-    #ifdef USE_COMPUTED_GOTO
+    #if USE_COMPUTED_GOTO
         printf("Dispatch Mode: Computed Goto (optimized)\n");
     #else
         printf("Dispatch Mode: Switch-based (portable)\n");

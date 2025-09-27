@@ -92,7 +92,7 @@ void runtimeError(ErrorType type, SrcLocation location, const char* format, ...)
 #endif
 
 // Dispatch macros - defined differently for each implementation
-#ifdef USE_COMPUTED_GOTO
+#if USE_COMPUTED_GOTO
     // Fast dispatch macros for computed goto
     #ifdef ORUS_DEBUG
         #define DISPATCH() \
