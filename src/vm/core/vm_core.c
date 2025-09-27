@@ -73,6 +73,7 @@ void initVM(void) {
     vm.frameCount = 0;
     vm.tryFrameCount = 0;
     vm.lastError = BOOL_VAL(false); // Default value instead of NIL_VAL
+    vm_set_error_report_pending(false);
     vm.instruction_count = 0;
     vm.astRoot = NULL;
     vm.filePath = NULL;
