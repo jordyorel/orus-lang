@@ -12,6 +12,28 @@
 #include <errno.h>
 #include <stdio.h>
 
+#if defined(_WIN32)
+#    include <io.h>
+#else
+#    include <unistd.h>
+#endif
+
+static void display_default_prompt_if_interactive(void) {
+#if defined(_WIN32)
+    int stdin_fd = _fileno(stdin);
+    int stderr_fd = _fileno(stderr);
+    if (stdin_fd >= 0 && stderr_fd >= 0 && _isatty(stdin_fd) && _isatty(stderr_fd)) {
+        fputs("input> ", stderr);
+        fflush(stderr);
+    }
+#else
+    if (isatty(STDIN_FILENO) && isatty(STDERR_FILENO)) {
+        fputs("input> ", stderr);
+        fflush(stderr);
+    }
+#endif
+}
+
 static char* read_line_dynamic(size_t* out_capacity, int* out_length) {
     if (!out_capacity || !out_length) {
         return NULL;
@@ -90,7 +112,9 @@ bool builtin_input(Value* args, int count, Value* out_value) {
         return false;
     }
 
-    if (count == 1 && args) {
+    bool has_explicit_prompt = (count == 1 && args);
+
+    if (has_explicit_prompt) {
         Value prompt = args[0];
         if (IS_STRING(prompt)) {
             ObjString* prompt_str = AS_STRING(prompt);
@@ -100,7 +124,12 @@ bool builtin_input(Value* args, int count, Value* out_value) {
         } else {
             printValue(prompt);
         }
-        fflush(stdout);
+    }
+
+    fflush(stdout);
+
+    if (!has_explicit_prompt) {
+        display_default_prompt_if_interactive();
     }
 
     size_t capacity = 0;
