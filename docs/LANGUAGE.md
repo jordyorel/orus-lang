@@ -262,7 +262,7 @@ enum Result:
 ```orus
 fn describe(outcome: Result) -> string:
     return match outcome:
-        Result.Ok(value) -> "ok: " + (value as string)
+        Result.Ok(value) -> "ok: " + ((value as i32) as string)
         Result.Err(reason) -> "error: " + reason
 
 flag = Flag.Off
@@ -271,6 +271,8 @@ if flag matches Flag.On:
 ```
 
 - Payload bindings are available inside the matched arm. `_` ignores fields.
+- Payload bindings currently have the `any` type until they are explicitly cast. Cast them to the declared payload type before
+  performing additional conversions such as `as string`.
 
 ### Error Handling
 - `try:` introduces a protected block. `catch name:` (or `catch:`) must follow immediately and handles thrown values.

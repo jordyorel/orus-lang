@@ -2274,7 +2274,7 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             bool creating_new = (existing == NULL);
             Variant* variants = NULL;
 
-            if (creating_new && node->enumDecl.variantCount > 0) {
+            if (node->enumDecl.variantCount > 0) {
                 variants = calloc((size_t)node->enumDecl.variantCount, sizeof(Variant));
                 if (!variants) {
                     set_type_error();
@@ -2287,7 +2287,7 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                 Type** fieldTypes = NULL;
                 ObjString** fieldNames = NULL;
 
-                if (creating_new && variants && fieldCount > 0) {
+                if (variants && fieldCount > 0) {
                     fieldTypes = calloc((size_t)fieldCount, sizeof(Type*));
                     fieldNames = calloc((size_t)fieldCount, sizeof(ObjString*));
                     if (!fieldTypes || !fieldNames) {
@@ -2343,7 +2343,7 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                     }
                 }
 
-                if (creating_new && variants) {
+                if (variants) {
                     variants[i].field_types = fieldTypes;
                     variants[i].field_names = fieldNames;
                     variants[i].field_count = fieldCount;
@@ -2359,16 +2359,6 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                         if (fieldTypes) free(fieldTypes);
                         cleanup_variant_info(variants, node->enumDecl.variantCount);
                         return NULL;
-                    }
-                } else {
-                    if (fieldTypes) {
-                        free(fieldTypes);
-                    }
-                    if (fieldNames) {
-                        for (int j = 0; j < fieldCount; j++) {
-                            free_compiler_string(fieldNames[j]);
-                        }
-                        free(fieldNames);
                     }
                 }
             }
@@ -2389,6 +2379,34 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                     cleanup_variant_info(variants, node->enumDecl.variantCount);
                     return NULL;
                 }
+            } else {
+                if (!existing || existing->kind != TYPE_ENUM) {
+                    set_type_error();
+                    cleanup_variant_info(variants, node->enumDecl.variantCount);
+                    return NULL;
+                }
+
+                TypeExtension* ext = get_type_extension(existing);
+                if (!ext) {
+                    set_type_error();
+                    cleanup_variant_info(variants, node->enumDecl.variantCount);
+                    return NULL;
+                }
+
+                cleanup_variant_info(ext->extended.enum_.variants, ext->extended.enum_.variant_count);
+                ext->extended.enum_.variants = variants;
+                ext->extended.enum_.variant_count = node->enumDecl.variantCount;
+                if (!ext->extended.enum_.name && node->enumDecl.name) {
+                    ext->extended.enum_.name = create_compiler_string(node->enumDecl.name);
+                    if (!ext->extended.enum_.name) {
+                        set_type_error();
+                        ext->extended.enum_.variants = NULL;
+                        ext->extended.enum_.variant_count = 0;
+                        cleanup_variant_info(variants, node->enumDecl.variantCount);
+                        return NULL;
+                    }
+                }
+                variants = NULL;
             }
 
             if (enum_type) {

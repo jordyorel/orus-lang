@@ -279,7 +279,7 @@ match success:
 
 ```orus
 label: string = match failure:
-    Result.Ok(value) -> "ok: " + (value as string)
+    Result.Ok(value) -> "ok: " + ((value as i32) as string)
     Result.Err(reason) -> "error: " + reason
 ```
 
@@ -292,6 +292,9 @@ if flag matches Flag.On:
 ```
 
 The `matches` keyword provides a readable equality check—code generation treats it like `==`.
+
+Until generics land, payload bindings default to the `any` type. Cast the binding to the variant's payload type before chaining
+another conversion (like `as string`) to satisfy the checker.
 
 ## 11. Error Handling
 - `try:` introduces protected code. `catch name:` (or `catch:`) handles thrown values. Both accept either a single statement on the same line or an indented block.
