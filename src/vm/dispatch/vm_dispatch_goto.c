@@ -122,8 +122,12 @@ InterpretResult vm_run_dispatch(void) {
     double start_time = get_time_vm();
     #define RETURN(val) \
         do { \
+            InterpretResult _return_val = (val); \
+            if (_return_val == INTERPRET_RUNTIME_ERROR) { \
+                vm_report_unhandled_error(); \
+            } \
             vm.lastExecutionTime = get_time_vm() - start_time; \
-            return (val); \
+            return _return_val; \
         } while (0)
 
     // Initialize dispatch table with label addresses - this only runs ONCE per process
@@ -2548,6 +2552,7 @@ InterpretResult vm_run_dispatch(void) {
                 }
             }
             vm.lastError = err;
+            vm_set_error_report_pending(true);
             goto HANDLE_RUNTIME_ERROR;
         }
 

@@ -65,6 +65,16 @@ extern VM vm;
 void* vm_dispatch_table[OP_HALT + 1] = {0};
 #endif
 
+static bool vm_error_report_pending = false;
+
+void vm_set_error_report_pending(bool pending) {
+    vm_error_report_pending = pending;
+}
+
+bool vm_get_error_report_pending(void) {
+    return vm_error_report_pending;
+}
+
 // Forward declarations
 static InterpretResult run(void);
 void runtimeError(ErrorType type, SrcLocation location,
@@ -259,12 +269,61 @@ void runtimeError(ErrorType type, SrcLocation location,
         }
     }
 
-    // Use enhanced error reporting
-    ErrorCode code = map_error_type_to_code(type);
-    report_runtime_error(code, location, "%s", buffer);
+    bool has_catch_handler = false;
+    for (int i = vm.tryFrameCount - 1; i >= 0; --i) {
+        if (vm.tryFrames[i].catchRegister != TRY_CATCH_REGISTER_NONE) {
+            has_catch_handler = true;
+            break;
+        }
+    }
 
     ObjError* err = allocateError(type, buffer, location);
+    if (!err) {
+        ErrorCode code = map_error_type_to_code(type);
+        report_runtime_error(code, location, "%s", buffer);
+        vm.lastError = BOOL_VAL(false);
+        vm_set_error_report_pending(false);
+        return;
+    }
+
     vm.lastError = ERROR_VAL(err);
+
+    if (has_catch_handler) {
+        vm_set_error_report_pending(true);
+    } else {
+        ErrorCode code = map_error_type_to_code(type);
+        report_runtime_error(code, location, "%s", buffer);
+        vm_set_error_report_pending(false);
+    }
+}
+
+void vm_report_unhandled_error(void) {
+    if (!vm_get_error_report_pending()) {
+        return;
+    }
+
+    if (!IS_ERROR(vm.lastError)) {
+        vm_set_error_report_pending(false);
+        return;
+    }
+
+    ObjError* err = AS_ERROR(vm.lastError);
+    if (!err) {
+        vm_set_error_report_pending(false);
+        return;
+    }
+
+    const char* message = (err->message && err->message->chars)
+                               ? err->message->chars
+                               : "";
+    SrcLocation loc = {
+        .file = err->location.file,
+        .line = err->location.line,
+        .column = err->location.column,
+    };
+    ErrorCode code = map_error_type_to_code(err->type);
+    report_runtime_error(code, loc, "%s", message);
+    vm_set_error_report_pending(false);
 }
 
 void vm_unwind_to_stack_depth(int targetDepth) {

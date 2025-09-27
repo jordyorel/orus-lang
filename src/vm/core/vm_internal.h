@@ -22,6 +22,9 @@
 // Declare it here so any internal VM module including this header has
 // access to the prototype without needing the dispatch headers.
 void runtimeError(ErrorType type, SrcLocation location, const char* format, ...);
+void vm_set_error_report_pending(bool pending);
+bool vm_get_error_report_pending(void);
+void vm_report_unhandled_error(void);
 
 #define CURRENT_LOCATION() ((SrcLocation){vm.filePath, vm.currentLine, vm.currentColumn})
 
