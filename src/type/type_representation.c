@@ -164,6 +164,7 @@ static void* arena_alloc(size_t size) {
 // ---- HashMap for primitive cache ----
 typedef struct HashMapEntry {
     int key;
+    char* string_key;
     void* value;
     struct HashMapEntry* next;
 } HashMapEntry;
@@ -173,6 +174,21 @@ typedef struct HashMap {
     size_t capacity;
     size_t count;
 } HashMap;
+
+static char* hashmap_duplicate_key(const char* key) {
+    if (!key) {
+        return NULL;
+    }
+
+    size_t len = strlen(key);
+    char* copy = (char*)malloc(len + 1);
+    if (!copy) {
+        return NULL;
+    }
+
+    memcpy(copy, key, len + 1);
+    return copy;
+}
 
 HashMap* hashmap_new(void) {
     HashMap* map = malloc(sizeof(HashMap));
@@ -197,6 +213,9 @@ void hashmap_free(HashMap* map) {
         HashMapEntry* entry = map->buckets[i];
         while (entry) {
             HashMapEntry* next = entry->next;
+            if (entry->string_key) {
+                free(entry->string_key);
+            }
             free(entry);
             entry = next;
         }
@@ -208,40 +227,41 @@ void hashmap_free(HashMap* map) {
 
 static void* hashmap_get_int(HashMap* map, int key) {
     if (!map) return NULL;
-    
+
     size_t index = (size_t)key % map->capacity;
     HashMapEntry* entry = map->buckets[index];
-    
+
     while (entry) {
-        if (entry->key == key) {
+        if (entry->string_key == NULL && entry->key == key) {
             return entry->value;
         }
         entry = entry->next;
     }
-    
+
     return NULL;
 }
 
 static void hashmap_set_int(HashMap* map, int key, void* value) {
     if (!map) return;
-    
+
     size_t index = (size_t)key % map->capacity;
     HashMapEntry* entry = map->buckets[index];
-    
+
     // Check if key already exists
     while (entry) {
-        if (entry->key == key) {
+        if (entry->string_key == NULL && entry->key == key) {
             entry->value = value;
             return;
         }
         entry = entry->next;
     }
-    
+
     // Create new entry
     entry = malloc(sizeof(HashMapEntry));
     if (!entry) return;
-    
+
     entry->key = key;
+    entry->string_key = NULL;
     entry->value = value;
     entry->next = map->buckets[index];
     map->buckets[index] = entry;
@@ -260,27 +280,54 @@ static size_t hash_string(const char* str) {
 
 void* hashmap_get(HashMap* map, const char* key) {
     if (!map || !key) return NULL;
-    
+
     size_t index = hash_string(key) % map->capacity;
     HashMapEntry* entry = map->buckets[index];
-    
+
     while (entry) {
-        // For string keys, we need a different comparison
-        // This is a simplified version - in practice you'd need separate string/int hashmaps
-        if (entry->key == (int)hash_string(key)) {
+        if (entry->string_key) {
+            if (strcmp(entry->string_key, key) == 0) {
+                return entry->value;
+            }
+        } else if (entry->key == (int)hash_string(key)) {
             return entry->value;
         }
         entry = entry->next;
     }
-    
+
     return NULL;
 }
 
 void hashmap_set(HashMap* map, const char* key, void* value) {
     if (!map || !key) return;
 
-    int hash_key = (int)hash_string(key);
-    hashmap_set_int(map, hash_key, value);
+    size_t hash = hash_string(key);
+    size_t index = hash % map->capacity;
+    HashMapEntry* entry = map->buckets[index];
+
+    while (entry) {
+        if (entry->string_key && strcmp(entry->string_key, key) == 0) {
+            entry->value = value;
+            return;
+        }
+        entry = entry->next;
+    }
+
+    entry = malloc(sizeof(HashMapEntry));
+    if (!entry) {
+        return;
+    }
+
+    entry->key = (int)hash;
+    entry->string_key = hashmap_duplicate_key(key);
+    if (!entry->string_key) {
+        free(entry);
+        return;
+    }
+    entry->value = value;
+    entry->next = map->buckets[index];
+    map->buckets[index] = entry;
+    map->count++;
 }
 
 static TypeExtension* allocate_type_extension(void) {
