@@ -28,7 +28,7 @@ ifeq ($(origin PORTABLE), undefined)
     ifeq ($(UNAME_S),Darwin)
         ifeq ($(UNAME_M),arm64)
             PORTABLE := 1
-            PORTABLE_AUTO_REASON := " (auto-enabled for macOS arm64 to avoid Apple Clang mis-optimizations)"
+            PORTABLE_AUTO_REASON := $(space)(auto-enabled for macOS arm64 to avoid Apple Clang mis-optimizations)
         endif
     endif
 endif
