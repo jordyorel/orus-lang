@@ -16,7 +16,10 @@ fn assert_type(value, expected: string):
     if is_type(value, "__no_match__"):
         print("is_type false positive for", expected)
         trigger = 1 / 0
-    print(expected, actual)
+    if expected == actual:
+        print(actual)
+    else:
+        print(expected, actual)
 
 assert_type(true, "bool")
 assert_type(42, "i32")
@@ -56,6 +59,6 @@ try:
     mut empty = []
     pop(empty)
 catch err:
-    assert_type(err, "error")
+    assert_type(err, "value error Cannot pop from an empty array")
 
 print("-- builtin type checks complete --")
