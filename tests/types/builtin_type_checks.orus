@@ -56,6 +56,6 @@ try:
     mut empty = []
     pop(empty)
 catch err:
-    assert_type(err, "error")
+    assert_type(err, "You tried to pop from an empty array")
 
 print("-- builtin type checks complete --")
