@@ -13,6 +13,9 @@ UNAME_S := $(shell uname -s)
 # Base compiler flags
 BASE_CFLAGS = -Wall -Wextra -std=c11
 
+empty :=
+space := $(empty) $(empty)
+
 # Architecture-specific optimizations
 # Set PORTABLE=1 to build without aggressive CPU-specific tuning (safer on some macOS setups)
 # On Apple Silicon we default to the portable configuration because the aggressive
