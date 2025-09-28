@@ -28,7 +28,7 @@ ifeq ($(origin PORTABLE), undefined)
     ifeq ($(UNAME_S),Darwin)
         ifeq ($(UNAME_M),arm64)
             PORTABLE := 1
-            PORTABLE_AUTO_REASON := (auto-enabled for macOS arm64 to avoid Apple Clang mis-optimizations)
+            PORTABLE_AUTO_REASON := " (auto-enabled for macOS arm64 to avoid Apple Clang mis-optimizations)"
         endif
     endif
 endif
@@ -36,7 +36,7 @@ endif
 PORTABLE ?= 0
 
 PORTABLE_DESC = $(if $(filter 1,$(PORTABLE)),enabled,disabled)
-PORTABLE_NOTE = $(if $(and $(filter 1,$(PORTABLE)),$(PORTABLE_AUTO_REASON)),$(space)$(PORTABLE_AUTO_REASON),)
+PORTABLE_NOTE = $(if $(and $(filter 1,$(PORTABLE)),$(PORTABLE_AUTO_REASON)),$(PORTABLE_AUTO_REASON),)
 
 ARCH_FLAGS =
 ARCH_DEFINES =
