@@ -19,6 +19,26 @@ bool builtin_type_of(Value value, Value* out_value) {
         return false;
     }
 
+    if (IS_ERROR(value)) {
+        char* label_chars = NULL;
+        size_t label_length = 0;
+        size_t label_capacity = 0;
+        if (!builtin_alloc_error_label(value, &label_chars, &label_length,
+                                       &label_capacity)) {
+            return false;
+        }
+
+        ObjString* type_name =
+            allocateStringFromBuffer(label_chars, label_capacity, (int)label_length);
+        if (!type_name) {
+            reallocate(label_chars, label_capacity, 0);
+            return false;
+        }
+
+        *out_value = STRING_VAL(type_name);
+        return true;
+    }
+
     const char* label = builtin_value_type_label(value);
     if (!label) {
         label = "unknown";
