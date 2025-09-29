@@ -38,7 +38,14 @@ void initVM(void) {
     
     // printf("[VM_CORE_TRACE] About to call init_string_table()\n");
     // fflush(stdout);
-    init_string_table(&globalStringTable);
+    if (globalStringTable.interned == NULL) {
+        init_string_table(&globalStringTable);
+    } else if (globalStringTable.threshold == 0) {
+        // The table may have been pre-initialized by the caller (e.g. main.c)
+        // to guarantee cleanup on early exits. Avoid reinitializing it here to
+        // prevent leaking the previously allocated hashmap backing store.
+        globalStringTable.threshold = 32;
+    }
     // printf("[VM_CORE_TRACE] init_string_table() completed\n");
     // fflush(stdout);
 
