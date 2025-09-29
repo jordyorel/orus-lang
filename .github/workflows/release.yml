@@ -2,8 +2,11 @@ name: release
 
 on:
   push:
+    branches:
+      - '**'
     tags:
       - 'v*'
+  workflow_dispatch:
 
 env:
   BUILD_PROFILE: release
@@ -11,36 +14,71 @@ env:
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Extract version from tag
+      - name: Extract version
         id: version
         run: |
-          TAG="${GITHUB_REF##*/}"
           VERSION_FILE="include/public/version.h"
           MAJOR=$(grep -E "#define ORUS_VERSION_MAJOR" "$VERSION_FILE" | awk '{print $3}')
           MINOR=$(grep -E "#define ORUS_VERSION_MINOR" "$VERSION_FILE" | awk '{print $3}')
           PATCH=$(grep -E "#define ORUS_VERSION_PATCH" "$VERSION_FILE" | awk '{print $3}')
           VERSION="v${MAJOR}.${MINOR}.${PATCH}"
           echo "Repository version: ${VERSION}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Determine trigger type
+        id: trigger
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            echo "from_tag=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "from_tag=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Validate tag matches version
+        if: steps.trigger.outputs.from_tag == 'true'
+        run: |
+          TAG="${GITHUB_REF##*/}"
+          VERSION="${{ steps.version.outputs.version }}"
           if [[ "$TAG" != "$VERSION" ]]; then
             echo "Tag $TAG does not match version macros ($VERSION)." >&2
             exit 1
           fi
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
-      - name: Make dist artifacts
+      - name: Build release artifacts
         run: |
           make clean
-          make dist
+          make release
+
+      - name: Check if release already exists
+        id: release-check
+        env:
+          TAG: ${{ steps.version.outputs.version }}
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          api_url="https://api.github.com/repos/${GH_REPO}/releases/tags/${TAG}"
+          status=$(curl -sS -o response.json -w "%{http_code}" -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "$api_url")
+          if [[ "$status" == "200" ]]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Release for ${TAG} already exists."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Create GitHub release
+        if: steps.trigger.outputs.from_tag == 'true' && steps.release-check.outputs.exists != 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
+          tag_name: ${{ steps.version.outputs.version }}
           name: Orus ${{ steps.version.outputs.version }}
           generate_release_notes: true
           files: |
