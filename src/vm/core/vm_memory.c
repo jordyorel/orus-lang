@@ -80,8 +80,9 @@ static void* allocateObject(size_t size, ObjType type) {
     } else {
         object = (Obj*)malloc(size);
         if (!object) exit(1);
-        vm.bytesAllocated += size;
     }
+
+    vm.bytesAllocated += size;
     object->type = type;
     object->isMarked = false;
     object->next = vm.objects;
