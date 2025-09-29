@@ -2,7 +2,7 @@
  * Orus Language Project
  * ---------------------------------------------------------------------------
  * File: src/vm/runtime/builtin_is_type.c
- * Author: OpenAI Assistant
+ * Author: JORDY OREL KONDA
  * Description: Implements the builtin is_type routine that compares a value's
  *              runtime type name against a provided string.
  */

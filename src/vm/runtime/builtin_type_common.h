@@ -2,7 +2,7 @@
  * Orus Language Project
  * ---------------------------------------------------------------------------
  * File: src/vm/runtime/builtin_type_common.h
- * Author: OpenAI Assistant
+ * Author: JORDY OREL KONDA
  * Description: Shared helpers for builtin type inspection routines.
  */
 

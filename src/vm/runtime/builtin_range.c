@@ -2,7 +2,7 @@
  * Orus Language Project
  * ---------------------------------------------------------------------------
  * File: src/vm/runtime/builtin_range.c
- * Author: OpenAI Assistant
+ * Author: JORDY OREL KONDA
  * Description: Implements the range() builtin producing integer iterators.
  */
 

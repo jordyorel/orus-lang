@@ -2,7 +2,7 @@
  * Orus Language Project
  * ---------------------------------------------------------------------------
  * File: src/vm/runtime/builtin_type_of.c
- * Author: OpenAI Assistant
+ * Author: JORDY OREL KONDA
  * Description: Implements the builtin type_of routine that reports the runtime
  *              type name of a value.
  */
