@@ -41,6 +41,27 @@ PORTABLE_NOTE = $(if $(and $(filter 1,$(PORTABLE)),$(PORTABLE_AUTO_REASON)),$(PO
 ARCH_FLAGS =
 ARCH_DEFINES =
 
+# Build metadata (commit + date)
+GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null)
+GIT_COMMIT := $(strip $(GIT_COMMIT))
+ifeq ($(GIT_COMMIT),)
+    GIT_COMMIT := unknown
+endif
+
+GIT_COMMIT_DATE := $(shell git show -s --format=%cs HEAD 2>/dev/null)
+GIT_COMMIT_DATE := $(strip $(GIT_COMMIT_DATE))
+
+BUILD_DATE := $(shell date -u +%Y-%m-%d 2>/dev/null)
+BUILD_DATE := $(strip $(BUILD_DATE))
+ifeq ($(BUILD_DATE),)
+    BUILD_DATE := unknown
+endif
+
+ifeq ($(GIT_COMMIT_DATE),)
+    GIT_COMMIT_DATE := $(BUILD_DATE)
+endif
+
+
 ifeq ($(PORTABLE),1)
     # Portable build avoids micro-arch specific flags that can trigger kernel kills on some systems
     ifeq ($(UNAME_M),arm64)
@@ -140,6 +161,7 @@ endif
 
 # Assemble final CFLAGS
 CFLAGS = $(BASE_CFLAGS) $(ARCH_FLAGS) $(OPT_FLAGS) $(DEBUG_FLAGS) $(FAST_FLAGS) $(PROFILE_FLAGS) $(DEFINES)
+CFLAGS += -DORUS_BUILD_COMMIT=\"$(GIT_COMMIT)\" -DORUS_BUILD_DATE=\"$(GIT_COMMIT_DATE)\"
 
 LDFLAGS = -lm
 

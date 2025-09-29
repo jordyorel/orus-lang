@@ -102,13 +102,21 @@ Pick the archive that matches your operating system and architecture:
 - Linux arm64: `https://github.com/jordyorel/orus-lang/releases/latest/download/orus-linux-arm64.tar.gz`
 
 Example install (macOS arm64 shown; adjust the archive name as needed):
+
 ```bash
-curl -L https://github.com/jordyorel/orus-lang/releases/latest/download/orus-macos-arm64.tar.gz -o /tmp/orus.tar.gz
-tar -xzf /tmp/orus.tar.gz -C /tmp
-sudo install -m 755 /tmp/orus /usr/local/bin/orus
+# Install to ~/.local/bin (no sudo required)
+mkdir -p "$HOME/.local/bin"
+curl -fsSL https://github.com/jordyorel/orus-lang/releases/latest/download/orus-macos-arm64.tar.gz \
+  | tar -xz -O orus > "$HOME/.local/bin/orus"
+chmod 755 "$HOME/.local/bin/orus"
+
+# Optional: install system-wide (requires sudo)
+curl -fsSL https://github.com/jordyorel/orus-lang/releases/latest/download/orus-macos-arm64.tar.gz \
+  | tar -xz -O orus | sudo tee /usr/local/bin/orus >/dev/null \
+  && sudo chmod 755 /usr/local/bin/orus
 ```
 
-The tarball contains the `orus` executable and the project `LICENSE` file. Remove the temporary files once installed.
+Add `~/.local/bin` to your `PATH` if it is not already present. To keep accompanying files (for example the `LICENSE`), extract into a temporary directory with `tar -xzf` before installing.
 
 **Build from source**
 ```bash

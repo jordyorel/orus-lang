@@ -18,6 +18,14 @@
 #include <stdio.h>
 #include <ctype.h>
 
+#ifndef ORUS_BUILD_COMMIT
+#define ORUS_BUILD_COMMIT "unknown"
+#endif
+
+#ifndef ORUS_BUILD_DATE
+#define ORUS_BUILD_DATE "unknown"
+#endif
+
 // Add strcasecmp for cross-platform compatibility
 #ifndef strcasecmp
 #ifdef _WIN32
@@ -667,7 +675,11 @@ void config_print_version(void) {
         const char* dispatch_mode = "switch";
     #endif
 
-    printf("orus %s (%s dispatch)\n", ORUS_VERSION_STRING, dispatch_mode);
+    printf("orus %s (%s %s, %s dispatch)\n",
+           ORUS_VERSION_STRING,
+           ORUS_BUILD_COMMIT,
+           ORUS_BUILD_DATE,
+           dispatch_mode);
 }
 
 void config_print_current(const OrusConfig* config) {

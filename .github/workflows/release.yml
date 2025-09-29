@@ -1,0 +1,49 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  BUILD_PROFILE: release
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          TAG="${GITHUB_REF##*/}"
+          VERSION_FILE="include/public/version.h"
+          MAJOR=$(grep -E "#define ORUS_VERSION_MAJOR" "$VERSION_FILE" | awk '{print $3}')
+          MINOR=$(grep -E "#define ORUS_VERSION_MINOR" "$VERSION_FILE" | awk '{print $3}')
+          PATCH=$(grep -E "#define ORUS_VERSION_PATCH" "$VERSION_FILE" | awk '{print $3}')
+          VERSION="v${MAJOR}.${MINOR}.${PATCH}"
+          echo "Repository version: ${VERSION}"
+          if [[ "$TAG" != "$VERSION" ]]; then
+            echo "Tag $TAG does not match version macros ($VERSION)." >&2
+            exit 1
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Make dist artifacts
+        run: |
+          make clean
+          make dist
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Orus ${{ steps.version.outputs.version }}
+          generate_release_notes: true
+          files: |
+            dist/orus-*.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
