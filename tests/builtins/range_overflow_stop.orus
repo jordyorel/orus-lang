@@ -1,0 +1,3 @@
+// Expect runtime failure: u64 stop that exceeds i64 range
+limit: u64 = ((9223372036854775807 as u64) + (1 as u64))
+range(limit)

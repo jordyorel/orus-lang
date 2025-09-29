@@ -86,6 +86,7 @@ void handle_print(void);
 void handle_print_multi(void);
 void handle_print_no_nl(void);
 void handle_input(void);
+void handle_range(void);
 void handle_parse_int(void);
 void handle_parse_float(void);
 void handle_type_of(void);

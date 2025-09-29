@@ -40,7 +40,7 @@ bool arrayPop(ObjArray* array, Value* outValue);
 bool arrayGet(const ObjArray* array, int index, Value* outValue);
 bool arraySet(ObjArray* array, int index, Value value);
 ObjError* allocateError(ErrorType type, const char* message, SrcLocation location);
-ObjRangeIterator* allocateRangeIterator(int64_t start, int64_t end);
+ObjRangeIterator* allocateRangeIterator(int64_t start, int64_t end, int64_t step);
 ObjFunction* allocateFunction(void);
 ObjClosure* allocateClosure(ObjFunction* function);
 ObjEnumInstance* allocateEnumInstance(ObjString* typeName, ObjString* variantName, int variantIndex, ObjArray* payload);

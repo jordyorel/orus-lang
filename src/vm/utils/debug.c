@@ -216,6 +216,17 @@ int disassembleInstruction(Chunk* chunk, int offset) {
             return offset + 4;
         }
 
+        case OP_RANGE_R: {
+            uint8_t dst = chunk->code[offset + 1];
+            uint8_t arg_count = chunk->code[offset + 2];
+            uint8_t arg0 = chunk->code[offset + 3];
+            uint8_t arg1 = chunk->code[offset + 4];
+            uint8_t arg2 = chunk->code[offset + 5];
+            printf("%-16s R%d, args=%d, regs=R%d,R%d,R%d\n",
+                   "RANGE", dst, arg_count, arg0, arg1, arg2);
+            return offset + 6;
+        }
+
         case OP_PRINT_MULTI_R: {
             uint8_t first = chunk->code[offset + 1];
             uint8_t count = chunk->code[offset + 2];

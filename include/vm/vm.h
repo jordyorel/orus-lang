@@ -172,6 +172,7 @@ struct ObjRangeIterator {
     Obj obj;
     int64_t current;
     int64_t end;
+    int64_t step;
 };
 
 // Chunk (bytecode container)
@@ -615,6 +616,7 @@ typedef enum {
     OP_TYPE_OF_R,        // dst_reg, value_reg
     OP_IS_TYPE_R,        // dst_reg, value_reg, type_reg
     OP_INPUT_R,           // dst_reg, arg_count, prompt_reg
+    OP_RANGE_R,           // dst_reg, arg_count, arg0, arg1, arg2
     OP_PRINT_MULTI_R,     // first_reg, count, newline_flag
     OP_PRINT_R,           // reg
     OP_PRINT_NO_NL_R,     // reg
@@ -1041,6 +1043,7 @@ typedef struct {
         struct {
             int64_t current;
             int64_t end;
+            int64_t step;
         } range_i64;
         struct {
             ObjArray* array;
@@ -1255,6 +1258,7 @@ typedef enum {
 #define F64_VAL(value) ((Value){VAL_F64, {.f64 = value}})
 #define STRING_VAL(value) ((Value){VAL_STRING, {.obj = (Obj*)value}})
 #define ARRAY_VAL(arrayObj) ((Value){VAL_ARRAY, {.obj = (Obj*)arrayObj}})
+#define RANGE_ITERATOR_VAL(iteratorObj) ((Value){VAL_RANGE_ITERATOR, {.obj = (Obj*)iteratorObj}})
 #define ENUM_VAL(enumObj) ((Value){VAL_ENUM, {.obj = (Obj*)enumObj}})
 #define ARRAY_ITERATOR_VAL(iteratorObj) ((Value){VAL_ARRAY_ITERATOR, {.obj = (Obj*)iteratorObj}})
 #define ERROR_VAL(object) ((Value){VAL_ERROR, {.obj = (Obj*)object}})

@@ -33,6 +33,7 @@ static inline void vm_typed_iterator_invalidate(uint16_t reg) {
     vm.typed_iterators[reg].kind = TYPED_ITER_NONE;
     vm.typed_iterators[reg].data.range_i64.current = 0;
     vm.typed_iterators[reg].data.range_i64.end = 0;
+    vm.typed_iterators[reg].data.range_i64.step = 1;
     vm.typed_iterators[reg].data.array.array = NULL;
     vm.typed_iterators[reg].data.array.index = 0;
 }
@@ -41,13 +42,15 @@ static inline bool vm_typed_iterator_is_active(uint16_t reg) {
     return reg < REGISTER_COUNT && vm.typed_iterators[reg].kind != TYPED_ITER_NONE;
 }
 
-static inline void vm_typed_iterator_bind_range(uint16_t reg, int64_t start, int64_t end) {
+static inline void vm_typed_iterator_bind_range(uint16_t reg, int64_t start, int64_t end,
+                                                int64_t step) {
     if (reg >= REGISTER_COUNT) {
         return;
     }
     vm.typed_iterators[reg].kind = TYPED_ITER_RANGE_I64;
     vm.typed_iterators[reg].data.range_i64.current = start;
     vm.typed_iterators[reg].data.range_i64.end = end;
+    vm.typed_iterators[reg].data.range_i64.step = step;
 }
 
 static inline bool vm_typed_iterator_bind_array(uint16_t reg, ObjArray* array) {

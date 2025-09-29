@@ -2043,7 +2043,7 @@ InterpretResult vm_run_dispatch(void) {
                         }
 
                         vm_set_register_safe(dst, I64_VAL(0));
-                        vm_typed_iterator_bind_range(dst, 0, count);
+                        vm_typed_iterator_bind_range(dst, 0, count, 1);
                         vm_trace_loop_event(LOOP_TRACE_ITER_SAVED_ALLOCATIONS);
                     } else if (IS_I32(iterable) || IS_I64(iterable) || IS_U32(iterable) || IS_U64(iterable)) {
                         int64_t count = 0;
@@ -2065,7 +2065,7 @@ InterpretResult vm_run_dispatch(void) {
                             VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Cannot iterate negative integer");
                         }
 
-                        ObjRangeIterator* iterator = allocateRangeIterator(0, count);
+                        ObjRangeIterator* iterator = allocateRangeIterator(0, count, 1);
                         if (!iterator) {
                             VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(), "Failed to allocate range iterator");
                         }
@@ -2115,11 +2115,17 @@ InterpretResult vm_run_dispatch(void) {
                         vm_set_register_safe(has_reg, BOOL_VAL(false));
                     } else if (IS_RANGE_ITERATOR(iterator_value)) {
                         ObjRangeIterator* it = AS_RANGE_ITERATOR(iterator_value);
-                        if (it->current >= it->end) {
+                        int64_t current = it ? it->current : 0;
+                        int64_t end = it ? it->end : 0;
+                        int64_t step = it ? it->step : 1;
+                        if (step == 0) {
+                            vm_set_register_safe(has_reg, BOOL_VAL(false));
+                        } else if ((step > 0 && current >= end) ||
+                                   (step < 0 && current <= end)) {
                             vm_set_register_safe(has_reg, BOOL_VAL(false));
                         } else {
-                            vm_set_register_safe(dst, I64_VAL(it->current));
-                            it->current++;
+                            vm_set_register_safe(dst, I64_VAL(current));
+                            it->current = current + step;
                             vm_set_register_safe(has_reg, BOOL_VAL(true));
                         }
                     } else if (IS_ARRAY_ITERATOR(iterator_value)) {
@@ -2267,6 +2273,11 @@ InterpretResult vm_run_dispatch(void) {
 
                 case OP_IS_TYPE_R: {
                     handle_is_type();
+                    break;
+                }
+
+                case OP_RANGE_R: {
+                    handle_range();
                     break;
                 }
 

@@ -82,6 +82,7 @@ typedef struct ObjRangeIterator {
     Obj obj;
     int64_t current;
     int64_t end;
+    int64_t step;
 } ObjRangeIterator;
 
 typedef struct ObjArrayIterator {

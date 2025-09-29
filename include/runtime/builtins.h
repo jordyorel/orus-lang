@@ -68,6 +68,16 @@ BuiltinParseResult builtin_parse_float(Value input, Value* out_value,
                                        char* message, size_t message_size);
 
 /**
+ * Create a range iterator object mirroring Python-style semantics.
+ *
+ * @param args      Array of arguments describing the range bounds.
+ * @param count     Number of arguments supplied (1..3).
+ * @param out_value Receives the constructed range iterator on success.
+ * @return true when the range arguments were valid and the iterator was created.
+ */
+bool builtin_range(Value* args, int count, Value* out_value);
+
+/**
  * Push a value onto an array, growing the backing store when needed.
  *
  * @param array_value Value containing the target array.

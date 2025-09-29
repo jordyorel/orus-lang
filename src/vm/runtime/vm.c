@@ -137,9 +137,17 @@ void printValue(Value value) {
             break;
         case VAL_RANGE_ITERATOR: {
             ObjRangeIterator* it = AS_RANGE_ITERATOR(value);
-            printf("range(%lld..%lld)",
-                   (long long)it->current,
-                   (long long)it->end);
+            long long step = it ? (long long)it->step : 1;
+            if (!it || step == 1) {
+                printf("range(%lld..%lld)",
+                       it ? (long long)it->current : 0,
+                       it ? (long long)it->end : 0);
+            } else {
+                printf("range(%lld..%lld step=%lld)",
+                       (long long)it->current,
+                       (long long)it->end,
+                       step);
+            }
             break;
         }
         case VAL_ARRAY_ITERATOR: {

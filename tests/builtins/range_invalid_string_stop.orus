@@ -1,0 +1,2 @@
+// Expect runtime failure: non-integer stop argument
+range("ten")

@@ -342,6 +342,7 @@ InterpretResult vm_run_dispatch(void) {
         vm_dispatch_table[OP_TYPE_OF_R] = &&LABEL_OP_TYPE_OF_R;
         vm_dispatch_table[OP_IS_TYPE_R] = &&LABEL_OP_IS_TYPE_R;
         vm_dispatch_table[OP_INPUT_R] = &&LABEL_OP_INPUT_R;
+        vm_dispatch_table[OP_RANGE_R] = &&LABEL_OP_RANGE_R;
         vm_dispatch_table[OP_PRINT_MULTI_R] = &&LABEL_OP_PRINT_MULTI_R;
         vm_dispatch_table[OP_PRINT_R] = &&LABEL_OP_PRINT_R;
         vm_dispatch_table[OP_PRINT_NO_NL_R] = &&LABEL_OP_PRINT_NO_NL_R;
@@ -2629,7 +2630,7 @@ InterpretResult vm_run_dispatch(void) {
             }
 
             vm_set_register_safe(dst, I64_VAL(0));
-            vm_typed_iterator_bind_range(dst, 0, count);
+            vm_typed_iterator_bind_range(dst, 0, count, 1);
             vm_trace_loop_event(LOOP_TRACE_ITER_SAVED_ALLOCATIONS);
         } else if (IS_I32(v) || IS_I64(v) || IS_U32(v) || IS_U64(v)) {
             int64_t count = 0;
@@ -2651,7 +2652,7 @@ InterpretResult vm_run_dispatch(void) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Cannot iterate negative integer");
             }
 
-            ObjRangeIterator* iterator = allocateRangeIterator(0, count);
+            ObjRangeIterator* iterator = allocateRangeIterator(0, count, 1);
             if (!iterator) {
                 VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(), "Failed to allocate range iterator");
             }
@@ -2704,11 +2705,16 @@ InterpretResult vm_run_dispatch(void) {
         Value iterValue = vm_get_register_safe(iterReg);
         if (IS_RANGE_ITERATOR(iterValue)) {
             ObjRangeIterator* it = AS_RANGE_ITERATOR(iterValue);
-            if (it->current >= it->end) {
+            int64_t current = it ? it->current : 0;
+            int64_t end = it ? it->end : 0;
+            int64_t step = it ? it->step : 1;
+            if (step == 0) {
+                vm_set_register_safe(hasReg, BOOL_VAL(false));
+            } else if ((step > 0 && current >= end) || (step < 0 && current <= end)) {
                 vm_set_register_safe(hasReg, BOOL_VAL(false));
             } else {
-                vm_set_register_safe(dst, I64_VAL(it->current));
-                it->current++;
+                vm_set_register_safe(dst, I64_VAL(current));
+                it->current = current + step;
                 vm_set_register_safe(hasReg, BOOL_VAL(true));
             }
         } else if (IS_ARRAY_ITERATOR(iterValue)) {
@@ -2823,6 +2829,50 @@ InterpretResult vm_run_dispatch(void) {
         }
 
         vm_set_register_safe(dst, result);
+        DISPATCH();
+    }
+
+    LABEL_OP_RANGE_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t arg_count = READ_BYTE();
+        uint8_t first_reg = READ_BYTE();
+        uint8_t second_reg = READ_BYTE();
+        uint8_t third_reg = READ_BYTE();
+
+        if (arg_count < 1 || arg_count > 3) {
+            VM_ERROR_RETURN(ERROR_ARGUMENT, CURRENT_LOCATION(),
+                            "range() expects between 1 and 3 arguments");
+        }
+
+        Value args_storage[3];
+        Value* args_ptr = NULL;
+        if (arg_count > 0) {
+            args_ptr = args_storage;
+            args_storage[0] = vm_get_register_safe(first_reg);
+            if (arg_count > 1) {
+                args_storage[1] = vm_get_register_safe(second_reg);
+            }
+            if (arg_count > 2) {
+                args_storage[2] = vm_get_register_safe(third_reg);
+            }
+        }
+
+        Value result;
+        if (!builtin_range(args_ptr, arg_count, &result)) {
+            VM_ERROR_RETURN(ERROR_ARGUMENT, CURRENT_LOCATION(),
+                            "Invalid arguments provided to range()");
+        }
+
+        vm_typed_iterator_invalidate(dst);
+        vm_set_register_safe(dst, result);
+
+        if (!vm.config.force_boxed_iterators && IS_RANGE_ITERATOR(result)) {
+            ObjRangeIterator* iterator = AS_RANGE_ITERATOR(result);
+            if (iterator) {
+                vm_typed_iterator_bind_range(dst, iterator->current, iterator->end, iterator->step);
+            }
+        }
+
         DISPATCH();
     }
 

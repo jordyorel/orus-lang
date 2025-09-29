@@ -1,0 +1,2 @@
+// Expect runtime failure: non-integer bound argument
+range(1, "ten")
