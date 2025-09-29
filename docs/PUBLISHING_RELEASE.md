@@ -3,16 +3,12 @@
 Follow this checklist to prepare GitHub releases that work with the direct `curl` download instructions.
 
 1. Ensure the working tree is clean and bump any version references that need updating. Commit the changes before tagging.
-2. Build the optimized binary for the current platform:
+2. Build and package the optimized binary for the current platform:
    ```bash
    make clean release
    ```
-3. Produce the distributable archive:
-   ```bash
-   make dist
-   ```
-   This creates `dist/orus-<os>-<arch>.tar.gz` containing the `orus` executable and the project `LICENSE`.
-4. Repeat the build and `make dist` steps on each supported platform (macOS arm64/x86_64, Linux x86_64/arm64). Cross-compilation targets such as `make cross-linux` are available if you prefer to build everything from one machine.
+   This creates the optimized `orus` binary and packages `dist/orus-<os>-<arch>.tar.gz` with the binary plus `LICENSE`.
+3. Repeat the release build on each supported platform (macOS arm64/x86_64, Linux x86_64/arm64). Cross-compilation targets such as `make cross-linux` are available if you prefer to build everything from one machine. If you need WebAssembly outputs, run `make release-with-wasm` on a host with Emscripten installed.
 5. (Optional) Generate checksums for the artifacts you plan to upload:
    ```bash
    shasum -a 256 dist/orus-*.tar.gz

@@ -244,7 +244,7 @@ BUILTIN_RANGE_ORUS_FAIL_TESTS = \
     tests/builtins/range_zero_step.orus \
     tests/builtins/range_float_step.orus \
     tests/builtins/range_overflow_stop.orus
-.PHONY: all clean test unit-test test-control-flow test-loop-telemetry benchmark help debug release profiling analyze install dist bytecode-jump-tests source-map-tests scope-tracking-tests peephole-tests cli-smoke-tests licm-metadata-tests tagged-union-tests builtin-input-tests builtin-range-tests test-optimizer wasm
+.PHONY: all clean test unit-test test-control-flow test-loop-telemetry benchmark help debug release release-with-wasm profiling analyze install dist package bytecode-jump-tests source-map-tests scope-tracking-tests peephole-tests cli-smoke-tests licm-metadata-tests tagged-union-tests builtin-input-tests builtin-range-tests test-optimizer wasm
 
 all: build-info $(ORUS)
 
@@ -263,11 +263,12 @@ debug:
 
 release:
 	@$(MAKE) PROFILE=release all
-	@if command -v $(EMCC) >/dev/null 2>&1; then \
-		$(MAKE) PROFILE=release wasm; \
-	else \
-		echo "Skipping WebAssembly build: $(EMCC) not available"; \
-	fi
+	@$(MAKE) PROFILE=release package
+
+release-with-wasm:
+	@$(MAKE) PROFILE=release all
+	@$(MAKE) PROFILE=release wasm
+	@$(MAKE) PROFILE=release package
 
 profiling:
 	@$(MAKE) PROFILE=profiling
@@ -595,10 +596,14 @@ install: release
 	@sudo cp orus /usr/local/bin/orus
 	@echo "✓ Orus installed successfully"
 
-dist: release
+dist:
+	@echo "'make dist' is deprecated; use 'make release' instead."
+	@$(MAKE) release
+
+package: $(ORUS)
 	@mkdir -p $(DIST_DIR)
 	@echo "Packaging $(DIST_ARCHIVE)..."
-	@tar -czf $(DIST_ARCHIVE) orus LICENSE
+	@tar -czf $(DIST_ARCHIVE) $(ORUS) LICENSE
 	@echo "✓ Package ready: $(DIST_ARCHIVE)"
 
 # Clean build artifacts
@@ -631,7 +636,7 @@ help:
 	@echo "Development Targets:"
 	@echo "  analyze   - Run static analysis (cppcheck, clang analyzer)"
 	@echo "  install   - Install release build to /usr/local/bin"
-	@echo "  dist      - Package release binary into dist/orus-<os>-<arch>.tar.gz"
+	@echo "  release-with-wasm - Build release binary and WebAssembly bundle"
 	@echo ""
 	@echo "Cross-compilation:"
 	@echo "  cross-linux   - Cross-compile for Linux x86_64"
@@ -639,7 +644,7 @@ help:
 	@echo ""
 	@echo "Examples:"
 	@echo "  make                    - Build debug version (creates orus_debug)"
-	@echo "  make release            - Build optimized release version (creates orus)"
+	@echo "  make release            - Build optimized release version and package dist/orus-<os>-<arch>.tar.gz"
 	@echo "  make PROFILE=profiling  - Build with profiling support (creates orus_profiling)"
 	@echo "  make PROFILE=ci         - Build with warnings as errors (creates orus_ci)"
 	@echo "  make test               - Run tests (builds debug if needed)"
