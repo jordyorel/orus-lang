@@ -263,7 +263,11 @@ debug:
 
 release:
 	@$(MAKE) PROFILE=release all
-	@$(MAKE) PROFILE=release wasm
+	@if command -v $(EMCC) >/dev/null 2>&1; then \
+		$(MAKE) PROFILE=release wasm; \
+	else \
+		echo "Skipping WebAssembly build: $(EMCC) not available"; \
+	fi
 
 profiling:
 	@$(MAKE) PROFILE=profiling
