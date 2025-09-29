@@ -661,21 +661,13 @@ void config_apply_debug_settings(const OrusConfig* config) {
 }
 
 void config_print_version(void) {
-    printf("Orus Language Interpreter v%s\n", ORUS_VERSION_STRING);
-    printf("Built with comprehensive configuration system\n");
-    printf("Register-based virtual machine with garbage collection\n");
-    
     #if USE_COMPUTED_GOTO
-        printf("Dispatch Mode: Computed Goto (optimized)\n");
+        const char* dispatch_mode = "computed-goto";
     #else
-        printf("Dispatch Mode: Switch-based (portable)\n");
+        const char* dispatch_mode = "switch";
     #endif
-    
-    printf("\nConfiguration Features:\n");
-    printf("  - Multi-source configuration (CLI, env vars, files)\n");
-    printf("  - Runtime VM tuning\n");
-    printf("  - Development tool integration\n");
-    printf("  - Memory debugging support\n");
+
+    printf("orus %s (%s dispatch)\n", ORUS_VERSION_STRING, dispatch_mode);
 }
 
 void config_print_current(const OrusConfig* config) {
