@@ -269,59 +269,9 @@ void free_rope(StringRope* rope) {
     free(rope);
 }
 
-// --- HashMapIterator stub implementation ---
-typedef struct {
-    size_t bucket_idx;
-    void* current_entry;
-    void* map;
-} HashMapIterator;
-
-static void hashmap_iterator_init(HashMap* map, HashMapIterator* it) {
-    it->map = map;
-    it->bucket_idx = 0;
-    it->current_entry = NULL;
-}
-
-static int hashmap_iterator_has_next(HashMapIterator* it) {
-    HashMap* map = (HashMap*)it->map;
-    if (!map) return 0;
-    while (it->bucket_idx < map->capacity) {
-        HashMapEntry* entry = (HashMapEntry*)it->current_entry;
-        if (!entry) entry = map->buckets[it->bucket_idx];
-        if (entry) {
-            it->current_entry = entry;
-            return 1;
-        }
-        it->bucket_idx++;
-        it->current_entry = NULL;
-    }
-    return 0;
-}
-
-static void* hashmap_iterator_next_value(HashMapIterator* it) {
-    HashMapEntry* entry = (HashMapEntry*)it->current_entry;
-    if (!entry) return NULL;
-    void* value = entry->value;
-    it->current_entry = entry->next;
-    if (!it->current_entry) it->bucket_idx++;
-    return value;
-}
-
 void free_string_table(StringInternTable* table) {
     if (!table || !table->interned) return;
-    HashMapIterator it;
-    hashmap_iterator_init(table->interned, &it);
-    bool skip_object_free = vm.isShuttingDown;
-    while (hashmap_iterator_has_next(&it)) {
-        ObjString* s = (ObjString*)hashmap_iterator_next_value(&it);
-        if (s) {
-            if (!skip_object_free) {
-                if (s->rope) free_rope(s->rope);
-                free(s->chars);
-                free(s);
-            }
-        }
-    }
+
     hashmap_free(table->interned);
     table->interned = NULL;
     table->total_interned = 0;
