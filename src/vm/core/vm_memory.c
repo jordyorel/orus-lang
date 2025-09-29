@@ -223,10 +223,11 @@ ObjError* allocateError(ErrorType type, const char* message, SrcLocation locatio
     return error;
 }
 
-ObjRangeIterator* allocateRangeIterator(int64_t start, int64_t end) {
+ObjRangeIterator* allocateRangeIterator(int64_t start, int64_t end, int64_t step) {
     ObjRangeIterator* it = (ObjRangeIterator*)allocateObject(sizeof(ObjRangeIterator), OBJ_RANGE_ITERATOR);
     it->current = start;
     it->end = end;
+    it->step = step;
     return it;
 }
 

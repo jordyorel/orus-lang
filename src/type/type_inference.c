@@ -904,6 +904,12 @@ static void register_builtin_functions(TypeEnv* env) {
                                 float_params, 1);
     }
 
+    // range([start], stop[, step]) -> iterator (treated as any)
+    if (any_type) {
+        Type* range_params[3] = {any_type, any_type, any_type};
+        define_builtin_function(env, "range", any_type, range_params, 3);
+    }
+
     // type_of(value: any) -> string
     Type* string_type = getPrimitiveType(TYPE_STRING);
     if (any_param && string_type) {
@@ -1900,8 +1906,11 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                 if (expected_args < 0) expected_args = 0;
 
                 bool is_input_builtin = (callee_name && strcmp(callee_name, "input") == 0);
+                bool is_range_builtin = (callee_name && strcmp(callee_name, "range") == 0);
                 if (is_input_builtin && node->call.argCount == 0) {
                     expected_args = 0;
+                } else if (is_range_builtin) {
+                    expected_args = node->call.argCount;
                 }
 
                 if (node->call.argCount != expected_args) {

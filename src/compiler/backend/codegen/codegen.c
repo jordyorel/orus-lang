@@ -1625,6 +1625,89 @@ static int compile_builtin_array_len(CompilerContext* ctx, TypedASTNode* call) {
     return result_reg;
 }
 
+static int compile_builtin_range(CompilerContext* ctx, TypedASTNode* call) {
+    if (!ctx || !call || !call->original) {
+        return -1;
+    }
+
+    int arg_count = call->original->call.argCount;
+    if (arg_count < 1 || arg_count > 3) {
+        DEBUG_CODEGEN_PRINT("Error: range() expects between 1 and 3 arguments, got %d\n",
+                            arg_count);
+        ctx->has_compilation_errors = true;
+        return -1;
+    }
+
+    TypedASTNode* arg_nodes[3] = {NULL, NULL, NULL};
+    bool free_nodes[3] = {false, false, false};
+    int arg_regs[3] = {0, 0, 0};
+
+    for (int i = 0; i < arg_count; i++) {
+        arg_nodes[i] = get_call_argument_node(call, i, &free_nodes[i]);
+        if (!arg_nodes[i]) {
+            for (int j = 0; j < i; j++) {
+                if (arg_regs[j] >= MP_TEMP_REG_START && arg_regs[j] <= MP_TEMP_REG_END) {
+                    mp_free_temp_register(ctx->allocator, arg_regs[j]);
+                }
+                if (free_nodes[j] && arg_nodes[j]) {
+                    free_typed_ast_node(arg_nodes[j]);
+                }
+            }
+            return -1;
+        }
+
+        int reg = compile_expression(ctx, arg_nodes[i]);
+        if (reg == -1) {
+            for (int j = 0; j < i; j++) {
+                if (arg_regs[j] >= MP_TEMP_REG_START && arg_regs[j] <= MP_TEMP_REG_END) {
+                    mp_free_temp_register(ctx->allocator, arg_regs[j]);
+                }
+                if (free_nodes[j] && arg_nodes[j]) {
+                    free_typed_ast_node(arg_nodes[j]);
+                }
+            }
+            if (free_nodes[i] && arg_nodes[i]) {
+                free_typed_ast_node(arg_nodes[i]);
+            }
+            return -1;
+        }
+
+        arg_regs[i] = reg;
+    }
+
+    int result_reg = mp_allocate_temp_register(ctx->allocator);
+    if (result_reg == -1) {
+        DEBUG_CODEGEN_PRINT("Error: Failed to allocate result register for range() builtin\n");
+        for (int i = 0; i < arg_count; i++) {
+            if (arg_regs[i] >= MP_TEMP_REG_START && arg_regs[i] <= MP_TEMP_REG_END) {
+                mp_free_temp_register(ctx->allocator, arg_regs[i]);
+            }
+            if (free_nodes[i] && arg_nodes[i]) {
+                free_typed_ast_node(arg_nodes[i]);
+            }
+        }
+        return -1;
+    }
+
+    set_location_from_node(ctx, call);
+    emit_byte_to_buffer(ctx->bytecode, OP_RANGE_R);
+    emit_byte_to_buffer(ctx->bytecode, result_reg);
+    emit_byte_to_buffer(ctx->bytecode, (uint8_t)arg_count);
+    emit_byte_to_buffer(ctx->bytecode, arg_regs[0]);
+    emit_byte_to_buffer(ctx->bytecode, arg_regs[1]);
+    emit_byte_to_buffer(ctx->bytecode, arg_regs[2]);
+
+    for (int i = 0; i < arg_count; i++) {
+        if (arg_regs[i] >= MP_TEMP_REG_START && arg_regs[i] <= MP_TEMP_REG_END) {
+            mp_free_temp_register(ctx->allocator, arg_regs[i]);
+        }
+        if (free_nodes[i] && arg_nodes[i]) {
+            free_typed_ast_node(arg_nodes[i]);
+        }
+    }
+    return result_reg;
+}
+
 static int compile_builtin_input(CompilerContext* ctx, TypedASTNode* call) {
     if (!ctx || !call || !call->original) {
         return -1;
@@ -3655,6 +3738,8 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                     return compile_builtin_array_pop(ctx, expr);
                 } else if (strcmp(builtin_name, "len") == 0) {
                     return compile_builtin_array_len(ctx, expr);
+                } else if (strcmp(builtin_name, "range") == 0) {
+                    return compile_builtin_range(ctx, expr);
                 } else if (strcmp(builtin_name, "input") == 0) {
                     return compile_builtin_input(ctx, expr);
                 } else if (strcmp(builtin_name, "int") == 0) {

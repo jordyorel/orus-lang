@@ -23,6 +23,7 @@
 #include "vm/vm_opcode_handlers.h"
 #include "vm/vm_dispatch.h"
 #include "vm/vm_comparison.h"
+#include "vm/vm_loop_fastpaths.h"
 #include "runtime/builtins.h"
 
 // Frame-aware register access functions for proper local variable isolation
@@ -429,6 +430,50 @@ void handle_input(void) {
     }
 
     vm_set_register_safe(dst, result);
+}
+
+void handle_range(void) {
+    uint8_t dst = READ_BYTE();
+    uint8_t arg_count = READ_BYTE();
+    uint8_t first_reg = READ_BYTE();
+    uint8_t second_reg = READ_BYTE();
+    uint8_t third_reg = READ_BYTE();
+
+    if (arg_count < 1 || arg_count > 3) {
+        SrcLocation loc = {vm.filePath, vm.currentLine, vm.currentColumn};
+        runtimeError(ERROR_ARGUMENT, loc, "range() expects between 1 and 3 arguments");
+        return;
+    }
+
+    Value args_storage[3];
+    Value* args_ptr = NULL;
+    if (arg_count > 0) {
+        args_ptr = args_storage;
+        args_storage[0] = vm_get_register_safe(first_reg);
+        if (arg_count > 1) {
+            args_storage[1] = vm_get_register_safe(second_reg);
+        }
+        if (arg_count > 2) {
+            args_storage[2] = vm_get_register_safe(third_reg);
+        }
+    }
+
+    Value result;
+    if (!builtin_range(args_ptr, arg_count, &result)) {
+        SrcLocation loc = {vm.filePath, vm.currentLine, vm.currentColumn};
+        runtimeError(ERROR_ARGUMENT, loc, "Invalid arguments provided to range()");
+        return;
+    }
+
+    vm_typed_iterator_invalidate(dst);
+    vm_set_register_safe(dst, result);
+
+    if (!vm.config.force_boxed_iterators && IS_RANGE_ITERATOR(result)) {
+        ObjRangeIterator* iterator = AS_RANGE_ITERATOR(result);
+        if (iterator) {
+            vm_typed_iterator_bind_range(dst, iterator->current, iterator->end, iterator->step);
+        }
+    }
 }
 
 void handle_print(void) {

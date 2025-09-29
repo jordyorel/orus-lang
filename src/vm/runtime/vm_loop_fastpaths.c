@@ -148,15 +148,26 @@ bool vm_typed_iterator_next(uint16_t reg, Value* out_value) {
 
     TypedIteratorDescriptor* descriptor = &vm.typed_iterators[reg];
     switch (descriptor->kind) {
-        case TYPED_ITER_RANGE_I64:
-            if (descriptor->data.range_i64.current >= descriptor->data.range_i64.end) {
+        case TYPED_ITER_RANGE_I64: {
+            int64_t current = descriptor->data.range_i64.current;
+            int64_t end = descriptor->data.range_i64.end;
+            int64_t step = descriptor->data.range_i64.step;
+
+            if (step == 0) {
                 vm_typed_iterator_invalidate(reg);
                 return false;
             }
-            *out_value = I64_VAL(descriptor->data.range_i64.current);
-            descriptor->data.range_i64.current++;
+
+            bool done = (step > 0) ? (current >= end) : (current <= end);
+            if (done) {
+                vm_typed_iterator_invalidate(reg);
+                return false;
+            }
+            *out_value = I64_VAL(current);
+            descriptor->data.range_i64.current = current + step;
             vm_trace_loop_event(LOOP_TRACE_TYPED_HIT);
             return true;
+        }
         case TYPED_ITER_ARRAY_SLICE: {
             ObjArray* array = descriptor->data.array.array;
             uint32_t index = descriptor->data.array.index;

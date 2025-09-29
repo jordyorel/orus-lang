@@ -1,0 +1,2 @@
+// Expect runtime failure: non-integer step argument
+range(0, 5, 2.5)
