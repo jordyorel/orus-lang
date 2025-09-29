@@ -79,6 +79,31 @@ endif
 
 ARCH_DEFINES += $(DISPATCH_DEFINE)
 
+# Distribution packaging configuration
+DIST_DIR = dist
+
+ifeq ($(UNAME_S),Darwin)
+    DIST_OS = macos
+else ifeq ($(UNAME_S),Linux)
+    DIST_OS = linux
+else
+    DIST_OS = $(shell echo $(UNAME_S) | tr '[:upper:]' '[:lower:]')
+endif
+
+ifeq ($(UNAME_M),arm64)
+    DIST_ARCH = arm64
+else ifeq ($(UNAME_M),aarch64)
+    DIST_ARCH = arm64
+else ifeq ($(UNAME_M),x86_64)
+    DIST_ARCH = x86_64
+else ifeq ($(UNAME_M),amd64)
+    DIST_ARCH = x86_64
+else
+    DIST_ARCH = $(UNAME_M)
+endif
+
+DIST_ARCHIVE = $(DIST_DIR)/orus-$(DIST_OS)-$(DIST_ARCH).tar.gz
+
 # Profile-specific configurations
 ifeq ($(PROFILE),debug)
     # Debug build: maximum debugging info, no optimization, all checks enabled
@@ -197,7 +222,7 @@ BUILTIN_RANGE_ORUS_FAIL_TESTS = \
     tests/builtins/range_zero_step.orus \
     tests/builtins/range_float_step.orus \
     tests/builtins/range_overflow_stop.orus
-.PHONY: all clean test unit-test test-control-flow test-loop-telemetry benchmark help debug release profiling analyze install bytecode-jump-tests source-map-tests scope-tracking-tests peephole-tests cli-smoke-tests licm-metadata-tests tagged-union-tests builtin-input-tests builtin-range-tests test-optimizer wasm
+.PHONY: all clean test unit-test test-control-flow test-loop-telemetry benchmark help debug release profiling analyze install dist bytecode-jump-tests source-map-tests scope-tracking-tests peephole-tests cli-smoke-tests licm-metadata-tests tagged-union-tests builtin-input-tests builtin-range-tests test-optimizer wasm
 
 all: build-info $(ORUS)
 
@@ -544,6 +569,12 @@ install: release
 	@sudo cp orus /usr/local/bin/orus
 	@echo "✓ Orus installed successfully"
 
+dist: release
+	@mkdir -p $(DIST_DIR)
+	@echo "Packaging $(DIST_ARCHIVE)..."
+	@tar -czf $(DIST_ARCHIVE) orus LICENSE
+	@echo "✓ Package ready: $(DIST_ARCHIVE)"
+
 # Clean build artifacts
 clean:
 	@echo "Cleaning build artifacts..."
@@ -574,6 +605,7 @@ help:
 	@echo "Development Targets:"
 	@echo "  analyze   - Run static analysis (cppcheck, clang analyzer)"
 	@echo "  install   - Install release build to /usr/local/bin"
+	@echo "  dist      - Package release binary into dist/orus-<os>-<arch>.tar.gz"
 	@echo ""
 	@echo "Cross-compilation:"
 	@echo "  cross-linux   - Cross-compile for Linux x86_64"

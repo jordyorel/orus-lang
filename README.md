@@ -88,8 +88,20 @@ make help
 - **Cross-compilation**: Linux and Windows targets available
 - **Static analysis**: Built-in cppcheck and clang analyzer integration
 
+### Release Archives
+
+Create a tarball suitable for GitHub releases with `make dist`. The command produces `dist/orus-<os>-<arch>.tar.gz` alongside the `orus` binary; upload this archive (and the installer script) when drafting a new release so the curl installer can fetch the correct artifact for each platform. See `docs/PUBLISHING_RELEASE.md` for the full release checklist.
+
 ### Installation
 
+**Download prebuilt binaries (macOS & Linux)**
+- Latest release: `curl -fsSL https://github.com/jordyorel/orus-lang/releases/latest/download/install-orus.sh | bash`
+- Specific tag: `curl -fsSL https://github.com/jordyorel/orus-lang/releases/download/v0.6.0/install-orus.sh | bash -s -- --version v0.6.0`
+- Optional flags: `--dest` to change the install directory (defaults to `~/.local/bin`), `--sudo` to elevate when installing to a protected path, `--dry-run` to inspect the resolved download URL.
+
+The installer detects your platform and downloads the matching archive (`orus-<os>-<arch>.tar.gz`) from the release before placing the binary in the requested directory.
+
+**Build from source**
 ```bash
 # System-wide installation (requires sudo)
 make install
