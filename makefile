@@ -207,7 +207,7 @@ COMPILER_BACKEND_SRCS = $(SRCDIR)/compiler/backend/typed_ast_visualizer.c $(SRCD
 
 # Combined simplified compiler sources  
 COMPILER_SRCS = $(COMPILER_FRONTEND_SRCS) $(COMPILER_BACKEND_SRCS) $(SRCDIR)/compiler/typed_ast.c $(SRCDIR)/debug/debug_config.c
-VM_SRCS = $(SRCDIR)/vm/core/vm_core.c $(SRCDIR)/vm/core/vm_tagged_union.c $(SRCDIR)/vm/runtime/vm.c $(SRCDIR)/vm/runtime/vm_loop_fastpaths.c $(SRCDIR)/vm/core/vm_memory.c $(SRCDIR)/vm/utils/debug.c $(SRCDIR)/vm/runtime/builtin_print.c $(SRCDIR)/vm/runtime/builtin_input.c $(SRCDIR)/vm/runtime/builtin_array_push.c $(SRCDIR)/vm/runtime/builtin_array_pop.c $(SRCDIR)/vm/runtime/builtin_time_stamp.c $(SRCDIR)/vm/runtime/builtin_number.c $(SRCDIR)/vm/runtime/builtin_type_of.c $(SRCDIR)/vm/runtime/builtin_is_type.c $(SRCDIR)/vm/runtime/builtin_range.c $(SRCDIR)/vm/operations/vm_arithmetic.c $(SRCDIR)/vm/operations/vm_control_flow.c $(SRCDIR)/vm/operations/vm_typed_ops.c $(SRCDIR)/vm/operations/vm_string_ops.c $(SRCDIR)/vm/operations/vm_comparison.c $(SRCDIR)/vm/dispatch/vm_dispatch_switch.c $(SRCDIR)/vm/dispatch/vm_dispatch_goto.c $(SRCDIR)/vm/core/vm_validation.c $(SRCDIR)/vm/register_file.c $(SRCDIR)/vm/spill_manager.c $(SRCDIR)/vm/module_manager.c $(SRCDIR)/vm/register_cache.c $(SRCDIR)/vm/profiling/vm_profiling.c $(SRCDIR)/vm/vm_config.c $(SRCDIR)/type/type_representation.c $(SRCDIR)/type/type_inference.c $(SRCDIR)/errors/infrastructure/error_infrastructure.c $(SRCDIR)/errors/core/error_base.c $(SRCDIR)/errors/features/type_errors.c $(SRCDIR)/errors/features/variable_errors.c $(SRCDIR)/errors/features/control_flow_errors.c $(SRCDIR)/config/config.c $(SRCDIR)/internal/logging.c
+VM_SRCS = $(SRCDIR)/vm/core/vm_core.c $(SRCDIR)/vm/core/vm_tagged_union.c $(SRCDIR)/vm/runtime/vm.c $(SRCDIR)/vm/runtime/vm_loop_fastpaths.c $(SRCDIR)/vm/core/vm_memory.c $(SRCDIR)/vm/utils/debug.c $(SRCDIR)/vm/runtime/builtin_print.c $(SRCDIR)/vm/runtime/builtin_input.c $(SRCDIR)/vm/runtime/builtin_array_push.c $(SRCDIR)/vm/runtime/builtin_array_pop.c $(SRCDIR)/vm/runtime/builtin_time_stamp.c $(SRCDIR)/vm/runtime/builtin_number.c $(SRCDIR)/vm/runtime/builtin_type_of.c $(SRCDIR)/vm/runtime/builtin_is_type.c $(SRCDIR)/vm/runtime/builtin_range.c $(SRCDIR)/vm/runtime/builtin_sorted.c $(SRCDIR)/vm/operations/vm_arithmetic.c $(SRCDIR)/vm/operations/vm_control_flow.c $(SRCDIR)/vm/operations/vm_typed_ops.c $(SRCDIR)/vm/operations/vm_string_ops.c $(SRCDIR)/vm/operations/vm_comparison.c $(SRCDIR)/vm/dispatch/vm_dispatch_switch.c $(SRCDIR)/vm/dispatch/vm_dispatch_goto.c $(SRCDIR)/vm/core/vm_validation.c $(SRCDIR)/vm/register_file.c $(SRCDIR)/vm/spill_manager.c $(SRCDIR)/vm/module_manager.c $(SRCDIR)/vm/register_cache.c $(SRCDIR)/vm/profiling/vm_profiling.c $(SRCDIR)/vm/vm_config.c $(SRCDIR)/type/type_representation.c $(SRCDIR)/type/type_inference.c $(SRCDIR)/errors/infrastructure/error_infrastructure.c $(SRCDIR)/errors/core/error_base.c $(SRCDIR)/errors/features/type_errors.c $(SRCDIR)/errors/features/variable_errors.c $(SRCDIR)/errors/features/control_flow_errors.c $(SRCDIR)/config/config.c $(SRCDIR)/internal/logging.c
 REPL_SRC = $(SRCDIR)/repl.c
 MAIN_SRC = $(SRCDIR)/main.c
 
@@ -237,6 +237,11 @@ PEEPHOLE_TEST_BIN = $(BUILDDIR)/tests/test_constant_propagation
 LICM_METADATA_TEST_BIN = $(BUILDDIR)/tests/test_licm_typed_metadata
 TAGGED_UNION_TEST_BIN = $(BUILDDIR)/tests/test_vm_tagged_union
 BUILTIN_INPUT_TEST_BIN = $(BUILDDIR)/tests/test_builtin_input
+BUILTIN_SORTED_ORUS_TESTS = \
+    tests/builtins/sorted_runtime.orus
+BUILTIN_SORTED_ORUS_FAIL_TESTS = \
+    tests/builtins/sorted_struct_fail.orus \
+    tests/builtins/sorted_nested_array_fail.orus
 BUILTIN_RANGE_ORUS_TESTS = tests/builtins/range_runtime.orus
 BUILTIN_RANGE_ORUS_FAIL_TESTS = \
     tests/builtins/range_invalid_string_stop.orus \
@@ -244,7 +249,7 @@ BUILTIN_RANGE_ORUS_FAIL_TESTS = \
     tests/builtins/range_zero_step.orus \
     tests/builtins/range_float_step.orus \
     tests/builtins/range_overflow_stop.orus
-.PHONY: all clean test unit-test test-control-flow test-loop-telemetry benchmark help debug release profiling analyze install dist bytecode-jump-tests source-map-tests scope-tracking-tests peephole-tests cli-smoke-tests licm-metadata-tests tagged-union-tests builtin-input-tests builtin-range-tests test-optimizer wasm
+.PHONY: all clean test unit-test test-control-flow test-loop-telemetry benchmark help debug release profiling analyze install dist bytecode-jump-tests source-map-tests scope-tracking-tests peephole-tests cli-smoke-tests licm-metadata-tests tagged-union-tests builtin-input-tests builtin-sorted-tests builtin-range-tests test-optimizer wasm
 
 all: build-info $(ORUS)
 
@@ -377,6 +382,9 @@ SUBDIRS="arrays arithmetic algorithms benchmarks builtins comments comprehensive
 	@echo "\033[36m=== Builtin Input Tests ===\033[0m"
 	@$(MAKE) builtin-input-tests
 	@echo ""
+	@echo "\033[36m=== Builtin Sorted Tests ===\033[0m"
+	@$(MAKE) builtin-sorted-tests
+	@echo ""
 	@echo "\033[36m=== Builtin Range Tests ===\033[0m"
 	@$(MAKE) builtin-range-tests
 	@echo ""
@@ -451,6 +459,33 @@ $(BUILTIN_INPUT_TEST_BIN): tests/unit/test_builtin_input.c $(COMPILER_OBJS) $(VM
 builtin-input-tests: $(BUILTIN_INPUT_TEST_BIN)
 	@echo "Running builtin input tests..."
 	@./$(BUILTIN_INPUT_TEST_BIN)
+
+builtin-sorted-tests: $(ORUS)
+	@echo "Running builtin sorted runtime tests..."
+	@passed=0; failed=0; \
+	for test_file in $(BUILTIN_SORTED_ORUS_TESTS); do \
+		printf "Testing: $$test_file ... "; \
+		if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
+			printf "\033[32mPASS\033[0m\n"; \
+			passed=$$((passed + 1)); \
+		else \
+			printf "\033[31mFAIL\033[0m\n"; \
+			failed=$$((failed + 1)); \
+		fi; \
+	done; \
+	for test_file in $(BUILTIN_SORTED_ORUS_FAIL_TESTS); do \
+		printf "Testing: $$test_file (expected failure) ... "; \
+		if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
+			printf "\033[31mUNEXPECTED PASS\033[0m\n"; \
+			failed=$$((failed + 1)); \
+		else \
+			printf "\033[32mCORRECT FAIL\033[0m\n"; \
+			passed=$$((passed + 1)); \
+		fi; \
+	done; \
+	if [ $$failed -ne 0 ]; then \
+		exit 1; \
+	fi
 
 builtin-range-tests: $(ORUS)
 	@echo "Running builtin range runtime tests..."

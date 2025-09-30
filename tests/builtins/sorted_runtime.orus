@@ -1,0 +1,66 @@
+// builtin sorted() runtime validation covering supported element types and copy semantics.
+
+print("-- builtin sorted runtime validation --")
+
+fn arrays_equal(left, right) -> bool:
+    if len(left) != len(right):
+        return false
+    mut idx: i32 = 0
+    count: i32 = len(left)
+    while idx < count:
+        if left[idx] != right[idx]:
+            return false
+        idx = idx + 1
+    return true
+
+fn assert_array(label, actual, expected):
+    if arrays_equal(actual, expected):
+        print("ok", label, actual)
+    else:
+        print("FAIL", label, actual, expected)
+        zero: i32 = 0
+        _ = 1 / zero
+
+fn assert_bool(label, condition):
+    if condition:
+        print("ok", label)
+    else:
+        print("FAIL", label)
+        zero: i32 = 0
+        _ = 1 / zero
+
+ints = [5, 1, 4, 2, 3]
+ints_sorted = sorted(ints)
+assert_array("i32 sorted", ints_sorted, [1, 2, 3, 4, 5])
+assert_array("i32 original untouched", ints, [5, 1, 4, 2, 3])
+assert_array("i32 idempotent", sorted(ints_sorted), [1, 2, 3, 4, 5])
+
+bools = [true, false, true, false]
+bools_sorted = sorted(bools)
+assert_array("bool sorted", bools_sorted, [false, false, true, true])
+
+strings = ["pear", "apple", "banana", "apple"]
+strings_sorted = sorted(strings)
+assert_array("string sorted", strings_sorted, ["apple", "apple", "banana", "pear"])
+
+mut floats = [3.5, -2.0, 3.5, 0.0]
+floats_sorted = sorted(floats)
+assert_array("f64 sorted", floats_sorted, [-2.0, 0.0, 3.5, 3.5])
+assert_array("f64 original untouched", floats, [3.5, -2.0, 3.5, 0.0])
+
+i64_values = [5 as i64, -7 as i64, 0 as i64, 12 as i64]
+i64_sorted = sorted(i64_values)
+assert_array("i64 sorted", i64_sorted, [-7 as i64, 0 as i64, 5 as i64, 12 as i64])
+
+u32_values = [9 as u32, 4 as u32, 6 as u32, 6 as u32]
+u32_sorted = sorted(u32_values)
+assert_array("u32 sorted", u32_sorted, [4 as u32, 6 as u32, 6 as u32, 9 as u32])
+
+u64_values = [7 as u64, 1 as u64, 12 as u64, 3 as u64]
+u64_sorted = sorted(u64_values)
+assert_array("u64 sorted", u64_sorted, [1 as u64, 3 as u64, 7 as u64, 12 as u64])
+
+empty = []
+empty_sorted = sorted(empty)
+assert_array("empty sorted", empty_sorted, [])
+assert_bool("empty identical instance", len(empty) == len(empty_sorted))

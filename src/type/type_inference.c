@@ -882,6 +882,17 @@ static void register_builtin_functions(TypeEnv* env) {
         define_builtin_function(env, "pop", pop_element, pop_params, 1);
     }
 
+    // sorted(array[T]) -> array[T]
+    Type* sorted_element = make_var_type(NULL);
+    if (!sorted_element) {
+        sorted_element = any_type;
+    }
+    Type* sorted_array = createArrayType(sorted_element);
+    if (sorted_array) {
+        Type* sorted_params[1] = {sorted_array};
+        define_builtin_function(env, "sorted", sorted_array, sorted_params, 1);
+    }
+
     // input(prompt: string = "") -> string
     Type* prompt_type = getPrimitiveType(TYPE_STRING);
     if (prompt_type) {

@@ -326,6 +326,7 @@ InterpretResult vm_run_dispatch(void) {
         vm_dispatch_table[OP_ARRAY_LEN_R] = &&LABEL_OP_ARRAY_LEN_R;
         vm_dispatch_table[OP_ARRAY_PUSH_R] = &&LABEL_OP_ARRAY_PUSH_R;
         vm_dispatch_table[OP_ARRAY_POP_R] = &&LABEL_OP_ARRAY_POP_R;
+        vm_dispatch_table[OP_ARRAY_SORTED_R] = &&LABEL_OP_ARRAY_SORTED_R;
         vm_dispatch_table[OP_ARRAY_SLICE_R] = &&LABEL_OP_ARRAY_SLICE_R;
         vm_dispatch_table[OP_TO_STRING_R] = &&LABEL_OP_TO_STRING_R;
         vm_dispatch_table[OP_TRY_BEGIN] = &&LABEL_OP_TRY_BEGIN;
@@ -2411,6 +2412,24 @@ InterpretResult vm_run_dispatch(void) {
         }
 
         vm_set_register_safe(dst, popped);
+        DISPATCH();
+    }
+
+    LABEL_OP_ARRAY_SORTED_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t array_reg = READ_BYTE();
+
+        Value array_value = vm_get_register_safe(array_reg);
+        Value result;
+        if (!builtin_sorted(array_value, &result)) {
+            if (!IS_ARRAY(array_value)) {
+                VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Value is not an array");
+            }
+            VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(),
+                            "sorted() requires an array of comparable elements");
+        }
+
+        vm_set_register_safe(dst, result);
         DISPATCH();
     }
 

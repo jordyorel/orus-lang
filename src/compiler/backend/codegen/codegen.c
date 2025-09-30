@@ -371,6 +371,7 @@ static void compile_import_statement(CompilerContext* ctx, TypedASTNode* stmt);
 static int compile_builtin_array_push(CompilerContext* ctx, TypedASTNode* call);
 static int compile_builtin_array_pop(CompilerContext* ctx, TypedASTNode* call);
 static int compile_builtin_array_len(CompilerContext* ctx, TypedASTNode* call);
+static int compile_builtin_sorted(CompilerContext* ctx, TypedASTNode* call);
 static int compile_builtin_input(CompilerContext* ctx, TypedASTNode* call);
 static int compile_builtin_int(CompilerContext* ctx, TypedASTNode* call);
 static int compile_builtin_float(CompilerContext* ctx, TypedASTNode* call);
@@ -1613,6 +1614,55 @@ static int compile_builtin_array_len(CompilerContext* ctx, TypedASTNode* call) {
 
     set_location_from_node(ctx, call);
     emit_byte_to_buffer(ctx->bytecode, OP_ARRAY_LEN_R);
+    emit_byte_to_buffer(ctx->bytecode, result_reg);
+    emit_byte_to_buffer(ctx->bytecode, array_reg);
+
+    if (array_reg >= MP_TEMP_REG_START && array_reg <= MP_TEMP_REG_END) {
+        mp_free_temp_register(ctx->allocator, array_reg);
+    }
+
+    if (free_array) free_typed_ast_node(array_arg);
+
+    return result_reg;
+}
+
+static int compile_builtin_sorted(CompilerContext* ctx, TypedASTNode* call) {
+    if (!ctx || !call || !call->original) {
+        return -1;
+    }
+
+    if (call->original->call.argCount != 1) {
+        DEBUG_CODEGEN_PRINT("Error: sorted() expects 1 argument, got %d\n",
+                            call->original->call.argCount);
+        ctx->has_compilation_errors = true;
+        return -1;
+    }
+
+    bool free_array = false;
+    TypedASTNode* array_arg = get_call_argument_node(call, 0, &free_array);
+    if (!array_arg) {
+        if (free_array) free_typed_ast_node(array_arg);
+        return -1;
+    }
+
+    int array_reg = compile_expression(ctx, array_arg);
+    if (array_reg == -1) {
+        if (free_array) free_typed_ast_node(array_arg);
+        return -1;
+    }
+
+    int result_reg = mp_allocate_temp_register(ctx->allocator);
+    if (result_reg == -1) {
+        DEBUG_CODEGEN_PRINT("Error: Failed to allocate result register for sorted() builtin\n");
+        if (array_reg >= MP_TEMP_REG_START && array_reg <= MP_TEMP_REG_END) {
+            mp_free_temp_register(ctx->allocator, array_reg);
+        }
+        if (free_array) free_typed_ast_node(array_arg);
+        return -1;
+    }
+
+    set_location_from_node(ctx, call);
+    emit_byte_to_buffer(ctx->bytecode, OP_ARRAY_SORTED_R);
     emit_byte_to_buffer(ctx->bytecode, result_reg);
     emit_byte_to_buffer(ctx->bytecode, array_reg);
 
@@ -3738,6 +3788,8 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                     return compile_builtin_array_pop(ctx, expr);
                 } else if (strcmp(builtin_name, "len") == 0) {
                     return compile_builtin_array_len(ctx, expr);
+                } else if (strcmp(builtin_name, "sorted") == 0) {
+                    return compile_builtin_sorted(ctx, expr);
                 } else if (strcmp(builtin_name, "range") == 0) {
                     return compile_builtin_range(ctx, expr);
                 } else if (strcmp(builtin_name, "input") == 0) {
