@@ -90,7 +90,7 @@ make help
 
 ### Release Archives
 
-Create a tarball suitable for GitHub releases with `make dist`. The command produces `dist/orus-<os>-<arch>.tar.gz` alongside the `orus` binary. Upload the archives you build to the corresponding GitHub release so users can download them directly via `curl`. See `docs/PUBLISHING_RELEASE.md` for the full release checklist.
+Run `make release` to build the optimized binary and package `dist/orus-<os>-<arch>.tar.gz` alongside it. Upload the archives you build to the corresponding GitHub release so users can download them directly via `curl`. See `docs/PUBLISHING_RELEASE.md` for the full release checklist. For WebAssembly builds use `make release-with-wasm` on a machine with Emscripten installed.
 
 ### Installation
 
