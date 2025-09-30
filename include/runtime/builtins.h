@@ -96,6 +96,15 @@ bool builtin_array_push(Value array_value, Value element);
 bool builtin_array_pop(Value array_value, Value* out_value);
 
 /**
+ * Produce a sorted copy of the provided array.
+ *
+ * @param array_value Value referencing the array to sort.
+ * @param out_value   Receives the new sorted array on success.
+ * @return true when sorting succeeded and {@code out_value} was populated.
+ */
+bool builtin_sorted(Value array_value, Value* out_value);
+
+/**
  * Obtain a monotonic timestamp in seconds.
  *
  * The epoch is unspecified but monotonically increasing for the

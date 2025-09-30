@@ -1,0 +1,4 @@
+// Expect runtime failure: sorted() requires comparable elements (nested arrays)
+
+nested = [[2], [1], [3]]
+sorted(nested)

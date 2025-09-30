@@ -476,6 +476,26 @@ void handle_range(void) {
     }
 }
 
+void handle_sorted(void) {
+    uint8_t dst = READ_BYTE();
+    uint8_t array_reg = READ_BYTE();
+
+    Value array_value = vm_get_register_safe(array_reg);
+    Value result;
+    if (!builtin_sorted(array_value, &result)) {
+        SrcLocation loc = {vm.filePath, vm.currentLine, vm.currentColumn};
+        if (!IS_ARRAY(array_value)) {
+            runtimeError(ERROR_TYPE, loc, "Value is not an array");
+        } else {
+            runtimeError(ERROR_RUNTIME, loc,
+                         "sorted() requires an array of comparable elements");
+        }
+        return;
+    }
+
+    vm_set_register_safe(dst, result);
+}
+
 void handle_print(void) {
     uint8_t reg = READ_BYTE();
     Value temp_value = vm_get_register_safe(reg);

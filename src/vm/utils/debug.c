@@ -328,6 +328,13 @@ int disassembleInstruction(Chunk* chunk, int offset) {
             return offset + 3;
         }
 
+        case OP_ARRAY_SORTED_R: {
+            uint8_t dst = chunk->code[offset + 1];
+            uint8_t array_reg = chunk->code[offset + 2];
+            printf("%-16s R%d, R%d\n", "ARRAY_SORTED", dst, array_reg);
+            return offset + 3;
+        }
+
         case OP_ARRAY_SLICE_R: {
             uint8_t dst = chunk->code[offset + 1];
             uint8_t array_reg = chunk->code[offset + 2];
