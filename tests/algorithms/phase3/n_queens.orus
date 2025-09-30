@@ -10,7 +10,7 @@ global mut NQ_CONFLICT_REJECTIONS = 0
 global mut NQ_PLACEMENTS = 0
 global mut NQ_BACKTRACKS = 0
 global mut NQ_SOLUTIONS = 0
-global mut NQ_LAST_POSITIONS = []
+global mut NQ_LAST_POSITIONS: [i32] = []
 
 fn reset_metrics():
     NQ_CALLS = 0
@@ -89,22 +89,22 @@ fn run_n_queens(label, n: i32, expected_solutions: i32) -> i32:
 
     reset_metrics()
 
-    mut columns_used = []
+    mut columns_used: [bool] = []
     mut init_index: i32 = 0
     while init_index < n:
         push(columns_used, false)
         init_index = init_index + 1
 
     diag_length: i32 = n + n - 1
-    mut diag_main_used = []
-    mut diag_anti_used = []
+    mut diag_main_used: [bool] = []
+    mut diag_anti_used: [bool] = []
     mut diag_index: i32 = 0
     while diag_index < diag_length:
         push(diag_main_used, false)
         push(diag_anti_used, false)
         diag_index = diag_index + 1
 
-    mut positions = []
+    mut positions: [i32] = []
     mut pos_index: i32 = 0
     while pos_index < n:
         push(positions, -1)

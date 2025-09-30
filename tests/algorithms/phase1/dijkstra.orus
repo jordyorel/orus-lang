@@ -13,13 +13,13 @@ fn dijkstra(label, graph, start, infinity):
     DIJKSTRA_SELECTIONS = 0
 
     count = len(graph)
-    distances = []
+    mut distances: [i32] = []
     mut distance_index = 0
     while distance_index < count:
         push(distances, infinity)
         distance_index = distance_index + 1
 
-    visited = []
+    mut visited: [bool] = []
     mut visit_index = 0
     while visit_index < count:
         push(visited, false)
@@ -78,33 +78,33 @@ fn assert_distances(label, observed, expected):
 // === Tests ===
 infinity = 999999
 fn make_weighted_graph():
-    mut graph = []
+    mut graph: [[i32]] = []
 
-    mut node0 = []
+    mut node0: [i32] = []
     push(node0, 1)
     push(node0, 4)
     push(node0, 2)
     push(node0, 1)
     push(graph, node0)
 
-    mut node1 = []
+    mut node1: [i32] = []
     push(node1, 3)
     push(node1, 1)
     push(graph, node1)
 
-    mut node2 = []
+    mut node2: [i32] = []
     push(node2, 1)
     push(node2, 2)
     push(node2, 3)
     push(node2, 5)
     push(graph, node2)
 
-    mut node3 = []
+    mut node3: [i32] = []
     push(node3, 4)
     push(node3, 3)
     push(graph, node3)
 
-    mut node4 = []
+    mut node4: [i32] = []
     push(graph, node4)
 
     return graph
@@ -118,22 +118,22 @@ expected_from_two = [999999, 2, 0, 3, 6]
 assert_distances("from_two", dijkstra("from_two", weighted_graph, 2, infinity), expected_from_two)
 
 fn make_disconnected_graph():
-    mut graph = []
+    mut graph: [[i32]] = []
 
-    mut node0 = []
+    mut node0: [i32] = []
     push(node0, 1)
     push(node0, 2)
     push(graph, node0)
 
-    mut node1 = []
+    mut node1: [i32] = []
     push(graph, node1)
 
-    mut node2 = []
+    mut node2: [i32] = []
     push(node2, 3)
     push(node2, 1)
     push(graph, node2)
 
-    mut node3 = []
+    mut node3: [i32] = []
     push(graph, node3)
 
     return graph

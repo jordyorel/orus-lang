@@ -1,0 +1,23 @@
+// Validate new array syntax features: typed arrays, dynamic arrays, fill expressions.
+print("-- array syntax --")
+
+mut nums: [i32, 3] = [1, 2, 3]
+print(nums[0], nums[1], nums[2])
+
+mut values: [i32] = []
+push(values, 10)
+push(values, 20)
+print(len(values))
+
+zeros = [0, 4]
+print(len(zeros), zeros[0], zeros[3])
+
+const N = 5
+fixed: [i32, N] = [0, N]
+print(len(fixed), fixed[0], fixed[4])
+
+mut multiline: [
+    i32,
+    3
+] = [1, 2, 3]
+print(multiline[0], multiline[2])

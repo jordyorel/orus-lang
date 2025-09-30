@@ -384,6 +384,10 @@ bool apply_constant_folding_recursive(TypedASTNode* ast) {
         case NODE_ARRAY_LITERAL:
             fold_children(ast->typed.arrayLiteral.elements, ast->typed.arrayLiteral.count);
             break;
+        case NODE_ARRAY_FILL:
+            fold_child(ast->typed.arrayFill.value);
+            fold_child(ast->typed.arrayFill.lengthExpr);
+            break;
 
         case NODE_ARRAY_ASSIGN:
             fold_child(ast->typed.arrayAssign.target);

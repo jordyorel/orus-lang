@@ -174,6 +174,11 @@ struct TypedASTNode {
             int count;
         } arrayLiteral;
         struct {
+            TypedASTNode* value;
+            TypedASTNode* lengthExpr;
+            int resolvedLength;
+        } arrayFill;
+        struct {
             TypedASTNode* array;
             TypedASTNode* index;
             bool isStringIndex;

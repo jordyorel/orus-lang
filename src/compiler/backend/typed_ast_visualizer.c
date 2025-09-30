@@ -73,6 +73,7 @@ static const char* get_node_type_name(NodeType type) {
         case NODE_IDENTIFIER: return "Identifier";
         case NODE_LITERAL: return "Literal";
         case NODE_ARRAY_LITERAL: return "ArrayLiteral";
+        case NODE_ARRAY_FILL: return "ArrayFill";
         case NODE_INDEX_ACCESS: return "IndexAccess";
         case NODE_ARRAY_SLICE: return "ArraySlice";
         case NODE_BINARY: return "Binary";

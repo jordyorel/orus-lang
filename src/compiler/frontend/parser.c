@@ -1487,10 +1487,124 @@ static ASTNode* parsePrintStatement(ParserContext* ctx) {
 static bool token_can_start_type(TokenType type) {
     return type == TOKEN_IDENTIFIER || type == TOKEN_INT || type == TOKEN_I64 ||
            type == TOKEN_U32 || type == TOKEN_U64 || type == TOKEN_F64 ||
-           type == TOKEN_BOOL || type == TOKEN_STRING;
+           type == TOKEN_BOOL || type == TOKEN_STRING ||
+           type == TOKEN_LEFT_BRACKET;
+}
+
+static ASTNode* build_type_annotation_node(ParserContext* ctx, Token typeTok);
+
+static ASTNode* parse_array_type_annotation(ParserContext* ctx, Token openToken) {
+    Token elementTok = nextToken(ctx);
+    while (elementTok.type == TOKEN_NEWLINE || elementTok.type == TOKEN_INDENT ||
+           elementTok.type == TOKEN_DEDENT) {
+        elementTok = nextToken(ctx);
+    }
+
+    if (elementTok.type == TOKEN_RIGHT_BRACKET) {
+        SrcLocation location = {NULL, elementTok.line, elementTok.column};
+        report_compile_error(E1006_INVALID_SYNTAX, location,
+                             "expected an element type before ']'");
+        return NULL;
+    }
+
+    ASTNode* elementType = build_type_annotation_node(ctx, elementTok);
+    if (!elementType) {
+        SrcLocation location = {NULL, elementTok.line, elementTok.column};
+        report_compile_error(E1006_INVALID_SYNTAX, location,
+                             "invalid element type inside array type annotation");
+        return NULL;
+    }
+
+    while (peekToken(ctx).type == TOKEN_NEWLINE || peekToken(ctx).type == TOKEN_INDENT ||
+           peekToken(ctx).type == TOKEN_DEDENT) {
+        nextToken(ctx);
+    }
+
+    if (peekToken(ctx).type == TOKEN_QUESTION) {
+        nextToken(ctx);
+        elementType->typeAnnotation.isNullable = true;
+    }
+
+    while (peekToken(ctx).type == TOKEN_NEWLINE || peekToken(ctx).type == TOKEN_INDENT ||
+           peekToken(ctx).type == TOKEN_DEDENT) {
+        nextToken(ctx);
+    }
+
+    bool hasLength = false;
+    int lengthValue = 0;
+    char* lengthIdentifier = NULL;
+
+    if (peekToken(ctx).type == TOKEN_COMMA) {
+        nextToken(ctx);
+        while (peekToken(ctx).type == TOKEN_NEWLINE || peekToken(ctx).type == TOKEN_INDENT ||
+               peekToken(ctx).type == TOKEN_DEDENT) {
+            nextToken(ctx);
+        }
+
+        Token lengthTok = nextToken(ctx);
+        if (lengthTok.type == TOKEN_NUMBER) {
+            char* text = copy_token_text(ctx, lengthTok);
+            char* endptr = NULL;
+            long parsed = strtol(text, &endptr, 10);
+            if (!text || !endptr || *endptr != '\0' || parsed < 0 || parsed > INT_MAX) {
+                SrcLocation location = {NULL, lengthTok.line, lengthTok.column};
+                report_compile_error(E1006_INVALID_SYNTAX, location,
+                                     "array length must be a non-negative integer literal within range");
+                return NULL;
+            }
+            lengthValue = (int)parsed;
+        } else if (lengthTok.type == TOKEN_IDENTIFIER) {
+            lengthIdentifier = copy_token_text(ctx, lengthTok);
+        } else {
+            SrcLocation location = {NULL, lengthTok.line, lengthTok.column};
+            report_compile_error(E1006_INVALID_SYNTAX, location,
+                                 "expected a constant name or integer literal for the array length");
+            return NULL;
+        }
+
+        hasLength = true;
+
+        while (peekToken(ctx).type == TOKEN_NEWLINE || peekToken(ctx).type == TOKEN_INDENT ||
+               peekToken(ctx).type == TOKEN_DEDENT) {
+            nextToken(ctx);
+        }
+    }
+
+    while (peekToken(ctx).type == TOKEN_NEWLINE || peekToken(ctx).type == TOKEN_INDENT ||
+           peekToken(ctx).type == TOKEN_DEDENT) {
+        nextToken(ctx);
+    }
+
+    Token closeTok = nextToken(ctx);
+    if (closeTok.type != TOKEN_RIGHT_BRACKET) {
+        SrcLocation location = {NULL, closeTok.line, closeTok.column};
+        report_compile_error(E1020_MISSING_BRACKET, location,
+                             "expected ']' to close this array type, but found %s instead.",
+                             token_type_to_string(closeTok.type));
+        return NULL;
+    }
+
+    ASTNode* typeNode = new_node(ctx);
+    typeNode->type = NODE_TYPE;
+    typeNode->typeAnnotation.name = NULL;
+    typeNode->typeAnnotation.isNullable = false;
+    typeNode->typeAnnotation.isArrayType = true;
+    typeNode->typeAnnotation.arrayElementType = elementType;
+    typeNode->typeAnnotation.arrayHasLength = hasLength;
+    typeNode->typeAnnotation.arrayLength = lengthIdentifier ? 0 : lengthValue;
+    typeNode->typeAnnotation.arrayLengthIdentifier = lengthIdentifier;
+    typeNode->location.line = openToken.line;
+    typeNode->location.column = openToken.column;
+    typeNode->dataType = NULL;
+
+    return typeNode;
 }
 
 static ASTNode* build_type_annotation_node(ParserContext* ctx, Token typeTok) {
+    if (typeTok.type == TOKEN_LEFT_BRACKET) {
+        return parse_array_type_annotation(ctx, typeTok);
+    }
+
     if (!token_can_start_type(typeTok.type)) {
         return NULL;
     }
@@ -1504,6 +1618,11 @@ static ASTNode* build_type_annotation_node(ParserContext* ctx, Token typeTok) {
     typeNode->type = NODE_TYPE;
     typeNode->typeAnnotation.name = typeName;
     typeNode->typeAnnotation.isNullable = false;
+    typeNode->typeAnnotation.isArrayType = false;
+    typeNode->typeAnnotation.arrayElementType = NULL;
+    typeNode->typeAnnotation.arrayHasLength = false;
+    typeNode->typeAnnotation.arrayLength = 0;
+    typeNode->typeAnnotation.arrayLengthIdentifier = NULL;
     typeNode->location.line = typeTok.line;
     typeNode->location.column = typeTok.column;
     typeNode->dataType = NULL;
@@ -3086,8 +3205,15 @@ static ASTNode* parseBinaryExpression(ParserContext* ctx, int minPrec) {
             ASTNode* targetType = new_node(ctx);
             targetType->type = NODE_TYPE;
             targetType->typeAnnotation.name = typeName;
+            targetType->typeAnnotation.isNullable = false;
+            targetType->typeAnnotation.isArrayType = false;
+            targetType->typeAnnotation.arrayElementType = NULL;
+            targetType->typeAnnotation.arrayHasLength = false;
+            targetType->typeAnnotation.arrayLength = 0;
+            targetType->typeAnnotation.arrayLengthIdentifier = NULL;
             targetType->location.line = typeToken.line;
             targetType->location.column = typeToken.column;
+            targetType->dataType = NULL;
 
             ASTNode* castNode = new_node(ctx);
             castNode->type = NODE_CAST;
@@ -3359,10 +3485,36 @@ static ASTNode* parsePrimaryExpression(ParserContext* ctx) {
     return parsePostfixExpressions(ctx, node);
 }
 
+static bool is_valid_fill_length_node(const ASTNode* node) {
+    if (!node) {
+        return false;
+    }
+
+    if (node->type == NODE_LITERAL) {
+        Value value = node->literal.value;
+        switch (value.type) {
+            case VAL_I32:
+            case VAL_I64:
+            case VAL_U32:
+            case VAL_U64:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    if (node->type == NODE_IDENTIFIER) {
+        return node->identifier.name != NULL;
+    }
+
+    return false;
+}
+
 static ASTNode* parseArrayLiteral(ParserContext* ctx, Token leftToken) {
     ASTNode** elements = NULL;
     int count = 0;
     int capacity = 0;
+    bool trailingComma = false;
 
     while (peekToken(ctx).type == TOKEN_NEWLINE) {
         nextToken(ctx);
@@ -3389,6 +3541,7 @@ static ASTNode* parseArrayLiteral(ParserContext* ctx, Token leftToken) {
 
             // Allow trailing comma before closing bracket
             if (peekToken(ctx).type == TOKEN_RIGHT_BRACKET) {
+                trailingComma = true;
                 break;
             }
         }
@@ -3401,6 +3554,22 @@ static ASTNode* parseArrayLiteral(ParserContext* ctx, Token leftToken) {
                              "Expected ']' to close this array literal, but found %s instead.",
                              token_type_to_string(close.type));
         return NULL;
+    }
+
+    if (count == 2 && !trailingComma && is_valid_fill_length_node(elements[1])) {
+        ASTNode* node = new_node(ctx);
+        node->type = NODE_ARRAY_FILL;
+        node->arrayFill.value = elements[0];
+        node->arrayFill.lengthExpr = elements[1];
+        node->arrayFill.lengthIdentifier = (elements[1]->type == NODE_IDENTIFIER)
+                                               ? elements[1]->identifier.name
+                                               : NULL;
+        node->arrayFill.hasResolvedLength = false;
+        node->arrayFill.resolvedLength = 0;
+        node->location.line = leftToken.line;
+        node->location.column = leftToken.column;
+        node->dataType = NULL;
+        return node;
     }
 
     ASTNode* node = new_node(ctx);
@@ -4358,36 +4527,24 @@ static ASTNode* parseFunctionType(ParserContext* ctx) {
     
     if (peekToken(ctx).type != TOKEN_RIGHT_PAREN) {
         while (true) {
-            // For function types, we only need the type, not the name
-            Token typeTok = nextToken(ctx);
-            if (typeTok.type != TOKEN_IDENTIFIER && typeTok.type != TOKEN_INT &&
-                typeTok.type != TOKEN_I64 && typeTok.type != TOKEN_U32 &&
-                typeTok.type != TOKEN_U64 && typeTok.type != TOKEN_F64 &&
-                typeTok.type != TOKEN_BOOL && typeTok.type != TOKEN_STRING &&
-                typeTok.type != TOKEN_FN) {
+            ASTNode* paramType = NULL;
+            Token nextTok = peekToken(ctx);
+            if (nextTok.type == TOKEN_FN) {
+                paramType = parseFunctionType(ctx);
+            } else {
+                if (!token_can_start_type(nextTok.type)) {
+                    SrcLocation location = {NULL, nextTok.line, nextTok.column};
+                    report_compile_error(E1006_INVALID_SYNTAX, location,
+                                         "expected a type annotation in function type, but found %s",
+                                         token_type_to_string(nextTok.type));
+                    return NULL;
+                }
+                paramType = parseTypeAnnotation(ctx);
+            }
+            if (!paramType) {
                 return NULL;
             }
-            
-            // Handle nested function types
-            ASTNode* paramType = NULL;
-            if (typeTok.type == TOKEN_FN) {
-                // TODO: Handle nested function types - for now just treat as identifier
-                int typeLen = 2; // "fn"
-                char* typeName = parser_arena_alloc(ctx, typeLen + 1);
-                strcpy(typeName, "fn");
-                paramType = new_node(ctx);
-                paramType->type = NODE_TYPE;
-                paramType->typeAnnotation.name = typeName;
-            } else {
-                int typeLen = typeTok.length;
-                char* typeName = parser_arena_alloc(ctx, typeLen + 1);
-                strncpy(typeName, typeTok.start, typeLen);
-                typeName[typeLen] = '\0';
-                paramType = new_node(ctx);
-                paramType->type = NODE_TYPE;
-                paramType->typeAnnotation.name = typeName;
-            }
-            
+
             // Add parameter to list
             if (paramCount + 1 > paramCapacity) {
                 int newCap = paramCapacity == 0 ? 4 : (paramCapacity * 2);

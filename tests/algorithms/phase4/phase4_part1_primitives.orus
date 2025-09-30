@@ -23,7 +23,7 @@ fn rand_len(max_len: i32) -> i32:
     return rand_range(0, max_len)
 
 fn copy_array(xs):
-    mut out = []
+    mut out: [i32] = []
     mut i: i32 = 0
     while i < len(xs):
         push(out, xs[i])
@@ -31,7 +31,7 @@ fn copy_array(xs):
     return out
 
 fn concat(a, b):
-    mut out = []
+    mut out: [i32] = []
     mut i: i32 = 0
     while i < len(a):
         push(out, a[i])
@@ -43,7 +43,7 @@ fn concat(a, b):
     return out
 
 fn add_k(xs, k: i32):
-    mut out = []
+    mut out: [i32] = []
     mut i: i32 = 0
     while i < len(xs):
         push(out, xs[i] + k)
@@ -51,8 +51,8 @@ fn add_k(xs, k: i32):
     return out
 
 fn split_at(xs, mid: i32):
-    mut left = []
-    mut right = []
+    mut left: [i32] = []
+    mut right: [i32] = []
     mut i: i32 = 0
     while i < len(xs):
         if i < mid:
@@ -60,7 +60,10 @@ fn split_at(xs, mid: i32):
         else:
             push(right, xs[i])
         i = i + 1
-    return [left, right]
+    mut parts: [[i32]] = []
+    push(parts, left)
+    push(parts, right)
+    return parts
 
 srand(1792609982)
 print("rand_u32 sample", rand_u32())

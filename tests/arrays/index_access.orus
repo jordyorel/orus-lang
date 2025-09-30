@@ -4,7 +4,7 @@
 // assignments compile to OP_ARRAY_SET with bounds checking.
 
 print("-- array indexing and assignment --")
-mut values = [10, 20, 30]
+values: [i32, 3] = [10, 20, 30]
 
 first = values[0]
 second = values[1]

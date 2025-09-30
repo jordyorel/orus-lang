@@ -56,6 +56,7 @@ typedef enum {
     NODE_IDENTIFIER,
     NODE_LITERAL,
     NODE_ARRAY_LITERAL,
+    NODE_ARRAY_FILL,
     NODE_INDEX_ACCESS,
     NODE_BINARY,
     NODE_ASSIGN,
@@ -151,6 +152,13 @@ struct ASTNode {
             int count;
         } arrayLiteral;
         struct {
+            ASTNode* value;
+            ASTNode* lengthExpr;
+            char* lengthIdentifier;
+            bool hasResolvedLength;
+            int resolvedLength;
+        } arrayFill;
+        struct {
             ASTNode* array;
             ASTNode* index;
             bool isStringIndex;
@@ -228,6 +236,11 @@ struct ASTNode {
         struct {
             char* name;
             bool isNullable;
+            bool isArrayType;
+            ASTNode* arrayElementType;
+            bool arrayHasLength;
+            int arrayLength;
+            char* arrayLengthIdentifier;
         } typeAnnotation;
         struct {
             char* label;

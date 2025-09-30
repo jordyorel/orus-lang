@@ -22,6 +22,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 #include "internal/strutil.h"
 
 #include "compiler/ast.h"
@@ -93,6 +94,67 @@ static Variant* lookup_enum_variant(Type* enum_type, const char* variant_name, i
     }
 
     return NULL;
+}
+
+static bool literal_to_int32(const ASTNode* node, int* outValue) {
+    if (!node || node->type != NODE_LITERAL) {
+        return false;
+    }
+
+    Value value = node->literal.value;
+    switch (value.type) {
+        case VAL_I32:
+            if (outValue) {
+                *outValue = AS_I32(value);
+            }
+            return true;
+        case VAL_I64: {
+            int64_t v = AS_I64(value);
+            if (v < INT_MIN || v > INT_MAX) {
+                return false;
+            }
+            if (outValue) {
+                *outValue = (int)v;
+            }
+            return true;
+        }
+        case VAL_U32: {
+            uint32_t v = AS_U32(value);
+            if (v > (uint32_t)INT_MAX) {
+                return false;
+            }
+            if (outValue) {
+                *outValue = (int)v;
+            }
+            return true;
+        }
+        case VAL_U64: {
+            uint64_t v = AS_U64(value);
+            if (v > (uint64_t)INT_MAX) {
+                return false;
+            }
+            if (outValue) {
+                *outValue = (int)v;
+            }
+            return true;
+        }
+        default:
+            return false;
+    }
+}
+
+static bool literal_to_non_negative_int(const ASTNode* node, int* outValue) {
+    int temp = 0;
+    if (!literal_to_int32(node, &temp)) {
+        return false;
+    }
+    if (temp < 0) {
+        return false;
+    }
+    if (outValue) {
+        *outValue = temp;
+    }
+    return true;
 }
 
 static const char* get_enum_type_name(Type* enum_type) {
@@ -459,10 +521,17 @@ typedef struct TypeEnvEntry {
     struct TypeEnvEntry* next;
 } TypeEnvEntry;
 
+typedef struct ConstIntEntry {
+    char* name;
+    int value;
+    struct ConstIntEntry* next;
+} ConstIntEntry;
+
 typedef struct TypeEnv {
     TypeEnvEntry* entries;
     struct TypeEnv* parent;
     Type* expected_return_type;
+    ConstIntEntry* const_ints;
 } TypeEnv;
 
 TypeEnv* type_env_new(TypeEnv* parent) {
@@ -471,6 +540,7 @@ TypeEnv* type_env_new(TypeEnv* parent) {
     env->entries = NULL;
     env->parent = parent;
     env->expected_return_type = parent ? parent->expected_return_type : NULL;
+    env->const_ints = NULL;
     if (!parent) {
         register_builtin_functions(env);
         register_builtin_enums();
@@ -515,6 +585,43 @@ static TypeScheme* type_env_lookup(TypeEnv* env, const char* name) {
     }
 
     return env->parent ? type_env_lookup(env->parent, name) : NULL;
+}
+
+static void type_env_define_const_int(TypeEnv* env, const char* name, int value) {
+    if (!env || !name) {
+        return;
+    }
+
+    ConstIntEntry* entry = type_arena_alloc(sizeof(ConstIntEntry));
+    if (!entry) {
+        return;
+    }
+
+    size_t nameLen = strlen(name);
+    entry->name = type_arena_alloc(nameLen + 1);
+    if (!entry->name) {
+        return;
+    }
+    memcpy(entry->name, name, nameLen + 1);
+    entry->value = value;
+    entry->next = env->const_ints;
+    env->const_ints = entry;
+}
+
+static bool type_env_lookup_const_int(TypeEnv* env, const char* name, int* outValue) {
+    for (TypeEnv* current = env; current; current = current->parent) {
+        ConstIntEntry* entry = current->const_ints;
+        while (entry) {
+            if (strcmp(entry->name, name) == 0) {
+                if (outValue) {
+                    *outValue = entry->value;
+                }
+                return true;
+            }
+            entry = entry->next;
+        }
+    }
+    return false;
 }
 
 // ---- Type Schemes ----
@@ -1194,7 +1301,50 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                 element_type = getPrimitiveType(TYPE_ANY);
             }
 
-            return createArrayType(element_type);
+            return createSizedArrayType(element_type, node->arrayLiteral.count);
+        }
+        case NODE_ARRAY_FILL: {
+            if (!node->arrayFill.value || !node->arrayFill.lengthExpr) {
+                set_type_error();
+                return NULL;
+            }
+
+            Type* element_type = algorithm_w(env, node->arrayFill.value);
+            if (!element_type) {
+                return NULL;
+            }
+
+            int length = 0;
+            bool resolved = literal_to_non_negative_int(node->arrayFill.lengthExpr, &length);
+
+            if (!resolved && node->arrayFill.lengthExpr->type == NODE_IDENTIFIER) {
+                const char* name = node->arrayFill.lengthExpr->identifier.name;
+                if (!name || !type_env_lookup_const_int(env, name, &length)) {
+                    report_undefined_variable(node->arrayFill.lengthExpr->location,
+                                              name ? name : "<length>");
+                    set_type_error();
+                    return NULL;
+                }
+                if (length < 0) {
+                    report_compile_error(E1006_INVALID_SYNTAX, node->arrayFill.lengthExpr->location,
+                                         "array length must be a non-negative constant");
+                    set_type_error();
+                    return NULL;
+                }
+                resolved = true;
+            }
+
+            if (!resolved) {
+                report_compile_error(E1006_INVALID_SYNTAX, node->arrayFill.lengthExpr->location,
+                                     "array fill length must be a compile-time constant integer");
+                set_type_error();
+                return NULL;
+            }
+
+            node->arrayFill.hasResolvedLength = true;
+            node->arrayFill.resolvedLength = length;
+
+            return createSizedArrayType(element_type, length);
         }
         case NODE_STRUCT_LITERAL: {
             if (!node->structLiteral.structName) {
@@ -1721,6 +1871,13 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                 }
             }
 
+            if (node->varDecl.isConst && node->varDecl.name && node->varDecl.initializer) {
+                int constValue = 0;
+                if (literal_to_int32(node->varDecl.initializer, &constValue)) {
+                    type_env_define_const_int(env, node->varDecl.name, constValue);
+                }
+            }
+
             return getPrimitiveType(TYPE_VOID);
         }
         case NODE_ASSIGN: {
@@ -2013,6 +2170,40 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             return void_type;
         }
         case NODE_TYPE: {
+            if (node->typeAnnotation.isArrayType) {
+                if (!node->typeAnnotation.arrayElementType) {
+                    set_type_error();
+                    return NULL;
+                }
+
+                Type* element_type = algorithm_w(env, node->typeAnnotation.arrayElementType);
+                if (!element_type) {
+                    return NULL;
+                }
+
+                if (node->typeAnnotation.arrayHasLength) {
+                    int length = node->typeAnnotation.arrayLength;
+                    if (node->typeAnnotation.arrayLengthIdentifier) {
+                        if (!type_env_lookup_const_int(env, node->typeAnnotation.arrayLengthIdentifier, &length)) {
+                            report_undefined_variable(node->location, node->typeAnnotation.arrayLengthIdentifier);
+                            set_type_error();
+                            return NULL;
+                        }
+                    }
+
+                    if (length < 0) {
+                        report_compile_error(E1006_INVALID_SYNTAX, node->location,
+                                             "array length must be a non-negative constant");
+                        set_type_error();
+                        return NULL;
+                    }
+
+                    return createSizedArrayType(element_type, length);
+                }
+
+                return createArrayType(element_type);
+            }
+
             if (!node->typeAnnotation.name) {
                 return getPrimitiveType(TYPE_UNKNOWN);
             }
@@ -3290,6 +3481,14 @@ void populate_ast_types(ASTNode* node, TypeEnv* env) {
                 populate_ast_types(node->arrayLiteral.elements[i], env);
             }
             break;
+        case NODE_ARRAY_FILL:
+            if (node->arrayFill.value) {
+                populate_ast_types(node->arrayFill.value, env);
+            }
+            if (node->arrayFill.lengthExpr) {
+                populate_ast_types(node->arrayFill.lengthExpr, env);
+            }
+            break;
         case NODE_ARRAY_SLICE:
             if (node->arraySlice.array) {
                 populate_ast_types(node->arraySlice.array, env);
@@ -3740,6 +3939,25 @@ static TypedASTNode* generate_typed_ast_recursive(ASTNode* ast, TypeEnv* type_en
                     }
                 }
             }
+            break;
+        case NODE_ARRAY_FILL:
+            if (ast->arrayFill.value) {
+                typed->typed.arrayFill.value = generate_typed_ast_recursive(ast->arrayFill.value, type_env);
+                if (!typed->typed.arrayFill.value) {
+                    free_typed_ast_node(typed);
+                    return NULL;
+                }
+            }
+            if (ast->arrayFill.lengthExpr) {
+                typed->typed.arrayFill.lengthExpr = generate_typed_ast_recursive(ast->arrayFill.lengthExpr, type_env);
+                if (!typed->typed.arrayFill.lengthExpr) {
+                    free_typed_ast_node(typed->typed.arrayFill.value);
+                    free_typed_ast_node(typed);
+                    return NULL;
+                }
+            }
+            typed->typed.arrayFill.resolvedLength =
+                ast->arrayFill.hasResolvedLength ? ast->arrayFill.resolvedLength : 0;
             break;
         case NODE_INDEX_ACCESS:
             typed->typed.indexAccess.array = generate_typed_ast_recursive(ast->indexAccess.array, type_env);
