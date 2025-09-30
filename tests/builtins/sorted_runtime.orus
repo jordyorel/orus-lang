@@ -29,17 +29,17 @@ fn assert_bool(label, condition):
         zero: i32 = 0
         _ = 1 / zero
 
-ints = [5, 1, 4, 2, 3]
+ints: i32 = [5, 1, 4, 2, 3]
 ints_sorted = sorted(ints)
 assert_array("i32 sorted", ints_sorted, [1, 2, 3, 4, 5])
 assert_array("i32 original untouched", ints, [5, 1, 4, 2, 3])
 assert_array("i32 idempotent", sorted(ints_sorted), [1, 2, 3, 4, 5])
 
-bools = [true, false, true, false]
+bools: bool = [true, false, true, false]
 bools_sorted = sorted(bools)
 assert_array("bool sorted", bools_sorted, [false, false, true, true])
 
-strings = ["pear", "apple", "banana", "apple"]
+strings: string = ["pear", "apple", "banana", "apple"]
 strings_sorted = sorted(strings)
 assert_array("string sorted", strings_sorted, ["apple", "apple", "banana", "pear"])
 
