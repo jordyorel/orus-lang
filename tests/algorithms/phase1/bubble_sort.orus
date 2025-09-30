@@ -49,5 +49,5 @@ print("duplicates =>", bubble_sort("duplicates", duplicates), "expected", expect
 single = [42]
 print("single =>", bubble_sort("single", single), "expected", single)
 
-empty = []
+empty: [i32] = []
 print("empty =>", bubble_sort("empty", empty), "expected", [])

@@ -112,5 +112,5 @@ assert_sorted("negatives", heap_sort("negatives", negatives), expected_negatives
 single = [42]
 assert_sorted("single", heap_sort("single", single), single)
 
-empty = []
+empty: [i32] = []
 assert_sorted("empty", heap_sort("empty", empty), [])

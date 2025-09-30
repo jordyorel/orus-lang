@@ -19,7 +19,7 @@ global mut SUDOKU_CONFLICT_CHECKS = 0
 global mut SUDOKU_BACKTRACKS = 0
 global mut SUDOKU_DEAD_ENDS = 0
 global mut SUDOKU_SOLUTIONS = 0
-global mut SUDOKU_LAST_SOLUTION = []
+global mut SUDOKU_LAST_SOLUTION: [i32] = []
 
 fn reset_sudoku_metrics():
     SUDOKU_CALLS = 0
@@ -35,7 +35,7 @@ fn reset_sudoku_metrics():
     SUDOKU_LAST_SOLUTION = []
 
 fn copy_board(board):
-    mut copy = []
+    mut copy: [i32] = []
     mut idx: i32 = 0
     limit: i32 = len(board)
     while idx < limit:
@@ -55,7 +55,7 @@ fn boards_equal(first, second) -> bool:
     return true
 
 fn init_seen():
-    mut seen = []
+    mut seen: [bool] = []
     mut idx: i32 = 0
     while idx <= SUDOKU_SIZE:
         push(seen, false)
@@ -71,12 +71,12 @@ fn sudoku_mark_seen(seen, value: i32) -> bool:
     return true
 
 fn board_rows_snapshot(board):
-    mut rows = []
+    mut rows: [[i32]] = []
     if len(board) != SUDOKU_CELL_COUNT:
         return rows
     mut row: i32 = 0
     while row < SUDOKU_SIZE:
-        mut row_values = []
+        mut row_values: [i32] = []
         mut col: i32 = 0
         while col < SUDOKU_SIZE:
             push(row_values, board[row * SUDOKU_SIZE + col])
@@ -242,7 +242,7 @@ fn solve_sudoku(board) -> i32:
     return solve_sudoku_inner(board, 0)
 
 fn flatten_rows(row0, row1, row2, row3, row4, row5, row6, row7, row8):
-    mut board = []
+    mut board: [i32] = []
 
     mut idx: i32 = 0
     while idx < len(row0):

@@ -147,6 +147,12 @@ TypedASTNode* create_typed_ast_node(ASTNode* original) {
             typed->typed.arrayLiteral.elements = NULL;
             typed->typed.arrayLiteral.count = 0;
             break;
+        case NODE_ARRAY_FILL:
+            typed->typed.arrayFill.value = NULL;
+            typed->typed.arrayFill.lengthExpr = NULL;
+            typed->typed.arrayFill.resolvedLength =
+                original->arrayFill.hasResolvedLength ? original->arrayFill.resolvedLength : 0;
+            break;
         case NODE_INDEX_ACCESS:
             typed->typed.indexAccess.array = NULL;
             typed->typed.indexAccess.index = NULL;
@@ -350,6 +356,10 @@ void free_typed_ast_node(TypedASTNode* node) {
                 }
                 free(node->typed.arrayLiteral.elements);
             }
+            break;
+        case NODE_ARRAY_FILL:
+            free_typed_ast_node(node->typed.arrayFill.value);
+            free_typed_ast_node(node->typed.arrayFill.lengthExpr);
             break;
         case NODE_INDEX_ACCESS:
             free_typed_ast_node(node->typed.indexAccess.array);

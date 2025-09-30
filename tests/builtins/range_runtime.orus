@@ -1,7 +1,7 @@
 print("-- builtin range runtime validation --")
 
 fn collect_i32(iter):
-    mut out = []
+    mut out: [i32] = []
     for value in iter:
         push(out, value as i32)
     return out

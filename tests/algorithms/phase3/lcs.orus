@@ -68,10 +68,10 @@ fn build_lcs_dp_table(seq_a, seq_b):
     len_a: i32 = len(seq_a)
     len_b: i32 = len(seq_b)
 
-    mut dp = []
+    mut dp: [[i32]] = []
     mut row_index: i32 = 0
     while row_index <= len_a:
-        mut row = []
+        mut row: [i32] = []
         mut col_index: i32 = 0
         while col_index <= len_b:
             push(row, 0)
@@ -107,7 +107,7 @@ fn build_lcs_dp_table(seq_a, seq_b):
 fn reconstruct_lcs(seq_a, seq_b, dp):
     mut i: i32 = len(seq_a)
     mut j: i32 = len(seq_b)
-    mut reversed = []
+    mut reversed: [i32] = []
 
     while i > 0 and j > 0:
         if seq_a[i - 1] == seq_b[j - 1]:
@@ -122,7 +122,7 @@ fn reconstruct_lcs(seq_a, seq_b, dp):
             else:
                 j = j - 1
 
-    mut result = []
+    mut result: [i32] = []
     mut idx: i32 = len(reversed) - 1
     while idx >= 0:
         push(result, reversed[idx])
@@ -153,7 +153,7 @@ fn code_to_label(code: i32) -> string:
     return "?"
 
 fn codes_to_labels(seq):
-    labels = []
+    mut labels: [string] = []
     mut idx: i32 = 0
     while idx < len(seq):
         push(labels, code_to_label(seq[idx]))
@@ -225,7 +225,7 @@ run_case("prefix_overlap", prefix_overlap_a, prefix_overlap_b, 4, prefix_expecte
 
 no_overlap_a = [LETTER_A, LETTER_B, LETTER_C]
 no_overlap_b = [LETTER_X, LETTER_Y, LETTER_Z]
-empty_expected = []
+empty_expected: [i32] = []
 run_case("no_overlap", no_overlap_a, no_overlap_b, 0, empty_expected, true)
 
 repeat_chars_a = [LETTER_A, LETTER_A, LETTER_B, LETTER_A]

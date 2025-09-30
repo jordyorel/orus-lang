@@ -26,7 +26,7 @@ fn rand_len(max_len: i32) -> i32:
 
 // ---------- Common helpers ----------
 fn copy_array(xs):
-    mut out = []
+    mut out: [string] = []
     mut i: i32 = 0
     while i < len(xs):
         push(out, xs[i])
@@ -40,7 +40,7 @@ fn swap(xs, i: i32, j: i32):
 
 // Pool of ASCII-safe glyphs for deterministic generation.
 fn build_ascii_pool():
-    mut pool = []
+    mut pool: [string] = []
     push(pool, "a")
     push(pool, "b")
     push(pool, "c")
@@ -126,7 +126,7 @@ fn rand_ascii_char():
 
 fn rand_ascii_chars(max_len: i32):
     L: i32 = rand_len(max_len)
-    mut out = []
+    mut out: [string] = []
     mut i: i32 = 0
     while i < L:
         push(out, rand_ascii_char())
@@ -143,7 +143,7 @@ fn string_from_chars(chars) -> string:
 
 fn generate_segments(max_segments: i32, max_len: i32):
     count: i32 = rand_range(1, max_segments)
-    mut segments = []
+    mut segments: [[string]] = []
     mut i: i32 = 0
     while i < count:
         push(segments, rand_ascii_chars(max_len))
@@ -151,7 +151,7 @@ fn generate_segments(max_segments: i32, max_len: i32):
     return segments
 
 fn segments_to_strings(segments):
-    mut out = []
+    mut out: [string] = []
     mut i: i32 = 0
     while i < len(segments):
         push(out, string_from_chars(segments[i]))
@@ -183,7 +183,7 @@ fn join_range(segments, start: i32, end: i32):
     return out
 
 fn flatten_char_parts(segments):
-    mut flat = []
+    mut flat: [string] = []
     mut i: i32 = 0
     while i < len(segments):
         segment = segments[i]
@@ -247,7 +247,7 @@ fn right_associative_concat(segments) -> string:
     return out
 
 fn copy_nested_array(xs):
-    mut out = []
+    mut out: [[string]] = []
     mut i: i32 = 0
     while i < len(xs):
         push(out, copy_array(xs[i]))
@@ -271,7 +271,7 @@ fn slice_chars_from_parts(segments, start: i32, length: i32):
     if length <= 0: return []
     mut remaining_start: i32 = start
     mut collected: i32 = 0
-    mut out = []
+    mut out: [string] = []
     mut idx: i32 = 0
     while idx < len(segments) and collected < length:
         segment = segments[idx]
@@ -294,7 +294,7 @@ fn manual_slice_from_segments(segments, start: i32, length: i32) -> string:
 
 fn slice_chars_from_flat(flat_chars, start: i32, length: i32):
     if length <= 0: return []
-    mut out = []
+    mut out: [string] = []
     mut i: i32 = 0
     while i < length:
         actual: i32 = start + i

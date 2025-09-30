@@ -8,7 +8,7 @@ global mut MERGE_MAX_DEPTH = 0
 
 fn merge(left, right):
     MERGE_MERGES = MERGE_MERGES + 1
-    mut result = []
+    mut result: [i32] = []
     mut i = 0
     mut j = 0
 
@@ -88,5 +88,5 @@ assert_sorted("duplicates", merge_sort("duplicates", duplicates), expected_dupli
 single = [42]
 assert_sorted("single", merge_sort("single", single), single)
 
-empty = []
+empty: [i32] = []
 assert_sorted("empty", merge_sort("empty", empty), [])

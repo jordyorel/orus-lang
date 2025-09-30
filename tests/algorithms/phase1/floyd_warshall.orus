@@ -7,11 +7,11 @@ print("== Phase 2: Floyd-Warshall All-Pairs Shortest Paths Smoke ==")
 global mut FLOYD_RELAXATIONS = 0
 
 fn clone_matrix(matrix, dimension):
-    mut result = []
+    mut result: [[i32]] = []
     mut i = 0
     while i < dimension:
         source_row = matrix[i]
-        mut copy = []
+        mut copy: [i32] = []
         mut j = 0
         while j < dimension:
             push(copy, source_row[j])
@@ -67,30 +67,30 @@ fn assert_matrix(label, observed, expected, dimension):
 infinity = 999999
 
 fn make_dense_matrix(infinity):
-    mut matrix = []
+    mut matrix: [[i32]] = []
 
-    mut row0 = []
+    mut row0: [i32] = []
     push(row0, 0)
     push(row0, 3)
     push(row0, infinity)
     push(row0, 7)
     push(matrix, row0)
 
-    mut row1 = []
+    mut row1: [i32] = []
     push(row1, 8)
     push(row1, 0)
     push(row1, 2)
     push(row1, infinity)
     push(matrix, row1)
 
-    mut row2 = []
+    mut row2: [i32] = []
     push(row2, 5)
     push(row2, infinity)
     push(row2, 0)
     push(row2, 1)
     push(matrix, row2)
 
-    mut row3 = []
+    mut row3: [i32] = []
     push(row3, 2)
     push(row3, infinity)
     push(row3, infinity)
@@ -100,30 +100,30 @@ fn make_dense_matrix(infinity):
     return matrix
 
 fn make_dense_expected():
-    mut expected = []
+    mut expected: [[i32]] = []
 
-    mut row0 = []
+    mut row0: [i32] = []
     push(row0, 0)
     push(row0, 3)
     push(row0, 5)
     push(row0, 6)
     push(expected, row0)
 
-    mut row1 = []
+    mut row1: [i32] = []
     push(row1, 5)
     push(row1, 0)
     push(row1, 2)
     push(row1, 3)
     push(expected, row1)
 
-    mut row2 = []
+    mut row2: [i32] = []
     push(row2, 3)
     push(row2, 6)
     push(row2, 0)
     push(row2, 1)
     push(expected, row2)
 
-    mut row3 = []
+    mut row3: [i32] = []
     push(row3, 2)
     push(row3, 5)
     push(row3, 7)
@@ -139,21 +139,21 @@ dense_expected = make_dense_expected()
 assert_matrix("dense_fixture", floyd_warshall("dense_fixture", dense_matrix, dense_dimension, infinity), dense_expected, dense_dimension)
 
 fn make_disconnected_matrix(infinity):
-    mut matrix = []
+    mut matrix: [[i32]] = []
 
-    mut row0 = []
+    mut row0: [i32] = []
     push(row0, 0)
     push(row0, infinity)
     push(row0, infinity)
     push(matrix, row0)
 
-    mut row1 = []
+    mut row1: [i32] = []
     push(row1, infinity)
     push(row1, 0)
     push(row1, 4)
     push(matrix, row1)
 
-    mut row2 = []
+    mut row2: [i32] = []
     push(row2, infinity)
     push(row2, infinity)
     push(row2, 0)
@@ -162,21 +162,21 @@ fn make_disconnected_matrix(infinity):
     return matrix
 
 fn make_disconnected_expected(infinity):
-    mut expected = []
+    mut expected: [[i32]] = []
 
-    mut row0 = []
+    mut row0: [i32] = []
     push(row0, 0)
     push(row0, infinity)
     push(row0, infinity)
     push(expected, row0)
 
-    mut row1 = []
+    mut row1: [i32] = []
     push(row1, infinity)
     push(row1, 0)
     push(row1, 4)
     push(expected, row1)
 
-    mut row2 = []
+    mut row2: [i32] = []
     push(row2, infinity)
     push(row2, infinity)
     push(row2, 0)

@@ -55,8 +55,8 @@ fn run_fib_memo(label, n: i32) -> i32:
     FIB_MEMO_CACHE_HITS = 0
     FIB_MEMO_CACHE_WRITES = 0
 
-    cache_values = []
-    cache_filled = []
+    mut cache_values: [i32] = []
+    mut cache_filled: [bool] = []
     mut i: i32 = 0
     limit: i32 = n
     while i <= limit:

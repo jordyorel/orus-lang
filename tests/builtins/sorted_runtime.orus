@@ -43,24 +43,24 @@ strings: string = ["pear", "apple", "banana", "apple"]
 strings_sorted = sorted(strings)
 assert_array("string sorted", strings_sorted, ["apple", "apple", "banana", "pear"])
 
-mut floats: f64 = [3.5, -2.0, 3.5, 0.0]
+floats = [3.5, -2.0, 3.5, 0.0]
 floats_sorted = sorted(floats)
 assert_array("f64 sorted", floats_sorted, [-2.0, 0.0, 3.5, 3.5])
 assert_array("f64 original untouched", floats, [3.5, -2.0, 3.5, 0.0])
 
-i64_values: i64 = [5, -7, 0, 12]
+i64_values: [i64, 4] = [5 as i64, -7 as i64, 0 as i64, 12 as i64]
 i64_sorted = sorted(i64_values)
-assert_array("i64 sorted", i64_sorted, [-7, 0, 5, 12])
+assert_array("i64 sorted", i64_sorted, [-7 as i64, 0 as i64, 5 as i64, 12 as i64])
 
-u32_values: u32 = [9, 4, 6, 6]
+u32_values: [u32, 4] = [9 as u32, 4 as u32, 6 as u32, 6 as u32]
 u32_sorted = sorted(u32_values)
-assert_array("u32 sorted", u32_sorted, [4, 6, 6, 9])
+assert_array("u32 sorted", u32_sorted, [4 as u32, 6 as u32, 6 as u32, 9 as u32])
 
-u64_values: u64 = [7, 1, 12, 3]
+u64_values: [u64, 4] = [7 as u64, 1 as u64, 12 as u64, 3 as u64]
 u64_sorted = sorted(u64_values)
-assert_array("u64 sorted", u64_sorted, [1, 3, 7, 12])
+assert_array("u64 sorted", u64_sorted, [1 as u64, 3 as u64, 7 as u64, 12 as u64])
 
-empty = []
+empty: [i32] = []
 empty_sorted = sorted(empty)
 assert_array("empty sorted", empty_sorted, [])
 assert_bool("empty identical instance", len(empty) == len(empty_sorted))

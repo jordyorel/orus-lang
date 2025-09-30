@@ -16,7 +16,7 @@ fn topological_sort(label, graph):
     TOPO_MAX_QUEUE = 0
 
     node_count = len(graph)
-    indegree = []
+    mut indegree: [i32] = []
     mut zero_index = 0
     while zero_index < node_count:
         push(indegree, 0)
@@ -33,7 +33,7 @@ fn topological_sort(label, graph):
             j = j + 1
         i = i + 1
 
-    queue = []
+    mut queue: [i32] = []
     mut front = 0
     mut node = 0
     while node < node_count:
@@ -43,7 +43,7 @@ fn topological_sort(label, graph):
         node = node + 1
     TOPO_MAX_QUEUE = len(queue) - front
 
-    order = []
+    mut order: [i32] = []
     while front < len(queue):
         current = queue[front]
         front = front + 1
@@ -96,31 +96,31 @@ fn assert_sequence(label, observed, expected):
         print("FAIL", label, "=>", observed, "expected", expected)
 
 fn make_dag_linear():
-    mut graph = []
+    mut graph: [[i32]] = []
 
-    mut row0 = []
+    mut row0: [i32] = []
     push(row0, 1)
     push(row0, 2)
     push(graph, row0)
 
-    mut row1 = []
+    mut row1: [i32] = []
     push(row1, 3)
     push(graph, row1)
 
-    mut row2 = []
+    mut row2: [i32] = []
     push(row2, 3)
     push(row2, 4)
     push(graph, row2)
 
-    mut row3 = []
+    mut row3: [i32] = []
     push(row3, 5)
     push(graph, row3)
 
-    mut row4 = []
+    mut row4: [i32] = []
     push(row4, 5)
     push(graph, row4)
 
-    mut row5 = []
+    mut row5: [i32] = []
     push(graph, row5)
 
     return graph
@@ -132,30 +132,30 @@ expected_order = [0, 1, 2, 3, 4, 5]
 assert_sequence("dag_linear", topological_sort("dag_linear", dag), expected_order)
 
 fn make_multiple_roots():
-    mut graph = []
+    mut graph: [[i32]] = []
 
-    mut row0 = []
+    mut row0: [i32] = []
     push(row0, 3)
     push(graph, row0)
 
-    mut row1 = []
+    mut row1: [i32] = []
     push(row1, 3)
     push(row1, 4)
     push(graph, row1)
 
-    mut row2 = []
+    mut row2: [i32] = []
     push(row2, 4)
     push(graph, row2)
 
-    mut row3 = []
+    mut row3: [i32] = []
     push(row3, 5)
     push(graph, row3)
 
-    mut row4 = []
+    mut row4: [i32] = []
     push(row4, 5)
     push(graph, row4)
 
-    mut row5 = []
+    mut row5: [i32] = []
     push(graph, row5)
 
     return graph
@@ -166,32 +166,32 @@ expected_multiple = [0, 1, 2, 3, 4, 5]
 assert_sequence("multiple_roots", topological_sort("multiple_roots", multiple_roots), expected_multiple)
 
 fn make_wide_dag():
-    mut graph = []
+    mut graph: [[i32]] = []
 
-    mut row0 = []
+    mut row0: [i32] = []
     push(row0, 2)
     push(row0, 3)
     push(row0, 4)
     push(graph, row0)
 
-    mut row1 = []
+    mut row1: [i32] = []
     push(row1, 2)
     push(row1, 4)
     push(graph, row1)
 
-    mut row2 = []
+    mut row2: [i32] = []
     push(row2, 5)
     push(graph, row2)
 
-    mut row3 = []
+    mut row3: [i32] = []
     push(row3, 5)
     push(graph, row3)
 
-    mut row4 = []
+    mut row4: [i32] = []
     push(row4, 5)
     push(graph, row4)
 
-    mut row5 = []
+    mut row5: [i32] = []
     push(graph, row5)
 
     return graph

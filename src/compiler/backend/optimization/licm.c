@@ -414,6 +414,16 @@ static void collect_loop_metadata(TypedASTNode* node,
                                              mutated,
                                              mutation_counts);
             break;
+        case NODE_ARRAY_FILL:
+            collect_loop_metadata(node->typed.arrayFill.value,
+                                  locals,
+                                  mutated,
+                                  mutation_counts);
+            collect_loop_metadata(node->typed.arrayFill.lengthExpr,
+                                  locals,
+                                  mutated,
+                                  mutation_counts);
+            break;
         case NODE_INDEX_ACCESS:
             collect_loop_metadata(node->typed.indexAccess.array,
                                  locals,
