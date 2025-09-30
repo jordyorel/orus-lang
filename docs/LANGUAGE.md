@@ -146,23 +146,33 @@ print("Pi ~= @.2f", pi)
 ```
 
 ### Arrays
-- Array literals use brackets: `values = [1, 2, 3]`. Trailing commas are allowed.
-- Indexing uses `array[index]`. Slices create new arrays with `array[start..end]` and treat `end` as inclusive. Passing the
-  array length as the end bound (or omitting it) includes the last element.
+- Fixed-length arrays use `[Type, Length]` annotations. The compiler enforces that `Length` is a compile-time constant.
+- Dynamic arrays declare only the element type: `[Type]`. They start empty (`[]`) and grow via built-ins.
+- When a literal omits an annotation (`values = [1, 2, 3]`) the compiler infers a fixed-length array whose length matches the
+  number of elements.
+- Array fill expressions `[value, Length]` create a fixed-length array with every slot set to `value`. `Length` must be known at
+  compile time.
+- Indexing uses `array[index]`. Slices use `array[start..end]` with an exclusive end bound; omitting the start or end slices from
+  the beginning or to the end respectively.
 - Built-ins:
   - `len(array)` returns an `i32` length.
-  - `push(array, value)` appends in place and returns the array.
-  - `pop(array)` removes and returns the last element.
+  - `push(array, value)` appends in place and returns the dynamic array.
+  - `pop(array)` removes and returns the last element of a dynamic array.
 
 ```orus
-mut numbers = []
+// Fixed-length array. Mark the binding as `mut` when you need to mutate elements.
+mut nums: [i32, 3] = [1, 2, 3]
+nums[1] = 20
+slice = nums[0..2]          // indices 0 and 1
+
+// Dynamic array with typed annotation
+mut numbers: [i32] = []
 push(numbers, 1)
 push(numbers, 2)
-push(numbers, 3)
-print(len(numbers))        // 3
-last = pop(numbers)
-print("popped", last)
-window = numbers[0..1]          // includes indices 0 and 1
+print(len(numbers))         // 2
+
+// Compile-time fill expression
+zeros: [i32, 4] = [0, 4]
 ```
 
 ### Control Flow

@@ -108,7 +108,7 @@ combined = "a" + " :: " + "b" + " :: " + "c"
 score = 98
 report = "Score: " + (score as string)
 
-mut log = []
+mut log: [string] = []
 push(log, "start")
 push(log, "stop")
 history = " | ".join(log) // once join() lands
@@ -180,21 +180,30 @@ for item in values:
 ```
 
 ## 7. Arrays in Practice
-- Literal syntax: `[]` or `[expr, expr, ...]`. Trailing commas are fine.
-- `len(array)` returns an `i32` length.
-- `push(array, value)` appends and returns the array.
-- `pop(array)` removes and returns the last element.
-- Slices use `array[start..end]` with an inclusive end index. Passing the array length (or omitting the bound) includes the
-  final element.
+- Fixed-length arrays annotate both the element type and length using `[Type, Length]`.
+- Dynamic arrays specify only the element type (`[Type]`) and grow with `push`/`pop`.
+- Trailing commas remain legal in literals. Omitting an annotation (`values = [1, 2, 3]`) creates a fixed-length array inferred
+  from the literal's length.
+- Array fill expressions `[value, Length]` require a compile-time `Length`.
+- Slices use `array[start..end]` with an exclusive upper bound.
+- Standard helpers: `len(array)`, `push(array, value)`, and `pop(array)`.
 
 ```orus
-mut numbers = []
+// Fixed-length array with element mutation
+mut nums: [i32, 3] = [1, 2, 3]
+nums[1] = 42
+print("slice", nums[0..2])
+
+// Dynamic array
+mut numbers: [i32] = []
 push(numbers, 1)
 push(numbers, 2)
-push(numbers, 3)
 print("len", len(numbers))
 print("pop", pop(numbers))
-print("slice", numbers[0..1])
+
+// Compile-time fill expression
+const SIZE = 4
+zeros: [i32, SIZE] = [0, SIZE]
 ```
 
 ## 8. Functions and Higher-Order Code
@@ -384,7 +393,7 @@ module diagnostics.report:
         values: [i32]
 
     pub fn collect(limit: i32) -> Sample:
-        mut data = []
+        mut data: [i32] = []
         for n in 0..=limit:
             if n % 2 == 0:
                 push(data, n)
