@@ -5,7 +5,7 @@ ITERATIONS: i64 = 1_000_000
 ARRAY_LENGTH: i64 = 128
 REPEATS: i32 = 1024
 
-mut seed_values = []
+mut seed_values: [i64] = []
 mut fill_index: i64 = 0
 while fill_index < ARRAY_LENGTH:
     push(seed_values, fill_index)

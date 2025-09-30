@@ -9,7 +9,7 @@ global mut DFS_EDGES_EXPLORED = 0
 global mut DFS_MAX_DEPTH = 0
 
 fn make_bool_array(count):
-    mut result = []
+    mut result: [bool] = []
     mut i = 0
     while i < count:
         push(result, false)
@@ -25,7 +25,7 @@ fn dfs_visit(graph, node, depth, visited, order):
 
     neighbors = graph[node]
     neighbor_count = len(neighbors)
-    mut snapshot = []
+    mut snapshot: [i32] = []
     mut copy_index = 0
     while copy_index < neighbor_count:
         push(snapshot, neighbors[copy_index])
@@ -45,7 +45,7 @@ fn depth_first_search(label, graph, start):
     DFS_MAX_DEPTH = 0
 
     visited = make_bool_array(len(graph))
-    order = []
+    mut order: [i32] = []
     dfs_visit(graph, start, 1, visited, order)
     print("dfs", label, "recursions:", DFS_RECURSIONS, "edges:", DFS_EDGES_EXPLORED, "max_depth:", DFS_MAX_DEPTH)
     return order
@@ -66,7 +66,7 @@ fn assert_sequence(label, observed, expected):
         print("FAIL", label, "=>", observed, "expected", expected)
 
 fn make_base_graph():
-    mut graph = []
+    mut graph: [[i32]] = []
     push(graph, [1, 2])      // 0 connects to two neighbours
     push(graph, [2, 4])      // 1 has a shortcut back to 2 and a branch to 4
     push(graph, [3])         // 2 leads deeper into the component
@@ -86,7 +86,7 @@ assert_sequence("component_b", depth_first_search("component_b", base_graph, 5),
 
 // Stress a tree-shaped traversal to highlight depth growth.
 fn make_tree_graph():
-    mut graph = []
+    mut graph: [[i32]] = []
     push(graph, [1, 2, 3])
     push(graph, [4, 5])
     push(graph, [6])

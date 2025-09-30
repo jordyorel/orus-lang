@@ -50,5 +50,5 @@ print("duplicates =>", insertion_sort("duplicates", duplicates), "expected", exp
 short = [3]
 print("single =>", insertion_sort("single", short), "expected", short)
 
-empty = []
+empty: [i32] = []
 print("empty =>", insertion_sort("empty", empty), "expected", [])

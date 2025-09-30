@@ -52,10 +52,10 @@ fn run_knapsack_dp(label, weights, values, capacity: i32) -> i32:
     rows: i32 = item_count
     cols: i32 = capacity
 
-    table = []
+    mut table: [[i32]] = []
     mut row_index: i32 = 0
     while row_index <= rows:
-        row = []
+        mut row: [i32] = []
         mut cap: i32 = 0
         while cap <= cols:
             push(row, 0)

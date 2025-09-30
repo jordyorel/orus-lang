@@ -5,7 +5,7 @@
 // printing the observed order and remaining length after each operation.
 
 print("-- array push/pop builtin smoke --")
-mut numbers = []
+mut numbers: [i32] = []
 
 // Push a few values
 push(numbers, 1)

@@ -14,9 +14,9 @@ fn quick_sort_recursive(values, depth):
         return values
 
     pivot = values[length / 2]
-    mut less = []
-    mut equal = []
-    mut greater = []
+    mut less: [i32] = []
+    mut equal: [i32] = []
+    mut greater: [i32] = []
 
     mut i = 0
     while i < length:
@@ -36,7 +36,7 @@ fn quick_sort_recursive(values, depth):
     sorted_less = quick_sort_recursive(less, depth + 1)
     sorted_greater = quick_sort_recursive(greater, depth + 1)
 
-    mut result = []
+    mut result: [i32] = []
     mut li = 0
     while li < len(sorted_less):
         push(result, sorted_less[li])
@@ -96,5 +96,5 @@ assert_sorted("duplicates", quick_sort("duplicates", duplicates), expected_dupli
 single = [99]
 assert_sorted("single", quick_sort("single", single), single)
 
-empty = []
+empty: [i32] = []
 assert_sorted("empty", quick_sort("empty", empty), [])

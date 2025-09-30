@@ -2825,6 +2825,108 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                 return result_reg;
             }
         }
+        case NODE_ARRAY_FILL: {
+            ASTNode* fillAst = expr->original;
+            if (!fillAst->arrayFill.hasResolvedLength) {
+                DEBUG_CODEGEN_PRINT("Error: Array fill length unresolved at codegen time\n");
+                return -1;
+            }
+
+            int length = fillAst->arrayFill.resolvedLength;
+            if (length < 0) {
+                DEBUG_CODEGEN_PRINT("Error: Negative array fill length\n");
+                return -1;
+            }
+
+            int result_reg = mp_allocate_temp_register(ctx->allocator);
+            if (result_reg == -1) {
+                DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for array fill result\n");
+                return -1;
+            }
+
+            if (length == 0) {
+                set_location_from_node(ctx, expr);
+                emit_byte_to_buffer(ctx->bytecode, OP_MAKE_ARRAY_R);
+                emit_byte_to_buffer(ctx->bytecode, result_reg);
+                emit_byte_to_buffer(ctx->bytecode, 0);
+                emit_byte_to_buffer(ctx->bytecode, 0);
+                return result_reg;
+            }
+
+            int base_reg = mp_allocate_consecutive_temp_registers(ctx->allocator, length);
+            if (base_reg == -1) {
+                mp_free_temp_register(ctx->allocator, result_reg);
+                DEBUG_CODEGEN_PRINT("Error: Failed to allocate registers for array fill elements\n");
+                return -1;
+            }
+
+            TypedASTNode* value_node = expr->typed.arrayFill.value;
+            bool created_value_node = false;
+            if (!value_node && fillAst->arrayFill.value) {
+                value_node = create_typed_ast_node(fillAst->arrayFill.value);
+                created_value_node = (value_node != NULL);
+            }
+
+            if (!value_node) {
+                for (int i = 0; i < length; i++) {
+                    int reg = base_reg + i;
+                    if (reg >= MP_TEMP_REG_START && reg <= MP_TEMP_REG_END) {
+                        mp_free_temp_register(ctx->allocator, reg);
+                    }
+                }
+                mp_free_temp_register(ctx->allocator, result_reg);
+                DEBUG_CODEGEN_PRINT("Error: Missing value expression for array fill\n");
+                return -1;
+            }
+
+            int value_reg = compile_expression(ctx, value_node);
+            if (created_value_node && value_node) {
+                free_typed_ast_node(value_node);
+            }
+
+            if (value_reg == -1) {
+                for (int i = 0; i < length; i++) {
+                    int reg = base_reg + i;
+                    if (reg >= MP_TEMP_REG_START && reg <= MP_TEMP_REG_END) {
+                        mp_free_temp_register(ctx->allocator, reg);
+                    }
+                }
+                mp_free_temp_register(ctx->allocator, result_reg);
+                DEBUG_CODEGEN_PRINT("Error: Failed to compile array fill value expression\n");
+                return -1;
+            }
+
+            bool value_reg_temp = (value_reg >= MP_TEMP_REG_START && value_reg <= MP_TEMP_REG_END);
+
+            if (value_reg != base_reg) {
+                emit_move(ctx, base_reg, value_reg);
+                if (value_reg_temp) {
+                    mp_free_temp_register(ctx->allocator, value_reg);
+                    value_reg_temp = false;
+                }
+            } else {
+                value_reg_temp = false;
+            }
+
+            for (int i = 1; i < length; i++) {
+                emit_move(ctx, base_reg + i, base_reg);
+            }
+
+            set_location_from_node(ctx, expr);
+            emit_byte_to_buffer(ctx->bytecode, OP_MAKE_ARRAY_R);
+            emit_byte_to_buffer(ctx->bytecode, result_reg);
+            emit_byte_to_buffer(ctx->bytecode, base_reg);
+            emit_byte_to_buffer(ctx->bytecode, length);
+
+            for (int i = 0; i < length; i++) {
+                int reg = base_reg + i;
+                if (reg >= MP_TEMP_REG_START && reg <= MP_TEMP_REG_END) {
+                    mp_free_temp_register(ctx->allocator, reg);
+                }
+            }
+
+            return result_reg;
+        }
         case NODE_ENUM_MATCH_TEST:
             return compile_enum_match_test(ctx, expr);
         case NODE_MATCH_EXPRESSION:

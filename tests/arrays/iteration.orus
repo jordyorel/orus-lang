@@ -10,7 +10,7 @@ for item in values:
 
 print("sum:", total)
 
-mut collected = []
+mut collected: [i32] = []
 for element in values:
     push(collected, element)
 

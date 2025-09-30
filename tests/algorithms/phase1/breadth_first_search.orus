@@ -11,7 +11,7 @@ global mut BFS_MAX_DEPTH = 0
 global mut BFS_MAX_QUEUE = 0
 
 fn make_bool_array(count):
-    mut result = []
+    mut result: [bool] = []
     mut i = 0
     while i < count:
         push(result, false)
@@ -26,8 +26,8 @@ fn breadth_first_search(label, graph, start):
     BFS_MAX_QUEUE = 0
 
     visited = make_bool_array(len(graph))
-    queue = []
-    queue_depths = []
+    mut queue: [i32] = []
+    mut queue_depths: [i32] = []
     mut front = 0
 
     push(queue, start)
@@ -36,7 +36,7 @@ fn breadth_first_search(label, graph, start):
     visited[start] = true
     BFS_MAX_QUEUE = 1
 
-    order = []
+    mut order: [i32] = []
     while front < len(queue):
         node = queue[front]
         depth = queue_depths[front]
@@ -80,7 +80,7 @@ fn assert_sequence(label, observed, expected):
         print("FAIL", label, "=>", observed, "expected", expected)
 
 fn make_base_graph():
-    mut graph = []
+    mut graph: [[i32]] = []
     push(graph, [1, 2])
     push(graph, [2, 4])
     push(graph, [3])
@@ -99,7 +99,7 @@ expected_component_b = [5, 2, 3, 1, 4]
 assert_sequence("component_b", breadth_first_search("component_b", base_graph, 5), expected_component_b)
 
 fn make_layered_graph():
-    mut graph = []
+    mut graph: [[i32]] = []
     push(graph, [1, 2, 3])
     push(graph, [4, 5])
     push(graph, [6])

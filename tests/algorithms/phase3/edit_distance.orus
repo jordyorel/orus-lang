@@ -115,7 +115,7 @@ global mut EDIT_DP_INSERTIONS = 0
 global mut EDIT_DP_DELETIONS = 0
 global mut EDIT_DP_TIES = 0
 global mut EDIT_DP_LAST_DISTANCE = 0
-global mut EDIT_DP_LAST_TABLE = []
+global mut EDIT_DP_LAST_TABLE: [[i32]] = []
 
 fn pack_operation(op: i32, from_code: i32, to_code: i32) -> i32:
     return op * 10000 + from_code * 100 + to_code
@@ -141,10 +141,10 @@ fn build_edit_dp_table(seq_a, seq_b):
     len_a: i32 = len(seq_a)
     len_b: i32 = len(seq_b)
 
-    mut dp = []
+    mut dp: [[i32]] = []
     mut row_index: i32 = 0
     while row_index <= len_a:
-        mut row = []
+        mut row: [i32] = []
         mut col_index: i32 = 0
         while col_index <= len_b:
             push(row, 0)
@@ -275,7 +275,7 @@ fn code_to_label(code: i32) -> string:
 fn reconstruct_edit_script(seq_a, seq_b):
     mut i: i32 = len(seq_a)
     mut j: i32 = len(seq_b)
-    mut reversed = []
+    mut reversed: [i32] = []
 
     while i > 0 or j > 0:
         current: i32 = EDIT_DP_LAST_TABLE[i][j]
@@ -311,7 +311,7 @@ fn reconstruct_edit_script(seq_a, seq_b):
         if not resolved:
             break
 
-    mut script = []
+    mut script: [i32] = []
     mut idx: i32 = len(reversed) - 1
     while idx >= 0:
         push(script, reversed[idx])
@@ -389,7 +389,7 @@ fn run_case(label, seq_a, seq_b, expected_distance: i32, check_naive: bool, expe
 // === Shared datasets ===
 baseline_source = [LETTER_K, LETTER_I, LETTER_T, LETTER_T, LETTER_E, LETTER_N]
 baseline_target = [LETTER_S, LETTER_I, LETTER_T, LETTER_T, LETTER_I, LETTER_N, LETTER_G]
-mut baseline_expected_script = []
+mut baseline_expected_script: [i32] = []
 push(baseline_expected_script, pack_operation(EDIT_OP_SUBSTITUTE, LETTER_K, LETTER_S))
 push(baseline_expected_script, pack_operation(EDIT_OP_MATCH, LETTER_I, LETTER_I))
 push(baseline_expected_script, pack_operation(EDIT_OP_MATCH, LETTER_T, LETTER_T))
@@ -401,7 +401,7 @@ run_case("baseline", baseline_source, baseline_target, 3, true, baseline_expecte
 
 insertion_source = [LETTER_G, LETTER_U, LETTER_M]
 insertion_target = [LETTER_G, LETTER_U, LETTER_M, LETTER_B, LETTER_O]
-mut insertion_expected_script = []
+mut insertion_expected_script: [i32] = []
 push(insertion_expected_script, pack_operation(EDIT_OP_MATCH, LETTER_G, LETTER_G))
 push(insertion_expected_script, pack_operation(EDIT_OP_MATCH, LETTER_U, LETTER_U))
 push(insertion_expected_script, pack_operation(EDIT_OP_MATCH, LETTER_M, LETTER_M))
@@ -411,7 +411,7 @@ run_case("suffix_insert", insertion_source, insertion_target, 2, true, insertion
 
 deletion_source = [LETTER_P, LETTER_L, LETTER_A, LETTER_T, LETTER_E]
 deletion_target = [LETTER_P, LETTER_L, LETTER_A, LETTER_T]
-mut deletion_expected_script = []
+mut deletion_expected_script: [i32] = []
 push(deletion_expected_script, pack_operation(EDIT_OP_MATCH, LETTER_P, LETTER_P))
 push(deletion_expected_script, pack_operation(EDIT_OP_MATCH, LETTER_L, LETTER_L))
 push(deletion_expected_script, pack_operation(EDIT_OP_MATCH, LETTER_A, LETTER_A))
@@ -421,7 +421,7 @@ run_case("suffix_delete", deletion_source, deletion_target, 1, true, deletion_ex
 
 swap_source = [LETTER_C, LETTER_A, LETTER_R, LETTER_D]
 swap_target = [LETTER_C, LETTER_A, LETTER_R, LETTER_D, LETTER_S]
-mut swap_expected_script = []
+mut swap_expected_script: [i32] = []
 push(swap_expected_script, pack_operation(EDIT_OP_MATCH, LETTER_C, LETTER_C))
 push(swap_expected_script, pack_operation(EDIT_OP_MATCH, LETTER_A, LETTER_A))
 push(swap_expected_script, pack_operation(EDIT_OP_MATCH, LETTER_R, LETTER_R))

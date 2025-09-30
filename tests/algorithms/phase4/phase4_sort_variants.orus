@@ -30,7 +30,7 @@ fn rand_len(max_len: i32) -> i32:
 
 // ---------- Common helpers ----------
 fn copy_array(xs):
-    mut out = []
+    mut out: [i32] = []
     mut i: i32 = 0
     while i < len(xs):
         push(out, xs[i])
@@ -38,7 +38,7 @@ fn copy_array(xs):
     return out
 
 fn concat(a, b):
-    mut out = []
+    mut out: [i32] = []
     mut i: i32 = 0
     while i < len(a): push(out, a[i]); i = i + 1
     i = 0
@@ -46,7 +46,7 @@ fn concat(a, b):
     return out
 
 fn add_k(xs, k: i32):
-    mut out = []
+    mut out: [i32] = []
     mut i: i32 = 0
     while i < len(xs):
         push(out, xs[i] + k)
@@ -54,14 +54,17 @@ fn add_k(xs, k: i32):
     return out
 
 fn split_at(xs, mid: i32):
-    mut left = []
-    mut right = []
+    mut left: [i32] = []
+    mut right: [i32] = []
     mut i: i32 = 0
     while i < len(xs):
         if i < mid: push(left, xs[i])
         else: push(right, xs[i])
         i = i + 1
-    return [left, right]
+    mut parts: [[i32]] = []
+    push(parts, left)
+    push(parts, right)
+    return parts
 
 fn swap(xs, i: i32, j: i32):
     tmp = xs[i]
@@ -70,7 +73,7 @@ fn swap(xs, i: i32, j: i32):
 
 // ---------- Oracle merge sort (reference) ----------
 fn merge(a, b):
-    mut out = []
+    mut out: [i32] = []
     mut i: i32 = 0
     mut j: i32 = 0
     while i < len(a) and j < len(b):
@@ -211,7 +214,7 @@ fn counting_sort(label, values):
         if v > max_v: max_v = v
         i = i + 1
     range_size: i32 = (max_v - min_v) + 1
-    mut counts = []
+    mut counts: [i32] = []
     mut k: i32 = 0
     while k < range_size: push(counts, 0); k = k + 1
     i = 0
@@ -219,7 +222,7 @@ fn counting_sort(label, values):
         idx: i32 = values[i] - min_v
         counts[idx] = counts[idx] + 1
         i = i + 1
-    mut out = []
+    mut out: [i32] = []
     mut value = min_v
     while value <= max_v:
         mut count = counts[value - min_v]
@@ -311,7 +314,7 @@ fn run_sort_properties_once(algo_name, algo_id: i32, xs):
 // ---------- Generators ----------
 fn gen_random_array(max_len: i32, min_v: i32, max_v: i32):
     L = rand_len(max_len)
-    mut out = []
+    mut out: [i32] = []
     mut i: i32 = 0
     while i < L:
         push(out, rand_range(min_v, max_v))
@@ -319,7 +322,7 @@ fn gen_random_array(max_len: i32, min_v: i32, max_v: i32):
     return out
 
 fn fixed_cases():
-    mut cases = []
+    mut cases: [[i32]] = []
 
     // Empty
     push(cases, [])

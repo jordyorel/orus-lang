@@ -13,7 +13,7 @@ fn factorial(n: i32) -> i64:
     return result
 
 fn fibonacci(count: i32):
-    mut sequence = []
+    mut sequence: [i32] = []
 
     if count <= 0:
         return sequence
@@ -64,7 +64,7 @@ fn linear_search(values, target: i32) -> i32:
     return -1
 
 fn bubble_sort(values):
-    mut sorted = []
+    mut sorted: [i32] = []
     for value in values:
         push(sorted, value)
 

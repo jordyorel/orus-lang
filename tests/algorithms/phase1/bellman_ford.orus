@@ -8,7 +8,7 @@ global mut BELLMAN_RELAXATIONS = 0
 global mut BELLMAN_ITERATIONS = 0
 
 fn make_distance_array(count, value):
-    mut result = []
+    mut result: [i32] = []
     mut i = 0
     while i < count:
         push(result, value)
@@ -62,7 +62,7 @@ fn assert_distances(label, observed, expected):
 
 // === Tests ===
 fn make_main_edges():
-    mut edges = []
+    mut edges: [i32] = []
     push(edges, 0)
     push(edges, 1)
     push(edges, 6)
@@ -96,7 +96,7 @@ fn make_main_edges():
     return edges
 
 fn make_sparse_edges():
-    mut edges = []
+    mut edges: [i32] = []
     push(edges, 0)
     push(edges, 1)
     push(edges, 5)
@@ -106,7 +106,7 @@ fn make_sparse_edges():
     return edges
 
 fn make_expected_from_zero():
-    mut expected = []
+    mut expected: [i32] = []
     push(expected, 0)
     push(expected, 2)
     push(expected, 7)
@@ -115,7 +115,7 @@ fn make_expected_from_zero():
     return expected
 
 fn make_expected_from_four():
-    mut expected = []
+    mut expected: [i32] = []
     push(expected, 2)
     push(expected, 4)
     push(expected, 9)
@@ -124,7 +124,7 @@ fn make_expected_from_four():
     return expected
 
 fn make_expected_sparse(infinity):
-    mut expected = []
+    mut expected: [i32] = []
     push(expected, 0)
     push(expected, 5)
     push(expected, 8)

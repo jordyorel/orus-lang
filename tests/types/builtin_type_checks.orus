@@ -56,7 +56,7 @@ if is_type(42, "string"):
     trigger = 1 / 0
 
 try:
-    mut empty = []
+    mut empty: [i32] = []
     pop(empty)
 catch err:
     assert_type(err, "value error Cannot pop from an empty array")
