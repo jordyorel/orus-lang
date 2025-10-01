@@ -627,6 +627,7 @@ typedef enum {
     OP_JUMP_BACK_SHORT,    // 1-byte backward jump (0-255)
     OP_JUMP_IF_NOT_SHORT,  // Conditional short jump
     OP_LOOP_SHORT,         // Short loop (backward jump)
+    OP_BRANCH_TYPED,       // loop_id_hi, loop_id_lo, predicate_reg, offset
 
     // Typed register operations for performance (bypass Value boxing)
     OP_ADD_I32_TYPED,      // dst_reg, left_reg, right_reg
@@ -1067,6 +1068,8 @@ typedef enum {
     LOOP_TRACE_ITER_FALLBACK,
     LOOP_TRACE_LICM_GUARD_FUSION,
     LOOP_TRACE_LICM_GUARD_DEMOTION,
+    LOOP_TRACE_BRANCH_CACHE_HIT,
+    LOOP_TRACE_BRANCH_CACHE_MISS,
     LOOP_TRACE_KIND_COUNT
 } LoopTraceKind;
 
@@ -1083,6 +1086,8 @@ typedef struct {
     uint64_t iter_fallbacks;
     uint64_t licm_guard_fusions;
     uint64_t licm_guard_demotions;
+    uint64_t branch_cache_hits;
+    uint64_t branch_cache_misses;
 } LoopTraceCounters;
 
 // Profiling counters
@@ -1090,6 +1095,21 @@ typedef struct {
     uint64_t instruction_counts[VM_DISPATCH_TABLE_SIZE];
     LoopTraceCounters loop_trace;
 } VMProfile;
+
+#define LOOP_BRANCH_CACHE_CAPACITY 128
+
+typedef struct {
+    bool valid;
+    uint16_t loop_id;
+    uint16_t predicate_reg;
+    uint8_t predicate_type;
+    uint32_t guard_generation;
+} LoopBranchCacheEntry;
+
+typedef struct {
+    LoopBranchCacheEntry entries[LOOP_BRANCH_CACHE_CAPACITY];
+    uint32_t guard_generations[REGISTER_COUNT];
+} LoopBranchCache;
 
 // Runtime configuration toggles
 typedef struct {
@@ -1173,6 +1193,8 @@ typedef struct {
 
     VMProfile profile;
 
+    LoopBranchCache branch_cache;
+
     // Configuration
     bool trace;
     const char* stdPath;
@@ -1236,6 +1258,12 @@ static inline void vm_trace_loop_event(LoopTraceKind kind) {
             break;
         case LOOP_TRACE_LICM_GUARD_DEMOTION:
             vm.profile.loop_trace.licm_guard_demotions++;
+            break;
+        case LOOP_TRACE_BRANCH_CACHE_HIT:
+            vm.profile.loop_trace.branch_cache_hits++;
+            break;
+        case LOOP_TRACE_BRANCH_CACHE_MISS:
+            vm.profile.loop_trace.branch_cache_misses++;
             break;
         case LOOP_TRACE_KIND_COUNT:
         default:

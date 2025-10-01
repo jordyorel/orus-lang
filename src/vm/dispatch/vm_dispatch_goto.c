@@ -173,7 +173,8 @@ InterpretResult vm_run_dispatch(void) {
         vm_dispatch_table[OP_JUMP_BACK_SHORT] = &&LABEL_OP_JUMP_BACK_SHORT;
         vm_dispatch_table[OP_JUMP_IF_NOT_SHORT] = &&LABEL_OP_JUMP_IF_NOT_SHORT;
         vm_dispatch_table[OP_LOOP_SHORT] = &&LABEL_OP_LOOP_SHORT;
-        
+        vm_dispatch_table[OP_BRANCH_TYPED] = &&LABEL_OP_BRANCH_TYPED;
+
         // Loop-critical operations
         vm_dispatch_table[OP_INC_I32_R] = &&LABEL_OP_INC_I32_R;
         vm_dispatch_table[OP_INC_I32_CHECKED] = &&LABEL_OP_INC_I32_CHECKED;
@@ -3299,15 +3300,25 @@ InterpretResult vm_run_dispatch(void) {
 
     LABEL_OP_LOOP_SHORT: {
         uint8_t offset = READ_BYTE();
-        
+
         // Hot path detection: Profile short loop iterations (tight loops)
         if (g_profiling.isActive && (g_profiling.enabledFlags & PROFILE_HOT_PATHS)) {
             static uint64_t short_loop_iterations = 0;
             short_loop_iterations++;
             profileHotPath((void*)(vm.ip - vm.chunk->code), short_loop_iterations);
         }
-        
+
         if (!CF_LOOP_SHORT(offset)) {
+            RETURN(INTERPRET_RUNTIME_ERROR);
+        }
+        DISPATCH();
+    }
+
+    LABEL_OP_BRANCH_TYPED: {
+        uint16_t loop_id = READ_SHORT();
+        uint8_t reg = READ_BYTE();
+        uint16_t offset = READ_SHORT();
+        if (!CF_BRANCH_TYPED(loop_id, reg, offset)) {
             RETURN(INTERPRET_RUNTIME_ERROR);
         }
         DISPATCH();

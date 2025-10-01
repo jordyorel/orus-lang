@@ -386,6 +386,14 @@ int disassembleInstruction(Chunk* chunk, int offset) {
             return offset + 2;
         }
 
+        case OP_BRANCH_TYPED: {
+            uint16_t loop_id = (uint16_t)((chunk->code[offset + 1] << 8) | chunk->code[offset + 2]);
+            uint8_t predicate = chunk->code[offset + 3];
+            uint16_t rel = (uint16_t)((chunk->code[offset + 4] << 8) | chunk->code[offset + 5]);
+            printf("%-16s loop=%u R%d, +%u\n", "BRANCH_TYPED", loop_id, predicate, rel);
+            return offset + 6;
+        }
+
         // Typed operations for performance
         case OP_ADD_I32_TYPED: {
             uint8_t dst = chunk->code[offset + 1];

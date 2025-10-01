@@ -14,6 +14,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 struct SymbolTable;
 
@@ -29,6 +30,9 @@ typedef struct ScopeFrame {
     int start_offset;
     int end_offset;
     int continue_offset;
+
+    uint16_t loop_id;
+    uint16_t prev_loop_id;
 
     int prev_loop_start;
     int prev_loop_end;

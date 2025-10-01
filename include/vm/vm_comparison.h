@@ -83,6 +83,7 @@ static inline void vm_update_typed_register(uint16_t id, Value value) {
     if (new_type == REG_TYPE_NONE) {
         uint8_t old_type = vm.typed_regs.reg_types[id];
         if (old_type != REG_TYPE_NONE && old_type != REG_TYPE_HEAP) {
+            vm_branch_cache_bump_generation(id);
             vm_clear_typed_register_slot(id, old_type);
         }
         vm.typed_regs.reg_types[id] = REG_TYPE_HEAP;
@@ -92,6 +93,7 @@ static inline void vm_update_typed_register(uint16_t id, Value value) {
 
     uint8_t old_type = vm.typed_regs.reg_types[id];
     if (old_type != new_type) {
+        vm_branch_cache_bump_generation(id);
         vm_clear_typed_register_slot(id, old_type);
     }
 
@@ -392,6 +394,9 @@ static inline void vm_cache_f64_typed(uint16_t id, double value) {
 
 static inline void vm_cache_bool_typed(uint16_t id, bool value) {
     if (vm_typed_reg_in_range(id)) {
+        if (vm.typed_regs.reg_types[id] != REG_TYPE_BOOL) {
+            vm_branch_cache_bump_generation(id);
+        }
         vm.typed_regs.bool_regs[id] = value;
         vm.typed_regs.reg_types[id] = REG_TYPE_BOOL;
         vm.typed_regs.dirty[id] = false;

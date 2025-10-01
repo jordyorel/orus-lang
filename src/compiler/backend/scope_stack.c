@@ -74,6 +74,8 @@ ScopeFrame* scope_stack_push(ScopeStack* stack, ScopeKind kind) {
     frame->start_offset = -1;
     frame->end_offset = -1;
     frame->continue_offset = -1;
+    frame->loop_id = 0;
+    frame->prev_loop_id = 0;
     frame->prev_loop_start = -1;
     frame->prev_loop_end = -1;
     frame->prev_loop_continue = -1;

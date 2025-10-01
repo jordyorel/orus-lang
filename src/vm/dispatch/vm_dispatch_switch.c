@@ -2744,6 +2744,16 @@ InterpretResult vm_run_dispatch(void) {
                     break;
                 }
 
+                case OP_BRANCH_TYPED: {
+                    uint16_t loop_id = READ_SHORT();
+                    uint8_t reg = READ_BYTE();
+                    uint16_t offset = READ_SHORT();
+                    if (!CF_BRANCH_TYPED(loop_id, reg, offset)) {
+                        RETURN(INTERPRET_RUNTIME_ERROR);
+                    }
+                    break;
+                }
+
                 // Typed arithmetic operations for maximum performance (bypass Value boxing)
 #if ORUS_VM_ENABLE_TYPED_OPS
                 case OP_ADD_I32_TYPED: {
