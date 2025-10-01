@@ -15,9 +15,21 @@
 #include <stddef.h>
 #include <string.h>
 
+static size_t vm_branch_cache_bucket_index(uint16_t loop_id, uint16_t reg) {
+    uint32_t key = ((uint32_t)loop_id << 16) ^ (uint32_t)reg;
+    key *= 2654435761u;
+    return key % LOOP_BRANCH_CACHE_BUCKET_COUNT;
+}
+
+static LoopBranchCacheBucket* vm_branch_cache_bucket(uint16_t loop_id, uint16_t reg) {
+    size_t index = vm_branch_cache_bucket_index(loop_id, reg);
+    return &vm.branch_cache.buckets[index];
+}
+
 static LoopBranchCacheEntry* vm_branch_cache_lookup(uint16_t loop_id, uint16_t reg) {
-    for (size_t i = 0; i < LOOP_BRANCH_CACHE_CAPACITY; ++i) {
-        LoopBranchCacheEntry* entry = &vm.branch_cache.entries[i];
+    LoopBranchCacheBucket* bucket = vm_branch_cache_bucket(loop_id, reg);
+    for (size_t i = 0; i < LOOP_BRANCH_CACHE_BUCKET_SIZE; ++i) {
+        LoopBranchCacheEntry* entry = &bucket->slots[i];
         if (entry->valid && entry->loop_id == loop_id && entry->predicate_reg == reg) {
             return entry;
         }
@@ -26,9 +38,10 @@ static LoopBranchCacheEntry* vm_branch_cache_lookup(uint16_t loop_id, uint16_t r
 }
 
 static LoopBranchCacheEntry* vm_branch_cache_select_slot(uint16_t loop_id, uint16_t reg) {
+    LoopBranchCacheBucket* bucket = vm_branch_cache_bucket(loop_id, reg);
     LoopBranchCacheEntry* free_slot = NULL;
-    for (size_t i = 0; i < LOOP_BRANCH_CACHE_CAPACITY; ++i) {
-        LoopBranchCacheEntry* entry = &vm.branch_cache.entries[i];
+    for (size_t i = 0; i < LOOP_BRANCH_CACHE_BUCKET_SIZE; ++i) {
+        LoopBranchCacheEntry* entry = &bucket->slots[i];
         if (!entry->valid) {
             if (!free_slot) {
                 free_slot = entry;
@@ -42,12 +55,13 @@ static LoopBranchCacheEntry* vm_branch_cache_select_slot(uint16_t loop_id, uint1
     if (free_slot) {
         return free_slot;
     }
-    size_t index = loop_id % LOOP_BRANCH_CACHE_CAPACITY;
-    return &vm.branch_cache.entries[index];
+
+    size_t slot_index = reg % LOOP_BRANCH_CACHE_BUCKET_SIZE;
+    return &bucket->slots[slot_index];
 }
 
 void vm_branch_cache_reset(void) {
-    memset(vm.branch_cache.entries, 0, sizeof(vm.branch_cache.entries));
+    memset(vm.branch_cache.buckets, 0, sizeof(vm.branch_cache.buckets));
     memset(vm.branch_cache.guard_generations, 0, sizeof(vm.branch_cache.guard_generations));
 }
 
