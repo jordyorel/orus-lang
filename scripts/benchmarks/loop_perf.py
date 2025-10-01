@@ -18,7 +18,7 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional
+from typing import Dict, Iterable, List, Optional, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PHASE_DEFAULT_BENCH: Dict[str, Path] = {
@@ -207,7 +207,7 @@ def run_benchmark(orus_binary: Path, bench_source: Path, env: Dict[str, str]) ->
     return subprocess.run(cmd, capture_output=True, text=True, env=full_env, check=False)
 
 
-def parse_stdout(stdout: str) -> (List[float], Optional[int], Optional[int], Optional[int]):
+def parse_stdout(stdout: str) -> Tuple[List[float], Optional[int], Optional[int], Optional[int]]:
     elapsed: List[float] = []
     trials = None
     iterations = None
