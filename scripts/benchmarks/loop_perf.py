@@ -18,7 +18,7 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional
+from typing import Dict, Iterable, List, Optional, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PHASE_DEFAULT_BENCH: Dict[str, Path] = {
@@ -114,6 +114,22 @@ PHASE_VARIANTS: Dict[str, List[Variant]] = {
                 "ORUS_EXPERIMENT_BOOL_BRANCH_FASTPATH": "1",
             },
         ),
+        Variant(
+            name="branch-fastpath-on",
+            description="Boolean branch fast path enabled (baseline)",
+            env={
+                "ORUS_ENABLE_LICM_TYPED_GUARDS": "1",
+                "ORUS_EXPERIMENT_BOOL_BRANCH_FASTPATH": "1",
+            },
+        ),
+        Variant(
+            name="branch-fastpath-off",
+            description="Boolean branch fast path disabled for comparison",
+            env={
+                "ORUS_ENABLE_LICM_TYPED_GUARDS": "1",
+                "ORUS_DISABLE_BOOL_BRANCH_FASTPATH": "1",
+            },
+        ),
     ],
 }
 
@@ -135,7 +151,7 @@ CSV_HEADER = [
 PHASE_HEADERS: Dict[str, str] = {
     "2": "Phase 2 typed increment microbenchmark",
     "3": "Phase 3 zero-allocation iterator microbenchmark",
-    "4": "Phase 4 LICM typed guard microbenchmark",
+    "4": "Phase 4 LICM typed guard and branch fast path microbenchmark",
 }
 
 
@@ -207,7 +223,7 @@ def run_benchmark(orus_binary: Path, bench_source: Path, env: Dict[str, str]) ->
     return subprocess.run(cmd, capture_output=True, text=True, env=full_env, check=False)
 
 
-def parse_stdout(stdout: str) -> (List[float], Optional[int], Optional[int], Optional[int]):
+def parse_stdout(stdout: str) -> Tuple[List[float], Optional[int], Optional[int], Optional[int]]:
     elapsed: List[float] = []
     trials = None
     iterations = None
@@ -362,21 +378,40 @@ def emit_results(stats_list: List[BenchmarkStats], csv_path: Optional[Path], pha
     for stats in stats_list:
         print(",".join(stats.to_row()))
 
-    baseline = next((s for s in stats_list if s.variant.name == "typed-fastpath"), None)
+    baseline = next(
+        (
+            s
+            for s in stats_list
+            if s.variant.name in {"typed-fastpath", "branch-fastpath-on"}
+        ),
+        None,
+    )
     if baseline:
+        baseline_label = baseline.variant.name
         for stats in stats_list:
             if stats is baseline:
                 continue
             ratio = stats.average_seconds / baseline.average_seconds
             if ratio >= 1.0:
                 print(
-                    f"Speed ratio ({stats.variant.name} vs typed-fastpath): {ratio:.3f}x slower"
+                    f"Speed ratio ({stats.variant.name} vs {baseline_label}): {ratio:.3f}x slower"
                 )
             else:
                 inverse = 1.0 / ratio if ratio > 0 else float('inf')
                 print(
-                    f"Speed ratio ({stats.variant.name} vs typed-fastpath): {inverse:.3f}x faster"
+                    f"Speed ratio ({stats.variant.name} vs {baseline_label}): {inverse:.3f}x faster"
                 )
+
+    branch_on = next((s for s in stats_list if s.variant.name == "branch-fastpath-on"), None)
+    branch_off = next((s for s in stats_list if s.variant.name == "branch-fastpath-off"), None)
+    if branch_on and branch_off:
+        ratio = branch_off.average_seconds / branch_on.average_seconds
+        comparison = "slower" if ratio >= 1.0 else "faster"
+        magnitude = ratio if ratio >= 1.0 else 1.0 / max(ratio, sys.float_info.min)
+        print(
+            "Branch fast path latency: "
+            f"{magnitude:.3f}x {comparison} when disabled (off vs on)."
+        )
 
     if csv_path:
         with csv_path.open("w", newline="") as handle:

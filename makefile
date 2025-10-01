@@ -175,8 +175,8 @@ WASM_OUTPUT_DIR = web
 WASM_MODULE = orus_web$(SUFFIX)
 WASM_JS = $(WASM_OUTPUT_DIR)/$(WASM_MODULE).js
 WASM_WASM = $(WASM_OUTPUT_DIR)/$(WASM_MODULE).wasm
-WASM_SRCS = $(COMPILER_SRCS) $(VM_SRCS) $(REPL_SRC) $(MAIN_SRC)
-WASM_EXPORTED_FUNCTIONS = ["_main"]
+WASM_SRCS = $(COMPILER_SRCS) $(VM_SRCS) $(REPL_SRC) $(MAIN_SRC) $(SRCDIR)/web/wasm_bridge.c
+WASM_EXPORTED_FUNCTIONS = ["_main","_initWebVM","_runSource","_freeWebVM","_getVersion","_setInputCallback","_setOutputCallback","_registerWebBuiltins","_getLastError","_clearLastError","_isVMReady","_resetVMState","_getVMStackSize","_getVMFrameCount","_getVMModuleCount"]
 WASM_RUNTIME_METHODS = ["cwrap","ccall","UTF8ToString","lengthBytesUTF8"]
 WASM_CFLAGS = $(BASE_CFLAGS) $(DEFINES)
 
@@ -236,6 +236,7 @@ SCOPE_TRACKING_TEST_BIN = $(BUILDDIR)/tests/test_scope_tracking
 PEEPHOLE_TEST_BIN = $(BUILDDIR)/tests/test_constant_propagation
 LICM_METADATA_TEST_BIN = $(BUILDDIR)/tests/test_licm_typed_metadata
 TAGGED_UNION_TEST_BIN = $(BUILDDIR)/tests/test_vm_tagged_union
+TYPED_REGISTER_TEST_BIN = $(BUILDDIR)/tests/test_vm_typed_registers
 BUILTIN_INPUT_TEST_BIN = $(BUILDDIR)/tests/test_builtin_input
 BUILTIN_SORTED_ORUS_TESTS = \
     tests/builtins/sorted_runtime.orus
@@ -284,7 +285,7 @@ ci:
 
 # Create build directory
 $(BUILDDIR):
-	@mkdir -p $(BUILDDIR) $(BUILDDIR)/vm/core $(BUILDDIR)/vm/dispatch $(BUILDDIR)/vm/operations $(BUILDDIR)/vm/runtime $(BUILDDIR)/vm/utils $(BUILDDIR)/vm/handlers $(BUILDDIR)/vm/profiling $(BUILDDIR)/compiler/backend/optimization $(BUILDDIR)/compiler/backend/codegen $(BUILDDIR)/type $(BUILDDIR)/errors/core $(BUILDDIR)/errors/features $(BUILDDIR)/errors/infrastructure $(BUILDDIR)/config $(BUILDDIR)/internal $(BUILDDIR)/debug $(BUILDDIR)/tests/unit
+	@mkdir -p $(BUILDDIR) $(BUILDDIR)/vm/core $(BUILDDIR)/vm/dispatch $(BUILDDIR)/vm/operations $(BUILDDIR)/vm/runtime $(BUILDDIR)/vm/utils $(BUILDDIR)/vm/handlers $(BUILDDIR)/vm/profiling $(BUILDDIR)/compiler/backend/optimization $(BUILDDIR)/compiler/backend/codegen $(BUILDDIR)/type $(BUILDDIR)/errors/core $(BUILDDIR)/errors/features $(BUILDDIR)/errors/infrastructure $(BUILDDIR)/config $(BUILDDIR)/internal $(BUILDDIR)/debug $(BUILDDIR)/tests/unit $(BUILDDIR)/web
 
 # Main interpreter
 $(ORUS): $(MAIN_OBJ) $(REPL_OBJ) $(VM_OBJS) $(COMPILER_OBJS)
@@ -381,6 +382,9 @@ SUBDIRS="arrays arithmetic algorithms benchmarks builtins comments comprehensive
 	@echo "\033[36m=== Tagged Union Tests ===\033[0m"
 	@$(MAKE) tagged-union-tests
 	@echo ""
+	@echo "\033[36m=== Typed Register Tests ===\033[0m"
+	@$(MAKE) typed-register-tests
+	@echo ""
 	@echo "\033[36m=== Builtin Input Tests ===\033[0m"
 	@$(MAKE) builtin-input-tests
 	@echo ""
@@ -452,6 +456,15 @@ $(TAGGED_UNION_TEST_BIN): tests/unit/test_vm_tagged_union.c $(COMPILER_OBJS) $(V
 tagged-union-tests: $(TAGGED_UNION_TEST_BIN)
 	@echo "Running tagged union tests..."
 	@./$(TAGGED_UNION_TEST_BIN)
+
+$(TYPED_REGISTER_TEST_BIN): tests/unit/test_vm_typed_registers.c $(COMPILER_OBJS) $(VM_OBJS)
+	@mkdir -p $(dir $@)
+	@echo "Compiling typed register coherence tests..."
+	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+
+typed-register-tests: $(TYPED_REGISTER_TEST_BIN)
+	@echo "Running typed register coherence tests..."
+	@./$(TYPED_REGISTER_TEST_BIN)
 
 $(BUILTIN_INPUT_TEST_BIN): tests/unit/test_builtin_input.c $(COMPILER_OBJS) $(VM_OBJS)
 	@mkdir -p $(dir $@)

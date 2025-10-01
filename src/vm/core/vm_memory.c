@@ -11,6 +11,7 @@
 #include "runtime/memory.h"
 #include "vm/vm.h"
 #include "vm/vm_string_ops.h"
+#include "vm/vm_comparison.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -550,6 +551,11 @@ ObjUpvalue* captureUpvalue(Value* local) {
 void closeUpvalues(Value* last) {
     while (vm.openUpvalues != NULL && vm.openUpvalues->location >= last) {
         ObjUpvalue* upvalue = vm.openUpvalues;
+        if (upvalue->location >= vm.registers &&
+            upvalue->location < vm.registers + REGISTER_COUNT) {
+            uint16_t reg_id = (uint16_t)(upvalue->location - vm.registers);
+            vm_get_register_safe(reg_id);
+        }
         upvalue->closed = *upvalue->location;
         upvalue->location = &upvalue->closed;
         vm.openUpvalues = upvalue->next;

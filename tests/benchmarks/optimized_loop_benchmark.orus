@@ -1,0 +1,69 @@
+// Optimized loop benchmark designed for cross-language comparison
+
+TRIALS: i32 = 5
+ITER_SIMPLE: i32 = 5_000_000
+NEST_OUTER: i32 = 800
+NEST_INNER: i32 = 800
+ARRAY_LENGTH: i32 = 2048
+ARRAY_REPEATS: i32 = 512
+
+mut seed_values: [i32] = []
+mut fill_index: i32 = 0
+while fill_index < ARRAY_LENGTH:
+    seed_value: i32 = fill_index * (3 as i32)
+    push(seed_values, seed_value)
+    fill_index = fill_index + 1
+
+mut total_simple: f64 = 0.0
+mut total_nested: f64 = 0.0
+mut total_array: f64 = 0.0
+mut checksum: i64 = 0
+mut trial: i32 = 0
+
+print("=== Orus Optimized Loop Benchmark ===")
+print("trials:", TRIALS)
+
+while trial < TRIALS:
+    start_simple: f64 = time_stamp()
+    mut simple_sum: i64 = 0
+    for i in 0..ITER_SIMPLE:
+        simple_sum = simple_sum + (i as i64)
+    elapsed_simple: f64 = time_stamp() - start_simple
+    total_simple = total_simple + elapsed_simple
+
+    start_nested: f64 = time_stamp()
+    mut nested_acc: i64 = 0
+    for outer in 0..NEST_OUTER:
+        mut inner: i32 = 0
+        while inner < NEST_INNER:
+            combined: i64 = (outer as i64) * (inner as i64)
+            if (combined % (2 as i64)) == 0:
+                nested_acc = nested_acc + combined
+            else:
+                nested_acc = nested_acc - (inner as i64)
+            inner = inner + 1
+    elapsed_nested: f64 = time_stamp() - start_nested
+    total_nested = total_nested + elapsed_nested
+
+    start_array: f64 = time_stamp()
+    mut array_total: i64 = 0
+    mut repeat: i32 = 0
+    while repeat < ARRAY_REPEATS:
+        for element in seed_values:
+            array_total = array_total + (element as i64)
+        repeat = repeat + 1
+    elapsed_array: f64 = time_stamp() - start_array
+    total_array = total_array + elapsed_array
+
+    checksum = checksum + simple_sum + nested_acc + array_total
+
+    print("trial", trial, "simple:", elapsed_simple, "nested:", elapsed_nested, "array:", elapsed_array)
+
+    trial = trial + 1
+
+trial_f64: f64 = TRIALS as f64
+print("average_simple:", total_simple / trial_f64)
+print("average_nested:", total_nested / trial_f64)
+print("average_array:", total_array / trial_f64)
+print("checksum:", checksum)
+print("=== Benchmark complete ===")

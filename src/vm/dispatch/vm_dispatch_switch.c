@@ -1629,47 +1629,8 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t src1 = READ_BYTE();
                     uint8_t src2 = READ_BYTE();
 
-                    // Convert operands to boolean using truthiness rules
-                    bool left_bool = false;
-                    bool right_bool = false;
-                    
-                    // Convert left operand to boolean
-                    if (IS_BOOL(vm_get_register_safe(src1))) {
-                        left_bool = AS_BOOL(vm_get_register_safe(src1));
-                    } else if (IS_I32(vm_get_register_safe(src1))) {
-                        left_bool = AS_I32(vm_get_register_safe(src1)) != 0;
-                    } else if (IS_I64(vm_get_register_safe(src1))) {
-                        left_bool = AS_I64(vm_get_register_safe(src1)) != 0;
-                    } else if (IS_U32(vm_get_register_safe(src1))) {
-                        left_bool = AS_U32(vm_get_register_safe(src1)) != 0;
-                    } else if (IS_U64(vm_get_register_safe(src1))) {
-                        left_bool = AS_U64(vm_get_register_safe(src1)) != 0;
-                    } else if (IS_F64(vm_get_register_safe(src1))) {
-                        left_bool = AS_F64(vm_get_register_safe(src1)) != 0.0;
-                    } else if (IS_BOOL(vm_get_register_safe(src1))) {
-                        left_bool = false;
-                    } else {
-                        left_bool = true; // Objects, strings, etc. are truthy
-                    }
-                    
-                    // Convert right operand to boolean
-                    if (IS_BOOL(vm_get_register_safe(src2))) {
-                        right_bool = AS_BOOL(vm_get_register_safe(src2));
-                    } else if (IS_I32(vm_get_register_safe(src2))) {
-                        right_bool = AS_I32(vm_get_register_safe(src2)) != 0;
-                    } else if (IS_I64(vm_get_register_safe(src2))) {
-                        right_bool = AS_I64(vm_get_register_safe(src2)) != 0;
-                    } else if (IS_U32(vm_get_register_safe(src2))) {
-                        right_bool = AS_U32(vm_get_register_safe(src2)) != 0;
-                    } else if (IS_U64(vm_get_register_safe(src2))) {
-                        right_bool = AS_U64(vm_get_register_safe(src2)) != 0;
-                    } else if (IS_F64(vm_get_register_safe(src2))) {
-                        right_bool = AS_F64(vm_get_register_safe(src2)) != 0.0;
-                    } else if (IS_BOOL(vm_get_register_safe(src2))) {
-                        right_bool = false;
-                    } else {
-                        right_bool = true; // Objects, strings, etc. are truthy
-                    }
+                    bool left_bool = vm_register_is_truthy(src1);
+                    bool right_bool = vm_register_is_truthy(src2);
 
                     vm_set_register_safe(dst, BOOL_VAL(left_bool && right_bool));
                     break;
@@ -1680,47 +1641,8 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t src1 = READ_BYTE();
                     uint8_t src2 = READ_BYTE();
 
-                    // Convert operands to boolean using truthiness rules
-                    bool left_bool = false;
-                    bool right_bool = false;
-                    
-                    // Convert left operand to boolean
-                    if (IS_BOOL(vm_get_register_safe(src1))) {
-                        left_bool = AS_BOOL(vm_get_register_safe(src1));
-                    } else if (IS_I32(vm_get_register_safe(src1))) {
-                        left_bool = AS_I32(vm_get_register_safe(src1)) != 0;
-                    } else if (IS_I64(vm_get_register_safe(src1))) {
-                        left_bool = AS_I64(vm_get_register_safe(src1)) != 0;
-                    } else if (IS_U32(vm_get_register_safe(src1))) {
-                        left_bool = AS_U32(vm_get_register_safe(src1)) != 0;
-                    } else if (IS_U64(vm_get_register_safe(src1))) {
-                        left_bool = AS_U64(vm_get_register_safe(src1)) != 0;
-                    } else if (IS_F64(vm_get_register_safe(src1))) {
-                        left_bool = AS_F64(vm_get_register_safe(src1)) != 0.0;
-                    } else if (IS_BOOL(vm_get_register_safe(src1))) {
-                        left_bool = false;
-                    } else {
-                        left_bool = true; // Objects, strings, etc. are truthy
-                    }
-                    
-                    // Convert right operand to boolean
-                    if (IS_BOOL(vm_get_register_safe(src2))) {
-                        right_bool = AS_BOOL(vm_get_register_safe(src2));
-                    } else if (IS_I32(vm_get_register_safe(src2))) {
-                        right_bool = AS_I32(vm_get_register_safe(src2)) != 0;
-                    } else if (IS_I64(vm_get_register_safe(src2))) {
-                        right_bool = AS_I64(vm_get_register_safe(src2)) != 0;
-                    } else if (IS_U32(vm_get_register_safe(src2))) {
-                        right_bool = AS_U32(vm_get_register_safe(src2)) != 0;
-                    } else if (IS_U64(vm_get_register_safe(src2))) {
-                        right_bool = AS_U64(vm_get_register_safe(src2)) != 0;
-                    } else if (IS_F64(vm_get_register_safe(src2))) {
-                        right_bool = AS_F64(vm_get_register_safe(src2)) != 0.0;
-                    } else if (IS_BOOL(vm_get_register_safe(src2))) {
-                        right_bool = false;
-                    } else {
-                        right_bool = true; // Objects, strings, etc. are truthy
-                    }
+                    bool left_bool = vm_register_is_truthy(src1);
+                    bool right_bool = vm_register_is_truthy(src2);
 
                     vm_set_register_safe(dst, BOOL_VAL(left_bool || right_bool));
                     break;
@@ -1730,23 +1652,7 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
 
-                    // Convert operand to boolean using truthiness rules, then negate
-                    bool src_bool = false;
-                    if (IS_BOOL(vm_get_register_safe(src))) {
-                        src_bool = AS_BOOL(vm_get_register_safe(src));
-                    } else if (IS_I32(vm_get_register_safe(src))) {
-                        src_bool = AS_I32(vm_get_register_safe(src)) != 0;
-                    } else if (IS_I64(vm_get_register_safe(src))) {
-                        src_bool = AS_I64(vm_get_register_safe(src)) != 0;
-                    } else if (IS_U32(vm_get_register_safe(src))) {
-                        src_bool = AS_U32(vm_get_register_safe(src)) != 0;
-                    } else if (IS_U64(vm_get_register_safe(src))) {
-                        src_bool = AS_U64(vm_get_register_safe(src)) != 0;
-                    } else if (IS_F64(vm_get_register_safe(src))) {
-                        src_bool = AS_F64(vm_get_register_safe(src)) != 0.0;
-                    } else {
-                        src_bool = true; // Objects, strings, etc. are truthy
-                    }
+                    bool src_bool = vm_register_is_truthy(src);
 
                     vm_set_register_safe(dst, BOOL_VAL(!src_bool));
                     break;
@@ -2826,9 +2732,11 @@ InterpretResult vm_run_dispatch(void) {
                         uint8_t index = READ_BYTE();
                         
                         if (isLocal) {
-                            closure->upvalues[i] = captureUpvalue(&vm_get_register_safe(index));
+                            vm_get_register_safe(index);
+                            closure->upvalues[i] = captureUpvalue(&vm.registers[index]);
                         } else {
-                            ObjClosure* enclosing = AS_CLOSURE(vm_get_register_safe(0)); // Current closure
+                            Value enclosing_value = vm_get_register_safe(0);
+                            ObjClosure* enclosing = AS_CLOSURE(enclosing_value); // Current closure
                             closure->upvalues[i] = enclosing->upvalues[index];
                         }
                     }
@@ -2841,7 +2749,8 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t dstReg = READ_BYTE();
                     uint8_t upvalueIndex = READ_BYTE();
                     
-                    ObjClosure* closure = AS_CLOSURE(vm_get_register_safe(0)); // Current closure
+                    Value closure_value = vm_get_register_safe(0);
+                    ObjClosure* closure = AS_CLOSURE(closure_value); // Current closure
                     vm_set_register_safe(dstReg, *closure->upvalues[upvalueIndex]->location);
                     break;
                 }
@@ -2850,14 +2759,16 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t upvalueIndex = READ_BYTE();
                     uint8_t valueReg = READ_BYTE();
                     
-                    ObjClosure* closure = AS_CLOSURE(vm_get_register_safe(0)); // Current closure
+                    Value closure_value = vm_get_register_safe(0);
+                    ObjClosure* closure = AS_CLOSURE(closure_value); // Current closure
                     *closure->upvalues[upvalueIndex]->location = vm_get_register_safe(valueReg);
                     break;
                 }
 
                 case OP_CLOSE_UPVALUE_R: {
                     uint8_t localReg = READ_BYTE();
-                    closeUpvalues(&vm_get_register_safe(localReg));
+                    vm_get_register_safe(localReg);
+                    closeUpvalues(&vm.registers[localReg]);
                     break;
                 }
 

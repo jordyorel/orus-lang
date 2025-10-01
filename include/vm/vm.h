@@ -1107,6 +1107,17 @@ typedef struct {
 } VMProfile;
 
 #define LOOP_BRANCH_CACHE_CAPACITY 128
+#define LOOP_BRANCH_CACHE_BUCKET_SIZE 4
+#define LOOP_BRANCH_CACHE_BUCKET_COUNT \
+    (LOOP_BRANCH_CACHE_CAPACITY / LOOP_BRANCH_CACHE_BUCKET_SIZE)
+
+#if LOOP_BRANCH_CACHE_BUCKET_COUNT == 0
+#error "LOOP_BRANCH_CACHE_BUCKET_COUNT must be greater than zero"
+#endif
+
+#if (LOOP_BRANCH_CACHE_CAPACITY % LOOP_BRANCH_CACHE_BUCKET_SIZE) != 0
+#error "Loop branch cache capacity must be divisible by bucket size"
+#endif
 
 typedef struct {
     bool valid;
@@ -1117,7 +1128,11 @@ typedef struct {
 } LoopBranchCacheEntry;
 
 typedef struct {
-    LoopBranchCacheEntry entries[LOOP_BRANCH_CACHE_CAPACITY];
+    LoopBranchCacheEntry slots[LOOP_BRANCH_CACHE_BUCKET_SIZE];
+} LoopBranchCacheBucket;
+
+typedef struct {
+    LoopBranchCacheBucket buckets[LOOP_BRANCH_CACHE_BUCKET_COUNT];
     uint32_t guard_generations[REGISTER_COUNT];
 } LoopBranchCache;
 

@@ -124,17 +124,9 @@ run_benchmark_category() {
     
     # Get base name for other language files
     local base_name="${orus_file%.orus}"
-    
-    # Special case: For Control Flow, use LICM for Orus but control_flow for other languages
-    if [[ "$category" == "Control Flow Performance" ]]; then
-        # Run Orus with LICM benchmark
-        run_language_benchmark "Orus" "$orus_file" "\"$ORUS_BINARY\" \"$SCRIPT_DIR/$orus_file\""
-        # Use control_flow_benchmark for other languages
-        base_name="control_flow_benchmark"
-    else
-        # Normal case: run Orus with the specified file
-        run_language_benchmark "Orus" "$orus_file" "\"$ORUS_BINARY\" \"$SCRIPT_DIR/$orus_file\""
-    fi
+
+    # Run Orus with the specified file
+    run_language_benchmark "Orus" "$orus_file" "\"$ORUS_BINARY\" \"$SCRIPT_DIR/$orus_file\""
     
     if [[ -f "$SCRIPT_DIR/${base_name}.py" ]]; then
         run_language_benchmark "Python" "${base_name}.py" "python3 \"$SCRIPT_DIR/${base_name}.py\""
@@ -300,7 +292,7 @@ run_benchmark_category "Pure Arithmetic Performance" "arithmetic_benchmark.orus"
 # TODO: Uncomment when implemented
 # run_benchmark_category "Comprehensive Performance" "comprehensive_benchmark.orus"
 # run_benchmark_category "Extreme Performance" "extreme_benchmark.orus"
-run_benchmark_category "Control Flow Performance" "control_flow_benchmark.orus"
+run_benchmark_category "Optimized Loop Performance" "optimized_loop_benchmark.orus"
 # run_benchmark_category "While Loop Performance" "while_loop_benchmark.orus"
 
 echo -e "${BLUE}=================================================================${NC}"
