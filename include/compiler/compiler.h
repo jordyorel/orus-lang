@@ -124,6 +124,8 @@ typedef struct CompilerContext {
     int current_loop_start;            // Bytecode offset of current loop start
     int current_loop_end;              // Bytecode offset of current loop end
     int current_loop_continue;         // Bytecode offset for continue statements (for for-loops)
+    uint16_t current_loop_id;          // Active loop identifier for typed branch cache
+    uint16_t next_loop_id;             // Monotonic loop identifier allocator
     int* break_statements;             // Array of break statement bytecode offsets to patch
     int break_count;                   // Number of break statements in current loop
     int break_capacity;                // Capacity of break_statements array

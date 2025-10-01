@@ -12,6 +12,100 @@
 #include "vm/vm_comparison.h"
 
 #include <limits.h>
+#include <stddef.h>
+#include <string.h>
+
+static LoopBranchCacheEntry* vm_branch_cache_lookup(uint16_t loop_id, uint16_t reg) {
+    for (size_t i = 0; i < LOOP_BRANCH_CACHE_CAPACITY; ++i) {
+        LoopBranchCacheEntry* entry = &vm.branch_cache.entries[i];
+        if (entry->valid && entry->loop_id == loop_id && entry->predicate_reg == reg) {
+            return entry;
+        }
+    }
+    return NULL;
+}
+
+static LoopBranchCacheEntry* vm_branch_cache_select_slot(uint16_t loop_id, uint16_t reg) {
+    LoopBranchCacheEntry* free_slot = NULL;
+    for (size_t i = 0; i < LOOP_BRANCH_CACHE_CAPACITY; ++i) {
+        LoopBranchCacheEntry* entry = &vm.branch_cache.entries[i];
+        if (!entry->valid) {
+            if (!free_slot) {
+                free_slot = entry;
+            }
+            continue;
+        }
+        if (entry->loop_id == loop_id && entry->predicate_reg == reg) {
+            return entry;
+        }
+    }
+    if (free_slot) {
+        return free_slot;
+    }
+    size_t index = loop_id % LOOP_BRANCH_CACHE_CAPACITY;
+    return &vm.branch_cache.entries[index];
+}
+
+void vm_branch_cache_reset(void) {
+    memset(vm.branch_cache.entries, 0, sizeof(vm.branch_cache.entries));
+    memset(vm.branch_cache.guard_generations, 0, sizeof(vm.branch_cache.guard_generations));
+}
+
+void vm_branch_cache_bump_generation(uint16_t reg) {
+    if (reg >= REGISTER_COUNT) {
+        return;
+    }
+    vm.branch_cache.guard_generations[reg]++;
+}
+
+bool vm_branch_cache_try_get(uint16_t loop_id, uint16_t reg, bool* out_value) {
+    if (!out_value || !vm.config.enable_bool_branch_fastpath) {
+        return false;
+    }
+
+    LoopBranchCacheEntry* entry = vm_branch_cache_lookup(loop_id, reg);
+    if (!vm_typed_reg_in_range(reg) || vm.typed_regs.reg_types[reg] != REG_TYPE_BOOL) {
+        if (entry) {
+            entry->valid = false;
+        }
+        vm_trace_loop_event(LOOP_TRACE_BRANCH_CACHE_MISS);
+        return false;
+    }
+
+    if (!entry || !entry->valid) {
+        vm_trace_loop_event(LOOP_TRACE_BRANCH_CACHE_MISS);
+        return false;
+    }
+
+    if (entry->guard_generation != vm.branch_cache.guard_generations[reg]) {
+        entry->valid = false;
+        vm_trace_loop_event(LOOP_TRACE_BRANCH_CACHE_MISS);
+        return false;
+    }
+
+    *out_value = vm.typed_regs.bool_regs[reg];
+    vm_trace_loop_event(LOOP_TRACE_TYPED_HIT);
+    vm_trace_loop_event(LOOP_TRACE_BRANCH_FAST_HIT);
+    vm_trace_loop_event(LOOP_TRACE_BRANCH_CACHE_HIT);
+    return true;
+}
+
+void vm_branch_cache_store(uint16_t loop_id, uint16_t reg) {
+    if (!vm_typed_reg_in_range(reg) || vm.typed_regs.reg_types[reg] != REG_TYPE_BOOL) {
+        return;
+    }
+
+    LoopBranchCacheEntry* entry = vm_branch_cache_select_slot(loop_id, reg);
+    if (!entry) {
+        return;
+    }
+
+    entry->valid = true;
+    entry->loop_id = loop_id;
+    entry->predicate_reg = reg;
+    entry->predicate_type = REG_TYPE_BOOL;
+    entry->guard_generation = vm.branch_cache.guard_generations[reg];
+}
 
 bool vm_try_branch_bool_fast_hot(uint16_t reg, bool* out_value) {
     if (!out_value) {
@@ -36,6 +130,7 @@ bool vm_try_branch_bool_fast_hot(uint16_t reg, bool* out_value) {
     if (vm.config.enable_licm_typed_metadata) {
         vm_trace_loop_event(LOOP_TRACE_LICM_GUARD_DEMOTION);
     }
+    vm_branch_cache_bump_generation(reg);
     return false;
 }
 
@@ -56,10 +151,12 @@ VMBoolBranchResult vm_try_branch_bool_fast_cold(uint16_t reg, bool* out_value) {
         if (vm.config.enable_licm_typed_metadata) {
             vm_trace_loop_event(LOOP_TRACE_LICM_GUARD_DEMOTION);
         }
+        vm_branch_cache_bump_generation(reg);
         return VM_BOOL_BRANCH_RESULT_FAIL;
     }
 
     *out_value = AS_BOOL(condition);
+    vm_cache_bool_typed(reg, *out_value);
     return VM_BOOL_BRANCH_RESULT_BOXED;
 }
 
@@ -76,6 +173,7 @@ bool vm_exec_inc_i32_checked(uint16_t reg) {
     }
 
     if (vm.typed_regs.reg_types[reg] != REG_TYPE_I32) {
+        vm_branch_cache_bump_generation(reg);
         vm.typed_regs.reg_types[reg] = REG_TYPE_HEAP;
         vm.typed_regs.dirty[reg] = false;
         vm_trace_loop_event(LOOP_TRACE_INC_TYPE_INSTABILITY);
@@ -86,6 +184,7 @@ bool vm_exec_inc_i32_checked(uint16_t reg) {
     int32_t current = vm.typed_regs.i32_regs[reg];
     int32_t next_value;
     if (__builtin_add_overflow(current, 1, &next_value)) {
+        vm_branch_cache_bump_generation(reg);
         vm.typed_regs.reg_types[reg] = REG_TYPE_HEAP;
         vm.typed_regs.dirty[reg] = false;
         vm_trace_loop_event(LOOP_TRACE_INC_OVERFLOW_BAILOUT);
@@ -114,6 +213,7 @@ bool vm_exec_monotonic_inc_cmp_i32(uint16_t counter_reg, uint16_t limit_reg,
     if (vm.typed_regs.reg_types[counter_reg] != REG_TYPE_I32 ||
         vm.typed_regs.reg_types[limit_reg] != REG_TYPE_I32) {
         if (vm.typed_regs.reg_types[counter_reg] != REG_TYPE_I32) {
+            vm_branch_cache_bump_generation(counter_reg);
             vm.typed_regs.reg_types[counter_reg] = REG_TYPE_HEAP;
             vm_trace_loop_event(LOOP_TRACE_INC_TYPE_INSTABILITY);
         }
@@ -123,6 +223,7 @@ bool vm_exec_monotonic_inc_cmp_i32(uint16_t counter_reg, uint16_t limit_reg,
 
     int32_t current = vm.typed_regs.i32_regs[counter_reg];
     if (current == INT32_MAX) {
+        vm_branch_cache_bump_generation(counter_reg);
         vm.typed_regs.reg_types[counter_reg] = REG_TYPE_HEAP;
         vm_trace_loop_event(LOOP_TRACE_INC_OVERFLOW_BAILOUT);
         vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);

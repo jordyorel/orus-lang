@@ -38,6 +38,7 @@
 #include "runtime/memory.h"
 #include "runtime/builtins.h"
 #include "tools/debug.h"
+#include "vm/vm_loop_fastpaths.h"
 #include "internal/error_reporting.h"
 #include "config/config.h"
 #include <time.h>
@@ -938,6 +939,7 @@ cleanup:
 
 void vm_reset_loop_trace(void) {
     memset(&vm.profile.loop_trace, 0, sizeof(LoopTraceCounters));
+    vm_branch_cache_reset();
 }
 
 void vm_dump_loop_trace(FILE* out) {
@@ -951,7 +953,8 @@ void vm_dump_loop_trace(FILE* out) {
             " branch_fast_hits=%" PRIu64 " branch_fast_misses=%" PRIu64
             " inc_overflow_bailouts=%" PRIu64 " inc_type_instability=%" PRIu64
             " iter_alloc_saved=%" PRIu64 " iter_fallbacks=%" PRIu64
-            " licm_guard_fusions=%" PRIu64 " licm_guard_demotions=%" PRIu64 "\n",
+            " licm_guard_fusions=%" PRIu64 " licm_guard_demotions=%" PRIu64
+            " branch_cache_hits=%" PRIu64 " branch_cache_misses=%" PRIu64 "\n",
             (uint64_t)vm.profile.loop_trace.typed_hit,
             (uint64_t)vm.profile.loop_trace.typed_miss,
             (uint64_t)vm.profile.loop_trace.boxed_type_mismatch,
@@ -963,5 +966,7 @@ void vm_dump_loop_trace(FILE* out) {
             (uint64_t)vm.profile.loop_trace.iter_allocations_saved,
             (uint64_t)vm.profile.loop_trace.iter_fallbacks,
             (uint64_t)vm.profile.loop_trace.licm_guard_fusions,
-            (uint64_t)vm.profile.loop_trace.licm_guard_demotions);
+            (uint64_t)vm.profile.loop_trace.licm_guard_demotions,
+            (uint64_t)vm.profile.loop_trace.branch_cache_hits,
+            (uint64_t)vm.profile.loop_trace.branch_cache_misses);
 }

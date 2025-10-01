@@ -99,6 +99,47 @@ static inline bool CF_JUMP_IF(uint8_t reg, uint16_t offset) {
     return false;
 }
 
+static inline bool CF_BRANCH_TYPED(uint16_t loop_id, uint8_t reg, uint16_t offset) {
+    if (vm.isShuttingDown || !vm.chunk || !vm.chunk->code) {
+        return true;
+    }
+
+    bool cached_condition = false;
+    if (vm_branch_cache_try_get(loop_id, reg, &cached_condition)) {
+        if (!cached_condition) {
+            if (!CF_JUMP(offset)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    bool evaluated_condition = false;
+    VMBoolBranchResult branch_result = vm_try_branch_bool_fast_cold(reg, &evaluated_condition);
+    if (branch_result == VM_BOOL_BRANCH_RESULT_FAIL) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Condition must be boolean");
+        return false;
+    }
+
+    if (branch_result == VM_BOOL_BRANCH_RESULT_BOXED) {
+        vm_cache_bool_typed(reg, evaluated_condition);
+    }
+
+    if (vm.config.enable_bool_branch_fastpath &&
+        (branch_result == VM_BOOL_BRANCH_RESULT_BOXED ||
+         branch_result == VM_BOOL_BRANCH_RESULT_TYPED)) {
+        vm_branch_cache_store(loop_id, reg);
+    }
+
+    if (!evaluated_condition) {
+        if (!CF_JUMP(offset)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 static inline bool CF_JUMP_IF_NOT_I32_TYPED(uint8_t left_reg, uint8_t right_reg, uint16_t offset) {
     if (vm.isShuttingDown || !vm.chunk || !vm.chunk->code) {
         return true;

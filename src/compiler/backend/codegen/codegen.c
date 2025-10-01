@@ -429,6 +429,11 @@ static ScopeFrame* enter_loop_context(CompilerContext* ctx, int loop_start) {
     frame->start_offset = loop_start;
     frame->end_offset = -1;
     frame->continue_offset = loop_start;
+    frame->prev_loop_id = ctx->current_loop_id;
+    frame->loop_id = ctx->next_loop_id++;
+    if (ctx->next_loop_id == 0) {
+        ctx->next_loop_id = 1;
+    }
     frame->prev_loop_start = ctx->current_loop_start;
     frame->prev_loop_end = ctx->current_loop_end;
     frame->prev_loop_continue = ctx->current_loop_continue;
@@ -442,6 +447,7 @@ static ScopeFrame* enter_loop_context(CompilerContext* ctx, int loop_start) {
     ctx->current_loop_start = loop_start;
     ctx->current_loop_end = loop_start;
     ctx->current_loop_continue = loop_start;
+    ctx->current_loop_id = frame->loop_id;
 
     ctx->break_statements = NULL;
     ctx->break_count = 0;
@@ -491,6 +497,7 @@ static void leave_loop_context(CompilerContext* ctx, ScopeFrame* frame, int end_
         ctx->current_loop_start = frame->prev_loop_start;
         ctx->current_loop_end = frame->prev_loop_end;
         ctx->current_loop_continue = frame->prev_loop_continue;
+        ctx->current_loop_id = frame->prev_loop_id;
 
         if (ctx->scopes) {
             scope_stack_pop(ctx->scopes);
@@ -505,6 +512,7 @@ static void leave_loop_context(CompilerContext* ctx, ScopeFrame* frame, int end_
         ctx->current_loop_start = -1;
         ctx->current_loop_end = -1;
         ctx->current_loop_continue = -1;
+        ctx->current_loop_id = 0;
     }
 
     control_flow_leave_loop_context();
@@ -5504,7 +5512,9 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
         return;
     }
 
-    DEBUG_CODEGEN_PRINT("While loop start at offset %d\n", loop_start);
+    uint16_t loop_id = ctx->current_loop_id;
+
+    DEBUG_CODEGEN_PRINT("While loop start at offset %d (loop_id=%u)\n", loop_start, loop_id);
 
     int condition_reg = compile_expression(ctx, while_stmt->typed.whileStmt.condition);
     if (condition_reg == -1) {
@@ -5516,9 +5526,11 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
 
     set_location_from_node(ctx, while_stmt);
     int end_patch = -1;
-    emit_byte_to_buffer(ctx->bytecode, OP_JUMP_IF_NOT_R);
-    emit_byte_to_buffer(ctx->bytecode, condition_reg);
-    end_patch = emit_jump_placeholder(ctx->bytecode, OP_JUMP_IF_NOT_R);
+    emit_byte_to_buffer(ctx->bytecode, OP_BRANCH_TYPED);
+    emit_byte_to_buffer(ctx->bytecode, (uint8_t)((loop_id >> 8) & 0xFF));
+    emit_byte_to_buffer(ctx->bytecode, (uint8_t)(loop_id & 0xFF));
+    emit_byte_to_buffer(ctx->bytecode, (uint8_t)condition_reg);
+    end_patch = emit_jump_placeholder(ctx->bytecode, OP_BRANCH_TYPED);
     if (end_patch < 0) {
         DEBUG_CODEGEN_PRINT("Error: Failed to allocate while-loop end placeholder\n");
         ctx->has_compilation_errors = true;
@@ -5528,8 +5540,8 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
         leave_loop_context(ctx, loop_frame, ctx->bytecode->count);
         return;
     }
-    DEBUG_CODEGEN_PRINT("Emitted OP_JUMP_IF_NOT_R R%d (placeholder index %d)\n",
-           condition_reg, end_patch);
+    DEBUG_CODEGEN_PRINT("Emitted OP_BRANCH_TYPED loop=%u R%d (placeholder index %d)\n",
+           loop_id, condition_reg, end_patch);
 
     if (condition_reg >= MP_TEMP_REG_START && condition_reg <= MP_TEMP_REG_END) {
         mp_free_temp_register(ctx->allocator, condition_reg);
@@ -5757,6 +5769,8 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
         goto cleanup;
     }
     loop_frame_index = loop_frame->lexical_depth;
+    uint16_t loop_id = ctx->current_loop_id;
+    (void)loop_id;
     ctx->current_loop_continue = -1;
     loop_frame->continue_offset = -1;
 
@@ -5882,9 +5896,11 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
         end_patch = guard_patch;
     } else {
         set_location_from_node(ctx, for_stmt);
-        emit_byte_to_buffer(ctx->bytecode, OP_JUMP_IF_NOT_R);
-        emit_byte_to_buffer(ctx->bytecode, condition_reg);
-        end_patch = emit_jump_placeholder(ctx->bytecode, OP_JUMP_IF_NOT_R);
+        emit_byte_to_buffer(ctx->bytecode, OP_BRANCH_TYPED);
+        emit_byte_to_buffer(ctx->bytecode, (uint8_t)((loop_id >> 8) & 0xFF));
+        emit_byte_to_buffer(ctx->bytecode, (uint8_t)(loop_id & 0xFF));
+        emit_byte_to_buffer(ctx->bytecode, (uint8_t)condition_reg);
+        end_patch = emit_jump_placeholder(ctx->bytecode, OP_BRANCH_TYPED);
         if (end_patch < 0) {
             ctx->has_compilation_errors = true;
             goto cleanup;
@@ -6134,8 +6150,9 @@ void compile_for_iter_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
         goto cleanup;
     }
     loop_frame_index = loop_frame->lexical_depth;
+    uint16_t loop_id = ctx->current_loop_id;
 
-    DEBUG_CODEGEN_PRINT("For iteration loop start at offset %d\n", loop_start);
+    DEBUG_CODEGEN_PRINT("For iteration loop start at offset %d (loop_id=%u)\n", loop_start, loop_id);
 
     // Get next value from iterator
     set_location_from_node(ctx, for_stmt);
@@ -6147,17 +6164,19 @@ void compile_for_iter_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     // Emit conditional jump - if has_value is false, jump to end of loop
     set_location_from_node(ctx, for_stmt);
     int end_patch = -1;
-    emit_byte_to_buffer(ctx->bytecode, OP_JUMP_IF_NOT_R);
-    emit_byte_to_buffer(ctx->bytecode, has_value_reg);
-    end_patch = emit_jump_placeholder(ctx->bytecode, OP_JUMP_IF_NOT_R);
+    emit_byte_to_buffer(ctx->bytecode, OP_BRANCH_TYPED);
+    emit_byte_to_buffer(ctx->bytecode, (uint8_t)((loop_id >> 8) & 0xFF));
+    emit_byte_to_buffer(ctx->bytecode, (uint8_t)(loop_id & 0xFF));
+    emit_byte_to_buffer(ctx->bytecode, (uint8_t)has_value_reg);
+    end_patch = emit_jump_placeholder(ctx->bytecode, OP_BRANCH_TYPED);
     if (end_patch < 0) {
         DEBUG_CODEGEN_PRINT("Error: Failed to allocate iterator loop end placeholder\n");
         ctx->has_compilation_errors = true;
         goto cleanup;
     }
 
-    DEBUG_CODEGEN_PRINT("Emitted OP_JUMP_IF_NOT_R R%d (placeholder index %d)\n",
-           has_value_reg, end_patch);
+    DEBUG_CODEGEN_PRINT("Emitted OP_BRANCH_TYPED loop=%u R%d (placeholder index %d)\n",
+           loop_id, has_value_reg, end_patch);
     
     // Compile loop body with scope (like while loops do)
     compile_block_with_scope(ctx, for_stmt->typed.forIter.body, true);

@@ -272,6 +272,8 @@ static inline int determine_prefix_size(uint8_t opcode) {
     switch (opcode) {
         case OP_JUMP_IF_NOT_I32_TYPED:
             return 3;  // opcode + left_reg + right_reg
+        case OP_BRANCH_TYPED:
+            return 4;  // opcode + loop_id_hi + loop_id_lo + predicate register
         case OP_JUMP_IF_NOT_R:
         case OP_JUMP_IF_R:
         case OP_TRY_BEGIN:
@@ -356,6 +358,7 @@ bool patch_jump(BytecodeBuffer* buffer, int patch_index, int target_offset) {
         case OP_JUMP_IF_R:
         case OP_TRY_BEGIN:
         case OP_JUMP_IF_NOT_I32_TYPED:
+        case OP_BRANCH_TYPED:
         {
             relative = target_offset - next_ip;
             if (relative < 0 || relative > 0xFFFF) {
@@ -479,6 +482,8 @@ CompilerContext* init_compiler_context(TypedASTNode* typed_ast) {
     ctx->current_loop_start = -1;     // No current loop
     ctx->current_loop_end = -1;       // No current loop
     ctx->current_loop_continue = -1;  // No current loop
+    ctx->current_loop_id = 0;
+    ctx->next_loop_id = 1;
     ctx->break_statements = NULL;     // No break statements yet
     ctx->break_count = 0;
     ctx->break_capacity = 0;

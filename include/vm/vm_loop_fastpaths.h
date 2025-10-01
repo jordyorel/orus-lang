@@ -68,6 +68,10 @@ VMBoolBranchResult vm_try_branch_bool_fast_cold(uint16_t reg, bool* out_value);
 bool vm_exec_inc_i32_checked(uint16_t reg);
 bool vm_exec_monotonic_inc_cmp_i32(uint16_t counter_reg, uint16_t limit_reg, bool* out_should_continue);
 bool vm_typed_iterator_next(uint16_t reg, Value* out_value);
+void vm_branch_cache_reset(void);
+void vm_branch_cache_bump_generation(uint16_t reg);
+bool vm_branch_cache_try_get(uint16_t loop_id, uint16_t reg, bool* out_value);
+void vm_branch_cache_store(uint16_t loop_id, uint16_t reg);
 
 #ifdef __cplusplus
 }
