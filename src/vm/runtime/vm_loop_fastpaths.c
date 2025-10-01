@@ -163,12 +163,14 @@ VMBoolBranchResult vm_try_branch_bool_fast_cold(uint16_t reg, bool* out_value) {
 bool vm_exec_inc_i32_checked(uint16_t reg) {
     if (vm.config.disable_inc_typed_fastpath) {
         vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+        vm_trace_loop_event(LOOP_TRACE_INC_FAST_MISS);
         return false;
     }
 
     if (!vm_typed_reg_in_range(reg)) {
         vm_trace_loop_event(LOOP_TRACE_INC_TYPE_INSTABILITY);
         vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+        vm_trace_loop_event(LOOP_TRACE_INC_FAST_MISS);
         return false;
     }
 
@@ -178,6 +180,7 @@ bool vm_exec_inc_i32_checked(uint16_t reg) {
         vm.typed_regs.dirty[reg] = false;
         vm_trace_loop_event(LOOP_TRACE_INC_TYPE_INSTABILITY);
         vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+        vm_trace_loop_event(LOOP_TRACE_INC_FAST_MISS);
         return false;
     }
 
@@ -189,11 +192,121 @@ bool vm_exec_inc_i32_checked(uint16_t reg) {
         vm.typed_regs.dirty[reg] = false;
         vm_trace_loop_event(LOOP_TRACE_INC_OVERFLOW_BAILOUT);
         vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+        vm_trace_loop_event(LOOP_TRACE_INC_FAST_MISS);
         return false;
     }
 
     vm_store_i32_typed_hot(reg, next_value);
     vm_trace_loop_event(LOOP_TRACE_TYPED_HIT);
+    vm_trace_loop_event(LOOP_TRACE_INC_FAST_HIT);
+    return true;
+}
+
+bool vm_exec_inc_i64_checked(uint16_t reg) {
+    if (vm.config.disable_inc_typed_fastpath) {
+        vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+        vm_trace_loop_event(LOOP_TRACE_INC_FAST_MISS);
+        return false;
+    }
+
+    if (!vm_typed_reg_in_range(reg)) {
+        vm_trace_loop_event(LOOP_TRACE_INC_TYPE_INSTABILITY);
+        vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+        vm_trace_loop_event(LOOP_TRACE_INC_FAST_MISS);
+        return false;
+    }
+
+    if (vm.typed_regs.reg_types[reg] != REG_TYPE_I64) {
+        vm_branch_cache_bump_generation(reg);
+        vm.typed_regs.reg_types[reg] = REG_TYPE_HEAP;
+        vm.typed_regs.dirty[reg] = false;
+        vm_trace_loop_event(LOOP_TRACE_INC_TYPE_INSTABILITY);
+        vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+        vm_trace_loop_event(LOOP_TRACE_INC_FAST_MISS);
+        return false;
+    }
+
+    int64_t current = vm.typed_regs.i64_regs[reg];
+    int64_t next_value;
+    if (__builtin_add_overflow(current, (int64_t)1, &next_value)) {
+        vm_branch_cache_bump_generation(reg);
+        vm.typed_regs.reg_types[reg] = REG_TYPE_HEAP;
+        vm.typed_regs.dirty[reg] = false;
+        vm_trace_loop_event(LOOP_TRACE_INC_OVERFLOW_BAILOUT);
+        vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+        vm_trace_loop_event(LOOP_TRACE_INC_FAST_MISS);
+        return false;
+    }
+
+    vm_store_i64_typed_hot(reg, next_value);
+    vm_trace_loop_event(LOOP_TRACE_TYPED_HIT);
+    vm_trace_loop_event(LOOP_TRACE_INC_FAST_HIT);
+    return true;
+}
+
+bool vm_exec_inc_u32_checked(uint16_t reg) {
+    if (vm.config.disable_inc_typed_fastpath) {
+        vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+        vm_trace_loop_event(LOOP_TRACE_INC_FAST_MISS);
+        return false;
+    }
+
+    if (!vm_typed_reg_in_range(reg)) {
+        vm_trace_loop_event(LOOP_TRACE_INC_TYPE_INSTABILITY);
+        vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+        vm_trace_loop_event(LOOP_TRACE_INC_FAST_MISS);
+        return false;
+    }
+
+    if (vm.typed_regs.reg_types[reg] != REG_TYPE_U32) {
+        vm_branch_cache_bump_generation(reg);
+        vm.typed_regs.reg_types[reg] = REG_TYPE_HEAP;
+        vm.typed_regs.dirty[reg] = false;
+        vm_trace_loop_event(LOOP_TRACE_INC_TYPE_INSTABILITY);
+        vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+        vm_trace_loop_event(LOOP_TRACE_INC_FAST_MISS);
+        return false;
+    }
+
+    uint32_t current = vm.typed_regs.u32_regs[reg];
+    uint32_t next_value = current + (uint32_t)1;
+
+    vm_store_u32_typed_hot(reg, next_value);
+    vm_trace_loop_event(LOOP_TRACE_TYPED_HIT);
+    vm_trace_loop_event(LOOP_TRACE_INC_FAST_HIT);
+    return true;
+}
+
+bool vm_exec_inc_u64_checked(uint16_t reg) {
+    if (vm.config.disable_inc_typed_fastpath) {
+        vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+        vm_trace_loop_event(LOOP_TRACE_INC_FAST_MISS);
+        return false;
+    }
+
+    if (!vm_typed_reg_in_range(reg)) {
+        vm_trace_loop_event(LOOP_TRACE_INC_TYPE_INSTABILITY);
+        vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+        vm_trace_loop_event(LOOP_TRACE_INC_FAST_MISS);
+        return false;
+    }
+
+    if (vm.typed_regs.reg_types[reg] != REG_TYPE_U64) {
+        vm_branch_cache_bump_generation(reg);
+        vm.typed_regs.reg_types[reg] = REG_TYPE_HEAP;
+        vm.typed_regs.dirty[reg] = false;
+        vm_trace_loop_event(LOOP_TRACE_INC_TYPE_INSTABILITY);
+        vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+        vm_trace_loop_event(LOOP_TRACE_INC_FAST_MISS);
+        return false;
+    }
+
+    uint64_t current = vm.typed_regs.u64_regs[reg];
+    uint64_t next_value = current + (uint64_t)1;
+
+    vm_store_u64_typed_hot(reg, next_value);
+    vm_trace_loop_event(LOOP_TRACE_TYPED_HIT);
+    vm_trace_loop_event(LOOP_TRACE_INC_FAST_HIT);
     return true;
 }
 
@@ -201,12 +314,14 @@ bool vm_exec_monotonic_inc_cmp_i32(uint16_t counter_reg, uint16_t limit_reg,
                                    bool* out_should_continue) {
     if (vm.config.disable_inc_typed_fastpath) {
         vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+        vm_trace_loop_event(LOOP_TRACE_INC_FAST_MISS);
         return false;
     }
 
     if (!vm_typed_reg_in_range(counter_reg) || !vm_typed_reg_in_range(limit_reg)) {
         vm_trace_loop_event(LOOP_TRACE_INC_TYPE_INSTABILITY);
         vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+        vm_trace_loop_event(LOOP_TRACE_INC_FAST_MISS);
         return false;
     }
 
@@ -218,6 +333,7 @@ bool vm_exec_monotonic_inc_cmp_i32(uint16_t counter_reg, uint16_t limit_reg,
             vm_trace_loop_event(LOOP_TRACE_INC_TYPE_INSTABILITY);
         }
         vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+        vm_trace_loop_event(LOOP_TRACE_INC_FAST_MISS);
         return false;
     }
 
@@ -227,6 +343,7 @@ bool vm_exec_monotonic_inc_cmp_i32(uint16_t counter_reg, uint16_t limit_reg,
         vm.typed_regs.reg_types[counter_reg] = REG_TYPE_HEAP;
         vm_trace_loop_event(LOOP_TRACE_INC_OVERFLOW_BAILOUT);
         vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+        vm_trace_loop_event(LOOP_TRACE_INC_FAST_MISS);
         return false;
     }
 
@@ -239,6 +356,157 @@ bool vm_exec_monotonic_inc_cmp_i32(uint16_t counter_reg, uint16_t limit_reg,
     }
 
     vm_trace_loop_event(LOOP_TRACE_TYPED_HIT);
+    vm_trace_loop_event(LOOP_TRACE_INC_FAST_HIT);
+    return true;
+}
+
+bool vm_exec_monotonic_inc_cmp_i64(uint16_t counter_reg, uint16_t limit_reg,
+                                   bool* out_should_continue) {
+    if (vm.config.disable_inc_typed_fastpath) {
+        vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+        vm_trace_loop_event(LOOP_TRACE_INC_FAST_MISS);
+        return false;
+    }
+
+    if (!vm_typed_reg_in_range(counter_reg) || !vm_typed_reg_in_range(limit_reg)) {
+        vm_trace_loop_event(LOOP_TRACE_INC_TYPE_INSTABILITY);
+        vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+        vm_trace_loop_event(LOOP_TRACE_INC_FAST_MISS);
+        return false;
+    }
+
+    if (vm.typed_regs.reg_types[counter_reg] != REG_TYPE_I64 ||
+        vm.typed_regs.reg_types[limit_reg] != REG_TYPE_I64) {
+        if (vm.typed_regs.reg_types[counter_reg] != REG_TYPE_I64) {
+            vm_branch_cache_bump_generation(counter_reg);
+            vm.typed_regs.reg_types[counter_reg] = REG_TYPE_HEAP;
+            vm_trace_loop_event(LOOP_TRACE_INC_TYPE_INSTABILITY);
+        }
+        vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+        vm_trace_loop_event(LOOP_TRACE_INC_FAST_MISS);
+        return false;
+    }
+
+    int64_t current = vm.typed_regs.i64_regs[counter_reg];
+    if (current == INT64_MAX) {
+        vm_branch_cache_bump_generation(counter_reg);
+        vm.typed_regs.reg_types[counter_reg] = REG_TYPE_HEAP;
+        vm_trace_loop_event(LOOP_TRACE_INC_OVERFLOW_BAILOUT);
+        vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+        vm_trace_loop_event(LOOP_TRACE_INC_FAST_MISS);
+        return false;
+    }
+
+    int64_t next_value = current + 1;
+    store_i64_register(counter_reg, next_value);
+
+    int64_t limit_value = vm.typed_regs.i64_regs[limit_reg];
+    if (out_should_continue) {
+        *out_should_continue = next_value < limit_value;
+    }
+
+    vm_trace_loop_event(LOOP_TRACE_TYPED_HIT);
+    vm_trace_loop_event(LOOP_TRACE_INC_FAST_HIT);
+    return true;
+}
+
+bool vm_exec_monotonic_inc_cmp_u32(uint16_t counter_reg, uint16_t limit_reg,
+                                   bool* out_should_continue) {
+    if (vm.config.disable_inc_typed_fastpath) {
+        vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+        vm_trace_loop_event(LOOP_TRACE_INC_FAST_MISS);
+        return false;
+    }
+
+    if (!vm_typed_reg_in_range(counter_reg) || !vm_typed_reg_in_range(limit_reg)) {
+        vm_trace_loop_event(LOOP_TRACE_INC_TYPE_INSTABILITY);
+        vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+        vm_trace_loop_event(LOOP_TRACE_INC_FAST_MISS);
+        return false;
+    }
+
+    if (vm.typed_regs.reg_types[counter_reg] != REG_TYPE_U32 ||
+        vm.typed_regs.reg_types[limit_reg] != REG_TYPE_U32) {
+        if (vm.typed_regs.reg_types[counter_reg] != REG_TYPE_U32) {
+            vm_branch_cache_bump_generation(counter_reg);
+            vm.typed_regs.reg_types[counter_reg] = REG_TYPE_HEAP;
+            vm_trace_loop_event(LOOP_TRACE_INC_TYPE_INSTABILITY);
+        }
+        vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+        vm_trace_loop_event(LOOP_TRACE_INC_FAST_MISS);
+        return false;
+    }
+
+    uint32_t current = vm.typed_regs.u32_regs[counter_reg];
+    if (current == UINT32_MAX) {
+        vm_branch_cache_bump_generation(counter_reg);
+        vm.typed_regs.reg_types[counter_reg] = REG_TYPE_HEAP;
+        vm_trace_loop_event(LOOP_TRACE_INC_OVERFLOW_BAILOUT);
+        vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+        vm_trace_loop_event(LOOP_TRACE_INC_FAST_MISS);
+        return false;
+    }
+
+    uint32_t next_value = current + 1u;
+    store_u32_register(counter_reg, next_value);
+
+    uint32_t limit_value = vm.typed_regs.u32_regs[limit_reg];
+    if (out_should_continue) {
+        *out_should_continue = next_value < limit_value;
+    }
+
+    vm_trace_loop_event(LOOP_TRACE_TYPED_HIT);
+    vm_trace_loop_event(LOOP_TRACE_INC_FAST_HIT);
+    return true;
+}
+
+bool vm_exec_monotonic_inc_cmp_u64(uint16_t counter_reg, uint16_t limit_reg,
+                                   bool* out_should_continue) {
+    if (vm.config.disable_inc_typed_fastpath) {
+        vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+        vm_trace_loop_event(LOOP_TRACE_INC_FAST_MISS);
+        return false;
+    }
+
+    if (!vm_typed_reg_in_range(counter_reg) || !vm_typed_reg_in_range(limit_reg)) {
+        vm_trace_loop_event(LOOP_TRACE_INC_TYPE_INSTABILITY);
+        vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+        vm_trace_loop_event(LOOP_TRACE_INC_FAST_MISS);
+        return false;
+    }
+
+    if (vm.typed_regs.reg_types[counter_reg] != REG_TYPE_U64 ||
+        vm.typed_regs.reg_types[limit_reg] != REG_TYPE_U64) {
+        if (vm.typed_regs.reg_types[counter_reg] != REG_TYPE_U64) {
+            vm_branch_cache_bump_generation(counter_reg);
+            vm.typed_regs.reg_types[counter_reg] = REG_TYPE_HEAP;
+            vm_trace_loop_event(LOOP_TRACE_INC_TYPE_INSTABILITY);
+        }
+        vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+        vm_trace_loop_event(LOOP_TRACE_INC_FAST_MISS);
+        return false;
+    }
+
+    uint64_t current = vm.typed_regs.u64_regs[counter_reg];
+    if (current == UINT64_MAX) {
+        vm_branch_cache_bump_generation(counter_reg);
+        vm.typed_regs.reg_types[counter_reg] = REG_TYPE_HEAP;
+        vm_trace_loop_event(LOOP_TRACE_INC_OVERFLOW_BAILOUT);
+        vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+        vm_trace_loop_event(LOOP_TRACE_INC_FAST_MISS);
+        return false;
+    }
+
+    uint64_t next_value = current + 1u;
+    store_u64_register(counter_reg, next_value);
+
+    uint64_t limit_value = vm.typed_regs.u64_regs[limit_reg];
+    if (out_should_continue) {
+        *out_should_continue = next_value < limit_value;
+    }
+
+    vm_trace_loop_event(LOOP_TRACE_TYPED_HIT);
+    vm_trace_loop_event(LOOP_TRACE_INC_FAST_HIT);
     return true;
 }
 
