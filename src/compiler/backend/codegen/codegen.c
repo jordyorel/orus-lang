@@ -4320,11 +4320,15 @@ void compile_statement(CompilerContext* ctx, TypedASTNode* stmt) {
         case NODE_BREAK:
             compile_break_statement(ctx, stmt);
             break;
-            
+
         case NODE_CONTINUE:
             compile_continue_statement(ctx, stmt);
             break;
-            
+
+        case NODE_PASS:
+            // No bytecode emitted for pass statements
+            break;
+
         case NODE_FOR_RANGE:
             compile_for_range_statement(ctx, stmt);
             break;

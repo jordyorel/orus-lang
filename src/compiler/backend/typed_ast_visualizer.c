@@ -93,6 +93,7 @@ static const char* get_node_type_name(NodeType type) {
         case NODE_TYPE: return "Type";
         case NODE_BREAK: return "Break";
         case NODE_CONTINUE: return "Continue";
+        case NODE_PASS: return "Pass";
         case NODE_FUNCTION: return "Function";
         case NODE_CALL: return "Call";
         case NODE_RETURN: return "Return";

@@ -668,6 +668,9 @@ bool validate_typed_ast(TypedASTNode* root) {
             break;
         case NODE_THROW:
             return validate_typed_ast(root->typed.throwStmt.value);
+        case NODE_PASS:
+            // No children to validate
+            break;
         default:
             // For leaf nodes, just check if type is resolved
             break;
@@ -830,6 +833,9 @@ void print_typed_ast(TypedASTNode* node, int indent) {
             break;
         case NODE_CONTINUE:
             nodeTypeStr = "Continue";
+            break;
+        case NODE_PASS:
+            nodeTypeStr = "Pass";
             break;
         case NODE_TYPE:
             nodeTypeStr = "Type";

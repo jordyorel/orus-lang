@@ -200,6 +200,7 @@ while attempts < 3:
   - Ranges: `for i in start..end:` (exclusive) or `start..=end` (inclusive). A second `..step` expression sets the step.
   - Iterable loops: `for item in array:` iterates arrays.
 - Loops may be labelled using a leading apostrophe (`'outer:`). `break` and `continue` optionally target a label.
+- Use `pass` inside any block when you need a syntactically valid body without executing code.
 
 ```orus
 for i in 0..10..2:
@@ -213,6 +214,9 @@ for value in values:
     for col in 0..5:
         if row == col:
             break 'outer
+
+if should_wait:
+    pass  // Placeholder block until logic is implemented
 ```
 
 ### Functions and Function Values
