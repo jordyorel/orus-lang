@@ -341,6 +341,7 @@ static ASTNode* parseWhileStatement(ParserContext* ctx);
 static ASTNode* parseForStatement(ParserContext* ctx);
 static ASTNode* parseBreakStatement(ParserContext* ctx);
 static ASTNode* parseContinueStatement(ParserContext* ctx);
+static ASTNode* parsePassStatement(ParserContext* ctx);
 static ASTNode* parseBlock(ParserContext* ctx);
 static ASTNode* parseFunctionDefinition(ParserContext* ctx, bool isPublic);
 static ASTNode* parseEnumDefinition(ParserContext* ctx, bool isPublic);
@@ -425,6 +426,9 @@ static ASTNode* parseStatement(ParserContext* ctx) {
 
     if (t.type == TOKEN_PRINT || t.type == TOKEN_PRINT_NO_NL) {
         return parsePrintStatement(ctx);
+    }
+    if (t.type == TOKEN_PASS) {
+        return parsePassStatement(ctx);
     }
     if (t.type == TOKEN_APOSTROPHE) {
         nextToken(ctx);
@@ -2884,6 +2888,20 @@ static ASTNode* parseForStatement(ParserContext* ctx) {
     }
     node->location.line = forTok.line;
     node->location.column = forTok.column;
+    node->dataType = NULL;
+    return node;
+}
+
+static ASTNode* parsePassStatement(ParserContext* ctx) {
+    Token passToken = nextToken(ctx);
+    if (passToken.type != TOKEN_PASS) {
+        return NULL;
+    }
+
+    ASTNode* node = new_node(ctx);
+    node->type = NODE_PASS;
+    node->location.line = passToken.line;
+    node->location.column = passToken.column;
     node->dataType = NULL;
     return node;
 }

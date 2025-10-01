@@ -76,6 +76,7 @@ typedef enum {
     NODE_TYPE,
     NODE_BREAK,
     NODE_CONTINUE,
+    NODE_PASS,
     NODE_FUNCTION,
     NODE_CALL,
     NODE_RETURN,

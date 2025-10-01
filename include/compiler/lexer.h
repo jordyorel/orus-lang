@@ -57,6 +57,7 @@ typedef enum {
     TOKEN_AND,
     TOKEN_BREAK,
     TOKEN_CONTINUE,
+    TOKEN_PASS,
     TOKEN_ELSE,
     TOKEN_ELIF,
     TOKEN_FALSE,

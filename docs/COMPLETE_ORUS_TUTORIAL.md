@@ -1,220 +1,326 @@
-# Complete Orus Tutorial (workspace snapshot)
+# Complete Orus Tutorial (Friendly Edition)
 
-This tutorial walks through every feature that the current Orus compiler and VM implement. Each section builds on the previous one so you can see the language in action while keeping close to the behaviour encoded in the source.
+Welcome to Orus! This guide walks through every feature currently implemented in the Orus compiler and virtual machine. Each
+section explains *why* a feature exists, *how* to use it, and shows runnable Orus code so you can follow along in the REPL or in
+`.orus` files. By the end you will have a complete picture of day-to-day Orus development.
 
-## 1. Orientation
-- Source files are newline-oriented. Semicolons are rejected (`E1007`).
-- A colon (`:`) introduces an indented block. Tabs count as four spaces; mixing widths triggers "Inconsistent indentation" errors.
-- Comments use `//` for single lines and `/* ... */` for block ranges (block comments do not nest).
+---
 
-```orus
-// Single line comment
-/* Block comment
-   over multiple lines */
-print("Hello")
+## 1. Getting Started
+
+Orus ships as a command-line toolchain. After cloning the repository you can build a release binary and launch the REPL:
+
+```bash
+make release
+./orus               # start the interactive shell
+./orus main.orus     # run a file
 ```
 
-## 2. Hello, Orus!
+Source files are indentation-sensitive. Statements do **not** end with semicolons; instead, blocks begin after a colon (`:`) and
+are indented with spaces. Tabs count as four spaces for indentation checks—mixing tabs and spaces produces an "Inconsistent
+indentation" error. Keep these rules in mind when typing along with the examples in this tutorial.
+
+---
+
+## 2. Variables and Mutability
+
+Variables are immutable unless you opt in to mutability. This default encourages a functional style while still allowing stateful
+code where it matters.
 
 ```orus
-print("Hello, Orus!")
-print_no_newline("Streaming")
-print("A | B | C")
+score = 10               // immutable binding
+mut retries = 0          // mutable binding (can be reassigned)
+threshold: f64 = 0.75    // optional type annotation
+x = 1, mut y = 2         // multiple declarations on one line
+
+mut retries += 1         // compound assignment requires `mut`
 ```
 
-- `print` adds a trailing newline and separates arguments with a space.
-- `print_no_newline` writes the arguments and keeps the cursor on the same line.
-- Format specifiers inside the first string literal (`@.2f`, `@x`, `@b`, `@o`) format the next argument: `print("pi = @.2f", 3.14159)`.
-  Build custom separators by constructing the string yourself or joining values before printing.
+Names must start with a letter or `_` and may contain letters, digits, or underscores. When a type annotation is present it
+follows the name (`value: i64`). Without an annotation the Hindley–Milner type checker infers the type from the initializer.
 
-## 3. Values and Types
-- Integers default to `i32`; larger values become `i64`. Use underscores for readability and `0x` for hexadecimal.
-- Floating literals are `f64`.
-- Booleans are `true` and `false`.
-- Strings support `\n`, `\t`, `\\`, `\"`, `\r`, and `\0` escapes.
-- Type annotations follow the name: `total: i64 = 0`.
+---
 
-```orus
-count = 42
-big: i64 = 5_000_000_000
-mask = 0xFF
-ratio = 6.022e23
-flag = true
-message = "Line one\nLine two"
-```
+## 3. Constants
 
-## 4. Variables and Mutability
-- Bindings are immutable by default.
-- Prepend `mut` to allow reassignment.
-- Multiple declarations may share a line when separated by commas.
-- Names must start with a letter or `_` and contain only letters, digits, or `_`.
-- Compound assignments `+=`, `-=`, `*=`, `/=`, `%=` operate on existing bindings.
-
-```orus
-score = 10
-mut retries = 0
-threshold: f64 = 0.75
-x = 1, mut y = 2, label: string = "ready"
-
-mut retries += 1
-```
-
-### Globals and Exports
-- `global` is only permitted at module scope, requires an initializer, and the name must be uppercase. Use `mut` for writable globals.
-- `pub` exports `fn`, `global`, `struct`, `enum`, or `impl` declarations from the module; it is illegal inside nested blocks.
+The current implementation reserves the `const` keyword but does not yet assign behaviour to it. To model constants today, use
+module-scope globals without `mut`. Global names must be uppercase and always provide an initializer.
 
 ```orus
 pub global MAX_CONNECTIONS = 512
-pub global mut CACHE_BYTES = 1_048_576
+pub global mut CACHE_BYTES = 1_048_576   // writable global
 ```
 
-## 5. Strings and Printing
+Treat uppercase globals as constants in your codebase. Because they live in the global register bank they are fast to read, and
+the compiler will flag attempts to modify a non-`mut` global.
 
-Strings are immutable UTF-8 sequences managed by the runtime's rope engine. That design makes concatenation cheap and keeps
-indexing a constant-time operation on flat strings.
+---
 
-### Literals and Escapes
+## 4. Primitive Types
+
+Orus has a small, predictable set of primitive types. Every example in this guide uses one of the following:
+
+| Type | Description | Notes |
+|------|-------------|-------|
+| `i32` | 32-bit signed integer | Default type for integer literals within range |
+| `i64` | 64-bit signed integer | Automatically selected for large literals |
+| `u32` | 32-bit unsigned integer | Must hold values ≥ 0 |
+| `u64` | 64-bit unsigned integer | Useful for large counters and IDs |
+| `f64` | IEEE 754 double-precision floating point | Only floating type currently implemented |
+| `bool` | Boolean (`true` or `false`) | Result of comparisons and logical operators |
+| `string` | UTF-8 encoded text | Backed by a rope for efficient concatenation |
+
+You can add annotations wherever you need to communicate intent:
 
 ```orus
-name = "Orus"
+count: i32 = 42
+big: i64 = 5_000_000_000
+mask: u32 = 0xFF
+ratio: f64 = 6.022e23
+flag: bool = true
+name: string = "Orus"
+```
+
+### Strings in Practice
+
+Strings store UTF-8 bytes. That design keeps concatenation efficient and indexing predictable:
+
+```orus
 banner = "Line one\nLine two\tTabbed"
 path = "C:\\tmp\\reports"
-quote = "She said: \"Ready\""
-emoji = "😀"
+emoji = "😀"               // occupies multiple bytes internally
 ```
 
-- Escape sequences: `\n`, `\t`, `\\`, `\"`, `\r`, and `\0`.
-- Multi-line strings are not yet supported—use `\n` to join lines.
-- Each literal is encoded as UTF-8; non-ASCII characters occupy multiple bytes.
+`len(string)` returns the number of bytes. Indexing (`string[index]`) yields a single-byte string; multi-byte characters require
+additional handling if you care about grapheme clusters.
 
-### Printing and Formatting
+---
+
+## 5. Numeric Literals
+
+Integer literals are decimal by default. Prefix with `0x` for hexadecimal values and use underscores for readability. Floating
+literals are always `f64` and accept scientific notation.
 
 ```orus
-pi = 3.14159
-print("Hello", name)
-print("Pi ~= @.2f", pi)
-print_no_newline("Processing")
-print("{", name, "}")
+decimal = 1_000_000       // underscores ignored by the parser
+hex = 0xDEADBEEF
+big = 9_223_372_036_854_775_807  // promoted to i64 automatically
+ratio = 3.14159           // f64 literal
+avogadro = 6.022e23       // scientific notation
 ```
 
-- `print` inserts spaces between arguments and appends a newline.
-- `print_no_newline` keeps the cursor on the same line—helpful for progress messages.
-- Format specifiers (`@.2f`, `@x`, `@b`, `@o`) inside the first literal format the following argument before concatenation.
-
-### Concatenation and Casting
+You may also append a suffix like `i32`, `i64`, `u32`, `u64`, `f64`, or `u` to force a literal's type. Because only the listed
+primitive types exist, stick to those suffixes.
 
 ```orus
-combined = "a" + " :: " + "b" + " :: " + "c"
-score = 98
-report = "Score: " + (score as string)
-
-mut log: [string] = []
-push(log, "start")
-push(log, "stop")
-history = " | ".join(log) // once join() lands
+items = 5u          // explicit unsigned literal
+precise = 1f64      // force floating type even with an integer literal
 ```
 
-- `+` produces a brand new string; the runtime reuses existing rope nodes to avoid copying the left-hand operand.
-- Cast other values explicitly with `as string`—no implicit conversions occur during concatenation.
+---
 
-### Indexing and Length
+## 6. Casting Rules
+
+All conversions are explicit via the `as` keyword. The type checker prevents implicit promotions so that the generated bytecode
+is predictable.
+
+Supported conversions include:
+
+- `i32` → `i64`, `u32`, `u64`, `f64`, `bool`, `string`
+- `i64` → `i32`, `u64`, `f64`, `string`
+- `u32` → `i32`, `i64`, `u64`, `f64`, `string`
+- `u64` → `i32`, `i64`, `u32`, `f64`, `string`
+- `f64` → `i32`, `i64`, `u32`, `u64`, `string` (fractional part truncates toward zero)
+- `bool` → `i32`, `string`
+- Any primitive → `string`
 
 ```orus
-greeting = "Hola"
-first = greeting[0]         // "H"
-last = greeting[len(greeting) - 1]
-
-emoji = "😀🎉"
-// Indexing operates on bytes, not Unicode scalars.
-first_byte = emoji[0]       // "\xF0"
-second_byte = emoji[1]      // "\x9F"
+value: i32 = 42
+flag: bool = value as bool
+ratio = (value as f64) / 10.0
+label = "Value: " + (value as string)
 ```
 
-- `len(string)` returns the number of bytes; multi-byte characters increase the count accordingly.
-- `string[index]` emits `OP_STRING_INDEX_R` and returns a new single-byte string. The runtime bounds-checks the index and
-  reports `ERROR_INDEX` on failure.
-- Because indexing is byte-oriented, slicing multi-byte graphemes requires manual decoding; plan for a higher-level helper if
-  you need full Unicode awareness.
+Invalid casts raise runtime errors and are usually caught by the type checker before the program runs.
 
-## 6. Branching and Loops
+---
 
-### Conditional Logic
+## 7. Comments
+
+Orus supports both line and block comments. Block comments cannot nest.
+
+```orus
+// Single-line comment
+/* Block comment
+   spanning multiple lines */
+print("Hello")
+```
+
+Comments are stripped during lexing, so feel free to use them liberally for documentation without affecting performance.
+
+---
+
+## 8. Operators
+
+The core operator set covers arithmetic, comparisons, boolean logic, and explicit casts:
+
+- Arithmetic: `+`, `-`, `*`, `/`, `%`
+- Comparisons: `<`, `<=`, `>`, `>=`, `==`, `!=`
+- Boolean logic: `and`, `or`, `not`
+- Equality helper: `matches` (alias for `==`, reads better with enums)
+- Casting: `value as Type`
+
+```orus
+hits = 42
+misses = 3
+ratio = hits as f64 / (hits + misses) as f64
+is_large = hits > 10_000 and not aborted
+if mode matches Mode.Cached:
+    print("cache hit")
+```
+
+Compound assignments (`+=`, `-=`, `*=`, `/=`, `%=`) update existing mutable bindings.
+
+---
+
+## 9. Control Flow
+
+### 9.1 Conditionals
+
+`if`/`elif`/`else` chains evaluate boolean conditions. Each branch may be a single statement on the same line or an indented
+block.
 
 ```orus
 if status == "ok":
     print("ready")
-elif status == "retry": print("waiting")
+elif status == "retry":
+    print("waiting")
 else:
     print("failed")
 ```
 
-- Conditions must evaluate to `bool`. Using `=` inside a condition raises a syntax error.
+Conditions must evaluate to `bool`. Accidentally writing `=` inside a condition triggers a syntax error.
 
-### While Loops
+### 9.2 Loops
+
+Orus includes `while` and `for` loops. Both support `break` and `continue`, and either loop may carry a label so that you can
+target a specific level of nesting. Declare a label by writing an apostrophe followed by the label name right before the loop
+header (`'outer: for ...`). Later, use `break 'outer` or `continue 'outer` to jump directly to that loop.
 
 ```orus
 mut attempts = 0
 while attempts < 3:
     attempts += 1
+    if attempts == 2:
+        continue         // skip the print on the second iteration
     print("attempt", attempts)
 ```
 
-### For Loops
-- Range form: `start..end` is exclusive. Use `start..=end` for inclusive ranges.
-- Provide a second `..step` expression to control the step size.
-- Iterable form: `for item in array` walks an array.
-- Loops support labels written as `'label:` before the keyword. `break`/`continue` accept an optional label target.
+`for` loops iterate either over a numeric range or the elements of an array.
 
 ```orus
+// Exclusive range with custom step
 for i in 0..10..2:
     print(i)
+
+// Inclusive range (`..=`)
+for i in 0..=3:
+    print("inclusive", i)
 
 values = [1, 2, 3]
 for item in values:
     print("item", item)
+```
 
-'outer: for row in 0..5: // not implemented
+If you only need a loop structure without work yet, use the `pass` statement as a no-op placeholder. Labels then make it easy to
+break out of the correct level when you add real logic. Use labels to break out of nested loops cleanly:
+
+```orus
+'outer: for row in 0..5:
     for col in 0..5:
         if row == col:
             break 'outer
 ```
 
-## 7. Arrays in Practice
-- Fixed-length arrays annotate both the element type and length using `[Type, Length]`.
-- Dynamic arrays specify only the element type (`[Type]`) and grow with `push`/`pop`.
-- Trailing commas remain legal in literals. Omitting an annotation (`values = [1, 2, 3]`) creates a fixed-length array inferred
-  from the literal's length.
-- Array fill expressions `[value, Length]` require a compile-time `Length`.
-- Slices use `array[start..end]` with an exclusive upper bound.
-- Standard helpers: `len(array)`, `push(array, value)`, and `pop(array)`.
+---
+
+## 10. Arrays
+
+Arrays come in two flavours: fixed-length (stack-allocated) and dynamic (heap-allocated, growable).
+
+### 10.1 Fixed-Length Arrays
+
+Fixed arrays specify both the element type and a compile-time length.
 
 ```orus
-// Fixed-length array with element mutation
 mut nums: [i32, 3] = [1, 2, 3]
 nums[1] = 42
 print("slice", nums[0..2])
+```
 
-// Dynamic array
+### 10.2 Dynamic Arrays
+
+Dynamic arrays declare only the element type and start empty. Use the built-in helpers to manage their contents.
+
+```orus
 mut numbers: [i32] = []
 push(numbers, 1)
 push(numbers, 2)
 print("len", len(numbers))
 print("pop", pop(numbers))
+```
 
-// Compile-time fill expression
+`push` appends in place and returns the array. `pop` removes and returns the last element.
+
+### 10.3 Length Inference
+
+When you omit the type annotation, the compiler infers a fixed-length array whose size equals the number of literal elements.
+
+```orus
+nums = [1, 2, 3]      // inferred type: [i32, 3]
+```
+
+These inferred arrays are still fixed-size and do not support `push` or `pop`.
+
+### 10.4 Fill Expressions
+
+Use `[value, Length]` to create a fixed array filled with a repeated value. `Length` must be known at compile time.
+
+```orus
 const SIZE = 4
 zeros: [i32, SIZE] = [0, SIZE]
 ```
 
-## 8. Functions and Higher-Order Code
-- Define functions with `fn name(params) -> ReturnType:` and a block body. Omit the arrow for `void` functions.
-- Use `return` to exit early; omit the expression to return `void`.
-- Function expressions (`fn (...) -> ...:`) create first-class functions.
+### 10.5 Slicing
+
+Slices create subarrays using `array[start..end]` with an exclusive upper bound. Omitting the start or end extends the slice to
+the beginning or end respectively.
+
+```orus
+nums = [1, 2, 3, 4]
+first_three = nums[..3]
+last_two = nums[2..]
+whole = nums[..]
+```
+
+---
+
+## 11. Functions
+
+Define functions with `fn name(parameters) -> ReturnType:`. Omit the arrow for `void` functions. Use `return` to exit early; if
+no value is supplied the function returns `void`.
 
 ```orus
 fn add(a: i32, b: i32) -> i32:
     return a + b
 
+fn log_message(message: string):
+    print("log:", message)
+```
+
+Orus also supports function expressions, making higher-order programming straightforward.
+
+```orus
 square = fn(value: i32) -> i32:
     return value * value
 
@@ -224,23 +330,31 @@ print(square(6))
 
 Function values capture surrounding variables automatically.
 
-## 9. Structs and Methods
-- Structs declare named fields. Provide default expressions where needed.
+---
+
+## 12. Structs
+
+Structs bundle related fields under a single type.
 
 ```orus
 struct Point:
     x: i32
-    y: i32 = 0
+    y: i32 = 0     // default value
 ```
 
-- Construct values with `{ field: value }` and assign fields with dot notation.
+Construct values using curly braces and dot syntax to access or mutate fields.
 
 ```orus
 mut origin = Point{ x: 0, y: 0 }
 origin.y = 5
 ```
 
-- `impl` blocks attach methods. Methods whose first parameter is `self` become instance methods. Others act as static helpers invoked through the struct name.
+---
+
+## 13. Methods with `impl`
+
+`impl` blocks attach functions to a struct. Methods whose first parameter is `self` become instance methods. Others act as
+associated functions invoked through the struct name.
 
 ```orus
 impl Point:
@@ -254,60 +368,63 @@ p = Point.from_origin(4, 9)
 print(p.translate(1, -1).y)
 ```
 
-## 10. Enums and Pattern Matching
-- Enums list variants with optional payloads. Payloads may have names (`Variant(name: Type)`).
+---
+
+## 14. Pattern Matching
+
+Orus features enums with payloads and a powerful `match` expression.
 
 ```orus
 enum Result:
     Ok(value: i32)
     Err(message: string)
+
+value = Result.Ok(42)
+message = Result.Err("boom")
 ```
 
-### Constructors
+### 14.1 `match` Statements
 
 ```orus
-success = Result.Ok(42)
-failure = Result.Err("boom")
-```
-
-### Match Statement
-
-```orus
-match success:
-    Result.Ok(value) ->
-        print("ok", value)
+match value:
+    Result.Ok(result) ->
+        print("ok", result)
     Result.Err(reason) ->
         print("error", reason)
 ```
 
-- Arms use `pattern ->` followed by either a single statement or an indented block.
-- `_` matches anything. Named bindings capture payload fields and are available in the arm.
-- Exhaustiveness is enforced for enums; add a wildcard arm to cover the remainder.
+Each arm uses `pattern ->` followed by a single statement or an indented block. `_` acts as a wildcard. The compiler enforces
+exhaustiveness for enums—add a wildcard arm if you genuinely want a catch-all.
 
-### Match Expression
+### 14.2 `match` Expressions
+
+`match` also produces values:
 
 ```orus
-label: string = match failure:
-    Result.Ok(value) -> "ok: " + ((value as i32) as string)
+label: string = match message:
+    Result.Ok(result) -> "ok: " + (result as string)
     Result.Err(reason) -> "error: " + reason
 ```
 
-### `matches` Operator
+### 14.3 `matches` Keyword
+
+`matches` provides a readable equality check:
 
 ```orus
-flag = Flag.Off
-if flag matches Flag.On:
-    print("enabled")
+if value matches Result.Ok(_):
+    print("still ok")
 ```
 
-The `matches` keyword provides a readable equality check—code generation treats it like `==`.
+Under the hood it compiles to the same bytecode as `==` but reads better when working with enum variants.
 
-Until generics land, payload bindings default to the `any` type. Cast the binding to the variant's payload type before chaining
-another conversion (like `as string`) to satisfy the checker.
+Until Orus gains generics, payload bindings default to the `any` type. Cast them to the payload's known type when chaining
+further conversions.
 
-## 11. Error Handling
-- `try:` introduces protected code. `catch name:` (or `catch:`) handles thrown values. Both accept either a single statement on the same line or an indented block.
-- `throw expression` raises an error value.
+---
+
+## 15. Error Handling
+
+Use `try`/`catch` to guard potentially failing code. `throw` raises an error value that propagates until a handler catches it.
 
 ```orus
 try:
@@ -318,22 +435,17 @@ catch err:
 throw "unexpected state"
 ```
 
-## 12. Modules and Code Organisation
-- A file may begin with `module path` or `module path:`. The declaration must be the first non-comment statement and may appear only once.
-  - The block form (`module pkg.stats:`) requires the entire file to reside inside the indented block.
-  - Dotted names map to directories (`geometry/points.orus` for `module geometry.points`).
-- `use` is valid only at module scope.
-  - `use geometry.points` imports all public symbols from the module.
-  - `use geometry.points: Point, origin` selects specific exports.
-  - `use geometry.points: length as distance` applies aliases to symbols.
-  - `use geometry.points as geo` records a module alias (namespace lookups are not generated yet).
-- Declarations are private by default. Use `pub` to expose them. Globals must be uppercase identifiers.
+Both `try` and `catch` accept either a single inline statement or an indented block. The runtime ensures unwinding is safe and
+predictable.
 
-Example layout:
+---
 
-```
-geometry/points.orus
---------------------
+## 16. Modules
+
+A file may begin with a `module` declaration to establish its path. The declaration must be the first non-comment statement and
+may appear only once per file.
+
+```orus
 module geometry.points:
 
     pub struct Point:
@@ -342,49 +454,112 @@ module geometry.points:
 
     pub fn origin() -> Point:
         return Point{ x: 0, y: 0 }
-
-main.orus
---------
-use geometry.points: Point, origin
-
-fn main():
-    p = origin()
-    print(Point{ x: 5, y: 6 })
 ```
 
-## 13. Explicit Conversions
-- Use `as` to convert between types; implicit promotions do not exist.
-- Supported conversions:
-  - `i32` → `i64`, `u32`, `u64`, `f64`, `bool`, `string`
-  - `i64` → `i32`, `u64`, `f64`, `string`
-  - `u32` → `i32`, `i64`, `u64`, `f64`, `string`
-  - `u64` → `i32`, `i64`, `u32`, `f64`, `string`
-  - `f64` → `i32`, `i64`, `u32`, `u64`, `string` (fractional parts truncate toward zero)
-  - `bool` → `i32`, `string`
-  - Any value → `string`
-- Invalid casts raise runtime errors and are flagged by type inference where possible.
+The block form shown above requires the whole file to remain indented beneath the module declaration. Alternatively, use the
+single-line form `module geometry.points` followed by top-level definitions.
+
+### 16.1 Imports with `use`
+
+`use` works only at module scope. Choose between wide and selective imports:
 
 ```orus
-value: i32 = 42
-flag: bool = value as bool
-text = value as string
-ratio = (value as f64) / 10.0
+use geometry.points           // import all public symbols
+use geometry.points: Point    // import a subset
+use geometry.points: origin as start
 ```
 
-## 14. Built-ins and Utilities
-- `print(...)` and `print_no_newline(...)` for output.
-- `len(array)`, `push(array, value)`, and `pop(array)` for dynamic arrays.
-- `time_stamp()` returns a monotonic `f64` timestamp in seconds.
+Module aliases (`use geometry.points as geo`) are recorded today for tooling and diagnostics; future releases will expose them as
+namespaces.
+
+### 16.2 Public Functions and Structs
+
+Definitions are private by default. Prefix `fn`, `struct`, `enum`, `impl`, or `global` with `pub` to make them available to other
+modules.
 
 ```orus
+pub fn squared_distance(a: Point, b: Point) -> f64:
+    dx = (b.x - a.x) as f64
+    dy = (b.y - a.y) as f64
+    return dx * dx + dy * dy
+```
+
+Remember that globals must use uppercase names; add `mut` if the value should be writable.
+
+---
+
+## 17. Built-in Utilities
+
+The Orus runtime ships with a rich set of built-ins so you can inspect values, gather input, and manipulate collections without
+leaving the language. Built-ins behave like ordinary functions even though the VM implements them natively.
+
+- `print(...)` – statement form that writes the provided expressions separated by spaces and terminates with a newline. When the
+  first argument is a string literal you can embed `@` format specifiers like `@.2f`, `@x`, `@X`, `@b`, and `@o` to control how
+  the following value is rendered.
+- `len(array_or_string)` – returns the number of elements in an array or the number of bytes in a string.
+- `push(array, value)` / `pop(array)` – append to or remove from dynamic arrays.
+- `sorted(array)` – produces a new array whose elements are sorted without mutating the original.
+- `range(stop)`, `range(start, stop)`, `range(start, stop, step)` – constructs range iterators used by `for` loops or consumed
+  manually.
+- `input()` / `input(prompt)` – reads a full line from standard input, optionally printing a prompt first.
+- `int(value)` / `float(value)` – parse strings or convert numbers to the target numeric type. Parsing failures raise runtime
+  errors so wrap them in `try`/`catch` when dealing with user input.
+- `type_of(value)` – returns a string describing the runtime type.
+- `is_type(value, name)` – returns `true` when the runtime type matches the provided string.
+- `time_stamp()` – returns a monotonic `f64` timestamp in seconds for lightweight profiling.
+
+```orus
+pi = 3.14159
+print("Pi ~= @.2f", pi)
+
+mut values: [i32] = []
+push(values, 3)
+push(values, 1)
+push(values, 2)
+print("sorted copy:", sorted(values))   // values remains unchanged
+
+for i in range(2, 10, 3):
+    print("range value", i)
+
+answer = input("Enter a number: ")
+try:
+    parsed = int(answer)
+    print("you typed", parsed, "of type", type_of(parsed))
+catch err:
+    print("invalid input:", err)
+
 start: f64 = time_stamp()
 for i in 0..1_000_000:
-    pass
+    for _ in 0..1_000_000:
+        pass
 elapsed = time_stamp() - start
 print("elapsed seconds:", elapsed)
 ```
 
-## 15. Putting It Together
+---
+
+## 18. Best Practices and Patterns
+
+- **Lean on immutability.** Start with immutable bindings and add `mut` only when necessary. This makes reasoning about code
+  easier and improves optimizer opportunities.
+- **Annotate intent.** Type annotations communicate design intent to readers and help the compiler surface better diagnostics.
+- **Prefer explicit casts.** Because Orus does not perform implicit promotions, sprinkle `as` conversions where clarity demands it
+  rather than relying on subtle coercion rules.
+- **Use modules early.** Organise code by feature. Even small programs benefit from `module` declarations and selective `use`
+  imports.
+- **Design enums for exhaustive matches.** Pattern matching shines when every state is accounted for. Include a `_` arm only when
+  you intentionally accept all remaining cases.
+- **Handle errors thoughtfully.** Wrap risky operations with `try`/`catch` and propagate meaningful messages with `throw`.
+- **Measure with `time_stamp()`.** Quick timing harnesses help you evaluate performance changes without leaving the language.
+
+The Orus toolchain enforces these patterns through its type system and diagnostics, letting you build reliable, high-performance
+programs with confidence.
+
+---
+
+## 19. Putting It Together
+
+Here is a complete example that exercises the concepts covered above:
 
 ```orus
 module diagnostics.report:
@@ -429,30 +604,7 @@ fn main():
         print("recovered", err)
 ```
 
-This program demonstrates modules, array helpers, struct methods, pattern matching, and error handling working together.
+This program demonstrates modules, array helpers, struct methods, pattern matching, and error handling working together. Feel free
+to copy it into `main.orus`, run `./orus main.orus`, and experiment with additional ideas.
 
-## 16. Feature Checklist
-- [x] Indentation-scoped syntax (no semicolons)
-- [x] Line and block comments
-- [x] Numeric, string, and boolean literals with type annotations
-- [x] Immutable and mutable variables, multi-declarations, compound assignments
-- [x] Module-scope `pub` and uppercase `global` declarations
-- [x] Arithmetic, comparison, boolean operators, and explicit casts via `as`
-- [x] `matches` keyword for readable equality checks
-- [x] String formatting inside `print`
-- [x] Dynamic arrays with `len`, `push`, `pop`, and slicing
-- [x] `if`/`elif`/`else`, `while`, and `for` (ranges, inclusive ranges, custom steps, iterables, loop labels)
-- [x] Functions and function expressions
-- [x] Structs, struct literals, and `impl` blocks with instance/static methods
-- [x] Enums, constructors, `match` statements/expressions, destructuring, wildcard arms, exhaustiveness checks
-- [x] `try`/`catch` and `throw`
-- [x] Module declarations and `use` imports (including selective and aliased forms)
-- [x] `time_stamp()` and the printing built-ins
-- [x] Explicit cast rules, including conversions to `string`
-
-## 17. Current Limitations
-- `const`, `static`, bitwise operators (`&`, `|`, `^`, `<<`, `>>`, unary `~`), generics, list comprehensions, `range(...)`, ternary `?:`, and inline `expr if cond else alt` forms are not yet implemented.
-- Block comments cannot nest.
-- Module aliases created with `use module as alias` are stored for tooling but do not create a namespace object; imported symbols bind directly into the current scope.
-
-Stay within these boundaries and the Orus toolchain will behave exactly as described above.
+Enjoy exploring Orus!

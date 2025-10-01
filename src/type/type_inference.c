@@ -2413,6 +2413,10 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             // Continue statements have void type
             return getPrimitiveType(TYPE_VOID);
         }
+        case NODE_PASS: {
+            // Pass statements evaluate to void
+            return getPrimitiveType(TYPE_VOID);
+        }
         case NODE_STRUCT_DECL: {
             Type* existing = findStructType(node->structDecl.name);
             bool creating_new = (existing == NULL);
@@ -4041,7 +4045,11 @@ static TypedASTNode* generate_typed_ast_recursive(ASTNode* ast, TypeEnv* type_en
             break;
 
         case NODE_CONTINUE:
-            // Continue statements have no children to process  
+            // Continue statements have no children to process
+            break;
+
+        case NODE_PASS:
+            // Pass statements have no children to process
             break;
 
         case NODE_FOR_RANGE:

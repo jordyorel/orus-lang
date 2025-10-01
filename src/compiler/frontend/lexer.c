@@ -298,6 +298,8 @@ static TokenType identifier_type(const char* start, int length) {
             if (length == 2 && memcmp(start, "or", 2) == 0) return TOKEN_OR;
             break;
         case 'p':
+            if (length == 4 && memcmp(start, "pass", 4) == 0)
+                return TOKEN_PASS;
             if (length == 5 && memcmp(start, "print", 5) == 0)
                 return TOKEN_PRINT;
             if (length == 15 && memcmp(start, "print_no_newline", 15) == 0)

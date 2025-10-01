@@ -1,0 +1,32 @@
+pass
+
+print("=== Pass Statement Smoke Tests ===")
+
+values = [1, 2, 3]
+mut total = 0
+for value in values:
+    pass
+    total = total + value
+print("for-with-pass total", total)
+
+mut i = 0
+while i < 3:
+    pass
+    i = i + 1
+print("while-with-pass count", i)
+
+mut nested = 0
+for row in 0..3:
+    for col in 0..3:
+        if col == 1:
+            pass
+        if col == 2:
+            continue
+        nested = nested + 1
+print("nested pass usage", nested)
+
+if true:
+    pass
+print("if-pass done")
+
+print("=== Pass Statement Smoke Tests Complete ===")
