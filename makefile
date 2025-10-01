@@ -236,6 +236,7 @@ SCOPE_TRACKING_TEST_BIN = $(BUILDDIR)/tests/test_scope_tracking
 PEEPHOLE_TEST_BIN = $(BUILDDIR)/tests/test_constant_propagation
 LICM_METADATA_TEST_BIN = $(BUILDDIR)/tests/test_licm_typed_metadata
 TAGGED_UNION_TEST_BIN = $(BUILDDIR)/tests/test_vm_tagged_union
+TYPED_REGISTER_TEST_BIN = $(BUILDDIR)/tests/test_vm_typed_registers
 BUILTIN_INPUT_TEST_BIN = $(BUILDDIR)/tests/test_builtin_input
 BUILTIN_SORTED_ORUS_TESTS = \
     tests/builtins/sorted_runtime.orus
@@ -381,6 +382,9 @@ SUBDIRS="arrays arithmetic algorithms benchmarks builtins comments comprehensive
 	@echo "\033[36m=== Tagged Union Tests ===\033[0m"
 	@$(MAKE) tagged-union-tests
 	@echo ""
+	@echo "\033[36m=== Typed Register Tests ===\033[0m"
+	@$(MAKE) typed-register-tests
+	@echo ""
 	@echo "\033[36m=== Builtin Input Tests ===\033[0m"
 	@$(MAKE) builtin-input-tests
 	@echo ""
@@ -452,6 +456,15 @@ $(TAGGED_UNION_TEST_BIN): tests/unit/test_vm_tagged_union.c $(COMPILER_OBJS) $(V
 tagged-union-tests: $(TAGGED_UNION_TEST_BIN)
 	@echo "Running tagged union tests..."
 	@./$(TAGGED_UNION_TEST_BIN)
+
+$(TYPED_REGISTER_TEST_BIN): tests/unit/test_vm_typed_registers.c $(COMPILER_OBJS) $(VM_OBJS)
+	@mkdir -p $(dir $@)
+	@echo "Compiling typed register coherence tests..."
+	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+
+typed-register-tests: $(TYPED_REGISTER_TEST_BIN)
+	@echo "Running typed register coherence tests..."
+	@./$(TYPED_REGISTER_TEST_BIN)
 
 $(BUILTIN_INPUT_TEST_BIN): tests/unit/test_builtin_input.c $(COMPILER_OBJS) $(VM_OBJS)
 	@mkdir -p $(dir $@)
