@@ -4736,35 +4736,59 @@ static int compile_assignment_internal(CompilerContext* ctx, TypedASTNode* assig
 
     bool emitted_fast_inc = false;
     if (!as_expression && !is_upvalue && var_reg_direct >= 0 && symbol &&
-        assign->resolvedType && assign->resolvedType->kind == TYPE_I32) {
-        TypedASTNode* value_node = assign->typed.assign.value;
-        if (value_node && value_node->original &&
-            value_node->original->type == NODE_BINARY &&
-            value_node->original->binary.op &&
-            strcmp(value_node->original->binary.op, "+") == 0) {
-            TypedASTNode* left = value_node->typed.binary.left;
-            TypedASTNode* right = value_node->typed.binary.right;
-            int32_t increment = 0;
-            bool matches_pattern = false;
-            if (left && left->original && left->original->type == NODE_IDENTIFIER &&
-                left->original->identifier.name &&
-                strcmp(left->original->identifier.name, var_name) == 0 &&
-                evaluate_constant_i32(right, &increment) && increment == 1) {
-                matches_pattern = true;
-            } else if (right && right->original &&
-                       right->original->type == NODE_IDENTIFIER &&
-                       right->original->identifier.name &&
-                       strcmp(right->original->identifier.name, var_name) == 0 &&
-                       evaluate_constant_i32(left, &increment) && increment == 1) {
-                matches_pattern = true;
-            }
+        assign->resolvedType) {
+        TypeKind inc_type = assign->resolvedType->kind;
+        uint8_t inc_opcode = 0;
+        switch (inc_type) {
+            case TYPE_I32:
+                inc_opcode = OP_INC_I32_CHECKED;
+                break;
+            case TYPE_I64:
+                inc_opcode = OP_INC_I64_CHECKED;
+                break;
+            case TYPE_U32:
+                inc_opcode = OP_INC_U32_CHECKED;
+                break;
+            case TYPE_U64:
+                inc_opcode = OP_INC_U64_CHECKED;
+                break;
+            default:
+                break;
+        }
 
-            if (matches_pattern) {
-                set_location_from_node(ctx, assign);
-                emit_byte_to_buffer(ctx->bytecode, OP_INC_I32_CHECKED);
-                emit_byte_to_buffer(ctx->bytecode, (uint8_t)var_reg_direct);
-                mark_symbol_arithmetic_heavy(symbol);
-                emitted_fast_inc = true;
+        if (inc_opcode != 0) {
+            TypedASTNode* value_node = assign->typed.assign.value;
+            if (value_node && value_node->original &&
+                value_node->original->type == NODE_BINARY &&
+                value_node->original->binary.op &&
+                strcmp(value_node->original->binary.op, "+") == 0 &&
+                value_node->resolvedType &&
+                value_node->resolvedType->kind == inc_type) {
+                TypedASTNode* left = value_node->typed.binary.left;
+                TypedASTNode* right = value_node->typed.binary.right;
+                int32_t increment = 0;
+                bool matches_pattern = false;
+                if (left && left->original &&
+                    left->original->type == NODE_IDENTIFIER &&
+                    left->original->identifier.name &&
+                    strcmp(left->original->identifier.name, var_name) == 0 &&
+                    evaluate_constant_i32(right, &increment) && increment == 1) {
+                    matches_pattern = true;
+                } else if (right && right->original &&
+                           right->original->type == NODE_IDENTIFIER &&
+                           right->original->identifier.name &&
+                           strcmp(right->original->identifier.name, var_name) == 0 &&
+                           evaluate_constant_i32(left, &increment) && increment == 1) {
+                    matches_pattern = true;
+                }
+
+                if (matches_pattern) {
+                    set_location_from_node(ctx, assign);
+                    emit_byte_to_buffer(ctx->bytecode, inc_opcode);
+                    emit_byte_to_buffer(ctx->bytecode, (uint8_t)var_reg_direct);
+                    mark_symbol_arithmetic_heavy(symbol);
+                    emitted_fast_inc = true;
+                }
             }
         }
     }

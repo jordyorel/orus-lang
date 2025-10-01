@@ -47,12 +47,57 @@
             vm_trace_loop_event(LOOP_TRACE_OVERFLOW_GUARD); \
             VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow"); \
         } \
-        if (vm_typed_reg_in_range((reg)) && \
-            vm.typed_regs.reg_types[(reg)] == REG_TYPE_I32) { \
-            vm.typed_regs.i32_regs[(reg)] = next_value__; \
-            vm.typed_regs.dirty[(reg)] = false; \
+        vm_store_i32_typed_hot((reg), next_value__); \
+    } while (0)
+
+#define VM_HANDLE_INC_I64_SLOW_PATH(reg) \
+    do { \
+        Value val_reg__ = vm_get_register_safe((reg)); \
+        if (!IS_I64(val_reg__)) { \
+            vm_trace_loop_event(LOOP_TRACE_TYPE_MISMATCH); \
+            if (vm_typed_reg_in_range((reg))) { \
+                vm.typed_regs.reg_types[(reg)] = REG_TYPE_HEAP; \
+                vm.typed_regs.dirty[(reg)] = false; \
+            } \
+            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be i64"); \
         } \
-        vm_set_register_safe((reg), I32_VAL(next_value__)); \
+        int64_t current__ = AS_I64(val_reg__); \
+        int64_t next_value__; \
+        if (__builtin_add_overflow(current__, (int64_t)1, &next_value__)) { \
+            vm_trace_loop_event(LOOP_TRACE_OVERFLOW_GUARD); \
+            VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow"); \
+        } \
+        vm_store_i64_typed_hot((reg), next_value__); \
+    } while (0)
+
+#define VM_HANDLE_INC_U32_SLOW_PATH(reg) \
+    do { \
+        Value val_reg__ = vm_get_register_safe((reg)); \
+        if (!IS_U32(val_reg__)) { \
+            vm_trace_loop_event(LOOP_TRACE_TYPE_MISMATCH); \
+            if (vm_typed_reg_in_range((reg))) { \
+                vm.typed_regs.reg_types[(reg)] = REG_TYPE_HEAP; \
+                vm.typed_regs.dirty[(reg)] = false; \
+            } \
+            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be u32"); \
+        } \
+        uint32_t next_value__ = AS_U32(val_reg__) + (uint32_t)1; \
+        vm_store_u32_typed_hot((reg), next_value__); \
+    } while (0)
+
+#define VM_HANDLE_INC_U64_SLOW_PATH(reg) \
+    do { \
+        Value val_reg__ = vm_get_register_safe((reg)); \
+        if (!IS_U64(val_reg__)) { \
+            vm_trace_loop_event(LOOP_TRACE_TYPE_MISMATCH); \
+            if (vm_typed_reg_in_range((reg))) { \
+                vm.typed_regs.reg_types[(reg)] = REG_TYPE_HEAP; \
+                vm.typed_regs.dirty[(reg)] = false; \
+            } \
+            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be u64"); \
+        } \
+        uint64_t next_value__ = AS_U64(val_reg__) + (uint64_t)1; \
+        vm_store_u64_typed_hot((reg), next_value__); \
     } while (0)
 
 static inline bool value_to_index(Value value, int* out_index) {
@@ -178,7 +223,13 @@ InterpretResult vm_run_dispatch(void) {
         // Loop-critical operations
         vm_dispatch_table[OP_INC_I32_R] = &&LABEL_OP_INC_I32_R;
         vm_dispatch_table[OP_INC_I32_CHECKED] = &&LABEL_OP_INC_I32_CHECKED;
-        
+        vm_dispatch_table[OP_INC_I64_R] = &&LABEL_OP_INC_I64_R;
+        vm_dispatch_table[OP_INC_I64_CHECKED] = &&LABEL_OP_INC_I64_CHECKED;
+        vm_dispatch_table[OP_INC_U32_R] = &&LABEL_OP_INC_U32_R;
+        vm_dispatch_table[OP_INC_U32_CHECKED] = &&LABEL_OP_INC_U32_CHECKED;
+        vm_dispatch_table[OP_INC_U64_R] = &&LABEL_OP_INC_U64_R;
+        vm_dispatch_table[OP_INC_U64_CHECKED] = &&LABEL_OP_INC_U64_CHECKED;
+
         // Remaining typed operations
         VM_REGISTER_TYPED_LABEL(OP_DIV_I32_TYPED);
         VM_REGISTER_TYPED_LABEL(OP_MOD_I32_TYPED);
@@ -929,6 +980,60 @@ InterpretResult vm_run_dispatch(void) {
                 DISPATCH();
             }
             VM_HANDLE_INC_I32_SLOW_PATH(reg);
+            DISPATCH();
+        }
+
+    LABEL_OP_INC_I64_R: {
+            uint8_t reg = READ_BYTE();
+            if (vm_exec_inc_i64_checked(reg)) {
+                DISPATCH();
+            }
+            VM_HANDLE_INC_I64_SLOW_PATH(reg);
+            DISPATCH();
+        }
+
+    LABEL_OP_INC_I64_CHECKED: {
+            uint8_t reg = READ_BYTE();
+            if (vm_exec_inc_i64_checked(reg)) {
+                DISPATCH();
+            }
+            VM_HANDLE_INC_I64_SLOW_PATH(reg);
+            DISPATCH();
+        }
+
+    LABEL_OP_INC_U32_R: {
+            uint8_t reg = READ_BYTE();
+            if (vm_exec_inc_u32_checked(reg)) {
+                DISPATCH();
+            }
+            VM_HANDLE_INC_U32_SLOW_PATH(reg);
+            DISPATCH();
+        }
+
+    LABEL_OP_INC_U32_CHECKED: {
+            uint8_t reg = READ_BYTE();
+            if (vm_exec_inc_u32_checked(reg)) {
+                DISPATCH();
+            }
+            VM_HANDLE_INC_U32_SLOW_PATH(reg);
+            DISPATCH();
+        }
+
+    LABEL_OP_INC_U64_R: {
+            uint8_t reg = READ_BYTE();
+            if (vm_exec_inc_u64_checked(reg)) {
+                DISPATCH();
+            }
+            VM_HANDLE_INC_U64_SLOW_PATH(reg);
+            DISPATCH();
+        }
+
+    LABEL_OP_INC_U64_CHECKED: {
+            uint8_t reg = READ_BYTE();
+            if (vm_exec_inc_u64_checked(reg)) {
+                DISPATCH();
+            }
+            VM_HANDLE_INC_U64_SLOW_PATH(reg);
             DISPATCH();
         }
 
@@ -2623,45 +2728,99 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_GET_ITER_R: {
         uint8_t dst = READ_BYTE();
         uint8_t src = READ_BYTE();
-        Value v = vm_get_register_safe(src);
-        vm_typed_iterator_invalidate(dst);
+        Value iterable = vm_get_register_safe(src);
+        bool src_typed_active = vm_typed_iterator_is_active(src);
 
-        if (IS_RANGE_ITERATOR(v)) {
-            vm_set_register_safe(dst, v);
-        } else if (!vm.config.force_boxed_iterators &&
-                   (IS_I32(v) || IS_I64(v) || IS_U32(v) || IS_U64(v))) {
-            int64_t count = 0;
-            if (IS_I32(v)) {
-                count = (int64_t)AS_I32(v);
-            } else if (IS_I64(v)) {
-                count = AS_I64(v);
-            } else if (IS_U32(v)) {
-                count = (int64_t)AS_U32(v);
-            } else {
-                uint64_t unsigned_count = AS_U64(v);
-                if (unsigned_count > (uint64_t)INT64_MAX) {
-                    VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Integer too large to iterate");
+        vm_set_register_safe(dst, iterable);
+
+        if (!vm.config.force_boxed_iterators) {
+            if (src_typed_active && vm_typed_iterator_clone(dst, src)) {
+                vm_trace_loop_event(LOOP_TRACE_ITER_SAVED_ALLOCATIONS);
+                DISPATCH();
+            }
+
+            if (IS_RANGE_ITERATOR(iterable)) {
+                ObjRangeIterator* iterator = AS_RANGE_ITERATOR(iterable);
+                if (iterator && vm_typed_iterator_bind_range(dst,
+                                                            iterator->current,
+                                                            iterator->end,
+                                                            iterator->step)) {
+                    vm_trace_loop_event(LOOP_TRACE_ITER_SAVED_ALLOCATIONS);
+                } else {
+                    vm_trace_loop_event(LOOP_TRACE_ITER_FALLBACK);
                 }
-                count = (int64_t)unsigned_count;
+                DISPATCH();
             }
 
-            if (count < 0) {
-                VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Cannot iterate negative integer");
+            if (IS_ARRAY_ITERATOR(iterable)) {
+                ObjArrayIterator* iterator = AS_ARRAY_ITERATOR(iterable);
+                uint32_t start_index = 0u;
+                if (iterator) {
+                    if (iterator->index > 0) {
+                        start_index = (uint32_t)iterator->index;
+                    }
+                    if (iterator->array &&
+                        vm_typed_iterator_bind_array_at(dst, iterator->array, start_index)) {
+                        vm_trace_loop_event(LOOP_TRACE_ITER_SAVED_ALLOCATIONS);
+                        DISPATCH();
+                    }
+                }
+                vm_trace_loop_event(LOOP_TRACE_ITER_FALLBACK);
+                DISPATCH();
             }
 
-            vm_set_register_safe(dst, I64_VAL(0));
-            vm_typed_iterator_bind_range(dst, 0, count, 1);
-            vm_trace_loop_event(LOOP_TRACE_ITER_SAVED_ALLOCATIONS);
-        } else if (IS_I32(v) || IS_I64(v) || IS_U32(v) || IS_U64(v)) {
+            if (IS_ARRAY(iterable)) {
+                ObjArray* array = AS_ARRAY(iterable);
+                if (vm_typed_iterator_bind_array(dst, array)) {
+                    vm_trace_loop_event(LOOP_TRACE_ITER_SAVED_ALLOCATIONS);
+                    DISPATCH();
+                }
+            }
+
+            if (IS_I32(iterable) || IS_I64(iterable) || IS_U32(iterable) || IS_U64(iterable)) {
+                int64_t count = 0;
+                if (IS_I32(iterable)) {
+                    count = (int64_t)AS_I32(iterable);
+                } else if (IS_I64(iterable)) {
+                    count = AS_I64(iterable);
+                } else if (IS_U32(iterable)) {
+                    count = (int64_t)AS_U32(iterable);
+                } else {
+                    uint64_t unsigned_count = AS_U64(iterable);
+                    if (unsigned_count > (uint64_t)INT64_MAX) {
+                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Integer too large to iterate");
+                    }
+                    count = (int64_t)unsigned_count;
+                }
+
+                if (count < 0) {
+                    VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Cannot iterate negative integer");
+                }
+
+                vm_set_register_safe(dst, I64_VAL(0));
+                if (vm_typed_iterator_bind_range(dst, 0, count, 1)) {
+                    vm_trace_loop_event(LOOP_TRACE_ITER_SAVED_ALLOCATIONS);
+                    DISPATCH();
+                }
+
+                vm_trace_loop_event(LOOP_TRACE_ITER_FALLBACK);
+            }
+        }
+
+        if (IS_RANGE_ITERATOR(iterable)) {
+            DISPATCH();
+        }
+
+        if (IS_I32(iterable) || IS_I64(iterable) || IS_U32(iterable) || IS_U64(iterable)) {
             int64_t count = 0;
-            if (IS_I32(v)) {
-                count = (int64_t)AS_I32(v);
-            } else if (IS_I64(v)) {
-                count = AS_I64(v);
-            } else if (IS_U32(v)) {
-                count = (int64_t)AS_U32(v);
+            if (IS_I32(iterable)) {
+                count = (int64_t)AS_I32(iterable);
+            } else if (IS_I64(iterable)) {
+                count = AS_I64(iterable);
+            } else if (IS_U32(iterable)) {
+                count = (int64_t)AS_U32(iterable);
             } else {
-                uint64_t unsigned_count = AS_U64(v);
+                uint64_t unsigned_count = AS_U64(iterable);
                 if (unsigned_count > (uint64_t)INT64_MAX) {
                     VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Integer too large to iterate");
                 }
@@ -2681,16 +2840,11 @@ InterpretResult vm_run_dispatch(void) {
             vm_set_register_safe(dst, iterator_value);
             vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
             vm_trace_loop_event(LOOP_TRACE_ITER_FALLBACK);
-        } else if (IS_ARRAY(v)) {
-            ObjArray* array = AS_ARRAY(v);
-            if (!vm.config.force_boxed_iterators) {
-                vm_set_register_safe(dst, v);
-                if (vm_typed_iterator_bind_array(dst, array)) {
-                    vm_trace_loop_event(LOOP_TRACE_ITER_SAVED_ALLOCATIONS);
-                    DISPATCH();
-                }
-            }
+            DISPATCH();
+        }
 
+        if (IS_ARRAY(iterable)) {
+            ObjArray* array = AS_ARRAY(iterable);
             ObjArrayIterator* iterator = allocateArrayIterator(array);
             if (!iterator) {
                 VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(), "Failed to allocate array iterator");
@@ -2699,12 +2853,14 @@ InterpretResult vm_run_dispatch(void) {
             vm_set_register_safe(dst, iterator_value);
             vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
             vm_trace_loop_event(LOOP_TRACE_ITER_FALLBACK);
-        } else if (IS_ARRAY_ITERATOR(v)) {
-            vm_set_register_safe(dst, v);
-        } else {
-            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Value not iterable");
+            DISPATCH();
         }
-        DISPATCH();
+
+        if (IS_ARRAY_ITERATOR(iterable)) {
+            DISPATCH();
+        }
+
+        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Value not iterable");
     }
 
     LABEL_OP_ITER_NEXT_R: {
@@ -3695,12 +3851,48 @@ InterpretResult vm_run_dispatch(void) {
             monotonic_hint = vm.chunk->monotonic_range_flags[opcode_offset] != 0;
         }
 
-        if (monotonic_hint && vm_typed_reg_in_range(reg) &&
-            vm_typed_reg_in_range(limit_reg) &&
-            vm.typed_regs.reg_types[reg] == REG_TYPE_I32 &&
-            vm.typed_regs.reg_types[limit_reg] == REG_TYPE_I32) {
+        RegisterType counter_type = REG_TYPE_NONE;
+        RegisterType limit_type = REG_TYPE_NONE;
+        if (vm_typed_reg_in_range(reg)) {
+            counter_type = vm.typed_regs.reg_types[reg];
+        }
+        if (vm_typed_reg_in_range(limit_reg)) {
+            limit_type = vm.typed_regs.reg_types[limit_reg];
+        }
+
+        if (monotonic_hint) {
             bool should_continue = false;
-            if (vm_exec_monotonic_inc_cmp_i32(reg, limit_reg, &should_continue)) {
+            bool monotonic_taken = false;
+            switch (counter_type) {
+                case REG_TYPE_I32:
+                    if (limit_type == REG_TYPE_I32) {
+                        monotonic_taken =
+                            vm_exec_monotonic_inc_cmp_i32(reg, limit_reg, &should_continue);
+                    }
+                    break;
+                case REG_TYPE_I64:
+                    if (limit_type == REG_TYPE_I64) {
+                        monotonic_taken =
+                            vm_exec_monotonic_inc_cmp_i64(reg, limit_reg, &should_continue);
+                    }
+                    break;
+                case REG_TYPE_U32:
+                    if (limit_type == REG_TYPE_U32) {
+                        monotonic_taken =
+                            vm_exec_monotonic_inc_cmp_u32(reg, limit_reg, &should_continue);
+                    }
+                    break;
+                case REG_TYPE_U64:
+                    if (limit_type == REG_TYPE_U64) {
+                        monotonic_taken =
+                            vm_exec_monotonic_inc_cmp_u64(reg, limit_reg, &should_continue);
+                    }
+                    break;
+                default:
+                    break;
+            }
+
+            if (monotonic_taken) {
                 if (should_continue) {
                     vm.ip += offset;
                 }
@@ -3708,39 +3900,136 @@ InterpretResult vm_run_dispatch(void) {
             }
         }
 
-        if (vm_exec_inc_i32_checked(reg)) {
-            if (vm_typed_reg_in_range(limit_reg) &&
-                vm.typed_regs.reg_types[limit_reg] == REG_TYPE_I32) {
-                if (vm.typed_regs.i32_regs[reg] < vm.typed_regs.i32_regs[limit_reg]) {
-                    vm.ip += offset;
+        switch (counter_type) {
+            case REG_TYPE_I32:
+                if (vm_exec_inc_i32_checked(reg)) {
+                    if (limit_type == REG_TYPE_I32) {
+                        if (vm.typed_regs.i32_regs[reg] < vm.typed_regs.i32_regs[limit_reg]) {
+                            vm.ip += offset;
+                        }
+                        DISPATCH_TYPED();
+                    }
+
+                    Value limit_val = vm_get_register_safe(limit_reg);
+                    if (!IS_I32(limit_val)) {
+                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(),
+                                        "Operands must be i32");
+                    }
+
+                    if (vm.typed_regs.i32_regs[reg] < AS_I32(limit_val)) {
+                        vm.ip += offset;
+                    }
+                    DISPATCH_TYPED();
                 }
-                DISPATCH_TYPED();
-            }
+                break;
+            case REG_TYPE_I64:
+                if (vm_exec_inc_i64_checked(reg)) {
+                    if (limit_type == REG_TYPE_I64) {
+                        if (vm.typed_regs.i64_regs[reg] < vm.typed_regs.i64_regs[limit_reg]) {
+                            vm.ip += offset;
+                        }
+                        DISPATCH_TYPED();
+                    }
 
-            Value limit = vm_get_register_safe(limit_reg);
-            if (!IS_I32(limit)) {
-                VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be i32");
-            }
+                    Value limit_val = vm_get_register_safe(limit_reg);
+                    if (!IS_I64(limit_val)) {
+                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(),
+                                        "Operands must be i64");
+                    }
 
-            if (vm.typed_regs.i32_regs[reg] < AS_I32(limit)) {
+                    if (vm.typed_regs.i64_regs[reg] < AS_I64(limit_val)) {
+                        vm.ip += offset;
+                    }
+                    DISPATCH_TYPED();
+                }
+                break;
+            case REG_TYPE_U32:
+                if (vm_exec_inc_u32_checked(reg)) {
+                    if (limit_type == REG_TYPE_U32) {
+                        if (vm.typed_regs.u32_regs[reg] < vm.typed_regs.u32_regs[limit_reg]) {
+                            vm.ip += offset;
+                        }
+                        DISPATCH_TYPED();
+                    }
+
+                    Value limit_val = vm_get_register_safe(limit_reg);
+                    if (!IS_U32(limit_val)) {
+                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(),
+                                        "Operands must be u32");
+                    }
+
+                    if (vm.typed_regs.u32_regs[reg] < AS_U32(limit_val)) {
+                        vm.ip += offset;
+                    }
+                    DISPATCH_TYPED();
+                }
+                break;
+            case REG_TYPE_U64:
+                if (vm_exec_inc_u64_checked(reg)) {
+                    if (limit_type == REG_TYPE_U64) {
+                        if (vm.typed_regs.u64_regs[reg] < vm.typed_regs.u64_regs[limit_reg]) {
+                            vm.ip += offset;
+                        }
+                        DISPATCH_TYPED();
+                    }
+
+                    Value limit_val = vm_get_register_safe(limit_reg);
+                    if (!IS_U64(limit_val)) {
+                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(),
+                                        "Operands must be u64");
+                    }
+
+                    if (vm.typed_regs.u64_regs[reg] < AS_U64(limit_val)) {
+                        vm.ip += offset;
+                    }
+                    DISPATCH_TYPED();
+                }
+                break;
+            default:
+                break;
+        }
+
+        Value counter = vm_get_register_safe(reg);
+        Value limit = vm_get_register_safe(limit_reg);
+
+        if (IS_I32(counter) && IS_I32(limit)) {
+            int32_t incremented = AS_I32(counter) + 1;
+            store_i32_register(reg, incremented);
+            if (incremented < AS_I32(limit)) {
                 vm.ip += offset;
             }
             DISPATCH_TYPED();
         }
 
-        Value counter = vm_get_register_safe(reg);
-        Value limit = vm_get_register_safe(limit_reg);
-        if (!IS_I32(counter) || !IS_I32(limit)) {
-            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be i32");
+        if (IS_I64(counter) && IS_I64(limit)) {
+            int64_t incremented = AS_I64(counter) + 1;
+            store_i64_register(reg, incremented);
+            if (incremented < AS_I64(limit)) {
+                vm.ip += offset;
+            }
+            DISPATCH_TYPED();
         }
 
-        int32_t incremented = AS_I32(counter) + 1;
-        store_i32_register(reg, incremented);
-        if (incremented < AS_I32(limit)) {
-            vm.ip += offset;
+        if (IS_U32(counter) && IS_U32(limit)) {
+            uint32_t incremented = AS_U32(counter) + 1u;
+            store_u32_register(reg, incremented);
+            if (incremented < AS_U32(limit)) {
+                vm.ip += offset;
+            }
+            DISPATCH_TYPED();
         }
 
-        DISPATCH_TYPED();
+        if (IS_U64(counter) && IS_U64(limit)) {
+            uint64_t incremented = AS_U64(counter) + 1u;
+            store_u64_register(reg, incremented);
+            if (incremented < AS_U64(limit)) {
+                vm.ip += offset;
+            }
+            DISPATCH_TYPED();
+        }
+
+        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(),
+                        "Operands must be homogeneous integers");
     }
 
     LABEL_OP_DEC_CMP_JMP: {

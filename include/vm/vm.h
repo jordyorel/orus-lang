@@ -451,6 +451,12 @@ typedef enum {
     OP_MOD_I32_R,
     OP_INC_I32_R,
     OP_INC_I32_CHECKED,
+    OP_INC_I64_R,
+    OP_INC_I64_CHECKED,
+    OP_INC_U32_R,
+    OP_INC_U32_CHECKED,
+    OP_INC_U64_R,
+    OP_INC_U64_CHECKED,
     OP_DEC_I32_R,
 
     OP_ADD_I64_R,
@@ -1062,6 +1068,8 @@ typedef enum {
     LOOP_TRACE_OVERFLOW_GUARD,
     LOOP_TRACE_BRANCH_FAST_HIT,
     LOOP_TRACE_BRANCH_FAST_MISS,
+    LOOP_TRACE_INC_FAST_HIT,
+    LOOP_TRACE_INC_FAST_MISS,
     LOOP_TRACE_INC_OVERFLOW_BAILOUT,
     LOOP_TRACE_INC_TYPE_INSTABILITY,
     LOOP_TRACE_ITER_SAVED_ALLOCATIONS,
@@ -1080,14 +1088,16 @@ typedef struct {
     uint64_t boxed_overflow_guard;
     uint64_t typed_branch_fast_hits;
     uint64_t typed_branch_fast_misses;
+    uint64_t inc_fast_hits;
+    uint64_t inc_fast_misses;
     uint64_t inc_overflow_bailouts;
     uint64_t inc_type_instability;
     uint64_t iter_allocations_saved;
     uint64_t iter_fallbacks;
     uint64_t licm_guard_fusions;
     uint64_t licm_guard_demotions;
-    uint64_t branch_cache_hits;
-    uint64_t branch_cache_misses;
+    uint64_t loop_branch_cache_hits;
+    uint64_t loop_branch_cache_misses;
 } LoopTraceCounters;
 
 // Profiling counters
@@ -1241,6 +1251,12 @@ static inline void vm_trace_loop_event(LoopTraceKind kind) {
         case LOOP_TRACE_BRANCH_FAST_MISS:
             vm.profile.loop_trace.typed_branch_fast_misses++;
             break;
+        case LOOP_TRACE_INC_FAST_HIT:
+            vm.profile.loop_trace.inc_fast_hits++;
+            break;
+        case LOOP_TRACE_INC_FAST_MISS:
+            vm.profile.loop_trace.inc_fast_misses++;
+            break;
         case LOOP_TRACE_INC_OVERFLOW_BAILOUT:
             vm.profile.loop_trace.inc_overflow_bailouts++;
             break;
@@ -1260,10 +1276,10 @@ static inline void vm_trace_loop_event(LoopTraceKind kind) {
             vm.profile.loop_trace.licm_guard_demotions++;
             break;
         case LOOP_TRACE_BRANCH_CACHE_HIT:
-            vm.profile.loop_trace.branch_cache_hits++;
+            vm.profile.loop_trace.loop_branch_cache_hits++;
             break;
         case LOOP_TRACE_BRANCH_CACHE_MISS:
-            vm.profile.loop_trace.branch_cache_misses++;
+            vm.profile.loop_trace.loop_branch_cache_misses++;
             break;
         case LOOP_TRACE_KIND_COUNT:
         default:

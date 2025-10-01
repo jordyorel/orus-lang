@@ -1,0 +1,11 @@
+iterable = range(8)
+alias = iterable
+
+mut seen = 0
+mut total = 0
+
+for value in alias:
+    total = total + value
+    seen = seen + 1
+
+print("phase3-range-alias", seen, total)

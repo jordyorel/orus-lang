@@ -551,6 +551,53 @@ static bool is_invariant_expression(const TypedASTNode* node,
                                            locals,
                                            mutated,
                                            hoisted);
+        case NODE_CALL: {
+            TypedASTNode* typed_callee = node->typed.call.callee;
+            if (!typed_callee || !typed_callee->original) {
+                return false;
+            }
+
+            const ASTNode* callee_ast = typed_callee->original;
+            const char* callee_name = NULL;
+            bool allow_call = false;
+
+            if (callee_ast->type == NODE_IDENTIFIER) {
+                callee_name = callee_ast->identifier.name;
+                if (callee_name &&
+                    (strcmp(callee_name, "range") == 0 || strcmp(callee_name, "iter") == 0)) {
+                    allow_call = true;
+                }
+            } else if (callee_ast->type == NODE_MEMBER_ACCESS) {
+                callee_name = callee_ast->member.member;
+                if (callee_name &&
+                    (strcmp(callee_name, "iter") == 0 || strcmp(callee_name, "iterator") == 0)) {
+                    if (!typed_callee->typed.member.object ||
+                        !is_invariant_expression(typed_callee->typed.member.object,
+                                                 locals,
+                                                 mutated,
+                                                 hoisted)) {
+                        return false;
+                    }
+                    allow_call = true;
+                }
+            }
+
+            if (!allow_call) {
+                return false;
+            }
+
+            if (node->typed.call.argCount > 0 && node->typed.call.args) {
+                for (int i = 0; i < node->typed.call.argCount; ++i) {
+                    if (!is_invariant_expression(node->typed.call.args[i],
+                                                 locals,
+                                                 mutated,
+                                                 hoisted)) {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
         default:
             break;
     }
