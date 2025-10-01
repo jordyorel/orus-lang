@@ -106,7 +106,8 @@ void runtimeError(ErrorType type, SrcLocation location, const char* format, ...)
                     printf("        "); \
                     for (int i = 0; i < 8; i++) { \
                         printf("[ R%d: ", i); \
-                        printValue(vm.registers[i]); \
+                        Value debug_val = vm_get_register_safe((uint16_t)i); \
+                        printValue(debug_val); \
                         printf(" ]"); \
                     } \
                     printf("\\n"); \
