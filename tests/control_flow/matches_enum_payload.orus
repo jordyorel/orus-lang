@@ -1,0 +1,22 @@
+// Control flow tests for `matches` with enum payloads
+enum Result:
+    Ok(value: i32)
+    Err(message: string)
+
+mut value = Result.Ok(42)
+if value matches Result.Ok(42):
+    print("enum ok literal equality works")
+
+if value matches Result.Ok(7):
+    print("unexpected ok branch")
+else:
+    print("enum ok literal mismatch works")
+
+if value matches Result.Err("boom"):
+    print("unexpected err branch")
+else:
+    print("enum variant mismatch works")
+
+value = Result.Err("boom")
+if value matches Result.Err("boom"):
+    print("enum err literal equality works")
