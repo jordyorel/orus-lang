@@ -175,8 +175,8 @@ WASM_OUTPUT_DIR = web
 WASM_MODULE = orus_web$(SUFFIX)
 WASM_JS = $(WASM_OUTPUT_DIR)/$(WASM_MODULE).js
 WASM_WASM = $(WASM_OUTPUT_DIR)/$(WASM_MODULE).wasm
-WASM_SRCS = $(COMPILER_SRCS) $(VM_SRCS) $(REPL_SRC) $(MAIN_SRC)
-WASM_EXPORTED_FUNCTIONS = ["_main"]
+WASM_SRCS = $(COMPILER_SRCS) $(VM_SRCS) $(REPL_SRC) $(MAIN_SRC) $(SRCDIR)/web/wasm_bridge.c
+WASM_EXPORTED_FUNCTIONS = ["_main","_initWebVM","_runSource","_freeWebVM","_getVersion","_setInputCallback","_setOutputCallback","_registerWebBuiltins","_getLastError","_clearLastError","_isVMReady","_resetVMState","_getVMStackSize","_getVMFrameCount","_getVMModuleCount"]
 WASM_RUNTIME_METHODS = ["cwrap","ccall","UTF8ToString","lengthBytesUTF8"]
 WASM_CFLAGS = $(BASE_CFLAGS) $(DEFINES)
 
@@ -284,7 +284,7 @@ ci:
 
 # Create build directory
 $(BUILDDIR):
-	@mkdir -p $(BUILDDIR) $(BUILDDIR)/vm/core $(BUILDDIR)/vm/dispatch $(BUILDDIR)/vm/operations $(BUILDDIR)/vm/runtime $(BUILDDIR)/vm/utils $(BUILDDIR)/vm/handlers $(BUILDDIR)/vm/profiling $(BUILDDIR)/compiler/backend/optimization $(BUILDDIR)/compiler/backend/codegen $(BUILDDIR)/type $(BUILDDIR)/errors/core $(BUILDDIR)/errors/features $(BUILDDIR)/errors/infrastructure $(BUILDDIR)/config $(BUILDDIR)/internal $(BUILDDIR)/debug $(BUILDDIR)/tests/unit
+	@mkdir -p $(BUILDDIR) $(BUILDDIR)/vm/core $(BUILDDIR)/vm/dispatch $(BUILDDIR)/vm/operations $(BUILDDIR)/vm/runtime $(BUILDDIR)/vm/utils $(BUILDDIR)/vm/handlers $(BUILDDIR)/vm/profiling $(BUILDDIR)/compiler/backend/optimization $(BUILDDIR)/compiler/backend/codegen $(BUILDDIR)/type $(BUILDDIR)/errors/core $(BUILDDIR)/errors/features $(BUILDDIR)/errors/infrastructure $(BUILDDIR)/config $(BUILDDIR)/internal $(BUILDDIR)/debug $(BUILDDIR)/tests/unit $(BUILDDIR)/web
 
 # Main interpreter
 $(ORUS): $(MAIN_OBJ) $(REPL_OBJ) $(VM_OBJS) $(COMPILER_OBJS)
