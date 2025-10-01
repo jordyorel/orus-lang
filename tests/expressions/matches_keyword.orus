@@ -1,0 +1,8 @@
+// Tests for the `matches` keyword evaluating to booleans
+value = 42
+print("value matches 42 =", value matches 42)
+print("value matches 100 =", value matches 100)
+
+text = "hello"
+print("text matches \"hello\" =", text matches "hello")
+print("text matches \"world\" =", text matches "world")
