@@ -1,0 +1,18 @@
+iterable = range(10)
+
+mut first_pass = 0
+mut first_total = 0
+
+for value in iterable:
+    first_total = first_total + value
+    first_pass = first_pass + 1
+    if first_pass == 4:
+        break
+
+mut second_pass = 0
+mut second_total = 0
+for value in iterable:
+    second_total = second_total + value
+    second_pass = second_pass + 1
+
+print("phase3-range-resume", first_pass, first_total, second_pass, second_total)

@@ -997,17 +997,29 @@ boxed safety net and LICM correctness guarantees.
        with tracing enabled and diffs the counters against the golden values.
    - **Sample implementation**:
      ```c
-     typedef struct {
-         uint64_t typed_hit;
-         uint64_t typed_miss;
-         uint64_t boxed_type_mismatch;
-         uint64_t boxed_overflow_guard;
-     } LoopTraceCounters;
+    typedef struct {
+        uint64_t typed_hit;
+        uint64_t typed_miss;
+        uint64_t boxed_type_mismatch;
+        uint64_t boxed_overflow_guard;
+        uint64_t typed_branch_fast_hits;
+        uint64_t typed_branch_fast_misses;
+        uint64_t inc_fast_hits;
+        uint64_t inc_fast_misses;
+        uint64_t inc_overflow_bailouts;
+        uint64_t inc_type_instability;
+        uint64_t iter_allocations_saved;
+        uint64_t iter_fallbacks;
+        uint64_t licm_guard_fusions;
+        uint64_t licm_guard_demotions;
+        uint64_t loop_branch_cache_hits;
+        uint64_t loop_branch_cache_misses;
+    } LoopTraceCounters;
 
-     static inline void vm_trace_loop_event(VM* vm, LoopTraceKind kind) {
-         if (!vm->config.trace_typed_fallbacks) return;
-         vm->loop_trace[kind]++;
-     }
+    static inline void vm_trace_loop_event(VM* vm, LoopTraceKind kind) {
+        if (!vm->config.trace_typed_fallbacks) return;
+        vm->loop_trace[kind]++;
+    }
      ```
    - **Status**: Landed. `vm.profile.loop_trace` now records per-loop counters,
      `vm_dump_loop_trace(stderr)` emits `[loop-trace]` summaries, and the new
@@ -1034,6 +1046,12 @@ boxed safety net and LICM correctness guarantees.
                 break;
             case LOOP_TRACE_BRANCH_FAST_MISS:
                 vm.profile.loop_trace.typed_branch_fast_misses++;
+                break;
+            case LOOP_TRACE_INC_FAST_HIT:
+                vm.profile.loop_trace.inc_fast_hits++;
+                break;
+            case LOOP_TRACE_INC_FAST_MISS:
+                vm.profile.loop_trace.inc_fast_misses++;
                 break;
             case LOOP_TRACE_INC_OVERFLOW_BAILOUT:
                 vm.profile.loop_trace.inc_overflow_bailouts++;
@@ -1064,21 +1082,27 @@ boxed safety net and LICM correctness guarantees.
                 "[loop-trace] typed_hit=%" PRIu64 " typed_miss=%" PRIu64
                 " boxed_type_mismatch=%" PRIu64 " boxed_overflow_guard=%" PRIu64
                 " branch_fast_hits=%" PRIu64 " branch_fast_misses=%" PRIu64
+                " inc_fast_hits=%" PRIu64 " inc_fast_misses=%" PRIu64
                 " inc_overflow_bailouts=%" PRIu64 " inc_type_instability=%" PRIu64
                 " iter_alloc_saved=%" PRIu64 " iter_fallbacks=%" PRIu64
-                " licm_guard_fusions=%" PRIu64 " licm_guard_demotions=%" PRIu64 "\n",
+                " licm_guard_fusions=%" PRIu64 " licm_guard_demotions=%" PRIu64
+                " loop_branch_cache_hits=%" PRIu64 " loop_branch_cache_misses=%" PRIu64 "\n",
                 vm.profile.loop_trace.typed_hit,
                 vm.profile.loop_trace.typed_miss,
                 vm.profile.loop_trace.boxed_type_mismatch,
                 vm.profile.loop_trace.boxed_overflow_guard,
                 vm.profile.loop_trace.typed_branch_fast_hits,
                 vm.profile.loop_trace.typed_branch_fast_misses,
+                vm.profile.loop_trace.inc_fast_hits,
+                vm.profile.loop_trace.inc_fast_misses,
                 vm.profile.loop_trace.inc_overflow_bailouts,
                 vm.profile.loop_trace.inc_type_instability,
                 vm.profile.loop_trace.iter_allocations_saved,
                 vm.profile.loop_trace.iter_fallbacks,
                 vm.profile.loop_trace.licm_guard_fusions,
-                vm.profile.loop_trace.licm_guard_demotions);
+                vm.profile.loop_trace.licm_guard_demotions,
+                vm.profile.loop_trace.loop_branch_cache_hits,
+                vm.profile.loop_trace.loop_branch_cache_misses);
     }
      ```
 
@@ -1132,10 +1156,22 @@ boxed safety net and LICM correctness guarantees.
      - Implement `vm_exec_inc_i32_checked` using `__builtin_add_overflow` so the
        VM records `LOOP_TRACE_INC_OVERFLOW_BAILOUT` before falling back to the
        boxed path (which still raises on overflow).
-     - Update the dispatch tables to call the helper and surface `typed_miss`
-       events when the counter is not resident in the typed bank.
+     - Generalise the helper to `vm_exec_inc_i64_checked`,
+       `vm_exec_inc_u32_checked`, and `vm_exec_inc_u64_checked`, respecting
+       signed overflow semantics while allowing unsigned wraparound to remain on
+       the fast path.
+     - Update the dispatch tables to call the helper and surface
+       `LOOP_TRACE_INC_FAST_{HIT,MISS}` whenever the typed bank is used or the
+       opcode falls back to boxed execution.
+     - Hoist the monotonic fused loop helper so `vm_exec_monotonic_inc_cmp_*`
+       covers `i32`, `i64`, `u32`, and `u64` counters, keeping monotonic
+       `OP_INC_CMP_JMP` loops entirely in typed registers when both operands stay
+       inside the widened register envelope.
      - Extend telemetry with `inc_overflow_bailouts` and
        `inc_type_instability` counters for roll-up reporting.
+     - Ensure the boxed slow path rehydrates the typed cache via the
+       corresponding `vm_store_*_typed_hot` helper so the next iteration can
+       stay on the fused fast path without waiting for a separate re-type pass.
    - **Benchmark snapshot** (release build, Linux x86_64, 3x5 trials via
      `scripts/benchmarks/loop_perf.py`):
      - `typed-fastpath`: 0.159 s average runtime for 3 M iterations (~18.81 M
@@ -1147,42 +1183,235 @@ boxed safety net and LICM correctness guarantees.
        future optimizations.
    - **Sample implementation**:
      ```c
-     static inline bool vm_exec_inc_i32_checked(uint16_t reg) {
+     bool vm_exec_inc_i32_checked(uint16_t reg) {
          if (vm.config.disable_inc_typed_fastpath) {
              vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+             vm_trace_loop_event(LOOP_TRACE_INC_FAST_MISS);
              return false;
          }
 
-         if (vm_typed_reg_in_range(reg) && vm.typed_regs.reg_types[reg] == REG_TYPE_I32) {
-             int32_t current = vm.typed_regs.i32_regs[reg];
-             int32_t next_value;
-             if (__builtin_add_overflow(current, 1, &next_value)) {
-                 vm_trace_loop_event(LOOP_TRACE_INC_OVERFLOW_BAILOUT);
-                 vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
-                 return false;
-             }
-             vm.typed_regs.i32_regs[reg] = next_value;
-             vm_set_register_safe(reg, I32_VAL(next_value));
-             vm_trace_loop_event(LOOP_TRACE_TYPED_HIT);
-             return true;
+         if (!vm_typed_reg_in_range(reg)) {
+             vm_trace_loop_event(LOOP_TRACE_INC_TYPE_INSTABILITY);
+             vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+             vm_trace_loop_event(LOOP_TRACE_INC_FAST_MISS);
+             return false;
          }
 
-         vm_trace_loop_event(LOOP_TRACE_INC_TYPE_INSTABILITY);
-         vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
-         return false;
+         if (vm.typed_regs.reg_types[reg] != REG_TYPE_I32) {
+             vm_branch_cache_bump_generation(reg);
+             vm.typed_regs.reg_types[reg] = REG_TYPE_HEAP;
+             vm.typed_regs.dirty[reg] = false;
+             vm_trace_loop_event(LOOP_TRACE_INC_TYPE_INSTABILITY);
+             vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+             vm_trace_loop_event(LOOP_TRACE_INC_FAST_MISS);
+             return false;
+         }
+
+         int32_t current = vm.typed_regs.i32_regs[reg];
+         int32_t next_value;
+         if (__builtin_add_overflow(current, 1, &next_value)) {
+             vm_branch_cache_bump_generation(reg);
+             vm.typed_regs.reg_types[reg] = REG_TYPE_HEAP;
+             vm.typed_regs.dirty[reg] = false;
+             vm_trace_loop_event(LOOP_TRACE_INC_OVERFLOW_BAILOUT);
+             vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+             vm_trace_loop_event(LOOP_TRACE_INC_FAST_MISS);
+             return false;
+         }
+
+     vm_store_i32_typed_hot(reg, next_value);
+     vm_trace_loop_event(LOOP_TRACE_TYPED_HIT);
+     vm_trace_loop_event(LOOP_TRACE_INC_FAST_HIT);
+     return true;
+ }
+
+     #define VM_HANDLE_INC_I32_SLOW_PATH(reg)                                \
+         do {                                                                \
+             Value boxed__ = vm_get_register_safe((reg));                    \
+             if (!IS_I32(boxed__)) {                                         \
+                 vm_trace_loop_event(LOOP_TRACE_TYPE_MISMATCH);             \
+                 if (vm_typed_reg_in_range((reg))) {                         \
+                     vm.typed_regs.reg_types[(reg)] = REG_TYPE_HEAP;        \
+                     vm.typed_regs.dirty[(reg)] = false;                    \
+                 }                                                          \
+                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(),             \
+                                 "Operands must be i32");                   \
+             }                                                               \
+             int32_t next__;                                                 \
+             if (__builtin_add_overflow(AS_I32(boxed__), 1, &next__)) {      \
+                 vm_trace_loop_event(LOOP_TRACE_OVERFLOW_GUARD);            \
+                 VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(),           \
+                                 "Integer overflow");                       \
+             }                                                               \
+             vm_store_i32_typed_hot((reg), next__);                          \
+         } while (0)
+
+     bool vm_exec_inc_i64_checked(uint16_t reg) {
+         if (vm.config.disable_inc_typed_fastpath || !vm_typed_reg_in_range(reg)) {
+             vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+             vm_trace_loop_event(LOOP_TRACE_INC_FAST_MISS);
+             return false;
+         }
+
+         if (vm.typed_regs.reg_types[reg] != REG_TYPE_I64) {
+             vm_branch_cache_bump_generation(reg);
+             vm.typed_regs.reg_types[reg] = REG_TYPE_HEAP;
+             vm.typed_regs.dirty[reg] = false;
+             vm_trace_loop_event(LOOP_TRACE_INC_TYPE_INSTABILITY);
+             vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+             vm_trace_loop_event(LOOP_TRACE_INC_FAST_MISS);
+             return false;
+         }
+
+         int64_t current = vm.typed_regs.i64_regs[reg];
+         int64_t next_value;
+         if (__builtin_add_overflow(current, (int64_t)1, &next_value)) {
+             vm_branch_cache_bump_generation(reg);
+             vm.typed_regs.reg_types[reg] = REG_TYPE_HEAP;
+             vm.typed_regs.dirty[reg] = false;
+             vm_trace_loop_event(LOOP_TRACE_INC_OVERFLOW_BAILOUT);
+             vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+             vm_trace_loop_event(LOOP_TRACE_INC_FAST_MISS);
+             return false;
+         }
+
+         vm_store_i64_typed_hot(reg, next_value);
+         vm_trace_loop_event(LOOP_TRACE_TYPED_HIT);
+         vm_trace_loop_event(LOOP_TRACE_INC_FAST_HIT);
+         return true;
      }
-     ```
+
+     bool vm_exec_inc_u32_checked(uint16_t reg) {
+         if (vm.config.disable_inc_typed_fastpath || !vm_typed_reg_in_range(reg)) {
+             vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+             vm_trace_loop_event(LOOP_TRACE_INC_FAST_MISS);
+             return false;
+         }
+
+         if (vm.typed_regs.reg_types[reg] != REG_TYPE_U32) {
+             vm_branch_cache_bump_generation(reg);
+             vm.typed_regs.reg_types[reg] = REG_TYPE_HEAP;
+             vm.typed_regs.dirty[reg] = false;
+             vm_trace_loop_event(LOOP_TRACE_INC_TYPE_INSTABILITY);
+             vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+             vm_trace_loop_event(LOOP_TRACE_INC_FAST_MISS);
+             return false;
+         }
+
+         uint32_t current = vm.typed_regs.u32_regs[reg];
+         vm_store_u32_typed_hot(reg, current + (uint32_t)1);
+         vm_trace_loop_event(LOOP_TRACE_TYPED_HIT);
+         vm_trace_loop_event(LOOP_TRACE_INC_FAST_HIT);
+         return true;
+     }
+
+    bool vm_exec_inc_u64_checked(uint16_t reg) {
+        if (vm.config.disable_inc_typed_fastpath || !vm_typed_reg_in_range(reg)) {
+            vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+            vm_trace_loop_event(LOOP_TRACE_INC_FAST_MISS);
+            return false;
+        }
+
+        if (vm.typed_regs.reg_types[reg] != REG_TYPE_U64) {
+            vm_branch_cache_bump_generation(reg);
+            vm.typed_regs.reg_types[reg] = REG_TYPE_HEAP;
+            vm.typed_regs.dirty[reg] = false;
+            vm_trace_loop_event(LOOP_TRACE_INC_TYPE_INSTABILITY);
+            vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+            vm_trace_loop_event(LOOP_TRACE_INC_FAST_MISS);
+            return false;
+        }
+
+        uint64_t current = vm.typed_regs.u64_regs[reg];
+        vm_store_u64_typed_hot(reg, current + (uint64_t)1);
+        vm_trace_loop_event(LOOP_TRACE_TYPED_HIT);
+        vm_trace_loop_event(LOOP_TRACE_INC_FAST_HIT);
+        return true;
+    }
+    ```
+
+    With the widened monotonic helper, `vm_exec_monotonic_inc_cmp_*` mirrors the
+    increment fast paths and performs the fused increment + comparison without
+    leaving the typed register bank:
+
+    ```c
+    bool vm_exec_monotonic_inc_cmp_i64(uint16_t counter_reg, uint16_t limit_reg,
+                                       bool* out_should_continue) {
+        if (vm.config.disable_inc_typed_fastpath) {
+            vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+            vm_trace_loop_event(LOOP_TRACE_INC_FAST_MISS);
+            return false;
+        }
+
+        if (!vm_typed_reg_in_range(counter_reg) || !vm_typed_reg_in_range(limit_reg)) {
+            vm_trace_loop_event(LOOP_TRACE_INC_TYPE_INSTABILITY);
+            vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+            vm_trace_loop_event(LOOP_TRACE_INC_FAST_MISS);
+            return false;
+        }
+
+        if (vm.typed_regs.reg_types[counter_reg] != REG_TYPE_I64 ||
+            vm.typed_regs.reg_types[limit_reg] != REG_TYPE_I64) {
+            if (vm.typed_regs.reg_types[counter_reg] != REG_TYPE_I64) {
+                vm_branch_cache_bump_generation(counter_reg);
+                vm.typed_regs.reg_types[counter_reg] = REG_TYPE_HEAP;
+                vm_trace_loop_event(LOOP_TRACE_INC_TYPE_INSTABILITY);
+            }
+            vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+            vm_trace_loop_event(LOOP_TRACE_INC_FAST_MISS);
+            return false;
+        }
+
+        int64_t current = vm.typed_regs.i64_regs[counter_reg];
+        if (current == INT64_MAX) {
+            vm_branch_cache_bump_generation(counter_reg);
+            vm.typed_regs.reg_types[counter_reg] = REG_TYPE_HEAP;
+            vm_trace_loop_event(LOOP_TRACE_INC_OVERFLOW_BAILOUT);
+            vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
+            vm_trace_loop_event(LOOP_TRACE_INC_FAST_MISS);
+            return false;
+        }
+
+        int64_t next_value = current + 1;
+        store_i64_register(counter_reg, next_value);
+
+        if (out_should_continue) {
+            *out_should_continue =
+                next_value < vm.typed_regs.i64_regs[limit_reg];
+        }
+
+        vm_trace_loop_event(LOOP_TRACE_TYPED_HIT);
+        vm_trace_loop_event(LOOP_TRACE_INC_FAST_HIT);
+        return true;
+    }
+    ```
+
+     The corresponding slow-path macros (`VM_HANDLE_INC_I64_SLOW_PATH`,
+     `VM_HANDLE_INC_U32_SLOW_PATH`, `VM_HANDLE_INC_U64_SLOW_PATH`) mirror the
+     `i32` version: they validate the boxed operand, emit
+     `LOOP_TRACE_TYPE_MISMATCH` on incompatible values, raise
+     `LOOP_TRACE_OVERFLOW_GUARD` before surfacing signed overflow, and rehydrate
+     the typed bank via `vm_store_*_typed_hot` so the next iteration can resume
+     on the fused helper.
 
 4. **Phase 3 – Zero-allocation iterators (Day 6-9)**
    - **Goal**: Allow array and range iterators to live entirely in typed scratch
      registers using `TypedIteratorDescriptor` state.
    - **Tasks**:
-     - Define `TypedIteratorDescriptor` with discriminated union for range and
-       array iterators.
-     - Extend `OP_GET_ITER_R` to detect supported iterable shapes, initialise
-       the descriptor, and emit `LOOP_TRACE_ITER_SAVED_ALLOCATIONS`.
-     - Harden `OP_ITER_NEXT_R` so it consumes typed descriptors first and only
-       falls back to boxed objects when the descriptor is invalidated.
+      - Define `TypedIteratorDescriptor` with discriminated union for range and
+        array iterators.
+      - Extend `OP_GET_ITER_R` to detect supported iterable shapes, initialise
+        the descriptor, and emit `LOOP_TRACE_ITER_SAVED_ALLOCATIONS`.
+      - Harden `OP_ITER_NEXT_R` so it consumes typed descriptors first and only
+        falls back to boxed objects when the descriptor is invalidated.
+      - Clone existing descriptors when registers are remapped so typed
+        iterators survive moves without reallocation.
+      - Provide `vm_typed_iterator_bind_array_at()` for array iterators that
+        resume from the current index of helper objects.
+      - Validate the zero-allocation contract with
+        `tests/loop_fastpaths/phase3/iterator_range_alias.orus` (register move
+        clones) and `iterator_range_resume.orus` (partial-consumption resume)
+        so regressions surface immediately in CI.
    - **Sample implementation**:
      ```c
      typedef enum {
@@ -1236,6 +1465,50 @@ boxed safety net and LICM correctness guarantees.
      }
      ```
 
+     The dispatchers now rely on two small helpers to keep iterator descriptors
+     resident even when values move between registers:
+
+     ```c
+     static inline bool vm_typed_iterator_clone(uint16_t dst, uint16_t src) {
+         if (dst >= REGISTER_COUNT || src >= REGISTER_COUNT) {
+             return false;
+         }
+         TypedIteratorDescriptor descriptor = vm.typed_iterators[src];
+         if (descriptor.kind == TYPED_ITER_NONE) {
+             return false;
+         }
+         vm.typed_iterators[dst] = descriptor;
+         return true;
+     }
+
+     static inline bool vm_typed_iterator_bind_array_at(uint16_t reg,
+                                                        ObjArray* array,
+                                                        uint32_t index) {
+         if (reg >= REGISTER_COUNT || !array) {
+             return false;
+         }
+         int length = array->length;
+         if (length < 0) {
+             length = 0;
+         }
+         if (index > (uint32_t)length) {
+             index = (uint32_t)length;
+         }
+         vm.typed_iterators[reg].kind = TYPED_ITER_ARRAY_SLICE;
+         vm.typed_iterators[reg].data.array.array = array;
+         vm.typed_iterators[reg].data.array.index = index;
+         return true;
+     }
+     ```
+
+    `OP_GET_ITER_R` first performs a normal register write, then tries the
+     clone helper before hydrating new descriptors. That sequence lets `range()`
+     results and iterator objects keep their stack-resident frames instead of
+     falling back to boxed allocations. The only builtin that materialises an
+     iterator today is `range()`, and its VM handler immediately invokes
+     `vm_typed_iterator_bind_range()` after allocating the helper object so the
+     typed descriptor stays hot even before the first `for` loop executes.
+
 5. **Phase 4 – LICM & optimizer integration (Day 9-11)**
    - **Goal**: Ensure LICM cooperates with the new fast paths without breaking
      safety invariants while emitting guard fusion/demotion telemetry.
@@ -1243,13 +1516,15 @@ boxed safety net and LICM correctness guarantees.
      - Augment LICM metadata with `typed_escape_mask`, `typed_guard_witness`,
        and `typed_metadata_stable` so hoisted expressions record whether they
        depend on typed cache residency.
-     - Mark loops that successfully hoist invariants via `licm_mark_loop_metadata`
-       so runtime counters can distinguish fused guards from demoted ones.
-     - Rewrite redundant guard chains (e.g. `fused_guard = typed_guard and base_guard`)
-       so the hoisted initializer references the fused predecessor directly,
-       incrementing guard fusion counters without re-evaluating the base guard.
-     - Introduce optimizer unit tests that combine hoisted bounds checks with
-       the typed iterators to guarantee early exits still occur.
+    - Mark loops that successfully hoist invariants via `licm_mark_loop_metadata`
+      so runtime counters can distinguish fused guards from demoted ones.
+    - Rewrite redundant guard chains (e.g. `fused_guard = typed_guard and base_guard`)
+      so the hoisted initializer references the fused predecessor directly,
+      incrementing guard fusion counters without re-evaluating the base guard.
+    - Introduce optimizer unit tests that combine hoisted bounds checks with
+      the typed iterators to guarantee early exits still occur.
+    - Treat calls to `range()` and `*.iter()` as loop-invariant when their
+      operands are stable so iterator construction is hoisted out of hot loops.
 
 6. **Phase 5 – Regression suites & performance gates (Day 11-14)**
    - **Goal**: Lock in correctness while tracking performance deltas.
