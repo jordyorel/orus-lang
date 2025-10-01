@@ -20,7 +20,7 @@ Keeping the roadmap short and direct makes it easier for the team to track what 
 - Structured diagnostics shared by CLI/REPL with richer context blocks.
 - Variable lifecycle analysis (duplicate bindings, use-before-init, immutable mutations).
 - Algorithm stress suite expansion across graph, dynamic programming, and numeric workloads (see `docs/ALGORITHM_STRESS_TEST_ROADMAP.md`).
-- Loop performance fast-pathing to eliminate the current boxed execution bottleneck (see roadmap below).
+- Compiler loop canonicalization and register residency work to unlock the VM loop fast paths already shipped (see roadmap below).
 
 ## Next Milestones
 1. Ship the structured diagnostic renderer with regression snapshots.
@@ -30,44 +30,18 @@ Keeping the roadmap short and direct makes it easier for the team to track what 
 
 ## Loop Performance Roadmap
 
-### Current Bottleneck
-- Profiling confirms loop iterations still run through the generic boxed path, forcing register resynchronisation, iterator allocation, and runtime guard traffic every iteration.
-- Safety guards remain essential, but without a dedicated typed fast path the VM cannot stay entirely in typed registers for hot loops.
+### Current State
+- VM typed fast paths (branch caches, fused increments, zero-allocation iterators, LICM metadata preservation, and regression gates) are complete and enabled by default.
+- Telemetry and benchmarks highlight that the compiler still emits bytecode that fails to stay on those fast paths consistently, causing boxed fallbacks and inflated guard traffic.
 
-### Implementation Phases
+### Next Steps (Compiler-Focused)
+1. **Loop Canonicalization** – Normalize desugared loops into canonical `(init → guard → increment)` forms with typed metadata so the backend can select the correct opcodes.
+2. **Register Residency Guarantees** – Reserve typed registers for induction variables/bounds and propagate residency hints so the VM keeps hot counters in place.
+3. **Guard Thinning & Fusion** – Merge redundant guards and convert invariant checks into telemetry counters to cut slow-path churn without losing safety.
+4. **Codegen Integration** – Feed canonical descriptors into the emitter to guarantee the optimized bytecode uses the VM's typed entrypoints.
+5. **Benchmark & Telemetry Gates** – Promote loop microbenchmarks and typed-hit telemetry thresholds to required CI gates to lock in improvements.
 
-#### Phase 1 – Typed Branch Cache ✅
-- **Objective**: Keep hot loop conditions in typed form so the dispatch path can branch without re-materialising boxed `Value`s.
-- **Scope**:
-  - Install a per-loop branch cache keyed by `(loop_id, predicate_slot)`.
-  - Emit `BRANCH_TYPED` opcodes that consult the cache before falling back to the boxed handler.
-  - Add guard invalidation hooks when the predicate source mutates outside the cached type envelope.
-- **Status**: ✅ `OP_BRANCH_TYPED` now drives a per-loop cache with guard-versioned invalidation and exposes `loop_branch_cache_hits/misses` counters through the diagnostics console.
-- **Acceptance**: Micro-benchmarks (`tests/benchmarks/control_flow_benchmark.*`) show branch-only loops avoiding boxed transitions; telemetry proves cache hit rates >95% for simple counters.
-- **Telemetry**: `loop_branch_cache_hits/misses` counters flow through `vm_dump_loop_trace` and the diagnostics console.
-
-- **Objective**: Replace the generic arithmetic opcode with a fused increment that keeps counters in typed registers while honouring overflow guarantees.
-- **Scope**: Introduce `INC_Typed` opcodes with inline overflow checks and boxed slow-path fallback.
-- **Status**: Fused helpers now drive both dispatch backends; `i32`, `i64`, `u32`, and `u64` induction variables stay in the typed bank with overflow bailouts for signed counters and wrap-preserving unsigned updates. Slow-path fallbacks rehydrate the appropriate typed register via the new `vm_store_*_typed_hot` helpers so steady-state loops stay resident after a single miss. The monotonic fused loop helper now covers all four integer widths so `OP_INC_CMP_JMP` stays hot when both counter and limit remain typed.
-- **Telemetry**: VM stats expose `inc_fast_hits/inc_fast_misses`, `inc_overflow_bailouts`, and `inc_type_instability` through the diagnostics console and loop telemetry harness.
-- **Dependency**: Requires Phase 1 cache invalidation hooks to notify increments of type transitions.
-
-#### Phase 3 – Zero-Allocation Iterators ✅
-- **Objective**: Eliminate heap churn for range/array iterators by storing descriptors in typed scratch registers.
-- **Scope**: Provide stack-allocated iterator frames and update the optimizer to lift iterator construction out of the loop body when safe.
-- **Dependency**: Builds on Phase 1 and Phase 2 typed register residency guarantees.
-- **Status**: Dispatchers clone typed iterator descriptors for `range()` and
-  array iterables, array helpers reuse descriptors via
-  `vm_typed_iterator_bind_array_at`, and LICM now hoists invariant `range()` /
-  `.iter()` calls so iterator setup stays out of the hot loop body. Regression
-  coverage in `tests/loop_fastpaths/phase3/iterator_range_alias.orus` and
-  `iterator_range_resume.orus` proves descriptors survive register moves and can
-  resume partially-consumed iterators without falling back to boxed objects. A
-  runtime audit confirmed `range()` is the only iterator-producing builtin
-  today and its handler now populates typed descriptors immediately after
-  allocation so no additional heap work is required on the hot path.
-
-Loops will remain on the conservative boxed path until all three fast paths land and are wired into the runtime; tracking this phased roadmap keeps the focus on those deliverables in order.
+Full details live in `docs/LOOP_OPTIMIZATION_CONVERGENCE_PLAN.md`.
 
 ## Later Initiatives
 - First-class generics with constraint handling and monomorphisation.
