@@ -162,7 +162,9 @@ Comments are stripped during lexing, so feel free to use them liberally for docu
 
 ## 8. Operators
 
-The core operator set covers arithmetic, comparisons, boolean logic, and explicit casts:
+The core operator family in Orus mirrors what you would expect from a modern systems language. Arithmetic and comparison
+operators are punctuation-based, while boolean logic uses word operators for clarity during code review. Explicit casts rely on
+the `as` keyword so that type changes always stand out in the source.
 
 - Arithmetic: `+`, `-`, `*`, `/`, `%`
 - Comparisons: `<`, `<=`, `>`, `>=`, `==`, `!=`
@@ -170,16 +172,138 @@ The core operator set covers arithmetic, comparisons, boolean logic, and explici
 - Equality helper: `matches` (alias for `==`, reads better with enums)
 - Casting: `value as Type`
 
+### 8.1 Arithmetic in Practice
+
 ```orus
 hits = 42
 misses = 3
 ratio = hits as f64 / (hits + misses) as f64
+mut balance = 100
+balance -= 25
+```
+
+Compound assignments (`+=`, `-=`, `*=`, `/=`, `%=`) update existing mutable bindings. Division between integers performs
+truncating division just like other systems languages.
+
+### 8.2 Comparisons and Equality
+
+Comparison operators always return `bool` and work with numeric and string values that share a compatible type.
+
+```orus
+score = 87
+passing = 70
+
+print("strictly greater?", score > passing)
+print("allow retake?", score >= passing - 5)
+print("perfect match?", score == 100)
+print("needs help?", score != 100 and score <= passing)
+```
+
+Chaining comparisons is legal (`a < b < c`) and evaluates left to right.
+
+### 8.3 Boolean Logic and Short-Circuiting
+
+Orus models boolean logic with the keyword operators `and`, `or`, and `not`. Each operand must evaluate to `bool`; there is no
+"truthy" coercion of numbers or strings. The operators always return a `bool`, evaluate from left to right, and short-circuit so
+that unnecessary work is skipped. Although precedence follows the conventional order (`not` > `and` > `or`), production code
+should lean on parentheses whenever the intent might be ambiguous.
+
+| Operator | Arity | Precedence | Description |
+|----------|-------|------------|-------------|
+| `not` | Unary | Highest | Logical negation of a boolean expression |
+| `and` | Binary | Middle | Conjunction; both operands must be true |
+| `or` | Binary | Lowest | Disjunction; at least one operand must be true |
+
+#### 8.3.1 `and`: Require Both Conditions
+
+`and` succeeds only when **both** operands are `true`. Evaluation stops immediately if the left operand is `false`, which is ideal
+for guarding work on the right-hand side.
+
+| Left | Right | Result |
+|------|-------|--------|
+| `true` | `true` | `true` |
+| `true` | `false` | `false` |
+| `false` | `true` | `false` |
+| `false` | `false` | `false` |
+
+```orus
+// Authenticate only when a token is present.
+is_authenticated = user.has_token() and user.token_valid()
+
+// Vote counting that avoids touching expired proposals.
+has_quorum = votes >= quorum and not proposal.expired
+```
+
+Because of short-circuiting, `token_valid()` and `proposal.expired` are never evaluated when their left-hand guard already fails.
+
+#### 8.3.2 `or`: Accept Any Passing Condition
+
+`or` returns `true` when **either** operand is `true`. If the left operand already succeeds, the right operand is skipped, which
+makes `or` excellent for fallback configuration or cached results.
+
+| Left | Right | Result |
+|------|-------|--------|
+| `true` | `true` | `true` |
+| `true` | `false` | `true` |
+| `false` | `true` | `true` |
+| `false` | `false` | `false` |
+
+```orus
+// Enable verbose logging when either source asks for it.
+should_log = config.debug_enabled or request.has_override_flag()
+
+// Retry network operations when any transient status appears.
+needs_retry = response == Status.Timeout or response == Status.Unreachable
+```
+
+Only the required branch of each expression executes—`has_override_flag()` is skipped once debugging is already enabled, and the
+second comparison runs only if the first one fails.
+
+#### 8.3.3 `not`: Invert a Boolean Expression
+
+`not` flips the boolean value of its single operand. It binds more tightly than `and` and `or`, so always add parentheses when
+combining negation with other operators to capture the intended grouping.
+
+```orus
+mut guard = false
+guard = not guard              // flips the current state
+
+if not (request.is_cached() or request.is_warm()):
+    hydrate_cache(request)
+```
+
+Negating a grouped condition keeps cache hydration from running when either of the warm paths already succeeded.
+
+#### 8.3.4 Composition Guidelines
+
+Complex predicates often layer comparisons and logical operators. The following example highlights best practices:
+
+```orus
+aborted = false
+hits = 42
+
 is_large = hits > 10_000 and not aborted
+should_retry = aborted or hits == 0
+
+if hits > 50 and (aborted or not should_retry):
+    print("steady state")
+```
+
+- Use comparisons (`>`, `==`, and friends) to produce `bool` inputs for logical operators.
+- Group mixed `and`/`or` chains with parentheses so the intended precedence is unmistakable.
+- Exploit short-circuiting to protect expensive calculations or side effects inside later operands.
+
+Orus rejects non-boolean operands in logical expressions, so the type checker catches mistakes like `value and 5`. Keep the
+operands explicitly boolean and the control flow remains predictable.
+
+### 8.4 Pattern Matching Equality Helpers
+
+The `matches` keyword reads more naturally when comparing enum-style values:
+
+```orus
 if mode matches Mode.Cached:
     print("cache hit")
 ```
-
-Compound assignments (`+=`, `-=`, `*=`, `/=`, `%=`) update existing mutable bindings.
 
 ---
 
