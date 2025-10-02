@@ -22,6 +22,8 @@ while trial < TRIALS:
 
     elapsed: f64 = time_stamp() - start
     print("elapsed:", elapsed)
+    if assert_eq("loop_fastpath_phase4 fused_hits", fused_hits, ITERATIONS as i64):
+        print("ok", "fused hits", fused_hits)
 
     checksum = checksum + fused_hits
     trial = trial + 1
@@ -29,3 +31,5 @@ while trial < TRIALS:
 print("checksum:", checksum)
 print("trials:", TRIALS)
 print("iterations:", ITERATIONS)
+if assert_eq("loop_fastpath_phase4 checksum", checksum, (ITERATIONS as i64) * (TRIALS as i64)):
+    print("ok", "total checksum", checksum)

@@ -45,21 +45,6 @@ fn bellman_ford(label, vertex_count, edges, start, infinity):
     print("bellman_ford", label, "iterations:", BELLMAN_ITERATIONS, "relaxations:", BELLMAN_RELAXATIONS)
     return distances
 
-fn assert_distances(label, observed, expected):
-    if len(observed) != len(expected):
-        print("FAIL", label, "length mismatch", len(observed), "expected", len(expected))
-        return
-    mut i = 0
-    mut ok = true
-    while i < len(expected):
-        if observed[i] != expected[i]:
-            ok = false
-        i = i + 1
-    if ok:
-        print(label, "distances", observed)
-    else:
-        print("FAIL", label, "=>", observed, "expected", expected)
-
 // === Tests ===
 fn make_main_edges():
     mut edges: [i32] = []
@@ -136,11 +121,14 @@ vertex_count = 5
 
 edges = make_main_edges()
 expected_from_zero = make_expected_from_zero()
-assert_distances("from_zero", bellman_ford("from_zero", vertex_count, edges, 0, infinity), expected_from_zero)
+if assert_eq("bellman_ford from_zero", bellman_ford("from_zero", vertex_count, edges, 0, infinity), expected_from_zero):
+    print("ok", "bellman_ford from_zero")
 
 expected_from_four = make_expected_from_four()
-assert_distances("from_four", bellman_ford("from_four", vertex_count, edges, 4, infinity), expected_from_four)
+if assert_eq("bellman_ford from_four", bellman_ford("from_four", vertex_count, edges, 4, infinity), expected_from_four):
+    print("ok", "bellman_ford from_four")
 
 sparse_edges = make_sparse_edges()
 expected_sparse = make_expected_sparse(infinity)
-assert_distances("sparse", bellman_ford("sparse", 4, sparse_edges, 0, infinity), expected_sparse)
+if assert_eq("bellman_ford sparse", bellman_ford("sparse", 4, sparse_edges, 0, infinity), expected_sparse):
+    print("ok", "bellman_ford sparse")

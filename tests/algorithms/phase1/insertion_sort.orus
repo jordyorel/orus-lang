@@ -33,22 +33,28 @@ fn insertion_sort(label, values):
 // === Tests ===
 unsorted = [12, 5, 1, 8, 14, 7]
 expected_unsorted = [1, 5, 7, 8, 12, 14]
-print("random =>", insertion_sort("random", unsorted), "expected", expected_unsorted)
+if assert_eq("insertion_sort random", insertion_sort("random", unsorted), expected_unsorted):
+    print("ok", "insertion_sort random")
 
 nearly_sorted = [2, 3, 4, 5, 1]
 expected_nearly_sorted = [1, 2, 3, 4, 5]
-print("rotation =>", insertion_sort("rotation", nearly_sorted), "expected", expected_nearly_sorted)
+if assert_eq("insertion_sort rotation", insertion_sort("rotation", nearly_sorted), expected_nearly_sorted):
+    print("ok", "insertion_sort rotation")
 
 with_negatives = [0, -3, -1, 4, 2]
 expected_with_negatives = [-3, -1, 0, 2, 4]
-print("negatives =>", insertion_sort("negatives", with_negatives), "expected", expected_with_negatives)
+if assert_eq("insertion_sort negatives", insertion_sort("negatives", with_negatives), expected_with_negatives):
+    print("ok", "insertion_sort negatives")
 
 duplicates = [4, 2, 4, 2, 4]
 expected_duplicates = [2, 2, 4, 4, 4]
-print("duplicates =>", insertion_sort("duplicates", duplicates), "expected", expected_duplicates)
+if assert_eq("insertion_sort duplicates", insertion_sort("duplicates", duplicates), expected_duplicates):
+    print("ok", "insertion_sort duplicates")
 
 short = [3]
-print("single =>", insertion_sort("single", short), "expected", short)
+if assert_eq("insertion_sort single", insertion_sort("single", short), short):
+    print("ok", "insertion_sort single")
 
 empty: [i32] = []
-print("empty =>", insertion_sort("empty", empty), "expected", [])
+if assert_eq("insertion_sort empty", insertion_sort("empty", empty), []):
+    print("ok", "insertion_sort empty")

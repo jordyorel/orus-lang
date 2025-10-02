@@ -249,7 +249,9 @@ fn arrays_equal(a, b) -> bool:
     return true
 
 fn assert_prop(ok: bool, name, algo):
-    if ok == false: print("FAIL", algo, "—", name)
+    label = algo + " " + name
+    if assert_eq(label, ok, true):
+        print("ok", algo, name)
 
 // ---------- Algorithm registry ----------
 const ALG_INSERTION = 1

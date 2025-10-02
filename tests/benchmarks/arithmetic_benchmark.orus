@@ -34,6 +34,14 @@ print("Addition chain:", add_result)
 print("Subtraction chain:", sub_result)
 print("Multiplication result:", mul_result)
 print("Division result:", div_result)
+if assert_eq("arithmetic_benchmark addition", add_result, 19960 as i64):
+    print("ok", "addition chain", add_result)
+if assert_eq("arithmetic_benchmark subtraction", sub_result, 995 as i64):
+    print("ok", "subtraction chain", sub_result)
+if assert_eq("arithmetic_benchmark multiplication", mul_result, 65610 as i64):
+    print("ok", "multiplication chain", mul_result)
+if assert_eq("arithmetic_benchmark division", div_result, 967 as i64):
+    print("ok", "division chain", div_result)
 
 // === PHASE 2: COMPLEX MATHEMATICAL EXPRESSIONS ===
 print("Phase 2: Complex Mathematical Expressions")
@@ -64,6 +72,16 @@ print("Quadratic 2:", quad2)
 print("Pi approximation:", pi_approx)
 print("Circle area:", circle_area)
 print("Triangle area:", triangle_area)
+if assert_eq("arithmetic_benchmark quad1", quad1, 13125 as i64):
+    print("ok", "quadratic 1", quad1)
+if assert_eq("arithmetic_benchmark quad2", quad2, 20000 as i64):
+    print("ok", "quadratic 2", quad2)
+if assert_eq("arithmetic_benchmark pi_approx", pi_approx, 3142 as i64):
+    print("ok", "pi approx", pi_approx)
+if assert_eq("arithmetic_benchmark circle_area", circle_area, 31420 as i64):
+    print("ok", "circle area", circle_area)
+if assert_eq("arithmetic_benchmark triangle_area", triangle_area, 2500 as i64):
+    print("ok", "triangle area", triangle_area)
 
 // === PHASE 3: ITERATIVE CALCULATIONS ===
 print("Phase 3: Iterative Calculations")
@@ -117,6 +135,16 @@ print("Factorial result:", fact_result)
 print("2^10:", power_2_10)
 print("3^6:", power_3_6)
 print("5^4:", power_5_4)
+if assert_eq("arithmetic_benchmark fibonacci", fib_c, 55 as i64):
+    print("ok", "fibonacci", fib_c)
+if assert_eq("arithmetic_benchmark factorial", fact_result, 3628800 as i64):
+    print("ok", "factorial", fact_result)
+if assert_eq("arithmetic_benchmark power2", power_2_10, 1024 as i64):
+    print("ok", "2^10", power_2_10)
+if assert_eq("arithmetic_benchmark power3", power_3_6, 729 as i64):
+    print("ok", "3^6", power_3_6)
+if assert_eq("arithmetic_benchmark power5", power_5_4, 625 as i64):
+    print("ok", "5^4", power_5_4)
 
 // === PHASE 4: MATHEMATICAL ALGORITHMS ===
 print("Phase 4: Mathematical Algorithms")
@@ -163,6 +191,18 @@ print("GCD result:", gcd_result)
 print("Square root approximation:", sqrt_guess)
 print("Prime candidate:", prime_candidate)
 print("Divisibility checks:", if_check_2, if_check_3, if_check_5, if_check_7)
+if assert_eq("arithmetic_benchmark gcd", gcd_result, 21 as i64):
+    print("ok", "gcd", gcd_result)
+if assert_eq("arithmetic_benchmark sqrt", sqrt_guess, 10 as i64):
+    print("ok", "sqrt approx", sqrt_guess)
+if assert_eq("arithmetic_benchmark prime remainder 2", if_check_2, 1 as i64):
+    print("ok", "prime remainder 2", if_check_2)
+if assert_eq("arithmetic_benchmark prime remainder 3", if_check_3, 1 as i64):
+    print("ok", "prime remainder 3", if_check_3)
+if assert_eq("arithmetic_benchmark prime remainder 5", if_check_5, 2 as i64):
+    print("ok", "prime remainder 5", if_check_5)
+if assert_eq("arithmetic_benchmark prime remainder 7", if_check_7, 6 as i64):
+    print("ok", "prime remainder 7", if_check_7)
 
 // === PHASE 5: HIGH-PRECISION ARITHMETIC ===
 print("Phase 5: High-Precision Arithmetic")
@@ -193,6 +233,22 @@ print("E approximation:", e_approx)
 print("Golden ratio:", golden_ratio)
 print("Pi approximation 1:", fraction_1)
 print("Pi approximation 2:", fraction_2)
+if assert_eq("arithmetic_benchmark large division", large_division, 1000 as i64):
+    print("ok", "large division", large_division)
+if assert_eq("arithmetic_benchmark pi fraction3", fraction_3, 141 as i64):
+    print("ok", "pi fraction3", fraction_3)
+if assert_eq("arithmetic_benchmark large sum", large_sum, 2666664 as i64):
+    print("ok", "large sum", large_sum)
+if assert_eq("arithmetic_benchmark large product", large_product, 887112 as i64):
+    print("ok", "large product", large_product)
+if assert_eq("arithmetic_benchmark e approximation", e_approx, 2 as i64):
+    print("ok", "e approx", e_approx)
+if assert_eq("arithmetic_benchmark golden ratio", golden_ratio, 5 as i64):
+    print("ok", "golden ratio", golden_ratio)
+if assert_eq("arithmetic_benchmark pi fraction1", fraction_1, 3141 as i64):
+    print("ok", "pi fraction1", fraction_1)
+if assert_eq("arithmetic_benchmark pi fraction2", fraction_2, 31428 as i64):
+    print("ok", "pi fraction2", fraction_2)
 
 // === PHASE 6: COMPUTATIONAL STRESS TEST ===
 print("Phase 6: Computational Stress Test")
@@ -218,6 +274,16 @@ print("Stress calculation 3:", stress_calc_3)
 print("Stress calculation 4:", stress_calc_4)
 print("Final arithmetic result:", final_arithmetic_result)
 print("Computation time:", computation_time)
+if assert_eq("arithmetic_benchmark stress1", stress_calc_1, 1395121 as i64):
+    print("ok", "stress calc 1", stress_calc_1)
+if assert_eq("arithmetic_benchmark stress2", stress_calc_2, 1 as i64):
+    print("ok", "stress calc 2", stress_calc_2)
+if assert_eq("arithmetic_benchmark stress3", stress_calc_3, 1526 as i64):
+    print("ok", "stress calc 3", stress_calc_3)
+if assert_eq("arithmetic_benchmark stress4", stress_calc_4, 2876 as i64):
+    print("ok", "stress calc 4", stress_calc_4)
+if assert_eq("arithmetic_benchmark final result", final_arithmetic_result, 1399524 as i64):
+    print("ok", "final arithmetic", final_arithmetic_result)
 
 // === FINAL BENCHMARK RESULTS ===
 end_time: f64 = time_stamp()

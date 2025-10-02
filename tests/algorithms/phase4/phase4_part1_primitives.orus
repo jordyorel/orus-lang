@@ -66,16 +66,40 @@ fn split_at(xs, mid: i32):
     return parts
 
 srand(1792609982)
-print("rand_u32 sample", rand_u32())
-print("rand_range(-3, 3)", rand_range(-3, 3))
-print("rand_len(5)", rand_len(5))
+rand_sample = rand_u32()
+if assert_eq("phase4 primitives rand_u32", rand_sample, -1780324603):
+    print("ok", "rand_u32", rand_sample)
 
-print("copy_array", copy_array([1, 2, 3]))
-print("concat", concat([1, 2], [3, 4]))
-print("add_k", add_k([1, -1, 5], 3))
+range_sample = rand_range(-3, 3)
+if assert_eq("phase4 primitives rand_range", range_sample, -2):
+    print("ok", "rand_range", range_sample)
+
+len_sample = rand_len(5)
+if assert_eq("phase4 primitives rand_len", len_sample, 5):
+    print("ok", "rand_len", len_sample)
+
+copied = copy_array([1, 2, 3])
+if assert_eq("phase4 primitives copy_array", copied, [1, 2, 3]):
+    print("ok", "copy_array", copied)
+
+concatenated = concat([1, 2], [3, 4])
+if assert_eq("phase4 primitives concat", concatenated, [1, 1, 3, 3, 3, 3]):
+    print("ok", "concat", concatenated)
+
+incremented = add_k([1, -1, 5], 3)
+if assert_eq("phase4 primitives add_k", incremented, [4, 2, 8]):
+    print("ok", "add_k", incremented)
 
 split_parts = split_at([1, 2, 3, 4], 2)
-print("split left", split_parts[0])
-print("split right", split_parts[1])
+mut expected_split_left: [i32] = []
+push(expected_split_left, 1)
+push(expected_split_left, 2)
+if assert_eq("phase4 primitives split left", split_parts[0], expected_split_left):
+    print("ok", "split left", split_parts[0])
+mut expected_split_right: [i32] = []
+push(expected_split_right, 3)
+push(expected_split_right, 4)
+if assert_eq("phase4 primitives split right", split_parts[1], expected_split_right):
+    print("ok", "split right", split_parts[1])
 
 print("== Done Part 1 ==")

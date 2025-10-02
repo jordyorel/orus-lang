@@ -75,9 +75,12 @@ fn run_fib_memo(label, n: i32) -> i32:
     return value
 
 fn run_case(label, n: i32, expected: i32):
-    run_fib_naive(label, n)
+    naive_value = run_fib_naive(label, n)
+    if assert_eq("fib_naive " + label, naive_value, expected):
+        print("ok", "fib_naive", label)
     memo_value = run_fib_memo(label, n)
-    print(label, "memo =>", memo_value, "expected", expected)
+    if assert_eq("fib_memo " + label, memo_value, expected):
+        print("ok", "fib_memo", label)
 
 run_case("n0", 0, 0)
 run_case("n1", 1, 1)
@@ -88,4 +91,5 @@ run_case("n10", 10, 55)
 // Memoized stress: drive deeper recursion that would explode without caching.
 stress_n = 25
 memo_stress_value = run_fib_memo("stress", stress_n)
-print("stress memo =>", memo_stress_value, "expected", 75025)
+if assert_eq("fib_memo stress", memo_stress_value, 75025):
+    print("ok", "fib_memo stress")

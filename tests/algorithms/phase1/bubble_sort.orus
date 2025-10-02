@@ -33,21 +33,27 @@ fn bubble_sort(label, values):
 // === Tests ===
 unsorted = [5, 1, 4, 2, 8, 0]
 expected_unsorted = [0, 1, 2, 4, 5, 8]
-print("random =>", bubble_sort("random", unsorted), "expected", expected_unsorted)
+if assert_eq("bubble_sort random", bubble_sort("random", unsorted), expected_unsorted):
+    print("ok", "bubble_sort random")
 
 ascending = [1, 2, 3, 4, 5]
-print("already_sorted =>", bubble_sort("already_sorted", ascending), "expected", ascending)
+if assert_eq("bubble_sort already_sorted", bubble_sort("already_sorted", ascending), ascending):
+    print("ok", "bubble_sort already_sorted")
 
 reversed = [9, 7, 5, 3, 1, -1]
 expected_reversed = [-1, 1, 3, 5, 7, 9]
-print("reversed =>", bubble_sort("reversed", reversed), "expected", expected_reversed)
+if assert_eq("bubble_sort reversed", bubble_sort("reversed", reversed), expected_reversed):
+    print("ok", "bubble_sort reversed")
 
 duplicates = [3, 1, 2, 3, 1]
 expected_duplicates = [1, 1, 2, 3, 3]
-print("duplicates =>", bubble_sort("duplicates", duplicates), "expected", expected_duplicates)
+if assert_eq("bubble_sort duplicates", bubble_sort("duplicates", duplicates), expected_duplicates):
+    print("ok", "bubble_sort duplicates")
 
 single = [42]
-print("single =>", bubble_sort("single", single), "expected", single)
+if assert_eq("bubble_sort single", bubble_sort("single", single), single):
+    print("ok", "bubble_sort single")
 
 empty: [i32] = []
-print("empty =>", bubble_sort("empty", empty), "expected", [])
+if assert_eq("bubble_sort empty", bubble_sort("empty", empty), []):
+    print("ok", "bubble_sort empty")

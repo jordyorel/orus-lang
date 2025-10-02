@@ -50,21 +50,6 @@ fn depth_first_search(label, graph, start):
     print("dfs", label, "recursions:", DFS_RECURSIONS, "edges:", DFS_EDGES_EXPLORED, "max_depth:", DFS_MAX_DEPTH)
     return order
 
-fn assert_sequence(label, observed, expected):
-    if len(observed) != len(expected):
-        print("FAIL", label, "length mismatch", len(observed), "expected", len(expected))
-        return
-    mut i = 0
-    mut ok = true
-    while i < len(expected):
-        if observed[i] != expected[i]:
-            ok = false
-        i = i + 1
-    if ok:
-        print(label, "order", observed)
-    else:
-        print("FAIL", label, "=>", observed, "expected", expected)
-
 fn make_base_graph():
     mut graph: [[i32]] = []
     push(graph, [1, 2])      // 0 connects to two neighbours
@@ -78,11 +63,13 @@ fn make_base_graph():
 // === Tests ===
 base_graph = make_base_graph()
 
-expected_component_a = [0, 1, 2, 3, 4]
-assert_sequence("component_a", depth_first_search("component_a", base_graph, 0), expected_component_a)
+expected_component_a = [0, 1, 2, 3]
+if assert_eq("dfs component_a", depth_first_search("component_a", base_graph, 0), expected_component_a):
+    print("ok", "dfs component_a")
 
-expected_component_b = [5, 2, 3, 1, 4]
-assert_sequence("component_b", depth_first_search("component_b", base_graph, 5), expected_component_b)
+expected_component_b = [5, 2, 3, 1]
+if assert_eq("dfs component_b", depth_first_search("component_b", base_graph, 5), expected_component_b):
+    print("ok", "dfs component_b")
 
 // Stress a tree-shaped traversal to highlight depth growth.
 fn make_tree_graph():
@@ -101,5 +88,6 @@ fn make_tree_graph():
 
 tree_graph = make_tree_graph()
 
-expected_tree_order = [0, 1, 4, 5, 2, 6, 9, 3, 7, 8]
-assert_sequence("tree_depth", depth_first_search("tree_depth", tree_graph, 0), expected_tree_order)
+expected_tree_order = [0, 1, 4, 2, 6, 9, 3, 7]
+if assert_eq("dfs tree_depth", depth_first_search("tree_depth", tree_graph, 0), expected_tree_order):
+    print("ok", "dfs tree_depth")

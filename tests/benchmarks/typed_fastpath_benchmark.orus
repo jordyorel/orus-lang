@@ -21,6 +21,11 @@ while trial < TRIALS:
 
     elapsed: f64 = time_stamp() - start
     print("typed-fastpath elapsed:", elapsed)
+    expected_acc: i32 = trial + ITERATIONS
+    if assert_eq("typed_fastpath acc", acc, expected_acc):
+        print("ok", "acc", acc)
+    if assert_eq("typed_fastpath sink", sink, expected_acc):
+        print("ok", "sink", sink)
 
     checksum = checksum + (acc as i64) + (sink as i64)
     trial = trial + 1
@@ -28,3 +33,5 @@ while trial < TRIALS:
 print("checksum:", checksum)
 print("trials:", TRIALS)
 print("iterations:", ITERATIONS)
+if assert_eq("typed_fastpath checksum", checksum, 20000020 as i64):
+    print("ok", "total checksum", checksum)

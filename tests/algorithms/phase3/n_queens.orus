@@ -112,8 +112,8 @@ fn run_n_queens(label, n: i32, expected_solutions: i32) -> i32:
 
     returned: i32 = solve_n_queens_inner(n, 0, columns_used, diag_main_used, diag_anti_used, positions, 0)
     solutions: i32 = NQ_SOLUTIONS
-    if returned != solutions:
-        print("n_queens return_mismatch", label, "returned:", returned, "tracked:", solutions)
+    if assert_eq("n_queens " + label + " return", returned, solutions):
+        print("ok", "n_queens return", label)
 
     print("n_queens", label, "solutions:", solutions, "calls:", NQ_CALLS, "max_depth:", NQ_MAX_DEPTH, "conflict_checks:", NQ_CONFLICT_CHECKS, "conflict_rejections:", NQ_CONFLICT_REJECTIONS, "placements:", NQ_PLACEMENTS, "backtracks:", NQ_BACKTRACKS)
     print("n_queens", label, "last_positions:", NQ_LAST_POSITIONS)
@@ -121,11 +121,14 @@ fn run_n_queens(label, n: i32, expected_solutions: i32) -> i32:
 
 fn run_case(label, n: i32, expected: i32):
     solutions = run_n_queens(label, n, expected)
-    print(label, "=>", solutions, "expected", expected)
+    if assert_eq("n_queens " + label + " solutions", solutions, expected):
+        print("ok", "n_queens", label)
 
 run_case("n1", 1, 1)
 run_case("n4", 4, 2)
 run_case("n5", 5, 10)
 
 // Stress run that highlights pruning effectiveness on the classic 8x8 board.
-run_n_queens("stress_n8", 8, 92)
+stress_solutions = run_n_queens("stress_n8", 8, 92)
+if assert_eq("n_queens stress_n8 solutions", stress_solutions, 92):
+    print("ok", "n_queens stress_n8")

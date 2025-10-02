@@ -43,17 +43,6 @@ fn copy_board(board):
         idx = idx + 1
     return copy
 
-fn boards_equal(first, second) -> bool:
-    if len(first) != len(second):
-        return false
-    mut idx: i32 = 0
-    limit: i32 = len(first)
-    while idx < limit:
-        if first[idx] != second[idx]:
-            return false
-        idx = idx + 1
-    return true
-
 fn init_seen():
     mut seen: [bool] = []
     mut idx: i32 = 0
@@ -346,19 +335,18 @@ fn run_sudoku_case(label, puzzle, expected_solution, expected_solution_count: i3
     board = copy_board(puzzle)
     solutions = solve_sudoku(board)
 
-    if solutions != SUDOKU_SOLUTIONS:
-        print("FAIL", label, "returned_solutions", solutions, "tracked", SUDOKU_SOLUTIONS)
+    if assert_eq(label + " returned_solutions", solutions, SUDOKU_SOLUTIONS):
+        print("ok", "sudoku", label, "solution tracking")
 
-    if solutions != expected_solution_count:
-        print("FAIL", label, "solution_count", solutions, "expected", expected_solution_count)
+    if assert_eq(label + " solution_count", solutions, expected_solution_count):
+        print("ok", "sudoku", label, "solution count")
 
     if expected_solution_count > 0:
-        if not sudoku_validate_solution(SUDOKU_LAST_SOLUTION):
-            print("FAIL", label, "last_solution_failed_validation")
-        else:
-            if len(expected_solution) == len(SUDOKU_LAST_SOLUTION):
-                if not boards_equal(SUDOKU_LAST_SOLUTION, expected_solution):
-                    print("FAIL", label, "last_solution_mismatch")
+        if assert_eq(label + " last_solution_valid", sudoku_validate_solution(SUDOKU_LAST_SOLUTION), true):
+            print("ok", "sudoku", label, "solution valid")
+        if assert_eq(label + " last_solution_length", len(SUDOKU_LAST_SOLUTION), len(expected_solution)):
+            if assert_eq(label + " last_solution", SUDOKU_LAST_SOLUTION, expected_solution):
+                print("ok", "sudoku", label, "solution matches")
 
     print("sudoku", label, "solutions:", solutions, "calls:", SUDOKU_CALLS, "max_depth:", SUDOKU_MAX_DEPTH, "empty_cells:", SUDOKU_EMPTY_CELLS_EXPLORED, "value_tries:", SUDOKU_VALUE_TRIES, "valid:", SUDOKU_VALID_PLACEMENTS, "pruned:", SUDOKU_PRUNED_CANDIDATES, "conflict_checks:", SUDOKU_CONFLICT_CHECKS, "backtracks:", SUDOKU_BACKTRACKS, "dead_ends:", SUDOKU_DEAD_ENDS)
 

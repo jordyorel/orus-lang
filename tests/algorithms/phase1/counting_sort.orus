@@ -66,43 +66,35 @@ fn counting_sort(label, values):
     print("counting_sort", label, "range_size:", COUNTING_RANGE_SLOTS, "extent_scans:", COUNTING_EXTENT_SCANS, "count_updates:", COUNTING_COUNT_UPDATES, "output_writes:", COUNTING_OUTPUT_WRITES)
     return output
 
-fn assert_sorted(label, observed, expected):
-    if len(observed) != len(expected):
-        print("FAIL", label, "length mismatch", len(observed), "expected", len(expected))
-        return
-    mut i = 0
-    mut ok = true
-    while i < len(observed):
-        if observed[i] != expected[i]:
-            ok = false
-        i = i + 1
-    if ok:
-        print(label, "sorted", observed)
-    else:
-        print("FAIL", label, "=>", observed, "expected", expected)
-
 // === Tests ===
 random_values = [4, 2, 2, 8, 3, 3, 1]
 expected_random = [1, 2, 2, 3, 3, 4, 8]
-assert_sorted("random", counting_sort("random", random_values), expected_random)
+if assert_eq("counting_sort random", counting_sort("random", random_values), expected_random):
+    print("ok", "counting_sort random")
 
 already_sorted = [1, 2, 3, 4, 5, 6]
-assert_sorted("already_sorted", counting_sort("already_sorted", already_sorted), already_sorted)
+if assert_eq("counting_sort already_sorted", counting_sort("already_sorted", already_sorted), already_sorted):
+    print("ok", "counting_sort already_sorted")
 
 reversed = [9, 7, 5, 3, 1, -1]
 expected_reversed = [-1, 1, 3, 5, 7, 9]
-assert_sorted("reversed", counting_sort("reversed", reversed), expected_reversed)
+if assert_eq("counting_sort reversed", counting_sort("reversed", reversed), expected_reversed):
+    print("ok", "counting_sort reversed")
 
 with_duplicates = [5, 1, 3, 5, 2, 5, 1]
 expected_duplicates = [1, 1, 2, 3, 5, 5, 5]
-assert_sorted("duplicates", counting_sort("duplicates", with_duplicates), expected_duplicates)
+if assert_eq("counting_sort duplicates", counting_sort("duplicates", with_duplicates), expected_duplicates):
+    print("ok", "counting_sort duplicates")
 
 with_negatives = [0, -3, -1, 4, 2, -3]
 expected_negatives = [-3, -3, -1, 0, 2, 4]
-assert_sorted("negatives", counting_sort("negatives", with_negatives), expected_negatives)
+if assert_eq("counting_sort negatives", counting_sort("negatives", with_negatives), expected_negatives):
+    print("ok", "counting_sort negatives")
 
 single = [42]
-assert_sorted("single", counting_sort("single", single), single)
+if assert_eq("counting_sort single", counting_sort("single", single), single):
+    print("ok", "counting_sort single")
 
 empty = []
-assert_sorted("empty", counting_sort("empty", empty), [])
+if assert_eq("counting_sort empty", counting_sort("empty", empty), []):
+    print("ok", "counting_sort empty")

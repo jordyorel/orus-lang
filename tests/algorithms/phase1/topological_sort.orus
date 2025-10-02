@@ -80,21 +80,6 @@ fn topological_sort(label, graph):
     print("topological_sort", label, "enqueues:", TOPO_ENQUEUES, "dequeues:", TOPO_DEQUEUES, "edge_visits:", TOPO_EDGE_VISITS, "max_queue:", TOPO_MAX_QUEUE)
     return order
 
-fn assert_sequence(label, observed, expected):
-    if len(observed) != len(expected):
-        print("FAIL", label, "length mismatch", len(observed), "expected", len(expected))
-        return
-    mut i = 0
-    mut ok = true
-    while i < len(expected):
-        if observed[i] != expected[i]:
-            ok = false
-        i = i + 1
-    if ok:
-        print(label, "order", observed)
-    else:
-        print("FAIL", label, "=>", observed, "expected", expected)
-
 fn make_dag_linear():
     mut graph: [[i32]] = []
 
@@ -129,7 +114,8 @@ fn make_dag_linear():
 dag = make_dag_linear()
 
 expected_order = [0, 1, 2, 3, 4, 5]
-assert_sequence("dag_linear", topological_sort("dag_linear", dag), expected_order)
+if assert_eq("topological_sort dag_linear", topological_sort("dag_linear", dag), expected_order):
+    print("ok", "topological_sort dag_linear")
 
 fn make_multiple_roots():
     mut graph: [[i32]] = []
@@ -163,7 +149,8 @@ fn make_multiple_roots():
 multiple_roots = make_multiple_roots()
 
 expected_multiple = [0, 1, 2, 3, 4, 5]
-assert_sequence("multiple_roots", topological_sort("multiple_roots", multiple_roots), expected_multiple)
+if assert_eq("topological_sort multiple_roots", topological_sort("multiple_roots", multiple_roots), expected_multiple):
+    print("ok", "topological_sort multiple_roots")
 
 fn make_wide_dag():
     mut graph: [[i32]] = []
@@ -199,4 +186,5 @@ fn make_wide_dag():
 wide_dag = make_wide_dag()
 
 expected_wide = [0, 1, 2, 3, 4, 5]
-assert_sequence("wide", topological_sort("wide", wide_dag), expected_wide)
+if assert_eq("topological_sort wide", topological_sort("wide", wide_dag), expected_wide):
+    print("ok", "topological_sort wide")
