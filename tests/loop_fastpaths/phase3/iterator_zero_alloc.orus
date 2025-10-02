@@ -2,4 +2,5 @@ mut count = 0
 for k in 6:
     count = count + 1
 
-print("phase3-ok", count)
+assert_eq("phase3 iterator_zero_alloc count", count, 6)
+print("phase3-ok")

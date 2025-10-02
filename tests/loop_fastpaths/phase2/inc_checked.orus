@@ -21,4 +21,8 @@ mut down = 3
 while down > -2:
     down = down - 1
 
-print("phase2-ok", total, mixed)
+assert_eq("phase2 inc_checked total", total, 15)
+assert_eq("phase2 inc_checked mixed", mixed, 6)
+assert_eq("phase2 inc_checked wrap", wrap, 2147483645)
+assert_eq("phase2 inc_checked down", down, -2)
+print("phase2-ok")

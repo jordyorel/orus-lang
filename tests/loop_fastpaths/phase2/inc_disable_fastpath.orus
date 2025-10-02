@@ -21,4 +21,8 @@ mut down = 3
 while down > -2:
     down = down - 1
 
-print("phase2-disable", total, mixed, wrap, down)
+assert_eq("phase2 inc_disable_fastpath total", total, 15)
+assert_eq("phase2 inc_disable_fastpath mixed", mixed, 6)
+assert_eq("phase2 inc_disable_fastpath wrap", wrap, 2147483645)
+assert_eq("phase2 inc_disable_fastpath down", down, -2)
+print("phase2-disable-ok")

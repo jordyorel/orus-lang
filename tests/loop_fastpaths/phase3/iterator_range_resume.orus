@@ -15,4 +15,8 @@ for value in iterable:
     second_total = second_total + value
     second_pass = second_pass + 1
 
-print("phase3-range-resume", first_pass, first_total, second_pass, second_total)
+assert_eq("phase3 iterator_range_resume first_pass", first_pass, 4)
+assert_eq("phase3 iterator_range_resume first_total", first_total, 6)
+assert_eq("phase3 iterator_range_resume second_pass", second_pass, 6)
+assert_eq("phase3 iterator_range_resume second_total", second_total, 39)
+print("phase3-range-resume-ok")
