@@ -2,31 +2,45 @@
 // Each for loop should create its own scope
 
 mut outer_var = 10
+mut outer_loop_count = 0
+mut total_inner_iterations = 0
+mut last_inner_sum = 0
 print("Initial outer_var:", outer_var)
 
 // Outer for loop
 for i in 1..3:
     print("Outer loop i:", i)
     mut inner_sum = 0  // Variable in outer loop scope
-    
+    outer_loop_count = outer_loop_count + 1
+
     // Inner for loop - creates new nested scope
     for j in 1..3:
         print("  Inner loop j:", j)
         print("  Inner can access outer i:", i)
         print("  Inner can access outer_var:", outer_var)
-        
+
         // Modify variables from outer scopes
         inner_sum = inner_sum + j
         outer_var = outer_var + 1
-    
+        total_inner_iterations = total_inner_iterations + 1
+
     print("After inner loop, inner_sum:", inner_sum)
     print("After inner loop, outer_var:", outer_var)
+    last_inner_sum = inner_sum
     
     // j should not be accessible here (inner loop variable)
     // Uncomment next line to test scope violation
     // print("Inner j outside inner loop:", j)  // Should fail
 
 print("Final outer_var:", outer_var)
+if assert_eq("nested_for_scope outer_loop_count", outer_loop_count, 2):
+    print("ok", "outer_loop_count", outer_loop_count)
+if assert_eq("nested_for_scope total_inner_iterations", total_inner_iterations, 4):
+    print("ok", "total_inner_iterations", total_inner_iterations)
+if assert_eq("nested_for_scope last_inner_sum", last_inner_sum, 3):
+    print("ok", "last_inner_sum", last_inner_sum)
+if assert_eq("nested_for_scope outer_var", outer_var, 14):
+    print("ok", "outer_var", outer_var)
 
 // Neither i nor j should be accessible here
 // Uncomment next lines to test scope violations

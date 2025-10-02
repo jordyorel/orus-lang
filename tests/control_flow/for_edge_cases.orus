@@ -10,6 +10,8 @@ for i in 5..5:
     print(i)
 print("Iterations: ")
 print(count)
+if assert_eq("for_edge_cases zero_iterations", count, 0):
+    print("ok", "zero_iterations", count)
 
 print("Test 2: Backwards range (should not iterate)")
 print("10..5 (should not iterate):")
@@ -19,6 +21,8 @@ for j in 10..5:
     print(j)
 print("Iterations: ")
 print(count2)
+if assert_eq("for_edge_cases backward_iterations", count2, 0):
+    print("ok", "backward_iterations", count2)
 
 // Single iteration cases
 print("Test 3: Single iterations")

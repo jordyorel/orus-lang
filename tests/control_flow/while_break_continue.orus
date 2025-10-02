@@ -4,50 +4,108 @@ print("=== While Loop Break and Continue Tests ===")
 // Test 1: Break statement
 print("Test 1: Break statement")
 mut i = 0
+mut test1_iterations = 0
+mut test1_break_hit = false
 while i < 10:
     if i == 3:
         print("Breaking at i =", i)
+        test1_break_hit = true
         break
     print("i =", i)
+    test1_iterations = test1_iterations + 1
     i = i + 1
 print("Break test complete")
 
 // Test 2: Continue statement
 print("Test 2: Continue statement")
 mut j = 0
+mut test2_iterations = 0
+mut test2_continue_hits = 0
+mut test2_prints = 0
 while j < 5:
     j = j + 1
+    test2_iterations = test2_iterations + 1
     if j == 3:
         print("Skipping j =", j)
+        test2_continue_hits = test2_continue_hits + 1
         continue
     print("j =", j)
+    test2_prints = test2_prints + 1
 print("Continue test complete")
 
 // Test 3: Multiple breaks and continues
 print("Test 3: Complex break/continue")
 mut k = 0
+mut test3_iterations = 0
+mut test3_continue_hits = 0
+mut test3_break_hit = false
+mut test3_prints = 0
 while k < 8:
     k = k + 1
+    test3_iterations = test3_iterations + 1
     if k == 2:
+        test3_continue_hits = test3_continue_hits + 1
         continue  // Skip 2
     if k == 4:
+        test3_continue_hits = test3_continue_hits + 1
         continue  // Skip 4
     if k == 6:
         print("Breaking at k =", k)
+        test3_break_hit = true
         break     // Break at 6
     print("k =", k)
+    test3_prints = test3_prints + 1
 print("Complex test complete")
 
 // Test 4: Break in nested conditional
 print("Test 4: Break in nested conditional")
 mut m = 0
+mut test4_iterations = 0
+mut test4_break_hit = false
+mut test4_prints = 0
 while m < 5:
+    test4_iterations = test4_iterations + 1
     if m == 2:
         if true:
             print("Nested break at m =", m)
+            test4_break_hit = true
             break
     print("m =", m)
+    test4_prints = test4_prints + 1
     m = m + 1
 print("Nested break test complete")
 
 print("=== All Break/Continue Tests Complete ===")
+
+if assert_eq("while_break_continue test1_iterations", test1_iterations, 3):
+    print("ok", "test1_iterations", test1_iterations)
+if assert_eq("while_break_continue test1_break_hit", test1_break_hit, true):
+    print("ok", "test1_break_hit", test1_break_hit)
+if assert_eq("while_break_continue i", i, 3):
+    print("ok", "i", i)
+if assert_eq("while_break_continue test2_iterations", test2_iterations, 5):
+    print("ok", "test2_iterations", test2_iterations)
+if assert_eq("while_break_continue test2_continue_hits", test2_continue_hits, 1):
+    print("ok", "test2_continue_hits", test2_continue_hits)
+if assert_eq("while_break_continue test2_prints", test2_prints, 4):
+    print("ok", "test2_prints", test2_prints)
+if assert_eq("while_break_continue j", j, 5):
+    print("ok", "j", j)
+if assert_eq("while_break_continue test3_iterations", test3_iterations, 6):
+    print("ok", "test3_iterations", test3_iterations)
+if assert_eq("while_break_continue test3_continue_hits", test3_continue_hits, 2):
+    print("ok", "test3_continue_hits", test3_continue_hits)
+if assert_eq("while_break_continue test3_break_hit", test3_break_hit, true):
+    print("ok", "test3_break_hit", test3_break_hit)
+if assert_eq("while_break_continue test3_prints", test3_prints, 3):
+    print("ok", "test3_prints", test3_prints)
+if assert_eq("while_break_continue k", k, 6):
+    print("ok", "k", k)
+if assert_eq("while_break_continue test4_iterations", test4_iterations, 3):
+    print("ok", "test4_iterations", test4_iterations)
+if assert_eq("while_break_continue test4_break_hit", test4_break_hit, true):
+    print("ok", "test4_break_hit", test4_break_hit)
+if assert_eq("while_break_continue test4_prints", test4_prints, 2):
+    print("ok", "test4_prints", test4_prints)
+if assert_eq("while_break_continue m", m, 2):
+    print("ok", "m", m)

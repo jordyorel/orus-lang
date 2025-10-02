@@ -22,3 +22,7 @@ else:
     print("negative")
 
 print("grading complete")
+if assert_eq("elif_chains score", score, 85):
+    print("ok", "score", score)
+if assert_eq("elif_chains value", value, -5):
+    print("ok", "value", value)

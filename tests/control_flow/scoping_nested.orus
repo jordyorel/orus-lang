@@ -19,3 +19,9 @@ if x > 5:
     print(outer_var)
 
 print("nested scoping complete")
+if assert_eq("scoping_nested combined", combined, 11):
+    print("ok", "combined", combined)
+if assert_eq("scoping_nested outer_var", outer_var, "outer block"):
+    print("ok", "outer_var", outer_var)
+if assert_eq("scoping_nested x", x, 8):
+    print("ok", "x", x)

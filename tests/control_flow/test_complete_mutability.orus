@@ -6,23 +6,51 @@ mut outside_var = 1
 outside_var = outside_var + 1
 print("Outside loop (explicit mut):", outside_var)
 
+mut loop_iterations = 0
+mut i_original_total = 0
+mut i_modified_total = 0
+mut inner_var_total = 0
+mut nested_iterations = 0
+mut nested_var_total = 0
+
 for i in 0..2:
     print("Loop iteration:", i)
-    
+    loop_iterations = loop_iterations + 1
+
     // Loop variable 'i' is automatically mutable
     original_i = i
     i = i * 100
     print("  Modified loop var i:", original_i, "->", i)
-    
+    i_original_total = i_original_total + original_i
+    i_modified_total = i_modified_total + i
+
     // Variables declared inside loop are automatically mutable
     inner_var = 5
     inner_var = inner_var * 2  // No 'mut' needed!
     print("  Inner var (auto-mutable):", inner_var)
-    
+    inner_var_total = inner_var_total + inner_var
+
     // Nested loops work too
     for j in 0..1:
         nested_var = 99
         nested_var = nested_var + 1  // Also auto-mutable!
         print("    Nested var (auto-mutable):", nested_var)
+        nested_iterations = nested_iterations + 1
+        nested_var_total = nested_var_total + nested_var
 
 print("Test completed successfully!")
+
+if assert_eq("test_complete_mutability outside_var", outside_var, 2):
+    print("ok", "outside_var", outside_var)
+if assert_eq("test_complete_mutability loop_iterations", loop_iterations, 2):
+    print("ok", "loop_iterations", loop_iterations)
+if assert_eq("test_complete_mutability i_original_total", i_original_total, 1):
+    print("ok", "i_original_total", i_original_total)
+if assert_eq("test_complete_mutability i_modified_total", i_modified_total, 100):
+    print("ok", "i_modified_total", i_modified_total)
+if assert_eq("test_complete_mutability inner_var_total", inner_var_total, 20):
+    print("ok", "inner_var_total", inner_var_total)
+if assert_eq("test_complete_mutability nested_iterations", nested_iterations, 2):
+    print("ok", "nested_iterations", nested_iterations)
+if assert_eq("test_complete_mutability nested_var_total", nested_var_total, 200):
+    print("ok", "nested_var_total", nested_var_total)

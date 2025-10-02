@@ -8,12 +8,16 @@ for value in values:
     pass
     total = total + value
 print("for-with-pass total", total)
+if assert_eq("pass_statement total", total, 6):
+    print("ok", "total", total)
 
 mut i = 0
 while i < 3:
     pass
     i = i + 1
 print("while-with-pass count", i)
+if assert_eq("pass_statement while_count", i, 3):
+    print("ok", "while_count", i)
 
 mut nested = 0
 for row in 0..3:
@@ -24,6 +28,8 @@ for row in 0..3:
             continue
         nested = nested + 1
 print("nested pass usage", nested)
+if assert_eq("pass_statement nested", nested, 6):
+    print("ok", "nested", nested)
 
 if true:
     pass

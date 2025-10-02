@@ -3,15 +3,25 @@ x = 10
 y = 5
 z = 3
 
+mut result = "unset"
+mut hit_x_branch = false
+mut hit_y_branch = false
+mut hit_z_gt_branch = false
+mut hit_z_eq_branch = false
+
 if x > 5:
     print("x is greater than 5")
+    hit_x_branch = true
     if y > 3:
         print("y is greater than 3")
+        hit_y_branch = true
         if z > 1:
             print("z is greater than 1")
+            hit_z_gt_branch = true
             if z == 3:
                 print("z equals 3")
                 result = "deeply nested success"
+                hit_z_eq_branch = true
                 print(result)
             else:
                 print("z does not equal 3")
@@ -23,3 +33,14 @@ else:
     print("x is not greater than 5")
 
 print("nested test complete")
+
+if assert_eq("test_nested_control_flow result", result, "deeply nested success"):
+    print("ok", "result", result)
+if assert_eq("test_nested_control_flow hit_x_branch", hit_x_branch, true):
+    print("ok", "hit_x_branch", hit_x_branch)
+if assert_eq("test_nested_control_flow hit_y_branch", hit_y_branch, true):
+    print("ok", "hit_y_branch", hit_y_branch)
+if assert_eq("test_nested_control_flow hit_z_gt_branch", hit_z_gt_branch, true):
+    print("ok", "hit_z_gt_branch", hit_z_gt_branch)
+if assert_eq("test_nested_control_flow hit_z_eq_branch", hit_z_eq_branch, true):
+    print("ok", "hit_z_eq_branch", hit_z_eq_branch)

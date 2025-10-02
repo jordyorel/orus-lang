@@ -2,19 +2,35 @@
 print("Testing while loop variable mutability:")
 
 mut counter = 0
+mut while_iterations = 0
+mut w_initial_total = 0
+mut w_modified_total = 0
+
 while counter < 2:
     print("While iteration:", counter)
-    
+    while_iterations = while_iterations + 1
+
     // This variable 'w' is declared inside the while loop
     // It should NOT require 'mut' declaration to be mutable
     w = 10
     print("Initial w =", w)
-    
+    w_initial_total = w_initial_total + w
+
     // This should work without explicit 'mut' - proving w is automatically mutable
     w = w * 2
     print("Modified w =", w)
-    
+    w_modified_total = w_modified_total + w
+
     counter = counter + 1
     print("---")
 
 print("While test completed!")
+
+if assert_eq("test_while_mutability while_iterations", while_iterations, 2):
+    print("ok", "while_iterations", while_iterations)
+if assert_eq("test_while_mutability counter", counter, 2):
+    print("ok", "counter", counter)
+if assert_eq("test_while_mutability w_initial_total", w_initial_total, 20):
+    print("ok", "w_initial_total", w_initial_total)
+if assert_eq("test_while_mutability w_modified_total", w_modified_total, 40):
+    print("ok", "w_modified_total", w_modified_total)

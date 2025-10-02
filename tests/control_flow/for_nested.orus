@@ -4,47 +4,67 @@ print("=== Nested For Loop Tests ===")
 // Basic nested loops
 print("Test 1: Basic 2D nested loops")
 print("Multiplication table (2x2):")
+mut multiplication_total = 0
 for i in 1..3:
     for j in 1..3:
         result = i * j
         print(result)
+        multiplication_total = multiplication_total + result
 
 print("Test 2: Different ranges")
 print("Nested with different ranges:")
+mut outer_iterations = 0
 for outer in 0..2:
     print("Outer: ")
     print(outer)
+    outer_iterations = outer_iterations + 1
     for inner in 10..12:
         print("  Inner: ")
         print(inner)
 
 print("Test 3: Mixed inclusive/exclusive")
+mut mixed_inner_count = 0
 for a in 1..=2:
     print("a = ")
     print(a)
     for b in 5..7:
         print("  b = ")
         print(b)
+        mixed_inner_count = mixed_inner_count + 1
 
 print("Test 4: With steps")
 print("Nested loops with steps:")
+mut stepped_pairs = 0
 for x in 0..6..2:
     print("x = ")
     print(x)
     for y in 1..7..3:
         print("  y = ")
         print(y)
+        stepped_pairs = stepped_pairs + 1
 
 print("Test 5: Triple nested")
 print("Triple nested (small ranges):")
+mut triple_count = 0
 for i in 1..=2:
     print("Level 1: ")
     print(i)
     for j in 1..=2:
         print("  Level 2: ")
-        print(j)  
+        print(j)
         for k in 1..=2:
             print("    Level 3: ")
             print(k)
+            triple_count = triple_count + 1
 
 print("All nested tests completed!")
+if assert_eq("for_nested multiplication_total", multiplication_total, 9):
+    print("ok", "multiplication_total", multiplication_total)
+if assert_eq("for_nested outer_iterations", outer_iterations, 2):
+    print("ok", "outer_iterations", outer_iterations)
+if assert_eq("for_nested mixed_inner_count", mixed_inner_count, 4):
+    print("ok", "mixed_inner_count", mixed_inner_count)
+if assert_eq("for_nested stepped_pairs", stepped_pairs, 6):
+    print("ok", "stepped_pairs", stepped_pairs)
+if assert_eq("for_nested triple_count", triple_count, 8):
+    print("ok", "triple_count", triple_count)

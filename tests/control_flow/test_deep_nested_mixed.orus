@@ -1,49 +1,115 @@
 // Test deeply nested mixed loops with break/continue
 print("Testing deeply nested mixed loops:")
 
+mut level1_count = 0
+mut level2_count = 0
+mut level2_continue_hits = 0
+mut level2_break_hits = 0
+mut level2_done_count = 0
+mut level3_entry_count = 0
+mut level3_iterations = 0
+mut level3_continue_hits = 0
+mut level3_break_hits = 0
+mut level3_done_count = 0
+mut level4_runs = 0
+mut level4_iterations = 0
+mut level4_continue_hits = 0
+mut level4_break_hits = 0
+mut level4_processing_count = 0
+mut level4_done_count = 0
+
 // Outer for loop
 for i in 0..3:
     print("Level 1 (for): i =", i)
-    
+    level1_count = level1_count + 1
+
     // Inner while loop
     mut j = 0
     while j < 4:
         j = j + 1
         print("  Level 2 (while): j =", j)
-        
+        level2_count = level2_count + 1
+
         if j == 2:
             print("    Level 2 continue at j =", j)
+            level2_continue_hits = level2_continue_hits + 1
             continue
         if j == 4 and i == 2:
             print("    Level 2 break at j =", j, "when i =", i)
+            level2_break_hits = level2_break_hits + 1
             break
-            
+
         // Innermost for loop
+        level3_entry_count = level3_entry_count + 1
         for k in 0..3:
             print("    Level 3 (for): k =", k)
-            
+            level3_iterations = level3_iterations + 1
+
             if k == 1 and j == 1:
                 print("      Level 3 continue at k =", k, "when j =", j)
+                level3_continue_hits = level3_continue_hits + 1
                 continue
             if k == 2 and j == 3:
                 print("      Level 3 break at k =", k, "when j =", j)
+                level3_break_hits = level3_break_hits + 1
                 break
-                
+
             // Deepest while loop
+            level4_runs = level4_runs + 1
             mut l = 0
             while l < 2:
                 l = l + 1
                 print("      Level 4 (while): l =", l)
-                
+                level4_iterations = level4_iterations + 1
+
                 if l == 1 and k == 0 and j == 1:
                     print("        Level 4 continue at l =", l)
+                    level4_continue_hits = level4_continue_hits + 1
                     continue
                 if l == 2 and k == 2 and j == 1:
                     print("        Level 4 break at l =", l)
+                    level4_break_hits = level4_break_hits + 1
                     break
-                    
+
                 print("        Level 4 processing complete")
+                level4_processing_count = level4_processing_count + 1
             print("      Level 4 while done")
+            level4_done_count = level4_done_count + 1
         print("    Level 3 for done")
+        level3_done_count = level3_done_count + 1
     print("  Level 2 while done")
+    level2_done_count = level2_done_count + 1
 print("All levels complete!")
+
+if assert_eq("test_deep_nested_mixed level1_count", level1_count, 3):
+    print("ok", "level1_count", level1_count)
+if assert_eq("test_deep_nested_mixed level2_count", level2_count, 12):
+    print("ok", "level2_count", level2_count)
+if assert_eq("test_deep_nested_mixed level2_continue_hits", level2_continue_hits, 3):
+    print("ok", "level2_continue_hits", level2_continue_hits)
+if assert_eq("test_deep_nested_mixed level2_break_hits", level2_break_hits, 1):
+    print("ok", "level2_break_hits", level2_break_hits)
+if assert_eq("test_deep_nested_mixed level2_done_count", level2_done_count, 3):
+    print("ok", "level2_done_count", level2_done_count)
+if assert_eq("test_deep_nested_mixed level3_entry_count", level3_entry_count, 8):
+    print("ok", "level3_entry_count", level3_entry_count)
+if assert_eq("test_deep_nested_mixed level3_iterations", level3_iterations, 24):
+    print("ok", "level3_iterations", level3_iterations)
+if assert_eq("test_deep_nested_mixed level3_continue_hits", level3_continue_hits, 3):
+    print("ok", "level3_continue_hits", level3_continue_hits)
+if assert_eq("test_deep_nested_mixed level3_break_hits", level3_break_hits, 3):
+    print("ok", "level3_break_hits", level3_break_hits)
+if assert_eq("test_deep_nested_mixed level3_done_count", level3_done_count, 8):
+    print("ok", "level3_done_count", level3_done_count)
+if assert_eq("test_deep_nested_mixed level4_runs", level4_runs, 18):
+    print("ok", "level4_runs", level4_runs)
+if assert_eq("test_deep_nested_mixed level4_iterations", level4_iterations, 36):
+    print("ok", "level4_iterations", level4_iterations)
+if assert_eq("test_deep_nested_mixed level4_continue_hits", level4_continue_hits, 3):
+    print("ok", "level4_continue_hits", level4_continue_hits)
+if assert_eq("test_deep_nested_mixed level4_break_hits", level4_break_hits, 3):
+    print("ok", "level4_break_hits", level4_break_hits)
+if assert_eq("test_deep_nested_mixed level4_processing_count", level4_processing_count, 30):
+    print("ok", "level4_processing_count", level4_processing_count)
+if assert_eq("test_deep_nested_mixed level4_done_count", level4_done_count, 18):
+    print("ok", "level4_done_count", level4_done_count)

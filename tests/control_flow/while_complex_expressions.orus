@@ -6,9 +6,11 @@ print("Test 1: Mathematical computations")
 mut n = 10
 mut factorial = 1
 mut original = n
+mut test1_iterations = 0
 while n > 0:
     factorial = factorial * n
     print("n =", n, "factorial so far =", factorial)
+    test1_iterations = test1_iterations + 1
     n = n - 1
 print("Factorial of", original, "is", factorial)
 
@@ -18,9 +20,15 @@ mut a = 0
 mut b = 1
 mut count = 0
 mut limit = 8
+mut fib_iterations = 0
+mut fib_sum = 0
+mut fib_last_printed = 0
 print("Fibonacci sequence:")
 while count < limit:
     print(a)
+    fib_iterations = fib_iterations + 1
+    fib_sum = fib_sum + a
+    fib_last_printed = a
     mut temp = a + b
     a = b
     b = temp
@@ -32,10 +40,12 @@ print("Test 3: Prime number checking")
 mut num = 17
 mut is_prime = true
 mut divisor = 2
+mut prime_iterations = 0
 if num < 2:
     is_prime = false
 else:
     while divisor * divisor <= num:
+        prime_iterations = prime_iterations + 1
         if num % divisor == 0:
             is_prime = false
             print("Found divisor:", divisor)
@@ -51,9 +61,11 @@ print("Test 4: Number sequence processing")
 mut sequence = 12345
 mut digit_sum = 0
 mut temp_num = sequence
+mut digit_iterations = 0
 while temp_num > 0:
     mut digit = temp_num % 10
     digit_sum = digit_sum + digit
+    digit_iterations = digit_iterations + 1
     print("Processing digit:", digit)
     temp_num = temp_num / 10  // Integer division
 print("Sum of digits in", sequence, "is", digit_sum)
@@ -64,8 +76,10 @@ mut value = 100.0
 mut target = 1.0
 mut iteration = 0
 mut tolerance = 0.1
+mut convergence_expected_value = 100.0
 while (value - target > tolerance or target - value > tolerance) and iteration < 10:
     value = value * 0.8  // Decay factor
+    convergence_expected_value = convergence_expected_value * 0.8
     iteration = iteration + 1
     print("Iteration", iteration, "value =", value)
 print("Converged after", iteration, "iterations")
@@ -75,15 +89,64 @@ print("Test 6: Matrix-like computation")
 mut rows = 3
 mut cols = 3
 mut i = 0
+mut matrix_row_count = 0
+mut matrix_col_count = 0
+mut matrix_sum = 0
+mut matrix_square_sum = 0
 while i < rows:
     print("Row", i, ":")
+    matrix_row_count = matrix_row_count + 1
     mut j = 0
     while j < cols:
         mut element = (i * cols) + j + 1
         mut product = element * element
         print("  Element[", i, ",", j, "] =", element, "^2 =", product)
+        matrix_col_count = matrix_col_count + 1
+        matrix_sum = matrix_sum + element
+        matrix_square_sum = matrix_square_sum + product
         j = j + 1
     i = i + 1
 print("Matrix computation complete")
 
 print("=== All Complex Expression Tests Complete ===")
+
+if assert_eq("while_complex_expressions test1_iterations", test1_iterations, 10):
+    print("ok", "test1_iterations", test1_iterations)
+if assert_eq("while_complex_expressions factorial", factorial, 3628800):
+    print("ok", "factorial", factorial)
+if assert_eq("while_complex_expressions n", n, 0):
+    print("ok", "n", n)
+if assert_eq("while_complex_expressions fib_iterations", fib_iterations, limit):
+    print("ok", "fib_iterations", fib_iterations)
+if assert_eq("while_complex_expressions fib_sum", fib_sum, 33):
+    print("ok", "fib_sum", fib_sum)
+if assert_eq("while_complex_expressions fib_last_printed", fib_last_printed, 13):
+    print("ok", "fib_last_printed", fib_last_printed)
+if assert_eq("while_complex_expressions a", a, 21):
+    print("ok", "a", a)
+if assert_eq("while_complex_expressions b", b, 34):
+    print("ok", "b", b)
+if assert_eq("while_complex_expressions is_prime", is_prime, true):
+    print("ok", "is_prime", is_prime)
+if assert_eq("while_complex_expressions prime_iterations", prime_iterations, 3):
+    print("ok", "prime_iterations", prime_iterations)
+if assert_eq("while_complex_expressions divisor", divisor, 5):
+    print("ok", "divisor", divisor)
+if assert_eq("while_complex_expressions digit_iterations", digit_iterations, 5):
+    print("ok", "digit_iterations", digit_iterations)
+if assert_eq("while_complex_expressions digit_sum", digit_sum, 15):
+    print("ok", "digit_sum", digit_sum)
+if assert_eq("while_complex_expressions temp_num", temp_num, 0):
+    print("ok", "temp_num", temp_num)
+if assert_eq("while_complex_expressions iteration", iteration, 10):
+    print("ok", "iteration", iteration)
+if assert_eq("while_complex_expressions value", value, convergence_expected_value):
+    print("ok", "value", value)
+if assert_eq("while_complex_expressions matrix_row_count", matrix_row_count, rows):
+    print("ok", "matrix_row_count", matrix_row_count)
+if assert_eq("while_complex_expressions matrix_col_count", matrix_col_count, rows * cols):
+    print("ok", "matrix_col_count", matrix_col_count)
+if assert_eq("while_complex_expressions matrix_sum", matrix_sum, 45):
+    print("ok", "matrix_sum", matrix_sum)
+if assert_eq("while_complex_expressions matrix_square_sum", matrix_square_sum, 285):
+    print("ok", "matrix_square_sum", matrix_square_sum)

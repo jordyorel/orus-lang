@@ -91,4 +91,8 @@ print("Checksum:", checksum)
 print("Total time (nanoseconds):", elapsed_ns)
 print("Total time (milliseconds):", elapsed_ms)
 print("=== Orus Max Control Flow Benchmark Complete ===")
+if assert_eq("control_flow_max_stress condition_hits", condition_hits, 50000 as i64):
+    print("ok", "condition_hits", condition_hits)
+if assert_eq("control_flow_max_stress tight_total", tight_total, 200000 as i64):
+    print("ok", "tight_total", tight_total)
 

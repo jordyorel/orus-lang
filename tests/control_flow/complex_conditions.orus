@@ -36,3 +36,9 @@ else:
     print("far apart")
 
 print("complex conditions complete")
+if assert_eq("complex_conditions max_val", max_val, 15):
+    print("ok", "max_val", max_val)
+if assert_eq("complex_conditions sum", sum, c):
+    print("ok", "sum", sum)
+if assert_eq("complex_conditions difference", difference, 5):
+    print("ok", "difference", difference)

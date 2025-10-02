@@ -29,3 +29,7 @@ if edge * 2 == 10:
         print("addition equals multiplication")
 
 print("edge cases complete")
+if assert_eq("edge_cases abs_val", abs_val, 10):
+    print("ok", "abs_val", abs_val)
+if assert_eq("edge_cases edge", edge, 5):
+    print("ok", "edge", edge)

@@ -3,6 +3,9 @@ score = 85
 mut grade = "unknown"
 mut special = "not set"
 mut bonus = "not set"
+mut took_b_branch = false
+mut reached_high_b = false
+mut hit_exact_85 = false
 
 if score >= 90:
     grade = "A"
@@ -14,11 +17,14 @@ if score >= 90:
         bonus = "good effort"
 elif score >= 80:
     grade = "B"
+    took_b_branch = true
     if score >= 85:
         print("Very good work!")
+        reached_high_b = true
         if score == 85:
             print("Exactly 85!")
             special = "perfect score"
+            hit_exact_85 = true
         else:
             print("Above 85!")
             special = "above average"
@@ -36,3 +42,16 @@ else:
 
 print(grade)
 print(special)
+
+if assert_eq("test_complex_nested grade", grade, "B"):
+    print("ok", "grade", grade)
+if assert_eq("test_complex_nested special", special, "perfect score"):
+    print("ok", "special", special)
+if assert_eq("test_complex_nested bonus", bonus, "not set"):
+    print("ok", "bonus", bonus)
+if assert_eq("test_complex_nested took_b_branch", took_b_branch, true):
+    print("ok", "took_b_branch", took_b_branch)
+if assert_eq("test_complex_nested reached_high_b", reached_high_b, true):
+    print("ok", "reached_high_b", reached_high_b)
+if assert_eq("test_complex_nested hit_exact_85", hit_exact_85, true):
+    print("ok", "hit_exact_85", hit_exact_85)

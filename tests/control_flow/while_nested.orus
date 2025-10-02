@@ -4,11 +4,15 @@ print("=== Nested While Loop Tests ===")
 // Test 1: Simple nested while loops
 print("Test 1: Simple nested loops")
 mut i = 0
+mut test1_outer_iterations = 0
+mut test1_inner_iterations = 0
 while i < 3:
     print("Outer loop i =", i)
+    test1_outer_iterations = test1_outer_iterations + 1
     mut j = 0
     while j < 2:
         print("  Inner loop j =", j)
+        test1_inner_iterations = test1_inner_iterations + 1
         j = j + 1
     i = i + 1
 print("Simple nested test complete")
@@ -16,14 +20,20 @@ print("Simple nested test complete")
 // Test 2: Nested loops with break in inner loop
 print("Test 2: Break in inner loop")
 mut x = 0
+mut test2_outer_iterations = 0
+mut test2_inner_iterations = 0
+mut test2_break_hits = 0
 while x < 2:
     print("Outer x =", x)
+    test2_outer_iterations = test2_outer_iterations + 1
     mut y = 0
     while y < 5:
         if y == 2:
             print("  Breaking inner at y =", y)
+            test2_break_hits = test2_break_hits + 1
             break
         print("  Inner y =", y)
+        test2_inner_iterations = test2_inner_iterations + 1
         y = y + 1
     x = x + 1
 print("Inner break test complete")
@@ -31,14 +41,20 @@ print("Inner break test complete")
 // Test 3: Nested loops with break in outer loop
 print("Test 3: Break in outer loop")
 mut a = 0
+mut test3_outer_iterations = 0
+mut test3_inner_iterations = 0
+mut test3_break_hit = false
 while a < 5:
+    test3_outer_iterations = test3_outer_iterations + 1
     if a == 2:
         print("Breaking outer at a =", a)
+        test3_break_hit = true
         break
     print("Outer a =", a)
     mut b = 0
     while b < 2:
         print("  Inner b =", b)
+        test3_inner_iterations = test3_inner_iterations + 1
         b = b + 1
     a = a + 1
 print("Outer break test complete")
@@ -46,35 +62,94 @@ print("Outer break test complete")
 // Test 4: Nested loops with continue statements
 print("Test 4: Continue in nested loops")
 mut m = 0
+mut test4_outer_iterations = 0
+mut test4_outer_skips = 0
+mut test4_inner_iterations = 0
+mut test4_inner_skips = 0
+mut test4_inner_prints = 0
 while m < 3:
     m = m + 1
+    test4_outer_iterations = test4_outer_iterations + 1
     if m == 2:
         print("Skipping outer m =", m)
+        test4_outer_skips = test4_outer_skips + 1
         continue
     print("Outer m =", m)
     mut n = 0
     while n < 3:
         n = n + 1
+        test4_inner_iterations = test4_inner_iterations + 1
         if n == 2:
             print("  Skipping inner n =", n)
+            test4_inner_skips = test4_inner_skips + 1
             continue
         print("  Inner n =", n)
+        test4_inner_prints = test4_inner_prints + 1
 print("Nested continue test complete")
 
 // Test 5: Triple nested loops (stress test)
 print("Test 5: Triple nested loops")
 mut p = 0
+mut test5_level1_iterations = 0
+mut test5_level2_iterations = 0
+mut test5_level3_iterations = 0
 while p < 2:
     print("Level 1: p =", p)
+    test5_level1_iterations = test5_level1_iterations + 1
     mut q = 0
     while q < 2:
         print("  Level 2: q =", q)
+        test5_level2_iterations = test5_level2_iterations + 1
         mut r = 0
         while r < 2:
             print("    Level 3: r =", r)
+            test5_level3_iterations = test5_level3_iterations + 1
             r = r + 1
         q = q + 1
     p = p + 1
 print("Triple nested test complete")
 
 print("=== All Nested Tests Complete ===")
+
+if assert_eq("while_nested test1_outer_iterations", test1_outer_iterations, 3):
+    print("ok", "test1_outer_iterations", test1_outer_iterations)
+if assert_eq("while_nested test1_inner_iterations", test1_inner_iterations, 6):
+    print("ok", "test1_inner_iterations", test1_inner_iterations)
+if assert_eq("while_nested i", i, 3):
+    print("ok", "i", i)
+if assert_eq("while_nested test2_outer_iterations", test2_outer_iterations, 2):
+    print("ok", "test2_outer_iterations", test2_outer_iterations)
+if assert_eq("while_nested test2_inner_iterations", test2_inner_iterations, 4):
+    print("ok", "test2_inner_iterations", test2_inner_iterations)
+if assert_eq("while_nested test2_break_hits", test2_break_hits, 2):
+    print("ok", "test2_break_hits", test2_break_hits)
+if assert_eq("while_nested x", x, 2):
+    print("ok", "x", x)
+if assert_eq("while_nested test3_outer_iterations", test3_outer_iterations, 3):
+    print("ok", "test3_outer_iterations", test3_outer_iterations)
+if assert_eq("while_nested test3_inner_iterations", test3_inner_iterations, 4):
+    print("ok", "test3_inner_iterations", test3_inner_iterations)
+if assert_eq("while_nested test3_break_hit", test3_break_hit, true):
+    print("ok", "test3_break_hit", test3_break_hit)
+if assert_eq("while_nested a", a, 2):
+    print("ok", "a", a)
+if assert_eq("while_nested test4_outer_iterations", test4_outer_iterations, 3):
+    print("ok", "test4_outer_iterations", test4_outer_iterations)
+if assert_eq("while_nested test4_outer_skips", test4_outer_skips, 1):
+    print("ok", "test4_outer_skips", test4_outer_skips)
+if assert_eq("while_nested test4_inner_iterations", test4_inner_iterations, 6):
+    print("ok", "test4_inner_iterations", test4_inner_iterations)
+if assert_eq("while_nested test4_inner_skips", test4_inner_skips, 2):
+    print("ok", "test4_inner_skips", test4_inner_skips)
+if assert_eq("while_nested test4_inner_prints", test4_inner_prints, 4):
+    print("ok", "test4_inner_prints", test4_inner_prints)
+if assert_eq("while_nested m", m, 3):
+    print("ok", "m", m)
+if assert_eq("while_nested test5_level1_iterations", test5_level1_iterations, 2):
+    print("ok", "test5_level1_iterations", test5_level1_iterations)
+if assert_eq("while_nested test5_level2_iterations", test5_level2_iterations, 4):
+    print("ok", "test5_level2_iterations", test5_level2_iterations)
+if assert_eq("while_nested test5_level3_iterations", test5_level3_iterations, 8):
+    print("ok", "test5_level3_iterations", test5_level3_iterations)
+if assert_eq("while_nested p", p, 2):
+    print("ok", "p", p)

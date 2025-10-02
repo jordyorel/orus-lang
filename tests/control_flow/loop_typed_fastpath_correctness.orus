@@ -44,4 +44,15 @@ if while_sum != 6:
     print("While loop sum mismatch:", while_sum)
     trigger_failure()
 
+if assert_eq("loop_typed_fastpath forward_sum", forward_sum, 10):
+    print("ok", "forward_sum", forward_sum)
+if assert_eq("loop_typed_fastpath backward_sum", backward_sum, 9):
+    print("ok", "backward_sum", backward_sum)
+if assert_eq("loop_typed_fastpath exclusive_sum", exclusive_sum, 3):
+    print("ok", "exclusive_sum", exclusive_sum)
+if assert_eq("loop_typed_fastpath idx", idx, 4):
+    print("ok", "idx", idx)
+if assert_eq("loop_typed_fastpath while_sum", while_sum, 6):
+    print("ok", "while_sum", while_sum)
+
 print("All typed loop correctness checks passed!")

@@ -2,6 +2,7 @@
 print("jump patch regression start")
 
 mut count = 0
+mut while_iterations = 0
 
 if count == 0:
     count = count + 1
@@ -9,6 +10,7 @@ else:
     count = 100
 
 while count < 4:
+    while_iterations = while_iterations + 1
     if count == 2:
         count = count + 1
         continue
@@ -25,3 +27,7 @@ for idx in 0..=3:
 
 print(count)
 print("jump patch regression end")
+if assert_eq("jump_patch_regression final_count", count, 3):
+    print("ok", "count", count)
+if assert_eq("jump_patch_regression while_iterations", while_iterations, 3):
+    print("ok", "while_iterations", while_iterations)

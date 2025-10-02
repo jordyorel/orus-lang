@@ -1,55 +1,136 @@
 // Comprehensive test of nested loops with break/continue
 print("=== Comprehensive Nested Loop Test ===")
 
+mut section1_for_count = 0
+mut section1_while_count = 0
+mut section1_continue_hits = 0
+mut section1_print_count = 0
+
 print("\n1. For-While nesting with continue:")
 for i in 0..2:
     print("For i =", i)
+    section1_for_count = section1_for_count + 1
     mut j = 0
     while j < 3:
         j = j + 1
+        section1_while_count = section1_while_count + 1
         if j == 2:
             print("  While continue j =", j)
+            section1_continue_hits = section1_continue_hits + 1
             continue
         print("  While j =", j)
+        section1_print_count = section1_print_count + 1
+
+mut section2_while_count = 0
+mut section2_for_iterations = 0
+mut section2_break_hits = 0
+mut section2_prints = 0
 
 print("\n2. While-For nesting with break:")
 mut a = 0
 while a < 2:
     a = a + 1
+    section2_while_count = section2_while_count + 1
     print("While a =", a)
     for b in 0..4:
+        section2_for_iterations = section2_for_iterations + 1
         if b == 2:
             print("  For break b =", b)
+            section2_break_hits = section2_break_hits + 1
             break
         print("  For b =", b)
+        section2_prints = section2_prints + 1
+
+mut section3_outer_count = 0
+mut section3_middle_count = 0
+mut section3_inner_iterations = 0
+mut section3_continue_hits = 0
+mut section3_break_hits = 0
+mut section3_print_count = 0
 
 print("\n3. Triple nesting (For-For-While):")
 for x in 0..2:
     print("Outer x =", x)
+    section3_outer_count = section3_outer_count + 1
     for y in 0..2:
         print("  Middle y =", y)
+        section3_middle_count = section3_middle_count + 1
         mut z = 0
         while z < 3:
             z = z + 1
+            section3_inner_iterations = section3_inner_iterations + 1
             if z == 2 and y == 1:
                 print("    Inner continue z =", z)
+                section3_continue_hits = section3_continue_hits + 1
                 continue
             if z == 3 and x == 1:
                 print("    Inner break z =", z)
+                section3_break_hits = section3_break_hits + 1
                 break
             print("    Inner z =", z)
+            section3_print_count = section3_print_count + 1
+
+mut section4_iteration_count = 0
+mut section4_low_count = 0
+mut section4_skip_count = 0
+mut section4_process_count = 0
+mut section4_break_hits = 0
 
 print("\n4. Mixed break/continue in same loop:")
 for i in 0..8:
+    section4_iteration_count = section4_iteration_count + 1
     if i < 2:
         print("Low i =", i)
+        section4_low_count = section4_low_count + 1
     elif i == 3 or i == 5:
         print("Skip i =", i)
+        section4_skip_count = section4_skip_count + 1
         continue
     elif i == 7:
         print("Break i =", i)
+        section4_break_hits = section4_break_hits + 1
         break
     else:
         print("Process i =", i)
+        section4_process_count = section4_process_count + 1
 
 print("\n=== Test Complete ===")
+
+if assert_eq("test_comprehensive_nested section1_for_count", section1_for_count, 2):
+    print("ok", "section1_for_count", section1_for_count)
+if assert_eq("test_comprehensive_nested section1_while_count", section1_while_count, 6):
+    print("ok", "section1_while_count", section1_while_count)
+if assert_eq("test_comprehensive_nested section1_continue_hits", section1_continue_hits, 2):
+    print("ok", "section1_continue_hits", section1_continue_hits)
+if assert_eq("test_comprehensive_nested section1_print_count", section1_print_count, 4):
+    print("ok", "section1_print_count", section1_print_count)
+if assert_eq("test_comprehensive_nested section2_while_count", section2_while_count, 2):
+    print("ok", "section2_while_count", section2_while_count)
+if assert_eq("test_comprehensive_nested section2_for_iterations", section2_for_iterations, 6):
+    print("ok", "section2_for_iterations", section2_for_iterations)
+if assert_eq("test_comprehensive_nested section2_break_hits", section2_break_hits, 2):
+    print("ok", "section2_break_hits", section2_break_hits)
+if assert_eq("test_comprehensive_nested section2_prints", section2_prints, 4):
+    print("ok", "section2_prints", section2_prints)
+if assert_eq("test_comprehensive_nested section3_outer_count", section3_outer_count, 2):
+    print("ok", "section3_outer_count", section3_outer_count)
+if assert_eq("test_comprehensive_nested section3_middle_count", section3_middle_count, 4):
+    print("ok", "section3_middle_count", section3_middle_count)
+if assert_eq("test_comprehensive_nested section3_inner_iterations", section3_inner_iterations, 12):
+    print("ok", "section3_inner_iterations", section3_inner_iterations)
+if assert_eq("test_comprehensive_nested section3_continue_hits", section3_continue_hits, 2):
+    print("ok", "section3_continue_hits", section3_continue_hits)
+if assert_eq("test_comprehensive_nested section3_break_hits", section3_break_hits, 2):
+    print("ok", "section3_break_hits", section3_break_hits)
+if assert_eq("test_comprehensive_nested section3_print_count", section3_print_count, 8):
+    print("ok", "section3_print_count", section3_print_count)
+if assert_eq("test_comprehensive_nested section4_iteration_count", section4_iteration_count, 8):
+    print("ok", "section4_iteration_count", section4_iteration_count)
+if assert_eq("test_comprehensive_nested section4_low_count", section4_low_count, 2):
+    print("ok", "section4_low_count", section4_low_count)
+if assert_eq("test_comprehensive_nested section4_skip_count", section4_skip_count, 2):
+    print("ok", "section4_skip_count", section4_skip_count)
+if assert_eq("test_comprehensive_nested section4_process_count", section4_process_count, 3):
+    print("ok", "section4_process_count", section4_process_count)
+if assert_eq("test_comprehensive_nested section4_break_hits", section4_break_hits, 1):
+    print("ok", "section4_break_hits", section4_break_hits)
