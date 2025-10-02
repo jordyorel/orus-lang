@@ -1,34 +1,76 @@
 // Comprehensive test for auto-mutable loop variables
 // Tests both unrolled and normal loops with various scenarios
 
+// Accumulators keyed by test sections for validating intermediate values
+mut test1_indices: [i32] = []
+mut test1_temps: [i32] = []
+mut test1_results: [i32] = []
+mut test1_result_sum = 0
+expected_test1_indices: [i32] = [1, 2, 3]
+expected_test1_temps = [10, 20, 30]
+expected_test1_results = [11, 22, 33]
+
+expected_test2_combined = [110, 120, 210, 220]
+
+expected_test3_indices: [i32] = [1, 2, 3]
+expected_test3_expensive = [84, 84, 84]
+expected_test3_temps = [85, 86, 87]
+
+mut expected_test5_indices: [i32] = []
+push(expected_test5_indices, 1)
+push(expected_test5_indices, 2)
+mut expected_test5_as_float: [f64] = []
+push(expected_test5_as_float, 1.0)
+push(expected_test5_as_float, 2.0)
+mut expected_test5_doubled: [f64] = []
+push(expected_test5_doubled, 2.5)
+push(expected_test5_doubled, 5.0)
 // Test 1: Basic loop with auto-mutable variables
 print("=== Test 1: Auto-mutable in simple loop ===")
-mut test1_result_sum = 0
 for i in 1..4:
+    push(test1_indices, i)
     temp = i * 10
     result = temp + i
     print("Iteration", i, ":", "temp =", temp, "result =", result)
+    push(test1_temps, temp)
+    push(test1_results, result)
     test1_result_sum = test1_result_sum + result
 
 // Test 2: Nested loops with auto-mutable
 print("\n=== Test 2: Nested loops with auto-mutable ===")
 mut test2_count = 0
+mut test2_outer_values: [i32] = []
+mut test2_inner_values: [i32] = []
+mut test2_combined_values: [i32] = []
+mut test2_outer_total = 0
+mut test2_inner_total = 0
 for outer in 1..3:
     outer_var = outer * 100
+    push(test2_outer_values, outer_var)
+    test2_outer_total = test2_outer_total + outer_var
     for inner in 1..3:
         inner_var = inner * 10
+        push(test2_inner_values, inner_var)
+        test2_inner_total = test2_inner_total + inner_var
         combined = outer_var + inner_var
         print("Outer", outer, "Inner", inner, "Combined:", combined)
+        push(test2_combined_values, combined)
         test2_count = test2_count + 1
 
 // Test 3: Loop with invariant expressions (LICM candidates)
 print("\n=== Test 3: Loop with invariant expressions ===")
 constant = 42
 mut test3_sum = 0
+mut test3_indices: [i32] = []
+mut test3_expensive: [i32] = []
+mut test3_temps: [i32] = []
 for i in 1..4:
+    push(test3_indices, i)
     expensive_calc = constant * 2
     simple_temp = expensive_calc + i
     print("i =", i, "expensive =", expensive_calc, "temp =", simple_temp)
+    push(test3_expensive, expensive_calc)
+    push(test3_temps, simple_temp)
     test3_sum = test3_sum + simple_temp
 
 // Test 4: Variables defined outside loop remain immutable
@@ -39,20 +81,53 @@ print("Outside variable:", outside_var)
 // Test 5: Loop variables with type casting
 print("\n=== Test 5: Auto-mutable with type casting ===")
 mut cast_total: f64 = 0.0
+mut test5_indices: [i32] = []
+mut test5_as_float: [f64] = []
+mut test5_doubled: [f64] = []
 for i in 1..3:
+    push(test5_indices, i)
     as_float = (i as f64)
     doubled = as_float * 2.5
     print("i =", i, "as_float =", as_float, "doubled =", doubled)
+    push(test5_as_float, as_float)
+    push(test5_doubled, doubled)
     cast_total = cast_total + doubled
 
-print("\n✅ All auto-mutable tests completed successfully!")
+if assert_eq("loop_variable_lifetime_boundaries test1 indices", test1_indices, expected_test1_indices):
+    print("ok", "test1 indices", test1_indices)
+if assert_eq("loop_variable_lifetime_boundaries test1 temps", test1_temps, expected_test1_temps):
+    print("ok", "test1 temps", test1_temps)
+if assert_eq("loop_variable_lifetime_boundaries test1 results", test1_results, expected_test1_results):
+    print("ok", "test1 results", test1_results)
 if assert_eq("loop_variable_lifetime_boundaries test1_result_sum", test1_result_sum, 66):
     print("ok", "test1_result_sum", test1_result_sum)
+
+if assert_eq("loop_variable_lifetime_boundaries test2 combined", test2_combined_values, expected_test2_combined):
+    print("ok", "test2 combined", test2_combined_values)
 if assert_eq("loop_variable_lifetime_boundaries test2_count", test2_count, 4):
     print("ok", "test2_count", test2_count)
+if assert_eq("loop_variable_lifetime_boundaries test2 outer_total", test2_outer_total, 300):
+    print("ok", "test2 outer_total", test2_outer_total)
+if assert_eq("loop_variable_lifetime_boundaries test2 inner_total", test2_inner_total, 60):
+    print("ok", "test2 inner_total", test2_inner_total)
+
+if assert_eq("loop_variable_lifetime_boundaries test3 indices", test3_indices, expected_test3_indices):
+    print("ok", "test3 indices", test3_indices)
+if assert_eq("loop_variable_lifetime_boundaries test3 expensive", test3_expensive, expected_test3_expensive):
+    print("ok", "test3 expensive", test3_expensive)
+if assert_eq("loop_variable_lifetime_boundaries test3 temps", test3_temps, expected_test3_temps):
+    print("ok", "test3 temps", test3_temps)
 if assert_eq("loop_variable_lifetime_boundaries test3_sum", test3_sum, 258):
     print("ok", "test3_sum", test3_sum)
 if assert_eq("loop_variable_lifetime_boundaries outside_var", outside_var, 999):
     print("ok", "outside_var", outside_var)
+if assert_eq("loop_variable_lifetime_boundaries test5 indices", test5_indices, expected_test5_indices):
+    print("ok", "test5 indices", test5_indices)
+if assert_eq("loop_variable_lifetime_boundaries test5 as_float", test5_as_float, expected_test5_as_float):
+    print("ok", "test5 as_float", test5_as_float)
+if assert_eq("loop_variable_lifetime_boundaries test5 doubled", test5_doubled, expected_test5_doubled):
+    print("ok", "test5 doubled", test5_doubled)
 if assert_eq("loop_variable_lifetime_boundaries cast_total", cast_total, 7.5):
     print("ok", "cast_total", cast_total)
+
+print("\n✅ All auto-mutable tests completed successfully!")
