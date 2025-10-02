@@ -1,0 +1,54 @@
+// Regression tests for labeled break/continue semantics
+print("== Labeled loop control regression ==")
+
+fn assert_eq(label, actual, expected):
+    if actual != expected:
+        print("FAIL", label, actual, expected)
+    else:
+        print("ok", label)
+
+// Test labeled break exits the target loop and skips trailing work
+mut break_rows = 0
+mut break_inner = 0
+mut break_last_row = -1
+mut break_after = 0
+
+'outer: for row in 0..5:
+    break_rows = break_rows + 1
+    break_last_row = row
+
+    for col in 0..5:
+        break_inner = break_inner + 1
+        if row == col:
+            break 'outer
+
+    // This statement should never execute because the labeled break exits the outer loop
+    break_after = break_after + 1
+
+assert_eq("labeled break rows", break_rows, 1)
+assert_eq("labeled break last row", break_last_row, 0)
+assert_eq("labeled break inner iterations", break_inner, 1)
+assert_eq("labeled break skipped trailing body", break_after, 0)
+
+// Test labeled continue resumes the target loop without finishing inner iterations
+mut continue_outer = 0
+mut continue_inner = 0
+mut continue_body = 0
+mut continue_sum = 0
+
+'outer_continue: for row in 0..3:
+    continue_outer = continue_outer + 1
+    continue_sum = continue_sum + row
+
+    for col in 0..3:
+        continue_inner = continue_inner + 1
+        if col == 1:
+            continue 'outer_continue
+        continue_body = continue_body + 1
+
+assert_eq("labeled continue outer iterations", continue_outer, 3)
+assert_eq("labeled continue inner visits", continue_inner, 6)
+assert_eq("labeled continue body executions", continue_body, 3)
+assert_eq("labeled continue outer sum", continue_sum, 3)
+
+print("== Labeled loop control regression complete ==")

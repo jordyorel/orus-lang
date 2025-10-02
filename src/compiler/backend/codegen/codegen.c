@@ -444,6 +444,14 @@ static ScopeFrame* enter_loop_context(CompilerContext* ctx, int loop_start) {
     frame->saved_continue_count = ctx->continue_count;
     frame->saved_continue_capacity = ctx->continue_capacity;
 
+    frame->loop_break_statements = NULL;
+    frame->loop_break_count = 0;
+    frame->loop_break_capacity = 0;
+    frame->loop_continue_statements = NULL;
+    frame->loop_continue_count = 0;
+    frame->loop_continue_capacity = 0;
+    frame->label = NULL;
+
     ctx->current_loop_start = loop_start;
     ctx->current_loop_end = loop_start;
     ctx->current_loop_continue = loop_start;
@@ -494,6 +502,14 @@ static void leave_loop_context(CompilerContext* ctx, ScopeFrame* frame, int end_
         ctx->continue_count = frame->saved_continue_count;
         ctx->continue_capacity = frame->saved_continue_capacity;
 
+        frame->loop_break_statements = NULL;
+        frame->loop_break_count = 0;
+        frame->loop_break_capacity = 0;
+        frame->loop_continue_statements = NULL;
+        frame->loop_continue_count = 0;
+        frame->loop_continue_capacity = 0;
+        frame->label = NULL;
+
         ctx->current_loop_start = frame->prev_loop_start;
         ctx->current_loop_end = frame->prev_loop_end;
         ctx->current_loop_continue = frame->prev_loop_continue;
@@ -516,6 +532,146 @@ static void leave_loop_context(CompilerContext* ctx, ScopeFrame* frame, int end_
     }
 
     control_flow_leave_loop_context();
+}
+
+static void update_saved_break_pointer(CompilerContext* ctx, int* old_ptr, int* new_ptr) {
+    if (!ctx || !ctx->scopes || old_ptr == new_ptr) {
+        return;
+    }
+
+    ScopeStack* stack = ctx->scopes;
+    for (int i = 0; i < stack->count; ++i) {
+        ScopeFrame* sf = &stack->frames[i];
+        if (sf->saved_break_statements == old_ptr) {
+            sf->saved_break_statements = new_ptr;
+        }
+    }
+}
+
+static void update_saved_break_metadata(CompilerContext* ctx, int* ptr, int count, int capacity) {
+    if (!ctx || !ctx->scopes || !ptr) {
+        return;
+    }
+
+    ScopeStack* stack = ctx->scopes;
+    for (int i = 0; i < stack->count; ++i) {
+        ScopeFrame* sf = &stack->frames[i];
+        if (sf->saved_break_statements == ptr) {
+            sf->saved_break_count = count;
+            sf->saved_break_capacity = capacity;
+        }
+    }
+}
+
+static void add_break_statement_to_frame(CompilerContext* ctx, ScopeFrame* frame, int patch_index) {
+    if (!ctx || !frame) {
+        return;
+    }
+
+    int* patches = frame->loop_break_statements;
+    int count = frame->loop_break_count;
+    int capacity = frame->loop_break_capacity;
+
+    if (count >= capacity) {
+        int new_capacity = capacity == 0 ? 4 : capacity * 2;
+        int* new_array = malloc((size_t)new_capacity * sizeof(int));
+        if (!new_array) {
+            ctx->has_compilation_errors = true;
+            return;
+        }
+        if (patches && count > 0) {
+            memcpy(new_array, patches, (size_t)count * sizeof(int));
+        }
+        update_saved_break_pointer(ctx, patches, new_array);
+        free(patches);
+        patches = new_array;
+        frame->loop_break_statements = new_array;
+        frame->loop_break_capacity = new_capacity;
+        capacity = new_capacity;
+    }
+
+    patches[count++] = patch_index;
+    frame->loop_break_count = count;
+    frame->loop_break_statements = patches;
+
+    update_saved_break_metadata(ctx, patches, count, frame->loop_break_capacity);
+
+    ScopeFrame* current = scope_stack_current_loop(ctx->scopes);
+    if (current == frame) {
+        ctx->break_statements = patches;
+        ctx->break_count = count;
+        ctx->break_capacity = frame->loop_break_capacity;
+    }
+}
+
+static void update_saved_continue_pointer(CompilerContext* ctx, int* old_ptr, int* new_ptr) {
+    if (!ctx || !ctx->scopes || old_ptr == new_ptr) {
+        return;
+    }
+
+    ScopeStack* stack = ctx->scopes;
+    for (int i = 0; i < stack->count; ++i) {
+        ScopeFrame* sf = &stack->frames[i];
+        if (sf->saved_continue_statements == old_ptr) {
+            sf->saved_continue_statements = new_ptr;
+        }
+    }
+}
+
+static void update_saved_continue_metadata(CompilerContext* ctx, int* ptr, int count, int capacity) {
+    if (!ctx || !ctx->scopes || !ptr) {
+        return;
+    }
+
+    ScopeStack* stack = ctx->scopes;
+    for (int i = 0; i < stack->count; ++i) {
+        ScopeFrame* sf = &stack->frames[i];
+        if (sf->saved_continue_statements == ptr) {
+            sf->saved_continue_count = count;
+            sf->saved_continue_capacity = capacity;
+        }
+    }
+}
+
+static void add_continue_statement_to_frame(CompilerContext* ctx, ScopeFrame* frame, int patch_index) {
+    if (!ctx || !frame) {
+        return;
+    }
+
+    int* patches = frame->loop_continue_statements;
+    int count = frame->loop_continue_count;
+    int capacity = frame->loop_continue_capacity;
+
+    if (count >= capacity) {
+        int new_capacity = capacity == 0 ? 4 : capacity * 2;
+        int* new_array = malloc((size_t)new_capacity * sizeof(int));
+        if (!new_array) {
+            ctx->has_compilation_errors = true;
+            return;
+        }
+        if (patches && count > 0) {
+            memcpy(new_array, patches, (size_t)count * sizeof(int));
+        }
+        update_saved_continue_pointer(ctx, patches, new_array);
+        free(patches);
+        patches = new_array;
+        frame->loop_continue_statements = new_array;
+        frame->loop_continue_capacity = new_capacity;
+        capacity = new_capacity;
+    }
+
+    patches[count++] = patch_index;
+    frame->loop_continue_count = count;
+    frame->loop_continue_statements = patches;
+
+    update_saved_continue_metadata(ctx, patches, count, frame->loop_continue_capacity);
+
+    ScopeFrame* current = scope_stack_current_loop(ctx->scopes);
+    if (current == frame) {
+        ctx->continue_statements = patches;
+        ctx->continue_count = count;
+        ctx->continue_capacity = frame->loop_continue_capacity;
+    }
 }
 
 static Type* unwrap_struct_type(Type* type) {
@@ -5253,18 +5409,12 @@ void compile_throw_statement(CompilerContext* ctx, TypedASTNode* throw_stmt) {
     }
 }
 
-// Helper function to add a break statement location for later patching
-static void add_break_statement(CompilerContext* ctx, int patch_index) {
-    if (ctx->break_count >= ctx->break_capacity) {
-        ctx->break_capacity = ctx->break_capacity == 0 ? 4 : ctx->break_capacity * 2;
-        ctx->break_statements = realloc(ctx->break_statements,
-                                       ctx->break_capacity * sizeof(int));
-    }
-    ctx->break_statements[ctx->break_count++] = patch_index;
-}
-
 // Helper function to patch all break statements to jump to end
 static void patch_break_statements(CompilerContext* ctx, int end_target) {
+    if (!ctx) {
+        return;
+    }
+
     for (int i = 0; i < ctx->break_count; i++) {
         int patch_index = ctx->break_statements[i];
         if (!patch_jump(ctx->bytecode, patch_index, end_target)) {
@@ -5277,20 +5427,22 @@ static void patch_break_statements(CompilerContext* ctx, int end_target) {
     }
     // Clear break statements for this loop
     ctx->break_count = 0;
-}
 
-// Helper function to add a continue statement location for later patching
-static void add_continue_statement(CompilerContext* ctx, int patch_index) {
-    if (ctx->continue_count >= ctx->continue_capacity) {
-        ctx->continue_capacity = ctx->continue_capacity == 0 ? 4 : ctx->continue_capacity * 2;
-        ctx->continue_statements = realloc(ctx->continue_statements,
-                                          ctx->continue_capacity * sizeof(int));
+    ScopeFrame* frame = ctx->scopes ? scope_stack_current_loop(ctx->scopes) : NULL;
+    if (frame) {
+        frame->loop_break_count = 0;
+        update_saved_break_metadata(ctx, frame->loop_break_statements,
+                                    frame->loop_break_count,
+                                    frame->loop_break_capacity);
     }
-    ctx->continue_statements[ctx->continue_count++] = patch_index;
 }
 
 // Helper function to patch all continue statements to jump to continue target
 static void patch_continue_statements(CompilerContext* ctx, int continue_target) {
+    if (!ctx) {
+        return;
+    }
+
     for (int i = 0; i < ctx->continue_count; i++) {
         int patch_index = ctx->continue_statements[i];
         if (!patch_jump(ctx->bytecode, patch_index, continue_target)) {
@@ -5303,6 +5455,14 @@ static void patch_continue_statements(CompilerContext* ctx, int continue_target)
     }
     // Clear continue statements for this loop
     ctx->continue_count = 0;
+
+    ScopeFrame* frame = ctx->scopes ? scope_stack_current_loop(ctx->scopes) : NULL;
+    if (frame) {
+        frame->loop_continue_count = 0;
+        update_saved_continue_metadata(ctx, frame->loop_continue_statements,
+                                       frame->loop_continue_count,
+                                       frame->loop_continue_capacity);
+    }
 }
 
 void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
@@ -5448,6 +5608,10 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
             return;
         }
 
+        if (while_stmt->original && while_stmt->original->type == NODE_WHILE) {
+            loop_frame_fused->label = while_stmt->original->whileStmt.label;
+        }
+
         DEBUG_CODEGEN_PRINT("While loop start at offset %d\n", loop_start_fused);
 
         set_location_from_node(ctx, while_stmt);
@@ -5538,6 +5702,10 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
         DEBUG_CODEGEN_PRINT("Error: Failed to enter loop context");
         ctx->has_compilation_errors = true;
         return;
+    }
+
+    if (while_stmt->original && while_stmt->original->type == NODE_WHILE) {
+        loop_frame->label = while_stmt->original->whileStmt.label;
     }
 
     uint16_t loop_id = ctx->current_loop_id;
@@ -5797,6 +5965,9 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
         goto cleanup;
     }
     loop_frame_index = loop_frame->lexical_depth;
+    if (loop_frame) {
+        loop_frame->label = for_stmt->typed.forRange.label;
+    }
     uint16_t loop_id = ctx->current_loop_id;
     (void)loop_id;
     ctx->current_loop_continue = -1;
@@ -6182,6 +6353,10 @@ void compile_for_iter_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
 
     DEBUG_CODEGEN_PRINT("For iteration loop start at offset %d (loop_id=%u)\n", loop_start, loop_id);
 
+    if (loop_frame) {
+        loop_frame->label = for_stmt->typed.forIter.label;
+    }
+
     // Get next value from iterator
     set_location_from_node(ctx, for_stmt);
     emit_byte_to_buffer(ctx->bytecode, OP_ITER_NEXT_R);
@@ -6312,6 +6487,31 @@ void compile_break_statement(CompilerContext* ctx, TypedASTNode* break_stmt) {
         return;
     }
     
+    const char* label = NULL;
+    if (break_stmt->original && break_stmt->original->type == NODE_BREAK) {
+        label = break_stmt->original->breakStmt.label;
+    }
+
+    ScopeFrame* target_frame = NULL;
+    if (label && ctx->scopes) {
+        target_frame = scope_stack_find_loop_by_label(ctx->scopes, label);
+        if (!target_frame) {
+            DEBUG_CODEGEN_PRINT("Error: labeled break target '%s' not found\n", label);
+            ctx->has_compilation_errors = true;
+            SrcLocation location = break_stmt->original ? break_stmt->original->location : (SrcLocation){NULL, 0, 0};
+            report_labeled_break_not_found(location, label);
+            return;
+        }
+    } else {
+        target_frame = ctx->scopes ? scope_stack_current_loop(ctx->scopes) : NULL;
+    }
+
+    if (!target_frame) {
+        DEBUG_CODEGEN_PRINT("Error: Unable to resolve break target frame\n");
+        ctx->has_compilation_errors = true;
+        return;
+    }
+
     // Emit a break jump and track it for later patching
     // OP_JUMP format: opcode + 2-byte offset (3 bytes total)
     set_location_from_node(ctx, break_stmt);
@@ -6322,9 +6522,15 @@ void compile_break_statement(CompilerContext* ctx, TypedASTNode* break_stmt) {
         ctx->has_compilation_errors = true;
         return;
     }
-    add_break_statement(ctx, break_patch);
-    DEBUG_CODEGEN_PRINT("Emitted OP_JUMP for break statement (placeholder index %d)\n", break_patch);
-    
+
+    add_break_statement_to_frame(ctx, target_frame, break_patch);
+    if (label) {
+        DEBUG_CODEGEN_PRINT("Emitted OP_JUMP for labeled break '%s' (placeholder index %d)\n",
+               label, break_patch);
+    } else {
+        DEBUG_CODEGEN_PRINT("Emitted OP_JUMP for break statement (placeholder index %d)\n", break_patch);
+    }
+
     DEBUG_CODEGEN_PRINT("Break statement compilation completed");
 }
 
@@ -6347,10 +6553,39 @@ void compile_continue_statement(CompilerContext* ctx, TypedASTNode* continue_stm
         return;
     }
     
-    // For for loops, use patching system. For while loops, emit directly.
-    if (ctx->current_loop_continue != ctx->current_loop_start) {
-        // This is a for loop - continue target will be set later, use patching
-        DEBUG_CODEGEN_PRINT("Continue in for loop - using patching system");
+    const char* label = NULL;
+    if (continue_stmt->original && continue_stmt->original->type == NODE_CONTINUE) {
+        label = continue_stmt->original->continueStmt.label;
+    }
+
+    ScopeFrame* target_frame = NULL;
+    if (label && ctx->scopes) {
+        target_frame = scope_stack_find_loop_by_label(ctx->scopes, label);
+        if (!target_frame) {
+            DEBUG_CODEGEN_PRINT("Error: labeled continue target '%s' not found\n", label);
+            ctx->has_compilation_errors = true;
+            SrcLocation location = continue_stmt->original ? continue_stmt->original->location : (SrcLocation){NULL, 0, 0};
+            report_labeled_continue_not_found(location, label);
+            return;
+        }
+    } else {
+        target_frame = ctx->scopes ? scope_stack_current_loop(ctx->scopes) : NULL;
+    }
+
+    if (!target_frame) {
+        DEBUG_CODEGEN_PRINT("Error: Unable to resolve continue target frame\n");
+        ctx->has_compilation_errors = true;
+        return;
+    }
+
+    bool use_patch = true;
+    if (target_frame->continue_offset >= 0 && target_frame->continue_offset == target_frame->start_offset) {
+        use_patch = false;
+    }
+
+    if (use_patch) {
+        DEBUG_CODEGEN_PRINT("Continue statement using patching system%s\n",
+               label ? " (labeled)" : "");
         set_location_from_node(ctx, continue_stmt);
         emit_byte_to_buffer(ctx->bytecode, OP_JUMP);
         int continue_patch = emit_jump_placeholder(ctx->bytecode, OP_JUMP);
@@ -6359,22 +6594,25 @@ void compile_continue_statement(CompilerContext* ctx, TypedASTNode* continue_stm
             ctx->has_compilation_errors = true;
             return;
         }
-        add_continue_statement(ctx, continue_patch);
-        DEBUG_CODEGEN_PRINT("Emitted OP_JUMP for continue statement (placeholder index %d)\n", continue_patch);
+        add_continue_statement_to_frame(ctx, target_frame, continue_patch);
+        if (label) {
+            DEBUG_CODEGEN_PRINT("Emitted OP_JUMP for labeled continue '%s' (placeholder index %d)\n",
+                   label, continue_patch);
+        } else {
+            DEBUG_CODEGEN_PRINT("Emitted OP_JUMP for continue statement (placeholder index %d)\n",
+                   continue_patch);
+        }
     } else {
-        // This is a while loop - emit jump directly to loop start
-        DEBUG_CODEGEN_PRINT("Continue in while loop - jumping to start");
-        int continue_target = ctx->current_loop_start;
+        DEBUG_CODEGEN_PRINT("Continue targeting loop start%s\n", label ? " (labeled)" : "");
+        int continue_target = target_frame->start_offset;
         int back_jump_distance = (ctx->bytecode->count + 2) - continue_target;
-        
+
         if (back_jump_distance >= 0 && back_jump_distance <= 255) {
-            // Use OP_LOOP_SHORT for short backward jumps (2 bytes)
             set_location_from_node(ctx, continue_stmt);
             emit_byte_to_buffer(ctx->bytecode, OP_LOOP_SHORT);
             emit_byte_to_buffer(ctx->bytecode, (uint8_t)back_jump_distance);
             DEBUG_CODEGEN_PRINT("Emitted OP_LOOP_SHORT for continue with distance %d\n", back_jump_distance);
         } else {
-            // Use regular backward jump (3 bytes)
             int back_jump_offset = continue_target - (ctx->bytecode->count + 3);
             set_location_from_node(ctx, continue_stmt);
             emit_byte_to_buffer(ctx->bytecode, OP_JUMP);
@@ -6383,7 +6621,7 @@ void compile_continue_statement(CompilerContext* ctx, TypedASTNode* continue_stm
             DEBUG_CODEGEN_PRINT("Emitted OP_JUMP for continue with offset %d\n", back_jump_offset);
         }
     }
-    
+
     DEBUG_CODEGEN_PRINT("Continue statement compilation completed");
 }
 
