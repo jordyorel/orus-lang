@@ -2,12 +2,16 @@
 start_time = time_stamp()
 mut i = 0
 mut iterations = 0
+mut visited: [i32] = []
 while i < 3:
     print("i is: ", i)
+    push(visited, i)
     iterations = iterations + 1
     i = i + 1
-print("Final i: ", i)
-if assert_eq("loop_safety_simple iterations", iterations, 3):
-    print("ok", "iterations", iterations)
 if assert_eq("loop_safety_simple final_i", i, 3):
     print("ok", "final_i", i)
+    print("Final i: ", i)
+if assert_eq("loop_safety_simple visited_values", visited, [0, 1, 2]):
+    print("ok", "visited_values", visited)
+if assert_eq("loop_safety_simple iterations", iterations, 3):
+    print("ok", "iterations", iterations)
