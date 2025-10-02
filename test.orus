@@ -6,19 +6,19 @@
 
 
 
-// 'outer: for row in 0..5:
-//     print(row)
-//     for col in 0..5:
-//         print(col)
-//         if row == col:
-//             break 'outer
+'outer: for row in 0..5:
+    print(row)
+    for col in 0..5:
+        print(col)
+        if row == col:
+            break 'outer
 
 
 
 
-answer = input("Enter a number: ")
-try:
-    parsed = int(answer)
-    print("you typed", parsed, "of type", type_of(parsed))
-catch err:
-    print("invalid input:", err)
+// answer = input("Enter a number: ")
+// try:
+//     parsed = int(answer)
+//     print("you typed", parsed, "of type", type_of(parsed))
+// catch err:
+//     print("invalid input:", err)
