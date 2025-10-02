@@ -18,7 +18,7 @@
 
 answer = input("Enter a number: ")
 try:
-    parsed = (answer)
+    parsed = int(answer)
     print("you typed", parsed, "of type", type_of(parsed))
 catch err:
     print("invalid input:", err)
