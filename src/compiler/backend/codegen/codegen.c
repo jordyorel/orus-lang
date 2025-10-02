@@ -1615,6 +1615,23 @@ void emit_move(CompilerContext* ctx, int dst, int src) {
     DEBUG_CODEGEN_PRINT("Emitted OP_MOVE R%d, R%d (3 bytes)\n", dst, src);
 }
 
+static void ensure_i32_typed_register(CompilerContext* ctx, int reg, const TypedASTNode* source) {
+    if (!ctx || !ctx->bytecode) {
+        return;
+    }
+    if (reg < 0 || reg >= REGISTER_COUNT) {
+        return;
+    }
+
+    if (source && source->resolvedType && source->resolvedType->kind != TYPE_I32) {
+        return;
+    }
+
+    emit_byte_to_buffer(ctx->bytecode, OP_MOVE_I32);
+    emit_byte_to_buffer(ctx->bytecode, (uint8_t)reg);
+    emit_byte_to_buffer(ctx->bytecode, (uint8_t)reg);
+}
+
 static TypedASTNode* get_call_argument_node(TypedASTNode* call, int index,
                                             bool* should_free) {
     if (should_free) {
@@ -5946,6 +5963,7 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
         ctx->has_compilation_errors = true;
         goto cleanup;
     }
+    ensure_i32_typed_register(ctx, end_reg, end_node);
 
     bool step_known_positive = false;
     bool step_known_negative = false;
@@ -5957,6 +5975,7 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
             ctx->has_compilation_errors = true;
             goto cleanup;
         }
+        ensure_i32_typed_register(ctx, step_reg, step_node);
 
         int32_t step_constant = 0;
         if (evaluate_constant_i32(step_node, &step_constant)) {

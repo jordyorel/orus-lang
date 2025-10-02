@@ -1,24 +1,6 @@
-// start: f64 = time_stamp()
-// for i in 0..1_000_000_000:
-//     pass
-// elapsed = time_stamp() - start
-// print("elapsed seconds:", elapsed)
+start: f64 = time_stamp()
+for i in 0..1_000_000:
+    pass
+elapsed = time_stamp() - start
+print("elapsed seconds:", elapsed)
 
-
-
-'outer: for row in 0..5:
-    print(row)
-    for col in 0..5:
-        print(col)
-        if row == col:
-            break 'outer
-
-
-
-
-// answer = input("Enter a number: ")
-// try:
-//     parsed = int(answer)
-//     print("you typed", parsed, "of type", type_of(parsed))
-// catch err:
-//     print("invalid input:", err)
