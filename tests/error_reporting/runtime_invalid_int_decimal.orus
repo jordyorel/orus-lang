@@ -1,0 +1,3 @@
+print("runtime invalid int decimal")
+value = "9.7"
+print(int(value))
