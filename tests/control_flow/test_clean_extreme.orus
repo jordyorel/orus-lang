@@ -1,13 +1,42 @@
 // Test extreme nesting with all control flow - clean version
 print("Extreme nesting test:")
+
+mut level1_count = 0
+mut level2_total = 0
+mut level2_processed = 0
+mut level2_skips = 0
+mut level3_total = 0
+mut level3_prints = 0
+
 for i in 0..2:
     print("Level 1 i =", i)
+    level1_count = level1_count + 1
+
     for j in 0..3:
+        level2_total = level2_total + 1
         if j == 0:
+            level2_skips = level2_skips + 1
             continue
+        level2_processed = level2_processed + 1
         print("  Level 2 j =", j)
+
         for k in 0..3:
+            level3_total = level3_total + 1
             if k == 2:
                 break
+            level3_prints = level3_prints + 1
             print("    Level 3 k =", k)
 print("Test completed!")
+
+if assert_eq("test_clean_extreme level1_count", level1_count, 2):
+    print("ok", "level1_count", level1_count)
+if assert_eq("test_clean_extreme level2_total", level2_total, 6):
+    print("ok", "level2_total", level2_total)
+if assert_eq("test_clean_extreme level2_processed", level2_processed, 4):
+    print("ok", "level2_processed", level2_processed)
+if assert_eq("test_clean_extreme level2_skips", level2_skips, 2):
+    print("ok", "level2_skips", level2_skips)
+if assert_eq("test_clean_extreme level3_total", level3_total, 12):
+    print("ok", "level3_total", level3_total)
+if assert_eq("test_clean_extreme level3_prints", level3_prints, 8):
+    print("ok", "level3_prints", level3_prints)

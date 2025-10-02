@@ -4,39 +4,71 @@ print("=== For Loop Step Tests ===")
 // Basic step tests
 print("Test 1: Basic steps")
 print("0..10..2 (even numbers):")
+mut even_sum = 0
 for i in 0..10..2:
     print(i)
+    even_sum = even_sum + i
 
 print("1..10..2 (odd numbers):")
+mut odd_sum = 0
 for j in 1..10..2:
     print(j)
+    odd_sum = odd_sum + j
 
 print("Test 2: Different step sizes")
 print("0..15..3:")
+mut step_three_sum = 0
 for k in 0..15..3:
     print(k)
+    step_three_sum = step_three_sum + k
 
 print("0..20..5:")
+mut step_five_sum = 0
 for m in 0..20..5:
     print(m)
+    step_five_sum = step_five_sum + m
 
 print("Test 3: Steps with inclusive ranges")
 print("0..=10..2:")
+mut inclusive_even_sum = 0
 for a in 0..=10..2:
     print(a)
+    inclusive_even_sum = inclusive_even_sum + a
 
 print("1..=9..2:")
+mut inclusive_odd_sum = 0
 for b in 1..=9..2:
     print(b)
+    inclusive_odd_sum = inclusive_odd_sum + b
 
 print("Test 4: Large steps")
 print("0..100..25:")
+mut large_step_sum = 0
 for x in 0..100..25:
     print(x)
+    large_step_sum = large_step_sum + x
 
 print("Test 5: Step of 1 (equivalent to no step)")
 print("5..8..1:")
+mut step_one_sum = 0
 for y in 5..8..1:
     print(y)
+    step_one_sum = step_one_sum + y
 
 print("All step tests completed!")
+if assert_eq("for_steps even_sum", even_sum, 20):
+    print("ok", "even_sum", even_sum)
+if assert_eq("for_steps odd_sum", odd_sum, 25):
+    print("ok", "odd_sum", odd_sum)
+if assert_eq("for_steps step_three_sum", step_three_sum, 30):
+    print("ok", "step_three_sum", step_three_sum)
+if assert_eq("for_steps step_five_sum", step_five_sum, 30):
+    print("ok", "step_five_sum", step_five_sum)
+if assert_eq("for_steps inclusive_even_sum", inclusive_even_sum, 30):
+    print("ok", "inclusive_even_sum", inclusive_even_sum)
+if assert_eq("for_steps inclusive_odd_sum", inclusive_odd_sum, 25):
+    print("ok", "inclusive_odd_sum", inclusive_odd_sum)
+if assert_eq("for_steps large_step_sum", large_step_sum, 150):
+    print("ok", "large_step_sum", large_step_sum)
+if assert_eq("for_steps step_one_sum", step_one_sum, 18):
+    print("ok", "step_one_sum", step_one_sum)

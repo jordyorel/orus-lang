@@ -14,3 +14,7 @@ if x > 5:
 // result should still be accessible and modified
 print(result)
 print("scoping test complete")
+if assert_eq("scoping_basic result", result, "greater than 5"):
+    print("ok", "result", result)
+if assert_eq("scoping_basic x", x, 10):
+    print("ok", "x", x)

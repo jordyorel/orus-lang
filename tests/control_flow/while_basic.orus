@@ -4,22 +4,32 @@ print("=== Basic While Loop Tests ===")
 // Test 1: Simple counting loop
 print("Test 1: Simple counting loop")
 mut i = 0
+mut test1_iterations = 0
+mut test1_sum = 0
 while i < 3:
     print(i)
+    test1_iterations = test1_iterations + 1
+    test1_sum = test1_sum + i
     i = i + 1
 print("Counting complete")
 
 // Test 2: While loop with false condition (should not execute)
 print("Test 2: False condition")
+mut test2_executed = false
+mut test2_iterations = 0
 while false:
     print("This should never print")
+    test2_iterations = test2_iterations + 1
+    test2_executed = true
 print("False condition test complete")
 
 // Test 3: While loop with true condition and break
 print("Test 3: True condition with break")
 mut counter = 0
+mut test3_iterations = 0
 while true:
     print(counter)
+    test3_iterations = test3_iterations + 1
     counter = counter + 1
     if counter >= 2:
         break
@@ -29,11 +39,36 @@ print("Break test complete")
 print("Test 4: Variable scope")
 outer = 10
 mut j = 0
+mut test4_iterations = 0
+mut test4_inner_sum = 0
+mut test4_outer_sum = 0
 while j < 2:
     inner = j * 2
     print(inner)
     print(outer)
+    test4_iterations = test4_iterations + 1
+    test4_inner_sum = test4_inner_sum + inner
+    test4_outer_sum = test4_outer_sum + outer
     j = j + 1
 print("Scope test complete")
 
 print("=== All Basic Tests Complete ===")
+
+if assert_eq("while_basic test1_iterations", test1_iterations, 3):
+    print("ok", "test1_iterations", test1_iterations)
+if assert_eq("while_basic test1_sum", test1_sum, 3):
+    print("ok", "test1_sum", test1_sum)
+if assert_eq("while_basic test2_iterations", test2_iterations, 0):
+    print("ok", "test2_iterations", test2_iterations)
+if assert_eq("while_basic test2_executed", test2_executed, true):
+    print("ok", "test2_executed", test2_executed)
+if assert_eq("while_basic test3_iterations", test3_iterations, 2):
+    print("ok", "test3_iterations", test3_iterations)
+if assert_eq("while_basic counter", counter, 2):
+    print("ok", "counter", counter)
+if assert_eq("while_basic test4_iterations", test4_iterations, 2):
+    print("ok", "test4_iterations", test4_iterations)
+if assert_eq("while_basic test4_inner_sum", test4_inner_sum, 2):
+    print("ok", "test4_inner_sum", test4_inner_sum)
+if assert_eq("while_basic test4_outer_sum", test4_outer_sum, 20):
+    print("ok", "test4_outer_sum", test4_outer_sum)

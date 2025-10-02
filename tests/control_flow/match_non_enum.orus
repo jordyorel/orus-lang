@@ -17,10 +17,22 @@ fn log_value(value: i32):
         _ ->
             print("fallback")
 
-print(describe(0))
-print(describe(1))
-print(describe(2))
-print(describe(3))
+res0 = describe(0)
+res1 = describe(1)
+res2 = describe(2)
+res3 = describe(3)
+print(res0)
+print(res1)
+print(res2)
+print(res3)
 log_value(0)
 log_value(1)
 log_value(7)
+if assert_eq("match_non_enum res0", res0, "zero"):
+    print("ok", "res0", res0)
+if assert_eq("match_non_enum res1", res1, "one"):
+    print("ok", "res1", res1)
+if assert_eq("match_non_enum res2", res2, "two"):
+    print("ok", "res2", res2)
+if assert_eq("match_non_enum res3", res3, "other"):
+    print("ok", "res3", res3)

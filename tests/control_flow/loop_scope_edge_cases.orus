@@ -3,31 +3,38 @@
 mut global_var = 42
 
 print("=== Test 1: Multiple consecutive for loops ===")
+mut first_loop_count = 0
 for x in 1..3:
     mut temp_a = x + 10
     print("First loop x:", x, "temp_a:", temp_a)
+    first_loop_count = first_loop_count + 1
 
 // x and temp_a should not be accessible here
 
+mut second_loop_count = 0
 for x in 5..7:
     mut temp_b = x + 20
     print("Second loop x:", x, "temp_b:", temp_b)
+    second_loop_count = second_loop_count + 1
 
 // x, temp_a, and temp_b should not be accessible here
 
 print("\n=== Test 2: For loop variable shadowing different types ===")
 mut x = 100  // Global integer
+mut shadow_iterations = 0
 print("Global x (integer):", x)
 
 for x in 1..3:  // Loop variable shadows global
     print("Loop x (shadows global):", x)
     mut local_var = x * 2
     print("Local var in loop:", local_var)
+    shadow_iterations = shadow_iterations + 1
 
 print("After loop, x should be restored:", x)
 
 print("\n=== Test 3: Nested while and for combination ===")
 mut outer_counter = 0
+mut inner_iterations = 0
 while outer_counter < 2:
     print("While iteration:", outer_counter)
     
@@ -35,10 +42,11 @@ while outer_counter < 2:
     for inner in 1..3:
         print("  For loop inner:", inner)
         print("  Can access outer_counter:", outer_counter)
-        
+
         // Create variable in for loop scope
         mut for_scope_var = inner + outer_counter
         print("  For scope var:", for_scope_var)
+        inner_iterations = inner_iterations + 1
     
     // for_scope_var should not be accessible here (was in for loop scope)
     // print("for_scope_var in while:", for_scope_var)  // Would fail
@@ -47,18 +55,36 @@ while outer_counter < 2:
 
 print("\n=== Test 4: Empty and single iteration loops ===")
 print("Testing empty range loop:")
+mut empty_iterations = 0
 for empty in 5..5:  // Empty range (5 not included in 5..5)
     mut empty_var = 999
     print("This should not print")
+    empty_iterations = empty_iterations + 1
 
 // empty_var should not exist since loop never executed
 
 print("Testing single iteration loop:")
+mut single_iteration_value = 0
 for single in 1..2:  // Single iteration (just 1)
     mut single_var = 777
     print("Single iteration, single_var:", single_var)
+    single_iteration_value = single_var
 
 // single_var should not be accessible here
 
 print("=== All edge case tests completed ===")
 print("Final global_var:", global_var)
+if assert_eq("loop_scope_edge_cases first_loop_count", first_loop_count, 2):
+    print("ok", "first_loop_count", first_loop_count)
+if assert_eq("loop_scope_edge_cases second_loop_count", second_loop_count, 2):
+    print("ok", "second_loop_count", second_loop_count)
+if assert_eq("loop_scope_edge_cases shadow_iterations", shadow_iterations, 2):
+    print("ok", "shadow_iterations", shadow_iterations)
+if assert_eq("loop_scope_edge_cases inner_iterations", inner_iterations, 4):
+    print("ok", "inner_iterations", inner_iterations)
+if assert_eq("loop_scope_edge_cases empty_iterations", empty_iterations, 0):
+    print("ok", "empty_iterations", empty_iterations)
+if assert_eq("loop_scope_edge_cases single_iteration_value", single_iteration_value, 777):
+    print("ok", "single_iteration_value", single_iteration_value)
+if assert_eq("loop_scope_edge_cases global_var", global_var, 42):
+    print("ok", "global_var", global_var)

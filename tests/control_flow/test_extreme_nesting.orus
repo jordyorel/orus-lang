@@ -1,15 +1,50 @@
 // Test extreme nesting with all control flow
 print("Extreme nesting test:")
+
+mut level1_count = 0
+mut level2_total = 0
+mut level2_continues = 0
+mut level2_processed = 0
+mut level3_iterations = 0
+mut level3_break_hits = 0
+mut level3_normal_prints = 0
+mut level3_break_prints = 0
+
 for i in 0..3:
     print("Level 1: i =", i)
+    level1_count = level1_count + 1
     for j in 0..3:
+        level2_total = level2_total + 1
         if j == 0:
             print("  Level 2: j =", j, "(continuing)")
+            level2_continues = level2_continues + 1
             continue
         print("  Level 2: j =", j)
+        level2_processed = level2_processed + 1
         for k in 0..3:
+            level3_iterations = level3_iterations + 1
             if k == 1:
                 print("    Level 3: k =", k, "(breaking)")
+                level3_break_hits = level3_break_hits + 1
+                level3_break_prints = level3_break_prints + 1
                 break
             print("    Level 3: k =", k)
+            level3_normal_prints = level3_normal_prints + 1
 print("Test completed!")
+
+if assert_eq("test_extreme_nesting level1_count", level1_count, 3):
+    print("ok", "level1_count", level1_count)
+if assert_eq("test_extreme_nesting level2_total", level2_total, 9):
+    print("ok", "level2_total", level2_total)
+if assert_eq("test_extreme_nesting level2_continues", level2_continues, 3):
+    print("ok", "level2_continues", level2_continues)
+if assert_eq("test_extreme_nesting level2_processed", level2_processed, 6):
+    print("ok", "level2_processed", level2_processed)
+if assert_eq("test_extreme_nesting level3_iterations", level3_iterations, 12):
+    print("ok", "level3_iterations", level3_iterations)
+if assert_eq("test_extreme_nesting level3_break_hits", level3_break_hits, 6):
+    print("ok", "level3_break_hits", level3_break_hits)
+if assert_eq("test_extreme_nesting level3_normal_prints", level3_normal_prints, 6):
+    print("ok", "level3_normal_prints", level3_normal_prints)
+if assert_eq("test_extreme_nesting level3_break_prints", level3_break_prints, 6):
+    print("ok", "level3_break_prints", level3_break_prints)

@@ -1,12 +1,22 @@
 // Basic if statement tests
 x = 0
+mut zero_branch_hit = false
+mut one_branch_hit = false
 
 // Test true condition
 if x == 0:
+    zero_branch_hit = true
     print("zero")
 
-// Test false condition  
+// Test false condition
 if x == 1:
+    one_branch_hit = true
     print("one")
 
 print("done")
+if assert_eq("if_basic zero_branch_hit", zero_branch_hit, true):
+    print("ok", "zero_branch_hit", zero_branch_hit)
+if assert_eq("if_basic one_branch_hit", one_branch_hit, false):
+    print("ok", "one_branch_hit", one_branch_hit)
+if assert_eq("if_basic x_value", x, 0):
+    print("ok", "x", x)

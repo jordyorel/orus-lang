@@ -1,47 +1,125 @@
 // Final comprehensive test of break/continue
 print("=== Final Comprehensive Test ===")
 
+mut section1_iterations = 0
+mut section1_break_hits = 0
+mut section1_processed = 0
+
 print("\n1. Simple for loop with break:")
 for i in 0..5:
+    section1_iterations = section1_iterations + 1
     if i == 3:
         print("Breaking at", i)
+        section1_break_hits = section1_break_hits + 1
         break
     print("i =", i)
+    section1_processed = section1_processed + 1
+
+mut section2_iterations = 0
+mut section2_skips = 0
+mut section2_processed = 0
 
 print("\n2. Simple for loop with continue:")
 for i in 0..5:
+    section2_iterations = section2_iterations + 1
     if i == 2:
         print("Skipping", i)
+        section2_skips = section2_skips + 1
         continue
     print("Processing", i)
+    section2_processed = section2_processed + 1
+
+mut section3_outer_count = 0
+mut section3_inner_iterations = 0
+mut section3_break_hits = 0
+mut section3_inner_prints = 0
 
 print("\n3. Nested for loops with break:")
 for i in 0..3:
     print("Outer", i)
+    section3_outer_count = section3_outer_count + 1
     for j in 0..4:
+        section3_inner_iterations = section3_inner_iterations + 1
         if j == 2:
             print("  Inner break at", j)
+            section3_break_hits = section3_break_hits + 1
             break
         print("  Inner", j)
+        section3_inner_prints = section3_inner_prints + 1
+
+mut section4_outer_count = 0
+mut section4_inner_iterations = 0
+mut section4_continue_hits = 0
+mut section4_inner_prints = 0
 
 print("\n4. Nested with continue:")
 for i in 0..3:
     print("Outer", i)
+    section4_outer_count = section4_outer_count + 1
     for j in 0..4:
+        section4_inner_iterations = section4_inner_iterations + 1
         if j == 1:
             print("  Inner continue at", j)
+            section4_continue_hits = section4_continue_hits + 1
             continue
         print("  Inner", j)
+        section4_inner_prints = section4_inner_prints + 1
+
+mut section5_for_iterations = 0
+mut section5_while_iterations = 0
+mut section5_continue_hits = 0
+mut section5_prints = 0
 
 print("\n5. For-while mixed:")
 for i in 0..2:
     print("For", i)
+    section5_for_iterations = section5_for_iterations + 1
     mut k = 0
     while k < 3:
         k = k + 1
+        section5_while_iterations = section5_while_iterations + 1
         if k == 2:
             print("  While continue at", k)
+            section5_continue_hits = section5_continue_hits + 1
             continue
         print("  While", k)
+        section5_prints = section5_prints + 1
 
 print("\n=== All Tests Complete ===")
+
+if assert_eq("test_final_comprehensive section1_iterations", section1_iterations, 4):
+    print("ok", "section1_iterations", section1_iterations)
+if assert_eq("test_final_comprehensive section1_break_hits", section1_break_hits, 1):
+    print("ok", "section1_break_hits", section1_break_hits)
+if assert_eq("test_final_comprehensive section1_processed", section1_processed, 3):
+    print("ok", "section1_processed", section1_processed)
+if assert_eq("test_final_comprehensive section2_iterations", section2_iterations, 5):
+    print("ok", "section2_iterations", section2_iterations)
+if assert_eq("test_final_comprehensive section2_skips", section2_skips, 1):
+    print("ok", "section2_skips", section2_skips)
+if assert_eq("test_final_comprehensive section2_processed", section2_processed, 4):
+    print("ok", "section2_processed", section2_processed)
+if assert_eq("test_final_comprehensive section3_outer_count", section3_outer_count, 3):
+    print("ok", "section3_outer_count", section3_outer_count)
+if assert_eq("test_final_comprehensive section3_inner_iterations", section3_inner_iterations, 9):
+    print("ok", "section3_inner_iterations", section3_inner_iterations)
+if assert_eq("test_final_comprehensive section3_break_hits", section3_break_hits, 3):
+    print("ok", "section3_break_hits", section3_break_hits)
+if assert_eq("test_final_comprehensive section3_inner_prints", section3_inner_prints, 6):
+    print("ok", "section3_inner_prints", section3_inner_prints)
+if assert_eq("test_final_comprehensive section4_outer_count", section4_outer_count, 3):
+    print("ok", "section4_outer_count", section4_outer_count)
+if assert_eq("test_final_comprehensive section4_inner_iterations", section4_inner_iterations, 12):
+    print("ok", "section4_inner_iterations", section4_inner_iterations)
+if assert_eq("test_final_comprehensive section4_continue_hits", section4_continue_hits, 3):
+    print("ok", "section4_continue_hits", section4_continue_hits)
+if assert_eq("test_final_comprehensive section4_inner_prints", section4_inner_prints, 9):
+    print("ok", "section4_inner_prints", section4_inner_prints)
+if assert_eq("test_final_comprehensive section5_for_iterations", section5_for_iterations, 2):
+    print("ok", "section5_for_iterations", section5_for_iterations)
+if assert_eq("test_final_comprehensive section5_while_iterations", section5_while_iterations, 6):
+    print("ok", "section5_while_iterations", section5_while_iterations)
+if assert_eq("test_final_comprehensive section5_continue_hits", section5_continue_hits, 2):
+    print("ok", "section5_continue_hits", section5_continue_hits)
+if assert_eq("test_final_comprehensive section5_prints", section5_prints, 4):
+    print("ok", "section5_prints", section5_prints)

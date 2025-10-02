@@ -1,7 +1,13 @@
 // Basic while loop test
 start_time = time_stamp()
 mut i = 0
+mut iterations = 0
 while i < 3:
     print("i is: ", i)
+    iterations = iterations + 1
     i = i + 1
 print("Final i: ", i)
+if assert_eq("loop_empty_range iterations", iterations, 3):
+    print("ok", "iterations", iterations)
+if assert_eq("loop_empty_range final_i", i, 3):
+    print("ok", "final_i", i)

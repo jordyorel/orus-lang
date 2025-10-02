@@ -4,19 +4,35 @@ enum Result:
     Err(message: string)
 
 mut value = Result.Ok(42)
+mut ok_literal_hit = false
+mut ok_literal_mismatch = false
+mut err_variant_mismatch = false
+mut err_literal_hit = false
 if value matches Result.Ok(42):
+    ok_literal_hit = true
     print("enum ok literal equality works")
 
 if value matches Result.Ok(7):
     print("unexpected ok branch")
 else:
+    ok_literal_mismatch = true
     print("enum ok literal mismatch works")
 
 if value matches Result.Err("boom"):
     print("unexpected err branch")
 else:
+    err_variant_mismatch = true
     print("enum variant mismatch works")
 
 value = Result.Err("boom")
 if value matches Result.Err("boom"):
+    err_literal_hit = true
     print("enum err literal equality works")
+if assert_eq("matches_enum_payload ok_literal_hit", ok_literal_hit, true):
+    print("ok", "ok_literal_hit", ok_literal_hit)
+if assert_eq("matches_enum_payload ok_literal_mismatch", ok_literal_mismatch, true):
+    print("ok", "ok_literal_mismatch", ok_literal_mismatch)
+if assert_eq("matches_enum_payload err_variant_mismatch", err_variant_mismatch, true):
+    print("ok", "err_variant_mismatch", err_variant_mismatch)
+if assert_eq("matches_enum_payload err_literal_hit", err_literal_hit, true):
+    print("ok", "err_literal_hit", err_literal_hit)

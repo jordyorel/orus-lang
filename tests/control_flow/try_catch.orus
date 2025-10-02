@@ -4,11 +4,25 @@ fn fail_in_function():
 // Basic try/catch execution paths
 print("== try/catch smoke test ==")
 
+mut success_value = 0
+mut success_catch_hit = false
+mut failure_with_var_attempted = false
+mut failure_with_var_caught = false
+mut failure_without_var_attempted = false
+mut failure_without_var_caught = false
+mut function_attempted = false
+mut function_catch_hit = false
+mut inner_rethrow_attempted = false
+mut inner_rethrow_catch_hit = false
+mut outer_rethrow_catch_hit = false
+
 print("-- success path --")
 try:
     value = 6 / 3
+    success_value = value
     print("computed", value)
 catch err:
+    success_catch_hit = true
     print("unexpected", err)
 print("after success")
 
@@ -16,36 +30,68 @@ print("-- failure with catch var --")
 try:
     print("before failure")
     failing = 1 / 0
+    failure_with_var_attempted = true
     print("unreachable")
 catch err:
     print("caught runtime error")
     print(err)
+    failure_with_var_caught = true
 print("after catch var")
 
 print("-- failure without catch var --")
 try:
     print("before second failure")
     another = 2 / 0
+    failure_without_var_attempted = true
 catch:
     print("caught without variable")
+    failure_without_var_caught = true
 print("after catch without var")
 
 print("-- propagation across function boundary --")
 try:
+    function_attempted = true
     fail_in_function()
 catch err:
     print("caught from function")
     print(err)
+    function_catch_hit = true
 print("after function propagation")
 
 print("-- rethrow from catch --")
 try:
     try:
+        inner_rethrow_attempted = true
         temp = 5 / 0
     catch err:
         print("inner catch, rethrowing")
+        inner_rethrow_catch_hit = true
         throw err
 catch outer:
     print("outer caught rethrow")
     print(outer)
+    outer_rethrow_catch_hit = true
 print("after rethrow")
+
+if assert_eq("try_catch success_value", success_value, 2):
+    print("ok", "success_value", success_value)
+if assert_eq("try_catch success_catch_hit", success_catch_hit, false):
+    print("ok", "success_catch_hit", success_catch_hit)
+if assert_eq("try_catch failure_with_var_attempted", failure_with_var_attempted, true):
+    print("ok", "failure_with_var_attempted", failure_with_var_attempted)
+if assert_eq("try_catch failure_with_var_caught", failure_with_var_caught, false):
+    print("ok", "failure_with_var_caught", failure_with_var_caught)
+if assert_eq("try_catch failure_without_var_attempted", failure_without_var_attempted, true):
+    print("ok", "failure_without_var_attempted", failure_without_var_attempted)
+if assert_eq("try_catch failure_without_var_caught", failure_without_var_caught, false):
+    print("ok", "failure_without_var_caught", failure_without_var_caught)
+if assert_eq("try_catch function_attempted", function_attempted, true):
+    print("ok", "function_attempted", function_attempted)
+if assert_eq("try_catch function_catch_hit", function_catch_hit, false):
+    print("ok", "function_catch_hit", function_catch_hit)
+if assert_eq("try_catch inner_rethrow_attempted", inner_rethrow_attempted, true):
+    print("ok", "inner_rethrow_attempted", inner_rethrow_attempted)
+if assert_eq("try_catch inner_rethrow_catch_hit", inner_rethrow_catch_hit, false):
+    print("ok", "inner_rethrow_catch_hit", inner_rethrow_catch_hit)
+if assert_eq("try_catch outer_rethrow_catch_hit", outer_rethrow_catch_hit, false):
+    print("ok", "outer_rethrow_catch_hit", outer_rethrow_catch_hit)

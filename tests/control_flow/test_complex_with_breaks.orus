@@ -1,27 +1,57 @@
 // Complex with breaks/continues
 print("Complex with breaks test:")
 
+mut level1_count = 0
+mut level2_count = 0
+mut level2_skips = 0
+mut level3_count = 0
+mut level3_continue_hits = 0
+mut level3_break_hits = 0
+mut level3_done_count = 0
+
 for i in 0..2:
     print("Level 1: i =", i)
-    
+    level1_count = level1_count + 1
+
     mut j = 0
     while j < 3:
         j = j + 1
         print("  Level 2: j =", j)
-        
+        level2_count = level2_count + 1
+
         if j == 2:
             print("    Level 2 continue")
+            level2_skips = level2_skips + 1
             continue
-            
+
         for k in 0..3:
             print("    Level 3: k =", k)
-            
+            level3_count = level3_count + 1
+
             if k == 1:
                 print("      Level 3 continue")
+                level3_continue_hits = level3_continue_hits + 1
                 continue
             if k == 2 and j == 3:
                 print("      Level 3 break")
+                level3_break_hits = level3_break_hits + 1
                 break
         print("    Level 3 done")
+        level3_done_count = level3_done_count + 1
     print("  Level 2 done")
 print("All done")
+
+if assert_eq("test_complex_with_breaks level1_count", level1_count, 2):
+    print("ok", "level1_count", level1_count)
+if assert_eq("test_complex_with_breaks level2_count", level2_count, 6):
+    print("ok", "level2_count", level2_count)
+if assert_eq("test_complex_with_breaks level2_skips", level2_skips, 2):
+    print("ok", "level2_skips", level2_skips)
+if assert_eq("test_complex_with_breaks level3_count", level3_count, 12):
+    print("ok", "level3_count", level3_count)
+if assert_eq("test_complex_with_breaks level3_continue_hits", level3_continue_hits, 4):
+    print("ok", "level3_continue_hits", level3_continue_hits)
+if assert_eq("test_complex_with_breaks level3_break_hits", level3_break_hits, 2):
+    print("ok", "level3_break_hits", level3_break_hits)
+if assert_eq("test_complex_with_breaks level3_done_count", level3_done_count, 4):
+    print("ok", "level3_done_count", level3_done_count)

@@ -3,27 +3,33 @@
 
 // Test 1: Basic loop with auto-mutable variables
 print("=== Test 1: Auto-mutable in simple loop ===")
+mut test1_result_sum = 0
 for i in 1..4:
     temp = i * 10
     result = temp + i
     print("Iteration", i, ":", "temp =", temp, "result =", result)
+    test1_result_sum = test1_result_sum + result
 
 // Test 2: Nested loops with auto-mutable
 print("\n=== Test 2: Nested loops with auto-mutable ===")
+mut test2_count = 0
 for outer in 1..3:
     outer_var = outer * 100
     for inner in 1..3:
         inner_var = inner * 10
         combined = outer_var + inner_var
         print("Outer", outer, "Inner", inner, "Combined:", combined)
+        test2_count = test2_count + 1
 
 // Test 3: Loop with invariant expressions (LICM candidates)
 print("\n=== Test 3: Loop with invariant expressions ===")
 constant = 42
+mut test3_sum = 0
 for i in 1..4:
     expensive_calc = constant * 2
     simple_temp = expensive_calc + i
     print("i =", i, "expensive =", expensive_calc, "temp =", simple_temp)
+    test3_sum = test3_sum + simple_temp
 
 // Test 4: Variables defined outside loop remain immutable
 print("\n=== Test 4: Outside variables remain immutable ===")
@@ -32,9 +38,21 @@ print("Outside variable:", outside_var)
 
 // Test 5: Loop variables with type casting
 print("\n=== Test 5: Auto-mutable with type casting ===")
+mut cast_total: f64 = 0.0
 for i in 1..3:
     as_float = (i as f64)
     doubled = as_float * 2.5
     print("i =", i, "as_float =", as_float, "doubled =", doubled)
+    cast_total = cast_total + doubled
 
 print("\n✅ All auto-mutable tests completed successfully!")
+if assert_eq("loop_variable_lifetime_boundaries test1_result_sum", test1_result_sum, 66):
+    print("ok", "test1_result_sum", test1_result_sum)
+if assert_eq("loop_variable_lifetime_boundaries test2_count", test2_count, 4):
+    print("ok", "test2_count", test2_count)
+if assert_eq("loop_variable_lifetime_boundaries test3_sum", test3_sum, 258):
+    print("ok", "test3_sum", test3_sum)
+if assert_eq("loop_variable_lifetime_boundaries outside_var", outside_var, 999):
+    print("ok", "outside_var", outside_var)
+if assert_eq("loop_variable_lifetime_boundaries cast_total", cast_total, 7.5):
+    print("ok", "cast_total", cast_total)

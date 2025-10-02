@@ -4,41 +4,67 @@ print("=== For Loop Range Tests ===")
 // Exclusive ranges
 print("Test 1: Exclusive ranges")
 print("0..3:")
+mut exclusive_sum = 0
 for i in 0..3:
     print(i)
+    exclusive_sum = exclusive_sum + i
 
 print("10..13:")
 for j in 10..13:
     print(j)
+    exclusive_sum = exclusive_sum + j
 
 // Inclusive ranges
 print("Test 2: Inclusive ranges")
 print("0..=2:")
+mut inclusive_sum = 0
 for k in 0..=2:
     print(k)
+    inclusive_sum = inclusive_sum + k
 
 print("10..=12:")
 for m in 10..=12:
     print(m)
+    inclusive_sum = inclusive_sum + m
 
 // Compare exclusive vs inclusive with same numbers
 print("Test 3: Compare exclusive vs inclusive")
 print("Exclusive 5..8:")
+mut exclusive_compare_count = 0
 for a in 5..8:
     print(a)
+    exclusive_compare_count = exclusive_compare_count + 1
 
 print("Inclusive 5..=7:")
+mut inclusive_compare_count = 0
 for b in 5..=7:
     print(b)
+    inclusive_compare_count = inclusive_compare_count + 1
 
 // Edge cases
-print("Test 4: Edge cases") 
+print("Test 4: Edge cases")
 print("Large numbers 100..=102:")
+mut large_sum = 0
 for x in 100..=102:
     print(x)
+    large_sum = large_sum + x
 
 print("Negative to positive -2..=1:")
+mut mixed_sum = 0
 for y in -2..=1:
     print(y)
+    mixed_sum = mixed_sum + y
 
 print("All range tests completed!")
+if assert_eq("for_ranges exclusive_sum", exclusive_sum, 36):
+    print("ok", "exclusive_sum", exclusive_sum)
+if assert_eq("for_ranges inclusive_sum", inclusive_sum, 36):
+    print("ok", "inclusive_sum", inclusive_sum)
+if assert_eq("for_ranges exclusive_compare_count", exclusive_compare_count, 3):
+    print("ok", "exclusive_compare_count", exclusive_compare_count)
+if assert_eq("for_ranges inclusive_compare_count", inclusive_compare_count, 3):
+    print("ok", "inclusive_compare_count", inclusive_compare_count)
+if assert_eq("for_ranges large_sum", large_sum, 303):
+    print("ok", "large_sum", large_sum)
+if assert_eq("for_ranges mixed_sum", mixed_sum, -2):
+    print("ok", "mixed_sum", mixed_sum)

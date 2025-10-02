@@ -49,3 +49,7 @@ for a in 1..2:
 print("=== All tests completed ===")
 print("Final global_var:", global_var)
 print("Final counter:", counter)
+if assert_eq("complex_scope_interactions global_var", global_var, 1024):
+    print("ok", "global_var", global_var)
+if assert_eq("complex_scope_interactions counter", counter, 6):
+    print("ok", "counter", counter)

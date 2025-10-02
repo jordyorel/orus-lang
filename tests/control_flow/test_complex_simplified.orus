@@ -1,16 +1,34 @@
 // Simplified version of complex nested
 print("Complex simplified test:")
 
+mut level1_count = 0
+mut level2_count = 0
+mut level3_count = 0
+mut level3_done_count = 0
+
 for i in 0..=3:
     print("Level 1: i =", i)
-    
+    level1_count = level1_count + 1
+
     mut j = 0
     while j < 2:
         j = j + 1
         print("  Level 2: j =", j)
-        
+        level2_count = level2_count + 1
+
         for k in 0..2:
             print("    Level 3: k =", k)
+            level3_count = level3_count + 1
         print("    Level 3 done")
+        level3_done_count = level3_done_count + 1
     print("  Level 2 done")
 print("All done")
+
+if assert_eq("test_complex_simplified level1_count", level1_count, 4):
+    print("ok", "level1_count", level1_count)
+if assert_eq("test_complex_simplified level2_count", level2_count, 8):
+    print("ok", "level2_count", level2_count)
+if assert_eq("test_complex_simplified level3_count", level3_count, 16):
+    print("ok", "level3_count", level3_count)
+if assert_eq("test_complex_simplified level3_done_count", level3_done_count, 8):
+    print("ok", "level3_done_count", level3_done_count)

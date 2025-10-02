@@ -5,8 +5,10 @@ print("=== While Loop Edge Cases ===")
 print("Test 1: Complex boolean conditions")
 mut x = 5
 mut y = 10
+mut test1_iterations = 0
 while x < 8 and y > 7:
     print("x =", x, "y =", y)
+    test1_iterations = test1_iterations + 1
     x = x + 1
     y = y - 1
 print("Complex condition test complete")
@@ -14,8 +16,10 @@ print("Complex condition test complete")
 // Test 2: While loop modifying condition variable in complex ways
 print("Test 2: Complex condition variable modification")
 mut counter = 1
+mut test2_iterations = 0
 while counter < 100:
     print("counter =", counter)
+    test2_iterations = test2_iterations + 1
     counter = counter * 2  // 1, 2, 4, 8, 16, 32, 64, 128 (stops)
 print("Complex modification test complete")
 
@@ -24,12 +28,16 @@ print("Test 3: Early termination patterns")
 mut search = 0
 mut target = 7
 mut found = false
+mut test3_iterations = 0
+mut test3_found_at = -1
 while search < 10 and not found:
     if search == target:
         print("Found target at", search)
         found = true
+        test3_found_at = search
     else:
         print("Searching...", search)
+    test3_iterations = test3_iterations + 1
     search = search + 1
 print("Search test complete")
 
@@ -37,29 +45,45 @@ print("Search test complete")
 print("Test 4: Variable reassignment in condition")
 mut limit = 3
 mut count = 0
+mut test4_iterations = 0
+mut test4_limit_changes = 0
 while count < limit:
     print("count =", count, "limit =", limit)
+    test4_iterations = test4_iterations + 1
     count = count + 1
     if count == 2:
         limit = 5  // Extend the loop
+        test4_limit_changes = test4_limit_changes + 1
 print("Variable reassignment test complete")
 
 // Test 5: Deeply nested break/continue combinations
 print("Test 5: Deep nesting with mixed control flow")
 mut outer = 0
+mut test5_outer_iterations = 0
+mut test5_inner_iterations = 0
+mut test5_inner_skips = 0
+mut test5_special_breaks = 0
+mut test5_inner_prints = 0
+mut test5_outer_break_hit = false
 while outer < 3:
     print("Outer:", outer)
+    test5_outer_iterations = test5_outer_iterations + 1
     mut inner = 0
     while inner < 4:
         inner = inner + 1
+        test5_inner_iterations = test5_inner_iterations + 1
         if inner == 2:
+            test5_inner_skips = test5_inner_skips + 1
             continue
         if inner == 4 and outer == 1:
             print("  Special break condition")
+            test5_special_breaks = test5_special_breaks + 1
             break
         print("  Inner:", inner)
+        test5_inner_prints = test5_inner_prints + 1
     if outer == 2:
         print("Breaking from outer")
+        test5_outer_break_hit = true
         break
     outer = outer + 1
 print("Deep nesting test complete")
@@ -67,8 +91,57 @@ print("Deep nesting test complete")
 // Test 6: While loop with zero iterations
 print("Test 6: Zero iteration loop")
 mut never_true = false
+mut test6_executed = false
+mut test6_iterations = 0
 while never_true:
     print("This should never execute")
+    test6_executed = true
+    test6_iterations = test6_iterations + 1
 print("Zero iteration test complete")
 
 print("=== All Edge Case Tests Complete ===")
+
+if assert_eq("while_edge_cases test1_iterations", test1_iterations, 3):
+    print("ok", "test1_iterations", test1_iterations)
+if assert_eq("while_edge_cases x", x, 8):
+    print("ok", "x", x)
+if assert_eq("while_edge_cases y", y, 7):
+    print("ok", "y", y)
+if assert_eq("while_edge_cases test2_iterations", test2_iterations, 7):
+    print("ok", "test2_iterations", test2_iterations)
+if assert_eq("while_edge_cases counter", counter, 128):
+    print("ok", "counter", counter)
+if assert_eq("while_edge_cases test3_iterations", test3_iterations, 8):
+    print("ok", "test3_iterations", test3_iterations)
+if assert_eq("while_edge_cases found", found, true):
+    print("ok", "found", found)
+if assert_eq("while_edge_cases test3_found_at", test3_found_at, 7):
+    print("ok", "test3_found_at", test3_found_at)
+if assert_eq("while_edge_cases search", search, 8):
+    print("ok", "search", search)
+if assert_eq("while_edge_cases test4_iterations", test4_iterations, 5):
+    print("ok", "test4_iterations", test4_iterations)
+if assert_eq("while_edge_cases limit", limit, 5):
+    print("ok", "limit", limit)
+if assert_eq("while_edge_cases count", count, 5):
+    print("ok", "count", count)
+if assert_eq("while_edge_cases test4_limit_changes", test4_limit_changes, 1):
+    print("ok", "test4_limit_changes", test4_limit_changes)
+if assert_eq("while_edge_cases test5_outer_iterations", test5_outer_iterations, 3):
+    print("ok", "test5_outer_iterations", test5_outer_iterations)
+if assert_eq("while_edge_cases test5_inner_iterations", test5_inner_iterations, 12):
+    print("ok", "test5_inner_iterations", test5_inner_iterations)
+if assert_eq("while_edge_cases test5_inner_skips", test5_inner_skips, 3):
+    print("ok", "test5_inner_skips", test5_inner_skips)
+if assert_eq("while_edge_cases test5_special_breaks", test5_special_breaks, 1):
+    print("ok", "test5_special_breaks", test5_special_breaks)
+if assert_eq("while_edge_cases test5_inner_prints", test5_inner_prints, 8):
+    print("ok", "test5_inner_prints", test5_inner_prints)
+if assert_eq("while_edge_cases test5_outer_break_hit", test5_outer_break_hit, true):
+    print("ok", "test5_outer_break_hit", test5_outer_break_hit)
+if assert_eq("while_edge_cases outer", outer, 2):
+    print("ok", "outer", outer)
+if assert_eq("while_edge_cases test6_iterations", test6_iterations, 0):
+    print("ok", "test6_iterations", test6_iterations)
+if assert_eq("while_edge_cases test6_executed", test6_executed, true):
+    print("ok", "test6_executed", test6_executed)

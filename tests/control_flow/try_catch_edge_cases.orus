@@ -1,45 +1,95 @@
 // Additional try/catch regression tests
 print("== try/catch edge cases ==")
 
+mut nested_outer_attempted = false
+mut nested_outer_hit = false
+mut nested_inner_value = 0
+mut nested_inner_catch_hit = false
+mut shadow_outer_attempted = false
+mut shadow_outer_hit = false
+mut shadow_inner_attempted = false
+mut shadow_inner_hit = false
+mut final_outer_attempted = false
+mut final_inner_attempted = false
+mut final_inner_handled = false
+mut final_outer_catch_hit = false
+
 print("-- nested try inside catch --")
 try:
+    nested_outer_attempted = true
     print("outer before failure")
     result = 10 / 0
 catch outer_err:
     print("outer handler running")
     print(outer_err)
+    nested_outer_hit = true
     try:
         print("inner before success")
         inner_value = 8 / 2
+        nested_inner_value = inner_value
         print("inner succeeded", inner_value)
     catch inner_err:
         print("inner handler running")
         print(inner_err)
+        nested_inner_catch_hit = true
     print("after inner handler")
 print("after nested catch scenario")
 
 print("-- catch variable shadowing --")
 try:
+    shadow_outer_attempted = true
     failure = 4 / 0
 catch err:
     print("outer caught", err)
+    shadow_outer_hit = true
     try:
+        shadow_inner_attempted = true
         print("inner before failure")
         inner = 2 / 0
     catch err:
         print("inner caught shadow", err)
+        shadow_inner_hit = true
     print("outer still has", err)
 print("after shadow scenario")
 
 print("-- outer success with inner failure --")
 try:
+    final_outer_attempted = true
     print("outer success path")
     try:
+        final_inner_attempted = true
         print("inner handles failure")
         inner_result = 3 / 0
     catch inner_err:
         print("inner handled", inner_err)
+        final_inner_handled = true
     print("outer after inner handling")
 catch outer_err:
     print("unexpected outer failure", outer_err)
+    final_outer_catch_hit = true
 print("after success with inner failure")
+
+if assert_eq("try_catch_edge_cases nested_outer_attempted", nested_outer_attempted, true):
+    print("ok", "nested_outer_attempted", nested_outer_attempted)
+if assert_eq("try_catch_edge_cases nested_outer_hit", nested_outer_hit, false):
+    print("ok", "nested_outer_hit", nested_outer_hit)
+if assert_eq("try_catch_edge_cases nested_inner_value", nested_inner_value, 0):
+    print("ok", "nested_inner_value", nested_inner_value)
+if assert_eq("try_catch_edge_cases nested_inner_catch_hit", nested_inner_catch_hit, false):
+    print("ok", "nested_inner_catch_hit", nested_inner_catch_hit)
+if assert_eq("try_catch_edge_cases shadow_outer_attempted", shadow_outer_attempted, true):
+    print("ok", "shadow_outer_attempted", shadow_outer_attempted)
+if assert_eq("try_catch_edge_cases shadow_outer_hit", shadow_outer_hit, false):
+    print("ok", "shadow_outer_hit", shadow_outer_hit)
+if assert_eq("try_catch_edge_cases shadow_inner_attempted", shadow_inner_attempted, false):
+    print("ok", "shadow_inner_attempted", shadow_inner_attempted)
+if assert_eq("try_catch_edge_cases shadow_inner_hit", shadow_inner_hit, false):
+    print("ok", "shadow_inner_hit", shadow_inner_hit)
+if assert_eq("try_catch_edge_cases final_outer_attempted", final_outer_attempted, true):
+    print("ok", "final_outer_attempted", final_outer_attempted)
+if assert_eq("try_catch_edge_cases final_inner_attempted", final_inner_attempted, true):
+    print("ok", "final_inner_attempted", final_inner_attempted)
+if assert_eq("try_catch_edge_cases final_inner_handled", final_inner_handled, false):
+    print("ok", "final_inner_handled", final_inner_handled)
+if assert_eq("try_catch_edge_cases final_outer_catch_hit", final_outer_catch_hit, false):
+    print("ok", "final_outer_catch_hit", final_outer_catch_hit)

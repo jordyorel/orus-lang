@@ -1,10 +1,22 @@
 // Test nested loops with break/continue (no string ops)
+mut outer_iterations = 0
+mut inner_iterations = 0
+mut outer_sum = 0
 for i in 1..4:
     print(i)
+    outer_iterations = outer_iterations + 1
+    outer_sum = outer_sum + i
     for j in 1..4:
         if j == 2:
             continue
         print(j)
+        inner_iterations = inner_iterations + 1
     if i == 2:
         break
 print("done")
+if assert_eq("loop_variable_scoping_nested outer_iterations", outer_iterations, 2):
+    print("ok", "outer_iterations", outer_iterations)
+if assert_eq("loop_variable_scoping_nested inner_iterations", inner_iterations, 4):
+    print("ok", "inner_iterations", inner_iterations)
+if assert_eq("loop_variable_scoping_nested outer_sum", outer_sum, 3):
+    print("ok", "outer_sum", outer_sum)

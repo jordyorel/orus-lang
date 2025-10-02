@@ -7,8 +7,10 @@ print("=== While Loop Error Condition Tests ===")
 // Valid test to ensure basic functionality works
 print("Test 1: Valid while loop (control test)")
 mut i = 0
+mut valid_iterations = 0
 while i < 2:
     print("Valid iteration", i)
+    valid_iterations = valid_iterations + 1
     i = i + 1
 print("Valid test complete")
 
@@ -19,7 +21,7 @@ print("Valid test complete")
 print("Test 2: Break outside loop")
 // break  // This should cause an error
 
-// Test 3: Continue outside of loop (should cause compilation error)  
+// Test 3: Continue outside of loop (should cause compilation error)
 print("Test 3: Continue outside loop")
 // continue  // This should cause an error
 
@@ -44,13 +46,17 @@ print("Test 5: Non-boolean conditions")
 // Test for memory/register pressure with large nested loops
 print("Test 6: Stress test - many variables in nested loops")
 mut stress_outer = 0
+mut stress_outer_iterations = 0
+mut stress_inner_iterations = 0
+mut stress_inner_var5_sum = 0
 while stress_outer < 2:
+    stress_outer_iterations = stress_outer_iterations + 1
     var1 = stress_outer * 1
-    var2 = stress_outer * 2  
+    var2 = stress_outer * 2
     var3 = stress_outer * 3
     var4 = stress_outer * 4
     var5 = stress_outer * 5
-    
+
     mut stress_inner = 0
     while stress_inner < 2:
         inner_var1 = stress_inner + var1
@@ -58,16 +64,24 @@ while stress_outer < 2:
         inner_var3 = stress_inner + var3
         inner_var4 = stress_inner + var4
         inner_var5 = stress_inner + var5
-        
+
         print("Stress test:", stress_outer, stress_inner, inner_var5)
+        stress_inner_iterations = stress_inner_iterations + 1
+        stress_inner_var5_sum = stress_inner_var5_sum + inner_var5
         stress_inner = stress_inner + 1
-    
+
     stress_outer = stress_outer + 1
 print("Stress test complete")
 
 // Test for very deep nesting (compiler/runtime limits)
 print("Test 7: Deep nesting stress test")
 mut depth1 = 0
+mut deep_iterations = 0
+mut depth1_total = 0
+mut depth2_total = 0
+mut depth3_total = 0
+mut depth4_total = 0
+mut depth5_total = 0
 while depth1 < 2:
     mut depth2 = 0
     while depth2 < 2:
@@ -78,6 +92,12 @@ while depth1 < 2:
                 mut depth5 = 0
                 while depth5 < 2:
                     print("Deep nesting level 5:", depth1, depth2, depth3, depth4, depth5)
+                    deep_iterations = deep_iterations + 1
+                    depth1_total = depth1_total + depth1
+                    depth2_total = depth2_total + depth2
+                    depth3_total = depth3_total + depth3
+                    depth4_total = depth4_total + depth4
+                    depth5_total = depth5_total + depth5
                     depth5 = depth5 + 1
                 depth4 = depth4 + 1
             depth3 = depth3 + 1
@@ -86,3 +106,28 @@ while depth1 < 2:
 print("Deep nesting test complete")
 
 print("=== Error Condition Tests Complete ===")
+
+if assert_eq("while_error_conditions valid_iterations", valid_iterations, 2):
+    print("ok", "valid_iterations", valid_iterations)
+if assert_eq("while_error_conditions i", i, 2):
+    print("ok", "i", i)
+if assert_eq("while_error_conditions stress_outer_iterations", stress_outer_iterations, 2):
+    print("ok", "stress_outer_iterations", stress_outer_iterations)
+if assert_eq("while_error_conditions stress_inner_iterations", stress_inner_iterations, 4):
+    print("ok", "stress_inner_iterations", stress_inner_iterations)
+if assert_eq("while_error_conditions stress_inner_var5_sum", stress_inner_var5_sum, 12):
+    print("ok", "stress_inner_var5_sum", stress_inner_var5_sum)
+if assert_eq("while_error_conditions stress_outer", stress_outer, 2):
+    print("ok", "stress_outer", stress_outer)
+if assert_eq("while_error_conditions deep_iterations", deep_iterations, 32):
+    print("ok", "deep_iterations", deep_iterations)
+if assert_eq("while_error_conditions depth1_total", depth1_total, 16):
+    print("ok", "depth1_total", depth1_total)
+if assert_eq("while_error_conditions depth2_total", depth2_total, 16):
+    print("ok", "depth2_total", depth2_total)
+if assert_eq("while_error_conditions depth3_total", depth3_total, 16):
+    print("ok", "depth3_total", depth3_total)
+if assert_eq("while_error_conditions depth4_total", depth4_total, 16):
+    print("ok", "depth4_total", depth4_total)
+if assert_eq("while_error_conditions depth5_total", depth5_total, 16):
+    print("ok", "depth5_total", depth5_total)

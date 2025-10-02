@@ -1,17 +1,33 @@
 // Basic if-else statement tests
 x = 1
+mut zero_branch_taken = false
+mut non_zero_branch_taken = false
 
 // Test else branch execution
 if x == 0:
+    zero_branch_taken = true
     print("zero")
 else:
+    non_zero_branch_taken = true
     print("not zero")
 
 // Test then branch execution
 y = 5
+mut positive_branch_taken = false
+mut non_positive_branch_taken = false
 if y > 0:
+    positive_branch_taken = true
     print("positive")
 else:
+    non_positive_branch_taken = true
     print("non-positive")
 
 print("complete")
+if assert_eq("if_else_basic zero_branch_taken", zero_branch_taken, false):
+    print("ok", "zero_branch_taken", zero_branch_taken)
+if assert_eq("if_else_basic non_zero_branch_taken", non_zero_branch_taken, true):
+    print("ok", "non_zero_branch_taken", non_zero_branch_taken)
+if assert_eq("if_else_basic positive_branch_taken", positive_branch_taken, true):
+    print("ok", "positive_branch_taken", positive_branch_taken)
+if assert_eq("if_else_basic non_positive_branch_taken", non_positive_branch_taken, false):
+    print("ok", "non_positive_branch_taken", non_positive_branch_taken)
