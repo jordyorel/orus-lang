@@ -54,6 +54,14 @@ void scope_stack_destroy(ScopeStack* stack) {
         return;
     }
 
+    if (stack->frames) {
+        for (int i = 0; i < stack->count; i++) {
+            ScopeFrame* frame = &stack->frames[i];
+            free(frame->loop_break_statements);
+            free(frame->loop_continue_statements);
+        }
+    }
+
     free(stack->frames);
     free(stack);
 }
@@ -79,6 +87,19 @@ ScopeFrame* scope_stack_push(ScopeStack* stack, ScopeKind kind) {
     frame->prev_loop_start = -1;
     frame->prev_loop_end = -1;
     frame->prev_loop_continue = -1;
+    frame->saved_break_statements = NULL;
+    frame->saved_break_count = 0;
+    frame->saved_break_capacity = 0;
+    frame->saved_continue_statements = NULL;
+    frame->saved_continue_count = 0;
+    frame->saved_continue_capacity = 0;
+    frame->loop_break_statements = NULL;
+    frame->loop_break_count = 0;
+    frame->loop_break_capacity = 0;
+    frame->loop_continue_statements = NULL;
+    frame->loop_continue_count = 0;
+    frame->loop_continue_capacity = 0;
+    frame->label = NULL;
 
     stack->count++;
 
@@ -140,4 +161,19 @@ ScopeFrame* scope_stack_get_frame(ScopeStack* stack, int index) {
         return NULL;
     }
     return &stack->frames[index];
+}
+
+ScopeFrame* scope_stack_find_loop_by_label(ScopeStack* stack, const char* label) {
+    if (!stack || !label || *label == '\0') {
+        return NULL;
+    }
+
+    for (int i = stack->count - 1; i >= 0; --i) {
+        ScopeFrame* frame = &stack->frames[i];
+        if (frame->kind == SCOPE_KIND_LOOP && frame->label && strcmp(frame->label, label) == 0) {
+            return frame;
+        }
+    }
+
+    return NULL;
 }

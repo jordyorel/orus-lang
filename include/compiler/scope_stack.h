@@ -45,6 +45,16 @@ typedef struct ScopeFrame {
     int* saved_continue_statements;
     int saved_continue_count;
     int saved_continue_capacity;
+
+    int* loop_break_statements;
+    int loop_break_count;
+    int loop_break_capacity;
+
+    int* loop_continue_statements;
+    int loop_continue_count;
+    int loop_continue_capacity;
+
+    const char* label;
 } ScopeFrame;
 
 typedef struct ScopeStack {
@@ -64,5 +74,6 @@ int scope_stack_depth(const ScopeStack* stack);
 int scope_stack_loop_depth(const ScopeStack* stack);
 bool scope_stack_is_in_loop(const ScopeStack* stack);
 ScopeFrame* scope_stack_get_frame(ScopeStack* stack, int index);
+ScopeFrame* scope_stack_find_loop_by_label(ScopeStack* stack, const char* label);
 
 #endif // ORUS_COMPILER_SCOPE_STACK_H
