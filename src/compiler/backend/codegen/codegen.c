@@ -377,6 +377,7 @@ static int compile_builtin_int(CompilerContext* ctx, TypedASTNode* call);
 static int compile_builtin_float(CompilerContext* ctx, TypedASTNode* call);
 static int compile_builtin_type_of(CompilerContext* ctx, TypedASTNode* call);
 static int compile_builtin_is_type(CompilerContext* ctx, TypedASTNode* call);
+static int compile_builtin_assert_eq(CompilerContext* ctx, TypedASTNode* call);
 int lookup_variable(CompilerContext* ctx, const char* name);
 static char* create_method_symbol_name(const char* struct_name, const char* method_name);
 static int compile_struct_method_call(CompilerContext* ctx, TypedASTNode* call);
@@ -2197,6 +2198,83 @@ static int compile_builtin_is_type(CompilerContext* ctx, TypedASTNode* call) {
 
     if (free_value && value_arg) free_typed_ast_node(value_arg);
     if (free_type && type_arg) free_typed_ast_node(type_arg);
+
+    return result_reg;
+}
+
+static int compile_builtin_assert_eq(CompilerContext* ctx, TypedASTNode* call) {
+    if (!ctx || !call || !call->original) {
+        return -1;
+    }
+
+    if (call->original->call.argCount != 3) {
+        DEBUG_CODEGEN_PRINT("Error: assert_eq() expects exactly 3 arguments, got %d\n",
+                            call->original->call.argCount);
+        ctx->has_compilation_errors = true;
+        return -1;
+    }
+
+    bool free_nodes[3] = {false, false, false};
+    TypedASTNode* args[3] = {NULL, NULL, NULL};
+    int regs[3] = {-1, -1, -1};
+
+    for (int i = 0; i < 3; i++) {
+        args[i] = get_call_argument_node(call, i, &free_nodes[i]);
+        if (!args[i]) {
+            for (int j = 0; j <= i; j++) {
+                if (regs[j] >= MP_TEMP_REG_START && regs[j] <= MP_TEMP_REG_END) {
+                    mp_free_temp_register(ctx->allocator, regs[j]);
+                }
+                if (free_nodes[j] && args[j]) {
+                    free_typed_ast_node(args[j]);
+                }
+            }
+            return -1;
+        }
+        regs[i] = compile_expression(ctx, args[i]);
+        if (regs[i] == -1) {
+            for (int j = 0; j <= i; j++) {
+                if (regs[j] >= MP_TEMP_REG_START && regs[j] <= MP_TEMP_REG_END) {
+                    mp_free_temp_register(ctx->allocator, regs[j]);
+                }
+                if (free_nodes[j] && args[j]) {
+                    free_typed_ast_node(args[j]);
+                }
+            }
+            return -1;
+        }
+    }
+
+    int result_reg = mp_allocate_temp_register(ctx->allocator);
+    if (result_reg == -1) {
+        DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for assert_eq() result\n");
+        ctx->has_compilation_errors = true;
+        for (int i = 0; i < 3; i++) {
+            if (regs[i] >= MP_TEMP_REG_START && regs[i] <= MP_TEMP_REG_END) {
+                mp_free_temp_register(ctx->allocator, regs[i]);
+            }
+            if (free_nodes[i] && args[i]) {
+                free_typed_ast_node(args[i]);
+            }
+        }
+        return -1;
+    }
+
+    set_location_from_node(ctx, call);
+    emit_byte_to_buffer(ctx->bytecode, OP_ASSERT_EQ_R);
+    emit_byte_to_buffer(ctx->bytecode, (uint8_t)result_reg);
+    emit_byte_to_buffer(ctx->bytecode, (uint8_t)regs[0]);
+    emit_byte_to_buffer(ctx->bytecode, (uint8_t)regs[1]);
+    emit_byte_to_buffer(ctx->bytecode, (uint8_t)regs[2]);
+
+    for (int i = 0; i < 3; i++) {
+        if (regs[i] >= MP_TEMP_REG_START && regs[i] <= MP_TEMP_REG_END) {
+            mp_free_temp_register(ctx->allocator, regs[i]);
+        }
+        if (free_nodes[i] && args[i]) {
+            free_typed_ast_node(args[i]);
+        }
+    }
 
     return result_reg;
 }
@@ -4068,6 +4146,8 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                     return compile_builtin_type_of(ctx, expr);
                 } else if (strcmp(builtin_name, "is_type") == 0) {
                     return compile_builtin_is_type(ctx, expr);
+                } else if (strcmp(builtin_name, "assert_eq") == 0) {
+                    return compile_builtin_assert_eq(ctx, expr);
                 }
             }
 

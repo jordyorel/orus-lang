@@ -214,6 +214,16 @@ int disassembleInstruction(Chunk* chunk, int offset) {
             return offset + 2;
         }
 
+        case OP_ASSERT_EQ_R: {
+            uint8_t dst = chunk->code[offset + 1];
+            uint8_t label_reg = chunk->code[offset + 2];
+            uint8_t actual_reg = chunk->code[offset + 3];
+            uint8_t expected_reg = chunk->code[offset + 4];
+            printf("%-16s dst=R%d, label=R%d, actual=R%d, expected=R%d\n",
+                   "ASSERT_EQ", dst, label_reg, actual_reg, expected_reg);
+            return offset + 5;
+        }
+
         case OP_CALL_NATIVE_R: {
             uint8_t native_index = chunk->code[offset + 1];
             uint8_t first_arg = chunk->code[offset + 2];

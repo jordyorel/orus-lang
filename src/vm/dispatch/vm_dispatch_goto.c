@@ -399,6 +399,7 @@ InterpretResult vm_run_dispatch(void) {
         vm_dispatch_table[OP_PRINT_MULTI_R] = &&LABEL_OP_PRINT_MULTI_R;
         vm_dispatch_table[OP_PRINT_R] = &&LABEL_OP_PRINT_R;
         vm_dispatch_table[OP_PRINT_NO_NL_R] = &&LABEL_OP_PRINT_NO_NL_R;
+        vm_dispatch_table[OP_ASSERT_EQ_R] = &&LABEL_OP_ASSERT_EQ_R;
         vm_dispatch_table[OP_CALL_R] = &&LABEL_OP_CALL_R;
         vm_dispatch_table[OP_TAIL_CALL_R] = &&LABEL_OP_TAIL_CALL_R;
         vm_dispatch_table[OP_RETURN_R] = &&LABEL_OP_RETURN_R;
@@ -3001,6 +3002,28 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t reg = READ_BYTE();
             Value temp_value = vm_get_register_safe(reg);
             builtin_print(&temp_value, 1, false);
+            DISPATCH();
+        }
+
+    LABEL_OP_ASSERT_EQ_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t label_reg = READ_BYTE();
+            uint8_t actual_reg = READ_BYTE();
+            uint8_t expected_reg = READ_BYTE();
+
+            Value label = vm_get_register_safe(label_reg);
+            Value actual = vm_get_register_safe(actual_reg);
+            Value expected = vm_get_register_safe(expected_reg);
+            char* failure_message = NULL;
+            bool ok = builtin_assert_eq(label, actual, expected, &failure_message);
+            if (!ok) {
+                const char* message = failure_message ? failure_message : "assert_eq failed";
+                runtimeError(ERROR_RUNTIME, CURRENT_LOCATION(), "%s", message);
+                free(failure_message);
+                goto HANDLE_RUNTIME_ERROR;
+            }
+            free(failure_message);
+            vm_store_bool_register(dst, true);
             DISPATCH();
         }
 
