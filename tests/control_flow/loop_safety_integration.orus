@@ -184,7 +184,7 @@ if assert_eq("loop_safety_integration test10_values", test10_values, expected_te
     print("ok", "test10_values", test10_values)
 print("Test 10 done")
 
-print("=== All Loop Optimization Tests Complete ===")
+
 if assert_eq("loop_safety_integration test1_count", test1_count, 3):
     print("ok", "test1_count", test1_count)
 if assert_eq("loop_safety_integration test2_count", test2_count, 1):
@@ -205,3 +205,6 @@ if assert_eq("loop_safety_integration test9_count", test9_count, 14):
     print("ok", "test9_count", test9_count)
 if assert_eq("loop_safety_integration test10_count", test10_count, 2):
     print("ok", "test10_count", test10_count)
+print("=== All Loop Optimization Tests Complete ===")
+
+
