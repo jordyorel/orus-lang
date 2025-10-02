@@ -1,0 +1,29 @@
+// Runtime assertions for the builtin assert_eq helper
+print("== assert_eq builtin ==")
+
+if assert_eq("int equality", 42, 42):
+    print("ok", "int equality")
+
+if assert_eq("float equality", 3.14, 3.14):
+    print("ok", "float equality")
+
+if assert_eq("string equality", "orus", "orus"):
+    print("ok", "string equality")
+
+array_actual = [[1, 2], [3, 4]]
+array_expected = [[1, 2], [3, 4]]
+if assert_eq("nested array equality", array_actual, array_expected):
+    print("ok", "nested array equality")
+
+mut error_caught = false
+try:
+    assert_eq("intentional mismatch", 1, 2)
+    print("FAIL", "missing panic")
+catch err:
+    error_caught = true
+    print(err)
+
+if assert_eq("mismatch raised error", error_caught, true):
+    print("ok error", "intentional mismatch")
+
+print("== done ==")

@@ -627,6 +627,7 @@ typedef enum {
     OP_PRINT_MULTI_R,     // first_reg, count, newline_flag
     OP_PRINT_R,           // reg
     OP_PRINT_NO_NL_R,     // reg
+    OP_ASSERT_EQ_R,       // dst_reg, label_reg, actual_reg, expected_reg
 
     // Short jump optimizations (1-byte offset instead of 2)
     OP_JUMP_SHORT,         // 1-byte forward jump (0-255)

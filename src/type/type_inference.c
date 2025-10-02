@@ -1041,6 +1041,12 @@ static void register_builtin_functions(TypeEnv* env) {
         Type* is_type_params[2] = {any_param, string_type};
         define_builtin_function(env, "is_type", bool_type, is_type_params, 2);
     }
+
+    // assert_eq(label: string, actual: any, expected: any) -> bool
+    if (bool_type && string_type && any_param) {
+        Type* assert_params[3] = {string_type, any_param, any_param};
+        define_builtin_function(env, "assert_eq", bool_type, assert_params, 3);
+    }
 }
 
 static void register_builtin_enums(void) {

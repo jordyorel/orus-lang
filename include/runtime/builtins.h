@@ -112,4 +112,18 @@ bool builtin_sorted(Value array_value, Value* out_value);
  */
 double builtin_time_stamp(void);
 
+/**
+ * Compare two values for equality and report detailed diagnostics when they
+ * differ. Used by the integration tests to validate interpreter behaviour.
+ *
+ * @param label     Human-readable label describing the assertion context.
+ * @param actual    The value observed during execution.
+ * @param expected  The expected value.
+ * @param out_message Optional pointer that receives an allocated failure
+ *                    message when the assertion fails. The caller owns the
+ *                    returned string and must free it with {@code free()}.
+ * @return true when the values are equal, false otherwise.
+ */
+bool builtin_assert_eq(Value label, Value actual, Value expected, char** out_message);
+
 #endif // ORUS_BUILTINS_H

@@ -1,22 +1,23 @@
 // Direct string indexing regression tests exercising VM opcode support
 print("== String indexing regression ==")
 
-fn assert_eq(label, actual, expected):
-    if actual != expected:
-        print("FAIL", label, actual, expected)
-    else:
-        print("ok", label)
-
 base = "Hello runtime!"
-assert_eq("base[0]", base[0], "H")
-assert_eq("base[6]", base[6], "r")
-assert_eq("base[12]", base[12], "e")
-assert_eq("base[13]", base[13], "!")
+if assert_eq("base[0]", base[0], "H"):
+    print("ok", "base[0]")
+if assert_eq("base[6]", base[6], "r"):
+    print("ok", "base[6]")
+if assert_eq("base[12]", base[12], "e"):
+    print("ok", "base[12]")
+if assert_eq("base[13]", base[13], "!"):
+    print("ok", "base[13]")
 
 rope = ("rope" + "-") + ("engine" + "ering")
-assert_eq("rope[0]", rope[0], "r")
-assert_eq("rope[4]", rope[4], "-")
-assert_eq("rope[9]", rope[9], "n")
+if assert_eq("rope[0]", rope[0], "r"):
+    print("ok", "rope[0]")
+if assert_eq("rope[4]", rope[4], "-"):
+    print("ok", "rope[4]")
+if assert_eq("rope[9]", rope[9], "n"):
+    print("ok", "rope[9]")
 
 try:
     value = base[-1]
