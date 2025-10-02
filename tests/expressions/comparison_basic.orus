@@ -6,10 +6,25 @@ z = 10
 // Comparison operations
 gt_result = x > y
 lt_result = x < y
+ge_result = x >= z
+le_result = y <= x
 eq_result = x == z
-ne_result = x == y
+ne_result = x != y
 
-print("10 > 5 =", gt_result)
-print("10 < 5 =", lt_result)
-print("10 == 10 =", eq_result)
-print("10 == 5 =", ne_result)
+if assert_eq("comparison 10 > 5", gt_result, true):
+    pass
+
+if assert_eq("comparison 10 < 5", lt_result, false):
+    pass
+
+if assert_eq("comparison 10 >= 10", ge_result, true):
+    pass
+
+if assert_eq("comparison 5 <= 10", le_result, true):
+    pass
+
+if assert_eq("comparison 10 == 10", eq_result, true):
+    pass
+
+if assert_eq("comparison 10 != 5", ne_result, true):
+    pass

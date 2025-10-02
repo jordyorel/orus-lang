@@ -1,0 +1,51 @@
+// Basic logical operator coverage
+
+// Truth table samples
+if assert_eq("logic true and true", true and true, true):
+    pass
+
+if assert_eq("logic true and false", true and false, false):
+    pass
+
+if assert_eq("logic true or false", true or false, true):
+    pass
+
+if assert_eq("logic false or false", false or false, false):
+    pass
+
+if assert_eq("logic not true", not true, false):
+    pass
+
+if assert_eq("logic not false", not false, true):
+    pass
+
+// Mixed expressions with comparisons
+x = 12
+mut y = 4
+threshold = 10
+
+if assert_eq("logic comparison and", x > threshold and y < x, true):
+    pass
+
+if assert_eq("logic comparison or", x <= threshold or y == 4, true):
+    pass
+
+if assert_eq("logic comparison not", not (y >= x), true):
+    pass
+
+// Short-circuit style chaining
+mut counter = 0
+mut guard = false
+
+if counter == 0 and not guard:
+    counter += 1
+
+if guard or counter == 1:
+    guard = true
+
+if assert_eq("logic short-circuit counter", counter, 1):
+    pass
+
+if assert_eq("logic short-circuit guard", guard, true):
+    pass
+
