@@ -60,21 +60,6 @@ fn dijkstra(label, graph, start, infinity):
     print("dijkstra", label, "relaxations:", DIJKSTRA_RELAXATIONS, "selections:", DIJKSTRA_SELECTIONS)
     return distances
 
-fn assert_distances(label, observed, expected):
-    if len(observed) != len(expected):
-        print("FAIL", label, "length mismatch", len(observed), "expected", len(expected))
-        return
-    mut i = 0
-    mut ok = true
-    while i < len(expected):
-        if observed[i] != expected[i]:
-            ok = false
-        i = i + 1
-    if ok:
-        print(label, "distances", observed)
-    else:
-        print("FAIL", label, "=>", observed, "expected", expected)
-
 // === Tests ===
 infinity = 999999
 fn make_weighted_graph():
@@ -112,10 +97,12 @@ fn make_weighted_graph():
 weighted_graph = make_weighted_graph()
 
 expected_from_zero = [0, 3, 1, 4, 7]
-assert_distances("from_zero", dijkstra("from_zero", weighted_graph, 0, infinity), expected_from_zero)
+if assert_eq("dijkstra from_zero", dijkstra("from_zero", weighted_graph, 0, infinity), expected_from_zero):
+    print("ok", "dijkstra from_zero")
 
 expected_from_two = [999999, 2, 0, 3, 6]
-assert_distances("from_two", dijkstra("from_two", weighted_graph, 2, infinity), expected_from_two)
+if assert_eq("dijkstra from_two", dijkstra("from_two", weighted_graph, 2, infinity), expected_from_two):
+    print("ok", "dijkstra from_two")
 
 fn make_disconnected_graph():
     mut graph: [[i32]] = []
@@ -141,4 +128,5 @@ fn make_disconnected_graph():
 disconnected_graph = make_disconnected_graph()
 
 expected_disconnected = [0, 2, 999999, 999999]
-assert_distances("disconnected", dijkstra("disconnected", disconnected_graph, 0, infinity), expected_disconnected)
+if assert_eq("dijkstra disconnected", dijkstra("disconnected", disconnected_graph, 0, infinity), expected_disconnected):
+    print("ok", "dijkstra disconnected")

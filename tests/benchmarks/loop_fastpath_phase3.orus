@@ -37,6 +37,10 @@ while trial < TRIALS:
 
     elapsed: f64 = time_stamp() - start
     print("elapsed:", elapsed)
+    if assert_eq("loop_fastpath_phase3 typed_sum", typed_sum, 499999500000 as i64):
+        print("ok", "typed sum", typed_sum)
+    if assert_eq("loop_fastpath_phase3 array_sum", array_sum, 8323072 as i64):
+        print("ok", "array sum", array_sum)
 
     checksum = checksum + typed_sum + array_sum
     trial = trial + 1
@@ -44,3 +48,5 @@ while trial < TRIALS:
 print("checksum:", checksum)
 print("trials:", TRIALS)
 print("iterations:", ITERATIONS)
+if assert_eq("loop_fastpath_phase3 checksum", checksum, 2500039115360 as i64):
+    print("ok", "total checksum", checksum)

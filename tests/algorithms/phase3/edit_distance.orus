@@ -338,23 +338,14 @@ fn print_edit_script(label, script):
         index = index + 1
 
 fn validate_distance(label, algo_label, value: i32, expected: i32):
-    if value != expected:
-        print("FAIL", label, algo_label, "distance", value, "expected", expected)
-    else:
+    message = label + " " + algo_label + " distance"
+    if assert_eq(message, value, expected):
         print(label, algo_label, "distance ok ->", value)
 
 fn validate_script(label, script, expected):
-    if len(script) != len(expected):
-        print("FAIL", label, "script length", len(script), "expected", len(expected))
-        return
-
-    mut idx: i32 = 0
-    while idx < len(expected):
-        if script[idx] != expected[idx]:
-            print("FAIL", label, "script mismatch at", idx, "saw", script[idx], "expected", expected[idx])
-            return
-        idx = idx + 1
-    print(label, "script matches expected operations")
+    message = label + " script"
+    if assert_eq(message, script, expected):
+        print(label, "script matches expected operations")
 
 fn run_edit_dp(label, seq_a, seq_b):
     dp = build_edit_dp_table(seq_a, seq_b)
@@ -374,10 +365,9 @@ fn run_case(label, seq_a, seq_b, expected_distance: i32, check_naive: bool, expe
     dp_distance: i32 = EDIT_DP_LAST_DISTANCE
     validate_distance(label, "dp", dp_distance, expected_distance)
 
-    if check_naive and naive_result != dp_distance:
-        print("FAIL", label, "naive/dp disagreement", naive_result, dp_distance)
-    else:
-        if check_naive:
+    if check_naive:
+        parity_label = label + " naive/dp distance"
+        if assert_eq(parity_label, naive_result, dp_distance):
             print(label, "naive/dp distances agree")
 
     script = reconstruct_edit_script(seq_a, seq_b)

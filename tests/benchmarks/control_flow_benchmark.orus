@@ -43,3 +43,11 @@ elapsed: f64 = end_time - start_time
 print("Checksum:", checksum)
 print("Total execution time:", elapsed)
 print("=== Orus Control Flow Benchmark Complete ===")
+if assert_eq("control_flow_benchmark sum1", sum1, 2000001000000 as i64):
+    print("ok", "sum1", sum1)
+if assert_eq("control_flow_benchmark acc2", acc2, 499000000 as i64):
+    print("ok", "acc2", acc2)
+if assert_eq("control_flow_benchmark sum3", sum3, 999999000000 as i64):
+    print("ok", "sum3", sum3)
+if assert_eq("control_flow_benchmark checksum", checksum, 3000499000000 as i64):
+    print("ok", "checksum", checksum)

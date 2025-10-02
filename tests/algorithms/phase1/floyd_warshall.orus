@@ -46,23 +46,6 @@ fn floyd_warshall(label, matrix, dimension, infinity):
     print("floyd_warshall", label, "relaxations:", FLOYD_RELAXATIONS)
     return distances
 
-fn assert_matrix(label, observed, expected, dimension):
-    mut ok = true
-    mut i = 0
-    while i < dimension:
-        observed_row = observed[i]
-        expected_row = expected[i]
-        mut j = 0
-        while j < dimension:
-            if observed_row[j] != expected_row[j]:
-                ok = false
-            j = j + 1
-        i = i + 1
-    if ok:
-        print(label, "matrix", observed)
-    else:
-        print("FAIL", label, "=>", observed, "expected", expected)
-
 // === Tests ===
 infinity = 999999
 
@@ -136,7 +119,8 @@ dense_dimension = 4
 dense_matrix = make_dense_matrix(infinity)
 dense_expected = make_dense_expected()
 
-assert_matrix("dense_fixture", floyd_warshall("dense_fixture", dense_matrix, dense_dimension, infinity), dense_expected, dense_dimension)
+if assert_eq("floyd_warshall dense_fixture", floyd_warshall("dense_fixture", dense_matrix, dense_dimension, infinity), dense_expected):
+    print("ok", "floyd_warshall dense_fixture")
 
 fn make_disconnected_matrix(infinity):
     mut matrix: [[i32]] = []
@@ -188,4 +172,5 @@ disconnected_dimension = 3
 disconnected_matrix = make_disconnected_matrix(infinity)
 disconnected_expected = make_disconnected_expected(infinity)
 
-assert_matrix("disconnected", floyd_warshall("disconnected", disconnected_matrix, disconnected_dimension, infinity), disconnected_expected, disconnected_dimension)
+if assert_eq("floyd_warshall disconnected", floyd_warshall("disconnected", disconnected_matrix, disconnected_dimension, infinity), disconnected_expected):
+    print("ok", "floyd_warshall disconnected")

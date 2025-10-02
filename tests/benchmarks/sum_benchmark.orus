@@ -22,6 +22,8 @@ while trial < TRIALS:
     total_time = total_time + elapsed
 
     print("trial", trial, "sum:", sum, "elapsed:", elapsed)
+    if assert_eq("sum_benchmark sum", sum, 20000100000):
+        print("ok", "sum value", sum)
     trial = trial + 1
 
 avg: f64 = total_time / (TRIALS as f64)

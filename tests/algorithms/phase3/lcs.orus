@@ -171,27 +171,15 @@ fn run_lcs_dp(label, seq_a, seq_b):
     print("lcs_dp", label, "length:", length, "cells:", LCS_DP_CELLS, "match_extends:", LCS_DP_MATCH_EXTENDS, "top_reuses:", LCS_DP_TOP_REUSES, "left_reuses:", LCS_DP_LEFT_REUSES, "ties:", LCS_DP_TIES, "subsequence:", subsequence_labels)
     return subsequence
 
-fn arrays_equal(first, second) -> bool:
-    if len(first) != len(second):
-        return false
-    mut index: i32 = 0
-    while index < len(first):
-        if first[index] != second[index]:
-            return false
-        index = index + 1
-    return true
-
 fn validate_length(label, algorithm, observed: i32, expected: i32):
-    if observed != expected:
-        print("FAIL", label, algorithm, "length", observed, "expected", expected)
-    else:
+    message = label + " " + algorithm + " length"
+    if assert_eq(message, observed, expected):
         print(label, algorithm, "length ok ->", observed)
 
 fn validate_subsequence(label, observed, expected):
-    if arrays_equal(observed, expected):
+    message = label + " dp subsequence"
+    if assert_eq(message, observed, expected):
         print(label, "dp subsequence ok ->", codes_to_labels(observed))
-    else:
-        print("FAIL", label, "dp subsequence", codes_to_labels(observed), "expected", codes_to_labels(expected))
 
 fn run_case(label, seq_a, seq_b, expected_length: i32, expected_example, check_example: bool):
     naive_length = run_lcs_naive(label, seq_a, seq_b)
@@ -202,9 +190,8 @@ fn run_case(label, seq_a, seq_b, expected_length: i32, expected_example, check_e
     validate_length(label, "dp", dp_length, expected_length)
 
     subseq_length: i32 = len(subsequence)
-    if subseq_length != expected_length:
-        print("FAIL", label, "dp subsequence length", subseq_length, "expected", expected_length)
-    else:
+    length_label = label + " dp subsequence length"
+    if assert_eq(length_label, subseq_length, expected_length):
         print(label, "dp subsequence length ok ->", subseq_length)
 
     if check_example:

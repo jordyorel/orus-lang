@@ -92,9 +92,8 @@ fn run_knapsack_dp(label, weights, values, capacity: i32) -> i32:
 
 
 fn validate(label, name, observed: i32, expected: i32):
-    if observed != expected:
-        print("FAIL", label, name, "value", observed, "expected", expected)
-    else:
+    message = label + " " + name
+    if assert_eq(message, observed, expected):
         print(label, name, "=>", observed)
 
 

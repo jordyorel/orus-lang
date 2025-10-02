@@ -74,43 +74,35 @@ fn heap_sort(label, values):
     print("heap_sort", label, "heapify_calls:", HEAPIFY_CALLS, "comparisons:", HEAP_COMPARISONS, "swaps:", HEAP_SWAPS, "sifts:", HEAP_SIFTS)
     return values
 
-fn assert_sorted(label, observed, expected):
-    if len(observed) != len(expected):
-        print("FAIL", label, "length mismatch", len(observed), "expected", len(expected))
-        return
-    mut i = 0
-    mut ok = true
-    while i < len(observed):
-        if observed[i] != expected[i]:
-            ok = false
-        i = i + 1
-    if ok:
-        print(label, "sorted", observed)
-    else:
-        print("FAIL", label, "=>", observed, "expected", expected)
-
 // === Tests ===
 unsorted = [12, 11, 13, 5, 6, 7]
 expected_unsorted = [5, 6, 7, 11, 12, 13]
-assert_sorted("random", heap_sort("random", unsorted), expected_unsorted)
+if assert_eq("heap_sort random", heap_sort("random", unsorted), expected_unsorted):
+    print("ok", "heap_sort random")
 
 ascending = [1, 2, 3, 4, 5, 6]
-assert_sorted("already_sorted", heap_sort("already_sorted", ascending), ascending)
+if assert_eq("heap_sort already_sorted", heap_sort("already_sorted", ascending), ascending):
+    print("ok", "heap_sort already_sorted")
 
 reversed = [9, 7, 5, 3, 1, -1]
 expected_reversed = [-1, 1, 3, 5, 7, 9]
-assert_sorted("reversed", heap_sort("reversed", reversed), expected_reversed)
+if assert_eq("heap_sort reversed", heap_sort("reversed", reversed), expected_reversed):
+    print("ok", "heap_sort reversed")
 
 duplicates = [4, 10, 4, 8, 4, 6, 4]
 expected_duplicates = [4, 4, 4, 4, 6, 8, 10]
-assert_sorted("duplicates", heap_sort("duplicates", duplicates), expected_duplicates)
+if assert_eq("heap_sort duplicates", heap_sort("duplicates", duplicates), expected_duplicates):
+    print("ok", "heap_sort duplicates")
 
 negatives = [0, -2, -5, 3, 2, -1]
 expected_negatives = [-5, -2, -1, 0, 2, 3]
-assert_sorted("negatives", heap_sort("negatives", negatives), expected_negatives)
+if assert_eq("heap_sort negatives", heap_sort("negatives", negatives), expected_negatives):
+    print("ok", "heap_sort negatives")
 
 single = [42]
-assert_sorted("single", heap_sort("single", single), single)
+if assert_eq("heap_sort single", heap_sort("single", single), single):
+    print("ok", "heap_sort single")
 
 empty: [i32] = []
-assert_sorted("empty", heap_sort("empty", empty), [])
+if assert_eq("heap_sort empty", heap_sort("empty", empty), []):
+    print("ok", "heap_sort empty")
