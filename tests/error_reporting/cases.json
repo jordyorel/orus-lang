@@ -274,6 +274,25 @@
     ]
   },
   {
+    "name": "runtime_invalid_int_decimal",
+    "source": "runtime_invalid_int_decimal.orus",
+    "description": "Calling int() on a decimal string should suggest using float().",
+    "expected_exit": 70,
+    "expected_diagnostic_count": 1,
+    "expected_diagnostics": [
+      {
+        "category": "RUNTIME PANIC",
+        "message_contains": "decimals are not allowed",
+        "help_contains": "Ensure the text only contains digits",
+        "note_contains": "Only base-10 numbers are supported",
+        "location_contains": "runtime_invalid_int_decimal.orus:3:10"
+      }
+    ],
+    "expected": [
+      "int() argument must be an integer string (decimals are not allowed). Use float() to parse decimal values, got \"9.7\""
+    ]
+  },
+  {
     "name": "runtime_invalid_float_literal",
     "source": "runtime_invalid_float_literal.orus",
     "description": "Calling float() on a non-numeric string should surface a conversion runtime panic with guidance.",

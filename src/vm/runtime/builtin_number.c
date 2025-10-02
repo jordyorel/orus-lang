@@ -62,6 +62,21 @@ static void format_string_preview(const ObjString* string, char* buffer, size_t 
     }
 }
 
+static bool string_contains_decimal_hint(const ObjString* string) {
+    if (!string || !string->chars) {
+        return false;
+    }
+
+    for (int i = 0; i < string->length; i++) {
+        char c = string->chars[i];
+        if (c == '.' || c == 'e' || c == 'E') {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 static bool parse_int_string(const ObjString* string, int32_t* out_value, bool* out_overflow) {
     if (!string || !string->chars || !out_value || !out_overflow) {
         return false;
@@ -227,9 +242,16 @@ BuiltinParseResult builtin_parse_int(Value input, Value* out_value,
                 return BUILTIN_PARSE_OVERFLOW;
             }
 
-            write_message(message, message_size,
-                          "int() argument must be an integer string, got \"%s\"",
-                          preview);
+            if (string_contains_decimal_hint(string)) {
+                write_message(message, message_size,
+                              "int() argument must be an integer string (decimals are not allowed). "
+                              "Use float() to parse decimal values, got \"%s\"",
+                              preview);
+            } else {
+                write_message(message, message_size,
+                              "int() argument must be an integer string, got \"%s\"",
+                              preview);
+            }
             return BUILTIN_PARSE_INVALID;
         }
 
