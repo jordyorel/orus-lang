@@ -8,4 +8,6 @@ for value in alias:
     total = total + value
     seen = seen + 1
 
-print("phase3-range-alias", seen, total)
+assert_eq("phase3 iterator_range_alias seen", seen, 8)
+assert_eq("phase3 iterator_range_alias total", total, 28)
+print("phase3-range-alias-ok")

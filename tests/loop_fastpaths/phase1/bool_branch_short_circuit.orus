@@ -38,7 +38,10 @@ while or_gate or (or_idx < 5):
     if or_idx > 7:
         or_gate = false
 
-if hits != 4 or laps != 5 or and_hits != 4 or guard != 4 or or_ticks != 4 or or_idx != 8:
-    print("phase1-mismatch", hits, laps, and_hits, guard, or_ticks, or_idx)
-else:
-    print("phase1-ok")
+assert_eq("phase1 bool_branch_short_circuit hits", hits, 4)
+assert_eq("phase1 bool_branch_short_circuit laps", laps, 5)
+assert_eq("phase1 bool_branch_short_circuit and_hits", and_hits, 4)
+assert_eq("phase1 bool_branch_short_circuit guard", guard, 4)
+assert_eq("phase1 bool_branch_short_circuit or_ticks", or_ticks, 4)
+assert_eq("phase1 bool_branch_short_circuit or_idx", or_idx, 8)
+print("phase1-ok")

@@ -10,4 +10,6 @@ while idx < 4:
         continue
     idx = idx + 1
 
-print("phase5-ok", total, idx)
+assert_eq("phase5 telemetry_smoke total", total, 9)
+assert_eq("phase5 telemetry_smoke idx", idx, 4)
+print("phase5-ok")
