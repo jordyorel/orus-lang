@@ -1,13 +1,11 @@
-/*
- * Orus Language Project
- * ---------------------------------------------------------------------------
- * File: src/compiler/symbol_table.c
- * Author: Jordy Orel KONDA
- * Copyright (c) 2025 Jordy Orel KONDA
- * License: MIT License (see LICENSE file in the project root)
- * Description: Implements symbol table management for declarations, scopes, and
- *              resolution.
- */
+//  Orus Language Project
+//  ---------------------------------------------------------------------------
+//  File: src/compiler/symbol_table.c
+//  Author: Jordy Orel KONDA
+//  Copyright (c) 2022 Jordy Orel KONDA
+//  License: MIT License (see LICENSE file in the project root)
+//  Description: Implements symbol table management for declarations, scopes, and resolution.
+//  
 
 #include "compiler/symbol_table.h"
 #include <stdio.h>

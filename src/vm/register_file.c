@@ -1,13 +1,10 @@
-/*
- * Orus Language Project
- * ---------------------------------------------------------------------------
- * File: src/vm/register_file.c
- * Author: Jordy Orel KONDA
- * Copyright (c) 2025 Jordy Orel KONDA
- * License: MIT License (see LICENSE file in the project root)
- * Description: Implements the VM register file storing execution state for each
- *              frame.
- */
+// Orus Language Project
+// ---------------------------------------------------------------------------
+// File: src/vm/register_file.c
+// Author: Jordy Orel KONDA
+// Copyright (c) 2025 Jordy Orel KONDA
+// License: MIT License (see LICENSE file in the project root)
+// Description: Implements the VM register file storing execution state for each frame.
 
 // register_file.c - Register File Architecture Implementation
 // Implementation of hierarchical register windows with dynamic spilling
@@ -25,7 +22,7 @@
 bool is_spilled_register(uint16_t id);
 bool is_module_register(uint16_t id);
 
-// Phase 1: Internal fast register access with branch prediction hints (used by cache)
+// Internal fast register access with branch prediction hints (used by cache)
 Value* get_register_internal(RegisterFile* rf, uint16_t id) {
     // Fast path: Global registers (0-255)
     if (__builtin_expect(id < GLOBAL_REGISTERS, 1)) {
@@ -98,7 +95,7 @@ void set_register_internal(RegisterFile* rf, uint16_t id, Value value) {
         return;
     }
     
-    // Phase 3: Module registers (352-479)
+    // Module registers (352-479)
     if (rf->module_manager && is_module_register(id)) {
         uint8_t module_id = (id - MODULE_REG_START) / MODULE_REGISTERS;
         uint16_t reg_offset = (id - MODULE_REG_START) % MODULE_REGISTERS;
@@ -106,7 +103,7 @@ void set_register_internal(RegisterFile* rf, uint16_t id, Value value) {
         return;
     }
     
-    // Phase 2: Spilled registers (480+) - Store in HashMap
+    // Spilled registers (480+) - Store in HashMap
     if (rf->spilled_registers && is_spilled_register(id)) {
         SpillManager* spill_mgr = rf->spilled_registers;
         set_spill_register_value(spill_mgr, id, value);
@@ -117,7 +114,7 @@ void set_register_internal(RegisterFile* rf, uint16_t id, Value value) {
     rf->globals[id % GLOBAL_REGISTERS] = value;
 }
 
-// Phase 4: Cached register set function (public interface)
+// Cached register set function (public interface)
 void set_register(RegisterFile* rf, uint16_t id, Value value) {
     // Use cache if available, otherwise fall back to direct access
     if (rf->cache) {
@@ -127,7 +124,7 @@ void set_register(RegisterFile* rf, uint16_t id, Value value) {
     }
 }
 
-// Phase 1: Call frame management
+// Call frame management
 CallFrame* allocate_frame(RegisterFile* rf) {
     // Allocate new frame from heap (for now - could use frame pool later)
     CallFrame* frame = (CallFrame*)malloc(sizeof(CallFrame));
@@ -170,7 +167,7 @@ void deallocate_frame(RegisterFile* rf) {
     free(frame);
 }
 
-// Phase 1: Initialize register file
+// Initialize register file
 void init_register_file(RegisterFile* rf) {
     // Initialize global registers to NIL
     for (int i = 0; i < GLOBAL_REGISTERS; i++) {
@@ -186,37 +183,37 @@ void init_register_file(RegisterFile* rf) {
     rf->current_frame = NULL;
     rf->frame_stack = NULL;
     
-    // Phase 2: Initialize spill management
+    // Initialize spill management
     rf->spilled_registers = create_spill_manager();
     rf->metadata = NULL;  // TODO: Initialize metadata array if needed
     
-    // Phase 3: Initialize module management
+    // Initialize module management
     rf->module_manager = create_module_manager();
     
-    // Phase 4: Initialize register cache
+    // Initialize register cache
     rf->cache = NULL;  // Cache is created on-demand via enable_register_caching()
 }
 
-// Phase 1: Cleanup register file
+// Cleanup register file
 void free_register_file(RegisterFile* rf) {
     // Deallocate all frames
     while (rf->current_frame) {
         deallocate_frame(rf);
     }
     
-    // Phase 2: Free spill area
+    // Free spill area
     if (rf->spilled_registers) {
         free_spill_manager(rf->spilled_registers);
         rf->spilled_registers = NULL;
     }
     
-    // Phase 3: Free module management
+    // Free module management
     if (rf->module_manager) {
         free_module_manager(rf->module_manager);
         rf->module_manager = NULL;
     }
     
-    // Phase 4: Free register cache
+    // Free register cache
     if (rf->cache) {
         free_register_cache(rf->cache);
         rf->cache = NULL;
@@ -228,7 +225,7 @@ void free_register_file(RegisterFile* rf) {
     }
 }
 
-// Phase 1: Frame register allocation for compiler
+// Frame register allocation for compiler
 uint16_t allocate_frame_register(RegisterFile* rf) {
     if (!rf->current_frame) {
         // Allocate frame if none exists
@@ -248,7 +245,7 @@ uint16_t allocate_frame_register(RegisterFile* rf) {
     return reg_id;
 }
 
-// Phase 1: Temporary register allocation
+// Temporary register allocation
 uint16_t allocate_temp_register(RegisterFile* rf) {
     (void)rf; // Suppress unused parameter warning
     // Simple linear allocation for temps (could be more sophisticated)
@@ -261,7 +258,7 @@ uint16_t allocate_temp_register(RegisterFile* rf) {
     return TEMP_REG_START + next_temp++;
 }
 
-// Phase 1: Register type checking for debugging
+// Register type checking for debugging
 bool is_global_register(uint16_t id) {
     return id < FRAME_REG_START;
 }
@@ -282,7 +279,7 @@ bool is_spilled_register(uint16_t id) {
     return id >= SPILL_REG_START;
 }
 
-// Phase 2: Spilling functions implementation
+// Spilling functions implementation
 void spill_register(RegisterFile* rf, uint16_t id) {
     if (!rf->spilled_registers) return;
     
@@ -310,7 +307,7 @@ bool register_file_needs_spilling(RegisterFile* rf) {
     return needs_spilling(spill_mgr);
 }
 
-// Phase 2: Register pressure analysis (simple implementation)
+// Register pressure analysis (simple implementation)
 uint16_t allocate_spilled_register(RegisterFile* rf, Value value) {
     if (!rf->spilled_registers) return 0;
     
@@ -318,7 +315,7 @@ uint16_t allocate_spilled_register(RegisterFile* rf, Value value) {
     return spill_register_value(spill_mgr, value);
 }
 
-// Phase 2: Get spilling statistics
+// Get spilling statistics
 void get_register_file_stats(RegisterFile* rf, size_t* global_used, size_t* frame_used, size_t* temp_used, size_t* spilled_count) {
     if (global_used) {
         *global_used = 0;
@@ -346,7 +343,7 @@ void get_register_file_stats(RegisterFile* rf, size_t* global_used, size_t* fram
     }
 }
 
-// Phase 4: Cache integration functions
+// Cache integration functions
 void enable_register_caching(RegisterFile* rf) {
     if (!rf || rf->cache) return; // Already enabled
     

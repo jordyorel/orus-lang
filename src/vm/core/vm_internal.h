@@ -1,13 +1,11 @@
-/*
- * Orus Language Project
- * ---------------------------------------------------------------------------
- * File: src/vm/core/vm_internal.h
- * Author: Jordy Orel KONDA
- * Copyright (c) 2025 Jordy Orel KONDA
- * License: MIT License (see LICENSE file in the project root)
- * Description: Defines internal VM structures and helper macros shared by core
- *              components.
- */
+//  Orus Language Project
+//  ---------------------------------------------------------------------------
+//  File: src/vm/core/vm_internal.h
+//  Author: Jordy Orel KONDA
+//  Copyright (c) 2022 Jordy Orel KONDA
+//  License: MIT License (see LICENSE file in the project root)
+//  Description: Defines internal VM structures and helper macros shared by core components.
+
 
 // vm_internal.h - Shared internal helpers for the VM
 #ifndef VM_INTERNAL_H
@@ -18,9 +16,7 @@
 #include "public/common.h"
 #include "vm/vm_validation.h"
 
-// runtimeError is implemented in vm.c and used by validation helpers.
-// Declare it here so any internal VM module including this header has
-// access to the prototype without needing the dispatch headers.
+
 void runtimeError(ErrorType type, SrcLocation location, const char* format, ...);
 void vm_set_error_report_pending(bool pending);
 bool vm_get_error_report_pending(void);

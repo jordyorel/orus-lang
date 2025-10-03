@@ -1,13 +1,11 @@
-/*
- * Orus Language Project
- * ---------------------------------------------------------------------------
- * File: src/compiler/backend/codegen/codegen.c
- * Author: Jordy Orel KONDA
- * Copyright (c) 2025 Jordy Orel KONDA
- * License: MIT License (see LICENSE file in the project root)
- * Description: Implements the backend that lowers typed AST modules into executable
- *              Orus VM bytecode chunks.
- */
+//  Orus Language Project
+//  ---------------------------------------------------------------------------
+//  File: src/compiler/backend/codegen/codegen.c
+//  uthor: Jordy Orel KONDA
+//  Copyright (c) 2022 Jordy Orel KONDA
+//  License: MIT License (see LICENSE file in the project root)
+//  Description: Implements the backend that lowers typed AST modules into executable Orus VM bytecode chunks.
+
 
 #include "compiler/codegen/codegen.h"
 #include "compiler/codegen/peephole.h"

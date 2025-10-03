@@ -15,13 +15,6 @@
 #include "compiler/typed_ast.h"
 #include "compiler/compiler.h"
 
-// ===== PRODUCTION-READY CODE GENERATION =====
-// Leverages VM's 150+ specialized opcodes for optimal performance
-// Features:
-// - Type-specific instruction selection (OP_ADD_I32_TYPED vs OP_ADD_R)
-// - Efficient constant loading (OP_LOAD_I32_CONST vs OP_LOAD_CONST)
-// - Optimal register allocation utilizing 256 registers
-// - Comprehensive error handling and validation
 
 // Main code generation function
 bool generate_bytecode_from_ast(CompilerContext* ctx);

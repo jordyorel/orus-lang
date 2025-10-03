@@ -1,8 +1,8 @@
-// Phase 2 Bellman-Ford implementation for the algorithm stress-test suite.
+// Bellman-Ford implementation for the algorithm stress-test suite.
 // Iterative relaxation across an explicit edge list to surface negative edge
 // handling and early-out behaviour when no updates occur.
 
-print("== Phase 2: Bellman-Ford Shortest Paths (Edge Relaxation) Smoke ==")
+print("== Bellman-Ford Shortest Paths (Edge Relaxation) Smoke ==")
 
 global mut BELLMAN_RELAXATIONS = 0
 global mut BELLMAN_ITERATIONS = 0

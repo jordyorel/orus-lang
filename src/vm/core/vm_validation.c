@@ -1,12 +1,11 @@
-/*
- * Orus Language Project
- * ---------------------------------------------------------------------------
- * File: src/vm/core/vm_validation.c
- * Author: Jordy Orel KONDA
- * Copyright (c) 2025 Jordy Orel KONDA
- * License: MIT License (see LICENSE file in the project root)
- * Description: Validates VM state and bytecode invariants prior to execution.
- */
+//  Orus Language Project
+//  ---------------------------------------------------------------------------
+//  File: src/vm/core/vm_validation.c
+//  Author: Jordy Orel KONDA
+//  Copyright (c) 2022 Jordy Orel KONDA
+//  License: MIT License (see LICENSE file in the project root)
+//  Description: Validates VM state and bytecode invariants prior to execution.
+
 
 #include "vm_internal.h"
 #include "vm/vm_validation.h"

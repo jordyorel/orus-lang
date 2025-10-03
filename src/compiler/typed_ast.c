@@ -1,21 +1,16 @@
-/*
- * Orus Language Project
- * ---------------------------------------------------------------------------
- * File: src/compiler/typed_ast.c
- * Author: Jordy Orel KONDA
- * Copyright (c) 2025 Jordy Orel KONDA
- * License: MIT License (see LICENSE file in the project root)
- * Description: Builds and manipulates typed AST nodes during semantic analysis.
- */
+//  Orus Language Project
+//  ---------------------------------------------------------------------------
+//  File: src/compiler/typed_ast.c
+//  Author: Jordy Orel KONDA
+//  Copyright (c) 2024 Jordy Orel KONDA
+//  License: MIT License (see LICENSE file in the project root)
+//  Description: Builds and manipulates typed AST nodes during semantic analysis.
 
-/*
- * File: src/compiler/typed_ast.c
- * Typed AST implementation for Orus compiler
- *
- * This file implements the typed AST data structure that bridges
- * the gap between HM type inference and bytecode generation.
- * It provides functions to create, manipulate, and visualize typed AST nodes.
- */
+
+//  This file implements the typed AST data structure that bridges
+//  the gap between HM type inference and bytecode generation.
+//  It provides functions to create, manipulate, and visualize typed AST nodes.
+
 
 #include "compiler/typed_ast.h"
 

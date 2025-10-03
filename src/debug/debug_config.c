@@ -1,12 +1,10 @@
-/*
- * Orus Language Project
- * ---------------------------------------------------------------------------
- * File: src/debug/debug_config.c
- * Author: Jordy Orel KONDA
- * Copyright (c) 2025 Jordy Orel KONDA
- * License: MIT License (see LICENSE file in the project root)
- * Description: Implements debug configuration management helpers used across modules.
- */
+//  Orus Language Project
+//  ---------------------------------------------------------------------------
+//  File: src/debug/debug_config.c
+//  Author: Jordy Orel KONDA
+//  Copyright (c) 2022 Jordy Orel KONDA
+//  License: MIT License (see LICENSE file in the project root)
+//  Description: Implements debug configuration management helpers used across modules.
 
 #include "debug/debug_config.h"
 #include <stdarg.h>

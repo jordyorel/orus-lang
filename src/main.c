@@ -1,13 +1,10 @@
-/*
- * Orus Language Project
- * ---------------------------------------------------------------------------
- * File: src/main.c
- * Author: Jordy Orel KONDA
- * Copyright (c) 2025 Jordy Orel KONDA
- * License: MIT License (see LICENSE file in the project root)
- * Description: Defines the Orus CLI entry point, bootstrapping the VM and the
- *              interactive REPL.
- */
+//  Orus Language Project
+//  ---------------------------------------------------------------------------
+//  File: src/main.c
+//  Author: Jordy Orel KONDA
+//  Copyright (c) 2022 Jordy Orel KONDA
+//  License: MIT License (see LICENSE file in the project root)
+//  Description: Defines the Orus CLI entry point, bootstrapping the VM and the interactive REPL.
 
 // Orus Language Main Interpreter
 // This is the main entry point for the Orus programming language

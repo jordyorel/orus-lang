@@ -1,13 +1,11 @@
-/*
- * Orus Language Project
- * ---------------------------------------------------------------------------
- * File: src/vm/runtime/vm.c
- * Author: Jordy Orel KONDA
- * Copyright (c) 2025 Jordy Orel KONDA
- * License: MIT License (see LICENSE file in the project root)
- * Description: Initializes and drives the public VM runtime interface exposed to
- *              clients.
- */
+// Orus Language Project
+// ---------------------------------------------------------------------------
+// File: src/vm/runtime/vm.c
+// Author: Jordy Orel KONDA
+// Copyright (c) 2022 Jordy Orel KONDA
+// License: MIT License (see LICENSE file in the project root)
+// Description: Initializes and drives the public VM runtime interface exposed to clients.
+
 
 // register_vm.c - Register-based VM implementation
 #define _POSIX_C_SOURCE 200809L
@@ -19,7 +17,7 @@
 #include <string.h>
 #include <inttypes.h>
 
-// ✅ Phase 1: Auto-detect computed goto support
+// Auto-detect computed goto support
 #ifndef USE_COMPUTED_GOTO
   #if defined(__GNUC__) || defined(__clang__)
     #define USE_COMPUTED_GOTO 1
@@ -59,7 +57,6 @@ double get_time_vm(void) {
     #endif
 }
 
-// Global VM instance is defined in vm_core.c
 extern VM vm;
 
 #if USE_COMPUTED_GOTO
@@ -84,7 +81,6 @@ static bool collect_module_imports(ASTNode* ast, char*** out_names, int* out_cou
 static void free_module_imports(char** names, int count);
 static bool load_module_list(const char* current_path, char** module_names, int module_count);
 
-// Memory allocation handled in vm_memory.c
 
 // Value operations
 void printValue(Value value) {
@@ -222,17 +218,12 @@ bool valuesEqual(Value a, Value b) {
     }
 }
 
-// Type system moved to src/type/type_representation.c
 // Forward declarations for type system functions
 extern void init_extended_type_system(void);
 extern Type* get_primitive_type_cached(TypeKind kind);
 
 void initTypeSystem(void) {
-    // printf("[TYPE_SYSTEM_TRACE] initTypeSystem() starting\n");
-    // fflush(stdout);
     init_extended_type_system();
-    // printf("[TYPE_SYSTEM_TRACE] init_extended_type_system() completed\n");
-    // fflush(stdout);
 }
 
 Type* getPrimitiveType(TypeKind kind) {
@@ -251,11 +242,6 @@ void runtimeError(ErrorType type, SrcLocation location,
     vsnprintf(buffer, sizeof(buffer), format, args);
     va_end(args);
 
-    // DEBUG: Trace runtime errors to find the source
-    // fprintf(stderr, "[RUNTIME_ERROR_TRACE] runtimeError called: type=%d, message='%s'\n", type, buffer);
-    // fprintf(stderr, "[RUNTIME_ERROR_TRACE] Location: file=%s, line=%d, column=%d\n", 
-    //         location.file ? location.file : "NULL", location.line, location.column);
-    // fflush(stderr);
 
     if (location.file == NULL && vm.filePath) {
         location.file = vm.filePath;

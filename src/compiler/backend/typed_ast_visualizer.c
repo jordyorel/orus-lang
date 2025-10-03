@@ -1,28 +1,23 @@
-/*
- * Orus Language Project
- * ---------------------------------------------------------------------------
- * File: src/compiler/backend/typed_ast_visualizer.c
- * Author: Jordy Orel KONDA
- * Copyright (c) 2025 Jordy Orel KONDA
- * License: MIT License (see LICENSE file in the project root)
- * Description: Provides utilities to print and visualize typed AST nodes for
- *              debugging.
- */
+//  Orus Language Project
+//  ---------------------------------------------------------------------------
+//  File: src/compiler/backend/typed_ast_visualizer.c
+//  Author: Jordy Orel KONDA
+//  Copyright (c) 2025 Jordy Orel KONDA
+//  License: MIT License (see LICENSE file in the project root)
+//  Description: Provides utilities to print and visualize typed AST nodes for debugging.
 
-/*
- * File: src/compiler/backend/typed_ast_visualizer.c
- * Typed AST Visualization Tool for Orus Compiler
- * 
- * This tool outputs the typed AST in a human-readable, tree-like format
- * to aid debugging and verification of HM type inference results.
- * 
- * Features:
- * - Tree-like indented output showing AST structure
- * - Type annotations for each node
- * - Node metadata (constants, register hints, etc.)
- * - Optional detailed mode showing all attributes
- * - Color-coded output support (when terminal supports it)
- */
+
+//  Typed AST Visualization Tool for Orus Compiler
+//  This tool outputs the typed AST in a human-readable, tree-like format
+//  to aid debugging and verification of HM type inference results.
+//  
+//  Features:
+//  - Tree-like indented output showing AST structure
+//  - Type annotations for each node
+//  - Node metadata (constants, register hints, etc.)
+//  - Optional detailed mode showing all attributes
+//  - Color-coded output support (when terminal supports it)
+
 
 #include "compiler/typed_ast.h"
 #include "compiler/ast.h"

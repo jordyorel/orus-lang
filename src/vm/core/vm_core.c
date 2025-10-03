@@ -1,12 +1,11 @@
-/*
- * Orus Language Project
- * ---------------------------------------------------------------------------
- * File: src/vm/core/vm_core.c
- * Author: Jordy Orel KONDA
- * Copyright (c) 2025 Jordy Orel KONDA
- * License: MIT License (see LICENSE file in the project root)
- * Description: Implements the central VM execution loop and core runtime primitives.
- */
+//  Orus Language Project
+//  ---------------------------------------------------------------------------
+//  File: src/vm/core/vm_core.c
+//  Author: Jordy Orel KONDA
+//  Copyright (c) 2022 Jordy Orel KONDA
+//  License: MIT License (see LICENSE file in the project root)
+//  Description: Implements the central VM execution loop and core runtime primitives.
+//  
 
 // vm_core.c - VM initialization and core management
 #include "vm_internal.h"
@@ -21,23 +20,10 @@
 VM vm; // Global VM instance
 
 void initVM(void) {
-    // printf("[VM_CORE_TRACE] initVM() starting\n");
-    // fflush(stdout);
-    
-    // printf("[VM_CORE_TRACE] About to call initTypeSystem()\n");
-    // fflush(stdout);
     initTypeSystem();
-    // printf("[VM_CORE_TRACE] initTypeSystem() completed\n");
-    // fflush(stdout);
-    
-    // printf("[VM_CORE_TRACE] About to call initMemory()\n");
-    // fflush(stdout);
+
     initMemory();
-    // printf("[VM_CORE_TRACE] initMemory() completed\n");
-    // fflush(stdout);
-    
-    // printf("[VM_CORE_TRACE] About to call init_string_table()\n");
-    // fflush(stdout);
+
     if (globalStringTable.interned == NULL) {
         init_string_table(&globalStringTable);
     } else if (globalStringTable.threshold == 0) {
@@ -46,10 +32,7 @@ void initVM(void) {
         // prevent leaking the previously allocated hashmap backing store.
         globalStringTable.threshold = 32;
     }
-    // printf("[VM_CORE_TRACE] init_string_table() completed\n");
-    // fflush(stdout);
 
-    // Phase 1: Initialize new register file architecture
     init_register_file(&vm.register_file);
 
     // Legacy register initialization (for backward compatibility)

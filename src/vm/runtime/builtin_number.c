@@ -1,10 +1,9 @@
-/*
- * Orus Language Project
- * ---------------------------------------------------------------------------
- * File: src/vm/runtime/builtin_number.c
- * Author: JORDY OREL KONDA
- * Description: Implements numeric parsing helpers for builtin int() and float().
- */
+// Orus Language Project
+// ---------------------------------------------------------------------------
+// File: src/vm/runtime/builtin_number.c
+// Author: Jordy Orel KONDA
+// Description: Implements numeric parsing helpers for builtin int() and float().
+
 
 #include "runtime/builtins.h"
 

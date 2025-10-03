@@ -1,10 +1,8 @@
-/*
- * Orus Language Project
- * ---------------------------------------------------------------------------
- * File: src/vm/runtime/builtin_array_pop.c
- * Author: Jordy Orel KONDA
- * Description: Implements the builtin routine to pop values from arrays.
- */
+//  Orus Language Project
+//  ---------------------------------------------------------------------------
+//  File: src/vm/runtime/builtin_array_pop.c
+//  Author: Jordy Orel KONDA
+//  Description: Implements the builtin routine to pop values from arrays.
 
 #include "runtime/builtins.h"
 #include "runtime/memory.h"

@@ -1,8 +1,7 @@
-/*
- * WebAssembly bridge exposing Orus runtime helpers to the generated
- * Emscripten module. These functions are auto-exported and consumed by the
- * playground loader at runtime.
- */
+//  WebAssembly bridge exposing Orus runtime helpers to the generated
+//  Emscripten module. These functions are auto-exported and consumed by the
+//  playground loader at runtime.
+
 
 #include <stdbool.h>
 #include <stddef.h>

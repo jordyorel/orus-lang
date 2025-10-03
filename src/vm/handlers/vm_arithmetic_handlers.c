@@ -1,23 +1,12 @@
-/*
- * Orus Language Project
- * ---------------------------------------------------------------------------
- * File: src/vm/handlers/vm_arithmetic_handlers.c
- * Author: Jordy Orel KONDA
- * Copyright (c) 2025 Jordy Orel KONDA
- * License: MIT License (see LICENSE file in the project root)
- * Description: Implements arithmetic opcode handlers invoked by the VM dispatcher.
- */
+// Orus Language Project
+// ---------------------------------------------------------------------------
+// File: src/vm/handlers/vm_arithmetic_handlers.c
+// Author: Jordy Orel KONDA
+// Copyright (c) 2023 Jordy Orel KONDA
+// License: MIT License (see LICENSE file in the project root)
+// Description: Implements arithmetic opcode handlers invoked by the VM dispatcher.
 
-/*
- * File: src/vm/handlers/vm_arithmetic_handlers.c
- * High-performance arithmetic opcode handlers for the Orus VM
- * 
- * Design Philosophy:
- * - Static inline functions for zero-cost abstraction
- * - Preserve computed-goto dispatch performance
- * - Clean separation of opcode implementation from dispatch logic
- * - Maintain exact same behavior as original macros
- */
+
 
 #include "vm/vm_opcode_handlers.h"
 #include "vm/vm_dispatch.h"

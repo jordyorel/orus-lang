@@ -1,12 +1,11 @@
-/*
- * Orus Language Project
- * ---------------------------------------------------------------------------
- * File: src/vm/runtime/vm_loop_fastpaths.c
- * Author: Jordy Orel KONDA
- * Copyright (c) 2025 Jordy Orel KONDA
- * License: MIT License (see LICENSE file in the project root)
- * Description: Implements optimized fast-path loops for hot opcode sequences.
- */
+// Orus Language Project
+// ---------------------------------------------------------------------------
+// File: src/vm/runtime/vm_loop_fastpaths.c
+// Author: Jordy Orel KONDA
+// Copyright (c) 2025 Jordy Orel KONDA
+// License: MIT License (see LICENSE file in the project root)
+// Description: Implements optimized fast-path loops for hot opcode sequences.
+
 
 #include "vm/vm_loop_fastpaths.h"
 #include "vm/vm_comparison.h"

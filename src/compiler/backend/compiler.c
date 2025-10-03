@@ -1,13 +1,10 @@
-/*
- * Orus Language Project
- * ---------------------------------------------------------------------------
- * File: src/compiler/backend/compiler.c
- * Author: Jordy Orel KONDA
- * Copyright (c) 2025 Jordy Orel KONDA
- * License: MIT License (see LICENSE file in the project root)
- * Description: Coordinates the backend compilation pipeline, wiring analysis,
- *              optimization, and code generation stages.
- */
+//  Orus Language Project
+//  ---------------------------------------------------------------------------
+//  File: src/compiler/backend/compiler.c
+//  Author: Jordy Orel KONDA
+//  Copyright (c) 2023 Jordy Orel KONDA
+//  License: MIT License (see LICENSE file in the project root)
+//  Description: Coordinates the backend compilation pipeline, wiring analysis, optimization, and code generation stages.
 
 // compiler.c - Multi-pass compiler pipeline coordinator
 #include "compiler/compiler.h"

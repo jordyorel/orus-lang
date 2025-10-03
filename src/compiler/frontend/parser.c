@@ -1,13 +1,11 @@
-/*
- * Orus Language Project
- * ---------------------------------------------------------------------------
- * File: src/compiler/frontend/parser.c
- * Author: Jordy Orel KONDA
- * Copyright (c) 2025 Jordy Orel KONDA
- * License: MIT License (see LICENSE file in the project root)
- * Description: Implements the recursive-descent parser that produces AST structures
- *              from tokens.
- */
+//  Orus Language Project
+//  ---------------------------------------------------------------------------
+//  File: src/compiler/frontend/parser.c
+//  Author: Jordy Orel KONDA
+//  Copyright (c) 2022 Jordy Orel KONDA
+//  License: MIT License (see LICENSE file in the project root)
+//  Description: Implements the recursive-descent parser that produces AST structures from tokens.
+//  
 
 // Orus Language Compiler - Parser Implementation
 
@@ -26,8 +24,7 @@
 #include <stdio.h>
 #include <ctype.h>
 
-// ArenaBlock and Arena are now defined in parser.h
-// This eliminates the redefinition error
+
 
 // Parser recursion depth tracking
 #define MAX_RECURSION_DEPTH 1000

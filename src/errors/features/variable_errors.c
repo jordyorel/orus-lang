@@ -1,13 +1,11 @@
-/*
- * Orus Language Project
- * ---------------------------------------------------------------------------
- * File: src/errors/features/variable_errors.c
- * Author: Jordy Orel KONDA
- * Copyright (c) 2025 Jordy Orel KONDA
- * License: MIT License (see LICENSE file in the project root)
- * Description: Implements diagnostics for variable binding, lifetime, and scope
- *              errors.
- */
+//  Orus Language Project
+//  ---------------------------------------------------------------------------
+//  File: src/errors/features/variable_errors.c
+//  Author: Jordy Orel KONDA
+//  Copyright (c) 2025 Jordy Orel KONDA
+//  License: MIT License (see LICENSE file in the project root)
+//  Description: Implements diagnostics for variable binding, lifetime, and scope errors.
+
 
 #include "errors/features/variable_errors.h"
 #include "errors/error_interface.h"

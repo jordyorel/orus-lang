@@ -1,13 +1,11 @@
-/*
- * Orus Language Project
- * ---------------------------------------------------------------------------
- * File: src/vm/dispatch/vm_dispatch_goto.c
- * Author: Jordy Orel KONDA
- * Copyright (c) 2025 Jordy Orel KONDA
- * License: MIT License (see LICENSE file in the project root)
- * Description: Provides the goto-threaded dispatch implementation optimized for GCC
- *              and Clang.
- */
+//  Orus Language Project
+//  ---------------------------------------------------------------------------
+//  File: src/vm/dispatch/vm_dispatch_goto.c
+//  Author: Jordy Orel KONDA
+//  Copyright (c) 2023 Jordy Orel KONDA
+//  License: MIT License (see LICENSE file in the project root)
+//  Description: Provides the goto-threaded dispatch implementation optimized for GCC and Clang.
+
 
 #include "vm/vm_dispatch.h"
 #include "vm/spill_manager.h"
@@ -464,7 +462,6 @@ InterpretResult vm_run_dispatch(void) {
     // printf("[DISPATCH_TRACE] About to start bytecode execution loop");
     fflush(stdout);
 
-    // Phase 1.1 Optimization: Fast DISPATCH macro for production builds
     // Macros are defined in vm_dispatch.h to avoid redefinition warnings
     
     // Profiling hook: Initialize timing for first instruction
@@ -510,8 +507,6 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t globalIndex = READ_BYTE();
             uint8_t reg = READ_BYTE();
             
-            // CREATIVE SOLUTION: Type safety enforcement with intelligent literal coercion
-            // This maintains single-pass design while being flexible for compatible types
             Value valueToStore = vm_get_register_safe(reg);
             Type* declaredType = vm.globalTypes[globalIndex];
             

@@ -1,13 +1,11 @@
-/*
- * Orus Language Project
- * ---------------------------------------------------------------------------
- * File: src/errors/features/control_flow_errors.c
- * Author: Jordy Orel KONDA
- * Copyright (c) 2025 Jordy Orel KONDA
- * License: MIT License (see LICENSE file in the project root)
- * Description: Implements diagnostics for control-flow related errors encountered
- *              during compilation and execution.
- */
+//  Orus Language Project
+//  ---------------------------------------------------------------------------
+//  File: src/errors/features/control_flow_errors.c
+//  Author: Jordy Orel KONDA
+//  Copyright (c) 2024 Jordy Orel KONDA
+//  License: MIT License (see LICENSE file in the project root)
+//  Description: Implements diagnostics for control-flow related errors encountered during compilation and execution.
+
 
 #include "errors/features/control_flow_errors.h"
 #include "errors/error_interface.h"
@@ -15,8 +13,7 @@
 #include <string.h>
 #include <limits.h>
 
-// Control flow error definitions with friendly, mentor-like messages
-// Note: Reserved for future error infrastructure integration
+
 static const FeatureErrorInfo control_flow_errors[] __attribute__((unused)) = {
     {
         .code = E1401_BREAK_OUTSIDE_LOOP,

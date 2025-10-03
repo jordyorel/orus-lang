@@ -1,12 +1,11 @@
-/*
- * Orus Language Project
- * ---------------------------------------------------------------------------
- * File: src/vm/dispatch/vm_dispatch_switch.c
- * Author: Jordy Orel KONDA
- * Copyright (c) 2025 Jordy Orel KONDA
- * License: MIT License (see LICENSE file in the project root)
- * Description: Provides the switch-based dispatch implementation for portable builds.
- */
+// Orus Language Project
+// ---------------------------------------------------------------------------
+// File: src/vm/dispatch/vm_dispatch_switch.c
+// Author: Jordy Orel KONDA
+// Copyright (c) 2022 Jordy Orel KONDA
+// License: MIT License (see LICENSE file in the project root)
+// Description: Provides the switch-based dispatch implementation for portable builds.
+
 
 #include "vm/vm_dispatch.h"
 #include "vm/spill_manager.h"

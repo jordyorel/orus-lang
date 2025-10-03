@@ -1,22 +1,19 @@
-/*
- * Orus Language Project
- * ---------------------------------------------------------------------------
- * File: src/type/type_inference.c
- * Author: Jordy Orel KONDA
- * Copyright (c) 2025 Jordy Orel KONDA
- * License: MIT License (see LICENSE file in the project root)
- * Description: Performs type inference over AST nodes using the Orus type system.
- */
 
-/*
- * File: src/type/type_inference.c
- * A sophisticated Hindley-Milner type inference (Algorithm W) for Orus
- * Features:
- *  - Full let-polymorphism with generalization and instantiation
- *  - Union-find based type variables for efficient unification
- *  - Constraint-based solving with error reporting
- *  - Separate TypeVar and Type constructors, using arena allocation
- */
+//  Orus Language Project
+//  ---------------------------------------------------------------------------
+//  File: src/type/type_inference.c
+//  Author: Jordy Orel KONDA
+//  Copyright (c) 2025 Jordy Orel KONDA
+//  License: MIT License (see LICENSE file in the project root)
+//  Description: Performs type inference over AST nodes using the Orus type system.
+
+//  Hindley-Milner type inference (Algorithm W) for Orus
+//  Features:
+//  - Full let-polymorphism with generalization and instantiation
+//  - Union-find based type variables for efficient unification
+//  - Constraint-based solving with error reporting
+//  - Separate TypeVar and Type constructors, using arena allocation
+
 
 #include <stdarg.h>
 #include <stdio.h>

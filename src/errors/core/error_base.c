@@ -1,13 +1,12 @@
-/*
- * Orus Language Project
- * ---------------------------------------------------------------------------
- * File: src/errors/core/error_base.c
- * Author: Jordy Orel KONDA
- * Copyright (c) 2025 Jordy Orel KONDA
- * License: MIT License (see LICENSE file in the project root)
- * Description: Provides the foundational error type implementation and formatting
- *              helpers.
- */
+
+//  Orus Language Project
+//  ---------------------------------------------------------------------------
+//  File: src/errors/core/error_base.c
+//  Author: Jordy Orel KONDA
+//  Copyright (c) 2025 Jordy Orel KONDA
+//  License: MIT License (see LICENSE file in the project root)
+//  Description: Provides the foundational error type implementation and formatting helpers.
+
 
 #include "errors/error_interface.h"
 #include "errors/error_types.h"

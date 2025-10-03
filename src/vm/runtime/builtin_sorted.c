@@ -1,11 +1,10 @@
-/*
- * Orus Language Project
- * ---------------------------------------------------------------------------
- * File: src/vm/runtime/builtin_sorted.c
- * Author: JORDY OREL KONDA
- * Description: Implements the sorted() builtin that returns a sorted copy of
- *              an array.
- */
+
+// Orus Language Project
+// ---------------------------------------------------------------------------
+// File: src/vm/runtime/builtin_sorted.c
+// Author: Jordy Orel KONDA
+// Description: Implements the sorted() builtin that returns a sorted copy of an array.
+
 
 #include "runtime/builtins.h"
 #include "runtime/memory.h"

@@ -1,10 +1,9 @@
-/*
- * Orus Language Project
- * ---------------------------------------------------------------------------
- * File: src/vm/runtime/builtin_type_common.h
- * Author: JORDY OREL KONDA
- * Description: Shared helpers for builtin type inspection routines.
- */
+// Orus Language Project
+// ---------------------------------------------------------------------------
+// File: src/vm/runtime/builtin_type_common.h
+// Author: JORDY OREL KONDA
+// Description: Shared helpers for builtin type inspection routines.
+
 
 #ifndef ORUS_BUILTIN_TYPE_COMMON_H
 #define ORUS_BUILTIN_TYPE_COMMON_H
