@@ -33,8 +33,6 @@ struct DebugConfig;
 typedef struct {
     // Runtime behavior
     bool trace_execution;          // Enable execution tracing (-t, --trace)
-    bool trace_typed_fallbacks;    // Emit typed loop fallback telemetry
-    bool disable_inc_typed_fastpath; // Disable i32 typed increment fast path
     bool debug_mode;              // Enable debug mode (-d, --debug)
     bool verbose;                 // Enable verbose output (-v, --verbose)
     bool quiet;                   // Suppress non-essential output (-q, --quiet)
@@ -136,8 +134,6 @@ void config_save_to_file(const OrusConfig* config, const char* filename);
 // Environment variable names
 #define ORUS_CONFIG_FILE "ORUS_CONFIG"
 #define ORUS_TRACE "ORUS_TRACE"
-#define ORUS_TRACE_TYPED_FALLBACKS "ORUS_TRACE_TYPED_FALLBACKS"
-#define ORUS_DISABLE_INC_TYPED_FASTPATH "ORUS_DISABLE_INC_TYPED_FASTPATH"
 #define ORUS_DEBUG "ORUS_DEBUG"
 #define ORUS_VERBOSE "ORUS_VERBOSE"
 #define ORUS_QUIET "ORUS_QUIET"

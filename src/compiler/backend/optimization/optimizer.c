@@ -8,7 +8,6 @@
 
 #include "compiler/optimization/optimizer.h"
 #include "compiler/optimization/constantfold.h"
-#include "compiler/optimization/licm.h"
 #include "runtime/memory.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -31,7 +30,7 @@ OptimizationContext* init_optimization_context(void) {
     ctx->enable_constant_folding = true;
     ctx->enable_dead_code_elimination = false; // Future phase
     ctx->enable_common_subexpression = false;  // Future phase
-    ctx->enable_loop_invariant_code_motion = true;
+    ctx->enable_loop_invariant_code_motion = false;
     
     // Initialize analysis structures (for future advanced features)
     ctx->constants = NULL;
@@ -79,9 +78,7 @@ TypedASTNode* optimize_typed_ast(TypedASTNode* input_ast, OptimizationContext* c
     }
     
     // Phase 2: Loop Invariant Code Motion
-    if (ctx->enable_loop_invariant_code_motion) {
-        apply_loop_invariant_code_motion(input_ast, ctx);
-    }
+    (void)ctx; // Loop optimization hooks removed; keep signature stable for now.
 
     // Phase 3: Dead Code Elimination (Future)
     if (ctx->enable_dead_code_elimination) {

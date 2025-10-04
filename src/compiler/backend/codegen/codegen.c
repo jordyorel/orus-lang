@@ -5744,7 +5744,6 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
         set_location_from_node(ctx, while_stmt);
         int inc_cmp_offset = ctx->bytecode ? ctx->bytecode->count : 0;
         emit_byte_to_buffer(ctx->bytecode, OP_INC_CMP_JMP);
-        bytecode_mark_monotonic_range(ctx->bytecode, inc_cmp_offset);
         emit_byte_to_buffer(ctx->bytecode, (uint8_t)fused_loop_reg);
         emit_byte_to_buffer(ctx->bytecode, (uint8_t)(fused_limit_temp_is_temp ? fused_limit_temp_reg : fused_limit_reg));
         int back_off = loop_start_fused - (ctx->bytecode->count + 2);
@@ -6219,7 +6218,6 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
         set_location_from_node(ctx, for_stmt);
         int inc_cmp_offset = ctx->bytecode ? ctx->bytecode->count : 0;
         emit_byte_to_buffer(ctx->bytecode, OP_INC_CMP_JMP);
-        bytecode_mark_monotonic_range(ctx->bytecode, inc_cmp_offset);
         emit_byte_to_buffer(ctx->bytecode, (uint8_t)loop_var_reg);
         emit_byte_to_buffer(ctx->bytecode, (uint8_t)limit_reg_used);
         // back offset is relative to address after the 2-byte offset we emit now
@@ -6878,8 +6876,6 @@ void finalize_functions_to_vm(CompilerContext* ctx) {
         chunk->lines = func_chunk->count > 0 ? malloc(sizeof(int) * func_chunk->count) : NULL;
         chunk->columns = func_chunk->count > 0 ? malloc(sizeof(int) * func_chunk->count) : NULL;
         chunk->files = func_chunk->count > 0 ? malloc(sizeof(const char*) * func_chunk->count) : NULL;
-        chunk->monotonic_range_flags =
-            func_chunk->count > 0 ? malloc(sizeof(uint8_t) * func_chunk->count) : NULL;
         if (chunk->lines && func_chunk->source_lines) {
             memcpy(chunk->lines, func_chunk->source_lines, sizeof(int) * func_chunk->count);
         }
@@ -6893,13 +6889,6 @@ void finalize_functions_to_vm(CompilerContext* ctx) {
                 chunk->files[j] = NULL;
             }
         }
-        if (chunk->monotonic_range_flags && func_chunk->monotonic_range_flags) {
-            memcpy(chunk->monotonic_range_flags, func_chunk->monotonic_range_flags,
-                   sizeof(uint8_t) * func_chunk->count);
-        } else if (chunk->monotonic_range_flags) {
-            memset(chunk->monotonic_range_flags, 0, sizeof(uint8_t) * func_chunk->count);
-        }
-
         // Copy constants from main context
         if (ctx->constants && ctx->constants->count > 0) {
             chunk->constants.count = ctx->constants->count;

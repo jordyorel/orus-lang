@@ -183,7 +183,6 @@ typedef struct {
     int* lines;
     int* columns;
     const char** files;
-    uint8_t* monotonic_range_flags;
     struct {
         int count;
         int capacity;
@@ -1040,112 +1039,6 @@ typedef enum {
     REG_TYPE_HEAP
 } RegisterType;
 
-typedef enum {
-    TYPED_ITER_NONE = 0,
-    TYPED_ITER_RANGE_I64,
-    TYPED_ITER_ARRAY_SLICE
-} TypedIteratorKind;
-
-typedef struct {
-    TypedIteratorKind kind;
-    union {
-        struct {
-            int64_t current;
-            int64_t end;
-            int64_t step;
-        } range_i64;
-        struct {
-            ObjArray* array;
-            uint32_t index;
-        } array;
-    } data;
-} TypedIteratorDescriptor;
-
-// Loop telemetry counters for typed fast paths
-typedef enum {
-    LOOP_TRACE_TYPED_HIT = 0,
-    LOOP_TRACE_TYPED_MISS,
-    LOOP_TRACE_TYPE_MISMATCH,
-    LOOP_TRACE_OVERFLOW_GUARD,
-    LOOP_TRACE_BRANCH_FAST_HIT,
-    LOOP_TRACE_BRANCH_FAST_MISS,
-    LOOP_TRACE_INC_FAST_HIT,
-    LOOP_TRACE_INC_FAST_MISS,
-    LOOP_TRACE_INC_OVERFLOW_BAILOUT,
-    LOOP_TRACE_INC_TYPE_INSTABILITY,
-    LOOP_TRACE_ITER_SAVED_ALLOCATIONS,
-    LOOP_TRACE_ITER_FALLBACK,
-    LOOP_TRACE_LICM_GUARD_FUSION,
-    LOOP_TRACE_LICM_GUARD_DEMOTION,
-    LOOP_TRACE_BRANCH_CACHE_HIT,
-    LOOP_TRACE_BRANCH_CACHE_MISS,
-    LOOP_TRACE_KIND_COUNT
-} LoopTraceKind;
-
-typedef struct {
-    uint64_t typed_hit;
-    uint64_t typed_miss;
-    uint64_t boxed_type_mismatch;
-    uint64_t boxed_overflow_guard;
-    uint64_t typed_branch_fast_hits;
-    uint64_t typed_branch_fast_misses;
-    uint64_t inc_fast_hits;
-    uint64_t inc_fast_misses;
-    uint64_t inc_overflow_bailouts;
-    uint64_t inc_type_instability;
-    uint64_t iter_allocations_saved;
-    uint64_t iter_fallbacks;
-    uint64_t licm_guard_fusions;
-    uint64_t licm_guard_demotions;
-    uint64_t loop_branch_cache_hits;
-    uint64_t loop_branch_cache_misses;
-} LoopTraceCounters;
-
-// Profiling counters
-typedef struct {
-    uint64_t instruction_counts[VM_DISPATCH_TABLE_SIZE];
-    LoopTraceCounters loop_trace;
-} VMProfile;
-
-#define LOOP_BRANCH_CACHE_CAPACITY 128
-#define LOOP_BRANCH_CACHE_BUCKET_SIZE 4
-#define LOOP_BRANCH_CACHE_BUCKET_COUNT \
-    (LOOP_BRANCH_CACHE_CAPACITY / LOOP_BRANCH_CACHE_BUCKET_SIZE)
-
-#if LOOP_BRANCH_CACHE_BUCKET_COUNT == 0
-#error "LOOP_BRANCH_CACHE_BUCKET_COUNT must be greater than zero"
-#endif
-
-#if (LOOP_BRANCH_CACHE_CAPACITY % LOOP_BRANCH_CACHE_BUCKET_SIZE) != 0
-#error "Loop branch cache capacity must be divisible by bucket size"
-#endif
-
-typedef struct {
-    bool valid;
-    uint16_t loop_id;
-    uint16_t predicate_reg;
-    uint8_t predicate_type;
-    uint32_t guard_generation;
-} LoopBranchCacheEntry;
-
-typedef struct {
-    LoopBranchCacheEntry slots[LOOP_BRANCH_CACHE_BUCKET_SIZE];
-} LoopBranchCacheBucket;
-
-typedef struct {
-    LoopBranchCacheBucket buckets[LOOP_BRANCH_CACHE_BUCKET_COUNT];
-    uint32_t guard_generations[REGISTER_COUNT];
-} LoopBranchCache;
-
-// Runtime configuration toggles
-typedef struct {
-    bool trace_typed_fallbacks;
-    bool enable_bool_branch_fastpath;
-    bool disable_inc_typed_fastpath;
-    bool force_boxed_iterators;
-    bool enable_licm_typed_metadata;
-} VMRuntimeOptions;
-
 // Phase 1: Register access functions (forward declarations)
 // These are implemented in register_file.c
 
@@ -1159,9 +1052,6 @@ typedef struct {
     
     // Typed registers for performance optimization
     TypedRegisters typed_regs;
-
-    // Typed iterator descriptors
-    TypedIteratorDescriptor typed_iterators[REGISTER_COUNT];
 
     // Call frames
     CallFrame frames[FRAMES_MAX];
@@ -1217,10 +1107,6 @@ typedef struct {
 
     double lastExecutionTime;
 
-    VMProfile profile;
-
-    LoopBranchCache branch_cache;
-
     // Configuration
     bool trace;
     const char* stdPath;
@@ -1229,7 +1115,6 @@ typedef struct {
     bool suppressWarnings;
     bool promotionHints;
     bool isShuttingDown;  // Flag to indicate VM is in cleanup/shutdown phase
-    VMRuntimeOptions config;
     
     // Call frame stack pointers
     CallFrame* callFrames;     // Array of call frames (for legacy compatibility)
@@ -1239,69 +1124,6 @@ typedef struct {
 
 // Global VM instance
 extern VM vm;
-
-void vm_reset_loop_trace(void);
-void vm_dump_loop_trace(FILE* out);
-
-static inline void vm_trace_loop_event(LoopTraceKind kind) {
-    if (!vm.config.trace_typed_fallbacks) {
-        return;
-    }
-
-    switch (kind) {
-        case LOOP_TRACE_TYPED_HIT:
-            vm.profile.loop_trace.typed_hit++;
-            break;
-        case LOOP_TRACE_TYPED_MISS:
-            vm.profile.loop_trace.typed_miss++;
-            break;
-        case LOOP_TRACE_TYPE_MISMATCH:
-            vm.profile.loop_trace.boxed_type_mismatch++;
-            break;
-        case LOOP_TRACE_OVERFLOW_GUARD:
-            vm.profile.loop_trace.boxed_overflow_guard++;
-            break;
-        case LOOP_TRACE_BRANCH_FAST_HIT:
-            vm.profile.loop_trace.typed_branch_fast_hits++;
-            break;
-        case LOOP_TRACE_BRANCH_FAST_MISS:
-            vm.profile.loop_trace.typed_branch_fast_misses++;
-            break;
-        case LOOP_TRACE_INC_FAST_HIT:
-            vm.profile.loop_trace.inc_fast_hits++;
-            break;
-        case LOOP_TRACE_INC_FAST_MISS:
-            vm.profile.loop_trace.inc_fast_misses++;
-            break;
-        case LOOP_TRACE_INC_OVERFLOW_BAILOUT:
-            vm.profile.loop_trace.inc_overflow_bailouts++;
-            break;
-        case LOOP_TRACE_INC_TYPE_INSTABILITY:
-            vm.profile.loop_trace.inc_type_instability++;
-            break;
-        case LOOP_TRACE_ITER_SAVED_ALLOCATIONS:
-            vm.profile.loop_trace.iter_allocations_saved++;
-            break;
-        case LOOP_TRACE_ITER_FALLBACK:
-            vm.profile.loop_trace.iter_fallbacks++;
-            break;
-        case LOOP_TRACE_LICM_GUARD_FUSION:
-            vm.profile.loop_trace.licm_guard_fusions++;
-            break;
-        case LOOP_TRACE_LICM_GUARD_DEMOTION:
-            vm.profile.loop_trace.licm_guard_demotions++;
-            break;
-        case LOOP_TRACE_BRANCH_CACHE_HIT:
-            vm.profile.loop_trace.loop_branch_cache_hits++;
-            break;
-        case LOOP_TRACE_BRANCH_CACHE_MISS:
-            vm.profile.loop_trace.loop_branch_cache_misses++;
-            break;
-        case LOOP_TRACE_KIND_COUNT:
-        default:
-            break;
-    }
-}
 
 // Interpretation results
 typedef enum {

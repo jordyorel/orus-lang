@@ -66,12 +66,6 @@ void config_reset_to_defaults(OrusConfig* config) {
     
     // Runtime behavior
     config->trace_execution = false;
-#ifdef VM_TRACE_TYPED_FALLBACKS
-    config->trace_typed_fallbacks = true;
-#else
-    config->trace_typed_fallbacks = false;
-#endif
-    config->disable_inc_typed_fastpath = false;
     config->debug_mode = false;
     config->verbose = false;
     config->quiet = false;
@@ -151,16 +145,6 @@ bool config_load_from_env(OrusConfig* config) {
     if ((env_val = getenv(ORUS_TRACE))) {
         config->trace_execution = (strcmp(env_val, "1") == 0 ||
                                   strcasecmp(env_val, "true") == 0);
-    }
-
-    if ((env_val = getenv(ORUS_TRACE_TYPED_FALLBACKS))) {
-        config->trace_typed_fallbacks = (strcmp(env_val, "1") == 0 ||
-                                         strcasecmp(env_val, "true") == 0);
-    }
-
-    if ((env_val = getenv(ORUS_DISABLE_INC_TYPED_FASTPATH))) {
-        config->disable_inc_typed_fastpath =
-            (strcmp(env_val, "1") == 0 || strcasecmp(env_val, "true") == 0);
     }
 
     if ((env_val = getenv(ORUS_DEBUG))) {
@@ -281,14 +265,6 @@ bool config_parse_args(OrusConfig* config, int argc, const char* argv[]) {
         // Runtime flags
         if (strcmp(arg, "-t") == 0 || strcmp(arg, "--trace") == 0) {
             config->trace_execution = true;
-        } else if (strcmp(arg, "--trace-typed-fallbacks") == 0) {
-            config->trace_typed_fallbacks = true;
-        } else if (strcmp(arg, "--no-trace-typed-fallbacks") == 0) {
-            config->trace_typed_fallbacks = false;
-        } else if (strcmp(arg, "--disable-inc-typed-fastpath") == 0) {
-            config->disable_inc_typed_fastpath = true;
-        } else if (strcmp(arg, "--enable-inc-typed-fastpath") == 0) {
-            config->disable_inc_typed_fastpath = false;
         } else if (strcmp(arg, "-d") == 0 || strcmp(arg, "--debug") == 0) {
             config->debug_mode = true;
         } else if (strcmp(arg, "--verbose") == 0) {
@@ -522,10 +498,6 @@ void config_print_help(const char* program_name) {
     printf("  -h, --help              Show this help message\n");
     printf("  -v, --version           Show version information\n");
     printf("  -t, --trace             Enable execution tracing\n");
-    printf("  --trace-typed-fallbacks Enable loop typed fallback telemetry\n");
-    printf("      --no-trace-typed-fallbacks Disable loop typed fallback telemetry\n");
-    printf("  --disable-inc-typed-fastpath Disable i32 typed increment fast path\n");
-    printf("      --enable-inc-typed-fastpath Re-enable i32 typed increment fast path\n");
     printf("  -d, --debug             Enable debug mode\n");
     printf("  --verbose               Enable verbose output\n");
     printf("  -q, --quiet             Suppress non-essential output\n");
@@ -585,7 +557,6 @@ void config_print_help(const char* program_name) {
     printf("  ORUS_MAX_RECURSION, ORUS_REGISTER_COUNT, ORUS_STACK_SIZE\n");
     printf("  ORUS_GC_ENABLED, ORUS_GC_THRESHOLD, ORUS_GC_STRATEGY\n");
     printf("  ORUS_ERROR_FORMAT, ORUS_ERROR_COLORS, ORUS_OPTIMIZATION_LEVEL\n");
-    printf("  ORUS_DISABLE_INC_TYPED_FASTPATH\n");
     printf("  ORUS_DEBUG, ORUS_DEBUG_COLORS, ORUS_DEBUG_TIMESTAMPS\n");
 }
 
@@ -691,9 +662,6 @@ void config_print_current(const OrusConfig* config) {
     
     printf("Runtime Behavior:\n");
     printf("  Trace Execution: %s\n", config->trace_execution ? "enabled" : "disabled");
-    printf("  Trace Typed Fallbacks: %s\n", config->trace_typed_fallbacks ? "enabled" : "disabled");
-    printf("  Typed INC Fast Path: %s\n",
-           config->disable_inc_typed_fastpath ? "disabled" : "enabled");
     printf("  Debug Mode: %s\n", config->debug_mode ? "enabled" : "disabled");
     printf("  Verbose: %s\n", config->verbose ? "enabled" : "disabled");
     printf("  Quiet: %s\n", config->quiet ? "enabled" : "disabled");
@@ -745,9 +713,6 @@ void config_save_to_file(const OrusConfig* config, const char* filename) {
     
     fprintf(file, "[runtime]\n");
     fprintf(file, "trace_execution = %s\n", config->trace_execution ? "true" : "false");
-    fprintf(file, "trace_typed_fallbacks = %s\n", config->trace_typed_fallbacks ? "true" : "false");
-    fprintf(file, "disable_inc_typed_fastpath = %s\n",
-            config->disable_inc_typed_fastpath ? "true" : "false");
     fprintf(file, "debug_mode = %s\n", config->debug_mode ? "true" : "false");
     fprintf(file, "verbose = %s\n", config->verbose ? "true" : "false");
     fprintf(file, "quiet = %s\n", config->quiet ? "true" : "false");
@@ -831,10 +796,6 @@ bool config_load_from_file(OrusConfig* config, const char* filename) {
         if (strcmp(section, "runtime") == 0) {
             if (strcmp(key, "trace_execution") == 0) {
                 config->trace_execution = (strcmp(value, "true") == 0);
-            } else if (strcmp(key, "trace_typed_fallbacks") == 0) {
-                config->trace_typed_fallbacks = (strcmp(value, "true") == 0);
-            } else if (strcmp(key, "disable_inc_typed_fastpath") == 0) {
-                config->disable_inc_typed_fastpath = (strcmp(value, "true") == 0);
             } else if (strcmp(key, "debug_mode") == 0) {
                 config->debug_mode = (strcmp(value, "true") == 0);
             } else if (strcmp(key, "verbose") == 0) {

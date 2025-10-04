@@ -98,10 +98,6 @@ static void runFile(const char* path) {
         exit(70);
     }
     
-    if (vm.config.trace_typed_fallbacks) {
-        vm_reset_loop_trace();
-    }
-
     InterpretResult result = interpret(source);
     
     // Clean up error reporting before freeing source
@@ -109,11 +105,6 @@ static void runFile(const char* path) {
     free(source);
     vm.filePath = NULL;
     
-    if (vm.config.trace_typed_fallbacks) {
-        vm_dump_loop_trace(stderr);
-        fflush(stderr);
-    }
-
     if (result == INTERPRET_COMPILE_ERROR) {
         fprintf(stderr, "Compilation failed for \"%s\".\n", path);
         if (vm.devMode) {
@@ -215,8 +206,6 @@ int main(int argc, const char* argv[]) {
     // Apply configuration to VM
     vm.trace = config->trace_execution;
     vm.devMode = config->debug_mode;
-    vm.config.trace_typed_fallbacks = config->trace_typed_fallbacks;
-    vm.config.disable_inc_typed_fastpath = config->disable_inc_typed_fastpath;
     
     // Configure VM profiling based on command line options
     if (config->vm_profiling_enabled) {

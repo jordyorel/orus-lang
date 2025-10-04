@@ -109,7 +109,6 @@ void handle_add_i32_typed(void) {
     int32_t left_val;
     bool left_typed = false;
     if (!read_i32_operand(left, &left_val, &left_typed)) {
-        vm_trace_loop_event(LOOP_TRACE_TYPE_MISMATCH);
         runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i32");
         return;
     }
@@ -117,15 +116,12 @@ void handle_add_i32_typed(void) {
     int32_t right_val;
     bool right_typed = false;
     if (!read_i32_operand(right, &right_val, &right_typed)) {
-        vm_trace_loop_event(LOOP_TRACE_TYPE_MISMATCH);
         runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i32");
         return;
     }
 
     if (left_typed && right_typed) {
-        vm_trace_loop_event(LOOP_TRACE_TYPED_HIT);
     } else {
-        vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
     }
 
     vm_store_i32_typed_hot(dst, left_val + right_val);
@@ -139,7 +135,6 @@ void handle_sub_i32_typed(void) {
     int32_t left_val;
     bool left_typed = false;
     if (!read_i32_operand(left, &left_val, &left_typed)) {
-        vm_trace_loop_event(LOOP_TRACE_TYPE_MISMATCH);
         runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i32");
         return;
     }
@@ -147,15 +142,12 @@ void handle_sub_i32_typed(void) {
     int32_t right_val;
     bool right_typed = false;
     if (!read_i32_operand(right, &right_val, &right_typed)) {
-        vm_trace_loop_event(LOOP_TRACE_TYPE_MISMATCH);
         runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i32");
         return;
     }
 
     if (left_typed && right_typed) {
-        vm_trace_loop_event(LOOP_TRACE_TYPED_HIT);
     } else {
-        vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
     }
 
     vm_store_i32_typed_hot(dst, left_val - right_val);
@@ -169,7 +161,6 @@ void handle_mul_i32_typed(void) {
     int32_t left_val;
     bool left_typed = false;
     if (!read_i32_operand(left, &left_val, &left_typed)) {
-        vm_trace_loop_event(LOOP_TRACE_TYPE_MISMATCH);
         runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i32");
         return;
     }
@@ -177,15 +168,12 @@ void handle_mul_i32_typed(void) {
     int32_t right_val;
     bool right_typed = false;
     if (!read_i32_operand(right, &right_val, &right_typed)) {
-        vm_trace_loop_event(LOOP_TRACE_TYPE_MISMATCH);
         runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i32");
         return;
     }
 
     if (left_typed && right_typed) {
-        vm_trace_loop_event(LOOP_TRACE_TYPED_HIT);
     } else {
-        vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
     }
 
     vm_store_i32_typed_hot(dst, left_val * right_val);
@@ -199,7 +187,6 @@ void handle_div_i32_typed(void) {
     int32_t left_val;
     bool left_typed = false;
     if (!read_i32_operand(left, &left_val, &left_typed)) {
-        vm_trace_loop_event(LOOP_TRACE_TYPE_MISMATCH);
         runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i32");
         return;
     }
@@ -207,7 +194,6 @@ void handle_div_i32_typed(void) {
     int32_t right_val;
     bool right_typed = false;
     if (!read_i32_operand(right, &right_val, &right_typed)) {
-        vm_trace_loop_event(LOOP_TRACE_TYPE_MISMATCH);
         runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i32");
         return;
     }
@@ -218,9 +204,7 @@ void handle_div_i32_typed(void) {
     }
 
     if (left_typed && right_typed) {
-        vm_trace_loop_event(LOOP_TRACE_TYPED_HIT);
     } else {
-        vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
     }
 
     vm_store_i32_typed_hot(dst, left_val / right_val);
@@ -234,7 +218,6 @@ void handle_mod_i32_typed(void) {
     int32_t left_val;
     bool left_typed = false;
     if (!read_i32_operand(left, &left_val, &left_typed)) {
-        vm_trace_loop_event(LOOP_TRACE_TYPE_MISMATCH);
         runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i32");
         return;
     }
@@ -242,7 +225,6 @@ void handle_mod_i32_typed(void) {
     int32_t right_val;
     bool right_typed = false;
     if (!read_i32_operand(right, &right_val, &right_typed)) {
-        vm_trace_loop_event(LOOP_TRACE_TYPE_MISMATCH);
         runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i32");
         return;
     }
@@ -253,9 +235,7 @@ void handle_mod_i32_typed(void) {
     }
 
     if (left_typed && right_typed) {
-        vm_trace_loop_event(LOOP_TRACE_TYPED_HIT);
     } else {
-        vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
     }
 
     vm_store_i32_typed_hot(dst, left_val % right_val);

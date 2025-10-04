@@ -60,7 +60,7 @@ if assert_eq("while_basic test1_sum", test1_sum, 3):
     print("ok", "test1_sum", test1_sum)
 if assert_eq("while_basic test2_iterations", test2_iterations, 0):
     print("ok", "test2_iterations", test2_iterations)
-if assert_eq("while_basic test2_executed", test2_executed, true):
+if assert_eq("while_basic test2_executed", test2_executed, false):
     print("ok", "test2_executed", test2_executed)
 if assert_eq("while_basic test3_iterations", test3_iterations, 2):
     print("ok", "test3_iterations", test3_iterations)

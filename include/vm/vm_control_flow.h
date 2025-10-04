@@ -12,7 +12,6 @@
 #define ORUS_VM_CONTROL_FLOW_H
 
 #include "vm/vm_comparison.h"
-#include "vm/vm_loop_fastpaths.h"
 
 static inline bool CF_JUMP(uint16_t offset) {
     // If VM is shutting down or chunk is invalid, ignore jump
@@ -61,20 +60,19 @@ static inline bool CF_JUMP_IF_NOT(uint8_t reg, uint16_t offset) {
         return true;  // Silently ignore jump during cleanup
     }
 
-    bool fast_condition = false;
-    VMBoolBranchResult branch_result = vm_try_branch_bool_fast_cold(reg, &fast_condition);
-    if (branch_result == VM_BOOL_BRANCH_RESULT_TYPED ||
-        branch_result == VM_BOOL_BRANCH_RESULT_BOXED) {
-        if (!fast_condition) {
-            if (!CF_JUMP(offset)) {
-                return false;
-            }
-        }
-        return true;
+    Value condition = vm_get_register_safe(reg);
+    if (!IS_BOOL(condition)) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Condition must be boolean");
+        return false;
     }
 
-    runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Condition must be boolean");
-    return false;
+    if (!AS_BOOL(condition)) {
+        if (!CF_JUMP(offset)) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 static inline bool CF_JUMP_IF(uint8_t reg, uint16_t offset) {
@@ -83,55 +81,35 @@ static inline bool CF_JUMP_IF(uint8_t reg, uint16_t offset) {
         return true;  // Silently ignore jump during cleanup
     }
 
-    bool fast_condition = false;
-    VMBoolBranchResult branch_result = vm_try_branch_bool_fast_cold(reg, &fast_condition);
-    if (branch_result == VM_BOOL_BRANCH_RESULT_TYPED ||
-        branch_result == VM_BOOL_BRANCH_RESULT_BOXED) {
-        if (fast_condition) {
-            if (!CF_JUMP(offset)) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Condition must be boolean");
-    return false;
-}
-
-static inline bool CF_BRANCH_TYPED(uint16_t loop_id, uint8_t reg, uint16_t offset) {
-    if (vm.isShuttingDown || !vm.chunk || !vm.chunk->code) {
-        return true;
-    }
-
-    bool cached_condition = false;
-    if (vm_branch_cache_try_get(loop_id, reg, &cached_condition)) {
-        if (!cached_condition) {
-            if (!CF_JUMP(offset)) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    bool evaluated_condition = false;
-    VMBoolBranchResult branch_result = vm_try_branch_bool_fast_cold(reg, &evaluated_condition);
-    if (branch_result == VM_BOOL_BRANCH_RESULT_FAIL) {
+    Value condition = vm_get_register_safe(reg);
+    if (!IS_BOOL(condition)) {
         runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Condition must be boolean");
         return false;
     }
 
-    if (branch_result == VM_BOOL_BRANCH_RESULT_BOXED) {
-        vm_cache_bool_typed(reg, evaluated_condition);
+    if (AS_BOOL(condition)) {
+        if (!CF_JUMP(offset)) {
+            return false;
+        }
     }
 
-    if (vm.config.enable_bool_branch_fastpath &&
-        (branch_result == VM_BOOL_BRANCH_RESULT_BOXED ||
-         branch_result == VM_BOOL_BRANCH_RESULT_TYPED)) {
-        vm_branch_cache_store(loop_id, reg);
+    return true;
+}
+
+static inline bool CF_BRANCH_TYPED(uint16_t loop_id, uint8_t reg, uint16_t offset) {
+    (void)loop_id;
+
+    if (vm.isShuttingDown || !vm.chunk || !vm.chunk->code) {
+        return true;
     }
 
-    if (!evaluated_condition) {
+    Value condition = vm_get_register_safe(reg);
+    if (!IS_BOOL(condition)) {
+        runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Condition must be boolean");
+        return false;
+    }
+
+    if (!AS_BOOL(condition)) {
         if (!CF_JUMP(offset)) {
             return false;
         }
@@ -150,30 +128,13 @@ static inline bool CF_JUMP_IF_NOT_I32_TYPED(uint8_t left_reg, uint8_t right_reg,
     bool left_typed = vm_try_read_i32_typed(left_reg, &left_i32);
     bool right_typed = vm_try_read_i32_typed(right_reg, &right_i32);
 
-    if (left_typed && right_typed) {
-        vm_trace_loop_event(LOOP_TRACE_TYPED_HIT);
-        vm_trace_loop_event(LOOP_TRACE_BRANCH_FAST_HIT);
-        if (vm.config.enable_licm_typed_metadata) {
-            vm_trace_loop_event(LOOP_TRACE_LICM_GUARD_FUSION);
-        }
-    } else {
+    if (!left_typed || !right_typed) {
         Value left_value = vm_get_register_safe(left_reg);
         Value right_value = vm_get_register_safe(right_reg);
 
         if (!IS_I32(left_value) || !IS_I32(right_value)) {
-            vm_trace_loop_event(LOOP_TRACE_TYPE_MISMATCH);
-            vm_trace_loop_event(LOOP_TRACE_BRANCH_FAST_MISS);
-            if (vm.config.enable_licm_typed_metadata) {
-                vm_trace_loop_event(LOOP_TRACE_LICM_GUARD_DEMOTION);
-            }
             runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i32");
             return false;
-        }
-
-        vm_trace_loop_event(LOOP_TRACE_TYPED_MISS);
-        vm_trace_loop_event(LOOP_TRACE_BRANCH_FAST_MISS);
-        if (vm.config.enable_licm_typed_metadata) {
-            vm_trace_loop_event(LOOP_TRACE_LICM_GUARD_DEMOTION);
         }
 
         left_i32 = AS_I32(left_value);

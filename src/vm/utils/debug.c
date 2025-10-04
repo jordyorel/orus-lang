@@ -546,10 +546,5 @@ int disassembleInstruction(Chunk* chunk, int offset) {
 
 void dumpProfile(void) {
     printf("=== VM Instruction Profile ===\n");
-    for (int i = 0; i < VM_DISPATCH_TABLE_SIZE; i++) {
-        if (vm.profile.instruction_counts[i] > 0) {
-            printf("%3d: %llu\n", i,
-                   (unsigned long long)vm.profile.instruction_counts[i]);
-        }
-    }
+    printf("Profiling is disabled in the baseline interpreter.\n");
 }
