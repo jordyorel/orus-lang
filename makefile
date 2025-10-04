@@ -356,13 +356,22 @@ _test-run: $(ORUS)
 				echo ""; \
 				echo "\033[36m=== $$current_dir Tests ===\033[0m"; \
 			fi; \
-			printf "Testing: $$test_file ... "; \
-			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
-				printf "\033[32mPASS\033[0m\n"; \
-				passed=$$((passed + 1)); \
-			else \
-				printf "\033[31mFAIL\033[0m\n"; \
-				failed=$$((failed + 1)); \
+                        stdin_file="$${test_file%.orus}.stdin"; \
+                        printf "Testing: $$test_file ... "; \
+                        if [ -f "$$stdin_file" ]; then \
+                                if ./$(ORUS) "$$test_file" < "$$stdin_file" >/dev/null 2>&1; then \
+                                        printf "\033[32mPASS\033[0m\n"; \
+                                        passed=$$((passed + 1)); \
+                                else \
+                                        printf "\033[31mFAIL\033[0m\n"; \
+                                        failed=$$((failed + 1)); \
+                                fi; \
+                        elif ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
+                                printf "\033[32mPASS\033[0m\n"; \
+                                passed=$$((passed + 1)); \
+                        else \
+                                printf "\033[31mFAIL\033[0m\n"; \
+                                failed=$$((failed + 1)); \
 			fi; \
 		done; \
 	done; \
