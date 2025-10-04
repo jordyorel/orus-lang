@@ -541,6 +541,7 @@ typedef enum {
     OP_U64_TO_BOOL_R,
     OP_F64_TO_BOOL_R,
     OP_I32_TO_U32_R,
+    OP_I64_TO_U32_R,
     OP_U32_TO_I32_R,
     OP_F64_TO_U32_R,
     OP_U32_TO_F64_R,

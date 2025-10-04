@@ -1023,6 +1023,21 @@ InterpretResult vm_run_dispatch(void) {
                     break;
                 }
 
+                case OP_I64_TO_U32_R: {
+                    uint8_t dst = READ_BYTE();
+                    uint8_t src = READ_BYTE();
+                    READ_BYTE(); // Skip third operand (unused)
+                    if (!IS_I64(vm_get_register_safe(src))) {
+                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i64");
+                    }
+                    int64_t val = AS_I64(vm_get_register_safe(src));
+                    if (val < 0 || val > (int64_t)UINT32_MAX) {
+                        VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "i64 value out of u32 range");
+                    }
+                    vm_set_register_safe(dst, U32_VAL((uint32_t)val));
+                    break;
+                }
+
                 case OP_I64_TO_BOOL_R: {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();

@@ -1367,6 +1367,7 @@ uint8_t get_cast_opcode(TypeKind from_type, TypeKind to_type) {
             case TYPE_I32: return OP_I64_TO_I32_R;
             case TYPE_F64: return OP_I64_TO_F64_R;
             case TYPE_U64: return OP_I64_TO_U64_R;
+            case TYPE_U32: return OP_I64_TO_U32_R;
             default: break;
         }
     }
@@ -3910,6 +3911,8 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                 cast_opcode = OP_I64_TO_F64_R;
             } else if (source_type->kind == TYPE_I64 && target_type->kind == TYPE_U64) {
                 cast_opcode = OP_I64_TO_U64_R;
+            } else if (source_type->kind == TYPE_I64 && target_type->kind == TYPE_U32) {
+                cast_opcode = OP_I64_TO_U32_R;
             } else if (source_type->kind == TYPE_I64 && target_type->kind == TYPE_BOOL) {
                 cast_opcode = OP_I64_TO_BOOL_R;
             } else if (source_type->kind == TYPE_F64 && target_type->kind == TYPE_I32) {
