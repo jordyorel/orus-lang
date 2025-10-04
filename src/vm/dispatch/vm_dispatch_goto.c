@@ -296,6 +296,7 @@ InterpretResult vm_run_dispatch(void) {
         vm_dispatch_table[OP_I32_TO_BOOL_R] = &&LABEL_OP_I32_TO_BOOL_R;
         vm_dispatch_table[OP_U32_TO_I32_R] = &&LABEL_OP_U32_TO_I32_R;
         vm_dispatch_table[OP_I64_TO_I32_R] = &&LABEL_OP_I64_TO_I32_R;
+        vm_dispatch_table[OP_I64_TO_U32_R] = &&LABEL_OP_I64_TO_U32_R;
         vm_dispatch_table[OP_I64_TO_BOOL_R] = &&LABEL_OP_I64_TO_BOOL_R;
         vm_dispatch_table[OP_ADD_F64_R] = &&LABEL_OP_ADD_F64_R;
         vm_dispatch_table[OP_SUB_F64_R] = &&LABEL_OP_SUB_F64_R;
@@ -1487,6 +1488,22 @@ InterpretResult vm_run_dispatch(void) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i64");
             }
             vm_set_register_safe(dst, I32_VAL((int32_t)AS_I64(src_val)));
+            DISPATCH();
+        }
+
+    LABEL_OP_I64_TO_U32_R: {
+            uint8_t dst = READ_BYTE();
+            uint8_t src = READ_BYTE();
+             (void)READ_BYTE(); // Skip third operand (unused)
+            Value src_val = vm_get_register_safe(src);
+            if (!IS_I64(src_val)) {
+                VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i64");
+            }
+            int64_t val = AS_I64(src_val);
+            if (val < 0 || val > (int64_t)UINT32_MAX) {
+                VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "i64 value out of u32 range");
+            }
+            vm_set_register_safe(dst, U32_VAL((uint32_t)val));
             DISPATCH();
         }
 
