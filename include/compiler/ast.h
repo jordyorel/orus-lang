@@ -242,6 +242,8 @@ struct ASTNode {
             bool arrayHasLength;
             int arrayLength;
             char* arrayLengthIdentifier;
+            ASTNode** genericArgs;
+            int genericArgCount;
         } typeAnnotation;
         struct {
             char* label;
@@ -311,6 +313,8 @@ struct ASTNode {
             bool isPublic;         // Whether the enum is public
             EnumVariant* variants; // Declared variants
             int variantCount;      // Number of variants
+            char** genericParams;  // Optional generic parameter names
+            int genericParamCount; // Number of generic parameters
         } enumDecl;
         struct {
             ASTNode* value;           // Enum expression being tested

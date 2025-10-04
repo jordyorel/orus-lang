@@ -2499,9 +2499,10 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_TO_STRING_R: {
         uint8_t dst = READ_BYTE();
         uint8_t src = READ_BYTE();
+        (void)READ_BYTE();  // Padding byte emitted by generic instruction helper
         Value val = vm_get_register_safe(src);
         char buffer[64];
-        
+
         if (IS_I32(val)) {
             snprintf(buffer, sizeof(buffer), "%d", AS_I32(val));
         } else if (IS_I64(val)) {

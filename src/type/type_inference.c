@@ -1214,15 +1214,29 @@ static bool is_integer_type(Type* type) {
 
 static bool is_cast_allowed(Type* from, Type* to) {
     if (!from || !to) return false;
-    
+
     // Same types are always allowed
     if (type_equals_extended(from, to)) return true;
-    
+
+    if (to->kind == TYPE_STRING) {
+        if (from->kind == TYPE_STRING) {
+            return true;
+        }
+        if (is_numeric_type(from) || from->kind == TYPE_BOOL) {
+            return true;
+        }
+        return false;
+    }
+
+    if (from->kind == TYPE_STRING) {
+        return false;
+    }
+
     // Allowed numeric conversions
     if (is_numeric_type(from) && is_numeric_type(to)) {
         return true;
     }
-    
+
     // Bool conversions
     if (from->kind == TYPE_BOOL || to->kind == TYPE_BOOL) {
         // Only bool <-> numeric conversions are allowed, not string
@@ -1230,14 +1244,7 @@ static bool is_cast_allowed(Type* from, Type* to) {
             return true;
         }
     }
-    
-    // String conversions - very restricted
-    if (from->kind == TYPE_STRING || to->kind == TYPE_STRING) {
-        // Only allow string -> string (identity) or between string and character types
-        // No automatic conversions from string to numbers or bools
-        return false;
-    }
-    
+
     return false;
 }
 
@@ -1796,11 +1803,18 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                 return getPrimitiveType(TYPE_BOOL);
             } else if (strcmp(node->binary.op, "and") == 0 ||
                        strcmp(node->binary.op, "or") == 0) {
-                // Logical operations: both operands should be bool, result is bool
                 DEBUG_TYPE_INFERENCE_PRINT("Processing logical operator '%s'", node->binary.op);
                 DEBUG_TYPE_INFERENCE_PRINT("Left operand type: %s (kind=%d)", getTypeName(l->kind), (int)l->kind);
                 DEBUG_TYPE_INFERENCE_PRINT("Right operand type: %s (kind=%d)", getTypeName(r->kind), (int)r->kind);
-                
+
+                // Bitwise form for integers (currently limited to i32 until the VM grows
+                // additional typed opcodes). Keep the operands in the integer domain so
+                // downstream code generation can select OP_AND_I32_R / OP_OR_I32_R.
+                if (l->kind == TYPE_I32 && r->kind == TYPE_I32) {
+                    return getPrimitiveType(TYPE_I32);
+                }
+
+                // Logical operations: both operands should be bool, result is bool
                 if (l->kind != TYPE_BOOL) {
                     DEBUG_TYPE_INFERENCE_PRINT("Error: Left operand is not bool");
                     report_type_mismatch(node->location, "bool", getTypeName(l->kind));
@@ -1838,12 +1852,12 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             if (init_type && anno_type) {
                 // Rust-like behavior: Allow literals to adapt to declared type
                 bool can_adapt = false;
-                
+
                 // Check if initializer is a literal that can adapt to the declared type
                 if (node->varDecl.initializer && node->varDecl.initializer->type == NODE_LITERAL) {
                     can_adapt = true; // Literals can always adapt to declared types
                 }
-                
+
                 if (can_adapt || unify(init_type, anno_type)) {
                     var_type = anno_type; // Use declared type, not inferred type
                 } else {
@@ -1885,7 +1899,6 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
         }
         case NODE_ASSIGN: {
             Type* value_type = algorithm_w(env, node->assign.value);
-            
             // Always create the variable, even if type inference fails
             if (node->assign.name) {
                 Type* assigned_type;
@@ -2049,6 +2062,19 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             if (is_member_call) {
                 is_method_call = node->call.callee->member.isMethod;
                 is_instance_method = node->call.callee->member.isInstanceMethod;
+            }
+
+            if (is_member_call && node->call.callee->member.resolvesToEnumVariant &&
+                node->call.callee->member.enumVariantArity == 0) {
+                if (node->call.argCount != 0) {
+                    report_argument_count_mismatch(node->location,
+                                                   node->call.callee->member.member,
+                                                   0,
+                                                   node->call.argCount);
+                    set_type_error();
+                    return NULL;
+                }
+                return callee_type;
             }
 
             Type** arg_types = NULL;
@@ -2225,10 +2251,16 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                 return getPrimitiveType(TYPE_F64);
             } else if (strcmp(type_name, "bool") == 0) {
                 return getPrimitiveType(TYPE_BOOL);
-            } else if (strcmp(type_name, "string") == 0) {
+            } else if (strcmp(type_name, "string") == 0 || strcmp(type_name, "str") == 0) {
                 return getPrimitiveType(TYPE_STRING);
             } else if (strcmp(type_name, "void") == 0) {
                 return getPrimitiveType(TYPE_VOID);
+            }
+
+            TypeScheme* generic_scheme = type_env_lookup(env, type_name);
+            if (generic_scheme && generic_scheme->type) {
+                node->dataType = generic_scheme->type;
+                return generic_scheme->type;
             }
 
             Type* struct_type = findStructType(type_name);
@@ -2266,13 +2298,18 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             if (!is_cast_allowed(source_type, target_type)) {
                 const char* source_name = getTypeName(source_type->kind);
                 const char* target_name = getTypeName(target_type->kind);
-                
+
                 // Report cast error
                 report_type_mismatch(node->location, target_name, source_name);
                 set_type_error();
                 return NULL;
             }
-            
+
+            node->dataType = target_type;
+            if (node->cast.expression) {
+                node->cast.expression->dataType = source_type;
+            }
+
             return target_type;
         }
         case NODE_TERNARY: {
@@ -2506,6 +2543,28 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             bool creating_new = (existing == NULL);
             Variant* variants = NULL;
 
+            TypeEnv* enum_env = env;
+            if (node->enumDecl.genericParamCount > 0 && node->enumDecl.genericParams) {
+                TypeEnv* new_env = type_env_new(env);
+                if (new_env) {
+                    enum_env = new_env;
+                    for (int g = 0; g < node->enumDecl.genericParamCount; g++) {
+                        const char* generic_name = node->enumDecl.genericParams[g];
+                        if (!generic_name) {
+                            continue;
+                        }
+                        TypeScheme* generic_scheme = type_arena_alloc(sizeof(TypeScheme));
+                        if (!generic_scheme) {
+                            continue;
+                        }
+                        generic_scheme->type = getPrimitiveType(TYPE_ANY);
+                        generic_scheme->bound_vars = NULL;
+                        generic_scheme->bound_count = 0;
+                        type_env_define(enum_env, generic_name, generic_scheme);
+                    }
+                }
+            }
+
             if (node->enumDecl.variantCount > 0) {
                 variants = calloc((size_t)node->enumDecl.variantCount, sizeof(Variant));
                 if (!variants) {
@@ -2535,7 +2594,7 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                     ASTNode* typeAnno = node->enumDecl.variants[i].fields[j].typeAnnotation;
                     Type* fieldType = NULL;
                     if (typeAnno) {
-                        fieldType = algorithm_w(env, typeAnno);
+                        fieldType = algorithm_w(enum_env, typeAnno);
                         if (!fieldType) {
                             if (fieldTypes) free(fieldTypes);
                             if (fieldNames) {
@@ -3623,20 +3682,43 @@ void populate_ast_types(ASTNode* node, TypeEnv* env) {
                 }
             }
             break;
-        case NODE_ENUM_DECL:
+        case NODE_ENUM_DECL: {
+            TypeEnv* enum_env = env;
+            if (node->enumDecl.genericParamCount > 0 && node->enumDecl.genericParams) {
+                TypeEnv* new_env = type_env_new(env);
+                if (new_env) {
+                    enum_env = new_env;
+                    for (int g = 0; g < node->enumDecl.genericParamCount; g++) {
+                        const char* generic_name = node->enumDecl.genericParams[g];
+                        if (!generic_name) {
+                            continue;
+                        }
+                        TypeScheme* generic_scheme = type_arena_alloc(sizeof(TypeScheme));
+                        if (!generic_scheme) {
+                            continue;
+                        }
+                        generic_scheme->type = getPrimitiveType(TYPE_ANY);
+                        generic_scheme->bound_vars = NULL;
+                        generic_scheme->bound_count = 0;
+                        type_env_define(enum_env, generic_name, generic_scheme);
+                    }
+                }
+            }
+
             if (node->enumDecl.variantCount > 0 && node->enumDecl.variants) {
                 for (int i = 0; i < node->enumDecl.variantCount; i++) {
                     if (node->enumDecl.variants[i].fieldCount > 0 &&
                         node->enumDecl.variants[i].fields) {
                         for (int j = 0; j < node->enumDecl.variants[i].fieldCount; j++) {
                             if (node->enumDecl.variants[i].fields[j].typeAnnotation) {
-                                populate_ast_types(node->enumDecl.variants[i].fields[j].typeAnnotation, env);
+                                populate_ast_types(node->enumDecl.variants[i].fields[j].typeAnnotation, enum_env);
                             }
                         }
                     }
                 }
             }
             break;
+        }
         case NODE_STRUCT_LITERAL:
             if (node->structLiteral.fieldCount > 0 && node->structLiteral.fields) {
                 for (int i = 0; i < node->structLiteral.fieldCount; i++) {

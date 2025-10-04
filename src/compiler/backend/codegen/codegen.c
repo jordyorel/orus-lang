@@ -29,6 +29,22 @@
 #include <stdlib.h>
 #include <string.h>
 
+static bool type_is_numeric(const Type* type) {
+    if (!type) {
+        return false;
+    }
+    switch (type->kind) {
+        case TYPE_I32:
+        case TYPE_I64:
+        case TYPE_U32:
+        case TYPE_U64:
+        case TYPE_F64:
+            return true;
+        default:
+            return false;
+    }
+}
+
 static Symbol* register_variable(CompilerContext* ctx, SymbolTable* scope,
                                  const char* name, int reg, Type* type,
                                  bool is_mutable, bool declared_mutable,
@@ -1220,12 +1236,14 @@ uint8_t select_optimal_opcode(const char* op, Type* type) {
     if (reg_type == REG_TYPE_I32) {
         DEBUG_CODEGEN_PRINT("Handling REG_TYPE_I32 arithmetic operation: %s", op);
         
-        // Arithmetic operators
+        // Arithmetic and bitwise operators
         if (strcmp(op, "+") == 0) return OP_ADD_I32_TYPED;
         if (strcmp(op, "-") == 0) return OP_SUB_I32_TYPED;
         if (strcmp(op, "*") == 0) return OP_MUL_I32_TYPED;
         if (strcmp(op, "/") == 0) return OP_DIV_I32_TYPED;
         if (strcmp(op, "%") == 0) return OP_MOD_I32_TYPED;
+        if (strcmp(op, "and") == 0) return OP_AND_I32_R;
+        if (strcmp(op, "or") == 0) return OP_OR_I32_R;
         
         // Comparison operators (result is boolean)
         if (strcmp(op, "<") == 0) return OP_LT_I32_TYPED;
@@ -3925,8 +3943,22 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                 cast_opcode = OP_U64_TO_U32_R;
             } else if (source_type->kind == TYPE_U64 && target_type->kind == TYPE_BOOL) {
                 cast_opcode = OP_U64_TO_BOOL_R;
+            } else if (target_type->kind == TYPE_STRING) {
+                if (type_is_numeric(source_type) || source_type->kind == TYPE_BOOL) {
+                    cast_opcode = OP_TO_STRING_R;
+                } else {
+                    DEBUG_CODEGEN_PRINT("Error: Unsupported cast from type %d to string\n",
+                           source_type->kind);
+                    if (source_reg >= MP_TEMP_REG_START && source_reg <= MP_TEMP_REG_END) {
+                        mp_free_temp_register(ctx->allocator, source_reg);
+                    }
+                    if (target_reg >= MP_TEMP_REG_START && target_reg <= MP_TEMP_REG_END) {
+                        mp_free_temp_register(ctx->allocator, target_reg);
+                    }
+                    return -1;
+                }
             } else {
-                DEBUG_CODEGEN_PRINT("Error: Unsupported cast from type %d to type %d\n", 
+                DEBUG_CODEGEN_PRINT("Error: Unsupported cast from type %d to type %d\n",
                        source_type->kind, target_type->kind);
                 // Only free if they're temp registers
                 if (source_reg >= MP_TEMP_REG_START && source_reg <= MP_TEMP_REG_END) {

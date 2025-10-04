@@ -232,6 +232,8 @@ struct TypedASTNode {
             bool isPublic;
             TypedEnumVariant* variants;
             int variantCount;
+            const char** genericParams;
+            int genericParamCount;
         } enumDecl;
         struct {
             TypedASTNode* value;
