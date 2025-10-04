@@ -312,6 +312,15 @@ int disassembleInstruction(Chunk* chunk, int offset) {
             return offset + 5;
         }
 
+        case OP_TO_STRING_R: {
+            uint8_t dst = chunk->code[offset + 1];
+            uint8_t src = chunk->code[offset + 2];
+            uint8_t padding = chunk->code[offset + 3];
+            (void)padding;
+            printf("%-16s R%d, R%d\n", "TO_STRING", dst, src);
+            return offset + 4;
+        }
+
         case OP_STRING_INDEX_R: {
             uint8_t dst = chunk->code[offset + 1];
             uint8_t string_reg = chunk->code[offset + 2];

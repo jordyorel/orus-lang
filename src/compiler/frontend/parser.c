@@ -125,6 +125,7 @@ static void add_enum_variant(ParserContext* ctx, EnumVariant** list, int* count,
 
 static Token peekToken(ParserContext* ctx);
 static Token nextToken(ParserContext* ctx);
+static bool report_reserved_keyword_identifier(ParserContext* ctx, Token token, const char* context);
 
 static bool append_token(Token** tokens, int* count, int* capacity, Token token) {
     if (*count >= *capacity) {
@@ -317,6 +318,8 @@ static void preprocessNumberToken(const char* tokenStart, int tokenLength, char*
 // Suffix detection removed - type inference handles numeric types
 static bool isFloatingPointNumber(const char* numStr, int length);
 static Value parseNumberValue(const char* numStr, int length);
+static bool token_is_numeric_suffix(TokenType type);
+static bool tokens_are_adjacent(const Token* first, const Token* second);
 
 static ASTNode* parseStringLiteral(ParserContext* ctx, Token token);
 static ASTNode* parseBooleanLiteral(ParserContext* ctx, Token token);
@@ -1594,6 +1597,8 @@ static ASTNode* parse_array_type_annotation(ParserContext* ctx, Token openToken)
     typeNode->typeAnnotation.arrayHasLength = hasLength;
     typeNode->typeAnnotation.arrayLength = lengthIdentifier ? 0 : lengthValue;
     typeNode->typeAnnotation.arrayLengthIdentifier = lengthIdentifier;
+    typeNode->typeAnnotation.genericArgs = NULL;
+    typeNode->typeAnnotation.genericArgCount = 0;
     typeNode->location.line = openToken.line;
     typeNode->location.column = openToken.column;
     typeNode->dataType = NULL;
@@ -1624,6 +1629,8 @@ static ASTNode* build_type_annotation_node(ParserContext* ctx, Token typeTok) {
     typeNode->typeAnnotation.arrayHasLength = false;
     typeNode->typeAnnotation.arrayLength = 0;
     typeNode->typeAnnotation.arrayLengthIdentifier = NULL;
+    typeNode->typeAnnotation.genericArgs = NULL;
+    typeNode->typeAnnotation.genericArgCount = 0;
     typeNode->location.line = typeTok.line;
     typeNode->location.column = typeTok.column;
     typeNode->dataType = NULL;
@@ -1636,6 +1643,50 @@ static ASTNode* parseTypeAnnotation(ParserContext* ctx) {
     ASTNode* typeNode = build_type_annotation_node(ctx, typeTok);
     if (!typeNode) {
         return NULL;
+    }
+
+    if (!typeNode->typeAnnotation.isArrayType && peekToken(ctx).type == TOKEN_LEFT_BRACKET) {
+        nextToken(ctx);
+
+        ASTNode** args = NULL;
+        int argCount = 0;
+        int argCapacity = 0;
+
+        if (peekToken(ctx).type != TOKEN_RIGHT_BRACKET) {
+            while (true) {
+                ASTNode* arg = parseTypeAnnotation(ctx);
+                if (!arg) {
+                    return NULL;
+                }
+
+                if (argCount + 1 > argCapacity) {
+                    int newCap = argCapacity == 0 ? 2 : argCapacity * 2;
+                    ASTNode** newArgs = parser_arena_alloc(ctx, sizeof(ASTNode*) * newCap);
+                    if (argCapacity > 0 && args) {
+                        memcpy(newArgs, args, sizeof(ASTNode*) * argCount);
+                    }
+                    args = newArgs;
+                    argCapacity = newCap;
+                }
+
+                args[argCount++] = arg;
+
+                Token delim = peekToken(ctx);
+                if (delim.type == TOKEN_COMMA) {
+                    nextToken(ctx);
+                    continue;
+                }
+                break;
+            }
+        }
+
+        Token closeTok = nextToken(ctx);
+        if (closeTok.type != TOKEN_RIGHT_BRACKET) {
+            return NULL;
+        }
+
+        typeNode->typeAnnotation.genericArgs = args;
+        typeNode->typeAnnotation.genericArgCount = argCount;
     }
 
     if (peekToken(ctx).type == TOKEN_QUESTION) {
@@ -1698,12 +1749,28 @@ static ASTNode* parseVariableDeclaration(ParserContext* ctx, bool isMutable, Tok
                     initializer->literal.value.as.u32 = (uint32_t)value;
                 }
             }
+            else if (strcmp(declaredType, "u32") == 0 && literalType == VAL_I64) {
+                int64_t value = initializer->literal.value.as.i64;
+                if (value >= 0 && value <= (int64_t)UINT32_MAX) {
+                    mismatch = false;
+                    initializer->literal.value.type = VAL_U32;
+                    initializer->literal.value.as.u32 = (uint32_t)value;
+                }
+            }
             else if (strcmp(declaredType, "u64") == 0 && literalType == VAL_I32) {
                 // Allow i32 -> u64 conversion if value is non-negative
                 int32_t value = initializer->literal.value.as.i32;
                 if (value >= 0) {
                     mismatch = false;
                     // Convert the literal to u64 type
+                    initializer->literal.value.type = VAL_U64;
+                    initializer->literal.value.as.u64 = (uint64_t)value;
+                }
+            }
+            else if (strcmp(declaredType, "u64") == 0 && literalType == VAL_I64) {
+                int64_t value = initializer->literal.value.as.i64;
+                if (value >= 0) {
+                    mismatch = false;
                     initializer->literal.value.type = VAL_U64;
                     initializer->literal.value.as.u64 = (uint64_t)value;
                 }
@@ -3268,12 +3335,36 @@ static ASTNode* parseBinaryExpression(ParserContext* ctx, int minPrec) {
 // Primary expression handlers
 
 // Number parsing helper functions implementation
+static bool token_is_numeric_suffix(TokenType type) {
+    switch (type) {
+        case TOKEN_INT:
+        case TOKEN_I64:
+        case TOKEN_U32:
+        case TOKEN_U64:
+        case TOKEN_F64:
+            return true;
+        default:
+            return false;
+    }
+}
+
+static bool tokens_are_adjacent(const Token* first, const Token* second) {
+    if (!first || !second) {
+        return false;
+    }
+    if (first->line != second->line) {
+        return false;
+    }
+    int first_end_column = first->column + first->length;
+    return first_end_column == second->column;
+}
+
 static void preprocessNumberToken(const char* tokenStart, int tokenLength, char* numStr, int* processedLength) {
     char raw[64];
     int len = tokenLength < 63 ? tokenLength : 63;
     strncpy(raw, tokenStart, len);
     raw[len] = '\0';
-    
+
     int j = 0;
     for (int i = 0; i < len && j < 63; i++) {
         if (raw[i] != '_') numStr[j++] = raw[i];
@@ -3334,6 +3425,156 @@ static ASTNode* parseNumberLiteral(ParserContext* ctx, Token token) {
     node->location.line = token.line;
     node->location.column = token.column;
     node->dataType = NULL;
+
+    Token suffix = peekToken(ctx);
+    if (token_is_numeric_suffix(suffix.type) && tokens_are_adjacent(&token, &suffix)) {
+        nextToken(ctx);
+        node->literal.hasExplicitSuffix = true;
+
+        bool conversion_ok = true;
+        Value converted = node->literal.value;
+
+        switch (suffix.type) {
+            case TOKEN_INT: {
+                int64_t value = 0;
+                if (converted.type == VAL_I32) {
+                    value = AS_I32(converted);
+                } else if (converted.type == VAL_I64) {
+                    value = AS_I64(converted);
+                } else if (converted.type == VAL_F64) {
+                    double d = AS_F64(converted);
+                    if (d < (double)INT32_MIN || d > (double)INT32_MAX ||
+                        (double)(int32_t)d != d) {
+                        conversion_ok = false;
+                        break;
+                    }
+                    value = (int32_t)d;
+                } else {
+                    conversion_ok = false;
+                    break;
+                }
+                if (value < INT32_MIN || value > INT32_MAX) {
+                    conversion_ok = false;
+                    break;
+                }
+                converted = I32_VAL((int32_t)value);
+                break;
+            }
+            case TOKEN_I64: {
+                int64_t value = 0;
+                if (converted.type == VAL_I32) {
+                    value = AS_I32(converted);
+                } else if (converted.type == VAL_I64) {
+                    value = AS_I64(converted);
+                } else if (converted.type == VAL_F64) {
+                    double d = AS_F64(converted);
+                    double truncated = (double)(int64_t)d;
+                    if (truncated != d) {
+                        conversion_ok = false;
+                        break;
+                    }
+                    value = (int64_t)d;
+                } else {
+                    conversion_ok = false;
+                    break;
+                }
+                converted = I64_VAL(value);
+                break;
+            }
+            case TOKEN_U32: {
+                uint64_t value = 0;
+                if (converted.type == VAL_I32) {
+                    int32_t v = AS_I32(converted);
+                    if (v < 0) {
+                        conversion_ok = false;
+                        break;
+                    }
+                    value = (uint32_t)v;
+                } else if (converted.type == VAL_I64) {
+                    int64_t v = AS_I64(converted);
+                    if (v < 0 || v > (int64_t)UINT32_MAX) {
+                        conversion_ok = false;
+                        break;
+                    }
+                    value = (uint32_t)v;
+                } else if (converted.type == VAL_F64) {
+                    double d = AS_F64(converted);
+                    if (d < 0.0 || d > (double)UINT32_MAX ||
+                        (double)(uint32_t)d != d) {
+                        conversion_ok = false;
+                        break;
+                    }
+                    value = (uint32_t)d;
+                } else {
+                    conversion_ok = false;
+                    break;
+                }
+                converted = U32_VAL((uint32_t)value);
+                break;
+            }
+            case TOKEN_U64: {
+                uint64_t value = 0;
+                if (converted.type == VAL_I32) {
+                    int32_t v = AS_I32(converted);
+                    if (v < 0) {
+                        conversion_ok = false;
+                        break;
+                    }
+                    value = (uint64_t)v;
+                } else if (converted.type == VAL_I64) {
+                    int64_t v = AS_I64(converted);
+                    if (v < 0) {
+                        conversion_ok = false;
+                        break;
+                    }
+                    value = (uint64_t)v;
+                } else if (converted.type == VAL_F64) {
+                    double d = AS_F64(converted);
+                    if (d < 0.0 || d > (double)UINT64_MAX) {
+                        conversion_ok = false;
+                        break;
+                    }
+                    double truncated = (double)(uint64_t)d;
+                    if (truncated != d) {
+                        conversion_ok = false;
+                        break;
+                    }
+                    value = (uint64_t)d;
+                } else {
+                    conversion_ok = false;
+                    break;
+                }
+                converted = U64_VAL(value);
+                break;
+            }
+            case TOKEN_F64: {
+                if (converted.type == VAL_F64) {
+                    // Already floating point
+                } else if (converted.type == VAL_I32) {
+                    converted = F64_VAL((double)AS_I32(converted));
+                } else if (converted.type == VAL_I64) {
+                    converted = F64_VAL((double)AS_I64(converted));
+                } else {
+                    conversion_ok = false;
+                }
+                break;
+            }
+            default:
+                conversion_ok = false;
+                break;
+        }
+
+        if (!conversion_ok) {
+            SrcLocation location = {NULL, suffix.line, suffix.column};
+            report_compile_error(E1006_INVALID_SYNTAX, location,
+                                 "invalid numeric literal suffix '%s'",
+                                 token_type_to_string(suffix.type));
+            node->literal.value = I32_VAL(0);
+        } else {
+            node->literal.value = converted;
+        }
+    }
+
     return node;
 }
 
@@ -3852,6 +4093,52 @@ static ASTNode* parseEnumDefinition(ParserContext* ctx, bool isPublic) {
     strncpy(enumName, nameTok.start, nameLen);
     enumName[nameLen] = '\0';
 
+    char** genericParams = NULL;
+    int genericParamCount = 0;
+    int genericParamCapacity = 0;
+
+    if (peekToken(ctx).type == TOKEN_LEFT_BRACKET) {
+        nextToken(ctx);
+
+        if (peekToken(ctx).type != TOKEN_RIGHT_BRACKET) {
+            while (true) {
+                Token paramTok = nextToken(ctx);
+                if (paramTok.type != TOKEN_IDENTIFIER) {
+                    report_reserved_keyword_identifier(ctx, paramTok, "generic parameter");
+                    return NULL;
+                }
+
+                if (genericParamCount + 1 > genericParamCapacity) {
+                    int newCap = genericParamCapacity == 0 ? 2 : genericParamCapacity * 2;
+                    char** newParams = parser_arena_alloc(ctx, sizeof(char*) * newCap);
+                    if (genericParamCapacity > 0 && genericParams) {
+                        memcpy(newParams, genericParams, sizeof(char*) * genericParamCount);
+                    }
+                    genericParams = newParams;
+                    genericParamCapacity = newCap;
+                }
+
+                int paramLen = paramTok.length;
+                char* paramName = parser_arena_alloc(ctx, paramLen + 1);
+                strncpy(paramName, paramTok.start, paramLen);
+                paramName[paramLen] = '\0';
+                genericParams[genericParamCount++] = paramName;
+
+                Token delim = peekToken(ctx);
+                if (delim.type == TOKEN_COMMA) {
+                    nextToken(ctx);
+                    continue;
+                }
+                break;
+            }
+        }
+
+        Token closeGenerics = nextToken(ctx);
+        if (closeGenerics.type != TOKEN_RIGHT_BRACKET) {
+            return NULL;
+        }
+    }
+
     Token colonTok = nextToken(ctx);
     if (colonTok.type != TOKEN_COLON) {
         return NULL;
@@ -3981,6 +4268,8 @@ static ASTNode* parseEnumDefinition(ParserContext* ctx, bool isPublic) {
     node->enumDecl.isPublic = isPublic;
     node->enumDecl.variants = variants;
     node->enumDecl.variantCount = variantCount;
+    node->enumDecl.genericParams = genericParams;
+    node->enumDecl.genericParamCount = genericParamCount;
     node->location.line = enumTok.line;
     node->location.column = enumTok.column;
     node->dataType = NULL;
