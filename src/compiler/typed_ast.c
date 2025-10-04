@@ -211,6 +211,8 @@ TypedASTNode* create_typed_ast_node(ASTNode* original) {
             typed->typed.enumDecl.isPublic = original->enumDecl.isPublic;
             typed->typed.enumDecl.variants = NULL;
             typed->typed.enumDecl.variantCount = 0;
+            typed->typed.enumDecl.genericParams = (const char**)original->enumDecl.genericParams;
+            typed->typed.enumDecl.genericParamCount = original->enumDecl.genericParamCount;
             break;
         case NODE_ENUM_MATCH_TEST:
             typed->typed.enumMatchTest.value = NULL;
