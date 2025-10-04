@@ -189,7 +189,6 @@ void emit_byte_to_buffer(BytecodeBuffer* buffer, uint8_t byte) {
 
     // Resize if needed
     if (buffer->count >= buffer->capacity) {
-        int old_capacity = buffer->capacity;
         buffer->capacity *= 2;
         buffer->instructions = realloc(buffer->instructions, buffer->capacity);
         buffer->source_lines = realloc(buffer->source_lines, buffer->capacity * sizeof(int));

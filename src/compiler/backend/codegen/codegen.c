@@ -5742,7 +5742,6 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
         }
 
         set_location_from_node(ctx, while_stmt);
-        int inc_cmp_offset = ctx->bytecode ? ctx->bytecode->count : 0;
         emit_byte_to_buffer(ctx->bytecode, OP_INC_CMP_JMP);
         emit_byte_to_buffer(ctx->bytecode, (uint8_t)fused_loop_reg);
         emit_byte_to_buffer(ctx->bytecode, (uint8_t)(fused_limit_temp_is_temp ? fused_limit_temp_reg : fused_limit_reg));
@@ -6216,7 +6215,6 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
         patch_continue_statements(ctx, continue_target);
 
         set_location_from_node(ctx, for_stmt);
-        int inc_cmp_offset = ctx->bytecode ? ctx->bytecode->count : 0;
         emit_byte_to_buffer(ctx->bytecode, OP_INC_CMP_JMP);
         emit_byte_to_buffer(ctx->bytecode, (uint8_t)loop_var_reg);
         emit_byte_to_buffer(ctx->bytecode, (uint8_t)limit_reg_used);
