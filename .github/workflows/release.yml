@@ -57,6 +57,80 @@ jobs:
           make clean
           make release
 
+      - name: Check for binary changes
+        if: steps.trigger.outputs.from_tag == 'true'
+        env:
+          TAG_NAME: ${{ steps.version.outputs.version }}
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          shopt -s nullglob
+          artifact_pattern="dist/orus-*.tar.gz"
+          new_artifacts=(${artifact_pattern})
+          shopt -u nullglob
+
+          if [[ ${#new_artifacts[@]} -eq 0 ]]; then
+            echo "No build artifacts found matching ${artifact_pattern}" >&2
+            exit 1
+          fi
+
+          api_url="https://api.github.com/repos/${GH_REPO}/releases/latest"
+          status=$(curl -sS -o latest.json -w "%{http_code}" -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "$api_url")
+
+          if [[ "$status" != "200" ]]; then
+            echo "No previous release found (status ${status}); skipping binary comparison."
+            rm -f latest.json
+            exit 0
+          fi
+
+          prev_tag=$(jq -r '.tag_name' latest.json)
+          if [[ "$prev_tag" == "$TAG_NAME" ]]; then
+            echo "Latest release already uses tag ${TAG_NAME}; skipping binary comparison."
+            rm -f latest.json
+            exit 0
+          fi
+
+          declare -A previous_hashes
+          while read -r asset_name && read -r asset_url; do
+            tmp_file=$(mktemp)
+            curl -sSL -H "Authorization: Bearer ${GH_TOKEN}" -o "$tmp_file" "$asset_url"
+            previous_hashes["$asset_name"]=$(sha256sum "$tmp_file" | awk '{print $1}')
+            rm -f "$tmp_file"
+          done < <(jq -r '.assets[] | select(.name | test("^orus-.*\\.tar\\.gz$")) | .name + "\n" + .browser_download_url' latest.json)
+
+          rm -f latest.json
+
+          if [[ ${#previous_hashes[@]} -eq 0 ]]; then
+            echo "Previous release has no matching artifacts; skipping binary comparison."
+            exit 0
+          fi
+
+          changed_artifacts=0
+          for artifact in "${new_artifacts[@]}"; do
+            artifact_name=$(basename "$artifact")
+            new_hash=$(sha256sum "$artifact" | awk '{print $1}')
+            old_hash=${previous_hashes["$artifact_name"]:-}
+            if [[ -z "$old_hash" ]]; then
+              echo "No previous artifact named ${artifact_name}; treating as changed."
+              changed_artifacts=$((changed_artifacts + 1))
+              continue
+            fi
+
+            if [[ "$new_hash" != "$old_hash" ]]; then
+              echo "Artifact ${artifact_name} changed (sha256 ${old_hash} -> ${new_hash})."
+              changed_artifacts=$((changed_artifacts + 1))
+            else
+              echo "Artifact ${artifact_name} is unchanged compared to latest release." >&2
+            fi
+          done
+
+          if [[ $changed_artifacts -eq 0 ]]; then
+            echo "No release artifacts changed compared to latest release." >&2
+            exit 1
+          fi
+
       - name: Delete existing release (if any)
         if: steps.trigger.outputs.from_tag == 'true'
         env:
