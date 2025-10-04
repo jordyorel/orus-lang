@@ -150,7 +150,9 @@ static char* parse_qualified_name(ParserContext* ctx, Token firstToken, const ch
 
     if (firstToken.type != TOKEN_IDENTIFIER) {
         SrcLocation location = {NULL, firstToken.line, firstToken.column};
-        report_compile_error(E1006_INVALID_SYNTAX, location, missingMessage);
+        if (!report_reserved_keyword_identifier(ctx, firstToken, "module name")) {
+            report_compile_error(E1006_INVALID_SYNTAX, location, missingMessage);
+        }
         return NULL;
     }
 
@@ -164,8 +166,10 @@ static char* parse_qualified_name(ParserContext* ctx, Token firstToken, const ch
         Token segment = nextToken(ctx);
         if (segment.type != TOKEN_IDENTIFIER) {
             SrcLocation location = {NULL, segment.line, segment.column};
-            report_compile_error(E1006_INVALID_SYNTAX, location,
-                                 "expected identifier after '.' in module name");
+            if (!report_reserved_keyword_identifier(ctx, segment, "module name")) {
+                report_compile_error(E1006_INVALID_SYNTAX, location,
+                                     "expected identifier after '.' in module name");
+            }
             free(parts);
             return NULL;
         }
@@ -433,7 +437,10 @@ static ASTNode* parseStatement(ParserContext* ctx) {
     if (t.type == TOKEN_APOSTROPHE) {
         nextToken(ctx);
         Token labelTok = nextToken(ctx);
-        if (labelTok.type != TOKEN_IDENTIFIER) return NULL;
+        if (labelTok.type != TOKEN_IDENTIFIER) {
+            report_reserved_keyword_identifier(ctx, labelTok, "loop label");
+            return NULL;
+        }
         if (nextToken(ctx).type != TOKEN_COLON) return NULL;
         int len = labelTok.length;
         char* label = parser_arena_alloc(ctx, len + 1);
@@ -487,7 +494,10 @@ static ASTNode* parseStatement(ParserContext* ctx) {
     if (t.type == TOKEN_MUT) {
         nextToken(ctx); // consume TOKEN_MUT
         Token nameTok = nextToken(ctx); // get identifier
-        if (nameTok.type != TOKEN_IDENTIFIER) return NULL;
+        if (nameTok.type != TOKEN_IDENTIFIER) {
+            report_reserved_keyword_identifier(ctx, nameTok, "variable");
+            return NULL;
+        }
         if (peekToken(ctx).type == TOKEN_COLON) {
             return parseVariableDeclaration(ctx, true, nameTok);
         }
@@ -750,6 +760,66 @@ static char* copy_token_text(ParserContext* ctx, Token token) {
     return text;
 }
 
+static bool token_is_reserved_keyword(TokenType type) {
+    switch (type) {
+        case TOKEN_AND:
+        case TOKEN_AS:
+        case TOKEN_BOOL:
+        case TOKEN_BREAK:
+        case TOKEN_CATCH:
+        case TOKEN_CONST:
+        case TOKEN_CONTINUE:
+        case TOKEN_ELIF:
+        case TOKEN_ELSE:
+        case TOKEN_ENUM:
+        case TOKEN_FALSE:
+        case TOKEN_FN:
+        case TOKEN_FOR:
+        case TOKEN_F64:
+        case TOKEN_GLOBAL:
+        case TOKEN_IF:
+        case TOKEN_IMPL:
+        case TOKEN_IN:
+        case TOKEN_INT:
+        case TOKEN_I64:
+        case TOKEN_MATCH:
+        case TOKEN_MATCHES:
+        case TOKEN_MODULE:
+        case TOKEN_MUT:
+        case TOKEN_NOT:
+        case TOKEN_OR:
+        case TOKEN_PASS:
+        case TOKEN_PRINT:
+        case TOKEN_PRINT_NO_NL:
+        case TOKEN_PUB:
+        case TOKEN_RETURN:
+        case TOKEN_STATIC:
+        case TOKEN_STRUCT:
+        case TOKEN_THROW:
+        case TOKEN_TIME_STAMP:
+        case TOKEN_TRUE:
+        case TOKEN_TRY:
+        case TOKEN_U32:
+        case TOKEN_U64:
+        case TOKEN_IMPORT:
+        case TOKEN_WHILE:
+            return true;
+        default:
+            return false;
+    }
+}
+
+static bool report_reserved_keyword_identifier(ParserContext* ctx, Token token, const char* context) {
+    if (!token_is_reserved_keyword(token.type)) {
+        return false;
+    }
+
+    char* keyword = copy_token_text(ctx, token);
+    SrcLocation location = {NULL, token.line, token.column};
+    report_reserved_keyword_usage(location, keyword, context ? context : "identifier");
+    return true;
+}
+
 static ASTNode* wrap_statement_in_block(ParserContext* ctx, ASTNode* stmt) {
     if (!stmt) return NULL;
     ASTNode** statements = parser_arena_alloc(ctx, sizeof(ASTNode*));
@@ -937,6 +1007,7 @@ static ASTNode* parseMatchStatement(ParserContext* ctx) {
             nextToken(ctx);
             Token variantTok = nextToken(ctx);
             if (variantTok.type != TOKEN_IDENTIFIER) {
+                report_reserved_keyword_identifier(ctx, variantTok, "enum variant");
                 return NULL;
             }
             variantName = copy_token_text(ctx, variantTok);
@@ -949,6 +1020,7 @@ static ASTNode* parseMatchStatement(ParserContext* ctx) {
                     while (true) {
                         Token payloadTok = nextToken(ctx);
                         if (payloadTok.type != TOKEN_IDENTIFIER) {
+                            report_reserved_keyword_identifier(ctx, payloadTok, "pattern binding");
                             return NULL;
                         }
                         char* bindingName = NULL;
@@ -1258,6 +1330,7 @@ static ASTNode* parseMatchExpression(ParserContext* ctx, Token matchTok) {
             nextToken(ctx);
             Token variantTok = nextToken(ctx);
             if (variantTok.type != TOKEN_IDENTIFIER) {
+                report_reserved_keyword_identifier(ctx, variantTok, "enum variant");
                 return NULL;
             }
             variantName = copy_token_text(ctx, variantTok);
@@ -1270,6 +1343,7 @@ static ASTNode* parseMatchExpression(ParserContext* ctx, Token matchTok) {
                     while (true) {
                         Token payloadTok = nextToken(ctx);
                         if (payloadTok.type != TOKEN_IDENTIFIER) {
+                            report_reserved_keyword_identifier(ctx, payloadTok, "pattern binding");
                             return NULL;
                         }
                         char* bindingName = NULL;
@@ -1803,6 +1877,7 @@ static ASTNode* parseGlobalVariable(ParserContext* ctx, bool isPublic) {
 
     Token nameTok = nextToken(ctx);
     if (nameTok.type != TOKEN_IDENTIFIER) {
+        report_reserved_keyword_identifier(ctx, nameTok, "global variable");
         return NULL;
     }
 
@@ -1866,6 +1941,7 @@ static ASTNode* parseConstDeclaration(ParserContext* ctx) {
 
     Token nameTok = nextToken(ctx);
     if (nameTok.type != TOKEN_IDENTIFIER) {
+        report_reserved_keyword_identifier(ctx, nameTok, "constant");
         return NULL;
     }
 
@@ -1961,8 +2037,10 @@ static ASTNode* parseDestructuringAssignment(ParserContext* ctx, Token firstToke
         Token nextNameTok = nextToken(ctx);
         if (nextNameTok.type != TOKEN_IDENTIFIER) {
             SrcLocation location = {NULL, nextNameTok.line, nextNameTok.column};
-            report_compile_error(E1006_INVALID_SYNTAX, location,
-                                 "expected identifier in destructuring assignment");
+            if (!report_reserved_keyword_identifier(ctx, nextNameTok, "variable")) {
+                report_compile_error(E1006_INVALID_SYNTAX, location,
+                                     "expected identifier in destructuring assignment");
+            }
             return NULL;
         }
         currentToken = nextNameTok;
@@ -2059,7 +2137,9 @@ static ASTNode* parseImportStatement(ParserContext* ctx) {
         Token aliasTok = nextToken(ctx);
         if (aliasTok.type != TOKEN_IDENTIFIER) {
             SrcLocation location = {NULL, aliasTok.line, aliasTok.column};
-            report_compile_error(E1006_INVALID_SYNTAX, location, "expected identifier after 'as'");
+            if (!report_reserved_keyword_identifier(ctx, aliasTok, "module alias")) {
+                report_compile_error(E1006_INVALID_SYNTAX, location, "expected identifier after 'as'");
+            }
             return NULL;
         }
 
@@ -2090,7 +2170,9 @@ static ASTNode* parseImportStatement(ParserContext* ctx) {
                 Token symTok = nextToken(ctx);
                 if (symTok.type != TOKEN_IDENTIFIER) {
                     SrcLocation location = {NULL, symTok.line, symTok.column};
-                    report_compile_error(E1006_INVALID_SYNTAX, location, "expected symbol name in use list");
+                    if (!report_reserved_keyword_identifier(ctx, symTok, "import symbol")) {
+                        report_compile_error(E1006_INVALID_SYNTAX, location, "expected symbol name in use list");
+                    }
                     free(tempSymbols);
                     return NULL;
                 }
@@ -2106,7 +2188,9 @@ static ASTNode* parseImportStatement(ParserContext* ctx) {
                     Token aliasTok = nextToken(ctx);
                     if (aliasTok.type != TOKEN_IDENTIFIER) {
                         SrcLocation location = {NULL, aliasTok.line, aliasTok.column};
-                        report_compile_error(E1006_INVALID_SYNTAX, location, "expected alias name after 'as'");
+                        if (!report_reserved_keyword_identifier(ctx, aliasTok, "module alias")) {
+                            report_compile_error(E1006_INVALID_SYNTAX, location, "expected alias name after 'as'");
+                        }
                         free(tempSymbols);
                         return NULL;
                     }
@@ -2727,10 +2811,12 @@ static ASTNode* parseForStatement(ParserContext* ctx) {
 
     Token nameTok = nextToken(ctx);
     if (nameTok.type != TOKEN_IDENTIFIER) {
-        SrcLocation location = {NULL, forTok.line, forTok.column};
-        report_invalid_loop_variable(location, "missing", "loop variable name is required after 'for'");
-        if (vm.devMode) {
-            fprintf(stderr, "Debug: Expected TOKEN_IDENTIFIER after 'for', got %d\n", nameTok.type);
+        if (!report_reserved_keyword_identifier(ctx, nameTok, "loop variable")) {
+            SrcLocation location = {NULL, forTok.line, forTok.column};
+            report_invalid_loop_variable(location, "missing", "loop variable name is required after 'for'");
+            if (vm.devMode) {
+                fprintf(stderr, "Debug: Expected TOKEN_IDENTIFIER after 'for', got %d\n", nameTok.type);
+            }
         }
         return NULL;
     }
@@ -2932,7 +3018,9 @@ static ASTNode* parseBreakStatement(ParserContext* ctx) {
         Token labelTok = nextToken(ctx);
         if (labelTok.type != TOKEN_IDENTIFIER) {
             SrcLocation location = {NULL, labelTok.line, labelTok.column};
-            report_invalid_loop_variable(location, "label", "expected identifier after apostrophe");
+            if (!report_reserved_keyword_identifier(ctx, labelTok, "loop label")) {
+                report_invalid_loop_variable(location, "label", "expected identifier after apostrophe");
+            }
             return NULL;
         }
         int len = labelTok.length;
@@ -2971,7 +3059,9 @@ static ASTNode* parseContinueStatement(ParserContext* ctx) {
         Token labelTok = nextToken(ctx);
         if (labelTok.type != TOKEN_IDENTIFIER) {
             SrcLocation location = {NULL, labelTok.line, labelTok.column};
-            report_invalid_loop_variable(location, "label", "expected identifier after apostrophe");
+            if (!report_reserved_keyword_identifier(ctx, labelTok, "loop label")) {
+                report_invalid_loop_variable(location, "label", "expected identifier after apostrophe");
+            }
             return NULL;
         }
         int len = labelTok.length;
@@ -3493,6 +3583,7 @@ static ASTNode* parsePrimaryExpression(ParserContext* ctx) {
             node = parseMatchExpression(ctx, token);
             break;
         default:
+            report_reserved_keyword_identifier(ctx, token, "variable");
             return NULL;
     }
 
@@ -3614,6 +3705,7 @@ static ASTNode* parseFunctionExpression(ParserContext* ctx, Token fnToken) {
         while (true) {
             Token paramTok = nextToken(ctx);
             if (paramTok.type != TOKEN_IDENTIFIER) {
+                report_reserved_keyword_identifier(ctx, paramTok, "parameter");
                 return NULL;
             }
 
@@ -3713,6 +3805,7 @@ static ASTNode* parseFunctionDefinition(ParserContext* ctx, bool isPublic) {
     // Get function name
     Token nameTok = nextToken(ctx);
     if (nameTok.type != TOKEN_IDENTIFIER) {
+        report_reserved_keyword_identifier(ctx, nameTok, "function");
         return NULL;
     }
     
@@ -3735,6 +3828,7 @@ static ASTNode* parseFunctionDefinition(ParserContext* ctx, bool isPublic) {
         while (true) {
             Token paramTok = nextToken(ctx);
             if (paramTok.type != TOKEN_IDENTIFIER) {
+                report_reserved_keyword_identifier(ctx, paramTok, "parameter");
                 return NULL;
             }
             
@@ -3847,6 +3941,7 @@ static ASTNode* parseEnumDefinition(ParserContext* ctx, bool isPublic) {
 
     Token nameTok = nextToken(ctx);
     if (nameTok.type != TOKEN_IDENTIFIER) {
+        report_reserved_keyword_identifier(ctx, nameTok, "enum");
         return NULL;
     }
 
@@ -3887,6 +3982,7 @@ static ASTNode* parseEnumDefinition(ParserContext* ctx, bool isPublic) {
 
         Token variantNameTok = nextToken(ctx);
         if (variantNameTok.type != TOKEN_IDENTIFIER) {
+            report_reserved_keyword_identifier(ctx, variantNameTok, "enum variant");
             return NULL;
         }
 
@@ -3917,6 +4013,7 @@ static ASTNode* parseEnumDefinition(ParserContext* ctx, bool isPublic) {
 
                     if (peekToken(ctx).type == TOKEN_COLON) {
                         if (firstTok.type != TOKEN_IDENTIFIER) {
+                            report_reserved_keyword_identifier(ctx, firstTok, "field name");
                             return NULL;
                         }
                         int fieldNameLen = firstTok.length;
@@ -3999,6 +4096,7 @@ static ASTNode* parseStructDefinition(ParserContext* ctx, bool isPublic) {
 
     Token nameTok = nextToken(ctx);
     if (nameTok.type != TOKEN_IDENTIFIER) {
+        report_reserved_keyword_identifier(ctx, nameTok, "struct");
         return NULL;
     }
 
@@ -4039,6 +4137,7 @@ static ASTNode* parseStructDefinition(ParserContext* ctx, bool isPublic) {
 
         Token fieldNameTok = nextToken(ctx);
         if (fieldNameTok.type != TOKEN_IDENTIFIER) {
+            report_reserved_keyword_identifier(ctx, fieldNameTok, "field name");
             return NULL;
         }
 
@@ -4107,6 +4206,7 @@ static ASTNode* parseImplBlock(ParserContext* ctx, bool isPublic) {
 
     Token nameTok = nextToken(ctx);
     if (nameTok.type != TOKEN_IDENTIFIER) {
+        report_reserved_keyword_identifier(ctx, nameTok, "type");
         return NULL;
     }
 
@@ -4375,6 +4475,7 @@ static ASTNode* parseMemberAccess(ParserContext* ctx, ASTNode* objectExpr) {
 
     Token memberTok = nextToken(ctx);
     if (memberTok.type != TOKEN_IDENTIFIER) {
+        report_reserved_keyword_identifier(ctx, memberTok, "member");
         return NULL;
     }
 
@@ -4420,6 +4521,7 @@ static ASTNode* parseStructLiteral(ParserContext* ctx, ASTNode* typeExpr, Token 
         while (true) {
             Token fieldTok = nextToken(ctx);
             if (fieldTok.type != TOKEN_IDENTIFIER) {
+                report_reserved_keyword_identifier(ctx, fieldTok, "field name");
                 return NULL;
             }
 

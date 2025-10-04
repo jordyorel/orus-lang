@@ -95,6 +95,14 @@ ErrorReportResult report_mutable_required(SrcLocation location, const char* vari
 ErrorReportResult report_invalid_variable_name(SrcLocation location, const char* variable_name, const char* reason);
 
 /**
+ * Report use of a reserved keyword as an identifier
+ * @param location Source location of the misuse
+ * @param keyword The reserved keyword text
+ * @param context Description of what was being named (e.g. "variable")
+ */
+ErrorReportResult report_reserved_keyword_usage(SrcLocation location, const char* keyword, const char* context);
+
+/**
  * Report invalid multiple declaration error
  * @param location Source location of the error
  * @param variable_name Name of the variable with declaration issues
