@@ -125,7 +125,94 @@ static void add_enum_variant(ParserContext* ctx, EnumVariant** list, int* count,
 
 static Token peekToken(ParserContext* ctx);
 static Token nextToken(ParserContext* ctx);
+static char* copy_token_text(ParserContext* ctx, Token token);
 static bool report_reserved_keyword_identifier(ParserContext* ctx, Token token, const char* context);
+
+static bool is_reserved_keyword_token(TokenType type) {
+    switch (type) {
+        case TOKEN_AND:
+        case TOKEN_BREAK:
+        case TOKEN_CONTINUE:
+        case TOKEN_PASS:
+        case TOKEN_ELSE:
+        case TOKEN_ELIF:
+        case TOKEN_FALSE:
+        case TOKEN_FOR:
+        case TOKEN_FN:
+        case TOKEN_IF:
+        case TOKEN_OR:
+        case TOKEN_NOT:
+        case TOKEN_PRINT:
+        case TOKEN_PRINT_NO_NL:
+        case TOKEN_TIME_STAMP:
+        case TOKEN_RETURN:
+        case TOKEN_TRUE:
+        case TOKEN_MUT:
+        case TOKEN_CONST:
+        case TOKEN_WHILE:
+        case TOKEN_TRY:
+        case TOKEN_THROW:
+        case TOKEN_CATCH:
+        case TOKEN_INT:
+        case TOKEN_I64:
+        case TOKEN_IN:
+        case TOKEN_BOOL:
+        case TOKEN_STRUCT:
+        case TOKEN_ENUM:
+        case TOKEN_IMPL:
+        case TOKEN_IMPORT:
+        case TOKEN_AS:
+        case TOKEN_MATCH:
+        case TOKEN_MATCHES:
+        case TOKEN_PUB:
+        case TOKEN_GLOBAL:
+        case TOKEN_MODULE:
+        case TOKEN_STATIC:
+        case TOKEN_U32:
+        case TOKEN_U64:
+        case TOKEN_F64:
+            return true;
+        default:
+            return false;
+    }
+}
+
+static bool report_reserved_keyword_identifier(ParserContext* ctx, Token token, const char* context) {
+    if (token.type == TOKEN_IDENTIFIER) {
+        return true;
+    }
+
+    const char* context_label = context ? context : "identifier";
+    SrcLocation location = {NULL, token.line, token.column};
+
+    if (token.type == TOKEN_ERROR) {
+        const char* message = token.start ? token.start : "invalid token";
+        report_compile_error(E1006_INVALID_SYNTAX, location,
+                             "expected identifier for %s, but %s",
+                             context_label,
+                             message);
+        return false;
+    }
+
+    char* token_text = NULL;
+    if (token.start && token.length > 0) {
+        token_text = copy_token_text(ctx, token);
+    }
+
+    if (is_reserved_keyword_token(token.type)) {
+        report_compile_error(E1006_INVALID_SYNTAX, location,
+                             "expected identifier for %s, but '%s' is a reserved keyword",
+                             context_label,
+                             token_text ? token_text : token_type_to_string(token.type));
+    } else {
+        report_compile_error(E1006_INVALID_SYNTAX, location,
+                             "expected identifier for %s, but found '%s'",
+                             context_label,
+                             token_text ? token_text : token_type_to_string(token.type));
+    }
+
+    return false;
+}
 
 static bool append_token(Token** tokens, int* count, int* capacity, Token token) {
     if (*count >= *capacity) {
