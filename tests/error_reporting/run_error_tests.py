@@ -89,6 +89,16 @@ def run_case(binary: Path, case: ErrorCase) -> tuple[bool, str]:
     return True, ""
 
 
+def format_status(passed: bool, expect_success: bool) -> str:
+    if passed:
+        label = "PASS" if expect_success else "CORRECT FAIL"
+        color = "\033[32m"
+    else:
+        label = "FAIL"
+        color = "\033[31m"
+    return f"{color}{label}\033[0m"
+
+
 def main(argv: Iterable[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run Orus error-reporting regression suite")
     parser.add_argument(
@@ -108,7 +118,7 @@ def main(argv: Iterable[str] | None = None) -> int:
     failures: list[tuple[ErrorCase, str]] = []
     for case in cases:
         passed, detail = run_case(binary, case)
-        status = "PASS" if passed else "FAIL"
+        status = format_status(passed, case.expect_success)
         print(f"[{status}] {binary.name} {case.program.relative_to(repo_root)}")
         if detail:
             for line in detail.splitlines():

@@ -30,7 +30,6 @@ OptimizationContext* init_optimization_context(void) {
     ctx->enable_constant_folding = true;
     ctx->enable_dead_code_elimination = false; // Future phase
     ctx->enable_common_subexpression = false;  // Future phase
-    ctx->enable_loop_invariant_code_motion = false;
     
     // Initialize analysis structures (for future advanced features)
     ctx->constants = NULL;
@@ -42,10 +41,6 @@ OptimizationContext* init_optimization_context(void) {
     ctx->nodes_eliminated = 0;
     ctx->constants_folded = 0;
     ctx->binary_expressions_folded = 0;
-    ctx->loop_invariants_hoisted = 0;
-    ctx->loops_optimized = 0;
-    ctx->licm_guard_fusions = 0;
-    ctx->licm_redundant_guard_fusions = 0;
     
     // Enable detailed logging
     ctx->verbose_output = true;
@@ -77,15 +72,12 @@ TypedASTNode* optimize_typed_ast(TypedASTNode* input_ast, OptimizationContext* c
         }
     }
     
-    // Phase 2: Loop Invariant Code Motion
-    (void)ctx; // Loop optimization hooks removed; keep signature stable for now.
-
-    // Phase 3: Dead Code Elimination (Future)
+    // Phase 2: Dead Code Elimination (Future)
     if (ctx->enable_dead_code_elimination) {
         printf("[OPTIMIZER] Dead code elimination not yet implemented\n");
     }
 
-    // Phase 4: Common Subexpression Elimination (Future)
+    // Phase 3: Common Subexpression Elimination (Future)
     if (ctx->enable_common_subexpression) {
         printf("[OPTIMIZER] Common subexpression elimination not yet implemented\n");
     }

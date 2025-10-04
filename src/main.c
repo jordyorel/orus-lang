@@ -21,7 +21,6 @@
 #include "errors/error_interface.h"
 #include "errors/features/type_errors.h"
 #include "errors/features/variable_errors.h"
-// #include "compiler/loop_optimization.h" // DISABLED in Phase 2
 #include "tools/repl.h"
 #include "public/version.h"
 #include "config/config.h"

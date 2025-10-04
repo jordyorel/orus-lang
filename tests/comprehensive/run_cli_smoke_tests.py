@@ -6,11 +6,12 @@ from pathlib import Path
 from typing import Iterable, List, Optional
 
 
+@dataclass
 class SmokeResult:
-    def __init__(self, name: str, passed: bool, details: str = "") -> None:
-        self.name = name
-        self.passed = passed
-        self.details = details
+    name: str
+    passed: bool
+    expect_success: bool
+    details: str = ""
 
 
 @dataclass
@@ -65,16 +66,26 @@ def run_smoke(binary: Path, case: SmokeCase) -> SmokeResult:
             )
             if completed.stderr:
                 detail += f" Stderr:\n{completed.stderr.strip()}"
-            return SmokeResult(name, False, detail)
+            return SmokeResult(name, False, case.expect_success, detail)
     if exit_ok:
-        return SmokeResult(name, True)
+        return SmokeResult(name, True, case.expect_success)
 
     output = completed.stdout + completed.stderr
     detail = (
         f"Expected {'success' if case.expect_success else 'failure'}, "
         f"but exit code was {completed.returncode}.\n{output.strip()}"
     )
-    return SmokeResult(name, False, detail)
+    return SmokeResult(name, False, case.expect_success, detail)
+
+
+def format_status(result: SmokeResult) -> str:
+    if result.passed:
+        label = "PASS" if result.expect_success else "CORRECT FAIL"
+        color = "\033[32m"
+    else:
+        label = "FAIL"
+        color = "\033[31m"
+    return f"{color}{label}\033[0m"
 
 
 def load_tests(repo_root: Path) -> List[SmokeCase]:
@@ -133,8 +144,7 @@ def main(argv: Iterable[str] | None = None) -> int:
 
     failures = [result for result in results if not result.passed]
     for result in results:
-        status = "PASS" if result.passed else "FAIL"
-        print(f"[{status}] {result.name}")
+        print(f"[{format_status(result)}] {result.name}")
         if result.details:
             for line in result.details.splitlines():
                 print(f"    {line}")
