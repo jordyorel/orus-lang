@@ -3811,7 +3811,6 @@ static TypedASTNode* generate_typed_ast_recursive(ASTNode* ast, TypeEnv* type_en
                 }
             }
             typed->typed.program.moduleName = ast->program.moduleName;
-            typed->typed.program.hasModuleDeclaration = ast->program.hasModuleDeclaration;
             break;
 
         case NODE_VAR_DECL:

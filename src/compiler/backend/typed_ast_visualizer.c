@@ -361,7 +361,7 @@ static void visualize_node_recursive(TypedASTNode* node, int depth, bool is_last
             }
             break;
         case NODE_PROGRAM:
-            if (node->typed.program.hasModuleDeclaration && node->typed.program.moduleName) {
+            if (node->typed.program.moduleName) {
                 printf(" module='%s'", node->typed.program.moduleName);
             }
             break;

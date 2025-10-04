@@ -302,8 +302,8 @@ throw "boom"
 ```
 
 ### Modules and Imports
-- Files may start with `module path` or `module path:`. The declaration must be the first non-comment statement and may appear only once. The block form (`module pkg.tools:`) requires the entire file to be indented under the declaration.
-- Dotted module names map to directories (`module pkg.stats` lives at `pkg/stats.orus`).
+- Module names are inferred from the file path. The file `geometry/points.orus` defines the module `geometry.points`.
+- Files contain declarations directly—there is no `module` keyword or required indentation block.
 - `use` is available only at module scope:
   - `use math` imports all public symbols.
   - `use math: *` is synonymous with importing all symbols.
@@ -313,14 +313,12 @@ throw "boom"
 - Globals must be uppercase identifiers and may be exported with `pub global`.
 
 ```orus
-module geometry.points:
+pub struct Point:
+    x: i32
+    y: i32
 
-    pub struct Point:
-        x: i32
-        y: i32
-
-    pub fn origin() -> Point:
-        return Point{ x: 0, y: 0 }
+pub fn origin() -> Point:
+    return Point{ x: 0, y: 0 }
 ```
 
 In another file:

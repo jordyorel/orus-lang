@@ -288,8 +288,6 @@ static TokenType identifier_type(const char* start, int length) {
                 return TOKEN_MATCH;
             if (length == 7 && memcmp(start, "matches", 7) == 0)
                 return TOKEN_MATCHES;
-            if (length == 6 && memcmp(start, "module", 6) == 0)
-                return TOKEN_MODULE;
             break;
         case 'n':
             if (length == 3 && memcmp(start, "not", 3) == 0) return TOKEN_NOT;
@@ -988,7 +986,6 @@ const char* token_type_to_string(TokenType type) {
         case TOKEN_MATCHES: return "MATCHES";
         case TOKEN_PUB: return "PUB";
         case TOKEN_GLOBAL: return "GLOBAL";
-        case TOKEN_MODULE: return "MODULE";
         case TOKEN_STATIC: return "STATIC";
         case TOKEN_U32: return "U32";
         case TOKEN_U64: return "U64";

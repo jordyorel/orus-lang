@@ -123,7 +123,6 @@ struct ASTNode {
             ASTNode** declarations;
             int count;
             char* moduleName;
-            bool hasModuleDeclaration;
         } program;
         struct {
             char* name;

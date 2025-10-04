@@ -566,22 +566,16 @@ predictable.
 
 ## 16. Modules
 
-A file may begin with a `module` declaration to establish its path. The declaration must be the first non-comment statement and
-may appear only once per file.
+Module names are inferred directly from the filesystem. The file `geometry/points.orus` defines the module `geometry.points`, and declarations live at the top level—there is no `module` keyword to wrap the file.
 
 ```orus
-module geometry.points:
+pub struct Point:
+    x: i32
+    y: i32
 
-    pub struct Point:
-        x: i32
-        y: i32
-
-    pub fn origin() -> Point:
-        return Point{ x: 0, y: 0 }
+pub fn origin() -> Point:
+    return Point{ x: 0, y: 0 }
 ```
-
-The block form shown above requires the whole file to remain indented beneath the module declaration. Alternatively, use the
-single-line form `module geometry.points` followed by top-level definitions.
 
 ### 16.1 Imports with `use`
 
@@ -669,7 +663,7 @@ print("elapsed seconds:", elapsed)
 - **Annotate intent.** Type annotations communicate design intent to readers and help the compiler surface better diagnostics.
 - **Prefer explicit casts.** Because Orus does not perform implicit promotions, sprinkle `as` conversions where clarity demands it
   rather than relying on subtle coercion rules.
-- **Use modules early.** Organise code by feature. Even small programs benefit from `module` declarations and selective `use`
+- **Use modules early.** Organise code by feature. Even small programs benefit from directory-based modules and selective `use`
   imports.
 - **Design enums for exhaustive matches.** Pattern matching shines when every state is accounted for. Include a `_` arm only when
   you intentionally accept all remaining cases.
@@ -686,21 +680,19 @@ programs with confidence.
 Here is a complete example that exercises the concepts covered above:
 
 ```orus
-module diagnostics.report:
+pub struct Sample:
+    values: [i32]
 
-    pub struct Sample:
-        values: [i32]
+pub fn collect(limit: i32) -> Sample:
+    mut data: [i32] = []
+    for n in 0..=limit:
+        if n % 2 == 0:
+            push(data, n)
+    return Sample{ values: data }
 
-    pub fn collect(limit: i32) -> Sample:
-        mut data: [i32] = []
-        for n in 0..=limit:
-            if n % 2 == 0:
-                push(data, n)
-        return Sample{ values: data }
-
-    pub fn summarize(sample: Sample) -> string:
-        total = len(sample.values)
-        return "even count: " + (total as string)
+pub fn summarize(sample: Sample) -> string:
+    total = len(sample.values)
+    return "even count: " + (total as string)
 ```
 
 ```orus

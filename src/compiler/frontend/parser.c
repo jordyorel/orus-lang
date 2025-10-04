@@ -404,22 +404,19 @@ static const char* getOperatorString(TokenType type) {
 
 // Backward compatibility wrapper
 ASTNode* parseSource(const char* source) {
+    return parseSourceWithModuleName(source, NULL);
+}
+
+ASTNode* parseSourceWithModuleName(const char* source, const char* module_name) {
     static ParserContext* global_ctx = NULL;
     if (!global_ctx) {
         global_ctx = parser_context_create();
     }
-    return parseSourceWithContext(global_ctx, source);
+    return parseSourceWithContextAndModule(global_ctx, source, module_name);
 }
 
 static ASTNode* parseStatement(ParserContext* ctx) {
     Token t = peekToken(ctx);
-
-    if (t.type == TOKEN_MODULE) {
-        SrcLocation location = {NULL, t.line, t.column};
-        report_compile_error(E1006_INVALID_SYNTAX, location,
-                             "'module' declarations must appear at the start of a file");
-        return NULL;
-    }
 
     if (t.type == TOKEN_PRINT || t.type == TOKEN_PRINT_NO_NL) {
         return parsePrintStatement(ctx);
@@ -4644,7 +4641,7 @@ void set_parser_debug(bool enabled) {
 } while(0)
 
 // Context-based parsing interface - new implementation
-ASTNode* parseSourceWithContext(ParserContext* ctx, const char* source) {
+ASTNode* parseSourceWithContextAndModule(ParserContext* ctx, const char* source, const char* module_name) {
     if (!ctx) return NULL;
 
     parser_context_reset(ctx);
@@ -4657,8 +4654,16 @@ ASTNode* parseSourceWithContext(ParserContext* ctx, const char* source) {
     int count = 0;
     int capacity = 0;
 
-    bool moduleDeclared = false;
     char* moduleName = NULL;
+    if (module_name && module_name[0] != '\0') {
+        size_t nameLen = strlen(module_name);
+        moduleName = parser_arena_alloc(ctx, nameLen + 1);
+        if (!moduleName) {
+            return NULL;
+        }
+        memcpy(moduleName, module_name, nameLen);
+        moduleName[nameLen] = '\0';
+    }
 
     while (true) {
         Token t = peekToken(ctx);
@@ -4674,93 +4679,12 @@ ASTNode* parseSourceWithContext(ParserContext* ctx, const char* source) {
             return NULL;
         }
         if (t.type == TOKEN_COMMA) {
-            // Skip commas between statements (for comma-separated variable declarations)
             nextToken(ctx);
             continue;
         }
         if (t.type == TOKEN_SEMICOLON) {
             nextToken(ctx);
             continue;
-        }
-
-        if (!moduleDeclared && t.type == TOKEN_MODULE) {
-            nextToken(ctx); // consume 'module'
-            Token nameTok = nextToken(ctx);
-            moduleName = parse_qualified_name(ctx, nameTok, "expected module name after 'module'");
-            if (!moduleName) {
-                return NULL;
-            }
-            moduleDeclared = true;
-
-            bool colonForm = false;
-            if (peekToken(ctx).type == TOKEN_COLON) {
-                colonForm = true;
-                nextToken(ctx);
-            }
-
-            Token afterDecl = peekToken(ctx);
-            if (afterDecl.type == TOKEN_NEWLINE) {
-                nextToken(ctx);
-            } else if (afterDecl.type != TOKEN_EOF) {
-                SrcLocation location = {NULL, afterDecl.line, afterDecl.column};
-                report_compile_error(E1006_INVALID_SYNTAX, location,
-                                     "expected newline after module declaration");
-                return NULL;
-            }
-
-            if (colonForm) {
-                while (peekToken(ctx).type == TOKEN_NEWLINE) {
-                    nextToken(ctx);
-                }
-                Token indentTok = consume_indent_token(ctx);
-                if (indentTok.type != TOKEN_INDENT) {
-                    SrcLocation location = {NULL, indentTok.line, indentTok.column};
-                    report_compile_error(E1006_INVALID_SYNTAX, location,
-                                         "expected indented module body after ':'");
-                    return NULL;
-                }
-
-                int savedDepth = ctx->block_depth;
-                ctx->block_depth--;
-                ASTNode* bodyBlock = parseBlock(ctx);
-                ctx->block_depth = savedDepth;
-                if (!bodyBlock) {
-                    return NULL;
-                }
-
-                if (bodyBlock->type != NODE_BLOCK) {
-                    SrcLocation location = {NULL, indentTok.line, indentTok.column};
-                    report_compile_error(E1006_INVALID_SYNTAX, location,
-                                         "invalid module body");
-                    return NULL;
-                }
-
-                for (int i = 0; i < bodyBlock->block.count; i++) {
-                    addStatement(ctx, &statements, &count, &capacity, bodyBlock->block.statements[i]);
-                }
-
-                while (peekToken(ctx).type == TOKEN_NEWLINE) {
-                    nextToken(ctx);
-                }
-
-                if (peekToken(ctx).type != TOKEN_EOF) {
-                    Token extra = peekToken(ctx);
-                    SrcLocation location = {NULL, extra.line, extra.column};
-                    report_compile_error(E1006_INVALID_SYNTAX, location,
-                                         "module block must contain the entire file");
-                    return NULL;
-                }
-                break;
-            }
-
-            continue;
-        }
-
-        if (t.type == TOKEN_MODULE) {
-            SrcLocation location = {NULL, t.line, t.column};
-            report_compile_error(E1006_INVALID_SYNTAX, location,
-                                 "duplicate module declaration");
-            return NULL;
         }
 
         ASTNode* stmt = parseStatement(ctx);
@@ -4771,19 +4695,21 @@ ASTNode* parseSourceWithContext(ParserContext* ctx, const char* source) {
         addStatement(ctx, &statements, &count, &capacity, stmt);
     }
 
-    // Create program node even if empty (valid empty program)
     ASTNode* root = new_node(ctx);
 
     root->type = NODE_PROGRAM;
     root->program.declarations = statements;
     root->program.count = count;
     root->program.moduleName = moduleName;
-    root->program.hasModuleDeclaration = moduleDeclared;
     root->location.line = 1;
     root->location.column = 1;
     root->dataType = NULL;
 
     return root;
+}
+
+ASTNode* parseSourceWithContext(ParserContext* ctx, const char* source) {
+    return parseSourceWithContextAndModule(ctx, source, NULL);
 }
 
 

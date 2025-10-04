@@ -1,5 +1,3 @@
-module math_module
-
 pub global PI = 314
 
 pub fn double(value):

@@ -1,4 +1,4 @@
-use type_provider: Point as P, Color, origin
+use tests.modules.type_provider: Point as P, Color, origin
 
 fn add(point: P) -> i32:
     return point.x + point.y
