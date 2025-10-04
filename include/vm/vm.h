@@ -763,7 +763,6 @@ typedef struct {
     bool nestedLoopUsage;   // Whether used in nested loops
     bool crossesLoopBoundary; // Whether lifetime crosses loop boundaries
     bool isShortLived;      // Whether variable has short lifetime
-    bool isLoopInvariant;   // Whether variable is loop invariant
     int priority;           // Priority for register allocation
 } LiveRange;
 
@@ -790,26 +789,6 @@ typedef struct {
     int loopVarStartInstr; // Instruction where loop variable becomes live
 } LoopContext;
 
-// Loop Invariant Code Motion (LICM) instruction-level data structures
-typedef struct {
-    int instructionOffset;    // Offset in bytecode where invariant operation occurs
-    uint8_t operation;        // The operation opcode
-    uint8_t operand1;         // First operand register
-    uint8_t operand2;         // Second operand register  
-    uint8_t result;           // Result register
-    bool canHoist;            // Whether this operation can be safely hoisted
-    bool hasBeenHoisted;      // Whether this has already been hoisted
-} InvariantNode;
-
-typedef struct {
-    InvariantNode* invariantNodes;  // Array of detected invariant operations
-    int count;                      // Number of invariant operations found
-    int capacity;                   // Capacity of arrays
-    uint8_t* hoistedRegs;          // Registers used for hoisted values
-    uint8_t* originalInstructions; // Original instruction opcodes
-    bool* canHoist;                // Which operations can be hoisted
-} InstructionLICMAnalysis;
-
 // Forward declarations  
 struct TypeInferer;
 
@@ -822,7 +801,6 @@ typedef struct ScopeVariable {
     int lastUse;             // Last use of the variable
     bool escapes;            // Whether variable escapes current scope
     bool isLoopVar;          // Whether this is a loop induction variable
-    bool isLoopInvariant;    // Whether variable is loop invariant
     bool crossesLoopBoundary; // Whether lifetime crosses loop boundaries
     uint8_t reg;             // Assigned register
     int priority;            // Priority for register allocation

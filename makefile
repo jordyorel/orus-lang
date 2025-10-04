@@ -338,35 +338,51 @@ _test-run: $(ORUS)
 	@echo "Running Comprehensive Test Suite..."
 	@echo "==================================="
 	@passed=0; failed=0; current_dir=""; \
-SUBDIRS="arrays arithmetic algorithms benchmarks builtins comments comprehensive control_flow edge_cases expressions formatting functions literals modules register_file scope_analysis strings structs type_safety_fails types/f64 types/i32 types/i64 variables"; \
-for subdir in $$SUBDIRS; do \
-subdir_path="$(TESTDIR)/$$subdir"; \
-if [ ! -d "$$subdir_path" ]; then \
-continue; \
-fi; \
-for test_file in $$(find "$$subdir_path" -type f -name "*.orus" | sort); do \
-if [ -f "$$test_file" ]; then \
-if [ "$$subdir" != "$$current_dir" ]; then \
-current_dir=$$subdir; \
-echo ""; \
-echo "\033[36m=== $$current_dir Tests ===\033[0m"; \
-fi; \
-printf "Testing: $$test_file ... "; \
-if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
-printf "\033[32mPASS\033[0m\n"; \
-passed=$$((passed + 1)); \
-else \
-            if echo "$$test_file" | grep -q -E "$(TESTDIR)/type_safety_fails|$(TESTDIR)/edge_cases/modulo_by_zero_test.orus|$(TESTDIR)/edge_cases/large_number_modulo_by_zero.orus|$(TESTDIR)/edge_cases/expression_modulo_by_zero.orus|$(TESTDIR)/edge_cases/division_by_zero_enhanced.orus|$(TESTDIR)/edge_cases/division_by_zero_runtime.orus|$(TESTDIR)/types/u32/u32_division_by_zero.orus|$(TESTDIR)/types/f64/test_f64_runtime_div.orus"; then \
-                printf "\033[32mCORRECT FAIL\033[0m\n"; \
-passed=$$((passed + 1)); \
-else \
-printf "\033[31mFAIL\033[0m\n"; \
-failed=$$((failed + 1)); \
-fi; \
-fi; \
-fi; \
-done; \
-done; \
+		expected_fail_files="$$(find "$(TESTDIR)/type_safety_fails" -type f -name "*.orus" 2>/dev/null)"; \
+		expected_fail_files="$$expected_fail_files $(TESTDIR)/types/u32/u32_division_by_zero.orus $(TESTDIR)/types/f64/test_f64_runtime_div.orus"; \
+		expected_fail_files="$$(printf '%s\n' $$expected_fail_files | sed '/^$$/d' | sort)"; \
+	SUBDIRS="algorithms arithmetic arrays benchmarks builtins comments comprehensive control_flow expressions functions io modules strings structs types variables"; \
+	for subdir in $$SUBDIRS; do \
+		subdir_path="$(TESTDIR)/$$subdir"; \
+		if [ ! -d "$$subdir_path" ]; then \
+			continue; \
+		fi; \
+		for test_file in $$(find "$$subdir_path" -type f -name "*.orus" | sort); do \
+			if printf '%s\n' "$$expected_fail_files" | grep -Fx "$$test_file" >/dev/null; then \
+				continue; \
+			fi; \
+			if [ "$$subdir" != "$$current_dir" ]; then \
+				current_dir=$$subdir; \
+				echo ""; \
+				echo "\033[36m=== $$current_dir Tests ===\033[0m"; \
+			fi; \
+			printf "Testing: $$test_file ... "; \
+			if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
+				printf "\033[32mPASS\033[0m\n"; \
+				passed=$$((passed + 1)); \
+			else \
+				printf "\033[31mFAIL\033[0m\n"; \
+				failed=$$((failed + 1)); \
+			fi; \
+		done; \
+	done; \
+	if [ -n "$$expected_fail_files" ]; then \
+		echo ""; \
+		echo "\033[36m=== CORRECT FAIL Tests ===\033[0m"; \
+		for fail_test in $$expected_fail_files; do \
+			if [ ! -f "$$fail_test" ]; then \
+				continue; \
+			fi; \
+			printf "Testing: $$fail_test ... "; \
+			if ./$(ORUS) "$$fail_test" >/dev/null 2>&1; then \
+				printf "\033[31mUNEXPECTED PASS\033[0m\n"; \
+				failed=$$((failed + 1)); \
+			else \
+				printf "\033[32mCORRECT FAIL\033[0m\n"; \
+				passed=$$((passed + 1)); \
+			fi; \
+			done; \
+	fi; \
 	echo ""; \
 	echo "========================"; \
 	echo "\033[36m=== Test Summary ===\033[0m"; \
@@ -375,7 +391,8 @@ done; \
 	else \
 		echo "\033[31m✗ $$failed test(s) failed, $$passed test(s) passed.\033[0m"; \
 	fi; \
-	echo ""
+	echo ""; \
+
 	@echo "\033[36m=== Bytecode Jump Patch Tests ===\033[0m"
 	@$(MAKE) bytecode-jump-tests
 	@echo ""

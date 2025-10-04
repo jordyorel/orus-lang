@@ -74,11 +74,6 @@ struct TypedASTNode {
     int suggestedRegister;   // Suggested register for this value (-1 if none)
     bool spillable;          // Whether this value can be spilled to memory
 
-    // Typed loop optimization metadata
-    uint32_t typed_escape_mask;   // Bitmask describing which guards escape the loop
-    bool typed_guard_witness;     // True if guard has a stable type witness
-    bool typed_metadata_stable;   // Tracks whether typed metadata survived optimization
-    
     // Child nodes (typed versions)
     union {
         struct {
