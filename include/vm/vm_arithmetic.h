@@ -23,7 +23,6 @@
     do { \
         int32_t result; \
         if (unlikely(__builtin_add_overflow(a, b, &result))) { \
-            vm_trace_loop_event(LOOP_TRACE_OVERFLOW_GUARD); \
             runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
                        "Integer overflow"); \
             RETURN(INTERPRET_RUNTIME_ERROR); \
@@ -36,7 +35,6 @@
     do { \
         int32_t result; \
         if (unlikely(__builtin_sub_overflow(a, b, &result))) { \
-            vm_trace_loop_event(LOOP_TRACE_OVERFLOW_GUARD); \
             runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
                        "Integer overflow"); \
             RETURN(INTERPRET_RUNTIME_ERROR); \
@@ -49,7 +47,6 @@
     do { \
         int32_t result; \
         if (unlikely(__builtin_mul_overflow(a, b, &result))) { \
-            vm_trace_loop_event(LOOP_TRACE_OVERFLOW_GUARD); \
             runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
                        "Integer overflow"); \
             RETURN(INTERPRET_RUNTIME_ERROR); \
@@ -61,13 +58,11 @@
 #define HANDLE_I32_OVERFLOW_DIV(a, b, dst_reg) \
     do { \
         if (unlikely(b == 0)) { \
-            vm_trace_loop_event(LOOP_TRACE_OVERFLOW_GUARD); \
             runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
                        "Division by zero"); \
             RETURN(INTERPRET_RUNTIME_ERROR); \
         } \
         if (unlikely(a == INT32_MIN && b == -1)) { \
-            vm_trace_loop_event(LOOP_TRACE_OVERFLOW_GUARD); \
             runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
                        "Integer overflow"); \
             RETURN(INTERPRET_RUNTIME_ERROR); \
@@ -79,13 +74,11 @@
 #define HANDLE_I32_OVERFLOW_MOD(a, b, dst_reg) \
     do { \
         if (unlikely(b == 0)) { \
-            vm_trace_loop_event(LOOP_TRACE_OVERFLOW_GUARD); \
             runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
                        "Division by zero"); \
             RETURN(INTERPRET_RUNTIME_ERROR); \
         } \
         if (unlikely(a == INT32_MIN && b == -1)) { \
-            vm_trace_loop_event(LOOP_TRACE_OVERFLOW_GUARD); \
             runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
                        "Integer overflow"); \
             RETURN(INTERPRET_RUNTIME_ERROR); \
@@ -98,7 +91,6 @@
     do { \
         uint32_t result; \
         if (unlikely(__builtin_add_overflow(a, b, &result))) { \
-            vm_trace_loop_event(LOOP_TRACE_OVERFLOW_GUARD); \
             runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
                        "Unsigned integer overflow"); \
             RETURN(INTERPRET_RUNTIME_ERROR); \
@@ -111,7 +103,6 @@
     do { \
         uint32_t result; \
         if (unlikely(__builtin_sub_overflow(a, b, &result))) { \
-            vm_trace_loop_event(LOOP_TRACE_OVERFLOW_GUARD); \
             runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
                        "Unsigned integer underflow"); \
             RETURN(INTERPRET_RUNTIME_ERROR); \
@@ -124,7 +115,6 @@
     do { \
         uint32_t result; \
         if (unlikely(__builtin_mul_overflow(a, b, &result))) { \
-            vm_trace_loop_event(LOOP_TRACE_OVERFLOW_GUARD); \
             runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
                        "Unsigned integer overflow"); \
             RETURN(INTERPRET_RUNTIME_ERROR); \
@@ -136,7 +126,6 @@
 #define HANDLE_U32_OVERFLOW_DIV(a, b, dst_reg) \
     do { \
         if (unlikely(b == 0)) { \
-            vm_trace_loop_event(LOOP_TRACE_OVERFLOW_GUARD); \
             runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
                        "Division by zero"); \
             RETURN(INTERPRET_RUNTIME_ERROR); \
@@ -147,7 +136,6 @@
 #define HANDLE_U32_OVERFLOW_MOD(a, b, dst_reg) \
     do { \
         if (unlikely(b == 0)) { \
-            vm_trace_loop_event(LOOP_TRACE_OVERFLOW_GUARD); \
             runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
                        "Division by zero"); \
             RETURN(INTERPRET_RUNTIME_ERROR); \
@@ -159,7 +147,6 @@
     do { \
         int64_t result; \
         if (unlikely(__builtin_add_overflow(a, b, &result))) { \
-            vm_trace_loop_event(LOOP_TRACE_OVERFLOW_GUARD); \
             runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
                        "Integer overflow: result exceeds i64 range"); \
             RETURN(INTERPRET_RUNTIME_ERROR); \
@@ -171,7 +158,6 @@
     do { \
         int64_t result; \
         if (unlikely(__builtin_sub_overflow(a, b, &result))) { \
-            vm_trace_loop_event(LOOP_TRACE_OVERFLOW_GUARD); \
             runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
                        "Integer overflow: result exceeds i64 range"); \
             RETURN(INTERPRET_RUNTIME_ERROR); \
@@ -183,7 +169,6 @@
     do { \
         int64_t result; \
         if (unlikely(__builtin_mul_overflow(a, b, &result))) { \
-            vm_trace_loop_event(LOOP_TRACE_OVERFLOW_GUARD); \
             runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
                        "Integer overflow: result exceeds i64 range"); \
             RETURN(INTERPRET_RUNTIME_ERROR); \
@@ -194,13 +179,11 @@
 #define HANDLE_I64_OVERFLOW_DIV(a, b, dst_reg) \
     do { \
         if (unlikely(b == 0)) { \
-            vm_trace_loop_event(LOOP_TRACE_OVERFLOW_GUARD); \
             runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
                        "Division by zero"); \
             RETURN(INTERPRET_RUNTIME_ERROR); \
         } \
         if (unlikely(a == INT64_MIN && b == -1)) { \
-            vm_trace_loop_event(LOOP_TRACE_OVERFLOW_GUARD); \
             runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
                        "Integer overflow: result exceeds i64 range"); \
             RETURN(INTERPRET_RUNTIME_ERROR); \
@@ -211,7 +194,6 @@
 #define HANDLE_I64_OVERFLOW_MOD(a, b, dst_reg) \
     do { \
         if (unlikely(b == 0)) { \
-            vm_trace_loop_event(LOOP_TRACE_OVERFLOW_GUARD); \
             runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
                        "Division by zero"); \
             RETURN(INTERPRET_RUNTIME_ERROR); \
@@ -227,7 +209,6 @@
     do { \
         uint64_t result; \
         if (unlikely(__builtin_add_overflow(a, b, &result))) { \
-            vm_trace_loop_event(LOOP_TRACE_OVERFLOW_GUARD); \
             runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
                        "Unsigned integer overflow: result exceeds u64 range"); \
             RETURN(INTERPRET_RUNTIME_ERROR); \
@@ -239,7 +220,6 @@
     do { \
         uint64_t result; \
         if (unlikely(__builtin_sub_overflow(a, b, &result))) { \
-            vm_trace_loop_event(LOOP_TRACE_OVERFLOW_GUARD); \
             runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
                        "Unsigned integer underflow"); \
             RETURN(INTERPRET_RUNTIME_ERROR); \
@@ -251,7 +231,6 @@
     do { \
         uint64_t result; \
         if (unlikely(__builtin_mul_overflow(a, b, &result))) { \
-            vm_trace_loop_event(LOOP_TRACE_OVERFLOW_GUARD); \
             runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
                        "Unsigned integer overflow: result exceeds u64 range"); \
             RETURN(INTERPRET_RUNTIME_ERROR); \
@@ -262,7 +241,6 @@
 #define HANDLE_U64_OVERFLOW_DIV(a, b, dst_reg) \
     do { \
         if (unlikely(b == 0)) { \
-            vm_trace_loop_event(LOOP_TRACE_OVERFLOW_GUARD); \
             runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
                        "Division by zero"); \
             RETURN(INTERPRET_RUNTIME_ERROR); \
@@ -273,7 +251,6 @@
 #define HANDLE_U64_OVERFLOW_MOD(a, b, dst_reg) \
     do { \
         if (unlikely(b == 0)) { \
-            vm_trace_loop_event(LOOP_TRACE_OVERFLOW_GUARD); \
             runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
                        "Division by zero"); \
             RETURN(INTERPRET_RUNTIME_ERROR); \
@@ -285,7 +262,6 @@
     do { \
         double result = a + b; \
         if (unlikely(!isfinite(result))) { \
-            vm_trace_loop_event(LOOP_TRACE_OVERFLOW_GUARD); \
             if (isnan(result)) { \
                 runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
                            "Floating-point operation resulted in NaN"); \
@@ -302,7 +278,6 @@
     do { \
         double result = a - b; \
         if (unlikely(!isfinite(result))) { \
-            vm_trace_loop_event(LOOP_TRACE_OVERFLOW_GUARD); \
             if (isnan(result)) { \
                 runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
                            "Floating-point operation resulted in NaN"); \
@@ -319,7 +294,6 @@
     do { \
         double result = a * b; \
         if (unlikely(!isfinite(result))) { \
-            vm_trace_loop_event(LOOP_TRACE_OVERFLOW_GUARD); \
             if (isnan(result)) { \
                 runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
                            "Floating-point operation resulted in NaN"); \
@@ -335,7 +309,6 @@
 #define HANDLE_F64_OVERFLOW_DIV(a, b, dst_reg) \
     do { \
         if (unlikely(b == 0.0)) { \
-            vm_trace_loop_event(LOOP_TRACE_OVERFLOW_GUARD); \
             runtimeError(ERROR_VALUE, (SrcLocation){NULL, 0, 0}, \
                        "Division by zero"); \
             RETURN(INTERPRET_RUNTIME_ERROR); \

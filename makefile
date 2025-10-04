@@ -6,6 +6,12 @@ EMCC ?= emcc
 # Default is debug for development
 PROFILE ?= debug
 
+# Dedicated profiles for higher-level automation targets.
+# These default to release builds so that long-running suites remain
+# responsive now that loop-specific fast paths have been removed.
+TEST_PROFILE ?= release
+BENCHMARK_PROFILE ?= release
+
 # Architecture Detection
 UNAME_M := $(shell uname -m)
 UNAME_S := $(shell uname -s)
@@ -203,11 +209,11 @@ INCLUDES = -I$(INCDIR)
 COMPILER_FRONTEND_SRCS = $(SRCDIR)/compiler/frontend/lexer.c $(SRCDIR)/compiler/frontend/parser.c
 
 # Keep multipass compiler and minimal dependencies 
-COMPILER_BACKEND_SRCS = $(SRCDIR)/compiler/backend/typed_ast_visualizer.c $(SRCDIR)/compiler/backend/register_allocator.c $(SRCDIR)/compiler/backend/compiler.c $(SRCDIR)/compiler/backend/optimization/optimizer.c $(SRCDIR)/compiler/backend/optimization/constantfold.c $(SRCDIR)/compiler/backend/optimization/licm.c $(SRCDIR)/compiler/backend/codegen/codegen.c $(SRCDIR)/compiler/backend/codegen/peephole.c $(SRCDIR)/compiler/backend/error_reporter.c $(SRCDIR)/compiler/backend/scope_stack.c $(SRCDIR)/compiler/symbol_table.c
+COMPILER_BACKEND_SRCS = $(SRCDIR)/compiler/backend/typed_ast_visualizer.c $(SRCDIR)/compiler/backend/register_allocator.c $(SRCDIR)/compiler/backend/compiler.c $(SRCDIR)/compiler/backend/optimization/optimizer.c $(SRCDIR)/compiler/backend/optimization/constantfold.c $(SRCDIR)/compiler/backend/codegen/codegen.c $(SRCDIR)/compiler/backend/codegen/peephole.c $(SRCDIR)/compiler/backend/error_reporter.c $(SRCDIR)/compiler/backend/scope_stack.c $(SRCDIR)/compiler/symbol_table.c
 
 # Combined simplified compiler sources  
 COMPILER_SRCS = $(COMPILER_FRONTEND_SRCS) $(COMPILER_BACKEND_SRCS) $(SRCDIR)/compiler/typed_ast.c $(SRCDIR)/debug/debug_config.c
-VM_SRCS = $(SRCDIR)/vm/core/vm_core.c $(SRCDIR)/vm/core/vm_tagged_union.c $(SRCDIR)/vm/runtime/vm.c $(SRCDIR)/vm/runtime/vm_loop_fastpaths.c $(SRCDIR)/vm/core/vm_memory.c $(SRCDIR)/vm/utils/debug.c $(SRCDIR)/vm/runtime/builtin_print.c $(SRCDIR)/vm/runtime/builtin_input.c $(SRCDIR)/vm/runtime/builtin_array_push.c $(SRCDIR)/vm/runtime/builtin_array_pop.c $(SRCDIR)/vm/runtime/builtin_time_stamp.c $(SRCDIR)/vm/runtime/builtin_number.c $(SRCDIR)/vm/runtime/builtin_type_of.c $(SRCDIR)/vm/runtime/builtin_is_type.c $(SRCDIR)/vm/runtime/builtin_range.c $(SRCDIR)/vm/runtime/builtin_sorted.c $(SRCDIR)/vm/runtime/builtin_assert.c $(SRCDIR)/vm/operations/vm_arithmetic.c $(SRCDIR)/vm/operations/vm_control_flow.c $(SRCDIR)/vm/operations/vm_typed_ops.c $(SRCDIR)/vm/operations/vm_string_ops.c $(SRCDIR)/vm/operations/vm_comparison.c $(SRCDIR)/vm/dispatch/vm_dispatch_switch.c $(SRCDIR)/vm/dispatch/vm_dispatch_goto.c $(SRCDIR)/vm/core/vm_validation.c $(SRCDIR)/vm/register_file.c $(SRCDIR)/vm/spill_manager.c $(SRCDIR)/vm/module_manager.c $(SRCDIR)/vm/register_cache.c $(SRCDIR)/vm/profiling/vm_profiling.c $(SRCDIR)/vm/vm_config.c $(SRCDIR)/type/type_representation.c $(SRCDIR)/type/type_inference.c $(SRCDIR)/errors/infrastructure/error_infrastructure.c $(SRCDIR)/errors/core/error_base.c $(SRCDIR)/errors/features/type_errors.c $(SRCDIR)/errors/features/variable_errors.c $(SRCDIR)/errors/features/control_flow_errors.c $(SRCDIR)/config/config.c $(SRCDIR)/internal/logging.c
+VM_SRCS = $(SRCDIR)/vm/core/vm_core.c $(SRCDIR)/vm/core/vm_tagged_union.c $(SRCDIR)/vm/runtime/vm.c $(SRCDIR)/vm/core/vm_memory.c $(SRCDIR)/vm/utils/debug.c $(SRCDIR)/vm/runtime/builtin_print.c $(SRCDIR)/vm/runtime/builtin_input.c $(SRCDIR)/vm/runtime/builtin_array_push.c $(SRCDIR)/vm/runtime/builtin_array_pop.c $(SRCDIR)/vm/runtime/builtin_time_stamp.c $(SRCDIR)/vm/runtime/builtin_number.c $(SRCDIR)/vm/runtime/builtin_type_of.c $(SRCDIR)/vm/runtime/builtin_is_type.c $(SRCDIR)/vm/runtime/builtin_range.c $(SRCDIR)/vm/runtime/builtin_sorted.c $(SRCDIR)/vm/runtime/builtin_assert.c $(SRCDIR)/vm/operations/vm_arithmetic.c $(SRCDIR)/vm/operations/vm_control_flow.c $(SRCDIR)/vm/operations/vm_typed_ops.c $(SRCDIR)/vm/operations/vm_string_ops.c $(SRCDIR)/vm/operations/vm_comparison.c $(SRCDIR)/vm/dispatch/vm_dispatch_switch.c $(SRCDIR)/vm/dispatch/vm_dispatch_goto.c $(SRCDIR)/vm/core/vm_validation.c $(SRCDIR)/vm/register_file.c $(SRCDIR)/vm/spill_manager.c $(SRCDIR)/vm/module_manager.c $(SRCDIR)/vm/register_cache.c $(SRCDIR)/vm/profiling/vm_profiling.c $(SRCDIR)/vm/vm_config.c $(SRCDIR)/type/type_representation.c $(SRCDIR)/type/type_inference.c $(SRCDIR)/errors/infrastructure/error_infrastructure.c $(SRCDIR)/errors/core/error_base.c $(SRCDIR)/errors/features/type_errors.c $(SRCDIR)/errors/features/variable_errors.c $(SRCDIR)/errors/features/control_flow_errors.c $(SRCDIR)/config/config.c $(SRCDIR)/internal/logging.c
 REPL_SRC = $(SRCDIR)/repl.c
 MAIN_SRC = $(SRCDIR)/main.c
 
@@ -234,7 +240,6 @@ BYTECODE_TEST_BIN = $(BUILDDIR)/tests/test_jump_patch
 SOURCE_MAP_TEST_BIN = $(BUILDDIR)/tests/test_source_mapping
 SCOPE_TRACKING_TEST_BIN = $(BUILDDIR)/tests/test_scope_tracking
 PEEPHOLE_TEST_BIN = $(BUILDDIR)/tests/test_constant_propagation
-LICM_METADATA_TEST_BIN = $(BUILDDIR)/tests/test_licm_typed_metadata
 TAGGED_UNION_TEST_BIN = $(BUILDDIR)/tests/test_vm_tagged_union
 TYPED_REGISTER_TEST_BIN = $(BUILDDIR)/tests/test_vm_typed_registers
 BUILTIN_INPUT_TEST_BIN = $(BUILDDIR)/tests/test_builtin_input
@@ -251,7 +256,7 @@ BUILTIN_RANGE_ORUS_FAIL_TESTS = \
     tests/builtins/range_float_step.orus \
     tests/builtins/range_overflow_stop.orus
 
-.PHONY: all clean test unit-test test-control-flow test-loop-telemetry benchmark help debug release release-with-wasm profiling analyze install dist package bytecode-jump-tests source-map-tests scope-tracking-tests peephole-tests cli-smoke-tests licm-metadata-tests tagged-union-tests builtin-input-tests builtin-range-tests test-optimizer wasm
+.PHONY: all clean test unit-test test-control-flow benchmark help debug release release-with-wasm profiling analyze install dist package bytecode-jump-tests source-map-tests scope-tracking-tests peephole-tests cli-smoke-tests tagged-union-tests builtin-input-tests builtin-range-tests test-optimizer wasm _test-run _benchmark-run
 
 all: build-info $(ORUS)
 
@@ -326,35 +331,42 @@ $(WASM_JS): $(WASM_SRCS)
 $(WASM_WASM): $(WASM_JS)
 
 # Run comprehensive test suite
-test: $(ORUS)
+test:
+	@$(MAKE) PROFILE=$(TEST_PROFILE) _test-run
+
+_test-run: $(ORUS)
 	@echo "Running Comprehensive Test Suite..."
 	@echo "==================================="
 	@passed=0; failed=0; current_dir=""; \
 SUBDIRS="arrays arithmetic algorithms benchmarks builtins comments comprehensive control_flow edge_cases expressions formatting functions literals modules register_file scope_analysis strings structs type_safety_fails types/f64 types/i32 types/i64 variables"; \
-	for subdir in $$SUBDIRS; do \
-		for test_file in $$(find $(TESTDIR)/$$subdir -type f -name "*.orus" | sort); do \
-			if [ -f "$$test_file" ]; then \
-				if [ "$$subdir" != "$$current_dir" ]; then \
-					current_dir=$$subdir; \
-					echo ""; \
-					echo "\033[36m=== $$current_dir Tests ===\033[0m"; \
-				fi; \
-				printf "Testing: $$test_file ... "; \
-				if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
-					printf "\033[32mPASS\033[0m\n"; \
-					passed=$$((passed + 1)); \
-				else \
-					if echo "$$test_file" | grep -q -E "$(TESTDIR)/type_safety_fails|$(TESTDIR)/edge_cases/modulo_by_zero_test.orus|$(TESTDIR)/edge_cases/large_number_modulo_by_zero.orus|$(TESTDIR)/edge_cases/expression_modulo_by_zero.orus|$(TESTDIR)/edge_cases/division_by_zero_enhanced.orus|$(TESTDIR)/edge_cases/division_by_zero_runtime.orus|$(TESTDIR)/types/u32/u32_division_by_zero.orus|$(TESTDIR)/types/f64/test_f64_runtime_div.orus"; then \
-						printf "\033[32mCORRECT FAIL\033[0m\n"; \
-						passed=$$((passed + 1)); \
-					else \
-						printf "\033[31mFAIL\033[0m\n"; \
-						failed=$$((failed + 1)); \
-					fi; \
-				fi; \
-			fi; \
-		done; \
-	done; \
+for subdir in $$SUBDIRS; do \
+subdir_path="$(TESTDIR)/$$subdir"; \
+if [ ! -d "$$subdir_path" ]; then \
+continue; \
+fi; \
+for test_file in $$(find "$$subdir_path" -type f -name "*.orus" | sort); do \
+if [ -f "$$test_file" ]; then \
+if [ "$$subdir" != "$$current_dir" ]; then \
+current_dir=$$subdir; \
+echo ""; \
+echo "\033[36m=== $$current_dir Tests ===\033[0m"; \
+fi; \
+printf "Testing: $$test_file ... "; \
+if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
+printf "\033[32mPASS\033[0m\n"; \
+passed=$$((passed + 1)); \
+else \
+            if echo "$$test_file" | grep -q -E "$(TESTDIR)/type_safety_fails|$(TESTDIR)/edge_cases/modulo_by_zero_test.orus|$(TESTDIR)/edge_cases/large_number_modulo_by_zero.orus|$(TESTDIR)/edge_cases/expression_modulo_by_zero.orus|$(TESTDIR)/edge_cases/division_by_zero_enhanced.orus|$(TESTDIR)/edge_cases/division_by_zero_runtime.orus|$(TESTDIR)/types/u32/u32_division_by_zero.orus|$(TESTDIR)/types/f64/test_f64_runtime_div.orus"; then \
+                printf "\033[32mCORRECT FAIL\033[0m\n"; \
+passed=$$((passed + 1)); \
+else \
+printf "\033[31mFAIL\033[0m\n"; \
+failed=$$((failed + 1)); \
+fi; \
+fi; \
+fi; \
+done; \
+done; \
 	echo ""; \
 	echo "========================"; \
 	echo "\033[36m=== Test Summary ===\033[0m"; \
@@ -364,9 +376,6 @@ SUBDIRS="arrays arithmetic algorithms benchmarks builtins comments comprehensive
 		echo "\033[31m✗ $$failed test(s) failed, $$passed test(s) passed.\033[0m"; \
 	fi; \
 	echo ""
-	@echo "\033[36m=== Error Reporting Tests ===\033[0m"
-	@python3 tests/error_reporting/run_error_tests.py ./$(ORUS)
-	@echo ""
 	@echo "\033[36m=== Bytecode Jump Patch Tests ===\033[0m"
 	@$(MAKE) bytecode-jump-tests
 	@echo ""
@@ -393,6 +402,9 @@ SUBDIRS="arrays arithmetic algorithms benchmarks builtins comments comprehensive
 	@echo ""
 	@echo "\033[36m=== Builtin Range Tests ===\033[0m"
 	@$(MAKE) builtin-range-tests
+	@echo ""
+	@echo "\033[36m=== Error Reporting Tests ===\033[0m"
+	@python3 tests/error_reporting/run_error_tests.py ./$(ORUS)
 	@echo ""
 	@echo "\033[36m=== CLI Smoke Tests ===\033[0m"
 	@python3 tests/comprehensive/run_cli_smoke_tests.py ./$(ORUS)
@@ -438,15 +450,6 @@ $(PEEPHOLE_TEST_BIN): tests/unit/test_constant_propagation.c $(COMPILER_OBJS) $(
 peephole-tests: $(PEEPHOLE_TEST_BIN)
 	@echo "Running constant propagation tests..."
 	@./$(PEEPHOLE_TEST_BIN)
-
-$(LICM_METADATA_TEST_BIN): tests/unit/test_licm_typed_metadata.c $(COMPILER_OBJS) $(VM_OBJS)
-	@mkdir -p $(dir $@)
-	@echo "Compiling LICM typed metadata tests..."
-	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
-
-licm-metadata-tests: $(LICM_METADATA_TEST_BIN)
-	@echo "Running LICM typed metadata tests..."
-	@./$(LICM_METADATA_TEST_BIN)
 
 $(TAGGED_UNION_TEST_BIN): tests/unit/test_vm_tagged_union.c $(COMPILER_OBJS) $(VM_OBJS)
 	@mkdir -p $(dir $@)
@@ -552,56 +555,9 @@ test-control-flow: $(ORUS)
 		echo "\033[31m✗ $$failed control flow test(s) failed\033[0m"; \
 	fi
 
-test-loop-telemetry: $(ORUS)
-	@echo "Running loop telemetry baseline..."
-	@mkdir -p build/loop_telemetry
-	@passed=0; failed=0; \
-        for test_file in \
-                tests/control_flow/loop_typed_fastpath_correctness.orus \
-                tests/loop_fastpaths/phase1/bool_branch_short_circuit.orus \
-                tests/loop_fastpaths/phase2/inc_checked.orus \
-                tests/loop_fastpaths/phase2/inc_disable_fastpath.orus \
-                tests/loop_fastpaths/phase3/iterator_zero_alloc.orus \
-                tests/loop_fastpaths/phase3/iterator_array_zero_alloc.orus \
-                tests/optimizer/loop_typed_phase4/licm_guard.orus \
-                tests/optimizer/loop_typed_phase4/licm_guard_nested.orus \
-                tests/optimizer/loop_typed_phase4/licm_guard_fallback.orus \
-                tests/optimizer/loop_typed_phase4/licm_guard_off.orus \
-                tests/loop_fastpaths/phase5/telemetry_smoke.orus; do \
-                name=$$(basename $$test_file .orus); \
-                out=build/loop_telemetry/$$name.log; \
-                env_args="ORUS_TRACE_TYPED_FALLBACKS=1"; \
-                case "$$test_file" in \
-                        *phase1*) env_args="$$env_args ORUS_EXPERIMENT_BOOL_BRANCH_FASTPATH=1" ;; \
-                        *disable_fastpath*) env_args="$$env_args ORUS_DISABLE_INC_TYPED_FASTPATH=1" ;; \
-                        *phase3*) env_args="$$env_args ORUS_FORCE_BOXED_ITERATORS=0" ;; \
-                        *phase4*off.orus) env_args="$$env_args ORUS_EXPERIMENT_BOOL_BRANCH_FASTPATH=1 ORUS_ENABLE_LICM_TYPED_GUARDS=0" ;; \
-                        *phase4*) env_args="$$env_args ORUS_ENABLE_LICM_TYPED_GUARDS=1 ORUS_EXPERIMENT_BOOL_BRANCH_FASTPATH=1" ;; \
-                        *phase5*) env_args="$$env_args ORUS_FORCE_BOXED_ITERATORS=1 ORUS_ENABLE_LICM_TYPED_GUARDS=1" ;; \
-                        *) env_args="$$env_args" ;; \
-                esac; \
-                if env $$env_args ./$(ORUS) "$$test_file" >/dev/null 2>"$$out"; then \
-                        if diff -u tests/golden/loop_telemetry/$$name.log "$$out" >/dev/null; then \
-                                printf "\033[32mPASS\033[0m %s\n" "$$test_file"; \
-                                passed=$$((passed + 1)); \
-                        else \
-				printf "\033[31mFAIL\033[0m %s (telemetry mismatch)\n" "$$test_file"; \
-				diff -u tests/golden/loop_telemetry/$$name.log "$$out" || true; \
-				failed=$$((failed + 1)); \
-			fi; \
-		else \
-			printf "\033[31mFAIL\033[0m %s (runtime error)\n" "$$test_file"; \
-			failed=$$((failed + 1)); \
-		fi; \
-	done; \
-        if [ $$failed -eq 0 ]; then \
-                echo "\033[32m✓ Loop telemetry baseline verified ($$passed)\033[0m"; \
-        else \
-                echo "\033[31m✗ $$failed loop telemetry test(s) failed\033[0m"; \
-                exit 1; \
-        fi
 
-test-optimizer: licm-metadata-tests
+test-optimizer:
+	@echo "Optimizer-specific tests removed with loop optimizer retirement."
 
 # CI test target: Build with warnings as errors and run full test suite
 ci-test: 
@@ -615,9 +571,12 @@ ci-test:
 	@$(MAKE) unit-test UNIT_TEST_RUNNER=test_runner_ci
 
 # Run cross-language benchmark tests
-benchmark: $(ORUS)
+benchmark:
+	@$(MAKE) PROFILE=$(BENCHMARK_PROFILE) _benchmark-run
+
+_benchmark-run: $(ORUS)
 	@cd $(TESTDIR)/benchmarks && ./unified_benchmark.sh
-	
+
 # Static Analysis
 analyze:
 	@echo "Running static analysis..."

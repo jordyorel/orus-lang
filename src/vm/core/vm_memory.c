@@ -569,7 +569,6 @@ void initChunk(Chunk* chunk) {
     chunk->lines = NULL;
     chunk->columns = NULL;
     chunk->files = NULL;
-    chunk->monotonic_range_flags = NULL;
     chunk->constants.count = 0;
     chunk->constants.capacity = 0;
     chunk->constants.values = NULL;
@@ -580,7 +579,6 @@ void freeChunk(Chunk* chunk) {
     FREE_ARRAY(int, chunk->lines, chunk->capacity);
     FREE_ARRAY(int, chunk->columns, chunk->capacity);
     free(chunk->files);
-    free(chunk->monotonic_range_flags);
     FREE_ARRAY(Value, chunk->constants.values, chunk->constants.capacity);
     initChunk(chunk);
 }
@@ -597,12 +595,6 @@ void writeChunk(Chunk* chunk, uint8_t byte, int line, int column, const char* fi
             GROW_ARRAY(int, chunk->columns, oldCapacity, chunk->capacity);
         chunk->files =
             GROW_ARRAY(const char*, chunk->files, oldCapacity, chunk->capacity);
-        chunk->monotonic_range_flags =
-            GROW_ARRAY(uint8_t, chunk->monotonic_range_flags, oldCapacity, chunk->capacity);
-        if (chunk->monotonic_range_flags) {
-            memset(chunk->monotonic_range_flags + oldCapacity, 0,
-                   (size_t)(chunk->capacity - oldCapacity) * sizeof(uint8_t));
-        }
     }
 
     chunk->code[chunk->count] = byte;
@@ -610,9 +602,6 @@ void writeChunk(Chunk* chunk, uint8_t byte, int line, int column, const char* fi
     chunk->columns[chunk->count] = column;
     if (chunk->files) {
         chunk->files[chunk->count] = file;
-    }
-    if (chunk->monotonic_range_flags) {
-        chunk->monotonic_range_flags[chunk->count] = 0;
     }
     chunk->count++;
 }

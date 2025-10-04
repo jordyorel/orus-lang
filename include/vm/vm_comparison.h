@@ -13,7 +13,6 @@
 
 #include "../../src/vm/core/vm_internal.h"
 #include "vm/register_file.h"
-#include "vm/vm_loop_fastpaths.h"
 
 #define VM_TYPED_REGISTER_LIMIT \
     ((uint16_t)(sizeof(((TypedRegisters*)0)->i32_regs) / sizeof(int32_t)))
@@ -83,7 +82,6 @@ static inline void vm_update_typed_register(uint16_t id, Value value) {
     if (new_type == REG_TYPE_NONE) {
         uint8_t old_type = vm.typed_regs.reg_types[id];
         if (old_type != REG_TYPE_NONE && old_type != REG_TYPE_HEAP) {
-            vm_branch_cache_bump_generation(id);
             vm_clear_typed_register_slot(id, old_type);
         }
         vm.typed_regs.reg_types[id] = REG_TYPE_HEAP;
@@ -93,7 +91,6 @@ static inline void vm_update_typed_register(uint16_t id, Value value) {
 
     uint8_t old_type = vm.typed_regs.reg_types[id];
     if (old_type != new_type) {
-        vm_branch_cache_bump_generation(id);
         vm_clear_typed_register_slot(id, old_type);
     }
 
@@ -166,14 +163,12 @@ static inline Value vm_get_register_safe(uint16_t id) {
 
 static inline void vm_set_register_safe(uint16_t id, Value value) {
     if (id < 256) {
-        vm_typed_iterator_invalidate(id);
         vm.registers[id] = value;
         vm_update_typed_register(id, value);
         vm.typed_regs.dirty[id] = false;
         return;
     }
 
-    vm_typed_iterator_invalidate(id);
     set_register(&vm.register_file, id, value);
 }
 
@@ -395,7 +390,6 @@ static inline void vm_cache_f64_typed(uint16_t id, double value) {
 static inline void vm_cache_bool_typed(uint16_t id, bool value) {
     if (vm_typed_reg_in_range(id)) {
         if (vm.typed_regs.reg_types[id] != REG_TYPE_BOOL) {
-            vm_branch_cache_bump_generation(id);
         }
         vm.typed_regs.bool_regs[id] = value;
         vm.typed_regs.reg_types[id] = REG_TYPE_BOOL;
@@ -448,7 +442,6 @@ static inline bool vm_mark_typed_register_dirty(uint16_t id, RegisterType new_ty
         return false;
     }
 
-    vm_typed_iterator_invalidate(id);
 
     uint8_t previous_type = vm.typed_regs.reg_types[id];
     bool has_upvalue = id < REGISTER_COUNT && vm_register_has_open_upvalue(id);
@@ -458,7 +451,6 @@ static inline bool vm_mark_typed_register_dirty(uint16_t id, RegisterType new_ty
     }
 
     if (previous_type != REG_TYPE_NONE && previous_type != REG_TYPE_HEAP) {
-        vm_branch_cache_bump_generation(id);
     }
 
     vm.typed_regs.reg_types[id] = (uint8_t)new_type;
@@ -473,7 +465,6 @@ static inline void store_i32_register(uint16_t id, int32_t value) {
         vm.typed_regs.dirty[id] = false;
     }
 
-    vm_typed_iterator_invalidate(id);
 
     Value boxed = I32_VAL(value);
     if (id < 256) {
@@ -565,7 +556,6 @@ static inline void vm_store_i64_typed_hot(uint16_t id, int64_t value) {
         return;
     }
 
-    vm_typed_iterator_invalidate(id);
     vm.typed_regs.i64_regs[id] = value;
     vm.typed_regs.reg_types[id] = REG_TYPE_I64;
     vm.typed_regs.dirty[id] = true;
@@ -584,7 +574,6 @@ static inline void vm_store_u32_typed_hot(uint16_t id, uint32_t value) {
         return;
     }
 
-    vm_typed_iterator_invalidate(id);
     vm.typed_regs.u32_regs[id] = value;
     vm.typed_regs.reg_types[id] = REG_TYPE_U32;
     vm.typed_regs.dirty[id] = true;
@@ -603,7 +592,6 @@ static inline void vm_store_u32_typed_hot(uint16_t id, uint32_t value) {
 //         return;
 //     }
 
-//     vm_typed_iterator_invalidate(id);
 //     vm.typed_regs.u64_regs[id] = value;
 //     vm.typed_regs.reg_types[id] = REG_TYPE_U64;
 //     vm.typed_regs.dirty[id] = true;
@@ -623,7 +611,6 @@ static inline void store_i64_register(uint16_t id, int64_t value) {
         vm.typed_regs.dirty[id] = false;
     }
 
-    vm_typed_iterator_invalidate(id);
 
     Value boxed = I64_VAL(value);
     if (id < 256) {
@@ -640,7 +627,6 @@ static inline void store_u32_register(uint16_t id, uint32_t value) {
         vm.typed_regs.dirty[id] = false;
     }
 
-    vm_typed_iterator_invalidate(id);
 
     Value boxed = U32_VAL(value);
     if (id < 256) {
@@ -657,7 +643,6 @@ static inline void store_u64_register(uint16_t id, uint64_t value) {
         vm.typed_regs.dirty[id] = false;
     }
 
-    vm_typed_iterator_invalidate(id);
 
     Value boxed = U64_VAL(value);
     if (id < 256) {
@@ -674,7 +659,6 @@ static inline void store_f64_register(uint16_t id, double value) {
         vm.typed_regs.dirty[id] = false;
     }
 
-    vm_typed_iterator_invalidate(id);
 
     Value boxed = F64_VAL(value);
     if (id < 256) {
@@ -691,7 +675,6 @@ static inline void store_bool_register(uint16_t id, bool value) {
         vm.typed_regs.dirty[id] = false;
     }
 
-    vm_typed_iterator_invalidate(id);
 
     Value boxed = BOOL_VAL(value);
     if (id < 256) {
@@ -744,17 +727,14 @@ static inline void vm_store_bool_register(uint16_t id, bool value) {
         bool left_typed = vm_try_read_i32_typed(a, &val_a_i32); \
         bool right_typed = vm_try_read_i32_typed(b, &val_b_i32); \
         if (left_typed && right_typed) { \
-            vm_trace_loop_event(LOOP_TRACE_TYPED_HIT); \
             vm_store_bool_register((dst), val_a_i32 < val_b_i32); \
         } else { \
             Value val_a = vm_get_register_safe(a); \
             Value val_b = vm_get_register_safe(b); \
             if (!IS_I32(val_a) || !IS_I32(val_b)) { \
-                vm_trace_loop_event(LOOP_TRACE_TYPE_MISMATCH); \
                 runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i32"); \
                 RETURN(INTERPRET_RUNTIME_ERROR); \
             } \
-            vm_trace_loop_event(LOOP_TRACE_TYPED_MISS); \
             val_a_i32 = AS_I32(val_a); \
             val_b_i32 = AS_I32(val_b); \
             vm_cache_i32_typed(a, val_a_i32); \
@@ -770,17 +750,14 @@ static inline void vm_store_bool_register(uint16_t id, bool value) {
         bool left_typed = vm_try_read_i32_typed(a, &val_a_i32); \
         bool right_typed = vm_try_read_i32_typed(b, &val_b_i32); \
         if (left_typed && right_typed) { \
-            vm_trace_loop_event(LOOP_TRACE_TYPED_HIT); \
             vm_store_bool_register((dst), val_a_i32 <= val_b_i32); \
         } else { \
             Value val_a = vm_get_register_safe(a); \
             Value val_b = vm_get_register_safe(b); \
             if (!IS_I32(val_a) || !IS_I32(val_b)) { \
-                vm_trace_loop_event(LOOP_TRACE_TYPE_MISMATCH); \
                 runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i32"); \
                 RETURN(INTERPRET_RUNTIME_ERROR); \
             } \
-            vm_trace_loop_event(LOOP_TRACE_TYPED_MISS); \
             val_a_i32 = AS_I32(val_a); \
             val_b_i32 = AS_I32(val_b); \
             vm_cache_i32_typed(a, val_a_i32); \
@@ -796,17 +773,14 @@ static inline void vm_store_bool_register(uint16_t id, bool value) {
         bool left_typed = vm_try_read_i32_typed(a, &val_a_i32); \
         bool right_typed = vm_try_read_i32_typed(b, &val_b_i32); \
         if (left_typed && right_typed) { \
-            vm_trace_loop_event(LOOP_TRACE_TYPED_HIT); \
             vm_store_bool_register((dst), val_a_i32 > val_b_i32); \
         } else { \
             Value val_a = vm_get_register_safe(a); \
             Value val_b = vm_get_register_safe(b); \
             if (!IS_I32(val_a) || !IS_I32(val_b)) { \
-                vm_trace_loop_event(LOOP_TRACE_TYPE_MISMATCH); \
                 runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i32"); \
                 RETURN(INTERPRET_RUNTIME_ERROR); \
             } \
-            vm_trace_loop_event(LOOP_TRACE_TYPED_MISS); \
             val_a_i32 = AS_I32(val_a); \
             val_b_i32 = AS_I32(val_b); \
             vm_cache_i32_typed(a, val_a_i32); \
@@ -822,17 +796,14 @@ static inline void vm_store_bool_register(uint16_t id, bool value) {
         bool left_typed = vm_try_read_i32_typed(a, &val_a_i32); \
         bool right_typed = vm_try_read_i32_typed(b, &val_b_i32); \
         if (left_typed && right_typed) { \
-            vm_trace_loop_event(LOOP_TRACE_TYPED_HIT); \
             vm_store_bool_register((dst), val_a_i32 >= val_b_i32); \
         } else { \
             Value val_a = vm_get_register_safe(a); \
             Value val_b = vm_get_register_safe(b); \
             if (!IS_I32(val_a) || !IS_I32(val_b)) { \
-                vm_trace_loop_event(LOOP_TRACE_TYPE_MISMATCH); \
                 runtimeError(ERROR_TYPE, (SrcLocation){NULL,0,0}, "Operands must be i32"); \
                 RETURN(INTERPRET_RUNTIME_ERROR); \
             } \
-            vm_trace_loop_event(LOOP_TRACE_TYPED_MISS); \
             val_a_i32 = AS_I32(val_a); \
             val_b_i32 = AS_I32(val_b); \
             vm_cache_i32_typed(a, val_a_i32); \

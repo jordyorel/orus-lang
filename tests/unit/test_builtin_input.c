@@ -71,6 +71,10 @@ static bool redirect_stdout_to_capture(int* saved_fd, FILE** capture_file) {
         return false;
     }
 
+    if (fflush(stdout) == EOF) {
+        return false;
+    }
+
     FILE* capture = tmpfile();
     if (!capture) {
         return false;

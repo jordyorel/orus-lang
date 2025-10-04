@@ -3,9 +3,9 @@
 print("=== Orus Sum Benchmark ===")
 
 N: i32 = 200000
-TRIALS: i64 = 10
+TRIALS: i32 = 10
 
-mut trial: i64 = 0
+mut trial: i32 = 0
 mut total_time: f64 = 0.0
 
 while trial < TRIALS:

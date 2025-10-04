@@ -72,21 +72,17 @@ BytecodeBuffer* init_bytecode_buffer(void) {
     buffer->capacity = 256;  // Initial capacity
     buffer->patch_count = 0;
     buffer->patch_capacity = 0;
-    buffer->monotonic_range_flags = NULL;
 
     buffer->instructions = malloc(buffer->capacity);
     buffer->source_lines = malloc(buffer->capacity * sizeof(int));
     buffer->source_columns = malloc(buffer->capacity * sizeof(int));
     buffer->source_files = malloc(buffer->capacity * sizeof(const char*));
-    buffer->monotonic_range_flags = malloc(buffer->capacity * sizeof(uint8_t));
 
     if (!buffer->instructions || !buffer->source_lines || !buffer->source_columns ||
-        !buffer->source_files || !buffer->monotonic_range_flags) {
+        !buffer->source_files) {
         free_bytecode_buffer(buffer);
         return NULL;
     }
-
-    memset(buffer->monotonic_range_flags, 0, buffer->capacity * sizeof(uint8_t));
 
     buffer->current_location.file = NULL;
     buffer->current_location.line = -1;
@@ -104,7 +100,6 @@ void free_bytecode_buffer(BytecodeBuffer* buffer) {
     free(buffer->source_columns);
     free(buffer->source_files);
     free(buffer->patches);
-    free(buffer->monotonic_range_flags);
     free(buffer);
 }
 
@@ -200,18 +195,9 @@ void emit_byte_to_buffer(BytecodeBuffer* buffer, uint8_t byte) {
         buffer->source_lines = realloc(buffer->source_lines, buffer->capacity * sizeof(int));
         buffer->source_columns = realloc(buffer->source_columns, buffer->capacity * sizeof(int));
         buffer->source_files = realloc(buffer->source_files, buffer->capacity * sizeof(const char*));
-        buffer->monotonic_range_flags =
-            realloc(buffer->monotonic_range_flags, buffer->capacity * sizeof(uint8_t));
-        if (buffer->monotonic_range_flags) {
-            memset(buffer->monotonic_range_flags + old_capacity, 0,
-                   (size_t)(buffer->capacity - old_capacity) * sizeof(uint8_t));
-        }
     }
 
     buffer->instructions[buffer->count] = byte;
-    if (buffer->monotonic_range_flags) {
-        buffer->monotonic_range_flags[buffer->count] = 0;
-    }
     if (buffer->has_current_location) {
         buffer->source_lines[buffer->count] = buffer->current_location.line;
         buffer->source_columns[buffer->count] = buffer->current_location.column;
@@ -253,16 +239,6 @@ void emit_instruction_to_buffer(BytecodeBuffer* buffer, uint8_t opcode, uint8_t 
     emit_byte_to_buffer(buffer, reg1);
     emit_byte_to_buffer(buffer, reg2);
     emit_byte_to_buffer(buffer, reg3);
-}
-
-void bytecode_mark_monotonic_range(BytecodeBuffer* buffer, int offset) {
-    if (!buffer || !buffer->monotonic_range_flags) {
-        return;
-    }
-    if (offset < 0 || offset >= buffer->count) {
-        return;
-    }
-    buffer->monotonic_range_flags[offset] = 1;
 }
 
 static inline int determine_prefix_size(uint8_t opcode) {
@@ -870,8 +846,6 @@ static bool copy_compiled_bytecode(Compiler* legacy_compiler, CompilerContext* c
         chunk->lines = (int*)reallocate(NULL, 0, sizeof(int) * (size_t)bytecode->count);
         chunk->columns = (int*)reallocate(NULL, 0, sizeof(int) * (size_t)bytecode->count);
         chunk->files = (const char**)reallocate(NULL, 0, sizeof(const char*) * (size_t)bytecode->count);
-        chunk->monotonic_range_flags =
-            (uint8_t*)reallocate(NULL, 0, sizeof(uint8_t) * (size_t)bytecode->count);
 
         memcpy(chunk->code, bytecode->instructions, (size_t)bytecode->count);
 
@@ -891,13 +865,6 @@ static bool copy_compiled_bytecode(Compiler* legacy_compiler, CompilerContext* c
             }
         }
 
-        if (chunk->monotonic_range_flags && bytecode->monotonic_range_flags) {
-            memcpy(chunk->monotonic_range_flags, bytecode->monotonic_range_flags,
-                   sizeof(uint8_t) * (size_t)bytecode->count);
-        } else if (chunk->monotonic_range_flags) {
-            memset(chunk->monotonic_range_flags, 0, sizeof(uint8_t) * (size_t)bytecode->count);
-        }
-
         if (chunk->files && bytecode->source_files) {
             memcpy(chunk->files, bytecode->source_files, sizeof(const char*) * (size_t)bytecode->count);
         } else if (chunk->files) {
@@ -910,7 +877,6 @@ static bool copy_compiled_bytecode(Compiler* legacy_compiler, CompilerContext* c
         chunk->lines = NULL;
         chunk->columns = NULL;
         chunk->files = NULL;
-        chunk->monotonic_range_flags = NULL;
     }
 
     // Copy constants into the VM chunk using the existing helper so GC accounting remains correct

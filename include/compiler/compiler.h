@@ -66,8 +66,6 @@ typedef struct BytecodeBuffer {
     int patch_count;
     int patch_capacity;
 
-    // Instruction metadata (per-byte flags)
-    uint8_t* monotonic_range_flags; // Marks fused range loops eligible for monotonic fastpath
 } BytecodeBuffer;
 
 typedef struct JumpPatch {
@@ -124,7 +122,7 @@ typedef struct CompilerContext {
     int current_loop_start;            // Bytecode offset of current loop start
     int current_loop_end;              // Bytecode offset of current loop end
     int current_loop_continue;         // Bytecode offset for continue statements (for for-loops)
-    uint16_t current_loop_id;          // Active loop identifier for typed branch cache
+    uint16_t current_loop_id;          // Active loop identifier (legacy branch-cache metadata)
     uint16_t next_loop_id;             // Monotonic loop identifier allocator
     int* break_statements;             // Array of break statement bytecode offsets to patch
     int break_count;                   // Number of break statements in current loop
@@ -180,8 +178,6 @@ OpCode get_typed_opcode(const char* op, RegisterType type);
 OpCode get_standard_opcode(const char* op, RegisterType type);
 int emit_jump_placeholder(BytecodeBuffer* buffer, uint8_t jump_opcode);
 bool patch_jump(BytecodeBuffer* buffer, int patch_index, int target_offset);
-void bytecode_mark_monotonic_range(BytecodeBuffer* buffer, int offset);
-
 // Constant pool functions
 ConstantPool* init_constant_pool(void);
 void free_constant_pool(ConstantPool* pool);

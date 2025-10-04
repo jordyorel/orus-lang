@@ -10,7 +10,6 @@
 #include "vm/vm_opcode_handlers.h"
 #include "vm/vm_dispatch.h"
 #include "vm/vm_comparison.h"
-#include "vm/vm_loop_fastpaths.h"
 #include "runtime/builtins.h"
 
 // Frame-aware register access functions for proper local variable isolation
@@ -452,15 +451,7 @@ void handle_range(void) {
         return;
     }
 
-    vm_typed_iterator_invalidate(dst);
     vm_set_register_safe(dst, result);
-
-    if (!vm.config.force_boxed_iterators && IS_RANGE_ITERATOR(result)) {
-        ObjRangeIterator* iterator = AS_RANGE_ITERATOR(result);
-        if (iterator) {
-            vm_typed_iterator_bind_range(dst, iterator->current, iterator->end, iterator->step);
-        }
-    }
 }
 
 void handle_sorted(void) {

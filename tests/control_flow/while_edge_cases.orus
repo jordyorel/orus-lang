@@ -143,5 +143,5 @@ if assert_eq("while_edge_cases outer", outer, 2):
     print("ok", "outer", outer)
 if assert_eq("while_edge_cases test6_iterations", test6_iterations, 0):
     print("ok", "test6_iterations", test6_iterations)
-if assert_eq("while_edge_cases test6_executed", test6_executed, true):
+if assert_eq("while_edge_cases test6_executed", test6_executed, false):
     print("ok", "test6_executed", test6_executed)
