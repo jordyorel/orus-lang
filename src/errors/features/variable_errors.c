@@ -13,6 +13,8 @@
 #include <ctype.h>
 #include <limits.h>
 
+static bool is_reserved_keyword_name_internal(const char* name);
+
 // Variable error definitions with friendly, mentor-like messages
 static const FeatureErrorInfo variable_errors[] = {
     {
@@ -133,14 +135,23 @@ ErrorReportResult report_mutable_required(SrcLocation location, const char* vari
 
 ErrorReportResult report_invalid_variable_name(SrcLocation location, const char* variable_name, const char* reason) {
     if (reason) {
-        return report_feature_error_f(E1013_INVALID_VARIABLE_NAME, location, 
-                                     "Invalid variable name '%s': %s", 
+        return report_feature_error_f(E1013_INVALID_VARIABLE_NAME, location,
+                                     "Invalid variable name '%s': %s",
                                      variable_name, reason);
     } else {
-        return report_feature_error_f(E1013_INVALID_VARIABLE_NAME, location, 
-                                     "Invalid variable name '%s'", 
+        return report_feature_error_f(E1013_INVALID_VARIABLE_NAME, location,
+                                     "Invalid variable name '%s'",
                                      variable_name);
     }
+}
+
+ErrorReportResult report_reserved_keyword_usage(SrcLocation location, const char* keyword, const char* context) {
+    if (!context || *context == '\0') {
+        context = "identifier";
+    }
+    return report_feature_error_f(E1013_INVALID_VARIABLE_NAME, location,
+                                 "Cannot use reserved keyword '%s' as the %s name.",
+                                 keyword, context);
 }
 
 ErrorReportResult report_invalid_multiple_declaration(SrcLocation location, const char* variable_name, const char* issue) {
@@ -252,7 +263,7 @@ bool is_valid_variable_name(const char* name) {
     if (!name || *name == '\0') {
         return false;
     }
-    
+
     // Must start with letter or underscore
     if (!isalpha(*name) && *name != '_') {
         return false;
@@ -264,7 +275,11 @@ bool is_valid_variable_name(const char* name) {
             return false;
         }
     }
-    
+
+    if (is_reserved_keyword_name_internal(name)) {
+        return false;
+    }
+
     return true;
 }
 
@@ -287,6 +302,68 @@ const char* get_variable_name_violation_reason(const char* name) {
             return "name can only contain letters, digits, and underscores";
         }
     }
-    
+
+    if (is_reserved_keyword_name_internal(name)) {
+        return "this name is reserved by the language";
+    }
+
     return NULL; // Name is valid
+}
+
+static bool is_reserved_keyword_name_internal(const char* name) {
+    static const char* const reserved_keywords[] = {
+        "and",
+        "as",
+        "bool",
+        "break",
+        "catch",
+        "const",
+        "continue",
+        "elif",
+        "else",
+        "enum",
+        "false",
+        "fn",
+        "for",
+        "f64",
+        "global",
+        "if",
+        "impl",
+        "in",
+        "i32",
+        "i64",
+        "match",
+        "matches",
+        "module",
+        "mut",
+        "not",
+        "or",
+        "pass",
+        "print",
+        "print_no_newline",
+        "pub",
+        "return",
+        "static",
+        "struct",
+        "throw",
+        "time_stamp",
+        "true",
+        "try",
+        "while",
+        "u32",
+        "u64",
+        "use"
+    };
+
+    if (!name) {
+        return false;
+    }
+
+    size_t count = sizeof(reserved_keywords) / sizeof(reserved_keywords[0]);
+    for (size_t i = 0; i < count; i++) {
+        if (strcmp(name, reserved_keywords[i]) == 0) {
+            return true;
+        }
+    }
+    return false;
 }

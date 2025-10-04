@@ -515,12 +515,9 @@ ErrorReportResult report_enhanced_error_ctx(ErrorContext* ctx, const EnhancedErr
         fprintf(stderr, "      |\n");
     }
     
-    // Main explanation
-    fprintf(stderr, "      = %s\n", error->message ? error->message : "Unknown error");
-    
     // Help and notes with bounds checking
     if (error->help && ctx->config.show_help) {
-        fprintf(stderr, "      = %shelp%s: %s\n", 
+        fprintf(stderr, "      = %shelp%s: %s\n",
                 help_color, reset_color, error->help);
     }
     
@@ -631,12 +628,9 @@ ErrorReportResult report_enhanced_error(const EnhancedError* error) {
         fprintf(stderr, "      |\n");
     }
     
-    // Main explanation
-    fprintf(stderr, "      = %s\n", error->message ? error->message : "Unknown error");
-    
     // Help and notes with bounds checking
     if (error->help && g_error_state.config.show_help) {
-        fprintf(stderr, "      = %shelp%s: %s\n", 
+        fprintf(stderr, "      = %shelp%s: %s\n",
                 help_color, reset_color, error->help);
     }
     
