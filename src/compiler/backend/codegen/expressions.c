@@ -2339,6 +2339,45 @@ bool evaluate_constant_i32(TypedASTNode* node, int32_t* out_value) {
                     return false;
             }
         }
+        case NODE_BINARY: {
+            if (!original->binary.op) {
+                return false;
+            }
+            TypedASTNode* left = node->typed.binary.left;
+            TypedASTNode* right = node->typed.binary.right;
+            if (!left || !right) {
+                return false;
+            }
+            int32_t left_val = 0;
+            int32_t right_val = 0;
+            if (!evaluate_constant_i32(left, &left_val) ||
+                !evaluate_constant_i32(right, &right_val)) {
+                return false;
+            }
+            if (strcmp(original->binary.op, "+") == 0) {
+                *out_value = left_val + right_val;
+                return true;
+            } else if (strcmp(original->binary.op, "-") == 0) {
+                *out_value = left_val - right_val;
+                return true;
+            } else if (strcmp(original->binary.op, "*") == 0) {
+                *out_value = left_val * right_val;
+                return true;
+            } else if (strcmp(original->binary.op, "/") == 0) {
+                if (right_val == 0) {
+                    return false;
+                }
+                *out_value = left_val / right_val;
+                return true;
+            } else if (strcmp(original->binary.op, "%") == 0) {
+                if (right_val == 0) {
+                    return false;
+                }
+                *out_value = left_val % right_val;
+                return true;
+            }
+            return false;
+        }
         case NODE_UNARY: {
             if (!original->unary.op || strcmp(original->unary.op, "-") != 0) {
                 return false;
