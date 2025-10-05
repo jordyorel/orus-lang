@@ -264,8 +264,6 @@ static TokenType identifier_type(const char* start, int length) {
             if (length == 3 && memcmp(start, "for", 3) == 0) return TOKEN_FOR;
             if (length == 2 && start[1] == 'n') return TOKEN_FN;
             break;
-        case 'g':
-            break;
         case 'i':
             if (length == 2 && memcmp(start, "if", 2) == 0) return TOKEN_IF;
             if (length == 2 && memcmp(start, "in", 2) == 0) return TOKEN_IN;
@@ -303,7 +301,6 @@ static TokenType identifier_type(const char* start, int length) {
             break;
         case 't':
             if (length == 3 && memcmp(start, "try", 3) == 0) return TOKEN_TRY;
-            if (length == 5 && memcmp(start, "throw", 5) == 0) return TOKEN_THROW;
             break;
         case 'u':
             if (length == 3 && memcmp(start, "use", 3) == 0) return TOKEN_IMPORT;

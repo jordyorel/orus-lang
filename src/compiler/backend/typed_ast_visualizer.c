@@ -349,9 +349,6 @@ static void visualize_node_recursive(TypedASTNode* node, int depth, bool is_last
             if (node->original->varDecl.isMutable) {
                 printf(" [mutable]");
             }
-            if (node->original->varDecl.isConst) {
-                printf(" [const]");
-            }
             if (node->original->varDecl.isGlobal) {
                 printf(" [global]");
             }
@@ -618,7 +615,7 @@ static void visualize_node_recursive(TypedASTNode* node, int depth, bool is_last
             break;
         case NODE_FUNCTION:
             if (node->typed.function.returnType) {
-                visualize_node_recursive(node->typed.function.returnType, depth + 1, 
+                visualize_node_recursive(node->typed.function.returnType, depth + 1,
                                        !node->typed.function.body, config);
             }
             if (node->typed.function.body) {

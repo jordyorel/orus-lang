@@ -3,7 +3,7 @@
 // Global variable
 mut global_var = 100
 
-// Function that uses global variable
+// Function that uses variable
 fn use_global() -> i32:
     return global_var + 10
 
@@ -25,10 +25,10 @@ fn param_shadow(global_var) -> i32:
 
 // Test scoping
 result1 = use_global()
-print("Using global (100 + 10):", result1)
+print("Using (100 + 10):", result1)
 
 result2 = shadow_global()
-print("Shadowed global (50 * 2):", result2)
+print("Shadowed (50 * 2):", result2)
 
 // Global should still be 100
 result3 = use_global()

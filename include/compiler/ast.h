@@ -129,7 +129,6 @@ struct ASTNode {
             bool isGlobal;
             ASTNode* initializer;
             ASTNode* typeAnnotation;
-            bool isConst;
             bool isMutable;
         } varDecl;
         struct {
@@ -184,7 +183,6 @@ struct ASTNode {
         struct {
             ASTNode** values;
             int count;
-            bool newline;
         } print;
         struct {
             ASTNode* condition;
