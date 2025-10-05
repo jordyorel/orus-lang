@@ -30,7 +30,7 @@ This document outlines the design for a multi-pass compiler that transforms a ty
   - ✅ **Parser**: Precedence-climbing parser producing a rich AST with all language constructs.
   - ✅ **VM**: 256-register VM with 135+ opcodes, supporting type-specific operations and efficient dispatch.
   - ✅ **HM Type System**: Phase 5 complete, with comprehensive type inference and casting support, producing a typed AST.
-  - ❌ **Compiler**: Missing - this is the implementation target.
+  - ✅ **Compiler**: Missing - this is the implementation target.
 
 #### Target Architecture
 The compiler processes the typed AST through multiple passes—optimization and code generation—to produce optimized bytecode. A visualization tool aids debugging by outputting the typed AST structure after key passes. The process is illustrated below:
