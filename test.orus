@@ -1,6 +1,6 @@
-start: f64 = time_stamp()
+start: f64 = timestamp()
 for i in 0..1_000_000:
     pass
-elapsed = time_stamp() - start
+elapsed = timestamp() - start
 print("elapsed seconds:", elapsed)
 

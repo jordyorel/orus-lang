@@ -1,5 +1,5 @@
 // Basic while loop test
-start_time = time_stamp()
+start_time = timestamp()
 mut i = 0
 mut iterations = 0
 while i < 3:

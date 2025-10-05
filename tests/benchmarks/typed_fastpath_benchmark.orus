@@ -9,7 +9,7 @@ mut trial: i32 = 0
 mut checksum: i64 = 0
 
 while trial < TRIALS:
-    start: f64 = time_stamp()
+    start: f64 = timestamp()
     mut i: i32 = 0
     mut acc: i32 = trial
     mut sink: i32 = 0
@@ -19,7 +19,7 @@ while trial < TRIALS:
         sink = acc
         i = i + 1
 
-    elapsed: f64 = time_stamp() - start
+    elapsed: f64 = timestamp() - start
     print("typed-fastpath elapsed:", elapsed)
     expected_acc: i32 = trial + ITERATIONS
     if assert_eq("typed_fastpath acc", acc, expected_acc):

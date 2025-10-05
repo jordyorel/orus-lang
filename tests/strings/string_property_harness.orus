@@ -2,7 +2,7 @@
 // Orus Strings Property Harness
 // ==============================
 print("== String Property Harness ==")
-start_time: f64 = time_stamp()
+start_time: f64 = timestamp()
 print("Start timestamp:", start_time)
 
 // ---------- Deterministic RNG ----------
@@ -426,5 +426,5 @@ total_checksum = total_checksum + phase_loop_vs_batch(0xBEE5, TRIALS)
 total_checksum = total_checksum + phase_permutation_invariance(0xC0DE, TRIALS)
 total_checksum = total_checksum + phase_metamorphic_slicing(0xDADA, TRIALS)
 
-end_time: f64 = time_stamp()
+end_time: f64 = timestamp()
 print("== String Property Harness Complete ==", "checksum:", total_checksum, "elapsed:", end_time - start_time)

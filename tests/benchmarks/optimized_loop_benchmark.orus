@@ -24,16 +24,16 @@ print("=== Orus Optimized Loop Benchmark ===")
 print("trials:", TRIALS)
 
 while trial < TRIALS:
-    start_simple: f64 = time_stamp()
+    start_simple: f64 = timestamp()
     mut simple_sum: i64 = 0
     for i in 0..ITER_SIMPLE:
         simple_sum = simple_sum + (i as i64)
-    elapsed_simple: f64 = time_stamp() - start_simple
+    elapsed_simple: f64 = timestamp() - start_simple
     total_simple = total_simple + elapsed_simple
     if assert_eq("optimized_loop simple_sum", simple_sum, 12499997500000):
         print("ok", "simple sum", simple_sum)
 
-    start_nested: f64 = time_stamp()
+    start_nested: f64 = timestamp()
     mut nested_acc: i64 = 0
     for outer in 0..NEST_OUTER:
         mut inner: i32 = 0
@@ -44,19 +44,19 @@ while trial < TRIALS:
             else:
                 nested_acc = nested_acc - (inner as i64)
             inner = inner + 1
-    elapsed_nested: f64 = time_stamp() - start_nested
+    elapsed_nested: f64 = timestamp() - start_nested
     total_nested = total_nested + elapsed_nested
     if assert_eq("optimized_loop nested_acc", nested_acc, 76480160000):
         print("ok", "nested acc", nested_acc)
 
-    start_array: f64 = time_stamp()
+    start_array: f64 = timestamp()
     mut array_total: i64 = 0
     mut repeat: i32 = 0
     while repeat < ARRAY_REPEATS:
         for element in seed_values:
             array_total = array_total + (element as i64)
         repeat = repeat + 1
-    elapsed_array: f64 = time_stamp() - start_array
+    elapsed_array: f64 = timestamp() - start_array
     total_array = total_array + elapsed_array
     if assert_eq("optimized_loop array_total", array_total, 3219652608):
         print("ok", "array total", array_total)

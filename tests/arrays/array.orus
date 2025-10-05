@@ -1,11 +1,11 @@
 // Sum numbers from 1 to 10000 and measure execution time
-start_time: f64 = time_stamp()
+start_time: f64 = timestamp()
 
 mut sum: i64 = 0
 for i in 1..=10000:
     sum = sum + (i as i64)
 
-end_time: f64 = time_stamp()
+end_time: f64 = timestamp()
 elapsed: f64 = end_time - start_time
 
 print("Sum 1..10000:", sum)

@@ -44,7 +44,7 @@ bool builtin_input(Value* args, int count, Value* out_value);
  * @param out_value Receives the resulting string value on success.
  * @return true when the type name could be produced.
  */
-bool builtin_type_of(Value value, Value* out_value);
+bool builtin_typeof(Value value, Value* out_value);
 
 /**
  * Determine whether a value's runtime type matches the provided identifier.
@@ -54,7 +54,7 @@ bool builtin_type_of(Value value, Value* out_value);
  * @param out_value      Receives a boolean value indicating the result.
  * @return true on success, false when the comparison could not be performed.
  */
-bool builtin_is_type(Value value, Value type_identifier, Value* out_value);
+bool builtin_istype(Value value, Value type_identifier, Value* out_value);
 
 typedef enum {
     BUILTIN_PARSE_OK = 0,
@@ -110,7 +110,7 @@ bool builtin_sorted(Value array_value, Value* out_value);
  * The epoch is unspecified but monotonically increasing for the
  * duration of the process.
  */
-double builtin_time_stamp(void);
+double builtin_timestamp(void);
 
 /**
  * Compare two values for equality and report detailed diagnostics when they
