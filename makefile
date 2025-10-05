@@ -244,7 +244,7 @@ ORUS = orus$(SUFFIX)
 UNIT_TEST_RUNNER = test_runner$(SUFFIX)
 BYTECODE_TEST_BIN = $(BUILDDIR)/tests/test_jump_patch
 SOURCE_MAP_TEST_BIN = $(BUILDDIR)/tests/test_source_mapping
-FUSED_LOOP_TEST_BIN = $(BUILDDIR)/tests/test_codegen_fused_loops
+FUSED_LOOP_CODEGEN_TEST_BIN = $(BUILDDIR)/tests/test_codegen_fused_loops
 SCOPE_TRACKING_TEST_BIN = $(BUILDDIR)/tests/test_scope_tracking
 FUSED_WHILE_TEST_BIN = $(BUILDDIR)/tests/test_codegen_fused_while
 PEEPHOLE_TEST_BIN = $(BUILDDIR)/tests/test_constant_propagation
@@ -252,7 +252,7 @@ TAGGED_UNION_TEST_BIN = $(BUILDDIR)/tests/test_vm_tagged_union
 TYPED_REGISTER_TEST_BIN = $(BUILDDIR)/tests/test_vm_typed_registers
 REGISTER_ALLOCATOR_TEST_BIN = $(BUILDDIR)/tests/test_register_allocator
 INC_CMP_JMP_TEST_BIN = $(BUILDDIR)/tests/test_vm_inc_cmp_jmp
-FUSED_LOOP_TEST_BIN = $(BUILDDIR)/tests/test_fused_loop_bytecode
+FUSED_LOOP_BYTECODE_TEST_BIN = $(BUILDDIR)/tests/test_fused_loop_bytecode
 ADD_I32_IMM_TEST_BIN = $(BUILDDIR)/tests/test_vm_add_i32_imm
 BUILTIN_INPUT_TEST_BIN = $(BUILDDIR)/tests/test_builtin_input
 CONSTANT_FOLD_TEST_BIN = $(BUILDDIR)/tests/test_constant_folding
@@ -493,14 +493,14 @@ source-map-tests: $(SOURCE_MAP_TEST_BIN)
 	@echo "Running source mapping tests..."
 	@./$(SOURCE_MAP_TEST_BIN)
 
-$(FUSED_LOOP_TEST_BIN): tests/unit/test_codegen_fused_loops.c $(COMPILER_OBJS) $(VM_OBJS)
+$(FUSED_LOOP_CODEGEN_TEST_BIN): tests/unit/test_codegen_fused_loops.c $(COMPILER_OBJS) $(VM_OBJS)
 	@mkdir -p $(dir $@)
 	@echo "Compiling fused loop codegen tests..."
 	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
 
-fused-loop-tests: $(FUSED_LOOP_TEST_BIN)
+fused-loop-tests: $(FUSED_LOOP_CODEGEN_TEST_BIN)
 	@echo "Running fused loop codegen tests..."
-	@./$(FUSED_LOOP_TEST_BIN)
+	@./$(FUSED_LOOP_CODEGEN_TEST_BIN)
 
 $(SCOPE_TRACKING_TEST_BIN): tests/unit/test_scope_stack.c $(COMPILER_OBJS) $(VM_OBJS)
 	@mkdir -p $(dir $@)
@@ -565,14 +565,14 @@ inc-cmp-jmp-tests: $(INC_CMP_JMP_TEST_BIN)
 	@echo "Running OP_INC_CMP_JMP regression tests..."
 	@./$(INC_CMP_JMP_TEST_BIN)
 
-$(FUSED_LOOP_TEST_BIN): tests/unit/test_fused_loop_bytecode.c $(COMPILER_OBJS) $(VM_OBJS)
+$(FUSED_LOOP_BYTECODE_TEST_BIN): tests/unit/test_fused_loop_bytecode.c $(COMPILER_OBJS) $(VM_OBJS)
 	@mkdir -p $(dir $@)
 	@echo "Compiling fused loop bytecode tests..."
 	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
 
-fused-loop-bytecode-tests: $(FUSED_LOOP_TEST_BIN)
+fused-loop-bytecode-tests: $(FUSED_LOOP_BYTECODE_TEST_BIN)
 	@echo "Running fused loop bytecode tests..."
-	@./$(FUSED_LOOP_TEST_BIN)
+	@./$(FUSED_LOOP_BYTECODE_TEST_BIN)
 
 $(ADD_I32_IMM_TEST_BIN): tests/unit/test_vm_add_i32_imm.c $(COMPILER_OBJS) $(VM_OBJS)
 	@mkdir -p $(dir $@)

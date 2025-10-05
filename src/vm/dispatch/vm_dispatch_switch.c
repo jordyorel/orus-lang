@@ -3248,15 +3248,116 @@ InterpretResult vm_run_dispatch(void) {
                 }
                 case OP_DEC_CMP_JMP: {
                     uint8_t reg = READ_BYTE();
-                    uint8_t zero_test = READ_BYTE();
+                    uint8_t limit_reg = READ_BYTE();
                     int16_t offset = READ_SHORT();
 
-                    int32_t decremented = vm.typed_regs.i32_regs[reg] - 1;
-                    vm_store_i32_typed_hot(reg, decremented);
-                    if (decremented > vm.typed_regs.i32_regs[zero_test]) {
-                        vm.ip += offset;
+                    int32_t counter_i32;
+                    int32_t limit_i32;
+                    if (vm_try_read_i32_typed(reg, &counter_i32) &&
+                        vm_try_read_i32_typed(limit_reg, &limit_i32)) {
+                        int32_t decremented;
+                        if (__builtin_sub_overflow(counter_i32, 1, &decremented)) {
+                            VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(),
+                                            "Integer overflow");
+                        }
+                        vm_store_i32_typed_hot(reg, decremented);
+                        if (decremented > limit_i32) {
+                            vm.ip += offset;
+                        }
+                        break;
                     }
-                    break;
+
+                    int64_t counter_i64;
+                    int64_t limit_i64;
+                    if (vm_try_read_i64_typed(reg, &counter_i64) &&
+                        vm_try_read_i64_typed(limit_reg, &limit_i64)) {
+                        int64_t decremented;
+                        if (__builtin_sub_overflow(counter_i64, (int64_t)1, &decremented)) {
+                            VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(),
+                                            "Integer overflow");
+                        }
+                        vm_store_i64_typed_hot(reg, decremented);
+                        if (decremented > limit_i64) {
+                            vm.ip += offset;
+                        }
+                        break;
+                    }
+
+                    uint32_t counter_u32;
+                    uint32_t limit_u32;
+                    if (vm_try_read_u32_typed(reg, &counter_u32) &&
+                        vm_try_read_u32_typed(limit_reg, &limit_u32)) {
+                        uint32_t decremented = counter_u32 - (uint32_t)1;
+                        vm_store_u32_typed_hot(reg, decremented);
+                        if (decremented > limit_u32) {
+                            vm.ip += offset;
+                        }
+                        break;
+                    }
+
+                    uint64_t counter_u64;
+                    uint64_t limit_u64;
+                    if (vm_try_read_u64_typed(reg, &counter_u64) &&
+                        vm_try_read_u64_typed(limit_reg, &limit_u64)) {
+                        uint64_t decremented = counter_u64 - (uint64_t)1;
+                        vm_store_u64_typed_hot(reg, decremented);
+                        if (decremented > limit_u64) {
+                            vm.ip += offset;
+                        }
+                        break;
+                    }
+
+                    Value counter = vm_get_register_safe(reg);
+                    Value limit = vm_get_register_safe(limit_reg);
+
+                    if (IS_I32(counter) && IS_I32(limit)) {
+                        int32_t current = AS_I32(counter);
+                        int32_t decremented;
+                        if (__builtin_sub_overflow(current, 1, &decremented)) {
+                            VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(),
+                                            "Integer overflow");
+                        }
+                        vm_store_i32_typed_hot(reg, decremented);
+                        if (decremented > AS_I32(limit)) {
+                            vm.ip += offset;
+                        }
+                        break;
+                    }
+
+                    if (IS_I64(counter) && IS_I64(limit)) {
+                        int64_t current = AS_I64(counter);
+                        int64_t decremented;
+                        if (__builtin_sub_overflow(current, (int64_t)1, &decremented)) {
+                            VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(),
+                                            "Integer overflow");
+                        }
+                        vm_store_i64_typed_hot(reg, decremented);
+                        if (decremented > AS_I64(limit)) {
+                            vm.ip += offset;
+                        }
+                        break;
+                    }
+
+                    if (IS_U32(counter) && IS_U32(limit)) {
+                        uint32_t decremented = AS_U32(counter) - (uint32_t)1;
+                        vm_store_u32_typed_hot(reg, decremented);
+                        if (decremented > AS_U32(limit)) {
+                            vm.ip += offset;
+                        }
+                        break;
+                    }
+
+                    if (IS_U64(counter) && IS_U64(limit)) {
+                        uint64_t decremented = AS_U64(counter) - (uint64_t)1;
+                        vm_store_u64_typed_hot(reg, decremented);
+                        if (decremented > AS_U64(limit)) {
+                            vm.ip += offset;
+                        }
+                        break;
+                    }
+
+                    VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(),
+                                    "Operands must be homogeneous integers");
                 }
 
                 case OP_MUL_ADD_I32: {
