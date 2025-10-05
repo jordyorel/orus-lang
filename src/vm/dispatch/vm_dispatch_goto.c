@@ -2661,25 +2661,63 @@ InterpretResult vm_run_dispatch(void) {
             int64_t current = it ? it->current : 0;
             int64_t end = it ? it->end : 0;
             int64_t step = it ? it->step : 1;
-            if (step == 0) {
-                vm_set_register_safe(hasReg, BOOL_VAL(false));
-            } else if ((step > 0 && current >= end) || (step < 0 && current <= end)) {
-                vm_set_register_safe(hasReg, BOOL_VAL(false));
-            } else {
-                vm_set_register_safe(dst, I64_VAL(current));
-                it->current = current + step;
-                vm_set_register_safe(hasReg, BOOL_VAL(true));
+            bool has_value = false;
+
+            if (it && step != 0) {
+                bool forward_in_range = (step > 0) && (current < end);
+                bool backward_in_range = (step < 0) && (current > end);
+                if (forward_in_range || backward_in_range) {
+                    has_value = true;
+                    it->current = current + step;
+                }
             }
+
+            if (has_value) {
+                vm_store_i64_typed_hot(dst, current);
+            }
+            vm_store_bool_register(hasReg, has_value);
         } else if (IS_ARRAY_ITERATOR(iterValue)) {
             ObjArrayIterator* it = AS_ARRAY_ITERATOR(iterValue);
             ObjArray* array = it ? it->array : NULL;
-            if (!array || it->index >= array->length) {
-                vm_set_register_safe(hasReg, BOOL_VAL(false));
-            } else {
-                vm_set_register_safe(dst, array->elements[it->index]);
-                it->index++;
-                vm_set_register_safe(hasReg, BOOL_VAL(true));
+            bool has_value = (array != NULL) && (it->index < array->length);
+
+            if (has_value) {
+                Value element = array->elements[it->index++];
+                bool stored_typed = false;
+
+                if (vm_typed_reg_in_range(dst)) {
+                    switch (element.type) {
+                        case VAL_I32:
+                            vm_store_i32_typed_hot(dst, AS_I32(element));
+                            stored_typed = true;
+                            break;
+                        case VAL_I64:
+                            vm_store_i64_typed_hot(dst, AS_I64(element));
+                            stored_typed = true;
+                            break;
+                        case VAL_U32:
+                            vm_store_u32_typed_hot(dst, AS_U32(element));
+                            stored_typed = true;
+                            break;
+                        case VAL_U64:
+                            vm_store_u64_typed_hot(dst, AS_U64(element));
+                            stored_typed = true;
+                            break;
+                        case VAL_BOOL:
+                            vm_store_bool_register(dst, AS_BOOL(element));
+                            stored_typed = true;
+                            break;
+                        default:
+                            break;
+                    }
+                }
+
+                if (!stored_typed) {
+                    vm_set_register_safe(dst, element);
+                }
             }
+
+            vm_store_bool_register(hasReg, has_value);
         } else {
             VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Invalid iterator");
         }

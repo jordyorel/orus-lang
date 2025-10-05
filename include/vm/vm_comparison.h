@@ -373,6 +373,25 @@ static inline void vm_store_u64_typed_hot(uint16_t id, uint64_t value) {
     }
 }
 
+static inline void vm_store_bool_typed_hot(uint16_t id, bool value) {
+    if (!vm_typed_reg_in_range(id)) {
+        vm_set_register_safe(id, BOOL_VAL(value));
+        return;
+    }
+
+    bool skip_boxed_write = vm_mark_typed_register_dirty(id, REG_TYPE_BOOL);
+    vm.typed_regs.bool_regs[id] = value;
+    vm.typed_regs.dirty[id] = skip_boxed_write;
+
+    if (id < REGISTER_COUNT) {
+        if (!skip_boxed_write) {
+            vm.registers[id] = BOOL_VAL(value);
+        }
+    } else {
+        set_register(&vm.register_file, id, BOOL_VAL(value));
+    }
+}
+
 static inline void store_i64_register(uint16_t id, int64_t value) {
     if (vm_typed_reg_in_range(id)) {
         vm.typed_regs.i64_regs[id] = value;
