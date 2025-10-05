@@ -293,7 +293,8 @@ run_benchmark_category "Pure Arithmetic Performance" "arithmetic_benchmark.orus"
 # run_benchmark_category "Comprehensive Performance" "comprehensive_benchmark.orus"
 # run_benchmark_category "Extreme Performance" "extreme_benchmark.orus"
 run_benchmark_category "Optimized Loop Performance" "optimized_loop_benchmark.orus"
-# run_benchmark_category "While Loop Performance" "while_loop_benchmark.orus"
+# run_benchmark_category "Optimized Loop Performance" "control_flow_benchmark.orus"
+
 
 echo -e "${BLUE}=================================================================${NC}"
 echo -e "${GREEN}✨ Benchmark comparison complete!${NC}"
