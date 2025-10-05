@@ -274,7 +274,7 @@ void repl(){
         if(ib->multiline){
             print_colored(COLOR_PROMPT,"... ");
         }else{
-            print_colored(COLOR_PROMPT,"orus> ");
+            print_colored(COLOR_PROMPT,">> ");
         }
         fflush(stdout);
         if(!fgets(line,sizeof(line),stdin)){ printf("\n"); break; }
