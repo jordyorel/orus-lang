@@ -2,9 +2,9 @@
 // against bottom-up dynamic programming with instrumentation on both paths.
 print("== Phase 3: 0-1 Knapsack Stress ==")
 
-global mut KNAPSACK_NAIVE_CALLS = 0
-global mut KNAPSACK_NAIVE_MAX_DEPTH = 0
-global mut KNAPSACK_NAIVE_BRANCH_SPLITS = 0
+mut KNAPSACK_NAIVE_CALLS = 0
+mut KNAPSACK_NAIVE_MAX_DEPTH = 0
+mut KNAPSACK_NAIVE_BRANCH_SPLITS = 0
 
 fn knapsack_naive_inner(index: i32, capacity: i32, weights, values, depth: i32) -> i32:
     KNAPSACK_NAIVE_CALLS = KNAPSACK_NAIVE_CALLS + 1
@@ -39,9 +39,9 @@ fn run_knapsack_naive(label, weights, values, capacity: i32) -> i32:
     return result
 
 
-global mut KNAPSACK_DP_TABLE_CELLS = 0
-global mut KNAPSACK_DP_TRANSITIONS = 0
-global mut KNAPSACK_DP_REUSES = 0
+mut KNAPSACK_DP_TABLE_CELLS = 0
+mut KNAPSACK_DP_TRANSITIONS = 0
+mut KNAPSACK_DP_REUSES = 0
 
 fn run_knapsack_dp(label, weights, values, capacity: i32) -> i32:
     KNAPSACK_DP_TABLE_CELLS = 0

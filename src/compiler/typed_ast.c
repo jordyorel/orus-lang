@@ -107,9 +107,6 @@ TypedASTNode* create_typed_ast_node(ASTNode* original) {
             typed->typed.tryStmt.catchBlock = NULL;
             typed->typed.tryStmt.catchVarName = NULL;
             break;
-        case NODE_THROW:
-            typed->typed.throwStmt.value = NULL;
-            break;
         case NODE_BLOCK:
             typed->typed.block.statements = NULL;
             typed->typed.block.count = 0;
@@ -317,9 +314,6 @@ void free_typed_ast_node(TypedASTNode* node) {
             if (node->typed.tryStmt.catchVarName) {
                 free(node->typed.tryStmt.catchVarName);
             }
-            break;
-        case NODE_THROW:
-            free_typed_ast_node(node->typed.throwStmt.value);
             break;
         case NODE_BLOCK:
             if (node->typed.block.statements) {
@@ -672,8 +666,6 @@ bool validate_typed_ast(TypedASTNode* root) {
                 return false;
             }
             break;
-        case NODE_THROW:
-            return validate_typed_ast(root->typed.throwStmt.value);
         case NODE_PASS:
             // No children to validate
             break;
@@ -791,9 +783,6 @@ void print_typed_ast(TypedASTNode* node, int indent) {
             break;
         case NODE_TRY:
             nodeTypeStr = "Try";
-            break;
-        case NODE_THROW:
-            nodeTypeStr = "Throw";
             break;
         case NODE_BLOCK:
             nodeTypeStr = "Block";
@@ -979,9 +968,6 @@ void print_typed_ast(TypedASTNode* node, int indent) {
             if (node->typed.tryStmt.catchBlock) {
                 print_typed_ast(node->typed.tryStmt.catchBlock, indent + 1);
             }
-            break;
-        case NODE_THROW:
-            print_typed_ast(node->typed.throwStmt.value, indent + 1);
             break;
         case NODE_BLOCK:
             if (node->typed.block.statements) {

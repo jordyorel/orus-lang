@@ -2,8 +2,8 @@
 // Captures naive recursion depth/call growth alongside memoized cache hits.
 print("== Phase 3: Fibonacci Recursion Stress ==")
 
-global mut FIB_NAIVE_CALLS = 0
-global mut FIB_NAIVE_MAX_DEPTH = 0
+mut FIB_NAIVE_CALLS = 0
+mut FIB_NAIVE_MAX_DEPTH = 0
 
 fn fib_naive_inner(n: i32, depth: i32) -> i32:
     FIB_NAIVE_CALLS = FIB_NAIVE_CALLS + 1
@@ -22,10 +22,10 @@ fn run_fib_naive(label, n: i32) -> i32:
     print("fib_naive", label, "n:", n, "value:", value, "calls:", FIB_NAIVE_CALLS, "max_depth:", FIB_NAIVE_MAX_DEPTH)
     return value
 
-global mut FIB_MEMO_CALLS = 0
-global mut FIB_MEMO_MAX_DEPTH = 0
-global mut FIB_MEMO_CACHE_HITS = 0
-global mut FIB_MEMO_CACHE_WRITES = 0
+mut FIB_MEMO_CALLS = 0
+mut FIB_MEMO_MAX_DEPTH = 0
+mut FIB_MEMO_CACHE_HITS = 0
+mut FIB_MEMO_CACHE_WRITES = 0
 
 fn fib_memo_inner(n: i32, cache_values, cache_filled, depth: i32) -> i32:
     FIB_MEMO_CALLS = FIB_MEMO_CALLS + 1

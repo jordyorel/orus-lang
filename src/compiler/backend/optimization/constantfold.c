@@ -368,10 +368,6 @@ bool apply_constant_folding_recursive(TypedASTNode* ast, ConstantFoldContext* ct
             fold_children(ast->typed.call.args, ast->typed.call.argCount, ctx);
             break;
 
-        case NODE_THROW:
-            fold_child(ast->typed.throwStmt.value, ctx);
-            break;
-
         case NODE_ARRAY_LITERAL:
             fold_children(ast->typed.arrayLiteral.elements, ast->typed.arrayLiteral.count, ctx);
             break;

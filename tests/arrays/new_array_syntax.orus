@@ -12,7 +12,7 @@ print(len(values))
 zeros = [0, 4]
 print(len(zeros), zeros[0], zeros[3])
 
-const N = 5
+N:i32 := 5
 fixed: [i32, N] = [0, N]
 print(len(fixed), fixed[0], fixed[4])
 

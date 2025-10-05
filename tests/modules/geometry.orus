@@ -5,7 +5,7 @@ pub struct Point:
 pub fn origin() -> Point:
     return Point{ x: 0, y: 0 }
 
-pub global mut SCALE = 100
+pub SCALE:i32 := 100
 
 pub fn translate(dx: i32, dy: i32) -> Point:
     base = origin()

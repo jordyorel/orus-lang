@@ -67,15 +67,12 @@ typedef enum {
     TOKEN_OR,
     TOKEN_NOT,
     TOKEN_PRINT,
-    TOKEN_PRINT_NO_NL,
     TOKEN_TIME_STAMP,
     TOKEN_RETURN,
     TOKEN_TRUE,
     TOKEN_MUT,
-    TOKEN_CONST,
     TOKEN_WHILE,
     TOKEN_TRY,
-    TOKEN_THROW,
     TOKEN_CATCH,
     TOKEN_INT,
     TOKEN_I64,
@@ -89,8 +86,7 @@ typedef enum {
     TOKEN_MATCH,
     TOKEN_MATCHES,
     TOKEN_PUB,
-    TOKEN_GLOBAL,
-    TOKEN_STATIC,
+    TOKEN_DEFINE,
 
     // Add type tokens
     TOKEN_U32,  // Add this
@@ -170,4 +166,4 @@ void debug_print_tokens(const char* source);
 // can access the raw source when producing error messages.
 extern Lexer lexer;
 
-#endif
+#endif // ORUS_LEXER_H

@@ -4,43 +4,43 @@
 print("== Phase 3: Edit Distance Stress ==")
 
 // === Naive recursion metrics ===
-global mut EDIT_NAIVE_CALLS = 0
-global mut EDIT_NAIVE_MAX_DEPTH = 0
-global mut EDIT_NAIVE_BRANCH_SPLITS = 0
-global mut EDIT_NAIVE_MATCH_ADVANCES = 0
-global mut EDIT_NAIVE_SUBSTITUTIONS = 0
-global mut EDIT_NAIVE_INSERTIONS = 0
-global mut EDIT_NAIVE_DELETIONS = 0
-global mut EDIT_NAIVE_TIES = 0
+mut EDIT_NAIVE_CALLS = 0
+mut EDIT_NAIVE_MAX_DEPTH = 0
+mut EDIT_NAIVE_BRANCH_SPLITS = 0
+mut EDIT_NAIVE_MATCH_ADVANCES = 0
+mut EDIT_NAIVE_SUBSTITUTIONS = 0
+mut EDIT_NAIVE_INSERTIONS = 0
+mut EDIT_NAIVE_DELETIONS = 0
+mut EDIT_NAIVE_TIES = 0
 
 // Symbol codes for the uppercase character sequences (ASCII values).
-global LETTER_A = 65
-global LETTER_B = 66
-global LETTER_C = 67
-global LETTER_D = 68
-global LETTER_E = 69
-global LETTER_F = 70
-global LETTER_G = 71
-global LETTER_I = 73
-global LETTER_K = 75
-global LETTER_L = 76
-global LETTER_M = 77
-global LETTER_N = 78
-global LETTER_O = 79
-global LETTER_P = 80
-global LETTER_R = 82
-global LETTER_S = 83
-global LETTER_T = 84
-global LETTER_U = 85
-global LETTER_X = 88
-global LETTER_Y = 89
-global LETTER_Z = 90
+LETTER_A:i32 := 65
+LETTER_B:i32 := 66
+LETTER_C:i32 := 67
+LETTER_D:i32 := 68
+LETTER_E:i32 := 69
+LETTER_F:i32 := 70
+LETTER_G:i32 := 71
+LETTER_I:i32 := 73
+LETTER_K:i32 := 75
+LETTER_L:i32 := 76
+LETTER_M:i32 := 77
+LETTER_N:i32 := 78
+LETTER_O:i32 := 79
+LETTER_P:i32 := 80
+LETTER_R:i32 := 82
+LETTER_S:i32 := 83
+LETTER_T:i32 := 84
+LETTER_U:i32 := 85
+LETTER_X:i32 := 88
+LETTER_Y:i32 := 89
+LETTER_Z:i32 := 90
 
 // Operation codes for packed script reconstruction.
-global EDIT_OP_MATCH = 0
-global EDIT_OP_SUBSTITUTE = 1
-global EDIT_OP_INSERT = 2
-global EDIT_OP_DELETE = 3
+EDIT_OP_MATCH:i32 := 0
+EDIT_OP_SUBSTITUTE:i32 := 1
+EDIT_OP_INSERT:i32 := 2
+EDIT_OP_DELETE:i32 := 3
 
 fn edit_distance_naive_inner(seq_a, len_a: i32, seq_b, len_b: i32, i: i32, j: i32, depth: i32) -> i32:
     EDIT_NAIVE_CALLS = EDIT_NAIVE_CALLS + 1
@@ -107,15 +107,15 @@ fn run_edit_naive(label, seq_a, seq_b) -> i32:
     return value
 
 // === Dynamic programming metrics ===
-global mut EDIT_DP_BASE_INITIALIZATIONS = 0
-global mut EDIT_DP_CELLS = 0
-global mut EDIT_DP_MATCH_COPIES = 0
-global mut EDIT_DP_SUBSTITUTIONS = 0
-global mut EDIT_DP_INSERTIONS = 0
-global mut EDIT_DP_DELETIONS = 0
-global mut EDIT_DP_TIES = 0
-global mut EDIT_DP_LAST_DISTANCE = 0
-global mut EDIT_DP_LAST_TABLE: [[i32]] = []
+mut EDIT_DP_BASE_INITIALIZATIONS = 0
+mut EDIT_DP_CELLS = 0
+mut EDIT_DP_MATCH_COPIES = 0
+mut EDIT_DP_SUBSTITUTIONS = 0
+mut EDIT_DP_INSERTIONS = 0
+mut EDIT_DP_DELETIONS = 0
+mut EDIT_DP_TIES = 0
+mut EDIT_DP_LAST_DISTANCE = 0
+mut EDIT_DP_LAST_TABLE: [[i32]] = []
 
 fn pack_operation(op: i32, from_code: i32, to_code: i32) -> i32:
     return op * 10000 + from_code * 100 + to_code

@@ -4,11 +4,11 @@
 
 print("== Phase 2: Breadth-First Search (Iterative) Smoke ==")
 
-global mut BFS_ENQUEUES = 0
-global mut BFS_DEQUEUES = 0
-global mut BFS_EDGE_CHECKS = 0
-global mut BFS_MAX_DEPTH = 0
-global mut BFS_MAX_QUEUE = 0
+mut BFS_ENQUEUES = 0
+mut BFS_DEQUEUES = 0
+mut BFS_EDGE_CHECKS = 0
+mut BFS_MAX_DEPTH = 0
+mut BFS_MAX_QUEUE = 0
 
 fn make_bool_array(count):
     mut result: [bool] = []

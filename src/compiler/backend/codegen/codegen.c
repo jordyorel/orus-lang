@@ -4655,9 +4655,6 @@ void compile_statement(CompilerContext* ctx, TypedASTNode* stmt) {
         case NODE_TRY:
             compile_try_statement(ctx, stmt);
             break;
-        case NODE_THROW:
-            compile_throw_statement(ctx, stmt);
-            break;
 
         case NODE_BREAK:
             compile_break_statement(ctx, stmt);
@@ -5569,29 +5566,6 @@ void compile_try_statement(CompilerContext* ctx, TypedASTNode* try_stmt) {
     if (!patch_jump(ctx->bytecode, end_patch, ctx->bytecode->count)) {
         DEBUG_CODEGEN_PRINT("Error: Failed to patch end jump for try statement");
         ctx->has_compilation_errors = true;
-    }
-}
-
-void compile_throw_statement(CompilerContext* ctx, TypedASTNode* throw_stmt) {
-    if (!ctx || !throw_stmt) {
-        return;
-    }
-
-    if (!throw_stmt->typed.throwStmt.value) {
-        return;
-    }
-
-    int value_reg = compile_expression(ctx, throw_stmt->typed.throwStmt.value);
-    if (value_reg == -1) {
-        return;
-    }
-
-    set_location_from_node(ctx, throw_stmt);
-    emit_byte_to_buffer(ctx->bytecode, OP_THROW);
-    emit_byte_to_buffer(ctx->bytecode, (uint8_t)value_reg);
-
-    if (value_reg >= MP_TEMP_REG_START && value_reg <= MP_TEMP_REG_END) {
-        compiler_free_temp(ctx->allocator, value_reg);
     }
 }
 

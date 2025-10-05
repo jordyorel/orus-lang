@@ -255,8 +255,6 @@ static TokenType identifier_type(const char* start, int length) {
                 return TOKEN_CONTINUE;
             if (length == 5 && memcmp(start, "catch", 5) == 0)
                 return TOKEN_CATCH;
-            if (length == 5 && memcmp(start, "const", 5) == 0)
-                return TOKEN_CONST;
             break;
         case 'e':
             if (length == 4 && memcmp(start, "else", 4) == 0) return TOKEN_ELSE;
@@ -271,7 +269,6 @@ static TokenType identifier_type(const char* start, int length) {
             if (length == 3 && memcmp(start, "f64", 3) == 0) return TOKEN_F64;
             break;
         case 'g':
-            if (length == 6 && memcmp(start, "global", 6) == 0) return TOKEN_GLOBAL;
             break;
         case 'i':
             if (length == 2 && memcmp(start, "if", 2) == 0) return TOKEN_IF;
@@ -300,8 +297,6 @@ static TokenType identifier_type(const char* start, int length) {
                 return TOKEN_PASS;
             if (length == 5 && memcmp(start, "print", 5) == 0)
                 return TOKEN_PRINT;
-            if (length == 15 && memcmp(start, "print_no_newline", 15) == 0)
-                return TOKEN_PRINT_NO_NL;
             if (length == 3 && memcmp(start, "pub", 3) == 0) return TOKEN_PUB;
             break;
         case 'r':
@@ -311,13 +306,10 @@ static TokenType identifier_type(const char* start, int length) {
         case 's':
             if (length == 6 && memcmp(start, "struct", 6) == 0)
                 return TOKEN_STRUCT;
-            if (length == 6 && memcmp(start, "static", 6) == 0)
-                return TOKEN_STATIC;
             break;
         case 't':
             if (length == 4 && memcmp(start, "true", 4) == 0) return TOKEN_TRUE;
             if (length == 3 && memcmp(start, "try", 3) == 0) return TOKEN_TRY;
-            if (length == 5 && memcmp(start, "throw", 5) == 0) return TOKEN_THROW;
             if (length == 10 && memcmp(start, "time_stamp", 10) == 0) return TOKEN_TIME_STAMP;
             break;
         case 'u':
@@ -748,6 +740,7 @@ Token scan_token_ctx(LexerContext* ctx) {
         case '^':
             return make_token_ctx(ctx, TOKEN_BIT_XOR);
         case ':':
+            if (match_char_ctx(ctx, '=')) return make_token_ctx(ctx, TOKEN_DEFINE);
             return make_token_ctx(ctx, TOKEN_COLON);
         case '\'':
             return make_token_ctx(ctx, TOKEN_APOSTROPHE);
@@ -964,15 +957,12 @@ const char* token_type_to_string(TokenType type) {
         case TOKEN_OR: return "OR";
         case TOKEN_NOT: return "NOT";
         case TOKEN_PRINT: return "PRINT";
-        case TOKEN_PRINT_NO_NL: return "PRINT_NO_NL";
         case TOKEN_TIME_STAMP: return "TIME_STAMP";
         case TOKEN_RETURN: return "RETURN";
         case TOKEN_TRUE: return "TRUE";
         case TOKEN_MUT: return "MUT";
-        case TOKEN_CONST: return "CONST";
         case TOKEN_WHILE: return "WHILE";
         case TOKEN_TRY: return "TRY";
-        case TOKEN_THROW: return "THROW";
         case TOKEN_CATCH: return "CATCH";
         case TOKEN_INT: return "INT";
         case TOKEN_I64: return "I64";
@@ -985,8 +975,7 @@ const char* token_type_to_string(TokenType type) {
         case TOKEN_MATCH: return "MATCH";
         case TOKEN_MATCHES: return "MATCHES";
         case TOKEN_PUB: return "PUB";
-        case TOKEN_GLOBAL: return "GLOBAL";
-        case TOKEN_STATIC: return "STATIC";
+        case TOKEN_DEFINE: return "DEFINE";
         case TOKEN_U32: return "U32";
         case TOKEN_U64: return "U64";
         case TOKEN_F64: return "F64";

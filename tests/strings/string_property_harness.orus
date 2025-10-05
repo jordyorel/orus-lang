@@ -6,7 +6,7 @@ start_time: f64 = time_stamp()
 print("Start timestamp:", start_time)
 
 // ---------- Deterministic RNG ----------
-global mut RNG_SEED: i32 = 0x13579BDF
+mut RNG_SEED: i32 = 0x13579BDF
 
 fn srand(seed: i32): RNG_SEED = seed
 fn rand_u32() -> i32:
@@ -418,7 +418,7 @@ fn phase_metamorphic_slicing(seed: i32, trials: i32) -> i32:
     return checksum
 
 // ---------- Runner ----------
-const TRIALS = 64
+TRIALS:i32 := 64
 
 mut total_checksum: i32 = 0
 total_checksum = total_checksum + phase_multi_concat(0xA5A5, TRIALS)

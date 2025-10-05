@@ -4,7 +4,7 @@
 
 print("== Phase 2: Floyd-Warshall All-Pairs Shortest Paths Smoke ==")
 
-global mut FLOYD_RELAXATIONS = 0
+mut FLOYD_RELAXATIONS = 0
 
 fn clone_matrix(matrix, dimension):
     mut result: [[i32]] = []

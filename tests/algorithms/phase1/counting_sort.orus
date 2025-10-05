@@ -4,10 +4,10 @@
 
 print("== Phase 1: Counting Sort (Frequency Table) Smoke ==")
 
-global mut COUNTING_EXTENT_SCANS = 0
-global mut COUNTING_RANGE_SLOTS = 0
-global mut COUNTING_COUNT_UPDATES = 0
-global mut COUNTING_OUTPUT_WRITES = 0
+mut COUNTING_EXTENT_SCANS = 0
+mut COUNTING_RANGE_SLOTS = 0
+mut COUNTING_COUNT_UPDATES = 0
+mut COUNTING_OUTPUT_WRITES = 0
 
 fn counting_sort(label, values):
     COUNTING_EXTENT_SCANS = 0

@@ -43,16 +43,21 @@ follows the name (`value: i64`). Without an annotation the Hindley–Milner type
 
 ## 3. Constants
 
-The current implementation reserves the `const` keyword but does not yet assign behaviour to it. To model constants today, use
-module-scope globals without `mut`. Global names must be uppercase and always provide an initializer.
+Declare constants with `:=` and an explicit type annotation. Constants are always immutable and live at module scope, so you can
+reference them anywhere in the file. Prefix the declaration with `pub` when you want to expose the value to other modules.
 
 ```orus
-pub global MAX_CONNECTIONS = 512
-pub global mut CACHE_BYTES = 1_048_576   // writable global
+PI:f64 := 3.1415926535
+SCALE:i32 := 100
+pub APP_NAME:string := "Orus"
 ```
 
-Treat uppercase globals as constants in your codebase. Because they live in the global register bank they are fast to read, and
-the compiler will flag attempts to modify a non-`mut` global.
+Constant names should use uppercase with underscores. When you need writable module-level state, declare a top-level `mut`
+binding instead:
+
+```orus
+mut cache_bytes: i64 = 1_048_576
+```
 
 ---
 
@@ -411,7 +416,7 @@ These inferred arrays are still fixed-size and do not support `push` or `pop`.
 Use `[value, Length]` to create a fixed array filled with a repeated value. `Length` must be known at compile time.
 
 ```orus
-const SIZE = 4
+SIZE:i32 := 4
 zeros: [i32, SIZE] = [0, SIZE]
 ```
 
@@ -548,15 +553,14 @@ further conversions.
 
 ## 15. Error Handling
 
-Use `try`/`catch` to guard potentially failing code. `throw` raises an error value that propagates until a handler catches it.
+Use `try`/`catch` to guard potentially failing code. Operations such as division by zero, failed casts, or explicit runtime
+errors raised by built-ins propagate into the nearest `catch` block.
 
 ```orus
 try:
     risky = 10 / step
 catch err:
     print("caught", err)
-
-throw "unexpected state"
 ```
 
 Both `try` and `catch` accept either a single inline statement or an indented block. The runtime ensures unwinding is safe and
@@ -604,8 +608,8 @@ namespaces.
 
 ### 16.2 Public Functions and Structs
 
-Definitions are private by default. Prefix `fn`, `struct`, `enum`, `impl`, or `global` with `pub` to make them available to other
-modules.
+Definitions are private by default. Prefix `fn`, `struct`, `enum`, `impl`, or constant declarations with `pub` to make them
+available to other modules.
 
 ```orus
 pub fn squared_distance(a: Point, b: Point) -> f64:
@@ -614,7 +618,7 @@ pub fn squared_distance(a: Point, b: Point) -> f64:
     return dx * dx + dy * dy
 ```
 
-Remember that globals must use uppercase names; add `mut` if the value should be writable.
+Constants must use uppercase names; add `mut` to a top-level binding only when you truly need writable module state.
 
 ---
 
@@ -679,7 +683,7 @@ print("elapsed seconds:", elapsed)
   imports.
 - **Design enums for exhaustive matches.** Pattern matching shines when every state is accounted for. Include a `_` arm only when
   you intentionally accept all remaining cases.
-- **Handle errors thoughtfully.** Wrap risky operations with `try`/`catch` and propagate meaningful messages with `throw`.
+- **Handle errors thoughtfully.** Wrap risky operations with `try`/`catch` and surface meaningful diagnostics from the handler.
 - **Measure with `time_stamp()`.** Quick timing harnesses help you evaluate performance changes without leaving the language.
 
 The Orus toolchain enforces these patterns through its type system and diagnostics, letting you build reliable, high-performance
@@ -727,7 +731,7 @@ fn main():
     print(status_text(current))
 
     try:
-        throw "simulated failure"
+        risky = int("not a number")
     catch err:
         print("recovered", err)
 ```
