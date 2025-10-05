@@ -15,6 +15,7 @@
 #include "compiler/symbol_table.h"
 #include "compiler/scope_stack.h"
 #include "compiler/error_reporter.h"
+#include "config/config.h"
 #include "type/type.h"
 #include "vm/vm.h"
 #include "vm/vm_constants.h"
@@ -143,6 +144,70 @@ static TypeKind fallback_type_kind_from_ast(const ASTNode* node) {
     }
 
     return TYPE_I32;
+}
+
+static bool node_type_is_expression(NodeType type) {
+    switch (type) {
+        case NODE_IDENTIFIER:
+        case NODE_LITERAL:
+        case NODE_ARRAY_LITERAL:
+        case NODE_ARRAY_FILL:
+        case NODE_ARRAY_SLICE:
+        case NODE_INDEX_ACCESS:
+        case NODE_BINARY:
+        case NODE_TERNARY:
+        case NODE_UNARY:
+        case NODE_CALL:
+        case NODE_CAST:
+        case NODE_STRUCT_LITERAL:
+        case NODE_MEMBER_ACCESS:
+        case NODE_ENUM_MATCH_TEST:
+        case NODE_ENUM_PAYLOAD:
+        case NODE_MATCH_EXPRESSION:
+        case NODE_TIME_STAMP:
+        case NODE_TYPE:
+            return true;
+        default:
+            return false;
+    }
+}
+
+static const Type* get_effective_type(const TypedASTNode* node) {
+    if (!node) {
+        return NULL;
+    }
+    if (node->resolvedType) {
+        return node->resolvedType;
+    }
+    if (node->original && node->original->dataType) {
+        return node->original->dataType;
+    }
+    return NULL;
+}
+
+static bool expression_node_has_value(const TypedASTNode* node) {
+    const Type* type = get_effective_type(node);
+    if (!type) {
+        return true;
+    }
+    switch (type->kind) {
+        case TYPE_VOID:
+        case TYPE_ERROR:
+            return false;
+        default:
+            return true;
+    }
+}
+
+static bool repl_mode_active(void) {
+    const OrusConfig* config = config_get_global();
+    if (config && config->repl_mode) {
+        return true;
+    }
+    if (vm.filePath && strcmp(vm.filePath, "<repl>") == 0) {
+        return true;
+    }
+    return false;
 }
 
 static inline void set_location_from_node(CompilerContext* ctx, TypedASTNode* node) {
@@ -4601,12 +4666,42 @@ static void compile_import_statement(CompilerContext* ctx, TypedASTNode* stmt) {
 
 // ===== STATEMENT COMPILATION =====
 
+static void compile_expression_statement(CompilerContext* ctx, TypedASTNode* expr) {
+    if (!ctx || !expr) {
+        return;
+    }
+
+    int result_reg = compile_expression(ctx, expr);
+    if (result_reg == -1) {
+        return;
+    }
+
+    bool should_print = !ctx->compiling_function && repl_mode_active() &&
+                        expression_node_has_value(expr);
+    if (should_print) {
+        set_location_from_node(ctx, expr);
+        emit_byte_to_buffer(ctx->bytecode, OP_PRINT_R);
+        emit_byte_to_buffer(ctx->bytecode, (uint8_t)result_reg);
+    }
+
+    if (result_reg >= MP_TEMP_REG_START && result_reg <= MP_TEMP_REG_END) {
+        compiler_free_temp(ctx->allocator, result_reg);
+    }
+}
+
 void compile_statement(CompilerContext* ctx, TypedASTNode* stmt) {
     if (!ctx || !stmt) return;
-    
-    DEBUG_CODEGEN_PRINT("Compiling statement type %d\n", stmt->original->type);
-    
-    switch (stmt->original->type) {
+
+    NodeType node_type = stmt->original ? stmt->original->type : NODE_PROGRAM;
+
+    if (node_type_is_expression(node_type)) {
+        compile_expression_statement(ctx, stmt);
+        return;
+    }
+
+    DEBUG_CODEGEN_PRINT("Compiling statement type %d\n", node_type);
+
+    switch (node_type) {
         case NODE_ASSIGN:
             compile_assignment(ctx, stmt);
             break;
@@ -4692,11 +4787,7 @@ void compile_statement(CompilerContext* ctx, TypedASTNode* stmt) {
         case NODE_RETURN:
             compile_return_statement(ctx, stmt);
             break;
-            
-        case NODE_CALL:
-            // Compile function call as statement (void return type)
-            compile_expression(ctx, stmt);
-            break;
+
         case NODE_ENUM_MATCH_CHECK:
             // Compile-time exhaustiveness checks generate this node; no runtime emission required.
             break;
@@ -4729,7 +4820,7 @@ void compile_statement(CompilerContext* ctx, TypedASTNode* stmt) {
             break;
 
         default:
-            DEBUG_CODEGEN_PRINT("Warning: Unsupported statement type: %d\n", stmt->original->type);
+            DEBUG_CODEGEN_PRINT("Warning: Unsupported statement type: %d\n", node_type);
             break;
     }
 }
