@@ -2134,8 +2134,9 @@ static bool emit_fused_numeric_loop(CompilerContext* ctx,
     emit_byte_to_buffer(ctx->bytecode, (uint8_t)loop_reg);
     emit_byte_to_buffer(ctx->bytecode, (uint8_t)guard_limit_reg);
     int back_off = loop_start - (ctx->bytecode->count + 2);
-    emit_byte_to_buffer(ctx->bytecode, (uint8_t)(back_off & 0xFF));
-    emit_byte_to_buffer(ctx->bytecode, (uint8_t)((back_off >> 8) & 0xFF));
+    uint16_t encoded_back_off = (uint16_t)back_off;
+    emit_byte_to_buffer(ctx->bytecode, (uint8_t)((encoded_back_off >> 8) & 0xFF));
+    emit_byte_to_buffer(ctx->bytecode, (uint8_t)(encoded_back_off & 0xFF));
 
     int end_target = ctx->bytecode ? ctx->bytecode->count : 0;
     ctx->current_loop_end = end_target;
