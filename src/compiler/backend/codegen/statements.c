@@ -18,6 +18,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <limits.h>
 
 static bool node_type_is_expression(NodeType type) {
     switch (type) {
@@ -2039,6 +2040,8 @@ static bool emit_fused_numeric_loop(CompilerContext* ctx,
     bool use_adjusted_limit = adjusted_limit_reg >= 0;
     int guard_limit_reg = use_adjusted_limit ? adjusted_limit_reg : limit_reg;
     int guard_copy_reg = -1;
+    int start_count = ctx->bytecode ? ctx->bytecode->count : 0;
+    int start_patch_count = ctx->bytecode ? ctx->bytecode->patch_count : 0;
 
     if (!use_adjusted_limit && metadata->limit_reg_is_temp && ctx->allocator) {
         guard_copy_reg = compiler_alloc_temp(ctx->allocator);
@@ -2134,6 +2137,24 @@ static bool emit_fused_numeric_loop(CompilerContext* ctx,
     emit_byte_to_buffer(ctx->bytecode, (uint8_t)loop_reg);
     emit_byte_to_buffer(ctx->bytecode, (uint8_t)guard_limit_reg);
     int back_off = loop_start - (ctx->bytecode->count + 2);
+    if (back_off < INT16_MIN || back_off > INT16_MAX) {
+        if (ctx->bytecode) {
+            ctx->bytecode->count = start_count;
+            if (ctx->bytecode->patch_count > start_patch_count) {
+                ctx->bytecode->patch_count = start_patch_count;
+            }
+        }
+        if (ctx->allocator && metadata->typed_hint_limit_reg >= 0) {
+            compiler_set_typed_residency_hint(ctx->allocator,
+                                              metadata->typed_hint_limit_reg,
+                                              false);
+        }
+        metadata->typed_hint_limit_reg = -1;
+        if (guard_copy_reg >= 0 && ctx->allocator) {
+            compiler_free_temp(ctx->allocator, guard_copy_reg);
+        }
+        return false;
+    }
     uint16_t encoded_back_off = (uint16_t)back_off;
     emit_byte_to_buffer(ctx->bytecode, (uint8_t)((encoded_back_off >> 8) & 0xFF));
     emit_byte_to_buffer(ctx->bytecode, (uint8_t)(encoded_back_off & 0xFF));
@@ -2323,6 +2344,7 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
         }
 
         int loop_start_fused = ctx->bytecode->count;
+        int patch_start_fused = ctx->bytecode ? ctx->bytecode->patch_count : 0;
         ScopeFrame* loop_frame_fused = enter_loop_context(ctx, loop_start_fused);
         int loop_frame_index = loop_frame_fused ? loop_frame_fused->lexical_depth : -1;
         if (!loop_frame_fused) {
@@ -2464,22 +2486,15 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
         emit_byte_to_buffer(ctx->bytecode, (uint8_t)fused_loop_reg);
         emit_byte_to_buffer(ctx->bytecode, limit_for_fused);
         int back_off = loop_start_fused - (ctx->bytecode->count + 2);
-        // OP_INC_CMP_JMP reads its offset as a big-endian signed 16-bit value.
-        uint16_t encoded_back_off = (uint16_t)back_off;
-        emit_byte_to_buffer(ctx->bytecode, (uint8_t)((encoded_back_off >> 8) & 0xFF));
-        emit_byte_to_buffer(ctx->bytecode, (uint8_t)(encoded_back_off & 0xFF));
-
-        int end_target = ctx->bytecode->count;
-        ctx->current_loop_end = end_target;
-        if (loop_frame_fused) {
-            loop_frame_fused->end_offset = end_target;
-        }
-        patch_break_statements(ctx, end_target);
-
-        if (!patch_jump(ctx->bytecode, end_patch, end_target)) {
-            DEBUG_CODEGEN_PRINT("Error: Failed to patch while-loop end jump to %d\n", end_target);
-            ctx->has_compilation_errors = true;
-            leave_loop_context(ctx, loop_frame_fused, end_target);
+        if (back_off < INT16_MIN || back_off > INT16_MAX) {
+            if (ctx->bytecode) {
+                ctx->bytecode->count = loop_start_fused;
+                if (ctx->bytecode->patch_count > patch_start_fused) {
+                    ctx->bytecode->patch_count = patch_start_fused;
+                }
+            }
+            release_typed_hint(ctx, &typed_hint_loop_reg);
+            release_typed_hint(ctx, &typed_hint_limit_reg);
             if (fused_limit_guard_is_temp && fused_limit_guard_reg >= MP_TEMP_REG_START &&
                 fused_limit_guard_reg <= MP_TEMP_REG_END) {
                 compiler_free_temp(ctx->allocator, fused_limit_guard_reg);
@@ -2489,42 +2504,85 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
                 compiler_free_register(ctx->allocator, fused_limit_guard_reg);
                 fused_limit_guard_reg = -1;
             }
-            if (fused_limit_temp_is_temp) {
+            if (fused_info.use_adjusted_limit && fused_limit_temp_is_temp &&
+                fused_limit_temp_reg >= 0) {
                 compiler_free_temp(ctx->allocator, fused_limit_temp_reg);
+                fused_limit_temp_reg = -1;
             }
-            if (fused_limit_is_temp) {
+            if (fused_limit_is_temp && fused_limit_reg >= 0) {
                 compiler_free_temp(ctx->allocator, fused_limit_reg);
+                fused_limit_reg = -1;
             }
+            if (loop_frame_index >= 0) {
+                loop_frame_fused = get_scope_frame_by_index(ctx, loop_frame_index);
+            }
+            leave_loop_context(ctx, loop_frame_fused, loop_start_fused);
+            loop_frame_fused = NULL;
+            loop_frame_index = -1;
+            use_fused_inc = false;
+        } else {
+            // OP_INC_CMP_JMP reads its offset as a big-endian signed 16-bit value.
+            uint16_t encoded_back_off = (uint16_t)back_off;
+            emit_byte_to_buffer(ctx->bytecode, (uint8_t)((encoded_back_off >> 8) & 0xFF));
+            emit_byte_to_buffer(ctx->bytecode, (uint8_t)(encoded_back_off & 0xFF));
+
+            int end_target = ctx->bytecode->count;
+            ctx->current_loop_end = end_target;
+            if (loop_frame_fused) {
+                loop_frame_fused->end_offset = end_target;
+            }
+            patch_break_statements(ctx, end_target);
+
+            if (!patch_jump(ctx->bytecode, end_patch, end_target)) {
+                DEBUG_CODEGEN_PRINT("Error: Failed to patch while-loop end jump to %d\n", end_target);
+                ctx->has_compilation_errors = true;
+                leave_loop_context(ctx, loop_frame_fused, end_target);
+                if (fused_limit_guard_is_temp && fused_limit_guard_reg >= MP_TEMP_REG_START &&
+                    fused_limit_guard_reg <= MP_TEMP_REG_END) {
+                    compiler_free_temp(ctx->allocator, fused_limit_guard_reg);
+                    fused_limit_guard_reg = -1;
+                }
+                if (fused_limit_guard_is_frame && fused_limit_guard_reg >= 0) {
+                    compiler_free_register(ctx->allocator, fused_limit_guard_reg);
+                    fused_limit_guard_reg = -1;
+                }
+                if (fused_limit_temp_is_temp) {
+                    compiler_free_temp(ctx->allocator, fused_limit_temp_reg);
+                }
+                if (fused_limit_is_temp) {
+                    compiler_free_temp(ctx->allocator, fused_limit_reg);
+                }
+                release_typed_hint(ctx, &typed_hint_loop_reg);
+                release_typed_hint(ctx, &typed_hint_limit_reg);
+                return;
+            }
+            DEBUG_CODEGEN_PRINT("Patched end jump to %d\n", end_target);
+
+            leave_loop_context(ctx, loop_frame_fused, end_target);
+
             release_typed_hint(ctx, &typed_hint_loop_reg);
             release_typed_hint(ctx, &typed_hint_limit_reg);
+            if (fused_limit_guard_is_temp && fused_limit_guard_reg >= MP_TEMP_REG_START &&
+                fused_limit_guard_reg <= MP_TEMP_REG_END) {
+                compiler_free_temp(ctx->allocator, fused_limit_guard_reg);
+                fused_limit_guard_reg = -1;
+            }
+            if (fused_limit_guard_is_frame && fused_limit_guard_reg >= 0) {
+                compiler_free_register(ctx->allocator, fused_limit_guard_reg);
+                fused_limit_guard_reg = -1;
+            }
+            if (fused_info.use_adjusted_limit && fused_limit_temp_is_temp &&
+                fused_limit_temp_reg >= 0) {
+                compiler_free_temp(ctx->allocator, fused_limit_temp_reg);
+                fused_limit_temp_reg = -1;
+            }
+            if (fused_limit_is_temp && fused_limit_reg >= 0) {
+                compiler_free_temp(ctx->allocator, fused_limit_reg);
+                fused_limit_reg = -1;
+            }
+
             return;
         }
-        DEBUG_CODEGEN_PRINT("Patched end jump to %d\n", end_target);
-
-        leave_loop_context(ctx, loop_frame_fused, end_target);
-
-        release_typed_hint(ctx, &typed_hint_loop_reg);
-        release_typed_hint(ctx, &typed_hint_limit_reg);
-        if (fused_limit_guard_is_temp && fused_limit_guard_reg >= MP_TEMP_REG_START &&
-            fused_limit_guard_reg <= MP_TEMP_REG_END) {
-            compiler_free_temp(ctx->allocator, fused_limit_guard_reg);
-            fused_limit_guard_reg = -1;
-        }
-        if (fused_limit_guard_is_frame && fused_limit_guard_reg >= 0) {
-            compiler_free_register(ctx->allocator, fused_limit_guard_reg);
-            fused_limit_guard_reg = -1;
-        }
-        if (fused_info.use_adjusted_limit && fused_limit_temp_is_temp &&
-            fused_limit_temp_reg >= 0) {
-            compiler_free_temp(ctx->allocator, fused_limit_temp_reg);
-            fused_limit_temp_reg = -1;
-        }
-        if (fused_limit_is_temp && fused_limit_reg >= 0) {
-            compiler_free_temp(ctx->allocator, fused_limit_reg);
-            fused_limit_reg = -1;
-        }
-
-        return;
     }
 
     int loop_start = ctx->bytecode->count;
