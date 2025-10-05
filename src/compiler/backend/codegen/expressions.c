@@ -37,6 +37,22 @@ static bool type_is_numeric(const Type* type) {
     }
 }
 
+static bool type_is_string_like(const Type* type) {
+    if (!type) {
+        return false;
+    }
+
+    if (type->kind == TYPE_STRING) {
+        return true;
+    }
+
+    if (type->kind == TYPE_INSTANCE && type->info.instance.base) {
+        return type->info.instance.base->kind == TYPE_STRING;
+    }
+
+    return false;
+}
+
 static void format_match_literal(Value value, char* buffer, size_t size) {
     if (!buffer || size == 0) {
         return;
@@ -3818,7 +3834,7 @@ void compile_literal(CompilerContext* ctx, TypedASTNode* literal, int target_reg
 
 void compile_binary_op(CompilerContext* ctx, TypedASTNode* binary, int target_reg, int left_reg, int right_reg) {
     if (!ctx || !binary || target_reg < 0 || left_reg < 0 || right_reg < 0) return;
-    
+
     // Get the operator and operand types
     const char* op = binary->original->binary.op;
 
@@ -3844,6 +3860,16 @@ void compile_binary_op(CompilerContext* ctx, TypedASTNode* binary, int target_re
         right_type = &right_fallback;
     }
 
+    bool left_is_string = type_is_string_like(left_type) || left_fallback.kind == TYPE_STRING;
+    bool right_is_string = type_is_string_like(right_type) || right_fallback.kind == TYPE_STRING;
+    bool is_string_concat = (strcmp(op, "+") == 0) && (left_is_string || right_is_string);
+    Type string_type = {.kind = TYPE_STRING};
+
+    if (is_string_concat) {
+        left_type = &string_type;
+        right_type = &string_type;
+    }
+
     DEBUG_CODEGEN_PRINT("Binary operation: %s, left_type=%d, right_type=%d\n", op, left_type->kind, right_type->kind);
 
     // Check if this is a comparison operation
@@ -3860,6 +3886,9 @@ void compile_binary_op(CompilerContext* ctx, TypedASTNode* binary, int target_re
     if (!result_type_valid) {
         result_type = &result_fallback;
     }
+    if (is_string_concat) {
+        result_type = &string_type;
+    }
     int coerced_left_reg = left_reg;
     int coerced_right_reg = right_reg;
 
@@ -3867,11 +3896,11 @@ void compile_binary_op(CompilerContext* ctx, TypedASTNode* binary, int target_re
         // Retain the original resolved type when it is trustworthy.
         result_type = binary->resolvedType;
     }
-    
+
     // Type coercion rules: promote to the "larger" type
-    if (left_type->kind != right_type->kind) {
+    if (!is_string_concat && left_type->kind != right_type->kind) {
         DEBUG_CODEGEN_PRINT("Type mismatch detected: %d vs %d, applying coercion\n", left_type->kind, right_type->kind);
-        
+
         // Determine the promoted type following simpler, safer rules
         TypeKind promoted_type = TYPE_I32; // Default fallback
         
@@ -3938,7 +3967,10 @@ void compile_binary_op(CompilerContext* ctx, TypedASTNode* binary, int target_re
         // For comparisons, use the (promoted) operand type
         opcode_type = left_type->kind == right_type->kind ? left_type : result_type;
     }
-    
+    if (is_string_concat) {
+        opcode_type = &string_type;
+    }
+
     DEBUG_CODEGEN_PRINT("Emitting binary operation: %s (target=R%d, left=R%d, right=R%d, type=%d)%s\n",
            op, target_reg, coerced_left_reg, coerced_right_reg, opcode_type->kind,
            is_comparison ? " [COMPARISON]" : " [ARITHMETIC]");
