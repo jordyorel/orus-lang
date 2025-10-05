@@ -248,6 +248,7 @@ SCOPE_TRACKING_TEST_BIN = $(BUILDDIR)/tests/test_scope_tracking
 PEEPHOLE_TEST_BIN = $(BUILDDIR)/tests/test_constant_propagation
 TAGGED_UNION_TEST_BIN = $(BUILDDIR)/tests/test_vm_tagged_union
 TYPED_REGISTER_TEST_BIN = $(BUILDDIR)/tests/test_vm_typed_registers
+REGISTER_ALLOCATOR_TEST_BIN = $(BUILDDIR)/tests/test_register_allocator
 BUILTIN_INPUT_TEST_BIN = $(BUILDDIR)/tests/test_builtin_input
 CONSTANT_FOLD_TEST_BIN = $(BUILDDIR)/tests/test_constant_folding
 BUILTIN_SORTED_ORUS_TESTS = \
@@ -263,7 +264,7 @@ BUILTIN_RANGE_ORUS_FAIL_TESTS = \
     tests/builtins/range_float_step.orus \
     tests/builtins/range_overflow_stop.orus
 
-.PHONY: all clean test unit-test test-control-flow benchmark help debug release release-with-wasm profiling analyze install dist package bytecode-jump-tests source-map-tests scope-tracking-tests peephole-tests constant-fold-tests cli-smoke-tests tagged-union-tests builtin-input-tests builtin-range-tests test-optimizer wasm _test-run _benchmark-run
+.PHONY: all clean test unit-test test-control-flow benchmark help debug release release-with-wasm profiling analyze install dist package bytecode-jump-tests source-map-tests scope-tracking-tests peephole-tests cli-smoke-tests tagged-union-tests typed-register-tests register-allocator-tests builtin-input-tests builtin-range-tests test-optimizer wasm _test-run _benchmark-run
 
 all: build-info $(ORUS)
 
@@ -430,6 +431,9 @@ _test-run: $(ORUS)
 	@echo "\033[36m=== Typed Register Tests ===\033[0m"
 	@$(MAKE) typed-register-tests
 	@echo ""
+	@echo "\033[36m=== Register Allocator Tests ===\033[0m"
+	@$(MAKE) register-allocator-tests
+	@echo ""
 	@echo "\033[36m=== Builtin Input Tests ===\033[0m"
 	@$(MAKE) builtin-input-tests
 	@echo ""
@@ -513,6 +517,15 @@ $(TYPED_REGISTER_TEST_BIN): tests/unit/test_vm_typed_registers.c $(COMPILER_OBJS
 typed-register-tests: $(TYPED_REGISTER_TEST_BIN)
 	@echo "Running typed register coherence tests..."
 	@./$(TYPED_REGISTER_TEST_BIN)
+
+$(REGISTER_ALLOCATOR_TEST_BIN): tests/unit/test_register_allocator.c $(COMPILER_OBJS) $(VM_OBJS)
+	@mkdir -p $(dir $@)
+	@echo "Compiling register allocator tests..."
+	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+
+register-allocator-tests: $(REGISTER_ALLOCATOR_TEST_BIN)
+	@echo "Running register allocator tests..."
+	@./$(REGISTER_ALLOCATOR_TEST_BIN)
 
 $(BUILTIN_INPUT_TEST_BIN): tests/unit/test_builtin_input.c $(COMPILER_OBJS) $(VM_OBJS)
 	@mkdir -p $(dir $@)
