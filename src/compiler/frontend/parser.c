@@ -136,7 +136,6 @@ static bool is_reserved_keyword_token(TokenType type) {
         case TOKEN_PASS:
         case TOKEN_ELSE:
         case TOKEN_ELIF:
-        case TOKEN_FALSE:
         case TOKEN_FOR:
         case TOKEN_FN:
         case TOKEN_IF:
@@ -146,17 +145,13 @@ static bool is_reserved_keyword_token(TokenType type) {
         case TOKEN_PRINT_NO_NL:
         case TOKEN_TIME_STAMP:
         case TOKEN_RETURN:
-        case TOKEN_TRUE:
         case TOKEN_MUT:
         case TOKEN_CONST:
         case TOKEN_WHILE:
         case TOKEN_TRY:
         case TOKEN_THROW:
         case TOKEN_CATCH:
-        case TOKEN_INT:
-        case TOKEN_I64:
         case TOKEN_IN:
-        case TOKEN_BOOL:
         case TOKEN_STRUCT:
         case TOKEN_ENUM:
         case TOKEN_IMPL:
@@ -166,11 +161,7 @@ static bool is_reserved_keyword_token(TokenType type) {
         case TOKEN_MATCHES:
         case TOKEN_PUB:
         case TOKEN_GLOBAL:
-        // case TOKEN_MODULE:
         case TOKEN_STATIC:
-        case TOKEN_U32:
-        case TOKEN_U64:
-        case TOKEN_F64:
             return true;
         default:
             return false;
@@ -226,6 +217,18 @@ static bool append_token(Token** tokens, int* count, int* capacity, Token token)
     }
     (*tokens)[(*count)++] = token;
     return true;
+}
+
+static bool token_text_equals(const Token* token, const char* text) {
+    if (!token || !text) {
+        return false;
+    }
+    if (token->type != TOKEN_IDENTIFIER) {
+        return false;
+    }
+    size_t expected_length = strlen(text);
+    return token->length == (int)expected_length &&
+           strncmp(token->start, text, expected_length) == 0;
 }
 
 static char* parse_qualified_name(ParserContext* ctx, Token firstToken, const char* missingMessage) {
@@ -405,7 +408,7 @@ static void preprocessNumberToken(const char* tokenStart, int tokenLength, char*
 // Suffix detection removed - type inference handles numeric types
 static bool isFloatingPointNumber(const char* numStr, int length);
 static Value parseNumberValue(const char* numStr, int length);
-static bool token_is_numeric_suffix(TokenType type);
+static bool token_is_numeric_suffix(const Token* token);
 static bool tokens_are_adjacent(const Token* first, const Token* second);
 
 static ASTNode* parseStringLiteral(ParserContext* ctx, Token token);
@@ -1572,11 +1575,14 @@ static ASTNode* parsePrintStatement(ParserContext* ctx) {
     return node;
 }
 
-static bool token_can_start_type(TokenType type) {
-    return type == TOKEN_IDENTIFIER || type == TOKEN_INT || type == TOKEN_I64 ||
-           type == TOKEN_U32 || type == TOKEN_U64 || type == TOKEN_F64 ||
-           type == TOKEN_BOOL || type == TOKEN_STRING ||
-           type == TOKEN_LEFT_BRACKET;
+static bool token_can_start_type(Token token) {
+    if (token.type == TOKEN_IDENTIFIER) {
+        return true;
+    }
+    if (token.type == TOKEN_LEFT_BRACKET) {
+        return true;
+    }
+    return false;
 }
 
 static ASTNode* build_type_annotation_node(ParserContext* ctx, Token typeTok);
@@ -1695,7 +1701,7 @@ static ASTNode* build_type_annotation_node(ParserContext* ctx, Token typeTok) {
         return parse_array_type_annotation(ctx, typeTok);
     }
 
-    if (!token_can_start_type(typeTok.type)) {
+    if (!token_can_start_type(typeTok)) {
         return NULL;
     }
 
@@ -3356,10 +3362,7 @@ static ASTNode* parseBinaryExpression(ParserContext* ctx, int minPrec) {
             
             // Parse the target type
             Token typeToken = nextToken(ctx);
-            if (typeToken.type != TOKEN_IDENTIFIER && typeToken.type != TOKEN_INT &&
-                typeToken.type != TOKEN_I64 && typeToken.type != TOKEN_U32 &&
-                typeToken.type != TOKEN_U64 && typeToken.type != TOKEN_F64 &&
-                typeToken.type != TOKEN_BOOL && typeToken.type != TOKEN_STRING) {
+            if (typeToken.type != TOKEN_IDENTIFIER) {
                 ctx->recursion_depth--;
                 return NULL;
             }
@@ -3421,17 +3424,13 @@ static ASTNode* parseBinaryExpression(ParserContext* ctx, int minPrec) {
 // Primary expression handlers
 
 // Number parsing helper functions implementation
-static bool token_is_numeric_suffix(TokenType type) {
-    switch (type) {
-        case TOKEN_INT:
-        case TOKEN_I64:
-        case TOKEN_U32:
-        case TOKEN_U64:
-        case TOKEN_F64:
-            return true;
-        default:
-            return false;
+static bool token_is_numeric_suffix(const Token* token) {
+    if (!token) {
+        return false;
     }
+    return token_text_equals(token, "i32") || token_text_equals(token, "i64") ||
+           token_text_equals(token, "u32") || token_text_equals(token, "u64") ||
+           token_text_equals(token, "f64");
 }
 
 static bool tokens_are_adjacent(const Token* first, const Token* second) {
@@ -3513,148 +3512,145 @@ static ASTNode* parseNumberLiteral(ParserContext* ctx, Token token) {
     node->dataType = NULL;
 
     Token suffix = peekToken(ctx);
-    if (token_is_numeric_suffix(suffix.type) && tokens_are_adjacent(&token, &suffix)) {
+    if (token_is_numeric_suffix(&suffix) && tokens_are_adjacent(&token, &suffix)) {
         nextToken(ctx);
         node->literal.hasExplicitSuffix = true;
 
         bool conversion_ok = true;
         Value converted = node->literal.value;
 
-        switch (suffix.type) {
-            case TOKEN_INT: {
-                int64_t value = 0;
-                if (converted.type == VAL_I32) {
-                    value = AS_I32(converted);
-                } else if (converted.type == VAL_I64) {
-                    value = AS_I64(converted);
-                } else if (converted.type == VAL_F64) {
-                    double d = AS_F64(converted);
-                    if (d < (double)INT32_MIN || d > (double)INT32_MAX ||
-                        (double)(int32_t)d != d) {
-                        conversion_ok = false;
-                        break;
-                    }
-                    value = (int32_t)d;
-                } else {
+        if (token_text_equals(&suffix, "i32")) {
+            int64_t value = 0;
+            if (converted.type == VAL_I32) {
+                value = AS_I32(converted);
+            } else if (converted.type == VAL_I64) {
+                value = AS_I64(converted);
+            } else if (converted.type == VAL_F64) {
+                double d = AS_F64(converted);
+                if (d < (double)INT32_MIN || d > (double)INT32_MAX ||
+                    (double)(int32_t)d != d) {
                     conversion_ok = false;
-                    break;
+                } else {
+                    value = (int32_t)d;
                 }
+            } else {
+                conversion_ok = false;
+            }
+
+            if (conversion_ok) {
                 if (value < INT32_MIN || value > INT32_MAX) {
                     conversion_ok = false;
-                    break;
+                } else {
+                    converted = I32_VAL((int32_t)value);
                 }
-                converted = I32_VAL((int32_t)value);
-                break;
             }
-            case TOKEN_I64: {
-                int64_t value = 0;
-                if (converted.type == VAL_I32) {
-                    value = AS_I32(converted);
-                } else if (converted.type == VAL_I64) {
-                    value = AS_I64(converted);
-                } else if (converted.type == VAL_F64) {
-                    double d = AS_F64(converted);
-                    double truncated = (double)(int64_t)d;
-                    if (truncated != d) {
-                        conversion_ok = false;
-                        break;
-                    }
+        } else if (token_text_equals(&suffix, "i64")) {
+            int64_t value = 0;
+            if (converted.type == VAL_I32) {
+                value = AS_I32(converted);
+            } else if (converted.type == VAL_I64) {
+                value = AS_I64(converted);
+            } else if (converted.type == VAL_F64) {
+                double d = AS_F64(converted);
+                double truncated = (double)(int64_t)d;
+                if (truncated != d) {
+                    conversion_ok = false;
+                } else {
                     value = (int64_t)d;
-                } else {
-                    conversion_ok = false;
-                    break;
                 }
+            } else {
+                conversion_ok = false;
+            }
+
+            if (conversion_ok) {
                 converted = I64_VAL(value);
-                break;
             }
-            case TOKEN_U32: {
-                uint64_t value = 0;
-                if (converted.type == VAL_I32) {
-                    int32_t v = AS_I32(converted);
-                    if (v < 0) {
-                        conversion_ok = false;
-                        break;
-                    }
-                    value = (uint32_t)v;
-                } else if (converted.type == VAL_I64) {
-                    int64_t v = AS_I64(converted);
-                    if (v < 0 || v > (int64_t)UINT32_MAX) {
-                        conversion_ok = false;
-                        break;
-                    }
-                    value = (uint32_t)v;
-                } else if (converted.type == VAL_F64) {
-                    double d = AS_F64(converted);
-                    if (d < 0.0 || d > (double)UINT32_MAX ||
-                        (double)(uint32_t)d != d) {
-                        conversion_ok = false;
-                        break;
-                    }
-                    value = (uint32_t)d;
-                } else {
+        } else if (token_text_equals(&suffix, "u32")) {
+            uint64_t value = 0;
+            if (converted.type == VAL_I32) {
+                int32_t v = AS_I32(converted);
+                if (v < 0) {
                     conversion_ok = false;
-                    break;
+                } else {
+                    value = (uint32_t)v;
                 }
-                converted = U32_VAL((uint32_t)value);
-                break;
+            } else if (converted.type == VAL_I64) {
+                int64_t v = AS_I64(converted);
+                if (v < 0 || v > (int64_t)UINT32_MAX) {
+                    conversion_ok = false;
+                } else {
+                    value = (uint32_t)v;
+                }
+            } else if (converted.type == VAL_F64) {
+                double d = AS_F64(converted);
+                if (d < 0.0 || d > (double)UINT32_MAX ||
+                    (double)(uint32_t)d != d) {
+                    conversion_ok = false;
+                } else {
+                    value = (uint32_t)d;
+                }
+            } else {
+                conversion_ok = false;
             }
-            case TOKEN_U64: {
-                uint64_t value = 0;
-                if (converted.type == VAL_I32) {
-                    int32_t v = AS_I32(converted);
-                    if (v < 0) {
-                        conversion_ok = false;
-                        break;
-                    }
+
+            if (conversion_ok) {
+                converted = U32_VAL((uint32_t)value);
+            }
+        } else if (token_text_equals(&suffix, "u64")) {
+            uint64_t value = 0;
+            if (converted.type == VAL_I32) {
+                int32_t v = AS_I32(converted);
+                if (v < 0) {
+                    conversion_ok = false;
+                } else {
                     value = (uint64_t)v;
-                } else if (converted.type == VAL_I64) {
-                    int64_t v = AS_I64(converted);
-                    if (v < 0) {
-                        conversion_ok = false;
-                        break;
-                    }
+                }
+            } else if (converted.type == VAL_I64) {
+                int64_t v = AS_I64(converted);
+                if (v < 0) {
+                    conversion_ok = false;
+                } else {
                     value = (uint64_t)v;
-                } else if (converted.type == VAL_F64) {
-                    double d = AS_F64(converted);
-                    if (d < 0.0 || d > (double)UINT64_MAX) {
-                        conversion_ok = false;
-                        break;
-                    }
+                }
+            } else if (converted.type == VAL_F64) {
+                double d = AS_F64(converted);
+                if (d < 0.0 || d > (double)UINT64_MAX) {
+                    conversion_ok = false;
+                } else {
                     double truncated = (double)(uint64_t)d;
                     if (truncated != d) {
                         conversion_ok = false;
-                        break;
+                    } else {
+                        value = (uint64_t)d;
                     }
-                    value = (uint64_t)d;
-                } else {
-                    conversion_ok = false;
-                    break;
                 }
-                converted = U64_VAL(value);
-                break;
-            }
-            case TOKEN_F64: {
-                if (converted.type == VAL_F64) {
-                    // Already floating point
-                } else if (converted.type == VAL_I32) {
-                    converted = F64_VAL((double)AS_I32(converted));
-                } else if (converted.type == VAL_I64) {
-                    converted = F64_VAL((double)AS_I64(converted));
-                } else {
-                    conversion_ok = false;
-                }
-                break;
-            }
-            default:
+            } else {
                 conversion_ok = false;
-                break;
+            }
+
+            if (conversion_ok) {
+                converted = U64_VAL(value);
+            }
+        } else if (token_text_equals(&suffix, "f64")) {
+            if (converted.type == VAL_F64) {
+                // Already floating point
+            } else if (converted.type == VAL_I32) {
+                converted = F64_VAL((double)AS_I32(converted));
+            } else if (converted.type == VAL_I64) {
+                converted = F64_VAL((double)AS_I64(converted));
+            } else {
+                conversion_ok = false;
+            }
+        } else {
+            conversion_ok = false;
         }
 
         if (!conversion_ok) {
             SrcLocation location = {NULL, suffix.line, suffix.column};
+            char* suffix_text = copy_token_text(ctx, suffix);
             report_compile_error(E1006_INVALID_SYNTAX, location,
                                  "invalid numeric literal suffix '%s'",
-                                 token_type_to_string(suffix.type));
+                                 suffix_text ? suffix_text : "<invalid>");
             node->literal.value = I32_VAL(0);
         } else {
             node->literal.value = converted;
@@ -3723,7 +3719,7 @@ static ASTNode* parseStringLiteral(ParserContext* ctx, Token token) {
 static ASTNode* parseBooleanLiteral(ParserContext* ctx, Token token) {
     ASTNode* node = new_node(ctx);
     node->type = NODE_LITERAL;
-    bool boolValue = (token.type == TOKEN_TRUE);
+    bool boolValue = token_text_equals(&token, "true");
     node->literal.value = BOOL_VAL(boolValue);
     node->literal.hasExplicitSuffix = false;
     node->location.line = token.line;
@@ -3794,12 +3790,12 @@ static ASTNode* parsePrimaryExpression(ParserContext* ctx) {
         case TOKEN_STRING:
             node = parseStringLiteral(ctx, token);
             break;
-        case TOKEN_TRUE:
-        case TOKEN_FALSE:
-            node = parseBooleanLiteral(ctx, token);
-            break;
         case TOKEN_IDENTIFIER:
-            node = parseIdentifierExpression(ctx, token);
+            if (token_text_equals(&token, "true") || token_text_equals(&token, "false")) {
+                node = parseBooleanLiteral(ctx, token);
+            } else {
+                node = parseIdentifierExpression(ctx, token);
+            }
             break;
         case TOKEN_TIME_STAMP:
             node = parseTimeStampExpression(ctx, token);
@@ -3983,7 +3979,7 @@ static ASTNode* parseFunctionExpression(ParserContext* ctx, Token fnToken) {
             returnType = parseFunctionType(ctx);
             if (!returnType) return NULL;
         } else {
-            if (!token_can_start_type(typeTok.type)) {
+            if (!token_can_start_type(typeTok)) {
                 SrcLocation location = {NULL, arrowTok.line, arrowTok.column};
                 report_compile_error(E1006_INVALID_SYNTAX, location,
                                      "Expected return type after '->' in function expression, but found %s",
@@ -4108,7 +4104,7 @@ static ASTNode* parseFunctionDefinition(ParserContext* ctx, bool isPublic) {
             returnType = parseFunctionType(ctx);
             if (!returnType) return NULL;
         } else {
-            if (!token_can_start_type(typeTok.type)) {
+            if (!token_can_start_type(typeTok)) {
                 SrcLocation location = {NULL, arrowTok.line, arrowTok.column};
                 report_compile_error(E1006_INVALID_SYNTAX, location,
                                      "Expected return type after '->' in function '%s', but found %s",
@@ -4277,7 +4273,7 @@ static ASTNode* parseEnumDefinition(ParserContext* ctx, bool isPublic) {
             } else {
                 while (true) {
                     Token firstTok = nextToken(ctx);
-                    if (!token_can_start_type(firstTok.type) &&
+                    if (!token_can_start_type(firstTok) &&
                         firstTok.type != TOKEN_IDENTIFIER) {
                         return NULL;
                     }
@@ -4935,7 +4931,7 @@ static ASTNode* parseFunctionType(ParserContext* ctx) {
             if (nextTok.type == TOKEN_FN) {
                 paramType = parseFunctionType(ctx);
             } else {
-                if (!token_can_start_type(nextTok.type)) {
+                if (!token_can_start_type(nextTok)) {
                     SrcLocation location = {NULL, nextTok.line, nextTok.column};
                     report_compile_error(E1006_INVALID_SYNTAX, location,
                                          "expected a type annotation in function type, but found %s",
@@ -4980,7 +4976,7 @@ static ASTNode* parseFunctionType(ParserContext* ctx) {
         if (typeTok.type == TOKEN_FN) {
             returnType = parseFunctionType(ctx);
         } else {
-            if (!token_can_start_type(typeTok.type)) {
+            if (!token_can_start_type(typeTok)) {
                 SrcLocation location = {NULL, arrowTok.line, arrowTok.column};
                 report_compile_error(E1006_INVALID_SYNTAX, location,
                                      "Expected return type after '->' in function type, but found %s",
