@@ -12,11 +12,19 @@
 #include <stdlib.h>
 #include <string.h>
 
-// Disable all debug output for clean program execution
-#define REGISTER_ALLOCATOR_DEBUG 0
-#if REGISTER_ALLOCATOR_DEBUG == 0
-#define printf(...) ((void)0)
+#if REGISTER_ALLOCATOR_DEBUG
+#define REGISTER_ALLOCATOR_LOG(...) \
+    do { fprintf(stderr, __VA_ARGS__); } while (0)
+#else
+#define REGISTER_ALLOCATOR_LOG(...) \
+    do { (void)0; } while (0)
 #endif
+
+#define REGISTER_ALLOCATOR_WARN(...) \
+    do { fprintf(stderr, __VA_ARGS__); } while (0)
+
+#define REGISTER_ALLOCATOR_ERROR(...) \
+    do { fprintf(stderr, __VA_ARGS__); } while (0)
 
 // ====== DUAL REGISTER SYSTEM IMPLEMENTATION ======
 
@@ -65,7 +73,7 @@ int mp_allocate_global_register(MultiPassRegisterAllocator* allocator) {
     }
 
     // No free global registers
-    printf("[REGISTER_ALLOCATOR] Warning: No free global registers\n");
+    REGISTER_ALLOCATOR_WARN("[REGISTER_ALLOCATOR] Warning: No free global registers\n");
     return -1;
 }
 
@@ -96,7 +104,7 @@ int mp_allocate_frame_register(MultiPassRegisterAllocator* allocator) {
     }
     
     // No free frame registers
-    printf("[REGISTER_ALLOCATOR] Warning: No free frame registers\n");
+    REGISTER_ALLOCATOR_WARN("[REGISTER_ALLOCATOR] Warning: No free frame registers\n");
     return -1;
 }
 
@@ -112,7 +120,7 @@ void mp_reset_frame_registers(MultiPassRegisterAllocator* allocator) {
     // Reset frame allocation counter
     allocator->next_frame = MP_FRAME_REG_START;
     
-    printf("[REGISTER_ALLOCATOR] Reset frame registers for new function\n");
+    REGISTER_ALLOCATOR_LOG("[REGISTER_ALLOCATOR] Reset frame registers for new function\n");
 }
 
 int mp_allocate_temp_register(MultiPassRegisterAllocator* allocator) {
@@ -124,7 +132,7 @@ int mp_allocate_temp_register(MultiPassRegisterAllocator* allocator) {
         if (!allocator->temp_regs[i]) {
             allocator->temp_regs[i] = true;
             int reg = MP_TEMP_REG_START + i;
-            printf("[REGISTER_ALLOCATOR] Allocated temp register R%d (sequential allocation)\n", reg);
+            REGISTER_ALLOCATOR_LOG("[REGISTER_ALLOCATOR] Allocated temp register R%d (sequential allocation)\n", reg);
             return reg;
         }
     }
@@ -132,18 +140,18 @@ int mp_allocate_temp_register(MultiPassRegisterAllocator* allocator) {
     // If no sequential register available, try to reuse from stack
     if (allocator->temp_stack_top >= 0) {
         int reused_reg = allocator->temp_stack[allocator->temp_stack_top--];
-        printf("[REGISTER_ALLOCATOR] Reusing temp register R%d (from stack)\n", reused_reg);
+        REGISTER_ALLOCATOR_LOG("[REGISTER_ALLOCATOR] Reusing temp register R%d (from stack)\n", reused_reg);
         return reused_reg;
     }
 
     // No free temp registers
-    printf("[REGISTER_ALLOCATOR] Error: No free temp registers (register spill needed)\n");
+    REGISTER_ALLOCATOR_ERROR("[REGISTER_ALLOCATOR] Error: No free temp registers (register spill needed)\n");
     return -1;
 }
 
 int mp_allocate_consecutive_temp_registers(MultiPassRegisterAllocator* allocator, int count) {
     if (!allocator || count <= 0 || count > TEMP_REGISTERS) {
-        printf("[REGISTER_ALLOCATOR] Error: Invalid consecutive allocation request (%d)\n", count);
+        REGISTER_ALLOCATOR_ERROR("[REGISTER_ALLOCATOR] Error: Invalid consecutive allocation request (%d)\n", count);
         return -1;
     }
 
@@ -161,13 +169,13 @@ int mp_allocate_consecutive_temp_registers(MultiPassRegisterAllocator* allocator
                 allocator->temp_regs[start + offset] = true;
             }
             int reg = MP_TEMP_REG_START + start;
-            printf("[REGISTER_ALLOCATOR] Allocated consecutive temp registers R%d-R%d\n",
+            REGISTER_ALLOCATOR_LOG("[REGISTER_ALLOCATOR] Allocated consecutive temp registers R%d-R%d\n",
                    reg, reg + count - 1);
             return reg;
         }
     }
 
-    printf("[REGISTER_ALLOCATOR] Error: Unable to allocate %d consecutive temp registers\n", count);
+    REGISTER_ALLOCATOR_ERROR("[REGISTER_ALLOCATOR] Error: Unable to allocate %d consecutive temp registers\n", count);
     return -1;
 }
 
@@ -183,7 +191,7 @@ int mp_allocate_module_register(MultiPassRegisterAllocator* allocator) {
     }
     
     // No free module registers
-    printf("[REGISTER_ALLOCATOR] Warning: No free module registers\n");
+    REGISTER_ALLOCATOR_WARN("[REGISTER_ALLOCATOR] Warning: No free module registers\n");
     return -1;
 }
 
@@ -192,7 +200,7 @@ int mp_allocate_module_register(MultiPassRegisterAllocator* allocator) {
 int mp_allocate_scoped_temp_register(MultiPassRegisterAllocator* allocator, int scope_level) {
     if (!allocator) return -1;
     if (scope_level < 0 || scope_level >= MP_SCOPE_LEVEL_COUNT) {
-        printf("[REGISTER_ALLOCATOR] Error: Invalid scope level %d (must be 0-%d)\n",
+        REGISTER_ALLOCATOR_ERROR("[REGISTER_ALLOCATOR] Error: Invalid scope level %d (must be 0-%d)\n",
                scope_level, MP_SCOPE_LEVEL_COUNT - 1);
         return -1;
     }
@@ -205,14 +213,14 @@ int mp_allocate_scoped_temp_register(MultiPassRegisterAllocator* allocator, int 
         if (!allocator->scope_temp_regs[scope_level][i]) {
             allocator->scope_temp_regs[scope_level][i] = true;
             int reg = base_reg + i;
-            printf("[REGISTER_ALLOCATOR] Allocated scoped temp register R%d (scope level %d, slot %d)\n", 
+            REGISTER_ALLOCATOR_LOG("[REGISTER_ALLOCATOR] Allocated scoped temp register R%d (scope level %d, slot %d)\n", 
                    reg, scope_level, i);
             return reg;
         }
     }
     
     // No free registers in this scope level
-    printf("[REGISTER_ALLOCATOR] Warning: No free temp registers in scope level %d\n", scope_level);
+    REGISTER_ALLOCATOR_WARN("[REGISTER_ALLOCATOR] Warning: No free temp registers in scope level %d\n", scope_level);
     return -1;
 }
 
@@ -221,9 +229,9 @@ void mp_enter_scope(MultiPassRegisterAllocator* allocator) {
     
     if (allocator->current_scope_level < MP_SCOPE_LEVEL_COUNT - 1) {
         allocator->current_scope_level++;
-        printf("[REGISTER_ALLOCATOR] Entered scope level %d\n", allocator->current_scope_level);
+        REGISTER_ALLOCATOR_LOG("[REGISTER_ALLOCATOR] Entered scope level %d\n", allocator->current_scope_level);
     } else {
-        printf("[REGISTER_ALLOCATOR] Warning: Maximum scope depth (%d) reached\n",
+        REGISTER_ALLOCATOR_WARN("[REGISTER_ALLOCATOR] Warning: Maximum scope depth (%d) reached\n",
                MP_SCOPE_LEVEL_COUNT - 1);
     }
 }
@@ -238,10 +246,10 @@ void mp_exit_scope(MultiPassRegisterAllocator* allocator) {
             allocator->scope_temp_regs[scope][i] = false;
         }
 
-        printf("[REGISTER_ALLOCATOR] Exited scope level %d (freed %d registers)\n", scope, 8);
+        REGISTER_ALLOCATOR_LOG("[REGISTER_ALLOCATOR] Exited scope level %d (freed %d registers)\n", scope, 8);
         allocator->current_scope_level--;
     } else {
-        printf("[REGISTER_ALLOCATOR] Warning: Already at root scope level\n");
+        REGISTER_ALLOCATOR_WARN("[REGISTER_ALLOCATOR] Warning: Already at root scope level\n");
     }
 }
 
@@ -253,7 +261,7 @@ void mp_free_scoped_temp_register(MultiPassRegisterAllocator* allocator, int reg
     if (reg >= base_reg && reg < base_reg + 8) {
         int slot = reg - base_reg;
         allocator->scope_temp_regs[scope_level][slot] = false;
-        printf("[REGISTER_ALLOCATOR] Freed scoped temp register R%d (scope level %d, slot %d)\n", 
+        REGISTER_ALLOCATOR_LOG("[REGISTER_ALLOCATOR] Freed scoped temp register R%d (scope level %d, slot %d)\n", 
                reg, scope_level, slot);
     }
 }
@@ -262,7 +270,7 @@ void mp_free_register(MultiPassRegisterAllocator* allocator, int reg) {
     if (!allocator) return;
 
     if (mp_has_typed_residency_hint(allocator, reg)) {
-        printf("[REGISTER_ALLOCATOR] Skipped freeing R%d due to typed residency hint\n", reg);
+        REGISTER_ALLOCATOR_LOG("[REGISTER_ALLOCATOR] Skipped freeing R%d due to typed residency hint\n", reg);
         return;
     }
 
@@ -270,12 +278,12 @@ void mp_free_register(MultiPassRegisterAllocator* allocator, int reg) {
     if (reg >= MP_GLOBAL_REG_START && reg <= MP_GLOBAL_REG_END) {
         int index = reg - MP_GLOBAL_REG_START;
         allocator->global_regs[index] = false;
-        printf("[REGISTER_ALLOCATOR] Freed global register R%d\n", reg);
+        REGISTER_ALLOCATOR_LOG("[REGISTER_ALLOCATOR] Freed global register R%d\n", reg);
     }
     else if (reg >= MP_FRAME_REG_START && reg <= MP_FRAME_REG_END) {
         int index = reg - MP_FRAME_REG_START;
         allocator->frame_regs[index] = false;
-        printf("[REGISTER_ALLOCATOR] Freed frame register R%d\n", reg);
+        REGISTER_ALLOCATOR_LOG("[REGISTER_ALLOCATOR] Freed frame register R%d\n", reg);
     }
     else if (reg >= MP_TEMP_REG_START && reg <= MP_TEMP_REG_END) {
         mp_free_temp_register(allocator, reg);
@@ -283,10 +291,10 @@ void mp_free_register(MultiPassRegisterAllocator* allocator, int reg) {
     else if (reg >= MP_MODULE_REG_START && reg <= MP_MODULE_REG_END) {
         int index = reg - MP_MODULE_REG_START;
         allocator->module_regs[index] = false;
-        printf("[REGISTER_ALLOCATOR] Freed module register R%d\n", reg);
+        REGISTER_ALLOCATOR_LOG("[REGISTER_ALLOCATOR] Freed module register R%d\n", reg);
     }
     else {
-        printf("[REGISTER_ALLOCATOR] Warning: Invalid register R%d cannot be freed\n", reg);
+        REGISTER_ALLOCATOR_WARN("[REGISTER_ALLOCATOR] Warning: Invalid register R%d cannot be freed\n", reg);
     }
 }
 
@@ -296,12 +304,12 @@ void mp_free_temp_register(MultiPassRegisterAllocator* allocator, int reg) {
     }
 
     if (mp_has_typed_residency_hint(allocator, reg)) {
-        printf("[REGISTER_ALLOCATOR] Skipped freeing temp R%d due to typed residency hint\n", reg);
+        REGISTER_ALLOCATOR_LOG("[REGISTER_ALLOCATOR] Skipped freeing temp R%d due to typed residency hint\n", reg);
         return;
     }
 
     if (reg < MP_TEMP_REG_START || reg > MP_TEMP_REG_END) {
-        printf("[REGISTER_ALLOCATOR] Warning: Invalid temp register R%d\n", reg);
+        REGISTER_ALLOCATOR_WARN("[REGISTER_ALLOCATOR] Warning: Invalid temp register R%d\n", reg);
         return;
     }
 
@@ -311,9 +319,9 @@ void mp_free_temp_register(MultiPassRegisterAllocator* allocator, int reg) {
     // Add to reuse stack (LIFO for better cache locality)
     if (allocator->temp_stack_top < TEMP_REGISTERS - 1) {
         allocator->temp_stack[++allocator->temp_stack_top] = reg;
-        printf("[REGISTER_ALLOCATOR] Freed temp register R%d (added to reuse stack)\n", reg);
+        REGISTER_ALLOCATOR_LOG("[REGISTER_ALLOCATOR] Freed temp register R%d (added to reuse stack)\n", reg);
     } else {
-        printf("[REGISTER_ALLOCATOR] Freed temp register R%d (reuse stack full)\n", reg);
+        REGISTER_ALLOCATOR_LOG("[REGISTER_ALLOCATOR] Freed temp register R%d (reuse stack full)\n", reg);
     }
 }
 
@@ -390,7 +398,7 @@ DualRegisterAllocator* init_dual_register_allocator(void) {
     allocator->arithmetic_operation_count = 0;
     allocator->prefer_typed_registers = true;  // Start with optimization enabled
     
-    printf("[DUAL_REGISTER_ALLOCATOR] Initialized with typed register optimization enabled\n");
+    REGISTER_ALLOCATOR_LOG("[DUAL_REGISTER_ALLOCATOR] Initialized with typed register optimization enabled\n");
     return allocator;
 }
 
@@ -438,13 +446,13 @@ RegisterAllocation* allocate_typed_register(DualRegisterAllocator* allocator, Re
     
     int physical_id = find_free_typed_register(allocator, type);
     if (physical_id == -1) {
-        printf("[DUAL_REGISTER_ALLOCATOR] No free typed registers for type %d, falling back to standard\n", type);
+        REGISTER_ALLOCATOR_WARN("[DUAL_REGISTER_ALLOCATOR] No free typed registers for type %d, falling back to standard\n", type);
         return allocate_standard_register(allocator, type, MP_TEMP_REG_START);
     }
     
     // Create allocation record
     if (allocator->allocation_count >= 256) {
-        printf("[DUAL_REGISTER_ALLOCATOR] Warning: Maximum allocations reached\n");
+        REGISTER_ALLOCATOR_WARN("[DUAL_REGISTER_ALLOCATOR] Warning: Maximum allocations reached\n");
         return NULL;
     }
     
@@ -455,7 +463,7 @@ RegisterAllocation* allocate_typed_register(DualRegisterAllocator* allocator, Re
     allocation->strategy = REG_STRATEGY_TYPED;
     allocation->is_active = true;
     
-    printf("[DUAL_REGISTER_ALLOCATOR] Allocated typed register: type=%d, physical_id=%d\n", type, physical_id);
+    REGISTER_ALLOCATOR_LOG("[DUAL_REGISTER_ALLOCATOR] Allocated typed register: type=%d, physical_id=%d\n", type, physical_id);
     return allocation;
 }
 
@@ -477,7 +485,7 @@ RegisterAllocation* allocate_standard_register(DualRegisterAllocator* allocator,
     }
     
     if (logical_id == -1) {
-        printf("[DUAL_REGISTER_ALLOCATOR] Failed to allocate standard register\n");
+        REGISTER_ALLOCATOR_ERROR("[DUAL_REGISTER_ALLOCATOR] Failed to allocate standard register\n");
         return NULL;
     }
     
@@ -488,7 +496,7 @@ RegisterAllocation* allocate_standard_register(DualRegisterAllocator* allocator,
     
     // Create allocation record
     if (allocator->allocation_count >= 256) {
-        printf("[DUAL_REGISTER_ALLOCATOR] Warning: Maximum allocations reached\n");
+        REGISTER_ALLOCATOR_WARN("[DUAL_REGISTER_ALLOCATOR] Warning: Maximum allocations reached\n");
         return NULL;
     }
     
@@ -499,7 +507,7 @@ RegisterAllocation* allocate_standard_register(DualRegisterAllocator* allocator,
     allocation->strategy = REG_STRATEGY_STANDARD;
     allocation->is_active = true;
     
-    printf("[DUAL_REGISTER_ALLOCATOR] Allocated standard register: logical_id=%d, type=%d\n", logical_id, type);
+    REGISTER_ALLOCATOR_LOG("[DUAL_REGISTER_ALLOCATOR] Allocated standard register: logical_id=%d, type=%d\n", logical_id, type);
     return allocation;
 }
 
@@ -518,12 +526,12 @@ RegisterAllocation* allocate_register_smart(DualRegisterAllocator* allocator, Re
         
         RegisterAllocation* typed_alloc = allocate_typed_register(allocator, type);
         if (typed_alloc) {
-            printf("[DUAL_REGISTER_ALLOCATOR] Smart allocation chose TYPED register for performance\n");
+            REGISTER_ALLOCATOR_LOG("[DUAL_REGISTER_ALLOCATOR] Smart allocation chose TYPED register for performance\n");
             return typed_alloc;
         }
         
         // Fallback to standard if typed allocation failed
-        printf("[DUAL_REGISTER_ALLOCATOR] Typed allocation failed, falling back to standard\n");
+        REGISTER_ALLOCATOR_WARN("[DUAL_REGISTER_ALLOCATOR] Typed allocation failed, falling back to standard\n");
     }
     
     // Use standard registers for general-purpose or non-numeric operations
@@ -531,7 +539,7 @@ RegisterAllocation* allocate_register_smart(DualRegisterAllocator* allocator, Re
     RegisterAllocation* standard_alloc = allocate_standard_register(allocator, type, scope_preference);
     
     if (standard_alloc) {
-        printf("[DUAL_REGISTER_ALLOCATOR] Smart allocation chose STANDARD register\n");
+        REGISTER_ALLOCATOR_LOG("[DUAL_REGISTER_ALLOCATOR] Smart allocation chose STANDARD register\n");
     }
     
     return standard_alloc;
@@ -556,7 +564,7 @@ void free_register_allocation(DualRegisterAllocator* allocator, RegisterAllocati
         
         if (regs && allocation->physical_id >= 0 && allocation->physical_id < 256) {
             regs[allocation->physical_id] = false;
-            printf("[DUAL_REGISTER_ALLOCATOR] Freed typed register: type=%d, physical_id=%d\n",
+            REGISTER_ALLOCATOR_LOG("[DUAL_REGISTER_ALLOCATOR] Freed typed register: type=%d, physical_id=%d\n",
                    allocation->physical_type, allocation->physical_id);
         }
     } else if (allocation->strategy == REG_STRATEGY_STANDARD) {
@@ -564,7 +572,7 @@ void free_register_allocation(DualRegisterAllocator* allocator, RegisterAllocati
         if (allocation->logical_id >= 0 && allocation->logical_id < 256) {
             allocator->standard_regs[allocation->logical_id] = false;
             mp_free_register(allocator->legacy_allocator, allocation->logical_id);
-            printf("[DUAL_REGISTER_ALLOCATOR] Freed standard register: logical_id=%d\n", allocation->logical_id);
+            REGISTER_ALLOCATOR_LOG("[DUAL_REGISTER_ALLOCATOR] Freed standard register: logical_id=%d\n", allocation->logical_id);
         }
     }
     
@@ -601,7 +609,7 @@ void print_register_allocation_stats(DualRegisterAllocator* allocator) {
         }
     }
     
-    printf("[DUAL_REGISTER_ALLOCATOR] Stats: %d typed, %d standard, %d arithmetic ops\n", 
+    REGISTER_ALLOCATOR_LOG("[DUAL_REGISTER_ALLOCATOR] Stats: %d typed, %d standard, %d arithmetic ops\n", 
            typed_count, standard_count, allocator->arithmetic_operation_count);
     
     // Explicitly mark variables as used to avoid compiler warnings

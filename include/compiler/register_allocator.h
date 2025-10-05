@@ -16,6 +16,10 @@
 #include <stdbool.h>
 #include "vm/vm.h"  // For RegisterType enum
 
+#ifndef REGISTER_ALLOCATOR_DEBUG
+#define REGISTER_ALLOCATOR_DEBUG 0
+#endif
+
 // Multi-pass compiler register ranges (mirrors VM register layout)
 #define MP_GLOBAL_REG_START    GLOBAL_REG_START
 #define MP_GLOBAL_REG_END      (GLOBAL_REG_START + GLOBAL_REGISTERS - 1)
