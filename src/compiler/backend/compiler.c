@@ -9,6 +9,7 @@
 // compiler.c - Multi-pass compiler pipeline coordinator
 #include "compiler/compiler.h"
 #include "compiler/register_allocator.h"
+#include "compiler/bytecode_utils.h"
 #include "compiler/typed_ast_visualizer.h"
 #include "compiler/optimization/optimizer.h"
 #include "compiler/codegen/codegen.h"
@@ -240,44 +241,13 @@ void emit_instruction_to_buffer(BytecodeBuffer* buffer, uint8_t opcode, uint8_t 
     emit_byte_to_buffer(buffer, reg3);
 }
 
-static inline int determine_prefix_size(uint8_t opcode) {
-    switch (opcode) {
-        case OP_JUMP_IF_NOT_I32_TYPED:
-            return 3;  // opcode + left_reg + right_reg
-        case OP_BRANCH_TYPED:
-            return 4;  // opcode + loop_id_hi + loop_id_lo + predicate register
-        case OP_JUMP_IF_NOT_R:
-        case OP_JUMP_IF_R:
-        case OP_TRY_BEGIN:
-            return 2;  // opcode + condition register
-        case OP_JUMP_IF_NOT_SHORT:
-            return 2;  // opcode + condition register
-        default:
-            return 1;  // opcode only
-    }
-}
-
-static inline int determine_operand_size(uint8_t opcode) {
-    switch (opcode) {
-        case OP_JUMP_SHORT:
-        case OP_JUMP_BACK_SHORT:
-        case OP_JUMP_IF_NOT_SHORT:
-        case OP_LOOP_SHORT:
-            return 1;
-        case OP_TRY_BEGIN:
-            return 2;
-        default:
-            return 2;
-    }
-}
-
 int emit_jump_placeholder(BytecodeBuffer* buffer, uint8_t jump_opcode) {
     if (!buffer) {
         return -1;
     }
 
-    int operand_size = determine_operand_size(jump_opcode);
-    int prefix_size = determine_prefix_size(jump_opcode);
+    int operand_size = (int)bytecode_operand_size(jump_opcode);
+    int prefix_size = (int)bytecode_prefix_size(jump_opcode);
 
     int operand_offset = buffer->count;
     for (int i = 0; i < operand_size; i++) {

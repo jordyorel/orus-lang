@@ -27,22 +27,8 @@ typedef struct PeepholeContext {
 
 // Main peephole optimization function
 bool apply_peephole_optimizations(CompilerContext* ctx);
-
-// Specific optimization patterns
-int optimize_load_move_pattern(CompilerContext* ctx);
-int optimize_redundant_operations(CompilerContext* ctx);
-int optimize_constant_propagation(CompilerContext* ctx);
-
-// Pattern matching helpers
-bool is_load_move_pattern(CompilerContext* ctx, int offset);
-bool is_redundant_move(CompilerContext* ctx, int offset);
-
-// Instruction manipulation
-void eliminate_instruction_sequence(CompilerContext* ctx, int start_offset, int length);
-void modify_instruction_register(CompilerContext* ctx, int offset, int reg_field, uint8_t new_reg);
-
-// Statistics and reporting
 void init_peephole_context(PeepholeContext* ctx);
 void print_peephole_statistics(PeepholeContext* ctx);
+const PeepholeContext* get_peephole_statistics(void);
 
 #endif // PEEPHOLE_H
