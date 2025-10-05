@@ -1,0 +1,51 @@
+print("=== Fused Loop Regression Tests ===")
+
+base = 3
+derived_limit = base * 2
+mut while_index = 0
+mut while_sum = 0
+while while_index < derived_limit:
+    while_sum = while_sum + while_index
+    while_index = while_index + 1
+
+inclusive_limit = base + 4
+mut inclusive_index = 0
+mut inclusive_sum = 0
+while inclusive_index <= inclusive_limit:
+    inclusive_sum = inclusive_sum + inclusive_index
+    inclusive_index = inclusive_index + 1
+
+start_val = 2
+offset_val = 4
+derived_end = start_val + offset_val
+mut range_sum = 0
+for k in start_val..derived_end:
+    range_sum = range_sum + k
+
+inclusive_end = 3
+inclusive_range_end = inclusive_end + 2
+mut inclusive_range_sum = 0
+for m in 0..=inclusive_range_end:
+    inclusive_range_sum = inclusive_range_sum + m
+
+mut cached_step_sum = 0
+for n in 0..10..(0 + 1):
+    cached_step_sum = cached_step_sum + n
+
+cached_step = 1
+mut cached_identifier_step_sum = 0
+for p in 0..5..cached_step:
+    cached_identifier_step_sum = cached_identifier_step_sum + p
+
+if assert_eq("while derived limit sum", while_sum, 15):
+    print("ok", "while derived limit sum", while_sum)
+if assert_eq("while inclusive derived sum", inclusive_sum, 28):
+    print("ok", "while inclusive derived sum", inclusive_sum)
+if assert_eq("for derived limit sum", range_sum, 14):
+    print("ok", "for derived limit sum", range_sum)
+if assert_eq("for inclusive derived sum", inclusive_range_sum, 15):
+    print("ok", "for inclusive derived sum", inclusive_range_sum)
+if assert_eq("for cached step sum", cached_step_sum, 45):
+    print("ok", "for cached step sum", cached_step_sum)
+if assert_eq("for cached identifier step sum", cached_identifier_step_sum, 10):
+    print("ok", "for cached identifier step sum", cached_identifier_step_sum)
