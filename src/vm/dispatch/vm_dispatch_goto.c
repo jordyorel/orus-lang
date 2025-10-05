@@ -3655,6 +3655,60 @@ InterpretResult vm_run_dispatch(void) {
         int16_t offset = *(int16_t*)vm.ip;
         vm.ip += 2;
 
+        int32_t counter_i32;
+        int32_t limit_i32;
+        if (vm_try_read_i32_typed(reg, &counter_i32) &&
+            vm_try_read_i32_typed(limit_reg, &limit_i32)) {
+            int32_t incremented;
+            if (__builtin_add_overflow(counter_i32, 1, &incremented)) {
+                VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow");
+            }
+            vm_store_i32_typed_hot(reg, incremented);
+            if (incremented < limit_i32) {
+                vm.ip += offset;
+            }
+            DISPATCH_TYPED();
+        }
+
+        int64_t counter_i64;
+        int64_t limit_i64;
+        if (vm_try_read_i64_typed(reg, &counter_i64) &&
+            vm_try_read_i64_typed(limit_reg, &limit_i64)) {
+            int64_t incremented;
+            if (__builtin_add_overflow(counter_i64, (int64_t)1, &incremented)) {
+                VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow");
+            }
+            vm_store_i64_typed_hot(reg, incremented);
+            if (incremented < limit_i64) {
+                vm.ip += offset;
+            }
+            DISPATCH_TYPED();
+        }
+
+        uint32_t counter_u32;
+        uint32_t limit_u32;
+        if (vm_try_read_u32_typed(reg, &counter_u32) &&
+            vm_try_read_u32_typed(limit_reg, &limit_u32)) {
+            uint32_t incremented = counter_u32 + (uint32_t)1;
+            vm_store_u32_typed_hot(reg, incremented);
+            if (incremented < limit_u32) {
+                vm.ip += offset;
+            }
+            DISPATCH_TYPED();
+        }
+
+        uint64_t counter_u64;
+        uint64_t limit_u64;
+        if (vm_try_read_u64_typed(reg, &counter_u64) &&
+            vm_try_read_u64_typed(limit_reg, &limit_u64)) {
+            uint64_t incremented = counter_u64 + (uint64_t)1;
+            vm_store_u64_typed_hot(reg, incremented);
+            if (incremented < limit_u64) {
+                vm.ip += offset;
+            }
+            DISPATCH_TYPED();
+        }
+
         Value counter = vm_get_register_safe(reg);
         Value limit = vm_get_register_safe(limit_reg);
 
@@ -3664,7 +3718,7 @@ InterpretResult vm_run_dispatch(void) {
             if (__builtin_add_overflow(current, 1, &incremented)) {
                 VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow");
             }
-            store_i32_register(reg, incremented);
+            vm_store_i32_typed_hot(reg, incremented);
             if (incremented < AS_I32(limit)) {
                 vm.ip += offset;
             }
@@ -3677,7 +3731,7 @@ InterpretResult vm_run_dispatch(void) {
             if (__builtin_add_overflow(current, (int64_t)1, &incremented)) {
                 VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow");
             }
-            store_i64_register(reg, incremented);
+            vm_store_i64_typed_hot(reg, incremented);
             if (incremented < AS_I64(limit)) {
                 vm.ip += offset;
             }
@@ -3685,8 +3739,8 @@ InterpretResult vm_run_dispatch(void) {
         }
 
         if (IS_U32(counter) && IS_U32(limit)) {
-            uint32_t incremented = AS_U32(counter) + 1u;
-            store_u32_register(reg, incremented);
+            uint32_t incremented = AS_U32(counter) + (uint32_t)1;
+            vm_store_u32_typed_hot(reg, incremented);
             if (incremented < AS_U32(limit)) {
                 vm.ip += offset;
             }
@@ -3694,8 +3748,8 @@ InterpretResult vm_run_dispatch(void) {
         }
 
         if (IS_U64(counter) && IS_U64(limit)) {
-            uint64_t incremented = AS_U64(counter) + 1u;
-            store_u64_register(reg, incremented);
+            uint64_t incremented = AS_U64(counter) + (uint64_t)1;
+            vm_store_u64_typed_hot(reg, incremented);
             if (incremented < AS_U64(limit)) {
                 vm.ip += offset;
             }
