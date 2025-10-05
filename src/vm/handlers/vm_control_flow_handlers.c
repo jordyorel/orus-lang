@@ -14,63 +14,57 @@
 
 // ====== Jump Operation Handlers ======
 
-static inline void handle_jump_short(void) {
+bool handle_jump_short(void) {
     uint8_t offset = READ_BYTE();
-    CF_JUMP_SHORT(offset);
+    return CF_JUMP_SHORT(offset);
 }
 
-static inline void handle_jump_back_short(void) {
+bool handle_jump_back_short(void) {
     uint8_t offset = READ_BYTE();
-    CF_JUMP_BACK_SHORT(offset);
+    return CF_JUMP_BACK_SHORT(offset);
 }
 
-static inline void handle_jump_if_not_short(void) {
+bool handle_jump_if_not_short(void) {
     uint8_t reg = READ_BYTE();
     uint8_t offset = READ_BYTE();
-    if (!CF_JUMP_IF_NOT_SHORT(reg, offset)) {
-        return;
-    }
+    return CF_JUMP_IF_NOT_SHORT(reg, offset);
 }
 
-static inline void handle_loop_short(void) {
+bool handle_loop_short(void) {
     uint8_t offset = READ_BYTE();
-    CF_LOOP_SHORT(offset);
-}
 
-// ====== Extended Jump Operation Handlers ======
-
-static inline void handle_jump_if_false(void) {
-    uint8_t reg = READ_BYTE();
-    uint16_t offset = READ_SHORT();
-    if (!CF_JUMP_IF_NOT(reg, offset)) {
-        return;
+    // Hot path detection: Profile short loop iterations (tight loops)
+    if (g_profiling.isActive && (g_profiling.enabledFlags & PROFILE_HOT_PATHS)) {
+        static uint64_t short_loop_iterations = 0;
+        short_loop_iterations++;
+        profileHotPath((void*)(vm.ip - vm.chunk->code), short_loop_iterations);
     }
-}
 
-static inline void handle_jump_if_true(void) {
-    uint8_t reg = READ_BYTE();
-    uint16_t offset = READ_SHORT();
-    if (!CF_JUMP_IF(reg, offset)) {
-        return;
-    }
+    return CF_LOOP_SHORT(offset);
 }
 
 // ====== Long Jump Operation Handlers ======
 
-static inline void handle_jump_long(void) {
+bool handle_jump_long(void) {
     uint16_t offset = READ_SHORT();
-    CF_JUMP(offset);
+    return CF_JUMP(offset);
 }
 
-static inline void handle_jump_if_not_long(void) {
+bool handle_jump_if_not_long(void) {
     uint8_t reg = READ_BYTE();
     uint16_t offset = READ_SHORT();
-    if (!CF_JUMP_IF_NOT(reg, offset)) {
-        return;
-    }
+    return CF_JUMP_IF_NOT(reg, offset);
 }
 
-static inline void handle_loop_long(void) {
+bool handle_loop_long(void) {
     uint16_t offset = READ_SHORT();
-    CF_LOOP(offset);
+
+    // Hot path detection: Profile loop iterations
+    if (g_profiling.isActive && (g_profiling.enabledFlags & PROFILE_HOT_PATHS)) {
+        static uint64_t loop_iterations = 0;
+        loop_iterations++;
+        profileHotPath((void*)(vm.ip - vm.chunk->code), loop_iterations);
+    }
+
+    return CF_LOOP(offset);
 }

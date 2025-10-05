@@ -53,6 +53,16 @@ void handle_mul_f64_typed(void);
 void handle_div_f64_typed(void);
 void handle_mod_f64_typed(void);
 
+// ====== Control Flow Handlers ======
+
+bool handle_jump_short(void);
+bool handle_jump_back_short(void);
+bool handle_jump_if_not_short(void);
+bool handle_loop_short(void);
+bool handle_jump_long(void);
+bool handle_jump_if_not_long(void);
+bool handle_loop_long(void);
+
 // ====== Memory Operation Handlers ======
 
 // Constant loading operations

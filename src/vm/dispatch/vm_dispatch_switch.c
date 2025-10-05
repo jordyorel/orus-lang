@@ -2181,17 +2181,14 @@ InterpretResult vm_run_dispatch(void) {
                 }
 
                 case OP_JUMP: {
-                    uint16_t offset = READ_SHORT();
-                    if (!CF_JUMP(offset)) {
+                    if (!handle_jump_long()) {
                         RETURN(INTERPRET_RUNTIME_ERROR);
                     }
                     break;
                 }
 
                 case OP_JUMP_IF_NOT_R: {
-                    uint8_t reg = READ_BYTE();
-                    uint16_t offset = READ_SHORT();
-                    if (!CF_JUMP_IF_NOT(reg, offset)) {
+                    if (!handle_jump_if_not_long()) {
                         RETURN(INTERPRET_RUNTIME_ERROR);
                     }
                     break;
@@ -2208,8 +2205,7 @@ InterpretResult vm_run_dispatch(void) {
                 }
 
                 case OP_LOOP: {
-                    uint16_t offset = READ_SHORT();
-                    if (!CF_LOOP(offset)) {
+                    if (!handle_loop_long()) {
                         RETURN(INTERPRET_RUNTIME_ERROR);
                     }
                     break;
@@ -2694,33 +2690,28 @@ InterpretResult vm_run_dispatch(void) {
 
                 // Short jump optimizations for performance  
                 case OP_JUMP_SHORT: {
-                    uint8_t offset = READ_BYTE();
-                    if (!CF_JUMP_SHORT(offset)) {
+                    if (!handle_jump_short()) {
                         RETURN(INTERPRET_RUNTIME_ERROR);
                     }
                     break;
                 }
 
                 case OP_JUMP_BACK_SHORT: {
-                    uint8_t offset = READ_BYTE();
-                    if (!CF_JUMP_BACK_SHORT(offset)) {
+                    if (!handle_jump_back_short()) {
                         RETURN(INTERPRET_RUNTIME_ERROR);
                     }
                     break;
                 }
 
                 case OP_JUMP_IF_NOT_SHORT: {
-                    uint8_t reg = READ_BYTE();
-                    uint8_t offset = READ_BYTE();
-                    if (!CF_JUMP_IF_NOT_SHORT(reg, offset)) {
+                    if (!handle_jump_if_not_short()) {
                         RETURN(INTERPRET_RUNTIME_ERROR);
                     }
                     break;
                 }
 
                 case OP_LOOP_SHORT: {
-                    uint8_t offset = READ_BYTE();
-                    if (!CF_LOOP_SHORT(offset)) {
+                    if (!handle_loop_short()) {
                         RETURN(INTERPRET_RUNTIME_ERROR);
                     }
                     break;
