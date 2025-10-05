@@ -9,7 +9,6 @@
 
 #include "compiler/optimization/constantfold.h"
 #include "compiler/typed_ast.h"
-#include "compiler/optimization/optimizer.h"
 #include "vm/vm.h"
 #include "debug/debug_config.h"
 #include <stdio.h>
@@ -18,43 +17,40 @@
 #include <limits.h>
 #include <math.h>
 
-// Global context for tracking statistics
-static ConstantFoldContext fold_stats;
-
 // Helper to safely recurse into optional child nodes
-static void fold_child(TypedASTNode* node) {
+static void fold_child(TypedASTNode* node, ConstantFoldContext* ctx) {
     if (node) {
-        apply_constant_folding_recursive(node);
+        apply_constant_folding_recursive(node, ctx);
     }
 }
 
 // Helper to recurse into arrays of child nodes
-static void fold_children(TypedASTNode** nodes, int count) {
+static void fold_children(TypedASTNode** nodes, int count, ConstantFoldContext* ctx) {
     if (!nodes || count <= 0) {
         return;
     }
 
     for (int i = 0; i < count; i++) {
         if (nodes[i]) {
-            apply_constant_folding_recursive(nodes[i]);
+            apply_constant_folding_recursive(nodes[i], ctx);
         }
     }
 }
 
 // Helper to recurse through struct field metadata
-static void fold_struct_fields(TypedStructField* fields, int count) {
+static void fold_struct_fields(TypedStructField* fields, int count, ConstantFoldContext* ctx) {
     if (!fields || count <= 0) {
         return;
     }
 
     for (int i = 0; i < count; i++) {
-        fold_child(fields[i].typeAnnotation);
-        fold_child(fields[i].defaultValue);
+        fold_child(fields[i].typeAnnotation, ctx);
+        fold_child(fields[i].defaultValue, ctx);
     }
 }
 
 // Helper to recurse through enum variant field metadata
-static void fold_enum_variants(TypedEnumVariant* variants, int count) {
+static void fold_enum_variants(TypedEnumVariant* variants, int count, ConstantFoldContext* ctx) {
     if (!variants || count <= 0) {
         return;
     }
@@ -66,23 +62,23 @@ static void fold_enum_variants(TypedEnumVariant* variants, int count) {
         }
 
         for (int j = 0; j < variant->fieldCount; j++) {
-            fold_child(variant->fields[j].typeAnnotation);
+            fold_child(variant->fields[j].typeAnnotation, ctx);
         }
     }
 }
 
 // Helper to recurse through match expression arms
-static void fold_match_arms(TypedMatchArm* arms, int count) {
+static void fold_match_arms(TypedMatchArm* arms, int count, ConstantFoldContext* ctx) {
     if (!arms || count <= 0) {
         return;
     }
 
     for (int i = 0; i < count; i++) {
         TypedMatchArm* arm = &arms[i];
-        fold_child(arm->valuePattern);
-        fold_child(arm->body);
-        fold_child(arm->condition);
-        fold_children(arm->payloadAccesses, arm->payloadCount);
+        fold_child(arm->valuePattern, ctx);
+        fold_child(arm->body, ctx);
+        fold_child(arm->condition, ctx);
+        fold_children(arm->payloadAccesses, arm->payloadCount, ctx);
     }
 }
 
@@ -182,7 +178,7 @@ static bool simplify_algebraic_binary_ast(ASTNode* node) {
     return false;
 }
 
-static bool simplify_algebraic_binary_typed(TypedASTNode* node) {
+static bool simplify_algebraic_binary_typed(TypedASTNode* node, ConstantFoldContext* ctx) {
     if (!node || !node->original || node->original->type != NODE_BINARY) {
         return false;
     }
@@ -195,10 +191,10 @@ static bool simplify_algebraic_binary_typed(TypedASTNode* node) {
     node->typed.binary.left = NULL;
     node->typed.binary.right = NULL;
 
-    fold_stats.optimizations_applied++;
-    fold_stats.constants_folded++;
-    fold_stats.binary_expressions_folded++;
-    fold_stats.nodes_eliminated++;
+    ctx->optimizations_applied++;
+    ctx->constants_folded++;
+    ctx->binary_expressions_folded++;
+    ctx->nodes_eliminated++;
 
     return true;
 }
@@ -210,63 +206,60 @@ void init_constant_fold_context(ConstantFoldContext* ctx) {
     ctx->nodes_eliminated = 0;
 }
 
-bool apply_constant_folding(TypedASTNode* ast, OptimizationContext* opt_ctx) {
+bool apply_constant_folding(TypedASTNode* ast, ConstantFoldContext* ctx) {
     if (!ast) return false;
-    
+
     DEBUG_CONSTANTFOLD_PRINT("🚀 Starting constant folding optimization...\n");
-    init_constant_fold_context(&fold_stats);
-    
-    bool result = apply_constant_folding_recursive(ast);
-    
-    // Update optimization context statistics
-    if (opt_ctx) {
-        opt_ctx->optimizations_applied += fold_stats.optimizations_applied;
-        opt_ctx->constants_folded += fold_stats.constants_folded;
-        opt_ctx->nodes_eliminated += fold_stats.nodes_eliminated;
-    }
-    
-    print_constant_fold_statistics(&fold_stats);
+
+    ConstantFoldContext local_stats;
+    ConstantFoldContext* active_ctx = ctx ? ctx : &local_stats;
+
+    init_constant_fold_context(active_ctx);
+
+    bool result = apply_constant_folding_recursive(ast, active_ctx);
+
+    print_constant_fold_statistics(active_ctx);
     return result;
 }
 
 // Main constant folding pass (moved from optimizer.c)
-bool apply_constant_folding_recursive(TypedASTNode* ast) {
+bool apply_constant_folding_recursive(TypedASTNode* ast, ConstantFoldContext* ctx) {
     if (!ast || !ast->original) return true;
-    
+
     switch (ast->original->type) {
         case NODE_PROGRAM:
-            fold_children(ast->typed.program.declarations, ast->typed.program.count);
+            fold_children(ast->typed.program.declarations, ast->typed.program.count, ctx);
             break;
 
         case NODE_FUNCTION:
-            fold_child(ast->typed.function.returnType);
-            fold_child(ast->typed.function.body);
+            fold_child(ast->typed.function.returnType, ctx);
+            fold_child(ast->typed.function.body, ctx);
             break;
 
         case NODE_BLOCK:
-            fold_children(ast->typed.block.statements, ast->typed.block.count);
+            fold_children(ast->typed.block.statements, ast->typed.block.count, ctx);
             break;
 
         case NODE_VAR_DECL:
-            fold_child(ast->typed.varDecl.initializer);
-            fold_child(ast->typed.varDecl.typeAnnotation);
+            fold_child(ast->typed.varDecl.initializer, ctx);
+            fold_child(ast->typed.varDecl.typeAnnotation, ctx);
             break;
 
         case NODE_ASSIGN:
-            fold_child(ast->typed.assign.value);
+            fold_child(ast->typed.assign.value, ctx);
             break;
 
         case NODE_BINARY:
             DEBUG_CONSTANTFOLD_PRINT("Analyzing binary expression: %s\n", ast->original->binary.op);
 
             // Recursively fold child expressions first
-            fold_child(ast->typed.binary.left);
-            fold_child(ast->typed.binary.right);
+            fold_child(ast->typed.binary.left, ctx);
+            fold_child(ast->typed.binary.right, ctx);
 
             // Try to fold this binary expression
-            bool folded = fold_binary_expression(ast);
+            bool folded = fold_binary_expression(ast, ctx);
             if (!folded) {
-                simplify_algebraic_binary_typed(ast);
+                simplify_algebraic_binary_typed(ast, ctx);
             }
             break;
 
@@ -277,7 +270,7 @@ bool apply_constant_folding_recursive(TypedASTNode* ast) {
             // First recursively fold the operand using the typed AST if available
             if (ast->typed.unary.operand) {
                 DEBUG_CONSTANTFOLD_PRINT("Recursively folding unary operand via typed AST\n");
-                apply_constant_folding_recursive(ast->typed.unary.operand);
+                apply_constant_folding_recursive(ast->typed.unary.operand, ctx);
             } else if (ast->original->unary.operand) {
                 DEBUG_CONSTANTFOLD_PRINT("No typed operand, trying to fold original AST operand directly\n");
                 // For cases where typed AST isn't fully populated, work with original AST
@@ -308,25 +301,25 @@ bool apply_constant_folding_recursive(TypedASTNode* ast) {
                         else if (binary_result.type == VAL_I32) DEBUG_CONSTANTFOLD_PRINT("%d", AS_I32(binary_result));
                         else DEBUG_CONSTANTFOLD_PRINT("(value)");
                         DEBUG_CONSTANTFOLD_PRINT("\n");
-                        
-                        fold_stats.optimizations_applied++;
-                        fold_stats.constants_folded++;
-                        fold_stats.binary_expressions_folded++;
+
+                        ctx->optimizations_applied++;
+                        ctx->constants_folded++;
+                        ctx->binary_expressions_folded++;
                     }
                 }
             }
-            
+
             // Try to fold the unary expression if the operand is now a literal
-            fold_unary_expression(ast);
+            fold_unary_expression(ast, ctx);
             break;
-            
+
         case NODE_PRINT:
-            fold_children(ast->typed.print.values, ast->typed.print.count);
+            fold_children(ast->typed.print.values, ast->typed.print.count, ctx);
             break;
 
         case NODE_INDEX_ACCESS:
-            fold_child(ast->typed.indexAccess.array);
-            fold_child(ast->typed.indexAccess.index);
+            fold_child(ast->typed.indexAccess.array, ctx);
+            fold_child(ast->typed.indexAccess.index, ctx);
             break;
 
         case NODE_IF:
@@ -335,125 +328,125 @@ bool apply_constant_folding_recursive(TypedASTNode* ast) {
             // Fold the condition expression using typed AST if available
             if (ast->typed.ifStmt.condition) {
                 DEBUG_CONSTANTFOLD_PRINT("Folding if condition via typed AST\n");
-                apply_constant_folding_recursive(ast->typed.ifStmt.condition);
+                apply_constant_folding_recursive(ast->typed.ifStmt.condition, ctx);
             } else if (ast->original->ifStmt.condition) {
                 DEBUG_CONSTANTFOLD_PRINT("Folding if condition directly on original AST\n");
                 // Apply constant folding directly to the condition expression
-                fold_ast_node_directly(ast->original->ifStmt.condition);
+                fold_ast_node_directly(ast->original->ifStmt.condition, ctx);
             }
-            
+
             // Fold the then branch
-            fold_child(ast->typed.ifStmt.thenBranch);
+            fold_child(ast->typed.ifStmt.thenBranch, ctx);
 
             // Fold the else branch if it exists
-            fold_child(ast->typed.ifStmt.elseBranch);
+            fold_child(ast->typed.ifStmt.elseBranch, ctx);
             break;
 
         case NODE_WHILE:
-            fold_child(ast->typed.whileStmt.condition);
-            fold_child(ast->typed.whileStmt.body);
+            fold_child(ast->typed.whileStmt.condition, ctx);
+            fold_child(ast->typed.whileStmt.body, ctx);
             break;
 
         case NODE_FOR_RANGE:
-            fold_child(ast->typed.forRange.start);
-            fold_child(ast->typed.forRange.end);
-            fold_child(ast->typed.forRange.step);
-            fold_child(ast->typed.forRange.body);
+            fold_child(ast->typed.forRange.start, ctx);
+            fold_child(ast->typed.forRange.end, ctx);
+            fold_child(ast->typed.forRange.step, ctx);
+            fold_child(ast->typed.forRange.body, ctx);
             break;
 
         case NODE_FOR_ITER:
-            fold_child(ast->typed.forIter.iterable);
-            fold_child(ast->typed.forIter.body);
+            fold_child(ast->typed.forIter.iterable, ctx);
+            fold_child(ast->typed.forIter.body, ctx);
             break;
 
         case NODE_RETURN:
-            fold_child(ast->typed.returnStmt.value);
+            fold_child(ast->typed.returnStmt.value, ctx);
             break;
 
         case NODE_CALL:
-            fold_child(ast->typed.call.callee);
-            fold_children(ast->typed.call.args, ast->typed.call.argCount);
+            fold_child(ast->typed.call.callee, ctx);
+            fold_children(ast->typed.call.args, ast->typed.call.argCount, ctx);
             break;
 
         case NODE_THROW:
-            fold_child(ast->typed.throwStmt.value);
+            fold_child(ast->typed.throwStmt.value, ctx);
             break;
 
         case NODE_ARRAY_LITERAL:
-            fold_children(ast->typed.arrayLiteral.elements, ast->typed.arrayLiteral.count);
+            fold_children(ast->typed.arrayLiteral.elements, ast->typed.arrayLiteral.count, ctx);
             break;
         case NODE_ARRAY_FILL:
-            fold_child(ast->typed.arrayFill.value);
-            fold_child(ast->typed.arrayFill.lengthExpr);
+            fold_child(ast->typed.arrayFill.value, ctx);
+            fold_child(ast->typed.arrayFill.lengthExpr, ctx);
             break;
 
         case NODE_ARRAY_ASSIGN:
-            fold_child(ast->typed.arrayAssign.target);
-            fold_child(ast->typed.arrayAssign.value);
+            fold_child(ast->typed.arrayAssign.target, ctx);
+            fold_child(ast->typed.arrayAssign.value, ctx);
             break;
 
         case NODE_ARRAY_SLICE:
-            fold_child(ast->typed.arraySlice.array);
-            fold_child(ast->typed.arraySlice.start);
-            fold_child(ast->typed.arraySlice.end);
+            fold_child(ast->typed.arraySlice.array, ctx);
+            fold_child(ast->typed.arraySlice.start, ctx);
+            fold_child(ast->typed.arraySlice.end, ctx);
             break;
 
         case NODE_TERNARY:
-            fold_child(ast->typed.ternary.condition);
-            fold_child(ast->typed.ternary.trueExpr);
-            fold_child(ast->typed.ternary.falseExpr);
+            fold_child(ast->typed.ternary.condition, ctx);
+            fold_child(ast->typed.ternary.trueExpr, ctx);
+            fold_child(ast->typed.ternary.falseExpr, ctx);
             break;
 
         case NODE_CAST:
-            fold_child(ast->typed.cast.expression);
-            fold_child(ast->typed.cast.targetType);
+            fold_child(ast->typed.cast.expression, ctx);
+            fold_child(ast->typed.cast.targetType, ctx);
             break;
 
         case NODE_TRY:
-            fold_child(ast->typed.tryStmt.tryBlock);
-            fold_child(ast->typed.tryStmt.catchBlock);
+            fold_child(ast->typed.tryStmt.tryBlock, ctx);
+            fold_child(ast->typed.tryStmt.catchBlock, ctx);
             break;
 
         case NODE_MEMBER_ACCESS:
-            fold_child(ast->typed.member.object);
+            fold_child(ast->typed.member.object, ctx);
             break;
 
         case NODE_MEMBER_ASSIGN:
-            fold_child(ast->typed.memberAssign.target);
-            fold_child(ast->typed.memberAssign.value);
+            fold_child(ast->typed.memberAssign.target, ctx);
+            fold_child(ast->typed.memberAssign.value, ctx);
             break;
 
         case NODE_STRUCT_LITERAL:
-            fold_children(ast->typed.structLiteral.values, ast->typed.structLiteral.fieldCount);
+            fold_children(ast->typed.structLiteral.values, ast->typed.structLiteral.fieldCount, ctx);
             break;
 
         case NODE_STRUCT_DECL:
-            fold_struct_fields(ast->typed.structDecl.fields, ast->typed.structDecl.fieldCount);
+            fold_struct_fields(ast->typed.structDecl.fields, ast->typed.structDecl.fieldCount, ctx);
             break;
 
         case NODE_IMPL_BLOCK:
-            fold_children(ast->typed.implBlock.methods, ast->typed.implBlock.methodCount);
+            fold_children(ast->typed.implBlock.methods, ast->typed.implBlock.methodCount, ctx);
             break;
 
         case NODE_ENUM_DECL:
-            fold_enum_variants(ast->typed.enumDecl.variants, ast->typed.enumDecl.variantCount);
+            fold_enum_variants(ast->typed.enumDecl.variants, ast->typed.enumDecl.variantCount, ctx);
             break;
 
         case NODE_ENUM_MATCH_TEST:
-            fold_child(ast->typed.enumMatchTest.value);
+            fold_child(ast->typed.enumMatchTest.value, ctx);
             break;
 
         case NODE_ENUM_PAYLOAD:
-            fold_child(ast->typed.enumPayload.value);
+            fold_child(ast->typed.enumPayload.value, ctx);
             break;
 
         case NODE_ENUM_MATCH_CHECK:
-            fold_child(ast->typed.enumMatchCheck.value);
+            fold_child(ast->typed.enumMatchCheck.value, ctx);
             break;
 
         case NODE_MATCH_EXPRESSION:
-            fold_child(ast->typed.matchExpr.subject);
-            fold_match_arms(ast->typed.matchExpr.arms, ast->typed.matchExpr.armCount);
+            fold_child(ast->typed.matchExpr.subject, ctx);
+            fold_match_arms(ast->typed.matchExpr.arms, ast->typed.matchExpr.armCount, ctx);
             break;
 
         default:
@@ -464,7 +457,7 @@ bool apply_constant_folding_recursive(TypedASTNode* ast) {
     return true;
 }
 
-bool fold_binary_expression(TypedASTNode* node) {
+bool fold_binary_expression(TypedASTNode* node, ConstantFoldContext* ctx) {
     if (!is_foldable_binary(node)) {
         return false;
     }
@@ -508,9 +501,9 @@ bool fold_binary_expression(TypedASTNode* node) {
     // The codegen will handle folded nodes by checking if original->type is NODE_LITERAL
     
     // Update statistics
-    fold_stats.optimizations_applied++;
-    fold_stats.constants_folded++;
-    fold_stats.binary_expressions_folded++;
+    ctx->optimizations_applied++;
+    ctx->constants_folded++;
+    ctx->binary_expressions_folded++;
     
     DEBUG_CONSTANTFOLD_PRINT("✅ Successfully folded to: ");
     if (result.type == VAL_I32) DEBUG_CONSTANTFOLD_PRINT("%d", AS_I32(result));
@@ -523,16 +516,16 @@ bool fold_binary_expression(TypedASTNode* node) {
 }
 
 // Function to apply constant folding directly to AST nodes without typed AST
-void fold_ast_node_directly(ASTNode* node) {
+void fold_ast_node_directly(ASTNode* node, ConstantFoldContext* ctx) {
     if (!node) return;
-    
+
     switch (node->type) {
         case NODE_BINARY:
             DEBUG_CONSTANTFOLD_PRINT("Folding binary expression directly: %s\n", node->binary.op);
-            
+
             // Recursively fold children first
-            fold_ast_node_directly(node->binary.left);
-            fold_ast_node_directly(node->binary.right);
+            fold_ast_node_directly(node->binary.left, ctx);
+            fold_ast_node_directly(node->binary.right, ctx);
             
             // Try to fold this binary expression
             if (node->binary.left && node->binary.right &&
@@ -560,9 +553,9 @@ void fold_ast_node_directly(ASTNode* node) {
                 node->literal.value = result;
                 node->literal.hasExplicitSuffix = false;
                 
-                fold_stats.optimizations_applied++;
-                fold_stats.constants_folded++;
-                fold_stats.binary_expressions_folded++;
+                ctx->optimizations_applied++;
+                ctx->constants_folded++;
+                ctx->binary_expressions_folded++;
 
                 DEBUG_CONSTANTFOLD_PRINT("Direct folded to: ");
                 if (result.type == VAL_BOOL) DEBUG_CONSTANTFOLD_PRINT("%s", AS_BOOL(result) ? "true" : "false");
@@ -570,18 +563,18 @@ void fold_ast_node_directly(ASTNode* node) {
                 else DEBUG_CONSTANTFOLD_PRINT("(value)");
                 DEBUG_CONSTANTFOLD_PRINT("\n");
             } else if (simplify_algebraic_binary_ast(node)) {
-                fold_stats.optimizations_applied++;
-                fold_stats.constants_folded++;
-                fold_stats.binary_expressions_folded++;
-                fold_stats.nodes_eliminated++;
+                ctx->optimizations_applied++;
+                ctx->constants_folded++;
+                ctx->binary_expressions_folded++;
+                ctx->nodes_eliminated++;
             }
             break;
-            
+
         case NODE_UNARY:
             DEBUG_CONSTANTFOLD_PRINT("Folding unary expression directly: %s\n", node->unary.op);
-            
+
             // Recursively fold operand first
-            fold_ast_node_directly(node->unary.operand);
+            fold_ast_node_directly(node->unary.operand, ctx);
             
             // Try to fold this unary expression
             if (node->unary.operand && node->unary.operand->type == NODE_LITERAL) {
@@ -618,8 +611,8 @@ void fold_ast_node_directly(ASTNode* node) {
                     node->literal.value = result;
                     node->literal.hasExplicitSuffix = false;
                     
-                    fold_stats.optimizations_applied++;
-                    fold_stats.constants_folded++;
+                    ctx->optimizations_applied++;
+                    ctx->constants_folded++;
                     
                     DEBUG_CONSTANTFOLD_PRINT("Direct unary folded to: ");
                     if (result.type == VAL_BOOL) DEBUG_CONSTANTFOLD_PRINT("%s", AS_BOOL(result) ? "true" : "false");
@@ -636,7 +629,7 @@ void fold_ast_node_directly(ASTNode* node) {
     }
 }
 
-bool fold_unary_expression(TypedASTNode* node) {
+bool fold_unary_expression(TypedASTNode* node, ConstantFoldContext* ctx) {
     if (!node || !node->original || node->original->type != NODE_UNARY) {
         return false;
     }
@@ -692,8 +685,8 @@ bool fold_unary_expression(TypedASTNode* node) {
     node->original->literal.hasExplicitSuffix = false;
     
     // Update statistics
-    fold_stats.optimizations_applied++;
-    fold_stats.constants_folded++;
+    ctx->optimizations_applied++;
+    ctx->constants_folded++;
     
     DEBUG_CONSTANTFOLD_PRINT("✅ Successfully folded unary to: ");
     if (result.type == VAL_I32) DEBUG_CONSTANTFOLD_PRINT("%d", AS_I32(result));
