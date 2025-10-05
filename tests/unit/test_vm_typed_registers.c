@@ -21,11 +21,15 @@ static bool test_typed_register_deferred_boxing_flushes_on_read(void) {
     ASSERT_TRUE(!vm.typed_regs.dirty[0], "Initial store should synchronize boxed register");
     ASSERT_TRUE(IS_I32(vm.registers[0]) && AS_I32(vm.registers[0]) == 10,
                 "Initial store should write boxed value");
+    ASSERT_TRUE(IS_I32(vm.register_file.globals[0]) && AS_I32(vm.register_file.globals[0]) == 10,
+                "Global mirror should receive initial boxed value");
 
     vm_store_i32_typed_hot(0, 42);
     ASSERT_TRUE(vm.typed_regs.dirty[0], "Second store should defer boxing");
-    ASSERT_TRUE(IS_I32(vm.registers[0]) && AS_I32(vm.registers[0]) == 10,
-                "Deferred store should leave boxed value untouched");
+    ASSERT_TRUE(IS_I32(vm.registers[0]) && AS_I32(vm.registers[0]) == 42,
+                "Global boxed mirror should update immediately even when dirty");
+    ASSERT_TRUE(IS_I32(vm.register_file.globals[0]) && AS_I32(vm.register_file.globals[0]) == 42,
+                "Global register file mirror should match boxed register");
 
     Value flushed = vm_get_register_safe(0);
     ASSERT_TRUE(IS_I32(flushed) && AS_I32(flushed) == 42,
@@ -33,6 +37,8 @@ static bool test_typed_register_deferred_boxing_flushes_on_read(void) {
     ASSERT_TRUE(!vm.typed_regs.dirty[0], "Dirty bit should clear after flush");
     ASSERT_TRUE(IS_I32(vm.registers[0]) && AS_I32(vm.registers[0]) == 42,
                 "Boxed register should reflect flushed value");
+    ASSERT_TRUE(IS_I32(vm.register_file.globals[0]) && AS_I32(vm.register_file.globals[0]) == 42,
+                "Global mirror should remain synchronized after flush");
 
     freeVM();
     return true;
@@ -103,6 +109,9 @@ static bool test_range_iterator_uses_typed_registers(void) {
                 "Initial store should synchronize boxed register for range iterator");
     ASSERT_TRUE(IS_I64(vm.registers[dst_reg]) && AS_I64(vm.registers[dst_reg]) == 0,
                 "Boxed register should receive first iteration value");
+    ASSERT_TRUE(IS_I64(vm.register_file.globals[dst_reg]) &&
+                    AS_I64(vm.register_file.globals[dst_reg]) == 0,
+                "Global mirror should receive first iteration value");
     ASSERT_TRUE(vm.typed_regs.reg_types[has_reg] == REG_TYPE_BOOL,
                 "Has-value flag should occupy typed bool slot");
     ASSERT_TRUE(vm.typed_regs.bool_regs[has_reg],
@@ -113,8 +122,11 @@ static bool test_range_iterator_uses_typed_registers(void) {
                 "Second iteration should advance typed payload");
     ASSERT_TRUE(vm.typed_regs.dirty[dst_reg],
                 "Second iteration should defer boxing for hot path");
-    ASSERT_TRUE(IS_I64(vm.registers[dst_reg]) && AS_I64(vm.registers[dst_reg]) == 0,
-                "Boxed register should remain unchanged after deferred write");
+    ASSERT_TRUE(IS_I64(vm.registers[dst_reg]) && AS_I64(vm.registers[dst_reg]) == 1,
+                "Global boxed mirror should reflect deferred typed update");
+    ASSERT_TRUE(IS_I64(vm.register_file.globals[dst_reg]) &&
+                    AS_I64(vm.register_file.globals[dst_reg]) == 1,
+                "Global mirror should stay aligned with boxed register");
     ASSERT_TRUE(vm.typed_regs.bool_regs[has_reg],
                 "Has-value flag should stay true while range produces values");
 
@@ -123,8 +135,11 @@ static bool test_range_iterator_uses_typed_registers(void) {
                 "Third iteration should update typed payload without boxing");
     ASSERT_TRUE(vm.typed_regs.dirty[dst_reg],
                 "Typed register should remain dirty until explicit read");
-    ASSERT_TRUE(IS_I64(vm.registers[dst_reg]) && AS_I64(vm.registers[dst_reg]) == 0,
-                "Boxed register should still reflect first materialized value");
+    ASSERT_TRUE(IS_I64(vm.registers[dst_reg]) && AS_I64(vm.registers[dst_reg]) == 2,
+                "Global boxed mirror should reflect newest typed payload");
+    ASSERT_TRUE(IS_I64(vm.register_file.globals[dst_reg]) &&
+                    AS_I64(vm.register_file.globals[dst_reg]) == 2,
+                "Global mirror should stay aligned with typed payload");
     ASSERT_TRUE(vm.typed_regs.bool_regs[has_reg],
                 "Has-value flag should be true before iterator exhaustion");
 
@@ -135,6 +150,11 @@ static bool test_range_iterator_uses_typed_registers(void) {
                 "Boxed has-value flag should flush false on exhaustion");
     ASSERT_TRUE(vm.typed_regs.i64_regs[dst_reg] == 2,
                 "Destination typed value should retain last yielded integer");
+    ASSERT_TRUE(IS_I64(vm.registers[dst_reg]) && AS_I64(vm.registers[dst_reg]) == 2,
+                "Boxed register should hold final yielded integer");
+    ASSERT_TRUE(IS_I64(vm.register_file.globals[dst_reg]) &&
+                    AS_I64(vm.register_file.globals[dst_reg]) == 2,
+                "Global mirror should hold final yielded integer");
 
     freeChunk(&chunk);
     freeVM();
@@ -171,14 +191,22 @@ static bool test_array_iterator_preserves_typed_loop_variable(void) {
                 "Initial array iteration should write boxed value");
     ASSERT_TRUE(vm.typed_regs.bool_regs[has_reg],
                 "Has-value flag should start true for populated arrays");
+    ASSERT_TRUE(IS_I64(vm.registers[dst_reg]) && AS_I64(vm.registers[dst_reg]) == 10,
+                "Boxed register should capture first array element");
+    ASSERT_TRUE(IS_I64(vm.register_file.globals[dst_reg]) &&
+                    AS_I64(vm.register_file.globals[dst_reg]) == 10,
+                "Global mirror should capture first array element");
 
     ASSERT_TRUE(run_single_iter_step(&chunk), "Second array iteration should execute");
     ASSERT_TRUE(vm.typed_regs.i64_regs[dst_reg] == 20,
                 "Second array iteration should update typed payload");
     ASSERT_TRUE(vm.typed_regs.dirty[dst_reg],
                 "Hot array path should avoid boxing on subsequent iterations");
-    ASSERT_TRUE(IS_I64(vm.registers[dst_reg]) && AS_I64(vm.registers[dst_reg]) == 10,
-                "Boxed register should still contain first array element");
+    ASSERT_TRUE(IS_I64(vm.registers[dst_reg]) && AS_I64(vm.registers[dst_reg]) == 20,
+                "Global boxed mirror should follow typed payload");
+    ASSERT_TRUE(IS_I64(vm.register_file.globals[dst_reg]) &&
+                    AS_I64(vm.register_file.globals[dst_reg]) == 20,
+                "Global mirror should follow typed payload");
     ASSERT_TRUE(vm.typed_regs.bool_regs[has_reg],
                 "Has-value flag should remain true while elements remain");
 
@@ -195,6 +223,11 @@ static bool test_array_iterator_preserves_typed_loop_variable(void) {
                 "Boxed boolean flag should flush false at exhaustion");
     ASSERT_TRUE(vm.typed_regs.i64_regs[dst_reg] == 30,
                 "Typed register should preserve last array element");
+    ASSERT_TRUE(IS_I64(vm.registers[dst_reg]) && AS_I64(vm.registers[dst_reg]) == 30,
+                "Boxed register should preserve last array element");
+    ASSERT_TRUE(IS_I64(vm.register_file.globals[dst_reg]) &&
+                    AS_I64(vm.register_file.globals[dst_reg]) == 30,
+                "Global mirror should preserve last array element");
 
     freeChunk(&chunk);
     freeVM();

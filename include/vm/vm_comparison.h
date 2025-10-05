@@ -290,7 +290,10 @@ static inline void store_i32_register(uint16_t id, int32_t value) {
 
 
     Value boxed = I32_VAL(value);
-    if (id < 256) {
+    if (id < FRAME_REG_START) {
+        vm.register_file.globals[id] = boxed;
+        vm.registers[id] = boxed;
+    } else if (id < REGISTER_COUNT) {
         vm.registers[id] = boxed;
     } else {
         set_register(&vm.register_file, id, boxed);
@@ -307,12 +310,19 @@ static inline void vm_store_i32_typed_hot(uint16_t id, int32_t value) {
     vm.typed_regs.i32_regs[id] = value;
     vm.typed_regs.dirty[id] = skip_boxed_write;
 
+    Value boxed = I32_VAL(value);
+    if (id < FRAME_REG_START) {
+        vm.register_file.globals[id] = boxed;
+        vm.registers[id] = boxed;
+        return;
+    }
+
     if (id < REGISTER_COUNT) {
         if (!skip_boxed_write) {
-            vm.registers[id] = I32_VAL(value);
+            vm.registers[id] = boxed;
         }
     } else {
-        set_register(&vm.register_file, id, I32_VAL(value));
+        set_register(&vm.register_file, id, boxed);
     }
 }
 
@@ -326,12 +336,19 @@ static inline void vm_store_i64_typed_hot(uint16_t id, int64_t value) {
     vm.typed_regs.i64_regs[id] = value;
     vm.typed_regs.dirty[id] = skip_boxed_write;
 
+    Value boxed = I64_VAL(value);
+    if (id < FRAME_REG_START) {
+        vm.register_file.globals[id] = boxed;
+        vm.registers[id] = boxed;
+        return;
+    }
+
     if (id < REGISTER_COUNT) {
         if (!skip_boxed_write) {
-            vm.registers[id] = I64_VAL(value);
+            vm.registers[id] = boxed;
         }
     } else {
-        set_register(&vm.register_file, id, I64_VAL(value));
+        set_register(&vm.register_file, id, boxed);
     }
 }
 
@@ -345,12 +362,19 @@ static inline void vm_store_u32_typed_hot(uint16_t id, uint32_t value) {
     vm.typed_regs.u32_regs[id] = value;
     vm.typed_regs.dirty[id] = skip_boxed_write;
 
+    Value boxed = U32_VAL(value);
+    if (id < FRAME_REG_START) {
+        vm.register_file.globals[id] = boxed;
+        vm.registers[id] = boxed;
+        return;
+    }
+
     if (id < REGISTER_COUNT) {
         if (!skip_boxed_write) {
-            vm.registers[id] = U32_VAL(value);
+            vm.registers[id] = boxed;
         }
     } else {
-        set_register(&vm.register_file, id, U32_VAL(value));
+        set_register(&vm.register_file, id, boxed);
     }
 }
 
@@ -364,12 +388,19 @@ static inline void vm_store_u64_typed_hot(uint16_t id, uint64_t value) {
     vm.typed_regs.u64_regs[id] = value;
     vm.typed_regs.dirty[id] = skip_boxed_write;
 
+    Value boxed = U64_VAL(value);
+    if (id < FRAME_REG_START) {
+        vm.register_file.globals[id] = boxed;
+        vm.registers[id] = boxed;
+        return;
+    }
+
     if (id < REGISTER_COUNT) {
         if (!skip_boxed_write) {
-            vm.registers[id] = U64_VAL(value);
+            vm.registers[id] = boxed;
         }
     } else {
-        set_register(&vm.register_file, id, U64_VAL(value));
+        set_register(&vm.register_file, id, boxed);
     }
 }
 
@@ -383,12 +414,19 @@ static inline void vm_store_bool_typed_hot(uint16_t id, bool value) {
     vm.typed_regs.bool_regs[id] = value;
     vm.typed_regs.dirty[id] = skip_boxed_write;
 
+    Value boxed = BOOL_VAL(value);
+    if (id < FRAME_REG_START) {
+        vm.register_file.globals[id] = boxed;
+        vm.registers[id] = boxed;
+        return;
+    }
+
     if (id < REGISTER_COUNT) {
         if (!skip_boxed_write) {
-            vm.registers[id] = BOOL_VAL(value);
+            vm.registers[id] = boxed;
         }
     } else {
-        set_register(&vm.register_file, id, BOOL_VAL(value));
+        set_register(&vm.register_file, id, boxed);
     }
 }
 
@@ -401,7 +439,10 @@ static inline void store_i64_register(uint16_t id, int64_t value) {
 
 
     Value boxed = I64_VAL(value);
-    if (id < 256) {
+    if (id < FRAME_REG_START) {
+        vm.register_file.globals[id] = boxed;
+        vm.registers[id] = boxed;
+    } else if (id < REGISTER_COUNT) {
         vm.registers[id] = boxed;
     } else {
         set_register(&vm.register_file, id, boxed);
@@ -417,7 +458,10 @@ static inline void store_u32_register(uint16_t id, uint32_t value) {
 
 
     Value boxed = U32_VAL(value);
-    if (id < 256) {
+    if (id < FRAME_REG_START) {
+        vm.register_file.globals[id] = boxed;
+        vm.registers[id] = boxed;
+    } else if (id < REGISTER_COUNT) {
         vm.registers[id] = boxed;
     } else {
         set_register(&vm.register_file, id, boxed);
@@ -433,7 +477,10 @@ static inline void store_u64_register(uint16_t id, uint64_t value) {
 
 
     Value boxed = U64_VAL(value);
-    if (id < 256) {
+    if (id < FRAME_REG_START) {
+        vm.register_file.globals[id] = boxed;
+        vm.registers[id] = boxed;
+    } else if (id < REGISTER_COUNT) {
         vm.registers[id] = boxed;
     } else {
         set_register(&vm.register_file, id, boxed);
@@ -449,7 +496,10 @@ static inline void store_f64_register(uint16_t id, double value) {
 
 
     Value boxed = F64_VAL(value);
-    if (id < 256) {
+    if (id < FRAME_REG_START) {
+        vm.register_file.globals[id] = boxed;
+        vm.registers[id] = boxed;
+    } else if (id < REGISTER_COUNT) {
         vm.registers[id] = boxed;
     } else {
         set_register(&vm.register_file, id, boxed);
@@ -465,7 +515,10 @@ static inline void store_bool_register(uint16_t id, bool value) {
 
 
     Value boxed = BOOL_VAL(value);
-    if (id < 256) {
+    if (id < FRAME_REG_START) {
+        vm.register_file.globals[id] = boxed;
+        vm.registers[id] = boxed;
+    } else if (id < REGISTER_COUNT) {
         vm.registers[id] = boxed;
     } else {
         set_register(&vm.register_file, id, boxed);
