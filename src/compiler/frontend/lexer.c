@@ -281,7 +281,7 @@ static TokenType identifier_type(const char* start, int length) {
         case 'n':
             if (length == 3 && memcmp(start, "not", 3) == 0) return TOKEN_NOT;
             break;
-        case 'o':
+        case 'o':https://github.com/jordyorel/orus-lang/pull/249/conflict?name=src%252Fcompiler%252Ffrontend%252Flexer.c&ancestor_oid=3ff3f38934733bf94c11912e4e6ccc6c3ab95141&base_oid=590f40eba25d7c7c7e0a8f41f4fee3bb1658dde0&head_oid=01379cc0df7b784d86a446c014c5cadc72918636
             if (length == 2 && memcmp(start, "or", 2) == 0) return TOKEN_OR;
             break;
         case 'p':
@@ -728,6 +728,7 @@ Token scan_token_ctx(LexerContext* ctx) {
         case '^':
             return make_token_ctx(ctx, TOKEN_BIT_XOR);
         case ':':
+            if (match_char_ctx(ctx, '=')) return make_token_ctx(ctx, TOKEN_DEFINE);
             return make_token_ctx(ctx, TOKEN_COLON);
         case '\'':
             return make_token_ctx(ctx, TOKEN_APOSTROPHE);
@@ -879,7 +880,7 @@ Token scan_token() {
         case '^':
             return make_token(TOKEN_BIT_XOR);
         case ':':
-            return make_token(TOKEN_COLON);
+            return make_token(match_char('=') ? TOKEN_DEFINE : TOKEN_COLON);
         case '\'':
             return make_token(TOKEN_APOSTROPHE);
         case '"':

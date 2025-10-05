@@ -1,0 +1,14 @@
+// Validate the new constant declaration design with typed bindings.
+// Constants default to module scope, and `pub` exports are exposed automatically.
+
+pub PI:f64 := 3.1415926535
+SCALE:i32 := 100
+APP_NAME:string := "Orus"
+
+fn circumference(radius: f64) -> f64:
+    return 2.0 * PI * radius
+
+print("PI:", PI)
+print("SCALE:", SCALE)
+print("APP:", APP_NAME)
+print("CIRCUMFERENCE(5):", circumference(5.0))

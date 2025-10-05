@@ -14,33 +14,33 @@ mut EDIT_NAIVE_DELETIONS = 0
 mut EDIT_NAIVE_TIES = 0
 
 // Symbol codes for the uppercase character sequences (ASCII values).
-LETTER_A = 65
-LETTER_B = 66
-LETTER_C = 67
-LETTER_D = 68
-LETTER_E = 69
-LETTER_F = 70
-LETTER_G = 71
-LETTER_I = 73
-LETTER_K = 75
-LETTER_L = 76
-LETTER_M = 77
-LETTER_N = 78
-LETTER_O = 79
-LETTER_P = 80
-LETTER_R = 82
-LETTER_S = 83
-LETTER_T = 84
-LETTER_U = 85
-LETTER_X = 88
-LETTER_Y = 89
-LETTER_Z = 90
+LETTER_A:i32 := 65
+LETTER_B:i32 := 66
+LETTER_C:i32 := 67
+LETTER_D:i32 := 68
+LETTER_E:i32 := 69
+LETTER_F:i32 := 70
+LETTER_G:i32 := 71
+LETTER_I:i32 := 73
+LETTER_K:i32 := 75
+LETTER_L:i32 := 76
+LETTER_M:i32 := 77
+LETTER_N:i32 := 78
+LETTER_O:i32 := 79
+LETTER_P:i32 := 80
+LETTER_R:i32 := 82
+LETTER_S:i32 := 83
+LETTER_T:i32 := 84
+LETTER_U:i32 := 85
+LETTER_X:i32 := 88
+LETTER_Y:i32 := 89
+LETTER_Z:i32 := 90
 
 // Operation codes for packed script reconstruction.
-EDIT_OP_MATCH = 0
-EDIT_OP_SUBSTITUTE = 1
-EDIT_OP_INSERT = 2
-EDIT_OP_DELETE = 3
+EDIT_OP_MATCH:i32 := 0
+EDIT_OP_SUBSTITUTE:i32 := 1
+EDIT_OP_INSERT:i32 := 2
+EDIT_OP_DELETE:i32 := 3
 
 fn edit_distance_naive_inner(seq_a, len_a: i32, seq_b, len_b: i32, i: i32, j: i32, depth: i32) -> i32:
     EDIT_NAIVE_CALLS = EDIT_NAIVE_CALLS + 1

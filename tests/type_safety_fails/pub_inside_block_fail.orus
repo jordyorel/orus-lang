@@ -2,4 +2,4 @@
 // block should surface a parse error.
 
 fn main():
-    pub COUNTER = 1
+    pub VALUE:i32 := 1

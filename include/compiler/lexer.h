@@ -80,6 +80,7 @@ typedef enum {
     TOKEN_MATCH,
     TOKEN_MATCHES,
     TOKEN_PUB,
+    TOKEN_DEFINE,
 
     // Bitwise operators
     TOKEN_BIT_AND,

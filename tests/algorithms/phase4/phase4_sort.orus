@@ -234,13 +234,13 @@ fn assert_prop(ok: bool, name, algo):
         print("ok", algo, name)
 
 // ---------- Algorithm registry ----------
-ALG_INSERTION = 1
-ALG_BUBBLE    = 2
-ALG_QUICK     = 3
-ALG_HEAP      = 4
-ALG_MERGE     = 5
-ALG_COUNTING  = 6
-ALG_ORACLE    = 7    // reference; also used as differential oracle
+ALG_INSERTION:i32 := 1
+ALG_BUBBLE:i32    := 2
+ALG_QUICK:i32     := 3
+ALG_HEAP:i32      := 4
+ALG_MERGE:i32     := 5
+ALG_COUNTING:i32  := 6
+ALG_ORACLE:i32    := 7    // reference; also used as differential oracle
 
 fn apply_sort(algo_id: i32, label, xs):
     // Always pass a copy so in-place algos don't mutate test fixtures
@@ -344,8 +344,8 @@ fn run_props_for(algo_name, algo_id: i32, random_trials: i32, seed: i32):
         t = t + 1
 
 // ---------- Main ----------
-RANDOM_TRIALS = 100
-ORACLE_TRIALS = 50
+RANDOM_TRIALS:i32 := 100
+ORACLE_TRIALS:i32 := 50
 
 fn run_suite_for_seed(seed: i32):
     print("== Running property suite (seed", seed, ") ==")

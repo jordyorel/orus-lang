@@ -9,16 +9,16 @@ mut LCS_NAIVE_MAX_DEPTH = 0
 mut LCS_NAIVE_BRANCH_SPLITS = 0
 
 // Symbol codes for character sequences (ASCII values for readability).
-LETTER_A = 65
-LETTER_B = 66
-LETTER_C = 67
-LETTER_D = 68
-LETTER_F = 70
-LETTER_G = 71
-LETTER_T = 84
-LETTER_X = 88
-LETTER_Y = 89
-LETTER_Z = 90
+LETTER_A:i32 := 65
+LETTER_B:i32 := 66
+LETTER_C:i32 := 67
+LETTER_D:i32 := 68
+LETTER_F:i32 := 70
+LETTER_G:i32 := 71
+LETTER_T:i32 := 84
+LETTER_X:i32 := 88
+LETTER_Y:i32 := 89
+LETTER_Z:i32 := 90
 
 fn lcs_naive_inner(seq_a, len_a: i32, seq_b, len_b: i32, i: i32, j: i32, depth: i32) -> i32:
     LCS_NAIVE_CALLS = LCS_NAIVE_CALLS + 1

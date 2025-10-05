@@ -1,4 +1,4 @@
-// Redeclaring a module-scope binding should surface a compile-time error.
+// Lowercase constant identifiers are rejected because module-level constants
+// must use SCREAMING_SNAKE_CASE naming.
 
-mut counter: i32 = 1
-mut counter: i32 = 2
+counter:i32 := 1

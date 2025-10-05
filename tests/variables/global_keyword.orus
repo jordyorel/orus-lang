@@ -1,8 +1,8 @@
-// Module-scope bindings should allocate module-level storage
-// and allow public exports when combined with `pub`.
+// Module-level bindings allocate module storage automatically.
+// Constants use ':=' and optional `pub` for exports.
 
-pub REGISTER: i32 = 256
-mut COUNTER = 1
+pub REGISTER:i32 := 256
+mut COUNTER: i32 = 1
 
 fn bump():
     COUNTER = COUNTER + 1

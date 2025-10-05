@@ -254,13 +254,13 @@ fn assert_prop(ok: bool, name, algo):
         print("ok", algo, name)
 
 // ---------- Algorithm registry ----------
-ALG_INSERTION = 1
-ALG_BUBBLE    = 2
-ALG_QUICK     = 3
-ALG_HEAP      = 4
-ALG_MERGE     = 5
-ALG_COUNTING  = 6
-ALG_ORACLE    = 7    // reference; also used as differential oracle
+ALG_INSERTION:i32 := 1
+ALG_BUBBLE:i32    := 2
+ALG_QUICK:i32     := 3
+ALG_HEAP:i32      := 4
+ALG_MERGE:i32     := 5
+ALG_COUNTING:i32  := 6
+ALG_ORACLE:i32    := 7    // reference; also used as differential oracle
 
 fn apply_sort(algo_id: i32, label, xs):
     // Always pass a copy so in-place algos don't mutate test fixtures
@@ -345,10 +345,10 @@ fn fixed_cases():
     return cases
 
 // ---------- Configuration ----------
-RANDOM_TRIALS = 1     // 500-1000
-ORACLE_TRIALS = 1   // 250
-RANDOM_MAX_LEN = 10 // 1000
-SLOW_MAX_LEN = 1    //128
+RANDOM_TRIALS:i32  := 1     // 500-1000
+ORACLE_TRIALS:i32  := 1   // 250
+RANDOM_MAX_LEN:i32 := 10 // 1000
+SLOW_MAX_LEN:i32   := 1    //128
 
 fn max_len_for(algo_id: i32) -> i32:
     if algo_id == ALG_INSERTION: return SLOW_MAX_LEN

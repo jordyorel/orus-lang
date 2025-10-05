@@ -4,9 +4,9 @@
 print("== Phase 3: Sudoku Solver Stress ==")
 
 // === Grid constants ===
-SUDOKU_SIZE: i32 = 9
-SUDOKU_BLOCK: i32 = 3
-SUDOKU_CELL_COUNT: i32 = 81
+SUDOKU_SIZE:i32 := 9
+SUDOKU_BLOCK:i32 := 3
+SUDOKU_CELL_COUNT:i32 := 81
 
 // === Metrics captured during solving ===
 mut SUDOKU_CALLS = 0

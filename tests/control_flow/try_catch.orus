@@ -64,9 +64,9 @@ try:
         inner_rethrow_attempted = true
         assert_eq("inner failure", 5, 6)
     catch err:
-        print("inner catch, escalating")
+        print("inner catch, raising new failure")
         inner_rethrow_catch_hit = true
-        fail_in_function()
+        temp = int("bad-number")
 catch outer:
     print("outer caught escalated failure")
     print(outer)

@@ -75,11 +75,10 @@ print("Welcome to", name, "version", version)
 // Multiple values
 print("Values:", 1, 2, 3, "done")
 
-// Print with newline (default) and without
+// Print with newline (default)
 print("Line 1")
 print("Line 2")
-print_no_newline("Same line: ")
-print("continues here")
+print("Same line, explicit formatting")
 ```
 
 **Implementation Requirements:**
@@ -772,7 +771,7 @@ The error reporting system should combine Rust's precision with Elm's empathy, p
 - [ ] **TODO**: Duplicate variable declarations - Currently disabled due to architectural limitations where all variables are globals, causing false positives in loop contexts
 - [ ] **TODO**: Use before initialization - Variables declared but used before being assigned a value
 - [ ] **TODO**: Out-of-scope access - Using variables outside their declared scope (partially works, needs refinement)
-- [ ] **TODO**: Const variable reassignment - When Orus adds const variables
+- [x] **DONE**: Constant declarations enforce immutability via `:=`
 - [ ] **TODO**: Advanced scope violations - Complex nested scope edge cases and lifetime management
 - [ ] **TODO**: Variable lifetime issues - Using variables after they should be destroyed or go out of scope
 
@@ -780,7 +779,7 @@ The error reporting system should combine Rust's precision with Elm's empathy, p
 - [ ] Implement proper local variable architecture (currently all variables are globals)
 - [ ] Add variable initialization tracking in compiler
 - [ ] Enhance scope analysis for complex nested contexts
-- [ ] Add const variable support to language
+- [x] Implemented module-scope constant declarations with `:=`
 - [ ] Implement variable lifetime analysis
 - [ ] Add more sophisticated scope violation detection
 
