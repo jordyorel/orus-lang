@@ -34,17 +34,19 @@ typedef struct MultiPassRegisterAllocator {
     int temp_stack_top;
 } MultiPassRegisterAllocator;
 
+typedef struct RegisterBank {
+    RegisterBankKind kind;
+    RegisterType physical_type;
+    const char* name;
+    bool regs[256];
+} RegisterBank;
+
 typedef struct DualRegisterAllocator {
     MultiPassRegisterAllocator* legacy_allocator;
 
     bool standard_regs[256];
 
-    bool typed_i32_regs[256];
-    bool typed_i64_regs[256];
-    bool typed_f64_regs[256];
-    bool typed_u32_regs[256];
-    bool typed_u64_regs[256];
-    bool typed_bool_regs[256];
+    RegisterBank banks[REG_BANK_COUNT];
 
     RegisterAllocation allocations[256];
     int allocation_count;
@@ -52,6 +54,21 @@ typedef struct DualRegisterAllocator {
     int arithmetic_operation_count;
     bool prefer_typed_registers;
 } DualRegisterAllocator;
+
+typedef struct RegisterBankDefinition {
+    RegisterBankKind kind;
+    RegisterType type;
+    const char* name;
+} RegisterBankDefinition;
+
+static const RegisterBankDefinition REGISTER_BANK_DEFINITIONS[REG_BANK_COUNT] = {
+    [REG_BANK_TYPED_I32] = {REG_BANK_TYPED_I32, REG_TYPE_I32, "i32"},
+    [REG_BANK_TYPED_I64] = {REG_BANK_TYPED_I64, REG_TYPE_I64, "i64"},
+    [REG_BANK_TYPED_F64] = {REG_BANK_TYPED_F64, REG_TYPE_F64, "f64"},
+    [REG_BANK_TYPED_U32] = {REG_BANK_TYPED_U32, REG_TYPE_U32, "u32"},
+    [REG_BANK_TYPED_U64] = {REG_BANK_TYPED_U64, REG_TYPE_U64, "u64"},
+    [REG_BANK_TYPED_BOOL] = {REG_BANK_TYPED_BOOL, REG_TYPE_BOOL, "bool"},
+};
 
 // Logging helpers scoped to the register allocator implementation
 #ifndef REGISTER_ALLOCATOR_DEBUG
@@ -74,6 +91,14 @@ static bool mp_has_typed_residency_hint(const MultiPassRegisterAllocator* alloca
 static RegisterAllocation* allocate_standard_register(DualRegisterAllocator* allocator,
                                                       RegisterType type,
                                                       int scope_preference);
+static void init_register_banks(DualRegisterAllocator* allocator);
+static RegisterBank* get_register_bank(DualRegisterAllocator* allocator, RegisterBankKind kind);
+static RegisterBank* find_bank_for_type(DualRegisterAllocator* allocator, RegisterType type);
+static int allocate_physical_from_bank(RegisterBank* bank);
+static void free_physical_from_bank(RegisterBank* bank, int physical_id);
+static RegisterAllocation* allocate_register_from_bank(DualRegisterAllocator* allocator,
+                                                       RegisterBankKind kind);
+static RegisterBankKind register_bank_kind_from_type(RegisterType type);
 
 // ====== DUAL REGISTER SYSTEM IMPLEMENTATION ======
 
@@ -430,14 +455,9 @@ DualRegisterAllocator* init_dual_register_allocator(void) {
     
     // Initialize standard register tracking (R0-R255)
     memset(allocator->standard_regs, false, sizeof(allocator->standard_regs));
-    
-    // Initialize typed register tracking (R0-R255 per type)
-    memset(allocator->typed_i32_regs, false, sizeof(allocator->typed_i32_regs));
-    memset(allocator->typed_i64_regs, false, sizeof(allocator->typed_i64_regs));
-    memset(allocator->typed_f64_regs, false, sizeof(allocator->typed_f64_regs));
-    memset(allocator->typed_u32_regs, false, sizeof(allocator->typed_u32_regs));
-    memset(allocator->typed_u64_regs, false, sizeof(allocator->typed_u64_regs));
-    memset(allocator->typed_bool_regs, false, sizeof(allocator->typed_bool_regs));
+
+    // Initialize typed register banks
+    init_register_banks(allocator);
     
     // Initialize allocation tracking
     memset(allocator->allocations, 0, sizeof(allocator->allocations));
@@ -453,67 +473,139 @@ DualRegisterAllocator* init_dual_register_allocator(void) {
 
 void free_dual_register_allocator(DualRegisterAllocator* allocator) {
     if (!allocator) return;
-    
+
     free_mp_register_allocator(allocator->legacy_allocator);
     free(allocator);
 }
 
-// Helper function to check if a register type is numeric and benefits from typed registers
-static bool is_numeric_type_for_typed_regs(RegisterType type) {
-    return (type == REG_TYPE_I32 || type == REG_TYPE_I64 || 
-            type == REG_TYPE_F64 || type == REG_TYPE_U32 || 
-            type == REG_TYPE_U64 || type == REG_TYPE_BOOL);
+static void init_register_banks(DualRegisterAllocator* allocator) {
+    if (!allocator) {
+        return;
+    }
+
+    for (int i = 0; i < REG_BANK_COUNT; i++) {
+        const RegisterBankDefinition* def = &REGISTER_BANK_DEFINITIONS[i];
+        RegisterBank* bank = &allocator->banks[i];
+        bank->kind = def->kind;
+        bank->physical_type = def->type;
+        bank->name = def->name;
+        memset(bank->regs, 0, sizeof(bank->regs));
+    }
 }
 
-// Helper function to get next available typed register for a specific type
-static int find_free_typed_register(DualRegisterAllocator* allocator, RegisterType type) {
-    bool* regs = NULL;
-    
-    switch (type) {
-        case REG_TYPE_I32:  regs = allocator->typed_i32_regs;  break;
-        case REG_TYPE_I64:  regs = allocator->typed_i64_regs;  break;
-        case REG_TYPE_F64:  regs = allocator->typed_f64_regs;  break;
-        case REG_TYPE_U32:  regs = allocator->typed_u32_regs;  break;
-        case REG_TYPE_U64:  regs = allocator->typed_u64_regs;  break;
-        case REG_TYPE_BOOL: regs = allocator->typed_bool_regs; break;
-        default: return -1;
+static RegisterBank* get_register_bank(DualRegisterAllocator* allocator, RegisterBankKind kind) {
+    if (!allocator || kind < 0 || kind >= REG_BANK_COUNT) {
+        return NULL;
     }
-    
-    // Find first free register in the bank (R0-R255)
+    return &allocator->banks[kind];
+}
+
+static RegisterBank* find_bank_for_type(DualRegisterAllocator* allocator, RegisterType type) {
+    if (!allocator) {
+        return NULL;
+    }
+
+    for (int i = 0; i < REG_BANK_COUNT; i++) {
+        if (allocator->banks[i].physical_type == type) {
+            return &allocator->banks[i];
+        }
+    }
+    return NULL;
+}
+
+static RegisterBankKind register_bank_kind_from_type(RegisterType type) {
+    for (int i = 0; i < REG_BANK_COUNT; i++) {
+        if (REGISTER_BANK_DEFINITIONS[i].type == type) {
+            return REGISTER_BANK_DEFINITIONS[i].kind;
+        }
+    }
+    return REG_BANK_INVALID;
+}
+
+static int allocate_physical_from_bank(RegisterBank* bank) {
+    if (!bank) {
+        return -1;
+    }
+
     for (int i = 0; i < 256; i++) {
-        if (!regs[i]) {
-            regs[i] = true;
+        if (!bank->regs[i]) {
+            bank->regs[i] = true;
             return i;
         }
     }
-    
-    return -1;  // No free typed registers
+    return -1;
 }
 
-RegisterAllocation* allocate_typed_register(DualRegisterAllocator* allocator, RegisterType type) {
-    if (!allocator || !is_numeric_type_for_typed_regs(type)) return NULL;
-    
-    int physical_id = find_free_typed_register(allocator, type);
-    if (physical_id == -1) {
-        REGISTER_ALLOCATOR_WARN("[DUAL_REGISTER_ALLOCATOR] No free typed registers for type %d, falling back to standard\n", type);
-        return allocate_standard_register(allocator, type, MP_TEMP_REG_START);
+static void free_physical_from_bank(RegisterBank* bank, int physical_id) {
+    if (!bank) {
+        return;
     }
-    
-    // Create allocation record
-    if (allocator->allocation_count >= 256) {
-        REGISTER_ALLOCATOR_WARN("[DUAL_REGISTER_ALLOCATOR] Warning: Maximum allocations reached\n");
+
+    if (physical_id >= 0 && physical_id < 256) {
+        bank->regs[physical_id] = false;
+    }
+}
+
+static RegisterAllocation* allocate_register_from_bank(DualRegisterAllocator* allocator,
+                                                       RegisterBankKind kind) {
+    RegisterBank* bank = get_register_bank(allocator, kind);
+    if (!bank) {
         return NULL;
     }
-    
+
+    int physical_id = allocate_physical_from_bank(bank);
+    if (physical_id == -1) {
+        return NULL;
+    }
+
+    if (allocator->allocation_count >= 256) {
+        REGISTER_ALLOCATOR_WARN("[DUAL_REGISTER_ALLOCATOR] Warning: Maximum allocations reached\n");
+        free_physical_from_bank(bank, physical_id);
+        return NULL;
+    }
+
     RegisterAllocation* allocation = &allocator->allocations[allocator->allocation_count++];
-    allocation->logical_id = -1;  // Not applicable for typed registers
-    allocation->physical_type = type;
+    allocation->logical_id = -1;
+    allocation->physical_type = bank->physical_type;
     allocation->physical_id = physical_id;
     allocation->strategy = REG_STRATEGY_TYPED;
     allocation->is_active = true;
-    
-    REGISTER_ALLOCATOR_LOG("[DUAL_REGISTER_ALLOCATOR] Allocated typed register: type=%d, physical_id=%d\n", type, physical_id);
+
+    REGISTER_ALLOCATOR_LOG(
+        "[DUAL_REGISTER_ALLOCATOR] Allocated typed register bank=%s (type=%d) physical_id=%d\n",
+        bank->name,
+        bank->physical_type,
+        physical_id);
+
     return allocation;
+}
+
+// Helper function to check if a register type is numeric and benefits from typed registers
+static bool is_numeric_type_for_typed_regs(RegisterType type) {
+    return register_bank_kind_from_type(type) != REG_BANK_INVALID;
+}
+
+static RegisterAllocation* allocate_typed_register(DualRegisterAllocator* allocator,
+                                                   RegisterBankKind bank_kind) {
+    if (!allocator) {
+        return NULL;
+    }
+
+    RegisterBank* bank = get_register_bank(allocator, bank_kind);
+    if (!bank) {
+        return NULL;
+    }
+
+    RegisterAllocation* allocation = allocate_register_from_bank(allocator, bank_kind);
+    if (allocation) {
+        return allocation;
+    }
+
+    REGISTER_ALLOCATOR_WARN(
+        "[DUAL_REGISTER_ALLOCATOR] No free typed registers in bank %s (type=%d), falling back to standard\n",
+        bank->name,
+        bank->physical_type);
+    return allocate_standard_register(allocator, bank->physical_type, MP_TEMP_REG_START);
 }
 
 static RegisterAllocation* allocate_standard_register(DualRegisterAllocator* allocator,
@@ -571,16 +663,19 @@ RegisterAllocation* allocate_register_smart(DualRegisterAllocator* allocator, Re
     }
     
     // Smart decision: use typed registers for arithmetic-heavy numeric operations
-    if (is_arithmetic_hot_path && 
-        is_numeric_type_for_typed_regs(type) && 
+    if (is_arithmetic_hot_path &&
+        is_numeric_type_for_typed_regs(type) &&
         allocator->prefer_typed_registers) {
-        
-        RegisterAllocation* typed_alloc = allocate_typed_register(allocator, type);
-        if (typed_alloc) {
-            REGISTER_ALLOCATOR_LOG("[DUAL_REGISTER_ALLOCATOR] Smart allocation chose TYPED register for performance\n");
-            return typed_alloc;
+
+        RegisterBankKind bank_kind = register_bank_kind_from_type(type);
+        if (bank_kind != REG_BANK_INVALID) {
+            RegisterAllocation* typed_alloc = allocate_typed_register(allocator, bank_kind);
+            if (typed_alloc) {
+                REGISTER_ALLOCATOR_LOG("[DUAL_REGISTER_ALLOCATOR] Smart allocation chose TYPED register for performance\n");
+                return typed_alloc;
+            }
         }
-        
+
         // Fallback to standard if typed allocation failed
         REGISTER_ALLOCATOR_WARN("[DUAL_REGISTER_ALLOCATOR] Typed allocation failed, falling back to standard\n");
     }
@@ -600,23 +695,18 @@ void free_register_allocation(DualRegisterAllocator* allocator, RegisterAllocati
     if (!allocator || !allocation || !allocation->is_active) return;
     
     if (allocation->strategy == REG_STRATEGY_TYPED) {
-        // Free typed register
-        bool* regs = NULL;
-        
-        switch (allocation->physical_type) {
-            case REG_TYPE_I32:  regs = allocator->typed_i32_regs;  break;
-            case REG_TYPE_I64:  regs = allocator->typed_i64_regs;  break;
-            case REG_TYPE_F64:  regs = allocator->typed_f64_regs;  break;
-            case REG_TYPE_U32:  regs = allocator->typed_u32_regs;  break;
-            case REG_TYPE_U64:  regs = allocator->typed_u64_regs;  break;
-            case REG_TYPE_BOOL: regs = allocator->typed_bool_regs; break;
-            default: break;
-        }
-        
-        if (regs && allocation->physical_id >= 0 && allocation->physical_id < 256) {
-            regs[allocation->physical_id] = false;
-            REGISTER_ALLOCATOR_LOG("[DUAL_REGISTER_ALLOCATOR] Freed typed register: type=%d, physical_id=%d\n",
-                   allocation->physical_type, allocation->physical_id);
+        RegisterBank* bank = find_bank_for_type(allocator, allocation->physical_type);
+        if (bank) {
+            free_physical_from_bank(bank, allocation->physical_id);
+            REGISTER_ALLOCATOR_LOG(
+                "[DUAL_REGISTER_ALLOCATOR] Freed typed register bank=%s (type=%d) physical_id=%d\n",
+                bank->name,
+                allocation->physical_type,
+                allocation->physical_id);
+        } else {
+            REGISTER_ALLOCATOR_WARN(
+                "[DUAL_REGISTER_ALLOCATOR] Unable to locate bank for typed register type=%d\n",
+                allocation->physical_type);
         }
     } else if (allocation->strategy == REG_STRATEGY_STANDARD) {
         // Free standard register
@@ -773,9 +863,9 @@ const char* compiler_register_type_name(int reg) {
     return mp_register_type_name(reg);
 }
 
-RegisterAllocation* compiler_alloc_typed(DualRegisterAllocator* allocator, RegisterType type) {
+RegisterAllocation* compiler_alloc_typed(DualRegisterAllocator* allocator, RegisterBankKind bank_kind) {
     if (!allocator) return NULL;
-    return allocate_typed_register(allocator, type);
+    return allocate_typed_register(allocator, bank_kind);
 }
 
 RegisterAllocation* compiler_alloc_smart(DualRegisterAllocator* allocator,
