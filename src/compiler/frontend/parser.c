@@ -565,7 +565,8 @@ static ASTNode* parseStatement(ParserContext* ctx) {
             return NULL;
         }
 
-        if (peekToken(ctx).type == TOKEN_COLON) {
+        Token nextAfterName = peekToken(ctx);
+        if (nextAfterName.type == TOKEN_COLON || nextAfterName.type == TOKEN_DEFINE) {
             return parseVariableDeclaration(ctx, isMutable, true, nameTok);
         }
         return parseAssignOrVarList(ctx, isMutable, true, nameTok);
@@ -602,7 +603,7 @@ static ASTNode* parseStatement(ParserContext* ctx) {
     }
     if (t.type == TOKEN_IDENTIFIER) {
         Token second = peekSecondToken(ctx);
-        if (second.type == TOKEN_COLON) {
+        if (second.type == TOKEN_COLON || second.type == TOKEN_DEFINE) {
             nextToken(ctx);
             return parseVariableDeclaration(ctx, false, false, t);
         } else if (second.type == TOKEN_EQUAL) {
@@ -1766,8 +1767,16 @@ static ASTNode* parseVariableDeclaration(ParserContext* ctx, bool isMutable, boo
         if (!typeNode) return NULL;
     }
 
-    Token equalToken = nextToken(ctx);
-    if (equalToken.type != TOKEN_EQUAL) {
+    Token assignToken = nextToken(ctx);
+    bool usesDefine = (assignToken.type == TOKEN_DEFINE);
+    if (usesDefine) {
+        if (isMutable) {
+            SrcLocation location = {NULL, assignToken.line, assignToken.column};
+            report_compile_error(E1006_INVALID_SYNTAX, location,
+                                 "mutable bindings must use '='; ':=' declares an immutable constant");
+            return NULL;
+        }
+    } else if (assignToken.type != TOKEN_EQUAL) {
         return NULL;
     }
 
@@ -1898,6 +1907,18 @@ static ASTNode* parseVariableDeclaration(ParserContext* ctx, bool isMutable, boo
         SrcLocation location = {NULL, nameToken.line, nameToken.column};
         report_invalid_variable_name(location, name, reason);
         return NULL;
+    }
+
+    if (ctx->block_depth == 0 && !isMutable && usesDefine) {
+        if (!is_valid_constant_name(name)) {
+            const char* reason = get_constant_name_violation_reason(name);
+            if (!reason) {
+                reason = "module constants must use SCREAMING_SNAKE_CASE (uppercase letters, digits, and underscores)";
+            }
+            SrcLocation location = {NULL, nameToken.line, nameToken.column};
+            report_invalid_variable_name(location, name, reason);
+            return NULL;
+        }
     }
 
     varNode->varDecl.name = name;
@@ -2171,7 +2192,8 @@ static ASTNode* parseImportStatement(ParserContext* ctx) {
 
 static ASTNode* parseAssignOrVarList(ParserContext* ctx, bool isMutable, bool isPublic, Token nameToken) {
     Token opToken = nextToken(ctx);
-    
+    bool usesDefine = (opToken.type == TOKEN_DEFINE);
+
     // Handle compound assignments (+=, -=, *=, /=, %=)
     if (opToken.type == TOKEN_PLUS_EQUAL || opToken.type == TOKEN_MINUS_EQUAL ||
         opToken.type == TOKEN_STAR_EQUAL || opToken.type == TOKEN_SLASH_EQUAL ||
@@ -2253,13 +2275,22 @@ static ASTNode* parseAssignOrVarList(ParserContext* ctx, bool isMutable, bool is
     }
     
     // Regular assignment
-    if (opToken.type != TOKEN_EQUAL) return NULL;
+    if (usesDefine) {
+        if (isMutable) {
+            SrcLocation location = {NULL, opToken.line, opToken.column};
+            report_compile_error(E1006_INVALID_SYNTAX, location,
+                                 "mutable bindings must use '='; ':=' declares an immutable constant");
+            return NULL;
+        }
+    } else if (opToken.type != TOKEN_EQUAL) {
+        return NULL;
+    }
     ASTNode* initializer = parseExpression(ctx);
     if (!initializer) return NULL;
 
     // For multiple variable declarations separated by commas,
     // only parse the first one and let the main parser handle the rest
-    if (peekToken(ctx).type != TOKEN_COMMA && !isMutable) {
+    if (!usesDefine && peekToken(ctx).type != TOKEN_COMMA && !isMutable) {
         // Regular assignment
         ASTNode* node = new_node(ctx);
         node->type = NODE_ASSIGN;

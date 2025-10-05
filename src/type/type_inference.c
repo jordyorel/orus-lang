@@ -20,6 +20,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
+#include <stdint.h>
 #include "internal/strutil.h"
 
 #include "compiler/ast.h"
@@ -656,6 +657,27 @@ static void type_env_define(TypeEnv* env, const char* name,
     entry->scheme = scheme;
     entry->next = env->entries;
     env->entries = entry;
+}
+
+static void type_env_define_const_int(TypeEnv* env, const char* name, int value) {
+    if (!env || !name) {
+        return;
+    }
+
+    ConstIntEntry* entry = type_arena_alloc(sizeof(ConstIntEntry));
+    if (!entry) {
+        return;
+    }
+
+    size_t len = strlen(name);
+    entry->name = type_arena_alloc(len + 1);
+    if (!entry->name) {
+        return;
+    }
+    memcpy(entry->name, name, len + 1);
+    entry->value = value;
+    entry->next = env->const_ints;
+    env->const_ints = entry;
 }
 
 static TypeScheme* type_env_lookup(TypeEnv* env, const char* name) {
@@ -2069,6 +2091,42 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                 }
                 if (scheme) {
                     type_env_define(env, node->varDecl.name, scheme);
+                    if (!node->varDecl.isMutable && node->varDecl.name &&
+                        node->varDecl.initializer &&
+                        node->varDecl.initializer->type == NODE_LITERAL) {
+                        Value literal = node->varDecl.initializer->literal.value;
+                        int const_value = 0;
+                        bool record_const = false;
+                        switch (literal.type) {
+                            case VAL_I32:
+                                const_value = AS_I32(literal);
+                                record_const = true;
+                                break;
+                            case VAL_I64:
+                                if (AS_I64(literal) >= INT_MIN && AS_I64(literal) <= INT_MAX) {
+                                    const_value = (int)AS_I64(literal);
+                                    record_const = true;
+                                }
+                                break;
+                            case VAL_U32:
+                                if (AS_U32(literal) <= (uint32_t)INT_MAX) {
+                                    const_value = (int)AS_U32(literal);
+                                    record_const = true;
+                                }
+                                break;
+                            case VAL_U64:
+                                if (AS_U64(literal) <= (uint64_t)INT_MAX) {
+                                    const_value = (int)AS_U64(literal);
+                                    record_const = true;
+                                }
+                                break;
+                            default:
+                                break;
+                        }
+                        if (record_const) {
+                            type_env_define_const_int(env, node->varDecl.name, const_value);
+                        }
+                    }
                 }
             }
 
