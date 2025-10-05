@@ -15,6 +15,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <inttypes.h>
 
 // Auto-detect computed goto support
@@ -79,6 +80,9 @@ void runtimeError(ErrorType type, SrcLocation location,
 static bool collect_module_imports(ASTNode* ast, char*** out_names, int* out_count);
 static void free_module_imports(char** names, int count);
 static bool load_module_list(const char* current_path, char** module_names, int module_count);
+static bool has_orus_suffix(const char* text, size_t length);
+static char* infer_module_name_from_path(const char* path);
+static char* build_module_path(const char* base_path, const char* module_name);
 
 
 // Value operations
@@ -362,8 +366,10 @@ InterpretResult interpret(const char* source) {
     Compiler compiler;
     initCompiler(&compiler, &chunk, "<repl>", source);
 
+    char* module_name = infer_module_name_from_path(vm.filePath);
+
     // Parse the source into an AST
-    ASTNode* ast = parseSource(source);
+    ASTNode* ast = parseSourceWithModuleName(source, module_name);
     // fflush(stdout);
 
     if (!ast) {
@@ -401,7 +407,7 @@ InterpretResult interpret(const char* source) {
         free_module_imports(import_names, import_count);
         import_names = NULL;
 
-        ast = parseSource(source);
+        ast = parseSourceWithModuleName(source, module_name);
         if (!ast) {
             goto cleanup;
         }
@@ -492,6 +498,7 @@ cleanup:
     if (ast) {
         freeAST(ast);
     }
+    free(module_name);
     freeCompiler(&compiler);
     freeChunk(&chunk);
 
@@ -591,47 +598,128 @@ static void popLoadingModule(const char* path) {
     }
 }
 
-static char* build_module_path(const char* base_path, const char* module_name) {
-    if (!module_name) {
+static bool has_orus_suffix(const char* text, size_t length) {
+    const char* suffix = ".orus";
+    size_t suffix_len = 5;  // strlen(".orus")
+    if (!text || length < suffix_len) {
+        return false;
+    }
+
+    const char* start = text + length - suffix_len;
+    for (size_t i = 0; i < suffix_len; ++i) {
+        if (tolower((unsigned char)start[i]) != suffix[i]) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static char* infer_module_name_from_path(const char* path) {
+    if (!path) {
         return NULL;
     }
 
-    size_t module_len = strlen(module_name);
-    const char* forward = strrchr(base_path, '/');
-    const char* backward = strrchr(base_path, '\\');
-    const char* sep = forward;
-    if (backward && (!sep || backward > sep)) {
-        sep = backward;
+    const char* start = path;
+
+    // Skip leading drive letters like C:/
+    if (isalpha((unsigned char)start[0]) && start[1] == ':' &&
+        (start[2] == '\\' || start[2] == '/')) {
+        start += 3;
     }
 
-    size_t dir_len = sep ? (size_t)(sep - base_path + 1) : 0;
-    const char* suffix = ".orus";
-    size_t suffix_len = strlen(suffix);
-    bool has_extension = module_len >= suffix_len && strcmp(module_name + module_len - suffix_len, suffix) == 0;
-    size_t total = dir_len + module_len + (has_extension ? 1 : suffix_len + 1);
-    char* result = (char*)malloc(total);
+    // Skip leading ./ or .\ segments
+    while (start[0] == '.' && (start[1] == '/' || start[1] == '\\')) {
+        start += 2;
+    }
+
+    // Skip remaining leading separators
+    while (*start == '/' || *start == '\\') {
+        start++;
+    }
+
+    if (*start == '\0') {
+        return NULL;
+    }
+
+    size_t length = strlen(start);
+    if (!has_orus_suffix(start, length)) {
+        return NULL;
+    }
+
+    size_t base_length = length - 5;  // Remove ".orus"
+
+    if (base_length == 0) {
+        return NULL;
+    }
+
+    char* result = (char*)malloc(base_length + 1);
     if (!result) {
         return NULL;
     }
 
-    if (dir_len > 0) {
-        memcpy(result, base_path, dir_len);
-    }
-    size_t base_len = has_extension ? module_len - suffix_len : module_len;
-    for (size_t i = 0; i < base_len; i++) {
-        char ch = module_name[i];
-        if (ch == '.') {
-            result[dir_len + i] = '/';
+    size_t out_index = 0;
+    for (size_t i = 0; i < base_length; ++i) {
+        char ch = start[i];
+        if (ch == '/' || ch == '\\') {
+            if (out_index == 0 || result[out_index - 1] == '.') {
+                continue;  // Avoid leading or duplicate separators
+            }
+            result[out_index++] = '.';
         } else {
-            result[dir_len + i] = ch;
+            result[out_index++] = ch;
+        }
+    }
+
+    while (out_index > 0 && result[out_index - 1] == '.') {
+        out_index--;
+    }
+
+    if (out_index == 0) {
+        free(result);
+        return NULL;
+    }
+
+    result[out_index] = '\0';
+    return result;
+}
+
+static char* build_module_path(const char* base_path, const char* module_name) {
+    (void)base_path;
+    if (!module_name) {
+        return NULL;
+    }
+
+    size_t name_len = strlen(module_name);
+    const char* suffix = ".orus";
+    size_t suffix_len = 5;  // strlen(".orus")
+    bool has_extension = has_orus_suffix(module_name, name_len);
+    size_t base_len = has_extension ? name_len - suffix_len : name_len;
+    size_t total_len = has_extension ? name_len + 1 : base_len + suffix_len + 1;
+
+    char* result = (char*)malloc(total_len);
+    if (!result) {
+        return NULL;
+    }
+
+    size_t out_index = 0;
+    for (size_t i = 0; i < base_len; ++i) {
+        char ch = module_name[i];
+        if (ch == '.' || ch == '/' || ch == '\\') {
+            if (out_index == 0 || result[out_index - 1] == '/') {
+                continue;
+            }
+            result[out_index++] = '/';
+        } else {
+            result[out_index++] = ch;
         }
     }
 
     if (has_extension) {
-        memcpy(result + dir_len + base_len, module_name + base_len, suffix_len + 1);
+        memcpy(result + out_index, module_name + base_len, suffix_len + 1);
     } else {
-        memcpy(result + dir_len + base_len, suffix, suffix_len + 1);
+        memcpy(result + out_index, suffix, suffix_len + 1);
     }
+
     return result;
 }
 
@@ -747,15 +835,15 @@ InterpretResult interpret_module(const char* path) {
     // Create a chunk for the compiled bytecode
     initChunk(&chunk);
     chunk_initialized = true;
-    
-    // Extract module name from path (filename without extension)
+
+    // Extract file name for diagnostics
     const char* fileName = strrchr(path, '/');
     if (!fileName) fileName = strrchr(path, '\\'); // Windows path separator
     if (!fileName) fileName = path;
     else fileName++; // Skip the separator
 
-    module_name = NULL;
-    if (fileName) {
+    module_name = infer_module_name_from_path(path);
+    if (!module_name && fileName) {
         size_t name_len = strlen(fileName);
         module_name = (char*)malloc(name_len + 1);
         if (module_name) {
@@ -772,7 +860,7 @@ InterpretResult interpret_module(const char* path) {
     compiler_initialized = true;
 
     // Parse the module source into an AST
-    ast = parseSource(source);
+    ast = parseSourceWithModuleName(source, module_name);
 
     if (!ast) {
         fprintf(stderr, "Failed to parse module: %s\n", path);
@@ -797,7 +885,7 @@ InterpretResult interpret_module(const char* path) {
         free_module_imports(module_imports, module_import_count);
         module_imports = NULL;
 
-        ast = parseSource(source);
+        ast = parseSourceWithModuleName(source, module_name);
         if (!ast) {
             fprintf(stderr, "Failed to parse module: %s\n", path);
             goto cleanup;
@@ -805,15 +893,6 @@ InterpretResult interpret_module(const char* path) {
     } else {
         free_module_imports(module_imports, module_import_count);
         module_imports = NULL;
-    }
-
-    if (ast && ast->type == NODE_PROGRAM && ast->program.moduleName) {
-        free(module_name);
-        module_name = strdup(ast->program.moduleName);
-        if (!module_name) {
-            fprintf(stderr, "Failed to allocate module name for: %s\n", path);
-            goto cleanup;
-        }
     }
 
     if (!compileProgram(ast, &compiler, true)) {

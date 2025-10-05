@@ -296,12 +296,11 @@ fn fibonacci(n: i32) -> i32:
 ### Modular Code
 ```orus
 // Module-level organization
-module math:
-    mut PI = 3.14159;     // ✅ Module register
-    
-    fn calculate_area(r: f64) -> f64:
-        mut area = PI * r * r;  // ✅ Frame register
-        return area;
+pub global mut PI = 3.14159;     // ✅ Module register
+
+fn calculate_area(r: f64) -> f64:
+    mut area = PI * r * r;  // ✅ Frame register
+    return area;
 ```
 
 ## Risk Assessment

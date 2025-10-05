@@ -1,0 +1,8 @@
+use tests.modules.math_module
+
+print("namespace bump:", math_module.bump())
+print("namespace PI + 0:", math_module.PI + 0)
+
+use tests.modules.math_module as mm
+print("alias bump:", mm.bump())
+print("alias PI + 0:", mm.PI + 0)

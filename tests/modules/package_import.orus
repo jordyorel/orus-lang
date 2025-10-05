@@ -1,4 +1,4 @@
-use pkg.stats: add, sum_three, ZERO
+use tests.modules.pkg.stats: add, sum_three, ZERO
 
 pair_sum = add(4, 5)
 triple_sum = sum_three(ZERO, pair_sum, 6)

@@ -524,11 +524,18 @@ typedef struct ConstIntEntry {
     struct ConstIntEntry* next;
 } ConstIntEntry;
 
+typedef struct ModuleAliasEntry {
+    char* alias;
+    char* module_name;
+    struct ModuleAliasEntry* next;
+} ModuleAliasEntry;
+
 typedef struct TypeEnv {
     TypeEnvEntry* entries;
     struct TypeEnv* parent;
     Type* expected_return_type;
     ConstIntEntry* const_ints;
+    ModuleAliasEntry* module_aliases;
 } TypeEnv;
 
 TypeEnv* type_env_new(TypeEnv* parent) {
@@ -538,11 +545,92 @@ TypeEnv* type_env_new(TypeEnv* parent) {
     env->parent = parent;
     env->expected_return_type = parent ? parent->expected_return_type : NULL;
     env->const_ints = NULL;
+    env->module_aliases = NULL;
     if (!parent) {
         register_builtin_functions(env);
         register_builtin_enums();
     }
     return env;
+}
+
+static void type_env_define_module_alias(TypeEnv* env, const char* alias, const char* module_name) {
+    if (!env || !alias || !module_name) {
+        return;
+    }
+
+    ModuleAliasEntry* entry = type_arena_alloc(sizeof(ModuleAliasEntry));
+    if (!entry) {
+        return;
+    }
+
+    size_t alias_len = strlen(alias);
+    entry->alias = type_arena_alloc(alias_len + 1);
+    if (!entry->alias) {
+        return;
+    }
+    memcpy(entry->alias, alias, alias_len + 1);
+
+    size_t module_len = strlen(module_name);
+    entry->module_name = type_arena_alloc(module_len + 1);
+    if (!entry->module_name) {
+        return;
+    }
+    memcpy(entry->module_name, module_name, module_len + 1);
+
+    entry->next = env->module_aliases;
+    env->module_aliases = entry;
+}
+
+static const char* type_env_lookup_module_alias(TypeEnv* env, const char* alias) {
+    if (!env || !alias) {
+        return NULL;
+    }
+
+    for (TypeEnv* current = env; current; current = current->parent) {
+        ModuleAliasEntry* entry = current->module_aliases;
+        while (entry) {
+            if (strcmp(entry->alias, alias) == 0) {
+                return entry->module_name;
+            }
+            entry = entry->next;
+        }
+    }
+
+    return NULL;
+}
+
+static const char* derive_default_module_alias(TypeEnv* env, const char* module_name) {
+    if (!env || !module_name) {
+        return NULL;
+    }
+
+    const char* last_dot = strrchr(module_name, '.');
+    const char* last_slash = strrchr(module_name, '/');
+    const char* last_backslash = strrchr(module_name, '\\');
+    const char* last_sep = last_dot;
+    if (last_slash && (!last_sep || last_slash > last_sep)) {
+        last_sep = last_slash;
+    }
+    if (last_backslash && (!last_sep || last_backslash > last_sep)) {
+        last_sep = last_backslash;
+    }
+
+    const char* alias_start = last_sep ? last_sep + 1 : module_name;
+    if (!alias_start || *alias_start == '\0') {
+        alias_start = module_name;
+    }
+
+    size_t alias_len = strlen(alias_start);
+    if (alias_len == 0) {
+        return NULL;
+    }
+
+    char* alias = type_arena_alloc(alias_len + 1);
+    if (!alias) {
+        return NULL;
+    }
+    memcpy(alias, alias_start, alias_len + 1);
+    return alias;
 }
 
 static Type* type_env_get_expected_return(TypeEnv* env) {
@@ -1362,9 +1450,61 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                 return NULL;
             }
 
-            Type* struct_type = findStructType(node->structLiteral.structName);
+            const char* struct_name = node->structLiteral.structName;
+            const char* module_alias = node->structLiteral.moduleAlias;
+            node->structLiteral.resolvedModuleName = NULL;
+
+            Type* struct_type = NULL;
+            if (module_alias) {
+                const char* module_name = type_env_lookup_module_alias(env, module_alias);
+                if (!module_name) {
+                    report_compile_error(E3004_IMPORT_FAILED, node->location,
+                                         "module alias '%s' is not defined", module_alias);
+                    set_type_error();
+                    return NULL;
+                }
+
+                ModuleManager* manager = vm.register_file.module_manager;
+                if (!manager) {
+                    report_compile_error(E3004_IMPORT_FAILED, node->location,
+                                         "module manager is not initialized");
+                    set_type_error();
+                    return NULL;
+                }
+
+                ModuleExportKind kind = MODULE_EXPORT_KIND_GLOBAL;
+                uint16_t register_index = MODULE_EXPORT_NO_REGISTER;
+                Type* exported_type = NULL;
+
+                if (!module_manager_resolve_export(manager, module_name, struct_name, &kind,
+                                                   &register_index, &exported_type)) {
+                    report_compile_error(E3004_IMPORT_FAILED, node->location,
+                                         "module '%s' does not export '%s'", module_name,
+                                         struct_name);
+                    set_type_error();
+                    return NULL;
+                }
+
+                if (kind != MODULE_EXPORT_KIND_STRUCT) {
+                    report_compile_error(E3004_IMPORT_FAILED, node->location,
+                                         "module '%s' export '%s' is not a struct", module_name,
+                                         struct_name);
+                    set_type_error();
+                    return NULL;
+                }
+
+                if (exported_type) {
+                    struct_type = exported_type;
+                }
+                node->structLiteral.resolvedModuleName = module_name;
+            }
+
             if (!struct_type) {
-                report_undefined_type(node->location, node->structLiteral.structName);
+                struct_type = findStructType(struct_name);
+            }
+
+            if (!struct_type) {
+                report_undefined_type(node->location, struct_name);
                 set_type_error();
                 return NULL;
             }
@@ -1492,6 +1632,71 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             node->member.enumVariantIndex = -1;
             node->member.enumVariantArity = 0;
             node->member.enumTypeName = NULL;
+            node->member.resolvesToModule = false;
+            node->member.moduleName = NULL;
+            node->member.moduleAliasBinding = NULL;
+            node->member.moduleExportKind = MODULE_EXPORT_KIND_GLOBAL;
+            node->member.moduleRegisterIndex = MODULE_EXPORT_NO_REGISTER;
+            if (node->member.object && node->member.object->type == NODE_IDENTIFIER) {
+                const char* module_name = type_env_lookup_module_alias(env, node->member.object->identifier.name);
+                if (module_name) {
+                    ModuleManager* manager = vm.register_file.module_manager;
+                    if (!manager) {
+                        report_compile_error(E3004_IMPORT_FAILED, node->location,
+                                             "module manager is not initialized");
+                        set_type_error();
+                        return getPrimitiveType(TYPE_UNKNOWN);
+                    }
+
+                    ModuleExportKind kind = MODULE_EXPORT_KIND_GLOBAL;
+                    uint16_t register_index = MODULE_EXPORT_NO_REGISTER;
+                    Type* exported_type = NULL;
+                    if (!module_manager_resolve_export(manager, module_name, node->member.member,
+                                                       &kind, &register_index, &exported_type)) {
+                        report_compile_error(E3004_IMPORT_FAILED, node->location,
+                                             "module '%s' does not export '%s'", module_name,
+                                             node->member.member ? node->member.member : "<unknown>");
+                        set_type_error();
+                        return getPrimitiveType(TYPE_UNKNOWN);
+                    }
+
+                    node->member.resolvesToModule = true;
+                    node->member.moduleName = module_name;
+                    node->member.moduleExportKind = kind;
+                    node->member.moduleRegisterIndex = register_index;
+
+                    const char* alias_prefix = node->member.object->identifier.name;
+                    size_t alias_len = strlen(alias_prefix) + strlen(node->member.member ? node->member.member : "") + 12;
+                    char* binding_name = type_arena_alloc(alias_len + 1);
+                    if (binding_name) {
+                        snprintf(binding_name, alias_len + 1, "__module_%s_%s", alias_prefix,
+                                 node->member.member ? node->member.member : "value");
+                        node->member.moduleAliasBinding = binding_name;
+                    }
+
+                    if (!exported_type) {
+                        switch (kind) {
+                            case MODULE_EXPORT_KIND_GLOBAL:
+                                exported_type = getPrimitiveType(TYPE_ANY);
+                                break;
+                            case MODULE_EXPORT_KIND_FUNCTION:
+                                exported_type = getPrimitiveType(TYPE_FUNCTION);
+                                break;
+                            case MODULE_EXPORT_KIND_STRUCT:
+                                exported_type = findStructType(node->member.member);
+                                break;
+                            case MODULE_EXPORT_KIND_ENUM:
+                                exported_type = findEnumType(node->member.member);
+                                break;
+                            default:
+                                exported_type = getPrimitiveType(TYPE_ANY);
+                                break;
+                        }
+                    }
+
+                    return exported_type ? exported_type : getPrimitiveType(TYPE_ANY);
+                }
+            }
             Type* object_type = algorithm_w(env, node->member.object);
             if (!object_type) {
                 return NULL;
@@ -1908,7 +2113,7 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                 } else {
                     assigned_type = value_type;
                 }
-                
+
                 TypeScheme* scheme = generalize(env, assigned_type);
                 type_env_define(env, node->assign.name, scheme);
             }
@@ -3332,6 +3537,29 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                 return getPrimitiveType(TYPE_VOID);
             }
 
+            if (node->import.importModule) {
+                const char* alias_name = node->import.moduleAlias;
+                if (!alias_name || alias_name[0] == '\0') {
+                    alias_name = derive_default_module_alias(env, module_name);
+                }
+                if (!alias_name || alias_name[0] == '\0') {
+                    report_compile_error(E3004_IMPORT_FAILED, node->location,
+                                         "unable to infer alias for module '%s'", module_name);
+                    set_type_error();
+                    return getPrimitiveType(TYPE_UNKNOWN);
+                }
+
+                type_env_define_module_alias(env, alias_name, module_name);
+
+                RegisterModule* module_entry = find_module(manager, module_name);
+                if (!module_entry) {
+                    report_compile_error(E3003_MODULE_NOT_FOUND, node->location,
+                                         "module '%s' is not loaded", module_name);
+                    set_type_error();
+                }
+                return getPrimitiveType(TYPE_VOID);
+            }
+
             RegisterModule* module_entry = find_module(manager, module_name);
             if (!module_entry) {
                 report_compile_error(E3003_MODULE_NOT_FOUND, node->location,
@@ -3341,7 +3569,7 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             }
 
             bool imported_value = false;
-            if (node->import.importAll || node->import.symbolCount == 0) {
+            if (node->import.importAll) {
                 for (uint16_t i = 0; i < module_entry->exports.export_count; i++) {
                     const char* symbol_name = module_entry->exports.exported_names[i];
                     ModuleExportKind kind = module_entry->exports.exported_kinds[i];
@@ -3729,7 +3957,7 @@ void populate_ast_types(ASTNode* node, TypeEnv* env) {
             }
             break;
         case NODE_MEMBER_ACCESS:
-            if (node->member.object) {
+            if (!node->member.resolvesToModule && node->member.object) {
                 populate_ast_types(node->member.object, env);
             }
             break;
@@ -3893,7 +4121,6 @@ static TypedASTNode* generate_typed_ast_recursive(ASTNode* ast, TypeEnv* type_en
                 }
             }
             typed->typed.program.moduleName = ast->program.moduleName;
-            typed->typed.program.hasModuleDeclaration = ast->program.hasModuleDeclaration;
             break;
 
         case NODE_VAR_DECL:

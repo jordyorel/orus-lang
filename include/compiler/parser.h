@@ -62,7 +62,9 @@ void parser_context_reset(ParserContext* ctx);
 
 // Main parsing interface
 ASTNode* parseSource(const char* source);
+ASTNode* parseSourceWithModuleName(const char* source, const char* module_name);
 ASTNode* parseSourceWithContext(ParserContext* ctx, const char* source);
+ASTNode* parseSourceWithContextAndModule(ParserContext* ctx, const char* source, const char* module_name);
 
 // Debug control
 void set_parser_debug(bool enabled);

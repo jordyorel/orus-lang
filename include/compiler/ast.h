@@ -123,7 +123,6 @@ struct ASTNode {
             ASTNode** declarations;
             int count;
             char* moduleName;
-            bool hasModuleDeclaration;
         } program;
         struct {
             char* name;
@@ -140,6 +139,7 @@ struct ASTNode {
             ImportSymbol* symbols;
             int symbolCount;
             bool importAll;
+            bool importModule;           // True when importing module as namespace (no direct symbols)
         } import;
         struct {
             char* name;
@@ -290,6 +290,8 @@ struct ASTNode {
         } implBlock;
         struct {
             char* structName;              // Name of the struct being instantiated
+            char* moduleAlias;             // Optional module alias qualifier (e.g., geometry.Point)
+            const char* resolvedModuleName;// Fully qualified module name after resolution
             StructLiteralField* fields;    // Field assignments
             int fieldCount;
         } structLiteral;
@@ -303,6 +305,11 @@ struct ASTNode {
             int enumVariantIndex;          // Variant slot inside the enum definition
             int enumVariantArity;          // Number of payload fields the variant expects
             const char* enumTypeName;      // Cached enum type name for backend lowering
+            bool resolvesToModule;         // True if member access resolves to a module export
+            const char* moduleName;        // Fully qualified module name for the export
+            const char* moduleAliasBinding;// Internal alias binding name used for symbol registration
+            ModuleExportKind moduleExportKind; // Kind of export resolved from module
+            uint16_t moduleRegisterIndex;  // Register index for exported globals/functions (if applicable)
         } member;
         struct {
             ASTNode* target;               // Member access node

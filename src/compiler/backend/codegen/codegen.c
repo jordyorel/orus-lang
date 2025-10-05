@@ -4077,6 +4077,58 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
         }
 
         case NODE_MEMBER_ACCESS: {
+            if (expr->typed.member.resolvesToModule) {
+                ModuleExportKind kind = expr->typed.member.moduleExportKind;
+                if (kind == MODULE_EXPORT_KIND_STRUCT || kind == MODULE_EXPORT_KIND_ENUM) {
+                    // Type-level access; no runtime value to materialize
+                    return -1;
+                }
+
+                const char* alias_name = expr->original->member.moduleAliasBinding;
+                char generated_alias[128];
+                if (!alias_name || alias_name[0] == '\0') {
+                    const char* prefix = NULL;
+                    if (expr->original->member.object && expr->original->member.object->type == NODE_IDENTIFIER) {
+                        prefix = expr->original->member.object->identifier.name;
+                    }
+                    if (!prefix || prefix[0] == '\0') {
+                        prefix = "module";
+                    }
+                    const char* member_name = expr->typed.member.member ? expr->typed.member.member : "value";
+                    snprintf(generated_alias, sizeof(generated_alias), "__module_%s_%s", prefix, member_name);
+                    alias_name = generated_alias;
+                }
+
+                int existing_reg = lookup_variable(ctx, alias_name);
+                if (existing_reg == -1) {
+                    ModuleManager* manager = vm.register_file.module_manager;
+                    if (!manager) {
+                        report_compile_error(E3004_IMPORT_FAILED, expr->original->location,
+                                             "module manager is not initialized");
+                        ctx->has_compilation_errors = true;
+                        return -1;
+                    }
+
+                    const char* module_name = expr->original->member.moduleName;
+                    if (!module_name) {
+                        report_compile_error(E3004_IMPORT_FAILED, expr->original->location,
+                                             "missing module name for namespace access");
+                        ctx->has_compilation_errors = true;
+                        return -1;
+                    }
+
+                    if (!import_symbol_by_name(ctx, manager, module_name,
+                                              expr->typed.member.member, alias_name,
+                                              expr->original->location)) {
+                        return -1;
+                    }
+
+                    existing_reg = lookup_variable(ctx, alias_name);
+                }
+
+                return existing_reg;
+            }
+
             if (expr->typed.member.resolvesToEnumVariant) {
                 return compile_enum_variant_access(ctx, expr);
             }
@@ -4507,7 +4559,11 @@ static void compile_import_statement(CompilerContext* ctx, TypedASTNode* stmt) {
         return;
     }
 
-    if (stmt->original->import.importAll || stmt->original->import.symbolCount == 0) {
+    if (stmt->original->import.importModule) {
+        return;
+    }
+
+    if (stmt->original->import.importAll) {
         bool imported_any = false;
         for (uint16_t i = 0; i < module_entry->exports.export_count; i++) {
             const char* symbol_name = module_entry->exports.exported_names[i];

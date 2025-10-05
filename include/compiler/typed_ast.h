@@ -80,7 +80,6 @@ struct TypedASTNode {
             TypedASTNode** declarations;
             int count;
             const char* moduleName;
-            bool hasModuleDeclaration;
         } program;
         struct {
             TypedASTNode* initializer;
@@ -94,6 +93,7 @@ struct TypedASTNode {
             TypedImportSymbol* symbols;
             int symbolCount;
             bool importAll;
+            bool importModule;
         } import;
         struct {
             TypedASTNode* left;
@@ -208,6 +208,8 @@ struct TypedASTNode {
         } implBlock;
         struct {
             const char* structName;
+            const char* moduleAlias;
+            const char* resolvedModuleName;
             StructLiteralField* fields;
             int fieldCount;
             TypedASTNode** values;
@@ -222,6 +224,11 @@ struct TypedASTNode {
             int enumVariantIndex;
             int enumVariantArity;
             const char* enumTypeName;
+            bool resolvesToModule;
+            const char* moduleName;
+            const char* moduleAliasBinding;
+            ModuleExportKind moduleExportKind;
+            uint16_t moduleRegisterIndex;
         } member;
         struct {
             TypedASTNode* target;

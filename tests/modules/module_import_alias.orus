@@ -1,5 +1,5 @@
-use alias_provider: OFFSET as START, add_offset as bump
-use math_module: double as twice
+use tests.modules.alias_provider: OFFSET as START, add_offset as bump
+use tests.modules.math_module: double as twice
 
 bumped = bump(START)
 doubled = twice(bumped)

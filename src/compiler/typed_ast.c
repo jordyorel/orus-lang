@@ -48,7 +48,6 @@ TypedASTNode* create_typed_ast_node(ASTNode* original) {
             typed->typed.program.declarations = NULL;
             typed->typed.program.count = 0;
             typed->typed.program.moduleName = original->program.moduleName;
-            typed->typed.program.hasModuleDeclaration = original->program.hasModuleDeclaration;
             break;
         case NODE_VAR_DECL:
             typed->typed.varDecl.initializer = NULL;
@@ -61,6 +60,7 @@ TypedASTNode* create_typed_ast_node(ASTNode* original) {
             typed->typed.import.moduleAlias = original->import.moduleAlias;
             typed->typed.import.symbolCount = original->import.symbolCount;
             typed->typed.import.importAll = original->import.importAll;
+            typed->typed.import.importModule = original->import.importModule;
             typed->typed.import.symbols = NULL;
             if (original->import.symbolCount > 0 && original->import.symbols) {
                 typed->typed.import.symbols = malloc(sizeof(TypedImportSymbol) * (size_t)original->import.symbolCount);
@@ -180,6 +180,8 @@ TypedASTNode* create_typed_ast_node(ASTNode* original) {
             break;
         case NODE_STRUCT_LITERAL:
             typed->typed.structLiteral.structName = original->structLiteral.structName;
+            typed->typed.structLiteral.moduleAlias = original->structLiteral.moduleAlias;
+            typed->typed.structLiteral.resolvedModuleName = original->structLiteral.resolvedModuleName;
             typed->typed.structLiteral.fields = original->structLiteral.fields;
             typed->typed.structLiteral.fieldCount = original->structLiteral.fieldCount;
             typed->typed.structLiteral.values = NULL;
@@ -194,6 +196,11 @@ TypedASTNode* create_typed_ast_node(ASTNode* original) {
             typed->typed.member.enumVariantIndex = original->member.enumVariantIndex;
             typed->typed.member.enumVariantArity = original->member.enumVariantArity;
             typed->typed.member.enumTypeName = original->member.enumTypeName;
+            typed->typed.member.resolvesToModule = original->member.resolvesToModule;
+            typed->typed.member.moduleName = original->member.moduleName;
+            typed->typed.member.moduleAliasBinding = original->member.moduleAliasBinding;
+            typed->typed.member.moduleExportKind = original->member.moduleExportKind;
+            typed->typed.member.moduleRegisterIndex = original->member.moduleRegisterIndex;
             break;
         case NODE_MEMBER_ASSIGN:
             typed->typed.memberAssign.target = NULL;
@@ -492,6 +499,11 @@ TypedASTNode* copy_typed_ast_node(TypedASTNode* node) {
         copy->typed.member.enumVariantIndex = node->typed.member.enumVariantIndex;
         copy->typed.member.enumVariantArity = node->typed.member.enumVariantArity;
         copy->typed.member.enumTypeName = node->typed.member.enumTypeName;
+        copy->typed.member.resolvesToModule = node->typed.member.resolvesToModule;
+        copy->typed.member.moduleName = node->typed.member.moduleName;
+        copy->typed.member.moduleAliasBinding = node->typed.member.moduleAliasBinding;
+        copy->typed.member.moduleExportKind = node->typed.member.moduleExportKind;
+        copy->typed.member.moduleRegisterIndex = node->typed.member.moduleRegisterIndex;
     }
 
     return copy;
@@ -877,6 +889,14 @@ void print_typed_ast(TypedASTNode* node, int indent) {
         } else if (node->typed.member.resolvesToEnum) {
             const char* enumName = node->typed.member.enumTypeName ? node->typed.member.enumTypeName : "<anon-enum>";
             printf(" enum=%s", enumName);
+        }
+        if (node->typed.member.resolvesToModule) {
+            const char* moduleName = node->typed.member.moduleName ? node->typed.member.moduleName : "<module>";
+            printf(" module=%s", moduleName);
+            if (node->typed.member.moduleAliasBinding) {
+                printf(" alias=%s", node->typed.member.moduleAliasBinding);
+            }
+            printf(" kind=%d", (int)node->typed.member.moduleExportKind);
         }
         printf("]");
     }

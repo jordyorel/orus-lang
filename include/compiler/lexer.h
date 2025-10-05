@@ -90,7 +90,6 @@ typedef enum {
     TOKEN_MATCHES,
     TOKEN_PUB,
     TOKEN_GLOBAL,
-    TOKEN_MODULE,
     TOKEN_STATIC,
 
     // Add type tokens
