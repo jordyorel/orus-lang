@@ -66,10 +66,16 @@ TypedASTNode* optimize_typed_ast(TypedASTNode* input_ast, OptimizationContext* c
     
     // Phase 1: Constant Folding (re-enabled after fixing memory corruption)
     if (ctx->enable_constant_folding) {
-        if (!apply_constant_folding(input_ast, ctx)) {
+        ConstantFoldContext fold_ctx;
+        if (!apply_constant_folding(input_ast, &fold_ctx)) {
             printf("[OPTIMIZER] ❌ Constant folding failed\n");
             return input_ast;
         }
+
+        ctx->optimizations_applied += fold_ctx.optimizations_applied;
+        ctx->constants_folded += fold_ctx.constants_folded;
+        ctx->binary_expressions_folded += fold_ctx.binary_expressions_folded;
+        ctx->nodes_eliminated += fold_ctx.nodes_eliminated;
     }
     
     // Phase 2: Dead Code Elimination (Future)
