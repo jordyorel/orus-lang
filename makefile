@@ -244,6 +244,7 @@ ORUS = orus$(SUFFIX)
 UNIT_TEST_RUNNER = test_runner$(SUFFIX)
 BYTECODE_TEST_BIN = $(BUILDDIR)/tests/test_jump_patch
 SOURCE_MAP_TEST_BIN = $(BUILDDIR)/tests/test_source_mapping
+FUSED_LOOP_TEST_BIN = $(BUILDDIR)/tests/test_codegen_fused_loops
 SCOPE_TRACKING_TEST_BIN = $(BUILDDIR)/tests/test_scope_tracking
 FUSED_WHILE_TEST_BIN = $(BUILDDIR)/tests/test_codegen_fused_while
 PEEPHOLE_TEST_BIN = $(BUILDDIR)/tests/test_constant_propagation
@@ -420,6 +421,9 @@ _test-run: $(ORUS)
 	@echo "\033[36m=== Source Mapping Tests ===\033[0m"
 	@$(MAKE) source-map-tests
 	@echo ""
+	@echo "\033[36m=== Fused Counter Loop Codegen Tests ===\033[0m"
+	@$(MAKE) fused-loop-tests
+	@echo ""
 	@echo "\033[36m=== Scope Tracking Tests ===\033[0m"
 	@$(MAKE) scope-tracking-tests
 	@echo ""
@@ -488,6 +492,15 @@ $(SOURCE_MAP_TEST_BIN): tests/unit/test_source_mapping.c $(COMPILER_OBJS) $(VM_O
 source-map-tests: $(SOURCE_MAP_TEST_BIN)
 	@echo "Running source mapping tests..."
 	@./$(SOURCE_MAP_TEST_BIN)
+
+$(FUSED_LOOP_TEST_BIN): tests/unit/test_codegen_fused_loops.c $(COMPILER_OBJS) $(VM_OBJS)
+	@mkdir -p $(dir $@)
+	@echo "Compiling fused loop codegen tests..."
+	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+
+fused-loop-tests: $(FUSED_LOOP_TEST_BIN)
+	@echo "Running fused loop codegen tests..."
+	@./$(FUSED_LOOP_TEST_BIN)
 
 $(SCOPE_TRACKING_TEST_BIN): tests/unit/test_scope_stack.c $(COMPILER_OBJS) $(VM_OBJS)
 	@mkdir -p $(dir $@)

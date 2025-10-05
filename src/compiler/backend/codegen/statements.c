@@ -74,6 +74,7 @@ typedef struct {
     TypedASTNode* limit_node;
     TypedASTNode* step_node;
     TypedASTNode* increment_stmt;
+    int increment_index;
     TypedASTNode* body_node;
     bool body_is_block;
     int body_statement_count;
@@ -90,6 +91,9 @@ typedef struct {
     bool step_is_one;
     bool step_known_positive;
     bool step_known_negative;
+    bool step_is_constant;
+    int32_t step_constant;
+    bool descending;
 } FusedCounterLoopInfo;
 
 static void init_fused_counter_loop_info(FusedCounterLoopInfo* info) {
@@ -108,7 +112,107 @@ static void init_fused_counter_loop_info(FusedCounterLoopInfo* info) {
     info->limit_node = NULL;
     info->step_node = NULL;
     info->increment_stmt = NULL;
+    info->increment_index = -1;
     info->body_node = NULL;
+    info->step_constant = 0;
+}
+
+static bool node_matches_identifier(const TypedASTNode* node, const char* name);
+
+static bool extract_step_from_expression(const char* loop_var_name,
+                                         TypedASTNode* expr,
+                                         int32_t* out_step) {
+    if (!loop_var_name || !expr || !expr->original) {
+        return false;
+    }
+
+    ASTNode* original = expr->original;
+    switch (original->type) {
+        case NODE_BINARY: {
+            if (!original->binary.op) {
+                return false;
+            }
+
+            TypedASTNode* left = expr->typed.binary.left;
+            TypedASTNode* right = expr->typed.binary.right;
+            if (!left || !right) {
+                return false;
+            }
+
+            int32_t constant = 0;
+            if (strcmp(original->binary.op, "+") == 0) {
+                if (node_matches_identifier(left, loop_var_name) &&
+                    evaluate_constant_i32(right, &constant)) {
+                    *out_step = constant;
+                    return true;
+                }
+                if (node_matches_identifier(right, loop_var_name) &&
+                    evaluate_constant_i32(left, &constant)) {
+                    *out_step = constant;
+                    return true;
+                }
+            } else if (strcmp(original->binary.op, "-") == 0) {
+                if (node_matches_identifier(left, loop_var_name) &&
+                    evaluate_constant_i32(right, &constant)) {
+                    *out_step = -constant;
+                    return true;
+                }
+                if (node_matches_identifier(right, loop_var_name) &&
+                    evaluate_constant_i32(left, &constant)) {
+                    // Form like "constant - i" is not a simple counter update
+                    return false;
+                }
+            }
+            return false;
+        }
+        default:
+            return false;
+    }
+}
+
+static bool extract_counter_step(const char* loop_var_name,
+                                 TypedASTNode* stmt,
+                                 int32_t* out_step) {
+    if (!loop_var_name || !stmt || !stmt->original) {
+        return false;
+    }
+
+    ASTNode* original = stmt->original;
+    switch (original->type) {
+        case NODE_ASSIGN: {
+            if (!stmt->typed.assign.name ||
+                strcmp(stmt->typed.assign.name, loop_var_name) != 0) {
+                return false;
+            }
+            return extract_step_from_expression(loop_var_name,
+                                               stmt->typed.assign.value,
+                                               out_step);
+        }
+        case NODE_UNARY: {
+            if (!original->unary.op) {
+                return false;
+            }
+            TypedASTNode* operand = stmt->typed.unary.operand;
+            if (!operand) {
+                return false;
+            }
+            if (!node_matches_identifier(operand, loop_var_name)) {
+                return false;
+            }
+            if (strcmp(original->unary.op, "++") == 0) {
+                *out_step = 1;
+                return true;
+            }
+            if (strcmp(original->unary.op, "--") == 0) {
+                *out_step = -1;
+                return true;
+            }
+            return false;
+        }
+        default:
+            break;
+    }
+    return false;
 }
 
 static bool node_matches_identifier(const TypedASTNode* node, const char* name) {
@@ -117,6 +221,34 @@ static bool node_matches_identifier(const TypedASTNode* node, const char* name) 
     }
     const char* candidate = node->original->identifier.name;
     return candidate && strcmp(candidate, name) == 0;
+}
+
+static bool statement_mutates_identifier(const char* name, TypedASTNode* stmt) {
+    if (!name || !stmt || !stmt->original) {
+        return false;
+    }
+
+    switch (stmt->original->type) {
+        case NODE_ASSIGN:
+            if (stmt->typed.assign.name && strcmp(stmt->typed.assign.name, name) == 0) {
+                return true;
+            }
+            return false;
+        case NODE_UNARY: {
+            ASTNode* operand = stmt->typed.unary.operand ? stmt->typed.unary.operand->original : NULL;
+            if (!operand || operand->type != NODE_IDENTIFIER) {
+                return false;
+            }
+            const char* operand_name = operand->identifier.name;
+            if (!operand_name || strcmp(operand_name, name) != 0) {
+                return false;
+            }
+            const char* op = stmt->original->unary.op;
+            return op && (strcmp(op, "++") == 0 || strcmp(op, "--") == 0);
+        }
+        default:
+            return false;
+    }
 }
 
 static bool try_prepare_fused_counter_loop(CompilerContext* ctx,
@@ -140,7 +272,23 @@ static bool try_prepare_fused_counter_loop(CompilerContext* ctx,
         }
 
         const char* op = condition->original->binary.op;
-        if (!op || (strcmp(op, "<") != 0 && strcmp(op, "<=") != 0)) {
+        if (!op) {
+            return true;
+        }
+
+        bool descending = false;
+        bool inclusive = false;
+        if (strcmp(op, "<") == 0) {
+            inclusive = false;
+        } else if (strcmp(op, "<=") == 0) {
+            inclusive = true;
+        } else if (strcmp(op, ">") == 0) {
+            descending = true;
+            inclusive = false;
+        } else if (strcmp(op, ">=") == 0) {
+            descending = true;
+            inclusive = true;
+        } else {
             return true;
         }
 
@@ -174,68 +322,77 @@ static bool try_prepare_fused_counter_loop(CompilerContext* ctx,
         bool body_is_block = body->original && body->original->type == NODE_BLOCK;
         int body_count = 0;
         TypedASTNode* increment_stmt = NULL;
+        int increment_index = -1;
+        int32_t step_constant = 0;
+        bool found_increment = false;
+
         if (body_is_block) {
             body_count = body->typed.block.count;
             if (body_count <= 0) {
                 return true;
             }
-            increment_stmt = body->typed.block.statements[body_count - 1];
+            for (int i = body_count - 1; i >= 0; --i) {
+                TypedASTNode* candidate = body->typed.block.statements[i];
+                if (!candidate) {
+                    continue;
+                }
+                if (extract_counter_step(loop_var_name, candidate, &step_constant)) {
+                    increment_stmt = candidate;
+                    increment_index = i;
+                    found_increment = true;
+                    break;
+                }
+            }
         } else {
             body_count = body ? 1 : 0;
-            increment_stmt = body;
+            if (body && extract_counter_step(loop_var_name, body, &step_constant)) {
+                increment_stmt = body;
+                increment_index = 0;
+                found_increment = true;
+            }
         }
 
-        if (!increment_stmt || !increment_stmt->original ||
-            increment_stmt->original->type != NODE_ASSIGN ||
-            !increment_stmt->typed.assign.name ||
-            strcmp(increment_stmt->typed.assign.name, loop_var_name) != 0) {
+        if (!found_increment || !increment_stmt) {
             return true;
         }
 
-        TypedASTNode* value = increment_stmt->typed.assign.value;
-        if (!value || !value->original || value->original->type != NODE_BINARY) {
-            return true;
+        if (body_is_block) {
+            for (int i = increment_index + 1; i < body_count; ++i) {
+                TypedASTNode* trailing = body->typed.block.statements[i];
+                if (statement_mutates_identifier(loop_var_name, trailing)) {
+                    return true;
+                }
+            }
         }
 
-        const char* inc_op = value->original->binary.op;
-        if (!inc_op || strcmp(inc_op, "+") != 0) {
-            return true;
-        }
-
-        TypedASTNode* inc_left = value->typed.binary.left;
-        TypedASTNode* inc_right = value->typed.binary.right;
-        if (!inc_left || !inc_right) {
-            return true;
-        }
-
-        int32_t inc_constant = 0;
-        bool matches_increment = false;
-        if (node_matches_identifier(inc_left, loop_var_name) &&
-            evaluate_constant_i32(inc_right, &inc_constant) && inc_constant == 1) {
-            matches_increment = true;
-        } else if (node_matches_identifier(inc_right, loop_var_name) &&
-                   evaluate_constant_i32(inc_left, &inc_constant) && inc_constant == 1) {
-            matches_increment = true;
-        }
-
-        if (!matches_increment) {
-            return true;
+        if (descending) {
+            if (step_constant != -1) {
+                return true;
+            }
+        } else {
+            if (step_constant != 1) {
+                return true;
+            }
         }
 
         info->pattern_matched = true;
         info->can_fuse = true;
-        info->inclusive = (strcmp(op, "<=") == 0);
+        info->inclusive = inclusive;
         info->loop_var_name = loop_var_name;
         info->loop_var_node = left;
         info->limit_node = right;
         info->increment_stmt = increment_stmt;
+        info->increment_index = increment_index;
         info->body_node = body;
         info->body_is_block = body_is_block;
         info->body_statement_count = body_count;
         info->has_increment = true;
         info->step_is_one = true;
-        info->step_known_positive = true;
-        info->step_known_negative = false;
+        info->step_known_positive = !descending;
+        info->step_known_negative = descending;
+        info->step_is_constant = true;
+        info->step_constant = step_constant;
+        info->descending = descending;
 
         int limit_reg = compile_expression(ctx, right);
         if (limit_reg == -1) {
@@ -259,11 +416,11 @@ static bool try_prepare_fused_counter_loop(CompilerContext* ctx,
             emit_byte_to_buffer(ctx->bytecode, OP_ADD_I32_IMM);
             emit_byte_to_buffer(ctx->bytecode, (uint8_t)temp_reg);
             emit_byte_to_buffer(ctx->bytecode, (uint8_t)limit_reg);
-            int32_t one = 1;
-            emit_byte_to_buffer(ctx->bytecode, (uint8_t)(one & 0xFF));
-            emit_byte_to_buffer(ctx->bytecode, (uint8_t)((one >> 8) & 0xFF));
-            emit_byte_to_buffer(ctx->bytecode, (uint8_t)((one >> 16) & 0xFF));
-            emit_byte_to_buffer(ctx->bytecode, (uint8_t)((one >> 24) & 0xFF));
+            int32_t adjust = descending ? -1 : 1;
+            emit_byte_to_buffer(ctx->bytecode, (uint8_t)(adjust & 0xFF));
+            emit_byte_to_buffer(ctx->bytecode, (uint8_t)((adjust >> 8) & 0xFF));
+            emit_byte_to_buffer(ctx->bytecode, (uint8_t)((adjust >> 16) & 0xFF));
+            emit_byte_to_buffer(ctx->bytecode, (uint8_t)((adjust >> 24) & 0xFF));
             info->use_adjusted_limit = true;
             info->adjusted_limit_reg = temp_reg;
             info->adjusted_limit_is_temp = true;
@@ -301,6 +458,7 @@ static bool try_prepare_fused_counter_loop(CompilerContext* ctx,
         TypedASTNode* step_node = loop_node->typed.forRange.step;
         info->step_node = step_node;
         int32_t step_constant = 0;
+        bool step_constant_known = false;
         if (step_node) {
             int step_reg = compile_expression(ctx, step_node);
             if (step_reg == -1) {
@@ -314,15 +472,7 @@ static bool try_prepare_fused_counter_loop(CompilerContext* ctx,
             info->step_reg = step_reg;
             info->step_reg_is_temp = (step_reg >= MP_TEMP_REG_START && step_reg <= MP_TEMP_REG_END);
             if (evaluate_constant_i32(step_node, &step_constant)) {
-                if (step_constant >= 0) {
-                    info->step_known_positive = true;
-                }
-                if (step_constant < 0) {
-                    info->step_known_negative = true;
-                }
-                if (step_constant == 1) {
-                    info->step_is_one = true;
-                }
+                step_constant_known = true;
             }
         } else {
             int step_reg = compiler_alloc_temp(ctx->allocator);
@@ -337,22 +487,34 @@ static bool try_prepare_fused_counter_loop(CompilerContext* ctx,
             emit_load_constant(ctx, step_reg, I32_VAL(1));
             info->step_reg = step_reg;
             info->step_reg_is_temp = true;
-            info->step_known_positive = true;
-            info->step_is_one = true;
             step_constant = 1;
+            step_constant_known = true;
         }
 
-        if (!step_node || step_constant >= 0) {
-            info->step_known_positive = true;
-        }
-        if (step_constant < 0) {
-            info->step_known_negative = true;
-        }
-        if (step_constant == 1) {
-            info->step_is_one = true;
+        if (step_constant_known) {
+            info->step_is_constant = true;
+            info->step_constant = step_constant;
+            if (step_constant > 0) {
+                info->step_known_positive = true;
+            }
+            if (step_constant < 0) {
+                info->step_known_negative = true;
+            }
+            if (step_constant == 1 || step_constant == -1) {
+                info->step_is_one = true;
+            }
+        } else {
+            if (!step_node) {
+                info->step_known_positive = true;
+            }
         }
 
-        info->can_fuse = (info->step_known_positive && info->step_is_one);
+        info->descending = info->step_known_negative && !info->step_known_positive;
+        if (info->step_known_positive && info->step_known_negative) {
+            info->descending = false;
+        }
+
+        info->can_fuse = (info->step_is_one && info->step_is_constant);
 
         if (info->can_fuse && info->inclusive) {
             int temp_reg = compiler_alloc_temp(ctx->allocator);
@@ -373,11 +535,11 @@ static bool try_prepare_fused_counter_loop(CompilerContext* ctx,
             emit_byte_to_buffer(ctx->bytecode, OP_ADD_I32_IMM);
             emit_byte_to_buffer(ctx->bytecode, (uint8_t)temp_reg);
             emit_byte_to_buffer(ctx->bytecode, (uint8_t)limit_reg);
-            int32_t one = 1;
-            emit_byte_to_buffer(ctx->bytecode, (uint8_t)(one & 0xFF));
-            emit_byte_to_buffer(ctx->bytecode, (uint8_t)((one >> 8) & 0xFF));
-            emit_byte_to_buffer(ctx->bytecode, (uint8_t)((one >> 16) & 0xFF));
-            emit_byte_to_buffer(ctx->bytecode, (uint8_t)((one >> 24) & 0xFF));
+            int32_t adjust = (info->descending ? -1 : 1);
+            emit_byte_to_buffer(ctx->bytecode, (uint8_t)(adjust & 0xFF));
+            emit_byte_to_buffer(ctx->bytecode, (uint8_t)((adjust >> 8) & 0xFF));
+            emit_byte_to_buffer(ctx->bytecode, (uint8_t)((adjust >> 16) & 0xFF));
+            emit_byte_to_buffer(ctx->bytecode, (uint8_t)((adjust >> 24) & 0xFF));
             info->use_adjusted_limit = true;
             info->adjusted_limit_reg = temp_reg;
             info->adjusted_limit_is_temp = true;
@@ -2014,6 +2176,7 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
     TypedASTNode* fused_limit_node = fused_info.limit_node;
     bool fused_body_is_block = fused_info.body_is_block;
     int fused_block_count = fused_info.body_statement_count;
+    bool fused_descending = fused_info.descending;
 
     Symbol* fused_symbol = NULL;
     int fused_loop_reg = -1;
@@ -2109,6 +2272,8 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
             loop_frame_fused->label = while_stmt->original->whileStmt.label;
         }
 
+        update_loop_continue_target(ctx, loop_frame_fused, -1);
+
         DEBUG_CODEGEN_PRINT("While loop start at offset %d\n", loop_start_fused);
 
         int fused_limit_guard_reg = fused_info.use_adjusted_limit ? fused_limit_temp_reg : fused_limit_reg;
@@ -2134,10 +2299,16 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
             typed_hint_limit_reg = fused_limit_guard_reg;
         }
 
+        uint8_t guard_left = fused_descending ?
+            (uint8_t)(fused_limit_temp_is_temp ? fused_limit_temp_reg : fused_limit_reg) :
+            (uint8_t)fused_loop_reg;
+        uint8_t guard_right = fused_descending ?
+            (uint8_t)fused_loop_reg :
+            (uint8_t)(fused_limit_temp_is_temp ? fused_limit_temp_reg : fused_limit_reg);
         set_location_from_node(ctx, while_stmt);
         emit_byte_to_buffer(ctx->bytecode, OP_JUMP_IF_NOT_I32_TYPED);
-        emit_byte_to_buffer(ctx->bytecode, (uint8_t)fused_loop_reg);
-        emit_byte_to_buffer(ctx->bytecode, (uint8_t)(fused_limit_temp_is_temp ? fused_limit_temp_reg : fused_limit_reg));
+        emit_byte_to_buffer(ctx->bytecode, guard_left);
+        emit_byte_to_buffer(ctx->bytecode, guard_right);
         int end_patch = emit_jump_placeholder(ctx->bytecode, OP_JUMP_IF_NOT_I32_TYPED);
         if (end_patch < 0) {
             DEBUG_CODEGEN_PRINT("Error: Failed to allocate while-loop end placeholder\n");
@@ -2156,18 +2327,14 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
         }
         if (fused_body_is_block && fused_block_count > 0 && while_body && while_body->original &&
             while_body->original->type == NODE_BLOCK) {
-            int limit = fused_block_count - 1;
-            if (limit < 0) {
-                limit = 0;
-            }
-            for (int i = 0; i < limit; i++) {
+            for (int i = 0; i < fused_block_count; i++) {
                 TypedASTNode* stmt = while_body->typed.block.statements[i];
-                if (stmt) {
-                    compile_statement(ctx, stmt);
+                if (!stmt || stmt == fused_info.increment_stmt) {
+                    continue;
                 }
+                compile_statement(ctx, stmt);
             }
         } else if (!fused_body_is_block && fused_info.has_increment == false && while_body) {
-            // Non-block bodies without an increment should still be compiled normally.
             compile_statement(ctx, while_body);
         }
 
@@ -2175,10 +2342,19 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
             loop_frame_fused = get_scope_frame_by_index(ctx, loop_frame_index);
         }
 
+        int continue_target = ctx->bytecode->count;
+        update_loop_continue_target(ctx, loop_frame_fused, continue_target);
+        patch_continue_statements(ctx, continue_target);
+
         set_location_from_node(ctx, while_stmt);
-        emit_byte_to_buffer(ctx->bytecode, OP_INC_CMP_JMP);
+        uint8_t limit_for_fused = (uint8_t)(fused_limit_temp_is_temp ? fused_limit_temp_reg : fused_limit_reg);
+        if (fused_descending) {
+            emit_byte_to_buffer(ctx->bytecode, OP_DEC_CMP_JMP);
+        } else {
+            emit_byte_to_buffer(ctx->bytecode, OP_INC_CMP_JMP);
+        }
         emit_byte_to_buffer(ctx->bytecode, (uint8_t)fused_loop_reg);
-        emit_byte_to_buffer(ctx->bytecode, (uint8_t)(fused_limit_temp_is_temp ? fused_limit_temp_reg : fused_limit_reg));
+        emit_byte_to_buffer(ctx->bytecode, limit_for_fused);
         int back_off = loop_start_fused - (ctx->bytecode->count + 2);
         emit_byte_to_buffer(ctx->bytecode, (uint8_t)(back_off & 0xFF));
         emit_byte_to_buffer(ctx->bytecode, (uint8_t)((back_off >> 8) & 0xFF));
@@ -2421,6 +2597,7 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
 
     bool step_known_positive = fused_info.step_known_positive;
     bool step_known_negative = fused_info.step_known_negative;
+    bool fused_descending = fused_info.descending;
 
     limit_temp_reg = fused_info.use_adjusted_limit ? fused_info.adjusted_limit_reg : -1;
     limit_temp_reg_is_temp = fused_info.use_adjusted_limit ? fused_info.adjusted_limit_is_temp : false;
