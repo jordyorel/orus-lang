@@ -166,7 +166,7 @@ static bool is_reserved_keyword_token(TokenType type) {
         case TOKEN_MATCHES:
         case TOKEN_PUB:
         case TOKEN_GLOBAL:
-        case TOKEN_MODULE:
+        // case TOKEN_MODULE:
         case TOKEN_STATIC:
         case TOKEN_U32:
         case TOKEN_U64:
