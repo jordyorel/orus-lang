@@ -3595,7 +3595,12 @@ InterpretResult vm_run_dispatch(void) {
             VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operand must be i32");
         }
 
-        int32_t result = AS_I32(src_value) + imm;
+        int32_t current = AS_I32(src_value);
+        int32_t result;
+        if (__builtin_add_overflow(current, imm, &result)) {
+            VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow");
+        }
+
         vm_store_i32_typed_hot(dst, result);
 
         DISPATCH_TYPED();
