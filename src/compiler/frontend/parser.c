@@ -143,7 +143,6 @@ static bool is_reserved_keyword_token(TokenType type) {
         case TOKEN_NOT:
         case TOKEN_PRINT:
         case TOKEN_PRINT_NO_NL:
-        case TOKEN_TIME_STAMP:
         case TOKEN_RETURN:
         case TOKEN_MUT:
         case TOKEN_CONST:
@@ -3793,12 +3792,12 @@ static ASTNode* parsePrimaryExpression(ParserContext* ctx) {
         case TOKEN_IDENTIFIER:
             if (token_text_equals(&token, "true") || token_text_equals(&token, "false")) {
                 node = parseBooleanLiteral(ctx, token);
+            } else if (token_text_equals(&token, "time_stamp") &&
+                       peekToken(ctx).type == TOKEN_LEFT_PAREN) {
+                node = parseTimeStampExpression(ctx, token);
             } else {
                 node = parseIdentifierExpression(ctx, token);
             }
-            break;
-        case TOKEN_TIME_STAMP:
-            node = parseTimeStampExpression(ctx, token);
             break;
         case TOKEN_LEFT_PAREN:
             node = parseParenthesizedExpressionToken(ctx, token);
