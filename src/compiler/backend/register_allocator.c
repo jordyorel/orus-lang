@@ -23,6 +23,10 @@ typedef struct MultiPassRegisterAllocator {
     bool scope_temp_regs[MP_SCOPE_LEVEL_COUNT][8];
     int current_scope_level;
 
+    int max_scope_depth_seen;
+    int scope_depth_overflow_count;
+    int scope_exit_underflow_count;
+
     bool typed_residency_hint[REGISTER_COUNT];
 
     int next_global;
@@ -116,6 +120,9 @@ MultiPassRegisterAllocator* init_mp_register_allocator(void) {
     // Initialize scope-aware temp registers
     memset(allocator->scope_temp_regs, false, sizeof(allocator->scope_temp_regs));
     allocator->current_scope_level = 0;
+    allocator->max_scope_depth_seen = 0;
+    allocator->scope_depth_overflow_count = 0;
+    allocator->scope_exit_underflow_count = 0;
     
     // Initialize allocation pointers
     allocator->next_global = MP_GLOBAL_REG_START;
@@ -300,13 +307,15 @@ int mp_allocate_scoped_temp_register(MultiPassRegisterAllocator* allocator, int 
 
 void mp_enter_scope(MultiPassRegisterAllocator* allocator) {
     if (!allocator) return;
-    
+
     if (allocator->current_scope_level < MP_SCOPE_LEVEL_COUNT - 1) {
         allocator->current_scope_level++;
+        if (allocator->current_scope_level > allocator->max_scope_depth_seen) {
+            allocator->max_scope_depth_seen = allocator->current_scope_level;
+        }
         REGISTER_ALLOCATOR_LOG("[REGISTER_ALLOCATOR] Entered scope level %d\n", allocator->current_scope_level);
     } else {
-        REGISTER_ALLOCATOR_WARN("[REGISTER_ALLOCATOR] Warning: Maximum scope depth (%d) reached\n",
-               MP_SCOPE_LEVEL_COUNT - 1);
+        allocator->scope_depth_overflow_count++;
     }
 }
 
@@ -323,7 +332,7 @@ void mp_exit_scope(MultiPassRegisterAllocator* allocator) {
         REGISTER_ALLOCATOR_LOG("[REGISTER_ALLOCATOR] Exited scope level %d (freed %d registers)\n", scope, 8);
         allocator->current_scope_level--;
     } else {
-        REGISTER_ALLOCATOR_WARN("[REGISTER_ALLOCATOR] Warning: Already at root scope level\n");
+        allocator->scope_exit_underflow_count++;
     }
 }
 
@@ -765,6 +774,19 @@ DualRegisterAllocator* compiler_create_allocator(void) {
 }
 
 void compiler_destroy_allocator(DualRegisterAllocator* allocator) {
+    if (!allocator) {
+        return;
+    }
+
+    AllocatorDiagnostics diagnostics = compiler_allocator_get_diagnostics(allocator);
+    if (diagnostics.scope_depth_overflow_count > 0 || diagnostics.scope_exit_underflow_count > 0) {
+        LOG_DEBUG(
+            "[REGISTER_ALLOCATOR] Scoped temp depth overflow=%d underflow=%d (max depth %d)\n",
+            diagnostics.scope_depth_overflow_count,
+            diagnostics.scope_exit_underflow_count,
+            diagnostics.max_scope_depth_seen);
+    }
+
     free_dual_register_allocator(allocator);
 }
 
@@ -882,5 +904,37 @@ void compiler_free_allocation(DualRegisterAllocator* allocator, RegisterAllocati
 
 void compiler_print_register_allocation_stats(DualRegisterAllocator* allocator) {
     print_register_allocation_stats(allocator);
+}
+
+AllocatorDiagnostics compiler_allocator_get_diagnostics(const DualRegisterAllocator* allocator) {
+    AllocatorDiagnostics diagnostics = {0, 0, 0};
+    if (!allocator) {
+        return diagnostics;
+    }
+
+    const MultiPassRegisterAllocator* legacy = allocator->legacy_allocator;
+    if (!legacy) {
+        return diagnostics;
+    }
+
+    diagnostics.max_scope_depth_seen = legacy->max_scope_depth_seen;
+    diagnostics.scope_depth_overflow_count = legacy->scope_depth_overflow_count;
+    diagnostics.scope_exit_underflow_count = legacy->scope_exit_underflow_count;
+    return diagnostics;
+}
+
+void compiler_allocator_reset_diagnostics(DualRegisterAllocator* allocator) {
+    if (!allocator) {
+        return;
+    }
+
+    MultiPassRegisterAllocator* legacy = allocator->legacy_allocator;
+    if (!legacy) {
+        return;
+    }
+
+    legacy->max_scope_depth_seen = legacy->current_scope_level;
+    legacy->scope_depth_overflow_count = 0;
+    legacy->scope_exit_underflow_count = 0;
 }
 
