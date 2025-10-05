@@ -2365,7 +2365,33 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
                 }
             }
         }
-        if (ctx->allocator && fused_limit_guard_reg >= 0) {
+
+        fused_limit_guard_reg = compiler_alloc_temp(ctx->allocator);
+        if (fused_limit_guard_reg != -1) {
+            fused_limit_guard_is_temp = true;
+        } else {
+            fused_limit_guard_reg = compiler_alloc_frame(ctx->allocator);
+            if (fused_limit_guard_reg == -1) {
+                if (fused_info.use_adjusted_limit && fused_limit_temp_is_temp &&
+                    fused_limit_temp_reg >= 0) {
+                    compiler_free_temp(ctx->allocator, fused_limit_temp_reg);
+                }
+                if (fused_limit_is_temp && fused_limit_reg >= 0) {
+                    compiler_free_temp(ctx->allocator, fused_limit_reg);
+                }
+                leave_loop_context(ctx, loop_frame_fused, ctx->bytecode->count);
+                ctx->has_compilation_errors = true;
+                return;
+            }
+            fused_limit_guard_is_frame = true;
+        }
+
+        set_location_from_node(ctx, while_stmt);
+        emit_byte_to_buffer(ctx->bytecode, OP_MOVE_I32);
+        emit_byte_to_buffer(ctx->bytecode, (uint8_t)fused_limit_guard_reg);
+        emit_byte_to_buffer(ctx->bytecode, (uint8_t)fused_limit_source_reg);
+
+        if (ctx->allocator) {
             compiler_set_typed_residency_hint(ctx->allocator, fused_limit_guard_reg, true);
             typed_hint_limit_reg = fused_limit_guard_reg;
         }
@@ -2427,8 +2453,10 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
         emit_byte_to_buffer(ctx->bytecode, (uint8_t)fused_loop_reg);
         emit_byte_to_buffer(ctx->bytecode, limit_for_fused);
         int back_off = loop_start_fused - (ctx->bytecode->count + 2);
-        emit_byte_to_buffer(ctx->bytecode, (uint8_t)(back_off & 0xFF));
-        emit_byte_to_buffer(ctx->bytecode, (uint8_t)((back_off >> 8) & 0xFF));
+        // OP_INC_CMP_JMP reads its offset as a big-endian signed 16-bit value.
+        uint16_t encoded_back_off = (uint16_t)back_off;
+        emit_byte_to_buffer(ctx->bytecode, (uint8_t)((encoded_back_off >> 8) & 0xFF));
+        emit_byte_to_buffer(ctx->bytecode, (uint8_t)(encoded_back_off & 0xFF));
 
         int end_target = ctx->bytecode->count;
         ctx->current_loop_end = end_target;
@@ -2460,17 +2488,13 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
         if (fused_info.use_adjusted_limit && fused_limit_temp_is_temp &&
             fused_limit_temp_reg >= 0) {
             compiler_free_temp(ctx->allocator, fused_limit_temp_reg);
+            fused_limit_temp_reg = -1;
         }
         if (fused_limit_is_temp && fused_limit_reg >= 0) {
             compiler_free_temp(ctx->allocator, fused_limit_reg);
+            fused_limit_reg = -1;
         }
 
-        if (fused_symbol) {
-            mark_symbol_as_loop_variable(fused_symbol);
-            mark_symbol_arithmetic_heavy(fused_symbol);
-        }
-
-        DEBUG_CODEGEN_PRINT("While statement compilation completed (fused inc path)");
         return;
     }
 
@@ -2605,8 +2629,15 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     int end_reg = -1;
     int step_reg = -1;
     int loop_var_reg = -1;
-    int condition_reg = -1;
-    int condition_neg_reg = -1;
+    int positive_guard_limit_reg = -1;
+    bool positive_guard_limit_is_temp = false;
+    bool positive_guard_limit_is_frame = false;
+    int negative_guard_limit_reg = -1;
+    bool negative_guard_limit_is_temp = false;
+    bool negative_guard_limit_is_frame = false;
+    int fused_guard_limit_reg = -1;
+    bool fused_guard_limit_is_temp = false;
+    bool fused_guard_limit_is_frame = false;
     int step_nonneg_reg = -1;
     int zero_reg = -1;
     int limit_temp_reg = -1; // temp for inclusive fused limit (end+1)
@@ -2794,8 +2825,9 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
 
     // If we can use fused INC_CMP_JMP, prefer the precomputed adjusted limit when available
     int limit_reg_used = end_reg;
-    if (can_fuse_inc_cmp && limit_temp_reg >= 0) {
-        limit_reg_used = limit_temp_reg;
+    int limit_source_reg = end_reg;
+    if (limit_temp_reg >= 0) {
+        limit_source_reg = limit_temp_reg;
     }
 
     if (can_fuse_inc_cmp && limit_reg_used >= 0) {
@@ -2825,66 +2857,135 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     emit_byte_to_buffer(ctx->bytecode, loop_var_reg);
     emit_byte_to_buffer(ctx->bytecode, (uint8_t)end_reg);
 
-    if (!step_known_positive) {
-        condition_neg_reg = compiler_alloc_temp(ctx->allocator);
-        if (condition_neg_reg == -1) {
-            ctx->has_compilation_errors = true;
-            goto cleanup;
+        if (need_positive_guard) {
+            positive_guard_limit_reg = compiler_alloc_temp(ctx->allocator);
+            if (positive_guard_limit_reg != -1) {
+                positive_guard_limit_is_temp = true;
+            } else {
+                positive_guard_limit_reg = compiler_alloc_frame(ctx->allocator);
+                if (positive_guard_limit_reg == -1) {
+                    ctx->has_compilation_errors = true;
+                    goto cleanup;
+                }
+                positive_guard_limit_is_frame = true;
+            }
+
+            set_location_from_node(ctx, for_stmt);
+            if (for_stmt->typed.forRange.inclusive) {
+                if (limit_temp_reg >= 0) {
+                    emit_byte_to_buffer(ctx->bytecode, OP_MOVE_I32);
+                    emit_byte_to_buffer(ctx->bytecode, (uint8_t)positive_guard_limit_reg);
+                    emit_byte_to_buffer(ctx->bytecode, (uint8_t)limit_temp_reg);
+                } else {
+                    emit_byte_to_buffer(ctx->bytecode, OP_MOVE_I32);
+                    emit_byte_to_buffer(ctx->bytecode, (uint8_t)positive_guard_limit_reg);
+                    emit_byte_to_buffer(ctx->bytecode, (uint8_t)end_reg);
+                    emit_byte_to_buffer(ctx->bytecode, OP_ADD_I32_IMM);
+                    emit_byte_to_buffer(ctx->bytecode, (uint8_t)positive_guard_limit_reg);
+                    emit_byte_to_buffer(ctx->bytecode, (uint8_t)positive_guard_limit_reg);
+                    int32_t one = 1;
+                    emit_byte_to_buffer(ctx->bytecode, (uint8_t)(one & 0xFF));
+                    emit_byte_to_buffer(ctx->bytecode, (uint8_t)((one >> 8) & 0xFF));
+                    emit_byte_to_buffer(ctx->bytecode, (uint8_t)((one >> 16) & 0xFF));
+                    emit_byte_to_buffer(ctx->bytecode, (uint8_t)((one >> 24) & 0xFF));
+                }
+            } else {
+                emit_byte_to_buffer(ctx->bytecode, OP_MOVE_I32);
+                emit_byte_to_buffer(ctx->bytecode, (uint8_t)positive_guard_limit_reg);
+                emit_byte_to_buffer(ctx->bytecode, (uint8_t)end_reg);
+            }
         }
 
-        set_location_from_node(ctx, for_stmt);
-        if (for_stmt->typed.forRange.inclusive) {
-            emit_byte_to_buffer(ctx->bytecode, OP_GE_I32_TYPED);
+        if (need_negative_guard) {
+            negative_guard_limit_reg = compiler_alloc_temp(ctx->allocator);
+            if (negative_guard_limit_reg != -1) {
+                negative_guard_limit_is_temp = true;
+            } else {
+                negative_guard_limit_reg = compiler_alloc_frame(ctx->allocator);
+                if (negative_guard_limit_reg == -1) {
+                    ctx->has_compilation_errors = true;
+                    goto cleanup;
+                }
+                negative_guard_limit_is_frame = true;
+            }
+
+            set_location_from_node(ctx, for_stmt);
+            emit_byte_to_buffer(ctx->bytecode, OP_MOVE_I32);
+            emit_byte_to_buffer(ctx->bytecode, (uint8_t)negative_guard_limit_reg);
+            emit_byte_to_buffer(ctx->bytecode, (uint8_t)end_reg);
+            if (for_stmt->typed.forRange.inclusive) {
+                emit_byte_to_buffer(ctx->bytecode, OP_SUB_I32_IMM);
+                emit_byte_to_buffer(ctx->bytecode, (uint8_t)negative_guard_limit_reg);
+                emit_byte_to_buffer(ctx->bytecode, (uint8_t)negative_guard_limit_reg);
+                int32_t one = 1;
+                emit_byte_to_buffer(ctx->bytecode, (uint8_t)(one & 0xFF));
+                emit_byte_to_buffer(ctx->bytecode, (uint8_t)((one >> 8) & 0xFF));
+                emit_byte_to_buffer(ctx->bytecode, (uint8_t)((one >> 16) & 0xFF));
+                emit_byte_to_buffer(ctx->bytecode, (uint8_t)((one >> 24) & 0xFF));
+            }
+        }
+
+        if (need_positive_guard && !need_negative_guard) {
+            set_location_from_node(ctx, for_stmt);
+            emit_byte_to_buffer(ctx->bytecode, OP_JUMP_IF_NOT_I32_TYPED);
+            emit_byte_to_buffer(ctx->bytecode, (uint8_t)loop_var_reg);
+            emit_byte_to_buffer(ctx->bytecode, (uint8_t)positive_guard_limit_reg);
+            guard_patches[guard_patch_count] =
+                emit_jump_placeholder(ctx->bytecode, OP_JUMP_IF_NOT_I32_TYPED);
+            if (guard_patches[guard_patch_count] < 0) {
+                ctx->has_compilation_errors = true;
+                goto cleanup;
+            }
+            guard_patch_count++;
+        } else if (!need_positive_guard && need_negative_guard) {
+            set_location_from_node(ctx, for_stmt);
+            emit_byte_to_buffer(ctx->bytecode, OP_JUMP_IF_NOT_I32_TYPED);
+            emit_byte_to_buffer(ctx->bytecode, (uint8_t)negative_guard_limit_reg);
+            emit_byte_to_buffer(ctx->bytecode, (uint8_t)loop_var_reg);
+            guard_patches[guard_patch_count] =
+                emit_jump_placeholder(ctx->bytecode, OP_JUMP_IF_NOT_I32_TYPED);
+            if (guard_patches[guard_patch_count] < 0) {
+                ctx->has_compilation_errors = true;
+                goto cleanup;
+            }
+            guard_patch_count++;
         } else {
-            emit_byte_to_buffer(ctx->bytecode, OP_GT_I32_TYPED);
-        }
-        emit_byte_to_buffer(ctx->bytecode, condition_neg_reg);
-        emit_byte_to_buffer(ctx->bytecode, loop_var_reg);
-        emit_byte_to_buffer(ctx->bytecode, end_reg);
-    }
+            if (step_nonneg_reg == -1) {
+                ctx->has_compilation_errors = true;
+                goto cleanup;
+            }
 
-    int select_neg_patch = -1;
-    int skip_neg_patch = -1;
+            int select_neg_patch = -1;
+            int skip_neg_patch = -1;
 
-    if (step_known_negative) {
-        set_location_from_node(ctx, for_stmt);
-        emit_move(ctx, condition_reg, condition_neg_reg);
-    } else if (!step_known_positive) {
-        if (step_nonneg_reg == -1) {
-            ctx->has_compilation_errors = true;
-            goto cleanup;
-        }
+            set_location_from_node(ctx, for_stmt);
+            emit_byte_to_buffer(ctx->bytecode, OP_JUMP_IF_NOT_R);
+            emit_byte_to_buffer(ctx->bytecode, (uint8_t)step_nonneg_reg);
+            select_neg_patch = emit_jump_placeholder(ctx->bytecode, OP_JUMP_IF_NOT_R);
+            if (select_neg_patch < 0) {
+                ctx->has_compilation_errors = true;
+                goto cleanup;
+            }
 
-        set_location_from_node(ctx, for_stmt);
-        emit_byte_to_buffer(ctx->bytecode, OP_JUMP_IF_NOT_R);
-        emit_byte_to_buffer(ctx->bytecode, step_nonneg_reg);
-        select_neg_patch = emit_jump_placeholder(ctx->bytecode, OP_JUMP_IF_NOT_R);
-        if (select_neg_patch < 0) {
-            ctx->has_compilation_errors = true;
-            goto cleanup;
-        }
+            set_location_from_node(ctx, for_stmt);
+            emit_byte_to_buffer(ctx->bytecode, OP_JUMP_IF_NOT_I32_TYPED);
+            emit_byte_to_buffer(ctx->bytecode, (uint8_t)loop_var_reg);
+            emit_byte_to_buffer(ctx->bytecode, (uint8_t)positive_guard_limit_reg);
+            guard_patches[guard_patch_count] =
+                emit_jump_placeholder(ctx->bytecode, OP_JUMP_IF_NOT_I32_TYPED);
+            if (guard_patches[guard_patch_count] < 0) {
+                ctx->has_compilation_errors = true;
+                goto cleanup;
+            }
+            guard_patch_count++;
 
-        set_location_from_node(ctx, for_stmt);
-        emit_byte_to_buffer(ctx->bytecode, OP_JUMP);
-        skip_neg_patch = emit_jump_placeholder(ctx->bytecode, OP_JUMP);
-        if (skip_neg_patch < 0) {
-            ctx->has_compilation_errors = true;
-            goto cleanup;
-        }
-
-        if (!patch_jump(ctx->bytecode, select_neg_patch, ctx->bytecode->count)) {
-            ctx->has_compilation_errors = true;
-            goto cleanup;
-        }
-
-        set_location_from_node(ctx, for_stmt);
-        emit_move(ctx, condition_reg, condition_neg_reg);
-
-        if (!patch_jump(ctx->bytecode, skip_neg_patch, ctx->bytecode->count)) {
-            ctx->has_compilation_errors = true;
-            goto cleanup;
-        }
-    }
+            set_location_from_node(ctx, for_stmt);
+            emit_byte_to_buffer(ctx->bytecode, OP_JUMP);
+            skip_neg_patch = emit_jump_placeholder(ctx->bytecode, OP_JUMP);
+            if (skip_neg_patch < 0) {
+                ctx->has_compilation_errors = true;
+                goto cleanup;
+            }
 
     int end_patch = -1;
     set_location_from_node(ctx, for_stmt);
@@ -2931,9 +3032,11 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     int end_target = ctx->bytecode->count;
     ctx->current_loop_end = end_target;
 
-    if (!patch_jump(ctx->bytecode, end_patch, end_target)) {
-        ctx->has_compilation_errors = true;
-        goto cleanup;
+    for (int i = 0; i < guard_patch_count; i++) {
+        if (!patch_jump(ctx->bytecode, guard_patches[i], end_target)) {
+            ctx->has_compilation_errors = true;
+            goto cleanup;
+        }
     }
 
     patch_break_statements(ctx, end_target);
@@ -2955,13 +3058,33 @@ cleanup:
     release_typed_hint(ctx, &typed_hint_loop_reg);
     release_typed_hint(ctx, &typed_hint_limit_reg);
 
-    if (condition_reg >= MP_TEMP_REG_START && condition_reg <= MP_TEMP_REG_END) {
-        compiler_free_temp(ctx->allocator, condition_reg);
-        condition_reg = -1;
+    if (fused_guard_limit_is_temp && fused_guard_limit_reg >= MP_TEMP_REG_START &&
+        fused_guard_limit_reg <= MP_TEMP_REG_END) {
+        compiler_free_temp(ctx->allocator, fused_guard_limit_reg);
+        fused_guard_limit_reg = -1;
     }
-    if (condition_neg_reg >= MP_TEMP_REG_START && condition_neg_reg <= MP_TEMP_REG_END) {
-        compiler_free_temp(ctx->allocator, condition_neg_reg);
-        condition_neg_reg = -1;
+    if (fused_guard_limit_is_frame && fused_guard_limit_reg >= 0) {
+        compiler_free_register(ctx->allocator, fused_guard_limit_reg);
+        fused_guard_limit_reg = -1;
+    }
+
+    if (positive_guard_limit_is_temp && positive_guard_limit_reg >= MP_TEMP_REG_START &&
+        positive_guard_limit_reg <= MP_TEMP_REG_END) {
+        compiler_free_temp(ctx->allocator, positive_guard_limit_reg);
+        positive_guard_limit_reg = -1;
+    }
+    if (positive_guard_limit_is_frame && positive_guard_limit_reg >= 0) {
+        compiler_free_register(ctx->allocator, positive_guard_limit_reg);
+        positive_guard_limit_reg = -1;
+    }
+    if (negative_guard_limit_is_temp && negative_guard_limit_reg >= MP_TEMP_REG_START &&
+        negative_guard_limit_reg <= MP_TEMP_REG_END) {
+        compiler_free_temp(ctx->allocator, negative_guard_limit_reg);
+        negative_guard_limit_reg = -1;
+    }
+    if (negative_guard_limit_is_frame && negative_guard_limit_reg >= 0) {
+        compiler_free_register(ctx->allocator, negative_guard_limit_reg);
+        negative_guard_limit_reg = -1;
     }
     if (step_nonneg_reg >= MP_TEMP_REG_START && step_nonneg_reg <= MP_TEMP_REG_END) {
         compiler_free_temp(ctx->allocator, step_nonneg_reg);

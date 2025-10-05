@@ -9,8 +9,8 @@
 
 static void write_short(Chunk* chunk, int16_t value) {
     uint16_t encoded = (uint16_t)value;
-    writeChunk(chunk, (uint8_t)(encoded & 0xFF), 1, 0, "inc_cmp_jmp");
     writeChunk(chunk, (uint8_t)(encoded >> 8), 1, 0, "inc_cmp_jmp");
+    writeChunk(chunk, (uint8_t)(encoded & 0xFF), 1, 0, "inc_cmp_jmp");
 }
 
 static void write_inc_cmp_jmp_program(Chunk* chunk, uint8_t counter_reg, uint8_t limit_reg, int16_t offset) {
