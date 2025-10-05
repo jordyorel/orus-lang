@@ -73,7 +73,11 @@
             } \
             VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be u32"); \
         } \
-        uint32_t next_value__ = AS_U32(val_reg__) + (uint32_t)1; \
+        uint32_t current__ = AS_U32(val_reg__); \
+        uint32_t next_value__; \
+        if (__builtin_add_overflow(current__, (uint32_t)1, &next_value__)) { \
+            VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow"); \
+        } \
         vm_store_u32_typed_hot((reg), next_value__); \
     } while (0)
 
@@ -87,7 +91,11 @@
             } \
             VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be u64"); \
         } \
-        uint64_t next_value__ = AS_U64(val_reg__) + (uint64_t)1; \
+        uint64_t current__ = AS_U64(val_reg__); \
+        uint64_t next_value__; \
+        if (__builtin_add_overflow(current__, (uint64_t)1, &next_value__)) { \
+            VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow"); \
+        } \
         vm_store_u64_typed_hot((reg), next_value__); \
     } while (0)
 
@@ -1195,7 +1203,13 @@ InterpretResult vm_run_dispatch(void) {
             if (!IS_U32(val1) || !IS_U32(val2)) {
                 VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be u32");
             }
-            vm_set_register_safe(dst, U32_VAL(AS_U32(val1) + AS_U32(val2)));
+            uint32_t a = AS_U32(val1);
+            uint32_t b = AS_U32(val2);
+            uint32_t result;
+            if (__builtin_add_overflow(a, b, &result)) {
+                VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow");
+            }
+            vm_set_register_safe(dst, U32_VAL(result));
             DISPATCH();
         }
 
@@ -1272,13 +1286,12 @@ InterpretResult vm_run_dispatch(void) {
 
             uint64_t a = AS_U64(val1);
             uint64_t b = AS_U64(val2);
-            
-            // Check for overflow: if a + b < a, then overflow occurred
-            if (UINT64_MAX - a < b) {
-                VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "u64 addition overflow");
+            uint64_t result;
+            if (__builtin_add_overflow(a, b, &result)) {
+                VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow");
             }
 
-            vm_set_register_safe(dst, U64_VAL(a + b));
+            vm_set_register_safe(dst, U64_VAL(result));
             DISPATCH();
         }
 
@@ -3694,7 +3707,10 @@ InterpretResult vm_run_dispatch(void) {
         uint32_t limit_u32;
         if (vm_try_read_u32_typed(reg, &counter_u32) &&
             vm_try_read_u32_typed(limit_reg, &limit_u32)) {
-            uint32_t incremented = counter_u32 + (uint32_t)1;
+            uint32_t incremented;
+            if (__builtin_add_overflow(counter_u32, (uint32_t)1, &incremented)) {
+                VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow");
+            }
             vm_store_u32_typed_hot(reg, incremented);
             if (incremented < limit_u32) {
                 vm.ip += offset;
@@ -3706,7 +3722,10 @@ InterpretResult vm_run_dispatch(void) {
         uint64_t limit_u64;
         if (vm_try_read_u64_typed(reg, &counter_u64) &&
             vm_try_read_u64_typed(limit_reg, &limit_u64)) {
-            uint64_t incremented = counter_u64 + (uint64_t)1;
+            uint64_t incremented;
+            if (__builtin_add_overflow(counter_u64, (uint64_t)1, &incremented)) {
+                VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow");
+            }
             vm_store_u64_typed_hot(reg, incremented);
             if (incremented < limit_u64) {
                 vm.ip += offset;
@@ -3744,7 +3763,11 @@ InterpretResult vm_run_dispatch(void) {
         }
 
         if (IS_U32(counter) && IS_U32(limit)) {
-            uint32_t incremented = AS_U32(counter) + (uint32_t)1;
+            uint32_t current = AS_U32(counter);
+            uint32_t incremented;
+            if (__builtin_add_overflow(current, (uint32_t)1, &incremented)) {
+                VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow");
+            }
             vm_store_u32_typed_hot(reg, incremented);
             if (incremented < AS_U32(limit)) {
                 vm.ip += offset;
@@ -3753,7 +3776,11 @@ InterpretResult vm_run_dispatch(void) {
         }
 
         if (IS_U64(counter) && IS_U64(limit)) {
-            uint64_t incremented = AS_U64(counter) + (uint64_t)1;
+            uint64_t current = AS_U64(counter);
+            uint64_t incremented;
+            if (__builtin_add_overflow(current, (uint64_t)1, &incremented)) {
+                VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow");
+            }
             vm_store_u64_typed_hot(reg, incremented);
             if (incremented < AS_U64(limit)) {
                 vm.ip += offset;

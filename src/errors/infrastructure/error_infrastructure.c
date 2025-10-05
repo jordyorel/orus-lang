@@ -329,6 +329,10 @@ ErrorReportResult set_source_text(const char* source, size_t length) {
 }
 
 const char* get_error_category(ErrorCode code) {
+    if (code == E0004_ARITHMETIC_OVERFLOW) {
+        return "RUNTIME SAFETY CHECK";
+    }
+
     // Branchless selection for better performance
     static const char* categories[] = {
         "RUNTIME PANIC",   // 0-999
@@ -1014,7 +1018,7 @@ const char* get_error_title(ErrorCode code) {
         case E0001_DIVISION_BY_ZERO: return "Oh no! You tried to divide by zero";
         case E0002_INDEX_OUT_OF_BOUNDS: return "Index is outside the valid range";
         case E0003_NULL_REFERENCE: return "Tried to use a null value";
-        case E0004_ARITHMETIC_OVERFLOW: return "Number got too big to handle";
+        case E0004_ARITHMETIC_OVERFLOW: return "Arithmetic overflow detected and prevented";
         case E0005_INVALID_OPERATION: return "This operation isn't allowed here";
         case E0006_MODULO_BY_ZERO: return "Can't find remainder when dividing by zero";
         case E0010_INVALID_LITERAL: return "Couldn't parse this number";
@@ -1078,7 +1082,7 @@ const char* get_error_help(ErrorCode code) {
         case E0002_INDEX_OUT_OF_BOUNDS:
             return "Check that your index is between 0 and the array length - 1.";
         case E0004_ARITHMETIC_OVERFLOW:
-            return "Try using a larger number type like i64 or check for overflow before the operation.";
+            return "Overflow was caught before it wrapped. Use a larger integer type or clamp the value if you need to avoid this safety stop.";
         case E0006_MODULO_BY_ZERO:
             return "Add a check to ensure the divisor isn't zero before using the modulo operator.";
         case E0010_INVALID_LITERAL:

@@ -99,7 +99,7 @@ static inline bool read_f64_operand(uint16_t reg, double* out) {
     return true;
 }
 
-#define DEFINE_TYPED_ARITH_HANDLER(OP_NAME, TYPE_SUFFIX, CTYPE, READ_FN, STORE_FN, ZERO_GUARD, RESULT_EXPR) \
+#define DEFINE_TYPED_ARITH_HANDLER(OP_NAME, TYPE_SUFFIX, CTYPE, READ_FN, STORE_FN, ZERO_GUARD, BODY) \
     void handle_##OP_NAME##_##TYPE_SUFFIX##_typed(void) { \
         uint8_t dst = READ_BYTE(); \
         uint8_t left = READ_BYTE(); \
@@ -115,7 +115,7 @@ static inline bool read_f64_operand(uint16_t reg, double* out) {
             return; \
         } \
         ZERO_GUARD; \
-        STORE_FN(dst, (RESULT_EXPR)); \
+        BODY; \
     }
 
 #define NO_EXTRA_GUARD do { } while (0)
@@ -146,40 +146,150 @@ static inline bool read_f64_operand(uint16_t reg, double* out) {
 
 // ====== I32 Typed Arithmetic Handlers ======
 
-DEFINE_TYPED_ARITH_HANDLER(add, i32, int32_t, READ_I32_OPERAND, STORE_I32_RESULT, NO_EXTRA_GUARD, left_val + right_val)
-DEFINE_TYPED_ARITH_HANDLER(sub, i32, int32_t, READ_I32_OPERAND, STORE_I32_RESULT, NO_EXTRA_GUARD, left_val - right_val)
-DEFINE_TYPED_ARITH_HANDLER(mul, i32, int32_t, READ_I32_OPERAND, STORE_I32_RESULT, NO_EXTRA_GUARD, left_val * right_val)
-DEFINE_TYPED_ARITH_HANDLER(div, i32, int32_t, READ_I32_OPERAND, STORE_I32_RESULT, GUARD_DIV_ZERO_INT, left_val / right_val)
-DEFINE_TYPED_ARITH_HANDLER(mod, i32, int32_t, READ_I32_OPERAND, STORE_I32_RESULT, GUARD_DIV_ZERO_INT, left_val % right_val)
+DEFINE_TYPED_ARITH_HANDLER(add, i32, int32_t, READ_I32_OPERAND, STORE_I32_RESULT, NO_EXTRA_GUARD, {
+        int32_t result;
+        if (__builtin_add_overflow(left_val, right_val, &result)) {
+            runtimeError(ERROR_VALUE, (SrcLocation){NULL,0,0}, "Integer overflow");
+            return;
+        }
+        STORE_I32_RESULT(dst, result);
+    })
+DEFINE_TYPED_ARITH_HANDLER(sub, i32, int32_t, READ_I32_OPERAND, STORE_I32_RESULT, NO_EXTRA_GUARD, {
+        int32_t result;
+        if (__builtin_sub_overflow(left_val, right_val, &result)) {
+            runtimeError(ERROR_VALUE, (SrcLocation){NULL,0,0}, "Integer overflow");
+            return;
+        }
+        STORE_I32_RESULT(dst, result);
+    })
+DEFINE_TYPED_ARITH_HANDLER(mul, i32, int32_t, READ_I32_OPERAND, STORE_I32_RESULT, NO_EXTRA_GUARD, {
+        int32_t result;
+        if (__builtin_mul_overflow(left_val, right_val, &result)) {
+            runtimeError(ERROR_VALUE, (SrcLocation){NULL,0,0}, "Integer overflow");
+            return;
+        }
+        STORE_I32_RESULT(dst, result);
+    })
+DEFINE_TYPED_ARITH_HANDLER(div, i32, int32_t, READ_I32_OPERAND, STORE_I32_RESULT, GUARD_DIV_ZERO_INT, {
+        STORE_I32_RESULT(dst, left_val / right_val);
+    })
+DEFINE_TYPED_ARITH_HANDLER(mod, i32, int32_t, READ_I32_OPERAND, STORE_I32_RESULT, GUARD_DIV_ZERO_INT, {
+        STORE_I32_RESULT(dst, left_val % right_val);
+    })
 
 // ====== I64 Typed Arithmetic Handlers ======
 
-DEFINE_TYPED_ARITH_HANDLER(add, i64, int64_t, READ_I64_OPERAND, STORE_I64_RESULT, NO_EXTRA_GUARD, left_val + right_val)
-DEFINE_TYPED_ARITH_HANDLER(sub, i64, int64_t, READ_I64_OPERAND, STORE_I64_RESULT, NO_EXTRA_GUARD, left_val - right_val)
-DEFINE_TYPED_ARITH_HANDLER(mul, i64, int64_t, READ_I64_OPERAND, STORE_I64_RESULT, NO_EXTRA_GUARD, left_val * right_val)
-DEFINE_TYPED_ARITH_HANDLER(div, i64, int64_t, READ_I64_OPERAND, STORE_I64_RESULT, GUARD_DIV_ZERO_INT, left_val / right_val)
-DEFINE_TYPED_ARITH_HANDLER(mod, i64, int64_t, READ_I64_OPERAND, STORE_I64_RESULT, GUARD_DIV_ZERO_INT, left_val % right_val)
+DEFINE_TYPED_ARITH_HANDLER(add, i64, int64_t, READ_I64_OPERAND, STORE_I64_RESULT, NO_EXTRA_GUARD, {
+        int64_t result;
+        if (__builtin_add_overflow(left_val, right_val, &result)) {
+            runtimeError(ERROR_VALUE, (SrcLocation){NULL,0,0}, "Integer overflow");
+            return;
+        }
+        STORE_I64_RESULT(dst, result);
+    })
+DEFINE_TYPED_ARITH_HANDLER(sub, i64, int64_t, READ_I64_OPERAND, STORE_I64_RESULT, NO_EXTRA_GUARD, {
+        int64_t result;
+        if (__builtin_sub_overflow(left_val, right_val, &result)) {
+            runtimeError(ERROR_VALUE, (SrcLocation){NULL,0,0}, "Integer overflow");
+            return;
+        }
+        STORE_I64_RESULT(dst, result);
+    })
+DEFINE_TYPED_ARITH_HANDLER(mul, i64, int64_t, READ_I64_OPERAND, STORE_I64_RESULT, NO_EXTRA_GUARD, {
+        int64_t result;
+        if (__builtin_mul_overflow(left_val, right_val, &result)) {
+            runtimeError(ERROR_VALUE, (SrcLocation){NULL,0,0}, "Integer overflow");
+            return;
+        }
+        STORE_I64_RESULT(dst, result);
+    })
+DEFINE_TYPED_ARITH_HANDLER(div, i64, int64_t, READ_I64_OPERAND, STORE_I64_RESULT, GUARD_DIV_ZERO_INT, {
+        STORE_I64_RESULT(dst, left_val / right_val);
+    })
+DEFINE_TYPED_ARITH_HANDLER(mod, i64, int64_t, READ_I64_OPERAND, STORE_I64_RESULT, GUARD_DIV_ZERO_INT, {
+        STORE_I64_RESULT(dst, left_val % right_val);
+    })
 
 // ====== F64 Typed Arithmetic Handlers ======
 
-DEFINE_TYPED_ARITH_HANDLER(add, f64, double, READ_F64_OPERAND, STORE_F64_RESULT, NO_EXTRA_GUARD, left_val + right_val)
-DEFINE_TYPED_ARITH_HANDLER(sub, f64, double, READ_F64_OPERAND, STORE_F64_RESULT, NO_EXTRA_GUARD, left_val - right_val)
-DEFINE_TYPED_ARITH_HANDLER(mul, f64, double, READ_F64_OPERAND, STORE_F64_RESULT, NO_EXTRA_GUARD, left_val * right_val)
-DEFINE_TYPED_ARITH_HANDLER(div, f64, double, READ_F64_OPERAND, STORE_F64_RESULT, GUARD_DIV_ZERO_F64, left_val / right_val)
-DEFINE_TYPED_ARITH_HANDLER(mod, f64, double, READ_F64_OPERAND, STORE_F64_RESULT, GUARD_DIV_ZERO_F64, fmod(left_val, right_val))
+DEFINE_TYPED_ARITH_HANDLER(add, f64, double, READ_F64_OPERAND, STORE_F64_RESULT, NO_EXTRA_GUARD, {
+        STORE_F64_RESULT(dst, left_val + right_val);
+    })
+DEFINE_TYPED_ARITH_HANDLER(sub, f64, double, READ_F64_OPERAND, STORE_F64_RESULT, NO_EXTRA_GUARD, {
+        STORE_F64_RESULT(dst, left_val - right_val);
+    })
+DEFINE_TYPED_ARITH_HANDLER(mul, f64, double, READ_F64_OPERAND, STORE_F64_RESULT, NO_EXTRA_GUARD, {
+        STORE_F64_RESULT(dst, left_val * right_val);
+    })
+DEFINE_TYPED_ARITH_HANDLER(div, f64, double, READ_F64_OPERAND, STORE_F64_RESULT, GUARD_DIV_ZERO_F64, {
+        STORE_F64_RESULT(dst, left_val / right_val);
+    })
+DEFINE_TYPED_ARITH_HANDLER(mod, f64, double, READ_F64_OPERAND, STORE_F64_RESULT, GUARD_DIV_ZERO_F64, {
+        STORE_F64_RESULT(dst, fmod(left_val, right_val));
+    })
 
 // ====== U32 Typed Arithmetic Handlers ======
 
-DEFINE_TYPED_ARITH_HANDLER(add, u32, uint32_t, READ_U32_OPERAND, STORE_U32_RESULT, NO_EXTRA_GUARD, left_val + right_val)
-DEFINE_TYPED_ARITH_HANDLER(sub, u32, uint32_t, READ_U32_OPERAND, STORE_U32_RESULT, NO_EXTRA_GUARD, left_val - right_val)
-DEFINE_TYPED_ARITH_HANDLER(mul, u32, uint32_t, READ_U32_OPERAND, STORE_U32_RESULT, NO_EXTRA_GUARD, left_val * right_val)
-DEFINE_TYPED_ARITH_HANDLER(div, u32, uint32_t, READ_U32_OPERAND, STORE_U32_RESULT, GUARD_DIV_ZERO_INT, left_val / right_val)
-DEFINE_TYPED_ARITH_HANDLER(mod, u32, uint32_t, READ_U32_OPERAND, STORE_U32_RESULT, GUARD_DIV_ZERO_INT, left_val % right_val)
+DEFINE_TYPED_ARITH_HANDLER(add, u32, uint32_t, READ_U32_OPERAND, STORE_U32_RESULT, NO_EXTRA_GUARD, {
+        uint32_t result;
+        if (__builtin_add_overflow(left_val, right_val, &result)) {
+            runtimeError(ERROR_VALUE, (SrcLocation){NULL,0,0}, "Integer overflow");
+            return;
+        }
+        STORE_U32_RESULT(dst, result);
+    })
+DEFINE_TYPED_ARITH_HANDLER(sub, u32, uint32_t, READ_U32_OPERAND, STORE_U32_RESULT, NO_EXTRA_GUARD, {
+        uint32_t result;
+        if (__builtin_sub_overflow(left_val, right_val, &result)) {
+            runtimeError(ERROR_VALUE, (SrcLocation){NULL,0,0}, "Integer overflow");
+            return;
+        }
+        STORE_U32_RESULT(dst, result);
+    })
+DEFINE_TYPED_ARITH_HANDLER(mul, u32, uint32_t, READ_U32_OPERAND, STORE_U32_RESULT, NO_EXTRA_GUARD, {
+        uint32_t result;
+        if (__builtin_mul_overflow(left_val, right_val, &result)) {
+            runtimeError(ERROR_VALUE, (SrcLocation){NULL,0,0}, "Integer overflow");
+            return;
+        }
+        STORE_U32_RESULT(dst, result);
+    })
+DEFINE_TYPED_ARITH_HANDLER(div, u32, uint32_t, READ_U32_OPERAND, STORE_U32_RESULT, GUARD_DIV_ZERO_INT, {
+        STORE_U32_RESULT(dst, left_val / right_val);
+    })
+DEFINE_TYPED_ARITH_HANDLER(mod, u32, uint32_t, READ_U32_OPERAND, STORE_U32_RESULT, GUARD_DIV_ZERO_INT, {
+        STORE_U32_RESULT(dst, left_val % right_val);
+    })
 
 // ====== U64 Typed Arithmetic Handlers ======
 
-DEFINE_TYPED_ARITH_HANDLER(add, u64, uint64_t, READ_U64_OPERAND, STORE_U64_RESULT, NO_EXTRA_GUARD, left_val + right_val)
-DEFINE_TYPED_ARITH_HANDLER(sub, u64, uint64_t, READ_U64_OPERAND, STORE_U64_RESULT, NO_EXTRA_GUARD, left_val - right_val)
-DEFINE_TYPED_ARITH_HANDLER(mul, u64, uint64_t, READ_U64_OPERAND, STORE_U64_RESULT, NO_EXTRA_GUARD, left_val * right_val)
-DEFINE_TYPED_ARITH_HANDLER(div, u64, uint64_t, READ_U64_OPERAND, STORE_U64_RESULT, GUARD_DIV_ZERO_INT, left_val / right_val)
-DEFINE_TYPED_ARITH_HANDLER(mod, u64, uint64_t, READ_U64_OPERAND, STORE_U64_RESULT, GUARD_DIV_ZERO_INT, left_val % right_val)
+DEFINE_TYPED_ARITH_HANDLER(add, u64, uint64_t, READ_U64_OPERAND, STORE_U64_RESULT, NO_EXTRA_GUARD, {
+        uint64_t result;
+        if (__builtin_add_overflow(left_val, right_val, &result)) {
+            runtimeError(ERROR_VALUE, (SrcLocation){NULL,0,0}, "Integer overflow");
+            return;
+        }
+        STORE_U64_RESULT(dst, result);
+    })
+DEFINE_TYPED_ARITH_HANDLER(sub, u64, uint64_t, READ_U64_OPERAND, STORE_U64_RESULT, NO_EXTRA_GUARD, {
+        uint64_t result;
+        if (__builtin_sub_overflow(left_val, right_val, &result)) {
+            runtimeError(ERROR_VALUE, (SrcLocation){NULL,0,0}, "Integer overflow");
+            return;
+        }
+        STORE_U64_RESULT(dst, result);
+    })
+DEFINE_TYPED_ARITH_HANDLER(mul, u64, uint64_t, READ_U64_OPERAND, STORE_U64_RESULT, NO_EXTRA_GUARD, {
+        uint64_t result;
+        if (__builtin_mul_overflow(left_val, right_val, &result)) {
+            runtimeError(ERROR_VALUE, (SrcLocation){NULL,0,0}, "Integer overflow");
+            return;
+        }
+        STORE_U64_RESULT(dst, result);
+    })
+DEFINE_TYPED_ARITH_HANDLER(div, u64, uint64_t, READ_U64_OPERAND, STORE_U64_RESULT, GUARD_DIV_ZERO_INT, {
+        STORE_U64_RESULT(dst, left_val / right_val);
+    })
+DEFINE_TYPED_ARITH_HANDLER(mod, u64, uint64_t, READ_U64_OPERAND, STORE_U64_RESULT, GUARD_DIV_ZERO_INT, {
+        STORE_U64_RESULT(dst, left_val % right_val);
+    })
