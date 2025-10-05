@@ -179,223 +179,46 @@ static inline Value vm_peek_register(uint16_t id) {
     return vm_get_register_safe(id);
 }
 
-static inline bool vm_try_read_i32_typed(uint16_t id, int32_t* out) {
-    if (!vm_typed_reg_in_range(id) || vm.typed_regs.reg_types[id] != REG_TYPE_I32) {
-        return false;
+#define VM_DEFINE_TYPED_ACCESSORS(REG_ENUM, FIELD, CTYPE, IS_MACRO, AS_MACRO) \
+    static inline bool vm_try_read_##FIELD##_typed(uint16_t id, CTYPE* out) { \
+        if (!vm_typed_reg_in_range((id)) || \
+            vm.typed_regs.reg_types[(id)] != (uint8_t)(REG_ENUM)) { \
+            return false; \
+        } \
+        if (vm.typed_regs.dirty[(id)]) { \
+            *out = vm.typed_regs.FIELD##_regs[(id)]; \
+            return true; \
+        } \
+        Value current = vm_peek_register((id)); \
+        if (!IS_MACRO(current)) { \
+            vm.typed_regs.reg_types[(id)] = (uint8_t)REG_TYPE_NONE; \
+            vm.typed_regs.dirty[(id)] = false; \
+            return false; \
+        } \
+        CTYPE cached = vm.typed_regs.FIELD##_regs[(id)]; \
+        CTYPE value = AS_MACRO(current); \
+        if (cached != value) { \
+            vm.typed_regs.FIELD##_regs[(id)] = value; \
+            cached = value; \
+        } \
+        *out = cached; \
+        return true; \
+    } \
+    static inline void vm_cache_##FIELD##_typed(uint16_t id, CTYPE value) { \
+        if (vm_typed_reg_in_range((id))) { \
+            vm.typed_regs.FIELD##_regs[(id)] = value; \
+            vm.typed_regs.reg_types[(id)] = (uint8_t)(REG_ENUM); \
+            vm.typed_regs.dirty[(id)] = false; \
+        } \
     }
 
-    if (vm.typed_regs.dirty[id]) {
-        *out = vm.typed_regs.i32_regs[id];
-        return true;
-    }
-
-    Value current = vm_peek_register(id);
-    if (!IS_I32(current)) {
-        vm.typed_regs.reg_types[id] = REG_TYPE_NONE;
-        vm.typed_regs.dirty[id] = false;
-        return false;
-    }
-
-    int32_t cached = vm.typed_regs.i32_regs[id];
-    int32_t value = AS_I32(current);
-    if (cached != value) {
-        vm.typed_regs.i32_regs[id] = value;
-        cached = value;
-    }
-
-    *out = cached;
-    return true;
-}
-
-static inline bool vm_try_read_i64_typed(uint16_t id, int64_t* out) {
-    if (!vm_typed_reg_in_range(id) || vm.typed_regs.reg_types[id] != REG_TYPE_I64) {
-        return false;
-    }
-
-    if (vm.typed_regs.dirty[id]) {
-        *out = vm.typed_regs.i64_regs[id];
-        return true;
-    }
-
-    Value current = vm_peek_register(id);
-    if (!IS_I64(current)) {
-        vm.typed_regs.reg_types[id] = REG_TYPE_NONE;
-        vm.typed_regs.dirty[id] = false;
-        return false;
-    }
-
-    int64_t cached = vm.typed_regs.i64_regs[id];
-    int64_t value = AS_I64(current);
-    if (cached != value) {
-        vm.typed_regs.i64_regs[id] = value;
-        cached = value;
-    }
-
-    *out = cached;
-    return true;
-}
-
-static inline bool vm_try_read_u32_typed(uint16_t id, uint32_t* out) {
-    if (!vm_typed_reg_in_range(id) || vm.typed_regs.reg_types[id] != REG_TYPE_U32) {
-        return false;
-    }
-
-    if (vm.typed_regs.dirty[id]) {
-        *out = vm.typed_regs.u32_regs[id];
-        return true;
-    }
-
-    Value current = vm_peek_register(id);
-    if (!IS_U32(current)) {
-        vm.typed_regs.reg_types[id] = REG_TYPE_NONE;
-        vm.typed_regs.dirty[id] = false;
-        return false;
-    }
-
-    uint32_t cached = vm.typed_regs.u32_regs[id];
-    uint32_t value = AS_U32(current);
-    if (cached != value) {
-        vm.typed_regs.u32_regs[id] = value;
-        cached = value;
-    }
-
-    *out = cached;
-    return true;
-}
-
-static inline bool vm_try_read_u64_typed(uint16_t id, uint64_t* out) {
-    if (!vm_typed_reg_in_range(id) || vm.typed_regs.reg_types[id] != REG_TYPE_U64) {
-        return false;
-    }
-
-    if (vm.typed_regs.dirty[id]) {
-        *out = vm.typed_regs.u64_regs[id];
-        return true;
-    }
-
-    Value current = vm_peek_register(id);
-    if (!IS_U64(current)) {
-        vm.typed_regs.reg_types[id] = REG_TYPE_NONE;
-        vm.typed_regs.dirty[id] = false;
-        return false;
-    }
-
-    uint64_t cached = vm.typed_regs.u64_regs[id];
-    uint64_t value = AS_U64(current);
-    if (cached != value) {
-        vm.typed_regs.u64_regs[id] = value;
-        cached = value;
-    }
-
-    *out = cached;
-    return true;
-}
-
-static inline bool vm_try_read_f64_typed(uint16_t id, double* out) {
-    if (!vm_typed_reg_in_range(id) || vm.typed_regs.reg_types[id] != REG_TYPE_F64) {
-        return false;
-    }
-
-    if (vm.typed_regs.dirty[id]) {
-        *out = vm.typed_regs.f64_regs[id];
-        return true;
-    }
-
-    Value current = vm_peek_register(id);
-    if (!IS_F64(current)) {
-        vm.typed_regs.reg_types[id] = REG_TYPE_NONE;
-        vm.typed_regs.dirty[id] = false;
-        return false;
-    }
-
-    double cached = vm.typed_regs.f64_regs[id];
-    double value = AS_F64(current);
-    if (cached != value) {
-        vm.typed_regs.f64_regs[id] = value;
-        cached = value;
-    }
-
-    *out = cached;
-    return true;
-}
-
-static inline bool vm_try_read_bool_typed(uint16_t id, bool* out) {
-    if (!vm_typed_reg_in_range(id) || vm.typed_regs.reg_types[id] != REG_TYPE_BOOL) {
-        return false;
-    }
-
-    if (vm.typed_regs.dirty[id]) {
-        *out = vm.typed_regs.bool_regs[id];
-        return true;
-    }
-
-    Value current = vm_peek_register(id);
-    if (!IS_BOOL(current)) {
-        vm.typed_regs.reg_types[id] = REG_TYPE_NONE;
-        vm.typed_regs.dirty[id] = false;
-        return false;
-    }
-
-    bool cached = vm.typed_regs.bool_regs[id];
-    bool value = AS_BOOL(current);
-    if (cached != value) {
-        vm.typed_regs.bool_regs[id] = value;
-        cached = value;
-    }
-
-    *out = cached;
-    return true;
-}
-
-static inline void vm_cache_i32_typed(uint16_t id, int32_t value) {
-    if (vm_typed_reg_in_range(id)) {
-        vm.typed_regs.i32_regs[id] = value;
-        vm.typed_regs.reg_types[id] = REG_TYPE_I32;
-        vm.typed_regs.dirty[id] = false;
-    }
-}
-
-static inline void vm_cache_i64_typed(uint16_t id, int64_t value) {
-    if (vm_typed_reg_in_range(id)) {
-        vm.typed_regs.i64_regs[id] = value;
-        vm.typed_regs.reg_types[id] = REG_TYPE_I64;
-        vm.typed_regs.dirty[id] = false;
-    }
-}
-
-static inline void vm_cache_u32_typed(uint16_t id, uint32_t value) {
-    if (vm_typed_reg_in_range(id)) {
-        vm.typed_regs.u32_regs[id] = value;
-        vm.typed_regs.reg_types[id] = REG_TYPE_U32;
-        vm.typed_regs.dirty[id] = false;
-    }
-}
-
-static inline void vm_cache_u64_typed(uint16_t id, uint64_t value) {
-    if (vm_typed_reg_in_range(id)) {
-        vm.typed_regs.u64_regs[id] = value;
-        vm.typed_regs.reg_types[id] = REG_TYPE_U64;
-        vm.typed_regs.dirty[id] = false;
-    }
-}
-
-static inline void vm_cache_f64_typed(uint16_t id, double value) {
-    if (vm_typed_reg_in_range(id)) {
-        vm.typed_regs.f64_regs[id] = value;
-        vm.typed_regs.reg_types[id] = REG_TYPE_F64;
-        vm.typed_regs.dirty[id] = false;
-    }
-}
-
-static inline void vm_cache_bool_typed(uint16_t id, bool value) {
-    if (vm_typed_reg_in_range(id)) {
-        if (vm.typed_regs.reg_types[id] != REG_TYPE_BOOL) {
-        }
-        vm.typed_regs.bool_regs[id] = value;
-        vm.typed_regs.reg_types[id] = REG_TYPE_BOOL;
-        vm.typed_regs.dirty[id] = false;
-    }
-}
+VM_DEFINE_TYPED_ACCESSORS(REG_TYPE_I32, i32, int32_t, IS_I32, AS_I32)
+VM_DEFINE_TYPED_ACCESSORS(REG_TYPE_I64, i64, int64_t, IS_I64, AS_I64)
+VM_DEFINE_TYPED_ACCESSORS(REG_TYPE_U32, u32, uint32_t, IS_U32, AS_U32)
+VM_DEFINE_TYPED_ACCESSORS(REG_TYPE_U64, u64, uint64_t, IS_U64, AS_U64)
+VM_DEFINE_TYPED_ACCESSORS(REG_TYPE_F64, f64, double, IS_F64, AS_F64)
+VM_DEFINE_TYPED_ACCESSORS(REG_TYPE_BOOL, bool, bool, IS_BOOL, AS_BOOL)
+#undef VM_DEFINE_TYPED_ACCESSORS
 
 static inline bool vm_value_is_truthy(Value value) {
     if (IS_BOOL(value)) {
