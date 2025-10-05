@@ -730,6 +730,17 @@ void compiler_free_register(DualRegisterAllocator* allocator, int reg) {
 
 void compiler_free_temp(DualRegisterAllocator* allocator, int reg) {
     if (!allocator) return;
+
+    // Some call sites defensively attempt to free registers that ultimately
+    // resolved to global or frame allocations (for example, when a previously
+    // computed value is reused). Those registers are not managed by the temp
+    // allocator, so forwarding them would trigger noisy warnings and offer no
+    // benefit. Guard the call here so that only genuine temp registers are
+    // passed through to the multipass allocator.
+    if (reg < MP_TEMP_REG_START || reg > MP_TEMP_REG_END) {
+        return;
+    }
+
     mp_free_temp_register(allocator->legacy_allocator, reg);
 }
 
