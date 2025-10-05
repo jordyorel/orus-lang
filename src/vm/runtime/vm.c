@@ -277,7 +277,7 @@ void runtimeError(ErrorType type, SrcLocation location,
 
     ObjError* err = allocateError(type, buffer, location);
     if (!err) {
-        ErrorCode code = map_error_type_to_code(type);
+        ErrorCode code = map_error_details_to_code(type, buffer);
         report_runtime_error(code, location, "%s", buffer);
         vm.lastError = BOOL_VAL(false);
         vm_set_error_report_pending(false);
@@ -289,7 +289,7 @@ void runtimeError(ErrorType type, SrcLocation location,
     if (has_catch_handler) {
         vm_set_error_report_pending(true);
     } else {
-        ErrorCode code = map_error_type_to_code(type);
+        ErrorCode code = map_error_details_to_code(type, buffer);
         report_runtime_error(code, location, "%s", buffer);
         vm_set_error_report_pending(false);
     }
@@ -319,7 +319,7 @@ void vm_report_unhandled_error(void) {
         .line = err->location.line,
         .column = err->location.column,
     };
-    ErrorCode code = map_error_type_to_code(err->type);
+    ErrorCode code = map_error_details_to_code(err->type, message);
     report_runtime_error(code, loc, "%s", message);
     vm_set_error_report_pending(false);
 }

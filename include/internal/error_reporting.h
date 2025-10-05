@@ -201,6 +201,7 @@ ErrorReportResult format_error_line_safe(char* buffer, size_t buffer_size, const
 
 // Error code mappings
 ErrorCode map_error_type_to_code(ErrorType type);
+ErrorCode map_error_details_to_code(ErrorType type, const char* message);
 const char* get_error_title(ErrorCode code);
 const char* get_error_help(ErrorCode code);
 const char* get_error_note(ErrorCode code);
