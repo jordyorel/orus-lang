@@ -245,6 +245,7 @@ UNIT_TEST_RUNNER = test_runner$(SUFFIX)
 BYTECODE_TEST_BIN = $(BUILDDIR)/tests/test_jump_patch
 SOURCE_MAP_TEST_BIN = $(BUILDDIR)/tests/test_source_mapping
 SCOPE_TRACKING_TEST_BIN = $(BUILDDIR)/tests/test_scope_tracking
+FOR_LOOP_GUARD_TEST_BIN = $(BUILDDIR)/tests/test_for_loop_bytecode
 PEEPHOLE_TEST_BIN = $(BUILDDIR)/tests/test_constant_propagation
 TAGGED_UNION_TEST_BIN = $(BUILDDIR)/tests/test_vm_tagged_union
 TYPED_REGISTER_TEST_BIN = $(BUILDDIR)/tests/test_vm_typed_registers
@@ -421,6 +422,9 @@ _test-run: $(ORUS)
 	@echo "\033[36m=== Scope Tracking Tests ===\033[0m"
 	@$(MAKE) scope-tracking-tests
 	@echo ""
+	@echo "\033[36m=== For Loop Bytecode Tests ===\033[0m"
+	@$(MAKE) for-loop-bytecode-tests
+	@echo ""
 	@echo "\033[36m=== Peephole Constant Propagation Tests ===\033[0m"
 	@$(MAKE) peephole-tests
 	@echo ""
@@ -489,6 +493,15 @@ $(SCOPE_TRACKING_TEST_BIN): tests/unit/test_scope_stack.c $(COMPILER_OBJS) $(VM_
 scope-tracking-tests: $(SCOPE_TRACKING_TEST_BIN)
 	@echo "Running scope tracking tests..."
 	@./$(SCOPE_TRACKING_TEST_BIN)
+
+$(FOR_LOOP_GUARD_TEST_BIN): tests/unit/test_for_loop_bytecode.c $(COMPILER_OBJS) $(VM_OBJS)
+	@mkdir -p $(dir $@)
+	@echo "Compiling for-loop bytecode tests..."
+	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+
+for-loop-bytecode-tests: $(FOR_LOOP_GUARD_TEST_BIN)
+	@echo "Running for-loop bytecode tests..."
+	@./$(FOR_LOOP_GUARD_TEST_BIN)
 
 $(PEEPHOLE_TEST_BIN): tests/unit/test_constant_propagation.c $(COMPILER_OBJS) $(VM_OBJS)
 	@mkdir -p $(dir $@)
