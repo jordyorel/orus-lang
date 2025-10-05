@@ -252,7 +252,7 @@ bool is_valid_variable_name(const char* name) {
     if (!name || *name == '\0') {
         return false;
     }
-    
+
     // Must start with letter or underscore
     if (!isalpha(*name) && *name != '_') {
         return false;
@@ -287,6 +287,42 @@ const char* get_variable_name_violation_reason(const char* name) {
             return "name can only contain letters, digits, and underscores";
         }
     }
-    
+
     return NULL; // Name is valid
+}
+
+bool is_valid_constant_name(const char* name) {
+    if (!name || *name == '\0') {
+        return false;
+    }
+
+    if (!isupper(*name)) {
+        return false;
+    }
+
+    for (const char* p = name + 1; *p; p++) {
+        if (!isupper(*p) && !isdigit(*p) && *p != '_') {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+const char* get_constant_name_violation_reason(const char* name) {
+    if (!name || *name == '\0') {
+        return "module constants must have a non-empty name";
+    }
+
+    if (!isupper(*name)) {
+        return "module constants must start with an uppercase letter";
+    }
+
+    for (const char* p = name + 1; *p; p++) {
+        if (!isupper(*p) && !isdigit(*p) && *p != '_') {
+            return "module constants must use SCREAMING_SNAKE_CASE (uppercase letters, digits, and underscores)";
+        }
+    }
+
+    return NULL;
 }

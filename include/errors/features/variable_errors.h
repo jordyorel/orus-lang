@@ -167,4 +167,18 @@ bool is_valid_variable_name(const char* name);
  */
 const char* get_variable_name_violation_reason(const char* name);
 
+/**
+ * Check if a module constant name follows SCREAMING_SNAKE_CASE conventions.
+ * @param name Constant name to validate
+ * @return true if the name is valid, false otherwise
+ */
+bool is_valid_constant_name(const char* name);
+
+/**
+ * Provide a reason when a constant name violates SCREAMING_SNAKE_CASE rules.
+ * @param name Constant name to analyze
+ * @return Reason string or NULL if valid
+ */
+const char* get_constant_name_violation_reason(const char* name);
+
 #endif // VARIABLE_ERRORS_H

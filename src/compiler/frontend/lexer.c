@@ -281,6 +281,7 @@ static TokenType identifier_type(const char* start, int length) {
         case 'n':
             if (length == 3 && memcmp(start, "not", 3) == 0) return TOKEN_NOT;
             break;
+        case 'o':
             if (length == 2 && memcmp(start, "or", 2) == 0) return TOKEN_OR;
             break;
         case 'p':
