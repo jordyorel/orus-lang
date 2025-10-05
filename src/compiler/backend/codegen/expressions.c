@@ -99,15 +99,17 @@ static TypeKind fallback_type_kind_from_value(Value value) {
 
 static TypeKind fallback_type_kind_from_ast(const ASTNode* node) {
     if (!node) {
-        return TYPE_I32;
+        return TYPE_UNKNOWN;
     }
 
     if (node->dataType &&
         node->dataType->kind != TYPE_ERROR &&
         node->dataType->kind != TYPE_UNKNOWN) {
-        if (node->dataType->kind == TYPE_ARRAY &&
-            node->dataType->info.array.elementType) {
-            return node->dataType->info.array.elementType->kind;
+        if (node->dataType->kind == TYPE_ARRAY) {
+            if (node->dataType->info.array.elementType) {
+                return node->dataType->info.array.elementType->kind;
+            }
+            return TYPE_UNKNOWN;
         }
         return node->dataType->kind;
     }
@@ -129,7 +131,7 @@ static TypeKind fallback_type_kind_from_ast(const ASTNode* node) {
             break;
     }
 
-    return TYPE_I32;
+    return TYPE_UNKNOWN;
 }
 
 static Type* unwrap_struct_type(Type* type) {

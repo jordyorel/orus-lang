@@ -57,15 +57,48 @@ static bool test_distinct_banks_track_independently(void) {
     return true;
 }
 
+static bool test_scope_depth_overflow_records_diagnostics(void) {
+    DualRegisterAllocator* allocator = compiler_create_allocator();
+    ASSERT_TRUE(allocator != NULL, "allocator should be created");
+
+    compiler_allocator_reset_diagnostics(allocator);
+
+    for (int i = 0; i < MP_SCOPE_LEVEL_COUNT; i++) {
+        compiler_enter_scope(allocator);
+    }
+
+    compiler_enter_scope(allocator);
+    compiler_enter_scope(allocator);
+
+    for (int i = 0; i < MP_SCOPE_LEVEL_COUNT; i++) {
+        compiler_exit_scope(allocator);
+    }
+
+    compiler_exit_scope(allocator);
+
+    AllocatorDiagnostics diagnostics = compiler_allocator_get_diagnostics(allocator);
+    ASSERT_TRUE(diagnostics.scope_depth_overflow_count >= 2,
+                "scope overflow attempts should be recorded");
+    ASSERT_TRUE(diagnostics.scope_exit_underflow_count >= 1,
+                "scope underflow attempts should be recorded");
+    ASSERT_TRUE(diagnostics.max_scope_depth_seen >= MP_SCOPE_LEVEL_COUNT - 1,
+                "max scope depth should track deepest level reached");
+
+    compiler_destroy_allocator(allocator);
+    return true;
+}
+
 int main(void) {
     bool (*tests[])(void) = {
         test_typed_register_allocation_cycle,
         test_distinct_banks_track_independently,
+        test_scope_depth_overflow_records_diagnostics,
     };
 
     const char* names[] = {
         "Typed register allocation/free cycle reuses freed slots",
         "Distinct register banks maintain independent indices",
+        "Scope overflow attempts are captured as diagnostics instead of warnings",
     };
 
     int passed = 0;

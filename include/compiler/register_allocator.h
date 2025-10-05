@@ -64,6 +64,12 @@ typedef struct RegisterAllocation {
 // Opaque dual allocator handle
 typedef struct DualRegisterAllocator DualRegisterAllocator;
 
+typedef struct AllocatorDiagnostics {
+    int max_scope_depth_seen;
+    int scope_depth_overflow_count;
+    int scope_exit_underflow_count;
+} AllocatorDiagnostics;
+
 // ====== COMPILER FACADE HELPERS ======
 
 // Initialization and cleanup
@@ -108,6 +114,10 @@ void compiler_free_allocation(DualRegisterAllocator* allocator, RegisterAllocati
 bool is_arithmetic_heavy_context(DualRegisterAllocator* allocator);
 const char* register_strategy_name(RegisterStrategy strategy);
 void compiler_print_register_allocation_stats(DualRegisterAllocator* allocator);
+
+// Diagnostic snapshots
+AllocatorDiagnostics compiler_allocator_get_diagnostics(const DualRegisterAllocator* allocator);
+void compiler_allocator_reset_diagnostics(DualRegisterAllocator* allocator);
 
 #endif // REGISTER_ALLOCATOR_H
 
