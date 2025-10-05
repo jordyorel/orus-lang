@@ -84,6 +84,8 @@ typedef struct {
     bool use_adjusted_limit;
     int adjusted_limit_reg;
     bool adjusted_limit_is_temp;
+    bool limit_reg_is_primed;
+    bool adjusted_limit_is_primed;
     int step_reg;
     bool step_reg_is_temp;
     bool step_is_one;
@@ -104,6 +106,8 @@ static void init_fused_counter_loop_info(FusedCounterLoopInfo* info) {
     info->limit_reg = -1;
     info->adjusted_limit_reg = -1;
     info->step_reg = -1;
+    info->limit_reg_is_primed = false;
+    info->adjusted_limit_is_primed = false;
     info->loop_var_node = NULL;
     info->limit_node = NULL;
     info->step_node = NULL;
@@ -395,6 +399,7 @@ static bool try_prepare_fused_counter_loop(CompilerContext* ctx,
             return false;
         }
         ensure_i32_typed_register(ctx, limit_reg, right);
+        info->limit_reg_is_primed = true;
         info->limit_reg = limit_reg;
         info->limit_reg_is_temp = (limit_reg >= MP_TEMP_REG_START && limit_reg <= MP_TEMP_REG_END);
 
@@ -442,6 +447,7 @@ static bool try_prepare_fused_counter_loop(CompilerContext* ctx,
             return false;
         }
         ensure_i32_typed_register(ctx, limit_reg, end_node);
+        info->limit_reg_is_primed = true;
 
         info->pattern_matched = true;
         info->limit_node = end_node;
@@ -710,6 +716,16 @@ static void leave_loop_context(CompilerContext* ctx, ScopeFrame* frame, int end_
     }
 
     control_flow_leave_loop_context();
+}
+
+static void release_typed_hint(CompilerContext* ctx, int* hint_reg) {
+    if (!ctx || !ctx->allocator || !hint_reg) {
+        return;
+    }
+    if (*hint_reg >= 0) {
+        compiler_set_typed_residency_hint(ctx->allocator, *hint_reg, false);
+        *hint_reg = -1;
+    }
 }
 
 static void update_saved_break_pointer(CompilerContext* ctx, int* old_ptr, int* new_ptr) {
@@ -1154,8 +1170,22 @@ void compile_variable_declaration(CompilerContext* ctx, TypedASTNode* var_decl) 
     }
 
     // Register the variable in symbol table
+    Type* variable_type = NULL;
+    if (var_decl->typed.varDecl.initializer &&
+        var_decl->typed.varDecl.initializer->resolvedType) {
+        variable_type = var_decl->typed.varDecl.initializer->resolvedType;
+    } else if (var_decl->typed.varDecl.typeAnnotation &&
+               var_decl->typed.varDecl.typeAnnotation->resolvedType) {
+        variable_type = var_decl->typed.varDecl.typeAnnotation->resolvedType;
+    } else if (var_decl->original && var_decl->original->varDecl.typeAnnotation &&
+               var_decl->original->varDecl.typeAnnotation->dataType) {
+        variable_type = var_decl->original->varDecl.typeAnnotation->dataType;
+    } else if (var_decl->resolvedType) {
+        variable_type = var_decl->resolvedType;
+    }
+
     Symbol* symbol = register_variable(ctx, ctx->symbols, var_name, var_reg,
-                                       var_decl->resolvedType,
+                                       variable_type,
                                        is_mutable, is_mutable, decl_location, value_reg != -1);
     if (!symbol) {
         compiler_free_register(ctx->allocator, var_reg);
@@ -1915,6 +1945,217 @@ static void patch_continue_statements(CompilerContext* ctx, int continue_target)
     }
 }
 
+typedef void (*FusedLoopBodyEmitter)(CompilerContext* ctx, void* user_data);
+
+typedef struct {
+    TypedASTNode* loop_node;
+    ScopeFrame** loop_frame_ptr;
+    int loop_frame_index;
+    int loop_start;
+    bool patch_continue_sites;
+    bool update_continue_target;
+    TypedASTNode* limit_node;
+    int typed_hint_limit_reg;
+    bool limit_reg_is_temp;
+    bool adjusted_limit_is_temp;
+} FusedLoopEmitMetadata;
+
+static bool emit_fused_numeric_loop(CompilerContext* ctx,
+                                    int loop_reg,
+                                    int limit_reg,
+                                    int adjusted_limit_reg,
+                                    FusedLoopBodyEmitter body_emitter,
+                                    void* body_data,
+                                    FusedLoopEmitMetadata* metadata) {
+    if (!ctx || !metadata || !metadata->loop_node || !metadata->loop_frame_ptr) {
+        return false;
+    }
+
+    ScopeFrame* frame = metadata->loop_frame_ptr ? *metadata->loop_frame_ptr : NULL;
+    int loop_start = metadata->loop_start;
+
+    bool use_adjusted_limit = adjusted_limit_reg >= 0;
+    int guard_limit_reg = use_adjusted_limit ? adjusted_limit_reg : limit_reg;
+    int guard_copy_reg = -1;
+
+    if (!use_adjusted_limit && metadata->limit_reg_is_temp && ctx->allocator) {
+        guard_copy_reg = compiler_alloc_temp(ctx->allocator);
+        if (guard_copy_reg == -1) {
+            ctx->has_compilation_errors = true;
+            if (frame) {
+                leave_loop_context(ctx, frame, ctx->bytecode ? ctx->bytecode->count : loop_start);
+                *metadata->loop_frame_ptr = NULL;
+            }
+            return false;
+        }
+
+        set_location_from_node(ctx, metadata->limit_node ? metadata->limit_node
+                                                         : metadata->loop_node);
+        emit_byte_to_buffer(ctx->bytecode, OP_MOVE_I32);
+        emit_byte_to_buffer(ctx->bytecode, (uint8_t)guard_copy_reg);
+        emit_byte_to_buffer(ctx->bytecode, (uint8_t)guard_limit_reg);
+        guard_limit_reg = guard_copy_reg;
+    }
+
+    if (guard_limit_reg < 0) {
+        ctx->has_compilation_errors = true;
+        if (frame) {
+            leave_loop_context(ctx, frame, ctx->bytecode ? ctx->bytecode->count : loop_start);
+            *metadata->loop_frame_ptr = NULL;
+        }
+        if (guard_copy_reg >= 0 && ctx->allocator) {
+            compiler_free_temp(ctx->allocator, guard_copy_reg);
+        }
+        return false;
+    }
+
+    if (metadata->limit_node) {
+        ensure_i32_typed_register(ctx, guard_limit_reg, metadata->limit_node);
+    }
+
+    metadata->typed_hint_limit_reg = guard_limit_reg;
+
+    if (ctx->allocator && metadata->typed_hint_limit_reg >= 0) {
+        compiler_set_typed_residency_hint(ctx->allocator, metadata->typed_hint_limit_reg, true);
+    }
+
+    set_location_from_node(ctx, metadata->loop_node);
+    emit_byte_to_buffer(ctx->bytecode, OP_JUMP_IF_NOT_I32_TYPED);
+    emit_byte_to_buffer(ctx->bytecode, (uint8_t)loop_reg);
+    emit_byte_to_buffer(ctx->bytecode, (uint8_t)guard_limit_reg);
+    int guard_patch = emit_jump_placeholder(ctx->bytecode, OP_JUMP_IF_NOT_I32_TYPED);
+    if (guard_patch < 0) {
+        ctx->has_compilation_errors = true;
+        if (ctx->allocator && metadata->typed_hint_limit_reg >= 0) {
+            compiler_set_typed_residency_hint(ctx->allocator, metadata->typed_hint_limit_reg, false);
+        }
+        if (guard_copy_reg >= 0 && ctx->allocator) {
+            compiler_free_temp(ctx->allocator, guard_copy_reg);
+        }
+        if (frame) {
+            leave_loop_context(ctx, frame, ctx->bytecode ? ctx->bytecode->count : loop_start);
+            *metadata->loop_frame_ptr = NULL;
+        }
+        return false;
+    }
+
+    if (body_emitter) {
+        body_emitter(ctx, body_data);
+    }
+
+    if (metadata->loop_frame_index >= 0) {
+        frame = get_scope_frame_by_index(ctx, metadata->loop_frame_index);
+        if (metadata->loop_frame_ptr) {
+            *metadata->loop_frame_ptr = frame;
+        }
+    }
+
+    int continue_target = ctx->bytecode ? ctx->bytecode->count : 0;
+    if (metadata->update_continue_target) {
+        update_loop_continue_target(ctx, frame, continue_target);
+    }
+    if (metadata->patch_continue_sites) {
+        patch_continue_statements(ctx, continue_target);
+    }
+
+    set_location_from_node(ctx, metadata->loop_node);
+    emit_byte_to_buffer(ctx->bytecode, OP_INC_CMP_JMP);
+    emit_byte_to_buffer(ctx->bytecode, (uint8_t)loop_reg);
+    emit_byte_to_buffer(ctx->bytecode, (uint8_t)guard_limit_reg);
+    int back_off = loop_start - (ctx->bytecode->count + 2);
+    emit_byte_to_buffer(ctx->bytecode, (uint8_t)(back_off & 0xFF));
+    emit_byte_to_buffer(ctx->bytecode, (uint8_t)((back_off >> 8) & 0xFF));
+
+    int end_target = ctx->bytecode ? ctx->bytecode->count : 0;
+    ctx->current_loop_end = end_target;
+    if (frame) {
+        frame->end_offset = end_target;
+    }
+
+    patch_break_statements(ctx, end_target);
+
+    if (!patch_jump(ctx->bytecode, guard_patch, end_target)) {
+        ctx->has_compilation_errors = true;
+        if (frame) {
+            leave_loop_context(ctx, frame, end_target);
+            if (metadata->loop_frame_ptr) {
+                *metadata->loop_frame_ptr = NULL;
+            }
+        }
+        if (ctx->allocator && metadata->typed_hint_limit_reg >= 0) {
+            compiler_set_typed_residency_hint(ctx->allocator, metadata->typed_hint_limit_reg, false);
+        }
+        return false;
+    }
+
+    leave_loop_context(ctx, frame, end_target);
+    if (metadata->loop_frame_ptr) {
+        *metadata->loop_frame_ptr = NULL;
+    }
+
+    if (ctx->allocator && metadata->typed_hint_limit_reg >= 0) {
+        compiler_set_typed_residency_hint(ctx->allocator, metadata->typed_hint_limit_reg, false);
+    }
+
+    if (guard_copy_reg >= 0 && ctx->allocator) {
+        compiler_free_temp(ctx->allocator, guard_copy_reg);
+    }
+
+    return true;
+}
+
+typedef struct {
+    TypedASTNode* body;
+    bool body_is_block;
+    int body_statement_count;
+    bool has_increment;
+} FusedWhileBodyData;
+
+static void emit_fused_while_body(CompilerContext* ctx, void* user_data) {
+    if (!ctx || !user_data) {
+        return;
+    }
+
+    FusedWhileBodyData* data = (FusedWhileBodyData*)user_data;
+    TypedASTNode* body = data->body;
+    if (!body) {
+        return;
+    }
+
+    if (data->body_is_block && data->body_statement_count > 0 &&
+        body->original && body->original->type == NODE_BLOCK) {
+        int limit = data->body_statement_count - 1;
+        if (limit < 0) {
+            limit = 0;
+        }
+        for (int i = 0; i < limit; i++) {
+            TypedASTNode* stmt = body->typed.block.statements[i];
+            if (stmt) {
+                compile_statement(ctx, stmt);
+            }
+        }
+    } else if (!data->body_is_block && !data->has_increment && body) {
+        compile_statement(ctx, body);
+    }
+}
+
+typedef struct {
+    TypedASTNode* body;
+} FusedForRangeBodyData;
+
+static void emit_fused_for_range_body(CompilerContext* ctx, void* user_data) {
+    if (!ctx || !user_data) {
+        return;
+    }
+
+    FusedForRangeBodyData* data = (FusedForRangeBodyData*)user_data;
+    if (!data->body) {
+        return;
+    }
+
+    compile_block_with_scope(ctx, data->body, true);
+}
+
 void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
     if (!ctx || !while_stmt) return;
 
@@ -1962,7 +2203,20 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
         int upvalue_index = -1;
         fused_symbol = resolve_symbol(ctx->symbols, fused_index_name);
         fused_loop_reg = resolve_variable_or_upvalue(ctx, fused_index_name, &is_upvalue, &upvalue_index);
-        if (!fused_symbol || !fused_symbol->is_mutable || fused_loop_reg < 0 || is_upvalue) {
+
+        const Type* loop_type = get_effective_type(condition_node ? condition_node->typed.binary.left : NULL);
+        if (fused_symbol && fused_symbol->type) {
+            loop_type = fused_symbol->type;
+        }
+
+        bool loop_type_ok = loop_type && loop_type->kind == TYPE_I32;
+        const Type* limit_type = get_effective_type(fused_limit_node);
+        if (!loop_type_ok && limit_type && limit_type->kind == TYPE_I32) {
+            loop_type_ok = true;
+        }
+
+        if (!fused_symbol || !fused_symbol->is_mutable || !loop_type_ok ||
+            fused_loop_reg < 0 || is_upvalue) {
             use_fused_inc = false;
         }
     }
@@ -1988,6 +2242,14 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
             ensure_i32_typed_register(ctx, fused_loop_reg, condition_node->typed.binary.left);
         }
 
+        int typed_hint_loop_reg = -1;
+        int typed_hint_limit_reg = -1;
+
+        if (ctx->allocator && fused_loop_reg >= 0) {
+            compiler_set_typed_residency_hint(ctx->allocator, fused_loop_reg, true);
+            typed_hint_loop_reg = fused_loop_reg;
+        }
+
         int loop_start_fused = ctx->bytecode->count;
         ScopeFrame* loop_frame_fused = enter_loop_context(ctx, loop_start_fused);
         int loop_frame_index = loop_frame_fused ? loop_frame_fused->lexical_depth : -1;
@@ -2001,6 +2263,8 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
             if (fused_limit_is_temp && fused_limit_reg >= 0) {
                 compiler_free_temp(ctx->allocator, fused_limit_reg);
             }
+            release_typed_hint(ctx, &typed_hint_loop_reg);
+            release_typed_hint(ctx, &typed_hint_limit_reg);
             return;
         }
 
@@ -2012,11 +2276,23 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
 
         DEBUG_CODEGEN_PRINT("While loop start at offset %d\n", loop_start_fused);
 
-        int typed_hint_limit_reg = -1;
         int fused_limit_guard_reg = fused_info.use_adjusted_limit ? fused_limit_temp_reg : fused_limit_reg;
         if (fused_limit_guard_reg >= 0) {
-            ensure_i32_typed_register(ctx, fused_limit_guard_reg,
-                                      fused_info.use_adjusted_limit ? fused_limit_node : fused_limit_node);
+            bool guard_already_primed = false;
+            if (fused_info.use_adjusted_limit && fused_limit_guard_reg == fused_limit_temp_reg) {
+                guard_already_primed = fused_info.adjusted_limit_is_primed;
+            } else if (fused_limit_guard_reg == fused_limit_reg) {
+                guard_already_primed = fused_info.limit_reg_is_primed;
+            }
+            if (!guard_already_primed) {
+                ensure_i32_typed_register(ctx, fused_limit_guard_reg,
+                                          fused_info.use_adjusted_limit ? fused_limit_node : fused_limit_node);
+                if (fused_info.use_adjusted_limit && fused_limit_guard_reg == fused_limit_temp_reg) {
+                    fused_info.adjusted_limit_is_primed = true;
+                } else if (fused_limit_guard_reg == fused_limit_reg) {
+                    fused_info.limit_reg_is_primed = true;
+                }
+            }
         }
         if (ctx->allocator && fused_limit_guard_reg >= 0) {
             compiler_set_typed_residency_hint(ctx->allocator, fused_limit_guard_reg, true);
@@ -2045,6 +2321,8 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
             if (fused_limit_is_temp && fused_limit_reg >= 0) {
                 compiler_free_temp(ctx->allocator, fused_limit_reg);
             }
+            release_typed_hint(ctx, &typed_hint_loop_reg);
+            release_typed_hint(ctx, &typed_hint_limit_reg);
             return;
         }
         if (fused_body_is_block && fused_block_count > 0 && while_body && while_body->original &&
@@ -2098,15 +2376,16 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
             if (fused_limit_is_temp) {
                 compiler_free_temp(ctx->allocator, fused_limit_reg);
             }
+            release_typed_hint(ctx, &typed_hint_loop_reg);
+            release_typed_hint(ctx, &typed_hint_limit_reg);
             return;
         }
         DEBUG_CODEGEN_PRINT("Patched end jump to %d\n", end_target);
 
         leave_loop_context(ctx, loop_frame_fused, end_target);
 
-        if (ctx->allocator && typed_hint_limit_reg >= 0) {
-            compiler_set_typed_residency_hint(ctx->allocator, typed_hint_limit_reg, false);
-        }
+        release_typed_hint(ctx, &typed_hint_loop_reg);
+        release_typed_hint(ctx, &typed_hint_limit_reg);
         if (fused_info.use_adjusted_limit && fused_limit_temp_is_temp &&
             fused_limit_temp_reg >= 0) {
             compiler_free_temp(ctx->allocator, fused_limit_temp_reg);
@@ -2396,6 +2675,45 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     ctx->current_loop_continue = -1;
     loop_frame->continue_offset = -1;
 
+    if (can_fuse_inc_cmp) {
+        FusedForRangeBodyData body_data = {
+            .body = for_stmt->typed.forRange.body,
+        };
+
+        int adjusted_limit_reg = limit_temp_reg >= 0 ? limit_temp_reg : -1;
+        int hint_reg = adjusted_limit_reg >= 0 ? adjusted_limit_reg : end_reg;
+
+        FusedLoopEmitMetadata metadata = {
+            .loop_node = for_stmt,
+            .loop_frame_ptr = &loop_frame,
+            .loop_frame_index = loop_frame_index,
+            .loop_start = loop_start,
+            .patch_continue_sites = true,
+            .update_continue_target = true,
+            .limit_node = fused_info.limit_node,
+            .typed_hint_limit_reg = hint_reg,
+            .limit_reg_is_temp = end_reg_is_temp,
+            .adjusted_limit_is_temp = limit_temp_reg_is_temp,
+        };
+
+        bool fused_ok = emit_fused_numeric_loop(ctx,
+                                                loop_var_reg,
+                                                end_reg,
+                                                adjusted_limit_reg,
+                                                emit_fused_for_range_body,
+                                                &body_data,
+                                                &metadata);
+        if (!fused_ok) {
+            goto cleanup;
+        }
+
+        loop_frame = NULL;
+        loop_frame_index = -1;
+        typed_hint_limit_reg = -1;
+        success = true;
+        goto cleanup;
+    }
+
     condition_reg = compiler_alloc_temp(ctx->allocator);
     if (condition_reg == -1) {
         ctx->has_compilation_errors = true;
@@ -2409,37 +2727,31 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     }
 
     if (can_fuse_inc_cmp && limit_reg_used >= 0) {
-        ensure_i32_typed_register(ctx, limit_reg_used, fused_info.limit_node);
+        bool guard_already_primed = false;
+        if (fused_info.use_adjusted_limit && limit_reg_used == limit_temp_reg) {
+            guard_already_primed = fused_info.adjusted_limit_is_primed;
+        } else if (limit_reg_used == fused_info.limit_reg) {
+            guard_already_primed = fused_info.limit_reg_is_primed;
+        }
+        if (!guard_already_primed) {
+            ensure_i32_typed_register(ctx, limit_reg_used, fused_info.limit_node);
+            if (fused_info.use_adjusted_limit && limit_reg_used == limit_temp_reg) {
+                fused_info.adjusted_limit_is_primed = true;
+            } else if (limit_reg_used == fused_info.limit_reg) {
+                fused_info.limit_reg_is_primed = true;
+            }
+        }
     }
 
-    if (ctx->allocator && limit_reg_used >= 0) {
-        compiler_set_typed_residency_hint(ctx->allocator, limit_reg_used, true);
-        typed_hint_limit_reg = limit_reg_used;
-    }
-
-    int guard_patch = -1;
     set_location_from_node(ctx, for_stmt);
-    if (can_fuse_inc_cmp) {
-        uint8_t guard_left = fused_descending ? (uint8_t)limit_reg_used : (uint8_t)loop_var_reg;
-        uint8_t guard_right = fused_descending ? (uint8_t)loop_var_reg : (uint8_t)limit_reg_used;
-        emit_byte_to_buffer(ctx->bytecode, OP_JUMP_IF_NOT_I32_TYPED);
-        emit_byte_to_buffer(ctx->bytecode, guard_left);
-        emit_byte_to_buffer(ctx->bytecode, guard_right);
-        guard_patch = emit_jump_placeholder(ctx->bytecode, OP_JUMP_IF_NOT_I32_TYPED);
-        if (guard_patch < 0) {
-            ctx->has_compilation_errors = true;
-            goto cleanup;
-        }
+    if (for_stmt->typed.forRange.inclusive) {
+        emit_byte_to_buffer(ctx->bytecode, OP_LE_I32_TYPED);
     } else {
-        if (for_stmt->typed.forRange.inclusive) {
-            emit_byte_to_buffer(ctx->bytecode, OP_LE_I32_TYPED);
-        } else {
-            emit_byte_to_buffer(ctx->bytecode, OP_LT_I32_TYPED);
-        }
-        emit_byte_to_buffer(ctx->bytecode, condition_reg);
-        emit_byte_to_buffer(ctx->bytecode, loop_var_reg);
-        emit_byte_to_buffer(ctx->bytecode, (uint8_t)end_reg);
+        emit_byte_to_buffer(ctx->bytecode, OP_LT_I32_TYPED);
     }
+    emit_byte_to_buffer(ctx->bytecode, condition_reg);
+    emit_byte_to_buffer(ctx->bytecode, loop_var_reg);
+    emit_byte_to_buffer(ctx->bytecode, (uint8_t)end_reg);
 
     if (!step_known_positive) {
         condition_neg_reg = compiler_alloc_temp(ctx->allocator);
@@ -2503,19 +2815,15 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     }
 
     int end_patch = -1;
-    if (can_fuse_inc_cmp) {
-        end_patch = guard_patch;
-    } else {
-        set_location_from_node(ctx, for_stmt);
-        emit_byte_to_buffer(ctx->bytecode, OP_BRANCH_TYPED);
-        emit_byte_to_buffer(ctx->bytecode, (uint8_t)((loop_id >> 8) & 0xFF));
-        emit_byte_to_buffer(ctx->bytecode, (uint8_t)(loop_id & 0xFF));
-        emit_byte_to_buffer(ctx->bytecode, (uint8_t)condition_reg);
-        end_patch = emit_jump_placeholder(ctx->bytecode, OP_BRANCH_TYPED);
-        if (end_patch < 0) {
-            ctx->has_compilation_errors = true;
-            goto cleanup;
-        }
+    set_location_from_node(ctx, for_stmt);
+    emit_byte_to_buffer(ctx->bytecode, OP_BRANCH_TYPED);
+    emit_byte_to_buffer(ctx->bytecode, (uint8_t)((loop_id >> 8) & 0xFF));
+    emit_byte_to_buffer(ctx->bytecode, (uint8_t)(loop_id & 0xFF));
+    emit_byte_to_buffer(ctx->bytecode, (uint8_t)condition_reg);
+    end_patch = emit_jump_placeholder(ctx->bytecode, OP_BRANCH_TYPED);
+    if (end_patch < 0) {
+        ctx->has_compilation_errors = true;
+        goto cleanup;
     }
 
     compile_block_with_scope(ctx, for_stmt->typed.forRange.body, true);
@@ -2527,44 +2835,25 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     int continue_target = ctx->bytecode->count;
     update_loop_continue_target(ctx, loop_frame, continue_target);
 
-    if (can_fuse_inc_cmp) {
-        // Continue statements should jump here to execute fused inc+cmp+jmp
-        patch_continue_statements(ctx, continue_target);
+    set_location_from_node(ctx, for_stmt);
+    emit_byte_to_buffer(ctx->bytecode, OP_ADD_I32_TYPED);
+    emit_byte_to_buffer(ctx->bytecode, loop_var_reg);
+    emit_byte_to_buffer(ctx->bytecode, loop_var_reg);
+    emit_byte_to_buffer(ctx->bytecode, step_reg);
 
+    patch_continue_statements(ctx, continue_target);
+
+    int back_jump_distance = (ctx->bytecode->count + 2) - loop_start;
+    if (back_jump_distance >= 0 && back_jump_distance <= 255) {
         set_location_from_node(ctx, for_stmt);
-        if (fused_descending) {
-            emit_byte_to_buffer(ctx->bytecode, OP_DEC_CMP_JMP);
-        } else {
-            emit_byte_to_buffer(ctx->bytecode, OP_INC_CMP_JMP);
-        }
-        emit_byte_to_buffer(ctx->bytecode, (uint8_t)loop_var_reg);
-        emit_byte_to_buffer(ctx->bytecode, (uint8_t)limit_reg_used);
-        // back offset is relative to address after the 2-byte offset we emit now
-        int back_off = loop_start - (ctx->bytecode->count + 2);
-        // OP_INC_CMP_JMP reads offset as native int16 (little-endian on our targets)
-        emit_byte_to_buffer(ctx->bytecode, (uint8_t)(back_off & 0xFF));
-        emit_byte_to_buffer(ctx->bytecode, (uint8_t)((back_off >> 8) & 0xFF));
+        emit_byte_to_buffer(ctx->bytecode, OP_LOOP_SHORT);
+        emit_byte_to_buffer(ctx->bytecode, (uint8_t)back_jump_distance);
     } else {
+        int back_jump_offset = loop_start - (ctx->bytecode->count + 3);
         set_location_from_node(ctx, for_stmt);
-        emit_byte_to_buffer(ctx->bytecode, OP_ADD_I32_TYPED);
-        emit_byte_to_buffer(ctx->bytecode, loop_var_reg);
-        emit_byte_to_buffer(ctx->bytecode, loop_var_reg);
-        emit_byte_to_buffer(ctx->bytecode, step_reg);
-
-        patch_continue_statements(ctx, continue_target);
-
-        int back_jump_distance = (ctx->bytecode->count + 2) - loop_start;
-        if (back_jump_distance >= 0 && back_jump_distance <= 255) {
-            set_location_from_node(ctx, for_stmt);
-            emit_byte_to_buffer(ctx->bytecode, OP_LOOP_SHORT);
-            emit_byte_to_buffer(ctx->bytecode, (uint8_t)back_jump_distance);
-        } else {
-            int back_jump_offset = loop_start - (ctx->bytecode->count + 3);
-            set_location_from_node(ctx, for_stmt);
-            emit_byte_to_buffer(ctx->bytecode, OP_JUMP);
-            emit_byte_to_buffer(ctx->bytecode, (back_jump_offset >> 8) & 0xFF);
-            emit_byte_to_buffer(ctx->bytecode, back_jump_offset & 0xFF);
-        }
+        emit_byte_to_buffer(ctx->bytecode, OP_JUMP);
+        emit_byte_to_buffer(ctx->bytecode, (back_jump_offset >> 8) & 0xFF);
+        emit_byte_to_buffer(ctx->bytecode, back_jump_offset & 0xFF);
     }
 
     int end_target = ctx->bytecode->count;
@@ -2591,16 +2880,8 @@ cleanup:
         loop_frame_index = -1;
     }
 
-    if (ctx->allocator) {
-        if (typed_hint_loop_reg >= 0) {
-            compiler_set_typed_residency_hint(ctx->allocator, typed_hint_loop_reg, false);
-            typed_hint_loop_reg = -1;
-        }
-        if (typed_hint_limit_reg >= 0) {
-            compiler_set_typed_residency_hint(ctx->allocator, typed_hint_limit_reg, false);
-            typed_hint_limit_reg = -1;
-        }
-    }
+    release_typed_hint(ctx, &typed_hint_loop_reg);
+    release_typed_hint(ctx, &typed_hint_limit_reg);
 
     if (condition_reg >= MP_TEMP_REG_START && condition_reg <= MP_TEMP_REG_END) {
         compiler_free_temp(ctx->allocator, condition_reg);
@@ -2846,16 +3127,8 @@ cleanup:
         loop_frame_index = -1;
     }
 
-    if (ctx->allocator) {
-        if (typed_hint_iter_reg >= 0) {
-            compiler_set_typed_residency_hint(ctx->allocator, typed_hint_iter_reg, false);
-            typed_hint_iter_reg = -1;
-        }
-        if (typed_hint_loop_reg >= 0) {
-            compiler_set_typed_residency_hint(ctx->allocator, typed_hint_loop_reg, false);
-            typed_hint_loop_reg = -1;
-        }
-    }
+    release_typed_hint(ctx, &typed_hint_iter_reg);
+    release_typed_hint(ctx, &typed_hint_loop_reg);
 
     if (iterable_reg >= MP_TEMP_REG_START && iterable_reg <= MP_TEMP_REG_END) {
         compiler_free_temp(ctx->allocator, iterable_reg);
