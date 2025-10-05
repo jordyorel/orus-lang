@@ -328,7 +328,7 @@ static bool finalize_import_symbol(CompilerContext* ctx, const char* module_name
     }
 
     int reg = (int)register_index;
-    mp_reserve_global_register(ctx->allocator, reg);
+    compiler_reserve_global(ctx->allocator, reg);
 
     Type* resolved_type = exported_type;
     if (!resolved_type) {
@@ -849,11 +849,11 @@ static int compile_struct_method_call(CompilerContext* ctx, TypedASTNode* call) 
         }
 
         for (int i = 0; i < total_args; i++) {
-            arg_regs[i] = mp_allocate_temp_register(ctx->allocator);
+            arg_regs[i] = compiler_alloc_temp(ctx->allocator);
             if (arg_regs[i] == -1) {
                 for (int j = 0; j < i; j++) {
                     if (arg_regs[j] >= MP_TEMP_REG_START && arg_regs[j] <= MP_TEMP_REG_END) {
-                        mp_free_temp_register(ctx->allocator, arg_regs[j]);
+                        compiler_free_temp(ctx->allocator, arg_regs[j]);
                     }
                 }
                 free(arg_regs);
@@ -869,7 +869,7 @@ static int compile_struct_method_call(CompilerContext* ctx, TypedASTNode* call) 
         if (!temp_arg_regs) {
             for (int i = 0; i < total_args; i++) {
                 if (arg_regs[i] >= MP_TEMP_REG_START && arg_regs[i] <= MP_TEMP_REG_END) {
-                    mp_free_temp_register(ctx->allocator, arg_regs[i]);
+                    compiler_free_temp(ctx->allocator, arg_regs[i]);
                 }
             }
             free(arg_regs);
@@ -886,7 +886,7 @@ static int compile_struct_method_call(CompilerContext* ctx, TypedASTNode* call) 
             if (arg_regs) {
                 for (int i = 0; i < total_args; i++) {
                     if (arg_regs[i] >= MP_TEMP_REG_START && arg_regs[i] <= MP_TEMP_REG_END) {
-                        mp_free_temp_register(ctx->allocator, arg_regs[i]);
+                        compiler_free_temp(ctx->allocator, arg_regs[i]);
                     }
                 }
                 free(arg_regs);
@@ -901,7 +901,7 @@ static int compile_struct_method_call(CompilerContext* ctx, TypedASTNode* call) 
             if (arg_regs) {
                 for (int i = 0; i < total_args; i++) {
                     if (arg_regs[i] >= MP_TEMP_REG_START && arg_regs[i] <= MP_TEMP_REG_END) {
-                        mp_free_temp_register(ctx->allocator, arg_regs[i]);
+                        compiler_free_temp(ctx->allocator, arg_regs[i]);
                     }
                 }
                 free(arg_regs);
@@ -923,7 +923,7 @@ static int compile_struct_method_call(CompilerContext* ctx, TypedASTNode* call) 
                 for (int j = 0; j < compiled_count; j++) {
                     int reg = temp_arg_regs[j];
                     if (reg >= MP_TEMP_REG_START && reg <= MP_TEMP_REG_END) {
-                        mp_free_temp_register(ctx->allocator, reg);
+                        compiler_free_temp(ctx->allocator, reg);
                     }
                 }
                 free(temp_arg_regs);
@@ -931,7 +931,7 @@ static int compile_struct_method_call(CompilerContext* ctx, TypedASTNode* call) 
             if (arg_regs) {
                 for (int j = 0; j < total_args; j++) {
                     if (arg_regs[j] >= MP_TEMP_REG_START && arg_regs[j] <= MP_TEMP_REG_END) {
-                        mp_free_temp_register(ctx->allocator, arg_regs[j]);
+                        compiler_free_temp(ctx->allocator, arg_regs[j]);
                     }
                 }
                 free(arg_regs);
@@ -946,7 +946,7 @@ static int compile_struct_method_call(CompilerContext* ctx, TypedASTNode* call) 
                 for (int j = 0; j < compiled_count; j++) {
                     int reg = temp_arg_regs[j];
                     if (reg >= MP_TEMP_REG_START && reg <= MP_TEMP_REG_END) {
-                        mp_free_temp_register(ctx->allocator, reg);
+                        compiler_free_temp(ctx->allocator, reg);
                     }
                 }
                 free(temp_arg_regs);
@@ -954,7 +954,7 @@ static int compile_struct_method_call(CompilerContext* ctx, TypedASTNode* call) 
             if (arg_regs) {
                 for (int j = 0; j < total_args; j++) {
                     if (arg_regs[j] >= MP_TEMP_REG_START && arg_regs[j] <= MP_TEMP_REG_END) {
-                        mp_free_temp_register(ctx->allocator, arg_regs[j]);
+                        compiler_free_temp(ctx->allocator, arg_regs[j]);
                     }
                 }
                 free(arg_regs);
@@ -973,7 +973,7 @@ static int compile_struct_method_call(CompilerContext* ctx, TypedASTNode* call) 
             if (temp_arg_regs[i] != arg_regs[i]) {
                 emit_move(ctx, arg_regs[i], temp_arg_regs[i]);
                 if (temp_arg_regs[i] >= MP_TEMP_REG_START && temp_arg_regs[i] <= MP_TEMP_REG_END) {
-                    mp_free_temp_register(ctx->allocator, temp_arg_regs[i]);
+                    compiler_free_temp(ctx->allocator, temp_arg_regs[i]);
                 }
             }
         }
@@ -981,12 +981,12 @@ static int compile_struct_method_call(CompilerContext* ctx, TypedASTNode* call) 
         temp_arg_regs = NULL;
     }
 
-    int return_reg = mp_allocate_temp_register(ctx->allocator);
+    int return_reg = compiler_alloc_temp(ctx->allocator);
     if (return_reg == -1) {
         if (arg_regs) {
             for (int i = 0; i < total_args; i++) {
                 if (arg_regs[i] >= MP_TEMP_REG_START && arg_regs[i] <= MP_TEMP_REG_END) {
-                    mp_free_temp_register(ctx->allocator, arg_regs[i]);
+                    compiler_free_temp(ctx->allocator, arg_regs[i]);
                 }
             }
             free(arg_regs);
@@ -1003,7 +1003,7 @@ static int compile_struct_method_call(CompilerContext* ctx, TypedASTNode* call) 
     if (arg_regs) {
         for (int i = 0; i < total_args; i++) {
             if (arg_regs[i] >= MP_TEMP_REG_START && arg_regs[i] <= MP_TEMP_REG_END) {
-                mp_free_temp_register(ctx->allocator, arg_regs[i]);
+                compiler_free_temp(ctx->allocator, arg_regs[i]);
             }
         }
         free(arg_regs);
@@ -1704,7 +1704,7 @@ static int compile_builtin_array_push(CompilerContext* ctx, TypedASTNode* call) 
     int value_reg = compile_expression(ctx, value_arg);
     if (value_reg == -1) {
         if (array_reg >= MP_TEMP_REG_START && array_reg <= MP_TEMP_REG_END) {
-            mp_free_temp_register(ctx->allocator, array_reg);
+            compiler_free_temp(ctx->allocator, array_reg);
         }
         if (free_array) free_typed_ast_node(array_arg);
         if (free_value) free_typed_ast_node(value_arg);
@@ -1718,7 +1718,7 @@ static int compile_builtin_array_push(CompilerContext* ctx, TypedASTNode* call) 
 
     if (value_reg != array_reg &&
         value_reg >= MP_TEMP_REG_START && value_reg <= MP_TEMP_REG_END) {
-        mp_free_temp_register(ctx->allocator, value_reg);
+        compiler_free_temp(ctx->allocator, value_reg);
     }
 
     if (free_array) free_typed_ast_node(array_arg);
@@ -1752,11 +1752,11 @@ static int compile_builtin_array_pop(CompilerContext* ctx, TypedASTNode* call) {
         return -1;
     }
 
-    int result_reg = mp_allocate_temp_register(ctx->allocator);
+    int result_reg = compiler_alloc_temp(ctx->allocator);
     if (result_reg == -1) {
         DEBUG_CODEGEN_PRINT("Error: Failed to allocate result register for pop() builtin\n");
         if (array_reg >= MP_TEMP_REG_START && array_reg <= MP_TEMP_REG_END) {
-            mp_free_temp_register(ctx->allocator, array_reg);
+            compiler_free_temp(ctx->allocator, array_reg);
         }
         if (free_array) free_typed_ast_node(array_arg);
         return -1;
@@ -1768,7 +1768,7 @@ static int compile_builtin_array_pop(CompilerContext* ctx, TypedASTNode* call) {
     emit_byte_to_buffer(ctx->bytecode, array_reg);
 
     if (array_reg >= MP_TEMP_REG_START && array_reg <= MP_TEMP_REG_END) {
-        mp_free_temp_register(ctx->allocator, array_reg);
+        compiler_free_temp(ctx->allocator, array_reg);
     }
 
     if (free_array) free_typed_ast_node(array_arg);
@@ -1801,11 +1801,11 @@ static int compile_builtin_array_len(CompilerContext* ctx, TypedASTNode* call) {
         return -1;
     }
 
-    int result_reg = mp_allocate_temp_register(ctx->allocator);
+    int result_reg = compiler_alloc_temp(ctx->allocator);
     if (result_reg == -1) {
         DEBUG_CODEGEN_PRINT("Error: Failed to allocate result register for len() builtin\n");
         if (array_reg >= MP_TEMP_REG_START && array_reg <= MP_TEMP_REG_END) {
-            mp_free_temp_register(ctx->allocator, array_reg);
+            compiler_free_temp(ctx->allocator, array_reg);
         }
         if (free_array) free_typed_ast_node(array_arg);
         return -1;
@@ -1817,7 +1817,7 @@ static int compile_builtin_array_len(CompilerContext* ctx, TypedASTNode* call) {
     emit_byte_to_buffer(ctx->bytecode, array_reg);
 
     if (array_reg >= MP_TEMP_REG_START && array_reg <= MP_TEMP_REG_END) {
-        mp_free_temp_register(ctx->allocator, array_reg);
+        compiler_free_temp(ctx->allocator, array_reg);
     }
 
     if (free_array) free_typed_ast_node(array_arg);
@@ -1850,11 +1850,11 @@ static int compile_builtin_sorted(CompilerContext* ctx, TypedASTNode* call) {
         return -1;
     }
 
-    int result_reg = mp_allocate_temp_register(ctx->allocator);
+    int result_reg = compiler_alloc_temp(ctx->allocator);
     if (result_reg == -1) {
         DEBUG_CODEGEN_PRINT("Error: Failed to allocate result register for sorted() builtin\n");
         if (array_reg >= MP_TEMP_REG_START && array_reg <= MP_TEMP_REG_END) {
-            mp_free_temp_register(ctx->allocator, array_reg);
+            compiler_free_temp(ctx->allocator, array_reg);
         }
         if (free_array) free_typed_ast_node(array_arg);
         return -1;
@@ -1866,7 +1866,7 @@ static int compile_builtin_sorted(CompilerContext* ctx, TypedASTNode* call) {
     emit_byte_to_buffer(ctx->bytecode, array_reg);
 
     if (array_reg >= MP_TEMP_REG_START && array_reg <= MP_TEMP_REG_END) {
-        mp_free_temp_register(ctx->allocator, array_reg);
+        compiler_free_temp(ctx->allocator, array_reg);
     }
 
     if (free_array) free_typed_ast_node(array_arg);
@@ -1896,7 +1896,7 @@ static int compile_builtin_range(CompilerContext* ctx, TypedASTNode* call) {
         if (!arg_nodes[i]) {
             for (int j = 0; j < i; j++) {
                 if (arg_regs[j] >= MP_TEMP_REG_START && arg_regs[j] <= MP_TEMP_REG_END) {
-                    mp_free_temp_register(ctx->allocator, arg_regs[j]);
+                    compiler_free_temp(ctx->allocator, arg_regs[j]);
                 }
                 if (free_nodes[j] && arg_nodes[j]) {
                     free_typed_ast_node(arg_nodes[j]);
@@ -1909,7 +1909,7 @@ static int compile_builtin_range(CompilerContext* ctx, TypedASTNode* call) {
         if (reg == -1) {
             for (int j = 0; j < i; j++) {
                 if (arg_regs[j] >= MP_TEMP_REG_START && arg_regs[j] <= MP_TEMP_REG_END) {
-                    mp_free_temp_register(ctx->allocator, arg_regs[j]);
+                    compiler_free_temp(ctx->allocator, arg_regs[j]);
                 }
                 if (free_nodes[j] && arg_nodes[j]) {
                     free_typed_ast_node(arg_nodes[j]);
@@ -1924,12 +1924,12 @@ static int compile_builtin_range(CompilerContext* ctx, TypedASTNode* call) {
         arg_regs[i] = reg;
     }
 
-    int result_reg = mp_allocate_temp_register(ctx->allocator);
+    int result_reg = compiler_alloc_temp(ctx->allocator);
     if (result_reg == -1) {
         DEBUG_CODEGEN_PRINT("Error: Failed to allocate result register for range() builtin\n");
         for (int i = 0; i < arg_count; i++) {
             if (arg_regs[i] >= MP_TEMP_REG_START && arg_regs[i] <= MP_TEMP_REG_END) {
-                mp_free_temp_register(ctx->allocator, arg_regs[i]);
+                compiler_free_temp(ctx->allocator, arg_regs[i]);
             }
             if (free_nodes[i] && arg_nodes[i]) {
                 free_typed_ast_node(arg_nodes[i]);
@@ -1948,7 +1948,7 @@ static int compile_builtin_range(CompilerContext* ctx, TypedASTNode* call) {
 
     for (int i = 0; i < arg_count; i++) {
         if (arg_regs[i] >= MP_TEMP_REG_START && arg_regs[i] <= MP_TEMP_REG_END) {
-            mp_free_temp_register(ctx->allocator, arg_regs[i]);
+            compiler_free_temp(ctx->allocator, arg_regs[i]);
         }
         if (free_nodes[i] && arg_nodes[i]) {
             free_typed_ast_node(arg_nodes[i]);
@@ -1987,11 +1987,11 @@ static int compile_builtin_input(CompilerContext* ctx, TypedASTNode* call) {
         }
     }
 
-    int result_reg = mp_allocate_temp_register(ctx->allocator);
+    int result_reg = compiler_alloc_temp(ctx->allocator);
     if (result_reg == -1) {
         DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for input() result\n");
         if (arg_count == 1 && prompt_reg >= MP_TEMP_REG_START && prompt_reg <= MP_TEMP_REG_END) {
-            mp_free_temp_register(ctx->allocator, prompt_reg);
+            compiler_free_temp(ctx->allocator, prompt_reg);
         }
         if (free_prompt && prompt_arg) free_typed_ast_node(prompt_arg);
         return -1;
@@ -2004,7 +2004,7 @@ static int compile_builtin_input(CompilerContext* ctx, TypedASTNode* call) {
     emit_byte_to_buffer(ctx->bytecode, (uint8_t)prompt_reg);
 
     if (arg_count == 1 && prompt_reg >= MP_TEMP_REG_START && prompt_reg <= MP_TEMP_REG_END) {
-        mp_free_temp_register(ctx->allocator, prompt_reg);
+        compiler_free_temp(ctx->allocator, prompt_reg);
     }
 
     if (free_prompt && prompt_arg) free_typed_ast_node(prompt_arg);
@@ -2037,11 +2037,11 @@ static int compile_builtin_int(CompilerContext* ctx, TypedASTNode* call) {
         return -1;
     }
 
-    int result_reg = mp_allocate_temp_register(ctx->allocator);
+    int result_reg = compiler_alloc_temp(ctx->allocator);
     if (result_reg == -1) {
         DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for int() result\n");
         if (value_reg >= MP_TEMP_REG_START && value_reg <= MP_TEMP_REG_END) {
-            mp_free_temp_register(ctx->allocator, value_reg);
+            compiler_free_temp(ctx->allocator, value_reg);
         }
         if (free_value && value_arg) free_typed_ast_node(value_arg);
         return -1;
@@ -2053,7 +2053,7 @@ static int compile_builtin_int(CompilerContext* ctx, TypedASTNode* call) {
     emit_byte_to_buffer(ctx->bytecode, value_reg);
 
     if (value_reg >= MP_TEMP_REG_START && value_reg <= MP_TEMP_REG_END) {
-        mp_free_temp_register(ctx->allocator, value_reg);
+        compiler_free_temp(ctx->allocator, value_reg);
     }
 
     if (free_value && value_arg) free_typed_ast_node(value_arg);
@@ -2086,11 +2086,11 @@ static int compile_builtin_float(CompilerContext* ctx, TypedASTNode* call) {
         return -1;
     }
 
-    int result_reg = mp_allocate_temp_register(ctx->allocator);
+    int result_reg = compiler_alloc_temp(ctx->allocator);
     if (result_reg == -1) {
         DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for float() result\n");
         if (value_reg >= MP_TEMP_REG_START && value_reg <= MP_TEMP_REG_END) {
-            mp_free_temp_register(ctx->allocator, value_reg);
+            compiler_free_temp(ctx->allocator, value_reg);
         }
         if (free_value && value_arg) free_typed_ast_node(value_arg);
         return -1;
@@ -2102,7 +2102,7 @@ static int compile_builtin_float(CompilerContext* ctx, TypedASTNode* call) {
     emit_byte_to_buffer(ctx->bytecode, value_reg);
 
     if (value_reg >= MP_TEMP_REG_START && value_reg <= MP_TEMP_REG_END) {
-        mp_free_temp_register(ctx->allocator, value_reg);
+        compiler_free_temp(ctx->allocator, value_reg);
     }
 
     if (free_value && value_arg) free_typed_ast_node(value_arg);
@@ -2135,11 +2135,11 @@ static int compile_builtin_type_of(CompilerContext* ctx, TypedASTNode* call) {
         return -1;
     }
 
-    int result_reg = mp_allocate_temp_register(ctx->allocator);
+    int result_reg = compiler_alloc_temp(ctx->allocator);
     if (result_reg == -1) {
         DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for type_of() result\n");
         if (value_reg >= MP_TEMP_REG_START && value_reg <= MP_TEMP_REG_END) {
-            mp_free_temp_register(ctx->allocator, value_reg);
+            compiler_free_temp(ctx->allocator, value_reg);
         }
         if (free_value && value_arg) free_typed_ast_node(value_arg);
         return -1;
@@ -2151,7 +2151,7 @@ static int compile_builtin_type_of(CompilerContext* ctx, TypedASTNode* call) {
     emit_byte_to_buffer(ctx->bytecode, value_reg);
 
     if (value_reg >= MP_TEMP_REG_START && value_reg <= MP_TEMP_REG_END) {
-        mp_free_temp_register(ctx->allocator, value_reg);
+        compiler_free_temp(ctx->allocator, value_reg);
     }
 
     if (free_value && value_arg) free_typed_ast_node(value_arg);
@@ -2196,21 +2196,21 @@ static int compile_builtin_is_type(CompilerContext* ctx, TypedASTNode* call) {
     int type_reg = compile_expression(ctx, type_arg);
     if (type_reg == -1) {
         if (value_reg >= MP_TEMP_REG_START && value_reg <= MP_TEMP_REG_END) {
-            mp_free_temp_register(ctx->allocator, value_reg);
+            compiler_free_temp(ctx->allocator, value_reg);
         }
         if (free_value && value_arg) free_typed_ast_node(value_arg);
         if (free_type && type_arg) free_typed_ast_node(type_arg);
         return -1;
     }
 
-    int result_reg = mp_allocate_temp_register(ctx->allocator);
+    int result_reg = compiler_alloc_temp(ctx->allocator);
     if (result_reg == -1) {
         DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for is_type() result\n");
         if (value_reg >= MP_TEMP_REG_START && value_reg <= MP_TEMP_REG_END) {
-            mp_free_temp_register(ctx->allocator, value_reg);
+            compiler_free_temp(ctx->allocator, value_reg);
         }
         if (type_reg >= MP_TEMP_REG_START && type_reg <= MP_TEMP_REG_END) {
-            mp_free_temp_register(ctx->allocator, type_reg);
+            compiler_free_temp(ctx->allocator, type_reg);
         }
         if (free_value && value_arg) free_typed_ast_node(value_arg);
         if (free_type && type_arg) free_typed_ast_node(type_arg);
@@ -2224,10 +2224,10 @@ static int compile_builtin_is_type(CompilerContext* ctx, TypedASTNode* call) {
     emit_byte_to_buffer(ctx->bytecode, type_reg);
 
     if (value_reg >= MP_TEMP_REG_START && value_reg <= MP_TEMP_REG_END) {
-        mp_free_temp_register(ctx->allocator, value_reg);
+        compiler_free_temp(ctx->allocator, value_reg);
     }
     if (type_reg >= MP_TEMP_REG_START && type_reg <= MP_TEMP_REG_END) {
-        mp_free_temp_register(ctx->allocator, type_reg);
+        compiler_free_temp(ctx->allocator, type_reg);
     }
 
     if (free_value && value_arg) free_typed_ast_node(value_arg);
@@ -2257,7 +2257,7 @@ static int compile_builtin_assert_eq(CompilerContext* ctx, TypedASTNode* call) {
         if (!args[i]) {
             for (int j = 0; j <= i; j++) {
                 if (regs[j] >= MP_TEMP_REG_START && regs[j] <= MP_TEMP_REG_END) {
-                    mp_free_temp_register(ctx->allocator, regs[j]);
+                    compiler_free_temp(ctx->allocator, regs[j]);
                 }
                 if (free_nodes[j] && args[j]) {
                     free_typed_ast_node(args[j]);
@@ -2269,7 +2269,7 @@ static int compile_builtin_assert_eq(CompilerContext* ctx, TypedASTNode* call) {
         if (regs[i] == -1) {
             for (int j = 0; j <= i; j++) {
                 if (regs[j] >= MP_TEMP_REG_START && regs[j] <= MP_TEMP_REG_END) {
-                    mp_free_temp_register(ctx->allocator, regs[j]);
+                    compiler_free_temp(ctx->allocator, regs[j]);
                 }
                 if (free_nodes[j] && args[j]) {
                     free_typed_ast_node(args[j]);
@@ -2279,13 +2279,13 @@ static int compile_builtin_assert_eq(CompilerContext* ctx, TypedASTNode* call) {
         }
     }
 
-    int result_reg = mp_allocate_temp_register(ctx->allocator);
+    int result_reg = compiler_alloc_temp(ctx->allocator);
     if (result_reg == -1) {
         DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for assert_eq() result\n");
         ctx->has_compilation_errors = true;
         for (int i = 0; i < 3; i++) {
             if (regs[i] >= MP_TEMP_REG_START && regs[i] <= MP_TEMP_REG_END) {
-                mp_free_temp_register(ctx->allocator, regs[i]);
+                compiler_free_temp(ctx->allocator, regs[i]);
             }
             if (free_nodes[i] && args[i]) {
                 free_typed_ast_node(args[i]);
@@ -2303,7 +2303,7 @@ static int compile_builtin_assert_eq(CompilerContext* ctx, TypedASTNode* call) {
 
     for (int i = 0; i < 3; i++) {
         if (regs[i] >= MP_TEMP_REG_START && regs[i] <= MP_TEMP_REG_END) {
-            mp_free_temp_register(ctx->allocator, regs[i]);
+            compiler_free_temp(ctx->allocator, regs[i]);
         }
         if (free_nodes[i] && args[i]) {
             free_typed_ast_node(args[i]);
@@ -2369,7 +2369,7 @@ static int compile_enum_variant_access(CompilerContext* ctx, TypedASTNode* expr)
         return -1;
     }
 
-    int result_reg = mp_allocate_temp_register(ctx->allocator);
+    int result_reg = compiler_alloc_temp(ctx->allocator);
     if (result_reg == -1) {
         ctx->has_compilation_errors = true;
         return -1;
@@ -2433,7 +2433,7 @@ static int compile_enum_constructor_call(CompilerContext* ctx, TypedASTNode* cal
         return -1;
     }
 
-    int result_reg = mp_allocate_temp_register(ctx->allocator);
+    int result_reg = compiler_alloc_temp(ctx->allocator);
     if (result_reg == -1) {
         ctx->has_compilation_errors = true;
         return -1;
@@ -2453,7 +2453,7 @@ static int compile_enum_constructor_call(CompilerContext* ctx, TypedASTNode* cal
         }
 
         for (int i = 0; i < expectedArgs; i++) {
-            arg_regs[i] = mp_allocate_temp_register(ctx->allocator);
+            arg_regs[i] = compiler_alloc_temp(ctx->allocator);
             if (arg_regs[i] == -1) {
                 ctx->has_compilation_errors = true;
                 goto cleanup;
@@ -2480,7 +2480,7 @@ static int compile_enum_constructor_call(CompilerContext* ctx, TypedASTNode* cal
             if (temp_arg_regs[i] != arg_regs[i]) {
                 emit_move(ctx, arg_regs[i], temp_arg_regs[i]);
                 if (temp_arg_regs[i] >= MP_TEMP_REG_START && temp_arg_regs[i] <= MP_TEMP_REG_END) {
-                    mp_free_temp_register(ctx->allocator, temp_arg_regs[i]);
+                    compiler_free_temp(ctx->allocator, temp_arg_regs[i]);
                     temp_arg_regs[i] = arg_regs[i];
                 }
             }
@@ -2506,7 +2506,7 @@ cleanup:
             for (int i = 0; i < expectedArgs; i++) {
                 if (temp_arg_regs[i] >= MP_TEMP_REG_START && temp_arg_regs[i] <= MP_TEMP_REG_END &&
                     (!arg_regs || temp_arg_regs[i] != arg_regs[i])) {
-                    mp_free_temp_register(ctx->allocator, temp_arg_regs[i]);
+                    compiler_free_temp(ctx->allocator, temp_arg_regs[i]);
                 }
             }
         }
@@ -2516,7 +2516,7 @@ cleanup:
     if (arg_regs) {
         for (int i = 0; i < expectedArgs; i++) {
             if (arg_regs[i] >= MP_TEMP_REG_START && arg_regs[i] <= MP_TEMP_REG_END) {
-                mp_free_temp_register(ctx->allocator, arg_regs[i]);
+                compiler_free_temp(ctx->allocator, arg_regs[i]);
             }
         }
         free(arg_regs);
@@ -2524,7 +2524,7 @@ cleanup:
 
     if (!success) {
         if (result_reg >= MP_TEMP_REG_START && result_reg <= MP_TEMP_REG_END) {
-            mp_free_temp_register(ctx->allocator, result_reg);
+            compiler_free_temp(ctx->allocator, result_reg);
         }
         return -1;
     }
@@ -2548,11 +2548,11 @@ static int compile_enum_match_test(CompilerContext* ctx, TypedASTNode* expr) {
         return -1;
     }
 
-    int result_reg = mp_allocate_temp_register(ctx->allocator);
+    int result_reg = compiler_alloc_temp(ctx->allocator);
     if (result_reg == -1) {
         ctx->has_compilation_errors = true;
         if (enum_reg >= MP_TEMP_REG_START && enum_reg <= MP_TEMP_REG_END) {
-            mp_free_temp_register(ctx->allocator, enum_reg);
+            compiler_free_temp(ctx->allocator, enum_reg);
         }
         return -1;
     }
@@ -2564,7 +2564,7 @@ static int compile_enum_match_test(CompilerContext* ctx, TypedASTNode* expr) {
     emit_byte_to_buffer(ctx->bytecode, (uint8_t)variant_index);
 
     if (enum_reg >= MP_TEMP_REG_START && enum_reg <= MP_TEMP_REG_END) {
-        mp_free_temp_register(ctx->allocator, enum_reg);
+        compiler_free_temp(ctx->allocator, enum_reg);
     }
 
     return result_reg;
@@ -2587,11 +2587,11 @@ static int compile_enum_payload_extract(CompilerContext* ctx, TypedASTNode* expr
         return -1;
     }
 
-    int result_reg = mp_allocate_temp_register(ctx->allocator);
+    int result_reg = compiler_alloc_temp(ctx->allocator);
     if (result_reg == -1) {
         ctx->has_compilation_errors = true;
         if (enum_reg >= MP_TEMP_REG_START && enum_reg <= MP_TEMP_REG_END) {
-            mp_free_temp_register(ctx->allocator, enum_reg);
+            compiler_free_temp(ctx->allocator, enum_reg);
         }
         return -1;
     }
@@ -2604,7 +2604,7 @@ static int compile_enum_payload_extract(CompilerContext* ctx, TypedASTNode* expr
     emit_byte_to_buffer(ctx->bytecode, (uint8_t)field_index);
 
     if (enum_reg >= MP_TEMP_REG_START && enum_reg <= MP_TEMP_REG_END) {
-        mp_free_temp_register(ctx->allocator, enum_reg);
+        compiler_free_temp(ctx->allocator, enum_reg);
     }
 
     return result_reg;
@@ -2620,10 +2620,10 @@ static int compile_match_expression(CompilerContext* ctx, TypedASTNode* expr) {
         return -1;
     }
 
-    int result_reg = mp_allocate_temp_register(ctx->allocator);
+    int result_reg = compiler_alloc_temp(ctx->allocator);
     if (result_reg == -1) {
         if (scrutinee_reg >= MP_TEMP_REG_START && scrutinee_reg <= MP_TEMP_REG_END) {
-            mp_free_temp_register(ctx->allocator, scrutinee_reg);
+            compiler_free_temp(ctx->allocator, scrutinee_reg);
         }
         return -1;
     }
@@ -2631,9 +2631,9 @@ static int compile_match_expression(CompilerContext* ctx, TypedASTNode* expr) {
     SymbolTable* parent_scope = ctx->symbols;
     SymbolTable* match_scope = create_symbol_table(parent_scope);
     if (!match_scope) {
-        mp_free_temp_register(ctx->allocator, result_reg);
+        compiler_free_temp(ctx->allocator, result_reg);
         if (scrutinee_reg >= MP_TEMP_REG_START && scrutinee_reg <= MP_TEMP_REG_END) {
-            mp_free_temp_register(ctx->allocator, scrutinee_reg);
+            compiler_free_temp(ctx->allocator, scrutinee_reg);
         }
         return -1;
     }
@@ -2643,7 +2643,7 @@ static int compile_match_expression(CompilerContext* ctx, TypedASTNode* expr) {
 
     ctx->symbols = match_scope;
     if (ctx->allocator) {
-        mp_enter_scope(ctx->allocator);
+        compiler_enter_scope(ctx->allocator);
     }
     if (ctx->scopes) {
         match_frame = scope_stack_push(ctx->scopes, SCOPE_KIND_LEXICAL);
@@ -2660,16 +2660,16 @@ static int compile_match_expression(CompilerContext* ctx, TypedASTNode* expr) {
         if (!register_variable(ctx, ctx->symbols, expr->typed.matchExpr.tempName, scrutinee_reg,
                                scrutinee_type, false, false, expr->original->location, true)) {
             if (ctx->allocator) {
-                mp_exit_scope(ctx->allocator);
+                compiler_exit_scope(ctx->allocator);
             }
             free_symbol_table(match_scope);
             ctx->symbols = parent_scope;
             if (match_frame && ctx->scopes) {
                 scope_stack_pop(ctx->scopes);
             }
-            mp_free_temp_register(ctx->allocator, result_reg);
+            compiler_free_temp(ctx->allocator, result_reg);
             if (scrutinee_reg >= MP_TEMP_REG_START && scrutinee_reg <= MP_TEMP_REG_END) {
-                mp_free_temp_register(ctx->allocator, scrutinee_reg);
+                compiler_free_temp(ctx->allocator, scrutinee_reg);
             }
             return -1;
         }
@@ -2764,7 +2764,7 @@ static int compile_match_expression(CompilerContext* ctx, TypedASTNode* expr) {
                     success = false;
                 }
                 if (condition_reg >= MP_TEMP_REG_START && condition_reg <= MP_TEMP_REG_END) {
-                    mp_free_temp_register(ctx->allocator, condition_reg);
+                    compiler_free_temp(ctx->allocator, condition_reg);
                 }
             }
         }
@@ -2778,7 +2778,7 @@ static int compile_match_expression(CompilerContext* ctx, TypedASTNode* expr) {
         } else {
             ctx->symbols = branch_scope;
             if (ctx->allocator) {
-                mp_enter_scope(ctx->allocator);
+                compiler_enter_scope(ctx->allocator);
             }
             if (ctx->scopes) {
                 branch_frame = scope_stack_push(ctx->scopes, SCOPE_KIND_LEXICAL);
@@ -2810,13 +2810,13 @@ static int compile_match_expression(CompilerContext* ctx, TypedASTNode* expr) {
                                                true)) {
                             success = false;
                             if (payload_reg >= MP_TEMP_REG_START && payload_reg <= MP_TEMP_REG_END) {
-                                mp_free_temp_register(ctx->allocator, payload_reg);
+                                compiler_free_temp(ctx->allocator, payload_reg);
                             }
                             break;
                         }
                     } else {
                         if (payload_reg >= MP_TEMP_REG_START && payload_reg <= MP_TEMP_REG_END) {
-                            mp_free_temp_register(ctx->allocator, payload_reg);
+                            compiler_free_temp(ctx->allocator, payload_reg);
                         }
                     }
                 }
@@ -2835,7 +2835,7 @@ static int compile_match_expression(CompilerContext* ctx, TypedASTNode* expr) {
                     set_location_from_node(ctx, arm->body ? arm->body : expr);
                     emit_move(ctx, result_reg, body_reg);
                     if (body_reg >= MP_TEMP_REG_START && body_reg <= MP_TEMP_REG_END) {
-                        mp_free_temp_register(ctx->allocator, body_reg);
+                        compiler_free_temp(ctx->allocator, body_reg);
                     }
                 }
             }
@@ -2850,7 +2850,7 @@ static int compile_match_expression(CompilerContext* ctx, TypedASTNode* expr) {
                 }
             }
             if (ctx->allocator) {
-                mp_exit_scope(ctx->allocator);
+                compiler_exit_scope(ctx->allocator);
             }
             free_symbol_table(branch_scope);
             ctx->symbols = branch_parent;
@@ -2912,15 +2912,15 @@ static int compile_match_expression(CompilerContext* ctx, TypedASTNode* expr) {
         }
     }
     if (ctx->allocator) {
-        mp_exit_scope(ctx->allocator);
+        compiler_exit_scope(ctx->allocator);
     }
     free_symbol_table(match_scope);
     ctx->symbols = parent_scope;
 
     if (!success) {
-        mp_free_temp_register(ctx->allocator, result_reg);
+        compiler_free_temp(ctx->allocator, result_reg);
         if (scrutinee_reg >= MP_TEMP_REG_START && scrutinee_reg <= MP_TEMP_REG_END) {
-            mp_free_temp_register(ctx->allocator, scrutinee_reg);
+            compiler_free_temp(ctx->allocator, scrutinee_reg);
         }
         ctx->has_compilation_errors = true;
         return -1;
@@ -2987,7 +2987,7 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
     
     switch (expr->original->type) {
         case NODE_LITERAL: {
-            int reg = mp_allocate_temp_register(ctx->allocator);
+            int reg = compiler_alloc_temp(ctx->allocator);
             if (reg == -1) {
                 DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for literal");
                 return -1;
@@ -2998,7 +2998,7 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
 
         case NODE_ARRAY_LITERAL: {
             int element_count = expr->original->arrayLiteral.count;
-            int result_reg = mp_allocate_temp_register(ctx->allocator);
+            int result_reg = compiler_alloc_temp(ctx->allocator);
             if (result_reg == -1) {
                 DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for array literal result\n");
                 return -1;
@@ -3012,9 +3012,9 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                 emit_byte_to_buffer(ctx->bytecode, 0);
                 return result_reg;
             } else {
-                int base_reg = mp_allocate_consecutive_temp_registers(ctx->allocator, element_count);
+                int base_reg = compiler_alloc_consecutive_temps(ctx->allocator, element_count);
                 if (base_reg == -1) {
-                    mp_free_temp_register(ctx->allocator, result_reg);
+                    compiler_free_temp(ctx->allocator, result_reg);
                     DEBUG_CODEGEN_PRINT("Error: Failed to allocate consecutive registers for array literal\n");
                     return -1;
                 }
@@ -3022,9 +3022,9 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                 int* element_regs = malloc(sizeof(int) * element_count);
                 if (!element_regs) {
                     for (int i = 0; i < element_count; i++) {
-                        mp_free_temp_register(ctx->allocator, base_reg + i);
+                        compiler_free_temp(ctx->allocator, base_reg + i);
                     }
-                    mp_free_temp_register(ctx->allocator, result_reg);
+                    compiler_free_temp(ctx->allocator, result_reg);
                     DEBUG_CODEGEN_PRINT("Error: Failed to allocate element register list for array literal\n");
                     return -1;
                 }
@@ -3063,7 +3063,7 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                     if (value_reg != element_regs[i]) {
                         emit_move(ctx, element_regs[i], value_reg);
                         if (value_reg >= MP_TEMP_REG_START && value_reg <= MP_TEMP_REG_END) {
-                            mp_free_temp_register(ctx->allocator, value_reg);
+                            compiler_free_temp(ctx->allocator, value_reg);
                         }
                     }
                 }
@@ -3071,11 +3071,11 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                 if (!success) {
                     for (int i = 0; i < element_count; i++) {
                         if (element_regs[i] >= MP_TEMP_REG_START && element_regs[i] <= MP_TEMP_REG_END) {
-                            mp_free_temp_register(ctx->allocator, element_regs[i]);
+                            compiler_free_temp(ctx->allocator, element_regs[i]);
                         }
                     }
                     free(element_regs);
-                    mp_free_temp_register(ctx->allocator, result_reg);
+                    compiler_free_temp(ctx->allocator, result_reg);
                     DEBUG_CODEGEN_PRINT("Error: Failed to compile array literal element\n");
                     return -1;
                 }
@@ -3093,7 +3093,7 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
 
                 for (int i = 0; i < element_count; i++) {
                     if (element_regs[i] >= MP_TEMP_REG_START && element_regs[i] <= MP_TEMP_REG_END) {
-                        mp_free_temp_register(ctx->allocator, element_regs[i]);
+                        compiler_free_temp(ctx->allocator, element_regs[i]);
                     }
                 }
 
@@ -3114,7 +3114,7 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                 return -1;
             }
 
-            int result_reg = mp_allocate_temp_register(ctx->allocator);
+            int result_reg = compiler_alloc_temp(ctx->allocator);
             if (result_reg == -1) {
                 DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for array fill result\n");
                 return -1;
@@ -3129,9 +3129,9 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                 return result_reg;
             }
 
-            int base_reg = mp_allocate_consecutive_temp_registers(ctx->allocator, length);
+            int base_reg = compiler_alloc_consecutive_temps(ctx->allocator, length);
             if (base_reg == -1) {
-                mp_free_temp_register(ctx->allocator, result_reg);
+                compiler_free_temp(ctx->allocator, result_reg);
                 DEBUG_CODEGEN_PRINT("Error: Failed to allocate registers for array fill elements\n");
                 return -1;
             }
@@ -3147,10 +3147,10 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                 for (int i = 0; i < length; i++) {
                     int reg = base_reg + i;
                     if (reg >= MP_TEMP_REG_START && reg <= MP_TEMP_REG_END) {
-                        mp_free_temp_register(ctx->allocator, reg);
+                        compiler_free_temp(ctx->allocator, reg);
                     }
                 }
-                mp_free_temp_register(ctx->allocator, result_reg);
+                compiler_free_temp(ctx->allocator, result_reg);
                 DEBUG_CODEGEN_PRINT("Error: Missing value expression for array fill\n");
                 return -1;
             }
@@ -3164,10 +3164,10 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                 for (int i = 0; i < length; i++) {
                     int reg = base_reg + i;
                     if (reg >= MP_TEMP_REG_START && reg <= MP_TEMP_REG_END) {
-                        mp_free_temp_register(ctx->allocator, reg);
+                        compiler_free_temp(ctx->allocator, reg);
                     }
                 }
-                mp_free_temp_register(ctx->allocator, result_reg);
+                compiler_free_temp(ctx->allocator, result_reg);
                 DEBUG_CODEGEN_PRINT("Error: Failed to compile array fill value expression\n");
                 return -1;
             }
@@ -3177,7 +3177,7 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             if (value_reg != base_reg) {
                 emit_move(ctx, base_reg, value_reg);
                 if (value_reg_temp) {
-                    mp_free_temp_register(ctx->allocator, value_reg);
+                    compiler_free_temp(ctx->allocator, value_reg);
                     value_reg_temp = false;
                 }
             } else {
@@ -3197,7 +3197,7 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             for (int i = 0; i < length; i++) {
                 int reg = base_reg + i;
                 if (reg >= MP_TEMP_REG_START && reg <= MP_TEMP_REG_END) {
-                    mp_free_temp_register(ctx->allocator, reg);
+                    compiler_free_temp(ctx->allocator, reg);
                 }
             }
 
@@ -3225,7 +3225,7 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                 field_count = expr->typed.structLiteral.fieldCount;
             }
 
-            int result_reg = mp_allocate_temp_register(ctx->allocator);
+            int result_reg = compiler_alloc_temp(ctx->allocator);
             if (result_reg == -1) {
                 DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for struct literal result\n");
                 return -1;
@@ -3242,14 +3242,14 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
 
             int* field_regs = malloc(sizeof(int) * field_count);
             if (!field_regs) {
-                mp_free_temp_register(ctx->allocator, result_reg);
+                compiler_free_temp(ctx->allocator, result_reg);
                 DEBUG_CODEGEN_PRINT("Error: Failed to allocate register list for struct fields\n");
                 return -1;
             }
 
             bool allocation_failed = false;
             for (int i = 0; i < field_count; i++) {
-                field_regs[i] = mp_allocate_temp_register(ctx->allocator);
+                field_regs[i] = compiler_alloc_temp(ctx->allocator);
                 if (field_regs[i] == -1) {
                     allocation_failed = true;
                     break;
@@ -3259,11 +3259,11 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             if (allocation_failed) {
                 for (int i = 0; i < field_count; i++) {
                     if (field_regs[i] >= MP_TEMP_REG_START && field_regs[i] <= MP_TEMP_REG_END) {
-                        mp_free_temp_register(ctx->allocator, field_regs[i]);
+                        compiler_free_temp(ctx->allocator, field_regs[i]);
                     }
                 }
                 free(field_regs);
-                mp_free_temp_register(ctx->allocator, result_reg);
+                compiler_free_temp(ctx->allocator, result_reg);
                 DEBUG_CODEGEN_PRINT("Error: Failed to allocate struct field registers\n");
                 return -1;
             }
@@ -3307,7 +3307,7 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                 if (value_reg != field_regs[i]) {
                     emit_move(ctx, field_regs[i], value_reg);
                     if (value_reg >= MP_TEMP_REG_START && value_reg <= MP_TEMP_REG_END) {
-                        mp_free_temp_register(ctx->allocator, value_reg);
+                        compiler_free_temp(ctx->allocator, value_reg);
                     }
                 }
             }
@@ -3315,11 +3315,11 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             if (!success) {
                 for (int i = 0; i < field_count; i++) {
                     if (field_regs[i] >= MP_TEMP_REG_START && field_regs[i] <= MP_TEMP_REG_END) {
-                        mp_free_temp_register(ctx->allocator, field_regs[i]);
+                        compiler_free_temp(ctx->allocator, field_regs[i]);
                     }
                 }
                 free(field_regs);
-                mp_free_temp_register(ctx->allocator, result_reg);
+                compiler_free_temp(ctx->allocator, result_reg);
                 return -1;
             }
 
@@ -3331,7 +3331,7 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
 
             for (int i = 0; i < field_count; i++) {
                 if (field_regs[i] >= MP_TEMP_REG_START && field_regs[i] <= MP_TEMP_REG_END) {
-                    mp_free_temp_register(ctx->allocator, field_regs[i]);
+                    compiler_free_temp(ctx->allocator, field_regs[i]);
                 }
             }
 
@@ -3349,19 +3349,19 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             int index_reg = compile_expression(ctx, index_node);
             if (index_reg == -1) {
                 if (array_reg >= MP_TEMP_REG_START && array_reg <= MP_TEMP_REG_END) {
-                    mp_free_temp_register(ctx->allocator, array_reg);
+                    compiler_free_temp(ctx->allocator, array_reg);
                 }
                 return -1;
             }
 
-            int result_reg = mp_allocate_temp_register(ctx->allocator);
+            int result_reg = compiler_alloc_temp(ctx->allocator);
             if (result_reg == -1) {
                 DEBUG_CODEGEN_PRINT("Error: Failed to allocate result register for array access\n");
                 if (index_reg >= MP_TEMP_REG_START && index_reg <= MP_TEMP_REG_END) {
-                    mp_free_temp_register(ctx->allocator, index_reg);
+                    compiler_free_temp(ctx->allocator, index_reg);
                 }
                 if (array_reg >= MP_TEMP_REG_START && array_reg <= MP_TEMP_REG_END) {
-                    mp_free_temp_register(ctx->allocator, array_reg);
+                    compiler_free_temp(ctx->allocator, array_reg);
                 }
                 return -1;
             }
@@ -3412,10 +3412,10 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             emit_byte_to_buffer(ctx->bytecode, index_reg);
 
             if (index_reg >= MP_TEMP_REG_START && index_reg <= MP_TEMP_REG_END) {
-                mp_free_temp_register(ctx->allocator, index_reg);
+                compiler_free_temp(ctx->allocator, index_reg);
             }
             if (array_reg >= MP_TEMP_REG_START && array_reg <= MP_TEMP_REG_END) {
-                mp_free_temp_register(ctx->allocator, array_reg);
+                compiler_free_temp(ctx->allocator, array_reg);
             }
 
             return result_reg;
@@ -3596,7 +3596,7 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                 DEBUG_CODEGEN_PRINT("NODE_BINARY: Protected left operand R%d -> R%d (param register)\n", left_reg, frame_protection_reg);
 
                 // Free the original temp register
-                mp_free_temp_register(ctx->allocator, left_reg);
+                compiler_free_temp(ctx->allocator, left_reg);
                 protected_left_reg = frame_protection_reg;
             }
             
@@ -3605,7 +3605,7 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             DEBUG_CODEGEN_PRINT("NODE_BINARY: Right operand returned register %d\n", right_reg);
             
             DEBUG_CODEGEN_PRINT("NODE_BINARY: Allocating result register");
-            int result_reg = mp_allocate_temp_register(ctx->allocator);
+            int result_reg = compiler_alloc_temp(ctx->allocator);
             DEBUG_CODEGEN_PRINT("NODE_BINARY: Result register is %d\n", result_reg);
             
             if (protected_left_reg == -1 || right_reg == -1 || result_reg == -1) {
@@ -3622,10 +3622,10 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             // expressions (e.g. comparisons). Only temporary registers should be
             // released here.
             if (protected_left_reg >= MP_TEMP_REG_START && protected_left_reg <= MP_TEMP_REG_END) {
-                mp_free_temp_register(ctx->allocator, protected_left_reg);
+                compiler_free_temp(ctx->allocator, protected_left_reg);
             }
             if (right_reg >= MP_TEMP_REG_START && right_reg <= MP_TEMP_REG_END) {
-                mp_free_temp_register(ctx->allocator, right_reg);
+                compiler_free_temp(ctx->allocator, right_reg);
             }
             
             // Clean up temporary typed nodes if we created them
@@ -3696,7 +3696,7 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                 start_reg = compile_expression(ctx, start_node);
                 if (start_reg == -1) {
                     if (array_reg >= MP_TEMP_REG_START && array_reg <= MP_TEMP_REG_END) {
-                        mp_free_temp_register(ctx->allocator, array_reg);
+                        compiler_free_temp(ctx->allocator, array_reg);
                     }
                     if (free_array_node) free_typed_ast_node(array_node);
                     if (free_start_node) free_typed_ast_node(start_node);
@@ -3704,10 +3704,10 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                     return -1;
                 }
             } else {
-                start_reg = mp_allocate_temp_register(ctx->allocator);
+                start_reg = compiler_alloc_temp(ctx->allocator);
                 if (start_reg == -1) {
                     if (array_reg >= MP_TEMP_REG_START && array_reg <= MP_TEMP_REG_END) {
-                        mp_free_temp_register(ctx->allocator, array_reg);
+                        compiler_free_temp(ctx->allocator, array_reg);
                     }
                     if (free_array_node) free_typed_ast_node(array_node);
                     if (free_start_node) free_typed_ast_node(start_node);
@@ -3723,10 +3723,10 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                 end_reg = compile_expression(ctx, end_node);
                 if (end_reg == -1) {
                     if (start_reg >= MP_TEMP_REG_START && start_reg <= MP_TEMP_REG_END) {
-                        mp_free_temp_register(ctx->allocator, start_reg);
+                        compiler_free_temp(ctx->allocator, start_reg);
                     }
                     if (array_reg >= MP_TEMP_REG_START && array_reg <= MP_TEMP_REG_END) {
-                        mp_free_temp_register(ctx->allocator, array_reg);
+                        compiler_free_temp(ctx->allocator, array_reg);
                     }
                     if (free_array_node) free_typed_ast_node(array_node);
                     if (free_start_node) free_typed_ast_node(start_node);
@@ -3734,13 +3734,13 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                     return -1;
                 }
             } else {
-                end_reg = mp_allocate_temp_register(ctx->allocator);
+                end_reg = compiler_alloc_temp(ctx->allocator);
                 if (end_reg == -1) {
                     if (start_reg >= MP_TEMP_REG_START && start_reg <= MP_TEMP_REG_END) {
-                        mp_free_temp_register(ctx->allocator, start_reg);
+                        compiler_free_temp(ctx->allocator, start_reg);
                     }
                     if (array_reg >= MP_TEMP_REG_START && array_reg <= MP_TEMP_REG_END) {
-                        mp_free_temp_register(ctx->allocator, array_reg);
+                        compiler_free_temp(ctx->allocator, array_reg);
                     }
                     if (free_array_node) free_typed_ast_node(array_node);
                     if (free_start_node) free_typed_ast_node(start_node);
@@ -3753,17 +3753,17 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                 emit_byte_to_buffer(ctx->bytecode, array_reg);
             }
 
-            int result_reg = mp_allocate_temp_register(ctx->allocator);
+            int result_reg = compiler_alloc_temp(ctx->allocator);
             if (result_reg == -1) {
                 DEBUG_CODEGEN_PRINT("Error: Failed to allocate result register for array slice\n");
                 if (end_reg >= MP_TEMP_REG_START && end_reg <= MP_TEMP_REG_END) {
-                    mp_free_temp_register(ctx->allocator, end_reg);
+                    compiler_free_temp(ctx->allocator, end_reg);
                 }
                 if (start_reg >= MP_TEMP_REG_START && start_reg <= MP_TEMP_REG_END) {
-                    mp_free_temp_register(ctx->allocator, start_reg);
+                    compiler_free_temp(ctx->allocator, start_reg);
                 }
                 if (array_reg >= MP_TEMP_REG_START && array_reg <= MP_TEMP_REG_END) {
-                    mp_free_temp_register(ctx->allocator, array_reg);
+                    compiler_free_temp(ctx->allocator, array_reg);
                 }
                 if (free_array_node) free_typed_ast_node(array_node);
                 if (free_start_node) free_typed_ast_node(start_node);
@@ -3779,13 +3779,13 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             emit_byte_to_buffer(ctx->bytecode, end_reg);
 
             if (end_reg >= MP_TEMP_REG_START && end_reg <= MP_TEMP_REG_END) {
-                mp_free_temp_register(ctx->allocator, end_reg);
+                compiler_free_temp(ctx->allocator, end_reg);
             }
             if (start_reg >= MP_TEMP_REG_START && start_reg <= MP_TEMP_REG_END) {
-                mp_free_temp_register(ctx->allocator, start_reg);
+                compiler_free_temp(ctx->allocator, start_reg);
             }
             if (array_reg >= MP_TEMP_REG_START && array_reg <= MP_TEMP_REG_END) {
-                mp_free_temp_register(ctx->allocator, array_reg);
+                compiler_free_temp(ctx->allocator, array_reg);
             }
 
             if (free_array_node) free_typed_ast_node(array_node);
@@ -3823,7 +3823,7 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             symbol->has_been_read = true;
 
             if (is_upvalue) {
-                int temp = mp_allocate_temp_register(ctx->allocator);
+                int temp = compiler_alloc_temp(ctx->allocator);
                 if (temp == -1) {
                     DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for upvalue access");
                     return -1;
@@ -3857,7 +3857,7 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                        (void*)source_type, (void*)target_type);
                 // Only free if it's a temp register
                 if (source_reg >= MP_TEMP_REG_START && source_reg <= MP_TEMP_REG_END) {
-                    mp_free_temp_register(ctx->allocator, source_reg);
+                    compiler_free_temp(ctx->allocator, source_reg);
                 }
                 return -1;
             }
@@ -3871,12 +3871,12 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             }
             
             // Always allocate a new register for cast result to avoid register conflicts
-            int target_reg = mp_allocate_temp_register(ctx->allocator);
+            int target_reg = compiler_alloc_temp(ctx->allocator);
             if (target_reg == -1) {
                 DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for cast result");
                 // Only free if it's a temp register
                 if (source_reg >= MP_TEMP_REG_START && source_reg <= MP_TEMP_REG_END) {
-                    mp_free_temp_register(ctx->allocator, source_reg);
+                    compiler_free_temp(ctx->allocator, source_reg);
                 }
                 return -1;
             }
@@ -3953,10 +3953,10 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                     DEBUG_CODEGEN_PRINT("Error: Unsupported cast from type %d to string\n",
                            source_type->kind);
                     if (source_reg >= MP_TEMP_REG_START && source_reg <= MP_TEMP_REG_END) {
-                        mp_free_temp_register(ctx->allocator, source_reg);
+                        compiler_free_temp(ctx->allocator, source_reg);
                     }
                     if (target_reg >= MP_TEMP_REG_START && target_reg <= MP_TEMP_REG_END) {
-                        mp_free_temp_register(ctx->allocator, target_reg);
+                        compiler_free_temp(ctx->allocator, target_reg);
                     }
                     return -1;
                 }
@@ -3965,10 +3965,10 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                        source_type->kind, target_type->kind);
                 // Only free if they're temp registers
                 if (source_reg >= MP_TEMP_REG_START && source_reg <= MP_TEMP_REG_END) {
-                    mp_free_temp_register(ctx->allocator, source_reg);
+                    compiler_free_temp(ctx->allocator, source_reg);
                 }
                 if (target_reg >= MP_TEMP_REG_START && target_reg <= MP_TEMP_REG_END) {
-                    mp_free_temp_register(ctx->allocator, target_reg);
+                    compiler_free_temp(ctx->allocator, target_reg);
                 }
                 return -1;
             }
@@ -3981,7 +3981,7 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             
             // Free source register only if it's a temp register
             if (source_reg >= MP_TEMP_REG_START && source_reg <= MP_TEMP_REG_END) {
-                mp_free_temp_register(ctx->allocator, source_reg);
+                compiler_free_temp(ctx->allocator, source_reg);
             }
             
             return target_reg;
@@ -3989,7 +3989,7 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
         
         case NODE_TIME_STAMP: {
             // Generate time_stamp() call - returns f64
-            int reg = mp_allocate_temp_register(ctx->allocator);
+            int reg = compiler_alloc_temp(ctx->allocator);
             if (reg == -1) {
                 DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for time_stamp");
                 return -1;
@@ -4037,7 +4037,7 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             free_typed_ast_node(operand_typed);
             
             // Allocate result register
-            int result_reg = mp_allocate_temp_register(ctx->allocator);
+            int result_reg = compiler_alloc_temp(ctx->allocator);
             if (result_reg == -1) {
                 DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for unary result");
                 return -1;
@@ -4066,7 +4066,7 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             
             // Free operand register if it's a temporary
             if (operand_reg >= MP_TEMP_REG_START && operand_reg <= MP_TEMP_REG_END) {
-                mp_free_temp_register(ctx->allocator, operand_reg);
+                compiler_free_temp(ctx->allocator, operand_reg);
             }
             
             return result_reg;
@@ -4162,23 +4162,23 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                 return -1;
             }
 
-            int index_reg = mp_allocate_temp_register(ctx->allocator);
+            int index_reg = compiler_alloc_temp(ctx->allocator);
             if (index_reg == -1) {
                 if (object_reg >= MP_TEMP_REG_START && object_reg <= MP_TEMP_REG_END) {
-                    mp_free_temp_register(ctx->allocator, object_reg);
+                    compiler_free_temp(ctx->allocator, object_reg);
                 }
                 return -1;
             }
 
             emit_load_constant(ctx, index_reg, I32_VAL(field_index));
 
-            int result_reg = mp_allocate_temp_register(ctx->allocator);
+            int result_reg = compiler_alloc_temp(ctx->allocator);
             if (result_reg == -1) {
                 if (index_reg >= MP_TEMP_REG_START && index_reg <= MP_TEMP_REG_END) {
-                    mp_free_temp_register(ctx->allocator, index_reg);
+                    compiler_free_temp(ctx->allocator, index_reg);
                 }
                 if (object_reg >= MP_TEMP_REG_START && object_reg <= MP_TEMP_REG_END) {
-                    mp_free_temp_register(ctx->allocator, object_reg);
+                    compiler_free_temp(ctx->allocator, object_reg);
                 }
                 return -1;
             }
@@ -4190,10 +4190,10 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             emit_byte_to_buffer(ctx->bytecode, index_reg);
 
             if (index_reg >= MP_TEMP_REG_START && index_reg <= MP_TEMP_REG_END) {
-                mp_free_temp_register(ctx->allocator, index_reg);
+                compiler_free_temp(ctx->allocator, index_reg);
             }
             if (object_reg >= MP_TEMP_REG_START && object_reg <= MP_TEMP_REG_END) {
-                mp_free_temp_register(ctx->allocator, object_reg);
+                compiler_free_temp(ctx->allocator, object_reg);
             }
 
             return result_reg;
@@ -4273,7 +4273,7 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                     return -1;
                 }
 
-                int consecutive_base = mp_allocate_consecutive_temp_registers(ctx->allocator, arg_count);
+                int consecutive_base = compiler_alloc_consecutive_temps(ctx->allocator, arg_count);
                 if (consecutive_base != -1) {
                     first_arg_reg = consecutive_base;
                     for (int i = 0; i < arg_count; i++) {
@@ -4282,7 +4282,7 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                 } else {
                     // Fallback: allocate individually (older behavior)
                     for (int i = 0; i < arg_count; i++) {
-                        int reg = mp_allocate_temp_register(ctx->allocator);
+                        int reg = compiler_alloc_temp(ctx->allocator);
                         if (reg == -1) {
                             DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for argument %d", i);
                             free(arg_regs);
@@ -4337,7 +4337,7 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                     
                     // Free the temporary register if it's different from our allocated one
                     if (temp_arg_regs[i] != arg_regs[i] && temp_arg_regs[i] >= MP_TEMP_REG_START && temp_arg_regs[i] <= MP_TEMP_REG_END) {
-                        mp_free_temp_register(ctx->allocator, temp_arg_regs[i]);
+                        compiler_free_temp(ctx->allocator, temp_arg_regs[i]);
                     }
                 }
                 
@@ -4345,7 +4345,7 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             }
             
             // Allocate register for return value
-            int return_reg = mp_allocate_temp_register(ctx->allocator);
+            int return_reg = compiler_alloc_temp(ctx->allocator);
             if (return_reg == -1) {
                 DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for function return value");
                 return -1;
@@ -4362,7 +4362,7 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             if (arg_regs) {
                 for (int i = 0; i < arg_count; i++) {
                     if (arg_regs[i] >= MP_TEMP_REG_START && arg_regs[i] <= MP_TEMP_REG_END) {
-                        mp_free_temp_register(ctx->allocator, arg_regs[i]);
+                        compiler_free_temp(ctx->allocator, arg_regs[i]);
                     }
                 }
                 free(arg_regs);
@@ -4370,7 +4370,7 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
 
             // Free callee register if temporary
             if (callee_reg >= MP_TEMP_REG_START && callee_reg <= MP_TEMP_REG_END) {
-                mp_free_temp_register(ctx->allocator, callee_reg);
+                compiler_free_temp(ctx->allocator, callee_reg);
             }
 
             return return_reg;
@@ -4475,7 +4475,7 @@ void compile_binary_op(CompilerContext* ctx, TypedASTNode* binary, int target_re
         
         // Insert cast instruction for left operand if needed
         if (left_type->kind != promoted_type) {
-            int cast_reg = mp_allocate_temp_register(ctx->allocator);
+            int cast_reg = compiler_alloc_temp(ctx->allocator);
             DEBUG_CODEGEN_PRINT("Casting left operand from %d to %d (R%d -> R%d)\n", 
                    left_type->kind, promoted_type, left_reg, cast_reg);
             
@@ -4489,7 +4489,7 @@ void compile_binary_op(CompilerContext* ctx, TypedASTNode* binary, int target_re
         
         // Insert cast instruction for right operand if needed
         if (right_type->kind != promoted_type) {
-            int cast_reg = mp_allocate_temp_register(ctx->allocator);
+            int cast_reg = compiler_alloc_temp(ctx->allocator);
             DEBUG_CODEGEN_PRINT("Casting right operand from %d to %d (R%d -> R%d)\n", 
                    right_type->kind, promoted_type, right_reg, cast_reg);
             
@@ -4523,10 +4523,10 @@ void compile_binary_op(CompilerContext* ctx, TypedASTNode* binary, int target_re
     
     // Free any temporary cast registers
     if (coerced_left_reg != left_reg && coerced_left_reg >= MP_TEMP_REG_START && coerced_left_reg <= MP_TEMP_REG_END) {
-        mp_free_temp_register(ctx->allocator, coerced_left_reg);
+        compiler_free_temp(ctx->allocator, coerced_left_reg);
     }
     if (coerced_right_reg != right_reg && coerced_right_reg >= MP_TEMP_REG_START && coerced_right_reg <= MP_TEMP_REG_END) {
-        mp_free_temp_register(ctx->allocator, coerced_right_reg);
+        compiler_free_temp(ctx->allocator, coerced_right_reg);
     }
 }
 
@@ -4793,17 +4793,17 @@ void compile_variable_declaration(CompilerContext* ctx, TypedASTNode* var_decl) 
 
     int var_reg;
     if (use_global_register) {
-        var_reg = mp_allocate_global_register(ctx->allocator);
+        var_reg = compiler_alloc_global(ctx->allocator);
         if (var_reg == -1) {
-            var_reg = mp_allocate_frame_register(ctx->allocator);
+            var_reg = compiler_alloc_frame(ctx->allocator);
         }
     } else {
-        var_reg = mp_allocate_frame_register(ctx->allocator);
+        var_reg = compiler_alloc_frame(ctx->allocator);
     }
     if (var_reg == -1) {
         DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for variable %s\n", var_name);
         if (value_reg != -1) {
-            mp_free_temp_register(ctx->allocator, value_reg);
+            compiler_free_temp(ctx->allocator, value_reg);
         }
         return;
     }
@@ -4813,9 +4813,9 @@ void compile_variable_declaration(CompilerContext* ctx, TypedASTNode* var_decl) 
                                        var_decl->resolvedType,
                                        is_mutable, is_mutable, decl_location, value_reg != -1);
     if (!symbol) {
-        mp_free_register(ctx->allocator, var_reg);
+        compiler_free_register(ctx->allocator, var_reg);
         if (value_reg != -1) {
-            mp_free_temp_register(ctx->allocator, value_reg);
+            compiler_free_temp(ctx->allocator, value_reg);
         }
         return;
     }
@@ -4829,7 +4829,7 @@ void compile_variable_declaration(CompilerContext* ctx, TypedASTNode* var_decl) 
     if (value_reg != -1) {
         set_location_from_node(ctx, var_decl);
         emit_move(ctx, var_reg, value_reg);
-        mp_free_temp_register(ctx->allocator, value_reg);
+        compiler_free_temp(ctx->allocator, value_reg);
         symbol->last_assignment_location = decl_location;
         symbol->is_initialized = true;
     }
@@ -4858,7 +4858,7 @@ static int compile_array_assignment(CompilerContext* ctx, TypedASTNode* assign,
     int index_reg = compile_expression(ctx, target->typed.indexAccess.index);
     if (index_reg == -1) {
         if (array_reg >= MP_TEMP_REG_START && array_reg <= MP_TEMP_REG_END) {
-            mp_free_temp_register(ctx->allocator, array_reg);
+            compiler_free_temp(ctx->allocator, array_reg);
         }
         return -1;
     }
@@ -4866,10 +4866,10 @@ static int compile_array_assignment(CompilerContext* ctx, TypedASTNode* assign,
     int value_reg = compile_expression(ctx, value_node);
     if (value_reg == -1) {
         if (index_reg >= MP_TEMP_REG_START && index_reg <= MP_TEMP_REG_END) {
-            mp_free_temp_register(ctx->allocator, index_reg);
+            compiler_free_temp(ctx->allocator, index_reg);
         }
         if (array_reg >= MP_TEMP_REG_START && array_reg <= MP_TEMP_REG_END) {
-            mp_free_temp_register(ctx->allocator, array_reg);
+            compiler_free_temp(ctx->allocator, array_reg);
         }
         return -1;
     }
@@ -4881,17 +4881,17 @@ static int compile_array_assignment(CompilerContext* ctx, TypedASTNode* assign,
     emit_byte_to_buffer(ctx->bytecode, value_reg);
 
     if (index_reg >= MP_TEMP_REG_START && index_reg <= MP_TEMP_REG_END) {
-        mp_free_temp_register(ctx->allocator, index_reg);
+        compiler_free_temp(ctx->allocator, index_reg);
     }
     if (array_reg >= MP_TEMP_REG_START && array_reg <= MP_TEMP_REG_END) {
-        mp_free_temp_register(ctx->allocator, array_reg);
+        compiler_free_temp(ctx->allocator, array_reg);
     }
 
     bool value_is_temp = value_reg >= MP_TEMP_REG_START && value_reg <= MP_TEMP_REG_END;
     int result_reg = value_reg;
 
     if (!as_expression && value_is_temp) {
-        mp_free_temp_register(ctx->allocator, value_reg);
+        compiler_free_temp(ctx->allocator, value_reg);
     }
 
     return result_reg;
@@ -4940,10 +4940,10 @@ static int compile_member_assignment(CompilerContext* ctx, TypedASTNode* assign,
         return -1;
     }
 
-    int index_reg = mp_allocate_temp_register(ctx->allocator);
+    int index_reg = compiler_alloc_temp(ctx->allocator);
     if (index_reg == -1) {
         if (object_reg >= MP_TEMP_REG_START && object_reg <= MP_TEMP_REG_END) {
-            mp_free_temp_register(ctx->allocator, object_reg);
+            compiler_free_temp(ctx->allocator, object_reg);
         }
         return -1;
     }
@@ -4953,10 +4953,10 @@ static int compile_member_assignment(CompilerContext* ctx, TypedASTNode* assign,
     int value_reg = compile_expression(ctx, value_node);
     if (value_reg == -1) {
         if (index_reg >= MP_TEMP_REG_START && index_reg <= MP_TEMP_REG_END) {
-            mp_free_temp_register(ctx->allocator, index_reg);
+            compiler_free_temp(ctx->allocator, index_reg);
         }
         if (object_reg >= MP_TEMP_REG_START && object_reg <= MP_TEMP_REG_END) {
-            mp_free_temp_register(ctx->allocator, object_reg);
+            compiler_free_temp(ctx->allocator, object_reg);
         }
         return -1;
     }
@@ -4968,15 +4968,15 @@ static int compile_member_assignment(CompilerContext* ctx, TypedASTNode* assign,
     emit_byte_to_buffer(ctx->bytecode, value_reg);
 
     if (index_reg >= MP_TEMP_REG_START && index_reg <= MP_TEMP_REG_END) {
-        mp_free_temp_register(ctx->allocator, index_reg);
+        compiler_free_temp(ctx->allocator, index_reg);
     }
     if (object_reg >= MP_TEMP_REG_START && object_reg <= MP_TEMP_REG_END) {
-        mp_free_temp_register(ctx->allocator, object_reg);
+        compiler_free_temp(ctx->allocator, object_reg);
     }
 
     bool value_is_temp = value_reg >= MP_TEMP_REG_START && value_reg <= MP_TEMP_REG_END;
     if (!as_expression && value_is_temp) {
-        mp_free_temp_register(ctx->allocator, value_reg);
+        compiler_free_temp(ctx->allocator, value_reg);
     }
 
     return value_reg;
@@ -4995,16 +4995,16 @@ static int compile_assignment_internal(CompilerContext* ctx, TypedASTNode* assig
 
         int var_reg = -1;
         if (ctx->compiling_function) {
-            var_reg = mp_allocate_frame_register(ctx->allocator);
+            var_reg = compiler_alloc_frame(ctx->allocator);
         } else {
-            var_reg = mp_allocate_global_register(ctx->allocator);
+            var_reg = compiler_alloc_global(ctx->allocator);
             if (var_reg == -1) {
-                var_reg = mp_allocate_frame_register(ctx->allocator);
+                var_reg = compiler_alloc_frame(ctx->allocator);
             }
         }
 
         if (var_reg == -1) {
-            mp_free_temp_register(ctx->allocator, value_reg);
+            compiler_free_temp(ctx->allocator, value_reg);
             return -1;
         }
 
@@ -5037,14 +5037,14 @@ static int compile_assignment_internal(CompilerContext* ctx, TypedASTNode* assig
                                value_type ? value_type : assign->resolvedType,
                                should_be_mutable, false,
                                location, true)) {
-            mp_free_register(ctx->allocator, var_reg);
-            mp_free_temp_register(ctx->allocator, value_reg);
+            compiler_free_register(ctx->allocator, var_reg);
+            compiler_free_temp(ctx->allocator, value_reg);
             return -1;
         }
 
         set_location_from_node(ctx, assign);
         emit_move(ctx, var_reg, value_reg);
-        mp_free_temp_register(ctx->allocator, value_reg);
+        compiler_free_temp(ctx->allocator, value_reg);
         return var_reg;
     }
 
@@ -5157,7 +5157,7 @@ static int compile_assignment_internal(CompilerContext* ctx, TypedASTNode* assig
                                    get_variable_scope_info(var_name, ctx->symbols->scope_depth));
             ctx->has_compilation_errors = true;
             if (value_is_temp) {
-                mp_free_temp_register(ctx->allocator, value_reg);
+                compiler_free_temp(ctx->allocator, value_reg);
             }
             return -1;
         }
@@ -5178,7 +5178,7 @@ static int compile_assignment_internal(CompilerContext* ctx, TypedASTNode* assig
     }
 
     if (value_is_temp && !(as_expression && is_upvalue)) {
-        mp_free_temp_register(ctx->allocator, value_reg);
+        compiler_free_temp(ctx->allocator, value_reg);
     }
     symbol->is_initialized = true;
     symbol->last_assignment_location = location;
@@ -5217,12 +5217,12 @@ void compile_print_statement(CompilerContext* ctx, TypedASTNode* print) {
             DEBUG_CODEGEN_PRINT("Emitted OP_PRINT_R R%d (single expression)\n", reg);
             
             // Free the temporary register
-            mp_free_temp_register(ctx->allocator, reg);
+            compiler_free_temp(ctx->allocator, reg);
         }
     } else {
         // Multiple expressions - need consecutive registers for OP_PRINT_MULTI_R
         // FIXED: Allocate consecutive registers FIRST to prevent register conflicts
-        int first_consecutive_reg = mp_allocate_temp_register(ctx->allocator);
+        int first_consecutive_reg = compiler_alloc_temp(ctx->allocator);
         if (first_consecutive_reg == -1) {
             DEBUG_CODEGEN_PRINT("Error: Failed to allocate consecutive registers for print");
             return;
@@ -5230,7 +5230,7 @@ void compile_print_statement(CompilerContext* ctx, TypedASTNode* print) {
         
         // Reserve additional consecutive registers
         for (int i = 1; i < print->typed.print.count; i++) {
-            int next_reg = mp_allocate_temp_register(ctx->allocator);
+            int next_reg = compiler_alloc_temp(ctx->allocator);
             if (next_reg != first_consecutive_reg + i) {
                 DEBUG_CODEGEN_PRINT("Warning: Non-consecutive register allocated: R%d (expected R%d)\n", 
                        next_reg, first_consecutive_reg + i);
@@ -5250,7 +5250,7 @@ void compile_print_statement(CompilerContext* ctx, TypedASTNode* print) {
 
                 // Free the original temp register
                 if (expr_reg >= MP_TEMP_REG_START && expr_reg <= MP_TEMP_REG_END) {
-                    mp_free_temp_register(ctx->allocator, expr_reg);
+                    compiler_free_temp(ctx->allocator, expr_reg);
                 }
             }
         }
@@ -5264,7 +5264,7 @@ void compile_print_statement(CompilerContext* ctx, TypedASTNode* print) {
         
         // Free the consecutive temp registers
         for (int i = 0; i < print->typed.print.count; i++) {
-            mp_free_temp_register(ctx->allocator, first_consecutive_reg + i);
+            compiler_free_temp(ctx->allocator, first_consecutive_reg + i);
         }
     }
 }
@@ -5357,7 +5357,7 @@ void compile_if_statement(CompilerContext* ctx, TypedASTNode* if_stmt) {
     
     // Free condition register
     if (condition_reg >= MP_TEMP_REG_START && condition_reg <= MP_TEMP_REG_END) {
-        mp_free_temp_register(ctx->allocator, condition_reg);
+        compiler_free_temp(ctx->allocator, condition_reg);
     }
     
     // Compile then branch with new scope
@@ -5422,7 +5422,7 @@ void compile_try_statement(CompilerContext* ctx, TypedASTNode* try_stmt) {
     uint8_t catch_operand = 0xFF; // Sentinel indicating no catch register
 
     if (has_catch_var) {
-        catch_reg = mp_allocate_frame_register(ctx->allocator);
+        catch_reg = compiler_alloc_frame(ctx->allocator);
         if (catch_reg == -1) {
             DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for catch variable");
             ctx->has_compilation_errors = true;
@@ -5440,7 +5440,7 @@ void compile_try_statement(CompilerContext* ctx, TypedASTNode* try_stmt) {
         DEBUG_CODEGEN_PRINT("Error: Failed to allocate jump placeholder for catch handler");
         ctx->has_compilation_errors = true;
         if (catch_reg_allocated && !catch_reg_bound) {
-            mp_free_register(ctx->allocator, catch_reg);
+            compiler_free_register(ctx->allocator, catch_reg);
         }
         return;
     }
@@ -5459,7 +5459,7 @@ void compile_try_statement(CompilerContext* ctx, TypedASTNode* try_stmt) {
         DEBUG_CODEGEN_PRINT("Error: Failed to allocate jump placeholder for try end");
         ctx->has_compilation_errors = true;
         if (catch_reg_allocated && !catch_reg_bound) {
-            mp_free_register(ctx->allocator, catch_reg);
+            compiler_free_register(ctx->allocator, catch_reg);
         }
         return;
     }
@@ -5469,7 +5469,7 @@ void compile_try_statement(CompilerContext* ctx, TypedASTNode* try_stmt) {
         DEBUG_CODEGEN_PRINT("Error: Failed to patch catch handler jump to %d\n", catch_start);
         ctx->has_compilation_errors = true;
         if (catch_reg_allocated && !catch_reg_bound) {
-            mp_free_register(ctx->allocator, catch_reg);
+            compiler_free_register(ctx->allocator, catch_reg);
         }
         return;
     }
@@ -5485,13 +5485,13 @@ void compile_try_statement(CompilerContext* ctx, TypedASTNode* try_stmt) {
             ctx->symbols = saved_scope;
             ctx->has_compilation_errors = true;
             if (catch_reg_allocated && !catch_reg_bound) {
-                mp_free_register(ctx->allocator, catch_reg);
+                compiler_free_register(ctx->allocator, catch_reg);
             }
             return;
         }
 
         if (ctx->allocator) {
-            mp_enter_scope(ctx->allocator);
+            compiler_enter_scope(ctx->allocator);
         }
 
         if (ctx->scopes) {
@@ -5511,13 +5511,13 @@ void compile_try_statement(CompilerContext* ctx, TypedASTNode* try_stmt) {
                 DEBUG_CODEGEN_PRINT("Error: Failed to register catch variable '%s'",
                        try_stmt->typed.tryStmt.catchVarName);
                 if (ctx->allocator) {
-                    mp_exit_scope(ctx->allocator);
+                    compiler_exit_scope(ctx->allocator);
                 }
                 free_symbol_table(ctx->symbols);
                 ctx->symbols = saved_scope;
                 ctx->has_compilation_errors = true;
                 if (catch_reg_allocated && !catch_reg_bound) {
-                    mp_free_register(ctx->allocator, catch_reg);
+                    compiler_free_register(ctx->allocator, catch_reg);
                 }
                 if (lexical_frame && ctx->scopes) {
                     scope_stack_pop(ctx->scopes);
@@ -5538,7 +5538,7 @@ void compile_try_statement(CompilerContext* ctx, TypedASTNode* try_stmt) {
                 while (symbol) {
                     if (symbol->legacy_register_id >= MP_FRAME_REG_START &&
                         symbol->legacy_register_id <= MP_FRAME_REG_END) {
-                        mp_free_register(ctx->allocator, symbol->legacy_register_id);
+                        compiler_free_register(ctx->allocator, symbol->legacy_register_id);
                     }
                     symbol = symbol->next;
                 }
@@ -5556,13 +5556,13 @@ void compile_try_statement(CompilerContext* ctx, TypedASTNode* try_stmt) {
         }
 
         if (ctx->allocator) {
-            mp_exit_scope(ctx->allocator);
+            compiler_exit_scope(ctx->allocator);
         }
 
         free_symbol_table(ctx->symbols);
         ctx->symbols = saved_scope;
     } else if (catch_reg_allocated && !catch_reg_bound) {
-        mp_free_register(ctx->allocator, catch_reg);
+        compiler_free_register(ctx->allocator, catch_reg);
         catch_reg_allocated = false;
     }
 
@@ -5591,7 +5591,7 @@ void compile_throw_statement(CompilerContext* ctx, TypedASTNode* throw_stmt) {
     emit_byte_to_buffer(ctx->bytecode, (uint8_t)value_reg);
 
     if (value_reg >= MP_TEMP_REG_START && value_reg <= MP_TEMP_REG_END) {
-        mp_free_temp_register(ctx->allocator, value_reg);
+        compiler_free_temp(ctx->allocator, value_reg);
     }
 }
 
@@ -5758,12 +5758,12 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
                                fused_limit_reg <= MP_TEMP_REG_END);
 
         if (fused_inclusive) {
-            fused_limit_temp_reg = mp_allocate_temp_register(ctx->allocator);
+            fused_limit_temp_reg = compiler_alloc_temp(ctx->allocator);
             if (fused_limit_temp_reg == -1) {
                 DEBUG_CODEGEN_PRINT("Error: Failed to allocate temp register for inclusive while limit");
                 ctx->has_compilation_errors = true;
                 if (fused_limit_is_temp) {
-                    mp_free_temp_register(ctx->allocator, fused_limit_reg);
+                    compiler_free_temp(ctx->allocator, fused_limit_reg);
                 }
                 return;
             }
@@ -5786,10 +5786,10 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
             DEBUG_CODEGEN_PRINT("Error: Failed to enter loop context");
             ctx->has_compilation_errors = true;
             if (fused_limit_temp_is_temp) {
-                mp_free_temp_register(ctx->allocator, fused_limit_temp_reg);
+                compiler_free_temp(ctx->allocator, fused_limit_temp_reg);
             }
             if (fused_limit_is_temp) {
-                mp_free_temp_register(ctx->allocator, fused_limit_reg);
+                compiler_free_temp(ctx->allocator, fused_limit_reg);
             }
             return;
         }
@@ -5810,10 +5810,10 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
             ctx->has_compilation_errors = true;
             leave_loop_context(ctx, loop_frame_fused, ctx->bytecode->count);
             if (fused_limit_temp_is_temp) {
-                mp_free_temp_register(ctx->allocator, fused_limit_temp_reg);
+                compiler_free_temp(ctx->allocator, fused_limit_temp_reg);
             }
             if (fused_limit_is_temp) {
-                mp_free_temp_register(ctx->allocator, fused_limit_reg);
+                compiler_free_temp(ctx->allocator, fused_limit_reg);
             }
             return;
         }
@@ -5852,10 +5852,10 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
             ctx->has_compilation_errors = true;
             leave_loop_context(ctx, loop_frame_fused, end_target);
             if (fused_limit_temp_is_temp) {
-                mp_free_temp_register(ctx->allocator, fused_limit_temp_reg);
+                compiler_free_temp(ctx->allocator, fused_limit_temp_reg);
             }
             if (fused_limit_is_temp) {
-                mp_free_temp_register(ctx->allocator, fused_limit_reg);
+                compiler_free_temp(ctx->allocator, fused_limit_reg);
             }
             return;
         }
@@ -5864,10 +5864,10 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
         leave_loop_context(ctx, loop_frame_fused, end_target);
 
         if (fused_limit_temp_is_temp) {
-            mp_free_temp_register(ctx->allocator, fused_limit_temp_reg);
+            compiler_free_temp(ctx->allocator, fused_limit_temp_reg);
         }
         if (fused_limit_is_temp) {
-            mp_free_temp_register(ctx->allocator, fused_limit_reg);
+            compiler_free_temp(ctx->allocator, fused_limit_reg);
         }
 
         if (fused_symbol) {
@@ -5915,7 +5915,7 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
         DEBUG_CODEGEN_PRINT("Error: Failed to allocate while-loop end placeholder\n");
         ctx->has_compilation_errors = true;
         if (condition_reg >= MP_TEMP_REG_START && condition_reg <= MP_TEMP_REG_END) {
-            mp_free_temp_register(ctx->allocator, condition_reg);
+            compiler_free_temp(ctx->allocator, condition_reg);
         }
         leave_loop_context(ctx, loop_frame, ctx->bytecode->count);
         return;
@@ -5924,7 +5924,7 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
            loop_id, condition_reg, end_patch);
 
     if (condition_reg >= MP_TEMP_REG_START && condition_reg <= MP_TEMP_REG_END) {
-        mp_free_temp_register(ctx->allocator, condition_reg);
+        compiler_free_temp(ctx->allocator, condition_reg);
     }
 
     compile_block_with_scope(ctx, while_body, false);
@@ -5987,7 +5987,7 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     created_scope = true;
 
     if (ctx->allocator) {
-        mp_enter_scope(ctx->allocator);
+        compiler_enter_scope(ctx->allocator);
     }
 
     ScopeFrame* scope_frame = NULL;
@@ -6076,7 +6076,7 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
             }
         }
     } else {
-        step_reg = mp_allocate_temp_register(ctx->allocator);
+        step_reg = compiler_alloc_temp(ctx->allocator);
         if (step_reg == -1) {
             ctx->has_compilation_errors = true;
             goto cleanup;
@@ -6088,7 +6088,7 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     }
 
     if (!step_known_positive && !step_known_negative) {
-        zero_reg = mp_allocate_temp_register(ctx->allocator);
+        zero_reg = compiler_alloc_temp(ctx->allocator);
         if (zero_reg == -1) {
             ctx->has_compilation_errors = true;
             goto cleanup;
@@ -6096,7 +6096,7 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
         set_location_from_node(ctx, for_stmt);
         emit_load_constant(ctx, zero_reg, I32_VAL(0));
 
-        step_nonneg_reg = mp_allocate_temp_register(ctx->allocator);
+        step_nonneg_reg = compiler_alloc_temp(ctx->allocator);
         if (step_nonneg_reg == -1) {
             ctx->has_compilation_errors = true;
             goto cleanup;
@@ -6108,12 +6108,12 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
         emit_byte_to_buffer(ctx->bytecode, zero_reg);
 
         if (zero_reg >= MP_TEMP_REG_START && zero_reg <= MP_TEMP_REG_END) {
-            mp_free_temp_register(ctx->allocator, zero_reg);
+            compiler_free_temp(ctx->allocator, zero_reg);
         }
         zero_reg = -1;
     }
 
-    loop_var_reg = mp_allocate_frame_register(ctx->allocator);
+    loop_var_reg = compiler_alloc_frame(ctx->allocator);
     if (loop_var_reg == -1) {
         ctx->has_compilation_errors = true;
         goto cleanup;
@@ -6128,7 +6128,7 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
         goto cleanup;
     }
     if (ctx->allocator) {
-        mp_set_typed_residency_hint(ctx->allocator, loop_var_reg, true);
+        compiler_set_typed_residency_hint(ctx->allocator, loop_var_reg, true);
         typed_hint_loop_reg = loop_var_reg;
     }
     mark_symbol_as_loop_variable(loop_symbol);
@@ -6140,7 +6140,7 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     emit_byte_to_buffer(ctx->bytecode, start_reg);
 
     if (start_reg >= MP_TEMP_REG_START && start_reg <= MP_TEMP_REG_END) {
-        mp_free_temp_register(ctx->allocator, start_reg);
+        compiler_free_temp(ctx->allocator, start_reg);
         start_reg = -1;
     }
 
@@ -6159,7 +6159,7 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     ctx->current_loop_continue = -1;
     loop_frame->continue_offset = -1;
 
-    condition_reg = mp_allocate_temp_register(ctx->allocator);
+    condition_reg = compiler_alloc_temp(ctx->allocator);
     if (condition_reg == -1) {
         ctx->has_compilation_errors = true;
         goto cleanup;
@@ -6170,7 +6170,7 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     bool can_fuse_inc_cmp = step_known_positive && step_is_one;
     if (can_fuse_inc_cmp && for_stmt->typed.forRange.inclusive) {
         // Compute (end + 1) into a temp to preserve inclusive semantics
-        limit_temp_reg = mp_allocate_temp_register(ctx->allocator);
+        limit_temp_reg = compiler_alloc_temp(ctx->allocator);
         if (limit_temp_reg == -1) {
             ctx->has_compilation_errors = true;
             goto cleanup;
@@ -6189,7 +6189,7 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     }
 
     if (ctx->allocator && limit_reg_used >= 0) {
-        mp_set_typed_residency_hint(ctx->allocator, limit_reg_used, true);
+        compiler_set_typed_residency_hint(ctx->allocator, limit_reg_used, true);
         typed_hint_limit_reg = limit_reg_used;
     }
 
@@ -6216,7 +6216,7 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     }
 
     if (!step_known_positive) {
-        condition_neg_reg = mp_allocate_temp_register(ctx->allocator);
+        condition_neg_reg = compiler_alloc_temp(ctx->allocator);
         if (condition_neg_reg == -1) {
             ctx->has_compilation_errors = true;
             goto cleanup;
@@ -6363,45 +6363,45 @@ cleanup:
 
     if (ctx->allocator) {
         if (typed_hint_loop_reg >= 0) {
-            mp_set_typed_residency_hint(ctx->allocator, typed_hint_loop_reg, false);
+            compiler_set_typed_residency_hint(ctx->allocator, typed_hint_loop_reg, false);
             typed_hint_loop_reg = -1;
         }
         if (typed_hint_limit_reg >= 0) {
-            mp_set_typed_residency_hint(ctx->allocator, typed_hint_limit_reg, false);
+            compiler_set_typed_residency_hint(ctx->allocator, typed_hint_limit_reg, false);
             typed_hint_limit_reg = -1;
         }
     }
 
     if (condition_reg >= MP_TEMP_REG_START && condition_reg <= MP_TEMP_REG_END) {
-        mp_free_temp_register(ctx->allocator, condition_reg);
+        compiler_free_temp(ctx->allocator, condition_reg);
         condition_reg = -1;
     }
     if (condition_neg_reg >= MP_TEMP_REG_START && condition_neg_reg <= MP_TEMP_REG_END) {
-        mp_free_temp_register(ctx->allocator, condition_neg_reg);
+        compiler_free_temp(ctx->allocator, condition_neg_reg);
         condition_neg_reg = -1;
     }
     if (step_nonneg_reg >= MP_TEMP_REG_START && step_nonneg_reg <= MP_TEMP_REG_END) {
-        mp_free_temp_register(ctx->allocator, step_nonneg_reg);
+        compiler_free_temp(ctx->allocator, step_nonneg_reg);
         step_nonneg_reg = -1;
     }
     if (zero_reg >= MP_TEMP_REG_START && zero_reg <= MP_TEMP_REG_END) {
-        mp_free_temp_register(ctx->allocator, zero_reg);
+        compiler_free_temp(ctx->allocator, zero_reg);
         zero_reg = -1;
     }
     if (start_reg >= MP_TEMP_REG_START && start_reg <= MP_TEMP_REG_END) {
-        mp_free_temp_register(ctx->allocator, start_reg);
+        compiler_free_temp(ctx->allocator, start_reg);
         start_reg = -1;
     }
     if (end_reg >= MP_TEMP_REG_START && end_reg <= MP_TEMP_REG_END) {
-        mp_free_temp_register(ctx->allocator, end_reg);
+        compiler_free_temp(ctx->allocator, end_reg);
         end_reg = -1;
     }
     if (limit_temp_reg >= MP_TEMP_REG_START && limit_temp_reg <= MP_TEMP_REG_END) {
-        mp_free_temp_register(ctx->allocator, limit_temp_reg);
+        compiler_free_temp(ctx->allocator, limit_temp_reg);
         limit_temp_reg = -1;
     }
     if (step_reg >= MP_TEMP_REG_START && step_reg <= MP_TEMP_REG_END) {
-        mp_free_temp_register(ctx->allocator, step_reg);
+        compiler_free_temp(ctx->allocator, step_reg);
         step_reg = -1;
     }
 
@@ -6411,7 +6411,7 @@ cleanup:
             while (symbol) {
                 if (symbol->legacy_register_id >= MP_FRAME_REG_START &&
                     symbol->legacy_register_id <= MP_FRAME_REG_END) {
-                    mp_free_register(ctx->allocator, symbol->legacy_register_id);
+                    compiler_free_register(ctx->allocator, symbol->legacy_register_id);
                 }
                 symbol = symbol->next;
             }
@@ -6431,7 +6431,7 @@ cleanup:
     }
 
     if (created_scope && ctx->allocator) {
-        mp_exit_scope(ctx->allocator);
+        compiler_exit_scope(ctx->allocator);
     }
 
     if (created_scope && ctx->symbols) {
@@ -6472,7 +6472,7 @@ void compile_for_iter_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     }
 
     // Allocate iterator register
-    iter_reg = mp_allocate_temp_register(ctx->allocator);
+    iter_reg = compiler_alloc_temp(ctx->allocator);
     if (iter_reg == -1) {
         DEBUG_CODEGEN_PRINT("Error: Failed to allocate iterator register");
         ctx->has_compilation_errors = true;
@@ -6480,7 +6480,7 @@ void compile_for_iter_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     }
 
     if (ctx->allocator) {
-        mp_set_typed_residency_hint(ctx->allocator, iter_reg, true);
+        compiler_set_typed_residency_hint(ctx->allocator, iter_reg, true);
         typed_hint_iter_reg = iter_reg;
     }
 
@@ -6491,7 +6491,7 @@ void compile_for_iter_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     emit_byte_to_buffer(ctx->bytecode, iterable_reg);
     
     // Allocate loop variable register and store in symbol table
-    loop_var_reg = mp_allocate_frame_register(ctx->allocator);
+    loop_var_reg = compiler_alloc_frame(ctx->allocator);
     if (loop_var_reg == -1) {
         DEBUG_CODEGEN_PRINT("Error: Failed to allocate loop variable register");
         ctx->has_compilation_errors = true;
@@ -6510,14 +6510,14 @@ void compile_for_iter_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     }
 
     if (ctx->allocator) {
-        mp_set_typed_residency_hint(ctx->allocator, loop_var_reg, true);
+        compiler_set_typed_residency_hint(ctx->allocator, loop_var_reg, true);
         typed_hint_loop_reg = loop_var_reg;
     }
 
     mark_symbol_as_loop_variable(loop_symbol);
     
     // Allocate has_value register for iterator status
-    has_value_reg = mp_allocate_temp_register(ctx->allocator);
+    has_value_reg = compiler_alloc_temp(ctx->allocator);
     if (has_value_reg == -1) {
         DEBUG_CODEGEN_PRINT("Error: Failed to allocate has_value register");
         ctx->has_compilation_errors = true;
@@ -6618,30 +6618,30 @@ cleanup:
 
     if (ctx->allocator) {
         if (typed_hint_iter_reg >= 0) {
-            mp_set_typed_residency_hint(ctx->allocator, typed_hint_iter_reg, false);
+            compiler_set_typed_residency_hint(ctx->allocator, typed_hint_iter_reg, false);
             typed_hint_iter_reg = -1;
         }
         if (typed_hint_loop_reg >= 0) {
-            mp_set_typed_residency_hint(ctx->allocator, typed_hint_loop_reg, false);
+            compiler_set_typed_residency_hint(ctx->allocator, typed_hint_loop_reg, false);
             typed_hint_loop_reg = -1;
         }
     }
 
     if (iterable_reg >= MP_TEMP_REG_START && iterable_reg <= MP_TEMP_REG_END) {
-        mp_free_temp_register(ctx->allocator, iterable_reg);
+        compiler_free_temp(ctx->allocator, iterable_reg);
         iterable_reg = -1;
     }
     if (iter_reg >= MP_TEMP_REG_START && iter_reg <= MP_TEMP_REG_END) {
-        mp_free_temp_register(ctx->allocator, iter_reg);
+        compiler_free_temp(ctx->allocator, iter_reg);
         iter_reg = -1;
     }
     if (has_value_reg >= MP_TEMP_REG_START && has_value_reg <= MP_TEMP_REG_END) {
-        mp_free_temp_register(ctx->allocator, has_value_reg);
+        compiler_free_temp(ctx->allocator, has_value_reg);
         has_value_reg = -1;
     }
 
     if (loop_var_reg >= MP_FRAME_REG_START && loop_var_reg <= MP_FRAME_REG_END) {
-        mp_free_register(ctx->allocator, loop_var_reg);
+        compiler_free_register(ctx->allocator, loop_var_reg);
         loop_var_reg = -1;
     }
 
@@ -6826,7 +6826,7 @@ void compile_block_with_scope(CompilerContext* ctx, TypedASTNode* block, bool cr
         }
 
         if (ctx->allocator) {
-            mp_enter_scope(ctx->allocator);
+            compiler_enter_scope(ctx->allocator);
         }
 
         if (ctx->scopes) {
@@ -6865,7 +6865,7 @@ void compile_block_with_scope(CompilerContext* ctx, TypedASTNode* block, bool cr
                     symbol->legacy_register_id <= MP_FRAME_REG_END) {
                     DEBUG_CODEGEN_PRINT("Freeing frame register R%d for variable '%s'",
                            symbol->legacy_register_id, symbol->name);
-                    mp_free_register(ctx->allocator, symbol->legacy_register_id);
+                    compiler_free_register(ctx->allocator, symbol->legacy_register_id);
                 }
                 symbol = symbol->next;
             }
@@ -6882,7 +6882,7 @@ void compile_block_with_scope(CompilerContext* ctx, TypedASTNode* block, bool cr
         }
 
         if (ctx->allocator) {
-            mp_exit_scope(ctx->allocator);
+            compiler_exit_scope(ctx->allocator);
         }
 
         free_symbol_table(ctx->symbols);
@@ -7028,8 +7028,8 @@ int compile_function_declaration(CompilerContext* ctx, TypedASTNode* func) {
     int func_reg;
     if (func_name) {
         func_reg = ctx->compiling_function ?
-            mp_allocate_frame_register(ctx->allocator) :
-            mp_allocate_global_register(ctx->allocator);
+            compiler_alloc_frame(ctx->allocator) :
+            compiler_alloc_global(ctx->allocator);
         if (func_reg == -1) return -1;
         if (!register_variable(ctx, ctx->symbols, func_name, func_reg,
                                function_type, false, false,
@@ -7053,9 +7053,9 @@ int compile_function_declaration(CompilerContext* ctx, TypedASTNode* func) {
             }
             free(alias_name);
         }
-        mp_reset_frame_registers(ctx->allocator);
+        compiler_reset_frame_registers(ctx->allocator);
     } else {
-        func_reg = mp_allocate_temp_register(ctx->allocator);
+        func_reg = compiler_alloc_temp(ctx->allocator);
         if (func_reg == -1) return -1;
     }
 
@@ -7177,7 +7177,7 @@ void compile_return_statement(CompilerContext* ctx, TypedASTNode* ret) {
         
         // Free value register if it's temporary
         if (value_reg >= MP_TEMP_REG_START && value_reg <= MP_TEMP_REG_END) {
-            mp_free_temp_register(ctx->allocator, value_reg);
+            compiler_free_temp(ctx->allocator, value_reg);
         }
     } else {
         // Return void
