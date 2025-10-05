@@ -2014,6 +2014,7 @@ typedef struct {
     ScopeFrame** loop_frame_ptr;
     int loop_frame_index;
     int loop_start;
+    int body_start;
     bool patch_continue_sites;
     bool update_continue_target;
     TypedASTNode* limit_node;
@@ -2036,6 +2037,7 @@ static bool emit_fused_numeric_loop(CompilerContext* ctx,
 
     ScopeFrame* frame = metadata->loop_frame_ptr ? *metadata->loop_frame_ptr : NULL;
     int loop_start = metadata->loop_start;
+    int body_start = metadata->body_start;
 
     bool use_adjusted_limit = adjusted_limit_reg >= 0;
     int guard_limit_reg = use_adjusted_limit ? adjusted_limit_reg : limit_reg;
@@ -2109,6 +2111,13 @@ static bool emit_fused_numeric_loop(CompilerContext* ctx,
         return false;
     }
 
+    body_start = ctx->bytecode ? ctx->bytecode->count : loop_start;
+    metadata->body_start = body_start;
+    if (frame) {
+        frame->start_offset = body_start;
+    }
+    ctx->current_loop_start = body_start;
+
     if (body_emitter) {
         body_emitter(ctx, body_data);
     }
@@ -2136,7 +2145,8 @@ static bool emit_fused_numeric_loop(CompilerContext* ctx,
     }
     emit_byte_to_buffer(ctx->bytecode, (uint8_t)loop_reg);
     emit_byte_to_buffer(ctx->bytecode, (uint8_t)guard_limit_reg);
-    int back_off = loop_start - (ctx->bytecode->count + 2);
+    int jump_target = metadata->body_start;
+    int back_off = jump_target - (ctx->bytecode->count + 2);
     if (back_off < INT16_MIN || back_off > INT16_MAX) {
         if (ctx->bytecode) {
             ctx->bytecode->count = start_count;
@@ -2153,6 +2163,7 @@ static bool emit_fused_numeric_loop(CompilerContext* ctx,
         if (guard_copy_reg >= 0 && ctx->allocator) {
             compiler_free_temp(ctx->allocator, guard_copy_reg);
         }
+        metadata->body_start = metadata->loop_start;
         return false;
     }
     uint16_t encoded_back_off = (uint16_t)back_off;
@@ -2195,41 +2206,6 @@ static bool emit_fused_numeric_loop(CompilerContext* ctx,
     }
 
     return true;
-}
-
-typedef struct {
-    TypedASTNode* body;
-    bool body_is_block;
-    int body_statement_count;
-    bool has_increment;
-} FusedWhileBodyData;
-
-static void emit_fused_while_body(CompilerContext* ctx, void* user_data) {
-    if (!ctx || !user_data) {
-        return;
-    }
-
-    FusedWhileBodyData* data = (FusedWhileBodyData*)user_data;
-    TypedASTNode* body = data->body;
-    if (!body) {
-        return;
-    }
-
-    if (data->body_is_block && data->body_statement_count > 0 &&
-        body->original && body->original->type == NODE_BLOCK) {
-        int limit = data->body_statement_count - 1;
-        if (limit < 0) {
-            limit = 0;
-        }
-        for (int i = 0; i < limit; i++) {
-            TypedASTNode* stmt = body->typed.block.statements[i];
-            if (stmt) {
-                compile_statement(ctx, stmt);
-            }
-        }
-    } else if (!data->body_is_block && !data->has_increment && body) {
-        compile_statement(ctx, body);
-    }
 }
 
 typedef struct {
@@ -2344,6 +2320,7 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
         }
 
         int loop_start_fused = ctx->bytecode->count;
+        int body_start_fused = loop_start_fused;
         int patch_start_fused = ctx->bytecode ? ctx->bytecode->patch_count : 0;
         ScopeFrame* loop_frame_fused = enter_loop_context(ctx, loop_start_fused);
         int loop_frame_index = loop_frame_fused ? loop_frame_fused->lexical_depth : -1;
@@ -2455,6 +2432,11 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
             release_typed_hint(ctx, &typed_hint_limit_reg);
             return;
         }
+        body_start_fused = ctx->bytecode->count;
+        if (loop_frame_fused) {
+            loop_frame_fused->start_offset = body_start_fused;
+        }
+        ctx->current_loop_start = body_start_fused;
         if (fused_body_is_block && fused_block_count > 0 && while_body && while_body->original &&
             while_body->original->type == NODE_BLOCK) {
             for (int i = 0; i < fused_block_count; i++) {
@@ -2485,7 +2467,7 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
         }
         emit_byte_to_buffer(ctx->bytecode, (uint8_t)fused_loop_reg);
         emit_byte_to_buffer(ctx->bytecode, limit_for_fused);
-        int back_off = loop_start_fused - (ctx->bytecode->count + 2);
+        int back_off = body_start_fused - (ctx->bytecode->count + 2);
         if (back_off < INT16_MIN || back_off > INT16_MAX) {
             if (ctx->bytecode) {
                 ctx->bytecode->count = loop_start_fused;
@@ -2881,6 +2863,7 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
             .loop_frame_ptr = &loop_frame,
             .loop_frame_index = loop_frame_index,
             .loop_start = loop_start,
+            .body_start = loop_start,
             .patch_continue_sites = true,
             .update_continue_target = true,
             .limit_node = fused_info.limit_node,
