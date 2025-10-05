@@ -250,6 +250,7 @@ TAGGED_UNION_TEST_BIN = $(BUILDDIR)/tests/test_vm_tagged_union
 TYPED_REGISTER_TEST_BIN = $(BUILDDIR)/tests/test_vm_typed_registers
 REGISTER_ALLOCATOR_TEST_BIN = $(BUILDDIR)/tests/test_register_allocator
 INC_CMP_JMP_TEST_BIN = $(BUILDDIR)/tests/test_vm_inc_cmp_jmp
+ADD_I32_IMM_TEST_BIN = $(BUILDDIR)/tests/test_vm_add_i32_imm
 BUILTIN_INPUT_TEST_BIN = $(BUILDDIR)/tests/test_builtin_input
 CONSTANT_FOLD_TEST_BIN = $(BUILDDIR)/tests/test_constant_folding
 BUILTIN_SORTED_ORUS_TESTS = \
@@ -265,7 +266,7 @@ BUILTIN_RANGE_ORUS_FAIL_TESTS = \
     tests/builtins/range_float_step.orus \
     tests/builtins/range_overflow_stop.orus
 
-.PHONY: all clean test unit-test test-control-flow benchmark help debug release release-with-wasm profiling analyze install dist package bytecode-jump-tests source-map-tests scope-tracking-tests peephole-tests cli-smoke-tests tagged-union-tests typed-register-tests inc-cmp-jmp-tests register-allocator-tests builtin-input-tests builtin-range-tests test-optimizer wasm _test-run _benchmark-run
+.PHONY: all clean test unit-test test-control-flow benchmark help debug release release-with-wasm profiling analyze install dist package bytecode-jump-tests source-map-tests scope-tracking-tests peephole-tests cli-smoke-tests tagged-union-tests typed-register-tests inc-cmp-jmp-tests add-i32-imm-tests register-allocator-tests builtin-input-tests builtin-range-tests test-optimizer wasm _test-run _benchmark-run
 
 all: build-info $(ORUS)
 
@@ -435,6 +436,9 @@ _test-run: $(ORUS)
 	@echo "\033[36m=== OP_INC_CMP_JMP Tests ===\033[0m"
 	@$(MAKE) inc-cmp-jmp-tests
 	@echo ""
+	@echo "\033[36m=== OP_ADD_I32_IMM Tests ===\033[0m"
+	@$(MAKE) add-i32-imm-tests
+	@echo ""
 	@echo "\033[36m=== Register Allocator Tests ===\033[0m"
 	@$(MAKE) register-allocator-tests
 	@echo ""
@@ -530,6 +534,15 @@ $(INC_CMP_JMP_TEST_BIN): tests/unit/test_vm_inc_cmp_jmp.c $(COMPILER_OBJS) $(VM_
 inc-cmp-jmp-tests: $(INC_CMP_JMP_TEST_BIN)
 	@echo "Running OP_INC_CMP_JMP regression tests..."
 	@./$(INC_CMP_JMP_TEST_BIN)
+
+$(ADD_I32_IMM_TEST_BIN): tests/unit/test_vm_add_i32_imm.c $(COMPILER_OBJS) $(VM_OBJS)
+	@mkdir -p $(dir $@)
+	@echo "Compiling OP_ADD_I32_IMM regression tests..."
+	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+
+add-i32-imm-tests: $(ADD_I32_IMM_TEST_BIN)
+	@echo "Running OP_ADD_I32_IMM regression tests..."
+	@./$(ADD_I32_IMM_TEST_BIN)
 
 $(REGISTER_ALLOCATOR_TEST_BIN): tests/unit/test_register_allocator.c $(COMPILER_OBJS) $(VM_OBJS)
 	@mkdir -p $(dir $@)
