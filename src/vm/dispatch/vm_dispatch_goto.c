@@ -3767,8 +3767,7 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_DEC_CMP_JMP: {
         uint8_t reg = *vm.ip++;
         uint8_t limit_reg = *vm.ip++;
-        int16_t offset = *(int16_t*)vm.ip;
-        vm.ip += 2;
+        int16_t offset = (int16_t)READ_SHORT();
 
         int32_t counter_i32;
         int32_t limit_i32;
