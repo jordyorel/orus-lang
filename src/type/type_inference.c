@@ -2626,30 +2626,6 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             node->dataType = getPrimitiveType(TYPE_VOID);
             return node->dataType;
         }
-        case NODE_THROW: {
-            if (!node->throwStmt.value) {
-                return getPrimitiveType(TYPE_VOID);
-            }
-
-            Type* thrown_type = algorithm_w(env, node->throwStmt.value);
-            if (!thrown_type) {
-                return NULL;
-            }
-
-            Type* error_type = getPrimitiveType(TYPE_ERROR);
-            if (thrown_type->kind == TYPE_STRING) {
-                node->throwStmt.value->dataType = error_type;
-                return getPrimitiveType(TYPE_VOID);
-            }
-            if (!unify(thrown_type, error_type)) {
-                report_type_mismatch(node->throwStmt.value->location, "error",
-                                     getTypeName(thrown_type->kind));
-                set_type_error();
-                return NULL;
-            }
-
-            return getPrimitiveType(TYPE_VOID);
-        }
         case NODE_BREAK: {
             // Break statements have void type
             return getPrimitiveType(TYPE_VOID);

@@ -3,14 +3,14 @@
 print("== Phase 3: N-Queens Stress ==")
 
 // === Metrics for the recursive backtracking solver ===
-global mut NQ_CALLS = 0
-global mut NQ_MAX_DEPTH = 0
-global mut NQ_CONFLICT_CHECKS = 0
-global mut NQ_CONFLICT_REJECTIONS = 0
-global mut NQ_PLACEMENTS = 0
-global mut NQ_BACKTRACKS = 0
-global mut NQ_SOLUTIONS = 0
-global mut NQ_LAST_POSITIONS: [i32] = []
+mut NQ_CALLS = 0
+mut NQ_MAX_DEPTH = 0
+mut NQ_CONFLICT_CHECKS = 0
+mut NQ_CONFLICT_REJECTIONS = 0
+mut NQ_PLACEMENTS = 0
+mut NQ_BACKTRACKS = 0
+mut NQ_SOLUTIONS = 0
+mut NQ_LAST_POSITIONS: [i32] = []
 
 fn reset_metrics():
     NQ_CALLS = 0

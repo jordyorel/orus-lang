@@ -69,10 +69,8 @@ typedef enum {
     TOKEN_PRINT_NO_NL,
     TOKEN_RETURN,
     TOKEN_MUT,
-    TOKEN_CONST,
     TOKEN_WHILE,
     TOKEN_TRY,
-    TOKEN_THROW,
     TOKEN_CATCH,
     TOKEN_IN,
     TOKEN_STRUCT,
@@ -83,8 +81,7 @@ typedef enum {
     TOKEN_MATCH,
     TOKEN_MATCHES,
     TOKEN_PUB,
-    TOKEN_GLOBAL,
-    TOKEN_STATIC,
+    TOKEN_DEFINE,
 
     // Bitwise operators
     TOKEN_BIT_AND,

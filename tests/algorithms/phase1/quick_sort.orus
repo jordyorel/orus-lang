@@ -2,9 +2,9 @@
 // Functional variant that returns a new array to stress recursion, pivot
 // selection, and dynamic array construction while tracking simple metrics.
 
-global mut QUICK_COMPARISONS = 0
-global mut QUICK_PARTITIONS = 0
-global mut QUICK_MAX_DEPTH = 0
+mut QUICK_COMPARISONS = 0
+mut QUICK_PARTITIONS = 0
+mut QUICK_MAX_DEPTH = 0
 
 fn quick_sort_recursive(values, depth):
     length = len(values)

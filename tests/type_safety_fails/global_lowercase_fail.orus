@@ -1,4 +1,4 @@
-// Lowercase global identifiers are rejected because module globals must use
-// SCREAMING_SNAKE_CASE naming.
+// Lowercase constant identifiers are rejected because module-level constants
+// must use SCREAMING_SNAKE_CASE naming.
 
-global counter = 1
+counter:i32 := 1

@@ -375,7 +375,6 @@ InterpretResult vm_run_dispatch(void) {
         vm_dispatch_table[OP_TO_STRING_R] = &&LABEL_OP_TO_STRING_R;
         vm_dispatch_table[OP_TRY_BEGIN] = &&LABEL_OP_TRY_BEGIN;
         vm_dispatch_table[OP_TRY_END] = &&LABEL_OP_TRY_END;
-        vm_dispatch_table[OP_THROW] = &&LABEL_OP_THROW;
         vm_dispatch_table[OP_JUMP] = &&LABEL_OP_JUMP;
         vm_dispatch_table[OP_JUMP_IF_NOT_R] = &&LABEL_OP_JUMP_IF_NOT_R;
         vm_dispatch_table[OP_JUMP_IF_NOT_I32_TYPED] = &&LABEL_OP_JUMP_IF_NOT_I32_TYPED;
@@ -390,7 +389,6 @@ InterpretResult vm_run_dispatch(void) {
         vm_dispatch_table[OP_RANGE_R] = &&LABEL_OP_RANGE_R;
         vm_dispatch_table[OP_PRINT_MULTI_R] = &&LABEL_OP_PRINT_MULTI_R;
         vm_dispatch_table[OP_PRINT_R] = &&LABEL_OP_PRINT_R;
-        vm_dispatch_table[OP_PRINT_NO_NL_R] = &&LABEL_OP_PRINT_NO_NL_R;
         vm_dispatch_table[OP_ASSERT_EQ_R] = &&LABEL_OP_ASSERT_EQ_R;
         vm_dispatch_table[OP_CALL_R] = &&LABEL_OP_CALL_R;
         vm_dispatch_table[OP_TAIL_CALL_R] = &&LABEL_OP_TAIL_CALL_R;
@@ -2566,29 +2564,6 @@ InterpretResult vm_run_dispatch(void) {
             DISPATCH();
         }
 
-    LABEL_OP_THROW: {
-            uint8_t reg = READ_BYTE();
-            Value err = vm_get_register_safe(reg);
-            if (!IS_ERROR(err)) {
-                if (IS_STRING(err)) {
-                    ObjString* message = AS_STRING(err);
-                    ObjError* converted = allocateError(ERROR_RUNTIME, message->chars, CURRENT_LOCATION());
-                    if (!converted) {
-                        VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(),
-                                        "Failed to allocate error for throw");
-                    }
-                    err = ERROR_VAL(converted);
-                    vm_set_register_safe(reg, err);
-                } else {
-                    VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(),
-                                    "throw expects an error or string value");
-                }
-            }
-            vm.lastError = err;
-            vm_set_error_report_pending(true);
-            goto HANDLE_RUNTIME_ERROR;
-        }
-
     LABEL_OP_JUMP: {
             if (!handle_jump_long()) {
                 RETURN(INTERPRET_RUNTIME_ERROR);
@@ -2864,13 +2839,6 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t reg = READ_BYTE();
             Value temp_value = vm_get_register_safe(reg);
             builtin_print(&temp_value, 1, true);
-            DISPATCH();
-        }
-
-    LABEL_OP_PRINT_NO_NL_R: {
-            uint8_t reg = READ_BYTE();
-            Value temp_value = vm_get_register_safe(reg);
-            builtin_print(&temp_value, 1, false);
             DISPATCH();
         }
 

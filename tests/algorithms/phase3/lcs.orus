@@ -4,21 +4,21 @@
 print("== Phase 3: Longest Common Subsequence Stress ==")
 
 // === Naive recursion metrics ===
-global mut LCS_NAIVE_CALLS = 0
-global mut LCS_NAIVE_MAX_DEPTH = 0
-global mut LCS_NAIVE_BRANCH_SPLITS = 0
+mut LCS_NAIVE_CALLS = 0
+mut LCS_NAIVE_MAX_DEPTH = 0
+mut LCS_NAIVE_BRANCH_SPLITS = 0
 
 // Symbol codes for character sequences (ASCII values for readability).
-global LETTER_A = 65
-global LETTER_B = 66
-global LETTER_C = 67
-global LETTER_D = 68
-global LETTER_F = 70
-global LETTER_G = 71
-global LETTER_T = 84
-global LETTER_X = 88
-global LETTER_Y = 89
-global LETTER_Z = 90
+LETTER_A:i32 := 65
+LETTER_B:i32 := 66
+LETTER_C:i32 := 67
+LETTER_D:i32 := 68
+LETTER_F:i32 := 70
+LETTER_G:i32 := 71
+LETTER_T:i32 := 84
+LETTER_X:i32 := 88
+LETTER_Y:i32 := 89
+LETTER_Z:i32 := 90
 
 fn lcs_naive_inner(seq_a, len_a: i32, seq_b, len_b: i32, i: i32, j: i32, depth: i32) -> i32:
     LCS_NAIVE_CALLS = LCS_NAIVE_CALLS + 1
@@ -51,12 +51,12 @@ fn run_lcs_naive(label, seq_a, seq_b) -> i32:
     return value
 
 // === Dynamic programming metrics ===
-global mut LCS_DP_CELLS = 0
-global mut LCS_DP_MATCH_EXTENDS = 0
-global mut LCS_DP_TOP_REUSES = 0
-global mut LCS_DP_LEFT_REUSES = 0
-global mut LCS_DP_TIES = 0
-global mut LCS_DP_LAST_LENGTH = 0
+mut LCS_DP_CELLS = 0
+mut LCS_DP_MATCH_EXTENDS = 0
+mut LCS_DP_TOP_REUSES = 0
+mut LCS_DP_LEFT_REUSES = 0
+mut LCS_DP_TIES = 0
+mut LCS_DP_LAST_LENGTH = 0
 
 fn build_lcs_dp_table(seq_a, seq_b):
     LCS_DP_CELLS = 0

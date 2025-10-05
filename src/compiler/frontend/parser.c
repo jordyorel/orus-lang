@@ -142,13 +142,11 @@ static bool is_reserved_keyword_token(TokenType type) {
         case TOKEN_OR:
         case TOKEN_NOT:
         case TOKEN_PRINT:
-        case TOKEN_PRINT_NO_NL:
+        case TOKEN_TIME_STAMP:
         case TOKEN_RETURN:
         case TOKEN_MUT:
-        case TOKEN_CONST:
         case TOKEN_WHILE:
         case TOKEN_TRY:
-        case TOKEN_THROW:
         case TOKEN_CATCH:
         case TOKEN_IN:
         case TOKEN_STRUCT:
@@ -159,8 +157,10 @@ static bool is_reserved_keyword_token(TokenType type) {
         case TOKEN_MATCH:
         case TOKEN_MATCHES:
         case TOKEN_PUB:
-        case TOKEN_GLOBAL:
-        case TOKEN_STATIC:
+        case TOKEN_DEFINE:
+        case TOKEN_U32:
+        case TOKEN_U64:
+        case TOKEN_F64:
             return true;
         default:
             return false;
@@ -388,7 +388,6 @@ static ASTNode* parseArrayLiteral(ParserContext* ctx, Token leftToken);
 // Control flow parsing functions
 static ASTNode* parseIfStatement(ParserContext* ctx);
 static ASTNode* parseTryStatement(ParserContext* ctx);
-static ASTNode* parseThrowStatement(ParserContext* ctx);
 static ASTNode* parseWhileStatement(ParserContext* ctx);
 static ASTNode* parseForStatement(ParserContext* ctx);
 static ASTNode* parseBreakStatement(ParserContext* ctx);
@@ -415,17 +414,14 @@ static ASTNode* parseBooleanLiteral(ParserContext* ctx, Token token);
 static ASTNode* parseIdentifierExpression(ParserContext* ctx, Token token);
 static ASTNode* parseTimeStampExpression(ParserContext* ctx, Token token);
 static ASTNode* parseParenthesizedExpressionToken(ParserContext* ctx, Token token);
-static ASTNode* parseVariableDeclaration(ParserContext* ctx, bool isMutable, Token nameToken);
+static ASTNode* parseVariableDeclaration(ParserContext* ctx, bool isMutable, Token nameToken, bool isPublic);
 static ASTNode* parseAssignOrVarList(ParserContext* ctx, bool isMutable, Token nameToken);
-static ASTNode* parseGlobalVariable(ParserContext* ctx, bool isPublic);
-static ASTNode* parseConstDeclaration(ParserContext* ctx);
 static ASTNode* parseImportStatement(ParserContext* ctx);
 static ASTNode* parseStatement(ParserContext* ctx);
 static ASTNode* parseDestructuringAssignment(ParserContext* ctx, Token firstToken);
 static ASTNode* parseInlineBlock(ParserContext* ctx);
 static ASTNode* parseIfStatement(ParserContext* ctx);
 static ASTNode* parseTryStatement(ParserContext* ctx);
-static ASTNode* parseThrowStatement(ParserContext* ctx);
 static ASTNode* parseWhileStatement(ParserContext* ctx);
 static ASTNode* parseForStatement(ParserContext* ctx);
 static ASTNode* parseBreakStatement(ParserContext* ctx);
@@ -510,7 +506,7 @@ ASTNode* parseSourceWithModuleName(const char* source, const char* module_name) 
 static ASTNode* parseStatement(ParserContext* ctx) {
     Token t = peekToken(ctx);
 
-    if (t.type == TOKEN_PRINT || t.type == TOKEN_PRINT_NO_NL) {
+    if (t.type == TOKEN_PRINT) {
         return parsePrintStatement(ctx);
     }
     if (t.type == TOKEN_PASS) {
@@ -556,9 +552,13 @@ static ASTNode* parseStatement(ParserContext* ctx) {
             return parseImplBlock(ctx, true);
         } else if (afterPub.type == TOKEN_FN) {
             return parseFunctionDefinition(ctx, true);
-        } else if (afterPub.type == TOKEN_GLOBAL) {
-            return parseGlobalVariable(ctx, true);
+        } else if (afterPub.type == TOKEN_IDENTIFIER) {
+            Token nameTok = nextToken(ctx);
+            return parseVariableDeclaration(ctx, false, nameTok, true);
         }
+        SrcLocation location = {NULL, afterPub.line, afterPub.column};
+        report_compile_error(E1006_INVALID_SYNTAX, location,
+                             "expected a constant, struct, enum, impl, or fn after 'pub'");
         return NULL;
     }
     if (t.type == TOKEN_IMPORT) {
@@ -575,21 +575,9 @@ static ASTNode* parseStatement(ParserContext* ctx) {
         Token nameTok = nextToken(ctx); // get identifier
         if (nameTok.type != TOKEN_IDENTIFIER) return NULL;
         if (peekToken(ctx).type == TOKEN_COLON) {
-            return parseVariableDeclaration(ctx, true, nameTok);
+            return parseVariableDeclaration(ctx, true, nameTok, false);
         }
         return parseAssignOrVarList(ctx, true, nameTok);
-    }
-    if (t.type == TOKEN_GLOBAL) {
-        if (ctx->block_depth > 0) {
-            SrcLocation location = {NULL, t.line, t.column};
-            report_compile_error(E1006_INVALID_SYNTAX, location,
-                                 "'global' declarations are only allowed at module scope");
-            return NULL;
-        }
-        return parseGlobalVariable(ctx, false);
-    }
-    if (t.type == TOKEN_CONST) {
-        return parseConstDeclaration(ctx);
     }
     if (t.type == TOKEN_STRUCT) {
         return parseStructDefinition(ctx, false);
@@ -607,7 +595,7 @@ static ASTNode* parseStatement(ParserContext* ctx) {
         Token second = peekSecondToken(ctx);
         if (second.type == TOKEN_COLON) {
             nextToken(ctx);
-            return parseVariableDeclaration(ctx, false, t);
+            return parseVariableDeclaration(ctx, false, t, false);
         } else if (second.type == TOKEN_EQUAL) {
             nextToken(ctx);
             return parseAssignOrVarList(ctx, false, t);
@@ -617,9 +605,6 @@ static ASTNode* parseStatement(ParserContext* ctx) {
     }
     if (t.type == TOKEN_TRY) {
         return parseTryStatement(ctx);
-    }
-    if (t.type == TOKEN_THROW) {
-        return parseThrowStatement(ctx);
     }
     if (t.type == TOKEN_IF) {
         return parseIfStatement(ctx);
@@ -1503,9 +1488,9 @@ static ASTNode* parseMatchExpression(ParserContext* ctx, Token matchTok) {
 }
 
 static ASTNode* parsePrintStatement(ParserContext* ctx) {
-    // Consume PRINT or PRINT_NO_NL
+    // Consume PRINT
     Token printTok = nextToken(ctx);
-    bool newline = (printTok.type == TOKEN_PRINT);
+    bool newline = true;
 
     // Expect '('
     Token left = nextToken(ctx);
@@ -1786,8 +1771,7 @@ static ASTNode* parseTypeAnnotation(ParserContext* ctx) {
     return typeNode;
 }
 
-static ASTNode* parseVariableDeclaration(ParserContext* ctx, bool isMutable, Token nameToken) {
-
+static ASTNode* parseVariableDeclaration(ParserContext* ctx, bool isMutable, Token nameToken, bool isPublic) {
     ASTNode* typeNode = NULL;
     if (peekToken(ctx).type == TOKEN_COLON) {
         nextToken(ctx);
@@ -1795,8 +1779,40 @@ static ASTNode* parseVariableDeclaration(ParserContext* ctx, bool isMutable, Tok
         if (!typeNode) return NULL;
     }
 
-    Token equalToken = nextToken(ctx);
-    if (equalToken.type != TOKEN_EQUAL) {
+    Token assignToken = nextToken(ctx);
+    bool isConstDecl = (assignToken.type == TOKEN_DEFINE);
+    if (!isConstDecl && assignToken.type != TOKEN_EQUAL) {
+        SrcLocation location = {NULL, assignToken.line, assignToken.column};
+        report_compile_error(E1006_INVALID_SYNTAX, location,
+                             "expected '=' or ':=' after name");
+        return NULL;
+    }
+
+    if (isConstDecl && isMutable) {
+        SrcLocation location = {NULL, nameToken.line, nameToken.column};
+        report_compile_error(E1006_INVALID_SYNTAX, location,
+                             "constants cannot be declared with 'mut'");
+        return NULL;
+    }
+
+    if (isPublic && !isConstDecl) {
+        SrcLocation location = {NULL, nameToken.line, nameToken.column};
+        report_compile_error(E1006_INVALID_SYNTAX, location,
+                             "only constants can be public");
+        return NULL;
+    }
+
+    if (isConstDecl && ctx->block_depth > 0) {
+        SrcLocation location = {NULL, nameToken.line, nameToken.column};
+        report_compile_error(E1006_INVALID_SYNTAX, location,
+                             "constants must be declared at module scope");
+        return NULL;
+    }
+
+    if (isConstDecl && !typeNode) {
+        SrcLocation location = {NULL, nameToken.line, nameToken.column};
+        report_compile_error(E1006_INVALID_SYNTAX, location,
+                             "constants require an explicit type annotation");
         return NULL;
     }
 
@@ -1805,108 +1821,91 @@ static ASTNode* parseVariableDeclaration(ParserContext* ctx, bool isMutable, Tok
         return NULL;
     }
 
-    // Suffix redundancy checks removed - type inference handles all type conflicts
     if (typeNode && initializer->type == NODE_LITERAL) {
         const char* declaredType = typeNode->typeAnnotation.name;
         ValueType literalType = initializer->literal.value.type;
-        
-        // Check for type mismatches (without suffix logic)
-        {
-            bool mismatch = true;
-            if (strcmp(declaredType, "i32") == 0 && literalType == VAL_I32)
+
+        bool mismatch = true;
+        if (strcmp(declaredType, "i32") == 0 && literalType == VAL_I32)
+            mismatch = false;
+        else if (strcmp(declaredType, "i64") == 0 && literalType == VAL_I64)
+            mismatch = false;
+        else if (strcmp(declaredType, "u32") == 0 && literalType == VAL_U32)
+            mismatch = false;
+        else if (strcmp(declaredType, "u64") == 0 && literalType == VAL_U64)
+            mismatch = false;
+        else if (strcmp(declaredType, "f64") == 0 && literalType == VAL_F64)
+            mismatch = false;
+        else if (strcmp(declaredType, "bool") == 0 && literalType == VAL_BOOL)
+            mismatch = false;
+        else if (strcmp(declaredType, "string") == 0 && literalType == VAL_STRING)
+            mismatch = false;
+        else if (strcmp(declaredType, "u32") == 0 && literalType == VAL_I32) {
+            int32_t value = initializer->literal.value.as.i32;
+            if (value >= 0) {
                 mismatch = false;
-            else if (strcmp(declaredType, "i64") == 0 && literalType == VAL_I64)
-                mismatch = false;
-            else if (strcmp(declaredType, "u32") == 0 && literalType == VAL_U32)
-                mismatch = false;
-            else if (strcmp(declaredType, "u64") == 0 && literalType == VAL_U64)
-                mismatch = false;
-            else if (strcmp(declaredType, "f64") == 0 && literalType == VAL_F64)
-                mismatch = false;
-            else if (strcmp(declaredType, "bool") == 0 && literalType == VAL_BOOL)
-                mismatch = false;
-            else if (strcmp(declaredType, "string") == 0 && literalType == VAL_STRING)
-                mismatch = false;
-            // Allow compatible type conversions when annotation overrides
-            else if (strcmp(declaredType, "u32") == 0 && literalType == VAL_I32) {
-                // Allow i32 -> u32 conversion if value is non-negative
-                int32_t value = initializer->literal.value.as.i32;
-                if (value >= 0) {
-                    mismatch = false;
-                    // Convert the literal to u32 type
-                    initializer->literal.value.type = VAL_U32;
-                    initializer->literal.value.as.u32 = (uint32_t)value;
-                }
+                initializer->literal.value.type = VAL_U32;
+                initializer->literal.value.as.u32 = (uint32_t)value;
             }
-            else if (strcmp(declaredType, "u32") == 0 && literalType == VAL_I64) {
-                int64_t value = initializer->literal.value.as.i64;
-                if (value >= 0 && value <= (int64_t)UINT32_MAX) {
-                    mismatch = false;
-                    initializer->literal.value.type = VAL_U32;
-                    initializer->literal.value.as.u32 = (uint32_t)value;
-                }
-            }
-            else if (strcmp(declaredType, "u64") == 0 && literalType == VAL_I32) {
-                // Allow i32 -> u64 conversion if value is non-negative
-                int32_t value = initializer->literal.value.as.i32;
-                if (value >= 0) {
-                    mismatch = false;
-                    // Convert the literal to u64 type
-                    initializer->literal.value.type = VAL_U64;
-                    initializer->literal.value.as.u64 = (uint64_t)value;
-                }
-            }
-            else if (strcmp(declaredType, "u64") == 0 && literalType == VAL_I64) {
-                int64_t value = initializer->literal.value.as.i64;
-                if (value >= 0) {
-                    mismatch = false;
-                    initializer->literal.value.type = VAL_U64;
-                    initializer->literal.value.as.u64 = (uint64_t)value;
-                }
-            }
-            else if (strcmp(declaredType, "i64") == 0 && literalType == VAL_I32) {
-                // Allow i32 -> i64 conversion always
-                int32_t value = initializer->literal.value.as.i32;
+        }
+        else if (strcmp(declaredType, "u32") == 0 && literalType == VAL_I64) {
+            int64_t value = initializer->literal.value.as.i64;
+            if (value >= 0 && value <= (int64_t)UINT32_MAX) {
                 mismatch = false;
-                // Convert the literal to i64 type
-                initializer->literal.value.type = VAL_I64;
-                initializer->literal.value.as.i64 = (int64_t)value;
+                initializer->literal.value.type = VAL_U32;
+                initializer->literal.value.as.u32 = (uint32_t)value;
             }
-            else if (strcmp(declaredType, "f64") == 0 && literalType == VAL_I32) {
-                // Allow i32 -> f64 conversion
-                int32_t value = initializer->literal.value.as.i32;
+        }
+        else if (strcmp(declaredType, "u64") == 0 && literalType == VAL_I32) {
+            int32_t value = initializer->literal.value.as.i32;
+            if (value >= 0) {
                 mismatch = false;
-                // Convert the literal to f64 type
-                initializer->literal.value.type = VAL_F64;
-                initializer->literal.value.as.f64 = (double)value;
+                initializer->literal.value.type = VAL_U64;
+                initializer->literal.value.as.u64 = (uint64_t)value;
+            }
+        }
+        else if (strcmp(declaredType, "u64") == 0 && literalType == VAL_I64) {
+            int64_t value = initializer->literal.value.as.i64;
+            if (value >= 0) {
+                mismatch = false;
+                initializer->literal.value.type = VAL_U64;
+                initializer->literal.value.as.u64 = (uint64_t)value;
+            }
+        }
+        else if (strcmp(declaredType, "i64") == 0 && literalType == VAL_I32) {
+            int32_t value = initializer->literal.value.as.i32;
+            mismatch = false;
+            initializer->literal.value.type = VAL_I64;
+            initializer->literal.value.as.i64 = (int64_t)value;
+        }
+        else if (strcmp(declaredType, "f64") == 0 && literalType == VAL_I32) {
+            int32_t value = initializer->literal.value.as.i32;
+            mismatch = false;
+            initializer->literal.value.type = VAL_F64;
+            initializer->literal.value.as.f64 = (double)value;
+        }
+
+        if (mismatch) {
+            SrcLocation location = {
+                .file = NULL,
+                .line = nameToken.line,
+                .column = nameToken.column
+            };
+
+            const char* literalTypeName = "unknown";
+            switch (literalType) {
+                case VAL_I32: literalTypeName = "i32"; break;
+                case VAL_I64: literalTypeName = "i64"; break;
+                case VAL_U32: literalTypeName = "u32"; break;
+                case VAL_U64: literalTypeName = "u64"; break;
+                case VAL_F64: literalTypeName = "f64"; break;
+                case VAL_BOOL: literalTypeName = "bool"; break;
+                case VAL_STRING: literalTypeName = "string"; break;
+                default: literalTypeName = "unknown"; break;
             }
 
-
-            if (mismatch) {
-                // Use structured error reporting instead of fprintf
-                SrcLocation location = {
-                    .file = NULL, // Will be set by error reporting system
-                    .line = nameToken.line,
-                    .column = nameToken.column
-                };
-                
-                // Get the actual literal type name for the error
-                const char* literalTypeName = "unknown";
-                switch (literalType) {
-                    case VAL_I32: literalTypeName = "i32"; break;
-                    case VAL_I64: literalTypeName = "i64"; break;
-                    case VAL_U32: literalTypeName = "u32"; break;
-                    case VAL_U64: literalTypeName = "u64"; break;
-                    case VAL_F64: literalTypeName = "f64"; break;
-                    case VAL_BOOL: literalTypeName = "bool"; break;
-                    case VAL_STRING: literalTypeName = "string"; break;
-                    default: literalTypeName = "unknown"; break;
-                }
-                
-                // Report structured type error
-                report_type_error(E2001_TYPE_MISMATCH, location, declaredType, literalTypeName);
-                return NULL;
-            }
+            report_type_error(E2001_TYPE_MISMATCH, location, declaredType, literalTypeName);
+            return NULL;
         }
     }
 
@@ -1921,7 +1920,6 @@ static ASTNode* parseVariableDeclaration(ParserContext* ctx, bool isMutable, Tok
     strncpy(name, nameToken.start, len);
     name[len] = '\0';
 
-    // Validate variable name follows Orus conventions
     if (!is_valid_variable_name(name)) {
         const char* reason = get_variable_name_violation_reason(name);
         SrcLocation location = {NULL, nameToken.line, nameToken.column};
@@ -1929,141 +1927,22 @@ static ASTNode* parseVariableDeclaration(ParserContext* ctx, bool isMutable, Tok
         return NULL;
     }
 
-    varNode->varDecl.name = name;
-    varNode->varDecl.isPublic = false;
-    varNode->varDecl.isGlobal = false;
-    varNode->varDecl.initializer = initializer;
-    varNode->varDecl.typeAnnotation = typeNode;
-    varNode->varDecl.isConst = false;
-    varNode->varDecl.isMutable = isMutable;
-
-    // For multiple variable declarations separated by commas,
-    // only parse the first one and let the main parser handle the rest
-    return varNode;
-}
-
-static ASTNode* parseGlobalVariable(ParserContext* ctx, bool isPublic) {
-    Token globalTok = nextToken(ctx);
-    if (globalTok.type != TOKEN_GLOBAL) {
-        return NULL;
-    }
-
-    bool isMutable = false;
-    if (peekToken(ctx).type == TOKEN_MUT) {
-        nextToken(ctx);
-        isMutable = true;
-    }
-
-    Token nameTok = nextToken(ctx);
-    if (nameTok.type != TOKEN_IDENTIFIER) {
-        return NULL;
-    }
-
-    int len = nameTok.length;
-    char* name = parser_arena_alloc(ctx, len + 1);
-    strncpy(name, nameTok.start, len);
-    name[len] = '\0';
-
-    if (!is_valid_variable_name(name)) {
-        const char* reason = get_variable_name_violation_reason(name);
-        SrcLocation location = {NULL, nameTok.line, nameTok.column};
-        report_invalid_variable_name(location, name, reason);
-        return NULL;
-    }
-
-    if (!is_uppercase_identifier(name)) {
-        SrcLocation location = {NULL, nameTok.line, nameTok.column};
+    if (isConstDecl && !is_uppercase_identifier(name)) {
+        SrcLocation location = {NULL, nameToken.line, nameToken.column};
         report_invalid_variable_name(location, name,
-                                     "global variable names must be uppercase");
+                                     "constant names must be uppercase");
         return NULL;
     }
 
-    ASTNode* typeNode = NULL;
-    if (peekToken(ctx).type == TOKEN_COLON) {
-        nextToken(ctx);
-        typeNode = parseTypeAnnotation(ctx);
-        if (!typeNode) return NULL;
-    }
-
-    Token equalToken = nextToken(ctx);
-    if (equalToken.type != TOKEN_EQUAL) {
-        return NULL;
-    }
-
-    ASTNode* initializer = parseExpression(ctx);
-    if (!initializer) {
-        return NULL;
-    }
-
-    ASTNode* varNode = new_node(ctx);
-    varNode->type = NODE_VAR_DECL;
-    varNode->location.line = nameTok.line;
-    varNode->location.column = nameTok.column;
-    varNode->dataType = NULL;
     varNode->varDecl.name = name;
     varNode->varDecl.isPublic = isPublic;
-    varNode->varDecl.isGlobal = true;
+    varNode->varDecl.isGlobal = (ctx->block_depth == 0);
     varNode->varDecl.initializer = initializer;
     varNode->varDecl.typeAnnotation = typeNode;
-    varNode->varDecl.isConst = false;
-    varNode->varDecl.isMutable = isMutable;
+    varNode->varDecl.isConst = isConstDecl;
+    varNode->varDecl.isMutable = isConstDecl ? false : isMutable;
 
     return varNode;
-}
-
-static ASTNode* parseConstDeclaration(ParserContext* ctx) {
-    Token constTok = nextToken(ctx);
-    if (constTok.type != TOKEN_CONST) {
-        return NULL;
-    }
-
-    Token nameTok = nextToken(ctx);
-    if (nameTok.type != TOKEN_IDENTIFIER) {
-        return NULL;
-    }
-
-    char* name = copy_token_text(ctx, nameTok);
-    if (!is_valid_variable_name(name)) {
-        const char* reason = get_variable_name_violation_reason(name);
-        SrcLocation location = {NULL, nameTok.line, nameTok.column};
-        report_invalid_variable_name(location, name, reason);
-        return NULL;
-    }
-
-    ASTNode* typeNode = NULL;
-    if (peekToken(ctx).type == TOKEN_COLON) {
-        nextToken(ctx);
-        typeNode = parseTypeAnnotation(ctx);
-        if (!typeNode) return NULL;
-    }
-
-    Token equalTok = nextToken(ctx);
-    if (equalTok.type != TOKEN_EQUAL) {
-        SrcLocation location = {NULL, equalTok.line, equalTok.column};
-        report_compile_error(E1006_INVALID_SYNTAX, location,
-                             "expected '=' after constant name");
-        return NULL;
-    }
-
-    ASTNode* initializer = parseExpression(ctx);
-    if (!initializer) {
-        return NULL;
-    }
-
-    ASTNode* node = new_node(ctx);
-    node->type = NODE_VAR_DECL;
-    node->location.line = nameTok.line;
-    node->location.column = nameTok.column;
-    node->dataType = NULL;
-    node->varDecl.name = name;
-    node->varDecl.isPublic = false;
-    node->varDecl.isGlobal = (ctx->block_depth == 0);
-    node->varDecl.initializer = initializer;
-    node->varDecl.typeAnnotation = typeNode;
-    node->varDecl.isConst = true;
-    node->varDecl.isMutable = false;
-
-    return node;
 }
 
 static ASTNode* parseDestructuringAssignment(ParserContext* ctx, Token firstToken) {
@@ -2837,31 +2716,6 @@ static ASTNode* parseTryStatement(ParserContext* ctx) {
     node->tryStmt.catchVar = catchName;
     node->location.line = tryTok.line;
     node->location.column = tryTok.column;
-    node->dataType = NULL;
-    return node;
-}
-
-static ASTNode* parseThrowStatement(ParserContext* ctx) {
-    Token throwTok = nextToken(ctx);
-    if (throwTok.type != TOKEN_THROW) return NULL;
-
-    Token next = peekToken(ctx);
-    if (next.type == TOKEN_NEWLINE || next.type == TOKEN_EOF || next.type == TOKEN_DEDENT) {
-        SrcLocation location = {NULL, throwTok.line, throwTok.column};
-        report_compile_error(E1006_INVALID_SYNTAX, location, "expected expression after 'throw'");
-        return NULL;
-    }
-
-    ASTNode* value = parseExpression(ctx);
-    if (!value) {
-        return NULL;
-    }
-
-    ASTNode* node = new_node(ctx);
-    node->type = NODE_THROW;
-    node->throwStmt.value = value;
-    node->location.line = throwTok.line;
-    node->location.column = throwTok.column;
     node->dataType = NULL;
     return node;
 }

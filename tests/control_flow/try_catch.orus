@@ -64,9 +64,9 @@ try:
         inner_rethrow_attempted = true
         temp = 5 / 0
     catch err:
-        print("inner catch, rethrowing")
+        print("inner catch, raising new failure")
         inner_rethrow_catch_hit = true
-        throw err
+        temp = int("bad-number")
 catch outer:
     print("outer caught rethrow")
     print(outer)

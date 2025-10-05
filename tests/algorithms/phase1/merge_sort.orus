@@ -2,9 +2,9 @@
 // Functional style to exercise recursion depth, slicing, and array allocation
 // while tracking comparison counts, merge operations, and recursion depth.
 
-global mut MERGE_COMPARISONS = 0
-global mut MERGE_MERGES = 0
-global mut MERGE_MAX_DEPTH = 0
+mut MERGE_COMPARISONS = 0
+mut MERGE_MERGES = 0
+mut MERGE_MAX_DEPTH = 0
 
 fn merge(left, right):
     MERGE_MERGES = MERGE_MERGES + 1

@@ -254,8 +254,6 @@ static TokenType identifier_type(const char* start, int length) {
                 return TOKEN_CONTINUE;
             if (length == 5 && memcmp(start, "catch", 5) == 0)
                 return TOKEN_CATCH;
-            if (length == 5 && memcmp(start, "const", 5) == 0)
-                return TOKEN_CONST;
             break;
         case 'e':
             if (length == 4 && memcmp(start, "else", 4) == 0) return TOKEN_ELSE;
@@ -267,7 +265,6 @@ static TokenType identifier_type(const char* start, int length) {
             if (length == 2 && start[1] == 'n') return TOKEN_FN;
             break;
         case 'g':
-            if (length == 6 && memcmp(start, "global", 6) == 0) return TOKEN_GLOBAL;
             break;
         case 'i':
             if (length == 2 && memcmp(start, "if", 2) == 0) return TOKEN_IF;
@@ -286,7 +283,7 @@ static TokenType identifier_type(const char* start, int length) {
         case 'n':
             if (length == 3 && memcmp(start, "not", 3) == 0) return TOKEN_NOT;
             break;
-        case 'o':
+        case 'o':https://github.com/jordyorel/orus-lang/pull/249/conflict?name=src%252Fcompiler%252Ffrontend%252Flexer.c&ancestor_oid=3ff3f38934733bf94c11912e4e6ccc6c3ab95141&base_oid=590f40eba25d7c7c7e0a8f41f4fee3bb1658dde0&head_oid=01379cc0df7b784d86a446c014c5cadc72918636
             if (length == 2 && memcmp(start, "or", 2) == 0) return TOKEN_OR;
             break;
         case 'p':
@@ -294,8 +291,6 @@ static TokenType identifier_type(const char* start, int length) {
                 return TOKEN_PASS;
             if (length == 5 && memcmp(start, "print", 5) == 0)
                 return TOKEN_PRINT;
-            if (length == 15 && memcmp(start, "print_no_newline", 15) == 0)
-                return TOKEN_PRINT_NO_NL;
             if (length == 3 && memcmp(start, "pub", 3) == 0) return TOKEN_PUB;
             break;
         case 'r':
@@ -305,8 +300,6 @@ static TokenType identifier_type(const char* start, int length) {
         case 's':
             if (length == 6 && memcmp(start, "struct", 6) == 0)
                 return TOKEN_STRUCT;
-            if (length == 6 && memcmp(start, "static", 6) == 0)
-                return TOKEN_STATIC;
             break;
         case 't':
             if (length == 3 && memcmp(start, "try", 3) == 0) return TOKEN_TRY;
@@ -738,6 +731,7 @@ Token scan_token_ctx(LexerContext* ctx) {
         case '^':
             return make_token_ctx(ctx, TOKEN_BIT_XOR);
         case ':':
+            if (match_char_ctx(ctx, '=')) return make_token_ctx(ctx, TOKEN_DEFINE);
             return make_token_ctx(ctx, TOKEN_COLON);
         case '\'':
             return make_token_ctx(ctx, TOKEN_APOSTROPHE);
@@ -889,7 +883,7 @@ Token scan_token() {
         case '^':
             return make_token(TOKEN_BIT_XOR);
         case ':':
-            return make_token(TOKEN_COLON);
+            return make_token(match_char('=') ? TOKEN_DEFINE : TOKEN_COLON);
         case '\'':
             return make_token(TOKEN_APOSTROPHE);
         case '"':
@@ -953,13 +947,10 @@ const char* token_type_to_string(TokenType type) {
         case TOKEN_OR: return "OR";
         case TOKEN_NOT: return "NOT";
         case TOKEN_PRINT: return "PRINT";
-        case TOKEN_PRINT_NO_NL: return "PRINT_NO_NL";
         case TOKEN_RETURN: return "RETURN";
         case TOKEN_MUT: return "MUT";
-        case TOKEN_CONST: return "CONST";
         case TOKEN_WHILE: return "WHILE";
         case TOKEN_TRY: return "TRY";
-        case TOKEN_THROW: return "THROW";
         case TOKEN_CATCH: return "CATCH";
         case TOKEN_IN: return "IN";
         case TOKEN_STRUCT: return "STRUCT";
@@ -969,8 +960,6 @@ const char* token_type_to_string(TokenType type) {
         case TOKEN_MATCH: return "MATCH";
         case TOKEN_MATCHES: return "MATCHES";
         case TOKEN_PUB: return "PUB";
-        case TOKEN_GLOBAL: return "GLOBAL";
-        case TOKEN_STATIC: return "STATIC";
         case TOKEN_BIT_AND: return "BIT_AND";
         case TOKEN_BIT_OR: return "BIT_OR";
         case TOKEN_BIT_XOR: return "BIT_XOR";
