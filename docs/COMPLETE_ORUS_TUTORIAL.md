@@ -566,7 +566,7 @@ predictable.
 
 ## 16. Modules
 
-Module names are inferred directly from the filesystem. The file `geometry/points.orus` defines the module `geometry.points`, and declarations live at the top level—there is no `module` keyword to wrap the file.
+Module names are inferred directly from the filesystem. A file such as `geometry.orus` defines the module `geometry`, while `geometry/points.orus` defines the nested module `geometry.points`. Declarations live at the top level—there is no `module` keyword to wrap the file.
 
 ```orus
 pub struct Point:
@@ -582,13 +582,14 @@ pub fn origin() -> Point:
 `use` works only at module scope. Choose between wide and selective imports:
 
 ```orus
-use geometry.points           // import all public symbols
-use geometry.points: Point    // import a subset
-use geometry.points: origin as start
+use geometry                     // bind the module as a namespace (access exports as geometry.Point)
+use geometry as geom             // namespace alias
+use geometry: Point              // import a subset directly into scope
+use geometry: origin as start
 ```
 
-Module aliases (`use geometry.points as geo`) are recorded today for tooling and diagnostics; future releases will expose them as
-namespaces.
+Namespace imports keep exports behind the module name: `geometry.Point`, `geometry.origin`, or `geom.origin`. Use the colon form to pull selected
+symbols into the current scope when you need unqualified names.
 
 ### 16.2 Public Functions and Structs
 

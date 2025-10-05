@@ -1,0 +1,12 @@
+pub struct Point:
+    x: i32
+    y: i32
+
+pub fn origin() -> Point:
+    return Point{ x: 0, y: 0 }
+
+pub global mut SCALE = 100
+
+pub fn translate(dx: i32, dy: i32) -> Point:
+    base = origin()
+    return Point{ x: base.x + dx, y: base.y + dy }

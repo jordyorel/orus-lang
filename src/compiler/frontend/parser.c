@@ -2063,19 +2063,20 @@ static ASTNode* parseImportStatement(ParserContext* ctx) {
         moduleAlias[aliasLen] = '\0';
     }
 
-    bool importAll = true;
+    bool importAll = false;
+    bool importModule = true;
     ImportSymbol* finalSymbols = NULL;
     int symbolCount = 0;
 
     if (peekToken(ctx).type == TOKEN_COLON) {
         nextToken(ctx); // consume ':'
+        importModule = false;
 
         Token nextTok = peekToken(ctx);
         if (nextTok.type == TOKEN_STAR) {
             nextToken(ctx);
             importAll = true;
         } else {
-            importAll = false;
             ImportSymbol* tempSymbols = NULL;
             int tempCount = 0;
             int tempCapacity = 0;
@@ -2157,7 +2158,8 @@ static ASTNode* parseImportStatement(ParserContext* ctx) {
     node->import.moduleAlias = moduleAlias;
     node->import.symbols = finalSymbols;
     node->import.symbolCount = symbolCount;
-    node->import.importAll = importAll || symbolCount == 0;
+    node->import.importAll = importAll;
+    node->import.importModule = importModule;
 
     return node;
 }
@@ -4396,11 +4398,22 @@ static ASTNode* parseMemberAccess(ParserContext* ctx, ASTNode* objectExpr) {
 }
 
 static ASTNode* parseStructLiteral(ParserContext* ctx, ASTNode* typeExpr, Token leftBrace) {
-    if (!typeExpr || typeExpr->type != NODE_IDENTIFIER) {
+    if (!typeExpr) {
         return NULL;
     }
 
-    char* structName = typeExpr->identifier.name;
+    char* structName = NULL;
+    char* moduleAlias = NULL;
+
+    if (typeExpr->type == NODE_IDENTIFIER) {
+        structName = typeExpr->identifier.name;
+    } else if (typeExpr->type == NODE_MEMBER_ACCESS && typeExpr->member.member &&
+               typeExpr->member.object && typeExpr->member.object->type == NODE_IDENTIFIER) {
+        structName = typeExpr->member.member;
+        moduleAlias = typeExpr->member.object->identifier.name;
+    } else {
+        return NULL;
+    }
 
     StructLiteralField* fields = NULL;
     int fieldCount = 0;
@@ -4474,6 +4487,8 @@ static ASTNode* parseStructLiteral(ParserContext* ctx, ASTNode* typeExpr, Token 
 
     typeExpr->type = NODE_STRUCT_LITERAL;
     typeExpr->structLiteral.structName = structName;
+    typeExpr->structLiteral.moduleAlias = moduleAlias;
+    typeExpr->structLiteral.resolvedModuleName = NULL;
     typeExpr->structLiteral.fields = fields;
     typeExpr->structLiteral.fieldCount = fieldCount;
     typeExpr->location.line = leftBrace.line;

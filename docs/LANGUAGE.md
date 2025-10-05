@@ -302,13 +302,13 @@ throw "boom"
 ```
 
 ### Modules and Imports
-- Module names are inferred from the file path. The file `geometry/points.orus` defines the module `geometry.points`.
+- Module names are inferred from the file path. A top-level file like `geometry.orus` defines the module `geometry`, while `geometry/points.orus` defines the module `geometry.points`.
 - Files contain declarations directly—there is no `module` keyword or required indentation block.
 - `use` is available only at module scope:
-  - `use math` imports all public symbols.
-  - `use math: *` is synonymous with importing all symbols.
+  - `use math` binds the module as a namespace. Access exports with `math.sin` and `math.PI`.
+  - `use math as calc` renames the namespace (`calc.sin`, `calc.PI`).
+  - `use math: *` imports all public symbols directly into scope.
   - `use math: sin, cos as cosine` selectively imports and optionally renames symbols.
-  - `use math as alias` records an alias for tooling; namespace-style access is not yet generated.
 - Declarations are private by default. Apply `pub` to export `fn`, `struct`, `enum`, `impl`, or `global` items.
 - Globals must be uppercase identifiers and may be exported with `pub global`.
 
@@ -324,10 +324,13 @@ pub fn origin() -> Point:
 In another file:
 
 ```orus
-use geometry.points: Point, origin
+use geometry                    // bind the module as a namespace
 
-p = origin()
-print(Point{x: 5, y: 6})
+p = geometry.origin()
+print(geometry.Point{ x: 5, y: 6 })
+
+use geometry: origin as start    // selectively import names
+print(start())
 ```
 
 ### Built-in Helpers
