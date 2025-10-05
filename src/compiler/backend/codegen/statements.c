@@ -2348,6 +2348,9 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
         DEBUG_CODEGEN_PRINT("While loop start at offset %d\n", loop_start_fused);
 
         int fused_limit_guard_reg = fused_info.use_adjusted_limit ? fused_limit_temp_reg : fused_limit_reg;
+        int fused_limit_source_reg = fused_info.use_adjusted_limit ? fused_limit_temp_reg : fused_limit_reg;
+        bool fused_limit_guard_is_temp = false;
+        bool fused_limit_guard_is_frame = false;
         if (fused_limit_guard_reg >= 0) {
             bool guard_already_primed = false;
             if (fused_info.use_adjusted_limit && fused_limit_guard_reg == fused_limit_temp_reg) {
@@ -2411,6 +2414,13 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
             DEBUG_CODEGEN_PRINT("Error: Failed to allocate while-loop end placeholder\n");
             ctx->has_compilation_errors = true;
             leave_loop_context(ctx, loop_frame_fused, ctx->bytecode->count);
+            if (fused_limit_guard_is_temp && fused_limit_guard_reg >= MP_TEMP_REG_START &&
+                fused_limit_guard_reg <= MP_TEMP_REG_END) {
+                compiler_free_temp(ctx->allocator, fused_limit_guard_reg);
+            }
+            if (fused_limit_guard_is_frame && fused_limit_guard_reg >= 0) {
+                compiler_free_register(ctx->allocator, fused_limit_guard_reg);
+            }
             if (fused_info.use_adjusted_limit && fused_limit_temp_is_temp &&
                 fused_limit_temp_reg >= 0) {
                 compiler_free_temp(ctx->allocator, fused_limit_temp_reg);
@@ -2469,6 +2479,15 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
             DEBUG_CODEGEN_PRINT("Error: Failed to patch while-loop end jump to %d\n", end_target);
             ctx->has_compilation_errors = true;
             leave_loop_context(ctx, loop_frame_fused, end_target);
+            if (fused_limit_guard_is_temp && fused_limit_guard_reg >= MP_TEMP_REG_START &&
+                fused_limit_guard_reg <= MP_TEMP_REG_END) {
+                compiler_free_temp(ctx->allocator, fused_limit_guard_reg);
+                fused_limit_guard_reg = -1;
+            }
+            if (fused_limit_guard_is_frame && fused_limit_guard_reg >= 0) {
+                compiler_free_register(ctx->allocator, fused_limit_guard_reg);
+                fused_limit_guard_reg = -1;
+            }
             if (fused_limit_temp_is_temp) {
                 compiler_free_temp(ctx->allocator, fused_limit_temp_reg);
             }
@@ -2485,6 +2504,15 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
 
         release_typed_hint(ctx, &typed_hint_loop_reg);
         release_typed_hint(ctx, &typed_hint_limit_reg);
+        if (fused_limit_guard_is_temp && fused_limit_guard_reg >= MP_TEMP_REG_START &&
+            fused_limit_guard_reg <= MP_TEMP_REG_END) {
+            compiler_free_temp(ctx->allocator, fused_limit_guard_reg);
+            fused_limit_guard_reg = -1;
+        }
+        if (fused_limit_guard_is_frame && fused_limit_guard_reg >= 0) {
+            compiler_free_register(ctx->allocator, fused_limit_guard_reg);
+            fused_limit_guard_reg = -1;
+        }
         if (fused_info.use_adjusted_limit && fused_limit_temp_is_temp &&
             fused_limit_temp_reg >= 0) {
             compiler_free_temp(ctx->allocator, fused_limit_temp_reg);
@@ -2635,9 +2663,11 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     int negative_guard_limit_reg = -1;
     bool negative_guard_limit_is_temp = false;
     bool negative_guard_limit_is_frame = false;
-    int fused_guard_limit_reg = -1;
-    bool fused_guard_limit_is_temp = false;
-    bool fused_guard_limit_is_frame = false;
+    bool need_positive_guard = false;
+    bool need_negative_guard = false;
+    int guard_patches[8];
+    int guard_patch_count = 0;
+    int condition_reg = -1;
     int step_nonneg_reg = -1;
     int zero_reg = -1;
     int limit_temp_reg = -1; // temp for inclusive fused limit (end+1)
@@ -2699,6 +2729,8 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
 
     bool step_known_positive = fused_info.step_known_positive;
     bool step_known_negative = fused_info.step_known_negative;
+    need_positive_guard = !step_known_negative;
+    need_negative_guard = !step_known_positive;
     bool fused_descending = fused_info.descending;
 
     limit_temp_reg = fused_info.use_adjusted_limit ? fused_info.adjusted_limit_reg : -1;
@@ -2825,10 +2857,6 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
 
     // If we can use fused INC_CMP_JMP, prefer the precomputed adjusted limit when available
     int limit_reg_used = end_reg;
-    int limit_source_reg = end_reg;
-    if (limit_temp_reg >= 0) {
-        limit_source_reg = limit_temp_reg;
-    }
 
     if (can_fuse_inc_cmp && limit_reg_used >= 0) {
         bool guard_already_primed = false;
@@ -2986,6 +3014,28 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
                 ctx->has_compilation_errors = true;
                 goto cleanup;
             }
+            if (!patch_jump(ctx->bytecode, select_neg_patch, ctx->bytecode->count)) {
+                ctx->has_compilation_errors = true;
+                goto cleanup;
+            }
+
+            set_location_from_node(ctx, for_stmt);
+            emit_byte_to_buffer(ctx->bytecode, OP_JUMP_IF_NOT_I32_TYPED);
+            emit_byte_to_buffer(ctx->bytecode, (uint8_t)negative_guard_limit_reg);
+            emit_byte_to_buffer(ctx->bytecode, (uint8_t)loop_var_reg);
+            guard_patches[guard_patch_count] =
+                emit_jump_placeholder(ctx->bytecode, OP_JUMP_IF_NOT_I32_TYPED);
+            if (guard_patches[guard_patch_count] < 0) {
+                ctx->has_compilation_errors = true;
+                goto cleanup;
+            }
+            guard_patch_count++;
+
+            if (!patch_jump(ctx->bytecode, skip_neg_patch, ctx->bytecode->count)) {
+                ctx->has_compilation_errors = true;
+                goto cleanup;
+            }
+        }
 
     int end_patch = -1;
     set_location_from_node(ctx, for_stmt);
@@ -3058,16 +3108,6 @@ cleanup:
     release_typed_hint(ctx, &typed_hint_loop_reg);
     release_typed_hint(ctx, &typed_hint_limit_reg);
 
-    if (fused_guard_limit_is_temp && fused_guard_limit_reg >= MP_TEMP_REG_START &&
-        fused_guard_limit_reg <= MP_TEMP_REG_END) {
-        compiler_free_temp(ctx->allocator, fused_guard_limit_reg);
-        fused_guard_limit_reg = -1;
-    }
-    if (fused_guard_limit_is_frame && fused_guard_limit_reg >= 0) {
-        compiler_free_register(ctx->allocator, fused_guard_limit_reg);
-        fused_guard_limit_reg = -1;
-    }
-
     if (positive_guard_limit_is_temp && positive_guard_limit_reg >= MP_TEMP_REG_START &&
         positive_guard_limit_reg <= MP_TEMP_REG_END) {
         compiler_free_temp(ctx->allocator, positive_guard_limit_reg);
@@ -3105,6 +3145,10 @@ cleanup:
     if (limit_temp_reg_is_temp && limit_temp_reg >= 0) {
         compiler_free_temp(ctx->allocator, limit_temp_reg);
         limit_temp_reg = -1;
+    }
+    if (condition_reg >= MP_TEMP_REG_START && condition_reg <= MP_TEMP_REG_END) {
+        compiler_free_temp(ctx->allocator, condition_reg);
+        condition_reg = -1;
     }
     if (step_reg_was_temp && step_reg >= 0) {
         compiler_free_temp(ctx->allocator, step_reg);
