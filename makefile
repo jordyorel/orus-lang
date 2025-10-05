@@ -244,13 +244,15 @@ ORUS = orus$(SUFFIX)
 UNIT_TEST_RUNNER = test_runner$(SUFFIX)
 BYTECODE_TEST_BIN = $(BUILDDIR)/tests/test_jump_patch
 SOURCE_MAP_TEST_BIN = $(BUILDDIR)/tests/test_source_mapping
+FUSED_LOOP_CODEGEN_TEST_BIN = $(BUILDDIR)/tests/test_codegen_fused_loops
 SCOPE_TRACKING_TEST_BIN = $(BUILDDIR)/tests/test_scope_tracking
-FOR_LOOP_GUARD_TEST_BIN = $(BUILDDIR)/tests/test_for_loop_bytecode
+FUSED_WHILE_TEST_BIN = $(BUILDDIR)/tests/test_codegen_fused_while
 PEEPHOLE_TEST_BIN = $(BUILDDIR)/tests/test_constant_propagation
 TAGGED_UNION_TEST_BIN = $(BUILDDIR)/tests/test_vm_tagged_union
 TYPED_REGISTER_TEST_BIN = $(BUILDDIR)/tests/test_vm_typed_registers
 REGISTER_ALLOCATOR_TEST_BIN = $(BUILDDIR)/tests/test_register_allocator
 INC_CMP_JMP_TEST_BIN = $(BUILDDIR)/tests/test_vm_inc_cmp_jmp
+FUSED_LOOP_BYTECODE_TEST_BIN = $(BUILDDIR)/tests/test_fused_loop_bytecode
 ADD_I32_IMM_TEST_BIN = $(BUILDDIR)/tests/test_vm_add_i32_imm
 BUILTIN_INPUT_TEST_BIN = $(BUILDDIR)/tests/test_builtin_input
 CONSTANT_FOLD_TEST_BIN = $(BUILDDIR)/tests/test_constant_folding
@@ -267,7 +269,7 @@ BUILTIN_RANGE_ORUS_FAIL_TESTS = \
     tests/builtins/range_float_step.orus \
     tests/builtins/range_overflow_stop.orus
 
-.PHONY: all clean test unit-test test-control-flow benchmark help debug release release-with-wasm profiling analyze install dist package bytecode-jump-tests source-map-tests scope-tracking-tests peephole-tests cli-smoke-tests tagged-union-tests typed-register-tests inc-cmp-jmp-tests add-i32-imm-tests register-allocator-tests builtin-input-tests builtin-range-tests test-optimizer wasm _test-run _benchmark-run
+.PHONY: all clean test unit-test test-control-flow benchmark help debug release release-with-wasm profiling analyze install dist package bytecode-jump-tests source-map-tests scope-tracking-tests fused-while-tests peephole-tests cli-smoke-tests tagged-union-tests typed-register-tests inc-cmp-jmp-tests add-i32-imm-tests register-allocator-tests builtin-input-tests builtin-range-tests test-optimizer wasm _test-run _benchmark-run
 
 all: build-info $(ORUS)
 
@@ -419,11 +421,14 @@ _test-run: $(ORUS)
 	@echo "\033[36m=== Source Mapping Tests ===\033[0m"
 	@$(MAKE) source-map-tests
 	@echo ""
+	@echo "\033[36m=== Fused Counter Loop Codegen Tests ===\033[0m"
+	@$(MAKE) fused-loop-tests
+	@echo ""
 	@echo "\033[36m=== Scope Tracking Tests ===\033[0m"
 	@$(MAKE) scope-tracking-tests
 	@echo ""
-	@echo "\033[36m=== For Loop Bytecode Tests ===\033[0m"
-	@$(MAKE) for-loop-bytecode-tests
+	@echo "\033[36m=== Fused While Codegen Tests ===\033[0m"
+	@$(MAKE) fused-while-tests
 	@echo ""
 	@echo "\033[36m=== Peephole Constant Propagation Tests ===\033[0m"
 	@$(MAKE) peephole-tests
@@ -439,6 +444,9 @@ _test-run: $(ORUS)
 	@echo ""
 	@echo "\033[36m=== OP_INC_CMP_JMP Tests ===\033[0m"
 	@$(MAKE) inc-cmp-jmp-tests
+	@echo ""
+	@echo "\033[36m=== Fused Loop Bytecode Tests ===\033[0m"
+	@$(MAKE) fused-loop-bytecode-tests
 	@echo ""
 	@echo "\033[36m=== OP_ADD_I32_IMM Tests ===\033[0m"
 	@$(MAKE) add-i32-imm-tests
@@ -485,6 +493,15 @@ source-map-tests: $(SOURCE_MAP_TEST_BIN)
 	@echo "Running source mapping tests..."
 	@./$(SOURCE_MAP_TEST_BIN)
 
+$(FUSED_LOOP_CODEGEN_TEST_BIN): tests/unit/test_codegen_fused_loops.c $(COMPILER_OBJS) $(VM_OBJS)
+	@mkdir -p $(dir $@)
+	@echo "Compiling fused loop codegen tests..."
+	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+
+fused-loop-tests: $(FUSED_LOOP_CODEGEN_TEST_BIN)
+	@echo "Running fused loop codegen tests..."
+	@./$(FUSED_LOOP_CODEGEN_TEST_BIN)
+
 $(SCOPE_TRACKING_TEST_BIN): tests/unit/test_scope_stack.c $(COMPILER_OBJS) $(VM_OBJS)
 	@mkdir -p $(dir $@)
 	@echo "Compiling scope tracking tests..."
@@ -494,14 +511,14 @@ scope-tracking-tests: $(SCOPE_TRACKING_TEST_BIN)
 	@echo "Running scope tracking tests..."
 	@./$(SCOPE_TRACKING_TEST_BIN)
 
-$(FOR_LOOP_GUARD_TEST_BIN): tests/unit/test_for_loop_bytecode.c $(COMPILER_OBJS) $(VM_OBJS)
+$(FUSED_WHILE_TEST_BIN): tests/unit/test_codegen_fused_while.c $(COMPILER_OBJS) $(VM_OBJS)
 	@mkdir -p $(dir $@)
-	@echo "Compiling for-loop bytecode tests..."
+	@echo "Compiling fused while codegen tests..."
 	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
 
-for-loop-bytecode-tests: $(FOR_LOOP_GUARD_TEST_BIN)
-	@echo "Running for-loop bytecode tests..."
-	@./$(FOR_LOOP_GUARD_TEST_BIN)
+fused-while-tests: $(FUSED_WHILE_TEST_BIN)
+	@echo "Running fused while codegen tests..."
+	@./$(FUSED_WHILE_TEST_BIN)
 
 $(PEEPHOLE_TEST_BIN): tests/unit/test_constant_propagation.c $(COMPILER_OBJS) $(VM_OBJS)
 	@mkdir -p $(dir $@)
@@ -547,6 +564,15 @@ $(INC_CMP_JMP_TEST_BIN): tests/unit/test_vm_inc_cmp_jmp.c $(COMPILER_OBJS) $(VM_
 inc-cmp-jmp-tests: $(INC_CMP_JMP_TEST_BIN)
 	@echo "Running OP_INC_CMP_JMP regression tests..."
 	@./$(INC_CMP_JMP_TEST_BIN)
+
+$(FUSED_LOOP_BYTECODE_TEST_BIN): tests/unit/test_fused_loop_bytecode.c $(COMPILER_OBJS) $(VM_OBJS)
+	@mkdir -p $(dir $@)
+	@echo "Compiling fused loop bytecode tests..."
+	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+
+fused-loop-bytecode-tests: $(FUSED_LOOP_BYTECODE_TEST_BIN)
+	@echo "Running fused loop bytecode tests..."
+	@./$(FUSED_LOOP_BYTECODE_TEST_BIN)
 
 $(ADD_I32_IMM_TEST_BIN): tests/unit/test_vm_add_i32_imm.c $(COMPILER_OBJS) $(VM_OBJS)
 	@mkdir -p $(dir $@)
