@@ -3858,10 +3858,6 @@ InterpretResult vm_run_dispatch(void) {
     #undef RETURN
 }
 
-// Include the handlers implementation
-#include "../handlers/vm_arithmetic_handlers.c"
-#include "../handlers/vm_memory_handlers.c"
-#include "../handlers/vm_control_flow_handlers.c"
 
 #undef VM_REGISTER_TYPED_LABEL
 #endif // USE_COMPUTED_GOTO
