@@ -5,11 +5,11 @@
 
 print("== Phase 1: Heap Sort (In-Place Max-Heap) Smoke ==")
 
-global mut HEAPIFY_CALLS = 0
-global mut HEAP_COMPARISONS = 0
-global mut HEAP_SWAPS = 0
-global mut HEAP_SIFTS = 0
-global mut HEAP_ACTIVE_COUNT = 0
+mut HEAPIFY_CALLS = 0
+mut HEAP_COMPARISONS = 0
+mut HEAP_SWAPS = 0
+mut HEAP_SIFTS = 0
+mut HEAP_ACTIVE_COUNT = 0
 
 fn swap(values, i, j):
     if i == j:

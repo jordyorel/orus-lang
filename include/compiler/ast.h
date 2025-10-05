@@ -69,7 +69,6 @@ typedef enum {
     NODE_FOR_RANGE,
     NODE_FOR_ITER,
     NODE_TRY,
-    NODE_THROW,
     NODE_BLOCK,
     NODE_TERNARY,
     NODE_UNARY,
@@ -130,7 +129,6 @@ struct ASTNode {
             bool isGlobal;
             ASTNode* initializer;
             ASTNode* typeAnnotation;
-            bool isConst;
             bool isMutable;
         } varDecl;
         struct {
@@ -185,7 +183,6 @@ struct ASTNode {
         struct {
             ASTNode** values;
             int count;
-            bool newline;
         } print;
         struct {
             ASTNode* condition;
@@ -217,9 +214,6 @@ struct ASTNode {
             char* catchVar;
             ASTNode* catchBlock;
         } tryStmt;
-        struct {
-            ASTNode* value;
-        } throwStmt;
         struct {
             ASTNode** statements;
             int count;

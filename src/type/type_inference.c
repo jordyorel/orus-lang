@@ -672,27 +672,6 @@ static TypeScheme* type_env_lookup(TypeEnv* env, const char* name) {
     return env->parent ? type_env_lookup(env->parent, name) : NULL;
 }
 
-static void type_env_define_const_int(TypeEnv* env, const char* name, int value) {
-    if (!env || !name) {
-        return;
-    }
-
-    ConstIntEntry* entry = type_arena_alloc(sizeof(ConstIntEntry));
-    if (!entry) {
-        return;
-    }
-
-    size_t nameLen = strlen(name);
-    entry->name = type_arena_alloc(nameLen + 1);
-    if (!entry->name) {
-        return;
-    }
-    memcpy(entry->name, name, nameLen + 1);
-    entry->value = value;
-    entry->next = env->const_ints;
-    env->const_ints = entry;
-}
-
 static bool type_env_lookup_const_int(TypeEnv* env, const char* name, int* outValue) {
     for (TypeEnv* current = env; current; current = current->parent) {
         ConstIntEntry* entry = current->const_ints;
@@ -2093,13 +2072,6 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                 }
             }
 
-            if (node->varDecl.isConst && node->varDecl.name && node->varDecl.initializer) {
-                int constValue = 0;
-                if (literal_to_int32(node->varDecl.initializer, &constValue)) {
-                    type_env_define_const_int(env, node->varDecl.name, constValue);
-                }
-            }
-
             return getPrimitiveType(TYPE_VOID);
         }
         case NODE_ASSIGN: {
@@ -2625,30 +2597,6 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
 
             node->dataType = getPrimitiveType(TYPE_VOID);
             return node->dataType;
-        }
-        case NODE_THROW: {
-            if (!node->throwStmt.value) {
-                return getPrimitiveType(TYPE_VOID);
-            }
-
-            Type* thrown_type = algorithm_w(env, node->throwStmt.value);
-            if (!thrown_type) {
-                return NULL;
-            }
-
-            Type* error_type = getPrimitiveType(TYPE_ERROR);
-            if (thrown_type->kind == TYPE_STRING) {
-                node->throwStmt.value->dataType = error_type;
-                return getPrimitiveType(TYPE_VOID);
-            }
-            if (!unify(thrown_type, error_type)) {
-                report_type_mismatch(node->throwStmt.value->location, "error",
-                                     getTypeName(thrown_type->kind));
-                set_type_error();
-                return NULL;
-            }
-
-            return getPrimitiveType(TYPE_VOID);
         }
         case NODE_BREAK: {
             // Break statements have void type

@@ -260,12 +260,6 @@ int disassembleInstruction(Chunk* chunk, int offset) {
             return offset + 2;
         }
 
-        case OP_PRINT_NO_NL_R: {
-            uint8_t reg = chunk->code[offset + 1];
-            printf("%-16s R%d\n", "PRINT_NO_NL_R", reg);
-            return offset + 2;
-        }
-
         case OP_ASSERT_EQ_R: {
             uint8_t dst = chunk->code[offset + 1];
             uint8_t label_reg = chunk->code[offset + 2];
@@ -534,12 +528,6 @@ int disassembleInstruction(Chunk* chunk, int offset) {
         case OP_TRY_END:
             printf("%-16s\n", "TRY_END");
             return offset + 1;
-
-        case OP_THROW: {
-            uint8_t reg = chunk->code[offset + 1];
-            printf("%-16s R%u\n", "THROW", reg);
-            return offset + 2;
-        }
 
         case OP_JUMP: {
             uint16_t jump = (uint16_t)((chunk->code[offset + 1] << 8) | chunk->code[offset + 2]);

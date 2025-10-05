@@ -5,8 +5,8 @@
 
 print("== Phase 2: Dijkstra Shortest Paths (Array Priority) Smoke ==")
 
-global mut DIJKSTRA_RELAXATIONS = 0
-global mut DIJKSTRA_SELECTIONS = 0
+mut DIJKSTRA_RELAXATIONS = 0
+mut DIJKSTRA_SELECTIONS = 0
 
 fn dijkstra(label, graph, start, infinity):
     DIJKSTRA_RELAXATIONS = 0

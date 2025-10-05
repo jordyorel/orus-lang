@@ -484,7 +484,7 @@ void handle_print_multi(void) {
     uint8_t first = READ_BYTE();
     uint8_t count = READ_BYTE();
     uint8_t nl = READ_BYTE();
-    
+
     // Validate bounds to avoid out-of-range register access
     if ((int)first + (int)count > 256) {
         runtimeError(ERROR_RUNTIME, (SrcLocation){NULL,0,0},
@@ -499,12 +499,6 @@ void handle_print_multi(void) {
         temp_values[i] = vm_get_register_safe((uint16_t)(first + i));
     }
     builtin_print(temp_values, count, nl != 0);
-}
-
-void handle_print_no_nl(void) {
-    uint8_t reg = READ_BYTE();
-    Value temp_value = vm_get_register_safe(reg);
-    builtin_print(&temp_value, 1, false);
 }
 
 void handle_parse_int(void) {

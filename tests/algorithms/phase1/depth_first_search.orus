@@ -4,9 +4,9 @@
 
 print("== Phase 2: Depth-First Search (Recursive) Smoke ==")
 
-global mut DFS_RECURSIONS = 0
-global mut DFS_EDGES_EXPLORED = 0
-global mut DFS_MAX_DEPTH = 0
+mut DFS_RECURSIONS = 0
+mut DFS_EDGES_EXPLORED = 0
+mut DFS_MAX_DEPTH = 0
 
 fn make_bool_array(count):
     mut result: [bool] = []

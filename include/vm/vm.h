@@ -576,7 +576,6 @@ typedef enum {
     // Control flow
     OP_TRY_BEGIN,
     OP_TRY_END,
-    OP_THROW,
     OP_JUMP,
     OP_JUMP_IF_R,      // condition_reg, offset
     OP_JUMP_IF_NOT_R,  // condition_reg, offset
@@ -626,7 +625,6 @@ typedef enum {
     OP_RANGE_R,           // dst_reg, arg_count, arg0, arg1, arg2
     OP_PRINT_MULTI_R,     // first_reg, count, newline_flag
     OP_PRINT_R,           // reg
-    OP_PRINT_NO_NL_R,     // reg
     OP_ASSERT_EQ_R,       // dst_reg, label_reg, actual_reg, expected_reg
 
     // Short jump optimizations (1-byte offset instead of 2)

@@ -1,6 +1,6 @@
 print("== Phase 4 Part 2: Algorithm smoke tests ==")
 
-global mut RNG_SEED: i32 = 0x13579BDF
+mut RNG_SEED: i32 = 0x13579BDF
 
 fn srand(seed: i32):
     RNG_SEED = seed

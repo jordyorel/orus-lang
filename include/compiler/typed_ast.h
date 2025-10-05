@@ -137,9 +137,6 @@ struct TypedASTNode {
             char* catchVarName;
         } tryStmt;
         struct {
-            TypedASTNode* value;
-        } throwStmt;
-        struct {
             TypedASTNode** statements;
             int count;
         } block;

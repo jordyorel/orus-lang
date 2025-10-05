@@ -208,12 +208,6 @@ int disassembleInstruction(Chunk* chunk, int offset) {
             return offset + 2;
         }
 
-        case OP_PRINT_NO_NL_R: {
-            uint8_t reg = chunk->code[offset + 1];
-            printf("%-16s R%d\n", "PRINT_NO_NL_R", reg);
-            return offset + 2;
-        }
-
         case OP_ASSERT_EQ_R: {
             uint8_t dst = chunk->code[offset + 1];
             uint8_t label_reg = chunk->code[offset + 2];

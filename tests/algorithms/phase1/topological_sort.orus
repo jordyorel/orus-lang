@@ -4,10 +4,10 @@
 
 print("== Phase 2: Topological Sort (Kahn's Algorithm) Smoke ==")
 
-global mut TOPO_ENQUEUES = 0
-global mut TOPO_DEQUEUES = 0
-global mut TOPO_EDGE_VISITS = 0
-global mut TOPO_MAX_QUEUE = 0
+mut TOPO_ENQUEUES = 0
+mut TOPO_DEQUEUES = 0
+mut TOPO_EDGE_VISITS = 0
+mut TOPO_MAX_QUEUE = 0
 
 fn topological_sort(label, graph):
     TOPO_ENQUEUES = 0

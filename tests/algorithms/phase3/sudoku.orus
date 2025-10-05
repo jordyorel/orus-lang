@@ -4,22 +4,22 @@
 print("== Phase 3: Sudoku Solver Stress ==")
 
 // === Grid constants ===
-global SUDOKU_SIZE: i32 = 9
-global SUDOKU_BLOCK: i32 = 3
-global SUDOKU_CELL_COUNT: i32 = 81
+SUDOKU_SIZE: i32 = 9
+SUDOKU_BLOCK: i32 = 3
+SUDOKU_CELL_COUNT: i32 = 81
 
 // === Metrics captured during solving ===
-global mut SUDOKU_CALLS = 0
-global mut SUDOKU_MAX_DEPTH = 0
-global mut SUDOKU_EMPTY_CELLS_EXPLORED = 0
-global mut SUDOKU_VALUE_TRIES = 0
-global mut SUDOKU_VALID_PLACEMENTS = 0
-global mut SUDOKU_PRUNED_CANDIDATES = 0
-global mut SUDOKU_CONFLICT_CHECKS = 0
-global mut SUDOKU_BACKTRACKS = 0
-global mut SUDOKU_DEAD_ENDS = 0
-global mut SUDOKU_SOLUTIONS = 0
-global mut SUDOKU_LAST_SOLUTION: [i32] = []
+mut SUDOKU_CALLS = 0
+mut SUDOKU_MAX_DEPTH = 0
+mut SUDOKU_EMPTY_CELLS_EXPLORED = 0
+mut SUDOKU_VALUE_TRIES = 0
+mut SUDOKU_VALID_PLACEMENTS = 0
+mut SUDOKU_PRUNED_CANDIDATES = 0
+mut SUDOKU_CONFLICT_CHECKS = 0
+mut SUDOKU_BACKTRACKS = 0
+mut SUDOKU_DEAD_ENDS = 0
+mut SUDOKU_SOLUTIONS = 0
+mut SUDOKU_LAST_SOLUTION: [i32] = []
 
 fn reset_sudoku_metrics():
     SUDOKU_CALLS = 0

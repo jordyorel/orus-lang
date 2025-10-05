@@ -4,8 +4,8 @@
 
 print("== Bellman-Ford Shortest Paths (Edge Relaxation) Smoke ==")
 
-global mut BELLMAN_RELAXATIONS = 0
-global mut BELLMAN_ITERATIONS = 0
+mut BELLMAN_RELAXATIONS = 0
+mut BELLMAN_ITERATIONS = 0
 
 fn make_distance_array(count, value):
     mut result: [i32] = []

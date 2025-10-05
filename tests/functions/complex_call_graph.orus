@@ -1,4 +1,4 @@
-// Complex call graph exercising loops, helper functions, and global reads
+// Complex call graph exercising loops, helper functions, and reads
 print("=== Complex function call graph tests ===")
 
 mut global_adjust = 7

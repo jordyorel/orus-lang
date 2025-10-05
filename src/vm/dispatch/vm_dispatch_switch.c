@@ -2157,29 +2157,6 @@ InterpretResult vm_run_dispatch(void) {
                     break;
                 }
 
-                case OP_THROW: {
-                    uint8_t reg = READ_BYTE();
-                    Value err = vm_get_register_safe(reg);
-                    if (!IS_ERROR(err)) {
-                        if (IS_STRING(err)) {
-                            ObjString* message = AS_STRING(err);
-                            ObjError* converted = allocateError(ERROR_RUNTIME, message->chars, CURRENT_LOCATION());
-                            if (!converted) {
-                                VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(),
-                                                "Failed to allocate error for throw");
-                            }
-                            err = ERROR_VAL(converted);
-                            vm_set_register_safe(reg, err);
-                        } else {
-                            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(),
-                                            "throw expects an error or string value");
-                        }
-                    }
-                    vm.lastError = err;
-                    vm_set_error_report_pending(true);
-                    goto HANDLE_RUNTIME_ERROR;
-                }
-
                 case OP_JUMP: {
                     if (!handle_jump_long()) {
                         RETURN(INTERPRET_RUNTIME_ERROR);
@@ -2249,11 +2226,6 @@ InterpretResult vm_run_dispatch(void) {
 
                 case OP_PRINT_R: {
                     handle_print();
-                    break;
-                }
-
-                case OP_PRINT_NO_NL_R: {
-                    handle_print_no_nl();
                     break;
                 }
 

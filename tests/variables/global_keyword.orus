@@ -1,8 +1,8 @@
-// Explicit global keyword should allocate module-level storage
+// Module-scope bindings should allocate module-level storage
 // and allow public exports when combined with `pub`.
 
-pub global REGISTER = 256
-global mut COUNTER = 1
+pub REGISTER: i32 = 256
+mut COUNTER = 1
 
 fn bump():
     COUNTER = COUNTER + 1
