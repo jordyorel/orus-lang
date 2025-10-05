@@ -638,9 +638,9 @@ leaving the language. Built-ins behave like ordinary functions even though the V
 - `input()` / `input(prompt)` – reads a full line from standard input, optionally printing a prompt first.
 - `int(value)` / `float(value)` – parse strings or convert numbers to the target numeric type. Parsing failures raise runtime
   errors so wrap them in `try`/`catch` when dealing with user input.
-- `type_of(value)` – returns a string describing the runtime type.
-- `is_type(value, name)` – returns `true` when the runtime type matches the provided string.
-- `time_stamp()` – returns a monotonic `f64` timestamp in seconds for lightweight profiling.
+- `typeof(value)` – returns a string describing the runtime type.
+- `istype(value, name)` – returns `true` when the runtime type matches the provided string.
+- `timestamp()` – returns a monotonic `f64` timestamp in seconds for lightweight profiling.
 
 ```orus
 pi = 3.14159
@@ -658,15 +658,15 @@ for i in range(2, 10, 3):
 answer = input("Enter a number: ")
 try:
     parsed = int(answer)
-    print("you typed", parsed, "of type", type_of(parsed))
+    print("you typed", parsed, "of type", typeof(parsed))
 catch err:
     print("invalid input:", err)
 
-start: f64 = time_stamp()
+start: f64 = timestamp()
 for i in 0..1_000_000:
     for _ in 0..1_000_000:
         pass
-elapsed = time_stamp() - start
+elapsed = timestamp() - start
 print("elapsed seconds:", elapsed)
 ```
 
@@ -684,7 +684,7 @@ print("elapsed seconds:", elapsed)
 - **Design enums for exhaustive matches.** Pattern matching shines when every state is accounted for. Include a `_` arm only when
   you intentionally accept all remaining cases.
 - **Handle errors thoughtfully.** Wrap risky operations with `try`/`catch` and surface meaningful diagnostics from the handler.
-- **Measure with `time_stamp()`.** Quick timing harnesses help you evaluate performance changes without leaving the language.
+- **Measure with `timestamp()`.** Quick timing harnesses help you evaluate performance changes without leaving the language.
 
 The Orus toolchain enforces these patterns through its type system and diagnostics, letting you build reliable, high-performance
 programs with confidence.

@@ -1,8 +1,8 @@
 // Orus Language Project
 // ---------------------------------------------------------------------------
-// File: src/vm/runtime/builtin_type_of.c
+// File: src/vm/runtime/builtin_typeof.c
 // Author: JORDY OREL KONDA
-// Description: Implements the builtin type_of routine that reports the runtime type name of a value.
+// Description: Implements the builtin typeof routine that reports the runtime type name of a value.
 
 #include "runtime/builtins.h"
 #include "runtime/memory.h"
@@ -11,7 +11,7 @@
 
 #include "builtin_type_common.h"
 
-bool builtin_type_of(Value value, Value* out_value) {
+bool builtin_typeof(Value value, Value* out_value) {
     if (!out_value) {
         return false;
     }

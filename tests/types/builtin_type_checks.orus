@@ -1,4 +1,4 @@
-// Validate runtime type inspection helpers type_of() and is_type().
+// Validate runtime type inspection helpers typeof() and istype().
 print("-- builtin type checks --")
 
 enum Example:
@@ -6,15 +6,15 @@ enum Example:
     Tuple(value: i32)
 
 fn assert_type(value, expected: string):
-    actual = type_of(value)
+    actual = typeof(value)
     if actual != expected:
-        print("type_of mismatch for", expected, "got", actual)
+        print("typeof mismatch for", expected, "got", actual)
         trigger = 1 / 0
-    if not is_type(value, expected):
-        print("is_type failed for", expected)
+    if not istype(value, expected):
+        print("istype failed for", expected)
         trigger = 1 / 0
-    if is_type(value, "__no_match__"):
-        print("is_type false positive for", expected)
+    if istype(value, "__no_match__"):
+        print("istype false positive for", expected)
         trigger = 1 / 0
     if expected == actual:
         print(actual)
@@ -48,10 +48,10 @@ assert_type(example, "Example")
 another = Example.Tuple(7)
 assert_type(another, "Example")
 
-nested = type_of(99)
+nested = typeof(99)
 assert_type(nested, "string")
 
-if is_type(42, "string"):
+if istype(42, "string"):
     print("unexpected numeric/string match")
     trigger = 1 / 0
 

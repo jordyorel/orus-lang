@@ -3,7 +3,7 @@
 
 print("=== Orus Max Control Flow + Types Benchmark ===")
 
-start_ns = time_stamp()
+start_ns = timestamp()
 
 // Tunable parameters (kept reasonable for cross-language runs)
 N1: i32 = 2_000_000   // simple loop iterations
@@ -83,7 +83,7 @@ for outer in 0..100:
 // Aggregate checksum to avoid DCE and validate consistency
 checksum: i64 = sum1 + acc2 + sum3 + condition_hits + dense_total + tight_total + mixed_total
 
-end_ns = time_stamp()
+end_ns = timestamp()
 elapsed_ns = end_ns - start_ns
 elapsed_ms = elapsed_ns / 1000000
 

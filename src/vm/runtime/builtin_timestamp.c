@@ -1,6 +1,6 @@
 // Orus Language Project
 // ---------------------------------------------------------------------------
-// File: src/vm/runtime/builtin_time_stamp.c
+// File: src/vm/runtime/builtin_timestamp.c
 // Author: Jordy Orel KONDA
 // Description: Provides a cross-platform monotonic timestamp builtin.
 
@@ -33,7 +33,7 @@ static void init_timebase() {
 }
 #endif
 
-double builtin_time_stamp(void) {
+double builtin_timestamp(void) {
 #ifdef __APPLE__
     init_timebase();
     uint64_t abs_time = mach_absolute_time();

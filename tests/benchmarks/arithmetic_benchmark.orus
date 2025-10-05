@@ -2,7 +2,7 @@
 // Focus on mathematical computation performance only
 print("=== Orus Pure Arithmetic Performance Benchmark ===")
 
-start_time = time_stamp()
+start_time = timestamp()
 
 // === PHASE 1: BASIC ARITHMETIC OPERATIONS ===
 print("Phase 1: Basic Arithmetic Operations")
@@ -253,7 +253,7 @@ if assert_eq("arithmetic_benchmark pi fraction2", fraction_2, 31428 as i64):
 // === PHASE 6: COMPUTATIONAL STRESS TEST ===
 print("Phase 6: Computational Stress Test")
 
-computation_start: f64 = time_stamp()
+computation_start: f64 = timestamp()
 
 // Intensive calculation combining all previous results
 stress_calc_1: i64 = (add_result + sub_result) * (mul_result + div_result) / (1000 as i64)
@@ -264,7 +264,7 @@ stress_calc_4: i64 = (gcd_result * sqrt_guess) + (large_sum / (1000 as i64))
 // Final mega calculation
 final_arithmetic_result: i64 = stress_calc_1 + stress_calc_2 + stress_calc_3 + stress_calc_4
 
-computation_end: f64 = time_stamp()
+computation_end: f64 = timestamp()
 computation_time: f64 = computation_end - computation_start
 
 print("Stress test results:")
@@ -286,7 +286,7 @@ if assert_eq("arithmetic_benchmark final result", final_arithmetic_result, 13995
     print("ok", "final arithmetic", final_arithmetic_result)
 
 // === FINAL BENCHMARK RESULTS ===
-end_time: f64 = time_stamp()
+end_time: f64 = timestamp()
 total_elapsed: f64 = end_time - start_time
 
 print("=== PURE ARITHMETIC BENCHMARK COMPLETE ===")

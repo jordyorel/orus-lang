@@ -2200,12 +2200,12 @@ InterpretResult vm_run_dispatch(void) {
                 }
 
                 case OP_TYPE_OF_R: {
-                    handle_type_of();
+                    handle_typeof();
                     break;
                 }
 
                 case OP_IS_TYPE_R: {
-                    handle_is_type();
+                    handle_istype();
                     break;
                 }
 
@@ -3023,7 +3023,7 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t dst = READ_BYTE();
                     
                     // Get high-precision timestamp in seconds
-                    double timestamp = builtin_time_stamp();
+                    double timestamp = builtin_timestamp();
                     
                     // Store in typed register and regular register for compatibility
                     vm.typed_regs.f64_regs[dst] = timestamp;

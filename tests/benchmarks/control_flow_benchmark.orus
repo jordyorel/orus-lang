@@ -2,7 +2,7 @@
 // Focus: tight loops, nested loops, simple branching inside loops
 print("=== Orus Control Flow (For Loop) Benchmark ===")
 
-start_time = time_stamp()
+start_time = timestamp()
 
 // Parameters tuned to keep runs sub-second across languages
 N1: i32 = 2_000_000   // simple loop iterations
@@ -37,7 +37,7 @@ for k in 0..(N3*2)..2:  // step by 2, sum evens
 // Compute final checksum to avoid DCE
 checksum: i64 = sum1 + acc2 + sum3
 
-end_time: f64 = time_stamp()
+end_time: f64 = timestamp()
 elapsed: f64 = end_time - start_time
 
 print("Checksum:", checksum)

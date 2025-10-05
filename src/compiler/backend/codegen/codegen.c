@@ -389,8 +389,8 @@ static int compile_builtin_sorted(CompilerContext* ctx, TypedASTNode* call);
 static int compile_builtin_input(CompilerContext* ctx, TypedASTNode* call);
 static int compile_builtin_int(CompilerContext* ctx, TypedASTNode* call);
 static int compile_builtin_float(CompilerContext* ctx, TypedASTNode* call);
-static int compile_builtin_type_of(CompilerContext* ctx, TypedASTNode* call);
-static int compile_builtin_is_type(CompilerContext* ctx, TypedASTNode* call);
+static int compile_builtin_typeof(CompilerContext* ctx, TypedASTNode* call);
+static int compile_builtin_istype(CompilerContext* ctx, TypedASTNode* call);
 static int compile_builtin_assert_eq(CompilerContext* ctx, TypedASTNode* call);
 int lookup_variable(CompilerContext* ctx, const char* name);
 static char* create_method_symbol_name(const char* struct_name, const char* method_name);
@@ -2110,13 +2110,13 @@ static int compile_builtin_float(CompilerContext* ctx, TypedASTNode* call) {
     return result_reg;
 }
 
-static int compile_builtin_type_of(CompilerContext* ctx, TypedASTNode* call) {
+static int compile_builtin_typeof(CompilerContext* ctx, TypedASTNode* call) {
     if (!ctx || !call || !call->original) {
         return -1;
     }
 
     if (call->original->call.argCount != 1) {
-        DEBUG_CODEGEN_PRINT("Error: type_of() expects exactly 1 argument, got %d\n",
+        DEBUG_CODEGEN_PRINT("Error: typeof() expects exactly 1 argument, got %d\n",
                             call->original->call.argCount);
         ctx->has_compilation_errors = true;
         return -1;
@@ -2137,7 +2137,7 @@ static int compile_builtin_type_of(CompilerContext* ctx, TypedASTNode* call) {
 
     int result_reg = compiler_alloc_temp(ctx->allocator);
     if (result_reg == -1) {
-        DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for type_of() result\n");
+        DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for typeof() result\n");
         if (value_reg >= MP_TEMP_REG_START && value_reg <= MP_TEMP_REG_END) {
             compiler_free_temp(ctx->allocator, value_reg);
         }
@@ -2159,13 +2159,13 @@ static int compile_builtin_type_of(CompilerContext* ctx, TypedASTNode* call) {
     return result_reg;
 }
 
-static int compile_builtin_is_type(CompilerContext* ctx, TypedASTNode* call) {
+static int compile_builtin_istype(CompilerContext* ctx, TypedASTNode* call) {
     if (!ctx || !call || !call->original) {
         return -1;
     }
 
     if (call->original->call.argCount != 2) {
-        DEBUG_CODEGEN_PRINT("Error: is_type() expects exactly 2 arguments, got %d\n",
+        DEBUG_CODEGEN_PRINT("Error: istype() expects exactly 2 arguments, got %d\n",
                             call->original->call.argCount);
         ctx->has_compilation_errors = true;
         return -1;
@@ -2205,7 +2205,7 @@ static int compile_builtin_is_type(CompilerContext* ctx, TypedASTNode* call) {
 
     int result_reg = compiler_alloc_temp(ctx->allocator);
     if (result_reg == -1) {
-        DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for is_type() result\n");
+        DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for istype() result\n");
         if (value_reg >= MP_TEMP_REG_START && value_reg <= MP_TEMP_REG_END) {
             compiler_free_temp(ctx->allocator, value_reg);
         }
@@ -3988,13 +3988,13 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
         }
         
         case NODE_TIME_STAMP: {
-            // Generate time_stamp() call - returns f64
+            // Generate timestamp() call - returns f64
             int reg = compiler_alloc_temp(ctx->allocator);
             if (reg == -1) {
-                DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for time_stamp");
+                DEBUG_CODEGEN_PRINT("Error: Failed to allocate register for timestamp");
                 return -1;
             }
-            
+
             // Emit OP_TIME_STAMP instruction (variable-length format: opcode + register)
             set_location_from_node(ctx, expr);
             emit_byte_to_buffer(ctx->bytecode, OP_TIME_STAMP);
@@ -4244,10 +4244,10 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                     return compile_builtin_int(ctx, expr);
                 } else if (strcmp(builtin_name, "float") == 0) {
                     return compile_builtin_float(ctx, expr);
-                } else if (strcmp(builtin_name, "type_of") == 0) {
-                    return compile_builtin_type_of(ctx, expr);
-                } else if (strcmp(builtin_name, "is_type") == 0) {
-                    return compile_builtin_is_type(ctx, expr);
+                } else if (strcmp(builtin_name, "typeof") == 0) {
+                    return compile_builtin_typeof(ctx, expr);
+                } else if (strcmp(builtin_name, "istype") == 0) {
+                    return compile_builtin_istype(ctx, expr);
                 } else if (strcmp(builtin_name, "assert_eq") == 0) {
                     return compile_builtin_assert_eq(ctx, expr);
                 }

@@ -9,7 +9,7 @@ mut trial: i32 = 0
 mut total_time: f64 = 0.0
 
 while trial < TRIALS:
-    start: f64 = time_stamp()
+    start: f64 = timestamp()
 
     mut sum: i64 = 0
     mut i: i32 = 1
@@ -17,7 +17,7 @@ while trial < TRIALS:
         sum = sum + (i as i64)
         i = i + 1
 
-    finish: f64 = time_stamp()
+    finish: f64 = timestamp()
     elapsed: f64 = finish - start
     total_time = total_time + elapsed
 

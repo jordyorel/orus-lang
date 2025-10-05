@@ -99,9 +99,9 @@ void handle_range(void);
 void handle_sorted(void);
 void handle_parse_int(void);
 void handle_parse_float(void);
-void handle_type_of(void);
-void handle_is_type(void);
+void handle_typeof(void);
+void handle_istype(void);
 void handle_halt(void);
-void handle_time_stamp(void);
+void handle_timestamp(void);
 
 #endif // VM_OPCODE_HANDLERS_H

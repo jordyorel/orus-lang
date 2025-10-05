@@ -1114,18 +1114,18 @@ static void register_builtin_functions(TypeEnv* env) {
         define_builtin_function(env, "range", any_type, range_params, 3);
     }
 
-    // type_of(value: any) -> string
+    // typeof(value: any) -> string
     Type* string_type = getPrimitiveType(TYPE_STRING);
     if (any_param && string_type) {
-        Type* type_of_params[1] = {any_param};
-        define_builtin_function(env, "type_of", string_type, type_of_params, 1);
+        Type* typeof_params[1] = {any_param};
+        define_builtin_function(env, "typeof", string_type, typeof_params, 1);
     }
 
-    // is_type(value: any, type_name: string) -> bool
+    // istype(value: any, type_name: string) -> bool
     Type* bool_type = getPrimitiveType(TYPE_BOOL);
     if (any_param && string_type && bool_type) {
-        Type* is_type_params[2] = {any_param, string_type};
-        define_builtin_function(env, "is_type", bool_type, is_type_params, 2);
+        Type* istype_params[2] = {any_param, string_type};
+        define_builtin_function(env, "istype", bool_type, istype_params, 2);
     }
 
     // assert_eq(label: string, actual: any, expected: any) -> bool
@@ -1937,7 +1937,7 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
         }
 
         case NODE_TIME_STAMP: {
-            // time_stamp() returns f64 (seconds as double)
+            // timestamp() returns f64 (seconds as double)
             DEBUG_TYPE_INFERENCE_PRINT("Processing NODE_TIME_STAMP, returning TYPE_F64");
             return getPrimitiveType(TYPE_F64);
         }
@@ -4868,7 +4868,7 @@ Type* infer_type(TypeInferer* inferer, ASTNode* expr) {
         case NODE_LITERAL:
             return infer_literal(expr->literal.value);
         case NODE_TIME_STAMP:
-            // time_stamp() returns f64 (seconds as double)  
+            // timestamp() returns f64 (seconds as double)
             return getPrimitiveType(TYPE_F64);
         case NODE_IDENTIFIER:
             return getPrimitiveType(TYPE_ANY);

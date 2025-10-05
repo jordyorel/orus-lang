@@ -2734,8 +2734,8 @@ InterpretResult vm_run_dispatch(void) {
 
         Value value = vm_get_register_safe(value_reg);
         Value result;
-        if (!builtin_type_of(value, &result)) {
-            VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(), "type_of() internal error");
+        if (!builtin_typeof(value, &result)) {
+            VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(), "typeof() internal error");
         }
 
         vm_set_register_safe(dst, result);
@@ -2750,8 +2750,8 @@ InterpretResult vm_run_dispatch(void) {
         Value value = vm_get_register_safe(value_reg);
         Value type_identifier = vm_get_register_safe(type_reg);
         Value result;
-        if (!builtin_is_type(value, type_identifier, &result)) {
-            VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(), "is_type() internal error");
+        if (!builtin_istype(value, type_identifier, &result)) {
+            VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(), "istype() internal error");
         }
 
         vm_set_register_safe(dst, result);
@@ -3534,7 +3534,7 @@ InterpretResult vm_run_dispatch(void) {
         uint8_t dst = READ_BYTE();
         
         // Get high-precision timestamp in seconds
-        double timestamp = builtin_time_stamp();
+        double timestamp = builtin_timestamp();
         
         // Store in both typed register and regular register for compatibility
         vm.typed_regs.f64_regs[dst] = timestamp;

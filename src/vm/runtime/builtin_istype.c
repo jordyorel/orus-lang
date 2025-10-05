@@ -1,8 +1,8 @@
 // Orus Language Project
 //  ---------------------------------------------------------------------------
-//  File: src/vm/runtime/builtin_is_type.c
+//  File: src/vm/runtime/builtin_istype.c
 //  Author: Jordy Orel KONDA
-//  Description: Implements the builtin is_type routine that compares a value's runtime type name against a provided string.
+//  Description: Implements the builtin istype routine that compares a value's runtime type name against a provided string.
 
 #include "runtime/builtins.h"
 
@@ -10,7 +10,7 @@
 
 #include "builtin_type_common.h"
 
-bool builtin_is_type(Value value, Value type_identifier, Value* out_value) {
+bool builtin_istype(Value value, Value type_identifier, Value* out_value) {
     if (!out_value) {
         return false;
     }

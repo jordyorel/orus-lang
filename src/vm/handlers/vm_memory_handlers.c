@@ -545,22 +545,22 @@ void handle_parse_float(void) {
     vm_set_register_safe(dst, result);
 }
 
-void handle_type_of(void) {
+void handle_typeof(void) {
     uint8_t dst = READ_BYTE();
     uint8_t value_reg = READ_BYTE();
 
     Value value = vm_get_register_safe(value_reg);
     Value result;
-    if (!builtin_type_of(value, &result)) {
+    if (!builtin_typeof(value, &result)) {
         SrcLocation loc = {vm.filePath, vm.currentLine, vm.currentColumn};
-        runtimeError(ERROR_RUNTIME, loc, "type_of() internal error");
+        runtimeError(ERROR_RUNTIME, loc, "typeof() internal error");
         return;
     }
 
     vm_set_register_safe(dst, result);
 }
 
-void handle_is_type(void) {
+void handle_istype(void) {
     uint8_t dst = READ_BYTE();
     uint8_t value_reg = READ_BYTE();
     uint8_t type_reg = READ_BYTE();
@@ -568,9 +568,9 @@ void handle_is_type(void) {
     Value value = vm_get_register_safe(value_reg);
     Value type_identifier = vm_get_register_safe(type_reg);
     Value result;
-    if (!builtin_is_type(value, type_identifier, &result)) {
+    if (!builtin_istype(value, type_identifier, &result)) {
         SrcLocation loc = {vm.filePath, vm.currentLine, vm.currentColumn};
-        runtimeError(ERROR_RUNTIME, loc, "is_type() internal error");
+        runtimeError(ERROR_RUNTIME, loc, "istype() internal error");
         return;
     }
 
@@ -584,7 +584,7 @@ void handle_halt(void) {
     // This is a placeholder for consistency
 }
 
-void handle_time_stamp(void) {
+void handle_timestamp(void) {
     // Time stamp operation - implementation depends on VM requirements
     // This is a placeholder for consistency
 }

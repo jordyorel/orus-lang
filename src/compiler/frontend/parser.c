@@ -3643,7 +3643,7 @@ static ASTNode* parsePrimaryExpression(ParserContext* ctx) {
         case TOKEN_IDENTIFIER:
             if (token_text_equals(&token, "true") || token_text_equals(&token, "false")) {
                 node = parseBooleanLiteral(ctx, token);
-            } else if (token_text_equals(&token, "time_stamp") &&
+            } else if (token_text_equals(&token, "timestamp") &&
                        peekToken(ctx).type == TOKEN_LEFT_PAREN) {
                 node = parseTimeStampExpression(ctx, token);
             } else {
