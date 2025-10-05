@@ -40,6 +40,18 @@ typedef enum RegisterStrategy {
     REG_STRATEGY_AUTO         // Compiler decides based on usage pattern
 } RegisterStrategy;
 
+// Kinds of register banks managed by the dual allocator
+typedef enum RegisterBankKind {
+    REG_BANK_INVALID = -1,
+    REG_BANK_TYPED_I32 = 0,
+    REG_BANK_TYPED_I64,
+    REG_BANK_TYPED_F64,
+    REG_BANK_TYPED_U32,
+    REG_BANK_TYPED_U64,
+    REG_BANK_TYPED_BOOL,
+    REG_BANK_COUNT
+} RegisterBankKind;
+
 // Register allocation record
 typedef struct RegisterAllocation {
     int logical_id;              // R0-R255 logical register ID (for standard)
@@ -86,7 +98,7 @@ bool compiler_is_register_free(DualRegisterAllocator* allocator, int reg);
 const char* compiler_register_type_name(int reg);
 
 // Typed/dual allocation helpers
-RegisterAllocation* compiler_alloc_typed(DualRegisterAllocator* allocator, RegisterType type);
+RegisterAllocation* compiler_alloc_typed(DualRegisterAllocator* allocator, RegisterBankKind bank_kind);
 RegisterAllocation* compiler_alloc_smart(DualRegisterAllocator* allocator,
                                          RegisterType type,
                                          bool is_arithmetic_hot_path);
