@@ -13,7 +13,6 @@
 #define CONSTANTFOLD_H
 
 #include "compiler/typed_ast.h"
-#include "compiler/optimization/optimizer.h"
 
 // Constant folding algorithm implementation
 // Transforms binary expressions with literal operands into single literals
@@ -27,13 +26,13 @@ typedef struct ConstantFoldContext {
 } ConstantFoldContext;
 
 // Main constant folding function
-bool apply_constant_folding(TypedASTNode* ast, OptimizationContext* opt_ctx);
-bool apply_constant_folding_recursive(TypedASTNode* ast);
+bool apply_constant_folding(TypedASTNode* ast, ConstantFoldContext* ctx);
+bool apply_constant_folding_recursive(TypedASTNode* ast, ConstantFoldContext* ctx);
 
 // Individual folding functions
-bool fold_binary_expression(TypedASTNode* node);
-bool fold_unary_expression(TypedASTNode* node);
-void fold_ast_node_directly(ASTNode* node);
+bool fold_binary_expression(TypedASTNode* node, ConstantFoldContext* ctx);
+bool fold_unary_expression(TypedASTNode* node, ConstantFoldContext* ctx);
+void fold_ast_node_directly(ASTNode* node, ConstantFoldContext* ctx);
 
 // Helper functions
 bool is_foldable_binary(TypedASTNode* node);
