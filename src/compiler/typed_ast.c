@@ -503,6 +503,335 @@ TypedASTNode* copy_typed_ast_node(TypedASTNode* node) {
     return copy;
 }
 
+static bool visit_child(TypedASTNode* child, const TypedASTVisitor* visitor,
+                        void* user_data);
+static bool visit_child_array(TypedASTNode** children, int count,
+                              const TypedASTVisitor* visitor,
+                              void* user_data);
+static bool visit_struct_fields(TypedStructField* fields, int count,
+                                const TypedASTVisitor* visitor,
+                                void* user_data);
+static bool visit_enum_variants(TypedEnumVariant* variants, int count,
+                                const TypedASTVisitor* visitor,
+                                void* user_data);
+static bool visit_match_arms(TypedMatchArm* arms, int count,
+                             const TypedASTVisitor* visitor,
+                             void* user_data);
+
+static bool visit_child(TypedASTNode* child, const TypedASTVisitor* visitor,
+                        void* user_data) {
+    if (!child) {
+        return true;
+    }
+    return typed_ast_visit(child, visitor, user_data);
+}
+
+static bool visit_child_array(TypedASTNode** children, int count,
+                              const TypedASTVisitor* visitor,
+                              void* user_data) {
+    if (!children || count <= 0) {
+        return true;
+    }
+
+    for (int i = 0; i < count; i++) {
+        if (!visit_child(children[i], visitor, user_data)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static bool visit_struct_fields(TypedStructField* fields, int count,
+                                const TypedASTVisitor* visitor,
+                                void* user_data) {
+    if (!fields || count <= 0) {
+        return true;
+    }
+
+    for (int i = 0; i < count; i++) {
+        if (!visit_child(fields[i].typeAnnotation, visitor, user_data)) {
+            return false;
+        }
+        if (!visit_child(fields[i].defaultValue, visitor, user_data)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static bool visit_enum_variants(TypedEnumVariant* variants, int count,
+                                const TypedASTVisitor* visitor,
+                                void* user_data) {
+    if (!variants || count <= 0) {
+        return true;
+    }
+
+    for (int i = 0; i < count; i++) {
+        TypedEnumVariant* variant = &variants[i];
+        if (!variant->fields || variant->fieldCount <= 0) {
+            continue;
+        }
+
+        for (int j = 0; j < variant->fieldCount; j++) {
+            if (!visit_child(variant->fields[j].typeAnnotation, visitor,
+                             user_data)) {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+static bool visit_match_arms(TypedMatchArm* arms, int count,
+                             const TypedASTVisitor* visitor,
+                             void* user_data) {
+    if (!arms || count <= 0) {
+        return true;
+    }
+
+    for (int i = 0; i < count; i++) {
+        TypedMatchArm* arm = &arms[i];
+        if (!visit_child(arm->valuePattern, visitor, user_data)) {
+            return false;
+        }
+        if (!visit_child(arm->body, visitor, user_data)) {
+            return false;
+        }
+        if (!visit_child(arm->condition, visitor, user_data)) {
+            return false;
+        }
+        if (!visit_child_array(arm->payloadAccesses, arm->payloadCount,
+                               visitor, user_data)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static bool typed_ast_visit_children(TypedASTNode* node,
+                                     const TypedASTVisitor* visitor,
+                                     void* user_data) {
+    if (!node || !node->original) {
+        return true;
+    }
+
+    switch (node->original->type) {
+        case NODE_PROGRAM:
+            return visit_child_array(node->typed.program.declarations,
+                                     node->typed.program.count, visitor,
+                                     user_data);
+        case NODE_VAR_DECL:
+            if (!visit_child(node->typed.varDecl.initializer, visitor,
+                             user_data)) {
+                return false;
+            }
+            return visit_child(node->typed.varDecl.typeAnnotation, visitor,
+                               user_data);
+        case NODE_BINARY:
+            if (!visit_child(node->typed.binary.left, visitor, user_data)) {
+                return false;
+            }
+            return visit_child(node->typed.binary.right, visitor, user_data);
+        case NODE_ASSIGN:
+            return visit_child(node->typed.assign.value, visitor, user_data);
+        case NODE_PRINT:
+            return visit_child_array(node->typed.print.values,
+                                     node->typed.print.count, visitor,
+                                     user_data);
+        case NODE_IF:
+            if (!visit_child(node->typed.ifStmt.condition, visitor,
+                             user_data)) {
+                return false;
+            }
+            if (!visit_child(node->typed.ifStmt.thenBranch, visitor,
+                             user_data)) {
+                return false;
+            }
+            return visit_child(node->typed.ifStmt.elseBranch, visitor,
+                               user_data);
+        case NODE_WHILE:
+            if (!visit_child(node->typed.whileStmt.condition, visitor,
+                             user_data)) {
+                return false;
+            }
+            return visit_child(node->typed.whileStmt.body, visitor,
+                               user_data);
+        case NODE_FOR_RANGE:
+            if (!visit_child(node->typed.forRange.start, visitor,
+                             user_data)) {
+                return false;
+            }
+            if (!visit_child(node->typed.forRange.end, visitor, user_data)) {
+                return false;
+            }
+            if (!visit_child(node->typed.forRange.step, visitor, user_data)) {
+                return false;
+            }
+            return visit_child(node->typed.forRange.body, visitor,
+                               user_data);
+        case NODE_FOR_ITER:
+            if (!visit_child(node->typed.forIter.iterable, visitor,
+                             user_data)) {
+                return false;
+            }
+            return visit_child(node->typed.forIter.body, visitor, user_data);
+        case NODE_TRY:
+            if (!visit_child(node->typed.tryStmt.tryBlock, visitor,
+                             user_data)) {
+                return false;
+            }
+            return visit_child(node->typed.tryStmt.catchBlock, visitor,
+                               user_data);
+        case NODE_BLOCK:
+            return visit_child_array(node->typed.block.statements,
+                                     node->typed.block.count, visitor,
+                                     user_data);
+        case NODE_TERNARY:
+            if (!visit_child(node->typed.ternary.condition, visitor,
+                             user_data)) {
+                return false;
+            }
+            if (!visit_child(node->typed.ternary.trueExpr, visitor,
+                             user_data)) {
+                return false;
+            }
+            return visit_child(node->typed.ternary.falseExpr, visitor,
+                               user_data);
+        case NODE_UNARY:
+            return visit_child(node->typed.unary.operand, visitor, user_data);
+        case NODE_FUNCTION:
+            if (!visit_child(node->typed.function.returnType, visitor,
+                             user_data)) {
+                return false;
+            }
+            return visit_child(node->typed.function.body, visitor, user_data);
+        case NODE_CALL:
+            if (!visit_child(node->typed.call.callee, visitor, user_data)) {
+                return false;
+            }
+            return visit_child_array(node->typed.call.args,
+                                     node->typed.call.argCount, visitor,
+                                     user_data);
+        case NODE_ARRAY_LITERAL:
+            return visit_child_array(node->typed.arrayLiteral.elements,
+                                     node->typed.arrayLiteral.count, visitor,
+                                     user_data);
+        case NODE_ARRAY_FILL:
+            if (!visit_child(node->typed.arrayFill.value, visitor,
+                             user_data)) {
+                return false;
+            }
+            return visit_child(node->typed.arrayFill.lengthExpr, visitor,
+                               user_data);
+        case NODE_INDEX_ACCESS:
+            if (!visit_child(node->typed.indexAccess.array, visitor,
+                             user_data)) {
+                return false;
+            }
+            return visit_child(node->typed.indexAccess.index, visitor,
+                               user_data);
+        case NODE_RETURN:
+            return visit_child(node->typed.returnStmt.value, visitor,
+                               user_data);
+        case NODE_CAST:
+            if (!visit_child(node->typed.cast.expression, visitor,
+                             user_data)) {
+                return false;
+            }
+            return visit_child(node->typed.cast.targetType, visitor,
+                               user_data);
+        case NODE_ARRAY_ASSIGN:
+            if (!visit_child(node->typed.arrayAssign.target, visitor,
+                             user_data)) {
+                return false;
+            }
+            return visit_child(node->typed.arrayAssign.value, visitor,
+                               user_data);
+        case NODE_ARRAY_SLICE:
+            if (!visit_child(node->typed.arraySlice.array, visitor,
+                             user_data)) {
+                return false;
+            }
+            if (!visit_child(node->typed.arraySlice.start, visitor,
+                             user_data)) {
+                return false;
+            }
+            return visit_child(node->typed.arraySlice.end, visitor, user_data);
+        case NODE_STRUCT_DECL:
+            return visit_struct_fields(node->typed.structDecl.fields,
+                                       node->typed.structDecl.fieldCount,
+                                       visitor, user_data);
+        case NODE_IMPL_BLOCK:
+            return visit_child_array(node->typed.implBlock.methods,
+                                     node->typed.implBlock.methodCount,
+                                     visitor, user_data);
+        case NODE_STRUCT_LITERAL:
+            return visit_child_array(node->typed.structLiteral.values,
+                                     node->typed.structLiteral.fieldCount,
+                                     visitor, user_data);
+        case NODE_MEMBER_ACCESS:
+            return visit_child(node->typed.member.object, visitor, user_data);
+        case NODE_MEMBER_ASSIGN:
+            if (!visit_child(node->typed.memberAssign.target, visitor,
+                             user_data)) {
+                return false;
+            }
+            return visit_child(node->typed.memberAssign.value, visitor,
+                               user_data);
+        case NODE_ENUM_DECL:
+            return visit_enum_variants(node->typed.enumDecl.variants,
+                                       node->typed.enumDecl.variantCount,
+                                       visitor, user_data);
+        case NODE_ENUM_MATCH_TEST:
+            return visit_child(node->typed.enumMatchTest.value, visitor,
+                               user_data);
+        case NODE_ENUM_PAYLOAD:
+            return visit_child(node->typed.enumPayload.value, visitor,
+                               user_data);
+        case NODE_ENUM_MATCH_CHECK:
+            return visit_child(node->typed.enumMatchCheck.value, visitor,
+                               user_data);
+        case NODE_MATCH_EXPRESSION:
+            if (!visit_child(node->typed.matchExpr.subject, visitor,
+                             user_data)) {
+                return false;
+            }
+            return visit_match_arms(node->typed.matchExpr.arms,
+                                    node->typed.matchExpr.armCount, visitor,
+                                    user_data);
+        default:
+            return true;
+    }
+}
+
+bool typed_ast_visit(TypedASTNode* root, const TypedASTVisitor* visitor,
+                     void* user_data) {
+    if (!root) {
+        return true;
+    }
+
+    bool descend = true;
+    if (visitor && visitor->pre) {
+        descend = visitor->pre(root, user_data);
+    }
+
+    bool success = true;
+    if (descend) {
+        success = typed_ast_visit_children(root, visitor, user_data);
+    }
+
+    if (visitor && visitor->post) {
+        bool post_success = visitor->post(root, user_data);
+        success = success && post_success;
+    }
+
+    return success;
+}
+
 // Validate that a typed AST tree has all types resolved
 bool validate_typed_ast(TypedASTNode* root) {
     if (!root) return false;

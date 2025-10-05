@@ -56,6 +56,14 @@ typedef struct TypedImportSymbol {
     const char* alias;
 } TypedImportSymbol;
 
+// Generic visitor interface for walking typed AST nodes
+typedef bool (*TypedASTVisitFn)(TypedASTNode* node, void* user_data);
+
+typedef struct TypedASTVisitor {
+    TypedASTVisitFn pre;
+    TypedASTVisitFn post;
+} TypedASTVisitor;
+
 // Typed AST node that contains the original AST plus resolved type information
 struct TypedASTNode {
     ASTNode* original;       // Original AST node from parser
@@ -282,5 +290,7 @@ bool validate_typed_ast(TypedASTNode* root);
 // Utility functions
 const char* typed_node_type_string(TypedASTNode* node);
 void print_typed_ast(TypedASTNode* node, int indent);
+bool typed_ast_visit(TypedASTNode* root, const TypedASTVisitor* visitor,
+                     void* user_data);
 
 #endif // ORUS_TYPED_AST_H

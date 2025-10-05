@@ -250,6 +250,7 @@ TAGGED_UNION_TEST_BIN = $(BUILDDIR)/tests/test_vm_tagged_union
 TYPED_REGISTER_TEST_BIN = $(BUILDDIR)/tests/test_vm_typed_registers
 REGISTER_ALLOCATOR_TEST_BIN = $(BUILDDIR)/tests/test_register_allocator
 BUILTIN_INPUT_TEST_BIN = $(BUILDDIR)/tests/test_builtin_input
+CONSTANT_FOLD_TEST_BIN = $(BUILDDIR)/tests/test_constant_folding
 BUILTIN_SORTED_ORUS_TESTS = \
     tests/builtins/sorted_runtime.orus
 BUILTIN_SORTED_ORUS_FAIL_TESTS = \
@@ -421,6 +422,9 @@ _test-run: $(ORUS)
 	@echo "\033[36m=== Peephole Constant Propagation Tests ===\033[0m"
 	@$(MAKE) peephole-tests
 	@echo ""
+	@echo "\033[36m=== Constant Folding Tests ===\033[0m"
+	@$(MAKE) constant-fold-tests
+	@echo ""
 	@echo "\033[36m=== Tagged Union Tests ===\033[0m"
 	@$(MAKE) tagged-union-tests
 	@echo ""
@@ -486,6 +490,15 @@ $(PEEPHOLE_TEST_BIN): tests/unit/test_constant_propagation.c $(COMPILER_OBJS) $(
 peephole-tests: $(PEEPHOLE_TEST_BIN)
 	@echo "Running constant propagation tests..."
 	@./$(PEEPHOLE_TEST_BIN)
+
+$(CONSTANT_FOLD_TEST_BIN): tests/unit/test_constant_folding.c $(COMPILER_OBJS) $(VM_OBJS)
+	@mkdir -p $(dir $@)
+	@echo "Compiling constant folding tests..."
+	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+
+constant-fold-tests: $(CONSTANT_FOLD_TEST_BIN)
+	@echo "Running constant folding tests..."
+	@./$(CONSTANT_FOLD_TEST_BIN)
 
 $(TAGGED_UNION_TEST_BIN): tests/unit/test_vm_tagged_union.c $(COMPILER_OBJS) $(VM_OBJS)
 	@mkdir -p $(dir $@)
