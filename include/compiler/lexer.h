@@ -60,24 +60,19 @@ typedef enum {
     TOKEN_PASS,
     TOKEN_ELSE,
     TOKEN_ELIF,
-    TOKEN_FALSE,
     TOKEN_FOR,
     TOKEN_FN,
     TOKEN_IF,
     TOKEN_OR,
     TOKEN_NOT,
     TOKEN_PRINT,
-    TOKEN_TIME_STAMP,
+    TOKEN_PRINT_NO_NL,
     TOKEN_RETURN,
-    TOKEN_TRUE,
     TOKEN_MUT,
     TOKEN_WHILE,
     TOKEN_TRY,
     TOKEN_CATCH,
-    TOKEN_INT,
-    TOKEN_I64,
     TOKEN_IN,
-    TOKEN_BOOL,
     TOKEN_STRUCT,
     TOKEN_ENUM,
     TOKEN_IMPL,
@@ -87,11 +82,6 @@ typedef enum {
     TOKEN_MATCHES,
     TOKEN_PUB,
     TOKEN_DEFINE,
-
-    // Add type tokens
-    TOKEN_U32,  // Add this
-    TOKEN_U64,  // Add this
-    TOKEN_F64,  // Add this
 
     // Bitwise operators
     TOKEN_BIT_AND,
@@ -166,4 +156,4 @@ void debug_print_tokens(const char* source);
 // can access the raw source when producing error messages.
 extern Lexer lexer;
 
-#endif // ORUS_LEXER_H
+#endif

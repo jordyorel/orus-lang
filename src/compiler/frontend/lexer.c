@@ -248,7 +248,6 @@ static TokenType identifier_type(const char* start, int length) {
         case 'b':
             if (length == 5 && memcmp(start, "break", 5) == 0)
                 return TOKEN_BREAK;
-            if (length == 4 && memcmp(start, "bool", 4) == 0) return TOKEN_BOOL;
             break;
         case 'c':
             if (length == 8 && memcmp(start, "continue", 8) == 0)
@@ -262,19 +261,14 @@ static TokenType identifier_type(const char* start, int length) {
             if (length == 4 && memcmp(start, "enum", 4) == 0) return TOKEN_ENUM;
             break;
         case 'f':
-            if (length == 5 && memcmp(start, "false", 5) == 0)
-                return TOKEN_FALSE;
             if (length == 3 && memcmp(start, "for", 3) == 0) return TOKEN_FOR;
             if (length == 2 && start[1] == 'n') return TOKEN_FN;
-            if (length == 3 && memcmp(start, "f64", 3) == 0) return TOKEN_F64;
             break;
         case 'g':
             break;
         case 'i':
             if (length == 2 && memcmp(start, "if", 2) == 0) return TOKEN_IF;
             if (length == 2 && memcmp(start, "in", 2) == 0) return TOKEN_IN;
-            if (length == 3 && memcmp(start, "i32", 3) == 0) return TOKEN_INT;
-            if (length == 3 && memcmp(start, "i64", 3) == 0) return TOKEN_I64;
             if (length == 4 && memcmp(start, "impl", 4) == 0) return TOKEN_IMPL;
             break;
         case 'l':
@@ -289,7 +283,7 @@ static TokenType identifier_type(const char* start, int length) {
         case 'n':
             if (length == 3 && memcmp(start, "not", 3) == 0) return TOKEN_NOT;
             break;
-        case 'o':
+        case 'o':https://github.com/jordyorel/orus-lang/pull/249/conflict?name=src%252Fcompiler%252Ffrontend%252Flexer.c&ancestor_oid=3ff3f38934733bf94c11912e4e6ccc6c3ab95141&base_oid=590f40eba25d7c7c7e0a8f41f4fee3bb1658dde0&head_oid=01379cc0df7b784d86a446c014c5cadc72918636
             if (length == 2 && memcmp(start, "or", 2) == 0) return TOKEN_OR;
             break;
         case 'p':
@@ -308,14 +302,11 @@ static TokenType identifier_type(const char* start, int length) {
                 return TOKEN_STRUCT;
             break;
         case 't':
-            if (length == 4 && memcmp(start, "true", 4) == 0) return TOKEN_TRUE;
             if (length == 3 && memcmp(start, "try", 3) == 0) return TOKEN_TRY;
-            if (length == 10 && memcmp(start, "time_stamp", 10) == 0) return TOKEN_TIME_STAMP;
+            if (length == 5 && memcmp(start, "throw", 5) == 0) return TOKEN_THROW;
             break;
         case 'u':
             if (length == 3 && memcmp(start, "use", 3) == 0) return TOKEN_IMPORT;
-            if (length == 3 && memcmp(start, "u32", 3) == 0) return TOKEN_U32;
-            if (length == 3 && memcmp(start, "u64", 3) == 0) return TOKEN_U64;
             break;
         case 'w':
             if (length == 5 && memcmp(start, "while", 5) == 0)
@@ -950,24 +941,18 @@ const char* token_type_to_string(TokenType type) {
         case TOKEN_CONTINUE: return "CONTINUE";
         case TOKEN_ELSE: return "ELSE";
         case TOKEN_ELIF: return "ELIF";
-        case TOKEN_FALSE: return "FALSE";
         case TOKEN_FOR: return "FOR";
         case TOKEN_FN: return "FN";
         case TOKEN_IF: return "IF";
         case TOKEN_OR: return "OR";
         case TOKEN_NOT: return "NOT";
         case TOKEN_PRINT: return "PRINT";
-        case TOKEN_TIME_STAMP: return "TIME_STAMP";
         case TOKEN_RETURN: return "RETURN";
-        case TOKEN_TRUE: return "TRUE";
         case TOKEN_MUT: return "MUT";
         case TOKEN_WHILE: return "WHILE";
         case TOKEN_TRY: return "TRY";
         case TOKEN_CATCH: return "CATCH";
-        case TOKEN_INT: return "INT";
-        case TOKEN_I64: return "I64";
         case TOKEN_IN: return "IN";
-        case TOKEN_BOOL: return "BOOL";
         case TOKEN_STRUCT: return "STRUCT";
         case TOKEN_IMPL: return "IMPL";
         case TOKEN_IMPORT: return "USE";
@@ -975,10 +960,6 @@ const char* token_type_to_string(TokenType type) {
         case TOKEN_MATCH: return "MATCH";
         case TOKEN_MATCHES: return "MATCHES";
         case TOKEN_PUB: return "PUB";
-        case TOKEN_DEFINE: return "DEFINE";
-        case TOKEN_U32: return "U32";
-        case TOKEN_U64: return "U64";
-        case TOKEN_F64: return "F64";
         case TOKEN_BIT_AND: return "BIT_AND";
         case TOKEN_BIT_OR: return "BIT_OR";
         case TOKEN_BIT_XOR: return "BIT_XOR";
