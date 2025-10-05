@@ -60,7 +60,6 @@ typedef enum {
     TOKEN_PASS,
     TOKEN_ELSE,
     TOKEN_ELIF,
-    TOKEN_FALSE,
     TOKEN_FOR,
     TOKEN_FN,
     TOKEN_IF,
@@ -70,17 +69,13 @@ typedef enum {
     TOKEN_PRINT_NO_NL,
     TOKEN_TIME_STAMP,
     TOKEN_RETURN,
-    TOKEN_TRUE,
     TOKEN_MUT,
     TOKEN_CONST,
     TOKEN_WHILE,
     TOKEN_TRY,
     TOKEN_THROW,
     TOKEN_CATCH,
-    TOKEN_INT,
-    TOKEN_I64,
     TOKEN_IN,
-    TOKEN_BOOL,
     TOKEN_STRUCT,
     TOKEN_ENUM,
     TOKEN_IMPL,
@@ -91,11 +86,6 @@ typedef enum {
     TOKEN_PUB,
     TOKEN_GLOBAL,
     TOKEN_STATIC,
-
-    // Add type tokens
-    TOKEN_U32,  // Add this
-    TOKEN_U64,  // Add this
-    TOKEN_F64,  // Add this
 
     // Bitwise operators
     TOKEN_BIT_AND,

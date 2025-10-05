@@ -1,7 +1,10 @@
 #include <stdbool.h>
 #include <stdio.h>
 
+#include <string.h>
+
 #include "compiler/compiler.h"
+#include "compiler/lexer.h"
 #include "compiler/parser.h"
 #include "compiler/typed_ast.h"
 #include "debug/debug_config.h"
@@ -15,6 +18,14 @@
             return false;                                                                  \
         }                                                                                  \
     } while (0)
+
+static bool token_text_equals(Token token, const char* text) {
+    if (!text) {
+        return false;
+    }
+    size_t len = strlen(text);
+    return token.length == (int)len && strncmp(token.start, text, len) == 0;
+}
 
 static void annotate_ast_with_file(ASTNode* node, const char* file_name) {
     if (!node) {
@@ -205,6 +216,72 @@ static bool test_source_mapping_tracks_original_locations(void) {
     return true;
 }
 
+static bool test_lexer_treats_builtin_identifiers_as_identifiers(void) {
+    static const char* source = "true false i32 u64 bool fn if 123i64 45u32 6f64";
+
+    init_scanner(source);
+
+    Token token = scan_token();
+    ASSERT_TRUE(token.type == TOKEN_IDENTIFIER && token_text_equals(token, "true"),
+                "expected 'true' to be scanned as an identifier");
+
+    token = scan_token();
+    ASSERT_TRUE(token.type == TOKEN_IDENTIFIER && token_text_equals(token, "false"),
+                "expected 'false' to be scanned as an identifier");
+
+    token = scan_token();
+    ASSERT_TRUE(token.type == TOKEN_IDENTIFIER && token_text_equals(token, "i32"),
+                "expected 'i32' to be scanned as an identifier");
+
+    token = scan_token();
+    ASSERT_TRUE(token.type == TOKEN_IDENTIFIER && token_text_equals(token, "u64"),
+                "expected 'u64' to be scanned as an identifier");
+
+    token = scan_token();
+    ASSERT_TRUE(token.type == TOKEN_IDENTIFIER && token_text_equals(token, "bool"),
+                "expected 'bool' to be scanned as an identifier");
+
+    token = scan_token();
+    ASSERT_TRUE(token.type == TOKEN_FN && token_text_equals(token, "fn"),
+                "expected 'fn' to remain a reserved keyword");
+
+    token = scan_token();
+    ASSERT_TRUE(token.type == TOKEN_IF && token_text_equals(token, "if"),
+                "expected 'if' to remain a reserved keyword");
+
+    Token number = scan_token();
+    ASSERT_TRUE(number.type == TOKEN_NUMBER && token_text_equals(number, "123"),
+                "expected numeric literal '123'");
+    Token suffix = scan_token();
+    ASSERT_TRUE(suffix.type == TOKEN_IDENTIFIER && token_text_equals(suffix, "i64"),
+                "expected 'i64' suffix to be scanned as an identifier");
+    ASSERT_TRUE(number.line == suffix.line && number.column + number.length == suffix.column,
+                "numeric suffix should be adjacent to the literal");
+
+    number = scan_token();
+    ASSERT_TRUE(number.type == TOKEN_NUMBER && token_text_equals(number, "45"),
+                "expected numeric literal '45'");
+    suffix = scan_token();
+    ASSERT_TRUE(suffix.type == TOKEN_IDENTIFIER && token_text_equals(suffix, "u32"),
+                "expected 'u32' suffix to be scanned as an identifier");
+    ASSERT_TRUE(number.line == suffix.line && number.column + number.length == suffix.column,
+                "numeric suffix should be adjacent to the literal");
+
+    number = scan_token();
+    ASSERT_TRUE(number.type == TOKEN_NUMBER && token_text_equals(number, "6"),
+                "expected numeric literal '6'");
+    suffix = scan_token();
+    ASSERT_TRUE(suffix.type == TOKEN_IDENTIFIER && token_text_equals(suffix, "f64"),
+                "expected 'f64' suffix to be scanned as an identifier");
+    ASSERT_TRUE(number.line == suffix.line && number.column + number.length == suffix.column,
+                "numeric suffix should be adjacent to the literal");
+
+    token = scan_token();
+    ASSERT_TRUE(token.type == TOKEN_EOF, "expected end of file after scanning tokens");
+
+    return true;
+}
+
 int main(void) {
     debug_init();
 
@@ -212,6 +289,7 @@ int main(void) {
         const char* name;
         bool (*fn)(void);
     } tests[] = {
+        {"lexer treats built-in identifiers as regular identifiers", test_lexer_treats_builtin_identifiers_as_identifiers},
         {"source mapping retains line and column information", test_source_mapping_tracks_original_locations},
     };
 
