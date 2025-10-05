@@ -2590,17 +2590,14 @@ InterpretResult vm_run_dispatch(void) {
         }
 
     LABEL_OP_JUMP: {
-            uint16_t offset = READ_SHORT();
-            if (!CF_JUMP(offset)) {
+            if (!handle_jump_long()) {
                 RETURN(INTERPRET_RUNTIME_ERROR);
             }
             DISPATCH();
         }
 
     LABEL_OP_JUMP_IF_NOT_R: {
-            uint8_t reg = READ_BYTE();
-            uint16_t offset = READ_SHORT();
-            if (!CF_JUMP_IF_NOT(reg, offset)) {
+            if (!handle_jump_if_not_long()) {
                 RETURN(INTERPRET_RUNTIME_ERROR);
             }
             DISPATCH();
@@ -2617,16 +2614,7 @@ InterpretResult vm_run_dispatch(void) {
         }
 
     LABEL_OP_LOOP: {
-        uint16_t offset = READ_SHORT();
-
-        // Hot path detection: Profile loop iterations
-        if (g_profiling.isActive && (g_profiling.enabledFlags & PROFILE_HOT_PATHS)) {
-            static uint64_t loop_iterations = 0;
-            loop_iterations++;
-            profileHotPath((void*)(vm.ip - vm.chunk->code), loop_iterations);
-        }
-
-        if (!CF_LOOP(offset)) {
+        if (!handle_loop_long()) {
             RETURN(INTERPRET_RUNTIME_ERROR);
         }
         DISPATCH();
@@ -3260,41 +3248,28 @@ InterpretResult vm_run_dispatch(void) {
 
     // Short jump optimizations for performance
     LABEL_OP_JUMP_SHORT: {
-        uint8_t offset = READ_BYTE();
-        if (!CF_JUMP_SHORT(offset)) {
+        if (!handle_jump_short()) {
             RETURN(INTERPRET_RUNTIME_ERROR);
         }
         DISPATCH();
     }
 
     LABEL_OP_JUMP_BACK_SHORT: {
-        uint8_t offset = READ_BYTE();
-        if (!CF_JUMP_BACK_SHORT(offset)) {
+        if (!handle_jump_back_short()) {
             RETURN(INTERPRET_RUNTIME_ERROR);
         }
         DISPATCH();
     }
 
     LABEL_OP_JUMP_IF_NOT_SHORT: {
-        uint8_t reg = READ_BYTE();
-        uint8_t offset = READ_BYTE();
-        if (!CF_JUMP_IF_NOT_SHORT(reg, offset)) {
+        if (!handle_jump_if_not_short()) {
             RETURN(INTERPRET_RUNTIME_ERROR);
         }
         DISPATCH();
     }
 
     LABEL_OP_LOOP_SHORT: {
-        uint8_t offset = READ_BYTE();
-
-        // Hot path detection: Profile short loop iterations (tight loops)
-        if (g_profiling.isActive && (g_profiling.enabledFlags & PROFILE_HOT_PATHS)) {
-            static uint64_t short_loop_iterations = 0;
-            short_loop_iterations++;
-            profileHotPath((void*)(vm.ip - vm.chunk->code), short_loop_iterations);
-        }
-
-        if (!CF_LOOP_SHORT(offset)) {
+        if (!handle_loop_short()) {
             RETURN(INTERPRET_RUNTIME_ERROR);
         }
         DISPATCH();
