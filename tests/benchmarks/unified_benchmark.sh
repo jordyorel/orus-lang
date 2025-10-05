@@ -25,14 +25,38 @@ overall_results=""
 # Function to get high precision time
 get_time_ns() {
     if [[ -r /proc/uptime ]]; then
-        awk '{print int($1 * 1000000000)}' /proc/uptime
+        local uptime seconds fraction
+        IFS=' ' read -r uptime _ < /proc/uptime
+        IFS='.' read -r seconds fraction <<< "$uptime"
+        fraction=${fraction:-0}
+        fraction="${fraction}000000000"
+        fraction=${fraction:0:9}
+        printf '%s%09d\n' "$seconds" "$fraction"
+    elif command -v date >/dev/null 2>&1; then
+        local date_ns
+        date_ns=$(date +%s%N 2>/dev/null || true)
+        if [[ "$date_ns" =~ ^[0-9]+$ ]]; then
+            echo "$date_ns"
+        elif command -v python3 >/dev/null 2>&1; then
+            python3 -c "import time; print(time.time_ns())"
+        else
+            echo $(( $(date +%s) * 1000000000 ))
+        fi
     elif command -v python3 >/dev/null 2>&1; then
-        python3 -c "import time; print(int(time.time_ns()))"
-    elif date +%s%N >/dev/null 2>&1; then
-        date +%s%N
+        python3 -c "import time; print(time.time_ns())"
     else
-        echo $(($(date +%s) * 1000000000))
+        echo $(( $(date +%s) * 1000000000 ))
     fi
+}
+
+# Format nanoseconds as milliseconds with one decimal place without spawning external tools
+format_ns_to_ms() {
+    local ns=${1:-0}
+    # Round to the nearest 0.1ms to match previous printf behavior
+    local ms10=$(( (ns + 50000) / 100000 ))
+    local ms=$(( ms10 / 10 ))
+    local tenths=$(( ms10 % 10 ))
+    printf '%d.%01d' "$ms" "$tenths"
 }
 
 # Function to ensure Orus is built once with optimal settings
@@ -80,7 +104,7 @@ run_language_benchmark() {
         if eval "$command" > /dev/null 2>&1; then
             local end_time=$(get_time_ns)
             local duration_ns=$((end_time - start_time))
-            local duration_ms=$(echo "$duration_ns" | awk '{printf "%.1f", $1/1000000}')
+            local duration_ms=$(format_ns_to_ms "$duration_ns")
             
             times+=("$duration_ns")
             total_time=$((total_time + duration_ns))
@@ -94,7 +118,7 @@ run_language_benchmark() {
     
     if [[ $successful_runs -gt 0 ]]; then
         local avg_time_ns=$((total_time / successful_runs))
-        local avg_time_ms=$(echo "$avg_time_ns" | awk '{printf "%.1f", $1/1000000}')
+        local avg_time_ms=$(format_ns_to_ms "$avg_time_ns")
         
         benchmark_results="${benchmark_results}${lang}:${avg_time_ms};"
         overall_results="${overall_results}${lang}:${avg_time_ms};"
