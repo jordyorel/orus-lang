@@ -251,6 +251,7 @@ TAGGED_UNION_TEST_BIN = $(BUILDDIR)/tests/test_vm_tagged_union
 TYPED_REGISTER_TEST_BIN = $(BUILDDIR)/tests/test_vm_typed_registers
 REGISTER_ALLOCATOR_TEST_BIN = $(BUILDDIR)/tests/test_register_allocator
 INC_CMP_JMP_TEST_BIN = $(BUILDDIR)/tests/test_vm_inc_cmp_jmp
+FUSED_LOOP_TEST_BIN = $(BUILDDIR)/tests/test_fused_loop_bytecode
 ADD_I32_IMM_TEST_BIN = $(BUILDDIR)/tests/test_vm_add_i32_imm
 BUILTIN_INPUT_TEST_BIN = $(BUILDDIR)/tests/test_builtin_input
 CONSTANT_FOLD_TEST_BIN = $(BUILDDIR)/tests/test_constant_folding
@@ -440,6 +441,9 @@ _test-run: $(ORUS)
 	@echo "\033[36m=== OP_INC_CMP_JMP Tests ===\033[0m"
 	@$(MAKE) inc-cmp-jmp-tests
 	@echo ""
+	@echo "\033[36m=== Fused Loop Bytecode Tests ===\033[0m"
+	@$(MAKE) fused-loop-bytecode-tests
+	@echo ""
 	@echo "\033[36m=== OP_ADD_I32_IMM Tests ===\033[0m"
 	@$(MAKE) add-i32-imm-tests
 	@echo ""
@@ -547,6 +551,15 @@ $(INC_CMP_JMP_TEST_BIN): tests/unit/test_vm_inc_cmp_jmp.c $(COMPILER_OBJS) $(VM_
 inc-cmp-jmp-tests: $(INC_CMP_JMP_TEST_BIN)
 	@echo "Running OP_INC_CMP_JMP regression tests..."
 	@./$(INC_CMP_JMP_TEST_BIN)
+
+$(FUSED_LOOP_TEST_BIN): tests/unit/test_fused_loop_bytecode.c $(COMPILER_OBJS) $(VM_OBJS)
+	@mkdir -p $(dir $@)
+	@echo "Compiling fused loop bytecode tests..."
+	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+
+fused-loop-bytecode-tests: $(FUSED_LOOP_TEST_BIN)
+	@echo "Running fused loop bytecode tests..."
+	@./$(FUSED_LOOP_TEST_BIN)
 
 $(ADD_I32_IMM_TEST_BIN): tests/unit/test_vm_add_i32_imm.c $(COMPILER_OBJS) $(VM_OBJS)
 	@mkdir -p $(dir $@)
