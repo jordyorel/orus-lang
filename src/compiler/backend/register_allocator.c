@@ -8,6 +8,7 @@
 
 
 #include "compiler/register_allocator.h"
+#include "internal/logging.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -52,10 +53,19 @@ typedef struct DualRegisterAllocator {
     bool prefer_typed_registers;
 } DualRegisterAllocator;
 
-// Disable all debug output for clean program execution
+// Logging helpers scoped to the register allocator implementation
+#ifndef REGISTER_ALLOCATOR_DEBUG
 #define REGISTER_ALLOCATOR_DEBUG 0
-#if REGISTER_ALLOCATOR_DEBUG == 0
-#define printf(...) ((void)0)
+#endif
+
+#if REGISTER_ALLOCATOR_DEBUG
+#define REGISTER_ALLOCATOR_LOG(fmt, ...)   LOG_DEBUG(fmt, ##__VA_ARGS__)
+#define REGISTER_ALLOCATOR_WARN(fmt, ...)  LOG_WARN(fmt, ##__VA_ARGS__)
+#define REGISTER_ALLOCATOR_ERROR(fmt, ...) LOG_ERROR(fmt, ##__VA_ARGS__)
+#else
+#define REGISTER_ALLOCATOR_LOG(fmt, ...)   ((void)0)
+#define REGISTER_ALLOCATOR_WARN(fmt, ...)  LOG_WARN(fmt, ##__VA_ARGS__)
+#define REGISTER_ALLOCATOR_ERROR(fmt, ...) LOG_ERROR(fmt, ##__VA_ARGS__)
 #endif
 
 // Forward declarations for internal helpers used before their definitions.
