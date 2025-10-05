@@ -26,6 +26,27 @@
 #define MAX_ERROR_MESSAGE_SIZE 2048
 #define MAX_SOURCE_LINE_SIZE 1024
 
+static bool contains_case_insensitive(const char* haystack, const char* needle) {
+    if (!haystack || !needle || *needle == '\0') {
+        return false;
+    }
+
+    size_t needle_len = strlen(needle);
+    for (const char* cursor = haystack; *cursor; ++cursor) {
+        size_t matched = 0;
+        while (matched < needle_len && cursor[matched] != '\0' &&
+               (unsigned char)tolower((unsigned char)cursor[matched]) ==
+                   (unsigned char)tolower((unsigned char)needle[matched])) {
+            matched++;
+        }
+        if (matched == needle_len) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 // Cache-aligned global configuration for optimal performance (backward compatibility)
 typedef struct {
     ErrorReportingConfig config;
@@ -962,6 +983,27 @@ ErrorCode map_error_type_to_code(ErrorType type) {
         case ERROR_IMPORT: return E3004_IMPORT_FAILED;
         default: return E9001_INTERNAL_PANIC;
     }
+}
+
+ErrorCode map_error_details_to_code(ErrorType type, const char* message) {
+    if (type == ERROR_VALUE && message && *message) {
+        if (contains_case_insensitive(message, "division by zero") ||
+            contains_case_insensitive(message, "divide by zero")) {
+            return E0001_DIVISION_BY_ZERO;
+        }
+
+        if (contains_case_insensitive(message, "modulo by zero") ||
+            contains_case_insensitive(message, "mod by zero")) {
+            return E0006_MODULO_BY_ZERO;
+        }
+
+        if (contains_case_insensitive(message, "overflow") ||
+            contains_case_insensitive(message, "underflow")) {
+            return E0004_ARITHMETIC_OVERFLOW;
+        }
+    }
+
+    return map_error_type_to_code(type);
 }
 
 const char* get_error_title(ErrorCode code) {
