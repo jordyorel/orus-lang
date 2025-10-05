@@ -21,8 +21,10 @@
 #include "vm/vm_opcode_handlers.h"
 #include "vm/register_file.h"
 #include "vm/vm_profiling.h"
+#include "debug/debug_config.h"
 #include <math.h>
 #include <limits.h>
+#include <inttypes.h>
 
 #define VM_HANDLE_INC_I32_SLOW_PATH(reg) \
     do { \
@@ -221,11 +223,11 @@ InterpretResult vm_run_dispatch(void) {
                             if (IS_I32(left)) {
                                 snprintf(buffer, sizeof(buffer), "%d", AS_I32(left));
                             } else if (IS_I64(left)) {
-                                snprintf(buffer, sizeof(buffer), "%lld", AS_I64(left));
+                                snprintf(buffer, sizeof(buffer), "%" PRId64, (int64_t)AS_I64(left));
                             } else if (IS_U32(left)) {
                                 snprintf(buffer, sizeof(buffer), "%u", AS_U32(left));
                             } else if (IS_U64(left)) {
-                                snprintf(buffer, sizeof(buffer), "%llu", AS_U64(left));
+                                snprintf(buffer, sizeof(buffer), "%" PRIu64, (uint64_t)AS_U64(left));
                             } else if (IS_F64(left)) {
                                 snprintf(buffer, sizeof(buffer), "%.6g", AS_F64(left));
                             } else if (IS_BOOL(left)) {
@@ -243,11 +245,11 @@ InterpretResult vm_run_dispatch(void) {
                             if (IS_I32(right)) {
                                 snprintf(buffer, sizeof(buffer), "%d", AS_I32(right));
                             } else if (IS_I64(right)) {
-                                snprintf(buffer, sizeof(buffer), "%lld", AS_I64(right));
+                                snprintf(buffer, sizeof(buffer), "%" PRId64, (int64_t)AS_I64(right));
                             } else if (IS_U32(right)) {
                                 snprintf(buffer, sizeof(buffer), "%u", AS_U32(right));
                             } else if (IS_U64(right)) {
-                                snprintf(buffer, sizeof(buffer), "%llu", AS_U64(right));
+                                snprintf(buffer, sizeof(buffer), "%" PRIu64, (uint64_t)AS_U64(right));
                             } else if (IS_F64(right)) {
                                 snprintf(buffer, sizeof(buffer), "%.6g", AS_F64(right));
                             } else if (IS_BOOL(right)) {
@@ -482,7 +484,10 @@ InterpretResult vm_run_dispatch(void) {
                     } else if (IS_U64(vm_get_register_safe(src1))) {
                         HANDLE_U64_OVERFLOW_MOD(AS_U64(vm_get_register_safe(src1)), AS_U64(vm_get_register_safe(src2)), dst);
                     } else {
-                        HANDLE_F64_OVERFLOW_MOD(AS_F64(vm_get_register_safe(src1)), AS_F64(vm_get_register_safe(src2)), dst);
+                        double a = AS_F64(vm_get_register_safe(src1));
+                        double b = AS_F64(vm_get_register_safe(src2));
+                        double result = fmod(a, b);
+                        vm_set_register_safe(dst, F64_VAL(result));
                     }
                     break;
                 }
@@ -2172,7 +2177,7 @@ InterpretResult vm_run_dispatch(void) {
                     }
                     vm.lastError = err;
                     vm_set_error_report_pending(true);
-                    goto handle_runtime_error;
+                    goto HANDLE_RUNTIME_ERROR;
                 }
 
                 case OP_JUMP: {
@@ -2387,7 +2392,7 @@ InterpretResult vm_run_dispatch(void) {
                             // Debug: Print saved values for first few registers
                             if (i < 8) {
                                 DEBUG_VM_PRINT("SAVE FRAME R%d (type=%d)", FRAME_REG_START + i, vm_get_register_safe(FRAME_REG_START + i).type);
-                                if (vm_get_register_safe(FRAME_REG_START + i).type == VALUE_I32) {
+                                if (vm_get_register_safe(FRAME_REG_START + i).type == VAL_I32) {
                                     DEBUG_VM_PRINT("  value = %d\n", AS_I32(vm_get_register_safe(FRAME_REG_START + i)));
                                 }
                             }
@@ -2399,7 +2404,7 @@ InterpretResult vm_run_dispatch(void) {
                             // Debug: Print saved temp register values for first few
                             if (i < 8) {
                                 DEBUG_VM_PRINT("SAVE TEMP R%d (type=%d)", temp_reg_start + i, vm_get_register_safe(temp_reg_start + i).type);
-                                if (vm_get_register_safe(temp_reg_start + i).type == VALUE_I32) {
+                                if (vm_get_register_safe(temp_reg_start + i).type == VAL_I32) {
                                     DEBUG_VM_PRINT("  value = %d\n", AS_I32(vm_get_register_safe(temp_reg_start + i)));
                                 }
                             }
@@ -3239,7 +3244,7 @@ InterpretResult vm_run_dispatch(void) {
             }
             continue;
 
-        handle_runtime_error:
+        HANDLE_RUNTIME_ERROR:
             if (!vm_handle_pending_error()) {
                 RETURN(INTERPRET_RUNTIME_ERROR);
             }

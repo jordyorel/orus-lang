@@ -15,7 +15,10 @@ The dispatch system has been restructured into separate files for better maintai
 
 ### Build System Integration
 
-The Makefile conditionally includes the appropriate dispatch file based on the `USE_GOTO` setting:
+The Makefile conditionally includes the appropriate dispatch file based on the `USE_GOTO` setting, and
+`DISPATCH_MODE=auto` now prefers the switch dispatcher when building on Linux ARM hosts (where computed
+goto support is less predictable) while keeping the computed-goto fast path as the default on other
+platforms:
 
 ```makefile
 # Conditional dispatch sources based on computed goto support
@@ -71,8 +74,11 @@ make USE_GOTO=0
 
 ## Performance Impact
 
-- **Computed Goto**: ~20% faster performance (28ms vs 35ms arithmetic benchmark)
-- **Switch-based**: More portable across compilers
+- **Computed Goto** (release build, Linux x86_64 container, `tests/benchmarks/arithmetic_benchmark.orus`, 5-run average): **15.22 ms**
+- **Switch-based** under the same conditions: **15.28 ms** (within benchmark noise on this host)
 - **Build Time**: Minimal impact, conditional compilation is efficient
+
+> _Measurement details_: each build was produced with `make PROFILE=release DISPATCH_MODE=<goto|switch>` after `make clean`,
+> then timed via a short Python harness that ran the arithmetic benchmark five times and averaged the wall-clock durations.
 
 This architecture provides a solid foundation for maintaining both dispatch implementations while keeping the codebase organized and performance-optimized.
