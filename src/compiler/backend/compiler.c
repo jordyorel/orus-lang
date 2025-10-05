@@ -44,7 +44,7 @@ static void reserve_existing_module_globals(CompilerContext* ctx) {
             for (uint16_t i = 0; i < module->exports.export_count; ++i) {
                 uint16_t reg = module->exports.exported_registers[i];
                 if (reg != MODULE_EXPORT_NO_REGISTER) {
-                    mp_reserve_global_register(ctx->allocator, reg);
+                    compiler_reserve_global(ctx->allocator, reg);
                 }
             }
         }
@@ -423,8 +423,7 @@ CompilerContext* init_compiler_context(TypedASTNode* typed_ast) {
     ctx->optimized_ast = NULL;
     
     // Initialize register allocation - DUAL SYSTEM
-    ctx->allocator = init_mp_register_allocator();           // Legacy compatibility
-    ctx->dual_allocator = init_dual_register_allocator();    // New dual system
+    ctx->allocator = compiler_create_allocator();            // Unified dual system
     ctx->next_temp_register = MP_TEMP_REG_START;
     ctx->next_local_register = MP_FRAME_REG_START;
     ctx->next_global_register = MP_GLOBAL_REG_START;
@@ -486,7 +485,7 @@ CompilerContext* init_compiler_context(TypedASTNode* typed_ast) {
     ctx->module_import_count = 0;
     ctx->module_import_capacity = 0;
 
-    if (!ctx->allocator || !ctx->dual_allocator || !ctx->bytecode || !ctx->constants ||
+    if (!ctx->allocator || !ctx->bytecode || !ctx->constants ||
         !ctx->symbols || !ctx->scopes || !ctx->errors) {
         free_compiler_context(ctx);
         return NULL;
@@ -668,8 +667,7 @@ bool run_codegen_pass(CompilerContext* ctx) {
 void free_compiler_context(CompilerContext* ctx) {
     if (!ctx) return;
     
-    free_mp_register_allocator(ctx->allocator);
-    free_dual_register_allocator(ctx->dual_allocator);  // Clean up dual system
+    compiler_destroy_allocator(ctx->allocator);
     free_bytecode_buffer(ctx->bytecode);
     free_constant_pool(ctx->constants);
     

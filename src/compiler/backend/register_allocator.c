@@ -12,11 +12,58 @@
 #include <stdlib.h>
 #include <string.h>
 
+// Internal legacy allocator used by the dual system facade.
+typedef struct MultiPassRegisterAllocator {
+    bool global_regs[GLOBAL_REGISTERS];
+    bool frame_regs[FRAME_REGISTERS];
+    bool temp_regs[TEMP_REGISTERS];
+    bool module_regs[MODULE_REGISTERS];
+
+    bool scope_temp_regs[MP_SCOPE_LEVEL_COUNT][8];
+    int current_scope_level;
+
+    bool typed_residency_hint[REGISTER_COUNT];
+
+    int next_global;
+    int next_frame;
+    int next_temp;
+    int next_module;
+
+    int temp_stack[TEMP_REGISTERS];
+    int temp_stack_top;
+} MultiPassRegisterAllocator;
+
+typedef struct DualRegisterAllocator {
+    MultiPassRegisterAllocator* legacy_allocator;
+
+    bool standard_regs[256];
+
+    bool typed_i32_regs[256];
+    bool typed_i64_regs[256];
+    bool typed_f64_regs[256];
+    bool typed_u32_regs[256];
+    bool typed_u64_regs[256];
+    bool typed_bool_regs[256];
+
+    RegisterAllocation allocations[256];
+    int allocation_count;
+
+    int arithmetic_operation_count;
+    bool prefer_typed_registers;
+} DualRegisterAllocator;
+
 // Disable all debug output for clean program execution
 #define REGISTER_ALLOCATOR_DEBUG 0
 #if REGISTER_ALLOCATOR_DEBUG == 0
 #define printf(...) ((void)0)
 #endif
+
+// Forward declarations for internal helpers used before their definitions.
+static void mp_free_temp_register(MultiPassRegisterAllocator* allocator, int reg);
+static bool mp_has_typed_residency_hint(const MultiPassRegisterAllocator* allocator, int reg);
+static RegisterAllocation* allocate_standard_register(DualRegisterAllocator* allocator,
+                                                      RegisterType type,
+                                                      int scope_preference);
 
 // ====== DUAL REGISTER SYSTEM IMPLEMENTATION ======
 
@@ -290,7 +337,7 @@ void mp_free_register(MultiPassRegisterAllocator* allocator, int reg) {
     }
 }
 
-void mp_free_temp_register(MultiPassRegisterAllocator* allocator, int reg) {
+static void mp_free_temp_register(MultiPassRegisterAllocator* allocator, int reg) {
     if (!allocator) {
         return;
     }
@@ -324,7 +371,7 @@ void mp_set_typed_residency_hint(MultiPassRegisterAllocator* allocator, int reg,
     allocator->typed_residency_hint[reg] = persistent;
 }
 
-bool mp_has_typed_residency_hint(const MultiPassRegisterAllocator* allocator, int reg) {
+static bool mp_has_typed_residency_hint(const MultiPassRegisterAllocator* allocator, int reg) {
     if (!allocator || reg < 0 || reg >= REGISTER_COUNT) {
         return false;
     }
@@ -459,7 +506,9 @@ RegisterAllocation* allocate_typed_register(DualRegisterAllocator* allocator, Re
     return allocation;
 }
 
-RegisterAllocation* allocate_standard_register(DualRegisterAllocator* allocator, RegisterType type, int scope_preference) {
+static RegisterAllocation* allocate_standard_register(DualRegisterAllocator* allocator,
+                                                      RegisterType type,
+                                                      int scope_preference) {
     if (!allocator) return NULL;
     
     // Use legacy allocator to get a standard register based on scope preference
@@ -608,3 +657,119 @@ void print_register_allocation_stats(DualRegisterAllocator* allocator) {
     (void)typed_count;
     (void)standard_count;
 }
+
+// ====== COMPILER FACADE HELPERS ======
+
+DualRegisterAllocator* compiler_create_allocator(void) {
+    return init_dual_register_allocator();
+}
+
+void compiler_destroy_allocator(DualRegisterAllocator* allocator) {
+    free_dual_register_allocator(allocator);
+}
+
+int compiler_alloc_global(DualRegisterAllocator* allocator) {
+    if (!allocator) return -1;
+    return mp_allocate_global_register(allocator->legacy_allocator);
+}
+
+int compiler_alloc_frame(DualRegisterAllocator* allocator) {
+    if (!allocator) return -1;
+    return mp_allocate_frame_register(allocator->legacy_allocator);
+}
+
+int compiler_alloc_temp(DualRegisterAllocator* allocator) {
+    if (!allocator) return -1;
+    return mp_allocate_temp_register(allocator->legacy_allocator);
+}
+
+int compiler_alloc_consecutive_temps(DualRegisterAllocator* allocator, int count) {
+    if (!allocator) return -1;
+    return mp_allocate_consecutive_temp_registers(allocator->legacy_allocator, count);
+}
+
+int compiler_alloc_module(DualRegisterAllocator* allocator) {
+    if (!allocator) return -1;
+    return mp_allocate_module_register(allocator->legacy_allocator);
+}
+
+int compiler_alloc_scoped_temp(DualRegisterAllocator* allocator, int scope_level) {
+    if (!allocator) return -1;
+    return mp_allocate_scoped_temp_register(allocator->legacy_allocator, scope_level);
+}
+
+void compiler_enter_scope(DualRegisterAllocator* allocator) {
+    if (!allocator) return;
+    mp_enter_scope(allocator->legacy_allocator);
+}
+
+void compiler_exit_scope(DualRegisterAllocator* allocator) {
+    if (!allocator) return;
+    mp_exit_scope(allocator->legacy_allocator);
+}
+
+void compiler_free_scoped_temp(DualRegisterAllocator* allocator, int reg, int scope_level) {
+    if (!allocator) return;
+    mp_free_scoped_temp_register(allocator->legacy_allocator, reg, scope_level);
+}
+
+void compiler_free_register(DualRegisterAllocator* allocator, int reg) {
+    if (!allocator) return;
+    mp_free_register(allocator->legacy_allocator, reg);
+}
+
+void compiler_free_temp(DualRegisterAllocator* allocator, int reg) {
+    if (!allocator) return;
+    mp_free_temp_register(allocator->legacy_allocator, reg);
+}
+
+void compiler_set_typed_residency_hint(DualRegisterAllocator* allocator, int reg, bool persistent) {
+    if (!allocator) return;
+    mp_set_typed_residency_hint(allocator->legacy_allocator, reg, persistent);
+}
+
+bool compiler_has_typed_residency_hint(const DualRegisterAllocator* allocator, int reg) {
+    if (!allocator) return false;
+    return mp_has_typed_residency_hint(allocator->legacy_allocator, reg);
+}
+
+void compiler_reserve_global(DualRegisterAllocator* allocator, int reg) {
+    if (!allocator) return;
+    mp_reserve_global_register(allocator->legacy_allocator, reg);
+}
+
+void compiler_reset_frame_registers(DualRegisterAllocator* allocator) {
+    if (!allocator) return;
+    mp_reset_frame_registers(allocator->legacy_allocator);
+}
+
+bool compiler_is_register_free(DualRegisterAllocator* allocator, int reg) {
+    if (!allocator) return false;
+    return mp_is_register_free(allocator->legacy_allocator, reg);
+}
+
+const char* compiler_register_type_name(int reg) {
+    return mp_register_type_name(reg);
+}
+
+RegisterAllocation* compiler_alloc_typed(DualRegisterAllocator* allocator, RegisterType type) {
+    if (!allocator) return NULL;
+    return allocate_typed_register(allocator, type);
+}
+
+RegisterAllocation* compiler_alloc_smart(DualRegisterAllocator* allocator,
+                                         RegisterType type,
+                                         bool is_arithmetic_hot_path) {
+    if (!allocator) return NULL;
+    return allocate_register_smart(allocator, type, is_arithmetic_hot_path);
+}
+
+void compiler_free_allocation(DualRegisterAllocator* allocator, RegisterAllocation* allocation) {
+    if (!allocator) return;
+    free_register_allocation(allocator, allocation);
+}
+
+void compiler_print_register_allocation_stats(DualRegisterAllocator* allocator) {
+    print_register_allocation_stats(allocator);
+}
+

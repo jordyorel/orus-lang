@@ -34,7 +34,6 @@ void emitByte(Compiler* compiler, uint8_t byte);
 // ===== NEW MULTI-PASS COMPILER INFRASTRUCTURE =====
 
 // Forward declarations
-typedef struct MultiPassRegisterAllocator MultiPassRegisterAllocator;
 typedef struct SymbolTable SymbolTable;
 typedef struct ScopeStack ScopeStack;
 // Simple constant pool matching VM's Chunk constants structure
@@ -88,8 +87,7 @@ typedef struct CompilerContext {
     TypedASTNode* optimized_ast;       // After optimization pass
     
     // Register allocation - DUAL SYSTEM
-    MultiPassRegisterAllocator* allocator;        // Legacy allocator (compatibility)
-    struct DualRegisterAllocator* dual_allocator; // New dual system (forward declaration)
+    struct DualRegisterAllocator* allocator;      // Unified dual allocator facade
     int next_temp_register;            // R192-R239 temps
     int next_local_register;           // R64-R191 locals
     int next_global_register;          // R0-R63 globals

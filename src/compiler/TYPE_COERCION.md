@@ -142,7 +142,7 @@ uint8_t get_cast_opcode(TypeKind from_type, TypeKind to_type) {
 ```c
 // Cast left operand if needed
 if (left_type->kind != promoted_type) {
-    int cast_reg = mp_allocate_temp_register(ctx->reg_allocator);
+    int cast_reg = compiler_alloc_temp(ctx->allocator);
     uint8_t cast_opcode = get_cast_opcode(left_type->kind, promoted_type);
     
     if (cast_opcode == OP_HALT) {
@@ -159,7 +159,7 @@ if (left_type->kind != promoted_type) {
 
 // Cast right operand if needed
 if (right_type->kind != promoted_type) {
-    int cast_reg = mp_allocate_temp_register(ctx->reg_allocator);
+    int cast_reg = compiler_alloc_temp(ctx->allocator);
     uint8_t cast_opcode = get_cast_opcode(right_type->kind, promoted_type);
     
     if (cast_opcode == OP_HALT) {
@@ -390,7 +390,7 @@ case NODE_CAST: {
     
     // Emit explicit cast instruction
     uint8_t cast_opcode = get_cast_opcode(source_type->kind, target_type->kind);
-    int target_reg = mp_allocate_temp_register(ctx->allocator);
+    int target_reg = compiler_alloc_temp(ctx->allocator);
     emit_instruction_to_buffer(ctx->bytecode, cast_opcode, target_reg, source_reg, 0);
     
     return target_reg;
