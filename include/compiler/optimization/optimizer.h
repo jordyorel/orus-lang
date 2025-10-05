@@ -14,23 +14,41 @@
 
 #include "compiler/typed_ast.h"
 #include <stdbool.h>
+#include <stddef.h>
 
-// Forward declarations for future implementation 
+// Forward declarations for future implementation
 typedef struct ConstantTable ConstantTable;
 typedef struct UsageAnalysis UsageAnalysis;
 typedef struct ExpressionCache ExpressionCache;
 
-typedef struct OptimizationContext {
-    // Optimization flags
-    bool enable_constant_folding;       // Fold 2+3 → 5
-    bool enable_dead_code_elimination;  // Remove unused variables
-    bool enable_common_subexpression;   // Eliminate duplicate expressions
-    
+typedef struct OptimizationContext OptimizationContext;
+
+typedef struct OptimizationPassResult {
+    bool success;
+    int optimizations_applied;
+    int nodes_eliminated;
+    int constants_folded;
+    int binary_expressions_folded;
+} OptimizationPassResult;
+
+typedef OptimizationPassResult (*OptimizationPassFunction)(TypedASTNode* node, OptimizationContext* ctx);
+
+typedef struct OptimizationPass {
+    const char* name;
+    bool enabled;
+    OptimizationPassFunction run;
+} OptimizationPass;
+
+struct OptimizationContext {
+    OptimizationPass* passes;
+    size_t pass_count;
+    size_t pass_capacity;
+
     // Analysis results (TODO: implement in advanced phases)
     ConstantTable* constants;          // Known constant values
-    UsageAnalysis* usage;              // Variable usage tracking  
+    UsageAnalysis* usage;              // Variable usage tracking
     ExpressionCache* expressions;      // Common expressions
-    
+
     // Statistics for reporting
     int optimizations_applied;
     int nodes_eliminated;
@@ -39,16 +57,17 @@ typedef struct OptimizationContext {
 
     // Debug information
     bool verbose_output;               // Enable detailed optimization logging
-} OptimizationContext;
+};
 
 // Core optimization functions
 OptimizationContext* init_optimization_context(void);
 TypedASTNode* optimize_typed_ast(TypedASTNode* input, OptimizationContext* ctx);
 void free_optimization_context(OptimizationContext* ctx);
 
-// Individual optimization passes
-TypedASTNode* constant_folding_pass(TypedASTNode* node, OptimizationContext* ctx);
-TypedASTNode* dead_code_elimination_pass(TypedASTNode* node, OptimizationContext* ctx);
+// Pass management helpers
+bool set_optimization_pass_enabled(OptimizationContext* ctx, const char* name, bool enabled);
+bool toggle_optimization_pass(OptimizationContext* ctx, const char* name);
+bool is_optimization_pass_enabled(OptimizationContext* ctx, const char* name);
 
 // Utility functions for optimization
 bool is_constant_literal(TypedASTNode* node);
