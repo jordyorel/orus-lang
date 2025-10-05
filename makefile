@@ -245,6 +245,7 @@ UNIT_TEST_RUNNER = test_runner$(SUFFIX)
 BYTECODE_TEST_BIN = $(BUILDDIR)/tests/test_jump_patch
 SOURCE_MAP_TEST_BIN = $(BUILDDIR)/tests/test_source_mapping
 SCOPE_TRACKING_TEST_BIN = $(BUILDDIR)/tests/test_scope_tracking
+FUSED_WHILE_TEST_BIN = $(BUILDDIR)/tests/test_codegen_fused_while
 PEEPHOLE_TEST_BIN = $(BUILDDIR)/tests/test_constant_propagation
 TAGGED_UNION_TEST_BIN = $(BUILDDIR)/tests/test_vm_tagged_union
 TYPED_REGISTER_TEST_BIN = $(BUILDDIR)/tests/test_vm_typed_registers
@@ -267,7 +268,7 @@ BUILTIN_RANGE_ORUS_FAIL_TESTS = \
     tests/builtins/range_float_step.orus \
     tests/builtins/range_overflow_stop.orus
 
-.PHONY: all clean test unit-test test-control-flow benchmark help debug release release-with-wasm profiling analyze install dist package bytecode-jump-tests source-map-tests scope-tracking-tests peephole-tests cli-smoke-tests tagged-union-tests typed-register-tests inc-cmp-jmp-tests fused-loop-bytecode-tests add-i32-imm-tests register-allocator-tests builtin-input-tests builtin-range-tests test-optimizer wasm _test-run _benchmark-run
+.PHONY: all clean test unit-test test-control-flow benchmark help debug release release-with-wasm profiling analyze install dist package bytecode-jump-tests source-map-tests scope-tracking-tests fused-while-tests peephole-tests cli-smoke-tests tagged-union-tests typed-register-tests inc-cmp-jmp-tests add-i32-imm-tests register-allocator-tests builtin-input-tests builtin-range-tests test-optimizer wasm _test-run _benchmark-run
 
 all: build-info $(ORUS)
 
@@ -422,6 +423,9 @@ _test-run: $(ORUS)
 	@echo "\033[36m=== Scope Tracking Tests ===\033[0m"
 	@$(MAKE) scope-tracking-tests
 	@echo ""
+	@echo "\033[36m=== Fused While Codegen Tests ===\033[0m"
+	@$(MAKE) fused-while-tests
+	@echo ""
 	@echo "\033[36m=== Peephole Constant Propagation Tests ===\033[0m"
 	@$(MAKE) peephole-tests
 	@echo ""
@@ -493,6 +497,15 @@ $(SCOPE_TRACKING_TEST_BIN): tests/unit/test_scope_stack.c $(COMPILER_OBJS) $(VM_
 scope-tracking-tests: $(SCOPE_TRACKING_TEST_BIN)
 	@echo "Running scope tracking tests..."
 	@./$(SCOPE_TRACKING_TEST_BIN)
+
+$(FUSED_WHILE_TEST_BIN): tests/unit/test_codegen_fused_while.c $(COMPILER_OBJS) $(VM_OBJS)
+	@mkdir -p $(dir $@)
+	@echo "Compiling fused while codegen tests..."
+	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+
+fused-while-tests: $(FUSED_WHILE_TEST_BIN)
+	@echo "Running fused while codegen tests..."
+	@./$(FUSED_WHILE_TEST_BIN)
 
 $(PEEPHOLE_TEST_BIN): tests/unit/test_constant_propagation.c $(COMPILER_OBJS) $(VM_OBJS)
 	@mkdir -p $(dir $@)

@@ -1025,6 +1025,10 @@ void ensure_i32_typed_register(CompilerContext* ctx, int reg, const TypedASTNode
         return;
     }
 
+    if (ctx->allocator && compiler_has_typed_residency_hint(ctx->allocator, reg)) {
+        return;
+    }
+
     emit_byte_to_buffer(ctx->bytecode, OP_MOVE_I32);
     emit_byte_to_buffer(ctx->bytecode, (uint8_t)reg);
     emit_byte_to_buffer(ctx->bytecode, (uint8_t)reg);
