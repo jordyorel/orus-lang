@@ -67,7 +67,6 @@ typedef enum {
     TOKEN_NOT,
     TOKEN_PRINT,
     TOKEN_PRINT_NO_NL,
-    TOKEN_TIME_STAMP,
     TOKEN_RETURN,
     TOKEN_MUT,
     TOKEN_CONST,
