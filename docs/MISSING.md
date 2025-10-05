@@ -15,6 +15,3 @@
 2. Add lifecycle analysis for variables.
 3. Introduce more iterator-friendly syntax once the baseline execution paths are fully covered by tests.
 
-## Notes
-Loop telemetry, fast paths, and related benchmarks have been removed. Future performance work should be
-planned separately once the functional baseline is stable.
