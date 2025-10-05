@@ -49,6 +49,45 @@ static void free_diagnostic(CompilerDiagnostic* diagnostic) {
     diagnostic->note = NULL;
 }
 
+static bool strings_equal(const char* a, const char* b) {
+    if (a == b) {
+        return true;
+    }
+    if (!a || !b) {
+        return false;
+    }
+    return strcmp(a, b) == 0;
+}
+
+static bool locations_equal(SrcLocation a, SrcLocation b) {
+    bool files_equal = false;
+    if (a.file == b.file) {
+        files_equal = true;
+    } else if (a.file && b.file) {
+        files_equal = strcmp(a.file, b.file) == 0;
+    }
+
+    return files_equal && a.line == b.line && a.column == b.column;
+}
+
+static bool diagnostics_match(const CompilerDiagnostic* diagnostic,
+                              ErrorCode code,
+                              ErrorSeverity severity,
+                              SrcLocation location,
+                              const char* message,
+                              const char* help,
+                              const char* note) {
+    if (!diagnostic) {
+        return false;
+    }
+
+    return diagnostic->code == code && diagnostic->severity == severity &&
+           locations_equal(diagnostic->location, location) &&
+           strings_equal(diagnostic->message, message) &&
+           strings_equal(diagnostic->help, help) &&
+           strings_equal(diagnostic->note, note);
+}
+
 static bool ensure_capacity(ErrorReporter* reporter, size_t required) {
     if (!reporter) {
         return false;
@@ -117,6 +156,13 @@ bool error_reporter_add(ErrorReporter* reporter,
                         const char* note) {
     if (!reporter) {
         return false;
+    }
+
+    for (size_t i = 0; i < reporter->count; ++i) {
+        if (diagnostics_match(&reporter->diagnostics[i], code, severity, location,
+                               message, help, note)) {
+            return true;
+        }
     }
 
     if (!ensure_capacity(reporter, reporter->count + 1)) {
