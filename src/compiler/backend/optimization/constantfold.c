@@ -17,70 +17,8 @@
 #include <limits.h>
 #include <math.h>
 
-// Helper to safely recurse into optional child nodes
-static void fold_child(TypedASTNode* node, ConstantFoldContext* ctx) {
-    if (node) {
-        apply_constant_folding_recursive(node, ctx);
-    }
-}
-
-// Helper to recurse into arrays of child nodes
-static void fold_children(TypedASTNode** nodes, int count, ConstantFoldContext* ctx) {
-    if (!nodes || count <= 0) {
-        return;
-    }
-
-    for (int i = 0; i < count; i++) {
-        if (nodes[i]) {
-            apply_constant_folding_recursive(nodes[i], ctx);
-        }
-    }
-}
-
-// Helper to recurse through struct field metadata
-static void fold_struct_fields(TypedStructField* fields, int count, ConstantFoldContext* ctx) {
-    if (!fields || count <= 0) {
-        return;
-    }
-
-    for (int i = 0; i < count; i++) {
-        fold_child(fields[i].typeAnnotation, ctx);
-        fold_child(fields[i].defaultValue, ctx);
-    }
-}
-
-// Helper to recurse through enum variant field metadata
-static void fold_enum_variants(TypedEnumVariant* variants, int count, ConstantFoldContext* ctx) {
-    if (!variants || count <= 0) {
-        return;
-    }
-
-    for (int i = 0; i < count; i++) {
-        TypedEnumVariant* variant = &variants[i];
-        if (!variant->fields || variant->fieldCount <= 0) {
-            continue;
-        }
-
-        for (int j = 0; j < variant->fieldCount; j++) {
-            fold_child(variant->fields[j].typeAnnotation, ctx);
-        }
-    }
-}
-
-// Helper to recurse through match expression arms
-static void fold_match_arms(TypedMatchArm* arms, int count, ConstantFoldContext* ctx) {
-    if (!arms || count <= 0) {
-        return;
-    }
-
-    for (int i = 0; i < count; i++) {
-        TypedMatchArm* arm = &arms[i];
-        fold_child(arm->valuePattern, ctx);
-        fold_child(arm->body, ctx);
-        fold_child(arm->condition, ctx);
-        fold_children(arm->payloadAccesses, arm->payloadCount, ctx);
-    }
-}
+static bool constant_fold_pre_visit(TypedASTNode* node, void* user_data);
+static bool constant_fold_post_visit(TypedASTNode* node, void* user_data);
 
 static bool is_numeric_zero_literal(const ASTNode* node) {
     if (!node || node->type != NODE_LITERAL) {
@@ -199,6 +137,73 @@ static bool simplify_algebraic_binary_typed(TypedASTNode* node, ConstantFoldCont
     return true;
 }
 
+static bool constant_fold_pre_visit(TypedASTNode* node, void* user_data) {
+    (void)user_data;
+
+    if (!node || !node->original) {
+        return true;
+    }
+
+    switch (node->original->type) {
+        case NODE_BINARY:
+            DEBUG_CONSTANTFOLD_PRINT("Analyzing binary expression: %s\n",
+                   node->original->binary.op ? node->original->binary.op :
+                                               "unknown");
+            break;
+        case NODE_UNARY:
+            DEBUG_CONSTANTFOLD_PRINT("Analyzing unary expression: %s\n",
+                   node->original->unary.op ? node->original->unary.op :
+                                              "unknown");
+            break;
+        case NODE_IF:
+            DEBUG_CONSTANTFOLD_PRINT("Analyzing if statement\n");
+            break;
+        default:
+            break;
+    }
+
+    return true;
+}
+
+static bool constant_fold_post_visit(TypedASTNode* node, void* user_data) {
+    if (!node || !node->original) {
+        return true;
+    }
+
+    ConstantFoldContext* ctx = (ConstantFoldContext*)user_data;
+    ConstantFoldContext local_ctx;
+    if (!ctx) {
+        init_constant_fold_context(&local_ctx);
+        ctx = &local_ctx;
+    }
+
+    switch (node->original->type) {
+        case NODE_BINARY: {
+            bool folded = fold_binary_expression(node, ctx);
+            if (!folded) {
+                simplify_algebraic_binary_typed(node, ctx);
+            }
+            break;
+        }
+        case NODE_UNARY:
+            if (!node->typed.unary.operand && node->original->unary.operand) {
+                fold_ast_node_directly(node->original->unary.operand, ctx);
+            }
+            fold_unary_expression(node, ctx);
+            break;
+        case NODE_IF:
+            if (!node->typed.ifStmt.condition &&
+                node->original->ifStmt.condition) {
+                fold_ast_node_directly(node->original->ifStmt.condition, ctx);
+            }
+            break;
+        default:
+            break;
+    }
+
+    return true;
+}
+
 void init_constant_fold_context(ConstantFoldContext* ctx) {
     ctx->optimizations_applied = 0;
     ctx->constants_folded = 0;
@@ -224,233 +229,16 @@ bool apply_constant_folding(TypedASTNode* ast, ConstantFoldContext* ctx) {
 
 // Main constant folding pass (moved from optimizer.c)
 bool apply_constant_folding_recursive(TypedASTNode* ast, ConstantFoldContext* ctx) {
-    if (!ast || !ast->original) return true;
-
-    switch (ast->original->type) {
-        case NODE_PROGRAM:
-            fold_children(ast->typed.program.declarations, ast->typed.program.count, ctx);
-            break;
-
-        case NODE_FUNCTION:
-            fold_child(ast->typed.function.returnType, ctx);
-            fold_child(ast->typed.function.body, ctx);
-            break;
-
-        case NODE_BLOCK:
-            fold_children(ast->typed.block.statements, ast->typed.block.count, ctx);
-            break;
-
-        case NODE_VAR_DECL:
-            fold_child(ast->typed.varDecl.initializer, ctx);
-            fold_child(ast->typed.varDecl.typeAnnotation, ctx);
-            break;
-
-        case NODE_ASSIGN:
-            fold_child(ast->typed.assign.value, ctx);
-            break;
-
-        case NODE_BINARY:
-            DEBUG_CONSTANTFOLD_PRINT("Analyzing binary expression: %s\n", ast->original->binary.op);
-
-            // Recursively fold child expressions first
-            fold_child(ast->typed.binary.left, ctx);
-            fold_child(ast->typed.binary.right, ctx);
-
-            // Try to fold this binary expression
-            bool folded = fold_binary_expression(ast, ctx);
-            if (!folded) {
-                simplify_algebraic_binary_typed(ast, ctx);
-            }
-            break;
-
-        case NODE_UNARY:
-            DEBUG_CONSTANTFOLD_PRINT("Analyzing unary expression: %s\n",
-                   ast->original->unary.op ? ast->original->unary.op : "unknown");
-
-            // First recursively fold the operand using the typed AST if available
-            if (ast->typed.unary.operand) {
-                DEBUG_CONSTANTFOLD_PRINT("Recursively folding unary operand via typed AST\n");
-                apply_constant_folding_recursive(ast->typed.unary.operand, ctx);
-            } else if (ast->original->unary.operand) {
-                DEBUG_CONSTANTFOLD_PRINT("No typed operand, trying to fold original AST operand directly\n");
-                // For cases where typed AST isn't fully populated, work with original AST
-                // This is a fallback that handles simple cases
-                if (ast->original->unary.operand->type == NODE_BINARY) {
-                    ASTNode* binary_operand = ast->original->unary.operand;
-                    // Check if both operands of the binary expression are literals
-                    if (binary_operand->binary.left && binary_operand->binary.right &&
-                        binary_operand->binary.left->type == NODE_LITERAL &&
-                        binary_operand->binary.right->type == NODE_LITERAL) {
-                        
-                        DEBUG_CONSTANTFOLD_PRINT("Found foldable binary operand in unary expression\n");
-                        
-                        // Evaluate the binary operation directly
-                        Value left = binary_operand->binary.left->literal.value;
-                        Value right = binary_operand->binary.right->literal.value;
-                        const char* op = binary_operand->binary.op;
-                        
-                        Value binary_result = evaluate_binary_operation(left, op, right);
-                        
-                        // Transform the binary operand to a literal
-                        binary_operand->type = NODE_LITERAL;
-                        binary_operand->literal.value = binary_result;
-                        binary_operand->literal.hasExplicitSuffix = false;
-                        
-                        DEBUG_CONSTANTFOLD_PRINT("Folded binary operand to: ");
-                        if (binary_result.type == VAL_BOOL) DEBUG_CONSTANTFOLD_PRINT("%s", AS_BOOL(binary_result) ? "true" : "false");
-                        else if (binary_result.type == VAL_I32) DEBUG_CONSTANTFOLD_PRINT("%d", AS_I32(binary_result));
-                        else DEBUG_CONSTANTFOLD_PRINT("(value)");
-                        DEBUG_CONSTANTFOLD_PRINT("\n");
-
-                        ctx->optimizations_applied++;
-                        ctx->constants_folded++;
-                        ctx->binary_expressions_folded++;
-                    }
-                }
-            }
-
-            // Try to fold the unary expression if the operand is now a literal
-            fold_unary_expression(ast, ctx);
-            break;
-
-        case NODE_PRINT:
-            fold_children(ast->typed.print.values, ast->typed.print.count, ctx);
-            break;
-
-        case NODE_INDEX_ACCESS:
-            fold_child(ast->typed.indexAccess.array, ctx);
-            fold_child(ast->typed.indexAccess.index, ctx);
-            break;
-
-        case NODE_IF:
-            DEBUG_CONSTANTFOLD_PRINT("Analyzing if statement\n");
-
-            // Fold the condition expression using typed AST if available
-            if (ast->typed.ifStmt.condition) {
-                DEBUG_CONSTANTFOLD_PRINT("Folding if condition via typed AST\n");
-                apply_constant_folding_recursive(ast->typed.ifStmt.condition, ctx);
-            } else if (ast->original->ifStmt.condition) {
-                DEBUG_CONSTANTFOLD_PRINT("Folding if condition directly on original AST\n");
-                // Apply constant folding directly to the condition expression
-                fold_ast_node_directly(ast->original->ifStmt.condition, ctx);
-            }
-
-            // Fold the then branch
-            fold_child(ast->typed.ifStmt.thenBranch, ctx);
-
-            // Fold the else branch if it exists
-            fold_child(ast->typed.ifStmt.elseBranch, ctx);
-            break;
-
-        case NODE_WHILE:
-            fold_child(ast->typed.whileStmt.condition, ctx);
-            fold_child(ast->typed.whileStmt.body, ctx);
-            break;
-
-        case NODE_FOR_RANGE:
-            fold_child(ast->typed.forRange.start, ctx);
-            fold_child(ast->typed.forRange.end, ctx);
-            fold_child(ast->typed.forRange.step, ctx);
-            fold_child(ast->typed.forRange.body, ctx);
-            break;
-
-        case NODE_FOR_ITER:
-            fold_child(ast->typed.forIter.iterable, ctx);
-            fold_child(ast->typed.forIter.body, ctx);
-            break;
-
-        case NODE_RETURN:
-            fold_child(ast->typed.returnStmt.value, ctx);
-            break;
-
-        case NODE_CALL:
-            fold_child(ast->typed.call.callee, ctx);
-            fold_children(ast->typed.call.args, ast->typed.call.argCount, ctx);
-            break;
-
-        case NODE_ARRAY_LITERAL:
-            fold_children(ast->typed.arrayLiteral.elements, ast->typed.arrayLiteral.count, ctx);
-            break;
-        case NODE_ARRAY_FILL:
-            fold_child(ast->typed.arrayFill.value, ctx);
-            fold_child(ast->typed.arrayFill.lengthExpr, ctx);
-            break;
-
-        case NODE_ARRAY_ASSIGN:
-            fold_child(ast->typed.arrayAssign.target, ctx);
-            fold_child(ast->typed.arrayAssign.value, ctx);
-            break;
-
-        case NODE_ARRAY_SLICE:
-            fold_child(ast->typed.arraySlice.array, ctx);
-            fold_child(ast->typed.arraySlice.start, ctx);
-            fold_child(ast->typed.arraySlice.end, ctx);
-            break;
-
-        case NODE_TERNARY:
-            fold_child(ast->typed.ternary.condition, ctx);
-            fold_child(ast->typed.ternary.trueExpr, ctx);
-            fold_child(ast->typed.ternary.falseExpr, ctx);
-            break;
-
-        case NODE_CAST:
-            fold_child(ast->typed.cast.expression, ctx);
-            fold_child(ast->typed.cast.targetType, ctx);
-            break;
-
-        case NODE_TRY:
-            fold_child(ast->typed.tryStmt.tryBlock, ctx);
-            fold_child(ast->typed.tryStmt.catchBlock, ctx);
-            break;
-
-        case NODE_MEMBER_ACCESS:
-            fold_child(ast->typed.member.object, ctx);
-            break;
-
-        case NODE_MEMBER_ASSIGN:
-            fold_child(ast->typed.memberAssign.target, ctx);
-            fold_child(ast->typed.memberAssign.value, ctx);
-            break;
-
-        case NODE_STRUCT_LITERAL:
-            fold_children(ast->typed.structLiteral.values, ast->typed.structLiteral.fieldCount, ctx);
-            break;
-
-        case NODE_STRUCT_DECL:
-            fold_struct_fields(ast->typed.structDecl.fields, ast->typed.structDecl.fieldCount, ctx);
-            break;
-
-        case NODE_IMPL_BLOCK:
-            fold_children(ast->typed.implBlock.methods, ast->typed.implBlock.methodCount, ctx);
-            break;
-
-        case NODE_ENUM_DECL:
-            fold_enum_variants(ast->typed.enumDecl.variants, ast->typed.enumDecl.variantCount, ctx);
-            break;
-
-        case NODE_ENUM_MATCH_TEST:
-            fold_child(ast->typed.enumMatchTest.value, ctx);
-            break;
-
-        case NODE_ENUM_PAYLOAD:
-            fold_child(ast->typed.enumPayload.value, ctx);
-            break;
-
-        case NODE_ENUM_MATCH_CHECK:
-            fold_child(ast->typed.enumMatchCheck.value, ctx);
-            break;
-
-        case NODE_MATCH_EXPRESSION:
-            fold_child(ast->typed.matchExpr.subject, ctx);
-            fold_match_arms(ast->typed.matchExpr.arms, ast->typed.matchExpr.armCount, ctx);
-            break;
-
-        default:
-            // No folding needed for other node types
-            break;
+    if (!ast || !ast->original) {
+        return true;
     }
-    
-    return true;
+
+    TypedASTVisitor visitor = {
+        .pre = constant_fold_pre_visit,
+        .post = constant_fold_post_visit,
+    };
+
+    return typed_ast_visit(ast, &visitor, ctx);
 }
 
 bool fold_binary_expression(TypedASTNode* node, ConstantFoldContext* ctx) {
