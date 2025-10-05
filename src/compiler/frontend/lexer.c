@@ -892,7 +892,7 @@ Token scan_token() {
         case '^':
             return make_token(TOKEN_BIT_XOR);
         case ':':
-            return make_token(TOKEN_COLON);
+            return make_token(match_char('=') ? TOKEN_DEFINE : TOKEN_COLON);
         case '\'':
             return make_token(TOKEN_APOSTROPHE);
         case '"':
