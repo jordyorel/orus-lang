@@ -22,129 +22,140 @@
 bool is_spilled_register(uint16_t id);
 bool is_module_register(uint16_t id);
 
-static void clear_typed_frame_registers(void) {
-    uint16_t capacity = (uint16_t)(sizeof(vm.typed_regs.reg_types) /
-                                   sizeof(vm.typed_regs.reg_types[0]));
-
-    uint16_t frame_end = FRAME_REG_START + FRAME_REGISTERS;
-    if (frame_end > capacity) {
-        frame_end = capacity;
-    }
-    for (uint16_t id = FRAME_REG_START; id < frame_end; ++id) {
-        switch (vm.typed_regs.reg_types[id]) {
-            case REG_TYPE_I32:
-                vm.typed_regs.i32_regs[id] = 0;
-                break;
-            case REG_TYPE_I64:
-                vm.typed_regs.i64_regs[id] = 0;
-                break;
-            case REG_TYPE_U32:
-                vm.typed_regs.u32_regs[id] = 0;
-                break;
-            case REG_TYPE_U64:
-                vm.typed_regs.u64_regs[id] = 0;
-                break;
-            case REG_TYPE_F64:
-                vm.typed_regs.f64_regs[id] = 0.0;
-                break;
-            case REG_TYPE_BOOL:
-                vm.typed_regs.bool_regs[id] = false;
-                break;
-            default:
-                break;
-        }
-        vm.typed_regs.reg_types[id] = REG_TYPE_NONE;
-        vm.typed_regs.dirty[id] = false;
+static void typed_window_reset(TypedRegisterWindow* window) {
+    if (!window) {
+        return;
     }
 
-    uint16_t temp_end = TEMP_REG_START + TEMP_REGISTERS;
-    if (temp_end > capacity) {
-        temp_end = capacity;
+    memset(window, 0, sizeof(*window));
+    for (uint16_t i = 0; i < TYPED_REGISTER_WINDOW_SIZE; ++i) {
+        window->heap_regs[i] = BOOL_VAL(false);
+        window->reg_types[i] = REG_TYPE_NONE;
+        window->dirty[i] = false;
     }
-    for (uint16_t id = TEMP_REG_START; id < temp_end; ++id) {
-        switch (vm.typed_regs.reg_types[id]) {
-            case REG_TYPE_I32:
-                vm.typed_regs.i32_regs[id] = 0;
-                break;
-            case REG_TYPE_I64:
-                vm.typed_regs.i64_regs[id] = 0;
-                break;
-            case REG_TYPE_U32:
-                vm.typed_regs.u32_regs[id] = 0;
-                break;
-            case REG_TYPE_U64:
-                vm.typed_regs.u64_regs[id] = 0;
-                break;
-            case REG_TYPE_F64:
-                vm.typed_regs.f64_regs[id] = 0.0;
-                break;
-            case REG_TYPE_BOOL:
-                vm.typed_regs.bool_regs[id] = false;
-                break;
-            default:
-                break;
+    window->next = NULL;
+}
+
+static void typed_window_copy_slot(TypedRegisterWindow* dst, const TypedRegisterWindow* src, uint16_t index) {
+    dst->i32_regs[index] = src->i32_regs[index];
+    dst->i64_regs[index] = src->i64_regs[index];
+    dst->u32_regs[index] = src->u32_regs[index];
+    dst->u64_regs[index] = src->u64_regs[index];
+    dst->f64_regs[index] = src->f64_regs[index];
+    dst->bool_regs[index] = src->bool_regs[index];
+    dst->heap_regs[index] = src->heap_regs[index];
+    dst->reg_types[index] = src->reg_types[index];
+    dst->dirty[index] = src->dirty[index];
+}
+
+static void typed_window_sync_shared_ranges(TypedRegisterWindow* dst, const TypedRegisterWindow* src) {
+    if (!dst || !src) {
+        return;
+    }
+
+    for (uint16_t i = 0; i < FRAME_REG_START && i < TYPED_REGISTER_WINDOW_SIZE; ++i) {
+        typed_window_copy_slot(dst, src, i);
+    }
+
+    uint16_t module_end = MODULE_REG_START + MODULE_REGISTERS;
+    if (MODULE_REG_START < TYPED_REGISTER_WINDOW_SIZE) {
+        if (module_end > TYPED_REGISTER_WINDOW_SIZE) {
+            module_end = TYPED_REGISTER_WINDOW_SIZE;
         }
-        vm.typed_regs.reg_types[id] = REG_TYPE_NONE;
-        vm.typed_regs.dirty[id] = false;
+        for (uint16_t i = MODULE_REG_START; i < module_end; ++i) {
+            typed_window_copy_slot(dst, src, i);
+        }
     }
 }
 
-static void snapshot_typed_frame_state(CallFrame* frame) {
-    for (uint16_t idx = 0; idx < FRAME_REGISTERS; ++idx) {
-        uint16_t reg_id = FRAME_REG_START + idx;
-        frame->saved_i32[idx] = vm.typed_regs.i32_regs[reg_id];
-        frame->saved_i64[idx] = vm.typed_regs.i64_regs[reg_id];
-        frame->saved_u32[idx] = vm.typed_regs.u32_regs[reg_id];
-        frame->saved_u64[idx] = vm.typed_regs.u64_regs[reg_id];
-        frame->saved_f64[idx] = vm.typed_regs.f64_regs[reg_id];
-        frame->saved_bool[idx] = vm.typed_regs.bool_regs[reg_id];
-        frame->saved_heap[idx] = vm.typed_regs.heap_regs[reg_id];
-        frame->saved_types[idx] = vm.typed_regs.reg_types[reg_id];
-        frame->saved_dirty[idx] = vm.typed_regs.dirty[reg_id];
+static void typed_registers_bind_window(TypedRegisterWindow* window) {
+    if (!window) {
+        window = &vm.typed_regs.root_window;
     }
 
-    for (uint16_t idx = 0; idx < TEMP_REGISTERS; ++idx) {
-        uint16_t offset = FRAME_REGISTERS + idx;
-        uint16_t reg_id = TEMP_REG_START + idx;
-        frame->saved_i32[offset] = vm.typed_regs.i32_regs[reg_id];
-        frame->saved_i64[offset] = vm.typed_regs.i64_regs[reg_id];
-        frame->saved_u32[offset] = vm.typed_regs.u32_regs[reg_id];
-        frame->saved_u64[offset] = vm.typed_regs.u64_regs[reg_id];
-        frame->saved_f64[offset] = vm.typed_regs.f64_regs[reg_id];
-        frame->saved_bool[offset] = vm.typed_regs.bool_regs[reg_id];
-        frame->saved_heap[offset] = vm.typed_regs.heap_regs[reg_id];
-        frame->saved_types[offset] = vm.typed_regs.reg_types[reg_id];
-        frame->saved_dirty[offset] = vm.typed_regs.dirty[reg_id];
+    vm.typed_regs.active_window = window;
+    vm.typed_regs.i32_regs = window->i32_regs;
+    vm.typed_regs.i64_regs = window->i64_regs;
+    vm.typed_regs.u32_regs = window->u32_regs;
+    vm.typed_regs.u64_regs = window->u64_regs;
+    vm.typed_regs.f64_regs = window->f64_regs;
+    vm.typed_regs.bool_regs = window->bool_regs;
+    vm.typed_regs.heap_regs = window->heap_regs;
+    vm.typed_regs.dirty = window->dirty;
+    vm.typed_regs.reg_types = window->reg_types;
+}
+
+static TypedRegisterWindow* typed_registers_acquire_window(void) {
+    TypedRegisterWindow* window = vm.typed_regs.free_windows;
+    if (window) {
+        vm.typed_regs.free_windows = window->next;
+    } else {
+        window = (TypedRegisterWindow*)malloc(sizeof(TypedRegisterWindow));
+        if (!window) {
+            return NULL;
+        }
+    }
+
+    typed_window_reset(window);
+    return window;
+}
+
+static void typed_registers_release_window(TypedRegisterWindow* window) {
+    if (!window) {
+        return;
+    }
+
+    typed_window_reset(window);
+    window->next = vm.typed_regs.free_windows;
+    vm.typed_regs.free_windows = window;
+}
+
+static void clear_typed_window_frame(TypedRegisterWindow* window) {
+    if (!window) {
+        return;
+    }
+
+    uint16_t limit = MODULE_REG_START < TYPED_REGISTER_WINDOW_SIZE ? MODULE_REG_START : TYPED_REGISTER_WINDOW_SIZE;
+    for (uint16_t i = FRAME_REG_START; i < limit; ++i) {
+        window->i32_regs[i] = 0;
+        window->i64_regs[i] = 0;
+        window->u32_regs[i] = 0;
+        window->u64_regs[i] = 0;
+        window->f64_regs[i] = 0.0;
+        window->bool_regs[i] = false;
+        window->heap_regs[i] = BOOL_VAL(false);
+        window->reg_types[i] = REG_TYPE_NONE;
+        window->dirty[i] = false;
     }
 }
 
-static void restore_typed_frame_state(const CallFrame* frame) {
-    for (uint16_t idx = 0; idx < FRAME_REGISTERS; ++idx) {
-        uint16_t reg_id = FRAME_REG_START + idx;
-        vm.typed_regs.i32_regs[reg_id] = frame->saved_i32[idx];
-        vm.typed_regs.i64_regs[reg_id] = frame->saved_i64[idx];
-        vm.typed_regs.u32_regs[reg_id] = frame->saved_u32[idx];
-        vm.typed_regs.u64_regs[reg_id] = frame->saved_u64[idx];
-        vm.typed_regs.f64_regs[reg_id] = frame->saved_f64[idx];
-        vm.typed_regs.bool_regs[reg_id] = frame->saved_bool[idx];
-        vm.typed_regs.heap_regs[reg_id] = frame->saved_heap[idx];
-        vm.typed_regs.reg_types[reg_id] = frame->saved_types[idx];
-        vm.typed_regs.dirty[reg_id] = frame->saved_dirty[idx];
+void register_file_clear_active_typed_frame(void) {
+    TypedRegisterWindow* window = vm.typed_regs.active_window;
+    if (!window) {
+        window = &vm.typed_regs.root_window;
+    }
+    clear_typed_window_frame(window);
+}
+
+static void reset_frame_value_storage(CallFrame* frame) {
+    if (!frame) {
+        return;
     }
 
-    for (uint16_t idx = 0; idx < TEMP_REGISTERS; ++idx) {
-        uint16_t offset = FRAME_REGISTERS + idx;
-        uint16_t reg_id = TEMP_REG_START + idx;
-        vm.typed_regs.i32_regs[reg_id] = frame->saved_i32[offset];
-        vm.typed_regs.i64_regs[reg_id] = frame->saved_i64[offset];
-        vm.typed_regs.u32_regs[reg_id] = frame->saved_u32[offset];
-        vm.typed_regs.u64_regs[reg_id] = frame->saved_u64[offset];
-        vm.typed_regs.f64_regs[reg_id] = frame->saved_f64[offset];
-        vm.typed_regs.bool_regs[reg_id] = frame->saved_bool[offset];
-        vm.typed_regs.heap_regs[reg_id] = frame->saved_heap[offset];
-        vm.typed_regs.reg_types[reg_id] = frame->saved_types[offset];
-        vm.typed_regs.dirty[reg_id] = frame->saved_dirty[offset];
+    for (uint16_t i = 0; i < FRAME_REGISTERS; ++i) {
+        frame->registers[i] = BOOL_VAL(false);
     }
+    for (uint16_t i = 0; i < TEMP_REGISTERS; ++i) {
+        frame->temps[i] = BOOL_VAL(false);
+    }
+}
+
+void register_file_reset_active_frame_storage(void) {
+    CallFrame* frame = vm.register_file.current_frame;
+    if (!frame) {
+        return;
+    }
+    reset_frame_value_storage(frame);
 }
 
 // Internal fast register access with branch prediction hints (used by cache)
@@ -293,7 +304,6 @@ CallFrame* allocate_frame(RegisterFile* rf) {
     memset(frame, 0, sizeof(CallFrame));
 
     frame->parent = rf->current_frame;
-    frame->next = rf->frame_stack;
     frame->frame_base = FRAME_REG_START;
     frame->temp_base = TEMP_REG_START;
     frame->temp_count = TEMP_REGISTERS;
@@ -309,14 +319,30 @@ CallFrame* allocate_frame(RegisterFile* rf) {
     frame->resultRegister = FRAME_REG_START;
     frame->parameterBaseRegister = FRAME_REG_START;
     frame->functionIndex = UINT16_MAX;
-    
+
+    TypedRegisterWindow* parent_window =
+        vm.typed_regs.active_window ? vm.typed_regs.active_window : &vm.typed_regs.root_window;
+    TypedRegisterWindow* new_window = typed_registers_acquire_window();
+    if (!new_window) {
+        free(frame);
+        return NULL;
+    }
+
+    typed_window_sync_shared_ranges(new_window, parent_window);
+    frame->typed_window = new_window;
+    frame->previous_typed_window = parent_window;
+    frame->typed_window_version = ++vm.typed_regs.window_version;
+
     // Update register file
+    frame->next = rf->frame_stack;
     rf->frame_stack = frame;
     rf->current_frame = frame;
     rf->temps = frame->temps;
 
-    snapshot_typed_frame_state(frame);
-    clear_typed_frame_registers();
+    typed_registers_bind_window(new_window);
+    vm.typed_regs.active_depth++;
+    clear_typed_window_frame(new_window);
+    reset_frame_value_storage(frame);
 
     return frame;
 }
@@ -326,7 +352,16 @@ void deallocate_frame(RegisterFile* rf) {
 
     CallFrame* frame = rf->current_frame;
 
-    restore_typed_frame_state(frame);
+    TypedRegisterWindow* parent_window =
+        frame->previous_typed_window ? frame->previous_typed_window : &vm.typed_regs.root_window;
+    TypedRegisterWindow* window_to_release = frame->typed_window;
+
+    typed_window_sync_shared_ranges(parent_window, window_to_release);
+    typed_registers_bind_window(parent_window);
+    if (vm.typed_regs.active_depth > 0) {
+        vm.typed_regs.active_depth--;
+    }
+    typed_registers_release_window(window_to_release);
 
     // Update register file
     rf->current_frame = frame->parent;
@@ -389,11 +424,21 @@ void free_register_file(RegisterFile* rf) {
         free_register_cache(rf->cache);
         rf->cache = NULL;
     }
-    
+
     if (rf->metadata) {
         free(rf->metadata);
         rf->metadata = NULL;
     }
+
+    TypedRegisterWindow* window = vm.typed_regs.free_windows;
+    while (window) {
+        TypedRegisterWindow* next = window->next;
+        free(window);
+        window = next;
+    }
+    vm.typed_regs.free_windows = NULL;
+    typed_registers_bind_window(&vm.typed_regs.root_window);
+    vm.typed_regs.active_depth = 0;
 }
 
 // Frame register allocation for compiler

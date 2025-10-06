@@ -31,6 +31,8 @@ void set_register(RegisterFile* rf, uint16_t id, Value value);
 // Phase 1: Frame management functions
 CallFrame* allocate_frame(RegisterFile* rf);
 void deallocate_frame(RegisterFile* rf);
+void register_file_clear_active_typed_frame(void);
+void register_file_reset_active_frame_storage(void);
 
 // Phase 1: Register type checking
 bool is_global_register(uint16_t id);

@@ -6,6 +6,7 @@
 
 #include "vm/vm.h"
 #include "vm/vm_comparison.h"
+#include "vm/vm_dispatch.h"
 #include "runtime/memory.h"
 #include "vm/spill_manager.h"
 
