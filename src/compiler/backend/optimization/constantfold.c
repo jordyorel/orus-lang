@@ -273,7 +273,11 @@ bool fold_binary_expression(TypedASTNode* node, ConstantFoldContext* ctx) {
     }
     
     DEBUG_CONSTANTFOLD_PRINT("Evaluating expression...\n");
-    Value result = evaluate_binary_operation(left, op, right);
+    Value result;
+    if (!evaluate_binary_operation(left, op, right, &result)) {
+        DEBUG_CONSTANTFOLD_PRINT("Evaluation failed; leaving expression unchanged\n");
+        return false;
+    }
     DEBUG_CONSTANTFOLD_PRINT("Evaluation completed\n");
     
     // Transform the original AST node to a literal
@@ -330,23 +334,26 @@ void fold_ast_node_directly(ASTNode* node, ConstantFoldContext* ctx) {
                 else DEBUG_CONSTANTFOLD_PRINT("(value)");
                 DEBUG_CONSTANTFOLD_PRINT("\n");
                 
-                Value result = evaluate_binary_operation(left, op, right);
-                
-                // Transform this binary node to a literal
-                node->type = NODE_LITERAL;
-                node->literal.value = result;
-                node->literal.hasExplicitSuffix = false;
-                
-                ctx->optimizations_applied++;
-                ctx->constants_folded++;
-                ctx->binary_expressions_folded++;
+                Value result;
+                if (evaluate_binary_operation(left, op, right, &result)) {
+                    // Transform this binary node to a literal
+                    node->type = NODE_LITERAL;
+                    node->literal.value = result;
+                    node->literal.hasExplicitSuffix = false;
 
-                DEBUG_CONSTANTFOLD_PRINT("Direct folded to: ");
-                if (result.type == VAL_BOOL) DEBUG_CONSTANTFOLD_PRINT("%s", AS_BOOL(result) ? "true" : "false");
-                else if (result.type == VAL_I32) DEBUG_CONSTANTFOLD_PRINT("%d", AS_I32(result));
-                else DEBUG_CONSTANTFOLD_PRINT("(value)");
-                DEBUG_CONSTANTFOLD_PRINT("\n");
-            } else if (simplify_algebraic_binary_ast(node)) {
+                    ctx->optimizations_applied++;
+                    ctx->constants_folded++;
+                    ctx->binary_expressions_folded++;
+
+                    DEBUG_CONSTANTFOLD_PRINT("Direct folded to: ");
+                    if (result.type == VAL_BOOL) DEBUG_CONSTANTFOLD_PRINT("%s", AS_BOOL(result) ? "true" : "false");
+                    else if (result.type == VAL_I32) DEBUG_CONSTANTFOLD_PRINT("%d", AS_I32(result));
+                    else DEBUG_CONSTANTFOLD_PRINT("(value)");
+                    DEBUG_CONSTANTFOLD_PRINT("\n");
+                }
+            }
+
+            if (node->type == NODE_BINARY && simplify_algebraic_binary_ast(node)) {
                 ctx->optimizations_applied++;
                 ctx->constants_folded++;
                 ctx->binary_expressions_folded++;
@@ -510,14 +517,20 @@ bool is_foldable_binary(TypedASTNode* node) {
     return is_foldable;
 }
 
-Value evaluate_binary_operation(Value left, const char* op, Value right) {
+bool evaluate_binary_operation(Value left, const char* op, Value right, Value* out_result) {
+    if (!op || !out_result) {
+        return false;
+    }
+
     // Arithmetic operations
     if (strcmp(op, "+") == 0) {
         if (left.type == VAL_I32 && right.type == VAL_I32) {
-            return I32_VAL(AS_I32(left) + AS_I32(right));
+            *out_result = I32_VAL(AS_I32(left) + AS_I32(right));
+            return true;
         }
         if (left.type == VAL_F64 && right.type == VAL_F64) {
-            return F64_VAL(AS_F64(left) + AS_F64(right));
+            *out_result = F64_VAL(AS_F64(left) + AS_F64(right));
+            return true;
         }
         if (left.type == VAL_STRING && right.type == VAL_STRING) {
             ObjString* leftStr = AS_STRING(left);
@@ -527,7 +540,7 @@ Value evaluate_binary_operation(Value left, const char* op, Value right) {
             char* buffer = (char*)malloc((size_t)newLength + 1);
             if (!buffer) {
                 DEBUG_CONSTANTFOLD_PRINT("⚠️ Failed to allocate buffer for string folding\n");
-                return left;
+                return false;
             }
 
             memcpy(buffer, leftStr->chars, (size_t)leftStr->length);
@@ -539,118 +552,142 @@ Value evaluate_binary_operation(Value left, const char* op, Value right) {
 
             if (!resultStr) {
                 DEBUG_CONSTANTFOLD_PRINT("⚠️ Failed to intern folded string\n");
-                return left;
+                return false;
             }
 
-            return STRING_VAL(resultStr);
+            *out_result = STRING_VAL(resultStr);
+            return true;
         }
     }
     else if (strcmp(op, "-") == 0) {
         if (left.type == VAL_I32 && right.type == VAL_I32) {
-            return I32_VAL(AS_I32(left) - AS_I32(right));
+            *out_result = I32_VAL(AS_I32(left) - AS_I32(right));
+            return true;
         }
         if (left.type == VAL_F64 && right.type == VAL_F64) {
-            return F64_VAL(AS_F64(left) - AS_F64(right));
+            *out_result = F64_VAL(AS_F64(left) - AS_F64(right));
+            return true;
         }
     }
     else if (strcmp(op, "*") == 0) {
         if (left.type == VAL_I32 && right.type == VAL_I32) {
-            return I32_VAL(AS_I32(left) * AS_I32(right));
+            *out_result = I32_VAL(AS_I32(left) * AS_I32(right));
+            return true;
         }
         if (left.type == VAL_F64 && right.type == VAL_F64) {
-            return F64_VAL(AS_F64(left) * AS_F64(right));
+            *out_result = F64_VAL(AS_F64(left) * AS_F64(right));
+            return true;
         }
     }
     else if (strcmp(op, "/") == 0) {
         if (left.type == VAL_I32 && right.type == VAL_I32) {
             if (AS_I32(right) == 0) {
                 DEBUG_CONSTANTFOLD_PRINT("⚠️ Division by zero detected\n");
-                return left; // Return unchanged
+                return false;
             }
-            return I32_VAL(AS_I32(left) / AS_I32(right));
+            *out_result = I32_VAL(AS_I32(left) / AS_I32(right));
+            return true;
         }
         if (left.type == VAL_F64 && right.type == VAL_F64) {
-            return F64_VAL(AS_F64(left) / AS_F64(right));
+            *out_result = F64_VAL(AS_F64(left) / AS_F64(right));
+            return true;
         }
     }
     else if (strcmp(op, "%") == 0) {
         if (left.type == VAL_I32 && right.type == VAL_I32) {
             if (AS_I32(right) == 0) {
                 DEBUG_CONSTANTFOLD_PRINT("⚠️ Modulo by zero detected\n");
-                return left; // Return unchanged
+                return false;
             }
-            return I32_VAL(AS_I32(left) % AS_I32(right));
+            *out_result = I32_VAL(AS_I32(left) % AS_I32(right));
+            return true;
         }
     }
     // Logical operations
     else if (strcmp(op, "and") == 0) {
         if (left.type == VAL_BOOL && right.type == VAL_BOOL) {
-            return BOOL_VAL(AS_BOOL(left) && AS_BOOL(right));
+            *out_result = BOOL_VAL(AS_BOOL(left) && AS_BOOL(right));
+            return true;
         }
     }
     else if (strcmp(op, "or") == 0) {
         if (left.type == VAL_BOOL && right.type == VAL_BOOL) {
-            return BOOL_VAL(AS_BOOL(left) || AS_BOOL(right));
+            *out_result = BOOL_VAL(AS_BOOL(left) || AS_BOOL(right));
+            return true;
         }
     }
     // Comparison operations
     else if (strcmp(op, "==") == 0) {
         if (left.type == VAL_BOOL && right.type == VAL_BOOL) {
-            return BOOL_VAL(AS_BOOL(left) == AS_BOOL(right));
+            *out_result = BOOL_VAL(AS_BOOL(left) == AS_BOOL(right));
+            return true;
         }
         if (left.type == VAL_I32 && right.type == VAL_I32) {
-            return BOOL_VAL(AS_I32(left) == AS_I32(right));
+            *out_result = BOOL_VAL(AS_I32(left) == AS_I32(right));
+            return true;
         }
         if (left.type == VAL_F64 && right.type == VAL_F64) {
-            return BOOL_VAL(AS_F64(left) == AS_F64(right));
+            *out_result = BOOL_VAL(AS_F64(left) == AS_F64(right));
+            return true;
         }
     }
     else if (strcmp(op, "!=") == 0) {
         if (left.type == VAL_BOOL && right.type == VAL_BOOL) {
-            return BOOL_VAL(AS_BOOL(left) != AS_BOOL(right));
+            *out_result = BOOL_VAL(AS_BOOL(left) != AS_BOOL(right));
+            return true;
         }
         if (left.type == VAL_I32 && right.type == VAL_I32) {
-            return BOOL_VAL(AS_I32(left) != AS_I32(right));
+            *out_result = BOOL_VAL(AS_I32(left) != AS_I32(right));
+            return true;
         }
         if (left.type == VAL_F64 && right.type == VAL_F64) {
-            return BOOL_VAL(AS_F64(left) != AS_F64(right));
+            *out_result = BOOL_VAL(AS_F64(left) != AS_F64(right));
+            return true;
         }
     }
     else if (strcmp(op, "<") == 0) {
         if (left.type == VAL_I32 && right.type == VAL_I32) {
-            return BOOL_VAL(AS_I32(left) < AS_I32(right));
+            *out_result = BOOL_VAL(AS_I32(left) < AS_I32(right));
+            return true;
         }
         if (left.type == VAL_F64 && right.type == VAL_F64) {
-            return BOOL_VAL(AS_F64(left) < AS_F64(right));
+            *out_result = BOOL_VAL(AS_F64(left) < AS_F64(right));
+            return true;
         }
     }
     else if (strcmp(op, ">") == 0) {
         if (left.type == VAL_I32 && right.type == VAL_I32) {
-            return BOOL_VAL(AS_I32(left) > AS_I32(right));
-        }  
+            *out_result = BOOL_VAL(AS_I32(left) > AS_I32(right));
+            return true;
+        }
         if (left.type == VAL_F64 && right.type == VAL_F64) {
-            return BOOL_VAL(AS_F64(left) > AS_F64(right));
+            *out_result = BOOL_VAL(AS_F64(left) > AS_F64(right));
+            return true;
         }
     }
     else if (strcmp(op, "<=") == 0) {
         if (left.type == VAL_I32 && right.type == VAL_I32) {
-            return BOOL_VAL(AS_I32(left) <= AS_I32(right));
+            *out_result = BOOL_VAL(AS_I32(left) <= AS_I32(right));
+            return true;
         }
         if (left.type == VAL_F64 && right.type == VAL_F64) {
-            return BOOL_VAL(AS_F64(left) <= AS_F64(right));
+            *out_result = BOOL_VAL(AS_F64(left) <= AS_F64(right));
+            return true;
         }
     }
     else if (strcmp(op, ">=") == 0) {
         if (left.type == VAL_I32 && right.type == VAL_I32) {
-            return BOOL_VAL(AS_I32(left) >= AS_I32(right));
+            *out_result = BOOL_VAL(AS_I32(left) >= AS_I32(right));
+            return true;
         }
         if (left.type == VAL_F64 && right.type == VAL_F64) {
-            return BOOL_VAL(AS_F64(left) >= AS_F64(right));
+            *out_result = BOOL_VAL(AS_F64(left) >= AS_F64(right));
+            return true;
         }
     }
-    
+
     DEBUG_CONSTANTFOLD_PRINT("⚠️ Unsupported operation or type mismatch\n");
-    return left; // Return left operand unchanged
+    return false;
 }
 
 bool has_overflow(Value left, const char* op, Value right) {

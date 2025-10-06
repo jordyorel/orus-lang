@@ -34,7 +34,7 @@ void fold_ast_node_directly(ASTNode* node, ConstantFoldContext* ctx);
 
 // Helper functions
 bool is_foldable_binary(TypedASTNode* node);
-Value evaluate_binary_operation(Value left, const char* op, Value right);
+bool evaluate_binary_operation(Value left, const char* op, Value right, Value* out_result);
 bool has_overflow(Value left, const char* op, Value right);
 
 // Statistics and reporting

@@ -16,6 +16,272 @@
 #include <stdlib.h>
 #include <string.h>
 
+static bool type_is_void_like(Type* type) {
+    if (!type) {
+        return true;
+    }
+
+    Type* resolved = prune(type);
+    if (!resolved) {
+        return true;
+    }
+
+    return resolved->kind == TYPE_VOID || resolved->kind == TYPE_UNKNOWN ||
+           resolved->kind == TYPE_ERROR;
+}
+
+static bool node_is_expression_type(NodeType type) {
+    switch (type) {
+        case NODE_IDENTIFIER:
+        case NODE_LITERAL:
+        case NODE_ARRAY_LITERAL:
+        case NODE_ARRAY_FILL:
+        case NODE_ARRAY_SLICE:
+        case NODE_INDEX_ACCESS:
+        case NODE_BINARY:
+        case NODE_TERNARY:
+        case NODE_UNARY:
+        case NODE_CALL:
+        case NODE_CAST:
+        case NODE_STRUCT_LITERAL:
+        case NODE_MEMBER_ACCESS:
+        case NODE_ENUM_MATCH_TEST:
+        case NODE_ENUM_PAYLOAD:
+        case NODE_MATCH_EXPRESSION:
+        case NODE_TIME_STAMP:
+        case NODE_TYPE:
+            return true;
+        default:
+            return false;
+    }
+}
+
+static bool emit_return_from_register(CompilerContext* ctx, TypedASTNode* origin, int value_reg) {
+    if (!ctx || value_reg == -1) {
+        return false;
+    }
+
+    set_location_from_node(ctx, origin);
+    emit_byte_to_buffer(ctx->bytecode, OP_RETURN_R);
+    emit_byte_to_buffer(ctx->bytecode, (uint8_t)value_reg);
+
+    if (value_reg >= MP_TEMP_REG_START && value_reg <= MP_TEMP_REG_END) {
+        compiler_free_temp(ctx->allocator, value_reg);
+    }
+
+    return true;
+}
+
+static bool ensure_statement_terminates_with_return(CompilerContext* ctx,
+                                                   TypedASTNode* stmt,
+                                                   Type* return_type);
+
+static bool emit_implicit_return_from_expression(CompilerContext* ctx,
+                                                 TypedASTNode* expr) {
+    if (!ctx || !expr) {
+        return false;
+    }
+
+    int value_reg = compile_expression(ctx, expr);
+    if (value_reg == -1) {
+        return false;
+    }
+
+    return emit_return_from_register(ctx, expr, value_reg);
+}
+
+static bool emit_branch_return(CompilerContext* ctx,
+                               TypedASTNode* branch,
+                               Type* return_type);
+
+static bool emit_implicit_return_from_block(CompilerContext* ctx,
+                                            TypedASTNode* block,
+                                            Type* return_type) {
+    if (!ctx || !block || !block->original ||
+        block->original->type != NODE_BLOCK) {
+        return false;
+    }
+
+    bool creates_scope = block->original->block.createsScope;
+    SymbolTable* saved_scope = ctx->symbols;
+    ScopeFrame* lexical_frame = NULL;
+    int lexical_frame_index = -1;
+
+    if (creates_scope) {
+        ctx->symbols = create_symbol_table(saved_scope);
+        if (!ctx->symbols) {
+            ctx->symbols = saved_scope;
+            return false;
+        }
+
+        if (ctx->allocator) {
+            compiler_enter_scope(ctx->allocator);
+        }
+
+        if (ctx->scopes) {
+            lexical_frame = scope_stack_push(ctx->scopes, SCOPE_KIND_LEXICAL);
+            if (lexical_frame) {
+                lexical_frame->symbols = ctx->symbols;
+                lexical_frame->start_offset = ctx->bytecode ? ctx->bytecode->count : 0;
+                lexical_frame->end_offset = lexical_frame->start_offset;
+                lexical_frame_index = lexical_frame->lexical_depth;
+            }
+        }
+    }
+
+    bool success = false;
+    int count = block->typed.block.count;
+    for (int i = 0; i < count; i++) {
+        TypedASTNode* nested = block->typed.block.statements[i];
+        if (!nested) {
+            continue;
+        }
+
+        bool is_last = (i == count - 1);
+        if (!is_last) {
+            compile_statement(ctx, nested);
+            continue;
+        }
+
+        if (ensure_statement_terminates_with_return(ctx, nested, return_type)) {
+            success = true;
+        } else {
+            compile_statement(ctx, nested);
+            if (nested->original && nested->original->type == NODE_RETURN) {
+                success = true;
+            }
+        }
+    }
+
+    if (creates_scope) {
+        if (ctx->symbols) {
+            for (int i = 0; i < ctx->symbols->capacity; i++) {
+                Symbol* symbol = ctx->symbols->symbols[i];
+                while (symbol) {
+                    if (symbol->legacy_register_id >= MP_FRAME_REG_START &&
+                        symbol->legacy_register_id <= MP_FRAME_REG_END) {
+                        compiler_free_register(ctx->allocator, symbol->legacy_register_id);
+                    }
+                    symbol = symbol->next;
+                }
+            }
+        }
+
+        if (lexical_frame) {
+            ScopeFrame* refreshed = get_scope_frame_by_index(ctx, lexical_frame_index);
+            if (refreshed) {
+                refreshed->end_offset = ctx->bytecode ? ctx->bytecode->count : lexical_frame->start_offset;
+            }
+            if (ctx->scopes) {
+                scope_stack_pop(ctx->scopes);
+            }
+        }
+
+        if (ctx->allocator) {
+            compiler_exit_scope(ctx->allocator);
+        }
+
+        free_symbol_table(ctx->symbols);
+        ctx->symbols = saved_scope;
+    }
+
+    return success;
+}
+
+static bool emit_implicit_return_from_if(CompilerContext* ctx,
+                                         TypedASTNode* if_stmt,
+                                         Type* return_type) {
+    if (!ctx || !if_stmt || !if_stmt->original ||
+        if_stmt->original->type != NODE_IF ||
+        !if_stmt->typed.ifStmt.condition ||
+        !if_stmt->typed.ifStmt.elseBranch) {
+        return false;
+    }
+
+    int condition_reg = compile_expression(ctx, if_stmt->typed.ifStmt.condition);
+    if (condition_reg == -1) {
+        return false;
+    }
+
+    set_location_from_node(ctx, if_stmt);
+    emit_byte_to_buffer(ctx->bytecode, OP_JUMP_IF_NOT_R);
+    emit_byte_to_buffer(ctx->bytecode, (uint8_t)condition_reg);
+    int else_patch = emit_jump_placeholder(ctx->bytecode, OP_JUMP_IF_NOT_R);
+    if (else_patch < 0) {
+        if (condition_reg >= MP_TEMP_REG_START && condition_reg <= MP_TEMP_REG_END) {
+            compiler_free_temp(ctx->allocator, condition_reg);
+        }
+        return false;
+    }
+
+    if (condition_reg >= MP_TEMP_REG_START && condition_reg <= MP_TEMP_REG_END) {
+        compiler_free_temp(ctx->allocator, condition_reg);
+    }
+
+    if (!emit_branch_return(ctx, if_stmt->typed.ifStmt.thenBranch, return_type)) {
+        return false;
+    }
+
+    int else_target = ctx->bytecode ? ctx->bytecode->count : 0;
+    if (!patch_jump(ctx->bytecode, else_patch, else_target)) {
+        return false;
+    }
+
+    return emit_branch_return(ctx, if_stmt->typed.ifStmt.elseBranch, return_type);
+}
+
+static bool emit_branch_return(CompilerContext* ctx,
+                               TypedASTNode* branch,
+                               Type* return_type) {
+    if (!ctx || !branch || !branch->original) {
+        return false;
+    }
+
+    if (branch->original->type == NODE_BLOCK) {
+        return emit_implicit_return_from_block(ctx, branch, return_type);
+    }
+
+    if (ensure_statement_terminates_with_return(ctx, branch, return_type)) {
+        return true;
+    }
+
+    compile_statement(ctx, branch);
+    return branch->original->type == NODE_RETURN;
+}
+
+static bool ensure_statement_terminates_with_return(CompilerContext* ctx,
+                                                   TypedASTNode* stmt,
+                                                   Type* return_type) {
+    if (!ctx || !stmt || !stmt->original) {
+        return false;
+    }
+
+    NodeType node_type = stmt->original->type;
+
+    if (node_type == NODE_RETURN) {
+        compile_statement(ctx, stmt);
+        return true;
+    }
+
+    if (type_is_void_like(return_type)) {
+        return false;
+    }
+
+    if (node_is_expression_type(node_type)) {
+        return emit_implicit_return_from_expression(ctx, stmt);
+    }
+
+    if (node_type == NODE_BLOCK) {
+        return emit_implicit_return_from_block(ctx, stmt, return_type);
+    }
+
+    if (node_type == NODE_IF) {
+        return emit_implicit_return_from_if(ctx, stmt, return_type);
+    }
+
+    return false;
+}
+
 void finalize_functions_to_vm(CompilerContext* ctx) {
     if (!ctx) return;
     
@@ -185,14 +451,31 @@ int compile_function_declaration(CompilerContext* ctx, TypedASTNode* func) {
     }
 
     // Compile function body
+    Type* return_type = NULL;
+    if (function_type && function_type->kind == TYPE_FUNCTION) {
+        return_type = function_type->info.function.returnType;
+    }
+
     if (func->typed.function.body) {
         if (func->typed.function.body->original->type == NODE_BLOCK) {
-            for (int i = 0; i < func->typed.function.body->typed.block.count; i++) {
+            int statement_count = func->typed.function.body->typed.block.count;
+            for (int i = 0; i < statement_count; i++) {
                 TypedASTNode* stmt = func->typed.function.body->typed.block.statements[i];
-                if (stmt) compile_statement(ctx, stmt);
+                if (!stmt) {
+                    continue;
+                }
+
+                bool is_last = (i == statement_count - 1);
+                if (is_last && ensure_statement_terminates_with_return(ctx, stmt, return_type)) {
+                    continue;
+                }
+
+                compile_statement(ctx, stmt);
             }
         } else {
-            compile_statement(ctx, func->typed.function.body);
+            if (!ensure_statement_terminates_with_return(ctx, func->typed.function.body, return_type)) {
+                compile_statement(ctx, func->typed.function.body);
+            }
         }
     }
 

@@ -1,0 +1,17 @@
+// Validate that expression-oriented control flow can return values implicitly
+// at the end of a function body without requiring an explicit `return`.
+print("== Functions: implicit return expressions ==")
+
+fn fib_expr(n: i32) -> i32:
+    if n <= 1: n
+    else: fib_expr(n - 1) + fib_expr(n - 2)
+
+fn min_expr(a: i32, b: i32) -> i32:
+    if a <= b: a
+    else: b
+
+if assert_eq("implicit fib", fib_expr(10), 55):
+    print("ok", "fib_expr", fib_expr(10))
+
+if assert_eq("implicit min", min_expr(7, 3), 3):
+    print("ok", "min_expr", min_expr(7, 3))

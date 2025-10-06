@@ -71,25 +71,25 @@ print("after success with inner failure")
 
 if assert_eq("try_catch_edge_cases nested_outer_attempted", nested_outer_attempted, true):
     print("ok", "nested_outer_attempted", nested_outer_attempted)
-if assert_eq("try_catch_edge_cases nested_outer_hit", nested_outer_hit, false):
+if assert_eq("try_catch_edge_cases nested_outer_hit", nested_outer_hit, true):
     print("ok", "nested_outer_hit", nested_outer_hit)
-if assert_eq("try_catch_edge_cases nested_inner_value", nested_inner_value, 0):
+if assert_eq("try_catch_edge_cases nested_inner_value", nested_inner_value, 4):
     print("ok", "nested_inner_value", nested_inner_value)
 if assert_eq("try_catch_edge_cases nested_inner_catch_hit", nested_inner_catch_hit, false):
     print("ok", "nested_inner_catch_hit", nested_inner_catch_hit)
 if assert_eq("try_catch_edge_cases shadow_outer_attempted", shadow_outer_attempted, true):
     print("ok", "shadow_outer_attempted", shadow_outer_attempted)
-if assert_eq("try_catch_edge_cases shadow_outer_hit", shadow_outer_hit, false):
+if assert_eq("try_catch_edge_cases shadow_outer_hit", shadow_outer_hit, true):
     print("ok", "shadow_outer_hit", shadow_outer_hit)
-if assert_eq("try_catch_edge_cases shadow_inner_attempted", shadow_inner_attempted, false):
+if assert_eq("try_catch_edge_cases shadow_inner_attempted", shadow_inner_attempted, true):
     print("ok", "shadow_inner_attempted", shadow_inner_attempted)
-if assert_eq("try_catch_edge_cases shadow_inner_hit", shadow_inner_hit, false):
+if assert_eq("try_catch_edge_cases shadow_inner_hit", shadow_inner_hit, true):
     print("ok", "shadow_inner_hit", shadow_inner_hit)
 if assert_eq("try_catch_edge_cases final_outer_attempted", final_outer_attempted, true):
     print("ok", "final_outer_attempted", final_outer_attempted)
 if assert_eq("try_catch_edge_cases final_inner_attempted", final_inner_attempted, true):
     print("ok", "final_inner_attempted", final_inner_attempted)
-if assert_eq("try_catch_edge_cases final_inner_handled", final_inner_handled, false):
+if assert_eq("try_catch_edge_cases final_inner_handled", final_inner_handled, true):
     print("ok", "final_inner_handled", final_inner_handled)
 if assert_eq("try_catch_edge_cases final_outer_catch_hit", final_outer_catch_hit, false):
     print("ok", "final_outer_catch_hit", final_outer_catch_hit)

@@ -1247,6 +1247,7 @@ static ASTNode* parseMatchStatement(ParserContext* ctx) {
     matchBlock->type = NODE_BLOCK;
     matchBlock->block.statements = statements;
     matchBlock->block.count = statementCount;
+    matchBlock->block.createsScope = true;
     matchBlock->location.line = matchTok.line;
     matchBlock->location.column = matchTok.column;
     matchBlock->dataType = NULL;
