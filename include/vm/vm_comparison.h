@@ -13,11 +13,14 @@
 #include "../../src/vm/core/vm_internal.h"
 #include "vm/register_file.h"
 
-#define VM_TYPED_REGISTER_LIMIT ((uint16_t)TYPED_REGISTER_WINDOW_SIZE)
+#define VM_TYPED_REGISTER_LIMIT \
+    ((uint16_t)(sizeof(((TypedRegisters*)0)->i32_regs) / sizeof(int32_t)))
 
 // Frame-aware register access helpers shared across dispatch implementations
 
-static inline uint16_t vm_typed_register_capacity(void) { return VM_TYPED_REGISTER_LIMIT; }
+static inline uint16_t vm_typed_register_capacity(void) {
+    return (uint16_t)(sizeof(vm.typed_regs.i32_regs) / sizeof(vm.typed_regs.i32_regs[0]));
+}
 
 static inline bool vm_typed_reg_in_range(uint16_t id) {
     return id < VM_TYPED_REGISTER_LIMIT;

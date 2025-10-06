@@ -4,7 +4,6 @@
 #include "vm/vm.h"
 #include "vm/vm_comparison.h"
 #include "vm/vm_dispatch.h"
-#include "vm/register_file.h"
 #include "runtime/memory.h"
 
 #define ASSERT_TRUE(cond, message)                                                         \
@@ -237,85 +236,12 @@ static bool test_array_iterator_preserves_typed_loop_variable(void) {
     return true;
 }
 
-static bool test_nested_frames_preserve_typed_windows(void) {
-    initVM();
-
-    CallFrame* parent = allocate_frame(&vm.register_file);
-    ASSERT_TRUE(parent != NULL, "allocate_frame should return parent frame");
-
-    const uint16_t reg = FRAME_REG_START;
-    vm_store_i64_typed_hot(reg, 17);
-    ASSERT_TRUE(parent->typed_window != NULL, "Parent frame should own typed window");
-    ASSERT_TRUE(parent->typed_window->i64_regs[reg] == 17,
-                "Parent typed window should capture initial value");
-
-    CallFrame* child = allocate_frame(&vm.register_file);
-    ASSERT_TRUE(child != NULL, "allocate_frame should return child frame");
-    ASSERT_TRUE(child->typed_window != parent->typed_window,
-                "Child frame should receive distinct typed window");
-
-    vm_store_i64_typed_hot(reg, 99);
-    ASSERT_TRUE(vm.typed_regs.i64_regs[reg] == 99,
-                "Active typed window should reflect child writes");
-    ASSERT_TRUE(parent->typed_window->i64_regs[reg] == 17,
-                "Parent typed window should remain untouched during child execution");
-
-    deallocate_frame(&vm.register_file);
-    ASSERT_TRUE(vm.typed_regs.i64_regs[reg] == 17,
-                "Restoring parent frame should reactivate original typed payload");
-
-    deallocate_frame(&vm.register_file);
-    freeVM();
-    return true;
-}
-
-static bool test_global_typed_state_propagates_across_frames(void) {
-    initVM();
-
-    vm_store_i64_typed_hot(0, 11);
-    ASSERT_TRUE(vm.typed_regs.i64_regs[0] == 11,
-                "Root window should capture initial global value");
-
-    CallFrame* parent = allocate_frame(&vm.register_file);
-    ASSERT_TRUE(parent != NULL, "allocate_frame should produce parent frame");
-
-    vm_store_i64_typed_hot(0, 22);
-    ASSERT_TRUE(parent->typed_window->i64_regs[0] == 22,
-                "Parent window should observe updated global value");
-
-    CallFrame* child = allocate_frame(&vm.register_file);
-    ASSERT_TRUE(child != NULL, "allocate_frame should produce child frame");
-
-    vm_store_i64_typed_hot(0, 33);
-    ASSERT_TRUE(vm.typed_regs.i64_regs[0] == 33,
-                "Active child window should observe latest global write");
-
-    deallocate_frame(&vm.register_file);
-    ASSERT_TRUE(vm.typed_regs.i64_regs[0] == 33,
-                "Parent window should inherit child global writes");
-    ASSERT_TRUE(parent->typed_window->i64_regs[0] == 33,
-                "Parent typed cache should match propagated value");
-    ASSERT_TRUE(IS_I64(vm.register_file.globals[0]) && AS_I64(vm.register_file.globals[0]) == 33,
-                "Register file globals should store propagated value");
-
-    deallocate_frame(&vm.register_file);
-    ASSERT_TRUE(vm.typed_regs.root_window.i64_regs[0] == 33,
-                "Root window should retain latest global value after unwinding");
-    ASSERT_TRUE(IS_I64(vm.registers[0]) && AS_I64(vm.registers[0]) == 33,
-                "Mirror register array should reflect propagated global value");
-
-    freeVM();
-    return true;
-}
-
 int main(void) {
     bool (*tests[])(void) = {
         test_typed_register_deferred_boxing_flushes_on_read,
         test_typed_register_flushes_for_open_upvalue,
         test_range_iterator_uses_typed_registers,
         test_array_iterator_preserves_typed_loop_variable,
-        test_nested_frames_preserve_typed_windows,
-        test_global_typed_state_propagates_across_frames,
     };
 
     const char* names[] = {
@@ -323,8 +249,6 @@ int main(void) {
         "Open upvalues force boxed synchronization",
         "Range iterators keep loop variable typed",
         "Array iterators keep loop variable typed",
-        "Nested frames reuse typed windows without copying",
-        "Global typed state propagates across frames",
     };
 
     int passed = 0;

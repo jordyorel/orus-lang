@@ -1003,7 +1003,7 @@ InterpretResult vm_run_dispatch(void) {
 
     LABEL_OP_DEC_I32_R: {
             uint8_t reg = READ_BYTE();
-            const uint8_t typed_limit = (uint8_t)TYPED_REGISTER_WINDOW_SIZE;
+            const uint8_t typed_limit = (uint8_t)(sizeof(vm.typed_regs.i32_regs) / sizeof(vm.typed_regs.i32_regs[0]));
 
             if (reg < typed_limit && vm.typed_regs.reg_types[reg] == REG_TYPE_I32) {
     #if USE_FAST_ARITH

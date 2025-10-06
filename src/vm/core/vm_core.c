@@ -41,26 +41,12 @@ void initVM(void) {
     }
 
     memset(&vm.typed_regs, 0, sizeof(TypedRegisters));
-    memset(&vm.typed_regs.root_window, 0, sizeof(TypedRegisterWindow));
-    for (int i = 0; i < TYPED_REGISTER_WINDOW_SIZE; i++) {
-        vm.typed_regs.root_window.heap_regs[i] = BOOL_VAL(false);
-        vm.typed_regs.root_window.reg_types[i] = REG_TYPE_NONE;
-        vm.typed_regs.root_window.dirty[i] = false;
+    for (int i = 0; i < 32; i++) {
+        vm.typed_regs.heap_regs[i] = BOOL_VAL(false); // Default value instead of NIL_VAL
     }
-    vm.typed_regs.root_window.next = NULL;
-    vm.typed_regs.active_window = &vm.typed_regs.root_window;
-    vm.typed_regs.free_windows = NULL;
-    vm.typed_regs.window_version = 0;
-    vm.typed_regs.active_depth = 0;
-    vm.typed_regs.i32_regs = vm.typed_regs.root_window.i32_regs;
-    vm.typed_regs.i64_regs = vm.typed_regs.root_window.i64_regs;
-    vm.typed_regs.u32_regs = vm.typed_regs.root_window.u32_regs;
-    vm.typed_regs.u64_regs = vm.typed_regs.root_window.u64_regs;
-    vm.typed_regs.f64_regs = vm.typed_regs.root_window.f64_regs;
-    vm.typed_regs.bool_regs = vm.typed_regs.root_window.bool_regs;
-    vm.typed_regs.heap_regs = vm.typed_regs.root_window.heap_regs;
-    vm.typed_regs.dirty = vm.typed_regs.root_window.dirty;
-    vm.typed_regs.reg_types = vm.typed_regs.root_window.reg_types;
+    for (int i = 0; i < 256; i++) {
+        vm.typed_regs.reg_types[i] = REG_TYPE_NONE;
+    }
     for (int i = 0; i < UINT8_COUNT; i++) {
         vm.globals[i] = BOOL_VAL(false); // Default value instead of NIL_VAL
         vm.globalTypes[i] = NULL;
