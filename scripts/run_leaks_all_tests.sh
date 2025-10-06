@@ -28,14 +28,23 @@ run_leaks_test() {
     local test_file="$2"
     
     echo "Running leaks on $test_file with $binary..."
-    
-    # Run leaks and capture the output
-    if leaks -atExit -- "$binary" "$test_file" 2>&1 | grep -q "Process.*leaks for.*total leaked bytes"; then
-        echo "  ❌ MEMORY LEAK DETECTED in $test_file with $binary"
-        return 1
-    else
+
+    # Run leaks and capture the output for inspection
+    local leaks_output
+    leaks_output=$(leaks -atExit -- "$binary" "$test_file" 2>&1)
+
+    # The macOS leaks tool always prints the summary line
+    #   "Process <pid>: X leaks for Y total leaked bytes.".
+    # Previously we only checked for the presence of this line, which also
+    # appears when X and Y are zero, producing false positives. Instead, treat
+    # the run as successful only when the summary reports zero leaks.
+    if echo "$leaks_output" | grep -q "Process .*: 0 leaks for 0 total leaked bytes"; then
         echo "  ✅ No leaks detected in $test_file with $binary"
         return 0
+    else
+        echo "  ❌ MEMORY LEAK DETECTED in $test_file with $binary"
+        echo "$leaks_output"
+        return 1
     fi
 }
 
