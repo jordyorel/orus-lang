@@ -8,6 +8,7 @@
 
 #include "runtime/builtins.h"
 #include "runtime/memory.h"
+#include "vm/vm_string_ops.h"
 
 #include <math.h>
 #include <stdbool.h>
@@ -79,7 +80,12 @@ static int compare_string(const Value* a, const Value* b) {
     if (left == right) return 0;
     if (!left) return right ? -1 : 0;
     if (!right) return 1;
-    return strcmp(left->chars, right->chars);
+        const char* left_chars = string_get_chars(left);
+        const char* right_chars = string_get_chars(right);
+        if (!left_chars || !right_chars) {
+            return left_chars ? 1 : (right_chars ? -1 : 0);
+        }
+        return strcmp(left_chars, right_chars);
 }
 
 static int compare_values(const void* lhs, const void* rhs) {

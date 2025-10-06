@@ -10,6 +10,7 @@
 #include "compiler/optimization/constantfold.h"
 #include "compiler/typed_ast.h"
 #include "vm/vm.h"
+#include "vm/vm_string_ops.h"
 #include "debug/debug_config.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -530,8 +531,14 @@ Value evaluate_binary_operation(Value left, const char* op, Value right) {
                 return left;
             }
 
-            memcpy(buffer, leftStr->chars, (size_t)leftStr->length);
-            memcpy(buffer + leftStr->length, rightStr->chars, (size_t)rightStr->length);
+            const char* left_chars = string_get_chars(leftStr);
+            const char* right_chars = string_get_chars(rightStr);
+            if (!left_chars || !right_chars) {
+                free(buffer);
+                return left;
+            }
+            memcpy(buffer, left_chars, (size_t)leftStr->length);
+            memcpy(buffer + leftStr->length, right_chars, (size_t)rightStr->length);
             buffer[newLength] = '\0';
 
             ObjString* resultStr = intern_string(buffer, newLength);

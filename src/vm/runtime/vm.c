@@ -38,6 +38,7 @@
 #include "runtime/builtins.h"
 #include "tools/debug.h"
 #include "internal/error_reporting.h"
+#include "vm/vm_string_ops.h"
 #include "config/config.h"
 #include <time.h>
 #ifdef _WIN32
@@ -106,9 +107,11 @@ void printValue(Value value) {
         case VAL_F64:
             printf("%.17g", AS_F64(value));
             break;
-        case VAL_STRING:
-            printf("%s", AS_STRING(value)->chars);
+        case VAL_STRING: {
+            const char* chars = string_get_chars(AS_STRING(value));
+            printf("%s", chars ? chars : "");
             break;
+        }
         case VAL_ARRAY: {
             ObjArray* array = AS_ARRAY(value);
             for (int i = 0; i < array->length; i++) {
@@ -119,8 +122,10 @@ void printValue(Value value) {
         }
         case VAL_ENUM: {
             ObjEnumInstance* inst = AS_ENUM(value);
-            const char* typeName = (inst && inst->typeName) ? inst->typeName->chars : "<enum>";
-            const char* variantName = (inst && inst->variantName) ? inst->variantName->chars : "<variant>";
+            const char* typeName = inst && inst->typeName ? string_get_chars(inst->typeName) : NULL;
+            if (!typeName) typeName = "<enum>";
+            const char* variantName = inst && inst->variantName ? string_get_chars(inst->variantName) : NULL;
+            if (!variantName) variantName = "<variant>";
             printf("%s.%s", typeName, variantName);
             if (inst && inst->payload && inst->payload->length > 0) {
                 printf("(");
@@ -132,9 +137,12 @@ void printValue(Value value) {
             }
             break;
         }
-        case VAL_ERROR:
-            printf("Error: %s", AS_ERROR(value)->message->chars);
+        case VAL_ERROR: {
+            ObjError* err_obj = AS_ERROR(value);
+            const char* msg = err_obj && err_obj->message ? string_get_chars(err_obj->message) : NULL;
+            printf("Error: %s", msg ? msg : "");
             break;
+        }
         case VAL_RANGE_ITERATOR: {
             ObjRangeIterator* it = AS_RANGE_ITERATOR(value);
             long long step = it ? (long long)it->step : 1;
@@ -188,7 +196,12 @@ bool valuesEqual(Value a, Value b) {
             if (left == right) return true;
             if (!left || !right) return false;
             if (left->length != right->length) return false;
-            return memcmp(left->chars, right->chars, (size_t)left->length) == 0;
+            const char* left_chars = string_get_chars(left);
+            const char* right_chars = string_get_chars(right);
+            if (!left_chars || !right_chars) {
+                return left_chars == right_chars;
+            }
+            return memcmp(left_chars, right_chars, (size_t)left->length) == 0;
         }
         case VAL_ARRAY:
             return AS_ARRAY(a) == AS_ARRAY(b);
@@ -311,9 +324,10 @@ void vm_report_unhandled_error(void) {
         return;
     }
 
-    const char* message = (err->message && err->message->chars)
-                               ? err->message->chars
-                               : "";
+    const char* message = err->message ? string_get_chars(err->message) : NULL;
+    if (!message) {
+        message = "";
+    }
     SrcLocation loc = {
         .file = err->location.file,
         .line = err->location.line,
@@ -548,7 +562,7 @@ __attribute__((unused)) static long getFileModTime(const char* path) {
 // Helper function to check if a module is already loaded
 static bool isModuleLoaded(const char* path) {
     for (int i = 0; i < vm.moduleCount; i++) {
-        if (vm.loadedModules[i] && strcmp(vm.loadedModules[i]->chars, path) == 0) {
+        if (vm.loadedModules[i] && strcmp(string_get_chars(vm.loadedModules[i]), path) == 0) {
             return true;
         }
     }
@@ -565,7 +579,7 @@ static void addLoadedModule(const char* path) {
 
 static bool isModuleLoading(const char* path) {
     for (int i = 0; i < vm.loadingModuleCount; i++) {
-        if (vm.loadingModules[i] && strcmp(vm.loadingModules[i]->chars, path) == 0) {
+        if (vm.loadingModules[i] && strcmp(string_get_chars(vm.loadingModules[i]), path) == 0) {
             return true;
         }
     }
@@ -587,7 +601,7 @@ static void popLoadingModule(const char* path) {
         return;
     }
     for (int i = 0; i < vm.loadingModuleCount; i++) {
-        if (vm.loadingModules[i] && strcmp(vm.loadingModules[i]->chars, path) == 0) {
+        if (vm.loadingModules[i] && strcmp(string_get_chars(vm.loadingModules[i]), path) == 0) {
             vm.loadingModuleCount--;
             vm.loadingModules[i] = vm.loadingModules[vm.loadingModuleCount];
             vm.loadingModules[vm.loadingModuleCount] = NULL;

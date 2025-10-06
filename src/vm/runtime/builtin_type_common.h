@@ -13,6 +13,7 @@
 
 #include "runtime/memory.h"
 #include "vm/vm.h"
+#include "vm/vm_string_ops.h"
 
 static inline const char* builtin_value_type_label(Value value) {
     switch (value.type) {
@@ -27,10 +28,10 @@ static inline const char* builtin_value_type_label(Value value) {
         case VAL_ARRAY: return "array";
         case VAL_ENUM: {
             ObjEnumInstance* instance = AS_ENUM(value);
-            if (instance && instance->typeName && instance->typeName->chars) {
-                return instance->typeName->chars;
-            }
-            return "enum";
+            const char* name = instance && instance->typeName
+                                   ? string_get_chars(instance->typeName)
+                                   : NULL;
+            return name ? name : "enum";
         }
         case VAL_ERROR: return "error";
         case VAL_RANGE_ITERATOR: return "range_iterator";
@@ -85,7 +86,10 @@ static inline bool builtin_alloc_error_label(
     }
 
     const char* message =
-        (error->message && error->message->chars) ? error->message->chars : "";
+        (error->message) ? string_get_chars(error->message) : NULL;
+    if (!message) {
+        message = "";
+    }
 
     size_t type_len = strlen(type_name);
     size_t message_len = strlen(message);

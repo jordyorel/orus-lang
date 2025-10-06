@@ -22,6 +22,7 @@
 #include "compiler/typed_ast.h"
 #include "compiler/ast.h"
 #include "vm/vm.h"
+#include "vm/vm_string_ops.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -245,7 +246,11 @@ static const char* get_literal_value_string(Value* value, char* buffer, size_t b
         case VAL_STRING: {
             if (value->as.obj && IS_STRING(*value)) {
                 ObjString* str = AS_STRING(*value);
-                snprintf(buffer, buffer_size, "\"%.*s\"", str->length, str->chars);
+                const char* chars = string_get_chars(str);
+                if (!chars) {
+                    chars = "<rope>";
+                }
+                snprintf(buffer, buffer_size, "\"%.*s\"", str->length, chars);
             } else {
                 snprintf(buffer, buffer_size, "\"<invalid string>\"");
             }

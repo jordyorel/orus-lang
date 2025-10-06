@@ -9,6 +9,7 @@
 #include <string.h>
 
 #include "builtin_type_common.h"
+#include "vm/vm_string_ops.h"
 
 bool builtin_istype(Value value, Value type_identifier, Value* out_value) {
     if (!out_value) {
@@ -27,8 +28,10 @@ bool builtin_istype(Value value, Value type_identifier, Value* out_value) {
         bool matches = false;
         if (IS_STRING(type_identifier)) {
             ObjString* expected = AS_STRING(type_identifier);
-            const char* expected_chars =
-                (expected && expected->chars) ? expected->chars : "";
+            const char* expected_chars = expected ? string_get_chars(expected) : NULL;
+            if (!expected_chars) {
+                expected_chars = "";
+            }
             matches = (strcmp(label_chars, expected_chars) == 0);
         }
 
@@ -45,7 +48,10 @@ bool builtin_istype(Value value, Value type_identifier, Value* out_value) {
     bool matches = false;
     if (IS_STRING(type_identifier)) {
         ObjString* expected = AS_STRING(type_identifier);
-        const char* expected_chars = (expected && expected->chars) ? expected->chars : "";
+        const char* expected_chars = expected ? string_get_chars(expected) : NULL;
+        if (!expected_chars) {
+            expected_chars = "";
+        }
         matches = (strcmp(label, expected_chars) == 0);
     }
 

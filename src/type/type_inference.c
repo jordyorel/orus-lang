@@ -29,6 +29,7 @@
 #include "runtime/memory.h"
 #include "type/type.h"
 #include "vm/vm.h"
+#include "vm/vm_string_ops.h"
 #include "vm/module_manager.h"
 #include "internal/error_reporting.h"
 #include "errors/features/type_errors.h"
@@ -57,9 +58,13 @@ static ObjString* create_compiler_string(const char* text) {
         free(string);
         return NULL;
     }
-    string->rope = NULL;
+    string->rope = rope_from_buffer(string->chars, length, false);
     string->hash = 0;
     return string;
+}
+
+static const char* safe_string_chars(ObjString* string) {
+    return string ? string_get_chars(string) : NULL;
 }
 
 static Variant* lookup_enum_variant(Type* enum_type, const char* variant_name, int* out_index) {
@@ -83,7 +88,8 @@ static Variant* lookup_enum_variant(Type* enum_type, const char* variant_name, i
 
     for (int i = 0; i < ext->extended.enum_.variant_count; i++) {
         Variant* variant = &ext->extended.enum_.variants[i];
-        if (variant->name && variant->name->chars && strcmp(variant->name->chars, variant_name) == 0) {
+        const char* name = variant ? safe_string_chars(variant->name) : NULL;
+        if (name && strcmp(name, variant_name) == 0) {
             if (out_index) {
                 *out_index = i;
             }
@@ -174,7 +180,7 @@ static const char* get_enum_type_name(Type* enum_type) {
         return NULL;
     }
 
-    return ext->extended.enum_.name->chars;
+    return safe_string_chars(ext->extended.enum_.name);
 }
 
 static void free_compiler_string(ObjString* string) {
@@ -183,6 +189,9 @@ static void free_compiler_string(ObjString* string) {
     }
     if (string->chars) {
         free(string->chars);
+    }
+    if (string->rope) {
+        rope_release(string->rope);
     }
     free(string);
 }
@@ -251,10 +260,12 @@ static bool literal_values_equal(Value a, Value b) {
         case VAL_STRING: {
             ObjString* left = AS_STRING(a);
             ObjString* right = AS_STRING(b);
-            if (!left || !right || !left->chars || !right->chars) {
+            const char* left_chars = left ? safe_string_chars(left) : NULL;
+            const char* right_chars = right ? safe_string_chars(right) : NULL;
+            if (!left_chars || !right_chars) {
                 return left == right;
             }
-            return strcmp(left->chars, right->chars) == 0;
+            return strcmp(left_chars, right_chars) == 0;
         }
         default:
             return false;
@@ -287,8 +298,8 @@ static void format_literal_value(Value value, char* buffer, size_t size) {
             break;
         case VAL_STRING: {
             ObjString* str = AS_STRING(value);
-            const char* chars = (str && str->chars) ? str->chars : "";
-            snprintf(buffer, size, "\"%s\"", chars);
+            const char* chars = safe_string_chars(str);
+            snprintf(buffer, size, "\"%s\"", chars ? chars : "");
             break;
         }
         default:
@@ -1607,8 +1618,9 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                 if (ext->extended.structure.fields) {
                     for (int j = 0; j < ext->extended.structure.fieldCount; j++) {
                         FieldInfo* defined = &ext->extended.structure.fields[j];
-                        if (defined->name && defined->name->chars &&
-                            strcmp(defined->name->chars, field->name) == 0) {
+                        const char* defined_name =
+                            defined ? safe_string_chars(defined->name) : NULL;
+                        if (defined_name && strcmp(defined_name, field->name) == 0) {
                             matched = true;
                             field_type = defined->type;
                             break;
@@ -1802,8 +1814,8 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                 if (ext->extended.structure.fields) {
                     for (int i = 0; i < ext->extended.structure.fieldCount; i++) {
                         FieldInfo* field = &ext->extended.structure.fields[i];
-                        if (field->name && field->name->chars &&
-                            strcmp(field->name->chars, node->member.member) == 0) {
+                        const char* field_name = field ? safe_string_chars(field->name) : NULL;
+                        if (field_name && strcmp(field_name, node->member.member) == 0) {
                             node->member.isMethod = false;
                             node->member.isInstanceMethod = false;
                             return field->type ? field->type : getPrimitiveType(TYPE_UNKNOWN);
@@ -1815,8 +1827,8 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                 if (ext->extended.structure.methods) {
                     for (int i = 0; i < ext->extended.structure.methodCount; i++) {
                         Method* method = &ext->extended.structure.methods[i];
-                        if (method->name && method->name->chars &&
-                            strcmp(method->name->chars, node->member.member) == 0) {
+                        const char* method_name = method ? safe_string_chars(method->name) : NULL;
+                        if (method_name && strcmp(method_name, node->member.member) == 0) {
                             node->member.isMethod = true;
                             node->member.isInstanceMethod = method->isInstance;
                             return method->type;
@@ -1838,14 +1850,15 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                 }
 
                 node->member.resolvesToEnum = true;
-                if (ext->extended.enum_.name && ext->extended.enum_.name->chars) {
-                    node->member.enumTypeName = ext->extended.enum_.name->chars;
+                const char* enum_name = safe_string_chars(ext->extended.enum_.name);
+                if (enum_name) {
+                    node->member.enumTypeName = enum_name;
                 }
 
                 for (int i = 0; i < ext->extended.enum_.variant_count; i++) {
                     Variant* variant = &ext->extended.enum_.variants[i];
-                    if (variant->name && variant->name->chars &&
-                        strcmp(variant->name->chars, node->member.member) == 0) {
+                    const char* variant_name = variant ? safe_string_chars(variant->name) : NULL;
+                    if (variant_name && strcmp(variant_name, node->member.member) == 0) {
                         node->member.isMethod = false;
                         node->member.isInstanceMethod = false;
                         node->member.resolvesToEnumVariant = true;
@@ -3194,8 +3207,9 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                     if (!seen[i]) {
                         missing_count++;
                         Variant* variant = &ext->extended.enum_.variants[i];
-                        if (variant && variant->name && variant->name->chars) {
-                            buffer_len += strlen(variant->name->chars) + 2;
+                        const char* variant_name = variant ? safe_string_chars(variant->name) : NULL;
+                        if (variant_name) {
+                            buffer_len += strlen(variant_name) + 2;
                         }
                     }
                 }
@@ -3211,11 +3225,13 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                         for (int i = 0; i < variant_total; i++) {
                             if (!seen[i]) {
                                 Variant* variant = &ext->extended.enum_.variants[i];
-                                if (variant && variant->name && variant->name->chars) {
+                                const char* variant_name =
+                                    variant ? safe_string_chars(variant->name) : NULL;
+                                if (variant_name) {
                                     if (!first) {
                                         strcat(buffer, ", ");
                                     }
-                                    strcat(buffer, variant->name->chars);
+                                    strcat(buffer, variant_name);
                                     first = false;
                                 }
                             }
@@ -3437,8 +3453,9 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                     if (!seen_variants[i]) {
                         missing_count++;
                         Variant* variant = &enum_ext->extended.enum_.variants[i];
-                        if (variant && variant->name && variant->name->chars) {
-                            buffer_len += strlen(variant->name->chars) + 2;
+                        const char* variant_name = variant ? safe_string_chars(variant->name) : NULL;
+                        if (variant_name) {
+                            buffer_len += strlen(variant_name) + 2;
                         }
                     }
                 }
@@ -3453,11 +3470,13 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                         for (int i = 0; i < variant_total; i++) {
                             if (!seen_variants[i]) {
                                 Variant* variant = &enum_ext->extended.enum_.variants[i];
-                                if (variant && variant->name && variant->name->chars) {
+                                const char* variant_name =
+                                    variant ? safe_string_chars(variant->name) : NULL;
+                                if (variant_name) {
                                     if (!first) {
                                         strcat(buffer, ", ");
                                     }
-                                    strcat(buffer, variant->name->chars);
+                                    strcat(buffer, variant_name);
                                     first = false;
                                 }
                             }

@@ -122,6 +122,19 @@ ObjString* allocateStringFromBuffer(char* buffer, size_t capacity, int length) {
     return string;
 }
 
+ObjString* allocateStringFromRope(StringRope* rope) {
+    if (!rope) {
+        return NULL;
+    }
+
+    ObjString* string = (ObjString*)allocateObject(sizeof(ObjString), OBJ_STRING);
+    string->length = (int)rope_length(rope);
+    string->chars = NULL;
+    string->rope = rope;
+    string->hash = 0;
+    return string;
+}
+
 ObjArray* allocateArray(int capacity) {
     ObjArray* array = (ObjArray*)allocateObject(sizeof(ObjArray), OBJ_ARRAY);
     array->length = 0;
@@ -473,7 +486,7 @@ static void freeObject(Obj* object) {
             if (s->chars) {
                 reallocate(s->chars, (size_t)s->length + 1, 0);
             }
-            if (s->rope) free_rope(s->rope);
+            if (s->rope) rope_release(s->rope);
             break;
         }
         case OBJ_ARRAY: {

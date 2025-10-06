@@ -20,6 +20,7 @@
 #include "internal/error_reporting.h"
 #include "runtime/memory.h"
 #include "type/type.h"
+#include "vm/vm_string_ops.h"
 #include "debug/debug_config.h"
 #include "internal/strutil.h"
 #include "vm/module_manager.h"
@@ -166,7 +167,8 @@ int add_constant(ConstantPool* pool, Value value) {
     if (value.type == VAL_I32) {
         DEBUG_CODEGEN_PRINT("Added i32 constant %d at index %d\n", AS_I32(value), index);
     } else if (value.type == VAL_STRING) {
-        DEBUG_CODEGEN_PRINT("Added string constant \"%s\" at index %d\n", AS_STRING(value)->chars, index);
+        DEBUG_CODEGEN_PRINT("Added string constant \"%s\" at index %d\n",
+                           string_get_chars(AS_STRING(value)), index);
     } else {
         DEBUG_CODEGEN_PRINT("Added constant (type=%d) at index %d\n", value.type, index);
     }

@@ -31,7 +31,7 @@ get_time_ns() {
         fraction=${fraction:-0}
         fraction="${fraction}000000000"
         fraction=${fraction:0:9}
-        printf '%s%09d\n' "$seconds" "$fraction"
+        printf '%s%s\n' "$seconds" "$fraction"
     elif command -v date >/dev/null 2>&1; then
         local date_ns
         date_ns=$(date +%s%N 2>/dev/null || true)
@@ -313,6 +313,8 @@ ensure_orus_built
 
 # Run benchmark categories
 run_benchmark_category "Pure Arithmetic Performance" "arithmetic_benchmark.orus"
+# String concatenation stress test to validate rope performance
+run_benchmark_category "String Concatenation Performance" "string_concat_benchmark.orus"
 # TODO: Uncomment when implemented
 # run_benchmark_category "Comprehensive Performance" "comprehensive_benchmark.orus"
 # run_benchmark_category "Extreme Performance" "extreme_benchmark.orus"
