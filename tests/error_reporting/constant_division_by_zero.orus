@@ -1,0 +1,2 @@
+print("constant division by zero should fail")
+print(10 / 0)
