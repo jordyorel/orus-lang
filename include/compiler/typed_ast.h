@@ -282,6 +282,7 @@ struct TypedASTNode {
 TypedASTNode* create_typed_ast_node(ASTNode* original);
 void free_typed_ast_node(TypedASTNode* node);
 TypedASTNode* copy_typed_ast_node(TypedASTNode* node);
+void typed_ast_release_orphans(void);
 
 // Type resolution functions
 bool resolve_node_type(TypedASTNode* node, TypeEnv* env);

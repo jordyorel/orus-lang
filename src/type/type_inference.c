@@ -4829,6 +4829,7 @@ void cleanup_type_inference(void) {
         arena = next;
     }
     type_arena = NULL;
+    typed_ast_release_orphans();
 }
 
 Type* instantiate(Type* type, TypeInferer* inferer) {

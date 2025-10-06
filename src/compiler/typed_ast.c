@@ -22,6 +22,80 @@
 #include "runtime/memory.h"
 #include "type/type.h"
 
+typedef struct {
+    TypedASTNode** nodes;
+    size_t count;
+    size_t capacity;
+} TypedASTRegistry;
+
+static TypedASTRegistry g_typed_registry = {NULL, 0, 0};
+
+static bool typed_ast_registry_ensure_capacity(size_t required) {
+    if (g_typed_registry.capacity >= required) {
+        return true;
+    }
+
+    size_t new_capacity = g_typed_registry.capacity == 0 ? 64 : g_typed_registry.capacity;
+    while (new_capacity < required) {
+        new_capacity *= 2;
+    }
+
+    TypedASTNode** resized = realloc(g_typed_registry.nodes, new_capacity * sizeof(TypedASTNode*));
+    if (!resized) {
+        return false;
+    }
+
+    g_typed_registry.nodes = resized;
+    g_typed_registry.capacity = new_capacity;
+    return true;
+}
+
+static void typed_ast_registry_register(TypedASTNode* node) {
+    if (!node) {
+        return;
+    }
+
+    if (!typed_ast_registry_ensure_capacity(g_typed_registry.count + 1)) {
+        return;  // Allocation failure: allow leak rather than crash
+    }
+
+    g_typed_registry.nodes[g_typed_registry.count++] = node;
+}
+
+static void typed_ast_registry_unregister(TypedASTNode* node) {
+    if (!node || g_typed_registry.count == 0 || !g_typed_registry.nodes) {
+        return;
+    }
+
+    for (size_t i = 0; i < g_typed_registry.count; ++i) {
+        if (g_typed_registry.nodes[i] == node) {
+            g_typed_registry.count--;
+            g_typed_registry.nodes[i] = g_typed_registry.nodes[g_typed_registry.count];
+            g_typed_registry.nodes[g_typed_registry.count] = NULL;
+            return;
+        }
+    }
+}
+
+void typed_ast_release_orphans(void) {
+    if (!g_typed_registry.nodes) {
+        return;
+    }
+
+    while (g_typed_registry.count > 0) {
+        TypedASTNode* node = g_typed_registry.nodes[g_typed_registry.count - 1];
+        if (!node) {
+            g_typed_registry.count--;
+            continue;
+        }
+        free_typed_ast_node(node);
+    }
+
+    free(g_typed_registry.nodes);
+    g_typed_registry.nodes = NULL;
+    g_typed_registry.capacity = 0;
+}
+
 // Forward declaration
 
 // Create a new typed AST node from an original AST node
@@ -41,6 +115,8 @@ TypedASTNode* create_typed_ast_node(ASTNode* original) {
     typed->canInline = false;
     typed->suggestedRegister = -1;
     typed->spillable = true;
+
+    typed_ast_registry_register(typed);
 
     // Initialize union based on node type
     switch (original->type) {
@@ -93,14 +169,18 @@ TypedASTNode* create_typed_ast_node(ASTNode* original) {
             typed->typed.whileStmt.body = NULL;
             break;
         case NODE_FOR_RANGE:
+            typed->typed.forRange.varName = NULL;
             typed->typed.forRange.start = NULL;
             typed->typed.forRange.end = NULL;
             typed->typed.forRange.step = NULL;
             typed->typed.forRange.body = NULL;
+            typed->typed.forRange.label = NULL;
             break;
         case NODE_FOR_ITER:
+            typed->typed.forIter.varName = NULL;
             typed->typed.forIter.iterable = NULL;
             typed->typed.forIter.body = NULL;
+            typed->typed.forIter.label = NULL;
             break;
         case NODE_TRY:
             typed->typed.tryStmt.tryBlock = NULL;
@@ -252,6 +332,8 @@ TypedASTNode* create_typed_ast_node(ASTNode* original) {
 void free_typed_ast_node(TypedASTNode* node) {
     if (!node) return;
 
+    typed_ast_registry_unregister(node);
+
     // Free error message if allocated
     if (node->errorMessage) {
         free(node->errorMessage);
@@ -299,14 +381,26 @@ void free_typed_ast_node(TypedASTNode* node) {
             free_typed_ast_node(node->typed.whileStmt.body);
             break;
         case NODE_FOR_RANGE:
+            if (node->typed.forRange.varName) {
+                free(node->typed.forRange.varName);
+            }
             free_typed_ast_node(node->typed.forRange.start);
             free_typed_ast_node(node->typed.forRange.end);
             free_typed_ast_node(node->typed.forRange.step);
             free_typed_ast_node(node->typed.forRange.body);
+            if (node->typed.forRange.label) {
+                free(node->typed.forRange.label);
+            }
             break;
         case NODE_FOR_ITER:
+            if (node->typed.forIter.varName) {
+                free(node->typed.forIter.varName);
+            }
             free_typed_ast_node(node->typed.forIter.iterable);
             free_typed_ast_node(node->typed.forIter.body);
+            if (node->typed.forIter.label) {
+                free(node->typed.forIter.label);
+            }
             break;
         case NODE_TRY:
             free_typed_ast_node(node->typed.tryStmt.tryBlock);
