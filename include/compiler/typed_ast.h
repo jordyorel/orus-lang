@@ -1,13 +1,11 @@
-/*
- * Orus Language Project
- * ---------------------------------------------------------------------------
- * File: include/compiler/typed_ast.h
- * Author: Jordy Orel KONDA
- * Copyright (c) 2025 Jordy Orel KONDA
- * License: MIT License (see LICENSE file in the project root)
- * Description: Defines typed AST nodes produced after semantic analysis and type
- *              inference.
- */
+// Orus Language Project
+// ---------------------------------------------------------------------------
+// File: include/compiler/typed_ast.h
+// Author: Jordy Orel KONDA
+// Copyright (c) 2025 Jordy Orel KONDA
+// License: MIT License (see LICENSE file in the project root)
+// Description: Defines typed AST nodes produced after semantic analysis and type inference.
+
 
 #ifndef ORUS_TYPED_AST_H
 #define ORUS_TYPED_AST_H
@@ -282,6 +280,7 @@ struct TypedASTNode {
 TypedASTNode* create_typed_ast_node(ASTNode* original);
 void free_typed_ast_node(TypedASTNode* node);
 TypedASTNode* copy_typed_ast_node(TypedASTNode* node);
+void typed_ast_release_orphans(void);
 
 // Type resolution functions
 bool resolve_node_type(TypedASTNode* node, TypeEnv* env);

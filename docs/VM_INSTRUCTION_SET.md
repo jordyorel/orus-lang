@@ -447,5 +447,3 @@ CAST_I32_STR R65, R64     ; text = x as string
 CAST_I32_BOOL R66, R64    ; flag = x as bool
 RETURN_VOID
 ```
-
-This instruction set provides comprehensive coverage of the Orus language features while maintaining efficient execution characteristics in the register-based VM architecture.

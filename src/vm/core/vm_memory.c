@@ -8,6 +8,7 @@
 
 
 #include "runtime/memory.h"
+#include "vm/spill_manager.h"
 #include "vm/vm.h"
 #include "vm/vm_string_ops.h"
 #include "vm/vm_comparison.h"
@@ -379,6 +380,10 @@ static void markRoots() {
 
     if (vm.register_file.spilled_registers) {
         spill_manager_iterate(vm.register_file.spilled_registers, mark_spill_entry, NULL);
+    }
+
+    if (vm.register_file.spilled_registers) {
+        spill_manager_visit_entries(vm.register_file.spilled_registers, mark_spill_entry, NULL);
     }
 
     if (vm.chunk) {

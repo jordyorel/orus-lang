@@ -109,7 +109,3 @@ Whenever possible, error messages:
 * [ ] Link error codes to docs (e.g. [https://orus-lang.org/errors/E2101](https://orus-lang.org/errors/E2101))
 * [ ] Include emoji in friendly REPL feedback mode (opt-in)
 
----
-
-Orus error messages aim to be **actionable, welcoming, and non-condescending**.
-Whether you're a beginner or an expert, the compiler tries to guide you, not shame you. All errors follow a consistent format and strive to make you say: *"Ah, I get it now!"*

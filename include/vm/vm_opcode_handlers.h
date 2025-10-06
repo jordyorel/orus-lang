@@ -1,12 +1,10 @@
-/*
- * Orus Language Project
- * ---------------------------------------------------------------------------
- * File: include/vm/vm_opcode_handlers.h
- * Author: Jordy Orel KONDA
- * Copyright (c) 2025 Jordy Orel KONDA
- * License: MIT License (see LICENSE file in the project root)
- * Description: Declares grouped opcode handler tables used during dispatch.
- */
+// Orus Language Project
+// ---------------------------------------------------------------------------
+// File: include/vm/vm_opcode_handlers.h
+// Author: Jordy Orel KONDA
+// Copyright (c) 2025 Jordy Orel KONDA
+// License: MIT License (see LICENSE file in the project root)
+// Description: Declares grouped opcode handler tables used during dispatch.
 
 #ifndef VM_OPCODE_HANDLERS_H
 #define VM_OPCODE_HANDLERS_H

@@ -1,12 +1,11 @@
-/*
- * Orus Language Project
- * ---------------------------------------------------------------------------
- * File: include/vm/vm_config.h
- * Author: Jordy Orel KONDA
- * Copyright (c) 2025 Jordy Orel KONDA
- * License: MIT License (see LICENSE file in the project root)
- * Description: Configuration structures and constants controlling VM execution.
- */
+// Orus Language Project
+// ---------------------------------------------------------------------------
+// File: include/vm/vm_config.h
+// Author: Jordy Orel KONDA
+// Copyright (c) 2025 Jordy Orel KONDA
+// License: MIT License (see LICENSE file in the project root)
+// Description: Configuration structures and constants controlling VM execution.
+
 
 #ifndef VM_CONFIG_H
 #define VM_CONFIG_H

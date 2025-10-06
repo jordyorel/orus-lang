@@ -1,13 +1,10 @@
-/*
- * Orus Language Project
- * ---------------------------------------------------------------------------
- * File: include/compiler/compiler.h
- * Author: Jordy Orel KONDA
- * Copyright (c) 2025 Jordy Orel KONDA
- * License: MIT License (see LICENSE file in the project root)
- * Description: Public entry points for orchestrating the Orus compiler pipeline from
- *              source text to VM modules.
- */
+// Orus Language Project
+// ---------------------------------------------------------------------------
+// File: include/compiler/compiler.h
+// Author: Jordy Orel KONDA
+// Copyright (c) 2022 Jordy Orel KONDA
+// License: MIT License (see LICENSE file in the project root)
+// Description: Public entry points for orchestrating the Orus compiler pipeline from source text to VM modules.
 
 #ifndef ORUS_COMPILER_H
 #define ORUS_COMPILER_H

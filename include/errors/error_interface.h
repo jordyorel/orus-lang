@@ -1,13 +1,10 @@
-/*
- * Orus Language Project
- * ---------------------------------------------------------------------------
- * File: include/errors/error_interface.h
- * Author: Jordy Orel KONDA
- * Copyright (c) 2025 Jordy Orel KONDA
- * License: MIT License (see LICENSE file in the project root)
- * Description: Defines the abstract error interface used to emit diagnostics across
- *              the project.
- */
+// Orus Language Project
+// ---------------------------------------------------------------------------
+// File: include/errors/error_interface.h
+// Author: Jordy Orel KONDA
+// Copyright (c) 2025 Jordy Orel KONDA
+// License: MIT License (see LICENSE file in the project root)
+// Description: Defines the abstract error interface used to emit diagnostics across the project.
 
 #ifndef ORUS_ERROR_INTERFACE_H
 #define ORUS_ERROR_INTERFACE_H

@@ -1,12 +1,11 @@
-/*
- * Orus Language Project
- * ---------------------------------------------------------------------------
- * File: include/vm/vm_comparison.h
- * Author: Jordy Orel KONDA
- * Copyright (c) 2025 Jordy Orel KONDA
- * License: MIT License (see LICENSE file in the project root)
- * Description: Declares comparison operation helpers for the Orus virtual machine.
- */
+// Orus Language Project
+// ---------------------------------------------------------------------------
+// File: include/vm/vm_comparison.h
+// Author: Jordy Orel KONDA
+// Copyright (c) 2025 Jordy Orel KONDA
+// License: MIT License (see LICENSE file in the project root)
+// Description: Declares comparison operation helpers for the Orus virtual machine.
+
 
 #ifndef ORUS_VM_COMPARISON_H
 #define ORUS_VM_COMPARISON_H
@@ -345,6 +344,13 @@ static inline void vm_store_i32_typed_hot(uint16_t id, int32_t value) {
     vm.typed_regs.dirty[id] = skip_boxed_write;
 
     Value boxed = I32_VAL(value);
+    if (id < FRAME_REG_START) {
+        vm.register_file.globals[id] = boxed;
+        vm.registers[id] = boxed;
+        return;
+    }
+
+    Value boxed = I32_VAL(value);
     if (!skip_boxed_write || id >= FRAME_REG_START) {
         set_register(&vm.register_file, id, boxed);
     } else if (id < FRAME_REG_START) {
@@ -362,6 +368,13 @@ static inline void vm_store_i64_typed_hot(uint16_t id, int64_t value) {
     bool skip_boxed_write = vm_mark_typed_register_dirty(id, REG_TYPE_I64);
     vm.typed_regs.i64_regs[id] = value;
     vm.typed_regs.dirty[id] = skip_boxed_write;
+
+    Value boxed = I64_VAL(value);
+    if (id < FRAME_REG_START) {
+        vm.register_file.globals[id] = boxed;
+        vm.registers[id] = boxed;
+        return;
+    }
 
     Value boxed = I64_VAL(value);
     if (!skip_boxed_write || id >= FRAME_REG_START) {
@@ -383,6 +396,13 @@ static inline void vm_store_u32_typed_hot(uint16_t id, uint32_t value) {
     vm.typed_regs.dirty[id] = skip_boxed_write;
 
     Value boxed = U32_VAL(value);
+    if (id < FRAME_REG_START) {
+        vm.register_file.globals[id] = boxed;
+        vm.registers[id] = boxed;
+        return;
+    }
+
+    Value boxed = U32_VAL(value);
     if (!skip_boxed_write || id >= FRAME_REG_START) {
         set_register(&vm.register_file, id, boxed);
     } else if (id < FRAME_REG_START) {
@@ -402,6 +422,13 @@ static inline void vm_store_u64_typed_hot(uint16_t id, uint64_t value) {
     vm.typed_regs.dirty[id] = skip_boxed_write;
 
     Value boxed = U64_VAL(value);
+    if (id < FRAME_REG_START) {
+        vm.register_file.globals[id] = boxed;
+        vm.registers[id] = boxed;
+        return;
+    }
+
+    Value boxed = U64_VAL(value);
     if (!skip_boxed_write || id >= FRAME_REG_START) {
         set_register(&vm.register_file, id, boxed);
     } else if (id < FRAME_REG_START) {
@@ -419,6 +446,13 @@ static inline void vm_store_bool_typed_hot(uint16_t id, bool value) {
     bool skip_boxed_write = vm_mark_typed_register_dirty(id, REG_TYPE_BOOL);
     vm.typed_regs.bool_regs[id] = value;
     vm.typed_regs.dirty[id] = skip_boxed_write;
+
+    Value boxed = BOOL_VAL(value);
+    if (id < FRAME_REG_START) {
+        vm.register_file.globals[id] = boxed;
+        vm.registers[id] = boxed;
+        return;
+    }
 
     Value boxed = BOOL_VAL(value);
     if (!skip_boxed_write || id >= FRAME_REG_START) {
