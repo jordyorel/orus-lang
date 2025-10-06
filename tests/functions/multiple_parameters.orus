@@ -24,16 +24,21 @@ fn sum_five(a, b, c, d, e) -> i32:
 
 // Test each function
 result1 = square(7)
-print("7^2 =", result1)
+if assert_eq("multiple_parameters square", result1, 49):
+    print("7^2 =", result1)
 
 result2 = multiply(6, 8)
-print("6 * 8 =", result2)
+if assert_eq("multiple_parameters multiply", result2, 48):
+    print("6 * 8 =", result2)
 
 result3 = sum_three(1, 2, 3)
-print("1 + 2 + 3 =", result3)
+if assert_eq("multiple_parameters sum_three", result3, 6):
+    print("1 + 2 + 3 =", result3)
 
 result4 = sum_four(1, 2, 3, 4)
-print("1 + 2 + 3 + 4 =", result4)
+if assert_eq("multiple_parameters sum_four", result4, 10):
+    print("1 + 2 + 3 + 4 =", result4)
 
 result5 = sum_five(1, 2, 3, 4, 5)
-print("1 + 2 + 3 + 4 + 5 =", result5)
+if assert_eq("multiple_parameters sum_five", result5, 15):
+    print("1 + 2 + 3 + 4 + 5 =", result5)

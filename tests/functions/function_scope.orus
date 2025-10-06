@@ -9,7 +9,7 @@ fn use_global() -> i32:
 
 // Function with local variable that shadows global
 fn shadow_global() -> i32:
-    global_var = 50  // This should be local to the function
+    mut global_var = 50  // Local variable shadows the global binding
     return global_var * 2
 
 // Function that modifies local variables
@@ -25,17 +25,22 @@ fn param_shadow(global_var) -> i32:
 
 // Test scoping
 result1 = use_global()
-print("Using (100 + 10):", result1)
+if assert_eq("function_scope use_global", result1, 110):
+    print("Using (100 + 10):", result1)
 
 result2 = shadow_global()
-print("Shadowed (50 * 2):", result2)
+if assert_eq("function_scope shadow_global", result2, 100):
+    print("Shadowed (50 * 2):", result2)
 
 // Global should still be 100
 result3 = use_global()
-print("Global after shadow (should be 100 + 10):", result3)
+if assert_eq("function_scope global persists", result3, 110):
+    print("Global after shadow (should be 100 + 10):", result3)
 
 result4 = local_vars()
-print("Local vars (10 + 20):", result4)
+if assert_eq("function_scope local_vars", result4, 30):
+    print("Local vars (10 + 20):", result4)
 
 result5 = param_shadow(25)
-print("Parameter shadow (25 * 3):", result5)
+if assert_eq("function_scope param_shadow", result5, 75):
+    print("Parameter shadow (25 * 3):", result5)

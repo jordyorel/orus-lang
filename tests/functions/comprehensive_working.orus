@@ -20,16 +20,20 @@ fn complex_calc(a, b, c) -> i32:
 // Test all functions
 print("Testing basic add:")
 result1 = add(15, 25)
-print(result1)
+if assert_eq("comprehensive_working add", result1, 40):
+    print(result1)
 
 print("Testing multiply:")
 result2 = multiply(6, 7)
-print(result2)
+if assert_eq("comprehensive_working multiply", result2, 42):
+    print(result2)
 
-print("Testing no parameters:")  
+print("Testing no parameters:")
 result3 = get_seven()
-print(result3)
+if assert_eq("comprehensive_working get_seven", result3, 7):
+    print(result3)
 
 print("Testing function composition:")
 result4 = complex_calc(3, 4, 5)
-print(result4)
+if assert_eq("comprehensive_working complex_calc", result4, 35):
+    print(result4)

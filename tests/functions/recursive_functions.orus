@@ -1,5 +1,8 @@
 // Test recursive functions
 
+// Track countdown recursion depth
+mut countdown_calls = 0
+
 // Simple factorial function
 fn factorial(n) -> i32:
     if n <= 1:
@@ -16,16 +19,21 @@ fn fibonacci(n) -> i32:
 
 // Simple countdown function
 fn countdown(n) -> void:
+    countdown_calls = countdown_calls + 1
     print("Counting:", n)
     if n > 0:
         countdown(n - 1)
 
 // Test recursive functions
 fact5 = factorial(5)
-print("5! =", fact5)
+if assert_eq("recursive_functions factorial", fact5, 120):
+    print("5! =", fact5)
 
 fib7 = fibonacci(7)
-print("Fibonacci(7) =", fib7)
+if assert_eq("recursive_functions fibonacci", fib7, 13):
+    print("Fibonacci(7) =", fib7)
 
 print("Countdown from 3:")
 countdown(3)
+if assert_eq("recursive_functions countdown_calls", countdown_calls, 4):
+    print("Countdown calls:", countdown_calls)

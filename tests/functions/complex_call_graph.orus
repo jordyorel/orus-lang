@@ -81,31 +81,41 @@ fn iterative_transform(start: i32, steps: i32) -> i32:
     return current
 
 squares_6 = sum_of_squares(6)
-print("sum_of_squares(6) =", squares_6)
+if assert_eq("complex_call_graph sum_of_squares(6)", squares_6, 91):
+    print("sum_of_squares(6) =", squares_6)
 
 squares_4 = sum_of_squares(4)
-print("sum_of_squares(4) =", squares_4)
+if assert_eq("complex_call_graph sum_of_squares(4)", squares_4, 30):
+    print("sum_of_squares(4) =", squares_4)
 
 alt_7 = alternating_sum(7)
-print("alternating_sum(7) =", alt_7)
+if assert_eq("complex_call_graph alternating_sum(7)", alt_7, 4):
+    print("alternating_sum(7) =", alt_7)
 
 alt_4 = alternating_sum(4)
-print("alternating_sum(4) =", alt_4)
+if assert_eq("complex_call_graph alternating_sum(4)", alt_4, -2):
+    print("alternating_sum(4) =", alt_4)
 
 metric = combined_metric(3, 2, 4)
-print("combined_metric(3, 2, 4) =", metric)
+if assert_eq("complex_call_graph combined_metric", metric, 45):
+    print("combined_metric(3, 2, 4) =", metric)
 
 stairs_4 = staircase_sum(4)
-print("staircase_sum(4) =", stairs_4)
+if assert_eq("complex_call_graph staircase_sum", stairs_4, 65):
+    print("staircase_sum(4) =", stairs_4)
 
 chain = chain_evaluation(3, 4)
-print("chain_evaluation(3, 4) =", chain)
+if assert_eq("complex_call_graph chain_evaluation", chain, 177):
+    print("chain_evaluation(3, 4) =", chain)
 
 transform_a = iterative_transform(2, 4)
-print("iterative_transform(2, 4) =", transform_a)
+if assert_eq("complex_call_graph iterative_transform(2, 4)", transform_a, -9):
+    print("iterative_transform(2, 4) =", transform_a)
 
 transform_b = iterative_transform(3, 3)
-print("iterative_transform(3, 3) =", transform_b)
+if assert_eq("complex_call_graph iterative_transform(3, 3)", transform_b, 25):
+    print("iterative_transform(3, 3) =", transform_b)
 
 adjusted_total = apply_adjustment(squares_6 + alt_7)
-print("apply_adjustment(sum_of_squares(6) + alternating_sum(7)) =", adjusted_total)
+if assert_eq("complex_call_graph apply_adjustment", adjusted_total, 102):
+    print("apply_adjustment(sum_of_squares(6) + alternating_sum(7)) =", adjusted_total)
