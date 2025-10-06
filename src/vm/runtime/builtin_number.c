@@ -41,7 +41,8 @@ static void format_string_preview(const ObjString* string, char* buffer, size_t 
         return;
     }
 
-    if (!string || !string->chars) {
+    const char* chars = obj_string_chars((ObjString*)string);
+    if (!string || !chars) {
         snprintf(buffer, size, "<null string>");
         return;
     }
@@ -55,19 +56,24 @@ static void format_string_preview(const ObjString* string, char* buffer, size_t 
     }
 
     if (truncated) {
-        snprintf(buffer, size, "%.*s...", (int)copy_len, string->chars);
+        snprintf(buffer, size, "%.*s...", (int)copy_len, chars);
     } else {
-        snprintf(buffer, size, "%.*s", (int)copy_len, string->chars);
+        snprintf(buffer, size, "%.*s", (int)copy_len, chars);
     }
 }
 
 static bool string_contains_decimal_hint(const ObjString* string) {
-    if (!string || !string->chars) {
+    if (!string) {
+        return false;
+    }
+
+    const char* chars = obj_string_chars((ObjString*)string);
+    if (!chars) {
         return false;
     }
 
     for (int i = 0; i < string->length; i++) {
-        char c = string->chars[i];
+        char c = chars[i];
         if (c == '.' || c == 'e' || c == 'E') {
             return true;
         }
@@ -77,12 +83,16 @@ static bool string_contains_decimal_hint(const ObjString* string) {
 }
 
 static bool parse_int_string(const ObjString* string, int32_t* out_value, bool* out_overflow) {
-    if (!string || !string->chars || !out_value || !out_overflow) {
+    if (!string || !out_value || !out_overflow) {
+        return false;
+    }
+
+    const char* start = obj_string_chars((ObjString*)string);
+    if (!start) {
         return false;
     }
 
     errno = 0;
-    const char* start = string->chars;
     char* end = NULL;
     long value = strtol(start, &end, 10);
 
@@ -106,12 +116,16 @@ static bool parse_int_string(const ObjString* string, int32_t* out_value, bool* 
 }
 
 static bool parse_float_string(const ObjString* string, double* out_value, bool* out_overflow) {
-    if (!string || !string->chars || !out_value || !out_overflow) {
+    if (!string || !out_value || !out_overflow) {
+        return false;
+    }
+
+    const char* start = obj_string_chars((ObjString*)string);
+    if (!start) {
         return false;
     }
 
     errno = 0;
-    const char* start = string->chars;
     char* end = NULL;
     double value = strtod(start, &end);
 

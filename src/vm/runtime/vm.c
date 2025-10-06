@@ -107,7 +107,7 @@ void printValue(Value value) {
             printf("%.17g", AS_F64(value));
             break;
         case VAL_STRING:
-            printf("%s", AS_STRING(value)->chars);
+            printf("%s", obj_string_chars(AS_STRING(value)));
             break;
         case VAL_ARRAY: {
             ObjArray* array = AS_ARRAY(value);
@@ -119,8 +119,8 @@ void printValue(Value value) {
         }
         case VAL_ENUM: {
             ObjEnumInstance* inst = AS_ENUM(value);
-            const char* typeName = (inst && inst->typeName) ? inst->typeName->chars : "<enum>";
-            const char* variantName = (inst && inst->variantName) ? inst->variantName->chars : "<variant>";
+            const char* typeName = (inst && inst->typeName) ? obj_string_chars(inst->typeName) : "<enum>";
+            const char* variantName = (inst && inst->variantName) ? obj_string_chars(inst->variantName) : "<variant>";
             printf("%s.%s", typeName, variantName);
             if (inst && inst->payload && inst->payload->length > 0) {
                 printf("(");
@@ -133,7 +133,7 @@ void printValue(Value value) {
             break;
         }
         case VAL_ERROR:
-            printf("Error: %s", AS_ERROR(value)->message->chars);
+            printf("Error: %s", obj_string_chars(AS_ERROR(value)->message));
             break;
         case VAL_RANGE_ITERATOR: {
             ObjRangeIterator* it = AS_RANGE_ITERATOR(value);
@@ -188,7 +188,7 @@ bool valuesEqual(Value a, Value b) {
             if (left == right) return true;
             if (!left || !right) return false;
             if (left->length != right->length) return false;
-            return memcmp(left->chars, right->chars, (size_t)left->length) == 0;
+            return memcmp(obj_string_chars(left), obj_string_chars(right), (size_t)left->length) == 0;
         }
         case VAL_ARRAY:
             return AS_ARRAY(a) == AS_ARRAY(b);
@@ -311,8 +311,8 @@ void vm_report_unhandled_error(void) {
         return;
     }
 
-    const char* message = (err->message && err->message->chars)
-                               ? err->message->chars
+    const char* message = (err->message)
+                               ? obj_string_chars(err->message)
                                : "";
     SrcLocation loc = {
         .file = err->location.file,
@@ -548,7 +548,7 @@ __attribute__((unused)) static long getFileModTime(const char* path) {
 // Helper function to check if a module is already loaded
 static bool isModuleLoaded(const char* path) {
     for (int i = 0; i < vm.moduleCount; i++) {
-        if (vm.loadedModules[i] && strcmp(vm.loadedModules[i]->chars, path) == 0) {
+        if (vm.loadedModules[i] && strcmp(obj_string_chars(vm.loadedModules[i]), path) == 0) {
             return true;
         }
     }
@@ -565,7 +565,7 @@ static void addLoadedModule(const char* path) {
 
 static bool isModuleLoading(const char* path) {
     for (int i = 0; i < vm.loadingModuleCount; i++) {
-        if (vm.loadingModules[i] && strcmp(vm.loadingModules[i]->chars, path) == 0) {
+        if (vm.loadingModules[i] && strcmp(obj_string_chars(vm.loadingModules[i]), path) == 0) {
             return true;
         }
     }
@@ -587,7 +587,7 @@ static void popLoadingModule(const char* path) {
         return;
     }
     for (int i = 0; i < vm.loadingModuleCount; i++) {
-        if (vm.loadingModules[i] && strcmp(vm.loadingModules[i]->chars, path) == 0) {
+        if (vm.loadingModules[i] && strcmp(obj_string_chars(vm.loadingModules[i]), path) == 0) {
             vm.loadingModuleCount--;
             vm.loadingModules[i] = vm.loadingModules[vm.loadingModuleCount];
             vm.loadingModules[vm.loadingModuleCount] = NULL;

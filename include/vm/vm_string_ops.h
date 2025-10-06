@@ -56,6 +56,7 @@ typedef struct StringRope {
     } as;
     uint32_t hash_cache;
     bool hash_valid;
+    size_t ref_count;
 } StringRope;
 
 typedef struct {
@@ -79,6 +80,13 @@ char* rope_to_cstr(StringRope* rope);
 size_t rope_length(const StringRope* rope);
 bool rope_char_at(const StringRope* rope, size_t index, char* out);
 ObjString* string_char_at(ObjString* string, size_t index);
+
+void rope_retain(StringRope* rope);
+void rope_release(StringRope* rope);
+StringRope* rope_concat(StringRope* left, StringRope* right);
+
+const char* obj_string_chars(ObjString* string);
+ObjString* concatenate_strings(ObjString* left, ObjString* right);
 
 ObjString* rope_index_to_string(StringRope* rope, size_t index);
 

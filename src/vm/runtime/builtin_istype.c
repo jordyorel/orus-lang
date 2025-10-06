@@ -27,8 +27,7 @@ bool builtin_istype(Value value, Value type_identifier, Value* out_value) {
         bool matches = false;
         if (IS_STRING(type_identifier)) {
             ObjString* expected = AS_STRING(type_identifier);
-            const char* expected_chars =
-                (expected && expected->chars) ? expected->chars : "";
+            const char* expected_chars = expected ? obj_string_chars(expected) : "";
             matches = (strcmp(label_chars, expected_chars) == 0);
         }
 
@@ -45,7 +44,7 @@ bool builtin_istype(Value value, Value type_identifier, Value* out_value) {
     bool matches = false;
     if (IS_STRING(type_identifier)) {
         ObjString* expected = AS_STRING(type_identifier);
-        const char* expected_chars = (expected && expected->chars) ? expected->chars : "";
+        const char* expected_chars = expected ? obj_string_chars(expected) : "";
         matches = (strcmp(label, expected_chars) == 0);
     }
 

@@ -166,7 +166,8 @@ int add_constant(ConstantPool* pool, Value value) {
     if (value.type == VAL_I32) {
         DEBUG_CODEGEN_PRINT("Added i32 constant %d at index %d\n", AS_I32(value), index);
     } else if (value.type == VAL_STRING) {
-        DEBUG_CODEGEN_PRINT("Added string constant \"%s\" at index %d\n", AS_STRING(value)->chars, index);
+        DEBUG_CODEGEN_PRINT("Added string constant \"%s\" at index %d\n",
+                            obj_string_chars(AS_STRING(value)), index);
     } else {
         DEBUG_CODEGEN_PRINT("Added constant (type=%d) at index %d\n", value.type, index);
     }

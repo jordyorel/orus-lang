@@ -530,8 +530,10 @@ Value evaluate_binary_operation(Value left, const char* op, Value right) {
                 return left;
             }
 
-            memcpy(buffer, leftStr->chars, (size_t)leftStr->length);
-            memcpy(buffer + leftStr->length, rightStr->chars, (size_t)rightStr->length);
+            const char* left_chars = obj_string_chars(leftStr);
+            const char* right_chars = obj_string_chars(rightStr);
+            memcpy(buffer, left_chars, (size_t)leftStr->length);
+            memcpy(buffer + leftStr->length, right_chars, (size_t)rightStr->length);
             buffer[newLength] = '\0';
 
             ObjString* resultStr = intern_string(buffer, newLength);

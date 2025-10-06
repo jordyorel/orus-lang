@@ -65,8 +65,8 @@ static void populate_error_from_vm(void) {
         return;
     }
 
-    const char* message = (err->message && err->message->chars)
-                              ? err->message->chars
+    const char* message = (err->message)
+                              ? obj_string_chars(err->message)
                               : "Runtime error";
     set_last_error(message);
 }

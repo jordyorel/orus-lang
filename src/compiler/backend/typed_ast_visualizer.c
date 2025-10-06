@@ -245,7 +245,7 @@ static const char* get_literal_value_string(Value* value, char* buffer, size_t b
         case VAL_STRING: {
             if (value->as.obj && IS_STRING(*value)) {
                 ObjString* str = AS_STRING(*value);
-                snprintf(buffer, buffer_size, "\"%.*s\"", str->length, str->chars);
+                snprintf(buffer, buffer_size, "\"%.*s\"", str->length, obj_string_chars(str));
             } else {
                 snprintf(buffer, buffer_size, "\"<invalid string>\"");
             }

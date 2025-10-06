@@ -27,8 +27,8 @@ static inline const char* builtin_value_type_label(Value value) {
         case VAL_ARRAY: return "array";
         case VAL_ENUM: {
             ObjEnumInstance* instance = AS_ENUM(value);
-            if (instance && instance->typeName && instance->typeName->chars) {
-                return instance->typeName->chars;
+            if (instance && instance->typeName) {
+                return obj_string_chars(instance->typeName);
             }
             return "enum";
         }
@@ -84,8 +84,7 @@ static inline bool builtin_alloc_error_label(
         type_name = "error";
     }
 
-    const char* message =
-        (error->message && error->message->chars) ? error->message->chars : "";
+    const char* message = (error->message) ? obj_string_chars(error->message) : "";
 
     size_t type_len = strlen(type_name);
     size_t message_len = strlen(message);

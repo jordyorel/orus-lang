@@ -716,10 +716,10 @@ static bool parser_match_literals_equal(Value a, Value b) {
             case VAL_STRING: {
                 ObjString* left = AS_STRING(a);
                 ObjString* right = AS_STRING(b);
-                if (!left || !right || !left->chars || !right->chars) {
+                if (!left || !right) {
                     return left == right;
                 }
-                return strcmp(left->chars, right->chars) == 0;
+                return strcmp(obj_string_chars(left), obj_string_chars(right)) == 0;
             }
             default:
                 return false;
@@ -761,7 +761,7 @@ static void parser_format_match_literal(Value value, char* buffer, size_t size) 
             break;
         case VAL_STRING: {
             ObjString* str = AS_STRING(value);
-            const char* chars = (str && str->chars) ? str->chars : "";
+            const char* chars = str ? obj_string_chars(str) : "";
             snprintf(buffer, size, "\"%s\"", chars);
             break;
         }

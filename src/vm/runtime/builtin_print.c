@@ -116,11 +116,16 @@ static void print_formatted_value(Value value, const char* spec) {
 
 static void print_string_interpolated(ObjString* str, Value* args, int* arg_index,
                                       int arg_count) {
+    const char* chars = obj_string_chars(str);
+    if (!chars) {
+        return;
+    }
+
     for (int i = 0; i < str->length; i++) {
-        char c = str->chars[i];
+        char c = chars[i];
         if (c == '\\') {
             if (i + 1 < str->length) {
-                char next = str->chars[++i];
+                char next = chars[++i];
                 switch (next) {
                     case 'n': putchar('\n'); break;
                     case 't': putchar('\t'); break;
@@ -133,20 +138,20 @@ static void print_string_interpolated(ObjString* str, Value* args, int* arg_inde
             char spec[16];
             int spec_len = 0;
             int j = i + 1;
-            if (j < str->length && str->chars[j] == '.') {
+            if (j < str->length && chars[j] == '.') {
                 spec[spec_len++] = '.';
                 j++;
-                while (j < str->length && isdigit((unsigned char)str->chars[j])) {
-                    if (spec_len < 15) spec[spec_len++] = str->chars[j];
+                while (j < str->length && isdigit((unsigned char)chars[j])) {
+                    if (spec_len < 15) spec[spec_len++] = chars[j];
                     j++;
                 }
-                if (j < str->length && str->chars[j] == 'f') {
+                if (j < str->length && chars[j] == 'f') {
                     if (spec_len < 15) spec[spec_len++] = 'f';
                     j++;
                 }
-            } else if (j < str->length && (str->chars[j] == 'x' || str->chars[j] == 'X' ||
-                                            str->chars[j] == 'b' || str->chars[j] == 'o')) {
-                if (spec_len < 15) spec[spec_len++] = str->chars[j];
+            } else if (j < str->length && (chars[j] == 'x' || chars[j] == 'X' ||
+                                            chars[j] == 'b' || chars[j] == 'o')) {
+                if (spec_len < 15) spec[spec_len++] = chars[j];
                 j++;
             }
             spec[spec_len] = '\0';

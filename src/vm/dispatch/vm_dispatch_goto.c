@@ -653,24 +653,8 @@ InterpretResult vm_run_dispatch(void) {
                 // Concatenate the strings
                 ObjString* leftStr = AS_STRING(left);
                 ObjString* rightStr = AS_STRING(right);
-                int newLength = leftStr->length + rightStr->length;
-                
-                // Use stack buffer for small strings, otherwise fall back to a StringBuilder
-                if (newLength < VM_SMALL_STRING_BUFFER) {
-                    char buffer[VM_SMALL_STRING_BUFFER];
-                    memcpy(buffer, leftStr->chars, leftStr->length);
-                    memcpy(buffer + leftStr->length, rightStr->chars, rightStr->length);
-                    buffer[newLength] = '\0';
-                    ObjString* result = allocateString(buffer, newLength);
-                    vm_set_register_safe(dst, STRING_VAL(result));
-                } else {
-                    StringBuilder* sb = createStringBuilder(newLength + 1);
-                    appendToStringBuilder(sb, leftStr->chars, leftStr->length);
-                    appendToStringBuilder(sb, rightStr->chars, rightStr->length);
-                    ObjString* result = stringBuilderToString(sb);
-                    freeStringBuilder(sb);
-                    vm_set_register_safe(dst, STRING_VAL(result));
-                }
+                ObjString* result = concatenate_strings(leftStr, rightStr);
+                vm_set_register_safe(dst, STRING_VAL(result));
                 DISPATCH();
             }
             
@@ -2132,13 +2116,7 @@ InterpretResult vm_run_dispatch(void) {
         }
         ObjString* a = AS_STRING(left_val);
         ObjString* b = AS_STRING(right_val);
-        int newLen = a->length + b->length;
-        char* buf = malloc(newLen + 1);
-        memcpy(buf, a->chars, a->length);
-        memcpy(buf + a->length, b->chars, b->length);
-        buf[newLen] = '\0';
-        ObjString* res = allocateString(buf, newLen);
-        free(buf);
+        ObjString* res = concatenate_strings(a, b);
         vm_set_register_safe(dst, STRING_VAL(res));
         DISPATCH();
     }
@@ -2198,8 +2176,8 @@ InterpretResult vm_run_dispatch(void) {
         }
 
         TaggedUnionSpec spec = {
-            .type_name = typeName->chars,
-            .variant_name = variantName ? variantName->chars : NULL,
+            .type_name = obj_string_chars(typeName),
+            .variant_name = variantName ? obj_string_chars(variantName) : NULL,
             .variant_index = variantIndex,
             .payload = payload_ptr,
             .payload_count = payloadCount,
@@ -2243,7 +2221,8 @@ InterpretResult vm_run_dispatch(void) {
 
         ObjEnumInstance* instance = AS_ENUM(value);
         if (!instance || instance->variantIndex != variantIndex) {
-            const char* typeName = instance && instance->typeName ? instance->typeName->chars : "enum";
+            const char* typeName =
+                (instance && instance->typeName) ? obj_string_chars(instance->typeName) : "enum";
             VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(),
                             "Match arm expected %s variant index %u", typeName, variantIndex);
         }
@@ -2284,8 +2263,9 @@ InterpretResult vm_run_dispatch(void) {
         }
 
         if (!result) {
+            const char* chars = obj_string_chars(source);
             char buffer[2];
-            buffer[0] = source->chars[index];
+            buffer[0] = chars[index];
             buffer[1] = '\0';
             result = allocateString(buffer, 1);
         }

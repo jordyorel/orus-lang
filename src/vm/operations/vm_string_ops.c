@@ -102,6 +102,7 @@ StringRope* rope_from_cstr(const char* str, size_t len) {
     r->as.leaf.owns_data = true;
     r->hash_valid = false;
     r->hash_cache = 0;
+    r->ref_count = 1;
     return r;
 }
 
@@ -116,6 +117,7 @@ StringRope* rope_from_buffer(char* buffer, size_t len, bool owns_data) {
     r->as.leaf.owns_data = owns_data;
     r->hash_valid = false;
     r->hash_cache = 0;
+    r->ref_count = 1;
     return r;
 }
 
@@ -125,6 +127,9 @@ static size_t rope_length_internal(const StringRope* rope) {
         case ROPE_LEAF:
             return rope->as.leaf.len;
         case ROPE_CONCAT:
+            if (rope->as.concat.total_len != 0) {
+                return rope->as.concat.total_len;
+            }
             return rope_length_internal(rope->as.concat.left) +
                    rope_length_internal(rope->as.concat.right);
         case ROPE_SUBSTRING:
@@ -205,9 +210,137 @@ char* rope_to_cstr(StringRope* rope) {
     StringBuilder* sb = createStringBuilder(rope->kind == ROPE_LEAF ? rope->as.leaf.len + 1 : 16);
     rope_flatten(rope, sb);
     sb->buffer[sb->length] = '\0';
-    char* result = sb->buffer;
-    free(sb); // only free the struct, keep buffer
-    return result;
+    char* buffer = sb->buffer;
+    size_t capacity = sb->capacity;
+    size_t length = sb->length;
+    buffer = (char*)reallocate(buffer, capacity, length + 1);
+    reallocate(sb, sizeof(StringBuilder), 0);
+    return buffer;
+}
+
+void rope_retain(StringRope* rope) {
+    if (!rope) {
+        return;
+    }
+    rope->ref_count++;
+}
+
+void rope_release(StringRope* rope) {
+    if (!rope) {
+        return;
+    }
+    if (rope->ref_count == 0) {
+        return;
+    }
+    rope->ref_count--;
+    if (rope->ref_count > 0) {
+        return;
+    }
+
+    switch (rope->kind) {
+        case ROPE_LEAF:
+            if (rope->as.leaf.owns_data && rope->as.leaf.data) {
+                free(rope->as.leaf.data);
+            }
+            break;
+        case ROPE_CONCAT:
+            rope_release(rope->as.concat.left);
+            rope_release(rope->as.concat.right);
+            break;
+        case ROPE_SUBSTRING:
+            rope_release(rope->as.substring.base);
+            break;
+    }
+    free(rope);
+}
+
+static uint32_t rope_depth(const StringRope* rope) {
+    if (!rope) {
+        return 0;
+    }
+    if (rope->kind == ROPE_CONCAT) {
+        return rope->as.concat.depth;
+    }
+    return 1;
+}
+
+StringRope* rope_concat(StringRope* left, StringRope* right) {
+    if (!left) {
+        if (!right) {
+            return rope_from_cstr("", 0);
+        }
+        rope_retain(right);
+        return right;
+    }
+    if (!right) {
+        rope_retain(left);
+        return left;
+    }
+
+    StringRope* node = (StringRope*)reallocate(NULL, 0, sizeof(StringRope));
+    node->kind = ROPE_CONCAT;
+    node->as.concat.left = left;
+    node->as.concat.right = right;
+    node->as.concat.total_len = rope_length(left) + rope_length(right);
+    uint32_t left_depth = rope_depth(left);
+    uint32_t right_depth = rope_depth(right);
+    node->as.concat.depth = (left_depth > right_depth ? left_depth : right_depth) + 1;
+    node->hash_valid = false;
+    node->hash_cache = 0;
+    node->ref_count = 1;
+    rope_retain(left);
+    rope_retain(right);
+    return node;
+}
+
+const char* obj_string_chars(ObjString* string) {
+    if (!string) {
+        return "";
+    }
+    if (string->chars) {
+        return string->chars;
+    }
+    if (!string->rope) {
+        string->chars = copyString("", 0);
+        string->length = 0;
+        string->rope = rope_from_buffer(string->chars, 0, false);
+        return string->chars;
+    }
+
+    size_t len = rope_length(string->rope);
+    char* flat = rope_to_cstr(string->rope);
+    rope_release(string->rope);
+    string->chars = flat;
+    string->length = (int)len;
+    string->rope = rope_from_buffer(string->chars, len, false);
+    return string->chars;
+}
+
+ObjString* concatenate_strings(ObjString* left, ObjString* right) {
+    if (!left || !right) {
+        return allocateString("", 0);
+    }
+
+    size_t newLength = (size_t)left->length + (size_t)right->length;
+    if (newLength < VM_SMALL_STRING_BUFFER) {
+        const char* left_chars = obj_string_chars(left);
+        const char* right_chars = obj_string_chars(right);
+        char buffer[VM_SMALL_STRING_BUFFER];
+        memcpy(buffer, left_chars, (size_t)left->length);
+        memcpy(buffer + left->length, right_chars, (size_t)right->length);
+        buffer[newLength] = '\0';
+        return allocateString(buffer, (int)newLength);
+    }
+
+    if (!left->rope) {
+        obj_string_chars(left);
+    }
+    if (!right->rope) {
+        obj_string_chars(right);
+    }
+
+    StringRope* combined = rope_concat(left->rope, right->rope);
+    return allocateStringFromRope(combined);
 }
 
 ObjString* rope_index_to_string(StringRope* rope, size_t index) {
@@ -238,7 +371,8 @@ ObjString* intern_string(const char* chars, int length) {
     char keybuf[32];
     snprintf(keybuf, sizeof(keybuf), "%zu", hash);
     ObjString* existing = (ObjString*)hashmap_get(globalStringTable.interned, keybuf);
-    if (existing && existing->length == length && memcmp(existing->chars, chars, length) == 0) {
+    if (existing && existing->length == length &&
+        memcmp(obj_string_chars(existing), chars, length) == 0) {
         return existing;
     }
     ObjString* s = allocateString(chars, length);
@@ -249,24 +383,7 @@ ObjString* intern_string(const char* chars, int length) {
 }
 
 
-void free_rope(StringRope* rope) {
-    if (!rope) return;
-    switch (rope->kind) {
-        case ROPE_LEAF:
-            if (rope->as.leaf.owns_data && rope->as.leaf.data) {
-                free(rope->as.leaf.data);
-            }
-            break;
-        case ROPE_CONCAT:
-            free_rope(rope->as.concat.left);
-            free_rope(rope->as.concat.right);
-            break;
-        case ROPE_SUBSTRING:
-            free_rope(rope->as.substring.base);
-            break;
-    }
-    free(rope);
-}
+void free_rope(StringRope* rope) { rope_release(rope); }
 
 void free_string_table(StringInternTable* table) {
     if (!table || !table->interned) return;

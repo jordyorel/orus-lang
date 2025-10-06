@@ -118,7 +118,10 @@ bool builtin_input(Value* args, int count, Value* out_value) {
         if (IS_STRING(prompt)) {
             ObjString* prompt_str = AS_STRING(prompt);
             if (prompt_str && prompt_str->length > 0) {
-                fwrite(prompt_str->chars, sizeof(char), (size_t)prompt_str->length, stdout);
+                const char* chars = obj_string_chars(prompt_str);
+                if (chars) {
+                    fwrite(chars, sizeof(char), (size_t)prompt_str->length, stdout);
+                }
             }
         } else {
             printValue(prompt);

@@ -79,7 +79,7 @@ static int compare_string(const Value* a, const Value* b) {
     if (left == right) return 0;
     if (!left) return right ? -1 : 0;
     if (!right) return 1;
-    return strcmp(left->chars, right->chars);
+    return strcmp(obj_string_chars(left), obj_string_chars(right));
 }
 
 static int compare_values(const void* lhs, const void* rhs) {

@@ -81,8 +81,8 @@ static void format_match_literal(Value value, char* buffer, size_t size) {
             break;
         case VAL_STRING: {
             ObjString* str = AS_STRING(value);
-            if (str && str->chars) {
-                snprintf(buffer, size, "\"%s\"", str->chars);
+            if (str) {
+                snprintf(buffer, size, "\"%s\"", obj_string_chars(str));
             } else {
                 snprintf(buffer, size, "<string>");
             }
@@ -181,8 +181,7 @@ int resolve_struct_field_index(Type* struct_type, const char* field_name) {
 
     for (int i = 0; i < ext->extended.structure.fieldCount; i++) {
         FieldInfo* info = &ext->extended.structure.fields[i];
-        if (info && info->name && info->name->chars &&
-            strcmp(info->name->chars, field_name) == 0) {
+        if (info && info->name && strcmp(obj_string_chars(info->name), field_name) == 0) {
             return i;
         }
     }
@@ -247,8 +246,8 @@ static int compile_struct_method_call(CompilerContext* ctx, TypedASTNode* call) 
     Type* base_struct = unwrap_struct_type(object_type);
     if (base_struct) {
         TypeExtension* ext = get_type_extension(base_struct);
-        if (ext && ext->extended.structure.name && ext->extended.structure.name->chars) {
-            struct_name = ext->extended.structure.name->chars;
+        if (ext && ext->extended.structure.name) {
+            struct_name = obj_string_chars(ext->extended.structure.name);
         }
     }
 
@@ -929,7 +928,7 @@ void emit_load_constant(CompilerContext* ctx, int reg, Value constant) {
                 emit_byte_to_buffer(ctx->bytecode, (const_index >> 8) & 0xFF); // High byte
                 emit_byte_to_buffer(ctx->bytecode, const_index & 0xFF);        // Low byte
                 DEBUG_CODEGEN_PRINT("Emitted OP_LOAD_CONST R%d, #%d \"%s\"\n",
-                       reg, const_index, AS_STRING(constant)->chars);
+                       reg, const_index, obj_string_chars(AS_STRING(constant)));
             } else {
                 DEBUG_CODEGEN_PRINT("Error: Failed to add string constant to pool");
             }
@@ -2713,7 +2712,7 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
                     i < ext->extended.structure.fieldCount) {
                     FieldInfo* info = &ext->extended.structure.fields[i];
                     if (info && info->name) {
-                        field_name = info->name->chars;
+                        field_name = obj_string_chars(info->name);
                     }
                 }
                 if (!field_name && expr->typed.structLiteral.fields &&

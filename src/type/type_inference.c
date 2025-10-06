@@ -83,7 +83,7 @@ static Variant* lookup_enum_variant(Type* enum_type, const char* variant_name, i
 
     for (int i = 0; i < ext->extended.enum_.variant_count; i++) {
         Variant* variant = &ext->extended.enum_.variants[i];
-        if (variant->name && variant->name->chars && strcmp(variant->name->chars, variant_name) == 0) {
+        if (variant->name && strcmp(obj_string_chars(variant->name), variant_name) == 0) {
             if (out_index) {
                 *out_index = i;
             }
@@ -174,7 +174,7 @@ static const char* get_enum_type_name(Type* enum_type) {
         return NULL;
     }
 
-    return ext->extended.enum_.name->chars;
+    return ext->extended.enum_.name ? obj_string_chars(ext->extended.enum_.name) : NULL;
 }
 
 static void free_compiler_string(ObjString* string) {
@@ -251,10 +251,10 @@ static bool literal_values_equal(Value a, Value b) {
         case VAL_STRING: {
             ObjString* left = AS_STRING(a);
             ObjString* right = AS_STRING(b);
-            if (!left || !right || !left->chars || !right->chars) {
+            if (!left || !right) {
                 return left == right;
             }
-            return strcmp(left->chars, right->chars) == 0;
+            return strcmp(obj_string_chars(left), obj_string_chars(right)) == 0;
         }
         default:
             return false;
@@ -287,7 +287,7 @@ static void format_literal_value(Value value, char* buffer, size_t size) {
             break;
         case VAL_STRING: {
             ObjString* str = AS_STRING(value);
-            const char* chars = (str && str->chars) ? str->chars : "";
+            const char* chars = str ? obj_string_chars(str) : "";
             snprintf(buffer, size, "\"%s\"", chars);
             break;
         }
@@ -1534,8 +1534,8 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                 if (ext->extended.structure.fields) {
                     for (int j = 0; j < ext->extended.structure.fieldCount; j++) {
                         FieldInfo* defined = &ext->extended.structure.fields[j];
-                        if (defined->name && defined->name->chars &&
-                            strcmp(defined->name->chars, field->name) == 0) {
+                        if (defined->name &&
+                            strcmp(obj_string_chars(defined->name), field->name) == 0) {
                             matched = true;
                             field_type = defined->type;
                             break;
@@ -1729,8 +1729,8 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                 if (ext->extended.structure.fields) {
                     for (int i = 0; i < ext->extended.structure.fieldCount; i++) {
                         FieldInfo* field = &ext->extended.structure.fields[i];
-                        if (field->name && field->name->chars &&
-                            strcmp(field->name->chars, node->member.member) == 0) {
+                        if (field->name &&
+                            strcmp(obj_string_chars(field->name), node->member.member) == 0) {
                             node->member.isMethod = false;
                             node->member.isInstanceMethod = false;
                             return field->type ? field->type : getPrimitiveType(TYPE_UNKNOWN);
@@ -1742,8 +1742,8 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                 if (ext->extended.structure.methods) {
                     for (int i = 0; i < ext->extended.structure.methodCount; i++) {
                         Method* method = &ext->extended.structure.methods[i];
-                        if (method->name && method->name->chars &&
-                            strcmp(method->name->chars, node->member.member) == 0) {
+                        if (method->name &&
+                            strcmp(obj_string_chars(method->name), node->member.member) == 0) {
                             node->member.isMethod = true;
                             node->member.isInstanceMethod = method->isInstance;
                             return method->type;
@@ -1765,14 +1765,14 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                 }
 
                 node->member.resolvesToEnum = true;
-                if (ext->extended.enum_.name && ext->extended.enum_.name->chars) {
-                    node->member.enumTypeName = ext->extended.enum_.name->chars;
+                if (ext->extended.enum_.name) {
+                    node->member.enumTypeName = obj_string_chars(ext->extended.enum_.name);
                 }
 
                 for (int i = 0; i < ext->extended.enum_.variant_count; i++) {
                     Variant* variant = &ext->extended.enum_.variants[i];
-                    if (variant->name && variant->name->chars &&
-                        strcmp(variant->name->chars, node->member.member) == 0) {
+                    if (variant->name &&
+                        strcmp(obj_string_chars(variant->name), node->member.member) == 0) {
                         node->member.isMethod = false;
                         node->member.isInstanceMethod = false;
                         node->member.resolvesToEnumVariant = true;
@@ -3105,8 +3105,9 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                     if (!seen[i]) {
                         missing_count++;
                         Variant* variant = &ext->extended.enum_.variants[i];
-                        if (variant && variant->name && variant->name->chars) {
-                            buffer_len += strlen(variant->name->chars) + 2;
+                        if (variant && variant->name) {
+                            const char* variant_chars = obj_string_chars(variant->name);
+                            buffer_len += strlen(variant_chars) + 2;
                         }
                     }
                 }
@@ -3122,11 +3123,11 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                         for (int i = 0; i < variant_total; i++) {
                             if (!seen[i]) {
                                 Variant* variant = &ext->extended.enum_.variants[i];
-                                if (variant && variant->name && variant->name->chars) {
+                                if (variant && variant->name) {
                                     if (!first) {
                                         strcat(buffer, ", ");
                                     }
-                                    strcat(buffer, variant->name->chars);
+                                    strcat(buffer, obj_string_chars(variant->name));
                                     first = false;
                                 }
                             }
@@ -3348,8 +3349,9 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                     if (!seen_variants[i]) {
                         missing_count++;
                         Variant* variant = &enum_ext->extended.enum_.variants[i];
-                        if (variant && variant->name && variant->name->chars) {
-                            buffer_len += strlen(variant->name->chars) + 2;
+                        if (variant && variant->name) {
+                            const char* variant_chars = obj_string_chars(variant->name);
+                            buffer_len += strlen(variant_chars) + 2;
                         }
                     }
                 }
@@ -3364,11 +3366,11 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                         for (int i = 0; i < variant_total; i++) {
                             if (!seen_variants[i]) {
                                 Variant* variant = &enum_ext->extended.enum_.variants[i];
-                                if (variant && variant->name && variant->name->chars) {
+                                if (variant && variant->name) {
                                     if (!first) {
                                         strcat(buffer, ", ");
                                     }
-                                    strcat(buffer, variant->name->chars);
+                                    strcat(buffer, obj_string_chars(variant->name));
                                     first = false;
                                 }
                             }
