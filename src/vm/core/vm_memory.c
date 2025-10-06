@@ -8,6 +8,7 @@
 
 
 #include "runtime/memory.h"
+#include "vm/spill_manager.h"
 #include "vm/vm.h"
 #include "vm/vm_string_ops.h"
 #include "vm/vm_comparison.h"
@@ -345,6 +346,16 @@ void markValue(Value value) {
     }
 }
 
+static void mark_spill_entry(uint16_t register_id, const Value* value, void* user_data) {
+    (void)register_id;
+    (void)user_data;
+    if (!value) {
+        return;
+    }
+
+    markValue(*value);
+}
+
 static void markRoots() {
     for (int i = 0; i < REGISTER_COUNT; i++) {
         markValue(vm.registers[i]);
@@ -388,6 +399,10 @@ static void markRoots() {
         for (int saved = 0; saved < savedCount; saved++) {
             markValue(frame->savedRegisters[saved]);
         }
+    }
+
+    if (vm.register_file.spilled_registers) {
+        spill_manager_visit_entries(vm.register_file.spilled_registers, mark_spill_entry, NULL);
     }
 
     if (vm.chunk) {

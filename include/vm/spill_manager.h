@@ -20,6 +20,8 @@
 // Forward declaration
 typedef struct SpillManager SpillManager;
 
+typedef void (*SpillEntryVisitor)(uint16_t register_id, const Value* value, void* user_data);
+
 // Phase 2: Spill manager lifecycle
 SpillManager* create_spill_manager(void);
 void free_spill_manager(SpillManager* manager);
@@ -30,6 +32,8 @@ bool set_spill_register_value(SpillManager* manager, uint16_t register_id, Value
 void reserve_spill_slot(SpillManager* manager, uint16_t register_id);
 bool unspill_register_value(SpillManager* manager, uint16_t register_id, Value* value);
 void remove_spilled_register(SpillManager* manager, uint16_t register_id);
+
+void spill_manager_visit_entries(const SpillManager* manager, SpillEntryVisitor visitor, void* user_data);
 
 // Phase 2: Pressure analysis
 bool needs_spilling(SpillManager* manager);
