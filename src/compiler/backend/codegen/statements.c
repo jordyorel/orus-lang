@@ -59,6 +59,96 @@ static const Type* get_effective_type(const TypedASTNode* node) {
     return NULL;
 }
 
+static bool type_is_string_like(const Type* type) {
+    if (!type) {
+        return false;
+    }
+
+    Type* resolved = prune((Type*)type);
+    if (!resolved) {
+        return false;
+    }
+
+    if (resolved->kind == TYPE_STRING) {
+        return true;
+    }
+
+    if (resolved->kind == TYPE_INSTANCE && resolved->info.instance.base) {
+        Type* base = prune(resolved->info.instance.base);
+        if (base && base->kind == TYPE_STRING) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static Type* extract_array_element_type(const Type* type) {
+    if (!type) {
+        return NULL;
+    }
+
+    Type* resolved = prune((Type*)type);
+    if (!resolved) {
+        return NULL;
+    }
+
+    if (resolved->kind == TYPE_ARRAY) {
+        return resolved->info.array.elementType;
+    }
+
+    if (resolved->kind == TYPE_INSTANCE && resolved->info.instance.base) {
+        Type* base = prune(resolved->info.instance.base);
+        if (base && base->kind == TYPE_ARRAY) {
+            if (resolved->info.instance.argCount > 0 && resolved->info.instance.args) {
+                return resolved->info.instance.args[0];
+            }
+            return base->info.array.elementType;
+        }
+    }
+
+    return NULL;
+}
+
+static Type* infer_iterable_element_type(const Type* iterable_type) {
+    if (!iterable_type) {
+        return getPrimitiveType(TYPE_ANY);
+    }
+
+    Type* resolved = prune((Type*)iterable_type);
+    if (!resolved) {
+        return getPrimitiveType(TYPE_ANY);
+    }
+
+    if (type_is_string_like(resolved)) {
+        return getPrimitiveType(TYPE_STRING);
+    }
+
+    if (resolved->kind == TYPE_ANY || resolved->kind == TYPE_UNKNOWN || resolved->kind == TYPE_ERROR) {
+        return resolved;
+    }
+
+    Type* element_type = extract_array_element_type(resolved);
+    if (element_type) {
+        return element_type;
+    }
+
+    if (resolved->kind == TYPE_VAR) {
+        Type* fallback_var = make_var_type(NULL);
+        if (fallback_var) {
+            return fallback_var;
+        }
+        return getPrimitiveType(TYPE_ANY);
+    }
+
+    Type* generic_var = make_var_type(NULL);
+    if (generic_var) {
+        return generic_var;
+    }
+
+    return getPrimitiveType(TYPE_ANY);
+}
+
 typedef enum {
     FUSED_LOOP_KIND_NONE = 0,
     FUSED_LOOP_KIND_WHILE,
@@ -3290,11 +3380,25 @@ void compile_for_iter_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
         goto cleanup;
     }
     
+    Type* loop_var_type = getPrimitiveType(TYPE_ANY);
+    if (for_stmt->typed.forIter.iterable) {
+        const Type* iterable_type = get_effective_type(for_stmt->typed.forIter.iterable);
+        if (iterable_type) {
+            Type* inferred = infer_iterable_element_type(iterable_type);
+            if (inferred) {
+                loop_var_type = inferred;
+            }
+        }
+    }
+    if (!loop_var_type) {
+        loop_var_type = getPrimitiveType(TYPE_ANY);
+    }
+
     // Register the loop variable in symbol table (loop variables are implicitly mutable)
     Symbol* loop_symbol = register_variable(ctx, ctx->symbols,
                                             for_stmt->typed.forIter.varName,
                                             loop_var_reg,
-                                            getPrimitiveType(TYPE_I32), true, true,
+                                            loop_var_type, true, true,
                                             for_stmt->original->location, true);
     if (!loop_symbol) {
         ctx->has_compilation_errors = true;

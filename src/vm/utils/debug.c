@@ -367,6 +367,14 @@ int disassembleInstruction(Chunk* chunk, int offset) {
             return offset + 3;
         }
 
+        case OP_ARRAY_REPEAT_R: {
+            uint8_t dst = chunk->code[offset + 1];
+            uint8_t array_reg = chunk->code[offset + 2];
+            uint8_t count_reg = chunk->code[offset + 3];
+            printf("%-16s R%d, R%d, R%d\n", "ARRAY_REPEAT", dst, array_reg, count_reg);
+            return offset + 4;
+        }
+
         case OP_ARRAY_SLICE_R: {
             uint8_t dst = chunk->code[offset + 1];
             uint8_t array_reg = chunk->code[offset + 2];

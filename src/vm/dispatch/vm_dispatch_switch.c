@@ -1946,6 +1946,11 @@ InterpretResult vm_run_dispatch(void) {
                     break;
                 }
 
+                case OP_ARRAY_REPEAT_R: {
+                    handle_array_repeat();
+                    break;
+                }
+
                 case OP_ARRAY_SLICE_R: {
                     uint8_t dst = READ_BYTE();
                     uint8_t array_reg = READ_BYTE();

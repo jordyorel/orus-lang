@@ -371,6 +371,7 @@ InterpretResult vm_run_dispatch(void) {
         vm_dispatch_table[OP_ARRAY_PUSH_R] = &&LABEL_OP_ARRAY_PUSH_R;
         vm_dispatch_table[OP_ARRAY_POP_R] = &&LABEL_OP_ARRAY_POP_R;
         vm_dispatch_table[OP_ARRAY_SORTED_R] = &&LABEL_OP_ARRAY_SORTED_R;
+        vm_dispatch_table[OP_ARRAY_REPEAT_R] = &&LABEL_OP_ARRAY_REPEAT_R;
         vm_dispatch_table[OP_ARRAY_SLICE_R] = &&LABEL_OP_ARRAY_SLICE_R;
         vm_dispatch_table[OP_TO_STRING_R] = &&LABEL_OP_TO_STRING_R;
         vm_dispatch_table[OP_TRY_BEGIN] = &&LABEL_OP_TRY_BEGIN;
@@ -2437,6 +2438,28 @@ InterpretResult vm_run_dispatch(void) {
             }
             VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(),
                             "sorted() requires an array of comparable elements");
+        }
+
+        vm_set_register_safe(dst, result);
+        DISPATCH();
+    }
+
+    LABEL_OP_ARRAY_REPEAT_R: {
+        uint8_t dst = READ_BYTE();
+        uint8_t array_reg = READ_BYTE();
+        uint8_t count_reg = READ_BYTE();
+
+        Value array_value = vm_get_register_safe(array_reg);
+        Value count_value = vm_get_register_safe(count_reg);
+        Value result;
+
+        if (!IS_ARRAY(array_value)) {
+            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Value is not an array");
+        }
+
+        if (!builtin_array_repeat(array_value, count_value, &result)) {
+            VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(),
+                            "Array repetition requires a non-negative integer count and reasonable size");
         }
 
         vm_set_register_safe(dst, result);

@@ -1,0 +1,12 @@
+// Validate array repetition via the `*` operator.
+chars = ["a"] * 5
+if assert_eq("array_repeat length", len(chars), 5):
+    print("ok", "repeat length", len(chars))
+if assert_eq("array_repeat contents", chars, ["a", "a", "a", "a", "a"]):
+    print("ok", "repeat contents", chars)
+
+mut combined = ""
+for part in ["ab", "cd"] * 2:
+    combined = combined + part
+if assert_eq("array_repeat multi", combined, "abcdabcd"):
+    print("ok", "repeat multi", combined)
