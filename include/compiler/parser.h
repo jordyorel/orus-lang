@@ -50,9 +50,12 @@ typedef struct ParserContext {
     bool has_peeked_token;
     Token peeked_token2;
     bool has_peeked_token2;
-    
+
     // Parser configuration
     int max_recursion_depth;
+
+    // Context-sensitive parsing flags
+    bool allow_array_fill;
 } ParserContext;
 
 // Parser context lifecycle

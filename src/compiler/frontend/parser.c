@@ -18,6 +18,7 @@
 #include "errors/features/variable_errors.h"
 #include "errors/features/control_flow_errors.h"
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 #include <stdint.h>
 #include <limits.h>
@@ -300,6 +301,7 @@ ParserContext* parser_context_create(void) {
     ctx->has_peeked_token = false;
     ctx->has_peeked_token2 = false;
     ctx->max_recursion_depth = MAX_RECURSION_DEPTH;
+    ctx->allow_array_fill = true;
 
     return ctx;
 }
@@ -328,6 +330,7 @@ void parser_context_reset(ParserContext* ctx) {
     ctx->block_depth = 0;
     ctx->has_peeked_token = false;
     ctx->has_peeked_token2 = false;
+    ctx->allow_array_fill = true;
 }
 
 // Token lookahead functions now use context
@@ -3744,7 +3747,8 @@ static ASTNode* parseArrayLiteral(ParserContext* ctx, Token leftToken) {
         return NULL;
     }
 
-    if (count == 2 && !trailingComma && is_valid_fill_length_node(elements[1])) {
+    if (ctx->allow_array_fill && count == 2 && !trailingComma &&
+        is_valid_fill_length_node(elements[1])) {
         ASTNode* node = new_node(ctx);
         node->type = NODE_ARRAY_FILL;
         node->arrayFill.value = elements[0];
@@ -4471,10 +4475,15 @@ static ASTNode* parseCallExpression(ParserContext* ctx, ASTNode* callee) {
     int argCount = 0;
     int argCapacity = 0;
     
+    bool previous_allow_fill = ctx->allow_array_fill;
     if (peekToken(ctx).type != TOKEN_RIGHT_PAREN) {
+        ctx->allow_array_fill = false;
         while (true) {
             ASTNode* arg = parseExpression(ctx);
-            if (!arg) return NULL;
+            if (!arg) {
+                ctx->allow_array_fill = previous_allow_fill;
+                return NULL;
+            }
             
             // Add argument to list
             if (argCount + 1 > argCapacity) {
@@ -4492,10 +4501,13 @@ static ASTNode* parseCallExpression(ParserContext* ctx, ASTNode* callee) {
             nextToken(ctx); // consume ','
         }
     }
-    
+
     if (nextToken(ctx).type != TOKEN_RIGHT_PAREN) {
+        ctx->allow_array_fill = previous_allow_fill;
         return NULL;
     }
+
+    ctx->allow_array_fill = previous_allow_fill;
     
     ASTNode* call = new_node(ctx);
     call->type = NODE_CALL;

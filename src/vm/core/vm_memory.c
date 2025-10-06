@@ -11,6 +11,7 @@
 #include "vm/vm.h"
 #include "vm/vm_string_ops.h"
 #include "vm/vm_comparison.h"
+#include "vm/spill_manager.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -345,49 +346,39 @@ void markValue(Value value) {
     }
 }
 
+static void mark_spill_entry(uint16_t register_id, Value* value, void* user_data) {
+    (void)register_id;
+    (void)user_data;
+    if (value) {
+        markValue(*value);
+    }
+}
+
 static void markRoots() {
     for (int i = 0; i < REGISTER_COUNT; i++) {
         markValue(vm.registers[i]);
     }
 
-    // Mark any values stored in active VM call frames. During a call we copy
-    // the caller's frame and temporary registers into the frame's
-    // savedRegisters array so the callee can reuse the primary windows. If the
-    // garbage collector runs while a call is in progress those saved values are
-    // the only roots for the caller's arrays/strings. Failing to mark them lets
-    // the collector free live data, which later manifests as corrupted strings
-    // or "Value is not an array" errors when the caller resumes.
-    for (int frameIndex = 0; frameIndex < vm.frameCount; frameIndex++) {
-        CallFrame* frame = &vm.frames[frameIndex];
-
-        for (int reg = 0; reg < FRAME_REGISTERS; reg++) {
-            markValue(frame->registers[reg]);
-        }
-
-        int savedCount = frame->savedRegisterCount;
-        if (savedCount > FRAME_REGISTERS + TEMP_REGISTERS) {
-            savedCount = FRAME_REGISTERS + TEMP_REGISTERS;
-        }
-        for (int saved = 0; saved < savedCount; saved++) {
-            markValue(frame->savedRegisters[saved]);
-        }
-    }
-
-    // The register file maintains its own linked list of frames for the
-    // high-level ENTER/EXIT_FRAME instructions. These frames can also contain
-    // live values that must be treated as GC roots.
+    // Mark live values stored in the register file's active frame windows.
     for (CallFrame* frame = vm.register_file.frame_stack; frame != NULL; frame = frame->next) {
         for (int reg = 0; reg < FRAME_REGISTERS; reg++) {
             markValue(frame->registers[reg]);
         }
+        for (int i = 0; i < TEMP_REGISTERS; i++) {
+            markValue(frame->temps[i]);
+        }
+    }
 
-        int savedCount = frame->savedRegisterCount;
-        if (savedCount > FRAME_REGISTERS + TEMP_REGISTERS) {
-            savedCount = FRAME_REGISTERS + TEMP_REGISTERS;
-        }
-        for (int saved = 0; saved < savedCount; saved++) {
-            markValue(frame->savedRegisters[saved]);
-        }
+    // Mark temporary registers for the root context when no frame is active.
+    for (int i = 0; i < TEMP_REGISTERS; i++) {
+        markValue(vm.register_file.temps_root[i]);
+    }
+    for (int i = 0; i < GLOBAL_REGISTERS; i++) {
+        markValue(vm.register_file.globals[i]);
+    }
+
+    if (vm.register_file.spilled_registers) {
+        spill_manager_iterate(vm.register_file.spilled_registers, mark_spill_entry, NULL);
     }
 
     if (vm.chunk) {
@@ -554,6 +545,26 @@ void closeUpvalues(Value* last) {
             upvalue->location < vm.registers + REGISTER_COUNT) {
             uint16_t reg_id = (uint16_t)(upvalue->location - vm.registers);
             vm_get_register_safe(reg_id);
+        } else {
+            CallFrame* frame_iter = vm.register_file.frame_stack;
+            bool flushed = false;
+            while (frame_iter && !flushed) {
+                Value* frame_start = frame_iter->registers;
+                Value* frame_end = frame_start + FRAME_REGISTERS;
+                if (upvalue->location >= frame_start && upvalue->location < frame_end) {
+                    uint16_t reg_id = (uint16_t)(frame_iter->frame_base + (upvalue->location - frame_start));
+                    vm_get_register_safe(reg_id);
+                    flushed = true;
+                    break;
+                }
+                frame_iter = frame_iter->next;
+            }
+            if (!flushed &&
+                upvalue->location >= vm.register_file.temps &&
+                upvalue->location < vm.register_file.temps + TEMP_REGISTERS) {
+                uint16_t reg_id = (uint16_t)(TEMP_REG_START + (upvalue->location - vm.register_file.temps));
+                vm_get_register_safe(reg_id);
+            }
         }
         upvalue->closed = *upvalue->location;
         upvalue->location = &upvalue->closed;

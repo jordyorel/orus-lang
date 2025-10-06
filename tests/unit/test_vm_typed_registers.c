@@ -24,8 +24,10 @@ static bool test_typed_register_deferred_boxing_flushes_on_read(void) {
 
     vm_store_i32_typed_hot(0, 42);
     ASSERT_TRUE(vm.typed_regs.dirty[0], "Second store should defer boxing");
-    ASSERT_TRUE(IS_I32(vm.registers[0]) && AS_I32(vm.registers[0]) == 10,
-                "Deferred store should leave boxed value untouched");
+    ASSERT_TRUE(IS_I32(vm.registers[0]) && AS_I32(vm.registers[0]) == 42,
+                "Deferred store should keep boxed mirror synchronized for globals");
+    ASSERT_TRUE(IS_I32(vm.register_file.globals[0]) && AS_I32(vm.register_file.globals[0]) == 42,
+                "Register file globals should mirror deferred typed value");
 
     Value flushed = vm_get_register_safe(0);
     ASSERT_TRUE(IS_I32(flushed) && AS_I32(flushed) == 42,
@@ -46,9 +48,11 @@ static bool test_typed_register_flushes_for_open_upvalue(void) {
     ASSERT_TRUE(IS_I32(initial) && AS_I32(initial) == 7,
                 "Initial value should be accessible");
 
-    ObjUpvalue* upvalue = captureUpvalue(&vm.registers[0]);
+    Value* slot = get_register(&vm.register_file, 0);
+    ASSERT_TRUE(slot != NULL, "Register file should expose slot for capture");
+    ObjUpvalue* upvalue = captureUpvalue(slot);
     ASSERT_TRUE(upvalue != NULL, "captureUpvalue should return handle");
-    ASSERT_TRUE(upvalue->location == &vm.registers[0], "Upvalue should reference register slot");
+    ASSERT_TRUE(upvalue->location == slot, "Upvalue should reference register slot");
 
     vm_store_i32_typed_hot(0, 99);
     ASSERT_TRUE(!vm.typed_regs.dirty[0], "Registers with open upvalues must stay boxed");
@@ -57,7 +61,7 @@ static bool test_typed_register_flushes_for_open_upvalue(void) {
     ASSERT_TRUE(IS_I32(*upvalue->location) && AS_I32(*upvalue->location) == 99,
                 "Open upvalue should see updated value");
 
-    closeUpvalues(&vm.registers[0]);
+    closeUpvalues(slot);
     freeVM();
     return true;
 }
@@ -113,8 +117,11 @@ static bool test_range_iterator_uses_typed_registers(void) {
                 "Second iteration should advance typed payload");
     ASSERT_TRUE(vm.typed_regs.dirty[dst_reg],
                 "Second iteration should defer boxing for hot path");
-    ASSERT_TRUE(IS_I64(vm.registers[dst_reg]) && AS_I64(vm.registers[dst_reg]) == 0,
-                "Boxed register should remain unchanged after deferred write");
+    ASSERT_TRUE(IS_I64(vm.registers[dst_reg]) && AS_I64(vm.registers[dst_reg]) == 1,
+                "Global mirror should advance alongside typed payload");
+    ASSERT_TRUE(IS_I64(vm.register_file.globals[dst_reg]) &&
+                    AS_I64(vm.register_file.globals[dst_reg]) == 1,
+                "Register file globals should match deferred range writes");
     ASSERT_TRUE(vm.typed_regs.bool_regs[has_reg],
                 "Has-value flag should stay true while range produces values");
 
@@ -123,8 +130,11 @@ static bool test_range_iterator_uses_typed_registers(void) {
                 "Third iteration should update typed payload without boxing");
     ASSERT_TRUE(vm.typed_regs.dirty[dst_reg],
                 "Typed register should remain dirty until explicit read");
-    ASSERT_TRUE(IS_I64(vm.registers[dst_reg]) && AS_I64(vm.registers[dst_reg]) == 0,
-                "Boxed register should still reflect first materialized value");
+    ASSERT_TRUE(IS_I64(vm.registers[dst_reg]) && AS_I64(vm.registers[dst_reg]) == 2,
+                "Deferred writes should keep boxed range mirror current");
+    ASSERT_TRUE(IS_I64(vm.register_file.globals[dst_reg]) &&
+                    AS_I64(vm.register_file.globals[dst_reg]) == 2,
+                "Register file globals should retain last deferred range value");
     ASSERT_TRUE(vm.typed_regs.bool_regs[has_reg],
                 "Has-value flag should be true before iterator exhaustion");
 
@@ -177,8 +187,11 @@ static bool test_array_iterator_preserves_typed_loop_variable(void) {
                 "Second array iteration should update typed payload");
     ASSERT_TRUE(vm.typed_regs.dirty[dst_reg],
                 "Hot array path should avoid boxing on subsequent iterations");
-    ASSERT_TRUE(IS_I64(vm.registers[dst_reg]) && AS_I64(vm.registers[dst_reg]) == 10,
-                "Boxed register should still contain first array element");
+    ASSERT_TRUE(IS_I64(vm.registers[dst_reg]) && AS_I64(vm.registers[dst_reg]) == 20,
+                "Array iterator globals should update during deferred writes");
+    ASSERT_TRUE(IS_I64(vm.register_file.globals[dst_reg]) &&
+                    AS_I64(vm.register_file.globals[dst_reg]) == 20,
+                "Register file globals should stay in sync for array iterators");
     ASSERT_TRUE(vm.typed_regs.bool_regs[has_reg],
                 "Has-value flag should remain true while elements remain");
 
