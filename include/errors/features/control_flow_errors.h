@@ -1,12 +1,11 @@
-/*
- * Orus Language Project
- * ---------------------------------------------------------------------------
- * File: include/errors/features/control_flow_errors.h
- * Author: Jordy Orel KONDA
- * Copyright (c) 2025 Jordy Orel KONDA
- * License: MIT License (see LICENSE file in the project root)
- * Description: Declares error helpers dedicated to control-flow related diagnostics.
- */
+//  Orus Language Project
+//  ---------------------------------------------------------------------------
+//  File: include/errors/features/control_flow_errors.h
+//  Author: Jordy Orel KONDA
+//  Copyright (c) 2025 Jordy Orel KONDA
+//  License: MIT License (see LICENSE file in the project root)
+//  Description: Declares error helpers dedicated to control-flow related diagnostics.
+
 
 #ifndef CONTROL_FLOW_ERRORS_H
 #define CONTROL_FLOW_ERRORS_H

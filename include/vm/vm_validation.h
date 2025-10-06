@@ -1,13 +1,10 @@
-/*
- * Orus Language Project
- * ---------------------------------------------------------------------------
- * File: include/vm/vm_validation.h
- * Author: Jordy Orel KONDA
- * Copyright (c) 2025 Jordy Orel KONDA
- * License: MIT License (see LICENSE file in the project root)
- * Description: Declares validation helpers that verify bytecode and runtime
- *              invariants.
- */
+// Orus Language Project
+// ---------------------------------------------------------------------------
+// File: include/vm/vm_validation.h
+// Author: Jordy Orel KONDA
+// Copyright (c) 2025 Jordy Orel KONDA
+// License: MIT License (see LICENSE file in the project root)
+// Description: Declares validation helpers that verify bytecode and runtime invariants.
 
 #ifndef VM_VALIDATION_H
 #define VM_VALIDATION_H

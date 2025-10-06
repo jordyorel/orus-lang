@@ -1,12 +1,11 @@
-/*
- * Orus Language Project
- * ---------------------------------------------------------------------------
- * File: include/vm/vm_comparison.h
- * Author: Jordy Orel KONDA
- * Copyright (c) 2025 Jordy Orel KONDA
- * License: MIT License (see LICENSE file in the project root)
- * Description: Declares comparison operation helpers for the Orus virtual machine.
- */
+// Orus Language Project
+// ---------------------------------------------------------------------------
+// File: include/vm/vm_comparison.h
+// Author: Jordy Orel KONDA
+// Copyright (c) 2025 Jordy Orel KONDA
+// License: MIT License (see LICENSE file in the project root)
+// Description: Declares comparison operation helpers for the Orus virtual machine.
+
 
 #ifndef ORUS_VM_COMPARISON_H
 #define ORUS_VM_COMPARISON_H

@@ -1,13 +1,11 @@
-/*
- * Orus Language Project
- * ---------------------------------------------------------------------------
- * File: include/compiler/optimization/constantfold.h
- * Author: Jordy Orel KONDA
- * Copyright (c) 2025 Jordy Orel KONDA
- * License: MIT License (see LICENSE file in the project root)
- * Description: Declares constant folding optimizations applied to the typed AST and
- *              emitted bytecode.
- */
+// Orus Language Project
+// ---------------------------------------------------------------------------
+// File: include/compiler/optimization/constantfold.h
+// Author: Jordy Orel KONDA
+// Copyright (c) 2025 Jordy Orel KONDA
+// License: MIT License (see LICENSE file in the project root)
+// Description: Declares constant folding optimizations applied to the typed AST and emitted bytecode.
+
 
 #ifndef CONSTANTFOLD_H
 #define CONSTANTFOLD_H

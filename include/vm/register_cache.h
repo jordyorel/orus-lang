@@ -1,14 +1,13 @@
-/*
- * Orus Language Project
- * ---------------------------------------------------------------------------
- * File: include/vm/register_cache.h
- * Author: Jordy Orel KONDA
- * Copyright (c) 2025 Jordy Orel KONDA
- * License: MIT License (see LICENSE file in the project root)
- * Description: Declares helpers managing cached register state between VM frames.
- */
+// Orus Language Project
+// ---------------------------------------------------------------------------
+// File: include/vm/register_cache.h
+// Author: Jordy Orel KONDA
+// Copyright (c) 2025 Jordy Orel KONDA
+// License: MIT License (see LICENSE file in the project root)
+// Description: Declares helpers managing cached register state between VM frames.
 
-// register_cache.h - Phase 4: Advanced Register Optimizations
+
+// register_cache.h Advanced Register Optimizations
 #ifndef REGISTER_CACHE_H
 #define REGISTER_CACHE_H
 

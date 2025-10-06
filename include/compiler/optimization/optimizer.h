@@ -1,13 +1,10 @@
-/*
- * Orus Language Project
- * ---------------------------------------------------------------------------
- * File: include/compiler/optimization/optimizer.h
- * Author: Jordy Orel KONDA
- * Copyright (c) 2025 Jordy Orel KONDA
- * License: MIT License (see LICENSE file in the project root)
- * Description: Coordinator interface for invoking backend optimization passes on Orus
- *              bytecode.
- */
+// Orus Language Project
+// ---------------------------------------------------------------------------
+// File: include/compiler/optimization/optimizer.h
+// Author: Jordy Orel KONDA
+// Copyright (c) 2025 Jordy Orel KONDA
+// License: MIT License (see LICENSE file in the project root)
+// Description: Coordinator interface for invoking backend optimization passes on Orus bytecode.
 
 #ifndef OPTIMIZER_H
 #define OPTIMIZER_H

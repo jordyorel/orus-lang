@@ -1,13 +1,11 @@
-/*
- * Orus Language Project
- * ---------------------------------------------------------------------------
- * File: include/compiler/ast.h
- * Author: Jordy Orel KONDA
- * Copyright (c) 2025 Jordy Orel KONDA
- * License: MIT License (see LICENSE file in the project root)
- * Description: Declares abstract syntax tree node structures and helper types for the
- *              Orus compiler front-end.
- */
+// Orus Language Project
+// ---------------------------------------------------------------------------
+// File: include/compiler/ast.h
+// Author: Jordy Orel KONDA
+// Copyright (c) 2022 Jordy Orel KONDA
+// License: MIT License (see LICENSE file in the project root)
+// Description: Declares abstract syntax tree node structures and helper types for the Orus compiler front-end.
+
 
 #ifndef ORUS_AST_H
 #define ORUS_AST_H

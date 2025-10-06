@@ -1,13 +1,10 @@
-/*
- * Orus Language Project
- * ---------------------------------------------------------------------------
- * File: include/vm/spill_manager.h
- * Author: Jordy Orel KONDA
- * Copyright (c) 2025 Jordy Orel KONDA
- * License: MIT License (see LICENSE file in the project root)
- * Description: Declares spill management helpers that handle register pressure during
- *              execution.
- */
+// Orus Language Project
+// ---------------------------------------------------------------------------
+// File: include/vm/spill_manager.h
+// Author: Jordy Orel KONDA
+// Copyright (c) 2025 Jordy Orel KONDA
+// License: MIT License (see LICENSE file in the project root)
+// Description: Declares spill management helpers that handle register pressure during execution.
 
 // spill_manager.h - Phase 2: Register Spilling Header
 #ifndef SPILL_MANAGER_H

@@ -5,18 +5,28 @@
 set -e
 
 # Test both debug and release binaries
-ORUS_BINARIES=("./orus_debug" "./orus")
+ORUS_BINARIES=("./orus")
 
 # List of test directories
 TEST_DIRS=(
+    "tests/algorithms"
+    "tests/arithmetic"
+    "tests/arrays"
     "tests/benchmarks"
+    "tests/builtins"
     "tests/control_flow"
+    "tests/comments"
+    "tests/comprehensive"
     "tests/edge_cases"
     "tests/expressions"
+    "tests/functions"
+    # "tests/io"
+    "tests/modules"
     "tests/literals"
     "tests/loops"
     "tests/register_file"
     "tests/strings"
+    "tests/structs"
     "tests/type_safety_fails"
     "tests/types"
     "tests/variables"

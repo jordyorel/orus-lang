@@ -1,13 +1,11 @@
-/*
- * Orus Language Project
- * ---------------------------------------------------------------------------
- * File: include/compiler/error_reporter.h
- * Author: Jordy Orel KONDA
- * Copyright (c) 2025 Jordy Orel KONDA
- * License: MIT License (see LICENSE file in the project root)
- * Description: Declares utilities for tracking, formatting, and reporting compiler
- *              diagnostics.
- */
+// Orus Language Project
+// ---------------------------------------------------------------------------
+// File: include/compiler/error_reporter.h
+// Author: Jordy Orel KONDA
+// Copyright (c) 2022 Jordy Orel KONDA
+// License: MIT License (see LICENSE file in the project root)
+// Description: Declares utilities for tracking, formatting, and reporting compiler diagnostics.
+
 
 #ifndef ORUS_COMPILER_ERROR_REPORTER_H
 #define ORUS_COMPILER_ERROR_REPORTER_H

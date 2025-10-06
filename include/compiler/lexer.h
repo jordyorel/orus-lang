@@ -1,13 +1,11 @@
-/*
- * Orus Language Project
- * ---------------------------------------------------------------------------
- * File: include/compiler/lexer.h
- * Author: Jordy Orel KONDA
- * Copyright (c) 2025 Jordy Orel KONDA
- * License: MIT License (see LICENSE file in the project root)
- * Description: Token definitions and lexer API used to scan Orus source files into
- *              lexical tokens.
- */
+// Orus Language Project
+// ---------------------------------------------------------------------------
+// File: include/compiler/lexer.h
+// Author: Jordy Orel KONDA
+// Copyright (c) 2025 Jordy Orel KONDA
+// License: MIT License (see LICENSE file in the project root)
+// Description: Token definitions and lexer API used to scan Orus source files into exical tokens.
+
 
 #ifndef ORUS_LEXER_H
 #define ORUS_LEXER_H

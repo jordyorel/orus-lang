@@ -1,17 +1,11 @@
-/*
- * Orus Language Project
- * ---------------------------------------------------------------------------
- * File: include/internal/logging.h
- * Author: Jordy Orel KONDA
- * Copyright (c) 2025 Jordy Orel KONDA
- * License: MIT License (see LICENSE file in the project root)
- * Description: Central logging macros and facilities for structured project logging.
- */
+//  Orus Language Project
+//  ---------------------------------------------------------------------------
+//  File: include/internal/logging.h
+//  Author: Jordy Orel KONDA
+//  Copyright (c) 2025 Jordy Orel KONDA
+//  License: MIT License (see LICENSE file in the project root)
+//  Description: Central logging macros and facilities for structured project logging.
 
-// logging.h
-// Author: Hierat
-// Date: 2023-10-01
-// Description: Configurable logging system with levels for the Orus compiler
 
 #ifndef ORUS_LOGGING_H
 #define ORUS_LOGGING_H

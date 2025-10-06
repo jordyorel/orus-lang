@@ -1,35 +1,16 @@
-/*
- * Orus Language Project
- * ---------------------------------------------------------------------------
- * File: include/errors/features/variable_errors.h
- * Author: Jordy Orel KONDA
- * Copyright (c) 2025 Jordy Orel KONDA
- * License: MIT License (see LICENSE file in the project root)
- * Description: Declares error helpers dedicated to variable binding and scope
- *              diagnostics.
- */
+// Orus Language Project
+// ---------------------------------------------------------------------------
+// File: include/errors/features/variable_errors.h
+// Author: Jordy Orel KONDA
+// Copyright (c) 2025 Jordy Orel KONDA
+// License: MIT License (see LICENSE file in the project root)
+// Description: Declares error helpers dedicated to variable binding and scope diagnostics.
 
 #ifndef VARIABLE_ERRORS_H
 #define VARIABLE_ERRORS_H
 
 #include "errors/error_interface.h"
 #include "internal/error_reporting.h"
-
-/**
- * Variable Error Reporting Module
- * 
- * This module provides comprehensive error reporting for all variable-related
- * errors in the Orus language, following the modular error architecture.
- * 
- * Error Categories Covered:
- * - Variable declaration errors
- * - Variable assignment errors
- * - Scope violations
- * - Mutability violations
- * - Variable naming issues
- * - Multiple declaration errors
- * - Loop variable errors
- */
 
 // Initialize the variable error system
 ErrorReportResult init_variable_errors(void);

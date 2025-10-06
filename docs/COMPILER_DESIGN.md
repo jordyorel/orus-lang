@@ -455,5 +455,3 @@ The Orus compiler achieves its goals by adopting a multi-pass design, decoupling
 5. **Performance Expectations**: Increased targets (10x to 15x Python, 12x to 18x JavaScript) to reflect optimization potential.
 6. **File Structure**: Added `optimizer.c` and `codegen.c` to separate optimization and code generation logic.
 7. **Success Criteria**: Updated to reflect optimized bytecode and reduced spill rates.
-
-This multi-pass design aligns with your goal of enabling optimizations, leveraging the VM’s scalability while maintaining the original design principles. If you’d like to refine a specific pass or test the plan, let me know! (Current date and time: 1:10 AM PDT, Monday, July 28, 2025.)

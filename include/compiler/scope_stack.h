@@ -1,13 +1,11 @@
-/*
- * Orus Language Project
- * ---------------------------------------------------------------------------
- * File: include/compiler/scope_stack.h
- * Author: Jordy Orel KONDA
- * Copyright (c) 2025 Jordy Orel KONDA
- * License: MIT License (see LICENSE file in the project root)
- * Description: Defines the compiler scope stack for tracking lexical scopes and
- *              symbol visibility.
- */
+// Orus Language Project
+// ---------------------------------------------------------------------------
+// File: include/compiler/scope_stack.h
+// Author: Jordy Orel KONDA
+// Copyright (c) 2025 Jordy Orel KONDA
+// License: MIT License (see LICENSE file in the project root)
+// Description: Defines the compiler scope stack for tracking lexical scopes and symbol visibility.
+
 
 #ifndef ORUS_COMPILER_SCOPE_STACK_H
 #define ORUS_COMPILER_SCOPE_STACK_H
