@@ -104,7 +104,7 @@ void printValue(Value value) {
             printf("%llu", (unsigned long long)AS_U64(value));
             break;
         case VAL_F64:
-            printf("%g", AS_F64(value));
+            printf("%.17g", AS_F64(value));
             break;
         case VAL_STRING:
             printf("%s", AS_STRING(value)->chars);

@@ -104,7 +104,7 @@ static void print_formatted_value(Value value, const char* spec) {
                 snprintf(fmt, sizeof(fmt), "%%.%df", prec);
                 printf(fmt, AS_F64(value));
             } else {
-                printf("%g", AS_F64(value));
+                printf("%.17g", AS_F64(value));
             }
             break;
         }
