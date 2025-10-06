@@ -32,6 +32,8 @@
 #define MAX_NATIVES 256
 #define UINT8_COUNT 256
 
+#define TYPED_REGISTER_WINDOW_SIZE 256
+
 // Value types
 typedef enum {
     VAL_BOOL,
@@ -305,21 +307,18 @@ typedef struct {
     Type* returnType;
 } NativeFunction;
 
+// Forward declaration for typed register windows used by call frames.
+typedef struct TypedRegisterWindow TypedRegisterWindow;
+
 // Phase 1: Enhanced CallFrame structure for hierarchical register windows
 typedef struct CallFrame {
     Value registers[FRAME_REGISTERS];     // Function-local registers
     Value temps[TEMP_REGISTERS];          // Temporary registers scoped to this frame
 
-    // Typed register snapshots for restoring parent frame state
-    int32_t saved_i32[FRAME_REGISTERS + TEMP_REGISTERS];
-    int64_t saved_i64[FRAME_REGISTERS + TEMP_REGISTERS];
-    uint32_t saved_u32[FRAME_REGISTERS + TEMP_REGISTERS];
-    uint64_t saved_u64[FRAME_REGISTERS + TEMP_REGISTERS];
-    double saved_f64[FRAME_REGISTERS + TEMP_REGISTERS];
-    bool saved_bool[FRAME_REGISTERS + TEMP_REGISTERS];
-    Value saved_heap[FRAME_REGISTERS + TEMP_REGISTERS];
-    uint8_t saved_types[FRAME_REGISTERS + TEMP_REGISTERS];
-    bool saved_dirty[FRAME_REGISTERS + TEMP_REGISTERS];
+    // Typed register window metadata for constant-time swaps
+    TypedRegisterWindow* typed_window;        // Active typed register cache for this frame
+    TypedRegisterWindow* previous_typed_window; // Parent frame window to restore on exit
+    uint32_t typed_window_version;            // Version counter for debugging/GC coordination
 
     struct CallFrame* parent;             // Parent scope
     struct CallFrame* next;               // Call stack linkage
@@ -1000,24 +999,45 @@ static inline void compiler_reset_exports(Compiler* compiler) {
     compiler->isModule = false;
 }
 
-// Typed registers for optimization (unboxed values)
-typedef struct {
+typedef struct TypedRegisterWindow {
+    struct TypedRegisterWindow* next;  // Free-list linkage for recycled windows
+
     // Numeric registers (unboxed for performance)
-    int32_t i32_regs[256];
-    int64_t i64_regs[256];
-    uint32_t u32_regs[256];
-    uint64_t u64_regs[256];
-    double f64_regs[256];
-    bool bool_regs[256];
+    int32_t i32_regs[TYPED_REGISTER_WINDOW_SIZE];
+    int64_t i64_regs[TYPED_REGISTER_WINDOW_SIZE];
+    uint32_t u32_regs[TYPED_REGISTER_WINDOW_SIZE];
+    uint64_t u64_regs[TYPED_REGISTER_WINDOW_SIZE];
+    double f64_regs[TYPED_REGISTER_WINDOW_SIZE];
+    bool bool_regs[TYPED_REGISTER_WINDOW_SIZE];
 
     // Heap object registers (boxed)
-    Value heap_regs[256];
+    Value heap_regs[TYPED_REGISTER_WINDOW_SIZE];
 
     // Dirty flags indicate when the boxed register copy is stale
-    bool dirty[256];
+    bool dirty[TYPED_REGISTER_WINDOW_SIZE];
 
     // Register type tracking (for debugging/safety)
-    uint8_t reg_types[256];  // Track which register bank each logical register maps to
+    uint8_t reg_types[TYPED_REGISTER_WINDOW_SIZE];
+} TypedRegisterWindow;
+
+// Typed registers for optimization (unboxed values)
+typedef struct {
+    TypedRegisterWindow root_window;        // Root execution context window
+    TypedRegisterWindow* active_window;     // Currently active window
+    TypedRegisterWindow* free_windows;      // Recycled windows for reuse
+    uint32_t window_version;                // Monotonic counter for debugging/GC coordination
+    uint16_t active_depth;                  // Depth of active window stack (excludes root)
+
+    // Active window views (updated when swapping windows)
+    int32_t* i32_regs;
+    int64_t* i64_regs;
+    uint32_t* u32_regs;
+    uint64_t* u64_regs;
+    double* f64_regs;
+    bool* bool_regs;
+    Value* heap_regs;
+    bool* dirty;
+    uint8_t* reg_types;
 } TypedRegisters;
 
 // Register type enum

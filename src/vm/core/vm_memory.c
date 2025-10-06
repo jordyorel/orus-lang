@@ -355,6 +355,18 @@ static void mark_spill_entry(uint16_t register_id, Value* value, void* user_data
     }
 }
 
+static void mark_typed_window(TypedRegisterWindow* window) {
+    if (!window) {
+        return;
+    }
+
+    for (int i = 0; i < TYPED_REGISTER_WINDOW_SIZE; i++) {
+        if (window->reg_types[i] == REG_TYPE_HEAP) {
+            markValue(window->heap_regs[i]);
+        }
+    }
+}
+
 static void markRoots() {
     for (int i = 0; i < REGISTER_COUNT; i++) {
         markValue(vm.registers[i]);
@@ -368,7 +380,10 @@ static void markRoots() {
         for (int i = 0; i < TEMP_REGISTERS; i++) {
             markValue(frame->temps[i]);
         }
+        mark_typed_window(frame->typed_window);
     }
+
+    mark_typed_window(&vm.typed_regs.root_window);
 
     // Mark temporary registers for the root context when no frame is active.
     for (int i = 0; i < TEMP_REGISTERS; i++) {
