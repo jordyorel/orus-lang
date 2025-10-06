@@ -1,0 +1,27 @@
+// Runtime exercise of print() formatting with @ specifiers.
+print("== print formatting ==")
+
+value = 255
+print("default decimal: @", value)
+print("binary: @b", value)
+print("octal: @o", value)
+print("hex lower: @x", value)
+print("hex upper: @X", value)
+
+mixed = 42
+print("mixed formats -> dec=@ hex=@x bin=@b", mixed, mixed, mixed)
+
+negative = -17
+print("negative default: @", negative)
+print("negative hex: @x", negative)
+
+pi = 3.1415926535
+print("float default: @", pi)
+print("float 0 decimals: @.0f", pi)
+print("float 3 decimals: @.3f", pi)
+print("float 6 decimals: @.6f", pi)
+
+print("literal @ without args: @@")
+print("literal spec sequence: @.2f shown with no value")
+
+print("== print formatting done ==")

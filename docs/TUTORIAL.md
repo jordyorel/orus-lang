@@ -628,8 +628,10 @@ The Orus runtime ships with a rich set of built-ins so you can inspect values, g
 leaving the language. Built-ins behave like ordinary functions even though the VM implements them natively.
 
 - `print(...)` – statement form that writes the provided expressions separated by spaces and terminates with a newline. When the
-  first argument is a string literal you can embed `@` format specifiers like `@.2f`, `@x`, `@X`, `@b`, and `@o` to control how
-  the following value is rendered.
+  first argument is a string literal you can embed `@` format specifiers to control how the following value is rendered. Use
+  bare `@` for default rendering, `@.Nf` for fixed precision floats, and `@x` / `@X` / `@b` / `@o` for hexadecimal (lower/upper),
+  binary, and octal output. Combine as many specifiers as needed within the string; they consume arguments from left to right.
+  Write `@@` (or any specifier without a corresponding argument) to emit a literal `@` sequence in the output.
 - `len(array_or_string)` – returns the number of elements in an array or the number of bytes in a string.
 - `push(array, value)` / `pop(array)` – append to or remove from dynamic arrays.
 - `sorted(array)` – produces a new array whose elements are sorted without mutating the original.
@@ -645,6 +647,10 @@ leaving the language. Built-ins behave like ordinary functions even though the V
 ```orus
 pi = 3.14159
 print("Pi ~= @.2f", pi)
+
+value = 255
+print("formats -> dec=@ hex=@x HEX=@X bin=@b oct=@o", value, value, value, value, value)
+print("pi precise: @.4f trailing", pi)
 
 mut values: [i32] = []
 push(values, 3)

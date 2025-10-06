@@ -1,0 +1,43 @@
+// Runtime checks for typeof() and istype() builtins.
+print("== runtime type inspection ==")
+
+fn check_type(label: string, value, expected: string):
+    actual = typeof(value)
+    if actual == expected:
+        print(label, "typeof ok", actual)
+    else:
+        print(label, "typeof mismatch", actual)
+    if istype(value, expected):
+        print(label, "istype ok")
+    else:
+        print(label, "istype mismatch")
+
+check_type("bool", true, "bool")
+check_type("i32", 42, "i32")
+check_type("f64", 3.25, "f64")
+check_type("string", "orus", "string")
+check_type("array", [1, 2, 3], "array")
+
+struct Point:
+    x: i32
+    y: i32
+
+point = Point{ x: 3, y: 4 }
+check_type("struct", point, "Point")
+
+enum Example:
+    Unit
+    Value(data: i32)
+
+check_type("enum unit", Example.Unit, "Example")
+check_type("enum payload", Example.Value(7), "Example")
+
+inner = typeof(99)
+check_type("typeof result", inner, "string")
+
+if istype(Example.Unit, "no-match"):
+    print("unexpected match", true)
+else:
+    print("no-match", false)
+
+print("== runtime type inspection done ==")
