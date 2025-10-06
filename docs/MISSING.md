@@ -33,6 +33,7 @@
 - Improve diagnostics and error reporting quality.
 - Expand language surface with additional standard library helpers.
 - Grow the regression suite to cover more user programs.
+- Builtins `sum()`, `min()`, `max()`, `reversed()`, `abs()`, `round()`, `pow()`, `iter()`, `str()`, `bool()`
 
 ## Next Steps
 1. Finish the structured diagnostic renderer.

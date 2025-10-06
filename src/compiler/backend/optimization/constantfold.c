@@ -548,7 +548,7 @@ bool evaluate_binary_operation(Value left, const char* op, Value right, Value* o
             const char* right_chars = string_get_chars(rightStr);
             if (!left_chars || !right_chars) {
                 free(buffer);
-                return left;
+                return false;
             }
             memcpy(buffer, left_chars, (size_t)leftStr->length);
             memcpy(buffer + leftStr->length, right_chars, (size_t)rightStr->length);
