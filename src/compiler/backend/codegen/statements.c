@@ -2846,7 +2846,6 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
         loop_frame->label = for_stmt->typed.forRange.label;
     }
     uint16_t loop_id = ctx->current_loop_id;
-    (void)loop_id;
     ctx->current_loop_continue = -1;
     loop_frame->continue_offset = -1;
 
@@ -2881,14 +2880,40 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
                                                 &body_data,
                                                 &metadata);
         if (!fused_ok) {
+            int fused_hint_reg = metadata.typed_hint_limit_reg;
+            release_typed_hint(ctx, &fused_hint_reg);
+
+            ScopeFrame* refreshed = NULL;
+            if (loop_frame_index >= 0) {
+                refreshed = get_scope_frame_by_index(ctx, loop_frame_index);
+            } else {
+                refreshed = loop_frame;
+            }
+            leave_loop_context(ctx, refreshed, loop_start);
+
+            loop_frame = NULL;
+            loop_frame_index = -1;
+
+            loop_frame = enter_loop_context(ctx, loop_start);
+            if (!loop_frame) {
+                ctx->has_compilation_errors = true;
+                goto cleanup;
+            }
+            loop_frame_index = loop_frame->lexical_depth;
+            if (loop_frame) {
+                loop_frame->label = for_stmt->typed.forRange.label;
+            }
+            ctx->current_loop_continue = -1;
+            loop_frame->continue_offset = -1;
+            loop_id = ctx->current_loop_id;
+            can_fuse_inc_cmp = false;
+        } else {
+            loop_frame = NULL;
+            loop_frame_index = -1;
+            typed_hint_limit_reg = -1;
+            success = true;
             goto cleanup;
         }
-
-        loop_frame = NULL;
-        loop_frame_index = -1;
-        typed_hint_limit_reg = -1;
-        success = true;
-        goto cleanup;
     }
 
     condition_reg = compiler_alloc_temp(ctx->allocator);
