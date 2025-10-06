@@ -32,6 +32,7 @@ void remove_spilled_register(SpillManager* manager, uint16_t register_id);
 
 // Spill entry iteration (used by GC root scanning)
 void spill_manager_iterate(SpillManager* manager, SpillEntryVisitor visitor, void* user_data);
+void spill_manager_visit_entries(SpillManager* manager, SpillEntryVisitor visitor, void* user_data);
 
 // Phase 2: Pressure analysis
 bool needs_spilling(SpillManager* manager);

@@ -299,6 +299,15 @@ static void format_literal_value(Value value, char* buffer, size_t size) {
 
 // ---- Arena and utilities ----
 static TypeArena* type_arena = NULL;
+
+typedef struct TypeInferenceFrame {
+    TypeArena* arena_snapshot;
+    int next_var_id_snapshot;
+    size_t typed_checkpoint;
+    struct TypeInferenceFrame* next;
+} TypeInferenceFrame;
+
+static TypeInferenceFrame* type_inference_stack = NULL;
 static void* type_arena_alloc(size_t size) {
     size = (size + ARENA_ALIGNMENT - 1) & ~(ARENA_ALIGNMENT - 1);
     if (!type_arena || type_arena->used + size > type_arena->size) {
@@ -4816,6 +4825,15 @@ static TypedASTNode* generate_typed_ast_recursive(ASTNode* ast, TypeEnv* type_en
 
 // ---- Public API ----
 void init_type_inference(void) {
+    TypeInferenceFrame* frame = malloc(sizeof(TypeInferenceFrame));
+    if (frame) {
+        frame->arena_snapshot = type_arena;
+        frame->next_var_id_snapshot = next_var_id;
+        frame->typed_checkpoint = typed_ast_registry_checkpoint();
+        frame->next = type_inference_stack;
+        type_inference_stack = frame;
+    }
+
     next_var_id = 0;
     type_arena = NULL;
 }
@@ -4829,7 +4847,24 @@ void cleanup_type_inference(void) {
         arena = next;
     }
     type_arena = NULL;
-    typed_ast_release_orphans();
+
+    size_t checkpoint = 0;
+    TypeArena* previous_arena = NULL;
+    int previous_next_var_id = 0;
+
+    if (type_inference_stack) {
+        TypeInferenceFrame* frame = type_inference_stack;
+        checkpoint = frame->typed_checkpoint;
+        previous_arena = frame->arena_snapshot;
+        previous_next_var_id = frame->next_var_id_snapshot;
+        type_inference_stack = frame->next;
+        free(frame);
+    }
+
+    typed_ast_release_from_checkpoint(checkpoint);
+
+    type_arena = previous_arena;
+    next_var_id = previous_next_var_id;
 }
 
 Type* instantiate(Type* type, TypeInferer* inferer) {

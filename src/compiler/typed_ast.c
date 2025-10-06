@@ -77,13 +77,22 @@ static void typed_ast_registry_unregister(TypedASTNode* node) {
     }
 }
 
-void typed_ast_release_orphans(void) {
+size_t typed_ast_registry_checkpoint(void) {
+    return g_typed_registry.count;
+}
+
+void typed_ast_release_from_checkpoint(size_t checkpoint) {
     if (!g_typed_registry.nodes) {
         return;
     }
 
-    while (g_typed_registry.count > 0) {
-        TypedASTNode* node = g_typed_registry.nodes[g_typed_registry.count - 1];
+    if (checkpoint > g_typed_registry.count) {
+        checkpoint = 0;
+    }
+
+    while (g_typed_registry.count > checkpoint) {
+        size_t index = g_typed_registry.count - 1;
+        TypedASTNode* node = g_typed_registry.nodes[index];
         if (!node) {
             g_typed_registry.count--;
             continue;
@@ -91,9 +100,15 @@ void typed_ast_release_orphans(void) {
         free_typed_ast_node(node);
     }
 
-    free(g_typed_registry.nodes);
-    g_typed_registry.nodes = NULL;
-    g_typed_registry.capacity = 0;
+    if (checkpoint == 0 && g_typed_registry.count == 0) {
+        free(g_typed_registry.nodes);
+        g_typed_registry.nodes = NULL;
+        g_typed_registry.capacity = 0;
+    }
+}
+
+void typed_ast_release_orphans(void) {
+    typed_ast_release_from_checkpoint(0);
 }
 
 // Forward declaration

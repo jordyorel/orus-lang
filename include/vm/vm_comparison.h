@@ -350,12 +350,8 @@ static inline void vm_store_i32_typed_hot(uint16_t id, int32_t value) {
         return;
     }
 
-    Value boxed = I32_VAL(value);
-    if (!skip_boxed_write || id >= FRAME_REG_START) {
+    if (!skip_boxed_write) {
         set_register(&vm.register_file, id, boxed);
-    } else if (id < FRAME_REG_START) {
-        vm.register_file.globals[id] = boxed;
-        vm.registers[id] = boxed;
     }
 }
 
@@ -376,12 +372,8 @@ static inline void vm_store_i64_typed_hot(uint16_t id, int64_t value) {
         return;
     }
 
-    Value boxed = I64_VAL(value);
-    if (!skip_boxed_write || id >= FRAME_REG_START) {
+    if (!skip_boxed_write) {
         set_register(&vm.register_file, id, boxed);
-    } else if (id < FRAME_REG_START) {
-        vm.register_file.globals[id] = boxed;
-        vm.registers[id] = boxed;
     }
 }
 
@@ -402,12 +394,8 @@ static inline void vm_store_u32_typed_hot(uint16_t id, uint32_t value) {
         return;
     }
 
-    Value boxed = U32_VAL(value);
-    if (!skip_boxed_write || id >= FRAME_REG_START) {
+    if (!skip_boxed_write) {
         set_register(&vm.register_file, id, boxed);
-    } else if (id < FRAME_REG_START) {
-        vm.register_file.globals[id] = boxed;
-        vm.registers[id] = boxed;
     }
 }
 
@@ -428,12 +416,8 @@ static inline void vm_store_u64_typed_hot(uint16_t id, uint64_t value) {
         return;
     }
 
-    Value boxed = U64_VAL(value);
-    if (!skip_boxed_write || id >= FRAME_REG_START) {
+    if (!skip_boxed_write) {
         set_register(&vm.register_file, id, boxed);
-    } else if (id < FRAME_REG_START) {
-        vm.register_file.globals[id] = boxed;
-        vm.registers[id] = boxed;
     }
 }
 
@@ -454,12 +438,8 @@ static inline void vm_store_bool_typed_hot(uint16_t id, bool value) {
         return;
     }
 
-    Value boxed = BOOL_VAL(value);
-    if (!skip_boxed_write || id >= FRAME_REG_START) {
+    if (!skip_boxed_write) {
         set_register(&vm.register_file, id, boxed);
-    } else if (id < FRAME_REG_START) {
-        vm.register_file.globals[id] = boxed;
-        vm.registers[id] = boxed;
     }
 }
 
