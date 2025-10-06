@@ -55,6 +55,50 @@ static bool type_is_string_like(const Type* type) {
     return false;
 }
 
+static bool type_is_array_like(const Type* type) {
+    if (!type) {
+        return false;
+    }
+
+    if (type->kind == TYPE_ARRAY) {
+        return true;
+    }
+
+    if (type->kind == TYPE_INSTANCE && type->info.instance.base) {
+        return type->info.instance.base->kind == TYPE_ARRAY;
+    }
+
+    return false;
+}
+
+static bool type_is_integer_like(const Type* type) {
+    if (!type) {
+        return false;
+    }
+
+    switch (type->kind) {
+        case TYPE_I32:
+        case TYPE_I64:
+        case TYPE_U32:
+        case TYPE_U64:
+            return true;
+        default:
+            return false;
+    }
+}
+
+static bool type_kind_is_integer(TypeKind kind) {
+    switch (kind) {
+        case TYPE_I32:
+        case TYPE_I64:
+        case TYPE_U32:
+        case TYPE_U64:
+            return true;
+        default:
+            return false;
+    }
+}
+
 static void format_match_literal(Value value, char* buffer, size_t size) {
     if (!buffer || size == 0) {
         return;
@@ -3858,12 +3902,34 @@ void compile_binary_op(CompilerContext* ctx, TypedASTNode* binary, int target_re
 
     bool left_is_string = type_is_string_like(left_type) || left_fallback.kind == TYPE_STRING;
     bool right_is_string = type_is_string_like(right_type) || right_fallback.kind == TYPE_STRING;
+    bool left_is_array = type_is_array_like(left_type) || left_fallback.kind == TYPE_ARRAY;
+    bool right_is_array = type_is_array_like(right_type) || right_fallback.kind == TYPE_ARRAY;
+    bool left_is_integer = type_is_integer_like(left_type) || type_kind_is_integer(left_fallback.kind);
+    bool right_is_integer = type_is_integer_like(right_type) || type_kind_is_integer(right_fallback.kind);
     bool is_string_concat = (strcmp(op, "+") == 0) && (left_is_string || right_is_string);
     Type string_type = {.kind = TYPE_STRING};
 
     if (is_string_concat) {
         left_type = &string_type;
         right_type = &string_type;
+    }
+
+    if (strcmp(op, "*") == 0) {
+        if (left_is_array && right_is_integer) {
+            set_location_from_node(ctx, binary);
+            emit_byte_to_buffer(ctx->bytecode, OP_ARRAY_REPEAT_R);
+            emit_byte_to_buffer(ctx->bytecode, target_reg);
+            emit_byte_to_buffer(ctx->bytecode, left_reg);
+            emit_byte_to_buffer(ctx->bytecode, right_reg);
+            return;
+        } else if (right_is_array && left_is_integer) {
+            set_location_from_node(ctx, binary);
+            emit_byte_to_buffer(ctx->bytecode, OP_ARRAY_REPEAT_R);
+            emit_byte_to_buffer(ctx->bytecode, target_reg);
+            emit_byte_to_buffer(ctx->bytecode, right_reg);
+            emit_byte_to_buffer(ctx->bytecode, left_reg);
+            return;
+        }
     }
 
     DEBUG_CODEGEN_PRINT("Binary operation: %s, left_type=%d, right_type=%d\n", op, left_type->kind, right_type->kind);

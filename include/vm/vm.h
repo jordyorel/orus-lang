@@ -587,6 +587,7 @@ typedef enum {
     OP_ARRAY_PUSH_R,  // array_reg, value_reg
     OP_ARRAY_POP_R,   // dst, array_reg
     OP_ARRAY_SORTED_R,  // dst, array_reg
+    OP_ARRAY_REPEAT_R,  // dst, array_reg, count_reg
     OP_ARRAY_SLICE_R, // dst, array_reg, start_reg, end_reg
 
     // Control flow

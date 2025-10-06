@@ -471,6 +471,30 @@ void handle_sorted(void) {
     vm_set_register_safe(dst, result);
 }
 
+void handle_array_repeat(void) {
+    uint8_t dst = READ_BYTE();
+    uint8_t array_reg = READ_BYTE();
+    uint8_t count_reg = READ_BYTE();
+
+    Value array_value = vm_get_register_safe(array_reg);
+    Value count_value = vm_get_register_safe(count_reg);
+    Value result;
+    SrcLocation loc = {vm.filePath, vm.currentLine, vm.currentColumn};
+
+    if (!IS_ARRAY(array_value)) {
+        runtimeError(ERROR_TYPE, loc, "Value is not an array");
+        return;
+    }
+
+    if (!builtin_array_repeat(array_value, count_value, &result)) {
+        runtimeError(ERROR_RUNTIME, loc,
+                     "Array repetition requires a non-negative integer count and reasonable size");
+        return;
+    }
+
+    vm_set_register_safe(dst, result);
+}
+
 void handle_print(void) {
     uint8_t reg = READ_BYTE();
     Value temp_value = vm_get_register_safe(reg);

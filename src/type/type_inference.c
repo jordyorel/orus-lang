@@ -1300,6 +1300,75 @@ static bool is_numeric_type(Type* type) {
            type->kind == TYPE_F64;
 }
 
+static bool is_string_like_type(Type* type) {
+    if (!type) return false;
+
+    Type* resolved = prune(type);
+    if (!resolved) return false;
+
+    if (resolved->kind == TYPE_STRING) return true;
+
+    if (resolved->kind == TYPE_INSTANCE && resolved->info.instance.base) {
+        Type* base = prune(resolved->info.instance.base);
+        if (base && base->kind == TYPE_STRING) return true;
+    }
+
+    return false;
+}
+
+static Type* extract_array_element_type(Type* type) {
+    if (!type) return NULL;
+
+    Type* resolved = prune(type);
+    if (!resolved) return NULL;
+
+    if (resolved->kind == TYPE_ARRAY) {
+        return resolved->info.array.elementType;
+    }
+
+    if (resolved->kind == TYPE_INSTANCE && resolved->info.instance.base) {
+        Type* base = prune(resolved->info.instance.base);
+        if (base && base->kind == TYPE_ARRAY) {
+            if (resolved->info.instance.argCount > 0 && resolved->info.instance.args) {
+                return resolved->info.instance.args[0];
+            }
+            return base->info.array.elementType;
+        }
+    }
+
+    return NULL;
+}
+
+static Type* infer_iterable_element_type(Type* iterable_type, ASTNode* iterable_node) {
+    if (!iterable_type) return NULL;
+
+    Type* resolved = prune(iterable_type);
+    if (!resolved) return NULL;
+
+    (void)iterable_node;
+
+    if (is_string_like_type(resolved)) {
+        return getPrimitiveType(TYPE_STRING);
+    }
+
+    if (resolved->kind == TYPE_ANY || resolved->kind == TYPE_UNKNOWN || resolved->kind == TYPE_ERROR) {
+        return resolved;
+    }
+
+    Type* element_type = extract_array_element_type(resolved);
+    if (element_type) {
+        return element_type;
+    }
+
+    if (resolved->kind == TYPE_VAR) {
+        Type* fallback_var = make_var_type(NULL);
+        return fallback_var ? fallback_var : getPrimitiveType(TYPE_ANY);
+    }
+
+    Type* generic_var = make_var_type(NULL);
+    return generic_var ? generic_var : getPrimitiveType(TYPE_ANY);
+}
+
 static bool is_integer_type(Type* type) {
     if (!type) return false;
 
@@ -1315,6 +1384,10 @@ static bool is_cast_allowed(Type* from, Type* to) {
 
     // Same types are always allowed
     if (type_equals_extended(from, to)) return true;
+
+    if (prune(from) && prune(from)->kind == TYPE_VAR) {
+        return true;
+    }
 
     if (to->kind == TYPE_STRING) {
         if (from->kind == TYPE_STRING) {
@@ -1955,6 +2028,22 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             Type* l = algorithm_w(env, node->binary.left);
             Type* r = algorithm_w(env, node->binary.right);
             if (!l || !r) return NULL;
+
+            Type* left_resolved = prune(l);
+            Type* right_resolved = prune(r);
+            bool left_is_array = extract_array_element_type(left_resolved) != NULL;
+            bool right_is_array = extract_array_element_type(right_resolved) != NULL;
+
+            if (strcmp(node->binary.op, "*") == 0) {
+                if (left_is_array && is_integer_type(r)) {
+                    node->dataType = left_resolved;
+                    return left_resolved;
+                }
+                if (right_is_array && is_integer_type(l)) {
+                    node->dataType = right_resolved;
+                    return right_resolved;
+                }
+            }
 
             if (strcmp(node->binary.op, "+") == 0 ||
                 strcmp(node->binary.op, "-") == 0 ||
@@ -3512,27 +3601,34 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
         case NODE_FOR_ITER: {
             // For iteration loops: for var in iterable
             // Type-check iterable expression
+            Type* element_type = getPrimitiveType(TYPE_ANY);
             if (node->forIter.iterable) {
                 Type* iterable_type = algorithm_w(env, node->forIter.iterable);
                 if (!iterable_type) return NULL;
-                
-                // Create a new scope for the loop and its variable
-                TypeEnv* loop_env = type_env_new(env);
-                
-                // Add loop variable to the loop scope only
-                if (node->forIter.varName) {
-                    TypeScheme* var_scheme = type_arena_alloc(sizeof(TypeScheme));
-                    var_scheme->type = getPrimitiveType(TYPE_I32);
-                    var_scheme->bound_vars = NULL;
-                    var_scheme->bound_count = 0;
-                    type_env_define(loop_env, node->forIter.varName, var_scheme);
+
+                Type* inferred_element = infer_iterable_element_type(iterable_type, node->forIter.iterable);
+                if (!inferred_element) {
+                    return NULL;
                 }
-                
-                // Type-check body in the loop environment
-                if (node->forIter.body) {
-                    Type* body_type = algorithm_w(loop_env, node->forIter.body);
-                    if (!body_type) return NULL;
-                }
+                element_type = inferred_element;
+            }
+
+            // Create a new scope for the loop and its variable
+            TypeEnv* loop_env = type_env_new(env);
+
+            // Add loop variable to the loop scope only
+            if (node->forIter.varName) {
+                TypeScheme* var_scheme = type_arena_alloc(sizeof(TypeScheme));
+                var_scheme->type = element_type ? element_type : getPrimitiveType(TYPE_ANY);
+                var_scheme->bound_vars = NULL;
+                var_scheme->bound_count = 0;
+                type_env_define(loop_env, node->forIter.varName, var_scheme);
+            }
+
+            // Type-check body in the loop environment
+            if (node->forIter.body) {
+                Type* body_type = algorithm_w(loop_env, node->forIter.body);
+                if (!body_type) return NULL;
             }
 
             return getPrimitiveType(TYPE_VOID);
@@ -3900,16 +3996,24 @@ void populate_ast_types(ASTNode* node, TypeEnv* env) {
             if (node->forIter.body) {
                 // Create a new scope for the loop and its variable - same as algorithm_w
                 TypeEnv* loop_env = type_env_new(env);
-                
+
+                Type* element_type = getPrimitiveType(TYPE_ANY);
+                if (node->forIter.iterable && node->forIter.iterable->dataType) {
+                    Type* inferred = infer_iterable_element_type(node->forIter.iterable->dataType, NULL);
+                    if (inferred) {
+                        element_type = inferred;
+                    }
+                }
+
                 // Add loop variable to the loop scope only - same as algorithm_w
                 if (node->forIter.varName) {
                     TypeScheme* var_scheme = type_arena_alloc(sizeof(TypeScheme));
-                    var_scheme->type = getPrimitiveType(TYPE_I32);
+                    var_scheme->type = element_type ? element_type : getPrimitiveType(TYPE_ANY);
                     var_scheme->bound_vars = NULL;
                     var_scheme->bound_count = 0;
                     type_env_define(loop_env, node->forIter.varName, var_scheme);
                 }
-                
+
                 populate_ast_types(node->forIter.body, loop_env);
             }
             break;

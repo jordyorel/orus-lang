@@ -93,6 +93,16 @@ bool builtin_array_push(Value array_value, Value element);
 bool builtin_array_pop(Value array_value, Value* out_value);
 
 /**
+ * Create a new array by repeating the contents of an existing array.
+ *
+ * @param array_value Value referencing the source array.
+ * @param count_value Value specifying how many times to repeat the array.
+ * @param out_value   Receives the repeated array on success.
+ * @return true when repetition succeeded and {@code out_value} was populated.
+ */
+bool builtin_array_repeat(Value array_value, Value count_value, Value* out_value);
+
+/**
  * Produce a sorted copy of the provided array.
  *
  * @param array_value Value referencing the array to sort.

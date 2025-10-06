@@ -95,6 +95,7 @@ void handle_print_multi(void);
 void handle_input(void);
 void handle_range(void);
 void handle_sorted(void);
+void handle_array_repeat(void);
 void handle_parse_int(void);
 void handle_parse_float(void);
 void handle_typeof(void);
