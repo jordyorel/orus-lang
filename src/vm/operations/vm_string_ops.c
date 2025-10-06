@@ -145,26 +145,65 @@ void rope_release(StringRope* rope) {
         return;
     }
 
-    if (--rope->refcount > 0) {
-        return;
-    }
+    size_t capacity = 16;
+    size_t count = 0;
+    StringRope** stack =
+        (StringRope**)reallocate(NULL, 0, capacity * sizeof(StringRope*));
 
-    switch (rope->kind) {
-        case ROPE_LEAF:
-            if (rope->as.leaf.owns_data && rope->as.leaf.data) {
-                free(rope->as.leaf.data);
+    stack[count++] = rope;
+
+    while (count > 0) {
+        StringRope* node = stack[--count];
+        if (!node) {
+            continue;
+        }
+
+        if (--node->refcount > 0) {
+            continue;
+        }
+
+        switch (node->kind) {
+            case ROPE_LEAF:
+                if (node->as.leaf.owns_data && node->as.leaf.data) {
+                    free(node->as.leaf.data);
+                }
+                break;
+            case ROPE_CONCAT: {
+                StringRope* left = node->as.concat.left;
+                StringRope* right = node->as.concat.right;
+
+                if (count + 2 > capacity) {
+                    size_t oldCapacity = capacity;
+                    capacity = capacity < 1024 ? capacity * 2 : capacity + 1024;
+                    stack = (StringRope**)reallocate(stack,
+                                                     oldCapacity * sizeof(StringRope*),
+                                                     capacity * sizeof(StringRope*));
+                }
+
+                stack[count++] = left;
+                stack[count++] = right;
+                break;
             }
-            break;
-        case ROPE_CONCAT:
-            rope_release(rope->as.concat.left);
-            rope_release(rope->as.concat.right);
-            break;
-        case ROPE_SUBSTRING:
-            rope_release(rope->as.substring.base);
-            break;
+            case ROPE_SUBSTRING: {
+                StringRope* base = node->as.substring.base;
+
+                if (count + 1 > capacity) {
+                    size_t oldCapacity = capacity;
+                    capacity = capacity < 1024 ? capacity * 2 : capacity + 1024;
+                    stack = (StringRope**)reallocate(stack,
+                                                     oldCapacity * sizeof(StringRope*),
+                                                     capacity * sizeof(StringRope*));
+                }
+
+                stack[count++] = base;
+                break;
+            }
+        }
+
+        reallocate(node, sizeof(StringRope), 0);
     }
 
-    reallocate(rope, sizeof(StringRope), 0);
+    reallocate(stack, capacity * sizeof(StringRope*), 0);
 }
 
 static uint32_t rope_child_depth(const StringRope* rope) {
