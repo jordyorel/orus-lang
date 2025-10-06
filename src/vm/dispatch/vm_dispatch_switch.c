@@ -542,7 +542,7 @@ InterpretResult vm_run_dispatch(void) {
 
                 case OP_DEC_I32_R: {
                     uint8_t reg = READ_BYTE();
-                    const uint8_t typed_limit = (uint8_t)(sizeof(vm.typed_regs.i32_regs) / sizeof(vm.typed_regs.i32_regs[0]));
+                    const uint8_t typed_limit = (uint8_t)TYPED_REGISTER_WINDOW_SIZE;
 
                     if (reg < typed_limit && vm.typed_regs.reg_types[reg] == REG_TYPE_I32) {
     #if USE_FAST_ARITH
@@ -2467,7 +2467,98 @@ InterpretResult vm_run_dispatch(void) {
 
                     Value funcValue = vm_get_register_safe(funcReg);
 
-                    if (IS_I32(funcValue)) {
+                    if (IS_CLOSURE(funcValue)) {
+                        ObjClosure* closure = AS_CLOSURE(funcValue);
+                        ObjFunction* objFunction = closure->function;
+
+                        if (argCount != objFunction->arity) {
+                            vm_set_register_safe(resultReg, BOOL_VAL(false));
+                            break;
+                        }
+
+                        Value tempArgs[FRAME_REGISTERS];
+                        for (int i = 0; i < argCount; i++) {
+                            tempArgs[i] = vm_get_register_safe((uint16_t)(firstArgReg + i));
+                        }
+
+                        uint16_t paramBase = calculateParameterBaseRegister(objFunction->arity);
+
+                        CallFrame* window = vm.register_file.current_frame;
+                        if (!window) {
+                            vm_set_register_safe(resultReg, BOOL_VAL(false));
+                            break;
+                        }
+
+                        window->parameterBaseRegister = paramBase;
+                        window->resultRegister = resultReg;
+                        window->functionIndex = UINT16_MAX;
+                        window->register_count = argCount;
+
+                        if (vm.frameCount > 0) {
+                            CallFrame* frame = &vm.frames[vm.frameCount - 1];
+                            frame->parameterBaseRegister = paramBase;
+                            frame->resultRegister = resultReg;
+                            frame->functionIndex = UINT16_MAX;
+                            frame->register_count = argCount;
+                        }
+
+                        register_file_clear_active_typed_frame();
+                        register_file_reset_active_frame_storage();
+
+                        vm_set_register_safe(0, funcValue);
+
+                        for (int i = 0; i < argCount; i++) {
+                            vm_set_register_safe((uint16_t)(paramBase + i), tempArgs[i]);
+                        }
+
+                        vm.chunk = objFunction->chunk;
+                        vm.ip = objFunction->chunk->code;
+
+                    } else if (IS_FUNCTION(funcValue)) {
+                        ObjFunction* objFunction = AS_FUNCTION(funcValue);
+
+                        if (argCount != objFunction->arity) {
+                            vm_set_register_safe(resultReg, BOOL_VAL(false));
+                            break;
+                        }
+
+                        Value tempArgs[FRAME_REGISTERS];
+                        for (int i = 0; i < argCount; i++) {
+                            tempArgs[i] = vm_get_register_safe((uint16_t)(firstArgReg + i));
+                        }
+
+                        uint16_t paramBase = calculateParameterBaseRegister(objFunction->arity);
+
+                        CallFrame* window = vm.register_file.current_frame;
+                        if (!window) {
+                            vm_set_register_safe(resultReg, BOOL_VAL(false));
+                            break;
+                        }
+
+                        window->parameterBaseRegister = paramBase;
+                        window->resultRegister = resultReg;
+                        window->functionIndex = UINT16_MAX;
+                        window->register_count = argCount;
+
+                        if (vm.frameCount > 0) {
+                            CallFrame* frame = &vm.frames[vm.frameCount - 1];
+                            frame->parameterBaseRegister = paramBase;
+                            frame->resultRegister = resultReg;
+                            frame->functionIndex = UINT16_MAX;
+                            frame->register_count = argCount;
+                        }
+
+                        register_file_clear_active_typed_frame();
+                        register_file_reset_active_frame_storage();
+
+                        for (int i = 0; i < argCount; i++) {
+                            vm_set_register_safe((uint16_t)(paramBase + i), tempArgs[i]);
+                        }
+
+                        vm.chunk = objFunction->chunk;
+                        vm.ip = objFunction->chunk->code;
+
+                    } else if (IS_I32(funcValue)) {
                         int functionIndex = AS_I32(funcValue);
 
                         if (functionIndex < 0 || functionIndex >= vm.functionCount) {
