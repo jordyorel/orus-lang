@@ -1,0 +1,27 @@
+// Demonstrate runtime usage of the timestamp() builtin.
+print("== timestamp builtin ==")
+
+start = timestamp()
+mut counter = 0
+while counter < 100_000:
+    counter += 1
+finish = timestamp()
+
+if finish >= start:
+    print("monotonic", true)
+else:
+    print("monotonic", false)
+
+elapsed = finish - start
+
+if elapsed >= 0.0:
+    print("elapsed", elapsed)
+else:
+    print("elapsed", -1.0)
+
+if istype(elapsed, "f64"):
+    print("elapsed type", typeof(elapsed))
+else:
+    print("elapsed type", "unexpected")
+
+print("== timestamp builtin done ==")
