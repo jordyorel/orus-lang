@@ -250,6 +250,7 @@ FUSED_WHILE_TEST_BIN = $(BUILDDIR)/tests/test_codegen_fused_while
 PEEPHOLE_TEST_BIN = $(BUILDDIR)/tests/test_constant_propagation
 TAGGED_UNION_TEST_BIN = $(BUILDDIR)/tests/test_vm_tagged_union
 TYPED_REGISTER_TEST_BIN = $(BUILDDIR)/tests/test_vm_typed_registers
+SPILL_GC_TEST_BIN = $(BUILDDIR)/tests/test_vm_spill_gc_root
 REGISTER_ALLOCATOR_TEST_BIN = $(BUILDDIR)/tests/test_register_allocator
 INC_CMP_JMP_TEST_BIN = $(BUILDDIR)/tests/test_vm_inc_cmp_jmp
 FUSED_LOOP_BYTECODE_TEST_BIN = $(BUILDDIR)/tests/test_fused_loop_bytecode
@@ -269,7 +270,7 @@ BUILTIN_RANGE_ORUS_FAIL_TESTS = \
     tests/builtins/range_float_step.orus \
     tests/builtins/range_overflow_stop.orus
 
-.PHONY: all clean test unit-test test-control-flow benchmark help debug release release-with-wasm profiling analyze install dist package bytecode-jump-tests source-map-tests scope-tracking-tests fused-while-tests peephole-tests cli-smoke-tests tagged-union-tests typed-register-tests inc-cmp-jmp-tests add-i32-imm-tests register-allocator-tests builtin-input-tests builtin-range-tests test-optimizer wasm _test-run _benchmark-run
+.PHONY: all clean test unit-test test-control-flow benchmark help debug release release-with-wasm profiling analyze install dist package bytecode-jump-tests source-map-tests scope-tracking-tests fused-while-tests peephole-tests cli-smoke-tests tagged-union-tests typed-register-tests spill-gc-tests inc-cmp-jmp-tests add-i32-imm-tests register-allocator-tests builtin-input-tests builtin-range-tests test-optimizer wasm _test-run _benchmark-run
 
 all: build-info $(ORUS)
 
@@ -442,6 +443,9 @@ _test-run: $(ORUS)
 	@echo "\033[36m=== Typed Register Tests ===\033[0m"
 	@$(MAKE) typed-register-tests
 	@echo ""
+	@echo "\033[36m=== Spill GC Tests ===\033[0m"
+	@$(MAKE) spill-gc-tests
+	@echo ""
 	@echo "\033[36m=== OP_INC_CMP_JMP Tests ===\033[0m"
 	@$(MAKE) inc-cmp-jmp-tests
 	@echo ""
@@ -555,6 +559,15 @@ $(TYPED_REGISTER_TEST_BIN): tests/unit/test_vm_typed_registers.c $(COMPILER_OBJS
 typed-register-tests: $(TYPED_REGISTER_TEST_BIN)
 	@echo "Running typed register coherence tests..."
 	@./$(TYPED_REGISTER_TEST_BIN)
+
+$(SPILL_GC_TEST_BIN): tests/unit/test_vm_spill_gc_root.c $(COMPILER_OBJS) $(VM_OBJS)
+	@mkdir -p $(dir $@)
+	@echo "Compiling spill GC regression tests..."
+	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+
+spill-gc-tests: $(SPILL_GC_TEST_BIN)
+	@echo "Running spill GC regression tests..."
+	@./$(SPILL_GC_TEST_BIN)
 
 $(INC_CMP_JMP_TEST_BIN): tests/unit/test_vm_inc_cmp_jmp.c $(COMPILER_OBJS) $(VM_OBJS)
 	@mkdir -p $(dir $@)

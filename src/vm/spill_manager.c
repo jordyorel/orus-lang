@@ -202,12 +202,25 @@ bool unspill_register_value(SpillManager* manager, uint16_t register_id, Value* 
 // Remove spilled register
 void remove_spilled_register(SpillManager* manager, uint16_t register_id) {
     SpillEntry* entry = find_spill_entry(manager->entries, manager->capacity, register_id);
-    
+
     if (entry->register_id == register_id && !entry->is_tombstone) {
         entry->is_tombstone = true;
         entry->register_id = 0;
         manager->count--;
         manager->tombstones++;
+    }
+}
+
+void spill_manager_visit_entries(const SpillManager* manager, SpillEntryVisitor visitor, void* user_data) {
+    if (!manager || !visitor) {
+        return;
+    }
+
+    for (size_t i = 0; i < manager->capacity; i++) {
+        const SpillEntry* entry = &manager->entries[i];
+        if (entry->register_id != 0 && !entry->is_tombstone) {
+            visitor(entry->register_id, &entry->value, user_data);
+        }
     }
 }
 
