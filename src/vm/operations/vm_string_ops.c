@@ -140,37 +140,78 @@ static size_t rope_length_internal(const StringRope* rope) {
 
 size_t rope_length(const StringRope* rope) { return rope_length_internal(rope); }
 
-static bool rope_char_at_internal(const StringRope* rope, size_t index, char* out) {
-    if (!rope) return false;
-    switch (rope->kind) {
-        case ROPE_LEAF:
-            if (index >= rope->as.leaf.len) {
-                return false;
-            }
-            *out = rope->as.leaf.data[index];
-            return true;
-        case ROPE_CONCAT: {
-            size_t left_len = rope_length_internal(rope->as.concat.left);
-            if (index < left_len) {
-                return rope_char_at_internal(rope->as.concat.left, index, out);
-            }
-            return rope_char_at_internal(rope->as.concat.right, index - left_len, out);
-        }
-        case ROPE_SUBSTRING:
-            if (index >= rope->as.substring.len) {
-                return false;
-            }
-            return rope_char_at_internal(rope->as.substring.base,
-                                         rope->as.substring.start + index, out);
+typedef struct {
+    const StringRope* node;
+    size_t offset;
+    size_t length;
+} RopeRange;
+
+static void push_rope_range(RopeRange** stack, size_t* size, size_t* capacity,
+                            const StringRope* node, size_t offset,
+                            size_t length) {
+    if (!node || length == 0) {
+        return;
     }
+
+    if (*size == *capacity) {
+        size_t newCapacity = (*capacity == 0) ? 16 : (*capacity * 2);
+        size_t oldBytes = (*capacity) * sizeof(RopeRange);
+        size_t newBytes = newCapacity * sizeof(RopeRange);
+        *stack = (RopeRange*)reallocate(*stack, oldBytes, newBytes);
+        *capacity = newCapacity;
+    }
+
+    (*stack)[(*size)++] = (RopeRange){node, offset, length};
+}
+
+static bool rope_char_at_iter(const StringRope* rope, size_t index, char* out) {
+    if (!rope || !out) {
+        return false;
+    }
+
+    const StringRope* node = rope;
+    size_t idx = index;
+
+    while (node) {
+        switch (node->kind) {
+            case ROPE_LEAF:
+                if (idx >= node->as.leaf.len) {
+                    return false;
+                }
+                *out = node->as.leaf.data[idx];
+                return true;
+
+            case ROPE_CONCAT: {
+                const StringRope* left = node->as.concat.left;
+                size_t left_len = rope_length_internal(left);
+                if (idx < left_len) {
+                    node = left;
+                } else {
+                    idx -= left_len;
+                    node = node->as.concat.right;
+                }
+                break;
+            }
+
+            case ROPE_SUBSTRING: {
+                if (idx >= node->as.substring.len) {
+                    return false;
+                }
+                if (!node->as.substring.base) {
+                    return false;
+                }
+                idx += node->as.substring.start;
+                node = node->as.substring.base;
+                break;
+            }
+        }
+    }
+
     return false;
 }
 
 bool rope_char_at(const StringRope* rope, size_t index, char* out) {
-    if (!out) {
-        return false;
-    }
-    return rope_char_at_internal(rope, index, out);
+    return rope_char_at_iter(rope, index, out);
 }
 
 ObjString* string_char_at(ObjString* string, size_t index) {
@@ -178,7 +219,7 @@ ObjString* string_char_at(ObjString* string, size_t index) {
         return NULL;
     }
     char ch;
-    if (!rope_char_at_internal(string->rope, index, &ch)) {
+    if (!rope_char_at(string->rope, index, &ch)) {
         return NULL;
     }
     char buffer[2];
@@ -188,20 +229,79 @@ ObjString* string_char_at(ObjString* string, size_t index) {
 }
 
 static void rope_flatten(StringRope* rope, StringBuilder* sb) {
-    if (!rope) return;
-    switch (rope->kind) {
-        case ROPE_LEAF:
-            appendToStringBuilder(sb, rope->as.leaf.data, rope->as.leaf.len);
-            break;
-        case ROPE_CONCAT:
-            rope_flatten(rope->as.concat.left, sb);
-            rope_flatten(rope->as.concat.right, sb);
-            break;
-        case ROPE_SUBSTRING:
-            appendToStringBuilder(sb,
-                                  rope->as.substring.base->as.leaf.data + rope->as.substring.start,
-                                  rope->as.substring.len);
-            break;
+    if (!rope || !sb) {
+        return;
+    }
+
+    RopeRange* stack = NULL;
+    size_t stackSize = 0;
+    size_t stackCapacity = 0;
+
+    push_rope_range(&stack, &stackSize, &stackCapacity, rope, 0,
+                    rope_length_internal(rope));
+
+    while (stackSize > 0) {
+        RopeRange frame = stack[--stackSize];
+        const StringRope* node = frame.node;
+        size_t offset = frame.offset;
+        size_t length = frame.length;
+
+        if (!node || length == 0) {
+            continue;
+        }
+
+        switch (node->kind) {
+            case ROPE_LEAF: {
+                if (offset >= node->as.leaf.len) {
+                    break;
+                }
+                size_t available = node->as.leaf.len - offset;
+                size_t copy_len = length < available ? length : available;
+                appendToStringBuilder(sb, node->as.leaf.data + offset, copy_len);
+                break;
+            }
+
+            case ROPE_CONCAT: {
+                const StringRope* left = node->as.concat.left;
+                const StringRope* right = node->as.concat.right;
+                size_t left_len = rope_length_internal(left);
+
+                if (offset < left_len) {
+                    size_t left_copy = left_len - offset;
+                    if (left_copy > length) {
+                        left_copy = length;
+                    }
+                    size_t remaining = length > left_copy ? length - left_copy : 0;
+                    if (remaining > 0) {
+                        push_rope_range(&stack, &stackSize, &stackCapacity, right, 0,
+                                        remaining);
+                    }
+                    push_rope_range(&stack, &stackSize, &stackCapacity, left, offset,
+                                    left_copy);
+                } else {
+                    size_t new_offset = offset - left_len;
+                    push_rope_range(&stack, &stackSize, &stackCapacity, right,
+                                    new_offset, length);
+                }
+                break;
+            }
+
+            case ROPE_SUBSTRING: {
+                if (!node->as.substring.base || offset >= node->as.substring.len) {
+                    break;
+                }
+                size_t available = node->as.substring.len - offset;
+                size_t slice_len = length < available ? length : available;
+                push_rope_range(&stack, &stackSize, &stackCapacity,
+                                node->as.substring.base,
+                                node->as.substring.start + offset, slice_len);
+                break;
+            }
+        }
+    }
+
+    if (stack) {
+        reallocate(stack, stackCapacity * sizeof(RopeRange), 0);
     }
 }
 
@@ -225,33 +325,88 @@ void rope_retain(StringRope* rope) {
     rope->ref_count++;
 }
 
+static void push_rope_node(StringRope*** stack, size_t* size, size_t* capacity,
+                           StringRope* node) {
+    if (!node) {
+        return;
+    }
+
+    if (*size == *capacity) {
+        size_t newCapacity = (*capacity == 0) ? 16 : (*capacity * 2);
+        size_t oldBytes = (*capacity) * sizeof(StringRope*);
+        size_t newBytes = newCapacity * sizeof(StringRope*);
+        *stack = (StringRope**)reallocate(*stack, oldBytes, newBytes);
+        *capacity = newCapacity;
+    }
+
+    (*stack)[(*size)++] = node;
+}
+
 void rope_release(StringRope* rope) {
-    if (!rope) {
+    if (!rope || rope->ref_count == 0) {
         return;
     }
-    if (rope->ref_count == 0) {
-        return;
-    }
+
     rope->ref_count--;
     if (rope->ref_count > 0) {
         return;
     }
 
-    switch (rope->kind) {
-        case ROPE_LEAF:
-            if (rope->as.leaf.owns_data && rope->as.leaf.data) {
-                free(rope->as.leaf.data);
+    StringRope** stack = NULL;
+    size_t stackSize = 0;
+    size_t stackCapacity = 0;
+    push_rope_node(&stack, &stackSize, &stackCapacity, rope);
+
+    while (stackSize > 0) {
+        StringRope* node = stack[--stackSize];
+
+        switch (node->kind) {
+            case ROPE_LEAF:
+                if (node->as.leaf.owns_data && node->as.leaf.data) {
+                    free(node->as.leaf.data);
+                }
+                free(node);
+                break;
+
+            case ROPE_CONCAT: {
+                StringRope* left = node->as.concat.left;
+                StringRope* right = node->as.concat.right;
+
+                if (left && left->ref_count > 0) {
+                    left->ref_count--;
+                    if (left->ref_count == 0) {
+                        push_rope_node(&stack, &stackSize, &stackCapacity, left);
+                    }
+                }
+
+                if (right && right->ref_count > 0) {
+                    right->ref_count--;
+                    if (right->ref_count == 0) {
+                        push_rope_node(&stack, &stackSize, &stackCapacity, right);
+                    }
+                }
+
+                free(node);
+                break;
             }
-            break;
-        case ROPE_CONCAT:
-            rope_release(rope->as.concat.left);
-            rope_release(rope->as.concat.right);
-            break;
-        case ROPE_SUBSTRING:
-            rope_release(rope->as.substring.base);
-            break;
+
+            case ROPE_SUBSTRING: {
+                StringRope* base = node->as.substring.base;
+                if (base && base->ref_count > 0) {
+                    base->ref_count--;
+                    if (base->ref_count == 0) {
+                        push_rope_node(&stack, &stackSize, &stackCapacity, base);
+                    }
+                }
+                free(node);
+                break;
+            }
+        }
     }
-    free(rope);
+
+    if (stack) {
+        reallocate(stack, stackCapacity * sizeof(StringRope*), 0);
+    }
 }
 
 static uint32_t rope_depth(const StringRope* rope) {
@@ -303,7 +458,7 @@ const char* obj_string_chars(ObjString* string) {
     if (!string->rope) {
         string->chars = copyString("", 0);
         string->length = 0;
-        string->rope = rope_from_buffer(string->chars, 0, false);
+        string->rope = rope_from_buffer(string->chars, 0, true);
         return string->chars;
     }
 
@@ -312,7 +467,7 @@ const char* obj_string_chars(ObjString* string) {
     rope_release(string->rope);
     string->chars = flat;
     string->length = (int)len;
-    string->rope = rope_from_buffer(string->chars, len, false);
+    string->rope = rope_from_buffer(string->chars, len, true);
     return string->chars;
 }
 

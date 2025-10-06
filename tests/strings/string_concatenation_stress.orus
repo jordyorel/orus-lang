@@ -1,0 +1,33 @@
+// Stress test for repeated string concatenation to guard against quadratic behavior
+print("=== String Concatenation Stress ===")
+
+ITERATIONS: i32 = 200000
+mut s = ""
+mut i: i32 = 0
+start: f64 = timestamp()
+while i < ITERATIONS:
+    s = s + "a"
+    i = i + 1
+elapsed: f64 = timestamp() - start
+
+print("iterations:", i)
+print("elapsed:", elapsed)
+
+if elapsed > 2.0:
+    print("Concatenation too slow:", elapsed)
+    trigger = 1 / 0
+
+if s[0] != "a":
+    print("Unexpected leading character:", s[0])
+    trigger = 1 / 0
+
+mid_index: i32 = ITERATIONS / 2
+if s[mid_index] != "a":
+    print("Unexpected middle character:", s[mid_index])
+    trigger = 1 / 0
+
+if s[ITERATIONS - 1] != "a":
+    print("Unexpected trailing character:", s[ITERATIONS - 1])
+    trigger = 1 / 0
+
+print("=== String concatenation stress passed ===")

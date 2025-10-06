@@ -98,7 +98,7 @@ ObjString* allocateString(const char* chars, int length) {
     string->chars = (char*)reallocate(NULL, 0, (size_t)length + 1);
     memcpy(string->chars, chars, length);
     string->chars[length] = '\0';
-    string->rope = rope_from_buffer(string->chars, (size_t)length, false);
+    string->rope = rope_from_buffer(string->chars, (size_t)length, true);
     string->hash = 0;
     return string;
 }
@@ -117,7 +117,7 @@ ObjString* allocateStringFromBuffer(char* buffer, size_t capacity, int length) {
     ObjString* string = (ObjString*)allocateObject(sizeof(ObjString), OBJ_STRING);
     string->length = length;
     string->chars = buffer;
-    string->rope = rope_from_buffer(buffer, (size_t)length, false);
+    string->rope = rope_from_buffer(buffer, (size_t)length, true);
     string->hash = 0;
     return string;
 }
@@ -465,10 +465,20 @@ static void freeObject(Obj* object) {
         case OBJ_STRING: {
             ObjString* s = (ObjString*)object;
             vm.bytesAllocated -= sizeof(ObjString);
-            if (s->chars) {
+
+            bool ropeOwnsBuffer = false;
+            if (s->rope && s->rope->kind == ROPE_LEAF &&
+                s->rope->as.leaf.data == s->chars && s->rope->as.leaf.owns_data) {
+                ropeOwnsBuffer = true;
+            }
+
+            if (s->chars && !ropeOwnsBuffer) {
                 reallocate(s->chars, (size_t)s->length + 1, 0);
             }
-            if (s->rope) rope_release(s->rope);
+
+            if (s->rope) {
+                rope_release(s->rope);
+            }
             break;
         }
         case OBJ_ARRAY: {
