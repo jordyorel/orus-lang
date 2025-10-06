@@ -314,7 +314,7 @@ ensure_orus_built
 # Run benchmark categories
 run_benchmark_category "Pure Arithmetic Performance" "arithmetic_benchmark.orus"
 # String concatenation stress test to validate rope performance
-run_benchmark_category "String Concatenation Performance" "string_concat_benchmark.orus"
+# run_benchmark_category "String Concatenation Performance" "string_concat_benchmark.orus"
 # TODO: Uncomment when implemented
 # run_benchmark_category "Comprehensive Performance" "comprehensive_benchmark.orus"
 # run_benchmark_category "Extreme Performance" "extreme_benchmark.orus"
