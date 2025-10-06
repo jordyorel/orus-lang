@@ -27,9 +27,9 @@ void handle_load_const_ext(void) {
     uint16_t reg = READ_SHORT();      // 16-bit register ID
     uint16_t constantIndex = READ_SHORT(); // 16-bit constant index
     Value constant = READ_CONSTANT(constantIndex);
-    
+
     // Use VM register file for extended register access
-    set_register(&vm.register_file, reg, constant);
+    vm_set_register_safe(reg, constant);
 }
 
 // Extended register move for 16-bit register IDs (Phase 2.2)
@@ -38,11 +38,8 @@ void handle_move_ext(void) {
     uint16_t src_reg = READ_SHORT();  // 16-bit source register
     
     // Get value from source register using VM register file
-    Value* src_value = get_register(&vm.register_file, src_reg);
-    if (src_value) {
-        // Move to destination register
-        set_register(&vm.register_file, dst_reg, *src_value);
-    }
+    Value value = vm_get_register_safe(src_reg);
+    vm_set_register_safe(dst_reg, value);
 }
 
 

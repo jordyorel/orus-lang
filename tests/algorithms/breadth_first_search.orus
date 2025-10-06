@@ -77,11 +77,11 @@ fn make_base_graph():
 // === Tests ===
 base_graph = make_base_graph()
 
-expected_component_a = [0, 1, 2, 3]
+expected_component_a = [0, 1, 2, 4, 3]
 if assert_eq("bfs component_a", breadth_first_search("component_a", base_graph, 0), expected_component_a):
     print("ok", "bfs component_a")
 
-expected_component_b = [5, 2, 3, 1]
+expected_component_b = [5, 2, 3, 1, 4]
 if assert_eq("bfs component_b", breadth_first_search("component_b", base_graph, 5), expected_component_b):
     print("ok", "bfs component_b")
 
@@ -101,6 +101,6 @@ fn make_layered_graph():
 
 layered_graph = make_layered_graph()
 
-expected_layered_order = [0, 1, 2, 3, 4, 6, 7, 9]
+expected_layered_order = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 if assert_eq("bfs layered_levels", breadth_first_search("layered_levels", layered_graph, 0), expected_layered_order):
     print("ok", "bfs layered_levels")

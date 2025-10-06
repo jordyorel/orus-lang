@@ -20,7 +20,6 @@
 #include "internal/error_reporting.h"
 #include "debug/debug_config.h"
 #include "internal/strutil.h"
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -552,23 +551,21 @@ int resolve_variable_or_upvalue(CompilerContext* ctx, const char* name,
 
 // ===== VM OPCODE SELECTION =====
 
-uint8_t select_optimal_opcode(const char* op, Type* type) {
-    if (!op || !type) {
-        DEBUG_CODEGEN_PRINT("select_optimal_opcode: op=%s, type=%p", op ? op : "NULL", (void*)type);
-        return OP_HALT; // Fallback
+uint8_t select_optimal_opcode(const char* op, TypeKind type_kind) {
+    if (!op) {
+        DEBUG_CODEGEN_PRINT("select_optimal_opcode: op=NULL");
+        return OP_HALT;
     }
-    
-    DEBUG_CODEGEN_PRINT("select_optimal_opcode: op='%s', type->kind=%d", op, type->kind);
-    
+
     // Convert Type kind to RegisterType for opcode selection
     RegisterType reg_type;
-    switch (type->kind) {
-        case TYPE_I32: 
-            reg_type = REG_TYPE_I32; 
+    switch (type_kind) {
+        case TYPE_I32:
+            reg_type = REG_TYPE_I32;
             DEBUG_CODEGEN_PRINT("Converting TYPE_I32 (%d) to REG_TYPE_I32 (%d)", TYPE_I32, REG_TYPE_I32);
             break;
-        case TYPE_I64: 
-            reg_type = REG_TYPE_I64; 
+        case TYPE_I64:
+            reg_type = REG_TYPE_I64;
             DEBUG_CODEGEN_PRINT("Converting TYPE_I64 (%d) to REG_TYPE_I64 (%d)", TYPE_I64, REG_TYPE_I64);
             break;
         case TYPE_U32: 
@@ -593,16 +590,16 @@ uint8_t select_optimal_opcode(const char* op, Type* type) {
             break;
         case TYPE_VOID:
             reg_type = REG_TYPE_I64;  // Void values should not reach arithmetic, but keep legacy fallback.
-            DEBUG_CODEGEN_PRINT("WORKAROUND: Converting TYPE_VOID (%d) to REG_TYPE_I64 (%d)", type->kind, REG_TYPE_I64);
+            DEBUG_CODEGEN_PRINT("WORKAROUND: Converting TYPE_VOID (%d) to REG_TYPE_I64 (%d)", type_kind, REG_TYPE_I64);
             break;
         default:
-            DEBUG_CODEGEN_PRINT("Warning: Unsupported type %d for opcode selection", type->kind);
-            DEBUG_CODEGEN_PRINT("TYPE_I32=%d, TYPE_I64=%d, TYPE_U32=%d, TYPE_U64=%d, TYPE_F64=%d, TYPE_BOOL=%d", 
+            DEBUG_CODEGEN_PRINT("Warning: Unsupported type %d for opcode selection", type_kind);
+            DEBUG_CODEGEN_PRINT("TYPE_I32=%d, TYPE_I64=%d, TYPE_U32=%d, TYPE_U64=%d, TYPE_F64=%d, TYPE_BOOL=%d",
                    TYPE_I32, TYPE_I64, TYPE_U32, TYPE_U64, TYPE_F64, TYPE_BOOL);
             return OP_HALT;
     }
-    
-    DEBUG_CODEGEN_PRINT("Converting TYPE_%d to REG_TYPE_%d for opcode selection", type->kind, reg_type);
+
+    DEBUG_CODEGEN_PRINT("Converting TYPE_%d to REG_TYPE_%d for opcode selection", type_kind, reg_type);
     
     // Check for logical operations on bool
     if (reg_type == REG_TYPE_BOOL) {
@@ -978,15 +975,11 @@ void emit_load_constant(CompilerContext* ctx, int reg, Value constant) {
     }
 }
 
-void emit_binary_op(CompilerContext* ctx, const char* op, Type* operand_type, int dst, int src1, int src2) {
-    // Debug output removed
-    int operand_kind = operand_type ? (int)operand_type->kind : -1;
+void emit_binary_op(CompilerContext* ctx, const char* op, TypeKind operand_kind, int dst, int src1, int src2) {
     DEBUG_CODEGEN_PRINT("emit_binary_op called: op='%s', type=%d, dst=R%d, src1=R%d, src2=R%d\n",
            op, operand_kind, dst, src1, src2);
-    (void)operand_kind;
 
-    uint8_t opcode = select_optimal_opcode(op, operand_type);
-    // Debug output removed
+    uint8_t opcode = select_optimal_opcode(op, operand_kind);
     DEBUG_CODEGEN_PRINT("select_optimal_opcode returned: %d (OP_HALT=%d)\n", opcode, OP_HALT);
 
     if (opcode == OP_HALT) {
@@ -3881,17 +3874,21 @@ void compile_binary_op(CompilerContext* ctx, TypedASTNode* binary, int target_re
                          strcmp(op, "==") == 0 || strcmp(op, "!=") == 0);
 
     // Determine the result type and handle type coercion
+    TypeKind left_kind = left_type->kind;
+    TypeKind right_kind = right_type->kind;
     Type* result_type = binary->resolvedType;
     bool result_type_valid = result_type &&
                              result_type->kind != TYPE_ERROR &&
                              result_type->kind != TYPE_UNKNOWN;
-    Type result_fallback = {.kind = is_comparison ? TYPE_BOOL : left_type->kind};
+    Type result_fallback = {.kind = is_comparison ? TYPE_BOOL : left_kind};
     if (!result_type_valid) {
         result_type = &result_fallback;
     }
     if (is_string_concat) {
+        left_kind = right_kind = TYPE_STRING;
         result_type = &string_type;
     }
+    TypeKind operand_kind = left_kind;
     int coerced_left_reg = left_reg;
     int coerced_right_reg = right_reg;
 
@@ -3901,86 +3898,96 @@ void compile_binary_op(CompilerContext* ctx, TypedASTNode* binary, int target_re
     }
 
     // Type coercion rules: promote to the "larger" type
-    if (!is_string_concat && left_type->kind != right_type->kind) {
-        DEBUG_CODEGEN_PRINT("Type mismatch detected: %d vs %d, applying coercion\n", left_type->kind, right_type->kind);
+    if (!is_string_concat && left_kind != right_kind) {
+        DEBUG_CODEGEN_PRINT("Type mismatch detected: %d vs %d, applying coercion\n", left_kind, right_kind);
 
         // Determine the promoted type following simpler, safer rules
         TypeKind promoted_type = TYPE_I32; // Default fallback
-        
+
         // FIXED: Simpler promotion rules to avoid problematic casts
-        if ((left_type->kind == TYPE_I32 && right_type->kind == TYPE_I64) ||
-            (left_type->kind == TYPE_I64 && right_type->kind == TYPE_I32)) {
+        if ((left_kind == TYPE_I32 && right_kind == TYPE_I64) ||
+            (left_kind == TYPE_I64 && right_kind == TYPE_I32)) {
             promoted_type = TYPE_I64;
-        } else if ((left_type->kind == TYPE_U32 && right_type->kind == TYPE_U64) ||
-                   (left_type->kind == TYPE_U64 && right_type->kind == TYPE_U32)) {
+        } else if ((left_kind == TYPE_U32 && right_kind == TYPE_U64) ||
+                   (left_kind == TYPE_U64 && right_kind == TYPE_U32)) {
             promoted_type = TYPE_U64;
-        } else if ((left_type->kind == TYPE_I32 && right_type->kind == TYPE_U32) ||
-                   (left_type->kind == TYPE_U32 && right_type->kind == TYPE_I32)) {
+        } else if ((left_kind == TYPE_I32 && right_kind == TYPE_U32) ||
+                   (left_kind == TYPE_U32 && right_kind == TYPE_I32)) {
             // FIXED: For u32 + i32, promote to u32 to avoid complex casts
             promoted_type = TYPE_U32;
-        } else if (left_type->kind == TYPE_F64 || right_type->kind == TYPE_F64) {
+        } else if (left_kind == TYPE_F64 || right_kind == TYPE_F64) {
             promoted_type = TYPE_F64;
         } else {
             // Default: use the larger type
-            if (left_type->kind > right_type->kind) {
-                promoted_type = left_type->kind;
+            if (left_kind > right_kind) {
+                promoted_type = left_kind;
             } else {
-                promoted_type = right_type->kind;
+                promoted_type = right_kind;
             }
         }
-        
+
         DEBUG_CODEGEN_PRINT("Promoting to type: %d\n", promoted_type);
-        
+
         // Insert cast instruction for left operand if needed
-        if (left_type->kind != promoted_type) {
+        if (left_kind != promoted_type) {
             int cast_reg = compiler_alloc_temp(ctx->allocator);
-            DEBUG_CODEGEN_PRINT("Casting left operand from %d to %d (R%d -> R%d)\n", 
-                   left_type->kind, promoted_type, left_reg, cast_reg);
-            
+            DEBUG_CODEGEN_PRINT("Casting left operand from %d to %d (R%d -> R%d)\n",
+                   left_kind, promoted_type, left_reg, cast_reg);
+
             // Emit appropriate cast instruction
-            uint8_t cast_opcode = get_cast_opcode(left_type->kind, promoted_type);
+            uint8_t cast_opcode = get_cast_opcode(left_kind, promoted_type);
             if (cast_opcode != OP_HALT) {
                 emit_instruction_to_buffer(ctx->bytecode, cast_opcode, cast_reg, left_reg, 0);
                 coerced_left_reg = cast_reg;
             }
         }
-        
+
         // Insert cast instruction for right operand if needed
-        if (right_type->kind != promoted_type) {
+        if (right_kind != promoted_type) {
             int cast_reg = compiler_alloc_temp(ctx->allocator);
-            DEBUG_CODEGEN_PRINT("Casting right operand from %d to %d (R%d -> R%d)\n", 
-                   right_type->kind, promoted_type, right_reg, cast_reg);
-            
+            DEBUG_CODEGEN_PRINT("Casting right operand from %d to %d (R%d -> R%d)\n",
+                   right_kind, promoted_type, right_reg, cast_reg);
+
             // Emit appropriate cast instruction
-            uint8_t cast_opcode = get_cast_opcode(right_type->kind, promoted_type);
+            uint8_t cast_opcode = get_cast_opcode(right_kind, promoted_type);
             if (cast_opcode != OP_HALT) {
                 emit_instruction_to_buffer(ctx->bytecode, cast_opcode, cast_reg, right_reg, 0);
                 coerced_right_reg = cast_reg;
             }
         }
-        
+
         // Update the operation type to the promoted type
-        Type promoted_type_obj = {.kind = promoted_type};
-        result_type = &promoted_type_obj;
-    }
-    
-    // Use the operand type (not the result type) for opcode selection
-    Type* opcode_type = result_type;
-    if (is_comparison) {
-        // For comparisons, use the (promoted) operand type
-        opcode_type = left_type->kind == right_type->kind ? left_type : result_type;
-    }
-    if (is_string_concat) {
-        opcode_type = &string_type;
+        left_kind = right_kind = promoted_type;
+        operand_kind = promoted_type;
+        if (!is_comparison) {
+            result_fallback.kind = promoted_type;
+            if (!result_type_valid) {
+                result_type = &result_fallback;
+            }
+        }
     }
 
+    if (is_string_concat) {
+        operand_kind = TYPE_STRING;
+    } else if (is_comparison) {
+        operand_kind = left_kind;
+    } else if (operand_kind == TYPE_UNKNOWN && result_type) {
+        operand_kind = result_type->kind;
+    }
+
+    TypeKind opcode_kind = operand_kind;
+
     DEBUG_CODEGEN_PRINT("Emitting binary operation: %s (target=R%d, left=R%d, right=R%d, type=%d)%s\n",
-           op, target_reg, coerced_left_reg, coerced_right_reg, opcode_type->kind,
+           op, target_reg, coerced_left_reg, coerced_right_reg, opcode_kind,
            is_comparison ? " [COMPARISON]" : " [ARITHMETIC]");
 
     // Emit type-specific binary instruction (arithmetic or comparison)
     set_location_from_node(ctx, binary);
-    emit_binary_op(ctx, op, opcode_type, target_reg, coerced_left_reg, coerced_right_reg);
+#ifdef DEBUG
+    int line = binary && binary->original ? binary->original->location.line : -1;
+    DEBUG_CODEGEN_PRINT("compile_binary_op resolved opcode kind %d for op %s at line %d\n", opcode_kind, op, line);
+#endif
+    emit_binary_op(ctx, op, opcode_kind, target_reg, coerced_left_reg, coerced_right_reg);
     
     // Free any temporary cast registers
     if (coerced_left_reg != left_reg && coerced_left_reg >= MP_TEMP_REG_START && coerced_left_reg <= MP_TEMP_REG_END) {

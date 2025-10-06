@@ -328,20 +328,18 @@ void vm_unwind_to_stack_depth(int targetDepth) {
     while (vm.frameCount > targetDepth) {
         CallFrame* frame = &vm.frames[--vm.frameCount];
 
-        closeUpvalues(&vm.registers[frame->parameterBaseRegister]);
-
-        if (frame->savedRegisterCount == FRAME_REGISTERS + TEMP_REGISTERS) {
-            for (int i = 0; i < FRAME_REGISTERS; i++) {
-                vm_set_register_safe(FRAME_REG_START + i, frame->savedRegisters[i]);
-            }
-            for (int i = 0; i < TEMP_REGISTERS; i++) {
-                vm_set_register_safe(TEMP_REG_START + i, frame->savedRegisters[FRAME_REGISTERS + i]);
-            }
-        } else {
-            for (int i = 0; i < frame->savedRegisterCount; i++) {
-                vm_set_register_safe(frame->savedRegisterStart + i, frame->savedRegisters[i]);
-            }
+        CallFrame* window = vm.register_file.current_frame;
+        Value* param_base_ptr = NULL;
+        if (window) {
+            vm_get_register_safe(frame->parameterBaseRegister);
+            param_base_ptr = get_register(&vm.register_file, frame->parameterBaseRegister);
         }
+        if (!param_base_ptr) {
+            param_base_ptr = &vm.registers[frame->parameterBaseRegister];
+        }
+        closeUpvalues(param_base_ptr);
+
+        deallocate_frame(&vm.register_file);
 
         vm.chunk = frame->previousChunk;
         vm.ip = frame->returnAddress;

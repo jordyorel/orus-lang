@@ -376,12 +376,22 @@ int disassembleInstruction(Chunk* chunk, int offset) {
             return offset + 5;
         }
 
+        case OP_CALL_R: {
+            uint8_t func_reg = chunk->code[offset + 1];
+            uint8_t first_arg = chunk->code[offset + 2];
+            uint8_t arg_count = chunk->code[offset + 3];
+            uint8_t result_reg = chunk->code[offset + 4];
+            printf("%-16s func=R%d, args=R%d..R%d, result=R%d\n",
+                   "CALL", func_reg, first_arg, first_arg + arg_count - 1, result_reg);
+            return offset + 5;
+        }
+
         case OP_CALL_NATIVE_R: {
             uint8_t native_index = chunk->code[offset + 1];
             uint8_t first_arg = chunk->code[offset + 2];
             uint8_t arg_count = chunk->code[offset + 3];
             uint8_t result_reg = chunk->code[offset + 4];
-            printf("%-16s native=%d, args=R%d..R%d, result=R%d\n", 
+            printf("%-16s native=%d, args=R%d..R%d, result=R%d\n",
                    "CALL_NATIVE", native_index, first_arg, first_arg + arg_count - 1, result_reg);
             return offset + 5;
         }

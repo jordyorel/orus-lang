@@ -242,7 +242,7 @@ void get_spill_stats(SpillManager* manager, size_t* active_spills, size_t* total
 uint16_t find_lru_spill(SpillManager* manager) {
     uint8_t oldest_time = 255;
     uint16_t lru_id = 0;
-    
+
     for (size_t i = 0; i < manager->capacity; i++) {
         SpillEntry* entry = &manager->entries[i];
         if (entry->register_id != 0 && !entry->is_tombstone) {
@@ -252,6 +252,19 @@ uint16_t find_lru_spill(SpillManager* manager) {
             }
         }
     }
-    
+
     return lru_id;
+}
+
+void spill_manager_iterate(SpillManager* manager, SpillEntryVisitor visitor, void* user_data) {
+    if (!manager || !visitor) {
+        return;
+    }
+
+    for (size_t i = 0; i < manager->capacity; i++) {
+        SpillEntry* entry = &manager->entries[i];
+        if (entry->register_id != 0 && !entry->is_tombstone) {
+            visitor(entry->register_id, &entry->value, user_data);
+        }
+    }
 }

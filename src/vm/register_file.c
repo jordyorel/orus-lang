@@ -16,50 +16,190 @@
 #include "vm/register_cache.h"
 #include "runtime/memory.h"
 #include <string.h>
-#include <assert.h>
+#include <stdlib.h>
 
 // Forward declarations
 bool is_spilled_register(uint16_t id);
 bool is_module_register(uint16_t id);
 
+static void clear_typed_frame_registers(void) {
+    uint16_t capacity = (uint16_t)(sizeof(vm.typed_regs.reg_types) /
+                                   sizeof(vm.typed_regs.reg_types[0]));
+
+    uint16_t frame_end = FRAME_REG_START + FRAME_REGISTERS;
+    if (frame_end > capacity) {
+        frame_end = capacity;
+    }
+    for (uint16_t id = FRAME_REG_START; id < frame_end; ++id) {
+        switch (vm.typed_regs.reg_types[id]) {
+            case REG_TYPE_I32:
+                vm.typed_regs.i32_regs[id] = 0;
+                break;
+            case REG_TYPE_I64:
+                vm.typed_regs.i64_regs[id] = 0;
+                break;
+            case REG_TYPE_U32:
+                vm.typed_regs.u32_regs[id] = 0;
+                break;
+            case REG_TYPE_U64:
+                vm.typed_regs.u64_regs[id] = 0;
+                break;
+            case REG_TYPE_F64:
+                vm.typed_regs.f64_regs[id] = 0.0;
+                break;
+            case REG_TYPE_BOOL:
+                vm.typed_regs.bool_regs[id] = false;
+                break;
+            default:
+                break;
+        }
+        vm.typed_regs.reg_types[id] = REG_TYPE_NONE;
+        vm.typed_regs.dirty[id] = false;
+    }
+
+    uint16_t temp_end = TEMP_REG_START + TEMP_REGISTERS;
+    if (temp_end > capacity) {
+        temp_end = capacity;
+    }
+    for (uint16_t id = TEMP_REG_START; id < temp_end; ++id) {
+        switch (vm.typed_regs.reg_types[id]) {
+            case REG_TYPE_I32:
+                vm.typed_regs.i32_regs[id] = 0;
+                break;
+            case REG_TYPE_I64:
+                vm.typed_regs.i64_regs[id] = 0;
+                break;
+            case REG_TYPE_U32:
+                vm.typed_regs.u32_regs[id] = 0;
+                break;
+            case REG_TYPE_U64:
+                vm.typed_regs.u64_regs[id] = 0;
+                break;
+            case REG_TYPE_F64:
+                vm.typed_regs.f64_regs[id] = 0.0;
+                break;
+            case REG_TYPE_BOOL:
+                vm.typed_regs.bool_regs[id] = false;
+                break;
+            default:
+                break;
+        }
+        vm.typed_regs.reg_types[id] = REG_TYPE_NONE;
+        vm.typed_regs.dirty[id] = false;
+    }
+}
+
+static void snapshot_typed_frame_state(CallFrame* frame) {
+    for (uint16_t idx = 0; idx < FRAME_REGISTERS; ++idx) {
+        uint16_t reg_id = FRAME_REG_START + idx;
+        frame->saved_i32[idx] = vm.typed_regs.i32_regs[reg_id];
+        frame->saved_i64[idx] = vm.typed_regs.i64_regs[reg_id];
+        frame->saved_u32[idx] = vm.typed_regs.u32_regs[reg_id];
+        frame->saved_u64[idx] = vm.typed_regs.u64_regs[reg_id];
+        frame->saved_f64[idx] = vm.typed_regs.f64_regs[reg_id];
+        frame->saved_bool[idx] = vm.typed_regs.bool_regs[reg_id];
+        frame->saved_heap[idx] = vm.typed_regs.heap_regs[reg_id];
+        frame->saved_types[idx] = vm.typed_regs.reg_types[reg_id];
+        frame->saved_dirty[idx] = vm.typed_regs.dirty[reg_id];
+    }
+
+    for (uint16_t idx = 0; idx < TEMP_REGISTERS; ++idx) {
+        uint16_t offset = FRAME_REGISTERS + idx;
+        uint16_t reg_id = TEMP_REG_START + idx;
+        frame->saved_i32[offset] = vm.typed_regs.i32_regs[reg_id];
+        frame->saved_i64[offset] = vm.typed_regs.i64_regs[reg_id];
+        frame->saved_u32[offset] = vm.typed_regs.u32_regs[reg_id];
+        frame->saved_u64[offset] = vm.typed_regs.u64_regs[reg_id];
+        frame->saved_f64[offset] = vm.typed_regs.f64_regs[reg_id];
+        frame->saved_bool[offset] = vm.typed_regs.bool_regs[reg_id];
+        frame->saved_heap[offset] = vm.typed_regs.heap_regs[reg_id];
+        frame->saved_types[offset] = vm.typed_regs.reg_types[reg_id];
+        frame->saved_dirty[offset] = vm.typed_regs.dirty[reg_id];
+    }
+}
+
+static void restore_typed_frame_state(const CallFrame* frame) {
+    for (uint16_t idx = 0; idx < FRAME_REGISTERS; ++idx) {
+        uint16_t reg_id = FRAME_REG_START + idx;
+        vm.typed_regs.i32_regs[reg_id] = frame->saved_i32[idx];
+        vm.typed_regs.i64_regs[reg_id] = frame->saved_i64[idx];
+        vm.typed_regs.u32_regs[reg_id] = frame->saved_u32[idx];
+        vm.typed_regs.u64_regs[reg_id] = frame->saved_u64[idx];
+        vm.typed_regs.f64_regs[reg_id] = frame->saved_f64[idx];
+        vm.typed_regs.bool_regs[reg_id] = frame->saved_bool[idx];
+        vm.typed_regs.heap_regs[reg_id] = frame->saved_heap[idx];
+        vm.typed_regs.reg_types[reg_id] = frame->saved_types[idx];
+        vm.typed_regs.dirty[reg_id] = frame->saved_dirty[idx];
+    }
+
+    for (uint16_t idx = 0; idx < TEMP_REGISTERS; ++idx) {
+        uint16_t offset = FRAME_REGISTERS + idx;
+        uint16_t reg_id = TEMP_REG_START + idx;
+        vm.typed_regs.i32_regs[reg_id] = frame->saved_i32[offset];
+        vm.typed_regs.i64_regs[reg_id] = frame->saved_i64[offset];
+        vm.typed_regs.u32_regs[reg_id] = frame->saved_u32[offset];
+        vm.typed_regs.u64_regs[reg_id] = frame->saved_u64[offset];
+        vm.typed_regs.f64_regs[reg_id] = frame->saved_f64[offset];
+        vm.typed_regs.bool_regs[reg_id] = frame->saved_bool[offset];
+        vm.typed_regs.heap_regs[reg_id] = frame->saved_heap[offset];
+        vm.typed_regs.reg_types[reg_id] = frame->saved_types[offset];
+        vm.typed_regs.dirty[reg_id] = frame->saved_dirty[offset];
+    }
+}
+
 // Internal fast register access with branch prediction hints (used by cache)
 Value* get_register_internal(RegisterFile* rf, uint16_t id) {
-    // Fast path: Global registers (0-255)
+    // Fast path: Global registers (0-63)
     if (__builtin_expect(id < GLOBAL_REGISTERS, 1)) {
         return &rf->globals[id];
     }
-    
-    // Frame registers (256-319)
+
+    // Frame registers (64-191)
     if (__builtin_expect(id >= FRAME_REG_START && id < FRAME_REG_START + FRAME_REGISTERS, 1)) {
         if (rf->current_frame) {
             return &rf->current_frame->registers[id - FRAME_REG_START];
         }
-        // Fallback to global if no current frame
-        return &rf->globals[id % GLOBAL_REGISTERS];
+
+        // When no frame is active, fall back to the legacy register storage so we don't
+        // alias unrelated global slots. This keeps register 1:1 semantics intact during
+        // bootstrapping and host-driven execution.
+        if (id < REGISTER_COUNT) {
+            return &vm.registers[id];
+        }
     }
-    
-    // Temp registers (320-351)
-    if (id < TEMP_REG_START + TEMP_REGISTERS) {
-        return &rf->temps[id - TEMP_REG_START];
+
+    // Temp registers (192-239)
+    if (id >= TEMP_REG_START && id < TEMP_REG_START + TEMP_REGISTERS) {
+        Value* temp_bank = rf->temps ? rf->temps : rf->temps_root;
+        return &temp_bank[id - TEMP_REG_START];
     }
-    
-    // Module registers (352-479)
-    if (rf->module_manager && is_module_register(id)) {
-        uint8_t module_id = (id - MODULE_REG_START) / MODULE_REGISTERS;
-        uint16_t reg_offset = (id - MODULE_REG_START) % MODULE_REGISTERS;
-        return get_module_register(rf->module_manager, module_id, reg_offset);
+
+    // Module registers (240-255)
+    if (id >= MODULE_REG_START && id < MODULE_REG_START + MODULE_REGISTERS) {
+        if (rf->module_manager && is_module_register(id)) {
+            uint8_t module_id = (id - MODULE_REG_START) / MODULE_REGISTERS;
+            uint16_t reg_offset = (id - MODULE_REG_START) % MODULE_REGISTERS;
+            Value* slot = get_module_register(rf->module_manager, module_id, reg_offset);
+            if (slot) {
+                return slot;
+            }
+        }
+
+        if (id < REGISTER_COUNT) {
+            return &vm.registers[id];
+        }
     }
-    
-    // Spilled registers (480+) - HashMap lookup
+
+    // Spilled registers (256+)
     if (rf->spilled_registers && is_spilled_register(id)) {
         static Value spilled_value;
         if (unspill_register_value(rf->spilled_registers, id, &spilled_value)) {
             return &spilled_value;
         }
     }
-    
-    // Fallback to global array (error case)
-    return &rf->globals[id % GLOBAL_REGISTERS];
+
+    // Final fallback – provide a stable pointer within the legacy array.
+    return &vm.registers[id % REGISTER_COUNT];
 }
 
 // Cached register access function (public interface)
@@ -72,45 +212,65 @@ Value* get_register(RegisterFile* rf, uint16_t id) {
 }
 
 void set_register_internal(RegisterFile* rf, uint16_t id, Value value) {
-    // Fast path: Global registers (0-255)
+    // Fast path: Global registers (0-63)
     if (__builtin_expect(id < GLOBAL_REGISTERS, 1)) {
         rf->globals[id] = value;
+        if (id < REGISTER_COUNT) {
+            vm.registers[id] = value;
+        }
         return;
     }
-    
-    // Frame registers (256-319)
+
+    // Frame registers (64-191)
     if (__builtin_expect(id >= FRAME_REG_START && id < FRAME_REG_START + FRAME_REGISTERS, 1)) {
         if (rf->current_frame) {
             rf->current_frame->registers[id - FRAME_REG_START] = value;
-            return;
+        } else if (id < REGISTER_COUNT) {
+            vm.registers[id] = value;
         }
-        // Fallback to global if no current frame
-        rf->globals[id % GLOBAL_REGISTERS] = value;
+
+        if (id < REGISTER_COUNT) {
+            vm.registers[id] = value;
+        }
         return;
     }
-    
-    // Temp registers (320-351)
-    if (id < TEMP_REG_START + TEMP_REGISTERS) {
-        rf->temps[id - TEMP_REG_START] = value;
+
+    // Temp registers (192-239)
+    if (id >= TEMP_REG_START && id < TEMP_REG_START + TEMP_REGISTERS) {
+        Value* temp_bank = rf->temps ? rf->temps : rf->temps_root;
+        temp_bank[id - TEMP_REG_START] = value;
+        if (id < REGISTER_COUNT) {
+            vm.registers[id] = value;
+        }
         return;
     }
-    
-    // Module registers (352-479)
-    if (rf->module_manager && is_module_register(id)) {
-        uint8_t module_id = (id - MODULE_REG_START) / MODULE_REGISTERS;
-        uint16_t reg_offset = (id - MODULE_REG_START) % MODULE_REGISTERS;
-        set_module_register(rf->module_manager, module_id, reg_offset, value);
+
+    // Module registers (240-255)
+    if (id >= MODULE_REG_START && id < MODULE_REG_START + MODULE_REGISTERS) {
+        if (rf->module_manager && is_module_register(id)) {
+            uint8_t module_id = (id - MODULE_REG_START) / MODULE_REGISTERS;
+            uint16_t reg_offset = (id - MODULE_REG_START) % MODULE_REGISTERS;
+            set_module_register(rf->module_manager, module_id, reg_offset, value);
+        }
+        if (id < REGISTER_COUNT) {
+            vm.registers[id] = value;
+        }
         return;
     }
-    
-    // Spilled registers (480+) - Store in HashMap
+
+    // Spilled registers (256+)
     if (rf->spilled_registers && is_spilled_register(id)) {
         SpillManager* spill_mgr = rf->spilled_registers;
         set_spill_register_value(spill_mgr, id, value);
         return;
     }
-    
-    // Fallback to global array (error case)
+
+    if (id < REGISTER_COUNT) {
+        vm.registers[id] = value;
+        return;
+    }
+
+    // Fallback: map to globals deterministically for out-of-range ids
     rf->globals[id % GLOBAL_REGISTERS] = value;
 }
 
@@ -129,40 +289,50 @@ CallFrame* allocate_frame(RegisterFile* rf) {
     // Allocate new frame from heap (for now - could use frame pool later)
     CallFrame* frame = (CallFrame*)malloc(sizeof(CallFrame));
     if (!frame) return NULL;
-    
-    // Initialize frame
-    memset(frame->registers, 0, sizeof(frame->registers));
+
+    memset(frame, 0, sizeof(CallFrame));
+
     frame->parent = rf->current_frame;
     frame->next = rf->frame_stack;
+    frame->frame_base = FRAME_REG_START;
+    frame->temp_base = TEMP_REG_START;
+    frame->temp_count = TEMP_REGISTERS;
+    frame->spill_base = SPILL_REG_START;
+    frame->spill_count = 0;
     frame->register_count = 0;
-    frame->spill_start = 0;
     frame->module_id = 0;
     frame->flags = 0;
-    
-    // Legacy compatibility
+
+    // Legacy compatibility / execution metadata
     frame->returnAddress = NULL;
     frame->previousChunk = NULL;
-    frame->baseRegister = 0;
-    frame->functionIndex = 0;
-    frame->savedRegisterCount = 0;
-    memset(frame->savedRegisters, 0, sizeof(frame->savedRegisters));
+    frame->resultRegister = FRAME_REG_START;
+    frame->parameterBaseRegister = FRAME_REG_START;
+    frame->functionIndex = UINT16_MAX;
     
     // Update register file
     rf->frame_stack = frame;
     rf->current_frame = frame;
-    
+    rf->temps = frame->temps;
+
+    snapshot_typed_frame_state(frame);
+    clear_typed_frame_registers();
+
     return frame;
 }
 
 void deallocate_frame(RegisterFile* rf) {
     if (!rf->current_frame) return;
-    
+
     CallFrame* frame = rf->current_frame;
-    
+
+    restore_typed_frame_state(frame);
+
     // Update register file
     rf->current_frame = frame->parent;
     rf->frame_stack = frame->next;
-    
+    rf->temps = rf->current_frame ? rf->current_frame->temps : rf->temps_root;
+
     // Free frame
     free(frame);
 }
@@ -176,8 +346,9 @@ void init_register_file(RegisterFile* rf) {
     
     // Initialize temp registers to NIL
     for (int i = 0; i < TEMP_REGISTERS; i++) {
-        rf->temps[i] = BOOL_VAL(false);
+        rf->temps_root[i] = BOOL_VAL(false);
     }
+    rf->temps = rf->temps_root;
     
     // Initialize frame management
     rf->current_frame = NULL;

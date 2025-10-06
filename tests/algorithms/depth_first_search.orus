@@ -63,11 +63,11 @@ fn make_base_graph():
 // === Tests ===
 base_graph = make_base_graph()
 
-expected_component_a = [0, 1, 2, 3]
+expected_component_a = [0, 1, 2, 3, 4]
 if assert_eq("dfs component_a", depth_first_search("component_a", base_graph, 0), expected_component_a):
     print("ok", "dfs component_a")
 
-expected_component_b = [5, 2, 3, 1]
+expected_component_b = [5, 2, 3, 1, 4]
 if assert_eq("dfs component_b", depth_first_search("component_b", base_graph, 5), expected_component_b):
     print("ok", "dfs component_b")
 
@@ -88,6 +88,6 @@ fn make_tree_graph():
 
 tree_graph = make_tree_graph()
 
-expected_tree_order = [0, 1, 4, 2, 6, 9, 3, 7]
+expected_tree_order = [0, 1, 4, 5, 2, 6, 9, 3, 7, 8]
 if assert_eq("dfs tree_depth", depth_first_search("tree_depth", tree_graph, 0), expected_tree_order):
     print("ok", "dfs tree_depth")

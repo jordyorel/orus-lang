@@ -308,40 +308,58 @@ typedef struct {
 // Phase 1: Enhanced CallFrame structure for hierarchical register windows
 typedef struct CallFrame {
     Value registers[FRAME_REGISTERS];     // Function-local registers
+    Value temps[TEMP_REGISTERS];          // Temporary registers scoped to this frame
+
+    // Typed register snapshots for restoring parent frame state
+    int32_t saved_i32[FRAME_REGISTERS + TEMP_REGISTERS];
+    int64_t saved_i64[FRAME_REGISTERS + TEMP_REGISTERS];
+    uint32_t saved_u32[FRAME_REGISTERS + TEMP_REGISTERS];
+    uint64_t saved_u64[FRAME_REGISTERS + TEMP_REGISTERS];
+    double saved_f64[FRAME_REGISTERS + TEMP_REGISTERS];
+    bool saved_bool[FRAME_REGISTERS + TEMP_REGISTERS];
+    Value saved_heap[FRAME_REGISTERS + TEMP_REGISTERS];
+    uint8_t saved_types[FRAME_REGISTERS + TEMP_REGISTERS];
+    bool saved_dirty[FRAME_REGISTERS + TEMP_REGISTERS];
+
     struct CallFrame* parent;             // Parent scope
     struct CallFrame* next;               // Call stack linkage
-    
-    // Frame metadata
-    uint16_t register_count;              // Registers in use
-    uint16_t spill_start;                 // First spilled register ID (Phase 2)
+
+    // Frame window metadata
+    uint16_t frame_base;                  // First register ID owned by this window
+    uint16_t temp_base;                   // First temporary register exposed to this frame
+    uint16_t temp_count;                  // Number of temporaries in the active window
+    uint16_t spill_base;                  // Spill window base (if spilling active)
+    uint16_t spill_count;                 // Number of spill slots in use
+    uint16_t register_count;              // Registers in use within the frame window
     uint8_t module_id;                    // Module this frame belongs to
     uint8_t flags;                        // Frame properties
-    
-    // Legacy compatibility
+
+    // Legacy compatibility / execution metadata
     uint8_t* returnAddress;
     Chunk* previousChunk;
-    uint8_t baseRegister;                // Base register for this frame (16-bit for extended registers)
-    uint8_t functionIndex;
+    uint16_t resultRegister;              // Register receiving the return value
     uint16_t parameterBaseRegister;       // Base register for function parameters (frame/spill space)
-    uint8_t savedRegisterCount;           // Number of saved registers
-    uint16_t savedRegisterStart;          // Starting register index for saved registers
-    Value savedRegisters[FRAME_REGISTERS + TEMP_REGISTERS]; // Saved frame + temp registers
+    uint16_t functionIndex;               // Function table index when calling by ID
 } CallFrame;
 
 // Shared function for parameter register allocation (used by both compiler and VM)
 static inline uint16_t calculateParameterBaseRegister(int argCount) {
-    // Hierarchical register allocation for unlimited parameters
-    // Always start parameters at the beginning of the frame window
-    // Individual parameters beyond frame space will spill automatically
-    (void)argCount; // Suppress unused parameter warning
-    return FRAME_REG_START;
+    // Place parameters at the top of the frame window so locals can grow
+    // downward without clobbering the call arguments. Clamp to the frame base
+    // when the function has fewer parameters than the window size.
+    int base = FRAME_REG_START + FRAME_REGISTERS - argCount;
+    if (base < FRAME_REG_START) {
+        base = FRAME_REG_START;
+    }
+    return (uint16_t)base;
 }
 
 // Phase 1: Register File Architecture
 typedef struct RegisterFile {
     // Core register banks
     Value globals[GLOBAL_REGISTERS];      // Global state (preserve existing behavior)
-    Value temps[TEMP_REGISTERS];          // Short-lived values
+    Value temps_root[TEMP_REGISTERS];     // Short-lived values for the root context
+    Value* temps;                         // Active temporary register window
     
     // Dynamic frame management
     CallFrame* current_frame;             // Active function frame
