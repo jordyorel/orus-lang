@@ -3066,20 +3066,24 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             DEBUG_CODEGEN_PRINT("NODE_BINARY: Left operand returned register %d\n", left_reg);
             
             // CRITICAL FIX: If left operand is a function call (temp register) and right operand is also a function call,
-            // move left result to a frame register to protect it from being corrupted during right operand evaluation
+            // move left result to a dedicated temporary register so it survives nested call evaluation.
             bool left_is_temp = (left_reg >= MP_TEMP_REG_START && left_reg <= MP_TEMP_REG_END);
             bool right_is_function_call = (right_typed->original->type == NODE_CALL);
             int protected_left_reg = left_reg;
-            
-            if (left_is_temp && right_is_function_call) {
-                // Use a dedicated parameter register (R240) to preserve left operand
-                int frame_protection_reg = 240;  // R240 is preserved across function calls
-                emit_move(ctx, frame_protection_reg, left_reg);
-                DEBUG_CODEGEN_PRINT("NODE_BINARY: Protected left operand R%d -> R%d (param register)\n", left_reg, frame_protection_reg);
 
-                // Free the original temp register
+            if (left_is_temp && right_is_function_call) {
+                int protection_reg = compiler_alloc_temp(ctx->allocator);
+                if (protection_reg == -1) {
+                    DEBUG_CODEGEN_PRINT("Error: Failed to allocate protective register for binary operation\n");
+                    return -1;
+                }
+
+                emit_move(ctx, protection_reg, left_reg);
+                DEBUG_CODEGEN_PRINT("NODE_BINARY: Protected left operand R%d -> R%d (temp register)\n", left_reg, protection_reg);
+
+                // Free the original temp register now that the value is preserved
                 compiler_free_temp(ctx->allocator, left_reg);
-                protected_left_reg = frame_protection_reg;
+                protected_left_reg = protection_reg;
             }
             
             DEBUG_CODEGEN_PRINT("NODE_BINARY: Compiling right operand (type %d)\n", right_typed->original->type);

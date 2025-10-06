@@ -1,0 +1,53 @@
+// Comprehensive Fibonacci validation ensures both recursive and iterative
+// implementations return the canonical sequence values across a range of inputs.
+// This guards against regressions in call dispatch, arithmetic, and loop codegen.
+
+print("== Function Fibonacci Sequence Validation ==")
+
+fn fibonacci_recursive(n: i32) -> i32:
+    if n <= 1:
+        return n
+    return fibonacci_recursive(n - 1) + fibonacci_recursive(n - 2)
+
+fn fibonacci_iterative(n: i32) -> i32:
+    if n <= 1:
+        return n
+
+    mut previous: i32 = 0
+    mut current: i32 = 1
+    mut index: i32 = 1
+
+    while index < n:
+        next_value = previous + current
+        previous = current
+        current = next_value
+        index = index + 1
+
+    return current
+
+expected_sequence = [0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144]
+mut position: i32 = 0
+sequence_length: i32 = len(expected_sequence)
+
+while position < sequence_length:
+    expected_value = expected_sequence[position]
+
+    recursive_value = fibonacci_recursive(position)
+    if assert_eq("fibonacci recursive", recursive_value, expected_value):
+        print("ok", "fibonacci_recursive", position, recursive_value)
+
+    iterative_value = fibonacci_iterative(position)
+    if assert_eq("fibonacci iterative", iterative_value, expected_value):
+        print("ok", "fibonacci_iterative", position, iterative_value)
+
+    position = position + 1
+
+// Additional spot checks for larger inputs ensure the implementations remain
+// consistent beyond the initial prefix that is validated in the loop above.
+recursive_large = fibonacci_recursive(12)
+if assert_eq("fibonacci recursive large", recursive_large, 144):
+    print("ok", "fibonacci_recursive", 12, recursive_large)
+
+iterative_large = fibonacci_iterative(25)
+if assert_eq("fibonacci iterative large", iterative_large, 75025):
+    print("ok", "fibonacci_iterative", 25, iterative_large)

@@ -18,20 +18,25 @@ mut c = 5
 
 // Test 1: Simple inline expressions
 result1 = add(a + 1, b + 1)
-print("add(a+1, b+1) =", result1)  // Should be 7
+if assert_eq("inline_argument_expressions add", result1, 7):
+    print("add(a+1, b+1) =", result1)  // Should be 7
 
 // Test 2: More complex expressions
 result2 = subtract(c * 2, a + b)
-print("subtract(c*2, a+b) =", result2)  // Should be 5
+if assert_eq("inline_argument_expressions subtract", result2, 5):
+    print("subtract(c*2, a+b) =", result2)  // Should be 5
 
 // Test 3: Nested expressions with parentheses
 result3 = multiply(a + 1, b * 2, c - 1)
-print("multiply(a+1, b*2, c-1) =", result3)  // Should be 3 * 6 * 4 = 72
+if assert_eq("inline_argument_expressions multiply", result3, 72):
+    print("multiply(a+1, b*2, c-1) =", result3)  // Should be 3 * 6 * 4 = 72
 
 // Test 4: Mixed literals and expressions
 result4 = add(10, b * 4)
-print("add(10, b*4) =", result4)  // Should be 22
+if assert_eq("inline_argument_expressions mixed_literals", result4, 22):
+    print("add(10, b*4) =", result4)  // Should be 22
 
 // Test 5: Function call as argument (nested calls)
 result5 = add(add(1, 2), subtract(10, 5))
-print("add(add(1,2), subtract(10,5)) =", result5)  // Should be 8
+if assert_eq("inline_argument_expressions nested_calls", result5, 8):
+    print("add(add(1,2), subtract(10,5)) =", result5)  // Should be 8

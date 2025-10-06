@@ -26,31 +26,41 @@ fn stress_registers(a, b, c, d, e, f, g, h, i, j) -> i32:
     return result
 
 first_result = stress_registers(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
-print("stress_registers(1..10) =", first_result)
+if assert_eq("register_pressure first_result", first_result, 422):
+    print("stress_registers(1..10) =", first_result)
 
 second_result = stress_registers(2, 3, 4, 5, 6, 7, 8, 9, 10, 11)
-print("stress_registers(2..11) =", second_result)
+if assert_eq("register_pressure second_result", second_result, 516):
+    print("stress_registers(2..11) =", second_result)
 
 mid_result = stress_registers(5, 6, 7, 8, 9, 10, 11, 12, 13, 14)
-print("stress_registers(5..14) =", mid_result)
+if assert_eq("register_pressure mid_result", mid_result, 846):
+    print("stress_registers(5..14) =", mid_result)
 
 extended_mid = stress_registers(6, 7, 8, 9, 10, 11, 12, 13, 14, 15)
-print("stress_registers(6..15) =", extended_mid)
+if assert_eq("register_pressure extended_mid", extended_mid, 972):
+    print("stress_registers(6..15) =", extended_mid)
 
 third_result = stress_registers(9, 10, 11, 12, 13, 14, 15, 16, 17, 18)
-print("stress_registers(9..18) =", third_result)
+if assert_eq("register_pressure third_result", third_result, 1398):
+    print("stress_registers(9..18) =", third_result)
 
 fourth_result = stress_registers(10, 11, 12, 13, 14, 15, 16, 17, 18, 19)
-print("stress_registers(10..19) =", fourth_result)
+if assert_eq("register_pressure fourth_result", fourth_result, 1556):
+    print("stress_registers(10..19) =", fourth_result)
 
 agg_seed1 = first_result + mid_result + third_result
-print("aggregated_values(1) =", agg_seed1)
+if assert_eq("register_pressure agg_seed1", agg_seed1, 2666):
+    print("aggregated_values(1) =", agg_seed1)
 
 agg_seed2 = second_result + extended_mid + fourth_result
-print("aggregated_values(2) =", agg_seed2)
+if assert_eq("register_pressure agg_seed2", agg_seed2, 3044):
+    print("aggregated_values(2) =", agg_seed2)
 
 difference = agg_seed2 - agg_seed1
-print("aggregated(2) - aggregated(1) =", difference)
+if assert_eq("register_pressure difference", difference, 378):
+    print("aggregated(2) - aggregated(1) =", difference)
 
 total = agg_seed1 + mid_result
-print("aggregated(1) + stress_registers(5..14) =", total)
+if assert_eq("register_pressure total", total, 3512):
+    print("aggregated(1) + stress_registers(5..14) =", total)

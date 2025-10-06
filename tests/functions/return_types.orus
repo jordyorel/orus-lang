@@ -1,12 +1,15 @@
 // Test different return types
 
+// Track side effects of void function
+mut message_counter = 0
+
 // Function returning i32
 fn return_i32() -> i32:
     return 123
 
 // Function returning i64  
 fn return_i64() -> i64:
-    return 1234567890
+    return 1234567890 as i64
 
 // Function returning f64
 fn return_f64() -> f64:
@@ -18,19 +21,26 @@ fn return_bool() -> bool:
 
 // Function with void return (no explicit return)
 fn print_message() -> void:
+    message_counter = message_counter + 1
     print("Hello from void function!")
 
 // Test each return type
 val_i32 = return_i32()
-print("i32 return:", val_i32)
+if assert_eq("return_types i32", val_i32, 123):
+    print("i32 return:", val_i32)
 
-val_i64 = return_i64()  
-print("i64 return:", val_i64)
+val_i64 = return_i64()
+if assert_eq("return_types i64", val_i64, 1234567890 as i64):
+    print("i64 return:", val_i64)
 
 val_f64 = return_f64()
-print("f64 return:", val_f64)
+if assert_eq("return_types f64", val_f64, 3.14159):
+    print("f64 return:", val_f64)
 
 val_bool = return_bool()
-print("bool return:", val_bool)
+if assert_eq("return_types bool", val_bool, true):
+    print("bool return:", val_bool)
 
 print_message()
+if assert_eq("return_types message_counter", message_counter, 1):
+    print("void return call count:", message_counter)

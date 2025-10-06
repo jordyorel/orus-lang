@@ -3,9 +3,13 @@
 double = fn(x: i32) -> i32:
     return x + x
 
-print("double:", double(3))
+double_result = double(3)
+if assert_eq("lambda_functions double", double_result, 6):
+    print("double:", double_result)
 
 increment = fn(n: i32) -> i32:
     return n + 1
 
-print("increment:", increment(5))
+increment_result = increment(5)
+if assert_eq("lambda_functions increment", increment_result, 6):
+    print("increment:", increment_result)

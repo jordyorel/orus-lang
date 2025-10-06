@@ -42,25 +42,33 @@ fn chained_mix(a: i32, b: i32, c: i32) -> i32:
     return total
 
 mult_result = apply_multiplier(7, 3)
-print("apply_multiplier(7, 3) =", mult_result)
+if assert_eq("higher_order apply_multiplier", mult_result, 21):
+    print("apply_multiplier(7, 3) =", mult_result)
 
 affine_result = apply_affine(4, 5, 2)
-print("apply_affine(4, 5, 2) =", affine_result)
+if assert_eq("higher_order apply_affine", affine_result, 22):
+    print("apply_affine(4, 5, 2) =", affine_result)
 
 inc_square_result = increment_then_square(4)
-print("increment_then_square(4) =", inc_square_result)
+if assert_eq("higher_order increment_then_square", inc_square_result, 25):
+    print("increment_then_square(4) =", inc_square_result)
 
 double_inc_result = double_then_increment(6)
-print("double_then_increment(6) =", double_inc_result)
+if assert_eq("higher_order double_then_increment", double_inc_result, 13):
+    print("double_then_increment(6) =", double_inc_result)
 
 scaled_shifted_result = scaled_then_shifted(3, 4, -2)
-print("scaled_then_shifted(3, 4, -2) =", scaled_shifted_result)
+if assert_eq("higher_order scaled_then_shifted", scaled_shifted_result, 10):
+    print("scaled_then_shifted(3, 4, -2) =", scaled_shifted_result)
 
 pipeline_result = run_pipeline(3, 3, 5)
-print("run_pipeline(3, 3, 5) =", pipeline_result)
+if assert_eq("higher_order run_pipeline", pipeline_result, 205):
+    print("run_pipeline(3, 3, 5) =", pipeline_result)
 
 mix_result = chained_mix(5, 4, 2)
-print("chained_mix(5, 4, 2) =", mix_result)
+if assert_eq("higher_order chained_mix", mix_result, 43):
+    print("chained_mix(5, 4, 2) =", mix_result)
 
 final_combo = apply_affine(run_pipeline(2, 4, 1), 3, -6)
-print("apply_affine(run_pipeline(2, 4, 1), 3, -6) =", final_combo)
+if assert_eq("higher_order final_combo", final_combo, 483):
+    print("apply_affine(run_pipeline(2, 4, 1), 3, -6) =", final_combo)
