@@ -238,6 +238,57 @@ static bool test_fused_loop_back_edge_fallback(void) {
     return true;
 }
 
+static bool test_for_range_back_edge_fallback(void) {
+    const int repeat_count = 2048;
+    const char* header =
+        "mut limit = 100000\n"
+        "mut acc = 0\n"
+        "for i in 0..limit:\n";
+    const char* body_line = "    acc = acc + i + limit + acc + i + limit\n";
+
+    size_t total_length = strlen(header) + (size_t)repeat_count * strlen(body_line) + 1;
+    char* source = (char*)malloc(total_length);
+    ASSERT_TRUE(source != NULL, "failed to allocate large for-range source");
+
+    char* cursor = source;
+    size_t header_len = strlen(header);
+    memcpy(cursor, header, header_len);
+    cursor += header_len;
+
+    size_t body_len = strlen(body_line);
+    for (int i = 0; i < repeat_count; ++i) {
+        memcpy(cursor, body_line, body_len);
+        cursor += body_len;
+    }
+
+    *cursor = '\0';
+
+    CompilerContext* ctx = NULL;
+    TypedASTNode* typed = NULL;
+    ASTNode* ast = NULL;
+
+    bool build_ok = build_context_from_source(source, "fused_for_large.orus",
+                                              &ctx, &typed, &ast);
+    free(source);
+    ASSERT_TRUE(build_ok, "failed to compile large for-range source");
+
+    BytecodeBuffer* bc = ctx->bytecode;
+    ASSERT_TRUE(bc != NULL, "bytecode buffer missing for large for-range");
+
+    bool has_fused_increment = false;
+    for (int i = 0; i < bc->count; ++i) {
+        if (bc->instructions[i] == OP_INC_CMP_JMP || bc->instructions[i] == OP_DEC_CMP_JMP) {
+            has_fused_increment = true;
+            break;
+        }
+    }
+
+    destroy_context(ctx, typed, ast);
+
+    ASSERT_TRUE(!has_fused_increment, "compiler emitted fused increment for oversized for-range loop");
+    return true;
+}
+
 int main(void) {
     debug_init();
 
@@ -247,6 +298,7 @@ int main(void) {
     } tests[] = {
         {"fused while/for bytecode identity", test_fused_loop_bytecode_identity},
         {"fused while falls back when back edge exceeds INT16", test_fused_loop_back_edge_fallback},
+        {"fused for-range falls back when back edge exceeds INT16", test_for_range_back_edge_fallback},
     };
 
     int passed = 0;
