@@ -10,6 +10,8 @@
 #ifndef ORUS_TYPED_AST_H
 #define ORUS_TYPED_AST_H
 
+#include <stddef.h>
+
 #include "compiler/ast.h"
 #include "vm/vm.h"
 
@@ -280,6 +282,8 @@ struct TypedASTNode {
 TypedASTNode* create_typed_ast_node(ASTNode* original);
 void free_typed_ast_node(TypedASTNode* node);
 TypedASTNode* copy_typed_ast_node(TypedASTNode* node);
+size_t typed_ast_registry_checkpoint(void);
+void typed_ast_release_from_checkpoint(size_t checkpoint);
 void typed_ast_release_orphans(void);
 
 // Type resolution functions
