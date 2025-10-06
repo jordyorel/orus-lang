@@ -213,11 +213,9 @@ InterpretResult vm_run_dispatch(void) {
 
                     // Check if either operand is a string - if so, do string concatenation
                     if (IS_STRING(vm_get_register_safe(src1)) || IS_STRING(vm_get_register_safe(src2))) {
-                        // Convert both operands to strings and concatenate
                         Value left = vm_get_register_safe(src1);
                         Value right = vm_get_register_safe(src2);
-                        
-                        // Convert left operand to string if needed
+
                         if (!IS_STRING(left)) {
                             char buffer[64];
                             if (IS_I32(left)) {
@@ -235,11 +233,9 @@ InterpretResult vm_run_dispatch(void) {
                             } else {
                                 snprintf(buffer, sizeof(buffer), "nil");
                             }
-                            ObjString* leftStr = allocateString(buffer, (int)strlen(buffer));
-                            left = STRING_VAL(leftStr);
+                            left = STRING_VAL(allocateString(buffer, (int)strlen(buffer)));
                         }
-                        
-                        // Convert right operand to string if needed
+
                         if (!IS_STRING(right)) {
                             char buffer[64];
                             if (IS_I32(right)) {
@@ -257,31 +253,15 @@ InterpretResult vm_run_dispatch(void) {
                             } else {
                                 snprintf(buffer, sizeof(buffer), "nil");
                             }
-                            ObjString* rightStr = allocateString(buffer, (int)strlen(buffer));
-                            right = STRING_VAL(rightStr);
+                            right = STRING_VAL(allocateString(buffer, (int)strlen(buffer)));
                         }
-                        
-                        // Concatenate the strings
-                        ObjString* leftStr = AS_STRING(left);
-                        ObjString* rightStr = AS_STRING(right);
-                        int newLength = leftStr->length + rightStr->length;
-                        
-                        // Use stack buffer for small strings, otherwise fall back to a StringBuilder
-                        if (newLength < VM_SMALL_STRING_BUFFER) {
-                            char buffer[VM_SMALL_STRING_BUFFER];
-                            memcpy(buffer, leftStr->chars, leftStr->length);
-                            memcpy(buffer + leftStr->length, rightStr->chars, rightStr->length);
-                            buffer[newLength] = '\0';
-                            ObjString* result = allocateString(buffer, newLength);
-                            vm_set_register_safe(dst, STRING_VAL(result));
-                        } else {
-                            StringBuilder* sb = createStringBuilder(newLength + 1);
-                            appendToStringBuilder(sb, leftStr->chars, leftStr->length);
-                            appendToStringBuilder(sb, rightStr->chars, rightStr->length);
-                            ObjString* result = stringBuilderToString(sb);
-                            freeStringBuilder(sb);
-                            vm_set_register_safe(dst, STRING_VAL(result));
+
+                        ObjString* result = rope_concat_strings(AS_STRING(left), AS_STRING(right));
+                        if (!result) {
+                            VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(),
+                                            "Failed to concatenate strings");
                         }
+                        vm_set_register_safe(dst, STRING_VAL(result));
                         break;
                     }
 
@@ -1655,15 +1635,13 @@ InterpretResult vm_run_dispatch(void) {
                         VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be string");
                     }
 
-                    ObjString* a = AS_STRING(vm_get_register_safe(src1));
-                    ObjString* b = AS_STRING(vm_get_register_safe(src2));
-                    int newLen = a->length + b->length;
-                    char* buf = malloc(newLen + 1);
-                    memcpy(buf, a->chars, a->length);
-                    memcpy(buf + a->length, b->chars, b->length);
-                    buf[newLen] = '\0';
-                    ObjString* res = allocateString(buf, newLen);
-                    free(buf);
+                    ObjString* res =
+                        rope_concat_strings(AS_STRING(vm_get_register_safe(src1)),
+                                            AS_STRING(vm_get_register_safe(src2)));
+                    if (!res) {
+                        VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(),
+                                        "Failed to concatenate strings");
+                    }
                     vm_set_register_safe(dst, STRING_VAL(res));
                     break;
                 }
@@ -1695,8 +1673,13 @@ InterpretResult vm_run_dispatch(void) {
                     }
 
                     if (!result) {
+                        const char* chars = string_get_chars(source);
+                        if (!chars) {
+                            VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(),
+                                            "Failed to access string data");
+                        }
                         char buffer[2];
-                        buffer[0] = source->chars[index];
+                        buffer[0] = chars[index];
                         buffer[1] = '\0';
                         result = allocateString(buffer, 1);
                     }
@@ -1760,8 +1743,8 @@ InterpretResult vm_run_dispatch(void) {
                     }
 
                     TaggedUnionSpec spec = {
-                        .type_name = typeName->chars,
-                        .variant_name = variantName ? variantName->chars : NULL,
+                        .type_name = typeName ? string_get_chars(typeName) : NULL,
+                        .variant_name = variantName ? string_get_chars(variantName) : NULL,
                         .variant_index = variantIndex,
                         .payload = payload_ptr,
                         .payload_count = payloadCount,
@@ -1805,7 +1788,13 @@ InterpretResult vm_run_dispatch(void) {
 
                     ObjEnumInstance* instance = AS_ENUM(value);
                     if (!instance || instance->variantIndex != variantIndex) {
-                        const char* typeName = instance && instance->typeName ? instance->typeName->chars : "enum";
+                        const char* typeName = "enum";
+                        if (instance && instance->typeName) {
+                            const char* chars = string_get_chars(instance->typeName);
+                            if (chars) {
+                                typeName = chars;
+                            }
+                        }
                         VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(),
                                         "Match arm expected %s variant index %u", typeName, variantIndex);
                     }

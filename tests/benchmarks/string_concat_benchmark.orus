@@ -1,0 +1,36 @@
+// String concatenation benchmark comparing repeated s = s + c
+// Uses an array repeat to mirror the reference Python snippet exactly.
+
+ITERATIONS: i32 = 100_000
+TRIALS: i32 = 5
+
+mut total_time: f64 = 0.0
+mut checksum: i32 = 0
+
+print("=== Orus String Concatenation Benchmark ===")
+print("iterations:", ITERATIONS)
+print("trials:", TRIALS)
+
+chars = ["a"] * ITERATIONS
+
+for trial in 0..TRIALS:
+    start: f64 = timestamp()
+    mut s: string = ""
+    mut appended: i32 = 0
+
+    for c in chars:
+        s = s + c
+        appended = appended + 1
+
+    elapsed: f64 = timestamp() - start
+
+    total_time = total_time + elapsed
+    checksum = checksum + appended
+
+    if assert_eq("concat iterations", appended, ITERATIONS):
+        print("trial", trial, "appended", appended, "elapsed", elapsed)
+
+avg_time: f64 = total_time / (TRIALS as f64)
+print("average_time:", avg_time)
+print("checksum:", checksum)
+print("=== Benchmark complete ===")

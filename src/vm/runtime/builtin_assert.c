@@ -9,6 +9,7 @@
 
 #include "runtime/memory.h"
 #include "vm/vm.h"
+#include "vm/vm_string_ops.h"
 
 #include <stdarg.h>
 #include <stdbool.h>
@@ -139,12 +140,14 @@ static bool append_enum_repr(AssertStringBuilder* sb, ObjEnumInstance* inst) {
     if (!inst) {
         return sb_append(sb, "<enum>");
     }
-    const char* type_name = (inst->typeName && inst->typeName->chars)
-                                ? inst->typeName->chars
-                                : "<enum>";
-    const char* variant_name = (inst->variantName && inst->variantName->chars)
-                                   ? inst->variantName->chars
-                                   : "<variant>";
+    const char* type_name = inst->typeName ? string_get_chars(inst->typeName) : NULL;
+    if (!type_name) {
+        type_name = "<enum>";
+    }
+    const char* variant_name = inst->variantName ? string_get_chars(inst->variantName) : NULL;
+    if (!variant_name) {
+        variant_name = "<variant>";
+    }
     if (!sb_append(sb, type_name)) {
         return false;
     }
@@ -178,9 +181,10 @@ static bool append_string_repr(AssertStringBuilder* sb, ObjString* str) {
     if (!sb_append_char(sb, '"')) {
         return false;
     }
-    if (str && str->chars) {
+    const char* chars = str ? string_get_chars(str) : NULL;
+    if (str && chars) {
         for (int i = 0; i < str->length; i++) {
-            char c = str->chars[i];
+            char c = chars[i];
             switch (c) {
                 case '\\':
                     if (!sb_append(sb, "\\\\")) return false;
@@ -229,7 +233,9 @@ static bool append_value_repr(AssertStringBuilder* sb, Value value) {
             return sb_append(sb, "<array-iter>");
         case VAL_ERROR:
             if (AS_ERROR(value) && AS_ERROR(value)->message) {
-                return sb_append_format(sb, "Error(%s)", AS_ERROR(value)->message->chars);
+                ObjString* message = AS_ERROR(value)->message;
+                const char* msg_chars = message ? string_get_chars(message) : NULL;
+                return sb_append_format(sb, "Error(%s)", msg_chars ? msg_chars : "<error>");
             }
             return sb_append(sb, "Error");
         case VAL_FUNCTION:
@@ -313,7 +319,7 @@ bool builtin_assert_eq(Value label, Value actual, Value expected, char** out_mes
     const char* label_text = NULL;
     char* label_owned = NULL;
     if (IS_STRING(label) && AS_STRING(label)) {
-        label_text = AS_STRING(label)->chars;
+        label_text = string_get_chars(AS_STRING(label));
     } else {
         AssertStringBuilder label_builder;
         if (!sb_init(&label_builder)) {

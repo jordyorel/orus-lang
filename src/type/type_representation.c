@@ -14,6 +14,11 @@
 #include "type/type.h"
 #include "runtime/memory.h"
 #include "public/common.h"
+#include "vm/vm_string_ops.h"
+
+static const char* safe_string_chars(ObjString* str) {
+    return str ? string_get_chars(str) : NULL;
+}
 #include <string.h>
 #include <stdlib.h>
 
@@ -537,7 +542,9 @@ bool equalsType(Type* a, Type* b) {
         if (!aname || !bname) return false;
         if (aname != bname) {
             if (aname->length != bname->length) return false;
-            if (strncmp(aname->chars, bname->chars, aname->length) != 0) return false;
+            const char* a_chars = safe_string_chars(aname);
+            const char* b_chars = safe_string_chars(bname);
+            if (!a_chars || !b_chars || strncmp(a_chars, b_chars, aname->length) != 0) return false;
         }
 
         if (aext->extended.structure.fieldCount != bext->extended.structure.fieldCount) return false;
@@ -546,7 +553,9 @@ bool equalsType(Type* a, Type* b) {
             FieldInfo* bf = &bext->extended.structure.fields[i];
             if (af->name && bf->name && af->name != bf->name) {
                 if (af->name->length != bf->name->length) return false;
-                if (strncmp(af->name->chars, bf->name->chars, af->name->length) != 0) return false;
+                const char* af_name = safe_string_chars(af->name);
+                const char* bf_name = safe_string_chars(bf->name);
+                if (!af_name || !bf_name || strncmp(af_name, bf_name, af->name->length) != 0) return false;
             }
             if (!equalsType(af->type, bf->type)) return false;
         }
@@ -563,7 +572,9 @@ bool equalsType(Type* a, Type* b) {
         if (!aname || !bname) return false;
         if (aname != bname) {
             if (aname->length != bname->length) return false;
-            if (strncmp(aname->chars, bname->chars, aname->length) != 0) return false;
+            const char* a_chars = safe_string_chars(aname);
+            const char* b_chars = safe_string_chars(bname);
+            if (!a_chars || !b_chars || strncmp(a_chars, b_chars, aname->length) != 0) return false;
         }
 
         if (aext->extended.enum_.variant_count != bext->extended.enum_.variant_count) return false;
@@ -572,7 +583,9 @@ bool equalsType(Type* a, Type* b) {
             Variant* bv = &bext->extended.enum_.variants[i];
             if (av->name && bv->name && av->name != bv->name) {
                 if (av->name->length != bv->name->length) return false;
-                if (strncmp(av->name->chars, bv->name->chars, av->name->length) != 0) return false;
+                const char* av_name = safe_string_chars(av->name);
+                const char* bv_name = safe_string_chars(bv->name);
+                if (!av_name || !bv_name || strncmp(av_name, bv_name, av->name->length) != 0) return false;
             }
             if (av->field_count != bv->field_count) return false;
             for (int j = 0; j < av->field_count; j++) {
@@ -582,7 +595,9 @@ bool equalsType(Type* a, Type* b) {
                     if (!afn || !bfn) return false;
                     if (afn != bfn) {
                         if (afn->length != bfn->length) return false;
-                        if (strncmp(afn->chars, bfn->chars, afn->length) != 0) return false;
+                        const char* af_chars = safe_string_chars(afn);
+                        const char* bf_chars = safe_string_chars(bfn);
+                        if (!af_chars || !bf_chars || strncmp(af_chars, bf_chars, afn->length) != 0) return false;
                     }
                 }
                 if (!equalsType(av->field_types[j], bv->field_types[j])) return false;
@@ -628,7 +643,8 @@ bool type_assignable_to_extended(Type* from, Type* to) {
 static bool match_generic_name(const char* generic_name, ObjString* candidate) {
     if (!generic_name || !candidate) return false;
     if ((size_t)candidate->length != strlen(generic_name)) return false;
-    return strncmp(generic_name, candidate->chars, candidate->length) == 0;
+    const char* candidate_chars = safe_string_chars(candidate);
+    return candidate_chars && strncmp(generic_name, candidate_chars, candidate->length) == 0;
 }
 
 static Type* substitute_generics_internal(Type* type, ObjString** names,
@@ -895,7 +911,8 @@ Type* createStructType(ObjString* name, FieldInfo* fields, int fieldCount,
     if (!name) return NULL;
 
     ensure_type_registries();
-    Type* existing = findStructType(name->chars);
+    const char* name_chars = safe_string_chars(name);
+    Type* existing = findStructType(name_chars);
     if (existing) {
         return existing;
     }
@@ -921,7 +938,7 @@ Type* createStructType(ObjString* name, FieldInfo* fields, int fieldCount,
     set_type_extension(type, ext);
 
     if (struct_type_registry) {
-        hashmap_set(struct_type_registry, name->chars, type);
+        hashmap_set(struct_type_registry, name_chars, type);
     }
     return type;
 }
@@ -930,6 +947,8 @@ Type* createEnumType(ObjString* name, Variant* variants, int variant_count) {
     if (!name) return NULL;
 
     ensure_type_registries();
+
+    const char* name_chars = safe_string_chars(name);
 
     Type* type = arena_alloc(sizeof(Type));
     if (!type) return NULL;
@@ -948,7 +967,7 @@ Type* createEnumType(ObjString* name, Variant* variants, int variant_count) {
     set_type_extension(type, ext);
 
     if (enum_type_registry) {
-        hashmap_set(enum_type_registry, name->chars, type);
+        hashmap_set(enum_type_registry, name_chars, type);
     }
     return type;
 }
@@ -965,7 +984,10 @@ Type* createGenericType(ObjString* name) {
     size_t len = (size_t)name->length;
     type->info.generic.name = arena_alloc(len + 1);
     if (!type->info.generic.name) return NULL;
-    memcpy(type->info.generic.name, name->chars, len);
+    const char* name_chars = safe_string_chars(name);
+    if (name_chars) {
+        memcpy(type->info.generic.name, name_chars, len);
+    }
     type->info.generic.name[len] = '\0';
     type->info.generic.paramCount = 0;
     type->info.generic.params = NULL;

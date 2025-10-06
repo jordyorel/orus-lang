@@ -34,6 +34,9 @@ typedef enum {
 
 typedef struct StringRope {
     RopeKind kind;
+    size_t total_len;
+    uint32_t depth;
+    uint32_t refcount;
     union {
         struct {
             char* data;
@@ -45,8 +48,6 @@ typedef struct StringRope {
         struct {
             struct StringRope* left;
             struct StringRope* right;
-            size_t total_len;
-            uint32_t depth;
         } concat;
         struct {
             struct StringRope* base;
@@ -75,12 +76,20 @@ void freeStringBuilder(StringBuilder* sb);
 // Rope helpers
 StringRope* rope_from_cstr(const char* str, size_t len);
 StringRope* rope_from_buffer(char* buffer, size_t len, bool owns_data);
+StringRope* rope_concat(StringRope* left, StringRope* right);
+void rope_retain(StringRope* rope);
+void rope_release(StringRope* rope);
 char* rope_to_cstr(StringRope* rope);
 size_t rope_length(const StringRope* rope);
 bool rope_char_at(const StringRope* rope, size_t index, char* out);
 ObjString* string_char_at(ObjString* string, size_t index);
 
 ObjString* rope_index_to_string(StringRope* rope, size_t index);
+
+// String helpers
+const char* string_get_chars(ObjString* string);
+ObjString* allocateStringFromRope(StringRope* rope);
+ObjString* rope_concat_strings(ObjString* left, ObjString* right);
 
 
 // Interning

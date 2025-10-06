@@ -6,6 +6,7 @@
 
 
 #include "runtime/builtins.h"
+#include "vm/vm_string_ops.h"
 
 #include <ctype.h>
 #include <errno.h>
@@ -36,12 +37,17 @@ static const char* value_type_name(ValueType type) {
     }
 }
 
+static const char* get_string_chars(const ObjString* string) {
+    return string ? string_get_chars((ObjString*)string) : NULL;
+}
+
 static void format_string_preview(const ObjString* string, char* buffer, size_t size) {
     if (!buffer || size == 0) {
         return;
     }
 
-    if (!string || !string->chars) {
+    const char* chars = get_string_chars(string);
+    if (!chars) {
         snprintf(buffer, size, "<null string>");
         return;
     }
@@ -55,19 +61,20 @@ static void format_string_preview(const ObjString* string, char* buffer, size_t 
     }
 
     if (truncated) {
-        snprintf(buffer, size, "%.*s...", (int)copy_len, string->chars);
+        snprintf(buffer, size, "%.*s...", (int)copy_len, chars);
     } else {
-        snprintf(buffer, size, "%.*s", (int)copy_len, string->chars);
+        snprintf(buffer, size, "%.*s", (int)copy_len, chars);
     }
 }
 
 static bool string_contains_decimal_hint(const ObjString* string) {
-    if (!string || !string->chars) {
+    const char* chars = get_string_chars(string);
+    if (!chars) {
         return false;
     }
 
     for (int i = 0; i < string->length; i++) {
-        char c = string->chars[i];
+        char c = chars[i];
         if (c == '.' || c == 'e' || c == 'E') {
             return true;
         }
@@ -77,12 +84,12 @@ static bool string_contains_decimal_hint(const ObjString* string) {
 }
 
 static bool parse_int_string(const ObjString* string, int32_t* out_value, bool* out_overflow) {
-    if (!string || !string->chars || !out_value || !out_overflow) {
+    const char* start = get_string_chars(string);
+    if (!start || !out_value || !out_overflow) {
         return false;
     }
 
     errno = 0;
-    const char* start = string->chars;
     char* end = NULL;
     long value = strtol(start, &end, 10);
 
@@ -106,12 +113,12 @@ static bool parse_int_string(const ObjString* string, int32_t* out_value, bool* 
 }
 
 static bool parse_float_string(const ObjString* string, double* out_value, bool* out_overflow) {
-    if (!string || !string->chars || !out_value || !out_overflow) {
+    const char* start = get_string_chars(string);
+    if (!start || !out_value || !out_overflow) {
         return false;
     }
 
     errno = 0;
-    const char* start = string->chars;
     char* end = NULL;
     double value = strtod(start, &end);
 
