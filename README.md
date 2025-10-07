@@ -64,6 +64,13 @@ curl -fsSL https://github.com/jordyorel/orus-lang/releases/latest/download/orus-
   | tar -xz -O orus > "$HOME/.local/bin/orus"
 chmod 755 "$HOME/.local/bin/orus"
 
+# Confirm the download resolved to the newest tag
+curl -sI https://github.com/jordyorel/orus-lang/releases/latest/download/orus-macos-arm64.tar.gz \
+  | grep -i "^location:"
+
+# Verify the installed binary reports the latest version (replace the archive for your platform)
+"$HOME/.local/bin/orus" --version
+
 # Optional: install system-wide (requires sudo)
 curl -fsSL https://github.com/jordyorel/orus-lang/releases/latest/download/orus-macos-arm64.tar.gz \
   | tar -xz -O orus | sudo tee /usr/local/bin/orus >/dev/null \

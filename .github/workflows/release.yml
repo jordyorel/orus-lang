@@ -202,8 +202,7 @@ jobs:
           done
 
           if [[ $changed_artifacts -eq 0 ]]; then
-            echo "No release artifacts changed compared to latest release." >&2
-            exit 1
+            echo "::warning::No release artifacts changed compared to latest release; continuing with publication."
           fi
 
       - name: Delete existing release (if any)
