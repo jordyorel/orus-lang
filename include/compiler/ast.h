@@ -253,6 +253,8 @@ struct ASTNode {
             bool isMethod;                 // Whether function is defined in impl block
             bool isInstanceMethod;         // Whether method has implicit self receiver
             char* methodStructName;        // Owning struct for methods
+            bool hasCoreIntrinsic;         // Whether the function binds to a core intrinsic
+            char* coreIntrinsicSymbol;     // Symbol name for the bound intrinsic
         } function;
         struct {
             ASTNode* callee;               // Function expression

@@ -26,6 +26,7 @@ typedef enum {
     TOKEN_PLUS,
     TOKEN_QUESTION,
     TOKEN_SEMICOLON,
+    TOKEN_AT,
     TOKEN_SLASH,
     TOKEN_STAR,
     // One or two character tokens.

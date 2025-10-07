@@ -4,8 +4,76 @@ This roadmap defines how the Orus standard library will evolve under the **Rust-
 
 * **VM core** stays minimal.
 * **Performance-critical intrinsics** live in C.
-* **Stdlib modules** (disk-based `.orus` files) wrap those intrinsics.
-* Users only access functionality via `use module`, never by calling raw C hooks.
+## 🔍 Current Readiness Snapshot
+
+### ✅ Foundations already in place
+
+* **Module discovery is disk-backed and std-aware.** The runtime normalizes bare
+  module names to `std/<module>.orus`, adds the executable's `std/` directory to
+  the search roots, and merges any `ORUSPATH` overrides before resolving and
+  caching module paths.【F:src/vm/runtime/vm.c†L1208-L1354】
+* **Compiler bookkeeping for exports/imports exists.** Module compilation
+  records exports with type metadata, tracks imports, and enforces that only
+  value-like exports become bindings during `use` resolution.【F:src/compiler/backend/codegen/modules.c†L14-L214】
+* **Selective and namespace imports are supported.** The statement compiler
+  iterates module exports for `use math` and resolves explicit symbol lists with
+  helpful diagnostics when a module is missing.【F:src/compiler/backend/codegen/statements.c†L1023-L1089】
+* **Module manager API is ready for packaging.** Runtime modules maintain
+  register files, export tables, and a registry for fast lookup, which is
+  required for bundling stdlib bytecode once authored.【F:src/vm/module_manager.c†L168-L520】
+* **Regression tests cover current resolver behavior.** The suite confirms that
+  bundled `std/math.orus` resolves by default, selective imports expose only
+  the requested names, and `ORUSPATH` can introduce alternate trees.【F:tests/modules/resolver/default_std_import.orus†L1-L5】【F:tests/modules/resolver/selective_std_import.orus†L1-L4】【F:tests/modules/resolver/oruspath_override.orus†L1-L4】【F:tests/modules/resolver/README.md†L1-L15】
+
+### ⚠️ Gaps before executing this roadmap
+
+* **Attribute-based intrinsic binding is not implemented.** The planned
+  `@[core("...")]` syntax is currently documentation-only and will require
+  parser, type-checker, and codegen support before stdlib wrappers can call into
+  VM intrinsics.
+* **Stdlib modules are placeholders.** `std/math.orus` only offers integer
+  helpers needed for resolver tests; it lacks floating-point APIs, constants,
+  and visibility rules described later in this roadmap.【F:std/math.orus†L1-L8】
+* **Testing focuses on resolution, not semantics.** No math correctness or
+  encapsulation tests exist yet, so Phase 3 test plans in this document remain
+  TODO.
+* **Packaging workflow is manual.** While the runtime can load disk modules,
+  developer tooling for distributing, validating, and refreshing stdlib content
+  has not been scripted.
+
+### 🛠️ Proposed tasks to close readiness gaps
+
+1. **Implement attribute-bound intrinsics.**
+   * Extend the parser to accept `@[core("symbol")]` metadata on function
+     declarations and thread the attribute through the typed AST.
+   * Teach the type-checker to validate intrinsic signatures against the
+     corresponding VM declarations.
+   * Update codegen to emit trampoline stubs that dispatch to the registered
+     intrinsic during module linking.
+   * Add end-to-end tests covering missing attributes, mismatched signatures,
+     and successful intrinsic calls from `std/math`.
+
+2. **Author the real math module.**
+   * Replace the placeholder helpers with the full floating-point API (trig,
+     exponential, and constants) promised in Phase 2 of this roadmap.
+   * Document visibility for internal helpers and confirm that only intended
+     symbols export through `use math`.
+   * Provide regression tests for `math` wrappers to ensure values match the
+     VM intrinsics within an acceptable tolerance.
+
+3. **Broaden stdlib testing.**
+   * Add semantic tests that exercise math correctness, namespace hygiene, and
+     attribute error reporting in addition to the current resolver suite.
+   * Integrate the new tests into the CI matrix (or document the target harness
+     if automation is pending) so regressions surface immediately.
+
+4. **Automate stdlib packaging.**
+   * Script a build step that compiles `std/` sources into bytecode bundles and
+     copies them into release artifacts.
+   * Provide validation tooling (hashes or manifest checks) to ensure the
+     packaged stdlib matches the source tree.
+   * Document the workflow for contributors so publishing updates remains
+     consistent across platforms.
 
 ---
 

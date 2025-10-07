@@ -682,6 +682,8 @@ Token scan_token_ctx(LexerContext* ctx) {
             return make_token_ctx(ctx, TOKEN_RIGHT_BRACKET);
         case ';':
             return make_token_ctx(ctx, TOKEN_SEMICOLON);
+        case '@':
+            return make_token_ctx(ctx, TOKEN_AT);
         case ',':
             return make_token_ctx(ctx, TOKEN_COMMA);
         case '.':
@@ -834,6 +836,8 @@ Token scan_token() {
             return make_token(TOKEN_RIGHT_BRACKET);
         case ';':
             return make_token(TOKEN_SEMICOLON);
+        case '@':
+            return make_token(TOKEN_AT);
         case ',':
             return make_token(TOKEN_COMMA);
         case '.':
@@ -913,6 +917,7 @@ const char* token_type_to_string(TokenType type) {
         case TOKEN_PLUS: return "PLUS";
         case TOKEN_QUESTION: return "QUESTION";
         case TOKEN_SEMICOLON: return "SEMICOLON";
+        case TOKEN_AT: return "AT";
         case TOKEN_SLASH: return "SLASH";
         case TOKEN_STAR: return "STAR";
         case TOKEN_BANG_EQUAL: return "BANG_EQUAL";
