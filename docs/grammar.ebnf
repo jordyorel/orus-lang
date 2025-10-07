@@ -1,0 +1,256 @@
+(* Orus Language Grammar (EBNF) *)
+(*
+   This document mirrors the constructs supported by the current Orus parser
+   (see src/compiler/frontend/parser.c).  The grammar is indentation-sensitive
+   in the same way as Python: physical newlines that increase indentation yield
+   INDENT tokens, and decreases yield DEDENT tokens.  Blank lines and trailing
+   semicolons are ignored between statements.
+*)
+
+(* ------------------------------------------------------------------------- *)
+(* Lexical elements                                                             *)
+(* ------------------------------------------------------------------------- *)
+identifier        ::= letter { letter | digit | "_" }
+letter            ::= "_" | "a".."z" | "A".."Z"
+digit             ::= "0".."9"
+
+number_literal    ::= integer_literal [numeric_suffix]
+integer_literal   ::= digits | "0x" hex_digits | "0b" binary_digits | "0o" octal_digits
+                    | digits "." digits [exponent] | digits exponent
+numeric_suffix    ::= "i32" | "i64" | "u32" | "u64" | "f64"
+digits            ::= digit { digit | "_" }
+hex_digits        ::= hex_digit { hex_digit | "_" }
+hex_digit         ::= digit | "a".."f" | "A".."F"
+binary_digits     ::= binary_digit { binary_digit | "_" }
+binary_digit      ::= "0" | "1"
+octal_digits      ::= octal_digit { octal_digit | "_" }
+octal_digit       ::= "0".."7"
+exponent          ::= ("e" | "E") ["+" | "-"] digits
+
+string_literal    ::= '"' { character | escape_sequence } '"'
+character         ::= ? any Unicode scalar value except "\\" , '"' , and newline ?
+escape_sequence   ::= "\\" ( '"' | '\\' | 'n' | 'r' | 't' )
+boolean_literal   ::= "true" | "false"
+newline           ::= NEWLINE
+indent            ::= INDENT
+dedent            ::= DEDENT
+separator         ::= newline | ";"
+qualified_name    ::= identifier { "." identifier }
+
+keyword           ::= "fn" | "struct" | "enum" | "impl" | "pub" | "mut" | "return"
+                    | "if" | "elif" | "else" | "for" | "while" | "break" | "continue"
+                    | "match" | "try" | "catch" | "pass" | "use" | "in" | "as"
+                    | "print" | "and" | "or" | "not" | "matches"
+operator          ::= "+" | "-" | "*" | "/" | "%" | "==" | "!=" | "<" | "<=" | ">"
+                    | ">=" | "?" | ".." | "..=" | "=" | ":=" | "+=" | "-=" | "*="
+                    | "/=" | "%=" | "->" | "::" | "~"
+other_symbol      ::= "(" | ")" | "[" | "]" | "{" | "}" | ":" | "," | "'"
+
+(* ------------------------------------------------------------------------- *)
+(* Program structure                                                            *)
+(* ------------------------------------------------------------------------- *)
+program           ::= { separator | top_level_statement }
+
+top_level_statement
+                  ::= import_statement
+                    | pub_declaration
+                    | statement
+
+pub_declaration   ::= "pub" ( function_definition
+                             | struct_definition
+                             | enum_definition
+                             | impl_block
+                             | public_variable_binding )
+
+public_variable_binding
+                  ::= immutable_binding
+                    | "mut" identifier [":" type_expression] "=" expression
+
+(* ------------------------------------------------------------------------- *)
+(* Statements                                                                  *)
+(* ------------------------------------------------------------------------- *)
+statement         ::= labelled_loop
+                    | print_statement
+                    | pass_statement
+                    | try_statement
+                    | if_statement
+                    | while_statement
+                    | for_statement
+                    | match_statement
+                    | mut_binding
+                    | immutable_binding
+                    | destructuring_assignment
+                    | assignment_statement
+                    | struct_definition
+                    | enum_definition
+                    | impl_block
+                    | function_definition
+                    | import_statement
+                    | return_statement
+                    | expression_statement
+
+labelled_loop     ::= "'" identifier ":" ( while_statement | for_statement )
+
+print_statement   ::= "print" "(" [ argument_list ] ")"
+argument_list     ::= expression { "," expression }
+
+pass_statement    ::= "pass"
+
+try_statement     ::= "try" ":" suite "catch" [identifier] ":" suite
+
+if_statement      ::= "if" expression ":" suite { "elif" expression ":" suite } [ "else" ":" suite ]
+
+while_statement   ::= "while" expression ":" suite
+
+for_statement     ::= "for" identifier "in" ( range_expression | expression ) ":" suite
+range_expression  ::= expression ".." [ "=" ] expression [ ".." expression ]
+(* The third expression after the second ".." is the optional step. *)
+
+match_statement   ::= "match" expression ":" newline indent match_arm+ dedent
+
+match_arm         ::= match_pattern "->" match_arm_body [separator]
+match_arm_body    ::= suite | expression_statement
+
+mut_binding       ::= "mut" identifier [":" type_expression] "=" expression
+immutable_binding ::= identifier ":=" expression
+                    | identifier ":" type_expression binding_operator expression
+binding_operator  ::= "=" | ":="
+
+(* Destructuring assigns multiple identifiers from a tuple-like value. *)
+destructuring_assignment
+                  ::= identifier "," identifier { "," identifier } "=" expression
+
+assignment_statement
+                  ::= assignable assignment_operator expression
+assignment_operator
+                  ::= "=" | "+=" | "-=" | "*=" | "/=" | "%="
+assignable        ::= identifier
+                    | member_access
+                    | index_expression
+
+return_statement  ::= "return" [ return_values ]
+return_values     ::= expression { "," expression }
+
+expression_statement
+                  ::= expression
+
+suite             ::= newline indent block_statements dedent
+                    | inline_block
+block_statements  ::= statement { separator statement }
+inline_block      ::= statement { separator statement }
+(* Inline suites are used for single-line forms such as "if cond: statement". *)
+
+(* ------------------------------------------------------------------------- *)
+(* Imports and declarations                                                    *)
+(* ------------------------------------------------------------------------- *)
+import_statement  ::= "use" qualified_name [ "as" identifier ] [ import_targets ]
+import_targets    ::= ":" ( "*" | import_list )
+import_list       ::= import_alias { "," import_alias }
+import_alias      ::= identifier [ "as" identifier ]
+
+function_definition
+                  ::= "fn" identifier function_signature ":" suite
+function_signature::= parameter_list [ return_arrow ]
+parameter_list    ::= "(" [ parameter { "," parameter } ] ")"
+parameter         ::= identifier [ ":" type_expression ]
+return_arrow      ::= "->" type_expression_or_function
+
+struct_definition ::= "struct" identifier ":" newline indent struct_field+ dedent
+struct_field      ::= identifier ":" type_expression [ "=" expression ] [separator]
+
+enum_definition   ::= "enum" identifier [ generic_parameter_list ]
+                      ":" newline indent enum_variant+ dedent
+generic_parameter_list
+                  ::= "[" identifier { "," identifier } "]"
+enum_variant      ::= identifier [ "(" [ enum_payload { "," enum_payload } ] ")" ] [separator]
+enum_payload      ::= [ identifier ":" ] type_expression
+
+impl_block        ::= "impl" identifier ":" newline indent method_definition+ dedent
+method_definition ::= [ "pub" ] function_definition
+
+(* ------------------------------------------------------------------------- *)
+(* Expressions                                                                 *)
+(* ------------------------------------------------------------------------- *)
+expression        ::= assignment_expression
+assignment_expression
+                  ::= conditional_expression
+                    | assignable assignment_operator assignment_expression
+
+conditional_expression
+                  ::= ternary_expression
+ternary_expression::= inline_if_expression | cast_expression
+inline_if_expression
+                  ::= or_expression "if" expression { "elif" expression } "else" expression
+cast_expression   ::= or_expression { "as" type_expression }
+or_expression     ::= and_expression { "or" and_expression }
+and_expression    ::= equality_expression { "and" equality_expression }
+equality_expression
+                  ::= comparison_expression { ("==" | "!=" | "matches") comparison_expression }
+comparison_expression
+                  ::= additive_expression { ("<" | "<=" | ">" | ">=") additive_expression }
+additive_expression
+                  ::= multiplicative_expression { ("+" | "-") multiplicative_expression }
+multiplicative_expression
+                  ::= unary_expression { ("*" | "/" | "%") unary_expression }
+unary_expression  ::= ("-" | "not" | "~") unary_expression
+                    | postfix_expression
+postfix_expression::= primary_expression { call_suffix | index_suffix | member_suffix | struct_literal_suffix }
+call_suffix       ::= "(" [ argument_list ] ")"
+index_suffix      ::= "[" [ expression ] [ ".." [ expression ] [ ".." expression ] ] "]"
+member_suffix     ::= "." identifier
+struct_literal_suffix
+                  ::= "{" [ struct_literal_field { struct_field_separator struct_literal_field } [struct_field_separator] ] "}"
+struct_field_separator
+                  ::= "," | newline
+struct_literal_field
+                  ::= identifier ":" expression
+member_access     ::= postfix_expression member_suffix
+index_expression  ::= postfix_expression index_suffix
+
+primary_expression::= literal
+                    | identifier
+                    | "(" expression ")"
+                    | array_literal
+                    | function_expression
+                    | match_expression
+                    | "timestamp" "(" ")"
+literal           ::= number_literal | string_literal | boolean_literal | array_fill_literal
+
+array_literal     ::= "[" [ expression { "," expression } ["," ] ] "]"
+(* When exactly two expressions are provided with no trailing comma, the form
+   represents an array fill literal: [value, length_or_identifier]. *)
+array_fill_literal::= "[" expression "," (number_literal | identifier) "]"
+
+function_expression
+                  ::= "fn" function_signature ":" suite
+
+match_expression  ::= "match" expression ":" newline indent match_expression_arm+ dedent
+match_expression_arm
+                  ::= match_pattern "->" expression_suite [separator]
+expression_suite  ::= suite | expression_statement
+
+match_pattern     ::= "_"
+                    | qualified_name [ "(" [ match_payload { "," match_payload } ] ")" ]
+                    | expression
+match_payload     ::= identifier | "_"
+
+(* ------------------------------------------------------------------------- *)
+(* Types                                                                       *)
+(* ------------------------------------------------------------------------- *)
+type_expression   ::= function_type | postfix_type
+postfix_type      ::= primary_type [ "?" ] [ generic_arguments ]
+primary_type      ::= identifier
+                    | array_type
+array_type        ::= "[" type_expression [ "," ( number_literal | identifier ) ] "]"
+generic_arguments ::= "[" type_expression { "," type_expression } "]"
+function_type     ::= "fn" "(" [ type_expression { "," type_expression } ] ")" [ "->" type_expression_or_function ]
+
+type_expression_or_function
+                  ::= function_type | type_expression
+
+(* ------------------------------------------------------------------------- *)
+(* Helper productions                                                           *)
+(* ------------------------------------------------------------------------- *)
+match_expression_arm+, struct_field+, enum_variant+, method_definition+
+                  denote one-or-more repetitions separated by optional separators
+                  as described in their respective rules.
