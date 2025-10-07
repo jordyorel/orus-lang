@@ -15,6 +15,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
+#include <errno.h>
 #include <ctype.h>
 #include <inttypes.h>
 
@@ -43,6 +45,11 @@
 #include <time.h>
 #ifdef _WIN32
 #include <windows.h>
+#include <direct.h>
+#endif
+
+#ifndef _WIN32
+extern char* realpath(const char* path, char* resolved_path);
 #endif
 
 double get_time_vm(void) {
@@ -84,6 +91,29 @@ static bool load_module_list(const char* current_path, char** module_names, int 
 static bool has_orus_suffix(const char* text, size_t length);
 static char* infer_module_name_from_path(const char* path);
 static char* build_module_path(const char* base_path, const char* module_name);
+
+typedef struct ModuleCacheEntry {
+    char* key;
+    char* resolved_path;
+} ModuleCacheEntry;
+
+typedef enum ModuleRootKind {
+    MODULE_ROOT_DIRECT,
+    MODULE_ROOT_CALLER,
+    MODULE_ROOT_STD,
+    MODULE_ROOT_ENV,
+} ModuleRootKind;
+
+typedef struct ModuleSearchRoot {
+    char* path;
+    ModuleRootKind kind;
+} ModuleSearchRoot;
+
+static ModuleCacheEntry* module_cache_entries = NULL;
+static size_t module_cache_count = 0;
+static size_t module_cache_capacity = 0;
+
+static char* cached_executable_dir = NULL;
 
 
 // Value operations
@@ -695,44 +725,718 @@ static char* infer_module_name_from_path(const char* path) {
     return result;
 }
 
-static char* build_module_path(const char* base_path, const char* module_name) {
-    (void)base_path;
-    if (!module_name) {
+static bool is_absolute_path(const char* path) {
+    if (!path || !*path) {
+        return false;
+    }
+
+#ifdef _WIN32
+    if ((isalpha((unsigned char)path[0]) && path[1] == ':' &&
+         (path[2] == '\\' || path[2] == '/')) ||
+        (path[0] == '\\' && path[1] == '\\')) {
+        return true;
+    }
+#else
+    if (path[0] == '/') {
+        return true;
+    }
+#endif
+
+    return false;
+}
+
+static char* make_absolute_path(const char* path) {
+    if (!path) {
         return NULL;
     }
 
-    size_t name_len = strlen(module_name);
-    const char* suffix = ".orus";
-    size_t suffix_len = 5;  // strlen(".orus")
-    bool has_extension = has_orus_suffix(module_name, name_len);
-    size_t base_len = has_extension ? name_len - suffix_len : name_len;
-    size_t total_len = has_extension ? name_len + 1 : base_len + suffix_len + 1;
+#ifdef _WIN32
+    char buffer[MAX_PATH];
+    if (_fullpath(buffer, path, MAX_PATH)) {
+        return strdup(buffer);
+    }
 
+    if (is_absolute_path(path)) {
+        return strdup(path);
+    }
+
+    if (_getcwd(buffer, MAX_PATH)) {
+        size_t base_len = strlen(buffer);
+        size_t path_len = strlen(path);
+        size_t needs_sep = (base_len > 0 && buffer[base_len - 1] != '/' && buffer[base_len - 1] != '\\') ? 1 : 0;
+        size_t total_len = base_len + needs_sep + path_len + 1;
+        char* combined = (char*)malloc(total_len);
+        if (!combined) {
+            return NULL;
+        }
+        memcpy(combined, buffer, base_len);
+        size_t offset = base_len;
+        if (needs_sep) {
+            combined[offset++] = '/';
+        }
+        memcpy(combined + offset, path, path_len + 1);
+        return combined;
+    }
+
+    return strdup(path);
+#else
+    char* resolved = realpath(path, NULL);
+    if (resolved) {
+        return resolved;
+    }
+
+    if (is_absolute_path(path)) {
+        return strdup(path);
+    }
+
+    char cwd[PATH_MAX];
+    if (!getcwd(cwd, sizeof(cwd))) {
+        return strdup(path);
+    }
+
+    size_t base_len = strlen(cwd);
+    size_t path_len = strlen(path);
+    size_t needs_sep = (base_len > 0 && cwd[base_len - 1] != '/') ? 1 : 0;
+    size_t total_len = base_len + needs_sep + path_len + 1;
+    char* combined = (char*)malloc(total_len);
+    if (!combined) {
+        return NULL;
+    }
+
+    memcpy(combined, cwd, base_len);
+    size_t offset = base_len;
+    if (needs_sep) {
+        combined[offset++] = '/';
+    }
+    memcpy(combined + offset, path, path_len + 1);
+    return combined;
+#endif
+}
+
+static char* copy_dirname(const char* path) {
+    if (!path || !*path) {
+        return NULL;
+    }
+
+    char* absolute = make_absolute_path(path);
+    if (!absolute) {
+        return NULL;
+    }
+
+    struct stat st;
+    if (stat(absolute, &st) == 0 && S_ISDIR(st.st_mode)) {
+        size_t len = strlen(absolute);
+        while (len > 1 && (absolute[len - 1] == '/' || absolute[len - 1] == '\\')) {
+            absolute[len - 1] = '\0';
+            len--;
+        }
+        return absolute;
+    }
+
+    size_t len = strlen(absolute);
+    while (len > 0 && (absolute[len - 1] == '/' || absolute[len - 1] == '\\')) {
+        absolute[len - 1] = '\0';
+        len--;
+    }
+
+    char* last_sep = NULL;
+    for (char* cursor = absolute; *cursor; ++cursor) {
+        if (*cursor == '/' || *cursor == '\\') {
+            last_sep = cursor;
+        }
+    }
+
+    if (!last_sep) {
+        free(absolute);
+        return make_absolute_path(".");
+    }
+
+#ifdef _WIN32
+    if (last_sep == absolute && absolute[1] == '\0') {
+        return absolute;
+    }
+    if (last_sep > absolute && last_sep[-1] == ':') {
+        last_sep[1] = '\0';
+        return absolute;
+    }
+#else
+    if (last_sep == absolute) {
+        last_sep[1] = '\0';
+        return absolute;
+    }
+#endif
+
+    *last_sep = '\0';
+    return absolute;
+}
+
+static char* join_paths(const char* base, const char* relative) {
+    if (!relative) {
+        return NULL;
+    }
+
+    if (!base || !*base) {
+        return strdup(relative);
+    }
+
+    if (is_absolute_path(relative)) {
+        return strdup(relative);
+    }
+
+    size_t base_len = strlen(base);
+    size_t relative_len = strlen(relative);
+    bool base_has_sep = base_len > 0 && (base[base_len - 1] == '/' || base[base_len - 1] == '\\');
+    size_t relative_start = (relative_len > 0 && (relative[0] == '/' || relative[0] == '\\')) ? 1 : 0;
+    if (relative_len <= relative_start) {
+        return strdup(base);
+    }
+
+    size_t total_len = base_len + (base_has_sep || relative_start ? 0 : 1) + (relative_len - relative_start) + 1;
     char* result = (char*)malloc(total_len);
     if (!result) {
         return NULL;
     }
 
-    size_t out_index = 0;
-    for (size_t i = 0; i < base_len; ++i) {
-        char ch = module_name[i];
-        if (ch == '.' || ch == '/' || ch == '\\') {
-            if (out_index == 0 || result[out_index - 1] == '/') {
-                continue;
-            }
-            result[out_index++] = '/';
-        } else {
-            result[out_index++] = ch;
+    memcpy(result, base, base_len);
+    size_t offset = base_len;
+    if (!base_has_sep && !relative_start) {
+        result[offset++] = '/';
+    }
+    memcpy(result + offset, relative + relative_start, relative_len - relative_start + 1);
+    return result;
+}
+
+static bool path_exists(const char* path) {
+    if (!path) {
+        return false;
+    }
+
+    struct stat st;
+    return stat(path, &st) == 0 && S_ISREG(st.st_mode);
+}
+
+static bool append_search_root(ModuleSearchRoot** roots, size_t* count, size_t* capacity,
+                               const char* path, ModuleRootKind kind) {
+    if (!path || !*path) {
+        return true;
+    }
+
+    for (size_t i = 0; i < *count; ++i) {
+        if ((*roots)[i].path && strcmp((*roots)[i].path, path) == 0) {
+            return true;
         }
     }
 
-    if (has_extension) {
-        memcpy(result + out_index, module_name + base_len, suffix_len + 1);
-    } else {
-        memcpy(result + out_index, suffix, suffix_len + 1);
+    if (*count == *capacity) {
+        size_t new_capacity = *capacity == 0 ? 4 : (*capacity * 2);
+        ModuleSearchRoot* resized = (ModuleSearchRoot*)realloc(*roots, sizeof(ModuleSearchRoot) * new_capacity);
+        if (!resized) {
+            return false;
+        }
+        *roots = resized;
+        *capacity = new_capacity;
     }
 
-    return result;
+    char* copy = strdup(path);
+    if (!copy) {
+        return false;
+    }
+
+    (*roots)[*count].path = copy;
+    (*roots)[*count].kind = kind;
+    (*count)++;
+    return true;
+}
+
+static void free_search_roots(ModuleSearchRoot* roots, size_t count) {
+    if (!roots) {
+        return;
+    }
+
+    for (size_t i = 0; i < count; ++i) {
+        free(roots[i].path);
+        roots[i].path = NULL;
+    }
+    free(roots);
+}
+
+static char* trim_whitespace_in_place(char* text) {
+    if (!text) {
+        return NULL;
+    }
+
+    while (*text && isspace((unsigned char)*text)) {
+        text++;
+    }
+
+    size_t len = strlen(text);
+    while (len > 0 && isspace((unsigned char)text[len - 1])) {
+        text[len - 1] = '\0';
+        len--;
+    }
+
+    return text;
+}
+
+static bool append_string(char*** list, size_t* count, size_t* capacity, const char* value) {
+    if (!value) {
+        return true;
+    }
+
+    if (*count == *capacity) {
+        size_t new_capacity = *capacity == 0 ? 4 : (*capacity * 2);
+        char** resized = (char**)realloc(*list, sizeof(char*) * new_capacity);
+        if (!resized) {
+            return false;
+        }
+        *list = resized;
+        *capacity = new_capacity;
+    }
+
+    (*list)[*count] = strdup(value);
+    if (!(*list)[*count]) {
+        return false;
+    }
+    (*count)++;
+    return true;
+}
+
+static void free_string_list(char** list, size_t count) {
+    if (!list) {
+        return;
+    }
+
+    for (size_t i = 0; i < count; ++i) {
+        free(list[i]);
+    }
+    free(list);
+}
+
+static char** collect_oruspath_entries(size_t* out_count) {
+    if (out_count) {
+        *out_count = 0;
+    }
+
+    const char* env = getenv("ORUSPATH");
+    if (!env || !*env) {
+        return NULL;
+    }
+
+    char separator = ':';
+#ifdef _WIN32
+    separator = ';';
+#endif
+
+    char* copy = strdup(env);
+    if (!copy) {
+        return NULL;
+    }
+
+    char** entries = NULL;
+    size_t count = 0;
+    size_t capacity = 0;
+
+    char* cursor = copy;
+    while (cursor && *cursor) {
+        char* next = strchr(cursor, separator);
+        if (next) {
+            *next = '\0';
+            next++;
+        }
+
+        char* trimmed = trim_whitespace_in_place(cursor);
+        if (trimmed && *trimmed) {
+            if (!append_string(&entries, &count, &capacity, trimmed)) {
+                free_string_list(entries, count);
+                free(copy);
+                return NULL;
+            }
+        }
+
+        cursor = next;
+    }
+
+    free(copy);
+
+    if (out_count) {
+        *out_count = count;
+    }
+    return entries;
+}
+
+static char* get_executable_directory(void) {
+    if (cached_executable_dir) {
+        return cached_executable_dir;
+    }
+
+#ifdef _WIN32
+    char buffer[MAX_PATH];
+    DWORD len = GetModuleFileNameA(NULL, buffer, MAX_PATH);
+    if (len > 0 && len < MAX_PATH) {
+        buffer[len] = '\0';
+        cached_executable_dir = copy_dirname(buffer);
+        if (cached_executable_dir) {
+            return cached_executable_dir;
+        }
+    }
+#else
+    char buffer[PATH_MAX];
+    ssize_t len = readlink("/proc/self/exe", buffer, sizeof(buffer) - 1);
+    if (len != -1) {
+        buffer[len] = '\0';
+        cached_executable_dir = copy_dirname(buffer);
+        if (cached_executable_dir) {
+            return cached_executable_dir;
+        }
+    }
+#endif
+
+    cached_executable_dir = make_absolute_path(".");
+    return cached_executable_dir;
+}
+
+static const char* module_cache_lookup(const char* key) {
+    if (!key) {
+        return NULL;
+    }
+
+    for (size_t i = 0; i < module_cache_count; ++i) {
+        if (module_cache_entries[i].key && strcmp(module_cache_entries[i].key, key) == 0) {
+            return module_cache_entries[i].resolved_path;
+        }
+    }
+    return NULL;
+}
+
+static bool module_cache_store(const char* key, const char* path) {
+    if (!key || !path) {
+        return false;
+    }
+
+    if (module_cache_lookup(key)) {
+        return true;
+    }
+
+    if (module_cache_count == module_cache_capacity) {
+        size_t new_capacity = module_cache_capacity == 0 ? 8 : (module_cache_capacity * 2);
+        ModuleCacheEntry* resized = (ModuleCacheEntry*)realloc(module_cache_entries,
+                                                              sizeof(ModuleCacheEntry) * new_capacity);
+        if (!resized) {
+            return false;
+        }
+        module_cache_entries = resized;
+        module_cache_capacity = new_capacity;
+    }
+
+    char* key_copy = strdup(key);
+    char* path_copy = strdup(path);
+    if (!key_copy || !path_copy) {
+        free(key_copy);
+        free(path_copy);
+        return false;
+    }
+
+    module_cache_entries[module_cache_count].key = key_copy;
+    module_cache_entries[module_cache_count].resolved_path = path_copy;
+    module_cache_count++;
+    return true;
+}
+
+static char* make_cache_key(const char* prefix, const char* normalized) {
+    if (!normalized) {
+        return NULL;
+    }
+
+    if (!prefix || !*prefix) {
+        return strdup(normalized);
+    }
+
+    size_t prefix_len = strlen(prefix);
+    size_t normalized_len = strlen(normalized);
+    size_t total_len = prefix_len + 1 + normalized_len + 1;
+    char* buffer = (char*)malloc(total_len);
+    if (!buffer) {
+        return NULL;
+    }
+
+    memcpy(buffer, prefix, prefix_len);
+    buffer[prefix_len] = '|';
+    memcpy(buffer + prefix_len + 1, normalized, normalized_len + 1);
+    return buffer;
+}
+
+static void report_module_resolution_failure(const char* module_name, const char* normalized,
+                                             char** roots, size_t root_count) {
+    const char* header = "  - %s\n";
+    size_t buffer_len = 0;
+    for (size_t i = 0; i < root_count; ++i) {
+        buffer_len += strlen(roots[i]) + strlen(header);
+    }
+
+    if (root_count == 0) {
+        buffer_len += strlen("  - <none>\n");
+    }
+
+    char* summary = (char*)malloc(buffer_len + 1);
+    if (!summary) {
+        summary = strdup("  - <memory error>\n");
+    }
+
+    if (summary) {
+        summary[0] = '\0';
+        if (root_count == 0) {
+            strcpy(summary, "  - <none>\n");
+        } else {
+            for (size_t i = 0; i < root_count; ++i) {
+                strcat(summary, "  - ");
+                strcat(summary, roots[i]);
+                strcat(summary, "\n");
+            }
+        }
+    }
+
+    runtimeError(ERROR_IMPORT, CURRENT_LOCATION(),
+                 "Unable to resolve module '%s'. Normalized path '%s'.\nSearch roots tried:\n%s"
+                 "Hint: Set the ORUSPATH environment variable to add additional module directories.",
+                 module_name ? module_name : "<unknown>",
+                 normalized ? normalized : "<unknown>",
+                 summary ? summary : "  - <none>\n");
+
+    free(summary);
+}
+
+static char* normalize_module_name(const char* module_name) {
+    if (!module_name || !*module_name) {
+        return NULL;
+    }
+
+    size_t name_len = strlen(module_name);
+    bool has_extension = has_orus_suffix(module_name, name_len);
+    size_t suffix_len = 5;  // strlen(".orus")
+    size_t base_len = has_extension ? name_len - suffix_len : name_len;
+
+    bool has_separator = false;
+    for (size_t i = 0; i < base_len; ++i) {
+        char ch = module_name[i];
+        if (ch == '.' || ch == '/' || ch == '\\') {
+            has_separator = true;
+            break;
+        }
+    }
+
+    const char* prefix = NULL;
+    size_t prefix_len = 0;
+    if (!has_separator) {
+        prefix = "std/";
+        prefix_len = 4;
+    }
+
+    size_t total_len = prefix_len + base_len + (has_extension ? suffix_len : suffix_len) + 1;
+    char* normalized = (char*)malloc(total_len);
+    if (!normalized) {
+        return NULL;
+    }
+
+    size_t offset = 0;
+    if (prefix) {
+        memcpy(normalized, prefix, prefix_len);
+        offset = prefix_len;
+    }
+
+    for (size_t i = 0; i < base_len; ++i) {
+        char ch = module_name[i];
+        if (ch == '.' || ch == '/' || ch == '\\') {
+            if (offset > 0 && normalized[offset - 1] == '/') {
+                continue;
+            }
+            normalized[offset++] = '/';
+        } else {
+            normalized[offset++] = ch;
+        }
+    }
+
+    if (!has_extension) {
+        memcpy(normalized + offset, ".orus", suffix_len + 1);
+    } else {
+        memcpy(normalized + offset, module_name + base_len, suffix_len + 1);
+    }
+
+    return normalized;
+}
+
+static char* build_module_path(const char* base_path, const char* module_name) {
+    if (!module_name) {
+        return NULL;
+    }
+
+    char* normalized = normalize_module_name(module_name);
+    if (!normalized) {
+        return NULL;
+    }
+
+    char* caller_dir = copy_dirname(base_path);
+    char* caller_key = make_cache_key(caller_dir, normalized);
+    char* global_key = make_cache_key(NULL, normalized);
+
+    const char* cached_path = caller_key ? module_cache_lookup(caller_key) : NULL;
+    if (!cached_path) {
+        cached_path = module_cache_lookup(global_key);
+    }
+
+    if (cached_path) {
+        char* result = strdup(cached_path);
+        free(normalized);
+        free(caller_dir);
+        free(caller_key);
+        free(global_key);
+        return result;
+    }
+
+    char** root_descriptions = NULL;
+    size_t root_description_count = 0;
+    size_t root_description_capacity = 0;
+
+    ModuleSearchRoot* roots = NULL;
+    size_t root_count = 0;
+    size_t root_capacity = 0;
+
+    if (caller_dir) {
+        append_search_root(&roots, &root_count, &root_capacity, caller_dir, MODULE_ROOT_CALLER);
+    }
+
+    char* exe_dir = get_executable_directory();
+    if (exe_dir) {
+        char* std_dir = join_paths(exe_dir, "std");
+        if (std_dir) {
+            append_search_root(&roots, &root_count, &root_capacity, std_dir, MODULE_ROOT_STD);
+            free(std_dir);
+        }
+    }
+
+    size_t env_count = 0;
+    char** env_entries = collect_oruspath_entries(&env_count);
+    for (size_t i = 0; i < env_count; ++i) {
+        append_search_root(&roots, &root_count, &root_capacity, env_entries[i], MODULE_ROOT_ENV);
+    }
+
+    char* resolved = NULL;
+    ModuleRootKind resolved_kind = MODULE_ROOT_DIRECT;
+
+    if (path_exists(normalized)) {
+        resolved = make_absolute_path(normalized);
+        resolved_kind = MODULE_ROOT_DIRECT;
+    }
+
+    for (size_t i = 0; !resolved && i < root_count; ++i) {
+        char* candidate = join_paths(roots[i].path, normalized);
+        if (candidate && path_exists(candidate)) {
+            resolved = make_absolute_path(candidate);
+            resolved_kind = roots[i].kind;
+        }
+        free(candidate);
+    }
+
+    if (resolved) {
+        if (resolved_kind == MODULE_ROOT_CALLER && caller_key) {
+            module_cache_store(caller_key, resolved);
+        } else if (global_key) {
+            module_cache_store(global_key, resolved);
+        }
+
+        free_string_list(env_entries, env_count);
+        free_search_roots(roots, root_count);
+        free(normalized);
+        free(caller_dir);
+        free(caller_key);
+        free(global_key);
+        free_string_list(root_descriptions, root_description_count);
+        return resolved;
+    }
+
+    if (is_absolute_path(normalized)) {
+        size_t needed = strlen(normalized) + strlen(" (explicit path)") + 1;
+        char* entry = (char*)malloc(needed);
+        if (entry) {
+            snprintf(entry, needed, "%s (explicit path)", normalized);
+            append_string(&root_descriptions, &root_description_count, &root_description_capacity,
+                          entry);
+            free(entry);
+        } else {
+            append_string(&root_descriptions, &root_description_count, &root_description_capacity,
+                          normalized);
+        }
+    } else {
+#ifdef _WIN32
+        char cwd_buffer[MAX_PATH];
+        if (_getcwd(cwd_buffer, MAX_PATH)) {
+            size_t needed = strlen(cwd_buffer) + 1 + strlen(normalized) + strlen(" (current working directory)") + 1;
+            char* cwd_entry = (char*)malloc(needed);
+            if (cwd_entry) {
+                snprintf(cwd_entry, needed, "%s/%s (current working directory)", cwd_buffer, normalized);
+                append_string(&root_descriptions, &root_description_count, &root_description_capacity,
+                              cwd_entry);
+                free(cwd_entry);
+            }
+        } else {
+            append_string(&root_descriptions, &root_description_count, &root_description_capacity,
+                          normalized);
+        }
+#else
+        char cwd_buffer[PATH_MAX];
+        if (getcwd(cwd_buffer, sizeof(cwd_buffer))) {
+            size_t needed = strlen(cwd_buffer) + 1 + strlen(normalized) + strlen(" (current working directory)") + 1;
+            char* cwd_entry = (char*)malloc(needed);
+            if (cwd_entry) {
+                snprintf(cwd_entry, needed, "%s/%s (current working directory)", cwd_buffer, normalized);
+                append_string(&root_descriptions, &root_description_count, &root_description_capacity,
+                              cwd_entry);
+                free(cwd_entry);
+            }
+        } else {
+            append_string(&root_descriptions, &root_description_count, &root_description_capacity,
+                          normalized);
+        }
+#endif
+    }
+
+    for (size_t i = 0; i < root_count; ++i) {
+        const char* label = "module search root";
+        switch (roots[i].kind) {
+            case MODULE_ROOT_CALLER:
+                label = "importer directory";
+                break;
+            case MODULE_ROOT_STD:
+                label = "stdlib directory";
+                break;
+            case MODULE_ROOT_ENV:
+                label = "ORUSPATH entry";
+                break;
+            default:
+                break;
+        }
+
+        size_t needed = strlen(roots[i].path) + strlen(label) + 4;
+        char* entry = (char*)malloc(needed);
+        if (entry) {
+            snprintf(entry, needed, "%s (%s)", roots[i].path, label);
+            append_string(&root_descriptions, &root_description_count, &root_description_capacity, entry);
+            free(entry);
+        } else {
+            append_string(&root_descriptions, &root_description_count, &root_description_capacity,
+                          roots[i].path);
+        }
+    }
+
+    report_module_resolution_failure(module_name, normalized, root_descriptions, root_description_count);
+
+    free_string_list(env_entries, env_count);
+    free_search_roots(roots, root_count);
+    free_string_list(root_descriptions, root_description_count);
+    free(normalized);
+    free(caller_dir);
+    free(caller_key);
+    free(global_key);
+    return NULL;
 }
 
 static void free_module_imports(char** names, int count) {
@@ -799,7 +1503,7 @@ static bool load_module_list(const char* current_path, char** module_names, int 
             return false;
         }
 
-        InterpretResult result = interpret_module(dep_path);
+        InterpretResult result = interpret_module(dep_path, module_names[i]);
         free(dep_path);
         if (result != INTERPRET_OK) {
             return false;
@@ -809,7 +1513,7 @@ static bool load_module_list(const char* current_path, char** module_names, int 
     return true;
 }
 
-InterpretResult interpret_module(const char* path) {
+InterpretResult interpret_module(const char* path, const char* module_name_hint) {
     InterpretResult result = INTERPRET_COMPILE_ERROR;
     bool pushed = false;
     bool chunk_initialized = false;
@@ -854,7 +1558,14 @@ InterpretResult interpret_module(const char* path) {
     if (!fileName) fileName = path;
     else fileName++; // Skip the separator
 
-    module_name = infer_module_name_from_path(path);
+    if (module_name_hint) {
+        module_name = strdup(module_name_hint);
+    }
+
+    if (!module_name) {
+        module_name = infer_module_name_from_path(path);
+    }
+
     if (!module_name && fileName) {
         size_t name_len = strlen(fileName);
         module_name = (char*)malloc(name_len + 1);

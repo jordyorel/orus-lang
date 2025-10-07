@@ -1,0 +1,4 @@
+use extra.utils as extra
+
+message = extra.greet("resolver")
+print(message)
