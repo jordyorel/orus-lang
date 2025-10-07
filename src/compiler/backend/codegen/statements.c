@@ -1569,6 +1569,15 @@ int compile_assignment_internal(CompilerContext* ctx, TypedASTNode* assign,
             return -1;
         }
 
+        if (ctx->is_module && !ctx->compiling_function && var_name) {
+            Type* export_type = value_type ? value_type : assign->resolvedType;
+            if (!export_type) {
+                export_type = getPrimitiveType(TYPE_ANY);
+            }
+            record_module_export(ctx, var_name, MODULE_EXPORT_KIND_GLOBAL, export_type);
+            set_module_export_metadata(ctx, var_name, var_reg, export_type);
+        }
+
         set_location_from_node(ctx, assign);
         emit_move(ctx, var_reg, value_reg);
         compiler_free_temp(ctx->allocator, value_reg);
