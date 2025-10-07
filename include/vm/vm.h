@@ -1210,7 +1210,7 @@ void initDispatchTable(void);
 InterpretResult interpret(const char* source);
 
 /** Execute an Orus module loaded from disk. */
-InterpretResult interpret_module(const char* path);
+InterpretResult interpret_module(const char* path, const char* module_name);
 
 // Chunk operations
 void initChunk(Chunk* chunk);

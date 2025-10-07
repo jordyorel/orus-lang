@@ -1,0 +1,4 @@
+use math: PI, add
+
+print(add(5, 7) == 12)
+print(PI == 314)

@@ -1,0 +1,8 @@
+// Minimal standard math module for resolver tests
+pub PI:i32 := 314
+
+pub fn add(left: i32, right: i32) -> i32:
+    return left + right
+
+pub fn scale(value: i32, factor: i32) -> i32:
+    return value * factor
