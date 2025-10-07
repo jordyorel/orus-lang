@@ -781,7 +781,7 @@ dist:
 package: $(ORUS)
 	@mkdir -p $(DIST_DIR)
 	@echo "Packaging $(DIST_ARCHIVE)..."
-	@tar -czf $(DIST_ARCHIVE) $(ORUS) LICENSE
+	@tar -czf $(DIST_ARCHIVE) $(ORUS) LICENSE std
 	@echo "✓ Package ready: $(DIST_ARCHIVE)"
 
 # Clean build artifacts
