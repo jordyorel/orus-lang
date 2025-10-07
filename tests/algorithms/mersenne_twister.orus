@@ -1,0 +1,207 @@
+// Phase 3 algorithm suite: Mersenne Twister MT19937 implementation and validation.
+// Ensures the interpreter can execute a full-featured PRNG with tempering and twisting.
+
+print("== Mersenne Twister RNG ==")
+
+N:i32 := 624
+M:i32 := 397
+MATRIX_A:u32 := 0x9908b0df as u32
+UPPER_MASK:u32 := 2147483648u32
+LOWER_MASK:u32 := 2147483647u32
+TEMPERING_MASK_B:u32 := 2636928640u32
+TEMPERING_MASK_C:u32 := 4022730752u32
+TWO_POW_32:u64 := 4294967296u64
+
+mut MT_STATE: [u32] = []
+mut MT_INDEX: i32 = N
+mut MT_INITIALIZED: bool = false
+
+fn ensure_state_allocated():
+    if len(MT_STATE) == 0:
+        mut i: i32 = 0
+        while i < N:
+            push(MT_STATE, 0u32)
+            i = i + 1
+
+fn modulo_u32(value: u64) -> u32:
+    return (value % TWO_POW_32) as u32
+
+fn add_mod_u32(a: u32, b: u32) -> u32:
+    total: u64 = (a as u64) + (b as u64)
+    return modulo_u32(total)
+
+fn mul_mod_u32(a: u32, b: u32) -> u32:
+    product: u64 = (a as u64) * (b as u64)
+    return modulo_u32(product)
+
+fn bit_xor_u32(a: u32, b: u32) -> u32:
+    mut result: u32 = 0u32
+    mut bit_value: u32 = 1u32
+    mut a_remaining: u32 = a
+    mut b_remaining: u32 = b
+    mut i: i32 = 0
+    while i < 32:
+        a_bit: u32 = a_remaining % 2u32
+        b_bit: u32 = b_remaining % 2u32
+        if ((a_bit + b_bit) % 2u32) == 1u32:
+            result = result + bit_value
+        a_remaining = a_remaining / 2u32
+        b_remaining = b_remaining / 2u32
+        bit_value = bit_value * 2u32
+        i = i + 1
+    return result
+
+fn bit_and_u32(a: u32, b: u32) -> u32:
+    mut result: u32 = 0u32
+    mut bit_value: u32 = 1u32
+    mut a_remaining: u32 = a
+    mut b_remaining: u32 = b
+    mut i: i32 = 0
+    while i < 32:
+        a_bit: u32 = a_remaining % 2u32
+        b_bit: u32 = b_remaining % 2u32
+        if a_bit == 1u32 and b_bit == 1u32:
+            result = result + bit_value
+        a_remaining = a_remaining / 2u32
+        b_remaining = b_remaining / 2u32
+        bit_value = bit_value * 2u32
+        i = i + 1
+    return result
+
+fn bit_or_u32(a: u32, b: u32) -> u32:
+    mut result: u32 = 0u32
+    mut bit_value: u32 = 1u32
+    mut a_remaining: u32 = a
+    mut b_remaining: u32 = b
+    mut i: i32 = 0
+    while i < 32:
+        a_bit: u32 = a_remaining % 2u32
+        b_bit: u32 = b_remaining % 2u32
+        if a_bit == 1u32 or b_bit == 1u32:
+            result = result + bit_value
+        a_remaining = a_remaining / 2u32
+        b_remaining = b_remaining / 2u32
+        bit_value = bit_value * 2u32
+        i = i + 1
+    return result
+
+fn shift_right_u32(value: u32, amount: i32) -> u32:
+    mut current: u32 = value
+    mut i: i32 = 0
+    while i < amount:
+        current = current / 2u32
+        i = i + 1
+    return current
+
+fn shift_left_u32(value: u32, amount: i32) -> u32:
+    mut current: u32 = value
+    mut i: i32 = 0
+    while i < amount:
+        doubled: u64 = (current as u64) * 2u64
+        current = modulo_u32(doubled)
+        i = i + 1
+    return current
+
+fn mt_seed(seed: u32):
+    ensure_state_allocated()
+    MT_STATE[0] = seed
+    mut i: i32 = 1
+    while i < N:
+        previous: u32 = MT_STATE[i - 1]
+        shifted = shift_right_u32(previous, 30)
+        mixed = bit_xor_u32(previous, shifted)
+        multiplied = mul_mod_u32(1812433253u32, mixed)
+        increment = add_mod_u32(multiplied, (i as u32))
+        MT_STATE[i] = increment
+        i = i + 1
+    MT_INDEX = N
+    MT_INITIALIZED = true
+
+fn mt_twist():
+    ensure_state_allocated()
+    mut i: i32 = 0
+    while i < N:
+        mut next_index: i32 = i + 1
+        if next_index >= N:
+            next_index = 0
+        mut y: u32 = bit_or_u32(bit_and_u32(MT_STATE[i], UPPER_MASK), bit_and_u32(MT_STATE[next_index], LOWER_MASK))
+        y_shifted = shift_right_u32(y, 1)
+        mut m_index: i32 = i + M
+        if m_index >= N:
+            m_index = m_index - N
+        new_value = bit_xor_u32(MT_STATE[m_index], y_shifted)
+        if (y % 2u32) != 0u32:
+            new_value = bit_xor_u32(new_value, MATRIX_A)
+        MT_STATE[i] = new_value
+        i = i + 1
+    MT_INDEX = 0
+
+fn ensure_seeded():
+    if not MT_INITIALIZED:
+        mt_seed(5489u32)
+
+fn mt_extract_number() -> u32:
+    ensure_seeded()
+    if MT_INDEX >= N:
+        mt_twist()
+    mut y: u32 = MT_STATE[MT_INDEX]
+    MT_INDEX = MT_INDEX + 1
+
+    y = bit_xor_u32(y, shift_right_u32(y, 11))
+    y = bit_xor_u32(y, bit_and_u32(shift_left_u32(y, 7), TEMPERING_MASK_B))
+    y = bit_xor_u32(y, bit_and_u32(shift_left_u32(y, 15), TEMPERING_MASK_C))
+    y = bit_xor_u32(y, shift_right_u32(y, 18))
+    return y
+
+fn generate_sequence(seed: u32, count: i32) -> [u32]:
+    mt_seed(seed)
+    mut values: [u32] = []
+    mut i: i32 = 0
+    while i < count:
+        push(values, mt_extract_number())
+        i = i + 1
+    return values
+
+fn ensure_varying(values: [u32]) -> bool:
+    if len(values) <= 1:
+        return false
+    mut different: bool = false
+    mut i: i32 = 1
+    while i < len(values):
+        if values[i] != values[i - 1]:
+            different = true
+        i = i + 1
+    return different
+
+expected_default: [u32] = [3499211612u32, 581869302u32, 3890346734u32, 3586334585u32, 545404204u32, 4161255391u32, 3922919429u32, 949333985u32, 2715962298u32, 1323567403u32]
+expected_custom: [u32] = [822569775u32, 2137449171u32, 2671936806u32, 3512589365u32, 1880026316u32, 2629000564u32, 3373089432u32, 3312965625u32, 3349970575u32, 3696548529u32]
+
+default_sequence = generate_sequence(5489u32, 10)
+if assert_eq("mt default sequence", default_sequence, expected_default):
+    print("ok", "mt default sequence")
+
+custom_sequence = generate_sequence(1234u32, 10)
+if assert_eq("mt custom sequence", custom_sequence, expected_custom):
+    print("ok", "mt custom sequence")
+
+if assert_eq("mt varying outputs", ensure_varying(default_sequence), true):
+    print("ok", "mt varying outputs")
+
+mut differences: i32 = 0
+mut idx: i32 = 0
+while idx < len(default_sequence):
+    if default_sequence[idx] != custom_sequence[idx]:
+        differences = differences + 1
+    idx = idx + 1
+
+if assert_eq("mt distinct seeds", differences > 0, true):
+    print("ok", "mt distinct seeds")
+
+
+print("Default seed 5489 sequence:")
+for v in default_sequence:
+    print(v)
+
+print("Custom seed 1234 sequence:")
+for v in custom_sequence:
+    print(v)
