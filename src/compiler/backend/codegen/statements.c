@@ -3369,6 +3369,11 @@ void compile_for_iter_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     int has_value_reg = -1;
     int typed_hint_iter_reg = -1;
     int typed_hint_loop_reg = -1;
+    SymbolTable* old_scope = ctx->symbols;
+    bool created_scope = false;
+    ScopeFrame* lexical_frame = NULL;
+    int lexical_frame_index = -1;
+    bool loop_var_registered = false;
 
     // Compile iterable expression
     iterable_reg = compile_expression(ctx, for_stmt->typed.forIter.iterable);
@@ -3404,7 +3409,33 @@ void compile_for_iter_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
         ctx->has_compilation_errors = true;
         goto cleanup;
     }
-    
+
+    // Create a dedicated lexical scope for the loop variable so it doesn't
+    // leak into the surrounding scope. This mirrors the range-loop behaviour.
+    SymbolTable* loop_scope = create_symbol_table(old_scope);
+    if (!loop_scope) {
+        DEBUG_CODEGEN_PRINT("Error: Failed to create loop scope for iterator loop");
+        ctx->symbols = old_scope;
+        ctx->has_compilation_errors = true;
+        goto cleanup;
+    }
+    ctx->symbols = loop_scope;
+    created_scope = true;
+
+    if (ctx->allocator) {
+        compiler_enter_scope(ctx->allocator);
+    }
+
+    if (ctx->scopes) {
+        lexical_frame = scope_stack_push(ctx->scopes, SCOPE_KIND_LEXICAL);
+        if (lexical_frame) {
+            lexical_frame->symbols = ctx->symbols;
+            lexical_frame->start_offset = ctx->bytecode ? ctx->bytecode->count : 0;
+            lexical_frame->end_offset = lexical_frame->start_offset;
+            lexical_frame_index = lexical_frame->lexical_depth;
+        }
+    }
+
     Type* loop_var_type = getPrimitiveType(TYPE_ANY);
     if (for_stmt->typed.forIter.iterable) {
         const Type* iterable_type = get_effective_type(for_stmt->typed.forIter.iterable);
@@ -3429,6 +3460,7 @@ void compile_for_iter_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
         ctx->has_compilation_errors = true;
         goto cleanup;
     }
+    loop_var_registered = true;
 
     if (ctx->allocator) {
         compiler_set_typed_residency_hint(ctx->allocator, loop_var_reg, true);
@@ -3553,9 +3585,48 @@ cleanup:
         has_value_reg = -1;
     }
 
-    if (loop_var_reg >= MP_FRAME_REG_START && loop_var_reg <= MP_FRAME_REG_END) {
+    if (!loop_var_registered && loop_var_reg >= MP_FRAME_REG_START &&
+        loop_var_reg <= MP_FRAME_REG_END) {
         compiler_free_register(ctx->allocator, loop_var_reg);
         loop_var_reg = -1;
+    }
+
+    if (created_scope && ctx->symbols) {
+        for (int i = 0; i < ctx->symbols->capacity; i++) {
+            Symbol* symbol = ctx->symbols->symbols[i];
+            while (symbol) {
+                if (symbol->legacy_register_id >= MP_FRAME_REG_START &&
+                    symbol->legacy_register_id <= MP_FRAME_REG_END) {
+                    compiler_free_register(ctx->allocator,
+                                           symbol->legacy_register_id);
+                }
+                symbol = symbol->next;
+            }
+        }
+    }
+
+    if (lexical_frame) {
+        ScopeFrame* refreshed = get_scope_frame_by_index(ctx, lexical_frame_index);
+        if (refreshed) {
+            refreshed->end_offset = ctx->bytecode ? ctx->bytecode->count
+                                                  : refreshed->start_offset;
+        }
+        if (ctx->scopes) {
+            scope_stack_pop(ctx->scopes);
+        }
+        lexical_frame = NULL;
+        lexical_frame_index = -1;
+    }
+
+    if (created_scope && ctx->allocator) {
+        compiler_exit_scope(ctx->allocator);
+    }
+
+    if (created_scope && ctx->symbols) {
+        free_symbol_table(ctx->symbols);
+    }
+    if (created_scope) {
+        ctx->symbols = old_scope;
     }
 
     if (success) {
