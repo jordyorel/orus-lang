@@ -1,39 +1,43 @@
-# Orus Standard Library Roadmap
+# Orus Standard Library Roadmap (Refactored)
 
-This roadmap tracks the work required to ship the Orus standard library as disk-based `.orus` modules that load dynamically at runtime. The milestones below build on the compiler and VM architecture documented in [`COMPILER_DESIGN.md`](COMPILER_DESIGN.md) and complement the outstanding feature work listed in [`MISSING.md`](MISSING.md).
+This roadmap defines how the Orus standard library will evolve under the **Rust-style model**:
+
+* **VM core** stays minimal.
+* **Performance-critical intrinsics** live in C.
+* **Stdlib modules** (disk-based `.orus` files) wrap those intrinsics.
+* Users only access functionality via `use module`, never by calling raw C hooks.
 
 ---
 
 ## 🎯 Goals
 
-* Ship a modular `std/` directory that the VM can load without recompilation.
-* Preserve startup performance and VM stability while moving module loading to disk.
-* Provide a testable, extensible foundation for future standard library packages.
+* Provide a **modular `std/` directory** shipped with Orus.
+* Keep **C intrinsics hidden** behind `.orus` wrappers.
+* Enforce **namespace discipline** (functions only exist under their module).
+* Enable clean error reporting and consistent API documentation.
 
 ---
 
-## 🗂️ Phase 0 – Inventory & Alignment
+## 🗂️ Phase 0 – Scope & Conventions
 
-1. **Audit current builtins**
+1. **Core principle**:
 
-   * Catalog all functionality currently embedded in C strings or native helpers.
-   * Identify which pieces migrate to `.orus` modules versus staying native for performance-critical paths.
-2. **Define module boundaries**
+   * No math function (`sin`, `pow`, etc.) is directly callable as a VM builtin.
+   * They only exist through `use math`.
 
-   * Draft the initial module list:
-     * `math` (abs, sqrt, pow, trig)
-     * `string` (split, join, search, case ops)
-     * `array` (push, pop, slice, map/filter/reduce)
-     * `io` (read_file, write_file)
-     * `system` (args, env)
-     * `time` (timestamp, sleep, formatting)
-     * `random` (srand, rand, distributions)
-     * `json` (parse, stringify)
-     * `collections` (set, dict/map, queue)
-     * `regex` (search, match, replace)
-3. **Agree on coding conventions**
+2. **Module structure**:
 
-   * Document style, naming, and module public API patterns for stdlib authors.
+   * `std/math.orus` → Orus file, public API.
+   * VM exposes internal C symbols prefixed with `__c_*`, inaccessible from userland.
+   * Example:
+
+     * `__c_sin` in C
+     * `sin` in Orus (wrapper around `__c_sin`)
+
+3. **Visibility rules**:
+
+   * Public API = names without `_`.
+   * Internal helpers = names starting with `_`, never exported by `use`.
 
 ---
 
@@ -41,112 +45,115 @@ This roadmap tracks the work required to ship the Orus standard library as disk-
 
 1. **Filesystem discovery**
 
-   * Update the VM boot sequence to locate the `std/` directory next to the binary.
-   * Respect the `ORUSPATH` environment variable for overrides and multiple search roots.
+   * VM locates `std/` next to the binary.
+   * Honor `ORUSPATH` env var for overrides.
+
 2. **Module resolver**
 
-   * Implement an import resolver that maps `use foo: bar` to `std/foo.orus`.
-   * Cache module lookups and report diagnostics when files are missing.
-3. **Bytecode integration hooks**
+   * `use math` → binds everything from `std/math.orus`.
+   * `use math: sin, pow` → binds only selected functions.
+   * Error handling: missing module = compile-time diagnostic.
 
-   * Ensure compiled stdlib modules are registered with the VM’s module/import tables.
-   * Expose hooks so compiler passes can request stdlib symbols during compilation.
-4. **Module resolver**
+3. **Bytecode integration**
 
-    * When use foo → load std/foo.orus and export all public symbols.
-
-    * When use foo: a, b, c → load std/foo.orus, but only bind selected symbols into the caller scope.
-
-    * Visibility rules:
-
-    * Inside modules, prefix all internal-only helpers with _ (private by convention).
-
-    * Only symbols without _ are exported by default.
+   * Stdlib functions compiled once and registered into import tables.
+   * Compiler queries resolver when resolving `use` statements.
 
 ---
 
-## 🧩 Phase 2 – Module Authoring
+## 🧩 Phase 2 – Math Module Authoring
 
-1. **Bootstrap core modules**
+### **C Core (hidden intrinsics)**
 
-   * Port baseline helpers into `.orus` files:
+```c
+// core_math.c
+double orus_sin(double x) { return sin(x); }
+double orus_cos(double x) { return cos(x); }
+double orus_pow(double a, double b) { return pow(a, b); }
+double orus_sqrt(double x) { return sqrt(x); }
+```
 
-     * `math`, `string`, `array`, `io`, `system`, `time`, `random`.
-   * Provide thin wrappers around performance-critical VM builtins where needed.
-2. **Shared utilities**
+Exposed to the VM as `__c_sin`, `__c_cos`, etc.
 
-   * Factor common helpers (error formatting, argument validation) into reusable modules.
-3. **Documentation & examples**
-
-   * Add usage examples to `docs/TUTORIAL.md` demonstrating `use` statements and stdlib APIs.
-
-* **Example: `math.orus`**
+### **Orus Wrapper**
 
 ```orus
 // std/math.orus
 
-// Exported by default
-fn sin(x: f64) -> f64: ...
-fn cos(x: f64) -> f64: ...
-fn pow(x: f64, y: f64) -> f64: ...
+extern fn __c_sin(f64) -> f64
+extern fn __c_cos(f64) -> f64
+extern fn __c_pow(f64, f64) -> f64
+extern fn __c_sqrt(f64) -> f64
 
-// Private helper (not exported if `use math`)
-fn _deg2rad(d: f64) -> f64: ...
+fn sin(x: f64) -> f64: return __c_sin(x)
+fn cos(x: f64) -> f64: return __c_cos(x)
+fn pow(a: f64, b: f64) -> f64: return __c_pow(a, b)
+fn sqrt(x: f64) -> f64: return __c_sqrt(x)
+
+const PI: f64 = 3.141592653589793
+const E: f64 = 2.718281828459045
 ```
 
-* **Usage**:
+### **Usage**
 
 ```orus
-use math           // brings all the methods
-use math: sin, pow // brings only sin and pow
+use math
+print(math.sin(math.PI / 2)) // 1.0
+
+use math: pow
+print(pow(2.0, 10.0))        // 1024.0
 ```
 
 ---
 
 ## 🧪 Phase 3 – Testing & Tooling
 
-1. **Unit and regression suites**
+1. **Unit tests**
 
-   * Create targeted tests for each stdlib module under `tests/std/`.
-   * Integrate these suites into the existing `make test` workflow and CI.
+   * Validate all `math` functions against known values.
+   * Place under `tests/std/math.orus`.
+
 2. **Import resolution tests**
 
-   * Add scenarios that validate `ORUSPATH` overrides and nested module imports.
-3. **Performance guardrails**
+   * Ensure `use math` loads functions only via module, not directly.
 
-   * Benchmark startup and hot paths to ensure the disk-based loader meets latency budgets.
+3. **Performance baselines**
+
+   * Benchmark calls (`math.sin`) vs direct C to confirm negligible overhead.
 
 ---
 
-## 📦 Phase 4 – Distribution & Developer Experience
+## 📦 Phase 4 – Packaging & Developer Experience
 
-1. **Packaging updates**
+1. **Distribution**
 
-   * Modify build scripts and release packaging to ship the `std/` directory alongside the binary.
-   * Document fallback behavior (e.g., future embedded bundle) for standalone binaries.
+   * Bundle `std/` alongside Orus binary.
+   * Ensure fallback works if `std/` is missing (clear error message).
+
 2. **Developer workflow**
 
+   * Stdlib modules can be edited/replaced without recompiling the VM.
+   * Document how `extern fn` bindings map to hidden C intrinsics.
    * Provide tooling/scripts for syncing stdlib changes without rebuilding the VM.
    * Document `ORUSPATH` usage for contributors and external developers.
-3. **Roadmap synchronization**
 
-   * Keep this roadmap, `MISSING.md`, and `IMPLEMENTATION_GUIDE.md` aligned after each milestone.
+3. **Docs & examples**
 
----
+   * Update `docs/STDLIB.md` with examples for `math`.
+   * Show how to import selectively (`use math: sin`).
 
-## 🗂️ Future Phases – Extended Modules
-
-* `json` → config parsing, API integration.
-* `collections` → sets, dicts/maps, queues, stacks.
-* `regex` → pattern matching utilities.
 
 ---
 
-## ✅ Completion Criteria
+## ✅ Completion Criteria (for `math`)
 
-* VM loads stdlib modules from disk by default and honors `ORUSPATH` overrides.
-* Core stdlib modules (`base`, `math`, `string`, `array`, `io`, `system`, `time`, `random`) exist as `.orus` files with comprehensive automated tests.
-* Extended stdlib modules (`json`, `collections`, `regex`) are planned and partially implemented.
-* Release artifacts bundle the stdlib, and documentation reflects the new workflow.
-* Roadmap and reference docs stay updated as modules evolve.
+* VM loads `std/math.orus` from disk.
+* Functions (`sin`, `cos`, `pow`, `sqrt`) callable only via `use math`.
+* Internal C hooks (`__c_*`) are inaccessible to user code.
+* Constants (`PI`, `E`) exposed under `math`.
+* Tests confirm correctness + import enforcement.
+* Documentation reflects the new modular design.
 
+---
+
+👉 Next step after `math`: replicate the same **C core + Orus wrapper** pattern for `time`, `random`, and `string`.
