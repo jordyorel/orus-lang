@@ -200,10 +200,63 @@ static InterpretResult interpret_file(const char* path){
     return r;
 }
 
+static const char* skip_command_prefix(const char* input, bool* had_prefix){
+    const char* ptr = input;
+    while(*ptr && isspace((unsigned char)*ptr)) ptr++;
+    *had_prefix = false;
+    if(*ptr == ':'){
+        *had_prefix = true;
+        ptr++;
+        while(*ptr && isspace((unsigned char)*ptr)) ptr++;
+    }
+    return ptr;
+}
+
 static bool process_command(const char* input){
-    if(input[0] != ':') return false;
-    if(strcmp(input,":exit")==0 || strcmp(input,":quit")==0){ repl_state.exit_requested=true; return true; }
-    if(strcmp(input,":help")==0){
+    bool had_prefix = false;
+    const char* command_start = skip_command_prefix(input, &had_prefix);
+
+    if(*command_start == '\0'){
+        return had_prefix;
+    }
+
+    char normalized[REPL_BUFFER_SIZE];
+    size_t idx = 0;
+    while(command_start[idx] != '\0' && idx < REPL_BUFFER_SIZE - 1){
+        normalized[idx] = command_start[idx];
+        idx++;
+    }
+    normalized[idx] = '\0';
+
+    while(idx > 0 && isspace((unsigned char)normalized[idx - 1])){
+        normalized[--idx] = '\0';
+    }
+
+    if(idx == 0){
+        return had_prefix;
+    }
+
+    char* args = normalized;
+    while(*args && !isspace((unsigned char)*args)) args++;
+
+    char* command_name = normalized;
+    char* command_args = NULL;
+    if(*args != '\0'){
+        *args = '\0';
+        args++;
+        while(*args && isspace((unsigned char)*args)) args++;
+        command_args = args;
+    }
+
+    if(strcmp(command_name,"exit")==0 || strcmp(command_name,"quit")==0){
+        if(command_args && *command_args){
+            print_colored(COLOR_ERROR,"Command '%s' does not take arguments.\n", command_name);
+            return true;
+        }
+        repl_state.exit_requested = true;
+        return true;
+    }
+    if(strcmp(command_name,"help")==0){
         print_colored(COLOR_INFO,"\nCommands:\n");
         printf("  :exit, :quit    - Exit the REPL\n");
         printf("  :clear          - Clear the screen\n");
@@ -211,10 +264,11 @@ static bool process_command(const char* input){
         printf("  :memory on/off  - Toggle memory stats\n");
         printf("  :history        - Show command history\n");
         printf("  :reset          - Reset VM state\n");
-        printf("  :load <file>    - Load and execute a file\n\n");
+        printf("  :load <file>    - Load and execute a file\n");
+        printf("\nCommands can be used with or without a leading ':' prefix.\n\n");
         return true;
     }
-    if(strcmp(input,":clear")==0){
+    if(strcmp(command_name,"clear")==0){
 #ifdef _WIN32
         int clear_status = system("cls");
 #else
@@ -223,26 +277,50 @@ static bool process_command(const char* input){
         (void)clear_status;
         return true;
     }
-    if(strncmp(input,":timing ",COMMAND_TIMING_PREFIX_LEN)==0){
-        repl_state.show_timing = (strcmp(input+COMMAND_TIMING_PREFIX_LEN,"on")==0);
+    if(strcmp(command_name,"timing")==0){
+        if(!command_args || !*command_args){
+            print_colored(COLOR_ERROR,"Usage: :timing on|off\n");
+        }else if(strcmp(command_args,"on")==0){
+            repl_state.show_timing = true;
+        }else if(strcmp(command_args,"off")==0){
+            repl_state.show_timing = false;
+        }else{
+            print_colored(COLOR_ERROR,"Unknown timing option: %s\n", command_args);
+        }
         return true;
     }
-    if(strncmp(input,":memory ",COMMAND_MEMORY_PREFIX_LEN)==0){
-        repl_state.show_memory = (strcmp(input+COMMAND_MEMORY_PREFIX_LEN,"on")==0);
+    if(strcmp(command_name,"memory")==0){
+        if(!command_args || !*command_args){
+            print_colored(COLOR_ERROR,"Usage: :memory on|off\n");
+        }else if(strcmp(command_args,"on")==0){
+            repl_state.show_memory = true;
+        }else if(strcmp(command_args,"off")==0){
+            repl_state.show_memory = false;
+        }else{
+            print_colored(COLOR_ERROR,"Unknown memory option: %s\n", command_args);
+        }
         return true;
     }
-    if(strcmp(input,":history")==0){
+    if(strcmp(command_name,"history")==0){
         for(size_t i=0;i<repl_state.history.count;i++)
             printf("  %3zu: %s\n", i+1, repl_state.history.items[i]);
         return true;
     }
-    if(strcmp(input,":reset")==0){
+    if(strcmp(command_name,"reset")==0){
+        if(command_args && *command_args){
+            print_colored(COLOR_ERROR,"Command 'reset' does not take arguments.\n");
+            return true;
+        }
         reset_vm();
         print_colored(COLOR_SUCCESS,"VM state reset.\n");
         return true;
     }
-    if(strncmp(input,":load ",COMMAND_LOAD_PREFIX_LEN)==0){
-        const char* filename=input+COMMAND_LOAD_PREFIX_LEN; while(*filename==' ') filename++;
+    if(strcmp(command_name,"load")==0){
+        if(!command_args || !*command_args){
+            print_colored(COLOR_ERROR,"Usage: :load <file>\n");
+            return true;
+        }
+        const char* filename = command_args;
         double start=get_time();
         InterpretResult res=interpret_file(filename);
         double elapsed=get_time()-start;
@@ -253,8 +331,11 @@ static bool process_command(const char* input){
         }
         return true;
     }
-    print_colored(COLOR_ERROR,"Unknown command: %s\n",input);
-    return true;
+    if(had_prefix){
+        print_colored(COLOR_ERROR,"Unknown command: %s\n",input);
+        return true;
+    }
+    return false;
 }
 
 void repl(){
@@ -293,7 +374,7 @@ void repl(){
         }
         if(ib->multiline && len==0){ if(input_is_complete(ib)) goto process_input; else continue; }
         if(!ib->multiline && is_whitespace_line(ib->buffer,ib->size)) continue;
-        if(!ib->multiline && ib->buffer[0]==':'){ if(process_command(ib->buffer)) continue; }
+        if(!ib->multiline && process_command(ib->buffer)) continue;
         if(!input_is_complete(ib)){ ib->multiline=true; continue; }
 process_input:
         if(ib->size>0 && !is_whitespace_line(ib->buffer,ib->size)) history_add(&repl_state.history,ib->buffer);
