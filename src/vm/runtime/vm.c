@@ -717,8 +717,10 @@ InterpretResult interpret(const char* source) {
                 }
 
                 Type* exported_type = entry->type;
-                bool registered = register_module_export(repl_module, entry->name, entry->kind,
-                                                        entry->register_index, exported_type);
+                bool registered = register_module_export(
+                    repl_module, entry->name, entry->kind,
+                    entry->register_index, exported_type,
+                    entry->intrinsic_symbol);
                 if (!registered && exported_type) {
                     module_free_export_type(exported_type);
                     exported_type = NULL;
