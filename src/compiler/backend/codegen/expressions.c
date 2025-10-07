@@ -3498,33 +3498,25 @@ int compile_expression(CompilerContext* ctx, TypedASTNode* expr) {
             DEBUG_CODEGEN_PRINT("NODE_UNARY: expr=%p\n", (void*)expr);
             DEBUG_CODEGEN_PRINT("NODE_UNARY: expr->original=%p\n", (void*)expr->original);
             DEBUG_CODEGEN_PRINT("NODE_UNARY: expr->original->unary.operand=%p\n", (void*)(expr->original ? expr->original->unary.operand : NULL));
-            
+
             if (!expr->original || !expr->original->unary.operand) {
                 DEBUG_CODEGEN_PRINT("Error: Unary operand is NULL in original AST");
                 return -1;
             }
-            
-            // Create a typed AST node for the operand  
-            TypedASTNode* operand_typed = create_typed_ast_node(expr->original->unary.operand);
+
+            TypedASTNode* operand_typed = expr->typed.unary.operand;
             if (!operand_typed) {
-                DEBUG_CODEGEN_PRINT("Error: Failed to create typed AST for unary operand\n");  
+                DEBUG_CODEGEN_PRINT("Error: Missing typed operand for unary expression\n");
+                ctx->has_compilation_errors = true;
                 return -1;
             }
-            
-            // Copy the resolved type if available
-            operand_typed->resolvedType = expr->original->unary.operand->dataType;
-            
-            // Compile the operand
+
             int operand_reg = compile_expression(ctx, operand_typed);
             if (operand_reg == -1) {
                 DEBUG_CODEGEN_PRINT("Error: Failed to compile unary operand");
-                free_typed_ast_node(operand_typed);
                 return -1;
             }
-            
-            // Clean up
-            free_typed_ast_node(operand_typed);
-            
+
             // Allocate result register
             int result_reg = compiler_alloc_temp(ctx->allocator);
             if (result_reg == -1) {

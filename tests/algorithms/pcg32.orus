@@ -1,0 +1,229 @@
+// Deterministic PCG32 generator translated from the reference implementation.
+// Validates 32-bit outputs, floating conversion, boolean sampling, and indexed choice.
+print("== Phase 3: PCG32 RNG ==")
+
+DEFAULT_SEED:u64 := 0x4d595df4d0f33173u64
+
+MULTIPLIER_LO:u32 := 0x4c957f2d as u32
+MULTIPLIER_HI:u32 := 0x5851f42d as u32
+DEFAULT_STREAM_LO:u32 := 0x94b95bdb as u32
+DEFAULT_STREAM_HI:u32 := 0xda3e39cb as u32
+DEFAULT_SEED_LO:u32 := 0xd0f33173 as u32
+DEFAULT_SEED_HI:u32 := 0x4d595df4 as u32
+HIGH_BIT_MASK:u32 := 2147483648u32
+
+struct U64Parts:
+    lo: u32
+    hi: u32
+
+fn new_parts(lo: u32, hi: u32) -> U64Parts:
+    return U64Parts{ lo: lo, hi: hi }
+
+mut STATE: U64Parts = U64Parts{ lo: 0u32, hi: 0u32 }
+mut INCREMENT: U64Parts = U64Parts{ lo: 0u32, hi: 0u32 }
+mut INITIALIZED: bool = false
+
+fn add_with_carry(a: u32, b: u32) -> U64Parts:
+    total: u64 = (a as u64) + (b as u64)
+    lo: u32 = (total % 4294967296u64) as u32
+    hi: u32 = (total / 4294967296u64) as u32
+    return new_parts(lo, hi)
+
+fn add_parts(a: U64Parts, b: U64Parts) -> U64Parts:
+    lo_sum = add_with_carry(a.lo, b.lo)
+    hi_base = add_with_carry(a.hi, b.hi)
+    hi_with_lo = add_with_carry(hi_base.lo, lo_sum.hi)
+    hi_final = add_with_carry(hi_with_lo.lo, hi_base.hi)
+    return new_parts(lo_sum.lo, hi_final.lo)
+
+fn double_parts(value: U64Parts) -> U64Parts:
+    return add_parts(value, value)
+
+fn bit_xor_u32(a: u32, b: u32) -> u32:
+    mut result: u32 = 0u32
+    mut bit_value: u32 = 1u32
+    mut a_remaining: u32 = a
+    mut b_remaining: u32 = b
+    mut i: i32 = 0
+    while i < 32:
+        a_bit: u32 = a_remaining % 2u32
+        b_bit: u32 = b_remaining % 2u32
+        if ((a_bit + b_bit) % 2u32) == 1u32:
+            result = result + bit_value
+        a_remaining = a_remaining / 2u32
+        b_remaining = b_remaining / 2u32
+        bit_value = bit_value * 2u32
+        i = i + 1
+    return result
+
+fn xor_parts(a: U64Parts, b: U64Parts) -> U64Parts:
+    return new_parts(bit_xor_u32(a.lo, b.lo), bit_xor_u32(a.hi, b.hi))
+
+fn div2_parts(value: U64Parts) -> U64Parts:
+    new_hi: u32 = value.hi / 2u32
+    hi_bit: u32 = value.hi % 2u32
+    mut new_lo: u32 = value.lo / 2u32
+    if hi_bit == 1u32:
+        new_lo = new_lo + HIGH_BIT_MASK
+    return new_parts(new_lo, new_hi)
+
+fn shift_right_parts(value: U64Parts, amount: i32) -> U64Parts:
+    mut current: U64Parts = value
+    mut i: i32 = 0
+    while i < amount:
+        current = div2_parts(current)
+        i = i + 1
+    return current
+
+fn is_zero_parts(value: U64Parts) -> bool:
+    return value.lo == 0u32 and value.hi == 0u32
+
+fn mul_parts(left: U64Parts, right: U64Parts) -> U64Parts:
+    mut result = new_parts(0u32, 0u32)
+    mut addend = left
+    mut multiplier = right
+    mut processed: i32 = 0
+    while processed < 64 and not is_zero_parts(multiplier):
+        if (multiplier.lo % 2u32) == 1u32:
+            result = add_parts(result, addend)
+        multiplier = shift_right_parts(multiplier, 1)
+        addend = double_parts(addend)
+        processed = processed + 1
+    return result
+
+fn mul_add_parts(state: U64Parts, multiplier: U64Parts, increment: U64Parts) -> U64Parts:
+    product = mul_parts(state, multiplier)
+    return add_parts(product, increment)
+
+fn split_u64_value(value: u64) -> U64Parts:
+    lo: u32 = (value % 4294967296u64) as u32
+    hi: u32 = (value / 4294967296u64) as u32
+    return new_parts(lo, hi)
+
+fn rotate_right_u32(value: u32, amount: i32) -> u32:
+    mut normalized: i32 = amount % 32
+    if normalized < 0:
+        normalized = normalized + 32
+    if normalized == 0:
+        return value
+
+    modulus: u64 = 4294967296u64
+    mut pow: i32 = 0
+    mut pow_amount: u64 = 1u64
+    while pow < normalized:
+        pow_amount = pow_amount * 2u64
+        pow = pow + 1
+
+    complement_shift: i32 = 32 - normalized
+    mut pow_complement: u64 = 1u64
+    mut comp: i32 = 0
+    while comp < complement_shift:
+        pow_complement = pow_complement * 2u64
+        comp = comp + 1
+
+    value_u64: u64 = (value as u64)
+    right: u64 = value_u64 / pow_amount
+    left_bits: u64 = value_u64 % pow_amount
+    left: u64 = (left_bits * pow_complement) % modulus
+    combined: u64 = (right + left) % modulus
+    return (combined as u32)
+
+fn raw_next_u32() -> u32:
+    old_state: U64Parts = STATE
+    STATE = mul_add_parts(old_state, new_parts(MULTIPLIER_LO, MULTIPLIER_HI), INCREMENT)
+
+    shift18 = shift_right_parts(old_state, 18)
+    xored = xor_parts(shift18, old_state)
+    shifted = shift_right_parts(xored, 27)
+    rot_parts = shift_right_parts(old_state, 59)
+
+    mut rot_value: i32 = (rot_parts.lo as i32)
+    if rot_parts.hi != 0u32:
+        rot_value = rot_value + (rot_parts.hi as i32) * 32
+    return rotate_right_u32(shifted.lo, rot_value)
+
+fn ensure_seeded():
+    if not INITIALIZED:
+        internal_seed(DEFAULT_SEED)
+
+fn internal_seed(seed_value: u64):
+    seed_parts = split_u64_value(seed_value)
+    initstate = add_parts(seed_parts, new_parts(DEFAULT_SEED_LO, DEFAULT_SEED_HI))
+    initseq = xor_parts(seed_parts, new_parts(DEFAULT_STREAM_LO, DEFAULT_STREAM_HI))
+
+    STATE = new_parts(0u32, 0u32)
+    INCREMENT = add_parts(double_parts(initseq), new_parts(1u32, 0u32))
+
+    raw_next_u32()
+
+    STATE = add_parts(STATE, initstate)
+
+    raw_next_u32()
+
+    INITIALIZED = true
+
+fn seed(seed_value: u64):
+    internal_seed(seed_value)
+
+fn next_u32() -> u32:
+    ensure_seeded()
+    return raw_next_u32()
+
+fn next_i32() -> i32:
+    return (next_u32() as i32)
+
+fn next_f64() -> f64:
+    ensure_seeded()
+    value: f64 = (raw_next_u32() as f64)
+    return (value + 0.5) / 4294967296.0
+
+fn bool() -> bool:
+    ensure_seeded()
+    return (raw_next_u32() % 2u32) == 1u32
+
+fn choice_or(options, fallback):
+    ensure_seeded()
+    count: i32 = len(options)
+    if count == 0:
+        return fallback
+
+    idx_u32: u32 = raw_next_u32() % (count as u32)
+    idx: i32 = (idx_u32 as i32)
+
+    mut current: i32 = 0
+    mut selected = fallback
+    for value in options:
+        if current == idx:
+            selected = value
+            break
+        current = current + 1
+    return selected
+
+fn verify_sequence(label: string, seed_value: u64, expected1: u32, expected2: u32, expected3: u32, expected_f64: f64, expected_bool: bool, expected_choice: string):
+    seed(seed_value)
+
+    sample1 = next_u32()
+    sample2 = next_u32()
+    sample3 = next_u32()
+    sample_f64 = next_f64()
+    sample_bool = bool()
+    sample_choice = choice_or(["alpha", "beta", "gamma"], "fallback")
+
+    if assert_eq(label + " next_u32 1", sample1, expected1):
+        print("ok", label, "next_u32 1", sample1)
+    if assert_eq(label + " next_u32 2", sample2, expected2):
+        print("ok", label, "next_u32 2", sample2)
+    if assert_eq(label + " next_u32 3", sample3, expected3):
+        print("ok", label, "next_u32 3", sample3)
+    if assert_eq(label + " next_f64", sample_f64, expected_f64):
+        print("ok", label, "next_f64", sample_f64)
+    if assert_eq(label + " bool", sample_bool, expected_bool):
+        print("ok", label, "bool", sample_bool)
+    if assert_eq(label + " choice", sample_choice, expected_choice):
+        print("ok", label, "choice", sample_choice)
+
+verify_sequence("pcg32 default", DEFAULT_SEED, 996165426u32, 3093242077u32, 779395887u32, 0.63073673599865288, true, "gamma")
+
+verify_sequence("pcg32 seed+1", DEFAULT_SEED + 1u64, 1998632490u32, 1488222426u32, 3489630950u32, 0.21689450147096068, false, "alpha")
+
+verify_sequence("pcg32 seed+2", DEFAULT_SEED + 2u64, 4142262189u32, 2260284037u32, 3431748511u32, 0.22814963047858328, true, "beta")
