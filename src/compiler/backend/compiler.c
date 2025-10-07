@@ -12,6 +12,7 @@
 #include "compiler/typed_ast_visualizer.h"
 #include "compiler/optimization/optimizer.h"
 #include "compiler/codegen/codegen.h"
+#include "compiler/codegen/codegen_internal.h"
 #include "compiler/symbol_table.h"
 #include "compiler/scope_stack.h"
 #include "compiler/error_reporter.h"
@@ -50,6 +51,54 @@ static void reserve_existing_module_globals(CompilerContext* ctx) {
             }
         }
         module = module->next;
+    }
+}
+
+static void register_existing_module_symbols(CompilerContext* ctx, const char* module_name) {
+    if (!ctx || !ctx->is_module || !ctx->symbols) {
+        return;
+    }
+
+    if (!module_name || module_name[0] == '\0') {
+        if (vm.filePath && strcmp(vm.filePath, "<repl>") == 0) {
+            module_name = "__repl__";
+        } else {
+            return;
+        }
+    }
+
+    ModuleManager* manager = vm.register_file.module_manager;
+    if (!manager) {
+        return;
+    }
+
+    RegisterModule* module = find_module(manager, module_name);
+    if (!module || !module->exports.exported_names) {
+        return;
+    }
+
+    for (uint16_t i = 0; i < module->exports.export_count; ++i) {
+        const char* name = module->exports.exported_names[i];
+        if (!name || resolve_symbol_local_only(ctx->symbols, name)) {
+            continue;
+        }
+
+        uint16_t reg = MODULE_EXPORT_NO_REGISTER;
+        if (module->exports.exported_registers && i < module->exports.export_count) {
+            reg = module->exports.exported_registers[i];
+        }
+        if (reg == MODULE_EXPORT_NO_REGISTER) {
+            continue;
+        }
+
+        Type* exported_type = NULL;
+        if (module->exports.exported_types && i < module->exports.export_count) {
+            exported_type = module->exports.exported_types[i];
+        }
+
+        register_variable(ctx, ctx->symbols, name, reg,
+                          exported_type ? exported_type : getPrimitiveType(TYPE_ANY),
+                          true, true, (SrcLocation){NULL, 0, 0}, true);
     }
 }
 
@@ -1002,7 +1051,16 @@ bool compileProgram(ASTNode* ast, Compiler* compiler, bool isModule) {
     }
 
     if (ctx->is_module) {
+        const char* module_name_for_symbols = NULL;
+        if (typed_ast->original && typed_ast->original->type == NODE_PROGRAM) {
+            module_name_for_symbols = typed_ast->original->program.moduleName;
+        }
+        if (!module_name_for_symbols && typed_ast->original &&
+            typed_ast->original->type == NODE_PROGRAM) {
+            module_name_for_symbols = typed_ast->typed.program.moduleName;
+        }
         reserve_existing_module_globals(ctx);
+        register_existing_module_symbols(ctx, module_name_for_symbols);
     }
 
     ctx->enable_visualization = show_typed_ast;

@@ -1023,6 +1023,56 @@ static bool type_env_define_import_binding(TypeEnv* env, const char* binding_nam
     return true;
 }
 
+static void seed_repl_environment(TypeEnv* env, ASTNode* root) {
+    if (!env || !root || root->type != NODE_PROGRAM) {
+        return;
+    }
+
+    if (!(vm.filePath && strcmp(vm.filePath, "<repl>") == 0)) {
+        return;
+    }
+
+    const char* module_name = root->program.moduleName;
+    if (!module_name || module_name[0] == '\0') {
+        module_name = "__repl__";
+    }
+
+    ModuleManager* manager = vm.register_file.module_manager;
+    if (!manager) {
+        return;
+    }
+
+    RegisterModule* module_entry = find_module(manager, module_name);
+    if (!module_entry) {
+        return;
+    }
+
+    if (!module_entry->exports.exported_names) {
+        return;
+    }
+
+    for (uint16_t i = 0; i < module_entry->exports.export_count; i++) {
+        const char* symbol_name = module_entry->exports.exported_names[i];
+        if (!symbol_name || symbol_name[0] == '\0') {
+            continue;
+        }
+
+        ModuleExportKind kind = MODULE_EXPORT_KIND_GLOBAL;
+        if (module_entry->exports.exported_kinds &&
+            i < module_entry->exports.export_count) {
+            kind = module_entry->exports.exported_kinds[i];
+        }
+
+        Type* exported_type = NULL;
+        if (module_entry->exports.exported_types &&
+            i < module_entry->exports.export_count) {
+            exported_type = module_entry->exports.exported_types[i];
+        }
+
+        type_env_define_import_binding(env, symbol_name, symbol_name, kind, exported_type);
+    }
+}
+
 static void define_builtin_function(TypeEnv* env, const char* name,
                                     Type* return_type, Type** params,
                                     int param_count) {
@@ -4252,6 +4302,8 @@ static TypedASTNode* generate_typed_ast_recursive(ASTNode* ast, TypeEnv* type_en
 
 TypedASTNode* generate_typed_ast(ASTNode* root, TypeEnv* env) {
     if (!root || !env) return NULL;
+
+    seed_repl_environment(env, root);
 
     // Reset error tracking
     reset_type_inference_errors();

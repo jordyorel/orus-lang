@@ -73,6 +73,8 @@ void* vm_dispatch_table[OP_HALT + 1] = {0};
 
 static bool vm_error_report_pending = false;
 
+static const char* REPL_MODULE_NAME = "__repl__";
+
 void vm_set_error_report_pending(bool pending) {
     vm_error_report_pending = pending;
 }
@@ -434,9 +436,19 @@ InterpretResult interpret(const char* source) {
     initCompiler(&compiler, &chunk, "<repl>", source);
 
     char* module_name = infer_module_name_from_path(vm.filePath);
+    bool is_repl_session = vm.filePath && strcmp(vm.filePath, "<repl>") == 0;
+    if (is_repl_session && !module_name) {
+        module_name = strdup(REPL_MODULE_NAME);
+        if (!module_name) {
+            goto cleanup;
+        }
+    }
+
+    RegisterModule* repl_module = NULL;
 
     // Parse the source into an AST
-    ASTNode* ast = parseSourceWithModuleName(source, module_name);
+    ASTNode* ast = NULL;
+    ast = parseSourceWithModuleName(source, module_name);
     // fflush(stdout);
 
     if (!ast) {
@@ -484,7 +496,7 @@ InterpretResult interpret(const char* source) {
     }
 
     // Compile the AST to bytecode using the unified multi-pass pipeline
-    bool compilation_result = compileProgram(ast, &compiler, false);
+    bool compilation_result = compileProgram(ast, &compiler, is_repl_session);
 
     if (!compilation_result) {
         printf("[ERROR] interpret: Compilation failed\n");
@@ -545,6 +557,10 @@ InterpretResult interpret(const char* source) {
         printf("=== END BYTECODE ===\n\n");
     }
 
+    if (is_repl_session && vm.register_file.module_manager && module_name) {
+        repl_module = load_module(vm.register_file.module_manager, module_name);
+    }
+
     // Execute the chunk
     vm.chunk = &chunk;
     vm.ip = chunk.code;
@@ -560,6 +576,58 @@ InterpretResult interpret(const char* source) {
     fflush(stdout);
     result = run();
     fflush(stdout);
+
+    if (is_repl_session && result == INTERPRET_OK && compiler.isModule &&
+        vm.register_file.module_manager) {
+        ModuleManager* manager = vm.register_file.module_manager;
+        if (!repl_module && module_name) {
+            repl_module = load_module(manager, module_name);
+        }
+        if (repl_module) {
+            for (int i = 0; i < compiler.exportCount; i++) {
+                ModuleExportEntry* entry = &compiler.exports[i];
+                if (!entry->name) {
+                    continue;
+                }
+
+                Type* exported_type = entry->type;
+                bool registered = register_module_export(repl_module, entry->name, entry->kind,
+                                                        entry->register_index, exported_type);
+                if (!registered && exported_type) {
+                    module_free_export_type(exported_type);
+                    exported_type = NULL;
+                }
+                entry->type = NULL;
+
+                if (entry->kind == MODULE_EXPORT_KIND_GLOBAL &&
+                    entry->register_index >= 0 && entry->register_index < UINT8_COUNT) {
+                    vm.publicGlobals[entry->register_index] = true;
+                    if (entry->register_index >= vm.variableCount) {
+                        vm.variableCount = entry->register_index + 1;
+                    }
+                    if (vm.globalTypes[entry->register_index] == NULL) {
+                        vm.globalTypes[entry->register_index] = exported_type ? exported_type : getPrimitiveType(TYPE_ANY);
+                    } else if (exported_type) {
+                        vm.globalTypes[entry->register_index] = exported_type;
+                    }
+                }
+            }
+
+            if (compiler.importCount > 0) {
+                for (int i = 0; i < compiler.importCount; i++) {
+                    ModuleImportEntry* entry = &compiler.imports[i];
+                    if (!entry->module_name || !entry->symbol_name) {
+                        continue;
+                    }
+                    RegisterModule* source_module = find_module(manager, entry->module_name);
+                    if (!source_module) {
+                        continue;
+                    }
+                    import_variable(repl_module, entry->symbol_name, source_module);
+                }
+            }
+        }
+    }
   
 cleanup:
     if (ast) {
