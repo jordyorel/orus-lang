@@ -1,4 +1,5 @@
-use math: PI, add
+use math: sin, PI, E
 
-print(add(5, 7) == 12)
-print(PI == 314)
+print(sin(0.0) == 0.0)
+print(PI > 3.14159)
+print(E > 2.71828)

@@ -1,5 +1,8 @@
 use math
 
-print(math.add(12, 30) == 42)
-print(math.scale(3, 4) == 12)
-print(math.PI == 314)
+print(math.sin(0.0) == 0.0)
+print(math.cos(0.0) == 1.0)
+print(math.pow(2.0, 3.0) == 8.0)
+print(math.sqrt(16.0) == 4.0)
+print(math.PI > 3.14159)
+print(math.E > 2.71828)
