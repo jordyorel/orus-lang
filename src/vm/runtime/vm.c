@@ -151,9 +151,15 @@ static void vm_patch_intrinsic_stub(int function_index, int native_index) {
 static InterpretResult run(void);
 void runtimeError(ErrorType type, SrcLocation location,
                    const char* format, ...);
-static bool collect_module_imports(ASTNode* ast, char*** out_names, int* out_count);
-static void free_module_imports(char** names, int count);
-static bool load_module_list(const char* current_path, char** module_names, int module_count);
+typedef struct ModuleImportInfo {
+    char* name;
+    int line;
+    int column;
+} ModuleImportInfo;
+
+static bool collect_module_imports(ASTNode* ast, ModuleImportInfo** out_imports, int* out_count);
+static void free_module_imports(ModuleImportInfo* imports, int count);
+static bool load_module_list(const char* current_path, ModuleImportInfo* imports, int module_count);
 static bool has_orus_suffix(const char* text, size_t length);
 static char* infer_module_name_from_path(const char* path);
 static char* build_module_path(const char* base_path, const char* module_name);
@@ -509,29 +515,31 @@ InterpretResult interpret(const char* source) {
     }
     
     const char* current_path = vm.filePath ? vm.filePath : ".";
-    char** import_names = NULL;
+    ModuleImportInfo* import_infos = NULL;
     int import_count = 0;
-    if (!collect_module_imports(ast, &import_names, &import_count)) {
+    if (!collect_module_imports(ast, &import_infos, &import_count)) {
         goto cleanup;
     }
 
     if (import_count > 0) {
-        freeAST(ast);
-        ast = NULL;
-        if (!load_module_list(current_path, import_names, import_count)) {
-            free_module_imports(import_names, import_count);
+        if (ast) {
+            freeAST(ast);
+            ast = NULL;
+        }
+        if (!load_module_list(current_path, import_infos, import_count)) {
+            free_module_imports(import_infos, import_count);
             goto cleanup;
         }
-        free_module_imports(import_names, import_count);
-        import_names = NULL;
+        free_module_imports(import_infos, import_count);
+        import_infos = NULL;
 
         ast = parseSourceWithModuleName(source, module_name);
         if (!ast) {
             goto cleanup;
         }
     } else {
-        free_module_imports(import_names, import_count);
-        import_names = NULL;
+        free_module_imports(import_infos, import_count);
+        import_infos = NULL;
     }
 
     // Compile the AST to bytecode using the unified multi-pass pipeline
@@ -1579,29 +1587,29 @@ static char* build_module_path(const char* base_path, const char* module_name) {
     return NULL;
 }
 
-static void free_module_imports(char** names, int count) {
-    if (!names) {
+static void free_module_imports(ModuleImportInfo* imports, int count) {
+    if (!imports) {
         return;
     }
     for (int i = 0; i < count; i++) {
-        free(names[i]);
+        free(imports[i].name);
     }
-    free(names);
+    free(imports);
 }
 
-static bool collect_module_imports(ASTNode* ast, char*** out_names, int* out_count) {
-    if (!out_names || !out_count) {
+static bool collect_module_imports(ASTNode* ast, ModuleImportInfo** out_imports, int* out_count) {
+    if (!out_imports || !out_count) {
         return false;
     }
 
-    *out_names = NULL;
+    *out_imports = NULL;
     *out_count = 0;
 
     if (!ast || ast->type != NODE_PROGRAM) {
         return true;
     }
 
-    char** names = NULL;
+    ModuleImportInfo* imports = NULL;
     int count = 0;
 
     for (int i = 0; i < ast->program.count; i++) {
@@ -1612,44 +1620,68 @@ static bool collect_module_imports(ASTNode* ast, char*** out_names, int* out_cou
 
         char* copy = strdup(decl->import.moduleName);
         if (!copy) {
-            free_module_imports(names, count);
+            free_module_imports(imports, count);
             return false;
         }
 
-        char** resized = (char**)realloc(names, sizeof(char*) * (size_t)(count + 1));
+        ModuleImportInfo* resized = (ModuleImportInfo*)realloc(imports, sizeof(ModuleImportInfo) * (size_t)(count + 1));
         if (!resized) {
             free(copy);
-            free_module_imports(names, count);
+            free_module_imports(imports, count);
             return false;
         }
 
-        names = resized;
-        names[count++] = copy;
+        imports = resized;
+        imports[count].name = copy;
+        imports[count].line = decl->location.line;
+        imports[count].column = decl->location.column;
+        count++;
     }
 
-    *out_names = names;
+    *out_imports = imports;
     *out_count = count;
     return true;
 }
 
-static bool load_module_list(const char* current_path, char** module_names, int module_count) {
-    if (!module_names || module_count == 0) {
+static bool load_module_list(const char* current_path, ModuleImportInfo* imports, int module_count) {
+    if (!imports || module_count == 0) {
         return true;
     }
 
+    const char* previous_file = vm.filePath;
+    int previous_line = vm.currentLine;
+    int previous_column = vm.currentColumn;
+
+    if (current_path) {
+        vm.filePath = current_path;
+    }
+
     for (int i = 0; i < module_count; i++) {
-        char* dep_path = build_module_path(current_path, module_names[i]);
+        ModuleImportInfo* info = &imports[i];
+        vm.currentLine = info->line;
+        vm.currentColumn = info->column;
+
+        char* dep_path = build_module_path(current_path, info->name);
         if (!dep_path) {
+            vm.filePath = previous_file;
+            vm.currentLine = previous_line;
+            vm.currentColumn = previous_column;
             return false;
         }
 
-        InterpretResult result = interpret_module(dep_path, module_names[i]);
+        InterpretResult result = interpret_module(dep_path, info->name);
         free(dep_path);
         if (result != INTERPRET_OK) {
+            vm.filePath = previous_file;
+            vm.currentLine = previous_line;
+            vm.currentColumn = previous_column;
             return false;
         }
     }
 
+    vm.filePath = previous_file;
+    vm.currentLine = previous_line;
+    vm.currentColumn = previous_column;
     return true;
 }
 
@@ -1730,7 +1762,7 @@ InterpretResult interpret_module(const char* path, const char* module_name_hint)
         goto cleanup;
     }
 
-    char** module_imports = NULL;
+    ModuleImportInfo* module_imports = NULL;
     int module_import_count = 0;
     if (!collect_module_imports(ast, &module_imports, &module_import_count)) {
         fprintf(stderr, "Failed to gather module uses for: %s\n", path);

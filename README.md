@@ -58,26 +58,33 @@ make help
 Example install (macOS arm64 shown; adjust the archive name as needed):
 
 ```bash
-# Install to ~/.local/bin (no sudo required)
-mkdir -p "$HOME/.local/bin"
+# Choose an installation prefix and ensure the directories exist
+INSTALL_DIR="$HOME/.local/opt/orus"
+BIN_DIR="$HOME/.local/bin"
+mkdir -p "$INSTALL_DIR" "$BIN_DIR"
+
+# Download and extract the full distribution (binary, stdlib, LICENSE)
 curl -fsSL https://github.com/jordyorel/orus-lang/releases/latest/download/orus-macos-arm64.tar.gz \
-  | tar -xz -O orus > "$HOME/.local/bin/orus"
-chmod 755 "$HOME/.local/bin/orus"
+  | tar -xz -C "$INSTALL_DIR"
+
+# Expose the interpreter on your PATH while keeping the stdlib beside it
+ln -sf "$INSTALL_DIR/orus" "$BIN_DIR/orus"
 
 # Confirm the download resolved to the newest tag
 curl -sI https://github.com/jordyorel/orus-lang/releases/latest/download/orus-macos-arm64.tar.gz \
   | grep -i "^location:"
 
 # Verify the installed binary reports the latest version (replace the archive for your platform)
-"$HOME/.local/bin/orus" --version
+"$BIN_DIR/orus" --version
 
 # Optional: install system-wide (requires sudo)
+sudo mkdir -p /usr/local/opt/orus
 curl -fsSL https://github.com/jordyorel/orus-lang/releases/latest/download/orus-macos-arm64.tar.gz \
-  | tar -xz -O orus | sudo tee /usr/local/bin/orus >/dev/null \
-  && sudo chmod 755 /usr/local/bin/orus
+  | sudo tar -xz -C /usr/local/opt/orus
+sudo ln -sf /usr/local/opt/orus/orus /usr/local/bin/orus
 ```
 
-Add `~/.local/bin` to your `PATH` if it is not already present. To keep accompanying files (for example the `LICENSE`), extract into a temporary directory with `tar -xzf` before installing.
+Add `~/.local/bin` to your `PATH` if it is not already present. The archive now bundles the standard library under `std/` alongside the interpreter binary, so keep the files together or set `ORUSPATH` to point at your chosen installation directory.
 
 
 ## Contributing
