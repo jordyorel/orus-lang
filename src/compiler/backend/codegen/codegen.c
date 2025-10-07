@@ -35,6 +35,53 @@
 #include <stdlib.h>
 #include <string.h>
 
+static void predeclare_function_symbols(CompilerContext* ctx, TypedASTNode* ast) {
+    if (!ctx || !ast || !ctx->symbols) {
+        return;
+    }
+
+    if (!ctx->allocator) {
+        return;
+    }
+
+    if (!ast->original || ast->original->type != NODE_PROGRAM) {
+        return;
+    }
+
+    for (int i = 0; i < ast->typed.program.count; i++) {
+        TypedASTNode* stmt = ast->typed.program.declarations[i];
+        if (!stmt || !stmt->original || stmt->original->type != NODE_FUNCTION) {
+            continue;
+        }
+
+        const char* name = stmt->original->function.name;
+        if (!name || stmt->typed.function.isMethod) {
+            continue;
+        }
+
+        if (resolve_symbol_local_only(ctx->symbols, name)) {
+            continue;
+        }
+
+        int reg = compiler_alloc_global(ctx->allocator);
+        if (reg == -1) {
+            reg = compiler_alloc_frame(ctx->allocator);
+            if (reg == -1) {
+                continue;
+            }
+        }
+
+        Type* function_type = stmt->resolvedType ? stmt->resolvedType : getPrimitiveType(TYPE_FUNCTION);
+        if (!register_variable(ctx, ctx->symbols, name, reg, function_type, false, false,
+                               stmt->original->location, true)) {
+            compiler_free_register(ctx->allocator, reg);
+            continue;
+        }
+
+        stmt->suggestedRegister = reg;
+    }
+}
+
 bool repl_mode_active(void) {
     const OrusConfig* config = config_get_global();
     if (config && config->repl_mode) {
@@ -138,6 +185,7 @@ bool generate_bytecode_from_ast(CompilerContext* ctx) {
     int initial_count = ctx->bytecode->count;
 
     if (ast->original->type == NODE_PROGRAM) {
+        predeclare_function_symbols(ctx, ast);
         for (int i = 0; i < ast->typed.program.count; i++) {
             TypedASTNode* stmt = ast->typed.program.declarations[i];
             if (stmt) {

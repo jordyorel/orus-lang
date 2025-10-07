@@ -1430,6 +1430,54 @@ static bool is_cast_allowed(Type* from, Type* to) {
     return false;
 }
 
+static void predeclare_program_functions(TypeEnv* env, ASTNode* program) {
+    if (!env || !program || program->type != NODE_PROGRAM) {
+        return;
+    }
+
+    for (int i = 0; i < program->program.count; i++) {
+        ASTNode* decl = program->program.declarations[i];
+        if (!decl || decl->type != NODE_FUNCTION) {
+            continue;
+        }
+
+        if (!decl->function.name) {
+            continue;
+        }
+
+        Type* return_type = make_var_type(NULL);
+        if (!return_type) {
+            return_type = getPrimitiveType(TYPE_UNKNOWN);
+        }
+
+        int param_count = decl->function.paramCount;
+        Type** param_types = NULL;
+        if (param_count > 0) {
+            param_types = type_arena_alloc(sizeof(Type*) * param_count);
+            if (!param_types) {
+                param_count = 0;
+            } else {
+                for (int p = 0; p < param_count; p++) {
+                    Type* param_type = make_var_type(NULL);
+                    param_types[p] = param_type ? param_type : getPrimitiveType(TYPE_UNKNOWN);
+                }
+            }
+        }
+
+        Type* func_type = createFunctionType(return_type, param_types, param_count);
+        if (!func_type) {
+            continue;
+        }
+
+        TypeScheme* scheme = generalize(env, func_type);
+        if (!scheme) {
+            continue;
+        }
+
+        type_env_define(env, decl->function.name, scheme);
+    }
+}
+
 Type* algorithm_w(TypeEnv* env, ASTNode* node) {
     if (!node) return NULL;
 
@@ -2678,6 +2726,7 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
             return true_type;
         }
         case NODE_PROGRAM: {
+            predeclare_program_functions(env, node);
             // Program nodes should type-check their declarations
             for (int i = 0; i < node->program.count; i++) {
                 algorithm_w(env, node->program.declarations[i]);
@@ -4271,12 +4320,22 @@ static TypedASTNode* generate_typed_ast_recursive(ASTNode* ast, TypeEnv* type_en
             break;
 
         case NODE_BINARY:
-            // DEBUG_TYPE_INFERENCE_PRINT("NODE_BINARY: ast->binary.left=%p, ast->binary.right=%p\n", 
+            // DEBUG_TYPE_INFERENCE_PRINT("NODE_BINARY: ast->binary.left=%p, ast->binary.right=%p\n",
             //        (void*)ast->binary.left, (void*)ast->binary.right);
             typed->typed.binary.left = generate_typed_ast_recursive(ast->binary.left, type_env);
             typed->typed.binary.right = generate_typed_ast_recursive(ast->binary.right, type_env);
-            // DEBUG_TYPE_INFERENCE_PRINT("NODE_BINARY: typed->typed.binary.left=%p, typed->typed.binary.right=%p\n", 
+            // DEBUG_TYPE_INFERENCE_PRINT("NODE_BINARY: typed->typed.binary.left=%p, typed->typed.binary.right=%p\n",
             //        (void*)typed->typed.binary.left, (void*)typed->typed.binary.right);
+            break;
+
+        case NODE_UNARY:
+            if (ast->unary.operand) {
+                typed->typed.unary.operand = generate_typed_ast_recursive(ast->unary.operand, type_env);
+                if (!typed->typed.unary.operand) {
+                    free_typed_ast_node(typed);
+                    return NULL;
+                }
+            }
             break;
 
         case NODE_ASSIGN:

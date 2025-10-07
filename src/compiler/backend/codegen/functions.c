@@ -375,17 +375,44 @@ int compile_function_declaration(CompilerContext* ctx, TypedASTNode* func) {
 
     Type* function_type = func->resolvedType ? func->resolvedType : getPrimitiveType(TYPE_FUNCTION);
 
-    int func_reg;
+    int func_reg = -1;
     if (func_name) {
-        func_reg = ctx->compiling_function ?
-            compiler_alloc_frame(ctx->allocator) :
-            compiler_alloc_global(ctx->allocator);
-        if (func_reg == -1) return -1;
-        if (!register_variable(ctx, ctx->symbols, func_name, func_reg,
-                               function_type, false, false,
-                               func->original->location, true)) {
-            return -1;
+        Symbol* existing = resolve_symbol_local_only(ctx->symbols, func_name);
+        if (existing) {
+            if (existing->reg_allocation) {
+                func_reg = existing->reg_allocation->logical_id;
+            } else {
+                func_reg = existing->legacy_register_id;
+            }
+
+            if (func_reg >= 0) {
+                existing->type = function_type;
+                existing->is_initialized = true;
+                existing->last_assignment_location = func->original->location;
+            }
         }
+
+        if (func_reg < 0) {
+            if (func->suggestedRegister >= 0) {
+                func_reg = func->suggestedRegister;
+            } else if (ctx->compiling_function) {
+                func_reg = compiler_alloc_frame(ctx->allocator);
+            } else {
+                func_reg = compiler_alloc_global(ctx->allocator);
+            }
+
+            if (func_reg == -1) {
+                return -1;
+            }
+
+            if (!register_variable(ctx, ctx->symbols, func_name, func_reg,
+                                   function_type, false, false,
+                                   func->original->location, true)) {
+                compiler_free_register(ctx->allocator, func_reg);
+                return -1;
+            }
+        }
+
         if (!ctx->compiling_function && ctx->is_module &&
             func->original->function.isPublic && !func->original->function.isMethod && func_name) {
             set_module_export_metadata(ctx, func_name, func_reg, function_type);
