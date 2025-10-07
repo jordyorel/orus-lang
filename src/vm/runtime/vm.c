@@ -108,6 +108,132 @@ const IntrinsicSignatureInfo* vm_get_intrinsic_signature(const char* symbol) {
     return NULL;
 }
 
+static Value intrinsic_native_sin(int argCount, Value* args) {
+    (void)argCount;
+    if (!args) {
+        return F64_VAL(0.0);
+    }
+    double operand = IS_F64(args[0]) ? AS_F64(args[0]) : 0.0;
+    return F64_VAL(sin(operand));
+}
+
+static Value intrinsic_native_cos(int argCount, Value* args) {
+    (void)argCount;
+    if (!args) {
+        return F64_VAL(0.0);
+    }
+    double operand = IS_F64(args[0]) ? AS_F64(args[0]) : 0.0;
+    return F64_VAL(cos(operand));
+}
+
+static Value intrinsic_native_pow(int argCount, Value* args) {
+    (void)argCount;
+    if (!args) {
+        return F64_VAL(1.0);
+    }
+    double base = IS_F64(args[0]) ? AS_F64(args[0]) : 0.0;
+    double exp = (argCount > 1 && IS_F64(args[1])) ? AS_F64(args[1]) : 0.0;
+    return F64_VAL(pow(base, exp));
+}
+
+static Value intrinsic_native_sqrt(int argCount, Value* args) {
+    (void)argCount;
+    if (!args) {
+        return F64_VAL(0.0);
+    }
+    double operand = IS_F64(args[0]) ? AS_F64(args[0]) : 0.0;
+    return F64_VAL(sqrt(operand));
+}
+
+typedef struct {
+    const char* symbol;
+    NativeFn function;
+} IntrinsicBinding;
+
+static const IntrinsicBinding core_intrinsic_bindings[] = {
+    {"__c_sin", intrinsic_native_sin},
+    {"__c_cos", intrinsic_native_cos},
+    {"__c_pow", intrinsic_native_pow},
+    {"__c_sqrt", intrinsic_native_sqrt},
+};
+
+static NativeFn vm_lookup_core_intrinsic(const char* symbol) {
+    if (!symbol) {
+        return NULL;
+    }
+    for (size_t i = 0; i < sizeof(core_intrinsic_bindings) / sizeof(core_intrinsic_bindings[0]); ++i) {
+        if (strcmp(core_intrinsic_bindings[i].symbol, symbol) == 0) {
+            return core_intrinsic_bindings[i].function;
+        }
+    }
+    return NULL;
+}
+
+static int vm_bind_core_intrinsic(const char* symbol, const IntrinsicSignatureInfo* signature) {
+    if (!symbol || !signature) {
+        return -1;
+    }
+
+    size_t symbol_len = strlen(symbol);
+
+    for (int i = 0; i < vm.nativeFunctionCount; ++i) {
+        NativeFunction* existing = &vm.nativeFunctions[i];
+        if (existing->name && existing->name->length == (int)symbol_len &&
+            strncmp(existing->name->chars, symbol, symbol_len) == 0) {
+            return i;
+        }
+    }
+
+    if (vm.nativeFunctionCount >= MAX_NATIVES) {
+        return -1;
+    }
+
+    NativeFn fn = vm_lookup_core_intrinsic(symbol);
+    if (!fn) {
+        return -1;
+    }
+
+    NativeFunction* slot = &vm.nativeFunctions[vm.nativeFunctionCount];
+    memset(slot, 0, sizeof(*slot));
+    slot->function = fn;
+    slot->arity = signature->paramCount;
+    slot->returnType = getPrimitiveType(signature->returnType);
+    slot->name = allocateString(symbol, (int)symbol_len);
+    if (!slot->name) {
+        slot->function = NULL;
+        slot->arity = 0;
+        slot->returnType = NULL;
+        return -1;
+    }
+
+    int bound_index = vm.nativeFunctionCount;
+    vm.nativeFunctionCount++;
+    return bound_index;
+}
+
+static void vm_patch_intrinsic_stub(int function_index, int native_index) {
+    if (function_index < 0 || function_index >= vm.functionCount) {
+        return;
+    }
+    if (native_index < 0 || native_index >= MAX_NATIVES) {
+        return;
+    }
+
+    Function* fn = &vm.functions[function_index];
+    if (!fn->chunk || !fn->chunk->code) {
+        return;
+    }
+
+    int start = fn->start;
+    if (start < 0 || start + 1 >= fn->chunk->count) {
+        return;
+    }
+    if (fn->chunk->code[start] != OP_CALL_NATIVE_R) {
+        return;
+    }
+    fn->chunk->code[start + 1] = (uint8_t)native_index;
+}
+
 // Forward declarations
 static InterpretResult run(void);
 void runtimeError(ErrorType type, SrcLocation location,
@@ -1720,6 +1846,25 @@ InterpretResult interpret_module(const char* path, const char* module_name_hint)
         module_entry = load_module(vm.register_file.module_manager, module_name);
     }
 
+    if (compiler.isModule) {
+        for (int i = 0; i < compiler.exportCount; ++i) {
+            ModuleExportEntry* entry = &compiler.exports[i];
+            if (!entry->name || !entry->intrinsic_symbol || entry->function_index < 0) {
+                continue;
+            }
+
+            const IntrinsicSignatureInfo* signature = vm_get_intrinsic_signature(entry->intrinsic_symbol);
+            if (!signature) {
+                continue;
+            }
+
+            int native_index = vm_bind_core_intrinsic(entry->intrinsic_symbol, signature);
+            if (native_index >= 0) {
+                vm_patch_intrinsic_stub(entry->function_index, native_index);
+            }
+        }
+    }
+
     // Store current VM state
     Chunk* oldChunk = vm.chunk;
     uint8_t* oldIP = vm.ip;
@@ -1754,7 +1899,8 @@ InterpretResult interpret_module(const char* path, const char* module_name_hint)
 
                 Type* exported_type = entry->type;
                 bool registered = register_module_export(module_entry, entry->name, entry->kind,
-                                                        entry->register_index, exported_type);
+                                                        entry->register_index, exported_type,
+                                                        entry->intrinsic_symbol);
                 if (!registered && exported_type) {
                     module_free_export_type(exported_type);
                     exported_type = NULL;

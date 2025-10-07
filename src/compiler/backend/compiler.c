@@ -773,10 +773,13 @@ void free_compiler_context(CompilerContext* ctx) {
     if (ctx->module_exports) {
         for (int i = 0; i < ctx->module_export_count; i++) {
             free(ctx->module_exports[i].name);
+            free(ctx->module_exports[i].intrinsic_symbol);
             if (ctx->module_exports[i].type) {
                 module_free_export_type(ctx->module_exports[i].type);
                 ctx->module_exports[i].type = NULL;
             }
+            ctx->module_exports[i].intrinsic_symbol = NULL;
+            ctx->module_exports[i].function_index = -1;
         }
         free(ctx->module_exports);
     }
@@ -813,6 +816,8 @@ void initCompiler(Compiler* compiler, Chunk* chunk, const char* fileName, const 
             compiler->exports[i].kind = MODULE_EXPORT_KIND_GLOBAL;
             compiler->exports[i].register_index = -1;
             compiler->exports[i].type = NULL;
+            compiler->exports[i].function_index = -1;
+            compiler->exports[i].intrinsic_symbol = NULL;
             compiler->imports[i].module_name = NULL;
             compiler->imports[i].symbol_name = NULL;
             compiler->imports[i].alias_name = NULL;
@@ -950,6 +955,12 @@ static bool copy_compiled_bytecode(Compiler* legacy_compiler, CompilerContext* c
                 }
                 legacy_compiler->exports[i].register_index = ctx->module_exports[i].register_index;
                 legacy_compiler->exports[i].type = ctx->module_exports[i].type;
+                legacy_compiler->exports[i].function_index = ctx->module_exports[i].function_index;
+                if (ctx->module_exports[i].intrinsic_symbol) {
+                    legacy_compiler->exports[i].intrinsic_symbol = orus_strdup(ctx->module_exports[i].intrinsic_symbol);
+                } else {
+                    legacy_compiler->exports[i].intrinsic_symbol = NULL;
+                }
                 ctx->module_exports[i].type = NULL;
                 if (!legacy_compiler->exports[i].name && ctx->module_exports[i].name) {
                     legacy_compiler->exportCount = i;

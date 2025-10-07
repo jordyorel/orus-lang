@@ -2283,6 +2283,43 @@ InterpretResult vm_run_dispatch(void) {
                 }
 
                 // Function operations
+                case OP_CALL_NATIVE_R: {
+                    uint8_t nativeIndex = READ_BYTE();
+                    uint8_t firstArgReg = READ_BYTE();
+                    uint8_t argCount = READ_BYTE();
+                    uint8_t resultReg = READ_BYTE();
+
+                    if (nativeIndex >= (uint8_t)vm.nativeFunctionCount) {
+                        VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(),
+                                        "Native function index %u out of range", nativeIndex);
+                    }
+
+                    NativeFunction* native = &vm.nativeFunctions[nativeIndex];
+                    if (!native->function) {
+                        VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(),
+                                        "Native function %u is unbound", nativeIndex);
+                    }
+
+                    if (native->arity >= 0 && native->arity != argCount) {
+                        VM_ERROR_RETURN(ERROR_ARGUMENT, CURRENT_LOCATION(),
+                                        "Native function expected %d argument(s) but received %u",
+                                        native->arity, argCount);
+                    }
+
+                    Value args_storage[FRAME_REGISTERS];
+                    Value* args_ptr = NULL;
+                    if (argCount > 0) {
+                        args_ptr = args_storage;
+                        for (int i = 0; i < argCount; ++i) {
+                            args_storage[i] = vm_get_register_safe((uint16_t)(firstArgReg + i));
+                        }
+                    }
+
+                    Value result = native->function(argCount, args_ptr);
+                    vm_set_register_safe(resultReg, result);
+                    break;
+                }
+
                 case OP_CALL_R: {
                     DEBUG_VM_PRINT("OP_CALL_R executed");
                     uint8_t funcReg = READ_BYTE();

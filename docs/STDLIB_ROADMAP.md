@@ -24,13 +24,13 @@ This roadmap defines how the Orus standard library will evolve under the **Rust-
 * **Regression tests cover current resolver behavior.** The suite confirms that
   bundled `std/math.orus` resolves by default, selective imports expose only
   the requested names, and `ORUSPATH` can introduce alternate trees.【F:tests/modules/resolver/default_std_import.orus†L1-L5】【F:tests/modules/resolver/selective_std_import.orus†L1-L4】【F:tests/modules/resolver/oruspath_override.orus†L1-L4】【F:tests/modules/resolver/README.md†L1-L15】
+* **Core intrinsics bind directly to native implementations.** The compiler now
+  emits `OP_CALL_NATIVE_R` trampolines for `@[core]` functions and the loader
+  wires module exports to the VM’s native table so calls dispatch into the C
+  runtime, with dedicated backend coverage to lock in the behavior.【F:src/compiler/backend/codegen/functions.c†L472-L547】【F:src/vm/runtime/vm.c†L94-L214】【F:tests/unit/test_codegen_core_intrinsics.c†L1-L126】
 
 ### ⚠️ Gaps before executing this roadmap
 
-* **Attribute-based intrinsic binding is not implemented.** The planned
-  `@[core("...")]` syntax is currently documentation-only and will require
-  parser, type-checker, and codegen support before stdlib wrappers can call into
-  VM intrinsics.
 * **Stdlib modules are placeholders.** `std/math.orus` only offers integer
   helpers needed for resolver tests; it lacks floating-point APIs, constants,
   and visibility rules described later in this roadmap.【F:std/math.orus†L1-L8】
@@ -43,15 +43,13 @@ This roadmap defines how the Orus standard library will evolve under the **Rust-
 
 ### 🛠️ Proposed tasks to close readiness gaps
 
-1. **Implement attribute-bound intrinsics.**
-   * Extend the parser to accept `@[core("symbol")]` metadata on function
-     declarations and thread the attribute through the typed AST.
-   * Teach the type-checker to validate intrinsic signatures against the
-     corresponding VM declarations.
-   * Update codegen to emit trampoline stubs that dispatch to the registered
-     intrinsic during module linking.
-   * Add end-to-end tests covering missing attributes, mismatched signatures,
-     and successful intrinsic calls from `std/math`.
+1. **Polish attribute-bound intrinsics.**
+   * Expand the stdlib wrappers so public APIs delegate to the new trampolines
+     and verify cross-module re-exports continue to work.
+   * Harden diagnostics around duplicate bindings or missing native
+     implementations now that the VM wires symbols at load time.
+   * Add integration coverage exercising module imports that forward these
+     trampolines to downstream users.
 
 2. **Author the real math module.**
    * Replace the placeholder helpers with the full floating-point API (trig,

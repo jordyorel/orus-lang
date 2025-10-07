@@ -258,6 +258,8 @@ FUSED_LOOP_BYTECODE_TEST_BIN = $(BUILDDIR)/tests/test_fused_loop_bytecode
 ADD_I32_IMM_TEST_BIN = $(BUILDDIR)/tests/test_vm_add_i32_imm
 BUILTIN_INPUT_TEST_BIN = $(BUILDDIR)/tests/test_builtin_input
 CONSTANT_FOLD_TEST_BIN = $(BUILDDIR)/tests/test_constant_folding
+CORE_INTRINSIC_TEST_BIN = $(BUILDDIR)/tests/test_codegen_core_intrinsics
+CORE_INTRINSIC_RUNTIME_TEST_BIN = $(BUILDDIR)/tests/test_vm_core_intrinsics
 BUILTIN_SORTED_ORUS_TESTS = \
     tests/builtins/sorted_runtime.orus
 BUILTIN_SORTED_ORUS_FAIL_TESTS = \
@@ -429,6 +431,9 @@ _test-run: $(ORUS)
 	@echo "\033[36m=== Scope Tracking Tests ===\033[0m"
 	@$(MAKE) scope-tracking-tests
 	@echo ""
+	@echo "\033[36m=== Core Intrinsic Codegen Tests ===\033[0m"
+	@$(MAKE) core-intrinsic-tests
+	@echo ""
 	@echo "\033[36m=== Fused While Codegen Tests ===\033[0m"
 	@$(MAKE) fused-while-tests
 	@echo ""
@@ -518,6 +523,22 @@ $(SCOPE_TRACKING_TEST_BIN): tests/unit/test_scope_stack.c $(COMPILER_OBJS) $(VM_
 scope-tracking-tests: $(SCOPE_TRACKING_TEST_BIN)
 	@echo "Running scope tracking tests..."
 	@./$(SCOPE_TRACKING_TEST_BIN)
+
+$(CORE_INTRINSIC_TEST_BIN): tests/unit/test_codegen_core_intrinsics.c $(COMPILER_OBJS) $(VM_OBJS)
+	@mkdir -p $(dir $@)
+	@echo "Compiling core intrinsic codegen tests..."
+	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+
+$(CORE_INTRINSIC_RUNTIME_TEST_BIN): tests/unit/test_vm_core_intrinsics.c $(COMPILER_OBJS) $(VM_OBJS)
+	@mkdir -p $(dir $@)
+	@echo "Compiling core intrinsic runtime tests..."
+	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+
+core-intrinsic-tests: $(CORE_INTRINSIC_TEST_BIN) $(CORE_INTRINSIC_RUNTIME_TEST_BIN)
+	@echo "Running core intrinsic codegen tests..."
+	@./$(CORE_INTRINSIC_TEST_BIN)
+	@echo "Running core intrinsic runtime tests..."
+	@./$(CORE_INTRINSIC_RUNTIME_TEST_BIN)
 
 $(FUSED_WHILE_TEST_BIN): tests/unit/test_codegen_fused_while.c $(COMPILER_OBJS) $(VM_OBJS)
 	@mkdir -p $(dir $@)

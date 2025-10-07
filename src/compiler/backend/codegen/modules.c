@@ -63,6 +63,8 @@ void record_module_export(CompilerContext* ctx, const char* name, ModuleExportKi
     }
 
     ctx->module_exports[ctx->module_export_count].type = cloned_type;
+    ctx->module_exports[ctx->module_export_count].function_index = -1;
+    ctx->module_exports[ctx->module_export_count].intrinsic_symbol = NULL;
     ctx->module_export_count++;
 }
 
@@ -83,6 +85,38 @@ void set_module_export_metadata(CompilerContext* ctx, const char* name, int reg,
             entry->type = cloned;
         }
     }
+}
+
+void set_module_export_function_index(CompilerContext* ctx, const char* name, int function_index) {
+    if (!ctx || !ctx->is_module || !name || function_index < 0) {
+        return;
+    }
+
+    ModuleExportEntry* entry = find_module_export_entry(ctx, name);
+    if (!entry) {
+        return;
+    }
+
+    entry->function_index = function_index;
+}
+
+void set_module_export_intrinsic(CompilerContext* ctx, const char* name, const char* symbol) {
+    if (!ctx || !ctx->is_module || !name || !symbol) {
+        return;
+    }
+
+    ModuleExportEntry* entry = find_module_export_entry(ctx, name);
+    if (!entry) {
+        return;
+    }
+
+    char* copy = orus_strdup(symbol);
+    if (!copy) {
+        return;
+    }
+
+    free(entry->intrinsic_symbol);
+    entry->intrinsic_symbol = copy;
 }
 
 static bool module_import_exists(const CompilerContext* ctx, const char* module_name, const char* symbol_name) {
