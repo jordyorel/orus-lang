@@ -73,28 +73,50 @@ double orus_pow(double a, double b) { return pow(a, b); }
 double orus_sqrt(double x) { return sqrt(x); }
 ```
 
-Exposed to the VM as `__c_sin`, `__c_cos`, etc.
+These are registered inside the VM under internal symbol names:
+`__c_sin`, `__c_cos`, `__c_pow`, `__c_sqrt`.
+They are *never directly visible* to user code.
 
-### **Orus Wrapper**
+---
+
+### **Orus Wrapper (public stdlib module)**
 
 ```orus
 // std/math.orus
 
-extern fn __c_sin(f64) -> f64
-extern fn __c_cos(f64) -> f64
-extern fn __c_pow(f64, f64) -> f64
-extern fn __c_sqrt(f64) -> f64
+@[core("__c_sin")]
+fn __c_sin(x: f64) -> f64
 
+@[core("__c_cos")]
+fn __c_cos(x: f64) -> f64
+
+@[core("__c_pow")]
+fn __c_pow(a: f64, b: f64) -> f64
+
+@[core("__c_sqrt")]
+fn __c_sqrt(x: f64) -> f64
+
+
+// Public API wrappers
 fn sin(x: f64) -> f64: return __c_sin(x)
 fn cos(x: f64) -> f64: return __c_cos(x)
 fn pow(a: f64, b: f64) -> f64: return __c_pow(a, b)
 fn sqrt(x: f64) -> f64: return __c_sqrt(x)
 
+
+// Constants
 const PI: f64 = 3.141592653589793
 const E: f64 = 2.718281828459045
 ```
 
-### **Usage**
+* The `@[core("...")]` attribute tells the compiler:
+
+  > “This function’s body lives in the VM core under the given symbol.”
+* Users never call `__c_*` directly — they only see `math.sin`, `math.cos`, etc.
+
+---
+
+### **Usage Example**
 
 ```orus
 use math
@@ -106,20 +128,74 @@ print(pow(2.0, 10.0))        // 1024.0
 
 ---
 
+✅ With this structure:
+
+* **VM intrinsics** remain hidden.
+* **Stdlib provides the public API.**
+* **Namespaces enforce modularity.**
+
+
+---
+
 ## 🧪 Phase 3 – Testing & Tooling
 
-1. **Unit tests**
+### 1. **Unit Tests for Math Functions**
 
-   * Validate all `math` functions against known values.
-   * Place under `tests/std/math.orus`.
+* Validate correctness of all math functions against known values.
+* Example tests under `tests/std/math.orus`:
 
-2. **Import resolution tests**
+  ```orus
+  use math
 
-   * Ensure `use math` loads functions only via module, not directly.
+  assert math.sin(math.PI / 2) == 1.0
+  assert math.cos(0.0) == 1.0
+  assert math.pow(2.0, 8.0) == 256.0
+  assert math.sqrt(9.0) == 3.0
+  ```
 
-3. **Performance baselines**
 
-   * Benchmark calls (`math.sin`) vs direct C to confirm negligible overhead.
+### 2. **Import Resolution & Visibility Tests**
+
+* Confirm that public functions/constants can be imported:
+
+  ```orus
+  use math: sin, PI
+  assert sin(PI / 2) == 1.0
+  ```
+* Confirm that internal VM intrinsics (`__c_*`) **cannot** be imported or used directly:
+
+  ```orus
+  use math: __c_sin   // ❌ should fail at compile-time
+  ```
+* Expected diagnostic:
+
+  ```
+  error: symbol `__c_sin` is not exported by module `math`
+  ```
+
+
+### 3. **Negative Tests for Direct Access**
+
+* Ensure user code cannot bypass stdlib and call VM hooks:
+
+```orus
+__c_sin(1.0)   // ❌ should fail: unknown symbol
+```
+* Compiler should reject `__c_*` identifiers outside stdlib files.
+
+
+### 4. **Performance Guardrails**
+
+* Benchmark wrapper calls vs direct C calls to confirm negligible overhead.
+* Example: `math.sin` should be within ~1–2% of calling `sin()` in C directly.
+
+
+✅ With this, you guarantee:
+
+* **Correctness** (math works).
+* **Encapsulation** (only `math.*` API is visible).
+* **Security** (no userland direct access to VM internals).
+* **Performance** (wrappers are essentially zero-cost).
 
 ---
 
