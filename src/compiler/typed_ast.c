@@ -221,6 +221,8 @@ TypedASTNode* create_typed_ast_node(ASTNode* original) {
             typed->typed.function.isMethod = original->function.isMethod;
             typed->typed.function.isInstanceMethod = original->function.isInstanceMethod;
             typed->typed.function.methodStructName = original->function.methodStructName;
+            typed->typed.function.isCoreIntrinsic = original->function.hasCoreIntrinsic;
+            typed->typed.function.coreIntrinsicSymbol = original->function.coreIntrinsicSymbol;
             break;
         case NODE_CALL:
             typed->typed.call.callee = NULL;

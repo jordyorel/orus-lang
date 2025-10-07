@@ -163,6 +163,8 @@ struct TypedASTNode {
             bool isMethod;
             bool isInstanceMethod;
             const char* methodStructName;
+            bool isCoreIntrinsic;
+            const char* coreIntrinsicSymbol;
         } function;
         struct {
             TypedASTNode* callee;
