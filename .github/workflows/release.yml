@@ -42,8 +42,64 @@ jobs:
             echo "from_tag=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Detect version change
+        id: version_changed
+        if: steps.trigger.outputs.from_tag == 'false'
+        env:
+          PREVIOUS_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+
+          VERSION_FILE="include/public/version.h"
+          if [[ -n "${PREVIOUS_SHA}" && "${PREVIOUS_SHA}" != "0000000000000000000000000000000000000000" ]]; then
+            if git diff --quiet "${PREVIOUS_SHA}" "${GITHUB_SHA}" -- "$VERSION_FILE"; then
+              echo "Version file unchanged between ${PREVIOUS_SHA} and ${GITHUB_SHA}."
+              echo "changed=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+
+          echo "Version file changed; release will be created."
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Decide if release is required
+        id: release_needed
+        env:
+          FROM_TAG: ${{ steps.trigger.outputs.from_tag }}
+          VERSION_CHANGED: ${{ steps.version_changed.outputs.changed }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+
+          ref_name="${GITHUB_REF}"
+          default_branch="refs/heads/${DEFAULT_BRANCH:-main}"
+
+          if [[ "${FROM_TAG}" == "true" ]]; then
+            echo "Release triggered by tag push ${ref_name}."
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            echo "reason=tag" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ "${ref_name}" != "${default_branch}" ]]; then
+            echo "Push to ${ref_name} does not match default branch ${default_branch}; skipping release."
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            echo "reason=non_default_branch" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ "${VERSION_CHANGED}" == "true" ]]; then
+            echo "Version change detected on default branch; release required."
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            echo "reason=version_change" >> "$GITHUB_OUTPUT"
+          else
+            echo "No version change detected; skipping release."
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            echo "reason=unchanged" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Validate tag matches version
-        if: steps.trigger.outputs.from_tag == 'true'
+        if: steps.release_needed.outputs.should_release == 'true' && steps.trigger.outputs.from_tag == 'true'
         run: |
           TAG="${GITHUB_REF##*/}"
           VERSION="${{ steps.version.outputs.version }}"
@@ -52,13 +108,32 @@ jobs:
             exit 1
           fi
 
+      - name: Create version tag
+        if: steps.release_needed.outputs.should_release == 'true' && steps.trigger.outputs.from_tag == 'false'
+        env:
+          TAG_NAME: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
+            echo "Tag ${TAG_NAME} already exists locally."
+          else
+            git tag "$TAG_NAME" "$GITHUB_SHA"
+          fi
+
+          echo "Pushing tag ${TAG_NAME} to origin."
+          git push origin "$TAG_NAME"
+
       - name: Build release artifacts
+        if: steps.release_needed.outputs.should_release == 'true'
         run: |
           make clean
           make release
 
       - name: Check for binary changes
-        if: steps.trigger.outputs.from_tag == 'true'
+        if: steps.release_needed.outputs.should_release == 'true'
         env:
           TAG_NAME: ${{ steps.version.outputs.version }}
           GH_REPO: ${{ github.repository }}
@@ -132,7 +207,7 @@ jobs:
           fi
 
       - name: Delete existing release (if any)
-        if: steps.trigger.outputs.from_tag == 'true'
+        if: steps.release_needed.outputs.should_release == 'true'
         env:
           TAG_NAME: ${{ steps.version.outputs.version }}
           GH_REPO: ${{ github.repository }}
@@ -151,7 +226,7 @@ jobs:
           rm -f response.json
 
       - name: Create GitHub release
-        if: steps.trigger.outputs.from_tag == 'true'
+        if: steps.release_needed.outputs.should_release == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.version }}
