@@ -81,6 +81,31 @@ bool vm_get_error_report_pending(void) {
     return vm_error_report_pending;
 }
 
+static const IntrinsicSignatureInfo intrinsic_signature_table[] = {
+    {"__c_sin", 1, {TYPE_F64}, TYPE_F64},
+    {"__c_cos", 1, {TYPE_F64}, TYPE_F64},
+    {"__c_pow", 2, {TYPE_F64, TYPE_F64}, TYPE_F64},
+    {"__c_sqrt", 1, {TYPE_F64}, TYPE_F64},
+};
+
+static const size_t intrinsic_signature_table_count =
+    sizeof(intrinsic_signature_table) / sizeof(intrinsic_signature_table[0]);
+
+const IntrinsicSignatureInfo* vm_get_intrinsic_signature(const char* symbol) {
+    if (!symbol) {
+        return NULL;
+    }
+
+    for (size_t i = 0; i < intrinsic_signature_table_count; i++) {
+        const IntrinsicSignatureInfo* entry = &intrinsic_signature_table[i];
+        if (entry->symbol && strcmp(entry->symbol, symbol) == 0) {
+            return entry;
+        }
+    }
+
+    return NULL;
+}
+
 // Forward declarations
 static InterpretResult run(void);
 void runtimeError(ErrorType type, SrcLocation location,
