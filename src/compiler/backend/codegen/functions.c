@@ -369,6 +369,8 @@ int compile_function_declaration(CompilerContext* ctx, TypedASTNode* func) {
     const char* method_struct = func->original->function.methodStructName;
     bool is_method = func->original->function.isMethod;
     int arity = func->original->function.paramCount;
+    bool is_core_intrinsic = func->typed.function.isCoreIntrinsic;
+    const char* intrinsic_symbol = func->typed.function.coreIntrinsicSymbol;
 
     DEBUG_CODEGEN_PRINT("Compiling function declaration: %s\n",
            func_name ? func_name : "(anonymous)");
@@ -416,6 +418,9 @@ int compile_function_declaration(CompilerContext* ctx, TypedASTNode* func) {
         if (!ctx->compiling_function && ctx->is_module &&
             func->original->function.isPublic && !func->original->function.isMethod && func_name) {
             set_module_export_metadata(ctx, func_name, func_reg, function_type);
+            if (is_core_intrinsic && intrinsic_symbol) {
+                set_module_export_intrinsic(ctx, func_name, intrinsic_symbol);
+            }
         }
         if (is_method && method_struct) {
             char* alias_name = create_method_symbol_name(method_struct, func_name);
@@ -439,86 +444,104 @@ int compile_function_declaration(CompilerContext* ctx, TypedASTNode* func) {
     BytecodeBuffer* function_bytecode = init_bytecode_buffer();
     if (!function_bytecode) return -1;
 
-    // Save outer compilation state
-    BytecodeBuffer* saved_bytecode = ctx->bytecode;
-    SymbolTable* old_scope = ctx->symbols;
-    bool old_compiling_function = ctx->compiling_function;
-    int saved_function_scope_depth = ctx->function_scope_depth;
+    if (!is_core_intrinsic) {
+        // Save outer compilation state
+        BytecodeBuffer* saved_bytecode = ctx->bytecode;
+        SymbolTable* old_scope = ctx->symbols;
+        bool old_compiling_function = ctx->compiling_function;
+        int saved_function_scope_depth = ctx->function_scope_depth;
 
-    // Switch to function compilation context
-    ctx->bytecode = function_bytecode;
-    ctx->symbols = create_symbol_table(old_scope);
-    ctx->compiling_function = true;
-    ctx->function_scope_depth = ctx->symbols->scope_depth;
+        // Switch to function compilation context
+        ctx->bytecode = function_bytecode;
+        ctx->symbols = create_symbol_table(old_scope);
+        ctx->compiling_function = true;
+        ctx->function_scope_depth = ctx->symbols->scope_depth;
 
-    // Make function name visible inside its own body for recursion
-    if (func_name) {
-        if (!register_variable(ctx, ctx->symbols, func_name, func_reg,
-                               function_type, false, false,
-                               func->original->location, true)) {
-            ctx->has_compilation_errors = true;
-            return -1;
-        }
-    }
-
-    // Register parameters
-    int param_base = FRAME_REG_START + FRAME_REGISTERS - arity;
-    if (param_base < FRAME_REG_START) param_base = FRAME_REG_START;
-    for (int i = 0; i < arity; i++) {
-        if (func->original->function.params[i].name) {
-            int param_reg = param_base + i;
-            if (!register_variable(ctx, ctx->symbols,
-                                   func->original->function.params[i].name,
-                                   param_reg, getPrimitiveType(TYPE_I32), false, false,
+        // Make function name visible inside its own body for recursion
+        if (func_name) {
+            if (!register_variable(ctx, ctx->symbols, func_name, func_reg,
+                                   function_type, false, false,
                                    func->original->location, true)) {
                 ctx->has_compilation_errors = true;
                 return -1;
             }
         }
-    }
 
-    // Compile function body
-    Type* return_type = NULL;
-    if (function_type && function_type->kind == TYPE_FUNCTION) {
-        return_type = function_type->info.function.returnType;
-    }
-
-    if (func->typed.function.body) {
-        if (func->typed.function.body->original->type == NODE_BLOCK) {
-            int statement_count = func->typed.function.body->typed.block.count;
-            for (int i = 0; i < statement_count; i++) {
-                TypedASTNode* stmt = func->typed.function.body->typed.block.statements[i];
-                if (!stmt) {
-                    continue;
+        // Register parameters
+        int param_base = FRAME_REG_START + FRAME_REGISTERS - arity;
+        if (param_base < FRAME_REG_START) param_base = FRAME_REG_START;
+        for (int i = 0; i < arity; i++) {
+            if (func->original->function.params[i].name) {
+                int param_reg = param_base + i;
+                if (!register_variable(ctx, ctx->symbols,
+                                       func->original->function.params[i].name,
+                                       param_reg, getPrimitiveType(TYPE_I32), false, false,
+                                       func->original->location, true)) {
+                    ctx->has_compilation_errors = true;
+                    return -1;
                 }
-
-                bool is_last = (i == statement_count - 1);
-                if (is_last && ensure_statement_terminates_with_return(ctx, stmt, return_type)) {
-                    continue;
-                }
-
-                compile_statement(ctx, stmt);
-            }
-        } else {
-            if (!ensure_statement_terminates_with_return(ctx, func->typed.function.body, return_type)) {
-                compile_statement(ctx, func->typed.function.body);
             }
         }
-    }
 
-    // Ensure function ends with return
-    if (function_bytecode->count == 0 ||
-        (function_bytecode->count >= 2 &&
-         function_bytecode->instructions[function_bytecode->count - 2] != OP_RETURN_R)) {
-        emit_byte_to_buffer(function_bytecode, OP_RETURN_VOID);
-    }
+        // Compile function body
+        Type* return_type = NULL;
+        if (function_type && function_type->kind == TYPE_FUNCTION) {
+            return_type = function_type->info.function.returnType;
+        }
 
-    // Restore outer compilation state
-    ctx->bytecode = saved_bytecode;
-    free_symbol_table(ctx->symbols);
-    ctx->symbols = old_scope;
-    ctx->compiling_function = old_compiling_function;
-    ctx->function_scope_depth = saved_function_scope_depth;
+        if (func->typed.function.body) {
+            if (func->typed.function.body->original->type == NODE_BLOCK) {
+                int statement_count = func->typed.function.body->typed.block.count;
+                for (int i = 0; i < statement_count; i++) {
+                    TypedASTNode* stmt = func->typed.function.body->typed.block.statements[i];
+                    if (!stmt) {
+                        continue;
+                    }
+
+                    bool is_last = (i == statement_count - 1);
+                    if (is_last && ensure_statement_terminates_with_return(ctx, stmt, return_type)) {
+                        continue;
+                    }
+
+                    compile_statement(ctx, stmt);
+                }
+            } else {
+                if (!ensure_statement_terminates_with_return(ctx, func->typed.function.body, return_type)) {
+                    compile_statement(ctx, func->typed.function.body);
+                }
+            }
+        }
+
+        // Ensure function ends with return
+        if (function_bytecode->count == 0 ||
+            (function_bytecode->count >= 2 &&
+             function_bytecode->instructions[function_bytecode->count - 2] != OP_RETURN_R)) {
+            emit_byte_to_buffer(function_bytecode, OP_RETURN_VOID);
+        }
+
+        // Restore outer compilation state
+        ctx->bytecode = saved_bytecode;
+        free_symbol_table(ctx->symbols);
+        ctx->symbols = old_scope;
+        ctx->compiling_function = old_compiling_function;
+        ctx->function_scope_depth = saved_function_scope_depth;
+    } else {
+        bytecode_set_location(function_bytecode, func->original->location);
+        uint8_t result_reg = FRAME_REG_START;
+        uint8_t first_arg_reg = 0;
+        if (arity > 0) {
+            int param_base = FRAME_REG_START + FRAME_REGISTERS - arity;
+            if (param_base < FRAME_REG_START) {
+                param_base = FRAME_REG_START;
+            }
+            first_arg_reg = (uint8_t)param_base;
+        }
+        emit_instruction_to_buffer(function_bytecode, OP_CALL_NATIVE_R, 0,
+                                   first_arg_reg, (uint8_t)arity);
+        emit_byte_to_buffer(function_bytecode, result_reg);
+        emit_byte_to_buffer(function_bytecode, OP_RETURN_R);
+        emit_byte_to_buffer(function_bytecode, result_reg);
+    }
 
     // Register function for VM finalization and get index
     const char* debug_name = func_name ? func_name : "(lambda)";
@@ -537,6 +560,11 @@ int compile_function_declaration(CompilerContext* ctx, TypedASTNode* func) {
         }
         free_bytecode_buffer(function_bytecode);
         return -1;
+    }
+
+    if (!ctx->compiling_function && ctx->is_module && func_name &&
+        func->original->function.isPublic && !func->original->function.isMethod) {
+        set_module_export_function_index(ctx, func_name, function_index);
     }
 
     if (mangled_debug) {

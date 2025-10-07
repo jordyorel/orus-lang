@@ -423,6 +423,8 @@ typedef struct {
     ModuleExportKind kind;
     int register_index;
     Type* type;
+    int function_index;
+    char* intrinsic_symbol;
 } ModuleExportEntry;
 
 #define MODULE_EXPORT_NO_REGISTER UINT16_MAX
@@ -988,9 +990,12 @@ static inline void compiler_reset_exports(Compiler* compiler) {
     }
     for (int i = 0; i < compiler->exportCount; ++i) {
         free(compiler->exports[i].name);
+        free(compiler->exports[i].intrinsic_symbol);
         compiler->exports[i].name = NULL;
         compiler->exports[i].kind = MODULE_EXPORT_KIND_GLOBAL;
         compiler->exports[i].register_index = -1;
+        compiler->exports[i].function_index = -1;
+        compiler->exports[i].intrinsic_symbol = NULL;
         if (compiler->exports[i].type) {
             module_free_export_type(compiler->exports[i].type);
             compiler->exports[i].type = NULL;
