@@ -238,6 +238,27 @@ static bool test_core_attribute_preserves_intrinsic_metadata(void) {
         goto cleanup;
     }
 
+    if (!typed_fn->typed.function.intrinsicSignature) {
+        fprintf(stderr, "Typed AST missing intrinsic signature metadata\n");
+        success = false;
+        goto cleanup;
+    }
+
+    if (strcmp(typed_fn->typed.function.intrinsicSignature->symbol, "__c_sin") != 0) {
+        fprintf(stderr, "Intrinsic signature stored unexpected symbol '%s'\n",
+                typed_fn->typed.function.intrinsicSignature->symbol);
+        success = false;
+        goto cleanup;
+    }
+
+    if (typed_fn->typed.function.intrinsicSignature->paramCount != 1 ||
+        typed_fn->typed.function.intrinsicSignature->paramTypes[0] != TYPE_F64 ||
+        typed_fn->typed.function.intrinsicSignature->returnType != TYPE_F64) {
+        fprintf(stderr, "Intrinsic signature did not record expected f64 -> f64 mapping\n");
+        success = false;
+        goto cleanup;
+    }
+
 cleanup:
     free_typed_ast_node(typed);
     freeAST(ast);

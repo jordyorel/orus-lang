@@ -291,6 +291,17 @@ struct Type {
     TypeExtension* ext;
 };
 
+#define ORUS_MAX_INTRINSIC_PARAMS 8
+
+typedef struct {
+    const char* symbol;
+    int paramCount;
+    TypeKind paramTypes[ORUS_MAX_INTRINSIC_PARAMS];
+    TypeKind returnType;
+} IntrinsicSignatureInfo;
+
+const IntrinsicSignatureInfo* vm_get_intrinsic_signature(const char* symbol);
+
 // Function
 typedef struct {
     int start;

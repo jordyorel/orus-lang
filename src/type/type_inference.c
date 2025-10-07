@@ -4348,12 +4348,107 @@ static TypedASTNode* generate_typed_ast_recursive(ASTNode* ast, TypeEnv* type_en
             }
             break;
 
-        case NODE_FUNCTION:
+        case NODE_FUNCTION: {
             if (ast->function.returnType) {
-                typed->typed.function.returnType = generate_typed_ast_recursive(ast->function.returnType, type_env);
+                typed->typed.function.returnType =
+                    generate_typed_ast_recursive(ast->function.returnType, type_env);
+                if (ast->function.returnType && !typed->typed.function.returnType) {
+                    free_typed_ast_node(typed);
+                    return NULL;
+                }
             }
-            typed->typed.function.body = generate_typed_ast_recursive(ast->function.body, type_env);
+
+            if (ast->function.hasCoreIntrinsic) {
+                const char* symbol = ast->function.coreIntrinsicSymbol;
+                const char* fn_name = ast->function.name ? ast->function.name : "<anonymous>";
+                const char* reported_symbol = symbol ? symbol : "<unknown>";
+
+                if (ast->function.body) {
+                    report_compile_error(E1006_INVALID_SYNTAX, ast->location,
+                                         "Core intrinsic '%s' bound to function '%s' cannot declare a body.",
+                                         reported_symbol, fn_name);
+                    free_typed_ast_node(typed);
+                    return NULL;
+                }
+
+                const IntrinsicSignatureInfo* signature = vm_get_intrinsic_signature(symbol);
+                if (!signature) {
+                    report_compile_error(E2003_UNDEFINED_TYPE, ast->location,
+                                         "Function '%s' references unknown core intrinsic symbol '%s'.",
+                                         fn_name, reported_symbol);
+                    free_typed_ast_node(typed);
+                    return NULL;
+                }
+
+                Type* function_type = typed->resolvedType;
+                if (!function_type || function_type->kind != TYPE_FUNCTION) {
+                    report_compile_error(E2002_INCOMPATIBLE_TYPES, ast->location,
+                                         "Function '%s' must resolve to a function type to bind intrinsic '%s'.",
+                                         fn_name, signature->symbol);
+                    free_typed_ast_node(typed);
+                    return NULL;
+                }
+
+                int actual_params = function_type->info.function.arity;
+                if (actual_params != signature->paramCount) {
+                    report_compile_error(E2009_ARGUMENT_COUNT_MISMATCH, ast->location,
+                                         "Intrinsic '%s' expects %d parameter(s) but function '%s' declares %d.",
+                                         signature->symbol, signature->paramCount, fn_name, actual_params);
+                    free_typed_ast_node(typed);
+                    return NULL;
+                }
+
+                if (signature->paramCount > 0) {
+                    if (!function_type->info.function.paramTypes) {
+                        report_compile_error(E2002_INCOMPATIBLE_TYPES, ast->location,
+                                             "Intrinsic '%s' requires parameter types but function '%s' is missing annotations.",
+                                             signature->symbol, fn_name);
+                        free_typed_ast_node(typed);
+                        return NULL;
+                    }
+
+                    for (int i = 0; i < signature->paramCount; i++) {
+                        Type* param_type = function_type->info.function.paramTypes[i];
+                        TypeKind param_kind = param_type ? param_type->kind : TYPE_UNKNOWN;
+                        if (param_kind != signature->paramTypes[i]) {
+                            report_compile_error(
+                                E2002_INCOMPATIBLE_TYPES,
+                                ast->location,
+                                "Parameter %d of intrinsic '%s' must be %s but function '%s' resolved to %s.",
+                                i + 1,
+                                signature->symbol,
+                                getTypeName(signature->paramTypes[i]),
+                                fn_name,
+                                getTypeName(param_kind));
+                            free_typed_ast_node(typed);
+                            return NULL;
+                        }
+                    }
+                }
+
+                Type* return_type = function_type->info.function.returnType;
+                TypeKind return_kind = return_type ? return_type->kind : TYPE_UNKNOWN;
+                if (return_kind != signature->returnType) {
+                    report_compile_error(E2002_INCOMPATIBLE_TYPES, ast->location,
+                                         "Intrinsic '%s' must return %s but function '%s' resolved to %s.",
+                                         signature->symbol, getTypeName(signature->returnType), fn_name,
+                                         getTypeName(return_kind));
+                    free_typed_ast_node(typed);
+                    return NULL;
+                }
+
+                typed->typed.function.intrinsicSignature = signature;
+                typed->typed.function.body = NULL;
+            } else if (ast->function.body) {
+                typed->typed.function.body =
+                    generate_typed_ast_recursive(ast->function.body, type_env);
+                if (!typed->typed.function.body && ast->function.body) {
+                    free_typed_ast_node(typed);
+                    return NULL;
+                }
+            }
             break;
+        }
 
         case NODE_CALL:
             typed->typed.call.callee = generate_typed_ast_recursive(ast->call.callee, type_env);

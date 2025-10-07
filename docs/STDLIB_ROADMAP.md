@@ -145,6 +145,12 @@ These are registered inside the VM under internal symbol names:
 `__c_sin`, `__c_cos`, `__c_pow`, `__c_sqrt`.
 They are *never directly visible* to user code.
 
+The VM now exposes a **canonical intrinsic signature table** (see
+`src/vm/runtime/vm.c`) that records each `__c_*` symbol’s arity and expected
+Orus types. During type inference the compiler queries this registry to ensure
+stdlib wrappers match the VM contract and to surface precise diagnostics when a
+signature drifts.
+
 ---
 
 ### **Orus Wrapper (public stdlib module)**
@@ -181,6 +187,8 @@ const E: f64 = 2.718281828459045
 
   > “This function’s body lives in the VM core under the given symbol.”
 * Users never call `__c_*` directly — they only see `math.sin`, `math.cos`, etc.
+* Typed AST nodes cache the validated intrinsic signature so later passes can
+  reference the VM symbol when reporting errors.
 
 ---
 

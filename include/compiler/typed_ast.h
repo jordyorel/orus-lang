@@ -165,6 +165,7 @@ struct TypedASTNode {
             const char* methodStructName;
             bool isCoreIntrinsic;
             const char* coreIntrinsicSymbol;
+            const IntrinsicSignatureInfo* intrinsicSignature;
         } function;
         struct {
             TypedASTNode* callee;
