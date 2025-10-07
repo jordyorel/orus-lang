@@ -9,6 +9,7 @@ void record_module_export(CompilerContext* ctx, const char* name, ModuleExportKi
 void set_module_export_metadata(CompilerContext* ctx, const char* name, int reg, Type* type);
 void set_module_export_function_index(CompilerContext* ctx, const char* name, int function_index);
 void set_module_export_intrinsic(CompilerContext* ctx, const char* name, const char* symbol);
+void mark_module_export_internal_intrinsic(CompilerContext* ctx, const char* name);
 bool finalize_import_symbol(CompilerContext* ctx, const char* module_name, const char* symbol_name,
                             const char* alias_name, ModuleExportKind kind, uint16_t register_index,
                             Type* exported_type, SrcLocation location);

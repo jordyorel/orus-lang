@@ -65,6 +65,7 @@ void record_module_export(CompilerContext* ctx, const char* name, ModuleExportKi
     ctx->module_exports[ctx->module_export_count].type = cloned_type;
     ctx->module_exports[ctx->module_export_count].function_index = -1;
     ctx->module_exports[ctx->module_export_count].intrinsic_symbol = NULL;
+    ctx->module_exports[ctx->module_export_count].is_internal_intrinsic = false;
     ctx->module_export_count++;
 }
 
@@ -117,6 +118,19 @@ void set_module_export_intrinsic(CompilerContext* ctx, const char* name, const c
 
     free(entry->intrinsic_symbol);
     entry->intrinsic_symbol = copy;
+}
+
+void mark_module_export_internal_intrinsic(CompilerContext* ctx, const char* name) {
+    if (!ctx || !ctx->is_module || !name) {
+        return;
+    }
+
+    ModuleExportEntry* entry = find_module_export_entry(ctx, name);
+    if (!entry) {
+        return;
+    }
+
+    entry->is_internal_intrinsic = true;
 }
 
 static bool module_import_exists(const CompilerContext* ctx, const char* module_name, const char* symbol_name) {

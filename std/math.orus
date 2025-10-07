@@ -1,8 +1,28 @@
-// Minimal standard math module for resolver tests
-pub PI:i32 := 314
+// Standard math module implemented with VM intrinsics
 
-pub fn add(left: i32, right: i32) -> i32:
-    return left + right
+@[core("__c_sin")]
+fn __c_sin(x: f64) -> f64
 
-pub fn scale(value: i32, factor: i32) -> i32:
-    return value * factor
+@[core("__c_cos")]
+fn __c_cos(x: f64) -> f64
+
+@[core("__c_pow")]
+fn __c_pow(base: f64, exponent: f64) -> f64
+
+@[core("__c_sqrt")]
+fn __c_sqrt(x: f64) -> f64
+
+pub PI: f64 := 3.141592653589793
+pub E: f64 := 2.718281828459045
+
+pub fn sin(x: f64) -> f64:
+    return __c_sin(x)
+
+pub fn cos(x: f64) -> f64:
+    return __c_cos(x)
+
+pub fn pow(base: f64, exponent: f64) -> f64:
+    return __c_pow(base, exponent)
+
+pub fn sqrt(x: f64) -> f64:
+    return __c_sqrt(x)

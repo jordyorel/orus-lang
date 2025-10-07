@@ -23,7 +23,7 @@ This roadmap defines how the Orus standard library will evolve under the **Rust-
   required for bundling stdlib bytecode once authored.【F:src/vm/module_manager.c†L168-L520】
 * **Regression tests cover current resolver behavior.** The suite confirms that
   bundled `std/math.orus` resolves by default, selective imports expose only
-  the requested names, and `ORUSPATH` can introduce alternate trees.【F:tests/modules/resolver/default_std_import.orus†L1-L5】【F:tests/modules/resolver/selective_std_import.orus†L1-L4】【F:tests/modules/resolver/oruspath_override.orus†L1-L4】【F:tests/modules/resolver/README.md†L1-L15】
+  the requested names, and `ORUSPATH` can introduce alternate trees.【F:tests/modules/resolver/default_std_import.orus†L1-L8】【F:tests/modules/resolver/selective_std_import.orus†L1-L5】【F:tests/modules/resolver/oruspath_override.orus†L1-L4】【F:tests/modules/resolver/README.md†L1-L16】
 * **Core intrinsics bind directly to native implementations.** The compiler now
   emits `OP_CALL_NATIVE_R` trampolines for `@[core]` functions and the loader
   wires module exports to the VM’s native table so calls dispatch into the C
@@ -31,9 +31,10 @@ This roadmap defines how the Orus standard library will evolve under the **Rust-
 
 ### ⚠️ Gaps before executing this roadmap
 
-* **Stdlib modules are placeholders.** `std/math.orus` only offers integer
-  helpers needed for resolver tests; it lacks floating-point APIs, constants,
-  and visibility rules described later in this roadmap.【F:std/math.orus†L1-L8】
+* **Math module now exports the first wave of wrappers.** `std/math.orus`
+  binds the VM intrinsics and exposes `sin`, `cos`, `pow`, `sqrt`, and the
+  `PI`/`E` constants, but trigonometric complements and logarithmic helpers are
+  still pending.【F:std/math.orus†L1-L24】
 * **Testing focuses on resolution, not semantics.** No math correctness or
   encapsulation tests exist yet, so Phase 3 test plans in this document remain
   TODO.
@@ -51,9 +52,9 @@ This roadmap defines how the Orus standard library will evolve under the **Rust-
    * Add integration coverage exercising module imports that forward these
      trampolines to downstream users.
 
-2. **Author the real math module.**
-   * Replace the placeholder helpers with the full floating-point API (trig,
-     exponential, and constants) promised in Phase 2 of this roadmap.
+2. **Expand the math module.**
+   * Build out the remaining floating-point API (tangent family, exponentials,
+     logarithms, etc.) on top of the intrinsic bindings now in place.
    * Document visibility for internal helpers and confirm that only intended
      symbols export through `use math`.
    * Provide regression tests for `math` wrappers to ensure values match the
@@ -163,22 +164,22 @@ fn __c_sin(x: f64) -> f64
 fn __c_cos(x: f64) -> f64
 
 @[core("__c_pow")]
-fn __c_pow(a: f64, b: f64) -> f64
+fn __c_pow(base: f64, exponent: f64) -> f64
 
 @[core("__c_sqrt")]
 fn __c_sqrt(x: f64) -> f64
 
 
 // Public API wrappers
-fn sin(x: f64) -> f64: return __c_sin(x)
-fn cos(x: f64) -> f64: return __c_cos(x)
-fn pow(a: f64, b: f64) -> f64: return __c_pow(a, b)
-fn sqrt(x: f64) -> f64: return __c_sqrt(x)
+pub fn sin(x: f64) -> f64: return __c_sin(x)
+pub fn cos(x: f64) -> f64: return __c_cos(x)
+pub fn pow(base: f64, exponent: f64) -> f64: return __c_pow(base, exponent)
+pub fn sqrt(x: f64) -> f64: return __c_sqrt(x)
 
 
 // Constants
-const PI: f64 = 3.141592653589793
-const E: f64 = 2.718281828459045
+pub PI: f64 := 3.141592653589793
+pub E: f64 := 2.718281828459045
 ```
 
 * The `@[core("...")]` attribute tells the compiler:
@@ -187,6 +188,21 @@ const E: f64 = 2.718281828459045
 * Users never call `__c_*` directly — they only see `math.sin`, `math.cos`, etc.
 * Typed AST nodes cache the validated intrinsic signature so later passes can
   reference the VM symbol when reporting errors.
+
+### ✅ Current public surface
+
+The math module currently exports the following bindings:
+
+* `PI: f64`
+* `E: f64`
+* `fn sin(x: f64) -> f64`
+* `fn cos(x: f64) -> f64`
+* `fn pow(base: f64, exponent: f64) -> f64`
+* `fn sqrt(x: f64) -> f64`
+
+Each wrapper simply delegates to its corresponding `__c_*` intrinsic, keeping
+the native entry points private while providing a stable surface for Orus
+programs.【F:std/math.orus†L1-L24】
 
 ---
 

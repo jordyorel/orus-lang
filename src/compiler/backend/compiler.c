@@ -961,6 +961,7 @@ static bool copy_compiled_bytecode(Compiler* legacy_compiler, CompilerContext* c
                 } else {
                     legacy_compiler->exports[i].intrinsic_symbol = NULL;
                 }
+                legacy_compiler->exports[i].is_internal_intrinsic = ctx->module_exports[i].is_internal_intrinsic;
                 ctx->module_exports[i].type = NULL;
                 if (!legacy_compiler->exports[i].name && ctx->module_exports[i].name) {
                     legacy_compiler->exportCount = i;

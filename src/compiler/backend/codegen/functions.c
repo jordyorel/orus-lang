@@ -415,8 +415,10 @@ int compile_function_declaration(CompilerContext* ctx, TypedASTNode* func) {
             }
         }
 
-        if (!ctx->compiling_function && ctx->is_module &&
-            func->original->function.isPublic && !func->original->function.isMethod && func_name) {
+        bool export_candidate = !ctx->compiling_function && ctx->is_module && func_name &&
+                                !func->original->function.isMethod &&
+                                (func->original->function.isPublic || is_core_intrinsic);
+        if (export_candidate) {
             set_module_export_metadata(ctx, func_name, func_reg, function_type);
             if (is_core_intrinsic && intrinsic_symbol) {
                 set_module_export_intrinsic(ctx, func_name, intrinsic_symbol);
@@ -563,7 +565,8 @@ int compile_function_declaration(CompilerContext* ctx, TypedASTNode* func) {
     }
 
     if (!ctx->compiling_function && ctx->is_module && func_name &&
-        func->original->function.isPublic && !func->original->function.isMethod) {
+        !func->original->function.isMethod &&
+        (func->original->function.isPublic || is_core_intrinsic)) {
         set_module_export_function_index(ctx, func_name, function_index);
     }
 

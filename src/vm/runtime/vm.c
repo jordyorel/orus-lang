@@ -9,7 +9,6 @@
 
 // register_vm.c - Register-based VM implementation
 #define _POSIX_C_SOURCE 200809L
-#include <math.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <stdio.h>
@@ -81,92 +80,6 @@ void vm_set_error_report_pending(bool pending) {
 
 bool vm_get_error_report_pending(void) {
     return vm_error_report_pending;
-}
-
-static const IntrinsicSignatureInfo intrinsic_signature_table[] = {
-    {"__c_sin", 1, {TYPE_F64}, TYPE_F64},
-    {"__c_cos", 1, {TYPE_F64}, TYPE_F64},
-    {"__c_pow", 2, {TYPE_F64, TYPE_F64}, TYPE_F64},
-    {"__c_sqrt", 1, {TYPE_F64}, TYPE_F64},
-};
-
-static const size_t intrinsic_signature_table_count =
-    sizeof(intrinsic_signature_table) / sizeof(intrinsic_signature_table[0]);
-
-const IntrinsicSignatureInfo* vm_get_intrinsic_signature(const char* symbol) {
-    if (!symbol) {
-        return NULL;
-    }
-
-    for (size_t i = 0; i < intrinsic_signature_table_count; i++) {
-        const IntrinsicSignatureInfo* entry = &intrinsic_signature_table[i];
-        if (entry->symbol && strcmp(entry->symbol, symbol) == 0) {
-            return entry;
-        }
-    }
-
-    return NULL;
-}
-
-static Value intrinsic_native_sin(int argCount, Value* args) {
-    (void)argCount;
-    if (!args) {
-        return F64_VAL(0.0);
-    }
-    double operand = IS_F64(args[0]) ? AS_F64(args[0]) : 0.0;
-    return F64_VAL(sin(operand));
-}
-
-static Value intrinsic_native_cos(int argCount, Value* args) {
-    (void)argCount;
-    if (!args) {
-        return F64_VAL(0.0);
-    }
-    double operand = IS_F64(args[0]) ? AS_F64(args[0]) : 0.0;
-    return F64_VAL(cos(operand));
-}
-
-static Value intrinsic_native_pow(int argCount, Value* args) {
-    (void)argCount;
-    if (!args) {
-        return F64_VAL(1.0);
-    }
-    double base = IS_F64(args[0]) ? AS_F64(args[0]) : 0.0;
-    double exp = (argCount > 1 && IS_F64(args[1])) ? AS_F64(args[1]) : 0.0;
-    return F64_VAL(pow(base, exp));
-}
-
-static Value intrinsic_native_sqrt(int argCount, Value* args) {
-    (void)argCount;
-    if (!args) {
-        return F64_VAL(0.0);
-    }
-    double operand = IS_F64(args[0]) ? AS_F64(args[0]) : 0.0;
-    return F64_VAL(sqrt(operand));
-}
-
-typedef struct {
-    const char* symbol;
-    NativeFn function;
-} IntrinsicBinding;
-
-static const IntrinsicBinding core_intrinsic_bindings[] = {
-    {"__c_sin", intrinsic_native_sin},
-    {"__c_cos", intrinsic_native_cos},
-    {"__c_pow", intrinsic_native_pow},
-    {"__c_sqrt", intrinsic_native_sqrt},
-};
-
-static NativeFn vm_lookup_core_intrinsic(const char* symbol) {
-    if (!symbol) {
-        return NULL;
-    }
-    for (size_t i = 0; i < sizeof(core_intrinsic_bindings) / sizeof(core_intrinsic_bindings[0]); ++i) {
-        if (strcmp(core_intrinsic_bindings[i].symbol, symbol) == 0) {
-            return core_intrinsic_bindings[i].function;
-        }
-    }
-    return NULL;
 }
 
 static int vm_bind_core_intrinsic(const char* symbol, const IntrinsicSignatureInfo* signature) {
@@ -717,8 +630,16 @@ InterpretResult interpret(const char* source) {
                 }
 
                 Type* exported_type = entry->type;
-                bool registered = register_module_export(repl_module, entry->name, entry->kind,
-                                                        entry->register_index, exported_type);
+                bool should_register = !entry->is_internal_intrinsic;
+                bool registered = true;
+                if (should_register) {
+                    registered = register_module_export(repl_module, entry->name, entry->kind,
+                                                        entry->register_index, exported_type,
+                                                        entry->intrinsic_symbol);
+                } else if (exported_type) {
+                    module_free_export_type(exported_type);
+                    exported_type = NULL;
+                }
                 if (!registered && exported_type) {
                     module_free_export_type(exported_type);
                     exported_type = NULL;
@@ -1898,9 +1819,16 @@ InterpretResult interpret_module(const char* path, const char* module_name_hint)
                 }
 
                 Type* exported_type = entry->type;
-                bool registered = register_module_export(module_entry, entry->name, entry->kind,
+                bool should_register = !entry->is_internal_intrinsic;
+                bool registered = true;
+                if (should_register) {
+                    registered = register_module_export(module_entry, entry->name, entry->kind,
                                                         entry->register_index, exported_type,
                                                         entry->intrinsic_symbol);
+                } else if (exported_type) {
+                    module_free_export_type(exported_type);
+                    exported_type = NULL;
+                }
                 if (!registered && exported_type) {
                     module_free_export_type(exported_type);
                     exported_type = NULL;
