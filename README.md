@@ -37,7 +37,7 @@ Orus supports multiple build configurations:
 # Production (optimized, creates 'orus')
 make release
 
-# Development (debugging, creates 'orus_debug')  
+# Development (debugging, creates 'orus_debug')
 make debug
 
 # Performance analysis (creates 'orus_profiling')
@@ -51,40 +51,31 @@ make help
 ```
 
 
-### Release Archives
+## Installation
 
-### Installation
-
-Example install (macOS arm64 shown; adjust the archive name as needed):
+### Single-command installer
 
 ```bash
-# Choose an installation prefix and ensure the directories exist
-INSTALL_DIR="$HOME/.local/opt/orus"
-BIN_DIR="$HOME/.local/bin"
-mkdir -p "$INSTALL_DIR" "$BIN_DIR"
-
-# Download and extract the full distribution (binary, stdlib, LICENSE)
-curl -fsSL https://github.com/jordyorel/orus-lang/releases/latest/download/orus-macos-arm64.tar.gz \
-  | tar -xz -C "$INSTALL_DIR"
-
-# Expose the interpreter on your PATH while keeping the stdlib beside it
-ln -sf "$INSTALL_DIR/orus" "$BIN_DIR/orus"
-
-# Confirm the download resolved to the newest tag
-curl -sI https://github.com/jordyorel/orus-lang/releases/latest/download/orus-macos-arm64.tar.gz \
-  | grep -i "^location:"
-
-# Verify the installed binary reports the latest version (replace the archive for your platform)
-"$BIN_DIR/orus" --version
-
-# Optional: install system-wide (requires sudo)
-sudo mkdir -p /usr/local/opt/orus
-curl -fsSL https://github.com/jordyorel/orus-lang/releases/latest/download/orus-macos-arm64.tar.gz \
-  | sudo tar -xz -C /usr/local/opt/orus
-sudo ln -sf /usr/local/opt/orus/orus /usr/local/bin/orus
+curl -fsSL https://raw.githubusercontent.com/jordyorel/orus-lang/main/scripts/install.sh | sh
 ```
 
-Add `~/.local/bin` to your `PATH` if it is not already present. The archive now bundles the standard library under `std/` alongside the interpreter binary, so keep the files together or set `ORUSPATH` to point at your chosen installation directory.
+The installer detects your operating system and CPU architecture, downloads the
+matching release archive, and stages it so the `orus` binary and bundled
+`std/` directory stay together. When run without elevated privileges it defaults
+to `~/.local/opt/orus` for the installation root and keeps a symlink in
+`~/.local/bin`. If executed with `sudo`, it switches to `/usr/local/opt/orus`
+and updates `/usr/local/bin`.
+
+Need a custom layout? Pass flags through `sh -s --`:
+
+```bash
+# Install into a custom prefix and publish the executable elsewhere
+curl -fsSL https://raw.githubusercontent.com/jordyorel/orus-lang/main/scripts/install.sh \
+  | sh -s -- --prefix "$HOME/dev/orus" --bin-dir "$HOME/bin"
+```
+
+The script always places the `std/` tree beside the interpreter. If you later
+relocate files manually, make sure to move both or set `ORUSPATH` accordingly.
 
 
 ## Contributing
