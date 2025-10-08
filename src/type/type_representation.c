@@ -1077,6 +1077,8 @@ Type* infer_literal_type_extended_ctx(TypeContext* ctx, Value* value) {
         return getPrimitive_ctx(ctx, TYPE_F64);
     case VAL_STRING:
         return getPrimitive_ctx(ctx, TYPE_STRING);
+    case VAL_BYTES:
+        return getPrimitive_ctx(ctx, TYPE_BYTES);
     case VAL_ARRAY:
         return getPrimitive_ctx(ctx, TYPE_ARRAY);
     case VAL_ERROR:
@@ -1113,6 +1115,8 @@ Type* infer_literal_type_extended(Value* value) {
         return getPrimitive(TYPE_F64);
     case VAL_STRING:
         return getPrimitive(TYPE_STRING);
+    case VAL_BYTES:
+        return getPrimitive(TYPE_BYTES);
     case VAL_ARRAY:
         return getPrimitive(TYPE_ARRAY);
     case VAL_ERROR:
@@ -1167,6 +1171,7 @@ TypeKind value_type_to_type_kind(ValueType value_type) {
     case VAL_U64: return TYPE_U64;
     case VAL_F64: return TYPE_F64;
     case VAL_STRING: return TYPE_STRING;
+    case VAL_BYTES: return TYPE_BYTES;
     case VAL_ARRAY: return TYPE_ARRAY;
     case VAL_ERROR: return TYPE_ERROR;
     case VAL_RANGE_ITERATOR: return TYPE_UNKNOWN;
@@ -1187,6 +1192,7 @@ ValueType type_kind_to_value_type(TypeKind type_kind) {
     case TYPE_U64: return VAL_U64;
     case TYPE_F64: return VAL_F64;
     case TYPE_STRING: return VAL_STRING;
+    case TYPE_BYTES: return VAL_BYTES;
     case TYPE_ARRAY: return VAL_ARRAY;
     case TYPE_ERROR: return VAL_ERROR;
     case TYPE_FUNCTION: return VAL_FUNCTION;
@@ -1248,6 +1254,7 @@ const char* getTypeName(TypeKind kind) {
         case TYPE_F64: return "f64";
         case TYPE_BOOL: return "bool";
         case TYPE_STRING: return "string";
+        case TYPE_BYTES: return "bytes";
         case TYPE_VOID: return "void";
         case TYPE_ARRAY: return "array";
         case TYPE_FUNCTION: return "function";

@@ -29,6 +29,7 @@ typedef struct Value Value;
 typedef enum {
     OBJ_STRING,
     OBJ_ARRAY,
+    OBJ_BYTEBUFFER,
     OBJ_INT_ARRAY,
     OBJ_AST,
     OBJ_TYPE,
@@ -53,6 +54,7 @@ typedef enum {
     VAL_F64,
     VAL_BOOL,
     VAL_STRING,
+    VAL_BYTES,
     VAL_ARRAY,
     VAL_ENUM,
     VAL_ERROR,
@@ -73,6 +75,13 @@ typedef struct ObjArray {
     int capacity;
     Value* elements;
 } ObjArray;
+
+typedef struct ObjByteBuffer {
+    Obj obj;
+    size_t length;
+    size_t capacity;
+    uint8_t* data;
+} ObjByteBuffer;
 
 typedef struct ObjIntArray {
     Obj obj;
@@ -123,6 +132,7 @@ typedef struct Value {
         bool boolean;
         Obj* obj;
         ObjString* string;
+        ObjByteBuffer* bytes;
         ObjArray* array;
         ObjError* error;
         ObjRangeIterator* rangeIter;
@@ -139,6 +149,7 @@ typedef struct Value {
 #define F64_VAL(value)   ((Value){VAL_F64, {.f64 = value}})
 #define BOOL_VAL(value)  ((Value){VAL_BOOL, {.boolean = value}})
 #define STRING_VAL(value) ((Value){VAL_STRING, {.string = value}})
+#define BYTES_VAL(obj)   ((Value){VAL_BYTES, {.bytes = obj}})
 #define ARRAY_VAL(obj)   ((Value){VAL_ARRAY, {.array = obj}})
 #define ENUM_VAL(enumObj)    ((Value){VAL_ENUM, {.obj = (Obj*)enumObj}})
 #define ERROR_VAL(obj)   ((Value){VAL_ERROR, {.error = obj}})
@@ -156,6 +167,7 @@ typedef struct Value {
 #define IS_F64(value)    ((value).type == VAL_F64)
 #define IS_BOOL(value)   ((value).type == VAL_BOOL)
 #define IS_STRING(value) ((value).type == VAL_STRING)
+#define IS_BYTES(value)  ((value).type == VAL_BYTES)
 #define IS_ARRAY(value)  ((value).type == VAL_ARRAY)
 #define IS_ENUM(value)   ((value).type == VAL_ENUM)
 #define IS_ERROR(value)  ((value).type == VAL_ERROR)
@@ -173,6 +185,7 @@ typedef struct Value {
 #define AS_F64(value)    ((value).as.f64)
 #define AS_BOOL(value)   ((value).as.boolean)
 #define AS_STRING(value) ((value).as.string)
+#define AS_BYTES(value)  ((value).as.bytes)
 #define AS_ARRAY(value)  ((value).as.array)
 #define AS_ENUM(value)   ((ObjEnumInstance*)(value).as.obj)
 #define AS_ERROR(value)  ((value).as.error)

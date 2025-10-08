@@ -6,15 +6,22 @@
 // Description: Core intrinsic bindings exposed to the runtime (math functions, etc.).
 
 #include <math.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "vm/vm.h"
+#include "runtime/core_bytes.h"
 
 static const IntrinsicSignatureInfo intrinsic_signature_table[] = {
     {"__c_sin", 1, {TYPE_F64}, TYPE_F64},
     {"__c_cos", 1, {TYPE_F64}, TYPE_F64},
     {"__c_pow", 2, {TYPE_F64, TYPE_F64}, TYPE_F64},
     {"__c_sqrt", 1, {TYPE_F64}, TYPE_F64},
+    {"__bytes_alloc", 1, {TYPE_I64}, TYPE_BYTES},
+    {"__bytes_alloc_fill", 2, {TYPE_I64, TYPE_I64}, TYPE_BYTES},
+    {"__bytes_slice", 3, {TYPE_BYTES, TYPE_I64, TYPE_I64}, TYPE_BYTES},
+    {"__bytes_from_string", 1, {TYPE_STRING}, TYPE_BYTES},
+    {"__bytes_to_string", 1, {TYPE_BYTES}, TYPE_STRING},
 };
 
 static const size_t intrinsic_signature_table_count =
@@ -82,6 +89,11 @@ static const IntrinsicBinding core_intrinsic_bindings[] = {
     {"__c_cos", intrinsic_native_cos},
     {"__c_pow", intrinsic_native_pow},
     {"__c_sqrt", intrinsic_native_sqrt},
+    {"__bytes_alloc", vm_core_bytes_alloc},
+    {"__bytes_alloc_fill", vm_core_bytes_alloc_fill},
+    {"__bytes_slice", vm_core_bytes_slice},
+    {"__bytes_from_string", vm_core_bytes_from_string},
+    {"__bytes_to_string", vm_core_bytes_to_string},
 };
 
 NativeFn vm_lookup_core_intrinsic(const char* symbol) {

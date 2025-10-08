@@ -271,6 +271,12 @@ void printValue(Value value) {
             printf("%s", chars ? chars : "");
             break;
         }
+        case VAL_BYTES: {
+            ObjByteBuffer* buffer = AS_BYTES(value);
+            size_t length = buffer ? buffer->length : 0;
+            printf("<bytes len=%zu>", length);
+            break;
+        }
         case VAL_ARRAY: {
             ObjArray* array = AS_ARRAY(value);
             for (int i = 0; i < array->length; i++) {
@@ -384,6 +390,18 @@ bool valuesEqual(Value a, Value b) {
         }
         case VAL_ARRAY:
             return AS_ARRAY(a) == AS_ARRAY(b);
+        case VAL_BYTES: {
+            ObjByteBuffer* left = AS_BYTES(a);
+            ObjByteBuffer* right = AS_BYTES(b);
+            if (left == right) return true;
+            if (!left || !right) return false;
+            if (left->length != right->length) return false;
+            if (left->length == 0) return true;
+            if (!left->data || !right->data) {
+                return left->data == right->data;
+            }
+            return memcmp(left->data, right->data, left->length) == 0;
+        }
         case VAL_ENUM: {
             ObjEnumInstance* left = AS_ENUM(a);
             ObjEnumInstance* right = AS_ENUM(b);

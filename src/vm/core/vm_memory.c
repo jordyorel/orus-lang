@@ -152,6 +152,52 @@ ObjArrayIterator* allocateArrayIterator(ObjArray* array) {
     return iterator;
 }
 
+ObjByteBuffer* allocateByteBuffer(size_t length) {
+    ObjByteBuffer* buffer =
+        (ObjByteBuffer*)allocateObject(sizeof(ObjByteBuffer), OBJ_BYTEBUFFER);
+    buffer->length = length;
+    buffer->capacity = length;
+    if (length > 0) {
+        buffer->data = (uint8_t*)reallocate(NULL, 0, length);
+        if (buffer->data) {
+            memset(buffer->data, 0, length);
+        }
+    } else {
+        buffer->data = NULL;
+    }
+    return buffer;
+}
+
+ObjByteBuffer* allocateByteBufferFilled(size_t length, uint8_t fill) {
+    ObjByteBuffer* buffer = allocateByteBuffer(length);
+    if (buffer && buffer->data && length > 0) {
+        memset(buffer->data, fill, length);
+    }
+    return buffer;
+}
+
+ObjByteBuffer* allocateByteBufferCopy(const uint8_t* data, size_t length) {
+    ObjByteBuffer* buffer = allocateByteBuffer(length);
+    if (buffer && buffer->data && data && length > 0) {
+        memcpy(buffer->data, data, length);
+    }
+    return buffer;
+}
+
+ObjByteBuffer* allocateByteBufferSlice(const ObjByteBuffer* source, size_t start, size_t length) {
+    if (!source || start >= source->length) {
+        return allocateByteBuffer(0);
+    }
+
+    size_t available = source->length - start;
+    if (length > available) {
+        length = available;
+    }
+
+    const uint8_t* data = (source->data && length > 0) ? source->data + start : NULL;
+    return allocateByteBufferCopy(data, length);
+}
+
 void arrayEnsureCapacity(ObjArray* array, int minCapacity) {
     if (!array) {
         return;
@@ -310,6 +356,8 @@ void markObject(Obj* object) {
             for (int i = 0; i < arr->length; i++) markValue(arr->elements[i]);
             break;
         }
+        case OBJ_BYTEBUFFER:
+            break;
         case OBJ_ERROR: {
             ObjError* err = (ObjError*)object;
             markObject((Obj*)err->message);
@@ -363,6 +411,7 @@ void markObject(Obj* object) {
 void markValue(Value value) {
     switch (value.type) {
         case VAL_STRING:
+        case VAL_BYTES:
         case VAL_ARRAY:
         case VAL_ENUM:
         case VAL_ERROR:
@@ -511,6 +560,14 @@ static void freeObject(Obj* object) {
             ObjArray* a = (ObjArray*)object;
             vm.bytesAllocated -= sizeof(ObjArray) + sizeof(Value) * a->capacity;
             FREE_ARRAY(Value, a->elements, a->capacity);
+            break;
+        }
+        case OBJ_BYTEBUFFER: {
+            ObjByteBuffer* buffer = (ObjByteBuffer*)object;
+            vm.bytesAllocated -= sizeof(ObjByteBuffer) + buffer->capacity;
+            if (buffer->data) {
+                reallocate(buffer->data, buffer->capacity, 0);
+            }
             break;
         }
         case OBJ_ERROR: {

@@ -12,6 +12,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 
 #define GROW_CAPACITY(capacity) ((capacity) < 8 ? 8 : (capacity) * 2)
@@ -35,6 +36,10 @@ ObjString* allocateStringFromBuffer(char* buffer, size_t capacity, int length);
 ObjString* allocateStringFromRope(StringRope* rope);
 ObjArray* allocateArray(int capacity);
 ObjArrayIterator* allocateArrayIterator(ObjArray* array);
+ObjByteBuffer* allocateByteBuffer(size_t length);
+ObjByteBuffer* allocateByteBufferFilled(size_t length, uint8_t fill);
+ObjByteBuffer* allocateByteBufferCopy(const uint8_t* data, size_t length);
+ObjByteBuffer* allocateByteBufferSlice(const ObjByteBuffer* source, size_t start, size_t length);
 void arrayEnsureCapacity(ObjArray* array, int minCapacity);
 bool arrayPush(ObjArray* array, Value value);
 bool arrayPop(ObjArray* array, Value* outValue);
