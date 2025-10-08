@@ -112,30 +112,21 @@ endif
 
 ARCH_DEFINES += $(DISPATCH_DEFINE)
 
-# Distribution packaging configuration
-DIST_DIR = dist
-
+# Installation directories
 ifeq ($(UNAME_S),Darwin)
-    DIST_OS = macos
+    INSTALL_PREFIX ?= /Library/Orus
 else ifeq ($(UNAME_S),Linux)
-    DIST_OS = linux
+    INSTALL_PREFIX ?= /usr/local/lib/orus
+else ifneq (,$(findstring MINGW,$(UNAME_S)))
+    INSTALL_PREFIX ?= C:/Program Files/Orus
+else ifneq (,$(findstring MSYS,$(UNAME_S)))
+    INSTALL_PREFIX ?= C:/Program Files/Orus
 else
-    DIST_OS = $(shell echo $(UNAME_S) | tr '[:upper:]' '[:lower:]')
+    INSTALL_PREFIX ?= /usr/local/lib/orus
 endif
 
-ifeq ($(UNAME_M),arm64)
-    DIST_ARCH = arm64
-else ifeq ($(UNAME_M),aarch64)
-    DIST_ARCH = arm64
-else ifeq ($(UNAME_M),x86_64)
-    DIST_ARCH = x86_64
-else ifeq ($(UNAME_M),amd64)
-    DIST_ARCH = x86_64
-else
-    DIST_ARCH = $(UNAME_M)
-endif
-
-DIST_ARCHIVE = $(DIST_DIR)/orus-$(DIST_OS)-$(DIST_ARCH).tar.gz
+INSTALL_BIN_DIR = $(INSTALL_PREFIX)/bin
+INSTALL_STD_DIR = $(INSTALL_PREFIX)/std
 
 # Profile-specific configurations
 ifeq ($(PROFILE),debug)
@@ -274,7 +265,7 @@ BUILTIN_RANGE_ORUS_FAIL_TESTS = \
     tests/builtins/range_float_step.orus \
     tests/builtins/range_overflow_stop.orus
 
-.PHONY: all clean test unit-test test-control-flow benchmark help debug release release-with-wasm profiling analyze install dist package bytecode-jump-tests source-map-tests scope-tracking-tests fused-while-tests peephole-tests cli-smoke-tests tagged-union-tests typed-register-tests vm-print-tests register-window-tests spill-gc-tests inc-cmp-jmp-tests add-i32-imm-tests register-allocator-tests builtin-input-tests builtin-range-tests test-optimizer wasm _test-run _benchmark-run
+.PHONY: all clean test unit-test test-control-flow benchmark help debug release profiling analyze install bytecode-jump-tests source-map-tests scope-tracking-tests fused-while-tests peephole-tests cli-smoke-tests tagged-union-tests typed-register-tests vm-print-tests register-window-tests spill-gc-tests inc-cmp-jmp-tests add-i32-imm-tests register-allocator-tests builtin-input-tests builtin-range-tests test-optimizer wasm _test-run _benchmark-run
 
 all: build-info $(ORUS)
 
@@ -293,12 +284,6 @@ debug:
 
 release:
 	@$(MAKE) PROFILE=release all
-	@$(MAKE) PROFILE=release package
-
-release-with-wasm:
-	@$(MAKE) PROFILE=release all
-	@$(MAKE) PROFILE=release wasm
-	@$(MAKE) PROFILE=release package
 
 profiling:
 	@$(MAKE) PROFILE=profiling
@@ -783,19 +768,13 @@ cross-windows:
 
 # Installation
 install: release
-	@echo "Installing Orus to /usr/local/bin..."
-	@sudo cp orus /usr/local/bin/orus
-	@echo "✓ Orus installed successfully"
-
-dist:
-	@echo "'make dist' is deprecated; use 'make release' instead."
-	@$(MAKE) release
-
-package: $(ORUS)
-	@mkdir -p $(DIST_DIR)
-	@echo "Packaging $(DIST_ARCHIVE)..."
-	@tar -czf $(DIST_ARCHIVE) $(ORUS) LICENSE std
-	@echo "✓ Package ready: $(DIST_ARCHIVE)"
+	@echo "Installing Orus to $(INSTALL_PREFIX)..."
+	@mkdir -p "$(INSTALL_BIN_DIR)"
+	@cp orus "$(INSTALL_BIN_DIR)/orus"
+	@rm -rf "$(INSTALL_STD_DIR)"
+	@mkdir -p "$(INSTALL_STD_DIR)"
+	@cp -R std/. "$(INSTALL_STD_DIR)/"
+	@echo "✓ Orus installed successfully into $(INSTALL_PREFIX)"
 
 # Clean build artifacts
 clean:
@@ -826,16 +805,14 @@ help:
 	@echo ""
 	@echo "Development Targets:"
 	@echo "  analyze   - Run static analysis (cppcheck, clang analyzer)"
-	@echo "  install   - Install release build to /usr/local/bin"
-	@echo "  release-with-wasm - Build release binary and WebAssembly bundle"
+	@echo "  install   - Build and install the release binary with the standard library"
 	@echo ""
-	@echo "Cross-compilation:"
-	@echo "  cross-linux   - Cross-compile for Linux x86_64"
-	@echo "  cross-windows - Cross-compile for Windows x86_64"
+	@echo "Installation:"
+	@echo "  install   - Build release binary and install it with the standard library"
 	@echo ""
 	@echo "Examples:"
 	@echo "  make                    - Build debug version (creates orus_debug)"
-	@echo "  make release            - Build optimized release version and package dist/orus-<os>-<arch>.tar.gz"
+	@echo "  make release            - Build optimized release version"
 	@echo "  make PROFILE=profiling  - Build with profiling support (creates orus_profiling)"
 	@echo "  make PROFILE=ci         - Build with warnings as errors (creates orus_ci)"
 	@echo "  make test               - Run tests (builds debug if needed)"

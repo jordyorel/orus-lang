@@ -1128,6 +1128,38 @@ static bool directory_exists(const char* path) {
     return stat(path, &st) == 0 && S_ISDIR(st.st_mode);
 }
 
+static bool path_has_suffix_component(const char* path, const char* component) {
+    if (!path || !component) {
+        return false;
+    }
+
+    size_t path_len = strlen(path);
+    size_t component_len = strlen(component);
+    if (component_len == 0 || path_len < component_len) {
+        return false;
+    }
+
+    const char* start = path + path_len - component_len;
+#ifdef _WIN32
+    for (size_t i = 0; i < component_len; ++i) {
+        if (tolower((unsigned char)start[i]) != tolower((unsigned char)component[i])) {
+            return false;
+        }
+    }
+#else
+    if (strncmp(start, component, component_len) != 0) {
+        return false;
+    }
+#endif
+
+    if (path_len == component_len) {
+        return true;
+    }
+
+    char separator = start[-1];
+    return separator == '/' || separator == '\\';
+}
+
 static bool append_search_root(ModuleSearchRoot** roots, size_t* count, size_t* capacity,
                                const char* path, ModuleRootKind kind) {
     if (!path || !*path) {
@@ -1570,15 +1602,42 @@ static char* build_module_path(const char* base_path, const char* module_name) {
     char* exe_dir = get_executable_directory();
     if (exe_dir) {
         append_search_root(&roots, &root_count, &root_capacity, exe_dir, MODULE_ROOT_STD);
+
+        bool exe_dir_has_std = false;
         char* std_probe = join_paths(exe_dir, "std");
         if (std_probe) {
-            if (!directory_exists(std_probe)) {
-                fprintf(stderr,
-                        "Warning: Standard library directory '%s' missing expected 'std' subdirectory."
-                        " Falling back to bundled search roots.\n",
-                        exe_dir);
+            if (directory_exists(std_probe)) {
+                exe_dir_has_std = true;
             }
             free(std_probe);
+        }
+
+        if (!exe_dir_has_std && path_has_suffix_component(exe_dir, "bin")) {
+            char* install_root_candidate = join_paths(exe_dir, "..");
+            char* install_root = NULL;
+            if (install_root_candidate) {
+                install_root = make_absolute_path(install_root_candidate);
+                free(install_root_candidate);
+            }
+
+            if (install_root) {
+                char* install_std = join_paths(install_root, "std");
+                if (install_std) {
+                    if (directory_exists(install_std)) {
+                        append_search_root(&roots, &root_count, &root_capacity, install_root, MODULE_ROOT_STD);
+                        exe_dir_has_std = true;
+                    }
+                    free(install_std);
+                }
+                free(install_root);
+            }
+        }
+
+        if (!exe_dir_has_std) {
+            fprintf(stderr,
+                    "Warning: Standard library directory '%s' missing expected 'std' subdirectory."
+                    " Falling back to bundled search roots.\n",
+                    exe_dir);
         }
     }
 
@@ -1595,6 +1654,48 @@ static char* build_module_path(const char* base_path, const char* module_name) {
             if (!directory_exists(std_probe)) {
                 fprintf(stderr,
                         "Warning: macOS stdlib fallback '%s' missing expected 'std' directory."
+                        " Resolver will continue searching.\n",
+                        root_path);
+            }
+            free(std_probe);
+        }
+    }
+#endif
+
+#if (defined(__linux__) || defined(__unix__) || defined(__posix__)) && !defined(__APPLE__) && !defined(_WIN32)
+    const char* posix_std_roots[] = {
+        "/usr/local/lib/orus",
+        "/usr/lib/orus",
+    };
+    for (size_t i = 0; i < sizeof(posix_std_roots) / sizeof(posix_std_roots[0]); ++i) {
+        const char* root_path = posix_std_roots[i];
+        append_search_root(&roots, &root_count, &root_capacity, root_path, MODULE_ROOT_STD);
+        char* std_probe = join_paths(root_path, "std");
+        if (std_probe) {
+            if (!directory_exists(std_probe)) {
+                fprintf(stderr,
+                        "Warning: POSIX stdlib fallback '%s' missing expected 'std' directory."
+                        " Resolver will continue searching.\n",
+                        root_path);
+            }
+            free(std_probe);
+        }
+    }
+#endif
+
+#ifdef _WIN32
+    const char* windows_std_roots[] = {
+        "C:/Program Files/Orus",
+        "C:/Program Files (x86)/Orus",
+    };
+    for (size_t i = 0; i < sizeof(windows_std_roots) / sizeof(windows_std_roots[0]); ++i) {
+        const char* root_path = windows_std_roots[i];
+        append_search_root(&roots, &root_count, &root_capacity, root_path, MODULE_ROOT_STD);
+        char* std_probe = join_paths(root_path, "std");
+        if (std_probe) {
+            if (!directory_exists(std_probe)) {
+                fprintf(stderr,
+                        "Warning: Windows stdlib fallback '%s' missing expected 'std' directory."
                         " Resolver will continue searching.\n",
                         root_path);
             }
@@ -1695,15 +1796,45 @@ static char* build_module_path(const char* base_path, const char* module_name) {
             case MODULE_ROOT_CALLER:
                 label = "importer directory";
                 break;
-            case MODULE_ROOT_STD:
-                label = "stdlib directory";
+            case MODULE_ROOT_STD: {
+                const char* std_label = "stdlib directory";
+                bool is_install_root = false;
+                if (cached_executable_dir && path_has_suffix_component(cached_executable_dir, "bin")) {
+                    char* install_root_candidate = join_paths(cached_executable_dir, "..");
+                    char* install_root = NULL;
+                    if (install_root_candidate) {
+                        install_root = make_absolute_path(install_root_candidate);
+                        free(install_root_candidate);
+                    }
+                    if (install_root) {
+                        if (strcmp(roots[i].path, install_root) == 0) {
+                            std_label = "installed stdlib root";
+                            is_install_root = true;
+                        }
+                        free(install_root);
+                    }
+                }
 #ifdef __APPLE__
-                if (strcmp(roots[i].path, "/Library/Orus") == 0 ||
-                    strcmp(roots[i].path, "/Library/Orus/latest") == 0) {
-                    label = "macOS stdlib fallback";
+                if (!is_install_root && (strcmp(roots[i].path, "/Library/Orus") == 0 ||
+                                         strcmp(roots[i].path, "/Library/Orus/latest") == 0)) {
+                    std_label = "macOS stdlib fallback";
                 }
 #endif
+#if (defined(__linux__) || defined(__unix__) || defined(__posix__)) && !defined(__APPLE__) && !defined(_WIN32)
+                if (!is_install_root && (strcmp(roots[i].path, "/usr/local/lib/orus") == 0 ||
+                                         strcmp(roots[i].path, "/usr/lib/orus") == 0)) {
+                    std_label = "system stdlib fallback";
+                }
+#endif
+#ifdef _WIN32
+                if (!is_install_root && (strcmp(roots[i].path, "C:/Program Files/Orus") == 0 ||
+                                         strcmp(roots[i].path, "C:/Program Files (x86)/Orus") == 0)) {
+                    std_label = "Windows stdlib fallback";
+                }
+#endif
+                label = std_label;
                 break;
+            }
             case MODULE_ROOT_ENV:
                 label = "ORUSPATH entry";
                 break;
