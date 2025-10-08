@@ -19,6 +19,9 @@
 #include <ctype.h>
 #include <inttypes.h>
 #include <math.h>
+#ifdef __APPLE__
+#include <mach-o/dyld.h>
+#endif
 
 // Auto-detect computed goto support
 #ifndef USE_COMPUTED_GOTO
@@ -1116,6 +1119,15 @@ static bool path_exists(const char* path) {
     return stat(path, &st) == 0 && S_ISREG(st.st_mode);
 }
 
+static bool directory_exists(const char* path) {
+    if (!path) {
+        return false;
+    }
+
+    struct stat st;
+    return stat(path, &st) == 0 && S_ISDIR(st.st_mode);
+}
+
 static bool append_search_root(ModuleSearchRoot** roots, size_t* count, size_t* capacity,
                                const char* path, ModuleRootKind kind) {
     if (!path || !*path) {
@@ -1278,6 +1290,56 @@ static char* get_executable_directory(void) {
         cached_executable_dir = copy_dirname(buffer);
         if (cached_executable_dir) {
             return cached_executable_dir;
+        }
+    }
+#elif defined(__APPLE__)
+    uint32_t size = 0;
+    if (_NSGetExecutablePath(NULL, &size) == -1 && size > 0) {
+        uint32_t buffer_capacity = size;
+        char* path_buffer = (char*)reallocate(NULL, 0, (size_t)buffer_capacity);
+        if (path_buffer) {
+            uint32_t requested = buffer_capacity;
+            if (_NSGetExecutablePath(path_buffer, &requested) == 0) {
+                char resolved[PATH_MAX];
+                char* canonical = realpath(path_buffer, resolved);
+                const char* target = canonical ? canonical : path_buffer;
+                cached_executable_dir = copy_dirname(target);
+            }
+            if (cached_executable_dir) {
+                reallocate(path_buffer, (size_t)buffer_capacity, 0);
+                return cached_executable_dir;
+            }
+            reallocate(path_buffer, (size_t)buffer_capacity, 0);
+        }
+    }
+
+    char path_buffer[PATH_MAX];
+    size = (uint32_t)sizeof(path_buffer);
+    int exec_path_result = _NSGetExecutablePath(path_buffer, &size);
+    if (exec_path_result == 0) {
+        char resolved[PATH_MAX];
+        char* canonical = realpath(path_buffer, resolved);
+        const char* target = canonical ? canonical : path_buffer;
+        cached_executable_dir = copy_dirname(target);
+        if (cached_executable_dir) {
+            return cached_executable_dir;
+        }
+    } else if (exec_path_result == -1 && size > 0) {
+        uint32_t heap_capacity = size;
+        char* heap_buffer = (char*)reallocate(NULL, 0, (size_t)heap_capacity);
+        if (heap_buffer) {
+            uint32_t requested = heap_capacity;
+            if (_NSGetExecutablePath(heap_buffer, &requested) == 0) {
+                char resolved[PATH_MAX];
+                char* canonical = realpath(heap_buffer, resolved);
+                const char* target = canonical ? canonical : heap_buffer;
+                cached_executable_dir = copy_dirname(target);
+            }
+            if (cached_executable_dir) {
+                reallocate(heap_buffer, (size_t)heap_capacity, 0);
+                return cached_executable_dir;
+            }
+            reallocate(heap_buffer, (size_t)heap_capacity, 0);
         }
     }
 #else
@@ -1507,12 +1569,31 @@ static char* build_module_path(const char* base_path, const char* module_name) {
 
     char* exe_dir = get_executable_directory();
     if (exe_dir) {
-        char* std_dir = join_paths(exe_dir, "std");
-        if (std_dir) {
-            append_search_root(&roots, &root_count, &root_capacity, std_dir, MODULE_ROOT_STD);
-            free(std_dir);
+        char* std_probe = join_paths(exe_dir, "std");
+        if (std_probe) {
+            if (directory_exists(std_probe)) {
+                append_search_root(&roots, &root_count, &root_capacity, exe_dir, MODULE_ROOT_STD);
+            }
+            free(std_probe);
         }
     }
+
+#ifdef __APPLE__
+    const char* mac_std_roots[] = {
+        "/Library/Orus",
+        "/Library/Orus/latest",
+    };
+    for (size_t i = 0; i < sizeof(mac_std_roots) / sizeof(mac_std_roots[0]); ++i) {
+        const char* root_path = mac_std_roots[i];
+        char* std_probe = join_paths(root_path, "std");
+        if (std_probe) {
+            if (directory_exists(std_probe)) {
+                append_search_root(&roots, &root_count, &root_capacity, root_path, MODULE_ROOT_STD);
+            }
+            free(std_probe);
+        }
+    }
+#endif
 
     size_t env_count = 0;
     char** env_entries = collect_oruspath_entries(&env_count);
