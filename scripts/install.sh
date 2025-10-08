@@ -194,6 +194,10 @@ if [ "$BIN_DIR" != "$PREFIX_BIN_DIR" ]; then
     ln -sfn "$BINARY_PATH" "${BIN_DIR}/orus"
 fi
 
+ln -sfn "$STAGE_DIR" "${INSTALL_PREFIX}/latest"
+ln -sfn "$BINARY_PATH" "${INSTALL_PREFIX}/orus"
+ln -sfn "$STD_PATH" "${INSTALL_PREFIX}/std"
+
 printf '\nInstalled Orus %s to %s\n' "$RELEASE_TAG" "$STAGE_DIR"
 printf 'Symlinked binary to %s\n' "${PREFIX_BIN_DIR}/orus"
 if [ "$BIN_DIR" != "$PREFIX_BIN_DIR" ]; then
