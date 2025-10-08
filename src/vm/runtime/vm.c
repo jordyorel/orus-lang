@@ -205,7 +205,24 @@ void print_raw_f64(double value) {
     }
 
     char buffer[512];
-    snprintf(buffer, sizeof(buffer), "%.17f", value);
+    const double abs_value = fabs(value);
+    const char* format = "%.17f";
+    if (abs_value > 0.0 && abs_value < 1e-4) {
+        format = "%.17g";
+    }
+
+    snprintf(buffer, sizeof(buffer), format, value);
+
+    char* exponent = strchr(buffer, 'e');
+    if (!exponent) {
+        exponent = strchr(buffer, 'E');
+    }
+
+    char exponent_part[64] = {0};
+    if (exponent) {
+        strncpy(exponent_part, exponent, sizeof(exponent_part) - 1);
+        *exponent = '\0';
+    }
 
     char* decimal = strchr(buffer, '.');
     if (decimal != NULL) {
@@ -216,6 +233,10 @@ void print_raw_f64(double value) {
         if (*end == '.') {
             *end = '\0';
         }
+    }
+
+    if (exponent_part[0] != '\0') {
+        strncat(buffer, exponent_part, sizeof(buffer) - strlen(buffer) - 1);
     }
 
     fputs(buffer, stdout);
