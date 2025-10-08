@@ -129,7 +129,7 @@ if [ -n "$BIN_OVERRIDE" ]; then
 else
     DEFAULT_USER_PREFIX="${HOME}/.local/opt/orus"
     case "$INSTALL_PREFIX" in
-        /Library/Orus) BIN_DIR="/Library/Orus/bin" ;;
+        /Library/Orus) BIN_DIR="/usr/local/bin" ;;
         /usr/local/opt/orus) BIN_DIR="/usr/local/bin" ;;
         "$DEFAULT_USER_PREFIX") BIN_DIR="${HOME}/.local/bin" ;;
         *) BIN_DIR="${INSTALL_PREFIX}/bin" ;;
