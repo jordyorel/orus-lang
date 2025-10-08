@@ -534,6 +534,7 @@ InterpretResult interpret(const char* source) {
     initCompiler(&compiler, &chunk, "<repl>", source);
 
     char* module_name = infer_module_name_from_path(vm.filePath);
+    ASTNode* ast = NULL;
     bool is_repl_session = vm.filePath && strcmp(vm.filePath, "<repl>") == 0;
     if (is_repl_session && !module_name) {
         module_name = strdup(REPL_MODULE_NAME);
@@ -545,7 +546,6 @@ InterpretResult interpret(const char* source) {
     RegisterModule* repl_module = NULL;
 
     // Parse the source into an AST
-    ASTNode* ast = NULL;
     ast = parseSourceWithModuleName(source, module_name);
     // fflush(stdout);
 

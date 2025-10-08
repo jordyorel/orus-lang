@@ -1,8 +1,8 @@
-// use math
-
-// print(math.sin(math.PI))
-
-
 use math
 
-print(math.sin(0.0))
+print(math.sin(math.PI))
+
+
+// use math
+
+// print(math.sin(0.0))
