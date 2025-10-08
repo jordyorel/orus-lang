@@ -1,0 +1,5 @@
+// Triggers module resolution for the math stdlib module.
+// Used by macOS installer regression tests to ensure fallback search roots
+// include /Library/Orus and /Library/Orus/latest even when the executable
+// lacks a bundled std symlink.
+use math

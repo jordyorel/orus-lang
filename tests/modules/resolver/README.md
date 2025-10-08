@@ -14,3 +14,6 @@ This directory exercises the module resolution pipeline.
 ```sh
 ORUSPATH=tests/modules/resolver/lib ./orus tests/modules/resolver/oruspath_override.orus
 ```
+* `macos_std_fallback_probe.orus` is used by macOS-specific regression tests to
+  ensure the resolver reports `/Library/Orus` fallbacks when the bundled `std`
+  symlink is absent next to the executable.

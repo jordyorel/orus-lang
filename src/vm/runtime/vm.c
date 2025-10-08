@@ -1569,10 +1569,14 @@ static char* build_module_path(const char* base_path, const char* module_name) {
 
     char* exe_dir = get_executable_directory();
     if (exe_dir) {
+        append_search_root(&roots, &root_count, &root_capacity, exe_dir, MODULE_ROOT_STD);
         char* std_probe = join_paths(exe_dir, "std");
         if (std_probe) {
-            if (directory_exists(std_probe)) {
-                append_search_root(&roots, &root_count, &root_capacity, exe_dir, MODULE_ROOT_STD);
+            if (!directory_exists(std_probe)) {
+                fprintf(stderr,
+                        "Warning: Standard library directory '%s' missing expected 'std' subdirectory."
+                        " Falling back to bundled search roots.\n",
+                        exe_dir);
             }
             free(std_probe);
         }
@@ -1585,10 +1589,14 @@ static char* build_module_path(const char* base_path, const char* module_name) {
     };
     for (size_t i = 0; i < sizeof(mac_std_roots) / sizeof(mac_std_roots[0]); ++i) {
         const char* root_path = mac_std_roots[i];
+        append_search_root(&roots, &root_count, &root_capacity, root_path, MODULE_ROOT_STD);
         char* std_probe = join_paths(root_path, "std");
         if (std_probe) {
-            if (directory_exists(std_probe)) {
-                append_search_root(&roots, &root_count, &root_capacity, root_path, MODULE_ROOT_STD);
+            if (!directory_exists(std_probe)) {
+                fprintf(stderr,
+                        "Warning: macOS stdlib fallback '%s' missing expected 'std' directory."
+                        " Resolver will continue searching.\n",
+                        root_path);
             }
             free(std_probe);
         }
@@ -1689,6 +1697,12 @@ static char* build_module_path(const char* base_path, const char* module_name) {
                 break;
             case MODULE_ROOT_STD:
                 label = "stdlib directory";
+#ifdef __APPLE__
+                if (strcmp(roots[i].path, "/Library/Orus") == 0 ||
+                    strcmp(roots[i].path, "/Library/Orus/latest") == 0) {
+                    label = "macOS stdlib fallback";
+                }
+#endif
                 break;
             case MODULE_ROOT_ENV:
                 label = "ORUSPATH entry";
