@@ -53,34 +53,32 @@ make help
 
 ## Installation
 
-### Single-command installer
+### Using `make install`
+
+`make install` builds the optimized release binary and stages both the
+interpreter and the bundled standard library together.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/jordyorel/orus-lang/main/scripts/install.sh | sudo sh
+# macOS and Linux (run with the privileges required for the destination)
+sudo make install
+
+# Windows (from a MinGW/MSYS shell with administrative privileges)
+make install
 ```
 
-The installer detects your operating system and CPU architecture, downloads the
-matching release archive, and stages it so the `orus` binary and bundled
-`std/` directory stay together. On macOS the default location is
-`/Library/Orus`, mirroring where Python and Java ship system components, and
-the installer registers `/Library/Orus/bin` via `/etc/paths.d` so `orus`
-becomes immediately available on your `PATH`.
+The default installation roots are:
 
-Prefer a user-local install or running without elevated privileges? Drop `sudo`
-and the script falls back to `~/.local/opt/orus` with a symlink in
-`~/.local/bin`. On Linux, running with administrative privileges continues to
-target `/usr/local/opt/orus`.
+- **macOS:** `/Library/Orus`
+- **Linux:** `/usr/local/lib/orus`
+- **Windows:** `C:/Program Files/Orus`
 
-Need a custom layout? Pass flags through `sh -s --` (combine with `sudo` when targeting system paths):
+The `orus` binary is copied into the `bin/` subdirectory and the standard
+library is mirrored under `std/`. Override `INSTALL_PREFIX` to install
+elsewhere:
 
 ```bash
-# Install into a custom prefix and publish the executable elsewhere
-curl -fsSL https://raw.githubusercontent.com/jordyorel/orus-lang/main/scripts/install.sh \
-  | sh -s -- --prefix "$HOME/dev/orus" --bin-dir "$HOME/bin"
+INSTALL_PREFIX="$HOME/.local/orus" make install
 ```
-
-The script always places the `std/` tree beside the interpreter. If you later
-relocate files manually, make sure to move both or set `ORUSPATH` accordingly.
 
 
 ## Contributing
