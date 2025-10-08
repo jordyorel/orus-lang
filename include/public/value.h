@@ -10,6 +10,7 @@
 #define clox_value_h
 
 #include "common.h"
+#include <stdio.h>
 #include <string.h>
 
 // Forward declarations used for object references
@@ -21,6 +22,7 @@ typedef struct ObjError ObjError;
 typedef struct ObjRangeIterator ObjRangeIterator;
 typedef struct ObjArrayIterator ObjArrayIterator;
 typedef struct ObjEnumInstance ObjEnumInstance;
+typedef struct ObjFile ObjFile;
 typedef struct Value Value;
 
 // Base object type for the garbage collector
@@ -34,6 +36,7 @@ typedef enum {
     OBJ_RANGE_ITERATOR,
     OBJ_ARRAY_ITERATOR,
     OBJ_ENUM_INSTANCE,
+    OBJ_FILE,
 } ObjType;
 
 struct Obj {
@@ -55,6 +58,7 @@ typedef enum {
     VAL_ERROR,
     VAL_RANGE_ITERATOR,
     VAL_ARRAY_ITERATOR,
+    VAL_FILE,
 } ValueType;
 
 typedef struct ObjString {
@@ -97,6 +101,14 @@ typedef struct ObjEnumInstance {
     ObjArray* payload;
 } ObjEnumInstance;
 
+typedef struct ObjFile {
+    Obj obj;
+    FILE* handle;
+    ObjString* path;
+    bool ownsHandle;
+    bool isClosed;
+} ObjFile;
+
 typedef ObjString String;
 typedef ObjArray Array;
 
@@ -115,6 +127,7 @@ typedef struct Value {
         ObjError* error;
         ObjRangeIterator* rangeIter;
         ObjArrayIterator* arrayIter;
+        ObjFile* file;
     } as;
 } Value;
 
@@ -133,6 +146,7 @@ typedef struct Value {
 #ifndef ARRAY_ITERATOR_VAL
 #define ARRAY_ITERATOR_VAL(iteratorObj) ((Value){VAL_ARRAY_ITERATOR, {.obj = (Obj*)iteratorObj}})
 #endif
+#define FILE_VAL(fileObj) ((Value){VAL_FILE, {.obj = (Obj*)fileObj}})
 
 // Value checking macros
 #define IS_I32(value)    ((value).type == VAL_I32)
@@ -149,6 +163,7 @@ typedef struct Value {
 #ifndef IS_ARRAY_ITERATOR
 #define IS_ARRAY_ITERATOR(value) ((value).type == VAL_ARRAY_ITERATOR)
 #endif
+#define IS_FILE(value)   ((value).type == VAL_FILE)
 
 // Value extraction macros
 #define AS_I32(value)    ((value).as.i32)
@@ -165,6 +180,7 @@ typedef struct Value {
 #ifndef AS_ARRAY_ITERATOR
 #define AS_ARRAY_ITERATOR(value) ((ObjArrayIterator*)(value).as.obj)
 #endif
+#define AS_FILE(value)   ((ObjFile*)(value).as.obj)
 
 // Generic dynamic array implementation used for storing Values.
 // #include "generic_array.h"

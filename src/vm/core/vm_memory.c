@@ -8,6 +8,7 @@
 
 
 #include "runtime/memory.h"
+#include "runtime/core_fs_handles.h"
 #include "vm/spill_manager.h"
 #include "vm/vm.h"
 #include "vm/vm_string_ops.h"
@@ -286,6 +287,15 @@ ObjEnumInstance* allocateEnumInstance(ObjString* typeName, ObjString* variantNam
     return instance;
 }
 
+ObjFile* allocateFileHandle(FILE* handle, ObjString* path, bool ownsHandle) {
+    ObjFile* file = (ObjFile*)allocateObject(sizeof(ObjFile), OBJ_FILE);
+    file->handle = handle;
+    file->path = path;
+    file->ownsHandle = ownsHandle;
+    file->isClosed = (handle == NULL);
+    return file;
+}
+
 void markValue(Value value);
 
 void markObject(Obj* object) {
@@ -321,6 +331,13 @@ void markObject(Obj* object) {
             if (inst->payload) markObject((Obj*)inst->payload);
             break;
         }
+        case OBJ_FILE: {
+            ObjFile* file = (ObjFile*)object;
+            if (file->path) {
+                markObject((Obj*)file->path);
+            }
+            break;
+        }
         case OBJ_FUNCTION: {
             ObjFunction* func = (ObjFunction*)object;
             markObject((Obj*)func->name);
@@ -351,6 +368,7 @@ void markValue(Value value) {
         case VAL_ERROR:
         case VAL_RANGE_ITERATOR:
         case VAL_ARRAY_ITERATOR:
+        case VAL_FILE:
         case VAL_FUNCTION:
         case VAL_CLOSURE:
             markObject(value.as.obj);
@@ -508,6 +526,12 @@ static void freeObject(Obj* object) {
         case OBJ_ENUM_INSTANCE:
             vm.bytesAllocated -= sizeof(ObjEnumInstance);
             break;
+        case OBJ_FILE: {
+            ObjFile* file = (ObjFile*)object;
+            (void)vm_file_close_object(file);
+            vm.bytesAllocated -= sizeof(ObjFile);
+            break;
+        }
         case OBJ_FUNCTION: {
             ObjFunction* func = (ObjFunction*)object;
             if (func->chunk != NULL) {

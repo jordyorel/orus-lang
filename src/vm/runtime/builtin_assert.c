@@ -231,6 +231,18 @@ static bool append_value_repr(AssertStringBuilder* sb, Value value) {
             return sb_append(sb, "<range>");
         case VAL_ARRAY_ITERATOR:
             return sb_append(sb, "<array-iter>");
+        case VAL_FILE: {
+            ObjFile* file = AS_FILE(value);
+            if (!file) {
+                return sb_append(sb, "file(<null>)");
+            }
+            const char* path = file->path ? string_get_chars(file->path) : NULL;
+            const char* state = file->isClosed ? "closed" : (file->ownsHandle ? "owned" : "borrowed");
+            if (path && *path) {
+                return sb_append_format(sb, "file(path=\"%s\", %s)", path, state);
+            }
+            return sb_append_format(sb, "file(%s)", state);
+        }
         case VAL_ERROR:
             if (AS_ERROR(value) && AS_ERROR(value)->message) {
                 ObjString* message = AS_ERROR(value)->message;

@@ -36,6 +36,7 @@ static inline const char* builtin_value_type_label(Value value) {
         case VAL_ERROR: return "error";
         case VAL_RANGE_ITERATOR: return "range_iterator";
         case VAL_ARRAY_ITERATOR: return "array_iterator";
+        case VAL_FILE: return "file";
         case VAL_FUNCTION: return "function";
         case VAL_CLOSURE: return "function";
         default: return "unknown";

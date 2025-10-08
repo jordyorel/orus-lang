@@ -49,6 +49,7 @@ typedef enum {
     VAL_ERROR,
     VAL_RANGE_ITERATOR,
     VAL_ARRAY_ITERATOR,
+    VAL_FILE,
     VAL_FUNCTION,
     VAL_CLOSURE
 } ValueType;
@@ -60,6 +61,7 @@ typedef struct ObjError ObjError;
 typedef struct ObjRangeIterator ObjRangeIterator;
 typedef struct ObjArrayIterator ObjArrayIterator;
 typedef struct ObjEnumInstance ObjEnumInstance;
+typedef struct ObjFile ObjFile;
 typedef struct ObjFunction ObjFunction;
 typedef struct ObjClosure ObjClosure;
 typedef struct ObjUpvalue ObjUpvalue;
@@ -77,6 +79,7 @@ typedef struct {
         double f64;
         double number;  // Generic number for literals
         Obj* obj;
+        ObjFile* file;
     } as;
 } Value;
 
@@ -88,12 +91,13 @@ typedef enum {
     OBJ_RANGE_ITERATOR,
     OBJ_ARRAY_ITERATOR,
     OBJ_ENUM_INSTANCE,
+    OBJ_FILE,
     OBJ_FUNCTION,
     OBJ_CLOSURE,
     OBJ_UPVALUE
 } ObjType;
 
-#define OBJ_TYPE_COUNT 9
+#define OBJ_TYPE_COUNT 10
 
 // Object header
 struct Obj {
@@ -132,6 +136,15 @@ struct ObjEnumInstance {
     ObjString* variantName;
     int variantIndex;
     ObjArray* payload;
+};
+
+// File handle object
+struct ObjFile {
+    Obj obj;
+    FILE* handle;
+    ObjString* path;
+    bool ownsHandle;
+    bool isClosed;
 };
 
 // Error object
@@ -1177,6 +1190,7 @@ typedef enum {
 #define RANGE_ITERATOR_VAL(iteratorObj) ((Value){VAL_RANGE_ITERATOR, {.obj = (Obj*)iteratorObj}})
 #define ENUM_VAL(enumObj) ((Value){VAL_ENUM, {.obj = (Obj*)enumObj}})
 #define ARRAY_ITERATOR_VAL(iteratorObj) ((Value){VAL_ARRAY_ITERATOR, {.obj = (Obj*)iteratorObj}})
+#define FILE_VAL(fileObj) ((Value){VAL_FILE, {.obj = (Obj*)fileObj}})
 #define ERROR_VAL(object) ((Value){VAL_ERROR, {.obj = (Obj*)object}})
 #define FUNCTION_VAL(value) ((Value){VAL_FUNCTION, {.obj = (Obj*)value}})
 #define CLOSURE_VAL(value) ((Value){VAL_CLOSURE, {.obj = (Obj*)value}})
@@ -1194,6 +1208,7 @@ typedef enum {
 #define AS_ERROR(value) ((ObjError*)(value).as.obj)
 #define AS_RANGE_ITERATOR(value) ((ObjRangeIterator*)(value).as.obj)
 #define AS_ARRAY_ITERATOR(value) ((ObjArrayIterator*)(value).as.obj)
+#define AS_FILE(value) ((ObjFile*)(value).as.obj)
 #define AS_FUNCTION(value) ((ObjFunction*)(value).as.obj)
 #define AS_CLOSURE(value) ((ObjClosure*)(value).as.obj)
 
@@ -1209,6 +1224,7 @@ typedef enum {
 #define IS_ERROR(value) ((value).type == VAL_ERROR)
 #define IS_RANGE_ITERATOR(value) ((value).type == VAL_RANGE_ITERATOR)
 #define IS_ARRAY_ITERATOR(value) ((value).type == VAL_ARRAY_ITERATOR)
+#define IS_FILE(value) ((value).type == VAL_FILE)
 #define IS_FUNCTION(value) ((value).type == VAL_FUNCTION)
 #define IS_CLOSURE(value) ((value).type == VAL_CLOSURE)
 
