@@ -6,3 +6,6 @@ print(math.pow(2.0, 3.0) == 8.0)
 print(math.sqrt(16.0) == 4.0)
 print(math.PI > 3.14159)
 print(math.E > 2.71828)
+
+
+print(math.sin(math.PI) as i32)
