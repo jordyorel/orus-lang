@@ -1361,6 +1361,101 @@ static bool is_numeric_type(Type* type) {
            type->kind == TYPE_F64;
 }
 
+static bool adapt_literal_argument_to_type(ASTNode* arg_node,
+                                           Type* target_type,
+                                           Type* original_type) {
+    if (!arg_node || arg_node->type != NODE_LITERAL || !target_type) {
+        return false;
+    }
+
+    Type* resolved_target = prune(target_type);
+    if (!resolved_target) {
+        resolved_target = target_type;
+    }
+
+    if (!resolved_target) {
+        return false;
+    }
+
+    TypeKind target_kind = resolved_target->kind;
+
+    if (!is_numeric_type(resolved_target)) {
+        return false;
+    }
+
+    if (original_type) {
+        Type* resolved_original = prune(original_type);
+        if (!resolved_original) {
+            resolved_original = original_type;
+        }
+
+        if (resolved_original && !is_numeric_type(resolved_original)) {
+            return false;
+        }
+    }
+
+    Value* literal_value = &arg_node->literal.value;
+    double as_double = 0.0;
+
+    switch (literal_value->type) {
+        case VAL_I32:
+            as_double = (double)literal_value->as.i32;
+            break;
+        case VAL_I64:
+            as_double = (double)literal_value->as.i64;
+            break;
+        case VAL_U32:
+            as_double = (double)literal_value->as.u32;
+            break;
+        case VAL_U64:
+            as_double = (double)literal_value->as.u64;
+            break;
+        case VAL_F64:
+            as_double = literal_value->as.f64;
+            break;
+        case VAL_NUMBER:
+            as_double = literal_value->as.number;
+            break;
+        default:
+            return false;
+    }
+
+    switch (target_kind) {
+        case TYPE_F64:
+            *literal_value = F64_VAL(as_double);
+            break;
+        case TYPE_I32:
+            if (as_double < (double)INT32_MIN || as_double > (double)INT32_MAX) {
+                return false;
+            }
+            *literal_value = I32_VAL((int32_t)as_double);
+            break;
+        case TYPE_I64:
+            if (as_double < (double)INT64_MIN || as_double > (double)INT64_MAX) {
+                return false;
+            }
+            *literal_value = I64_VAL((int64_t)as_double);
+            break;
+        case TYPE_U32:
+            if (as_double < 0.0 || as_double > (double)UINT32_MAX) {
+                return false;
+            }
+            *literal_value = U32_VAL((uint32_t)as_double);
+            break;
+        case TYPE_U64:
+            if (as_double < 0.0 || as_double > (double)UINT64_MAX) {
+                return false;
+            }
+            *literal_value = U64_VAL((uint64_t)as_double);
+            break;
+        default:
+            return false;
+    }
+
+    arg_node->dataType = resolved_target;
+    return true;
+}
+
 static bool is_string_like_type(Type* type) {
     if (!type) return false;
 
@@ -2576,11 +2671,26 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                         param_type = callee_type->info.function.paramTypes[i + offset];
                     }
                     Type* arg_type = arg_types ? arg_types[i] : NULL;
+
+                    bool types_match = true;
                     if (arg_type && param_type && !unify(arg_type, param_type)) {
+                        ASTNode* arg_node = (node->call.args && i < node->call.argCount)
+                                                ? node->call.args[i]
+                                                : NULL;
+                        if (arg_node && adapt_literal_argument_to_type(arg_node, param_type, arg_type)) {
+                            arg_types[i] = param_type;
+                        } else {
+                            types_match = false;
+                        }
+                    }
+
+                    if (!types_match) {
                         if (arg_types) free(arg_types);
+                        const char* expected_name = param_type ? getTypeName(param_type->kind) : "";
+                        const char* actual_name = arg_type ? getTypeName(arg_type->kind) : "unknown";
                         report_type_mismatch(node->call.args[i]->location,
-                                             getTypeName(param_type->kind),
-                                             getTypeName(arg_type->kind));
+                                             expected_name,
+                                             actual_name);
                         set_type_error();
                         return NULL;
                     }
