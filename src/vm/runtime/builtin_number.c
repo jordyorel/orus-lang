@@ -33,6 +33,7 @@ static const char* value_type_name(ValueType type) {
         case VAL_ERROR: return "error";
         case VAL_RANGE_ITERATOR: return "range_iterator";
         case VAL_ARRAY_ITERATOR: return "array_iterator";
+        case VAL_FILE: return "file";
         default: return "value";
     }
 }

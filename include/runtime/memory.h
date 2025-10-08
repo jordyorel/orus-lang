@@ -12,6 +12,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdio.h>
 
 #define GROW_CAPACITY(capacity) ((capacity) < 8 ? 8 : (capacity) * 2)
 #define GROW_ARRAY(type, pointer, oldCount, newCount) \
@@ -44,6 +45,7 @@ ObjRangeIterator* allocateRangeIterator(int64_t start, int64_t end, int64_t step
 ObjFunction* allocateFunction(void);
 ObjClosure* allocateClosure(ObjFunction* function);
 ObjEnumInstance* allocateEnumInstance(ObjString* typeName, ObjString* variantName, int variantIndex, ObjArray* payload);
+ObjFile* allocateFileHandle(FILE* handle, ObjString* path, bool ownsHandle);
 char* copyString(const char* chars, int length);
 
 #endif

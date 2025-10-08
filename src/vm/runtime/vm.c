@@ -40,6 +40,7 @@
 #include "compiler/parser.h"
 #include "compiler/compiler.h"
 #include "runtime/memory.h"
+#include "runtime/core_fs_handles.h"
 #include "runtime/builtins.h"
 #include "tools/debug.h"
 #include "internal/error_reporting.h"
@@ -327,6 +328,26 @@ void printValue(Value value) {
             printf("array_iter(index=%d, remaining=%d)", index, remaining);
             break;
         }
+        case VAL_FILE: {
+            ObjFile* file = AS_FILE(value);
+            if (!file) {
+                printf("file(<null>)");
+                break;
+            }
+            const char* path = file->path ? string_get_chars(file->path) : NULL;
+            const char* state = file->isClosed ? "closed" : (file->ownsHandle ? "owned" : "borrowed");
+            printf("file(");
+            bool printed_field = false;
+            if (path && *path) {
+                printf("path=\"%s\"", path);
+                printed_field = true;
+            }
+            if (printed_field) {
+                printf(", ");
+            }
+            printf("handle=%p, %s)", (void*)file->handle, state);
+            break;
+        }
         default:
             printf("<unknown>");
     }
@@ -385,6 +406,8 @@ bool valuesEqual(Value a, Value b) {
             return AS_RANGE_ITERATOR(a) == AS_RANGE_ITERATOR(b);
         case VAL_ARRAY_ITERATOR:
             return AS_ARRAY_ITERATOR(a) == AS_ARRAY_ITERATOR(b);
+        case VAL_FILE:
+            return AS_FILE(a) == AS_FILE(b);
         case VAL_ERROR:
             return AS_ERROR(a) == AS_ERROR(b);
         default:
