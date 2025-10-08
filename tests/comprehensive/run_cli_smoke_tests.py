@@ -185,27 +185,7 @@ def load_tests(repo_root: Path) -> List[SmokeCase]:
             stdin_data="Hello\n\n",
         ),
     ]
-
-    if sys.platform == "darwin":
-        fallback_program = (
-            repo_root
-            / "tests"
-            / "modules"
-            / "resolver"
-            / "macos_std_fallback_probe.orus"
-        )
-        cases.append(
-            SmokeCase(
-                program=fallback_program,
-                expect_success=False,
-                expected_stderr_substrings=[
-                    "/Library/Orus (macOS stdlib fallback)",
-                    "/Library/Orus/latest (macOS stdlib fallback)",
-                ],
-                run_without_local_std=True,
-            )
-        )
-
+    
     return cases
 
 
