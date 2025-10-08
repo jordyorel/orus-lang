@@ -87,6 +87,13 @@ void initVM(void) {
         vm.loadingModules[i] = NULL;
     }
     vm.nativeFunctionCount = 0;
+    for (int i = 0; i < MAX_NATIVES; ++i) {
+        vm.nativeFunctions[i].name = NULL;
+        vm.nativeFunctions[i].function = NULL;
+        vm.nativeFunctions[i].arity = 0;
+        vm.nativeFunctions[i].returnType = NULL;
+    }
+    vm_register_core_intrinsics();
     vm.gcCount = 0;
     vm.lastExecutionTime = 0.0;
 

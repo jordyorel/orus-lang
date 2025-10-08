@@ -41,7 +41,7 @@
 #include "compiler/compiler.h"
 #include "runtime/memory.h"
 #include "runtime/core_fs_handles.h"
-#include "runtime/builtins.h"
+#include "runtime/core_intrinsics.h"
 #include "tools/debug.h"
 #include "internal/error_reporting.h"
 #include "vm/vm_string_ops.h"
@@ -150,6 +150,28 @@ static void vm_patch_intrinsic_stub(int function_index, int native_index) {
         return;
     }
     fn->chunk->code[start + 1] = (uint8_t)native_index;
+}
+
+static void vm_register_intrinsic_table(const IntrinsicSignatureInfo* table,
+                                        size_t count) {
+    if (!table) {
+        return;
+    }
+
+    for (size_t i = 0; i < count; ++i) {
+        const IntrinsicSignatureInfo* signature = &table[i];
+        if (!signature->symbol) {
+            continue;
+        }
+        vm_bind_core_intrinsic(signature->symbol, signature);
+    }
+}
+
+void vm_register_core_intrinsics(void) {
+    vm_register_intrinsic_table(core_math_intrinsic_signature_table,
+                                core_math_intrinsic_signature_table_count);
+    vm_register_intrinsic_table(core_fs_intrinsic_signature_table,
+                                core_fs_intrinsic_signature_table_count);
 }
 
 // Forward declarations

@@ -343,6 +343,7 @@ typedef struct {
 
 const IntrinsicSignatureInfo* vm_get_intrinsic_signature(const char* symbol);
 NativeFn vm_lookup_core_intrinsic(const char* symbol);
+void vm_register_core_intrinsics(void);
 
 // Forward declaration for typed register windows used by call frames.
 typedef struct TypedRegisterWindow TypedRegisterWindow;
