@@ -18,6 +18,7 @@
 #include <errno.h>
 #include <ctype.h>
 #include <inttypes.h>
+#include <math.h>
 
 // Auto-detect computed goto support
 #ifndef USE_COMPUTED_GOTO
@@ -189,6 +190,37 @@ static char* cached_executable_dir = NULL;
 
 
 // Value operations
+void print_raw_f64(double value) {
+    if (isnan(value)) {
+        fputs("nan", stdout);
+        return;
+    }
+    if (isinf(value)) {
+        fputs(value < 0 ? "-inf" : "inf", stdout);
+        return;
+    }
+    if (value == 0.0) {
+        fputs("0", stdout);
+        return;
+    }
+
+    char buffer[512];
+    snprintf(buffer, sizeof(buffer), "%.17f", value);
+
+    char* decimal = strchr(buffer, '.');
+    if (decimal != NULL) {
+        char* end = buffer + strlen(buffer) - 1;
+        while (end > decimal && *end == '0') {
+            *end-- = '\0';
+        }
+        if (*end == '.') {
+            *end = '\0';
+        }
+    }
+
+    fputs(buffer, stdout);
+}
+
 void printValue(Value value) {
     switch (value.type) {
         case VAL_BOOL:
@@ -207,7 +239,7 @@ void printValue(Value value) {
             printf("%llu", (unsigned long long)AS_U64(value));
             break;
         case VAL_F64:
-            printf("%.17g", AS_F64(value));
+            print_raw_f64(AS_F64(value));
             break;
         case VAL_STRING: {
             const char* chars = string_get_chars(AS_STRING(value));

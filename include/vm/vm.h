@@ -1238,6 +1238,7 @@ void writeChunk(Chunk* chunk, uint8_t byte, int line, int column, const char* fi
 int addConstant(Chunk* chunk, Value value);
 
 // Value operations
+void print_raw_f64(double value);
 void printValue(Value value);
 bool valuesEqual(Value a, Value b);
 
