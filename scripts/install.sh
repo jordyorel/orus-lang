@@ -93,14 +93,28 @@ if ! command_exists tar; then
     exit 1
 fi
 
+OS_NAME=$(resolve_os)
+
 if [ -n "$PREFIX_OVERRIDE" ]; then
     INSTALL_PREFIX="$PREFIX_OVERRIDE"
 else
-    if [ "${SUDO_USER-}" != "" ] || [ "$(id -u)" -eq 0 ]; then
-        INSTALL_PREFIX="/usr/local/opt/orus"
-    else
-        INSTALL_PREFIX="${HOME}/.local/opt/orus"
-    fi
+    case "$OS_NAME" in
+        macos)
+            INSTALL_PREFIX="/Library/Orus"
+            if [ "$(id -u)" -ne 0 ]; then
+                printf 'Error: installing to %s requires administrator privileges.\n' "$INSTALL_PREFIX" >&2
+                printf 'Re-run with sudo or pass --prefix for a user-level installation.\n' >&2
+                exit 1
+            fi
+            ;;
+        *)
+            if [ "${SUDO_USER-}" != "" ] || [ "$(id -u)" -eq 0 ]; then
+                INSTALL_PREFIX="/usr/local/opt/orus"
+            else
+                INSTALL_PREFIX="${HOME}/.local/opt/orus"
+            fi
+            ;;
+    esac
 fi
 
 case "$INSTALL_PREFIX" in
@@ -113,14 +127,15 @@ esac
 if [ -n "$BIN_OVERRIDE" ]; then
     BIN_DIR="$BIN_OVERRIDE"
 else
+    DEFAULT_USER_PREFIX="${HOME}/.local/opt/orus"
     case "$INSTALL_PREFIX" in
+        /Library/Orus) BIN_DIR="/Library/Orus/bin" ;;
         /usr/local/opt/orus) BIN_DIR="/usr/local/bin" ;;
-        "${HOME}/.local/opt/orus") BIN_DIR="${HOME}/.local/bin" ;;
+        "$DEFAULT_USER_PREFIX") BIN_DIR="${HOME}/.local/bin" ;;
         *) BIN_DIR="${INSTALL_PREFIX}/bin" ;;
     esac
 fi
 
-OS_NAME=$(resolve_os)
 ARCH_NAME=$(resolve_arch)
 ARCHIVE_NAME="orus-${OS_NAME}-${ARCH_NAME}.tar.gz"
 DOWNLOAD_URL="${LATEST_URL_BASE}/${ARCHIVE_NAME}"
@@ -183,6 +198,33 @@ printf '\nInstalled Orus %s to %s\n' "$RELEASE_TAG" "$STAGE_DIR"
 printf 'Symlinked binary to %s\n' "${PREFIX_BIN_DIR}/orus"
 if [ "$BIN_DIR" != "$PREFIX_BIN_DIR" ]; then
     printf 'Additional symlink created at %s\n' "${BIN_DIR}/orus"
+fi
+
+PATH_NOTE=""
+if [ "$OS_NAME" = "macos" ] && [ "$INSTALL_PREFIX" = "/Library/Orus" ]; then
+    PATH_ENTRY="/Library/Orus/bin"
+    if [ "$(id -u)" -eq 0 ]; then
+        PATHS_DIR="/etc/paths.d"
+        if [ -d "$PATHS_DIR" ]; then
+            PATH_FILE="${PATHS_DIR}/orus"
+            if [ -f "$PATH_FILE" ]; then
+                if ! grep -qxF "$PATH_ENTRY" "$PATH_FILE"; then
+                    printf '%s\n' "$PATH_ENTRY" >>"$PATH_FILE"
+                fi
+            else
+                printf '%s\n' "$PATH_ENTRY" >"$PATH_FILE"
+            fi
+            PATH_NOTE="Registered ${PATH_ENTRY} in ${PATH_FILE}"
+        else
+            PATH_NOTE="Warning: ${PATHS_DIR} not found; add ${PATH_ENTRY} to your PATH manually."
+        fi
+    else
+        PATH_NOTE="Run with sudo to register ${PATH_ENTRY} in PATH or add it manually."
+    fi
+fi
+
+if [ -n "$PATH_NOTE" ]; then
+    printf '%s\n' "$PATH_NOTE"
 fi
 
 if [ "$BIN_DIR" = "${HOME}/.local/bin" ]; then

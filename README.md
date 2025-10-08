@@ -56,17 +56,22 @@ make help
 ### Single-command installer
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/jordyorel/orus-lang/main/scripts/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/jordyorel/orus-lang/main/scripts/install.sh | sudo sh
 ```
 
 The installer detects your operating system and CPU architecture, downloads the
 matching release archive, and stages it so the `orus` binary and bundled
-`std/` directory stay together. When run without elevated privileges it defaults
-to `~/.local/opt/orus` for the installation root and keeps a symlink in
-`~/.local/bin`. If executed with `sudo`, it switches to `/usr/local/opt/orus`
-and updates `/usr/local/bin`.
+`std/` directory stay together. On macOS the default location is
+`/Library/Orus`, mirroring where Python and Java ship system components, and
+the installer registers `/Library/Orus/bin` via `/etc/paths.d` so `orus`
+becomes immediately available on your `PATH`.
 
-Need a custom layout? Pass flags through `sh -s --`:
+Prefer a user-local install or running without elevated privileges? Drop `sudo`
+and the script falls back to `~/.local/opt/orus` with a symlink in
+`~/.local/bin`. On Linux, running with administrative privileges continues to
+target `/usr/local/opt/orus`.
+
+Need a custom layout? Pass flags through `sh -s --` (combine with `sudo` when targeting system paths):
 
 ```bash
 # Install into a custom prefix and publish the executable elsewhere
