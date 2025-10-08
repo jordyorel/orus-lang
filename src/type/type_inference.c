@@ -21,6 +21,7 @@
 #include <string.h>
 #include <limits.h>
 #include <stdint.h>
+#include <math.h>
 #include "internal/strutil.h"
 
 #include "compiler/ast.h"
@@ -1361,6 +1362,12 @@ static bool is_numeric_type(Type* type) {
            type->kind == TYPE_F64;
 }
 
+static bool double_has_fractional_component(double value) {
+    double integral_part;
+    double fractional_part = modf(value, &integral_part);
+    return fractional_part != 0.0;
+}
+
 static bool adapt_literal_argument_to_type(ASTNode* arg_node,
                                            Type* target_type,
                                            Type* original_type) {
@@ -1396,36 +1403,67 @@ static bool adapt_literal_argument_to_type(ASTNode* arg_node,
 
     Value* literal_value = &arg_node->literal.value;
     double as_double = 0.0;
+    bool literal_is_integer_literal = false;
+    bool literal_is_generic_number = false;
+    bool literal_is_float_literal = false;
 
     switch (literal_value->type) {
         case VAL_I32:
             as_double = (double)literal_value->as.i32;
+            literal_is_integer_literal = true;
             break;
         case VAL_I64:
             as_double = (double)literal_value->as.i64;
+            literal_is_integer_literal = true;
             break;
         case VAL_U32:
             as_double = (double)literal_value->as.u32;
+            literal_is_integer_literal = true;
             break;
         case VAL_U64:
             as_double = (double)literal_value->as.u64;
+            literal_is_integer_literal = true;
             break;
         case VAL_F64:
             as_double = literal_value->as.f64;
+            literal_is_float_literal = true;
             break;
         case VAL_NUMBER:
             as_double = literal_value->as.number;
+            literal_is_generic_number = true;
             break;
         default:
             return false;
     }
 
+    bool target_is_integer =
+        target_kind == TYPE_I32 || target_kind == TYPE_I64 ||
+        target_kind == TYPE_U32 || target_kind == TYPE_U64;
+
+    if (target_is_integer) {
+        if (!literal_is_integer_literal) {
+            if (literal_is_generic_number) {
+                if (double_has_fractional_component(as_double)) {
+                    return false;
+                }
+            } else {
+                return false;
+            }
+        }
+    }
+
     switch (target_kind) {
         case TYPE_F64:
+            if (!(literal_is_integer_literal || literal_is_generic_number || literal_is_float_literal)) {
+                return false;
+            }
             *literal_value = F64_VAL(as_double);
             break;
         case TYPE_I32:
             if (as_double < (double)INT32_MIN || as_double > (double)INT32_MAX) {
+                return false;
+            }
+            if (double_has_fractional_component(as_double)) {
                 return false;
             }
             *literal_value = I32_VAL((int32_t)as_double);
@@ -1434,16 +1472,25 @@ static bool adapt_literal_argument_to_type(ASTNode* arg_node,
             if (as_double < (double)INT64_MIN || as_double > (double)INT64_MAX) {
                 return false;
             }
+            if (double_has_fractional_component(as_double)) {
+                return false;
+            }
             *literal_value = I64_VAL((int64_t)as_double);
             break;
         case TYPE_U32:
             if (as_double < 0.0 || as_double > (double)UINT32_MAX) {
                 return false;
             }
+            if (double_has_fractional_component(as_double)) {
+                return false;
+            }
             *literal_value = U32_VAL((uint32_t)as_double);
             break;
         case TYPE_U64:
             if (as_double < 0.0 || as_double > (double)UINT64_MAX) {
+                return false;
+            }
+            if (double_has_fractional_component(as_double)) {
                 return false;
             }
             *literal_value = U64_VAL((uint64_t)as_double);
