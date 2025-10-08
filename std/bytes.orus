@@ -1,0 +1,13 @@
+// Byte buffer helpers built on top of the VM intrinsics
+
+@[core("__bytes_alloc")]
+pub fn make_bytes(length: i64) -> bytes
+
+@[core("__bytes_slice")]
+pub fn slice_bytes(buffer: bytes, start: i64, length: i64) -> bytes
+
+@[core("__bytes_from_string")]
+pub fn encode_utf8(text: string) -> bytes
+
+@[core("__bytes_to_string")]
+pub fn decode_utf8(buffer: bytes) -> string

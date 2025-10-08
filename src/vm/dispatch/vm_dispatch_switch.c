@@ -8,6 +8,7 @@
 
 
 #include "vm/vm_dispatch.h"
+#include <stdio.h>
 #include "vm/spill_manager.h"
 #include "runtime/builtins.h"
 #include "runtime/memory.h"

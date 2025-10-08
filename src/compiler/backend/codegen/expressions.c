@@ -634,8 +634,12 @@ uint8_t select_optimal_opcode(const char* op, TypeKind type_kind) {
             DEBUG_CODEGEN_PRINT("Converting TYPE_BOOL (%d) to REG_TYPE_BOOL (%d)", TYPE_BOOL, REG_TYPE_BOOL);
             break;
         case TYPE_STRING:
+        case TYPE_BYTES:
             reg_type = REG_TYPE_HEAP;
-            DEBUG_CODEGEN_PRINT("Converting TYPE_STRING (%d) to REG_TYPE_HEAP (%d)", TYPE_STRING, REG_TYPE_HEAP);
+            DEBUG_CODEGEN_PRINT("Converting TYPE_%s (%d) to REG_TYPE_HEAP (%d)",
+                                type_kind == TYPE_STRING ? "STRING" : "BYTES",
+                                type_kind,
+                                REG_TYPE_HEAP);
             break;
         case TYPE_VOID:
             reg_type = REG_TYPE_I64;  // Void values should not reach arithmetic, but keep legacy fallback.

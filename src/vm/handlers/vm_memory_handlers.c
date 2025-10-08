@@ -229,6 +229,9 @@ void handle_store_global(void) {
             case TYPE_STRING:
                 typeMatches = IS_STRING(valueToStore);
                 break;
+            case TYPE_BYTES:
+                typeMatches = IS_BYTES(valueToStore);
+                break;
             default:
                 typeMatches = true; // TYPE_ANY allows anything
                 break;
@@ -244,6 +247,7 @@ void handle_store_global(void) {
                 case TYPE_F64: expectedTypeName = "f64"; break;
                 case TYPE_BOOL: expectedTypeName = "bool"; break;
                 case TYPE_STRING: expectedTypeName = "string"; break;
+                case TYPE_BYTES: expectedTypeName = "bytes"; break;
                 default: break;
             }
             

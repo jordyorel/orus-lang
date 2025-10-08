@@ -1138,6 +1138,8 @@ const char* typed_node_type_string(TypedASTNode* node) {
             return "bool";
         case TYPE_STRING:
             return "string";
+        case TYPE_BYTES:
+            return "bytes";
         case TYPE_VOID:
             return "void";
         case TYPE_ARRAY:

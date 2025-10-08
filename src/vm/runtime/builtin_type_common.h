@@ -25,6 +25,7 @@ static inline const char* builtin_value_type_label(Value value) {
         case VAL_F64: return "f64";
         case VAL_NUMBER: return "number";
         case VAL_STRING: return "string";
+        case VAL_BYTES: return "bytes";
         case VAL_ARRAY: return "array";
         case VAL_ENUM: {
             ObjEnumInstance* instance = AS_ENUM(value);

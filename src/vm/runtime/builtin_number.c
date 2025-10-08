@@ -28,6 +28,7 @@ static const char* value_type_name(ValueType type) {
         case VAL_U64: return "u64";
         case VAL_F64: return "f64";
         case VAL_STRING: return "string";
+        case VAL_BYTES: return "bytes";
         case VAL_ARRAY: return "array";
         case VAL_ENUM: return "enum";
         case VAL_ERROR: return "error";

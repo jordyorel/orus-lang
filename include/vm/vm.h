@@ -44,6 +44,7 @@ typedef enum {
     VAL_F64,
     VAL_NUMBER,  // Generic number type for literals
     VAL_STRING,
+    VAL_BYTES,
     VAL_ARRAY,
     VAL_ENUM,
     VAL_ERROR,
@@ -57,6 +58,7 @@ typedef enum {
 // Forward declarations
 typedef struct ObjString ObjString;
 typedef struct ObjArray ObjArray;
+typedef struct ObjByteBuffer ObjByteBuffer;
 typedef struct ObjError ObjError;
 typedef struct ObjRangeIterator ObjRangeIterator;
 typedef struct ObjArrayIterator ObjArrayIterator;
@@ -79,6 +81,7 @@ typedef struct {
         double f64;
         double number;  // Generic number for literals
         Obj* obj;
+        ObjByteBuffer* bytes;
         ObjFile* file;
     } as;
 } Value;
@@ -87,6 +90,7 @@ typedef struct {
 typedef enum {
     OBJ_STRING,
     OBJ_ARRAY,
+    OBJ_BYTEBUFFER,
     OBJ_ERROR,
     OBJ_RANGE_ITERATOR,
     OBJ_ARRAY_ITERATOR,
@@ -97,7 +101,7 @@ typedef enum {
     OBJ_UPVALUE
 } ObjType;
 
-#define OBJ_TYPE_COUNT 10
+#define OBJ_TYPE_COUNT 11
 
 // Object header
 struct Obj {
@@ -121,6 +125,13 @@ struct ObjArray {
     int length;
     int capacity;
     Value* elements;
+};
+
+struct ObjByteBuffer {
+    Obj obj;
+    size_t length;
+    size_t capacity;
+    uint8_t* data;
 };
 
 // Array iterator object
@@ -246,6 +257,7 @@ typedef enum {
     TYPE_F64,
     TYPE_BOOL,
     TYPE_STRING,
+    TYPE_BYTES,
     TYPE_VOID,
     TYPE_ARRAY,
     TYPE_FUNCTION,
@@ -1186,6 +1198,7 @@ typedef enum {
 #define U64_VAL(value) ((Value){VAL_U64, {.u64 = value}})
 #define F64_VAL(value) ((Value){VAL_F64, {.f64 = value}})
 #define STRING_VAL(value) ((Value){VAL_STRING, {.obj = (Obj*)value}})
+#define BYTES_VAL(bufferObj) ((Value){VAL_BYTES, {.bytes = (bufferObj)}})
 #define ARRAY_VAL(arrayObj) ((Value){VAL_ARRAY, {.obj = (Obj*)arrayObj}})
 #define RANGE_ITERATOR_VAL(iteratorObj) ((Value){VAL_RANGE_ITERATOR, {.obj = (Obj*)iteratorObj}})
 #define ENUM_VAL(enumObj) ((Value){VAL_ENUM, {.obj = (Obj*)enumObj}})
@@ -1203,6 +1216,7 @@ typedef enum {
 #define AS_F64(value) ((value).as.f64)
 #define AS_OBJ(value) ((value).as.obj)
 #define AS_STRING(value) ((ObjString*)(value).as.obj)
+#define AS_BYTES(value) ((value).as.bytes)
 #define AS_ARRAY(value) ((ObjArray*)(value).as.obj)
 #define AS_ENUM(value) ((ObjEnumInstance*)(value).as.obj)
 #define AS_ERROR(value) ((ObjError*)(value).as.obj)
@@ -1219,6 +1233,7 @@ typedef enum {
 #define IS_U64(value) ((value).type == VAL_U64)
 #define IS_F64(value) ((value).type == VAL_F64)
 #define IS_STRING(value) ((value).type == VAL_STRING)
+#define IS_BYTES(value) ((value).type == VAL_BYTES)
 #define IS_ARRAY(value) ((value).type == VAL_ARRAY)
 #define IS_ENUM(value) ((value).type == VAL_ENUM)
 #define IS_ERROR(value) ((value).type == VAL_ERROR)

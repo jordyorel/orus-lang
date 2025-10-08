@@ -2854,6 +2854,8 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                 return getPrimitiveType(TYPE_BOOL);
             } else if (strcmp(type_name, "string") == 0 || strcmp(type_name, "str") == 0) {
                 return getPrimitiveType(TYPE_STRING);
+            } else if (strcmp(type_name, "bytes") == 0) {
+                return getPrimitiveType(TYPE_BYTES);
             } else if (strcmp(type_name, "void") == 0) {
                 return getPrimitiveType(TYPE_VOID);
             }

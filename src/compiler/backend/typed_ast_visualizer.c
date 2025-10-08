@@ -168,6 +168,7 @@ static const char* get_type_name(Type* type) {
         case TYPE_F64: return "f64";
         case TYPE_BOOL: return "bool";
         case TYPE_STRING: return "string";
+        case TYPE_BYTES: return "bytes";
         case TYPE_VOID: return "void";
         case TYPE_ARRAY: return "array";
         case TYPE_FUNCTION: {

@@ -8,6 +8,7 @@
 
 
 #include "vm/vm_dispatch.h"
+#include <stdio.h>
 #include "vm/spill_manager.h"
 #include "runtime/builtins.h"
 #include "runtime/memory.h"
@@ -563,6 +564,9 @@ InterpretResult vm_run_dispatch(void) {
                     case TYPE_STRING:
                         typeMatches = IS_STRING(valueToStore);
                         break;
+                    case TYPE_BYTES:
+                        typeMatches = IS_BYTES(valueToStore);
+                        break;
                     default:
                         typeMatches = true; // TYPE_ANY allows anything
                         break;
@@ -578,6 +582,7 @@ InterpretResult vm_run_dispatch(void) {
                         case TYPE_F64: expectedTypeName = "f64"; break;
                         case TYPE_BOOL: expectedTypeName = "bool"; break;
                         case TYPE_STRING: expectedTypeName = "string"; break;
+                        case TYPE_BYTES: expectedTypeName = "bytes"; break;
                         default: break;
                     }
                     
@@ -2948,10 +2953,10 @@ InterpretResult vm_run_dispatch(void) {
             }
         }
 
-        Value result = native->function(argCount, args_ptr);
-        vm_set_register_safe(resultReg, result);
-        DISPATCH();
-    }
+            Value result = native->function(argCount, args_ptr);
+            vm_set_register_safe(resultReg, result);
+            DISPATCH();
+        }
 
     LABEL_OP_CALL_R: {
             uint8_t funcReg = READ_BYTE();

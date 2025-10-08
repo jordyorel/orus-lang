@@ -223,6 +223,11 @@ static bool append_value_repr(AssertStringBuilder* sb, Value value) {
             return sb_append_format(sb, "%g", AS_F64(value));
         case VAL_STRING:
             return append_string_repr(sb, AS_STRING(value));
+        case VAL_BYTES: {
+            ObjByteBuffer* buffer = AS_BYTES(value);
+            size_t length = buffer ? buffer->length : 0;
+            return sb_append_format(sb, "<bytes len=%zu>", length);
+        }
         case VAL_ARRAY:
             return append_array_repr(sb, AS_ARRAY(value));
         case VAL_ENUM:
