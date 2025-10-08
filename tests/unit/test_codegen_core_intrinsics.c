@@ -115,6 +115,44 @@ static bool test_core_intrinsic_emits_native_call(void) {
     return true;
 }
 
+static bool test_fs_intrinsic_emits_native_trampoline(void) {
+    const char* source =
+        "@[core(\"__fs_read\")]\n"
+        "pub fn fs_read(handle: any, count: i64) -> bytes\n";
+
+    CompiledModule module;
+    if (!compile_module_source(source, "fs_intrinsic.orus", &module)) {
+        fprintf(stderr, "Failed to compile filesystem intrinsic module\n");
+        return false;
+    }
+
+    ASSERT_TRUE(module.ctx->module_export_count == 1,
+                "expected exactly one module export for fs intrinsic");
+    ModuleExportEntry* export_entry = &module.ctx->module_exports[0];
+    ASSERT_TRUE(export_entry->intrinsic_symbol != NULL,
+                "export should record intrinsic symbol");
+    ASSERT_TRUE(strcmp(export_entry->intrinsic_symbol, "__fs_read") == 0,
+                "export stored incorrect fs intrinsic symbol");
+    ASSERT_TRUE(export_entry->function_index >= 0,
+                "export missing function index metadata");
+
+    int function_index = export_entry->function_index;
+    ASSERT_TRUE(function_index < module.ctx->function_count,
+                "function index out of bounds for compiled module");
+
+    BytecodeBuffer* chunk = module.ctx->function_chunks[function_index];
+    ASSERT_TRUE(chunk != NULL, "compiled function chunk missing");
+    ASSERT_TRUE(chunk->count >= 6,
+                "intrinsic trampoline should contain call and return instructions");
+    ASSERT_TRUE(chunk->instructions[0] == OP_CALL_NATIVE_R,
+                "trampoline must call native opcode");
+    ASSERT_TRUE(chunk->instructions[5] == OP_RETURN_R,
+                "trampoline must return value register");
+
+    destroy_compiled_module(&module);
+    return true;
+}
+
 int main(void) {
     debug_init();
 
@@ -123,6 +161,7 @@ int main(void) {
         bool (*fn)(void);
     } tests[] = {
         {"core intrinsic codegen emits native trampoline", test_core_intrinsic_emits_native_call},
+        {"fs intrinsic codegen emits native trampoline", test_fs_intrinsic_emits_native_trampoline},
     };
 
     int passed = 0;

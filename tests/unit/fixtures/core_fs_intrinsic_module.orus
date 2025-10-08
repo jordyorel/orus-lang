@@ -1,0 +1,5 @@
+@[core("__fs_open")]
+pub fn open_file(path: string, mode: string) -> any
+
+@[core("__fs_close")]
+pub fn close_file(handle: any) -> bool

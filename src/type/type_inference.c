@@ -38,6 +38,14 @@
 #include "errors/features/control_flow_errors.h"
 #include "debug/debug_config.h"
 
+static bool intrinsic_signature_type_matches(TypeKind expected,
+                                             TypeKind actual) {
+    if (expected == TYPE_ANY || actual == TYPE_ANY) {
+        return true;
+    }
+    return expected == actual;
+}
+
 // ---- Helpers for struct and impl bookkeeping ----
 static ObjString* create_compiler_string(const char* text) {
     if (!text) {
@@ -2856,6 +2864,8 @@ Type* algorithm_w(TypeEnv* env, ASTNode* node) {
                 return getPrimitiveType(TYPE_STRING);
             } else if (strcmp(type_name, "bytes") == 0) {
                 return getPrimitiveType(TYPE_BYTES);
+            } else if (strcmp(type_name, "any") == 0) {
+                return getPrimitiveType(TYPE_ANY);
             } else if (strcmp(type_name, "void") == 0) {
                 return getPrimitiveType(TYPE_VOID);
             }
@@ -4621,7 +4631,8 @@ static TypedASTNode* generate_typed_ast_recursive(ASTNode* ast, TypeEnv* type_en
                     for (int i = 0; i < signature->paramCount; i++) {
                         Type* param_type = function_type->info.function.paramTypes[i];
                         TypeKind param_kind = param_type ? param_type->kind : TYPE_UNKNOWN;
-                        if (param_kind != signature->paramTypes[i]) {
+                        if (!intrinsic_signature_type_matches(signature->paramTypes[i],
+                                                              param_kind)) {
                             report_compile_error(
                                 E2002_INCOMPATIBLE_TYPES,
                                 ast->location,
@@ -4639,7 +4650,7 @@ static TypedASTNode* generate_typed_ast_recursive(ASTNode* ast, TypeEnv* type_en
 
                 Type* return_type = function_type->info.function.returnType;
                 TypeKind return_kind = return_type ? return_type->kind : TYPE_UNKNOWN;
-                if (return_kind != signature->returnType) {
+                if (!intrinsic_signature_type_matches(signature->returnType, return_kind)) {
                     report_compile_error(E2002_INCOMPATIBLE_TYPES, ast->location,
                                          "Intrinsic '%s' must return %s but function '%s' resolved to %s.",
                                          signature->symbol, getTypeName(signature->returnType), fn_name,
