@@ -40,7 +40,7 @@
 
 ### Phase 0: Prelude Bootstrap
 - Author `std/__kernel.orus` exposing typed signatures that wrap the future kernel primitives once they are stabilized.
-- Build `std/prelude.orus` implementing `print`, `println`, formatting, panic hooks, and RNG seeding in pure Orus.
+- Build `std/prelude.orus` implementing `print`, formatting, panic hooks, and RNG seeding in pure Orus.
 - Extend the VM boot sequence to load the prelude before executing user modules.
 
 ### Phase 1: IO, Time, Random Core Services
@@ -54,12 +54,12 @@
 - Port UTF-8 encode/decode and substring manipulation into Orus, replacing the VM helpers once parity is achieved.
 
 ### Phase 3: Math Rewrite
-- Replace C math intrinsics with Orus implementations (Newton–Raphson `sqrt`, minimax trig approximations, exponentiation by squaring for `pow`).
+- Orus implementations (Newton–Raphson `sqrt`, minimax trig approximations, exponentiation by squaring for `pow`).
 - Offer compile-time switches to optionally call native libm for platforms that require higher precision.
 - Add exhaustive accuracy tests comparing Orus results to high-precision references.
 
 ### Phase 4: Filesystem & Environment APIs
-- Build `std/fs` using `fs_open`, `fs_read`, `fs_write`, `fs_seek`, plus high-level helpers like `read_file` and `write_file`.
+- Build `std/fs` using `fopen`, `fread`, `fwrite`, `fseek`, plus high-level helpers like `readfile` and `writefile`.
 - Implement directory iteration and metadata queries once kernel primitives support them.
 - Add `std/env` for environment variables and process exit helpers.
 
@@ -83,15 +83,8 @@
 - **Bootstrap loops:** Ensure kernel primitives are callable before the prelude loads; keep minimal diagnostic hooks in C until Orus equivalents stabilize.
 - **Developer ergonomics:** Provide migration guides and lint rules that flag direct kernel primitive usage from user modules once the public APIs stabilize.
 
-## 9. Timeline Targets
-| Quarter | Milestone |
-| --- | --- |
-| Q1 | Kernel primitive table, prelude bootstrap, IO/Time/Random modules behind feature flags |
-| Q2 | Collections and bytes rewrite, math replacement reaching parity, filesystem alpha release |
-| Q3 | Extended utilities, kernel interface hardening, CI on multiple architectures |
-| Q4 | Release fully self-hosted stdlib, document post-migration maintenance |
 
-## 10. Long-Term Outlook
+## 9. Long-Term Outlook
 - Begin authoring compiler support tooling (formatters, linters) in Orus using the new stdlib foundations.
 - Explore alternative runtime backends (e.g., WASM) leveraging the same kernel primitive contract.
 - Treat the self-hosted stdlib as a stepping stone toward self-hosting the compiler and runtime maintenance tools.
