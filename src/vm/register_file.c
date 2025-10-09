@@ -36,6 +36,31 @@ static void reset_frame_value_storage(CallFrame* frame) {
     }
 }
 
+static void reset_frame_metadata(CallFrame* frame) {
+    if (!frame) {
+        return;
+    }
+
+    frame->parent = NULL;
+    frame->next = NULL;
+    frame->typed_window = NULL;
+    frame->previous_typed_window = NULL;
+    frame->typed_window_version = 0;
+    frame->frame_base = FRAME_REG_START;
+    frame->temp_base = TEMP_REG_START;
+    frame->temp_count = 0;
+    frame->spill_base = SPILL_REG_START;
+    frame->spill_count = 0;
+    frame->register_count = 0;
+    frame->module_id = 0;
+    frame->flags = 0;
+    frame->returnAddress = NULL;
+    frame->previousChunk = NULL;
+    frame->resultRegister = FRAME_REG_START;
+    frame->parameterBaseRegister = FRAME_REG_START;
+    frame->functionIndex = UINT16_MAX;
+}
+
 static inline uint16_t typed_window_select_bit(uint64_t mask) {
 #if defined(__GNUC__) || defined(__clang__)
     return (uint16_t)__builtin_ctzll(mask);
@@ -378,7 +403,7 @@ CallFrame* allocate_frame(RegisterFile* rf) {
         return NULL;
     }
     rf->free_frames = frame->next;
-    frame->next = NULL;
+    reset_frame_metadata(frame);
 
     TypedRegisterWindow* parent_window =
         vm.typed_regs.active_window ? vm.typed_regs.active_window : &vm.typed_regs.root_window;
@@ -390,19 +415,6 @@ CallFrame* allocate_frame(RegisterFile* rf) {
     }
 
     frame->parent = rf->current_frame;
-    frame->frame_base = FRAME_REG_START;
-    frame->temp_base = TEMP_REG_START;
-    frame->temp_count = 0;
-    frame->spill_base = SPILL_REG_START;
-    frame->spill_count = 0;
-    frame->register_count = 0;
-    frame->module_id = 0;
-    frame->flags = 0;
-    frame->returnAddress = NULL;
-    frame->previousChunk = NULL;
-    frame->resultRegister = FRAME_REG_START;
-    frame->parameterBaseRegister = FRAME_REG_START;
-    frame->functionIndex = UINT16_MAX;
 
     typed_window_reset_live_mask(new_window);
     typed_window_sync_shared_ranges(new_window, parent_window);
@@ -419,8 +431,6 @@ CallFrame* allocate_frame(RegisterFile* rf) {
     typed_registers_bind_window(new_window);
     vm.typed_regs.active_depth++;
     clear_typed_window_frame(new_window);
-    frame->register_count = 0;
-    frame->temp_count = 0;
 
     vm.frameCount++;
 
@@ -445,23 +455,15 @@ void deallocate_frame(RegisterFile* rf) {
     }
     typed_registers_release_window(window_to_release);
 
-    rf->current_frame = frame->parent;
-    rf->frame_stack = frame->next;
+    CallFrame* parent = frame->parent;
+    CallFrame* next_frame = frame->next;
+
+    rf->current_frame = parent;
+    rf->frame_stack = next_frame;
     rf->temps = rf->current_frame ? rf->current_frame->temps : rf->temps_root;
 
-    reset_frame_value_storage(frame);
-    frame->parent = NULL;
+    reset_frame_metadata(frame);
     frame->next = rf->free_frames;
-    frame->typed_window = NULL;
-    frame->previous_typed_window = NULL;
-    frame->returnAddress = NULL;
-    frame->previousChunk = NULL;
-    frame->resultRegister = FRAME_REG_START;
-    frame->parameterBaseRegister = FRAME_REG_START;
-    frame->functionIndex = UINT16_MAX;
-    frame->register_count = 0;
-    frame->spill_count = 0;
-
     rf->free_frames = frame;
 
     if (vm.frameCount > 0) {
@@ -489,23 +491,9 @@ void init_register_file(RegisterFile* rf) {
     for (int i = FRAMES_MAX - 1; i >= 0; --i) {
         CallFrame* frame = &vm.frames[i];
         reset_frame_value_storage(frame);
-        frame->typed_window = NULL;
-        frame->previous_typed_window = NULL;
-        frame->parent = NULL;
-        frame->next = rf->free_frames;
-        frame->frame_base = FRAME_REG_START;
-        frame->temp_base = TEMP_REG_START;
+        reset_frame_metadata(frame);
         frame->temp_count = TEMP_REGISTERS;
-        frame->spill_base = SPILL_REG_START;
-        frame->spill_count = 0;
-        frame->register_count = 0;
-        frame->module_id = 0;
-        frame->flags = 0;
-        frame->returnAddress = NULL;
-        frame->previousChunk = NULL;
-        frame->resultRegister = FRAME_REG_START;
-        frame->parameterBaseRegister = FRAME_REG_START;
-        frame->functionIndex = UINT16_MAX;
+        frame->next = rf->free_frames;
         rf->free_frames = frame;
     }
     vm.frameCount = 0;
