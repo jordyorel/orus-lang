@@ -20,7 +20,7 @@
 - [x] For each export, document the VM intrinsic or runtime feature it fronts so an equivalent can be supplied without the `.orus` file.
 - [x] Remove the `.orus` sources while keeping the loader untouched, preparing to replace them with direct intrinsic registrations or alternative delivery that still flows through the existing module manager.
 - [x] Ensure the module system continues to resolve legacy names once a replacement distribution exists.
-  - Added `module_manager_alias_module` so future intrinsic bundles can expose their canonical package name and alias historic `std/` entry points without altering loader semantics.
+  - The short-lived `module_manager_alias_module` helper is now retired; canonical `intrinsics/` module names are required going forward so the loader never reintroduces legacy `std/` identifiers.
 
 ### Catalog of removed `std/` modules
 
@@ -47,14 +47,14 @@
 ## Documentation & Testing
 - [x] Revise documentation that references the experimental stdlib files to reflect the intrinsic-backed replacements while leaving module loader instructions intact.
 - [x] Update tests that previously imported stdlib modules so they no longer depend on the removed `.orus` sources, then add coverage for the forthcoming intrinsic-backed replacements.
-  - `tests/unit/test_module_manager_legacy_alias.c` verifies that canonical intrinsic modules can re-export legacy names without disk lookups.
+  - Alias-specific coverage has been deleted alongside the helper, keeping the suite focused on canonical registration paths.
 - [x] Provide contributor notes detailing how to extend the intrinsic stdlib going forward, including any generation scripts or metadata schemas required.
   - See `docs/intrinsic_stdlib_contributors.md` for the authoring and verification workflow.
 
 ## Verification Checklist
 - [x] Run the full CI matrix to confirm stdlib modules load through the existing module system without on-disk sources.
-  - `make test` now runs the legacy-alias binary in addition to the comprehensive interpreter suite, covering the new path.
+  - `make test` runs the comprehensive interpreter suite that validates intrinsic-backed modules without any alias binaries.
 - [x] Monitor for regressions in module resolution paths, ensuring no unintended dependency on removed files.
-  - The alias tests exercise canonical and legacy lookups, catching regressions where the loader might reintroduce filesystem probes.
+  - Focus regression tests on the canonical names to guarantee the loader no longer consults legacy aliases.
 - [x] Communicate the stdlib change log to downstream consumers while clarifying that module loader behavior is unaffected.
-  - The `Unreleased` changelog entry documents the removal and the alias mechanism for downstream consumers.
+  - The `Unreleased` changelog entry now records the alias helper's removal so downstream consumers stop depending on legacy `std/` names.

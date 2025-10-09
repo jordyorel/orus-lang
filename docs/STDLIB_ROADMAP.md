@@ -28,10 +28,10 @@ This roadmap defines how the Orus standard library will evolve under the **Rust-
   helpful diagnostics when a module is missing.【F:src/compiler/backend/codegen/statements.c†L1023-L1089】
 * **Module manager API is ready for packaging.** Runtime modules maintain
   register files, export tables, and a registry for fast lookup, which is
-  required for bundling stdlib bytecode once authored.【F:src/vm/module_manager.c†L168-L518】
-* **Legacy std aliases are supported.** Canonical intrinsic modules can expose
-  historical `std/` names through `module_manager_alias_module`, keeping the
-  loader unchanged while preserving compatibility.
+  required for bundling stdlib bytecode once authored.【F:src/vm/module_manager.c†L168-L337】
+* **Legacy std aliases have been removed.** The registry now enforces
+  canonical `intrinsics/` names only, eliminating the helper that once
+  accepted `std/` aliases.【F:src/vm/module_manager.c†L168-L337】
 * **No builtin descriptor seeding yet.** Future intrinsic-backed std modules
   will need explicit registration logic because the runtime currently provides
   no placeholder metadata for legacy names.【F:src/vm/module_manager.c†L9-L117】
@@ -75,9 +75,8 @@ This roadmap defines how the Orus standard library will evolve under the **Rust-
      VM intrinsics within an acceptable tolerance.
 
 3. **Broaden stdlib testing.**
-   * ✅ Regression coverage for alias-based resolution lives in
-     `tests/unit/test_module_manager_legacy_alias.c` so canonical modules and
-     legacy names stay in sync.
+   * ✅ Regression coverage now focuses exclusively on canonical module
+     registration, matching the removal of alias-based resolution.
    * Add semantic tests that exercise math correctness, namespace hygiene, and
      attribute error reporting in addition to the current resolver suite.
    * Integrate the new tests into the CI matrix (or document the target harness

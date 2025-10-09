@@ -302,55 +302,6 @@ RegisterModule* load_module(ModuleManager* manager, const char* module_name) {
     return module;
 }
 
-bool module_manager_alias_module(ModuleManager* manager, const char* existing_module_name,
-                                 const char* legacy_module_name) {
-    if (!manager || !existing_module_name || !legacy_module_name) {
-        return false;
-    }
-
-    RegisterModule* module = find_module(manager, existing_module_name);
-    if (!module) {
-        return false;
-    }
-
-    if (find_module(manager, legacy_module_name)) {
-        return false;
-    }
-
-    if (manager->registry.count >= manager->registry.capacity) {
-        uint16_t new_capacity = (uint16_t)(manager->registry.capacity * 2);
-        char** new_names = (char**)malloc(new_capacity * sizeof(char*));
-        RegisterModule** new_modules = (RegisterModule**)malloc(new_capacity * sizeof(RegisterModule*));
-        if (!new_names || !new_modules) {
-            free(new_names);
-            free(new_modules);
-            return false;
-        }
-
-        for (uint16_t i = 0; i < manager->registry.count; ++i) {
-            new_names[i] = manager->registry.names[i];
-            new_modules[i] = manager->registry.modules[i];
-        }
-
-        free(manager->registry.names);
-        free(manager->registry.modules);
-        manager->registry.names = new_names;
-        manager->registry.modules = new_modules;
-        manager->registry.capacity = new_capacity;
-    }
-
-    char* alias_copy = duplicate_string(legacy_module_name);
-    if (!alias_copy) {
-        return false;
-    }
-
-    manager->registry.names[manager->registry.count] = alias_copy;
-    manager->registry.modules[manager->registry.count] = module;
-    manager->registry.count++;
-
-    return true;
-}
-
 // Phase 3: Find module by name
 RegisterModule* find_module(ModuleManager* manager, const char* module_name) {
     if (!manager || !module_name) return NULL;
