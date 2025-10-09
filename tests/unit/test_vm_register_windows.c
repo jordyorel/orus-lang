@@ -43,6 +43,35 @@ static ObjClosure* make_constant_closure(Value constant) {
     return allocateClosure(function);
 }
 
+static ObjClosure* make_recursive_closure(void) {
+    Chunk* chunk = (Chunk*)malloc(sizeof(Chunk));
+    if (!chunk) {
+        return NULL;
+    }
+    initChunk(chunk);
+
+    writeChunk(chunk, OP_CALL_R, 0, 0, NULL);
+    writeChunk(chunk, 0, 0, 0, NULL);  // funcReg -> closure stored in R0
+    writeChunk(chunk, 0, 0, 0, NULL);  // firstArgReg (unused)
+    writeChunk(chunk, 0, 0, 0, NULL);  // argCount = 0
+    writeChunk(chunk, FRAME_REG_START, 0, 0, NULL);  // result register
+    writeChunk(chunk, OP_RETURN_R, 0, 0, NULL);
+    writeChunk(chunk, FRAME_REG_START, 0, 0, NULL);
+
+    ObjFunction* function = allocateFunction();
+    if (!function) {
+        freeChunk(chunk);
+        free(chunk);
+        return NULL;
+    }
+    function->arity = 0;
+    function->chunk = chunk;
+    function->upvalueCount = 0;
+    function->name = NULL;
+
+    return allocateClosure(function);
+}
+
 static bool object_in_heap(Obj* target) {
     for (Obj* obj = vm.objects; obj != NULL; obj = obj->next) {
         if (obj == target) {
@@ -50,6 +79,14 @@ static bool object_in_heap(Obj* target) {
         }
     }
     return false;
+}
+
+static int free_frame_count(void) {
+    int count = 0;
+    for (CallFrame* frame = vm.register_file.free_frames; frame != NULL; frame = frame->next) {
+        ++count;
+    }
+    return count;
 }
 
 static bool run_chunk(Chunk* chunk) {
@@ -307,6 +344,101 @@ static bool test_gc_preserves_spilled_roots(void) {
     return success;
 }
 
+static bool test_frame_pool_allocation_limits(void) {
+    initVM();
+
+    bool success = true;
+    int allocated = 0;
+    for (; allocated < FRAMES_MAX; ++allocated) {
+        CallFrame* frame = allocate_frame(&vm.register_file);
+        if (!frame) {
+            fprintf(stderr, "Failed to allocate frame %d from pool\n", allocated);
+            success = false;
+            break;
+        }
+        if (frame < &vm.frames[0] || frame >= &vm.frames[FRAMES_MAX]) {
+            fprintf(stderr, "Frame %d not sourced from vm.frames pool\n", allocated);
+            success = false;
+            break;
+        }
+    }
+
+    if (allocated != FRAMES_MAX) {
+        success = false;
+    }
+
+    CallFrame* extra = allocate_frame(&vm.register_file);
+    if (extra) {
+        fprintf(stderr, "Frame pool allowed allocation beyond FRAMES_MAX\n");
+        success = false;
+        deallocate_frame(&vm.register_file);
+    }
+
+    for (int i = 0; i < allocated; ++i) {
+        deallocate_frame(&vm.register_file);
+    }
+
+    if (!vm.register_file.free_frames) {
+        fprintf(stderr, "Frame pool free list should not be empty after release\n");
+        success = false;
+    }
+
+    int returned = free_frame_count();
+    if (returned != FRAMES_MAX) {
+        fprintf(stderr, "Expected %d frames in free list after release, found %d\n", FRAMES_MAX,
+                returned);
+        success = false;
+    }
+
+    freeVM();
+    return success;
+}
+
+static bool test_recursive_frame_pool_exhaustion(void) {
+    initVM();
+
+    ObjClosure* recursive = make_recursive_closure();
+    if (!recursive) {
+        fprintf(stderr, "Failed to allocate recursive closure\n");
+        freeVM();
+        return false;
+    }
+
+    Chunk top_chunk;
+    initChunk(&top_chunk);
+    writeChunk(&top_chunk, OP_CALL_R, 0, 0, NULL);
+    writeChunk(&top_chunk, 0, 0, 0, NULL);  // funcReg -> recursive closure in R0
+    writeChunk(&top_chunk, 0, 0, 0, NULL);  // firstArgReg
+    writeChunk(&top_chunk, 0, 0, 0, NULL);  // argCount
+    writeChunk(&top_chunk, 3, 0, 0, NULL);  // result register
+    writeChunk(&top_chunk, OP_HALT, 0, 0, NULL);
+
+    vm_set_register_safe(0, CLOSURE_VAL(recursive));
+
+    bool ok = run_chunk(&top_chunk);
+    if (!ok) {
+        fprintf(stderr, "Interpreter failed during recursive frame exhaustion\n");
+        freeChunk(&top_chunk);
+        freeVM();
+        return false;
+    }
+
+    Value result = vm_get_register_safe(3);
+    bool success = IS_BOOL(result) && !AS_BOOL(result);
+    if (!success) {
+        fprintf(stderr, "Expected recursive exhaustion to return false, got type %d\n", result.type);
+    }
+
+    if (vm.frameCount != 0) {
+        fprintf(stderr, "Frame count should unwind to zero after exhaustion, found %d\n", vm.frameCount);
+        success = false;
+    }
+
+    freeChunk(&top_chunk);
+    freeVM();
+    return success;
+}
+
 int main(void) {
     struct {
         const char* name;
@@ -316,6 +448,8 @@ int main(void) {
         {"tail call reuses frame and returns value", test_tail_call_reuses_frame},
         {"GC preserves register file roots", test_gc_preserves_frame_roots},
         {"GC preserves spilled register roots", test_gc_preserves_spilled_roots},
+        {"Frame pool allocates from static storage", test_frame_pool_allocation_limits},
+        {"Recursive calls exhaust frame pool gracefully", test_recursive_frame_pool_exhaustion},
     };
 
     int passed = 0;

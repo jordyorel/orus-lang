@@ -2328,36 +2328,25 @@ InterpretResult vm_run_dispatch(void) {
                             break;
                         }
 
-                        if (vm.frameCount >= FRAMES_MAX) {
-                            vm_set_register_safe(resultReg, BOOL_VAL(false));
-                            break;
-                        }
-
                         Value tempArgs[FRAME_REGISTERS];
                         for (int i = 0; i < argCount; i++) {
                             tempArgs[i] = vm_get_register_safe((uint16_t)(firstArgReg + i));
                         }
 
-                        CallFrame* window = allocate_frame(&vm.register_file);
-                        if (!window) {
+                        CallFrame* frame = allocate_frame(&vm.register_file);
+                        if (!frame) {
                             vm_set_register_safe(resultReg, BOOL_VAL(false));
                             break;
                         }
 
                         uint16_t paramBase = calculateParameterBaseRegister(function->arity);
 
-                        CallFrame* frame = &vm.frames[vm.frameCount++];
                         frame->returnAddress = vm.ip;
                         frame->previousChunk = vm.chunk;
                         frame->resultRegister = resultReg;
                         frame->parameterBaseRegister = paramBase;
                         frame->functionIndex = UINT16_MAX;
                         frame->register_count = argCount;
-
-                        window->parameterBaseRegister = paramBase;
-                        window->resultRegister = resultReg;
-                        window->functionIndex = UINT16_MAX;
-                        window->register_count = argCount;
 
                         vm_set_register_safe(0, funcValue);
 
@@ -2377,36 +2366,25 @@ InterpretResult vm_run_dispatch(void) {
                             break;
                         }
 
-                        if (vm.frameCount >= FRAMES_MAX) {
-                            vm_set_register_safe(resultReg, BOOL_VAL(false));
-                            break;
-                        }
-
                         Value tempArgs[FRAME_REGISTERS];
                         for (int i = 0; i < argCount; i++) {
                             tempArgs[i] = vm_get_register_safe((uint16_t)(firstArgReg + i));
                         }
 
-                        CallFrame* window = allocate_frame(&vm.register_file);
-                        if (!window) {
+                        CallFrame* frame = allocate_frame(&vm.register_file);
+                        if (!frame) {
                             vm_set_register_safe(resultReg, BOOL_VAL(false));
                             break;
                         }
 
                         uint16_t paramBase = calculateParameterBaseRegister(objFunction->arity);
 
-                        CallFrame* frame = &vm.frames[vm.frameCount++];
                         frame->returnAddress = vm.ip;
                         frame->previousChunk = vm.chunk;
                         frame->resultRegister = resultReg;
                         frame->parameterBaseRegister = paramBase;
                         frame->functionIndex = UINT16_MAX;
                         frame->register_count = argCount;
-
-                        window->parameterBaseRegister = paramBase;
-                        window->resultRegister = resultReg;
-                        window->functionIndex = UINT16_MAX;
-                        window->register_count = argCount;
 
                         for (int i = 0; i < argCount; i++) {
                             Value arg = tempArgs[i];
@@ -2431,36 +2409,25 @@ InterpretResult vm_run_dispatch(void) {
                             break;
                         }
 
-                        if (vm.frameCount >= FRAMES_MAX) {
-                            vm_set_register_safe(resultReg, BOOL_VAL(false));
-                            break;
-                        }
-
                         Value tempArgs[FRAME_REGISTERS];
                         for (int i = 0; i < argCount; i++) {
                             tempArgs[i] = vm_get_register_safe((uint16_t)(firstArgReg + i));
                         }
 
-                        CallFrame* window = allocate_frame(&vm.register_file);
-                        if (!window) {
+                        CallFrame* frame = allocate_frame(&vm.register_file);
+                        if (!frame) {
                             vm_set_register_safe(resultReg, BOOL_VAL(false));
                             break;
                         }
 
                         uint16_t paramBase = calculateParameterBaseRegister(function->arity);
 
-                        CallFrame* frame = &vm.frames[vm.frameCount++];
                         frame->returnAddress = vm.ip;
                         frame->previousChunk = vm.chunk;
                         frame->resultRegister = resultReg;
                         frame->parameterBaseRegister = paramBase;
                         frame->functionIndex = (uint16_t)functionIndex;
                         frame->register_count = argCount;
-
-                        window->parameterBaseRegister = paramBase;
-                        window->resultRegister = resultReg;
-                        window->functionIndex = (uint16_t)functionIndex;
-                        window->register_count = argCount;
 
                         for (int i = 0; i < argCount; i++) {
                             Value arg = tempArgs[i];
@@ -2499,24 +2466,16 @@ InterpretResult vm_run_dispatch(void) {
 
                         uint16_t paramBase = calculateParameterBaseRegister(objFunction->arity);
 
-                        CallFrame* window = vm.register_file.current_frame;
-                        if (!window) {
+                        CallFrame* frame = vm.register_file.current_frame;
+                        if (!frame) {
                             vm_set_register_safe(resultReg, BOOL_VAL(false));
                             break;
                         }
 
-                        window->parameterBaseRegister = paramBase;
-                        window->resultRegister = resultReg;
-                        window->functionIndex = UINT16_MAX;
-                        window->register_count = argCount;
-
-                        if (vm.frameCount > 0) {
-                            CallFrame* frame = &vm.frames[vm.frameCount - 1];
-                            frame->parameterBaseRegister = paramBase;
-                            frame->resultRegister = resultReg;
-                            frame->functionIndex = UINT16_MAX;
-                            frame->register_count = argCount;
-                        }
+                        frame->parameterBaseRegister = paramBase;
+                        frame->resultRegister = resultReg;
+                        frame->functionIndex = UINT16_MAX;
+                        frame->register_count = argCount;
 
                         register_file_clear_active_typed_frame();
                         register_file_reset_active_frame_storage();
@@ -2545,24 +2504,16 @@ InterpretResult vm_run_dispatch(void) {
 
                         uint16_t paramBase = calculateParameterBaseRegister(objFunction->arity);
 
-                        CallFrame* window = vm.register_file.current_frame;
-                        if (!window) {
+                        CallFrame* frame = vm.register_file.current_frame;
+                        if (!frame) {
                             vm_set_register_safe(resultReg, BOOL_VAL(false));
                             break;
                         }
 
-                        window->parameterBaseRegister = paramBase;
-                        window->resultRegister = resultReg;
-                        window->functionIndex = UINT16_MAX;
-                        window->register_count = argCount;
-
-                        if (vm.frameCount > 0) {
-                            CallFrame* frame = &vm.frames[vm.frameCount - 1];
-                            frame->parameterBaseRegister = paramBase;
-                            frame->resultRegister = resultReg;
-                            frame->functionIndex = UINT16_MAX;
-                            frame->register_count = argCount;
-                        }
+                        frame->parameterBaseRegister = paramBase;
+                        frame->resultRegister = resultReg;
+                        frame->functionIndex = UINT16_MAX;
+                        frame->register_count = argCount;
 
                         register_file_clear_active_typed_frame();
                         register_file_reset_active_frame_storage();
@@ -2596,20 +2547,15 @@ InterpretResult vm_run_dispatch(void) {
 
                         uint16_t paramBase = calculateParameterBaseRegister(function->arity);
 
-                        CallFrame* window = vm.register_file.current_frame;
-                        if (window) {
-                            window->parameterBaseRegister = paramBase;
-                            window->resultRegister = resultReg;
-                            window->functionIndex = (uint16_t)functionIndex;
-                            window->register_count = argCount;
-                        }
-
-                        if (vm.frameCount > 0) {
-                            CallFrame* frame = &vm.frames[vm.frameCount - 1];
+                        CallFrame* frame = vm.register_file.current_frame;
+                        if (frame) {
                             frame->parameterBaseRegister = paramBase;
                             frame->resultRegister = resultReg;
                             frame->functionIndex = (uint16_t)functionIndex;
                             frame->register_count = argCount;
+                        } else {
+                            vm_set_register_safe(resultReg, BOOL_VAL(false));
+                            break;
                         }
 
                         for (int i = 0; i < argCount; i++) {
@@ -2628,25 +2574,27 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t reg = READ_BYTE();
                     Value returnValue = vm_get_register_safe(reg);
 
-                    if (vm.frameCount > 0) {
-                        CallFrame* frame = &vm.frames[--vm.frameCount];
-                        CallFrame* window = vm.register_file.current_frame;
-
-                        Value* param_base_ptr = NULL;
-                        if (window) {
-                            vm_get_register_safe(frame->parameterBaseRegister);
-                            param_base_ptr = get_register(&vm.register_file, frame->parameterBaseRegister);
+                    CallFrame* frame = vm.register_file.current_frame;
+                    if (frame) {
+                        vm_get_register_safe(frame->parameterBaseRegister);
+                        Value* param_base_ptr = get_register(&vm.register_file, frame->parameterBaseRegister);
+                        if (!param_base_ptr) {
+                            param_base_ptr = &vm.registers[frame->parameterBaseRegister];
                         }
                         if (param_base_ptr) {
                             closeUpvalues(param_base_ptr);
                         }
 
+                        Chunk* previousChunk = frame->previousChunk;
+                        uint8_t* returnAddress = frame->returnAddress;
+                        uint16_t resultRegister = frame->resultRegister;
+
                         deallocate_frame(&vm.register_file);
 
-                        vm.chunk = frame->previousChunk;
-                        vm.ip = frame->returnAddress;
+                        vm.chunk = previousChunk;
+                        vm.ip = returnAddress;
 
-                        vm_set_register_safe(frame->resultRegister, returnValue);
+                        vm_set_register_safe(resultRegister, returnValue);
                     } else {
                         vm.lastExecutionTime = get_time_vm() - start_time;
                         RETURN(INTERPRET_OK);
@@ -2655,23 +2603,24 @@ InterpretResult vm_run_dispatch(void) {
                 }
 
                 case OP_RETURN_VOID: {
-                    if (vm.frameCount > 0) {
-                        CallFrame* frame = &vm.frames[--vm.frameCount];
-                        CallFrame* window = vm.register_file.current_frame;
-
-                        Value* param_base_ptr = NULL;
-                        if (window) {
-                            vm_get_register_safe(frame->parameterBaseRegister);
-                            param_base_ptr = get_register(&vm.register_file, frame->parameterBaseRegister);
+                    CallFrame* frame = vm.register_file.current_frame;
+                    if (frame) {
+                        vm_get_register_safe(frame->parameterBaseRegister);
+                        Value* param_base_ptr = get_register(&vm.register_file, frame->parameterBaseRegister);
+                        if (!param_base_ptr) {
+                            param_base_ptr = &vm.registers[frame->parameterBaseRegister];
                         }
                         if (param_base_ptr) {
                             closeUpvalues(param_base_ptr);
                         }
 
+                        Chunk* previousChunk = frame->previousChunk;
+                        uint8_t* returnAddress = frame->returnAddress;
+
                         deallocate_frame(&vm.register_file);
 
-                        vm.chunk = frame->previousChunk;
-                        vm.ip = frame->returnAddress;
+                        vm.chunk = previousChunk;
+                        vm.ip = returnAddress;
                     } else {
                         vm.lastExecutionTime = get_time_vm() - start_time;
                         RETURN(INTERPRET_OK);
