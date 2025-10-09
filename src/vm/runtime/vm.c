@@ -40,8 +40,6 @@
 #include "compiler/parser.h"
 #include "compiler/compiler.h"
 #include "runtime/memory.h"
-#include "runtime/core_fs_handles.h"
-#include "runtime/core_intrinsics.h"
 #include "tools/debug.h"
 #include "internal/error_reporting.h"
 #include "vm/vm_string_ops.h"
@@ -87,93 +85,6 @@ bool vm_get_error_report_pending(void) {
     return vm_error_report_pending;
 }
 
-static int vm_bind_core_intrinsic(const char* symbol, const IntrinsicSignatureInfo* signature) {
-    if (!symbol || !signature) {
-        return -1;
-    }
-
-    size_t symbol_len = strlen(symbol);
-
-    for (int i = 0; i < vm.nativeFunctionCount; ++i) {
-        NativeFunction* existing = &vm.nativeFunctions[i];
-        if (existing->name && existing->name->length == (int)symbol_len &&
-            strncmp(existing->name->chars, symbol, symbol_len) == 0) {
-            return i;
-        }
-    }
-
-    if (vm.nativeFunctionCount >= MAX_NATIVES) {
-        return -1;
-    }
-
-    NativeFn fn = vm_lookup_core_intrinsic(symbol);
-    if (!fn) {
-        return -1;
-    }
-
-    NativeFunction* slot = &vm.nativeFunctions[vm.nativeFunctionCount];
-    memset(slot, 0, sizeof(*slot));
-    slot->function = fn;
-    slot->arity = signature->paramCount;
-    slot->returnType = getPrimitiveType(signature->returnType);
-    slot->name = allocateString(symbol, (int)symbol_len);
-    if (!slot->name) {
-        slot->function = NULL;
-        slot->arity = 0;
-        slot->returnType = NULL;
-        return -1;
-    }
-
-    int bound_index = vm.nativeFunctionCount;
-    vm.nativeFunctionCount++;
-    return bound_index;
-}
-
-static void vm_patch_intrinsic_stub(int function_index, int native_index) {
-    if (function_index < 0 || function_index >= vm.functionCount) {
-        return;
-    }
-    if (native_index < 0 || native_index >= MAX_NATIVES) {
-        return;
-    }
-
-    Function* fn = &vm.functions[function_index];
-    if (!fn->chunk || !fn->chunk->code) {
-        return;
-    }
-
-    int start = fn->start;
-    if (start < 0 || start + 1 >= fn->chunk->count) {
-        return;
-    }
-    if (fn->chunk->code[start] != OP_CALL_NATIVE_R) {
-        return;
-    }
-    fn->chunk->code[start + 1] = (uint8_t)native_index;
-}
-
-static void vm_register_intrinsic_table(const IntrinsicSignatureInfo* table,
-                                        size_t count) {
-    if (!table) {
-        return;
-    }
-
-    for (size_t i = 0; i < count; ++i) {
-        const IntrinsicSignatureInfo* signature = &table[i];
-        if (!signature->symbol) {
-            continue;
-        }
-        vm_bind_core_intrinsic(signature->symbol, signature);
-    }
-}
-
-void vm_register_core_intrinsics(void) {
-    vm_register_intrinsic_table(core_math_intrinsic_signature_table,
-                                core_math_intrinsic_signature_table_count);
-    vm_register_intrinsic_table(core_fs_intrinsic_signature_table,
-                                core_fs_intrinsic_signature_table_count);
-}
-
 // Forward declarations
 static InterpretResult run(void);
 void runtimeError(ErrorType type, SrcLocation location,
@@ -199,7 +110,7 @@ typedef struct ModuleCacheEntry {
 typedef enum ModuleRootKind {
     MODULE_ROOT_DIRECT,
     MODULE_ROOT_CALLER,
-    MODULE_ROOT_STD,
+    MODULE_ROOT_RUNTIME,
     MODULE_ROOT_ENV,
 } ModuleRootKind;
 
@@ -757,16 +668,8 @@ InterpretResult interpret(const char* source) {
                 }
 
                 Type* exported_type = entry->type;
-                bool should_register = !entry->is_internal_intrinsic;
-                bool registered = true;
-                if (should_register) {
-                    registered = register_module_export(repl_module, entry->name, entry->kind,
-                                                        entry->register_index, exported_type,
-                                                        entry->intrinsic_symbol);
-                } else if (exported_type) {
-                    module_free_export_type(exported_type);
-                    exported_type = NULL;
-                }
+                bool registered = register_module_export(repl_module, entry->name, entry->kind,
+                                                        entry->register_index, exported_type);
                 if (!registered && exported_type) {
                     module_free_export_type(exported_type);
                     exported_type = NULL;
@@ -1182,47 +1085,6 @@ static bool path_exists(const char* path) {
     return stat(path, &st) == 0 && S_ISREG(st.st_mode);
 }
 
-static bool directory_exists(const char* path) {
-    if (!path) {
-        return false;
-    }
-
-    struct stat st;
-    return stat(path, &st) == 0 && S_ISDIR(st.st_mode);
-}
-
-static bool path_has_suffix_component(const char* path, const char* component) {
-    if (!path || !component) {
-        return false;
-    }
-
-    size_t path_len = strlen(path);
-    size_t component_len = strlen(component);
-    if (component_len == 0 || path_len < component_len) {
-        return false;
-    }
-
-    const char* start = path + path_len - component_len;
-#ifdef _WIN32
-    for (size_t i = 0; i < component_len; ++i) {
-        if (tolower((unsigned char)start[i]) != tolower((unsigned char)component[i])) {
-            return false;
-        }
-    }
-#else
-    if (strncmp(start, component, component_len) != 0) {
-        return false;
-    }
-#endif
-
-    if (path_len == component_len) {
-        return true;
-    }
-
-    char separator = start[-1];
-    return separator == '/' || separator == '\\';
-}
-
 static bool append_search_root(ModuleSearchRoot** roots, size_t* count, size_t* capacity,
                                const char* path, ModuleRootKind kind) {
     if (!path || !*path) {
@@ -1573,33 +1435,13 @@ static char* normalize_module_name(const char* module_name) {
     size_t suffix_len = 5;  // strlen(".orus")
     size_t base_len = has_extension ? name_len - suffix_len : name_len;
 
-    bool has_separator = false;
-    for (size_t i = 0; i < base_len; ++i) {
-        char ch = module_name[i];
-        if (ch == '.' || ch == '/' || ch == '\\') {
-            has_separator = true;
-            break;
-        }
-    }
-
-    const char* prefix = NULL;
-    size_t prefix_len = 0;
-    if (!has_separator) {
-        prefix = "std/";
-        prefix_len = 4;
-    }
-
-    size_t total_len = prefix_len + base_len + (has_extension ? suffix_len : suffix_len) + 1;
+    size_t total_len = base_len + suffix_len + 1;
     char* normalized = (char*)malloc(total_len);
     if (!normalized) {
         return NULL;
     }
 
     size_t offset = 0;
-    if (prefix) {
-        memcpy(normalized, prefix, prefix_len);
-        offset = prefix_len;
-    }
 
     for (size_t i = 0; i < base_len; ++i) {
         char ch = module_name[i];
@@ -1664,108 +1506,8 @@ static char* build_module_path(const char* base_path, const char* module_name) {
 
     char* exe_dir = get_executable_directory();
     if (exe_dir) {
-        append_search_root(&roots, &root_count, &root_capacity, exe_dir, MODULE_ROOT_STD);
-
-        bool exe_dir_has_std = false;
-        char* std_probe = join_paths(exe_dir, "std");
-        if (std_probe) {
-            if (directory_exists(std_probe)) {
-                exe_dir_has_std = true;
-            }
-            free(std_probe);
-        }
-
-        if (!exe_dir_has_std && path_has_suffix_component(exe_dir, "bin")) {
-            char* install_root_candidate = join_paths(exe_dir, "..");
-            char* install_root = NULL;
-            if (install_root_candidate) {
-                install_root = make_absolute_path(install_root_candidate);
-                free(install_root_candidate);
-            }
-
-            if (install_root) {
-                char* install_std = join_paths(install_root, "std");
-                if (install_std) {
-                    if (directory_exists(install_std)) {
-                        append_search_root(&roots, &root_count, &root_capacity, install_root, MODULE_ROOT_STD);
-                        exe_dir_has_std = true;
-                    }
-                    free(install_std);
-                }
-                free(install_root);
-            }
-        }
-
-        if (!exe_dir_has_std) {
-            fprintf(stderr,
-                    "Warning: Standard library directory '%s' missing expected 'std' subdirectory."
-                    " Falling back to bundled search roots.\n",
-                    exe_dir);
-        }
+        append_search_root(&roots, &root_count, &root_capacity, exe_dir, MODULE_ROOT_RUNTIME);
     }
-
-#ifdef __APPLE__
-    const char* mac_std_roots[] = {
-        "/Library/Orus",
-        "/Library/Orus/latest",
-    };
-    for (size_t i = 0; i < sizeof(mac_std_roots) / sizeof(mac_std_roots[0]); ++i) {
-        const char* root_path = mac_std_roots[i];
-        append_search_root(&roots, &root_count, &root_capacity, root_path, MODULE_ROOT_STD);
-        char* std_probe = join_paths(root_path, "std");
-        if (std_probe) {
-            if (!directory_exists(std_probe)) {
-                fprintf(stderr,
-                        "Warning: macOS stdlib fallback '%s' missing expected 'std' directory."
-                        " Resolver will continue searching.\n",
-                        root_path);
-            }
-            free(std_probe);
-        }
-    }
-#endif
-
-#if (defined(__linux__) || defined(__unix__) || defined(__posix__)) && !defined(__APPLE__) && !defined(_WIN32)
-    const char* posix_std_roots[] = {
-        "/usr/local/lib/orus",
-        "/usr/lib/orus",
-    };
-    for (size_t i = 0; i < sizeof(posix_std_roots) / sizeof(posix_std_roots[0]); ++i) {
-        const char* root_path = posix_std_roots[i];
-        append_search_root(&roots, &root_count, &root_capacity, root_path, MODULE_ROOT_STD);
-        char* std_probe = join_paths(root_path, "std");
-        if (std_probe) {
-            if (!directory_exists(std_probe)) {
-                fprintf(stderr,
-                        "Warning: POSIX stdlib fallback '%s' missing expected 'std' directory."
-                        " Resolver will continue searching.\n",
-                        root_path);
-            }
-            free(std_probe);
-        }
-    }
-#endif
-
-#ifdef _WIN32
-    const char* windows_std_roots[] = {
-        "C:/Program Files/Orus",
-        "C:/Program Files (x86)/Orus",
-    };
-    for (size_t i = 0; i < sizeof(windows_std_roots) / sizeof(windows_std_roots[0]); ++i) {
-        const char* root_path = windows_std_roots[i];
-        append_search_root(&roots, &root_count, &root_capacity, root_path, MODULE_ROOT_STD);
-        char* std_probe = join_paths(root_path, "std");
-        if (std_probe) {
-            if (!directory_exists(std_probe)) {
-                fprintf(stderr,
-                        "Warning: Windows stdlib fallback '%s' missing expected 'std' directory."
-                        " Resolver will continue searching.\n",
-                        root_path);
-            }
-            free(std_probe);
-        }
-    }
-#endif
 
     size_t env_count = 0;
     char** env_entries = collect_oruspath_entries(&env_count);
@@ -1859,45 +1601,9 @@ static char* build_module_path(const char* base_path, const char* module_name) {
             case MODULE_ROOT_CALLER:
                 label = "importer directory";
                 break;
-            case MODULE_ROOT_STD: {
-                const char* std_label = "stdlib directory";
-                bool is_install_root = false;
-                if (cached_executable_dir && path_has_suffix_component(cached_executable_dir, "bin")) {
-                    char* install_root_candidate = join_paths(cached_executable_dir, "..");
-                    char* install_root = NULL;
-                    if (install_root_candidate) {
-                        install_root = make_absolute_path(install_root_candidate);
-                        free(install_root_candidate);
-                    }
-                    if (install_root) {
-                        if (strcmp(roots[i].path, install_root) == 0) {
-                            std_label = "installed stdlib root";
-                            is_install_root = true;
-                        }
-                        free(install_root);
-                    }
-                }
-#ifdef __APPLE__
-                if (!is_install_root && (strcmp(roots[i].path, "/Library/Orus") == 0 ||
-                                         strcmp(roots[i].path, "/Library/Orus/latest") == 0)) {
-                    std_label = "macOS stdlib fallback";
-                }
-#endif
-#if (defined(__linux__) || defined(__unix__) || defined(__posix__)) && !defined(__APPLE__) && !defined(_WIN32)
-                if (!is_install_root && (strcmp(roots[i].path, "/usr/local/lib/orus") == 0 ||
-                                         strcmp(roots[i].path, "/usr/lib/orus") == 0)) {
-                    std_label = "system stdlib fallback";
-                }
-#endif
-#ifdef _WIN32
-                if (!is_install_root && (strcmp(roots[i].path, "C:/Program Files/Orus") == 0 ||
-                                         strcmp(roots[i].path, "C:/Program Files (x86)/Orus") == 0)) {
-                    std_label = "Windows stdlib fallback";
-                }
-#endif
-                label = std_label;
+            case MODULE_ROOT_RUNTIME:
+                label = "runtime directory";
                 break;
-            }
             case MODULE_ROOT_ENV:
                 label = "ORUSPATH entry";
                 break;
@@ -2141,25 +1847,6 @@ InterpretResult interpret_module(const char* path, const char* module_name_hint)
         module_entry = load_module(vm.register_file.module_manager, module_name);
     }
 
-    if (compiler.isModule) {
-        for (int i = 0; i < compiler.exportCount; ++i) {
-            ModuleExportEntry* entry = &compiler.exports[i];
-            if (!entry->name || !entry->intrinsic_symbol || entry->function_index < 0) {
-                continue;
-            }
-
-            const IntrinsicSignatureInfo* signature = vm_get_intrinsic_signature(entry->intrinsic_symbol);
-            if (!signature) {
-                continue;
-            }
-
-            int native_index = vm_bind_core_intrinsic(entry->intrinsic_symbol, signature);
-            if (native_index >= 0) {
-                vm_patch_intrinsic_stub(entry->function_index, native_index);
-            }
-        }
-    }
-
     // Store current VM state
     Chunk* oldChunk = vm.chunk;
     uint8_t* oldIP = vm.ip;
@@ -2193,16 +1880,8 @@ InterpretResult interpret_module(const char* path, const char* module_name_hint)
                 }
 
                 Type* exported_type = entry->type;
-                bool should_register = !entry->is_internal_intrinsic;
-                bool registered = true;
-                if (should_register) {
-                    registered = register_module_export(module_entry, entry->name, entry->kind,
-                                                        entry->register_index, exported_type,
-                                                        entry->intrinsic_symbol);
-                } else if (exported_type) {
-                    module_free_export_type(exported_type);
-                    exported_type = NULL;
-                }
+                bool registered = register_module_export(module_entry, entry->name, entry->kind,
+                                                        entry->register_index, exported_type);
                 if (!registered && exported_type) {
                     module_free_export_type(exported_type);
                     exported_type = NULL;

@@ -154,118 +154,6 @@ static bool test_compiler_loop_context_cleanup(void) {
     return true;
 }
 
-static bool test_core_attribute_preserves_intrinsic_metadata(void) {
-    static const char* source =
-        "@[core(\"__c_sin\")]\n"
-        "fn __c_sin(x: f64) -> f64\n";
-
-    ASTNode* ast = parseSource(source);
-    if (!ast) {
-        fprintf(stderr, "Failed to parse core intrinsic declaration\n");
-        return false;
-    }
-
-    init_type_inference();
-    TypeEnv* env = type_env_new(NULL);
-    if (!env) {
-        fprintf(stderr, "Failed to allocate type environment for intrinsic declaration\n");
-        freeAST(ast);
-        cleanup_type_inference();
-        return false;
-    }
-
-    TypedASTNode* typed = generate_typed_ast(ast, env);
-    if (!typed) {
-        fprintf(stderr, "Failed to build typed AST for intrinsic declaration\n");
-        freeAST(ast);
-        cleanup_type_inference();
-        return false;
-    }
-
-    bool success = true;
-
-    if (ast->type != NODE_PROGRAM || ast->program.count != 1) {
-        fprintf(stderr, "Intrinsic test expected exactly one top-level declaration\n");
-        success = false;
-        goto cleanup;
-    }
-
-    ASTNode* fn = ast->program.declarations[0];
-    if (!fn || fn->type != NODE_FUNCTION) {
-        fprintf(stderr, "Intrinsic test expected a function declaration\n");
-        success = false;
-        goto cleanup;
-    }
-
-    if (!fn->function.hasCoreIntrinsic) {
-        fprintf(stderr, "Parser did not record @[core] attribute on function\n");
-        success = false;
-        goto cleanup;
-    }
-
-    if (!fn->function.coreIntrinsicSymbol || strcmp(fn->function.coreIntrinsicSymbol, "__c_sin") != 0) {
-        fprintf(stderr, "Parser stored incorrect intrinsic symbol (got '%s')\n",
-                fn->function.coreIntrinsicSymbol ? fn->function.coreIntrinsicSymbol : "<null>");
-        success = false;
-        goto cleanup;
-    }
-
-    if (!typed->original || typed->original->type != NODE_PROGRAM || typed->typed.program.count != 1) {
-        fprintf(stderr, "Typed AST expected exactly one declaration\n");
-        success = false;
-        goto cleanup;
-    }
-
-    TypedASTNode* typed_fn = typed->typed.program.declarations[0];
-    if (!typed_fn || !typed_fn->original || typed_fn->original != fn) {
-        fprintf(stderr, "Typed AST did not map function node correctly\n");
-        success = false;
-        goto cleanup;
-    }
-
-    if (!typed_fn->typed.function.isCoreIntrinsic) {
-        fprintf(stderr, "Typed AST lost intrinsic attribute metadata\n");
-        success = false;
-        goto cleanup;
-    }
-
-    if (!typed_fn->typed.function.coreIntrinsicSymbol ||
-        strcmp(typed_fn->typed.function.coreIntrinsicSymbol, "__c_sin") != 0) {
-        fprintf(stderr, "Typed AST stored incorrect intrinsic symbol (got '%s')\n",
-                typed_fn->typed.function.coreIntrinsicSymbol ?
-                    typed_fn->typed.function.coreIntrinsicSymbol : "<null>");
-        success = false;
-        goto cleanup;
-    }
-
-    if (!typed_fn->typed.function.intrinsicSignature) {
-        fprintf(stderr, "Typed AST missing intrinsic signature metadata\n");
-        success = false;
-        goto cleanup;
-    }
-
-    if (strcmp(typed_fn->typed.function.intrinsicSignature->symbol, "__c_sin") != 0) {
-        fprintf(stderr, "Intrinsic signature stored unexpected symbol '%s'\n",
-                typed_fn->typed.function.intrinsicSignature->symbol);
-        success = false;
-        goto cleanup;
-    }
-
-    if (typed_fn->typed.function.intrinsicSignature->paramCount != 1 ||
-        typed_fn->typed.function.intrinsicSignature->paramTypes[0] != TYPE_F64 ||
-        typed_fn->typed.function.intrinsicSignature->returnType != TYPE_F64) {
-        fprintf(stderr, "Intrinsic signature did not record expected f64 -> f64 mapping\n");
-        success = false;
-        goto cleanup;
-    }
-
-cleanup:
-    free_typed_ast_node(typed);
-    freeAST(ast);
-    cleanup_type_inference();
-    return success;
-}
-
 int main(void) {
     debug_init();
 
@@ -275,7 +163,6 @@ int main(void) {
     } tests[] = {
         {"scope stack push/pop maintains loop depth", test_scope_stack_push_and_pop},
         {"compiler loop context resets after nested loops", test_compiler_loop_context_cleanup},
-        {"core attribute metadata survives parsing and typing", test_core_attribute_preserves_intrinsic_metadata},
     };
 
     int passed = 0;

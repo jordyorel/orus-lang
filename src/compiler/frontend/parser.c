@@ -226,14 +226,6 @@ static bool token_text_equals(const Token* token, const char* text) {
            strncmp(token->start, text, expected_length) == 0;
 }
 
-typedef struct PendingFunctionAttributes {
-    bool has_core;
-    char* core_symbol;
-    SrcLocation location;
-} PendingFunctionAttributes;
-
-static char* copy_attribute_string(ParserContext* ctx, Token token);
-static bool parse_core_attribute(ParserContext* ctx, PendingFunctionAttributes* attrs);
 
 static char* parse_qualified_name(ParserContext* ctx, Token firstToken, const char* missingMessage) {
     Token* parts = NULL;
@@ -399,7 +391,7 @@ static ASTNode* parseWhileStatement(ParserContext* ctx);
 static ASTNode* parseForStatement(ParserContext* ctx);
 static ASTNode* parseBreakStatement(ParserContext* ctx);
 static ASTNode* parseContinueStatement(ParserContext* ctx);
-static ASTNode* parseFunctionDefinition(ParserContext* ctx, bool isPublic, PendingFunctionAttributes* attrs);
+static ASTNode* parseFunctionDefinition(ParserContext* ctx, bool isPublic);
 static ASTNode* parseFunctionExpression(ParserContext* ctx, Token fnToken);
 static ASTNode* parseReturnStatement(ParserContext* ctx);
 static ASTNode* parseMatchStatement(ParserContext* ctx);
@@ -435,7 +427,7 @@ static ASTNode* parseBreakStatement(ParserContext* ctx);
 static ASTNode* parseContinueStatement(ParserContext* ctx);
 static ASTNode* parsePassStatement(ParserContext* ctx);
 static ASTNode* parseBlock(ParserContext* ctx);
-static ASTNode* parseFunctionDefinition(ParserContext* ctx, bool isPublic, PendingFunctionAttributes* attrs);
+static ASTNode* parseFunctionDefinition(ParserContext* ctx, bool isPublic);
 static ASTNode* parseEnumDefinition(ParserContext* ctx, bool isPublic);
 static ASTNode* parseStructDefinition(ParserContext* ctx, bool isPublic);
 static ASTNode* parseImplBlock(ParserContext* ctx, bool isPublic);
@@ -511,25 +503,7 @@ ASTNode* parseSourceWithModuleName(const char* source, const char* module_name) 
 }
 
 static ASTNode* parseStatement(ParserContext* ctx) {
-    PendingFunctionAttributes attrs = {0};
-
-    while (peekToken(ctx).type == TOKEN_AT) {
-        if (!parse_core_attribute(ctx, &attrs)) {
-            return NULL;
-        }
-        while (peekToken(ctx).type == TOKEN_NEWLINE) {
-            nextToken(ctx);
-        }
-    }
-
     Token t = peekToken(ctx);
-
-    if (attrs.has_core && t.type != TOKEN_FN && t.type != TOKEN_PUB) {
-        SrcLocation location = attrs.location;
-        report_compile_error(E1006_INVALID_SYNTAX, location,
-                             "@[core] attributes are only valid before function declarations");
-        return NULL;
-    }
 
     if (t.type == TOKEN_PRINT) {
         return parsePrintStatement(ctx);
@@ -571,13 +545,6 @@ static ASTNode* parseStatement(ParserContext* ctx) {
         nextToken(ctx); // consume 'pub'
         Token afterPub = peekToken(ctx);
 
-        if (attrs.has_core && afterPub.type != TOKEN_FN) {
-            SrcLocation location = attrs.location;
-            report_compile_error(E1006_INVALID_SYNTAX, location,
-                                 "@[core] attributes are only valid before function declarations");
-            return NULL;
-        }
-
         if (afterPub.type == TOKEN_STRUCT) {
             return parseStructDefinition(ctx, true);
         } else if (afterPub.type == TOKEN_ENUM) {
@@ -585,7 +552,7 @@ static ASTNode* parseStatement(ParserContext* ctx) {
         } else if (afterPub.type == TOKEN_IMPL) {
             return parseImplBlock(ctx, true);
         } else if (afterPub.type == TOKEN_FN) {
-            return parseFunctionDefinition(ctx, true, &attrs);
+            return parseFunctionDefinition(ctx, true);
         }
 
         bool isMutable = false;
@@ -664,7 +631,7 @@ static ASTNode* parseStatement(ParserContext* ctx) {
     } else if (t.type == TOKEN_CONTINUE) {
         return parseContinueStatement(ctx);
     } else if (t.type == TOKEN_FN) {
-        return parseFunctionDefinition(ctx, false, &attrs);
+        return parseFunctionDefinition(ctx, false);
     } else if (t.type == TOKEN_RETURN) {
         return parseReturnStatement(ctx);
     } else {
@@ -868,145 +835,6 @@ static char* copy_token_text(ParserContext* ctx, Token token) {
     memcpy(text, token.start, (size_t)token.length);
     text[token.length] = '\0';
     return text;
-}
-
-static char* copy_attribute_string(ParserContext* ctx, Token token) {
-    int rawLen = token.length >= 2 ? token.length - 2 : 0;
-    const char* raw = token.start + 1;
-
-    StringBuilder* sb = createStringBuilder((size_t)rawLen + 1);
-    if (!sb) {
-        return NULL;
-    }
-
-    for (int i = 0; i < rawLen; i++) {
-        char current = raw[i];
-        if (current == '\\' && i + 1 < rawLen) {
-            char escape = raw[i + 1];
-            switch (escape) {
-                case 'n':
-                    current = '\n';
-                    i++;
-                    break;
-                case 't':
-                    current = '\t';
-                    i++;
-                    break;
-                case '\\':
-                    current = '\\';
-                    i++;
-                    break;
-                case '"':
-                    current = '"';
-                    i++;
-                    break;
-                case 'r':
-                    current = '\r';
-                    i++;
-                    break;
-                case '0':
-                    current = '\0';
-                    i++;
-                    break;
-                default:
-                    appendToStringBuilder(sb, &current, 1);
-                    continue;
-            }
-        }
-        appendToStringBuilder(sb, &current, 1);
-    }
-
-    size_t len = sb->length;
-    char* text = parser_arena_alloc(ctx, len + 1);
-    if (!text) {
-        freeStringBuilder(sb);
-        return NULL;
-    }
-
-    if (len > 0) {
-        memcpy(text, sb->buffer, len);
-    }
-    text[len] = '\0';
-    freeStringBuilder(sb);
-    return text;
-}
-
-static bool parse_core_attribute(ParserContext* ctx, PendingFunctionAttributes* attrs) {
-    if (!attrs) {
-        return false;
-    }
-
-    Token atToken = nextToken(ctx);
-    (void)atToken;
-
-    Token leftBracket = nextToken(ctx);
-    if (leftBracket.type != TOKEN_LEFT_BRACKET) {
-        SrcLocation location = {NULL, leftBracket.line, leftBracket.column};
-        report_compile_error(E1006_INVALID_SYNTAX, location,
-                             "Expected '[' to begin attribute list");
-        return false;
-    }
-
-    Token nameTok = nextToken(ctx);
-    if (nameTok.type != TOKEN_IDENTIFIER || !token_text_equals(&nameTok, "core")) {
-        SrcLocation location = {NULL, nameTok.line, nameTok.column};
-        char* name_text = nameTok.type == TOKEN_IDENTIFIER ? copy_token_text(ctx, nameTok) : NULL;
-        report_compile_error(E1006_INVALID_SYNTAX, location,
-                             "Unsupported attribute '%s'. Only @[core(\"symbol\")] is allowed",
-                             name_text ? name_text : token_type_to_string(nameTok.type));
-        return false;
-    }
-
-    if (attrs->has_core) {
-        SrcLocation location = {NULL, nameTok.line, nameTok.column};
-        report_compile_error(E1006_INVALID_SYNTAX, location,
-                             "Duplicate @[core] attribute on the same declaration");
-        return false;
-    }
-
-    Token leftParen = nextToken(ctx);
-    if (leftParen.type != TOKEN_LEFT_PAREN) {
-        SrcLocation location = {NULL, leftParen.line, leftParen.column};
-        report_compile_error(E1006_INVALID_SYNTAX, location,
-                             "Expected '(' after @[core]");
-        return false;
-    }
-
-    Token symbolTok = nextToken(ctx);
-    if (symbolTok.type != TOKEN_STRING) {
-        SrcLocation location = {NULL, symbolTok.line, symbolTok.column};
-        report_compile_error(E1006_INVALID_SYNTAX, location,
-                             "Intrinsic attribute requires a string literal symbol");
-        return false;
-    }
-
-    char* symbol = copy_attribute_string(ctx, symbolTok);
-    if (!symbol) {
-        return false;
-    }
-
-    Token rightParen = nextToken(ctx);
-    if (rightParen.type != TOKEN_RIGHT_PAREN) {
-        SrcLocation location = {NULL, rightParen.line, rightParen.column};
-        report_compile_error(E1006_INVALID_SYNTAX, location,
-                             "Expected ')' after intrinsic symbol");
-        return false;
-    }
-
-    Token rightBracket = nextToken(ctx);
-    if (rightBracket.type != TOKEN_RIGHT_BRACKET) {
-        SrcLocation location = {NULL, rightBracket.line, rightBracket.column};
-        report_compile_error(E1006_INVALID_SYNTAX, location,
-                             "Expected ']' to close attribute list");
-        return false;
-    }
-
-    attrs->has_core = true;
-    attrs->core_symbol = symbol;
-    attrs->location.line = nameTok.line;
-    attrs->location.column = nameTok.column;
-    attrs->location.file = NULL;
-    return true;
 }
 
 static ASTNode* wrap_statement_in_block(ParserContext* ctx, ASTNode* stmt) {
@@ -4056,7 +3884,7 @@ static ASTNode* parseFunctionExpression(ParserContext* ctx, Token fnToken) {
     return function;
 }
 
-static ASTNode* parseFunctionDefinition(ParserContext* ctx, bool isPublic, PendingFunctionAttributes* attrs) {
+static ASTNode* parseFunctionDefinition(ParserContext* ctx, bool isPublic) {
     // Consume 'fn' token
     nextToken(ctx);
 
@@ -4147,42 +3975,25 @@ static ASTNode* parseFunctionDefinition(ParserContext* ctx, bool isPublic, Pendi
         }
     }
 
-    bool is_core_intrinsic = attrs && attrs->has_core;
-    char* intrinsic_symbol = is_core_intrinsic ? attrs->core_symbol : NULL;
-
-    Token lookahead = peekToken(ctx);
-    bool has_external_body = false;
-    if (is_core_intrinsic) {
-        if (lookahead.type == TOKEN_NEWLINE || lookahead.type == TOKEN_EOF || lookahead.type == TOKEN_DEDENT) {
-            has_external_body = true;
-        }
+    ASTNode* body = NULL;
+    if (nextToken(ctx).type != TOKEN_COLON) {
+        return NULL;
     }
 
-    ASTNode* body = NULL;
-    if (has_external_body) {
-        if (lookahead.type == TOKEN_NEWLINE) {
-            nextToken(ctx);
-        }
-    } else {
-        if (nextToken(ctx).type != TOKEN_COLON) {
+    Token afterColon = peekToken(ctx);
+    if (afterColon.type == TOKEN_NEWLINE) {
+        nextToken(ctx);
+        if (consume_indent_token(ctx).type != TOKEN_INDENT) {
             return NULL;
         }
-
-        Token afterColon = peekToken(ctx);
-        if (afterColon.type == TOKEN_NEWLINE) {
-            nextToken(ctx);
-            if (consume_indent_token(ctx).type != TOKEN_INDENT) {
-                return NULL;
-            }
-            body = parseBlock(ctx);
-            if (!body) {
-                return NULL;
-            }
-        } else {
-            body = parseInlineBlock(ctx);
-            if (!body) {
-                return NULL;
-            }
+        body = parseBlock(ctx);
+        if (!body) {
+            return NULL;
+        }
+    } else {
+        body = parseInlineBlock(ctx);
+        if (!body) {
+            return NULL;
         }
     }
 
@@ -4198,16 +4009,9 @@ static ASTNode* parseFunctionDefinition(ParserContext* ctx, bool isPublic, Pendi
     function->function.isMethod = false;
     function->function.isInstanceMethod = false;
     function->function.methodStructName = NULL;
-    function->function.hasCoreIntrinsic = is_core_intrinsic;
-    function->function.coreIntrinsicSymbol = intrinsic_symbol;
     function->location.line = nameTok.line;
     function->location.column = nameTok.column;
     function->dataType = NULL;
-
-    if (attrs) {
-        attrs->has_core = false;
-        attrs->core_symbol = NULL;
-    }
 
     return function;
 }
@@ -4577,7 +4381,7 @@ static ASTNode* parseImplBlock(ParserContext* ctx, bool isPublic) {
             return NULL;
         }
 
-        ASTNode* method = parseFunctionDefinition(ctx, methodIsPublic, NULL);
+        ASTNode* method = parseFunctionDefinition(ctx, methodIsPublic);
         if (!method) {
             return NULL;
         }

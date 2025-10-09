@@ -1198,14 +1198,10 @@ void compile_statement(CompilerContext* ctx, TypedASTNode* stmt) {
             
         case NODE_FUNCTION: {
             bool is_public = stmt->original->function.isPublic;
-            bool is_core_intrinsic = stmt->original->function.hasCoreIntrinsic;
             if (!ctx->compiling_function && !stmt->original->function.isMethod &&
-                stmt->original->function.name && (is_public || is_core_intrinsic)) {
+                stmt->original->function.name && is_public) {
                 record_module_export(ctx, stmt->original->function.name, MODULE_EXPORT_KIND_FUNCTION,
                                      stmt->resolvedType);
-                if (is_core_intrinsic && !is_public) {
-                    mark_module_export_internal_intrinsic(ctx, stmt->original->function.name);
-                }
             }
             compile_function_declaration(ctx, stmt);
             break;

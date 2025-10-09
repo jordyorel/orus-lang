@@ -126,7 +126,6 @@ else
 endif
 
 INSTALL_BIN_DIR = $(INSTALL_PREFIX)/bin
-INSTALL_STD_DIR = $(INSTALL_PREFIX)/std
 
 # Profile-specific configurations
 ifeq ($(PROFILE),debug)
@@ -210,7 +209,7 @@ COMPILER_BACKEND_SRCS = $(SRCDIR)/compiler/backend/typed_ast_visualizer.c $(SRCD
 
 # Combined simplified compiler sources  
 COMPILER_SRCS = $(COMPILER_FRONTEND_SRCS) $(COMPILER_BACKEND_SRCS) $(SRCDIR)/compiler/typed_ast.c $(SRCDIR)/debug/debug_config.c
-VM_SRCS = $(SRCDIR)/vm/core/vm_core.c $(SRCDIR)/vm/core/vm_tagged_union.c $(SRCDIR)/vm/runtime/vm.c $(SRCDIR)/vm/runtime/core_math_intrinsics.c $(SRCDIR)/vm/runtime/core_fs_intrinsics.c $(SRCDIR)/vm/core/vm_memory.c $(SRCDIR)/vm/utils/debug.c $(SRCDIR)/vm/runtime/builtin_print.c $(SRCDIR)/vm/runtime/builtin_input.c $(SRCDIR)/vm/runtime/core_fs_handles.c $(SRCDIR)/vm/runtime/core_bytes.c $(SRCDIR)/vm/runtime/builtin_array_push.c $(SRCDIR)/vm/runtime/builtin_array_pop.c $(SRCDIR)/vm/runtime/builtin_array_repeat.c $(SRCDIR)/vm/runtime/builtin_timestamp.c $(SRCDIR)/vm/runtime/builtin_number.c $(SRCDIR)/vm/runtime/builtin_typeof.c $(SRCDIR)/vm/runtime/builtin_istype.c $(SRCDIR)/vm/runtime/builtin_range.c $(SRCDIR)/vm/runtime/builtin_sorted.c $(SRCDIR)/vm/runtime/builtin_assert.c $(SRCDIR)/vm/operations/vm_arithmetic.c $(SRCDIR)/vm/operations/vm_control_flow.c $(SRCDIR)/vm/operations/vm_typed_ops.c $(SRCDIR)/vm/operations/vm_string_ops.c $(SRCDIR)/vm/operations/vm_comparison.c $(SRCDIR)/vm/handlers/vm_arithmetic_handlers.c $(SRCDIR)/vm/handlers/vm_control_flow_handlers.c $(SRCDIR)/vm/handlers/vm_memory_handlers.c $(SRCDIR)/vm/dispatch/vm_dispatch_switch.c $(SRCDIR)/vm/dispatch/vm_dispatch_goto.c $(SRCDIR)/vm/core/vm_validation.c $(SRCDIR)/vm/register_file.c $(SRCDIR)/vm/spill_manager.c $(SRCDIR)/vm/module_manager.c $(SRCDIR)/vm/register_cache.c $(SRCDIR)/vm/profiling/vm_profiling.c $(SRCDIR)/vm/vm_config.c $(SRCDIR)/type/type_representation.c $(SRCDIR)/type/type_inference.c $(SRCDIR)/errors/infrastructure/error_infrastructure.c $(SRCDIR)/errors/core/error_base.c $(SRCDIR)/errors/features/type_errors.c $(SRCDIR)/errors/features/variable_errors.c $(SRCDIR)/errors/features/control_flow_errors.c $(SRCDIR)/config/config.c $(SRCDIR)/internal/logging.c
+VM_SRCS = $(SRCDIR)/vm/core/vm_core.c $(SRCDIR)/vm/core/vm_tagged_union.c $(SRCDIR)/vm/runtime/vm.c $(SRCDIR)/vm/core/vm_memory.c $(SRCDIR)/vm/utils/debug.c $(SRCDIR)/vm/runtime/builtin_print.c $(SRCDIR)/vm/runtime/builtin_input.c $(SRCDIR)/vm/runtime/builtin_array_push.c $(SRCDIR)/vm/runtime/builtin_array_pop.c $(SRCDIR)/vm/runtime/builtin_array_repeat.c $(SRCDIR)/vm/runtime/builtin_timestamp.c $(SRCDIR)/vm/runtime/builtin_number.c $(SRCDIR)/vm/runtime/builtin_typeof.c $(SRCDIR)/vm/runtime/builtin_istype.c $(SRCDIR)/vm/runtime/builtin_range.c $(SRCDIR)/vm/runtime/builtin_sorted.c $(SRCDIR)/vm/runtime/builtin_assert.c $(SRCDIR)/vm/operations/vm_arithmetic.c $(SRCDIR)/vm/operations/vm_control_flow.c $(SRCDIR)/vm/operations/vm_typed_ops.c $(SRCDIR)/vm/operations/vm_string_ops.c $(SRCDIR)/vm/operations/vm_comparison.c $(SRCDIR)/vm/handlers/vm_arithmetic_handlers.c $(SRCDIR)/vm/handlers/vm_control_flow_handlers.c $(SRCDIR)/vm/handlers/vm_memory_handlers.c $(SRCDIR)/vm/dispatch/vm_dispatch_switch.c $(SRCDIR)/vm/dispatch/vm_dispatch_goto.c $(SRCDIR)/vm/core/vm_validation.c $(SRCDIR)/vm/register_file.c $(SRCDIR)/vm/spill_manager.c $(SRCDIR)/vm/module_manager.c $(SRCDIR)/vm/register_cache.c $(SRCDIR)/vm/profiling/vm_profiling.c $(SRCDIR)/vm/vm_config.c $(SRCDIR)/type/type_representation.c $(SRCDIR)/type/type_inference.c $(SRCDIR)/errors/infrastructure/error_infrastructure.c $(SRCDIR)/errors/core/error_base.c $(SRCDIR)/errors/features/type_errors.c $(SRCDIR)/errors/features/variable_errors.c $(SRCDIR)/errors/features/control_flow_errors.c $(SRCDIR)/config/config.c $(SRCDIR)/internal/logging.c
 REPL_SRC = $(SRCDIR)/repl.c
 MAIN_SRC = $(SRCDIR)/main.c
 
@@ -250,8 +249,6 @@ FUSED_LOOP_BYTECODE_TEST_BIN = $(BUILDDIR)/tests/test_fused_loop_bytecode
 ADD_I32_IMM_TEST_BIN = $(BUILDDIR)/tests/test_vm_add_i32_imm
 BUILTIN_INPUT_TEST_BIN = $(BUILDDIR)/tests/test_builtin_input
 CONSTANT_FOLD_TEST_BIN = $(BUILDDIR)/tests/test_constant_folding
-CORE_INTRINSIC_TEST_BIN = $(BUILDDIR)/tests/test_codegen_core_intrinsics
-CORE_INTRINSIC_RUNTIME_TEST_BIN = $(BUILDDIR)/tests/test_vm_core_intrinsics
 BUILTIN_SORTED_ORUS_TESTS = \
     tests/builtins/sorted_runtime.orus
 BUILTIN_SORTED_ORUS_FAIL_TESTS = \
@@ -417,9 +414,6 @@ _test-run: $(ORUS)
 	@echo "\033[36m=== Scope Tracking Tests ===\033[0m"
 	@$(MAKE) scope-tracking-tests
 	@echo ""
-	@echo "\033[36m=== Core Intrinsic Codegen Tests ===\033[0m"
-	@$(MAKE) core-intrinsic-tests
-	@echo ""
 	@echo "\033[36m=== Fused While Codegen Tests ===\033[0m"
 	@$(MAKE) fused-while-tests
 	@echo ""
@@ -512,22 +506,6 @@ $(SCOPE_TRACKING_TEST_BIN): tests/unit/test_scope_stack.c $(COMPILER_OBJS) $(VM_
 scope-tracking-tests: $(SCOPE_TRACKING_TEST_BIN)
 	@echo "Running scope tracking tests..."
 	@./$(SCOPE_TRACKING_TEST_BIN)
-
-$(CORE_INTRINSIC_TEST_BIN): tests/unit/test_codegen_core_intrinsics.c $(COMPILER_OBJS) $(VM_OBJS)
-	@mkdir -p $(dir $@)
-	@echo "Compiling core intrinsic codegen tests..."
-	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
-
-$(CORE_INTRINSIC_RUNTIME_TEST_BIN): tests/unit/test_vm_core_intrinsics.c $(COMPILER_OBJS) $(VM_OBJS)
-	@mkdir -p $(dir $@)
-	@echo "Compiling core intrinsic runtime tests..."
-	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
-
-core-intrinsic-tests: $(CORE_INTRINSIC_TEST_BIN) $(CORE_INTRINSIC_RUNTIME_TEST_BIN)
-	@echo "Running core intrinsic codegen tests..."
-	@./$(CORE_INTRINSIC_TEST_BIN)
-	@echo "Running core intrinsic runtime tests..."
-	@./$(CORE_INTRINSIC_RUNTIME_TEST_BIN)
 
 $(FUSED_WHILE_TEST_BIN): tests/unit/test_codegen_fused_while.c $(COMPILER_OBJS) $(VM_OBJS)
 	@mkdir -p $(dir $@)
@@ -771,9 +749,6 @@ install: release
 	@echo "Installing Orus to $(INSTALL_PREFIX)..."
 	@mkdir -p "$(INSTALL_BIN_DIR)"
 	@cp orus "$(INSTALL_BIN_DIR)/orus"
-	@rm -rf "$(INSTALL_STD_DIR)"
-	@mkdir -p "$(INSTALL_STD_DIR)"
-	@cp -R std/. "$(INSTALL_STD_DIR)/"
 	@echo "✓ Orus installed successfully into $(INSTALL_PREFIX)"
 
 # Clean build artifacts
@@ -805,10 +780,10 @@ help:
 	@echo ""
 	@echo "Development Targets:"
 	@echo "  analyze   - Run static analysis (cppcheck, clang analyzer)"
-	@echo "  install   - Build and install the release binary with the standard library"
+	@echo "  install   - Build and install the release binary"
 	@echo ""
 	@echo "Installation:"
-	@echo "  install   - Build release binary and install it with the standard library"
+	@echo "  install   - Build the release binary and install it"
 	@echo ""
 	@echo "Examples:"
 	@echo "  make                    - Build debug version (creates orus_debug)"

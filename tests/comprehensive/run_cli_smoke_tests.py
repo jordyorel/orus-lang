@@ -1,9 +1,7 @@
 import argparse
 import os
-import shutil
 import subprocess
 import sys
-import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional
@@ -24,7 +22,6 @@ class SmokeCase:
     expected_stdout: Optional[str] = None
     stdin_data: Optional[str] = None
     expected_stderr_substrings: Optional[List[str]] = None
-    run_without_local_std: bool = False
     env: Optional[Dict[str, str]] = None
 
 
@@ -47,21 +44,12 @@ def resolve_binary(binary: str, repo_root: Path) -> Path:
 
 def run_smoke(binary: Path, case: SmokeCase) -> SmokeResult:
     program = case.program
-    temp_dir: Optional[tempfile.TemporaryDirectory[str]] = None
     binary_to_run = binary
     working_dir = binary.parent
     name = f"{binary.name} {program.as_posix()}"
     completed: Optional[subprocess.CompletedProcess[str]] = None
 
     try:
-        if case.run_without_local_std:
-            temp_dir = tempfile.TemporaryDirectory(prefix="orus-stdlib-missing-")
-            binary_copy = Path(temp_dir.name) / binary.name
-            shutil.copy2(binary, binary_copy)
-            binary_to_run = binary_copy
-            working_dir = binary_copy.parent
-            name = f"{binary_to_run.name} {program.as_posix()}"
-
         env = os.environ.copy()
         if case.env:
             env.update(case.env)
@@ -82,9 +70,6 @@ def run_smoke(binary: Path, case: SmokeCase) -> SmokeResult:
             expect_success=case.expect_success,
             details=f"Failed to execute: {exc}",
         )
-    finally:
-        if temp_dir is not None:
-            temp_dir.cleanup()
 
     if completed is None:
         return SmokeResult(

@@ -8,7 +8,6 @@
 
 
 #include "runtime/memory.h"
-#include "runtime/core_fs_handles.h"
 #include "vm/spill_manager.h"
 #include "vm/vm.h"
 #include "vm/vm_string_ops.h"
@@ -16,6 +15,7 @@
 #include "vm/spill_manager.h"
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 static size_t gcThreshold = 0;
 static const double GC_HEAP_GROW_FACTOR = 2.0;
@@ -585,7 +585,12 @@ static void freeObject(Obj* object) {
             break;
         case OBJ_FILE: {
             ObjFile* file = (ObjFile*)object;
-            (void)vm_file_close_object(file);
+            if (file->handle && file->ownsHandle) {
+                fclose(file->handle);
+            }
+            file->handle = NULL;
+            file->ownsHandle = false;
+            file->isClosed = true;
             vm.bytesAllocated -= sizeof(ObjFile);
             break;
         }

@@ -196,16 +196,12 @@ void free_module_manager(ModuleManager* manager) {
         if (current->exports.exported_names) {
             for (uint16_t i = 0; i < current->exports.export_count; i++) {
                 free(current->exports.exported_names[i]);
-                if (current->exports.exported_intrinsics) {
-                    free(current->exports.exported_intrinsics[i]);
-                }
                 if (current->exports.exported_types && i < current->exports.export_count) {
                     module_free_export_type(current->exports.exported_types[i]);
                 }
             }
             free(current->exports.exported_names);
         }
-        free(current->exports.exported_intrinsics);
         free(current->exports.exported_registers);
         free(current->exports.exported_kinds);
         if (current->exports.exported_types) {
@@ -267,7 +263,6 @@ RegisterModule* load_module(ModuleManager* manager, const char* module_name) {
     module->exports.exported_registers = NULL;
     module->exports.exported_kinds = NULL;
     module->exports.exported_types = NULL;
-    module->exports.exported_intrinsics = NULL;
     module->exports.export_count = 0;
     
     // Initialize imports
@@ -345,7 +340,7 @@ uint16_t allocate_module_register(ModuleManager* manager, const char* module_nam
 
 // Phase 3: Export variable from module
 bool register_module_export(RegisterModule* module, const char* name, ModuleExportKind kind, int register_index,
-                            Type* type, const char* intrinsic_symbol) {
+                            Type* type) {
     if (!module || !name) {
         return false;
     }
@@ -356,13 +351,6 @@ bool register_module_export(RegisterModule* module, const char* name, ModuleExpo
     }
 
     Type* adopted_type = type;
-    char* intrinsic_copy = NULL;
-    if (intrinsic_symbol) {
-        intrinsic_copy = duplicate_string(intrinsic_symbol);
-        if (!intrinsic_copy) {
-            return false;
-        }
-    }
 
     // Update existing entry if it already exists
     for (uint16_t i = 0; i < module->exports.export_count; i++) {
@@ -375,23 +363,9 @@ bool register_module_export(RegisterModule* module, const char* name, ModuleExpo
             } else if (adopted_type) {
                 module->exports.exported_types = (Type**)calloc(module->exports.export_count, sizeof(Type*));
                 if (!module->exports.exported_types) {
-                    free(intrinsic_copy);
                     return false;
                 }
                 module->exports.exported_types[i] = adopted_type;
-            }
-            if (module->exports.exported_intrinsics) {
-                free(module->exports.exported_intrinsics[i]);
-                module->exports.exported_intrinsics[i] = intrinsic_copy;
-            } else if (intrinsic_copy) {
-                module->exports.exported_intrinsics = (char**)calloc(module->exports.export_count, sizeof(char*));
-                if (!module->exports.exported_intrinsics) {
-                    free(intrinsic_copy);
-                    return false;
-                }
-                module->exports.exported_intrinsics[i] = intrinsic_copy;
-            } else {
-                free(intrinsic_copy);
             }
             return true;
         }
@@ -401,42 +375,30 @@ bool register_module_export(RegisterModule* module, const char* name, ModuleExpo
 
     char** names = (char**)realloc(module->exports.exported_names, new_count * sizeof(char*));
     if (!names) {
-        free(intrinsic_copy);
         return false;
     }
     module->exports.exported_names = names;
 
     uint16_t* registers = (uint16_t*)realloc(module->exports.exported_registers, new_count * sizeof(uint16_t));
     if (!registers) {
-        free(intrinsic_copy);
         return false;
     }
     module->exports.exported_registers = registers;
 
     ModuleExportKind* kinds = (ModuleExportKind*)realloc(module->exports.exported_kinds, new_count * sizeof(ModuleExportKind));
     if (!kinds) {
-        free(intrinsic_copy);
         return false;
     }
     module->exports.exported_kinds = kinds;
 
     Type** types = (Type**)realloc(module->exports.exported_types, new_count * sizeof(Type*));
     if (!types) {
-        free(intrinsic_copy);
         return false;
     }
     module->exports.exported_types = types;
 
-    char** intrinsics = (char**)realloc(module->exports.exported_intrinsics, new_count * sizeof(char*));
-    if (!intrinsics) {
-        free(intrinsic_copy);
-        return false;
-    }
-    module->exports.exported_intrinsics = intrinsics;
-
     char* copy = (char*)malloc(strlen(name) + 1);
     if (!copy) {
-        free(intrinsic_copy);
         return false;
     }
     strcpy(copy, name);
@@ -445,7 +407,6 @@ bool register_module_export(RegisterModule* module, const char* name, ModuleExpo
     module->exports.exported_registers[module->exports.export_count] = stored_register;
     module->exports.exported_kinds[module->exports.export_count] = kind;
     module->exports.exported_types[module->exports.export_count] = adopted_type;
-    module->exports.exported_intrinsics[module->exports.export_count] = intrinsic_copy;
     module->exports.export_count = new_count;
 
     return true;
