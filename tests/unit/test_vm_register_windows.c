@@ -344,6 +344,68 @@ static bool test_gc_preserves_spilled_roots(void) {
     return success;
 }
 
+static bool test_frame_reuse_resets_metadata_without_zeroing(void) {
+    initVM();
+
+    RegisterFile* rf = &vm.register_file;
+    bool success = true;
+    bool reused_same_frame = true;
+    CallFrame* expected = NULL;
+    int last_value = -1;
+
+    const int iterations = 5;
+    for (int i = 0; i < iterations && success; ++i) {
+        CallFrame* frame = allocate_frame(rf);
+        if (!frame) {
+            fprintf(stderr, "Failed to allocate frame on iteration %d\n", i);
+            success = false;
+            break;
+        }
+
+        if (i == 0) {
+            expected = frame;
+        } else if (frame != expected) {
+            fprintf(stderr, "Frame reuse returned different pointer on iteration %d\n", i);
+            reused_same_frame = false;
+        }
+
+        if (frame->register_count != 0 || frame->temp_count != 0 || frame->spill_count != 0 ||
+            frame->returnAddress != NULL || frame->previousChunk != NULL ||
+            frame->parameterBaseRegister != FRAME_REG_START ||
+            frame->resultRegister != FRAME_REG_START || frame->functionIndex != UINT16_MAX) {
+            fprintf(stderr, "Frame metadata not reset before reuse on iteration %d\n", i);
+            success = false;
+        }
+
+        if (i > 0) {
+            Value stale = frame->registers[0];
+            if (!IS_I32(stale) || AS_I32(stale) != last_value) {
+                fprintf(stderr, "Frame register storage was cleared unexpectedly on iteration %d\n", i);
+                success = false;
+            }
+        }
+
+        int new_value = 1000 + i;
+        vm_set_register_safe(FRAME_REG_START, I32_VAL(new_value));
+        Value read_back = vm_get_register_safe(FRAME_REG_START);
+        if (!IS_I32(read_back) || AS_I32(read_back) != new_value) {
+            fprintf(stderr, "Failed to update frame register on iteration %d\n", i);
+            success = false;
+        }
+
+        last_value = new_value;
+        deallocate_frame(rf);
+
+        if (vm.frameCount != 0) {
+            fprintf(stderr, "Frame count expected to return to zero after reuse, found %d\n", vm.frameCount);
+            success = false;
+        }
+    }
+
+    freeVM();
+    return success && reused_same_frame;
+}
+
 static bool test_frame_pool_allocation_limits(void) {
     initVM();
 
@@ -448,6 +510,7 @@ int main(void) {
         {"tail call reuses frame and returns value", test_tail_call_reuses_frame},
         {"GC preserves register file roots", test_gc_preserves_frame_roots},
         {"GC preserves spilled register roots", test_gc_preserves_spilled_roots},
+        {"Frame reuse resets metadata without zeroing", test_frame_reuse_resets_metadata_without_zeroing},
         {"Frame pool allocates from static storage", test_frame_pool_allocation_limits},
         {"Recursive calls exhaust frame pool gracefully", test_recursive_frame_pool_exhaustion},
     };
