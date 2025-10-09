@@ -1,3 +1,0 @@
-@[core("__c_sin")]
-pub fn sin(x: f64) -> f64
-

@@ -55,7 +55,8 @@ make help
 
 ### Using `make install`
 
-`make install` builds the optimized release binary and stages the interpreter.
+`make install` builds the optimized release binary and stages the
+interpreter for distribution.
 
 ```bash
 # macOS and Linux (run with the privileges required for the destination)

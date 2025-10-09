@@ -29,7 +29,6 @@ typedef struct RegisterModule {
         uint16_t* exported_registers;     // Register IDs of exports (or MODULE_EXPORT_NO_REGISTER)
         ModuleExportKind* exported_kinds; // Kind of each exported symbol
         Type** exported_types;            // Type metadata for exports
-        char** exported_intrinsics;       // Optional intrinsic symbol per export
         uint16_t export_count;            // Number of exports
     } exports;
     
@@ -78,7 +77,7 @@ bool free_module_register(ModuleManager* manager, const char* module_name, uint1
 
 // Phase 3: Import/Export functionality
 bool register_module_export(RegisterModule* module, const char* name, ModuleExportKind kind, int register_index,
-                            Type* type, const char* intrinsic_symbol);
+                            Type* type);
 bool import_variable(RegisterModule* dest_module, const char* var_name, RegisterModule* src_module);
 uint16_t resolve_import(ModuleManager* manager, const char* module_name, const char* var_name);
 bool module_manager_resolve_export(ModuleManager* manager, const char* module_name, const char* symbol_name,

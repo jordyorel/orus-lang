@@ -19,7 +19,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ### Added
 - Expanded random number generator regression coverage with new PCG32 and Mersenne Twister algorithm suites.
-- Published an EBNF grammar reference alongside refreshed standard library documentation for the math module.
+- Published an EBNF grammar reference alongside refreshed documentation for the math module.
 
 ### Changed
 - Normalized module resolver import paths and broadened search directories for more reliable module loading.

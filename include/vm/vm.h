@@ -316,15 +316,6 @@ struct Type {
     TypeExtension* ext;
 };
 
-#define ORUS_MAX_INTRINSIC_PARAMS 8
-
-typedef struct {
-    const char* symbol;
-    int paramCount;
-    TypeKind paramTypes[ORUS_MAX_INTRINSIC_PARAMS];
-    TypeKind returnType;
-} IntrinsicSignatureInfo;
-
 // Function
 typedef struct {
     int start;
@@ -340,10 +331,6 @@ typedef struct {
     int arity;
     Type* returnType;
 } NativeFunction;
-
-const IntrinsicSignatureInfo* vm_get_intrinsic_signature(const char* symbol);
-NativeFn vm_lookup_core_intrinsic(const char* symbol);
-void vm_register_core_intrinsics(void);
 
 // Forward declaration for typed register windows used by call frames.
 typedef struct TypedRegisterWindow TypedRegisterWindow;
@@ -451,8 +438,6 @@ typedef struct {
     int register_index;
     Type* type;
     int function_index;
-    char* intrinsic_symbol;
-    bool is_internal_intrinsic;
 } ModuleExportEntry;
 
 #define MODULE_EXPORT_NO_REGISTER UINT16_MAX
@@ -1018,13 +1003,10 @@ static inline void compiler_reset_exports(Compiler* compiler) {
     }
     for (int i = 0; i < compiler->exportCount; ++i) {
         free(compiler->exports[i].name);
-        free(compiler->exports[i].intrinsic_symbol);
         compiler->exports[i].name = NULL;
         compiler->exports[i].kind = MODULE_EXPORT_KIND_GLOBAL;
         compiler->exports[i].register_index = -1;
         compiler->exports[i].function_index = -1;
-        compiler->exports[i].intrinsic_symbol = NULL;
-        compiler->exports[i].is_internal_intrinsic = false;
         if (compiler->exports[i].type) {
             module_free_export_type(compiler->exports[i].type);
             compiler->exports[i].type = NULL;

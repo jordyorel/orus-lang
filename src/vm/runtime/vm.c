@@ -40,8 +40,6 @@
 #include "compiler/parser.h"
 #include "compiler/compiler.h"
 #include "runtime/memory.h"
-#include "runtime/core_fs_handles.h"
-#include "runtime/core_intrinsics.h"
 #include "tools/debug.h"
 #include "internal/error_reporting.h"
 #include "vm/vm_string_ops.h"
@@ -87,93 +85,6 @@ bool vm_get_error_report_pending(void) {
     return vm_error_report_pending;
 }
 
-static int vm_bind_core_intrinsic(const char* symbol, const IntrinsicSignatureInfo* signature) {
-    if (!symbol || !signature) {
-        return -1;
-    }
-
-    size_t symbol_len = strlen(symbol);
-
-    for (int i = 0; i < vm.nativeFunctionCount; ++i) {
-        NativeFunction* existing = &vm.nativeFunctions[i];
-        if (existing->name && existing->name->length == (int)symbol_len &&
-            strncmp(existing->name->chars, symbol, symbol_len) == 0) {
-            return i;
-        }
-    }
-
-    if (vm.nativeFunctionCount >= MAX_NATIVES) {
-        return -1;
-    }
-
-    NativeFn fn = vm_lookup_core_intrinsic(symbol);
-    if (!fn) {
-        return -1;
-    }
-
-    NativeFunction* slot = &vm.nativeFunctions[vm.nativeFunctionCount];
-    memset(slot, 0, sizeof(*slot));
-    slot->function = fn;
-    slot->arity = signature->paramCount;
-    slot->returnType = getPrimitiveType(signature->returnType);
-    slot->name = allocateString(symbol, (int)symbol_len);
-    if (!slot->name) {
-        slot->function = NULL;
-        slot->arity = 0;
-        slot->returnType = NULL;
-        return -1;
-    }
-
-    int bound_index = vm.nativeFunctionCount;
-    vm.nativeFunctionCount++;
-    return bound_index;
-}
-
-static void vm_patch_intrinsic_stub(int function_index, int native_index) {
-    if (function_index < 0 || function_index >= vm.functionCount) {
-        return;
-    }
-    if (native_index < 0 || native_index >= MAX_NATIVES) {
-        return;
-    }
-
-    Function* fn = &vm.functions[function_index];
-    if (!fn->chunk || !fn->chunk->code) {
-        return;
-    }
-
-    int start = fn->start;
-    if (start < 0 || start + 1 >= fn->chunk->count) {
-        return;
-    }
-    if (fn->chunk->code[start] != OP_CALL_NATIVE_R) {
-        return;
-    }
-    fn->chunk->code[start + 1] = (uint8_t)native_index;
-}
-
-static void vm_register_intrinsic_table(const IntrinsicSignatureInfo* table,
-                                        size_t count) {
-    if (!table) {
-        return;
-    }
-
-    for (size_t i = 0; i < count; ++i) {
-        const IntrinsicSignatureInfo* signature = &table[i];
-        if (!signature->symbol) {
-            continue;
-        }
-        vm_bind_core_intrinsic(signature->symbol, signature);
-    }
-}
-
-void vm_register_core_intrinsics(void) {
-    vm_register_intrinsic_table(core_math_intrinsic_signature_table,
-                                core_math_intrinsic_signature_table_count);
-    vm_register_intrinsic_table(core_fs_intrinsic_signature_table,
-                                core_fs_intrinsic_signature_table_count);
-}
-
 // Forward declarations
 static InterpretResult run(void);
 void runtimeError(ErrorType type, SrcLocation location,
@@ -199,6 +110,7 @@ typedef struct ModuleCacheEntry {
 typedef enum ModuleRootKind {
     MODULE_ROOT_DIRECT,
     MODULE_ROOT_CALLER,
+    MODULE_ROOT_RUNTIME,
     MODULE_ROOT_ENV,
 } ModuleRootKind;
 
@@ -756,16 +668,8 @@ InterpretResult interpret(const char* source) {
                 }
 
                 Type* exported_type = entry->type;
-                bool should_register = !entry->is_internal_intrinsic;
-                bool registered = true;
-                if (should_register) {
-                    registered = register_module_export(repl_module, entry->name, entry->kind,
-                                                        entry->register_index, exported_type,
-                                                        entry->intrinsic_symbol);
-                } else if (exported_type) {
-                    module_free_export_type(exported_type);
-                    exported_type = NULL;
-                }
+                bool registered = register_module_export(repl_module, entry->name, entry->kind,
+                                                        entry->register_index, exported_type);
                 if (!registered && exported_type) {
                     module_free_export_type(exported_type);
                     exported_type = NULL;
@@ -1602,7 +1506,7 @@ static char* build_module_path(const char* base_path, const char* module_name) {
 
     char* exe_dir = get_executable_directory();
     if (exe_dir) {
-        append_search_root(&roots, &root_count, &root_capacity, exe_dir, MODULE_ROOT_DIRECT);
+        append_search_root(&roots, &root_count, &root_capacity, exe_dir, MODULE_ROOT_RUNTIME);
     }
 
     size_t env_count = 0;
@@ -1696,6 +1600,9 @@ static char* build_module_path(const char* base_path, const char* module_name) {
         switch (roots[i].kind) {
             case MODULE_ROOT_CALLER:
                 label = "importer directory";
+                break;
+            case MODULE_ROOT_RUNTIME:
+                label = "runtime directory";
                 break;
             case MODULE_ROOT_ENV:
                 label = "ORUSPATH entry";
@@ -1941,25 +1848,6 @@ InterpretResult interpret_module(const char* path, const char* module_name_hint)
         module_entry = load_module(vm.register_file.module_manager, module_name);
     }
 
-    if (compiler.isModule) {
-        for (int i = 0; i < compiler.exportCount; ++i) {
-            ModuleExportEntry* entry = &compiler.exports[i];
-            if (!entry->name || !entry->intrinsic_symbol || entry->function_index < 0) {
-                continue;
-            }
-
-            const IntrinsicSignatureInfo* signature = vm_get_intrinsic_signature(entry->intrinsic_symbol);
-            if (!signature) {
-                continue;
-            }
-
-            int native_index = vm_bind_core_intrinsic(entry->intrinsic_symbol, signature);
-            if (native_index >= 0) {
-                vm_patch_intrinsic_stub(entry->function_index, native_index);
-            }
-        }
-    }
-
     // Store current VM state
     Chunk* oldChunk = vm.chunk;
     uint8_t* oldIP = vm.ip;
@@ -1993,16 +1881,8 @@ InterpretResult interpret_module(const char* path, const char* module_name_hint)
                 }
 
                 Type* exported_type = entry->type;
-                bool should_register = !entry->is_internal_intrinsic;
-                bool registered = true;
-                if (should_register) {
-                    registered = register_module_export(module_entry, entry->name, entry->kind,
-                                                        entry->register_index, exported_type,
-                                                        entry->intrinsic_symbol);
-                } else if (exported_type) {
-                    module_free_export_type(exported_type);
-                    exported_type = NULL;
-                }
+                bool registered = register_module_export(module_entry, entry->name, entry->kind,
+                                                        entry->register_index, exported_type);
                 if (!registered && exported_type) {
                     module_free_export_type(exported_type);
                     exported_type = NULL;

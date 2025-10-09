@@ -93,7 +93,6 @@ void initVM(void) {
         vm.nativeFunctions[i].arity = 0;
         vm.nativeFunctions[i].returnType = NULL;
     }
-    vm_register_core_intrinsics();
     vm.gcCount = 0;
     vm.lastExecutionTime = 0.0;
 
