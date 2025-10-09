@@ -7,7 +7,7 @@ library is being rebuilt. Additional fixtures will return once new `std/`
 modules exist.
 
 * `oruspath_override.orus` demonstrates overriding the search roots with the
-  `ORUSPATH` environment variable:
+  `ORUSPATH` environment variable to locate custom modules:
 
 ```sh
 ORUSPATH=tests/modules/resolver/lib ./orus tests/modules/resolver/oruspath_override.orus

@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
+## [Unreleased]
+
+### Removed
+- Completed the experimental stdlib retirement by deleting the `module_manager_alias_module` API, its dedicated legacy-alias tests, and all build wiring.
+
+### Added
+- Documented the intrinsic stdlib contribution workflow and recorded the historical audit for the removed modules.
+
+### Fixed
+- Ensured module resolution now exclusively accepts canonical intrinsic module names, preventing the registry from recreating legacy `std/` aliases.
+
 ## [0.6.4] - 2025-10-07
 
 ### Added

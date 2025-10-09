@@ -1607,6 +1607,7 @@ static char* build_module_path(const char* base_path, const char* module_name) {
             case MODULE_ROOT_ENV:
                 label = "ORUSPATH entry";
                 break;
+            case MODULE_ROOT_DIRECT:
             default:
                 break;
         }

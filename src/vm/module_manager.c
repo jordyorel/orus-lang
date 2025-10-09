@@ -32,6 +32,7 @@ static char* duplicate_string(const char* src) {
 
 void module_free_export_type(Type* type);
 
+
 Type* module_clone_export_type(const Type* source) {
     if (!source) {
         return NULL;
@@ -179,7 +180,7 @@ ModuleManager* create_module_manager(void) {
     manager->registry.names = (char**)calloc(manager->registry.capacity, sizeof(char*));
     manager->registry.modules = (RegisterModule**)calloc(manager->registry.capacity, sizeof(RegisterModule*));
     manager->registry.count = 0;
-    
+
     return manager;
 }
 
