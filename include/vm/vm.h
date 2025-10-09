@@ -384,11 +384,12 @@ typedef struct RegisterFile {
     Value globals[GLOBAL_REGISTERS];      // Global state (preserve existing behavior)
     Value temps_root[TEMP_REGISTERS];     // Short-lived values for the root context
     Value* temps;                         // Active temporary register window
-    
+
     // Dynamic frame management
     CallFrame* current_frame;             // Active function frame
     CallFrame* frame_stack;               // Call stack of frames
-    
+    CallFrame* free_frames;               // Pool of reusable frames backed by vm.frames
+
     // Phase 2: Spill area for unlimited scaling
     struct SpillManager* spilled_registers;  // When registers exhausted
     struct RegisterMetadata* metadata;      // Tracking register state
