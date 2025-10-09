@@ -7,13 +7,13 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 ## [Unreleased]
 
 ### Removed
-- Completed the experimental stdlib retirement by eliminating residual runtime expectations and adding alias-based coverage for legacy `std/` module names.
+- Completed the experimental stdlib retirement by deleting the `module_manager_alias_module` API, its dedicated legacy-alias tests, and all build wiring.
 
 ### Added
 - Documented the intrinsic stdlib contribution workflow and recorded the historical audit for the removed modules.
 
 ### Fixed
-- Ensured module resolution stays stable once future intrinsic bundles register canonical modules and legacy aliases.
+- Ensured module resolution now exclusively accepts canonical intrinsic module names, preventing the registry from recreating legacy `std/` aliases.
 
 ## [0.6.4] - 2025-10-07
 
