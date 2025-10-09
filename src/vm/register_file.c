@@ -22,6 +22,20 @@
 bool is_spilled_register(uint16_t id);
 bool is_module_register(uint16_t id);
 
+static void reset_frame_value_storage(CallFrame* frame) {
+    if (!frame) {
+        return;
+    }
+
+    for (size_t i = 0; i < FRAME_REGISTERS; ++i) {
+        frame->registers[i] = BOOL_VAL(false);
+    }
+
+    for (size_t i = 0; i < TEMP_REGISTERS; ++i) {
+        frame->temps[i] = BOOL_VAL(false);
+    }
+}
+
 static inline uint16_t typed_window_select_bit(uint64_t mask) {
 #if defined(__GNUC__) || defined(__clang__)
     return (uint16_t)__builtin_ctzll(mask);
@@ -211,6 +225,7 @@ void register_file_reset_active_frame_storage(void) {
     if (!frame) {
         return;
     }
+    reset_frame_value_storage(frame);
     frame->register_count = 0;
     frame->temp_count = 0;
 }
@@ -388,14 +403,6 @@ CallFrame* allocate_frame(RegisterFile* rf) {
     frame->resultRegister = FRAME_REG_START;
     frame->parameterBaseRegister = FRAME_REG_START;
     frame->functionIndex = UINT16_MAX;
-
-    TypedRegisterWindow* parent_window =
-        vm.typed_regs.active_window ? vm.typed_regs.active_window : &vm.typed_regs.root_window;
-    TypedRegisterWindow* new_window = typed_registers_acquire_window();
-    if (!new_window) {
-        free(frame);
-        return NULL;
-    }
 
     typed_window_reset_live_mask(new_window);
     typed_window_sync_shared_ranges(new_window, parent_window);
