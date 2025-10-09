@@ -501,6 +501,73 @@ static bool test_recursive_frame_pool_exhaustion(void) {
     return success;
 }
 
+static bool test_recycled_frame_drops_dead_values(void) {
+    initVM();
+
+    ObjArray* live_array = allocateArray(1);
+    ObjArray* stale_register_array = allocateArray(1);
+    ObjArray* stale_temp_array = allocateArray(1);
+    if (!live_array || !stale_register_array || !stale_temp_array) {
+        fprintf(stderr, "Failed to allocate test arrays\n");
+        freeVM();
+        return false;
+    }
+
+    Value live_value = ARRAY_VAL(live_array);
+    vm_set_register_safe(0, live_value);
+
+    CallFrame* frame = allocate_frame(&vm.register_file);
+    if (!frame) {
+        fprintf(stderr, "Failed to allocate frame for recycled-frame test\n");
+        freeVM();
+        return false;
+    }
+
+    vm_set_register_safe(FRAME_REG_START, live_value);
+    Value stale_register_value = ARRAY_VAL(stale_register_array);
+    vm_set_register_safe((uint16_t)(FRAME_REG_START + 3), stale_register_value);
+
+    vm_set_register_safe(TEMP_REG_START, live_value);
+    Value stale_temp_value = ARRAY_VAL(stale_temp_array);
+    vm_set_register_safe((uint16_t)(TEMP_REG_START + 1), stale_temp_value);
+
+    bool success = true;
+    if (frame->register_count < 4) {
+        fprintf(stderr, "Expected register_count to include slot 3, found %u\n", frame->register_count);
+        success = false;
+    }
+    if (frame->temp_count < 2) {
+        fprintf(stderr, "Expected temp_count to include slot 1, found %u\n", frame->temp_count);
+        success = false;
+    }
+
+    deallocate_frame(&vm.register_file);
+
+    if (frame->register_count != 0 || frame->temp_count != 0) {
+        fprintf(stderr, "Recycled frame should reset live counts (reg=%u temp=%u)\n",
+                frame->register_count, frame->temp_count);
+        success = false;
+    }
+
+    collectGarbage();
+
+    if (object_in_heap((Obj*)stale_register_array)) {
+        fprintf(stderr, "Recycled frame retained register object beyond live range\n");
+        success = false;
+    }
+    if (object_in_heap((Obj*)stale_temp_array)) {
+        fprintf(stderr, "Recycled frame retained temp object beyond live range\n");
+        success = false;
+    }
+    if (!object_in_heap((Obj*)live_array)) {
+        fprintf(stderr, "Live array should remain reachable through globals\n");
+        success = false;
+    }
+
+    freeVM();
+    return success;
+}
+
 int main(void) {
     struct {
         const char* name;
@@ -513,6 +580,7 @@ int main(void) {
         {"Frame reuse resets metadata without zeroing", test_frame_reuse_resets_metadata_without_zeroing},
         {"Frame pool allocates from static storage", test_frame_pool_allocation_limits},
         {"Recursive calls exhaust frame pool gracefully", test_recursive_frame_pool_exhaustion},
+        {"Recycled frame drops dead register and temp values", test_recycled_frame_drops_dead_values},
     };
 
     int passed = 0;

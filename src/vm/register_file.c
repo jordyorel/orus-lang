@@ -15,6 +15,7 @@
 #include "vm/module_manager.h"
 #include "vm/register_cache.h"
 #include "runtime/memory.h"
+#include <assert.h>
 #include <string.h>
 #include <stdlib.h>
 
@@ -332,7 +333,13 @@ void set_register_internal(RegisterFile* rf, uint16_t id, Value value) {
     // Frame registers (64-191)
     if (__builtin_expect(id >= FRAME_REG_START && id < FRAME_REG_START + FRAME_REGISTERS, 1)) {
         if (rf->current_frame) {
-            rf->current_frame->registers[id - FRAME_REG_START] = value;
+            uint16_t slot = (uint16_t)(id - FRAME_REG_START);
+            assert(slot < FRAME_REGISTERS);
+            rf->current_frame->registers[slot] = value;
+            uint16_t new_count = (uint16_t)(slot + 1);
+            if (new_count > rf->current_frame->register_count) {
+                rf->current_frame->register_count = new_count;
+            }
         } else if (id < REGISTER_COUNT) {
             vm.registers[id] = value;
         }
@@ -346,7 +353,15 @@ void set_register_internal(RegisterFile* rf, uint16_t id, Value value) {
     // Temp registers (192-239)
     if (id >= TEMP_REG_START && id < TEMP_REG_START + TEMP_REGISTERS) {
         Value* temp_bank = rf->temps ? rf->temps : rf->temps_root;
-        temp_bank[id - TEMP_REG_START] = value;
+        uint16_t slot = (uint16_t)(id - TEMP_REG_START);
+        assert(slot < TEMP_REGISTERS);
+        temp_bank[slot] = value;
+        if (rf->current_frame && rf->temps == rf->current_frame->temps) {
+            uint16_t new_count = (uint16_t)(slot + 1);
+            if (new_count > rf->current_frame->temp_count) {
+                rf->current_frame->temp_count = new_count;
+            }
+        }
         if (id < REGISTER_COUNT) {
             vm.registers[id] = value;
         }
