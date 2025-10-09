@@ -471,24 +471,23 @@ void vm_report_unhandled_error(void) {
 }
 
 void vm_unwind_to_stack_depth(int targetDepth) {
-    while (vm.frameCount > targetDepth) {
-        CallFrame* frame = &vm.frames[--vm.frameCount];
+    while (vm.register_file.current_frame && vm.frameCount > targetDepth) {
+        CallFrame* frame = vm.register_file.current_frame;
 
-        CallFrame* window = vm.register_file.current_frame;
-        Value* param_base_ptr = NULL;
-        if (window) {
-            vm_get_register_safe(frame->parameterBaseRegister);
-            param_base_ptr = get_register(&vm.register_file, frame->parameterBaseRegister);
-        }
+        vm_get_register_safe(frame->parameterBaseRegister);
+        Value* param_base_ptr = get_register(&vm.register_file, frame->parameterBaseRegister);
         if (!param_base_ptr) {
             param_base_ptr = &vm.registers[frame->parameterBaseRegister];
         }
         closeUpvalues(param_base_ptr);
 
+        Chunk* previousChunk = frame->previousChunk;
+        uint8_t* returnAddress = frame->returnAddress;
+
         deallocate_frame(&vm.register_file);
 
-        vm.chunk = frame->previousChunk;
-        vm.ip = frame->returnAddress;
+        vm.chunk = previousChunk;
+        vm.ip = returnAddress;
     }
 }
 

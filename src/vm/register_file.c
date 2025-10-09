@@ -297,11 +297,25 @@ void set_register(RegisterFile* rf, uint16_t id, Value value) {
 
 // Call frame management
 CallFrame* allocate_frame(RegisterFile* rf) {
-    // Allocate new frame from heap (for now - could use frame pool later)
-    CallFrame* frame = (CallFrame*)malloc(sizeof(CallFrame));
-    if (!frame) return NULL;
+    if (!rf) {
+        return NULL;
+    }
 
-    memset(frame, 0, sizeof(CallFrame));
+    CallFrame* frame = rf->free_frames;
+    if (!frame) {
+        return NULL;
+    }
+    rf->free_frames = frame->next;
+    frame->next = NULL;
+
+    TypedRegisterWindow* parent_window =
+        vm.typed_regs.active_window ? vm.typed_regs.active_window : &vm.typed_regs.root_window;
+    TypedRegisterWindow* new_window = typed_registers_acquire_window();
+    if (!new_window) {
+        frame->next = rf->free_frames;
+        rf->free_frames = frame;
+        return NULL;
+    }
 
     frame->parent = rf->current_frame;
     frame->frame_base = FRAME_REG_START;
@@ -312,28 +326,17 @@ CallFrame* allocate_frame(RegisterFile* rf) {
     frame->register_count = 0;
     frame->module_id = 0;
     frame->flags = 0;
-
-    // Legacy compatibility / execution metadata
     frame->returnAddress = NULL;
     frame->previousChunk = NULL;
     frame->resultRegister = FRAME_REG_START;
     frame->parameterBaseRegister = FRAME_REG_START;
     frame->functionIndex = UINT16_MAX;
 
-    TypedRegisterWindow* parent_window =
-        vm.typed_regs.active_window ? vm.typed_regs.active_window : &vm.typed_regs.root_window;
-    TypedRegisterWindow* new_window = typed_registers_acquire_window();
-    if (!new_window) {
-        free(frame);
-        return NULL;
-    }
-
     typed_window_sync_shared_ranges(new_window, parent_window);
     frame->typed_window = new_window;
     frame->previous_typed_window = parent_window;
     frame->typed_window_version = ++vm.typed_regs.window_version;
 
-    // Update register file
     frame->next = rf->frame_stack;
     rf->frame_stack = frame;
     rf->current_frame = frame;
@@ -344,11 +347,15 @@ CallFrame* allocate_frame(RegisterFile* rf) {
     clear_typed_window_frame(new_window);
     reset_frame_value_storage(frame);
 
+    vm.frameCount++;
+
     return frame;
 }
 
 void deallocate_frame(RegisterFile* rf) {
-    if (!rf->current_frame) return;
+    if (!rf || !rf->current_frame) {
+        return;
+    }
 
     CallFrame* frame = rf->current_frame;
 
@@ -363,13 +370,28 @@ void deallocate_frame(RegisterFile* rf) {
     }
     typed_registers_release_window(window_to_release);
 
-    // Update register file
     rf->current_frame = frame->parent;
     rf->frame_stack = frame->next;
     rf->temps = rf->current_frame ? rf->current_frame->temps : rf->temps_root;
 
-    // Free frame
-    free(frame);
+    reset_frame_value_storage(frame);
+    frame->parent = NULL;
+    frame->next = rf->free_frames;
+    frame->typed_window = NULL;
+    frame->previous_typed_window = NULL;
+    frame->returnAddress = NULL;
+    frame->previousChunk = NULL;
+    frame->resultRegister = FRAME_REG_START;
+    frame->parameterBaseRegister = FRAME_REG_START;
+    frame->functionIndex = UINT16_MAX;
+    frame->register_count = 0;
+    frame->spill_count = 0;
+
+    rf->free_frames = frame;
+
+    if (vm.frameCount > 0) {
+        vm.frameCount--;
+    }
 }
 
 // Initialize register file
@@ -384,11 +406,35 @@ void init_register_file(RegisterFile* rf) {
         rf->temps_root[i] = BOOL_VAL(false);
     }
     rf->temps = rf->temps_root;
-    
+
     // Initialize frame management
     rf->current_frame = NULL;
     rf->frame_stack = NULL;
-    
+    rf->free_frames = NULL;
+    for (int i = FRAMES_MAX - 1; i >= 0; --i) {
+        CallFrame* frame = &vm.frames[i];
+        reset_frame_value_storage(frame);
+        frame->typed_window = NULL;
+        frame->previous_typed_window = NULL;
+        frame->parent = NULL;
+        frame->next = rf->free_frames;
+        frame->frame_base = FRAME_REG_START;
+        frame->temp_base = TEMP_REG_START;
+        frame->temp_count = TEMP_REGISTERS;
+        frame->spill_base = SPILL_REG_START;
+        frame->spill_count = 0;
+        frame->register_count = 0;
+        frame->module_id = 0;
+        frame->flags = 0;
+        frame->returnAddress = NULL;
+        frame->previousChunk = NULL;
+        frame->resultRegister = FRAME_REG_START;
+        frame->parameterBaseRegister = FRAME_REG_START;
+        frame->functionIndex = UINT16_MAX;
+        rf->free_frames = frame;
+    }
+    vm.frameCount = 0;
+
     // Initialize spill management
     rf->spilled_registers = create_spill_manager();
     rf->metadata = NULL;  // TODO: Initialize metadata array if needed
