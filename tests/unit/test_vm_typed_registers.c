@@ -237,6 +237,79 @@ static bool test_array_iterator_preserves_typed_loop_variable(void) {
     return true;
 }
 
+static bool test_typed_window_frame_clear_is_metadata_only(void) {
+    initVM();
+
+    CallFrame* frame = allocate_frame(&vm.register_file);
+    ASSERT_TRUE(frame != NULL, "allocate_frame should succeed");
+    ASSERT_TRUE(frame->typed_window != NULL, "Active frame should own a typed window");
+
+    const uint16_t hot_reg = FRAME_REG_START;
+    const uint16_t sentinel_index = FRAME_REG_START + 42;
+
+    vm_store_i32_typed_hot(hot_reg, 512);
+    ASSERT_TRUE(typed_window_slot_live(frame->typed_window, hot_reg),
+                "Hot frame register should mark typed slot live");
+
+    frame->typed_window->i32_regs[sentinel_index] = 0x7B7B7B7B;
+
+    register_file_clear_active_typed_frame();
+
+    ASSERT_TRUE(!typed_window_slot_live(frame->typed_window, hot_reg),
+                "Frame register should be cleared via metadata");
+    ASSERT_TRUE(frame->typed_window->reg_types[hot_reg] == REG_TYPE_NONE,
+                "Frame register type should reset without touching other slots");
+    ASSERT_TRUE(frame->typed_window->i32_regs[sentinel_index] == 0x7B7B7B7B,
+                "Non-live sentinel should remain untouched after clear");
+
+    register_file_clear_active_typed_frame();
+    ASSERT_TRUE(frame->typed_window->i32_regs[sentinel_index] == 0x7B7B7B7B,
+                "Repeated clears should avoid scanning all typed slots");
+
+    deallocate_frame(&vm.register_file);
+    freeVM();
+    return true;
+}
+
+static bool test_typed_window_reuse_resets_metadata_without_scrubbing(void) {
+    initVM();
+
+    CallFrame* first = allocate_frame(&vm.register_file);
+    ASSERT_TRUE(first != NULL, "allocate_frame should return a frame");
+    ASSERT_TRUE(first->typed_window != NULL, "Frame should have a typed window");
+
+    TypedRegisterWindow* window = first->typed_window;
+    const uint16_t hot_reg = FRAME_REG_START;
+    const uint16_t sentinel_index = FRAME_REG_START + 64;
+    const uint64_t sentinel_value = 0xDEADBEEFCAFEBABEULL;
+
+    vm_store_bool_register(hot_reg, true);
+    ASSERT_TRUE(typed_window_slot_live(window, hot_reg),
+                "Stored register should mark slot live");
+
+    window->u64_regs[sentinel_index] = sentinel_value;
+    uint32_t initial_generation = window->generation;
+
+    deallocate_frame(&vm.register_file);
+
+    CallFrame* second = allocate_frame(&vm.register_file);
+    ASSERT_TRUE(second != NULL, "allocate_frame should recycle window");
+    ASSERT_TRUE(second->typed_window == window,
+                "Typed window should be reused from the free list");
+    ASSERT_TRUE(second->typed_window_version != initial_generation,
+                "Reused window should receive a fresh generation");
+    ASSERT_TRUE(!typed_window_slot_live(window, hot_reg),
+                "Live bit should reset when window is reacquired");
+    ASSERT_TRUE(window->u64_regs[sentinel_index] == sentinel_value,
+                "Reused window should not scrub inactive slots");
+    ASSERT_TRUE(second->register_count == 0 && second->temp_count == 0,
+                "Frame metadata should reset without scanning register arrays");
+
+    deallocate_frame(&vm.register_file);
+    freeVM();
+    return true;
+}
+
 static bool test_nested_frames_preserve_typed_windows(void) {
     initVM();
 
@@ -314,6 +387,8 @@ int main(void) {
         test_typed_register_flushes_for_open_upvalue,
         test_range_iterator_uses_typed_registers,
         test_array_iterator_preserves_typed_loop_variable,
+        test_typed_window_frame_clear_is_metadata_only,
+        test_typed_window_reuse_resets_metadata_without_scrubbing,
         test_nested_frames_preserve_typed_windows,
         test_global_typed_state_propagates_across_frames,
     };
@@ -323,6 +398,8 @@ int main(void) {
         "Open upvalues force boxed synchronization",
         "Range iterators keep loop variable typed",
         "Array iterators keep loop variable typed",
+        "Frame clears rely on metadata only",
+        "Window reuse avoids scrubbing inactive slots",
         "Nested frames reuse typed windows without copying",
         "Global typed state propagates across frames",
     };

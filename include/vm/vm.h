@@ -33,6 +33,7 @@
 #define UINT8_COUNT 256
 
 #define TYPED_REGISTER_WINDOW_SIZE 256
+#define TYPED_WINDOW_LIVE_WORDS ((TYPED_REGISTER_WINDOW_SIZE + 63) / 64)
 
 // Value types
 typedef enum {
@@ -1029,6 +1030,8 @@ static inline void compiler_reset_exports(Compiler* compiler) {
 
 typedef struct TypedRegisterWindow {
     struct TypedRegisterWindow* next;  // Free-list linkage for recycled windows
+    uint32_t generation;               // Window generation used for validity tracking
+    uint64_t live_mask[TYPED_WINDOW_LIVE_WORDS];
 
     // Numeric registers (unboxed for performance)
     int32_t i32_regs[TYPED_REGISTER_WINDOW_SIZE];
@@ -1047,6 +1050,44 @@ typedef struct TypedRegisterWindow {
     // Register type tracking (for debugging/safety)
     uint8_t reg_types[TYPED_REGISTER_WINDOW_SIZE];
 } TypedRegisterWindow;
+
+static inline void typed_window_reset_live_mask(TypedRegisterWindow* window) {
+    if (!window) {
+        return;
+    }
+    for (size_t i = 0; i < TYPED_WINDOW_LIVE_WORDS; ++i) {
+        window->live_mask[i] = 0;
+    }
+}
+
+static inline uint64_t typed_window_bit(uint16_t index) {
+    return (uint64_t)1 << (index & 63);
+}
+
+static inline uint16_t typed_window_word(uint16_t index) {
+    return (uint16_t)(index >> 6);
+}
+
+static inline void typed_window_mark_live(TypedRegisterWindow* window, uint16_t index) {
+    if (!window || index >= TYPED_REGISTER_WINDOW_SIZE) {
+        return;
+    }
+    window->live_mask[typed_window_word(index)] |= typed_window_bit(index);
+}
+
+static inline void typed_window_clear_live(TypedRegisterWindow* window, uint16_t index) {
+    if (!window || index >= TYPED_REGISTER_WINDOW_SIZE) {
+        return;
+    }
+    window->live_mask[typed_window_word(index)] &= ~typed_window_bit(index);
+}
+
+static inline bool typed_window_slot_live(const TypedRegisterWindow* window, uint16_t index) {
+    if (!window || index >= TYPED_REGISTER_WINDOW_SIZE) {
+        return false;
+    }
+    return (window->live_mask[typed_window_word(index)] & typed_window_bit(index)) != 0;
+}
 
 // Typed registers for optimization (unboxed values)
 typedef struct {

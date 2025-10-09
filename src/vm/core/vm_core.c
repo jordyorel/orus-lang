@@ -42,6 +42,8 @@ void initVM(void) {
 
     memset(&vm.typed_regs, 0, sizeof(TypedRegisters));
     memset(&vm.typed_regs.root_window, 0, sizeof(TypedRegisterWindow));
+    vm.typed_regs.root_window.generation = 0;
+    typed_window_reset_live_mask(&vm.typed_regs.root_window);
     for (int i = 0; i < TYPED_REGISTER_WINDOW_SIZE; i++) {
         vm.typed_regs.root_window.heap_regs[i] = BOOL_VAL(false);
         vm.typed_regs.root_window.reg_types[i] = REG_TYPE_NONE;

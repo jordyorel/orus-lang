@@ -22,12 +22,93 @@
 bool is_spilled_register(uint16_t id);
 bool is_module_register(uint16_t id);
 
-static void typed_window_reset(TypedRegisterWindow* window) {
+static inline uint16_t typed_window_select_bit(uint64_t mask) {
+#if defined(__GNUC__) || defined(__clang__)
+    return (uint16_t)__builtin_ctzll(mask);
+#else
+    uint16_t index = 0;
+    while ((mask & 1u) == 0u) {
+        mask >>= 1;
+        ++index;
+    }
+    return index;
+#endif
+}
+
+static inline uint64_t typed_window_mask_for_range(uint16_t start, uint16_t end, uint16_t word_index) {
+    uint16_t word_start = (uint16_t)(word_index * 64);
+    uint16_t word_end = (uint16_t)(word_start + 64);
+    if (start >= word_end || end <= word_start) {
+        return 0;
+    }
+    uint16_t local_start = start > word_start ? (uint16_t)(start - word_start) : 0;
+    uint16_t local_end = end < word_end ? (uint16_t)(end - word_start) : 64;
+    uint64_t lower_mask = local_start == 0 ? 0 : ((uint64_t)1 << local_start) - 1;
+    uint64_t upper_mask = local_end >= 64 ? UINT64_MAX : ((uint64_t)1 << local_end) - 1;
+    return upper_mask & ~lower_mask;
+}
+
+static void typed_window_copy_slot(TypedRegisterWindow* dst, const TypedRegisterWindow* src, uint16_t index);
+
+static void typed_window_clear_live_range(TypedRegisterWindow* window, uint16_t start, uint16_t end) {
+    if (!window || start >= end) {
+        return;
+    }
+
+    uint16_t start_word = (uint16_t)(start >> 6);
+    uint16_t end_word = (uint16_t)((end + 63) >> 6);
+    if (end_word > TYPED_WINDOW_LIVE_WORDS) {
+        end_word = TYPED_WINDOW_LIVE_WORDS;
+    }
+
+    for (uint16_t word = start_word; word < end_word; ++word) {
+        uint64_t range_mask = typed_window_mask_for_range(start, end, word);
+        uint64_t live = window->live_mask[word] & range_mask;
+        window->live_mask[word] &= ~range_mask;
+        while (live) {
+            uint16_t bit = typed_window_select_bit(live);
+            uint16_t index = (uint16_t)(word * 64 + bit);
+            window->reg_types[index] = REG_TYPE_NONE;
+            window->dirty[index] = false;
+            window->heap_regs[index] = BOOL_VAL(false);
+            live &= live - 1;
+        }
+    }
+}
+
+static void typed_window_copy_live_range(TypedRegisterWindow* dst, const TypedRegisterWindow* src,
+                                         uint16_t start, uint16_t end) {
+    if (!dst || !src || start >= end) {
+        return;
+    }
+
+    uint16_t start_word = (uint16_t)(start >> 6);
+    uint16_t end_word = (uint16_t)((end + 63) >> 6);
+    if (end_word > TYPED_WINDOW_LIVE_WORDS) {
+        end_word = TYPED_WINDOW_LIVE_WORDS;
+    }
+
+    for (uint16_t word = start_word; word < end_word; ++word) {
+        uint64_t range_mask = typed_window_mask_for_range(start, end, word);
+        uint64_t live = src->live_mask[word] & range_mask;
+        dst->live_mask[word] = (dst->live_mask[word] & ~range_mask) | live;
+        while (live) {
+            uint16_t bit = typed_window_select_bit(live);
+            uint16_t index = (uint16_t)(word * 64 + bit);
+            typed_window_copy_slot(dst, src, index);
+            live &= live - 1;
+        }
+    }
+}
+
+static void typed_window_initialize_storage(TypedRegisterWindow* window) {
     if (!window) {
         return;
     }
 
     memset(window, 0, sizeof(*window));
+    window->generation = 0;
+    typed_window_reset_live_mask(window);
     for (uint16_t i = 0; i < TYPED_REGISTER_WINDOW_SIZE; ++i) {
         window->heap_regs[i] = BOOL_VAL(false);
         window->reg_types[i] = REG_TYPE_NONE;
@@ -53,18 +134,15 @@ static void typed_window_sync_shared_ranges(TypedRegisterWindow* dst, const Type
         return;
     }
 
-    for (uint16_t i = 0; i < FRAME_REG_START && i < TYPED_REGISTER_WINDOW_SIZE; ++i) {
-        typed_window_copy_slot(dst, src, i);
-    }
+    uint16_t shared_limit = FRAME_REG_START < TYPED_REGISTER_WINDOW_SIZE ? FRAME_REG_START : TYPED_REGISTER_WINDOW_SIZE;
+    typed_window_copy_live_range(dst, src, 0, shared_limit);
 
     uint16_t module_end = MODULE_REG_START + MODULE_REGISTERS;
     if (MODULE_REG_START < TYPED_REGISTER_WINDOW_SIZE) {
         if (module_end > TYPED_REGISTER_WINDOW_SIZE) {
             module_end = TYPED_REGISTER_WINDOW_SIZE;
         }
-        for (uint16_t i = MODULE_REG_START; i < module_end; ++i) {
-            typed_window_copy_slot(dst, src, i);
-        }
+        typed_window_copy_live_range(dst, src, MODULE_REG_START, module_end);
     }
 }
 
@@ -94,9 +172,10 @@ static TypedRegisterWindow* typed_registers_acquire_window(void) {
         if (!window) {
             return NULL;
         }
+        typed_window_initialize_storage(window);
     }
 
-    typed_window_reset(window);
+    window->next = NULL;
     return window;
 }
 
@@ -105,7 +184,7 @@ static void typed_registers_release_window(TypedRegisterWindow* window) {
         return;
     }
 
-    typed_window_reset(window);
+    typed_window_reset_live_mask(window);
     window->next = vm.typed_regs.free_windows;
     vm.typed_regs.free_windows = window;
 }
@@ -116,17 +195,7 @@ static void clear_typed_window_frame(TypedRegisterWindow* window) {
     }
 
     uint16_t limit = MODULE_REG_START < TYPED_REGISTER_WINDOW_SIZE ? MODULE_REG_START : TYPED_REGISTER_WINDOW_SIZE;
-    for (uint16_t i = FRAME_REG_START; i < limit; ++i) {
-        window->i32_regs[i] = 0;
-        window->i64_regs[i] = 0;
-        window->u32_regs[i] = 0;
-        window->u64_regs[i] = 0;
-        window->f64_regs[i] = 0.0;
-        window->bool_regs[i] = false;
-        window->heap_regs[i] = BOOL_VAL(false);
-        window->reg_types[i] = REG_TYPE_NONE;
-        window->dirty[i] = false;
-    }
+    typed_window_clear_live_range(window, FRAME_REG_START, limit);
 }
 
 void register_file_clear_active_typed_frame(void) {
@@ -137,25 +206,13 @@ void register_file_clear_active_typed_frame(void) {
     clear_typed_window_frame(window);
 }
 
-static void reset_frame_value_storage(CallFrame* frame) {
-    if (!frame) {
-        return;
-    }
-
-    for (uint16_t i = 0; i < FRAME_REGISTERS; ++i) {
-        frame->registers[i] = BOOL_VAL(false);
-    }
-    for (uint16_t i = 0; i < TEMP_REGISTERS; ++i) {
-        frame->temps[i] = BOOL_VAL(false);
-    }
-}
-
 void register_file_reset_active_frame_storage(void) {
     CallFrame* frame = vm.register_file.current_frame;
     if (!frame) {
         return;
     }
-    reset_frame_value_storage(frame);
+    frame->register_count = 0;
+    frame->temp_count = 0;
 }
 
 // Internal fast register access with branch prediction hints (used by cache)
@@ -306,7 +363,7 @@ CallFrame* allocate_frame(RegisterFile* rf) {
     frame->parent = rf->current_frame;
     frame->frame_base = FRAME_REG_START;
     frame->temp_base = TEMP_REG_START;
-    frame->temp_count = TEMP_REGISTERS;
+    frame->temp_count = 0;
     frame->spill_base = SPILL_REG_START;
     frame->spill_count = 0;
     frame->register_count = 0;
@@ -328,10 +385,12 @@ CallFrame* allocate_frame(RegisterFile* rf) {
         return NULL;
     }
 
+    typed_window_reset_live_mask(new_window);
     typed_window_sync_shared_ranges(new_window, parent_window);
+    new_window->generation = ++vm.typed_regs.window_version;
     frame->typed_window = new_window;
     frame->previous_typed_window = parent_window;
-    frame->typed_window_version = ++vm.typed_regs.window_version;
+    frame->typed_window_version = new_window->generation;
 
     // Update register file
     frame->next = rf->frame_stack;
@@ -342,7 +401,8 @@ CallFrame* allocate_frame(RegisterFile* rf) {
     typed_registers_bind_window(new_window);
     vm.typed_regs.active_depth++;
     clear_typed_window_frame(new_window);
-    reset_frame_value_storage(frame);
+    frame->register_count = 0;
+    frame->temp_count = 0;
 
     return frame;
 }
