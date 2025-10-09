@@ -83,6 +83,8 @@ bool import_variable(RegisterModule* dest_module, const char* var_name, Register
 uint16_t resolve_import(ModuleManager* manager, const char* module_name, const char* var_name);
 bool module_manager_resolve_export(ModuleManager* manager, const char* module_name, const char* symbol_name,
                                    ModuleExportKind* out_kind, uint16_t* out_register, Type** out_type);
+bool module_manager_alias_module(ModuleManager* manager, const char* existing_module_name,
+                                 const char* legacy_module_name);
 
 // Type metadata helpers for module exports
 Type* module_clone_export_type(const Type* source);

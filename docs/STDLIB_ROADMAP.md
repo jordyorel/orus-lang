@@ -1,5 +1,9 @@
 # Orus Standard Library Roadmap (Refactored)
 
+> **Status:** The experimental `std/` Orus sources described below have been
+> removed from the repository. This roadmap is retained for historical context
+> while we rebuild the standard library around intrinsic modules.
+
 This roadmap defines how the Orus standard library will evolve under the **Rust-style model**:
 
 * **VM core** stays minimal.
@@ -8,10 +12,14 @@ This roadmap defines how the Orus standard library will evolve under the **Rust-
 
 ### ✅ Foundations already in place
 
-* **Module discovery is disk-backed and std-aware.** The runtime normalizes bare
-  module names to `std/<module>.orus`, adds the executable's `std/` directory to
-  the search roots, and merges any `ORUSPATH` overrides before resolving and
-  caching module paths.【F:src/vm/runtime/vm.c†L1208-L1354】
+* **Module discovery stays disk-backed.** The runtime now treats bare module
+  names literally, adds the executable directory and any `ORUSPATH` entries to
+  the search roots, and resolves modules without injecting `std/` prefixes or
+  probing legacy stdlib install locations.【F:src/vm/runtime/vm.c†L1599-L1729】
+* **Resolver failures surface loader context.** Missing modules report their
+  normalized path, enumerate attempted search roots, and remind users about
+  `ORUSPATH`, preserving the disk loader ergonomics without stdlib-specific
+  messaging.【F:src/vm/runtime/vm.c†L1484-L1521】
 * **Compiler bookkeeping for exports/imports exists.** Module compilation
   records exports with type metadata, tracks imports, and enforces that only
   value-like exports become bindings during `use` resolution.【F:src/compiler/backend/codegen/modules.c†L14-L214】
@@ -20,10 +28,17 @@ This roadmap defines how the Orus standard library will evolve under the **Rust-
   helpful diagnostics when a module is missing.【F:src/compiler/backend/codegen/statements.c†L1023-L1089】
 * **Module manager API is ready for packaging.** Runtime modules maintain
   register files, export tables, and a registry for fast lookup, which is
-  required for bundling stdlib bytecode once authored.【F:src/vm/module_manager.c†L168-L520】
-* **Regression tests cover current resolver behavior.** The suite confirms that
-  bundled `std/math.orus` resolves by default, selective imports expose only
-  the requested names, and `ORUSPATH` can introduce alternate trees.【F:tests/modules/resolver/default_std_import.orus†L1-L8】【F:tests/modules/resolver/selective_std_import.orus†L1-L5】【F:tests/modules/resolver/oruspath_override.orus†L1-L4】【F:tests/modules/resolver/README.md†L1-L16】
+  required for bundling stdlib bytecode once authored.【F:src/vm/module_manager.c†L168-L518】
+* **Legacy std aliases are supported.** Canonical intrinsic modules can expose
+  historical `std/` names through `module_manager_alias_module`, keeping the
+  loader unchanged while preserving compatibility.
+* **No builtin descriptor seeding yet.** Future intrinsic-backed std modules
+  will need explicit registration logic because the runtime currently provides
+  no placeholder metadata for legacy names.【F:src/vm/module_manager.c†L9-L117】
+* **Resolver coverage is being rewritten.** Earlier tests validated the
+  disk-backed stdlib modules, but those cases were removed along with the
+  experimental `std/` sources. The remaining suite focuses on custom search
+  roots via `ORUSPATH` while we rebuild intrinsic-backed coverage.【F:tests/modules/resolver/README.md†L1-L11】
 * **Core intrinsics bind directly to native implementations.** The compiler now
   emits `OP_CALL_NATIVE_R` trampolines for `@[core]` functions and the loader
   wires module exports to the VM’s native table so calls dispatch into the C
@@ -31,13 +46,12 @@ This roadmap defines how the Orus standard library will evolve under the **Rust-
 
 ### ⚠️ Gaps before executing this roadmap
 
-* **Math module now exports the first wave of wrappers.** `std/math.orus`
-  binds the VM intrinsics and exposes `sin`, `cos`, `pow`, `sqrt`, and the
-  `PI`/`E` constants, but trigonometric complements and logarithmic helpers are
-  still pending.【F:std/math.orus†L1-L24】
-* **Testing focuses on resolution, not semantics.** No math correctness or
-  encapsulation tests exist yet, so Phase 3 test plans in this document remain
-  TODO.
+* **No standard modules ship today.** Imports of the legacy names simply miss,
+  and the loader reports the unresolved path alongside every search root it
+  inspected so projects can vendor replacements or update `ORUSPATH`.【F:src/vm/runtime/vm.c†L1484-L1729】
+* **Testing focuses on resolution, not semantics.** With the stdlib removed the
+  suite exercises search roots and failure diagnostics; future semantic coverage
+  awaits a new distribution.
 * **Packaging workflow is manual.** While the runtime can load disk modules,
   developer tooling for distributing, validating, and refreshing stdlib content
   has not been scripted.
@@ -61,6 +75,9 @@ This roadmap defines how the Orus standard library will evolve under the **Rust-
      VM intrinsics within an acceptable tolerance.
 
 3. **Broaden stdlib testing.**
+   * ✅ Regression coverage for alias-based resolution lives in
+     `tests/unit/test_module_manager_legacy_alias.c` so canonical modules and
+     legacy names stay in sync.
    * Add semantic tests that exercise math correctness, namespace hygiene, and
      attribute error reporting in addition to the current resolver suite.
    * Integrate the new tests into the CI matrix (or document the target harness
@@ -200,15 +217,17 @@ The math module currently exports the following bindings:
 * `fn pow(base: f64, exponent: f64) -> f64`
 * `fn sqrt(x: f64) -> f64`
 
-Each wrapper simply delegates to its corresponding `__c_*` intrinsic, keeping
-the native entry points private while providing a stable surface for Orus
-programs.【F:std/math.orus†L1-L24】
+Historically each wrapper delegated to its corresponding `__c_*` intrinsic,
+keeping the native entry points private while providing a stable surface for
+Orus programs. That shim has been removed while we rebuild the module as a
+pure intrinsic.
 
 ---
 
 ### **Usage Example**
 
 ```orus
+// Historical example (the experimental stdlib has been removed)
 use math
 print(math.sin(math.PI / 2)) // 1.0
 
