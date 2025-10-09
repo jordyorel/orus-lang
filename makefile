@@ -126,7 +126,6 @@ else
 endif
 
 INSTALL_BIN_DIR = $(INSTALL_PREFIX)/bin
-INSTALL_STD_DIR = $(INSTALL_PREFIX)/std
 
 # Profile-specific configurations
 ifeq ($(PROFILE),debug)
@@ -252,6 +251,7 @@ BUILTIN_INPUT_TEST_BIN = $(BUILDDIR)/tests/test_builtin_input
 CONSTANT_FOLD_TEST_BIN = $(BUILDDIR)/tests/test_constant_folding
 CORE_INTRINSIC_TEST_BIN = $(BUILDDIR)/tests/test_codegen_core_intrinsics
 CORE_INTRINSIC_RUNTIME_TEST_BIN = $(BUILDDIR)/tests/test_vm_core_intrinsics
+MODULE_MANAGER_ALIAS_TEST_BIN = $(BUILDDIR)/tests/test_module_manager_legacy_alias
 BUILTIN_SORTED_ORUS_TESTS = \
     tests/builtins/sorted_runtime.orus
 BUILTIN_SORTED_ORUS_FAIL_TESTS = \
@@ -337,7 +337,9 @@ $(WASM_WASM): $(WASM_JS)
 test:
 	@$(MAKE) PROFILE=$(TEST_PROFILE) _test-run
 
-_test-run: $(ORUS)
+_test-run: $(ORUS) $(MODULE_MANAGER_ALIAS_TEST_BIN)
+	@echo "Running Module Manager Legacy Alias Tests..."
+	@./$(MODULE_MANAGER_ALIAS_TEST_BIN)
 	@echo "Running Comprehensive Test Suite..."
 	@echo "==================================="
 	@passed=0; failed=0; current_dir=""; \
@@ -521,6 +523,11 @@ $(CORE_INTRINSIC_TEST_BIN): tests/unit/test_codegen_core_intrinsics.c $(COMPILER
 $(CORE_INTRINSIC_RUNTIME_TEST_BIN): tests/unit/test_vm_core_intrinsics.c $(COMPILER_OBJS) $(VM_OBJS)
 	@mkdir -p $(dir $@)
 	@echo "Compiling core intrinsic runtime tests..."
+	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+
+$(MODULE_MANAGER_ALIAS_TEST_BIN): tests/unit/test_module_manager_legacy_alias.c $(COMPILER_OBJS) $(VM_OBJS)
+	@mkdir -p $(dir $@)
+	@echo "Compiling module manager legacy alias tests..."
 	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
 
 core-intrinsic-tests: $(CORE_INTRINSIC_TEST_BIN) $(CORE_INTRINSIC_RUNTIME_TEST_BIN)
@@ -771,9 +778,6 @@ install: release
 	@echo "Installing Orus to $(INSTALL_PREFIX)..."
 	@mkdir -p "$(INSTALL_BIN_DIR)"
 	@cp orus "$(INSTALL_BIN_DIR)/orus"
-	@rm -rf "$(INSTALL_STD_DIR)"
-	@mkdir -p "$(INSTALL_STD_DIR)"
-	@cp -R std/. "$(INSTALL_STD_DIR)/"
 	@echo "✓ Orus installed successfully into $(INSTALL_PREFIX)"
 
 # Clean build artifacts

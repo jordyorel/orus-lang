@@ -55,8 +55,7 @@ make help
 
 ### Using `make install`
 
-`make install` builds the optimized release binary and stages both the
-interpreter and the bundled standard library together.
+`make install` builds the optimized release binary and stages the interpreter.
 
 ```bash
 # macOS and Linux (run with the privileges required for the destination)
@@ -72,9 +71,8 @@ The default installation roots are:
 - **Linux:** `/usr/local/lib/orus`
 - **Windows:** `C:/Program Files/Orus`
 
-The `orus` binary is copied into the `bin/` subdirectory and the standard
-library is mirrored under `std/`. Override `INSTALL_PREFIX` to install
-elsewhere:
+The `orus` binary is copied into the `bin/` subdirectory. Override
+`INSTALL_PREFIX` to install elsewhere:
 
 ```bash
 INSTALL_PREFIX="$HOME/.local/orus" make install

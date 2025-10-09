@@ -1,5 +1,0 @@
-use math: sin, PI, E
-
-print(sin(0.0) == 0.0)
-print(PI > 3.14159)
-print(E > 2.71828)

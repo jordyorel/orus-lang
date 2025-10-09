@@ -9,6 +9,10 @@
 
 # std/fs — Minimal Filesystem API (Orus wrappers over C)
 
+> **Historical note:** The experimental `std/fs.orus` module referenced in this
+> document was removed alongside the rest of the `std/` tree. The design notes
+> are preserved here for future intrinsic-based replacements.
+
 ## Design goals
 
 * **Small surface** first: open, read, write, close, stat, list, mkdir, remove, rename.
