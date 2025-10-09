@@ -139,10 +139,10 @@ static inline bool read_f64_operand(uint16_t reg, double* out) {
 #define READ_F64_OPERAND(reg, out_ptr) read_f64_operand((reg), (out_ptr))
 
 #define STORE_I32_RESULT(dst_reg, value) vm_store_i32_typed_hot((dst_reg), (value))
-#define STORE_I64_RESULT(dst_reg, value) store_i64_register((dst_reg), (value))
-#define STORE_U32_RESULT(dst_reg, value) store_u32_register((dst_reg), (value))
-#define STORE_U64_RESULT(dst_reg, value) store_u64_register((dst_reg), (value))
-#define STORE_F64_RESULT(dst_reg, value) store_f64_register((dst_reg), (value))
+#define STORE_I64_RESULT(dst_reg, value) vm_store_i64_typed_hot((dst_reg), (value))
+#define STORE_U32_RESULT(dst_reg, value) vm_store_u32_typed_hot((dst_reg), (value))
+#define STORE_U64_RESULT(dst_reg, value) vm_store_u64_typed_hot((dst_reg), (value))
+#define STORE_F64_RESULT(dst_reg, value) vm_store_f64_typed_hot((dst_reg), (value))
 
 // ====== I32 Typed Arithmetic Handlers ======
 

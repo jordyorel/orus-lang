@@ -377,6 +377,11 @@ static inline void store_i32_register(uint16_t id, int32_t value) {
     }
 }
 
+// Fast typed-register stores used by arithmetic hot paths. Each helper marks
+// the target slot live through vm_mark_typed_register_dirty(). When that call
+// returns true the boxed register write is deferred and the dirty flag records
+// that vm_get_register_safe() must synchronize the cached typed value before
+// the register is observed again.
 static inline void vm_store_i32_typed_hot(uint16_t id, int32_t value) {
     if (!vm_typed_reg_in_range(id)) {
         vm_set_register_safe(id, I32_VAL(value));
@@ -454,6 +459,28 @@ static inline void vm_store_u64_typed_hot(uint16_t id, uint64_t value) {
     vm.typed_regs.dirty[id] = skip_boxed_write;
 
     Value boxed = U64_VAL(value);
+    if (id < FRAME_REG_START) {
+        vm.register_file.globals[id] = boxed;
+        vm.registers[id] = boxed;
+        return;
+    }
+
+    if (!skip_boxed_write) {
+        set_register(&vm.register_file, id, boxed);
+    }
+}
+
+static inline void vm_store_f64_typed_hot(uint16_t id, double value) {
+    if (!vm_typed_reg_in_range(id)) {
+        vm_set_register_safe(id, F64_VAL(value));
+        return;
+    }
+
+    bool skip_boxed_write = vm_mark_typed_register_dirty(id, REG_TYPE_F64);
+    vm.typed_regs.f64_regs[id] = value;
+    vm.typed_regs.dirty[id] = skip_boxed_write;
+
+    Value boxed = F64_VAL(value);
     if (id < FRAME_REG_START) {
         vm.register_file.globals[id] = boxed;
         vm.registers[id] = boxed;
