@@ -478,6 +478,12 @@ static void markRoots() {
         markValue(vm.registers[i]);
     }
 
+    if (vm.register_file.frame_stack == NULL) {
+        for (int i = 0; i < FRAME_REGISTERS; i++) {
+            markValue(vm.registers[FRAME_REG_START + i]);
+        }
+    }
+
     // Mark live values stored in the register file's active frame windows.
     for (CallFrame* frame = vm.register_file.frame_stack; frame != NULL; frame = frame->next) {
         assert(frame->register_count <= FRAME_REGISTERS);
