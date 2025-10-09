@@ -435,14 +435,34 @@ static void mark_spill_entry(uint16_t register_id, Value* value, void* user_data
     }
 }
 
+static inline uint16_t typed_window_ctz(uint64_t mask) {
+#if defined(__GNUC__) || defined(__clang__)
+    return (uint16_t)__builtin_ctzll(mask);
+#else
+    uint16_t index = 0;
+    while ((mask & 1u) == 0u) {
+        mask >>= 1;
+        ++index;
+    }
+    return index;
+#endif
+}
+
 static void mark_typed_window(TypedRegisterWindow* window) {
     if (!window) {
         return;
     }
 
-    for (int i = 0; i < TYPED_REGISTER_WINDOW_SIZE; i++) {
-        if (window->reg_types[i] == REG_TYPE_HEAP) {
-            markValue(window->heap_regs[i]);
+    for (uint16_t word = 0; word < TYPED_WINDOW_LIVE_WORDS; ++word) {
+        uint64_t live = window->live_mask[word];
+        while (live) {
+            uint16_t bit = typed_window_ctz(live);
+            uint16_t index = (uint16_t)(word * 64 + bit);
+            if (index < TYPED_REGISTER_WINDOW_SIZE &&
+                window->reg_types[index] == REG_TYPE_HEAP) {
+                markValue(window->heap_regs[index]);
+            }
+            live &= live - 1;
         }
     }
 }

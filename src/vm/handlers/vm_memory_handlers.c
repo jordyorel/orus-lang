@@ -59,7 +59,7 @@ void handle_move_reg(void) {
     uint8_t dst = READ_BYTE();
     uint8_t src = READ_BYTE();
 
-    if (vm_typed_reg_in_range(src)) {
+    if (vm_typed_slot_live(src)) {
         switch (vm.typed_regs.reg_types[src]) {
             case REG_TYPE_I32: {
                 int32_t cached;

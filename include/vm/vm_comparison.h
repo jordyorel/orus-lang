@@ -23,6 +23,14 @@ static inline bool vm_typed_reg_in_range(uint16_t id) {
     return id < VM_TYPED_REGISTER_LIMIT;
 }
 
+static inline TypedRegisterWindow* vm_active_typed_window(void) {
+    return vm.typed_regs.active_window ? vm.typed_regs.active_window : &vm.typed_regs.root_window;
+}
+
+static inline bool vm_typed_slot_live(uint16_t id) {
+    return vm_typed_reg_in_range(id) && typed_window_slot_live(vm_active_typed_window(), id);
+}
+
 static inline RegisterType vm_register_type_from_value(Value value) {
     switch (value.type) {
         case VAL_I32:
@@ -43,29 +51,39 @@ static inline RegisterType vm_register_type_from_value(Value value) {
 }
 
 static inline void vm_clear_typed_register_slot(uint16_t id, uint8_t reg_type) {
+    if (!vm_typed_reg_in_range(id)) {
+        return;
+    }
+
+    TypedRegisterWindow* window = vm_active_typed_window();
     switch (reg_type) {
         case REG_TYPE_I32:
-            vm.typed_regs.i32_regs[id] = 0;
+            window->i32_regs[id] = 0;
             break;
         case REG_TYPE_I64:
-            vm.typed_regs.i64_regs[id] = 0;
+            window->i64_regs[id] = 0;
             break;
         case REG_TYPE_U32:
-            vm.typed_regs.u32_regs[id] = 0;
+            window->u32_regs[id] = 0;
             break;
         case REG_TYPE_U64:
-            vm.typed_regs.u64_regs[id] = 0;
+            window->u64_regs[id] = 0;
             break;
         case REG_TYPE_F64:
-            vm.typed_regs.f64_regs[id] = 0.0;
+            window->f64_regs[id] = 0.0;
             break;
         case REG_TYPE_BOOL:
-            vm.typed_regs.bool_regs[id] = false;
+            window->bool_regs[id] = false;
+            break;
+        case REG_TYPE_HEAP:
+            window->heap_regs[id] = BOOL_VAL(false);
             break;
         default:
             break;
     }
-    vm.typed_regs.dirty[id] = false;
+    window->dirty[id] = false;
+    window->reg_types[id] = REG_TYPE_NONE;
+    typed_window_clear_live(window, id);
 }
 
 static inline void vm_update_typed_register(uint16_t id, Value value) {
@@ -74,47 +92,51 @@ static inline void vm_update_typed_register(uint16_t id, Value value) {
         return;
     }
 
+    TypedRegisterWindow* window = vm_active_typed_window();
     RegisterType new_type = vm_register_type_from_value(value);
     if (new_type == REG_TYPE_NONE) {
-        uint8_t old_type = vm.typed_regs.reg_types[id];
+        uint8_t old_type = vm_typed_slot_live(id) ? window->reg_types[id] : REG_TYPE_NONE;
         if (old_type != REG_TYPE_NONE && old_type != REG_TYPE_HEAP) {
             vm_clear_typed_register_slot(id, old_type);
         }
-        vm.typed_regs.reg_types[id] = REG_TYPE_HEAP;
-        vm.typed_regs.dirty[id] = false;
+        window->heap_regs[id] = value;
+        window->reg_types[id] = REG_TYPE_HEAP;
+        window->dirty[id] = false;
+        typed_window_mark_live(window, id);
         return;
     }
 
-    uint8_t old_type = vm.typed_regs.reg_types[id];
+    uint8_t old_type = vm_typed_slot_live(id) ? window->reg_types[id] : REG_TYPE_NONE;
     if (old_type != new_type) {
         vm_clear_typed_register_slot(id, old_type);
     }
 
     switch (new_type) {
         case REG_TYPE_I32:
-            vm.typed_regs.i32_regs[id] = AS_I32(value);
+            window->i32_regs[id] = AS_I32(value);
             break;
         case REG_TYPE_I64:
-            vm.typed_regs.i64_regs[id] = AS_I64(value);
+            window->i64_regs[id] = AS_I64(value);
             break;
         case REG_TYPE_U32:
-            vm.typed_regs.u32_regs[id] = AS_U32(value);
+            window->u32_regs[id] = AS_U32(value);
             break;
         case REG_TYPE_U64:
-            vm.typed_regs.u64_regs[id] = AS_U64(value);
+            window->u64_regs[id] = AS_U64(value);
             break;
         case REG_TYPE_F64:
-            vm.typed_regs.f64_regs[id] = AS_F64(value);
+            window->f64_regs[id] = AS_F64(value);
             break;
         case REG_TYPE_BOOL:
-            vm.typed_regs.bool_regs[id] = AS_BOOL(value);
+            window->bool_regs[id] = AS_BOOL(value);
             break;
         default:
             return;
     }
 
-    vm.typed_regs.reg_types[id] = (uint8_t)new_type;
-    vm.typed_regs.dirty[id] = false;
+    window->reg_types[id] = (uint8_t)new_type;
+    window->dirty[id] = false;
+    typed_window_mark_live(window, id);
 }
 
 static inline Value vm_get_register_safe(uint16_t id) {
@@ -129,29 +151,34 @@ static inline Value vm_get_register_safe(uint16_t id) {
         return BOOL_VAL(false);
     }
 
-    if (vm_typed_reg_in_range(id) && vm.typed_regs.dirty[id]) {
+    TypedRegisterWindow* window = vm_active_typed_window();
+    bool live_slot = vm_typed_slot_live(id);
+    if (live_slot && window->dirty[id]) {
         Value boxed = *storage;
-        switch (vm.typed_regs.reg_types[id]) {
+        switch (window->reg_types[id]) {
             case REG_TYPE_I32:
-                boxed = I32_VAL(vm.typed_regs.i32_regs[id]);
+                boxed = I32_VAL(window->i32_regs[id]);
                 break;
             case REG_TYPE_I64:
-                boxed = I64_VAL(vm.typed_regs.i64_regs[id]);
+                boxed = I64_VAL(window->i64_regs[id]);
                 break;
             case REG_TYPE_U32:
-                boxed = U32_VAL(vm.typed_regs.u32_regs[id]);
+                boxed = U32_VAL(window->u32_regs[id]);
                 break;
             case REG_TYPE_U64:
-                boxed = U64_VAL(vm.typed_regs.u64_regs[id]);
+                boxed = U64_VAL(window->u64_regs[id]);
                 break;
             case REG_TYPE_F64:
-                boxed = F64_VAL(vm.typed_regs.f64_regs[id]);
+                boxed = F64_VAL(window->f64_regs[id]);
                 break;
             case REG_TYPE_BOOL:
-                boxed = BOOL_VAL(vm.typed_regs.bool_regs[id]);
+                boxed = BOOL_VAL(window->bool_regs[id]);
+                break;
+            case REG_TYPE_HEAP:
+                boxed = window->heap_regs[id];
                 break;
             default:
-                vm.typed_regs.dirty[id] = false;
+                window->dirty[id] = false;
                 if (id < REGISTER_COUNT) {
                     return vm.registers[id];
                 }
@@ -159,7 +186,7 @@ static inline Value vm_get_register_safe(uint16_t id) {
         }
 
         *storage = boxed;
-        vm.typed_regs.dirty[id] = false;
+        window->dirty[id] = false;
     }
 
     if (id < REGISTER_COUNT) {
@@ -203,37 +230,45 @@ static inline Value vm_peek_register(uint16_t id) {
     return *storage;
 }
 
-#define VM_DEFINE_TYPED_ACCESSORS(REG_ENUM, FIELD, CTYPE, IS_MACRO, AS_MACRO) \
-    static inline bool vm_try_read_##FIELD##_typed(uint16_t id, CTYPE* out) { \
-        if (!vm_typed_reg_in_range((id)) || \
-            vm.typed_regs.reg_types[(id)] != (uint8_t)(REG_ENUM)) { \
-            return false; \
-        } \
-        if (vm.typed_regs.dirty[(id)]) { \
-            *out = vm.typed_regs.FIELD##_regs[(id)]; \
-            return true; \
-        } \
-        Value current = vm_peek_register((id)); \
-        if (!IS_MACRO(current)) { \
-            vm.typed_regs.reg_types[(id)] = (uint8_t)REG_TYPE_NONE; \
-            vm.typed_regs.dirty[(id)] = false; \
-            return false; \
-        } \
-        CTYPE cached = vm.typed_regs.FIELD##_regs[(id)]; \
-        CTYPE value = AS_MACRO(current); \
-        if (cached != value) { \
-            vm.typed_regs.FIELD##_regs[(id)] = value; \
-            cached = value; \
-        } \
-        *out = cached; \
-        return true; \
-    } \
-    static inline void vm_cache_##FIELD##_typed(uint16_t id, CTYPE value) { \
-        if (vm_typed_reg_in_range((id))) { \
-            vm.typed_regs.FIELD##_regs[(id)] = value; \
-            vm.typed_regs.reg_types[(id)] = (uint8_t)(REG_ENUM); \
-            vm.typed_regs.dirty[(id)] = false; \
-        } \
+#define VM_DEFINE_TYPED_ACCESSORS(REG_ENUM, FIELD, CTYPE, IS_MACRO, AS_MACRO)                            \
+    static inline bool vm_try_read_##FIELD##_typed(uint16_t id, CTYPE* out) {                            \
+        if (!vm_typed_reg_in_range((id))) {                                                              \
+            return false;                                                                                \
+        }                                                                                                \
+        TypedRegisterWindow* window__ = vm_active_typed_window();                                        \
+        if (!typed_window_slot_live(window__, (id)) ||                                                   \
+            window__->reg_types[(id)] != (uint8_t)(REG_ENUM)) {                                          \
+            return false;                                                                                \
+        }                                                                                                \
+        if (window__->dirty[(id)]) {                                                                     \
+            *out = window__->FIELD##_regs[(id)];                                                         \
+            return true;                                                                                 \
+        }                                                                                                \
+        Value current = vm_peek_register((id));                                                          \
+        if (!IS_MACRO(current)) {                                                                        \
+            window__->reg_types[(id)] = (uint8_t)REG_TYPE_NONE;                                          \
+            window__->dirty[(id)] = false;                                                               \
+            typed_window_clear_live(window__, (id));                                                     \
+            return false;                                                                                \
+        }                                                                                                \
+        CTYPE cached = window__->FIELD##_regs[(id)];                                                     \
+        CTYPE value = AS_MACRO(current);                                                                 \
+        if (cached != value) {                                                                           \
+            window__->FIELD##_regs[(id)] = value;                                                        \
+            cached = value;                                                                              \
+        }                                                                                                \
+        *out = cached;                                                                                   \
+        typed_window_mark_live(window__, (id));                                                          \
+        return true;                                                                                     \
+    }                                                                                                    \
+    static inline void vm_cache_##FIELD##_typed(uint16_t id, CTYPE value) {                              \
+        if (vm_typed_reg_in_range((id))) {                                                               \
+            TypedRegisterWindow* window__ = vm_active_typed_window();                                    \
+            window__->FIELD##_regs[(id)] = value;                                                        \
+            window__->reg_types[(id)] = (uint8_t)(REG_ENUM);                                             \
+            window__->dirty[(id)] = false;                                                               \
+            typed_window_mark_live(window__, (id));                                                      \
+        }                                                                                                \
     }
 
 VM_DEFINE_TYPED_ACCESSORS(REG_TYPE_I32, i32, int32_t, IS_I32, AS_I32)
@@ -297,27 +332,39 @@ static inline bool vm_mark_typed_register_dirty(uint16_t id, RegisterType new_ty
         return false;
     }
 
-
-    uint8_t previous_type = vm.typed_regs.reg_types[id];
+    TypedRegisterWindow* window = vm_active_typed_window();
+    uint8_t previous_type = vm_typed_slot_live(id) ? window->reg_types[id] : REG_TYPE_NONE;
     bool has_upvalue = id < REGISTER_COUNT && vm_register_has_open_upvalue(id);
+    typed_window_mark_live(window, id);
     if (previous_type == new_type && !has_upvalue) {
-        vm.typed_regs.dirty[id] = true;
+        window->dirty[id] = true;
         return true;
     }
 
-    if (previous_type != REG_TYPE_NONE && previous_type != REG_TYPE_HEAP) {
+    window->reg_types[id] = (uint8_t)new_type;
+    window->dirty[id] = true;
+    return false;
+}
+
+static inline void vm_typed_promote_to_heap(uint16_t id, Value value) {
+    if (!vm_typed_reg_in_range(id)) {
+        return;
     }
 
-    vm.typed_regs.reg_types[id] = (uint8_t)new_type;
-    vm.typed_regs.dirty[id] = true;
-    return false;
+    TypedRegisterWindow* window = vm_active_typed_window();
+    typed_window_mark_live(window, id);
+    window->reg_types[id] = REG_TYPE_HEAP;
+    window->heap_regs[id] = value;
+    window->dirty[id] = false;
 }
 
 static inline void store_i32_register(uint16_t id, int32_t value) {
     if (vm_typed_reg_in_range(id)) {
-        vm.typed_regs.i32_regs[id] = value;
-        vm.typed_regs.reg_types[id] = REG_TYPE_I32;
-        vm.typed_regs.dirty[id] = false;
+        TypedRegisterWindow* window = vm_active_typed_window();
+        window->i32_regs[id] = value;
+        window->reg_types[id] = REG_TYPE_I32;
+        window->dirty[id] = false;
+        typed_window_mark_live(window, id);
     }
 
 
@@ -442,9 +489,11 @@ static inline void vm_store_bool_typed_hot(uint16_t id, bool value) {
 
 static inline void store_i64_register(uint16_t id, int64_t value) {
     if (vm_typed_reg_in_range(id)) {
-        vm.typed_regs.i64_regs[id] = value;
-        vm.typed_regs.reg_types[id] = REG_TYPE_I64;
-        vm.typed_regs.dirty[id] = false;
+        TypedRegisterWindow* window = vm_active_typed_window();
+        window->i64_regs[id] = value;
+        window->reg_types[id] = REG_TYPE_I64;
+        window->dirty[id] = false;
+        typed_window_mark_live(window, id);
     }
 
 
@@ -459,9 +508,11 @@ static inline void store_i64_register(uint16_t id, int64_t value) {
 
 static inline void store_u32_register(uint16_t id, uint32_t value) {
     if (vm_typed_reg_in_range(id)) {
-        vm.typed_regs.u32_regs[id] = value;
-        vm.typed_regs.reg_types[id] = REG_TYPE_U32;
-        vm.typed_regs.dirty[id] = false;
+        TypedRegisterWindow* window = vm_active_typed_window();
+        window->u32_regs[id] = value;
+        window->reg_types[id] = REG_TYPE_U32;
+        window->dirty[id] = false;
+        typed_window_mark_live(window, id);
     }
 
 
@@ -476,9 +527,11 @@ static inline void store_u32_register(uint16_t id, uint32_t value) {
 
 static inline void store_u64_register(uint16_t id, uint64_t value) {
     if (vm_typed_reg_in_range(id)) {
-        vm.typed_regs.u64_regs[id] = value;
-        vm.typed_regs.reg_types[id] = REG_TYPE_U64;
-        vm.typed_regs.dirty[id] = false;
+        TypedRegisterWindow* window = vm_active_typed_window();
+        window->u64_regs[id] = value;
+        window->reg_types[id] = REG_TYPE_U64;
+        window->dirty[id] = false;
+        typed_window_mark_live(window, id);
     }
 
 
@@ -493,9 +546,11 @@ static inline void store_u64_register(uint16_t id, uint64_t value) {
 
 static inline void store_f64_register(uint16_t id, double value) {
     if (vm_typed_reg_in_range(id)) {
-        vm.typed_regs.f64_regs[id] = value;
-        vm.typed_regs.reg_types[id] = REG_TYPE_F64;
-        vm.typed_regs.dirty[id] = false;
+        TypedRegisterWindow* window = vm_active_typed_window();
+        window->f64_regs[id] = value;
+        window->reg_types[id] = REG_TYPE_F64;
+        window->dirty[id] = false;
+        typed_window_mark_live(window, id);
     }
 
 
@@ -510,9 +565,11 @@ static inline void store_f64_register(uint16_t id, double value) {
 
 static inline void store_bool_register(uint16_t id, bool value) {
     if (vm_typed_reg_in_range(id)) {
-        vm.typed_regs.bool_regs[id] = value;
-        vm.typed_regs.reg_types[id] = REG_TYPE_BOOL;
-        vm.typed_regs.dirty[id] = false;
+        TypedRegisterWindow* window = vm_active_typed_window();
+        window->bool_regs[id] = value;
+        window->reg_types[id] = REG_TYPE_BOOL;
+        window->dirty[id] = false;
+        typed_window_mark_live(window, id);
     }
 
 

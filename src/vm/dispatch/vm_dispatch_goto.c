@@ -32,10 +32,7 @@
     do { \
         Value val_reg__ = vm_get_register_safe((reg)); \
         if (!IS_I32(val_reg__)) { \
-            if (vm_typed_reg_in_range((reg))) { \
-                vm.typed_regs.reg_types[(reg)] = REG_TYPE_HEAP; \
-                vm.typed_regs.dirty[(reg)] = false; \
-            } \
+            vm_typed_promote_to_heap((reg), val_reg__); \
             VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be i32"); \
         } \
         int32_t current__ = AS_I32(val_reg__); \
@@ -50,10 +47,7 @@
     do { \
         Value val_reg__ = vm_get_register_safe((reg)); \
         if (!IS_I64(val_reg__)) { \
-            if (vm_typed_reg_in_range((reg))) { \
-                vm.typed_regs.reg_types[(reg)] = REG_TYPE_HEAP; \
-                vm.typed_regs.dirty[(reg)] = false; \
-            } \
+            vm_typed_promote_to_heap((reg), val_reg__); \
             VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be i64"); \
         } \
         int64_t current__ = AS_I64(val_reg__); \
@@ -68,10 +62,7 @@
     do { \
         Value val_reg__ = vm_get_register_safe((reg)); \
         if (!IS_U32(val_reg__)) { \
-            if (vm_typed_reg_in_range((reg))) { \
-                vm.typed_regs.reg_types[(reg)] = REG_TYPE_HEAP; \
-                vm.typed_regs.dirty[(reg)] = false; \
-            } \
+            vm_typed_promote_to_heap((reg), val_reg__); \
             VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be u32"); \
         } \
         uint32_t next_value__ = AS_U32(val_reg__) + (uint32_t)1; \
@@ -82,10 +73,7 @@
     do { \
         Value val_reg__ = vm_get_register_safe((reg)); \
         if (!IS_U64(val_reg__)) { \
-            if (vm_typed_reg_in_range((reg))) { \
-                vm.typed_regs.reg_types[(reg)] = REG_TYPE_HEAP; \
-                vm.typed_regs.dirty[(reg)] = false; \
-            } \
+            vm_typed_promote_to_heap((reg), val_reg__); \
             VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be u64"); \
         } \
         uint64_t next_value__ = AS_U64(val_reg__) + (uint64_t)1; \
@@ -992,7 +980,8 @@ InterpretResult vm_run_dispatch(void) {
             uint8_t reg = READ_BYTE();
             const uint8_t typed_limit = (uint8_t)TYPED_REGISTER_WINDOW_SIZE;
 
-            if (reg < typed_limit && vm.typed_regs.reg_types[reg] == REG_TYPE_I32) {
+            if (reg < typed_limit && vm_typed_slot_live(reg) &&
+                vm.typed_regs.reg_types[reg] == REG_TYPE_I32) {
     #if USE_FAST_ARITH
                 int32_t result = vm.typed_regs.i32_regs[reg] - 1;
     #else
@@ -3677,8 +3666,7 @@ InterpretResult vm_run_dispatch(void) {
         double timestamp = builtin_timestamp();
         
         // Store in both typed register and regular register for compatibility
-        vm.typed_regs.f64_regs[dst] = timestamp;
-        vm.typed_regs.reg_types[dst] = REG_TYPE_F64;
+        vm_cache_f64_typed(dst, timestamp);
         vm_set_register_safe(dst, F64_VAL(timestamp));
         
         DISPATCH();
