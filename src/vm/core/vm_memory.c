@@ -13,6 +13,7 @@
 #include "vm/vm_string_ops.h"
 #include "vm/vm_comparison.h"
 #include "vm/spill_manager.h"
+#include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -469,17 +470,34 @@ static void mark_typed_window(TypedRegisterWindow* window) {
 
 static void markRoots() {
     for (int i = 0; i < REGISTER_COUNT; i++) {
+        bool in_frame_window = (i >= FRAME_REG_START && i < FRAME_REG_START + FRAME_REGISTERS);
+        bool in_temp_window = (i >= TEMP_REG_START && i < TEMP_REG_START + TEMP_REGISTERS);
+        if (in_frame_window || in_temp_window) {
+            continue;
+        }
         markValue(vm.registers[i]);
     }
 
     // Mark live values stored in the register file's active frame windows.
     for (CallFrame* frame = vm.register_file.frame_stack; frame != NULL; frame = frame->next) {
-        for (int reg = 0; reg < FRAME_REGISTERS; reg++) {
+        assert(frame->register_count <= FRAME_REGISTERS);
+        uint16_t live_registers = frame->register_count;
+        if (live_registers > FRAME_REGISTERS) {
+            live_registers = FRAME_REGISTERS;
+        }
+        for (uint16_t reg = 0; reg < live_registers; reg++) {
             markValue(frame->registers[reg]);
         }
-        for (int i = 0; i < TEMP_REGISTERS; i++) {
+
+        assert(frame->temp_count <= TEMP_REGISTERS);
+        uint16_t live_temps = frame->temp_count;
+        if (live_temps > TEMP_REGISTERS) {
+            live_temps = TEMP_REGISTERS;
+        }
+        for (uint16_t i = 0; i < live_temps; i++) {
             markValue(frame->temps[i]);
         }
+
         mark_typed_window(frame->typed_window);
     }
 
