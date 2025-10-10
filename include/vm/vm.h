@@ -319,6 +319,22 @@ struct Type {
 
 typedef struct Function Function;
 
+// Lightweight identifiers used by the profiling system to avoid depending on
+// heavyweight compiler structures while the tiering pipeline is being
+// scaffolded. Both function and loop identifiers map directly to VM table
+// indices at the moment, but remain typedef'd to make future refactors less
+// invasive.
+typedef uint16_t FunctionId;
+typedef uint16_t LoopId;
+
+#define VM_MAX_PROFILED_LOOPS 256
+
+typedef struct {
+    FunctionId func;
+    LoopId loop;
+    uint64_t hit_count;
+} HotPathSample;
+
 typedef enum {
     FUNCTION_TIER_BASELINE = 0,
     FUNCTION_TIER_SPECIALIZED = 1
@@ -1261,12 +1277,16 @@ typedef struct {
 
     // Execution state
     uint64_t instruction_count;
+    uint64_t ticks;
     ASTNode* astRoot;
     const char* filePath;
     int currentLine;
     int currentColumn;
 
     double lastExecutionTime;
+
+    // Profiling / tier-up bookkeeping
+    HotPathSample profile[VM_MAX_PROFILED_LOOPS];
 
     // Configuration
     bool trace;
@@ -1282,6 +1302,10 @@ typedef struct {
     CallFrame* currentCallFrame; // Current active call frame
     CallFrame* frameStack;     // Stack of call frames
 } VM;
+
+// Transitional alias while the runtime gradually migrates to the new VMState
+// terminology used by the tiering and profiling roadmap.
+typedef VM VMState;
 
 // Global VM instance
 extern VM vm;

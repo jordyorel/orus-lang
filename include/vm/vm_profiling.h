@@ -11,7 +11,10 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <time.h>
+
+#include "vm/vm.h"
 
 // Profiling configuration flags
 typedef enum {
@@ -28,6 +31,7 @@ typedef enum {
 // Hot path detection thresholds
 #define HOT_PATH_THRESHOLD 1000        // Executions to consider hot
 #define HOT_LOOP_THRESHOLD 10000       // Loop iterations to consider hot
+#define HOT_THRESHOLD HOT_LOOP_THRESHOLD
 #define PROFILING_SAMPLE_RATE 100      // Sample every N instructions when enabled
 #define LOOP_HIT_SAMPLE_RATE 64        // Sample loop hit counts every 64 iterations
 #define FUNCTION_HIT_SAMPLE_RATE 32    // Sample function hits every 32 calls
@@ -219,6 +223,36 @@ static inline void profileFunctionHit(void* functionPtr, bool isNative) {
     functionProfile->hitCount += functionProfile->pendingCalls;
     functionProfile->lastHitInstruction = g_profiling.totalInstructions;
     functionProfile->pendingCalls = 0;
+}
+
+extern size_t gcThreshold;
+
+#define PROF_SAFEPOINT(vm_ptr)                         \
+    do {                                               \
+        if ((vm_ptr)->bytesAllocated > gcThreshold) {  \
+            collectGarbage();                          \
+        }                                              \
+    } while (0)
+
+void queue_tier_up(VMState* vm, const HotPathSample* sample);
+
+static inline bool vm_profile_tick(VMState* vm, FunctionId func, LoopId loop) {
+    if (!vm || loop >= VM_MAX_PROFILED_LOOPS) {
+        return false;
+    }
+
+    vm->ticks++;
+
+    HotPathSample* sample = &vm->profile[loop];
+    sample->func = func;
+    sample->loop = loop;
+
+    if (++sample->hit_count == HOT_THRESHOLD) {
+        queue_tier_up(vm, sample);
+        return true;
+    }
+
+    return false;
 }
 
 static inline void profileRegisterAllocation(uint8_t regNum, bool isSpill, bool isReuse) {

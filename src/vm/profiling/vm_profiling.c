@@ -524,3 +524,9 @@ void updateOptimizationHints(struct VMOptimizationContext* vmCtx) {
 bool shouldOptimizeForHotPath(void* codeAddress) {
     return isHotPath(codeAddress) && g_profiling.isActive;
 }
+
+void queue_tier_up(VMState* vm, const HotPathSample* sample) {
+    (void)vm;
+    (void)sample;
+    // Phase 4 JIT hook placeholder – intentionally left blank for now.
+}

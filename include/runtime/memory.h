@@ -31,6 +31,8 @@ void freeObjects(void);
 void pauseGC(void);
 void resumeGC(void);
 
+extern size_t gcThreshold;
+
 ObjString* allocateString(const char* chars, int length);
 ObjString* allocateStringFromBuffer(char* buffer, size_t capacity, int length);
 ObjString* allocateStringFromRope(StringRope* rope);
