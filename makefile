@@ -258,6 +258,7 @@ MUL_I32_IMM_TEST_BIN = $(BUILDDIR)/tests/test_vm_mul_i32_imm
 INC_R_TEST_BIN = $(BUILDDIR)/tests/test_vm_inc_r
 DEC_I32_R_TEST_BIN = $(BUILDDIR)/tests/test_vm_dec_i32_r
 HOT_LOOP_PROFILING_TEST_BIN = $(BUILDDIR)/tests/test_vm_hot_loop_profiling
+JIT_BENCHMARK_TEST_BIN = $(BUILDDIR)/tests/test_vm_jit_benchmark
 BUILTIN_INPUT_TEST_BIN = $(BUILDDIR)/tests/test_builtin_input
 CONSTANT_FOLD_TEST_BIN = $(BUILDDIR)/tests/test_constant_folding
 BUILTIN_SORTED_ORUS_TESTS = \
@@ -475,6 +476,9 @@ _test-run: $(ORUS) $(ORUS_PROF)
 	@echo "\033[36m=== VM Hot Loop Profiling Tests ===\033[0m"
 	@$(MAKE) hot-loop-tests
 	@echo ""
+	@echo "\033[36m=== VM JIT Benchmark ===\033[0m"
+	@$(MAKE) jit-benchmark-tests
+	@echo ""
 	@echo "\033[36m=== OP_DEC_I32_R Typed Cache Tests ===\033[0m"
 	@$(MAKE) dec-i32-r-tests
 	@echo ""
@@ -684,6 +688,15 @@ $(HOT_LOOP_PROFILING_TEST_BIN): tests/unit/test_vm_hot_loop_profiling.c $(COMPIL
 hot-loop-tests: $(HOT_LOOP_PROFILING_TEST_BIN)
 	@echo "Running VM hot loop profiling tests..."
 	@./$(HOT_LOOP_PROFILING_TEST_BIN)
+
+$(JIT_BENCHMARK_TEST_BIN): tests/unit/test_vm_jit_benchmark.c $(COMPILER_OBJS) $(VM_OBJS)
+	@mkdir -p $(dir $@)
+	@echo "Compiling VM JIT benchmark..."
+	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+
+jit-benchmark-tests: $(JIT_BENCHMARK_TEST_BIN)
+	@echo "Running VM JIT benchmark..."
+	@./$(JIT_BENCHMARK_TEST_BIN)
 
 $(REGISTER_ALLOCATOR_TEST_BIN): tests/unit/test_register_allocator.c $(COMPILER_OBJS) $(VM_OBJS)
 	@mkdir -p $(dir $@)

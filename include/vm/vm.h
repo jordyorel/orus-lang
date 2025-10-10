@@ -1323,6 +1323,8 @@ typedef struct {
     JITEntry jit_entry_stub;
     JITEntryCache jit_cache;
     bool jit_enabled;
+    uint64_t jit_compilation_count;
+    uint64_t jit_invocation_count;
 } VM;
 
 // Transitional alias while the runtime gradually migrates to the new VMState

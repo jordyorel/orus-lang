@@ -133,6 +133,8 @@ void initVM(void) {
     vm.jit_cache.capacity = 0;
     vm.jit_cache.count = 0;
     vm.jit_cache.next_generation = 0;
+    vm.jit_compilation_count = 0;
+    vm.jit_invocation_count = 0;
     if (vm.jit_backend) {
         JITEntry stub_entry;
         memset(&stub_entry, 0, sizeof(stub_entry));
@@ -206,6 +208,8 @@ void freeVM(void) {
         vm.jit_backend = NULL;
     }
     vm.jit_enabled = false;
+    vm.jit_compilation_count = 0;
+    vm.jit_invocation_count = 0;
     vm.functionCount = 0;
 
     // Free global string table
