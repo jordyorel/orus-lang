@@ -10,6 +10,7 @@
 # Executables
 /orus
 /orus_debug
+/orus-prof
 orus_ci
 /test-register
 /test-parser

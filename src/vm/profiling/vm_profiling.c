@@ -8,6 +8,10 @@
 
 
 #define _POSIX_C_SOURCE 199309L
+#if !defined(_POSIX_C_SOURCE) || _POSIX_C_SOURCE < 200112L
+#undef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 200112L
+#endif
 #include "vm/vm_profiling.h"
 #include "vm/vm.h"
 #include <stdio.h>
