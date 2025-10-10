@@ -150,7 +150,7 @@ TEST_CASE(test_hot_loop_detection) {
 
 ### Implementation Steps
 
-* Integrate a portable JIT backend (DynASM or LLVM ORC).
+* Integrate a portable JIT backend (DynASM).
 * Insert **GC safepoints** before each allocation call to cooperate with `collectGarbage()`.
 * Implement deoptimization stubs for type-mismatch recovery.
 * Keep identical frame and register layouts across interpreter and JIT tiers.
