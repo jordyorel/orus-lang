@@ -29,54 +29,86 @@
 
 #define VM_HANDLE_INC_I32_SLOW_PATH(reg) \
     do { \
-        Value val_reg__ = vm_get_register_safe((reg)); \
-        if (!IS_I32(val_reg__)) { \
-            vm_typed_promote_to_heap((reg), val_reg__); \
-            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be i32"); \
+        int32_t current__; \
+        if (vm_try_read_i32_typed((reg), &current__)) { \
+            int32_t next_value__; \
+            if (__builtin_add_overflow(current__, 1, &next_value__)) { \
+                VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow"); \
+            } \
+            vm_store_i32_typed_hot((reg), next_value__); \
+        } else { \
+            Value val_reg__ = vm_get_register_safe((reg)); \
+            if (!IS_I32(val_reg__)) { \
+                vm_typed_promote_to_heap((reg), val_reg__); \
+                VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be i32"); \
+            } \
+            int32_t boxed_value__ = AS_I32(val_reg__); \
+            vm_cache_i32_typed((reg), boxed_value__); \
+            int32_t next_value__; \
+            if (__builtin_add_overflow(boxed_value__, 1, &next_value__)) { \
+                VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow"); \
+            } \
+            vm_store_i32_typed_hot((reg), next_value__); \
         } \
-        int32_t current__ = AS_I32(val_reg__); \
-        int32_t next_value__; \
-        if (__builtin_add_overflow(current__, 1, &next_value__)) { \
-            VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow"); \
-        } \
-        vm_store_i32_typed_hot((reg), next_value__); \
     } while (0)
 
 #define VM_HANDLE_INC_I64_SLOW_PATH(reg) \
     do { \
-        Value val_reg__ = vm_get_register_safe((reg)); \
-        if (!IS_I64(val_reg__)) { \
-            vm_typed_promote_to_heap((reg), val_reg__); \
-            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be i64"); \
+        int64_t current__; \
+        if (vm_try_read_i64_typed((reg), &current__)) { \
+            int64_t next_value__; \
+            if (__builtin_add_overflow(current__, (int64_t)1, &next_value__)) { \
+                VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow"); \
+            } \
+            vm_store_i64_typed_hot((reg), next_value__); \
+        } else { \
+            Value val_reg__ = vm_get_register_safe((reg)); \
+            if (!IS_I64(val_reg__)) { \
+                vm_typed_promote_to_heap((reg), val_reg__); \
+                VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be i64"); \
+            } \
+            int64_t boxed_value__ = AS_I64(val_reg__); \
+            vm_cache_i64_typed((reg), boxed_value__); \
+            int64_t next_value__; \
+            if (__builtin_add_overflow(boxed_value__, (int64_t)1, &next_value__)) { \
+                VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow"); \
+            } \
+            vm_store_i64_typed_hot((reg), next_value__); \
         } \
-        int64_t current__ = AS_I64(val_reg__); \
-        int64_t next_value__; \
-        if (__builtin_add_overflow(current__, (int64_t)1, &next_value__)) { \
-            VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow"); \
-        } \
-        vm_store_i64_typed_hot((reg), next_value__); \
     } while (0)
 
 #define VM_HANDLE_INC_U32_SLOW_PATH(reg) \
     do { \
-        Value val_reg__ = vm_get_register_safe((reg)); \
-        if (!IS_U32(val_reg__)) { \
-            vm_typed_promote_to_heap((reg), val_reg__); \
-            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be u32"); \
+        uint32_t current__; \
+        if (vm_try_read_u32_typed((reg), &current__)) { \
+            vm_store_u32_typed_hot((reg), current__ + (uint32_t)1); \
+        } else { \
+            Value val_reg__ = vm_get_register_safe((reg)); \
+            if (!IS_U32(val_reg__)) { \
+                vm_typed_promote_to_heap((reg), val_reg__); \
+                VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be u32"); \
+            } \
+            uint32_t boxed_value__ = AS_U32(val_reg__); \
+            vm_cache_u32_typed((reg), boxed_value__); \
+            vm_store_u32_typed_hot((reg), boxed_value__ + (uint32_t)1); \
         } \
-        uint32_t next_value__ = AS_U32(val_reg__) + (uint32_t)1; \
-        vm_store_u32_typed_hot((reg), next_value__); \
     } while (0)
 
 #define VM_HANDLE_INC_U64_SLOW_PATH(reg) \
     do { \
-        Value val_reg__ = vm_get_register_safe((reg)); \
-        if (!IS_U64(val_reg__)) { \
-            vm_typed_promote_to_heap((reg), val_reg__); \
-            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be u64"); \
+        uint64_t current__; \
+        if (vm_try_read_u64_typed((reg), &current__)) { \
+            vm_store_u64_typed_hot((reg), current__ + (uint64_t)1); \
+        } else { \
+            Value val_reg__ = vm_get_register_safe((reg)); \
+            if (!IS_U64(val_reg__)) { \
+                vm_typed_promote_to_heap((reg), val_reg__); \
+                VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be u64"); \
+            } \
+            uint64_t boxed_value__ = AS_U64(val_reg__); \
+            vm_cache_u64_typed((reg), boxed_value__); \
+            vm_store_u64_typed_hot((reg), boxed_value__ + (uint64_t)1); \
         } \
-        uint64_t next_value__ = AS_U64(val_reg__) + (uint64_t)1; \
-        vm_store_u64_typed_hot((reg), next_value__); \
     } while (0)
 
 // Only needed for the switch-dispatch backend
