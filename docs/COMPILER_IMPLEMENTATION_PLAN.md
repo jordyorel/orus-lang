@@ -5,7 +5,7 @@
 ### Typed register execution baseline
 - Call frames now allocate dedicated typed register windows, keeping the active window in sync with the frame stack so arithmetic executes on the unboxed arrays in `vm.typed_regs` instead of the legacy `Value` array.
 - Hot-path helpers such as `vm_store_i32_typed_hot` write directly into the typed window and only touch the boxed array when the store crosses a frame boundary or would invalidate an upvalue, aligning with the Phase 1 goal of running loops on typed storage from the performance roadmap.
-- Typed fast-path opcodes and fused immediates (e.g. `OP_ADD_I32_IMM`) are wired to these helpers and cache APIs so tight loops stay in typed space by default.
+- Typed fast-path opcodes and fused immediates (e.g. `OP_ADD_I32_IMM`, `OP_SUB_I32_IMM`, `OP_MUL_I32_IMM`) are wired to these helpers and cache APIs so tight loops stay in typed space by default.
 
 ### Boxing fallbacks and reconciliation
 - `vm_mark_typed_register_dirty` only skips the boxed write when the register stays in the same numeric bank and no open upvalues require boxing; otherwise it forces an immediate reconciliation so slow paths remain consistent.

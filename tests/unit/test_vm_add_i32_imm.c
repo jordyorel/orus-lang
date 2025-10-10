@@ -2,29 +2,33 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
+#include "errors/error_interface.h"
 #include "vm/vm.h"
 #include "vm/vm_comparison.h"
 #include "vm/vm_dispatch.h"
 
-static void write_int32(Chunk* chunk, int32_t value) {
+static void write_int32(Chunk* chunk, int32_t value, int line, int column) {
     uint32_t encoded = (uint32_t)value;
-    writeChunk(chunk, (uint8_t)(encoded & 0xFF), 1, 0, "add_i32_imm");
-    writeChunk(chunk, (uint8_t)((encoded >> 8) & 0xFF), 1, 0, "add_i32_imm");
-    writeChunk(chunk, (uint8_t)((encoded >> 16) & 0xFF), 1, 0, "add_i32_imm");
-    writeChunk(chunk, (uint8_t)((encoded >> 24) & 0xFF), 1, 0, "add_i32_imm");
+    writeChunk(chunk, (uint8_t)(encoded & 0xFF), line, column, "add_i32_imm");
+    writeChunk(chunk, (uint8_t)((encoded >> 8) & 0xFF), line, column, "add_i32_imm");
+    writeChunk(chunk, (uint8_t)((encoded >> 16) & 0xFF), line, column, "add_i32_imm");
+    writeChunk(chunk, (uint8_t)((encoded >> 24) & 0xFF), line, column, "add_i32_imm");
 }
 
 static void write_add_i32_imm_instruction(Chunk* chunk, uint8_t dst_reg, uint8_t src_reg, int32_t imm) {
-    writeChunk(chunk, OP_ADD_I32_IMM, 1, 0, "add_i32_imm");
-    writeChunk(chunk, dst_reg, 1, 0, "add_i32_imm");
-    writeChunk(chunk, src_reg, 1, 0, "add_i32_imm");
-    write_int32(chunk, imm);
+    const int line = 1;
+    const int column = 9;
+    writeChunk(chunk, OP_ADD_I32_IMM, line, column, "add_i32_imm");
+    writeChunk(chunk, dst_reg, line, column, "add_i32_imm");
+    writeChunk(chunk, src_reg, line, column, "add_i32_imm");
+    write_int32(chunk, imm, line, column);
 }
 
 static void write_add_i32_imm_program(Chunk* chunk, uint8_t dst_reg, uint8_t src_reg, int32_t imm) {
     write_add_i32_imm_instruction(chunk, dst_reg, src_reg, imm);
-    writeChunk(chunk, OP_HALT, 1, 0, "add_i32_imm");
+    writeChunk(chunk, OP_HALT, 1, 1, "add_i32_imm");
 }
 
 static bool test_add_i32_imm_success(void) {
@@ -69,6 +73,15 @@ static bool test_add_i32_imm_overflow(void) {
     initChunk(&chunk);
     write_add_i32_imm_program(&chunk, 1, 0, 1);
 
+    const char* source_text = "r1 = r0 + 1\n";
+    if (init_feature_errors() != ERROR_REPORT_SUCCESS ||
+        set_error_source_text(source_text, strlen(source_text)) != ERROR_REPORT_SUCCESS) {
+        fprintf(stderr, "Failed to set error source text for overflow test\n");
+        freeChunk(&chunk);
+        freeVM();
+        return false;
+    }
+
     vm_store_i32_typed_hot(0, INT32_MAX);
 
     vm.chunk = &chunk;
@@ -89,7 +102,17 @@ static bool test_add_i32_imm_overflow(void) {
         goto cleanup;
     }
 
+    ObjError* err = AS_ERROR(vm.lastError);
+    if (!(err->location.file && strcmp(err->location.file, "add_i32_imm") == 0)) {
+        fprintf(stderr, "Expected runtime error to report file add_i32_imm, got %s\n",
+                err->location.file ? err->location.file : "(null)");
+        success = false;
+        goto cleanup;
+    }
+
 cleanup:
+    set_error_source_text(NULL, 0);
+    cleanup_feature_errors();
     freeChunk(&chunk);
     freeVM();
     return success;
