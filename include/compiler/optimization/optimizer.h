@@ -36,6 +36,22 @@ typedef struct OptimizationPass {
     OptimizationPassFunction run;
 } OptimizationPass;
 
+typedef struct LoopTypeResidencyPlan {
+    const TypedASTNode* loop_node;          // Loop statement associated with this plan
+    const TypedASTNode* range_end_node;     // Range loop end expression
+    const TypedASTNode* range_step_node;    // Range loop step expression
+    const TypedASTNode* guard_left_node;    // While guard left operand
+    const TypedASTNode* guard_right_node;   // While guard right operand
+    bool range_end_prefers_typed;           // Keep range end typed
+    bool range_end_requires_residency;      // Persist typed state for range end
+    bool range_step_prefers_typed;          // Keep range step typed
+    bool range_step_requires_residency;     // Persist typed state for range step
+    bool guard_left_prefers_typed;          // Guard left operand prefers typed register
+    bool guard_left_requires_residency;     // Guard left operand should persist typed state
+    bool guard_right_prefers_typed;         // Guard right operand prefers typed register
+    bool guard_right_requires_residency;    // Guard right operand should persist typed state
+} LoopTypeResidencyPlan;
+
 struct OptimizationContext {
     OptimizationPass* passes;
     size_t pass_count;
@@ -54,6 +70,11 @@ struct OptimizationContext {
 
     // Debug information
     bool verbose_output;               // Enable detailed optimization logging
+
+    // Loop residency analysis
+    LoopTypeResidencyPlan* loop_residency_plans;
+    size_t loop_residency_count;
+    size_t loop_residency_capacity;
 };
 
 // Core optimization functions
@@ -65,6 +86,12 @@ void free_optimization_context(OptimizationContext* ctx);
 bool set_optimization_pass_enabled(OptimizationContext* ctx, const char* name, bool enabled);
 bool toggle_optimization_pass(OptimizationContext* ctx, const char* name);
 bool is_optimization_pass_enabled(OptimizationContext* ctx, const char* name);
+
+// Loop residency helpers
+int optimization_add_loop_residency_plan(OptimizationContext* ctx, const LoopTypeResidencyPlan* plan);
+const LoopTypeResidencyPlan* optimization_find_loop_residency_plan(const OptimizationContext* ctx,
+                                                                   const TypedASTNode* loop_node);
+void optimization_clear_loop_residency_plans(OptimizationContext* ctx);
 
 // Utility functions for optimization
 bool is_constant_literal(TypedASTNode* node);

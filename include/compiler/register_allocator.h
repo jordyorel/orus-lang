@@ -62,6 +62,14 @@ typedef struct RegisterAllocation {
 // Opaque dual allocator handle
 typedef struct DualRegisterAllocator DualRegisterAllocator;
 
+typedef struct TypedSpanReservation {
+    RegisterBankKind bank_kind;      // Typed bank the span belongs to
+    RegisterType     physical_type;  // Physical type for the span
+    int              physical_start; // First physical register in the span
+    int              length;         // Number of contiguous registers reserved
+    bool             requires_reconciliation; // Whether boxed mirrors must be refreshed
+} TypedSpanReservation;
+
 typedef struct AllocatorDiagnostics {
     int max_scope_depth_seen;
     int scope_depth_overflow_count;
@@ -107,6 +115,18 @@ RegisterAllocation* compiler_alloc_smart(DualRegisterAllocator* allocator,
                                          RegisterType type,
                                          bool is_arithmetic_hot_path);
 void compiler_free_allocation(DualRegisterAllocator* allocator, RegisterAllocation* allocation);
+
+// Typed span helpers
+bool compiler_begin_typed_span(DualRegisterAllocator* allocator,
+                               RegisterBankKind bank_kind,
+                               int count,
+                               bool requires_reconciliation,
+                               TypedSpanReservation* out_span);
+void compiler_release_typed_span(DualRegisterAllocator* allocator,
+                                 const TypedSpanReservation* span);
+int compiler_collect_pending_reconciliations(DualRegisterAllocator* allocator,
+                                             TypedSpanReservation* out_spans,
+                                             int max_spans);
 
 // Diagnostics
 bool is_arithmetic_heavy_context(DualRegisterAllocator* allocator);
