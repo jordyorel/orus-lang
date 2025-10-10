@@ -27,10 +27,10 @@ static bool test_typed_register_deferred_boxing_flushes_on_read(void) {
 
     vm_store_i32_typed_hot(0, 42);
     ASSERT_TRUE(vm.typed_regs.dirty[0], "Second store should defer boxing");
-    ASSERT_TRUE(IS_I32(vm.registers[0]) && AS_I32(vm.registers[0]) == 42,
-                "Deferred store should keep boxed mirror synchronized for globals");
-    ASSERT_TRUE(IS_I32(vm.register_file.globals[0]) && AS_I32(vm.register_file.globals[0]) == 42,
-                "Register file globals should mirror deferred typed value");
+    ASSERT_TRUE(IS_I32(vm.registers[0]) && AS_I32(vm.registers[0]) == 10,
+                "Deferred store should leave boxed register stale until reconciliation");
+    ASSERT_TRUE(IS_I32(vm.register_file.globals[0]) && AS_I32(vm.register_file.globals[0]) == 10,
+                "Register file globals should remain stale until reconciliation");
 
     Value flushed = vm_get_register_safe(0);
     ASSERT_TRUE(IS_I32(flushed) && AS_I32(flushed) == 42,
@@ -125,11 +125,11 @@ static bool test_range_iterator_uses_typed_registers(void) {
                 "Second iteration should advance typed payload");
     ASSERT_TRUE(vm.typed_regs.dirty[dst_reg],
                 "Second iteration should defer boxing for hot path");
-    ASSERT_TRUE(IS_I64(vm.registers[dst_reg]) && AS_I64(vm.registers[dst_reg]) == 1,
-                "Global mirror should advance alongside typed payload");
+    ASSERT_TRUE(IS_I64(vm.registers[dst_reg]) && AS_I64(vm.registers[dst_reg]) == 0,
+                "Boxed register should remain at last reconciled value");
     ASSERT_TRUE(IS_I64(vm.register_file.globals[dst_reg]) &&
-                    AS_I64(vm.register_file.globals[dst_reg]) == 1,
-                "Register file globals should match deferred range writes");
+                    AS_I64(vm.register_file.globals[dst_reg]) == 0,
+                "Register file globals should remain at last reconciled value");
     ASSERT_TRUE(vm.typed_regs.bool_regs[has_reg],
                 "Has-value flag should stay true while range produces values");
 
@@ -138,11 +138,11 @@ static bool test_range_iterator_uses_typed_registers(void) {
                 "Third iteration should update typed payload without boxing");
     ASSERT_TRUE(vm.typed_regs.dirty[dst_reg],
                 "Typed register should remain dirty until explicit read");
-    ASSERT_TRUE(IS_I64(vm.registers[dst_reg]) && AS_I64(vm.registers[dst_reg]) == 2,
-                "Deferred writes should keep boxed range mirror current");
+    ASSERT_TRUE(IS_I64(vm.registers[dst_reg]) && AS_I64(vm.registers[dst_reg]) == 0,
+                "Boxed register should stay stale without reconciliation");
     ASSERT_TRUE(IS_I64(vm.register_file.globals[dst_reg]) &&
-                    AS_I64(vm.register_file.globals[dst_reg]) == 2,
-                "Register file globals should retain last deferred range value");
+                    AS_I64(vm.register_file.globals[dst_reg]) == 0,
+                "Register file globals should stay stale without reconciliation");
     ASSERT_TRUE(vm.typed_regs.bool_regs[has_reg],
                 "Has-value flag should be true before iterator exhaustion");
 
@@ -153,11 +153,14 @@ static bool test_range_iterator_uses_typed_registers(void) {
                 "Boxed has-value flag should flush false on exhaustion");
     ASSERT_TRUE(vm.typed_regs.i64_regs[dst_reg] == 2,
                 "Destination typed value should retain last yielded integer");
+    Value final_boxed = vm_reconcile_typed_register(dst_reg);
+    ASSERT_TRUE(IS_I64(final_boxed) && AS_I64(final_boxed) == 2,
+                "Reconciliation should flush final yielded integer");
     ASSERT_TRUE(IS_I64(vm.registers[dst_reg]) && AS_I64(vm.registers[dst_reg]) == 2,
-                "Boxed register should hold final yielded integer");
+                "Boxed register should hold final yielded integer after reconciliation");
     ASSERT_TRUE(IS_I64(vm.register_file.globals[dst_reg]) &&
                     AS_I64(vm.register_file.globals[dst_reg]) == 2,
-                "Global mirror should hold final yielded integer");
+                "Global mirror should hold final yielded integer after reconciliation");
 
     freeChunk(&chunk);
     freeVM();
@@ -205,11 +208,11 @@ static bool test_array_iterator_preserves_typed_loop_variable(void) {
                 "Second array iteration should update typed payload");
     ASSERT_TRUE(vm.typed_regs.dirty[dst_reg],
                 "Hot array path should avoid boxing on subsequent iterations");
-    ASSERT_TRUE(IS_I64(vm.registers[dst_reg]) && AS_I64(vm.registers[dst_reg]) == 20,
-                "Array iterator globals should update during deferred writes");
+    ASSERT_TRUE(IS_I64(vm.registers[dst_reg]) && AS_I64(vm.registers[dst_reg]) == 10,
+                "Boxed array iterator register should remain at last reconciled value");
     ASSERT_TRUE(IS_I64(vm.register_file.globals[dst_reg]) &&
-                    AS_I64(vm.register_file.globals[dst_reg]) == 20,
-                "Register file globals should stay in sync for array iterators");
+                    AS_I64(vm.register_file.globals[dst_reg]) == 10,
+                "Register file globals should remain at last reconciled value");
     ASSERT_TRUE(vm.typed_regs.bool_regs[has_reg],
                 "Has-value flag should remain true while elements remain");
 
@@ -226,11 +229,14 @@ static bool test_array_iterator_preserves_typed_loop_variable(void) {
                 "Boxed boolean flag should flush false at exhaustion");
     ASSERT_TRUE(vm.typed_regs.i64_regs[dst_reg] == 30,
                 "Typed register should preserve last array element");
+    Value array_final = vm_reconcile_typed_register(dst_reg);
+    ASSERT_TRUE(IS_I64(array_final) && AS_I64(array_final) == 30,
+                "Reconciliation should surface final array element");
     ASSERT_TRUE(IS_I64(vm.registers[dst_reg]) && AS_I64(vm.registers[dst_reg]) == 30,
-                "Boxed register should preserve last array element");
+                "Boxed register should preserve last array element after reconciliation");
     ASSERT_TRUE(IS_I64(vm.register_file.globals[dst_reg]) &&
                     AS_I64(vm.register_file.globals[dst_reg]) == 30,
-                "Global mirror should preserve last array element");
+                "Global mirror should preserve last array element after reconciliation");
 
     freeChunk(&chunk);
     freeVM();
@@ -368,14 +374,20 @@ static bool test_global_typed_state_propagates_across_frames(void) {
                 "Parent window should inherit child global writes");
     ASSERT_TRUE(parent->typed_window->i64_regs[0] == 33,
                 "Parent typed cache should match propagated value");
+    Value propagated = vm_reconcile_typed_register(0);
+    ASSERT_TRUE(IS_I64(propagated) && AS_I64(propagated) == 33,
+                "Reconciliation should surface propagated global value");
     ASSERT_TRUE(IS_I64(vm.register_file.globals[0]) && AS_I64(vm.register_file.globals[0]) == 33,
-                "Register file globals should store propagated value");
+                "Register file globals should store propagated value after reconciliation");
 
     deallocate_frame(&vm.register_file);
     ASSERT_TRUE(vm.typed_regs.root_window.i64_regs[0] == 33,
                 "Root window should retain latest global value after unwinding");
+    Value reconciled_root = vm_reconcile_typed_register(0);
+    ASSERT_TRUE(IS_I64(reconciled_root) && AS_I64(reconciled_root) == 33,
+                "Reconciliation should flush propagated value into boxed mirror");
     ASSERT_TRUE(IS_I64(vm.registers[0]) && AS_I64(vm.registers[0]) == 33,
-                "Mirror register array should reflect propagated global value");
+                "Mirror register array should reflect propagated global value after reconciliation");
 
     freeVM();
     return true;
