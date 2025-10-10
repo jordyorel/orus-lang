@@ -293,7 +293,59 @@ TEST_CASE(test_jit_gc_safepoint) {
 
 ---
 
-## Phase 5 — Add Ahead-of-Time (AOT) Compilation
+## Phase 5 — Lightweight Concurrency (Oroutines)
+
+**Objective:** Enable thousands of concurrent Orus routines with minimal memory and safe GC integration.
+
+### Implementation Steps
+
+* [] Add **scheduler loop** to `vm_run()` handling `oroutine_yield()` and `oroutine_resume()`.
+* [] Use **2–4 KB stacks** allocated from a shared arena (`oroutine_alloc_stack()`).
+* [] Integrate **GC safepoints** at yield boundaries and allocation calls.
+* [] Support **blocking I/O suspension** via continuation capture.
+* [] Maintain identical frame layout between VM, JIT, and oroutines.
+
+### Code Template — Scheduler Hooks
+
+```c
+typedef struct {
+    void* stack_base;
+    void* stack_top;
+    bool  ready;
+} Oroutine;
+
+void oroutine_yield(VMState* vm);
+void oroutine_resume(VMState* vm, Oroutine* coro);
+```
+
+### GC Integration
+
+```c
+#define ORUTINE_SAFEPOINT(vm) do { \
+    if ((vm)->bytesAllocated > gcThreshold) collectGarbage(); \
+} while (0)
+```
+
+### Unit Test — Concurrent Execution
+
+```c
+TEST_CASE(test_oroutine_spawn_yield) {
+    oroutine_spawn(task_a);
+    oroutine_spawn(task_b);
+    run_scheduler();
+    ASSERT_ALL_COMPLETED();
+}
+```
+
+### Milestone Exit Criteria
+
+* [] 10 000 oroutines execute concurrently under 100 MB total memory.
+* [] GC pause < 5 ms per 64 MB heap.
+* [] Works transparently with JIT-compiled frames.
+
+---
+
+## Phase 6 — Add Ahead-of-Time (AOT) Compilation
 
 **Objective:** Deliver self-contained native binaries.
 
@@ -331,7 +383,7 @@ TEST_CASE(test_aot_binary_executes) {
 
 ---
 
-## Phase 6 — Runtime and GC Enhancements
+## Phase 7 — Runtime and GC Enhancements
 
 **Objective:** Improve memory efficiency and pause times.
 
@@ -370,7 +422,7 @@ TEST_CASE(test_incremental_gc) {
 
 ---
 
-## Phase 7 — SSA Optimizer and Native Parity
+## Phase 8 — SSA Optimizer and Native Parity
 
 **Objective:** Close the remaining gap with Go.
 
