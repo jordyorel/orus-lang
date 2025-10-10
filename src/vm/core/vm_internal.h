@@ -15,6 +15,7 @@
 #include "vm/vm_constants.h"
 #include "public/common.h"
 #include "vm/vm_validation.h"
+#include "vm/vm_tiering.h"
 
 
 void runtimeError(ErrorType type, SrcLocation location, const char* format, ...);
@@ -26,6 +27,9 @@ void vm_report_unhandled_error(void);
 
 #define VM_ERROR_RETURN(type, loc, msg, ...) \
     do { \
+        if ((type) == ERROR_TYPE) { \
+            vm_handle_type_error_deopt(); \
+        } \
         runtimeError(type, loc, msg, ##__VA_ARGS__); \
         goto HANDLE_RUNTIME_ERROR; \
     } while (0)

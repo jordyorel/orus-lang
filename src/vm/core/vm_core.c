@@ -121,10 +121,34 @@ void initVM(void) {
     vm.chunk = NULL;
     vm.ip = NULL;
     vm.isShuttingDown = false;  // Initialize shutdown flag
-    
+
     // Initialize register file frame pointers
     vm.register_file.current_frame = NULL;
     vm.register_file.frame_stack = NULL;
+
+    vm.jit_backend = orus_jit_backend_create();
+    vm.jit_enabled = false;
+    memset(&vm.jit_entry_stub, 0, sizeof(vm.jit_entry_stub));
+    vm.jit_cache.slots = NULL;
+    vm.jit_cache.capacity = 0;
+    vm.jit_cache.count = 0;
+    vm.jit_cache.next_generation = 0;
+    if (vm.jit_backend) {
+        JITEntry stub_entry;
+        memset(&stub_entry, 0, sizeof(stub_entry));
+        JITBackendStatus status =
+            orus_jit_backend_compile_noop(vm.jit_backend, &stub_entry);
+        if (status == JIT_BACKEND_OK) {
+            vm.jit_entry_stub = stub_entry;
+            vm.jit_enabled = true;
+        } else {
+            if (stub_entry.code_ptr) {
+                orus_jit_backend_release_entry(vm.jit_backend, &stub_entry);
+            }
+            orus_jit_backend_destroy(vm.jit_backend);
+            vm.jit_backend = NULL;
+        }
+    }
 }
 
 void freeVM(void) {
@@ -159,6 +183,29 @@ void freeVM(void) {
         function->deopt_handler = NULL;
         function->specialization_hits = 0;
     }
+
+    vm_jit_flush_entries();
+    if (vm.jit_cache.slots) {
+        for (size_t i = 0; i < vm.jit_cache.capacity; ++i) {
+            vm.jit_cache.slots[i].function_index = UINT16_MAX;
+            vm.jit_cache.slots[i].loop_index = UINT16_MAX;
+        }
+        free(vm.jit_cache.slots);
+        vm.jit_cache.slots = NULL;
+    }
+    vm.jit_cache.capacity = 0;
+    vm.jit_cache.count = 0;
+    vm.jit_cache.next_generation = 0;
+
+    if (vm.jit_backend) {
+        if (vm.jit_entry_stub.code_ptr) {
+            orus_jit_backend_release_entry(vm.jit_backend, &vm.jit_entry_stub);
+            memset(&vm.jit_entry_stub, 0, sizeof(vm.jit_entry_stub));
+        }
+        orus_jit_backend_destroy(vm.jit_backend);
+        vm.jit_backend = NULL;
+    }
+    vm.jit_enabled = false;
     vm.functionCount = 0;
 
     // Free global string table
