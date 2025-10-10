@@ -97,6 +97,7 @@ typedef struct {
     bool profile_registers;        // Profile register usage (--profile-registers)
     bool profile_memory_access;    // Profile memory access patterns (--profile-memory)
     bool profile_branches;         // Profile branch prediction (--profile-branches)
+    bool profile_functions;        // Profile function invocation counts (--profile-functions)
     const char* profile_output;    // Profiling output file (--profile-output)
     
 } OrusConfig;

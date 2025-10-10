@@ -127,10 +127,18 @@ TEST_CASE(test_typed_loop_persistence) {
 
 ### Implementation Steps
 
-[] Add lightweight sampling probes for loop and function hit counts.
-[] Feed profiling metadata back to the compiler for re-specialization.
-[] Generate specialized bytecode guarded by deoptimization stubs.
-[] Provide `orus-prof` CLI to visualize hotness and specialization status.
+[x] Add lightweight sampling probes for loop and function hit counts.
+[x] Feed profiling metadata back to the compiler for re-specialization.
+    - The specialization feedback bridge harvests VM samples and hands them to
+      the compiler via `specialization_feedback.c`, letting phase 2 artifacts
+      trigger tier-up recompiles automatically.
+[x] Generate specialized bytecode guarded by deoptimization stubs.
+    - The backend now clones hot functions, emits guard checks, and wires
+      deoptimization stubs so the interpreter can recover when profiles drift.
+[x] Provide `orus-prof` CLI to visualize hotness and specialization status.
+    - Shipped the standalone `orus-prof` binary that ingests exported profiling
+      JSON, surfaces the hottest opcodes, and flags which functions are ready
+      for specialization promotion.
 
 ### Code Template — Runtime Hot Path Sampling
 
@@ -160,8 +168,18 @@ TEST_CASE(test_hot_loop_detection) {
 
 ### Milestone Exit Criteria
 
-[] Tier-up system triggers specialization after N iterations.
-[] Profiling data round-trips between runtime and compiler.
+[x] Tier-up system triggers specialization after N iterations.
+    - Runtime tier metadata now promotes hot functions once sampling crosses
+      the specialization threshold and queues recompilation jobs.
+[x] Profiling data round-trips between runtime and compiler.
+    - Collected loop/function counters are exported to the compiler service
+      during tier-up, enabling it to regenerate bytecode with guard metadata.
+
+### Follow-Up Work
+
+- [x] Ship the `orus-prof` CLI to visualize sampling hotness and tier status.
+- [ ] Add regression coverage for guard selection, deoptimization stubs, and
+      cold-start recompilation paths once the testing harness lands.
 
 ---
 

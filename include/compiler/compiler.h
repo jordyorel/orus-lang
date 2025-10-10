@@ -41,6 +41,7 @@ typedef struct ConstantPool {
 } ConstantPool;
 typedef struct ErrorReporter ErrorReporter;
 typedef struct OptimizationContext OptimizationContext;
+typedef struct CompilerProfilingFeedback CompilerProfilingFeedback;
 
 // Bytecode buffer for VM instruction generation
 typedef struct BytecodeBuffer {
@@ -133,6 +134,10 @@ typedef struct CompilerContext {
     int current_function_index;        // Currently compiling function index (-1 if global)
     BytecodeBuffer** function_chunks;  // Separate bytecode for each function
     int* function_arities;             // Arities for each function
+    char** function_names;             // Debug names preserved for specialization feedback
+    BytecodeBuffer** function_specialized_chunks; // Specialized variants generated from profiling data
+    BytecodeBuffer** function_deopt_stubs;        // Bytecode stubs used for deoptimization bookkeeping
+    uint64_t* function_hot_counts;     // Profiling hit counts attached to each function slot
     int function_count;                // Number of functions compiled
     int function_capacity;             // Capacity of function_chunks array
 
@@ -149,6 +154,8 @@ typedef struct CompilerContext {
     ModuleImportEntry* module_imports; // Collected imports
     int module_import_count;           // Number of collected imports
     int module_import_capacity;        // Allocated capacity for imports
+
+    CompilerProfilingFeedback* profiling_feedback; // Snapshot of VM profiling data driving specialization
 } CompilerContext;
 
 // Bytecode emission functions

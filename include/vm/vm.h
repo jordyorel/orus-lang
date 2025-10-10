@@ -317,12 +317,26 @@ struct Type {
     TypeExtension* ext;
 };
 
-// Function
-typedef struct {
+typedef struct Function Function;
+
+typedef enum {
+    FUNCTION_TIER_BASELINE = 0,
+    FUNCTION_TIER_SPECIALIZED = 1
+} FunctionTier;
+
+typedef void (*FunctionDeoptHandler)(Function* function);
+
+struct Function {
     int start;
     int arity;
     Chunk* chunk;
-} Function;
+    Chunk* specialized_chunk;
+    Chunk* deopt_stub_chunk;
+    FunctionTier tier;
+    FunctionDeoptHandler deopt_handler;
+    uint64_t specialization_hits;
+    char* debug_name;
+};
 
 // Native function
 typedef Value (*NativeFn)(int argCount, Value* args);

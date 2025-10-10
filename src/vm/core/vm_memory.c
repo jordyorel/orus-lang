@@ -528,9 +528,24 @@ static void markRoots() {
 
     for (int i = 0; i < vm.functionCount; i++) {
         Chunk* chunk = vm.functions[i].chunk;
-        if (!chunk) continue;
-        for (int c = 0; c < chunk->constants.count; c++) {
-            markValue(chunk->constants.values[c]);
+        if (chunk) {
+            for (int c = 0; c < chunk->constants.count; c++) {
+                markValue(chunk->constants.values[c]);
+            }
+        }
+
+        Chunk* specialized = vm.functions[i].specialized_chunk;
+        if (specialized) {
+            for (int c = 0; c < specialized->constants.count; c++) {
+                markValue(specialized->constants.values[c]);
+            }
+        }
+
+        Chunk* stub = vm.functions[i].deopt_stub_chunk;
+        if (stub) {
+            for (int c = 0; c < stub->constants.count; c++) {
+                markValue(stub->constants.values[c]);
+            }
         }
     }
 

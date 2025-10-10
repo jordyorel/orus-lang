@@ -212,6 +212,7 @@ int main(int argc, const char* argv[]) {
         
         if (config->profile_instructions) flags |= PROFILE_INSTRUCTIONS;
         if (config->profile_hot_paths) flags |= PROFILE_HOT_PATHS;
+        if (config->profile_functions) flags |= PROFILE_FUNCTION_CALLS;
         if (config->profile_registers) flags |= PROFILE_REGISTER_USAGE;
         if (config->profile_memory_access) flags |= PROFILE_MEMORY_ACCESS;
         if (config->profile_branches) flags |= PROFILE_BRANCH_PREDICTION;
