@@ -80,6 +80,15 @@ static bool run_single_iter_step(Chunk* chunk) {
     return result == INTERPRET_OK;
 }
 
+static bool run_single_conversion_step(Chunk* chunk) {
+    vm.chunk = chunk;
+    vm.ip = chunk->code;
+    vm.isShuttingDown = false;
+
+    InterpretResult result = vm_run_dispatch();
+    return result == INTERPRET_OK;
+}
+
 static void build_iter_next_chunk(Chunk* chunk, uint8_t dst, uint8_t iter_reg, uint8_t has_reg) {
     initChunk(chunk);
     writeChunk(chunk, OP_ITER_NEXT_R, 0, 0, NULL);
@@ -87,6 +96,107 @@ static void build_iter_next_chunk(Chunk* chunk, uint8_t dst, uint8_t iter_reg, u
     writeChunk(chunk, iter_reg, 0, 0, NULL);
     writeChunk(chunk, has_reg, 0, 0, NULL);
     writeChunk(chunk, OP_HALT, 0, 0, NULL);
+}
+
+static void build_conversion_chunk(Chunk* chunk, uint8_t opcode, uint8_t dst, uint8_t src) {
+    initChunk(chunk);
+    writeChunk(chunk, opcode, 0, 0, NULL);
+    writeChunk(chunk, dst, 0, 0, NULL);
+    writeChunk(chunk, src, 0, 0, NULL);
+    writeChunk(chunk, 0, 0, 0, NULL);
+    writeChunk(chunk, OP_HALT, 0, 0, NULL);
+}
+
+static bool test_bool_to_i32_conversion_defers_boxing_until_read(void) {
+    initVM();
+
+    const uint8_t dst_reg = 2;
+    const uint8_t src_reg = 1;
+
+    Chunk chunk;
+    build_conversion_chunk(&chunk, OP_BOOL_TO_I32_R, dst_reg, src_reg);
+
+    vm_set_register_safe(src_reg, BOOL_VAL(true));
+    vm_cache_bool_typed(src_reg, true);
+
+    ASSERT_TRUE(run_single_conversion_step(&chunk), "First bool->i32 conversion should execute");
+    ASSERT_TRUE(vm.typed_regs.reg_types[dst_reg] == REG_TYPE_I32,
+                "Destination register should adopt i32 type");
+    ASSERT_TRUE(vm.typed_regs.i32_regs[dst_reg] == 1,
+                "Typed window should record converted truthy value");
+    ASSERT_TRUE(!vm.typed_regs.dirty[dst_reg],
+                "Initial conversion should synchronize boxed register");
+    ASSERT_TRUE(IS_I32(vm.registers[dst_reg]) && AS_I32(vm.registers[dst_reg]) == 1,
+                "Boxed register should receive first converted value");
+
+    vm_set_register_safe(src_reg, BOOL_VAL(false));
+    vm_cache_bool_typed(src_reg, false);
+
+    ASSERT_TRUE(run_single_conversion_step(&chunk), "Second bool->i32 conversion should execute");
+    ASSERT_TRUE(vm.typed_regs.i32_regs[dst_reg] == 0,
+                "Typed cache should update with latest converted value");
+    ASSERT_TRUE(vm.typed_regs.dirty[dst_reg],
+                "Repeated conversion should defer boxing until reconciliation");
+    ASSERT_TRUE(IS_I32(vm.registers[dst_reg]) && AS_I32(vm.registers[dst_reg]) == 1,
+                "Boxed register should remain stale after deferred conversion");
+
+    Value flushed = vm_get_register_safe(dst_reg);
+    ASSERT_TRUE(IS_I32(flushed) && AS_I32(flushed) == 0,
+                "Explicit read should flush deferred converted value");
+    ASSERT_TRUE(!vm.typed_regs.dirty[dst_reg],
+                "Flush should clear dirty flag for converted register");
+    ASSERT_TRUE(IS_I32(vm.registers[dst_reg]) && AS_I32(vm.registers[dst_reg]) == 0,
+                "Boxed register should reflect reconciled conversion result");
+
+    freeChunk(&chunk);
+    freeVM();
+    return true;
+}
+
+static bool test_i32_to_bool_conversion_defers_boxing_until_read(void) {
+    initVM();
+
+    const uint8_t dst_reg = 4;
+    const uint8_t src_reg = 3;
+
+    Chunk chunk;
+    build_conversion_chunk(&chunk, OP_I32_TO_BOOL_R, dst_reg, src_reg);
+
+    vm_set_register_safe(src_reg, I32_VAL(7));
+    vm_cache_i32_typed(src_reg, 7);
+
+    ASSERT_TRUE(run_single_conversion_step(&chunk), "First i32->bool conversion should execute");
+    ASSERT_TRUE(vm.typed_regs.reg_types[dst_reg] == REG_TYPE_BOOL,
+                "Destination register should adopt bool type");
+    ASSERT_TRUE(vm.typed_regs.bool_regs[dst_reg],
+                "Typed cache should store truthy conversion");
+    ASSERT_TRUE(!vm.typed_regs.dirty[dst_reg],
+                "Initial conversion should reconcile boxed register");
+    ASSERT_TRUE(IS_BOOL(vm.registers[dst_reg]) && AS_BOOL(vm.registers[dst_reg]),
+                "Boxed register should receive initial boolean value");
+
+    vm_set_register_safe(src_reg, I32_VAL(0));
+    vm_cache_i32_typed(src_reg, 0);
+
+    ASSERT_TRUE(run_single_conversion_step(&chunk), "Second i32->bool conversion should execute");
+    ASSERT_TRUE(!vm.typed_regs.bool_regs[dst_reg],
+                "Typed cache should capture falsy conversion");
+    ASSERT_TRUE(vm.typed_regs.dirty[dst_reg],
+                "Repeated conversion should leave boxed register stale");
+    ASSERT_TRUE(IS_BOOL(vm.registers[dst_reg]) && AS_BOOL(vm.registers[dst_reg]),
+                "Boxed boolean should remain stale until explicit read");
+
+    Value reconciled = vm_get_register_safe(dst_reg);
+    ASSERT_TRUE(IS_BOOL(reconciled) && !AS_BOOL(reconciled),
+                "Explicit read should flush updated boolean");
+    ASSERT_TRUE(!vm.typed_regs.dirty[dst_reg],
+                "Dirty bit should clear after flushing boolean conversion");
+    ASSERT_TRUE(IS_BOOL(vm.registers[dst_reg]) && !AS_BOOL(vm.registers[dst_reg]),
+                "Boxed boolean should match reconciled typed value");
+
+    freeChunk(&chunk);
+    freeVM();
+    return true;
 }
 
 static bool test_range_iterator_uses_typed_registers(void) {
@@ -403,6 +513,8 @@ int main(void) {
         test_typed_window_reuse_resets_metadata_without_scrubbing,
         test_nested_frames_preserve_typed_windows,
         test_global_typed_state_propagates_across_frames,
+        test_bool_to_i32_conversion_defers_boxing_until_read,
+        test_i32_to_bool_conversion_defers_boxing_until_read,
     };
 
     const char* names[] = {
@@ -414,6 +526,8 @@ int main(void) {
         "Window reuse avoids scrubbing inactive slots",
         "Nested frames reuse typed windows without copying",
         "Global typed state propagates across frames",
+        "Bool to i32 conversion defers boxing until read",
+        "i32 to bool conversion defers boxing until read",
     };
 
     int passed = 0;
