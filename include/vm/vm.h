@@ -19,6 +19,7 @@
 #include <string.h>
 #include "vm_constants.h"
 #include "vm_string_ops.h"
+#include "vm/jit_backend.h"
 
 #ifndef ORUS_VM_ENABLE_TYPED_OPS
 #define ORUS_VM_ENABLE_TYPED_OPS 1
@@ -334,6 +335,21 @@ typedef struct {
     LoopId loop;
     uint64_t hit_count;
 } HotPathSample;
+
+typedef struct {
+    JITEntry entry;
+    uint16_t function_index;
+    uint16_t loop_index;
+    uint64_t generation;
+    bool occupied;
+} JITEntryCacheSlot;
+
+typedef struct {
+    JITEntryCacheSlot* slots;
+    size_t capacity;
+    size_t count;
+    uint64_t next_generation;
+} JITEntryCache;
 
 typedef enum {
     FUNCTION_TIER_BASELINE = 0,
@@ -1301,6 +1317,12 @@ typedef struct {
     CallFrame* callFrames;     // Array of call frames (for legacy compatibility)
     CallFrame* currentCallFrame; // Current active call frame
     CallFrame* frameStack;     // Stack of call frames
+
+    // Native tier integration
+    struct OrusJitBackend* jit_backend;
+    JITEntry jit_entry_stub;
+    JITEntryCache jit_cache;
+    bool jit_enabled;
 } VM;
 
 // Transitional alias while the runtime gradually migrates to the new VMState

@@ -204,7 +204,10 @@ void compiler_prepare_specialized_variants(struct CompilerContext* ctx) {
             continue;
         }
 
-        emit_byte_to_buffer(stub, OP_RETURN_VOID);
+        // Encode the function arity as metadata so the runtime stub can
+        // invalidate parameter registers before handing control back to the
+        // baseline chunk on deoptimization.
+        emit_byte_to_buffer(stub, (uint8_t)ctx->function_arities[i]);
 
         if (ctx->function_specialized_chunks) {
             if (ctx->function_specialized_chunks[i]) {

@@ -18,19 +18,57 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdint.h>
 
 size_t gcThreshold = 0;
 static const double GC_HEAP_GROW_FACTOR = 2.0;
+static const size_t GC_MIN_THRESHOLD = 1024 * 1024;
 
 static void freeObject(Obj* object);
 static Obj* freeLists[OBJ_TYPE_COUNT] = {NULL};
 static bool finalizing = false;
 
+static inline size_t gc_saturating_add(size_t a, size_t b) {
+    if (SIZE_MAX - a < b) {
+        return SIZE_MAX;
+    }
+    return a + b;
+}
+
+static inline size_t gc_compute_threshold(size_t baseline) {
+    double scaled = (double)baseline * GC_HEAP_GROW_FACTOR;
+    if (scaled > (double)SIZE_MAX) {
+        return SIZE_MAX;
+    }
+    size_t threshold = (size_t)scaled;
+    if (threshold < GC_MIN_THRESHOLD) {
+        threshold = GC_MIN_THRESHOLD;
+    }
+    return threshold;
+}
+
+static inline void gc_safepoint(size_t upcomingBytes) {
+    if (vm.gcPaused) {
+        return;
+    }
+
+    size_t projected = gc_saturating_add(vm.bytesAllocated, upcomingBytes);
+    if (projected <= gcThreshold) {
+        return;
+    }
+
+    collectGarbage();
+
+    size_t live_after_gc = vm.bytesAllocated;
+    size_t target = gc_saturating_add(live_after_gc, upcomingBytes);
+    gcThreshold = gc_compute_threshold(target > live_after_gc ? target : live_after_gc);
+}
+
 void initMemory() {
     vm.bytesAllocated = 0;
     vm.objects = NULL;
     vm.gcPaused = false;
-    gcThreshold = 1024 * 1024;
+    gcThreshold = GC_MIN_THRESHOLD;
     for (int i = 0; i < OBJ_TYPE_COUNT; i++) freeLists[i] = NULL;
 }
 
@@ -62,7 +100,11 @@ void* reallocate(void* pointer, size_t oldSize, size_t newSize) {
         return NULL;
     }
     if (newSize > oldSize) {
-        vm.bytesAllocated += newSize - oldSize;
+        size_t delta = newSize - oldSize;
+        if (pointer != NULL) {
+            gc_safepoint(delta);
+        }
+        vm.bytesAllocated += delta;
     } else {
         vm.bytesAllocated -= oldSize - newSize;
     }
@@ -73,10 +115,7 @@ void* reallocate(void* pointer, size_t oldSize, size_t newSize) {
 }
 
 static void* allocateObject(size_t size, ObjType type) {
-    if (!vm.gcPaused && vm.bytesAllocated > gcThreshold) {
-        collectGarbage();
-        gcThreshold = (size_t)(vm.bytesAllocated * GC_HEAP_GROW_FACTOR);
-    }
+    gc_safepoint(size);
 
     Obj* object = NULL;
     if (freeLists[type]) {
@@ -681,6 +720,7 @@ void pauseGC() { vm.gcPaused = true; }
 void resumeGC() { vm.gcPaused = false; }
 
 char* copyString(const char* chars, int length) {
+    gc_safepoint((size_t)length + 1u);
     char* copy = (char*)malloc(length + 1);
     memcpy(copy, chars, length);
     copy[length] = '\0';

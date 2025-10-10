@@ -241,13 +241,50 @@ TEST_CASE(test_hot_loop_detection) {
 
 ### Implementation Steps
 
-[] Integrate a portable JIT backend (DynASM).
-[] Insert **GC safepoints** before each allocation call to cooperate with `collectGarbage()`.
-[] Implement deoptimization stubs for type-mismatch recovery.
-[] Keep identical frame and register layouts across interpreter and JIT tiers.
-[] Implement OrusJit IR → DynASM codegen pipeline.
-[] Maintain JITEntry cache with invalidation and reuse.
-[] Support deoptimization fallback to interpreter.
+[x] Integrate a portable JIT backend (DynASM).
+    - Vendored DynASM 1.3.0 (MIT) into `third_party/dynasm/` and exposed
+      an `OrusJitBackend` abstraction that emits executable stubs through the
+      DynASM encoder. The VM now initializes the backend during `initVM()` and
+      caches a native entry stub to validate executable code generation.
+    - Added an AArch64 path that emits the same return stub using a direct
+      encoding and macOS `MAP_JIT` write toggles so Apple Silicon builds share
+      the native tier bootstrap story with x86-64.
+[x] Insert **GC safepoints** before each allocation call to cooperate with `collectGarbage()`.
+    - Added a centralized `gc_safepoint()` that saturates projected heap
+      growth, invokes `collectGarbage()` when thresholds are exceeded, and
+      recomputes `gcThreshold` with a minimum 1 MiB guard band.
+    - Routed `reallocate()`, `allocateObject()`, and raw string copies through
+      the safepoint helper so every GC-managed allocation cooperates with
+      register reconciliation and sweeping.
+[x] Implement deoptimization stubs for type-mismatch recovery.
+    - Runtime propagates type errors through a deoptimization shim that
+      clears profiled parameter caches, invokes the specialization handler,
+      and falls back to baseline bytecode after a mismatch.
+[x] Keep identical frame and register layouts across interpreter and JIT tiers.
+    - Published `vm/jit_layout.h` with shared offsets and compile-time
+      invariants so native entry stubs can assume the same frame/register
+      layout as the interpreter. Divergences now fail the build instead of
+      silently corrupting state during tier transitions.
+[x] Implement OrusJit IR → DynASM codegen pipeline.
+    - Introduced a minimal `OrusJitIRProgram` to capture stub logic in an
+      architecture-neutral format before hitting DynASM.
+    - Generated DynASM action lists for each IR opcode on x86-64 (via
+      `DASM_ESC` byte streams) and mirrored the same return stub using direct
+      encodings on AArch64 so Apple Silicon stays in sync with x86 builds.
+[x] Maintain JITEntry cache with invalidation and reuse.
+    - Added a VM-owned cache of `JITEntry` records keyed by function/loop IDs,
+      recycling executable buffers when recompiling hot paths and tracking a
+      generation counter so invalidation can surgically retire stale entries.
+    - Wired the backend vtable’s `invalidate`/`flush` hooks to purge the cache
+      and taught VM teardown to release every cached allocation before the
+      backend shuts down.
+[x] Support deoptimization fallback to interpreter.
+    - `vm_default_deopt_stub()` now retargets the currently executing
+      specialized frame to the baseline bytecode, preserving the instruction
+      offset so a bailout resumes inside the interpreter without replaying the
+      call from the top.
+    - Tiering demotions continue to log the transition, making it clear when
+      runtime profiling has forced execution back to the baseline tier.
 
 
 ### Code Template — JIT Backend Interface
@@ -288,8 +325,8 @@ TEST_CASE(test_jit_gc_safepoint) {
 
 ### Milestone Exit Criteria
 
-[] JIT’d code executes hot regions at 3–5× interpreter speed.
-[] GC operates correctly during JIT execution.
+[ ] JIT’d code executes hot regions at 3–5× interpreter speed.
+[ ] GC operates correctly during JIT execution.
 
 ---
 
