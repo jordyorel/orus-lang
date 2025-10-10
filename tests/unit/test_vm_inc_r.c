@@ -26,9 +26,10 @@ static bool test_inc_i32_hot_path_persists(void) {
 
     Chunk chunk;
     initChunk(&chunk);
-    write_inc_program(&chunk, OP_INC_I32_R, 0, 3, "inc_i32_r");
+    const uint16_t reg = FRAME_REG_START;
+    write_inc_program(&chunk, OP_INC_I32_R, (uint8_t)reg, 3, "inc_i32_r");
 
-    vm_store_i32_typed_hot(0, 7);
+    vm_store_i32_typed_hot(reg, 7);
 
     vm.chunk = &chunk;
     vm.ip = chunk.code;
@@ -42,21 +43,21 @@ static bool test_inc_i32_hot_path_persists(void) {
         goto cleanup;
     }
 
-    if (vm.typed_regs.reg_types[0] != REG_TYPE_I32) {
-        fprintf(stderr, "Expected register 0 to remain typed as i32 after increments\n");
+    if (vm.typed_regs.reg_types[reg] != REG_TYPE_I32) {
+        fprintf(stderr, "Expected register %u to remain typed as i32 after increments\n", reg);
         success = false;
         goto cleanup;
     }
 
-    if (!vm.typed_regs.dirty[0]) {
-        fprintf(stderr, "Expected register 0 to remain dirty after increments\n");
+    if (!vm.typed_regs.dirty[reg]) {
+        fprintf(stderr, "Expected register %u to remain dirty after increments\n", reg);
         success = false;
         goto cleanup;
     }
 
     int32_t typed_value = 0;
-    if (!vm_try_read_i32_typed(0, &typed_value)) {
-        fprintf(stderr, "Expected vm_try_read_i32_typed to hit for register 0\n");
+    if (!vm_try_read_i32_typed(reg, &typed_value)) {
+        fprintf(stderr, "Expected vm_try_read_i32_typed to hit for register %u\n", reg);
         success = false;
         goto cleanup;
     }
@@ -67,15 +68,15 @@ static bool test_inc_i32_hot_path_persists(void) {
         goto cleanup;
     }
 
-    if (!vm.typed_regs.dirty[0]) {
+    if (!vm.typed_regs.dirty[reg]) {
         fprintf(stderr, "Expected dirty flag to remain set after typed read\n");
         success = false;
         goto cleanup;
     }
 
-    if (!IS_I32(vm.registers[0]) || AS_I32(vm.registers[0]) != 7) {
+    if (!IS_I32(vm.registers[reg]) || AS_I32(vm.registers[reg]) != 7) {
         fprintf(stderr, "Expected boxed register to remain stale at 7, got type %d value %d\n",
-                vm.registers[0].type, IS_I32(vm.registers[0]) ? AS_I32(vm.registers[0]) : -1);
+                vm.registers[reg].type, IS_I32(vm.registers[reg]) ? AS_I32(vm.registers[reg]) : -1);
         success = false;
         goto cleanup;
     }
@@ -91,9 +92,10 @@ static bool test_inc_i64_hot_path_persists(void) {
 
     Chunk chunk;
     initChunk(&chunk);
-    write_inc_program(&chunk, OP_INC_I64_R, 0, 4, "inc_i64_r");
+    const uint16_t reg = FRAME_REG_START;
+    write_inc_program(&chunk, OP_INC_I64_R, (uint8_t)reg, 4, "inc_i64_r");
 
-    vm_store_i64_typed_hot(0, 42);
+    vm_store_i64_typed_hot(reg, 42);
 
     vm.chunk = &chunk;
     vm.ip = chunk.code;
@@ -107,21 +109,21 @@ static bool test_inc_i64_hot_path_persists(void) {
         goto cleanup;
     }
 
-    if (vm.typed_regs.reg_types[0] != REG_TYPE_I64) {
-        fprintf(stderr, "Expected register 0 to remain typed as i64 after increments\n");
+    if (vm.typed_regs.reg_types[reg] != REG_TYPE_I64) {
+        fprintf(stderr, "Expected register %u to remain typed as i64 after increments\n", reg);
         success = false;
         goto cleanup;
     }
 
-    if (!vm.typed_regs.dirty[0]) {
-        fprintf(stderr, "Expected register 0 to remain dirty after i64 increments\n");
+    if (!vm.typed_regs.dirty[reg]) {
+        fprintf(stderr, "Expected register %u to remain dirty after i64 increments\n", reg);
         success = false;
         goto cleanup;
     }
 
     int64_t typed_value = 0;
-    if (!vm_try_read_i64_typed(0, &typed_value)) {
-        fprintf(stderr, "Expected vm_try_read_i64_typed to hit for register 0\n");
+    if (!vm_try_read_i64_typed(reg, &typed_value)) {
+        fprintf(stderr, "Expected vm_try_read_i64_typed to hit for register %u\n", reg);
         success = false;
         goto cleanup;
     }
@@ -132,15 +134,15 @@ static bool test_inc_i64_hot_path_persists(void) {
         goto cleanup;
     }
 
-    if (!vm.typed_regs.dirty[0]) {
+    if (!vm.typed_regs.dirty[reg]) {
         fprintf(stderr, "Expected dirty flag to remain set after typed i64 read\n");
         success = false;
         goto cleanup;
     }
 
-    if (!IS_I64(vm.registers[0]) || AS_I64(vm.registers[0]) != 42) {
+    if (!IS_I64(vm.registers[reg]) || AS_I64(vm.registers[reg]) != 42) {
         fprintf(stderr, "Expected boxed register to remain stale at 42, got type %d value %" PRId64 "\n",
-                vm.registers[0].type, IS_I64(vm.registers[0]) ? AS_I64(vm.registers[0]) : (int64_t)-1);
+                vm.registers[reg].type, IS_I64(vm.registers[reg]) ? AS_I64(vm.registers[reg]) : (int64_t)-1);
         success = false;
         goto cleanup;
     }
@@ -156,9 +158,10 @@ static bool test_inc_u32_hot_path_persists(void) {
 
     Chunk chunk;
     initChunk(&chunk);
-    write_inc_program(&chunk, OP_INC_U32_R, 0, 5, "inc_u32_r");
+    const uint16_t reg = FRAME_REG_START;
+    write_inc_program(&chunk, OP_INC_U32_R, (uint8_t)reg, 5, "inc_u32_r");
 
-    vm_store_u32_typed_hot(0, 17u);
+    vm_store_u32_typed_hot(reg, 17u);
 
     vm.chunk = &chunk;
     vm.ip = chunk.code;
@@ -172,21 +175,21 @@ static bool test_inc_u32_hot_path_persists(void) {
         goto cleanup;
     }
 
-    if (vm.typed_regs.reg_types[0] != REG_TYPE_U32) {
-        fprintf(stderr, "Expected register 0 to remain typed as u32 after increments\n");
+    if (vm.typed_regs.reg_types[reg] != REG_TYPE_U32) {
+        fprintf(stderr, "Expected register %u to remain typed as u32 after increments\n", reg);
         success = false;
         goto cleanup;
     }
 
-    if (!vm.typed_regs.dirty[0]) {
-        fprintf(stderr, "Expected register 0 to remain dirty after u32 increments\n");
+    if (!vm.typed_regs.dirty[reg]) {
+        fprintf(stderr, "Expected register %u to remain dirty after u32 increments\n", reg);
         success = false;
         goto cleanup;
     }
 
     uint32_t typed_value = 0;
-    if (!vm_try_read_u32_typed(0, &typed_value)) {
-        fprintf(stderr, "Expected vm_try_read_u32_typed to hit for register 0\n");
+    if (!vm_try_read_u32_typed(reg, &typed_value)) {
+        fprintf(stderr, "Expected vm_try_read_u32_typed to hit for register %u\n", reg);
         success = false;
         goto cleanup;
     }
@@ -197,15 +200,15 @@ static bool test_inc_u32_hot_path_persists(void) {
         goto cleanup;
     }
 
-    if (!vm.typed_regs.dirty[0]) {
+    if (!vm.typed_regs.dirty[reg]) {
         fprintf(stderr, "Expected dirty flag to remain set after typed u32 read\n");
         success = false;
         goto cleanup;
     }
 
-    if (!IS_U32(vm.registers[0]) || AS_U32(vm.registers[0]) != 17u) {
+    if (!IS_U32(vm.registers[reg]) || AS_U32(vm.registers[reg]) != 17u) {
         fprintf(stderr, "Expected boxed register to remain stale at 17, got type %d value %" PRIu32 "\n",
-                vm.registers[0].type, IS_U32(vm.registers[0]) ? AS_U32(vm.registers[0]) : 0u);
+                vm.registers[reg].type, IS_U32(vm.registers[reg]) ? AS_U32(vm.registers[reg]) : 0u);
         success = false;
         goto cleanup;
     }
@@ -221,9 +224,10 @@ static bool test_inc_u64_hot_path_persists(void) {
 
     Chunk chunk;
     initChunk(&chunk);
-    write_inc_program(&chunk, OP_INC_U64_R, 0, 6, "inc_u64_r");
+    const uint16_t reg = FRAME_REG_START;
+    write_inc_program(&chunk, OP_INC_U64_R, (uint8_t)reg, 6, "inc_u64_r");
 
-    vm_store_u64_typed_hot(0, 100ull);
+    vm_store_u64_typed_hot(reg, 100ull);
 
     vm.chunk = &chunk;
     vm.ip = chunk.code;
@@ -237,21 +241,21 @@ static bool test_inc_u64_hot_path_persists(void) {
         goto cleanup;
     }
 
-    if (vm.typed_regs.reg_types[0] != REG_TYPE_U64) {
-        fprintf(stderr, "Expected register 0 to remain typed as u64 after increments\n");
+    if (vm.typed_regs.reg_types[reg] != REG_TYPE_U64) {
+        fprintf(stderr, "Expected register %u to remain typed as u64 after increments\n", reg);
         success = false;
         goto cleanup;
     }
 
-    if (!vm.typed_regs.dirty[0]) {
-        fprintf(stderr, "Expected register 0 to remain dirty after u64 increments\n");
+    if (!vm.typed_regs.dirty[reg]) {
+        fprintf(stderr, "Expected register %u to remain dirty after u64 increments\n", reg);
         success = false;
         goto cleanup;
     }
 
     uint64_t typed_value = 0;
-    if (!vm_try_read_u64_typed(0, &typed_value)) {
-        fprintf(stderr, "Expected vm_try_read_u64_typed to hit for register 0\n");
+    if (!vm_try_read_u64_typed(reg, &typed_value)) {
+        fprintf(stderr, "Expected vm_try_read_u64_typed to hit for register %u\n", reg);
         success = false;
         goto cleanup;
     }
@@ -264,17 +268,17 @@ static bool test_inc_u64_hot_path_persists(void) {
         goto cleanup;
     }
 
-    if (!vm.typed_regs.dirty[0]) {
+    if (!vm.typed_regs.dirty[reg]) {
         fprintf(stderr, "Expected dirty flag to remain set after typed u64 read\n");
         success = false;
         goto cleanup;
     }
 
-    if (!IS_U64(vm.registers[0]) || AS_U64(vm.registers[0]) != 100ull) {
+    if (!IS_U64(vm.registers[reg]) || AS_U64(vm.registers[reg]) != 100ull) {
         fprintf(stderr,
                 "Expected boxed register to remain stale at 100, got type %d value %llu\n",
-                vm.registers[0].type,
-                (unsigned long long)(IS_U64(vm.registers[0]) ? AS_U64(vm.registers[0]) : 0ull));
+                vm.registers[reg].type,
+                (unsigned long long)(IS_U64(vm.registers[reg]) ? AS_U64(vm.registers[reg]) : 0ull));
         success = false;
         goto cleanup;
     }
