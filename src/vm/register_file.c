@@ -208,6 +208,21 @@ static void typed_window_sync_shared_ranges(TypedRegisterWindow* dst, const Type
     }
 }
 
+void typed_registers_sync_heap_binding(TypedRegisterWindow* window) {
+    TypedRegisterWindow* active = vm.typed_regs.active_window;
+    if (!active) {
+        active = &vm.typed_regs.root_window;
+    }
+
+    if (!window) {
+        window = active;
+    }
+
+    if (window == active) {
+        vm.typed_regs.heap_regs = window->heap_regs;
+    }
+}
+
 static void typed_registers_bind_window(TypedRegisterWindow* window) {
     if (!window) {
         window = &vm.typed_regs.root_window;
@@ -220,10 +235,11 @@ static void typed_registers_bind_window(TypedRegisterWindow* window) {
     vm.typed_regs.u64_regs = window->u64_regs;
     vm.typed_regs.f64_regs = window->f64_regs;
     vm.typed_regs.bool_regs = window->bool_regs;
-    vm.typed_regs.heap_regs = window->heap_regs;
     vm.typed_regs.dirty = window->dirty;
     vm.typed_regs.dirty_mask = window->dirty_mask;
     vm.typed_regs.reg_types = window->reg_types;
+
+    typed_registers_sync_heap_binding(window);
 }
 
 void register_file_reconcile_active_window(void) {
