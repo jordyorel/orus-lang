@@ -1053,6 +1053,8 @@ typedef struct TypedRegisterWindow {
     uint8_t reg_types[TYPED_REGISTER_WINDOW_SIZE];
 } TypedRegisterWindow;
 
+void typed_registers_sync_heap_binding(TypedRegisterWindow* window);
+
 static inline void typed_window_reset_dirty_mask(TypedRegisterWindow* window) {
     if (!window) {
         return;
@@ -1149,6 +1151,7 @@ static inline Value* typed_window_ensure_heap_storage(TypedRegisterWindow* windo
             storage[i] = default_value;
         }
         window->heap_regs = storage;
+        typed_registers_sync_heap_binding(window);
     }
     return window->heap_regs;
 }
