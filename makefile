@@ -711,8 +711,8 @@ builtin-sorted-tests: $(ORUS)
 		fi; \
 	done; \
 	if [ $$failed -ne 0 ]; then \
-		exit 1; \
-fi
+	exit 1; \
+	fi
 
 builtin-range-tests: $(ORUS)
 	@echo "Running builtin range runtime tests..."
@@ -738,8 +738,8 @@ builtin-range-tests: $(ORUS)
 		fi; \
 	done; \
 	if [ $$failed -ne 0 ]; then \
-		exit 1; \
-fi
+	exit 1; \
+	fi
 
 cli-smoke-tests:
 	@python3 tests/comprehensive/run_cli_smoke_tests.py ./$(ORUS)
@@ -759,10 +759,10 @@ test-control-flow: $(ORUS)
 	done; \
 	echo ""; \
 	if [ $$failed -eq 0 ]; then \
-		echo "\033[32m✓ Control flow tests passed ($$passed)\033[0m"; \
+	echo "\033[32m✓ Control flow tests passed ($$passed)\033[0m"; \
 	else \
-		echo "\033[31m✗ $$failed control flow test(s) failed\033[0m"; \
-fi
+	echo "\033[31m✗ $$failed control flow test(s) failed\033[0m"; \
+	fi
 
 
 test-optimizer:

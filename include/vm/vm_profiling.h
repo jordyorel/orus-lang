@@ -159,9 +159,9 @@ static inline void profileHotPath(void* codeAddress, uint64_t iterations) {
     hotPath->totalIterations += iterations;
     hotPath->averageIterations = (double)hotPath->totalIterations / hotPath->entryCount;
     hotPath->lastAccessed = g_profiling.totalInstructions;
-    
-    // Mark as currently hot if iterations exceed threshold
-    if (iterations > HOT_LOOP_THRESHOLD) {
+
+    // Mark as currently hot once cumulative iterations cross the threshold
+    if (hotPath->totalIterations > HOT_LOOP_THRESHOLD) {
         hotPath->isCurrentlyHot = true;
     }
 }
