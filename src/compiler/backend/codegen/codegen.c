@@ -98,7 +98,11 @@ void set_location_from_node(CompilerContext* ctx, TypedASTNode* node) {
         return;
     }
     if (node && node->original) {
-        bytecode_set_location(ctx->bytecode, node->original->location);
+        SrcLocation location = node->original->location;
+        if (vm.filePath) {
+            location.file = vm.filePath;
+        }
+        bytecode_set_location(ctx->bytecode, location);
     } else {
         bytecode_set_synthetic_location(ctx->bytecode);
     }
