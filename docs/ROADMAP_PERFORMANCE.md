@@ -361,7 +361,7 @@ TEST_CASE(test_oroutine_spawn_yield) {
 
 [] Orus IR → native code using the same backend as JIT.
 [] Link runtime (`liborus_rt.a`) and embed GC metadata.
-[] Expose `orus build main.orus -o main`.
+[] Expose `orus main.orus -o main`.
 
 ### Code Template — AOT Entrypoint
 
