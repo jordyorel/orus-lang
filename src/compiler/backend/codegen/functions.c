@@ -10,6 +10,8 @@
 #include "compiler/error_reporter.h"
 #include "type/type.h"
 #include "vm/vm.h"
+#include "vm/vm_tiering.h"
+#include "internal/strutil.h"
 #include "errors/features/variable_errors.h"
 #include "internal/error_reporting.h"
 #include "debug/debug_config.h"
@@ -28,6 +30,68 @@ static bool type_is_void_like(Type* type) {
 
     return resolved->kind == TYPE_VOID || resolved->kind == TYPE_UNKNOWN ||
            resolved->kind == TYPE_ERROR;
+}
+
+static Chunk* materialize_chunk_from_buffer(CompilerContext* ctx, BytecodeBuffer* buffer) {
+    if (!buffer) {
+        return NULL;
+    }
+
+    Chunk* chunk = malloc(sizeof(Chunk));
+    if (!chunk) {
+        return NULL;
+    }
+
+    memset(chunk, 0, sizeof(Chunk));
+
+    chunk->count = buffer->count;
+    chunk->capacity = buffer->count;
+    chunk->code = buffer->count > 0 ? malloc(buffer->count) : NULL;
+    if (buffer->count > 0 && (!chunk->code || !buffer->instructions)) {
+        free(chunk->code);
+        free(chunk);
+        return NULL;
+    }
+    if (chunk->code && buffer->instructions) {
+        memcpy(chunk->code, buffer->instructions, buffer->count);
+    }
+
+    chunk->lines = buffer->count > 0 ? malloc(sizeof(int) * buffer->count) : NULL;
+    chunk->columns = buffer->count > 0 ? malloc(sizeof(int) * buffer->count) : NULL;
+    chunk->files = buffer->count > 0 ? malloc(sizeof(const char*) * buffer->count) : NULL;
+
+    if (chunk->lines && buffer->source_lines) {
+        memcpy(chunk->lines, buffer->source_lines, sizeof(int) * buffer->count);
+    }
+    if (chunk->columns && buffer->source_columns) {
+        memcpy(chunk->columns, buffer->source_columns, sizeof(int) * buffer->count);
+    }
+    if (chunk->files && buffer->source_files) {
+        memcpy(chunk->files, buffer->source_files, sizeof(const char*) * buffer->count);
+    } else if (chunk->files) {
+        for (int j = 0; j < buffer->count; ++j) {
+            chunk->files[j] = NULL;
+        }
+    }
+
+    if (ctx && ctx->constants && ctx->constants->count > 0) {
+        chunk->constants.count = ctx->constants->count;
+        chunk->constants.capacity = ctx->constants->capacity;
+        chunk->constants.values = malloc(sizeof(Value) * chunk->constants.capacity);
+        if (chunk->constants.values) {
+            memcpy(chunk->constants.values, ctx->constants->values,
+                   sizeof(Value) * ctx->constants->count);
+        } else {
+            chunk->constants.count = 0;
+            chunk->constants.capacity = 0;
+        }
+    } else {
+        chunk->constants.values = NULL;
+        chunk->constants.count = 0;
+        chunk->constants.capacity = 0;
+    }
+
+    return chunk;
 }
 
 static bool node_is_expression_type(NodeType type) {
@@ -299,59 +363,43 @@ void finalize_functions_to_vm(CompilerContext* ctx) {
         if (!func_chunk) continue;
         
         // Create a Chunk from BytecodeBuffer
-        Chunk* chunk = malloc(sizeof(Chunk));
-        if (!chunk) continue;
-
-        // Initialize chunk with function bytecode
-        chunk->code = malloc(func_chunk->count);
-        if (!chunk->code) {
-            free(chunk);
+        Chunk* chunk = materialize_chunk_from_buffer(ctx, func_chunk);
+        if (!chunk) {
             continue;
         }
 
-        memcpy(chunk->code, func_chunk->instructions, func_chunk->count);
-        chunk->count = func_chunk->count;
-        chunk->capacity = func_chunk->count;
-        chunk->lines = func_chunk->count > 0 ? malloc(sizeof(int) * func_chunk->count) : NULL;
-        chunk->columns = func_chunk->count > 0 ? malloc(sizeof(int) * func_chunk->count) : NULL;
-        chunk->files = func_chunk->count > 0 ? malloc(sizeof(const char*) * func_chunk->count) : NULL;
-        if (chunk->lines && func_chunk->source_lines) {
-            memcpy(chunk->lines, func_chunk->source_lines, sizeof(int) * func_chunk->count);
+        Chunk* specialized_chunk = NULL;
+        if (ctx->function_specialized_chunks && ctx->function_specialized_chunks[i]) {
+            specialized_chunk = materialize_chunk_from_buffer(ctx, ctx->function_specialized_chunks[i]);
+            free_bytecode_buffer(ctx->function_specialized_chunks[i]);
+            ctx->function_specialized_chunks[i] = NULL;
         }
-        if (chunk->columns && func_chunk->source_columns) {
-            memcpy(chunk->columns, func_chunk->source_columns, sizeof(int) * func_chunk->count);
+
+        Chunk* stub_chunk = NULL;
+        if (ctx->function_deopt_stubs && ctx->function_deopt_stubs[i]) {
+            stub_chunk = materialize_chunk_from_buffer(ctx, ctx->function_deopt_stubs[i]);
+            free_bytecode_buffer(ctx->function_deopt_stubs[i]);
+            ctx->function_deopt_stubs[i] = NULL;
         }
-        if (chunk->files && func_chunk->source_files) {
-            memcpy(chunk->files, func_chunk->source_files, sizeof(const char*) * func_chunk->count);
-        } else if (chunk->files) {
-            for (int j = 0; j < func_chunk->count; ++j) {
-                chunk->files[j] = NULL;
-            }
-        }
-        // Copy constants from main context
-        if (ctx->constants && ctx->constants->count > 0) {
-            chunk->constants.count = ctx->constants->count;
-            chunk->constants.capacity = ctx->constants->capacity;
-            chunk->constants.values = malloc(sizeof(Value) * chunk->constants.capacity);
-            if (chunk->constants.values) {
-                memcpy(chunk->constants.values, ctx->constants->values, sizeof(Value) * ctx->constants->count);
-            } else {
-                // Fallback to empty constants if allocation fails
-                chunk->constants.count = 0;
-                chunk->constants.capacity = 0;
-            }
-        } else {
-            chunk->constants.values = NULL;
-            chunk->constants.count = 0;
-            chunk->constants.capacity = 0;
-        }
-        
+
         // Register function in VM
         Function* vm_function = &vm.functions[vm.functionCount];
         vm_function->start = 0; // Always start at beginning of chunk
         vm_function->arity = ctx->function_arities[i]; // Use stored arity
         vm_function->chunk = chunk;
-        
+        vm_function->specialized_chunk = specialized_chunk;
+        vm_function->deopt_stub_chunk = stub_chunk;
+        if (ctx->function_hot_counts && specialized_chunk) {
+            vm_function->specialization_hits = ctx->function_hot_counts[i];
+        } else {
+            vm_function->specialization_hits = 0;
+        }
+        vm_function->tier = specialized_chunk ? FUNCTION_TIER_SPECIALIZED : FUNCTION_TIER_BASELINE;
+        vm_function->deopt_handler = specialized_chunk ? vm_default_deopt_stub : NULL;
+        vm_function->debug_name = ctx->function_names && ctx->function_names[i]
+                                   ? orus_strdup(ctx->function_names[i])
+                                   : NULL;
+
         DEBUG_CODEGEN_PRINT("Added function %d to VM (index %d)\n", i, vm.functionCount);
         vm.functionCount++;
     }

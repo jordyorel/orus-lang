@@ -132,6 +132,7 @@ void config_reset_to_defaults(OrusConfig* config) {
     config->profile_registers = false;
     config->profile_memory_access = false;
     config->profile_branches = false;
+    config->profile_functions = false;
     config->profile_output = NULL;
 }
 
@@ -293,12 +294,16 @@ bool config_parse_args(OrusConfig* config, int argc, const char* argv[]) {
             config->vm_profiling_enabled = true;
             config->profile_instructions = true;
             config->profile_hot_paths = true;
+            config->profile_functions = true;
         } else if (strcmp(arg, "--profile-instructions") == 0) {
             config->vm_profiling_enabled = true;
             config->profile_instructions = true;
         } else if (strcmp(arg, "--profile-hot-paths") == 0) {
             config->vm_profiling_enabled = true;
             config->profile_hot_paths = true;
+        } else if (strcmp(arg, "--profile-functions") == 0) {
+            config->vm_profiling_enabled = true;
+            config->profile_functions = true;
         } else if (strcmp(arg, "--profile-registers") == 0) {
             config->vm_profiling_enabled = true;
             config->profile_registers = true;
@@ -525,6 +530,7 @@ void config_print_help(const char* program_name) {
     printf("  --profile               Enable basic profiling (instructions + hot paths)\n");
     printf("  --profile-instructions  Profile instruction execution counts\n");
     printf("  --profile-hot-paths     Profile hot paths and loop detection\n");
+    printf("  --profile-functions     Profile function invocation counts\n");
     printf("  --profile-registers     Profile register allocation patterns\n");
     printf("  --profile-memory        Profile memory access patterns\n");
     printf("  --profile-branches      Profile branch prediction accuracy\n");

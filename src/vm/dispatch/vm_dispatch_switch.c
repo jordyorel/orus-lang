@@ -22,6 +22,7 @@
 #include "vm/vm_opcode_handlers.h"
 #include "vm/register_file.h"
 #include "vm/vm_profiling.h"
+#include "vm/vm_tiering.h"
 #include "debug/debug_config.h"
 #include <math.h>
 #include <limits.h>
@@ -2588,6 +2589,8 @@ InterpretResult vm_run_dispatch(void) {
                                         native->arity, argCount);
                     }
 
+                    profileFunctionHit((void*)native, true);
+
                     Value args_storage[FRAME_REGISTERS];
                     Value* args_ptr = NULL;
                     if (argCount > 0) {
@@ -2631,6 +2634,8 @@ InterpretResult vm_run_dispatch(void) {
                             break;
                         }
 
+                        profileFunctionHit((void*)function, false);
+
                         uint16_t paramBase = calculateParameterBaseRegister(function->arity);
 
                         frame->returnAddress = vm.ip;
@@ -2668,6 +2673,8 @@ InterpretResult vm_run_dispatch(void) {
                             vm_set_register_safe(resultReg, BOOL_VAL(false));
                             break;
                         }
+
+                        profileFunctionHit((void*)objFunction, false);
 
                         uint16_t paramBase = calculateParameterBaseRegister(objFunction->arity);
 
@@ -2712,6 +2719,8 @@ InterpretResult vm_run_dispatch(void) {
                             break;
                         }
 
+                        profileFunctionHit((void*)function, false);
+
                         uint16_t paramBase = calculateParameterBaseRegister(function->arity);
 
                         frame->returnAddress = vm.ip;
@@ -2726,8 +2735,14 @@ InterpretResult vm_run_dispatch(void) {
                             vm_set_register_safe((uint16_t)(paramBase + i), arg);
                         }
 
-                        vm.chunk = function->chunk;
-                        vm.ip = function->chunk->code + function->start;
+                        Chunk* target_chunk = vm_select_function_chunk(function);
+                        if (!target_chunk) {
+                            vm_set_register_safe(resultReg, BOOL_VAL(false));
+                            break;
+                        }
+
+                        vm.chunk = target_chunk;
+                        vm.ip = target_chunk->code + function->start;
 
                     } else {
                         vm_set_register_safe(resultReg, BOOL_VAL(false));
@@ -2763,6 +2778,8 @@ InterpretResult vm_run_dispatch(void) {
                             vm_set_register_safe(resultReg, BOOL_VAL(false));
                             break;
                         }
+
+                        profileFunctionHit((void*)objFunction, false);
 
                         frame->parameterBaseRegister = paramBase;
                         frame->resultRegister = resultReg;
@@ -2801,6 +2818,8 @@ InterpretResult vm_run_dispatch(void) {
                             vm_set_register_safe(resultReg, BOOL_VAL(false));
                             break;
                         }
+
+                        profileFunctionHit((void*)objFunction, false);
 
                         frame->parameterBaseRegister = paramBase;
                         frame->resultRegister = resultReg;
@@ -2841,6 +2860,8 @@ InterpretResult vm_run_dispatch(void) {
 
                         CallFrame* frame = vm.register_file.current_frame;
                         if (frame) {
+                            profileFunctionHit((void*)function, false);
+
                             frame->parameterBaseRegister = paramBase;
                             frame->resultRegister = resultReg;
                             frame->functionIndex = (uint16_t)functionIndex;
@@ -2854,8 +2875,14 @@ InterpretResult vm_run_dispatch(void) {
                             vm_set_register_safe((uint16_t)(paramBase + i), tempArgs[i]);
                         }
 
-                        vm.chunk = function->chunk;
-                        vm.ip = function->chunk->code + function->start;
+                        Chunk* target_chunk = vm_select_function_chunk(function);
+                        if (!target_chunk) {
+                            vm_set_register_safe(resultReg, BOOL_VAL(false));
+                            break;
+                        }
+
+                        vm.chunk = target_chunk;
+                        vm.ip = target_chunk->code + function->start;
 
                     } else {
                         vm_set_register_safe(resultReg, BOOL_VAL(false));

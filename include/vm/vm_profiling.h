@@ -21,13 +21,19 @@ typedef enum {
     PROFILE_REGISTER_USAGE = 1 << 2,   // Profile register allocation patterns
     PROFILE_MEMORY_ACCESS = 1 << 3,    // Profile memory access patterns
     PROFILE_BRANCH_PREDICTION = 1 << 4, // Profile branch prediction accuracy
-    PROFILE_ALL = 0xFF
+    PROFILE_FUNCTION_CALLS = 1 << 5,   // Profile function invocation frequency
+    PROFILE_ALL = 0x3F
 } ProfilingFlags;
 
 // Hot path detection thresholds
 #define HOT_PATH_THRESHOLD 1000        // Executions to consider hot
 #define HOT_LOOP_THRESHOLD 10000       // Loop iterations to consider hot
 #define PROFILING_SAMPLE_RATE 100      // Sample every N instructions when enabled
+#define LOOP_HIT_SAMPLE_RATE 64        // Sample loop hit counts every 64 iterations
+#define FUNCTION_HIT_SAMPLE_RATE 32    // Sample function hits every 32 calls
+
+#define LOOP_PROFILE_SLOTS 1024
+#define FUNCTION_PROFILE_SLOTS 512
 
 // Instruction profiling data
 typedef struct {
@@ -54,6 +60,23 @@ typedef struct {
     double averageLifetime;
 } RegisterProfile;
 
+// Loop hit sampling data (hashed by code address)
+typedef struct {
+    uintptr_t address;
+    uint64_t hitCount;
+    uint64_t pendingIterations;
+    uint64_t lastHitInstruction;
+} LoopProfile;
+
+// Function invocation sampling data (hashed by function pointer)
+typedef struct {
+    uintptr_t address;
+    uint64_t hitCount;
+    uint64_t pendingCalls;
+    uint64_t lastHitInstruction;
+    bool isNative;
+} FunctionProfile;
+
 // Main profiling context
 typedef struct {
     // Configuration
@@ -75,17 +98,23 @@ typedef struct {
     
     // Register profiling
     RegisterProfile registerStats[256];
-    
+
     // Memory access patterns
     uint64_t memoryReads;
     uint64_t memoryWrites;
     uint64_t cacheHits;
     uint64_t cacheMisses;
-    
+
     // Branch prediction stats
     uint64_t branchesTotal;
     uint64_t branchesCorrect;
     double branchAccuracy;
+
+    // Loop and function sampling
+    uint64_t loopSampleCounter;
+    uint64_t functionSampleCounter;
+    LoopProfile loopStats[LOOP_PROFILE_SLOTS];
+    FunctionProfile functionStats[FUNCTION_PROFILE_SLOTS];
 } VMProfilingContext;
 
 // Global profiling instance
@@ -137,6 +166,61 @@ static inline void profileHotPath(void* codeAddress, uint64_t iterations) {
     }
 }
 
+static inline uint64_t profileLoopHit(void* codeAddress) {
+    if (!(g_profiling.enabledFlags & PROFILE_HOT_PATHS) || !g_profiling.isActive) return 0;
+
+    g_profiling.loopSampleCounter++;
+
+    uint32_t hash = ((uintptr_t)codeAddress >> 3) % LOOP_PROFILE_SLOTS;
+    LoopProfile* loopProfile = &g_profiling.loopStats[hash];
+
+    if (loopProfile->address != (uintptr_t)codeAddress) {
+        loopProfile->address = (uintptr_t)codeAddress;
+        loopProfile->hitCount = 0;
+        loopProfile->pendingIterations = 0;
+        loopProfile->lastHitInstruction = 0;
+    }
+
+    loopProfile->pendingIterations++;
+
+    if (g_profiling.loopSampleCounter % LOOP_HIT_SAMPLE_RATE != 0) {
+        return 0;
+    }
+
+    uint64_t recordedIterations = loopProfile->pendingIterations;
+    loopProfile->pendingIterations = 0;
+    loopProfile->hitCount += recordedIterations;
+    loopProfile->lastHitInstruction = g_profiling.totalInstructions;
+    return recordedIterations;
+}
+
+static inline void profileFunctionHit(void* functionPtr, bool isNative) {
+    if (!(g_profiling.enabledFlags & PROFILE_FUNCTION_CALLS) || !g_profiling.isActive) return;
+
+    g_profiling.functionSampleCounter++;
+
+    uint32_t hash = ((uintptr_t)functionPtr >> 3) % FUNCTION_PROFILE_SLOTS;
+    FunctionProfile* functionProfile = &g_profiling.functionStats[hash];
+
+    if (functionProfile->address != (uintptr_t)functionPtr || functionProfile->isNative != isNative) {
+        functionProfile->address = (uintptr_t)functionPtr;
+        functionProfile->hitCount = 0;
+        functionProfile->pendingCalls = 0;
+        functionProfile->lastHitInstruction = 0;
+        functionProfile->isNative = isNative;
+    }
+
+    functionProfile->pendingCalls++;
+
+    if (g_profiling.functionSampleCounter % FUNCTION_HIT_SAMPLE_RATE != 0) {
+        return;
+    }
+
+    functionProfile->hitCount += functionProfile->pendingCalls;
+    functionProfile->lastHitInstruction = g_profiling.totalInstructions;
+    functionProfile->pendingCalls = 0;
+}
+
 static inline void profileRegisterAllocation(uint8_t regNum, bool isSpill, bool isReuse) {
     if (!(g_profiling.enabledFlags & PROFILE_REGISTER_USAGE) || !g_profiling.isActive) return;
     
@@ -177,6 +261,8 @@ bool isHotPath(void* codeAddress);
 bool isHotInstruction(uint8_t opcode);
 uint64_t getHotPathIterations(void* codeAddress);
 double getInstructionHotness(uint8_t opcode);
+uint64_t getLoopHitCount(void* codeAddress);
+uint64_t getFunctionHitCount(void* functionPtr, bool isNative);
 
 // Profiling data export
 void dumpProfilingStats(void);
@@ -184,6 +270,8 @@ void exportProfilingData(const char* filename);
 void printHotPaths(void);
 void printInstructionProfile(void);
 void printRegisterProfile(void);
+void printLoopProfile(void);
+void printFunctionProfile(void);
 
 // Forward declaration to avoid circular dependency
 struct VMOptimizationContext;

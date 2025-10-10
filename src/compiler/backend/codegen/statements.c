@@ -8,6 +8,7 @@
 #include "compiler/symbol_table.h"
 #include "compiler/scope_stack.h"
 #include "compiler/error_reporter.h"
+#include "compiler/specialization_feedback.h"
 #include "config/config.h"
 #include "type/type.h"
 #include "vm/vm.h"
@@ -15,6 +16,7 @@
 #include "errors/features/variable_errors.h"
 #include "errors/features/control_flow_errors.h"
 #include "internal/error_reporting.h"
+#include "internal/strutil.h"
 #include "debug/debug_config.h"
 #include <stdlib.h>
 #include <string.h>
@@ -4084,17 +4086,73 @@ int register_function(CompilerContext* ctx, const char* name, int arity, Bytecod
     // Ensure function_chunks and function_arities arrays have capacity
     if (ctx->function_count >= ctx->function_capacity) {
         int new_capacity = ctx->function_capacity == 0 ? 8 : ctx->function_capacity * 2;
-        ctx->function_chunks = realloc(ctx->function_chunks, sizeof(BytecodeBuffer*) * new_capacity);
-        ctx->function_arities = realloc(ctx->function_arities, sizeof(int) * new_capacity);
-        if (!ctx->function_chunks || !ctx->function_arities) return -1;
+        BytecodeBuffer** new_chunks = realloc(ctx->function_chunks, sizeof(BytecodeBuffer*) * new_capacity);
+        if (!new_chunks) return -1;
+        ctx->function_chunks = new_chunks;
+
+        int* new_arities = realloc(ctx->function_arities, sizeof(int) * new_capacity);
+        if (!new_arities) return -1;
+        ctx->function_arities = new_arities;
+
+        char** new_names = realloc(ctx->function_names, sizeof(char*) * new_capacity);
+        if (!new_names) return -1;
+        ctx->function_names = new_names;
+
+        BytecodeBuffer** new_specialized = realloc(ctx->function_specialized_chunks,
+                                                   sizeof(BytecodeBuffer*) * new_capacity);
+        if (!new_specialized) return -1;
+        ctx->function_specialized_chunks = new_specialized;
+
+        BytecodeBuffer** new_stubs = realloc(ctx->function_deopt_stubs,
+                                             sizeof(BytecodeBuffer*) * new_capacity);
+        if (!new_stubs) return -1;
+        ctx->function_deopt_stubs = new_stubs;
+
+        uint64_t* new_hot_counts = realloc(ctx->function_hot_counts,
+                                           sizeof(uint64_t) * new_capacity);
+        if (!new_hot_counts) return -1;
+        ctx->function_hot_counts = new_hot_counts;
+
+        for (int i = ctx->function_capacity; i < new_capacity; ++i) {
+            ctx->function_chunks[i] = NULL;
+            ctx->function_arities[i] = 0;
+            ctx->function_names[i] = NULL;
+            ctx->function_specialized_chunks[i] = NULL;
+            ctx->function_deopt_stubs[i] = NULL;
+            ctx->function_hot_counts[i] = 0;
+        }
         ctx->function_capacity = new_capacity;
     }
-    
+
     // Store the function chunk and arity (chunk can be NULL for pre-registration)
     int function_index = ctx->function_count++;
     ctx->function_chunks[function_index] = chunk;
     ctx->function_arities[function_index] = arity;
-    
+
+    if (ctx->function_names) {
+        free(ctx->function_names[function_index]);
+        ctx->function_names[function_index] = name ? orus_strdup(name) : NULL;
+    }
+
+    if (ctx->function_specialized_chunks) {
+        ctx->function_specialized_chunks[function_index] = NULL;
+    }
+
+    if (ctx->function_deopt_stubs) {
+        ctx->function_deopt_stubs[function_index] = NULL;
+    }
+
+    if (ctx->function_hot_counts) {
+        ctx->function_hot_counts[function_index] = 0;
+        if (ctx->profiling_feedback && name) {
+            const FunctionSpecializationHint* hint =
+                compiler_find_specialization_hint(ctx->profiling_feedback, name);
+            if (hint && hint->eligible) {
+                ctx->function_hot_counts[function_index] = hint->hit_count;
+            }
+        }
+    }
+
     DEBUG_CODEGEN_PRINT("Registered function '%s' with index %d (arity %d)\\n", name, function_index, arity);
     return function_index;
 }

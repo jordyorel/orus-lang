@@ -70,6 +70,18 @@ void initVM(void) {
         vm.mutableGlobals[i] = false;
         vm.variableNames[i].name = NULL;
         vm.variableNames[i].length = 0;
+        vm.functions[i].start = 0;
+        vm.functions[i].arity = 0;
+        vm.functions[i].chunk = NULL;
+        vm.functions[i].specialized_chunk = NULL;
+        vm.functions[i].deopt_stub_chunk = NULL;
+        vm.functions[i].tier = FUNCTION_TIER_BASELINE;
+        vm.functions[i].deopt_handler = NULL;
+        vm.functions[i].specialization_hits = 0;
+        if (vm.functions[i].debug_name) {
+            free(vm.functions[i].debug_name);
+            vm.functions[i].debug_name = NULL;
+        }
     }
 
     vm.variableCount = 0;
@@ -118,7 +130,34 @@ void freeVM(void) {
     
     // Phase 1: Free register file resources
     free_register_file(&vm.register_file);
-    
+
+    for (int i = 0; i < vm.functionCount; ++i) {
+        Function* function = &vm.functions[i];
+        if (function->specialized_chunk) {
+            freeChunk(function->specialized_chunk);
+            free(function->specialized_chunk);
+            function->specialized_chunk = NULL;
+        }
+        if (function->deopt_stub_chunk) {
+            freeChunk(function->deopt_stub_chunk);
+            free(function->deopt_stub_chunk);
+            function->deopt_stub_chunk = NULL;
+        }
+        if (function->chunk) {
+            freeChunk(function->chunk);
+            free(function->chunk);
+            function->chunk = NULL;
+        }
+        if (function->debug_name) {
+            free(function->debug_name);
+            function->debug_name = NULL;
+        }
+        function->tier = FUNCTION_TIER_BASELINE;
+        function->deopt_handler = NULL;
+        function->specialization_hits = 0;
+    }
+    vm.functionCount = 0;
+
     // Free global string table
     free_string_table(&globalStringTable);
     

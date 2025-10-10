@@ -205,13 +205,14 @@ INCLUDES = -I$(INCDIR)
 COMPILER_FRONTEND_SRCS = $(SRCDIR)/compiler/frontend/lexer.c $(SRCDIR)/compiler/frontend/parser.c
 
 # Keep multipass compiler and minimal dependencies 
-COMPILER_BACKEND_SRCS = $(SRCDIR)/compiler/backend/typed_ast_visualizer.c $(SRCDIR)/compiler/backend/register_allocator.c $(SRCDIR)/compiler/backend/compiler.c $(SRCDIR)/compiler/backend/optimization/optimizer.c $(SRCDIR)/compiler/backend/optimization/loop_type_residency.c $(SRCDIR)/compiler/backend/optimization/constantfold.c $(SRCDIR)/compiler/backend/codegen/codegen.c $(SRCDIR)/compiler/backend/codegen/expressions.c $(SRCDIR)/compiler/backend/codegen/statements.c $(SRCDIR)/compiler/backend/codegen/functions.c $(SRCDIR)/compiler/backend/codegen/modules.c $(SRCDIR)/compiler/backend/codegen/peephole.c $(SRCDIR)/compiler/backend/error_reporter.c $(SRCDIR)/compiler/backend/scope_stack.c $(SRCDIR)/compiler/symbol_table.c
+COMPILER_BACKEND_SRCS = $(SRCDIR)/compiler/backend/typed_ast_visualizer.c $(SRCDIR)/compiler/backend/register_allocator.c $(SRCDIR)/compiler/backend/compiler.c $(SRCDIR)/compiler/backend/optimization/optimizer.c $(SRCDIR)/compiler/backend/optimization/loop_type_residency.c $(SRCDIR)/compiler/backend/optimization/constantfold.c $(SRCDIR)/compiler/backend/codegen/codegen.c $(SRCDIR)/compiler/backend/codegen/expressions.c $(SRCDIR)/compiler/backend/codegen/statements.c $(SRCDIR)/compiler/backend/codegen/functions.c $(SRCDIR)/compiler/backend/codegen/modules.c $(SRCDIR)/compiler/backend/codegen/peephole.c $(SRCDIR)/compiler/backend/error_reporter.c $(SRCDIR)/compiler/backend/scope_stack.c $(SRCDIR)/compiler/backend/specialization/profiling_feedback.c $(SRCDIR)/compiler/symbol_table.c
 
 # Combined simplified compiler sources  
 COMPILER_SRCS = $(COMPILER_FRONTEND_SRCS) $(COMPILER_BACKEND_SRCS) $(SRCDIR)/compiler/typed_ast.c $(SRCDIR)/debug/debug_config.c
-VM_SRCS = $(SRCDIR)/vm/core/vm_core.c $(SRCDIR)/vm/core/vm_tagged_union.c $(SRCDIR)/vm/runtime/vm.c $(SRCDIR)/vm/core/vm_memory.c $(SRCDIR)/vm/utils/debug.c $(SRCDIR)/vm/runtime/builtin_print.c $(SRCDIR)/vm/runtime/builtin_input.c $(SRCDIR)/vm/runtime/builtin_array_push.c $(SRCDIR)/vm/runtime/builtin_array_pop.c $(SRCDIR)/vm/runtime/builtin_array_repeat.c $(SRCDIR)/vm/runtime/builtin_timestamp.c $(SRCDIR)/vm/runtime/builtin_number.c $(SRCDIR)/vm/runtime/builtin_typeof.c $(SRCDIR)/vm/runtime/builtin_istype.c $(SRCDIR)/vm/runtime/builtin_range.c $(SRCDIR)/vm/runtime/builtin_sorted.c $(SRCDIR)/vm/runtime/builtin_assert.c $(SRCDIR)/vm/operations/vm_arithmetic.c $(SRCDIR)/vm/operations/vm_control_flow.c $(SRCDIR)/vm/operations/vm_typed_ops.c $(SRCDIR)/vm/operations/vm_string_ops.c $(SRCDIR)/vm/operations/vm_comparison.c $(SRCDIR)/vm/handlers/vm_arithmetic_handlers.c $(SRCDIR)/vm/handlers/vm_control_flow_handlers.c $(SRCDIR)/vm/handlers/vm_memory_handlers.c $(SRCDIR)/vm/dispatch/vm_dispatch_switch.c $(SRCDIR)/vm/dispatch/vm_dispatch_goto.c $(SRCDIR)/vm/core/vm_validation.c $(SRCDIR)/vm/register_file.c $(SRCDIR)/vm/spill_manager.c $(SRCDIR)/vm/module_manager.c $(SRCDIR)/vm/register_cache.c $(SRCDIR)/vm/profiling/vm_profiling.c $(SRCDIR)/vm/vm_config.c $(SRCDIR)/type/type_representation.c $(SRCDIR)/type/type_inference.c $(SRCDIR)/errors/infrastructure/error_infrastructure.c $(SRCDIR)/errors/core/error_base.c $(SRCDIR)/errors/features/type_errors.c $(SRCDIR)/errors/features/variable_errors.c $(SRCDIR)/errors/features/control_flow_errors.c $(SRCDIR)/config/config.c $(SRCDIR)/internal/logging.c
+VM_SRCS = $(SRCDIR)/vm/core/vm_core.c $(SRCDIR)/vm/core/vm_tagged_union.c $(SRCDIR)/vm/runtime/vm.c $(SRCDIR)/vm/core/vm_memory.c $(SRCDIR)/vm/utils/debug.c $(SRCDIR)/vm/runtime/builtin_print.c $(SRCDIR)/vm/runtime/builtin_input.c $(SRCDIR)/vm/runtime/builtin_array_push.c $(SRCDIR)/vm/runtime/builtin_array_pop.c $(SRCDIR)/vm/runtime/builtin_array_repeat.c $(SRCDIR)/vm/runtime/builtin_timestamp.c $(SRCDIR)/vm/runtime/builtin_number.c $(SRCDIR)/vm/runtime/builtin_typeof.c $(SRCDIR)/vm/runtime/builtin_istype.c $(SRCDIR)/vm/runtime/builtin_range.c $(SRCDIR)/vm/runtime/builtin_sorted.c $(SRCDIR)/vm/runtime/builtin_assert.c $(SRCDIR)/vm/operations/vm_arithmetic.c $(SRCDIR)/vm/operations/vm_control_flow.c $(SRCDIR)/vm/operations/vm_typed_ops.c $(SRCDIR)/vm/operations/vm_string_ops.c $(SRCDIR)/vm/operations/vm_comparison.c $(SRCDIR)/vm/handlers/vm_arithmetic_handlers.c $(SRCDIR)/vm/handlers/vm_control_flow_handlers.c $(SRCDIR)/vm/handlers/vm_memory_handlers.c $(SRCDIR)/vm/dispatch/vm_dispatch_switch.c $(SRCDIR)/vm/dispatch/vm_dispatch_goto.c $(SRCDIR)/vm/core/vm_validation.c $(SRCDIR)/vm/register_file.c $(SRCDIR)/vm/spill_manager.c $(SRCDIR)/vm/module_manager.c $(SRCDIR)/vm/register_cache.c $(SRCDIR)/vm/profiling/vm_profiling.c $(SRCDIR)/vm/runtime/vm_tiering.c $(SRCDIR)/vm/vm_config.c $(SRCDIR)/type/type_representation.c $(SRCDIR)/type/type_inference.c $(SRCDIR)/errors/infrastructure/error_infrastructure.c $(SRCDIR)/errors/core/error_base.c $(SRCDIR)/errors/features/type_errors.c $(SRCDIR)/errors/features/variable_errors.c $(SRCDIR)/errors/features/control_flow_errors.c $(SRCDIR)/config/config.c $(SRCDIR)/internal/logging.c
 REPL_SRC = $(SRCDIR)/repl.c
 MAIN_SRC = $(SRCDIR)/main.c
+TOOLS_SRCS = $(SRCDIR)/tools/orus_prof.c
 
 # Unit testing files
 UNITY_SRCS = $(TESTDIR)/unit/unity.c
@@ -223,6 +224,7 @@ COMPILER_OBJS = $(COMPILER_SRCS:$(SRCDIR)/%.c=$(BUILDDIR)/%.o)
 VM_OBJS = $(VM_SRCS:$(SRCDIR)/%.c=$(BUILDDIR)/%.o)
 REPL_OBJ = $(REPL_SRC:$(SRCDIR)/%.c=$(BUILDDIR)/%.o)
 MAIN_OBJ = $(MAIN_SRC:$(SRCDIR)/%.c=$(BUILDDIR)/%.o)
+TOOLS_OBJS = $(TOOLS_SRCS:$(SRCDIR)/%.c=$(BUILDDIR)/%.o)
 
 # Unit test object files
 UNITY_OBJS = $(UNITY_SRCS:$(TESTDIR)/%.c=$(BUILDDIR)/tests/%.o)
@@ -231,6 +233,7 @@ TEST_RUNNER_OBJ = $(TEST_RUNNER_SRC:$(TESTDIR)/%.c=$(BUILDDIR)/tests/%.o)
 
 # Target (profile-specific)
 ORUS = orus$(SUFFIX)
+ORUS_PROF = orus-prof$(SUFFIX)
 UNIT_TEST_RUNNER = test_runner$(SUFFIX)
 BYTECODE_TEST_BIN = $(BUILDDIR)/tests/test_jump_patch
 SOURCE_MAP_TEST_BIN = $(BUILDDIR)/tests/test_source_mapping
@@ -268,7 +271,7 @@ BUILTIN_RANGE_ORUS_FAIL_TESTS = \
 
 .PHONY: all clean test unit-test test-control-flow benchmark help debug release profiling analyze install bytecode-jump-tests source-map-tests scope-tracking-tests fused-while-tests peephole-tests cli-smoke-tests tagged-union-tests typed-register-tests vm-print-tests register-window-tests spill-gc-tests inc-cmp-jmp-tests add-i32-imm-tests inc-r-tests dec-i32-r-tests register-allocator-tests builtin-input-tests builtin-range-tests test-optimizer wasm _test-run _benchmark-run
 
-all: build-info $(ORUS)
+all: build-info $(ORUS) $(ORUS_PROF)
 
 # Build information
 build-info:
@@ -294,13 +297,18 @@ ci:
 
 # Create build directory
 $(BUILDDIR):
-	@mkdir -p $(BUILDDIR) $(BUILDDIR)/vm/core $(BUILDDIR)/vm/dispatch $(BUILDDIR)/vm/operations $(BUILDDIR)/vm/runtime $(BUILDDIR)/vm/utils $(BUILDDIR)/vm/handlers $(BUILDDIR)/vm/profiling $(BUILDDIR)/compiler/backend/optimization $(BUILDDIR)/compiler/backend/codegen $(BUILDDIR)/type $(BUILDDIR)/errors/core $(BUILDDIR)/errors/features $(BUILDDIR)/errors/infrastructure $(BUILDDIR)/config $(BUILDDIR)/internal $(BUILDDIR)/debug $(BUILDDIR)/tests/unit $(BUILDDIR)/web
+	@mkdir -p $(BUILDDIR) $(BUILDDIR)/vm/core $(BUILDDIR)/vm/dispatch $(BUILDDIR)/vm/operations $(BUILDDIR)/vm/runtime $(BUILDDIR)/vm/utils $(BUILDDIR)/vm/handlers $(BUILDDIR)/vm/profiling $(BUILDDIR)/compiler/backend/optimization $(BUILDDIR)/compiler/backend/codegen $(BUILDDIR)/compiler/backend/specialization $(BUILDDIR)/type $(BUILDDIR)/errors/core $(BUILDDIR)/errors/features $(BUILDDIR)/errors/infrastructure $(BUILDDIR)/config $(BUILDDIR)/internal $(BUILDDIR)/debug $(BUILDDIR)/tests/unit $(BUILDDIR)/web $(BUILDDIR)/tools
 
 # Main interpreter
 $(ORUS): $(MAIN_OBJ) $(REPL_OBJ) $(VM_OBJS) $(COMPILER_OBJS)
 	@echo "Linking $(ORUS)..."
 	@$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 	@echo "✓ Build complete: $(ORUS)"
+
+$(ORUS_PROF): $(TOOLS_OBJS)
+	@echo "Linking $(ORUS_PROF)..."
+	@$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+	@echo "✓ Build complete: $(ORUS_PROF)"
 
 # Object files
 $(BUILDDIR)/%.o: $(SRCDIR)/%.c | $(BUILDDIR)
@@ -338,7 +346,7 @@ $(WASM_WASM): $(WASM_JS)
 test:
 	@$(MAKE) PROFILE=$(TEST_PROFILE) _test-run
 
-_test-run: $(ORUS)
+_test-run: $(ORUS) $(ORUS_PROF)
 	@echo "Running Comprehensive Test Suite..."
 	@echo "==================================="
 	@passed=0; failed=0; current_dir=""; \
@@ -480,6 +488,9 @@ _test-run: $(ORUS)
 	@echo ""
 	@echo "\033[36m=== CLI Smoke Tests ===\033[0m"
 	@python3 tests/comprehensive/run_cli_smoke_tests.py ./$(ORUS)
+	@echo ""
+	@echo "\033[36m=== orus-prof CLI Tests ===\033[0m"
+	@python3 tests/tools/run_orus_prof_cli_tests.py ./$(ORUS_PROF)
 
 # Run unit tests
 unit-test: $(UNIT_TEST_RUNNER)
@@ -701,7 +712,7 @@ builtin-sorted-tests: $(ORUS)
 	done; \
 	if [ $$failed -ne 0 ]; then \
 		exit 1; \
-	fi
+fi
 
 builtin-range-tests: $(ORUS)
 	@echo "Running builtin range runtime tests..."
@@ -728,7 +739,7 @@ builtin-range-tests: $(ORUS)
 	done; \
 	if [ $$failed -ne 0 ]; then \
 		exit 1; \
-	fi
+fi
 
 cli-smoke-tests:
 	@python3 tests/comprehensive/run_cli_smoke_tests.py ./$(ORUS)
@@ -751,7 +762,7 @@ test-control-flow: $(ORUS)
 		echo "\033[32m✓ Control flow tests passed ($$passed)\033[0m"; \
 	else \
 		echo "\033[31m✗ $$failed control flow test(s) failed\033[0m"; \
-	fi
+fi
 
 
 test-optimizer:
@@ -801,12 +812,16 @@ install: release
 	@echo "Installing Orus to $(INSTALL_PREFIX)..."
 	@mkdir -p "$(INSTALL_BIN_DIR)"
 	@cp orus "$(INSTALL_BIN_DIR)/orus"
+	@if [ -f orus-prof ]; then \
+		cp orus-prof "$(INSTALL_BIN_DIR)/orus-prof"; \
+	fi
 	@echo "✓ Orus installed successfully into $(INSTALL_PREFIX)"
 
 # Clean build artifacts
 clean:
 	@echo "Cleaning build artifacts..."
 	@rm -f orus orus_debug orus_profiling orus_ci
+	@rm -f orus-prof orus-prof_debug orus-prof_profiling orus-prof_ci
 	@rm -f test_runner test_runner_debug test_runner_profiling test_runner_ci
 	@rm -rf build/
 	@rm -rf web/

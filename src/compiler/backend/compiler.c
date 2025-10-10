@@ -13,6 +13,7 @@
 #include "compiler/optimization/optimizer.h"
 #include "compiler/codegen/codegen.h"
 #include "compiler/codegen/codegen_internal.h"
+#include "compiler/specialization_feedback.h"
 #include "compiler/symbol_table.h"
 #include "compiler/scope_stack.h"
 #include "compiler/error_reporter.h"
@@ -519,6 +520,10 @@ CompilerContext* init_compiler_context(TypedASTNode* typed_ast) {
     ctx->current_function_index = -1;    // Global scope initially
     ctx->function_chunks = NULL;         // No function chunks yet
     ctx->function_arities = NULL;        // No function arities yet
+    ctx->function_names = NULL;
+    ctx->function_specialized_chunks = NULL;
+    ctx->function_deopt_stubs = NULL;
+    ctx->function_hot_counts = NULL;
     ctx->function_count = 0;
     ctx->function_capacity = 0;
 
@@ -536,6 +541,8 @@ CompilerContext* init_compiler_context(TypedASTNode* typed_ast) {
     ctx->module_import_count = 0;
     ctx->module_import_capacity = 0;
 
+    ctx->profiling_feedback = NULL;
+
     if (!ctx->allocator || !ctx->bytecode || !ctx->constants ||
         !ctx->symbols || !ctx->scopes || !ctx->errors) {
         free_compiler_context(ctx);
@@ -552,6 +559,8 @@ bool compile_to_bytecode(CompilerContext* ctx) {
         error_reporter_reset(ctx->errors);
     }
     ctx->has_compilation_errors = false;
+
+    compiler_refresh_feedback(ctx);
 
     DEBUG_CODEGEN_PRINT("Starting compilation pipeline...\n");
     
@@ -624,10 +633,11 @@ bool run_codegen_pass(CompilerContext* ctx) {
     bool success = generate_bytecode_from_ast(ctx);
     
     if (success) {
-        DEBUG_CODEGEN_PRINT("✅ Code generation completed, %d instructions generated\n", 
+        DEBUG_CODEGEN_PRINT("✅ Code generation completed, %d instructions generated\n",
                ctx->bytecode->count);
-        
+
         // Copy compiled functions to the VM
+        compiler_prepare_specialized_variants(ctx);
         if (ctx->function_count > 0) {
             finalize_functions_to_vm(ctx);
         }
@@ -760,10 +770,39 @@ void free_compiler_context(CompilerContext* ctx) {
         }
         free(ctx->function_chunks);
     }
-    
+
     // Free function arities array
     if (ctx->function_arities) {
         free(ctx->function_arities);
+    }
+
+    if (ctx->function_specialized_chunks) {
+        for (int i = 0; i < ctx->function_count; i++) {
+            if (ctx->function_specialized_chunks[i]) {
+                free_bytecode_buffer(ctx->function_specialized_chunks[i]);
+            }
+        }
+        free(ctx->function_specialized_chunks);
+    }
+
+    if (ctx->function_deopt_stubs) {
+        for (int i = 0; i < ctx->function_count; i++) {
+            if (ctx->function_deopt_stubs[i]) {
+                free_bytecode_buffer(ctx->function_deopt_stubs[i]);
+            }
+        }
+        free(ctx->function_deopt_stubs);
+    }
+
+    if (ctx->function_names) {
+        for (int i = 0; i < ctx->function_count; i++) {
+            free(ctx->function_names[i]);
+        }
+        free(ctx->function_names);
+    }
+
+    if (ctx->function_hot_counts) {
+        free(ctx->function_hot_counts);
     }
 
     if (ctx->upvalues) {
@@ -789,6 +828,12 @@ void free_compiler_context(CompilerContext* ctx) {
             free(ctx->module_imports[i].alias_name);
         }
         free(ctx->module_imports);
+    }
+
+    if (ctx->profiling_feedback) {
+        compiler_free_profiling_feedback(ctx->profiling_feedback);
+        free(ctx->profiling_feedback);
+        ctx->profiling_feedback = NULL;
     }
 
     // Note: Don't free input_ast - it's owned by caller

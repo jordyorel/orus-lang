@@ -11,6 +11,7 @@
 #include "vm/vm_opcode_handlers.h"
 #include "vm/vm_dispatch.h"
 #include "vm/vm_control_flow.h"
+#include "vm/vm_profiling.h"
 
 // ====== Jump Operation Handlers ======
 
@@ -35,9 +36,11 @@ bool handle_loop_short(void) {
 
     // Hot path detection: Profile short loop iterations (tight loops)
     if (g_profiling.isActive && (g_profiling.enabledFlags & PROFILE_HOT_PATHS)) {
-        static uint64_t short_loop_iterations = 0;
-        short_loop_iterations++;
-        profileHotPath((void*)(vm.ip - vm.chunk->code), short_loop_iterations);
+        void* codeAddress = (void*)(vm.ip - vm.chunk->code);
+        uint64_t sampledIterations = profileLoopHit(codeAddress);
+        if (sampledIterations > 0) {
+            profileHotPath(codeAddress, sampledIterations);
+        }
     }
 
     return CF_LOOP_SHORT(offset);
@@ -61,9 +64,11 @@ bool handle_loop_long(void) {
 
     // Hot path detection: Profile loop iterations
     if (g_profiling.isActive && (g_profiling.enabledFlags & PROFILE_HOT_PATHS)) {
-        static uint64_t loop_iterations = 0;
-        loop_iterations++;
-        profileHotPath((void*)(vm.ip - vm.chunk->code), loop_iterations);
+        void* codeAddress = (void*)(vm.ip - vm.chunk->code);
+        uint64_t sampledIterations = profileLoopHit(codeAddress);
+        if (sampledIterations > 0) {
+            profileHotPath(codeAddress, sampledIterations);
+        }
     }
 
     return CF_LOOP(offset);
