@@ -51,6 +51,12 @@ static inline void vm_update_source_location(size_t offset) {
     }
     vm.currentLine = vm.chunk->lines ? vm.chunk->lines[offset] : -1;
     vm.currentColumn = vm.chunk->columns ? vm.chunk->columns[offset] : -1;
+    if (vm.chunk->files) {
+        const char* file = vm.chunk->files[offset];
+        if (file != NULL && file[0] != '\0') {
+            vm.filePath = file;
+        }
+    }
 }
 
 static inline bool vm_handle_pending_error(void) {

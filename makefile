@@ -247,6 +247,8 @@ REGISTER_ALLOCATOR_TEST_BIN = $(BUILDDIR)/tests/test_register_allocator
 INC_CMP_JMP_TEST_BIN = $(BUILDDIR)/tests/test_vm_inc_cmp_jmp
 FUSED_LOOP_BYTECODE_TEST_BIN = $(BUILDDIR)/tests/test_fused_loop_bytecode
 ADD_I32_IMM_TEST_BIN = $(BUILDDIR)/tests/test_vm_add_i32_imm
+SUB_I32_IMM_TEST_BIN = $(BUILDDIR)/tests/test_vm_sub_i32_imm
+MUL_I32_IMM_TEST_BIN = $(BUILDDIR)/tests/test_vm_mul_i32_imm
 BUILTIN_INPUT_TEST_BIN = $(BUILDDIR)/tests/test_builtin_input
 CONSTANT_FOLD_TEST_BIN = $(BUILDDIR)/tests/test_constant_folding
 BUILTIN_SORTED_ORUS_TESTS = \
@@ -447,6 +449,12 @@ _test-run: $(ORUS)
 	@echo "\033[36m=== OP_ADD_I32_IMM Tests ===\033[0m"
 	@$(MAKE) add-i32-imm-tests
 	@echo ""
+	@echo "\033[36m=== OP_SUB_I32_IMM Tests ===\033[0m"
+	@$(MAKE) sub-i32-imm-tests
+	@echo ""
+	@echo "\033[36m=== OP_MUL_I32_IMM Tests ===\033[0m"
+	@$(MAKE) mul-i32-imm-tests
+	@echo ""
 	@echo "\033[36m=== Register Allocator Tests ===\033[0m"
 	@$(MAKE) register-allocator-tests
 	@echo ""
@@ -605,6 +613,24 @@ $(ADD_I32_IMM_TEST_BIN): tests/unit/test_vm_add_i32_imm.c $(COMPILER_OBJS) $(VM_
 add-i32-imm-tests: $(ADD_I32_IMM_TEST_BIN)
 	@echo "Running OP_ADD_I32_IMM regression tests..."
 	@./$(ADD_I32_IMM_TEST_BIN)
+
+$(SUB_I32_IMM_TEST_BIN): tests/unit/test_vm_sub_i32_imm.c $(COMPILER_OBJS) $(VM_OBJS)
+	@mkdir -p $(dir $@)
+	@echo "Compiling OP_SUB_I32_IMM regression tests..."
+	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+
+sub-i32-imm-tests: $(SUB_I32_IMM_TEST_BIN)
+	@echo "Running OP_SUB_I32_IMM regression tests..."
+	@./$(SUB_I32_IMM_TEST_BIN)
+
+$(MUL_I32_IMM_TEST_BIN): tests/unit/test_vm_mul_i32_imm.c $(COMPILER_OBJS) $(VM_OBJS)
+	@mkdir -p $(dir $@)
+	@echo "Compiling OP_MUL_I32_IMM regression tests..."
+	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+
+mul-i32-imm-tests: $(MUL_I32_IMM_TEST_BIN)
+	@echo "Running OP_MUL_I32_IMM regression tests..."
+	@./$(MUL_I32_IMM_TEST_BIN)
 
 $(REGISTER_ALLOCATOR_TEST_BIN): tests/unit/test_register_allocator.c $(COMPILER_OBJS) $(VM_OBJS)
 	@mkdir -p $(dir $@)

@@ -3705,16 +3705,25 @@ InterpretResult vm_run_dispatch(void) {
         uint8_t src = *vm.ip++;
         int32_t imm = *(int32_t*)vm.ip;
         vm.ip += 4;
-        
-        // Compiler ensures this is only emitted for i32 operations, so trust it
-        Value val = vm_get_register_safe(src);
-        if (!IS_I32(val)) {
-            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operand must be i32");
+
+        int32_t current;
+        if (!vm_try_read_i32_typed(src, &current)) {
+            Value val = vm_get_register_safe(src);
+            if (!IS_I32(val)) {
+                VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operand must be i32");
+            }
+
+            current = AS_I32(val);
+            vm_cache_i32_typed(src, current);
         }
-        
-        int32_t result = AS_I32(val) - imm;
-        vm_set_register_safe(dst, I32_VAL(result));
-        
+
+        int32_t result;
+        if (__builtin_sub_overflow(current, imm, &result)) {
+            VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow");
+        }
+
+        vm_store_i32_typed_hot(dst, result);
+
         DISPATCH_TYPED();
     }
 
@@ -3723,16 +3732,25 @@ InterpretResult vm_run_dispatch(void) {
         uint8_t src = *vm.ip++;
         int32_t imm = *(int32_t*)vm.ip;
         vm.ip += 4;
-        
-        // Compiler ensures this is only emitted for i32 operations, so trust it
-        Value mul_val = vm_get_register_safe(src);
-        if (!IS_I32(mul_val)) {
-            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operand must be i32");
+
+        int32_t current;
+        if (!vm_try_read_i32_typed(src, &current)) {
+            Value mul_val = vm_get_register_safe(src);
+            if (!IS_I32(mul_val)) {
+                VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operand must be i32");
+            }
+
+            current = AS_I32(mul_val);
+            vm_cache_i32_typed(src, current);
         }
 
-        int32_t result = AS_I32(mul_val) * imm;
-        vm_set_register_safe(dst, I32_VAL(result));
-        
+        int32_t result;
+        if (__builtin_mul_overflow(current, imm, &result)) {
+            VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow");
+        }
+
+        vm_store_i32_typed_hot(dst, result);
+
         DISPATCH_TYPED();
     }
 

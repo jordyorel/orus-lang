@@ -160,6 +160,7 @@ InterpretResult vm_run_dispatch(void) {
             vm.instruction_count++;
 
             uint8_t instruction = READ_BYTE();
+            vm_update_source_location((size_t)((vm.ip - vm.chunk->code) - 1));
             PROFILE_INC(instruction);
 
             switch (instruction) {
@@ -3169,12 +3170,23 @@ InterpretResult vm_run_dispatch(void) {
                     int32_t imm = *(int32_t*)vm.ip;
                     vm.ip += 4;
 
-                    if (!IS_I32(vm_get_register_safe(src))) {
-                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operand must be i32");
+                    int32_t current;
+                    if (!vm_try_read_i32_typed(src, &current)) {
+                        Value src_value = vm_get_register_safe(src);
+                        if (!IS_I32(src_value)) {
+                            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operand must be i32");
+                        }
+
+                        current = AS_I32(src_value);
+                        vm_cache_i32_typed(src, current);
                     }
 
-                    int32_t result = AS_I32(vm_get_register_safe(src)) - imm;
-                    vm_set_register_safe(dst, I32_VAL(result));
+                    int32_t result;
+                    if (__builtin_sub_overflow(current, imm, &result)) {
+                        VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow");
+                    }
+
+                    vm_store_i32_typed_hot(dst, result);
                     break;
                 }
 
@@ -3184,12 +3196,23 @@ InterpretResult vm_run_dispatch(void) {
                     int32_t imm = *(int32_t*)vm.ip;
                     vm.ip += 4;
 
-                    if (!IS_I32(vm_get_register_safe(src))) {
-                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operand must be i32");
+                    int32_t current;
+                    if (!vm_try_read_i32_typed(src, &current)) {
+                        Value src_value = vm_get_register_safe(src);
+                        if (!IS_I32(src_value)) {
+                            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operand must be i32");
+                        }
+
+                        current = AS_I32(src_value);
+                        vm_cache_i32_typed(src, current);
                     }
 
-                    int32_t result = AS_I32(vm_get_register_safe(src)) * imm;
-                    vm_set_register_safe(dst, I32_VAL(result));
+                    int32_t result;
+                    if (__builtin_mul_overflow(current, imm, &result)) {
+                        VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow");
+                    }
+
+                    vm_store_i32_typed_hot(dst, result);
                     break;
                 }
 
