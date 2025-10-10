@@ -9,6 +9,7 @@
 
 #include "runtime/memory.h"
 #include "vm/spill_manager.h"
+#include "vm/register_file.h"
 #include "vm/vm.h"
 #include "vm/vm_string_ops.h"
 #include "vm/vm_comparison.h"
@@ -460,7 +461,7 @@ static void mark_typed_window(TypedRegisterWindow* window) {
             uint16_t bit = typed_window_ctz(live);
             uint16_t index = (uint16_t)(word * 64 + bit);
             if (index < TYPED_REGISTER_WINDOW_SIZE &&
-                window->reg_types[index] == REG_TYPE_HEAP) {
+                window->reg_types[index] == REG_TYPE_HEAP && window->heap_regs) {
                 markValue(window->heap_regs[index]);
             }
             live &= live - 1;
@@ -578,6 +579,7 @@ static void sweep() {
 void collectGarbage() {
     if (vm.gcPaused) return;
 
+    register_file_reconcile_active_window();
     markRoots();
     sweep();
     vm.gcCount++;

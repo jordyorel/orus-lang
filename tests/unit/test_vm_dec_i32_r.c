@@ -48,8 +48,8 @@ static bool test_dec_i32_typed_hot_path(void) {
         goto cleanup;
     }
 
-    if (!vm.typed_regs.dirty[reg]) {
-        fprintf(stderr, "Expected typed register %u to remain dirty after decrements\n", reg);
+    if (vm.typed_regs.dirty[reg]) {
+        fprintf(stderr, "Expected typed register %u to reconcile after decrements\n", reg);
         success = false;
         goto cleanup;
     }
@@ -67,14 +67,14 @@ static bool test_dec_i32_typed_hot_path(void) {
         goto cleanup;
     }
 
-    if (!vm.typed_regs.dirty[reg]) {
-        fprintf(stderr, "Expected dirty flag to remain set after typed read\n");
+    if (vm.typed_regs.dirty[reg]) {
+        fprintf(stderr, "Expected dirty flag to remain clear after typed read\n");
         success = false;
         goto cleanup;
     }
 
-    if (!IS_I32(vm.registers[reg]) || AS_I32(vm.registers[reg]) != 5) {
-        fprintf(stderr, "Expected boxed register to remain stale at 5, got type %d value %d\n",
+    if (!IS_I32(vm.registers[reg]) || AS_I32(vm.registers[reg]) != 3) {
+        fprintf(stderr, "Expected boxed register to reconcile to 3, got type %d value %d\n",
                 vm.registers[reg].type,
                 IS_I32(vm.registers[reg]) ? AS_I32(vm.registers[reg]) : -1);
         success = false;
@@ -115,8 +115,8 @@ static bool test_dec_i32_fallback_rehydrates_cache(void) {
         goto cleanup;
     }
 
-    if (!vm.typed_regs.dirty[reg]) {
-        fprintf(stderr, "Expected typed cache for register %u to be marked dirty\n", reg);
+    if (vm.typed_regs.dirty[reg]) {
+        fprintf(stderr, "Expected typed cache for register %u to be reconciled after fallback\n", reg);
         success = false;
         goto cleanup;
     }
@@ -134,8 +134,8 @@ static bool test_dec_i32_fallback_rehydrates_cache(void) {
         goto cleanup;
     }
 
-    if (!IS_I32(vm.registers[reg]) || AS_I32(vm.registers[reg]) != 11) {
-        fprintf(stderr, "Expected boxed register to remain unreconciled at 11, got type %d value %d\n",
+    if (!IS_I32(vm.registers[reg]) || AS_I32(vm.registers[reg]) != 10) {
+        fprintf(stderr, "Expected boxed register to reconcile to 10, got type %d value %d\n",
                 vm.registers[reg].type,
                 IS_I32(vm.registers[reg]) ? AS_I32(vm.registers[reg]) : -1);
         success = false;

@@ -49,8 +49,8 @@ static bool test_inc_i32_hot_path_persists(void) {
         goto cleanup;
     }
 
-    if (!vm.typed_regs.dirty[reg]) {
-        fprintf(stderr, "Expected register %u to remain dirty after increments\n", reg);
+    if (vm.typed_regs.dirty[reg]) {
+        fprintf(stderr, "Expected register %u to reconcile after increments\n", reg);
         success = false;
         goto cleanup;
     }
@@ -68,14 +68,14 @@ static bool test_inc_i32_hot_path_persists(void) {
         goto cleanup;
     }
 
-    if (!vm.typed_regs.dirty[reg]) {
-        fprintf(stderr, "Expected dirty flag to remain set after typed read\n");
+    if (vm.typed_regs.dirty[reg]) {
+        fprintf(stderr, "Expected dirty flag to remain clear after typed read\n");
         success = false;
         goto cleanup;
     }
 
-    if (!IS_I32(vm.registers[reg]) || AS_I32(vm.registers[reg]) != 7) {
-        fprintf(stderr, "Expected boxed register to remain stale at 7, got type %d value %d\n",
+    if (!IS_I32(vm.registers[reg]) || AS_I32(vm.registers[reg]) != 10) {
+        fprintf(stderr, "Expected boxed register to reconcile to 10, got type %d value %d\n",
                 vm.registers[reg].type, IS_I32(vm.registers[reg]) ? AS_I32(vm.registers[reg]) : -1);
         success = false;
         goto cleanup;
@@ -115,8 +115,8 @@ static bool test_inc_i64_hot_path_persists(void) {
         goto cleanup;
     }
 
-    if (!vm.typed_regs.dirty[reg]) {
-        fprintf(stderr, "Expected register %u to remain dirty after i64 increments\n", reg);
+    if (vm.typed_regs.dirty[reg]) {
+        fprintf(stderr, "Expected register %u to reconcile after i64 increments\n", reg);
         success = false;
         goto cleanup;
     }
@@ -134,14 +134,14 @@ static bool test_inc_i64_hot_path_persists(void) {
         goto cleanup;
     }
 
-    if (!vm.typed_regs.dirty[reg]) {
-        fprintf(stderr, "Expected dirty flag to remain set after typed i64 read\n");
+    if (vm.typed_regs.dirty[reg]) {
+        fprintf(stderr, "Expected dirty flag to remain clear after typed i64 read\n");
         success = false;
         goto cleanup;
     }
 
-    if (!IS_I64(vm.registers[reg]) || AS_I64(vm.registers[reg]) != 42) {
-        fprintf(stderr, "Expected boxed register to remain stale at 42, got type %d value %" PRId64 "\n",
+    if (!IS_I64(vm.registers[reg]) || AS_I64(vm.registers[reg]) != 46) {
+        fprintf(stderr, "Expected boxed register to reconcile to 46, got type %d value %" PRId64 "\n",
                 vm.registers[reg].type, IS_I64(vm.registers[reg]) ? AS_I64(vm.registers[reg]) : (int64_t)-1);
         success = false;
         goto cleanup;
@@ -181,8 +181,8 @@ static bool test_inc_u32_hot_path_persists(void) {
         goto cleanup;
     }
 
-    if (!vm.typed_regs.dirty[reg]) {
-        fprintf(stderr, "Expected register %u to remain dirty after u32 increments\n", reg);
+    if (vm.typed_regs.dirty[reg]) {
+        fprintf(stderr, "Expected register %u to reconcile after u32 increments\n", reg);
         success = false;
         goto cleanup;
     }
@@ -200,14 +200,14 @@ static bool test_inc_u32_hot_path_persists(void) {
         goto cleanup;
     }
 
-    if (!vm.typed_regs.dirty[reg]) {
-        fprintf(stderr, "Expected dirty flag to remain set after typed u32 read\n");
+    if (vm.typed_regs.dirty[reg]) {
+        fprintf(stderr, "Expected dirty flag to remain clear after typed u32 read\n");
         success = false;
         goto cleanup;
     }
 
-    if (!IS_U32(vm.registers[reg]) || AS_U32(vm.registers[reg]) != 17u) {
-        fprintf(stderr, "Expected boxed register to remain stale at 17, got type %d value %" PRIu32 "\n",
+    if (!IS_U32(vm.registers[reg]) || AS_U32(vm.registers[reg]) != 22u) {
+        fprintf(stderr, "Expected boxed register to reconcile to 22, got type %d value %" PRIu32 "\n",
                 vm.registers[reg].type, IS_U32(vm.registers[reg]) ? AS_U32(vm.registers[reg]) : 0u);
         success = false;
         goto cleanup;
@@ -247,8 +247,8 @@ static bool test_inc_u64_hot_path_persists(void) {
         goto cleanup;
     }
 
-    if (!vm.typed_regs.dirty[reg]) {
-        fprintf(stderr, "Expected register %u to remain dirty after u64 increments\n", reg);
+    if (vm.typed_regs.dirty[reg]) {
+        fprintf(stderr, "Expected register %u to reconcile after u64 increments\n", reg);
         success = false;
         goto cleanup;
     }
@@ -268,15 +268,15 @@ static bool test_inc_u64_hot_path_persists(void) {
         goto cleanup;
     }
 
-    if (!vm.typed_regs.dirty[reg]) {
-        fprintf(stderr, "Expected dirty flag to remain set after typed u64 read\n");
+    if (vm.typed_regs.dirty[reg]) {
+        fprintf(stderr, "Expected dirty flag to remain clear after typed u64 read\n");
         success = false;
         goto cleanup;
     }
 
-    if (!IS_U64(vm.registers[reg]) || AS_U64(vm.registers[reg]) != 100ull) {
+    if (!IS_U64(vm.registers[reg]) || AS_U64(vm.registers[reg]) != 106ull) {
         fprintf(stderr,
-                "Expected boxed register to remain stale at 100, got type %d value %llu\n",
+                "Expected boxed register to reconcile to 106, got type %d value %llu\n",
                 vm.registers[reg].type,
                 (unsigned long long)(IS_U64(vm.registers[reg]) ? AS_U64(vm.registers[reg]) : 0ull));
         success = false;

@@ -148,8 +148,8 @@ static bool test_add_i32_imm_reuses_typed_cache(void) {
         goto cleanup;
     }
 
-    if (!vm.typed_regs.dirty[0]) {
-        fprintf(stderr, "Expected register 0 to remain dirty after repeated adds\n");
+    if (vm.typed_regs.dirty[0]) {
+        fprintf(stderr, "Expected register 0 to reconcile after repeated adds\n");
         success = false;
         goto cleanup;
     }
@@ -167,14 +167,14 @@ static bool test_add_i32_imm_reuses_typed_cache(void) {
         goto cleanup;
     }
 
-    if (!vm.typed_regs.dirty[0]) {
-        fprintf(stderr, "Expected dirty flag to remain set after typed read\n");
+    if (vm.typed_regs.dirty[0]) {
+        fprintf(stderr, "Expected dirty flag to remain clear after typed read\n");
         success = false;
         goto cleanup;
     }
 
-    if (!IS_I32(vm.registers[0]) || AS_I32(vm.registers[0]) != 5) {
-        fprintf(stderr, "Expected boxed register to remain stale (5), got type %d value %d\n",
+    if (!IS_I32(vm.registers[0]) || AS_I32(vm.registers[0]) != 11) {
+        fprintf(stderr, "Expected boxed register to reconcile to 11, got type %d value %d\n",
                 vm.registers[0].type,
                 IS_I32(vm.registers[0]) ? AS_I32(vm.registers[0]) : -1);
         success = false;

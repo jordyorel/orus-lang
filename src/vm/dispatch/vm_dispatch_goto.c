@@ -211,6 +211,7 @@ InterpretResult vm_run_dispatch(void) {
     double start_time = get_time_vm();
     #define RETURN(val) \
         do { \
+            register_file_reconcile_active_window(); \
             InterpretResult _return_val = (val); \
             if (_return_val == INTERPRET_RUNTIME_ERROR) { \
                 vm_report_unhandled_error(); \
@@ -3177,6 +3178,8 @@ InterpretResult vm_run_dispatch(void) {
         uint8_t argCount = READ_BYTE();
         uint8_t resultReg = READ_BYTE();
 
+        register_file_reconcile_active_window();
+
         if (nativeIndex >= (uint8_t)vm.nativeFunctionCount) {
             VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(),
                             "Native function index %u out of range", nativeIndex);
@@ -4021,7 +4024,12 @@ InterpretResult vm_run_dispatch(void) {
         int32_t imm = *(int32_t*)vm.ip;
         vm.ip += 4;
 
-        bool result = vm.typed_regs.i32_regs[src] < imm;
+        int32_t current;
+        if (!vm_read_i32_hot(src, &current)) {
+            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operand must be i32");
+        }
+
+        bool result = current < imm;
         vm_store_bool_register(dst, result);
 
         DISPATCH_TYPED();
@@ -4254,9 +4262,22 @@ InterpretResult vm_run_dispatch(void) {
         uint8_t add = *vm.ip++;
 
         // Fused multiply-add (single operation on modern CPUs)
-        int32_t result =
-            vm.typed_regs.i32_regs[mul1] * vm.typed_regs.i32_regs[mul2] +
-            vm.typed_regs.i32_regs[add];
+        int32_t left;
+        if (!vm_read_i32_hot(mul1, &left)) {
+            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operand must be i32");
+        }
+
+        int32_t right;
+        if (!vm_read_i32_hot(mul2, &right)) {
+            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operand must be i32");
+        }
+
+        int32_t addend;
+        if (!vm_read_i32_hot(add, &addend)) {
+            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operand must be i32");
+        }
+
+        int32_t result = left * right + addend;
         vm_store_i32_typed_hot(dst, result);
 
         DISPATCH_TYPED();

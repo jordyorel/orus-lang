@@ -1033,6 +1033,7 @@ typedef struct TypedRegisterWindow {
     struct TypedRegisterWindow* next;  // Free-list linkage for recycled windows
     uint32_t generation;               // Window generation used for validity tracking
     uint64_t live_mask[TYPED_WINDOW_LIVE_WORDS];
+    uint64_t dirty_mask[TYPED_WINDOW_LIVE_WORDS];
 
     // Numeric registers (unboxed for performance)
     int32_t i32_regs[TYPED_REGISTER_WINDOW_SIZE];
@@ -1042,8 +1043,8 @@ typedef struct TypedRegisterWindow {
     double f64_regs[TYPED_REGISTER_WINDOW_SIZE];
     bool bool_regs[TYPED_REGISTER_WINDOW_SIZE];
 
-    // Heap object registers (boxed)
-    Value heap_regs[TYPED_REGISTER_WINDOW_SIZE];
+    // Heap object registers (boxed, lazily materialized)
+    Value* heap_regs;
 
     // Dirty flags indicate when the boxed register copy is stale
     bool dirty[TYPED_REGISTER_WINDOW_SIZE];
@@ -1052,6 +1053,15 @@ typedef struct TypedRegisterWindow {
     uint8_t reg_types[TYPED_REGISTER_WINDOW_SIZE];
 } TypedRegisterWindow;
 
+static inline void typed_window_reset_dirty_mask(TypedRegisterWindow* window) {
+    if (!window) {
+        return;
+    }
+    for (size_t i = 0; i < TYPED_WINDOW_LIVE_WORDS; ++i) {
+        window->dirty_mask[i] = 0;
+    }
+}
+
 static inline void typed_window_reset_live_mask(TypedRegisterWindow* window) {
     if (!window) {
         return;
@@ -1059,6 +1069,7 @@ static inline void typed_window_reset_live_mask(TypedRegisterWindow* window) {
     for (size_t i = 0; i < TYPED_WINDOW_LIVE_WORDS; ++i) {
         window->live_mask[i] = 0;
     }
+    typed_window_reset_dirty_mask(window);
 }
 
 static inline uint64_t typed_window_bit(uint16_t index) {
@@ -1090,6 +1101,58 @@ static inline bool typed_window_slot_live(const TypedRegisterWindow* window, uin
     return (window->live_mask[typed_window_word(index)] & typed_window_bit(index)) != 0;
 }
 
+static inline bool typed_window_slot_dirty(const TypedRegisterWindow* window, uint16_t index) {
+    if (!window || index >= TYPED_REGISTER_WINDOW_SIZE) {
+        return false;
+    }
+    return (window->dirty_mask[typed_window_word(index)] & typed_window_bit(index)) != 0;
+}
+
+static inline void typed_window_mark_dirty(TypedRegisterWindow* window, uint16_t index) {
+    if (!window || index >= TYPED_REGISTER_WINDOW_SIZE) {
+        return;
+    }
+    uint16_t word = typed_window_word(index);
+    uint64_t bit = typed_window_bit(index);
+    window->dirty_mask[word] |= bit;
+    window->dirty[index] = true;
+}
+
+static inline void typed_window_clear_dirty(TypedRegisterWindow* window, uint16_t index) {
+    if (!window || index >= TYPED_REGISTER_WINDOW_SIZE) {
+        return;
+    }
+    uint16_t word = typed_window_word(index);
+    uint64_t bit = typed_window_bit(index);
+    window->dirty_mask[word] &= ~bit;
+    window->dirty[index] = false;
+}
+
+static inline Value typed_window_default_boxed_value(void) {
+    Value value;
+    value.type = VAL_BOOL;
+    value.as.boolean = false;
+    return value;
+}
+
+static inline Value* typed_window_ensure_heap_storage(TypedRegisterWindow* window) {
+    if (!window) {
+        return NULL;
+    }
+    if (!window->heap_regs) {
+        Value* storage = (Value*)malloc(sizeof(Value) * TYPED_REGISTER_WINDOW_SIZE);
+        if (!storage) {
+            return NULL;
+        }
+        Value default_value = typed_window_default_boxed_value();
+        for (uint16_t i = 0; i < TYPED_REGISTER_WINDOW_SIZE; ++i) {
+            storage[i] = default_value;
+        }
+        window->heap_regs = storage;
+    }
+    return window->heap_regs;
+}
+
 // Typed registers for optimization (unboxed values)
 typedef struct {
     TypedRegisterWindow root_window;        // Root execution context window
@@ -1107,6 +1170,7 @@ typedef struct {
     bool* bool_regs;
     Value* heap_regs;
     bool* dirty;
+    uint64_t* dirty_mask;
     uint8_t* reg_types;
 } TypedRegisters;
 

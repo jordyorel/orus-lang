@@ -45,7 +45,6 @@ void initVM(void) {
     vm.typed_regs.root_window.generation = 0;
     typed_window_reset_live_mask(&vm.typed_regs.root_window);
     for (int i = 0; i < TYPED_REGISTER_WINDOW_SIZE; i++) {
-        vm.typed_regs.root_window.heap_regs[i] = BOOL_VAL(false);
         vm.typed_regs.root_window.reg_types[i] = REG_TYPE_NONE;
         vm.typed_regs.root_window.dirty[i] = false;
     }
@@ -62,6 +61,7 @@ void initVM(void) {
     vm.typed_regs.bool_regs = vm.typed_regs.root_window.bool_regs;
     vm.typed_regs.heap_regs = vm.typed_regs.root_window.heap_regs;
     vm.typed_regs.dirty = vm.typed_regs.root_window.dirty;
+    vm.typed_regs.dirty_mask = vm.typed_regs.root_window.dirty_mask;
     vm.typed_regs.reg_types = vm.typed_regs.root_window.reg_types;
     for (int i = 0; i < UINT8_COUNT; i++) {
         vm.globals[i] = BOOL_VAL(false); // Default value instead of NIL_VAL

@@ -19,17 +19,20 @@ static bool test_typed_register_deferred_boxing_flushes_on_read(void) {
     initVM();
 
     vm_store_i32_typed_hot(0, 10);
-    ASSERT_TRUE(!vm.typed_regs.dirty[0], "Initial store should synchronize boxed register");
-    ASSERT_TRUE(IS_I32(vm.registers[0]) && AS_I32(vm.registers[0]) == 10,
-                "Initial store should write boxed value");
-    ASSERT_TRUE(IS_I32(vm.register_file.globals[0]) && AS_I32(vm.register_file.globals[0]) == 10,
-                "Global mirror should receive initial boxed value");
+    ASSERT_TRUE(vm.typed_regs.dirty[0],
+                "Initial store should defer boxing until reconciliation");
+    ASSERT_TRUE(!IS_I32(vm.registers[0]) || AS_I32(vm.registers[0]) != 10,
+                "Deferred store should leave boxed register stale");
+    ASSERT_TRUE(!IS_I32(vm.register_file.globals[0]) ||
+                    AS_I32(vm.register_file.globals[0]) != 10,
+                "Global mirror should remain stale prior to reconciliation");
 
     vm_store_i32_typed_hot(0, 42);
     ASSERT_TRUE(vm.typed_regs.dirty[0], "Second store should defer boxing");
-    ASSERT_TRUE(IS_I32(vm.registers[0]) && AS_I32(vm.registers[0]) == 10,
+    ASSERT_TRUE(!IS_I32(vm.registers[0]) || AS_I32(vm.registers[0]) != 42,
                 "Deferred store should leave boxed register stale until reconciliation");
-    ASSERT_TRUE(IS_I32(vm.register_file.globals[0]) && AS_I32(vm.register_file.globals[0]) == 10,
+    ASSERT_TRUE(!IS_I32(vm.register_file.globals[0]) ||
+                    AS_I32(vm.register_file.globals[0]) != 42,
                 "Register file globals should remain stale until reconciliation");
 
     Value flushed = vm_get_register_safe(0);
@@ -107,6 +110,22 @@ static void build_conversion_chunk(Chunk* chunk, uint8_t opcode, uint8_t dst, ui
     writeChunk(chunk, OP_HALT, 0, 0, NULL);
 }
 
+static void write_i32_bytes(Chunk* chunk, int32_t value) {
+    writeChunk(chunk, (uint8_t)(value & 0xFF), 0, 0, NULL);
+    writeChunk(chunk, (uint8_t)((value >> 8) & 0xFF), 0, 0, NULL);
+    writeChunk(chunk, (uint8_t)((value >> 16) & 0xFF), 0, 0, NULL);
+    writeChunk(chunk, (uint8_t)((value >> 24) & 0xFF), 0, 0, NULL);
+}
+
+static void build_cmp_i32_imm_chunk(Chunk* chunk, uint8_t dst, uint8_t src, int32_t imm) {
+    initChunk(chunk);
+    writeChunk(chunk, OP_CMP_I32_IMM, 0, 0, NULL);
+    writeChunk(chunk, dst, 0, 0, NULL);
+    writeChunk(chunk, src, 0, 0, NULL);
+    write_i32_bytes(chunk, imm);
+    writeChunk(chunk, OP_HALT, 0, 0, NULL);
+}
+
 static bool test_bool_to_i32_conversion_defers_boxing_until_read(void) {
     initVM();
 
@@ -125,7 +144,7 @@ static bool test_bool_to_i32_conversion_defers_boxing_until_read(void) {
     ASSERT_TRUE(vm.typed_regs.i32_regs[dst_reg] == 1,
                 "Typed window should record converted truthy value");
     ASSERT_TRUE(!vm.typed_regs.dirty[dst_reg],
-                "Initial conversion should synchronize boxed register");
+                "Control-flow exit should reconcile initial conversion");
     ASSERT_TRUE(IS_I32(vm.registers[dst_reg]) && AS_I32(vm.registers[dst_reg]) == 1,
                 "Boxed register should receive first converted value");
 
@@ -135,10 +154,10 @@ static bool test_bool_to_i32_conversion_defers_boxing_until_read(void) {
     ASSERT_TRUE(run_single_conversion_step(&chunk), "Second bool->i32 conversion should execute");
     ASSERT_TRUE(vm.typed_regs.i32_regs[dst_reg] == 0,
                 "Typed cache should update with latest converted value");
-    ASSERT_TRUE(vm.typed_regs.dirty[dst_reg],
-                "Repeated conversion should defer boxing until reconciliation");
-    ASSERT_TRUE(IS_I32(vm.registers[dst_reg]) && AS_I32(vm.registers[dst_reg]) == 1,
-                "Boxed register should remain stale after deferred conversion");
+    ASSERT_TRUE(!vm.typed_regs.dirty[dst_reg],
+                "Second conversion should reconcile at dispatch boundary");
+    ASSERT_TRUE(IS_I32(vm.registers[dst_reg]) && AS_I32(vm.registers[dst_reg]) == 0,
+                "Boxed register should update with second converted value");
 
     Value flushed = vm_get_register_safe(dst_reg);
     ASSERT_TRUE(IS_I32(flushed) && AS_I32(flushed) == 0,
@@ -171,7 +190,7 @@ static bool test_i32_to_bool_conversion_defers_boxing_until_read(void) {
     ASSERT_TRUE(vm.typed_regs.bool_regs[dst_reg],
                 "Typed cache should store truthy conversion");
     ASSERT_TRUE(!vm.typed_regs.dirty[dst_reg],
-                "Initial conversion should reconcile boxed register");
+                "Initial conversion should reconcile at control-flow exit");
     ASSERT_TRUE(IS_BOOL(vm.registers[dst_reg]) && AS_BOOL(vm.registers[dst_reg]),
                 "Boxed register should receive initial boolean value");
 
@@ -181,10 +200,10 @@ static bool test_i32_to_bool_conversion_defers_boxing_until_read(void) {
     ASSERT_TRUE(run_single_conversion_step(&chunk), "Second i32->bool conversion should execute");
     ASSERT_TRUE(!vm.typed_regs.bool_regs[dst_reg],
                 "Typed cache should capture falsy conversion");
-    ASSERT_TRUE(vm.typed_regs.dirty[dst_reg],
-                "Repeated conversion should leave boxed register stale");
-    ASSERT_TRUE(IS_BOOL(vm.registers[dst_reg]) && AS_BOOL(vm.registers[dst_reg]),
-                "Boxed boolean should remain stale until explicit read");
+    ASSERT_TRUE(!vm.typed_regs.dirty[dst_reg],
+                "Repeated conversion should reconcile at dispatch boundary");
+    ASSERT_TRUE(IS_BOOL(vm.registers[dst_reg]) && !AS_BOOL(vm.registers[dst_reg]),
+                "Boxed boolean should reflect falsy conversion");
 
     Value reconciled = vm_get_register_safe(dst_reg);
     ASSERT_TRUE(IS_BOOL(reconciled) && !AS_BOOL(reconciled),
@@ -233,26 +252,26 @@ static bool test_range_iterator_uses_typed_registers(void) {
     ASSERT_TRUE(run_single_iter_step(&chunk), "Second iteration should execute");
     ASSERT_TRUE(vm.typed_regs.i64_regs[dst_reg] == 1,
                 "Second iteration should advance typed payload");
-    ASSERT_TRUE(vm.typed_regs.dirty[dst_reg],
-                "Second iteration should defer boxing for hot path");
-    ASSERT_TRUE(IS_I64(vm.registers[dst_reg]) && AS_I64(vm.registers[dst_reg]) == 0,
-                "Boxed register should remain at last reconciled value");
+    ASSERT_TRUE(!vm.typed_regs.dirty[dst_reg],
+                "Control-flow exit should reconcile range iterator payload");
+    ASSERT_TRUE(IS_I64(vm.registers[dst_reg]) && AS_I64(vm.registers[dst_reg]) == 1,
+                "Boxed register should reflect latest iteration after reconciliation");
     ASSERT_TRUE(IS_I64(vm.register_file.globals[dst_reg]) &&
-                    AS_I64(vm.register_file.globals[dst_reg]) == 0,
-                "Register file globals should remain at last reconciled value");
+                    AS_I64(vm.register_file.globals[dst_reg]) == 1,
+                "Register file globals should track reconciled iteration value");
     ASSERT_TRUE(vm.typed_regs.bool_regs[has_reg],
                 "Has-value flag should stay true while range produces values");
 
     ASSERT_TRUE(run_single_iter_step(&chunk), "Third iteration should execute");
     ASSERT_TRUE(vm.typed_regs.i64_regs[dst_reg] == 2,
                 "Third iteration should update typed payload without boxing");
-    ASSERT_TRUE(vm.typed_regs.dirty[dst_reg],
-                "Typed register should remain dirty until explicit read");
-    ASSERT_TRUE(IS_I64(vm.registers[dst_reg]) && AS_I64(vm.registers[dst_reg]) == 0,
-                "Boxed register should stay stale without reconciliation");
+    ASSERT_TRUE(!vm.typed_regs.dirty[dst_reg],
+                "Third iteration should reconcile at dispatch boundary");
+    ASSERT_TRUE(IS_I64(vm.registers[dst_reg]) && AS_I64(vm.registers[dst_reg]) == 2,
+                "Boxed register should match typed payload after reconciliation");
     ASSERT_TRUE(IS_I64(vm.register_file.globals[dst_reg]) &&
-                    AS_I64(vm.register_file.globals[dst_reg]) == 0,
-                "Register file globals should stay stale without reconciliation");
+                    AS_I64(vm.register_file.globals[dst_reg]) == 2,
+                "Register file globals should match reconciled iteration payload");
     ASSERT_TRUE(vm.typed_regs.bool_regs[has_reg],
                 "Has-value flag should be true before iterator exhaustion");
 
@@ -263,9 +282,11 @@ static bool test_range_iterator_uses_typed_registers(void) {
                 "Boxed has-value flag should flush false on exhaustion");
     ASSERT_TRUE(vm.typed_regs.i64_regs[dst_reg] == 2,
                 "Destination typed value should retain last yielded integer");
+    ASSERT_TRUE(!vm.typed_regs.dirty[dst_reg],
+                "Range iterator payload should already be reconciled after exhaustion");
     Value final_boxed = vm_reconcile_typed_register(dst_reg);
     ASSERT_TRUE(IS_I64(final_boxed) && AS_I64(final_boxed) == 2,
-                "Reconciliation should flush final yielded integer");
+                "Reconciliation should return stabilized value");
     ASSERT_TRUE(IS_I64(vm.registers[dst_reg]) && AS_I64(vm.registers[dst_reg]) == 2,
                 "Boxed register should hold final yielded integer after reconciliation");
     ASSERT_TRUE(IS_I64(vm.register_file.globals[dst_reg]) &&
@@ -316,21 +337,26 @@ static bool test_array_iterator_preserves_typed_loop_variable(void) {
     ASSERT_TRUE(run_single_iter_step(&chunk), "Second array iteration should execute");
     ASSERT_TRUE(vm.typed_regs.i64_regs[dst_reg] == 20,
                 "Second array iteration should update typed payload");
-    ASSERT_TRUE(vm.typed_regs.dirty[dst_reg],
-                "Hot array path should avoid boxing on subsequent iterations");
-    ASSERT_TRUE(IS_I64(vm.registers[dst_reg]) && AS_I64(vm.registers[dst_reg]) == 10,
-                "Boxed array iterator register should remain at last reconciled value");
+    ASSERT_TRUE(!vm.typed_regs.dirty[dst_reg],
+                "Control-flow exit should reconcile array iterator payload");
+    ASSERT_TRUE(IS_I64(vm.registers[dst_reg]) && AS_I64(vm.registers[dst_reg]) == 20,
+                "Boxed array iterator register should reflect updated element");
     ASSERT_TRUE(IS_I64(vm.register_file.globals[dst_reg]) &&
-                    AS_I64(vm.register_file.globals[dst_reg]) == 10,
-                "Register file globals should remain at last reconciled value");
+                    AS_I64(vm.register_file.globals[dst_reg]) == 20,
+                "Register file globals should match reconciled array element");
     ASSERT_TRUE(vm.typed_regs.bool_regs[has_reg],
                 "Has-value flag should remain true while elements remain");
 
     ASSERT_TRUE(run_single_iter_step(&chunk), "Third array iteration should execute");
     ASSERT_TRUE(vm.typed_regs.i64_regs[dst_reg] == 30,
                 "Third array iteration should expose final element via typed path");
-    ASSERT_TRUE(vm.typed_regs.dirty[dst_reg],
-                "Typed loop variable should stay dirty until read");
+    ASSERT_TRUE(!vm.typed_regs.dirty[dst_reg],
+                "Array iteration should reconcile each yield at dispatch boundary");
+    ASSERT_TRUE(IS_I64(vm.registers[dst_reg]) && AS_I64(vm.registers[dst_reg]) == 30,
+                "Boxed register should present current array element");
+    ASSERT_TRUE(IS_I64(vm.register_file.globals[dst_reg]) &&
+                    AS_I64(vm.register_file.globals[dst_reg]) == 30,
+                "Global mirror should present current array element");
 
     ASSERT_TRUE(run_single_iter_step(&chunk), "Fourth array iteration should detect exhaustion");
     ASSERT_TRUE(!vm.typed_regs.bool_regs[has_reg],
@@ -339,9 +365,11 @@ static bool test_array_iterator_preserves_typed_loop_variable(void) {
                 "Boxed boolean flag should flush false at exhaustion");
     ASSERT_TRUE(vm.typed_regs.i64_regs[dst_reg] == 30,
                 "Typed register should preserve last array element");
+    ASSERT_TRUE(!vm.typed_regs.dirty[dst_reg],
+                "Array iterator payload should be reconciled after exhaustion");
     Value array_final = vm_reconcile_typed_register(dst_reg);
     ASSERT_TRUE(IS_I64(array_final) && AS_I64(array_final) == 30,
-                "Reconciliation should surface final array element");
+                "Reconciliation should confirm stabilized array element");
     ASSERT_TRUE(IS_I64(vm.registers[dst_reg]) && AS_I64(vm.registers[dst_reg]) == 30,
                 "Boxed register should preserve last array element after reconciliation");
     ASSERT_TRUE(IS_I64(vm.register_file.globals[dst_reg]) &&
@@ -503,6 +531,38 @@ static bool test_global_typed_state_propagates_across_frames(void) {
     return true;
 }
 
+static bool test_cmp_i32_imm_recovers_typed_metadata(void) {
+    initVM();
+
+    Chunk chunk;
+    build_cmp_i32_imm_chunk(&chunk, 1, 0, 12);
+
+    vm_set_register_safe(0, I32_VAL(7));
+
+    TypedRegisterWindow* window = vm_active_typed_window();
+    typed_window_clear_live(window, 0);
+    window->reg_types[0] = REG_TYPE_NONE;
+
+    vm.chunk = &chunk;
+    vm.ip = chunk.code;
+    vm.isShuttingDown = false;
+
+    InterpretResult result = vm_run_dispatch();
+    ASSERT_TRUE(result == INTERPRET_OK, "vm_run_dispatch should succeed for OP_CMP_I32_IMM");
+
+    Value comparison = vm_get_register_safe(1);
+    ASSERT_TRUE(IS_BOOL(comparison) && AS_BOOL(comparison),
+                "Comparison should evaluate to true when src < imm");
+
+    int32_t recached = 0;
+    ASSERT_TRUE(vm_try_read_i32_typed(0, &recached) && recached == 7,
+                "vm_read_i32_hot fallback should repopulate typed cache");
+
+    freeChunk(&chunk);
+    freeVM();
+    return true;
+}
+
 int main(void) {
     bool (*tests[])(void) = {
         test_typed_register_deferred_boxing_flushes_on_read,
@@ -513,6 +573,7 @@ int main(void) {
         test_typed_window_reuse_resets_metadata_without_scrubbing,
         test_nested_frames_preserve_typed_windows,
         test_global_typed_state_propagates_across_frames,
+        test_cmp_i32_imm_recovers_typed_metadata,
         test_bool_to_i32_conversion_defers_boxing_until_read,
         test_i32_to_bool_conversion_defers_boxing_until_read,
     };
@@ -526,6 +587,7 @@ int main(void) {
         "Window reuse avoids scrubbing inactive slots",
         "Nested frames reuse typed windows without copying",
         "Global typed state propagates across frames",
+        "CMP_I32_IMM recovers typed metadata on fallback",
         "Bool to i32 conversion defers boxing until read",
         "i32 to bool conversion defers boxing until read",
     };
