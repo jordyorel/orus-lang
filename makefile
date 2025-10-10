@@ -250,6 +250,7 @@ ADD_I32_IMM_TEST_BIN = $(BUILDDIR)/tests/test_vm_add_i32_imm
 SUB_I32_IMM_TEST_BIN = $(BUILDDIR)/tests/test_vm_sub_i32_imm
 MUL_I32_IMM_TEST_BIN = $(BUILDDIR)/tests/test_vm_mul_i32_imm
 INC_R_TEST_BIN = $(BUILDDIR)/tests/test_vm_inc_r
+DEC_I32_R_TEST_BIN = $(BUILDDIR)/tests/test_vm_dec_i32_r
 BUILTIN_INPUT_TEST_BIN = $(BUILDDIR)/tests/test_builtin_input
 CONSTANT_FOLD_TEST_BIN = $(BUILDDIR)/tests/test_constant_folding
 BUILTIN_SORTED_ORUS_TESTS = \
@@ -265,7 +266,7 @@ BUILTIN_RANGE_ORUS_FAIL_TESTS = \
     tests/builtins/range_float_step.orus \
     tests/builtins/range_overflow_stop.orus
 
-.PHONY: all clean test unit-test test-control-flow benchmark help debug release profiling analyze install bytecode-jump-tests source-map-tests scope-tracking-tests fused-while-tests peephole-tests cli-smoke-tests tagged-union-tests typed-register-tests vm-print-tests register-window-tests spill-gc-tests inc-cmp-jmp-tests add-i32-imm-tests inc-r-tests register-allocator-tests builtin-input-tests builtin-range-tests test-optimizer wasm _test-run _benchmark-run
+.PHONY: all clean test unit-test test-control-flow benchmark help debug release profiling analyze install bytecode-jump-tests source-map-tests scope-tracking-tests fused-while-tests peephole-tests cli-smoke-tests tagged-union-tests typed-register-tests vm-print-tests register-window-tests spill-gc-tests inc-cmp-jmp-tests add-i32-imm-tests inc-r-tests dec-i32-r-tests register-allocator-tests builtin-input-tests builtin-range-tests test-optimizer wasm _test-run _benchmark-run
 
 all: build-info $(ORUS)
 
@@ -459,6 +460,9 @@ _test-run: $(ORUS)
 	@echo "\033[36m=== OP_INC_* Typed Cache Tests ===\033[0m"
 	@$(MAKE) inc-r-tests
 	@echo ""
+	@echo "\033[36m=== OP_DEC_I32_R Typed Cache Tests ===\033[0m"
+	@$(MAKE) dec-i32-r-tests
+	@echo ""
 	@echo "\033[36m=== Register Allocator Tests ===\033[0m"
 	@$(MAKE) register-allocator-tests
 	@echo ""
@@ -644,6 +648,15 @@ $(INC_R_TEST_BIN): tests/unit/test_vm_inc_r.c $(COMPILER_OBJS) $(VM_OBJS)
 inc-r-tests: $(INC_R_TEST_BIN)
 	@echo "Running OP_INC_* typed cache regression tests..."
 	@./$(INC_R_TEST_BIN)
+
+$(DEC_I32_R_TEST_BIN): tests/unit/test_vm_dec_i32_r.c $(COMPILER_OBJS) $(VM_OBJS)
+	@mkdir -p $(dir $@)
+	@echo "Compiling OP_DEC_I32_R typed cache regression tests..."
+	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+
+dec-i32-r-tests: $(DEC_I32_R_TEST_BIN)
+	@echo "Running OP_DEC_I32_R typed cache regression tests..."
+	@./$(DEC_I32_R_TEST_BIN)
 
 $(REGISTER_ALLOCATOR_TEST_BIN): tests/unit/test_register_allocator.c $(COMPILER_OBJS) $(VM_OBJS)
 	@mkdir -p $(dir $@)

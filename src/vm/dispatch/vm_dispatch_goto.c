@@ -1045,34 +1045,37 @@ InterpretResult vm_run_dispatch(void) {
         }
 
     LABEL_OP_DEC_I32_R: {
-            uint8_t reg = READ_BYTE();
-            const uint8_t typed_limit = (uint8_t)TYPED_REGISTER_WINDOW_SIZE;
+            uint8_t reg_byte = READ_BYTE();
+            uint16_t reg = (uint16_t)reg_byte;
 
-            if (reg < typed_limit && vm_typed_slot_live(reg) &&
-                vm.typed_regs.reg_types[reg] == REG_TYPE_I32) {
-    #if USE_FAST_ARITH
-                int32_t result = vm.typed_regs.i32_regs[reg] - 1;
-    #else
+            int32_t current;
+            if (vm_try_read_i32_typed(reg, &current)) {
+#if USE_FAST_ARITH
+                int32_t result = current - 1;
+#else
                 int32_t result;
-                if (__builtin_sub_overflow(vm.typed_regs.i32_regs[reg], 1, &result)) {
+                if (__builtin_sub_overflow(current, 1, &result)) {
                     VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow");
                 }
-    #endif
-                vm.typed_regs.i32_regs[reg] = result;
-                vm_set_register_safe(reg, I32_VAL(result));
+#endif
+                vm_store_i32_typed_hot(reg, result);
             } else {
-    #if USE_FAST_ARITH
-                Value val = vm_get_register_safe(reg);
-                vm_set_register_safe(reg, I32_VAL(AS_I32(val) - 1));
-    #else
-                Value val_reg = vm_get_register_safe(reg);
-                int32_t val = AS_I32(val_reg);
+                Value boxed = vm_get_register_safe(reg);
+                if (!IS_I32(boxed)) {
+                    vm_typed_promote_to_heap(reg, boxed);
+                    VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be i32");
+                }
+                int32_t val = AS_I32(boxed);
+                vm_cache_i32_typed(reg, val);
+#if USE_FAST_ARITH
+                vm_store_i32_typed_hot(reg, val - 1);
+#else
                 int32_t result;
                 if (__builtin_sub_overflow(val, 1, &result)) {
                     VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow");
                 }
-                vm_set_register_safe(reg, I32_VAL(result));
-    #endif
+                vm_store_i32_typed_hot(reg, result);
+#endif
             }
             DISPATCH();
         }
