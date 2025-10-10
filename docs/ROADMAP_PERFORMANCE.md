@@ -12,9 +12,9 @@ Each phase is validated by dedicated **C unit tests** ensuring correctness and m
 ### Implementation Steps
 
 * Decouple interpreter fast paths from the boxed `Value` array and defer boxing to reconciliation points (control-flow exits, GC barriers, or FFI crossings).
-* Split boxed storage into a lazily materialized cold path; update GC barriers and debugger hooks to trigger reconciliation explicitly.
-* Track dirtiness per register window instead of per write to reduce flag churn.
-* Audit VM opcodes so typed operands never invoke boxed accessors during steady-state loops.
+[] Split boxed storage into a lazily materialized cold path; update GC barriers and debugger hooks to trigger reconciliation explicitly.
+[] Track dirtiness per register window instead of per write to reduce flag churn.
+[] Audit VM opcodes so typed operands never invoke boxed accessors during steady-state loops.
 
 ### Code Template — Typed Register Window
 
@@ -53,8 +53,8 @@ TEST_CASE(test_typed_register_i32) {
 
 ### Milestone Exit Criteria
 
-* Interpreter fast paths operate exclusively on typed register windows.
-* All typed-register tests pass with zero GC regressions.
+[] Interpreter fast paths operate exclusively on typed register windows.
+*[] All typed-register tests pass with zero GC regressions.
 
 ---
 
@@ -64,9 +64,9 @@ TEST_CASE(test_typed_register_i32) {
 
 ### Implementation Steps
 
-* Extend optimizer passes to prove loop-invariant operand types and allocate persistent typed registers across loop bodies.
-* Update bytecode emitter to emit typed opcodes directly.
-* Extend register allocator to reserve contiguous spans per type, emitting reconciliation stubs only on loop exits.
+[] Extend optimizer passes to prove loop-invariant operand types and allocate persistent typed registers across loop bodies.
+[] Update bytecode emitter to emit typed opcodes directly.
+[] Extend register allocator to reserve contiguous spans per type, emitting reconciliation stubs only on loop exits.
 
 ### Code Template — Typed Loop Planning
 
@@ -95,8 +95,8 @@ TEST_CASE(test_typed_loop_persistence) {
 
 ### Milestone Exit Criteria
 
-* Typed loops validated to execute without boxed fallback.
-* Compiler emits contiguous type-homogeneous register blocks.
+[] Typed loops validated to execute without boxed fallback.
+[] Compiler emits contiguous type-homogeneous register blocks.
 
 ---
 
@@ -106,10 +106,10 @@ TEST_CASE(test_typed_loop_persistence) {
 
 ### Implementation Steps
 
-* Add lightweight sampling probes for loop and function hit counts.
-* Feed profiling metadata back to the compiler for re-specialization.
-* Generate specialized bytecode guarded by deoptimization stubs.
-* Provide `orus-prof` CLI to visualize hotness and specialization status.
+[] Add lightweight sampling probes for loop and function hit counts.
+[] Feed profiling metadata back to the compiler for re-specialization.
+[] Generate specialized bytecode guarded by deoptimization stubs.
+[] Provide `orus-prof` CLI to visualize hotness and specialization status.
 
 ### Code Template — Runtime Hot Path Sampling
 
@@ -139,21 +139,21 @@ TEST_CASE(test_hot_loop_detection) {
 
 ### Milestone Exit Criteria
 
-* Tier-up system triggers specialization after N iterations.
-* Profiling data round-trips between runtime and compiler.
+[] Tier-up system triggers specialization after N iterations.
+[] Profiling data round-trips between runtime and compiler.
 
 ---
 
-## Phase 4 — Introduce a Native + JIT Execution Tier
+## Phase 4 — Introduce a Native + JIT(OrusJit) Execution Tier
 
 **Objective:** Escape the interpreter ceiling by generating machine code for stabilized hot paths.
 
 ### Implementation Steps
 
-* Integrate a portable JIT backend (DynASM).
-* Insert **GC safepoints** before each allocation call to cooperate with `collectGarbage()`.
-* Implement deoptimization stubs for type-mismatch recovery.
-* Keep identical frame and register layouts across interpreter and JIT tiers.
+[] Integrate a portable JIT backend (DynASM).
+[] Insert **GC safepoints** before each allocation call to cooperate with `collectGarbage()`.
+[] Implement deoptimization stubs for type-mismatch recovery.
+[] Keep identical frame and register layouts across interpreter and JIT tiers.
 
 ### Code Template — JIT Backend Interface
 
@@ -193,8 +193,8 @@ TEST_CASE(test_jit_gc_safepoint) {
 
 ### Milestone Exit Criteria
 
-* JIT’d code executes hot regions at 3–5× interpreter speed.
-* GC operates correctly during JIT execution.
+[] JIT’d code executes hot regions at 3–5× interpreter speed.
+[] GC operates correctly during JIT execution.
 
 ---
 
@@ -204,9 +204,9 @@ TEST_CASE(test_jit_gc_safepoint) {
 
 ### Implementation Steps
 
-* Emit LLVM IR or Orus IR → native code using the same backend as JIT.
-* Link runtime (`liborus_rt.a`) and embed GC metadata.
-* Expose `orus build main.orus -o main`.
+[] Orus IR → native code using the same backend as JIT.
+[] Link runtime (`liborus_rt.a`) and embed GC metadata.
+[] Expose `orus build main.orus -o main`.
 
 ### Code Template — AOT Entrypoint
 
@@ -231,8 +231,8 @@ TEST_CASE(test_aot_binary_executes) {
 
 ### Milestone Exit Criteria
 
-* Compiled binaries run standalone with full GC support.
-* Performance within 10–15% of Go.
+[] Compiled binaries run standalone with full GC support.
+[] Performance within 10–15% of Go.
 
 ---
 
@@ -242,10 +242,10 @@ TEST_CASE(test_aot_binary_executes) {
 
 ### Implementation Steps
 
-* Convert the existing mark-and-sweep GC into incremental tri-color.
-* Add generational pools using existing `freeLists[]`.
-* Optimize `markRoots()` for frame-local scanning.
-* Profile allocation sites and create region allocators.
+[] Convert the existing mark-and-sweep GC into incremental tri-color.
+[] Add generational pools using existing `freeLists[]`.
+[] Optimize `markRoots()` for frame-local scanning.
+[] Profile allocation sites and create region allocators.
 
 ### Code Template — Incremental GC Step
 
@@ -270,8 +270,8 @@ TEST_CASE(test_incremental_gc) {
 
 ### Milestone Exit Criteria
 
-* GC pauses < 5 ms per 64 MB heap.
-* Stable memory footprint under sustained allocation churn.
+[] GC pauses < 5 ms per 64 MB heap.
+[] Stable memory footprint under sustained allocation churn.
 
 ---
 
@@ -281,9 +281,9 @@ TEST_CASE(test_incremental_gc) {
 
 ### Implementation Steps
 
-* Add SSA-based passes: constant folding, DCE, copy propagation, inlining.
-* Implement escape analysis for stack allocation.
-* Benchmark against LuaJIT 2.1 and Go.
+[] Add SSA-based passes: constant folding, DCE, copy propagation, inlining.
+[] Implement escape analysis for stack allocation.
+[] Benchmark against LuaJIT 2.1 and Go.
 
 ### Unit Test — SSA Optimization Validation
 
@@ -296,8 +296,8 @@ TEST_CASE(test_constant_folding) {
 
 ### Milestone Exit Criteria
 
-* Tight numeric loops reach 90%+ of Go speed.
-* Mixed workloads 70–90× faster than Python.
+[] Tight numeric loops reach 90%+ of Go speed.
+[] Mixed workloads 70–90× faster than Python.
 
 ---
 
