@@ -126,7 +126,6 @@ TEST_CASE(test_typed_loop_persistence) {
 **Objective:** Detect hot code and feed specialization data back into the compiler automatically.
 
 ### Implementation Steps
-
 [x] Add lightweight sampling probes for loop and function hit counts.
 [x] Feed profiling metadata back to the compiler for re-specialization.
     - The specialization feedback bridge harvests VM samples and hands them to
@@ -139,7 +138,57 @@ TEST_CASE(test_typed_loop_persistence) {
     - Shipped the standalone `orus-prof` binary that ingests exported profiling
       JSON, surfaces the hottest opcodes, and flags which functions are ready
       for specialization promotion.
+[] Profiling & Tier-Up
+    - Instruction & Loop Counters
 
+        ```c 
+        vm->ticks++;
+        if (++loop->hit_count == HOT_THRESHOLD)
+            queue_tier_up(&vm->compiler, func_id, loop_id);
+        ```
+    - Hot Path Sample Struct
+
+        ```c
+        typedef struct {
+            FunctionId func;
+            LoopId     loop;
+            uint64_t   hit_count;
+        } HotPathSample;
+        ```
+    - Profiling Hook
+
+        ```c
+        inline static bool
+        vm_profile_tick(VMState* vm, FunctionId f, LoopId l) {
+            HotPathSample* s = &vm->profile[l];
+            if (++s->hit_count == HOT_THRESHOLD) {
+                queue_tier_up(vm, s);
+                return true;
+            }
+            return false;
+        }
+        ```
+
+    - Tier-Up Stub (future JIT entrypoint)
+        ```c
+        void queue_tier_up(VMState* vm, const HotPathSample* s) {
+            /* placeholder for Phase 4 JIT */
+        }
+        ```
+
+    - GC Safepoint in Profiler
+        ```c
+        #define PROF_SAFEPOINT(vm) \
+            if ((vm)->bytesAllocated > gcThreshold) collectGarbage();
+        ```
+
+    - Minimal Unit Test
+        ```c
+        TEST_CASE(test_hot_loop_detection) {
+            run_hot_loop(10000);
+            ASSERT_TRUE(vm_profile_tick(&vm, FUNC_MAIN, LOOP_0));
+        }
+        ```
 ### Code Template — Runtime Hot Path Sampling
 
 ```c
