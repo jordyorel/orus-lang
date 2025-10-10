@@ -3679,13 +3679,17 @@ InterpretResult vm_run_dispatch(void) {
         int32_t imm = *(int32_t*)vm.ip;
         vm.ip += 4;
 
-        // Compiler ensures this is only emitted for i32 operations, so trust it
-        Value src_value = vm_get_register_safe(src);
-        if (!IS_I32(src_value)) {
-            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operand must be i32");
+        int32_t current;
+        if (!vm_try_read_i32_typed(src, &current)) {
+            Value src_value = vm_get_register_safe(src);
+            if (!IS_I32(src_value)) {
+                VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operand must be i32");
+            }
+
+            current = AS_I32(src_value);
+            vm_cache_i32_typed(src, current);
         }
 
-        int32_t current = AS_I32(src_value);
         int32_t result;
         if (__builtin_add_overflow(current, imm, &result)) {
             VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow");
