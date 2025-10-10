@@ -241,13 +241,21 @@ TEST_CASE(test_hot_loop_detection) {
 
 ### Implementation Steps
 
-[] Integrate a portable JIT backend (DynASM).
-[] Insert **GC safepoints** before each allocation call to cooperate with `collectGarbage()`.
-[] Implement deoptimization stubs for type-mismatch recovery.
-[] Keep identical frame and register layouts across interpreter and JIT tiers.
-[] Implement OrusJit IR → DynASM codegen pipeline.
-[] Maintain JITEntry cache with invalidation and reuse.
-[] Support deoptimization fallback to interpreter.
+[] Integrate a portable JIT backend (DynASM).  
+[] Insert **GC safepoints** before each allocation call to cooperate with `collectGarbage()`.  
+[] Implement deoptimization stubs for type-mismatch recovery.  
+[] Keep identical frame and register layouts across interpreter and JIT tiers.  
+[] Implement OrusJit IR → DynASM codegen pipeline.  
+[] Maintain JITEntry cache with invalidation and reuse.  
+[] Support deoptimization fallback to interpreter.  
+
+# 🧩 Future Enhancement — Loop Tracing and Inline Caching
+[] Extend `queue_tier_up()` to record and linearize hot bytecode traces (**trace-based JIT**).  
+[] Implement **trace guards** for type stability; fall back to interpreter on deopt.  
+[] Add **inline caches (IC)** for property/method lookups and arithmetic ops, patching machine code directly on type changes.  
+[] Merge stable traces into a **trace tree** for loop variants, feeding into the SSA optimizer (Phase 8).  
+[] Expected gain: **~4–10× speedup** on hot arithmetic loops and repeated object paths.  
+
 
 
 ### Code Template — JIT Backend Interface
