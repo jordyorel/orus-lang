@@ -14,6 +14,8 @@
 #endif
 #include "vm/vm_profiling.h"
 #include "vm/vm.h"
+#include "vm/vm_tiering.h"
+#include "vm/jit_ir.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -525,8 +527,79 @@ bool shouldOptimizeForHotPath(void* codeAddress) {
     return isHotPath(codeAddress) && g_profiling.isActive;
 }
 
-void queue_tier_up(VMState* vm, const HotPathSample* sample) {
-    (void)vm;
-    (void)sample;
-    // Phase 4 JIT hook placeholder – intentionally left blank for now.
+static void
+vm_jit_enter_entry(VMState* vm_state, const JITEntry* entry) {
+    if (!vm_state || !entry || !entry->entry_point) {
+        return;
+    }
+
+    const JITBackendVTable* vtable = orus_jit_backend_vtable();
+    if (!vtable || !vtable->enter) {
+        return;
+    }
+
+    vtable->enter((struct VM*)vm_state, entry);
+    vm_state->jit_invocation_count++;
+}
+
+void queue_tier_up(VMState* vm_state, const HotPathSample* sample) {
+    if (!vm_state || !sample) {
+        return;
+    }
+
+    if (!vm_state->jit_enabled || !vm_state->jit_backend) {
+        return;
+    }
+
+    if (sample->loop >= VM_MAX_PROFILED_LOOPS) {
+        return;
+    }
+
+    if (sample->func == UINT16_MAX || sample->func >= (FunctionId)vm_state->functionCount) {
+        return;
+    }
+
+    HotPathSample* record = &vm_state->profile[sample->loop];
+    record->hit_count = 0;
+
+    JITEntry* cached = vm_jit_lookup_entry(sample->func, sample->loop);
+    if (cached && cached->entry_point) {
+        vm_jit_enter_entry(vm_state, cached);
+        return;
+    }
+
+    OrusJitIRInstruction ir_instructions[] = {
+        { .opcode = ORUS_JIT_IR_OP_RETURN },
+    };
+    OrusJitIRProgram program = {
+        .instructions = ir_instructions,
+        .count = sizeof(ir_instructions) / sizeof(ir_instructions[0]),
+    };
+
+    JITEntry entry;
+    memset(&entry, 0, sizeof(entry));
+
+    JITBackendStatus status =
+        orus_jit_backend_compile_ir(vm_state->jit_backend, &program, &entry);
+    if (status != JIT_BACKEND_OK) {
+        vm_jit_enter_entry(vm_state, &vm_state->jit_entry_stub);
+        return;
+    }
+
+    uint64_t generation =
+        vm_jit_install_entry(sample->func, sample->loop, &entry);
+    if (generation == 0) {
+        vm_jit_enter_entry(vm_state, &vm_state->jit_entry_stub);
+        return;
+    }
+
+    vm_state->jit_compilation_count++;
+
+    cached = vm_jit_lookup_entry(sample->func, sample->loop);
+    if (cached && cached->entry_point) {
+        vm_jit_enter_entry(vm_state, cached);
+        return;
+    }
+
+    vm_jit_enter_entry(vm_state, &vm_state->jit_entry_stub);
 }

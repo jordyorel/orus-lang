@@ -49,10 +49,6 @@ struct OrusJitBackend {
     bool available;
 };
 
-#if ORUS_JIT_HAS_DYNASM_X86
-enum { ORUS_JIT_SECTION_CODE = 0 };
-#endif
-
 static size_t
 orus_jit_detect_page_size(void) {
 #ifdef _WIN32
@@ -263,11 +259,6 @@ static bool
 orus_jit_ir_emit_x86(const OrusJitIRProgram* program,
                      struct DynAsmActionBuffer* actions) {
     if (!program || !actions || program->count == 0) {
-        return false;
-    }
-
-    if (!dynasm_action_buffer_push(actions, DASM_SECTION) ||
-        !dynasm_action_buffer_push(actions, ORUS_JIT_SECTION_CODE)) {
         return false;
     }
 
