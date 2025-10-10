@@ -88,17 +88,57 @@ static bool test_scope_depth_overflow_records_diagnostics(void) {
     return true;
 }
 
+static bool test_typed_span_reservation_and_reconciliation_tracking(void) {
+    DualRegisterAllocator* allocator = compiler_create_allocator();
+    ASSERT_TRUE(allocator != NULL, "allocator should be created");
+
+    TypedSpanReservation span = {0};
+    bool reserved = compiler_begin_typed_span(
+        allocator, REG_BANK_TYPED_I32, 3, true, &span);
+    ASSERT_TRUE(reserved, "typed span reservation should succeed");
+    ASSERT_TRUE(span.length == 3, "span length should match requested count");
+    ASSERT_TRUE(span.physical_start >= 0, "span should have a valid physical start index");
+
+    compiler_release_typed_span(allocator, &span);
+
+    TypedSpanReservation pending[4] = {0};
+    int pending_count = compiler_collect_pending_reconciliations(allocator, pending, 4);
+    ASSERT_TRUE(pending_count == 1, "released span should enqueue one reconciliation");
+    ASSERT_TRUE(pending[0].physical_start == span.physical_start,
+                "pending span should report the same start index");
+    ASSERT_TRUE(pending[0].length == span.length,
+                "pending span should report the same length");
+
+    TypedSpanReservation span2 = {0};
+    bool reserved_again = compiler_begin_typed_span(
+        allocator, REG_BANK_TYPED_I32, 3, false, &span2);
+    ASSERT_TRUE(reserved_again, "allocator should reuse freed typed span");
+    ASSERT_TRUE(span2.physical_start == span.physical_start,
+                "allocator should recycle contiguous window");
+
+    compiler_release_typed_span(allocator, &span2);
+
+    pending_count = compiler_collect_pending_reconciliations(allocator, pending, 4);
+    ASSERT_TRUE(pending_count == 0,
+                "non-reconciling span should not enqueue reconciliation work");
+
+    compiler_destroy_allocator(allocator);
+    return true;
+}
+
 int main(void) {
     bool (*tests[])(void) = {
         test_typed_register_allocation_cycle,
         test_distinct_banks_track_independently,
         test_scope_depth_overflow_records_diagnostics,
+        test_typed_span_reservation_and_reconciliation_tracking,
     };
 
     const char* names[] = {
         "Typed register allocation/free cycle reuses freed slots",
         "Distinct register banks maintain independent indices",
         "Scope overflow attempts are captured as diagnostics instead of warnings",
+        "Typed span reservations track reconciliation requests",
     };
 
     int passed = 0;

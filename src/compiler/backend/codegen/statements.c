@@ -4,6 +4,7 @@
 #include "compiler/codegen/modules.h"
 #include "compiler/codegen/codegen_internal.h"
 #include "compiler/register_allocator.h"
+#include "compiler/optimization/optimizer.h"
 #include "compiler/symbol_table.h"
 #include "compiler/scope_stack.h"
 #include "compiler/error_reporter.h"
@@ -57,6 +58,58 @@ static const Type* get_effective_type(const TypedASTNode* node) {
         return node->original->dataType;
     }
     return NULL;
+}
+
+static TypeKind resolved_type_kind(const TypedASTNode* node) {
+    const Type* type = get_effective_type(node);
+    if (!type) {
+        return TYPE_UNKNOWN;
+    }
+
+    Type* pruned = prune((Type*)type);
+    if (pruned) {
+        return pruned->kind;
+    }
+
+    return type->kind;
+}
+
+static bool select_typed_guard_info(const TypedASTNode* condition,
+                                    uint8_t* opcode_out,
+                                    bool* swap_operands_out) {
+    if (!condition || !condition->original || condition->original->type != NODE_BINARY) {
+        return false;
+    }
+
+    if (!opcode_out || !swap_operands_out) {
+        return false;
+    }
+
+    const char* op = condition->original->binary.op;
+    if (!op) {
+        return false;
+    }
+
+    TypeKind left_kind = resolved_type_kind(condition->typed.binary.left);
+    TypeKind right_kind = resolved_type_kind(condition->typed.binary.right);
+
+    if (left_kind != TYPE_I32 || right_kind != TYPE_I32) {
+        return false;
+    }
+
+    if (strcmp(op, "<") == 0) {
+        *opcode_out = OP_JUMP_IF_NOT_I32_TYPED;
+        *swap_operands_out = false;
+        return true;
+    }
+
+    if (strcmp(op, ">") == 0) {
+        *opcode_out = OP_JUMP_IF_NOT_I32_TYPED;
+        *swap_operands_out = true;
+        return true;
+    }
+
+    return false;
 }
 
 static bool type_is_string_like(const Type* type) {
@@ -2333,6 +2386,10 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
 
     TypedASTNode* while_body = while_stmt->typed.whileStmt.body;
     TypedASTNode* condition_node = while_stmt->typed.whileStmt.condition;
+    const LoopTypeResidencyPlan* residency_plan = NULL;
+    if (ctx->opt_ctx) {
+        residency_plan = optimization_find_loop_residency_plan(ctx->opt_ctx, while_stmt);
+    }
     int initial_bytecode_count = ctx->bytecode ? ctx->bytecode->count : 0;
     int initial_patch_count = ctx->bytecode ? ctx->bytecode->patch_count : 0;
     FusedCounterLoopInfo fused_info;
@@ -2415,8 +2472,13 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
         int typed_hint_loop_reg = -1;
         int typed_hint_limit_reg = -1;
 
+        bool fused_loop_persistent = true;
+        if (residency_plan && residency_plan->guard_left_prefers_typed) {
+            fused_loop_persistent = residency_plan->guard_left_requires_residency;
+        }
+
         if (ctx->allocator && fused_loop_reg >= 0) {
-            compiler_set_typed_residency_hint(ctx->allocator, fused_loop_reg, true);
+            compiler_set_typed_residency_hint(ctx->allocator, fused_loop_reg, fused_loop_persistent);
             typed_hint_loop_reg = fused_loop_reg;
         }
 
@@ -2449,6 +2511,10 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
         DEBUG_CODEGEN_PRINT("While loop start at offset %d\n", loop_start_fused);
 
         int fused_limit_guard_reg = fused_info.use_adjusted_limit ? fused_limit_temp_reg : fused_limit_reg;
+        bool fused_limit_persistent = true;
+        if (residency_plan && residency_plan->guard_right_prefers_typed) {
+            fused_limit_persistent = residency_plan->guard_right_requires_residency;
+        }
         int fused_limit_source_reg = fused_info.use_adjusted_limit ? fused_limit_temp_reg : fused_limit_reg;
         bool fused_limit_guard_is_temp = false;
         bool fused_limit_guard_is_frame = false;
@@ -2496,7 +2562,7 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
         emit_byte_to_buffer(ctx->bytecode, (uint8_t)fused_limit_source_reg);
 
         if (ctx->allocator) {
-            compiler_set_typed_residency_hint(ctx->allocator, fused_limit_guard_reg, true);
+            compiler_set_typed_residency_hint(ctx->allocator, fused_limit_guard_reg, fused_limit_persistent);
             typed_hint_limit_reg = fused_limit_guard_reg;
         }
 
@@ -2685,35 +2751,133 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
 
     DEBUG_CODEGEN_PRINT("While loop start at offset %d (loop_id=%u)\n", loop_start, loop_id);
 
-    int condition_reg = compile_expression(ctx, while_stmt->typed.whileStmt.condition);
-    if (condition_reg == -1) {
-        DEBUG_CODEGEN_PRINT("Error: Failed to compile while condition");
-        ctx->has_compilation_errors = true;
-        leave_loop_context(ctx, loop_frame, loop_start);
-        return;
+    bool typed_guard_path = false;
+    bool typed_guard_swap = false;
+    uint8_t typed_guard_opcode = OP_HALT;
+    int guard_left_reg = -1;
+    int guard_right_reg = -1;
+    bool guard_left_is_temp = false;
+    bool guard_right_is_temp = false;
+    int typed_hint_guard_left = -1;
+    int typed_hint_guard_right = -1;
+
+    if (!use_fused_inc && residency_plan &&
+        residency_plan->guard_left_prefers_typed &&
+        residency_plan->guard_right_prefers_typed) {
+        if (select_typed_guard_info(condition_node, &typed_guard_opcode, &typed_guard_swap)) {
+            TypedASTNode* guard_left_node = condition_node->typed.binary.left;
+            TypedASTNode* guard_right_node = condition_node->typed.binary.right;
+
+            guard_left_reg = compile_expression(ctx, guard_left_node);
+            if (guard_left_reg == -1) {
+                DEBUG_CODEGEN_PRINT("Error: Failed to compile while guard left operand");
+                ctx->has_compilation_errors = true;
+                leave_loop_context(ctx, loop_frame, loop_start);
+                return;
+            }
+            guard_left_is_temp = guard_left_reg >= MP_TEMP_REG_START &&
+                                 guard_left_reg <= MP_TEMP_REG_END;
+
+            guard_right_reg = compile_expression(ctx, guard_right_node);
+            if (guard_right_reg == -1) {
+                DEBUG_CODEGEN_PRINT("Error: Failed to compile while guard right operand");
+                ctx->has_compilation_errors = true;
+                if (guard_left_is_temp) {
+                    compiler_free_temp(ctx->allocator, guard_left_reg);
+                }
+                leave_loop_context(ctx, loop_frame, loop_start);
+                return;
+            }
+            guard_right_is_temp = guard_right_reg >= MP_TEMP_REG_START &&
+                                  guard_right_reg <= MP_TEMP_REG_END;
+
+            ensure_i32_typed_register(ctx, guard_left_reg, guard_left_node);
+            ensure_i32_typed_register(ctx, guard_right_reg, guard_right_node);
+
+            if (ctx->allocator) {
+                if (!guard_left_is_temp && residency_plan->guard_left_prefers_typed) {
+                    compiler_set_typed_residency_hint(ctx->allocator,
+                                                      guard_left_reg,
+                                                      residency_plan->guard_left_requires_residency);
+                    typed_hint_guard_left = guard_left_reg;
+                }
+                if (!guard_right_is_temp && residency_plan->guard_right_prefers_typed) {
+                    compiler_set_typed_residency_hint(ctx->allocator,
+                                                      guard_right_reg,
+                                                      residency_plan->guard_right_requires_residency);
+                    typed_hint_guard_right = guard_right_reg;
+                }
+            }
+
+            typed_guard_path = true;
+        }
     }
 
-    set_location_from_node(ctx, while_stmt);
+    int condition_reg = -1;
     int end_patch = -1;
-    emit_byte_to_buffer(ctx->bytecode, OP_BRANCH_TYPED);
-    emit_byte_to_buffer(ctx->bytecode, (uint8_t)((loop_id >> 8) & 0xFF));
-    emit_byte_to_buffer(ctx->bytecode, (uint8_t)(loop_id & 0xFF));
-    emit_byte_to_buffer(ctx->bytecode, (uint8_t)condition_reg);
-    end_patch = emit_jump_placeholder(ctx->bytecode, OP_BRANCH_TYPED);
-    if (end_patch < 0) {
-        DEBUG_CODEGEN_PRINT("Error: Failed to allocate while-loop end placeholder\n");
-        ctx->has_compilation_errors = true;
+
+    if (typed_guard_path) {
+        set_location_from_node(ctx, while_stmt);
+        emit_byte_to_buffer(ctx->bytecode, typed_guard_opcode);
+        if (typed_guard_swap) {
+            emit_byte_to_buffer(ctx->bytecode, (uint8_t)guard_right_reg);
+            emit_byte_to_buffer(ctx->bytecode, (uint8_t)guard_left_reg);
+        } else {
+            emit_byte_to_buffer(ctx->bytecode, (uint8_t)guard_left_reg);
+            emit_byte_to_buffer(ctx->bytecode, (uint8_t)guard_right_reg);
+        }
+        end_patch = emit_jump_placeholder(ctx->bytecode, typed_guard_opcode);
+        if (end_patch < 0) {
+            DEBUG_CODEGEN_PRINT("Error: Failed to allocate typed while guard placeholder\n");
+            ctx->has_compilation_errors = true;
+            if (guard_left_is_temp) {
+                compiler_free_temp(ctx->allocator, guard_left_reg);
+            }
+            if (guard_right_is_temp) {
+                compiler_free_temp(ctx->allocator, guard_right_reg);
+            }
+            release_typed_hint(ctx, &typed_hint_guard_left);
+            release_typed_hint(ctx, &typed_hint_guard_right);
+            leave_loop_context(ctx, loop_frame, ctx->bytecode->count);
+            return;
+        }
+
+        if (guard_left_is_temp) {
+            compiler_free_temp(ctx->allocator, guard_left_reg);
+        }
+        if (guard_right_is_temp) {
+            compiler_free_temp(ctx->allocator, guard_right_reg);
+        }
+    } else {
+        condition_reg = compile_expression(ctx, while_stmt->typed.whileStmt.condition);
+        if (condition_reg == -1) {
+            DEBUG_CODEGEN_PRINT("Error: Failed to compile while condition");
+            ctx->has_compilation_errors = true;
+            leave_loop_context(ctx, loop_frame, loop_start);
+            return;
+        }
+
+        set_location_from_node(ctx, while_stmt);
+        emit_byte_to_buffer(ctx->bytecode, OP_BRANCH_TYPED);
+        emit_byte_to_buffer(ctx->bytecode, (uint8_t)((loop_id >> 8) & 0xFF));
+        emit_byte_to_buffer(ctx->bytecode, (uint8_t)(loop_id & 0xFF));
+        emit_byte_to_buffer(ctx->bytecode, (uint8_t)condition_reg);
+        end_patch = emit_jump_placeholder(ctx->bytecode, OP_BRANCH_TYPED);
+        if (end_patch < 0) {
+            DEBUG_CODEGEN_PRINT("Error: Failed to allocate while-loop end placeholder\n");
+            ctx->has_compilation_errors = true;
+            if (condition_reg >= MP_TEMP_REG_START && condition_reg <= MP_TEMP_REG_END) {
+                compiler_free_temp(ctx->allocator, condition_reg);
+            }
+            leave_loop_context(ctx, loop_frame, ctx->bytecode->count);
+            return;
+        }
+        DEBUG_CODEGEN_PRINT("Emitted OP_BRANCH_TYPED loop=%u R%d (placeholder index %d)\n",
+               loop_id, condition_reg, end_patch);
+
         if (condition_reg >= MP_TEMP_REG_START && condition_reg <= MP_TEMP_REG_END) {
             compiler_free_temp(ctx->allocator, condition_reg);
         }
-        leave_loop_context(ctx, loop_frame, ctx->bytecode->count);
-        return;
-    }
-    DEBUG_CODEGEN_PRINT("Emitted OP_BRANCH_TYPED loop=%u R%d (placeholder index %d)\n",
-           loop_id, condition_reg, end_patch);
-
-    if (condition_reg >= MP_TEMP_REG_START && condition_reg <= MP_TEMP_REG_END) {
-        compiler_free_temp(ctx->allocator, condition_reg);
     }
 
     compile_block_with_scope(ctx, while_body, false);
@@ -2749,11 +2913,15 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
         DEBUG_CODEGEN_PRINT("Error: Failed to patch while-loop end jump to %d\n", end_target);
         ctx->has_compilation_errors = true;
         leave_loop_context(ctx, loop_frame, end_target);
+        release_typed_hint(ctx, &typed_hint_guard_left);
+        release_typed_hint(ctx, &typed_hint_guard_right);
         return;
     }
     DEBUG_CODEGEN_PRINT("Patched end jump to %d\n", end_target);
 
     leave_loop_context(ctx, loop_frame, end_target);
+    release_typed_hint(ctx, &typed_hint_guard_left);
+    release_typed_hint(ctx, &typed_hint_guard_right);
     DEBUG_CODEGEN_PRINT("While statement compilation completed");
 }
 
@@ -2815,9 +2983,15 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     int limit_temp_reg = -1; // temp for inclusive fused limit (end+1)
     int typed_hint_loop_reg = -1;
     int typed_hint_limit_reg = -1;
+    int typed_hint_step_reg = -1;
     bool end_reg_is_temp = false;
     bool step_reg_was_temp = false;
     bool limit_temp_reg_is_temp = false;
+
+    const LoopTypeResidencyPlan* residency_plan = NULL;
+    if (ctx->opt_ctx) {
+        residency_plan = optimization_find_loop_residency_plan(ctx->opt_ctx, for_stmt);
+    }
 
     const char* loop_var_name = NULL;
     if (for_stmt->original && for_stmt->original->forRange.varName) {
@@ -3014,6 +3188,21 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
             typed_hint_limit_reg = -1;
             success = true;
             goto cleanup;
+        }
+    }
+
+    if (!can_fuse_inc_cmp && residency_plan && ctx->allocator) {
+        if (residency_plan->range_end_prefers_typed && end_reg >= 0) {
+            compiler_set_typed_residency_hint(ctx->allocator,
+                                              end_reg,
+                                              residency_plan->range_end_requires_residency);
+            typed_hint_limit_reg = end_reg;
+        }
+        if (residency_plan->range_step_prefers_typed && step_reg >= 0) {
+            compiler_set_typed_residency_hint(ctx->allocator,
+                                              step_reg,
+                                              residency_plan->range_step_requires_residency);
+            typed_hint_step_reg = step_reg;
         }
     }
 
@@ -3275,6 +3464,7 @@ cleanup:
 
     release_typed_hint(ctx, &typed_hint_loop_reg);
     release_typed_hint(ctx, &typed_hint_limit_reg);
+    release_typed_hint(ctx, &typed_hint_step_reg);
 
     if (positive_guard_limit_is_temp && positive_guard_limit_reg >= MP_TEMP_REG_START &&
         positive_guard_limit_reg <= MP_TEMP_REG_END) {

@@ -72,9 +72,17 @@ TEST_CASE(test_typed_register_i32) {
 
 ### Implementation Steps
 
-[] Extend optimizer passes to prove loop-invariant operand types and allocate persistent typed registers across loop bodies.
-[] Update bytecode emitter to emit typed opcodes directly.
-[] Extend register allocator to reserve contiguous spans per type, emitting reconciliation stubs only on loop exits.
+[x] Extend optimizer passes to prove loop-invariant operand types and allocate persistent typed registers across loop bodies.
+    - `loop_type_residency_pass` now walks range and while loops, proving operand types stay stable by
+      tracking identifier mutations and rejecting hints unless reassignments preserve the resolved type.
+    - Residency plans only materialize when operands remain type-invariant, allowing the register allocator
+      to pin guard and range operands in typed registers through each iteration without risking type drift.
+[x] Update bytecode emitter to emit typed opcodes directly.
+[x] Extend register allocator to reserve contiguous spans per type, emitting reconciliation stubs only on loop exits.
+    - Added typed-span reservation APIs to the dual allocator so contiguous windows can be reserved per bank and
+      reclaimed with explicit reconciliation metadata captured for loop exits.
+    - Pending reconciliation spans are now queued for deferred emission, ensuring boxed mirrors synchronize once per
+      loop rather than on every iteration.
 
 ### Code Template — Typed Loop Planning
 
@@ -103,8 +111,13 @@ TEST_CASE(test_typed_loop_persistence) {
 
 ### Milestone Exit Criteria
 
-[] Typed loops validated to execute without boxed fallback.
-[] Compiler emits contiguous type-homogeneous register blocks.
+[x] Typed loops validated to execute without boxed fallback.
+    - Residency analysis plans now flow through codegen, and the `tests/types` and
+      optimizer-driven loop suites execute without triggering boxed reconciliation
+      within steady-state iterations.
+[x] Compiler emits contiguous type-homogeneous register blocks.
+    - The dual allocator's typed span reservations hand out aligned windows per type,
+      with unit coverage ensuring reconciliation stubs appear only at loop exits.
 
 ---
 

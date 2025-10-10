@@ -45,6 +45,8 @@ typedef struct RegisterBank {
     bool regs[256];
 } RegisterBank;
 
+#define MAX_TYPED_SPAN_RESERVATIONS 32
+
 typedef struct DualRegisterAllocator {
     MultiPassRegisterAllocator* legacy_allocator;
 
@@ -57,6 +59,11 @@ typedef struct DualRegisterAllocator {
 
     int arithmetic_operation_count;
     bool prefer_typed_registers;
+
+    TypedSpanReservation active_spans[MAX_TYPED_SPAN_RESERVATIONS];
+    int active_span_count;
+    TypedSpanReservation pending_spans[MAX_TYPED_SPAN_RESERVATIONS];
+    int pending_span_count;
 } DualRegisterAllocator;
 
 typedef struct RegisterBankDefinition {
@@ -103,6 +110,8 @@ static void free_physical_from_bank(RegisterBank* bank, int physical_id);
 static RegisterAllocation* allocate_register_from_bank(DualRegisterAllocator* allocator,
                                                        RegisterBankKind kind);
 static RegisterBankKind register_bank_kind_from_type(RegisterType type);
+static int allocate_contiguous_from_bank(RegisterBank* bank, int count);
+static void release_contiguous_to_bank(RegisterBank* bank, int start, int count);
 
 // ====== DUAL REGISTER SYSTEM IMPLEMENTATION ======
 
@@ -475,7 +484,12 @@ DualRegisterAllocator* init_dual_register_allocator(void) {
     // Initialize performance heuristics
     allocator->arithmetic_operation_count = 0;
     allocator->prefer_typed_registers = true;  // Start with optimization enabled
-    
+
+    allocator->active_span_count = 0;
+    allocator->pending_span_count = 0;
+    memset(allocator->active_spans, 0, sizeof(allocator->active_spans));
+    memset(allocator->pending_spans, 0, sizeof(allocator->pending_spans));
+
     REGISTER_ALLOCATOR_LOG("[DUAL_REGISTER_ALLOCATOR] Initialized with typed register optimization enabled\n");
     return allocator;
 }
@@ -665,7 +679,7 @@ static RegisterAllocation* allocate_standard_register(DualRegisterAllocator* all
 
 RegisterAllocation* allocate_register_smart(DualRegisterAllocator* allocator, RegisterType type, bool is_arithmetic_hot_path) {
     if (!allocator) return NULL;
-    
+
     // Increment arithmetic operation counter for heuristics
     if (is_arithmetic_hot_path) {
         allocator->arithmetic_operation_count++;
@@ -727,6 +741,159 @@ void free_register_allocation(DualRegisterAllocator* allocator, RegisterAllocati
     }
     
     allocation->is_active = false;
+}
+
+static int allocate_contiguous_from_bank(RegisterBank* bank, int count) {
+    if (!bank || count <= 0 || count > 256) {
+        return -1;
+    }
+
+    for (int start = 0; start <= 256 - count; ++start) {
+        bool available = true;
+        for (int offset = 0; offset < count; ++offset) {
+            if (bank->regs[start + offset]) {
+                available = false;
+                break;
+            }
+        }
+
+        if (available) {
+            for (int offset = 0; offset < count; ++offset) {
+                bank->regs[start + offset] = true;
+            }
+            return start;
+        }
+    }
+
+    return -1;
+}
+
+static void release_contiguous_to_bank(RegisterBank* bank, int start, int count) {
+    if (!bank || start < 0 || count <= 0 || start + count > 256) {
+        return;
+    }
+
+    for (int offset = 0; offset < count; ++offset) {
+        bank->regs[start + offset] = false;
+    }
+}
+
+bool compiler_begin_typed_span(DualRegisterAllocator* allocator,
+                               RegisterBankKind bank_kind,
+                               int count,
+                               bool requires_reconciliation,
+                               TypedSpanReservation* out_span) {
+    if (!allocator || !out_span || count <= 0) {
+        return false;
+    }
+
+    if (allocator->active_span_count >= MAX_TYPED_SPAN_RESERVATIONS) {
+        REGISTER_ALLOCATOR_WARN(
+            "[DUAL_REGISTER_ALLOCATOR] Unable to reserve typed span: active span capacity exceeded\n");
+        return false;
+    }
+
+    RegisterBank* bank = get_register_bank(allocator, bank_kind);
+    if (!bank) {
+        return false;
+    }
+
+    int physical_start = allocate_contiguous_from_bank(bank, count);
+    if (physical_start < 0) {
+        REGISTER_ALLOCATOR_WARN(
+            "[DUAL_REGISTER_ALLOCATOR] Unable to reserve %d contiguous typed registers in bank %s\n",
+            count,
+            bank->name ? bank->name : "<unknown>");
+        return false;
+    }
+
+    TypedSpanReservation span = {
+        .bank_kind = bank_kind,
+        .physical_type = bank->physical_type,
+        .physical_start = physical_start,
+        .length = count,
+        .requires_reconciliation = requires_reconciliation,
+    };
+
+    allocator->active_spans[allocator->active_span_count++] = span;
+    *out_span = span;
+
+    REGISTER_ALLOCATOR_LOG(
+        "[DUAL_REGISTER_ALLOCATOR] Reserved typed span bank=%s start=%d length=%d reconcile=%d\n",
+        bank->name ? bank->name : "<unknown>",
+        physical_start,
+        count,
+        requires_reconciliation);
+
+    return true;
+}
+
+void compiler_release_typed_span(DualRegisterAllocator* allocator, const TypedSpanReservation* span) {
+    if (!allocator || !span) {
+        return;
+    }
+
+    RegisterBank* bank = get_register_bank(allocator, span->bank_kind);
+    if (!bank) {
+        return;
+    }
+
+    for (int i = 0; i < allocator->active_span_count; ++i) {
+        TypedSpanReservation* active = &allocator->active_spans[i];
+        if (active->bank_kind == span->bank_kind &&
+            active->physical_start == span->physical_start &&
+            active->length == span->length) {
+
+            release_contiguous_to_bank(bank, active->physical_start, active->length);
+
+            allocator->active_spans[i] = allocator->active_spans[allocator->active_span_count - 1];
+            allocator->active_span_count--;
+
+            if (span->requires_reconciliation) {
+                if (allocator->pending_span_count < MAX_TYPED_SPAN_RESERVATIONS) {
+                    allocator->pending_spans[allocator->pending_span_count++] = *span;
+                } else {
+                    REGISTER_ALLOCATOR_WARN(
+                        "[DUAL_REGISTER_ALLOCATOR] Pending reconciliation capacity exceeded; dropping span (%s:%d)\n",
+                        bank->name ? bank->name : "<unknown>",
+                        span->physical_start);
+                }
+            }
+
+            REGISTER_ALLOCATOR_LOG(
+                "[DUAL_REGISTER_ALLOCATOR] Released typed span bank=%s start=%d length=%d\n",
+                bank->name ? bank->name : "<unknown>",
+                span->physical_start,
+                span->length);
+            return;
+        }
+    }
+}
+
+int compiler_collect_pending_reconciliations(DualRegisterAllocator* allocator,
+                                             TypedSpanReservation* out_spans,
+                                             int max_spans) {
+    if (!allocator || !out_spans || max_spans <= 0) {
+        return 0;
+    }
+
+    int emit_count = allocator->pending_span_count;
+    if (emit_count > max_spans) {
+        emit_count = max_spans;
+    }
+
+    for (int i = 0; i < emit_count; ++i) {
+        out_spans[i] = allocator->pending_spans[i];
+    }
+
+    if (emit_count < allocator->pending_span_count) {
+        memmove(allocator->pending_spans,
+                allocator->pending_spans + emit_count,
+                (allocator->pending_span_count - emit_count) * sizeof(TypedSpanReservation));
+    }
+
+    allocator->pending_span_count -= emit_count;
+    return emit_count;
 }
 
 // Utility functions

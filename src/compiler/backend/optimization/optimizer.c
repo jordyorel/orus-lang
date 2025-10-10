@@ -8,6 +8,7 @@
 
 #include "compiler/optimization/optimizer.h"
 #include "compiler/optimization/constantfold.h"
+#include "compiler/optimization/loop_type_residency.h"
 #include "runtime/memory.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -112,6 +113,70 @@ static OptimizationPassResult run_common_subexpression_pass(TypedASTNode* ast, O
     return run_not_implemented_pass(ast, ctx, "Common subexpression elimination");
 }
 
+static bool ensure_loop_residency_capacity(OptimizationContext* ctx, size_t required) {
+    if (!ctx) {
+        return false;
+    }
+
+    if (ctx->loop_residency_capacity >= required) {
+        return true;
+    }
+
+    size_t new_capacity = ctx->loop_residency_capacity == 0 ? 8 : ctx->loop_residency_capacity;
+    while (new_capacity < required) {
+        new_capacity *= 2;
+    }
+
+    LoopTypeResidencyPlan* resized = realloc(ctx->loop_residency_plans,
+                                             new_capacity * sizeof(LoopTypeResidencyPlan));
+    if (!resized) {
+        return false;
+    }
+
+    ctx->loop_residency_plans = resized;
+    ctx->loop_residency_capacity = new_capacity;
+    return true;
+}
+
+int optimization_add_loop_residency_plan(OptimizationContext* ctx, const LoopTypeResidencyPlan* plan) {
+    if (!ctx || !plan) {
+        return -1;
+    }
+
+    if (!ensure_loop_residency_capacity(ctx, ctx->loop_residency_count + 1)) {
+        return -1;
+    }
+
+    LoopTypeResidencyPlan* slot = &ctx->loop_residency_plans[ctx->loop_residency_count];
+    *slot = *plan;
+    ctx->loop_residency_count++;
+    return (int)(ctx->loop_residency_count - 1);
+}
+
+const LoopTypeResidencyPlan* optimization_find_loop_residency_plan(const OptimizationContext* ctx,
+                                                                   const TypedASTNode* loop_node) {
+    if (!ctx || !loop_node || ctx->loop_residency_count == 0) {
+        return NULL;
+    }
+
+    for (size_t i = 0; i < ctx->loop_residency_count; ++i) {
+        const LoopTypeResidencyPlan* plan = &ctx->loop_residency_plans[i];
+        if (plan->loop_node == loop_node) {
+            return plan;
+        }
+    }
+
+    return NULL;
+}
+
+void optimization_clear_loop_residency_plans(OptimizationContext* ctx) {
+    if (!ctx) {
+        return;
+    }
+
+    ctx->loop_residency_count = 0;
+}
+
 OptimizationContext* init_optimization_context(void) {
     OptimizationContext* ctx = malloc(sizeof(OptimizationContext));
     if (!ctx) return NULL;
@@ -131,8 +196,13 @@ OptimizationContext* init_optimization_context(void) {
 
     ctx->verbose_output = true;
 
+    ctx->loop_residency_plans = NULL;
+    ctx->loop_residency_count = 0;
+    ctx->loop_residency_capacity = 0;
+
     const OptimizationPassRegistration registrations[] = {
         {"Constant Folding", true, run_constant_folding_pass},
+        {"Loop Type Residency", true, run_loop_type_residency_pass},
         {"Dead Code Elimination", false, run_dead_code_elimination_pass},
         {"Common Subexpression Elimination", false, run_common_subexpression_pass},
     };
@@ -157,6 +227,7 @@ void free_optimization_context(OptimizationContext* ctx) {
     // free_expression_cache(ctx->expressions);
 
     free(ctx->passes);
+    free(ctx->loop_residency_plans);
     free(ctx);
 }
 
