@@ -31,6 +31,9 @@
 #define VM_HANDLE_INC_I32_SLOW_PATH(reg) \
     do { \
         uint16_t reg__ = (uint16_t)(reg); \
+        bool needs_reconcile__ = (reg__ < FRAME_REG_START || \
+                                 (reg__ >= MODULE_REG_START && \
+                                  reg__ < MODULE_REG_START + MODULE_REGISTERS)); \
         int32_t current__; \
         if (vm_try_read_i32_typed(reg__, &current__)) { \
             int32_t next_value__; \
@@ -38,10 +41,6 @@
                 VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow"); \
             } \
             vm_store_i32_typed_hot(reg__, next_value__); \
-            if (reg__ < FRAME_REG_START || \
-                (reg__ >= MODULE_REG_START && reg__ < MODULE_REG_START + MODULE_REGISTERS)) { \
-                vm_reconcile_typed_register(reg__); \
-            } \
         } else { \
             Value val_reg__ = vm_get_register_safe(reg__); \
             if (!IS_I32(val_reg__)) { \
@@ -55,16 +54,18 @@
                 VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow"); \
             } \
             vm_store_i32_typed_hot(reg__, next_value__); \
-            if (reg__ < FRAME_REG_START || \
-                (reg__ >= MODULE_REG_START && reg__ < MODULE_REG_START + MODULE_REGISTERS)) { \
-                vm_reconcile_typed_register(reg__); \
-            } \
+        } \
+        if (needs_reconcile__) { \
+            vm_reconcile_typed_register(reg__); \
         } \
     } while (0)
 
 #define VM_HANDLE_INC_I64_SLOW_PATH(reg) \
     do { \
         uint16_t reg__ = (uint16_t)(reg); \
+        bool needs_reconcile__ = (reg__ < FRAME_REG_START || \
+                                 (reg__ >= MODULE_REG_START && \
+                                  reg__ < MODULE_REG_START + MODULE_REGISTERS)); \
         int64_t current__; \
         if (vm_try_read_i64_typed(reg__, &current__)) { \
             int64_t next_value__; \
@@ -72,10 +73,6 @@
                 VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow"); \
             } \
             vm_store_i64_typed_hot(reg__, next_value__); \
-            if (reg__ < FRAME_REG_START || \
-                (reg__ >= MODULE_REG_START && reg__ < MODULE_REG_START + MODULE_REGISTERS)) { \
-                vm_reconcile_typed_register(reg__); \
-            } \
         } else { \
             Value val_reg__ = vm_get_register_safe(reg__); \
             if (!IS_I64(val_reg__)) { \
@@ -89,23 +86,22 @@
                 VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow"); \
             } \
             vm_store_i64_typed_hot(reg__, next_value__); \
-            if (reg__ < FRAME_REG_START || \
-                (reg__ >= MODULE_REG_START && reg__ < MODULE_REG_START + MODULE_REGISTERS)) { \
-                vm_reconcile_typed_register(reg__); \
-            } \
+        } \
+        if (needs_reconcile__) { \
+            vm_reconcile_typed_register(reg__); \
         } \
     } while (0)
 
 #define VM_HANDLE_INC_U32_SLOW_PATH(reg) \
     do { \
         uint16_t reg__ = (uint16_t)(reg); \
+        bool needs_reconcile__ = (reg__ < FRAME_REG_START || \
+                                 (reg__ >= MODULE_REG_START && \
+                                  reg__ < MODULE_REG_START + MODULE_REGISTERS)); \
         uint32_t current__; \
         if (vm_try_read_u32_typed(reg__, &current__)) { \
-            vm_store_u32_typed_hot(reg__, current__ + (uint32_t)1); \
-            if (reg__ < FRAME_REG_START || \
-                (reg__ >= MODULE_REG_START && reg__ < MODULE_REG_START + MODULE_REGISTERS)) { \
-                vm_reconcile_typed_register(reg__); \
-            } \
+            uint32_t next_value__ = current__ + (uint32_t)1; \
+            vm_store_u32_typed_hot(reg__, next_value__); \
         } else { \
             Value val_reg__ = vm_get_register_safe(reg__); \
             if (!IS_U32(val_reg__)) { \
@@ -114,24 +110,24 @@
             } \
             uint32_t boxed_value__ = AS_U32(val_reg__); \
             vm_cache_u32_typed(reg__, boxed_value__); \
-            vm_store_u32_typed_hot(reg__, boxed_value__ + (uint32_t)1); \
-            if (reg__ < FRAME_REG_START || \
-                (reg__ >= MODULE_REG_START && reg__ < MODULE_REG_START + MODULE_REGISTERS)) { \
-                vm_reconcile_typed_register(reg__); \
-            } \
+            uint32_t next_value__ = boxed_value__ + (uint32_t)1; \
+            vm_store_u32_typed_hot(reg__, next_value__); \
+        } \
+        if (needs_reconcile__) { \
+            vm_reconcile_typed_register(reg__); \
         } \
     } while (0)
 
 #define VM_HANDLE_INC_U64_SLOW_PATH(reg) \
     do { \
         uint16_t reg__ = (uint16_t)(reg); \
+        bool needs_reconcile__ = (reg__ < FRAME_REG_START || \
+                                 (reg__ >= MODULE_REG_START && \
+                                  reg__ < MODULE_REG_START + MODULE_REGISTERS)); \
         uint64_t current__; \
         if (vm_try_read_u64_typed(reg__, &current__)) { \
-            vm_store_u64_typed_hot(reg__, current__ + (uint64_t)1); \
-            if (reg__ < FRAME_REG_START || \
-                (reg__ >= MODULE_REG_START && reg__ < MODULE_REG_START + MODULE_REGISTERS)) { \
-                vm_reconcile_typed_register(reg__); \
-            } \
+            uint64_t next_value__ = current__ + (uint64_t)1; \
+            vm_store_u64_typed_hot(reg__, next_value__); \
         } else { \
             Value val_reg__ = vm_get_register_safe(reg__); \
             if (!IS_U64(val_reg__)) { \
@@ -140,11 +136,11 @@
             } \
             uint64_t boxed_value__ = AS_U64(val_reg__); \
             vm_cache_u64_typed(reg__, boxed_value__); \
-            vm_store_u64_typed_hot(reg__, boxed_value__ + (uint64_t)1); \
-            if (reg__ < FRAME_REG_START || \
-                (reg__ >= MODULE_REG_START && reg__ < MODULE_REG_START + MODULE_REGISTERS)) { \
-                vm_reconcile_typed_register(reg__); \
-            } \
+            uint64_t next_value__ = boxed_value__ + (uint64_t)1; \
+            vm_store_u64_typed_hot(reg__, next_value__); \
+        } \
+        if (needs_reconcile__) { \
+            vm_reconcile_typed_register(reg__); \
         } \
     } while (0)
 
