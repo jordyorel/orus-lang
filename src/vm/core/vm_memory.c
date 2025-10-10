@@ -19,7 +19,7 @@
 #include <string.h>
 #include <stdio.h>
 
-static size_t gcThreshold = 0;
+size_t gcThreshold = 0;
 static const double GC_HEAP_GROW_FACTOR = 2.0;
 
 static void freeObject(Obj* object);

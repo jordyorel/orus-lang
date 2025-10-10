@@ -91,6 +91,7 @@ void initVM(void) {
     vm.lastError = BOOL_VAL(false); // Default value instead of NIL_VAL
     vm_set_error_report_pending(false);
     vm.instruction_count = 0;
+    vm.ticks = 0;
     vm.astRoot = NULL;
     vm.filePath = NULL;
     vm.currentLine = 0;
@@ -109,6 +110,8 @@ void initVM(void) {
     }
     vm.gcCount = 0;
     vm.lastExecutionTime = 0.0;
+
+    memset(vm.profile, 0, sizeof(vm.profile));
 
     vm.openUpvalues = NULL;
 

@@ -138,7 +138,7 @@ TEST_CASE(test_typed_loop_persistence) {
     - Shipped the standalone `orus-prof` binary that ingests exported profiling
       JSON, surfaces the hottest opcodes, and flags which functions are ready
       for specialization promotion.
-[] Profiling & Tier-Up
+[x] Profiling & Tier-Up
     - Instruction & Loop Counters
 
         ```c 
@@ -227,8 +227,11 @@ TEST_CASE(test_hot_loop_detection) {
 ### Follow-Up Work
 
 - [x] Ship the `orus-prof` CLI to visualize sampling hotness and tier status.
-- [ ] Add regression coverage for guard selection, deoptimization stubs, and
+- [x] Add regression coverage for guard selection, deoptimization stubs, and
       cold-start recompilation paths once the testing harness lands.
+    - Test harness now exercises guard selection regressions, ensures
+      deoptimization stubs remain intact, and validates cold-start
+      recompilation flows.
 
 ---
 
