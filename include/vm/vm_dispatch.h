@@ -23,6 +23,7 @@
 #include "vm_control_flow.h"
 #include "public/common.h"
 #include "vm/vm_profiling.h"
+#include "vm/register_file.h"
 
 // Forward declarations
 extern VM vm;
@@ -107,6 +108,7 @@ void runtimeError(ErrorType type, SrcLocation location, const char* format, ...)
                     } \
                 } \
                 if (vm.trace) { \
+                    register_file_reconcile_active_window(); \
                     printf("        "); \
                     for (int i = 0; i < 8; i++) { \
                         printf("[ R%d: ", i); \

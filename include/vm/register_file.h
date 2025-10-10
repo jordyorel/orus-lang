@@ -33,6 +33,7 @@ CallFrame* allocate_frame(RegisterFile* rf);
 void deallocate_frame(RegisterFile* rf);
 void register_file_clear_active_typed_frame(void);
 void register_file_reset_active_frame_storage(void);
+void register_file_reconcile_active_window(void);
 
 // Phase 1: Register type checking
 bool is_global_register(uint16_t id);

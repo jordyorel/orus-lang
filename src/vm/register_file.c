@@ -14,6 +14,7 @@
 #include "vm/spill_manager.h"
 #include "vm/module_manager.h"
 #include "vm/register_cache.h"
+#include "vm/vm_comparison.h"
 #include "runtime/memory.h"
 #include <assert.h>
 #include <string.h>
@@ -105,12 +106,15 @@ static void typed_window_clear_live_range(TypedRegisterWindow* window, uint16_t 
         uint64_t range_mask = typed_window_mask_for_range(start, end, word);
         uint64_t live = window->live_mask[word] & range_mask;
         window->live_mask[word] &= ~range_mask;
+        window->dirty_mask[word] &= ~range_mask;
         while (live) {
             uint16_t bit = typed_window_select_bit(live);
             uint16_t index = (uint16_t)(word * 64 + bit);
             window->reg_types[index] = REG_TYPE_NONE;
-            window->dirty[index] = false;
-            window->heap_regs[index] = BOOL_VAL(false);
+            typed_window_clear_dirty(window, index);
+            if (window->heap_regs) {
+                window->heap_regs[index] = typed_window_default_boxed_value();
+            }
             live &= live - 1;
         }
     }
@@ -131,12 +135,26 @@ static void typed_window_copy_live_range(TypedRegisterWindow* dst, const TypedRe
     for (uint16_t word = start_word; word < end_word; ++word) {
         uint64_t range_mask = typed_window_mask_for_range(start, end, word);
         uint64_t live = src->live_mask[word] & range_mask;
+        uint64_t dirty = (src->dirty_mask[word] & range_mask) & live;
         dst->live_mask[word] = (dst->live_mask[word] & ~range_mask) | live;
-        while (live) {
-            uint16_t bit = typed_window_select_bit(live);
+        dst->dirty_mask[word] = (dst->dirty_mask[word] & ~range_mask) | dirty;
+
+        uint64_t update_bits = range_mask;
+        while (update_bits) {
+            uint16_t bit = typed_window_select_bit(update_bits);
             uint16_t index = (uint16_t)(word * 64 + bit);
-            typed_window_copy_slot(dst, src, index);
-            live &= live - 1;
+            uint64_t mask_bit = (uint64_t)1 << bit;
+            bool is_live = (live & mask_bit) != 0;
+            bool is_dirty = (dirty & mask_bit) != 0;
+
+            if (is_live) {
+                typed_window_copy_slot(dst, src, index);
+                dst->dirty[index] = is_dirty;
+            } else {
+                dst->dirty[index] = false;
+            }
+
+            update_bits &= update_bits - 1;
         }
     }
 }
@@ -150,9 +168,7 @@ static void typed_window_initialize_storage(TypedRegisterWindow* window) {
     window->generation = 0;
     typed_window_reset_live_mask(window);
     for (uint16_t i = 0; i < TYPED_REGISTER_WINDOW_SIZE; ++i) {
-        window->heap_regs[i] = BOOL_VAL(false);
         window->reg_types[i] = REG_TYPE_NONE;
-        window->dirty[i] = false;
     }
     window->next = NULL;
 }
@@ -164,9 +180,15 @@ static void typed_window_copy_slot(TypedRegisterWindow* dst, const TypedRegister
     dst->u64_regs[index] = src->u64_regs[index];
     dst->f64_regs[index] = src->f64_regs[index];
     dst->bool_regs[index] = src->bool_regs[index];
-    dst->heap_regs[index] = src->heap_regs[index];
     dst->reg_types[index] = src->reg_types[index];
-    dst->dirty[index] = src->dirty[index];
+    if (src->reg_types[index] == REG_TYPE_HEAP && src->heap_regs) {
+        Value* dst_heap = typed_window_ensure_heap_storage(dst);
+        if (dst_heap) {
+            dst_heap[index] = src->heap_regs[index];
+        }
+    } else if (dst->heap_regs) {
+        dst->heap_regs[index] = typed_window_default_boxed_value();
+    }
 }
 
 static void typed_window_sync_shared_ranges(TypedRegisterWindow* dst, const TypedRegisterWindow* src) {
@@ -200,7 +222,25 @@ static void typed_registers_bind_window(TypedRegisterWindow* window) {
     vm.typed_regs.bool_regs = window->bool_regs;
     vm.typed_regs.heap_regs = window->heap_regs;
     vm.typed_regs.dirty = window->dirty;
+    vm.typed_regs.dirty_mask = window->dirty_mask;
     vm.typed_regs.reg_types = window->reg_types;
+}
+
+void register_file_reconcile_active_window(void) {
+    TypedRegisterWindow* window = vm.typed_regs.active_window ? vm.typed_regs.active_window : &vm.typed_regs.root_window;
+    if (!window) {
+        return;
+    }
+
+    for (uint16_t word = 0; word < TYPED_WINDOW_LIVE_WORDS; ++word) {
+        uint64_t dirty = window->dirty_mask[word];
+        while (dirty) {
+            uint16_t bit = typed_window_select_bit(dirty);
+            uint16_t index = (uint16_t)(word * 64 + bit);
+            vm_reconcile_typed_register(index);
+            dirty &= dirty - 1;
+        }
+    }
 }
 
 static TypedRegisterWindow* typed_registers_acquire_window(void) {

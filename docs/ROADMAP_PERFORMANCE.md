@@ -11,10 +11,18 @@ Each phase is validated by dedicated **C unit tests** ensuring correctness and m
 
 ### Implementation Steps
 
-* Decouple interpreter fast paths from the boxed `Value` array and defer boxing to reconciliation points (control-flow exits, GC barriers, or FFI crossings).
-[] Split boxed storage into a lazily materialized cold path; update GC barriers and debugger hooks to trigger reconciliation explicitly.
-[] Track dirtiness per register window instead of per write to reduce flag churn.
-[] Audit VM opcodes so typed operands never invoke boxed accessors during steady-state loops.
+[x] Decouple interpreter fast paths from the boxed `Value` array and defer boxing to reconciliation points (control-flow exits, GC barriers, or FFI crossings).
+    - `vm_get_register_lazy()` now returns typed snapshots without mutating `vm.registers`, keeping the legacy boxed mirror untouched until `vm_get_register_safe()` or `register_file_reconcile_active_window()` flush the window.
+[x] Split boxed storage into a lazily materialized cold path; update GC barriers and debugger hooks to trigger reconciliation explicitly.
+    - Boxed register mirrors only materialize when heap values are cached, and `collectGarbage()` plus debugging traces force
+      `register_file_reconcile_active_window()` so the legacy `Value` array stays coherent at safepoints.
+[x] Track dirtiness per register window instead of per write to reduce flag churn.
+    - `TypedRegisterWindow` now maintains a `dirty_mask` bitset mirrored in `TypedRegisters`,
+      letting the VM mark or clear dirty spans with a single word update while keeping the
+      existing per-slot booleans for diagnostics.
+[x] Audit VM opcodes so typed operands never invoke boxed accessors during steady-state loops.
+    - Introduced `vm_read_i32_hot()` so comparison and fused arithmetic opcodes reload typed caches
+      before touching boxed mirrors, ensuring fallback reads only occur when metadata is missing.
 
 ### Code Template — Typed Register Window
 
@@ -53,8 +61,8 @@ TEST_CASE(test_typed_register_i32) {
 
 ### Milestone Exit Criteria
 
-[] Interpreter fast paths operate exclusively on typed register windows.
-*[] All typed-register tests pass with zero GC regressions.
+[x] Interpreter fast paths operate exclusively on typed register windows.
+[x] All typed-register tests pass with zero GC regressions (validated by the typed register coherence suite).
 
 ---
 
