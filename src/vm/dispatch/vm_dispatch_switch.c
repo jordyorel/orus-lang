@@ -956,10 +956,18 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
                     READ_BYTE(); // Skip third operand (unused)
-                    if (!IS_BOOL(vm_get_register_safe(src))) {
-                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be bool");
+
+                    bool src_bool;
+                    if (!vm_try_read_bool_typed(src, &src_bool)) {
+                        Value src_val = vm_get_register_safe(src);
+                        if (!IS_BOOL(src_val)) {
+                            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be bool");
+                        }
+                        src_bool = AS_BOOL(src_val);
+                        vm_cache_bool_typed(src, src_bool);
                     }
-                    vm_set_register_safe(dst, I32_VAL(AS_BOOL(vm_get_register_safe(src)) ? 1 : 0));
+
+                    vm_store_i32_typed_hot(dst, src_bool ? 1 : 0);
                     break;
                 }
 
@@ -967,10 +975,18 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
                     READ_BYTE(); // Skip third operand (unused)
-                    if (!IS_BOOL(vm_get_register_safe(src))) {
-                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be bool");
+
+                    bool src_bool;
+                    if (!vm_try_read_bool_typed(src, &src_bool)) {
+                        Value src_val = vm_get_register_safe(src);
+                        if (!IS_BOOL(src_val)) {
+                            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be bool");
+                        }
+                        src_bool = AS_BOOL(src_val);
+                        vm_cache_bool_typed(src, src_bool);
                     }
-                    vm_set_register_safe(dst, I64_VAL(AS_BOOL(vm_get_register_safe(src)) ? 1 : 0));
+
+                    vm_store_i64_typed_hot(dst, src_bool ? 1 : 0);
                     break;
                 }
 
@@ -978,10 +994,18 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
                     READ_BYTE(); // Skip third operand (unused)
-                    if (!IS_BOOL(vm_get_register_safe(src))) {
-                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be bool");
+
+                    bool src_bool;
+                    if (!vm_try_read_bool_typed(src, &src_bool)) {
+                        Value src_val = vm_get_register_safe(src);
+                        if (!IS_BOOL(src_val)) {
+                            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be bool");
+                        }
+                        src_bool = AS_BOOL(src_val);
+                        vm_cache_bool_typed(src, src_bool);
                     }
-                    vm_set_register_safe(dst, U32_VAL(AS_BOOL(vm_get_register_safe(src)) ? 1u : 0u));
+
+                    vm_store_u32_typed_hot(dst, src_bool ? 1u : 0u);
                     break;
                 }
 
@@ -989,10 +1013,18 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
                     READ_BYTE(); // Skip third operand (unused)
-                    if (!IS_BOOL(vm_get_register_safe(src))) {
-                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be bool");
+
+                    bool src_bool;
+                    if (!vm_try_read_bool_typed(src, &src_bool)) {
+                        Value src_val = vm_get_register_safe(src);
+                        if (!IS_BOOL(src_val)) {
+                            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be bool");
+                        }
+                        src_bool = AS_BOOL(src_val);
+                        vm_cache_bool_typed(src, src_bool);
                     }
-                    vm_set_register_safe(dst, U64_VAL(AS_BOOL(vm_get_register_safe(src)) ? 1ull : 0ull));
+
+                    vm_store_u64_typed_hot(dst, src_bool ? 1ull : 0ull);
                     break;
                 }
 
@@ -1000,10 +1032,18 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
                     READ_BYTE(); // Skip third operand (unused)
-                    if (!IS_BOOL(vm_get_register_safe(src))) {
-                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be bool");
+
+                    bool src_bool;
+                    if (!vm_try_read_bool_typed(src, &src_bool)) {
+                        Value src_val = vm_get_register_safe(src);
+                        if (!IS_BOOL(src_val)) {
+                            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be bool");
+                        }
+                        src_bool = AS_BOOL(src_val);
+                        vm_cache_bool_typed(src, src_bool);
                     }
-                    vm_set_register_safe(dst, F64_VAL(AS_BOOL(vm_get_register_safe(src)) ? 1.0 : 0.0));
+
+                    vm_store_f64_typed_hot(dst, src_bool ? 1.0 : 0.0);
                     break;
                 }
 
@@ -1011,10 +1051,18 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
                     READ_BYTE(); // Skip third operand (unused)
-                    if (!IS_I32(vm_get_register_safe(src))) {
-                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i32");
+
+                    int32_t src_value;
+                    if (!vm_try_read_i32_typed(src, &src_value)) {
+                        Value src_val = vm_get_register_safe(src);
+                        if (!IS_I32(src_val)) {
+                            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i32");
+                        }
+                        src_value = AS_I32(src_val);
+                        vm_cache_i32_typed(src, src_value);
                     }
-                    vm_set_register_safe(dst, I64_VAL((int64_t)AS_I32(vm_get_register_safe(src))));
+
+                    vm_store_i64_typed_hot(dst, (int64_t)src_value);
                     break;
                 }
 
@@ -1022,10 +1070,18 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
                     READ_BYTE(); // Skip third operand (unused)
-                    if (!IS_I32(vm_get_register_safe(src))) {
-                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i32");
+
+                    int32_t src_value;
+                    if (!vm_try_read_i32_typed(src, &src_value)) {
+                        Value src_val = vm_get_register_safe(src);
+                        if (!IS_I32(src_val)) {
+                            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i32");
+                        }
+                        src_value = AS_I32(src_val);
+                        vm_cache_i32_typed(src, src_value);
                     }
-                    vm_set_register_safe(dst, U32_VAL((uint32_t)AS_I32(vm_get_register_safe(src))));
+
+                    vm_store_u32_typed_hot(dst, (uint32_t)src_value);
                     break;
                 }
 
@@ -1033,11 +1089,18 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
                     READ_BYTE(); // Skip third operand (unused)
-                    if (!IS_I32(vm_get_register_safe(src))) {
-                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i32");
+
+                    int32_t src_value;
+                    if (!vm_try_read_i32_typed(src, &src_value)) {
+                        Value src_val = vm_get_register_safe(src);
+                        if (!IS_I32(src_val)) {
+                            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i32");
+                        }
+                        src_value = AS_I32(src_val);
+                        vm_cache_i32_typed(src, src_value);
                     }
-                    // Convert i32 to bool: 0 -> false, non-zero -> true
-                    vm_set_register_safe(dst, BOOL_VAL(AS_I32(vm_get_register_safe(src)) != 0));
+
+                    vm_store_bool_typed_hot(dst, src_value != 0);
                     break;
                 }
 
@@ -1045,10 +1108,18 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
                     READ_BYTE(); // Skip third operand (unused)
-                    if (!IS_U32(vm_get_register_safe(src))) {
-                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u32");
+
+                    uint32_t src_value;
+                    if (!vm_try_read_u32_typed(src, &src_value)) {
+                        Value src_val = vm_get_register_safe(src);
+                        if (!IS_U32(src_val)) {
+                            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u32");
+                        }
+                        src_value = AS_U32(src_val);
+                        vm_cache_u32_typed(src, src_value);
                     }
-                    vm_set_register_safe(dst, I32_VAL((int32_t)AS_U32(vm_get_register_safe(src))));
+
+                    vm_store_i32_typed_hot(dst, (int32_t)src_value);
                     break;
                 }
 
@@ -1056,10 +1127,18 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
                     READ_BYTE(); // Skip third operand (unused)
-                    if (!IS_I64(vm_get_register_safe(src))) {
-                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i64");
+
+                    int64_t src_value;
+                    if (!vm_try_read_i64_typed(src, &src_value)) {
+                        Value src_val = vm_get_register_safe(src);
+                        if (!IS_I64(src_val)) {
+                            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i64");
+                        }
+                        src_value = AS_I64(src_val);
+                        vm_cache_i64_typed(src, src_value);
                     }
-                    vm_set_register_safe(dst, I32_VAL((int32_t)AS_I64(vm_get_register_safe(src))));
+
+                    vm_store_i32_typed_hot(dst, (int32_t)src_value);
                     break;
                 }
 
@@ -1067,14 +1146,21 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
                     READ_BYTE(); // Skip third operand (unused)
-                    if (!IS_I64(vm_get_register_safe(src))) {
-                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i64");
+
+                    int64_t src_value;
+                    if (!vm_try_read_i64_typed(src, &src_value)) {
+                        Value src_val = vm_get_register_safe(src);
+                        if (!IS_I64(src_val)) {
+                            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i64");
+                        }
+                        src_value = AS_I64(src_val);
+                        vm_cache_i64_typed(src, src_value);
                     }
-                    int64_t val = AS_I64(vm_get_register_safe(src));
-                    if (val < 0 || val > (int64_t)UINT32_MAX) {
+                    if (src_value < 0 || src_value > (int64_t)UINT32_MAX) {
                         VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "i64 value out of u32 range");
                     }
-                    vm_set_register_safe(dst, U32_VAL((uint32_t)val));
+
+                    vm_store_u32_typed_hot(dst, (uint32_t)src_value);
                     break;
                 }
 
@@ -1082,10 +1168,18 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
                     READ_BYTE(); // Skip third operand (unused)
-                    if (!IS_I64(vm_get_register_safe(src))) {
-                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i64");
+
+                    int64_t src_value;
+                    if (!vm_try_read_i64_typed(src, &src_value)) {
+                        Value src_val = vm_get_register_safe(src);
+                        if (!IS_I64(src_val)) {
+                            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i64");
+                        }
+                        src_value = AS_I64(src_val);
+                        vm_cache_i64_typed(src, src_value);
                     }
-                    vm_set_register_safe(dst, BOOL_VAL(AS_I64(vm_get_register_safe(src)) != 0));
+
+                    vm_store_bool_typed_hot(dst, src_value != 0);
                     break;
                 }
 
@@ -1093,14 +1187,21 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
                     READ_BYTE(); // Skip third operand (unused)
-                    if (!IS_F64(vm_get_register_safe(src))) {
-                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be f64");
+
+                    double src_value;
+                    if (!vm_try_read_f64_typed(src, &src_value)) {
+                        Value src_val = vm_get_register_safe(src);
+                        if (!IS_F64(src_val)) {
+                            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be f64");
+                        }
+                        src_value = AS_F64(src_val);
+                        vm_cache_f64_typed(src, src_value);
                     }
-                    double val = AS_F64(vm_get_register_safe(src));
-                    if (val < 0.0 || val > (double)UINT32_MAX) {
+                    if (src_value < 0.0 || src_value > (double)UINT32_MAX) {
                         VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "f64 value out of u32 range");
                     }
-                    vm_set_register_safe(dst, U32_VAL((uint32_t)val));
+
+                    vm_store_u32_typed_hot(dst, (uint32_t)src_value);
                     break;
                 }
 
@@ -1108,10 +1209,18 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
                     READ_BYTE(); // Skip third operand (unused)
-                    if (!IS_U32(vm_get_register_safe(src))) {
-                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u32");
+
+                    uint32_t src_value;
+                    if (!vm_try_read_u32_typed(src, &src_value)) {
+                        Value src_val = vm_get_register_safe(src);
+                        if (!IS_U32(src_val)) {
+                            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u32");
+                        }
+                        src_value = AS_U32(src_val);
+                        vm_cache_u32_typed(src, src_value);
                     }
-                    vm_set_register_safe(dst, F64_VAL((double)AS_U32(vm_get_register_safe(src))));
+
+                    vm_store_f64_typed_hot(dst, (double)src_value);
                     break;
                 }
 
@@ -1119,14 +1228,21 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
                     READ_BYTE(); // Skip third operand (unused)
-                    if (!IS_I32(vm_get_register_safe(src))) {
-                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i32");
+
+                    int32_t src_value;
+                    if (!vm_try_read_i32_typed(src, &src_value)) {
+                        Value src_val = vm_get_register_safe(src);
+                        if (!IS_I32(src_val)) {
+                            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i32");
+                        }
+                        src_value = AS_I32(src_val);
+                        vm_cache_i32_typed(src, src_value);
                     }
-                    int32_t val = AS_I32(vm_get_register_safe(src));
-                    if (val < 0) {
+                    if (src_value < 0) {
                         VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Cannot convert negative i32 to u64");
                     }
-                    vm_set_register_safe(dst, U64_VAL((uint64_t)val));
+
+                    vm_store_u64_typed_hot(dst, (uint64_t)src_value);
                     break;
                 }
 
@@ -1134,14 +1250,21 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
                     READ_BYTE(); // Skip third operand (unused)
-                    if (!IS_I64(vm_get_register_safe(src))) {
-                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i64");
+
+                    int64_t src_value;
+                    if (!vm_try_read_i64_typed(src, &src_value)) {
+                        Value src_val = vm_get_register_safe(src);
+                        if (!IS_I64(src_val)) {
+                            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i64");
+                        }
+                        src_value = AS_I64(src_val);
+                        vm_cache_i64_typed(src, src_value);
                     }
-                    int64_t val = AS_I64(vm_get_register_safe(src));
-                    if (val < 0) {
+                    if (src_value < 0) {
                         VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Cannot convert negative i64 to u64");
                     }
-                    vm_set_register_safe(dst, U64_VAL((uint64_t)val));
+
+                    vm_store_u64_typed_hot(dst, (uint64_t)src_value);
                     break;
                 }
 
@@ -1149,14 +1272,21 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
                     READ_BYTE(); // Skip third operand (unused)
-                    if (!IS_U64(vm_get_register_safe(src))) {
-                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u64");
+
+                    uint64_t src_value;
+                    if (!vm_try_read_u64_typed(src, &src_value)) {
+                        Value src_val = vm_get_register_safe(src);
+                        if (!IS_U64(src_val)) {
+                            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u64");
+                        }
+                        src_value = AS_U64(src_val);
+                        vm_cache_u64_typed(src, src_value);
                     }
-                    uint64_t val = AS_U64(vm_get_register_safe(src));
-                    if (val > (uint64_t)INT32_MAX) {
+                    if (src_value > (uint64_t)INT32_MAX) {
                         VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "u64 value too large for i32");
                     }
-                    vm_set_register_safe(dst, I32_VAL((int32_t)val));
+
+                    vm_store_i32_typed_hot(dst, (int32_t)src_value);
                     break;
                 }
 
@@ -1164,14 +1294,21 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
                     READ_BYTE(); // Skip third operand (unused)
-                    if (!IS_U64(vm_get_register_safe(src))) {
-                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u64");
+
+                    uint64_t src_value;
+                    if (!vm_try_read_u64_typed(src, &src_value)) {
+                        Value src_val = vm_get_register_safe(src);
+                        if (!IS_U64(src_val)) {
+                            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u64");
+                        }
+                        src_value = AS_U64(src_val);
+                        vm_cache_u64_typed(src, src_value);
                     }
-                    uint64_t val = AS_U64(vm_get_register_safe(src));
-                    if (val > (uint64_t)INT64_MAX) {
+                    if (src_value > (uint64_t)INT64_MAX) {
                         VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "u64 value too large for i64");
                     }
-                    vm_set_register_safe(dst, I64_VAL((int64_t)val));
+
+                    vm_store_i64_typed_hot(dst, (int64_t)src_value);
                     break;
                 }
 
@@ -1179,10 +1316,18 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
                     READ_BYTE(); // Skip third operand (unused)
-                    if (!IS_U32(vm_get_register_safe(src))) {
-                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u32");
+
+                    uint32_t src_value;
+                    if (!vm_try_read_u32_typed(src, &src_value)) {
+                        Value src_val = vm_get_register_safe(src);
+                        if (!IS_U32(src_val)) {
+                            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u32");
+                        }
+                        src_value = AS_U32(src_val);
+                        vm_cache_u32_typed(src, src_value);
                     }
-                    vm_set_register_safe(dst, BOOL_VAL(AS_U32(vm_get_register_safe(src)) != 0));
+
+                    vm_store_bool_typed_hot(dst, src_value != 0);
                     break;
                 }
 
@@ -1190,10 +1335,18 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
                     READ_BYTE(); // Skip third operand (unused)
-                    if (!IS_U32(vm_get_register_safe(src))) {
-                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u32");
+
+                    uint32_t src_value;
+                    if (!vm_try_read_u32_typed(src, &src_value)) {
+                        Value src_val = vm_get_register_safe(src);
+                        if (!IS_U32(src_val)) {
+                            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u32");
+                        }
+                        src_value = AS_U32(src_val);
+                        vm_cache_u32_typed(src, src_value);
                     }
-                    vm_set_register_safe(dst, U64_VAL((uint64_t)AS_U32(vm_get_register_safe(src))));
+
+                    vm_store_u64_typed_hot(dst, (uint64_t)src_value);
                     break;
                 }
 
@@ -1201,14 +1354,21 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
                     READ_BYTE(); // Skip third operand (unused)
-                    if (!IS_U64(vm_get_register_safe(src))) {
-                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u64");
+
+                    uint64_t src_value;
+                    if (!vm_try_read_u64_typed(src, &src_value)) {
+                        Value src_val = vm_get_register_safe(src);
+                        if (!IS_U64(src_val)) {
+                            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u64");
+                        }
+                        src_value = AS_U64(src_val);
+                        vm_cache_u64_typed(src, src_value);
                     }
-                    uint64_t val = AS_U64(vm_get_register_safe(src));
-                    if (val > (uint64_t)UINT32_MAX) {
+                    if (src_value > (uint64_t)UINT32_MAX) {
                         VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "u64 value too large for u32");
                     }
-                    vm_set_register_safe(dst, U32_VAL((uint32_t)val));
+
+                    vm_store_u32_typed_hot(dst, (uint32_t)src_value);
                     break;
                 }
 
@@ -1216,14 +1376,21 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
                     READ_BYTE(); // Skip third operand (unused)
-                    if (!IS_F64(vm_get_register_safe(src))) {
-                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be f64");
+
+                    double src_value;
+                    if (!vm_try_read_f64_typed(src, &src_value)) {
+                        Value src_val = vm_get_register_safe(src);
+                        if (!IS_F64(src_val)) {
+                            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be f64");
+                        }
+                        src_value = AS_F64(src_val);
+                        vm_cache_f64_typed(src, src_value);
                     }
-                    double val = AS_F64(vm_get_register_safe(src));
-                    if (val < 0.0 || val > (double)UINT64_MAX) {
+                    if (src_value < 0.0 || src_value > (double)UINT64_MAX) {
                         VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "f64 value out of u64 range");
                     }
-                    vm_set_register_safe(dst, U64_VAL((uint64_t)val));
+
+                    vm_store_u64_typed_hot(dst, (uint64_t)src_value);
                     break;
                 }
 
@@ -1231,10 +1398,18 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
                     READ_BYTE(); // Skip third operand (unused)
-                    if (!IS_U64(vm_get_register_safe(src))) {
-                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u64");
+
+                    uint64_t src_value;
+                    if (!vm_try_read_u64_typed(src, &src_value)) {
+                        Value src_val = vm_get_register_safe(src);
+                        if (!IS_U64(src_val)) {
+                            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u64");
+                        }
+                        src_value = AS_U64(src_val);
+                        vm_cache_u64_typed(src, src_value);
                     }
-                    vm_set_register_safe(dst, F64_VAL((double)AS_U64(vm_get_register_safe(src))));
+
+                    vm_store_f64_typed_hot(dst, (double)src_value);
                     break;
                 }
 
@@ -1242,10 +1417,18 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
                     READ_BYTE(); // Skip third operand (unused)
-                    if (!IS_U64(vm_get_register_safe(src))) {
-                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u64");
+
+                    uint64_t src_value;
+                    if (!vm_try_read_u64_typed(src, &src_value)) {
+                        Value src_val = vm_get_register_safe(src);
+                        if (!IS_U64(src_val)) {
+                            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be u64");
+                        }
+                        src_value = AS_U64(src_val);
+                        vm_cache_u64_typed(src, src_value);
                     }
-                    vm_set_register_safe(dst, BOOL_VAL(AS_U64(vm_get_register_safe(src)) != 0));
+
+                    vm_store_bool_typed_hot(dst, src_value != 0);
                     break;
                 }
 
@@ -1253,10 +1436,18 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
                     READ_BYTE(); // Skip third operand (unused)
-                    if (!IS_F64(vm_get_register_safe(src))) {
-                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be f64");
+
+                    double src_value;
+                    if (!vm_try_read_f64_typed(src, &src_value)) {
+                        Value src_val = vm_get_register_safe(src);
+                        if (!IS_F64(src_val)) {
+                            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be f64");
+                        }
+                        src_value = AS_F64(src_val);
+                        vm_cache_f64_typed(src, src_value);
                     }
-                    vm_set_register_safe(dst, BOOL_VAL(AS_F64(vm_get_register_safe(src)) != 0.0));
+
+                    vm_store_bool_typed_hot(dst, src_value != 0.0);
                     break;
                 }
 
@@ -1447,11 +1638,18 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
                     READ_BYTE(); // Skip third operand (unused)
-                    if (!IS_I32(vm_get_register_safe(src))) {
-                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i32");
-                        RETURN(INTERPRET_RUNTIME_ERROR);
+
+                    int32_t src_value;
+                    if (!vm_try_read_i32_typed(src, &src_value)) {
+                        Value src_val = vm_get_register_safe(src);
+                        if (!IS_I32(src_val)) {
+                            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i32");
+                        }
+                        src_value = AS_I32(src_val);
+                        vm_cache_i32_typed(src, src_value);
                     }
-                    vm_set_register_safe(dst, F64_VAL((double)AS_I32(vm_get_register_safe(src))));
+
+                    vm_store_f64_typed_hot(dst, (double)src_value);
                     break;
                 }
 
@@ -1459,11 +1657,18 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
                     READ_BYTE(); // Skip third operand (unused)
-                    if (!IS_I64(vm_get_register_safe(src))) {
-                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i64");
-                        RETURN(INTERPRET_RUNTIME_ERROR);
+
+                    int64_t src_value;
+                    if (!vm_try_read_i64_typed(src, &src_value)) {
+                        Value src_val = vm_get_register_safe(src);
+                        if (!IS_I64(src_val)) {
+                            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be i64");
+                        }
+                        src_value = AS_I64(src_val);
+                        vm_cache_i64_typed(src, src_value);
                     }
-                    vm_set_register_safe(dst, F64_VAL((double)AS_I64(vm_get_register_safe(src))));
+
+                    vm_store_f64_typed_hot(dst, (double)src_value);
                     break;
                 }
 
@@ -1471,11 +1676,18 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
                     READ_BYTE(); // Skip third operand (unused)
-                    if (!IS_F64(vm_get_register_safe(src))) {
-                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be f64");
-                        RETURN(INTERPRET_RUNTIME_ERROR);
+
+                    double src_value;
+                    if (!vm_try_read_f64_typed(src, &src_value)) {
+                        Value src_val = vm_get_register_safe(src);
+                        if (!IS_F64(src_val)) {
+                            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be f64");
+                        }
+                        src_value = AS_F64(src_val);
+                        vm_cache_f64_typed(src, src_value);
                     }
-                    vm_set_register_safe(dst, I32_VAL((int32_t)AS_F64(vm_get_register_safe(src))));
+
+                    vm_store_i32_typed_hot(dst, (int32_t)src_value);
                     break;
                 }
 
@@ -1483,11 +1695,18 @@ InterpretResult vm_run_dispatch(void) {
                     uint8_t dst = READ_BYTE();
                     uint8_t src = READ_BYTE();
                     READ_BYTE(); // Skip third operand (unused)
-                    if (!IS_F64(vm_get_register_safe(src))) {
-                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be f64");
-                        RETURN(INTERPRET_RUNTIME_ERROR);
+
+                    double src_value;
+                    if (!vm_try_read_f64_typed(src, &src_value)) {
+                        Value src_val = vm_get_register_safe(src);
+                        if (!IS_F64(src_val)) {
+                            VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Source must be f64");
+                        }
+                        src_value = AS_F64(src_val);
+                        vm_cache_f64_typed(src, src_value);
                     }
-                    vm_set_register_safe(dst, I64_VAL((int64_t)AS_F64(vm_get_register_safe(src))));
+
+                    vm_store_i64_typed_hot(dst, (int64_t)src_value);
                     break;
                 }
 
