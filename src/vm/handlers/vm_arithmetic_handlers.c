@@ -21,7 +21,7 @@ static inline bool read_i32_operand(uint16_t reg, int32_t* out, bool* typed_out)
         return true;
     }
 
-    Value boxed = vm_get_register_safe(reg);
+    Value boxed = vm_get_register_lazy(reg);
     if (!IS_I32(boxed)) {
         return false;
     }
@@ -40,7 +40,7 @@ static inline bool read_i64_operand(uint16_t reg, int64_t* out) {
         return true;
     }
 
-    Value boxed = vm_get_register_safe(reg);
+    Value boxed = vm_get_register_lazy(reg);
     if (!IS_I64(boxed)) {
         return false;
     }
@@ -56,7 +56,7 @@ static inline bool read_u32_operand(uint16_t reg, uint32_t* out) {
         return true;
     }
 
-    Value boxed = vm_get_register_safe(reg);
+    Value boxed = vm_get_register_lazy(reg);
     if (!IS_U32(boxed)) {
         return false;
     }
@@ -72,7 +72,7 @@ static inline bool read_u64_operand(uint16_t reg, uint64_t* out) {
         return true;
     }
 
-    Value boxed = vm_get_register_safe(reg);
+    Value boxed = vm_get_register_lazy(reg);
     if (!IS_U64(boxed)) {
         return false;
     }
@@ -88,7 +88,7 @@ static inline bool read_f64_operand(uint16_t reg, double* out) {
         return true;
     }
 
-    Value boxed = vm_get_register_safe(reg);
+    Value boxed = vm_get_register_lazy(reg);
     if (!IS_F64(boxed)) {
         return false;
     }
