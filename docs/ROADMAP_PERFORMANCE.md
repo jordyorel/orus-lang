@@ -285,13 +285,6 @@ TEST_CASE(test_hot_loop_detection) {
       call from the top.
     - Tiering demotions continue to log the transition, making it clear when
       runtime profiling has forced execution back to the baseline tier.
-[] Integrate a portable JIT backend (DynASM).  
-[] Insert **GC safepoints** before each allocation call to cooperate with `collectGarbage()`.  
-[] Implement deoptimization stubs for type-mismatch recovery.  
-[] Keep identical frame and register layouts across interpreter and JIT tiers.  
-[] Implement OrusJit IR → DynASM codegen pipeline.  
-[] Maintain JITEntry cache with invalidation and reuse.  
-[] Support deoptimization fallback to interpreter.  
 
 # 🧩 Future Enhancement — Loop Tracing and Inline Caching
 [] Extend `queue_tier_up()` to record and linearize hot bytecode traces (**trace-based JIT**).  
