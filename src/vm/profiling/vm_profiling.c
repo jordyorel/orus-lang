@@ -538,7 +538,8 @@ vm_jit_enter_entry(VMState* vm_state, const JITEntry* entry) {
         return;
     }
 
-    vtable->enter((struct VM*)vm_state, entry);
+    struct VM* vm = (struct VM*)vm_state;
+    vtable->enter(vm, entry);
     vm_state->jit_invocation_count++;
 }
 
