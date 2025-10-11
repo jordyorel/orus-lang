@@ -12,6 +12,8 @@
 #include "vm/vm_tiering.h"
 #include "vm/vm_string_ops.h"
 
+#include "internal/logging.h"
+
 #if defined(__x86_64__) || defined(_M_X64)
 #include "dasm_proto.h"
 #include "dasm_x86.h"
@@ -23,6 +25,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <errno.h>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -109,6 +112,13 @@ orus_jit_alloc_executable(size_t size, size_t page_size, size_t* out_capacity) {
 
     void* buffer = mmap(NULL, capacity, prot, flags, -1, 0);
     if (buffer == MAP_FAILED) {
+#if ORUS_JIT_USE_APPLE_JIT
+        const int error_code = errno;
+        if (error_code == EPERM || error_code == ENOTSUP) {
+            LOG_WARN("[JIT] mmap(MAP_JIT) failed with %s. macOS requires the com.apple.security.cs.allow-jit entitlement to enable native tier execution. The build tries to sign targets automatically; rerun scripts/macos/sign-with-jit.sh if codesign was unavailable during build.",
+                     strerror(error_code));
+        }
+#endif
         return NULL;
     }
 #endif
@@ -139,8 +149,20 @@ orus_jit_make_executable(void* ptr, size_t size) {
     }
     orus_jit_set_write_protection(false);
     int result = mprotect(ptr, size, PROT_READ | PROT_EXEC);
+    if (result != 0) {
+#if ORUS_JIT_USE_APPLE_JIT
+        const int protect_errno = errno;
+        if (protect_errno == EPERM || protect_errno == ENOTSUP) {
+            LOG_WARN("[JIT] mprotect(PROT_EXEC) rejected with %s. Grant the com.apple.security.cs.allow-jit entitlement to execute native stubs on macOS. Builds attempt to sign automatically; run scripts/macos/sign-with-jit.sh manually if codesign was skipped.",
+                     strerror(protect_errno));
+        }
+#endif
+        orus_jit_set_write_protection(true);
+        return false;
+    }
+
     orus_jit_set_write_protection(true);
-    return result == 0;
+    return true;
 }
 #endif
 

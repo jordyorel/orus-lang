@@ -127,6 +127,37 @@ endif
 
 INSTALL_BIN_DIR = $(INSTALL_PREFIX)/bin
 
+# macOS arm64 builds must be codesigned with the JIT entitlement before the
+# runtime can allocate MAP_JIT pages. Integrate the helper directly into the
+# build so locally produced binaries are signed automatically when possible.
+SIGN_HELPER := scripts/macos/sign-with-jit.sh
+
+ifeq ($(UNAME_S),Darwin)
+ifeq ($(UNAME_M),arm64)
+define sign_with_jit
+    @if command -v codesign >/dev/null 2>&1; then \
+        if [ -x "$(SIGN_HELPER)" ]; then \
+            if "$(SIGN_HELPER)" "$(1)"; then :; \
+            else \
+                echo "  ↳ warning: automatic macOS JIT signing failed for $(1)."; \
+                echo "    Run $(SIGN_HELPER) manually once codesign is configured."; \
+            fi; \
+        else \
+            echo "  ↳ warning: missing $(SIGN_HELPER); skipping macOS JIT signing for $(1)"; \
+        fi; \
+    else \
+        echo "  ↳ warning: codesign not found; skipping macOS JIT signing for $(1)"; \
+    fi
+endef
+else
+define sign_with_jit
+endef
+endif
+else
+define sign_with_jit
+endef
+endif
+
 # Profile-specific configurations
 ifeq ($(PROFILE),debug)
     # Debug build: maximum debugging info, no optimization, all checks enabled
@@ -310,11 +341,13 @@ $(BUILDDIR):
 $(ORUS): $(MAIN_OBJ) $(REPL_OBJ) $(VM_OBJS) $(COMPILER_OBJS)
 	@echo "Linking $(ORUS)..."
 	@$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+	$(call sign_with_jit,$@)
 	@echo "✓ Build complete: $(ORUS)"
 
 $(ORUS_PROF): $(TOOLS_OBJS)
 	@echo "Linking $(ORUS_PROF)..."
 	@$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+	$(call sign_with_jit,$@)
 	@echo "✓ Build complete: $(ORUS_PROF)"
 
 # Object files
@@ -686,6 +719,7 @@ $(HOT_LOOP_PROFILING_TEST_BIN): tests/unit/test_vm_hot_loop_profiling.c $(COMPIL
 	@mkdir -p $(dir $@)
 	@echo "Compiling VM hot loop profiling tests..."
 	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+	$(call sign_with_jit,$@)
 
 hot-loop-tests: $(HOT_LOOP_PROFILING_TEST_BIN)
 	@echo "Running VM hot loop profiling tests..."
@@ -695,6 +729,7 @@ $(JIT_BENCHMARK_TEST_BIN): tests/unit/test_vm_jit_benchmark.c $(COMPILER_OBJS) $
 	@mkdir -p $(dir $@)
 	@echo "Compiling VM JIT benchmark..."
 	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+	$(call sign_with_jit,$@)
 
 jit-benchmark-tests: $(JIT_BENCHMARK_TEST_BIN)
 	@echo "Running VM JIT benchmark..."
@@ -704,6 +739,7 @@ $(JIT_TRANSLATION_TEST_BIN): tests/unit/test_vm_jit_translation.c $(COMPILER_OBJ
 	@mkdir -p $(dir $@)
 	@echo "Compiling baseline translator tests..."
 	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+	$(call sign_with_jit,$@)
 
 jit-translation-tests: $(JIT_TRANSLATION_TEST_BIN)
 	@echo "Running baseline translator tests..."
@@ -713,6 +749,7 @@ $(JIT_BACKEND_TEST_BIN): tests/unit/test_vm_jit_backend.c $(COMPILER_OBJS) $(VM_
 	@mkdir -p $(dir $@)
 	@echo "Compiling baseline backend smoke tests..."
 	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+	$(call sign_with_jit,$@)
 
 jit-backend-tests: $(JIT_BACKEND_TEST_BIN)
 	@echo "Running baseline backend smoke tests..."
