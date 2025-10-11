@@ -832,6 +832,8 @@ typedef enum {
     // Typed loads
     OP_LOAD_I32_CONST,     // reg, value
     OP_LOAD_I64_CONST,     // reg, value
+    OP_LOAD_U32_CONST,     // reg, value
+    OP_LOAD_U64_CONST,     // reg, value
     OP_LOAD_F64_CONST,     // reg, value
     
     // Typed moves

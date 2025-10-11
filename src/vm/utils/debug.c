@@ -476,6 +476,20 @@ int disassembleInstruction(Chunk* chunk, int offset) {
             return offset + 4;
         }
 
+        case OP_LOAD_U32_CONST: {
+            uint8_t reg = chunk->code[offset + 1];
+            uint16_t constant = (uint16_t)((chunk->code[offset + 2] << 8) | chunk->code[offset + 3]);
+            printf("%-16s R%d, #%d (typed)\n", "LOAD_U32_CONST", reg, constant);
+            return offset + 4;
+        }
+
+        case OP_LOAD_U64_CONST: {
+            uint8_t reg = chunk->code[offset + 1];
+            uint16_t constant = (uint16_t)((chunk->code[offset + 2] << 8) | chunk->code[offset + 3]);
+            printf("%-16s R%d, #%d (typed)\n", "LOAD_U64_CONST", reg, constant);
+            return offset + 4;
+        }
+
         case OP_MOVE_I32: {
             uint8_t dst = chunk->code[offset + 1];
             uint8_t src = chunk->code[offset + 2];
