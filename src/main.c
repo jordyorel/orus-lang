@@ -9,12 +9,14 @@
 // Orus Language Main Interpreter
 // This is the main entry point for the Orus programming language
 
+#include <inttypes.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdbool.h>
 
 #include "vm/vm.h"
+#include "vm/jit_benchmark.h"
 #include "public/common.h"
 #include "internal/error_reporting.h"
 #include "internal/logging.h"
@@ -126,35 +128,18 @@ static void runFile(const char* path) {
 int main(int argc, const char* argv[]) {
     // Initialize logging system first (can be configured via environment variables)
     initLogger(LOG_INFO);
-    // LOG_INFO("Orus Language Interpreter starting up");
 
-    // Strict leak-free: initialize global string table first
-    init_string_table(&globalStringTable);
-    // Initialize error reporting system
-    init_error_reporting();
-    
-    // Initialize feature-based error system
-    init_feature_errors();
-    init_type_errors();
-    init_variable_errors();
-    
-    // Initialize VM profiling system
-    initVMProfiling();
-    
-    // Initialize debug system
-    debug_init();
-    
     // Create and initialize configuration
     OrusConfig* config = config_create();
     if (!config) {
         fprintf(stderr, "Error: Failed to create configuration\n");
-        free_string_table(&globalStringTable);
+        shutdownLogger();
         return EXIT_USAGE_ERROR;
     }
-    
+
     // Load configuration from environment variables
     config_load_from_env(config);
-    
+
     // Load configuration file if specified in environment
     const char* config_file = getenv(ORUS_CONFIG_FILE);
     if (config_file) {
@@ -165,24 +150,85 @@ int main(int argc, const char* argv[]) {
     if (!config_parse_args(config, argc, argv)) {
         // config_parse_args returns false for help/version or errors
         config_destroy(config);
-        free_string_table(&globalStringTable);
+        shutdownLogger();
         return 0; // Help/version shown, normal exit
     }
-    
-    // Apply debug settings from configuration to debug system
-    config_apply_debug_settings(config);
-    
+
     // Validate configuration
     if (!config_validate(config)) {
         config_print_errors(config);
         config_destroy(config);
-        free_string_table(&globalStringTable);
+        shutdownLogger();
         return EXIT_USAGE_ERROR;
     }
-    
+
+    if (config->jit_benchmark_mode) {
+        if (!config->input_file) {
+            fprintf(stderr,
+                    "Error: --jit-benchmark requires an input program.\n");
+            config_destroy(config);
+            shutdownLogger();
+            return EXIT_USAGE_ERROR;
+        }
+
+        OrusJitRunStats interpreter_stats = {0};
+        OrusJitRunStats jit_stats = {0};
+        if (!vm_jit_benchmark_file(config->input_file, &interpreter_stats,
+                                   &jit_stats)) {
+            fprintf(stderr,
+                    "Failed to execute JIT benchmark for \"%s\".\n",
+                    config->input_file);
+            config_destroy(config);
+            shutdownLogger();
+            return EXIT_RUNTIME_ERROR;
+        }
+
+        double interpreter_ms = interpreter_stats.duration_ns / 1e6;
+        double jit_ms = jit_stats.duration_ns / 1e6;
+        double speedup = (jit_ms > 0.0) ? (interpreter_ms / jit_ms) : 0.0;
+
+        printf("[JIT Benchmark] interpreter runtime: %.2f ms\n",
+               interpreter_ms);
+        printf("[JIT Benchmark] jit runtime: %.2f ms\n", jit_ms);
+        printf("[JIT Benchmark] speedup: %.2fx\n", speedup);
+        printf("[JIT Benchmark] translations: %" PRIu64
+               " succeeded, %" PRIu64 " failed\n",
+               jit_stats.translation_success,
+               jit_stats.translation_failure);
+        printf("[JIT Benchmark] native compilations recorded: %" PRIu64 "\n",
+               jit_stats.compilation_count);
+        printf("[JIT Benchmark] native invocations recorded: %" PRIu64
+               ", type guard bailouts: %" PRIu64 "\n",
+               jit_stats.invocations,
+               jit_stats.native_type_deopts);
+        printf("[JIT Benchmark] native dispatches: %" PRIu64
+               ", cache hits: %" PRIu64 ", cache misses: %" PRIu64
+               ", deopts: %" PRIu64 "\n",
+               jit_stats.native_dispatches,
+               jit_stats.cache_hits,
+               jit_stats.cache_misses,
+               jit_stats.deopts);
+
+        if (jit_stats.translation_success == 0 ||
+            jit_stats.native_dispatches == 0) {
+            printf("[JIT Benchmark] warning: baseline tier did not translate this "
+                   "program; execution remained in the interpreter.\n");
+        }
+
+        config_destroy(config);
+        shutdownLogger();
+        return 0;
+    }
+
+    // Initialize debug system
+    debug_init();
+
+    // Apply debug settings from configuration to debug system
+    config_apply_debug_settings(config);
+
     // Set global configuration for access by other modules
     config_set_global(config);
-    
+
     // Load configuration file if specified via command line
     if (config->config_file && config->config_file != config_file) {
         config_load_from_file(config, config->config_file);
@@ -190,18 +236,25 @@ int main(int argc, const char* argv[]) {
         if (!config_validate(config)) {
             config_print_errors(config);
             config_destroy(config);
-        free_string_table(&globalStringTable);
-        return EXIT_USAGE_ERROR;
+            shutdownLogger();
+            return EXIT_USAGE_ERROR;
         }
     }
-    
+
+    // Strict leak-free: initialize global string table before running programs
+    init_string_table(&globalStringTable);
+
+    // Initialize feature-based error system
+    init_feature_errors();
+    init_type_errors();
+    init_variable_errors();
+
+    // Initialize VM profiling system
+    initVMProfiling();
+
     // Initialize VM with configuration
-    // printf("[MAIN_TRACE] About to call initVM()\n");
-    // fflush(stdout);
     initVM();
-    // printf("[MAIN_TRACE] initVM() completed\n");
-    // fflush(stdout);
-    
+
     // Apply configuration to VM
     vm.trace = config->trace_execution;
     vm.devMode = config->debug_mode;
@@ -270,10 +323,11 @@ int main(int argc, const char* argv[]) {
         }
         shutdownVMProfiling();
     }
-    
+
     freeVM();
+    free_string_table(&globalStringTable);
     config_destroy(config);
-    
+
     // LOG_INFO("Orus Language Interpreter shutting down");
     shutdownLogger();
     return 0;

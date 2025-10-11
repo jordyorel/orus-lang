@@ -227,12 +227,18 @@ static inline void profileFunctionHit(void* functionPtr, bool isNative) {
 
 extern size_t gcThreshold;
 
-#define PROF_SAFEPOINT(vm_ptr)                         \
-    do {                                               \
-        if ((vm_ptr)->bytesAllocated > gcThreshold) {  \
-            collectGarbage();                          \
-        }                                              \
+#ifndef GC_SAFEPOINT
+#define GC_SAFEPOINT(vm_ptr)                                         \
+    do {                                                             \
+        if ((vm_ptr) && (vm_ptr)->bytesAllocated > gcThreshold) {    \
+            collectGarbage();                                        \
+        }                                                            \
     } while (0)
+#endif
+
+#ifndef PROF_SAFEPOINT
+#define PROF_SAFEPOINT(vm_ptr) GC_SAFEPOINT(vm_ptr)
+#endif
 
 void queue_tier_up(VMState* vm, const HotPathSample* sample);
 
