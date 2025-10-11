@@ -721,6 +721,14 @@ map_const_opcode(uint8_t opcode,
             *ir_opcode = ORUS_JIT_IR_OP_LOAD_I64_CONST;
             *kind = ORUS_JIT_VALUE_I64;
             return true;
+        case OP_LOAD_U32_CONST:
+            *ir_opcode = ORUS_JIT_IR_OP_LOAD_U32_CONST;
+            *kind = ORUS_JIT_VALUE_U32;
+            return true;
+        case OP_LOAD_U64_CONST:
+            *ir_opcode = ORUS_JIT_IR_OP_LOAD_U64_CONST;
+            *kind = ORUS_JIT_VALUE_U64;
+            return true;
         case OP_LOAD_F64_CONST:
             *ir_opcode = ORUS_JIT_IR_OP_LOAD_F64_CONST;
             *kind = ORUS_JIT_VALUE_F64;
@@ -1510,11 +1518,14 @@ void queue_tier_up(VMState* vm_state, const HotPathSample* sample) {
         return;
     }
 
-    if (!vm_state->jit_enabled || !vm_state->jit_backend) {
+    if (sample->loop >= VM_MAX_PROFILED_LOOPS) {
         return;
     }
 
-    if (sample->loop >= VM_MAX_PROFILED_LOOPS) {
+    HotPathSample* record = &vm_state->profile[sample->loop];
+    record->hit_count = 0;
+
+    if (!vm_state->jit_enabled || !vm_state->jit_backend) {
         return;
     }
 
@@ -1522,12 +1533,10 @@ void queue_tier_up(VMState* vm_state, const HotPathSample* sample) {
         return;
     }
 
-    if (sample->func == UINT16_MAX || sample->func >= (FunctionId)vm_state->functionCount) {
+    if (sample->func == UINT16_MAX ||
+        sample->func >= (FunctionId)vm_state->functionCount) {
         return;
     }
-
-    HotPathSample* record = &vm_state->profile[sample->loop];
-    record->hit_count = 0;
 
     Function* function = &vm_state->functions[sample->func];
 

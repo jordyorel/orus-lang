@@ -308,6 +308,8 @@ InterpretResult vm_run_dispatch(void) {
         // Constant loading (also hot)
         VM_REGISTER_TYPED_LABEL(OP_LOAD_I32_CONST);
         VM_REGISTER_TYPED_LABEL(OP_LOAD_I64_CONST);
+        VM_REGISTER_TYPED_LABEL(OP_LOAD_U32_CONST);
+        VM_REGISTER_TYPED_LABEL(OP_LOAD_U64_CONST);
         VM_REGISTER_TYPED_LABEL(OP_LOAD_F64_CONST);
         
         // Standard operations (less hot)
@@ -3863,6 +3865,16 @@ InterpretResult vm_run_dispatch(void) {
 
     LABEL_OP_LOAD_I64_CONST: {
         handle_load_i64_const();
+        DISPATCH();
+    }
+
+    LABEL_OP_LOAD_U32_CONST: {
+        handle_load_u32_const();
+        DISPATCH();
+    }
+
+    LABEL_OP_LOAD_U64_CONST: {
+        handle_load_u64_const();
         DISPATCH();
     }
 
