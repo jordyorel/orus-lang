@@ -6,7 +6,7 @@ The current DynASM-backed tier only emits a return stub through `OrusJitIRProgra
 
 ## Goal
 
-Deliver measurable tier-4 speedups without waiting for trace recording or inline caches by turning the stub backend into a straight-line compiler for the hot loop/function that triggered the promotion. This keeps the roadmap intact while allowing the VM to demonstrate tangible performance wins before the "Future Enhancement" work lands.
+Deliver measurable tier-4 speedups without waiting for trace recording or inline caches by turning the stub backend into a straight-line compiler for the hot loop/function that triggered the promotion. This keeps the roadmap intact while allowing the VM to demonstrate tangible performance wins before the "Future Enhancement" work lands and covers the full set of Orus value kinds (`i32`, `i64`, `u32`, `u64`, `f64`, and `string`).
 
 ## Step-by-Step Improvements
 
@@ -40,3 +40,83 @@ Deliver measurable tier-4 speedups without waiting for trace recording or inline
 ## Expected Outcome
 
 These steps keep the current infrastructure (hot-loop sampling, shared frame layout, deopt pathway) but finally let the tier emit useful code. Even without full trace specialization or inline caches, replacing interpreter dispatch on tight numeric loops should deliver the "few ×" wins promised in the Phase 4 exit criteria while laying the groundwork for the later optimization passes.
+
+## Roadmap: Multi-Type Baseline Support & Telemetry
+
+Although the baseline loop compiler can now carry the synthetic 32-bit microkernels to native code, real programs still promote
+to 64-bit integers, floats, or operate on strings long before tiering triggers. The current translator aborts the moment it sees a non-`ORUS_JIT_VALUE_I32`
+value kind, increments the generic failure counter, and installs the trivial stub. As a result, none of the real workloads ever
+escape the interpreter and we lose the telemetry needed to understand why.
+
+To close this gap we need to turn the hard guard into a set of supported lowering paths, broaden the emitter templates to cover
+every Orus type carried by the VM (including `string`), and upgrade the failure counter so it captures actionable diagnostics. The following phased
+plan keeps the risk small by staging type enablement, testing on existing benchmarks, and instrumenting the failure modes.
+
+### Phase A – Translator & IR Audit *(Status: ✅ phase tasks implemented)*
+
+1. **Inventory Orus value kinds** ✅ – Documented below in the "Orus Value Kind Inventory" table so reviewers can trace
+   which bytecodes produce widened arithmetic or string manipulation.
+2. **Split translator guards by reason** ✅ – Translator now surfaces `OrusJitTranslationStatus` values that distinguish
+   unsupported value kinds, constant mismatches, unhandled opcodes, and malformed loop shapes.
+3. **Extend IR builders** ✅ – Linear lowering emits `*_I64`, `*_U32`, `*_U64`, and `*_F64` opcodes, capturing mixed-width
+   operations even while the backend remains i32-only.
+4. **Unit tests** ✅ – Added dedicated translator unit tests that assert typed IR emission for i64/f64 loops and verify
+   structured failure reasons for unsupported constants.
+
+#### Orus Value Kind Inventory (Phase A.1)
+
+| Value kind | Source bytecodes | Notes |
+|------------|------------------|-------|
+| `ORUS_JIT_VALUE_I32` | `OP_LOAD_I32_CONST`, `OP_MOVE_I32`, `OP_{ADD,SUB,MUL,DIV,MOD}_I32_TYPED` | Baseline path used by the existing microkernels. |
+| `ORUS_JIT_VALUE_I64` | `OP_LOAD_I64_CONST`, `OP_MOVE_I64`, `OP_{ADD,SUB,MUL,DIV,MOD}_I64_TYPED` | Drives sign-extended integer promotions seen in real loops. |
+| `ORUS_JIT_VALUE_U32` | `OP_MOVE_U32`, `OP_{ADD,SUB,MUL,DIV,MOD}_U32_TYPED` | Shares translator plumbing with i32; constant loads rely on zero-extended i32 pool today. |
+| `ORUS_JIT_VALUE_U64` | `OP_MOVE_U64`, `OP_{ADD,SUB,MUL,DIV,MOD}_U64_TYPED` | Captures unsigned widening, pending dedicated constant opcodes. |
+| `ORUS_JIT_VALUE_F64` | `OP_LOAD_F64_CONST`, `OP_MOVE_F64`, `OP_{ADD,SUB,MUL,DIV,MOD}_F64_TYPED` | Covers the current floating-point stack. |
+| `ORUS_JIT_VALUE_STRING` | `OP_LOAD_STRING_CONST`, `OP_MOVE_STRING`, `OP_COMPARE_STRING`, concatenation helpers | Required for real-world programs that manipulate text; start with lowering to runtime helper calls before inlining hot paths. |
+
+### Phase B – Backend Templates per Type Family
+
+1. **Integer widening support** ✅ – The x86_64 baseline emitter now lowers i64, u64, and u32 variants of `LOAD`, `MOVE`, `ADD`,
+   `SUB`, and `MUL` through shared pointer guards, reusing new typed-register helpers to keep the linear templates consistent with
+   the i32 path.
+2. **Float support** ✅ – Added SSE2 templates that materialize f64 constants, moves, and arithmetic directly in XMM registers while
+   falling back to the existing bailout path if typed register metadata is missing.
+3. **String primitives** ✅ – Added IR nodes and helper-backed lowering for string constant loads, moves, concatenation,
+   and value-to-string conversions so the baseline emitter can materialize heap values without deopting. Comparisons and
+   length checks continue to route through the interpreter until profiling highlights hot call sites to inline.
+4. **Mixed-type promotions** ✅ – Translator now emits dedicated promotion opcodes for i32→i64 and u32→u64 conversions while
+   canonicalizing string literal materialization, allowing the backend to reuse shared helper shims instead of ad-hoc value
+   kind checks.
+5. **Validation harness** ✅ – Extended the microbenchmark suite with dedicated i32, i64, u64, f64, and string kernels so the
+   backend smoke tests now exercise every supported value kind and report per-kernel speedups through the JIT benchmark runner.
+
+### Phase C – Failure Counter & Telemetry
+
+1. **Structured failure reporting** ✅ – Replaced the single counter with a reusable failure log that captures the failure reason,
+   opcode, value kind, bytecode offset, and loop identifiers while tracking per-status aggregates and a rolling history buffer for debugging.
+2. **Expose metrics** ✅ – The CLI `--jit-benchmark` path and the unit harness now emit both reason-oriented and
+   per-value-kind breakdowns, so every run reports which Orus types are failing and their share of the total bailouts.
+3. **Alerting thresholds** ✅ – Debug builds assert once more than eight bailouts accumulate for a supported value kind,
+   flagging regressions in the translator or backend before they silently tank performance.
+4. **Documentation loop** ✅ – `JIT_BENCHMARK_RESULTS.md` tracks the new counters (including per-type failure percentages)
+   and records the first successful tier-ups for each Orus type in the benchmark suite.
+
+### Phase D – Rollout & Regression Guarding
+
+1. **Incremental enablement** ✅ – The VM now tracks a rollout stage (`i32-only`, `wide-int`, `floats`, `strings`) and the
+   translator refuses to lower opcodes whose value kinds exceed the active stage. The VM boots at the full `strings`
+   stage by default so floats and strings no longer require manual overrides, while the CLI, unit harness, and benchmark
+   telemetry surface the configured stage, the enabled-kind mask, and a dedicated `rollout_disabled` failure status so
+   new regressions and staged rollouts stay visible without additional instrumentation.
+2. **Cross-architecture validation** ✅ – Landed a dedicated AArch64 linear emitter that mirrors the typed baseline semantics by
+   calling the shared arithmetic, conversion, and string helpers, while keeping the helper stub as a fallback. The backend smoke
+   suite now emits native blocks for Arm before dropping to the stub, and `make jit-cross-arch-tests` continues to exercise the
+   helper-stub path to ensure both execution modes stay in lockstep.
+3. **Continuous telemetry review** ✅ – `--jit-benchmark` output and the unit harness print per-stage summaries and flag the
+   number of translations blocked by the active rollout, making weekly telemetry review actionable without spelunking logs.
+4. **Long-term cleanup** ✅ – `queue_tier_up()` now skips compiling the trivial return stub for unsupported translations, keeps
+   loops blocklisted, and reserves the helper stub only for catastrophic failures (e.g. OOM/invalid input) so real tier-ups are
+   the only events counted as baseline compilations.
+
+Executing this roadmap removes the i32-only limitation, gives us actionable data whenever translation still fails, and brings the
+baseline JIT closer to the 3× real-world speedups the roadmap targets.

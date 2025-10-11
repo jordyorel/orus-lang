@@ -13,6 +13,7 @@
 #include "runtime/memory.h"
 #include "vm/vm_string_ops.h"
 #include "vm/register_file.h"
+#include "vm/jit_translation.h"
 #include "type/type.h"
 #include <string.h>
 #include <stdlib.h>
@@ -139,9 +140,13 @@ void initVM(void) {
     vm.jit_cache_miss_count = 0;
     vm.jit_deopt_count = 0;
     vm.jit_translation_success_count = 0;
-    vm.jit_translation_failure_count = 0;
+    orus_jit_translation_failure_log_init(&vm.jit_translation_failures);
     vm.jit_native_dispatch_count = 0;
     vm.jit_native_type_deopts = 0;
+    // Default to the full baseline rollout so production workloads gain
+    // immediate access to floating-point and string helpers without requiring
+    // a command-line override.
+    orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
     memset(vm.jit_loop_blocklist, 0, sizeof(vm.jit_loop_blocklist));
     vm.jit_pending_invalidate = false;
     memset(&vm.jit_pending_trigger, 0, sizeof(vm.jit_pending_trigger));

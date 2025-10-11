@@ -11,6 +11,7 @@
 #include "config/config.h"
 #include "public/version.h"
 #include "debug/debug_config.h"
+#include "vm/jit_translation.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -102,6 +103,7 @@ void config_reset_to_defaults(OrusConfig* config) {
     config->show_optimization_stats = false;
     config->benchmark_mode = false;
     config->jit_benchmark_mode = false;
+    config->jit_rollout_stage = -1;
     
     // Debug System Configuration
     config->debug_categories = NULL;      // No debug categories by default
@@ -155,13 +157,20 @@ bool config_load_from_env(OrusConfig* config) {
     }
     
     if ((env_val = getenv(ORUS_VERBOSE))) {
-        config->verbose = (strcmp(env_val, "1") == 0 || 
+        config->verbose = (strcmp(env_val, "1") == 0 ||
                           strcasecmp(env_val, "true") == 0);
     }
-    
+
     if ((env_val = getenv(ORUS_QUIET))) {
-        config->quiet = (strcmp(env_val, "1") == 0 || 
+        config->quiet = (strcmp(env_val, "1") == 0 ||
                         strcasecmp(env_val, "true") == 0);
+    }
+
+    if ((env_val = getenv(ORUS_JIT_ROLLOUT_STAGE))) {
+        OrusJitRolloutStage stage;
+        if (orus_jit_rollout_stage_parse(env_val, &stage)) {
+            config->jit_rollout_stage = (int)stage;
+        }
     }
     
     // Load numeric values
@@ -290,8 +299,18 @@ bool config_parse_args(OrusConfig* config, int argc, const char* argv[]) {
             config->benchmark_mode = true;
         } else if (strcmp(arg, "--jit-benchmark") == 0) {
             config->jit_benchmark_mode = true;
+        } else if (strncmp(arg, "--jit-rollout-stage=", 20) == 0) {
+            const char* stage_text = arg + 20;
+            OrusJitRolloutStage stage;
+            if (!orus_jit_rollout_stage_parse(stage_text, &stage)) {
+                fprintf(stderr,
+                        "Error: Unknown --jit-rollout-stage value '%s'\n",
+                        stage_text);
+                return false;
+            }
+            config->jit_rollout_stage = (int)stage;
         }
-        
+
         // VM Profiling options
         else if (strcmp(arg, "--profile") == 0) {
             config->vm_profiling_enabled = true;
@@ -467,7 +486,11 @@ bool config_validate(const OrusConfig* config) {
     if (config->verbose && config->quiet) {
         return false;
     }
-    
+
+    if (config->jit_rollout_stage >= ORUS_JIT_ROLLOUT_STAGE_COUNT) {
+        return false;
+    }
+
     return true;
 }
 
@@ -487,6 +510,11 @@ void config_print_errors(const OrusConfig* config) {
     
     if (config->verbose && config->quiet) {
         fprintf(stderr, "Error: Cannot use both --verbose and --quiet options\n");
+    }
+
+    if (config->jit_rollout_stage >= ORUS_JIT_ROLLOUT_STAGE_COUNT) {
+        fprintf(stderr,
+                "Error: --jit-rollout-stage must be one of i32, wide-int, floats, or strings\n");
     }
 }
 
@@ -517,6 +545,7 @@ void config_print_help(const char* program_name) {
     printf("  --show-opt-stats        Show optimization statistics\n");
     printf("  --benchmark             Enable benchmarking mode\n");
     printf("  --jit-benchmark         Run the Phase 4 JIT benchmark harness\n");
+    printf("  --jit-rollout-stage=LVL Set baseline JIT rollout stage (i32, wide-int, floats, strings)\n");
     printf("\nVM Configuration:\n");
     printf("  --max-recursion=N       Set maximum recursion depth (default: %d)\n", DEFAULT_MAX_RECURSION_DEPTH);
     printf("  --registers=N           Set number of VM registers (default: %d)\n", DEFAULT_REGISTER_COUNT);

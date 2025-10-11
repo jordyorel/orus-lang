@@ -259,6 +259,8 @@ INC_R_TEST_BIN = $(BUILDDIR)/tests/test_vm_inc_r
 DEC_I32_R_TEST_BIN = $(BUILDDIR)/tests/test_vm_dec_i32_r
 HOT_LOOP_PROFILING_TEST_BIN = $(BUILDDIR)/tests/test_vm_hot_loop_profiling
 JIT_BENCHMARK_TEST_BIN = $(BUILDDIR)/tests/test_vm_jit_benchmark
+JIT_TRANSLATION_TEST_BIN = $(BUILDDIR)/tests/test_vm_jit_translation
+JIT_BACKEND_TEST_BIN = $(BUILDDIR)/tests/test_vm_jit_backend
 BUILTIN_INPUT_TEST_BIN = $(BUILDDIR)/tests/test_builtin_input
 CONSTANT_FOLD_TEST_BIN = $(BUILDDIR)/tests/test_constant_folding
 BUILTIN_SORTED_ORUS_TESTS = \
@@ -274,7 +276,7 @@ BUILTIN_RANGE_ORUS_FAIL_TESTS = \
     tests/builtins/range_float_step.orus \
     tests/builtins/range_overflow_stop.orus
 
-.PHONY: all clean test unit-test test-control-flow benchmark help debug release profiling analyze install bytecode-jump-tests source-map-tests scope-tracking-tests fused-while-tests peephole-tests cli-smoke-tests tagged-union-tests typed-register-tests vm-print-tests register-window-tests spill-gc-tests inc-cmp-jmp-tests add-i32-imm-tests inc-r-tests hot-loop-tests dec-i32-r-tests register-allocator-tests builtin-input-tests builtin-range-tests test-optimizer wasm _test-run _benchmark-run jit-benchmark-orus
+.PHONY: all clean test unit-test test-control-flow benchmark help debug release profiling analyze install bytecode-jump-tests source-map-tests scope-tracking-tests fused-while-tests peephole-tests cli-smoke-tests tagged-union-tests typed-register-tests vm-print-tests register-window-tests spill-gc-tests inc-cmp-jmp-tests add-i32-imm-tests inc-r-tests hot-loop-tests dec-i32-r-tests register-allocator-tests builtin-input-tests builtin-range-tests test-optimizer wasm _test-run _benchmark-run jit-benchmark-orus jit-backend-helper-tests jit-cross-arch-tests
 
 all: build-info $(ORUS) $(ORUS_PROF)
 
@@ -697,6 +699,31 @@ $(JIT_BENCHMARK_TEST_BIN): tests/unit/test_vm_jit_benchmark.c $(COMPILER_OBJS) $
 jit-benchmark-tests: $(JIT_BENCHMARK_TEST_BIN)
 	@echo "Running VM JIT benchmark..."
 	@./$(JIT_BENCHMARK_TEST_BIN)
+
+$(JIT_TRANSLATION_TEST_BIN): tests/unit/test_vm_jit_translation.c $(COMPILER_OBJS) $(VM_OBJS)
+	@mkdir -p $(dir $@)
+	@echo "Compiling baseline translator tests..."
+	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+
+jit-translation-tests: $(JIT_TRANSLATION_TEST_BIN)
+	@echo "Running baseline translator tests..."
+	@./$(JIT_TRANSLATION_TEST_BIN)
+
+$(JIT_BACKEND_TEST_BIN): tests/unit/test_vm_jit_backend.c $(COMPILER_OBJS) $(VM_OBJS)
+	@mkdir -p $(dir $@)
+	@echo "Compiling baseline backend smoke tests..."
+	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+
+jit-backend-tests: $(JIT_BACKEND_TEST_BIN)
+	@echo "Running baseline backend smoke tests..."
+	@./$(JIT_BACKEND_TEST_BIN)
+
+jit-backend-helper-tests: $(JIT_BACKEND_TEST_BIN)
+	@echo "Running backend smoke tests via helper stub (cross-arch path)..."
+	@ORUS_JIT_FORCE_HELPER_STUB=1 ./$(JIT_BACKEND_TEST_BIN)
+
+jit-cross-arch-tests: jit-backend-helper-tests jit-translation-tests
+	@echo "Cross-architecture validation complete."
 
 .PHONY: jit-benchmark-orus
 jit-benchmark-orus: $(ORUS)

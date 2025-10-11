@@ -16,6 +16,7 @@
 #include <string.h>
 
 #include "vm/vm.h"
+#include "vm/jit_translation.h"
 #include "vm/jit_benchmark.h"
 #include "public/common.h"
 #include "internal/error_reporting.h"
@@ -195,6 +196,67 @@ int main(int argc, const char* argv[]) {
                " succeeded, %" PRIu64 " failed\n",
                jit_stats.translation_success,
                jit_stats.translation_failure);
+        printf("[JIT Benchmark] rollout stage: %s (mask=0x%X)\n",
+               orus_jit_rollout_stage_name(jit_stats.rollout_stage),
+               jit_stats.rollout_mask);
+        uint64_t rollout_blocked =
+            (jit_stats.rollout_stage < ORUS_JIT_ROLLOUT_STAGE_STRINGS)
+                ? jit_stats.failure_log
+                      .reason_counts[ORUS_JIT_TRANSLATE_STATUS_ROLLOUT_DISABLED]
+                : 0u;
+        if (jit_stats.failure_log.total_failures > 0) {
+            printf("[JIT Benchmark] failure breakdown:\n");
+            for (size_t i = 0; i < ORUS_JIT_TRANSLATE_STATUS_COUNT; ++i) {
+                uint64_t count = jit_stats.failure_log.reason_counts[i];
+                if (count == 0) {
+                    continue;
+                }
+                printf("    - %s: %" PRIu64 "\n",
+                       orus_jit_translation_status_name(
+                           (OrusJitTranslationStatus)i),
+                       count);
+            }
+            printf("    - failure by value kind:\n");
+            double total_failures =
+                (double)jit_stats.failure_log.total_failures;
+            for (size_t kind = 0; kind < ORUS_JIT_VALUE_KIND_COUNT; ++kind) {
+                uint64_t count =
+                    jit_stats.failure_log.value_kind_counts[kind];
+                if (count == 0) {
+                    continue;
+                }
+                double share =
+                    (total_failures > 0.0)
+                        ? (100.0 * (double)count / total_failures)
+                        : 0.0;
+                printf("        * %s: %" PRIu64 " (%.1f%%)\n",
+                       orus_jit_value_kind_name((OrusJitValueKind)kind),
+                       count,
+                       share);
+            }
+            if (jit_stats.failure_log.count > 0) {
+                size_t history_size = ORUS_JIT_TRANSLATION_FAILURE_HISTORY;
+                size_t last_index =
+                    (jit_stats.failure_log.next_index + history_size - 1u) %
+                    history_size;
+                const OrusJitTranslationFailureRecord* last_failure =
+                    &jit_stats.failure_log.records[last_index];
+                printf("    - last failure: reason=%s opcode=%u kind=%u "
+                       "func=%u loop=%u bytecode=%u\n",
+                       orus_jit_translation_status_name(last_failure->status),
+                       (unsigned)last_failure->opcode,
+                       (unsigned)last_failure->value_kind,
+                       (unsigned)last_failure->function_index,
+                       (unsigned)last_failure->loop_index,
+                       last_failure->bytecode_offset);
+            }
+        }
+        if (rollout_blocked > 0) {
+            printf("[JIT Benchmark] notice: %" PRIu64
+                   " translations blocked by rollout stage %s\n",
+                   rollout_blocked,
+                   orus_jit_rollout_stage_name(jit_stats.rollout_stage));
+        }
         printf("[JIT Benchmark] native compilations recorded: %" PRIu64 "\n",
                jit_stats.compilation_count);
         printf("[JIT Benchmark] native invocations recorded: %" PRIu64
@@ -258,6 +320,11 @@ int main(int argc, const char* argv[]) {
     // Apply configuration to VM
     vm.trace = config->trace_execution;
     vm.devMode = config->debug_mode;
+    if (config->jit_rollout_stage >= 0 &&
+        config->jit_rollout_stage < ORUS_JIT_ROLLOUT_STAGE_COUNT) {
+        orus_jit_rollout_set_stage(&vm,
+                                   (OrusJitRolloutStage)config->jit_rollout_stage);
+    }
     
     // Configure VM profiling based on command line options
     if (config->vm_profiling_enabled) {

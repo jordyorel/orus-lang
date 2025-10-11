@@ -23,6 +23,8 @@ typedef enum OrusJitValueKind {
     ORUS_JIT_VALUE_U32,
     ORUS_JIT_VALUE_U64,
     ORUS_JIT_VALUE_F64,
+    ORUS_JIT_VALUE_STRING,
+    ORUS_JIT_VALUE_KIND_COUNT,
 } OrusJitValueKind;
 
 typedef enum OrusJitIROpcode {
@@ -33,12 +35,14 @@ typedef enum OrusJitIROpcode {
     ORUS_JIT_IR_OP_LOAD_U32_CONST,
     ORUS_JIT_IR_OP_LOAD_U64_CONST,
     ORUS_JIT_IR_OP_LOAD_F64_CONST,
+    ORUS_JIT_IR_OP_LOAD_STRING_CONST,
 
     ORUS_JIT_IR_OP_MOVE_I32,
     ORUS_JIT_IR_OP_MOVE_I64,
     ORUS_JIT_IR_OP_MOVE_U32,
     ORUS_JIT_IR_OP_MOVE_U64,
     ORUS_JIT_IR_OP_MOVE_F64,
+    ORUS_JIT_IR_OP_MOVE_STRING,
 
     ORUS_JIT_IR_OP_ADD_I32,
     ORUS_JIT_IR_OP_ADD_I64,
@@ -70,6 +74,12 @@ typedef enum OrusJitIROpcode {
     ORUS_JIT_IR_OP_MOD_U64,
     ORUS_JIT_IR_OP_MOD_F64,
 
+    ORUS_JIT_IR_OP_CONCAT_STRING,
+    ORUS_JIT_IR_OP_TO_STRING,
+
+    ORUS_JIT_IR_OP_I32_TO_I64,
+    ORUS_JIT_IR_OP_U32_TO_U64,
+
     ORUS_JIT_IR_OP_SAFEPOINT,
     ORUS_JIT_IR_OP_LOOP_BACK,
     ORUS_JIT_IR_OP_JUMP_SHORT,
@@ -86,6 +96,10 @@ typedef struct OrusJitIRInstruction {
             uint16_t dst_reg;
             uint16_t src_reg;
         } move;
+        struct {
+            uint16_t dst_reg;
+            uint16_t src_reg;
+        } unary;
         struct {
             uint16_t dst_reg;
             uint16_t lhs_reg;

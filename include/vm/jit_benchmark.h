@@ -13,6 +13,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "vm/jit_translation.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -31,6 +33,9 @@ typedef struct OrusJitRunStats {
     uint64_t native_dispatches;
     uint64_t native_type_deopts;
     uint64_t deopts;
+    OrusJitTranslationFailureLog failure_log;
+    OrusJitRolloutStage rollout_stage;
+    uint32_t rollout_mask;
 } OrusJitRunStats;
 
 // Execute the provided source buffer under either interpreter or JIT mode and
