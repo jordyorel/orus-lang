@@ -66,6 +66,7 @@ typedef struct {
     bool show_tokens;              // Show token stream (--show-tokens)
     bool show_optimization_stats;  // Show optimization statistics (--show-opt-stats)
     bool benchmark_mode;           // Enable benchmarking (--benchmark)
+    bool jit_benchmark_mode;       // Run the JIT benchmark harness (--jit-benchmark)
     
     // Debug System Configuration
     const char* debug_categories;  // Debug categories to enable (--debug-categories)

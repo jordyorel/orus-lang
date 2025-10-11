@@ -160,6 +160,8 @@ vm_jit_invalidate_entry(const JITDeoptTrigger* trigger) {
         return;
     }
 
+    vm.jit_deopt_count++;
+
     if (trigger->function_index == UINT16_MAX) {
         vm_jit_flush_entries();
         return;
@@ -194,6 +196,7 @@ vm_jit_flush_entries(void) {
         vm_jit_cache_reset_slot(&vm.jit_cache.slots[i]);
     }
     vm.jit_cache.count = 0;
+    memset(vm.jit_loop_blocklist, 0, sizeof(vm.jit_loop_blocklist));
 }
 
 static bool function_guard_allows_specialization(Function* function) {

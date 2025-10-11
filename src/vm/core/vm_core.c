@@ -135,6 +135,16 @@ void initVM(void) {
     vm.jit_cache.next_generation = 0;
     vm.jit_compilation_count = 0;
     vm.jit_invocation_count = 0;
+    vm.jit_cache_hit_count = 0;
+    vm.jit_cache_miss_count = 0;
+    vm.jit_deopt_count = 0;
+    vm.jit_translation_success_count = 0;
+    vm.jit_translation_failure_count = 0;
+    vm.jit_native_dispatch_count = 0;
+    vm.jit_native_type_deopts = 0;
+    memset(vm.jit_loop_blocklist, 0, sizeof(vm.jit_loop_blocklist));
+    vm.jit_pending_invalidate = false;
+    memset(&vm.jit_pending_trigger, 0, sizeof(vm.jit_pending_trigger));
     if (vm.jit_backend) {
         JITEntry stub_entry;
         memset(&stub_entry, 0, sizeof(stub_entry));
@@ -210,6 +220,9 @@ void freeVM(void) {
     vm.jit_enabled = false;
     vm.jit_compilation_count = 0;
     vm.jit_invocation_count = 0;
+    vm.jit_cache_hit_count = 0;
+    vm.jit_cache_miss_count = 0;
+    vm.jit_deopt_count = 0;
     vm.functionCount = 0;
 
     // Free global string table

@@ -202,7 +202,7 @@ struct ObjRangeIterator {
 };
 
 // Chunk (bytecode container)
-typedef struct {
+typedef struct Chunk {
     int count;
     int capacity;
     uint8_t* code;
@@ -1236,7 +1236,7 @@ typedef enum {
 // These are implemented in register_file.c
 
 // VM state
-typedef struct {
+typedef struct VM {
     // Phase 1: New register file architecture
     RegisterFile register_file;
     
@@ -1325,6 +1325,16 @@ typedef struct {
     bool jit_enabled;
     uint64_t jit_compilation_count;
     uint64_t jit_invocation_count;
+    uint64_t jit_cache_hit_count;
+    uint64_t jit_cache_miss_count;
+    uint64_t jit_deopt_count;
+    uint64_t jit_translation_success_count;
+    uint64_t jit_translation_failure_count;
+    uint64_t jit_native_dispatch_count;
+    uint64_t jit_native_type_deopts;
+    bool jit_loop_blocklist[VM_MAX_PROFILED_LOOPS];
+    bool jit_pending_invalidate;
+    JITDeoptTrigger jit_pending_trigger;
 } VM;
 
 // Transitional alias while the runtime gradually migrates to the new VMState

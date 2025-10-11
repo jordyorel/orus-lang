@@ -17,6 +17,10 @@
 #define ORUS_JIT_OFFSET_VM_REGISTER_FILE (offsetof(VM, register_file))
 #define ORUS_JIT_OFFSET_VM_REGISTERS     (offsetof(VM, registers))
 #define ORUS_JIT_OFFSET_VM_TYPED_REGS    (offsetof(VM, typed_regs))
+#define ORUS_JIT_OFFSET_TYPED_I32_PTR    (offsetof(TypedRegisters, i32_regs))
+#define ORUS_JIT_OFFSET_TYPED_U32_PTR    (offsetof(TypedRegisters, u32_regs))
+#define ORUS_JIT_OFFSET_TYPED_F64_PTR    (offsetof(TypedRegisters, f64_regs))
+#define ORUS_JIT_OFFSET_TYPED_REG_TYPES  (offsetof(TypedRegisters, reg_types))
 #define ORUS_JIT_OFFSET_VM_FRAMES        (offsetof(VM, frames))
 
 // --- Register file layout --------------------------------------------------

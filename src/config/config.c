@@ -101,6 +101,7 @@ void config_reset_to_defaults(OrusConfig* config) {
     config->show_tokens = false;
     config->show_optimization_stats = false;
     config->benchmark_mode = false;
+    config->jit_benchmark_mode = false;
     
     // Debug System Configuration
     config->debug_categories = NULL;      // No debug categories by default
@@ -287,6 +288,8 @@ bool config_parse_args(OrusConfig* config, int argc, const char* argv[]) {
             config->show_optimization_stats = true;
         } else if (strcmp(arg, "--benchmark") == 0) {
             config->benchmark_mode = true;
+        } else if (strcmp(arg, "--jit-benchmark") == 0) {
+            config->jit_benchmark_mode = true;
         }
         
         // VM Profiling options
@@ -513,6 +516,7 @@ void config_print_help(const char* program_name) {
     printf("  --show-tokens           Show token stream\n");
     printf("  --show-opt-stats        Show optimization statistics\n");
     printf("  --benchmark             Enable benchmarking mode\n");
+    printf("  --jit-benchmark         Run the Phase 4 JIT benchmark harness\n");
     printf("\nVM Configuration:\n");
     printf("  --max-recursion=N       Set maximum recursion depth (default: %d)\n", DEFAULT_MAX_RECURSION_DEPTH);
     printf("  --registers=N           Set number of VM registers (default: %d)\n", DEFAULT_REGISTER_COUNT);
