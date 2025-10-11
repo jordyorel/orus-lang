@@ -115,5 +115,6 @@ int main(void) {
     }
 
     puts("All hot loop profiling tests passed.");
+    // puts("This test is commnented out because I suspect an infinite loop that is only on my Mac M1 maybe achitecture issues. We should check for it");
     return 0;
 }
