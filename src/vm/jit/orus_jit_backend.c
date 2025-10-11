@@ -105,7 +105,12 @@ orus_jit_alloc_executable(size_t size, size_t page_size, size_t* out_capacity) {
     }
 #else
     int prot = PROT_READ | PROT_WRITE;
-    int flags = MAP_PRIVATE | MAP_ANONYMOUS;
+    int flags = MAP_PRIVATE;
+#ifdef MAP_ANONYMOUS
+    flags |= MAP_ANONYMOUS;
+#elif defined(MAP_ANON)
+    flags |= MAP_ANON;
+#endif
 #if ORUS_JIT_USE_APPLE_JIT
     flags |= MAP_JIT;
 #endif
