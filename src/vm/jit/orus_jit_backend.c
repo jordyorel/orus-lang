@@ -10,6 +10,7 @@
 #include "vm/vm_comparison.h"
 #include "vm/vm_profiling.h"
 #include "vm/vm_tiering.h"
+#include "vm/vm_string_ops.h"
 
 #if defined(__x86_64__) || defined(_M_X64)
 #include "dasm_proto.h"
@@ -21,6 +22,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -172,6 +174,32 @@ orus_jit_flush_icache(void* ptr, size_t size) {
 static void orus_jit_execute_block(struct VM* vm_instance,
                                    const OrusJitNativeBlock* block);
 
+#if defined(__aarch64__)
+static bool
+orus_jit_emit_a64_mov_imm64(uint32_t* code,
+                            size_t* index,
+                            size_t capacity_words,
+                            uint8_t reg,
+                            uint64_t value) {
+    if (*index >= capacity_words) {
+        return false;
+    }
+    code[(*index)++] = 0xD2800000u | ((uint32_t)(value & 0xFFFFu) << 5) | reg;
+    for (uint32_t shift = 16u; shift < 64u; shift += 16u) {
+        uint16_t part = (uint16_t)((value >> shift) & 0xFFFFu);
+        if (!part) {
+            continue;
+        }
+        if (*index >= capacity_words) {
+            return false;
+        }
+        uint32_t hw = shift / 16u;
+        code[(*index)++] = 0xF2800000u | (hw << 21) | ((uint32_t)part << 5) | reg;
+    }
+    return true;
+}
+#endif
+
 static JITBackendStatus
 orus_jit_backend_emit_helper_stub(struct OrusJitBackend* backend,
                                   OrusJitNativeBlock* block,
@@ -222,6 +250,96 @@ orus_jit_backend_emit_helper_stub(struct OrusJitBackend* backend,
 #endif
 
     orus_jit_set_write_protection(true);
+
+#if !defined(_WIN32)
+    if (!orus_jit_make_executable(buffer, capacity)) {
+        orus_jit_release_executable(buffer, capacity);
+        return JIT_BACKEND_ASSEMBLY_ERROR;
+    }
+#endif
+
+    orus_jit_flush_icache(buffer, stub_size);
+
+    block->code_ptr = buffer;
+    block->code_capacity = capacity;
+
+    entry->entry_point = (JITEntryPoint)buffer;
+    entry->code_ptr = buffer;
+    entry->code_size = stub_size;
+    entry->code_capacity = capacity;
+    entry->debug_name = "orus_jit_helper_stub";
+    return JIT_BACKEND_OK;
+#elif defined(__aarch64__)
+    size_t capacity = 0;
+    size_t stub_size = 0;
+    void* buffer = orus_jit_alloc_executable(64u, backend->page_size, &capacity);
+    if (!buffer) {
+        return JIT_BACKEND_OUT_OF_MEMORY;
+    }
+
+    orus_jit_set_write_protection(false);
+
+    uint32_t* code = (uint32_t*)buffer;
+    size_t capacity_words = capacity / sizeof(uint32_t);
+    size_t index = 0u;
+    bool success = true;
+
+    if (index < capacity_words) {
+        code[index++] = 0xA9BF7BF0u; // stp x29, x30, [sp, #-16]!
+    } else {
+        success = false;
+    }
+    if (success) {
+        if (index < capacity_words) {
+            code[index++] = 0x910003FDu; // mov x29, sp
+        } else {
+            success = false;
+        }
+    }
+
+    if (success) {
+        success = orus_jit_emit_a64_mov_imm64(code, &index, capacity_words, 0x1u,
+                                              (uint64_t)(uintptr_t)block);
+    }
+
+    if (success) {
+        success = orus_jit_emit_a64_mov_imm64(
+            code, &index, capacity_words, 0x10u,
+            (uint64_t)(uintptr_t)&orus_jit_execute_block);
+    }
+
+    if (success) {
+        if (index < capacity_words) {
+            code[index++] = 0xD63F0200u; // blr x16
+        } else {
+            success = false;
+        }
+    }
+
+    if (success) {
+        if (index < capacity_words) {
+            code[index++] = 0xA8C17BF0u; // ldp x29, x30, [sp], #16
+        } else {
+            success = false;
+        }
+    }
+
+    if (success) {
+        if (index < capacity_words) {
+            code[index++] = 0xD65F03C0u; // ret
+        } else {
+            success = false;
+        }
+    }
+
+    orus_jit_set_write_protection(true);
+
+    if (!success) {
+        orus_jit_release_executable(buffer, capacity);
+        return JIT_BACKEND_OUT_OF_MEMORY;
+    }
+
+    stub_size = index * sizeof(uint32_t);
 
 #if !defined(_WIN32)
     if (!orus_jit_make_executable(buffer, capacity)) {
@@ -489,6 +607,15 @@ jit_store_value(uint16_t dst, OrusJitValueKind kind, Value value) {
                 vm_set_register_safe(dst, value);
             }
             break;
+        case ORUS_JIT_VALUE_STRING:
+            if (IS_STRING(value)) {
+                vm_set_register_safe(dst, value);
+            } else {
+                vm_set_register_safe(dst, value);
+            }
+            break;
+        case ORUS_JIT_VALUE_KIND_COUNT:
+            break;
     }
 }
 
@@ -555,8 +682,376 @@ jit_move_typed(struct VM* vm_instance, const OrusJitIRInstruction* inst) {
                 vm_store_f64_typed_hot(dst, AS_F64(v));
             }
             break;
+        case ORUS_JIT_VALUE_STRING: {
+            Value v = vm_get_register_safe(src);
+            if (!IS_STRING(v)) {
+                vm_set_register_safe(dst, v);
+            } else {
+                vm_set_register_safe(dst, v);
+            }
+            break;
+        }
+        case ORUS_JIT_VALUE_KIND_COUNT:
+            break;
     }
 }
+
+static bool
+orus_jit_native_load_string_const(struct VM* vm_instance,
+                                  OrusJitNativeBlock* block,
+                                  uint16_t dst,
+                                  ObjString* string_value) {
+    if (!vm_instance || !string_value) {
+        jit_bailout_and_deopt(vm_instance, block);
+        return false;
+    }
+
+    vm_set_register_safe(dst, STRING_VAL(string_value));
+    return true;
+}
+
+static bool
+orus_jit_native_move_string(struct VM* vm_instance,
+                            OrusJitNativeBlock* block,
+                            uint16_t dst,
+                            uint16_t src) {
+    if (!vm_instance) {
+        return false;
+    }
+
+    Value value = vm_get_register_safe(src);
+    if (!IS_STRING(value)) {
+        jit_bailout_and_deopt(vm_instance, block);
+        return false;
+    }
+
+    vm_set_register_safe(dst, value);
+    return true;
+}
+
+static bool
+orus_jit_native_concat_string(struct VM* vm_instance,
+                              OrusJitNativeBlock* block,
+                              uint16_t dst,
+                              uint16_t lhs,
+                              uint16_t rhs) {
+    if (!vm_instance) {
+        return false;
+    }
+
+    Value left = vm_get_register_safe(lhs);
+    Value right = vm_get_register_safe(rhs);
+    if (!IS_STRING(left) || !IS_STRING(right)) {
+        jit_bailout_and_deopt(vm_instance, block);
+        return false;
+    }
+
+    ObjString* result = rope_concat_strings(AS_STRING(left), AS_STRING(right));
+    if (!result) {
+        jit_bailout_and_deopt(vm_instance, block);
+        return false;
+    }
+
+    vm_set_register_safe(dst, STRING_VAL(result));
+    return true;
+}
+
+static bool
+orus_jit_native_to_string(struct VM* vm_instance,
+                          OrusJitNativeBlock* block,
+                          uint16_t dst,
+                          uint16_t src) {
+    if (!vm_instance) {
+        return false;
+    }
+
+    Value val = vm_get_register_safe(src);
+    if (IS_STRING(val)) {
+        vm_set_register_safe(dst, val);
+        return true;
+    }
+
+    char buffer[64];
+    if (IS_I32(val)) {
+        snprintf(buffer, sizeof(buffer), "%d", AS_I32(val));
+    } else if (IS_I64(val)) {
+        snprintf(buffer, sizeof(buffer), "%lld", (long long)AS_I64(val));
+    } else if (IS_U32(val)) {
+        snprintf(buffer, sizeof(buffer), "%u", AS_U32(val));
+    } else if (IS_U64(val)) {
+        snprintf(buffer, sizeof(buffer), "%llu",
+                 (unsigned long long)AS_U64(val));
+    } else if (IS_F64(val)) {
+        snprintf(buffer, sizeof(buffer), "%g", AS_F64(val));
+    } else if (IS_BOOL(val)) {
+        snprintf(buffer, sizeof(buffer), "%s", AS_BOOL(val) ? "true" : "false");
+    } else {
+        snprintf(buffer, sizeof(buffer), "nil");
+    }
+
+    ObjString* result = allocateString(buffer, (int)strlen(buffer));
+    if (!result) {
+        jit_bailout_and_deopt(vm_instance, block);
+        return false;
+    }
+
+    vm_set_register_safe(dst, STRING_VAL(result));
+    return true;
+}
+
+static bool
+orus_jit_native_convert_i32_to_i64(struct VM* vm_instance,
+                                   OrusJitNativeBlock* block,
+                                   uint16_t dst,
+                                   uint16_t src) {
+    if (!vm_instance) {
+        return false;
+    }
+
+    int32_t value = 0;
+    if (!jit_read_i32(vm_instance, src, &value)) {
+        jit_bailout_and_deopt(vm_instance, block);
+        return false;
+    }
+
+    vm_store_i64_typed_hot(dst, (int64_t)value);
+    return true;
+}
+
+static bool
+orus_jit_native_convert_u32_to_u64(struct VM* vm_instance,
+                                   OrusJitNativeBlock* block,
+                                   uint16_t dst,
+                                   uint16_t src) {
+    if (!vm_instance) {
+        return false;
+    }
+
+    uint32_t value = 0u;
+    if (!jit_read_u32(vm_instance, src, &value)) {
+        jit_bailout_and_deopt(vm_instance, block);
+        return false;
+    }
+
+    vm_store_u64_typed_hot(dst, (uint64_t)value);
+    return true;
+}
+
+#if defined(__aarch64__)
+static bool orus_jit_opcode_is_add(OrusJitIROpcode opcode);
+static bool orus_jit_opcode_is_sub(OrusJitIROpcode opcode);
+static bool orus_jit_opcode_is_mul(OrusJitIROpcode opcode);
+
+static bool
+orus_jit_native_linear_load(struct VM* vm_instance,
+                            OrusJitNativeBlock* block,
+                            uint32_t raw_kind,
+                            uint16_t dst,
+                            uint64_t bits) {
+    if (!vm_instance) {
+        return false;
+    }
+
+    OrusJitValueKind kind = (OrusJitValueKind)raw_kind;
+    switch (kind) {
+        case ORUS_JIT_VALUE_I32:
+            vm_store_i32_typed_hot(dst, (int32_t)(uint32_t)bits);
+            return true;
+        case ORUS_JIT_VALUE_I64:
+            vm_store_i64_typed_hot(dst, (int64_t)bits);
+            return true;
+        case ORUS_JIT_VALUE_U32:
+            vm_store_u32_typed_hot(dst, (uint32_t)bits);
+            return true;
+        case ORUS_JIT_VALUE_U64:
+            vm_store_u64_typed_hot(dst, (uint64_t)bits);
+            return true;
+        case ORUS_JIT_VALUE_F64: {
+            double value = 0.0;
+            memcpy(&value, &bits, sizeof(double));
+            vm_store_f64_typed_hot(dst, value);
+            return true;
+        }
+        case ORUS_JIT_VALUE_STRING:
+            return orus_jit_native_load_string_const(
+                vm_instance, block, dst,
+                (ObjString*)(uintptr_t)bits);
+        case ORUS_JIT_VALUE_KIND_COUNT:
+            break;
+    }
+
+    jit_bailout_and_deopt(vm_instance, block);
+    return false;
+}
+
+static bool
+orus_jit_native_linear_move(struct VM* vm_instance,
+                            OrusJitNativeBlock* block,
+                            uint32_t raw_kind,
+                            uint16_t dst,
+                            uint16_t src) {
+    (void)block;
+    if (!vm_instance) {
+        return false;
+    }
+
+    OrusJitIRInstruction inst;
+    memset(&inst, 0, sizeof(inst));
+    inst.value_kind = (OrusJitValueKind)raw_kind;
+    inst.operands.move.dst_reg = dst;
+    inst.operands.move.src_reg = src;
+    jit_move_typed(vm_instance, &inst);
+    return true;
+}
+
+static bool
+orus_jit_native_linear_arithmetic(struct VM* vm_instance,
+                                  OrusJitNativeBlock* block,
+                                  uint32_t raw_opcode,
+                                  uint32_t raw_kind,
+                                  uint16_t dst,
+                                  uint16_t lhs,
+                                  uint16_t rhs) {
+    if (!vm_instance) {
+        return false;
+    }
+
+    OrusJitIROpcode opcode = (OrusJitIROpcode)raw_opcode;
+    OrusJitValueKind kind = (OrusJitValueKind)raw_kind;
+
+    switch (kind) {
+        case ORUS_JIT_VALUE_I32: {
+            int32_t left = 0;
+            int32_t right = 0;
+            if (!jit_read_i32(vm_instance, lhs, &left) ||
+                !jit_read_i32(vm_instance, rhs, &right)) {
+                jit_bailout_and_deopt(vm_instance, block);
+                return false;
+            }
+            int32_t result = left;
+            if (orus_jit_opcode_is_add(opcode)) {
+                result = left + right;
+            } else if (orus_jit_opcode_is_sub(opcode)) {
+                result = left - right;
+            } else if (orus_jit_opcode_is_mul(opcode)) {
+                result = left * right;
+            } else {
+                jit_bailout_and_deopt(vm_instance, block);
+                return false;
+            }
+            vm_store_i32_typed_hot(dst, result);
+            return true;
+        }
+        case ORUS_JIT_VALUE_I64: {
+            int64_t left = 0;
+            int64_t right = 0;
+            if (!jit_read_i64(vm_instance, lhs, &left) ||
+                !jit_read_i64(vm_instance, rhs, &right)) {
+                jit_bailout_and_deopt(vm_instance, block);
+                return false;
+            }
+            int64_t result = left;
+            if (orus_jit_opcode_is_add(opcode)) {
+                result = left + right;
+            } else if (orus_jit_opcode_is_sub(opcode)) {
+                result = left - right;
+            } else if (orus_jit_opcode_is_mul(opcode)) {
+                result = left * right;
+            } else {
+                jit_bailout_and_deopt(vm_instance, block);
+                return false;
+            }
+            vm_store_i64_typed_hot(dst, result);
+            return true;
+        }
+        case ORUS_JIT_VALUE_U32: {
+            uint32_t left = 0u;
+            uint32_t right = 0u;
+            if (!jit_read_u32(vm_instance, lhs, &left) ||
+                !jit_read_u32(vm_instance, rhs, &right)) {
+                jit_bailout_and_deopt(vm_instance, block);
+                return false;
+            }
+            uint32_t result = left;
+            if (orus_jit_opcode_is_add(opcode)) {
+                result = left + right;
+            } else if (orus_jit_opcode_is_sub(opcode)) {
+                result = left - right;
+            } else if (orus_jit_opcode_is_mul(opcode)) {
+                result = left * right;
+            } else {
+                jit_bailout_and_deopt(vm_instance, block);
+                return false;
+            }
+            vm_store_u32_typed_hot(dst, result);
+            return true;
+        }
+        case ORUS_JIT_VALUE_U64: {
+            uint64_t left = 0u;
+            uint64_t right = 0u;
+            if (!jit_read_u64(vm_instance, lhs, &left) ||
+                !jit_read_u64(vm_instance, rhs, &right)) {
+                jit_bailout_and_deopt(vm_instance, block);
+                return false;
+            }
+            uint64_t result = left;
+            if (orus_jit_opcode_is_add(opcode)) {
+                result = left + right;
+            } else if (orus_jit_opcode_is_sub(opcode)) {
+                result = left - right;
+            } else if (orus_jit_opcode_is_mul(opcode)) {
+                result = left * right;
+            } else {
+                jit_bailout_and_deopt(vm_instance, block);
+                return false;
+            }
+            vm_store_u64_typed_hot(dst, result);
+            return true;
+        }
+        case ORUS_JIT_VALUE_F64: {
+            double left = 0.0;
+            double right = 0.0;
+            if (!jit_read_f64(vm_instance, lhs, &left) ||
+                !jit_read_f64(vm_instance, rhs, &right)) {
+                jit_bailout_and_deopt(vm_instance, block);
+                return false;
+            }
+            double result = left;
+            if (orus_jit_opcode_is_add(opcode)) {
+                result = left + right;
+            } else if (orus_jit_opcode_is_sub(opcode)) {
+                result = left - right;
+            } else if (orus_jit_opcode_is_mul(opcode)) {
+                result = left * right;
+            } else {
+                jit_bailout_and_deopt(vm_instance, block);
+                return false;
+            }
+            vm_store_f64_typed_hot(dst, result);
+            return true;
+        }
+        case ORUS_JIT_VALUE_STRING:
+        case ORUS_JIT_VALUE_KIND_COUNT:
+            break;
+    }
+
+    jit_bailout_and_deopt(vm_instance, block);
+    return false;
+}
+
+static bool
+orus_jit_native_linear_safepoint(struct VM* vm_instance) {
+    if (!vm_instance) {
+        return false;
+    }
+    orus_jit_native_safepoint(vm_instance);
+    return true;
+}
+#endif // defined(__aarch64__)
+
+static const uint8_t MOV_RDI_R12[] = {0x4C, 0x89, 0xE7};
+static const uint8_t MOV_RSI_RBX_BYTES[] = {0x48, 0x89, 0xDE};
+static const uint8_t CALL_RAX[] = {0xFF, 0xD0};
 
 static bool
 orus_jit_opcode_is_add(OrusJitIROpcode opcode) {
@@ -617,6 +1112,7 @@ orus_jit_execute_block(struct VM* vm_instance, const OrusJitNativeBlock* block) 
             case ORUS_JIT_IR_OP_LOAD_U32_CONST:
             case ORUS_JIT_IR_OP_LOAD_U64_CONST:
             case ORUS_JIT_IR_OP_LOAD_F64_CONST:
+            case ORUS_JIT_IR_OP_LOAD_STRING_CONST:
                 jit_store_constant(vm_instance, chunk, inst);
                 break;
             case ORUS_JIT_IR_OP_MOVE_I32:
@@ -624,6 +1120,7 @@ orus_jit_execute_block(struct VM* vm_instance, const OrusJitNativeBlock* block) 
             case ORUS_JIT_IR_OP_MOVE_U32:
             case ORUS_JIT_IR_OP_MOVE_U64:
             case ORUS_JIT_IR_OP_MOVE_F64:
+            case ORUS_JIT_IR_OP_MOVE_STRING:
                 jit_move_typed(vm_instance, inst);
                 break;
             case ORUS_JIT_IR_OP_SAFEPOINT:
@@ -774,6 +1271,29 @@ orus_jit_execute_block(struct VM* vm_instance, const OrusJitNativeBlock* block) 
                 }
                 break;
             }
+            case ORUS_JIT_IR_OP_CONCAT_STRING:
+                orus_jit_native_concat_string(vm_instance, (OrusJitNativeBlock*)block,
+                                              inst->operands.arithmetic.dst_reg,
+                                              inst->operands.arithmetic.lhs_reg,
+                                              inst->operands.arithmetic.rhs_reg);
+                break;
+            case ORUS_JIT_IR_OP_TO_STRING:
+                orus_jit_native_to_string(vm_instance, (OrusJitNativeBlock*)block,
+                                          inst->operands.unary.dst_reg,
+                                          inst->operands.unary.src_reg);
+                break;
+            case ORUS_JIT_IR_OP_I32_TO_I64:
+                orus_jit_native_convert_i32_to_i64(vm_instance,
+                                                   (OrusJitNativeBlock*)block,
+                                                   inst->operands.unary.dst_reg,
+                                                   inst->operands.unary.src_reg);
+                break;
+            case ORUS_JIT_IR_OP_U32_TO_U64:
+                orus_jit_native_convert_u32_to_u64(vm_instance,
+                                                   (OrusJitNativeBlock*)block,
+                                                   inst->operands.unary.dst_reg,
+                                                   inst->operands.unary.src_reg);
+                break;
             case ORUS_JIT_IR_OP_LOOP_BACK:
             case ORUS_JIT_IR_OP_RETURN:
                 return;
@@ -792,6 +1312,14 @@ orus_jit_backend_is_available(void) {
     return false;
 #endif
 }
+
+#if defined(__x86_64__) || defined(_M_X64) || defined(__aarch64__)
+static bool
+orus_jit_should_force_helper_stub(void) {
+    const char* value = getenv("ORUS_JIT_FORCE_HELPER_STUB");
+    return value && value[0] != '\0';
+}
+#endif
 
 struct OrusJitBackend*
 orus_jit_backend_create(void) {
@@ -955,9 +1483,13 @@ orus_jit_offset_list_append(OrusJitOffsetList* list, size_t value) {
 static bool orus_jit_emit_conditional_jump(OrusJitCodeBuffer* buffer,
                                            uint8_t opcode,
                                            OrusJitOffsetList* patches);
-static bool orus_jit_emit_i32_guard(OrusJitCodeBuffer* buffer,
-                                    uint8_t index_reg_code,
-                                    OrusJitOffsetList* bail_patches);
+static bool orus_jit_emit_type_guard(OrusJitCodeBuffer* buffer,
+                                     uint8_t index_reg_code,
+                                     uint8_t expected_type,
+                                     OrusJitOffsetList* bail_patches);
+static bool orus_jit_emit_load_typed_pointer(OrusJitCodeBuffer* buffer,
+                                             uint32_t typed_ptr_offset,
+                                             OrusJitOffsetList* bail_patches);
 
 static bool
 orus_jit_emit_linear_prologue(OrusJitCodeBuffer* buffer,
@@ -1077,9 +1609,10 @@ orus_jit_emit_conditional_jump(OrusJitCodeBuffer* buffer,
 }
 
 static bool
-orus_jit_emit_i32_guard(OrusJitCodeBuffer* buffer,
-                        uint8_t index_reg_code,
-                        OrusJitOffsetList* bail_patches) {
+orus_jit_emit_type_guard(OrusJitCodeBuffer* buffer,
+                         uint8_t index_reg_code,
+                         uint8_t expected_type,
+                         OrusJitOffsetList* bail_patches) {
     if (!buffer || !bail_patches) {
         return false;
     }
@@ -1090,10 +1623,29 @@ orus_jit_emit_i32_guard(OrusJitCodeBuffer* buffer,
     }
     uint8_t sib = (uint8_t)((index_reg_code << 3) | 0x07u);
     if (!orus_jit_code_buffer_emit_u8(buffer, sib) ||
-        !orus_jit_code_buffer_emit_u8(buffer, (uint8_t)REG_TYPE_I32)) {
+        !orus_jit_code_buffer_emit_u8(buffer, expected_type)) {
         return false;
     }
     return orus_jit_emit_conditional_jump(buffer, 0x85u, bail_patches);
+}
+
+static bool
+orus_jit_emit_load_typed_pointer(OrusJitCodeBuffer* buffer,
+                                 uint32_t typed_ptr_offset,
+                                 OrusJitOffsetList* bail_patches) {
+    if (!buffer || !bail_patches) {
+        return false;
+    }
+    if (!orus_jit_code_buffer_emit_u8(buffer, 0x4D) ||
+        !orus_jit_code_buffer_emit_u8(buffer, 0x8B) ||
+        !orus_jit_code_buffer_emit_u8(buffer, 0x95) ||
+        !orus_jit_code_buffer_emit_u32(buffer, typed_ptr_offset) ||
+        !orus_jit_code_buffer_emit_u8(buffer, 0x4D) ||
+        !orus_jit_code_buffer_emit_u8(buffer, 0x85) ||
+        !orus_jit_code_buffer_emit_u8(buffer, 0xD2)) {
+        return false;
+    }
+    return orus_jit_emit_conditional_jump(buffer, 0x84u, bail_patches);
 }
 
 static bool
@@ -1148,6 +1700,60 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                     return JIT_BACKEND_ASSEMBLY_ERROR;
                 }
                 break;
+            case ORUS_JIT_IR_OP_LOAD_I64_CONST:
+            case ORUS_JIT_IR_OP_MOVE_I64:
+            case ORUS_JIT_IR_OP_ADD_I64:
+            case ORUS_JIT_IR_OP_SUB_I64:
+            case ORUS_JIT_IR_OP_MUL_I64:
+                if (inst->value_kind != ORUS_JIT_VALUE_I64) {
+                    return JIT_BACKEND_ASSEMBLY_ERROR;
+                }
+                break;
+            case ORUS_JIT_IR_OP_LOAD_U32_CONST:
+            case ORUS_JIT_IR_OP_MOVE_U32:
+            case ORUS_JIT_IR_OP_ADD_U32:
+            case ORUS_JIT_IR_OP_SUB_U32:
+            case ORUS_JIT_IR_OP_MUL_U32:
+                if (inst->value_kind != ORUS_JIT_VALUE_U32) {
+                    return JIT_BACKEND_ASSEMBLY_ERROR;
+                }
+                break;
+            case ORUS_JIT_IR_OP_LOAD_U64_CONST:
+            case ORUS_JIT_IR_OP_MOVE_U64:
+            case ORUS_JIT_IR_OP_ADD_U64:
+            case ORUS_JIT_IR_OP_SUB_U64:
+            case ORUS_JIT_IR_OP_MUL_U64:
+                if (inst->value_kind != ORUS_JIT_VALUE_U64) {
+                    return JIT_BACKEND_ASSEMBLY_ERROR;
+                }
+                break;
+            case ORUS_JIT_IR_OP_LOAD_F64_CONST:
+            case ORUS_JIT_IR_OP_MOVE_F64:
+            case ORUS_JIT_IR_OP_ADD_F64:
+            case ORUS_JIT_IR_OP_SUB_F64:
+            case ORUS_JIT_IR_OP_MUL_F64:
+                if (inst->value_kind != ORUS_JIT_VALUE_F64) {
+                    return JIT_BACKEND_ASSEMBLY_ERROR;
+                }
+                break;
+            case ORUS_JIT_IR_OP_LOAD_STRING_CONST:
+            case ORUS_JIT_IR_OP_MOVE_STRING:
+            case ORUS_JIT_IR_OP_CONCAT_STRING:
+            case ORUS_JIT_IR_OP_TO_STRING:
+                if (inst->value_kind != ORUS_JIT_VALUE_STRING) {
+                    return JIT_BACKEND_ASSEMBLY_ERROR;
+                }
+                break;
+            case ORUS_JIT_IR_OP_I32_TO_I64:
+                if (inst->value_kind != ORUS_JIT_VALUE_I64) {
+                    return JIT_BACKEND_ASSEMBLY_ERROR;
+                }
+                break;
+            case ORUS_JIT_IR_OP_U32_TO_U64:
+                if (inst->value_kind != ORUS_JIT_VALUE_U64) {
+                    return JIT_BACKEND_ASSEMBLY_ERROR;
+                }
+                break;
             case ORUS_JIT_IR_OP_SAFEPOINT:
             case ORUS_JIT_IR_OP_LOOP_BACK:
             case ORUS_JIT_IR_OP_RETURN:
@@ -1182,6 +1788,18 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
     static const uint8_t MOV_LOAD_EAX[] = {0x41, 0x8B, 0x04, 0x8E};
     static const uint8_t MOV_LOAD_EDX[] = {0x41, 0x8B, 0x14, 0x96};
     static const uint8_t MOV_STORE_EAX[] = {0x41, 0x89, 0x04, 0x8E};
+    static const uint8_t MOV_LOAD_RAX_I64[] = {0x49, 0x8B, 0x04, 0xCA};
+    static const uint8_t MOV_LOAD_RDX_I64[] = {0x49, 0x8B, 0x14, 0xD2};
+    static const uint8_t MOV_STORE_RAX_I64[] = {0x49, 0x89, 0x04, 0xCA};
+    static const uint8_t MOV_LOAD_EAX_U32[] = {0x41, 0x8B, 0x04, 0x8A};
+    static const uint8_t MOV_LOAD_EDX_U32[] = {0x41, 0x8B, 0x14, 0x92};
+    static const uint8_t MOV_STORE_EAX_U32[] = {0x41, 0x89, 0x04, 0x8A};
+    static const uint8_t MOVSD_LOAD_XMM0[] = {0xF2, 0x41, 0x0F, 0x10, 0x04, 0xCA};
+    static const uint8_t MOVSD_LOAD_XMM1[] = {0xF2, 0x41, 0x0F, 0x10, 0x0C, 0xD2};
+    static const uint8_t MOVSD_STORE_XMM0[] = {0xF2, 0x41, 0x0F, 0x11, 0x04, 0xCA};
+    static const uint8_t ADDSD_XMM0_XMM1[] = {0xF2, 0x0F, 0x58, 0xC1};
+    static const uint8_t SUBSD_XMM0_XMM1[] = {0xF2, 0x0F, 0x5C, 0xC1};
+    static const uint8_t MULSD_XMM0_XMM1[] = {0xF2, 0x0F, 0x59, 0xC1};
 
     for (size_t i = 0; i < block->program.count; ++i) {
         const OrusJitIRInstruction* inst = &block->program.instructions[i];
@@ -1199,11 +1817,35 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                 }
                 break;
             }
+            case ORUS_JIT_IR_OP_LOAD_STRING_CONST: {
+                if (!orus_jit_code_buffer_emit_bytes(&code, MOV_RDI_R12,
+                                                     sizeof(MOV_RDI_R12)) ||
+                    !orus_jit_code_buffer_emit_bytes(&code, MOV_RSI_RBX_BYTES,
+                                                     sizeof(MOV_RSI_RBX_BYTES)) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xBA) ||
+                    !orus_jit_code_buffer_emit_u32(
+                        &code, (uint32_t)inst->operands.load_const.dst_reg) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0x48) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xB9) ||
+                    !orus_jit_code_buffer_emit_u64(
+                        &code, inst->operands.load_const.immediate_bits) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0x48) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
+                    !orus_jit_code_buffer_emit_u64(
+                        &code, (uint64_t)(uintptr_t)&orus_jit_native_load_string_const) ||
+                    !orus_jit_code_buffer_emit_bytes(&code, CALL_RAX,
+                                                     sizeof(CALL_RAX))) {
+                    RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
+                }
+                break;
+            }
             case ORUS_JIT_IR_OP_MOVE_I32: {
                 if (!orus_jit_code_buffer_emit_u8(&code, 0xB9) ||
                     !orus_jit_code_buffer_emit_u32(
                         &code, (uint32_t)inst->operands.move.src_reg) ||
-                    !orus_jit_emit_i32_guard(&code, 0x01u, &bail_patches) ||
+                    !orus_jit_emit_type_guard(&code, 0x01u,
+                                              (uint8_t)REG_TYPE_I32,
+                                              &bail_patches) ||
                     !orus_jit_code_buffer_emit_bytes(&code, MOV_LOAD_EAX,
                                                      sizeof(MOV_LOAD_EAX)) ||
                     !orus_jit_code_buffer_emit_u8(&code, 0xB9) ||
@@ -1215,19 +1857,82 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                 }
                 break;
             }
+            case ORUS_JIT_IR_OP_MOVE_STRING: {
+                if (!orus_jit_code_buffer_emit_bytes(&code, MOV_RDI_R12,
+                                                     sizeof(MOV_RDI_R12)) ||
+                    !orus_jit_code_buffer_emit_bytes(&code, MOV_RSI_RBX_BYTES,
+                                                     sizeof(MOV_RSI_RBX_BYTES)) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xBA) ||
+                    !orus_jit_code_buffer_emit_u32(
+                        &code, (uint32_t)inst->operands.move.dst_reg) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xB9) ||
+                    !orus_jit_code_buffer_emit_u32(
+                        &code, (uint32_t)inst->operands.move.src_reg) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0x48) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
+                    !orus_jit_code_buffer_emit_u64(
+                        &code, (uint64_t)(uintptr_t)&orus_jit_native_move_string) ||
+                    !orus_jit_code_buffer_emit_bytes(&code, CALL_RAX,
+                                                     sizeof(CALL_RAX))) {
+                    RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_LOAD_I64_CONST: {
+                uint64_t bits = inst->operands.load_const.immediate_bits;
+                if (!orus_jit_code_buffer_emit_u8(&code, 0x48) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
+                    !orus_jit_code_buffer_emit_u64(&code, bits) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xB9) ||
+                    !orus_jit_code_buffer_emit_u32(
+                        &code, (uint32_t)inst->operands.load_const.dst_reg) ||
+                    !orus_jit_emit_load_typed_pointer(
+                        &code, (uint32_t)ORUS_JIT_OFFSET_TYPED_I64_PTR,
+                        &bail_patches) ||
+                    !orus_jit_code_buffer_emit_bytes(&code, MOV_STORE_RAX_I64,
+                                                     sizeof(MOV_STORE_RAX_I64))) {
+                    RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_MOVE_I64: {
+                if (!orus_jit_code_buffer_emit_u8(&code, 0xB9) ||
+                    !orus_jit_code_buffer_emit_u32(
+                        &code, (uint32_t)inst->operands.move.src_reg) ||
+                    !orus_jit_emit_type_guard(&code, 0x01u,
+                                              (uint8_t)REG_TYPE_I64,
+                                              &bail_patches) ||
+                    !orus_jit_emit_load_typed_pointer(
+                        &code, (uint32_t)ORUS_JIT_OFFSET_TYPED_I64_PTR,
+                        &bail_patches) ||
+                    !orus_jit_code_buffer_emit_bytes(&code, MOV_LOAD_RAX_I64,
+                                                     sizeof(MOV_LOAD_RAX_I64)) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xB9) ||
+                    !orus_jit_code_buffer_emit_u32(
+                        &code, (uint32_t)inst->operands.move.dst_reg) ||
+                    !orus_jit_code_buffer_emit_bytes(&code, MOV_STORE_RAX_I64,
+                                                     sizeof(MOV_STORE_RAX_I64))) {
+                    RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
+                }
+                break;
+            }
             case ORUS_JIT_IR_OP_ADD_I32:
             case ORUS_JIT_IR_OP_SUB_I32:
             case ORUS_JIT_IR_OP_MUL_I32: {
                 if (!orus_jit_code_buffer_emit_u8(&code, 0xB9) ||
                     !orus_jit_code_buffer_emit_u32(
                         &code, (uint32_t)inst->operands.arithmetic.lhs_reg) ||
-                    !orus_jit_emit_i32_guard(&code, 0x01u, &bail_patches) ||
+                    !orus_jit_emit_type_guard(&code, 0x01u,
+                                              (uint8_t)REG_TYPE_I32,
+                                              &bail_patches) ||
                     !orus_jit_code_buffer_emit_bytes(&code, MOV_LOAD_EAX,
                                                      sizeof(MOV_LOAD_EAX)) ||
                     !orus_jit_code_buffer_emit_u8(&code, 0xBA) ||
                     !orus_jit_code_buffer_emit_u32(
                         &code, (uint32_t)inst->operands.arithmetic.rhs_reg) ||
-                    !orus_jit_emit_i32_guard(&code, 0x02u, &bail_patches) ||
+                    !orus_jit_emit_type_guard(&code, 0x02u,
+                                              (uint8_t)REG_TYPE_I32,
+                                              &bail_patches) ||
                     !orus_jit_code_buffer_emit_bytes(&code, MOV_LOAD_EDX,
                                                      sizeof(MOV_LOAD_EDX))) {
                     RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
@@ -1268,6 +1973,450 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                 }
                 break;
             }
+            case ORUS_JIT_IR_OP_ADD_I64:
+            case ORUS_JIT_IR_OP_SUB_I64:
+            case ORUS_JIT_IR_OP_MUL_I64: {
+                if (!orus_jit_code_buffer_emit_u8(&code, 0xB9) ||
+                    !orus_jit_code_buffer_emit_u32(
+                        &code, (uint32_t)inst->operands.arithmetic.lhs_reg) ||
+                    !orus_jit_emit_type_guard(&code, 0x01u,
+                                              (uint8_t)REG_TYPE_I64,
+                                              &bail_patches) ||
+                    !orus_jit_emit_load_typed_pointer(
+                        &code, (uint32_t)ORUS_JIT_OFFSET_TYPED_I64_PTR,
+                        &bail_patches) ||
+                    !orus_jit_code_buffer_emit_bytes(&code, MOV_LOAD_RAX_I64,
+                                                     sizeof(MOV_LOAD_RAX_I64)) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xBA) ||
+                    !orus_jit_code_buffer_emit_u32(
+                        &code, (uint32_t)inst->operands.arithmetic.rhs_reg) ||
+                    !orus_jit_emit_type_guard(&code, 0x02u,
+                                              (uint8_t)REG_TYPE_I64,
+                                              &bail_patches) ||
+                    !orus_jit_code_buffer_emit_bytes(&code, MOV_LOAD_RDX_I64,
+                                                     sizeof(MOV_LOAD_RDX_I64))) {
+                    RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
+                }
+
+                uint8_t arithmetic_bytes[4];
+                size_t arithmetic_size = 0u;
+                switch (inst->opcode) {
+                    case ORUS_JIT_IR_OP_ADD_I64:
+                        arithmetic_bytes[0] = 0x48;
+                        arithmetic_bytes[1] = 0x01;
+                        arithmetic_bytes[2] = 0xD0;
+                        arithmetic_size = 3u;
+                        break;
+                    case ORUS_JIT_IR_OP_SUB_I64:
+                        arithmetic_bytes[0] = 0x48;
+                        arithmetic_bytes[1] = 0x29;
+                        arithmetic_bytes[2] = 0xD0;
+                        arithmetic_size = 3u;
+                        break;
+                    case ORUS_JIT_IR_OP_MUL_I64:
+                        arithmetic_bytes[0] = 0x48;
+                        arithmetic_bytes[1] = 0x0F;
+                        arithmetic_bytes[2] = 0xAF;
+                        arithmetic_bytes[3] = 0xC2;
+                        arithmetic_size = 4u;
+                        break;
+                    default:
+                        break;
+                }
+
+                if (arithmetic_size == 0u ||
+                    !orus_jit_code_buffer_emit_bytes(&code, arithmetic_bytes,
+                                                     arithmetic_size) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xB9) ||
+                    !orus_jit_code_buffer_emit_u32(
+                        &code, (uint32_t)inst->operands.arithmetic.dst_reg) ||
+                    !orus_jit_code_buffer_emit_bytes(&code, MOV_STORE_RAX_I64,
+                                                     sizeof(MOV_STORE_RAX_I64))) {
+                    RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_LOAD_U32_CONST: {
+                uint32_t value =
+                    (uint32_t)inst->operands.load_const.immediate_bits;
+                if (!orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
+                    !orus_jit_code_buffer_emit_u32(&code, value) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xB9) ||
+                    !orus_jit_code_buffer_emit_u32(
+                        &code, (uint32_t)inst->operands.load_const.dst_reg) ||
+                    !orus_jit_emit_load_typed_pointer(
+                        &code, (uint32_t)ORUS_JIT_OFFSET_TYPED_U32_PTR,
+                        &bail_patches) ||
+                    !orus_jit_code_buffer_emit_bytes(&code, MOV_STORE_EAX_U32,
+                                                     sizeof(MOV_STORE_EAX_U32))) {
+                    RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_MOVE_U32: {
+                if (!orus_jit_code_buffer_emit_u8(&code, 0xB9) ||
+                    !orus_jit_code_buffer_emit_u32(
+                        &code, (uint32_t)inst->operands.move.src_reg) ||
+                    !orus_jit_emit_type_guard(&code, 0x01u,
+                                              (uint8_t)REG_TYPE_U32,
+                                              &bail_patches) ||
+                    !orus_jit_emit_load_typed_pointer(
+                        &code, (uint32_t)ORUS_JIT_OFFSET_TYPED_U32_PTR,
+                        &bail_patches) ||
+                    !orus_jit_code_buffer_emit_bytes(&code, MOV_LOAD_EAX_U32,
+                                                     sizeof(MOV_LOAD_EAX_U32)) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xB9) ||
+                    !orus_jit_code_buffer_emit_u32(
+                        &code, (uint32_t)inst->operands.move.dst_reg) ||
+                    !orus_jit_code_buffer_emit_bytes(&code, MOV_STORE_EAX_U32,
+                                                     sizeof(MOV_STORE_EAX_U32))) {
+                    RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_ADD_U32:
+            case ORUS_JIT_IR_OP_SUB_U32:
+            case ORUS_JIT_IR_OP_MUL_U32: {
+                if (!orus_jit_code_buffer_emit_u8(&code, 0xB9) ||
+                    !orus_jit_code_buffer_emit_u32(
+                        &code, (uint32_t)inst->operands.arithmetic.lhs_reg) ||
+                    !orus_jit_emit_type_guard(&code, 0x01u,
+                                              (uint8_t)REG_TYPE_U32,
+                                              &bail_patches) ||
+                    !orus_jit_emit_load_typed_pointer(
+                        &code, (uint32_t)ORUS_JIT_OFFSET_TYPED_U32_PTR,
+                        &bail_patches) ||
+                    !orus_jit_code_buffer_emit_bytes(&code, MOV_LOAD_EAX_U32,
+                                                     sizeof(MOV_LOAD_EAX_U32)) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xBA) ||
+                    !orus_jit_code_buffer_emit_u32(
+                        &code, (uint32_t)inst->operands.arithmetic.rhs_reg) ||
+                    !orus_jit_emit_type_guard(&code, 0x02u,
+                                              (uint8_t)REG_TYPE_U32,
+                                              &bail_patches) ||
+                    !orus_jit_code_buffer_emit_bytes(&code, MOV_LOAD_EDX_U32,
+                                                     sizeof(MOV_LOAD_EDX_U32))) {
+                    RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
+                }
+
+                uint8_t arithmetic_bytes[3];
+                size_t arithmetic_size = 0u;
+                switch (inst->opcode) {
+                    case ORUS_JIT_IR_OP_ADD_U32:
+                        arithmetic_bytes[0] = 0x01;
+                        arithmetic_bytes[1] = 0xD0;
+                        arithmetic_size = 2u;
+                        break;
+                    case ORUS_JIT_IR_OP_SUB_U32:
+                        arithmetic_bytes[0] = 0x29;
+                        arithmetic_bytes[1] = 0xD0;
+                        arithmetic_size = 2u;
+                        break;
+                    case ORUS_JIT_IR_OP_MUL_U32:
+                        arithmetic_bytes[0] = 0x0F;
+                        arithmetic_bytes[1] = 0xAF;
+                        arithmetic_bytes[2] = 0xC2;
+                        arithmetic_size = 3u;
+                        break;
+                    default:
+                        break;
+                }
+
+                if (arithmetic_size == 0u ||
+                    !orus_jit_code_buffer_emit_bytes(&code, arithmetic_bytes,
+                                                     arithmetic_size) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xB9) ||
+                    !orus_jit_code_buffer_emit_u32(
+                        &code, (uint32_t)inst->operands.arithmetic.dst_reg) ||
+                    !orus_jit_code_buffer_emit_bytes(&code, MOV_STORE_EAX_U32,
+                                                     sizeof(MOV_STORE_EAX_U32))) {
+                    RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_LOAD_U64_CONST: {
+                uint64_t bits = inst->operands.load_const.immediate_bits;
+                if (!orus_jit_code_buffer_emit_u8(&code, 0x48) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
+                    !orus_jit_code_buffer_emit_u64(&code, bits) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xB9) ||
+                    !orus_jit_code_buffer_emit_u32(
+                        &code, (uint32_t)inst->operands.load_const.dst_reg) ||
+                    !orus_jit_emit_load_typed_pointer(
+                        &code, (uint32_t)ORUS_JIT_OFFSET_TYPED_U64_PTR,
+                        &bail_patches) ||
+                    !orus_jit_code_buffer_emit_bytes(&code, MOV_STORE_RAX_I64,
+                                                     sizeof(MOV_STORE_RAX_I64))) {
+                    RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_MOVE_U64: {
+                if (!orus_jit_code_buffer_emit_u8(&code, 0xB9) ||
+                    !orus_jit_code_buffer_emit_u32(
+                        &code, (uint32_t)inst->operands.move.src_reg) ||
+                    !orus_jit_emit_type_guard(&code, 0x01u,
+                                              (uint8_t)REG_TYPE_U64,
+                                              &bail_patches) ||
+                    !orus_jit_emit_load_typed_pointer(
+                        &code, (uint32_t)ORUS_JIT_OFFSET_TYPED_U64_PTR,
+                        &bail_patches) ||
+                    !orus_jit_code_buffer_emit_bytes(&code, MOV_LOAD_RAX_I64,
+                                                     sizeof(MOV_LOAD_RAX_I64)) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xB9) ||
+                    !orus_jit_code_buffer_emit_u32(
+                        &code, (uint32_t)inst->operands.move.dst_reg) ||
+                    !orus_jit_code_buffer_emit_bytes(&code, MOV_STORE_RAX_I64,
+                                                     sizeof(MOV_STORE_RAX_I64))) {
+                    RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_ADD_U64:
+            case ORUS_JIT_IR_OP_SUB_U64:
+            case ORUS_JIT_IR_OP_MUL_U64: {
+                if (!orus_jit_code_buffer_emit_u8(&code, 0xB9) ||
+                    !orus_jit_code_buffer_emit_u32(
+                        &code, (uint32_t)inst->operands.arithmetic.lhs_reg) ||
+                    !orus_jit_emit_type_guard(&code, 0x01u,
+                                              (uint8_t)REG_TYPE_U64,
+                                              &bail_patches) ||
+                    !orus_jit_emit_load_typed_pointer(
+                        &code, (uint32_t)ORUS_JIT_OFFSET_TYPED_U64_PTR,
+                        &bail_patches) ||
+                    !orus_jit_code_buffer_emit_bytes(&code, MOV_LOAD_RAX_I64,
+                                                     sizeof(MOV_LOAD_RAX_I64)) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xBA) ||
+                    !orus_jit_code_buffer_emit_u32(
+                        &code, (uint32_t)inst->operands.arithmetic.rhs_reg) ||
+                    !orus_jit_emit_type_guard(&code, 0x02u,
+                                              (uint8_t)REG_TYPE_U64,
+                                              &bail_patches) ||
+                    !orus_jit_code_buffer_emit_bytes(&code, MOV_LOAD_RDX_I64,
+                                                     sizeof(MOV_LOAD_RDX_I64))) {
+                    RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
+                }
+
+                uint8_t arithmetic_bytes[4];
+                size_t arithmetic_size = 0u;
+                switch (inst->opcode) {
+                    case ORUS_JIT_IR_OP_ADD_U64:
+                        arithmetic_bytes[0] = 0x48;
+                        arithmetic_bytes[1] = 0x01;
+                        arithmetic_bytes[2] = 0xD0;
+                        arithmetic_size = 3u;
+                        break;
+                    case ORUS_JIT_IR_OP_SUB_U64:
+                        arithmetic_bytes[0] = 0x48;
+                        arithmetic_bytes[1] = 0x29;
+                        arithmetic_bytes[2] = 0xD0;
+                        arithmetic_size = 3u;
+                        break;
+                    case ORUS_JIT_IR_OP_MUL_U64:
+                        arithmetic_bytes[0] = 0x48;
+                        arithmetic_bytes[1] = 0x0F;
+                        arithmetic_bytes[2] = 0xAF;
+                        arithmetic_bytes[3] = 0xC2;
+                        arithmetic_size = 4u;
+                        break;
+                    default:
+                        break;
+                }
+
+                if (arithmetic_size == 0u ||
+                    !orus_jit_code_buffer_emit_bytes(&code, arithmetic_bytes,
+                                                     arithmetic_size) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xB9) ||
+                    !orus_jit_code_buffer_emit_u32(
+                        &code, (uint32_t)inst->operands.arithmetic.dst_reg) ||
+                    !orus_jit_code_buffer_emit_bytes(&code, MOV_STORE_RAX_I64,
+                                                     sizeof(MOV_STORE_RAX_I64))) {
+                    RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_LOAD_F64_CONST: {
+                uint64_t bits = inst->operands.load_const.immediate_bits;
+                if (!orus_jit_code_buffer_emit_u8(&code, 0x48) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
+                    !orus_jit_code_buffer_emit_u64(&code, bits) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xB9) ||
+                    !orus_jit_code_buffer_emit_u32(
+                        &code, (uint32_t)inst->operands.load_const.dst_reg) ||
+                    !orus_jit_emit_load_typed_pointer(
+                        &code, (uint32_t)ORUS_JIT_OFFSET_TYPED_F64_PTR,
+                        &bail_patches) ||
+                    !orus_jit_code_buffer_emit_bytes(&code, MOV_STORE_RAX_I64,
+                                                     sizeof(MOV_STORE_RAX_I64))) {
+                    RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_MOVE_F64: {
+                if (!orus_jit_code_buffer_emit_u8(&code, 0xB9) ||
+                    !orus_jit_code_buffer_emit_u32(
+                        &code, (uint32_t)inst->operands.move.src_reg) ||
+                    !orus_jit_emit_type_guard(&code, 0x01u,
+                                              (uint8_t)REG_TYPE_F64,
+                                              &bail_patches) ||
+                    !orus_jit_emit_load_typed_pointer(
+                        &code, (uint32_t)ORUS_JIT_OFFSET_TYPED_F64_PTR,
+                        &bail_patches) ||
+                    !orus_jit_code_buffer_emit_bytes(&code, MOVSD_LOAD_XMM0,
+                                                     sizeof(MOVSD_LOAD_XMM0)) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xB9) ||
+                    !orus_jit_code_buffer_emit_u32(
+                        &code, (uint32_t)inst->operands.move.dst_reg) ||
+                    !orus_jit_code_buffer_emit_bytes(&code, MOVSD_STORE_XMM0,
+                                                     sizeof(MOVSD_STORE_XMM0))) {
+                    RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_ADD_F64:
+            case ORUS_JIT_IR_OP_SUB_F64:
+            case ORUS_JIT_IR_OP_MUL_F64: {
+                if (!orus_jit_code_buffer_emit_u8(&code, 0xB9) ||
+                    !orus_jit_code_buffer_emit_u32(
+                        &code, (uint32_t)inst->operands.arithmetic.lhs_reg) ||
+                    !orus_jit_emit_type_guard(&code, 0x01u,
+                                              (uint8_t)REG_TYPE_F64,
+                                              &bail_patches) ||
+                    !orus_jit_emit_load_typed_pointer(
+                        &code, (uint32_t)ORUS_JIT_OFFSET_TYPED_F64_PTR,
+                        &bail_patches) ||
+                    !orus_jit_code_buffer_emit_bytes(&code, MOVSD_LOAD_XMM0,
+                                                     sizeof(MOVSD_LOAD_XMM0)) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xBA) ||
+                    !orus_jit_code_buffer_emit_u32(
+                        &code, (uint32_t)inst->operands.arithmetic.rhs_reg) ||
+                    !orus_jit_emit_type_guard(&code, 0x02u,
+                                              (uint8_t)REG_TYPE_F64,
+                                              &bail_patches) ||
+                    !orus_jit_code_buffer_emit_bytes(&code, MOVSD_LOAD_XMM1,
+                                                     sizeof(MOVSD_LOAD_XMM1))) {
+                    RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
+                }
+
+                const uint8_t* arithmetic_bytes = NULL;
+                size_t arithmetic_size = 0u;
+                switch (inst->opcode) {
+                    case ORUS_JIT_IR_OP_ADD_F64:
+                        arithmetic_bytes = ADDSD_XMM0_XMM1;
+                        arithmetic_size = sizeof(ADDSD_XMM0_XMM1);
+                        break;
+                    case ORUS_JIT_IR_OP_SUB_F64:
+                        arithmetic_bytes = SUBSD_XMM0_XMM1;
+                        arithmetic_size = sizeof(SUBSD_XMM0_XMM1);
+                        break;
+                    case ORUS_JIT_IR_OP_MUL_F64:
+                        arithmetic_bytes = MULSD_XMM0_XMM1;
+                        arithmetic_size = sizeof(MULSD_XMM0_XMM1);
+                        break;
+                    default:
+                        break;
+                }
+
+                if (!arithmetic_bytes || arithmetic_size == 0u ||
+                    !orus_jit_code_buffer_emit_bytes(&code, arithmetic_bytes,
+                                                     arithmetic_size) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xB9) ||
+                    !orus_jit_code_buffer_emit_u32(
+                        &code, (uint32_t)inst->operands.arithmetic.dst_reg) ||
+                    !orus_jit_code_buffer_emit_bytes(&code, MOVSD_STORE_XMM0,
+                                                     sizeof(MOVSD_STORE_XMM0))) {
+                    RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_CONCAT_STRING: {
+                if (!orus_jit_code_buffer_emit_bytes(&code, MOV_RDI_R12,
+                                                     sizeof(MOV_RDI_R12)) ||
+                    !orus_jit_code_buffer_emit_bytes(&code, MOV_RSI_RBX_BYTES,
+                                                     sizeof(MOV_RSI_RBX_BYTES)) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xBA) ||
+                    !orus_jit_code_buffer_emit_u32(&code,
+                        (uint32_t)inst->operands.arithmetic.dst_reg) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xB9) ||
+                    !orus_jit_code_buffer_emit_u32(&code,
+                        (uint32_t)inst->operands.arithmetic.lhs_reg) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0x41) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
+                    !orus_jit_code_buffer_emit_u32(&code,
+                        (uint32_t)inst->operands.arithmetic.rhs_reg) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0x48) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
+                    !orus_jit_code_buffer_emit_u64(&code,
+                        (uint64_t)(uintptr_t)&orus_jit_native_concat_string) ||
+                    !orus_jit_code_buffer_emit_bytes(&code, CALL_RAX,
+                                                     sizeof(CALL_RAX))) {
+                    RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_TO_STRING: {
+                if (!orus_jit_code_buffer_emit_bytes(&code, MOV_RDI_R12,
+                                                     sizeof(MOV_RDI_R12)) ||
+                    !orus_jit_code_buffer_emit_bytes(&code, MOV_RSI_RBX_BYTES,
+                                                     sizeof(MOV_RSI_RBX_BYTES)) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xBA) ||
+                    !orus_jit_code_buffer_emit_u32(&code,
+                        (uint32_t)inst->operands.unary.dst_reg) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xB9) ||
+                    !orus_jit_code_buffer_emit_u32(&code,
+                        (uint32_t)inst->operands.unary.src_reg) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0x48) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
+                    !orus_jit_code_buffer_emit_u64(&code,
+                        (uint64_t)(uintptr_t)&orus_jit_native_to_string) ||
+                    !orus_jit_code_buffer_emit_bytes(&code, CALL_RAX,
+                                                     sizeof(CALL_RAX))) {
+                    RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_I32_TO_I64: {
+                if (!orus_jit_code_buffer_emit_bytes(&code, MOV_RDI_R12,
+                                                     sizeof(MOV_RDI_R12)) ||
+                    !orus_jit_code_buffer_emit_bytes(&code, MOV_RSI_RBX_BYTES,
+                                                     sizeof(MOV_RSI_RBX_BYTES)) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xBA) ||
+                    !orus_jit_code_buffer_emit_u32(&code,
+                        (uint32_t)inst->operands.unary.dst_reg) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xB9) ||
+                    !orus_jit_code_buffer_emit_u32(&code,
+                        (uint32_t)inst->operands.unary.src_reg) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0x48) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
+                    !orus_jit_code_buffer_emit_u64(&code,
+                        (uint64_t)(uintptr_t)&orus_jit_native_convert_i32_to_i64) ||
+                    !orus_jit_code_buffer_emit_bytes(&code, CALL_RAX,
+                                                     sizeof(CALL_RAX))) {
+                    RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_U32_TO_U64: {
+                if (!orus_jit_code_buffer_emit_bytes(&code, MOV_RDI_R12,
+                                                     sizeof(MOV_RDI_R12)) ||
+                    !orus_jit_code_buffer_emit_bytes(&code, MOV_RSI_RBX_BYTES,
+                                                     sizeof(MOV_RSI_RBX_BYTES)) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xBA) ||
+                    !orus_jit_code_buffer_emit_u32(&code,
+                        (uint32_t)inst->operands.unary.dst_reg) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xB9) ||
+                    !orus_jit_code_buffer_emit_u32(&code,
+                        (uint32_t)inst->operands.unary.src_reg) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0x48) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
+                    !orus_jit_code_buffer_emit_u64(&code,
+                        (uint64_t)(uintptr_t)&orus_jit_native_convert_u32_to_u64) ||
+                    !orus_jit_code_buffer_emit_bytes(&code, CALL_RAX,
+                                                     sizeof(CALL_RAX))) {
+                    RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
+                }
+                break;
+            }
             case ORUS_JIT_IR_OP_SAFEPOINT: {
                 if (!orus_jit_emit_safepoint_call(&code)) {
                     RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
@@ -1300,9 +2449,8 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
 
 finalize_block:;
     size_t bail_label_offset = code.size;
-    static const uint8_t MOV_RSI_RBX[] = {0x48, 0x89, 0xDE};
-    if (!orus_jit_code_buffer_emit_bytes(&code, MOV_RSI_RBX,
-                                         sizeof(MOV_RSI_RBX)) ||
+    if (!orus_jit_code_buffer_emit_bytes(&code, MOV_RSI_RBX_BYTES,
+                                         sizeof(MOV_RSI_RBX_BYTES)) ||
         !orus_jit_code_buffer_emit_u8(&code, 0x48) ||
         !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
         !orus_jit_code_buffer_emit_u64(
@@ -1543,6 +2691,535 @@ orus_jit_backend_compile_ir_x86(struct OrusJitBackend* backend,
 #endif // ORUS_JIT_HAS_DYNASM_X86
 
 #if defined(__aarch64__)
+typedef struct {
+    uint32_t* data;
+    size_t count;
+    size_t capacity;
+} OrusJitA64CodeBuffer;
+
+typedef struct {
+    size_t* data;
+    size_t count;
+    size_t capacity;
+} OrusJitA64PatchList;
+
+static void
+orus_jit_a64_code_buffer_init(OrusJitA64CodeBuffer* buffer) {
+    if (!buffer) {
+        return;
+    }
+    buffer->data = NULL;
+    buffer->count = 0u;
+    buffer->capacity = 0u;
+}
+
+static void
+orus_jit_a64_code_buffer_release(OrusJitA64CodeBuffer* buffer) {
+    if (!buffer) {
+        return;
+    }
+    free(buffer->data);
+    buffer->data = NULL;
+    buffer->count = 0u;
+    buffer->capacity = 0u;
+}
+
+static bool
+orus_jit_a64_code_buffer_reserve(OrusJitA64CodeBuffer* buffer, size_t additional) {
+    if (!buffer) {
+        return false;
+    }
+    if (additional > SIZE_MAX - buffer->count) {
+        return false;
+    }
+    size_t required = buffer->count + additional;
+    if (required <= buffer->capacity) {
+        return true;
+    }
+    size_t new_capacity = buffer->capacity ? buffer->capacity : 32u;
+    while (new_capacity < required) {
+        if (new_capacity > SIZE_MAX / 2u) {
+            new_capacity = required;
+            break;
+        }
+        new_capacity *= 2u;
+    }
+    uint32_t* data = (uint32_t*)realloc(buffer->data, new_capacity * sizeof(uint32_t));
+    if (!data) {
+        return false;
+    }
+    buffer->data = data;
+    buffer->capacity = new_capacity;
+    return true;
+}
+
+static bool
+orus_jit_a64_code_buffer_emit_u32(OrusJitA64CodeBuffer* buffer, uint32_t value) {
+    if (!orus_jit_a64_code_buffer_reserve(buffer, 1u)) {
+        return false;
+    }
+    buffer->data[buffer->count++] = value;
+    return true;
+}
+
+static void
+orus_jit_a64_patch_list_init(OrusJitA64PatchList* list) {
+    if (!list) {
+        return;
+    }
+    list->data = NULL;
+    list->count = 0u;
+    list->capacity = 0u;
+}
+
+static void
+orus_jit_a64_patch_list_release(OrusJitA64PatchList* list) {
+    if (!list) {
+        return;
+    }
+    free(list->data);
+    list->data = NULL;
+    list->count = 0u;
+    list->capacity = 0u;
+}
+
+static bool
+orus_jit_a64_patch_list_append(OrusJitA64PatchList* list, size_t value) {
+    if (!list) {
+        return false;
+    }
+    if (list->count == list->capacity) {
+        size_t new_capacity = list->capacity ? list->capacity * 2u : 8u;
+        size_t* data = (size_t*)realloc(list->data, new_capacity * sizeof(size_t));
+        if (!data) {
+            return false;
+        }
+        list->data = data;
+        list->capacity = new_capacity;
+    }
+    list->data[list->count++] = value;
+    return true;
+}
+
+static bool
+orus_jit_a64_emit_mov_imm64_buffer(OrusJitA64CodeBuffer* buffer,
+                                    uint8_t reg,
+                                    uint64_t value) {
+    if (!buffer) {
+        return false;
+    }
+    for (;;) {
+        size_t index = buffer->count;
+        if (orus_jit_emit_a64_mov_imm64(buffer->data, &index, buffer->capacity,
+                                        reg, value)) {
+            buffer->count = index;
+            return true;
+        }
+        if (!orus_jit_a64_code_buffer_reserve(buffer,
+                                              buffer->capacity ? buffer->capacity : 4u)) {
+            return false;
+        }
+    }
+}
+
+#define A64_MOV_REG(dst, src) \
+    (0xAA0003E0u | (((uint32_t)(src) & 0x1Fu) << 16) | ((uint32_t)(dst) & 0x1Fu))
+#define A64_STR_X(rt, rn, imm) \
+    (0xF9000000u | ((((uint32_t)(imm)) & 0xFFFu) << 10) | (((uint32_t)(rn) & 0x1Fu) << 5) | ((uint32_t)(rt) & 0x1Fu))
+#define A64_LDR_X(rt, rn, imm) \
+    (0xF9400000u | ((((uint32_t)(imm)) & 0xFFFu) << 10) | (((uint32_t)(rn) & 0x1Fu) << 5) | ((uint32_t)(rt) & 0x1Fu))
+#define A64_CBZ_W(rt, imm19) \
+    (0x34000000u | ((((uint32_t)(imm19)) & 0x7FFFFu) << 5) | ((uint32_t)(rt) & 0x1Fu))
+#define A64_B(imm26) (0x14000000u | ((uint32_t)(imm26) & 0x03FFFFFFu))
+
+static JITBackendStatus
+orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
+                                 OrusJitNativeBlock* block,
+                                 JITEntry* entry) {
+    if (!backend || !block || !entry || block->program.count == 0u) {
+        return JIT_BACKEND_ASSEMBLY_ERROR;
+    }
+
+    for (size_t i = 0; i < block->program.count; ++i) {
+        const OrusJitIRInstruction* inst = &block->program.instructions[i];
+        switch (inst->opcode) {
+            case ORUS_JIT_IR_OP_LOAD_I32_CONST:
+            case ORUS_JIT_IR_OP_MOVE_I32:
+            case ORUS_JIT_IR_OP_ADD_I32:
+            case ORUS_JIT_IR_OP_SUB_I32:
+            case ORUS_JIT_IR_OP_MUL_I32:
+                if (inst->value_kind != ORUS_JIT_VALUE_I32) {
+                    return JIT_BACKEND_ASSEMBLY_ERROR;
+                }
+                break;
+            case ORUS_JIT_IR_OP_LOAD_I64_CONST:
+            case ORUS_JIT_IR_OP_MOVE_I64:
+            case ORUS_JIT_IR_OP_ADD_I64:
+            case ORUS_JIT_IR_OP_SUB_I64:
+            case ORUS_JIT_IR_OP_MUL_I64:
+                if (inst->value_kind != ORUS_JIT_VALUE_I64) {
+                    return JIT_BACKEND_ASSEMBLY_ERROR;
+                }
+                break;
+            case ORUS_JIT_IR_OP_LOAD_U32_CONST:
+            case ORUS_JIT_IR_OP_MOVE_U32:
+            case ORUS_JIT_IR_OP_ADD_U32:
+            case ORUS_JIT_IR_OP_SUB_U32:
+            case ORUS_JIT_IR_OP_MUL_U32:
+                if (inst->value_kind != ORUS_JIT_VALUE_U32) {
+                    return JIT_BACKEND_ASSEMBLY_ERROR;
+                }
+                break;
+            case ORUS_JIT_IR_OP_LOAD_U64_CONST:
+            case ORUS_JIT_IR_OP_MOVE_U64:
+            case ORUS_JIT_IR_OP_ADD_U64:
+            case ORUS_JIT_IR_OP_SUB_U64:
+            case ORUS_JIT_IR_OP_MUL_U64:
+                if (inst->value_kind != ORUS_JIT_VALUE_U64) {
+                    return JIT_BACKEND_ASSEMBLY_ERROR;
+                }
+                break;
+            case ORUS_JIT_IR_OP_LOAD_F64_CONST:
+            case ORUS_JIT_IR_OP_MOVE_F64:
+            case ORUS_JIT_IR_OP_ADD_F64:
+            case ORUS_JIT_IR_OP_SUB_F64:
+            case ORUS_JIT_IR_OP_MUL_F64:
+                if (inst->value_kind != ORUS_JIT_VALUE_F64) {
+                    return JIT_BACKEND_ASSEMBLY_ERROR;
+                }
+                break;
+            case ORUS_JIT_IR_OP_LOAD_STRING_CONST:
+            case ORUS_JIT_IR_OP_MOVE_STRING:
+            case ORUS_JIT_IR_OP_CONCAT_STRING:
+            case ORUS_JIT_IR_OP_TO_STRING:
+                if (inst->value_kind != ORUS_JIT_VALUE_STRING) {
+                    return JIT_BACKEND_ASSEMBLY_ERROR;
+                }
+                break;
+            case ORUS_JIT_IR_OP_I32_TO_I64:
+                if (inst->value_kind != ORUS_JIT_VALUE_I64) {
+                    return JIT_BACKEND_ASSEMBLY_ERROR;
+                }
+                break;
+            case ORUS_JIT_IR_OP_U32_TO_U64:
+                if (inst->value_kind != ORUS_JIT_VALUE_U64) {
+                    return JIT_BACKEND_ASSEMBLY_ERROR;
+                }
+                break;
+            case ORUS_JIT_IR_OP_SAFEPOINT:
+            case ORUS_JIT_IR_OP_LOOP_BACK:
+            case ORUS_JIT_IR_OP_RETURN:
+                break;
+            default:
+                return JIT_BACKEND_ASSEMBLY_ERROR;
+        }
+    }
+
+    OrusJitA64CodeBuffer code;
+    orus_jit_a64_code_buffer_init(&code);
+    OrusJitA64PatchList bail_patches;
+    orus_jit_a64_patch_list_init(&bail_patches);
+    OrusJitA64PatchList return_patches;
+    orus_jit_a64_patch_list_init(&return_patches);
+
+#define A64_RETURN(status)                                                        \
+    do {                                                                         \
+        orus_jit_a64_code_buffer_release(&code);                                  \
+        orus_jit_a64_patch_list_release(&bail_patches);                           \
+        orus_jit_a64_patch_list_release(&return_patches);                         \
+        return (status);                                                         \
+    } while (0)
+
+    if (!orus_jit_a64_code_buffer_emit_u32(&code, 0xA9BF7BF0u) ||
+        !orus_jit_a64_code_buffer_emit_u32(&code, 0x910003FDu) ||
+        !orus_jit_a64_code_buffer_emit_u32(&code, 0xD10083FFu) ||
+        !orus_jit_a64_code_buffer_emit_u32(&code, 0xF90003E0u)) {
+        A64_RETURN(JIT_BACKEND_OUT_OF_MEMORY);
+    }
+
+    if (!orus_jit_a64_emit_mov_imm64_buffer(&code, 1u,
+                                            (uint64_t)(uintptr_t)block) ||
+        !orus_jit_a64_code_buffer_emit_u32(&code, 0xF90007E1u)) {
+        A64_RETURN(JIT_BACKEND_OUT_OF_MEMORY);
+    }
+
+    size_t loop_entry_index = code.count;
+
+    for (size_t i = 0; i < block->program.count; ++i) {
+        const OrusJitIRInstruction* inst = &block->program.instructions[i];
+
+        switch (inst->opcode) {
+            case ORUS_JIT_IR_OP_LOAD_I32_CONST:
+            case ORUS_JIT_IR_OP_LOAD_I64_CONST:
+            case ORUS_JIT_IR_OP_LOAD_U32_CONST:
+            case ORUS_JIT_IR_OP_LOAD_U64_CONST:
+            case ORUS_JIT_IR_OP_LOAD_F64_CONST:
+            case ORUS_JIT_IR_OP_LOAD_STRING_CONST: {
+                if (!orus_jit_a64_code_buffer_emit_u32(&code, A64_LDR_X(0u, 31u, 0u)) ||
+                    !orus_jit_a64_code_buffer_emit_u32(&code, A64_LDR_X(1u, 31u, 1u)) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(&code, 2u,
+                                                        (uint64_t)inst->value_kind) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 3u, (uint64_t)inst->operands.load_const.dst_reg) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 4u, inst->operands.load_const.immediate_bits) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 16u,
+                        (uint64_t)(uintptr_t)&orus_jit_native_linear_load) ||
+                    !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
+                    !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
+                    !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
+                    A64_RETURN(JIT_BACKEND_OUT_OF_MEMORY);
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_MOVE_I32:
+            case ORUS_JIT_IR_OP_MOVE_I64:
+            case ORUS_JIT_IR_OP_MOVE_U32:
+            case ORUS_JIT_IR_OP_MOVE_U64:
+            case ORUS_JIT_IR_OP_MOVE_F64: {
+                if (!orus_jit_a64_code_buffer_emit_u32(&code, A64_LDR_X(0u, 31u, 0u)) ||
+                    !orus_jit_a64_code_buffer_emit_u32(&code, A64_LDR_X(1u, 31u, 1u)) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(&code, 2u,
+                                                        (uint64_t)inst->value_kind) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 3u, (uint64_t)inst->operands.move.dst_reg) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 4u, (uint64_t)inst->operands.move.src_reg) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 16u,
+                        (uint64_t)(uintptr_t)&orus_jit_native_linear_move) ||
+                    !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
+                    !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
+                    !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
+                    A64_RETURN(JIT_BACKEND_OUT_OF_MEMORY);
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_MOVE_STRING: {
+                if (!orus_jit_a64_code_buffer_emit_u32(&code, A64_LDR_X(0u, 31u, 0u)) ||
+                    !orus_jit_a64_code_buffer_emit_u32(&code, A64_LDR_X(1u, 31u, 1u)) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 2u, (uint64_t)inst->operands.move.dst_reg) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 3u, (uint64_t)inst->operands.move.src_reg) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 16u,
+                        (uint64_t)(uintptr_t)&orus_jit_native_move_string) ||
+                    !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
+                    !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
+                    !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
+                    A64_RETURN(JIT_BACKEND_OUT_OF_MEMORY);
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_ADD_I32:
+            case ORUS_JIT_IR_OP_SUB_I32:
+            case ORUS_JIT_IR_OP_MUL_I32:
+            case ORUS_JIT_IR_OP_ADD_I64:
+            case ORUS_JIT_IR_OP_SUB_I64:
+            case ORUS_JIT_IR_OP_MUL_I64:
+            case ORUS_JIT_IR_OP_ADD_U32:
+            case ORUS_JIT_IR_OP_SUB_U32:
+            case ORUS_JIT_IR_OP_MUL_U32:
+            case ORUS_JIT_IR_OP_ADD_U64:
+            case ORUS_JIT_IR_OP_SUB_U64:
+            case ORUS_JIT_IR_OP_MUL_U64:
+            case ORUS_JIT_IR_OP_ADD_F64:
+            case ORUS_JIT_IR_OP_SUB_F64:
+            case ORUS_JIT_IR_OP_MUL_F64: {
+                if (!orus_jit_a64_code_buffer_emit_u32(&code, A64_LDR_X(0u, 31u, 0u)) ||
+                    !orus_jit_a64_code_buffer_emit_u32(&code, A64_LDR_X(1u, 31u, 1u)) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 2u, (uint64_t)inst->opcode) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 3u, (uint64_t)inst->value_kind) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 4u, (uint64_t)inst->operands.arithmetic.dst_reg) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 5u, (uint64_t)inst->operands.arithmetic.lhs_reg) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 6u, (uint64_t)inst->operands.arithmetic.rhs_reg) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 16u,
+                        (uint64_t)(uintptr_t)&orus_jit_native_linear_arithmetic) ||
+                    !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
+                    !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
+                    !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
+                    A64_RETURN(JIT_BACKEND_OUT_OF_MEMORY);
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_CONCAT_STRING: {
+                if (!orus_jit_a64_code_buffer_emit_u32(&code, A64_LDR_X(0u, 31u, 0u)) ||
+                    !orus_jit_a64_code_buffer_emit_u32(&code, A64_LDR_X(1u, 31u, 1u)) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 2u, (uint64_t)inst->operands.arithmetic.dst_reg) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 3u, (uint64_t)inst->operands.arithmetic.lhs_reg) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 4u, (uint64_t)inst->operands.arithmetic.rhs_reg) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 16u,
+                        (uint64_t)(uintptr_t)&orus_jit_native_concat_string) ||
+                    !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
+                    !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
+                    !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
+                    A64_RETURN(JIT_BACKEND_OUT_OF_MEMORY);
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_TO_STRING: {
+                if (!orus_jit_a64_code_buffer_emit_u32(&code, A64_LDR_X(0u, 31u, 0u)) ||
+                    !orus_jit_a64_code_buffer_emit_u32(&code, A64_LDR_X(1u, 31u, 1u)) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 2u, (uint64_t)inst->operands.unary.dst_reg) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 3u, (uint64_t)inst->operands.unary.src_reg) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 16u,
+                        (uint64_t)(uintptr_t)&orus_jit_native_to_string) ||
+                    !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
+                    !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
+                    !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
+                    A64_RETURN(JIT_BACKEND_OUT_OF_MEMORY);
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_I32_TO_I64: {
+                if (!orus_jit_a64_code_buffer_emit_u32(&code, A64_LDR_X(0u, 31u, 0u)) ||
+                    !orus_jit_a64_code_buffer_emit_u32(&code, A64_LDR_X(1u, 31u, 1u)) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 2u, (uint64_t)inst->operands.unary.dst_reg) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 3u, (uint64_t)inst->operands.unary.src_reg) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 16u,
+                        (uint64_t)(uintptr_t)&orus_jit_native_convert_i32_to_i64) ||
+                    !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
+                    !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
+                    !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
+                    A64_RETURN(JIT_BACKEND_OUT_OF_MEMORY);
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_U32_TO_U64: {
+                if (!orus_jit_a64_code_buffer_emit_u32(&code, A64_LDR_X(0u, 31u, 0u)) ||
+                    !orus_jit_a64_code_buffer_emit_u32(&code, A64_LDR_X(1u, 31u, 1u)) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 2u, (uint64_t)inst->operands.unary.dst_reg) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 3u, (uint64_t)inst->operands.unary.src_reg) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 16u,
+                        (uint64_t)(uintptr_t)&orus_jit_native_convert_u32_to_u64) ||
+                    !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
+                    !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
+                    !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
+                    A64_RETURN(JIT_BACKEND_OUT_OF_MEMORY);
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_SAFEPOINT: {
+                if (!orus_jit_a64_code_buffer_emit_u32(&code, A64_LDR_X(0u, 31u, 0u)) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 16u,
+                        (uint64_t)(uintptr_t)&orus_jit_native_linear_safepoint) ||
+                    !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
+                    !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
+                    !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
+                    A64_RETURN(JIT_BACKEND_OUT_OF_MEMORY);
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_LOOP_BACK: {
+                int64_t diff = (int64_t)loop_entry_index - (int64_t)code.count - 1;
+                if (diff < -(1 << 25) || diff > ((1 << 25) - 1)) {
+                    A64_RETURN(JIT_BACKEND_ASSEMBLY_ERROR);
+                }
+                uint32_t branch = A64_B((uint32_t)(diff & 0x03FFFFFFu));
+                if (!orus_jit_a64_code_buffer_emit_u32(&code, branch)) {
+                    A64_RETURN(JIT_BACKEND_OUT_OF_MEMORY);
+                }
+                goto finalize_block;
+            }
+            case ORUS_JIT_IR_OP_RETURN: {
+                if (!orus_jit_a64_code_buffer_emit_u32(&code, A64_B(0u)) ||
+                    !orus_jit_a64_patch_list_append(&return_patches, code.count - 1u)) {
+                    A64_RETURN(JIT_BACKEND_OUT_OF_MEMORY);
+                }
+                goto finalize_block;
+            }
+            default:
+                A64_RETURN(JIT_BACKEND_ASSEMBLY_ERROR);
+        }
+    }
+
+finalize_block:;
+    size_t epilogue_index = code.count;
+    if (!orus_jit_a64_code_buffer_emit_u32(&code, 0x910083FFu) ||
+        !orus_jit_a64_code_buffer_emit_u32(&code, 0xA8C17BF0u) ||
+        !orus_jit_a64_code_buffer_emit_u32(&code, 0xD65F03C0u)) {
+        A64_RETURN(JIT_BACKEND_OUT_OF_MEMORY);
+    }
+
+    for (size_t i = 0; i < bail_patches.count; ++i) {
+        size_t index = bail_patches.data[i];
+        int64_t diff = (int64_t)epilogue_index - (int64_t)index - 1;
+        if (diff < -(1 << 18) || diff > ((1 << 18) - 1)) {
+            A64_RETURN(JIT_BACKEND_ASSEMBLY_ERROR);
+        }
+        uint32_t imm = (uint32_t)(diff & 0x7FFFFu);
+        code.data[index] = (code.data[index] & ~0x00FFFFE0u) | (imm << 5);
+    }
+
+    for (size_t i = 0; i < return_patches.count; ++i) {
+        size_t index = return_patches.data[i];
+        int64_t diff = (int64_t)epilogue_index - (int64_t)index - 1;
+        if (diff < -(1 << 25) || diff > ((1 << 25) - 1)) {
+            A64_RETURN(JIT_BACKEND_ASSEMBLY_ERROR);
+        }
+        uint32_t imm = (uint32_t)(diff & 0x03FFFFFFu);
+        code.data[index] = A64_B(imm);
+    }
+
+    size_t encoded_size = code.count * sizeof(uint32_t);
+    size_t capacity = 0u;
+    size_t page_size = backend->page_size ? backend->page_size : orus_jit_detect_page_size();
+    void* buffer = orus_jit_alloc_executable(encoded_size, page_size, &capacity);
+    if (!buffer) {
+        A64_RETURN(JIT_BACKEND_OUT_OF_MEMORY);
+    }
+
+    orus_jit_set_write_protection(false);
+    memcpy(buffer, code.data, encoded_size);
+    orus_jit_set_write_protection(true);
+
+#if !defined(_WIN32)
+    if (!orus_jit_make_executable(buffer, capacity)) {
+        orus_jit_release_executable(buffer, capacity);
+        A64_RETURN(JIT_BACKEND_ASSEMBLY_ERROR);
+    }
+#endif
+
+    orus_jit_flush_icache(buffer, encoded_size);
+
+    entry->entry_point = (JITEntryPoint)buffer;
+    entry->code_ptr = buffer;
+    entry->code_size = encoded_size;
+    entry->code_capacity = capacity;
+    entry->debug_name = "orus_jit_linear_a64";
+
+    block->code_ptr = buffer;
+    block->code_capacity = capacity;
+
+    orus_jit_a64_code_buffer_release(&code);
+    orus_jit_a64_patch_list_release(&bail_patches);
+    orus_jit_a64_patch_list_release(&return_patches);
+#undef A64_RETURN
+    return JIT_BACKEND_OK;
+}
+
 static JITBackendStatus
 orus_jit_backend_compile_ir_arm64(struct OrusJitBackend* backend,
                                   const OrusJitIRProgram* program,
@@ -1562,13 +3239,7 @@ orus_jit_backend_compile_ir_arm64(struct OrusJitBackend* backend,
     orus_jit_set_write_protection(false);
     uint32_t* cursor = (uint32_t*)buffer;
     for (size_t i = 0; i < program->count; ++i) {
-        const OrusJitIRInstruction* inst = &program->instructions[i];
-        if (inst->opcode != ORUS_JIT_IR_OP_RETURN) {
-            orus_jit_set_write_protection(true);
-            orus_jit_release_executable(buffer, capacity);
-            return JIT_BACKEND_ASSEMBLY_ERROR;
-        }
-        cursor[i] = 0xD65F03C0u; // ret
+        cursor[i] = 0xD65F03C0u;
     }
     orus_jit_set_write_protection(true);
 
@@ -1636,14 +3307,29 @@ orus_jit_backend_compile_ir(struct OrusJitBackend* backend,
     JITBackendStatus status = JIT_BACKEND_ASSEMBLY_ERROR;
 
 #if defined(__x86_64__) || defined(_M_X64)
-    status = orus_jit_backend_emit_linear_x86(backend, block, out_entry);
-    if (status == JIT_BACKEND_OK) {
-        orus_jit_native_block_register(block);
-        return JIT_BACKEND_OK;
+    if (!orus_jit_should_force_helper_stub()) {
+        status = orus_jit_backend_emit_linear_x86(backend, block, out_entry);
+        if (status == JIT_BACKEND_OK) {
+            orus_jit_native_block_register(block);
+            return JIT_BACKEND_OK;
+        }
+        if (status == JIT_BACKEND_OUT_OF_MEMORY) {
+            orus_jit_native_block_destroy(block);
+            return status;
+        }
     }
-    if (status == JIT_BACKEND_OUT_OF_MEMORY) {
-        orus_jit_native_block_destroy(block);
-        return status;
+#endif
+#if defined(__aarch64__)
+    if (!orus_jit_should_force_helper_stub()) {
+        status = orus_jit_backend_emit_linear_a64(backend, block, out_entry);
+        if (status == JIT_BACKEND_OK) {
+            orus_jit_native_block_register(block);
+            return JIT_BACKEND_OK;
+        }
+        if (status == JIT_BACKEND_OUT_OF_MEMORY) {
+            orus_jit_native_block_destroy(block);
+            return status;
+        }
     }
 #endif
 

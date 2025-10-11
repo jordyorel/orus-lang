@@ -145,13 +145,16 @@ vm_jit_run_source_benchmark(const char* source,
         stats->duration_ns = vm_jit_timespec_diff_ns(&start, &end);
         stats->compilation_count = vm.jit_compilation_count;
         stats->translation_success = vm.jit_translation_success_count;
-        stats->translation_failure = vm.jit_translation_failure_count;
+        stats->translation_failure = vm.jit_translation_failures.total_failures;
         stats->cache_hits = vm.jit_cache_hit_count;
         stats->cache_misses = vm.jit_cache_miss_count;
         stats->invocations = vm.jit_invocation_count;
         stats->native_dispatches = vm.jit_native_dispatch_count;
         stats->native_type_deopts = vm.jit_native_type_deopts;
         stats->deopts = vm.jit_deopt_count;
+        stats->failure_log = vm.jit_translation_failures;
+        stats->rollout_stage = vm.jit_rollout.stage;
+        stats->rollout_mask = vm.jit_rollout.enabled_kind_mask;
     }
 
     cleanup_error_reporting();

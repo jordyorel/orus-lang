@@ -16,6 +16,8 @@
 #include "vm/vm.h"
 #include "vm/vm_tiering.h"
 #include "vm/jit_ir.h"
+#include "vm/jit_translation.h"
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -29,6 +31,158 @@
 VMProfilingContext g_profiling = {0};
 
 extern VM vm;
+
+void orus_jit_translation_failure_log_init(
+    OrusJitTranslationFailureLog* log) {
+    if (!log) {
+        return;
+    }
+    memset(log, 0, sizeof(*log));
+}
+
+static bool jit_failure_status_counts_toward_supported_alert(
+    OrusJitTranslationStatus status) {
+    switch (status) {
+        case ORUS_JIT_TRANSLATE_STATUS_OK:
+        case ORUS_JIT_TRANSLATE_STATUS_INVALID_INPUT:
+        case ORUS_JIT_TRANSLATE_STATUS_OUT_OF_MEMORY:
+        case ORUS_JIT_TRANSLATE_STATUS_ROLLOUT_DISABLED:
+            return false;
+        default:
+            return true;
+    }
+}
+
+void orus_jit_translation_failure_log_record(
+    OrusJitTranslationFailureLog* log,
+    const OrusJitTranslationFailureRecord* record) {
+    if (!log || !record) {
+        return;
+    }
+
+    log->total_failures++;
+    if ((size_t)record->status < ORUS_JIT_TRANSLATE_STATUS_COUNT) {
+        log->reason_counts[record->status]++;
+    }
+
+    if ((size_t)record->value_kind < ORUS_JIT_VALUE_KIND_COUNT) {
+        log->value_kind_counts[record->value_kind]++;
+#ifndef NDEBUG
+        if (jit_failure_status_counts_toward_supported_alert(record->status)) {
+            uint64_t supported_failures =
+                ++log->supported_kind_failures[record->value_kind];
+            assert(supported_failures <
+                       ORUS_JIT_SUPPORTED_FAILURE_ALERT_THRESHOLD &&
+                   "baseline JIT bailout threshold exceeded for supported value "
+                   "kind");
+        }
+#endif
+    }
+
+    if (ORUS_JIT_TRANSLATION_FAILURE_HISTORY == 0u) {
+        return;
+    }
+
+    size_t slot = log->next_index;
+    if (slot >= ORUS_JIT_TRANSLATION_FAILURE_HISTORY) {
+        slot %= ORUS_JIT_TRANSLATION_FAILURE_HISTORY;
+    }
+    log->records[slot] = *record;
+    log->next_index = (slot + 1u) % ORUS_JIT_TRANSLATION_FAILURE_HISTORY;
+    if (log->count < ORUS_JIT_TRANSLATION_FAILURE_HISTORY) {
+        log->count++;
+    }
+}
+
+static uint32_t
+orus_jit_rollout_mask_for_stage(OrusJitRolloutStage stage) {
+    if (stage < ORUS_JIT_ROLLOUT_STAGE_I32_ONLY) {
+        stage = ORUS_JIT_ROLLOUT_STAGE_I32_ONLY;
+    } else if (stage >= ORUS_JIT_ROLLOUT_STAGE_COUNT) {
+        stage = ORUS_JIT_ROLLOUT_STAGE_STRINGS;
+    }
+
+    uint32_t mask = 0u;
+    mask |= (1u << ORUS_JIT_VALUE_I32);
+    if (stage >= ORUS_JIT_ROLLOUT_STAGE_WIDE_INTS) {
+        mask |= (1u << ORUS_JIT_VALUE_I64);
+        mask |= (1u << ORUS_JIT_VALUE_U32);
+        mask |= (1u << ORUS_JIT_VALUE_U64);
+    }
+    if (stage >= ORUS_JIT_ROLLOUT_STAGE_FLOATS) {
+        mask |= (1u << ORUS_JIT_VALUE_F64);
+    }
+    if (stage >= ORUS_JIT_ROLLOUT_STAGE_STRINGS) {
+        mask |= (1u << ORUS_JIT_VALUE_STRING);
+    }
+    return mask;
+}
+
+const char*
+orus_jit_rollout_stage_name(OrusJitRolloutStage stage) {
+    switch (stage) {
+        case ORUS_JIT_ROLLOUT_STAGE_I32_ONLY:
+            return "i32-only";
+        case ORUS_JIT_ROLLOUT_STAGE_WIDE_INTS:
+            return "wide-int";
+        case ORUS_JIT_ROLLOUT_STAGE_FLOATS:
+            return "floats";
+        case ORUS_JIT_ROLLOUT_STAGE_STRINGS:
+            return "strings";
+        default:
+            break;
+    }
+    return "unknown";
+}
+
+bool
+orus_jit_rollout_stage_parse(const char* text, OrusJitRolloutStage* out_stage) {
+    if (!text || !out_stage) {
+        return false;
+    }
+
+    if (strcmp(text, "i32") == 0 || strcmp(text, "i32-only") == 0 ||
+        strcmp(text, "baseline") == 0) {
+        *out_stage = ORUS_JIT_ROLLOUT_STAGE_I32_ONLY;
+        return true;
+    }
+    if (strcmp(text, "wide-int") == 0 || strcmp(text, "wide-ints") == 0 ||
+        strcmp(text, "wide") == 0) {
+        *out_stage = ORUS_JIT_ROLLOUT_STAGE_WIDE_INTS;
+        return true;
+    }
+    if (strcmp(text, "floats") == 0 || strcmp(text, "float") == 0) {
+        *out_stage = ORUS_JIT_ROLLOUT_STAGE_FLOATS;
+        return true;
+    }
+    if (strcmp(text, "strings") == 0 || strcmp(text, "string") == 0 ||
+        strcmp(text, "full") == 0) {
+        *out_stage = ORUS_JIT_ROLLOUT_STAGE_STRINGS;
+        return true;
+    }
+    return false;
+}
+
+void
+orus_jit_rollout_set_stage(VMState* vm_state, OrusJitRolloutStage stage) {
+    if (!vm_state) {
+        return;
+    }
+
+    vm_state->jit_rollout.stage = stage;
+    vm_state->jit_rollout.enabled_kind_mask =
+        orus_jit_rollout_mask_for_stage(stage);
+}
+
+bool
+orus_jit_rollout_is_kind_enabled(const VMState* vm_state,
+                                 OrusJitValueKind kind) {
+    if (!vm_state || (size_t)kind >= ORUS_JIT_VALUE_KIND_COUNT) {
+        return false;
+    }
+    uint32_t bit = 1u << (uint32_t)kind;
+    return (vm_state->jit_rollout.enabled_kind_mask & bit) != 0u;
+}
 
 static const char* function_display_name(Function* function, int index, char* buffer, size_t size) {
     if (function && function->debug_name && function->debug_name[0] != '\0') {
@@ -711,17 +865,168 @@ map_arithmetic_opcode(uint8_t opcode,
     return false;
 }
 
-static bool
-orus_jit_translate_linear_block(VMState* vm_state,
-                                Function* function,
-                                const HotPathSample* sample,
-                                OrusJitIRProgram* program,
-                                bool* out_unsupported) {
-    if (!function || !program || !sample) {
+static OrusJitTranslationResult
+make_translation_result(OrusJitTranslationStatus status,
+                        OrusJitIROpcode opcode,
+                        OrusJitValueKind kind,
+                        uint32_t bytecode_offset) {
+    OrusJitTranslationResult result;
+    result.status = status;
+    result.opcode = opcode;
+    result.value_kind = kind;
+    result.bytecode_offset = bytecode_offset;
+    return result;
+}
+
+const char* orus_jit_translation_status_name(OrusJitTranslationStatus status) {
+    switch (status) {
+        case ORUS_JIT_TRANSLATE_STATUS_OK:
+            return "ok";
+        case ORUS_JIT_TRANSLATE_STATUS_INVALID_INPUT:
+            return "invalid_input";
+        case ORUS_JIT_TRANSLATE_STATUS_OUT_OF_MEMORY:
+            return "out_of_memory";
+        case ORUS_JIT_TRANSLATE_STATUS_UNSUPPORTED_VALUE_KIND:
+            return "unsupported_value_kind";
+        case ORUS_JIT_TRANSLATE_STATUS_UNSUPPORTED_CONSTANT_KIND:
+            return "unsupported_constant_kind";
+        case ORUS_JIT_TRANSLATE_STATUS_UNHANDLED_OPCODE:
+            return "unhandled_opcode";
+        case ORUS_JIT_TRANSLATE_STATUS_UNSUPPORTED_LOOP_SHAPE:
+            return "unsupported_loop_shape";
+        case ORUS_JIT_TRANSLATE_STATUS_ROLLOUT_DISABLED:
+            return "rollout_disabled";
+        default:
+            break;
+    }
+    return "unknown";
+}
+
+const char* orus_jit_value_kind_name(OrusJitValueKind kind) {
+    switch (kind) {
+        case ORUS_JIT_VALUE_I32:
+            return "i32";
+        case ORUS_JIT_VALUE_I64:
+            return "i64";
+        case ORUS_JIT_VALUE_U32:
+            return "u32";
+        case ORUS_JIT_VALUE_U64:
+            return "u64";
+        case ORUS_JIT_VALUE_F64:
+            return "f64";
+        case ORUS_JIT_VALUE_STRING:
+            return "string";
+        default:
+            break;
+    }
+    return "unknown";
+}
+
+bool orus_jit_translation_status_is_unsupported(
+    OrusJitTranslationStatus status) {
+    switch (status) {
+        case ORUS_JIT_TRANSLATE_STATUS_UNSUPPORTED_VALUE_KIND:
+        case ORUS_JIT_TRANSLATE_STATUS_UNSUPPORTED_CONSTANT_KIND:
+        case ORUS_JIT_TRANSLATE_STATUS_UNHANDLED_OPCODE:
+        case ORUS_JIT_TRANSLATE_STATUS_UNSUPPORTED_LOOP_SHAPE:
+        case ORUS_JIT_TRANSLATE_STATUS_ROLLOUT_DISABLED:
+            return true;
+        default:
+            return false;
+    }
+}
+
+static bool encode_numeric_constant(Value constant,
+                                    OrusJitValueKind kind,
+                                    uint64_t* out_bits) {
+    if (!out_bits) {
         return false;
     }
+
+    switch (kind) {
+        case ORUS_JIT_VALUE_I32:
+            if (!IS_I32(constant)) {
+                return false;
+            }
+            *out_bits = (uint64_t)(uint32_t)AS_I32(constant);
+            return true;
+        case ORUS_JIT_VALUE_I64:
+            if (!IS_I64(constant)) {
+                return false;
+            }
+            *out_bits = (uint64_t)AS_I64(constant);
+            return true;
+        case ORUS_JIT_VALUE_U32:
+            if (!IS_U32(constant)) {
+                return false;
+            }
+            *out_bits = (uint64_t)AS_U32(constant);
+            return true;
+        case ORUS_JIT_VALUE_U64:
+            if (!IS_U64(constant)) {
+                return false;
+            }
+            *out_bits = AS_U64(constant);
+            return true;
+        case ORUS_JIT_VALUE_F64:
+            if (!IS_F64(constant)) {
+                return false;
+            }
+            {
+                double value = AS_F64(constant);
+                uint64_t bits = 0u;
+                memcpy(&bits, &value, sizeof(bits));
+                *out_bits = bits;
+            }
+            return true;
+        default:
+            break;
+    }
+
+    return false;
+}
+
+OrusJitTranslationResult orus_jit_translate_linear_block(
+    VMState* vm_state,
+    Function* function,
+    const HotPathSample* sample,
+    OrusJitIRProgram* program) {
+    OrusJitTranslationResult result = make_translation_result(
+        ORUS_JIT_TRANSLATE_STATUS_INVALID_INPUT, ORUS_JIT_IR_OP_RETURN,
+        ORUS_JIT_VALUE_I32, 0u);
+
+    if (!function || !program || !sample) {
+        return result;
+    }
+
+    uint8_t register_kinds[REGISTER_COUNT];
+    for (size_t i = 0; i < REGISTER_COUNT; ++i) {
+        register_kinds[i] = (uint8_t)ORUS_JIT_VALUE_KIND_COUNT;
+    }
+
+#define ORUS_JIT_SET_KIND(reg, kind_value)                                          \
+    do {                                                                            \
+        uint16_t __reg = (reg);                                                     \
+        if (__reg < REGISTER_COUNT) {                                               \
+            register_kinds[__reg] = (uint8_t)(kind_value);                          \
+        }                                                                           \
+    } while (0)
+
+#define ORUS_JIT_GET_KIND(reg)                                                     \
+    (((reg) < REGISTER_COUNT)                                                      \
+         ? (OrusJitValueKind)register_kinds[(reg)]                                 \
+         : ORUS_JIT_VALUE_KIND_COUNT)
+#define ORUS_JIT_ENSURE_ROLLOUT(kind_value, opcode_value, byte_offset_value)          \
+    do {                                                                             \
+        OrusJitValueKind __kind = (kind_value);                                      \
+        if (!orus_jit_rollout_is_kind_enabled(vm_state, __kind)) {                   \
+            return make_translation_result(                                          \
+                ORUS_JIT_TRANSLATE_STATUS_ROLLOUT_DISABLED, (opcode_value),         \
+                __kind, (uint32_t)(byte_offset_value));                              \
+        }                                                                            \
+    } while (0)
     if (!function->chunk || !function->chunk->code || function->chunk->count <= 0) {
-        return false;
+        return result;
     }
 
     const Chunk* chunk = function->chunk;
@@ -730,11 +1035,7 @@ orus_jit_translate_linear_block(VMState* vm_state,
         start_offset = (size_t)sample->loop;
     }
     if (start_offset >= (size_t)chunk->count) {
-        return false;
-    }
-
-    if (out_unsupported) {
-        *out_unsupported = false;
+        return result;
     }
 
     program->source_chunk = (const struct Chunk*)chunk;
@@ -751,7 +1052,9 @@ orus_jit_translate_linear_block(VMState* vm_state,
     do {                                                                               \
         OrusJitIRInstruction* safepoint__ = orus_jit_ir_program_append(program);       \
         if (!safepoint__) {                                                            \
-            return false;                                                              \
+            return make_translation_result(                                            \
+                ORUS_JIT_TRANSLATE_STATUS_OUT_OF_MEMORY, ORUS_JIT_IR_OP_SAFEPOINT,     \
+                ORUS_JIT_VALUE_I32, (byte_offset));                                    \
         }                                                                              \
         safepoint__->opcode = ORUS_JIT_IR_OP_SAFEPOINT;                                \
         safepoint__->bytecode_offset = (byte_offset);                                  \
@@ -765,7 +1068,10 @@ orus_jit_translate_linear_block(VMState* vm_state,
             case OP_RETURN_VOID: {
                 OrusJitIRInstruction* inst = orus_jit_ir_program_append(program);
                 if (!inst) {
-                    return false;
+                    return make_translation_result(
+                        ORUS_JIT_TRANSLATE_STATUS_OUT_OF_MEMORY,
+                        ORUS_JIT_IR_OP_RETURN, ORUS_JIT_VALUE_I32,
+                        (uint32_t)offset);
                 }
                 inst->opcode = ORUS_JIT_IR_OP_RETURN;
                 inst->bytecode_offset = (uint32_t)offset;
@@ -775,11 +1081,17 @@ orus_jit_translate_linear_block(VMState* vm_state,
             }
             case OP_RETURN_R: {
                 if (offset + 1u >= (size_t)chunk->count) {
-                    return false;
+                    return make_translation_result(
+                        ORUS_JIT_TRANSLATE_STATUS_INVALID_INPUT,
+                        ORUS_JIT_IR_OP_RETURN, ORUS_JIT_VALUE_I32,
+                        (uint32_t)offset);
                 }
                 OrusJitIRInstruction* inst = orus_jit_ir_program_append(program);
                 if (!inst) {
-                    return false;
+                    return make_translation_result(
+                        ORUS_JIT_TRANSLATE_STATUS_OUT_OF_MEMORY,
+                        ORUS_JIT_IR_OP_RETURN, ORUS_JIT_VALUE_I32,
+                        (uint32_t)offset);
                 }
                 inst->opcode = ORUS_JIT_IR_OP_RETURN;
                 inst->bytecode_offset = (uint32_t)offset;
@@ -789,22 +1101,28 @@ orus_jit_translate_linear_block(VMState* vm_state,
             }
             case OP_LOOP_SHORT: {
                 if (offset + 1u >= (size_t)chunk->count) {
-                    return false;
+                    return make_translation_result(
+                        ORUS_JIT_TRANSLATE_STATUS_INVALID_INPUT,
+                        ORUS_JIT_IR_OP_LOOP_BACK, ORUS_JIT_VALUE_I32,
+                        (uint32_t)offset);
                 }
                 uint8_t back = chunk->code[offset + 1u];
                 size_t target = (offset >= (size_t)back) ? (offset - (size_t)back) : 0u;
                 if (target != start_offset) {
-                    if (out_unsupported) {
-                        *out_unsupported = true;
-                    }
-                    return false;
+                    return make_translation_result(
+                        ORUS_JIT_TRANSLATE_STATUS_UNSUPPORTED_LOOP_SHAPE,
+                        ORUS_JIT_IR_OP_LOOP_BACK, ORUS_JIT_VALUE_I32,
+                        (uint32_t)offset);
                 }
                 if (instructions_since_safepoint > 0u) {
                     INSERT_SAFEPOINT((uint32_t)offset);
                 }
                 OrusJitIRInstruction* inst = orus_jit_ir_program_append(program);
                 if (!inst) {
-                    return false;
+                    return make_translation_result(
+                        ORUS_JIT_TRANSLATE_STATUS_OUT_OF_MEMORY,
+                        ORUS_JIT_IR_OP_LOOP_BACK, ORUS_JIT_VALUE_I32,
+                        (uint32_t)offset);
                 }
                 inst->opcode = ORUS_JIT_IR_OP_LOOP_BACK;
                 inst->bytecode_offset = (uint32_t)offset;
@@ -817,41 +1135,91 @@ orus_jit_translate_linear_block(VMState* vm_state,
                 break;
         }
 
-        OrusJitValueKind kind;
-        OrusJitIROpcode ir_opcode;
-        if (map_const_opcode(opcode, &ir_opcode, &kind)) {
-            if (kind != ORUS_JIT_VALUE_I32) {
-                if (out_unsupported) {
-                    *out_unsupported = true;
-                }
-                return false;
-            }
+        OrusJitValueKind kind = ORUS_JIT_VALUE_I32;
+        OrusJitIROpcode ir_opcode = ORUS_JIT_IR_OP_RETURN;
+
+        if (opcode == OP_LOAD_CONST) {
             if (offset + 3u >= (size_t)chunk->count) {
-                return false;
+                return make_translation_result(
+                    ORUS_JIT_TRANSLATE_STATUS_INVALID_INPUT,
+                    ORUS_JIT_IR_OP_LOAD_STRING_CONST, ORUS_JIT_VALUE_STRING,
+                    (uint32_t)offset);
             }
             uint16_t dst = chunk->code[offset + 1u];
             uint16_t constant_index = read_be_u16(&chunk->code[offset + 2u]);
+            if (constant_index >= (uint16_t)chunk->constants.count) {
+                return make_translation_result(
+                    ORUS_JIT_TRANSLATE_STATUS_INVALID_INPUT,
+                    ORUS_JIT_IR_OP_LOAD_STRING_CONST, ORUS_JIT_VALUE_STRING,
+                    (uint32_t)offset);
+            }
+            Value constant = chunk->constants.values[constant_index];
+            if (!IS_STRING(constant)) {
+                return make_translation_result(
+                    ORUS_JIT_TRANSLATE_STATUS_UNSUPPORTED_CONSTANT_KIND,
+                    ORUS_JIT_IR_OP_LOAD_STRING_CONST, ORUS_JIT_VALUE_STRING,
+                    (uint32_t)offset);
+            }
+
+            ORUS_JIT_ENSURE_ROLLOUT(ORUS_JIT_VALUE_STRING,
+                                    ORUS_JIT_IR_OP_LOAD_STRING_CONST, offset);
+
             OrusJitIRInstruction* inst = orus_jit_ir_program_append(program);
             if (!inst) {
-                return false;
+                return make_translation_result(
+                    ORUS_JIT_TRANSLATE_STATUS_OUT_OF_MEMORY,
+                    ORUS_JIT_IR_OP_LOAD_STRING_CONST, ORUS_JIT_VALUE_STRING,
+                    (uint32_t)offset);
+            }
+            inst->opcode = ORUS_JIT_IR_OP_LOAD_STRING_CONST;
+            inst->value_kind = ORUS_JIT_VALUE_STRING;
+            inst->bytecode_offset = (uint32_t)offset;
+            inst->operands.load_const.dst_reg = dst;
+            inst->operands.load_const.constant_index = constant_index;
+            inst->operands.load_const.immediate_bits =
+                (uint64_t)(uintptr_t)AS_STRING(constant);
+            ORUS_JIT_SET_KIND(dst, ORUS_JIT_VALUE_STRING);
+            offset += 4u;
+            if (++instructions_since_safepoint >= safepoint_interval) {
+                INSERT_SAFEPOINT((uint32_t)offset);
+            }
+            continue;
+        }
+
+        if (map_const_opcode(opcode, &ir_opcode, &kind)) {
+            if (offset + 3u >= (size_t)chunk->count) {
+                return make_translation_result(
+                    ORUS_JIT_TRANSLATE_STATUS_INVALID_INPUT, ir_opcode, kind,
+                    (uint32_t)offset);
+            }
+            uint16_t dst = chunk->code[offset + 1u];
+            uint16_t constant_index = read_be_u16(&chunk->code[offset + 2u]);
+            if (constant_index >= (uint16_t)chunk->constants.count) {
+                return make_translation_result(
+                    ORUS_JIT_TRANSLATE_STATUS_INVALID_INPUT, ir_opcode, kind,
+                    (uint32_t)offset);
+            }
+            ORUS_JIT_ENSURE_ROLLOUT(kind, ir_opcode, offset);
+            OrusJitIRInstruction* inst = orus_jit_ir_program_append(program);
+            if (!inst) {
+                return make_translation_result(
+                    ORUS_JIT_TRANSLATE_STATUS_OUT_OF_MEMORY, ir_opcode, kind,
+                    (uint32_t)offset);
             }
             inst->opcode = ir_opcode;
             inst->value_kind = kind;
             inst->bytecode_offset = (uint32_t)offset;
             inst->operands.load_const.dst_reg = dst;
             inst->operands.load_const.constant_index = constant_index;
-            if (constant_index >= (uint16_t)chunk->constants.count) {
-                return false;
-            }
             Value constant = chunk->constants.values[constant_index];
-            if (!IS_I32(constant)) {
-                if (out_unsupported) {
-                    *out_unsupported = true;
-                }
-                return false;
+            uint64_t bits = 0u;
+            if (!encode_numeric_constant(constant, kind, &bits)) {
+                return make_translation_result(
+                    ORUS_JIT_TRANSLATE_STATUS_UNSUPPORTED_CONSTANT_KIND,
+                    ir_opcode, kind, (uint32_t)offset);
             }
-            inst->operands.load_const.immediate_bits =
-                (uint64_t)(uint32_t)AS_I32(constant);
+            inst->operands.load_const.immediate_bits = bits;
+            ORUS_JIT_SET_KIND(dst, kind);
             offset += 4u;
             if (++instructions_since_safepoint >= safepoint_interval) {
                 INSERT_SAFEPOINT((uint32_t)offset);
@@ -860,26 +1228,26 @@ orus_jit_translate_linear_block(VMState* vm_state,
         }
 
         if (map_move_opcode(opcode, &ir_opcode, &kind)) {
-            if (kind != ORUS_JIT_VALUE_I32) {
-                if (out_unsupported) {
-                    *out_unsupported = true;
-                }
-                return false;
-            }
             if (offset + 2u >= (size_t)chunk->count) {
-                return false;
+                return make_translation_result(
+                    ORUS_JIT_TRANSLATE_STATUS_INVALID_INPUT, ir_opcode, kind,
+                    (uint32_t)offset);
             }
             uint16_t dst = chunk->code[offset + 1u];
             uint16_t src = chunk->code[offset + 2u];
+            ORUS_JIT_ENSURE_ROLLOUT(kind, ir_opcode, offset);
             OrusJitIRInstruction* inst = orus_jit_ir_program_append(program);
             if (!inst) {
-                return false;
+                return make_translation_result(
+                    ORUS_JIT_TRANSLATE_STATUS_OUT_OF_MEMORY, ir_opcode, kind,
+                    (uint32_t)offset);
             }
             inst->opcode = ir_opcode;
             inst->value_kind = kind;
             inst->bytecode_offset = (uint32_t)offset;
             inst->operands.move.dst_reg = dst;
             inst->operands.move.src_reg = src;
+            ORUS_JIT_SET_KIND(dst, kind);
             offset += 3u;
             if (++instructions_since_safepoint >= safepoint_interval) {
                 INSERT_SAFEPOINT((uint32_t)offset);
@@ -887,37 +1255,153 @@ orus_jit_translate_linear_block(VMState* vm_state,
             continue;
         }
 
-        if (map_arithmetic_opcode(opcode, &ir_opcode, &kind)) {
-            if (kind != ORUS_JIT_VALUE_I32) {
-                if (out_unsupported) {
-                    *out_unsupported = true;
-                }
-                return false;
+        if (opcode == OP_MOVE) {
+            if (offset + 2u >= (size_t)chunk->count) {
+                return make_translation_result(
+                    ORUS_JIT_TRANSLATE_STATUS_INVALID_INPUT,
+                    ORUS_JIT_IR_OP_MOVE_STRING, ORUS_JIT_VALUE_STRING,
+                    (uint32_t)offset);
             }
-            if (ir_opcode != ORUS_JIT_IR_OP_ADD_I32 &&
-                ir_opcode != ORUS_JIT_IR_OP_SUB_I32 &&
-                ir_opcode != ORUS_JIT_IR_OP_MUL_I32) {
-                if (out_unsupported) {
-                    *out_unsupported = true;
-                }
-                return false;
+            uint16_t dst = chunk->code[offset + 1u];
+            uint16_t src = chunk->code[offset + 2u];
+            OrusJitValueKind tracked = ORUS_JIT_GET_KIND(src);
+            if (tracked != ORUS_JIT_VALUE_STRING) {
+                return make_translation_result(
+                    ORUS_JIT_TRANSLATE_STATUS_UNSUPPORTED_VALUE_KIND,
+                    ORUS_JIT_IR_OP_MOVE_STRING, tracked, (uint32_t)offset);
             }
+            ORUS_JIT_ENSURE_ROLLOUT(ORUS_JIT_VALUE_STRING,
+                                    ORUS_JIT_IR_OP_MOVE_STRING, offset);
+            OrusJitIRInstruction* inst = orus_jit_ir_program_append(program);
+            if (!inst) {
+                return make_translation_result(
+                    ORUS_JIT_TRANSLATE_STATUS_OUT_OF_MEMORY,
+                    ORUS_JIT_IR_OP_MOVE_STRING, ORUS_JIT_VALUE_STRING,
+                    (uint32_t)offset);
+            }
+            inst->opcode = ORUS_JIT_IR_OP_MOVE_STRING;
+            inst->value_kind = ORUS_JIT_VALUE_STRING;
+            inst->bytecode_offset = (uint32_t)offset;
+            inst->operands.move.dst_reg = dst;
+            inst->operands.move.src_reg = src;
+            ORUS_JIT_SET_KIND(dst, ORUS_JIT_VALUE_STRING);
+            offset += 3u;
+            if (++instructions_since_safepoint >= safepoint_interval) {
+                INSERT_SAFEPOINT((uint32_t)offset);
+            }
+            continue;
+        }
+
+        if (opcode == OP_I32_TO_I64_R) {
+            if (offset + 2u >= (size_t)chunk->count) {
+                return make_translation_result(
+                    ORUS_JIT_TRANSLATE_STATUS_INVALID_INPUT,
+                    ORUS_JIT_IR_OP_I32_TO_I64, ORUS_JIT_VALUE_I32,
+                    (uint32_t)offset);
+            }
+            uint16_t dst = chunk->code[offset + 1u];
+            uint16_t src = chunk->code[offset + 2u];
+            OrusJitValueKind src_kind = ORUS_JIT_GET_KIND(src);
+            if (src_kind != ORUS_JIT_VALUE_I32 &&
+                src_kind != ORUS_JIT_VALUE_KIND_COUNT) {
+                return make_translation_result(
+                    ORUS_JIT_TRANSLATE_STATUS_UNSUPPORTED_VALUE_KIND,
+                    ORUS_JIT_IR_OP_I32_TO_I64, src_kind, (uint32_t)offset);
+            }
+            ORUS_JIT_ENSURE_ROLLOUT(ORUS_JIT_VALUE_I64,
+                                    ORUS_JIT_IR_OP_I32_TO_I64, offset);
+            OrusJitIRInstruction* inst = orus_jit_ir_program_append(program);
+            if (!inst) {
+                return make_translation_result(
+                    ORUS_JIT_TRANSLATE_STATUS_OUT_OF_MEMORY,
+                    ORUS_JIT_IR_OP_I32_TO_I64, ORUS_JIT_VALUE_I64,
+                    (uint32_t)offset);
+            }
+            inst->opcode = ORUS_JIT_IR_OP_I32_TO_I64;
+            inst->value_kind = ORUS_JIT_VALUE_I64;
+            inst->bytecode_offset = (uint32_t)offset;
+            inst->operands.unary.dst_reg = dst;
+            inst->operands.unary.src_reg = src;
+            ORUS_JIT_SET_KIND(dst, ORUS_JIT_VALUE_I64);
+            offset += 3u;
+            if (++instructions_since_safepoint >= safepoint_interval) {
+                INSERT_SAFEPOINT((uint32_t)offset);
+            }
+            continue;
+        }
+
+        if (opcode == OP_U32_TO_U64_R) {
+            if (offset + 2u >= (size_t)chunk->count) {
+                return make_translation_result(
+                    ORUS_JIT_TRANSLATE_STATUS_INVALID_INPUT,
+                    ORUS_JIT_IR_OP_U32_TO_U64, ORUS_JIT_VALUE_U32,
+                    (uint32_t)offset);
+            }
+            uint16_t dst = chunk->code[offset + 1u];
+            uint16_t src = chunk->code[offset + 2u];
+            OrusJitValueKind src_kind = ORUS_JIT_GET_KIND(src);
+            if (src_kind != ORUS_JIT_VALUE_U32 &&
+                src_kind != ORUS_JIT_VALUE_KIND_COUNT) {
+                return make_translation_result(
+                    ORUS_JIT_TRANSLATE_STATUS_UNSUPPORTED_VALUE_KIND,
+                    ORUS_JIT_IR_OP_U32_TO_U64, src_kind, (uint32_t)offset);
+            }
+            ORUS_JIT_ENSURE_ROLLOUT(ORUS_JIT_VALUE_U64,
+                                    ORUS_JIT_IR_OP_U32_TO_U64, offset);
+            OrusJitIRInstruction* inst = orus_jit_ir_program_append(program);
+            if (!inst) {
+                return make_translation_result(
+                    ORUS_JIT_TRANSLATE_STATUS_OUT_OF_MEMORY,
+                    ORUS_JIT_IR_OP_U32_TO_U64, ORUS_JIT_VALUE_U64,
+                    (uint32_t)offset);
+            }
+            inst->opcode = ORUS_JIT_IR_OP_U32_TO_U64;
+            inst->value_kind = ORUS_JIT_VALUE_U64;
+            inst->bytecode_offset = (uint32_t)offset;
+            inst->operands.unary.dst_reg = dst;
+            inst->operands.unary.src_reg = src;
+            ORUS_JIT_SET_KIND(dst, ORUS_JIT_VALUE_U64);
+            offset += 3u;
+            if (++instructions_since_safepoint >= safepoint_interval) {
+                INSERT_SAFEPOINT((uint32_t)offset);
+            }
+            continue;
+        }
+
+        if (opcode == OP_CONCAT_R) {
             if (offset + 3u >= (size_t)chunk->count) {
-                return false;
+                return make_translation_result(
+                    ORUS_JIT_TRANSLATE_STATUS_INVALID_INPUT,
+                    ORUS_JIT_IR_OP_CONCAT_STRING, ORUS_JIT_VALUE_STRING,
+                    (uint32_t)offset);
             }
             uint16_t dst = chunk->code[offset + 1u];
             uint16_t lhs = chunk->code[offset + 2u];
             uint16_t rhs = chunk->code[offset + 3u];
+            OrusJitValueKind lhs_kind = ORUS_JIT_GET_KIND(lhs);
+            OrusJitValueKind rhs_kind = ORUS_JIT_GET_KIND(rhs);
+            if (lhs_kind != ORUS_JIT_VALUE_STRING ||
+                rhs_kind != ORUS_JIT_VALUE_STRING) {
+                return make_translation_result(
+                    ORUS_JIT_TRANSLATE_STATUS_UNSUPPORTED_VALUE_KIND,
+                    ORUS_JIT_IR_OP_CONCAT_STRING, lhs_kind, (uint32_t)offset);
+            }
+            ORUS_JIT_ENSURE_ROLLOUT(ORUS_JIT_VALUE_STRING,
+                                    ORUS_JIT_IR_OP_CONCAT_STRING, offset);
             OrusJitIRInstruction* inst = orus_jit_ir_program_append(program);
             if (!inst) {
-                return false;
+                return make_translation_result(
+                    ORUS_JIT_TRANSLATE_STATUS_OUT_OF_MEMORY,
+                    ORUS_JIT_IR_OP_CONCAT_STRING, ORUS_JIT_VALUE_STRING,
+                    (uint32_t)offset);
             }
-            inst->opcode = ir_opcode;
-            inst->value_kind = kind;
+            inst->opcode = ORUS_JIT_IR_OP_CONCAT_STRING;
+            inst->value_kind = ORUS_JIT_VALUE_STRING;
             inst->bytecode_offset = (uint32_t)offset;
             inst->operands.arithmetic.dst_reg = dst;
             inst->operands.arithmetic.lhs_reg = lhs;
             inst->operands.arithmetic.rhs_reg = rhs;
+            ORUS_JIT_SET_KIND(dst, ORUS_JIT_VALUE_STRING);
             offset += 4u;
             if (++instructions_since_safepoint >= safepoint_interval) {
                 INSERT_SAFEPOINT((uint32_t)offset);
@@ -925,11 +1409,70 @@ orus_jit_translate_linear_block(VMState* vm_state,
             continue;
         }
 
-        // Unsupported opcode - abort translation.
-        if (out_unsupported) {
-            *out_unsupported = true;
+        if (opcode == OP_TO_STRING_R) {
+            if (offset + 2u >= (size_t)chunk->count) {
+                return make_translation_result(
+                    ORUS_JIT_TRANSLATE_STATUS_INVALID_INPUT,
+                    ORUS_JIT_IR_OP_TO_STRING, ORUS_JIT_VALUE_STRING,
+                    (uint32_t)offset);
+            }
+            uint16_t dst = chunk->code[offset + 1u];
+            uint16_t src = chunk->code[offset + 2u];
+            ORUS_JIT_ENSURE_ROLLOUT(ORUS_JIT_VALUE_STRING,
+                                    ORUS_JIT_IR_OP_TO_STRING, offset);
+            OrusJitIRInstruction* inst = orus_jit_ir_program_append(program);
+            if (!inst) {
+                return make_translation_result(
+                    ORUS_JIT_TRANSLATE_STATUS_OUT_OF_MEMORY,
+                    ORUS_JIT_IR_OP_TO_STRING, ORUS_JIT_VALUE_STRING,
+                    (uint32_t)offset);
+            }
+            inst->opcode = ORUS_JIT_IR_OP_TO_STRING;
+            inst->value_kind = ORUS_JIT_VALUE_STRING;
+            inst->bytecode_offset = (uint32_t)offset;
+            inst->operands.unary.dst_reg = dst;
+            inst->operands.unary.src_reg = src;
+            ORUS_JIT_SET_KIND(dst, ORUS_JIT_VALUE_STRING);
+            offset += 3u;
+            if (++instructions_since_safepoint >= safepoint_interval) {
+                INSERT_SAFEPOINT((uint32_t)offset);
+            }
+            continue;
         }
-        return false;
+
+
+        if (map_arithmetic_opcode(opcode, &ir_opcode, &kind)) {
+            if (offset + 3u >= (size_t)chunk->count) {
+                return make_translation_result(
+                    ORUS_JIT_TRANSLATE_STATUS_INVALID_INPUT, ir_opcode, kind,
+                    (uint32_t)offset);
+            }
+            uint16_t dst = chunk->code[offset + 1u];
+            uint16_t lhs = chunk->code[offset + 2u];
+            uint16_t rhs = chunk->code[offset + 3u];
+            ORUS_JIT_ENSURE_ROLLOUT(kind, ir_opcode, offset);
+            OrusJitIRInstruction* inst = orus_jit_ir_program_append(program);
+            if (!inst) {
+                return make_translation_result(
+                    ORUS_JIT_TRANSLATE_STATUS_OUT_OF_MEMORY, ir_opcode, kind,
+                    (uint32_t)offset);
+            }
+            inst->opcode = ir_opcode;
+            inst->value_kind = kind;
+            inst->bytecode_offset = (uint32_t)offset;
+            inst->operands.arithmetic.dst_reg = dst;
+            inst->operands.arithmetic.lhs_reg = lhs;
+            inst->operands.arithmetic.rhs_reg = rhs;
+            ORUS_JIT_SET_KIND(dst, kind);
+            offset += 4u;
+            if (++instructions_since_safepoint >= safepoint_interval) {
+                INSERT_SAFEPOINT((uint32_t)offset);
+            }
+            continue;
+        }
+
+        return make_translation_result(ORUS_JIT_TRANSLATE_STATUS_UNHANDLED_OPCODE,
+                                       ir_opcode, kind, (uint32_t)offset);
     }
 
 translation_done:
@@ -938,14 +1481,28 @@ translation_done:
     if (!saw_terminal) {
         OrusJitIRInstruction* inst = orus_jit_ir_program_append(program);
         if (!inst) {
-            return false;
+            return make_translation_result(
+                ORUS_JIT_TRANSLATE_STATUS_OUT_OF_MEMORY, ORUS_JIT_IR_OP_RETURN,
+                ORUS_JIT_VALUE_I32, (uint32_t)offset);
         }
         inst->opcode = ORUS_JIT_IR_OP_RETURN;
         inst->bytecode_offset = (uint32_t)offset;
         saw_terminal = true;
     }
 
-    return program->count > 0 && saw_terminal;
+    if (!program->count || !saw_terminal) {
+        return make_translation_result(ORUS_JIT_TRANSLATE_STATUS_INVALID_INPUT,
+                                       ORUS_JIT_IR_OP_RETURN,
+                                       ORUS_JIT_VALUE_I32, (uint32_t)offset);
+    }
+
+#undef ORUS_JIT_GET_KIND
+#undef ORUS_JIT_SET_KIND
+#undef ORUS_JIT_ENSURE_ROLLOUT
+
+    return make_translation_result(ORUS_JIT_TRANSLATE_STATUS_OK,
+                                   ORUS_JIT_IR_OP_RETURN, ORUS_JIT_VALUE_I32,
+                                   (uint32_t)offset);
 }
 
 void queue_tier_up(VMState* vm_state, const HotPathSample* sample) {
@@ -988,14 +1545,35 @@ void queue_tier_up(VMState* vm_state, const HotPathSample* sample) {
 
     bool translated = false;
     bool unsupported = false;
-    bool owns_program_buffer = false;
+    bool attempted_translation = false;
+    bool catastrophic_failure = false;
+    OrusJitTranslationResult translation = {
+        .status = ORUS_JIT_TRANSLATE_STATUS_INVALID_INPUT,
+        .opcode = ORUS_JIT_IR_OP_RETURN,
+        .value_kind = ORUS_JIT_VALUE_I32,
+        .bytecode_offset = 0u,
+    };
     if (function) {
-        translated = orus_jit_translate_linear_block(vm_state, function, sample,
-                                                     &program, &unsupported);
+        translation = orus_jit_translate_linear_block(
+            vm_state, function, sample, &program);
+        translated = (translation.status == ORUS_JIT_TRANSLATE_STATUS_OK);
+        unsupported = orus_jit_translation_status_is_unsupported(translation.status);
+        attempted_translation = true;
     }
 
     if (!translated) {
-        vm_state->jit_translation_failure_count++;
+        if (attempted_translation) {
+            OrusJitTranslationFailureRecord failure_record = {
+                .status = translation.status,
+                .opcode = translation.opcode,
+                .value_kind = translation.value_kind,
+                .bytecode_offset = translation.bytecode_offset,
+                .function_index = sample->func,
+                .loop_index = sample->loop,
+            };
+            orus_jit_translation_failure_log_record(
+                &vm_state->jit_translation_failures, &failure_record);
+        }
         vm_state->jit_loop_blocklist[sample->loop] = true;
         if (unsupported) {
             JITDeoptTrigger trigger = {
@@ -1004,24 +1582,30 @@ void queue_tier_up(VMState* vm_state, const HotPathSample* sample) {
                 .generation = 0,
             };
             vm_jit_invalidate_entry(&trigger);
-        }
-        OrusJitIRInstruction fallback[] = {
-            {.opcode = ORUS_JIT_IR_OP_RETURN},
-        };
-        if (!orus_jit_ir_program_reserve(&program, sizeof(fallback) / sizeof(fallback[0]))) {
+            if (program.instructions) {
+                orus_jit_ir_program_reset(&program);
+            }
+            vm_jit_enter_entry(vm_state, &vm_state->jit_entry_stub);
             return;
         }
-        memcpy(program.instructions, fallback, sizeof(fallback));
-        program.count = sizeof(fallback) / sizeof(fallback[0]);
+        catastrophic_failure = true;
+        if (!orus_jit_ir_program_reserve(&program, 1u)) {
+            if (program.instructions) {
+                orus_jit_ir_program_reset(&program);
+            }
+            vm_jit_enter_entry(vm_state, &vm_state->jit_entry_stub);
+            return;
+        }
+        memset(&program.instructions[0], 0, sizeof(program.instructions[0]));
+        program.count = 1u;
+        program.instructions[0].opcode = ORUS_JIT_IR_OP_RETURN;
         program.source_chunk = function ? (const struct Chunk*)function->chunk : NULL;
         program.function_index = sample->func;
         program.loop_index = sample->loop;
         program.loop_start_offset = 0;
         program.loop_end_offset = 0;
-        owns_program_buffer = true;
     } else {
         vm_state->jit_translation_success_count++;
-        owns_program_buffer = true;
     }
 
     JITEntry entry;
@@ -1029,7 +1613,7 @@ void queue_tier_up(VMState* vm_state, const HotPathSample* sample) {
 
     JITBackendStatus status =
         orus_jit_backend_compile_ir(vm_state->jit_backend, &program, &entry);
-    if (owns_program_buffer) {
+    if (program.instructions) {
         orus_jit_ir_program_reset(&program);
     }
     if (status != JIT_BACKEND_OK) {
@@ -1044,7 +1628,9 @@ void queue_tier_up(VMState* vm_state, const HotPathSample* sample) {
         return;
     }
 
-    vm_state->jit_compilation_count++;
+    if (!catastrophic_failure) {
+        vm_state->jit_compilation_count++;
+    }
 
     cached = vm_jit_lookup_entry(sample->func, sample->loop);
     if (cached && cached->entry_point) {

@@ -20,6 +20,7 @@
 #include "vm_constants.h"
 #include "vm_string_ops.h"
 #include "vm/jit_backend.h"
+#include "vm/jit_ir.h"
 
 #ifndef ORUS_VM_ENABLE_TYPED_OPS
 #define ORUS_VM_ENABLE_TYPED_OPS 1
@@ -350,6 +351,53 @@ typedef struct {
     size_t count;
     uint64_t next_generation;
 } JITEntryCache;
+
+typedef enum OrusJitTranslationStatus {
+    ORUS_JIT_TRANSLATE_STATUS_OK = 0,
+    ORUS_JIT_TRANSLATE_STATUS_INVALID_INPUT,
+    ORUS_JIT_TRANSLATE_STATUS_OUT_OF_MEMORY,
+    ORUS_JIT_TRANSLATE_STATUS_UNSUPPORTED_VALUE_KIND,
+    ORUS_JIT_TRANSLATE_STATUS_UNSUPPORTED_CONSTANT_KIND,
+    ORUS_JIT_TRANSLATE_STATUS_UNHANDLED_OPCODE,
+    ORUS_JIT_TRANSLATE_STATUS_UNSUPPORTED_LOOP_SHAPE,
+    ORUS_JIT_TRANSLATE_STATUS_ROLLOUT_DISABLED,
+    ORUS_JIT_TRANSLATE_STATUS_COUNT,
+} OrusJitTranslationStatus;
+
+#define ORUS_JIT_TRANSLATION_FAILURE_HISTORY 32u
+#define ORUS_JIT_SUPPORTED_FAILURE_ALERT_THRESHOLD 8u
+
+typedef struct OrusJitTranslationFailureRecord {
+    OrusJitTranslationStatus status;
+    OrusJitIROpcode opcode;
+    OrusJitValueKind value_kind;
+    uint32_t bytecode_offset;
+    uint16_t function_index;
+    uint16_t loop_index;
+} OrusJitTranslationFailureRecord;
+
+typedef struct OrusJitTranslationFailureLog {
+    uint64_t total_failures;
+    uint64_t reason_counts[ORUS_JIT_TRANSLATE_STATUS_COUNT];
+    uint64_t value_kind_counts[ORUS_JIT_VALUE_KIND_COUNT];
+    uint64_t supported_kind_failures[ORUS_JIT_VALUE_KIND_COUNT];
+    OrusJitTranslationFailureRecord records[ORUS_JIT_TRANSLATION_FAILURE_HISTORY];
+    size_t next_index;
+    size_t count;
+} OrusJitTranslationFailureLog;
+
+typedef enum {
+    ORUS_JIT_ROLLOUT_STAGE_I32_ONLY = 0,
+    ORUS_JIT_ROLLOUT_STAGE_WIDE_INTS,
+    ORUS_JIT_ROLLOUT_STAGE_FLOATS,
+    ORUS_JIT_ROLLOUT_STAGE_STRINGS,
+    ORUS_JIT_ROLLOUT_STAGE_COUNT,
+} OrusJitRolloutStage;
+
+typedef struct {
+    OrusJitRolloutStage stage;
+    uint32_t enabled_kind_mask;
+} OrusJitRolloutState;
 
 typedef enum {
     FUNCTION_TIER_BASELINE = 0,
@@ -1329,12 +1377,13 @@ typedef struct VM {
     uint64_t jit_cache_miss_count;
     uint64_t jit_deopt_count;
     uint64_t jit_translation_success_count;
-    uint64_t jit_translation_failure_count;
+    OrusJitTranslationFailureLog jit_translation_failures;
     uint64_t jit_native_dispatch_count;
     uint64_t jit_native_type_deopts;
     bool jit_loop_blocklist[VM_MAX_PROFILED_LOOPS];
     bool jit_pending_invalidate;
     JITDeoptTrigger jit_pending_trigger;
+    OrusJitRolloutState jit_rollout;
 } VM;
 
 // Transitional alias while the runtime gradually migrates to the new VMState

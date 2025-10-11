@@ -67,7 +67,8 @@ typedef struct {
     bool show_optimization_stats;  // Show optimization statistics (--show-opt-stats)
     bool benchmark_mode;           // Enable benchmarking (--benchmark)
     bool jit_benchmark_mode;       // Run the JIT benchmark harness (--jit-benchmark)
-    
+    int jit_rollout_stage;         // Baseline JIT rollout stage (-1=default)
+
     // Debug System Configuration
     const char* debug_categories;  // Debug categories to enable (--debug-categories)
     bool debug_colors;             // Enable colored debug output (--debug-colors, --no-debug-colors)
@@ -146,6 +147,7 @@ void config_save_to_file(const OrusConfig* config, const char* filename);
 #define ORUS_GC_STRATEGY "ORUS_GC_STRATEGY"
 #define ORUS_ERROR_FORMAT "ORUS_ERROR_FORMAT"
 #define ORUS_ERROR_COLORS "ORUS_ERROR_COLORS"
+#define ORUS_JIT_ROLLOUT_STAGE "ORUS_JIT_ROLLOUT_STAGE"
 #define ORUS_OPTIMIZATION_LEVEL "ORUS_OPTIMIZATION_LEVEL"
 #define ORUS_LOG_FILE "ORUS_LOG_FILE"
 
