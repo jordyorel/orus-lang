@@ -190,6 +190,7 @@ static bool install_linear_i64_fixture(Function* function) {
     return true;
 }
 
+#ifdef OP_LOAD_U64_CONST
 static bool install_linear_u64_fixture(Function* function) {
     const char* file_tag = "jit_benchmark";
     const int line = 1;
@@ -245,6 +246,7 @@ static bool install_linear_u64_fixture(Function* function) {
 
     return true;
 }
+#endif  // OP_LOAD_U64_CONST
 
 static bool install_linear_f64_fixture(Function* function) {
     const char* file_tag = "jit_benchmark";
@@ -626,7 +628,9 @@ TEST_CASE(test_jit_backend_benchmark) {
     } cases[] = {
         {"i32", install_linear_i32_fixture, ORUS_JIT_ROLLOUT_STAGE_I32_ONLY},
         {"i64", install_linear_i64_fixture, ORUS_JIT_ROLLOUT_STAGE_WIDE_INTS},
+#ifdef OP_LOAD_U64_CONST
         {"u64", install_linear_u64_fixture, ORUS_JIT_ROLLOUT_STAGE_WIDE_INTS},
+#endif
         {"f64", install_linear_f64_fixture, ORUS_JIT_ROLLOUT_STAGE_FLOATS},
         {"string", install_linear_string_fixture,
          ORUS_JIT_ROLLOUT_STAGE_STRINGS},

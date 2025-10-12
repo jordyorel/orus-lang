@@ -23,7 +23,9 @@ typedef enum OrusJitValueKind {
     ORUS_JIT_VALUE_U32,
     ORUS_JIT_VALUE_U64,
     ORUS_JIT_VALUE_F64,
+    ORUS_JIT_VALUE_BOOL,
     ORUS_JIT_VALUE_STRING,
+    ORUS_JIT_VALUE_BOXED,
     ORUS_JIT_VALUE_KIND_COUNT,
 } OrusJitValueKind;
 
@@ -42,7 +44,9 @@ typedef enum OrusJitIROpcode {
     ORUS_JIT_IR_OP_MOVE_U32,
     ORUS_JIT_IR_OP_MOVE_U64,
     ORUS_JIT_IR_OP_MOVE_F64,
+    ORUS_JIT_IR_OP_MOVE_BOOL,
     ORUS_JIT_IR_OP_MOVE_STRING,
+    ORUS_JIT_IR_OP_MOVE_VALUE,
 
     ORUS_JIT_IR_OP_ADD_I32,
     ORUS_JIT_IR_OP_ADD_I64,
@@ -77,6 +81,41 @@ typedef enum OrusJitIROpcode {
     ORUS_JIT_IR_OP_CONCAT_STRING,
     ORUS_JIT_IR_OP_TO_STRING,
 
+    ORUS_JIT_IR_OP_TIME_STAMP,
+    ORUS_JIT_IR_OP_ARRAY_PUSH,
+    ORUS_JIT_IR_OP_PRINT,
+    ORUS_JIT_IR_OP_ASSERT_EQ,
+    ORUS_JIT_IR_OP_CALL_NATIVE,
+
+    ORUS_JIT_IR_OP_GET_ITER,
+    ORUS_JIT_IR_OP_ITER_NEXT,
+    ORUS_JIT_IR_OP_RANGE,
+
+    ORUS_JIT_IR_OP_LT_I32,
+    ORUS_JIT_IR_OP_LE_I32,
+    ORUS_JIT_IR_OP_GT_I32,
+    ORUS_JIT_IR_OP_GE_I32,
+
+    ORUS_JIT_IR_OP_LT_I64,
+    ORUS_JIT_IR_OP_LE_I64,
+    ORUS_JIT_IR_OP_GT_I64,
+    ORUS_JIT_IR_OP_GE_I64,
+
+    ORUS_JIT_IR_OP_LT_U32,
+    ORUS_JIT_IR_OP_LE_U32,
+    ORUS_JIT_IR_OP_GT_U32,
+    ORUS_JIT_IR_OP_GE_U32,
+
+    ORUS_JIT_IR_OP_LT_U64,
+    ORUS_JIT_IR_OP_LE_U64,
+    ORUS_JIT_IR_OP_GT_U64,
+    ORUS_JIT_IR_OP_GE_U64,
+
+    ORUS_JIT_IR_OP_LT_F64,
+    ORUS_JIT_IR_OP_LE_F64,
+    ORUS_JIT_IR_OP_GT_F64,
+    ORUS_JIT_IR_OP_GE_F64,
+
     ORUS_JIT_IR_OP_I32_TO_I64,
     ORUS_JIT_IR_OP_U32_TO_U64,
 
@@ -110,6 +149,44 @@ typedef struct OrusJitIRInstruction {
             uint16_t constant_index;
             uint64_t immediate_bits;
         } load_const;
+        struct {
+            uint16_t dst_reg;
+            uint16_t iterable_reg;
+        } get_iter;
+        struct {
+            uint16_t value_reg;
+            uint16_t iterator_reg;
+            uint16_t has_value_reg;
+        } iter_next;
+        struct {
+            uint16_t dst_reg;
+            uint16_t arg_count;
+            uint16_t arg_regs[3];
+        } range;
+        struct {
+            uint16_t dst_reg;
+        } time_stamp;
+        struct {
+            uint16_t array_reg;
+            uint16_t value_reg;
+        } array_push;
+        struct {
+            uint16_t dst_reg;
+            uint16_t label_reg;
+            uint16_t actual_reg;
+            uint16_t expected_reg;
+        } assert_eq;
+        struct {
+            uint16_t first_reg;
+            uint16_t arg_count;
+            uint16_t newline;
+        } print;
+        struct {
+            uint16_t dst_reg;
+            uint16_t first_arg_reg;
+            uint16_t arg_count;
+            uint16_t native_index;
+        } call_native;
         struct {
             uint16_t offset;
         } jump_short;
