@@ -339,10 +339,12 @@ TEST_CASE(test_jit_gc_safepoint) {
 ### Remaining Work to Hit the Exit Criteria
 
 1. **Quantify hot loop uplift against the interpreter**
-   - Lock in a stable benchmark corpus (numeric loops, mixed object access, FFI churn) and record interpreter baselines.
-   - Enable tier-up in the harness so the JIT runs long enough to amortize translation and cache warming costs.
-   - Instrument the `JITEntry` cache with cycle counters around `enter()` to capture steady-state throughput and regress if the 3–5× goal is missed.
-   - Capture regression tests under `make jit-benchmark-orus` so the uplift target is automatically enforced in CI.
+   - [x] Lock in a stable benchmark corpus covering numeric loops, mixed object access, and FFI churn candidates. See `docs/JIT_HOT_LOOP_CORPUS.md` for the canonical list.
+   - [x] Record interpreter-only baselines for numeric loop and mixed object workloads (`optimized_loop`, `typed_fastpath`, and `string_concat`). Interpreter runtimes are now checked into the corpus doc and exported via `scripts/measure_hot_loop_baselines.py`.
+   - [ ] Capture the FFI churn baseline once `tests/benchmarks/ffi_ping_pong_benchmark.orus` lands (blocked on host call surface finalization).
+   - [ ] Enable tier-up in the harness so the JIT runs long enough to amortize translation and cache warming costs.
+   - [ ] Instrument the `JITEntry` cache with cycle counters around `enter()` to capture steady-state throughput and regress if the 3–5× goal is missed.
+   - [ ] Capture regression tests under `make jit-benchmark-orus` so the uplift target is automatically enforced in CI.
 
 2. **Finish JIT-side GC cooperation**
    - Audit DynASM emission to ensure every allocation, write barrier, and safepoint macro expands to `GC_SAFEPOINT(vm)` before returning to Orus code.

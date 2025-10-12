@@ -10,6 +10,15 @@ The following measurements were collected by running `make test` on the release 
   counters only rise when the backend emits real native blocks. Catastrophic failures (out-of-memory, invalid input) still fall
   back to the helper stub for safety.
 
+- **Interpreter baseline corpus:** `scripts/measure_hot_loop_baselines.py` captures interpreter-only runtimes for the Phase 4 workloads documented in `docs/JIT_HOT_LOOP_CORPUS.md`. Current release-build measurements (2024-07-05) are summarized below.
+
+| Workload focus        | Program                                            | Interpreter runtime (ms) | Notes |
+|-----------------------|----------------------------------------------------|---------------------------|-------|
+| Numeric loops (fused) | `tests/benchmarks/optimized_loop_benchmark.orus`   | 4002.94                   | Matches the fused-loop workload used in the tier-up roadmap reruns. |
+| Mixed object access   | `tests/benchmarks/string_concat_benchmark.orus`    | 239.46                    | Heavily exercises boxed value churn and the string builder path. |
+| Numeric micro loops   | `tests/benchmarks/typed_fastpath_benchmark.orus`   | 950.36                    | Validates typed register windows over tight i32 arithmetic. |
+| FFI ping/pong         | _Pending (`tests/benchmarks/ffi_ping_pong_benchmark.orus`)_ | _Blocked_                 | Interpreter baseline will be published once the host-call harness lands. |
+
 - **Average tier-up latency:** 309,221 ns over 1 run
 - **Interpreter latency:** 335.49 ns per call (2.98 million calls/sec)
 - **Native entry latency:** 11.07 ns per call (90.30 million calls/sec)
