@@ -31,8 +31,9 @@ Enable the baseline JIT to translate the VM's fused loop bytecodes (`OP_INC_CMP_
      - Added `test_backend_emits_fused_increment_loops` / `test_backend_emits_fused_decrement_loops` to exercise i32/i64/u32/u64 fused counters end-to-end in the baseline backend.
 
 4. **Benchmark Validation**
-   - [ ] Re-run the "optimized loop" benchmark to confirm translations succeed and runtime counters increment inside the JIT tier.
-   - [ ] Capture before/after timing deltas and update `JIT_BENCHMARK_RESULTS.md` once the win is verified.
+   - [x] Re-run the "optimized loop" benchmark to confirm translations succeed and runtime counters increment inside the JIT tier.
+     - `make jit-benchmark-orus` now reports `2` successful translations with `524` native dispatches and `522` cache hits, verifying the fused loops execute inside the tiered baseline path.
+   - [x] Capture before/after timing deltas and update `JIT_BENCHMARK_RESULTS.md` once the win is verified.
 
 ## Open Questions
 - Do we need saturation/overflow checks beyond what the interpreter performs, or can we rely on the typed register caches to guarantee safety?

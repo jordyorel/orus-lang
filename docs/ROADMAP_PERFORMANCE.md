@@ -336,6 +336,22 @@ TEST_CASE(test_jit_gc_safepoint) {
 [ ] JIT’d code executes hot regions at 3–5× interpreter speed.
 [ ] GC operates correctly during JIT execution.
 
+### Remaining Work to Hit the Exit Criteria
+
+1. **Quantify hot loop uplift against the interpreter**
+   - [x] Lock in a stable benchmark corpus covering numeric loops, mixed object access, and FFI churn candidates. See `docs/JIT_HOT_LOOP_CORPUS.md` for the canonical list.
+   - [x] Record interpreter-only baselines for numeric loop and mixed object workloads (`optimized_loop`, `typed_fastpath`, and `string_concat`). Interpreter runtimes are now checked into the corpus doc and exported via `scripts/measure_hot_loop_baselines.py`.
+   - [ ] Capture the FFI churn baseline once `tests/benchmarks/ffi_ping_pong_benchmark.orus` lands (blocked on host call surface finalization).
+   - [ ] Enable tier-up in the harness so the JIT runs long enough to amortize translation and cache warming costs.
+   - [ ] Instrument the `JITEntry` cache with cycle counters around `enter()` to capture steady-state throughput and regress if the 3–5× goal is missed.
+   - [ ] Capture regression tests under `make jit-benchmark-orus` so the uplift target is automatically enforced in CI.
+
+2. **Finish JIT-side GC cooperation**
+   - Audit DynASM emission to ensure every allocation, write barrier, and safepoint macro expands to `GC_SAFEPOINT(vm)` before returning to Orus code.
+   - Add stress tests that trigger tiered code during heap growth (`run_gc_intensive_hotloop()`), verifying reconciliation of typed registers during collections.
+   - Exercise deoptimization paths mid-GC to guarantee interpreter + JIT frame layouts remain in sync when the collector walks the stack.
+   - Extend the GC telemetry dashboard to flag missed safepoints or reconciliation drift while native frames are active.
+
 ---
 
 ## Phase 5 — Lightweight Concurrency (Oroutines)
