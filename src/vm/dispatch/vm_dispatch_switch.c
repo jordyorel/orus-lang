@@ -3364,6 +3364,16 @@ InterpretResult vm_run_dispatch(void) {
                     break;
                 }
 
+                case OP_LOAD_U32_CONST: {
+                    handle_load_u32_const();
+                    break;
+                }
+
+                case OP_LOAD_U64_CONST: {
+                    handle_load_u64_const();
+                    break;
+                }
+
                 case OP_LOAD_F64_CONST: {
                     handle_load_f64_const();
                     break;
@@ -3387,6 +3397,8 @@ InterpretResult vm_run_dispatch(void) {
 #else
                 case OP_LOAD_I32_CONST:
                 case OP_LOAD_I64_CONST:
+                case OP_LOAD_U32_CONST:
+                case OP_LOAD_U64_CONST:
                 case OP_LOAD_F64_CONST:
                 case OP_MOVE_I32:
                 case OP_MOVE_I64:
