@@ -124,7 +124,29 @@ typedef enum OrusJitIROpcode {
     ORUS_JIT_IR_OP_JUMP_SHORT,
     ORUS_JIT_IR_OP_JUMP_BACK_SHORT,
     ORUS_JIT_IR_OP_JUMP_IF_NOT_SHORT,
+    ORUS_JIT_IR_OP_INC_CMP_JUMP,
+    ORUS_JIT_IR_OP_DEC_CMP_JUMP,
 } OrusJitIROpcode;
+
+typedef enum OrusJitIRLoopStepKind {
+    ORUS_JIT_IR_LOOP_STEP_INVALID = 0,
+    ORUS_JIT_IR_LOOP_STEP_INCREMENT = 1,
+    ORUS_JIT_IR_LOOP_STEP_DECREMENT = -1,
+} OrusJitIRLoopStepKind;
+
+typedef enum OrusJitIRLoopCompareKind {
+    ORUS_JIT_IR_LOOP_COMPARE_INVALID = 0,
+    ORUS_JIT_IR_LOOP_COMPARE_LESS_THAN,
+    ORUS_JIT_IR_LOOP_COMPARE_GREATER_THAN,
+} OrusJitIRLoopCompareKind;
+
+typedef struct OrusJitIRFusedLoopOperands {
+    uint16_t counter_reg;
+    uint16_t limit_reg;
+    int16_t jump_offset;
+    int8_t step;
+    uint8_t compare_kind; // OrusJitIRLoopCompareKind
+} OrusJitIRFusedLoopOperands;
 
 typedef struct OrusJitIRInstruction {
     OrusJitIROpcode opcode;
@@ -200,6 +222,7 @@ typedef struct OrusJitIRInstruction {
         struct {
             uint16_t back_offset;
         } loop_back;
+        OrusJitIRFusedLoopOperands fused_loop;
     } operands;
 } OrusJitIRInstruction;
 

@@ -1382,6 +1382,100 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
                 }
                 continue;
             }
+            case OP_INC_CMP_JMP:
+            case OP_DEC_CMP_JMP: {
+                if (offset + 4u >= (size_t)chunk->count) {
+                    return make_translation_result(
+                        ORUS_JIT_TRANSLATE_STATUS_INVALID_INPUT,
+                        opcode == OP_INC_CMP_JMP
+                            ? ORUS_JIT_IR_OP_INC_CMP_JUMP
+                            : ORUS_JIT_IR_OP_DEC_CMP_JUMP,
+                        ORUS_JIT_VALUE_I32, (uint32_t)offset);
+                }
+
+                uint16_t counter_reg = chunk->code[offset + 1u];
+                uint16_t limit_reg = chunk->code[offset + 2u];
+                int16_t jump_offset =
+                    (int16_t)((chunk->code[offset + 3u] << 8) |
+                              chunk->code[offset + 4u]);
+
+                OrusJitValueKind counter_kind = ORUS_JIT_GET_KIND(counter_reg);
+                OrusJitValueKind limit_kind = ORUS_JIT_GET_KIND(limit_reg);
+
+                if (counter_kind == ORUS_JIT_VALUE_BOXED &&
+                    limit_kind != ORUS_JIT_VALUE_BOXED) {
+                    counter_kind = limit_kind;
+                }
+                if (limit_kind == ORUS_JIT_VALUE_BOXED &&
+                    counter_kind != ORUS_JIT_VALUE_BOXED) {
+                    limit_kind = counter_kind;
+                }
+
+                if (counter_kind != limit_kind) {
+                    return make_translation_result(
+                        ORUS_JIT_TRANSLATE_STATUS_UNSUPPORTED_VALUE_KIND,
+                        opcode == OP_INC_CMP_JMP
+                            ? ORUS_JIT_IR_OP_INC_CMP_JUMP
+                            : ORUS_JIT_IR_OP_DEC_CMP_JUMP,
+                        counter_kind, (uint32_t)offset);
+                }
+
+                switch (counter_kind) {
+                    case ORUS_JIT_VALUE_I32:
+                    case ORUS_JIT_VALUE_I64:
+                    case ORUS_JIT_VALUE_U32:
+                    case ORUS_JIT_VALUE_U64:
+                        break;
+                    default:
+                        return make_translation_result(
+                            ORUS_JIT_TRANSLATE_STATUS_UNSUPPORTED_VALUE_KIND,
+                            opcode == OP_INC_CMP_JMP
+                                ? ORUS_JIT_IR_OP_INC_CMP_JUMP
+                                : ORUS_JIT_IR_OP_DEC_CMP_JUMP,
+                            counter_kind, (uint32_t)offset);
+                }
+
+                OrusJitIROpcode ir_opcode =
+                    (opcode == OP_INC_CMP_JMP)
+                        ? ORUS_JIT_IR_OP_INC_CMP_JUMP
+                        : ORUS_JIT_IR_OP_DEC_CMP_JUMP;
+                OrusJitIRLoopStepKind step_kind =
+                    (opcode == OP_INC_CMP_JMP)
+                        ? ORUS_JIT_IR_LOOP_STEP_INCREMENT
+                        : ORUS_JIT_IR_LOOP_STEP_DECREMENT;
+                OrusJitIRLoopCompareKind compare_kind =
+                    (opcode == OP_INC_CMP_JMP)
+                        ? ORUS_JIT_IR_LOOP_COMPARE_LESS_THAN
+                        : ORUS_JIT_IR_LOOP_COMPARE_GREATER_THAN;
+
+                ORUS_JIT_ENSURE_ROLLOUT(counter_kind, ir_opcode, offset);
+
+                OrusJitIRInstruction* inst =
+                    orus_jit_ir_program_append(program);
+                if (!inst) {
+                    return make_translation_result(
+                        ORUS_JIT_TRANSLATE_STATUS_OUT_OF_MEMORY, ir_opcode,
+                        counter_kind, (uint32_t)offset);
+                }
+
+                inst->opcode = ir_opcode;
+                inst->value_kind = counter_kind;
+                inst->bytecode_offset = (uint32_t)offset;
+                inst->operands.fused_loop.counter_reg = counter_reg;
+                inst->operands.fused_loop.limit_reg = limit_reg;
+                inst->operands.fused_loop.jump_offset = jump_offset;
+                inst->operands.fused_loop.step = (int8_t)step_kind;
+                inst->operands.fused_loop.compare_kind =
+                    (uint8_t)compare_kind;
+
+                ORUS_JIT_SET_KIND(counter_reg, counter_kind);
+
+                offset += 5u;
+                if (++instructions_since_safepoint >= safepoint_interval) {
+                    INSERT_SAFEPOINT((uint32_t)offset);
+                }
+                continue;
+            }
             case OP_LOOP_SHORT: {
                 if (offset + 1u >= (size_t)chunk->count) {
                     return make_translation_result(

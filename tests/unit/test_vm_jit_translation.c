@@ -1284,6 +1284,168 @@ cleanup:
     return success;
 }
 
+static bool test_translates_fused_increment_loop(void) {
+    initVM();
+    orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
+
+    Chunk chunk;
+    initChunk(&chunk);
+
+    Function function;
+    init_function(&function, &chunk);
+
+    const uint16_t counter_reg = FRAME_REG_START;
+    const uint16_t limit_reg = FRAME_REG_START + 1u;
+
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_I32_CONST, counter_reg,
+                                         I32_VAL(0)),
+                "expected counter load");
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_I32_CONST, limit_reg,
+                                         I32_VAL(4)),
+                "expected limit load");
+
+    const char* tag = "jit_translation";
+    writeChunk(&chunk, OP_INC_CMP_JMP, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)counter_reg, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)limit_reg, 1, 0, tag);
+    writeChunk(&chunk, 0xFF, 1, 0, tag);
+    writeChunk(&chunk, 0xFB, 1, 0, tag);
+
+    writeChunk(&chunk, OP_RETURN_VOID, 1, 0, tag);
+
+    HotPathSample sample = {0};
+    sample.func = 0;
+    sample.loop = (uint16_t)function.start;
+
+    OrusJitIRProgram program;
+    orus_jit_ir_program_init(&program);
+
+    OrusJitTranslationResult result =
+        orus_jit_translate_linear_block(&vm, &function, &sample, &program);
+
+    bool success = true;
+    if (result.status != ORUS_JIT_TRANSLATE_STATUS_OK) {
+        fprintf(stderr, "Unexpected fused loop translation failure: %s\n",
+                orus_jit_translation_status_name(result.status));
+        success = false;
+        goto cleanup;
+    }
+
+    bool saw_fused = false;
+    for (size_t i = 0; i < program.count; ++i) {
+        if (program.instructions[i].opcode == ORUS_JIT_IR_OP_INC_CMP_JUMP) {
+            const OrusJitIRInstruction* inst = &program.instructions[i];
+            ASSERT_TRUE(inst->value_kind == ORUS_JIT_VALUE_I32,
+                        "expected i32 fused loop kind");
+            ASSERT_TRUE(inst->operands.fused_loop.counter_reg == counter_reg,
+                        "counter register mismatch");
+            ASSERT_TRUE(inst->operands.fused_loop.limit_reg == limit_reg,
+                        "limit register mismatch");
+            ASSERT_TRUE(inst->operands.fused_loop.jump_offset == (int16_t)-5,
+                        "jump offset mismatch");
+            ASSERT_TRUE(
+                inst->operands.fused_loop.step ==
+                    (int8_t)ORUS_JIT_IR_LOOP_STEP_INCREMENT,
+                "step kind mismatch");
+            ASSERT_TRUE(
+                inst->operands.fused_loop.compare_kind ==
+                    (uint8_t)ORUS_JIT_IR_LOOP_COMPARE_LESS_THAN,
+                "compare kind mismatch");
+            saw_fused = true;
+            break;
+        }
+    }
+
+    ASSERT_TRUE(saw_fused, "expected fused increment IR opcode");
+
+cleanup:
+    orus_jit_ir_program_reset(&program);
+    freeChunk(&chunk);
+    freeVM();
+    return success;
+}
+
+static bool test_translates_fused_decrement_loop(void) {
+    initVM();
+    orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
+
+    Chunk chunk;
+    initChunk(&chunk);
+
+    Function function;
+    init_function(&function, &chunk);
+
+    const uint16_t counter_reg = FRAME_REG_START;
+    const uint16_t limit_reg = FRAME_REG_START + 1u;
+
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_I32_CONST, counter_reg,
+                                         I32_VAL(5)),
+                "expected counter load");
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_I32_CONST, limit_reg,
+                                         I32_VAL(0)),
+                "expected limit load");
+
+    const char* tag = "jit_translation";
+    writeChunk(&chunk, OP_DEC_CMP_JMP, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)counter_reg, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)limit_reg, 1, 0, tag);
+    writeChunk(&chunk, 0xFF, 1, 0, tag);
+    writeChunk(&chunk, 0xFB, 1, 0, tag);
+
+    writeChunk(&chunk, OP_RETURN_VOID, 1, 0, tag);
+
+    HotPathSample sample = {0};
+    sample.func = 0;
+    sample.loop = (uint16_t)function.start;
+
+    OrusJitIRProgram program;
+    orus_jit_ir_program_init(&program);
+
+    OrusJitTranslationResult result =
+        orus_jit_translate_linear_block(&vm, &function, &sample, &program);
+
+    bool success = true;
+    if (result.status != ORUS_JIT_TRANSLATE_STATUS_OK) {
+        fprintf(stderr, "Unexpected fused loop translation failure: %s\n",
+                orus_jit_translation_status_name(result.status));
+        success = false;
+        goto cleanup;
+    }
+
+    bool saw_fused = false;
+    for (size_t i = 0; i < program.count; ++i) {
+        if (program.instructions[i].opcode == ORUS_JIT_IR_OP_DEC_CMP_JUMP) {
+            const OrusJitIRInstruction* inst = &program.instructions[i];
+            ASSERT_TRUE(inst->value_kind == ORUS_JIT_VALUE_I32,
+                        "expected i32 fused loop kind");
+            ASSERT_TRUE(inst->operands.fused_loop.counter_reg == counter_reg,
+                        "counter register mismatch");
+            ASSERT_TRUE(inst->operands.fused_loop.limit_reg == limit_reg,
+                        "limit register mismatch");
+            ASSERT_TRUE(inst->operands.fused_loop.jump_offset == (int16_t)-5,
+                        "jump offset mismatch");
+            ASSERT_TRUE(
+                inst->operands.fused_loop.step ==
+                    (int8_t)ORUS_JIT_IR_LOOP_STEP_DECREMENT,
+                "step kind mismatch");
+            ASSERT_TRUE(
+                inst->operands.fused_loop.compare_kind ==
+                    (uint8_t)ORUS_JIT_IR_LOOP_COMPARE_GREATER_THAN,
+                "compare kind mismatch");
+            saw_fused = true;
+            break;
+        }
+    }
+
+    ASSERT_TRUE(saw_fused, "expected fused decrement IR opcode");
+
+cleanup:
+    orus_jit_ir_program_reset(&program);
+    freeChunk(&chunk);
+    freeVM();
+    return success;
+}
+
 int main(void) {
     struct {
         const char* name;
@@ -1316,6 +1478,10 @@ int main(void) {
          test_translates_iterator_boxed_move},
         {"translator emits runtime helper calls",
          test_translates_runtime_helpers},
+        {"translator emits fused increment loop",
+         test_translates_fused_increment_loop},
+        {"translator emits fused decrement loop",
+         test_translates_fused_decrement_loop},
     };
 
     int passed = 0;

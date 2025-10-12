@@ -6,6 +6,7 @@ This roadmap tracks the implementation work needed for the optimized loop benchm
 - **Control-flow lowering:** ✅ Completed – branch bytecodes, typed comparisons, and their backend emission now translate end-to-end on both x86-64 and ARM64 with regression coverage in place.
 - **Local/iterator bytecodes:** ✅ Completed – translator keeps frame window ops, range construction, and iterator traversal inside the baseline tier on both backends with regression coverage.
 - **Runtime helper calls:** ✅ Completed – builtin call, print, assert, and array helpers stay inside the tier through dedicated IR and backend stubs.
+- **Fused loop bytecodes:** 🛠️ In progress – IR models the fused increment/decrement patterns and the translator now records their counter, bounds, and step metadata ahead of backend lowering.
 
 ## Completed: Control-flow lowering
 1. ✅ `orus_jit_translate_linear_block` now translates the VM's branch and comparison opcodes into IR instead of bailing out with `UNHANDLED_OPCODE`.
@@ -21,5 +22,6 @@ This roadmap tracks the implementation work needed for the optimized loop benchm
 ## Next Steps (after control-flow lowering)
 - **Benchmark validation:** Confirm the optimized loop benchmark tiers up under the expanded helper set and update rollout thresholds if additional bytecodes appear during translation.
 - **Helper Calls:** ✅ Baseline IR now handles `OP_TIME_STAMP`, `OP_ARRAY_PUSH_R`, `OP_PRINT_*`, `OP_ASSERT_EQ_R`, and `OP_CALL_NATIVE_R` via native helpers on both backends with regression coverage.
+- **Fused Loop Lowering:** Implement backend templates or helper stubs for the new fused loop IR opcodes on x86-64 and ARM64, then re-run the optimized loop benchmark to confirm tier-up.
 
 Progress on each section should be reflected here as work completes.
