@@ -11,6 +11,7 @@
 /orus
 /orus_debug
 /orus-prof
+/orus-prof_debug
 orus_ci
 /test-register
 /test-parser
