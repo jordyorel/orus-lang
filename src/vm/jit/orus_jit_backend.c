@@ -469,9 +469,7 @@ jit_bailout_and_deopt(struct VM* vm_instance,
     vm_instance->jit_native_type_deopts++;
 
     if (block) {
-        if (block->program.loop_index < VM_MAX_PROFILED_LOOPS) {
-            vm_instance->jit_loop_blocklist[block->program.loop_index] = true;
-        }
+        vm_instance->jit_loop_blocklist[block->program.loop_index] = true;
 
         JITDeoptTrigger trigger = {
             .function_index = block->program.function_index,
@@ -1241,7 +1239,9 @@ orus_jit_native_compare_op(struct VM* vm_instance,
         case ORUS_JIT_IR_OP_LT_I32:
         case ORUS_JIT_IR_OP_LE_I32:
         case ORUS_JIT_IR_OP_GT_I32:
-        case ORUS_JIT_IR_OP_GE_I32: {
+        case ORUS_JIT_IR_OP_GE_I32:
+        case ORUS_JIT_IR_OP_EQ_I32:
+        case ORUS_JIT_IR_OP_NE_I32: {
             int32_t lhs_value = 0;
             int32_t rhs_value = 0;
             if (!jit_read_i32(vm_instance, lhs, &lhs_value) ||
@@ -1262,6 +1262,12 @@ orus_jit_native_compare_op(struct VM* vm_instance,
                 case ORUS_JIT_IR_OP_GE_I32:
                     result = lhs_value >= rhs_value;
                     break;
+                case ORUS_JIT_IR_OP_EQ_I32:
+                    result = lhs_value == rhs_value;
+                    break;
+                case ORUS_JIT_IR_OP_NE_I32:
+                    result = lhs_value != rhs_value;
+                    break;
                 default:
                     break;
             }
@@ -1270,7 +1276,9 @@ orus_jit_native_compare_op(struct VM* vm_instance,
         case ORUS_JIT_IR_OP_LT_I64:
         case ORUS_JIT_IR_OP_LE_I64:
         case ORUS_JIT_IR_OP_GT_I64:
-        case ORUS_JIT_IR_OP_GE_I64: {
+        case ORUS_JIT_IR_OP_GE_I64:
+        case ORUS_JIT_IR_OP_EQ_I64:
+        case ORUS_JIT_IR_OP_NE_I64: {
             int64_t lhs_value = 0;
             int64_t rhs_value = 0;
             if (!jit_read_i64(vm_instance, lhs, &lhs_value) ||
@@ -1291,6 +1299,12 @@ orus_jit_native_compare_op(struct VM* vm_instance,
                 case ORUS_JIT_IR_OP_GE_I64:
                     result = lhs_value >= rhs_value;
                     break;
+                case ORUS_JIT_IR_OP_EQ_I64:
+                    result = lhs_value == rhs_value;
+                    break;
+                case ORUS_JIT_IR_OP_NE_I64:
+                    result = lhs_value != rhs_value;
+                    break;
                 default:
                     break;
             }
@@ -1299,7 +1313,9 @@ orus_jit_native_compare_op(struct VM* vm_instance,
         case ORUS_JIT_IR_OP_LT_U32:
         case ORUS_JIT_IR_OP_LE_U32:
         case ORUS_JIT_IR_OP_GT_U32:
-        case ORUS_JIT_IR_OP_GE_U32: {
+        case ORUS_JIT_IR_OP_GE_U32:
+        case ORUS_JIT_IR_OP_EQ_U32:
+        case ORUS_JIT_IR_OP_NE_U32: {
             uint32_t lhs_value = 0;
             uint32_t rhs_value = 0;
             if (!jit_read_u32(vm_instance, lhs, &lhs_value) ||
@@ -1320,6 +1336,12 @@ orus_jit_native_compare_op(struct VM* vm_instance,
                 case ORUS_JIT_IR_OP_GE_U32:
                     result = lhs_value >= rhs_value;
                     break;
+                case ORUS_JIT_IR_OP_EQ_U32:
+                    result = lhs_value == rhs_value;
+                    break;
+                case ORUS_JIT_IR_OP_NE_U32:
+                    result = lhs_value != rhs_value;
+                    break;
                 default:
                     break;
             }
@@ -1328,7 +1350,9 @@ orus_jit_native_compare_op(struct VM* vm_instance,
         case ORUS_JIT_IR_OP_LT_U64:
         case ORUS_JIT_IR_OP_LE_U64:
         case ORUS_JIT_IR_OP_GT_U64:
-        case ORUS_JIT_IR_OP_GE_U64: {
+        case ORUS_JIT_IR_OP_GE_U64:
+        case ORUS_JIT_IR_OP_EQ_U64:
+        case ORUS_JIT_IR_OP_NE_U64: {
             uint64_t lhs_value = 0;
             uint64_t rhs_value = 0;
             if (!jit_read_u64(vm_instance, lhs, &lhs_value) ||
@@ -1349,6 +1373,12 @@ orus_jit_native_compare_op(struct VM* vm_instance,
                 case ORUS_JIT_IR_OP_GE_U64:
                     result = lhs_value >= rhs_value;
                     break;
+                case ORUS_JIT_IR_OP_EQ_U64:
+                    result = lhs_value == rhs_value;
+                    break;
+                case ORUS_JIT_IR_OP_NE_U64:
+                    result = lhs_value != rhs_value;
+                    break;
                 default:
                     break;
             }
@@ -1357,7 +1387,9 @@ orus_jit_native_compare_op(struct VM* vm_instance,
         case ORUS_JIT_IR_OP_LT_F64:
         case ORUS_JIT_IR_OP_LE_F64:
         case ORUS_JIT_IR_OP_GT_F64:
-        case ORUS_JIT_IR_OP_GE_F64: {
+        case ORUS_JIT_IR_OP_GE_F64:
+        case ORUS_JIT_IR_OP_EQ_F64:
+        case ORUS_JIT_IR_OP_NE_F64: {
             double lhs_value = 0.0;
             double rhs_value = 0.0;
             if (!jit_read_f64(vm_instance, lhs, &lhs_value) ||
@@ -1378,8 +1410,29 @@ orus_jit_native_compare_op(struct VM* vm_instance,
                 case ORUS_JIT_IR_OP_GE_F64:
                     result = lhs_value >= rhs_value;
                     break;
+                case ORUS_JIT_IR_OP_EQ_F64:
+                    result = lhs_value == rhs_value;
+                    break;
+                case ORUS_JIT_IR_OP_NE_F64:
+                    result = lhs_value != rhs_value;
+                    break;
                 default:
                     break;
+            }
+            break;
+        }
+        case ORUS_JIT_IR_OP_EQ_BOOL:
+        case ORUS_JIT_IR_OP_NE_BOOL: {
+            bool lhs_value = false;
+            bool rhs_value = false;
+            if (!jit_read_bool(vm_instance, lhs, &lhs_value) ||
+                !jit_read_bool(vm_instance, rhs, &rhs_value)) {
+                jit_bailout_and_deopt(vm_instance, block);
+                return false;
+            }
+            result = lhs_value == rhs_value;
+            if (opcode == ORUS_JIT_IR_OP_NE_BOOL) {
+                result = !result;
             }
             break;
         }
@@ -1427,6 +1480,25 @@ orus_jit_native_convert_u32_to_u64(struct VM* vm_instance,
     }
 
     vm_store_u64_typed_hot(dst, (uint64_t)value);
+    return true;
+}
+
+static bool
+orus_jit_native_convert_u32_to_i32(struct VM* vm_instance,
+                                   OrusJitNativeBlock* block,
+                                   uint16_t dst,
+                                   uint16_t src) {
+    if (!vm_instance) {
+        return false;
+    }
+
+    uint32_t value = 0u;
+    if (!jit_read_u32(vm_instance, src, &value)) {
+        jit_bailout_and_deopt(vm_instance, block);
+        return false;
+    }
+
+    vm_store_i32_typed_hot(dst, (int32_t)value);
     return true;
 }
 
@@ -1912,22 +1984,34 @@ orus_jit_execute_block(struct VM* vm_instance, const OrusJitNativeBlock* block) 
             case ORUS_JIT_IR_OP_LE_I32:
             case ORUS_JIT_IR_OP_GT_I32:
             case ORUS_JIT_IR_OP_GE_I32:
+            case ORUS_JIT_IR_OP_EQ_I32:
+            case ORUS_JIT_IR_OP_NE_I32:
             case ORUS_JIT_IR_OP_LT_I64:
             case ORUS_JIT_IR_OP_LE_I64:
             case ORUS_JIT_IR_OP_GT_I64:
             case ORUS_JIT_IR_OP_GE_I64:
+            case ORUS_JIT_IR_OP_EQ_I64:
+            case ORUS_JIT_IR_OP_NE_I64:
             case ORUS_JIT_IR_OP_LT_U32:
             case ORUS_JIT_IR_OP_LE_U32:
             case ORUS_JIT_IR_OP_GT_U32:
             case ORUS_JIT_IR_OP_GE_U32:
+            case ORUS_JIT_IR_OP_EQ_U32:
+            case ORUS_JIT_IR_OP_NE_U32:
             case ORUS_JIT_IR_OP_LT_U64:
             case ORUS_JIT_IR_OP_LE_U64:
             case ORUS_JIT_IR_OP_GT_U64:
             case ORUS_JIT_IR_OP_GE_U64:
+            case ORUS_JIT_IR_OP_EQ_U64:
+            case ORUS_JIT_IR_OP_NE_U64:
             case ORUS_JIT_IR_OP_LT_F64:
             case ORUS_JIT_IR_OP_LE_F64:
             case ORUS_JIT_IR_OP_GT_F64:
-            case ORUS_JIT_IR_OP_GE_F64: {
+            case ORUS_JIT_IR_OP_GE_F64:
+            case ORUS_JIT_IR_OP_EQ_F64:
+            case ORUS_JIT_IR_OP_NE_F64:
+            case ORUS_JIT_IR_OP_EQ_BOOL:
+            case ORUS_JIT_IR_OP_NE_BOOL: {
                 if (!orus_jit_native_compare_op(vm_instance,
                                                 (OrusJitNativeBlock*)block,
                                                 inst->opcode,
@@ -2021,6 +2105,12 @@ orus_jit_execute_block(struct VM* vm_instance, const OrusJitNativeBlock* block) 
                 break;
             case ORUS_JIT_IR_OP_U32_TO_U64:
                 orus_jit_native_convert_u32_to_u64(vm_instance,
+                                                   (OrusJitNativeBlock*)block,
+                                                   inst->operands.unary.dst_reg,
+                                                   inst->operands.unary.src_reg);
+                break;
+            case ORUS_JIT_IR_OP_U32_TO_I32:
+                orus_jit_native_convert_u32_to_i32(vm_instance,
                                                    (OrusJitNativeBlock*)block,
                                                    inst->operands.unary.dst_reg,
                                                    inst->operands.unary.src_reg);
@@ -2601,22 +2691,34 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
             case ORUS_JIT_IR_OP_LE_I32:
             case ORUS_JIT_IR_OP_GT_I32:
             case ORUS_JIT_IR_OP_GE_I32:
+            case ORUS_JIT_IR_OP_EQ_I32:
+            case ORUS_JIT_IR_OP_NE_I32:
             case ORUS_JIT_IR_OP_LT_I64:
             case ORUS_JIT_IR_OP_LE_I64:
             case ORUS_JIT_IR_OP_GT_I64:
             case ORUS_JIT_IR_OP_GE_I64:
+            case ORUS_JIT_IR_OP_EQ_I64:
+            case ORUS_JIT_IR_OP_NE_I64:
             case ORUS_JIT_IR_OP_LT_U32:
             case ORUS_JIT_IR_OP_LE_U32:
             case ORUS_JIT_IR_OP_GT_U32:
             case ORUS_JIT_IR_OP_GE_U32:
+            case ORUS_JIT_IR_OP_EQ_U32:
+            case ORUS_JIT_IR_OP_NE_U32:
             case ORUS_JIT_IR_OP_LT_U64:
             case ORUS_JIT_IR_OP_LE_U64:
             case ORUS_JIT_IR_OP_GT_U64:
             case ORUS_JIT_IR_OP_GE_U64:
+            case ORUS_JIT_IR_OP_EQ_U64:
+            case ORUS_JIT_IR_OP_NE_U64:
             case ORUS_JIT_IR_OP_LT_F64:
             case ORUS_JIT_IR_OP_LE_F64:
             case ORUS_JIT_IR_OP_GT_F64:
             case ORUS_JIT_IR_OP_GE_F64:
+            case ORUS_JIT_IR_OP_EQ_F64:
+            case ORUS_JIT_IR_OP_NE_F64:
+            case ORUS_JIT_IR_OP_EQ_BOOL:
+            case ORUS_JIT_IR_OP_NE_BOOL:
                 if (inst->value_kind != ORUS_JIT_VALUE_BOOL) {
                     return JIT_BACKEND_ASSEMBLY_ERROR;
                 }
@@ -2667,11 +2769,16 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                     return JIT_BACKEND_ASSEMBLY_ERROR;
                 }
                 break;
-            case ORUS_JIT_IR_OP_U32_TO_U64:
-                if (inst->value_kind != ORUS_JIT_VALUE_U64) {
-                    return JIT_BACKEND_ASSEMBLY_ERROR;
-                }
-                break;
+        case ORUS_JIT_IR_OP_U32_TO_U64:
+            if (inst->value_kind != ORUS_JIT_VALUE_U64) {
+                return JIT_BACKEND_ASSEMBLY_ERROR;
+            }
+            break;
+        case ORUS_JIT_IR_OP_U32_TO_I32:
+            if (inst->value_kind != ORUS_JIT_VALUE_I32) {
+                return JIT_BACKEND_ASSEMBLY_ERROR;
+            }
+            break;
             case ORUS_JIT_IR_OP_SAFEPOINT:
             case ORUS_JIT_IR_OP_LOOP_BACK:
             case ORUS_JIT_IR_OP_RETURN:
@@ -3350,22 +3457,34 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
             case ORUS_JIT_IR_OP_LE_I32:
             case ORUS_JIT_IR_OP_GT_I32:
             case ORUS_JIT_IR_OP_GE_I32:
+            case ORUS_JIT_IR_OP_EQ_I32:
+            case ORUS_JIT_IR_OP_NE_I32:
             case ORUS_JIT_IR_OP_LT_I64:
             case ORUS_JIT_IR_OP_LE_I64:
             case ORUS_JIT_IR_OP_GT_I64:
             case ORUS_JIT_IR_OP_GE_I64:
+            case ORUS_JIT_IR_OP_EQ_I64:
+            case ORUS_JIT_IR_OP_NE_I64:
             case ORUS_JIT_IR_OP_LT_U32:
             case ORUS_JIT_IR_OP_LE_U32:
             case ORUS_JIT_IR_OP_GT_U32:
             case ORUS_JIT_IR_OP_GE_U32:
+            case ORUS_JIT_IR_OP_EQ_U32:
+            case ORUS_JIT_IR_OP_NE_U32:
             case ORUS_JIT_IR_OP_LT_U64:
             case ORUS_JIT_IR_OP_LE_U64:
             case ORUS_JIT_IR_OP_GT_U64:
             case ORUS_JIT_IR_OP_GE_U64:
+            case ORUS_JIT_IR_OP_EQ_U64:
+            case ORUS_JIT_IR_OP_NE_U64:
             case ORUS_JIT_IR_OP_LT_F64:
             case ORUS_JIT_IR_OP_LE_F64:
             case ORUS_JIT_IR_OP_GT_F64:
-            case ORUS_JIT_IR_OP_GE_F64: {
+            case ORUS_JIT_IR_OP_GE_F64:
+            case ORUS_JIT_IR_OP_EQ_F64:
+            case ORUS_JIT_IR_OP_NE_F64:
+            case ORUS_JIT_IR_OP_EQ_BOOL:
+            case ORUS_JIT_IR_OP_NE_BOOL: {
                 if (!orus_jit_code_buffer_emit_bytes(&code, MOV_RDI_R12,
                                                      sizeof(MOV_RDI_R12)) ||
                     !orus_jit_code_buffer_emit_bytes(&code, MOV_RSI_RBX_BYTES,
@@ -3645,6 +3764,27 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                     !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
                     !orus_jit_code_buffer_emit_u64(&code,
                         (uint64_t)(uintptr_t)&orus_jit_native_convert_u32_to_u64) ||
+                    !orus_jit_code_buffer_emit_bytes(&code, CALL_RAX,
+                                                     sizeof(CALL_RAX))) {
+                    RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_U32_TO_I32: {
+                if (!orus_jit_code_buffer_emit_bytes(&code, MOV_RDI_R12,
+                                                     sizeof(MOV_RDI_R12)) ||
+                    !orus_jit_code_buffer_emit_bytes(&code, MOV_RSI_RBX_BYTES,
+                                                     sizeof(MOV_RSI_RBX_BYTES)) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xBA) ||
+                    !orus_jit_code_buffer_emit_u32(
+                        &code, (uint32_t)inst->operands.unary.dst_reg) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xB9) ||
+                    !orus_jit_code_buffer_emit_u32(
+                        &code, (uint32_t)inst->operands.unary.src_reg) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0x48) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
+                    !orus_jit_code_buffer_emit_u64(
+                        &code, (uint64_t)(uintptr_t)&orus_jit_native_convert_u32_to_i32) ||
                     !orus_jit_code_buffer_emit_bytes(&code, CALL_RAX,
                                                      sizeof(CALL_RAX))) {
                     RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
@@ -4474,22 +4614,34 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
             case ORUS_JIT_IR_OP_LE_I32:
             case ORUS_JIT_IR_OP_GT_I32:
             case ORUS_JIT_IR_OP_GE_I32:
+            case ORUS_JIT_IR_OP_EQ_I32:
+            case ORUS_JIT_IR_OP_NE_I32:
             case ORUS_JIT_IR_OP_LT_I64:
             case ORUS_JIT_IR_OP_LE_I64:
             case ORUS_JIT_IR_OP_GT_I64:
             case ORUS_JIT_IR_OP_GE_I64:
+            case ORUS_JIT_IR_OP_EQ_I64:
+            case ORUS_JIT_IR_OP_NE_I64:
             case ORUS_JIT_IR_OP_LT_U32:
             case ORUS_JIT_IR_OP_LE_U32:
             case ORUS_JIT_IR_OP_GT_U32:
             case ORUS_JIT_IR_OP_GE_U32:
+            case ORUS_JIT_IR_OP_EQ_U32:
+            case ORUS_JIT_IR_OP_NE_U32:
             case ORUS_JIT_IR_OP_LT_U64:
             case ORUS_JIT_IR_OP_LE_U64:
             case ORUS_JIT_IR_OP_GT_U64:
             case ORUS_JIT_IR_OP_GE_U64:
+            case ORUS_JIT_IR_OP_EQ_U64:
+            case ORUS_JIT_IR_OP_NE_U64:
             case ORUS_JIT_IR_OP_LT_F64:
             case ORUS_JIT_IR_OP_LE_F64:
             case ORUS_JIT_IR_OP_GT_F64:
             case ORUS_JIT_IR_OP_GE_F64:
+            case ORUS_JIT_IR_OP_EQ_F64:
+            case ORUS_JIT_IR_OP_NE_F64:
+            case ORUS_JIT_IR_OP_EQ_BOOL:
+            case ORUS_JIT_IR_OP_NE_BOOL:
                 if (inst->value_kind != ORUS_JIT_VALUE_BOOL) {
                     return JIT_BACKEND_ASSEMBLY_ERROR;
                 }
@@ -4709,22 +4861,34 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
             case ORUS_JIT_IR_OP_LE_I32:
             case ORUS_JIT_IR_OP_GT_I32:
             case ORUS_JIT_IR_OP_GE_I32:
+            case ORUS_JIT_IR_OP_EQ_I32:
+            case ORUS_JIT_IR_OP_NE_I32:
             case ORUS_JIT_IR_OP_LT_I64:
             case ORUS_JIT_IR_OP_LE_I64:
             case ORUS_JIT_IR_OP_GT_I64:
             case ORUS_JIT_IR_OP_GE_I64:
+            case ORUS_JIT_IR_OP_EQ_I64:
+            case ORUS_JIT_IR_OP_NE_I64:
             case ORUS_JIT_IR_OP_LT_U32:
             case ORUS_JIT_IR_OP_LE_U32:
             case ORUS_JIT_IR_OP_GT_U32:
             case ORUS_JIT_IR_OP_GE_U32:
+            case ORUS_JIT_IR_OP_EQ_U32:
+            case ORUS_JIT_IR_OP_NE_U32:
             case ORUS_JIT_IR_OP_LT_U64:
             case ORUS_JIT_IR_OP_LE_U64:
             case ORUS_JIT_IR_OP_GT_U64:
             case ORUS_JIT_IR_OP_GE_U64:
+            case ORUS_JIT_IR_OP_EQ_U64:
+            case ORUS_JIT_IR_OP_NE_U64:
             case ORUS_JIT_IR_OP_LT_F64:
             case ORUS_JIT_IR_OP_LE_F64:
             case ORUS_JIT_IR_OP_GT_F64:
-            case ORUS_JIT_IR_OP_GE_F64: {
+            case ORUS_JIT_IR_OP_GE_F64:
+            case ORUS_JIT_IR_OP_EQ_F64:
+            case ORUS_JIT_IR_OP_NE_F64:
+            case ORUS_JIT_IR_OP_EQ_BOOL:
+            case ORUS_JIT_IR_OP_NE_BOOL: {
                 if (!orus_jit_a64_code_buffer_emit_u32(&code, A64_LDR_X(0u, 31u, 0u)) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, A64_LDR_X(1u, 31u, 1u)) ||
                     !orus_jit_a64_emit_mov_imm64_buffer(
@@ -5032,6 +5196,23 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                     !orus_jit_a64_emit_mov_imm64_buffer(
                         &code, 16u,
                         (uint64_t)(uintptr_t)&orus_jit_native_convert_u32_to_u64) ||
+                    !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
+                    !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
+                    !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
+                    A64_RETURN(JIT_BACKEND_OUT_OF_MEMORY);
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_U32_TO_I32: {
+                if (!orus_jit_a64_code_buffer_emit_u32(&code, A64_LDR_X(0u, 31u, 0u)) ||
+                    !orus_jit_a64_code_buffer_emit_u32(&code, A64_LDR_X(1u, 31u, 1u)) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 2u, (uint64_t)inst->operands.unary.dst_reg) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 3u, (uint64_t)inst->operands.unary.src_reg) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 16u,
+                        (uint64_t)(uintptr_t)&orus_jit_native_convert_u32_to_i32) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
                     !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {

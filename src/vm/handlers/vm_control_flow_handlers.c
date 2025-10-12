@@ -13,6 +13,8 @@
 #include "vm/vm_control_flow.h"
 #include "vm/vm_profiling.h"
 
+#include <stddef.h>
+
 // ====== Jump Operation Handlers ======
 
 bool handle_jump_short(void) {
@@ -34,8 +36,20 @@ bool handle_jump_if_not_short(void) {
 bool handle_loop_short(void) {
     uint8_t offset = READ_BYTE();
 
+    if (vm.chunk && vm.chunk->code) {
+        size_t current_offset = (size_t)(vm.ip - vm.chunk->code);
+        if (offset <= current_offset) {
+            size_t loop_offset = current_offset - (size_t)offset;
+            if (loop_offset < (size_t)vm.chunk->count &&
+                loop_offset <= (size_t)UINT16_MAX) {
+                vm_profile_record_loop_hit(&vm, (LoopId)loop_offset);
+            }
+        }
+    }
+
     // Hot path detection: Profile short loop iterations (tight loops)
-    if (g_profiling.isActive && (g_profiling.enabledFlags & PROFILE_HOT_PATHS)) {
+    if (g_profiling.isActive && (g_profiling.enabledFlags & PROFILE_HOT_PATHS) &&
+        vm.chunk && vm.chunk->code) {
         void* codeAddress = (void*)(vm.ip - vm.chunk->code);
         uint64_t sampledIterations = profileLoopHit(codeAddress);
         if (sampledIterations > 0) {
@@ -62,8 +76,20 @@ bool handle_jump_if_not_long(void) {
 bool handle_loop_long(void) {
     uint16_t offset = READ_SHORT();
 
+    if (vm.chunk && vm.chunk->code) {
+        size_t current_offset = (size_t)(vm.ip - vm.chunk->code);
+        if (offset <= current_offset) {
+            size_t loop_offset = current_offset - (size_t)offset;
+            if (loop_offset < (size_t)vm.chunk->count &&
+                loop_offset <= (size_t)UINT16_MAX) {
+                vm_profile_record_loop_hit(&vm, (LoopId)loop_offset);
+            }
+        }
+    }
+
     // Hot path detection: Profile loop iterations
-    if (g_profiling.isActive && (g_profiling.enabledFlags & PROFILE_HOT_PATHS)) {
+    if (g_profiling.isActive && (g_profiling.enabledFlags & PROFILE_HOT_PATHS) &&
+        vm.chunk && vm.chunk->code) {
         void* codeAddress = (void*)(vm.ip - vm.chunk->code);
         uint64_t sampledIterations = profileLoopHit(codeAddress);
         if (sampledIterations > 0) {

@@ -329,7 +329,7 @@ typedef struct Function Function;
 typedef uint16_t FunctionId;
 typedef uint16_t LoopId;
 
-#define VM_MAX_PROFILED_LOOPS 256
+#define VM_MAX_PROFILED_LOOPS 65536
 
 typedef struct {
     FunctionId func;

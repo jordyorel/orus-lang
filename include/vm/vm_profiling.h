@@ -243,7 +243,7 @@ extern size_t gcThreshold;
 void queue_tier_up(VMState* vm, const HotPathSample* sample);
 
 static inline bool vm_profile_tick(VMState* vm, FunctionId func, LoopId loop) {
-    if (!vm || loop >= VM_MAX_PROFILED_LOOPS) {
+    if (!vm) {
         return false;
     }
 
@@ -259,6 +259,28 @@ static inline bool vm_profile_tick(VMState* vm, FunctionId func, LoopId loop) {
     }
 
     return false;
+}
+
+static inline void vm_profile_record_loop_hit(VMState* vm_state, LoopId loop_id) {
+    if (!vm_state) {
+        return;
+    }
+
+    FunctionId function_id = UINT16_MAX;
+    CallFrame* frame = vm_state->register_file.current_frame;
+    if (frame && frame->functionIndex != UINT16_MAX &&
+        frame->functionIndex < (uint16_t)vm_state->functionCount) {
+        function_id = frame->functionIndex;
+    } else if (vm_state->chunk) {
+        for (int i = 0; i < vm_state->functionCount; ++i) {
+            if (vm_state->functions[i].chunk == vm_state->chunk) {
+                function_id = (FunctionId)i;
+                break;
+            }
+        }
+    }
+
+    vm_profile_tick(vm_state, function_id, loop_id);
 }
 
 static inline void profileRegisterAllocation(uint8_t regNum, bool isSpill, bool isReuse) {
