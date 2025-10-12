@@ -82,6 +82,10 @@ static bool test_backend_helper_stub_executes(void) {
     OrusJitIRInstruction instructions[2];
     memset(instructions, 0, sizeof(instructions));
 
+    Chunk chunk;
+    memset(&chunk, 0, sizeof(chunk));
+    chunk.count = 1;
+
     instructions[0].opcode = ORUS_JIT_IR_OP_ADD_I32;
     instructions[0].value_kind = ORUS_JIT_VALUE_I32;
     instructions[0].operands.arithmetic.dst_reg = dst0;
@@ -92,6 +96,7 @@ static bool test_backend_helper_stub_executes(void) {
 
     OrusJitIRProgram program;
     init_ir_program(&program, instructions, 2);
+    program.source_chunk = &chunk;
 
     JITEntry entry;
     bool success = compile_program(backend, &program, &entry);
