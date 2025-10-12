@@ -337,6 +337,61 @@ cleanup:
     return success;
 }
 
+static bool test_translates_u32_to_i32_conversion(void) {
+    initVM();
+    orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
+
+    Chunk chunk;
+    initChunk(&chunk);
+
+    Function function;
+    init_function(&function, &chunk);
+
+    const uint16_t src_reg = FRAME_REG_START;
+    const uint16_t dst_reg = FRAME_REG_START + 1u;
+
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_U32_CONST, src_reg,
+                                         U32_VAL(1234u)),
+                "expected u32 constant load");
+
+    writeChunk(&chunk, OP_U32_TO_I32_R, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)dst_reg, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)src_reg, 1, 0, "jit_translation");
+
+    writeChunk(&chunk, OP_RETURN_VOID, 1, 0, "jit_translation");
+
+    HotPathSample sample = {0};
+    sample.func = 0;
+    sample.loop = (uint16_t)function.start;
+
+    OrusJitIRProgram program;
+    orus_jit_ir_program_init(&program);
+
+    OrusJitTranslationResult result =
+        orus_jit_translate_linear_block(&vm, &function, &sample, &program);
+
+    bool success = true;
+
+    if (result.status != ORUS_JIT_TRANSLATE_STATUS_OK) {
+        fprintf(stderr, "Unexpected translation failure for u32->i32: %s\n",
+                orus_jit_translation_status_name(result.status));
+        success = false;
+        goto cleanup;
+    }
+
+    ASSERT_TRUE(program.count >= 3, "expected conversion instructions");
+    ASSERT_TRUE(program.instructions[1].opcode == ORUS_JIT_IR_OP_U32_TO_I32,
+                "second instruction should be conversion");
+    ASSERT_TRUE(program.instructions[1].operands.unary.dst_reg == dst_reg,
+                "conversion should target dst register");
+
+cleanup:
+    orus_jit_ir_program_reset(&program);
+    freeChunk(&chunk);
+    freeVM();
+    return success;
+}
+
 static bool test_rollout_blocks_f64_before_stage(void) {
     initVM();
     orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_WIDE_INTS);
@@ -506,6 +561,78 @@ cleanup:
     return success;
 }
 
+static bool test_translates_eq_r_with_typed_inputs(void) {
+    initVM();
+    orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
+
+    Chunk chunk;
+    initChunk(&chunk);
+
+    Function function;
+    init_function(&function, &chunk);
+
+    const uint16_t dst = FRAME_REG_START;
+    const uint16_t lhs = FRAME_REG_START + 1u;
+    const uint16_t rhs = FRAME_REG_START + 2u;
+
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_I64_CONST, lhs,
+                                         I64_VAL(4)),
+                "expected lhs constant");
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_I64_CONST, rhs,
+                                         I64_VAL(6)),
+                "expected rhs constant");
+
+    writeChunk(&chunk, OP_EQ_R, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)dst, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)lhs, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)rhs, 1, 0, "jit_translation");
+
+    writeChunk(&chunk, OP_RETURN_VOID, 1, 0, "jit_translation");
+
+    HotPathSample sample = {0};
+    sample.func = 0;
+    sample.loop = (uint16_t)function.start;
+
+    OrusJitIRProgram program;
+    orus_jit_ir_program_init(&program);
+
+    OrusJitTranslationResult result =
+        orus_jit_translate_linear_block(&vm, &function, &sample, &program);
+
+    bool success = true;
+    if (result.status != ORUS_JIT_TRANSLATE_STATUS_OK) {
+        fprintf(stderr, "Unexpected translation failure: %s\n",
+                orus_jit_translation_status_name(result.status));
+        success = false;
+        goto cleanup;
+    }
+
+    bool found_eq = false;
+    for (size_t i = 0; i < program.count; ++i) {
+        const OrusJitIRInstruction* inst = &program.instructions[i];
+        if (inst->opcode == ORUS_JIT_IR_OP_EQ_I64) {
+            ASSERT_TRUE(inst->value_kind == ORUS_JIT_VALUE_BOOL,
+                        "eq should yield bool kind");
+            ASSERT_TRUE(inst->operands.arithmetic.dst_reg == dst,
+                        "dst register mismatch");
+            ASSERT_TRUE(inst->operands.arithmetic.lhs_reg == lhs,
+                        "lhs register mismatch");
+            ASSERT_TRUE(inst->operands.arithmetic.rhs_reg == rhs,
+                        "rhs register mismatch");
+            found_eq = true;
+            break;
+        }
+    }
+
+    ASSERT_TRUE(found_eq, "expected eq IR opcode");
+
+cleanup:
+    orus_jit_ir_program_reset(&program);
+    freeChunk(&chunk);
+    freeVM();
+    return success;
+}
+
 static bool test_translates_loop_with_forward_exit(void) {
     initVM();
     orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
@@ -546,7 +673,7 @@ static bool test_translates_loop_with_forward_exit(void) {
     writeChunk(&chunk, (uint8_t)step, 1, 0, "jit_translation");
 
     writeChunk(&chunk, OP_LOOP_SHORT, 1, 0, "jit_translation");
-    writeChunk(&chunk, 11u, 1, 0, "jit_translation");
+    writeChunk(&chunk, 13u, 1, 0, "jit_translation");
 
     writeChunk(&chunk, OP_RETURN_VOID, 1, 0, "jit_translation");
 
@@ -603,7 +730,7 @@ static bool test_translates_loop_with_forward_exit(void) {
                 found_add = true;
                 break;
             case ORUS_JIT_IR_OP_LOOP_BACK:
-                ASSERT_TRUE(inst->operands.loop_back.back_offset == 11u,
+                ASSERT_TRUE(inst->operands.loop_back.back_offset == 13u,
                             "loop back offset mismatch");
                 found_loop_back = true;
                 break;
@@ -1456,12 +1583,15 @@ int main(void) {
         {"translator reports unsupported constant", test_reports_constant_kind_failure},
         {"translator emits string concat", test_translates_string_concat},
         {"translator emits i32 to i64 conversion", test_translates_i32_to_i64_conversion},
+        {"translator emits u32 to i32 conversion", test_translates_u32_to_i32_conversion},
         {"rollout blocks f64 before float stage",
          test_rollout_blocks_f64_before_stage},
         {"queue_tier_up skips stub install on unsupported",
          test_queue_tier_up_skips_stub_install_on_unsupported},
         {"translator emits i32 comparison and branch",
          test_translates_i32_comparison_branch},
+        {"translator lowers eq_r with typed inputs",
+         test_translates_eq_r_with_typed_inputs},
         {"translator emits loop with forward exit",
          test_translates_loop_with_forward_exit},
         {"translator emits if/else jump sequence",

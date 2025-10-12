@@ -28,6 +28,7 @@
 #include <math.h>
 #include <limits.h>
 #include <inttypes.h>
+#include <stddef.h>
 
 #define VM_HANDLE_INC_I32_SLOW_PATH(reg) \
     do { \
@@ -4079,6 +4080,16 @@ InterpretResult vm_run_dispatch(void) {
         uint8_t limit_reg = *vm.ip++;
         int16_t offset = (int16_t)READ_SHORT();
 
+        LoopId fused_loop_id = UINT16_MAX;
+        if (vm.chunk && vm.chunk->code && offset < 0) {
+            ptrdiff_t current_offset = (ptrdiff_t)(vm.ip - vm.chunk->code);
+            ptrdiff_t target = current_offset + offset;
+            if (target >= 0 && target <= (ptrdiff_t)UINT16_MAX &&
+                target < (ptrdiff_t)vm.chunk->count) {
+                fused_loop_id = (LoopId)target;
+            }
+        }
+
         int32_t counter_i32;
         int32_t limit_i32;
         if (vm_try_read_i32_typed(reg, &counter_i32) &&
@@ -4089,6 +4100,9 @@ InterpretResult vm_run_dispatch(void) {
             }
             vm_store_i32_typed_hot(reg, incremented);
             if (incremented < limit_i32) {
+                if (fused_loop_id != UINT16_MAX) {
+                    vm_profile_record_loop_hit(&vm, fused_loop_id);
+                }
                 vm.ip += offset;
             }
             DISPATCH_TYPED();
@@ -4104,6 +4118,9 @@ InterpretResult vm_run_dispatch(void) {
             }
             vm_store_i64_typed_hot(reg, incremented);
             if (incremented < limit_i64) {
+                if (fused_loop_id != UINT16_MAX) {
+                    vm_profile_record_loop_hit(&vm, fused_loop_id);
+                }
                 vm.ip += offset;
             }
             DISPATCH_TYPED();
@@ -4116,6 +4133,9 @@ InterpretResult vm_run_dispatch(void) {
             uint32_t incremented = counter_u32 + (uint32_t)1;
             vm_store_u32_typed_hot(reg, incremented);
             if (incremented < limit_u32) {
+                if (fused_loop_id != UINT16_MAX) {
+                    vm_profile_record_loop_hit(&vm, fused_loop_id);
+                }
                 vm.ip += offset;
             }
             DISPATCH_TYPED();
@@ -4128,6 +4148,9 @@ InterpretResult vm_run_dispatch(void) {
             uint64_t incremented = counter_u64 + (uint64_t)1;
             vm_store_u64_typed_hot(reg, incremented);
             if (incremented < limit_u64) {
+                if (fused_loop_id != UINT16_MAX) {
+                    vm_profile_record_loop_hit(&vm, fused_loop_id);
+                }
                 vm.ip += offset;
             }
             DISPATCH_TYPED();
@@ -4144,6 +4167,9 @@ InterpretResult vm_run_dispatch(void) {
             }
             vm_store_i32_typed_hot(reg, incremented);
             if (incremented < AS_I32(limit)) {
+                if (fused_loop_id != UINT16_MAX) {
+                    vm_profile_record_loop_hit(&vm, fused_loop_id);
+                }
                 vm.ip += offset;
             }
             DISPATCH_TYPED();
@@ -4157,6 +4183,9 @@ InterpretResult vm_run_dispatch(void) {
             }
             vm_store_i64_typed_hot(reg, incremented);
             if (incremented < AS_I64(limit)) {
+                if (fused_loop_id != UINT16_MAX) {
+                    vm_profile_record_loop_hit(&vm, fused_loop_id);
+                }
                 vm.ip += offset;
             }
             DISPATCH_TYPED();
@@ -4166,6 +4195,9 @@ InterpretResult vm_run_dispatch(void) {
             uint32_t incremented = AS_U32(counter) + (uint32_t)1;
             vm_store_u32_typed_hot(reg, incremented);
             if (incremented < AS_U32(limit)) {
+                if (fused_loop_id != UINT16_MAX) {
+                    vm_profile_record_loop_hit(&vm, fused_loop_id);
+                }
                 vm.ip += offset;
             }
             DISPATCH_TYPED();
@@ -4175,6 +4207,9 @@ InterpretResult vm_run_dispatch(void) {
             uint64_t incremented = AS_U64(counter) + (uint64_t)1;
             vm_store_u64_typed_hot(reg, incremented);
             if (incremented < AS_U64(limit)) {
+                if (fused_loop_id != UINT16_MAX) {
+                    vm_profile_record_loop_hit(&vm, fused_loop_id);
+                }
                 vm.ip += offset;
             }
             DISPATCH_TYPED();
@@ -4189,6 +4224,16 @@ InterpretResult vm_run_dispatch(void) {
         uint8_t limit_reg = *vm.ip++;
         int16_t offset = (int16_t)READ_SHORT();
 
+        LoopId fused_loop_id = UINT16_MAX;
+        if (vm.chunk && vm.chunk->code && offset < 0) {
+            ptrdiff_t current_offset = (ptrdiff_t)(vm.ip - vm.chunk->code);
+            ptrdiff_t target = current_offset + offset;
+            if (target >= 0 && target <= (ptrdiff_t)UINT16_MAX &&
+                target < (ptrdiff_t)vm.chunk->count) {
+                fused_loop_id = (LoopId)target;
+            }
+        }
+
         int32_t counter_i32;
         int32_t limit_i32;
         if (vm_try_read_i32_typed(reg, &counter_i32) &&
@@ -4199,6 +4244,9 @@ InterpretResult vm_run_dispatch(void) {
             }
             vm_store_i32_typed_hot(reg, decremented);
             if (decremented > limit_i32) {
+                if (fused_loop_id != UINT16_MAX) {
+                    vm_profile_record_loop_hit(&vm, fused_loop_id);
+                }
                 vm.ip += offset;
             }
             DISPATCH_TYPED();
@@ -4214,6 +4262,9 @@ InterpretResult vm_run_dispatch(void) {
             }
             vm_store_i64_typed_hot(reg, decremented);
             if (decremented > limit_i64) {
+                if (fused_loop_id != UINT16_MAX) {
+                    vm_profile_record_loop_hit(&vm, fused_loop_id);
+                }
                 vm.ip += offset;
             }
             DISPATCH_TYPED();
@@ -4226,6 +4277,9 @@ InterpretResult vm_run_dispatch(void) {
             uint32_t decremented = counter_u32 - (uint32_t)1;
             vm_store_u32_typed_hot(reg, decremented);
             if (decremented > limit_u32) {
+                if (fused_loop_id != UINT16_MAX) {
+                    vm_profile_record_loop_hit(&vm, fused_loop_id);
+                }
                 vm.ip += offset;
             }
             DISPATCH_TYPED();
@@ -4238,6 +4292,9 @@ InterpretResult vm_run_dispatch(void) {
             uint64_t decremented = counter_u64 - (uint64_t)1;
             vm_store_u64_typed_hot(reg, decremented);
             if (decremented > limit_u64) {
+                if (fused_loop_id != UINT16_MAX) {
+                    vm_profile_record_loop_hit(&vm, fused_loop_id);
+                }
                 vm.ip += offset;
             }
             DISPATCH_TYPED();
@@ -4254,6 +4311,9 @@ InterpretResult vm_run_dispatch(void) {
             }
             vm_store_i32_typed_hot(reg, decremented);
             if (decremented > AS_I32(limit)) {
+                if (fused_loop_id != UINT16_MAX) {
+                    vm_profile_record_loop_hit(&vm, fused_loop_id);
+                }
                 vm.ip += offset;
             }
             DISPATCH_TYPED();
@@ -4267,6 +4327,9 @@ InterpretResult vm_run_dispatch(void) {
             }
             vm_store_i64_typed_hot(reg, decremented);
             if (decremented > AS_I64(limit)) {
+                if (fused_loop_id != UINT16_MAX) {
+                    vm_profile_record_loop_hit(&vm, fused_loop_id);
+                }
                 vm.ip += offset;
             }
             DISPATCH_TYPED();
@@ -4276,6 +4339,9 @@ InterpretResult vm_run_dispatch(void) {
             uint32_t decremented = AS_U32(counter) - (uint32_t)1;
             vm_store_u32_typed_hot(reg, decremented);
             if (decremented > AS_U32(limit)) {
+                if (fused_loop_id != UINT16_MAX) {
+                    vm_profile_record_loop_hit(&vm, fused_loop_id);
+                }
                 vm.ip += offset;
             }
             DISPATCH_TYPED();
@@ -4285,6 +4351,9 @@ InterpretResult vm_run_dispatch(void) {
             uint64_t decremented = AS_U64(counter) - (uint64_t)1;
             vm_store_u64_typed_hot(reg, decremented);
             if (decremented > AS_U64(limit)) {
+                if (fused_loop_id != UINT16_MAX) {
+                    vm_profile_record_loop_hit(&vm, fused_loop_id);
+                }
                 vm.ip += offset;
             }
             DISPATCH_TYPED();
