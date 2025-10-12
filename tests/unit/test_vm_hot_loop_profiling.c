@@ -1,6 +1,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "vm/vm.h"
 #include "vm/vm_profiling.h"
@@ -54,6 +55,15 @@ TEST_CASE(test_hot_loop_triggers_jit_entry) {
     }
 
     vm.functionCount = 1;
+
+    Chunk* loop_chunk = (Chunk*)malloc(sizeof(Chunk));
+    ASSERT_TRUE(loop_chunk != NULL);
+    initChunk(loop_chunk);
+    writeChunk(loop_chunk, OP_RETURN_R, 1, 1, "hot_loop_profile");
+    writeChunk(loop_chunk, 0, 1, 1, "hot_loop_profile");
+    vm.functions[FUNC_MAIN].chunk = loop_chunk;
+    vm.functions[FUNC_MAIN].start = 0;
+    vm.functions[FUNC_MAIN].arity = 0;
 
     HotPathSample* sample = &vm.profile[LOOP_0];
     sample->func = FUNC_MAIN;

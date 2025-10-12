@@ -423,6 +423,867 @@ static bool test_queue_tier_up_skips_stub_install_on_unsupported(void) {
     return true;
 }
 
+static bool test_translates_i32_comparison_branch(void) {
+    initVM();
+    orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
+
+    Chunk chunk;
+    initChunk(&chunk);
+
+    Function function;
+    init_function(&function, &chunk);
+
+    const uint16_t lhs = FRAME_REG_START;
+    const uint16_t rhs = FRAME_REG_START + 1u;
+    const uint16_t predicate = FRAME_REG_START + 2u;
+
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_I32_CONST, lhs,
+                                         I32_VAL(0)),
+                "expected lhs constant");
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_I32_CONST, rhs,
+                                         I32_VAL(1)),
+                "expected rhs constant");
+
+    writeChunk(&chunk, OP_LT_I32_TYPED, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)predicate, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)lhs, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)rhs, 1, 0, "jit_translation");
+
+    writeChunk(&chunk, OP_JUMP_IF_NOT_SHORT, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)predicate, 1, 0, "jit_translation");
+    writeChunk(&chunk, 0u, 1, 0, "jit_translation");
+
+    writeChunk(&chunk, OP_RETURN_VOID, 1, 0, "jit_translation");
+
+    HotPathSample sample = {0};
+    sample.func = 0;
+    sample.loop = (uint16_t)function.start;
+
+    OrusJitIRProgram program;
+    orus_jit_ir_program_init(&program);
+
+    OrusJitTranslationResult result =
+        orus_jit_translate_linear_block(&vm, &function, &sample, &program);
+
+    bool success = true;
+    if (result.status != ORUS_JIT_TRANSLATE_STATUS_OK) {
+        fprintf(stderr, "Unexpected translation failure: %s\n",
+                orus_jit_translation_status_name(result.status));
+        success = false;
+        goto cleanup;
+    }
+
+    bool found_compare = false;
+    bool found_jump = false;
+    for (size_t i = 0; i < program.count; ++i) {
+        const OrusJitIRInstruction* inst = &program.instructions[i];
+        if (inst->opcode == ORUS_JIT_IR_OP_LT_I32) {
+            ASSERT_TRUE(inst->value_kind == ORUS_JIT_VALUE_BOOL,
+                        "comparison should yield bool kind");
+            ASSERT_TRUE(inst->operands.arithmetic.dst_reg == predicate,
+                        "predicate register mismatch");
+            ASSERT_TRUE(inst->operands.arithmetic.lhs_reg == lhs,
+                        "lhs register mismatch");
+            ASSERT_TRUE(inst->operands.arithmetic.rhs_reg == rhs,
+                        "rhs register mismatch");
+            found_compare = true;
+        } else if (inst->opcode == ORUS_JIT_IR_OP_JUMP_IF_NOT_SHORT) {
+            ASSERT_TRUE(inst->operands.jump_if_not_short.predicate_reg == predicate,
+                        "jump predicate mismatch");
+            ASSERT_TRUE(inst->operands.jump_if_not_short.offset == 0u,
+                        "jump offset mismatch");
+            found_jump = true;
+        }
+    }
+
+    ASSERT_TRUE(found_compare, "expected comparison IR opcode");
+    ASSERT_TRUE(found_jump, "expected conditional jump IR opcode");
+
+cleanup:
+    orus_jit_ir_program_reset(&program);
+    freeChunk(&chunk);
+    freeVM();
+    return success;
+}
+
+static bool test_translates_loop_with_forward_exit(void) {
+    initVM();
+    orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
+
+    Chunk chunk;
+    initChunk(&chunk);
+
+    Function function;
+    init_function(&function, &chunk);
+
+    const uint16_t counter = FRAME_REG_START;
+    const uint16_t limit = FRAME_REG_START + 1u;
+    const uint16_t step = FRAME_REG_START + 2u;
+    const uint16_t predicate = FRAME_REG_START + 3u;
+
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_I32_CONST, counter,
+                                         I32_VAL(0)),
+                "expected counter constant");
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_I32_CONST, limit,
+                                         I32_VAL(3)),
+                "expected loop limit constant");
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_I32_CONST, step,
+                                         I32_VAL(1)),
+                "expected loop increment constant");
+
+    writeChunk(&chunk, OP_LT_I32_TYPED, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)predicate, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)counter, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)limit, 1, 0, "jit_translation");
+
+    writeChunk(&chunk, OP_JUMP_IF_NOT_SHORT, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)predicate, 1, 0, "jit_translation");
+    writeChunk(&chunk, 6u, 1, 0, "jit_translation");
+
+    writeChunk(&chunk, OP_ADD_I32_TYPED, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)counter, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)counter, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)step, 1, 0, "jit_translation");
+
+    writeChunk(&chunk, OP_LOOP_SHORT, 1, 0, "jit_translation");
+    writeChunk(&chunk, 11u, 1, 0, "jit_translation");
+
+    writeChunk(&chunk, OP_RETURN_VOID, 1, 0, "jit_translation");
+
+    HotPathSample sample = {0};
+    sample.func = 0;
+    sample.loop = (uint16_t)(function.start + 12u);
+
+    OrusJitIRProgram program;
+    orus_jit_ir_program_init(&program);
+
+    OrusJitTranslationResult result =
+        orus_jit_translate_linear_block(&vm, &function, &sample, &program);
+
+    bool success = true;
+    if (result.status != ORUS_JIT_TRANSLATE_STATUS_OK) {
+        fprintf(stderr, "Unexpected translation failure: %s\n",
+                orus_jit_translation_status_name(result.status));
+        success = false;
+        goto cleanup;
+    }
+
+    bool found_compare = false;
+    bool found_jump = false;
+    bool found_add = false;
+    bool found_loop_back = false;
+
+    for (size_t i = 0; i < program.count; ++i) {
+        const OrusJitIRInstruction* inst = &program.instructions[i];
+        switch (inst->opcode) {
+            case ORUS_JIT_IR_OP_LT_I32:
+                ASSERT_TRUE(inst->operands.arithmetic.dst_reg == predicate,
+                            "loop predicate register mismatch");
+                ASSERT_TRUE(inst->operands.arithmetic.lhs_reg == counter,
+                            "loop lhs register mismatch");
+                ASSERT_TRUE(inst->operands.arithmetic.rhs_reg == limit,
+                            "loop rhs register mismatch");
+                found_compare = true;
+                break;
+            case ORUS_JIT_IR_OP_JUMP_IF_NOT_SHORT:
+                ASSERT_TRUE(inst->operands.jump_if_not_short.predicate_reg ==
+                                predicate,
+                            "loop jump predicate mismatch");
+                ASSERT_TRUE(inst->operands.jump_if_not_short.offset == 6u,
+                            "loop exit offset mismatch");
+                found_jump = true;
+                break;
+            case ORUS_JIT_IR_OP_ADD_I32:
+                ASSERT_TRUE(inst->operands.arithmetic.dst_reg == counter,
+                            "loop increment destination mismatch");
+                ASSERT_TRUE(inst->operands.arithmetic.lhs_reg == counter,
+                            "loop increment lhs mismatch");
+                ASSERT_TRUE(inst->operands.arithmetic.rhs_reg == step,
+                            "loop increment rhs mismatch");
+                found_add = true;
+                break;
+            case ORUS_JIT_IR_OP_LOOP_BACK:
+                ASSERT_TRUE(inst->operands.loop_back.back_offset == 11u,
+                            "loop back offset mismatch");
+                found_loop_back = true;
+                break;
+            default:
+                break;
+        }
+    }
+
+    ASSERT_TRUE(found_compare, "expected loop compare IR instruction");
+    ASSERT_TRUE(found_jump, "expected loop conditional jump IR instruction");
+    ASSERT_TRUE(found_add, "expected loop body arithmetic instruction");
+    ASSERT_TRUE(found_loop_back, "expected loop back-edge IR instruction");
+
+cleanup:
+    orus_jit_ir_program_reset(&program);
+    freeChunk(&chunk);
+    freeVM();
+    return success;
+}
+
+static bool test_translates_if_else_jump_short(void) {
+    initVM();
+    orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
+
+    Chunk chunk;
+    initChunk(&chunk);
+
+    Function function;
+    init_function(&function, &chunk);
+
+    const uint16_t lhs = FRAME_REG_START;
+    const uint16_t rhs = FRAME_REG_START + 1u;
+    const uint16_t predicate = FRAME_REG_START + 2u;
+    const uint16_t then_dst = FRAME_REG_START + 3u;
+    const uint16_t else_dst = FRAME_REG_START + 4u;
+
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_I32_CONST, lhs,
+                                         I32_VAL(0)),
+                "expected lhs constant");
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_I32_CONST, rhs,
+                                         I32_VAL(1)),
+                "expected rhs constant");
+
+    writeChunk(&chunk, OP_LT_I32_TYPED, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)predicate, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)lhs, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)rhs, 1, 0, "jit_translation");
+
+    writeChunk(&chunk, OP_JUMP_IF_NOT_SHORT, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)predicate, 1, 0, "jit_translation");
+    writeChunk(&chunk, 6u, 1, 0, "jit_translation");
+
+    writeChunk(&chunk, OP_ADD_I32_TYPED, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)then_dst, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)lhs, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)rhs, 1, 0, "jit_translation");
+
+    writeChunk(&chunk, OP_JUMP_SHORT, 1, 0, "jit_translation");
+    writeChunk(&chunk, 4u, 1, 0, "jit_translation");
+
+    writeChunk(&chunk, OP_SUB_I32_TYPED, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)else_dst, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)rhs, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)lhs, 1, 0, "jit_translation");
+
+    writeChunk(&chunk, OP_RETURN_VOID, 1, 0, "jit_translation");
+
+    HotPathSample sample = {0};
+    sample.func = 0;
+    sample.loop = (uint16_t)function.start;
+
+    OrusJitIRProgram program;
+    orus_jit_ir_program_init(&program);
+
+    OrusJitTranslationResult result =
+        orus_jit_translate_linear_block(&vm, &function, &sample, &program);
+
+    bool success = true;
+    if (result.status != ORUS_JIT_TRANSLATE_STATUS_OK) {
+        fprintf(stderr, "Unexpected translation failure: %s\n",
+                orus_jit_translation_status_name(result.status));
+        success = false;
+        goto cleanup;
+    }
+
+    bool found_predicate = false;
+    bool found_conditional_jump = false;
+    bool found_forward_jump = false;
+
+    for (size_t i = 0; i < program.count; ++i) {
+        const OrusJitIRInstruction* inst = &program.instructions[i];
+        switch (inst->opcode) {
+            case ORUS_JIT_IR_OP_LT_I32:
+                found_predicate = true;
+                break;
+            case ORUS_JIT_IR_OP_JUMP_IF_NOT_SHORT:
+                ASSERT_TRUE(inst->operands.jump_if_not_short.predicate_reg ==
+                                predicate,
+                            "if/else predicate register mismatch");
+                ASSERT_TRUE(inst->operands.jump_if_not_short.offset == 6u,
+                            "if/else jump offset mismatch");
+                found_conditional_jump = true;
+                break;
+            case ORUS_JIT_IR_OP_JUMP_SHORT:
+                ASSERT_TRUE(inst->operands.jump_short.offset == 4u,
+                            "if/else forward jump offset mismatch");
+                found_forward_jump = true;
+                break;
+            default:
+                break;
+        }
+    }
+
+    ASSERT_TRUE(found_predicate, "expected predicate comparison IR instruction");
+    ASSERT_TRUE(found_conditional_jump,
+                "expected conditional branch IR instruction");
+    ASSERT_TRUE(found_forward_jump, "expected forward jump IR instruction");
+
+cleanup:
+    orus_jit_ir_program_reset(&program);
+    freeChunk(&chunk);
+    freeVM();
+    return success;
+}
+
+static bool test_translates_frame_window_moves(void) {
+    initVM();
+    orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
+
+    Chunk chunk;
+    initChunk(&chunk);
+
+    Function function;
+    init_function(&function, &chunk);
+
+    const uint16_t base_reg = FRAME_REG_START;
+    const uint8_t store_offset = 1u;
+    const uint8_t move_offset = 2u;
+    const uint16_t load_dst = FRAME_REG_START + 3u;
+
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_I64_CONST, base_reg,
+                                         I64_VAL(5)),
+                "expected initial i64 constant load");
+
+    writeChunk(&chunk, OP_STORE_FRAME, 1, 0, "jit_translation");
+    writeChunk(&chunk, store_offset, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)base_reg, 1, 0, "jit_translation");
+
+    writeChunk(&chunk, OP_MOVE_FRAME, 1, 0, "jit_translation");
+    writeChunk(&chunk, move_offset, 1, 0, "jit_translation");
+    writeChunk(&chunk, store_offset, 1, 0, "jit_translation");
+
+    writeChunk(&chunk, OP_LOAD_FRAME, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)load_dst, 1, 0, "jit_translation");
+    writeChunk(&chunk, move_offset, 1, 0, "jit_translation");
+
+    writeChunk(&chunk, OP_ADD_I64_TYPED, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)base_reg, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)base_reg, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)load_dst, 1, 0, "jit_translation");
+
+    writeChunk(&chunk, OP_RETURN_VOID, 1, 0, "jit_translation");
+
+    HotPathSample sample = {0};
+    sample.func = 0;
+    sample.loop = (uint16_t)function.start;
+
+    OrusJitIRProgram program;
+    orus_jit_ir_program_init(&program);
+
+    OrusJitTranslationResult result =
+        orus_jit_translate_linear_block(&vm, &function, &sample, &program);
+
+    bool success = true;
+
+    if (result.status != ORUS_JIT_TRANSLATE_STATUS_OK) {
+        fprintf(stderr,
+                "Unexpected translation failure for frame window moves: %s\n",
+                orus_jit_translation_status_name(result.status));
+        success = false;
+        goto cleanup;
+    }
+
+    bool saw_store = false;
+    bool saw_move = false;
+    bool saw_load = false;
+    bool saw_add = false;
+    const uint16_t stored_reg = (uint16_t)(FRAME_REG_START + store_offset);
+    const uint16_t moved_reg = (uint16_t)(FRAME_REG_START + move_offset);
+
+    for (size_t i = 0; i < program.count; ++i) {
+        const OrusJitIRInstruction* inst = &program.instructions[i];
+        if (inst->opcode == ORUS_JIT_IR_OP_MOVE_I64) {
+            if (inst->operands.move.dst_reg == stored_reg &&
+                inst->operands.move.src_reg == base_reg) {
+                saw_store = true;
+            } else if (inst->operands.move.dst_reg == moved_reg &&
+                       inst->operands.move.src_reg == stored_reg) {
+                saw_move = true;
+            } else if (inst->operands.move.dst_reg == load_dst &&
+                       inst->operands.move.src_reg == moved_reg) {
+                saw_load = true;
+            }
+        } else if (inst->opcode == ORUS_JIT_IR_OP_ADD_I64) {
+            saw_add = true;
+        }
+    }
+
+    ASSERT_TRUE(saw_store, "expected move to frame slot when storing local");
+    ASSERT_TRUE(saw_move, "expected move between frame slots");
+    ASSERT_TRUE(saw_load, "expected load from frame slot into register");
+    ASSERT_TRUE(saw_add, "expected i64 arithmetic after frame moves");
+
+cleanup:
+    orus_jit_ir_program_reset(&program);
+    freeChunk(&chunk);
+    freeVM();
+    return success;
+}
+
+static bool test_translates_iterator_bytecodes(void) {
+    initVM();
+    orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
+
+    Chunk chunk;
+    initChunk(&chunk);
+
+    Function function;
+    init_function(&function, &chunk);
+
+    const uint16_t range_reg = 0u;
+    const uint16_t iter_reg = 1u;
+    const uint16_t value_reg = 2u;
+    const uint16_t has_reg = 3u;
+
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_I32_CONST, range_reg,
+                                         I32_VAL(3)),
+                "expected range bound load");
+
+    writeChunk(&chunk, OP_GET_ITER_R, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)iter_reg, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)range_reg, 1, 0, "jit_translation");
+
+    writeChunk(&chunk, OP_ITER_NEXT_R, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)value_reg, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)iter_reg, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)has_reg, 1, 0, "jit_translation");
+
+    writeChunk(&chunk, OP_JUMP_IF_NOT_SHORT, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)has_reg, 1, 0, "jit_translation");
+    writeChunk(&chunk, 0u, 1, 0, "jit_translation");
+
+    writeChunk(&chunk, OP_RETURN_VOID, 1, 0, "jit_translation");
+
+    HotPathSample sample = {0};
+    sample.func = 0;
+    sample.loop = (uint16_t)function.start;
+
+    OrusJitIRProgram program;
+    orus_jit_ir_program_init(&program);
+
+    OrusJitTranslationResult result =
+        orus_jit_translate_linear_block(&vm, &function, &sample, &program);
+
+    bool success = true;
+
+    if (result.status != ORUS_JIT_TRANSLATE_STATUS_OK) {
+        fprintf(stderr,
+                "Unexpected translation failure for iterator lowering: %s\n",
+                orus_jit_translation_status_name(result.status));
+        success = false;
+        goto cleanup;
+    }
+
+    bool saw_get_iter = false;
+    bool saw_iter_next = false;
+    bool saw_predicate_branch = false;
+
+    for (size_t i = 0; i < program.count; ++i) {
+        const OrusJitIRInstruction* inst = &program.instructions[i];
+        switch (inst->opcode) {
+            case ORUS_JIT_IR_OP_GET_ITER:
+                if (inst->operands.get_iter.dst_reg == iter_reg &&
+                    inst->operands.get_iter.iterable_reg == range_reg) {
+                    saw_get_iter = true;
+                }
+                break;
+            case ORUS_JIT_IR_OP_ITER_NEXT:
+                if (inst->operands.iter_next.value_reg == value_reg &&
+                    inst->operands.iter_next.iterator_reg == iter_reg &&
+                    inst->operands.iter_next.has_value_reg == has_reg) {
+                    saw_iter_next = true;
+                }
+                break;
+            case ORUS_JIT_IR_OP_JUMP_IF_NOT_SHORT:
+                if (inst->operands.jump_if_not_short.predicate_reg == has_reg) {
+                    saw_predicate_branch = true;
+                }
+                break;
+            default:
+                break;
+        }
+    }
+
+    ASSERT_TRUE(saw_get_iter, "expected ORUS_JIT_IR_OP_GET_ITER in program");
+    ASSERT_TRUE(saw_iter_next,
+                "expected ORUS_JIT_IR_OP_ITER_NEXT in program");
+    ASSERT_TRUE(saw_predicate_branch,
+                "expected conditional branch to depend on iterator predicate");
+
+cleanup:
+    orus_jit_ir_program_reset(&program);
+    freeChunk(&chunk);
+    freeVM();
+    return success;
+}
+
+static bool test_translates_range_iterator_materialization(void) {
+    initVM();
+    orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
+
+    Chunk chunk;
+    initChunk(&chunk);
+
+    Function function;
+    init_function(&function, &chunk);
+
+    const uint16_t start_reg = 0u;
+    const uint16_t end_reg = 1u;
+    const uint16_t step_reg = 2u;
+    const uint16_t range_reg = 3u;
+    const uint16_t iter_reg = 4u;
+    const uint16_t value_reg = 5u;
+    const uint16_t has_reg = 6u;
+
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_I32_CONST, start_reg,
+                                         I32_VAL(1)),
+                "expected range start constant");
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_I32_CONST, end_reg,
+                                         I32_VAL(5)),
+                "expected range end constant");
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_I32_CONST, step_reg,
+                                         I32_VAL(1)),
+                "expected range step constant");
+
+    writeChunk(&chunk, OP_RANGE_R, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)range_reg, 1, 0, "jit_translation");
+    writeChunk(&chunk, 3u, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)start_reg, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)end_reg, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)step_reg, 1, 0, "jit_translation");
+
+    writeChunk(&chunk, OP_GET_ITER_R, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)iter_reg, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)range_reg, 1, 0, "jit_translation");
+
+    writeChunk(&chunk, OP_ITER_NEXT_R, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)value_reg, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)iter_reg, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)has_reg, 1, 0, "jit_translation");
+
+    writeChunk(&chunk, OP_RETURN_VOID, 1, 0, "jit_translation");
+
+    HotPathSample sample = {0};
+    sample.func = 0;
+    sample.loop = (uint16_t)function.start;
+
+    OrusJitIRProgram program;
+    orus_jit_ir_program_init(&program);
+
+    OrusJitTranslationResult result =
+        orus_jit_translate_linear_block(&vm, &function, &sample, &program);
+
+    bool success = true;
+
+    if (result.status != ORUS_JIT_TRANSLATE_STATUS_OK) {
+        fprintf(stderr,
+                "Unexpected translation failure for range lowering: %s\n",
+                orus_jit_translation_status_name(result.status));
+        success = false;
+        goto cleanup;
+    }
+
+    bool saw_range = false;
+    bool saw_get_iter = false;
+    bool saw_iter_next = false;
+
+    for (size_t i = 0; i < program.count; ++i) {
+        const OrusJitIRInstruction* inst = &program.instructions[i];
+        switch (inst->opcode) {
+            case ORUS_JIT_IR_OP_RANGE:
+                if (inst->operands.range.dst_reg == range_reg &&
+                    inst->operands.range.arg_count == 3u &&
+                    inst->operands.range.arg_regs[0] == start_reg &&
+                    inst->operands.range.arg_regs[1] == end_reg &&
+                    inst->operands.range.arg_regs[2] == step_reg) {
+                    saw_range = true;
+                }
+                break;
+            case ORUS_JIT_IR_OP_GET_ITER:
+                if (inst->operands.get_iter.dst_reg == iter_reg &&
+                    inst->operands.get_iter.iterable_reg == range_reg) {
+                    saw_get_iter = true;
+                }
+                break;
+            case ORUS_JIT_IR_OP_ITER_NEXT:
+                if (inst->operands.iter_next.value_reg == value_reg &&
+                    inst->operands.iter_next.iterator_reg == iter_reg &&
+                    inst->operands.iter_next.has_value_reg == has_reg) {
+                    saw_iter_next = true;
+                }
+                break;
+            default:
+                break;
+        }
+    }
+
+    ASSERT_TRUE(saw_range, "expected ORUS_JIT_IR_OP_RANGE in program");
+    ASSERT_TRUE(saw_get_iter, "expected iterator acquisition after range");
+    ASSERT_TRUE(saw_iter_next, "expected iterator advance after range");
+
+cleanup:
+    orus_jit_ir_program_reset(&program);
+    freeChunk(&chunk);
+    freeVM();
+    return success;
+}
+
+static bool test_translates_range_iterator_frame_moves(void) {
+    initVM();
+    orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
+
+    Chunk chunk;
+    initChunk(&chunk);
+
+    Function function;
+    init_function(&function, &chunk);
+
+    const uint16_t bound_reg = 0u;
+    const uint16_t iter_reg = 1u;
+    const uint16_t value_reg = 2u;
+    const uint16_t has_reg = 3u;
+    const uint16_t loaded_reg = 4u;
+    const uint16_t sum_reg = 5u;
+    const uint16_t frame_slot = 0u;
+
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_I32_CONST, bound_reg,
+                                         I32_VAL(4)),
+                "expected loop bound constant");
+
+    writeChunk(&chunk, OP_GET_ITER_R, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)iter_reg, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)bound_reg, 1, 0, "jit_translation");
+
+    writeChunk(&chunk, OP_ITER_NEXT_R, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)value_reg, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)iter_reg, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)has_reg, 1, 0, "jit_translation");
+
+    writeChunk(&chunk, OP_STORE_FRAME, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)frame_slot, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)value_reg, 1, 0, "jit_translation");
+
+    writeChunk(&chunk, OP_LOAD_FRAME, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)loaded_reg, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)frame_slot, 1, 0, "jit_translation");
+
+    writeChunk(&chunk, OP_ADD_I64_TYPED, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)sum_reg, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)value_reg, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)loaded_reg, 1, 0, "jit_translation");
+
+    writeChunk(&chunk, OP_RETURN_VOID, 1, 0, "jit_translation");
+
+    HotPathSample sample = {0};
+    sample.func = 0;
+    sample.loop = (uint16_t)function.start;
+
+    OrusJitIRProgram program;
+    orus_jit_ir_program_init(&program);
+
+    OrusJitTranslationResult result =
+        orus_jit_translate_linear_block(&vm, &function, &sample, &program);
+
+    bool success = true;
+
+    if (result.status != ORUS_JIT_TRANSLATE_STATUS_OK) {
+        fprintf(stderr,
+                "Unexpected translation failure for iterator frame moves: %s\n",
+                orus_jit_translation_status_name(result.status));
+        success = false;
+        goto cleanup;
+    }
+
+    bool saw_store_move = false;
+    bool saw_load_move = false;
+    bool saw_add = false;
+
+    for (size_t i = 0; i < program.count; ++i) {
+        const OrusJitIRInstruction* inst = &program.instructions[i];
+        if (inst->opcode == ORUS_JIT_IR_OP_MOVE_I64) {
+            if (inst->operands.move.dst_reg ==
+                (uint16_t)(FRAME_REG_START + frame_slot)) {
+                saw_store_move = true;
+            } else if (inst->operands.move.dst_reg == loaded_reg) {
+                saw_load_move = true;
+            }
+        } else if (inst->opcode == ORUS_JIT_IR_OP_ADD_I64 &&
+                   inst->operands.arithmetic.dst_reg == sum_reg) {
+            saw_add = true;
+        }
+    }
+
+    ASSERT_TRUE(saw_store_move,
+                "expected i64 move when storing iterator value to frame");
+    ASSERT_TRUE(saw_load_move,
+                "expected i64 move when reloading iterator value from frame");
+    ASSERT_TRUE(saw_add, "expected i64 addition after frame moves");
+
+cleanup:
+    orus_jit_ir_program_reset(&program);
+    freeChunk(&chunk);
+    freeVM();
+    return success;
+}
+
+static bool test_translates_iterator_boxed_move(void) {
+    initVM();
+    orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
+
+    Chunk chunk;
+    initChunk(&chunk);
+
+    Function function;
+    init_function(&function, &chunk);
+
+    const uint16_t bound_reg = 0u;
+    const uint16_t iter_reg = 1u;
+    const uint16_t frame_slot = 2u;
+
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_I32_CONST, bound_reg,
+                                         I32_VAL(2)),
+                "expected loop bound constant");
+
+    writeChunk(&chunk, OP_GET_ITER_R, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)iter_reg, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)bound_reg, 1, 0, "jit_translation");
+
+    writeChunk(&chunk, OP_STORE_FRAME, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)frame_slot, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)iter_reg, 1, 0, "jit_translation");
+
+    writeChunk(&chunk, OP_RETURN_VOID, 1, 0, "jit_translation");
+
+    HotPathSample sample = {0};
+    sample.func = 0;
+    sample.loop = (uint16_t)function.start;
+
+    OrusJitIRProgram program;
+    orus_jit_ir_program_init(&program);
+
+    OrusJitTranslationResult result =
+        orus_jit_translate_linear_block(&vm, &function, &sample, &program);
+
+    bool success = true;
+    if (result.status != ORUS_JIT_TRANSLATE_STATUS_OK) {
+        fprintf(stderr, "Unexpected iterator store failure: %s\n",
+                orus_jit_translation_status_name(result.status));
+        success = false;
+        goto cleanup;
+    }
+
+    bool saw_boxed_move = false;
+    for (size_t i = 0; i < program.count; ++i) {
+        const OrusJitIRInstruction* inst = &program.instructions[i];
+        if (inst->opcode == ORUS_JIT_IR_OP_MOVE_VALUE &&
+            inst->operands.move.dst_reg ==
+                (uint16_t)(FRAME_REG_START + frame_slot)) {
+            saw_boxed_move = true;
+            break;
+        }
+    }
+
+    ASSERT_TRUE(saw_boxed_move,
+                "expected boxed move when storing iterator object to frame");
+
+cleanup:
+    orus_jit_ir_program_reset(&program);
+    freeChunk(&chunk);
+    freeVM();
+    return success;
+}
+
+static bool test_translates_runtime_helpers(void) {
+    initVM();
+    orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
+
+    Chunk chunk;
+    initChunk(&chunk);
+
+    Function function;
+    init_function(&function, &chunk);
+
+    const char* tag = "jit_translation";
+    writeChunk(&chunk, OP_TIME_STAMP, 1, 0, tag);
+    writeChunk(&chunk, 0u, 1, 0, tag);
+
+    writeChunk(&chunk, OP_ARRAY_PUSH_R, 1, 0, tag);
+    writeChunk(&chunk, 1u, 1, 0, tag);
+    writeChunk(&chunk, 2u, 1, 0, tag);
+
+    writeChunk(&chunk, OP_PRINT_R, 1, 0, tag);
+    writeChunk(&chunk, 3u, 1, 0, tag);
+
+    writeChunk(&chunk, OP_ASSERT_EQ_R, 1, 0, tag);
+    writeChunk(&chunk, 4u, 1, 0, tag);
+    writeChunk(&chunk, 5u, 1, 0, tag);
+    writeChunk(&chunk, 6u, 1, 0, tag);
+    writeChunk(&chunk, 7u, 1, 0, tag);
+
+    writeChunk(&chunk, OP_CALL_NATIVE_R, 1, 0, tag);
+    writeChunk(&chunk, 2u, 1, 0, tag);
+    writeChunk(&chunk, 8u, 1, 0, tag);
+    writeChunk(&chunk, 1u, 1, 0, tag);
+    writeChunk(&chunk, 9u, 1, 0, tag);
+
+    writeChunk(&chunk, OP_RETURN_VOID, 1, 0, tag);
+
+    HotPathSample sample = {0};
+    sample.func = 0;
+    sample.loop = (uint16_t)function.start;
+
+    OrusJitIRProgram program;
+    orus_jit_ir_program_init(&program);
+
+    OrusJitTranslationResult result =
+        orus_jit_translate_linear_block(&vm, &function, &sample, &program);
+
+    bool success = true;
+    if (result.status != ORUS_JIT_TRANSLATE_STATUS_OK) {
+        fprintf(stderr, "Unexpected helper translation failure: %s\n",
+                orus_jit_translation_status_name(result.status));
+        success = false;
+        goto cleanup;
+    }
+
+    bool saw_time_stamp = false;
+    bool saw_array_push = false;
+    bool saw_print = false;
+    bool saw_assert_eq = false;
+    bool saw_call_native = false;
+
+    for (size_t i = 0; i < program.count; ++i) {
+        OrusJitIROpcode opcode = program.instructions[i].opcode;
+        if (opcode == ORUS_JIT_IR_OP_TIME_STAMP) {
+            saw_time_stamp = true;
+        } else if (opcode == ORUS_JIT_IR_OP_ARRAY_PUSH) {
+            saw_array_push = true;
+        } else if (opcode == ORUS_JIT_IR_OP_PRINT) {
+            saw_print = true;
+        } else if (opcode == ORUS_JIT_IR_OP_ASSERT_EQ) {
+            saw_assert_eq = true;
+        } else if (opcode == ORUS_JIT_IR_OP_CALL_NATIVE) {
+            saw_call_native = true;
+        }
+    }
+
+    ASSERT_TRUE(saw_time_stamp, "expected ORUS_JIT_IR_OP_TIME_STAMP in program");
+    ASSERT_TRUE(saw_array_push, "expected ORUS_JIT_IR_OP_ARRAY_PUSH in program");
+    ASSERT_TRUE(saw_print, "expected ORUS_JIT_IR_OP_PRINT in program");
+    ASSERT_TRUE(saw_assert_eq, "expected ORUS_JIT_IR_OP_ASSERT_EQ in program");
+    ASSERT_TRUE(saw_call_native, "expected ORUS_JIT_IR_OP_CALL_NATIVE in program");
+
+cleanup:
+    orus_jit_ir_program_reset(&program);
+    freeChunk(&chunk);
+    freeVM();
+    return success;
+}
+
 int main(void) {
     struct {
         const char* name;
@@ -437,6 +1298,24 @@ int main(void) {
          test_rollout_blocks_f64_before_stage},
         {"queue_tier_up skips stub install on unsupported",
          test_queue_tier_up_skips_stub_install_on_unsupported},
+        {"translator emits i32 comparison and branch",
+         test_translates_i32_comparison_branch},
+        {"translator emits loop with forward exit",
+         test_translates_loop_with_forward_exit},
+        {"translator emits if/else jump sequence",
+         test_translates_if_else_jump_short},
+        {"translator emits frame window moves",
+         test_translates_frame_window_moves},
+        {"translator emits iterator bytecodes",
+         test_translates_iterator_bytecodes},
+        {"translator emits range iterator materialization",
+         test_translates_range_iterator_materialization},
+        {"translator keeps iterator values typed across frame moves",
+         test_translates_range_iterator_frame_moves},
+        {"translator boxes iterator objects for frame stores",
+         test_translates_iterator_boxed_move},
+        {"translator emits runtime helper calls",
+         test_translates_runtime_helpers},
     };
 
     int passed = 0;
