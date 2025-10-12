@@ -1736,6 +1736,127 @@ orus_jit_native_evaluate_branch_false(struct VM* vm_instance,
     return value ? 0 : 1;
 }
 
+#if defined(__aarch64__)
+static int
+orus_jit_native_fused_loop_step(struct VM* vm_instance,
+                                OrusJitNativeBlock* block,
+                                uint32_t raw_kind,
+                                uint16_t counter_reg,
+                                uint16_t limit_reg,
+                                int32_t step,
+                                uint32_t raw_compare_kind,
+                                int32_t direction) {
+    if (!vm_instance) {
+        return -1;
+    }
+
+    OrusJitValueKind kind = (OrusJitValueKind)raw_kind;
+    OrusJitIRLoopCompareKind compare_kind =
+        (OrusJitIRLoopCompareKind)raw_compare_kind;
+
+    if (direction == 0 || step == 0 ||
+        (direction > 0 && step <= 0) || (direction < 0 && step >= 0) ||
+        (compare_kind != ORUS_JIT_IR_LOOP_COMPARE_LESS_THAN &&
+         compare_kind != ORUS_JIT_IR_LOOP_COMPARE_GREATER_THAN)) {
+        jit_bailout_and_deopt(vm_instance, block);
+        return -1;
+    }
+
+    bool should_branch = false;
+
+    switch (kind) {
+        case ORUS_JIT_VALUE_I32: {
+            int32_t counter = 0;
+            int32_t limit = 0;
+            if (!jit_read_i32(vm_instance, counter_reg, &counter) ||
+                !jit_read_i32(vm_instance, limit_reg, &limit)) {
+                jit_bailout_and_deopt(vm_instance, block);
+                return -1;
+            }
+            int32_t updated = 0;
+            if (__builtin_add_overflow(counter, step, &updated)) {
+                jit_bailout_and_deopt(vm_instance, block);
+                return -1;
+            }
+            vm_store_i32_typed_hot(counter_reg, updated);
+            should_branch = (compare_kind == ORUS_JIT_IR_LOOP_COMPARE_LESS_THAN)
+                                ? (updated < limit)
+                                : (updated > limit);
+            break;
+        }
+        case ORUS_JIT_VALUE_I64: {
+            int64_t counter = 0;
+            int64_t limit = 0;
+            if (!jit_read_i64(vm_instance, counter_reg, &counter) ||
+                !jit_read_i64(vm_instance, limit_reg, &limit)) {
+                jit_bailout_and_deopt(vm_instance, block);
+                return -1;
+            }
+            int64_t updated = 0;
+            int64_t step64 = (int64_t)step;
+            if (__builtin_add_overflow(counter, step64, &updated)) {
+                jit_bailout_and_deopt(vm_instance, block);
+                return -1;
+            }
+            vm_store_i64_typed_hot(counter_reg, updated);
+            should_branch = (compare_kind == ORUS_JIT_IR_LOOP_COMPARE_LESS_THAN)
+                                ? (updated < limit)
+                                : (updated > limit);
+            break;
+        }
+        case ORUS_JIT_VALUE_U32: {
+            uint32_t counter = 0;
+            uint32_t limit = 0;
+            if (!jit_read_u32(vm_instance, counter_reg, &counter) ||
+                !jit_read_u32(vm_instance, limit_reg, &limit)) {
+                jit_bailout_and_deopt(vm_instance, block);
+                return -1;
+            }
+            uint32_t magnitude =
+                (uint32_t)((step > 0) ? step : -step);
+            uint32_t updated = 0;
+            if (direction > 0) {
+                updated = counter + magnitude;
+            } else {
+                updated = counter - magnitude;
+            }
+            vm_store_u32_typed_hot(counter_reg, updated);
+            should_branch = (compare_kind == ORUS_JIT_IR_LOOP_COMPARE_LESS_THAN)
+                                ? (updated < limit)
+                                : (updated > limit);
+            break;
+        }
+        case ORUS_JIT_VALUE_U64: {
+            uint64_t counter = 0;
+            uint64_t limit = 0;
+            if (!jit_read_u64(vm_instance, counter_reg, &counter) ||
+                !jit_read_u64(vm_instance, limit_reg, &limit)) {
+                jit_bailout_and_deopt(vm_instance, block);
+                return -1;
+            }
+            uint64_t magnitude =
+                (uint64_t)((step > 0) ? step : -step);
+            uint64_t updated = 0;
+            if (direction > 0) {
+                updated = counter + magnitude;
+            } else {
+                updated = counter - magnitude;
+            }
+            vm_store_u64_typed_hot(counter_reg, updated);
+            should_branch = (compare_kind == ORUS_JIT_IR_LOOP_COMPARE_LESS_THAN)
+                                ? (updated < limit)
+                                : (updated > limit);
+            break;
+        }
+        default:
+            jit_bailout_and_deopt(vm_instance, block);
+            return -1;
+    }
+
+    return should_branch ? 1 : 0;
+}
+#endif // defined(__aarch64__)
+
 static bool
 orus_jit_opcode_is_add(OrusJitIROpcode opcode) {
     switch (opcode) {
@@ -4989,6 +5110,60 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                         &branch_patches, branch_index,
                         inst->bytecode_offset + 3u +
                             inst->operands.jump_if_not_short.offset,
+                        ORUS_JIT_A64_BRANCH_PATCH_KIND_CBNZ)) {
+                    A64_RETURN(JIT_BACKEND_OUT_OF_MEMORY);
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_INC_CMP_JUMP:
+            case ORUS_JIT_IR_OP_DEC_CMP_JUMP: {
+                if (!orus_jit_a64_code_buffer_emit_u32(&code, A64_LDR_X(0u, 31u, 0u)) ||
+                    !orus_jit_a64_code_buffer_emit_u32(&code, A64_LDR_X(1u, 31u, 1u)) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 2u, (uint64_t)inst->value_kind) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 3u,
+                        (uint64_t)inst->operands.fused_loop.counter_reg) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 4u,
+                        (uint64_t)inst->operands.fused_loop.limit_reg) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 5u,
+                        (uint64_t)(int64_t)inst->operands.fused_loop.step) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 6u,
+                        (uint64_t)inst->operands.fused_loop.compare_kind) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 7u,
+                        (uint64_t)(int64_t)((inst->opcode ==
+                                             ORUS_JIT_IR_OP_INC_CMP_JUMP)
+                                                ? 1
+                                                : -1)) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 16u,
+                        (uint64_t)(uintptr_t)&orus_jit_native_fused_loop_step) ||
+                    !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
+                    !orus_jit_a64_code_buffer_emit_u32(&code, 0x3100041Fu) ||
+                    !orus_jit_a64_code_buffer_emit_u32(&code, A64_B_COND(0x0u, 0u)) ||
+                    !orus_jit_a64_patch_list_append(&bail_patches,
+                                                    code.count - 1u)) {
+                    A64_RETURN(JIT_BACKEND_OUT_OF_MEMORY);
+                }
+
+                uint32_t fallthrough = inst->bytecode_offset + 5u;
+                int64_t target_bytecode =
+                    (int64_t)(int32_t)fallthrough +
+                    (int64_t)inst->operands.fused_loop.jump_offset;
+                if (target_bytecode < 0 ||
+                    target_bytecode > (int64_t)UINT32_MAX) {
+                    A64_RETURN(JIT_BACKEND_ASSEMBLY_ERROR);
+                }
+
+                size_t branch_index = code.count;
+                if (!orus_jit_a64_code_buffer_emit_u32(&code, A64_CBNZ_W(0u, 0u)) ||
+                    !orus_jit_a64_branch_patch_list_append(
+                        &branch_patches, branch_index,
+                        (uint32_t)target_bytecode,
                         ORUS_JIT_A64_BRANCH_PATCH_KIND_CBNZ)) {
                     A64_RETURN(JIT_BACKEND_OUT_OF_MEMORY);
                 }

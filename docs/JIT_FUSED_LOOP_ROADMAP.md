@@ -12,7 +12,8 @@ Enable the baseline JIT to translate the VM's fused loop bytecodes (`OP_INC_CMP_
 1. **IR Support**
    - [x] Introduce dedicated IR opcodes that capture increment/decrement plus compare and back-edge jump semantics.
    - [x] Extend the IR operand union to store the counter register, limit register, and signed jump displacement.
-   - [ ] Update IR introspection helpers and debug utilities to print the new instructions.
+   - [x] Update IR introspection helpers and debug utilities to print the new instructions.
+     - Dump routines now format `IR_OP_INC_CMP_JMP` / `IR_OP_DEC_CMP_JMP` with counter, limit, and displacement operands so fused loops appear in dumps and traces.
 
 2. **Translator Updates**
    - [x] Teach `orus_jit_translate_linear_block` how to decode `OP_INC_CMP_JMP` / `OP_DEC_CMP_JMP`.
@@ -21,11 +22,13 @@ Enable the baseline JIT to translate the VM's fused loop bytecodes (`OP_INC_CMP_
    - [x] Add unit tests that exercise translation of fused loops and assert the resulting IR stream.
 
 3. **Backend Lowering**
-   - [ ] Implement backend emission for the fused opcodes:
+   - [x] Implement backend emission for the fused opcodes:
      - [x] x86-64 linear backend templates that update the counter, compare against the limit, and branch to the recorded back-edge.
-     - [ ] Fallback helper stubs for architectures without inline templates (or reuse the interpreter helpers).
+     - [x] Fallback helper stubs for architectures without inline templates (or reuse the interpreter helpers).
+       - ARM64 now calls `orus_jit_native_fused_loop_step` so fused loops keep running even when the backend relies on helper dispatch.
    - [x] Integrate the new operations with existing bail-out and deoptimization plumbing.
-   - [ ] Extend backend tests to cover both incrementing and decrementing loops across numeric kinds.
+   - [x] Extend backend tests to cover both incrementing and decrementing loops across numeric kinds.
+     - Added `test_backend_emits_fused_increment_loops` / `test_backend_emits_fused_decrement_loops` to exercise i32/i64/u32/u64 fused counters end-to-end in the baseline backend.
 
 4. **Benchmark Validation**
    - [ ] Re-run the "optimized loop" benchmark to confirm translations succeed and runtime counters increment inside the JIT tier.

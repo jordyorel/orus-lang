@@ -359,6 +359,290 @@ static bool test_backend_emits_string_concat(void) {
     return success;
 }
 
+static bool run_fused_loop_case(OrusJitValueKind kind,
+                                bool is_increment,
+                                int64_t start_value,
+                                int64_t limit_value,
+                                uint64_t expected_iterations) {
+    initVM();
+    orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
+
+    struct OrusJitBackend* backend = orus_jit_backend_create();
+    if (!backend) {
+        freeVM();
+        return false;
+    }
+
+    const uint16_t counter_reg = FRAME_REG_START;
+    const uint16_t limit_reg = FRAME_REG_START + 1u;
+    const uint16_t acc_reg = FRAME_REG_START + 2u;
+    const uint16_t step_reg = FRAME_REG_START + 3u;
+
+    const uint32_t load_counter_offset = 0u;
+    const uint32_t load_limit_offset = 4u;
+    const uint32_t load_acc_offset = 8u;
+    const uint32_t load_step_offset = 12u;
+    const uint32_t body_offset = 16u;
+    const uint32_t fused_offset = 20u;
+    const uint32_t return_offset = fused_offset + 5u;
+    const int16_t jump_offset = (int16_t)((int32_t)body_offset - (int32_t)return_offset);
+
+    OrusJitIROpcode load_opcode = ORUS_JIT_IR_OP_LOAD_I32_CONST;
+    OrusJitIROpcode add_opcode = ORUS_JIT_IR_OP_ADD_I32;
+    uint8_t reg_type_tag = (uint8_t)REG_TYPE_I32;
+    uint64_t start_bits = 0u;
+    uint64_t limit_bits = 0u;
+    uint64_t step_bits = 0u;
+
+    switch (kind) {
+        case ORUS_JIT_VALUE_I32:
+            load_opcode = ORUS_JIT_IR_OP_LOAD_I32_CONST;
+            add_opcode = ORUS_JIT_IR_OP_ADD_I32;
+            reg_type_tag = (uint8_t)REG_TYPE_I32;
+            start_bits = (uint64_t)(uint32_t)start_value;
+            limit_bits = (uint64_t)(uint32_t)limit_value;
+            step_bits = (uint64_t)(uint32_t)1;
+            break;
+        case ORUS_JIT_VALUE_I64:
+            load_opcode = ORUS_JIT_IR_OP_LOAD_I64_CONST;
+            add_opcode = ORUS_JIT_IR_OP_ADD_I64;
+            reg_type_tag = (uint8_t)REG_TYPE_I64;
+            start_bits = (uint64_t)start_value;
+            limit_bits = (uint64_t)limit_value;
+            step_bits = (uint64_t)1;
+            break;
+        case ORUS_JIT_VALUE_U32:
+            load_opcode = ORUS_JIT_IR_OP_LOAD_U32_CONST;
+            add_opcode = ORUS_JIT_IR_OP_ADD_U32;
+            reg_type_tag = (uint8_t)REG_TYPE_U32;
+            start_bits = (uint64_t)(uint32_t)start_value;
+            limit_bits = (uint64_t)(uint32_t)limit_value;
+            step_bits = (uint64_t)(uint32_t)1u;
+            break;
+        case ORUS_JIT_VALUE_U64:
+            load_opcode = ORUS_JIT_IR_OP_LOAD_U64_CONST;
+            add_opcode = ORUS_JIT_IR_OP_ADD_U64;
+            reg_type_tag = (uint8_t)REG_TYPE_U64;
+            start_bits = (uint64_t)start_value;
+            limit_bits = (uint64_t)limit_value;
+            step_bits = (uint64_t)1u;
+            break;
+        default:
+            orus_jit_backend_destroy(backend);
+            freeVM();
+            return false;
+    }
+
+    OrusJitIRInstruction instructions[7];
+    memset(instructions, 0, sizeof(instructions));
+
+    vm.typed_regs.reg_types[counter_reg] = reg_type_tag;
+    vm.typed_regs.reg_types[limit_reg] = reg_type_tag;
+    vm.typed_regs.reg_types[acc_reg] = reg_type_tag;
+    vm.typed_regs.reg_types[step_reg] = reg_type_tag;
+
+    instructions[0].opcode = load_opcode;
+    instructions[0].value_kind = kind;
+    instructions[0].bytecode_offset = load_counter_offset;
+    instructions[0].operands.load_const.dst_reg = counter_reg;
+    instructions[0].operands.load_const.immediate_bits = start_bits;
+
+    instructions[1].opcode = load_opcode;
+    instructions[1].value_kind = kind;
+    instructions[1].bytecode_offset = load_limit_offset;
+    instructions[1].operands.load_const.dst_reg = limit_reg;
+    instructions[1].operands.load_const.immediate_bits = limit_bits;
+
+    instructions[2].opcode = load_opcode;
+    instructions[2].value_kind = kind;
+    instructions[2].bytecode_offset = load_acc_offset;
+    instructions[2].operands.load_const.dst_reg = acc_reg;
+    instructions[2].operands.load_const.immediate_bits = 0u;
+
+    instructions[3].opcode = load_opcode;
+    instructions[3].value_kind = kind;
+    instructions[3].bytecode_offset = load_step_offset;
+    instructions[3].operands.load_const.dst_reg = step_reg;
+    instructions[3].operands.load_const.immediate_bits = step_bits;
+
+    instructions[4].opcode = add_opcode;
+    instructions[4].value_kind = kind;
+    instructions[4].bytecode_offset = body_offset;
+    instructions[4].operands.arithmetic.dst_reg = acc_reg;
+    instructions[4].operands.arithmetic.lhs_reg = acc_reg;
+    instructions[4].operands.arithmetic.rhs_reg = step_reg;
+
+    instructions[5].opcode =
+        is_increment ? ORUS_JIT_IR_OP_INC_CMP_JUMP : ORUS_JIT_IR_OP_DEC_CMP_JUMP;
+    instructions[5].value_kind = kind;
+    instructions[5].bytecode_offset = fused_offset;
+    instructions[5].operands.fused_loop.counter_reg = counter_reg;
+    instructions[5].operands.fused_loop.limit_reg = limit_reg;
+    instructions[5].operands.fused_loop.jump_offset = jump_offset;
+    instructions[5].operands.fused_loop.step =
+        (int8_t)(is_increment ? ORUS_JIT_IR_LOOP_STEP_INCREMENT
+                              : ORUS_JIT_IR_LOOP_STEP_DECREMENT);
+    instructions[5].operands.fused_loop.compare_kind =
+        (uint8_t)(is_increment ? ORUS_JIT_IR_LOOP_COMPARE_LESS_THAN
+                               : ORUS_JIT_IR_LOOP_COMPARE_GREATER_THAN);
+
+    instructions[6].opcode = ORUS_JIT_IR_OP_RETURN;
+    instructions[6].bytecode_offset = return_offset;
+
+    OrusJitIRProgram program;
+    init_ir_program(&program, instructions, 7);
+    program.loop_start_offset = body_offset;
+
+    JITEntry entry;
+    if (!compile_program(backend, &program, &entry)) {
+        orus_jit_backend_destroy(backend);
+        freeVM();
+        return false;
+    }
+
+    entry.entry_point(&vm);
+
+    bool success = true;
+    switch (kind) {
+        case ORUS_JIT_VALUE_I32: {
+            int32_t expected_counter = (int32_t)limit_value;
+            int32_t expected_limit = (int32_t)limit_value;
+            int32_t expected_acc = (int32_t)expected_iterations;
+            if (vm.typed_regs.i32_regs[counter_reg] != expected_counter) {
+                fprintf(stderr,
+                        "fused loop counter mismatch: got %d expected %d\n",
+                        vm.typed_regs.i32_regs[counter_reg], expected_counter);
+                success = false;
+            }
+            if (vm.typed_regs.i32_regs[limit_reg] != expected_limit) {
+                fprintf(stderr,
+                        "fused loop limit clobbered: got %d expected %d\n",
+                        vm.typed_regs.i32_regs[limit_reg], expected_limit);
+                success = false;
+            }
+            if (vm.typed_regs.i32_regs[acc_reg] != expected_acc) {
+                fprintf(stderr,
+                        "fused loop accumulator mismatch: got %d expected %d\n",
+                        vm.typed_regs.i32_regs[acc_reg], expected_acc);
+                success = false;
+            }
+            break;
+        }
+        case ORUS_JIT_VALUE_I64: {
+            int64_t expected_counter = limit_value;
+            int64_t expected_limit = limit_value;
+            int64_t expected_acc = (int64_t)expected_iterations;
+            if (vm.typed_regs.i64_regs[counter_reg] != expected_counter) {
+                fprintf(stderr,
+                        "fused loop counter mismatch: got %lld expected %lld\n",
+                        (long long)vm.typed_regs.i64_regs[counter_reg],
+                        (long long)expected_counter);
+                success = false;
+            }
+            if (vm.typed_regs.i64_regs[limit_reg] != expected_limit) {
+                fprintf(stderr,
+                        "fused loop limit clobbered: got %lld expected %lld\n",
+                        (long long)vm.typed_regs.i64_regs[limit_reg],
+                        (long long)expected_limit);
+                success = false;
+            }
+            if (vm.typed_regs.i64_regs[acc_reg] != expected_acc) {
+                fprintf(stderr,
+                        "fused loop accumulator mismatch: got %lld expected %lld\n",
+                        (long long)vm.typed_regs.i64_regs[acc_reg],
+                        (long long)expected_acc);
+                success = false;
+            }
+            break;
+        }
+        case ORUS_JIT_VALUE_U32: {
+            uint32_t expected_counter = (uint32_t)limit_value;
+            uint32_t expected_limit = (uint32_t)limit_value;
+            uint32_t expected_acc = (uint32_t)expected_iterations;
+            if (vm.typed_regs.u32_regs[counter_reg] != expected_counter) {
+                fprintf(stderr,
+                        "fused loop counter mismatch: got %u expected %u\n",
+                        vm.typed_regs.u32_regs[counter_reg], expected_counter);
+                success = false;
+            }
+            if (vm.typed_regs.u32_regs[limit_reg] != expected_limit) {
+                fprintf(stderr,
+                        "fused loop limit clobbered: got %u expected %u\n",
+                        vm.typed_regs.u32_regs[limit_reg], expected_limit);
+                success = false;
+            }
+            if (vm.typed_regs.u32_regs[acc_reg] != expected_acc) {
+                fprintf(stderr,
+                        "fused loop accumulator mismatch: got %u expected %u\n",
+                        vm.typed_regs.u32_regs[acc_reg], expected_acc);
+                success = false;
+            }
+            break;
+        }
+        case ORUS_JIT_VALUE_U64: {
+            uint64_t expected_counter = (uint64_t)limit_value;
+            uint64_t expected_limit = (uint64_t)limit_value;
+            uint64_t expected_acc = (uint64_t)expected_iterations;
+            if (vm.typed_regs.u64_regs[counter_reg] != expected_counter) {
+                fprintf(stderr,
+                        "fused loop counter mismatch: got %llu expected %llu\n",
+                        (unsigned long long)vm.typed_regs.u64_regs[counter_reg],
+                        (unsigned long long)expected_counter);
+                success = false;
+            }
+            if (vm.typed_regs.u64_regs[limit_reg] != expected_limit) {
+                fprintf(stderr,
+                        "fused loop limit clobbered: got %llu expected %llu\n",
+                        (unsigned long long)vm.typed_regs.u64_regs[limit_reg],
+                        (unsigned long long)expected_limit);
+                success = false;
+            }
+            if (vm.typed_regs.u64_regs[acc_reg] != expected_acc) {
+                fprintf(stderr,
+                        "fused loop accumulator mismatch: got %llu expected %llu\n",
+                        (unsigned long long)vm.typed_regs.u64_regs[acc_reg],
+                        (unsigned long long)expected_acc);
+                success = false;
+            }
+            break;
+        }
+        default:
+            success = false;
+            break;
+    }
+
+    orus_jit_backend_release_entry(backend, &entry);
+    orus_jit_backend_destroy(backend);
+    freeVM();
+    return success;
+}
+
+static bool test_backend_emits_fused_increment_loops(void) {
+    bool success = true;
+    success &= run_fused_loop_case(ORUS_JIT_VALUE_I32, true, 0, 4, 4);
+    success &= run_fused_loop_case(ORUS_JIT_VALUE_I64, true, 5, 9, 4);
+    success &= run_fused_loop_case(ORUS_JIT_VALUE_U32, true, 1, 5, 4);
+    success &= run_fused_loop_case(ORUS_JIT_VALUE_U64, true, 2, 6, 4);
+    if (!success) {
+        fprintf(stderr,
+                "incrementing fused loop backend test failed for at least one kind\n");
+    }
+    return success;
+}
+
+static bool test_backend_emits_fused_decrement_loops(void) {
+    bool success = true;
+    success &= run_fused_loop_case(ORUS_JIT_VALUE_I32, false, 4, 0, 4);
+    success &= run_fused_loop_case(ORUS_JIT_VALUE_I64, false, 3, -1, 4);
+    success &= run_fused_loop_case(ORUS_JIT_VALUE_U32, false, 5, 1, 4);
+    success &= run_fused_loop_case(ORUS_JIT_VALUE_U64, false, 8, 4, 4);
+    if (!success) {
+        fprintf(stderr,
+                "decrementing fused loop backend test failed for at least one kind\n");
+    }
+    return success;
+}
+
 static bool test_backend_emits_i32_to_i64_conversion(void) {
     initVM();
     orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
@@ -487,6 +771,14 @@ int main(void) {
     }
     if (!test_backend_emits_u64_add()) {
         fprintf(stderr, "backend u64 add test failed\n");
+        success = false;
+    }
+    if (!test_backend_emits_fused_increment_loops()) {
+        fprintf(stderr, "backend fused increment loop test failed\n");
+        success = false;
+    }
+    if (!test_backend_emits_fused_decrement_loops()) {
+        fprintf(stderr, "backend fused decrement loop test failed\n");
         success = false;
     }
     if (!test_backend_emits_f64_mul()) {
