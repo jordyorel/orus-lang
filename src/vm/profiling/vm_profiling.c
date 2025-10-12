@@ -16,6 +16,7 @@
 #include "vm/vm.h"
 #include "vm/vm_tiering.h"
 #include "vm/jit_ir.h"
+#include "vm/jit_ir_debug.h"
 #include "vm/jit_translation.h"
 #include <assert.h>
 #include <stdbool.h>
@@ -51,6 +52,24 @@ orus_jit_kind_is_integer(OrusJitValueKind kind) {
 VMProfilingContext g_profiling = {0};
 
 extern VM vm;
+
+static bool
+orus_jit_trace_ir_enabled(void) {
+    static int cached = -1;
+    if (cached < 0) {
+        cached = 0;
+        const char* env = getenv("ORUS_TRACE_JIT_IR");
+        if (env && env[0] != '\0') {
+            cached = 1;
+        } else {
+            const char* trace = getenv("ORUS_TRACE");
+            if (trace && strstr(trace, "jit-ir")) {
+                cached = 1;
+            }
+        }
+    }
+    return cached != 0;
+}
 
 void orus_jit_translation_failure_log_init(
     OrusJitTranslationFailureLog* log) {
@@ -2651,6 +2670,9 @@ void queue_tier_up(VMState* vm_state, const HotPathSample* sample) {
         program.loop_end_offset = 0;
     } else {
         vm_state->jit_translation_success_count++;
+        if (orus_jit_trace_ir_enabled()) {
+            orus_jit_ir_dump_program(&program, stderr);
+        }
     }
 
     JITEntry entry;
