@@ -1075,6 +1075,181 @@ static bool test_backend_emits_f64_mul(void) {
     return success;
 }
 
+typedef union UnsupportedOpcodeValues {
+    struct {
+        int64_t lhs;
+        int64_t rhs;
+    } s64;
+    struct {
+        uint64_t lhs;
+        uint64_t rhs;
+    } u64;
+    struct {
+        double lhs;
+        double rhs;
+    } f64;
+} UnsupportedOpcodeValues;
+
+typedef struct UnsupportedOpcodeCase {
+    const char* label;
+    OrusJitIROpcode opcode;
+    OrusJitValueKind kind;
+    UnsupportedOpcodeValues values;
+} UnsupportedOpcodeCase;
+
+static bool run_unsupported_opcode_case(const UnsupportedOpcodeCase* test_case) {
+    if (!test_case) {
+        return false;
+    }
+
+    initVM();
+    orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
+
+    struct OrusJitBackend* backend = orus_jit_backend_create();
+    if (!backend) {
+        freeVM();
+        return false;
+    }
+
+    const uint16_t dst = FRAME_REG_START;
+    const uint16_t lhs = FRAME_REG_START + 1u;
+    const uint16_t rhs = FRAME_REG_START + 2u;
+
+    OrusJitIRInstruction instructions[4];
+    memset(instructions, 0, sizeof(instructions));
+
+    instructions[0].opcode = ORUS_JIT_IR_OP_LOAD_I32_CONST;
+    instructions[1].opcode = ORUS_JIT_IR_OP_LOAD_I32_CONST;
+    instructions[0].value_kind = ORUS_JIT_VALUE_I32;
+    instructions[1].value_kind = ORUS_JIT_VALUE_I32;
+
+    uint64_t lhs_bits = 0u;
+    uint64_t rhs_bits = 0u;
+
+    switch (test_case->kind) {
+        case ORUS_JIT_VALUE_I64:
+            lhs_bits = (uint64_t)test_case->values.s64.lhs;
+            rhs_bits = (uint64_t)test_case->values.s64.rhs;
+            instructions[0].opcode = ORUS_JIT_IR_OP_LOAD_I64_CONST;
+            instructions[1].opcode = ORUS_JIT_IR_OP_LOAD_I64_CONST;
+            instructions[0].value_kind = ORUS_JIT_VALUE_I64;
+            instructions[1].value_kind = ORUS_JIT_VALUE_I64;
+            break;
+        case ORUS_JIT_VALUE_U64:
+            lhs_bits = test_case->values.u64.lhs;
+            rhs_bits = test_case->values.u64.rhs;
+            instructions[0].opcode = ORUS_JIT_IR_OP_LOAD_U64_CONST;
+            instructions[1].opcode = ORUS_JIT_IR_OP_LOAD_U64_CONST;
+            instructions[0].value_kind = ORUS_JIT_VALUE_U64;
+            instructions[1].value_kind = ORUS_JIT_VALUE_U64;
+            break;
+        case ORUS_JIT_VALUE_F64: {
+            double lhs_value = test_case->values.f64.lhs;
+            double rhs_value = test_case->values.f64.rhs;
+            memcpy(&lhs_bits, &lhs_value, sizeof(lhs_bits));
+            memcpy(&rhs_bits, &rhs_value, sizeof(rhs_bits));
+            instructions[0].opcode = ORUS_JIT_IR_OP_LOAD_F64_CONST;
+            instructions[1].opcode = ORUS_JIT_IR_OP_LOAD_F64_CONST;
+            instructions[0].value_kind = ORUS_JIT_VALUE_F64;
+            instructions[1].value_kind = ORUS_JIT_VALUE_F64;
+            break;
+        }
+        default:
+            orus_jit_backend_destroy(backend);
+            freeVM();
+            return false;
+    }
+
+    instructions[0].operands.load_const.dst_reg = lhs;
+    instructions[0].operands.load_const.immediate_bits = lhs_bits;
+    instructions[1].operands.load_const.dst_reg = rhs;
+    instructions[1].operands.load_const.immediate_bits = rhs_bits;
+
+    instructions[2].opcode = test_case->opcode;
+    instructions[2].value_kind = test_case->kind;
+    instructions[2].operands.arithmetic.dst_reg = dst;
+    instructions[2].operands.arithmetic.lhs_reg = lhs;
+    instructions[2].operands.arithmetic.rhs_reg = rhs;
+
+    instructions[3].opcode = ORUS_JIT_IR_OP_RETURN;
+
+    OrusJitIRProgram program;
+    init_ir_program(&program, instructions, 4);
+
+    JITEntry entry;
+    if (!compile_program(backend, &program, &entry)) {
+        orus_jit_backend_destroy(backend);
+        freeVM();
+        return false;
+    }
+
+    const char* debug_name = entry.debug_name ? entry.debug_name : "";
+    bool used_helper_stub = (strcmp(debug_name, "orus_jit_helper_stub") == 0);
+
+    uint64_t initial_type_deopts = vm.jit_native_type_deopts;
+
+    entry.entry_point(&vm);
+
+    bool recorded_type_deopt = vm.jit_native_type_deopts > initial_type_deopts;
+
+    orus_jit_backend_release_entry(backend, &entry);
+    orus_jit_backend_destroy(backend);
+    freeVM();
+
+    if (!used_helper_stub) {
+        fprintf(stderr,
+                "unsupported opcode fixture '%s' expected helper stub fallback\n",
+                test_case->label);
+        return false;
+    }
+
+    if (!recorded_type_deopt) {
+        fprintf(stderr,
+                "unsupported opcode fixture '%s' did not trigger bailout counters\n",
+                test_case->label);
+        return false;
+    }
+
+    return true;
+}
+
+static bool test_backend_documents_unhandled_arithmetic_opcodes(void) {
+    static const UnsupportedOpcodeCase cases[] = {
+        {.label = "div_i64",
+         .opcode = ORUS_JIT_IR_OP_DIV_I64,
+         .kind = ORUS_JIT_VALUE_I64,
+         .values.s64 = {.lhs = 96, .rhs = 7}},
+        {.label = "mod_i64",
+         .opcode = ORUS_JIT_IR_OP_MOD_I64,
+         .kind = ORUS_JIT_VALUE_I64,
+         .values.s64 = {.lhs = 96, .rhs = 7}},
+        {.label = "div_u64",
+         .opcode = ORUS_JIT_IR_OP_DIV_U64,
+         .kind = ORUS_JIT_VALUE_U64,
+         .values.u64 = {.lhs = 128u, .rhs = 5u}},
+        {.label = "mod_u64",
+         .opcode = ORUS_JIT_IR_OP_MOD_U64,
+         .kind = ORUS_JIT_VALUE_U64,
+         .values.u64 = {.lhs = 128u, .rhs = 5u}},
+        {.label = "div_f64",
+         .opcode = ORUS_JIT_IR_OP_DIV_F64,
+         .kind = ORUS_JIT_VALUE_F64,
+         .values.f64 = {.lhs = 81.0, .rhs = 4.5}},
+        {.label = "mod_f64",
+         .opcode = ORUS_JIT_IR_OP_MOD_F64,
+         .kind = ORUS_JIT_VALUE_F64,
+         .values.f64 = {.lhs = 81.0, .rhs = 4.5}},
+    };
+
+    bool success = true;
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); ++i) {
+        if (!run_unsupported_opcode_case(&cases[i])) {
+            success = false;
+        }
+    }
+    return success;
+}
+
 int main(void) {
     if (!orus_jit_backend_is_available()) {
         printf("Baseline JIT backend unavailable; skipping backend tests.\n");
@@ -1104,6 +1279,11 @@ int main(void) {
     }
     if (!test_backend_emits_u64_add()) {
         fprintf(stderr, "backend u64 add test failed\n");
+        success = false;
+    }
+    if (!test_backend_documents_unhandled_arithmetic_opcodes()) {
+        fprintf(stderr,
+                "backend unsupported arithmetic opcode fixtures failed\n");
         success = false;
     }
     if (!test_backend_emits_fused_increment_loops()) {
