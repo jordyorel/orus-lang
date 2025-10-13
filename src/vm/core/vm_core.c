@@ -143,6 +143,10 @@ void initVM(void) {
     orus_jit_translation_failure_log_init(&vm.jit_translation_failures);
     vm.jit_native_dispatch_count = 0;
     vm.jit_native_type_deopts = 0;
+    vm.jit_enter_cycle_total = 0;
+    vm.jit_enter_cycle_samples = 0;
+    vm.jit_enter_cycle_warmup_total = 0;
+    vm.jit_enter_cycle_warmup_samples = 0;
     // Default to the full baseline rollout so production workloads gain
     // immediate access to floating-point and string helpers without requiring
     // a command-line override.

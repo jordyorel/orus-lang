@@ -766,6 +766,8 @@ jit-cross-arch-tests: jit-backend-helper-tests jit-translation-tests
 jit-benchmark-orus: $(ORUS)
 	@echo "Running JIT benchmark on optimized_loop_benchmark.orus..."
 	@./$(ORUS) --jit-benchmark tests/benchmarks/optimized_loop_benchmark.orus
+	@echo "Running JIT benchmark on ffi_ping_pong_benchmark.orus..."
+	@./$(ORUS) --jit-benchmark tests/benchmarks/ffi_ping_pong_benchmark.orus
 
 $(REGISTER_ALLOCATOR_TEST_BIN): tests/unit/test_register_allocator.c $(COMPILER_OBJS) $(VM_OBJS)
 	@mkdir -p $(dir $@)

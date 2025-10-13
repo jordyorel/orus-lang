@@ -57,7 +57,9 @@ orus_jit_ir_opcode_name(OrusJitIROpcode opcode) {
         case ORUS_JIT_IR_OP_CONCAT_STRING: return "ORUS_JIT_IR_OP_CONCAT_STRING";
         case ORUS_JIT_IR_OP_TO_STRING: return "ORUS_JIT_IR_OP_TO_STRING";
         case ORUS_JIT_IR_OP_TIME_STAMP: return "ORUS_JIT_IR_OP_TIME_STAMP";
+        case ORUS_JIT_IR_OP_MAKE_ARRAY: return "ORUS_JIT_IR_OP_MAKE_ARRAY";
         case ORUS_JIT_IR_OP_ARRAY_PUSH: return "ORUS_JIT_IR_OP_ARRAY_PUSH";
+        case ORUS_JIT_IR_OP_ENUM_NEW: return "ORUS_JIT_IR_OP_ENUM_NEW";
         case ORUS_JIT_IR_OP_PRINT: return "ORUS_JIT_IR_OP_PRINT";
         case ORUS_JIT_IR_OP_ASSERT_EQ: return "ORUS_JIT_IR_OP_ASSERT_EQ";
         case ORUS_JIT_IR_OP_CALL_NATIVE: return "ORUS_JIT_IR_OP_CALL_NATIVE";

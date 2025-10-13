@@ -1335,27 +1335,51 @@ static bool test_translates_runtime_helpers(void) {
     init_function(&function, &chunk);
 
     const char* tag = "jit_translation";
+    ObjString* enum_type = allocateString("BenchType", 9);
+    ObjString* enum_variant = allocateString("Variant", 7);
+    ASSERT_TRUE(enum_type != NULL && enum_variant != NULL,
+                "expected enum name allocation");
+    int enum_type_index = addConstant(&chunk, STRING_VAL(enum_type));
+    int enum_variant_index = addConstant(&chunk, STRING_VAL(enum_variant));
+    ASSERT_TRUE(enum_type_index >= 0 && enum_variant_index >= 0,
+                "expected enum constant indices");
+
     writeChunk(&chunk, OP_TIME_STAMP, 1, 0, tag);
     writeChunk(&chunk, 0u, 1, 0, tag);
 
-    writeChunk(&chunk, OP_ARRAY_PUSH_R, 1, 0, tag);
+    writeChunk(&chunk, OP_MAKE_ARRAY_R, 1, 0, tag);
     writeChunk(&chunk, 1u, 1, 0, tag);
     writeChunk(&chunk, 2u, 1, 0, tag);
+    writeChunk(&chunk, 2u, 1, 0, tag);
 
-    writeChunk(&chunk, OP_PRINT_R, 1, 0, tag);
+    writeChunk(&chunk, OP_ENUM_NEW_R, 1, 0, tag);
     writeChunk(&chunk, 3u, 1, 0, tag);
-
-    writeChunk(&chunk, OP_ASSERT_EQ_R, 1, 0, tag);
+    writeChunk(&chunk, 1u, 1, 0, tag);
+    writeChunk(&chunk, 2u, 1, 0, tag);
     writeChunk(&chunk, 4u, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)((enum_type_index >> 8) & 0xFF), 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)(enum_type_index & 0xFF), 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)((enum_variant_index >> 8) & 0xFF), 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)(enum_variant_index & 0xFF), 1, 0, tag);
+
+    writeChunk(&chunk, OP_ARRAY_PUSH_R, 1, 0, tag);
     writeChunk(&chunk, 5u, 1, 0, tag);
     writeChunk(&chunk, 6u, 1, 0, tag);
+
+    writeChunk(&chunk, OP_PRINT_R, 1, 0, tag);
     writeChunk(&chunk, 7u, 1, 0, tag);
 
-    writeChunk(&chunk, OP_CALL_NATIVE_R, 1, 0, tag);
-    writeChunk(&chunk, 2u, 1, 0, tag);
+    writeChunk(&chunk, OP_ASSERT_EQ_R, 1, 0, tag);
     writeChunk(&chunk, 8u, 1, 0, tag);
-    writeChunk(&chunk, 1u, 1, 0, tag);
     writeChunk(&chunk, 9u, 1, 0, tag);
+    writeChunk(&chunk, 10u, 1, 0, tag);
+    writeChunk(&chunk, 11u, 1, 0, tag);
+
+    writeChunk(&chunk, OP_CALL_NATIVE_R, 1, 0, tag);
+    writeChunk(&chunk, 12u, 1, 0, tag);
+    writeChunk(&chunk, 13u, 1, 0, tag);
+    writeChunk(&chunk, 1u, 1, 0, tag);
+    writeChunk(&chunk, 14u, 1, 0, tag);
 
     writeChunk(&chunk, OP_RETURN_VOID, 1, 0, tag);
 
@@ -1378,6 +1402,8 @@ static bool test_translates_runtime_helpers(void) {
     }
 
     bool saw_time_stamp = false;
+    bool saw_make_array = false;
+    bool saw_enum_new = false;
     bool saw_array_push = false;
     bool saw_print = false;
     bool saw_assert_eq = false;
@@ -1387,6 +1413,10 @@ static bool test_translates_runtime_helpers(void) {
         OrusJitIROpcode opcode = program.instructions[i].opcode;
         if (opcode == ORUS_JIT_IR_OP_TIME_STAMP) {
             saw_time_stamp = true;
+        } else if (opcode == ORUS_JIT_IR_OP_MAKE_ARRAY) {
+            saw_make_array = true;
+        } else if (opcode == ORUS_JIT_IR_OP_ENUM_NEW) {
+            saw_enum_new = true;
         } else if (opcode == ORUS_JIT_IR_OP_ARRAY_PUSH) {
             saw_array_push = true;
         } else if (opcode == ORUS_JIT_IR_OP_PRINT) {
@@ -1399,6 +1429,8 @@ static bool test_translates_runtime_helpers(void) {
     }
 
     ASSERT_TRUE(saw_time_stamp, "expected ORUS_JIT_IR_OP_TIME_STAMP in program");
+    ASSERT_TRUE(saw_make_array, "expected ORUS_JIT_IR_OP_MAKE_ARRAY in program");
+    ASSERT_TRUE(saw_enum_new, "expected ORUS_JIT_IR_OP_ENUM_NEW in program");
     ASSERT_TRUE(saw_array_push, "expected ORUS_JIT_IR_OP_ARRAY_PUSH in program");
     ASSERT_TRUE(saw_print, "expected ORUS_JIT_IR_OP_PRINT in program");
     ASSERT_TRUE(saw_assert_eq, "expected ORUS_JIT_IR_OP_ASSERT_EQ in program");

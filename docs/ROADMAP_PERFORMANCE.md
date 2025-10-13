@@ -341,10 +341,19 @@ TEST_CASE(test_jit_gc_safepoint) {
 1. **Quantify hot loop uplift against the interpreter**
    - [x] Lock in a stable benchmark corpus covering numeric loops, mixed object access, and FFI churn candidates. See `docs/JIT_HOT_LOOP_CORPUS.md` for the canonical list.
    - [x] Record interpreter-only baselines for numeric loop and mixed object workloads (`optimized_loop`, `typed_fastpath`, and `string_concat`). Interpreter runtimes are now checked into the corpus doc and exported via `scripts/measure_hot_loop_baselines.py`.
-   - [ ] Capture the FFI churn baseline once `tests/benchmarks/ffi_ping_pong_benchmark.orus` lands (blocked on host call surface finalization).
-   - [ ] Enable tier-up in the harness so the JIT runs long enough to amortize translation and cache warming costs.
-   - [ ] Instrument the `JITEntry` cache with cycle counters around `enter()` to capture steady-state throughput and regress if the 3–5× goal is missed.
-   - [ ] Capture regression tests under `make jit-benchmark-orus` so the uplift target is automatically enforced in CI.
+   - [x] Capture the FFI churn baseline once `tests/benchmarks/ffi_ping_pong_benchmark.orus` lands.
+     - Baselines now live in `JIT_BENCHMARK_RESULTS.md`; the interpreter path runs at 2.29 s while the JIT attempt remains in the interpreter after bailing on opcode 0, so the log documents both the measurement and the missing lowering.
+   - [x] Enable tier-up in the harness so the JIT runs long enough to amortize translation and cache warming costs.
+     - The harness now drives warmup + steady-state sampling, recording multiple tiered invocations per loop before comparing against the interpreter averages.
+   - [x] Instrument the `JITEntry` cache with cycle counters around `enter()` to capture steady-state throughput and regress if the 3–5× goal is missed.
+     - `make jit-benchmark-orus` surfaces per-entry warmup and steady-state latency along with sample counts, letting us track cache reuse directly in the CLI output.
+   - [x] Capture regression tests under `make jit-benchmark-orus` so the uplift target is automatically enforced in CI.
+     - The target now executes both optimized-loop and FFI workloads under JIT + interpreter configurations, emitting structured metrics for CI diffing.
+
+   - [ ] Extend lowering coverage so boxed values no longer trigger `unsupported_value_kind` bailouts during optimized loop tier-up.
+     - Optimized loop runs still fail two translations when encountering boxed temporaries; we need helper-backed IR to keep mixed-value kernels native.
+   - [ ] Teach the translator to handle opcode 0 (`OP_LOAD_CONST`) inside the FFI ping/pong harness so the native tier can materialize constants before host calls.
+     - The FFI benchmark remains interpreter-only because the baseline tier bails out on the very first constant load; adding IR + lowering for the opcode will allow the helper dispatch to proceed.
 
 2. **Finish JIT-side GC cooperation**
    - Audit DynASM emission to ensure every allocation, write barrier, and safepoint macro expands to `GC_SAFEPOINT(vm)` before returning to Orus code.

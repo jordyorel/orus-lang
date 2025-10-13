@@ -82,7 +82,9 @@ typedef enum OrusJitIROpcode {
     ORUS_JIT_IR_OP_TO_STRING,
 
     ORUS_JIT_IR_OP_TIME_STAMP,
+    ORUS_JIT_IR_OP_MAKE_ARRAY,
     ORUS_JIT_IR_OP_ARRAY_PUSH,
+    ORUS_JIT_IR_OP_ENUM_NEW,
     ORUS_JIT_IR_OP_PRINT,
     ORUS_JIT_IR_OP_ASSERT_EQ,
     ORUS_JIT_IR_OP_CALL_NATIVE,
@@ -132,6 +134,21 @@ typedef enum OrusJitIROpcode {
     ORUS_JIT_IR_OP_I32_TO_I64,
     ORUS_JIT_IR_OP_U32_TO_U64,
     ORUS_JIT_IR_OP_U32_TO_I32,
+    ORUS_JIT_IR_OP_I32_TO_F64,
+    ORUS_JIT_IR_OP_I64_TO_F64,
+    ORUS_JIT_IR_OP_F64_TO_I32,
+    ORUS_JIT_IR_OP_F64_TO_I64,
+    ORUS_JIT_IR_OP_F64_TO_U32,
+    ORUS_JIT_IR_OP_U32_TO_F64,
+    ORUS_JIT_IR_OP_I32_TO_U32,
+    ORUS_JIT_IR_OP_I64_TO_U32,
+    ORUS_JIT_IR_OP_I32_TO_U64,
+    ORUS_JIT_IR_OP_I64_TO_U64,
+    ORUS_JIT_IR_OP_U64_TO_I32,
+    ORUS_JIT_IR_OP_U64_TO_I64,
+    ORUS_JIT_IR_OP_U64_TO_U32,
+    ORUS_JIT_IR_OP_F64_TO_U64,
+    ORUS_JIT_IR_OP_U64_TO_F64,
 
     ORUS_JIT_IR_OP_SAFEPOINT,
     ORUS_JIT_IR_OP_LOOP_BACK,
@@ -203,9 +220,22 @@ typedef struct OrusJitIRInstruction {
             uint16_t dst_reg;
         } time_stamp;
         struct {
+            uint16_t dst_reg;
+            uint16_t first_reg;
+            uint16_t count;
+        } make_array;
+        struct {
             uint16_t array_reg;
             uint16_t value_reg;
         } array_push;
+        struct {
+            uint16_t dst_reg;
+            uint16_t variant_index;
+            uint16_t payload_count;
+            uint16_t payload_start;
+            uint16_t type_const_index;
+            uint16_t variant_const_index;
+        } enum_new;
         struct {
             uint16_t dst_reg;
             uint16_t label_reg;

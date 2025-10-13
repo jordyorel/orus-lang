@@ -37,6 +37,7 @@ vm_jit_cache_reset_slot(JITEntryCacheSlot* slot) {
     slot->loop_index = UINT16_MAX;
     slot->generation = 0;
     slot->occupied = false;
+    slot->warmup_recorded = false;
 }
 
 static JITEntryCacheSlot*
@@ -108,6 +109,7 @@ vm_jit_cache_acquire_slot(FunctionId function, LoopId loop) {
         slot->function_index = function;
         slot->loop_index = loop;
         slot->occupied = true;
+        slot->warmup_recorded = false;
         vm.jit_cache.count++;
         return slot;
     }
@@ -144,6 +146,7 @@ vm_jit_install_entry(FunctionId function, LoopId loop, JITEntry* entry) {
 
     slot->entry = *entry;
     slot->generation = ++vm.jit_cache.next_generation;
+    slot->warmup_recorded = false;
 
     entry->code_ptr = NULL;
     entry->entry_point = NULL;

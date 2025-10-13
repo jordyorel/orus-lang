@@ -196,6 +196,20 @@ int main(int argc, const char* argv[]) {
                " succeeded, %" PRIu64 " failed\n",
                jit_stats.translation_success,
                jit_stats.translation_failure);
+        if (jit_stats.enter_cycle_samples > 0) {
+            printf("[JIT Benchmark] native steady-state latency: %.0f ns "
+                   "(samples=%" PRIu64 ", total=%" PRIu64 ")\n",
+                   jit_stats.enter_cycle_average,
+                   jit_stats.enter_cycle_samples,
+                   jit_stats.enter_cycle_total);
+        }
+        if (jit_stats.enter_cycle_warmup_samples > 0) {
+            printf("[JIT Benchmark] native warmup latency: %.0f ns (samples=%" PRIu64
+                   ", total=%" PRIu64 ")\n",
+                   jit_stats.enter_cycle_warmup_average,
+                   jit_stats.enter_cycle_warmup_samples,
+                   jit_stats.enter_cycle_warmup_total);
+        }
         printf("[JIT Benchmark] rollout stage: %s (mask=0x%X)\n",
                orus_jit_rollout_stage_name(jit_stats.rollout_stage),
                jit_stats.rollout_mask);

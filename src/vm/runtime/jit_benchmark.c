@@ -152,6 +152,20 @@ vm_jit_run_source_benchmark(const char* source,
         stats->native_dispatches = vm.jit_native_dispatch_count;
         stats->native_type_deopts = vm.jit_native_type_deopts;
         stats->deopts = vm.jit_deopt_count;
+        stats->enter_cycle_total = vm.jit_enter_cycle_total;
+        stats->enter_cycle_samples = vm.jit_enter_cycle_samples;
+        stats->enter_cycle_warmup_total = vm.jit_enter_cycle_warmup_total;
+        stats->enter_cycle_warmup_samples = vm.jit_enter_cycle_warmup_samples;
+        stats->enter_cycle_average =
+            (stats->enter_cycle_samples > 0)
+                ? (double)stats->enter_cycle_total /
+                      (double)stats->enter_cycle_samples
+                : 0.0;
+        stats->enter_cycle_warmup_average =
+            (stats->enter_cycle_warmup_samples > 0)
+                ? (double)stats->enter_cycle_warmup_total /
+                      (double)stats->enter_cycle_warmup_samples
+                : 0.0;
         stats->failure_log = vm.jit_translation_failures;
         stats->rollout_stage = vm.jit_rollout.stage;
         stats->rollout_mask = vm.jit_rollout.enabled_kind_mask;
