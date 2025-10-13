@@ -60,4 +60,7 @@ void orus_jit_backend_release_entry(struct OrusJitBackend* backend,
 
 const JITBackendVTable* orus_jit_backend_vtable(void);
 
+size_t orus_jit_helper_safepoint_count(void);
+void orus_jit_helper_safepoint_reset(void);
+
 #endif // ORUS_VM_JIT_BACKEND_H

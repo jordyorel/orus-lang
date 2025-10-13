@@ -8,11 +8,14 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "runtime/memory.h"
 #include "vm/jit_backend.h"
 #include "vm/jit_ir.h"
 #include "vm/jit_translation.h"
+#include "vm/register_file.h"
 #include "vm/vm.h"
 #include "vm/vm_comparison.h"
+#include "vm/vm_tiering.h"
 
 #define ASSERT_TRUE(cond, message)                                                   \
     do {                                                                             \
@@ -47,6 +50,107 @@ static bool compile_program(struct OrusJitBackend* backend,
     return true;
 }
 
+static bool run_gc_intensive_hotloop(void) {
+    initVM();
+    orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
+
+    struct OrusJitBackend* backend = orus_jit_backend_create();
+    if (!backend) {
+        freeVM();
+        return false;
+    }
+
+    const uint16_t acc_reg = FRAME_REG_START;
+    const uint16_t inc_reg = FRAME_REG_START + 1u;
+
+    OrusJitIRInstruction instructions[6];
+    memset(instructions, 0, sizeof(instructions));
+
+    instructions[0].opcode = ORUS_JIT_IR_OP_LOAD_I32_CONST;
+    instructions[0].value_kind = ORUS_JIT_VALUE_I32;
+    instructions[0].operands.load_const.dst_reg = acc_reg;
+    instructions[0].operands.load_const.immediate_bits = 1u;
+
+    instructions[1].opcode = ORUS_JIT_IR_OP_LOAD_I32_CONST;
+    instructions[1].value_kind = ORUS_JIT_VALUE_I32;
+    instructions[1].operands.load_const.dst_reg = inc_reg;
+    instructions[1].operands.load_const.immediate_bits = 2u;
+
+    instructions[2].opcode = ORUS_JIT_IR_OP_ADD_I32;
+    instructions[2].value_kind = ORUS_JIT_VALUE_I32;
+    instructions[2].operands.arithmetic.dst_reg = acc_reg;
+    instructions[2].operands.arithmetic.lhs_reg = acc_reg;
+    instructions[2].operands.arithmetic.rhs_reg = inc_reg;
+
+    instructions[3].opcode = ORUS_JIT_IR_OP_SAFEPOINT;
+    instructions[3].value_kind = ORUS_JIT_VALUE_I32;
+
+    instructions[4].opcode = ORUS_JIT_IR_OP_ADD_I32;
+    instructions[4].value_kind = ORUS_JIT_VALUE_I32;
+    instructions[4].operands.arithmetic.dst_reg = acc_reg;
+    instructions[4].operands.arithmetic.lhs_reg = acc_reg;
+    instructions[4].operands.arithmetic.rhs_reg = inc_reg;
+
+    instructions[5].opcode = ORUS_JIT_IR_OP_RETURN;
+
+    OrusJitIRProgram program;
+    init_ir_program(&program, instructions, 6);
+
+    JITEntry entry;
+    if (!compile_program(backend, &program, &entry)) {
+        orus_jit_backend_destroy(backend);
+        freeVM();
+        return false;
+    }
+
+    vm_store_i32_typed_hot(acc_reg, 0);
+    vm_store_i32_typed_hot(inc_reg, 0);
+
+    size_t previous_threshold = gcThreshold;
+    size_t initial_gc = vm.gcCount;
+    vm.gcPaused = false;
+    gcThreshold = 64u;
+    vm.bytesAllocated = gcThreshold + 1024u;
+
+    orus_jit_helper_safepoint_reset();
+
+    entry.entry_point(&vm);
+
+    bool gc_triggered = vm.gcCount > initial_gc;
+    size_t safepoint_count = orus_jit_helper_safepoint_count();
+    int32_t acc_value = vm.typed_regs.i32_regs[acc_reg];
+    int32_t inc_value = vm.typed_regs.i32_regs[inc_reg];
+    bool registers_survived = (acc_value == 5) && (inc_value == 2);
+    bool safepoint_seen = safepoint_count > 0u;
+
+    if (!gc_triggered) {
+        fprintf(stderr,
+                "expected GC safepoint to trigger a collection during hotloop\n");
+    }
+    if (!safepoint_seen) {
+        fprintf(stderr,
+                "expected safepoint helper to increment counter during hotloop\n");
+    }
+    if (!registers_survived) {
+        fprintf(stderr,
+                "typed registers lost state across safepoint: acc=%d inc=%d\n",
+                acc_value,
+                inc_value);
+    }
+
+    gcThreshold = previous_threshold;
+
+    orus_jit_backend_release_entry(backend, &entry);
+    orus_jit_backend_destroy(backend);
+    freeVM();
+
+    return gc_triggered && safepoint_seen && registers_survived;
+}
+
+static bool test_backend_gc_safepoint_handles_heap_growth(void) {
+    return run_gc_intensive_hotloop();
+}
+
 static void force_helper_stub_env_on(void) {
 #if defined(_WIN32)
     _putenv("ORUS_JIT_FORCE_HELPER_STUB=1");
@@ -61,6 +165,228 @@ static void force_helper_stub_env_off(void) {
 #else
     unsetenv("ORUS_JIT_FORCE_HELPER_STUB");
 #endif
+}
+
+static int native_stub_invocations = 0;
+
+static Value native_allocating_stub(int argCount, Value* args) {
+    (void)argCount;
+    (void)args;
+    native_stub_invocations++;
+    if (getenv("ORUS_JIT_BACKEND_TEST_DEBUG")) {
+        fprintf(stderr, "[jit-backend-test] native stub invocation %d\n",
+                native_stub_invocations);
+    }
+    return BOOL_VAL(true);
+}
+
+static bool test_backend_call_native_triggers_gc_safepoint(void) {
+    initVM();
+    orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
+
+    struct OrusJitBackend* backend = orus_jit_backend_create();
+    ASSERT_TRUE(backend != NULL, "expected backend allocation to succeed");
+
+    vm.nativeFunctionCount = 1;
+    vm.nativeFunctions[0].function = native_allocating_stub;
+    vm.nativeFunctions[0].arity = 0;
+    vm.nativeFunctions[0].name = NULL;
+    vm.nativeFunctions[0].returnType = NULL;
+
+    const uint16_t dst = FRAME_REG_START;
+
+    OrusJitIRInstruction instructions[2];
+    memset(instructions, 0, sizeof(instructions));
+
+    instructions[0].opcode = ORUS_JIT_IR_OP_CALL_NATIVE;
+    instructions[0].value_kind = ORUS_JIT_VALUE_BOXED;
+    instructions[0].operands.call_native.dst_reg = dst;
+    instructions[0].operands.call_native.first_arg_reg = dst;
+    instructions[0].operands.call_native.arg_count = 0;
+    instructions[0].operands.call_native.native_index = 0;
+
+    instructions[1].opcode = ORUS_JIT_IR_OP_RETURN;
+
+    OrusJitIRProgram program;
+    init_ir_program(&program, instructions, 2);
+
+    JITEntry entry;
+    if (!compile_program(backend, &program, &entry)) {
+        orus_jit_backend_destroy(backend);
+        freeVM();
+        return false;
+    }
+
+    orus_jit_helper_safepoint_reset();
+    native_stub_invocations = 0;
+
+    entry.entry_point(&vm);
+
+    Value result = vm_get_register_safe(dst);
+    bool invoked = (native_stub_invocations == 1);
+    bool returned_true = IS_BOOL(result) && AS_BOOL(result);
+    size_t safepoint_count = orus_jit_helper_safepoint_count();
+    bool safepoint_hit = safepoint_count > 0u;
+
+    if (!invoked) {
+        fprintf(stderr, "native call helper stub was not invoked\n");
+    }
+    if (!returned_true) {
+        fprintf(stderr, "native call helper did not propagate return value\n");
+    }
+    if (!safepoint_hit) {
+        fprintf(stderr,
+                "native call helper missed safepoint accounting after host call\n");
+    }
+
+    orus_jit_backend_release_entry(backend, &entry);
+    orus_jit_backend_destroy(backend);
+    freeVM();
+
+    return invoked && returned_true && safepoint_hit;
+}
+
+static bool test_backend_deopt_mid_gc_preserves_frame_alignment(void) {
+    initVM();
+    orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
+
+    struct OrusJitBackend* backend = orus_jit_backend_create();
+    ASSERT_TRUE(backend != NULL, "expected backend allocation to succeed");
+
+    Chunk* baseline_chunk = (Chunk*)malloc(sizeof(Chunk));
+    Chunk* specialized_chunk = (Chunk*)malloc(sizeof(Chunk));
+    if (!baseline_chunk || !specialized_chunk) {
+        free(baseline_chunk);
+        free(specialized_chunk);
+        orus_jit_backend_destroy(backend);
+        freeVM();
+        return false;
+    }
+
+    initChunk(baseline_chunk);
+    initChunk(specialized_chunk);
+
+    writeChunk(baseline_chunk, OP_RETURN_VOID, 1, 0, "jit_backend");
+    writeChunk(specialized_chunk, OP_RETURN_VOID, 1, 0, "jit_backend");
+
+    int bool_constant_index = addConstant(baseline_chunk, BOOL_VAL(true));
+    if (bool_constant_index < 0) {
+        freeChunk(baseline_chunk);
+        freeChunk(specialized_chunk);
+        free(baseline_chunk);
+        free(specialized_chunk);
+        orus_jit_backend_destroy(backend);
+        freeVM();
+        return false;
+    }
+
+    Function* function = &vm.functions[0];
+    memset(function, 0, sizeof(*function));
+    function->chunk = baseline_chunk;
+    function->specialized_chunk = specialized_chunk;
+    function->tier = FUNCTION_TIER_SPECIALIZED;
+    function->start = 0;
+    function->arity = 0;
+    function->deopt_handler = vm_default_deopt_stub;
+    vm.functionCount = 1;
+
+    vm.chunk = specialized_chunk;
+    vm.ip = specialized_chunk->code;
+
+    CallFrame* frame = allocate_frame(&vm.register_file);
+    if (!frame) {
+        freeVM();
+        orus_jit_backend_destroy(backend);
+        return false;
+    }
+    frame->functionIndex = 0;
+    frame->parameterBaseRegister = FRAME_REG_START;
+    frame->resultRegister = FRAME_REG_START;
+    frame->register_count = 2;
+    frame->previousChunk = specialized_chunk;
+
+    const uint16_t bool_reg = FRAME_REG_START;
+    const uint16_t dst_reg = (uint16_t)(FRAME_REG_START + 1u);
+
+    OrusJitIRInstruction instructions[4];
+    memset(instructions, 0, sizeof(instructions));
+
+    instructions[0].opcode = ORUS_JIT_IR_OP_LOAD_VALUE_CONST;
+    instructions[0].value_kind = ORUS_JIT_VALUE_BOOL;
+    instructions[0].operands.load_const.dst_reg = bool_reg;
+    instructions[0].operands.load_const.constant_index = (uint16_t)bool_constant_index;
+
+    instructions[1].opcode = ORUS_JIT_IR_OP_SAFEPOINT;
+    instructions[1].value_kind = ORUS_JIT_VALUE_BOOL;
+
+    instructions[2].opcode = ORUS_JIT_IR_OP_MOVE_STRING;
+    instructions[2].value_kind = ORUS_JIT_VALUE_STRING;
+    instructions[2].operands.move.dst_reg = dst_reg;
+    instructions[2].operands.move.src_reg = bool_reg;
+
+    instructions[3].opcode = ORUS_JIT_IR_OP_RETURN;
+
+    OrusJitIRProgram program;
+    init_ir_program(&program, instructions, 4);
+    program.source_chunk = baseline_chunk;
+
+    JITEntry entry;
+    if (!compile_program(backend, &program, &entry)) {
+        deallocate_frame(&vm.register_file);
+        orus_jit_backend_destroy(backend);
+        freeVM();
+        return false;
+    }
+
+    size_t previous_threshold = gcThreshold;
+    size_t initial_gc_count = vm.gcCount;
+    size_t base_type_deopts = vm.jit_native_type_deopts;
+    gcThreshold = 64u;
+    vm.bytesAllocated = gcThreshold + 1024u;
+    vm.jit_pending_invalidate = false;
+    memset(&vm.jit_pending_trigger, 0, sizeof(vm.jit_pending_trigger));
+
+    entry.entry_point(&vm);
+
+    bool gc_triggered = vm.gcCount > initial_gc_count;
+    Value reconciled = vm.registers[bool_reg];
+    bool bool_mirrors_match = IS_BOOL(reconciled) && AS_BOOL(reconciled) &&
+                              vm.typed_regs.bool_regs[bool_reg];
+    bool downgraded_to_baseline =
+        function->tier == FUNCTION_TIER_BASELINE && vm.chunk == function->chunk;
+    bool invalidate_recorded =
+        vm.jit_pending_invalidate && vm.jit_pending_trigger.function_index == 0;
+    bool deopt_recorded = vm.jit_native_type_deopts > base_type_deopts;
+
+    if (!gc_triggered) {
+        fprintf(stderr, "expected GC to trigger during safepoint before deopt\n");
+    }
+    if (!bool_mirrors_match) {
+        fprintf(stderr,
+                "typed and boxed registers diverged after GC + deopt: boxed=%d typed=%d\n",
+                IS_BOOL(reconciled) ? AS_BOOL(reconciled) : -1,
+                vm.typed_regs.bool_regs[bool_reg]);
+    }
+    if (!downgraded_to_baseline) {
+        fprintf(stderr, "function did not fall back to baseline after deopt\n");
+    }
+    if (!invalidate_recorded) {
+        fprintf(stderr, "jit invalidate trigger was not recorded after deopt\n");
+    }
+    if (!deopt_recorded) {
+        fprintf(stderr, "type deopt counter was not incremented\n");
+    }
+
+    gcThreshold = previous_threshold;
+    vm.bytesAllocated = 0;
+
+    deallocate_frame(&vm.register_file);
+    orus_jit_backend_release_entry(backend, &entry);
+    orus_jit_backend_destroy(backend);
+    freeVM();
+
+    return gc_triggered && bool_mirrors_match && downgraded_to_baseline &&
+           invalidate_recorded && deopt_recorded;
 }
 
 static bool test_backend_helper_stub_executes(void) {
@@ -755,6 +1081,13 @@ int main(void) {
         return 0;
     }
 
+    const char* filter = getenv("ORUS_JIT_BACKEND_TEST_FILTER");
+    if (filter) {
+        if (strcmp(filter, "call_native_gc") == 0) {
+            return test_backend_call_native_triggers_gc_safepoint() ? 0 : 1;
+        }
+    }
+
     bool success = true;
 
     if (!test_backend_helper_stub_executes()) {
@@ -779,6 +1112,15 @@ int main(void) {
     }
     if (!test_backend_emits_fused_decrement_loops()) {
         fprintf(stderr, "backend fused decrement loop test failed\n");
+        success = false;
+    }
+    if (!test_backend_gc_safepoint_handles_heap_growth()) {
+        fprintf(stderr, "backend GC safepoint stress test failed\n");
+        success = false;
+    }
+    if (!test_backend_deopt_mid_gc_preserves_frame_alignment()) {
+        fprintf(stderr,
+                "backend GC + deopt frame reconciliation test failed\n");
         success = false;
     }
     if (!test_backend_emits_f64_mul()) {
