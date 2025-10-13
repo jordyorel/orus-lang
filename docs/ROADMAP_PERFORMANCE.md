@@ -350,15 +350,23 @@ TEST_CASE(test_jit_gc_safepoint) {
    - [x] Capture regression tests under `make jit-benchmark-orus` so the uplift target is automatically enforced in CI.
      - The target now executes both optimized-loop and FFI workloads under JIT + interpreter configurations, emitting structured metrics for CI diffing.
 
-   - [ ] Extend lowering coverage so boxed values no longer trigger `unsupported_value_kind` bailouts during optimized loop tier-up.
-     - Optimized loop runs still fail two translations when encountering boxed temporaries; we need helper-backed IR to keep mixed-value kernels native.
-   - [ ] Teach the translator to handle opcode 0 (`OP_LOAD_CONST`) inside the FFI ping/pong harness so the native tier can materialize constants before host calls.
-     - The FFI benchmark remains interpreter-only because the baseline tier bails out on the very first constant load; adding IR + lowering for the opcode will allow the helper dispatch to proceed.
+   - [x] Extend lowering coverage so boxed values no longer trigger `unsupported_value_kind` bailouts during optimized loop tier-up.
+     - Mixed-value loop kernels now route boxed temporaries through the shared helper-backed IR so tier-up emits native branches
+       without tripping the bailout guard. The profiler logs no longer record failed translations on boxed loop counters, keeping
+       optimized loops resident in the JIT tier. The translator now preserves boxed metadata when only one side of the loop guard
+       is typed, ensuring the helper-backed lowering is selected and validated by the mixed-counter regression test.
+   - [x] Teach the translator to handle opcode 0 (`OP_LOAD_CONST`) inside the FFI ping/pong harness so the native tier can materialize constants before host calls.
+     - Boxed constants now translate to a shared `LOAD_VALUE_CONST` IR opcode that funnels through a helper capable of materializing any constant pool entry. The x86-64 and AArch64 backends lower the opcode by invoking `orus_jit_native_load_value_const`, which validates the expected kind, warms the typed caches, and reconciles boxed registers before dispatching to FFI helpers. The baseline tier no longer bails on the first constant load, unblocking native execution of the FFI ping/pong benchmark.
 
 2. **Finish JIT-side GC cooperation**
-   - Audit DynASM emission to ensure every allocation, write barrier, and safepoint macro expands to `GC_SAFEPOINT(vm)` before returning to Orus code.
-   - Add stress tests that trigger tiered code during heap growth (`run_gc_intensive_hotloop()`), verifying reconciliation of typed registers during collections.
-   - Exercise deoptimization paths mid-GC to guarantee interpreter + JIT frame layouts remain in sync when the collector walks the stack.
+   - [x] Audit DynASM emission to ensure every allocation, write barrier, and safepoint macro expands to `GC_SAFEPOINT(vm)` before returning to Orus code.
+     - All JIT helpers now funnel through `orus_jit_helper_safepoint()` so translated DynASM paths, boxed allocations, write barriers, and native call returns consistently invoke `GC_SAFEPOINT(vm)` before resuming Orus execution.
+     - A new baseline regression drives `CALL_NATIVE` through the helper-backed IR and asserts the shared safepoint counter increments after native dispatch, preventing host hooks from bypassing GC enforcement.
+   - [x] Add stress tests that trigger tiered code during heap growth (`run_gc_intensive_hotloop()`), verifying reconciliation of typed registers during collections.
+     - The baseline backend suite now drives `run_gc_intensive_hotloop()` inside `tests/unit/test_vm_jit_backend.c`, forcing a safepoint while typed arithmetic values remain live.
+     - The stress harness spikes `bytesAllocated` past a reduced `gcThreshold`, asserts `vm.gcCount` increments, and confirms accumulator registers still contain the expected post-loop totals after the collector reconciles boxed mirrors.
+  - [x] Exercise deoptimization paths mid-GC to guarantee interpreter + JIT frame layouts remain in sync when the collector walks the stack.
+    - `tests/unit/test_vm_jit_backend.c` now drives a bool constant through a safepoint immediately before a type guard bailout, forcing `vm_default_deopt_stub()` to rebind the active frame while GC reconciliation is in flight. The regression asserts boxed and typed mirrors stay identical, the pending invalidate trigger is recorded, and the specialized function drops back to baseline execution without drifting interpreter state.
    - Extend the GC telemetry dashboard to flag missed safepoints or reconciliation drift while native frames are active.
 
 ---

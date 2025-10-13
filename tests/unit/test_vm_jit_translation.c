@@ -170,7 +170,7 @@ cleanup:
     return success;
 }
 
-static bool test_reports_constant_kind_failure(void) {
+static bool test_translates_boxed_bool_constant(void) {
     initVM();
     orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
 
@@ -182,9 +182,9 @@ static bool test_reports_constant_kind_failure(void) {
 
     const uint16_t dst0 = FRAME_REG_START;
 
-    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_I32_CONST, dst0,
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_CONST, dst0,
                                          BOOL_VAL(true)),
-                "expected constant emission");
+                "expected boxed constant emission");
     writeChunk(&chunk, OP_RETURN_VOID, 1, 0, "jit_translation");
 
     HotPathSample sample = {0};
@@ -199,15 +199,24 @@ static bool test_reports_constant_kind_failure(void) {
 
     bool success = true;
 
-    if (result.status != ORUS_JIT_TRANSLATE_STATUS_UNSUPPORTED_CONSTANT_KIND) {
-        fprintf(stderr, "Expected unsupported constant kind failure, got %s\n",
+    if (result.status != ORUS_JIT_TRANSLATE_STATUS_OK) {
+        fprintf(stderr,
+                "Expected boxed constant translation success, got %s\n",
                 orus_jit_translation_status_name(result.status));
         success = false;
+        goto cleanup;
     }
 
-    ASSERT_TRUE(orus_jit_translation_status_is_unsupported(result.status),
-                "failure should flag unsupported status");
+    ASSERT_TRUE(program.count >= 1, "expected at least one IR instruction");
+    ASSERT_TRUE(program.instructions[0].opcode ==
+                    ORUS_JIT_IR_OP_LOAD_VALUE_CONST,
+                "first instruction should load boxed const");
+    ASSERT_TRUE(program.instructions[0].value_kind == ORUS_JIT_VALUE_BOOL,
+                "boxed bool should record bool kind");
+    ASSERT_TRUE(program.instructions[0].operands.load_const.dst_reg == dst0,
+                "load should target dst0");
 
+cleanup:
     orus_jit_ir_program_reset(&program);
     freeChunk(&chunk);
     freeVM();
@@ -1524,6 +1533,82 @@ cleanup:
     return success;
 }
 
+static bool test_translates_mixed_boxed_counter_loop(void) {
+    initVM();
+    orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
+
+    Chunk chunk;
+    initChunk(&chunk);
+
+    Function function;
+    init_function(&function, &chunk);
+
+    const uint16_t boxed_src = FRAME_REG_START;
+    const uint16_t counter_reg = FRAME_REG_START + 1u;
+    const uint16_t limit_reg = FRAME_REG_START + 2u;
+
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_I32_CONST, counter_reg,
+                                         I32_VAL(0)),
+                "expected counter load");
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_I32_CONST, limit_reg,
+                                         I32_VAL(4)),
+                "expected limit load");
+
+    writeChunk(&chunk, OP_MOVE, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)counter_reg, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)boxed_src, 1, 0, "jit_translation");
+
+    const char* tag = "jit_translation";
+    writeChunk(&chunk, OP_INC_CMP_JMP, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)counter_reg, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)limit_reg, 1, 0, tag);
+    writeChunk(&chunk, 0xFF, 1, 0, tag);
+    writeChunk(&chunk, 0xFB, 1, 0, tag);
+
+    writeChunk(&chunk, OP_RETURN_VOID, 1, 0, tag);
+
+    HotPathSample sample = {0};
+    sample.func = 0;
+    sample.loop = (uint16_t)function.start;
+
+    OrusJitIRProgram program;
+    orus_jit_ir_program_init(&program);
+
+    OrusJitTranslationResult result =
+        orus_jit_translate_linear_block(&vm, &function, &sample, &program);
+
+    bool success = true;
+    if (result.status != ORUS_JIT_TRANSLATE_STATUS_OK) {
+        fprintf(stderr, "Unexpected mixed fused loop failure: %s\n",
+                orus_jit_translation_status_name(result.status));
+        success = false;
+        goto cleanup;
+    }
+
+    bool saw_fused = false;
+    for (size_t i = 0; i < program.count; ++i) {
+        if (program.instructions[i].opcode == ORUS_JIT_IR_OP_INC_CMP_JUMP) {
+            const OrusJitIRInstruction* inst = &program.instructions[i];
+            ASSERT_TRUE(inst->value_kind == ORUS_JIT_VALUE_BOXED,
+                        "expected boxed fused loop kind");
+            ASSERT_TRUE(inst->operands.fused_loop.counter_reg == counter_reg,
+                        "counter register mismatch");
+            ASSERT_TRUE(inst->operands.fused_loop.limit_reg == limit_reg,
+                        "limit register mismatch");
+            saw_fused = true;
+            break;
+        }
+    }
+
+    ASSERT_TRUE(saw_fused, "expected fused loop IR opcode");
+
+cleanup:
+    orus_jit_ir_program_reset(&program);
+    freeChunk(&chunk);
+    freeVM();
+    return success;
+}
+
 static bool test_translates_fused_decrement_loop(void) {
     initVM();
     orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
@@ -1612,7 +1697,7 @@ int main(void) {
     } tests[] = {
         {"translator emits i64 ops", test_translates_i64_linear_loop},
         {"translator emits f64 ops", test_translates_f64_stream},
-        {"translator reports unsupported constant", test_reports_constant_kind_failure},
+        {"translator loads boxed bool constants", test_translates_boxed_bool_constant},
         {"translator emits string concat", test_translates_string_concat},
         {"translator emits i32 to i64 conversion", test_translates_i32_to_i64_conversion},
         {"translator emits u32 to i32 conversion", test_translates_u32_to_i32_conversion},
@@ -1642,6 +1727,8 @@ int main(void) {
          test_translates_runtime_helpers},
         {"translator emits fused increment loop",
          test_translates_fused_increment_loop},
+        {"translator routes boxed fused loop counters",
+         test_translates_mixed_boxed_counter_loop},
         {"translator emits fused decrement loop",
          test_translates_fused_decrement_loop},
     };
