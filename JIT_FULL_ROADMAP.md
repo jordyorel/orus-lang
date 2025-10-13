@@ -16,10 +16,10 @@ subtasks as the implementation evolves.
 
 ## Stage 1 – Baseline Native Coverage Expansion
 
-- [ ] Lower wide integer arithmetic (`*_I64`, `*_U64`) and comparisons into DynASM templates on x86_64 and AArch64.
-- [ ] Lower floating-point arithmetic (`*_F64`) and comparisons with SSE2/NEON parity and flag propagation for branches.
-- [ ] Implement DynASM constant materialization for all value kinds, including pool loads, frame spills, and pointer moves.
-- [ ] Emit DynASM helper calls for GC safepoints, runtime math helpers, and VM service routines without forcing deopts.
+- [x] Lower wide integer arithmetic (`*_I64`, `*_U64`) and comparisons into DynASM templates on x86_64 and AArch64.
+- [x] Lower floating-point arithmetic (`*_F64`) and comparisons with SSE2/NEON parity and flag propagation for branches.
+- [x] Implement DynASM constant materialization for all value kinds, including pool loads, frame spills, and pointer moves.
+- [x] Emit DynASM helper calls for GC safepoints, runtime math helpers, and VM service routines without forcing deopts.
 - [ ] Provide typed deopt landing pads so guard exits reuse interpreter frames instead of regenerating helper stubs.
 - [ ] Update backend unit tests (`tests/unit/test_vm_jit_backend.c`) to assert DynASM parity with the linear emitter across value kinds.
 
