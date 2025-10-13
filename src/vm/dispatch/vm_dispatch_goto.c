@@ -29,6 +29,7 @@
 #include <limits.h>
 #include <inttypes.h>
 #include <stddef.h>
+#include <string.h>
 
 #define VM_HANDLE_INC_I32_SLOW_PATH(reg) \
     do { \
@@ -180,6 +181,288 @@ static inline bool value_to_index(Value value, int* out_index) {
         return true;
     }
     return false;
+}
+
+#define DISPATCH_TYPE_ERROR(msg, ...)                                                                 \
+    do {                                                                                              \
+        vm_handle_type_error_deopt();                                                                 \
+        runtimeError(ERROR_TYPE, CURRENT_LOCATION(), msg, ##__VA_ARGS__);                             \
+        return false;                                                                                \
+    } while (0)
+
+#define DISPATCH_RUNTIME_ERROR(msg, ...)                                                              \
+    do {                                                                                              \
+        runtimeError(ERROR_RUNTIME, CURRENT_LOCATION(), msg, ##__VA_ARGS__);                          \
+        return false;                                                                                \
+    } while (0)
+
+#define DEFINE_NUMERIC_COMPARE_HELPER(NAME, TYPE, TRY_READ, IS_TYPE, AS_TYPE, CACHE_TYPED, OP,        \
+                                      ERROR_MSG)                                                      \
+    static inline bool NAME(void) {                                                                   \
+        uint8_t dst = READ_BYTE();                                                                    \
+        uint8_t src1 = READ_BYTE();                                                                   \
+        uint8_t src2 = READ_BYTE();                                                                   \
+        TYPE left;                                                                                    \
+        TYPE right;                                                                                   \
+        bool left_typed = TRY_READ(src1, &left);                                                      \
+        bool right_typed = TRY_READ(src2, &right);                                                    \
+        if (!(left_typed && right_typed)) {                                                           \
+            Value left_val = vm_get_register_safe(src1);                                              \
+            Value right_val = vm_get_register_safe(src2);                                             \
+            if (!(IS_TYPE(left_val) && IS_TYPE(right_val))) {                                         \
+                DISPATCH_TYPE_ERROR(ERROR_MSG);                                                       \
+            }                                                                                         \
+            left = AS_TYPE(left_val);                                                                 \
+            right = AS_TYPE(right_val);                                                               \
+            CACHE_TYPED(src1, left);                                                                  \
+            CACHE_TYPED(src2, right);                                                                 \
+        }                                                                                             \
+        vm_store_bool_register(dst, left OP right);                                                   \
+        return true;                                                                                  \
+    }
+
+#define DEFINE_F64_COMPARE_HELPER(NAME, OP, TRACE_PREFIX, TRACE_MACRO)                                \
+    static inline bool NAME(void) {                                                                   \
+        uint8_t dst = READ_BYTE();                                                                    \
+        uint8_t src1 = READ_BYTE();                                                                   \
+        uint8_t src2 = READ_BYTE();                                                                   \
+        double left;                                                                                  \
+        double right;                                                                                 \
+        bool left_typed = vm_try_read_f64_typed(src1, &left);                                         \
+        bool right_typed = vm_try_read_f64_typed(src2, &right);                                       \
+        if (!(left_typed && right_typed)) {                                                           \
+            Value left_val = vm_get_register_safe(src1);                                              \
+            Value right_val = vm_get_register_safe(src2);                                             \
+            if (!IS_F64(left_val) || !IS_F64(right_val)) {                                            \
+                fprintf(stderr, "[%s_ERROR_TRACE] %s triggered: dst=%d, a=%d, b=%d\n", TRACE_PREFIX,  \
+                        TRACE_MACRO, dst, src1, src2);                                                \
+                fprintf(stderr, "[%s_ERROR_TRACE] Register[%d] type: %d, Register[%d] type: %d\n",      \
+                        TRACE_PREFIX, src1, left_val.type, src2, right_val.type);                     \
+                fflush(stderr);                                                                       \
+                DISPATCH_TYPE_ERROR("Operands must be f64");                                         \
+            }                                                                                         \
+            left = AS_F64(left_val);                                                                  \
+            right = AS_F64(right_val);                                                                \
+            vm_cache_f64_typed(src1, left);                                                           \
+            vm_cache_f64_typed(src2, right);                                                          \
+        }                                                                                             \
+        vm_store_bool_register(dst, left OP right);                                                   \
+        return true;                                                                                  \
+    }
+
+static inline bool dispatch_handle_add_i32_r(void) {
+    uint8_t dst = READ_BYTE();
+    uint8_t src1 = READ_BYTE();
+    uint8_t src2 = READ_BYTE();
+
+    Value val1 = vm_get_register_safe(src1);
+    Value val2 = vm_get_register_safe(src2);
+
+    if (IS_STRING(val1) || IS_STRING(val2)) {
+        Value left = val1;
+        Value right = val2;
+
+        if (!IS_STRING(left)) {
+            char buffer[64];
+            if (IS_I32(left)) {
+                snprintf(buffer, sizeof(buffer), "%d", AS_I32(left));
+            } else if (IS_I64(left)) {
+                snprintf(buffer, sizeof(buffer), "%" PRId64, (int64_t)AS_I64(left));
+            } else if (IS_U32(left)) {
+                snprintf(buffer, sizeof(buffer), "%u", AS_U32(left));
+            } else if (IS_U64(left)) {
+                snprintf(buffer, sizeof(buffer), "%" PRIu64, (uint64_t)AS_U64(left));
+            } else if (IS_F64(left)) {
+                snprintf(buffer, sizeof(buffer), "%.6g", AS_F64(left));
+            } else if (IS_BOOL(left)) {
+                snprintf(buffer, sizeof(buffer), "%s", AS_BOOL(left) ? "true" : "false");
+            } else {
+                snprintf(buffer, sizeof(buffer), "nil");
+            }
+            left = STRING_VAL(allocateString(buffer, (int)strlen(buffer)));
+        }
+
+        if (!IS_STRING(right)) {
+            char buffer[64];
+            if (IS_I32(right)) {
+                snprintf(buffer, sizeof(buffer), "%d", AS_I32(right));
+            } else if (IS_I64(right)) {
+                snprintf(buffer, sizeof(buffer), "%" PRId64, (int64_t)AS_I64(right));
+            } else if (IS_U32(right)) {
+                snprintf(buffer, sizeof(buffer), "%u", AS_U32(right));
+            } else if (IS_U64(right)) {
+                snprintf(buffer, sizeof(buffer), "%" PRIu64, (uint64_t)AS_U64(right));
+            } else if (IS_F64(right)) {
+                snprintf(buffer, sizeof(buffer), "%.6g", AS_F64(right));
+            } else if (IS_BOOL(right)) {
+                snprintf(buffer, sizeof(buffer), "%s", AS_BOOL(right) ? "true" : "false");
+            } else {
+                snprintf(buffer, sizeof(buffer), "nil");
+            }
+            right = STRING_VAL(allocateString(buffer, (int)strlen(buffer)));
+        }
+
+        ObjString* result = rope_concat_strings(AS_STRING(left), AS_STRING(right));
+        if (!result) {
+            DISPATCH_RUNTIME_ERROR("Failed to concatenate strings");
+        }
+        vm_set_register_safe(dst, STRING_VAL(result));
+        return true;
+    }
+
+    if (val1.type != val2.type) {
+        DISPATCH_TYPE_ERROR("Operands must be the same type. Use 'as' for explicit type conversion.");
+    }
+
+    if (!(IS_I32(val1) || IS_I64(val1) || IS_U32(val1) || IS_U64(val1) || IS_F64(val1))) {
+        DISPATCH_TYPE_ERROR("Operands must be numeric (i32, i64, u32, u64, or f64)");
+    }
+
+#if USE_FAST_ARITH
+    int32_t a = AS_I32(val1);
+    int32_t b = AS_I32(val2);
+    vm_set_register_safe(dst, I32_VAL(a + b));
+#else
+    if (IS_I32(val1)) {
+        int32_t a = AS_I32(val1);
+        int32_t b = AS_I32(val2);
+        vm_set_register_safe(dst, I32_VAL(a + b));
+    } else if (IS_I64(val1)) {
+        int64_t a = AS_I64(val1);
+        int64_t b = AS_I64(val2);
+        vm_set_register_safe(dst, I64_VAL(a + b));
+    } else if (IS_U32(val1)) {
+        uint32_t a = AS_U32(val1);
+        uint32_t b = AS_U32(val2);
+        vm_set_register_safe(dst, U32_VAL(a + b));
+    } else if (IS_U64(val1)) {
+        uint64_t a = AS_U64(val1);
+        uint64_t b = AS_U64(val2);
+        vm_set_register_safe(dst, U64_VAL(a + b));
+    } else if (IS_F64(val1)) {
+        double a = AS_F64(val1);
+        double b = AS_F64(val2);
+        vm_set_register_safe(dst, F64_VAL(a + b));
+    }
+#endif
+    return true;
+}
+
+static inline bool dispatch_handle_sub_i32_r(void) {
+    uint8_t dst = READ_BYTE();
+    uint8_t src1 = READ_BYTE();
+    uint8_t src2 = READ_BYTE();
+
+    Value val1 = vm_get_register_safe(src1);
+    Value val2 = vm_get_register_safe(src2);
+
+    if (val1.type != val2.type) {
+        DISPATCH_TYPE_ERROR("Operands must be the same type. Use 'as' for explicit type conversion.");
+    }
+
+    if (!(IS_I32(val1) || IS_I64(val1) || IS_U32(val1) || IS_U64(val1) || IS_F64(val1))) {
+        DISPATCH_TYPE_ERROR("Operands must be numeric (i32, i64, u32, u64, or f64)");
+    }
+
+#if USE_FAST_ARITH
+    int32_t a = AS_I32(val1);
+    int32_t b = AS_I32(val2);
+    vm_set_register_safe(dst, I32_VAL(a - b));
+#else
+    if (IS_I32(val1)) {
+        int32_t a = AS_I32(val1);
+        int32_t b = AS_I32(val2);
+        vm_set_register_safe(dst, I32_VAL(a - b));
+    } else if (IS_I64(val1)) {
+        int64_t a = AS_I64(val1);
+        int64_t b = AS_I64(val2);
+        vm_set_register_safe(dst, I64_VAL(a - b));
+    } else if (IS_U32(val1)) {
+        uint32_t a = AS_U32(val1);
+        uint32_t b = AS_U32(val2);
+        vm_set_register_safe(dst, U32_VAL(a - b));
+    } else if (IS_U64(val1)) {
+        uint64_t a = AS_U64(val1);
+        uint64_t b = AS_U64(val2);
+        vm_set_register_safe(dst, U64_VAL(a - b));
+    } else if (IS_F64(val1)) {
+        double a = AS_F64(val1);
+        double b = AS_F64(val2);
+        vm_set_register_safe(dst, F64_VAL(a - b));
+    }
+#endif
+    return true;
+}
+
+DEFINE_F64_COMPARE_HELPER(dispatch_handle_lt_f64_r, <, "F64_LT", "CMP_F64_LT")
+DEFINE_F64_COMPARE_HELPER(dispatch_handle_le_f64_r, <=, "F64_LE", "CMP_F64_LE")
+DEFINE_F64_COMPARE_HELPER(dispatch_handle_gt_f64_r, >, "F64_GT", "CMP_F64_GT")
+DEFINE_F64_COMPARE_HELPER(dispatch_handle_ge_f64_r, >=, "F64_GE", "CMP_F64_GE")
+
+DEFINE_NUMERIC_COMPARE_HELPER(dispatch_handle_lt_i32_r, int32_t, vm_try_read_i32_typed, IS_I32, AS_I32,
+                              vm_cache_i32_typed, <, "Operands must be i32")
+DEFINE_NUMERIC_COMPARE_HELPER(dispatch_handle_le_i32_r, int32_t, vm_try_read_i32_typed, IS_I32, AS_I32,
+                              vm_cache_i32_typed, <=, "Operands must be i32")
+DEFINE_NUMERIC_COMPARE_HELPER(dispatch_handle_gt_i32_r, int32_t, vm_try_read_i32_typed, IS_I32, AS_I32,
+                              vm_cache_i32_typed, >, "Operands must be i32")
+DEFINE_NUMERIC_COMPARE_HELPER(dispatch_handle_ge_i32_r, int32_t, vm_try_read_i32_typed, IS_I32, AS_I32,
+                              vm_cache_i32_typed, >=, "Operands must be i32")
+
+DEFINE_NUMERIC_COMPARE_HELPER(dispatch_handle_lt_i64_r, int64_t, vm_try_read_i64_typed, IS_I64, AS_I64,
+                              vm_cache_i64_typed, <, "Operands must be i64")
+DEFINE_NUMERIC_COMPARE_HELPER(dispatch_handle_le_i64_r, int64_t, vm_try_read_i64_typed, IS_I64, AS_I64,
+                              vm_cache_i64_typed, <=, "Operands must be i64")
+DEFINE_NUMERIC_COMPARE_HELPER(dispatch_handle_gt_i64_r, int64_t, vm_try_read_i64_typed, IS_I64, AS_I64,
+                              vm_cache_i64_typed, >, "Operands must be i64")
+DEFINE_NUMERIC_COMPARE_HELPER(dispatch_handle_ge_i64_r, int64_t, vm_try_read_i64_typed, IS_I64, AS_I64,
+                              vm_cache_i64_typed, >=, "Operands must be i64")
+
+DEFINE_NUMERIC_COMPARE_HELPER(dispatch_handle_lt_u32_r, uint32_t, vm_try_read_u32_typed, IS_U32, AS_U32,
+                              vm_cache_u32_typed, <, "Operands must be u32")
+DEFINE_NUMERIC_COMPARE_HELPER(dispatch_handle_le_u32_r, uint32_t, vm_try_read_u32_typed, IS_U32, AS_U32,
+                              vm_cache_u32_typed, <=, "Operands must be u32")
+DEFINE_NUMERIC_COMPARE_HELPER(dispatch_handle_gt_u32_r, uint32_t, vm_try_read_u32_typed, IS_U32, AS_U32,
+                              vm_cache_u32_typed, >, "Operands must be u32")
+DEFINE_NUMERIC_COMPARE_HELPER(dispatch_handle_ge_u32_r, uint32_t, vm_try_read_u32_typed, IS_U32, AS_U32,
+                              vm_cache_u32_typed, >=, "Operands must be u32")
+
+DEFINE_NUMERIC_COMPARE_HELPER(dispatch_handle_lt_u64_r, uint64_t, vm_try_read_u64_typed, IS_U64, AS_U64,
+                              vm_cache_u64_typed, <, "Operands must be u64")
+DEFINE_NUMERIC_COMPARE_HELPER(dispatch_handle_le_u64_r, uint64_t, vm_try_read_u64_typed, IS_U64, AS_U64,
+                              vm_cache_u64_typed, <=, "Operands must be u64")
+DEFINE_NUMERIC_COMPARE_HELPER(dispatch_handle_gt_u64_r, uint64_t, vm_try_read_u64_typed, IS_U64, AS_U64,
+                              vm_cache_u64_typed, >, "Operands must be u64")
+DEFINE_NUMERIC_COMPARE_HELPER(dispatch_handle_ge_u64_r, uint64_t, vm_try_read_u64_typed, IS_U64, AS_U64,
+                              vm_cache_u64_typed, >=, "Operands must be u64")
+
+static inline void dispatch_handle_eq_r(void) {
+    uint8_t dst = READ_BYTE();
+    uint8_t src1 = READ_BYTE();
+    uint8_t src2 = READ_BYTE();
+    vm_set_register_safe(dst, BOOL_VAL(valuesEqual(vm_get_register_safe(src1), vm_get_register_safe(src2))));
+}
+
+static inline void dispatch_handle_ne_r(void) {
+    uint8_t dst = READ_BYTE();
+    uint8_t src1 = READ_BYTE();
+    uint8_t src2 = READ_BYTE();
+    vm_set_register_safe(dst, BOOL_VAL(!valuesEqual(vm_get_register_safe(src1), vm_get_register_safe(src2))));
+}
+
+static inline bool dispatch_handle_jump_short(void) {
+    return handle_jump_short();
+}
+
+static inline bool dispatch_handle_jump_back_short(void) {
+    return handle_jump_back_short();
+}
+
+static inline bool dispatch_handle_jump_if_not_short(void) {
+    return handle_jump_if_not_short();
+}
+
+static inline bool dispatch_handle_loop_short(void) {
+    return handle_loop_short();
 }
 
 
@@ -658,157 +941,16 @@ InterpretResult vm_run_dispatch(void) {
         }
 
     LABEL_OP_ADD_I32_R: {
-            uint8_t dst = READ_BYTE();
-            uint8_t src1 = READ_BYTE();
-            uint8_t src2 = READ_BYTE();
-            
-            // Check if either operand is a string - if so, do string concatenation
-            Value val1 = vm_get_register_safe(src1);
-            Value val2 = vm_get_register_safe(src2);
-            if (IS_STRING(val1) || IS_STRING(val2)) {
-                Value left = val1;
-                Value right = val2;
-
-                if (!IS_STRING(left)) {
-                    char buffer[64];
-                    if (IS_I32(left)) {
-                        snprintf(buffer, sizeof(buffer), "%d", AS_I32(left));
-                    } else if (IS_I64(left)) {
-                        snprintf(buffer, sizeof(buffer), "%" PRId64, (int64_t)AS_I64(left));
-                    } else if (IS_U32(left)) {
-                        snprintf(buffer, sizeof(buffer), "%u", AS_U32(left));
-                    } else if (IS_U64(left)) {
-                        snprintf(buffer, sizeof(buffer), "%" PRIu64, (uint64_t)AS_U64(left));
-                    } else if (IS_F64(left)) {
-                        snprintf(buffer, sizeof(buffer), "%.6g", AS_F64(left));
-                    } else if (IS_BOOL(left)) {
-                        snprintf(buffer, sizeof(buffer), "%s", AS_BOOL(left) ? "true" : "false");
-                    } else {
-                        snprintf(buffer, sizeof(buffer), "nil");
-                    }
-                    left = STRING_VAL(allocateString(buffer, (int)strlen(buffer)));
-                }
-
-                if (!IS_STRING(right)) {
-                    char buffer[64];
-                    if (IS_I32(right)) {
-                        snprintf(buffer, sizeof(buffer), "%d", AS_I32(right));
-                    } else if (IS_I64(right)) {
-                        snprintf(buffer, sizeof(buffer), "%" PRId64, (int64_t)AS_I64(right));
-                    } else if (IS_U32(right)) {
-                        snprintf(buffer, sizeof(buffer), "%u", AS_U32(right));
-                    } else if (IS_U64(right)) {
-                        snprintf(buffer, sizeof(buffer), "%" PRIu64, (uint64_t)AS_U64(right));
-                    } else if (IS_F64(right)) {
-                        snprintf(buffer, sizeof(buffer), "%.6g", AS_F64(right));
-                    } else if (IS_BOOL(right)) {
-                        snprintf(buffer, sizeof(buffer), "%s", AS_BOOL(right) ? "true" : "false");
-                    } else {
-                        snprintf(buffer, sizeof(buffer), "nil");
-                    }
-                    right = STRING_VAL(allocateString(buffer, (int)strlen(buffer)));
-                }
-
-                ObjString* result = rope_concat_strings(AS_STRING(left), AS_STRING(right));
-                if (!result) {
-                    VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(),
-                                    "Failed to concatenate strings");
-                }
-                vm_set_register_safe(dst, STRING_VAL(result));
-                DISPATCH();
+            if (!dispatch_handle_add_i32_r()) {
+                goto HANDLE_RUNTIME_ERROR;
             }
-            
-            // STRICT TYPE SAFETY: No automatic coercion, types must match exactly
-            // Values already loaded above for string check
-            
-            // Enforce strict type matching - no coercion allowed
-            if (val1.type != val2.type) {
-                VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be the same type. Use 'as' for explicit type conversion.");
-            }
-
-            // Ensure both operands are numeric
-            if (!(IS_I32(val1) || IS_I64(val1) || IS_U32(val1) || IS_U64(val1) || IS_F64(val1))) {
-                VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be numeric (i32, i64, u32, u64, or f64)");
-            }
-
-#if USE_FAST_ARITH
-            // Fast path: assume i32, no overflow checking
-            int32_t a = AS_I32(val1);
-            int32_t b = AS_I32(val2);
-            vm_set_register_safe(dst, I32_VAL(a + b));
-#else
-            // Strict same-type arithmetic only (after coercion)
-            if (IS_I32(val1)) {
-                int32_t a = AS_I32(val1);
-                int32_t b = AS_I32(val2);
-                vm_set_register_safe(dst, I32_VAL(a + b));
-            } else if (IS_I64(val1)) {
-                int64_t a = AS_I64(val1);
-                int64_t b = AS_I64(val2);
-                vm_set_register_safe(dst, I64_VAL(a + b));
-            } else if (IS_U32(val1)) {
-                uint32_t a = AS_U32(val1);
-                uint32_t b = AS_U32(val2);
-                vm_set_register_safe(dst, U32_VAL(a + b));
-            } else if (IS_U64(val1)) {
-                uint64_t a = AS_U64(val1);
-                uint64_t b = AS_U64(val2);
-                vm_set_register_safe(dst, U64_VAL(a + b));
-            } else if (IS_F64(val1)) {
-                double a = AS_F64(val1);
-                double b = AS_F64(val2);
-                vm_set_register_safe(dst, F64_VAL(a + b));
-            }
-#endif
             DISPATCH();
         }
 
     LABEL_OP_SUB_I32_R: {
-            uint8_t dst = READ_BYTE();
-            uint8_t src1 = READ_BYTE();
-            uint8_t src2 = READ_BYTE();
-            
-            // Strict type safety for numeric operations: both operands must be the same numeric type
-            Value val1 = vm_get_register_safe(src1);
-            Value val2 = vm_get_register_safe(src2);
-            if (val1.type != val2.type) {
-                VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be the same type. Use 'as' for explicit type conversion.");
+            if (!dispatch_handle_sub_i32_r()) {
+                goto HANDLE_RUNTIME_ERROR;
             }
-
-            // Ensure both operands are numeric
-            if (!(IS_I32(val1) || IS_I64(val1) || IS_U32(val1) || IS_U64(val1) || IS_F64(val1))) {
-                VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be numeric (i32, i64, u32, u64, or f64)");
-            }
-
-#if USE_FAST_ARITH
-            // Fast path: assume i32, no overflow checking
-            int32_t a = AS_I32(val1);
-            int32_t b = AS_I32(val2);
-            vm_set_register_safe(dst, I32_VAL(a - b));
-#else
-            // Strict same-type arithmetic only
-            if (IS_I32(val1)) {
-                int32_t a = AS_I32(val1);
-                int32_t b = AS_I32(val2);
-                vm_set_register_safe(dst, I32_VAL(a - b));
-            } else if (IS_I64(val1)) {
-                int64_t a = AS_I64(val1);
-                int64_t b = AS_I64(val2);
-                vm_set_register_safe(dst, I64_VAL(a - b));
-            } else if (IS_U32(val1)) {
-                uint32_t a = AS_U32(val1);
-                uint32_t b = AS_U32(val2);
-                vm_set_register_safe(dst, U32_VAL(a - b));
-            } else if (IS_U64(val1)) {
-                uint64_t a = AS_U64(val1);
-                uint64_t b = AS_U64(val2);
-                vm_set_register_safe(dst, U64_VAL(a - b));
-            } else if (IS_F64(val1)) {
-                double a = AS_F64(val1);
-                double b = AS_F64(val2);
-                vm_set_register_safe(dst, F64_VAL(a - b));
-            }
-#endif
             DISPATCH();
         }
 
@@ -1808,34 +1950,30 @@ InterpretResult vm_run_dispatch(void) {
 
     // F64 Comparison Operations
     LABEL_OP_LT_F64_R: {
-            uint8_t dst = READ_BYTE();
-            uint8_t src1 = READ_BYTE();
-            uint8_t src2 = READ_BYTE();
-            CMP_F64_LT(dst, src1, src2);
+            if (!dispatch_handle_lt_f64_r()) {
+                goto HANDLE_RUNTIME_ERROR;
+            }
             DISPATCH();
         }
 
     LABEL_OP_LE_F64_R: {
-            uint8_t dst = READ_BYTE();
-            uint8_t src1 = READ_BYTE();
-            uint8_t src2 = READ_BYTE();
-            CMP_F64_LE(dst, src1, src2);
+            if (!dispatch_handle_le_f64_r()) {
+                goto HANDLE_RUNTIME_ERROR;
+            }
             DISPATCH();
         }
 
     LABEL_OP_GT_F64_R: {
-            uint8_t dst = READ_BYTE();
-            uint8_t src1 = READ_BYTE();
-            uint8_t src2 = READ_BYTE();
-            CMP_F64_GT(dst, src1, src2);
+            if (!dispatch_handle_gt_f64_r()) {
+                goto HANDLE_RUNTIME_ERROR;
+            }
             DISPATCH();
         }
 
     LABEL_OP_GE_F64_R: {
-            uint8_t dst = READ_BYTE();
-            uint8_t src1 = READ_BYTE();
-            uint8_t src2 = READ_BYTE();
-            CMP_F64_GE(dst, src1, src2);
+            if (!dispatch_handle_ge_f64_r()) {
+                goto HANDLE_RUNTIME_ERROR;
+            }
             DISPATCH();
         }
 
@@ -2186,146 +2324,124 @@ InterpretResult vm_run_dispatch(void) {
         }
 
     LABEL_OP_LT_I32_R: {
-            uint8_t dst = READ_BYTE();
-            uint8_t src1 = READ_BYTE();
-            uint8_t src2 = READ_BYTE();
-            CMP_I32_LT(dst, src1, src2);
+            if (!dispatch_handle_lt_i32_r()) {
+                goto HANDLE_RUNTIME_ERROR;
+            }
             DISPATCH();
         }
 
     LABEL_OP_EQ_R: {
-        uint8_t dst = READ_BYTE();
-        uint8_t src1 = READ_BYTE();
-        uint8_t src2 = READ_BYTE();
-        CMP_EQ(dst, src1, src2);
+        dispatch_handle_eq_r();
         DISPATCH();
     }
 
     LABEL_OP_NE_R: {
-        uint8_t dst = READ_BYTE();
-        uint8_t src1 = READ_BYTE();
-        uint8_t src2 = READ_BYTE();
-        CMP_NE(dst, src1, src2);
+        dispatch_handle_ne_r();
         DISPATCH();
     }
 
     LABEL_OP_LE_I32_R: {
-        uint8_t dst = READ_BYTE();
-        uint8_t src1 = READ_BYTE();
-        uint8_t src2 = READ_BYTE();
-        CMP_I32_LE(dst, src1, src2);
+        if (!dispatch_handle_le_i32_r()) {
+            goto HANDLE_RUNTIME_ERROR;
+        }
         DISPATCH();
     }
 
     LABEL_OP_GT_I32_R: {
-        uint8_t dst = READ_BYTE();
-        uint8_t src1 = READ_BYTE();
-        uint8_t src2 = READ_BYTE();
-        CMP_I32_GT(dst, src1, src2);
+        if (!dispatch_handle_gt_i32_r()) {
+            goto HANDLE_RUNTIME_ERROR;
+        }
         DISPATCH();
     }
 
     LABEL_OP_GE_I32_R: {
-        uint8_t dst = READ_BYTE();
-        uint8_t src1 = READ_BYTE();
-        uint8_t src2 = READ_BYTE();
-        CMP_I32_GE(dst, src1, src2);
+        if (!dispatch_handle_ge_i32_r()) {
+            goto HANDLE_RUNTIME_ERROR;
+        }
         DISPATCH();
     }
 
     LABEL_OP_LT_I64_R: {
-        uint8_t dst = READ_BYTE();
-        uint8_t src1 = READ_BYTE();
-        uint8_t src2 = READ_BYTE();
-        CMP_I64_LT(dst, src1, src2);
+        if (!dispatch_handle_lt_i64_r()) {
+            goto HANDLE_RUNTIME_ERROR;
+        }
         DISPATCH();
     }
 
     LABEL_OP_LE_I64_R: {
-        uint8_t dst = READ_BYTE();
-        uint8_t src1 = READ_BYTE();
-        uint8_t src2 = READ_BYTE();
-        CMP_I64_LE(dst, src1, src2);
+        if (!dispatch_handle_le_i64_r()) {
+            goto HANDLE_RUNTIME_ERROR;
+        }
         DISPATCH();
     }
 
     LABEL_OP_GT_I64_R: {
-        uint8_t dst = READ_BYTE();
-        uint8_t src1 = READ_BYTE();
-        uint8_t src2 = READ_BYTE();
-        CMP_I64_GT(dst, src1, src2);
+        if (!dispatch_handle_gt_i64_r()) {
+            goto HANDLE_RUNTIME_ERROR;
+        }
         DISPATCH();
     }
 
     LABEL_OP_GE_I64_R: {
-        uint8_t dst = READ_BYTE();
-        uint8_t src1 = READ_BYTE();
-        uint8_t src2 = READ_BYTE();
-        CMP_I64_GE(dst, src1, src2);
+        if (!dispatch_handle_ge_i64_r()) {
+            goto HANDLE_RUNTIME_ERROR;
+        }
         DISPATCH();
     }
 
     LABEL_OP_LT_U32_R: {
-        uint8_t dst = READ_BYTE();
-        uint8_t src1 = READ_BYTE();
-        uint8_t src2 = READ_BYTE();
-        CMP_U32_LT(dst, src1, src2);
+        if (!dispatch_handle_lt_u32_r()) {
+            goto HANDLE_RUNTIME_ERROR;
+        }
         DISPATCH();
     }
 
     LABEL_OP_LE_U32_R: {
-        uint8_t dst = READ_BYTE();
-        uint8_t src1 = READ_BYTE();
-        uint8_t src2 = READ_BYTE();
-        CMP_U32_LE(dst, src1, src2);
+        if (!dispatch_handle_le_u32_r()) {
+            goto HANDLE_RUNTIME_ERROR;
+        }
         DISPATCH();
     }
 
     LABEL_OP_GT_U32_R: {
-        uint8_t dst = READ_BYTE();
-        uint8_t src1 = READ_BYTE();
-        uint8_t src2 = READ_BYTE();
-        CMP_U32_GT(dst, src1, src2);
+        if (!dispatch_handle_gt_u32_r()) {
+            goto HANDLE_RUNTIME_ERROR;
+        }
         DISPATCH();
     }
 
     LABEL_OP_GE_U32_R: {
-        uint8_t dst = READ_BYTE();
-        uint8_t src1 = READ_BYTE();
-        uint8_t src2 = READ_BYTE();
-        CMP_U32_GE(dst, src1, src2);
+        if (!dispatch_handle_ge_u32_r()) {
+            goto HANDLE_RUNTIME_ERROR;
+        }
         DISPATCH();
     }
 
     LABEL_OP_LT_U64_R: {
-        uint8_t dst = READ_BYTE();
-        uint8_t src1 = READ_BYTE();
-        uint8_t src2 = READ_BYTE();
-        CMP_U64_LT(dst, src1, src2);
+        if (!dispatch_handle_lt_u64_r()) {
+            goto HANDLE_RUNTIME_ERROR;
+        }
         DISPATCH();
     }
 
     LABEL_OP_LE_U64_R: {
-        uint8_t dst = READ_BYTE();
-        uint8_t src1 = READ_BYTE();
-        uint8_t src2 = READ_BYTE();
-        CMP_U64_LE(dst, src1, src2);
+        if (!dispatch_handle_le_u64_r()) {
+            goto HANDLE_RUNTIME_ERROR;
+        }
         DISPATCH();
     }
 
     LABEL_OP_GT_U64_R: {
-        uint8_t dst = READ_BYTE();
-        uint8_t src1 = READ_BYTE();
-        uint8_t src2 = READ_BYTE();
-        CMP_U64_GT(dst, src1, src2);
+        if (!dispatch_handle_gt_u64_r()) {
+            goto HANDLE_RUNTIME_ERROR;
+        }
         DISPATCH();
     }
 
     LABEL_OP_GE_U64_R: {
-        uint8_t dst = READ_BYTE();
-        uint8_t src1 = READ_BYTE();
-        uint8_t src2 = READ_BYTE();
-        CMP_U64_GE(dst, src1, src2);
+        if (!dispatch_handle_ge_u64_r()) {
+            goto HANDLE_RUNTIME_ERROR;
+        }
         DISPATCH();
     }
 
@@ -3639,28 +3755,28 @@ InterpretResult vm_run_dispatch(void) {
 
     // Short jump optimizations for performance
     LABEL_OP_JUMP_SHORT: {
-        if (!handle_jump_short()) {
+        if (!dispatch_handle_jump_short()) {
             RETURN(INTERPRET_RUNTIME_ERROR);
         }
         DISPATCH();
     }
 
     LABEL_OP_JUMP_BACK_SHORT: {
-        if (!handle_jump_back_short()) {
+        if (!dispatch_handle_jump_back_short()) {
             RETURN(INTERPRET_RUNTIME_ERROR);
         }
         DISPATCH();
     }
 
     LABEL_OP_JUMP_IF_NOT_SHORT: {
-        if (!handle_jump_if_not_short()) {
+        if (!dispatch_handle_jump_if_not_short()) {
             RETURN(INTERPRET_RUNTIME_ERROR);
         }
         DISPATCH();
     }
 
     LABEL_OP_LOOP_SHORT: {
-        if (!handle_loop_short()) {
+        if (!dispatch_handle_loop_short()) {
             RETURN(INTERPRET_RUNTIME_ERROR);
         }
         DISPATCH();
@@ -4498,6 +4614,10 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_UNKNOWN: __attribute__((unused))
         VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(), "Unknown opcode: %d", instruction);
 
+#undef DEFINE_F64_COMPARE_HELPER
+#undef DEFINE_NUMERIC_COMPARE_HELPER
+#undef DISPATCH_RUNTIME_ERROR
+#undef DISPATCH_TYPE_ERROR
     #undef RETURN
 }
 
