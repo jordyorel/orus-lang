@@ -14,28 +14,6 @@
 #include <assert.h>
 #include <math.h>
 
-static inline bool read_i32_operand(uint16_t reg, int32_t* out, bool* typed_out) {
-    if (vm_try_read_i32_typed(reg, out)) {
-        if (typed_out) {
-            *typed_out = true;
-        }
-        return true;
-    }
-
-    Value boxed = vm_get_register_lazy(reg);
-    if (!IS_I32(boxed)) {
-        return false;
-    }
-
-    int32_t value = AS_I32(boxed);
-    vm_cache_i32_typed(reg, value);
-    *out = value;
-    if (typed_out) {
-        *typed_out = false;
-    }
-    return true;
-}
-
 static inline int32_t read_i32_operand_typed_fast(uint16_t reg) {
     int32_t value = 0;
     bool ok = vm_try_read_i32_typed(reg, &value);
@@ -46,22 +24,6 @@ static inline int32_t read_i32_operand_typed_fast(uint16_t reg) {
 #endif
     }
     return value;
-}
-
-static inline bool read_i64_operand(uint16_t reg, int64_t* out) {
-    if (vm_try_read_i64_typed(reg, out)) {
-        return true;
-    }
-
-    Value boxed = vm_get_register_lazy(reg);
-    if (!IS_I64(boxed)) {
-        return false;
-    }
-
-    int64_t value = AS_I64(boxed);
-    vm_cache_i64_typed(reg, value);
-    *out = value;
-    return true;
 }
 
 static inline int64_t read_i64_operand_typed_fast(uint16_t reg) {
@@ -76,22 +38,6 @@ static inline int64_t read_i64_operand_typed_fast(uint16_t reg) {
     return value;
 }
 
-static inline bool read_u32_operand(uint16_t reg, uint32_t* out) {
-    if (vm_try_read_u32_typed(reg, out)) {
-        return true;
-    }
-
-    Value boxed = vm_get_register_lazy(reg);
-    if (!IS_U32(boxed)) {
-        return false;
-    }
-
-    uint32_t value = AS_U32(boxed);
-    vm_cache_u32_typed(reg, value);
-    *out = value;
-    return true;
-}
-
 static inline uint32_t read_u32_operand_typed_fast(uint16_t reg) {
     uint32_t value = 0;
     bool ok = vm_try_read_u32_typed(reg, &value);
@@ -102,22 +48,6 @@ static inline uint32_t read_u32_operand_typed_fast(uint16_t reg) {
 #endif
     }
     return value;
-}
-
-static inline bool read_u64_operand(uint16_t reg, uint64_t* out) {
-    if (vm_try_read_u64_typed(reg, out)) {
-        return true;
-    }
-
-    Value boxed = vm_get_register_lazy(reg);
-    if (!IS_U64(boxed)) {
-        return false;
-    }
-
-    uint64_t value = AS_U64(boxed);
-    vm_cache_u64_typed(reg, value);
-    *out = value;
-    return true;
 }
 
 static inline uint64_t read_u64_operand_typed_fast(uint16_t reg) {
@@ -132,20 +62,16 @@ static inline uint64_t read_u64_operand_typed_fast(uint16_t reg) {
     return value;
 }
 
-static inline bool read_f64_operand(uint16_t reg, double* out) {
-    if (vm_try_read_f64_typed(reg, out)) {
-        return true;
+static inline double read_f64_operand_typed_fast(uint16_t reg) {
+    double value = 0.0;
+    bool ok = vm_try_read_f64_typed(reg, &value);
+    if (!ok) {
+        assert(ok && "Expected f64 typed register residency");
+#if defined(__GNUC__) || defined(__clang__)
+        __builtin_unreachable();
+#endif
     }
-
-    Value boxed = vm_get_register_lazy(reg);
-    if (!IS_F64(boxed)) {
-        return false;
-    }
-
-    double value = AS_F64(boxed);
-    vm_cache_f64_typed(reg, value);
-    *out = value;
-    return true;
+    return value;
 }
 
 static inline double read_f64_operand_typed_fast(uint16_t reg) {
@@ -185,11 +111,11 @@ static inline double read_f64_operand_typed_fast(uint16_t reg) {
     } \
 } while (0)
 
-#define READ_I32_OPERAND(reg, out_ptr) read_i32_operand((reg), (out_ptr), NULL)
-#define READ_I64_OPERAND(reg, out_ptr) read_i64_operand((reg), (out_ptr))
-#define READ_U32_OPERAND(reg, out_ptr) read_u32_operand((reg), (out_ptr))
-#define READ_U64_OPERAND(reg, out_ptr) read_u64_operand((reg), (out_ptr))
-#define READ_F64_OPERAND(reg, out_ptr) read_f64_operand((reg), (out_ptr))
+#define READ_I32_OPERAND_TYPED_FAST(reg) read_i32_operand_typed_fast((reg))
+#define READ_I64_OPERAND_TYPED_FAST(reg) read_i64_operand_typed_fast((reg))
+#define READ_U32_OPERAND_TYPED_FAST(reg) read_u32_operand_typed_fast((reg))
+#define READ_U64_OPERAND_TYPED_FAST(reg) read_u64_operand_typed_fast((reg))
+#define READ_F64_OPERAND_TYPED_FAST(reg) read_f64_operand_typed_fast((reg))
 
 #define READ_I32_OPERAND_TYPED_FAST(reg) read_i32_operand_typed_fast((reg))
 #define READ_I64_OPERAND_TYPED_FAST(reg) read_i64_operand_typed_fast((reg))
