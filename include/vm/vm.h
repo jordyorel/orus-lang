@@ -343,6 +343,7 @@ typedef struct {
     uint16_t loop_index;
     uint64_t generation;
     bool occupied;
+    bool warmup_recorded;
 } JITEntryCacheSlot;
 
 typedef struct {
@@ -1386,6 +1387,10 @@ typedef struct VM {
     bool jit_pending_invalidate;
     JITDeoptTrigger jit_pending_trigger;
     OrusJitRolloutState jit_rollout;
+    uint64_t jit_enter_cycle_total;
+    uint64_t jit_enter_cycle_samples;
+    uint64_t jit_enter_cycle_warmup_total;
+    uint64_t jit_enter_cycle_warmup_samples;
 } VM;
 
 // Transitional alias while the runtime gradually migrates to the new VMState

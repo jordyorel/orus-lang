@@ -33,6 +33,12 @@ typedef struct OrusJitRunStats {
     uint64_t native_dispatches;
     uint64_t native_type_deopts;
     uint64_t deopts;
+    uint64_t enter_cycle_total;
+    uint64_t enter_cycle_samples;
+    uint64_t enter_cycle_warmup_total;
+    uint64_t enter_cycle_warmup_samples;
+    double enter_cycle_average;
+    double enter_cycle_warmup_average;
     OrusJitTranslationFailureLog failure_log;
     OrusJitRolloutStage rollout_stage;
     uint32_t rollout_mask;

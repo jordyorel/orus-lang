@@ -17,7 +17,7 @@ The following measurements were collected by running `make test` on the release 
 | Numeric loops (fused) | `tests/benchmarks/optimized_loop_benchmark.orus`   | 4002.94                   | Matches the fused-loop workload used in the tier-up roadmap reruns. |
 | Mixed object access   | `tests/benchmarks/string_concat_benchmark.orus`    | 239.46                    | Heavily exercises boxed value churn and the string builder path. |
 | Numeric micro loops   | `tests/benchmarks/typed_fastpath_benchmark.orus`   | 950.36                    | Validates typed register windows over tight i32 arithmetic. |
-| FFI ping/pong         | _Pending (`tests/benchmarks/ffi_ping_pong_benchmark.orus`)_ | _Blocked_                 | Interpreter baseline will be published once the host-call harness lands. |
+| FFI ping/pong         | `tests/benchmarks/ffi_ping_pong_benchmark.orus`             | 2,096.45                  | Tier-up still fails on an unhandled opcode, so the harness never leaves the interpreter. |
 
 - **Average tier-up latency:** 309,221 ns over 1 run
 - **Interpreter latency:** 335.49 ns per call (2.98 million calls/sec)
@@ -35,14 +35,25 @@ These numbers come from the `tests/unit/test_vm_jit_benchmark.c` harness, which 
 
 ## Optimized Loop Benchmark (`tests/benchmarks/optimized_loop_benchmark.orus`)
 
-- **Interpreter runtime (JIT disabled):** 16,533.99 ms
-- **JIT-enabled runtime:** 15,700.51 ms
-- **Observed speedup:** 1.05×
+- **Interpreter runtime (JIT disabled):** 16,152.16 ms
+- **JIT-enabled runtime:** 16,355.90 ms
+- **Observed speedup:** 0.99×
 - **Translations:** 2 succeeded, 2 failed (`unsupported_value_kind` guard rails still fire on unknown kinds)
 - **Native dispatches:** 524, **Cache hits:** 522, **Cache misses:** 4, **Deopts:** 3, **Type guard bailouts:** 1
-- **Rollout stage:** `strings` (mask `0x7F`); fused loop lowering now lets the workload tier up while retaining failure telemetry for remaining gaps.
+- **Rollout stage:** `strings` (mask `0x7F`); cache reuse remains healthy, but the remaining failures erase any net speedup.
 
-Re-running the benchmark after adding fused loop lowering shows the profiler emitting native translations for the hot loops. The baseline tier now executes 524 times, driving a measurable 5% speedup while cache hits confirm stable reuse of the generated code. The residual translation failures stem from kernels that still exercise unknown value kinds, so the telemetry remains in place to guide the next rollout stages.
+The baseline tier still emits native translations for two of the fused loops, yet the outstanding value kind gaps hold the overall speedup under 1×. We need either additional rollout coverage or lower interpreter overhead to regain the 5% improvement observed prior to the latest changes.
+
+## FFI Ping/Pong Benchmark (`tests/benchmarks/ffi_ping_pong_benchmark.orus`)
+
+- **Interpreter runtime (JIT disabled):** 2,096.45 ms
+- **JIT-enabled runtime:** 2,173.20 ms
+- **Observed speedup:** 0.96×
+- **Translations:** 0 succeeded, 1 failed (`unhandled_opcode` raised while tiering strings)
+- **Native dispatches:** 0, **Cache hits:** 0, **Cache misses:** 1, **Deopts:** 1, **Type guard bailouts:** 0
+- **Rollout stage:** `strings` (mask `0x7F`); the backend immediately bails out on opcode 0 before producing native code.
+
+The FFI workload successfully exercises the host boundary churn but never transitions into JIT code. Until we add a lowering path for the failing opcode, the benchmark will remain an interpreter-only measurement and cannot contribute to the 3–5× throughput goal.
 
 ## Per-Type Tier-Up Tracker
 

@@ -1,0 +1,65 @@
+// FFI ping/pong benchmark to stress host boundary crossings.
+//
+// This benchmark performs rapid push/pop cycles against the array builtin
+// combined with typeof()/istype() inspections. Each iteration crosses the host
+// boundary multiple times so we can observe allocator pressure and safepoint
+// cadence once the FFI harness is wired into the JIT benchmark runner.
+
+TRIALS: i32 = 5
+ITERATIONS: i32 = 200_000
+
+EXPECTED_SUM: i64 = ((ITERATIONS as i64) * ((ITERATIONS - 1) as i64)) / 2
+EXPECTED_TYPE_HITS: i64 = ITERATIONS as i64
+
+mut total_time: f64 = 0.0
+mut checksum: i64 = 0
+mut type_hits_total: i64 = 0
+
+print("=== Orus FFI Ping/Pong Benchmark ===")
+print("trials:", TRIALS)
+print("iterations:", ITERATIONS)
+print("expected_roundtrip_sum:", EXPECTED_SUM)
+print("expected_type_hits:", EXPECTED_TYPE_HITS)
+
+for trial in 0..TRIALS:
+    start: f64 = timestamp()
+    mut buffer: [i32] = []
+    mut roundtrip_sum: i64 = 0
+    mut type_hits: i64 = 0
+
+    for value in 0..ITERATIONS:
+        push(buffer, value)
+        roundtrip: i32 = pop(buffer)
+        type_name: string = typeof(roundtrip)
+
+        roundtrip_sum = roundtrip_sum + (roundtrip as i64)
+        if type_name != "i32":
+            print("unexpected typeof result", type_name)
+        if istype(roundtrip, "i32"):
+            type_hits = type_hits + 1
+
+    elapsed: f64 = timestamp() - start
+
+    total_time = total_time + elapsed
+    checksum = checksum + roundtrip_sum
+    type_hits_total = type_hits_total + type_hits
+
+    if assert_eq("ffi_ping_pong roundtrip", roundtrip_sum, EXPECTED_SUM):
+        print("trial", trial, "elapsed", elapsed, "roundtrip_sum", roundtrip_sum)
+    if assert_eq("ffi_ping_pong type hits", type_hits, EXPECTED_TYPE_HITS):
+        print("trial", trial, "type_hits", type_hits)
+
+avg_time: f64 = total_time / (TRIALS as f64)
+expected_total_sum: i64 = (TRIALS as i64) * EXPECTED_SUM
+expected_total_type_hits: i64 = (TRIALS as i64) * EXPECTED_TYPE_HITS
+
+print("average_time:", avg_time)
+print("checksum:", checksum)
+print("type_hits_total:", type_hits_total)
+
+if assert_eq("ffi_ping_pong total sum", checksum, expected_total_sum):
+    print("total roundtrip checksum", checksum)
+if assert_eq("ffi_ping_pong total type hits", type_hits_total, expected_total_type_hits):
+    print("total type hits", type_hits_total)
+
+print("=== Benchmark complete ===")
