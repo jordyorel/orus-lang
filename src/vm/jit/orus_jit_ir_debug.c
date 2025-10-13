@@ -287,9 +287,10 @@ orus_jit_ir_format_instruction(const OrusJitIRInstruction* inst,
 
         case ORUS_JIT_IR_OP_JUMP_SHORT:
             return (size_t)snprintf(buffer, buffer_size,
-                                    "%s offset=%u",
+                                    "%s offset=%u length=%u",
                                     opcode_name,
-                                    inst->operands.jump_short.offset);
+                                    inst->operands.jump_short.offset,
+                                    inst->operands.jump_short.bytecode_length);
         case ORUS_JIT_IR_OP_JUMP_BACK_SHORT:
             return (size_t)snprintf(buffer, buffer_size,
                                     "%s back=%u",
@@ -297,10 +298,11 @@ orus_jit_ir_format_instruction(const OrusJitIRInstruction* inst,
                                     inst->operands.jump_back_short.back_offset);
         case ORUS_JIT_IR_OP_JUMP_IF_NOT_SHORT:
             return (size_t)snprintf(buffer, buffer_size,
-                                    "%s predicate=r%u offset=%u",
+                                    "%s predicate=r%u offset=%u length=%u",
                                     opcode_name,
                                     inst->operands.jump_if_not_short.predicate_reg,
-                                    inst->operands.jump_if_not_short.offset);
+                                    inst->operands.jump_if_not_short.offset,
+                                    inst->operands.jump_if_not_short.bytecode_length);
         case ORUS_JIT_IR_OP_LOOP_BACK:
             return (size_t)snprintf(buffer, buffer_size,
                                     "%s back=%u",

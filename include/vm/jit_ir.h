@@ -253,9 +253,12 @@ typedef struct OrusJitIRInstruction {
             uint16_t first_arg_reg;
             uint16_t arg_count;
             uint16_t native_index;
+            uint16_t spill_base;
+            uint16_t spill_count;
         } call_native;
         struct {
             uint16_t offset;
+            uint16_t bytecode_length;
         } jump_short;
         struct {
             uint16_t back_offset;
@@ -263,6 +266,7 @@ typedef struct OrusJitIRInstruction {
         struct {
             uint16_t predicate_reg;
             uint16_t offset;
+            uint16_t bytecode_length;
         } jump_if_not_short;
         struct {
             uint16_t back_offset;

@@ -20,16 +20,18 @@ subtasks as the implementation evolves.
 - [x] Lower floating-point arithmetic (`*_F64`) and comparisons with SSE2/NEON parity and flag propagation for branches.
 - [x] Implement DynASM constant materialization for all value kinds, including pool loads, frame spills, and pointer moves.
 - [x] Emit DynASM helper calls for GC safepoints, runtime math helpers, and VM service routines without forcing deopts.
-- [ ] Provide typed deopt landing pads so guard exits reuse interpreter frames instead of regenerating helper stubs.
-- [ ] Update backend unit tests (`tests/unit/test_vm_jit_backend.c`) to assert DynASM parity with the linear emitter across value kinds.
+- [x] Provide typed deopt landing pads so guard exits reuse interpreter frames instead of regenerating helper stubs.
+  - `vm_handle_type_error_deopt()` now applies landing pad metadata that clears frame, parameter, and temp typed windows before
+    handing control back to baseline bytecode, and guard exits reuse this path instead of re-materializing helper stubs.
+- [x] Update backend unit tests (`tests/unit/test_vm_jit_backend.c`) to assert DynASM parity with the linear emitter across value kinds.
 
 ## Stage 2 – Translator Hardening & Loop Resilience
 
-- [ ] Extend translator diagnostics to categorize unsupported bytecodes, malformed loop shapes, and disabled rollout stages.
-- [ ] Support loop patterns with conditional exits, nested branches, and in-loop helper calls while preserving safety invariants.
-- [ ] Track value-kind promotion so widened locals (i32→i64/u64) reuse existing IR nodes instead of triggering bailouts.
-- [ ] Annotate FFI call sites with spill metadata so translated loops can cross the C boundary and resume in native code.
-- [ ] Add translator unit tests for mixed-width arithmetic, FFI loops, and conditional branches to prevent regressions.
+- [x] Extend translator diagnostics to categorize unsupported bytecodes, malformed loop shapes, and disabled rollout stages.
+- [x] Support loop patterns with conditional exits, nested branches, and in-loop helper calls while preserving safety invariants.
+- [x] Track value-kind promotion so widened locals (i32→i64/u64) reuse existing IR nodes instead of triggering bailouts.
+- [x] Annotate FFI call sites with spill metadata so translated loops can cross the C boundary and resume in native code.
+- [x] Add translator unit tests for mixed-width arithmetic, FFI loops, and conditional branches to prevent regressions.
 
 ## Stage 3 – Runtime Integration & Services
 

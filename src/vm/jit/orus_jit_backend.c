@@ -205,6 +205,12 @@ orus_jit_flush_icache(void* ptr, size_t size) {
 static void orus_jit_execute_block(struct VM* vm_instance,
                                    const OrusJitNativeBlock* block);
 
+#if ORUS_JIT_HAS_DYNASM_X86
+static JITBackendStatus orus_jit_backend_compile_ir_x86(struct OrusJitBackend* backend,
+                                                        const OrusJitIRProgram* program,
+                                                        JITEntry* entry);
+#endif
+
 #if defined(__aarch64__)
 static bool
 orus_jit_emit_a64_mov_imm64(uint32_t* code,
@@ -483,9 +489,8 @@ jit_bailout_and_deopt(struct VM* vm_instance,
 
         if (block->program.function_index < vm_instance->functionCount) {
             Function* function = &vm_instance->functions[block->program.function_index];
-            if (function) {
-                vm_default_deopt_stub(function);
-                return;
+            if (function && !function->deopt_handler) {
+                function->deopt_handler = vm_default_deopt_stub;
             }
         }
     }
@@ -512,6 +517,42 @@ orus_jit_helper_safepoint_count(void) {
 void
 orus_jit_helper_safepoint_reset(void) {
     g_orus_jit_helper_safepoint_count = 0u;
+}
+
+static void
+orus_jit_native_flush_typed_range(struct VM* vm_instance,
+                                  uint16_t spill_base,
+                                  uint16_t spill_count) {
+    if (!vm_instance || spill_count == 0u) {
+        return;
+    }
+
+    uint32_t start = spill_base;
+    uint32_t end = start + (uint32_t)spill_count;
+    if (start >= REGISTER_COUNT) {
+        start = REGISTER_COUNT;
+    }
+    if (end > REGISTER_COUNT) {
+        end = REGISTER_COUNT;
+    }
+    if (start >= end) {
+        return;
+    }
+
+    TypedRegisterWindow* window = vm_instance->typed_regs.active_window
+                                      ? vm_instance->typed_regs.active_window
+                                      : &vm_instance->typed_regs.root_window;
+    if (!window) {
+        return;
+    }
+
+    for (uint32_t index = start; index < end; ++index) {
+        uint16_t reg = (uint16_t)index;
+        if (!typed_window_slot_live(window, reg)) {
+            continue;
+        }
+        vm_reconcile_typed_register(reg);
+    }
 }
 
 static size_t
@@ -1388,8 +1429,6 @@ orus_jit_native_call_native(struct VM* vm_instance,
     if (!vm_instance) {
         return false;
     }
-
-    register_file_reconcile_active_window();
 
     if (native_index >= (uint16_t)vm_instance->nativeFunctionCount) {
         jit_bailout_and_deopt(vm_instance, block);
@@ -2818,6 +2857,11 @@ orus_jit_execute_block(struct VM* vm_instance, const OrusJitNativeBlock* block) 
                 }
                 break;
             case ORUS_JIT_IR_OP_CALL_NATIVE:
+                if (inst->operands.call_native.spill_count > 0u) {
+                    orus_jit_native_flush_typed_range(
+                        vm_instance, inst->operands.call_native.spill_base,
+                        inst->operands.call_native.spill_count);
+                }
                 if (!orus_jit_native_call_native(vm_instance,
                                                  (OrusJitNativeBlock*)block,
                                                  inst->operands.call_native.dst_reg,
@@ -2962,7 +3006,8 @@ orus_jit_execute_block(struct VM* vm_instance, const OrusJitNativeBlock* block) 
                                                    inst->operands.unary.src_reg);
                 break;
             case ORUS_JIT_IR_OP_JUMP_SHORT: {
-                uint32_t fallthrough = inst->bytecode_offset + 2u;
+                uint32_t fallthrough = inst->bytecode_offset +
+                                      inst->operands.jump_short.bytecode_length;
                 uint32_t target = fallthrough + inst->operands.jump_short.offset;
                 size_t target_index = SIZE_MAX;
                 if (target < chunk_size) {
@@ -3011,7 +3056,9 @@ orus_jit_execute_block(struct VM* vm_instance, const OrusJitNativeBlock* block) 
                     goto cleanup;
                 }
                 if (!predicate) {
-                    uint32_t fallthrough = inst->bytecode_offset + 3u;
+                    uint32_t fallthrough =
+                        inst->bytecode_offset +
+                        inst->operands.jump_if_not_short.bytecode_length;
                     uint32_t target = fallthrough +
                                        inst->operands.jump_if_not_short.offset;
                     size_t target_index = SIZE_MAX;
@@ -3061,6 +3108,13 @@ orus_jit_should_force_helper_stub(void) {
     const char* value = getenv("ORUS_JIT_FORCE_HELPER_STUB");
     return value && value[0] != '\0';
 }
+#if ORUS_JIT_HAS_DYNASM_X86
+static bool
+orus_jit_should_force_dynasm(void) {
+    const char* value = getenv("ORUS_JIT_FORCE_DYNASM");
+    return value && value[0] != '\0';
+}
+#endif
 #endif
 
 struct OrusJitBackend*
@@ -4624,6 +4678,25 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                 break;
             }
             case ORUS_JIT_IR_OP_CALL_NATIVE: {
+                if (inst->operands.call_native.spill_count > 0u) {
+                    if (!orus_jit_code_buffer_emit_bytes(&code, MOV_RDI_R12,
+                                                         sizeof(MOV_RDI_R12)) ||
+                        !orus_jit_code_buffer_emit_u8(&code, 0xBE) ||
+                        !orus_jit_code_buffer_emit_u32(
+                            &code, (uint32_t)inst->operands.call_native.spill_base) ||
+                        !orus_jit_code_buffer_emit_u8(&code, 0xBA) ||
+                        !orus_jit_code_buffer_emit_u32(
+                            &code, (uint32_t)inst->operands.call_native.spill_count) ||
+                        !orus_jit_code_buffer_emit_u8(&code, 0x48) ||
+                        !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
+                        !orus_jit_code_buffer_emit_u64(
+                            &code, (uint64_t)(uintptr_t)
+                                        &orus_jit_native_flush_typed_range) ||
+                        !orus_jit_code_buffer_emit_bytes(&code, CALL_RAX,
+                                                         sizeof(CALL_RAX))) {
+                        RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
+                    }
+                }
                 if (!orus_jit_code_buffer_emit_bytes(&code, MOV_RDI_R12,
                                                      sizeof(MOV_RDI_R12)) ||
                     !orus_jit_code_buffer_emit_bytes(&code, MOV_RSI_RBX_BYTES,
@@ -5181,7 +5254,8 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                 if (!orus_jit_code_buffer_emit_u32(&code, 0u) ||
                     !orus_jit_branch_patch_list_append(
                         &branch_patches, disp_offset,
-                        inst->bytecode_offset + 2u +
+                        inst->bytecode_offset +
+                            inst->operands.jump_short.bytecode_length +
                             inst->operands.jump_short.offset)) {
                     RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
                 }
@@ -5251,7 +5325,8 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                 if (!orus_jit_code_buffer_emit_u32(&code, 0u) ||
                     !orus_jit_branch_patch_list_append(
                         &branch_patches, disp_offset,
-                        inst->bytecode_offset + 3u +
+                        inst->bytecode_offset +
+                            inst->operands.jump_if_not_short.bytecode_length +
                             inst->operands.jump_if_not_short.offset)) {
                     RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
                 }
@@ -6098,6 +6173,19 @@ orus_jit_ir_emit_x86(const OrusJitIRProgram* program,
                 break;
             }
             case ORUS_JIT_IR_OP_CALL_NATIVE: {
+                if (inst->operands.call_native.spill_count > 0u) {
+                    if (!dynasm_emit_load_vm_block(actions, &code_offset) ||
+                        !dynasm_emit_mov_reg_imm32(actions, 0xBE, &code_offset,
+                                                   (uint32_t)inst->operands.call_native.spill_base) ||
+                        !dynasm_emit_mov_reg_imm32(actions, 0xBA, &code_offset,
+                                                   (uint32_t)inst->operands.call_native.spill_count) ||
+                        !dynasm_emit_helper_call(actions, &code_offset,
+                                                  (const void*)&orus_jit_native_flush_typed_range)) {
+                        dynasm_patch_list_release(&bail_patches);
+                        dynasm_patch_list_release(&epilogue_patches);
+                        return false;
+                    }
+                }
                 if (!dynasm_emit_load_vm_block(actions, &code_offset) ||
                     !dynasm_emit_mov_reg_imm32(actions, 0xBA, &code_offset,
                                                (uint32_t)inst->operands.call_native.dst_reg) ||
@@ -7124,7 +7212,8 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                 if (!orus_jit_a64_code_buffer_emit_u32(&code, A64_B(0u)) ||
                     !orus_jit_a64_branch_patch_list_append(
                         &branch_patches, branch_index,
-                        inst->bytecode_offset + 2u +
+                        inst->bytecode_offset +
+                            inst->operands.jump_short.bytecode_length +
                             inst->operands.jump_short.offset,
                         ORUS_JIT_A64_BRANCH_PATCH_KIND_B)) {
                     A64_RETURN(JIT_BACKEND_OUT_OF_MEMORY);
@@ -7180,7 +7269,8 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                 if (!orus_jit_a64_code_buffer_emit_u32(&code, A64_CBNZ_W(0u, 0u)) ||
                     !orus_jit_a64_branch_patch_list_append(
                         &branch_patches, branch_index,
-                        inst->bytecode_offset + 3u +
+                        inst->bytecode_offset +
+                            inst->operands.jump_if_not_short.bytecode_length +
                             inst->operands.jump_if_not_short.offset,
                         ORUS_JIT_A64_BRANCH_PATCH_KIND_CBNZ)) {
                     A64_RETURN(JIT_BACKEND_OUT_OF_MEMORY);
@@ -7361,6 +7451,19 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                 break;
             }
             case ORUS_JIT_IR_OP_CALL_NATIVE: {
+                if (inst->operands.call_native.spill_count > 0u) {
+                    if (!orus_jit_a64_code_buffer_emit_u32(&code, A64_LDR_X(0u, 31u, 0u)) ||
+                        !orus_jit_a64_emit_mov_imm64_buffer(&code, 1u,
+                                                            (uint64_t)inst->operands.call_native.spill_base) ||
+                        !orus_jit_a64_emit_mov_imm64_buffer(&code, 2u,
+                                                            (uint64_t)inst->operands.call_native.spill_count) ||
+                        !orus_jit_a64_emit_mov_imm64_buffer(
+                            &code, 16u,
+                            (uint64_t)(uintptr_t)&orus_jit_native_flush_typed_range) ||
+                        !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u)) {
+                        A64_RETURN(JIT_BACKEND_OUT_OF_MEMORY);
+                    }
+                }
                 if (!orus_jit_a64_code_buffer_emit_u32(&code, A64_LDR_X(0u, 31u, 0u)) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, A64_LDR_X(1u, 31u, 1u)) ||
                     !orus_jit_a64_emit_mov_imm64_buffer(
@@ -7959,6 +8062,15 @@ orus_jit_backend_compile_ir(struct OrusJitBackend* backend,
     if (!block) {
         return JIT_BACKEND_OUT_OF_MEMORY;
     }
+
+#if ORUS_JIT_HAS_DYNASM_X86
+#if defined(__x86_64__) || defined(_M_X64)
+    if (orus_jit_should_force_dynasm()) {
+        orus_jit_native_block_destroy(block);
+        return orus_jit_backend_compile_ir_x86(backend, program, out_entry);
+    }
+#endif
+#endif
 
     JITBackendStatus status = JIT_BACKEND_ASSEMBLY_ERROR;
 

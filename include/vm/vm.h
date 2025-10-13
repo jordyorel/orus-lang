@@ -368,6 +368,14 @@ typedef enum OrusJitTranslationStatus {
 #define ORUS_JIT_TRANSLATION_FAILURE_HISTORY 32u
 #define ORUS_JIT_SUPPORTED_FAILURE_ALERT_THRESHOLD 8u
 
+typedef enum {
+    ORUS_JIT_TRANSLATION_FAILURE_CATEGORY_UNSUPPORTED_BYTECODE = 0,
+    ORUS_JIT_TRANSLATION_FAILURE_CATEGORY_MALFORMED_LOOP,
+    ORUS_JIT_TRANSLATION_FAILURE_CATEGORY_ROLLOUT_DISABLED,
+    ORUS_JIT_TRANSLATION_FAILURE_CATEGORY_OTHER,
+    ORUS_JIT_TRANSLATION_FAILURE_CATEGORY_COUNT,
+} OrusJitTranslationFailureCategory;
+
 typedef struct OrusJitTranslationFailureRecord {
     OrusJitTranslationStatus status;
     OrusJitIROpcode opcode;
@@ -381,6 +389,7 @@ typedef struct OrusJitTranslationFailureLog {
     uint64_t total_failures;
     uint64_t reason_counts[ORUS_JIT_TRANSLATE_STATUS_COUNT];
     uint64_t value_kind_counts[ORUS_JIT_VALUE_KIND_COUNT];
+    uint64_t category_counts[ORUS_JIT_TRANSLATION_FAILURE_CATEGORY_COUNT];
     uint64_t supported_kind_failures[ORUS_JIT_VALUE_KIND_COUNT];
     OrusJitTranslationFailureRecord records[ORUS_JIT_TRANSLATION_FAILURE_HISTORY];
     size_t next_index;
