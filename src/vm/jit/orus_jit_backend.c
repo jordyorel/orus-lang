@@ -2035,7 +2035,7 @@ orus_jit_native_convert_u64_to_f64(struct VM* vm_instance,
     return true;
 }
 
-#if defined(__aarch64__)
+#if defined(__aarch64__) || defined(__x86_64__) || defined(_M_X64)
 static bool orus_jit_opcode_is_add(OrusJitIROpcode opcode);
 static bool orus_jit_opcode_is_sub(OrusJitIROpcode opcode);
 static bool orus_jit_opcode_is_mul(OrusJitIROpcode opcode);
@@ -5383,6 +5383,17 @@ struct DynAsmActionBuffer {
     size_t capacity;
 };
 
+typedef struct DynAsmPatch {
+    size_t action_offset;
+    size_t code_offset;
+} DynAsmPatch;
+
+typedef struct DynAsmPatchList {
+    DynAsmPatch* data;
+    size_t count;
+    size_t capacity;
+} DynAsmPatchList;
+
 static void
 dynasm_action_buffer_init(struct DynAsmActionBuffer* buffer) {
     if (!buffer) {
@@ -5444,25 +5455,889 @@ dynasm_action_buffer_push(struct DynAsmActionBuffer* buffer, unsigned char value
 }
 
 static bool
+dynasm_emit_bytes(struct DynAsmActionBuffer* buffer,
+                  const uint8_t* bytes,
+                  size_t count) {
+    if (!buffer || (!bytes && count)) {
+        return false;
+    }
+    for (size_t i = 0; i < count; ++i) {
+        if (!dynasm_action_buffer_push(buffer, DASM_ESC) ||
+            !dynasm_action_buffer_push(buffer, bytes[i])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static void
+dynasm_patch_list_init(DynAsmPatchList* list) {
+    if (!list) {
+        return;
+    }
+    list->data = NULL;
+    list->count = 0u;
+    list->capacity = 0u;
+}
+
+static void
+dynasm_patch_list_release(DynAsmPatchList* list) {
+    if (!list) {
+        return;
+    }
+    free(list->data);
+    list->data = NULL;
+    list->count = 0u;
+    list->capacity = 0u;
+}
+
+static bool
+dynasm_patch_list_append(DynAsmPatchList* list,
+                         size_t action_offset,
+                         size_t code_offset) {
+    if (!list) {
+        return false;
+    }
+    if (list->count == list->capacity) {
+        size_t new_capacity = list->capacity ? list->capacity * 2u : 4u;
+        DynAsmPatch* data =
+            (DynAsmPatch*)realloc(list->data, new_capacity * sizeof(DynAsmPatch));
+        if (!data) {
+            return false;
+        }
+        list->data = data;
+        list->capacity = new_capacity;
+    }
+    list->data[list->count].action_offset = action_offset;
+    list->data[list->count].code_offset = code_offset;
+    list->count++;
+    return true;
+}
+
+static bool
+dynasm_emit_bytes_track(struct DynAsmActionBuffer* buffer,
+                        size_t* code_offset,
+                        const uint8_t* bytes,
+                        size_t count) {
+    if (!dynasm_emit_bytes(buffer, bytes, count)) {
+        return false;
+    }
+    if (code_offset) {
+        *code_offset += count;
+    }
+    return true;
+}
+
+static bool
+dynasm_emit_u32_le(struct DynAsmActionBuffer* buffer,
+                   size_t* code_offset,
+                   uint32_t value) {
+    uint8_t bytes[4];
+    bytes[0] = (uint8_t)(value & 0xFFu);
+    bytes[1] = (uint8_t)((value >> 8) & 0xFFu);
+    bytes[2] = (uint8_t)((value >> 16) & 0xFFu);
+    bytes[3] = (uint8_t)((value >> 24) & 0xFFu);
+    return dynasm_emit_bytes_track(buffer, code_offset, bytes, sizeof(bytes));
+}
+
+static bool
+dynasm_emit_u64_le(struct DynAsmActionBuffer* buffer,
+                   size_t* code_offset,
+                   uint64_t value) {
+    uint8_t bytes[8];
+    for (size_t i = 0; i < 8; ++i) {
+        bytes[i] = (uint8_t)((value >> (8u * i)) & 0xFFu);
+    }
+    return dynasm_emit_bytes_track(buffer, code_offset, bytes, sizeof(bytes));
+}
+
+static bool
+dynasm_emit_mov_reg_imm32(struct DynAsmActionBuffer* buffer,
+                          uint8_t opcode,
+                          size_t* code_offset,
+                          uint32_t immediate) {
+    uint8_t bytes[5];
+    bytes[0] = opcode;
+    bytes[1] = (uint8_t)(immediate & 0xFFu);
+    bytes[2] = (uint8_t)((immediate >> 8) & 0xFFu);
+    bytes[3] = (uint8_t)((immediate >> 16) & 0xFFu);
+    bytes[4] = (uint8_t)((immediate >> 24) & 0xFFu);
+    return dynasm_emit_bytes_track(buffer, code_offset, bytes, sizeof(bytes));
+}
+
+static bool
+dynasm_emit_load_vm_block(struct DynAsmActionBuffer* buffer, size_t* code_offset) {
+    return dynasm_emit_bytes_track(buffer, code_offset,
+                                   (const uint8_t[]){0x48, 0x8B, 0x7D, 0xF8}, 4u) &&
+           dynasm_emit_bytes_track(buffer, code_offset,
+                                   (const uint8_t[]){0x48, 0x8B, 0x75, 0xF0}, 4u);
+}
+
+static bool
+dynasm_emit_helper_call(struct DynAsmActionBuffer* buffer,
+                        size_t* code_offset,
+                        const void* helper) {
+    return dynasm_emit_bytes_track(buffer, code_offset, (const uint8_t[]){0x48, 0xB8},
+                                   2u) &&
+           dynasm_emit_u64_le(buffer, code_offset,
+                              (uint64_t)(uintptr_t)helper) &&
+           dynasm_emit_bytes_track(buffer, code_offset,
+                                   (const uint8_t[]){0xFF, 0xD0}, 2u);
+}
+
+static bool
+dynasm_emit_stack_push_u32(struct DynAsmActionBuffer* buffer,
+                           size_t* code_offset,
+                           uint32_t value) {
+    return dynasm_emit_bytes_track(buffer, code_offset,
+                                   (const uint8_t[]){0x48, 0x83, 0xEC, 0x08}, 4u) &&
+           dynasm_emit_bytes_track(buffer, code_offset,
+                                   (const uint8_t[]){0x48, 0xC7, 0x04, 0x24}, 4u) &&
+           dynasm_emit_u32_le(buffer, code_offset, value);
+}
+
+static bool
+dynasm_emit_stack_pop(struct DynAsmActionBuffer* buffer, size_t* code_offset) {
+    return dynasm_emit_bytes_track(buffer, code_offset,
+                                   (const uint8_t[]){0x48, 0x83, 0xC4, 0x08}, 4u);
+}
+
+static void
+dynasm_patch_u32(struct DynAsmActionBuffer* buffer,
+                 size_t action_offset,
+                 uint32_t value) {
+    if (!buffer || !buffer->data || action_offset + 7u >= buffer->size) {
+        return;
+    }
+    buffer->data[action_offset + 1u] = (uint8_t)(value & 0xFFu);
+    buffer->data[action_offset + 3u] = (uint8_t)((value >> 8) & 0xFFu);
+    buffer->data[action_offset + 5u] = (uint8_t)((value >> 16) & 0xFFu);
+    buffer->data[action_offset + 7u] = (uint8_t)((value >> 24) & 0xFFu);
+}
+
+static bool
 orus_jit_ir_emit_x86(const OrusJitIRProgram* program,
+                     OrusJitNativeBlock* block,
                      struct DynAsmActionBuffer* actions) {
-    if (!program || !actions || program->count == 0) {
+    if (!program || !block || !actions || program->count == 0u) {
+        return false;
+    }
+
+    size_t code_offset = 0u;
+    DynAsmPatchList bail_patches;
+    DynAsmPatchList epilogue_patches;
+    dynasm_patch_list_init(&bail_patches);
+    dynasm_patch_list_init(&epilogue_patches);
+
+    bool success = dynasm_emit_bytes_track(actions, &code_offset, (const uint8_t[]){0x55}, 1u) &&
+                   dynasm_emit_bytes_track(actions, &code_offset,
+                                          (const uint8_t[]){0x48, 0x89, 0xE5}, 3u) &&
+                   dynasm_emit_bytes_track(actions, &code_offset,
+                                          (const uint8_t[]){0x48, 0x83, 0xEC, 0x28}, 4u) &&
+                   dynasm_emit_bytes_track(actions, &code_offset,
+                                          (const uint8_t[]){0x48, 0x89, 0x7D, 0xF8}, 4u) &&
+                   dynasm_emit_bytes_track(actions, &code_offset,
+                                          (const uint8_t[]){0x48, 0xB8}, 2u) &&
+                   dynasm_emit_u64_le(actions, &code_offset,
+                                      (uint64_t)(uintptr_t)block) &&
+                   dynasm_emit_bytes_track(actions, &code_offset,
+                                          (const uint8_t[]){0x48, 0x89, 0x45, 0xF0}, 4u);
+    if (!success) {
+        dynasm_patch_list_release(&bail_patches);
+        dynasm_patch_list_release(&epilogue_patches);
         return false;
     }
 
     for (size_t i = 0; i < program->count; ++i) {
         const OrusJitIRInstruction* inst = &program->instructions[i];
+
         switch (inst->opcode) {
-            case ORUS_JIT_IR_OP_RETURN:
-                if (!dynasm_action_buffer_push(actions, DASM_ESC) ||
-                    !dynasm_action_buffer_push(actions, 0xC3u)) {
+            case ORUS_JIT_IR_OP_LOAD_I32_CONST:
+            case ORUS_JIT_IR_OP_LOAD_I64_CONST:
+            case ORUS_JIT_IR_OP_LOAD_U32_CONST:
+            case ORUS_JIT_IR_OP_LOAD_U64_CONST:
+            case ORUS_JIT_IR_OP_LOAD_F64_CONST: {
+                uint64_t bits = inst->operands.load_const.immediate_bits;
+                if (!dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x48, 0x8B, 0x7D, 0xF8}, 4u) ||
+                    !dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x48, 0x8B, 0x75, 0xF0}, 4u) ||
+                    !dynasm_emit_mov_reg_imm32(actions, 0xBA, &code_offset,
+                                               (uint32_t)inst->value_kind) ||
+                    !dynasm_emit_mov_reg_imm32(actions, 0xB9, &code_offset,
+                                               (uint32_t)inst->operands.load_const.dst_reg) ||
+                    !dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x49, 0xB8}, 2u) ||
+                    !dynasm_emit_u64_le(actions, &code_offset, bits) ||
+                    !dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x48, 0xB8}, 2u) ||
+                    !dynasm_emit_u64_le(actions, &code_offset,
+                                        (uint64_t)(uintptr_t)&orus_jit_native_linear_load) ||
+                    !dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0xFF, 0xD0}, 2u) ||
+                    !dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x84, 0xC0}, 2u)) {
+                    dynasm_patch_list_release(&bail_patches);
+                    dynasm_patch_list_release(&epilogue_patches);
+                    return false;
+                }
+                size_t jcc_action = actions->size;
+                size_t jcc_code = code_offset;
+                if (!dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x0F, 0x84, 0x00, 0x00, 0x00, 0x00},
+                                             6u) ||
+                    !dynasm_patch_list_append(&bail_patches, jcc_action + 4u,
+                                              jcc_code + 2u)) {
+                    dynasm_patch_list_release(&bail_patches);
+                    dynasm_patch_list_release(&epilogue_patches);
                     return false;
                 }
                 break;
+            }
+            case ORUS_JIT_IR_OP_LOAD_STRING_CONST: {
+                if (!dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x48, 0x8B, 0x7D, 0xF8}, 4u) ||
+                    !dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x48, 0x8B, 0x75, 0xF0}, 4u) ||
+                    !dynasm_emit_mov_reg_imm32(actions, 0xBA, &code_offset,
+                                               (uint32_t)inst->operands.load_const.dst_reg) ||
+                    !dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x48, 0xB9}, 2u) ||
+                    !dynasm_emit_u64_le(actions, &code_offset,
+                                        inst->operands.load_const.immediate_bits) ||
+                    !dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x48, 0xB8}, 2u) ||
+                    !dynasm_emit_u64_le(actions, &code_offset,
+                                        (uint64_t)(uintptr_t)&orus_jit_native_load_string_const) ||
+                    !dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0xFF, 0xD0}, 2u) ||
+                    !dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x84, 0xC0}, 2u)) {
+                    dynasm_patch_list_release(&bail_patches);
+                    dynasm_patch_list_release(&epilogue_patches);
+                    return false;
+                }
+                size_t jcc_action = actions->size;
+                size_t jcc_code = code_offset;
+                if (!dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x0F, 0x84, 0x00, 0x00, 0x00, 0x00},
+                                             6u) ||
+                    !dynasm_patch_list_append(&bail_patches, jcc_action + 4u,
+                                              jcc_code + 2u)) {
+                    dynasm_patch_list_release(&bail_patches);
+                    dynasm_patch_list_release(&epilogue_patches);
+                    return false;
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_LOAD_VALUE_CONST: {
+                if (!dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x48, 0x8B, 0x7D, 0xF8}, 4u) ||
+                    !dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x48, 0x8B, 0x75, 0xF0}, 4u) ||
+                    !dynasm_emit_mov_reg_imm32(actions, 0xBA, &code_offset,
+                                               (uint32_t)inst->operands.load_const.dst_reg) ||
+                    !dynasm_emit_mov_reg_imm32(actions, 0xB9, &code_offset,
+                                               (uint32_t)inst->operands.load_const.constant_index) ||
+                    !dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x41, 0xB8}, 2u) ||
+                    !dynasm_emit_u32_le(actions, &code_offset,
+                                        (uint32_t)inst->value_kind) ||
+                    !dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x48, 0xB8}, 2u) ||
+                    !dynasm_emit_u64_le(actions, &code_offset,
+                                        (uint64_t)(uintptr_t)&orus_jit_native_load_value_const) ||
+                    !dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0xFF, 0xD0}, 2u) ||
+                    !dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x84, 0xC0}, 2u)) {
+                    dynasm_patch_list_release(&bail_patches);
+                    dynasm_patch_list_release(&epilogue_patches);
+                    return false;
+                }
+                size_t jcc_action = actions->size;
+                size_t jcc_code = code_offset;
+                if (!dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x0F, 0x84, 0x00, 0x00, 0x00, 0x00},
+                                             6u) ||
+                    !dynasm_patch_list_append(&bail_patches, jcc_action + 4u,
+                                              jcc_code + 2u)) {
+                    dynasm_patch_list_release(&bail_patches);
+                    dynasm_patch_list_release(&epilogue_patches);
+                    return false;
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_MOVE_I32:
+            case ORUS_JIT_IR_OP_MOVE_I64:
+            case ORUS_JIT_IR_OP_MOVE_U32:
+            case ORUS_JIT_IR_OP_MOVE_U64:
+            case ORUS_JIT_IR_OP_MOVE_F64:
+            case ORUS_JIT_IR_OP_MOVE_BOOL: {
+                if (!dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x48, 0x8B, 0x7D, 0xF8}, 4u) ||
+                    !dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x48, 0x8B, 0x75, 0xF0}, 4u) ||
+                    !dynasm_emit_mov_reg_imm32(actions, 0xBA, &code_offset,
+                                               (uint32_t)inst->value_kind) ||
+                    !dynasm_emit_mov_reg_imm32(actions, 0xB9, &code_offset,
+                                               (uint32_t)inst->operands.move.dst_reg) ||
+                    !dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x41, 0xB8}, 2u) ||
+                    !dynasm_emit_u32_le(actions, &code_offset,
+                                        (uint32_t)inst->operands.move.src_reg) ||
+                    !dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x48, 0xB8}, 2u) ||
+                    !dynasm_emit_u64_le(actions, &code_offset,
+                                        (uint64_t)(uintptr_t)&orus_jit_native_linear_move) ||
+                    !dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0xFF, 0xD0}, 2u) ||
+                    !dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x84, 0xC0}, 2u)) {
+                    dynasm_patch_list_release(&bail_patches);
+                    dynasm_patch_list_release(&epilogue_patches);
+                    return false;
+                }
+                size_t jcc_action = actions->size;
+                size_t jcc_code = code_offset;
+                if (!dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x0F, 0x84, 0x00, 0x00, 0x00, 0x00},
+                                             6u) ||
+                    !dynasm_patch_list_append(&bail_patches, jcc_action + 4u,
+                                              jcc_code + 2u)) {
+                    dynasm_patch_list_release(&bail_patches);
+                    dynasm_patch_list_release(&epilogue_patches);
+                    return false;
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_MOVE_STRING: {
+                if (!dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x48, 0x8B, 0x7D, 0xF8}, 4u) ||
+                    !dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x48, 0x8B, 0x75, 0xF0}, 4u) ||
+                    !dynasm_emit_mov_reg_imm32(actions, 0xBA, &code_offset,
+                                               (uint32_t)inst->operands.move.dst_reg) ||
+                    !dynasm_emit_mov_reg_imm32(actions, 0xB9, &code_offset,
+                                               (uint32_t)inst->operands.move.src_reg) ||
+                    !dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x48, 0xB8}, 2u) ||
+                    !dynasm_emit_u64_le(actions, &code_offset,
+                                        (uint64_t)(uintptr_t)&orus_jit_native_move_string) ||
+                    !dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0xFF, 0xD0}, 2u) ||
+                    !dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x84, 0xC0}, 2u)) {
+                    dynasm_patch_list_release(&bail_patches);
+                    dynasm_patch_list_release(&epilogue_patches);
+                    return false;
+                }
+                size_t jcc_action = actions->size;
+                size_t jcc_code = code_offset;
+                if (!dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x0F, 0x84, 0x00, 0x00, 0x00, 0x00},
+                                             6u) ||
+                    !dynasm_patch_list_append(&bail_patches, jcc_action + 4u,
+                                              jcc_code + 2u)) {
+                    dynasm_patch_list_release(&bail_patches);
+                    dynasm_patch_list_release(&epilogue_patches);
+                    return false;
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_MOVE_VALUE: {
+                if (!dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x48, 0x8B, 0x7D, 0xF8}, 4u) ||
+                    !dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x48, 0x8B, 0x75, 0xF0}, 4u) ||
+                    !dynasm_emit_mov_reg_imm32(actions, 0xBA, &code_offset,
+                                               (uint32_t)inst->operands.move.dst_reg) ||
+                    !dynasm_emit_mov_reg_imm32(actions, 0xB9, &code_offset,
+                                               (uint32_t)inst->operands.move.src_reg) ||
+                    !dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x48, 0xB8}, 2u) ||
+                    !dynasm_emit_u64_le(actions, &code_offset,
+                                        (uint64_t)(uintptr_t)&orus_jit_native_move_value) ||
+                    !dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0xFF, 0xD0}, 2u) ||
+                    !dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x84, 0xC0}, 2u)) {
+                    dynasm_patch_list_release(&bail_patches);
+                    dynasm_patch_list_release(&epilogue_patches);
+                    return false;
+                }
+                size_t jcc_action = actions->size;
+                size_t jcc_code = code_offset;
+                if (!dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x0F, 0x84, 0x00, 0x00, 0x00, 0x00},
+                                             6u) ||
+                    !dynasm_patch_list_append(&bail_patches, jcc_action + 4u,
+                                              jcc_code + 2u)) {
+                    dynasm_patch_list_release(&bail_patches);
+                    dynasm_patch_list_release(&epilogue_patches);
+                    return false;
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_ADD_I32:
+            case ORUS_JIT_IR_OP_SUB_I32:
+            case ORUS_JIT_IR_OP_MUL_I32:
+            case ORUS_JIT_IR_OP_ADD_I64:
+            case ORUS_JIT_IR_OP_SUB_I64:
+            case ORUS_JIT_IR_OP_MUL_I64:
+            case ORUS_JIT_IR_OP_ADD_U32:
+            case ORUS_JIT_IR_OP_SUB_U32:
+            case ORUS_JIT_IR_OP_MUL_U32:
+            case ORUS_JIT_IR_OP_ADD_U64:
+            case ORUS_JIT_IR_OP_SUB_U64:
+            case ORUS_JIT_IR_OP_MUL_U64:
+            case ORUS_JIT_IR_OP_ADD_F64:
+            case ORUS_JIT_IR_OP_SUB_F64:
+            case ORUS_JIT_IR_OP_MUL_F64: {
+                if (!dynasm_emit_load_vm_block(actions, &code_offset) ||
+                    !dynasm_emit_mov_reg_imm32(actions, 0xBA, &code_offset,
+                                               (uint32_t)inst->opcode) ||
+                    !dynasm_emit_mov_reg_imm32(actions, 0xB9, &code_offset,
+                                               (uint32_t)inst->value_kind) ||
+                    !dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x41, 0xB8}, 2u) ||
+                    !dynasm_emit_u32_le(actions, &code_offset,
+                                        (uint32_t)inst->operands.arithmetic.dst_reg) ||
+                    !dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x41, 0xB9}, 2u) ||
+                    !dynasm_emit_u32_le(actions, &code_offset,
+                                        (uint32_t)inst->operands.arithmetic.lhs_reg) ||
+                    !dynasm_emit_stack_push_u32(actions, &code_offset,
+                                                 (uint32_t)inst->operands.arithmetic.rhs_reg) ||
+                    !dynasm_emit_helper_call(actions, &code_offset,
+                                              (const void*)&orus_jit_native_linear_arithmetic) ||
+                    !dynasm_emit_stack_pop(actions, &code_offset)) {
+                    dynasm_patch_list_release(&bail_patches);
+                    dynasm_patch_list_release(&epilogue_patches);
+                    return false;
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_LT_I32:
+            case ORUS_JIT_IR_OP_LE_I32:
+            case ORUS_JIT_IR_OP_GT_I32:
+            case ORUS_JIT_IR_OP_GE_I32:
+            case ORUS_JIT_IR_OP_EQ_I32:
+            case ORUS_JIT_IR_OP_NE_I32:
+            case ORUS_JIT_IR_OP_LT_I64:
+            case ORUS_JIT_IR_OP_LE_I64:
+            case ORUS_JIT_IR_OP_GT_I64:
+            case ORUS_JIT_IR_OP_GE_I64:
+            case ORUS_JIT_IR_OP_EQ_I64:
+            case ORUS_JIT_IR_OP_NE_I64:
+            case ORUS_JIT_IR_OP_LT_U32:
+            case ORUS_JIT_IR_OP_LE_U32:
+            case ORUS_JIT_IR_OP_GT_U32:
+            case ORUS_JIT_IR_OP_GE_U32:
+            case ORUS_JIT_IR_OP_EQ_U32:
+            case ORUS_JIT_IR_OP_NE_U32:
+            case ORUS_JIT_IR_OP_LT_U64:
+            case ORUS_JIT_IR_OP_LE_U64:
+            case ORUS_JIT_IR_OP_GT_U64:
+            case ORUS_JIT_IR_OP_GE_U64:
+            case ORUS_JIT_IR_OP_EQ_U64:
+            case ORUS_JIT_IR_OP_NE_U64:
+            case ORUS_JIT_IR_OP_LT_F64:
+            case ORUS_JIT_IR_OP_LE_F64:
+            case ORUS_JIT_IR_OP_GT_F64:
+            case ORUS_JIT_IR_OP_GE_F64:
+            case ORUS_JIT_IR_OP_EQ_F64:
+            case ORUS_JIT_IR_OP_NE_F64:
+            case ORUS_JIT_IR_OP_EQ_BOOL:
+            case ORUS_JIT_IR_OP_NE_BOOL: {
+                if (!dynasm_emit_load_vm_block(actions, &code_offset) ||
+                    !dynasm_emit_mov_reg_imm32(actions, 0xBA, &code_offset,
+                                               (uint32_t)inst->opcode) ||
+                    !dynasm_emit_mov_reg_imm32(actions, 0xB9, &code_offset,
+                                               (uint32_t)inst->operands.arithmetic.dst_reg) ||
+                    !dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x41, 0xB8}, 2u) ||
+                    !dynasm_emit_u32_le(actions, &code_offset,
+                                        (uint32_t)inst->operands.arithmetic.lhs_reg) ||
+                    !dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x41, 0xB9}, 2u) ||
+                    !dynasm_emit_u32_le(actions, &code_offset,
+                                        (uint32_t)inst->operands.arithmetic.rhs_reg) ||
+                    !dynasm_emit_helper_call(actions, &code_offset,
+                                              (const void*)&orus_jit_native_compare_op)) {
+                    dynasm_patch_list_release(&bail_patches);
+                    dynasm_patch_list_release(&epilogue_patches);
+                    return false;
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_CONCAT_STRING: {
+                if (!dynasm_emit_load_vm_block(actions, &code_offset) ||
+                    !dynasm_emit_mov_reg_imm32(actions, 0xBA, &code_offset,
+                                               (uint32_t)inst->operands.arithmetic.dst_reg) ||
+                    !dynasm_emit_mov_reg_imm32(actions, 0xB9, &code_offset,
+                                               (uint32_t)inst->operands.arithmetic.lhs_reg) ||
+                    !dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x41, 0xB8}, 2u) ||
+                    !dynasm_emit_u32_le(actions, &code_offset,
+                                        (uint32_t)inst->operands.arithmetic.rhs_reg) ||
+                    !dynasm_emit_helper_call(actions, &code_offset,
+                                              (const void*)&orus_jit_native_concat_string)) {
+                    dynasm_patch_list_release(&bail_patches);
+                    dynasm_patch_list_release(&epilogue_patches);
+                    return false;
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_TO_STRING: {
+                if (!dynasm_emit_load_vm_block(actions, &code_offset) ||
+                    !dynasm_emit_mov_reg_imm32(actions, 0xBA, &code_offset,
+                                               (uint32_t)inst->operands.unary.dst_reg) ||
+                    !dynasm_emit_mov_reg_imm32(actions, 0xB9, &code_offset,
+                                               (uint32_t)inst->operands.unary.src_reg) ||
+                    !dynasm_emit_helper_call(actions, &code_offset,
+                                              (const void*)&orus_jit_native_to_string)) {
+                    dynasm_patch_list_release(&bail_patches);
+                    dynasm_patch_list_release(&epilogue_patches);
+                    return false;
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_TIME_STAMP: {
+                if (!dynasm_emit_load_vm_block(actions, &code_offset) ||
+                    !dynasm_emit_mov_reg_imm32(actions, 0xBA, &code_offset,
+                                               (uint32_t)inst->operands.time_stamp.dst_reg) ||
+                    !dynasm_emit_helper_call(actions, &code_offset,
+                                              (const void*)&orus_jit_native_time_stamp)) {
+                    dynasm_patch_list_release(&bail_patches);
+                    dynasm_patch_list_release(&epilogue_patches);
+                    return false;
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_MAKE_ARRAY: {
+                if (!dynasm_emit_load_vm_block(actions, &code_offset) ||
+                    !dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x48, 0xBA}, 2u) ||
+                    !dynasm_emit_u64_le(actions, &code_offset,
+                                        (uint64_t)(uintptr_t)inst) ||
+                    !dynasm_emit_helper_call(actions, &code_offset,
+                                              (const void*)&orus_jit_native_make_array)) {
+                    dynasm_patch_list_release(&bail_patches);
+                    dynasm_patch_list_release(&epilogue_patches);
+                    return false;
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_ARRAY_PUSH: {
+                if (!dynasm_emit_load_vm_block(actions, &code_offset) ||
+                    !dynasm_emit_mov_reg_imm32(actions, 0xBA, &code_offset,
+                                               (uint32_t)inst->operands.array_push.array_reg) ||
+                    !dynasm_emit_mov_reg_imm32(actions, 0xB9, &code_offset,
+                                               (uint32_t)inst->operands.array_push.value_reg) ||
+                    !dynasm_emit_helper_call(actions, &code_offset,
+                                              (const void*)&orus_jit_native_array_push)) {
+                    dynasm_patch_list_release(&bail_patches);
+                    dynasm_patch_list_release(&epilogue_patches);
+                    return false;
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_ENUM_NEW: {
+                if (!dynasm_emit_load_vm_block(actions, &code_offset) ||
+                    !dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x48, 0xBA}, 2u) ||
+                    !dynasm_emit_u64_le(actions, &code_offset,
+                                        (uint64_t)(uintptr_t)inst) ||
+                    !dynasm_emit_helper_call(actions, &code_offset,
+                                              (const void*)&orus_jit_native_enum_new)) {
+                    dynasm_patch_list_release(&bail_patches);
+                    dynasm_patch_list_release(&epilogue_patches);
+                    return false;
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_PRINT: {
+                if (!dynasm_emit_load_vm_block(actions, &code_offset) ||
+                    !dynasm_emit_mov_reg_imm32(actions, 0xBA, &code_offset,
+                                               (uint32_t)inst->operands.print.first_reg) ||
+                    !dynasm_emit_mov_reg_imm32(actions, 0xB9, &code_offset,
+                                               (uint32_t)inst->operands.print.arg_count) ||
+                    !dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x41, 0xB8}, 2u) ||
+                    !dynasm_emit_u32_le(actions, &code_offset,
+                                        (uint32_t)inst->operands.print.newline) ||
+                    !dynasm_emit_helper_call(actions, &code_offset,
+                                              (const void*)&orus_jit_native_print)) {
+                    dynasm_patch_list_release(&bail_patches);
+                    dynasm_patch_list_release(&epilogue_patches);
+                    return false;
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_ASSERT_EQ: {
+                if (!dynasm_emit_load_vm_block(actions, &code_offset) ||
+                    !dynasm_emit_mov_reg_imm32(actions, 0xBA, &code_offset,
+                                               (uint32_t)inst->operands.assert_eq.dst_reg) ||
+                    !dynasm_emit_mov_reg_imm32(actions, 0xB9, &code_offset,
+                                               (uint32_t)inst->operands.assert_eq.label_reg) ||
+                    !dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x41, 0xB8}, 2u) ||
+                    !dynasm_emit_u32_le(actions, &code_offset,
+                                        (uint32_t)inst->operands.assert_eq.actual_reg) ||
+                    !dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x41, 0xB9}, 2u) ||
+                    !dynasm_emit_u32_le(actions, &code_offset,
+                                        (uint32_t)inst->operands.assert_eq.expected_reg) ||
+                    !dynasm_emit_helper_call(actions, &code_offset,
+                                              (const void*)&orus_jit_native_assert_eq)) {
+                    dynasm_patch_list_release(&bail_patches);
+                    dynasm_patch_list_release(&epilogue_patches);
+                    return false;
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_CALL_NATIVE: {
+                if (!dynasm_emit_load_vm_block(actions, &code_offset) ||
+                    !dynasm_emit_mov_reg_imm32(actions, 0xBA, &code_offset,
+                                               (uint32_t)inst->operands.call_native.dst_reg) ||
+                    !dynasm_emit_mov_reg_imm32(actions, 0xB9, &code_offset,
+                                               (uint32_t)inst->operands.call_native.first_arg_reg) ||
+                    !dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x41, 0xB8}, 2u) ||
+                    !dynasm_emit_u32_le(actions, &code_offset,
+                                        (uint32_t)inst->operands.call_native.arg_count) ||
+                    !dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x41, 0xB9}, 2u) ||
+                    !dynasm_emit_u32_le(actions, &code_offset,
+                                        (uint32_t)inst->operands.call_native.native_index) ||
+                    !dynasm_emit_helper_call(actions, &code_offset,
+                                              (const void*)&orus_jit_native_call_native)) {
+                    dynasm_patch_list_release(&bail_patches);
+                    dynasm_patch_list_release(&epilogue_patches);
+                    return false;
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_GET_ITER: {
+                if (!dynasm_emit_load_vm_block(actions, &code_offset) ||
+                    !dynasm_emit_mov_reg_imm32(actions, 0xBA, &code_offset,
+                                               (uint32_t)inst->operands.get_iter.dst_reg) ||
+                    !dynasm_emit_mov_reg_imm32(actions, 0xB9, &code_offset,
+                                               (uint32_t)inst->operands.get_iter.iterable_reg) ||
+                    !dynasm_emit_helper_call(actions, &code_offset,
+                                              (const void*)&orus_jit_native_get_iter)) {
+                    dynasm_patch_list_release(&bail_patches);
+                    dynasm_patch_list_release(&epilogue_patches);
+                    return false;
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_ITER_NEXT: {
+                if (!dynasm_emit_load_vm_block(actions, &code_offset) ||
+                    !dynasm_emit_mov_reg_imm32(actions, 0xBA, &code_offset,
+                                               (uint32_t)inst->operands.iter_next.value_reg) ||
+                    !dynasm_emit_mov_reg_imm32(actions, 0xB9, &code_offset,
+                                               (uint32_t)inst->operands.iter_next.iterator_reg) ||
+                    !dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x41, 0xB8}, 2u) ||
+                    !dynasm_emit_u32_le(actions, &code_offset,
+                                        (uint32_t)inst->operands.iter_next.has_value_reg) ||
+                    !dynasm_emit_helper_call(actions, &code_offset,
+                                              (const void*)&orus_jit_native_iter_next)) {
+                    dynasm_patch_list_release(&bail_patches);
+                    dynasm_patch_list_release(&epilogue_patches);
+                    return false;
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_RANGE: {
+                const uint16_t* args = inst->operands.range.arg_regs;
+                if (!dynasm_emit_load_vm_block(actions, &code_offset) ||
+                    !dynasm_emit_mov_reg_imm32(actions, 0xBA, &code_offset,
+                                               (uint32_t)inst->operands.range.dst_reg) ||
+                    !dynasm_emit_mov_reg_imm32(actions, 0xB9, &code_offset,
+                                               (uint32_t)inst->operands.range.arg_count) ||
+                    !dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x49, 0xB8}, 2u) ||
+                    !dynasm_emit_u64_le(actions, &code_offset,
+                                        (uint64_t)(uintptr_t)args) ||
+                    !dynasm_emit_helper_call(actions, &code_offset,
+                                              (const void*)&orus_jit_native_range)) {
+                    dynasm_patch_list_release(&bail_patches);
+                    dynasm_patch_list_release(&epilogue_patches);
+                    return false;
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_I32_TO_I64:
+            case ORUS_JIT_IR_OP_U32_TO_U64:
+            case ORUS_JIT_IR_OP_U32_TO_I32:
+            case ORUS_JIT_IR_OP_I32_TO_F64:
+            case ORUS_JIT_IR_OP_I64_TO_F64:
+            case ORUS_JIT_IR_OP_F64_TO_I32:
+            case ORUS_JIT_IR_OP_F64_TO_I64:
+            case ORUS_JIT_IR_OP_F64_TO_U32:
+            case ORUS_JIT_IR_OP_U32_TO_F64:
+            case ORUS_JIT_IR_OP_I32_TO_U32:
+            case ORUS_JIT_IR_OP_I64_TO_U32:
+            case ORUS_JIT_IR_OP_I32_TO_U64:
+            case ORUS_JIT_IR_OP_I64_TO_U64:
+            case ORUS_JIT_IR_OP_U64_TO_I32:
+            case ORUS_JIT_IR_OP_U64_TO_I64:
+            case ORUS_JIT_IR_OP_U64_TO_U32:
+            case ORUS_JIT_IR_OP_F64_TO_U64:
+            case ORUS_JIT_IR_OP_U64_TO_F64: {
+                const void* helper = NULL;
+                switch (inst->opcode) {
+                    case ORUS_JIT_IR_OP_I32_TO_I64:
+                        helper = (const void*)&orus_jit_native_convert_i32_to_i64;
+                        break;
+                    case ORUS_JIT_IR_OP_U32_TO_U64:
+                        helper = (const void*)&orus_jit_native_convert_u32_to_u64;
+                        break;
+                    case ORUS_JIT_IR_OP_U32_TO_I32:
+                        helper = (const void*)&orus_jit_native_convert_u32_to_i32;
+                        break;
+                    case ORUS_JIT_IR_OP_I32_TO_F64:
+                        helper = (const void*)&orus_jit_native_convert_i32_to_f64;
+                        break;
+                    case ORUS_JIT_IR_OP_I64_TO_F64:
+                        helper = (const void*)&orus_jit_native_convert_i64_to_f64;
+                        break;
+                    case ORUS_JIT_IR_OP_F64_TO_I32:
+                        helper = (const void*)&orus_jit_native_convert_f64_to_i32;
+                        break;
+                    case ORUS_JIT_IR_OP_F64_TO_I64:
+                        helper = (const void*)&orus_jit_native_convert_f64_to_i64;
+                        break;
+                    case ORUS_JIT_IR_OP_F64_TO_U32:
+                        helper = (const void*)&orus_jit_native_convert_f64_to_u32;
+                        break;
+                    case ORUS_JIT_IR_OP_U32_TO_F64:
+                        helper = (const void*)&orus_jit_native_convert_u32_to_f64;
+                        break;
+                    case ORUS_JIT_IR_OP_I32_TO_U32:
+                        helper = (const void*)&orus_jit_native_convert_i32_to_u32;
+                        break;
+                    case ORUS_JIT_IR_OP_I64_TO_U32:
+                        helper = (const void*)&orus_jit_native_convert_i64_to_u32;
+                        break;
+                    case ORUS_JIT_IR_OP_I32_TO_U64:
+                        helper = (const void*)&orus_jit_native_convert_i32_to_u64;
+                        break;
+                    case ORUS_JIT_IR_OP_I64_TO_U64:
+                        helper = (const void*)&orus_jit_native_convert_i64_to_u64;
+                        break;
+                    case ORUS_JIT_IR_OP_U64_TO_I32:
+                        helper = (const void*)&orus_jit_native_convert_u64_to_i32;
+                        break;
+                    case ORUS_JIT_IR_OP_U64_TO_I64:
+                        helper = (const void*)&orus_jit_native_convert_u64_to_i64;
+                        break;
+                    case ORUS_JIT_IR_OP_U64_TO_U32:
+                        helper = (const void*)&orus_jit_native_convert_u64_to_u32;
+                        break;
+                    case ORUS_JIT_IR_OP_F64_TO_U64:
+                        helper = (const void*)&orus_jit_native_convert_f64_to_u64;
+                        break;
+                    case ORUS_JIT_IR_OP_U64_TO_F64:
+                        helper = (const void*)&orus_jit_native_convert_u64_to_f64;
+                        break;
+                    default:
+                        break;
+                }
+                if (!helper || !dynasm_emit_load_vm_block(actions, &code_offset) ||
+                    !dynasm_emit_mov_reg_imm32(actions, 0xBA, &code_offset,
+                                               (uint32_t)inst->operands.unary.dst_reg) ||
+                    !dynasm_emit_mov_reg_imm32(actions, 0xB9, &code_offset,
+                                               (uint32_t)inst->operands.unary.src_reg) ||
+                    !dynasm_emit_helper_call(actions, &code_offset, helper)) {
+                    dynasm_patch_list_release(&bail_patches);
+                    dynasm_patch_list_release(&epilogue_patches);
+                    return false;
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_SAFEPOINT: {
+                if (!dynasm_emit_load_vm_block(actions, &code_offset) ||
+                    !dynasm_emit_helper_call(actions, &code_offset,
+                                              (const void*)&orus_jit_native_linear_safepoint)) {
+                    dynasm_patch_list_release(&bail_patches);
+                    dynasm_patch_list_release(&epilogue_patches);
+                    return false;
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_RETURN: {
+                size_t jmp_action = actions->size;
+                size_t jmp_code = code_offset;
+                if (!dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0xE9, 0x00, 0x00, 0x00, 0x00}, 5u) ||
+                    !dynasm_patch_list_append(&epilogue_patches, jmp_action + 2u,
+                                              jmp_code + 1u)) {
+                    dynasm_patch_list_release(&bail_patches);
+                    dynasm_patch_list_release(&epilogue_patches);
+                    return false;
+                }
+                break;
+            }
             default:
+                dynasm_patch_list_release(&bail_patches);
+                dynasm_patch_list_release(&epilogue_patches);
                 return false;
         }
     }
+
+    size_t jmp_action = actions->size;
+    size_t jmp_code = code_offset;
+    if (!dynasm_emit_bytes_track(actions, &code_offset,
+                                 (const uint8_t[]){0xE9, 0x00, 0x00, 0x00, 0x00}, 5u) ||
+        !dynasm_patch_list_append(&epilogue_patches, jmp_action + 2u,
+                                  jmp_code + 1u)) {
+        dynasm_patch_list_release(&bail_patches);
+        dynasm_patch_list_release(&epilogue_patches);
+        return false;
+    }
+
+    size_t bail_code_offset = code_offset;
+    if (!dynasm_emit_bytes_track(actions, &code_offset,
+                                 (const uint8_t[]){0x48, 0x8B, 0x7D, 0xF8}, 4u) ||
+        !dynasm_emit_bytes_track(actions, &code_offset,
+                                 (const uint8_t[]){0x48, 0x8B, 0x75, 0xF0}, 4u) ||
+        !dynasm_emit_bytes_track(actions, &code_offset,
+                                 (const uint8_t[]){0x48, 0xB8}, 2u) ||
+        !dynasm_emit_u64_le(actions, &code_offset,
+                            (uint64_t)(uintptr_t)&orus_jit_native_type_bailout) ||
+        !dynasm_emit_bytes_track(actions, &code_offset,
+                                 (const uint8_t[]){0xFF, 0xD0}, 2u)) {
+        dynasm_patch_list_release(&bail_patches);
+        dynasm_patch_list_release(&epilogue_patches);
+        return false;
+    }
+
+    size_t epilogue_code_offset = code_offset;
+    if (!dynasm_emit_bytes_track(actions, &code_offset,
+                                 (const uint8_t[]){0xC9, 0xC3}, 2u)) {
+        dynasm_patch_list_release(&bail_patches);
+        dynasm_patch_list_release(&epilogue_patches);
+        return false;
+    }
+
+    for (size_t i = 0; i < bail_patches.count; ++i) {
+        DynAsmPatch* patch = &bail_patches.data[i];
+        int64_t rel = (int64_t)bail_code_offset - ((int64_t)patch->code_offset + 4);
+        dynasm_patch_u32(actions, patch->action_offset, (uint32_t)rel);
+    }
+
+    for (size_t i = 0; i < epilogue_patches.count; ++i) {
+        DynAsmPatch* patch = &epilogue_patches.data[i];
+        int64_t rel = (int64_t)epilogue_code_offset - ((int64_t)patch->code_offset + 4);
+        dynasm_patch_u32(actions, patch->action_offset, (uint32_t)rel);
+    }
+
+    dynasm_patch_list_release(&bail_patches);
+    dynasm_patch_list_release(&epilogue_patches);
 
     if (!dynasm_action_buffer_push(actions, DASM_STOP)) {
         return false;
@@ -5482,8 +6357,15 @@ orus_jit_backend_compile_ir_x86(struct OrusJitBackend* backend,
     struct DynAsmActionBuffer actions;
     dynasm_action_buffer_init(&actions);
 
-    if (!orus_jit_ir_emit_x86(program, &actions)) {
+    OrusJitNativeBlock* block = orus_jit_native_block_create(program);
+    if (!block) {
         dynasm_action_buffer_release(&actions);
+        return JIT_BACKEND_OUT_OF_MEMORY;
+    }
+
+    if (!orus_jit_ir_emit_x86(program, block, &actions)) {
+        dynasm_action_buffer_release(&actions);
+        orus_jit_native_block_destroy(block);
         return JIT_BACKEND_ASSEMBLY_ERROR;
     }
 
@@ -5500,6 +6382,7 @@ orus_jit_backend_compile_ir_x86(struct OrusJitBackend* backend,
     if (status != DASM_S_OK) {
         dasm_free(&dasm);
         dynasm_action_buffer_release(&actions);
+        orus_jit_native_block_destroy(block);
         return JIT_BACKEND_ASSEMBLY_ERROR;
     }
 
@@ -5509,6 +6392,7 @@ orus_jit_backend_compile_ir_x86(struct OrusJitBackend* backend,
     if (!buffer) {
         dasm_free(&dasm);
         dynasm_action_buffer_release(&actions);
+        orus_jit_native_block_destroy(block);
         return JIT_BACKEND_OUT_OF_MEMORY;
     }
 
@@ -5518,6 +6402,7 @@ orus_jit_backend_compile_ir_x86(struct OrusJitBackend* backend,
 
     if (status != DASM_S_OK) {
         orus_jit_release_executable(buffer, capacity);
+        orus_jit_native_block_destroy(block);
         return JIT_BACKEND_ASSEMBLY_ERROR;
     }
 
@@ -5535,6 +6420,10 @@ orus_jit_backend_compile_ir_x86(struct OrusJitBackend* backend,
     entry->code_capacity = capacity;
     entry->entry_point = (JITEntryPoint)buffer;
     entry->debug_name = "orus_jit_ir_stub";
+
+    block->code_ptr = buffer;
+    block->code_capacity = capacity;
+    orus_jit_native_block_register(block);
 
     return JIT_BACKEND_OK;
 }
@@ -6854,25 +7743,163 @@ orus_jit_backend_compile_ir_arm64(struct OrusJitBackend* backend,
         return JIT_BACKEND_ASSEMBLY_ERROR;
     }
 
-    size_t encoded_size = program->count * sizeof(uint32_t);
-    size_t capacity = 0;
+    OrusJitA64CodeBuffer code;
+    orus_jit_a64_code_buffer_init(&code);
+    OrusJitA64PatchList bail_patches;
+    orus_jit_a64_patch_list_init(&bail_patches);
+
+#define ARM64_RETURN(status)                                                      \
+    do {                                                                         \
+        orus_jit_a64_code_buffer_release(&code);                                  \
+        orus_jit_a64_patch_list_release(&bail_patches);                           \
+        return (status);                                                         \
+    } while (0)
+
+    if (!orus_jit_a64_code_buffer_emit_u32(&code, 0xA9BF7BF0u) ||
+        !orus_jit_a64_code_buffer_emit_u32(&code, 0x910003FDu)) {
+        ARM64_RETURN(JIT_BACKEND_OUT_OF_MEMORY);
+    }
+
+    bool emitted_instruction = false;
+
+    for (size_t i = 0; i < program->count; ++i) {
+        const OrusJitIRInstruction* inst = &program->instructions[i];
+        switch (inst->opcode) {
+            case ORUS_JIT_IR_OP_ADD_I64:
+            case ORUS_JIT_IR_OP_SUB_I64:
+            case ORUS_JIT_IR_OP_MUL_I64:
+            case ORUS_JIT_IR_OP_ADD_U64:
+            case ORUS_JIT_IR_OP_SUB_U64:
+            case ORUS_JIT_IR_OP_MUL_U64:
+            case ORUS_JIT_IR_OP_ADD_F64:
+            case ORUS_JIT_IR_OP_SUB_F64:
+            case ORUS_JIT_IR_OP_MUL_F64: {
+                emitted_instruction = true;
+                if (!orus_jit_a64_code_buffer_emit_u32(&code, 0xAA1F03E1u) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(&code, 2u,
+                                                        (uint64_t)inst->opcode) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(&code, 3u,
+                                                        (uint64_t)inst->value_kind) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 4u,
+                        (uint64_t)inst->operands.arithmetic.dst_reg) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 5u,
+                        (uint64_t)inst->operands.arithmetic.lhs_reg) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 6u,
+                        (uint64_t)inst->operands.arithmetic.rhs_reg) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 16u,
+                        (uint64_t)(uintptr_t)&orus_jit_native_linear_arithmetic) ||
+                    !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
+                    !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
+                    !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
+                    ARM64_RETURN(JIT_BACKEND_OUT_OF_MEMORY);
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_LT_I64:
+            case ORUS_JIT_IR_OP_LE_I64:
+            case ORUS_JIT_IR_OP_GT_I64:
+            case ORUS_JIT_IR_OP_GE_I64:
+            case ORUS_JIT_IR_OP_EQ_I64:
+            case ORUS_JIT_IR_OP_NE_I64:
+            case ORUS_JIT_IR_OP_LT_U64:
+            case ORUS_JIT_IR_OP_LE_U64:
+            case ORUS_JIT_IR_OP_GT_U64:
+            case ORUS_JIT_IR_OP_GE_U64:
+            case ORUS_JIT_IR_OP_EQ_U64:
+            case ORUS_JIT_IR_OP_NE_U64:
+            case ORUS_JIT_IR_OP_LT_F64:
+            case ORUS_JIT_IR_OP_LE_F64:
+            case ORUS_JIT_IR_OP_GT_F64:
+            case ORUS_JIT_IR_OP_GE_F64:
+            case ORUS_JIT_IR_OP_EQ_F64:
+            case ORUS_JIT_IR_OP_NE_F64: {
+                emitted_instruction = true;
+                if (!orus_jit_a64_code_buffer_emit_u32(&code, 0xAA1F03E1u) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(&code, 2u,
+                                                        (uint64_t)inst->opcode) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 3u,
+                        (uint64_t)inst->operands.arithmetic.dst_reg) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 4u,
+                        (uint64_t)inst->operands.arithmetic.lhs_reg) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 5u,
+                        (uint64_t)inst->operands.arithmetic.rhs_reg) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 16u,
+                        (uint64_t)(uintptr_t)&orus_jit_native_compare_op) ||
+                    !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
+                    !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
+                    !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
+                    ARM64_RETURN(JIT_BACKEND_OUT_OF_MEMORY);
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_RETURN:
+                emitted_instruction = true;
+                break;
+            default:
+                ARM64_RETURN(JIT_BACKEND_ASSEMBLY_ERROR);
+        }
+    }
+
+    size_t branch_index = code.count;
+    if (!orus_jit_a64_code_buffer_emit_u32(&code, A64_B(0u))) {
+        ARM64_RETURN(JIT_BACKEND_OUT_OF_MEMORY);
+    }
+
+    size_t bail_index = code.count;
+    if (!orus_jit_a64_code_buffer_emit_u32(&code, 0xAA1F03E1u) ||
+        !orus_jit_a64_emit_mov_imm64_buffer(
+            &code, 16u,
+            (uint64_t)(uintptr_t)&orus_jit_native_type_bailout) ||
+        !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u)) {
+        ARM64_RETURN(JIT_BACKEND_OUT_OF_MEMORY);
+    }
+
+    size_t epilogue_index = code.count;
+    if (!orus_jit_a64_code_buffer_emit_u32(&code, 0xA8C17BF0u) ||
+        !orus_jit_a64_code_buffer_emit_u32(&code, 0xD65F03C0u)) {
+        ARM64_RETURN(JIT_BACKEND_OUT_OF_MEMORY);
+    }
+
+    for (size_t i = 0; i < bail_patches.count; ++i) {
+        size_t index = bail_patches.data[i];
+        int64_t diff = (int64_t)bail_index - (int64_t)index - 1;
+        if (diff < -(1 << 18) || diff > ((1 << 18) - 1)) {
+            ARM64_RETURN(JIT_BACKEND_ASSEMBLY_ERROR);
+        }
+        uint32_t imm = (uint32_t)(diff & 0x7FFFFu);
+        code.data[index] = A64_CBZ_W(0u, imm);
+    }
+
+    int64_t branch_diff = (int64_t)epilogue_index - (int64_t)branch_index - 1;
+    if (branch_diff < -(1 << 25) || branch_diff > ((1 << 25) - 1)) {
+        ARM64_RETURN(JIT_BACKEND_ASSEMBLY_ERROR);
+    }
+    code.data[branch_index] = A64_B((uint32_t)(branch_diff & 0x03FFFFFFu));
+
+    size_t encoded_size = code.count * sizeof(uint32_t);
+    size_t capacity = 0u;
     size_t page_size = backend->page_size ? backend->page_size : orus_jit_detect_page_size();
     void* buffer = orus_jit_alloc_executable(encoded_size, page_size, &capacity);
     if (!buffer) {
-        return JIT_BACKEND_OUT_OF_MEMORY;
+        ARM64_RETURN(JIT_BACKEND_OUT_OF_MEMORY);
     }
 
     orus_jit_set_write_protection(false);
-    uint32_t* cursor = (uint32_t*)buffer;
-    for (size_t i = 0; i < program->count; ++i) {
-        cursor[i] = 0xD65F03C0u;
-    }
+    memcpy(buffer, code.data, encoded_size);
     orus_jit_set_write_protection(true);
 
 #if !defined(_WIN32)
     if (!orus_jit_make_executable(buffer, capacity)) {
         orus_jit_release_executable(buffer, capacity);
-        return JIT_BACKEND_ASSEMBLY_ERROR;
+        ARM64_RETURN(JIT_BACKEND_ASSEMBLY_ERROR);
     }
 #endif
 
@@ -6884,6 +7911,9 @@ orus_jit_backend_compile_ir_arm64(struct OrusJitBackend* backend,
     entry->entry_point = (JITEntryPoint)buffer;
     entry->debug_name = "orus_jit_ir_stub_arm64";
 
+    orus_jit_a64_code_buffer_release(&code);
+    orus_jit_a64_patch_list_release(&bail_patches);
+#undef ARM64_RETURN
     return JIT_BACKEND_OK;
 }
 #endif
