@@ -74,6 +74,18 @@ static inline double read_f64_operand_typed_fast(uint16_t reg) {
     return value;
 }
 
+static inline double read_f64_operand_typed_fast(uint16_t reg) {
+    double value = 0.0;
+    bool ok = vm_try_read_f64_typed(reg, &value);
+    if (!ok) {
+        assert(ok && "Expected f64 typed register residency");
+#if defined(__GNUC__) || defined(__clang__)
+        __builtin_unreachable();
+#endif
+    }
+    return value;
+}
+
 #define DEFINE_TYPED_ARITH_HANDLER(OP_NAME, TYPE_SUFFIX, CTYPE, READ_FN, STORE_FN, ZERO_GUARD, RESULT_EXPR) \
     void handle_##OP_NAME##_##TYPE_SUFFIX##_typed(void) { \
         uint8_t dst = READ_BYTE(); \
@@ -98,6 +110,12 @@ static inline double read_f64_operand_typed_fast(uint16_t reg) {
         return; \
     } \
 } while (0)
+
+#define READ_I32_OPERAND_TYPED_FAST(reg) read_i32_operand_typed_fast((reg))
+#define READ_I64_OPERAND_TYPED_FAST(reg) read_i64_operand_typed_fast((reg))
+#define READ_U32_OPERAND_TYPED_FAST(reg) read_u32_operand_typed_fast((reg))
+#define READ_U64_OPERAND_TYPED_FAST(reg) read_u64_operand_typed_fast((reg))
+#define READ_F64_OPERAND_TYPED_FAST(reg) read_f64_operand_typed_fast((reg))
 
 #define READ_I32_OPERAND_TYPED_FAST(reg) read_i32_operand_typed_fast((reg))
 #define READ_I64_OPERAND_TYPED_FAST(reg) read_i64_operand_typed_fast((reg))
