@@ -230,6 +230,20 @@ int main(int argc, const char* argv[]) {
                            (OrusJitTranslationStatus)i),
                        count);
             }
+            printf("    - categorized failures:\n");
+            for (size_t category = 0;
+                 category < ORUS_JIT_TRANSLATION_FAILURE_CATEGORY_COUNT;
+                 ++category) {
+                uint64_t count =
+                    jit_stats.failure_log.category_counts[category];
+                if (count == 0) {
+                    continue;
+                }
+                printf("        * %s: %" PRIu64 "\n",
+                       orus_jit_translation_failure_category_name(
+                           (OrusJitTranslationFailureCategory)category),
+                       count);
+            }
             printf("    - failure by value kind:\n");
             double total_failures =
                 (double)jit_stats.failure_log.total_failures;

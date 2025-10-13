@@ -109,6 +109,71 @@ cleanup:
     return success;
 }
 
+static bool test_translator_promotes_i32_constants_to_i64(void) {
+    initVM();
+    orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
+
+    Chunk chunk;
+    initChunk(&chunk);
+
+    Function function;
+    init_function(&function, &chunk);
+
+    const uint16_t lhs = FRAME_REG_START;
+    const uint16_t rhs = FRAME_REG_START + 1u;
+
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_I32_CONST, lhs,
+                                         I32_VAL(7)),
+                "expected lhs i32 constant");
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_I32_CONST, rhs,
+                                         I32_VAL(9)),
+                "expected rhs i32 constant");
+
+    writeChunk(&chunk, OP_ADD_I64_TYPED, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)lhs, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)lhs, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)rhs, 1, 0, "jit_translation");
+
+    writeChunk(&chunk, OP_RETURN_VOID, 1, 0, "jit_translation");
+
+    HotPathSample sample = {0};
+    sample.func = 0;
+    sample.loop = (uint16_t)function.start;
+
+    OrusJitIRProgram program;
+    orus_jit_ir_program_init(&program);
+
+    OrusJitTranslationResult result =
+        orus_jit_translate_linear_block(&vm, &function, &sample, &program);
+
+    bool success = true;
+    if (result.status != ORUS_JIT_TRANSLATE_STATUS_OK) {
+        fprintf(stderr, "Unexpected promotion failure: %s\n",
+                orus_jit_translation_status_name(result.status));
+        success = false;
+        goto cleanup;
+    }
+
+    ASSERT_TRUE(program.count >= 4u,
+                "expected promoted program to contain at least four ops");
+    ASSERT_TRUE(program.instructions[0].opcode == ORUS_JIT_IR_OP_LOAD_I64_CONST,
+                "lhs constant should be promoted to i64 load");
+    ASSERT_TRUE(program.instructions[0].value_kind == ORUS_JIT_VALUE_I64,
+                "lhs load should advertise i64 kind");
+    ASSERT_TRUE(program.instructions[1].opcode == ORUS_JIT_IR_OP_LOAD_I64_CONST,
+                "rhs constant should be promoted to i64 load");
+    ASSERT_TRUE(program.instructions[1].value_kind == ORUS_JIT_VALUE_I64,
+                "rhs load should advertise i64 kind");
+    ASSERT_TRUE(program.instructions[2].opcode == ORUS_JIT_IR_OP_ADD_I64,
+                "arithmetic should use widened i64 opcode");
+
+cleanup:
+    orus_jit_ir_program_reset(&program);
+    freeChunk(&chunk);
+    freeVM();
+    return success;
+}
+
 static bool test_translates_f64_stream(void) {
     initVM();
     orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
@@ -752,6 +817,196 @@ static bool test_translates_loop_with_forward_exit(void) {
     ASSERT_TRUE(found_jump, "expected loop conditional jump IR instruction");
     ASSERT_TRUE(found_add, "expected loop body arithmetic instruction");
     ASSERT_TRUE(found_loop_back, "expected loop back-edge IR instruction");
+
+cleanup:
+    orus_jit_ir_program_reset(&program);
+    freeChunk(&chunk);
+    freeVM();
+    return success;
+}
+
+static bool test_translates_loop_with_nested_branches_and_helper(void) {
+    initVM();
+    orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
+
+    Chunk chunk;
+    initChunk(&chunk);
+
+    Function function;
+    init_function(&function, &chunk);
+
+    const char* tag = "jit_translation";
+
+    const uint16_t counter = FRAME_REG_START;
+    const uint16_t limit = FRAME_REG_START + 1u;
+    const uint16_t step = FRAME_REG_START + 2u;
+    const uint16_t predicate = FRAME_REG_START + 3u;
+    const uint16_t nested_predicate = FRAME_REG_START + 4u;
+    const uint16_t helper_dst = FRAME_REG_START + 5u;
+    const uint16_t helper_arg = FRAME_REG_START + 6u;
+
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_I32_CONST, counter,
+                                         I32_VAL(0)),
+                "expected counter constant");
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_I32_CONST, limit,
+                                         I32_VAL(8)),
+                "expected loop limit constant");
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_I32_CONST, step,
+                                         I32_VAL(1)),
+                "expected loop step constant");
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_I32_CONST, helper_dst,
+                                         I32_VAL(0)),
+                "expected helper accumulator constant");
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_I32_CONST, helper_arg,
+                                         I32_VAL(2)),
+                "expected helper argument constant");
+
+    size_t loop_start = chunk.count;
+
+    writeChunk(&chunk, OP_LT_I32_TYPED, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)predicate, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)counter, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)limit, 1, 0, tag);
+
+    size_t guard_jump_index = chunk.count;
+    writeChunk(&chunk, OP_JUMP_IF_NOT_R, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)predicate, 1, 0, tag);
+    size_t guard_jump_hi = chunk.count;
+    writeChunk(&chunk, 0u, 1, 0, tag);
+    size_t guard_jump_lo = chunk.count;
+    writeChunk(&chunk, 0u, 1, 0, tag);
+
+    writeChunk(&chunk, OP_EQ_I32_TYPED, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)nested_predicate, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)counter, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)helper_arg, 1, 0, tag);
+
+    size_t nested_jump_index = chunk.count;
+    writeChunk(&chunk, OP_JUMP_IF_NOT_SHORT, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)nested_predicate, 1, 0, tag);
+    size_t nested_jump_offset_index = chunk.count;
+    writeChunk(&chunk, 0u, 1, 0, tag);
+
+    writeChunk(&chunk, OP_CALL_NATIVE_R, 1, 0, tag);
+    writeChunk(&chunk, 0u, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)helper_arg, 1, 0, tag);
+    writeChunk(&chunk, 1u, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)helper_dst, 1, 0, tag);
+
+    size_t skip_else_jump_index = chunk.count;
+    writeChunk(&chunk, OP_JUMP, 1, 0, tag);
+    size_t skip_else_hi = chunk.count;
+    writeChunk(&chunk, 0u, 1, 0, tag);
+    size_t skip_else_lo = chunk.count;
+    writeChunk(&chunk, 0u, 1, 0, tag);
+
+    size_t else_start = chunk.count;
+    for (int i = 0; i < 80; ++i) {
+        writeChunk(&chunk, OP_ADD_I32_TYPED, 1, 0, tag);
+        writeChunk(&chunk, (uint8_t)helper_dst, 1, 0, tag);
+        writeChunk(&chunk, (uint8_t)helper_dst, 1, 0, tag);
+        writeChunk(&chunk, (uint8_t)step, 1, 0, tag);
+    }
+    size_t else_end = chunk.count;
+
+    uint8_t nested_offset = (uint8_t)(else_start - (nested_jump_index + 3u));
+    chunk.code[nested_jump_offset_index] = nested_offset;
+
+    uint16_t skip_else_offset =
+        (uint16_t)(else_end - (skip_else_jump_index + 3u));
+    chunk.code[skip_else_hi] = (uint8_t)((skip_else_offset >> 8) & 0xFF);
+    chunk.code[skip_else_lo] = (uint8_t)(skip_else_offset & 0xFF);
+
+    writeChunk(&chunk, OP_ADD_I32_TYPED, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)counter, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)counter, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)step, 1, 0, tag);
+
+    size_t loop_back_index = chunk.count;
+    writeChunk(&chunk, OP_LOOP, 1, 0, tag);
+    size_t loop_back_hi = chunk.count;
+    writeChunk(&chunk, 0u, 1, 0, tag);
+    size_t loop_back_lo = chunk.count;
+    writeChunk(&chunk, 0u, 1, 0, tag);
+
+    size_t exit_label = chunk.count;
+    writeChunk(&chunk, OP_RETURN_VOID, 1, 0, tag);
+
+    uint16_t loop_back_offset =
+        (uint16_t)((loop_back_index + 3u) - loop_start);
+    chunk.code[loop_back_hi] = (uint8_t)((loop_back_offset >> 8) & 0xFF);
+    chunk.code[loop_back_lo] = (uint8_t)(loop_back_offset & 0xFF);
+
+    uint16_t guard_offset =
+        (uint16_t)(exit_label - (guard_jump_index + 4u));
+    ASSERT_TRUE(guard_offset > UINT8_MAX,
+                "expected long guard exit offset");
+    chunk.code[guard_jump_hi] = (uint8_t)((guard_offset >> 8) & 0xFF);
+    chunk.code[guard_jump_lo] = (uint8_t)(guard_offset & 0xFF);
+
+    HotPathSample sample = {0};
+    sample.func = 0;
+    sample.loop = (uint16_t)loop_start;
+
+    OrusJitIRProgram program;
+    orus_jit_ir_program_init(&program);
+
+    OrusJitTranslationResult result =
+        orus_jit_translate_linear_block(&vm, &function, &sample, &program);
+
+    bool success = true;
+    if (result.status != ORUS_JIT_TRANSLATE_STATUS_OK) {
+        fprintf(stderr, "Unexpected translation failure: %s\n",
+                orus_jit_translation_status_name(result.status));
+        success = false;
+        goto cleanup;
+    }
+
+    bool saw_long_exit = false;
+    bool saw_helper = false;
+    bool saw_long_jump = false;
+    bool saw_loop_back = false;
+
+    for (size_t i = 0; i < program.count; ++i) {
+        const OrusJitIRInstruction* inst = &program.instructions[i];
+        if (inst->opcode == ORUS_JIT_IR_OP_JUMP_IF_NOT_SHORT) {
+            if (inst->bytecode_offset == (uint32_t)guard_jump_index) {
+                ASSERT_TRUE(inst->operands.jump_if_not_short.bytecode_length == 4u,
+                            "expected long guard branch length");
+                ASSERT_TRUE(inst->operands.jump_if_not_short.offset == guard_offset,
+                            "guard branch offset mismatch");
+                saw_long_exit = true;
+            } else if (inst->bytecode_offset == (uint32_t)nested_jump_index) {
+                ASSERT_TRUE(inst->operands.jump_if_not_short.bytecode_length == 3u,
+                            "expected nested branch to remain short");
+            }
+        } else if (inst->opcode == ORUS_JIT_IR_OP_JUMP_SHORT &&
+                   inst->bytecode_offset == (uint32_t)skip_else_jump_index) {
+            ASSERT_TRUE(inst->operands.jump_short.bytecode_length == 3u,
+                        "expected long forward jump encoding");
+            ASSERT_TRUE(inst->operands.jump_short.offset == skip_else_offset,
+                        "skip-else jump offset mismatch");
+            saw_long_jump = true;
+        } else if (inst->opcode == ORUS_JIT_IR_OP_CALL_NATIVE) {
+            uint16_t expected_base = helper_dst < helper_arg ? helper_dst : helper_arg;
+            uint16_t expected_high = helper_dst > helper_arg ? helper_dst : helper_arg;
+            uint16_t expected_count = (uint16_t)((expected_high - expected_base) + 1u);
+            ASSERT_TRUE(inst->operands.call_native.spill_base == expected_base,
+                        "call native spill base should cover helper registers");
+            ASSERT_TRUE(inst->operands.call_native.spill_count == expected_count,
+                        "call native spill range should include dst and args");
+            saw_helper = true;
+        } else if (inst->opcode == ORUS_JIT_IR_OP_LOOP_BACK) {
+            ASSERT_TRUE(inst->operands.loop_back.back_offset == loop_back_offset,
+                        "loop back offset mismatch");
+            saw_loop_back = true;
+        }
+    }
+
+    ASSERT_TRUE(saw_long_exit, "expected long conditional exit branch");
+    ASSERT_TRUE(saw_long_jump, "expected long unconditional jump");
+    ASSERT_TRUE(saw_helper, "expected helper call inside loop");
+    ASSERT_TRUE(saw_loop_back, "expected loop back IR instruction");
 
 cleanup:
     orus_jit_ir_program_reset(&program);
@@ -1433,6 +1688,11 @@ static bool test_translates_runtime_helpers(void) {
         } else if (opcode == ORUS_JIT_IR_OP_ASSERT_EQ) {
             saw_assert_eq = true;
         } else if (opcode == ORUS_JIT_IR_OP_CALL_NATIVE) {
+            const OrusJitIRInstruction* call_inst = &program.instructions[i];
+            ASSERT_TRUE(call_inst->operands.call_native.spill_base == 13u,
+                        "runtime helper call should spill argument base");
+            ASSERT_TRUE(call_inst->operands.call_native.spill_count == 2u,
+                        "runtime helper call should spill dst and argument");
             saw_call_native = true;
         }
     }
@@ -1696,6 +1956,8 @@ int main(void) {
         bool (*fn)(void);
     } tests[] = {
         {"translator emits i64 ops", test_translates_i64_linear_loop},
+        {"translator promotes i32 inputs for i64 ops",
+         test_translator_promotes_i32_constants_to_i64},
         {"translator emits f64 ops", test_translates_f64_stream},
         {"translator loads boxed bool constants", test_translates_boxed_bool_constant},
         {"translator emits string concat", test_translates_string_concat},
@@ -1711,6 +1973,8 @@ int main(void) {
          test_translates_eq_r_with_typed_inputs},
         {"translator emits loop with forward exit",
          test_translates_loop_with_forward_exit},
+        {"translator handles helper-rich loop exits",
+         test_translates_loop_with_nested_branches_and_helper},
         {"translator emits if/else jump sequence",
          test_translates_if_else_jump_short},
         {"translator emits frame window moves",

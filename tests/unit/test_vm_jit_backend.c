@@ -167,6 +167,30 @@ static void force_helper_stub_env_off(void) {
 #endif
 }
 
+#if defined(__x86_64__) || defined(_M_X64)
+static void force_dynasm_env_on(void) {
+#if defined(_WIN32)
+    _putenv("ORUS_JIT_FORCE_DYNASM=1");
+#else
+    setenv("ORUS_JIT_FORCE_DYNASM", "1", 1);
+#endif
+}
+
+static void force_dynasm_env_off(void) {
+#if defined(_WIN32)
+    _putenv("ORUS_JIT_FORCE_DYNASM=");
+#else
+    unsetenv("ORUS_JIT_FORCE_DYNASM");
+#endif
+}
+#else
+static void force_dynasm_env_on(void) {
+}
+
+static void force_dynasm_env_off(void) {
+}
+#endif
+
 static int native_stub_invocations = 0;
 
 static Value native_allocating_stub(int argCount, Value* args) {
@@ -204,6 +228,8 @@ static bool test_backend_call_native_triggers_gc_safepoint(void) {
     instructions[0].operands.call_native.first_arg_reg = dst;
     instructions[0].operands.call_native.arg_count = 0;
     instructions[0].operands.call_native.native_index = 0;
+    instructions[0].operands.call_native.spill_base = dst;
+    instructions[0].operands.call_native.spill_count = 1u;
 
     instructions[1].opcode = ORUS_JIT_IR_OP_RETURN;
 
@@ -389,6 +415,111 @@ static bool test_backend_deopt_mid_gc_preserves_frame_alignment(void) {
            invalidate_recorded && deopt_recorded;
 }
 
+static bool test_backend_typed_deopt_landing_pad_reuses_frame(void) {
+    initVM();
+    orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
+
+    Chunk* baseline_chunk = (Chunk*)malloc(sizeof(Chunk));
+    Chunk* specialized_chunk = (Chunk*)malloc(sizeof(Chunk));
+    if (!baseline_chunk || !specialized_chunk) {
+        free(baseline_chunk);
+        free(specialized_chunk);
+        freeVM();
+        return false;
+    }
+
+    initChunk(baseline_chunk);
+    initChunk(specialized_chunk);
+
+    writeChunk(baseline_chunk, OP_RETURN_VOID, 1, 0, "jit_backend");
+    writeChunk(specialized_chunk, OP_RETURN_VOID, 1, 0, "jit_backend");
+
+    Function* function = &vm.functions[0];
+    memset(function, 0, sizeof(*function));
+    function->chunk = baseline_chunk;
+    function->specialized_chunk = specialized_chunk;
+    function->tier = FUNCTION_TIER_SPECIALIZED;
+    function->start = 0;
+    function->arity = 1;
+    function->deopt_handler = vm_default_deopt_stub;
+    vm.functionCount = 1;
+
+    vm.chunk = specialized_chunk;
+    vm.ip = specialized_chunk->code;
+
+    CallFrame* frame = allocate_frame(&vm.register_file);
+    if (!frame) {
+        freeChunk(baseline_chunk);
+        freeChunk(specialized_chunk);
+        free(baseline_chunk);
+        free(specialized_chunk);
+        freeVM();
+        return false;
+    }
+
+    frame->functionIndex = 0;
+    frame->register_count = 2;
+    frame->parameterBaseRegister = (uint16_t)(frame->frame_base + frame->register_count - function->arity);
+    frame->resultRegister = frame->frame_base;
+    frame->previousChunk = specialized_chunk;
+    frame->temp_count = 1;
+
+    TypedRegisterWindow* window_before = frame->typed_window;
+    ASSERT_TRUE(window_before != NULL, "expected typed register window");
+
+    uint16_t param_reg = frame->parameterBaseRegister;
+    uint16_t local_reg = frame->frame_base;
+    uint16_t temp_reg = frame->temp_base;
+
+    vm_store_i32_typed_hot(param_reg, 13);
+    vm_store_i32_typed_hot(local_reg, 7);
+    vm_store_i32_typed_hot(temp_reg, 99);
+
+    ASSERT_TRUE(typed_window_slot_live(window_before, param_reg),
+                "parameter register not marked live before deopt");
+    ASSERT_TRUE(typed_window_slot_live(window_before, local_reg),
+                "local register not marked live before deopt");
+    ASSERT_TRUE(typed_window_slot_live(window_before, temp_reg),
+                "temp register not marked live before deopt");
+
+    vm_handle_type_error_deopt();
+
+    bool same_window = frame->typed_window == window_before;
+    bool params_cleared = !typed_window_slot_live(window_before, param_reg);
+    bool locals_cleared = !typed_window_slot_live(window_before, local_reg);
+    bool temps_cleared = !typed_window_slot_live(window_before, temp_reg);
+    bool downgraded = function->tier == FUNCTION_TIER_BASELINE;
+    bool ip_swapped = vm.chunk == function->chunk;
+
+    if (!same_window) {
+        fprintf(stderr, "typed window was replaced during deopt landing pad\n");
+    }
+    if (!params_cleared) {
+        fprintf(stderr, "parameter register remained live after landing pad\n");
+    }
+    if (!locals_cleared) {
+        fprintf(stderr, "local register remained live after landing pad\n");
+    }
+    if (!temps_cleared) {
+        fprintf(stderr, "temp register remained live after landing pad\n");
+    }
+    if (!downgraded) {
+        fprintf(stderr, "function did not downgrade after landing pad\n");
+    }
+    if (!ip_swapped) {
+        fprintf(stderr, "VM instruction pointer did not swap to baseline chunk\n");
+    }
+
+    deallocate_frame(&vm.register_file);
+    freeChunk(baseline_chunk);
+    freeChunk(specialized_chunk);
+    free(baseline_chunk);
+    free(specialized_chunk);
+    freeVM();
+
+    return same_window && params_cleared && locals_cleared && temps_cleared && downgraded && ip_swapped;
+}
+
 static bool test_backend_helper_stub_executes(void) {
     initVM();
     orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
@@ -462,6 +593,383 @@ static bool test_backend_helper_stub_executes(void) {
     freeVM();
     return success;
 }
+
+static uint64_t bits_from_i32(int32_t value) {
+    return (uint64_t)(uint32_t)value;
+}
+
+static uint64_t bits_from_i64(int64_t value) {
+    return (uint64_t)value;
+}
+
+static uint64_t bits_from_u32(uint32_t value) {
+    return (uint64_t)value;
+}
+
+static uint64_t bits_from_u64(uint64_t value) {
+    return value;
+}
+
+static uint64_t bits_from_f64(double value) {
+    uint64_t bits = 0u;
+    memcpy(&bits, &value, sizeof(bits));
+    return bits;
+}
+
+static int32_t decode_i32_bits(uint64_t bits) {
+    return (int32_t)(uint32_t)bits;
+}
+
+static int64_t decode_i64_bits(uint64_t bits) {
+    return (int64_t)bits;
+}
+
+static uint32_t decode_u32_bits(uint64_t bits) {
+    return (uint32_t)bits;
+}
+
+static uint64_t decode_u64_bits(uint64_t bits) {
+    return bits;
+}
+
+static double decode_f64_bits(uint64_t bits) {
+    double value = 0.0;
+    memcpy(&value, &bits, sizeof(value));
+    return value;
+}
+
+#if defined(__x86_64__) || defined(_M_X64)
+typedef struct {
+    uint64_t bits;
+    const char* emitter_name;
+} DynasmEmitterResult;
+
+static uint64_t read_result_bits(OrusJitValueKind kind, uint16_t reg) {
+    switch (kind) {
+        case ORUS_JIT_VALUE_I32:
+            return bits_from_i32(vm.typed_regs.i32_regs[reg]);
+        case ORUS_JIT_VALUE_I64:
+            return bits_from_i64(vm.typed_regs.i64_regs[reg]);
+        case ORUS_JIT_VALUE_U32:
+            return bits_from_u32(vm.typed_regs.u32_regs[reg]);
+        case ORUS_JIT_VALUE_U64:
+            return bits_from_u64(vm.typed_regs.u64_regs[reg]);
+        case ORUS_JIT_VALUE_F64:
+            return bits_from_f64(vm.typed_regs.f64_regs[reg]);
+        default:
+            return 0u;
+    }
+}
+
+static bool execute_dynasm_parity_case(OrusJitValueKind kind,
+                                       uint64_t lhs_bits,
+                                       uint64_t rhs_bits,
+                                       bool use_dynasm,
+                                       DynasmEmitterResult* out_result) {
+    if (!out_result) {
+        return false;
+    }
+
+    force_helper_stub_env_off();
+    if (use_dynasm) {
+        force_dynasm_env_on();
+    } else {
+        force_dynasm_env_off();
+    }
+
+    initVM();
+    orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
+
+    struct OrusJitBackend* backend = orus_jit_backend_create();
+    if (!backend) {
+        freeVM();
+        force_dynasm_env_off();
+        return false;
+    }
+
+    OrusJitIROpcode load_opcode = ORUS_JIT_IR_OP_LOAD_I32_CONST;
+    OrusJitIROpcode add_opcode = ORUS_JIT_IR_OP_ADD_I32;
+
+    switch (kind) {
+        case ORUS_JIT_VALUE_I32:
+            break;
+        case ORUS_JIT_VALUE_I64:
+            load_opcode = ORUS_JIT_IR_OP_LOAD_I64_CONST;
+            add_opcode = ORUS_JIT_IR_OP_ADD_I64;
+            break;
+        case ORUS_JIT_VALUE_U32:
+            load_opcode = ORUS_JIT_IR_OP_LOAD_U32_CONST;
+            add_opcode = ORUS_JIT_IR_OP_ADD_U32;
+            break;
+        case ORUS_JIT_VALUE_U64:
+            load_opcode = ORUS_JIT_IR_OP_LOAD_U64_CONST;
+            add_opcode = ORUS_JIT_IR_OP_ADD_U64;
+            break;
+        case ORUS_JIT_VALUE_F64:
+            load_opcode = ORUS_JIT_IR_OP_LOAD_F64_CONST;
+            add_opcode = ORUS_JIT_IR_OP_ADD_F64;
+            break;
+        default:
+            orus_jit_backend_destroy(backend);
+            freeVM();
+            force_dynasm_env_off();
+            return false;
+    }
+
+    const uint16_t dst0 = FRAME_REG_START;
+    const uint16_t dst1 = FRAME_REG_START + 1u;
+
+    OrusJitIRInstruction instructions[4];
+    memset(instructions, 0, sizeof(instructions));
+
+    instructions[0].opcode = load_opcode;
+    instructions[0].value_kind = kind;
+    instructions[0].operands.load_const.dst_reg = dst0;
+    instructions[0].operands.load_const.immediate_bits = lhs_bits;
+
+    instructions[1].opcode = load_opcode;
+    instructions[1].value_kind = kind;
+    instructions[1].operands.load_const.dst_reg = dst1;
+    instructions[1].operands.load_const.immediate_bits = rhs_bits;
+
+    instructions[2].opcode = add_opcode;
+    instructions[2].value_kind = kind;
+    instructions[2].operands.arithmetic.dst_reg = dst0;
+    instructions[2].operands.arithmetic.lhs_reg = dst0;
+    instructions[2].operands.arithmetic.rhs_reg = dst1;
+
+    instructions[3].opcode = ORUS_JIT_IR_OP_RETURN;
+
+    OrusJitIRProgram program;
+    init_ir_program(&program, instructions, 4);
+
+    JITEntry entry;
+    bool compiled = compile_program(backend, &program, &entry);
+    bool success = compiled;
+    if (!compiled) {
+        orus_jit_backend_destroy(backend);
+        freeVM();
+        force_dynasm_env_off();
+        return false;
+    }
+
+    const char* debug_name = entry.debug_name ? entry.debug_name : "";
+
+    if (use_dynasm) {
+        if (strcmp(debug_name, "orus_jit_ir_stub") != 0) {
+            fprintf(stderr, "expected DynASM emitter, got %s\n", debug_name);
+            success = false;
+        }
+    } else {
+        if (strstr(debug_name, "linear") == NULL) {
+            fprintf(stderr, "expected linear emitter, got %s\n", debug_name);
+            success = false;
+        }
+    }
+
+    switch (kind) {
+        case ORUS_JIT_VALUE_I32:
+            vm_store_i32_typed_hot(dst0, 0);
+            vm_store_i32_typed_hot(dst1, 0);
+            break;
+        case ORUS_JIT_VALUE_I64:
+            vm_store_i64_typed_hot(dst0, 0);
+            vm_store_i64_typed_hot(dst1, 0);
+            break;
+        case ORUS_JIT_VALUE_U32:
+            vm_store_u32_typed_hot(dst0, 0u);
+            vm_store_u32_typed_hot(dst1, 0u);
+            break;
+        case ORUS_JIT_VALUE_U64:
+            vm_store_u64_typed_hot(dst0, 0u);
+            vm_store_u64_typed_hot(dst1, 0u);
+            break;
+        case ORUS_JIT_VALUE_F64:
+            vm_store_f64_typed_hot(dst0, 0.0);
+            vm_store_f64_typed_hot(dst1, 0.0);
+            break;
+        default:
+            break;
+    }
+
+    entry.entry_point(&vm);
+
+    out_result->bits = read_result_bits(kind, dst0);
+    out_result->emitter_name = debug_name;
+
+    orus_jit_backend_release_entry(backend, &entry);
+    orus_jit_backend_destroy(backend);
+    freeVM();
+    force_dynasm_env_off();
+
+    return success;
+}
+
+typedef struct {
+    const char* label;
+    OrusJitValueKind kind;
+    uint64_t lhs_bits;
+    uint64_t rhs_bits;
+    uint64_t expected_bits;
+} DynasmParityCase;
+
+static void log_parity_mismatch(const char* emitter,
+                                const DynasmParityCase* test_case,
+                                uint64_t actual_bits,
+                                uint64_t expected_bits) {
+    switch (test_case->kind) {
+        case ORUS_JIT_VALUE_I32:
+            fprintf(stderr,
+                    "%s emitter parity mismatch for %s: got %d expected %d\n",
+                    emitter,
+                    test_case->label,
+                    decode_i32_bits(actual_bits),
+                    decode_i32_bits(expected_bits));
+            break;
+        case ORUS_JIT_VALUE_I64:
+            fprintf(stderr,
+                    "%s emitter parity mismatch for %s: got %lld expected %lld\n",
+                    emitter,
+                    test_case->label,
+                    (long long)decode_i64_bits(actual_bits),
+                    (long long)decode_i64_bits(expected_bits));
+            break;
+        case ORUS_JIT_VALUE_U32:
+            fprintf(stderr,
+                    "%s emitter parity mismatch for %s: got %u expected %u\n",
+                    emitter,
+                    test_case->label,
+                    decode_u32_bits(actual_bits),
+                    decode_u32_bits(expected_bits));
+            break;
+        case ORUS_JIT_VALUE_U64:
+            fprintf(stderr,
+                    "%s emitter parity mismatch for %s: got %llu expected %llu\n",
+                    emitter,
+                    test_case->label,
+                    (unsigned long long)decode_u64_bits(actual_bits),
+                    (unsigned long long)decode_u64_bits(expected_bits));
+            break;
+        case ORUS_JIT_VALUE_F64:
+            fprintf(stderr,
+                    "%s emitter parity mismatch for %s: got %.17g expected %.17g\n",
+                    emitter,
+                    test_case->label,
+                    decode_f64_bits(actual_bits),
+                    decode_f64_bits(expected_bits));
+            break;
+        default:
+            fprintf(stderr,
+                    "%s emitter parity mismatch for %s: unsupported kind %d\n",
+                    emitter,
+                    test_case->label,
+                    (int)test_case->kind);
+            break;
+    }
+}
+
+static bool run_dynasm_parity_case(const DynasmParityCase* test_case) {
+    if (!test_case) {
+        return false;
+    }
+
+    DynasmEmitterResult linear = {0};
+    DynasmEmitterResult dynasm = {0};
+
+    bool linear_ok = execute_dynasm_parity_case(test_case->kind,
+                                                test_case->lhs_bits,
+                                                test_case->rhs_bits,
+                                                false,
+                                                &linear);
+    bool dynasm_ok = execute_dynasm_parity_case(test_case->kind,
+                                                test_case->lhs_bits,
+                                                test_case->rhs_bits,
+                                                true,
+                                                &dynasm);
+
+    bool success = linear_ok && dynasm_ok;
+    if (!linear_ok) {
+        fprintf(stderr,
+                "linear emitter parity case '%s' did not execute successfully\n",
+                test_case->label);
+    }
+    if (!dynasm_ok) {
+        fprintf(stderr,
+                "DynASM emitter parity case '%s' did not execute successfully\n",
+                test_case->label);
+    }
+    if (!success) {
+        return false;
+    }
+
+    if (linear.bits != test_case->expected_bits) {
+        log_parity_mismatch("linear", test_case, linear.bits, test_case->expected_bits);
+        success = false;
+    }
+    if (dynasm.bits != test_case->expected_bits) {
+        log_parity_mismatch("DynASM", test_case, dynasm.bits, test_case->expected_bits);
+        success = false;
+    }
+    if (linear.bits != dynasm.bits) {
+        fprintf(stderr,
+                "linear and DynASM emitters diverged for %s (linear=0x%016llx DynASM=0x%016llx)\n",
+                test_case->label,
+                (unsigned long long)linear.bits,
+                (unsigned long long)dynasm.bits);
+        success = false;
+    }
+
+    return success;
+}
+
+static bool test_backend_dynasm_matches_linear_across_value_kinds(void) {
+    const DynasmParityCase cases[] = {
+        {.label = "i32_add",
+         .kind = ORUS_JIT_VALUE_I32,
+         .lhs_bits = bits_from_i32(21),
+         .rhs_bits = bits_from_i32(29),
+         .expected_bits = bits_from_i32(50)},
+        {.label = "i64_add",
+         .kind = ORUS_JIT_VALUE_I64,
+         .lhs_bits = bits_from_i64(1024LL),
+         .rhs_bits = bits_from_i64(256LL),
+         .expected_bits = bits_from_i64(1280LL)},
+        {.label = "u32_add",
+         .kind = ORUS_JIT_VALUE_U32,
+         .lhs_bits = bits_from_u32(100u),
+         .rhs_bits = bits_from_u32(200u),
+         .expected_bits = bits_from_u32(300u)},
+        {.label = "u64_add",
+         .kind = ORUS_JIT_VALUE_U64,
+         .lhs_bits = bits_from_u64(5000000000ULL),
+         .rhs_bits = bits_from_u64(42ULL),
+         .expected_bits = bits_from_u64(5000000042ULL)},
+        {.label = "f64_add",
+         .kind = ORUS_JIT_VALUE_F64,
+         .lhs_bits = bits_from_f64(3.125),
+         .rhs_bits = bits_from_f64(6.875),
+         .expected_bits = bits_from_f64(10.0)},
+    };
+
+    bool success = true;
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); ++i) {
+        if (!run_dynasm_parity_case(&cases[i])) {
+            success = false;
+        }
+    }
+
+    if (!success) {
+        fprintf(stderr,
+                "DynASM vs linear parity test failed for at least one value kind\n");
+    }
+
+    return success;
+}
+#else
+static bool test_backend_dynasm_matches_linear_across_value_kinds(void) {
+    return true;
+}
+#endif
 
 static bool test_backend_emits_i64_add(void) {
     initVM();
@@ -1269,6 +1777,10 @@ int main(void) {
         fprintf(stderr, "backend helper stub test failed\n");
         success = false;
     }
+    if (!test_backend_dynasm_matches_linear_across_value_kinds()) {
+        fprintf(stderr, "backend DynASM parity test failed\n");
+        success = false;
+    }
     if (!test_backend_emits_i64_add()) {
         fprintf(stderr, "backend i64 add test failed\n");
         success = false;
@@ -1301,6 +1813,10 @@ int main(void) {
     if (!test_backend_deopt_mid_gc_preserves_frame_alignment()) {
         fprintf(stderr,
                 "backend GC + deopt frame reconciliation test failed\n");
+        success = false;
+    }
+    if (!test_backend_typed_deopt_landing_pad_reuses_frame()) {
+        fprintf(stderr, "backend typed deopt landing pad test failed\n");
         success = false;
     }
     if (!test_backend_emits_f64_mul()) {

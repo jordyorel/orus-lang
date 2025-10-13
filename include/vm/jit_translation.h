@@ -37,6 +37,9 @@ bool orus_jit_translation_status_is_unsupported(
 
 const char* orus_jit_value_kind_name(OrusJitValueKind kind);
 
+const char* orus_jit_translation_failure_category_name(
+    OrusJitTranslationFailureCategory category);
+
 const char* orus_jit_rollout_stage_name(OrusJitRolloutStage stage);
 
 bool orus_jit_rollout_stage_parse(const char* text,

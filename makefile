@@ -248,11 +248,6 @@ REPL_SRC = $(SRCDIR)/repl.c
 MAIN_SRC = $(SRCDIR)/main.c
 TOOLS_SRCS = $(SRCDIR)/tools/orus_prof.c
 
-# Unit testing files
-UNITY_SRCS = $(TESTDIR)/unit/unity.c
-UNIT_TEST_SRCS = $(TESTDIR)/unit/test_shared_compilation.c $(TESTDIR)/unit/test_backend_selection.c $(TESTDIR)/unit/test_vm_optimization.c
-TEST_RUNNER_SRC = $(TESTDIR)/run_unit_tests.c
-
 # Object files (profile-specific)
 COMPILER_OBJS = $(COMPILER_SRCS:$(SRCDIR)/%.c=$(BUILDDIR)/%.o)
 VM_OBJS = $(VM_SRCS:$(SRCDIR)/%.c=$(BUILDDIR)/%.o)
@@ -260,15 +255,9 @@ REPL_OBJ = $(REPL_SRC:$(SRCDIR)/%.c=$(BUILDDIR)/%.o)
 MAIN_OBJ = $(MAIN_SRC:$(SRCDIR)/%.c=$(BUILDDIR)/%.o)
 TOOLS_OBJS = $(TOOLS_SRCS:$(SRCDIR)/%.c=$(BUILDDIR)/%.o)
 
-# Unit test object files
-UNITY_OBJS = $(UNITY_SRCS:$(TESTDIR)/%.c=$(BUILDDIR)/tests/%.o)
-UNIT_TEST_OBJS = $(UNIT_TEST_SRCS:$(TESTDIR)/%.c=$(BUILDDIR)/tests/%.o)
-TEST_RUNNER_OBJ = $(TEST_RUNNER_SRC:$(TESTDIR)/%.c=$(BUILDDIR)/tests/%.o)
-
 # Target (profile-specific)
 ORUS = orus$(SUFFIX)
 ORUS_PROF = orus-prof$(SUFFIX)
-UNIT_TEST_RUNNER = test_runner$(SUFFIX)
 BYTECODE_TEST_BIN = $(BUILDDIR)/tests/test_jump_patch
 SOURCE_MAP_TEST_BIN = $(BUILDDIR)/tests/test_source_mapping
 FUSED_LOOP_CODEGEN_TEST_BIN = $(BUILDDIR)/tests/test_codegen_fused_loops
@@ -362,11 +351,35 @@ $(BUILDDIR)/tests/%.o: $(TESTDIR)/%.c | $(BUILDDIR)
 	@echo "Compiling test $<..."
 	@$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
-# Unit test runner
-$(UNIT_TEST_RUNNER): $(TEST_RUNNER_OBJ) $(UNITY_OBJS) $(UNIT_TEST_OBJS) $(VM_OBJS) $(COMPILER_OBJS)
-	@echo "Linking unit test runner $(UNIT_TEST_RUNNER)..."
-	@$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
-	@echo "✓ Unit test runner built: $(UNIT_TEST_RUNNER)"
+# Run unit tests
+UNIT_TEST_TARGETS = \
+        bytecode-jump-tests \
+        source-map-tests \
+        fused-loop-tests \
+        fused-loop-bytecode-tests \
+        fused-while-tests \
+        scope-tracking-tests \
+        peephole-tests \
+        tagged-union-tests \
+        typed-register-tests \
+        vm-print-tests \
+        register-window-tests \
+        spill-gc-tests \
+        inc-cmp-jmp-tests \
+        add-i32-imm-tests \
+        sub-i32-imm-tests \
+        mul-i32-imm-tests \
+        inc-r-tests \
+        hot-loop-tests \
+        dec-i32-r-tests \
+        register-allocator-tests \
+        builtin-input-tests \
+        builtin-sorted-tests \
+        builtin-range-tests
+
+.NOTPARALLEL: unit-test
+unit-test: $(UNIT_TEST_TARGETS)
+	@echo "Unit Test Suite complete."
 
 wasm: $(WASM_JS)
 	@echo "✓ WebAssembly artifacts ready: $(WASM_JS) and $(WASM_WASM)"
@@ -537,12 +550,6 @@ _test-run: $(ORUS) $(ORUS_PROF)
 	@echo ""
 	@echo "\033[36m=== orus-prof CLI Tests ===\033[0m"
 	@python3 tests/tools/run_orus_prof_cli_tests.py ./$(ORUS_PROF)
-
-# Run unit tests
-unit-test: $(UNIT_TEST_RUNNER)
-	@echo "Running Unit Test Suite..."
-	@echo "=========================="
-	@./$(UNIT_TEST_RUNNER)
 
 $(BYTECODE_TEST_BIN): tests/unit/test_jump_patch.c $(COMPILER_OBJS) $(VM_OBJS)
 	@mkdir -p $(dir $@)
@@ -877,7 +884,7 @@ ci-test:
 	@echo "Running tests with CI build..."
 	@$(MAKE) test ORUS=orus_ci
 	@echo "Running unit tests with CI build..."
-	@$(MAKE) unit-test UNIT_TEST_RUNNER=test_runner_ci
+	@$(MAKE) PROFILE=ci unit-test
 
 # Run cross-language benchmark tests
 benchmark:
