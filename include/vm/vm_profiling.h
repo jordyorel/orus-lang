@@ -32,12 +32,51 @@ typedef enum {
 #define HOT_PATH_THRESHOLD 1000        // Executions to consider hot
 #define HOT_LOOP_THRESHOLD 10000       // Loop iterations to consider hot
 #define HOT_THRESHOLD HOT_LOOP_THRESHOLD
+
+#define ORUS_JIT_WARMUP_REQUIRED 2u
+#define ORUS_JIT_WARMUP_DECAY_TICKS (HOT_THRESHOLD * 3ULL)
+#define ORUS_JIT_WARMUP_BASE_COOLDOWN (HOT_THRESHOLD / 2ULL)
+#define ORUS_JIT_WARMUP_MAX_BACKOFF 5u
+#define ORUS_JIT_WARMUP_SUPPRESS_LIMIT 4u
+#define ORUS_JIT_WARMUP_ON_COOLDOWN_RESET                                             \
+    (HOT_THRESHOLD - (HOT_THRESHOLD / 4u))
+#define ORUS_JIT_WARMUP_PARTIAL_RESET (HOT_THRESHOLD / 2u)
 #define PROFILING_SAMPLE_RATE 100      // Sample every N instructions when enabled
 #define LOOP_HIT_SAMPLE_RATE 64        // Sample loop hit counts every 64 iterations
 #define FUNCTION_HIT_SAMPLE_RATE 32    // Sample function hits every 32 calls
 
 #define LOOP_PROFILE_SLOTS 1024
 #define FUNCTION_PROFILE_SLOTS 512
+
+// Opcode family taxonomy for aggregated profiling exports
+typedef enum {
+    ORUS_OPCODE_FAMILY_LITERAL = 0,
+    ORUS_OPCODE_FAMILY_MOVES,
+    ORUS_OPCODE_FAMILY_ARITHMETIC,
+    ORUS_OPCODE_FAMILY_BITWISE,
+    ORUS_OPCODE_FAMILY_COMPARISON,
+    ORUS_OPCODE_FAMILY_LOGIC,
+    ORUS_OPCODE_FAMILY_CONVERSION,
+    ORUS_OPCODE_FAMILY_STRING,
+    ORUS_OPCODE_FAMILY_COLLECTION,
+    ORUS_OPCODE_FAMILY_ITERATOR,
+    ORUS_OPCODE_FAMILY_CONTROL,
+    ORUS_OPCODE_FAMILY_CALL,
+    ORUS_OPCODE_FAMILY_FRAME,
+    ORUS_OPCODE_FAMILY_SPILL,
+    ORUS_OPCODE_FAMILY_MODULE,
+    ORUS_OPCODE_FAMILY_CLOSURE,
+    ORUS_OPCODE_FAMILY_RUNTIME,
+    ORUS_OPCODE_FAMILY_TYPED,
+    ORUS_OPCODE_FAMILY_EXTENDED,
+    ORUS_OPCODE_FAMILY_OTHER,
+    ORUS_OPCODE_FAMILY_COUNT,
+} OrusOpcodeFamily;
+
+typedef struct {
+    uint64_t executions;
+    uint64_t cycles;
+} OpcodeFamilyProfile;
 
 // Instruction profiling data
 typedef struct {
@@ -95,6 +134,7 @@ typedef struct {
     
     // Instruction profiling (indexed by opcode)
     InstructionProfile instructionStats[256];
+    OpcodeFamilyProfile familyStats[ORUS_OPCODE_FAMILY_COUNT];
     
     // Hot path detection (hash table for code addresses)
     HotPathData hotPaths[1024];
@@ -135,17 +175,306 @@ void resetProfiling(void);
 void shutdownVMProfiling(void);
 
 // Runtime profiling hooks (inline for performance)
+static inline OrusOpcodeFamily vm_opcode_family(uint8_t opcode) {
+    switch ((OpCode)opcode) {
+        case OP_LOAD_CONST:
+        case OP_LOAD_TRUE:
+        case OP_LOAD_FALSE:
+            return ORUS_OPCODE_FAMILY_LITERAL;
+
+        case OP_MOVE:
+        case OP_LOAD_GLOBAL:
+        case OP_STORE_GLOBAL:
+            return ORUS_OPCODE_FAMILY_MOVES;
+
+        case OP_ADD_I32_R:
+        case OP_SUB_I32_R:
+        case OP_MUL_I32_R:
+        case OP_DIV_I32_R:
+        case OP_MOD_I32_R:
+        case OP_INC_I32_R:
+        case OP_INC_I32_CHECKED:
+        case OP_DEC_I32_R:
+        case OP_ADD_I64_R:
+        case OP_SUB_I64_R:
+        case OP_MUL_I64_R:
+        case OP_DIV_I64_R:
+        case OP_MOD_I64_R:
+        case OP_INC_I64_R:
+        case OP_INC_I64_CHECKED:
+        case OP_ADD_U32_R:
+        case OP_SUB_U32_R:
+        case OP_MUL_U32_R:
+        case OP_DIV_U32_R:
+        case OP_MOD_U32_R:
+        case OP_INC_U32_R:
+        case OP_INC_U32_CHECKED:
+        case OP_ADD_U64_R:
+        case OP_SUB_U64_R:
+        case OP_MUL_U64_R:
+        case OP_DIV_U64_R:
+        case OP_MOD_U64_R:
+        case OP_INC_U64_R:
+        case OP_INC_U64_CHECKED:
+        case OP_ADD_F64_R:
+        case OP_SUB_F64_R:
+        case OP_MUL_F64_R:
+        case OP_DIV_F64_R:
+        case OP_MOD_F64_R:
+        case OP_LOAD_ADD_I32:
+        case OP_LOAD_INC_STORE:
+        case OP_MUL_ADD_I32:
+        case OP_ADD_I32_IMM:
+        case OP_SUB_I32_IMM:
+        case OP_MUL_I32_IMM:
+        case OP_CMP_I32_IMM:
+        case OP_NEG_I32_R:
+            return ORUS_OPCODE_FAMILY_ARITHMETIC;
+
+        case OP_AND_I32_R:
+        case OP_OR_I32_R:
+        case OP_XOR_I32_R:
+        case OP_NOT_I32_R:
+        case OP_SHL_I32_R:
+        case OP_SHR_I32_R:
+            return ORUS_OPCODE_FAMILY_BITWISE;
+
+        case OP_EQ_R:
+        case OP_NE_R:
+        case OP_LT_I32_R:
+        case OP_LE_I32_R:
+        case OP_GT_I32_R:
+        case OP_GE_I32_R:
+        case OP_LT_I64_R:
+        case OP_LE_I64_R:
+        case OP_GT_I64_R:
+        case OP_GE_I64_R:
+        case OP_LT_F64_R:
+        case OP_LE_F64_R:
+        case OP_GT_F64_R:
+        case OP_GE_F64_R:
+        case OP_LT_U32_R:
+        case OP_LE_U32_R:
+        case OP_GT_U32_R:
+        case OP_GE_U32_R:
+        case OP_LT_U64_R:
+        case OP_LE_U64_R:
+        case OP_GT_U64_R:
+        case OP_GE_U64_R:
+        case OP_LOAD_CMP_I32:
+            return ORUS_OPCODE_FAMILY_COMPARISON;
+
+        case OP_AND_BOOL_R:
+        case OP_OR_BOOL_R:
+        case OP_NOT_BOOL_R:
+            return ORUS_OPCODE_FAMILY_LOGIC;
+
+        case OP_I32_TO_F64_R:
+        case OP_I32_TO_I64_R:
+        case OP_I64_TO_I32_R:
+        case OP_I64_TO_F64_R:
+        case OP_U32_TO_I32_R:
+        case OP_F64_TO_U32_R:
+        case OP_U32_TO_F64_R:
+        case OP_I32_TO_U64_R:
+        case OP_I64_TO_U64_R:
+        case OP_U64_TO_I32_R:
+        case OP_U64_TO_I64_R:
+        case OP_U32_TO_U64_R:
+        case OP_U64_TO_U32_R:
+        case OP_F64_TO_U64_R:
+        case OP_U64_TO_F64_R:
+        case OP_I32_TO_BOOL_R:
+        case OP_I64_TO_BOOL_R:
+        case OP_U32_TO_BOOL_R:
+        case OP_U64_TO_BOOL_R:
+        case OP_BOOL_TO_I32_R:
+        case OP_BOOL_TO_I64_R:
+        case OP_BOOL_TO_U32_R:
+        case OP_BOOL_TO_U64_R:
+        case OP_BOOL_TO_F64_R:
+        case OP_F64_TO_I32_R:
+        case OP_F64_TO_I64_R:
+        case OP_F64_TO_BOOL_R:
+        case OP_I32_TO_U32_R:
+        case OP_I64_TO_U32_R:
+            return ORUS_OPCODE_FAMILY_CONVERSION;
+
+        case OP_CONCAT_R:
+        case OP_TO_STRING_R:
+        case OP_STRING_INDEX_R:
+        case OP_STRING_GET_R:
+            return ORUS_OPCODE_FAMILY_STRING;
+
+        case OP_MAKE_ARRAY_R:
+        case OP_ENUM_NEW_R:
+        case OP_ENUM_TAG_EQ_R:
+        case OP_ENUM_PAYLOAD_R:
+        case OP_ARRAY_GET_R:
+        case OP_ARRAY_SET_R:
+        case OP_ARRAY_LEN_R:
+        case OP_ARRAY_PUSH_R:
+        case OP_ARRAY_POP_R:
+        case OP_ARRAY_SORTED_R:
+        case OP_ARRAY_REPEAT_R:
+        case OP_ARRAY_SLICE_R:
+            return ORUS_OPCODE_FAMILY_COLLECTION;
+
+        case OP_GET_ITER_R:
+        case OP_ITER_NEXT_R:
+            return ORUS_OPCODE_FAMILY_ITERATOR;
+
+        case OP_TRY_BEGIN:
+        case OP_TRY_END:
+        case OP_JUMP:
+        case OP_JUMP_IF_R:
+        case OP_JUMP_IF_NOT_R:
+        case OP_JUMP_IF_NOT_I32_TYPED:
+        case OP_LOOP:
+        case OP_JUMP_SHORT:
+        case OP_JUMP_BACK_SHORT:
+        case OP_JUMP_IF_NOT_SHORT:
+        case OP_LOOP_SHORT:
+        case OP_BRANCH_TYPED:
+        case OP_INC_CMP_JMP:
+        case OP_DEC_CMP_JMP:
+            return ORUS_OPCODE_FAMILY_CONTROL;
+
+        case OP_CALL_R:
+        case OP_CALL_NATIVE_R:
+        case OP_TAIL_CALL_R:
+        case OP_RETURN_R:
+        case OP_RETURN_VOID:
+            return ORUS_OPCODE_FAMILY_CALL;
+
+        case OP_LOAD_FRAME:
+        case OP_STORE_FRAME:
+        case OP_ENTER_FRAME:
+        case OP_EXIT_FRAME:
+        case OP_MOVE_FRAME:
+            return ORUS_OPCODE_FAMILY_FRAME;
+
+        case OP_LOAD_SPILL:
+        case OP_STORE_SPILL:
+            return ORUS_OPCODE_FAMILY_SPILL;
+
+        case OP_LOAD_MODULE:
+        case OP_STORE_MODULE:
+        case OP_LOAD_MODULE_NAME:
+        case OP_SWITCH_MODULE:
+        case OP_EXPORT_VAR:
+        case OP_IMPORT_VAR:
+        case OP_IMPORT_R:
+            return ORUS_OPCODE_FAMILY_MODULE;
+
+        case OP_CLOSURE_R:
+        case OP_GET_UPVALUE_R:
+        case OP_SET_UPVALUE_R:
+        case OP_CLOSE_UPVALUE_R:
+            return ORUS_OPCODE_FAMILY_CLOSURE;
+
+        case OP_PARSE_INT_R:
+        case OP_PARSE_FLOAT_R:
+        case OP_TYPE_OF_R:
+        case OP_IS_TYPE_R:
+        case OP_INPUT_R:
+        case OP_RANGE_R:
+        case OP_PRINT_MULTI_R:
+        case OP_PRINT_R:
+        case OP_ASSERT_EQ_R:
+        case OP_TIME_STAMP:
+        case OP_GC_PAUSE:
+        case OP_GC_RESUME:
+            return ORUS_OPCODE_FAMILY_RUNTIME;
+
+        case OP_ADD_I32_TYPED:
+        case OP_SUB_I32_TYPED:
+        case OP_MUL_I32_TYPED:
+        case OP_DIV_I32_TYPED:
+        case OP_MOD_I32_TYPED:
+        case OP_ADD_I64_TYPED:
+        case OP_SUB_I64_TYPED:
+        case OP_MUL_I64_TYPED:
+        case OP_DIV_I64_TYPED:
+        case OP_MOD_I64_TYPED:
+        case OP_ADD_F64_TYPED:
+        case OP_SUB_F64_TYPED:
+        case OP_MUL_F64_TYPED:
+        case OP_DIV_F64_TYPED:
+        case OP_MOD_F64_TYPED:
+        case OP_ADD_U32_TYPED:
+        case OP_SUB_U32_TYPED:
+        case OP_MUL_U32_TYPED:
+        case OP_DIV_U32_TYPED:
+        case OP_MOD_U32_TYPED:
+        case OP_ADD_U64_TYPED:
+        case OP_SUB_U64_TYPED:
+        case OP_MUL_U64_TYPED:
+        case OP_DIV_U64_TYPED:
+        case OP_MOD_U64_TYPED:
+        case OP_LT_I32_TYPED:
+        case OP_LE_I32_TYPED:
+        case OP_GT_I32_TYPED:
+        case OP_GE_I32_TYPED:
+        case OP_LT_I64_TYPED:
+        case OP_LE_I64_TYPED:
+        case OP_GT_I64_TYPED:
+        case OP_GE_I64_TYPED:
+        case OP_LT_F64_TYPED:
+        case OP_LE_F64_TYPED:
+        case OP_GT_F64_TYPED:
+        case OP_GE_F64_TYPED:
+        case OP_LT_U32_TYPED:
+        case OP_LE_U32_TYPED:
+        case OP_GT_U32_TYPED:
+        case OP_GE_U32_TYPED:
+        case OP_LT_U64_TYPED:
+        case OP_LE_U64_TYPED:
+        case OP_GT_U64_TYPED:
+        case OP_GE_U64_TYPED:
+        case OP_LOAD_I32_CONST:
+        case OP_LOAD_I64_CONST:
+        case OP_LOAD_U32_CONST:
+        case OP_LOAD_U64_CONST:
+        case OP_LOAD_F64_CONST:
+        case OP_MOVE_I32:
+        case OP_MOVE_I64:
+        case OP_MOVE_F64:
+            return ORUS_OPCODE_FAMILY_TYPED;
+
+        case OP_LOAD_CONST_EXT:
+        case OP_MOVE_EXT:
+        case OP_STORE_EXT:
+        case OP_LOAD_EXT:
+            return ORUS_OPCODE_FAMILY_EXTENDED;
+
+        case OP_HALT:
+            return ORUS_OPCODE_FAMILY_CONTROL;
+
+        default:
+            break;
+    }
+    return ORUS_OPCODE_FAMILY_OTHER;
+}
+
 static inline void profileInstruction(uint8_t opcode, uint64_t cycles) {
     if (!(g_profiling.enabledFlags & PROFILE_INSTRUCTIONS) || !g_profiling.isActive) return;
-    
+
     // Sample-based profiling to reduce overhead
     if (++g_profiling.sampleCounter % PROFILING_SAMPLE_RATE != 0) return;
-    
+
     InstructionProfile* profile = &g_profiling.instructionStats[opcode];
     profile->executionCount++;
     profile->totalCycles += cycles;
     profile->averageCycles = (double)profile->totalCycles / profile->executionCount;
-    
+
+    OrusOpcodeFamily family = vm_opcode_family(opcode);
+    if ((size_t)family < ORUS_OPCODE_FAMILY_COUNT) {
+        OpcodeFamilyProfile* family_profile = &g_profiling.familyStats[family];
+        family_profile->executions++;
+        family_profile->cycles += cycles;
+    }
+
     // Mark as hot path if execution count exceeds threshold
     if (profile->executionCount > HOT_PATH_THRESHOLD) {
         profile->isHotPath = true;
@@ -242,6 +571,15 @@ extern size_t gcThreshold;
 
 void queue_tier_up(VMState* vm, const HotPathSample* sample);
 
+static inline uint64_t
+orus_jit_warmup_compute_cooldown(uint8_t backoff_shift) {
+    uint64_t cooldown = ORUS_JIT_WARMUP_BASE_COOLDOWN;
+    uint8_t clamped =
+        backoff_shift > ORUS_JIT_WARMUP_MAX_BACKOFF ? ORUS_JIT_WARMUP_MAX_BACKOFF
+                                                    : backoff_shift;
+    return cooldown << clamped;
+}
+
 static inline bool vm_profile_tick(VMState* vm, FunctionId func, LoopId loop) {
     if (!vm) {
         return false;
@@ -253,10 +591,72 @@ static inline bool vm_profile_tick(VMState* vm, FunctionId func, LoopId loop) {
     sample->func = func;
     sample->loop = loop;
 
-    if (++sample->hit_count == HOT_THRESHOLD) {
-        queue_tier_up(vm, sample);
-        return true;
+    if (sample->cooldown_until_tick && vm->ticks >= sample->cooldown_until_tick) {
+        if (sample->cooldown_exponent > 0) {
+            sample->cooldown_exponent--;
+        }
+        sample->cooldown_until_tick = 0;
+        sample->suppressed_triggers = 0;
     }
+
+    if (++sample->hit_count < HOT_THRESHOLD) {
+        return false;
+    }
+
+    uint64_t previous_threshold_tick = sample->last_threshold_tick;
+    sample->last_threshold_tick = vm->ticks;
+
+    if (previous_threshold_tick != 0 &&
+        (vm->ticks - previous_threshold_tick) > ORUS_JIT_WARMUP_DECAY_TICKS) {
+        sample->warmup_level = 0;
+    }
+
+    if (sample->cooldown_until_tick != 0 && vm->ticks < sample->cooldown_until_tick) {
+        if (sample->warmup_level > 0) {
+            sample->warmup_level--;
+        }
+        if (sample->suppressed_triggers < UINT32_MAX) {
+            sample->suppressed_triggers++;
+        }
+        if (sample->suppressed_triggers > ORUS_JIT_WARMUP_SUPPRESS_LIMIT &&
+            sample->cooldown_exponent > 0) {
+            sample->cooldown_exponent--;
+            sample->suppressed_triggers = 0;
+        }
+        sample->hit_count = ORUS_JIT_WARMUP_ON_COOLDOWN_RESET;
+        return false;
+    }
+
+    sample->suppressed_triggers = 0;
+
+    uint8_t warmup_level = sample->warmup_level;
+    if (warmup_level < UINT8_MAX) {
+        warmup_level++;
+    }
+    sample->warmup_level = warmup_level;
+
+    if (warmup_level < ORUS_JIT_WARMUP_REQUIRED) {
+        sample->hit_count = ORUS_JIT_WARMUP_PARTIAL_RESET;
+        return false;
+    }
+
+    sample->warmup_level = 0;
+
+    uint8_t backoff_shift = sample->cooldown_exponent;
+    if (backoff_shift > 0) {
+        backoff_shift--;
+    }
+    sample->cooldown_exponent = backoff_shift;
+
+    uint64_t cooldown = orus_jit_warmup_compute_cooldown(backoff_shift);
+    if (cooldown > UINT64_MAX - vm->ticks) {
+        sample->cooldown_until_tick = UINT64_MAX;
+    } else {
+        sample->cooldown_until_tick = vm->ticks + cooldown;
+    }
+
+    queue_tier_up(vm, sample);
+    return true;
 
     return false;
 }

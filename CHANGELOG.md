@@ -11,6 +11,12 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ### Added
 - Documented the intrinsic stdlib contribution workflow and recorded the historical audit for the removed modules.
+- Introduced a JIT stress harness (`jit-stress-tests`) that hammers long-running loops, GC-heavy string churn, and multi-process
+  invocations to validate native tier resilience.
+
+### Changed
+- Hardened the JIT backend with executable-heap W^X enforcement, helper ABI validation, and native-frame canaries to prevent
+  stack corruption from propagating across native frames.
 
 ### Fixed
 - Ensured module resolution now exclusively accepts canonical intrinsic module names, preventing the registry from recreating legacy `std/` aliases.
