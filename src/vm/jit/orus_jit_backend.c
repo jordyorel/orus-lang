@@ -71,9 +71,65 @@ static void orus_jit_flush_icache(void* ptr, size_t size);
 #define ORUS_JIT_USE_APPLE_JIT 0
 #endif
 
+typedef struct {
+    bool supported;
+    OrusJitBackendTarget target;
+    JITBackendStatus status;
+    const char* message;
+} OrusJitBackendAvailability;
+
+static OrusJitBackendAvailability
+orus_jit_backend_detect_availability(void) {
+    const char* forced_disable = getenv("ORUS_JIT_FORCE_UNSUPPORTED");
+    if (forced_disable && forced_disable[0] != '\0') {
+        return (OrusJitBackendAvailability){
+            .supported = false,
+            .target = ORUS_JIT_BACKEND_TARGET_NATIVE,
+            .status = JIT_BACKEND_UNSUPPORTED,
+            .message =
+                "JIT backend force-disabled via ORUS_JIT_FORCE_UNSUPPORTED.",
+        };
+    }
+
+#if defined(__x86_64__) || defined(_M_X64) || defined(_M_AMD64)
+    return (OrusJitBackendAvailability){
+        .supported = true,
+        .target = ORUS_JIT_BACKEND_TARGET_X86_64,
+        .status = JIT_BACKEND_OK,
+        .message = "Detected x86_64 host architecture.",
+    };
+#elif defined(__aarch64__) || defined(_M_ARM64)
+    return (OrusJitBackendAvailability){
+        .supported = true,
+        .target = ORUS_JIT_BACKEND_TARGET_AARCH64,
+        .status = JIT_BACKEND_OK,
+        .message = "Detected AArch64 host architecture.",
+    };
+#elif defined(__riscv) && defined(__riscv_xlen) && (__riscv_xlen == 64)
+    return (OrusJitBackendAvailability){
+        .supported = false,
+        .target = ORUS_JIT_BACKEND_TARGET_RISCV64,
+        .status = JIT_BACKEND_UNSUPPORTED,
+        .message =
+            "RISC-V 64-bit host detected but the JIT backend is not yet implemented.",
+    };
+#else
+    return (OrusJitBackendAvailability){
+        .supported = false,
+        .target = ORUS_JIT_BACKEND_TARGET_NATIVE,
+        .status = JIT_BACKEND_UNSUPPORTED,
+        .message =
+            "Host architecture is not supported by the Orus JIT backend.",
+    };
+#endif
+}
+
 struct OrusJitBackend {
     size_t page_size;
     bool available;
+    OrusJitBackendTarget target;
+    JITBackendStatus availability_status;
+    const char* availability_message;
 };
 
 typedef struct OrusJitNativeBlock {
@@ -3921,11 +3977,35 @@ cleanup:
 
 bool
 orus_jit_backend_is_available(void) {
-#if defined(__x86_64__) || defined(_M_X64) || defined(__aarch64__)
-    return true;
-#else
-    return false;
-#endif
+    OrusJitBackendAvailability availability =
+        orus_jit_backend_detect_availability();
+    if (!availability.supported) {
+        LOG_INFO("JIT backend unavailable: %s", availability.message);
+    }
+    return availability.supported;
+}
+
+JITBackendStatus
+orus_jit_backend_availability(const struct OrusJitBackend* backend,
+                              OrusJitBackendTarget* out_target,
+                              const char** out_message) {
+    if (!backend) {
+        if (out_target) {
+            *out_target = ORUS_JIT_BACKEND_TARGET_NATIVE;
+        }
+        if (out_message) {
+            *out_message = "Orus JIT backend not initialized.";
+        }
+        return JIT_BACKEND_UNSUPPORTED;
+    }
+
+    if (out_target) {
+        *out_target = backend->target;
+    }
+    if (out_message) {
+        *out_message = backend->availability_message;
+    }
+    return backend->availability_status;
 }
 
 #if defined(__x86_64__) || defined(_M_X64) || defined(__aarch64__)
@@ -3952,7 +4032,13 @@ orus_jit_backend_create(void) {
     }
 
     backend->page_size = orus_jit_detect_page_size();
-    backend->available = orus_jit_backend_is_available();
+    OrusJitBackendAvailability availability =
+        orus_jit_backend_detect_availability();
+    backend->available = availability.supported &&
+                         availability.status == JIT_BACKEND_OK;
+    backend->target = availability.target;
+    backend->availability_status = availability.status;
+    backend->availability_message = availability.message;
     if (g_dynasm_helper_stub_page_size == 0u) {
         g_dynasm_helper_stub_page_size = backend->page_size;
     }

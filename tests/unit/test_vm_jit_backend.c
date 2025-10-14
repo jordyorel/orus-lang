@@ -27,6 +27,26 @@
         }                                                                            \
     } while (0)
 
+static void test_set_env(const char* name, const char* value) {
+#if defined(_WIN32)
+    _putenv_s(name, value ? value : "");
+#else
+    if (value) {
+        setenv(name, value, 1);
+    } else {
+        unsetenv(name);
+    }
+#endif
+}
+
+static void test_unset_env(const char* name) {
+#if defined(_WIN32)
+    _putenv_s(name, "");
+#else
+    unsetenv(name);
+#endif
+}
+
 static void init_ir_program(OrusJitIRProgram* program,
                             OrusJitIRInstruction* instructions,
                             size_t count) {
@@ -1852,6 +1872,37 @@ static bool test_backend_documents_unhandled_arithmetic_opcodes(void) {
     return success;
 }
 
+static bool test_vm_init_surfaces_backend_status(void) {
+    initVM();
+
+    bool status_ok = (vm.jit_backend_status == JIT_BACKEND_OK);
+    bool target_valid =
+        vm.jit_backend_target < ORUS_JIT_BACKEND_TARGET_COUNT;
+    bool message_valid = vm.jit_backend_message &&
+                         vm.jit_backend_message[0] != '\0';
+    bool enabled_matches_status =
+        (vm.jit_backend_status == JIT_BACKEND_OK) == vm.jit_enabled;
+
+    freeVM();
+    return status_ok && target_valid && message_valid && enabled_matches_status;
+}
+
+static bool test_backend_unavailable_status_is_reported(void) {
+    test_set_env("ORUS_JIT_FORCE_UNSUPPORTED", "1");
+    initVM();
+
+    bool status_reported = (vm.jit_backend_status == JIT_BACKEND_UNSUPPORTED);
+    bool jit_disabled = !vm.jit_enabled;
+    bool message_contains = vm.jit_backend_message &&
+                            strstr(vm.jit_backend_message,
+                                   "ORUS_JIT_FORCE_UNSUPPORTED") != NULL;
+
+    freeVM();
+    test_unset_env("ORUS_JIT_FORCE_UNSUPPORTED");
+
+    return status_reported && jit_disabled && message_contains;
+}
+
 int main(void) {
     if (!orus_jit_backend_is_available()) {
         printf("Baseline JIT backend unavailable; skipping backend tests.\n");
@@ -1867,6 +1918,14 @@ int main(void) {
 
     bool success = true;
 
+    if (!test_vm_init_surfaces_backend_status()) {
+        fprintf(stderr, "vm init status surfacing test failed\n");
+        success = false;
+    }
+    if (!test_backend_unavailable_status_is_reported()) {
+        fprintf(stderr, "vm init unavailable status test failed\n");
+        success = false;
+    }
     if (!test_jit_debug_disassembly_capture()) {
         fprintf(stderr, "jit debug disassembly capture test failed\n");
         success = false;
