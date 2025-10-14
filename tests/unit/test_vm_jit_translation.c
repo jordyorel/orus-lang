@@ -307,6 +307,87 @@ cleanup:
     return success;
 }
 
+static bool test_translator_handles_boxed_guard_operands(void) {
+    initVM();
+    orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
+
+    Chunk chunk;
+    initChunk(&chunk);
+
+    Function function;
+    init_function(&function, &chunk);
+
+    ObjString* boxed_value = allocateString("boxed", 5);
+    ASSERT_TRUE(boxed_value != NULL, "expected string allocation");
+
+    const uint16_t lhs = FRAME_REG_START;
+    const uint16_t rhs = FRAME_REG_START + 1u;
+
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_CONST, lhs,
+                                         STRING_VAL(boxed_value)),
+                "expected string constant load");
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_I32_CONST, rhs,
+                                         I32_VAL(8)),
+                "expected i32 constant load");
+
+    size_t guard_offset = chunk.count;
+    writeChunk(&chunk, OP_JUMP_IF_NOT_I32_TYPED, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)lhs, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)rhs, 1, 0, "jit_translation");
+    writeChunk(&chunk, 0u, 1, 0, "jit_translation");
+    writeChunk(&chunk, 0u, 1, 0, "jit_translation");
+
+    writeChunk(&chunk, OP_RETURN_VOID, 1, 0, "jit_translation");
+
+    HotPathSample sample = {0};
+    sample.func = 0;
+    sample.loop = (uint16_t)function.start;
+
+    OrusJitIRProgram program;
+    orus_jit_ir_program_init(&program);
+
+    OrusJitTranslationResult result =
+        orus_jit_translate_linear_block(&vm, &function, function.chunk, &sample,
+                                        &program);
+
+    bool success = true;
+
+    if (result.status != ORUS_JIT_TRANSLATE_STATUS_OK) {
+        fprintf(stderr,
+                "Typed guard translation failed: %s (opcode=%d, kind=%d, offset=%u)\n",
+                orus_jit_translation_status_name(result.status), result.opcode,
+                result.value_kind, result.bytecode_offset);
+        success = false;
+        goto cleanup;
+    }
+
+    bool found_compare = false;
+    bool found_branch = false;
+    for (size_t i = 0; i < program.count; ++i) {
+        const OrusJitIRInstruction* inst = &program.instructions[i];
+        if (inst->opcode == ORUS_JIT_IR_OP_LT_I32 &&
+            inst->bytecode_offset == (uint32_t)guard_offset) {
+            ASSERT_TRUE(inst->operands.arithmetic.lhs_reg == lhs,
+                        "guard lhs register mismatch");
+            ASSERT_TRUE(inst->operands.arithmetic.rhs_reg == rhs,
+                        "guard rhs register mismatch");
+            found_compare = true;
+        } else if (inst->opcode == ORUS_JIT_IR_OP_JUMP_IF_NOT_SHORT &&
+                   inst->bytecode_offset == (uint32_t)guard_offset) {
+            found_branch = true;
+        }
+    }
+
+    ASSERT_TRUE(found_compare, "expected guard comparison IR opcode");
+    ASSERT_TRUE(found_branch, "expected guard branch IR opcode");
+
+cleanup:
+    orus_jit_ir_program_reset(&program);
+    freeChunk(&chunk);
+    freeVM();
+    return success;
+}
+
 static bool test_translator_promotes_i32_constants_to_i64(void) {
     initVM();
     orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
@@ -2560,6 +2641,8 @@ int main(void) {
          test_translates_baseline_register_loop},
         {"translator emits baseline comparison loop",
          test_translates_baseline_comparison_loop},
+        {"translator unboxes boxed operands for typed guard",
+         test_translator_handles_boxed_guard_operands},
         {"translator promotes i32 inputs for i64 ops",
          test_translator_promotes_i32_constants_to_i64},
         {"translator emits f64 ops", test_translates_f64_stream},
