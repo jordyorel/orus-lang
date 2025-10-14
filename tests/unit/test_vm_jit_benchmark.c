@@ -441,6 +441,13 @@ static bool run_jit_benchmark_case(const char* label,
     sample->func = 0;
     sample->loop = 0;
     sample->hit_count = HOT_THRESHOLD - 1;
+    if (ORUS_JIT_WARMUP_REQUIRED > 0) {
+        sample->warmup_level = ORUS_JIT_WARMUP_REQUIRED - 1;
+    }
+    sample->cooldown_until_tick = 0;
+    sample->cooldown_exponent = 0;
+    sample->suppressed_triggers = 0;
+    sample->last_threshold_tick = 0;
 
     struct timespec compile_start = {0};
     struct timespec compile_end = {0};
@@ -465,6 +472,13 @@ static bool run_jit_benchmark_case(const char* label,
         sample->func = 0;
         sample->loop = 0;
         sample->hit_count = HOT_THRESHOLD - 1;
+        if (ORUS_JIT_WARMUP_REQUIRED > 0) {
+            sample->warmup_level = ORUS_JIT_WARMUP_REQUIRED - 1;
+        }
+        sample->cooldown_until_tick = 0;
+        sample->cooldown_exponent = 0;
+        sample->suppressed_triggers = 0;
+        sample->last_threshold_tick = 0;
 
         ASSERT_TRUE(vm_profile_tick(&vm, 0, 0));
 

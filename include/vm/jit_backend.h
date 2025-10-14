@@ -69,6 +69,10 @@ void orus_jit_backend_destroy(struct OrusJitBackend* backend);
 
 bool orus_jit_backend_is_available(void);
 
+JITBackendStatus orus_jit_backend_availability(const struct OrusJitBackend* backend,
+                                               OrusJitBackendTarget* out_target,
+                                               const char** out_message);
+
 JITBackendStatus orus_jit_backend_compile_noop(struct OrusJitBackend* backend,
                                                JITEntry* out_entry);
 JITBackendStatus orus_jit_backend_compile_ir(struct OrusJitBackend* backend,

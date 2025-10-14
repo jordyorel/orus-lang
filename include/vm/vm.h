@@ -1404,6 +1404,9 @@ typedef struct VM {
     struct OrusJitBackend* jit_backend;
     JITEntry jit_entry_stub;
     JITEntryCache jit_cache;
+    JITBackendStatus jit_backend_status;
+    OrusJitBackendTarget jit_backend_target;
+    const char* jit_backend_message;
     bool jit_enabled;
     uint64_t jit_compilation_count;
     uint64_t jit_invocation_count;

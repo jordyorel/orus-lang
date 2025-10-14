@@ -30,6 +30,9 @@ static void run_hot_loop(uint64_t hits) {
     sample->func = FUNC_MAIN;
     sample->loop = LOOP_0;
     sample->hit_count = hits - 1;
+    if (ORUS_JIT_WARMUP_REQUIRED > 0) {
+        sample->warmup_level = ORUS_JIT_WARMUP_REQUIRED - 1;
+    }
 }
 
 TEST_CASE(test_hot_loop_detection) {
@@ -58,6 +61,9 @@ TEST_CASE(test_hot_loop_resets_counter_when_jit_disabled) {
     sample->func = FUNC_MAIN;
     sample->loop = LOOP_0;
     sample->hit_count = HOT_THRESHOLD - 1;
+    if (ORUS_JIT_WARMUP_REQUIRED > 0) {
+        sample->warmup_level = ORUS_JIT_WARMUP_REQUIRED - 1;
+    }
 
     ASSERT_TRUE(vm_profile_tick(&vm, FUNC_MAIN, LOOP_0));
     ASSERT_TRUE(vm.profile[LOOP_0].hit_count == 0);
@@ -91,6 +97,9 @@ TEST_CASE(test_hot_loop_triggers_jit_entry) {
     sample->func = FUNC_MAIN;
     sample->loop = LOOP_0;
     sample->hit_count = HOT_THRESHOLD - 1;
+    if (ORUS_JIT_WARMUP_REQUIRED > 0) {
+        sample->warmup_level = ORUS_JIT_WARMUP_REQUIRED - 1;
+    }
 
     uint64_t base_compilations = vm.jit_compilation_count;
     uint64_t base_invocations = vm.jit_invocation_count;

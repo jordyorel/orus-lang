@@ -15,6 +15,7 @@
 #include "vm/register_file.h"
 #include "vm/jit_translation.h"
 #include "vm/jit_debug.h"
+#include "internal/logging.h"
 #include "type/type.h"
 #include <string.h>
 #include <stdlib.h>
@@ -128,6 +129,9 @@ void initVM(void) {
     vm.register_file.current_frame = NULL;
     vm.register_file.frame_stack = NULL;
 
+    vm.jit_backend_status = JIT_BACKEND_UNSUPPORTED;
+    vm.jit_backend_target = ORUS_JIT_BACKEND_TARGET_NATIVE;
+    vm.jit_backend_message = NULL;
     vm.jit_backend = orus_jit_backend_create();
     vm.jit_enabled = false;
     memset(&vm.jit_entry_stub, 0, sizeof(vm.jit_entry_stub));
@@ -159,20 +163,43 @@ void initVM(void) {
     vm.jit_pending_invalidate = false;
     memset(&vm.jit_pending_trigger, 0, sizeof(vm.jit_pending_trigger));
     if (vm.jit_backend) {
-        JITEntry stub_entry;
-        memset(&stub_entry, 0, sizeof(stub_entry));
-        JITBackendStatus status =
-            orus_jit_backend_compile_noop(vm.jit_backend, &stub_entry);
-        if (status == JIT_BACKEND_OK) {
-            vm.jit_entry_stub = stub_entry;
-            vm.jit_enabled = true;
-        } else {
-            if (stub_entry.code_ptr) {
-                orus_jit_backend_release_entry(vm.jit_backend, &stub_entry);
+        const char* availability_message = NULL;
+        vm.jit_backend_status = orus_jit_backend_availability(
+            vm.jit_backend, &vm.jit_backend_target, &availability_message);
+        vm.jit_backend_message = availability_message;
+        if (vm.jit_backend_status != JIT_BACKEND_OK) {
+            if (vm.jit_backend_message) {
+                LOG_INFO("Disabling JIT backend: %s", vm.jit_backend_message);
+            } else {
+                LOG_INFO("Disabling JIT backend: unsupported host platform.");
             }
             orus_jit_backend_destroy(vm.jit_backend);
             vm.jit_backend = NULL;
+        } else {
+            JITEntry stub_entry;
+            memset(&stub_entry, 0, sizeof(stub_entry));
+            JITBackendStatus status =
+                orus_jit_backend_compile_noop(vm.jit_backend, &stub_entry);
+            vm.jit_backend_status = status;
+            if (status == JIT_BACKEND_OK) {
+                vm.jit_entry_stub = stub_entry;
+                vm.jit_enabled = true;
+            } else {
+                if (stub_entry.code_ptr) {
+                    orus_jit_backend_release_entry(vm.jit_backend, &stub_entry);
+                }
+                vm.jit_backend_message =
+                    "Failed to materialize baseline JIT entry stub.";
+                LOG_WARN("Disabling JIT backend: %s", vm.jit_backend_message);
+                orus_jit_backend_destroy(vm.jit_backend);
+                vm.jit_backend = NULL;
+            }
         }
+    } else {
+        vm.jit_backend_status = JIT_BACKEND_OUT_OF_MEMORY;
+        vm.jit_backend_message =
+            "Failed to allocate Orus JIT backend instance.";
+        LOG_ERROR("Failed to allocate Orus JIT backend; native tier disabled.");
     }
 }
 
