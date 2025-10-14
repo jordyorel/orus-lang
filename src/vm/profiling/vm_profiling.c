@@ -4227,6 +4227,79 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
             continue;
         }
 
+        if (opcode == OP_TYPE_OF_R) {
+            if (offset + 2u >= (size_t)chunk->count) {
+                return make_translation_result(
+                    ORUS_JIT_TRANSLATE_STATUS_INVALID_INPUT,
+                    ORUS_JIT_IR_OP_TYPE_OF, ORUS_JIT_VALUE_STRING,
+                    (uint32_t)offset);
+            }
+            uint16_t dst = chunk->code[offset + 1u];
+            uint16_t src = chunk->code[offset + 2u];
+            ORUS_JIT_ENSURE_ROLLOUT(ORUS_JIT_VALUE_STRING,
+                                    ORUS_JIT_IR_OP_TYPE_OF, offset);
+            OrusJitIRInstruction* inst = orus_jit_ir_program_append(program);
+            if (!inst) {
+                return make_translation_result(
+                    ORUS_JIT_TRANSLATE_STATUS_OUT_OF_MEMORY,
+                    ORUS_JIT_IR_OP_TYPE_OF, ORUS_JIT_VALUE_STRING,
+                    (uint32_t)offset);
+            }
+            inst->opcode = ORUS_JIT_IR_OP_TYPE_OF;
+            inst->value_kind = ORUS_JIT_VALUE_STRING;
+            inst->bytecode_offset = (uint32_t)offset;
+            inst->operands.type_of.dst_reg = dst;
+            inst->operands.type_of.value_reg = src;
+            ORUS_JIT_SET_KIND(dst, ORUS_JIT_VALUE_STRING, inst);
+            ORUS_JIT_SPECIALIZATION_INVALIDATE_REG(dst);
+            offset += 3u;
+            if (++instructions_since_safepoint >= safepoint_interval) {
+                INSERT_SAFEPOINT((uint32_t)offset);
+            }
+            continue;
+        }
+
+        if (opcode == OP_IS_TYPE_R) {
+            if (offset + 3u >= (size_t)chunk->count) {
+                return make_translation_result(
+                    ORUS_JIT_TRANSLATE_STATUS_INVALID_INPUT,
+                    ORUS_JIT_IR_OP_IS_TYPE, ORUS_JIT_VALUE_BOOL,
+                    (uint32_t)offset);
+            }
+            uint16_t dst = chunk->code[offset + 1u];
+            uint16_t value_reg = chunk->code[offset + 2u];
+            uint16_t type_reg = chunk->code[offset + 3u];
+            OrusJitValueKind type_kind = ORUS_JIT_GET_KIND(type_reg);
+            if (type_kind != ORUS_JIT_VALUE_STRING &&
+                type_kind != ORUS_JIT_VALUE_BOXED) {
+                return make_translation_result(
+                    ORUS_JIT_TRANSLATE_STATUS_UNSUPPORTED_VALUE_KIND,
+                    ORUS_JIT_IR_OP_IS_TYPE, type_kind, (uint32_t)offset);
+            }
+            ORUS_JIT_ENSURE_ROLLOUT(ORUS_JIT_VALUE_BOOL,
+                                    ORUS_JIT_IR_OP_IS_TYPE, offset);
+            OrusJitIRInstruction* inst = orus_jit_ir_program_append(program);
+            if (!inst) {
+                return make_translation_result(
+                    ORUS_JIT_TRANSLATE_STATUS_OUT_OF_MEMORY,
+                    ORUS_JIT_IR_OP_IS_TYPE, ORUS_JIT_VALUE_BOOL,
+                    (uint32_t)offset);
+            }
+            inst->opcode = ORUS_JIT_IR_OP_IS_TYPE;
+            inst->value_kind = ORUS_JIT_VALUE_BOOL;
+            inst->bytecode_offset = (uint32_t)offset;
+            inst->operands.is_type.dst_reg = dst;
+            inst->operands.is_type.value_reg = value_reg;
+            inst->operands.is_type.type_reg = type_reg;
+            ORUS_JIT_SET_KIND(dst, ORUS_JIT_VALUE_BOOL, inst);
+            ORUS_JIT_SPECIALIZATION_INVALIDATE_REG(dst);
+            offset += 4u;
+            if (++instructions_since_safepoint >= safepoint_interval) {
+                INSERT_SAFEPOINT((uint32_t)offset);
+            }
+            continue;
+        }
+
         if (opcode == OP_TO_STRING_R) {
             if (offset + 2u >= (size_t)chunk->count) {
                 return make_translation_result(

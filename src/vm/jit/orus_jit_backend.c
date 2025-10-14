@@ -1884,6 +1884,56 @@ orus_jit_native_to_string(struct VM* vm_instance,
 }
 
 static bool
+orus_jit_native_type_of(struct VM* vm_instance,
+                        OrusJitNativeBlock* block,
+                        uint16_t dst,
+                        uint16_t value_reg) {
+    if (!vm_instance) {
+        return false;
+    }
+
+    (void)block;
+
+    Value value = vm_get_register_safe(value_reg);
+    Value result;
+    if (!builtin_typeof(value, &result)) {
+        orus_jit_native_request_slow_path(vm_instance);
+        return false;
+    }
+
+    vm_set_register_safe(dst, result);
+    orus_jit_helper_safepoint(vm_instance);
+    return true;
+}
+
+static bool
+orus_jit_native_is_type(struct VM* vm_instance,
+                        OrusJitNativeBlock* block,
+                        uint16_t dst,
+                        uint16_t value_reg,
+                        uint16_t type_reg) {
+    if (!vm_instance) {
+        return false;
+    }
+
+    (void)block;
+
+    Value value = vm_get_register_safe(value_reg);
+    Value type_identifier = vm_get_register_safe(type_reg);
+    Value result;
+    if (!builtin_istype(value, type_identifier, &result)) {
+        orus_jit_native_request_slow_path(vm_instance);
+        return false;
+    }
+
+    bool bool_result = IS_BOOL(result) ? AS_BOOL(result) : false;
+    vm_store_bool_typed_hot(dst, bool_result);
+    vm_set_register_safe(dst, BOOL_VAL(bool_result));
+    orus_jit_helper_safepoint(vm_instance);
+    return true;
+}
+
+static bool
 orus_jit_native_range(struct VM* vm_instance,
                       OrusJitNativeBlock* block,
                       uint16_t dst,
@@ -3698,6 +3748,23 @@ orus_jit_execute_block(struct VM* vm_instance, const OrusJitNativeBlock* block) 
                     return;
                 }
                 break;
+            case ORUS_JIT_IR_OP_TYPE_OF:
+                if (!orus_jit_native_type_of(vm_instance,
+                                             (OrusJitNativeBlock*)block,
+                                             inst->operands.type_of.dst_reg,
+                                             inst->operands.type_of.value_reg)) {
+                    return;
+                }
+                break;
+            case ORUS_JIT_IR_OP_IS_TYPE:
+                if (!orus_jit_native_is_type(vm_instance,
+                                             (OrusJitNativeBlock*)block,
+                                             inst->operands.is_type.dst_reg,
+                                             inst->operands.is_type.value_reg,
+                                             inst->operands.is_type.type_reg)) {
+                    return;
+                }
+                break;
             case ORUS_JIT_IR_OP_TIME_STAMP:
                 orus_jit_native_time_stamp(vm_instance, (OrusJitNativeBlock*)block,
                                            inst->operands.time_stamp.dst_reg);
@@ -4556,6 +4623,7 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
             case ORUS_JIT_IR_OP_NE_F64:
             case ORUS_JIT_IR_OP_EQ_BOOL:
             case ORUS_JIT_IR_OP_NE_BOOL:
+            case ORUS_JIT_IR_OP_IS_TYPE:
                 if (inst->value_kind != ORUS_JIT_VALUE_BOOL) {
                     return JIT_BACKEND_ASSEMBLY_ERROR;
                 }
@@ -4583,6 +4651,7 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
             case ORUS_JIT_IR_OP_MOVE_STRING:
             case ORUS_JIT_IR_OP_CONCAT_STRING:
             case ORUS_JIT_IR_OP_TO_STRING:
+            case ORUS_JIT_IR_OP_TYPE_OF:
                 if (inst->value_kind != ORUS_JIT_VALUE_STRING) {
                     return JIT_BACKEND_ASSEMBLY_ERROR;
                 }
@@ -5477,6 +5546,62 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                     !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
                     !orus_jit_code_buffer_emit_u64(&code,
                         (uint64_t)(uintptr_t)&orus_jit_native_to_string) ||
+                    !orus_jit_code_buffer_emit_bytes(&code, CALL_RAX,
+                                                     sizeof(CALL_RAX)) ||
+                    !orus_jit_code_buffer_emit_bytes(&code,
+                                                     (const uint8_t[]){0x84, 0xC0},
+                                                     2u) ||
+                    !orus_jit_emit_conditional_jump(&code, 0x84u,
+                                                     &bail_patches)) {
+                    RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_TYPE_OF: {
+                if (!orus_jit_code_buffer_emit_bytes(&code, MOV_RDI_R12,
+                                                     sizeof(MOV_RDI_R12)) ||
+                    !orus_jit_code_buffer_emit_bytes(&code, MOV_RSI_RBX_BYTES,
+                                                     sizeof(MOV_RSI_RBX_BYTES)) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xBA) ||
+                    !orus_jit_code_buffer_emit_u32(
+                        &code, (uint32_t)inst->operands.type_of.dst_reg) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xB9) ||
+                    !orus_jit_code_buffer_emit_u32(
+                        &code, (uint32_t)inst->operands.type_of.value_reg) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0x48) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
+                    !orus_jit_code_buffer_emit_u64(
+                        &code, (uint64_t)(uintptr_t)&orus_jit_native_type_of) ||
+                    !orus_jit_code_buffer_emit_bytes(&code, CALL_RAX,
+                                                     sizeof(CALL_RAX)) ||
+                    !orus_jit_code_buffer_emit_bytes(&code,
+                                                     (const uint8_t[]){0x84, 0xC0},
+                                                     2u) ||
+                    !orus_jit_emit_conditional_jump(&code, 0x84u,
+                                                     &bail_patches)) {
+                    RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_IS_TYPE: {
+                if (!orus_jit_code_buffer_emit_bytes(&code, MOV_RDI_R12,
+                                                     sizeof(MOV_RDI_R12)) ||
+                    !orus_jit_code_buffer_emit_bytes(&code, MOV_RSI_RBX_BYTES,
+                                                     sizeof(MOV_RSI_RBX_BYTES)) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xBA) ||
+                    !orus_jit_code_buffer_emit_u32(
+                        &code, (uint32_t)inst->operands.is_type.dst_reg) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xB9) ||
+                    !orus_jit_code_buffer_emit_u32(
+                        &code, (uint32_t)inst->operands.is_type.value_reg) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0x41) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
+                    !orus_jit_code_buffer_emit_u32(
+                        &code, (uint32_t)inst->operands.is_type.type_reg) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0x48) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
+                    !orus_jit_code_buffer_emit_u64(
+                        &code, (uint64_t)(uintptr_t)&orus_jit_native_is_type) ||
                     !orus_jit_code_buffer_emit_bytes(&code, CALL_RAX,
                                                      sizeof(CALL_RAX)) ||
                     !orus_jit_code_buffer_emit_bytes(&code,
@@ -6912,6 +7037,12 @@ dynasm_instruction_dest_reg(const OrusJitIRInstruction* inst, uint16_t* out_reg)
         case ORUS_JIT_IR_OP_U64_TO_F64:
             *out_reg = inst->operands.unary.dst_reg;
             return true;
+        case ORUS_JIT_IR_OP_TYPE_OF:
+            *out_reg = inst->operands.type_of.dst_reg;
+            return true;
+        case ORUS_JIT_IR_OP_IS_TYPE:
+            *out_reg = inst->operands.is_type.dst_reg;
+            return true;
         case ORUS_JIT_IR_OP_GET_ITER:
             *out_reg = inst->operands.get_iter.dst_reg;
             return true;
@@ -7391,6 +7522,27 @@ dynasm_collect_instruction_regs(const OrusJitIRInstruction* inst,
                 dynasm_track_register(seen, unique_count, inst->operands.unary.dst_reg);
             }
             break;
+        case ORUS_JIT_IR_OP_TYPE_OF:
+            dynasm_track_register(seen, unique_count, inst->operands.type_of.value_reg);
+            if (invariant) {
+                if (invariant_defs) {
+                    ++(*invariant_defs);
+                }
+            } else {
+                dynasm_track_register(seen, unique_count, inst->operands.type_of.dst_reg);
+            }
+            break;
+        case ORUS_JIT_IR_OP_IS_TYPE:
+            dynasm_track_register(seen, unique_count, inst->operands.is_type.value_reg);
+            dynasm_track_register(seen, unique_count, inst->operands.is_type.type_reg);
+            if (invariant) {
+                if (invariant_defs) {
+                    ++(*invariant_defs);
+                }
+            } else {
+                dynasm_track_register(seen, unique_count, inst->operands.is_type.dst_reg);
+            }
+            break;
         default:
             break;
     }
@@ -7474,6 +7626,8 @@ dynasm_optimize_instruction(DynAsmRegisterState* regs,
         case ORUS_JIT_IR_OP_ITER_NEXT:
         case ORUS_JIT_IR_OP_CONCAT_STRING:
         case ORUS_JIT_IR_OP_TO_STRING:
+        case ORUS_JIT_IR_OP_TYPE_OF:
+        case ORUS_JIT_IR_OP_IS_TYPE:
         case ORUS_JIT_IR_OP_SAFEPOINT:
             dynasm_register_state_reset_all(regs);
             return result;
@@ -8109,6 +8263,58 @@ orus_jit_ir_emit_x86(const OrusJitIRProgram* program,
                     !dynasm_emit_helper_call(actions, &code_offset,
                                               (const void*)&orus_jit_native_to_string,
                                               ORUS_JIT_HELPER_STUB_KIND_STRING) ||
+                    !dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x84, 0xC0}, 2u)) {
+                    DYNASM_EMIT_FAIL();
+                }
+                size_t jcc_action = actions->size;
+                size_t jcc_code = code_offset;
+                if (!dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x0F, 0x84, 0x00, 0x00, 0x00, 0x00},
+                                             6u) ||
+                    !dynasm_patch_list_append(&bail_patches, jcc_action + 4u,
+                                              jcc_code + 2u)) {
+                    DYNASM_EMIT_FAIL();
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_TYPE_OF: {
+                if (!dynasm_emit_load_vm_block(actions, &code_offset) ||
+                    !dynasm_emit_mov_reg_imm32(actions, 0xBA, &code_offset,
+                                               (uint32_t)inst->operands.type_of.dst_reg) ||
+                    !dynasm_emit_mov_reg_imm32(actions, 0xB9, &code_offset,
+                                               (uint32_t)inst->operands.type_of.value_reg) ||
+                    !dynasm_emit_helper_call(actions, &code_offset,
+                                              (const void*)&orus_jit_native_type_of,
+                                              ORUS_JIT_HELPER_STUB_KIND_STRING) ||
+                    !dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x84, 0xC0}, 2u)) {
+                    DYNASM_EMIT_FAIL();
+                }
+                size_t jcc_action = actions->size;
+                size_t jcc_code = code_offset;
+                if (!dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x0F, 0x84, 0x00, 0x00, 0x00, 0x00},
+                                             6u) ||
+                    !dynasm_patch_list_append(&bail_patches, jcc_action + 4u,
+                                              jcc_code + 2u)) {
+                    DYNASM_EMIT_FAIL();
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_IS_TYPE: {
+                if (!dynasm_emit_load_vm_block(actions, &code_offset) ||
+                    !dynasm_emit_mov_reg_imm32(actions, 0xBA, &code_offset,
+                                               (uint32_t)inst->operands.is_type.dst_reg) ||
+                    !dynasm_emit_mov_reg_imm32(actions, 0xB9, &code_offset,
+                                               (uint32_t)inst->operands.is_type.value_reg) ||
+                    !dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0x41, 0xB8}, 2u) ||
+                    !dynasm_emit_u32_le(actions, &code_offset,
+                                        (uint32_t)inst->operands.is_type.type_reg) ||
+                    !dynasm_emit_helper_call(actions, &code_offset,
+                                              (const void*)&orus_jit_native_is_type,
+                                              ORUS_JIT_HELPER_STUB_KIND_RUNTIME) ||
                     !dynasm_emit_bytes_track(actions, &code_offset,
                                              (const uint8_t[]){0x84, 0xC0}, 2u)) {
                     DYNASM_EMIT_FAIL();
@@ -8860,6 +9066,7 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
             case ORUS_JIT_IR_OP_NE_F64:
             case ORUS_JIT_IR_OP_EQ_BOOL:
             case ORUS_JIT_IR_OP_NE_BOOL:
+            case ORUS_JIT_IR_OP_IS_TYPE:
                 if (inst->value_kind != ORUS_JIT_VALUE_BOOL) {
                     return JIT_BACKEND_ASSEMBLY_ERROR;
                 }
@@ -8868,6 +9075,7 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
             case ORUS_JIT_IR_OP_MOVE_STRING:
             case ORUS_JIT_IR_OP_CONCAT_STRING:
             case ORUS_JIT_IR_OP_TO_STRING:
+            case ORUS_JIT_IR_OP_TYPE_OF:
                 if (inst->value_kind != ORUS_JIT_VALUE_STRING) {
                     return JIT_BACKEND_ASSEMBLY_ERROR;
                 }
@@ -9382,6 +9590,42 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                     !orus_jit_a64_emit_mov_imm64_buffer(
                         &code, 16u,
                         (uint64_t)(uintptr_t)&orus_jit_native_to_string) ||
+                    !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
+                    !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
+                    !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
+                    A64_RETURN(JIT_BACKEND_OUT_OF_MEMORY);
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_TYPE_OF: {
+                if (!orus_jit_a64_code_buffer_emit_u32(&code, A64_LDR_X(0u, 31u, 0u)) ||
+                    !orus_jit_a64_code_buffer_emit_u32(&code, A64_LDR_X(1u, 31u, 1u)) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 2u, (uint64_t)inst->operands.type_of.dst_reg) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 3u, (uint64_t)inst->operands.type_of.value_reg) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 16u,
+                        (uint64_t)(uintptr_t)&orus_jit_native_type_of) ||
+                    !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
+                    !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
+                    !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
+                    A64_RETURN(JIT_BACKEND_OUT_OF_MEMORY);
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_IS_TYPE: {
+                if (!orus_jit_a64_code_buffer_emit_u32(&code, A64_LDR_X(0u, 31u, 0u)) ||
+                    !orus_jit_a64_code_buffer_emit_u32(&code, A64_LDR_X(1u, 31u, 1u)) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 2u, (uint64_t)inst->operands.is_type.dst_reg) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 3u, (uint64_t)inst->operands.is_type.value_reg) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 4u, (uint64_t)inst->operands.is_type.type_reg) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 16u,
+                        (uint64_t)(uintptr_t)&orus_jit_native_is_type) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
                     !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
@@ -10335,6 +10579,8 @@ orus_jit_parity_record(const OrusJitIRInstruction* inst,
 
         case ORUS_JIT_IR_OP_CONCAT_STRING:
         case ORUS_JIT_IR_OP_TO_STRING:
+        case ORUS_JIT_IR_OP_TYPE_OF:
+        case ORUS_JIT_IR_OP_IS_TYPE:
         case ORUS_JIT_IR_OP_TIME_STAMP:
         case ORUS_JIT_IR_OP_PRINT:
         case ORUS_JIT_IR_OP_ASSERT_EQ:
