@@ -10,6 +10,10 @@
 #include "vm/vm_profiling.h"
 #include "vm/vm_tiering.h"
 
+#ifndef OP_EQ_I32_TYPED
+#define OP_EQ_I32_TYPED OP_EQ_R
+#endif
+
 #define ASSERT_TRUE(cond, message)                                                    \
     do {                                                                               \
         if (!(cond)) {                                                                 \
@@ -348,6 +352,95 @@ static bool test_translates_string_concat(void) {
                 "third instruction should concat strings");
     ASSERT_TRUE(program.instructions[2].operands.arithmetic.dst_reg == dst2,
                 "concat should target dst2");
+
+cleanup:
+    orus_jit_ir_program_reset(&program);
+    freeChunk(&chunk);
+    freeVM();
+    return success;
+}
+
+static bool test_translates_type_builtins(void) {
+    initVM();
+    orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
+
+    Chunk chunk;
+    initChunk(&chunk);
+
+    Function function;
+    init_function(&function, &chunk);
+
+    const uint16_t value_reg = FRAME_REG_START;
+    const uint16_t typeof_reg = FRAME_REG_START + 1u;
+    const uint16_t type_identifier_reg = FRAME_REG_START + 2u;
+    const uint16_t predicate_reg = FRAME_REG_START + 3u;
+
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_I32_CONST, value_reg,
+                                         I32_VAL(42)),
+                "expected i32 constant load");
+
+    writeChunk(&chunk, OP_TYPE_OF_R, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)typeof_reg, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)value_reg, 1, 0, "jit_translation");
+
+    ObjString* type_name = allocateString("int", 3);
+    ASSERT_TRUE(type_name != NULL, "expected type name allocation");
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_CONST, type_identifier_reg,
+                                         STRING_VAL(type_name)),
+                "expected string constant load");
+
+    writeChunk(&chunk, OP_IS_TYPE_R, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)predicate_reg, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)value_reg, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)type_identifier_reg, 1, 0, "jit_translation");
+
+    writeChunk(&chunk, OP_RETURN_VOID, 1, 0, "jit_translation");
+
+    HotPathSample sample = {0};
+    sample.func = 0;
+    sample.loop = (uint16_t)function.start;
+
+    OrusJitIRProgram program;
+    orus_jit_ir_program_init(&program);
+
+    OrusJitTranslationResult result =
+        orus_jit_translate_linear_block(&vm, &function, &sample, &program);
+
+    bool success = true;
+    if (result.status != ORUS_JIT_TRANSLATE_STATUS_OK) {
+        fprintf(stderr, "Unexpected translation failure for type helpers: %s\n",
+                orus_jit_translation_status_name(result.status));
+        success = false;
+        goto cleanup;
+    }
+
+    bool saw_typeof = false;
+    bool saw_is_type = false;
+    for (size_t i = 0; i < program.count; ++i) {
+        const OrusJitIRInstruction* inst = &program.instructions[i];
+        if (inst->opcode == ORUS_JIT_IR_OP_TYPE_OF) {
+            ASSERT_TRUE(inst->value_kind == ORUS_JIT_VALUE_STRING,
+                        "typeof should yield string kind");
+            ASSERT_TRUE(inst->operands.type_of.dst_reg == typeof_reg,
+                        "typeof destination mismatch");
+            ASSERT_TRUE(inst->operands.type_of.value_reg == value_reg,
+                        "typeof source mismatch");
+            saw_typeof = true;
+        } else if (inst->opcode == ORUS_JIT_IR_OP_IS_TYPE) {
+            ASSERT_TRUE(inst->value_kind == ORUS_JIT_VALUE_BOOL,
+                        "istype should yield bool kind");
+            ASSERT_TRUE(inst->operands.is_type.dst_reg == predicate_reg,
+                        "istype destination mismatch");
+            ASSERT_TRUE(inst->operands.is_type.value_reg == value_reg,
+                        "istype value register mismatch");
+            ASSERT_TRUE(inst->operands.is_type.type_reg == type_identifier_reg,
+                        "istype type register mismatch");
+            saw_is_type = true;
+        }
+    }
+
+    ASSERT_TRUE(saw_typeof, "expected typeof IR opcode");
+    ASSERT_TRUE(saw_is_type, "expected istype IR opcode");
 
 cleanup:
     orus_jit_ir_program_reset(&program);
@@ -2056,6 +2149,7 @@ int main(void) {
         {"translator emits f64 ops", test_translates_f64_stream},
         {"translator loads boxed bool constants", test_translates_boxed_bool_constant},
         {"translator emits string concat", test_translates_string_concat},
+        {"translator emits typeof/istype helpers", test_translates_type_builtins},
         {"translator emits i32 to i64 conversion", test_translates_i32_to_i64_conversion},
         {"translator emits u32 to i32 conversion", test_translates_u32_to_i32_conversion},
         {"rollout blocks f64 before float stage",

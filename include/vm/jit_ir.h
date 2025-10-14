@@ -81,6 +81,8 @@ typedef enum OrusJitIROpcode {
 
     ORUS_JIT_IR_OP_CONCAT_STRING,
     ORUS_JIT_IR_OP_TO_STRING,
+    ORUS_JIT_IR_OP_TYPE_OF,
+    ORUS_JIT_IR_OP_IS_TYPE,
 
     ORUS_JIT_IR_OP_TIME_STAMP,
     ORUS_JIT_IR_OP_MAKE_ARRAY,
@@ -230,6 +232,15 @@ typedef struct OrusJitIRInstruction {
             uint16_t array_reg;
             uint16_t value_reg;
         } array_push;
+        struct {
+            uint16_t dst_reg;
+            uint16_t value_reg;
+        } type_of;
+        struct {
+            uint16_t dst_reg;
+            uint16_t value_reg;
+            uint16_t type_reg;
+        } is_type;
         struct {
             uint16_t dst_reg;
             uint16_t variant_index;
