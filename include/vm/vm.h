@@ -331,6 +331,9 @@ typedef uint16_t LoopId;
 
 #define VM_MAX_PROFILED_LOOPS 65536
 
+#define VM_MAX_FUSION_WINDOW 4
+#define VM_MAX_FUSION_PATCHES 128
+
 typedef struct {
     FunctionId func;
     LoopId loop;
@@ -342,6 +345,17 @@ typedef struct {
     uint8_t cooldown_exponent;
     uint16_t reserved;
 } HotPathSample;
+
+typedef struct {
+    const uint8_t* start_ip;
+    uint8_t length;
+    uint8_t opcodes[VM_MAX_FUSION_WINDOW];
+    void* handler;
+    uint64_t hot_hits;
+    uint64_t last_activation;
+    bool active;
+    bool metadata_requested;
+} VMFusionPatch;
 
 typedef struct {
     JITEntry entry;
@@ -1410,6 +1424,11 @@ typedef struct VM {
     uint64_t jit_enter_cycle_samples;
     uint64_t jit_enter_cycle_warmup_total;
     uint64_t jit_enter_cycle_warmup_samples;
+
+    // Tiered dispatch fusion state
+    VMFusionPatch fusion_patches[VM_MAX_FUSION_PATCHES];
+    size_t fusion_patch_count;
+    uint64_t fusion_generation;
 } VM;
 
 // Transitional alias while the runtime gradually migrates to the new VMState

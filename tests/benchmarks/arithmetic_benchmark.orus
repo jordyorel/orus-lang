@@ -290,10 +290,10 @@ end_time: f64 = timestamp()
 total_elapsed: f64 = end_time - start_time
 
 print("=== PURE ARITHMETIC BENCHMARK COMPLETE ===")
-print("Total execution time:", total_elapsed)
+print("Total execution time: @.6f seconds", total_elapsed)
 print("Arithmetic operations performed: 500+")
 print("Mathematical algorithms: 5")
 print("Precision calculations: 20+")
 print("Iterative computations: 50+")
-print("Final benchmark score:", total_elapsed * (final_arithmetic_result as f64) / (1000000 as f64))
+print("Final benchmark score: @.6f seconds", total_elapsed * (final_arithmetic_result as f64) / (1000000 as f64))
 print("=== Orus Pure Arithmetic Benchmark Complete ===")

@@ -102,51 +102,77 @@ void runtimeError(ErrorType type, SrcLocation location, const char* format, ...)
     #ifdef ORUS_DEBUG
         #define DISPATCH() \
             do { \
-                if (IS_ERROR(vm.lastError)) { \
-                    if (!vm_handle_pending_error()) { \
-                        RETURN(INTERPRET_RUNTIME_ERROR); \
+                for (;;) { \
+                    if (IS_ERROR(vm.lastError)) { \
+                        if (!vm_handle_pending_error()) { \
+                            RETURN(INTERPRET_RUNTIME_ERROR); \
+                        } \
                     } \
-                } \
-                if (vm.trace) { \
-                    register_file_reconcile_active_window(); \
-                    printf("        "); \
-                    for (int i = 0; i < 8; i++) { \
-                        printf("[ R%d: ", i); \
-                        Value debug_val = vm_get_register_safe((uint16_t)i); \
-                        printValue(debug_val); \
-                        printf(" ]"); \
+                    if (vm.trace) { \
+                        register_file_reconcile_active_window(); \
+                        printf("        "); \
+                        for (int i = 0; i < 8; i++) { \
+                            printf("[ R%d: ", i); \
+                            Value debug_val = vm_get_register_safe((uint16_t)i); \
+                            printValue(debug_val); \
+                            printf(" ]"); \
+                        } \
+                        printf("\\n"); \
+                        disassembleInstruction(vm.chunk, (int)(vm.ip - vm.chunk->code)); \
                     } \
-                    printf("\\n"); \
-                    disassembleInstruction(vm.chunk, (int)(vm.ip - vm.chunk->code)); \
+                    vm.instruction_count++; \
+                    vm_tiering_instruction_tick(vm.instruction_count); \
+                    instruction = READ_BYTE(); \
+                    const uint8_t* inst_addr__ = vm.ip - 1; \
+                    vm_update_source_location((size_t)((vm.ip - vm.chunk->code) - 1)); \
+                    PROFILE_INC(instruction); \
+                    if (g_profiling.isActive && instruction_start_time > 0) { \
+                        uint64_t cycles__ = getTimestamp() - instruction_start_time; \
+                        profileInstruction(instruction, cycles__); \
+                    } \
+                    if (g_profiling.isActive) { \
+                        instruction_start_time = getTimestamp(); \
+                        g_profiling.totalInstructions++; \
+                        profileOpcodeWindow(inst_addr__, instruction); \
+                    } \
+                    if (vm_tiering_try_execute_fused(inst_addr__, instruction)) { \
+                        continue; \
+                    } \
+                    if (instruction > OP_HALT || vm_dispatch_table[instruction] == NULL) { \
+                        goto LABEL_UNKNOWN; \
+                    } \
+                    goto *vm_dispatch_table[instruction]; \
                 } \
-                vm.instruction_count++; \
-                instruction = READ_BYTE(); \
-                vm_update_source_location((size_t)((vm.ip - vm.chunk->code) - 1)); \
-                PROFILE_INC(instruction); \
-                if (instruction > OP_HALT || vm_dispatch_table[instruction] == NULL) { \
-                    goto LABEL_UNKNOWN; \
-                } \
-                goto *vm_dispatch_table[instruction]; \
             } while (0)
         #define DISPATCH_TYPED() DISPATCH()
     #else
         #define DISPATCH() do { \
-            uint8_t inst = *vm.ip++; \
-            vm_update_source_location((size_t)((vm.ip - vm.chunk->code) - 1)); \
-            PROFILE_INC(inst); \
-            if (g_profiling.isActive && instruction_start_time > 0) { \
-                uint64_t cycles = getTimestamp() - instruction_start_time; \
-                profileInstruction(inst, cycles); \
+            for (;;) { \
+                vm.instruction_count++; \
+                vm_tiering_instruction_tick(vm.instruction_count); \
+                uint8_t inst = *vm.ip++; \
+                const uint8_t* inst_addr = vm.ip - 1; \
+                vm_update_source_location((size_t)((vm.ip - vm.chunk->code) - 1)); \
+                PROFILE_INC(inst); \
+                if (g_profiling.isActive && instruction_start_time > 0) { \
+                    uint64_t cycles = getTimestamp() - instruction_start_time; \
+                    profileInstruction(inst, cycles); \
+                } \
+                if (g_profiling.isActive) { \
+                    instruction_start_time = getTimestamp(); \
+                    g_profiling.totalInstructions++; \
+                    profileOpcodeWindow(inst_addr, inst); \
+                } \
+                if (vm_tiering_try_execute_fused(inst_addr, inst)) { \
+                    continue; \
+                } \
+                if (inst > OP_HALT || vm_dispatch_table[inst] == NULL) { \
+                    printf("[DISPATCH_ERROR] Invalid opcode %d (0x%02X) or NULL dispatch entry!\n", inst, inst); \
+                    fflush(stdout); \
+                    goto LABEL_UNKNOWN; \
+                } \
+                goto *vm_dispatch_table[inst]; \
             } \
-            if (g_profiling.isActive) { \
-                instruction_start_time = getTimestamp(); \
-            } \
-            if (inst > OP_HALT || vm_dispatch_table[inst] == NULL) { \
-                printf("[DISPATCH_ERROR] Invalid opcode %d (0x%02X) or NULL dispatch entry!\n", inst, inst); \
-                fflush(stdout); \
-                goto LABEL_UNKNOWN; \
-            } \
-            goto *vm_dispatch_table[inst]; \
         } while(0)
         #define DISPATCH_TYPED() DISPATCH()
         
