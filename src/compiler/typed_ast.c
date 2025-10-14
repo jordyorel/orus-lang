@@ -130,6 +130,9 @@ TypedASTNode* create_typed_ast_node(ASTNode* original) {
     typed->canInline = false;
     typed->suggestedRegister = -1;
     typed->spillable = true;
+    typed->prefer_typed_register = false;
+    typed->requires_loop_residency = false;
+    typed->loop_binding_id = -1;
 
     typed_ast_registry_register(typed);
 

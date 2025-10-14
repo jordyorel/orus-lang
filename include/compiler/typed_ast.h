@@ -81,6 +81,9 @@ struct TypedASTNode {
     // Register allocation hints for the compiler
     int suggestedRegister;   // Suggested register for this value (-1 if none)
     bool spillable;          // Whether this value can be spilled to memory
+    bool prefer_typed_register;     // Loop analysis hint: prefer typed register usage
+    bool requires_loop_residency;   // Loop analysis hint: needs residency across loop
+    int loop_binding_id;            // Loop affinity binding identifier (-1 if none)
 
     // Child nodes (typed versions)
     union {

@@ -18,6 +18,7 @@
 #include "internal/error_reporting.h"
 #include "internal/strutil.h"
 #include "debug/debug_config.h"
+#include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -2389,8 +2390,10 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
     TypedASTNode* while_body = while_stmt->typed.whileStmt.body;
     TypedASTNode* condition_node = while_stmt->typed.whileStmt.condition;
     const LoopTypeResidencyPlan* residency_plan = NULL;
+    const LoopTypeAffinityBinding* affinity_binding = NULL;
     if (ctx->opt_ctx) {
         residency_plan = optimization_find_loop_residency_plan(ctx->opt_ctx, while_stmt);
+        affinity_binding = optimization_find_loop_affinity(ctx->opt_ctx, while_stmt);
     }
     int initial_bytecode_count = ctx->bytecode ? ctx->bytecode->count : 0;
     int initial_patch_count = ctx->bytecode ? ctx->bytecode->patch_count : 0;
@@ -2924,6 +2927,11 @@ void compile_while_statement(CompilerContext* ctx, TypedASTNode* while_stmt) {
     leave_loop_context(ctx, loop_frame, end_target);
     release_typed_hint(ctx, &typed_hint_guard_left);
     release_typed_hint(ctx, &typed_hint_guard_right);
+
+    if (affinity_binding && affinity_binding->prefer_typed_registers && !typed_guard_path) {
+        assert(!"Loop type affinity expected typed guard emission");
+    }
+
     DEBUG_CODEGEN_PRINT("While statement compilation completed");
 }
 
@@ -2991,8 +2999,13 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     bool limit_temp_reg_is_temp = false;
 
     const LoopTypeResidencyPlan* residency_plan = NULL;
+    const LoopTypeAffinityBinding* affinity_binding = NULL;
+    bool emitted_typed_loop_path = false;
+    bool typed_loop_expected = false;
     if (ctx->opt_ctx) {
         residency_plan = optimization_find_loop_residency_plan(ctx->opt_ctx, for_stmt);
+        affinity_binding = optimization_find_loop_affinity(ctx->opt_ctx, for_stmt);
+        typed_loop_expected = affinity_binding && affinity_binding->prefer_typed_registers;
     }
 
     const char* loop_var_name = NULL;
@@ -3188,6 +3201,7 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
             loop_frame = NULL;
             loop_frame_index = -1;
             typed_hint_limit_reg = -1;
+            emitted_typed_loop_path = true;
             success = true;
             goto cleanup;
         }
@@ -3243,6 +3257,7 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     emit_byte_to_buffer(ctx->bytecode, condition_reg);
     emit_byte_to_buffer(ctx->bytecode, loop_var_reg);
     emit_byte_to_buffer(ctx->bytecode, (uint8_t)end_reg);
+    emitted_typed_loop_path = true;
 
         if (need_positive_guard) {
             positive_guard_limit_reg = compiler_alloc_temp(ctx->allocator);
@@ -3549,6 +3564,10 @@ cleanup:
     }
     if (created_scope) {
         ctx->symbols = old_scope;
+    }
+
+    if (success && typed_loop_expected && !emitted_typed_loop_path) {
+        assert(!"Loop type affinity expected typed loop emission");
     }
 
     if (success) {
