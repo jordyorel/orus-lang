@@ -160,7 +160,7 @@ static bool test_translates_baseline_register_loop(void) {
 
     HotPathSample sample = {0};
     sample.func = 0;
-    sample.loop = (uint16_t)function.start;
+    sample.loop = (uint16_t)loop_start;
 
     OrusJitIRProgram program;
     orus_jit_ir_program_init(&program);
@@ -185,6 +185,120 @@ static bool test_translates_baseline_register_loop(void) {
                 "baseline move should become typed move");
     ASSERT_TRUE(program.instructions[3].opcode == ORUS_JIT_IR_OP_ADD_I32,
                 "baseline add should become typed add");
+
+cleanup:
+    orus_jit_ir_program_reset(&program);
+    freeChunk(&chunk);
+    freeVM();
+    return success;
+}
+
+static bool test_translates_baseline_comparison_loop(void) {
+    initVM();
+    orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
+
+    Chunk chunk;
+    initChunk(&chunk);
+
+    Function function;
+    init_function(&function, &chunk);
+
+    const uint16_t counter = FRAME_REG_START;
+    const uint16_t limit = FRAME_REG_START + 1u;
+    const uint16_t step = FRAME_REG_START + 2u;
+    const uint16_t predicate = FRAME_REG_START + 3u;
+
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_CONST, counter, I32_VAL(0)),
+                "expected counter constant load");
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_CONST, limit, I32_VAL(4)),
+                "expected loop limit constant load");
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_CONST, step, I32_VAL(1)),
+                "expected step constant load");
+
+    size_t loop_start = chunk.count;
+
+    writeChunk(&chunk, OP_LT_I32_R, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)predicate, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)counter, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)limit, 1, 0, "jit_translation");
+
+    size_t branch_index = chunk.count;
+    writeChunk(&chunk, OP_JUMP_IF_NOT_SHORT, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)predicate, 1, 0, "jit_translation");
+    size_t branch_offset_index = chunk.count;
+    writeChunk(&chunk, 0u, 1, 0, "jit_translation");
+
+    writeChunk(&chunk, OP_ADD_I32_R, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)counter, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)counter, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)step, 1, 0, "jit_translation");
+
+    size_t loop_back_index = chunk.count;
+    writeChunk(&chunk, OP_LOOP_SHORT, 1, 0, "jit_translation");
+    size_t loop_back_offset_index = chunk.count;
+    writeChunk(&chunk, 0u, 1, 0, "jit_translation");
+
+    size_t exit_start = chunk.count;
+
+    size_t fallthrough = loop_back_index + 2u;
+    size_t back_span = fallthrough - loop_start;
+    ASSERT_TRUE(back_span <= UINT8_MAX, "loop back offset should fit in byte");
+    chunk.code[loop_back_offset_index] = (uint8_t)back_span;
+
+    size_t jump_offset = exit_start - (branch_index + 3u);
+    ASSERT_TRUE(jump_offset <= UINT8_MAX, "forward exit should remain short");
+    chunk.code[branch_offset_index] = (uint8_t)jump_offset;
+
+    writeChunk(&chunk, OP_RETURN_VOID, 1, 0, "jit_translation");
+
+    HotPathSample sample = {0};
+    sample.func = 0;
+    sample.loop = (uint16_t)loop_start;
+
+    OrusJitIRProgram program;
+    orus_jit_ir_program_init(&program);
+
+    OrusJitTranslationResult result =
+        orus_jit_translate_linear_block(&vm, &function, function.chunk, &sample,
+                                        &program);
+
+    bool success = true;
+
+    if (result.status != ORUS_JIT_TRANSLATE_STATUS_OK) {
+        fprintf(stderr,
+                "Baseline comparison loop translation failed: %s (opcode=%d, kind=%d, offset=%u)\n",
+                orus_jit_translation_status_name(result.status), result.opcode,
+                result.value_kind, result.bytecode_offset);
+        success = false;
+        goto cleanup;
+    }
+
+    bool found_compare = false;
+    bool found_branch = false;
+    for (size_t i = 0; i < program.count; ++i) {
+        const OrusJitIRInstruction* inst = &program.instructions[i];
+        if (inst->opcode == ORUS_JIT_IR_OP_LT_I32) {
+            ASSERT_TRUE(inst->value_kind == ORUS_JIT_VALUE_BOOL,
+                        "comparison should be tagged as bool");
+            ASSERT_TRUE(inst->operands.arithmetic.dst_reg == predicate,
+                        "predicate destination mismatch");
+            ASSERT_TRUE(inst->operands.arithmetic.lhs_reg == counter,
+                        "comparison lhs mismatch");
+            ASSERT_TRUE(inst->operands.arithmetic.rhs_reg == limit,
+                        "comparison rhs mismatch");
+            found_compare = true;
+        } else if (inst->opcode == ORUS_JIT_IR_OP_JUMP_IF_NOT_SHORT &&
+                   inst->bytecode_offset == (uint32_t)branch_index) {
+            ASSERT_TRUE(inst->operands.jump_if_not_short.predicate_reg == predicate,
+                        "branch predicate mismatch");
+            ASSERT_TRUE(inst->operands.jump_if_not_short.offset == jump_offset,
+                        "branch offset mismatch");
+            found_branch = true;
+        }
+    }
+
+    ASSERT_TRUE(found_compare, "expected baseline comparison IR opcode");
+    ASSERT_TRUE(found_branch, "expected conditional exit branch IR opcode");
 
 cleanup:
     orus_jit_ir_program_reset(&program);
@@ -2368,6 +2482,8 @@ int main(void) {
         {"translator emits i64 ops", test_translates_i64_linear_loop},
         {"translator handles baseline register loop",
          test_translates_baseline_register_loop},
+        {"translator emits baseline comparison loop",
+         test_translates_baseline_comparison_loop},
         {"translator promotes i32 inputs for i64 ops",
          test_translator_promotes_i32_constants_to_i64},
         {"translator emits f64 ops", test_translates_f64_stream},

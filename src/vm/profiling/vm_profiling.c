@@ -1442,82 +1442,102 @@ map_comparison_opcode(uint8_t opcode,
                       OrusJitIROpcode* ir_opcode,
                       OrusJitValueKind* kind) {
     switch (opcode) {
+        case OP_LT_I32_R:
         case OP_LT_I32_TYPED:
             *kind = ORUS_JIT_VALUE_BOOL;
             *ir_opcode = ORUS_JIT_IR_OP_LT_I32;
             return true;
+        case OP_LE_I32_R:
         case OP_LE_I32_TYPED:
             *kind = ORUS_JIT_VALUE_BOOL;
             *ir_opcode = ORUS_JIT_IR_OP_LE_I32;
             return true;
+        case OP_GT_I32_R:
         case OP_GT_I32_TYPED:
             *kind = ORUS_JIT_VALUE_BOOL;
             *ir_opcode = ORUS_JIT_IR_OP_GT_I32;
             return true;
+        case OP_GE_I32_R:
         case OP_GE_I32_TYPED:
             *kind = ORUS_JIT_VALUE_BOOL;
             *ir_opcode = ORUS_JIT_IR_OP_GE_I32;
             return true;
+        case OP_LT_I64_R:
         case OP_LT_I64_TYPED:
             *kind = ORUS_JIT_VALUE_BOOL;
             *ir_opcode = ORUS_JIT_IR_OP_LT_I64;
             return true;
+        case OP_LE_I64_R:
         case OP_LE_I64_TYPED:
             *kind = ORUS_JIT_VALUE_BOOL;
             *ir_opcode = ORUS_JIT_IR_OP_LE_I64;
             return true;
+        case OP_GT_I64_R:
         case OP_GT_I64_TYPED:
             *kind = ORUS_JIT_VALUE_BOOL;
             *ir_opcode = ORUS_JIT_IR_OP_GT_I64;
             return true;
+        case OP_GE_I64_R:
         case OP_GE_I64_TYPED:
             *kind = ORUS_JIT_VALUE_BOOL;
             *ir_opcode = ORUS_JIT_IR_OP_GE_I64;
             return true;
+        case OP_LT_U32_R:
         case OP_LT_U32_TYPED:
             *kind = ORUS_JIT_VALUE_BOOL;
             *ir_opcode = ORUS_JIT_IR_OP_LT_U32;
             return true;
+        case OP_LE_U32_R:
         case OP_LE_U32_TYPED:
             *kind = ORUS_JIT_VALUE_BOOL;
             *ir_opcode = ORUS_JIT_IR_OP_LE_U32;
             return true;
+        case OP_GT_U32_R:
         case OP_GT_U32_TYPED:
             *kind = ORUS_JIT_VALUE_BOOL;
             *ir_opcode = ORUS_JIT_IR_OP_GT_U32;
             return true;
+        case OP_GE_U32_R:
         case OP_GE_U32_TYPED:
             *kind = ORUS_JIT_VALUE_BOOL;
             *ir_opcode = ORUS_JIT_IR_OP_GE_U32;
             return true;
+        case OP_LT_U64_R:
         case OP_LT_U64_TYPED:
             *kind = ORUS_JIT_VALUE_BOOL;
             *ir_opcode = ORUS_JIT_IR_OP_LT_U64;
             return true;
+        case OP_LE_U64_R:
         case OP_LE_U64_TYPED:
             *kind = ORUS_JIT_VALUE_BOOL;
             *ir_opcode = ORUS_JIT_IR_OP_LE_U64;
             return true;
+        case OP_GT_U64_R:
         case OP_GT_U64_TYPED:
             *kind = ORUS_JIT_VALUE_BOOL;
             *ir_opcode = ORUS_JIT_IR_OP_GT_U64;
             return true;
+        case OP_GE_U64_R:
         case OP_GE_U64_TYPED:
             *kind = ORUS_JIT_VALUE_BOOL;
             *ir_opcode = ORUS_JIT_IR_OP_GE_U64;
             return true;
+        case OP_LT_F64_R:
         case OP_LT_F64_TYPED:
             *kind = ORUS_JIT_VALUE_BOOL;
             *ir_opcode = ORUS_JIT_IR_OP_LT_F64;
             return true;
+        case OP_LE_F64_R:
         case OP_LE_F64_TYPED:
             *kind = ORUS_JIT_VALUE_BOOL;
             *ir_opcode = ORUS_JIT_IR_OP_LE_F64;
             return true;
+        case OP_GT_F64_R:
         case OP_GT_F64_TYPED:
             *kind = ORUS_JIT_VALUE_BOOL;
             *ir_opcode = ORUS_JIT_IR_OP_GT_F64;
             return true;
+        case OP_GE_F64_R:
         case OP_GE_F64_TYPED:
             *kind = ORUS_JIT_VALUE_BOOL;
             *ir_opcode = ORUS_JIT_IR_OP_GE_F64;

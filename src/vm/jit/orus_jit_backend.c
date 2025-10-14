@@ -3015,6 +3015,9 @@ orus_jit_native_linear_load(struct VM* vm_instance,
         case ORUS_JIT_VALUE_U64:
             vm_store_u64_typed_hot(dst, (uint64_t)bits);
             return true;
+        case ORUS_JIT_VALUE_BOOL:
+            vm_store_bool_typed_hot(dst, bits != 0u);
+            return true;
         case ORUS_JIT_VALUE_F64: {
             double value = 0.0;
             memcpy(&value, &bits, sizeof(double));
@@ -3114,6 +3117,9 @@ orus_jit_native_linear_arithmetic(struct VM* vm_instance,
             vm_store_i64_typed_hot(dst, result);
             return true;
         }
+        case ORUS_JIT_VALUE_BOOL:
+            jit_bailout_and_deopt(vm_instance, block);
+            return false;
         case ORUS_JIT_VALUE_U32: {
             uint32_t left = 0u;
             uint32_t right = 0u;
