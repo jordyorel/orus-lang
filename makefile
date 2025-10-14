@@ -283,6 +283,7 @@ JIT_TRANSLATION_TEST_BIN = $(BUILDDIR)/tests/test_vm_jit_translation
 JIT_BACKEND_TEST_BIN = $(BUILDDIR)/tests/test_vm_jit_backend
 BUILTIN_INPUT_TEST_BIN = $(BUILDDIR)/tests/test_builtin_input
 CONSTANT_FOLD_TEST_BIN = $(BUILDDIR)/tests/test_constant_folding
+COMPILER_SPECIALIZATION_TEST_BIN = $(BUILDDIR)/tests/test_compiler_specialization
 BUILTIN_SORTED_ORUS_TESTS = \
     tests/builtins/sorted_runtime.orus
 BUILTIN_SORTED_ORUS_FAIL_TESTS = \
@@ -373,6 +374,7 @@ UNIT_TEST_TARGETS = \
         hot-loop-tests \
         dec-i32-r-tests \
         register-allocator-tests \
+        compiler-specialization-tests \
         builtin-input-tests \
         builtin-sorted-tests \
         builtin-range-tests
@@ -649,6 +651,15 @@ $(REGISTER_WINDOW_TEST_BIN): tests/unit/test_vm_register_windows.c $(COMPILER_OB
 register-window-tests: $(REGISTER_WINDOW_TEST_BIN)
 	@echo "Running register window reuse tests..."
 	@./$(REGISTER_WINDOW_TEST_BIN)
+
+$(COMPILER_SPECIALIZATION_TEST_BIN): tests/unit/test_compiler_specialization.c $(COMPILER_OBJS) $(VM_OBJS)
+	@mkdir -p $(dir $@)
+	@echo "Compiling compiler specialization regression tests..."
+	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+
+compiler-specialization-tests: $(COMPILER_SPECIALIZATION_TEST_BIN)
+	@echo "Running compiler specialization regression tests..."
+	@./$(COMPILER_SPECIALIZATION_TEST_BIN)
 
 $(SPILL_GC_TEST_BIN): tests/unit/test_vm_spill_gc_root.c $(COMPILER_OBJS) $(VM_OBJS)
 	@mkdir -p $(dir $@)
