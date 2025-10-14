@@ -25,6 +25,14 @@ typedef struct JITDeoptTrigger {
 typedef void (*JITEntryPoint)(struct VM* vm);
 
 typedef enum {
+    ORUS_JIT_BACKEND_TARGET_X86_64 = 0,
+    ORUS_JIT_BACKEND_TARGET_AARCH64,
+    ORUS_JIT_BACKEND_TARGET_RISCV64,
+    ORUS_JIT_BACKEND_TARGET_NATIVE = ORUS_JIT_BACKEND_TARGET_X86_64,
+    ORUS_JIT_BACKEND_TARGET_COUNT
+} OrusJitBackendTarget;
+
+typedef enum {
     JIT_BACKEND_OK = 0,
     JIT_BACKEND_UNSUPPORTED,
     JIT_BACKEND_OUT_OF_MEMORY,
@@ -45,6 +53,17 @@ typedef struct {
     void (*flush)(struct VM* vm);
 } JITBackendVTable;
 
+typedef struct {
+    uint32_t total_instructions;
+    uint32_t arithmetic_ops;
+    uint32_t comparison_ops;
+    uint32_t helper_ops;
+    uint32_t safepoints;
+    uint32_t conversion_ops;
+    uint32_t memory_ops;
+    uint32_t value_kind_mask;
+} OrusJitParityReport;
+
 struct OrusJitBackend* orus_jit_backend_create(void);
 void orus_jit_backend_destroy(struct OrusJitBackend* backend);
 
@@ -62,5 +81,9 @@ const JITBackendVTable* orus_jit_backend_vtable(void);
 
 size_t orus_jit_helper_safepoint_count(void);
 void orus_jit_helper_safepoint_reset(void);
+
+JITBackendStatus orus_jit_backend_collect_parity(const OrusJitIRProgram* program,
+                                                 OrusJitBackendTarget target,
+                                                 OrusJitParityReport* report);
 
 #endif // ORUS_VM_JIT_BACKEND_H

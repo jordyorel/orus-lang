@@ -19,6 +19,7 @@
 #include "vm/jit_ir_debug.h"
 #include "vm/jit_translation.h"
 #include <assert.h>
+#include <inttypes.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -47,6 +48,53 @@ orus_jit_kind_is_integer(OrusJitValueKind kind) {
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+
+static const char*
+opcode_family_name(OrusOpcodeFamily family) {
+    switch (family) {
+        case ORUS_OPCODE_FAMILY_LITERAL:
+            return "literal";
+        case ORUS_OPCODE_FAMILY_MOVES:
+            return "moves";
+        case ORUS_OPCODE_FAMILY_ARITHMETIC:
+            return "arithmetic";
+        case ORUS_OPCODE_FAMILY_BITWISE:
+            return "bitwise";
+        case ORUS_OPCODE_FAMILY_COMPARISON:
+            return "comparison";
+        case ORUS_OPCODE_FAMILY_LOGIC:
+            return "logic";
+        case ORUS_OPCODE_FAMILY_CONVERSION:
+            return "conversion";
+        case ORUS_OPCODE_FAMILY_STRING:
+            return "string";
+        case ORUS_OPCODE_FAMILY_COLLECTION:
+            return "collection";
+        case ORUS_OPCODE_FAMILY_ITERATOR:
+            return "iterator";
+        case ORUS_OPCODE_FAMILY_CONTROL:
+            return "control";
+        case ORUS_OPCODE_FAMILY_CALL:
+            return "call";
+        case ORUS_OPCODE_FAMILY_FRAME:
+            return "frame";
+        case ORUS_OPCODE_FAMILY_SPILL:
+            return "spill";
+        case ORUS_OPCODE_FAMILY_MODULE:
+            return "module";
+        case ORUS_OPCODE_FAMILY_CLOSURE:
+            return "closure";
+        case ORUS_OPCODE_FAMILY_RUNTIME:
+            return "runtime";
+        case ORUS_OPCODE_FAMILY_TYPED:
+            return "typed";
+        case ORUS_OPCODE_FAMILY_EXTENDED:
+            return "extended";
+        case ORUS_OPCODE_FAMILY_OTHER:
+        default:
+            return "other";
+    }
+}
 
 #ifndef FUNCTION_SPECIALIZATION_THRESHOLD
 #define FUNCTION_SPECIALIZATION_THRESHOLD 512ULL
@@ -544,6 +592,99 @@ uint64_t getFunctionHitCount(void* functionPtr, bool isNative) {
     return functionProfile->hitCount + functionProfile->pendingCalls;
 }
 
+static void
+printOpcodeFamilyProfile(void) {
+    uint64_t total_samples = 0;
+    for (size_t i = 0; i < ORUS_OPCODE_FAMILY_COUNT; ++i) {
+        total_samples += g_profiling.familyStats[i].executions;
+    }
+
+    if (total_samples == 0) {
+        return;
+    }
+
+    printf("\n--- Opcode Family Profile ---\n");
+    printf("%-18s %12s %12s %12s %8s\n",
+           "Family",
+           "Samples",
+           "Cycles",
+           "Avg",
+           "Share");
+
+    for (size_t i = 0; i < ORUS_OPCODE_FAMILY_COUNT; ++i) {
+        const OpcodeFamilyProfile* profile = &g_profiling.familyStats[i];
+        if (profile->executions == 0) {
+            continue;
+        }
+
+        double average_cycles =
+            (profile->executions > 0)
+                ? (double)profile->cycles / (double)profile->executions
+                : 0.0;
+        double share =
+            (total_samples > 0)
+                ? (100.0 * (double)profile->executions / (double)total_samples)
+                : 0.0;
+
+        printf("%-18s %12llu %12llu %12.1f %7.1f%%\n",
+               opcode_family_name((OrusOpcodeFamily)i),
+               (unsigned long long)profile->executions,
+               (unsigned long long)profile->cycles,
+               average_cycles,
+               share);
+    }
+}
+
+static void
+printJitFailureSummary(const OrusJitTranslationFailureLog* log) {
+    printf("\n--- JIT Translation Failures ---\n");
+    if (!log || log->total_failures == 0) {
+        printf("No translation failures recorded.\n");
+        return;
+    }
+
+    printf("Total failures: %" PRIu64 "\n", (uint64_t)log->total_failures);
+
+    printf("By reason:\n");
+    for (size_t i = 0; i < ORUS_JIT_TRANSLATE_STATUS_COUNT; ++i) {
+        uint64_t count = log->reason_counts[i];
+        if (count == 0) {
+            continue;
+        }
+        printf("    - %s: %" PRIu64 "\n",
+               orus_jit_translation_status_name((OrusJitTranslationStatus)i),
+               count);
+    }
+
+    printf("By category:\n");
+    for (size_t i = 0; i < ORUS_JIT_TRANSLATION_FAILURE_CATEGORY_COUNT; ++i) {
+        uint64_t count = log->category_counts[i];
+        if (count == 0) {
+            continue;
+        }
+        printf("    - %s: %" PRIu64 "\n",
+               orus_jit_translation_failure_category_name(
+                   (OrusJitTranslationFailureCategory)i),
+               count);
+    }
+
+    printf("By value kind:\n");
+    for (size_t i = 0; i < ORUS_JIT_VALUE_KIND_COUNT; ++i) {
+        uint64_t count = log->value_kind_counts[i];
+        if (count == 0) {
+            continue;
+        }
+        double share =
+            (log->total_failures > 0)
+                ? (100.0 * (double)count / (double)log->total_failures)
+                : 0.0;
+        printf("    - %s: %" PRIu64 " (%.1f%%)\n",
+               orus_jit_value_kind_name((OrusJitValueKind)i),
+               count,
+               share);
+    }
+}
+
 // Profiling data output functions
 void dumpProfilingStats(void) {
     if (!g_profiling.isActive) {
@@ -557,6 +698,7 @@ void dumpProfilingStats(void) {
     
     if (g_profiling.enabledFlags & PROFILE_INSTRUCTIONS) {
         printInstructionProfile();
+        printOpcodeFamilyProfile();
     }
     
     if (g_profiling.enabledFlags & PROFILE_HOT_PATHS) {
@@ -592,34 +734,37 @@ void dumpProfilingStats(void) {
     if (g_profiling.enabledFlags & PROFILE_FUNCTION_CALLS) {
         printFunctionProfile();
     }
+
+    printJitFailureSummary(&vm.jit_translation_failures);
 }
 
 void printInstructionProfile(void) {
     printf("\n--- Instruction Execution Profile ---\n");
-    printf("%-20s %12s %12s %8s %8s\n", "Instruction", "Count", "Cycles", "Avg", "Hot");
-    printf("--------------------------------------------------------\n");
-    
-    const char* opcodeNames[256] = {
-        [0] = "OP_CONSTANT", [1] = "OP_NIL", [2] = "OP_TRUE", [3] = "OP_FALSE",
-        [4] = "OP_NEGATE", [5] = "OP_ADD", [6] = "OP_SUBTRACT", [7] = "OP_MULTIPLY",
-        [8] = "OP_DIVIDE", [9] = "OP_NOT", [10] = "OP_EQUAL", [11] = "OP_GREATER",
-        [12] = "OP_LESS", [13] = "OP_PRINT", [14] = "OP_POP", [15] = "OP_DEFINE_GLOBAL",
-        [16] = "OP_GET_GLOBAL", [17] = "OP_SET_GLOBAL", [18] = "OP_GET_LOCAL",
-        [19] = "OP_SET_LOCAL", [20] = "OP_JUMP_IF_FALSE", [21] = "OP_JUMP", [22] = "OP_LOOP",
-        [23] = "OP_CALL", [24] = "OP_RETURN", [25] = "OP_HALT"
-    };
-    
+    printf("%-8s %-18s %12s %12s %8s %8s\n",
+           "Opcode",
+           "Family",
+           "Samples",
+           "Cycles",
+           "Avg",
+           "Hot");
+    printf("------------------------------------------------------------------\n");
+
     for (int i = 0; i < 256; i++) {
         InstructionProfile* profile = &g_profiling.instructionStats[i];
-        if (profile->executionCount > 0) {
-            const char* name = opcodeNames[i] ? opcodeNames[i] : "UNKNOWN";
-            printf("%-20s %12llu %12llu %8.1f %8s\n",
-                   name,
-                   (unsigned long long)profile->executionCount,
-                   (unsigned long long)profile->totalCycles,
-                   profile->averageCycles,
-                   profile->isHotPath ? "YES" : "NO");
+        if (profile->executionCount == 0) {
+            continue;
         }
+
+        OrusOpcodeFamily family = vm_opcode_family((uint8_t)i);
+        const char* family_name = opcode_family_name(family);
+
+        printf("%-8d %-18s %12llu %12llu %8.1f %8s\n",
+               i,
+               family_name,
+               (unsigned long long)profile->executionCount,
+               (unsigned long long)profile->totalCycles,
+               profile->averageCycles,
+               profile->isHotPath ? "YES" : "NO");
     }
 }
 
@@ -731,7 +876,35 @@ void exportProfilingData(const char* filename) {
         }
     }
     fprintf(file, "\n  ],\n");
-    
+
+    fprintf(file, "  \"opcodeFamilies\": [\n");
+    bool firstFamily = true;
+    for (size_t i = 0; i < ORUS_OPCODE_FAMILY_COUNT; ++i) {
+        const OpcodeFamilyProfile* family = &g_profiling.familyStats[i];
+        if (family->executions == 0) {
+            continue;
+        }
+        if (!firstFamily) {
+            fprintf(file, ",\n");
+        }
+        fprintf(file, "    {\"family\": ");
+        write_json_string(file, opcode_family_name((OrusOpcodeFamily)i));
+        double avg_cycles =
+            (family->executions > 0)
+                ? (double)family->cycles / (double)family->executions
+                : 0.0;
+        fprintf(file,
+                ", \"samples\": %llu, \"cycles\": %llu, \"average\": %.4f}",
+                (unsigned long long)family->executions,
+                (unsigned long long)family->cycles,
+                avg_cycles);
+        firstFamily = false;
+    }
+    if (!firstFamily) {
+        fprintf(file, "\n");
+    }
+    fprintf(file, "  ],\n");
+
     // Export hot paths
     fprintf(file, "  \"hotPaths\": [\n");
     bool firstPath = true;
@@ -782,6 +955,84 @@ void exportProfilingData(const char* filename) {
         }
     }
     fprintf(file, "\n  ],\n");
+
+    const OrusJitTranslationFailureLog* failure_log = &vm.jit_translation_failures;
+    fprintf(file, "  \"jitFailures\": {\n");
+    fprintf(file,
+            "    \"total\": %llu,\n",
+            (unsigned long long)failure_log->total_failures);
+
+    fprintf(file, "    \"byReason\": [\n");
+    bool firstReason = true;
+    for (size_t i = 0; i < ORUS_JIT_TRANSLATE_STATUS_COUNT; ++i) {
+        uint64_t count = failure_log->reason_counts[i];
+        if (count == 0) {
+            continue;
+        }
+        if (!firstReason) {
+            fprintf(file, ",\n");
+        }
+        fprintf(file, "      {\"reason\": ");
+        write_json_string(file,
+                          orus_jit_translation_status_name(
+                              (OrusJitTranslationStatus)i));
+        fprintf(file, ", \"count\": %llu}", (unsigned long long)count);
+        firstReason = false;
+    }
+    if (!firstReason) {
+        fprintf(file, "\n");
+    }
+    fprintf(file, "    ],\n");
+
+    fprintf(file, "    \"byCategory\": [\n");
+    bool firstCategory = true;
+    for (size_t i = 0; i < ORUS_JIT_TRANSLATION_FAILURE_CATEGORY_COUNT; ++i) {
+        uint64_t count = failure_log->category_counts[i];
+        if (count == 0) {
+            continue;
+        }
+        if (!firstCategory) {
+            fprintf(file, ",\n");
+        }
+        fprintf(file, "      {\"category\": ");
+        write_json_string(file,
+                          orus_jit_translation_failure_category_name(
+                              (OrusJitTranslationFailureCategory)i));
+        fprintf(file, ", \"count\": %llu}", (unsigned long long)count);
+        firstCategory = false;
+    }
+    if (!firstCategory) {
+        fprintf(file, "\n");
+    }
+    fprintf(file, "    ],\n");
+
+    fprintf(file, "    \"byValueKind\": [\n");
+    bool firstKind = true;
+    for (size_t i = 0; i < ORUS_JIT_VALUE_KIND_COUNT; ++i) {
+        uint64_t count = failure_log->value_kind_counts[i];
+        if (count == 0) {
+            continue;
+        }
+        if (!firstKind) {
+            fprintf(file, ",\n");
+        }
+        fprintf(file, "      {\"valueKind\": ");
+        write_json_string(file, orus_jit_value_kind_name((OrusJitValueKind)i));
+        double share =
+            (failure_log->total_failures > 0)
+                ? (double)count / (double)failure_log->total_failures
+                : 0.0;
+        fprintf(file,
+                ", \"count\": %llu, \"share\": %.6f}",
+                (unsigned long long)count,
+                share);
+        firstKind = false;
+    }
+    if (!firstKind) {
+        fprintf(file, "\n");
+    }
+    fprintf(file, "    ]\n");
+    fprintf(file, "  },\n");
 
     fprintf(file, "  \"specializations\": [\n");
     bool firstSpecialization = true;
@@ -1394,6 +1645,247 @@ static bool encode_numeric_constant(Value constant,
     return false;
 }
 
+#define ORUS_JIT_PROFILING_SPECIALIZATION_THRESHOLD 128u
+
+typedef struct {
+    bool enabled;
+    uint32_t epoch;
+    Value constants[REGISTER_COUNT];
+    uint32_t reg_epoch[REGISTER_COUNT];
+    bool valid[REGISTER_COUNT];
+    OrusJitIRInstruction* defining_instruction[REGISTER_COUNT];
+} OrusJitSpecializationState;
+
+static void
+orus_jit_specialization_state_init(OrusJitSpecializationState* state, bool enabled) {
+    if (!state) {
+        return;
+    }
+    state->enabled = enabled;
+    state->epoch = 1u;
+    memset(state->constants, 0, sizeof(state->constants));
+    memset(state->reg_epoch, 0, sizeof(state->reg_epoch));
+    memset(state->valid, 0, sizeof(state->valid));
+    memset(state->defining_instruction, 0, sizeof(state->defining_instruction));
+}
+
+static void
+orus_jit_specialization_invalidate_all(OrusJitSpecializationState* state) {
+    if (!state || !state->enabled) {
+        return;
+    }
+    state->epoch++;
+    memset(state->valid, 0, sizeof(state->valid));
+    memset(state->defining_instruction, 0, sizeof(state->defining_instruction));
+}
+
+static void
+orus_jit_specialization_set_constant(OrusJitSpecializationState* state,
+                                     uint16_t reg,
+                                     Value value,
+                                     OrusJitIRInstruction* inst) {
+    if (!state || !state->enabled || reg >= REGISTER_COUNT) {
+        return;
+    }
+    state->constants[reg] = value;
+    state->valid[reg] = true;
+    state->reg_epoch[reg] = state->epoch;
+    if (inst) {
+        state->defining_instruction[reg] = inst;
+    }
+}
+
+static void
+orus_jit_specialization_invalidate(OrusJitSpecializationState* state, uint16_t reg) {
+    if (!state || !state->enabled || reg >= REGISTER_COUNT) {
+        return;
+    }
+    state->valid[reg] = false;
+    state->reg_epoch[reg] = state->epoch;
+    state->defining_instruction[reg] = NULL;
+}
+
+static bool
+orus_jit_specialization_has_constant(const OrusJitSpecializationState* state,
+                                     uint16_t reg) {
+    if (!state || !state->enabled || reg >= REGISTER_COUNT) {
+        return false;
+    }
+    return state->valid[reg] && state->reg_epoch[reg] == state->epoch;
+}
+
+static bool
+orus_jit_specialization_constant_matches(const OrusJitSpecializationState* state,
+                                         uint16_t reg,
+                                         Value value) {
+    if (!orus_jit_specialization_has_constant(state, reg)) {
+        return false;
+    }
+    return valuesEqual(state->constants[reg], value);
+}
+
+static void
+orus_jit_specialization_record_move(OrusJitSpecializationState* state,
+                                    uint16_t dst,
+                                    uint16_t src,
+                                    OrusJitIRInstruction* inst) {
+    if (!state || !state->enabled || dst >= REGISTER_COUNT) {
+        return;
+    }
+    if (src < REGISTER_COUNT && orus_jit_specialization_has_constant(state, src)) {
+        state->constants[dst] = state->constants[src];
+        state->valid[dst] = true;
+        state->reg_epoch[dst] = state->epoch;
+        state->defining_instruction[dst] = state->defining_instruction[src];
+        if (!state->defining_instruction[dst] && inst) {
+            state->defining_instruction[dst] = inst;
+        }
+    } else {
+        state->valid[dst] = false;
+        state->reg_epoch[dst] = state->epoch;
+        state->defining_instruction[dst] = inst;
+    }
+}
+
+static OrusJitIROpcode
+orus_jit_specialization_load_opcode_for_kind(OrusJitValueKind kind) {
+    switch (kind) {
+        case ORUS_JIT_VALUE_I32:
+            return ORUS_JIT_IR_OP_LOAD_I32_CONST;
+        case ORUS_JIT_VALUE_I64:
+            return ORUS_JIT_IR_OP_LOAD_I64_CONST;
+        case ORUS_JIT_VALUE_U32:
+            return ORUS_JIT_IR_OP_LOAD_U32_CONST;
+        case ORUS_JIT_VALUE_U64:
+            return ORUS_JIT_IR_OP_LOAD_U64_CONST;
+        case ORUS_JIT_VALUE_F64:
+            return ORUS_JIT_IR_OP_LOAD_F64_CONST;
+        default:
+            break;
+    }
+    return ORUS_JIT_IR_OP_LOAD_VALUE_CONST;
+}
+
+static bool
+orus_jit_specialization_try_fold_arithmetic(OrusJitSpecializationState* state,
+                                            OrusJitIRInstruction* inst) {
+    if (!state || !state->enabled || !inst) {
+        return false;
+    }
+
+    uint16_t dst = inst->operands.arithmetic.dst_reg;
+    uint16_t lhs = inst->operands.arithmetic.lhs_reg;
+    uint16_t rhs = inst->operands.arithmetic.rhs_reg;
+
+    if (!orus_jit_specialization_has_constant(state, lhs) ||
+        !orus_jit_specialization_has_constant(state, rhs)) {
+        orus_jit_specialization_invalidate(state, dst);
+        return false;
+    }
+
+    Value lhs_value = state->constants[lhs];
+    Value rhs_value = state->constants[rhs];
+    Value result = {0};
+    bool folded = false;
+
+    switch (inst->opcode) {
+        case ORUS_JIT_IR_OP_ADD_I32:
+            result = I32_VAL(AS_I32(lhs_value) + AS_I32(rhs_value));
+            folded = true;
+            break;
+        case ORUS_JIT_IR_OP_SUB_I32:
+            result = I32_VAL(AS_I32(lhs_value) - AS_I32(rhs_value));
+            folded = true;
+            break;
+        case ORUS_JIT_IR_OP_MUL_I32:
+            result = I32_VAL(AS_I32(lhs_value) * AS_I32(rhs_value));
+            folded = true;
+            break;
+        case ORUS_JIT_IR_OP_ADD_I64:
+            result = I64_VAL(AS_I64(lhs_value) + AS_I64(rhs_value));
+            folded = true;
+            break;
+        case ORUS_JIT_IR_OP_SUB_I64:
+            result = I64_VAL(AS_I64(lhs_value) - AS_I64(rhs_value));
+            folded = true;
+            break;
+        case ORUS_JIT_IR_OP_MUL_I64:
+            result = I64_VAL(AS_I64(lhs_value) * AS_I64(rhs_value));
+            folded = true;
+            break;
+        case ORUS_JIT_IR_OP_ADD_U32:
+            result = U32_VAL((uint32_t)(AS_U32(lhs_value) + AS_U32(rhs_value)));
+            folded = true;
+            break;
+        case ORUS_JIT_IR_OP_SUB_U32:
+            result = U32_VAL((uint32_t)(AS_U32(lhs_value) - AS_U32(rhs_value)));
+            folded = true;
+            break;
+        case ORUS_JIT_IR_OP_MUL_U32:
+            result = U32_VAL((uint32_t)(AS_U32(lhs_value) * AS_U32(rhs_value)));
+            folded = true;
+            break;
+        case ORUS_JIT_IR_OP_ADD_U64:
+            result = U64_VAL(AS_U64(lhs_value) + AS_U64(rhs_value));
+            folded = true;
+            break;
+        case ORUS_JIT_IR_OP_SUB_U64:
+            result = U64_VAL(AS_U64(lhs_value) - AS_U64(rhs_value));
+            folded = true;
+            break;
+        case ORUS_JIT_IR_OP_MUL_U64:
+            result = U64_VAL(AS_U64(lhs_value) * AS_U64(rhs_value));
+            folded = true;
+            break;
+        case ORUS_JIT_IR_OP_ADD_F64: {
+            double value = AS_F64(lhs_value) + AS_F64(rhs_value);
+            result = F64_VAL(value);
+            folded = true;
+            break;
+        }
+        case ORUS_JIT_IR_OP_SUB_F64: {
+            double value = AS_F64(lhs_value) - AS_F64(rhs_value);
+            result = F64_VAL(value);
+            folded = true;
+            break;
+        }
+        case ORUS_JIT_IR_OP_MUL_F64: {
+            double value = AS_F64(lhs_value) * AS_F64(rhs_value);
+            result = F64_VAL(value);
+            folded = true;
+            break;
+        }
+        default:
+            break;
+    }
+
+    if (!folded) {
+        orus_jit_specialization_invalidate(state, dst);
+        return false;
+    }
+
+    uint64_t bits = 0u;
+    if (!encode_numeric_constant(result, inst->value_kind, &bits)) {
+        orus_jit_specialization_invalidate(state, dst);
+        return false;
+    }
+
+    OrusJitIROpcode load_opcode =
+        orus_jit_specialization_load_opcode_for_kind(inst->value_kind);
+    if (load_opcode == ORUS_JIT_IR_OP_LOAD_VALUE_CONST) {
+        orus_jit_specialization_invalidate(state, dst);
+        return false;
+    }
+
+    inst->opcode = load_opcode;
+    inst->operands.load_const.dst_reg = dst;
+    inst->operands.load_const.constant_index = 0u;
+    inst->operands.load_const.immediate_bits = bits;
+
+    orus_jit_specialization_set_constant(state, dst, result, inst);
+    return true;
+}
+
 typedef struct {
     uint8_t* kinds;
     OrusJitIRInstruction** writers;
@@ -1640,6 +2132,10 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
         promotion_visiting,
         chunk,
     };
+    OrusJitSpecializationState specialization_state;
+    bool specialization_enabled =
+        sample && sample->hit_count >= ORUS_JIT_PROFILING_SPECIALIZATION_THRESHOLD;
+    orus_jit_specialization_state_init(&specialization_state, specialization_enabled);
     size_t start_offset = (size_t)function->start;
     if ((size_t)sample->loop < (size_t)chunk->count) {
         start_offset = (size_t)sample->loop;
@@ -1658,6 +2154,11 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
     size_t instructions_since_safepoint = 0u;
     const size_t safepoint_interval = 12u;
 
+#define ORUS_JIT_SPECIALIZATION_INVALIDATE_REG(reg) \
+    orus_jit_specialization_invalidate(&specialization_state, (reg))
+#define ORUS_JIT_SPECIALIZATION_INVALIDATE_ALL() \
+    orus_jit_specialization_invalidate_all(&specialization_state)
+
 #define INSERT_SAFEPOINT(byte_offset)                                                   \
     do {                                                                               \
         OrusJitIRInstruction* safepoint__ = orus_jit_ir_program_append(program);       \
@@ -1669,6 +2170,7 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
         safepoint__->opcode = ORUS_JIT_IR_OP_SAFEPOINT;                                \
         safepoint__->bytecode_offset = (byte_offset);                                  \
         instructions_since_safepoint = 0u;                                             \
+        ORUS_JIT_SPECIALIZATION_INVALIDATE_ALL();                                      \
     } while (0)
 
     while (offset < (size_t)chunk->count) {
@@ -2160,6 +2662,17 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
                                         ORUS_JIT_IR_OP_LOAD_STRING_CONST,
                                         offset);
 
+                if (specialization_enabled &&
+                    ORUS_JIT_GET_KIND(dst) == ORUS_JIT_VALUE_STRING &&
+                    orus_jit_specialization_constant_matches(&specialization_state,
+                                                             dst, constant)) {
+                    offset += 4u;
+                    if (++instructions_since_safepoint >= safepoint_interval) {
+                        INSERT_SAFEPOINT((uint32_t)offset);
+                    }
+                    continue;
+                }
+
                 OrusJitIRInstruction* inst = orus_jit_ir_program_append(program);
                 if (!inst) {
                     return make_translation_result(
@@ -2175,6 +2688,10 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
                 inst->operands.load_const.immediate_bits =
                     (uint64_t)(uintptr_t)AS_STRING(constant);
                 ORUS_JIT_SET_KIND(dst, ORUS_JIT_VALUE_STRING, inst);
+                if (specialization_enabled) {
+                    orus_jit_specialization_set_constant(&specialization_state, dst,
+                                                         constant, inst);
+                }
                 offset += 4u;
                 if (++instructions_since_safepoint >= safepoint_interval) {
                     INSERT_SAFEPOINT((uint32_t)offset);
@@ -2187,6 +2704,17 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
 
             ORUS_JIT_ENSURE_ROLLOUT(const_kind,
                                     ORUS_JIT_IR_OP_LOAD_VALUE_CONST, offset);
+
+            if (specialization_enabled &&
+                ORUS_JIT_GET_KIND(dst) == const_kind &&
+                orus_jit_specialization_constant_matches(&specialization_state, dst,
+                                                         constant)) {
+                offset += 4u;
+                if (++instructions_since_safepoint >= safepoint_interval) {
+                    INSERT_SAFEPOINT((uint32_t)offset);
+                }
+                continue;
+            }
 
             OrusJitIRInstruction* inst = orus_jit_ir_program_append(program);
             if (!inst) {
@@ -2202,6 +2730,10 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
             inst->operands.load_const.constant_index = constant_index;
             inst->operands.load_const.immediate_bits = 0u;
             ORUS_JIT_SET_KIND(dst, const_kind, inst);
+            if (specialization_enabled) {
+                orus_jit_specialization_set_constant(&specialization_state, dst,
+                                                     constant, inst);
+            }
             offset += 4u;
             if (++instructions_since_safepoint >= safepoint_interval) {
                 INSERT_SAFEPOINT((uint32_t)offset);
@@ -2267,6 +2799,30 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
                 }
             }
             ORUS_JIT_ENSURE_ROLLOUT(kind, ir_opcode, offset);
+            if (specialization_enabled) {
+                bool skip_move = false;
+                OrusJitValueKind dst_kind_tracked = ORUS_JIT_GET_KIND(dst);
+                if (dst == src && dst_kind_tracked == kind) {
+                    skip_move = true;
+                } else if (dst_kind_tracked == kind &&
+                           orus_jit_specialization_has_constant(&specialization_state, src) &&
+                           orus_jit_specialization_constant_matches(
+                               &specialization_state, dst,
+                               specialization_state.constants[src])) {
+                    skip_move = true;
+                }
+                if (skip_move) {
+                    if (dst != src) {
+                        orus_jit_specialization_record_move(&specialization_state, dst, src,
+                                                             NULL);
+                    }
+                    offset += 3u;
+                    if (++instructions_since_safepoint >= safepoint_interval) {
+                        INSERT_SAFEPOINT((uint32_t)offset);
+                    }
+                    continue;
+                }
+            }
             OrusJitIRInstruction* inst = orus_jit_ir_program_append(program);
             if (!inst) {
                 return make_translation_result(
@@ -2279,6 +2835,9 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
             inst->operands.move.dst_reg = dst;
             inst->operands.move.src_reg = src;
             ORUS_JIT_SET_KIND(dst, kind, inst);
+            if (specialization_enabled) {
+                orus_jit_specialization_record_move(&specialization_state, dst, src, inst);
+            }
             offset += 3u;
             if (++instructions_since_safepoint >= safepoint_interval) {
                 INSERT_SAFEPOINT((uint32_t)offset);
@@ -2478,6 +3037,7 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
             inst->operands.range.arg_regs[2] = (arg_count >= 3u) ? third_reg : 0u;
             ORUS_JIT_SET_KIND(dst_reg, ORUS_JIT_VALUE_BOXED, inst);
             ORUS_JIT_SET_ITERATOR_KIND(dst_reg, ORUS_JIT_ITERATOR_RANGE);
+            ORUS_JIT_SPECIALIZATION_INVALIDATE_REG(dst_reg);
             offset += 6u;
             if (++instructions_since_safepoint >= safepoint_interval) {
                 INSERT_SAFEPOINT((uint32_t)offset);
@@ -2519,6 +3079,7 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
                 }
             }
             ORUS_JIT_SET_ITERATOR_KIND(dst_reg, iter_kind);
+            ORUS_JIT_SPECIALIZATION_INVALIDATE_REG(dst_reg);
             offset += 3u;
             if (++instructions_since_safepoint >= safepoint_interval) {
                 INSERT_SAFEPOINT((uint32_t)offset);
@@ -2562,6 +3123,8 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
             inst->operands.iter_next.has_value_reg = has_value_reg;
             ORUS_JIT_SET_KIND(value_reg, iter_value_kind, inst);
             ORUS_JIT_SET_KIND(has_value_reg, ORUS_JIT_VALUE_BOOL, inst);
+            ORUS_JIT_SPECIALIZATION_INVALIDATE_REG(value_reg);
+            ORUS_JIT_SPECIALIZATION_INVALIDATE_REG(has_value_reg);
             offset += 4u;
             if (++instructions_since_safepoint >= safepoint_interval) {
                 INSERT_SAFEPOINT((uint32_t)offset);
@@ -2591,6 +3154,7 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
             inst->bytecode_offset = (uint32_t)offset;
             inst->operands.time_stamp.dst_reg = dst;
             ORUS_JIT_SET_KIND(dst, ORUS_JIT_VALUE_F64, inst);
+            ORUS_JIT_SPECIALIZATION_INVALIDATE_REG(dst);
             offset += 2u;
             if (++instructions_since_safepoint >= safepoint_interval) {
                 INSERT_SAFEPOINT((uint32_t)offset);
@@ -2628,6 +3192,7 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
             inst->operands.make_array.first_reg = first;
             inst->operands.make_array.count = count;
             ORUS_JIT_SET_KIND(dst, ORUS_JIT_VALUE_BOXED, inst);
+            ORUS_JIT_SPECIALIZATION_INVALIDATE_REG(dst);
             offset += 4u;
             if (++instructions_since_safepoint >= safepoint_interval) {
                 INSERT_SAFEPOINT((uint32_t)offset);
@@ -2656,6 +3221,7 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
             inst->bytecode_offset = (uint32_t)offset;
             inst->operands.array_push.array_reg = array_reg;
             inst->operands.array_push.value_reg = value_reg;
+            ORUS_JIT_SPECIALIZATION_INVALIDATE_REG(array_reg);
             offset += 3u;
             if (++instructions_since_safepoint >= safepoint_interval) {
                 INSERT_SAFEPOINT((uint32_t)offset);
@@ -2716,6 +3282,7 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
             inst->operands.enum_new.type_const_index = type_const_index;
             inst->operands.enum_new.variant_const_index = variant_const_index;
             ORUS_JIT_SET_KIND(dst, ORUS_JIT_VALUE_BOXED, inst);
+            ORUS_JIT_SPECIALIZATION_INVALIDATE_REG(dst);
             offset += 8u;
             if (++instructions_since_safepoint >= safepoint_interval) {
                 INSERT_SAFEPOINT((uint32_t)offset);
@@ -2746,6 +3313,7 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
             inst->operands.print.first_reg = first_reg;
             inst->operands.print.arg_count = arg_count;
             inst->operands.print.newline = newline_flag;
+            ORUS_JIT_SPECIALIZATION_INVALIDATE_ALL();
             offset += 4u;
             if (++instructions_since_safepoint >= safepoint_interval) {
                 INSERT_SAFEPOINT((uint32_t)offset);
@@ -2774,6 +3342,7 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
             inst->operands.print.first_reg = value_reg;
             inst->operands.print.arg_count = 1u;
             inst->operands.print.newline = 1u;
+            ORUS_JIT_SPECIALIZATION_INVALIDATE_ALL();
             offset += 2u;
             if (++instructions_since_safepoint >= safepoint_interval) {
                 INSERT_SAFEPOINT((uint32_t)offset);
@@ -2809,6 +3378,7 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
             inst->operands.assert_eq.actual_reg = actual_reg;
             inst->operands.assert_eq.expected_reg = expected_reg;
             ORUS_JIT_SET_KIND(dst, ORUS_JIT_VALUE_BOOL, inst);
+            ORUS_JIT_SPECIALIZATION_INVALIDATE_REG(dst);
             offset += 5u;
             if (++instructions_since_safepoint >= safepoint_interval) {
                 INSERT_SAFEPOINT((uint32_t)offset);
@@ -2863,6 +3433,7 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
                                ? (spill_limit - (uint32_t)spill_base)
                                : 0u);
             ORUS_JIT_SET_KIND(dst_reg, ORUS_JIT_VALUE_BOXED, inst);
+            ORUS_JIT_SPECIALIZATION_INVALIDATE_ALL();
             offset += 5u;
             instructions_since_safepoint = 0u;
             continue;
@@ -2901,6 +3472,7 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
             inst->operands.unary.dst_reg = dst;
             inst->operands.unary.src_reg = src;
             ORUS_JIT_SET_KIND(dst, ORUS_JIT_VALUE_I64, inst);
+            ORUS_JIT_SPECIALIZATION_INVALIDATE_REG(dst);
             offset += 4u;
             if (++instructions_since_safepoint >= safepoint_interval) {
                 INSERT_SAFEPOINT((uint32_t)offset);
@@ -2941,6 +3513,7 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
             inst->operands.unary.dst_reg = dst;
             inst->operands.unary.src_reg = src;
             ORUS_JIT_SET_KIND(dst, ORUS_JIT_VALUE_F64, inst);
+            ORUS_JIT_SPECIALIZATION_INVALIDATE_REG(dst);
             offset += 4u;
             if (++instructions_since_safepoint >= safepoint_interval) {
                 INSERT_SAFEPOINT((uint32_t)offset);
@@ -2981,6 +3554,7 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
             inst->operands.unary.dst_reg = dst;
             inst->operands.unary.src_reg = src;
             ORUS_JIT_SET_KIND(dst, ORUS_JIT_VALUE_F64, inst);
+            ORUS_JIT_SPECIALIZATION_INVALIDATE_REG(dst);
             offset += 4u;
             if (++instructions_since_safepoint >= safepoint_interval) {
                 INSERT_SAFEPOINT((uint32_t)offset);
@@ -3021,6 +3595,7 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
             inst->operands.unary.dst_reg = dst;
             inst->operands.unary.src_reg = src;
             ORUS_JIT_SET_KIND(dst, ORUS_JIT_VALUE_U64, inst);
+            ORUS_JIT_SPECIALIZATION_INVALIDATE_REG(dst);
             offset += 4u;
             if (++instructions_since_safepoint >= safepoint_interval) {
                 INSERT_SAFEPOINT((uint32_t)offset);
@@ -3059,6 +3634,7 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
             inst->operands.unary.dst_reg = dst;
             inst->operands.unary.src_reg = src;
             ORUS_JIT_SET_KIND(dst, ORUS_JIT_VALUE_I32, inst);
+            ORUS_JIT_SPECIALIZATION_INVALIDATE_REG(dst);
             offset += 4u;
             if (++instructions_since_safepoint >= safepoint_interval) {
                 INSERT_SAFEPOINT((uint32_t)offset);
@@ -3101,6 +3677,7 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
             inst->operands.unary.dst_reg = dst;
             inst->operands.unary.src_reg = src;
             ORUS_JIT_SET_KIND(dst, ORUS_JIT_VALUE_F64, inst);
+            ORUS_JIT_SPECIALIZATION_INVALIDATE_REG(dst);
             offset += 4u;
             if (++instructions_since_safepoint >= safepoint_interval) {
                 INSERT_SAFEPOINT((uint32_t)offset);
@@ -3141,6 +3718,7 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
             inst->operands.unary.dst_reg = dst;
             inst->operands.unary.src_reg = src;
             ORUS_JIT_SET_KIND(dst, ORUS_JIT_VALUE_I32, inst);
+            ORUS_JIT_SPECIALIZATION_INVALIDATE_REG(dst);
             offset += 4u;
             if (++instructions_since_safepoint >= safepoint_interval) {
                 INSERT_SAFEPOINT((uint32_t)offset);
@@ -3181,6 +3759,7 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
             inst->operands.unary.dst_reg = dst;
             inst->operands.unary.src_reg = src;
             ORUS_JIT_SET_KIND(dst, ORUS_JIT_VALUE_I64, inst);
+            ORUS_JIT_SPECIALIZATION_INVALIDATE_REG(dst);
             offset += 4u;
             if (++instructions_since_safepoint >= safepoint_interval) {
                 INSERT_SAFEPOINT((uint32_t)offset);
@@ -3223,6 +3802,7 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
             inst->operands.unary.dst_reg = dst;
             inst->operands.unary.src_reg = src;
             ORUS_JIT_SET_KIND(dst, ORUS_JIT_VALUE_U32, inst);
+            ORUS_JIT_SPECIALIZATION_INVALIDATE_REG(dst);
             offset += 4u;
             if (++instructions_since_safepoint >= safepoint_interval) {
                 INSERT_SAFEPOINT((uint32_t)offset);
@@ -3263,6 +3843,7 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
             inst->operands.unary.dst_reg = dst;
             inst->operands.unary.src_reg = src;
             ORUS_JIT_SET_KIND(dst, ORUS_JIT_VALUE_U32, inst);
+            ORUS_JIT_SPECIALIZATION_INVALIDATE_REG(dst);
             offset += 4u;
             if (++instructions_since_safepoint >= safepoint_interval) {
                 INSERT_SAFEPOINT((uint32_t)offset);
@@ -3303,6 +3884,7 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
             inst->operands.unary.dst_reg = dst;
             inst->operands.unary.src_reg = src;
             ORUS_JIT_SET_KIND(dst, ORUS_JIT_VALUE_U32, inst);
+            ORUS_JIT_SPECIALIZATION_INVALIDATE_REG(dst);
             offset += 4u;
             if (++instructions_since_safepoint >= safepoint_interval) {
                 INSERT_SAFEPOINT((uint32_t)offset);
@@ -3343,6 +3925,7 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
             inst->operands.unary.dst_reg = dst;
             inst->operands.unary.src_reg = src;
             ORUS_JIT_SET_KIND(dst, ORUS_JIT_VALUE_U64, inst);
+            ORUS_JIT_SPECIALIZATION_INVALIDATE_REG(dst);
             offset += 4u;
             if (++instructions_since_safepoint >= safepoint_interval) {
                 INSERT_SAFEPOINT((uint32_t)offset);
@@ -3383,6 +3966,7 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
             inst->operands.unary.dst_reg = dst;
             inst->operands.unary.src_reg = src;
             ORUS_JIT_SET_KIND(dst, ORUS_JIT_VALUE_U64, inst);
+            ORUS_JIT_SPECIALIZATION_INVALIDATE_REG(dst);
             offset += 4u;
             if (++instructions_since_safepoint >= safepoint_interval) {
                 INSERT_SAFEPOINT((uint32_t)offset);
@@ -3423,6 +4007,7 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
             inst->operands.unary.dst_reg = dst;
             inst->operands.unary.src_reg = src;
             ORUS_JIT_SET_KIND(dst, ORUS_JIT_VALUE_I32, inst);
+            ORUS_JIT_SPECIALIZATION_INVALIDATE_REG(dst);
             offset += 4u;
             if (++instructions_since_safepoint >= safepoint_interval) {
                 INSERT_SAFEPOINT((uint32_t)offset);
@@ -3463,6 +4048,7 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
             inst->operands.unary.dst_reg = dst;
             inst->operands.unary.src_reg = src;
             ORUS_JIT_SET_KIND(dst, ORUS_JIT_VALUE_I64, inst);
+            ORUS_JIT_SPECIALIZATION_INVALIDATE_REG(dst);
             offset += 4u;
             if (++instructions_since_safepoint >= safepoint_interval) {
                 INSERT_SAFEPOINT((uint32_t)offset);
@@ -3505,6 +4091,7 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
             inst->operands.unary.dst_reg = dst;
             inst->operands.unary.src_reg = src;
             ORUS_JIT_SET_KIND(dst, ORUS_JIT_VALUE_U32, inst);
+            ORUS_JIT_SPECIALIZATION_INVALIDATE_REG(dst);
             offset += 4u;
             if (++instructions_since_safepoint >= safepoint_interval) {
                 INSERT_SAFEPOINT((uint32_t)offset);
@@ -3547,6 +4134,7 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
             inst->operands.unary.dst_reg = dst;
             inst->operands.unary.src_reg = src;
             ORUS_JIT_SET_KIND(dst, ORUS_JIT_VALUE_U64, inst);
+            ORUS_JIT_SPECIALIZATION_INVALIDATE_REG(dst);
             offset += 4u;
             if (++instructions_since_safepoint >= safepoint_interval) {
                 INSERT_SAFEPOINT((uint32_t)offset);
@@ -3589,6 +4177,7 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
             inst->operands.unary.dst_reg = dst;
             inst->operands.unary.src_reg = src;
             ORUS_JIT_SET_KIND(dst, ORUS_JIT_VALUE_F64, inst);
+            ORUS_JIT_SPECIALIZATION_INVALIDATE_REG(dst);
             offset += 4u;
             if (++instructions_since_safepoint >= safepoint_interval) {
                 INSERT_SAFEPOINT((uint32_t)offset);
@@ -3630,6 +4219,7 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
             inst->operands.arithmetic.lhs_reg = lhs;
             inst->operands.arithmetic.rhs_reg = rhs;
             ORUS_JIT_SET_KIND(dst, ORUS_JIT_VALUE_STRING, inst);
+            ORUS_JIT_SPECIALIZATION_INVALIDATE_REG(dst);
             offset += 4u;
             if (++instructions_since_safepoint >= safepoint_interval) {
                 INSERT_SAFEPOINT((uint32_t)offset);
@@ -3661,6 +4251,7 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
             inst->operands.unary.dst_reg = dst;
             inst->operands.unary.src_reg = src;
             ORUS_JIT_SET_KIND(dst, ORUS_JIT_VALUE_STRING, inst);
+            ORUS_JIT_SPECIALIZATION_INVALIDATE_REG(dst);
             offset += 3u;
             if (++instructions_since_safepoint >= safepoint_interval) {
                 INSERT_SAFEPOINT((uint32_t)offset);
@@ -3739,6 +4330,7 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
             inst->operands.arithmetic.lhs_reg = lhs;
             inst->operands.arithmetic.rhs_reg = rhs;
             ORUS_JIT_SET_KIND(dst, ORUS_JIT_VALUE_BOOL, inst);
+            ORUS_JIT_SPECIALIZATION_INVALIDATE_REG(dst);
             offset += 4u;
             if (++instructions_since_safepoint >= safepoint_interval) {
                 INSERT_SAFEPOINT((uint32_t)offset);
@@ -3785,6 +4377,11 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
             inst->operands.arithmetic.lhs_reg = lhs;
             inst->operands.arithmetic.rhs_reg = rhs;
             ORUS_JIT_SET_KIND(dst, kind, inst);
+            if (specialization_enabled) {
+                if (!orus_jit_specialization_try_fold_arithmetic(&specialization_state, inst)) {
+                    orus_jit_specialization_invalidate(&specialization_state, dst);
+                }
+            }
             offset += 4u;
             if (++instructions_since_safepoint >= safepoint_interval) {
                 INSERT_SAFEPOINT((uint32_t)offset);
@@ -3874,6 +4471,7 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
             inst->operands.arithmetic.lhs_reg = lhs;
             inst->operands.arithmetic.rhs_reg = rhs;
             ORUS_JIT_SET_KIND(dst, ORUS_JIT_VALUE_BOOL, inst);
+            ORUS_JIT_SPECIALIZATION_INVALIDATE_REG(dst);
             offset += 4u;
             if (++instructions_since_safepoint >= safepoint_interval) {
                 INSERT_SAFEPOINT((uint32_t)offset);
@@ -3887,7 +4485,20 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
 
 translation_done:
     program->loop_end_offset = (uint32_t)offset;
+    if (specialization_enabled) {
+        for (uint16_t reg = 0; reg < REGISTER_COUNT; ++reg) {
+            if (!orus_jit_specialization_has_constant(&specialization_state, reg)) {
+                continue;
+            }
+            OrusJitIRInstruction* def = specialization_state.defining_instruction[reg];
+            if (def) {
+                def->optimization_flags |= ORUS_JIT_IR_FLAG_LOOP_INVARIANT;
+            }
+        }
+    }
 #undef INSERT_SAFEPOINT
+#undef ORUS_JIT_SPECIALIZATION_INVALIDATE_ALL
+#undef ORUS_JIT_SPECIALIZATION_INVALIDATE_REG
     if (!saw_terminal) {
         OrusJitIRInstruction* inst = orus_jit_ir_program_append(program);
         if (!inst) {

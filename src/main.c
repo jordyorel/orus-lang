@@ -299,6 +299,16 @@ int main(int argc, const char* argv[]) {
                jit_stats.cache_misses,
                jit_stats.deopts);
 
+        double coverage =
+            (jit_stats.invocations > 0)
+                ? (100.0 * (double)jit_stats.native_dispatches /
+                   (double)jit_stats.invocations)
+                : 0.0;
+        printf("[JIT Benchmark] native coverage: %.1f%% (%" PRIu64 "/%" PRIu64 ")\n",
+               coverage,
+               jit_stats.native_dispatches,
+               jit_stats.invocations);
+
         if (jit_stats.translation_success == 0 ||
             jit_stats.native_dispatches == 0) {
             printf("[JIT Benchmark] warning: baseline tier did not translate this "

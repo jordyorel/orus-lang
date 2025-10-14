@@ -184,6 +184,7 @@ typedef struct OrusJitIRInstruction {
     OrusJitIROpcode opcode;
     OrusJitValueKind value_kind;
     uint32_t bytecode_offset;
+    uint32_t optimization_flags;
     union {
         struct {
             uint16_t dst_reg;
@@ -274,6 +275,11 @@ typedef struct OrusJitIRInstruction {
         OrusJitIRFusedLoopOperands fused_loop;
     } operands;
 } OrusJitIRInstruction;
+
+#define ORUS_JIT_IR_FLAG_VECTOR_HEAD    (1u << 0)
+#define ORUS_JIT_IR_FLAG_VECTOR_TAIL    (1u << 1)
+#define ORUS_JIT_IR_FLAG_INLINE_CACHE   (1u << 2)
+#define ORUS_JIT_IR_FLAG_LOOP_INVARIANT (1u << 3)
 
 typedef struct OrusJitIRProgram {
     OrusJitIRInstruction* instructions;

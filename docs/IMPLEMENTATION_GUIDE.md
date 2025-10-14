@@ -87,6 +87,55 @@ if (cached && cached->entry_point) {
 }
 ```
 
+## DynASM Debugging Workflow
+- Instrumentation for native debugging now lives in `OrusJitDebug`. Enable the
+  subsystems you need before compiling a loop to avoid paying for global
+  bookkeeping on every tier-up.
+- Disassembly dumps capture the scheduled IR, formatted mnemonics, and a
+  hex-encoded machine listing for each entry so developers can diff DynASM
+  output between architectures.
+- Guard exit traces retain the most recent failures in a ring buffer, including
+  timestamps, function/loop identifiers, and developer-provided reasons. Loop
+  telemetry counters (entries/slow paths/guard exits) can be toggled per-loop
+  to prevent noise when stress testing the tiering controller.
+
+```c
+// Enable disassembly and guard tracing for the loop about to be compiled.
+OrusJitDebugConfig config = ORUS_JIT_DEBUG_CONFIG_INIT;
+config.capture_disassembly = true;
+config.capture_guard_traces = true;
+config.loop_telemetry_enabled = true;
+orus_jit_debug_set_config(&config);
+orus_jit_debug_clear_loop_overrides();
+orus_jit_debug_set_loop_enabled(loop_id, true);  // Track this loop only
+
+JITEntry entry = {0};
+if (orus_jit_backend_compile_ir(vm->jit_backend, program, &entry) ==
+        JIT_BACKEND_OK) {
+    OrusJitDebugDisassembly dump;
+    if (orus_jit_debug_last_disassembly(&dump)) {
+        fputs(dump.buffer, stdout);  // Inspect IR + machine listing
+    }
+
+    OrusJitGuardTraceEvent guard_log[16];
+    size_t guard_events = orus_jit_debug_copy_guard_traces(
+        guard_log,
+        sizeof(guard_log) / sizeof(guard_log[0]));
+
+    OrusJitLoopTelemetry loop_stats[8];
+    size_t tracked = orus_jit_debug_collect_loop_telemetry(
+        loop_stats,
+        sizeof(loop_stats) / sizeof(loop_stats[0]));
+    // loop_stats[0] now includes entries/slow paths/guard exits for loop_id
+}
+```
+
+- Reset instrumentation with `orus_jit_debug_reset()` when finished so future
+  compilations run without the extra diagnostics.
+- Guard traces and loop telemetry only update when the respective toggles are
+  enabled, keeping the hot path free from unnecessary branches in production
+  builds.
+
 ## Type-Mismatch Deoptimization Stubs
 - Specialised functions now receive a compact metadata stub that records the
   arity so the runtime can flush cached parameter types before falling back to

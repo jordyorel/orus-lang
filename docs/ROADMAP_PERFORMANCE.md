@@ -459,6 +459,11 @@ TEST_CASE(test_aot_binary_executes) {
 [] Compiled binaries run standalone with full GC support.
 [] Performance within 10–15% of Go.
 
+### Phase 6 Updates — Native Tier Resilience
+
+- Established executable-heap W^X enforcement with tracked allocation regions and added native-frame canaries so the runtime aborts immediately if helper stubs or stack metadata are corrupted.
+- Introduced `test_vm_jit_stress` to run long-duration arithmetic kernels, GC-heavy string churn, and multi-process JIT invocations, ensuring the new safeguards hold under sustained and concurrent load.
+
 ---
 
 ## Phase 7 — Runtime and GC Enhancements

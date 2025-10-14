@@ -9,6 +9,9 @@ The following measurements were collected by running `make test` on the release 
 - **Trivial stub retired:** Unsupported translations now stay blocklisted without compiling a per-loop return stub, so benchmark
   counters only rise when the backend emits real native blocks. Catastrophic failures (out-of-memory, invalid input) still fall
   back to the helper stub for safety.
+- **Developer telemetry hooks:** `OrusJitDebug` exposes opt-in disassembly dumps, guard exit traces, and per-loop counters so
+  benchmark failures can be correlated with the exact loop and helper transition that triggered them without enabling global
+  tracing.
 
 - **Interpreter baseline corpus:** `scripts/measure_hot_loop_baselines.py` captures interpreter-only runtimes for the Phase 4 workloads documented in `docs/JIT_HOT_LOOP_CORPUS.md`. Current release-build measurements (2024-07-05) are summarized below.
 

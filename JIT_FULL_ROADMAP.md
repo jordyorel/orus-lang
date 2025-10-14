@@ -35,34 +35,54 @@ subtasks as the implementation evolves.
 
 ## Stage 3 – Runtime Integration & Services
 
-- [ ] Introduce shared ABI-compliant DynASM call stubs for GC, string operations, and other runtime helpers.
-- [ ] Implement safepoint awareness in native frames, including register flushing and slow-path transitions during collection.
-- [ ] Ensure string operations (comparisons, concatenation, length) either inline fast paths or fall back to helper calls without deopt.
-- [ ] Support exception propagation and error reporting from native frames back to interpreter handlers.
-- [ ] Harden the tiering controller to handle tier transitions, invalidation, and cache reuse across recompilations.
+- [x] Introduce shared ABI-compliant DynASM call stubs for GC, string operations, and other runtime helpers.
+- [x] Implement safepoint awareness in native frames, including register flushing and slow-path transitions during collection.
+- [x] Ensure string operations (comparisons, concatenation, length) either inline fast paths or fall back to helper calls without deopt.
+- [x] Support exception propagation and error reporting from native frames back to interpreter handlers.
+- [x] Harden the tiering controller to handle tier transitions, invalidation, and cache reuse across recompilations.
 
 ## Stage 4 – Optimization & Performance Scaling
 
-- [ ] Add basic block scheduling and peephole optimizations to the DynASM backend for reduced register pressure and branch stalls.
-- [ ] Implement simple profiling-guided specialization (e.g., constant folding, invariant hoisting) within the translator.
-- [ ] Enable register allocation improvements (live-range splitting, spill minimization) for hot loops.
-- [ ] Add support for vectorized math kernels and inline caching of property accesses where applicable.
-- [ ] Integrate warm-up heuristics that minimize thrashing between interpreter and JIT tiers on marginal loops.
+- [x] Add basic block scheduling and peephole optimizations to the DynASM backend for reduced register pressure and branch stalls.
+  - DynASM now computes unique register pressure metrics per block, prefers hot successors with fewer live values, and folds redundant loads and arithmetic into constants during scheduling.
+  - Loop-invariant writes lower successor weights, and the peephole pass removes self-moves and redundant helper setups before the emitter runs.
+- [x] Implement simple profiling-guided specialization (e.g., constant folding, invariant hoisting) within the translator.
+  - The translator tracks profiling-enabled constant definitions, hoists invariant loads, and annotates IR so the backend can preserve loop constants without reloading.
+  - Specialization-propagated moves maintain defining instructions, enabling the backend peephole pass to fold arithmetic and skip redundant work.
+- [x] Enable register allocation improvements (live-range splitting, spill minimization) for hot loops.
+  - Hot loop metadata now records live ranges for counters, bounds, and steps so the allocator can plan register splits.
+  - Register allocator exposes loop-aware APIs and optimizer state to minimize spills across loop iterations.
+- [x] Add support for vectorized math kernels and inline caching of property accesses where applicable.
+  - Native backend detects vectorizable opcode pairs, routes them through SSE-assisted helpers, and exposes interpreter fallbacks.
+  - Inline caching infrastructure covers numeric `toString` conversions with signature-based caching to stay in native code.
+- [x] Integrate warm-up heuristics that minimize thrashing between interpreter and JIT tiers on marginal loops.
+  - Tiering samples now track cooldown windows, warm-up levels, and backoff generations so marginal loops must demonstrate sustained heat before re-tiering.
+  - Deoptimizations escalate the cooldown exponent and saturating thresholds to prevent oscillation while still allowing loops to recover over time.
 
 ## Stage 5 – Observability & Regression Shielding
 
-- [ ] Split profiling counters by opcode family, value kind, and bailout reason with CLI/JSON exports.
-- [ ] Automate `make jit-benchmark-orus` in CI with pass/fail thresholds for uplift (≥3×) and native coverage (≥90%).
-- [ ] Capture disassembly dumps, guard exit traces, and per-loop telemetry toggles for developer debugging.
-- [ ] Document DynASM workflows, translation troubleshooting, and benchmarking procedures in `docs/IMPLEMENTATION_GUIDE.md`.
-- [ ] Maintain `JIT_BENCHMARK_RESULTS.md` with up-to-date metrics and narrative explanations after each milestone lands.
+- [x] Split profiling counters by opcode family, value kind, and bailout reason with CLI/JSON exports.
+  - Runtime profiling now aggregates sampled instructions per opcode family, surfaces JIT failure counts by translation status, category, and value kind, and exposes the same breakdown in `dumpProfilingStats` plus the JSON exporter.
+  - CLI exports also propagate the new family aggregates so downstream tooling can monitor hot spots without parsing individual opcode samples.
+- [x] Automate `make jit-benchmark-orus` in CI with pass/fail thresholds for uplift (≥3×) and native coverage (≥90%).
+  - Added a Python harness that runs the benchmark suite, enforces ≥3× speedup and ≥90% native coverage, and prints actionable failures when the thresholds are missed.
+  - Wired the harness into `make jit-benchmark-orus`, taught the CLI to report native coverage, and execute the target inside the release workflow so regressions trip CI immediately.
+- [x] Capture disassembly dumps, guard exit traces, and per-loop telemetry toggles for developer debugging.
+  - Added `OrusJitDebug` instrumentation hooks that snapshot IR listings, hex-encoded machine code, guard exit ring buffers, and loop-level counters gated by per-loop toggles.
+  - Native entry stubs publish loop entries, slow-path requests, and guard exits so developers can target specific loops without drowning in global counters.
+- [x] Document DynASM workflows, translation troubleshooting, and benchmarking procedures in `docs/IMPLEMENTATION_GUIDE.md`.
+- [x] Maintain `JIT_BENCHMARK_RESULTS.md` with up-to-date metrics and narrative explanations after each milestone lands.
 
 ## Stage 6 – Platform Parity & Release Readiness
 
-- [ ] Validate DynASM backend parity on AArch64 and RISC-V, including cross-arch test harnesses and CI coverage.
-- [ ] Stress test JIT execution with long-running workloads, high-concurrency scenarios, and GC-heavy programs.
-- [ ] Finalize security review: guard stack integrity, enforce W^X policies, and audit helper call ABI compliance.
-- [ ] Update user-facing documentation (`docs/ROADMAP_PERFORMANCE.md`, release notes) to reflect milestones and capabilities.
+- [x] Validate DynASM backend parity on AArch64 and RISC-V, including cross-arch test harnesses and CI coverage.
+  - Added a cross-architecture parity harness that classifies IR programs and asserts identical coverage across x86_64, AArch64, and RISC-V targets as part of CI test suites.
+  - Extended make targets so cross-arch parity runs alongside helper-stub and translation smoke tests during `jit-cross-arch-tests`.
+- [x] Stress test JIT execution with long-running workloads, high-concurrency scenarios, and GC-heavy programs.
+  - Added `test_vm_jit_stress` harness that drives long-running arithmetic loops, GC-heavy string workloads, and fork-based concurrency stress to exercise native dispatch stability.
+- [x] Finalize security review: guard stack integrity, enforce W^X policies, and audit helper call ABI compliance.
+  - Native frames now embed canaries with fatal verification on corruption, DynASM helper calls are validated against a registry, and executable heaps enforce W^X transitions via tracked regions.
+- [x] Update user-facing documentation (`docs/ROADMAP_PERFORMANCE.md`, release notes) to reflect milestones and capabilities.
 - [ ] Define exit criteria for GA: sustained uplift across benchmarks, zero unsupported opcode bailouts, and stable FFI integration.
 
 Use this roadmap as the living source of truth for JIT progress. After each landing, update the relevant checkbox, add links to

@@ -64,6 +64,23 @@ typedef struct DualRegisterAllocator {
     int active_span_count;
     TypedSpanReservation pending_spans[MAX_TYPED_SPAN_RESERVATIONS];
     int pending_span_count;
+
+    struct HotLoopOptimizerState {
+        bool active;
+        int depth;
+        int position;
+        struct HotLoopLiveRange {
+            int reg;
+            int first_use;
+            int last_use;
+            int use_count;
+            bool has_definition;
+            bool should_spill;
+            int split_reg;
+            RegisterType split_type;
+        } ranges[64];
+        int range_count;
+    } hot_loop;
 } DualRegisterAllocator;
 
 typedef struct RegisterBankDefinition {
@@ -112,6 +129,101 @@ static RegisterAllocation* allocate_register_from_bank(DualRegisterAllocator* al
 static RegisterBankKind register_bank_kind_from_type(RegisterType type);
 static int allocate_contiguous_from_bank(RegisterBank* bank, int count);
 static void release_contiguous_to_bank(RegisterBank* bank, int start, int count);
+
+static void hot_loop_reset(struct HotLoopOptimizerState* state) {
+    if (!state) {
+        return;
+    }
+    state->active = false;
+    state->depth = 0;
+    state->position = 0;
+    state->range_count = 0;
+    for (int i = 0; i < 64; ++i) {
+        state->ranges[i].reg = -1;
+        state->ranges[i].first_use = 0;
+        state->ranges[i].last_use = 0;
+        state->ranges[i].use_count = 0;
+        state->ranges[i].has_definition = false;
+        state->ranges[i].should_spill = false;
+        state->ranges[i].split_reg = -1;
+        state->ranges[i].split_type = REG_TYPE_NONE;
+    }
+}
+
+static struct HotLoopLiveRange*
+hot_loop_find_range(struct HotLoopOptimizerState* state, int reg, bool create) {
+    if (!state || reg < 0) {
+        return NULL;
+    }
+    for (int i = 0; i < state->range_count; ++i) {
+        if (state->ranges[i].reg == reg) {
+            return &state->ranges[i];
+        }
+    }
+    if (!create || state->range_count >= 64) {
+        return NULL;
+    }
+    struct HotLoopLiveRange* range = &state->ranges[state->range_count++];
+    range->reg = reg;
+    range->first_use = state->position;
+    range->last_use = state->position;
+    range->use_count = 0;
+    range->has_definition = false;
+    range->should_spill = false;
+    range->split_reg = -1;
+    range->split_type = REG_TYPE_NONE;
+    return range;
+}
+
+static void hot_loop_note_use(DualRegisterAllocator* allocator,
+                              int reg,
+                              bool is_definition) {
+    if (!allocator) {
+        return;
+    }
+    struct HotLoopOptimizerState* state = &allocator->hot_loop;
+    if (!state->active || reg < 0 || reg >= REGISTER_COUNT) {
+        return;
+    }
+    state->position++;
+    struct HotLoopLiveRange* range = hot_loop_find_range(state, reg, true);
+    if (!range) {
+        return;
+    }
+    if (is_definition) {
+        range->first_use = state->position;
+        range->has_definition = true;
+    }
+    if (range->use_count == 0) {
+        range->first_use = state->position;
+    }
+    range->last_use = state->position;
+    range->use_count++;
+}
+
+static void hot_loop_finalize(DualRegisterAllocator* allocator) {
+    if (!allocator) {
+        return;
+    }
+    struct HotLoopOptimizerState* state = &allocator->hot_loop;
+    if (!state->active || state->depth > 0) {
+        return;
+    }
+    for (int i = 0; i < state->range_count; ++i) {
+        struct HotLoopLiveRange* range = &state->ranges[i];
+        int span = range->last_use - range->first_use;
+        if (span < 0) {
+            span = 0;
+        }
+        if (range->use_count <= 1 && span > 6) {
+            range->should_spill = true;
+        } else if (range->use_count > 2 && span > 4) {
+            range->should_spill = false;
+        }
+    }
+    state->active = false;
+    state->depth = 0;
+}
 
 // ====== DUAL REGISTER SYSTEM IMPLEMENTATION ======
 
@@ -489,6 +601,8 @@ DualRegisterAllocator* init_dual_register_allocator(void) {
     allocator->pending_span_count = 0;
     memset(allocator->active_spans, 0, sizeof(allocator->active_spans));
     memset(allocator->pending_spans, 0, sizeof(allocator->pending_spans));
+
+    hot_loop_reset(&allocator->hot_loop);
 
     REGISTER_ALLOCATOR_LOG("[DUAL_REGISTER_ALLOCATOR] Initialized with typed register optimization enabled\n");
     return allocator;
@@ -1103,5 +1217,84 @@ void compiler_allocator_reset_diagnostics(DualRegisterAllocator* allocator) {
     legacy->max_scope_depth_seen = legacy->current_scope_level;
     legacy->scope_depth_overflow_count = 0;
     legacy->scope_exit_underflow_count = 0;
+}
+
+void compiler_allocator_begin_hot_loop(DualRegisterAllocator* allocator) {
+    if (!allocator) {
+        return;
+    }
+    struct HotLoopOptimizerState* state = &allocator->hot_loop;
+    if (!state->active) {
+        hot_loop_reset(state);
+        state->active = true;
+    }
+    state->depth++;
+}
+
+void compiler_allocator_track_hot_use(DualRegisterAllocator* allocator,
+                                      int reg,
+                                      bool is_definition) {
+    hot_loop_note_use(allocator, reg, is_definition);
+}
+
+int compiler_allocator_plan_split(DualRegisterAllocator* allocator,
+                                  int reg,
+                                  RegisterType type) {
+    if (!allocator || reg < 0) {
+        return -1;
+    }
+    struct HotLoopOptimizerState* state = &allocator->hot_loop;
+    if (!state->active) {
+        return -1;
+    }
+    struct HotLoopLiveRange* range = hot_loop_find_range(state, reg, true);
+    if (!range) {
+        return -1;
+    }
+    if (range->split_reg >= 0) {
+        return range->split_reg;
+    }
+    int span = range->last_use - range->first_use;
+    if (span < 0) {
+        span = 0;
+    }
+    if (range->use_count < 2 && span < 6) {
+        return -1;
+    }
+    int split_reg = mp_allocate_temp_register(allocator->legacy_allocator);
+    if (split_reg >= 0) {
+        range->split_reg = split_reg;
+        range->split_type = type;
+    }
+    return split_reg;
+}
+
+bool compiler_allocator_should_spill(DualRegisterAllocator* allocator, int reg) {
+    if (!allocator || reg < 0) {
+        return false;
+    }
+    struct HotLoopOptimizerState* state = &allocator->hot_loop;
+    for (int i = 0; i < state->range_count; ++i) {
+        if (state->ranges[i].reg == reg) {
+            return state->ranges[i].should_spill;
+        }
+    }
+    return false;
+}
+
+void compiler_allocator_end_hot_loop(DualRegisterAllocator* allocator) {
+    if (!allocator) {
+        return;
+    }
+    struct HotLoopOptimizerState* state = &allocator->hot_loop;
+    if (!state->active) {
+        return;
+    }
+    if (state->depth > 0) {
+        state->depth--;
+    }
+    if (state->depth == 0) {
+        hot_loop_finalize(allocator);
+    }
 }
 

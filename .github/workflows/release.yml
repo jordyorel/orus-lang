@@ -98,6 +98,9 @@ jobs:
             echo "reason=unchanged" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Run JIT benchmarks
+        run: make jit-benchmark-orus
+
       - name: Validate tag matches version
         if: steps.release_needed.outputs.should_release == 'true' && steps.trigger.outputs.from_tag == 'true'
         run: |
