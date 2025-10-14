@@ -1381,6 +1381,9 @@ typedef struct VM {
     int currentLine;
     int currentColumn;
 
+    // Diagnostics
+    uint64_t safe_register_reads;
+
     double lastExecutionTime;
 
     // Profiling / tier-up bookkeeping
