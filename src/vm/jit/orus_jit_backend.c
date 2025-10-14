@@ -10118,9 +10118,12 @@ orus_jit_backend_compile_ir(struct OrusJitBackend* backend,
 #endif
 
     JITBackendStatus status = JIT_BACKEND_ASSEMBLY_ERROR;
+    bool helper_stub_only_option = true;
+    bool native_codegen_failed = false;
 
 #if defined(__x86_64__) || defined(_M_X64)
     if (!orus_jit_should_force_helper_stub()) {
+        helper_stub_only_option = false;
         status = orus_jit_backend_emit_linear_x86(backend, block, out_entry);
         if (status == JIT_BACKEND_OK) {
             orus_jit_native_block_register(block);
@@ -10130,10 +10133,14 @@ orus_jit_backend_compile_ir(struct OrusJitBackend* backend,
             orus_jit_native_block_destroy(block);
             return status;
         }
+        native_codegen_failed = true;
+    } else {
+        native_codegen_failed = true;
     }
 #endif
 #if defined(__aarch64__)
     if (!orus_jit_should_force_helper_stub()) {
+        helper_stub_only_option = false;
         status = orus_jit_backend_emit_linear_a64(backend, block, out_entry);
         if (status == JIT_BACKEND_OK) {
             orus_jit_native_block_register(block);
@@ -10143,6 +10150,9 @@ orus_jit_backend_compile_ir(struct OrusJitBackend* backend,
             orus_jit_native_block_destroy(block);
             return status;
         }
+        native_codegen_failed = true;
+    } else {
+        native_codegen_failed = true;
     }
 #endif
 
@@ -10160,6 +10170,18 @@ orus_jit_backend_compile_ir(struct OrusJitBackend* backend,
         memset(out_entry, 0, sizeof(*out_entry));
         return status;
 #endif
+    }
+
+    if (helper_stub_only_option || native_codegen_failed) {
+        if (out_entry->code_ptr && out_entry->code_capacity) {
+            orus_jit_release_executable(out_entry->code_ptr,
+                                        out_entry->code_capacity);
+        }
+        memset(out_entry, 0, sizeof(*out_entry));
+        block->code_ptr = NULL;
+        block->code_capacity = 0;
+        orus_jit_native_block_destroy(block);
+        return JIT_BACKEND_UNSUPPORTED;
     }
 
     orus_jit_native_block_register(block);
