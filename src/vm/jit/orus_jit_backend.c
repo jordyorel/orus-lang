@@ -9142,6 +9142,7 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                     return JIT_BACKEND_ASSEMBLY_ERROR;
                 }
                 break;
+            case ORUS_JIT_IR_OP_LOAD_BOOL_CONST:
             case ORUS_JIT_IR_OP_MOVE_BOOL:
                 if (inst->value_kind != ORUS_JIT_VALUE_BOOL) {
                     return JIT_BACKEND_ASSEMBLY_ERROR;
@@ -9374,7 +9375,12 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
             case ORUS_JIT_IR_OP_LOAD_U32_CONST:
             case ORUS_JIT_IR_OP_LOAD_U64_CONST:
             case ORUS_JIT_IR_OP_LOAD_F64_CONST:
+            case ORUS_JIT_IR_OP_LOAD_BOOL_CONST:
             case ORUS_JIT_IR_OP_LOAD_STRING_CONST: {
+                uint64_t value_bits = inst->operands.load_const.immediate_bits;
+                if (inst->opcode == ORUS_JIT_IR_OP_LOAD_BOOL_CONST) {
+                    value_bits &= 0x1u;
+                }
                 if (!orus_jit_a64_code_buffer_emit_u32(&code, A64_LDR_X(0u, 31u, 0u)) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, A64_LDR_X(1u, 31u, 1u)) ||
                     !orus_jit_a64_emit_mov_imm64_buffer(&code, 2u,
@@ -9382,7 +9388,7 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                     !orus_jit_a64_emit_mov_imm64_buffer(
                         &code, 3u, (uint64_t)inst->operands.load_const.dst_reg) ||
                     !orus_jit_a64_emit_mov_imm64_buffer(
-                        &code, 4u, inst->operands.load_const.immediate_bits) ||
+                        &code, 4u, value_bits) ||
                     !orus_jit_a64_emit_mov_imm64_buffer(
                         &code, 16u,
                         (uint64_t)(uintptr_t)&orus_jit_native_linear_load) ||
