@@ -256,6 +256,33 @@ static inline bool dispatch_handle_add_i32_r(void) {
     uint8_t src1 = READ_BYTE();
     uint8_t src2 = READ_BYTE();
 
+    VmNumericOperand left_typed;
+    VmNumericOperand right_typed;
+    if (vm_dispatch_try_read_numeric_typed(src1, &left_typed) &&
+        vm_dispatch_try_read_numeric_typed(src2, &right_typed) &&
+        vm_dispatch_numeric_type_supported(left_typed.type) &&
+        left_typed.type == right_typed.type) {
+        switch (left_typed.type) {
+            case REG_TYPE_I32:
+                vm_store_i32_typed_hot(dst, left_typed.value.i32 + right_typed.value.i32);
+                return true;
+            case REG_TYPE_I64:
+                vm_store_i64_typed_hot(dst, left_typed.value.i64 + right_typed.value.i64);
+                return true;
+            case REG_TYPE_U32:
+                vm_store_u32_typed_hot(dst, left_typed.value.u32 + right_typed.value.u32);
+                return true;
+            case REG_TYPE_U64:
+                vm_store_u64_typed_hot(dst, left_typed.value.u64 + right_typed.value.u64);
+                return true;
+            case REG_TYPE_F64:
+                vm_store_f64_typed_hot(dst, left_typed.value.f64 + right_typed.value.f64);
+                return true;
+            default:
+                break;
+        }
+    }
+
     Value val1 = vm_get_register_safe(src1);
     Value val2 = vm_get_register_safe(src2);
 
@@ -312,40 +339,45 @@ static inline bool dispatch_handle_add_i32_r(void) {
     }
 
     if (val1.type != val2.type) {
-        DISPATCH_TYPE_ERROR("Operands must be the same type. Use 'as' for explicit type conversion.");
+        DISPATCH_TYPE_ERROR(
+            "Operands must be the same type. Use 'as' for explicit type conversion.");
     }
 
     if (!(IS_I32(val1) || IS_I64(val1) || IS_U32(val1) || IS_U64(val1) || IS_F64(val1))) {
         DISPATCH_TYPE_ERROR("Operands must be numeric (i32, i64, u32, u64, or f64)");
     }
 
-#if USE_FAST_ARITH
-    int32_t a = AS_I32(val1);
-    int32_t b = AS_I32(val2);
-    vm_set_register_safe(dst, I32_VAL(a + b));
-#else
     if (IS_I32(val1)) {
         int32_t a = AS_I32(val1);
         int32_t b = AS_I32(val2);
-        vm_set_register_safe(dst, I32_VAL(a + b));
+        vm_cache_i32_typed(src1, a);
+        vm_cache_i32_typed(src2, b);
+        vm_store_i32_typed_hot(dst, a + b);
     } else if (IS_I64(val1)) {
         int64_t a = AS_I64(val1);
         int64_t b = AS_I64(val2);
-        vm_set_register_safe(dst, I64_VAL(a + b));
+        vm_cache_i64_typed(src1, a);
+        vm_cache_i64_typed(src2, b);
+        vm_store_i64_typed_hot(dst, a + b);
     } else if (IS_U32(val1)) {
         uint32_t a = AS_U32(val1);
         uint32_t b = AS_U32(val2);
-        vm_set_register_safe(dst, U32_VAL(a + b));
+        vm_cache_u32_typed(src1, a);
+        vm_cache_u32_typed(src2, b);
+        vm_store_u32_typed_hot(dst, a + b);
     } else if (IS_U64(val1)) {
         uint64_t a = AS_U64(val1);
         uint64_t b = AS_U64(val2);
-        vm_set_register_safe(dst, U64_VAL(a + b));
+        vm_cache_u64_typed(src1, a);
+        vm_cache_u64_typed(src2, b);
+        vm_store_u64_typed_hot(dst, a + b);
     } else if (IS_F64(val1)) {
         double a = AS_F64(val1);
         double b = AS_F64(val2);
-        vm_set_register_safe(dst, F64_VAL(a + b));
+        vm_cache_f64_typed(src1, a);
+        vm_cache_f64_typed(src2, b);
+        vm_store_f64_typed_hot(dst, a + b);
     }
-#endif
     return true;
 }
 
@@ -354,44 +386,415 @@ static inline bool dispatch_handle_sub_i32_r(void) {
     uint8_t src1 = READ_BYTE();
     uint8_t src2 = READ_BYTE();
 
+    VmNumericOperand left_typed;
+    VmNumericOperand right_typed;
+    if (vm_dispatch_try_read_numeric_typed(src1, &left_typed) &&
+        vm_dispatch_try_read_numeric_typed(src2, &right_typed) &&
+        vm_dispatch_numeric_type_supported(left_typed.type) &&
+        left_typed.type == right_typed.type) {
+        switch (left_typed.type) {
+            case REG_TYPE_I32:
+                vm_store_i32_typed_hot(dst, left_typed.value.i32 - right_typed.value.i32);
+                return true;
+            case REG_TYPE_I64:
+                vm_store_i64_typed_hot(dst, left_typed.value.i64 - right_typed.value.i64);
+                return true;
+            case REG_TYPE_U32:
+                vm_store_u32_typed_hot(dst, left_typed.value.u32 - right_typed.value.u32);
+                return true;
+            case REG_TYPE_U64:
+                vm_store_u64_typed_hot(dst, left_typed.value.u64 - right_typed.value.u64);
+                return true;
+            case REG_TYPE_F64:
+                vm_store_f64_typed_hot(dst, left_typed.value.f64 - right_typed.value.f64);
+                return true;
+            default:
+                break;
+        }
+    }
+
     Value val1 = vm_get_register_safe(src1);
     Value val2 = vm_get_register_safe(src2);
 
     if (val1.type != val2.type) {
-        DISPATCH_TYPE_ERROR("Operands must be the same type. Use 'as' for explicit type conversion.");
+        DISPATCH_TYPE_ERROR(
+            "Operands must be the same type. Use 'as' for explicit type conversion.");
     }
 
     if (!(IS_I32(val1) || IS_I64(val1) || IS_U32(val1) || IS_U64(val1) || IS_F64(val1))) {
         DISPATCH_TYPE_ERROR("Operands must be numeric (i32, i64, u32, u64, or f64)");
     }
 
-#if USE_FAST_ARITH
-    int32_t a = AS_I32(val1);
-    int32_t b = AS_I32(val2);
-    vm_set_register_safe(dst, I32_VAL(a - b));
-#else
     if (IS_I32(val1)) {
         int32_t a = AS_I32(val1);
         int32_t b = AS_I32(val2);
-        vm_set_register_safe(dst, I32_VAL(a - b));
+        vm_cache_i32_typed(src1, a);
+        vm_cache_i32_typed(src2, b);
+        vm_store_i32_typed_hot(dst, a - b);
     } else if (IS_I64(val1)) {
         int64_t a = AS_I64(val1);
         int64_t b = AS_I64(val2);
-        vm_set_register_safe(dst, I64_VAL(a - b));
+        vm_cache_i64_typed(src1, a);
+        vm_cache_i64_typed(src2, b);
+        vm_store_i64_typed_hot(dst, a - b);
     } else if (IS_U32(val1)) {
         uint32_t a = AS_U32(val1);
         uint32_t b = AS_U32(val2);
-        vm_set_register_safe(dst, U32_VAL(a - b));
+        vm_cache_u32_typed(src1, a);
+        vm_cache_u32_typed(src2, b);
+        vm_store_u32_typed_hot(dst, a - b);
     } else if (IS_U64(val1)) {
         uint64_t a = AS_U64(val1);
         uint64_t b = AS_U64(val2);
-        vm_set_register_safe(dst, U64_VAL(a - b));
+        vm_cache_u64_typed(src1, a);
+        vm_cache_u64_typed(src2, b);
+        vm_store_u64_typed_hot(dst, a - b);
     } else if (IS_F64(val1)) {
         double a = AS_F64(val1);
         double b = AS_F64(val2);
-        vm_set_register_safe(dst, F64_VAL(a - b));
+        vm_cache_f64_typed(src1, a);
+        vm_cache_f64_typed(src2, b);
+        vm_store_f64_typed_hot(dst, a - b);
     }
-#endif
+    return true;
+}
+
+static inline bool dispatch_handle_mul_i32_r(void) {
+    uint8_t dst = READ_BYTE();
+    uint8_t src1 = READ_BYTE();
+    uint8_t src2 = READ_BYTE();
+
+    VmNumericOperand left_typed;
+    VmNumericOperand right_typed;
+    if (vm_dispatch_try_read_numeric_typed(src1, &left_typed) &&
+        vm_dispatch_try_read_numeric_typed(src2, &right_typed) &&
+        vm_dispatch_numeric_type_supported(left_typed.type) &&
+        left_typed.type == right_typed.type) {
+        switch (left_typed.type) {
+            case REG_TYPE_I32:
+                vm_store_i32_typed_hot(dst, left_typed.value.i32 * right_typed.value.i32);
+                return true;
+            case REG_TYPE_I64:
+                vm_store_i64_typed_hot(dst, left_typed.value.i64 * right_typed.value.i64);
+                return true;
+            case REG_TYPE_U32:
+                vm_store_u32_typed_hot(dst, left_typed.value.u32 * right_typed.value.u32);
+                return true;
+            case REG_TYPE_U64:
+                vm_store_u64_typed_hot(dst, left_typed.value.u64 * right_typed.value.u64);
+                return true;
+            case REG_TYPE_F64:
+                vm_store_f64_typed_hot(dst, left_typed.value.f64 * right_typed.value.f64);
+                return true;
+            default:
+                break;
+        }
+    }
+
+    Value val1 = vm_get_register_safe(src1);
+    Value val2 = vm_get_register_safe(src2);
+
+    if (val1.type != val2.type) {
+        DISPATCH_TYPE_ERROR(
+            "Operands must be the same type. Use 'as' for explicit type conversion.");
+    }
+
+    if (!(IS_I32(val1) || IS_I64(val1) || IS_U32(val1) || IS_U64(val1) || IS_F64(val1))) {
+        DISPATCH_TYPE_ERROR("Operands must be numeric (i32, i64, u32, u64, or f64)");
+    }
+
+    if (IS_I32(val1)) {
+        int32_t a = AS_I32(val1);
+        int32_t b = AS_I32(val2);
+        vm_cache_i32_typed(src1, a);
+        vm_cache_i32_typed(src2, b);
+        vm_store_i32_typed_hot(dst, a * b);
+    } else if (IS_I64(val1)) {
+        int64_t a = AS_I64(val1);
+        int64_t b = AS_I64(val2);
+        vm_cache_i64_typed(src1, a);
+        vm_cache_i64_typed(src2, b);
+        vm_store_i64_typed_hot(dst, a * b);
+    } else if (IS_U32(val1)) {
+        uint32_t a = AS_U32(val1);
+        uint32_t b = AS_U32(val2);
+        vm_cache_u32_typed(src1, a);
+        vm_cache_u32_typed(src2, b);
+        vm_store_u32_typed_hot(dst, a * b);
+    } else if (IS_U64(val1)) {
+        uint64_t a = AS_U64(val1);
+        uint64_t b = AS_U64(val2);
+        vm_cache_u64_typed(src1, a);
+        vm_cache_u64_typed(src2, b);
+        vm_store_u64_typed_hot(dst, a * b);
+    } else if (IS_F64(val1)) {
+        double a = AS_F64(val1);
+        double b = AS_F64(val2);
+        vm_cache_f64_typed(src1, a);
+        vm_cache_f64_typed(src2, b);
+        vm_store_f64_typed_hot(dst, a * b);
+    }
+    return true;
+}
+
+static inline bool dispatch_handle_div_i32_r(void) {
+    uint8_t dst = READ_BYTE();
+    uint8_t src1 = READ_BYTE();
+    uint8_t src2 = READ_BYTE();
+
+    VmNumericOperand left_typed;
+    VmNumericOperand right_typed;
+    if (vm_dispatch_try_read_numeric_typed(src1, &left_typed) &&
+        vm_dispatch_try_read_numeric_typed(src2, &right_typed) &&
+        vm_dispatch_numeric_type_supported(left_typed.type) &&
+        left_typed.type == right_typed.type) {
+        switch (left_typed.type) {
+            case REG_TYPE_I32:
+                if (right_typed.value.i32 == 0) {
+                    DISPATCH_RUNTIME_ERROR("Division by zero");
+                }
+                if (left_typed.value.i32 == INT32_MIN && right_typed.value.i32 == -1) {
+                    DISPATCH_RUNTIME_ERROR("Integer overflow");
+                }
+                vm_store_i32_typed_hot(dst, left_typed.value.i32 / right_typed.value.i32);
+                return true;
+            case REG_TYPE_I64:
+                if (right_typed.value.i64 == 0) {
+                    DISPATCH_RUNTIME_ERROR("Division by zero");
+                }
+                if (left_typed.value.i64 == INT64_MIN && right_typed.value.i64 == -1) {
+                    DISPATCH_RUNTIME_ERROR("Integer overflow: result exceeds i64 range");
+                }
+                vm_store_i64_typed_hot(dst, left_typed.value.i64 / right_typed.value.i64);
+                return true;
+            case REG_TYPE_U32:
+                if (right_typed.value.u32 == 0u) {
+                    DISPATCH_RUNTIME_ERROR("Division by zero");
+                }
+                vm_store_u32_typed_hot(dst, left_typed.value.u32 / right_typed.value.u32);
+                return true;
+            case REG_TYPE_U64:
+                if (right_typed.value.u64 == 0u) {
+                    DISPATCH_RUNTIME_ERROR("Division by zero");
+                }
+                vm_store_u64_typed_hot(dst, left_typed.value.u64 / right_typed.value.u64);
+                return true;
+            case REG_TYPE_F64: {
+                double divisor = right_typed.value.f64;
+                if (divisor == 0.0) {
+                    DISPATCH_RUNTIME_ERROR("Division by zero");
+                }
+                double result = left_typed.value.f64 / divisor;
+                if (!isfinite(result)) {
+                    if (isnan(result)) {
+                        DISPATCH_RUNTIME_ERROR("Floating-point operation resulted in NaN");
+                    }
+                    DISPATCH_RUNTIME_ERROR("Floating-point overflow: result is infinite");
+                }
+                vm_store_f64_typed_hot(dst, result);
+                return true;
+            }
+            default:
+                break;
+        }
+    }
+
+    Value val1 = vm_get_register_safe(src1);
+    Value val2 = vm_get_register_safe(src2);
+
+    if (val1.type != val2.type) {
+        DISPATCH_TYPE_ERROR(
+            "Operands must be the same type. Use 'as' for explicit type conversion.");
+    }
+
+    if (!(IS_I32(val1) || IS_I64(val1) || IS_U32(val1) || IS_U64(val1) || IS_F64(val1))) {
+        DISPATCH_TYPE_ERROR("Operands must be numeric (i32, i64, u32, u64, or f64)");
+    }
+
+    if (IS_I32(val1)) {
+        int32_t a = AS_I32(val1);
+        int32_t b = AS_I32(val2);
+        vm_cache_i32_typed(src1, a);
+        vm_cache_i32_typed(src2, b);
+        if (b == 0) {
+            DISPATCH_RUNTIME_ERROR("Division by zero");
+        }
+        if (a == INT32_MIN && b == -1) {
+            DISPATCH_RUNTIME_ERROR("Integer overflow");
+        }
+        vm_store_i32_typed_hot(dst, a / b);
+    } else if (IS_I64(val1)) {
+        int64_t a = AS_I64(val1);
+        int64_t b = AS_I64(val2);
+        vm_cache_i64_typed(src1, a);
+        vm_cache_i64_typed(src2, b);
+        if (b == 0) {
+            DISPATCH_RUNTIME_ERROR("Division by zero");
+        }
+        if (a == INT64_MIN && b == -1) {
+            DISPATCH_RUNTIME_ERROR("Integer overflow: result exceeds i64 range");
+        }
+        vm_store_i64_typed_hot(dst, a / b);
+    } else if (IS_U32(val1)) {
+        uint32_t a = AS_U32(val1);
+        uint32_t b = AS_U32(val2);
+        vm_cache_u32_typed(src1, a);
+        vm_cache_u32_typed(src2, b);
+        if (b == 0u) {
+            DISPATCH_RUNTIME_ERROR("Division by zero");
+        }
+        vm_store_u32_typed_hot(dst, a / b);
+    } else if (IS_U64(val1)) {
+        uint64_t a = AS_U64(val1);
+        uint64_t b = AS_U64(val2);
+        vm_cache_u64_typed(src1, a);
+        vm_cache_u64_typed(src2, b);
+        if (b == 0u) {
+            DISPATCH_RUNTIME_ERROR("Division by zero");
+        }
+        vm_store_u64_typed_hot(dst, a / b);
+    } else if (IS_F64(val1)) {
+        double a = AS_F64(val1);
+        double b = AS_F64(val2);
+        vm_cache_f64_typed(src1, a);
+        vm_cache_f64_typed(src2, b);
+        if (b == 0.0) {
+            DISPATCH_RUNTIME_ERROR("Division by zero");
+        }
+        double result = a / b;
+        if (!isfinite(result)) {
+            if (isnan(result)) {
+                DISPATCH_RUNTIME_ERROR("Floating-point operation resulted in NaN");
+            }
+            DISPATCH_RUNTIME_ERROR("Floating-point overflow: result is infinite");
+        }
+        vm_store_f64_typed_hot(dst, result);
+    }
+    return true;
+}
+
+static inline bool dispatch_handle_mod_i32_r(void) {
+    uint8_t dst = READ_BYTE();
+    uint8_t src1 = READ_BYTE();
+    uint8_t src2 = READ_BYTE();
+
+    VmNumericOperand left_typed;
+    VmNumericOperand right_typed;
+    if (vm_dispatch_try_read_numeric_typed(src1, &left_typed) &&
+        vm_dispatch_try_read_numeric_typed(src2, &right_typed) &&
+        vm_dispatch_numeric_type_supported(left_typed.type) &&
+        left_typed.type == right_typed.type) {
+        switch (left_typed.type) {
+            case REG_TYPE_I32:
+                if (right_typed.value.i32 == 0) {
+                    DISPATCH_RUNTIME_ERROR("Division by zero");
+                }
+                if (left_typed.value.i32 == INT32_MIN && right_typed.value.i32 == -1) {
+                    DISPATCH_RUNTIME_ERROR("Integer overflow");
+                }
+                vm_store_i32_typed_hot(dst, left_typed.value.i32 % right_typed.value.i32);
+                return true;
+            case REG_TYPE_I64:
+                if (right_typed.value.i64 == 0) {
+                    DISPATCH_RUNTIME_ERROR("Division by zero");
+                }
+                if (left_typed.value.i64 == INT64_MIN && right_typed.value.i64 == -1) {
+                    vm_store_i64_typed_hot(dst, 0);
+                } else {
+                    vm_store_i64_typed_hot(dst, left_typed.value.i64 % right_typed.value.i64);
+                }
+                return true;
+            case REG_TYPE_U32:
+                if (right_typed.value.u32 == 0u) {
+                    DISPATCH_RUNTIME_ERROR("Division by zero");
+                }
+                vm_store_u32_typed_hot(dst, left_typed.value.u32 % right_typed.value.u32);
+                return true;
+            case REG_TYPE_U64:
+                if (right_typed.value.u64 == 0u) {
+                    DISPATCH_RUNTIME_ERROR("Division by zero");
+                }
+                vm_store_u64_typed_hot(dst, left_typed.value.u64 % right_typed.value.u64);
+                return true;
+            case REG_TYPE_F64: {
+                double divisor = right_typed.value.f64;
+                if (divisor == 0.0) {
+                    DISPATCH_RUNTIME_ERROR("Division by zero");
+                }
+                double result = fmod(left_typed.value.f64, divisor);
+                vm_store_f64_typed_hot(dst, result);
+                return true;
+            }
+            default:
+                break;
+        }
+    }
+
+    Value val1 = vm_get_register_safe(src1);
+    Value val2 = vm_get_register_safe(src2);
+
+    if (val1.type != val2.type) {
+        DISPATCH_TYPE_ERROR(
+            "Operands must be the same type. Use 'as' for explicit type conversion.");
+    }
+
+    if (!(IS_I32(val1) || IS_I64(val1) || IS_U32(val1) || IS_U64(val1) || IS_F64(val1))) {
+        DISPATCH_TYPE_ERROR("Operands must be numeric (i32, i64, u32, u64, or f64)");
+    }
+
+    if (IS_I32(val1)) {
+        int32_t a = AS_I32(val1);
+        int32_t b = AS_I32(val2);
+        vm_cache_i32_typed(src1, a);
+        vm_cache_i32_typed(src2, b);
+        if (b == 0) {
+            DISPATCH_RUNTIME_ERROR("Division by zero");
+        }
+        if (a == INT32_MIN && b == -1) {
+            DISPATCH_RUNTIME_ERROR("Integer overflow");
+        }
+        vm_store_i32_typed_hot(dst, a % b);
+    } else if (IS_I64(val1)) {
+        int64_t a = AS_I64(val1);
+        int64_t b = AS_I64(val2);
+        vm_cache_i64_typed(src1, a);
+        vm_cache_i64_typed(src2, b);
+        if (b == 0) {
+            DISPATCH_RUNTIME_ERROR("Division by zero");
+        }
+        if (a == INT64_MIN && b == -1) {
+            vm_store_i64_typed_hot(dst, 0);
+        } else {
+            vm_store_i64_typed_hot(dst, a % b);
+        }
+    } else if (IS_U32(val1)) {
+        uint32_t a = AS_U32(val1);
+        uint32_t b = AS_U32(val2);
+        vm_cache_u32_typed(src1, a);
+        vm_cache_u32_typed(src2, b);
+        if (b == 0u) {
+            DISPATCH_RUNTIME_ERROR("Division by zero");
+        }
+        vm_store_u32_typed_hot(dst, a % b);
+    } else if (IS_U64(val1)) {
+        uint64_t a = AS_U64(val1);
+        uint64_t b = AS_U64(val2);
+        vm_cache_u64_typed(src1, a);
+        vm_cache_u64_typed(src2, b);
+        if (b == 0u) {
+            DISPATCH_RUNTIME_ERROR("Division by zero");
+        }
+        vm_store_u64_typed_hot(dst, a % b);
+    } else if (IS_F64(val1)) {
+        double a = AS_F64(val1);
+        double b = AS_F64(val2);
+        vm_cache_f64_typed(src1, a);
+        vm_cache_f64_typed(src2, b);
+        if (b == 0.0) {
+            DISPATCH_RUNTIME_ERROR("Division by zero");
+        }
+        vm_store_f64_typed_hot(dst, fmod(a, b));
+    }
     return true;
 }
 
@@ -572,111 +975,22 @@ InterpretResult vm_run_dispatch(void) {
                 }
 
                 case OP_MUL_I32_R: {
-                    uint8_t dst = READ_BYTE();
-                    uint8_t src1 = READ_BYTE();
-                    uint8_t src2 = READ_BYTE();
-
-                    // STRICT TYPE SAFETY: No automatic coercion, types must match exactly
-                    Value val1 = vm_get_register_safe(src1);
-                    Value val2 = vm_get_register_safe(src2);
-                    
-                    // Enforce strict type matching - no coercion allowed
-                    if (val1.type != val2.type) {
-                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be the same type. Use 'as' for explicit type conversion.");
+                    if (!dispatch_handle_mul_i32_r()) {
+                        goto HANDLE_RUNTIME_ERROR;
                     }
-
-                    // Ensure both operands are numeric
-                    if (!(IS_I32(val1) || IS_I64(val1) || IS_U32(val1) || IS_U64(val1) || IS_F64(val1))) {
-                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be numeric (i32, i64, u32, u64, or f64)");
-                    }
-
-#if USE_FAST_ARITH
-                    // Fast path: assume i32, no overflow checking
-                    int32_t a = AS_I32(val1);
-                    int32_t b = AS_I32(val2);
-                    vm_set_register_safe(dst, I32_VAL(a * b));
-#else
-                    // Strict same-type arithmetic only (after coercion)
-                    if (IS_I32(val1)) {
-                        int32_t a = AS_I32(val1);
-                        int32_t b = AS_I32(val2);
-                        vm_set_register_safe(dst, I32_VAL(a * b));
-                    } else if (IS_I64(val1)) {
-                        int64_t a = AS_I64(val1);
-                        int64_t b = AS_I64(val2);
-                        vm_set_register_safe(dst, I64_VAL(a * b));
-                    } else if (IS_U32(val1)) {
-                        uint32_t a = AS_U32(val1);
-                        uint32_t b = AS_U32(val2);
-                        vm_set_register_safe(dst, U32_VAL(a * b));
-                    } else if (IS_U64(val1)) {
-                        uint64_t a = AS_U64(val1);
-                        uint64_t b = AS_U64(val2);
-                        vm_set_register_safe(dst, U64_VAL(a * b));
-                    } else if (IS_F64(val1)) {
-                        double a = AS_F64(val1);
-                        double b = AS_F64(val2);
-                        vm_set_register_safe(dst, F64_VAL(a * b));
-                    }
-#endif
                     break;
                 }
 
                 case OP_DIV_I32_R: {
-                    uint8_t dst = READ_BYTE();
-                    uint8_t src1 = READ_BYTE();
-                    uint8_t src2 = READ_BYTE();
-
-                    if (vm_get_register_safe(src1).type != vm_get_register_safe(src2).type) {
-                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be the same type. Use 'as' for explicit type conversion.");
-                    }
-
-                    if (!(IS_I32(vm_get_register_safe(src1)) || IS_I64(vm_get_register_safe(src1)) ||
-                          IS_U32(vm_get_register_safe(src1)) || IS_U64(vm_get_register_safe(src1)) || IS_F64(vm_get_register_safe(src1)))) {
-                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be numeric (i32, i64, u32, u64, or f64)");
-                    }
-
-                    if (IS_I32(vm_get_register_safe(src1))) {
-                        HANDLE_I32_OVERFLOW_DIV(AS_I32(vm_get_register_safe(src1)), AS_I32(vm_get_register_safe(src2)), dst);
-                    } else if (IS_I64(vm_get_register_safe(src1))) {
-                        HANDLE_I64_OVERFLOW_DIV(AS_I64(vm_get_register_safe(src1)), AS_I64(vm_get_register_safe(src2)), dst);
-                    } else if (IS_U32(vm_get_register_safe(src1))) {
-                        HANDLE_U32_OVERFLOW_DIV(AS_U32(vm_get_register_safe(src1)), AS_U32(vm_get_register_safe(src2)), dst);
-                    } else if (IS_U64(vm_get_register_safe(src1))) {
-                        HANDLE_U64_OVERFLOW_DIV(AS_U64(vm_get_register_safe(src1)), AS_U64(vm_get_register_safe(src2)), dst);
-                    } else {
-                        HANDLE_F64_OVERFLOW_DIV(AS_F64(vm_get_register_safe(src1)), AS_F64(vm_get_register_safe(src2)), dst);
+                    if (!dispatch_handle_div_i32_r()) {
+                        goto HANDLE_RUNTIME_ERROR;
                     }
                     break;
                 }
 
                 case OP_MOD_I32_R: {
-                    uint8_t dst = READ_BYTE();
-                    uint8_t src1 = READ_BYTE();
-                    uint8_t src2 = READ_BYTE();
-
-                    if (vm_get_register_safe(src1).type != vm_get_register_safe(src2).type) {
-                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be the same type. Use 'as' for explicit type conversion.");
-                    }
-
-                    if (!(IS_I32(vm_get_register_safe(src1)) || IS_I64(vm_get_register_safe(src1)) ||
-                          IS_U32(vm_get_register_safe(src1)) || IS_U64(vm_get_register_safe(src1)) || IS_F64(vm_get_register_safe(src1)))) {
-                        VM_ERROR_RETURN(ERROR_TYPE, CURRENT_LOCATION(), "Operands must be numeric (i32, i64, u32, u64, or f64)");
-                    }
-
-                    if (IS_I32(vm_get_register_safe(src1))) {
-                        HANDLE_I32_OVERFLOW_MOD(AS_I32(vm_get_register_safe(src1)), AS_I32(vm_get_register_safe(src2)), dst);
-                    } else if (IS_I64(vm_get_register_safe(src1))) {
-                        HANDLE_I64_OVERFLOW_MOD(AS_I64(vm_get_register_safe(src1)), AS_I64(vm_get_register_safe(src2)), dst);
-                    } else if (IS_U32(vm_get_register_safe(src1))) {
-                        HANDLE_U32_OVERFLOW_MOD(AS_U32(vm_get_register_safe(src1)), AS_U32(vm_get_register_safe(src2)), dst);
-                    } else if (IS_U64(vm_get_register_safe(src1))) {
-                        HANDLE_U64_OVERFLOW_MOD(AS_U64(vm_get_register_safe(src1)), AS_U64(vm_get_register_safe(src2)), dst);
-                    } else {
-                        double a = AS_F64(vm_get_register_safe(src1));
-                        double b = AS_F64(vm_get_register_safe(src2));
-                        double result = fmod(a, b);
-                        vm_set_register_safe(dst, F64_VAL(result));
+                    if (!dispatch_handle_mod_i32_r()) {
+                        goto HANDLE_RUNTIME_ERROR;
                     }
                     break;
                 }

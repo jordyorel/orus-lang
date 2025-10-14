@@ -1334,9 +1334,16 @@ static bool run_fused_loop_case(OrusJitValueKind kind,
         return false;
     }
 
+    vm.safe_register_reads = 0;
     entry.entry_point(&vm);
 
     bool success = true;
+    if (vm.safe_register_reads != 0) {
+        fprintf(stderr,
+                "typed JIT loop touched boxed registers: observed %llu safe reads\n",
+                (unsigned long long)vm.safe_register_reads);
+        success = false;
+    }
     switch (kind) {
         case ORUS_JIT_VALUE_I32: {
             int32_t expected_counter = (int32_t)limit_value;

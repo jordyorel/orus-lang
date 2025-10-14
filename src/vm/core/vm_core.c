@@ -97,6 +97,7 @@ void initVM(void) {
     vm.filePath = NULL;
     vm.currentLine = 0;
     vm.currentColumn = 1;
+    vm.safe_register_reads = 0;
     vm.moduleCount = 0;
     vm.loadingModuleCount = 0;
     for (int i = 0; i < UINT8_COUNT; i++) {

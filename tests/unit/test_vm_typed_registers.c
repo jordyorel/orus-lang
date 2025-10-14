@@ -1,5 +1,6 @@
 #include <stdbool.h>
 #include <stdio.h>
+#include <inttypes.h>
 
 #include "vm/vm.h"
 #include "vm/vm_comparison.h"
@@ -90,6 +91,24 @@ static bool run_single_conversion_step(Chunk* chunk) {
 
     InterpretResult result = vm_run_dispatch();
     return result == INTERPRET_OK;
+}
+
+static size_t write_chunk_byte(Chunk* chunk, uint8_t byte, const char* tag) {
+    size_t index = chunk->count;
+    writeChunk(chunk, byte, 1, 0, tag);
+    return index;
+}
+
+static void write_triad_instruction(Chunk* chunk,
+                                    uint8_t opcode,
+                                    uint8_t dst,
+                                    uint8_t src1,
+                                    uint8_t src2,
+                                    const char* tag) {
+    write_chunk_byte(chunk, opcode, tag);
+    write_chunk_byte(chunk, dst, tag);
+    write_chunk_byte(chunk, src1, tag);
+    write_chunk_byte(chunk, src2, tag);
 }
 
 static void build_iter_next_chunk(Chunk* chunk, uint8_t dst, uint8_t iter_reg, uint8_t has_reg) {
@@ -216,6 +235,102 @@ static bool test_i32_to_bool_conversion_defers_boxing_until_read(void) {
     freeChunk(&chunk);
     freeVM();
     return true;
+}
+
+static bool test_numeric_loop_avoids_safe_reads(void) {
+    initVM();
+
+    Chunk chunk;
+    initChunk(&chunk);
+
+    const char* tag = "typed_numeric_loop";
+    const uint8_t acc_reg = 0;
+    const uint8_t step_reg = 1;
+    const uint8_t counter_reg = 2;
+    const uint8_t limit_reg = 3;
+    const uint8_t cmp_reg = 4;
+    const uint8_t iterations = 5;
+
+    size_t loop_start = chunk.count;
+    write_triad_instruction(&chunk, OP_ADD_I32_R, acc_reg, acc_reg, step_reg, tag);
+    write_triad_instruction(&chunk, OP_ADD_I32_R, counter_reg, counter_reg, step_reg, tag);
+    write_triad_instruction(&chunk, OP_LT_I32_R, cmp_reg, counter_reg, limit_reg, tag);
+
+    write_chunk_byte(&chunk, OP_JUMP_IF_NOT_SHORT, tag);
+    write_chunk_byte(&chunk, cmp_reg, tag);
+    size_t jump_offset_index = write_chunk_byte(&chunk, 0, tag);
+
+    write_chunk_byte(&chunk, OP_LOOP_SHORT, tag);
+    size_t loop_offset_index = write_chunk_byte(&chunk, 0, tag);
+
+    size_t halt_index = write_chunk_byte(&chunk, OP_HALT, tag);
+
+    uint8_t exit_offset = (uint8_t)(halt_index - (jump_offset_index + 1));
+    chunk.code[jump_offset_index] = exit_offset;
+
+    uint8_t loop_offset = (uint8_t)((loop_offset_index + 1) - loop_start);
+    chunk.code[loop_offset_index] = loop_offset;
+
+    vm_store_i32_typed_hot(acc_reg, 0);
+    vm_store_i32_typed_hot(step_reg, 1);
+    vm_store_i32_typed_hot(counter_reg, 0);
+    vm_store_i32_typed_hot(limit_reg, iterations);
+
+    vm.safe_register_reads = 0;
+
+    vm.chunk = &chunk;
+    vm.ip = chunk.code;
+    vm.isShuttingDown = false;
+
+    InterpretResult result = vm_run_dispatch();
+
+    bool success = true;
+    if (result != INTERPRET_OK) {
+        fprintf(stderr, "numeric loop dispatch failed with result %d\n", result);
+        success = false;
+        goto cleanup;
+    }
+
+    if (vm.safe_register_reads != (uint64_t)iterations) {
+        fprintf(stderr,
+                "expected %u safe register reads for control flow, observed %" PRIu64 "\n",
+                iterations,
+                (uint64_t)vm.safe_register_reads);
+        success = false;
+    }
+
+    int32_t acc_value = 0;
+    if (!vm_try_read_i32_typed(acc_reg, &acc_value) || acc_value != iterations) {
+        fprintf(stderr,
+                "typed accumulator mismatch: got %d expected %u\n",
+                acc_value,
+                iterations);
+        success = false;
+    }
+
+    int32_t counter_value = 0;
+    if (!vm_try_read_i32_typed(counter_reg, &counter_value) ||
+        counter_value != iterations) {
+        fprintf(stderr,
+                "typed counter mismatch: got %d expected %u\n",
+                counter_value,
+                iterations);
+        success = false;
+    }
+
+    int32_t limit_value = 0;
+    if (!vm_try_read_i32_typed(limit_reg, &limit_value) || limit_value != iterations) {
+        fprintf(stderr,
+                "typed loop limit mismatch: got %d expected %u\n",
+                limit_value,
+                iterations);
+        success = false;
+    }
+
+cleanup:
+    freeChunk(&chunk);
+    freeVM();
+    return success;
 }
 
 static bool test_range_iterator_uses_typed_registers(void) {
@@ -576,6 +691,7 @@ int main(void) {
         test_cmp_i32_imm_recovers_typed_metadata,
         test_bool_to_i32_conversion_defers_boxing_until_read,
         test_i32_to_bool_conversion_defers_boxing_until_read,
+        test_numeric_loop_avoids_safe_reads,
     };
 
     const char* names[] = {
@@ -590,6 +706,7 @@ int main(void) {
         "CMP_I32_IMM recovers typed metadata on fallback",
         "Bool to i32 conversion defers boxing until read",
         "i32 to bool conversion defers boxing until read",
+        "Numeric loop avoids boxed register reads",
     };
 
     int passed = 0;

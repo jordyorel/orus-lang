@@ -10,6 +10,62 @@
 #define VM_OPCODE_HANDLERS_H
 
 #include "vm/vm.h"
+#include "vm/vm_comparison.h"
+
+// Typed numeric operand helpers shared by dispatch implementations
+typedef union VmNumericValue {
+    int32_t i32;
+    int64_t i64;
+    uint32_t u32;
+    uint64_t u64;
+    double f64;
+} VmNumericValue;
+
+typedef struct VmNumericOperand {
+    RegisterType type;
+    VmNumericValue value;
+} VmNumericOperand;
+
+static inline bool vm_dispatch_numeric_type_supported(RegisterType type) {
+    switch (type) {
+        case REG_TYPE_I32:
+        case REG_TYPE_I64:
+        case REG_TYPE_U32:
+        case REG_TYPE_U64:
+        case REG_TYPE_F64:
+            return true;
+        default:
+            return false;
+    }
+}
+
+static inline bool vm_dispatch_try_read_numeric_typed(uint16_t reg,
+                                                      VmNumericOperand* out) {
+    if (!out) {
+        return false;
+    }
+    if (vm_try_read_i32_typed(reg, &out->value.i32)) {
+        out->type = REG_TYPE_I32;
+        return true;
+    }
+    if (vm_try_read_i64_typed(reg, &out->value.i64)) {
+        out->type = REG_TYPE_I64;
+        return true;
+    }
+    if (vm_try_read_u32_typed(reg, &out->value.u32)) {
+        out->type = REG_TYPE_U32;
+        return true;
+    }
+    if (vm_try_read_u64_typed(reg, &out->value.u64)) {
+        out->type = REG_TYPE_U64;
+        return true;
+    }
+    if (vm_try_read_f64_typed(reg, &out->value.f64)) {
+        out->type = REG_TYPE_F64;
+        return true;
+    }
+    return false;
+}
 
 // Forward declarations for performance-critical opcode handlers
 // These functions are designed to be inlined by the compiler for zero-cost abstraction
