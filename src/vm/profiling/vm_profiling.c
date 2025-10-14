@@ -4655,6 +4655,17 @@ void queue_tier_up(VMState* vm_state, const HotPathSample* sample) {
     if (program.instructions) {
         orus_jit_ir_program_reset(&program);
     }
+    if (status == JIT_BACKEND_UNSUPPORTED) {
+        vm_state->jit_loop_blocklist[sample->loop] = true;
+        JITDeoptTrigger trigger = {
+            .function_index = sample->func,
+            .loop_index = sample->loop,
+            .generation = 0,
+        };
+        vm_jit_invalidate_entry(&trigger);
+        vm_jit_enter_entry(vm_state, &vm_state->jit_entry_stub);
+        return;
+    }
     if (status != JIT_BACKEND_OK) {
         vm_jit_enter_entry(vm_state, &vm_state->jit_entry_stub);
         return;

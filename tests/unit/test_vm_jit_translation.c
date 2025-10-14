@@ -552,6 +552,101 @@ static bool test_queue_tier_up_skips_stub_install_on_unsupported(void) {
     return true;
 }
 
+static bool test_queue_tier_up_counts_only_native_entries(void) {
+    const char* previous_env = getenv("ORUS_JIT_FORCE_HELPER_STUB");
+    char* previous_copy = NULL;
+    if (previous_env) {
+        size_t len = strlen(previous_env);
+        previous_copy = (char*)malloc(len + 1u);
+        if (previous_copy) {
+            memcpy(previous_copy, previous_env, len + 1u);
+        }
+    }
+#ifdef _WIN32
+    _putenv("ORUS_JIT_FORCE_HELPER_STUB=1");
+#else
+    setenv("ORUS_JIT_FORCE_HELPER_STUB", "1", 1);
+#endif
+
+    initVM();
+    orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
+
+    Chunk* chunk = (Chunk*)malloc(sizeof(Chunk));
+    bool success = true;
+    if (!chunk) {
+        fprintf(stderr, "expected chunk allocation\n");
+        success = false;
+        goto cleanup;
+    }
+    initChunk(chunk);
+
+    Function* function = &vm.functions[0];
+    memset(function, 0, sizeof(*function));
+    function->chunk = chunk;
+    function->tier = FUNCTION_TIER_BASELINE;
+    function->start = 0;
+    vm.functionCount = 1;
+
+    const uint16_t dst = FRAME_REG_START;
+    if (!write_load_numeric_const(chunk, OP_LOAD_I64_CONST, dst,
+                                  I64_VAL(1234))) {
+        fprintf(stderr, "expected constant emission\n");
+        success = false;
+        goto cleanup;
+    }
+    writeChunk(chunk, OP_RETURN_VOID, 1, 0, "jit_translation");
+
+    HotPathSample sample = {0};
+    sample.func = 0;
+    sample.loop = (uint16_t)function->start;
+
+    uint64_t base_compilations = vm.jit_compilation_count;
+
+    queue_tier_up(&vm, &sample);
+
+    if (!vm.jit_loop_blocklist[sample.loop]) {
+        fprintf(stderr, "expected helper-stub-only loop to be blocklisted\n");
+        success = false;
+    }
+    if (vm.jit_compilation_count != base_compilations) {
+        fprintf(stderr, "expected compilation count to remain unchanged\n");
+        success = false;
+    }
+    if (vm.jit_cache.count != 0) {
+        fprintf(stderr, "expected no native cache entries to be installed\n");
+        success = false;
+    }
+
+cleanup:
+    freeVM();
+
+    if (previous_copy) {
+#ifdef _WIN32
+        size_t restored_len = strlen(previous_copy);
+        char* restore_buffer = (char*)malloc(restored_len + strlen("ORUS_JIT_FORCE_HELPER_STUB=") + 1u);
+        if (restore_buffer) {
+            strcpy(restore_buffer, "ORUS_JIT_FORCE_HELPER_STUB=");
+            strcat(restore_buffer, previous_copy);
+            _putenv(restore_buffer);
+            free(restore_buffer);
+        } else {
+            _putenv("ORUS_JIT_FORCE_HELPER_STUB=");
+        }
+#else
+        setenv("ORUS_JIT_FORCE_HELPER_STUB", previous_copy, 1);
+#endif
+        free(previous_copy);
+    } else {
+#ifdef _WIN32
+        _putenv("ORUS_JIT_FORCE_HELPER_STUB=");
+#else
+        unsetenv("ORUS_JIT_FORCE_HELPER_STUB");
+#endif
+    }
+
+    return success;
+}
+
 static bool test_translates_i32_comparison_branch(void) {
     initVM();
     orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
@@ -1967,6 +2062,8 @@ int main(void) {
          test_rollout_blocks_f64_before_stage},
         {"queue_tier_up skips stub install on unsupported",
          test_queue_tier_up_skips_stub_install_on_unsupported},
+        {"queue_tier_up ignores helper-stub-only compilations",
+         test_queue_tier_up_counts_only_native_entries},
         {"translator emits i32 comparison and branch",
          test_translates_i32_comparison_branch},
         {"translator lowers eq_r with typed inputs",
