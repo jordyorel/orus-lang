@@ -27,6 +27,7 @@ typedef struct OrusJitTranslationResult {
 OrusJitTranslationResult orus_jit_translate_linear_block(
     VMState* vm_state,
     Function* function,
+    const struct Chunk* chunk,
     const HotPathSample* sample,
     OrusJitIRProgram* program);
 

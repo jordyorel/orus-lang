@@ -89,7 +89,7 @@ static bool test_translates_i64_linear_loop(void) {
     orus_jit_ir_program_init(&program);
 
     OrusJitTranslationResult result =
-        orus_jit_translate_linear_block(&vm, &function, &sample, &program);
+        orus_jit_translate_linear_block(&vm, &function, function.chunk, &sample, &program);
 
     bool success = true;
 
@@ -154,7 +154,7 @@ static bool test_translator_promotes_i32_constants_to_i64(void) {
     orus_jit_ir_program_init(&program);
 
     OrusJitTranslationResult result =
-        orus_jit_translate_linear_block(&vm, &function, &sample, &program);
+        orus_jit_translate_linear_block(&vm, &function, function.chunk, &sample, &program);
 
     bool success = true;
     if (result.status != ORUS_JIT_TRANSLATE_STATUS_OK) {
@@ -219,7 +219,7 @@ static bool test_translates_f64_stream(void) {
     orus_jit_ir_program_init(&program);
 
     OrusJitTranslationResult result =
-        orus_jit_translate_linear_block(&vm, &function, &sample, &program);
+        orus_jit_translate_linear_block(&vm, &function, function.chunk, &sample, &program);
 
     bool success = true;
 
@@ -272,7 +272,7 @@ static bool test_translates_boxed_bool_constant(void) {
     orus_jit_ir_program_init(&program);
 
     OrusJitTranslationResult result =
-        orus_jit_translate_linear_block(&vm, &function, &sample, &program);
+        orus_jit_translate_linear_block(&vm, &function, function.chunk, &sample, &program);
 
     bool success = true;
 
@@ -340,7 +340,7 @@ static bool test_translates_string_concat(void) {
     orus_jit_ir_program_init(&program);
 
     OrusJitTranslationResult result =
-        orus_jit_translate_linear_block(&vm, &function, &sample, &program);
+        orus_jit_translate_linear_block(&vm, &function, function.chunk, &sample, &program);
 
     bool success = true;
 
@@ -412,7 +412,7 @@ static bool test_translates_type_builtins(void) {
     orus_jit_ir_program_init(&program);
 
     OrusJitTranslationResult result =
-        orus_jit_translate_linear_block(&vm, &function, &sample, &program);
+        orus_jit_translate_linear_block(&vm, &function, function.chunk, &sample, &program);
 
     bool success = true;
     if (result.status != ORUS_JIT_TRANSLATE_STATUS_OK) {
@@ -488,7 +488,7 @@ static bool test_translates_i32_to_i64_conversion(void) {
     orus_jit_ir_program_init(&program);
 
     OrusJitTranslationResult result =
-        orus_jit_translate_linear_block(&vm, &function, &sample, &program);
+        orus_jit_translate_linear_block(&vm, &function, function.chunk, &sample, &program);
 
     bool success = true;
 
@@ -543,7 +543,7 @@ static bool test_translates_u32_to_i32_conversion(void) {
     orus_jit_ir_program_init(&program);
 
     OrusJitTranslationResult result =
-        orus_jit_translate_linear_block(&vm, &function, &sample, &program);
+        orus_jit_translate_linear_block(&vm, &function, function.chunk, &sample, &program);
 
     bool success = true;
 
@@ -591,7 +591,7 @@ static bool test_rollout_blocks_f64_before_stage(void) {
     orus_jit_ir_program_init(&program);
 
     OrusJitTranslationResult result =
-        orus_jit_translate_linear_block(&vm, &function, &sample, &program);
+        orus_jit_translate_linear_block(&vm, &function, function.chunk, &sample, &program);
 
     bool success = (result.status == ORUS_JIT_TRANSLATE_STATUS_ROLLOUT_DISABLED);
     if (!success) {
@@ -788,7 +788,7 @@ static bool test_translates_i32_comparison_branch(void) {
     orus_jit_ir_program_init(&program);
 
     OrusJitTranslationResult result =
-        orus_jit_translate_linear_block(&vm, &function, &sample, &program);
+        orus_jit_translate_linear_block(&vm, &function, function.chunk, &sample, &program);
 
     bool success = true;
     if (result.status != ORUS_JIT_TRANSLATE_STATUS_OK) {
@@ -869,7 +869,7 @@ static bool test_translates_eq_r_with_typed_inputs(void) {
     orus_jit_ir_program_init(&program);
 
     OrusJitTranslationResult result =
-        orus_jit_translate_linear_block(&vm, &function, &sample, &program);
+        orus_jit_translate_linear_block(&vm, &function, function.chunk, &sample, &program);
 
     bool success = true;
     if (result.status != ORUS_JIT_TRANSLATE_STATUS_OK) {
@@ -959,7 +959,7 @@ static bool test_translates_loop_with_forward_exit(void) {
     orus_jit_ir_program_init(&program);
 
     OrusJitTranslationResult result =
-        orus_jit_translate_linear_block(&vm, &function, &sample, &program);
+        orus_jit_translate_linear_block(&vm, &function, function.chunk, &sample, &program);
 
     bool success = true;
     if (result.status != ORUS_JIT_TRANSLATE_STATUS_OK) {
@@ -1154,7 +1154,7 @@ static bool test_translates_loop_with_nested_branches_and_helper(void) {
     orus_jit_ir_program_init(&program);
 
     OrusJitTranslationResult result =
-        orus_jit_translate_linear_block(&vm, &function, &sample, &program);
+        orus_jit_translate_linear_block(&vm, &function, function.chunk, &sample, &program);
 
     bool success = true;
     if (result.status != ORUS_JIT_TRANSLATE_STATUS_OK) {
@@ -1274,7 +1274,7 @@ static bool test_translates_if_else_jump_short(void) {
     orus_jit_ir_program_init(&program);
 
     OrusJitTranslationResult result =
-        orus_jit_translate_linear_block(&vm, &function, &sample, &program);
+        orus_jit_translate_linear_block(&vm, &function, function.chunk, &sample, &program);
 
     bool success = true;
     if (result.status != ORUS_JIT_TRANSLATE_STATUS_OK) {
@@ -1372,7 +1372,7 @@ static bool test_translates_frame_window_moves(void) {
     orus_jit_ir_program_init(&program);
 
     OrusJitTranslationResult result =
-        orus_jit_translate_linear_block(&vm, &function, &sample, &program);
+        orus_jit_translate_linear_block(&vm, &function, function.chunk, &sample, &program);
 
     bool success = true;
 
@@ -1463,7 +1463,7 @@ static bool test_translates_iterator_bytecodes(void) {
     orus_jit_ir_program_init(&program);
 
     OrusJitTranslationResult result =
-        orus_jit_translate_linear_block(&vm, &function, &sample, &program);
+        orus_jit_translate_linear_block(&vm, &function, function.chunk, &sample, &program);
 
     bool success = true;
 
@@ -1572,7 +1572,7 @@ static bool test_translates_range_iterator_materialization(void) {
     orus_jit_ir_program_init(&program);
 
     OrusJitTranslationResult result =
-        orus_jit_translate_linear_block(&vm, &function, &sample, &program);
+        orus_jit_translate_linear_block(&vm, &function, function.chunk, &sample, &program);
 
     bool success = true;
 
@@ -1683,7 +1683,7 @@ static bool test_translates_range_iterator_frame_moves(void) {
     orus_jit_ir_program_init(&program);
 
     OrusJitTranslationResult result =
-        orus_jit_translate_linear_block(&vm, &function, &sample, &program);
+        orus_jit_translate_linear_block(&vm, &function, function.chunk, &sample, &program);
 
     bool success = true;
 
@@ -1763,7 +1763,7 @@ static bool test_translates_iterator_boxed_move(void) {
     orus_jit_ir_program_init(&program);
 
     OrusJitTranslationResult result =
-        orus_jit_translate_linear_block(&vm, &function, &sample, &program);
+        orus_jit_translate_linear_block(&vm, &function, function.chunk, &sample, &program);
 
     bool success = true;
     if (result.status != ORUS_JIT_TRANSLATE_STATUS_OK) {
@@ -1861,7 +1861,7 @@ static bool test_translates_runtime_helpers(void) {
     orus_jit_ir_program_init(&program);
 
     OrusJitTranslationResult result =
-        orus_jit_translate_linear_block(&vm, &function, &sample, &program);
+        orus_jit_translate_linear_block(&vm, &function, function.chunk, &sample, &program);
 
     bool success = true;
     if (result.status != ORUS_JIT_TRANSLATE_STATUS_OK) {
@@ -1957,7 +1957,7 @@ static bool test_translates_fused_increment_loop(void) {
     orus_jit_ir_program_init(&program);
 
     OrusJitTranslationResult result =
-        orus_jit_translate_linear_block(&vm, &function, &sample, &program);
+        orus_jit_translate_linear_block(&vm, &function, function.chunk, &sample, &program);
 
     bool success = true;
     if (result.status != ORUS_JIT_TRANSLATE_STATUS_OK) {
@@ -2038,7 +2038,7 @@ static bool test_translates_mismatched_integer_fused_loop(void) {
     orus_jit_ir_program_init(&program);
 
     OrusJitTranslationResult result =
-        orus_jit_translate_linear_block(&vm, &function, &sample, &program);
+        orus_jit_translate_linear_block(&vm, &function, function.chunk, &sample, &program);
 
     bool success = true;
     if (result.status != ORUS_JIT_TRANSLATE_STATUS_OK) {
@@ -2116,7 +2116,7 @@ static bool test_translates_mixed_boxed_counter_loop(void) {
     orus_jit_ir_program_init(&program);
 
     OrusJitTranslationResult result =
-        orus_jit_translate_linear_block(&vm, &function, &sample, &program);
+        orus_jit_translate_linear_block(&vm, &function, function.chunk, &sample, &program);
 
     bool success = true;
     if (result.status != ORUS_JIT_TRANSLATE_STATUS_OK) {
@@ -2146,6 +2146,61 @@ static bool test_translates_mixed_boxed_counter_loop(void) {
 cleanup:
     orus_jit_ir_program_reset(&program);
     freeChunk(&chunk);
+    freeVM();
+    return success;
+}
+
+static bool test_translates_specialized_function_chunk(void) {
+    initVM();
+    orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
+
+    Chunk baseline_chunk;
+    initChunk(&baseline_chunk);
+
+    Chunk specialized_chunk;
+    initChunk(&specialized_chunk);
+
+    const char* tag = "jit_translation";
+    writeChunk(&baseline_chunk, OP_PRINT_R, 1, 0, tag);
+    writeChunk(&baseline_chunk, (uint8_t)FRAME_REG_START, 1, 0, tag);
+    writeChunk(&baseline_chunk, OP_RETURN_VOID, 1, 0, tag);
+
+    writeChunk(&specialized_chunk, OP_RETURN_VOID, 1, 0, tag);
+
+    Function function;
+    init_function(&function, &baseline_chunk);
+    function.tier = FUNCTION_TIER_SPECIALIZED;
+    function.specialized_chunk = &specialized_chunk;
+
+    HotPathSample sample = {0};
+    sample.func = 0;
+    sample.loop = (uint16_t)function.start;
+    sample.hit_count = 512u;
+
+    OrusJitIRProgram program;
+    orus_jit_ir_program_init(&program);
+
+    OrusJitTranslationResult result = orus_jit_translate_linear_block(
+        &vm, &function, function.specialized_chunk, &sample, &program);
+
+    bool success = true;
+    if (result.status != ORUS_JIT_TRANSLATE_STATUS_OK) {
+        fprintf(stderr,
+                "Specialized translation failed: %s (opcode=%d, kind=%d, offset=%u)\n",
+                orus_jit_translation_status_name(result.status),
+                result.opcode, result.value_kind, result.bytecode_offset);
+        success = false;
+        goto cleanup;
+    }
+
+    ASSERT_TRUE(program.count > 0u, "expected specialized chunk to yield IR");
+    ASSERT_TRUE(program.source_chunk == (const struct Chunk*)function.specialized_chunk,
+                "expected IR source chunk to use specialized bytecode");
+
+cleanup:
+    orus_jit_ir_program_reset(&program);
+    freeChunk(&specialized_chunk);
+    freeChunk(&baseline_chunk);
     freeVM();
     return success;
 }
@@ -2187,7 +2242,7 @@ static bool test_translates_fused_decrement_loop(void) {
     orus_jit_ir_program_init(&program);
 
     OrusJitTranslationResult result =
-        orus_jit_translate_linear_block(&vm, &function, &sample, &program);
+        orus_jit_translate_linear_block(&vm, &function, function.chunk, &sample, &program);
 
     bool success = true;
     if (result.status != ORUS_JIT_TRANSLATE_STATUS_OK) {
@@ -2279,6 +2334,8 @@ int main(void) {
          test_translates_mismatched_integer_fused_loop},
         {"translator routes boxed fused loop counters",
          test_translates_mixed_boxed_counter_loop},
+        {"translator uses specialized chunk for tiered functions",
+         test_translates_specialized_function_chunk},
         {"translator emits fused decrement loop",
          test_translates_fused_decrement_loop},
     };
