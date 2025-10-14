@@ -2197,6 +2197,8 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
     program->loop_index = sample->loop;
     program->loop_start_offset = (uint32_t)start_offset;
 
+    bool loop_start_adjusted = false;
+
     size_t offset = start_offset;
     bool saw_terminal = false;
     size_t instructions_since_safepoint = 0u;
@@ -2393,6 +2395,91 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
                 inst->operands.jump_if_not_short.offset = jump;
                 inst->operands.jump_if_not_short.bytecode_length = 3u;
                 offset += 3u;
+                if (++instructions_since_safepoint >= safepoint_interval) {
+                    INSERT_SAFEPOINT((uint32_t)offset);
+                }
+                continue;
+            }
+            case OP_JUMP_IF_NOT_I32_TYPED: {
+                if (offset + 4u >= (size_t)chunk->count) {
+                    return make_translation_result(
+                        ORUS_JIT_TRANSLATE_STATUS_INVALID_INPUT,
+                        ORUS_JIT_IR_OP_JUMP_IF_NOT_SHORT,
+                        ORUS_JIT_VALUE_I32, (uint32_t)offset);
+                }
+                uint16_t lhs = chunk->code[offset + 1u];
+                uint16_t rhs = chunk->code[offset + 2u];
+                uint16_t jump = read_be_u16(&chunk->code[offset + 3u]);
+                size_t fallthrough = offset + 5u;
+                size_t target = fallthrough + (size_t)jump;
+                if (target >= (size_t)chunk->count) {
+                    return make_translation_result(
+                        ORUS_JIT_TRANSLATE_STATUS_INVALID_INPUT,
+                        ORUS_JIT_IR_OP_JUMP_IF_NOT_SHORT,
+                        ORUS_JIT_VALUE_I32, (uint32_t)offset);
+                }
+                OrusJitValueKind lhs_kind = ORUS_JIT_GET_KIND(lhs);
+                if (lhs_kind != ORUS_JIT_VALUE_I32) {
+                    if (lhs_kind == ORUS_JIT_VALUE_BOXED && lhs < REGISTER_COUNT) {
+                        register_kinds[lhs] = (uint8_t)ORUS_JIT_VALUE_I32;
+                        iterator_kinds[lhs] = (uint8_t)ORUS_JIT_ITERATOR_NONE;
+                        register_writers[lhs] = NULL;
+                        lhs_kind = ORUS_JIT_VALUE_I32;
+                    } else if (!orus_jit_try_promote_register(&promotion_ctx, lhs,
+                                                              ORUS_JIT_VALUE_I32)) {
+                        return make_translation_result(
+                            ORUS_JIT_TRANSLATE_STATUS_UNSUPPORTED_VALUE_KIND,
+                            ORUS_JIT_IR_OP_LT_I32, lhs_kind, (uint32_t)offset);
+                    } else {
+                        lhs_kind = ORUS_JIT_GET_KIND(lhs);
+                    }
+                }
+                OrusJitValueKind rhs_kind = ORUS_JIT_GET_KIND(rhs);
+                if (rhs_kind != ORUS_JIT_VALUE_I32) {
+                    if (rhs_kind == ORUS_JIT_VALUE_BOXED && rhs < REGISTER_COUNT) {
+                        register_kinds[rhs] = (uint8_t)ORUS_JIT_VALUE_I32;
+                        iterator_kinds[rhs] = (uint8_t)ORUS_JIT_ITERATOR_NONE;
+                        register_writers[rhs] = NULL;
+                        rhs_kind = ORUS_JIT_VALUE_I32;
+                    } else if (!orus_jit_try_promote_register(&promotion_ctx, rhs,
+                                                              ORUS_JIT_VALUE_I32)) {
+                        return make_translation_result(
+                            ORUS_JIT_TRANSLATE_STATUS_UNSUPPORTED_VALUE_KIND,
+                            ORUS_JIT_IR_OP_LT_I32, rhs_kind, (uint32_t)offset);
+                    } else {
+                        rhs_kind = ORUS_JIT_GET_KIND(rhs);
+                    }
+                }
+                ORUS_JIT_ENSURE_ROLLOUT(ORUS_JIT_VALUE_I32, ORUS_JIT_IR_OP_LT_I32,
+                                        offset);
+                uint16_t predicate_reg = TEMP_REG_START;
+                OrusJitIRInstruction* cmp_inst = orus_jit_ir_program_append(program);
+                if (!cmp_inst) {
+                    return make_translation_result(
+                        ORUS_JIT_TRANSLATE_STATUS_OUT_OF_MEMORY,
+                        ORUS_JIT_IR_OP_LT_I32, ORUS_JIT_VALUE_I32,
+                        (uint32_t)offset);
+                }
+                cmp_inst->opcode = ORUS_JIT_IR_OP_LT_I32;
+                cmp_inst->value_kind = ORUS_JIT_VALUE_BOOL;
+                cmp_inst->bytecode_offset = (uint32_t)offset;
+                cmp_inst->operands.arithmetic.dst_reg = predicate_reg;
+                cmp_inst->operands.arithmetic.lhs_reg = lhs;
+                cmp_inst->operands.arithmetic.rhs_reg = rhs;
+                ORUS_JIT_SET_KIND(predicate_reg, ORUS_JIT_VALUE_BOOL, cmp_inst);
+                OrusJitIRInstruction* jump_inst = orus_jit_ir_program_append(program);
+                if (!jump_inst) {
+                    return make_translation_result(
+                        ORUS_JIT_TRANSLATE_STATUS_OUT_OF_MEMORY,
+                        ORUS_JIT_IR_OP_JUMP_IF_NOT_SHORT,
+                        ORUS_JIT_VALUE_BOOL, (uint32_t)offset);
+                }
+                jump_inst->opcode = ORUS_JIT_IR_OP_JUMP_IF_NOT_SHORT;
+                jump_inst->bytecode_offset = (uint32_t)offset;
+                jump_inst->operands.jump_if_not_short.predicate_reg = predicate_reg;
+                jump_inst->operands.jump_if_not_short.offset = jump;
+                jump_inst->operands.jump_if_not_short.bytecode_length = 5u;
+                offset += 5u;
                 if (++instructions_since_safepoint >= safepoint_interval) {
                     INSERT_SAFEPOINT((uint32_t)offset);
                 }
@@ -2616,10 +2703,16 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
                 size_t target =
                     (fallthrough >= (size_t)back) ? (fallthrough - (size_t)back) : 0u;
                 if (target != start_offset) {
-                    return make_translation_result(
-                        ORUS_JIT_TRANSLATE_STATUS_UNSUPPORTED_LOOP_SHAPE,
-                        ORUS_JIT_IR_OP_LOOP_BACK, ORUS_JIT_VALUE_I32,
-                        (uint32_t)offset);
+                    if (!loop_start_adjusted) {
+                        start_offset = target;
+                        program->loop_start_offset = (uint32_t)start_offset;
+                        loop_start_adjusted = true;
+                    } else {
+                        return make_translation_result(
+                            ORUS_JIT_TRANSLATE_STATUS_UNSUPPORTED_LOOP_SHAPE,
+                            ORUS_JIT_IR_OP_LOOP_BACK, ORUS_JIT_VALUE_I32,
+                            (uint32_t)offset);
+                    }
                 }
                 if (instructions_since_safepoint > 0u) {
                     INSERT_SAFEPOINT((uint32_t)offset);
@@ -2655,10 +2748,16 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
                 }
                 size_t target = fallthrough - (size_t)back;
                 if (target != start_offset) {
-                    return make_translation_result(
-                        ORUS_JIT_TRANSLATE_STATUS_UNSUPPORTED_LOOP_SHAPE,
-                        ORUS_JIT_IR_OP_LOOP_BACK, ORUS_JIT_VALUE_I32,
-                        (uint32_t)offset);
+                    if (!loop_start_adjusted) {
+                        start_offset = target;
+                        program->loop_start_offset = (uint32_t)start_offset;
+                        loop_start_adjusted = true;
+                    } else {
+                        return make_translation_result(
+                            ORUS_JIT_TRANSLATE_STATUS_UNSUPPORTED_LOOP_SHAPE,
+                            ORUS_JIT_IR_OP_LOOP_BACK, ORUS_JIT_VALUE_I32,
+                            (uint32_t)offset);
+                    }
                 }
                 if (instructions_since_safepoint > 0u) {
                     INSERT_SAFEPOINT((uint32_t)offset);
@@ -2835,10 +2934,19 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
             uint16_t src = chunk->code[offset + 2u];
             OrusJitValueKind src_kind_tracked = ORUS_JIT_GET_KIND(src);
             if (src_kind_tracked != kind) {
-                if (!orus_jit_try_promote_register(&promotion_ctx, src, kind)) {
+                if (src_kind_tracked == ORUS_JIT_VALUE_BOXED &&
+                    src < REGISTER_COUNT) {
+                    register_kinds[src] = (uint8_t)kind;
+                    iterator_kinds[src] = (uint8_t)ORUS_JIT_ITERATOR_NONE;
+                    register_writers[src] = NULL;
+                    src_kind_tracked = kind;
+                } else if (!orus_jit_try_promote_register(&promotion_ctx, src,
+                                                          kind)) {
                     return make_translation_result(
                         ORUS_JIT_TRANSLATE_STATUS_UNSUPPORTED_VALUE_KIND,
                         ir_opcode, src_kind_tracked, (uint32_t)offset);
+                } else {
+                    src_kind_tracked = ORUS_JIT_GET_KIND(src);
                 }
             }
             ORUS_JIT_ENSURE_ROLLOUT(kind, ir_opcode, offset);
