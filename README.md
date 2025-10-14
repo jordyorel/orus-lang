@@ -72,6 +72,17 @@ detects that macOS denied the JIT buffers and automatically falls back to the
 interpreter tier. Signing with the entitlement is required any time you want to
 exercise native JIT code on Apple Silicon.
 
+### JIT coverage status
+
+The tiered compiler is still evolving and does not yet replace the interpreter
+for every Orus feature. The current roadmap keeps the JIT focused on the hot
+numeric loops and mixed boxed workloads that already translate, while the exit
+criteria tracking 3–5× speedups and fully GC-safe execution remain unchecked in
+`docs/ROADMAP_PERFORMANCE.md`. The benchmark corpus also records the FFI
+ping/pong harness as _pending_, so foreign call heavy programs continue to run
+in the interpreter until the missing pieces land. Refer to the roadmap
+documents when assessing JIT readiness for a specific workload.
+
 
 ## Installation
 

@@ -1302,6 +1302,11 @@ orus_jit_value_kind_is_integer_like(OrusJitValueKind kind) {
 }
 
 static bool
+orus_jit_value_kind_is_boxed_like(OrusJitValueKind kind) {
+    return kind == ORUS_JIT_VALUE_BOXED;
+}
+
+static bool
 map_arithmetic_opcode(uint8_t opcode,
                       OrusJitIROpcode* ir_opcode,
                       OrusJitValueKind* kind) {
@@ -2474,8 +2479,14 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
                         ORUS_JIT_VALUE_I32, (uint32_t)offset);
                 }
                 OrusJitValueKind lhs_kind = ORUS_JIT_GET_KIND(lhs);
+                if (lhs_kind == ORUS_JIT_VALUE_STRING) {
+                    return make_translation_result(
+                        ORUS_JIT_TRANSLATE_STATUS_UNSUPPORTED_VALUE_KIND,
+                        ORUS_JIT_IR_OP_LT_I32, lhs_kind, (uint32_t)offset);
+                }
                 if (lhs_kind != ORUS_JIT_VALUE_I32) {
-                    if (lhs_kind == ORUS_JIT_VALUE_BOXED && lhs < REGISTER_COUNT) {
+                    if (orus_jit_value_kind_is_boxed_like(lhs_kind) &&
+                        lhs < REGISTER_COUNT) {
                         register_kinds[lhs] = (uint8_t)ORUS_JIT_VALUE_I32;
                         iterator_kinds[lhs] = (uint8_t)ORUS_JIT_ITERATOR_NONE;
                         register_writers[lhs] = NULL;
@@ -2490,8 +2501,14 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
                     }
                 }
                 OrusJitValueKind rhs_kind = ORUS_JIT_GET_KIND(rhs);
+                if (rhs_kind == ORUS_JIT_VALUE_STRING) {
+                    return make_translation_result(
+                        ORUS_JIT_TRANSLATE_STATUS_UNSUPPORTED_VALUE_KIND,
+                        ORUS_JIT_IR_OP_LT_I32, rhs_kind, (uint32_t)offset);
+                }
                 if (rhs_kind != ORUS_JIT_VALUE_I32) {
-                    if (rhs_kind == ORUS_JIT_VALUE_BOXED && rhs < REGISTER_COUNT) {
+                    if (orus_jit_value_kind_is_boxed_like(rhs_kind) &&
+                        rhs < REGISTER_COUNT) {
                         register_kinds[rhs] = (uint8_t)ORUS_JIT_VALUE_I32;
                         iterator_kinds[rhs] = (uint8_t)ORUS_JIT_ITERATOR_NONE;
                         register_writers[rhs] = NULL;
