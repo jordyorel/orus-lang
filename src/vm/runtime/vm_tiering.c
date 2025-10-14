@@ -13,6 +13,8 @@
 #include <string.h>
 #include <stdint.h>
 
+#define VM_FUSION_PATCH_COOLDOWN 4096u
+
 #ifndef FUNCTION_SPECIALIZATION_THRESHOLD
 #define FUNCTION_SPECIALIZATION_THRESHOLD 512ULL
 #endif
