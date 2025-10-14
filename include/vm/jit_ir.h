@@ -37,6 +37,7 @@ typedef enum OrusJitIROpcode {
     ORUS_JIT_IR_OP_LOAD_U32_CONST,
     ORUS_JIT_IR_OP_LOAD_U64_CONST,
     ORUS_JIT_IR_OP_LOAD_F64_CONST,
+    ORUS_JIT_IR_OP_LOAD_BOOL_CONST,
     ORUS_JIT_IR_OP_LOAD_STRING_CONST,
     ORUS_JIT_IR_OP_LOAD_VALUE_CONST,
 
@@ -87,6 +88,7 @@ typedef enum OrusJitIROpcode {
     ORUS_JIT_IR_OP_TIME_STAMP,
     ORUS_JIT_IR_OP_MAKE_ARRAY,
     ORUS_JIT_IR_OP_ARRAY_PUSH,
+    ORUS_JIT_IR_OP_ARRAY_POP,
     ORUS_JIT_IR_OP_ENUM_NEW,
     ORUS_JIT_IR_OP_PRINT,
     ORUS_JIT_IR_OP_ASSERT_EQ,
@@ -232,6 +234,10 @@ typedef struct OrusJitIRInstruction {
             uint16_t array_reg;
             uint16_t value_reg;
         } array_push;
+        struct {
+            uint16_t dst_reg;
+            uint16_t array_reg;
+        } array_pop;
         struct {
             uint16_t dst_reg;
             uint16_t value_reg;
