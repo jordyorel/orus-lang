@@ -19,6 +19,7 @@
 #include "errors/features/type_errors.h"
 #include "errors/features/variable_errors.h"
 #include "internal/error_reporting.h"
+#include "vm/jit_debug.h"
 #include "vm/vm.h"
 #include "vm/vm_profiling.h"
 
@@ -97,6 +98,17 @@ vm_jit_run_source_benchmark(const char* source,
         return false;
     }
 
+    OrusJitDebugConfig previous_debug_config = {0};
+    OrusJitDebugConfig benchmark_debug_config = {0};
+    bool restore_debug_config = false;
+
+    if (enable_jit) {
+        previous_debug_config = orus_jit_debug_get_config();
+        benchmark_debug_config = previous_debug_config;
+        benchmark_debug_config.capture_guard_traces = true;
+        restore_debug_config = true;
+    }
+
     bool string_table_ready = false;
     bool error_system_ready = false;
     bool profiling_ready = false;
@@ -123,6 +135,10 @@ vm_jit_run_source_benchmark(const char* source,
 
     initVM();
     vm_ready = true;
+
+    if (enable_jit) {
+        orus_jit_debug_set_config(&benchmark_debug_config);
+    }
 
     vm.jit_enabled = enable_jit && vm.jit_backend != NULL;
     vm.filePath = path;
@@ -169,6 +185,9 @@ vm_jit_run_source_benchmark(const char* source,
         stats->failure_log = vm.jit_translation_failures;
         stats->rollout_stage = vm.jit_rollout.stage;
         stats->rollout_mask = vm.jit_rollout.enabled_kind_mask;
+        stats->jit_backend_enabled = vm.jit_enabled;
+        stats->backend_status = vm.jit_backend_status;
+        stats->backend_message = vm.jit_backend_message;
     }
 
     cleanup_error_reporting();
@@ -182,6 +201,10 @@ vm_jit_run_source_benchmark(const char* source,
 
     free_string_table(&globalStringTable);
     string_table_ready = false;
+
+    if (restore_debug_config) {
+        orus_jit_debug_set_config(&previous_debug_config);
+    }
 
     return true;
 
@@ -201,6 +224,9 @@ cleanup:
     if (string_table_ready) {
         free_string_table(&globalStringTable);
         string_table_ready = false;
+    }
+    if (restore_debug_config) {
+        orus_jit_debug_set_config(&previous_debug_config);
     }
     return false;
 }

@@ -13,6 +13,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "vm/jit_backend.h"
 #include "vm/jit_translation.h"
 
 #ifdef __cplusplus
@@ -42,6 +43,9 @@ typedef struct OrusJitRunStats {
     OrusJitTranslationFailureLog failure_log;
     OrusJitRolloutStage rollout_stage;
     uint32_t rollout_mask;
+    bool jit_backend_enabled;
+    JITBackendStatus backend_status;
+    const char* backend_message;
 } OrusJitRunStats;
 
 // Execute the provided source buffer under either interpreter or JIT mode and
