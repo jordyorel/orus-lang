@@ -8,6 +8,7 @@
 
 #include "compiler/optimization/optimizer.h"
 #include "compiler/optimization/constantfold.h"
+#include "compiler/optimization/loop_type_affinity.h"
 #include "compiler/optimization/loop_type_residency.h"
 #include "runtime/memory.h"
 #include <stdio.h>
@@ -177,6 +178,70 @@ void optimization_clear_loop_residency_plans(OptimizationContext* ctx) {
     ctx->loop_residency_count = 0;
 }
 
+static bool ensure_loop_affinity_capacity(OptimizationContext* ctx, size_t required) {
+    if (!ctx) {
+        return false;
+    }
+
+    if (ctx->loop_affinity_capacity >= required) {
+        return true;
+    }
+
+    size_t new_capacity = ctx->loop_affinity_capacity == 0 ? 8 : ctx->loop_affinity_capacity;
+    while (new_capacity < required) {
+        new_capacity *= 2;
+    }
+
+    LoopTypeAffinityBinding* resized = realloc(ctx->loop_affinity_bindings,
+                                               new_capacity * sizeof(LoopTypeAffinityBinding));
+    if (!resized) {
+        return false;
+    }
+
+    ctx->loop_affinity_bindings = resized;
+    ctx->loop_affinity_capacity = new_capacity;
+    return true;
+}
+
+int optimization_add_loop_affinity(OptimizationContext* ctx, const LoopTypeAffinityBinding* binding) {
+    if (!ctx || !binding) {
+        return -1;
+    }
+
+    if (!ensure_loop_affinity_capacity(ctx, ctx->loop_affinity_count + 1)) {
+        return -1;
+    }
+
+    LoopTypeAffinityBinding* slot = &ctx->loop_affinity_bindings[ctx->loop_affinity_count];
+    *slot = *binding;
+    ctx->loop_affinity_count++;
+    return (int)(ctx->loop_affinity_count - 1);
+}
+
+const LoopTypeAffinityBinding* optimization_find_loop_affinity(const OptimizationContext* ctx,
+                                                               const TypedASTNode* loop_node) {
+    if (!ctx || !loop_node || ctx->loop_affinity_count == 0) {
+        return NULL;
+    }
+
+    for (size_t i = 0; i < ctx->loop_affinity_count; ++i) {
+        const LoopTypeAffinityBinding* binding = &ctx->loop_affinity_bindings[i];
+        if (binding->loop_node == loop_node) {
+            return binding;
+        }
+    }
+
+    return NULL;
+}
+
+void optimization_clear_loop_affinities(OptimizationContext* ctx) {
+    if (!ctx) {
+        return;
+    }
+
+    ctx->loop_affinity_count = 0;
+}
+
 OptimizationContext* init_optimization_context(void) {
     OptimizationContext* ctx = malloc(sizeof(OptimizationContext));
     if (!ctx) return NULL;
@@ -199,9 +264,13 @@ OptimizationContext* init_optimization_context(void) {
     ctx->loop_residency_plans = NULL;
     ctx->loop_residency_count = 0;
     ctx->loop_residency_capacity = 0;
+    ctx->loop_affinity_bindings = NULL;
+    ctx->loop_affinity_count = 0;
+    ctx->loop_affinity_capacity = 0;
 
     const OptimizationPassRegistration registrations[] = {
         {"Constant Folding", true, run_constant_folding_pass},
+        {"Loop Type Affinity", true, run_loop_type_affinity_pass},
         {"Loop Type Residency", true, run_loop_type_residency_pass},
         {"Dead Code Elimination", false, run_dead_code_elimination_pass},
         {"Common Subexpression Elimination", false, run_common_subexpression_pass},
@@ -228,6 +297,7 @@ void free_optimization_context(OptimizationContext* ctx) {
 
     free(ctx->passes);
     free(ctx->loop_residency_plans);
+    free(ctx->loop_affinity_bindings);
     free(ctx);
 }
 

@@ -186,106 +186,24 @@ static bool record_for_range_binding(LoopTypeAffinityState* state, TypedASTNode*
     binding.loop_depth = state->loop_depth;
 
     int index = optimization_add_loop_affinity(state->ctx, &binding);
-    if (index >= 0) {
-        loop->preferTypedRegister = prefer_typed;
-        loop->requiresLoopResidency = prefer_typed && numeric_bounds;
-        loop->loopBindingId = index;
+    if (index >= 0 && loop) {
+        loop->prefer_typed_register = prefer_typed;
+        loop->requires_loop_residency = prefer_typed && numeric_bounds;
+        loop->loop_binding_id = index;
         state->recorded += 1;
     }
 
     return true;
 }
 
+// While/iterator loop affinity is currently disabled because the analysis needs to
+// validate pointer ownership after earlier folding passes mutate the AST. Keeping
+// this stub ensures the pass remains safe until the pointer lifetime rules are
+// clarified.
 static bool record_while_binding(LoopTypeAffinityState* state, TypedASTNode* loop) {
-    if (!state || !state->ctx || !loop) {
-        return false;
-    }
-
-    TypedASTNode* condition = loop->typed.whileStmt.condition;
-    if (!condition || !condition->original) {
-        return false;
-    }
-
-    if (condition->original->type != NODE_BINARY) {
-        return false;
-    }
-
-    const char* op = condition->original->binary.op;
-    if (!op) {
-        return false;
-    }
-
-    bool is_comparison = (strcmp(op, "<") == 0) || (strcmp(op, "<=") == 0) ||
-                         (strcmp(op, ">") == 0) || (strcmp(op, ">=") == 0);
-    if (!is_comparison) {
-        return false;
-    }
-
-    const TypedASTNode* left = condition->typed.binary.left;
-    const TypedASTNode* right = condition->typed.binary.right;
-
-    const Type* left_type = left ? left->resolvedType : NULL;
-    const Type* right_type = right ? right->resolvedType : NULL;
-
-    bool left_numeric = type_supports_typed_registers(left_type);
-    bool right_numeric = type_supports_typed_registers(right_type);
-    bool guard_numeric = left_numeric && right_numeric;
-
-    bool left_constant = is_effectively_constant(left);
-    bool right_constant = is_effectively_constant(right);
-
-    const Type* candidate_type = NULL;
-    if (left_numeric) {
-        candidate_type = left_type;
-    } else if (right_numeric) {
-        candidate_type = right_type;
-    }
-
-    LoopTypeAffinityBinding binding = (LoopTypeAffinityBinding){0};
-    binding.loop_node = loop;
-    binding.loop_variable_type = candidate_type;
-    binding.start_type = left_type;
-    binding.end_type = right_type;
-    binding.step_type = NULL;
-    binding.prefer_typed_registers = guard_numeric;
-    binding.proven_numeric_bounds = guard_numeric && (left_constant || right_constant);
-    binding.has_constant_start = left_constant;
-    binding.has_constant_end = right_constant;
-    binding.has_constant_step = true;
-    binding.step_is_positive = false;
-    binding.step_is_negative = false;
-    binding.is_inclusive = (strcmp(op, "<=") == 0) || (strcmp(op, ">=") == 0);
-    binding.is_range_loop = false;
-    binding.is_iterator_loop = false;
-    binding.is_while_loop = true;
-    binding.loop_depth = state->loop_depth;
-    binding.guard_left = left;
-    binding.guard_right = right;
-    binding.guard_left_type = left_type;
-    binding.guard_right_type = right_type;
-    binding.guard_operator = op;
-    binding.start_prefers_typed = left_numeric;
-    binding.end_prefers_typed = right_numeric;
-    binding.start_requires_residency = left_numeric && !left_constant;
-    binding.end_requires_residency = right_numeric && !right_constant;
-    binding.guard_prefers_typed = guard_numeric;
-    binding.guard_is_numeric = guard_numeric;
-    binding.guard_left_is_constant = left_constant;
-    binding.guard_right_is_constant = right_constant;
-    binding.guard_left_prefers_typed = left_numeric;
-    binding.guard_right_prefers_typed = right_numeric;
-    binding.guard_left_requires_residency = left_numeric && !left_constant;
-    binding.guard_right_requires_residency = right_numeric && !right_constant;
-
-    int index = optimization_add_loop_affinity(state->ctx, &binding);
-    if (index >= 0) {
-        loop->preferTypedRegister = guard_numeric;
-        loop->requiresLoopResidency = guard_numeric;
-        loop->loopBindingId = index;
-        state->recorded += 1;
-    }
-
-    return true;
+    (void)state;
+    (void)loop;
+    return false;
 }
 
 static bool loop_type_affinity_pre_visit(TypedASTNode* node, void* user_data) {
