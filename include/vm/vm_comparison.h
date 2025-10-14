@@ -56,32 +56,8 @@ static inline void vm_clear_typed_register_slot(uint16_t id, uint8_t reg_type) {
     }
 
     TypedRegisterWindow* window = vm_active_typed_window();
-    switch (reg_type) {
-        case REG_TYPE_I32:
-            window->i32_regs[id] = 0;
-            break;
-        case REG_TYPE_I64:
-            window->i64_regs[id] = 0;
-            break;
-        case REG_TYPE_U32:
-            window->u32_regs[id] = 0;
-            break;
-        case REG_TYPE_U64:
-            window->u64_regs[id] = 0;
-            break;
-        case REG_TYPE_F64:
-            window->f64_regs[id] = 0.0;
-            break;
-        case REG_TYPE_BOOL:
-            window->bool_regs[id] = false;
-            break;
-        case REG_TYPE_HEAP:
-            if (window->heap_regs) {
-                window->heap_regs[id] = typed_window_default_boxed_value();
-            }
-            break;
-        default:
-            break;
+    if (reg_type == REG_TYPE_HEAP && window->heap_regs) {
+        window->heap_regs[id] = typed_window_default_boxed_value();
     }
     typed_window_clear_dirty(window, id);
     window->reg_types[id] = REG_TYPE_NONE;
