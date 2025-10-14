@@ -1,3 +1,7 @@
+#ifndef _WIN32
+#define _POSIX_C_SOURCE 200112L
+#endif
+
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -86,8 +90,10 @@ static bool test_translates_i64_linear_loop(void) {
     bool success = true;
 
     if (result.status != ORUS_JIT_TRANSLATE_STATUS_OK) {
-        fprintf(stderr, "Unexpected translation failure: %s\n",
-                orus_jit_translation_status_name(result.status));
+        fprintf(stderr,
+                "Unexpected translation failure: %s (opcode=%d, kind=%d, offset=%u)\n",
+                orus_jit_translation_status_name(result.status),
+                result.opcode, result.value_kind, result.bytecode_offset);
         success = false;
         goto cleanup;
     }
@@ -214,8 +220,10 @@ static bool test_translates_f64_stream(void) {
     bool success = true;
 
     if (result.status != ORUS_JIT_TRANSLATE_STATUS_OK) {
-        fprintf(stderr, "Unexpected translation failure: %s\n",
-                orus_jit_translation_status_name(result.status));
+        fprintf(stderr,
+                "Unexpected translation failure: %s (opcode=%d, kind=%d, offset=%u)\n",
+                orus_jit_translation_status_name(result.status),
+                result.opcode, result.value_kind, result.bytecode_offset);
         success = false;
         goto cleanup;
     }
@@ -562,14 +570,14 @@ static bool test_queue_tier_up_counts_only_native_entries(void) {
             memcpy(previous_copy, previous_env, len + 1u);
         }
     }
+    initVM();
+    orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
+
 #ifdef _WIN32
     _putenv("ORUS_JIT_FORCE_HELPER_STUB=1");
 #else
     setenv("ORUS_JIT_FORCE_HELPER_STUB", "1", 1);
 #endif
-
-    initVM();
-    orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
 
     Chunk* chunk = (Chunk*)malloc(sizeof(Chunk));
     bool success = true;
@@ -691,8 +699,10 @@ static bool test_translates_i32_comparison_branch(void) {
 
     bool success = true;
     if (result.status != ORUS_JIT_TRANSLATE_STATUS_OK) {
-        fprintf(stderr, "Unexpected translation failure: %s\n",
-                orus_jit_translation_status_name(result.status));
+        fprintf(stderr,
+                "Unexpected translation failure: %s (opcode=%d, kind=%d, offset=%u)\n",
+                orus_jit_translation_status_name(result.status),
+                result.opcode, result.value_kind, result.bytecode_offset);
         success = false;
         goto cleanup;
     }
@@ -770,8 +780,10 @@ static bool test_translates_eq_r_with_typed_inputs(void) {
 
     bool success = true;
     if (result.status != ORUS_JIT_TRANSLATE_STATUS_OK) {
-        fprintf(stderr, "Unexpected translation failure: %s\n",
-                orus_jit_translation_status_name(result.status));
+        fprintf(stderr,
+                "Unexpected translation failure: %s (opcode=%d, kind=%d, offset=%u)\n",
+                orus_jit_translation_status_name(result.status),
+                result.opcode, result.value_kind, result.bytecode_offset);
         success = false;
         goto cleanup;
     }
@@ -858,8 +870,10 @@ static bool test_translates_loop_with_forward_exit(void) {
 
     bool success = true;
     if (result.status != ORUS_JIT_TRANSLATE_STATUS_OK) {
-        fprintf(stderr, "Unexpected translation failure: %s\n",
-                orus_jit_translation_status_name(result.status));
+        fprintf(stderr,
+                "Unexpected translation failure: %s (opcode=%d, kind=%d, offset=%u)\n",
+                orus_jit_translation_status_name(result.status),
+                result.opcode, result.value_kind, result.bytecode_offset);
         success = false;
         goto cleanup;
     }
@@ -971,7 +985,7 @@ static bool test_translates_loop_with_nested_branches_and_helper(void) {
     size_t guard_jump_lo = chunk.count;
     writeChunk(&chunk, 0u, 1, 0, tag);
 
-    writeChunk(&chunk, OP_EQ_I32_TYPED, 1, 0, tag);
+    writeChunk(&chunk, OP_EQ_R, 1, 0, tag);
     writeChunk(&chunk, (uint8_t)nested_predicate, 1, 0, tag);
     writeChunk(&chunk, (uint8_t)counter, 1, 0, tag);
     writeChunk(&chunk, (uint8_t)helper_arg, 1, 0, tag);
@@ -1051,8 +1065,10 @@ static bool test_translates_loop_with_nested_branches_and_helper(void) {
 
     bool success = true;
     if (result.status != ORUS_JIT_TRANSLATE_STATUS_OK) {
-        fprintf(stderr, "Unexpected translation failure: %s\n",
-                orus_jit_translation_status_name(result.status));
+        fprintf(stderr,
+                "Unexpected translation failure: %s (opcode=%d, kind=%d, offset=%u)\n",
+                orus_jit_translation_status_name(result.status),
+                result.opcode, result.value_kind, result.bytecode_offset);
         success = false;
         goto cleanup;
     }
@@ -1169,8 +1185,10 @@ static bool test_translates_if_else_jump_short(void) {
 
     bool success = true;
     if (result.status != ORUS_JIT_TRANSLATE_STATUS_OK) {
-        fprintf(stderr, "Unexpected translation failure: %s\n",
-                orus_jit_translation_status_name(result.status));
+        fprintf(stderr,
+                "Unexpected translation failure: %s (opcode=%d, kind=%d, offset=%u)\n",
+                orus_jit_translation_status_name(result.status),
+                result.opcode, result.value_kind, result.bytecode_offset);
         success = false;
         goto cleanup;
     }
@@ -1754,8 +1772,10 @@ static bool test_translates_runtime_helpers(void) {
 
     bool success = true;
     if (result.status != ORUS_JIT_TRANSLATE_STATUS_OK) {
-        fprintf(stderr, "Unexpected helper translation failure: %s\n",
-                orus_jit_translation_status_name(result.status));
+        fprintf(stderr,
+                "Unexpected helper translation failure: %s (opcode=%d, kind=%d, offset=%u)\n",
+                orus_jit_translation_status_name(result.status),
+                result.opcode, result.value_kind, result.bytecode_offset);
         success = false;
         goto cleanup;
     }
@@ -1880,6 +1900,79 @@ static bool test_translates_fused_increment_loop(void) {
     }
 
     ASSERT_TRUE(saw_fused, "expected fused increment IR opcode");
+
+cleanup:
+    orus_jit_ir_program_reset(&program);
+    freeChunk(&chunk);
+    freeVM();
+    return success;
+}
+
+static bool test_translates_mismatched_integer_fused_loop(void) {
+    initVM();
+    orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
+
+    Chunk chunk;
+    initChunk(&chunk);
+
+    Function function;
+    init_function(&function, &chunk);
+
+    const uint16_t counter_reg = FRAME_REG_START;
+    const uint16_t limit_reg = FRAME_REG_START + 1u;
+
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_I32_CONST, counter_reg,
+                                         I32_VAL(0)),
+                "expected counter load");
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_U32_CONST, limit_reg,
+                                         U32_VAL(5)),
+                "expected differently typed limit load");
+
+    const char* tag = "jit_translation";
+    writeChunk(&chunk, OP_INC_CMP_JMP, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)counter_reg, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)limit_reg, 1, 0, tag);
+    writeChunk(&chunk, 0xFF, 1, 0, tag);
+    writeChunk(&chunk, 0xFB, 1, 0, tag);
+
+    writeChunk(&chunk, OP_RETURN_VOID, 1, 0, tag);
+
+    HotPathSample sample = {0};
+    sample.func = 0;
+    sample.loop = (uint16_t)function.start;
+
+    OrusJitIRProgram program;
+    orus_jit_ir_program_init(&program);
+
+    OrusJitTranslationResult result =
+        orus_jit_translate_linear_block(&vm, &function, &sample, &program);
+
+    bool success = true;
+    if (result.status != ORUS_JIT_TRANSLATE_STATUS_OK) {
+        fprintf(stderr,
+                "Unexpected fused loop translation failure for mismatched "
+                "kinds: %s\n",
+                orus_jit_translation_status_name(result.status));
+        success = false;
+        goto cleanup;
+    }
+
+    bool saw_fused = false;
+    for (size_t i = 0; i < program.count; ++i) {
+        if (program.instructions[i].opcode == ORUS_JIT_IR_OP_INC_CMP_JUMP) {
+            const OrusJitIRInstruction* inst = &program.instructions[i];
+            ASSERT_TRUE(inst->value_kind == ORUS_JIT_VALUE_BOXED,
+                        "expected boxed fused loop value kind");
+            ASSERT_TRUE(inst->operands.fused_loop.counter_reg == counter_reg,
+                        "counter register mismatch");
+            ASSERT_TRUE(inst->operands.fused_loop.limit_reg == limit_reg,
+                        "limit register mismatch");
+            saw_fused = true;
+            break;
+        }
+    }
+
+    ASSERT_TRUE(saw_fused, "expected fused loop IR opcode");
 
 cleanup:
     orus_jit_ir_program_reset(&program);
@@ -2088,6 +2181,8 @@ int main(void) {
          test_translates_runtime_helpers},
         {"translator emits fused increment loop",
          test_translates_fused_increment_loop},
+        {"translator boxes mismatched typed fused loop",
+         test_translates_mismatched_integer_fused_loop},
         {"translator routes boxed fused loop counters",
          test_translates_mixed_boxed_counter_loop},
         {"translator emits fused decrement loop",

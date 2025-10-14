@@ -2473,31 +2473,26 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
 
                 if (!counter_is_boxed && !limit_is_boxed) {
                     if (counter_kind != limit_kind) {
-                        return make_translation_result(
-                            ORUS_JIT_TRANSLATE_STATUS_UNSUPPORTED_VALUE_KIND,
-                            opcode == OP_INC_CMP_JMP
-                                ? ORUS_JIT_IR_OP_INC_CMP_JUMP
-                                : ORUS_JIT_IR_OP_DEC_CMP_JUMP,
-                            counter_kind, (uint32_t)offset);
+                        fused_kind = ORUS_JIT_VALUE_BOXED;
+                        use_boxed_helper = true;
+                    } else {
+                        fused_kind = counter_kind;
                     }
-                    fused_kind = counter_kind;
                 } else {
                     if (counter_is_boxed && limit_is_boxed) {
                         fused_kind = ORUS_JIT_VALUE_BOXED;
+                        use_boxed_helper = true;
                     } else {
                         OrusJitValueKind typed_partner =
                             counter_is_boxed ? limit_kind : counter_kind;
                         if (!orus_jit_value_kind_is_integer_like(typed_partner)) {
-                            return make_translation_result(
-                                ORUS_JIT_TRANSLATE_STATUS_UNSUPPORTED_VALUE_KIND,
-                                opcode == OP_INC_CMP_JMP
-                                    ? ORUS_JIT_IR_OP_INC_CMP_JUMP
-                                    : ORUS_JIT_IR_OP_DEC_CMP_JUMP,
-                                typed_partner, (uint32_t)offset);
+                            fused_kind = ORUS_JIT_VALUE_BOXED;
+                            use_boxed_helper = true;
+                        } else {
+                            fused_kind = ORUS_JIT_VALUE_BOXED;
+                            use_boxed_helper = true;
                         }
-                        fused_kind = ORUS_JIT_VALUE_BOXED;
                     }
-                    use_boxed_helper = true;
                 }
 
                 switch (fused_kind) {
@@ -3283,7 +3278,7 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
             inst->operands.enum_new.variant_const_index = variant_const_index;
             ORUS_JIT_SET_KIND(dst, ORUS_JIT_VALUE_BOXED, inst);
             ORUS_JIT_SPECIALIZATION_INVALIDATE_REG(dst);
-            offset += 8u;
+            offset += 9u;
             if (++instructions_since_safepoint >= safepoint_interval) {
                 INSERT_SAFEPOINT((uint32_t)offset);
             }
@@ -4349,18 +4344,34 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
             uint16_t rhs = chunk->code[offset + 3u];
             OrusJitValueKind lhs_kind_tracked = ORUS_JIT_GET_KIND(lhs);
             if (lhs_kind_tracked != kind) {
-                if (!orus_jit_try_promote_register(&promotion_ctx, lhs, kind)) {
+                if (lhs_kind_tracked == ORUS_JIT_VALUE_BOXED && lhs < REGISTER_COUNT &&
+                    (register_writers[lhs] == NULL ||
+                     register_writers[lhs]->opcode == ORUS_JIT_IR_OP_CALL_NATIVE)) {
+                    ORUS_JIT_SET_KIND(lhs, kind);
+                    lhs_kind_tracked = kind;
+                } else if (!orus_jit_try_promote_register(&promotion_ctx, lhs,
+                                                          kind)) {
                     return make_translation_result(
                         ORUS_JIT_TRANSLATE_STATUS_UNSUPPORTED_VALUE_KIND,
                         ir_opcode, lhs_kind_tracked, (uint32_t)offset);
+                } else {
+                    lhs_kind_tracked = ORUS_JIT_GET_KIND(lhs);
                 }
             }
             OrusJitValueKind rhs_kind_tracked = ORUS_JIT_GET_KIND(rhs);
             if (rhs_kind_tracked != kind) {
-                if (!orus_jit_try_promote_register(&promotion_ctx, rhs, kind)) {
+                if (rhs_kind_tracked == ORUS_JIT_VALUE_BOXED && rhs < REGISTER_COUNT &&
+                    (register_writers[rhs] == NULL ||
+                     register_writers[rhs]->opcode == ORUS_JIT_IR_OP_CALL_NATIVE)) {
+                    ORUS_JIT_SET_KIND(rhs, kind);
+                    rhs_kind_tracked = kind;
+                } else if (!orus_jit_try_promote_register(&promotion_ctx, rhs,
+                                                          kind)) {
                     return make_translation_result(
                         ORUS_JIT_TRANSLATE_STATUS_UNSUPPORTED_VALUE_KIND,
                         ir_opcode, rhs_kind_tracked, (uint32_t)offset);
+                } else {
+                    rhs_kind_tracked = ORUS_JIT_GET_KIND(rhs);
                 }
             }
             ORUS_JIT_ENSURE_ROLLOUT(kind, ir_opcode, offset);
@@ -4440,20 +4451,40 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
             if (expected_kind != ORUS_JIT_VALUE_BOXED) {
                 OrusJitValueKind lhs_kind_tracked = ORUS_JIT_GET_KIND(lhs);
                 if (lhs_kind_tracked != expected_kind) {
-                    if (!orus_jit_try_promote_register(&promotion_ctx, lhs,
-                                                         expected_kind)) {
+                    if (lhs_kind_tracked == ORUS_JIT_VALUE_BOXED &&
+                        lhs < REGISTER_COUNT &&
+                        (register_writers[lhs] == NULL ||
+                         register_writers[lhs]->opcode ==
+                             ORUS_JIT_IR_OP_CALL_NATIVE)) {
+                        ORUS_JIT_SET_KIND(lhs, expected_kind);
+                        lhs_kind_tracked = expected_kind;
+                    } else if (!orus_jit_try_promote_register(&promotion_ctx,
+                                                              lhs,
+                                                              expected_kind)) {
                         return make_translation_result(
                             ORUS_JIT_TRANSLATE_STATUS_UNSUPPORTED_VALUE_KIND,
                             ir_opcode, lhs_kind_tracked, (uint32_t)offset);
+                    } else {
+                        lhs_kind_tracked = ORUS_JIT_GET_KIND(lhs);
                     }
                 }
                 OrusJitValueKind rhs_kind_tracked = ORUS_JIT_GET_KIND(rhs);
                 if (rhs_kind_tracked != expected_kind) {
-                    if (!orus_jit_try_promote_register(&promotion_ctx, rhs,
-                                                         expected_kind)) {
+                    if (rhs_kind_tracked == ORUS_JIT_VALUE_BOXED &&
+                        rhs < REGISTER_COUNT &&
+                        (register_writers[rhs] == NULL ||
+                         register_writers[rhs]->opcode ==
+                             ORUS_JIT_IR_OP_CALL_NATIVE)) {
+                        ORUS_JIT_SET_KIND(rhs, expected_kind);
+                        rhs_kind_tracked = expected_kind;
+                    } else if (!orus_jit_try_promote_register(&promotion_ctx,
+                                                              rhs,
+                                                              expected_kind)) {
                         return make_translation_result(
                             ORUS_JIT_TRANSLATE_STATUS_UNSUPPORTED_VALUE_KIND,
                             ir_opcode, rhs_kind_tracked, (uint32_t)offset);
+                    } else {
+                        rhs_kind_tracked = ORUS_JIT_GET_KIND(rhs);
                     }
                 }
             }
