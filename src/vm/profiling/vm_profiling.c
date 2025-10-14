@@ -2048,6 +2048,7 @@ promotion_done:
 OrusJitTranslationResult orus_jit_translate_linear_block(
     VMState* vm_state,
     Function* function,
+    const Chunk* chunk,
     const HotPathSample* sample,
     OrusJitIRProgram* program) {
     OrusJitTranslationResult result = make_translation_result(
@@ -2121,11 +2122,13 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
                 __kind, (uint32_t)(byte_offset_value));                              \
         }                                                                            \
     } while (0)
-    if (!function->chunk || !function->chunk->code || function->chunk->count <= 0) {
-        return result;
+    if (!chunk) {
+        chunk = function ? function->chunk : NULL;
     }
 
-    const Chunk* chunk = function->chunk;
+    if (!chunk || !chunk->code || chunk->count <= 0) {
+        return result;
+    }
     OrusJitPromotionContext promotion_ctx = {
         register_kinds,
         register_writers,
@@ -4651,6 +4654,7 @@ void queue_tier_up(VMState* vm_state, const HotPathSample* sample) {
 
     Function script_function = {0};
     Function* function = NULL;
+    const Chunk* active_chunk = NULL;
 
     if (sample->func == UINT16_MAX) {
         if (!vm_state->chunk) {
@@ -4666,11 +4670,17 @@ void queue_tier_up(VMState* vm_state, const HotPathSample* sample) {
         script_function.specialization_hits = 0;
         script_function.debug_name = NULL;
         function = &script_function;
+        active_chunk = vm_state->chunk;
     } else {
         if (sample->func >= (FunctionId)vm_state->functionCount) {
             return;
         }
         function = &vm_state->functions[sample->func];
+        active_chunk = vm_select_function_chunk(function);
+    }
+
+    if (!active_chunk) {
+        return;
     }
 
     JITEntry* cached = vm_jit_lookup_entry(sample->func, sample->loop);
@@ -4696,7 +4706,7 @@ void queue_tier_up(VMState* vm_state, const HotPathSample* sample) {
     };
     if (function) {
         translation = orus_jit_translate_linear_block(
-            vm_state, function, sample, &program);
+            vm_state, function, active_chunk, sample, &program);
         translated = (translation.status == ORUS_JIT_TRANSLATE_STATUS_OK);
         unsupported = orus_jit_translation_status_is_unsupported(translation.status);
         attempted_translation = true;
@@ -4739,7 +4749,7 @@ void queue_tier_up(VMState* vm_state, const HotPathSample* sample) {
         memset(&program.instructions[0], 0, sizeof(program.instructions[0]));
         program.count = 1u;
         program.instructions[0].opcode = ORUS_JIT_IR_OP_RETURN;
-        program.source_chunk = function ? (const struct Chunk*)function->chunk : NULL;
+        program.source_chunk = (const struct Chunk*)active_chunk;
         program.function_index = sample->func;
         program.loop_index = sample->loop;
         program.loop_start_offset = 0;
