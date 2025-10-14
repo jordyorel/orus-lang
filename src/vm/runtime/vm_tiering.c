@@ -11,12 +11,79 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
+
+#define VM_FUSION_PATCH_COOLDOWN 4096u
 
 #ifndef FUNCTION_SPECIALIZATION_THRESHOLD
 #define FUNCTION_SPECIALIZATION_THRESHOLD 512ULL
 #endif
 
 extern VM vm;
+
+static uint64_t g_tiering_instruction_tick_counter = 0;
+
+typedef bool (*VMFusionMiniHandler)(VMFusionPatch* patch);
+
+extern bool vm_dispatch_execute_fused_window(VMFusionPatch* patch);
+
+static VMFusionPatch*
+vm_fusion_find_patch(const uint8_t* start_ip) {
+    if (!start_ip) {
+        return NULL;
+    }
+
+    for (size_t i = 0; i < vm.fusion_patch_count && i < VM_MAX_FUSION_PATCHES; ++i) {
+        VMFusionPatch* patch = &vm.fusion_patches[i];
+        if (patch->start_ip == start_ip) {
+            return patch;
+        }
+    }
+
+    return NULL;
+}
+
+static size_t
+vm_fusion_oldest_patch_index(void) {
+    size_t index = 0;
+    uint64_t oldest = UINT64_MAX;
+
+    for (size_t i = 0; i < VM_MAX_FUSION_PATCHES; ++i) {
+        VMFusionPatch* patch = &vm.fusion_patches[i];
+        if (!patch->start_ip) {
+            return i;
+        }
+        if (patch->last_activation < oldest) {
+            oldest = patch->last_activation;
+            index = i;
+        }
+    }
+
+    return index;
+}
+
+static VMFusionPatch*
+vm_fusion_acquire_patch(const VMHotWindowDescriptor* window) {
+    if (!window || !window->start_ip) {
+        return NULL;
+    }
+
+    VMFusionPatch* existing = vm_fusion_find_patch(window->start_ip);
+    if (existing) {
+        return existing;
+    }
+
+    size_t slot = 0;
+    if (vm.fusion_patch_count < VM_MAX_FUSION_PATCHES) {
+        slot = vm.fusion_patch_count++;
+    } else {
+        slot = vm_fusion_oldest_patch_index();
+    }
+
+    VMFusionPatch* patch = &vm.fusion_patches[slot];
+    memset(patch, 0, sizeof(*patch));
+    return patch;
+}
 
 static void
 vm_jit_cache_reset_slot(JITEntryCacheSlot* slot) {
@@ -117,6 +184,88 @@ vm_jit_cache_acquire_slot(FunctionId function, LoopId loop) {
     return NULL;
 }
 
+void
+vm_tiering_request_window_fusion(const VMHotWindowDescriptor* window) {
+    if (!window || !window->start_ip || window->length == 0 ||
+        window->length > VM_MAX_FUSION_WINDOW) {
+        return;
+    }
+
+    VMFusionPatch* patch = vm_fusion_acquire_patch(window);
+    if (!patch) {
+        return;
+    }
+
+    patch->start_ip = window->start_ip;
+    patch->length = window->length;
+    memcpy(patch->opcodes, window->opcodes, window->length);
+    patch->handler = (void*)vm_dispatch_execute_fused_window;
+    patch->active = true;
+    patch->metadata_requested = true;
+    patch->hot_hits = 0;
+    patch->last_activation = g_tiering_instruction_tick_counter;
+}
+
+bool
+vm_tiering_try_execute_fused(const uint8_t* start_ip, uint8_t opcode) {
+    VMFusionPatch* patch = vm_fusion_find_patch(start_ip);
+    if (!patch || !patch->active || !patch->handler) {
+        return false;
+    }
+
+    if (patch->length == 0 || patch->opcodes[0] != opcode) {
+        return false;
+    }
+
+    VMFusionMiniHandler handler = (VMFusionMiniHandler)patch->handler;
+    uint8_t* original_ip = vm.ip;
+    bool handled = handler(patch);
+    if (!handled) {
+        vm.ip = original_ip;
+        patch->active = false;
+        return false;
+    }
+
+    if (patch->hot_hits < UINT64_MAX) {
+        patch->hot_hits++;
+    }
+    patch->last_activation = g_tiering_instruction_tick_counter;
+    return true;
+}
+
+void
+vm_tiering_instruction_tick(uint64_t instruction_index) {
+    g_tiering_instruction_tick_counter = instruction_index;
+
+    if (instruction_index == 0 ||
+        (instruction_index % VM_FUSION_PATCH_COOLDOWN) != 0) {
+        return;
+    }
+
+    for (size_t i = 0; i < vm.fusion_patch_count && i < VM_MAX_FUSION_PATCHES; ++i) {
+        VMFusionPatch* patch = &vm.fusion_patches[i];
+        if (!patch->active || !patch->start_ip) {
+            continue;
+        }
+        if (instruction_index - patch->last_activation > VM_FUSION_PATCH_COOLDOWN) {
+            patch->active = false;
+        }
+    }
+}
+
+void
+vm_tiering_invalidate_all_fusions(void) {
+    for (size_t i = 0; i < VM_MAX_FUSION_PATCHES; ++i) {
+        VMFusionPatch* patch = &vm.fusion_patches[i];
+        if (!patch->start_ip) {
+            continue;
+        }
+        memset(patch, 0, sizeof(*patch));
+    }
+    vm.fusion_patch_count = 0;
+    vm.fusion_generation++;
+}
+
 JITEntry*
 vm_jit_lookup_entry(FunctionId function, LoopId loop) {
     JITEntryCacheSlot* slot = vm_jit_cache_find_slot(function, loop);
@@ -164,6 +313,7 @@ vm_jit_invalidate_entry(const JITDeoptTrigger* trigger) {
     }
 
     vm.jit_deopt_count++;
+    vm_tiering_invalidate_all_fusions();
 
     if (trigger->function_index == UINT16_MAX) {
         vm_jit_flush_entries();
@@ -200,6 +350,7 @@ vm_jit_flush_entries(void) {
     }
     vm.jit_cache.count = 0;
     memset(vm.jit_loop_blocklist, 0, sizeof(vm.jit_loop_blocklist));
+    vm_tiering_invalidate_all_fusions();
 }
 
 static bool function_guard_allows_specialization(Function* function) {

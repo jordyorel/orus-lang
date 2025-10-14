@@ -25,7 +25,8 @@ typedef enum {
     PROFILE_MEMORY_ACCESS = 1 << 3,    // Profile memory access patterns
     PROFILE_BRANCH_PREDICTION = 1 << 4, // Profile branch prediction accuracy
     PROFILE_FUNCTION_CALLS = 1 << 5,   // Profile function invocation frequency
-    PROFILE_ALL = 0x3F
+    PROFILE_OPCODE_WINDOWS = 1 << 6,   // Detect hot opcode windows for fusion
+    PROFILE_ALL = 0x7F
 } ProfilingFlags;
 
 // Hot path detection thresholds
@@ -63,6 +64,21 @@ typedef struct {
     uint64_t reuses;
     double averageLifetime;
 } RegisterProfile;
+
+typedef struct {
+    uintptr_t start_address;
+    uint64_t hit_count;
+    uint64_t last_seen;
+    uint8_t length;
+    bool metadata_requested;
+    uint8_t opcodes[VM_MAX_FUSION_WINDOW];
+} OpcodeWindowProfile;
+
+typedef struct {
+    uintptr_t recent_addresses[VM_MAX_FUSION_WINDOW];
+    uint8_t recent_opcodes[VM_MAX_FUSION_WINDOW];
+    uint8_t recent_count;
+} OpcodeWindowSampler;
 
 // Loop hit sampling data (hashed by code address)
 typedef struct {
@@ -119,6 +135,10 @@ typedef struct {
     uint64_t functionSampleCounter;
     LoopProfile loopStats[LOOP_PROFILE_SLOTS];
     FunctionProfile functionStats[FUNCTION_PROFILE_SLOTS];
+
+    // Opcode window sampling for tiered fusion
+    OpcodeWindowSampler window_sampler;
+    OpcodeWindowProfile window_profiles[256];
 } VMProfilingContext;
 
 // Global profiling instance
@@ -133,6 +153,9 @@ void enableProfiling(ProfilingFlags flags);
 void disableProfiling(ProfilingFlags flags);
 void resetProfiling(void);
 void shutdownVMProfiling(void);
+
+// Opcode window fusion sampling
+void vm_profiling_record_opcode_window(const uint8_t* start_addr, uint8_t opcode);
 
 // Runtime profiling hooks (inline for performance)
 static inline void profileInstruction(uint8_t opcode, uint64_t cycles) {
@@ -196,6 +219,13 @@ static inline uint64_t profileLoopHit(void* codeAddress) {
     loopProfile->hitCount += recordedIterations;
     loopProfile->lastHitInstruction = g_profiling.totalInstructions;
     return recordedIterations;
+}
+
+static inline void profileOpcodeWindow(const uint8_t* start_addr, uint8_t opcode) {
+    if (!g_profiling.isActive || !(g_profiling.enabledFlags & PROFILE_OPCODE_WINDOWS)) {
+        return;
+    }
+    vm_profiling_record_opcode_window(start_addr, opcode);
 }
 
 static inline void profileFunctionHit(void* functionPtr, bool isNative) {

@@ -29,6 +29,9 @@ typedef enum OrusJitIteratorKind {
     ORUS_JIT_ITERATOR_GENERIC,
 } OrusJitIteratorKind;
 
+#define VM_OPCODE_WINDOW_THRESHOLD 64u
+#define VM_OPCODE_WINDOW_COOLDOWN 4096u
+
 static inline bool
 orus_jit_kind_is_integer(OrusJitValueKind kind) {
     switch (kind) {
@@ -53,6 +56,110 @@ orus_jit_kind_is_integer(OrusJitValueKind kind) {
 VMProfilingContext g_profiling = {0};
 
 extern VM vm;
+
+static void
+opcode_window_profile_reset(OpcodeWindowProfile* profile) {
+    if (!profile) {
+        return;
+    }
+    memset(profile, 0, sizeof(*profile));
+}
+
+static bool
+opcode_window_is_candidate(const uint8_t* opcodes, uint8_t length) {
+    if (!opcodes) {
+        return false;
+    }
+    if (length == 3) {
+        if (opcodes[0] == OP_INC_I32_R && opcodes[1] == OP_CMP_I32_IMM) {
+            uint8_t term = opcodes[2];
+            return term == OP_JUMP_IF_NOT_SHORT || term == OP_JUMP_SHORT ||
+                   term == OP_JUMP_BACK_SHORT;
+        }
+    }
+    return false;
+}
+
+static uint32_t
+opcode_window_hash(uintptr_t start_address, const uint8_t* opcodes, uint8_t length) {
+    uint32_t hash = (uint32_t)(start_address >> 3);
+    for (uint8_t i = 0; i < length; ++i) {
+        hash = (hash * 131u) ^ (uint32_t)opcodes[i];
+    }
+    return hash % (uint32_t)(sizeof(g_profiling.window_profiles) /
+                              sizeof(g_profiling.window_profiles[0]));
+}
+
+static void
+opcode_window_consider(uintptr_t start_address,
+                       const uint8_t* opcodes,
+                       uint8_t length) {
+    if (start_address == 0 || !opcode_window_is_candidate(opcodes, length)) {
+        return;
+    }
+
+    uint32_t slot_index = opcode_window_hash(start_address, opcodes, length);
+    OpcodeWindowProfile* profile = &g_profiling.window_profiles[slot_index];
+
+    if (profile->start_address != start_address || profile->length != length ||
+        memcmp(profile->opcodes, opcodes, length) != 0) {
+        opcode_window_profile_reset(profile);
+        profile->start_address = start_address;
+        profile->length = length;
+        memcpy(profile->opcodes, opcodes, length);
+    }
+
+    if (g_profiling.totalInstructions - profile->last_seen > VM_OPCODE_WINDOW_COOLDOWN) {
+        profile->hit_count = 0;
+        profile->metadata_requested = false;
+    }
+
+    profile->last_seen = g_profiling.totalInstructions;
+    if (profile->hit_count < UINT64_MAX) {
+        profile->hit_count++;
+    }
+
+    if (profile->hit_count >= VM_OPCODE_WINDOW_THRESHOLD &&
+        !profile->metadata_requested) {
+        VMHotWindowDescriptor descriptor = {0};
+        descriptor.start_ip = (const uint8_t*)profile->start_address;
+        descriptor.length = profile->length;
+        memcpy(descriptor.opcodes, profile->opcodes, profile->length);
+        vm_tiering_request_window_fusion(&descriptor);
+        profile->metadata_requested = true;
+    }
+}
+
+void
+vm_profiling_record_opcode_window(const uint8_t* start_addr, uint8_t opcode) {
+    OpcodeWindowSampler* sampler = &g_profiling.window_sampler;
+
+    if (sampler->recent_count < VM_MAX_FUSION_WINDOW) {
+        sampler->recent_addresses[sampler->recent_count] = (uintptr_t)start_addr;
+        sampler->recent_opcodes[sampler->recent_count] = opcode;
+        sampler->recent_count++;
+    } else {
+        memmove(&sampler->recent_addresses[0], &sampler->recent_addresses[1],
+                (VM_MAX_FUSION_WINDOW - 1) * sizeof(uintptr_t));
+        memmove(&sampler->recent_opcodes[0], &sampler->recent_opcodes[1],
+                (VM_MAX_FUSION_WINDOW - 1) * sizeof(uint8_t));
+        sampler->recent_addresses[VM_MAX_FUSION_WINDOW - 1] =
+            (uintptr_t)start_addr;
+        sampler->recent_opcodes[VM_MAX_FUSION_WINDOW - 1] = opcode;
+    }
+
+    uint8_t count = sampler->recent_count;
+    if (count < 3) {
+        return;
+    }
+
+    for (uint8_t length = 3; length <= count && length <= VM_MAX_FUSION_WINDOW;
+         ++length) {
+        uint8_t offset = count - length;
+        opcode_window_consider(sampler->recent_addresses[offset],
+                               &sampler->recent_opcodes[offset], length);
+    }
+}
 
 static bool
 orus_jit_trace_ir_enabled(void) {

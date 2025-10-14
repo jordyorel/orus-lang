@@ -466,6 +466,125 @@ static inline bool dispatch_handle_loop_short(void) {
 }
 
 
+bool
+vm_dispatch_execute_fused_window(VMFusionPatch* patch) {
+    if (!patch || !patch->start_ip || patch->length == 0) {
+        return false;
+    }
+
+    if (!vm.chunk || !vm.chunk->code) {
+        return false;
+    }
+
+    uint8_t* original_ip = vm.ip;
+    const uint8_t* cursor = patch->start_ip + 1;
+    const uint8_t* chunk_end = vm.chunk->code + vm.chunk->count;
+
+    for (uint8_t i = 0; i < patch->length; ++i) {
+        uint8_t opcode = patch->opcodes[i];
+        switch (opcode) {
+            case OP_INC_I32_R: {
+                if (cursor >= chunk_end) {
+                    vm.ip = original_ip;
+                    return false;
+                }
+                uint8_t reg = *cursor++;
+                int32_t current = 0;
+                if (!vm_try_read_i32_typed(reg, &current)) {
+                    Value value = vm_get_register_safe(reg);
+                    if (!IS_I32(value)) {
+                        vm.ip = original_ip;
+                        return false;
+                    }
+                    current = AS_I32(value);
+                    vm_cache_i32_typed(reg, current);
+                }
+                int32_t next_value;
+                if (__builtin_add_overflow(current, 1, &next_value)) {
+                    vm.ip = original_ip;
+                    return false;
+                }
+                vm_store_i32_typed_hot(reg, next_value);
+                break;
+            }
+            case OP_CMP_I32_IMM: {
+                if ((size_t)(chunk_end - cursor) < 6) {
+                    vm.ip = original_ip;
+                    return false;
+                }
+                uint8_t dst = *cursor++;
+                uint8_t src = *cursor++;
+                int32_t imm = 0;
+                memcpy(&imm, cursor, sizeof(int32_t));
+                cursor += sizeof(int32_t);
+
+                int32_t current = 0;
+                if (!vm_try_read_i32_typed(src, &current)) {
+                    Value value = vm_get_register_safe(src);
+                    if (!IS_I32(value)) {
+                        vm.ip = original_ip;
+                        return false;
+                    }
+                    current = AS_I32(value);
+                    vm_cache_i32_typed(src, current);
+                }
+
+                vm_store_bool_register(dst, current < imm);
+                break;
+            }
+            case OP_JUMP_IF_NOT_SHORT: {
+                if ((size_t)(chunk_end - cursor) < 2) {
+                    vm.ip = original_ip;
+                    return false;
+                }
+                uint8_t reg = *cursor++;
+                uint8_t offset = *cursor++;
+                vm.ip = (uint8_t*)cursor;
+                if (!CF_JUMP_IF_NOT_SHORT(reg, offset)) {
+                    vm.ip = original_ip;
+                    return false;
+                }
+                cursor = vm.ip;
+                break;
+            }
+            case OP_JUMP_SHORT: {
+                if ((size_t)(chunk_end - cursor) < 1) {
+                    vm.ip = original_ip;
+                    return false;
+                }
+                uint8_t offset = *cursor++;
+                vm.ip = (uint8_t*)cursor;
+                if (!CF_JUMP_SHORT(offset)) {
+                    vm.ip = original_ip;
+                    return false;
+                }
+                cursor = vm.ip;
+                break;
+            }
+            case OP_JUMP_BACK_SHORT: {
+                if ((size_t)(chunk_end - cursor) < 1) {
+                    vm.ip = original_ip;
+                    return false;
+                }
+                uint8_t offset = *cursor++;
+                vm.ip = (uint8_t*)cursor;
+                if (!CF_JUMP_BACK_SHORT(offset)) {
+                    vm.ip = original_ip;
+                    return false;
+                }
+                cursor = vm.ip;
+                break;
+            }
+            default:
+                vm.ip = original_ip;
+                return false;
+        }
+    }
+
+    vm.ip = (uint8_t*)cursor;
+    return true;
+}
+
 
 // Auto-detect computed goto support
 #ifndef USE_COMPUTED_GOTO
@@ -802,7 +921,6 @@ InterpretResult vm_run_dispatch(void) {
     // Profiling hook: Initialize timing for first instruction
     if (g_profiling.isActive) {
         instruction_start_time = getTimestamp();
-        g_profiling.totalInstructions++;
     }
     
         DISPATCH();
