@@ -119,6 +119,80 @@ cleanup:
     return success;
 }
 
+static bool test_translates_baseline_register_loop(void) {
+    initVM();
+    orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
+
+    Chunk chunk;
+    initChunk(&chunk);
+
+    Function function;
+    init_function(&function, &chunk);
+
+    const uint16_t acc = FRAME_REG_START;
+    const uint16_t step = FRAME_REG_START + 1u;
+    const uint16_t tmp = FRAME_REG_START + 2u;
+
+    size_t loop_start = chunk.count;
+
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_CONST, acc, I32_VAL(0)),
+                "expected OP_LOAD_CONST for accumulator");
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_CONST, step, I32_VAL(1)),
+                "expected OP_LOAD_CONST for step");
+
+    writeChunk(&chunk, OP_MOVE, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)tmp, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)step, 1, 0, "jit_translation");
+
+    writeChunk(&chunk, OP_ADD_I32_R, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)acc, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)acc, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)tmp, 1, 0, "jit_translation");
+
+    size_t loop_body_end = chunk.count;
+    size_t fallthrough = loop_body_end + 2u;
+    ASSERT_TRUE(fallthrough >= loop_start,
+                "loop fallthrough should be after loop start");
+    size_t back_span = fallthrough - loop_start;
+    ASSERT_TRUE(back_span <= UINT8_MAX, "loop back offset should fit in byte");
+    writeChunk(&chunk, OP_LOOP_SHORT, 1, 0, "jit_translation");
+    writeChunk(&chunk, (uint8_t)back_span, 1, 0, "jit_translation");
+
+    HotPathSample sample = {0};
+    sample.func = 0;
+    sample.loop = (uint16_t)function.start;
+
+    OrusJitIRProgram program;
+    orus_jit_ir_program_init(&program);
+
+    OrusJitTranslationResult result =
+        orus_jit_translate_linear_block(&vm, &function, function.chunk, &sample,
+                                        &program);
+
+    bool success = true;
+
+    if (result.status != ORUS_JIT_TRANSLATE_STATUS_OK) {
+        fprintf(stderr,
+                "Baseline register translation failed: %s (opcode=%d, kind=%d, offset=%u)\n",
+                orus_jit_translation_status_name(result.status), result.opcode,
+                result.value_kind, result.bytecode_offset);
+        success = false;
+        goto cleanup;
+    }
+
+    ASSERT_TRUE(program.count >= 4u, "expected baseline loop to produce IR");
+    ASSERT_TRUE(program.instructions[2].opcode == ORUS_JIT_IR_OP_MOVE_I32,
+                "baseline move should become typed move");
+    ASSERT_TRUE(program.instructions[3].opcode == ORUS_JIT_IR_OP_ADD_I32,
+                "baseline add should become typed add");
+
+cleanup:
+    orus_jit_ir_program_reset(&program);
+    freeChunk(&chunk);
+    freeVM();
+    return success;
+}
+
 static bool test_translator_promotes_i32_constants_to_i64(void) {
     initVM();
     orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
@@ -2292,6 +2366,8 @@ int main(void) {
         bool (*fn)(void);
     } tests[] = {
         {"translator emits i64 ops", test_translates_i64_linear_loop},
+        {"translator handles baseline register loop",
+         test_translates_baseline_register_loop},
         {"translator promotes i32 inputs for i64 ops",
          test_translator_promotes_i32_constants_to_i64},
         {"translator emits f64 ops", test_translates_f64_stream},

@@ -1306,102 +1306,127 @@ map_arithmetic_opcode(uint8_t opcode,
                       OrusJitIROpcode* ir_opcode,
                       OrusJitValueKind* kind) {
     switch (opcode) {
+        case OP_ADD_I32_R:
         case OP_ADD_I32_TYPED:
             *kind = ORUS_JIT_VALUE_I32;
             *ir_opcode = ORUS_JIT_IR_OP_ADD_I32;
             return true;
+        case OP_SUB_I32_R:
         case OP_SUB_I32_TYPED:
             *kind = ORUS_JIT_VALUE_I32;
             *ir_opcode = ORUS_JIT_IR_OP_SUB_I32;
             return true;
+        case OP_MUL_I32_R:
         case OP_MUL_I32_TYPED:
             *kind = ORUS_JIT_VALUE_I32;
             *ir_opcode = ORUS_JIT_IR_OP_MUL_I32;
             return true;
+        case OP_DIV_I32_R:
         case OP_DIV_I32_TYPED:
             *kind = ORUS_JIT_VALUE_I32;
             *ir_opcode = ORUS_JIT_IR_OP_DIV_I32;
             return true;
+        case OP_MOD_I32_R:
         case OP_MOD_I32_TYPED:
             *kind = ORUS_JIT_VALUE_I32;
             *ir_opcode = ORUS_JIT_IR_OP_MOD_I32;
             return true;
+        case OP_ADD_I64_R:
         case OP_ADD_I64_TYPED:
             *kind = ORUS_JIT_VALUE_I64;
             *ir_opcode = ORUS_JIT_IR_OP_ADD_I64;
             return true;
+        case OP_SUB_I64_R:
         case OP_SUB_I64_TYPED:
             *kind = ORUS_JIT_VALUE_I64;
             *ir_opcode = ORUS_JIT_IR_OP_SUB_I64;
             return true;
+        case OP_MUL_I64_R:
         case OP_MUL_I64_TYPED:
             *kind = ORUS_JIT_VALUE_I64;
             *ir_opcode = ORUS_JIT_IR_OP_MUL_I64;
             return true;
+        case OP_DIV_I64_R:
         case OP_DIV_I64_TYPED:
             *kind = ORUS_JIT_VALUE_I64;
             *ir_opcode = ORUS_JIT_IR_OP_DIV_I64;
             return true;
+        case OP_MOD_I64_R:
         case OP_MOD_I64_TYPED:
             *kind = ORUS_JIT_VALUE_I64;
             *ir_opcode = ORUS_JIT_IR_OP_MOD_I64;
             return true;
+        case OP_ADD_U32_R:
         case OP_ADD_U32_TYPED:
             *kind = ORUS_JIT_VALUE_U32;
             *ir_opcode = ORUS_JIT_IR_OP_ADD_U32;
             return true;
+        case OP_SUB_U32_R:
         case OP_SUB_U32_TYPED:
             *kind = ORUS_JIT_VALUE_U32;
             *ir_opcode = ORUS_JIT_IR_OP_SUB_U32;
             return true;
+        case OP_MUL_U32_R:
         case OP_MUL_U32_TYPED:
             *kind = ORUS_JIT_VALUE_U32;
             *ir_opcode = ORUS_JIT_IR_OP_MUL_U32;
             return true;
+        case OP_DIV_U32_R:
         case OP_DIV_U32_TYPED:
             *kind = ORUS_JIT_VALUE_U32;
             *ir_opcode = ORUS_JIT_IR_OP_DIV_U32;
             return true;
+        case OP_MOD_U32_R:
         case OP_MOD_U32_TYPED:
             *kind = ORUS_JIT_VALUE_U32;
             *ir_opcode = ORUS_JIT_IR_OP_MOD_U32;
             return true;
+        case OP_ADD_U64_R:
         case OP_ADD_U64_TYPED:
             *kind = ORUS_JIT_VALUE_U64;
             *ir_opcode = ORUS_JIT_IR_OP_ADD_U64;
             return true;
+        case OP_SUB_U64_R:
         case OP_SUB_U64_TYPED:
             *kind = ORUS_JIT_VALUE_U64;
             *ir_opcode = ORUS_JIT_IR_OP_SUB_U64;
             return true;
+        case OP_MUL_U64_R:
         case OP_MUL_U64_TYPED:
             *kind = ORUS_JIT_VALUE_U64;
             *ir_opcode = ORUS_JIT_IR_OP_MUL_U64;
             return true;
+        case OP_DIV_U64_R:
         case OP_DIV_U64_TYPED:
             *kind = ORUS_JIT_VALUE_U64;
             *ir_opcode = ORUS_JIT_IR_OP_DIV_U64;
             return true;
+        case OP_MOD_U64_R:
         case OP_MOD_U64_TYPED:
             *kind = ORUS_JIT_VALUE_U64;
             *ir_opcode = ORUS_JIT_IR_OP_MOD_U64;
             return true;
+        case OP_ADD_F64_R:
         case OP_ADD_F64_TYPED:
             *kind = ORUS_JIT_VALUE_F64;
             *ir_opcode = ORUS_JIT_IR_OP_ADD_F64;
             return true;
+        case OP_SUB_F64_R:
         case OP_SUB_F64_TYPED:
             *kind = ORUS_JIT_VALUE_F64;
             *ir_opcode = ORUS_JIT_IR_OP_SUB_F64;
             return true;
+        case OP_MUL_F64_R:
         case OP_MUL_F64_TYPED:
             *kind = ORUS_JIT_VALUE_F64;
             *ir_opcode = ORUS_JIT_IR_OP_MUL_F64;
             return true;
+        case OP_DIV_F64_R:
         case OP_DIV_F64_TYPED:
             *kind = ORUS_JIT_VALUE_F64;
             *ir_opcode = ORUS_JIT_IR_OP_DIV_F64;
             return true;
+        case OP_MOD_F64_R:
         case OP_MOD_F64_TYPED:
             *kind = ORUS_JIT_VALUE_F64;
             *ir_opcode = ORUS_JIT_IR_OP_MOD_F64;
