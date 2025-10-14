@@ -3795,82 +3795,82 @@ InterpretResult vm_run_dispatch(void) {
     // Typed arithmetic operations for maximum performance (bypass Value boxing)
 #if ORUS_VM_ENABLE_TYPED_OPS
     LABEL_OP_ADD_I32_TYPED: {
-        handle_add_i32_typed();
+        VM_TYPED_ADD_I32();
         DISPATCH_TYPED();
     }
 
     LABEL_OP_SUB_I32_TYPED: {
-        handle_sub_i32_typed();
+        VM_TYPED_SUB_I32();
         DISPATCH_TYPED();
     }
 
     LABEL_OP_MUL_I32_TYPED: {
-        handle_mul_i32_typed();
+        VM_TYPED_MUL_I32();
         DISPATCH_TYPED();
     }
 
     LABEL_OP_DIV_I32_TYPED: {
-        handle_div_i32_typed();
+        VM_TYPED_DIV_I32();
         CHECK_RUNTIME_ERROR();
         DISPATCH_TYPED();
     }
 
     LABEL_OP_MOD_I32_TYPED: {
-        handle_mod_i32_typed();
+        VM_TYPED_MOD_I32();
         CHECK_RUNTIME_ERROR();
         DISPATCH_TYPED();
     }
 
     LABEL_OP_ADD_I64_TYPED: {
-        handle_add_i64_typed();
+        VM_TYPED_ADD_I64();
         DISPATCH_TYPED();
     }
 
     LABEL_OP_SUB_I64_TYPED: {
-        handle_sub_i64_typed();
+        VM_TYPED_SUB_I64();
         DISPATCH_TYPED();
     }
 
     LABEL_OP_MUL_I64_TYPED: {
-        handle_mul_i64_typed();
+        VM_TYPED_MUL_I64();
         DISPATCH_TYPED();
     }
 
     LABEL_OP_DIV_I64_TYPED: {
-        handle_div_i64_typed();
+        VM_TYPED_DIV_I64();
         CHECK_RUNTIME_ERROR();
         DISPATCH_TYPED();
     }
 
     LABEL_OP_MOD_I64_TYPED: {
-        handle_mod_i64_typed();
+        VM_TYPED_MOD_I64();
         CHECK_RUNTIME_ERROR();
         DISPATCH_TYPED();
     }
 
     LABEL_OP_ADD_F64_TYPED: {
-        handle_add_f64_typed();
+        VM_TYPED_ADD_F64();
         DISPATCH_TYPED();
     }
 
     LABEL_OP_SUB_F64_TYPED: {
-        handle_sub_f64_typed();
+        VM_TYPED_SUB_F64();
         DISPATCH_TYPED();
     }
 
     LABEL_OP_MUL_F64_TYPED: {
-        handle_mul_f64_typed();
+        VM_TYPED_MUL_F64();
         DISPATCH_TYPED();
     }
 
     LABEL_OP_DIV_F64_TYPED: {
-        handle_div_f64_typed();
+        VM_TYPED_DIV_F64();
         CHECK_RUNTIME_ERROR();
         DISPATCH_TYPED();
     }
 
     LABEL_OP_MOD_F64_TYPED: {
-        handle_mod_f64_typed();
+        VM_TYPED_MOD_F64();
         CHECK_RUNTIME_ERROR();
         DISPATCH_TYPED();
     }
@@ -4016,56 +4016,56 @@ InterpretResult vm_run_dispatch(void) {
     }
 
     LABEL_OP_ADD_U32_TYPED: {
-        handle_add_u32_typed();
+        VM_TYPED_ADD_U32();
         DISPATCH_TYPED();
     }
 
     LABEL_OP_SUB_U32_TYPED: {
-        handle_sub_u32_typed();
+        VM_TYPED_SUB_U32();
         DISPATCH_TYPED();
     }
 
     LABEL_OP_MUL_U32_TYPED: {
-        handle_mul_u32_typed();
+        VM_TYPED_MUL_U32();
         DISPATCH_TYPED();
     }
 
     LABEL_OP_DIV_U32_TYPED: {
-        handle_div_u32_typed();
+        VM_TYPED_DIV_U32();
         CHECK_RUNTIME_ERROR();
         DISPATCH_TYPED();
     }
 
     LABEL_OP_MOD_U32_TYPED: {
-        handle_mod_u32_typed();
+        VM_TYPED_MOD_U32();
         CHECK_RUNTIME_ERROR();
         DISPATCH_TYPED();
     }
 
     // U64 Typed Operations
     LABEL_OP_ADD_U64_TYPED: {
-        handle_add_u64_typed();
+        VM_TYPED_ADD_U64();
         DISPATCH_TYPED();
     }
 
     LABEL_OP_SUB_U64_TYPED: {
-        handle_sub_u64_typed();
+        VM_TYPED_SUB_U64();
         DISPATCH_TYPED();
     }
 
     LABEL_OP_MUL_U64_TYPED: {
-        handle_mul_u64_typed();
+        VM_TYPED_MUL_U64();
         DISPATCH_TYPED();
     }
 
     LABEL_OP_DIV_U64_TYPED: {
-        handle_div_u64_typed();
+        VM_TYPED_DIV_U64();
         CHECK_RUNTIME_ERROR();
         DISPATCH_TYPED();
     }
 
     LABEL_OP_MOD_U64_TYPED: {
-        handle_mod_u64_typed();
+        VM_TYPED_MOD_U64();
         CHECK_RUNTIME_ERROR();
         DISPATCH_TYPED();
     }

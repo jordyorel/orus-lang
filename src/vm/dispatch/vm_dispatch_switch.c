@@ -3231,130 +3231,140 @@ InterpretResult vm_run_dispatch(void) {
                 // Typed arithmetic operations for maximum performance (bypass Value boxing)
 #if ORUS_VM_ENABLE_TYPED_OPS
                 case OP_ADD_I32_TYPED: {
-                    handle_add_i32_typed();
+                    VM_TYPED_ADD_I32();
                     break;
                 }
 
                 case OP_SUB_I32_TYPED: {
-                    handle_sub_i32_typed();
+                    VM_TYPED_SUB_I32();
                     break;
                 }
 
                 case OP_MUL_I32_TYPED: {
-                    handle_mul_i32_typed();
+                    VM_TYPED_MUL_I32();
                     break;
                 }
 
                 case OP_DIV_I32_TYPED: {
-                    handle_div_i32_typed();
+                    VM_TYPED_DIV_I32();
+                    if (IS_ERROR(vm.lastError)) goto HANDLE_RUNTIME_ERROR;
                     break;
                 }
 
                 case OP_MOD_I32_TYPED: {
-                    handle_mod_i32_typed();
+                    VM_TYPED_MOD_I32();
+                    if (IS_ERROR(vm.lastError)) goto HANDLE_RUNTIME_ERROR;
                     break;
                 }
 
                 // Additional typed operations (I64, F64, comparisons, loads, moves)
                 case OP_ADD_I64_TYPED: {
-                    handle_add_i64_typed();
+                    VM_TYPED_ADD_I64();
                     break;
                 }
 
                 case OP_SUB_I64_TYPED: {
-                    handle_sub_i64_typed();
+                    VM_TYPED_SUB_I64();
                     break;
                 }
 
                 case OP_MUL_I64_TYPED: {
-                    handle_mul_i64_typed();
+                    VM_TYPED_MUL_I64();
                     break;
                 }
 
                 case OP_DIV_I64_TYPED: {
-                    handle_div_i64_typed();
+                    VM_TYPED_DIV_I64();
+                    if (IS_ERROR(vm.lastError)) goto HANDLE_RUNTIME_ERROR;
                     break;
                 }
 
                 case OP_MOD_I64_TYPED: {
-                    handle_mod_i64_typed();
+                    VM_TYPED_MOD_I64();
+                    if (IS_ERROR(vm.lastError)) goto HANDLE_RUNTIME_ERROR;
                     break;
                 }
 
                 case OP_ADD_F64_TYPED: {
-                    handle_add_f64_typed();
+                    VM_TYPED_ADD_F64();
                     break;
                 }
 
                 case OP_SUB_F64_TYPED: {
-                    handle_sub_f64_typed();
+                    VM_TYPED_SUB_F64();
                     break;
                 }
 
                 case OP_MUL_F64_TYPED: {
-                    handle_mul_f64_typed();
+                    VM_TYPED_MUL_F64();
                     break;
                 }
 
                 case OP_DIV_F64_TYPED: {
-                    handle_div_f64_typed();
+                    VM_TYPED_DIV_F64();
+                    if (IS_ERROR(vm.lastError)) goto HANDLE_RUNTIME_ERROR;
                     break;
                 }
 
                 case OP_MOD_F64_TYPED: {
-                    handle_mod_f64_typed();
+                    VM_TYPED_MOD_F64();
+                    if (IS_ERROR(vm.lastError)) goto HANDLE_RUNTIME_ERROR;
                     break;
                 }
 
                 // U32 Typed Operations
                 case OP_ADD_U32_TYPED: {
-                    handle_add_u32_typed();
+                    VM_TYPED_ADD_U32();
                     break;
                 }
 
                 case OP_SUB_U32_TYPED: {
-                    handle_sub_u32_typed();
+                    VM_TYPED_SUB_U32();
                     break;
                 }
 
                 case OP_MUL_U32_TYPED: {
-                    handle_mul_u32_typed();
+                    VM_TYPED_MUL_U32();
                     break;
                 }
 
                 case OP_DIV_U32_TYPED: {
-                    handle_div_u32_typed();
+                    VM_TYPED_DIV_U32();
+                    if (IS_ERROR(vm.lastError)) goto HANDLE_RUNTIME_ERROR;
                     break;
                 }
 
                 case OP_MOD_U32_TYPED: {
-                    handle_mod_u32_typed();
+                    VM_TYPED_MOD_U32();
+                    if (IS_ERROR(vm.lastError)) goto HANDLE_RUNTIME_ERROR;
                     break;
                 }
 
                 // U64 Typed Operations
                 case OP_ADD_U64_TYPED: {
-                    handle_add_u64_typed();
+                    VM_TYPED_ADD_U64();
                     break;
                 }
 
                 case OP_SUB_U64_TYPED: {
-                    handle_sub_u64_typed();
+                    VM_TYPED_SUB_U64();
                     break;
                 }
 
                 case OP_MUL_U64_TYPED: {
-                    handle_mul_u64_typed();
+                    VM_TYPED_MUL_U64();
                     break;
                 }
 
                 case OP_DIV_U64_TYPED: {
-                    handle_div_u64_typed();
+                    VM_TYPED_DIV_U64();
+                    if (IS_ERROR(vm.lastError)) goto HANDLE_RUNTIME_ERROR;
                     break;
                 }
 
                 case OP_MOD_U64_TYPED: {
-                    handle_mod_u64_typed();
+                    VM_TYPED_MOD_U64();
+                    if (IS_ERROR(vm.lastError)) goto HANDLE_RUNTIME_ERROR;
                     break;
                 }
 
