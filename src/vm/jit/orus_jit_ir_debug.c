@@ -20,7 +20,10 @@ orus_jit_ir_opcode_name(OrusJitIROpcode opcode) {
         case ORUS_JIT_IR_OP_LOAD_U32_CONST: return "ORUS_JIT_IR_OP_LOAD_U32_CONST";
         case ORUS_JIT_IR_OP_LOAD_U64_CONST: return "ORUS_JIT_IR_OP_LOAD_U64_CONST";
         case ORUS_JIT_IR_OP_LOAD_F64_CONST: return "ORUS_JIT_IR_OP_LOAD_F64_CONST";
-        case ORUS_JIT_IR_OP_LOAD_STRING_CONST: return "ORUS_JIT_IR_OP_LOAD_STRING_CONST";
+        case ORUS_JIT_IR_OP_LOAD_BOOL_CONST:
+            return "ORUS_JIT_IR_OP_LOAD_BOOL_CONST";
+        case ORUS_JIT_IR_OP_LOAD_STRING_CONST:
+            return "ORUS_JIT_IR_OP_LOAD_STRING_CONST";
         case ORUS_JIT_IR_OP_MOVE_I32: return "ORUS_JIT_IR_OP_MOVE_I32";
         case ORUS_JIT_IR_OP_MOVE_I64: return "ORUS_JIT_IR_OP_MOVE_I64";
         case ORUS_JIT_IR_OP_MOVE_U32: return "ORUS_JIT_IR_OP_MOVE_U32";
@@ -59,6 +62,7 @@ orus_jit_ir_opcode_name(OrusJitIROpcode opcode) {
         case ORUS_JIT_IR_OP_TIME_STAMP: return "ORUS_JIT_IR_OP_TIME_STAMP";
         case ORUS_JIT_IR_OP_MAKE_ARRAY: return "ORUS_JIT_IR_OP_MAKE_ARRAY";
         case ORUS_JIT_IR_OP_ARRAY_PUSH: return "ORUS_JIT_IR_OP_ARRAY_PUSH";
+        case ORUS_JIT_IR_OP_ARRAY_POP: return "ORUS_JIT_IR_OP_ARRAY_POP";
         case ORUS_JIT_IR_OP_ENUM_NEW: return "ORUS_JIT_IR_OP_ENUM_NEW";
         case ORUS_JIT_IR_OP_PRINT: return "ORUS_JIT_IR_OP_PRINT";
         case ORUS_JIT_IR_OP_ASSERT_EQ: return "ORUS_JIT_IR_OP_ASSERT_EQ";
@@ -167,6 +171,12 @@ format_load_const(const OrusJitIRInstruction* inst, char* buffer, size_t size) {
                                     orus_jit_ir_opcode_name(inst->opcode),
                                     inst->operands.load_const.dst_reg, value);
         }
+        case ORUS_JIT_VALUE_BOOL:
+            return (size_t)snprintf(
+                buffer, size, "%s dst=r%u imm=%s",
+                orus_jit_ir_opcode_name(inst->opcode),
+                inst->operands.load_const.dst_reg,
+                (bits & 0x1u) ? "true" : "false");
         case ORUS_JIT_VALUE_STRING:
             return (size_t)snprintf(buffer, size,
                                     "%s dst=r%u const_index=%u ptr=0x%" PRIx64,
@@ -202,6 +212,7 @@ orus_jit_ir_format_instruction(const OrusJitIRInstruction* inst,
         case ORUS_JIT_IR_OP_LOAD_U32_CONST:
         case ORUS_JIT_IR_OP_LOAD_U64_CONST:
         case ORUS_JIT_IR_OP_LOAD_F64_CONST:
+        case ORUS_JIT_IR_OP_LOAD_BOOL_CONST:
         case ORUS_JIT_IR_OP_LOAD_STRING_CONST:
             return format_load_const(inst, buffer, buffer_size);
 
@@ -321,6 +332,18 @@ orus_jit_ir_format_instruction(const OrusJitIRInstruction* inst,
                 orus_jit_ir_step_name(inst->operands.fused_loop.step),
                 orus_jit_ir_loop_compare_name(
                     (OrusJitIRLoopCompareKind)inst->operands.fused_loop.compare_kind));
+        case ORUS_JIT_IR_OP_ARRAY_PUSH:
+            return (size_t)snprintf(buffer, buffer_size,
+                                    "%s array=r%u value=r%u",
+                                    opcode_name,
+                                    inst->operands.array_push.array_reg,
+                                    inst->operands.array_push.value_reg);
+        case ORUS_JIT_IR_OP_ARRAY_POP:
+            return (size_t)snprintf(buffer, buffer_size,
+                                    "%s dst=r%u array=r%u",
+                                    opcode_name,
+                                    inst->operands.array_pop.dst_reg,
+                                    inst->operands.array_pop.array_reg);
         case ORUS_JIT_IR_OP_SAFEPOINT:
             return (size_t)snprintf(buffer, buffer_size, "%s", opcode_name);
         default:

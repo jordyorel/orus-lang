@@ -2155,6 +2155,27 @@ orus_jit_native_array_push(struct VM* vm_instance,
 }
 
 static bool
+orus_jit_native_array_pop(struct VM* vm_instance,
+                          OrusJitNativeBlock* block,
+                          uint16_t dst_reg,
+                          uint16_t array_reg) {
+    if (!vm_instance) {
+        return false;
+    }
+
+    Value array_value = vm_get_register_safe(array_reg);
+    Value popped;
+    if (!builtin_array_pop(array_value, &popped)) {
+        jit_bailout_and_deopt(vm_instance, block);
+        return false;
+    }
+
+    vm_set_register_safe(dst_reg, popped);
+    orus_jit_helper_safepoint(vm_instance);
+    return true;
+}
+
+static bool
 orus_jit_native_make_array(struct VM* vm_instance,
                            OrusJitNativeBlock* block,
                            const OrusJitIRInstruction* inst) {
@@ -3335,6 +3356,21 @@ orus_jit_native_fused_loop_step(struct VM* vm_instance,
                                 : (updated > limit);
             break;
         }
+        case ORUS_JIT_VALUE_F64: {
+            double counter = 0.0;
+            double limit = 0.0;
+            if (!jit_read_f64(vm_instance, counter_reg, &counter) ||
+                !jit_read_f64(vm_instance, limit_reg, &limit)) {
+                jit_bailout_and_deopt(vm_instance, block);
+                return -1;
+            }
+            double updated = counter + (double)step;
+            vm_store_f64_typed_hot(counter_reg, updated);
+            should_branch = (compare_kind == ORUS_JIT_IR_LOOP_COMPARE_LESS_THAN)
+                                ? (updated < limit)
+                                : (updated > limit);
+            break;
+        }
         case ORUS_JIT_VALUE_BOXED: {
             Value counter_value = vm_get_register_safe(counter_reg);
             Value limit_value = vm_get_register_safe(limit_reg);
@@ -3786,6 +3822,14 @@ orus_jit_execute_block(struct VM* vm_instance, const OrusJitNativeBlock* block) 
                                                 (OrusJitNativeBlock*)block,
                                                 inst->operands.array_push.array_reg,
                                                 inst->operands.array_push.value_reg)) {
+                    return;
+                }
+                break;
+            case ORUS_JIT_IR_OP_ARRAY_POP:
+                if (!orus_jit_native_array_pop(vm_instance,
+                                               (OrusJitNativeBlock*)block,
+                                               inst->operands.array_pop.dst_reg,
+                                               inst->operands.array_pop.array_reg)) {
                     return;
                 }
                 break;
@@ -4592,6 +4636,11 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                     return JIT_BACKEND_ASSEMBLY_ERROR;
                 }
                 break;
+            case ORUS_JIT_IR_OP_LOAD_BOOL_CONST:
+                if (inst->value_kind != ORUS_JIT_VALUE_BOOL) {
+                    return JIT_BACKEND_ASSEMBLY_ERROR;
+                }
+                break;
             case ORUS_JIT_IR_OP_LOAD_VALUE_CONST:
                 if (inst->value_kind >= ORUS_JIT_VALUE_KIND_COUNT) {
                     return JIT_BACKEND_ASSEMBLY_ERROR;
@@ -4641,6 +4690,7 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                     case ORUS_JIT_VALUE_I64:
                     case ORUS_JIT_VALUE_U32:
                     case ORUS_JIT_VALUE_U64:
+                    case ORUS_JIT_VALUE_F64:
                     case ORUS_JIT_VALUE_BOXED:
                         break;
                     default:
@@ -4768,6 +4818,7 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                 }
                 break;
             case ORUS_JIT_IR_OP_MAKE_ARRAY:
+            case ORUS_JIT_IR_OP_ARRAY_POP:
             case ORUS_JIT_IR_OP_ENUM_NEW:
                 if (inst->value_kind != ORUS_JIT_VALUE_BOXED) {
                     return JIT_BACKEND_ASSEMBLY_ERROR;
@@ -5370,6 +5421,24 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                 }
                 break;
             }
+            case ORUS_JIT_IR_OP_LOAD_BOOL_CONST: {
+                if (!orus_jit_emit_load_typed_pointer(
+                        &code, (uint32_t)ORUS_JIT_OFFSET_TYPED_BOOL_PTR,
+                        &bail_patches) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
+                    !orus_jit_code_buffer_emit_u32(&code,
+                                                  (uint32_t)(inst->operands.load_const
+                                                                 .immediate_bits &
+                                                             0x1u)) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xB9) ||
+                    !orus_jit_code_buffer_emit_u32(
+                        &code, (uint32_t)inst->operands.load_const.dst_reg) ||
+                    !orus_jit_code_buffer_emit_bytes(&code, MOV_STORE_AL_BOOL,
+                                                     sizeof(MOV_STORE_AL_BOOL))) {
+                    RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
+                }
+                break;
+            }
             case ORUS_JIT_IR_OP_MOVE_F64: {
                 if (!orus_jit_code_buffer_emit_u8(&code, 0xB9) ||
                     !orus_jit_code_buffer_emit_u32(
@@ -5671,6 +5740,27 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                     !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
                     !orus_jit_code_buffer_emit_u64(
                         &code, (uint64_t)(uintptr_t)&orus_jit_native_array_push) ||
+                    !orus_jit_code_buffer_emit_bytes(&code, CALL_RAX,
+                                                     sizeof(CALL_RAX))) {
+                    RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_ARRAY_POP: {
+                if (!orus_jit_code_buffer_emit_bytes(&code, MOV_RDI_R12,
+                                                     sizeof(MOV_RDI_R12)) ||
+                    !orus_jit_code_buffer_emit_bytes(&code, MOV_RSI_RBX_BYTES,
+                                                     sizeof(MOV_RSI_RBX_BYTES)) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xBA) ||
+                    !orus_jit_code_buffer_emit_u32(
+                        &code, (uint32_t)inst->operands.array_pop.dst_reg) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xB9) ||
+                    !orus_jit_code_buffer_emit_u32(
+                        &code, (uint32_t)inst->operands.array_pop.array_reg) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0x48) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
+                    !orus_jit_code_buffer_emit_u64(
+                        &code, (uint64_t)(uintptr_t)&orus_jit_native_array_pop) ||
                     !orus_jit_code_buffer_emit_bytes(&code, CALL_RAX,
                                                      sizeof(CALL_RAX))) {
                     RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
@@ -6070,7 +6160,8 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                 uint8_t compare_kind = inst->operands.fused_loop.compare_kind;
                 int32_t direction_value = is_increment ? 1 : -1;
 
-                if (kind == ORUS_JIT_VALUE_BOXED) {
+                if (kind == ORUS_JIT_VALUE_BOXED ||
+                    kind == ORUS_JIT_VALUE_F64) {
                     if (!orus_jit_code_buffer_emit_bytes(&code, MOV_RDI_R12,
                                                          sizeof(MOV_RDI_R12)) ||
                         !orus_jit_code_buffer_emit_bytes(&code, MOV_RSI_RBX_BYTES,
@@ -7060,6 +7151,9 @@ dynasm_instruction_dest_reg(const OrusJitIRInstruction* inst, uint16_t* out_reg)
             return true;
         case ORUS_JIT_IR_OP_MAKE_ARRAY:
             *out_reg = inst->operands.make_array.dst_reg;
+            return true;
+        case ORUS_JIT_IR_OP_ARRAY_POP:
+            *out_reg = inst->operands.array_pop.dst_reg;
             return true;
         case ORUS_JIT_IR_OP_ENUM_NEW:
             *out_reg = inst->operands.enum_new.dst_reg;
@@ -8373,6 +8467,19 @@ orus_jit_ir_emit_x86(const OrusJitIRProgram* program,
                 }
                 break;
             }
+            case ORUS_JIT_IR_OP_ARRAY_POP: {
+                if (!dynasm_emit_load_vm_block(actions, &code_offset) ||
+                    !dynasm_emit_mov_reg_imm32(actions, 0xBA, &code_offset,
+                                               (uint32_t)inst->operands.array_pop.dst_reg) ||
+                    !dynasm_emit_mov_reg_imm32(actions, 0xB9, &code_offset,
+                                               (uint32_t)inst->operands.array_pop.array_reg) ||
+                    !dynasm_emit_helper_call(actions, &code_offset,
+                                              (const void*)&orus_jit_native_array_pop,
+                                              ORUS_JIT_HELPER_STUB_KIND_RUNTIME)) {
+                    DYNASM_EMIT_FAIL();
+                }
+                break;
+            }
             case ORUS_JIT_IR_OP_ENUM_NEW: {
                 if (!dynasm_emit_load_vm_block(actions, &code_offset) ||
                     !dynasm_emit_bytes_track(actions, &code_offset,
@@ -9191,6 +9298,13 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                     return JIT_BACKEND_ASSEMBLY_ERROR;
                 }
                 break;
+            case ORUS_JIT_IR_OP_MAKE_ARRAY:
+            case ORUS_JIT_IR_OP_ARRAY_POP:
+            case ORUS_JIT_IR_OP_ENUM_NEW:
+                if (inst->value_kind != ORUS_JIT_VALUE_BOXED) {
+                    return JIT_BACKEND_ASSEMBLY_ERROR;
+                }
+                break;
             case ORUS_JIT_IR_OP_SAFEPOINT:
             case ORUS_JIT_IR_OP_LOOP_BACK:
             case ORUS_JIT_IR_OP_RETURN:
@@ -9679,6 +9793,23 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                     !orus_jit_a64_emit_mov_imm64_buffer(
                         &code, 16u,
                         (uint64_t)(uintptr_t)&orus_jit_native_array_push) ||
+                    !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
+                    !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
+                    !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
+                    A64_RETURN(JIT_BACKEND_OUT_OF_MEMORY);
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_ARRAY_POP: {
+                if (!orus_jit_a64_code_buffer_emit_u32(&code, A64_LDR_X(0u, 31u, 0u)) ||
+                    !orus_jit_a64_code_buffer_emit_u32(&code, A64_LDR_X(1u, 31u, 1u)) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 2u, (uint64_t)inst->operands.array_pop.dst_reg) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 3u, (uint64_t)inst->operands.array_pop.array_reg) ||
+                    !orus_jit_a64_emit_mov_imm64_buffer(
+                        &code, 16u,
+                        (uint64_t)(uintptr_t)&orus_jit_native_array_pop) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
                     !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
@@ -10491,6 +10622,7 @@ orus_jit_parity_record(const OrusJitIRInstruction* inst,
         case ORUS_JIT_IR_OP_RANGE:
         case ORUS_JIT_IR_OP_MAKE_ARRAY:
         case ORUS_JIT_IR_OP_ARRAY_PUSH:
+        case ORUS_JIT_IR_OP_ARRAY_POP:
         case ORUS_JIT_IR_OP_ENUM_NEW:
             report->memory_ops++;
             break;

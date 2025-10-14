@@ -488,6 +488,74 @@ cleanup:
     return success;
 }
 
+static bool test_translates_typed_bool_loads(void) {
+    initVM();
+    orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
+
+    Chunk chunk;
+    initChunk(&chunk);
+
+    Function function;
+    init_function(&function, &chunk);
+
+    const uint16_t dst_true = FRAME_REG_START;
+    const uint16_t dst_false = FRAME_REG_START + 1u;
+    const char* tag = "jit_translation";
+
+    writeChunk(&chunk, OP_LOAD_TRUE, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)dst_true, 1, 0, tag);
+    writeChunk(&chunk, OP_LOAD_FALSE, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)dst_false, 1, 0, tag);
+    writeChunk(&chunk, OP_RETURN_VOID, 1, 0, tag);
+
+    HotPathSample sample = {0};
+    sample.func = 0;
+    sample.loop = (uint16_t)function.start;
+
+    OrusJitIRProgram program;
+    orus_jit_ir_program_init(&program);
+
+    OrusJitTranslationResult result =
+        orus_jit_translate_linear_block(&vm, &function, function.chunk, &sample,
+                                        &program);
+
+    bool success = true;
+    if (result.status != ORUS_JIT_TRANSLATE_STATUS_OK) {
+        fprintf(stderr, "Expected typed bool translation success, got %s\n",
+                orus_jit_translation_status_name(result.status));
+        success = false;
+        goto cleanup;
+    }
+
+    int seen_true = 0;
+    int seen_false = 0;
+    for (size_t i = 0; i < program.count; ++i) {
+        const OrusJitIRInstruction* inst = &program.instructions[i];
+        if (inst->opcode == ORUS_JIT_IR_OP_LOAD_BOOL_CONST) {
+            ASSERT_TRUE(inst->value_kind == ORUS_JIT_VALUE_BOOL,
+                        "typed bool load should have bool kind");
+            if (inst->operands.load_const.dst_reg == dst_true) {
+                ASSERT_TRUE(inst->operands.load_const.immediate_bits == 1u,
+                            "expected true immediate");
+                seen_true++;
+            } else if (inst->operands.load_const.dst_reg == dst_false) {
+                ASSERT_TRUE(inst->operands.load_const.immediate_bits == 0u,
+                            "expected false immediate");
+                seen_false++;
+            }
+        }
+    }
+
+    ASSERT_TRUE(seen_true == 1, "expected one typed true load");
+    ASSERT_TRUE(seen_false == 1, "expected one typed false load");
+
+cleanup:
+    orus_jit_ir_program_reset(&program);
+    freeChunk(&chunk);
+    freeVM();
+    return success;
+}
+
 static bool test_translates_string_concat(void) {
     initVM();
     orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
@@ -2024,6 +2092,10 @@ static bool test_translates_runtime_helpers(void) {
     writeChunk(&chunk, 5u, 1, 0, tag);
     writeChunk(&chunk, 6u, 1, 0, tag);
 
+    writeChunk(&chunk, OP_ARRAY_POP_R, 1, 0, tag);
+    writeChunk(&chunk, 15u, 1, 0, tag);
+    writeChunk(&chunk, 5u, 1, 0, tag);
+
     writeChunk(&chunk, OP_PRINT_R, 1, 0, tag);
     writeChunk(&chunk, 7u, 1, 0, tag);
 
@@ -2065,6 +2137,7 @@ static bool test_translates_runtime_helpers(void) {
     bool saw_make_array = false;
     bool saw_enum_new = false;
     bool saw_array_push = false;
+    bool saw_array_pop = false;
     bool saw_print = false;
     bool saw_assert_eq = false;
     bool saw_call_native = false;
@@ -2079,6 +2152,8 @@ static bool test_translates_runtime_helpers(void) {
             saw_enum_new = true;
         } else if (opcode == ORUS_JIT_IR_OP_ARRAY_PUSH) {
             saw_array_push = true;
+        } else if (opcode == ORUS_JIT_IR_OP_ARRAY_POP) {
+            saw_array_pop = true;
         } else if (opcode == ORUS_JIT_IR_OP_PRINT) {
             saw_print = true;
         } else if (opcode == ORUS_JIT_IR_OP_ASSERT_EQ) {
@@ -2097,6 +2172,7 @@ static bool test_translates_runtime_helpers(void) {
     ASSERT_TRUE(saw_make_array, "expected ORUS_JIT_IR_OP_MAKE_ARRAY in program");
     ASSERT_TRUE(saw_enum_new, "expected ORUS_JIT_IR_OP_ENUM_NEW in program");
     ASSERT_TRUE(saw_array_push, "expected ORUS_JIT_IR_OP_ARRAY_PUSH in program");
+    ASSERT_TRUE(saw_array_pop, "expected ORUS_JIT_IR_OP_ARRAY_POP in program");
     ASSERT_TRUE(saw_print, "expected ORUS_JIT_IR_OP_PRINT in program");
     ASSERT_TRUE(saw_assert_eq, "expected ORUS_JIT_IR_OP_ASSERT_EQ in program");
     ASSERT_TRUE(saw_call_native, "expected ORUS_JIT_IR_OP_CALL_NATIVE in program");
@@ -2487,6 +2563,7 @@ int main(void) {
         {"translator promotes i32 inputs for i64 ops",
          test_translator_promotes_i32_constants_to_i64},
         {"translator emits f64 ops", test_translates_f64_stream},
+        {"translator emits typed bool loads", test_translates_typed_bool_loads},
         {"translator loads boxed bool constants", test_translates_boxed_bool_constant},
         {"translator emits string concat", test_translates_string_concat},
         {"translator emits typeof/istype helpers", test_translates_type_builtins},
