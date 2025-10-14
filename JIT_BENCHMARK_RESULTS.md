@@ -69,3 +69,12 @@ The FFI workload successfully exercises the host boundary churn but never transi
 | `string`   | `tests/unit/test_vm_jit_benchmark.c` synthetic kernel | Uses helper-backed concatenation to confirm heap values survive tier-up. |
 
 Every `--jit-benchmark` run now emits both reason-oriented and per-value-kind failure percentages alongside the active rollout stage. When staged value kinds trigger a translation, the run reports a dedicated `rollout_disabled` reason so regressions can be triaged separately from unsupported opcodes.
+
+## 2025-02-14 Forced DynASM Run
+
+Command: `ORUS_JIT_FORCE_DYNASM=1 make jit-benchmark-orus`
+
+- **Optimized Loop Benchmark:** interpreter 5033.20 ms, JIT 4996.94 ms, speedup 1.01×
+- **FFI Ping/Pong Benchmark:** interpreter 811.24 ms, JIT 809.55 ms, speedup 1.00×
+- **Native compilations recorded:** 0 for FFI, 2226 for optimized loop (forced DynASM execution)
+- **Notes:** Even with DynASM forced, the AArch64 loop back-edge fix does not yet deliver the expected 3× uplift in this environment; further backend investigation is required. Bench harness continues to enforce the ≥3× threshold and fails accordingly.

@@ -9052,6 +9052,15 @@ orus_jit_a64_branch_patch_list_append(OrusJitA64BranchPatchList* list,
 }
 
 static bool
+orus_jit_a64_patch_list_append_branch(OrusJitA64BranchPatchList* list,
+                                      OrusJitA64BranchPatchKind kind,
+                                      size_t code_index,
+                                      uint32_t target_bytecode) {
+    return orus_jit_a64_branch_patch_list_append(
+        list, code_index, target_bytecode, kind);
+}
+
+static bool
 orus_jit_a64_emit_mov_imm64_buffer(OrusJitA64CodeBuffer* buffer,
                                     uint8_t reg,
                                     uint64_t value) {
@@ -9361,6 +9370,7 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
     }
 
     size_t loop_entry_index = code.count;
+    bool loop_back_patch_pending = false;
 
     for (size_t i = 0; i < block->program.count; ++i) {
         const OrusJitIRInstruction* inst = &block->program.instructions[i];
@@ -10137,14 +10147,13 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                 break;
             }
             case ORUS_JIT_IR_OP_LOOP_BACK: {
-                int64_t diff = (int64_t)loop_entry_index - (int64_t)code.count - 1;
-                if (diff < -(1 << 25) || diff > ((1 << 25) - 1)) {
-                    A64_RETURN(JIT_BACKEND_ASSEMBLY_ERROR);
-                }
-                uint32_t branch = A64_B((uint32_t)(diff & 0x03FFFFFFu));
-                if (!orus_jit_a64_code_buffer_emit_u32(&code, branch)) {
+                if (!orus_jit_a64_code_buffer_emit_u32(&code, A64_B(0u)) ||
+                    !orus_jit_a64_patch_list_append_branch(
+                        &branch_patches, ORUS_JIT_A64_BRANCH_PATCH_KIND_B,
+                        code.count - 1u, block->program.loop_start_offset)) {
                     A64_RETURN(JIT_BACKEND_OUT_OF_MEMORY);
                 }
+                loop_back_patch_pending = true;
                 goto finalize_block;
             }
             case ORUS_JIT_IR_OP_RETURN: {
@@ -10160,6 +10169,15 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
     }
 
 finalize_block:;
+    if (loop_back_patch_pending) {
+        size_t loop_header_index = orus_jit_program_find_index(
+            &block->program, block->program.loop_start_offset);
+        if (loop_header_index == SIZE_MAX) {
+            A64_RETURN(JIT_BACKEND_ASSEMBLY_ERROR);
+        }
+    }
+
+    bool loop_back_patch_resolved = false;
     for (size_t i = 0; i < branch_patches.count; ++i) {
         const OrusJitA64BranchPatch* patch = &branch_patches.data[i];
         if (!inst_offsets) {
@@ -10180,6 +10198,18 @@ finalize_block:;
                 }
                 code.data[patch->code_index] =
                     A64_B((uint32_t)(diff & 0x03FFFFFFu));
+                if (loop_back_patch_pending && !loop_back_patch_resolved &&
+                    patch->target_bytecode == block->program.loop_start_offset &&
+                    target_code_index != loop_entry_index) {
+                    LOG_VM_DEBUG(
+                        "JIT",
+                        "Relocated loop header to bytecode offset 0x%X (code index %zu → %zu)",
+                        patch->target_bytecode, loop_entry_index, target_code_index);
+                }
+                if (loop_back_patch_pending && !loop_back_patch_resolved &&
+                    patch->target_bytecode == block->program.loop_start_offset) {
+                    loop_back_patch_resolved = true;
+                }
                 break;
             case ORUS_JIT_A64_BRANCH_PATCH_KIND_CBNZ:
                 if (diff < -(1 << 18) || diff > ((1 << 18) - 1)) {
