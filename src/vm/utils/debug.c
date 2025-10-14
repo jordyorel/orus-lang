@@ -404,6 +404,17 @@ int disassembleInstruction(Chunk* chunk, int offset) {
             return offset + 5;
         }
 
+        case OP_CALL_FOREIGN: {
+            uint8_t foreign_index = chunk->code[offset + 1];
+            uint8_t first_arg = chunk->code[offset + 2];
+            uint8_t arg_count = chunk->code[offset + 3];
+            uint8_t result_reg = chunk->code[offset + 4];
+            printf("%-16s foreign=%d, args=R%d..R%d, result=R%d\n",
+                   "CALL_FOREIGN", foreign_index, first_arg,
+                   first_arg + arg_count - 1, result_reg);
+            return offset + 5;
+        }
+
         case OP_RETURN_R: {
             uint8_t reg = chunk->code[offset + 1];
             printf("%-16s R%d\n", "RETURN", reg);

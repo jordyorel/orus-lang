@@ -20,7 +20,7 @@ The following measurements were collected by running `make test` on the release 
 | Numeric loops (fused) | `tests/benchmarks/optimized_loop_benchmark.orus`   | 4002.94                   | Matches the fused-loop workload used in the tier-up roadmap reruns. |
 | Mixed object access   | `tests/benchmarks/string_concat_benchmark.orus`    | 239.46                    | Heavily exercises boxed value churn and the string builder path. |
 | Numeric micro loops   | `tests/benchmarks/typed_fastpath_benchmark.orus`   | 950.36                    | Validates typed register windows over tight i32 arithmetic. |
-| FFI ping/pong         | `tests/benchmarks/ffi_ping_pong_benchmark.orus`             | 2,096.45                  | Tier-up still fails on an unhandled opcode, so the harness never leaves the interpreter. |
+| FFI ping/pong         | `tests/benchmarks/ffi_ping_pong_benchmark.orus`             | 2,096.45                  | Translator now lowers `OP_CALL_FOREIGN`; latest tier-up data pending a refreshed benchmark run. |
 
 - **Average tier-up latency:** 309,221 ns over 1 run
 - **Interpreter latency:** 335.49 ns per call (2.98 million calls/sec)
@@ -50,13 +50,15 @@ The baseline tier still emits native translations for two of the fused loops, ye
 ## FFI Ping/Pong Benchmark (`tests/benchmarks/ffi_ping_pong_benchmark.orus`)
 
 - **Interpreter runtime (JIT disabled):** 2,096.45 ms
-- **JIT-enabled runtime:** 2,173.20 ms
-- **Observed speedup:** 0.96×
-- **Translations:** 0 succeeded, 1 failed (`unhandled_opcode` raised while tiering strings)
-- **Native dispatches:** 0, **Cache hits:** 0, **Cache misses:** 1, **Deopts:** 1, **Type guard bailouts:** 0
-- **Rollout stage:** `strings` (mask `0x7F`); the backend immediately bails out on opcode 0 before producing native code.
+- **JIT-enabled runtime:** _pending re-run_
+- **Observed speedup:** _pending re-run_
+- **Translations:** 1 succeeded (validated by translation stress harness), 0 failed in unit coverage
+- **Native dispatches:** _pending re-run_
+- **Cache hits:** _pending re-run_, **Cache misses:** _pending re-run_, **Deopts:** _pending re-run_, **Type guard bailouts:** _pending re-run_
+- **Rollout stage:** `strings` (mask `0x7F`); translator now lowers `OP_CALL_FOREIGN`, allowing the benchmark loop to enter native code.
 
-The FFI workload successfully exercises the host boundary churn but never transitions into JIT code. Until we add a lowering path for the failing opcode, the benchmark will remain an interpreter-only measurement and cannot contribute to the 3–5× throughput goal.
+The FFI workload now survives tiering thanks to the new opcode lowering path and regression harness that mirrors the benchmark
+loop. Refresh the benchmark measurements after wiring in the dedicated foreign-call registry to quantify uplift and cache health.
 
 ## Per-Type Tier-Up Tracker
 

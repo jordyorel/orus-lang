@@ -11,6 +11,7 @@
 #include "vm/jit_ir.h"
 #include "vm/jit_translation.h"
 #include "vm/vm.h"
+#include "vm/vm_comparison.h"
 #include "vm/vm_profiling.h"
 #include "vm/vm_tiering.h"
 
@@ -2631,6 +2632,205 @@ cleanup:
     return success;
 }
 
+static bool test_translates_ffi_ping_pong_foreign_bridge(void) {
+    initVM();
+    orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
+
+    Chunk chunk;
+    initChunk(&chunk);
+
+    Function function;
+    init_function(&function, &chunk);
+
+    ObjString* expected_type = allocateString("i32", 3);
+    ASSERT_TRUE(expected_type != NULL, "expected type string allocation");
+
+    const uint16_t counter = FRAME_REG_START;
+    const uint16_t limit = FRAME_REG_START + 1u;
+    const uint16_t buffer = FRAME_REG_START + 2u;
+    const uint16_t roundtrip = FRAME_REG_START + 3u;
+    const uint16_t type_name = FRAME_REG_START + 4u;
+    const uint16_t expected_type_reg = FRAME_REG_START + 5u;
+    const uint16_t roundtrip_sum = FRAME_REG_START + 6u;
+    const uint16_t type_hits = FRAME_REG_START + 7u;
+    const uint16_t type_pred = FRAME_REG_START + 8u;
+    const uint16_t converted = FRAME_REG_START + 9u;
+    const uint16_t loop_pred = FRAME_REG_START + 10u;
+    const uint16_t foreign_flag = FRAME_REG_START + 11u;
+    const uint16_t step_i32 = FRAME_REG_START + 12u;
+    const uint16_t one_i64 = FRAME_REG_START + 13u;
+
+    vm_store_i32_typed_hot(counter, 0);
+    vm_store_i32_typed_hot(limit, 0);
+    vm_store_i64_typed_hot(roundtrip_sum, 0);
+    vm_store_i64_typed_hot(type_hits, 0);
+    vm_store_bool_typed_hot(type_pred, false);
+    vm_store_i64_typed_hot(converted, 0);
+    vm_store_bool_typed_hot(loop_pred, false);
+    vm_store_bool_typed_hot(foreign_flag, false);
+    vm_store_i32_typed_hot(step_i32, 1);
+    vm_store_i64_typed_hot(one_i64, 1);
+
+    const char* tag = "jit_translation";
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_I32_CONST, counter,
+                                         I32_VAL(0)),
+                "expected counter seed");
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_I32_CONST, limit,
+                                         I32_VAL(4)),
+                "expected limit seed");
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_I64_CONST, roundtrip_sum,
+                                         I64_VAL(0)),
+                "expected roundtrip sum seed");
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_I64_CONST, type_hits,
+                                         I64_VAL(0)),
+                "expected type hits seed");
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_I32_CONST, step_i32,
+                                         I32_VAL(1)),
+                "expected i32 step seed");
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_I64_CONST, one_i64,
+                                         I64_VAL(1)),
+                "expected i64 one seed");
+    ASSERT_TRUE(write_load_numeric_const(&chunk, OP_LOAD_CONST, expected_type_reg,
+                                         STRING_VAL(expected_type)),
+                "expected type string constant");
+
+    writeChunk(&chunk, OP_MAKE_ARRAY_R, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)buffer, 1, 0, tag);
+    writeChunk(&chunk, 0u, 1, 0, tag);
+    writeChunk(&chunk, 0u, 1, 0, tag);
+
+    size_t loop_start = chunk.count;
+
+    writeChunk(&chunk, OP_ARRAY_PUSH_R, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)buffer, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)counter, 1, 0, tag);
+
+    writeChunk(&chunk, OP_ARRAY_POP_R, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)roundtrip, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)buffer, 1, 0, tag);
+
+    writeChunk(&chunk, OP_TYPE_OF_R, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)type_name, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)roundtrip, 1, 0, tag);
+
+    writeChunk(&chunk, OP_CALL_FOREIGN, 1, 0, tag);
+    writeChunk(&chunk, 0u, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)type_name, 1, 0, tag);
+    writeChunk(&chunk, 2u, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)foreign_flag, 1, 0, tag);
+
+    size_t type_guard_index = chunk.count;
+    writeChunk(&chunk, OP_JUMP_IF_NOT_R, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)foreign_flag, 1, 0, tag);
+    size_t type_guard_hi = chunk.count;
+    writeChunk(&chunk, 0u, 1, 0, tag);
+    size_t type_guard_lo = chunk.count;
+    writeChunk(&chunk, 0u, 1, 0, tag);
+
+    writeChunk(&chunk, OP_ADD_I64_TYPED, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)type_hits, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)type_hits, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)one_i64, 1, 0, tag);
+
+    size_t post_type_hit = chunk.count;
+
+    writeChunk(&chunk, OP_I32_TO_I64_R, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)converted, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)roundtrip, 1, 0, tag);
+    writeChunk(&chunk, 0u, 1, 0, tag);
+
+    writeChunk(&chunk, OP_ADD_I64_TYPED, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)roundtrip_sum, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)roundtrip_sum, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)converted, 1, 0, tag);
+
+    writeChunk(&chunk, OP_ADD_I32_TYPED, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)counter, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)counter, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)step_i32, 1, 0, tag);
+
+    writeChunk(&chunk, OP_LT_I32_TYPED, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)loop_pred, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)counter, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)limit, 1, 0, tag);
+
+    size_t guard_jump_index = chunk.count;
+    writeChunk(&chunk, OP_JUMP_IF_NOT_R, 1, 0, tag);
+    writeChunk(&chunk, (uint8_t)loop_pred, 1, 0, tag);
+    size_t guard_jump_hi = chunk.count;
+    writeChunk(&chunk, 0u, 1, 0, tag);
+    size_t guard_jump_lo = chunk.count;
+    writeChunk(&chunk, 0u, 1, 0, tag);
+
+    size_t loop_back_index = chunk.count;
+    writeChunk(&chunk, OP_LOOP, 1, 0, tag);
+    size_t loop_back_hi = chunk.count;
+    writeChunk(&chunk, 0u, 1, 0, tag);
+    size_t loop_back_lo = chunk.count;
+    writeChunk(&chunk, 0u, 1, 0, tag);
+
+    size_t exit_label = chunk.count;
+    writeChunk(&chunk, OP_RETURN_VOID, 1, 0, tag);
+
+    uint16_t type_skip_offset =
+        (uint16_t)(post_type_hit - (type_guard_index + 4u));
+    chunk.code[type_guard_hi] = (uint8_t)((type_skip_offset >> 8) & 0xFF);
+    chunk.code[type_guard_lo] = (uint8_t)(type_skip_offset & 0xFF);
+
+    uint16_t loop_back_offset =
+        (uint16_t)((loop_back_index + 3u) - loop_start);
+    chunk.code[loop_back_hi] = (uint8_t)((loop_back_offset >> 8) & 0xFF);
+    chunk.code[loop_back_lo] = (uint8_t)(loop_back_offset & 0xFF);
+
+    uint16_t guard_offset =
+        (uint16_t)(exit_label - (guard_jump_index + 4u));
+    chunk.code[guard_jump_hi] = (uint8_t)((guard_offset >> 8) & 0xFF);
+    chunk.code[guard_jump_lo] = (uint8_t)(guard_offset & 0xFF);
+
+    HotPathSample sample = {0};
+    sample.func = 0;
+    sample.loop = (uint16_t)loop_start;
+
+    OrusJitIRProgram program;
+    orus_jit_ir_program_init(&program);
+
+    OrusJitTranslationResult result =
+        orus_jit_translate_linear_block(&vm, &function, function.chunk, &sample,
+                                        &program);
+
+    bool success = true;
+    if (result.status != ORUS_JIT_TRANSLATE_STATUS_OK) {
+        fprintf(stderr,
+                "Foreign call translation failed: %s (opcode=%d, kind=%d, offset=%u)\n",
+                orus_jit_translation_status_name(result.status), result.opcode,
+                result.value_kind, result.bytecode_offset);
+        success = false;
+        goto cleanup;
+    }
+
+    bool saw_call_foreign = false;
+    for (size_t i = 0; i < program.count; ++i) {
+        const OrusJitIRInstruction* inst = &program.instructions[i];
+        if (inst->opcode == ORUS_JIT_IR_OP_CALL_FOREIGN) {
+            saw_call_foreign = true;
+            ASSERT_TRUE(inst->operands.call_native.spill_base == type_name,
+                        "foreign call spill base should start at first argument");
+            uint16_t expected_spill_limit = (uint16_t)(foreign_flag + 1u);
+            ASSERT_TRUE(inst->operands.call_native.spill_count ==
+                            (uint16_t)(expected_spill_limit - type_name),
+                        "foreign call spill range should cover args and dst");
+        }
+    }
+
+    ASSERT_TRUE(saw_call_foreign, "expected ORUS_JIT_IR_OP_CALL_FOREIGN in IR");
+
+cleanup:
+    orus_jit_ir_program_reset(&program);
+    freeChunk(&chunk);
+    freeVM();
+    return success;
+}
+
 int main(void) {
     struct {
         const char* name;
@@ -2680,6 +2880,8 @@ int main(void) {
          test_translates_iterator_boxed_move},
         {"translator emits runtime helper calls",
          test_translates_runtime_helpers},
+        {"translator handles ffi foreign bridge",
+         test_translates_ffi_ping_pong_foreign_bridge},
         {"translator emits fused increment loop",
          test_translates_fused_increment_loop},
         {"translator boxes mismatched typed fused loop",

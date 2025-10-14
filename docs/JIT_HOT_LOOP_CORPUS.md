@@ -28,13 +28,13 @@ interpreter and tiered runtimes.
 | Numeric loops (fused) | `tests/benchmarks/optimized_loop_benchmark.orus`       | 5      | 4002.94                   | Exercises fused increment/compare/jump loops that now translate in the baseline tier. |
 | Mixed object access   | `tests/benchmarks/string_concat_benchmark.orus`        | 5      | 239.46                    | Stresses string builder churn and boxed value traffic during repeated concatenation. |
 | Numeric micro loops   | `tests/benchmarks/typed_fastpath_benchmark.orus`       | 5      | 950.36                    | Confirms typed register windows stay hot when we loop on i32 math and cache moves. |
-| FFI ping/pong         | _Pending: `tests/benchmarks/ffi_ping_pong_benchmark.orus`_ | TBD    | _Blocked_                 | Requires finalizing the host call surface; tracked in Phase 4 GC/JIT integration follow-up. |
+| FFI ping/pong         | `tests/benchmarks/ffi_ping_pong_benchmark.orus`        | 5      | 2,096.45                  | Translator now lowers `OP_CALL_FOREIGN`; harness mirrors nested foreign roundtrips while dedicated FFI registry work continues. |
 
-The pending FFI workload will bounce across the host boundary with a tight
-foreign call loop so we can measure allocator pressure and safepoint cadence. We
-will register the interpreter timing once the binding lands. Until then, numeric
-and mixed workloads already provide the regression guard rails for the 3–5×
-throughput target.
+The FFI workload now bounces across the host boundary with a tight foreign call
+loop so we can measure allocator pressure and safepoint cadence. Translator
+coverage keeps the path native-ready while the remaining GC-safe foreign call
+infrastructure lands. Numeric and mixed workloads continue to provide the
+regression guard rails for the 3–5× throughput target.
 
 ## Automation Helper
 

@@ -175,6 +175,7 @@ runtime `ERROR_TYPE` exception.
 |--------|----------|----------|
 | `OP_CALL_R` | `func_reg, first_arg_reg, arg_count, result_reg` | Invokes a closure/function stored in `func_reg` using registers for arguments; result is written to `result_reg` unless the call is void.【F:include/vm/vm.h†L722-L730】
 | `OP_CALL_NATIVE_R` | `native_index, first_arg_reg, arg_count, result_reg` | Dispatches into the native builtin table.
+| `OP_CALL_FOREIGN` | `foreign_index, first_arg_reg, arg_count, result_reg` | Invokes a registered foreign host binding. Foreign entries reuse the native table today so the opcode is JIT-friendly while the dedicated FFI registry lands.【F:src/vm/dispatch/vm_dispatch_goto.c†L3655-L3687】
 | `OP_TAIL_CALL_R` | Same as `OP_CALL_R` | Reuses the current frame when the call is in tail position.
 | `OP_RETURN_R` / `OP_RETURN_VOID` | `value_reg` or none | Restores the caller's frame, optionally writing a return value.
 | `OP_ENTER_FRAME` | `frame_size` | Allocates local register space for a callee frame.【F:include/vm/vm.h†L732-L738】

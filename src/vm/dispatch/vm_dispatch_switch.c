@@ -2995,7 +2995,10 @@ InterpretResult vm_run_dispatch(void) {
                 }
 
                 // Function operations
-                case OP_CALL_NATIVE_R: {
+                case OP_CALL_NATIVE_R:
+                case OP_CALL_FOREIGN: {
+                    const bool is_foreign = (instruction == OP_CALL_FOREIGN);
+                    const char* label = is_foreign ? "Foreign" : "Native";
                     uint8_t nativeIndex = READ_BYTE();
                     uint8_t firstArgReg = READ_BYTE();
                     uint8_t argCount = READ_BYTE();
@@ -3005,19 +3008,19 @@ InterpretResult vm_run_dispatch(void) {
 
                     if (nativeIndex >= (uint8_t)vm.nativeFunctionCount) {
                         VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(),
-                                        "Native function index %u out of range", nativeIndex);
+                                        "%s function index %u out of range", label, nativeIndex);
                     }
 
                     NativeFunction* native = &vm.nativeFunctions[nativeIndex];
                     if (!native->function) {
                         VM_ERROR_RETURN(ERROR_RUNTIME, CURRENT_LOCATION(),
-                                        "Native function %u is unbound", nativeIndex);
+                                        "%s function %u is unbound", label, nativeIndex);
                     }
 
                     if (native->arity >= 0 && native->arity != argCount) {
                         VM_ERROR_RETURN(ERROR_ARGUMENT, CURRENT_LOCATION(),
-                                        "Native function expected %d argument(s) but received %u",
-                                        native->arity, argCount);
+                                        "%s function expected %d argument(s) but received %u",
+                                        label, native->arity, argCount);
                     }
 
                     profileFunctionHit((void*)native, true);

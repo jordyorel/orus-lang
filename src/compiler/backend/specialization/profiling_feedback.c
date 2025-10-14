@@ -386,6 +386,7 @@ static int bytecode_instruction_width(uint8_t opcode) {
         case OP_JUMP_IF_NOT_I32_TYPED:
         case OP_CALL_R:
         case OP_CALL_NATIVE_R:
+        case OP_CALL_FOREIGN:
         case OP_TAIL_CALL_R:
             return 4;
         default:

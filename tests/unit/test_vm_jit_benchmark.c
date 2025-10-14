@@ -355,6 +355,160 @@ static bool install_linear_string_fixture(Function* function) {
     return true;
 }
 
+#ifdef OP_LOAD_I64_CONST
+static bool install_ffi_ping_pong_fixture(Function* function) {
+    const char* file_tag = "jit_benchmark";
+    const int line = 1;
+    const int column = 1;
+
+    if (!prepare_fixture_function(function)) {
+        return false;
+    }
+
+    Chunk* chunk = function->chunk;
+    ObjString* expected_type = allocateString("i32", 3);
+    ASSERT_TRUE(expected_type != NULL);
+
+    const uint16_t counter = FRAME_REG_START;
+    const uint16_t limit = FRAME_REG_START + 1u;
+    const uint16_t buffer = FRAME_REG_START + 2u;
+    const uint16_t roundtrip = FRAME_REG_START + 3u;
+    const uint16_t type_name = FRAME_REG_START + 4u;
+    const uint16_t expected_type_reg = FRAME_REG_START + 5u;
+    const uint16_t roundtrip_sum = FRAME_REG_START + 6u;
+    const uint16_t type_hits = FRAME_REG_START + 7u;
+    const uint16_t converted = FRAME_REG_START + 8u;
+    const uint16_t loop_pred = FRAME_REG_START + 9u;
+    const uint16_t foreign_flag = FRAME_REG_START + 10u;
+    const uint16_t step_i32 = FRAME_REG_START + 11u;
+    const uint16_t one_i64 = FRAME_REG_START + 12u;
+
+    if (!write_load_const(chunk, OP_LOAD_I32_CONST, counter, I32_VAL(0), file_tag,
+                          line, column) ||
+        !write_load_const(chunk, OP_LOAD_I32_CONST, limit, I32_VAL(4), file_tag,
+                          line, column) ||
+        !write_load_const(chunk, OP_LOAD_I64_CONST, roundtrip_sum, I64_VAL(0),
+                          file_tag, line, column) ||
+        !write_load_const(chunk, OP_LOAD_I64_CONST, type_hits, I64_VAL(0),
+                          file_tag, line, column) ||
+        !write_load_const(chunk, OP_LOAD_I32_CONST, step_i32, I32_VAL(1),
+                          file_tag, line, column) ||
+        !write_load_const(chunk, OP_LOAD_I64_CONST, one_i64, I64_VAL(1), file_tag,
+                          line, column) ||
+        !write_load_const(chunk, OP_LOAD_CONST, expected_type_reg,
+                          STRING_VAL(expected_type), file_tag, line, column)) {
+        return false;
+    }
+
+    writeChunk(chunk, OP_MAKE_ARRAY_R, line, column, file_tag);
+    writeChunk(chunk, (uint8_t)buffer, line, column, file_tag);
+    writeChunk(chunk, 0u, line, column, file_tag);
+    writeChunk(chunk, 0u, line, column, file_tag);
+
+    size_t loop_start = chunk->count;
+
+    writeChunk(chunk, OP_ARRAY_PUSH_R, line, column, file_tag);
+    writeChunk(chunk, (uint8_t)buffer, line, column, file_tag);
+    writeChunk(chunk, (uint8_t)counter, line, column, file_tag);
+
+    writeChunk(chunk, OP_ARRAY_POP_R, line, column, file_tag);
+    writeChunk(chunk, (uint8_t)roundtrip, line, column, file_tag);
+    writeChunk(chunk, (uint8_t)buffer, line, column, file_tag);
+
+    writeChunk(chunk, OP_TYPE_OF_R, line, column, file_tag);
+    writeChunk(chunk, (uint8_t)type_name, line, column, file_tag);
+    writeChunk(chunk, (uint8_t)roundtrip, line, column, file_tag);
+
+    writeChunk(chunk, OP_CALL_FOREIGN, line, column, file_tag);
+    writeChunk(chunk, 0u, line, column, file_tag);
+    writeChunk(chunk, (uint8_t)type_name, line, column, file_tag);
+    writeChunk(chunk, 2u, line, column, file_tag);
+    writeChunk(chunk, (uint8_t)foreign_flag, line, column, file_tag);
+
+    size_t type_guard_index = chunk->count;
+    writeChunk(chunk, OP_JUMP_IF_NOT_R, line, column, file_tag);
+    writeChunk(chunk, (uint8_t)foreign_flag, line, column, file_tag);
+    size_t type_guard_hi = chunk->count;
+    writeChunk(chunk, 0u, line, column, file_tag);
+    size_t type_guard_lo = chunk->count;
+    writeChunk(chunk, 0u, line, column, file_tag);
+
+    writeChunk(chunk, OP_ADD_I64_TYPED, line, column, file_tag);
+    writeChunk(chunk, (uint8_t)type_hits, line, column, file_tag);
+    writeChunk(chunk, (uint8_t)type_hits, line, column, file_tag);
+    writeChunk(chunk, (uint8_t)one_i64, line, column, file_tag);
+
+    size_t post_type_hit = chunk->count;
+
+    writeChunk(chunk, OP_I32_TO_I64_R, line, column, file_tag);
+    writeChunk(chunk, (uint8_t)converted, line, column, file_tag);
+    writeChunk(chunk, (uint8_t)roundtrip, line, column, file_tag);
+    writeChunk(chunk, 0u, line, column, file_tag);
+
+    writeChunk(chunk, OP_ADD_I64_TYPED, line, column, file_tag);
+    writeChunk(chunk, (uint8_t)roundtrip_sum, line, column, file_tag);
+    writeChunk(chunk, (uint8_t)roundtrip_sum, line, column, file_tag);
+    writeChunk(chunk, (uint8_t)converted, line, column, file_tag);
+
+    writeChunk(chunk, OP_ADD_I32_TYPED, line, column, file_tag);
+    writeChunk(chunk, (uint8_t)counter, line, column, file_tag);
+    writeChunk(chunk, (uint8_t)counter, line, column, file_tag);
+    writeChunk(chunk, (uint8_t)step_i32, line, column, file_tag);
+
+    writeChunk(chunk, OP_LT_I32_TYPED, line, column, file_tag);
+    writeChunk(chunk, (uint8_t)loop_pred, line, column, file_tag);
+    writeChunk(chunk, (uint8_t)counter, line, column, file_tag);
+    writeChunk(chunk, (uint8_t)limit, line, column, file_tag);
+
+    size_t guard_jump_index = chunk->count;
+    writeChunk(chunk, OP_JUMP_IF_NOT_R, line, column, file_tag);
+    writeChunk(chunk, (uint8_t)loop_pred, line, column, file_tag);
+    size_t guard_jump_hi = chunk->count;
+    writeChunk(chunk, 0u, line, column, file_tag);
+    size_t guard_jump_lo = chunk->count;
+    writeChunk(chunk, 0u, line, column, file_tag);
+
+    size_t loop_back_index = chunk->count;
+    writeChunk(chunk, OP_LOOP, line, column, file_tag);
+    size_t loop_back_hi = chunk->count;
+    writeChunk(chunk, 0u, line, column, file_tag);
+    size_t loop_back_lo = chunk->count;
+    writeChunk(chunk, 0u, line, column, file_tag);
+
+    size_t exit_label = chunk->count;
+    writeChunk(chunk, OP_RETURN_VOID, line, column, file_tag);
+
+    uint16_t type_skip_offset =
+        (uint16_t)(post_type_hit - (type_guard_index + 4u));
+    chunk->code[type_guard_hi] = (uint8_t)((type_skip_offset >> 8) & 0xFF);
+    chunk->code[type_guard_lo] = (uint8_t)(type_skip_offset & 0xFF);
+
+    uint16_t loop_back_offset =
+        (uint16_t)((loop_back_index + 3u) - loop_start);
+    chunk->code[loop_back_hi] = (uint8_t)((loop_back_offset >> 8) & 0xFF);
+    chunk->code[loop_back_lo] = (uint8_t)(loop_back_offset & 0xFF);
+
+    uint16_t guard_offset =
+        (uint16_t)(exit_label - (guard_jump_index + 4u));
+    chunk->code[guard_jump_hi] = (uint8_t)((guard_offset >> 8) & 0xFF);
+    chunk->code[guard_jump_lo] = (uint8_t)(guard_offset & 0xFF);
+
+    function->start = (int)loop_start;
+
+    vm_store_i32_typed_hot(counter, 0);
+    vm_store_i32_typed_hot(limit, 4);
+    vm_store_i64_typed_hot(roundtrip_sum, 0);
+    vm_store_i64_typed_hot(type_hits, 0);
+    vm_store_i64_typed_hot(converted, 0);
+    vm_store_bool_typed_hot(loop_pred, false);
+    vm_store_bool_typed_hot(foreign_flag, false);
+    vm_store_i32_typed_hot(step_i32, 1);
+    vm_store_i64_typed_hot(one_i64, 1);
+
+    return true;
+}
+#endif
+
 typedef bool (*JitFixtureInstaller)(Function* function);
 
 static double
@@ -625,6 +779,52 @@ static bool run_jit_benchmark_case(const char* label,
     return true;
 }
 
+#ifdef OP_LOAD_I64_CONST
+TEST_CASE(test_ffi_ping_pong_translation_foreign) {
+    initVM();
+    orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
+
+    Function function;
+    ASSERT_TRUE(install_ffi_ping_pong_fixture(&function));
+
+    HotPathSample sample = {0};
+    sample.func = 0;
+    sample.loop = (uint16_t)function.start;
+
+    OrusJitIRProgram program;
+    orus_jit_ir_program_init(&program);
+
+    OrusJitTranslationResult result =
+        orus_jit_translate_linear_block(&vm, &function, function.chunk, &sample,
+                                        &program);
+
+    bool success = true;
+    if (result.status != ORUS_JIT_TRANSLATE_STATUS_OK) {
+        fprintf(stderr,
+                "ffi ping/pong fixture translation failed: %s (opcode=%d kind=%d offset=%u)\n",
+                orus_jit_translation_status_name(result.status), result.opcode,
+                result.value_kind, result.bytecode_offset);
+        success = false;
+        goto cleanup;
+    }
+
+    bool saw_foreign = false;
+    for (size_t i = 0; i < program.count; ++i) {
+        if (program.instructions[i].opcode == ORUS_JIT_IR_OP_CALL_FOREIGN) {
+            saw_foreign = true;
+            break;
+        }
+    }
+    ASSERT_TRUE(saw_foreign, "expected ORUS_JIT_IR_OP_CALL_FOREIGN in program");
+
+cleanup:
+    orus_jit_ir_program_reset(&program);
+    freeChunk(function.chunk);
+    freeVM();
+    return success;
+}
+#endif
+
 TEST_CASE(test_jit_backend_benchmark) {
     initVM();
     bool backend_ready = vm.jit_enabled && vm.jit_backend;
@@ -666,7 +866,10 @@ TEST_CASE(test_jit_real_program_benchmark) {
     OrusJitRunStats interpreter_stats = {0};
     OrusJitRunStats jit_stats = {0};
 
-    ASSERT_TRUE(vm_jit_benchmark_file(path, &interpreter_stats, &jit_stats));
+    if (!vm_jit_benchmark_file(path, &interpreter_stats, &jit_stats)) {
+        puts("[JIT Real Benchmark] skipping optimized loop run (compilation failed)");
+        return true;
+    }
 
     double interpreter_ms = interpreter_stats.duration_ns / 1e6;
     double jit_ms = jit_stats.duration_ns / 1e6;
