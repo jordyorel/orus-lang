@@ -2390,6 +2390,21 @@ orus_jit_native_call_native(struct VM* vm_instance,
 }
 
 static bool
+orus_jit_native_call_foreign(struct VM* vm_instance,
+                             OrusJitNativeBlock* block,
+                             uint16_t dst,
+                             uint16_t first_arg_reg,
+                             uint16_t arg_count,
+                             uint16_t foreign_index) {
+    // The runtime currently reuses the native function table for foreign
+    // bindings. This helper mirrors the native call path so the translator and
+    // backends can specialize `OP_CALL_FOREIGN` without forcing the
+    // interpreter to stay resident.
+    return orus_jit_native_call_native(vm_instance, block, dst, first_arg_reg,
+                                       arg_count, foreign_index);
+}
+
+static bool
 orus_jit_native_compare_op(struct VM* vm_instance,
                            OrusJitNativeBlock* block,
                            OrusJitIROpcode opcode,
@@ -3856,20 +3871,30 @@ orus_jit_execute_block(struct VM* vm_instance, const OrusJitNativeBlock* block) 
                 }
                 break;
             case ORUS_JIT_IR_OP_CALL_NATIVE:
+            case ORUS_JIT_IR_OP_CALL_FOREIGN: {
                 if (inst->operands.call_native.spill_count > 0u) {
                     orus_jit_native_flush_typed_range(
                         vm_instance, inst->operands.call_native.spill_base,
                         inst->operands.call_native.spill_count);
                 }
-                if (!orus_jit_native_call_native(vm_instance,
-                                                 (OrusJitNativeBlock*)block,
-                                                 inst->operands.call_native.dst_reg,
-                                                 inst->operands.call_native.first_arg_reg,
-                                                 inst->operands.call_native.arg_count,
-                                                 inst->operands.call_native.native_index)) {
+                bool ok = (inst->opcode == ORUS_JIT_IR_OP_CALL_FOREIGN)
+                              ? orus_jit_native_call_foreign(
+                                    vm_instance, (OrusJitNativeBlock*)block,
+                                    inst->operands.call_native.dst_reg,
+                                    inst->operands.call_native.first_arg_reg,
+                                    inst->operands.call_native.arg_count,
+                                    inst->operands.call_native.native_index)
+                              : orus_jit_native_call_native(
+                                    vm_instance, (OrusJitNativeBlock*)block,
+                                    inst->operands.call_native.dst_reg,
+                                    inst->operands.call_native.first_arg_reg,
+                                    inst->operands.call_native.arg_count,
+                                    inst->operands.call_native.native_index);
+                if (!ok) {
                     return;
                 }
                 break;
+            }
             case ORUS_JIT_IR_OP_RANGE:
                 if (!orus_jit_native_range(vm_instance,
                                            (OrusJitNativeBlock*)block,
@@ -4836,6 +4861,7 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
             case ORUS_JIT_IR_OP_ARRAY_PUSH:
             case ORUS_JIT_IR_OP_PRINT:
             case ORUS_JIT_IR_OP_CALL_NATIVE:
+            case ORUS_JIT_IR_OP_CALL_FOREIGN:
                 break;
             default:
                 return JIT_BACKEND_ASSEMBLY_ERROR;
@@ -5840,7 +5866,8 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                 }
                 break;
             }
-            case ORUS_JIT_IR_OP_CALL_NATIVE: {
+            case ORUS_JIT_IR_OP_CALL_NATIVE:
+            case ORUS_JIT_IR_OP_CALL_FOREIGN: {
                 if (inst->operands.call_native.spill_count > 0u) {
                     if (!orus_jit_code_buffer_emit_bytes(&code, MOV_RDI_R12,
                                                          sizeof(MOV_RDI_R12)) ||
@@ -5881,7 +5908,11 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                     !orus_jit_code_buffer_emit_u8(&code, 0x48) ||
                     !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
                     !orus_jit_code_buffer_emit_u64(
-                        &code, (uint64_t)(uintptr_t)&orus_jit_native_call_native) ||
+                        &code,
+                        (uint64_t)(uintptr_t)(inst->opcode ==
+                                                     ORUS_JIT_IR_OP_CALL_FOREIGN
+                                                 ? &orus_jit_native_call_foreign
+                                                 : &orus_jit_native_call_native)) ||
                     !orus_jit_code_buffer_emit_bytes(&code, CALL_RAX,
                                                      sizeof(CALL_RAX))) {
                     RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
@@ -7164,6 +7195,7 @@ dynasm_instruction_dest_reg(const OrusJitIRInstruction* inst, uint16_t* out_reg)
         case ORUS_JIT_IR_OP_PRINT:
         case ORUS_JIT_IR_OP_SAFEPOINT:
         case ORUS_JIT_IR_OP_CALL_NATIVE:
+        case ORUS_JIT_IR_OP_CALL_FOREIGN:
         case ORUS_JIT_IR_OP_LOOP_BACK:
         case ORUS_JIT_IR_OP_RETURN:
         case ORUS_JIT_IR_OP_JUMP_SHORT:
@@ -7718,6 +7750,7 @@ dynasm_optimize_instruction(DynAsmRegisterState* regs,
 
     switch (inst->opcode) {
         case ORUS_JIT_IR_OP_CALL_NATIVE:
+        case ORUS_JIT_IR_OP_CALL_FOREIGN:
         case ORUS_JIT_IR_OP_PRINT:
         case ORUS_JIT_IR_OP_ASSERT_EQ:
         case ORUS_JIT_IR_OP_RANGE:
@@ -8531,7 +8564,8 @@ orus_jit_ir_emit_x86(const OrusJitIRProgram* program,
                 }
                 break;
             }
-            case ORUS_JIT_IR_OP_CALL_NATIVE: {
+            case ORUS_JIT_IR_OP_CALL_NATIVE:
+            case ORUS_JIT_IR_OP_CALL_FOREIGN: {
                 if (inst->operands.call_native.spill_count > 0u) {
                     if (!dynasm_emit_load_vm_block(actions, &code_offset) ||
                         !dynasm_emit_mov_reg_imm32(actions, 0xBE, &code_offset,
@@ -8558,7 +8592,10 @@ orus_jit_ir_emit_x86(const OrusJitIRProgram* program,
                     !dynasm_emit_u32_le(actions, &code_offset,
                                         (uint32_t)inst->operands.call_native.native_index) ||
                     !dynasm_emit_helper_call(actions, &code_offset,
-                                              (const void*)&orus_jit_native_call_native,
+                                              (const void*)(inst->opcode ==
+                                                                   ORUS_JIT_IR_OP_CALL_FOREIGN
+                                                               ? &orus_jit_native_call_foreign
+                                                               : &orus_jit_native_call_native),
                                               ORUS_JIT_HELPER_STUB_KIND_RUNTIME)) {
                     DYNASM_EMIT_FAIL();
                 }
@@ -9323,6 +9360,7 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
             case ORUS_JIT_IR_OP_ARRAY_PUSH:
             case ORUS_JIT_IR_OP_PRINT:
             case ORUS_JIT_IR_OP_CALL_NATIVE:
+            case ORUS_JIT_IR_OP_CALL_FOREIGN:
                 break;
             default:
                 return JIT_BACKEND_ASSEMBLY_ERROR;
@@ -9882,7 +9920,8 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                 }
                 break;
             }
-            case ORUS_JIT_IR_OP_CALL_NATIVE: {
+            case ORUS_JIT_IR_OP_CALL_NATIVE:
+            case ORUS_JIT_IR_OP_CALL_FOREIGN: {
                 if (inst->operands.call_native.spill_count > 0u) {
                     if (!orus_jit_a64_code_buffer_emit_u32(&code, A64_LDR_X(0u, 31u, 0u)) ||
                         !orus_jit_a64_emit_mov_imm64_buffer(&code, 1u,
@@ -9910,7 +9949,10 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                         (uint64_t)inst->operands.call_native.native_index) ||
                     !orus_jit_a64_emit_mov_imm64_buffer(
                         &code, 16u,
-                        (uint64_t)(uintptr_t)&orus_jit_native_call_native) ||
+                        (uint64_t)(uintptr_t)(inst->opcode ==
+                                                     ORUS_JIT_IR_OP_CALL_FOREIGN
+                                                 ? &orus_jit_native_call_foreign
+                                                 : &orus_jit_native_call_native)) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
                     !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
@@ -10753,6 +10795,7 @@ orus_jit_parity_record(const OrusJitIRInstruction* inst,
         case ORUS_JIT_IR_OP_PRINT:
         case ORUS_JIT_IR_OP_ASSERT_EQ:
         case ORUS_JIT_IR_OP_CALL_NATIVE:
+        case ORUS_JIT_IR_OP_CALL_FOREIGN:
         case ORUS_JIT_IR_OP_GET_ITER:
         case ORUS_JIT_IR_OP_ITER_NEXT:
             report->helper_ops++;

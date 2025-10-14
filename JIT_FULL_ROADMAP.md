@@ -84,6 +84,22 @@ subtasks as the implementation evolves.
   - Native frames now embed canaries with fatal verification on corruption, DynASM helper calls are validated against a registry, and executable heaps enforce W^X transitions via tracked regions.
 - [x] Update user-facing documentation (`docs/ROADMAP_PERFORMANCE.md`, release notes) to reflect milestones and capabilities.
 - [ ] Define exit criteria for GA: sustained uplift across benchmarks, zero unsupported opcode bailouts, and stable FFI integration.
+  - [ ] **FFI-heavy workload parity**
+    - [x] Build a translation stress harness around the `ffi_ping_pong` benchmark that exercises nested foreign calls, boxed argument shuffles, and interpreter-to-native returns.
+      - `tests/unit/test_vm_jit_translation.c:test_translates_ffi_ping_pong_foreign_bridge` now mirrors the benchmark loop, issues nested foreign invocations, and asserts the translator emits `ORUS_JIT_IR_OP_CALL_FOREIGN` without exhausting the spill set.
+      - `tests/unit/test_vm_jit_benchmark.c:test_ffi_ping_pong_translation_foreign` reuses the benchmark harness to confirm the synthesized program translates under the tiered compiler.
+    - [x] Extend the translator to lower `OP_CALL_FOREIGN` and related bookkeeping opcodes without forcing bailouts; cover boxed argument packing/unboxing paths with unit and integration tests.
+      - `OP_CALL_FOREIGN` is wired through the dispatcher, profiling surface, IR, and backend emitters, with `orus_jit_native_call_foreign` bridging to the existing helper table until the dedicated registry lands.
+      - Regression coverage asserts that boxed arguments survive lowering and foreign-call helpers surface in the generated IR.
+    - [ ] Add tiered fallbacks that keep native frames alive across slow foreign calls (e.g., cooperative safepoints, helper-stub trampolines) and assert through tests that tiering no longer drops to the interpreter on foreign call boundaries.
+  - [ ] **GC-safe native execution**
+    - [ ] Implement precise root maps for active JIT frames so the collector can walk locals, temps, and spill slots without relying on deopts.
+    - [ ] Install GC interruption points in long-running native loops and verify with stress tests that collections triggered mid-loop preserve program state.
+    - [ ] Wire CI to run the GC stress harness under `jit-cross-arch-tests`, failing the build if any collection forces a tier drop or corrupts live values.
+  - [ ] **Complete opcode coverage**
+    - [ ] Audit unsupported bytecodes surfaced by the translator diagnostics channel and promote them to native IR one family at a time (string helpers, iterator protocols, table mutations, etc.).
+    - [ ] Maintain a running “unsupported opcode count” metric in `make jit-translation-tests` and gate GA readiness on the counter reaching zero.
+    - [ ] Author regression tests for each newly lowered opcode family to ensure no future refactor silently revives interpreter-only paths.
 
 Use this roadmap as the living source of truth for JIT progress. After each landing, update the relevant checkbox, add links to
 supporting benchmarks or design docs, and ensure the broader roadmap (`docs/ROADMAP_PERFORMANCE.md`, `JIT_BENCHMARK_RESULTS.md`)

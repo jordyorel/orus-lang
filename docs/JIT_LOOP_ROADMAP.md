@@ -21,7 +21,7 @@ This roadmap tracks the implementation work needed for the optimized loop benchm
 
 ## Next Steps (after control-flow lowering)
 - **Benchmark validation:** Confirm the optimized loop benchmark tiers up under the expanded helper set and update rollout thresholds if additional bytecodes appear during translation.
-- **Helper Calls:** ✅ Baseline IR now handles `OP_TIME_STAMP`, `OP_ARRAY_PUSH_R`, `OP_ARRAY_POP_R`, `OP_PRINT_*`, `OP_ASSERT_EQ_R`, and `OP_CALL_NATIVE_R` via native helpers on both backends with regression coverage.
+- **Helper Calls:** ✅ Baseline IR now handles `OP_TIME_STAMP`, `OP_ARRAY_PUSH_R`, `OP_ARRAY_POP_R`, `OP_PRINT_*`, `OP_ASSERT_EQ_R`, `OP_CALL_NATIVE_R`, and `OP_CALL_FOREIGN` via native helpers on both backends with regression coverage.
 - **Fused Loop Lowering:** Implement backend templates or helper stubs for the new fused loop IR opcodes on x86-64 and ARM64, then re-run the optimized loop benchmark to confirm tier-up.
 
 Progress on each section should be reflected here as work completes.

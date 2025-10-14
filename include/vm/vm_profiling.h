@@ -365,6 +365,7 @@ static inline OrusOpcodeFamily vm_opcode_family(uint8_t opcode) {
 
         case OP_CALL_R:
         case OP_CALL_NATIVE_R:
+        case OP_CALL_FOREIGN:
         case OP_TAIL_CALL_R:
         case OP_RETURN_R:
         case OP_RETURN_VOID:

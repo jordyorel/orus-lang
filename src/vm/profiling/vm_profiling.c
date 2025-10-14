@@ -1302,6 +1302,17 @@ orus_jit_value_kind_is_integer_like(OrusJitValueKind kind) {
 }
 
 static bool
+orus_jit_value_kind_is_boxed_like(OrusJitValueKind kind) {
+    switch (kind) {
+        case ORUS_JIT_VALUE_STRING:
+        case ORUS_JIT_VALUE_BOXED:
+            return true;
+        default:
+            return false;
+    }
+}
+
+static bool
 map_arithmetic_opcode(uint8_t opcode,
                       OrusJitIROpcode* ir_opcode,
                       OrusJitValueKind* kind) {
@@ -2475,7 +2486,8 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
                 }
                 OrusJitValueKind lhs_kind = ORUS_JIT_GET_KIND(lhs);
                 if (lhs_kind != ORUS_JIT_VALUE_I32) {
-                    if (lhs_kind == ORUS_JIT_VALUE_BOXED && lhs < REGISTER_COUNT) {
+                    if (orus_jit_value_kind_is_boxed_like(lhs_kind) &&
+                        lhs < REGISTER_COUNT) {
                         register_kinds[lhs] = (uint8_t)ORUS_JIT_VALUE_I32;
                         iterator_kinds[lhs] = (uint8_t)ORUS_JIT_ITERATOR_NONE;
                         register_writers[lhs] = NULL;
@@ -2491,7 +2503,8 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
                 }
                 OrusJitValueKind rhs_kind = ORUS_JIT_GET_KIND(rhs);
                 if (rhs_kind != ORUS_JIT_VALUE_I32) {
-                    if (rhs_kind == ORUS_JIT_VALUE_BOXED && rhs < REGISTER_COUNT) {
+                    if (orus_jit_value_kind_is_boxed_like(rhs_kind) &&
+                        rhs < REGISTER_COUNT) {
                         register_kinds[rhs] = (uint8_t)ORUS_JIT_VALUE_I32;
                         iterator_kinds[rhs] = (uint8_t)ORUS_JIT_ITERATOR_NONE;
                         register_writers[rhs] = NULL;
@@ -3657,12 +3670,14 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
             continue;
         }
 
-        if (opcode == OP_CALL_NATIVE_R) {
+        if (opcode == OP_CALL_NATIVE_R || opcode == OP_CALL_FOREIGN) {
+            OrusJitIROpcode call_opcode =
+                (opcode == OP_CALL_FOREIGN) ? ORUS_JIT_IR_OP_CALL_FOREIGN
+                                            : ORUS_JIT_IR_OP_CALL_NATIVE;
             if (offset + 4u >= (size_t)chunk->count) {
                 return make_translation_result(
-                    ORUS_JIT_TRANSLATE_STATUS_INVALID_INPUT,
-                    ORUS_JIT_IR_OP_CALL_NATIVE, ORUS_JIT_VALUE_BOXED,
-                    (uint32_t)offset);
+                    ORUS_JIT_TRANSLATE_STATUS_INVALID_INPUT, call_opcode,
+                    ORUS_JIT_VALUE_BOXED, (uint32_t)offset);
             }
             uint16_t native_index = chunk->code[offset + 1u];
             uint16_t first_arg_reg = chunk->code[offset + 2u];
@@ -3671,11 +3686,10 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
             OrusJitIRInstruction* inst = orus_jit_ir_program_append(program);
             if (!inst) {
                 return make_translation_result(
-                    ORUS_JIT_TRANSLATE_STATUS_OUT_OF_MEMORY,
-                    ORUS_JIT_IR_OP_CALL_NATIVE, ORUS_JIT_VALUE_BOXED,
-                    (uint32_t)offset);
+                    ORUS_JIT_TRANSLATE_STATUS_OUT_OF_MEMORY, call_opcode,
+                    ORUS_JIT_VALUE_BOXED, (uint32_t)offset);
             }
-            inst->opcode = ORUS_JIT_IR_OP_CALL_NATIVE;
+            inst->opcode = call_opcode;
             inst->value_kind = ORUS_JIT_VALUE_BOXED;
             inst->bytecode_offset = (uint32_t)offset;
             inst->operands.call_native.dst_reg = dst_reg;
