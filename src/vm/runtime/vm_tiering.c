@@ -11,7 +11,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <limits.h>
+#include <stdint.h>
 
 #define VM_FUSION_PATCH_COOLDOWN 4096u
 
@@ -105,6 +105,51 @@ vm_jit_cache_reset_slot(JITEntryCacheSlot* slot) {
     slot->generation = 0;
     slot->occupied = false;
     slot->warmup_recorded = false;
+}
+
+static void
+vm_jit_apply_warmup_backoff(FunctionId function,
+                            LoopId loop,
+                            bool escalate_backoff) {
+    if (loop == UINT16_MAX) {
+        return;
+    }
+
+    HotPathSample* sample = &vm.profile[loop];
+    sample->func = function;
+    sample->loop = loop;
+    sample->warmup_level = 0;
+    sample->suppressed_triggers = 0;
+
+    if (escalate_backoff) {
+        if (sample->cooldown_exponent < ORUS_JIT_WARMUP_MAX_BACKOFF) {
+            sample->cooldown_exponent++;
+        }
+        if (sample->hit_count > ORUS_JIT_WARMUP_PARTIAL_RESET) {
+            sample->hit_count = ORUS_JIT_WARMUP_PARTIAL_RESET;
+        }
+    } else {
+        sample->cooldown_exponent = 0;
+    }
+
+    uint64_t now = vm.ticks;
+    uint64_t cooldown =
+        orus_jit_warmup_compute_cooldown(sample->cooldown_exponent);
+    sample->last_threshold_tick = now;
+    if (cooldown > UINT64_MAX - now) {
+        sample->cooldown_until_tick = UINT64_MAX;
+    } else {
+        sample->cooldown_until_tick = now + cooldown;
+    }
+}
+
+static uint64_t
+vm_jit_cache_next_generation(void) {
+    vm.jit_cache.next_generation++;
+    if (vm.jit_cache.next_generation == 0) {
+        vm.jit_cache.next_generation = 1;
+    }
+    return vm.jit_cache.next_generation;
 }
 
 static JITEntryCacheSlot*
@@ -288,20 +333,28 @@ vm_jit_install_entry(FunctionId function, LoopId loop, JITEntry* entry) {
         return 0;
     }
 
-    if (slot->entry.code_ptr && slot->entry.code_ptr != entry->code_ptr) {
+    bool had_entry = slot->entry.code_ptr != NULL;
+    bool replaced_code = had_entry && slot->entry.code_ptr != entry->code_ptr;
+    if (replaced_code) {
         orus_jit_backend_release_entry(vm.jit_backend, &slot->entry);
         memset(&slot->entry, 0, sizeof(slot->entry));
     }
 
+    bool reused_code = had_entry && !replaced_code;
     slot->entry = *entry;
-    slot->generation = ++vm.jit_cache.next_generation;
-    slot->warmup_recorded = false;
+    slot->generation = vm_jit_cache_next_generation();
+    slot->warmup_recorded = reused_code ? slot->warmup_recorded : false;
 
     entry->code_ptr = NULL;
     entry->entry_point = NULL;
     entry->code_capacity = 0;
     entry->code_size = 0;
     entry->debug_name = NULL;
+
+    if (loop != UINT16_MAX) {
+        vm.jit_loop_blocklist[loop] = false;
+        vm_jit_apply_warmup_backoff(function, loop, false);
+    }
 
     return slot->generation;
 }
@@ -332,10 +385,13 @@ vm_jit_invalidate_entry(const JITDeoptTrigger* trigger) {
             slot->loop_index != trigger->loop_index) {
             continue;
         }
+        FunctionId function_index = slot->function_index;
+        LoopId loop_index = slot->loop_index;
         if (trigger->generation != 0 && slot->generation != trigger->generation) {
             continue;
         }
         vm_jit_cache_reset_slot(slot);
+        vm_jit_apply_warmup_backoff(function_index, loop_index, true);
     }
 }
 

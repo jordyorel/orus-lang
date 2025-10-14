@@ -12,6 +12,7 @@
 #include "vm/jit_backend.h"
 #include "vm/jit_ir.h"
 #include "vm/jit_translation.h"
+#include "vm/jit_debug.h"
 #include "vm/register_file.h"
 #include "vm/vm.h"
 #include "vm/vm_comparison.h"
@@ -48,6 +49,92 @@ static bool compile_program(struct OrusJitBackend* backend,
         return false;
     }
     return true;
+}
+
+static bool test_jit_debug_disassembly_capture(void) {
+    initVM();
+
+    struct OrusJitBackend* backend = orus_jit_backend_create();
+    if (!backend) {
+        freeVM();
+        return false;
+    }
+
+    OrusJitDebugConfig config = ORUS_JIT_DEBUG_CONFIG_INIT;
+    config.capture_disassembly = true;
+    orus_jit_debug_set_config(&config);
+
+    OrusJitIRInstruction instructions[1];
+    memset(instructions, 0, sizeof(instructions));
+    instructions[0].opcode = ORUS_JIT_IR_OP_RETURN;
+
+    OrusJitIRProgram program;
+    init_ir_program(&program, instructions, 1);
+
+    JITEntry entry;
+    bool compiled = compile_program(backend, &program, &entry);
+    if (!compiled) {
+        orus_jit_backend_destroy(backend);
+        freeVM();
+        return false;
+    }
+
+    OrusJitDebugDisassembly disassembly;
+    bool has_disassembly = orus_jit_debug_last_disassembly(&disassembly);
+    bool contains_return = false;
+    if (has_disassembly && disassembly.buffer) {
+        contains_return = strstr(disassembly.buffer, "RETURN") != NULL;
+    }
+
+    orus_jit_backend_release_entry(backend, &entry);
+    orus_jit_backend_destroy(backend);
+    freeVM();
+
+    return has_disassembly && contains_return;
+}
+
+static bool test_jit_debug_guard_trace_and_loop_telemetry(void) {
+    initVM();
+
+    OrusJitDebugConfig config = ORUS_JIT_DEBUG_CONFIG_INIT;
+    config.capture_guard_traces = true;
+    config.loop_telemetry_enabled = true;
+    orus_jit_debug_set_config(&config);
+    orus_jit_debug_clear_loop_overrides();
+
+    const uint16_t function_index = 3u;
+    const uint16_t loop_index = 7u;
+    orus_jit_debug_set_loop_enabled(loop_index, true);
+
+    orus_jit_debug_record_loop_entry(&vm, function_index, loop_index);
+    orus_jit_debug_record_loop_slow_path(&vm, function_index, loop_index);
+    orus_jit_debug_record_guard_exit(&vm,
+                                     function_index,
+                                     loop_index,
+                                     "unit-test",
+                                     ORUS_JIT_DEBUG_INVALID_INSTRUCTION_INDEX);
+
+    OrusJitGuardTraceEvent traces[4];
+    size_t trace_count = orus_jit_debug_copy_guard_traces(traces, 4);
+    bool guard_logged = trace_count > 0 &&
+                        strcmp(traces[trace_count - 1].reason, "unit-test") == 0;
+
+    OrusJitLoopTelemetry telemetry[4];
+    size_t telemetry_count =
+        orus_jit_debug_collect_loop_telemetry(telemetry, 4);
+    bool loop_logged = false;
+    if (telemetry_count > 0) {
+        const OrusJitLoopTelemetry* entry = &telemetry[0];
+        loop_logged = (entry->loop_index == loop_index) &&
+                      (entry->entries == 1u) &&
+                      (entry->guard_exits >= 1u) &&
+                      (entry->slow_paths >= 1u);
+    }
+
+    orus_jit_debug_reset();
+    freeVM();
+
+    return guard_logged && loop_logged;
 }
 
 static bool run_gc_intensive_hotloop(void) {
@@ -1334,9 +1421,16 @@ static bool run_fused_loop_case(OrusJitValueKind kind,
         return false;
     }
 
+    vm.safe_register_reads = 0;
     entry.entry_point(&vm);
 
     bool success = true;
+    if (vm.safe_register_reads != 0) {
+        fprintf(stderr,
+                "typed JIT loop touched boxed registers: observed %llu safe reads\n",
+                (unsigned long long)vm.safe_register_reads);
+        success = false;
+    }
     switch (kind) {
         case ORUS_JIT_VALUE_I32: {
             int32_t expected_counter = (int32_t)limit_value;
@@ -1773,6 +1867,15 @@ int main(void) {
 
     bool success = true;
 
+    if (!test_jit_debug_disassembly_capture()) {
+        fprintf(stderr, "jit debug disassembly capture test failed\n");
+        success = false;
+    }
+    if (!test_jit_debug_guard_trace_and_loop_telemetry()) {
+        fprintf(stderr,
+                "jit debug guard trace and loop telemetry test failed\n");
+        success = false;
+    }
     if (!test_backend_helper_stub_executes()) {
         fprintf(stderr, "backend helper stub test failed\n");
         success = false;

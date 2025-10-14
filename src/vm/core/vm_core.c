@@ -14,6 +14,7 @@
 #include "vm/vm_string_ops.h"
 #include "vm/register_file.h"
 #include "vm/jit_translation.h"
+#include "vm/jit_debug.h"
 #include "type/type.h"
 #include <string.h>
 #include <stdlib.h>
@@ -97,6 +98,7 @@ void initVM(void) {
     vm.filePath = NULL;
     vm.currentLine = 0;
     vm.currentColumn = 1;
+    vm.safe_register_reads = 0;
     vm.moduleCount = 0;
     vm.loadingModuleCount = 0;
     for (int i = 0; i < UINT8_COUNT; i++) {
@@ -143,10 +145,13 @@ void initVM(void) {
     orus_jit_translation_failure_log_init(&vm.jit_translation_failures);
     vm.jit_native_dispatch_count = 0;
     vm.jit_native_type_deopts = 0;
+    vm.jit_native_frame_top = NULL;
+    vm.jit_native_slow_path_pending = false;
     vm.jit_enter_cycle_total = 0;
     vm.jit_enter_cycle_samples = 0;
     vm.jit_enter_cycle_warmup_total = 0;
     vm.jit_enter_cycle_warmup_samples = 0;
+    orus_jit_debug_reset();
     // Default to the full baseline rollout so production workloads gain
     // immediate access to floating-point and string helpers without requiring
     // a command-line override.
@@ -226,6 +231,7 @@ void freeVM(void) {
         orus_jit_backend_destroy(vm.jit_backend);
         vm.jit_backend = NULL;
     }
+    orus_jit_debug_reset();
     vm.jit_enabled = false;
     vm.jit_compilation_count = 0;
     vm.jit_invocation_count = 0;

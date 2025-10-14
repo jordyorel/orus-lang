@@ -409,6 +409,9 @@ static inline Value vm_reconcile_typed_register(uint16_t id) {
 }
 
 static inline Value vm_get_register_internal(uint16_t id, bool reconcile) {
+    if (reconcile) {
+        vm.safe_register_reads++;
+    }
     Value* storage = NULL;
     if (id < FRAME_REG_START && id < REGISTER_COUNT) {
         storage = &vm.register_file.globals[id];

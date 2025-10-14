@@ -338,6 +338,12 @@ typedef struct {
     FunctionId func;
     LoopId loop;
     uint64_t hit_count;
+    uint64_t last_threshold_tick;
+    uint64_t cooldown_until_tick;
+    uint32_t suppressed_triggers;
+    uint8_t warmup_level;
+    uint8_t cooldown_exponent;
+    uint16_t reserved;
 } HotPathSample;
 
 typedef struct {
@@ -1310,6 +1316,8 @@ typedef enum {
 // These are implemented in register_file.c
 
 // VM state
+struct OrusJitNativeFrame;
+
 typedef struct VM {
     // Phase 1: New register file architecture
     RegisterFile register_file;
@@ -1373,6 +1381,9 @@ typedef struct VM {
     int currentLine;
     int currentColumn;
 
+    // Diagnostics
+    uint64_t safe_register_reads;
+
     double lastExecutionTime;
 
     // Profiling / tier-up bookkeeping
@@ -1406,6 +1417,8 @@ typedef struct VM {
     OrusJitTranslationFailureLog jit_translation_failures;
     uint64_t jit_native_dispatch_count;
     uint64_t jit_native_type_deopts;
+    struct OrusJitNativeFrame* jit_native_frame_top;
+    bool jit_native_slow_path_pending;
     bool jit_loop_blocklist[VM_MAX_PROFILED_LOOPS];
     bool jit_pending_invalidate;
     JITDeoptTrigger jit_pending_trigger;
@@ -1427,6 +1440,11 @@ typedef VM VMState;
 
 // Global VM instance
 extern VM vm;
+
+static inline void vm_mark_native_slow_path(struct VM* state) {
+    VM* target = state ? state : &vm;
+    target->jit_native_slow_path_pending = true;
+}
 
 // Interpretation results
 typedef enum {

@@ -2972,6 +2972,7 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     ScopeFrame* loop_frame = NULL;
     int loop_frame_index = -1;
     bool success = false;
+    bool hot_loop_tracking = false;
 
     int start_reg = -1;
     int end_reg = -1;
@@ -3008,6 +3009,11 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
         typed_loop_expected = affinity_binding && affinity_binding->prefer_typed_registers;
     }
 
+    if (ctx->allocator) {
+        compiler_allocator_begin_hot_loop(ctx->allocator);
+        hot_loop_tracking = true;
+    }
+
     const char* loop_var_name = NULL;
     if (for_stmt->original && for_stmt->original->forRange.varName) {
         loop_var_name = for_stmt->original->forRange.varName;
@@ -3033,6 +3039,9 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
         ctx->has_compilation_errors = true;
         goto cleanup;
     }
+    if (hot_loop_tracking) {
+        compiler_allocator_track_hot_use(ctx->allocator, start_reg, true);
+    }
 
     FusedCounterLoopInfo fused_info;
     if (!try_prepare_fused_counter_loop(ctx, for_stmt, &fused_info)) {
@@ -3050,12 +3059,18 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
         ctx->has_compilation_errors = true;
         goto cleanup;
     }
+    if (hot_loop_tracking) {
+        compiler_allocator_track_hot_use(ctx->allocator, end_reg, true);
+    }
 
     step_reg = fused_info.step_reg;
     step_reg_was_temp = fused_info.step_reg_is_temp;
     if (step_reg < 0) {
         ctx->has_compilation_errors = true;
         goto cleanup;
+    }
+    if (hot_loop_tracking) {
+        compiler_allocator_track_hot_use(ctx->allocator, step_reg, true);
     }
 
     bool step_known_positive = fused_info.step_known_positive;
@@ -3098,6 +3113,9 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     if (loop_var_reg == -1) {
         ctx->has_compilation_errors = true;
         goto cleanup;
+    }
+    if (hot_loop_tracking) {
+        compiler_allocator_track_hot_use(ctx->allocator, loop_var_reg, true);
     }
 
     Symbol* loop_symbol = register_variable(ctx, ctx->symbols, loop_var_name,
@@ -3252,24 +3270,39 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     if (for_stmt->typed.forRange.inclusive) {
         emit_byte_to_buffer(ctx->bytecode, OP_LE_I32_TYPED);
     } else {
-        emit_byte_to_buffer(ctx->bytecode, OP_LT_I32_TYPED);
+    emit_byte_to_buffer(ctx->bytecode, OP_LT_I32_TYPED);
     }
     emit_byte_to_buffer(ctx->bytecode, condition_reg);
     emit_byte_to_buffer(ctx->bytecode, loop_var_reg);
     emit_byte_to_buffer(ctx->bytecode, (uint8_t)end_reg);
     emitted_typed_loop_path = true;
+    if (hot_loop_tracking) {
+        compiler_allocator_track_hot_use(ctx->allocator, loop_var_reg, false);
+        compiler_allocator_track_hot_use(ctx->allocator, end_reg, false);
+    }
 
         if (need_positive_guard) {
-            positive_guard_limit_reg = compiler_alloc_temp(ctx->allocator);
-            if (positive_guard_limit_reg != -1) {
-                positive_guard_limit_is_temp = true;
+            int planned_split = -1;
+            if (hot_loop_tracking) {
+                planned_split = compiler_allocator_plan_split(
+                    ctx->allocator, end_reg, REG_TYPE_I32);
+            }
+            if (planned_split >= 0) {
+                positive_guard_limit_reg = planned_split;
+                positive_guard_limit_is_temp =
+                    (planned_split >= MP_TEMP_REG_START && planned_split <= MP_TEMP_REG_END);
             } else {
-                positive_guard_limit_reg = compiler_alloc_frame(ctx->allocator);
-                if (positive_guard_limit_reg == -1) {
-                    ctx->has_compilation_errors = true;
-                    goto cleanup;
+                positive_guard_limit_reg = compiler_alloc_temp(ctx->allocator);
+                if (positive_guard_limit_reg != -1) {
+                    positive_guard_limit_is_temp = true;
+                } else {
+                    positive_guard_limit_reg = compiler_alloc_frame(ctx->allocator);
+                    if (positive_guard_limit_reg == -1) {
+                        ctx->has_compilation_errors = true;
+                        goto cleanup;
+                    }
+                    positive_guard_limit_is_frame = true;
                 }
-                positive_guard_limit_is_frame = true;
             }
 
             set_location_from_node(ctx, for_stmt);
@@ -3437,6 +3470,10 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     emit_byte_to_buffer(ctx->bytecode, loop_var_reg);
     emit_byte_to_buffer(ctx->bytecode, loop_var_reg);
     emit_byte_to_buffer(ctx->bytecode, step_reg);
+    if (hot_loop_tracking) {
+        compiler_allocator_track_hot_use(ctx->allocator, loop_var_reg, false);
+        compiler_allocator_track_hot_use(ctx->allocator, step_reg, false);
+    }
 
     patch_continue_statements(ctx, continue_target);
 
@@ -3471,6 +3508,10 @@ void compile_for_range_statement(CompilerContext* ctx, TypedASTNode* for_stmt) {
     success = true;
 
 cleanup:
+    if (hot_loop_tracking) {
+        compiler_allocator_end_hot_loop(ctx->allocator);
+        hot_loop_tracking = false;
+    }
     if (loop_frame) {
         ScopeFrame* refreshed = get_scope_frame_by_index(ctx, loop_frame_index);
         leave_loop_context(ctx, refreshed,

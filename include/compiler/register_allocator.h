@@ -137,5 +137,16 @@ void compiler_print_register_allocation_stats(DualRegisterAllocator* allocator);
 AllocatorDiagnostics compiler_allocator_get_diagnostics(const DualRegisterAllocator* allocator);
 void compiler_allocator_reset_diagnostics(DualRegisterAllocator* allocator);
 
+// Hot-loop live range helpers
+void compiler_allocator_begin_hot_loop(DualRegisterAllocator* allocator);
+void compiler_allocator_track_hot_use(DualRegisterAllocator* allocator,
+                                      int reg,
+                                      bool is_definition);
+int compiler_allocator_plan_split(DualRegisterAllocator* allocator,
+                                  int reg,
+                                  RegisterType type);
+bool compiler_allocator_should_spill(DualRegisterAllocator* allocator, int reg);
+void compiler_allocator_end_hot_loop(DualRegisterAllocator* allocator);
+
 #endif // REGISTER_ALLOCATOR_H
 
