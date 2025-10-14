@@ -20,6 +20,22 @@
 #include <string.h>
 #include <stdlib.h>
 
+static const char*
+jit_backend_entry_stub_failure_message(JITBackendStatus status) {
+    switch (status) {
+        case JIT_BACKEND_UNSUPPORTED:
+            return "Baseline entry stub unsupported: native emitter unavailable or executable memory protections blocked code generation.";
+        case JIT_BACKEND_OUT_OF_MEMORY:
+            return "Baseline entry stub allocation failed: exhausted executable memory while emitting native code.";
+        case JIT_BACKEND_ASSEMBLY_ERROR:
+            return "Baseline entry stub assembly failed: native assembler rejected the generated code.";
+        case JIT_BACKEND_OK:
+            return "Baseline entry stub ready.";
+        default:
+            return "Failed to materialize baseline JIT entry stub.";
+    }
+}
+
 VM vm; // Global VM instance
 
 void initVM(void) {
@@ -190,8 +206,9 @@ void initVM(void) {
                     orus_jit_backend_release_entry(vm.jit_backend, &stub_entry);
                 }
                 vm.jit_backend_message =
-                    "Failed to materialize baseline JIT entry stub.";
-                LOG_WARN("Disabling JIT backend: %s", vm.jit_backend_message);
+                    jit_backend_entry_stub_failure_message(status);
+                LOG_WARN("Disabling JIT backend (status=%d): %s",
+                         (int)status, vm.jit_backend_message);
                 orus_jit_backend_destroy(vm.jit_backend);
                 vm.jit_backend = NULL;
             }
