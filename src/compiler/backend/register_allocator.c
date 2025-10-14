@@ -163,7 +163,7 @@ int mp_allocate_global_register(MultiPassRegisterAllocator* allocator) {
     }
 
     // No free global registers
-    REGISTER_ALLOCATOR_WARN("[REGISTER_ALLOCATOR] Warning: No free global registers\n");
+    // REGISTER_ALLOCATOR_WARN("[REGISTER_ALLOCATOR] Warning: No free global registers\n");
     return -1;
 }
 
@@ -194,7 +194,7 @@ int mp_allocate_frame_register(MultiPassRegisterAllocator* allocator) {
     }
     
     // No free frame registers
-    REGISTER_ALLOCATOR_WARN("[REGISTER_ALLOCATOR] Warning: No free frame registers\n");
+    // REGISTER_ALLOCATOR_WARN("[REGISTER_ALLOCATOR] Warning: No free frame registers\n");
     return -1;
 }
 
