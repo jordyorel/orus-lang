@@ -16,6 +16,7 @@
 
 // ====== Arithmetic Operation Handlers ======
 
+#if !ORUS_VM_ENABLE_TYPED_OPS
 // I32 arithmetic operations
 void handle_add_i32_typed(void);
 void handle_sub_i32_typed(void);
@@ -50,6 +51,7 @@ void handle_sub_f64_typed(void);
 void handle_mul_f64_typed(void);
 void handle_div_f64_typed(void);
 void handle_mod_f64_typed(void);
+#endif // !ORUS_VM_ENABLE_TYPED_OPS
 
 // ====== Control Flow Handlers ======
 

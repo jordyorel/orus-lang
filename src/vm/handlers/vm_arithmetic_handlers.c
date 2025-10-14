@@ -14,6 +14,8 @@
 #include <assert.h>
 #include <math.h>
 
+#if !ORUS_VM_ENABLE_TYPED_OPS
+
 static inline int32_t read_i32_operand_typed_fast(uint16_t reg) {
     int32_t value = 0;
     bool ok = vm_try_read_i32_typed(reg, &value);
@@ -150,3 +152,4 @@ DEFINE_TYPED_ARITH_HANDLER(sub, u64, uint64_t, READ_U64_OPERAND_TYPED_FAST, STOR
 DEFINE_TYPED_ARITH_HANDLER(mul, u64, uint64_t, READ_U64_OPERAND_TYPED_FAST, STORE_U64_RESULT, NO_EXTRA_GUARD, left_val * right_val)
 DEFINE_TYPED_ARITH_HANDLER(div, u64, uint64_t, READ_U64_OPERAND_TYPED_FAST, STORE_U64_RESULT, GUARD_DIV_ZERO_INT, left_val / right_val)
 DEFINE_TYPED_ARITH_HANDLER(mod, u64, uint64_t, READ_U64_OPERAND_TYPED_FAST, STORE_U64_RESULT, GUARD_DIV_ZERO_INT, left_val % right_val)
+#endif // !ORUS_VM_ENABLE_TYPED_OPS
