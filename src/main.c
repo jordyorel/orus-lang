@@ -17,6 +17,7 @@
 
 #include "vm/vm.h"
 #include "vm/jit_translation.h"
+#include "vm/jit_debug.h"
 #include "vm/jit_benchmark.h"
 #include "public/common.h"
 #include "internal/error_reporting.h"
@@ -121,6 +122,155 @@ static void runFile(const char* path) {
         free_string_table(&globalStringTable);
         exit(70);
     }
+}
+
+static const char*
+jit_backend_status_name(JITBackendStatus status) {
+    switch (status) {
+        case JIT_BACKEND_OK:
+            return "ok";
+        case JIT_BACKEND_UNSUPPORTED:
+            return "unsupported";
+        case JIT_BACKEND_OUT_OF_MEMORY:
+            return "out_of_memory";
+        case JIT_BACKEND_ASSEMBLY_ERROR:
+            return "assembly_error";
+        default:
+            return "unknown";
+    }
+}
+
+static void print_guard_trace_summary(void) {
+    size_t guard_count = orus_jit_debug_guard_trace_count();
+    if (guard_count == 0) {
+        printf("[JIT Benchmark] guard trace: no guard exits were recorded.\n");
+        return;
+    }
+
+    OrusJitGuardTraceEvent* events =
+        (OrusJitGuardTraceEvent*)calloc(guard_count, sizeof(*events));
+    if (!events) {
+        printf("[JIT Benchmark] guard trace: failed to allocate buffer for %zu events.\n",
+               guard_count);
+        return;
+    }
+
+    size_t copied = orus_jit_debug_copy_guard_traces(events, guard_count);
+    if (copied == 0) {
+        printf("[JIT Benchmark] guard trace: buffer empty after capture.\n");
+        free(events);
+        return;
+    }
+
+    typedef struct {
+        uint16_t function_index;
+        uint16_t loop_index;
+        uint32_t instruction_index;
+        char reason[sizeof(events->reason)];
+        uint64_t hits;
+        uint64_t first_timestamp;
+        uint64_t last_timestamp;
+    } OrusGuardTraceSummary;
+
+    OrusGuardTraceSummary* summaries = (OrusGuardTraceSummary*)calloc(
+        copied, sizeof(*summaries));
+    if (!summaries) {
+        printf("[JIT Benchmark] guard trace: insufficient memory for summaries; printing raw events.\n");
+        for (size_t i = 0; i < copied; ++i) {
+            const OrusJitGuardTraceEvent* event = &events[i];
+            const char* reason =
+                (event->reason[0] != '\0') ? event->reason : "(no reason)";
+            printf("    * guard event #%zu: func=%u loop=%u ir_index=%u hits=1 reason=%s timestamp=%" PRIu64 "\n",
+                   i,
+                   (unsigned)event->function_index,
+                   (unsigned)event->loop_index,
+                   event->instruction_index,
+                   reason,
+                   (uint64_t)event->timestamp);
+        }
+        free(events);
+        return;
+    }
+
+    size_t summary_count = 0u;
+    for (size_t i = 0; i < copied; ++i) {
+        const OrusJitGuardTraceEvent* event = &events[i];
+        size_t j = 0u;
+        for (; j < summary_count; ++j) {
+            OrusGuardTraceSummary* summary = &summaries[j];
+            if (summary->function_index == event->function_index &&
+                summary->loop_index == event->loop_index &&
+                summary->instruction_index == event->instruction_index &&
+                strncmp(summary->reason, event->reason, sizeof(summary->reason)) ==
+                    0) {
+                summary->hits++;
+                if (event->timestamp < summary->first_timestamp) {
+                    summary->first_timestamp = event->timestamp;
+                }
+                if (event->timestamp > summary->last_timestamp) {
+                    summary->last_timestamp = event->timestamp;
+                }
+                break;
+            }
+        }
+        if (j == summary_count) {
+            OrusGuardTraceSummary* summary = &summaries[summary_count++];
+            summary->function_index = event->function_index;
+            summary->loop_index = event->loop_index;
+            summary->instruction_index = event->instruction_index;
+            strncpy(summary->reason,
+                    event->reason,
+                    sizeof(summary->reason) - 1u);
+            summary->reason[sizeof(summary->reason) - 1u] = '\0';
+            summary->hits = 1u;
+            summary->first_timestamp = event->timestamp;
+            summary->last_timestamp = event->timestamp;
+        }
+    }
+
+    size_t dominant_index = 0u;
+    uint64_t dominant_hits = 0u;
+    for (size_t i = 0; i < summary_count; ++i) {
+        if (summaries[i].hits > dominant_hits) {
+            dominant_hits = summaries[i].hits;
+            dominant_index = i;
+        }
+    }
+
+    printf("[JIT Benchmark] guard trace events captured: %zu\n", copied);
+    if (summary_count > 0u) {
+        OrusGuardTraceSummary* dominant = &summaries[dominant_index];
+        const char* reason =
+            (dominant->reason[0] != '\0') ? dominant->reason : "(no reason)";
+        printf("[JIT Benchmark] dominant bailout: func=%u loop=%u ir_index=%u hits=%" PRIu64
+               " first_ts=%" PRIu64 " last_ts=%" PRIu64 " reason=%s\n",
+               (unsigned)dominant->function_index,
+               (unsigned)dominant->loop_index,
+               dominant->instruction_index,
+               dominant->hits,
+               dominant->first_timestamp,
+               dominant->last_timestamp,
+               reason);
+
+        printf("[JIT Benchmark] guard bailout breakdown:\n");
+        for (size_t i = 0; i < summary_count; ++i) {
+            OrusGuardTraceSummary* summary = &summaries[i];
+            const char* summary_reason =
+                (summary->reason[0] != '\0') ? summary->reason : "(no reason)";
+            printf("    - func=%u loop=%u ir_index=%u hits=%" PRIu64
+                   " first_ts=%" PRIu64 " last_ts=%" PRIu64 " reason=%s\n",
+                   (unsigned)summary->function_index,
+                   (unsigned)summary->loop_index,
+                   summary->instruction_index,
+                   summary->hits,
+                   summary->first_timestamp,
+                   summary->last_timestamp,
+                   summary_reason);
+        }
+    }
+
+    free(summaries);
+    free(events);
 }
 
 // Note: showUsage and showVersion functions are now handled by the configuration system
@@ -309,11 +459,28 @@ int main(int argc, const char* argv[]) {
                jit_stats.native_dispatches,
                jit_stats.invocations);
 
+        const char* backend_message =
+            (jit_stats.backend_message && jit_stats.backend_message[0] != '\0')
+                ? jit_stats.backend_message
+                : "(no message)";
+        if (!jit_stats.jit_backend_enabled) {
+            printf("[JIT Benchmark] backend disabled before execution: status=%s"
+                   " message=%s\n",
+                   jit_backend_status_name(jit_stats.backend_status),
+                   backend_message);
+        } else if (jit_stats.backend_status != JIT_BACKEND_OK) {
+            printf("[JIT Benchmark] backend status: status=%s message=%s\n",
+                   jit_backend_status_name(jit_stats.backend_status),
+                   backend_message);
+        }
+
         if (jit_stats.translation_success == 0 ||
             jit_stats.native_dispatches == 0) {
             printf("[JIT Benchmark] warning: baseline tier did not translate this "
                    "program; execution remained in the interpreter.\n");
         }
+
+        print_guard_trace_summary();
 
         config_destroy(config);
         shutdownLogger();
