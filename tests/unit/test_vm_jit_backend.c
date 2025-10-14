@@ -556,10 +556,6 @@ static bool test_backend_typed_deopt_landing_pad_reuses_frame(void) {
 
     CallFrame* frame = allocate_frame(&vm.register_file);
     if (!frame) {
-        freeChunk(baseline_chunk);
-        freeChunk(specialized_chunk);
-        free(baseline_chunk);
-        free(specialized_chunk);
         freeVM();
         return false;
     }
@@ -618,10 +614,6 @@ static bool test_backend_typed_deopt_landing_pad_reuses_frame(void) {
     }
 
     deallocate_frame(&vm.register_file);
-    freeChunk(baseline_chunk);
-    freeChunk(specialized_chunk);
-    free(baseline_chunk);
-    free(specialized_chunk);
     freeVM();
 
     return same_window && params_cleared && locals_cleared && temps_cleared && downgraded && ip_swapped;

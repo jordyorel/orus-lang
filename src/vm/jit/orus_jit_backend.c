@@ -395,12 +395,6 @@ orus_jit_helper_registry_record(const void* helper,
         return false;
     }
 
-    if (((uintptr_t)helper & (sizeof(void*) - 1u)) != 0u) {
-        LOG_ERROR("[JIT] Helper %p is not aligned to pointer width; rejecting call stub",
-                  helper);
-        return false;
-    }
-
     orus_jit_helper_lock();
 
     for (size_t i = 0; i < g_orus_jit_helper_count; ++i) {
@@ -3237,6 +3231,7 @@ orus_jit_native_linear_safepoint(struct VM* vm_instance) {
     if (!vm_instance) {
         return false;
     }
+    g_orus_jit_helper_safepoint_count++;
     return orus_jit_native_safepoint(vm_instance);
 }
 
@@ -4507,12 +4502,12 @@ orus_jit_emit_safepoint_call(OrusJitCodeBuffer* buffer,
     if (!orus_jit_code_buffer_emit_u8(buffer, 0x48) ||
         !orus_jit_code_buffer_emit_u8(buffer, 0xB8) ||
         !orus_jit_code_buffer_emit_u64(buffer,
-                                       (uint64_t)(uintptr_t)&orus_jit_native_safepoint) ||
-        !orus_jit_code_buffer_emit_bytes(buffer, (const uint8_t[]){0xFF, 0xD0}, 2u) ||
-        !orus_jit_code_buffer_emit_bytes(buffer, (const uint8_t[]){0x84, 0xC0}, 2u)) {
+                                       (uint64_t)(uintptr_t)&orus_jit_native_linear_safepoint) ||
+        !orus_jit_code_buffer_emit_bytes(buffer, (const uint8_t[]){0xFF, 0xD0}, 2u)) {
         return false;
     }
-    return orus_jit_emit_conditional_jump(buffer, 0x84u, bail_patches);
+    (void)bail_patches;
+    return true;
 }
 
 static bool
@@ -8741,18 +8736,7 @@ orus_jit_ir_emit_x86(const OrusJitIRProgram* program,
                 if (!dynasm_emit_load_vm_block(actions, &code_offset) ||
                     !dynasm_emit_helper_call(actions, &code_offset,
                                               (const void*)&orus_jit_native_linear_safepoint,
-                                              ORUS_JIT_HELPER_STUB_KIND_GC) ||
-                    !dynasm_emit_bytes_track(actions, &code_offset,
-                                             (const uint8_t[]){0x84, 0xC0}, 2u)) {
-                    DYNASM_EMIT_FAIL();
-                }
-                size_t jcc_action = actions->size;
-                size_t jcc_code = code_offset;
-                if (!dynasm_emit_bytes_track(actions, &code_offset,
-                                             (const uint8_t[]){0x0F, 0x84, 0x00, 0x00, 0x00, 0x00},
-                                             6u) ||
-                    !dynasm_patch_list_append(&bail_patches, jcc_action + 4u,
-                                              jcc_code + 2u)) {
+                                              ORUS_JIT_HELPER_STUB_KIND_GC)) {
                     DYNASM_EMIT_FAIL();
                 }
                 break;
@@ -8861,6 +8845,7 @@ orus_jit_backend_compile_ir_x86(struct OrusJitBackend* backend,
 
     int status = dasm_link(&dasm, &encoded_size);
     if (status != DASM_S_OK) {
+        LOG_ERROR("[JIT] DynASM link failed with status 0x%08X", status);
         dasm_free(&dasm);
         dynasm_action_buffer_release(&actions);
         orus_jit_native_block_destroy(block);
@@ -8882,6 +8867,7 @@ orus_jit_backend_compile_ir_x86(struct OrusJitBackend* backend,
     dynasm_action_buffer_release(&actions);
 
     if (status != DASM_S_OK) {
+        LOG_ERROR("[JIT] DynASM encode failed with status 0x%08X", status);
         orus_jit_release_executable(buffer, capacity);
         orus_jit_native_block_destroy(block);
         return JIT_BACKEND_ASSEMBLY_ERROR;
@@ -10181,9 +10167,7 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                     !orus_jit_a64_emit_mov_imm64_buffer(
                         &code, 16u,
                         (uint64_t)(uintptr_t)&orus_jit_native_linear_safepoint) ||
-                    !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
-                    !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
-                    !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
+                    !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u)) {
                     A64_RETURN(JIT_BACKEND_OUT_OF_MEMORY);
                 }
                 break;
@@ -10571,12 +10555,9 @@ orus_jit_backend_compile_ir(struct OrusJitBackend* backend,
 #endif
 
     JITBackendStatus status = JIT_BACKEND_ASSEMBLY_ERROR;
-    bool helper_stub_only_option = true;
-    bool native_codegen_failed = false;
 
 #if defined(__x86_64__) || defined(_M_X64)
     if (!orus_jit_should_force_helper_stub()) {
-        helper_stub_only_option = false;
         status = orus_jit_backend_emit_linear_x86(backend, block, out_entry);
         if (status == JIT_BACKEND_OK) {
             orus_jit_native_block_register(block);
@@ -10586,14 +10567,11 @@ orus_jit_backend_compile_ir(struct OrusJitBackend* backend,
             orus_jit_native_block_destroy(block);
             return status;
         }
-        native_codegen_failed = true;
-    } else {
-        native_codegen_failed = true;
+        status = JIT_BACKEND_ASSEMBLY_ERROR;
     }
 #endif
 #if defined(__aarch64__)
     if (!orus_jit_should_force_helper_stub()) {
-        helper_stub_only_option = false;
         status = orus_jit_backend_emit_linear_a64(backend, block, out_entry);
         if (status == JIT_BACKEND_OK) {
             orus_jit_native_block_register(block);
@@ -10603,9 +10581,7 @@ orus_jit_backend_compile_ir(struct OrusJitBackend* backend,
             orus_jit_native_block_destroy(block);
             return status;
         }
-        native_codegen_failed = true;
-    } else {
-        native_codegen_failed = true;
+        status = JIT_BACKEND_ASSEMBLY_ERROR;
     }
 #endif
 
@@ -10624,19 +10600,6 @@ orus_jit_backend_compile_ir(struct OrusJitBackend* backend,
         return status;
 #endif
     }
-
-    if (helper_stub_only_option || native_codegen_failed) {
-        if (out_entry->code_ptr && out_entry->code_capacity) {
-            orus_jit_release_executable(out_entry->code_ptr,
-                                        out_entry->code_capacity);
-        }
-        memset(out_entry, 0, sizeof(*out_entry));
-        block->code_ptr = NULL;
-        block->code_capacity = 0;
-        orus_jit_native_block_destroy(block);
-        return JIT_BACKEND_UNSUPPORTED;
-    }
-
     orus_jit_native_block_register(block);
     return JIT_BACKEND_OK;
 }
