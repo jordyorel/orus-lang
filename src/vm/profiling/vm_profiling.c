@@ -2703,6 +2703,12 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
                 size_t target =
                     (fallthrough >= (size_t)back) ? (fallthrough - (size_t)back) : 0u;
                 if (target != start_offset) {
+                    if (target < start_offset) {
+                        return make_translation_result(
+                            ORUS_JIT_TRANSLATE_STATUS_UNSUPPORTED_LOOP_SHAPE,
+                            ORUS_JIT_IR_OP_LOOP_BACK, ORUS_JIT_VALUE_I32,
+                            (uint32_t)offset);
+                    }
                     if (!loop_start_adjusted) {
                         start_offset = target;
                         program->loop_start_offset = (uint32_t)start_offset;
@@ -2748,6 +2754,12 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
                 }
                 size_t target = fallthrough - (size_t)back;
                 if (target != start_offset) {
+                    if (target < start_offset) {
+                        return make_translation_result(
+                            ORUS_JIT_TRANSLATE_STATUS_UNSUPPORTED_LOOP_SHAPE,
+                            ORUS_JIT_IR_OP_LOOP_BACK, ORUS_JIT_VALUE_I32,
+                            (uint32_t)offset);
+                    }
                     if (!loop_start_adjusted) {
                         start_offset = target;
                         program->loop_start_offset = (uint32_t)start_offset;
