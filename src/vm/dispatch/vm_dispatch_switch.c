@@ -508,10 +508,21 @@ InterpretResult vm_run_dispatch(void) {
             }
 
             vm.instruction_count++;
+            vm_tiering_instruction_tick(vm.instruction_count);
 
             uint8_t instruction = READ_BYTE();
+            const uint8_t* inst_addr = vm.ip - 1;
             vm_update_source_location((size_t)((vm.ip - vm.chunk->code) - 1));
             PROFILE_INC(instruction);
+
+            if (g_profiling.isActive) {
+                g_profiling.totalInstructions++;
+                profileOpcodeWindow(inst_addr, instruction);
+            }
+
+            if (vm_tiering_try_execute_fused(inst_addr, instruction)) {
+                continue;
+            }
 
             switch (instruction) {
                 case OP_LOAD_CONST: {
