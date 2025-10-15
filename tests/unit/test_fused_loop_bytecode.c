@@ -110,6 +110,25 @@ static bool extract_guard_and_inc(BytecodeBuffer* bytecode,
     return true;
 }
 
+static bool compile_and_extract(const char* source,
+                                const char* file_name,
+                                uint8_t guard_out[5],
+                                uint8_t inc_out[5]) {
+    CompilerContext* ctx = NULL;
+    TypedASTNode* typed = NULL;
+    ASTNode* ast = NULL;
+
+    if (!build_context_from_source(source, file_name, &ctx, &typed, &ast)) {
+        return false;
+    }
+
+    BytecodeBuffer* bytecode = ctx->bytecode;
+    bool extracted = extract_guard_and_inc(bytecode, guard_out, inc_out);
+
+    destroy_context(ctx, typed, ast);
+    return extracted;
+}
+
 static bool test_fused_loop_bytecode_identity(void) {
     static const char* while_source =
         "mut limit = 10\n"
@@ -122,40 +141,17 @@ static bool test_fused_loop_bytecode_identity(void) {
         "for i in 0..limit:\n"
         "    i = i";
 
-    CompilerContext* while_ctx = NULL;
-    TypedASTNode* while_typed = NULL;
-    ASTNode* while_ast = NULL;
-
-    CompilerContext* for_ctx = NULL;
-    TypedASTNode* for_typed = NULL;
-    ASTNode* for_ast = NULL;
-
-    if (!build_context_from_source(while_source, "fused_while.orus",
-                                   &while_ctx, &while_typed, &while_ast)) {
-        return false;
-    }
-
-    if (!build_context_from_source(for_source, "fused_for.orus",
-                                   &for_ctx, &for_typed, &for_ast)) {
-        destroy_context(while_ctx, while_typed, while_ast);
-        return false;
-    }
-
-    BytecodeBuffer* while_bc = while_ctx->bytecode;
-    BytecodeBuffer* for_bc = for_ctx->bytecode;
-
     uint8_t while_guard[5];
     uint8_t while_inc[5];
     uint8_t for_guard[5];
     uint8_t for_inc[5];
 
-    bool extracted_while = extract_guard_and_inc(while_bc, while_guard, while_inc);
-    bool extracted_for = extract_guard_and_inc(for_bc, for_guard, for_inc);
-
-    destroy_context(for_ctx, for_typed, for_ast);
-    destroy_context(while_ctx, while_typed, while_ast);
-
+    bool extracted_while = compile_and_extract(while_source, "fused_while.orus",
+                                               while_guard, while_inc);
     ASSERT_TRUE(extracted_while, "failed to extract fused while sequence");
+
+    bool extracted_for = compile_and_extract(for_source, "fused_for.orus",
+                                             for_guard, for_inc);
     ASSERT_TRUE(extracted_for, "failed to extract fused for sequence");
 
     ASSERT_TRUE(while_guard[0] == OP_JUMP_IF_NOT_I32_TYPED,
