@@ -4213,6 +4213,25 @@ orus_jit_should_force_dynasm(void) {
     return value && value[0] != '\0';
 }
 #endif
+
+static bool
+orus_jit_linear_emitter_enabled(void) {
+    static int cached = -1;
+    if (cached == -1) {
+        const char* enable = getenv("ORUS_JIT_ENABLE_LINEAR_EMITTER");
+        const char* force = getenv("ORUS_JIT_FORCE_LINEAR_EMITTER");
+        /*
+         * Support both the new opt-in switch and a legacy-style "force" toggle
+         * so existing automation that mirrored other JIT env variables keeps
+         * working while the linear emitter stays disabled by default.
+         */
+        cached = ((enable && enable[0] != '\0') ||
+                  (force && force[0] != '\0'))
+                     ? 1
+                     : 0;
+    }
+    return cached == 1;
+}
 #endif
 
 struct OrusJitBackend*
@@ -10629,7 +10648,7 @@ orus_jit_backend_compile_ir(struct OrusJitBackend* backend,
     JITBackendStatus status = JIT_BACKEND_ASSEMBLY_ERROR;
 
 #if defined(__x86_64__) || defined(_M_X64)
-    if (!orus_jit_should_force_helper_stub()) {
+    if (orus_jit_linear_emitter_enabled() && !orus_jit_should_force_helper_stub()) {
         status = orus_jit_backend_emit_linear_x86(backend, block, out_entry);
         if (status == JIT_BACKEND_OK) {
             orus_jit_native_block_register(block);
@@ -10643,7 +10662,7 @@ orus_jit_backend_compile_ir(struct OrusJitBackend* backend,
     }
 #endif
 #if defined(__aarch64__)
-    if (!orus_jit_should_force_helper_stub()) {
+    if (orus_jit_linear_emitter_enabled() && !orus_jit_should_force_helper_stub()) {
         status = orus_jit_backend_emit_linear_a64(backend, block, out_entry);
         if (status == JIT_BACKEND_OK) {
             orus_jit_native_block_register(block);
