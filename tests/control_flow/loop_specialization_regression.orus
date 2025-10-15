@@ -1,0 +1,10 @@
+print("=== Loop Specialization Regression ===")
+
+mut index = 0
+mut accumulator = 0
+while index < 6:
+    accumulator = accumulator + index
+    index = index + 1
+
+if assert_eq("while loop accumulator", accumulator, 15):
+    print("ok", "while loop accumulator", accumulator)
