@@ -463,13 +463,8 @@ orus-tests: $(ORUS)
                                         sed -n '1,20p' "$$tmp_output" | sed 's/^/        /'; \
                                 fi; \
                         else \
-                                status=$$?; \
-                                printf "\033[32mCORRECT FAIL\033[0m (exit $$status)\n"; \
+                                printf "... (\033[32mCORRECT FAIL\033[0m)\n"; \
                                 passed=$$((passed + 1)); \
-                                if [ -s "$$tmp_output" ]; then \
-                                        echo "        --- output (first 20 lines) ---"; \
-                                        sed -n '1,20p' "$$tmp_output" | sed 's/^/        /'; \
-                                fi; \
                         fi; \
                 elif ./$(ORUS) "$$fail_test" >"$$tmp_output" 2>&1; then \
                         printf "\033[31mUNEXPECTED PASS\033[0m\n"; \
@@ -479,13 +474,8 @@ orus-tests: $(ORUS)
                                 sed -n '1,20p' "$$tmp_output" | sed 's/^/        /'; \
                         fi; \
                 else \
-                        status=$$?; \
-                        printf "\033[32mCORRECT FAIL\033[0m (exit $$status)\n"; \
+                        printf "... (\033[32mCORRECT FAIL\033[0m)\n"; \
                         passed=$$((passed + 1)); \
-                        if [ -s "$$tmp_output" ]; then \
-                                echo "        --- output (first 20 lines) ---"; \
-                                sed -n '1,20p' "$$tmp_output" | sed 's/^/        /'; \
-                        fi; \
                 fi; \
                 rm -f "$$tmp_output"; \
         done; \
