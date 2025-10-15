@@ -540,6 +540,7 @@ orus_jit_helper_stub_init(OrusJitHelperStub* stub, OrusJitHelperStubKind kind) {
     stub->size = stub_size;
     return true;
 }
+#endif
 
 #if ORUS_JIT_HAS_DYNASM_X86
 static const void*
