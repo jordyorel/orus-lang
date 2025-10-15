@@ -387,6 +387,7 @@ orus_jit_helper_unlock(void) {
 }
 #endif
 
+#if ORUS_JIT_HAS_DYNASM_X86
 static bool
 orus_jit_helper_registry_record(const void* helper,
                                 OrusJitHelperStubKind kind,
@@ -432,6 +433,7 @@ orus_jit_helper_registry_record(const void* helper,
     orus_jit_helper_unlock();
     return true;
 }
+#endif
 
 static inline VM*
 orus_jit_native_vm(struct VM* vm_instance) {
@@ -536,6 +538,7 @@ orus_jit_helper_stub_init(OrusJitHelperStub* stub, OrusJitHelperStubKind kind) {
     return true;
 }
 
+#if ORUS_JIT_HAS_DYNASM_X86
 static const void*
 orus_jit_helper_stub_address(OrusJitHelperStubKind kind) {
     if (kind >= ORUS_JIT_HELPER_STUB_KIND_COUNT) {
@@ -547,6 +550,7 @@ orus_jit_helper_stub_address(OrusJitHelperStubKind kind) {
     }
     return stub->code;
 }
+#endif
 
 static size_t
 orus_jit_detect_page_size(void) {
@@ -3235,9 +3239,11 @@ orus_jit_native_linear_safepoint(struct VM* vm_instance) {
     return orus_jit_native_safepoint(vm_instance);
 }
 
+#if defined(__x86_64__) || defined(_M_X64)
 static const uint8_t MOV_RDI_R12[] = {0x4C, 0x89, 0xE7};
 static const uint8_t MOV_RSI_RBX_BYTES[] = {0x48, 0x89, 0xDE};
 static const uint8_t CALL_RAX[] = {0xFF, 0xD0};
+#endif
 
 static int
 orus_jit_native_evaluate_branch_false(struct VM* vm_instance,
@@ -10345,8 +10351,6 @@ orus_jit_backend_compile_ir_arm64(struct OrusJitBackend* backend,
         ARM64_RETURN(JIT_BACKEND_OUT_OF_MEMORY);
     }
 
-    bool emitted_instruction = false;
-
     for (size_t i = 0; i < program->count; ++i) {
         const OrusJitIRInstruction* inst = &program->instructions[i];
         switch (inst->opcode) {
@@ -10359,7 +10363,6 @@ orus_jit_backend_compile_ir_arm64(struct OrusJitBackend* backend,
             case ORUS_JIT_IR_OP_ADD_F64:
             case ORUS_JIT_IR_OP_SUB_F64:
             case ORUS_JIT_IR_OP_MUL_F64: {
-                emitted_instruction = true;
                 if (!orus_jit_a64_code_buffer_emit_u32(&code, 0xAA1F03E1u) ||
                     !orus_jit_a64_emit_mov_imm64_buffer(&code, 2u,
                                                         (uint64_t)inst->opcode) ||
@@ -10402,7 +10405,6 @@ orus_jit_backend_compile_ir_arm64(struct OrusJitBackend* backend,
             case ORUS_JIT_IR_OP_GE_F64:
             case ORUS_JIT_IR_OP_EQ_F64:
             case ORUS_JIT_IR_OP_NE_F64: {
-                emitted_instruction = true;
                 if (!orus_jit_a64_code_buffer_emit_u32(&code, 0xAA1F03E1u) ||
                     !orus_jit_a64_emit_mov_imm64_buffer(&code, 2u,
                                                         (uint64_t)inst->opcode) ||
@@ -10426,7 +10428,6 @@ orus_jit_backend_compile_ir_arm64(struct OrusJitBackend* backend,
                 break;
             }
             case ORUS_JIT_IR_OP_RETURN:
-                emitted_instruction = true;
                 break;
             default:
                 ARM64_RETURN(JIT_BACKEND_ASSEMBLY_ERROR);
