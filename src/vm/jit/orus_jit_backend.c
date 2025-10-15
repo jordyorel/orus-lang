@@ -4954,6 +4954,9 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
             orus_jit_offset_list_release(&bail_patches);
             return JIT_BACKEND_OUT_OF_MEMORY;
         }
+        for (size_t i = 0; i < block->program.count; ++i) {
+            inst_offsets[i] = SIZE_MAX;
+        }
     }
 
 #define RETURN_WITH(status)                                                     \
@@ -6545,6 +6548,9 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                     RETURN_WITH(JIT_BACKEND_ASSEMBLY_ERROR);
                 }
                 size_t target_code = inst_offsets[target_index];
+                if (target_code == SIZE_MAX) {
+                    RETURN_WITH(JIT_BACKEND_ASSEMBLY_ERROR);
+                }
                 int64_t rel = (int64_t)target_code -
                               ((int64_t)disp_offset + 4);
                 int32_t disp = (int32_t)rel;
@@ -6651,6 +6657,9 @@ finalize_block:;
             continue;
         }
         size_t target_code = inst_offsets[target_index];
+        if (target_code == SIZE_MAX) {
+            RETURN_WITH(JIT_BACKEND_ASSEMBLY_ERROR);
+        }
         int64_t rel = (int64_t)target_code -
                       ((int64_t)patch->code_offset + 4);
         int32_t disp = (int32_t)rel;
@@ -9474,11 +9483,14 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
         if (!inst_offsets) {
             A64_RETURN(JIT_BACKEND_OUT_OF_MEMORY);
         }
+        for (size_t i = 0; i < block->program.count; ++i) {
+            inst_offsets[i] = SIZE_MAX;
+        }
     }
 
     if (!orus_jit_a64_code_buffer_emit_u32(&code, 0xA9BF7BF0u) ||
         !orus_jit_a64_code_buffer_emit_u32(&code, 0x910003FDu) ||
-        !orus_jit_a64_code_buffer_emit_u32(&code, 0xD10083FFu) ||
+        !orus_jit_a64_code_buffer_emit_u32(&code, 0xD100C3FFu) ||
         !orus_jit_a64_code_buffer_emit_u32(&code, 0xF90003E0u)) {
         A64_RETURN(JIT_BACKEND_OUT_OF_MEMORY);
     }
@@ -9736,6 +9748,9 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                     A64_RETURN(JIT_BACKEND_ASSEMBLY_ERROR);
                 }
                 size_t target_code_index = inst_offsets[target_index];
+                if (target_code_index == SIZE_MAX) {
+                    A64_RETURN(JIT_BACKEND_ASSEMBLY_ERROR);
+                }
                 int64_t diff = (int64_t)target_code_index -
                                (int64_t)(branch_index + 1u);
                 if (diff < -(1 << 25) || diff > ((1 << 25) - 1)) {
@@ -10307,10 +10322,13 @@ finalize_block:;
         }
         size_t target_index = orus_jit_program_find_index(
             &block->program, patch->target_bytecode);
-        if (target_index == SIZE_MAX) {
+        if (target_index == SIZE_MAX || target_index >= block->program.count) {
             A64_RETURN(JIT_BACKEND_ASSEMBLY_ERROR);
         }
         size_t target_code_index = inst_offsets[target_index];
+        if (target_code_index == SIZE_MAX) {
+            A64_RETURN(JIT_BACKEND_ASSEMBLY_ERROR);
+        }
         int64_t diff = (int64_t)target_code_index -
                        (int64_t)(patch->code_index + 1u);
         switch (patch->kind) {
@@ -10347,7 +10365,7 @@ finalize_block:;
     }
 
     size_t epilogue_index = code.count;
-    if (!orus_jit_a64_code_buffer_emit_u32(&code, 0x910083FFu) ||
+    if (!orus_jit_a64_code_buffer_emit_u32(&code, 0x9100C3FFu) ||
         !orus_jit_a64_code_buffer_emit_u32(&code, 0xA8C17BF0u) ||
         !orus_jit_a64_code_buffer_emit_u32(&code, 0xD65F03C0u)) {
         A64_RETURN(JIT_BACKEND_OUT_OF_MEMORY);
@@ -10381,6 +10399,12 @@ finalize_block:;
         A64_RETURN(JIT_BACKEND_OUT_OF_MEMORY);
     }
 
+    if (((uintptr_t)buffer & 0x3u) != 0u) {
+        LOG_ERROR("[JIT] Code buffer not 4-byte aligned: %p", buffer);
+        orus_jit_release_executable(buffer, capacity);
+        A64_RETURN(JIT_BACKEND_ASSEMBLY_ERROR);
+    }
+
     orus_jit_set_write_protection(false);
     memcpy(buffer, code.data, encoded_size);
     orus_jit_set_write_protection(true);
@@ -10393,6 +10417,9 @@ finalize_block:;
 #endif
 
     orus_jit_flush_icache(buffer, encoded_size);
+#if defined(__APPLE__) && defined(__aarch64__)
+    __asm__ __volatile__("isb" ::: "memory");
+#endif
 
     entry->entry_point = (JITEntryPoint)buffer;
     entry->code_ptr = buffer;
