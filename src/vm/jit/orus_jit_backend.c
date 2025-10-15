@@ -541,6 +541,7 @@ orus_jit_helper_stub_init(OrusJitHelperStub* stub, OrusJitHelperStubKind kind) {
     return true;
 }
 
+#if ORUS_JIT_HAS_DYNASM_X86
 static const void*
 orus_jit_helper_stub_address(OrusJitHelperStubKind kind) {
     if (kind >= ORUS_JIT_HELPER_STUB_KIND_COUNT) {
