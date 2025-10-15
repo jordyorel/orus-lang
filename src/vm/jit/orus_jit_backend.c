@@ -354,6 +354,7 @@ static OrusJitHelperRegistration* g_orus_jit_helper_registry = NULL;
 static size_t g_orus_jit_helper_count = 0u;
 static size_t g_orus_jit_helper_capacity = 0u;
 
+#if ORUS_JIT_HAS_DYNASM_X86
 #if defined(_WIN32)
 static CRITICAL_SECTION g_orus_jit_helper_lock;
 static bool g_orus_jit_helper_lock_initialized = false;
@@ -385,6 +386,7 @@ static void
 orus_jit_helper_unlock(void) {
     pthread_mutex_unlock(&g_orus_jit_helper_lock);
 }
+#endif
 #endif
 
 #if ORUS_JIT_HAS_DYNASM_X86
@@ -467,6 +469,7 @@ orus_jit_helper_stubs_release_all(void) {
     }
 }
 
+#if ORUS_JIT_HAS_DYNASM_X86
 static bool
 orus_jit_helper_stub_init(OrusJitHelperStub* stub, OrusJitHelperStubKind kind) {
     if (!stub) {
@@ -538,7 +541,6 @@ orus_jit_helper_stub_init(OrusJitHelperStub* stub, OrusJitHelperStubKind kind) {
     return true;
 }
 
-#if ORUS_JIT_HAS_DYNASM_X86
 static const void*
 orus_jit_helper_stub_address(OrusJitHelperStubKind kind) {
     if (kind >= ORUS_JIT_HELPER_STUB_KIND_COUNT) {
