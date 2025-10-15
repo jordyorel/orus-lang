@@ -5,6 +5,7 @@
 #include "vm/vm.h"
 #include "vm/vm_string_ops.h"
 #include "vm/vm_tagged_union.h"
+#include "runtime/memory.h"
 
 #define ASSERT_TRUE(cond, message)                                                         \
     do {                                                                                   \
@@ -105,6 +106,34 @@ static bool test_vm_make_tagged_union_allows_empty_payload(void) {
     return true;
 }
 
+static bool test_vm_make_tagged_union_survives_gc_pressure(void) {
+    initVM();
+
+    size_t previous_threshold = gcThreshold;
+    gcThreshold = 1; // Force a GC safepoint on the next allocation-heavy operation.
+
+    Value inner = I32_VAL(42);
+    Value out = BOOL_VAL(false);
+    bool ok = vm_result_ok(inner, &out);
+
+    gcThreshold = previous_threshold;
+
+    ASSERT_TRUE(ok, "Result.Ok should succeed even under GC pressure");
+    ASSERT_TRUE(IS_ENUM(out), "Result.Ok under GC pressure should produce enum value");
+
+    ObjEnumInstance* instance = AS_ENUM(out);
+    ASSERT_TRUE(instance != NULL, "Result.Ok under GC pressure should return a valid instance");
+    ASSERT_TRUE(instance->payload != NULL, "Result.Ok under GC pressure should keep payload alive");
+    ASSERT_TRUE(instance->payload->length == 1,
+                "Result.Ok under GC pressure should preserve payload length");
+    ASSERT_TRUE(IS_I32(instance->payload->elements[0]) &&
+                    AS_I32(instance->payload->elements[0]) == 42,
+                "Result.Ok under GC pressure should preserve payload contents");
+
+    freeVM();
+    return true;
+}
+
 static bool test_vm_make_tagged_union_requires_payload_pointer(void) {
     initVM();
 
@@ -152,6 +181,7 @@ int main(void) {
         test_vm_result_ok_builds_enum,
         test_vm_result_err_builds_enum,
         test_vm_make_tagged_union_allows_empty_payload,
+        test_vm_make_tagged_union_survives_gc_pressure,
         test_vm_make_tagged_union_requires_payload_pointer,
         test_vm_make_tagged_union_requires_type_name,
     };
@@ -160,6 +190,7 @@ int main(void) {
         "Result.Ok wraps payload",
         "Result.Err wraps payload",
         "Tagged union supports empty payload",
+        "Tagged union handles GC pressure",
         "Tagged union validates payload pointer",
         "Tagged union validates type name",
     };
