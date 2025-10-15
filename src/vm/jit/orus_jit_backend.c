@@ -41,9 +41,9 @@
 #endif
 
 #if defined(__APPLE__) && defined(__aarch64__)
-#if defined(__has_include)
-#if __has_include(<ptrauth.h>)
+#if defined(__has_include) && __has_include(<ptrauth.h>)
 #include <ptrauth.h>
+#if defined(__has_feature) && __has_feature(ptrauth_intrinsics)
 #define ORUS_JIT_USE_PTRAUTH 1
 #endif
 #endif
