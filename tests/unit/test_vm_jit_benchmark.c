@@ -929,6 +929,33 @@ TEST_CASE(test_jit_real_program_benchmark) {
                    last_failure->bytecode_offset);
         }
     }
+    uint64_t tier_skip_total =
+        orus_jit_tier_skip_total(&jit_stats.tier_skips);
+    if (tier_skip_total > 0) {
+        printf("[JIT Real Benchmark] tier-up skips (%" PRIu64 " total):\n",
+               tier_skip_total);
+        for (size_t reason = 0; reason < ORUS_JIT_TIER_SKIP_REASON_COUNT;
+             ++reason) {
+            uint64_t count = jit_stats.tier_skips.reason_counts[reason];
+            if (count == 0) {
+                continue;
+            }
+            printf("    - %s: %" PRIu64 "\n",
+                   orus_jit_tier_skip_reason_name(
+                       (OrusJitTierSkipReason)reason),
+                   count);
+        }
+        printf("[JIT Real Benchmark] last skip: reason=%s func=%u loop=%u "
+               "translation=%s backend=%d bytecode=%u\n",
+               orus_jit_tier_skip_reason_name(
+                   jit_stats.tier_skips.last_reason),
+               (unsigned)jit_stats.tier_skips.last_function,
+               (unsigned)jit_stats.tier_skips.last_loop,
+               orus_jit_translation_status_name(
+                   jit_stats.tier_skips.last_translation_status),
+               (int)jit_stats.tier_skips.last_backend_status,
+               jit_stats.tier_skips.last_bytecode_offset);
+    }
     uint64_t real_rollout_blocked =
         jit_stats.failure_log
             .reason_counts[ORUS_JIT_TRANSLATE_STATUS_ROLLOUT_DISABLED];

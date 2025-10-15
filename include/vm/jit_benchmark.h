@@ -46,6 +46,7 @@ typedef struct OrusJitRunStats {
     bool jit_backend_enabled;
     JITBackendStatus backend_status;
     const char* backend_message;
+    OrusJitTierSkipStats tier_skips;
 } OrusJitRunStats;
 
 // Execute the provided source buffer under either interpreter or JIT mode and

@@ -38,14 +38,16 @@ These numbers come from the `tests/unit/test_vm_jit_benchmark.c` harness, which 
 
 ## Optimized Loop Benchmark (`tests/benchmarks/optimized_loop_benchmark.orus`)
 
-- **Interpreter runtime (JIT disabled):** 16,152.16 ms
-- **JIT-enabled runtime:** 16,355.90 ms
+- **Interpreter runtime (JIT disabled):** 15,400.76 ms
+- **JIT-enabled runtime:** 15,494.52 ms
 - **Observed speedup:** 0.99×
-- **Translations:** 2 succeeded, 2 failed (`unsupported_value_kind` guard rails still fire on unknown kinds)
-- **Native dispatches:** 524, **Cache hits:** 522, **Cache misses:** 4, **Deopts:** 3, **Type guard bailouts:** 1
-- **Rollout stage:** `strings` (mask `0x7F`); cache reuse remains healthy, but the remaining failures erase any net speedup.
+- **Translations:** 3 succeeded, 0 failed (baseline IR is produced)
+- **Tier-up skips:** 2,226 total – 2,223 `loop-blocklisted`, 3 `backend-unsupported`
+- **Native compilations recorded:** 0
+- **Native dispatches:** 3, **Cache hits:** 0, **Cache misses:** 3, **Deopts:** 3, **Type guard bailouts:** 0
+- **Rollout stage:** `strings` (mask `0x7F`); backend status reports `JIT_BACKEND_UNSUPPORTED` for every compiled loop, so the runtime immediately falls back to the interpreter stub.
 
-The baseline tier still emits native translations for two of the fused loops, yet the outstanding value kind gaps hold the overall speedup under 1×. We need either additional rollout coverage or lower interpreter overhead to regain the 5% improvement observed prior to the latest changes.
+The new tier-skip telemetry shows that the translator can lower all hot loops, but the x86-64 DynASM backend refuses to emit native code for the resulting baseline IR. Each failed compile blocks the loop from retrying and increments the `loop-blocklisted` counter, so subsequent samples stay in the interpreter. Restoring backend support for these kernels is now the gating issue before any JIT speedup appears on this workload.
 
 ## FFI Ping/Pong Benchmark (`tests/benchmarks/ffi_ping_pong_benchmark.orus`)
 

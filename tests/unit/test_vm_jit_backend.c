@@ -1633,6 +1633,126 @@ static bool test_backend_emits_i32_to_i64_conversion(void) {
     return success;
 }
 
+static bool test_backend_exit_branch_patches_to_bailout(void) {
+    initVM();
+    orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
+
+    struct OrusJitBackend* backend = orus_jit_backend_create();
+    ASSERT_TRUE(backend != NULL, "expected backend allocation to succeed");
+
+    OrusJitIRInstruction instructions[4];
+    memset(instructions, 0, sizeof(instructions));
+
+    instructions[0].opcode = ORUS_JIT_IR_OP_SAFEPOINT;
+    instructions[0].bytecode_offset = 100u;
+
+    instructions[1].opcode = ORUS_JIT_IR_OP_JUMP_IF_NOT_SHORT;
+    instructions[1].bytecode_offset = 104u;
+    instructions[1].operands.jump_if_not_short.predicate_reg = FRAME_REG_START;
+    instructions[1].operands.jump_if_not_short.bytecode_length = 4u;
+    instructions[1].operands.jump_if_not_short.offset = 24u;
+
+    instructions[2].opcode = ORUS_JIT_IR_OP_LOOP_BACK;
+    instructions[2].bytecode_offset = 124u;
+    instructions[2].operands.loop_back.back_offset = 24u;
+
+    instructions[3].opcode = ORUS_JIT_IR_OP_RETURN;
+    instructions[3].bytecode_offset = 124u;
+
+    OrusJitIRProgram program;
+    init_ir_program(&program, instructions, 4);
+    program.loop_start_offset = instructions[0].bytecode_offset;
+    program.loop_end_offset = instructions[2].bytecode_offset;
+
+    JITEntry entry;
+    bool compiled = compile_program(backend, &program, &entry);
+    bool success = compiled;
+    if (compiled) {
+        const char* debug_name = entry.debug_name ? entry.debug_name : "";
+        if (!entry.entry_point || strcmp(debug_name, "orus_jit_helper_stub") == 0) {
+            success = false;
+        }
+        orus_jit_backend_release_entry(backend, &entry);
+    }
+
+    orus_jit_backend_destroy(backend);
+    freeVM();
+    return success;
+}
+
+static bool test_backend_emits_iter_next_loop_with_exit_branch(void) {
+    initVM();
+    orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
+
+    struct OrusJitBackend* backend = orus_jit_backend_create();
+    ASSERT_TRUE(backend != NULL, "expected backend allocation to succeed");
+
+    const uint16_t iterator_reg = FRAME_REG_START;
+    const uint16_t value_reg = FRAME_REG_START + 1u;
+    const uint16_t has_value_reg = FRAME_REG_START + 2u;
+    const uint16_t temp64_reg = FRAME_REG_START + 3u;
+    const uint16_t sum_reg = FRAME_REG_START + 4u;
+    const uint16_t acc_reg = FRAME_REG_START + 5u;
+
+    OrusJitIRInstruction instructions[7];
+    memset(instructions, 0, sizeof(instructions));
+
+    instructions[0].opcode = ORUS_JIT_IR_OP_ITER_NEXT;
+    instructions[0].value_kind = ORUS_JIT_VALUE_BOOL;
+    instructions[0].bytecode_offset = 481u;
+    instructions[0].operands.iter_next.value_reg = value_reg;
+    instructions[0].operands.iter_next.iterator_reg = iterator_reg;
+    instructions[0].operands.iter_next.has_value_reg = has_value_reg;
+
+    instructions[1].opcode = ORUS_JIT_IR_OP_JUMP_IF_NOT_SHORT;
+    instructions[1].bytecode_offset = 485u;
+    instructions[1].operands.jump_if_not_short.predicate_reg = has_value_reg;
+    instructions[1].operands.jump_if_not_short.bytecode_length = 6u;
+    instructions[1].operands.jump_if_not_short.offset = 13u;
+
+    instructions[2].opcode = ORUS_JIT_IR_OP_I32_TO_I64;
+    instructions[2].value_kind = ORUS_JIT_VALUE_I64;
+    instructions[2].bytecode_offset = 491u;
+    instructions[2].operands.unary.dst_reg = temp64_reg;
+    instructions[2].operands.unary.src_reg = value_reg;
+
+    instructions[3].opcode = ORUS_JIT_IR_OP_ADD_I64;
+    instructions[3].value_kind = ORUS_JIT_VALUE_I64;
+    instructions[3].bytecode_offset = 495u;
+    instructions[3].operands.arithmetic.dst_reg = sum_reg;
+    instructions[3].operands.arithmetic.lhs_reg = acc_reg;
+    instructions[3].operands.arithmetic.rhs_reg = temp64_reg;
+
+    instructions[4].opcode = ORUS_JIT_IR_OP_MOVE_I64;
+    instructions[4].value_kind = ORUS_JIT_VALUE_I64;
+    instructions[4].bytecode_offset = 499u;
+    instructions[4].operands.move.dst_reg = acc_reg;
+    instructions[4].operands.move.src_reg = sum_reg;
+
+    instructions[5].opcode = ORUS_JIT_IR_OP_SAFEPOINT;
+    instructions[5].bytecode_offset = 502u;
+
+    instructions[6].opcode = ORUS_JIT_IR_OP_LOOP_BACK;
+    instructions[6].bytecode_offset = 502u;
+    instructions[6].operands.loop_back.back_offset = 23u;
+
+    OrusJitIRProgram program;
+    init_ir_program(&program, instructions, 7);
+    program.loop_start_offset = 481u;
+    program.loop_end_offset = 504u;
+
+    JITEntry entry;
+    bool compiled = compile_program(backend, &program, &entry);
+    bool success = compiled;
+    if (compiled) {
+        orus_jit_backend_release_entry(backend, &entry);
+    }
+
+    orus_jit_backend_destroy(backend);
+    freeVM();
+    return success;
+}
+
 static bool test_backend_emits_f64_mul(void) {
     initVM();
     orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
@@ -1913,6 +2033,10 @@ int main(void) {
     if (filter) {
         if (strcmp(filter, "call_native_gc") == 0) {
             return test_backend_call_native_triggers_gc_safepoint() ? 0 : 1;
+        } else if (strcmp(filter, "exit-branch-bailout") == 0) {
+            return test_backend_exit_branch_patches_to_bailout() ? 0 : 1;
+        } else if (strcmp(filter, "iter-next-exit") == 0) {
+            return test_backend_emits_iter_next_loop_with_exit_branch() ? 0 : 1;
         }
     }
 
@@ -1991,6 +2115,16 @@ int main(void) {
     }
     if (!test_backend_emits_i32_to_i64_conversion()) {
         fprintf(stderr, "backend i32->i64 conversion test failed\n");
+        success = false;
+    }
+    if (!test_backend_exit_branch_patches_to_bailout()) {
+        fprintf(stderr,
+                "backend exit branch bailout test failed\n");
+        success = false;
+    }
+    if (!test_backend_emits_iter_next_loop_with_exit_branch()) {
+        fprintf(stderr,
+                "backend iter-next exit branch test failed\n");
         success = false;
     }
 

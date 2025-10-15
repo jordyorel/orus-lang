@@ -602,6 +602,10 @@ extern size_t gcThreshold;
 
 void queue_tier_up(VMState* vm, const HotPathSample* sample);
 
+const char* orus_jit_tier_skip_reason_name(OrusJitTierSkipReason reason);
+
+uint64_t orus_jit_tier_skip_total(const OrusJitTierSkipStats* stats);
+
 static inline uint64_t
 orus_jit_warmup_compute_cooldown(uint8_t backoff_shift) {
     uint64_t cooldown = ORUS_JIT_WARMUP_BASE_COOLDOWN;

@@ -6554,10 +6554,17 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
 finalize_block:;
     for (size_t i = 0; i < branch_patches.count; ++i) {
         OrusJitBranchPatch* patch = &branch_patches.data[i];
+        if (!inst_offsets) {
+            RETURN_WITH(JIT_BACKEND_ASSEMBLY_ERROR);
+        }
         size_t target_index = orus_jit_program_find_index(
             &block->program, patch->target_bytecode);
-        if (target_index == SIZE_MAX || !inst_offsets) {
-            RETURN_WITH(JIT_BACKEND_ASSEMBLY_ERROR);
+        if (target_index == SIZE_MAX) {
+            if (!orus_jit_offset_list_append(&bail_patches,
+                                             patch->code_offset)) {
+                RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
+            }
+            continue;
         }
         size_t target_code = inst_offsets[target_index];
         int64_t rel = (int64_t)target_code -
