@@ -47,31 +47,46 @@ bool vm_make_tagged_union(const TaggedUnionSpec* spec, Value* out_value) {
         return false;
     }
 
+    bool paused_here = false;
+    if (!vm.gcPaused) {
+        pauseGC();
+        paused_here = true;
+    }
+
+    bool success = false;
+
     ObjString* type_name = intern_string(spec->type_name, (int)strlen(spec->type_name));
     if (!type_name) {
-        return false;
+        goto cleanup;
     }
 
     ObjString* variant_name = NULL;
     if (spec->variant_name && spec->variant_name[0] != '\0') {
         variant_name = intern_string(spec->variant_name, (int)strlen(spec->variant_name));
         if (!variant_name) {
-            return false;
+            goto cleanup;
         }
     }
 
     ObjArray* payload = NULL;
     if (!copy_payload_to_array(spec, &payload)) {
-        return false;
+        goto cleanup;
     }
 
     ObjEnumInstance* instance = allocateEnumInstance(type_name, variant_name, spec->variant_index, payload);
     if (!instance) {
-        return false;
+        goto cleanup;
     }
 
     *out_value = ENUM_VAL(instance);
-    return true;
+    success = true;
+
+cleanup:
+    if (paused_here) {
+        resumeGC();
+    }
+
+    return success;
 }
 
 bool vm_result_ok(Value inner, Value* out_value) {
