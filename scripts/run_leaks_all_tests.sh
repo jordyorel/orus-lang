@@ -27,7 +27,7 @@ TEST_DIRS=(
     "tests/register_file"
     "tests/strings"
     "tests/structs"
-    "tests/type_safety_fails"
+    "tests/expected_failures/type_safety"
     "tests/types"
     "tests/variables"
 )

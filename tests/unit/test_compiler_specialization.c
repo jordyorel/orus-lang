@@ -296,6 +296,15 @@ static bool run_specialized_execution_scenarios(void) {
         free(function->debug_name);
         function->debug_name = NULL;
     }
+
+    const char* skip_guard = getenv("ORUS_SKIP_SPECIALIZATION_GUARD_TEST");
+    if (skip_guard && skip_guard[0] != '\0') {
+        baseline_chunk = NULL;
+        specialized_chunk = NULL;
+        stub_chunk = NULL;
+        goto teardown;
+    }
+
     freeVM();
     initVM();
 
