@@ -103,6 +103,7 @@ void config_reset_to_defaults(OrusConfig* config) {
     config->show_optimization_stats = false;
     config->benchmark_mode = false;
     config->jit_benchmark_mode = false;
+    config->enable_jit = false;
     config->jit_rollout_stage = -1;
     
     // Debug System Configuration
@@ -164,6 +165,14 @@ bool config_load_from_env(OrusConfig* config) {
     if ((env_val = getenv(ORUS_QUIET))) {
         config->quiet = (strcmp(env_val, "1") == 0 ||
                         strcasecmp(env_val, "true") == 0);
+    }
+
+    if ((env_val = getenv(ORUS_ENABLE_JIT))) {
+        if (strcasecmp(env_val, "true") == 0 || strcmp(env_val, "1") == 0) {
+            config->enable_jit = true;
+        } else if (strcasecmp(env_val, "false") == 0 || strcmp(env_val, "0") == 0) {
+            config->enable_jit = false;
+        }
     }
 
     if ((env_val = getenv(ORUS_JIT_ROLLOUT_STAGE))) {
@@ -299,6 +308,10 @@ bool config_parse_args(OrusConfig* config, int argc, const char* argv[]) {
             config->benchmark_mode = true;
         } else if (strcmp(arg, "--jit-benchmark") == 0) {
             config->jit_benchmark_mode = true;
+        } else if (strcmp(arg, "--enable-jit") == 0) {
+            config->enable_jit = true;
+        } else if (strcmp(arg, "--disable-jit") == 0) {
+            config->enable_jit = false;
         } else if (strncmp(arg, "--jit-rollout-stage=", 20) == 0) {
             const char* stage_text = arg + 20;
             OrusJitRolloutStage stage;
@@ -545,6 +558,8 @@ void config_print_help(const char* program_name) {
     printf("  --show-opt-stats        Show optimization statistics\n");
     printf("  --benchmark             Enable benchmarking mode\n");
     printf("  --jit-benchmark         Run the Phase 4 JIT benchmark harness\n");
+    printf("  --enable-jit            Enable the experimental baseline JIT\n");
+    printf("  --disable-jit           Disable the baseline JIT (default)\n");
     printf("  --jit-rollout-stage=LVL Set baseline JIT rollout stage (i32, wide-int, floats, strings)\n");
     printf("\nVM Configuration:\n");
     printf("  --max-recursion=N       Set maximum recursion depth (default: %d)\n", DEFAULT_MAX_RECURSION_DEPTH);
@@ -705,6 +720,7 @@ void config_print_current(const OrusConfig* config) {
     printf("  Verbose: %s\n", config->verbose ? "enabled" : "disabled");
     printf("  Quiet: %s\n", config->quiet ? "enabled" : "disabled");
     printf("  REPL Mode: %s\n", config->repl_mode ? "enabled" : "disabled");
+    printf("  Baseline JIT: %s\n", config->enable_jit ? "enabled" : "disabled");
     
     printf("\nVM Configuration:\n");
     printf("  Max Recursion Depth: %u\n", config->max_recursion_depth);
@@ -755,6 +771,7 @@ void config_save_to_file(const OrusConfig* config, const char* filename) {
     fprintf(file, "debug_mode = %s\n", config->debug_mode ? "true" : "false");
     fprintf(file, "verbose = %s\n", config->verbose ? "true" : "false");
     fprintf(file, "quiet = %s\n", config->quiet ? "true" : "false");
+    fprintf(file, "enable_jit = %s\n", config->enable_jit ? "true" : "false");
     
     fprintf(file, "\n[vm]\n");
     fprintf(file, "max_recursion_depth = %u\n", config->max_recursion_depth);
@@ -841,6 +858,8 @@ bool config_load_from_file(OrusConfig* config, const char* filename) {
                 config->verbose = (strcmp(value, "true") == 0);
             } else if (strcmp(key, "quiet") == 0) {
                 config->quiet = (strcmp(value, "true") == 0);
+            } else if (strcmp(key, "enable_jit") == 0) {
+                config->enable_jit = (strcmp(value, "true") == 0);
             }
         } else if (strcmp(section, "vm") == 0) {
             if (strcmp(key, "max_recursion_depth") == 0) {

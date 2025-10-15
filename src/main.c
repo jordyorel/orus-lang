@@ -558,7 +558,16 @@ int main(int argc, const char* argv[]) {
         orus_jit_rollout_set_stage(&vm,
                                    (OrusJitRolloutStage)config->jit_rollout_stage);
     }
-    
+
+    bool jit_requested = config->enable_jit;
+    vm.jit_enabled = jit_requested && vm.jit_backend != NULL;
+    if (!jit_requested) {
+        vm.jit_backend_message = "Baseline JIT disabled by configuration.";
+    } else if (jit_requested && vm.jit_backend == NULL &&
+               vm.jit_backend_message == NULL) {
+        vm.jit_backend_message = "Baseline JIT unavailable on this platform.";
+    }
+
     // Configure VM profiling based on command line options
     if (config->vm_profiling_enabled) {
         ProfilingFlags flags = PROFILE_NONE;
