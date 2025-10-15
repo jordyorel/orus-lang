@@ -2021,6 +2021,15 @@ int main(void) {
         return 0;
     }
 
+    initVM();
+    bool runtime_jit_available =
+        (vm.jit_backend_status == JIT_BACKEND_OK) && (vm.jit_backend != NULL);
+    freeVM();
+    if (!runtime_jit_available) {
+        printf("Baseline JIT backend disabled at runtime; skipping backend tests.\n");
+        return 0;
+    }
+
     const char* filter = getenv("ORUS_JIT_BACKEND_TEST_FILTER");
     if (filter) {
         if (strcmp(filter, "call_native_gc") == 0) {

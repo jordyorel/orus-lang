@@ -33,6 +33,8 @@
 #include <limits.h>
 #include <errno.h>
 #include <stdint.h>
+#include <signal.h>
+#include <setjmp.h>
 #if defined(_MSC_VER)
 #include <intrin.h>
 #endif
@@ -77,7 +79,7 @@ orus_jit_make_entry_point(void* ptr) {
 
 static size_t orus_jit_detect_page_size(void);
 static void* orus_jit_alloc_executable(size_t size, size_t page_size, size_t* out_capacity);
-static inline void orus_jit_set_write_protection(bool enable);
+static inline bool orus_jit_set_write_protection(bool enable);
 #if !defined(_WIN32)
 static bool orus_jit_make_executable(void* ptr, size_t size);
 #endif
@@ -181,11 +183,14 @@ typedef struct {
     size_t size;
     bool executable;
     bool uses_mmap;
+    bool requires_write_protect;
 } OrusJitExecutableRegion;
 
 static OrusJitExecutableRegion* g_orus_jit_regions = NULL;
 static size_t g_orus_jit_region_count = 0u;
 static size_t g_orus_jit_region_capacity = 0u;
+static int g_orus_jit_linear_emitter_override = -1;
+static sigjmp_buf g_orus_jit_write_probe_env;
 
 #if defined(_WIN32)
 static CRITICAL_SECTION g_orus_jit_region_lock;
@@ -220,8 +225,92 @@ orus_jit_region_unlock(void) {
 }
 #endif
 
+#if ORUS_JIT_USE_APPLE_JIT
 static bool
-orus_jit_register_region(void* base, size_t size, bool uses_mmap) {
+orus_jit_regions_need_write_toggle(void) {
+    bool needed = false;
+    orus_jit_region_lock();
+    for (size_t i = 0; i < g_orus_jit_region_count; ++i) {
+        if (g_orus_jit_regions[i].requires_write_protect) {
+            needed = true;
+            break;
+        }
+    }
+    orus_jit_region_unlock();
+    return needed;
+}
+#endif
+
+static void
+orus_jit_write_probe_handler(int signal_number) {
+    (void)signal_number;
+    siglongjmp(g_orus_jit_write_probe_env, 1);
+}
+
+static bool
+orus_jit_backend_probe_executable(struct OrusJitBackend* backend) {
+#if defined(__unix__) || defined(__APPLE__)
+    if (!backend) {
+        return false;
+    }
+
+    struct sigaction new_action;
+    memset(&new_action, 0, sizeof(new_action));
+    new_action.sa_handler = orus_jit_write_probe_handler;
+    sigemptyset(&new_action.sa_mask);
+    new_action.sa_flags = SA_NODEFER;
+
+    struct sigaction old_bus;
+    struct sigaction old_segv;
+    const int install_bus = sigaction(SIGBUS, &new_action, &old_bus);
+    const int install_segv = sigaction(SIGSEGV, &new_action, &old_segv);
+
+    bool supported = true;
+    void* buffer = NULL;
+    size_t capacity = 0u;
+
+    if (install_bus != 0 || install_segv != 0) {
+        supported = false;
+    } else if (sigsetjmp(g_orus_jit_write_probe_env, 1) == 0) {
+        buffer = orus_jit_alloc_executable(64u, backend->page_size, &capacity);
+        if (!buffer) {
+            supported = false;
+        } else if (!orus_jit_set_write_protection(false)) {
+            supported = false;
+        } else {
+            volatile uint8_t* bytes = (volatile uint8_t*)buffer;
+            bytes[0] = 0xCCu;
+            if (!orus_jit_set_write_protection(true)) {
+                supported = false;
+            }
+        }
+    } else {
+        supported = false;
+    }
+
+    if (buffer) {
+        orus_jit_release_executable(buffer, capacity);
+    }
+
+    if (install_bus == 0) {
+        sigaction(SIGBUS, &old_bus, NULL);
+    }
+    if (install_segv == 0) {
+        sigaction(SIGSEGV, &old_segv, NULL);
+    }
+
+    return supported;
+#else
+    (void)backend;
+    return true;
+#endif
+}
+
+static bool
+orus_jit_register_region(void* base,
+                         size_t size,
+                         bool uses_mmap,
+                         bool requires_write_protect) {
     if (!base || size == 0u) {
         return false;
     }
@@ -233,6 +322,7 @@ orus_jit_register_region(void* base, size_t size, bool uses_mmap) {
             g_orus_jit_regions[i].size = size;
             g_orus_jit_regions[i].executable = false;
             g_orus_jit_regions[i].uses_mmap = uses_mmap;
+            g_orus_jit_regions[i].requires_write_protect = requires_write_protect;
             orus_jit_region_unlock();
             return true;
         }
@@ -255,6 +345,8 @@ orus_jit_register_region(void* base, size_t size, bool uses_mmap) {
     g_orus_jit_regions[g_orus_jit_region_count].size = size;
     g_orus_jit_regions[g_orus_jit_region_count].executable = false;
     g_orus_jit_regions[g_orus_jit_region_count].uses_mmap = uses_mmap;
+    g_orus_jit_regions[g_orus_jit_region_count].requires_write_protect =
+        requires_write_protect;
     g_orus_jit_region_count++;
 
     orus_jit_region_unlock();
@@ -537,7 +629,10 @@ orus_jit_helper_stub_init(OrusJitHelperStub* stub, OrusJitHelperStubKind kind) {
         return false;
     }
 
-    orus_jit_set_write_protection(false);
+    if (!orus_jit_set_write_protection(false)) {
+        orus_jit_release_executable(buffer, capacity);
+        return false;
+    }
     uint8_t* code = (uint8_t*)buffer;
     size_t stub_size = 0u;
 
@@ -573,7 +668,10 @@ orus_jit_helper_stub_init(OrusJitHelperStub* stub, OrusJitHelperStubKind kind) {
     stub_size = 2u;
 #endif
 
-    orus_jit_set_write_protection(true);
+    if (!orus_jit_set_write_protection(true)) {
+        orus_jit_release_executable(buffer, capacity);
+        return false;
+    }
 
 #if !defined(_WIN32)
     if (!orus_jit_make_executable(buffer, capacity)) {
@@ -638,6 +736,7 @@ orus_jit_alloc_executable(size_t size, size_t page_size, size_t* out_capacity) {
     size_t alignment = page_size ? page_size : orus_jit_detect_page_size();
     size_t capacity = align_up(size, alignment);
     bool used_mmap = true;
+    bool requires_write_protect = false;
 
 #ifdef _WIN32
     void* buffer = VirtualAlloc(NULL, capacity, MEM_COMMIT | MEM_RESERVE,
@@ -669,28 +768,26 @@ orus_jit_alloc_executable(size_t size, size_t page_size, size_t* out_capacity) {
 #endif
         errno = 0;
     }
+#if ORUS_JIT_USE_APPLE_JIT
+    if (buffer) {
+        requires_write_protect = true;
+    } else {
+        int fallback_flags = flags & ~MAP_JIT;
+        buffer = mmap(NULL, capacity, prot, fallback_flags, -1, 0);
+        if (buffer == MAP_FAILED) {
+            buffer = NULL;
+            errno = 0;
+        }
+    }
+#endif
 #endif
 
     if (!buffer) {
-#if !defined(_WIN32)
-        used_mmap = false;
-        void* aligned_buffer = NULL;
-        size_t fallback_alignment = alignment ? alignment : sizeof(void*);
-        if (fallback_alignment < sizeof(void*)) {
-            fallback_alignment = sizeof(void*);
-        }
-        int rc = posix_memalign(&aligned_buffer, fallback_alignment, capacity);
-        if (rc != 0) {
-            errno = rc;
-            return NULL;
-        }
-        buffer = aligned_buffer;
-#else
         return NULL;
-#endif
     }
 
-    if (!orus_jit_register_region(buffer, capacity, used_mmap)) {
+    if (!orus_jit_register_region(buffer, capacity, used_mmap,
+                                  requires_write_protect)) {
 #ifdef _WIN32
         VirtualFree(buffer, 0, MEM_RELEASE);
 #else
@@ -709,15 +806,19 @@ orus_jit_alloc_executable(size_t size, size_t page_size, size_t* out_capacity) {
     return buffer;
 }
 
-static inline void
+static inline bool
 orus_jit_set_write_protection(bool enable) {
 #if ORUS_JIT_USE_APPLE_JIT
-    pthread_jit_write_protect_np(enable);
+    if (orus_jit_regions_need_write_toggle()) {
+        pthread_jit_write_protect_np(enable);
+    }
 #endif
     if (!orus_jit_apply_region_protection(enable)) {
         LOG_ERROR("[JIT] Failed to transition executable heap to %s mode",
                   enable ? "read/execute" : "read/write");
+        return false;
     }
+    return true;
 }
 
 #if !defined(_WIN32)
@@ -813,7 +914,10 @@ orus_jit_backend_emit_helper_stub(struct OrusJitBackend* backend,
         return JIT_BACKEND_OUT_OF_MEMORY;
     }
 
-    orus_jit_set_write_protection(false);
+    if (!orus_jit_set_write_protection(false)) {
+        orus_jit_release_executable(buffer, capacity);
+        return JIT_BACKEND_ASSEMBLY_ERROR;
+    }
     uint8_t* code = (uint8_t*)buffer;
 
 #if defined(_WIN32)
@@ -846,7 +950,10 @@ orus_jit_backend_emit_helper_stub(struct OrusJitBackend* backend,
     stub_size = 22u;
 #endif
 
-    orus_jit_set_write_protection(true);
+    if (!orus_jit_set_write_protection(true)) {
+        orus_jit_release_executable(buffer, capacity);
+        return JIT_BACKEND_ASSEMBLY_ERROR;
+    }
 
 #if !defined(_WIN32)
     if (!orus_jit_make_executable(buffer, capacity)) {
@@ -874,7 +981,10 @@ orus_jit_backend_emit_helper_stub(struct OrusJitBackend* backend,
         return JIT_BACKEND_OUT_OF_MEMORY;
     }
 
-    orus_jit_set_write_protection(false);
+    if (!orus_jit_set_write_protection(false)) {
+        orus_jit_release_executable(buffer, capacity);
+        return JIT_BACKEND_ASSEMBLY_ERROR;
+    }
 
     uint32_t* code = (uint32_t*)buffer;
     size_t capacity_words = capacity / sizeof(uint32_t);
@@ -929,7 +1039,10 @@ orus_jit_backend_emit_helper_stub(struct OrusJitBackend* backend,
         }
     }
 
-    orus_jit_set_write_protection(true);
+    if (!orus_jit_set_write_protection(true)) {
+        orus_jit_release_executable(buffer, capacity);
+        return JIT_BACKEND_ASSEMBLY_ERROR;
+    }
 
     if (!success) {
         orus_jit_release_executable(buffer, capacity);
@@ -4252,6 +4365,9 @@ orus_jit_should_force_dynasm(void) {
 static bool
 orus_jit_linear_emitter_enabled(void) {
     static int cached = -1;
+    if (g_orus_jit_linear_emitter_override != -1) {
+        return g_orus_jit_linear_emitter_override == 1;
+    }
     if (cached == -1) {
         const char* enable = getenv("ORUS_JIT_ENABLE_LINEAR_EMITTER");
         const char* force = getenv("ORUS_JIT_FORCE_LINEAR_EMITTER");
@@ -4289,6 +4405,14 @@ orus_jit_backend_create(void) {
         g_dynasm_helper_stub_page_size = backend->page_size;
     }
     g_dynasm_helper_stub_users++;
+
+    if (backend->available && !orus_jit_backend_probe_executable(backend)) {
+        backend->available = false;
+        backend->availability_status = JIT_BACKEND_UNSUPPORTED;
+        backend->availability_message =
+            "Writable executable memory not available in this environment.";
+    }
+
     return backend;
 }
 
@@ -6749,9 +6873,15 @@ finalize_block:;
         RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
     }
 
-    orus_jit_set_write_protection(false);
+    if (!orus_jit_set_write_protection(false)) {
+        orus_jit_release_executable(buffer, capacity);
+        RETURN_WITH(JIT_BACKEND_ASSEMBLY_ERROR);
+    }
     memcpy(buffer, code.data, code.size);
-    orus_jit_set_write_protection(true);
+    if (!orus_jit_set_write_protection(true)) {
+        orus_jit_release_executable(buffer, capacity);
+        RETURN_WITH(JIT_BACKEND_ASSEMBLY_ERROR);
+    }
 
 #if !defined(_WIN32)
     if (!orus_jit_make_executable(buffer, capacity)) {
@@ -10440,9 +10570,15 @@ finalize_block:;
         A64_RETURN(JIT_BACKEND_ASSEMBLY_ERROR);
     }
 
-    orus_jit_set_write_protection(false);
+    if (!orus_jit_set_write_protection(false)) {
+        orus_jit_release_executable(buffer, capacity);
+        A64_RETURN(JIT_BACKEND_ASSEMBLY_ERROR);
+    }
     memcpy(buffer, code.data, encoded_size);
-    orus_jit_set_write_protection(true);
+    if (!orus_jit_set_write_protection(true)) {
+        orus_jit_release_executable(buffer, capacity);
+        A64_RETURN(JIT_BACKEND_ASSEMBLY_ERROR);
+    }
 
 #if !defined(_WIN32)
     if (!orus_jit_make_executable(buffer, capacity)) {
@@ -10630,9 +10766,15 @@ orus_jit_backend_compile_ir_arm64(struct OrusJitBackend* backend,
         ARM64_RETURN(JIT_BACKEND_OUT_OF_MEMORY);
     }
 
-    orus_jit_set_write_protection(false);
+    if (!orus_jit_set_write_protection(false)) {
+        orus_jit_release_executable(buffer, capacity);
+        ARM64_RETURN(JIT_BACKEND_ASSEMBLY_ERROR);
+    }
     memcpy(buffer, code.data, encoded_size);
-    orus_jit_set_write_protection(true);
+    if (!orus_jit_set_write_protection(true)) {
+        orus_jit_release_executable(buffer, capacity);
+        ARM64_RETURN(JIT_BACKEND_ASSEMBLY_ERROR);
+    }
 
 #if !defined(_WIN32)
     if (!orus_jit_make_executable(buffer, capacity)) {
@@ -11026,4 +11168,14 @@ orus_jit_backend_vtable(void) {
         .flush = orus_jit_flush_stub,
     };
     return &vtable;
+}
+
+void
+orus_jit_backend_set_linear_emitter_enabled(bool enabled) {
+    g_orus_jit_linear_emitter_override = enabled ? 1 : 0;
+}
+
+void
+orus_jit_backend_clear_linear_emitter_override(void) {
+    g_orus_jit_linear_emitter_override = -1;
 }

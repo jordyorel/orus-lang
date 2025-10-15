@@ -16,6 +16,7 @@
 #include <string.h>
 
 #include "vm/vm.h"
+#include "vm/jit_backend.h"
 #include "vm/jit_translation.h"
 #include "vm/jit_debug.h"
 #include "vm/jit_benchmark.h"
@@ -560,6 +561,13 @@ int main(int argc, const char* argv[]) {
     }
 
     bool jit_requested = config->enable_jit;
+    const char* force_helper_stub = getenv("ORUS_JIT_FORCE_HELPER_STUB");
+    bool helper_stub_forced = force_helper_stub && force_helper_stub[0] != '\0';
+    if (jit_requested && vm.jit_backend != NULL && !helper_stub_forced) {
+        orus_jit_backend_set_linear_emitter_enabled(true);
+    } else {
+        orus_jit_backend_clear_linear_emitter_override();
+    }
     vm.jit_enabled = jit_requested && vm.jit_backend != NULL;
     if (!jit_requested) {
         vm.jit_backend_message = "Baseline JIT disabled by configuration.";

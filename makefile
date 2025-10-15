@@ -196,7 +196,19 @@ endif
 CFLAGS = $(BASE_CFLAGS) $(ARCH_FLAGS) $(OPT_FLAGS) $(DEBUG_FLAGS) $(FAST_FLAGS) $(PROFILE_FLAGS) $(DEFINES)
 CFLAGS += -DORUS_BUILD_COMMIT=\"$(GIT_COMMIT)\" -DORUS_BUILD_DATE=\"$(GIT_COMMIT_DATE)\"
 
-LDFLAGS = -lm
+# Native builds on Unix platforms rely on pthread primitives for the JIT runtime
+# (for example pthread_jit_write_protect_np on macOS arm64). clang on macOS does
+# not automatically link against libpthread, so we need to propagate -pthread to
+# both the compile and link flags when building natively. Keep the WebAssembly
+# build separate so emscripten doesn't receive the flag.
+PTHREAD_FLAGS =
+ifneq (,$(filter Linux Darwin,$(UNAME_S)))
+    PTHREAD_FLAGS = -pthread
+endif
+
+CFLAGS += $(PTHREAD_FLAGS)
+
+LDFLAGS = -lm $(PTHREAD_FLAGS)
 
 # Add profiling link flags if needed
 ifeq ($(PROFILE),profiling)
@@ -495,6 +507,7 @@ $(BYTECODE_TEST_BIN): tests/unit/test_jump_patch.c $(COMPILER_OBJS) $(VM_OBJS)
 	@mkdir -p $(dir $@)
 	@echo "Compiling bytecode jump patch tests..."
 	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+	$(call sign_with_jit,$@)
 
 bytecode-jump-tests: $(BYTECODE_TEST_BIN)
 	@echo "Running bytecode jump patch tests..."
@@ -504,6 +517,7 @@ $(SOURCE_MAP_TEST_BIN): tests/unit/test_source_mapping.c $(COMPILER_OBJS) $(VM_O
 	@mkdir -p $(dir $@)
 	@echo "Compiling source mapping tests..."
 	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+	$(call sign_with_jit,$@)
 
 source-map-tests: $(SOURCE_MAP_TEST_BIN)
 	@echo "Running source mapping tests..."
@@ -513,6 +527,7 @@ $(FUSED_LOOP_CODEGEN_TEST_BIN): tests/unit/test_codegen_fused_loops.c $(COMPILER
 	@mkdir -p $(dir $@)
 	@echo "Compiling fused loop codegen tests..."
 	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+	$(call sign_with_jit,$@)
 
 fused-loop-tests: $(FUSED_LOOP_CODEGEN_TEST_BIN)
 	@echo "Running fused loop codegen tests..."
@@ -522,6 +537,7 @@ $(SCOPE_TRACKING_TEST_BIN): tests/unit/test_scope_stack.c $(COMPILER_OBJS) $(VM_
 	@mkdir -p $(dir $@)
 	@echo "Compiling scope tracking tests..."
 	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+	$(call sign_with_jit,$@)
 
 scope-tracking-tests: $(SCOPE_TRACKING_TEST_BIN)
 	@echo "Running scope tracking tests..."
@@ -531,6 +547,7 @@ $(FUSED_WHILE_TEST_BIN): tests/unit/test_codegen_fused_while.c $(COMPILER_OBJS) 
 	@mkdir -p $(dir $@)
 	@echo "Compiling fused while codegen tests..."
 	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+	$(call sign_with_jit,$@)
 
 fused-while-tests: $(FUSED_WHILE_TEST_BIN)
 	@echo "Running fused while codegen tests..."
@@ -540,6 +557,7 @@ $(PEEPHOLE_TEST_BIN): tests/unit/test_constant_propagation.c $(COMPILER_OBJS) $(
 	@mkdir -p $(dir $@)
 	@echo "Compiling constant propagation tests..."
 	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+	$(call sign_with_jit,$@)
 
 peephole-tests: $(PEEPHOLE_TEST_BIN)
 	@echo "Running constant propagation tests..."
@@ -549,6 +567,7 @@ $(CONSTANT_FOLD_TEST_BIN): tests/unit/test_constant_folding.c $(COMPILER_OBJS) $
 	@mkdir -p $(dir $@)
 	@echo "Compiling constant folding tests..."
 	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+	$(call sign_with_jit,$@)
 
 constant-fold-tests: $(CONSTANT_FOLD_TEST_BIN)
 	@echo "Running constant folding tests..."
@@ -558,15 +577,18 @@ $(TAGGED_UNION_TEST_BIN): tests/unit/test_vm_tagged_union.c $(COMPILER_OBJS) $(V
 	@mkdir -p $(dir $@)
 	@echo "Compiling tagged union tests..."
 	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+	$(call sign_with_jit,$@)
 
 tagged-union-tests: $(TAGGED_UNION_TEST_BIN)
 	@echo "Running tagged union tests..."
 	@./$(TAGGED_UNION_TEST_BIN)
+	
 
 $(TYPED_REGISTER_TEST_BIN): tests/unit/test_vm_typed_registers.c $(COMPILER_OBJS) $(VM_OBJS)
 	@mkdir -p $(dir $@)
 	@echo "Compiling typed register coherence tests..."
 	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+	$(call sign_with_jit,$@)
 
 typed-register-tests: $(TYPED_REGISTER_TEST_BIN)
 	@echo "Running typed register coherence tests..."
@@ -576,6 +598,7 @@ $(VM_PRINT_TEST_BIN): tests/unit/test_vm_print_format.c $(COMPILER_OBJS) $(VM_OB
 	@mkdir -p $(dir $@)
 	@echo "Compiling VM print formatting tests..."
 	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+	$(call sign_with_jit,$@)
 
 vm-print-tests: $(VM_PRINT_TEST_BIN)
 	@echo "Running VM print formatting tests..."
@@ -585,6 +608,7 @@ $(REGISTER_WINDOW_TEST_BIN): tests/unit/test_vm_register_windows.c $(COMPILER_OB
 	@mkdir -p $(dir $@)
 	@echo "Compiling register window reuse tests..."
 	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+	$(call sign_with_jit,$@)
 
 register-window-tests: $(REGISTER_WINDOW_TEST_BIN)
 	@echo "Running register window reuse tests..."
@@ -594,6 +618,7 @@ $(COMPILER_SPECIALIZATION_TEST_BIN): tests/unit/test_compiler_specialization.c $
 	@mkdir -p $(dir $@)
 	@echo "Compiling compiler specialization regression tests..."
 	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+	$(call sign_with_jit,$@)
 
 compiler-specialization-tests: $(COMPILER_SPECIALIZATION_TEST_BIN)
 	@echo "Running compiler specialization regression tests..."
@@ -603,6 +628,7 @@ $(SPILL_GC_TEST_BIN): tests/unit/test_vm_spill_gc_root.c $(COMPILER_OBJS) $(VM_O
 	@mkdir -p $(dir $@)
 	@echo "Compiling spill GC regression tests..."
 	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+	$(call sign_with_jit,$@)
 
 spill-gc-tests: $(SPILL_GC_TEST_BIN)
 	@echo "Running spill GC regression tests..."
@@ -612,6 +638,7 @@ $(INC_CMP_JMP_TEST_BIN): tests/unit/test_vm_inc_cmp_jmp.c $(COMPILER_OBJS) $(VM_
 	@mkdir -p $(dir $@)
 	@echo "Compiling OP_INC_CMP_JMP regression tests..."
 	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+	$(call sign_with_jit,$@)
 
 inc-cmp-jmp-tests: $(INC_CMP_JMP_TEST_BIN)
 	@echo "Running OP_INC_CMP_JMP regression tests..."
@@ -621,6 +648,7 @@ $(FUSED_LOOP_BYTECODE_TEST_BIN): tests/unit/test_fused_loop_bytecode.c $(COMPILE
 	@mkdir -p $(dir $@)
 	@echo "Compiling fused loop bytecode tests..."
 	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+	$(call sign_with_jit,$@)
 
 fused-loop-bytecode-tests: $(FUSED_LOOP_BYTECODE_TEST_BIN)
 	@echo "Running fused loop bytecode tests..."
@@ -630,6 +658,7 @@ $(ADD_I32_IMM_TEST_BIN): tests/unit/test_vm_add_i32_imm.c $(COMPILER_OBJS) $(VM_
 	@mkdir -p $(dir $@)
 	@echo "Compiling OP_ADD_I32_IMM regression tests..."
 	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+	$(call sign_with_jit,$@)
 
 add-i32-imm-tests: $(ADD_I32_IMM_TEST_BIN)
 	@echo "Running OP_ADD_I32_IMM regression tests..."
@@ -639,6 +668,7 @@ $(SUB_I32_IMM_TEST_BIN): tests/unit/test_vm_sub_i32_imm.c $(COMPILER_OBJS) $(VM_
 	@mkdir -p $(dir $@)
 	@echo "Compiling OP_SUB_I32_IMM regression tests..."
 	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+	$(call sign_with_jit,$@)
 
 sub-i32-imm-tests: $(SUB_I32_IMM_TEST_BIN)
 	@echo "Running OP_SUB_I32_IMM regression tests..."
@@ -648,6 +678,7 @@ $(MUL_I32_IMM_TEST_BIN): tests/unit/test_vm_mul_i32_imm.c $(COMPILER_OBJS) $(VM_
 	@mkdir -p $(dir $@)
 	@echo "Compiling OP_MUL_I32_IMM regression tests..."
 	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+	$(call sign_with_jit,$@)
 
 mul-i32-imm-tests: $(MUL_I32_IMM_TEST_BIN)
 	@echo "Running OP_MUL_I32_IMM regression tests..."
@@ -657,6 +688,7 @@ $(INC_R_TEST_BIN): tests/unit/test_vm_inc_r.c $(COMPILER_OBJS) $(VM_OBJS)
 	@mkdir -p $(dir $@)
 	@echo "Compiling OP_INC_* typed cache regression tests..."
 	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+	$(call sign_with_jit,$@)
 
 inc-r-tests: $(INC_R_TEST_BIN)
 	@echo "Running OP_INC_* typed cache regression tests..."
@@ -666,6 +698,7 @@ $(DEC_I32_R_TEST_BIN): tests/unit/test_vm_dec_i32_r.c $(COMPILER_OBJS) $(VM_OBJS
 	@mkdir -p $(dir $@)
 	@echo "Compiling OP_DEC_I32_R typed cache regression tests..."
 	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+	$(call sign_with_jit,$@)
 
 dec-i32-r-tests: $(DEC_I32_R_TEST_BIN)
 	@echo "Running OP_DEC_I32_R typed cache regression tests..."
@@ -748,6 +781,7 @@ $(REGISTER_ALLOCATOR_TEST_BIN): tests/unit/test_register_allocator.c $(COMPILER_
 	@mkdir -p $(dir $@)
 	@echo "Compiling register allocator tests..."
 	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+	$(call sign_with_jit,$@)
 
 register-allocator-tests: $(REGISTER_ALLOCATOR_TEST_BIN)
 	@echo "Running register allocator tests..."
@@ -757,6 +791,7 @@ $(BUILTIN_INPUT_TEST_BIN): tests/unit/test_builtin_input.c $(COMPILER_OBJS) $(VM
 	@mkdir -p $(dir $@)
 	@echo "Compiling builtin input tests..."
 	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+	$(call sign_with_jit,$@)
 
 builtin-input-tests: $(BUILTIN_INPUT_TEST_BIN)
 	@echo "Running builtin input tests..."

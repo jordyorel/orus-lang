@@ -83,6 +83,9 @@ void orus_jit_backend_release_entry(struct OrusJitBackend* backend,
 
 const JITBackendVTable* orus_jit_backend_vtable(void);
 
+void orus_jit_backend_set_linear_emitter_enabled(bool enabled);
+void orus_jit_backend_clear_linear_emitter_override(void);
+
 size_t orus_jit_helper_safepoint_count(void);
 void orus_jit_helper_safepoint_reset(void);
 
