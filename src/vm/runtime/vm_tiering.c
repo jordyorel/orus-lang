@@ -533,10 +533,10 @@ vm_clear_typed_window_range(TypedRegisterWindow* window, uint16_t start, uint16_
             continue;
         }
 
-        uint8_t reg_type = window->reg_types[reg];
-        if (reg_type != REG_TYPE_NONE) {
-            vm_clear_typed_register_slot(reg, reg_type);
-        }
+        vm_reconcile_typed_register(reg);
+        typed_window_clear_dirty(window, reg);
+        window->reg_types[reg] = REG_TYPE_NONE;
+        typed_window_clear_live(window, reg);
     }
 }
 
@@ -564,28 +564,14 @@ vm_apply_typed_deopt_landing_pad(Function* function, CallFrame* frame) {
         frame_end = computed_end > VM_TYPED_REGISTER_LIMIT ? VM_TYPED_REGISTER_LIMIT
                                                            : (uint16_t)computed_end;
     }
-    for (uint16_t reg = frame_start; reg < frame_end; ++reg) {
-        if (typed_window_slot_live(window, reg)) {
-            vm_reconcile_typed_register(reg);
-            typed_window_clear_dirty(window, reg);
-            window->reg_types[reg] = REG_TYPE_NONE;
-            typed_window_clear_live(window, reg);
-        }
-    }
+    vm_clear_typed_window_range(window, frame_start, frame_end);
 
     if (function && function->arity > 0) {
         uint16_t param_start = frame->parameterBaseRegister;
         uint32_t computed_param_end = (uint32_t)param_start + (uint32_t)function->arity;
         uint16_t param_end = computed_param_end > VM_TYPED_REGISTER_LIMIT ? VM_TYPED_REGISTER_LIMIT
                                                                           : (uint16_t)computed_param_end;
-        for (uint16_t reg = param_start; reg < param_end; ++reg) {
-            if (typed_window_slot_live(window, reg)) {
-                vm_reconcile_typed_register(reg);
-                typed_window_clear_dirty(window, reg);
-                window->reg_types[reg] = REG_TYPE_NONE;
-                typed_window_clear_live(window, reg);
-            }
-        }
+        vm_clear_typed_window_range(window, param_start, param_end);
     }
 
     if (frame->temp_count > 0) {
@@ -593,14 +579,7 @@ vm_apply_typed_deopt_landing_pad(Function* function, CallFrame* frame) {
         uint32_t computed_temp_end = (uint32_t)temp_start + (uint32_t)frame->temp_count;
         uint16_t temp_end = computed_temp_end > VM_TYPED_REGISTER_LIMIT ? VM_TYPED_REGISTER_LIMIT
                                                                         : (uint16_t)computed_temp_end;
-        for (uint16_t reg = temp_start; reg < temp_end; ++reg) {
-            if (typed_window_slot_live(window, reg)) {
-                vm_reconcile_typed_register(reg);
-                typed_window_clear_dirty(window, reg);
-                window->reg_types[reg] = REG_TYPE_NONE;
-                typed_window_clear_live(window, reg);
-            }
-        }
+        vm_clear_typed_window_range(window, temp_start, temp_end);
     }
 }
 
