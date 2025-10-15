@@ -145,6 +145,7 @@ typedef struct {
     void* base;
     size_t size;
     bool executable;
+    bool uses_mmap;
 } OrusJitExecutableRegion;
 
 static OrusJitExecutableRegion* g_orus_jit_regions = NULL;
@@ -185,7 +186,7 @@ orus_jit_region_unlock(void) {
 #endif
 
 static bool
-orus_jit_register_region(void* base, size_t size) {
+orus_jit_register_region(void* base, size_t size, bool uses_mmap) {
     if (!base || size == 0u) {
         return false;
     }
@@ -196,6 +197,7 @@ orus_jit_register_region(void* base, size_t size) {
         if (g_orus_jit_regions[i].base == base) {
             g_orus_jit_regions[i].size = size;
             g_orus_jit_regions[i].executable = false;
+            g_orus_jit_regions[i].uses_mmap = uses_mmap;
             orus_jit_region_unlock();
             return true;
         }
@@ -217,29 +219,41 @@ orus_jit_register_region(void* base, size_t size) {
     g_orus_jit_regions[g_orus_jit_region_count].base = base;
     g_orus_jit_regions[g_orus_jit_region_count].size = size;
     g_orus_jit_regions[g_orus_jit_region_count].executable = false;
+    g_orus_jit_regions[g_orus_jit_region_count].uses_mmap = uses_mmap;
     g_orus_jit_region_count++;
 
     orus_jit_region_unlock();
     return true;
 }
 
-static void
-orus_jit_unregister_region(void* base, size_t size) {
+static bool
+orus_jit_unregister_region(void* base, size_t size, bool* out_uses_mmap) {
     (void)size;
     if (!base) {
-        return;
+        return false;
     }
+
+    bool uses_mmap = true;
+    bool removed = false;
 
     orus_jit_region_lock();
     for (size_t i = 0; i < g_orus_jit_region_count; ++i) {
         if (g_orus_jit_regions[i].base == base) {
+            uses_mmap = g_orus_jit_regions[i].uses_mmap;
             g_orus_jit_regions[i] =
                 g_orus_jit_regions[g_orus_jit_region_count - 1u];
             g_orus_jit_region_count--;
+            removed = true;
             break;
         }
     }
     orus_jit_region_unlock();
+
+    if (removed && out_uses_mmap) {
+        *out_uses_mmap = uses_mmap;
+    }
+
+    return removed;
 }
 
 static bool
@@ -584,7 +598,9 @@ orus_jit_alloc_executable(size_t size, size_t page_size, size_t* out_capacity) {
         return NULL;
     }
 
-    size_t capacity = align_up(size, page_size ? page_size : orus_jit_detect_page_size());
+    size_t alignment = page_size ? page_size : orus_jit_detect_page_size();
+    size_t capacity = align_up(size, alignment);
+    bool used_mmap = true;
 
 #ifdef _WIN32
     void* buffer = VirtualAlloc(NULL, capacity, MEM_COMMIT | MEM_RESERVE,
@@ -606,6 +622,7 @@ orus_jit_alloc_executable(size_t size, size_t page_size, size_t* out_capacity) {
 
     void* buffer = mmap(NULL, capacity, prot, flags, -1, 0);
     if (buffer == MAP_FAILED) {
+        buffer = NULL;
 #if ORUS_JIT_USE_APPLE_JIT
         const int error_code = errno;
         if (error_code == EPERM || error_code == ENOTSUP) {
@@ -613,15 +630,38 @@ orus_jit_alloc_executable(size_t size, size_t page_size, size_t* out_capacity) {
                      strerror(error_code));
         }
 #endif
-        return NULL;
+        errno = 0;
     }
 #endif
 
-    if (!orus_jit_register_region(buffer, capacity)) {
+    if (!buffer) {
+#if !defined(_WIN32)
+        used_mmap = false;
+        void* aligned_buffer = NULL;
+        size_t fallback_alignment = alignment ? alignment : sizeof(void*);
+        if (fallback_alignment < sizeof(void*)) {
+            fallback_alignment = sizeof(void*);
+        }
+        int rc = posix_memalign(&aligned_buffer, fallback_alignment, capacity);
+        if (rc != 0) {
+            errno = rc;
+            return NULL;
+        }
+        buffer = aligned_buffer;
+#else
+        return NULL;
+#endif
+    }
+
+    if (!orus_jit_register_region(buffer, capacity, used_mmap)) {
 #ifdef _WIN32
         VirtualFree(buffer, 0, MEM_RELEASE);
 #else
-        munmap(buffer, capacity);
+        if (used_mmap) {
+            munmap(buffer, capacity);
+        } else {
+            free(buffer);
+        }
 #endif
         return NULL;
     }
@@ -657,11 +697,16 @@ orus_jit_release_executable(void* ptr, size_t capacity) {
     if (!ptr || !capacity) {
         return;
     }
-    orus_jit_unregister_region(ptr, capacity);
+    bool used_mmap = true;
+    orus_jit_unregister_region(ptr, capacity, &used_mmap);
 #ifdef _WIN32
     VirtualFree(ptr, 0, MEM_RELEASE);
 #else
-    munmap(ptr, capacity);
+    if (used_mmap) {
+        munmap(ptr, capacity);
+    } else {
+        free(ptr);
+    }
 #endif
 }
 
@@ -6531,14 +6576,29 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                 break;
             }
             case ORUS_JIT_IR_OP_LOOP_BACK: {
+                if (!inst_offsets) {
+                    RETURN_WITH(JIT_BACKEND_ASSEMBLY_ERROR);
+                }
+                size_t header_index = orus_jit_program_find_index(
+                    &block->program, block->program.loop_start_offset);
+                if (header_index == SIZE_MAX) {
+                    RETURN_WITH(JIT_BACKEND_ASSEMBLY_ERROR);
+                }
+                size_t header_offset = inst_offsets[header_index];
+                if (header_offset == SIZE_MAX) {
+                    RETURN_WITH(JIT_BACKEND_ASSEMBLY_ERROR);
+                }
                 if (!orus_jit_code_buffer_emit_u8(&code, 0xE9)) {
                     RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
                 }
                 size_t disp_offset = code.size;
-                int64_t rel = (int64_t)loop_entry_offset -
+                int64_t rel = (int64_t)header_offset -
                               ((int64_t)disp_offset + 4);
-                int32_t disp = (int32_t)rel;
-                if (!orus_jit_code_buffer_emit_u32(&code, (uint32_t)disp)) {
+                if (rel < INT32_MIN || rel > INT32_MAX) {
+                    RETURN_WITH(JIT_BACKEND_ASSEMBLY_ERROR);
+                }
+                uint32_t disp = (uint32_t)(int32_t)rel;
+                if (!orus_jit_code_buffer_emit_u32(&code, disp)) {
                     RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
                 }
                 goto finalize_block;
