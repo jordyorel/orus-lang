@@ -56,8 +56,8 @@
 static inline uint64_t
 orus_jit_function_ptr_bits(const void* ptr) {
 #if ORUS_JIT_USE_PTRAUTH
-    void* signed_ptr = __builtin_ptrauth_sign_unauthenticated(
-        (void*)ptr, ptrauth_key_function_pointer, 0);
+    (void*)ptr, ptrauth_key_function_pointer,
+        ptrauth_type_discriminator(JITEntryPoint));
     return (uint64_t)(uintptr_t)signed_ptr;
 #else
     return (uint64_t)(uintptr_t)ptr;
@@ -68,7 +68,8 @@ static inline JITEntryPoint
 orus_jit_make_entry_point(void* ptr) {
 #if ORUS_JIT_USE_PTRAUTH
     return (JITEntryPoint)__builtin_ptrauth_sign_unauthenticated(
-        ptr, ptrauth_key_function_pointer, 0);
+        ptr, ptrauth_key_function_pointer,
+        ptrauth_type_discriminator(JITEntryPoint));
 #else
     return (JITEntryPoint)ptr;
 #endif
