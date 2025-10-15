@@ -1642,6 +1642,107 @@ make_translation_result(OrusJitTranslationStatus status,
     return result;
 }
 
+static void
+orus_jit_ir_canonicalize_loop(OrusJitIRProgram* program) {
+    if (!program || !program->instructions || program->count == 0) {
+        return;
+    }
+
+    uint32_t loop_start = program->loop_start_offset;
+    uint32_t loop_end = program->loop_end_offset;
+    uint32_t body_start = loop_start;
+    bool found_target = false;
+
+    for (size_t i = 0; i < program->count; ++i) {
+        const OrusJitIRInstruction* inst = &program->instructions[i];
+        switch (inst->opcode) {
+            case ORUS_JIT_IR_OP_LOOP_BACK: {
+                uint32_t bytecode = inst->bytecode_offset;
+                uint16_t back = inst->operands.loop_back.back_offset;
+                if (bytecode >= back) {
+                    uint32_t target = bytecode - back;
+                    if (target <= loop_end && (!found_target || target < body_start)) {
+                        body_start = target;
+                        found_target = true;
+                    }
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_JUMP_BACK_SHORT: {
+                uint32_t fallthrough = inst->bytecode_offset + 2u;
+                uint16_t back = inst->operands.jump_back_short.back_offset;
+                if (fallthrough >= back) {
+                    uint32_t target = fallthrough - back;
+                    if (target <= loop_end && (!found_target || target < body_start)) {
+                        body_start = target;
+                        found_target = true;
+                    }
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_INC_CMP_JUMP:
+            case ORUS_JIT_IR_OP_DEC_CMP_JUMP: {
+                uint32_t fallthrough = inst->bytecode_offset + 5u;
+                int64_t projected = (int64_t)(int32_t)fallthrough +
+                                    (int64_t)inst->operands.fused_loop.jump_offset;
+                if (projected >= 0 && projected <= (int64_t)UINT32_MAX) {
+                    uint32_t target = (uint32_t)projected;
+                    if (target <= loop_end && (!found_target || target < body_start)) {
+                        body_start = target;
+                        found_target = true;
+                    }
+                }
+                break;
+            }
+            default:
+                break;
+        }
+    }
+
+    if (!found_target) {
+        body_start = loop_start;
+    }
+
+    size_t write_index = 0u;
+    for (size_t read_index = 0u; read_index < program->count; ++read_index) {
+        OrusJitIRInstruction inst = program->instructions[read_index];
+        if (inst.bytecode_offset < body_start) {
+            continue;
+        }
+        if (write_index != read_index) {
+            program->instructions[write_index] = inst;
+        }
+        ++write_index;
+    }
+    program->count = write_index;
+
+    size_t guard_index = SIZE_MAX;
+    uint32_t guard_offset = loop_start;
+    for (size_t i = 0; i < program->count; ++i) {
+        OrusJitIRInstruction* inst = &program->instructions[i];
+        if (inst->opcode == ORUS_JIT_IR_OP_INC_CMP_JUMP ||
+            inst->opcode == ORUS_JIT_IR_OP_DEC_CMP_JUMP) {
+            guard_index = i;
+            guard_offset = inst->bytecode_offset;
+            break;
+        }
+    }
+
+    if (guard_index != SIZE_MAX && guard_index > 0u) {
+        OrusJitIRInstruction guard_inst = program->instructions[guard_index];
+        memmove(program->instructions + 1,
+                program->instructions,
+                guard_index * sizeof(OrusJitIRInstruction));
+        program->instructions[0] = guard_inst;
+    }
+
+    if (guard_index != SIZE_MAX) {
+        program->loop_start_offset = guard_offset;
+    } else {
+        program->loop_start_offset = body_start;
+    }
+}
+
 static OrusJitValueKind
 orus_jit_value_kind_from_register_type(uint8_t reg_type) {
     switch ((RegisterType)reg_type) {
@@ -4959,6 +5060,7 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
 
 translation_done:
     program->loop_end_offset = (uint32_t)offset;
+    orus_jit_ir_canonicalize_loop(program);
     if (specialization_enabled) {
         for (uint16_t reg = 0; reg < REGISTER_COUNT; ++reg) {
             if (!orus_jit_specialization_has_constant(&specialization_state, reg)) {
