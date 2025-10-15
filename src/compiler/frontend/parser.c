@@ -96,7 +96,13 @@ static void parser_leave_loop(ParserContext* ctx) {
     }
 }
 
-static ASTNode* new_node(ParserContext* ctx) { return parser_arena_alloc(ctx, sizeof(ASTNode)); }
+static ASTNode* new_node(ParserContext* ctx) {
+    ASTNode* node = parser_arena_alloc(ctx, sizeof(ASTNode));
+    if (node) {
+        memset(node, 0, sizeof(ASTNode));
+    }
+    return node;
+}
 
 static void addStatement(ParserContext* ctx, ASTNode*** list, int* count, int* capacity, ASTNode* stmt) {
     if (*count + 1 > *capacity) {
