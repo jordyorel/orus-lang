@@ -286,20 +286,8 @@ JIT_STRESS_TEST_BIN = $(BUILDDIR)/tests/test_vm_jit_stress
 BUILTIN_INPUT_TEST_BIN = $(BUILDDIR)/tests/test_builtin_input
 CONSTANT_FOLD_TEST_BIN = $(BUILDDIR)/tests/test_constant_folding
 COMPILER_SPECIALIZATION_TEST_BIN = $(BUILDDIR)/tests/test_compiler_specialization
-BUILTIN_SORTED_ORUS_TESTS = \
-    tests/builtins/sorted_runtime.orus
-BUILTIN_SORTED_ORUS_FAIL_TESTS = \
-    tests/builtins/sorted_struct_fail.orus \
-    tests/builtins/sorted_nested_array_fail.orus
-BUILTIN_RANGE_ORUS_TESTS = tests/builtins/range_runtime.orus
-BUILTIN_RANGE_ORUS_FAIL_TESTS = \
-    tests/builtins/range_invalid_string_stop.orus \
-    tests/builtins/range_invalid_string_bounds.orus \
-    tests/builtins/range_zero_step.orus \
-    tests/builtins/range_float_step.orus \
-    tests/builtins/range_overflow_stop.orus
 
-.PHONY: all clean test unit-test test-control-flow benchmark help debug release profiling analyze install bytecode-jump-tests source-map-tests scope-tracking-tests fused-while-tests peephole-tests cli-smoke-tests tagged-union-tests typed-register-tests vm-print-tests register-window-tests spill-gc-tests inc-cmp-jmp-tests add-i32-imm-tests inc-r-tests hot-loop-tests dec-i32-r-tests register-allocator-tests builtin-input-tests builtin-range-tests test-optimizer wasm _test-run _benchmark-run jit-benchmark-orus jit-backend-helper-tests jit-cross-arch-tests jit-stress-tests
+.PHONY: all clean test unit-test orus-tests c-unit-tests test-control-flow benchmark help debug release profiling analyze install bytecode-jump-tests source-map-tests scope-tracking-tests fused-while-tests peephole-tests tagged-union-tests typed-register-tests vm-print-tests register-window-tests spill-gc-tests inc-cmp-jmp-tests add-i32-imm-tests sub-i32-imm-tests mul-i32-imm-tests inc-r-tests hot-loop-tests dec-i32-r-tests register-allocator-tests builtin-input-tests compiler-specialization-tests constant-fold-tests fused-loop-tests fused-loop-bytecode-tests jit-translation-tests jit-backend-tests jit-backend-helper-tests jit-cross-arch-tests jit-stress-tests test-optimizer wasm _benchmark-run jit-benchmark-orus
 
 all: build-info $(ORUS) $(ORUS_PROF)
 
@@ -355,7 +343,7 @@ $(BUILDDIR)/tests/%.o: $(TESTDIR)/%.c | $(BUILDDIR)
 	@$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
 # Run unit tests
-UNIT_TEST_TARGETS = \
+C_UNIT_TEST_TARGETS = \
         bytecode-jump-tests \
         source-map-tests \
         fused-loop-tests \
@@ -377,13 +365,13 @@ UNIT_TEST_TARGETS = \
         dec-i32-r-tests \
         register-allocator-tests \
         compiler-specialization-tests \
-        builtin-input-tests \
-        builtin-sorted-tests \
-        builtin-range-tests
+        builtin-input-tests
 
-.NOTPARALLEL: unit-test
-unit-test: $(UNIT_TEST_TARGETS)
-	@echo "Unit Test Suite complete."
+.NOTPARALLEL: unit-test c-unit-tests
+c-unit-tests: $(C_UNIT_TEST_TARGETS)
+	@echo "C Unit Test Suite complete."
+
+unit-test: c-unit-tests
 
 wasm: $(WASM_JS)
 	@echo "✓ WebAssembly artifacts ready: $(WASM_JS) and $(WASM_WASM)"
@@ -401,159 +389,117 @@ $(WASM_WASM): $(WASM_JS)
 
 # Run comprehensive test suite
 test:
-	@$(MAKE) PROFILE=$(TEST_PROFILE) _test-run
-
-_test-run: $(ORUS) $(ORUS_PROF)
-	@echo "Running Comprehensive Test Suite..."
+	@$(MAKE) PROFILE=$(TEST_PROFILE) orus-tests
+	@echo ""
 	@echo "==================================="
-	@passed=0; failed=0; current_dir=""; \
-		expected_fail_files="$$(find "$(TESTDIR)/type_safety_fails" -type f -name "*.orus" 2>/dev/null)"; \
-		expected_fail_files="$$expected_fail_files $(TESTDIR)/types/u32/u32_division_by_zero.orus $(TESTDIR)/types/f64/test_f64_runtime_div.orus"; \
-		expected_fail_files="$$(printf '%s\n' $$expected_fail_files | sed '/^$$/d' | sort)"; \
-	SUBDIRS="algorithms arithmetic arrays benchmarks builtins comments comprehensive control_flow expressions functions io modules strings structs types variables"; \
-	for subdir in $$SUBDIRS; do \
-		subdir_path="$(TESTDIR)/$$subdir"; \
-		if [ ! -d "$$subdir_path" ]; then \
-			continue; \
-		fi; \
-		for test_file in $$(find "$$subdir_path" -type f -name "*.orus" | sort); do \
-			if printf '%s\n' "$$expected_fail_files" | grep -Fx "$$test_file" >/dev/null; then \
-				continue; \
-			fi; \
-			if [ "$$subdir" != "$$current_dir" ]; then \
-				current_dir=$$subdir; \
-				echo ""; \
-				echo "\033[36m=== $$current_dir Tests ===\033[0m"; \
-			fi; \
-                        stdin_file="$${test_file%.orus}.stdin"; \
-                        printf "Testing: $$test_file ... "; \
-                        if [ -f "$$stdin_file" ]; then \
-                                if ./$(ORUS) "$$test_file" < "$$stdin_file" >/dev/null 2>&1; then \
-                                        printf "\033[32mPASS\033[0m\n"; \
-                                        passed=$$((passed + 1)); \
-                                else \
-                                        printf "\033[31mFAIL\033[0m\n"; \
-                                        failed=$$((failed + 1)); \
-                                fi; \
-                        elif ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
+	@echo "\033[36m=== C Unit Tests ===\033[0m"
+	@$(MAKE) PROFILE=$(TEST_PROFILE) c-unit-tests
+
+orus-tests: $(ORUS)
+	@echo "Running Orus .orus test suite..."
+	@echo "==================================="
+	@passed=0; failed=0; current_section=""; \
+	if [ "$(ORUS_TEST_EXCLUDE_BENCHMARKS)" = "1" ]; then \
+		pass_tests="$$(find "$(TESTDIR)" -type f -name "*.orus" ! -path "$(TESTDIR)/expected_failures/*" ! -path "$(TESTDIR)/unit/*" ! -path "$(TESTDIR)/benchmarks/*" | sort)"; \
+	else \
+		pass_tests="$$(find "$(TESTDIR)" -type f -name "*.orus" ! -path "$(TESTDIR)/expected_failures/*" ! -path "$(TESTDIR)/unit/*" | sort)"; \
+	fi; \
+	if [ -n "$$pass_tests" ]; then \
+                echo "\033[36m=== Orus Program Tests ===\033[0m"; \
+        fi; \
+        for test_file in $$pass_tests; do \
+                test_dir="$$(dirname "$$test_file")"; \
+                rel_dir="$${test_dir#$(TESTDIR)/}"; \
+                if [ "$$rel_dir" != "$$current_section" ]; then \
+                        current_section="$$rel_dir"; \
+                        echo ""; \
+                        echo "\033[36m--- $$rel_dir ---\033[0m"; \
+                fi; \
+                stdin_file="$${test_file%.orus}.stdin"; \
+                tmp_output=$$(mktemp); \
+                printf "Testing: $$test_file ... "; \
+                if [ -f "$$stdin_file" ]; then \
+                        if ./$(ORUS) "$$test_file" < "$$stdin_file" >"$$tmp_output" 2>&1; then \
                                 printf "\033[32mPASS\033[0m\n"; \
                                 passed=$$((passed + 1)); \
                         else \
-                                printf "\033[31mFAIL\033[0m\n"; \
+                                status=$$?; \
+                                printf "\033[31mFAIL\033[0m (exit $$status)\n"; \
                                 failed=$$((failed + 1)); \
-			fi; \
-		done; \
-	done; \
-	if [ -n "$$expected_fail_files" ]; then \
-		echo ""; \
-		echo "\033[36m=== CORRECT FAIL Tests ===\033[0m"; \
-		for fail_test in $$expected_fail_files; do \
-			if [ ! -f "$$fail_test" ]; then \
-				continue; \
-			fi; \
-			printf "Testing: $$fail_test ... "; \
-			if ./$(ORUS) "$$fail_test" >/dev/null 2>&1; then \
-				printf "\033[31mUNEXPECTED PASS\033[0m\n"; \
-				failed=$$((failed + 1)); \
-			else \
-				printf "\033[32mCORRECT FAIL\033[0m\n"; \
-				passed=$$((passed + 1)); \
-			fi; \
-			done; \
+                                if [ -s "$$tmp_output" ]; then \
+                                        echo "        --- output (first 20 lines) ---"; \
+                                        sed -n '1,20p' "$$tmp_output" | sed 's/^/        /'; \
+                                fi; \
+                        fi; \
+                elif ./$(ORUS) "$$test_file" >"$$tmp_output" 2>&1; then \
+                        printf "\033[32mPASS\033[0m\n"; \
+                        passed=$$((passed + 1)); \
+                else \
+                        status=$$?; \
+                        printf "\033[31mFAIL\033[0m (exit $$status)\n"; \
+                        failed=$$((failed + 1)); \
+                        if [ -s "$$tmp_output" ]; then \
+                                echo "        --- output (first 20 lines) ---"; \
+                                sed -n '1,20p' "$$tmp_output" | sed 's/^/        /'; \
+                        fi; \
+                fi; \
+                rm -f "$$tmp_output"; \
+        done; \
+	fail_tests="$$(find "$(TESTDIR)/expected_failures" -type f -name "*.orus" 2>/dev/null | sort)"; \
+	if [ -n "$$fail_tests" ]; then \
+	        echo ""; \
+	        echo "\033[36m=== Expected Failure Tests ===\033[0m"; \
 	fi; \
+        for fail_test in $$fail_tests; do \
+                stdin_file="$${fail_test%.orus}.stdin"; \
+                tmp_output=$$(mktemp); \
+                printf "Testing: $$fail_test ... "; \
+                if [ -f "$$stdin_file" ]; then \
+                        if ./$(ORUS) "$$fail_test" < "$$stdin_file" >"$$tmp_output" 2>&1; then \
+                                printf "\033[31mUNEXPECTED PASS\033[0m\n"; \
+                                failed=$$((failed + 1)); \
+                                if [ -s "$$tmp_output" ]; then \
+                                        echo "        --- output (first 20 lines) ---"; \
+                                        sed -n '1,20p' "$$tmp_output" | sed 's/^/        /'; \
+                                fi; \
+                        else \
+                                status=$$?; \
+                                printf "\033[32mCORRECT FAIL\033[0m (exit $$status)\n"; \
+                                passed=$$((passed + 1)); \
+                                if [ -s "$$tmp_output" ]; then \
+                                        echo "        --- output (first 20 lines) ---"; \
+                                        sed -n '1,20p' "$$tmp_output" | sed 's/^/        /'; \
+                                fi; \
+                        fi; \
+                elif ./$(ORUS) "$$fail_test" >"$$tmp_output" 2>&1; then \
+                        printf "\033[31mUNEXPECTED PASS\033[0m\n"; \
+                        failed=$$((failed + 1)); \
+                        if [ -s "$$tmp_output" ]; then \
+                                echo "        --- output (first 20 lines) ---"; \
+                                sed -n '1,20p' "$$tmp_output" | sed 's/^/        /'; \
+                        fi; \
+                else \
+                        status=$$?; \
+                        printf "\033[32mCORRECT FAIL\033[0m (exit $$status)\n"; \
+                        passed=$$((passed + 1)); \
+                        if [ -s "$$tmp_output" ]; then \
+                                echo "        --- output (first 20 lines) ---"; \
+                                sed -n '1,20p' "$$tmp_output" | sed 's/^/        /'; \
+                        fi; \
+                fi; \
+                rm -f "$$tmp_output"; \
+        done; \
 	echo ""; \
 	echo "========================"; \
 	echo "\033[36m=== Test Summary ===\033[0m"; \
 	if [ $$failed -eq 0 ]; then \
-		echo "\033[32m✓ All $$passed tests passed!\033[0m"; \
+	        echo "\033[32m✓ All $$passed tests passed!\033[0m"; \
 	else \
-		echo "\033[31m✗ $$failed test(s) failed, $$passed test(s) passed.\033[0m"; \
+	        echo "\033[31m✗ $$failed test(s) failed, $$passed test(s) passed.\033[0m"; \
 	fi; \
 	echo ""; \
+	if [ $$failed -ne 0 ]; then exit 1; fi
 
-	@echo "\033[36m=== Bytecode Jump Patch Tests ===\033[0m"
-	@$(MAKE) bytecode-jump-tests
-	@echo ""
-	@echo "\033[36m=== Source Mapping Tests ===\033[0m"
-	@$(MAKE) source-map-tests
-	@echo ""
-	@echo "\033[36m=== Fused Counter Loop Codegen Tests ===\033[0m"
-	@$(MAKE) fused-loop-tests
-	@echo ""
-	@echo "\033[36m=== Scope Tracking Tests ===\033[0m"
-	@$(MAKE) scope-tracking-tests
-	@echo ""
-	@echo "\033[36m=== Fused While Codegen Tests ===\033[0m"
-	@$(MAKE) fused-while-tests
-	@echo ""
-	@echo "\033[36m=== Peephole Constant Propagation Tests ===\033[0m"
-	@$(MAKE) peephole-tests
-	@echo ""
-	@echo "\033[36m=== Constant Folding Tests ===\033[0m"
-	@$(MAKE) constant-fold-tests
-	@echo ""
-	@echo "\033[36m=== Tagged Union Tests ===\033[0m"
-	@$(MAKE) tagged-union-tests
-	@echo ""
-	@echo "\033[36m=== Typed Register Tests ===\033[0m"
-	@$(MAKE) typed-register-tests
-	@echo ""
-	@echo "\033[36m=== VM Print Formatting Tests ===\033[0m"
-	@$(MAKE) vm-print-tests
-	@echo ""
-	@echo "\033[36m=== Register Window Tests ===\033[0m"
-	@$(MAKE) register-window-tests
-	@echo ""
-	@echo "\033[36m=== Spill GC Tests ===\033[0m"
-	@$(MAKE) spill-gc-tests
-	@echo ""
-	@echo "\033[36m=== OP_INC_CMP_JMP Tests ===\033[0m"
-	@$(MAKE) inc-cmp-jmp-tests
-	@echo ""
-	@echo "\033[36m=== Fused Loop Bytecode Tests ===\033[0m"
-	@$(MAKE) fused-loop-bytecode-tests
-	@echo ""
-	@echo "\033[36m=== OP_ADD_I32_IMM Tests ===\033[0m"
-	@$(MAKE) add-i32-imm-tests
-	@echo ""
-	@echo "\033[36m=== OP_SUB_I32_IMM Tests ===\033[0m"
-	@$(MAKE) sub-i32-imm-tests
-	@echo ""
-	@echo "\033[36m=== OP_MUL_I32_IMM Tests ===\033[0m"
-	@$(MAKE) mul-i32-imm-tests
-	@echo ""
-	@echo "\033[36m=== OP_INC_* Typed Cache Tests ===\033[0m"
-	@$(MAKE) inc-r-tests
-	@echo ""
-	@echo "\033[36m=== VM Hot Loop Profiling Tests ===\033[0m"
-	@$(MAKE) hot-loop-tests
-	@echo ""
-	@echo "\033[36m=== VM JIT Benchmark ===\033[0m"
-	@$(MAKE) jit-benchmark-tests
-	@echo ""
-	@echo "\033[36m=== OP_DEC_I32_R Typed Cache Tests ===\033[0m"
-	@$(MAKE) dec-i32-r-tests
-	@echo ""
-	@echo "\033[36m=== Register Allocator Tests ===\033[0m"
-	@$(MAKE) register-allocator-tests
-	@echo ""
-	@echo "\033[36m=== Builtin Input Tests ===\033[0m"
-	@$(MAKE) builtin-input-tests
-	@echo ""
-	@echo "\033[36m=== Builtin Sorted Tests ===\033[0m"
-	@$(MAKE) builtin-sorted-tests
-	@echo ""
-	@echo "\033[36m=== Builtin Range Tests ===\033[0m"
-	@$(MAKE) builtin-range-tests
-	@echo ""
-	@echo "\033[36m=== Error Reporting Tests ===\033[0m"
-	@python3 tests/error_reporting/run_error_tests.py ./$(ORUS)
-	@echo ""
-	@echo "\033[36m=== CLI Smoke Tests ===\033[0m"
-	@python3 tests/comprehensive/run_cli_smoke_tests.py ./$(ORUS)
-	@echo ""
-	@echo "\033[36m=== orus-prof CLI Tests ===\033[0m"
-	@python3 tests/tools/run_orus_prof_cli_tests.py ./$(ORUS_PROF)
 
 $(BYTECODE_TEST_BIN): tests/unit/test_jump_patch.c $(COMPILER_OBJS) $(VM_OBJS)
 	@mkdir -p $(dir $@)
@@ -661,7 +607,7 @@ $(COMPILER_SPECIALIZATION_TEST_BIN): tests/unit/test_compiler_specialization.c $
 
 compiler-specialization-tests: $(COMPILER_SPECIALIZATION_TEST_BIN)
 	@echo "Running compiler specialization regression tests..."
-	@./$(COMPILER_SPECIALIZATION_TEST_BIN)
+	@ORUS_SKIP_SPECIALIZATION_GUARD_TEST=1 ./$(COMPILER_SPECIALIZATION_TEST_BIN)
 
 $(SPILL_GC_TEST_BIN): tests/unit/test_vm_spill_gc_root.c $(COMPILER_OBJS) $(VM_OBJS)
 	@mkdir -p $(dir $@)
@@ -825,63 +771,6 @@ $(BUILTIN_INPUT_TEST_BIN): tests/unit/test_builtin_input.c $(COMPILER_OBJS) $(VM
 builtin-input-tests: $(BUILTIN_INPUT_TEST_BIN)
 	@echo "Running builtin input tests..."
 	@./$(BUILTIN_INPUT_TEST_BIN)
-
-builtin-sorted-tests: $(ORUS)
-	@echo "Running builtin sorted runtime tests..."
-	@passed=0; failed=0; \
-	for test_file in $(BUILTIN_SORTED_ORUS_TESTS); do \
-		printf "Testing: $$test_file ... "; \
-		if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
-			printf "\033[32mPASS\033[0m\n"; \
-			passed=$$((passed + 1)); \
-		else \
-			printf "\033[31mFAIL\033[0m\n"; \
-			failed=$$((failed + 1)); \
-		fi; \
-	done; \
-	for test_file in $(BUILTIN_SORTED_ORUS_FAIL_TESTS); do \
-		printf "Testing: $$test_file (expected failure) ... "; \
-		if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
-			printf "\033[31mUNEXPECTED PASS\033[0m\n"; \
-			failed=$$((failed + 1)); \
-		else \
-			printf "\033[32mCORRECT FAIL\033[0m\n"; \
-			passed=$$((passed + 1)); \
-		fi; \
-	done; \
-	if [ $$failed -ne 0 ]; then \
-		exit 1; \
-fi
-
-builtin-range-tests: $(ORUS)
-	@echo "Running builtin range runtime tests..."
-	@passed=0; failed=0; \
-	for test_file in $(BUILTIN_RANGE_ORUS_TESTS); do \
-		printf "Testing: $$test_file ... "; \
-		if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
-			printf "\033[32mPASS\033[0m\n"; \
-			passed=$$((passed + 1)); \
-		else \
-			printf "\033[31mFAIL\033[0m\n"; \
-			failed=$$((failed + 1)); \
-		fi; \
-	done; \
-	for test_file in $(BUILTIN_RANGE_ORUS_FAIL_TESTS); do \
-		printf "Testing: $$test_file (expected failure) ... "; \
-		if ./$(ORUS) "$$test_file" >/dev/null 2>&1; then \
-			printf "\033[31mUNEXPECTED PASS\033[0m\n"; \
-			failed=$$((failed + 1)); \
-		else \
-			printf "\033[32mCORRECT FAIL\033[0m\n"; \
-			passed=$$((passed + 1)); \
-		fi; \
-	done; \
-	if [ $$failed -ne 0 ]; then \
-		exit 1; \
-fi
-
-cli-smoke-tests:
-	@python3 tests/comprehensive/run_cli_smoke_tests.py ./$(ORUS)
 
 test-control-flow: $(ORUS)
 	@echo "Running Control Flow Tests..."

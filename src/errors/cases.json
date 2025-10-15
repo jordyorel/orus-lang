@@ -19,7 +19,7 @@
       "Undefined variable 'missing_value'. Variables must be declared before use.",
       "help: Make sure you've declared the variable before using it, or check the spelling.",
       "note: Variables must be declared before they can be used in Orus.",
-      "Compilation failed for \"tests/error_reporting/undefined_variable.orus\"."
+      "Compilation failed for \"tests/expected_failures/error_reporting/undefined_variable.orus\"."
     ]
   },
   {
@@ -36,7 +36,7 @@
     ],
     "expected": [
       "'break' can only be used inside a loop",
-      "Compilation failed for \"tests/error_reporting/break_outside_loop.orus\"."
+      "Compilation failed for \"tests/expected_failures/error_reporting/break_outside_loop.orus\"."
     ]
   },
   {
@@ -53,7 +53,7 @@
     ],
     "expected": [
       "'continue' can only be used inside a loop",
-      "Compilation failed for \"tests/error_reporting/continue_outside_loop.orus\"."
+      "Compilation failed for \"tests/expected_failures/error_reporting/continue_outside_loop.orus\"."
     ]
   },
   {
@@ -87,7 +87,7 @@
       "Cannot assign to immutable variable 'value'. Add 'mut' when declaring it.",
       "help: Add 'mut' before the variable name when declaring it: 'mut variable_name = value'",
       "note: Variables are immutable by default in Orus for safety and predictability.",
-      "Compilation failed for \"tests/error_reporting/immutable_assignment.orus\"."
+      "Compilation failed for \"tests/expected_failures/error_reporting/immutable_assignment.orus\"."
     ]
   },
   {
@@ -109,7 +109,7 @@
       "Variable 'value' is already defined on line 2",
       "help: Choose a different name for this variable, or use assignment to change the existing one.",
       "note: Each variable can only be declared once in the same scope.",
-      "Compilation failed for \"tests/error_reporting/variable_redefinition.orus\"."
+      "Compilation failed for \"tests/expected_failures/error_reporting/variable_redefinition.orus\"."
     ]
   },
   {
@@ -130,7 +130,7 @@
       "Undefined variable 'temp'. Variables must be declared before use.",
       "help: Make sure you've declared the variable before using it, or check the spelling.",
       "note: Variables must be declared before they can be used in Orus.",
-      "Compilation failed for \"tests/error_reporting/variable_scope_violation.orus\"."
+      "Compilation failed for \"tests/expected_failures/error_reporting/variable_scope_violation.orus\"."
     ]
   },
   {
@@ -154,7 +154,7 @@
       "Function 'add' expects 2 arguments but received 1 argument",
       "help: Try converting one value to match the other's type, like `x as string` or `y as i32`.",
       "note: Orus keeps types separate to help prevent unexpected behavior and bugs.",
-      "Compilation failed for \"tests/error_reporting/function_argument_mismatch.orus\"."
+      "Compilation failed for \"tests/expected_failures/error_reporting/function_argument_mismatch.orus\"."
     ]
   },
   {
@@ -172,7 +172,7 @@
     "expected": [
       "-- SYNTAX ERROR: Something went wrong",
       "Expected ':' after if statement",
-      "Compilation failed for \"tests/error_reporting/missing_if_colon.orus\"."
+      "Compilation failed for \"tests/expected_failures/error_reporting/missing_if_colon.orus\"."
     ]
   },
   {
@@ -192,7 +192,7 @@
       "Expected return type after '->' in function 'add', but found COLON",
       "help: Compare this syntax with a working example or check the docs to see what structure is expected here.",
       "note: Orus expected a different structure here. Re-read the surrounding code to find the mismatch.",
-      "Compilation failed for \"tests/error_reporting/missing_function_return_type.orus\"."
+      "Compilation failed for \"tests/expected_failures/error_reporting/missing_function_return_type.orus\"."
     ]
   },
   {
@@ -229,7 +229,7 @@
       "It looks like this line is indented, but there's no open block above it.",
       "help: If you meant to start a block, add a ':' on the previous line or remove this extra indentation.",
       "note: Blocks in Orus begin after lines ending with ':' and end when the indentation returns.",
-      "Compilation failed for \"tests/error_reporting/unexpected_indent.orus\"."
+      "Compilation failed for \"tests/expected_failures/error_reporting/unexpected_indent.orus\"."
     ]
   },
   {
@@ -251,7 +251,7 @@
       "Cannot assign to immutable variable 'value'. Add 'mut' when declaring it.",
       "help: Add 'mut' before the variable name when declaring it: 'mut variable_name = value'",
       "note: Variables are immutable by default in Orus for safety and predictability.",
-      "Compilation failed for \"tests/error_reporting/closure_invalid_upvalue.orus\"."
+      "Compilation failed for \"tests/expected_failures/error_reporting/closure_invalid_upvalue.orus\"."
     ]
   },
   {
@@ -325,7 +325,7 @@
       }
     ],
     "expected": [
-      "tests/error_reporting/runtime_division_by_zero.orus:4:13",
+      "tests/expected_failures/error_reporting/runtime_division_by_zero.orus:4:13",
       "Division by zero"
     ]
   }
