@@ -248,6 +248,10 @@ static bool process_command(const char* input){
         command_args = args;
     }
 
+    if(!had_prefix){
+        return false;
+    }
+
     if(strcmp(command_name,"exit")==0 || strcmp(command_name,"quit")==0){
         if(command_args && *command_args){
             print_colored(COLOR_ERROR,"Command '%s' does not take arguments.\n", command_name);
@@ -265,7 +269,8 @@ static bool process_command(const char* input){
         printf("  :history        - Show command history\n");
         printf("  :reset          - Reset VM state\n");
         printf("  :load <file>    - Load and execute a file\n");
-        printf("\nCommands can be used with or without a leading ':' prefix.\n\n");
+        printf("\nCommands require a leading ':' prefix. ");
+        printf("Identifiers like 'exit' can be used in code without triggering commands.\n\n");
         return true;
     }
     if(strcmp(command_name,"clear")==0){
