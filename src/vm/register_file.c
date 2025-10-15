@@ -64,6 +64,12 @@ static void reset_frame_metadata(CallFrame* frame) {
 }
 
 static inline uint16_t typed_window_select_bit(uint64_t mask) {
+    if (mask == 0) {
+        // Gracefully handle empty bit masks to avoid triggering undefined
+        // behavior in __builtin_ctzll(0) or spinning forever in the fallback
+        // implementation on platforms without the builtin.
+        return 0;
+    }
 #if defined(__GNUC__) || defined(__clang__)
     return (uint16_t)__builtin_ctzll(mask);
 #else
