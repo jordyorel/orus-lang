@@ -163,6 +163,13 @@ void initVM(void) {
     vm.jit_deopt_count = 0;
     vm.jit_translation_success_count = 0;
     orus_jit_translation_failure_log_init(&vm.jit_translation_failures);
+    memset(&vm.jit_tier_skips, 0, sizeof(vm.jit_tier_skips));
+    vm.jit_tier_skips.last_reason = ORUS_JIT_TIER_SKIP_REASON_NONE;
+    vm.jit_tier_skips.last_translation_status = ORUS_JIT_TRANSLATE_STATUS_OK;
+    vm.jit_tier_skips.last_backend_status = vm.jit_backend_status;
+    vm.jit_tier_skips.last_function = UINT16_MAX;
+    vm.jit_tier_skips.last_loop = UINT16_MAX;
+    vm.jit_tier_skips.last_bytecode_offset = 0u;
     vm.jit_native_dispatch_count = 0;
     vm.jit_native_type_deopts = 0;
     vm.jit_native_frame_top = NULL;

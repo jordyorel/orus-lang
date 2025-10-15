@@ -417,6 +417,31 @@ typedef struct OrusJitTranslationFailureLog {
 } OrusJitTranslationFailureLog;
 
 typedef enum {
+    ORUS_JIT_TIER_SKIP_REASON_NONE = 0,
+    ORUS_JIT_TIER_SKIP_REASON_DISABLED,
+    ORUS_JIT_TIER_SKIP_REASON_LOOP_BLOCKLISTED,
+    ORUS_JIT_TIER_SKIP_REASON_INVALID_FUNCTION,
+    ORUS_JIT_TIER_SKIP_REASON_NO_ACTIVE_CHUNK,
+    ORUS_JIT_TIER_SKIP_REASON_TRANSLATION_UNSUPPORTED,
+    ORUS_JIT_TIER_SKIP_REASON_IR_ALLOCATION_FAILED,
+    ORUS_JIT_TIER_SKIP_REASON_BACKEND_UNSUPPORTED,
+    ORUS_JIT_TIER_SKIP_REASON_BACKEND_FAILURE,
+    ORUS_JIT_TIER_SKIP_REASON_CACHE_INSTALL_FAILED,
+    ORUS_JIT_TIER_SKIP_REASON_CACHE_LOOKUP_FAILED,
+    ORUS_JIT_TIER_SKIP_REASON_COUNT,
+} OrusJitTierSkipReason;
+
+typedef struct OrusJitTierSkipStats {
+    uint64_t reason_counts[ORUS_JIT_TIER_SKIP_REASON_COUNT];
+    OrusJitTierSkipReason last_reason;
+    OrusJitTranslationStatus last_translation_status;
+    JITBackendStatus last_backend_status;
+    FunctionId last_function;
+    LoopId last_loop;
+    uint32_t last_bytecode_offset;
+} OrusJitTierSkipStats;
+
+typedef enum {
     ORUS_JIT_ROLLOUT_STAGE_I32_ONLY = 0,
     ORUS_JIT_ROLLOUT_STAGE_WIDE_INTS,
     ORUS_JIT_ROLLOUT_STAGE_FLOATS,
@@ -1419,6 +1444,7 @@ typedef struct VM {
     uint64_t jit_deopt_count;
     uint64_t jit_translation_success_count;
     OrusJitTranslationFailureLog jit_translation_failures;
+    OrusJitTierSkipStats jit_tier_skips;
     uint64_t jit_native_dispatch_count;
     uint64_t jit_native_type_deopts;
     struct OrusJitNativeFrame* jit_native_frame_top;

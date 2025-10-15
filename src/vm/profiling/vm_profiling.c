@@ -18,6 +18,7 @@
 #include "vm/jit_ir.h"
 #include "vm/jit_ir_debug.h"
 #include "vm/jit_translation.h"
+#include "internal/logging.h"
 #include <assert.h>
 #include <inttypes.h>
 #include <stdbool.h>
@@ -94,6 +95,75 @@ opcode_family_name(OrusOpcodeFamily family) {
         default:
             return "other";
     }
+}
+
+const char*
+orus_jit_tier_skip_reason_name(OrusJitTierSkipReason reason) {
+    switch (reason) {
+        case ORUS_JIT_TIER_SKIP_REASON_NONE:
+            return "none";
+        case ORUS_JIT_TIER_SKIP_REASON_DISABLED:
+            return "jit-disabled";
+        case ORUS_JIT_TIER_SKIP_REASON_LOOP_BLOCKLISTED:
+            return "loop-blocklisted";
+        case ORUS_JIT_TIER_SKIP_REASON_INVALID_FUNCTION:
+            return "invalid-function";
+        case ORUS_JIT_TIER_SKIP_REASON_NO_ACTIVE_CHUNK:
+            return "no-active-chunk";
+        case ORUS_JIT_TIER_SKIP_REASON_TRANSLATION_UNSUPPORTED:
+            return "translation-unsupported";
+        case ORUS_JIT_TIER_SKIP_REASON_IR_ALLOCATION_FAILED:
+            return "ir-allocation-failed";
+        case ORUS_JIT_TIER_SKIP_REASON_BACKEND_UNSUPPORTED:
+            return "backend-unsupported";
+        case ORUS_JIT_TIER_SKIP_REASON_BACKEND_FAILURE:
+            return "backend-failure";
+        case ORUS_JIT_TIER_SKIP_REASON_CACHE_INSTALL_FAILED:
+            return "cache-install-failed";
+        case ORUS_JIT_TIER_SKIP_REASON_CACHE_LOOKUP_FAILED:
+            return "cache-lookup-failed";
+        case ORUS_JIT_TIER_SKIP_REASON_COUNT:
+        default:
+            return "unknown";
+    }
+}
+
+uint64_t
+orus_jit_tier_skip_total(const OrusJitTierSkipStats* stats) {
+    if (!stats) {
+        return 0u;
+    }
+
+    uint64_t total = 0u;
+    for (size_t i = 0; i < ORUS_JIT_TIER_SKIP_REASON_COUNT; ++i) {
+        total += stats->reason_counts[i];
+    }
+    return total;
+}
+
+static void
+vm_jit_record_tier_skip(VMState* vm_state,
+                        const HotPathSample* sample,
+                        OrusJitTierSkipReason reason,
+                        OrusJitTranslationStatus translation_status,
+                        JITBackendStatus backend_status,
+                        uint32_t bytecode_offset) {
+    if (!vm_state) {
+        return;
+    }
+
+    if (reason >= ORUS_JIT_TIER_SKIP_REASON_COUNT) {
+        reason = ORUS_JIT_TIER_SKIP_REASON_NONE;
+    }
+
+    OrusJitTierSkipStats* stats = &vm_state->jit_tier_skips;
+    stats->reason_counts[reason]++;
+    stats->last_reason = reason;
+    stats->last_translation_status = translation_status;
+    stats->last_backend_status = backend_status;
+    stats->last_function = sample ? sample->func : UINT16_MAX;
+    stats->last_loop = sample ? sample->loop : UINT16_MAX;
+    stats->last_bytecode_offset = bytecode_offset;
 }
 
 #ifndef FUNCTION_SPECIALIZATION_THRESHOLD
@@ -4942,10 +5012,27 @@ void queue_tier_up(VMState* vm_state, const HotPathSample* sample) {
     record->hit_count = 0;
 
     if (!vm_state->jit_enabled || !vm_state->jit_backend) {
+        LOG_VM_DEBUG("JIT",
+                     "Skipping tier-up for func=%u loop=%u: backend disabled"
+                     " (enabled=%d backend=%p status=%d).",
+                     (unsigned)sample->func, (unsigned)sample->loop,
+                     vm_state->jit_enabled, (void*)vm_state->jit_backend,
+                     (int)vm_state->jit_backend_status);
+        vm_jit_record_tier_skip(vm_state, sample,
+                                ORUS_JIT_TIER_SKIP_REASON_DISABLED,
+                                ORUS_JIT_TRANSLATE_STATUS_INVALID_INPUT,
+                                vm_state->jit_backend_status, 0u);
         return;
     }
 
     if (vm_state->jit_loop_blocklist[sample->loop]) {
+        LOG_VM_DEBUG("JIT",
+                     "Skipping tier-up for func=%u loop=%u: loop blocklisted",
+                     (unsigned)sample->func, (unsigned)sample->loop);
+        vm_jit_record_tier_skip(vm_state, sample,
+                                ORUS_JIT_TIER_SKIP_REASON_LOOP_BLOCKLISTED,
+                                ORUS_JIT_TRANSLATE_STATUS_INVALID_INPUT,
+                                vm_state->jit_backend_status, 0u);
         return;
     }
 
@@ -4955,6 +5042,14 @@ void queue_tier_up(VMState* vm_state, const HotPathSample* sample) {
 
     if (sample->func == UINT16_MAX) {
         if (!vm_state->chunk) {
+            LOG_VM_DEBUG(
+                "JIT",
+                "Skipping tier-up for func=%u loop=%u: no active script chunk",
+                (unsigned)sample->func, (unsigned)sample->loop);
+            vm_jit_record_tier_skip(
+                vm_state, sample, ORUS_JIT_TIER_SKIP_REASON_NO_ACTIVE_CHUNK,
+                ORUS_JIT_TRANSLATE_STATUS_INVALID_INPUT,
+                vm_state->jit_backend_status, 0u);
             return;
         }
         script_function.start = 0;
@@ -4970,6 +5065,14 @@ void queue_tier_up(VMState* vm_state, const HotPathSample* sample) {
         active_chunk = vm_state->chunk;
     } else {
         if (sample->func >= (FunctionId)vm_state->functionCount) {
+            LOG_VM_DEBUG(
+                "JIT",
+                "Skipping tier-up: function %u out of bounds (count=%d)",
+                (unsigned)sample->func, vm_state->functionCount);
+            vm_jit_record_tier_skip(
+                vm_state, sample, ORUS_JIT_TIER_SKIP_REASON_INVALID_FUNCTION,
+                ORUS_JIT_TRANSLATE_STATUS_INVALID_INPUT,
+                vm_state->jit_backend_status, 0u);
             return;
         }
         function = &vm_state->functions[sample->func];
@@ -4977,6 +5080,13 @@ void queue_tier_up(VMState* vm_state, const HotPathSample* sample) {
     }
 
     if (!active_chunk) {
+        LOG_VM_DEBUG("JIT",
+                     "Skipping tier-up for func=%u loop=%u: no active chunk",
+                     (unsigned)sample->func, (unsigned)sample->loop);
+        vm_jit_record_tier_skip(vm_state, sample,
+                                ORUS_JIT_TIER_SKIP_REASON_NO_ACTIVE_CHUNK,
+                                ORUS_JIT_TRANSLATE_STATUS_INVALID_INPUT,
+                                vm_state->jit_backend_status, 0u);
         return;
     }
 
@@ -5024,6 +5134,18 @@ void queue_tier_up(VMState* vm_state, const HotPathSample* sample) {
         }
         vm_state->jit_loop_blocklist[sample->loop] = true;
         if (unsupported) {
+            LOG_VM_DEBUG(
+                "JIT",
+                "Skipping tier-up for func=%u loop=%u: translation unsupported"
+                " (%s) at bytecode %u",
+                (unsigned)sample->func, (unsigned)sample->loop,
+                orus_jit_translation_status_name(translation.status),
+                translation.bytecode_offset);
+            vm_jit_record_tier_skip(vm_state, sample,
+                                    ORUS_JIT_TIER_SKIP_REASON_TRANSLATION_UNSUPPORTED,
+                                    translation.status,
+                                    vm_state->jit_backend_status,
+                                    translation.bytecode_offset);
             JITDeoptTrigger trigger = {
                 .function_index = sample->func,
                 .loop_index = sample->loop,
@@ -5040,6 +5162,15 @@ void queue_tier_up(VMState* vm_state, const HotPathSample* sample) {
             if (program.instructions) {
                 orus_jit_ir_program_reset(&program);
             }
+            LOG_VM_DEBUG(
+                "JIT",
+                "Skipping tier-up for func=%u loop=%u: failed to reserve"
+                " baseline IR stub", (unsigned)sample->func,
+                (unsigned)sample->loop);
+            vm_jit_record_tier_skip(
+                vm_state, sample, ORUS_JIT_TIER_SKIP_REASON_IR_ALLOCATION_FAILED,
+                translation.status, vm_state->jit_backend_status,
+                translation.bytecode_offset);
             vm_jit_enter_entry(vm_state, &vm_state->jit_entry_stub);
             return;
         }
@@ -5067,6 +5198,15 @@ void queue_tier_up(VMState* vm_state, const HotPathSample* sample) {
         orus_jit_ir_program_reset(&program);
     }
     if (status == JIT_BACKEND_UNSUPPORTED) {
+        LOG_VM_DEBUG("JIT",
+                     "Skipping tier-up for func=%u loop=%u: backend"
+                     " unsupported (status=%d)",
+                     (unsigned)sample->func, (unsigned)sample->loop,
+                     (int)status);
+        vm_jit_record_tier_skip(vm_state, sample,
+                                ORUS_JIT_TIER_SKIP_REASON_BACKEND_UNSUPPORTED,
+                                translation.status, status,
+                                translation.bytecode_offset);
         vm_state->jit_loop_blocklist[sample->loop] = true;
         JITDeoptTrigger trigger = {
             .function_index = sample->func,
@@ -5078,6 +5218,15 @@ void queue_tier_up(VMState* vm_state, const HotPathSample* sample) {
         return;
     }
     if (status != JIT_BACKEND_OK) {
+        LOG_VM_DEBUG("JIT",
+                     "Skipping tier-up for func=%u loop=%u: backend failure"
+                     " (status=%d)",
+                     (unsigned)sample->func, (unsigned)sample->loop,
+                     (int)status);
+        vm_jit_record_tier_skip(vm_state, sample,
+                                ORUS_JIT_TIER_SKIP_REASON_BACKEND_FAILURE,
+                                translation.status, status,
+                                translation.bytecode_offset);
         vm_jit_enter_entry(vm_state, &vm_state->jit_entry_stub);
         return;
     }
@@ -5085,6 +5234,13 @@ void queue_tier_up(VMState* vm_state, const HotPathSample* sample) {
     uint64_t generation =
         vm_jit_install_entry(sample->func, sample->loop, &entry);
     if (generation == 0) {
+        LOG_VM_DEBUG("JIT",
+                     "Skipping tier-up for func=%u loop=%u: failed to install"
+                     " cache entry",
+                     (unsigned)sample->func, (unsigned)sample->loop);
+        vm_jit_record_tier_skip(vm_state, sample,
+                                ORUS_JIT_TIER_SKIP_REASON_CACHE_INSTALL_FAILED,
+                                translation.status, status, 0u);
         vm_jit_enter_entry(vm_state, &vm_state->jit_entry_stub);
         return;
     }
@@ -5105,5 +5261,12 @@ void queue_tier_up(VMState* vm_state, const HotPathSample* sample) {
         return;
     }
 
+    LOG_VM_DEBUG("JIT",
+                 "Tier-up entry missing for func=%u loop=%u after install;"
+                 " falling back to stub",
+                 (unsigned)sample->func, (unsigned)sample->loop);
+    vm_jit_record_tier_skip(vm_state, sample,
+                            ORUS_JIT_TIER_SKIP_REASON_CACHE_LOOKUP_FAILED,
+                            translation.status, status, 0u);
     vm_jit_enter_entry(vm_state, &vm_state->jit_entry_stub);
 }

@@ -188,6 +188,7 @@ vm_jit_run_source_benchmark(const char* source,
         stats->jit_backend_enabled = vm.jit_enabled;
         stats->backend_status = vm.jit_backend_status;
         stats->backend_message = vm.jit_backend_message;
+        stats->tier_skips = vm.jit_tier_skips;
     }
 
     cleanup_error_reporting();
