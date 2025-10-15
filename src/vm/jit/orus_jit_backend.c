@@ -1551,15 +1551,61 @@ jit_read_bool(struct VM* vm_instance, uint16_t reg, bool* out) {
     if (!vm_instance || !out) {
         return false;
     }
-    if (vm_typed_reg_in_range(reg)) {
-        *out = vm_instance->typed_regs.bool_regs[reg];
-        return true;
+    if (vm_typed_reg_in_range(reg) && vm_instance->typed_regs.reg_types) {
+        uint8_t reg_type = vm_instance->typed_regs.reg_types[reg];
+        switch (reg_type) {
+            case REG_TYPE_BOOL:
+                *out = vm_instance->typed_regs.bool_regs[reg];
+                return true;
+            case REG_TYPE_I32:
+                *out = vm_instance->typed_regs.i32_regs[reg] != 0;
+                vm_store_bool_typed_hot(reg, *out);
+                return true;
+            case REG_TYPE_I64:
+                *out = vm_instance->typed_regs.i64_regs[reg] != 0;
+                vm_store_bool_typed_hot(reg, *out);
+                return true;
+            case REG_TYPE_U32:
+                *out = vm_instance->typed_regs.u32_regs[reg] != 0u;
+                vm_store_bool_typed_hot(reg, *out);
+                return true;
+            case REG_TYPE_U64:
+                *out = vm_instance->typed_regs.u64_regs[reg] != 0u;
+                vm_store_bool_typed_hot(reg, *out);
+                return true;
+            case REG_TYPE_F64:
+                *out = vm_instance->typed_regs.f64_regs[reg] != 0.0;
+                vm_store_bool_typed_hot(reg, *out);
+                return true;
+            default:
+                break;
+        }
     }
+
     Value value = vm_get_register_safe(reg);
-    if (!IS_BOOL(value)) {
-        return false;
+    switch (value.type) {
+        case VAL_BOOL:
+            *out = AS_BOOL(value);
+            break;
+        case VAL_I32:
+            *out = AS_I32(value) != 0;
+            break;
+        case VAL_I64:
+            *out = AS_I64(value) != 0;
+            break;
+        case VAL_U32:
+            *out = AS_U32(value) != 0;
+            break;
+        case VAL_U64:
+            *out = AS_U64(value) != 0;
+            break;
+        case VAL_F64:
+            *out = AS_F64(value) != 0.0;
+            break;
+        default:
+            return false;
     }
-    *out = AS_BOOL(value);
+
     vm_store_bool_typed_hot(reg, *out);
     return true;
 }

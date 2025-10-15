@@ -2,14 +2,14 @@
 
 [![Version](https://img.shields.io/badge/version-0.6.4-blue.svg)](CHANGELOG.md)
 
-Fast, elegant programming language with Python's readability and Rust's safety.
+Fast experimental programming language that aims to combine readability and safety.
 
 ## Overview
 
-Orus is a modern register-based VM language that combines performance with safety:
+Orus is a modern register-based VM language that aims to combine performance with safety:
 - **Type Safety**: Static typing with intelligent type inference and runtime safety checks
 - **Developer Experience**: Clean, readable syntax with comprehensive error reporting (Still improving)
-- **Cross-Platform**: Optimized builds for Apple Silicon, Intel, and ARM architectures
+
 
 ```orus
 fn fibonacci(n: i32) -> i32:
@@ -102,6 +102,7 @@ INSTALL_PREFIX="$HOME/.local/orus" make install
 
 
 ## Contributing
+Every contribution is more than welcome
 
 ### Development Setup
 ```bash

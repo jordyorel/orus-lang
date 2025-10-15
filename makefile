@@ -267,6 +267,8 @@ REPL_OBJ = $(REPL_SRC:$(SRCDIR)/%.c=$(BUILDDIR)/%.o)
 MAIN_OBJ = $(MAIN_SRC:$(SRCDIR)/%.c=$(BUILDDIR)/%.o)
 TOOLS_OBJS = $(TOOLS_SRCS:$(SRCDIR)/%.c=$(BUILDDIR)/%.o)
 
+OBJ_DIRS = $(sort $(dir $(COMPILER_OBJS) $(VM_OBJS) $(REPL_OBJ) $(MAIN_OBJ) $(TOOLS_OBJS)))
+
 # Target (profile-specific)
 ORUS = orus$(SUFFIX)
 ORUS_PROF = orus-prof$(SUFFIX)
@@ -327,8 +329,7 @@ ci:
 
 # Create build directory
 $(BUILDDIR):
-	@mkdir -p $(BUILDDIR) $(BUILDDIR)/vm/core $(BUILDDIR)/vm/dispatch $(BUILDDIR)/vm/operations $(BUILDDIR)/vm/runtime $(BUILDDIR)/vm/utils $(BUILDDIR)/vm/handlers $(BUILDDIR)/vm/profiling $(BUILDDIR)/vm/jit $(BUILDDIR)/compiler/backend/optimization $(BUILDDIR)/compiler/backend/codegen $(BUILDDIR)/compiler/backend/specialization $(BUILDDIR)/type $(BUILDDIR)/errors/core $(BUILDDIR)/errors/features $(BUILDDIR)/errors/infrastructure $(BUILDDIR)/config $(BUILDDIR)/internal $(BUILDDIR)/debug $(BUILDDIR)/tests/unit $(BUILDDIR)/web $(BUILDDIR)/tools
-
+	@mkdir -p $(OBJ_DIRS)
 # Main interpreter
 $(ORUS): $(MAIN_OBJ) $(REPL_OBJ) $(VM_OBJS) $(COMPILER_OBJS)
 	@echo "Linking $(ORUS)..."
@@ -355,213 +356,50 @@ $(BUILDDIR)/tests/%.o: $(TESTDIR)/%.c | $(BUILDDIR)
 	@$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
 # Run unit tests
-C_UNIT_TEST_TARGETS = \
-        bytecode-jump-tests \
-        source-map-tests \
-        fused-loop-tests \
-        fused-loop-bytecode-tests \
-        fused-while-tests \
-        scope-tracking-tests \
-        peephole-tests \
-        tagged-union-tests \
-        typed-register-tests \
-        vm-print-tests \
-        register-window-tests \
-        spill-gc-tests \
-        inc-cmp-jmp-tests \
-        add-i32-imm-tests \
-        sub-i32-imm-tests \
-        mul-i32-imm-tests \
-        inc-r-tests \
-        hot-loop-tests \
-        dec-i32-r-tests \
-        register-allocator-tests \
-        compiler-specialization-tests \
-        builtin-input-tests
+c_unit_test_get = $(patsubst $(2):=%,%,$(filter $(2):=%,$(subst |, ,$(1))))
+c_unit_test_bin = $(BUILDDIR)/tests/$(basename $(notdir $(1)))
+c_unit_test_desc = $(subst __,$(space),$(1))
 
-.NOTPARALLEL: unit-test c-unit-tests
-c-unit-tests: $(C_UNIT_TEST_TARGETS)
-	@echo "C Unit Test Suite complete."
+# Descriptions encode spaces as "__" so opcode underscores remain intact.
+C_UNIT_TEST_SPECS := \
+        test_name:=bytecode-jump-tests|src:=tests/unit/test_jump_patch.c|description:=bytecode__jump__patch__tests|extra_cmds:= \
+        test_name:=source-map-tests|src:=tests/unit/test_source_mapping.c|description:=source__mapping__tests|extra_cmds:= \
+        test_name:=fused-loop-tests|src:=tests/unit/test_codegen_fused_loops.c|description:=fused__loop__codegen__tests|extra_cmds:= \
+        test_name:=fused-loop-bytecode-tests|src:=tests/unit/test_fused_loop_bytecode.c|description:=fused__loop__bytecode__tests|extra_cmds:= \
+        test_name:=fused-while-tests|src:=tests/unit/test_codegen_fused_while.c|description:=fused__while__codegen__tests|extra_cmds:= \
+        test_name:=scope-tracking-tests|src:=tests/unit/test_scope_stack.c|description:=scope__tracking__tests|extra_cmds:= \
+        test_name:=peephole-tests|src:=tests/unit/test_constant_propagation.c|description:=constant__propagation__tests|extra_cmds:= \
+        test_name:=tagged-union-tests|src:=tests/unit/test_vm_tagged_union.c|description:=tagged__union__tests|extra_cmds:= \
+        test_name:=typed-register-tests|src:=tests/unit/test_vm_typed_registers.c|description:=typed__register__coherence__tests|extra_cmds:= \
+        test_name:=vm-print-tests|src:=tests/unit/test_vm_print_format.c|description:=VM__print__formatting__tests|extra_cmds:= \
+        test_name:=register-window-tests|src:=tests/unit/test_vm_register_windows.c|description:=register__window__reuse__tests|extra_cmds:= \
+        test_name:=spill-gc-tests|src:=tests/unit/test_vm_spill_gc_root.c|description:=spill__GC__regression__tests|extra_cmds:= \
+        test_name:=inc-cmp-jmp-tests|src:=tests/unit/test_vm_inc_cmp_jmp.c|description:=OP_INC_CMP_JMP__regression__tests|extra_cmds:= \
+        test_name:=add-i32-imm-tests|src:=tests/unit/test_vm_add_i32_imm.c|description:=OP_ADD_I32_IMM__regression__tests|extra_cmds:= \
+        test_name:=sub-i32-imm-tests|src:=tests/unit/test_vm_sub_i32_imm.c|description:=OP_SUB_I32_IMM__regression__tests|extra_cmds:= \
+        test_name:=mul-i32-imm-tests|src:=tests/unit/test_vm_mul_i32_imm.c|description:=OP_MUL_I32_IMM__regression__tests|extra_cmds:= \
+        test_name:=inc-r-tests|src:=tests/unit/test_vm_inc_r.c|description:=OP_INC_*__typed__cache__regression__tests|extra_cmds:= \
+        test_name:=hot-loop-tests|src:=tests/unit/test_vm_hot_loop_profiling.c|description:=VM__hot__loop__profiling__tests|extra_cmds:= \
+        test_name:=dec-i32-r-tests|src:=tests/unit/test_vm_dec_i32_r.c|description:=OP_DEC_I32_R__typed__cache__regression__tests|extra_cmds:= \
+        test_name:=register-allocator-tests|src:=tests/unit/test_register_allocator.c|description:=register__allocator__tests|extra_cmds:= \
+        test_name:=compiler-specialization-tests|src:=tests/unit/test_compiler_specialization.c|description:=compiler__specialization__regression__tests|extra_cmds:=ORUS_SKIP_SPECIALIZATION_GUARD_TEST=1 \
+        test_name:=builtin-input-tests|src:=tests/unit/test_builtin_input.c|description:=builtin__input__tests|extra_cmds:=
 
-unit-test: c-unit-tests
+C_UNIT_TEST_TARGETS := $(foreach spec,$(C_UNIT_TEST_SPECS),$(call c_unit_test_get,$(spec),test_name))
 
-wasm: $(WASM_JS)
-	@echo "✓ WebAssembly artifacts ready: $(WASM_JS) and $(WASM_WASM)"
+define c_unit_test_rule
+$(call c_unit_test_bin,$(2)): $(2) $(COMPILER_OBJS) $(VM_OBJS)
+	@mkdir -p $$(dir $$@)
+	@echo "Compiling $(call c_unit_test_desc,$(3))..."
+	@$(CC) $(CFLAGS) $(INCLUDES) -o $$@ $$^ $(LDFLAGS)
+	$(call sign_with_jit,$$@)
 
-$(WASM_JS): $(WASM_SRCS)
-	@mkdir -p $(WASM_OUTPUT_DIR)
-	@echo "Compiling WebAssembly target ($(PROFILE))..."
-	@command -v $(EMCC) >/dev/null 2>&1 || { \
-		echo "Emscripten compiler '$(EMCC)' not found. Install Emscripten SDK or set EMCC=<path>."; \
-		exit 1; \
-	}
-	@$(EMCC) $(WASM_CFLAGS) $(INCLUDES) $(WASM_EMCC_FLAGS) $(WASM_SRCS) -o $(WASM_JS)
+$(1): $(call c_unit_test_bin,$(2))
+	@echo "Running $(call c_unit_test_desc,$(3))..."
+	@$(if $(strip $(4)),$(strip $(4))$(space),)./$(call c_unit_test_bin,$(2))
+endef
 
-$(WASM_WASM): $(WASM_JS)
-
-# Run comprehensive test suite
-test:
-	@$(MAKE) PROFILE=$(TEST_PROFILE) orus-tests
-	@echo ""
-	@echo "==================================="
-	@echo "\033[36m=== C Unit Tests ===\033[0m"
-	@$(MAKE) PROFILE=$(TEST_PROFILE) c-unit-tests
-
-orus-tests: $(ORUS)
-	@echo "Running Orus .orus test suite..."
-	@echo "==================================="
-	@passed=0; failed=0; current_section=""; \
-	if [ "$(ORUS_TEST_EXCLUDE_BENCHMARKS)" = "1" ]; then \
-		pass_tests="$$(find "$(TESTDIR)" -type f -name "*.orus" ! -path "$(TESTDIR)/expected_failures/*" ! -path "$(TESTDIR)/unit/*" ! -path "$(TESTDIR)/benchmarks/*" | sort)"; \
-	else \
-		pass_tests="$$(find "$(TESTDIR)" -type f -name "*.orus" ! -path "$(TESTDIR)/expected_failures/*" ! -path "$(TESTDIR)/unit/*" | sort)"; \
-	fi; \
-	if [ -n "$$pass_tests" ]; then \
-                echo "\033[36m=== Orus Program Tests ===\033[0m"; \
-        fi; \
-        for test_file in $$pass_tests; do \
-                test_dir="$$(dirname "$$test_file")"; \
-                rel_dir="$${test_dir#$(TESTDIR)/}"; \
-                if [ "$$rel_dir" != "$$current_section" ]; then \
-                        current_section="$$rel_dir"; \
-                        echo ""; \
-                        echo "\033[36m--- $$rel_dir ---\033[0m"; \
-                fi; \
-                stdin_file="$${test_file%.orus}.stdin"; \
-                tmp_output=$$(mktemp); \
-                printf "Testing: $$test_file ... "; \
-                if [ -f "$$stdin_file" ]; then \
-                        if ./$(ORUS) "$$test_file" < "$$stdin_file" >"$$tmp_output" 2>&1; then \
-                                printf "\033[32mPASS\033[0m\n"; \
-                                passed=$$((passed + 1)); \
-                        else \
-                                status=$$?; \
-                                printf "\033[31mFAIL\033[0m (exit $$status)\n"; \
-                                failed=$$((failed + 1)); \
-                                if [ -s "$$tmp_output" ]; then \
-                                        echo "        --- output (first 20 lines) ---"; \
-                                        sed -n '1,20p' "$$tmp_output" | sed 's/^/        /'; \
-                                fi; \
-                        fi; \
-                elif ./$(ORUS) "$$test_file" >"$$tmp_output" 2>&1; then \
-                        printf "\033[32mPASS\033[0m\n"; \
-                        passed=$$((passed + 1)); \
-                else \
-                        status=$$?; \
-                        printf "\033[31mFAIL\033[0m (exit $$status)\n"; \
-                        failed=$$((failed + 1)); \
-                        if [ -s "$$tmp_output" ]; then \
-                                echo "        --- output (first 20 lines) ---"; \
-                                sed -n '1,20p' "$$tmp_output" | sed 's/^/        /'; \
-                        fi; \
-                fi; \
-                rm -f "$$tmp_output"; \
-        done; \
-	fail_tests="$$(find "$(TESTDIR)/expected_failures" -type f -name "*.orus" 2>/dev/null | sort)"; \
-	if [ -n "$$fail_tests" ]; then \
-	        echo ""; \
-	        echo "\033[36m=== Expected Failure Tests ===\033[0m"; \
-	fi; \
-        for fail_test in $$fail_tests; do \
-                stdin_file="$${fail_test%.orus}.stdin"; \
-                tmp_output=$$(mktemp); \
-                printf "Testing: $$fail_test ... "; \
-                if [ -f "$$stdin_file" ]; then \
-                        if ./$(ORUS) "$$fail_test" < "$$stdin_file" >"$$tmp_output" 2>&1; then \
-                                printf "\033[31mUNEXPECTED PASS\033[0m\n"; \
-                                failed=$$((failed + 1)); \
-                                if [ -s "$$tmp_output" ]; then \
-                                        echo "        --- output (first 20 lines) ---"; \
-                                        sed -n '1,20p' "$$tmp_output" | sed 's/^/        /'; \
-                                fi; \
-                        else \
-                                printf "... (\033[32mCORRECT FAIL\033[0m)\n"; \
-                                passed=$$((passed + 1)); \
-                        fi; \
-                elif ./$(ORUS) "$$fail_test" >"$$tmp_output" 2>&1; then \
-                        printf "\033[31mUNEXPECTED PASS\033[0m\n"; \
-                        failed=$$((failed + 1)); \
-                        if [ -s "$$tmp_output" ]; then \
-                                echo "        --- output (first 20 lines) ---"; \
-                                sed -n '1,20p' "$$tmp_output" | sed 's/^/        /'; \
-                        fi; \
-                else \
-                        printf "... (\033[32mCORRECT FAIL\033[0m)\n"; \
-                        passed=$$((passed + 1)); \
-                fi; \
-                rm -f "$$tmp_output"; \
-        done; \
-	echo ""; \
-	echo "========================"; \
-	echo "\033[36m=== Test Summary ===\033[0m"; \
-	if [ $$failed -eq 0 ]; then \
-	        echo "\033[32m✓ All $$passed tests passed!\033[0m"; \
-	else \
-	        echo "\033[31m✗ $$failed test(s) failed, $$passed test(s) passed.\033[0m"; \
-	fi; \
-	echo ""; \
-	if [ $$failed -ne 0 ]; then exit 1; fi
-
-
-$(BYTECODE_TEST_BIN): tests/unit/test_jump_patch.c $(COMPILER_OBJS) $(VM_OBJS)
-	@mkdir -p $(dir $@)
-	@echo "Compiling bytecode jump patch tests..."
-	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
-	$(call sign_with_jit,$@)
-
-bytecode-jump-tests: $(BYTECODE_TEST_BIN)
-	@echo "Running bytecode jump patch tests..."
-	@./$(BYTECODE_TEST_BIN)
-
-$(SOURCE_MAP_TEST_BIN): tests/unit/test_source_mapping.c $(COMPILER_OBJS) $(VM_OBJS)
-	@mkdir -p $(dir $@)
-	@echo "Compiling source mapping tests..."
-	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
-	$(call sign_with_jit,$@)
-
-source-map-tests: $(SOURCE_MAP_TEST_BIN)
-	@echo "Running source mapping tests..."
-	@./$(SOURCE_MAP_TEST_BIN)
-
-$(FUSED_LOOP_CODEGEN_TEST_BIN): tests/unit/test_codegen_fused_loops.c $(COMPILER_OBJS) $(VM_OBJS)
-	@mkdir -p $(dir $@)
-	@echo "Compiling fused loop codegen tests..."
-	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
-	$(call sign_with_jit,$@)
-
-fused-loop-tests: $(FUSED_LOOP_CODEGEN_TEST_BIN)
-	@echo "Running fused loop codegen tests..."
-	@./$(FUSED_LOOP_CODEGEN_TEST_BIN)
-
-$(SCOPE_TRACKING_TEST_BIN): tests/unit/test_scope_stack.c $(COMPILER_OBJS) $(VM_OBJS)
-	@mkdir -p $(dir $@)
-	@echo "Compiling scope tracking tests..."
-	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
-	$(call sign_with_jit,$@)
-
-scope-tracking-tests: $(SCOPE_TRACKING_TEST_BIN)
-	@echo "Running scope tracking tests..."
-	@./$(SCOPE_TRACKING_TEST_BIN)
-
-$(FUSED_WHILE_TEST_BIN): tests/unit/test_codegen_fused_while.c $(COMPILER_OBJS) $(VM_OBJS)
-	@mkdir -p $(dir $@)
-	@echo "Compiling fused while codegen tests..."
-	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
-	$(call sign_with_jit,$@)
-
-fused-while-tests: $(FUSED_WHILE_TEST_BIN)
-	@echo "Running fused while codegen tests..."
-	@./$(FUSED_WHILE_TEST_BIN)
-
-$(PEEPHOLE_TEST_BIN): tests/unit/test_constant_propagation.c $(COMPILER_OBJS) $(VM_OBJS)
-	@mkdir -p $(dir $@)
-	@echo "Compiling constant propagation tests..."
-	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
-	$(call sign_with_jit,$@)
-
-peephole-tests: $(PEEPHOLE_TEST_BIN)
-	@echo "Running constant propagation tests..."
-	@./$(PEEPHOLE_TEST_BIN)
+$(foreach spec,$(C_UNIT_TEST_SPECS),$(eval $(call c_unit_test_rule,$(call c_unit_test_get,$(spec),test_name),$(call c_unit_test_get,$(spec),src),$(call c_unit_test_get,$(spec),description),$(call c_unit_test_get,$(spec),extra_cmds))))
 
 $(CONSTANT_FOLD_TEST_BIN): tests/unit/test_constant_folding.c $(COMPILER_OBJS) $(VM_OBJS)
 	@mkdir -p $(dir $@)
@@ -572,147 +410,6 @@ $(CONSTANT_FOLD_TEST_BIN): tests/unit/test_constant_folding.c $(COMPILER_OBJS) $
 constant-fold-tests: $(CONSTANT_FOLD_TEST_BIN)
 	@echo "Running constant folding tests..."
 	@./$(CONSTANT_FOLD_TEST_BIN)
-
-$(TAGGED_UNION_TEST_BIN): tests/unit/test_vm_tagged_union.c $(COMPILER_OBJS) $(VM_OBJS)
-	@mkdir -p $(dir $@)
-	@echo "Compiling tagged union tests..."
-	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
-	$(call sign_with_jit,$@)
-
-tagged-union-tests: $(TAGGED_UNION_TEST_BIN)
-	@echo "Running tagged union tests..."
-	@./$(TAGGED_UNION_TEST_BIN)
-	
-
-$(TYPED_REGISTER_TEST_BIN): tests/unit/test_vm_typed_registers.c $(COMPILER_OBJS) $(VM_OBJS)
-	@mkdir -p $(dir $@)
-	@echo "Compiling typed register coherence tests..."
-	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
-	$(call sign_with_jit,$@)
-
-typed-register-tests: $(TYPED_REGISTER_TEST_BIN)
-	@echo "Running typed register coherence tests..."
-	@./$(TYPED_REGISTER_TEST_BIN)
-
-$(VM_PRINT_TEST_BIN): tests/unit/test_vm_print_format.c $(COMPILER_OBJS) $(VM_OBJS)
-	@mkdir -p $(dir $@)
-	@echo "Compiling VM print formatting tests..."
-	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
-	$(call sign_with_jit,$@)
-
-vm-print-tests: $(VM_PRINT_TEST_BIN)
-	@echo "Running VM print formatting tests..."
-	@./$(VM_PRINT_TEST_BIN)
-
-$(REGISTER_WINDOW_TEST_BIN): tests/unit/test_vm_register_windows.c $(COMPILER_OBJS) $(VM_OBJS)
-	@mkdir -p $(dir $@)
-	@echo "Compiling register window reuse tests..."
-	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
-	$(call sign_with_jit,$@)
-
-register-window-tests: $(REGISTER_WINDOW_TEST_BIN)
-	@echo "Running register window reuse tests..."
-	@./$(REGISTER_WINDOW_TEST_BIN)
-
-$(COMPILER_SPECIALIZATION_TEST_BIN): tests/unit/test_compiler_specialization.c $(COMPILER_OBJS) $(VM_OBJS)
-	@mkdir -p $(dir $@)
-	@echo "Compiling compiler specialization regression tests..."
-	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
-	$(call sign_with_jit,$@)
-
-compiler-specialization-tests: $(COMPILER_SPECIALIZATION_TEST_BIN)
-	@echo "Running compiler specialization regression tests..."
-	@ORUS_SKIP_SPECIALIZATION_GUARD_TEST=1 ./$(COMPILER_SPECIALIZATION_TEST_BIN)
-
-$(SPILL_GC_TEST_BIN): tests/unit/test_vm_spill_gc_root.c $(COMPILER_OBJS) $(VM_OBJS)
-	@mkdir -p $(dir $@)
-	@echo "Compiling spill GC regression tests..."
-	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
-	$(call sign_with_jit,$@)
-
-spill-gc-tests: $(SPILL_GC_TEST_BIN)
-	@echo "Running spill GC regression tests..."
-	@./$(SPILL_GC_TEST_BIN)
-
-$(INC_CMP_JMP_TEST_BIN): tests/unit/test_vm_inc_cmp_jmp.c $(COMPILER_OBJS) $(VM_OBJS)
-	@mkdir -p $(dir $@)
-	@echo "Compiling OP_INC_CMP_JMP regression tests..."
-	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
-	$(call sign_with_jit,$@)
-
-inc-cmp-jmp-tests: $(INC_CMP_JMP_TEST_BIN)
-	@echo "Running OP_INC_CMP_JMP regression tests..."
-	@./$(INC_CMP_JMP_TEST_BIN)
-
-$(FUSED_LOOP_BYTECODE_TEST_BIN): tests/unit/test_fused_loop_bytecode.c $(COMPILER_OBJS) $(VM_OBJS)
-	@mkdir -p $(dir $@)
-	@echo "Compiling fused loop bytecode tests..."
-	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
-	$(call sign_with_jit,$@)
-
-fused-loop-bytecode-tests: $(FUSED_LOOP_BYTECODE_TEST_BIN)
-	@echo "Running fused loop bytecode tests..."
-	@./$(FUSED_LOOP_BYTECODE_TEST_BIN)
-
-$(ADD_I32_IMM_TEST_BIN): tests/unit/test_vm_add_i32_imm.c $(COMPILER_OBJS) $(VM_OBJS)
-	@mkdir -p $(dir $@)
-	@echo "Compiling OP_ADD_I32_IMM regression tests..."
-	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
-	$(call sign_with_jit,$@)
-
-add-i32-imm-tests: $(ADD_I32_IMM_TEST_BIN)
-	@echo "Running OP_ADD_I32_IMM regression tests..."
-	@./$(ADD_I32_IMM_TEST_BIN)
-
-$(SUB_I32_IMM_TEST_BIN): tests/unit/test_vm_sub_i32_imm.c $(COMPILER_OBJS) $(VM_OBJS)
-	@mkdir -p $(dir $@)
-	@echo "Compiling OP_SUB_I32_IMM regression tests..."
-	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
-	$(call sign_with_jit,$@)
-
-sub-i32-imm-tests: $(SUB_I32_IMM_TEST_BIN)
-	@echo "Running OP_SUB_I32_IMM regression tests..."
-	@./$(SUB_I32_IMM_TEST_BIN)
-
-$(MUL_I32_IMM_TEST_BIN): tests/unit/test_vm_mul_i32_imm.c $(COMPILER_OBJS) $(VM_OBJS)
-	@mkdir -p $(dir $@)
-	@echo "Compiling OP_MUL_I32_IMM regression tests..."
-	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
-	$(call sign_with_jit,$@)
-
-mul-i32-imm-tests: $(MUL_I32_IMM_TEST_BIN)
-	@echo "Running OP_MUL_I32_IMM regression tests..."
-	@./$(MUL_I32_IMM_TEST_BIN)
-
-$(INC_R_TEST_BIN): tests/unit/test_vm_inc_r.c $(COMPILER_OBJS) $(VM_OBJS)
-	@mkdir -p $(dir $@)
-	@echo "Compiling OP_INC_* typed cache regression tests..."
-	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
-	$(call sign_with_jit,$@)
-
-inc-r-tests: $(INC_R_TEST_BIN)
-	@echo "Running OP_INC_* typed cache regression tests..."
-	@./$(INC_R_TEST_BIN)
-
-$(DEC_I32_R_TEST_BIN): tests/unit/test_vm_dec_i32_r.c $(COMPILER_OBJS) $(VM_OBJS)
-	@mkdir -p $(dir $@)
-	@echo "Compiling OP_DEC_I32_R typed cache regression tests..."
-	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
-	$(call sign_with_jit,$@)
-
-dec-i32-r-tests: $(DEC_I32_R_TEST_BIN)
-	@echo "Running OP_DEC_I32_R typed cache regression tests..."
-	@./$(DEC_I32_R_TEST_BIN)
-
-$(HOT_LOOP_PROFILING_TEST_BIN): tests/unit/test_vm_hot_loop_profiling.c $(COMPILER_OBJS) $(VM_OBJS)
-	@mkdir -p $(dir $@)
-	@echo "Compiling VM hot loop profiling tests..."
-	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
-	$(call sign_with_jit,$@)
-
-hot-loop-tests: $(HOT_LOOP_PROFILING_TEST_BIN)
-	@echo "Running VM hot loop profiling tests..."
-	@./$(HOT_LOOP_PROFILING_TEST_BIN)
 
 $(JIT_BENCHMARK_TEST_BIN): tests/unit/test_vm_jit_benchmark.c $(COMPILER_OBJS) $(VM_OBJS)
 	@mkdir -p $(dir $@)
@@ -769,6 +466,38 @@ jit-stress-tests: $(JIT_STRESS_TEST_BIN)
 	@echo "Running JIT stress harness..."
 	@./$(JIT_STRESS_TEST_BIN)
 
+.NOTPARALLEL: unit-test c-unit-tests
+c-unit-tests: $(C_UNIT_TEST_TARGETS)
+	@echo "C Unit Test Suite complete."
+
+unit-test: c-unit-tests
+
+wasm: $(WASM_JS)
+	@echo "✓ WebAssembly artifacts ready: $(WASM_JS) and $(WASM_WASM)"
+
+$(WASM_JS): $(WASM_SRCS)
+	@mkdir -p $(WASM_OUTPUT_DIR)
+	@echo "Compiling WebAssembly target ($(PROFILE))..."
+	@command -v $(EMCC) >/dev/null 2>&1 || { \
+		echo "Emscripten compiler '$(EMCC)' not found. Install Emscripten SDK or set EMCC=<path>."; \
+		exit 1; \
+	}
+	@$(EMCC) $(WASM_CFLAGS) $(INCLUDES) $(WASM_EMCC_FLAGS) $(WASM_SRCS) -o $(WASM_JS)
+
+$(WASM_WASM): $(WASM_JS)
+
+# Run comprehensive test suite
+test:
+	@$(MAKE) PROFILE=$(TEST_PROFILE) orus-tests
+	@echo ""
+	@echo "==================================="
+	@echo "\033[36m=== C Unit Tests ===\033[0m"
+	@$(MAKE) PROFILE=$(TEST_PROFILE) c-unit-tests
+
+orus-tests: $(ORUS)
+	@scripts/run_orus_tests.sh "$(ORUS)" "$(TESTDIR)" "$(ORUS_TEST_EXCLUDE_BENCHMARKS)"
+
+
 .PHONY: jit-benchmark-orus
 jit-benchmark-orus: scripts/check_jit_benchmark.py
 	@$(MAKE) PROFILE=release orus
@@ -777,21 +506,6 @@ jit-benchmark-orus: scripts/check_jit_benchmark.py
 		tests/benchmarks/optimized_loop_benchmark.orus \
 		tests/benchmarks/ffi_ping_pong_benchmark.orus
 
-$(REGISTER_ALLOCATOR_TEST_BIN): tests/unit/test_register_allocator.c $(COMPILER_OBJS) $(VM_OBJS)
-	@mkdir -p $(dir $@)
-	@echo "Compiling register allocator tests..."
-	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
-	$(call sign_with_jit,$@)
-
-register-allocator-tests: $(REGISTER_ALLOCATOR_TEST_BIN)
-	@echo "Running register allocator tests..."
-	@./$(REGISTER_ALLOCATOR_TEST_BIN)
-
-$(BUILTIN_INPUT_TEST_BIN): tests/unit/test_builtin_input.c $(COMPILER_OBJS) $(VM_OBJS)
-	@mkdir -p $(dir $@)
-	@echo "Compiling builtin input tests..."
-	@$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
-	$(call sign_with_jit,$@)
 
 builtin-input-tests: $(BUILTIN_INPUT_TEST_BIN)
 	@echo "Running builtin input tests..."
