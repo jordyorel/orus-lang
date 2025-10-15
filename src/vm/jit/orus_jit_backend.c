@@ -40,6 +40,40 @@
 #include <emmintrin.h>
 #endif
 
+#if defined(__APPLE__) && defined(__aarch64__)
+#if defined(__has_include)
+#if __has_include(<ptrauth.h>)
+#include <ptrauth.h>
+#define ORUS_JIT_USE_PTRAUTH 1
+#endif
+#endif
+#endif
+
+#ifndef ORUS_JIT_USE_PTRAUTH
+#define ORUS_JIT_USE_PTRAUTH 0
+#endif
+
+static inline uint64_t
+orus_jit_function_ptr_bits(const void* ptr) {
+#if ORUS_JIT_USE_PTRAUTH
+    void* signed_ptr = __builtin_ptrauth_sign_unauthenticated(
+        (void*)ptr, ptrauth_key_function_pointer, 0);
+    return (uint64_t)(uintptr_t)signed_ptr;
+#else
+    return (uint64_t)(uintptr_t)ptr;
+#endif
+}
+
+static inline JITEntryPoint
+orus_jit_make_entry_point(void* ptr) {
+#if ORUS_JIT_USE_PTRAUTH
+    return (JITEntryPoint)__builtin_ptrauth_sign_unauthenticated(
+        ptr, ptrauth_key_function_pointer, 0);
+#else
+    return (JITEntryPoint)ptr;
+#endif
+}
+
 static size_t orus_jit_detect_page_size(void);
 static void* orus_jit_alloc_executable(size_t size, size_t page_size, size_t* out_capacity);
 static inline void orus_jit_set_write_protection(bool enable);
@@ -825,7 +859,7 @@ orus_jit_backend_emit_helper_stub(struct OrusJitBackend* backend,
     block->code_ptr = buffer;
     block->code_capacity = capacity;
 
-    entry->entry_point = (JITEntryPoint)buffer;
+    entry->entry_point = orus_jit_make_entry_point(buffer);
     entry->code_ptr = buffer;
     entry->code_size = stub_size;
     entry->code_capacity = capacity;
@@ -867,7 +901,7 @@ orus_jit_backend_emit_helper_stub(struct OrusJitBackend* backend,
     if (success) {
         success = orus_jit_emit_a64_mov_imm64(
             code, &index, capacity_words, 0x10u,
-            (uint64_t)(uintptr_t)&orus_jit_execute_block);
+            orus_jit_function_ptr_bits(&orus_jit_execute_block));
     }
 
     if (success) {
@@ -915,7 +949,7 @@ orus_jit_backend_emit_helper_stub(struct OrusJitBackend* backend,
     block->code_ptr = buffer;
     block->code_capacity = capacity;
 
-    entry->entry_point = (JITEntryPoint)buffer;
+    entry->entry_point = orus_jit_make_entry_point(buffer);
     entry->code_ptr = buffer;
     entry->code_size = stub_size;
     entry->code_capacity = capacity;
@@ -4576,7 +4610,7 @@ orus_jit_emit_safepoint_call(OrusJitCodeBuffer* buffer,
     if (!orus_jit_code_buffer_emit_u8(buffer, 0x48) ||
         !orus_jit_code_buffer_emit_u8(buffer, 0xB8) ||
         !orus_jit_code_buffer_emit_u64(buffer,
-                                       (uint64_t)(uintptr_t)&orus_jit_native_linear_safepoint) ||
+                                       orus_jit_function_ptr_bits(&orus_jit_native_linear_safepoint)) ||
         !orus_jit_code_buffer_emit_bytes(buffer, (const uint8_t[]){0xFF, 0xD0}, 2u)) {
         return false;
     }
@@ -5032,7 +5066,7 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                     !orus_jit_code_buffer_emit_u8(&code, 0x48) ||
                     !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
                     !orus_jit_code_buffer_emit_u64(
-                        &code, (uint64_t)(uintptr_t)&orus_jit_native_load_string_const) ||
+                        &code, orus_jit_function_ptr_bits(&orus_jit_native_load_string_const)) ||
                     !orus_jit_code_buffer_emit_bytes(&code, CALL_RAX,
                                                      sizeof(CALL_RAX))) {
                     RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
@@ -5057,7 +5091,7 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                     !orus_jit_code_buffer_emit_u8(&code, 0x48) ||
                     !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
                     !orus_jit_code_buffer_emit_u64(
-                        &code, (uint64_t)(uintptr_t)&orus_jit_native_load_value_const) ||
+                        &code, orus_jit_function_ptr_bits(&orus_jit_native_load_value_const)) ||
                     !orus_jit_code_buffer_emit_bytes(&code, CALL_RAX,
                                                      sizeof(CALL_RAX))) {
                     RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
@@ -5117,7 +5151,7 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                     !orus_jit_code_buffer_emit_u8(&code, 0x48) ||
                     !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
                     !orus_jit_code_buffer_emit_u64(
-                        &code, (uint64_t)(uintptr_t)&orus_jit_native_move_string) ||
+                        &code, orus_jit_function_ptr_bits(&orus_jit_native_move_string)) ||
                     !orus_jit_code_buffer_emit_bytes(&code, CALL_RAX,
                                                      sizeof(CALL_RAX))) {
                     RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
@@ -5138,7 +5172,7 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                     !orus_jit_code_buffer_emit_u8(&code, 0x48) ||
                     !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
                     !orus_jit_code_buffer_emit_u64(
-                        &code, (uint64_t)(uintptr_t)&orus_jit_native_move_value) ||
+                        &code, orus_jit_function_ptr_bits(&orus_jit_native_move_value)) ||
                     !orus_jit_code_buffer_emit_bytes(&code, CALL_RAX,
                                                      sizeof(CALL_RAX))) {
                     RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
@@ -5632,7 +5666,7 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                     !orus_jit_code_buffer_emit_u8(&code, 0x48) ||
                     !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
                     !orus_jit_code_buffer_emit_u64(&code,
-                        (uint64_t)(uintptr_t)&orus_jit_native_concat_string) ||
+                        orus_jit_function_ptr_bits(&orus_jit_native_concat_string)) ||
                     !orus_jit_code_buffer_emit_bytes(&code, CALL_RAX,
                                                      sizeof(CALL_RAX)) ||
                     !orus_jit_code_buffer_emit_bytes(&code,
@@ -5697,7 +5731,7 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                     !orus_jit_code_buffer_emit_u8(&code, 0x48) ||
                     !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
                     !orus_jit_code_buffer_emit_u64(
-                        &code, (uint64_t)(uintptr_t)&orus_jit_native_compare_op) ||
+                        &code, orus_jit_function_ptr_bits(&orus_jit_native_compare_op)) ||
                     !orus_jit_code_buffer_emit_bytes(&code, CALL_RAX,
                                                      sizeof(CALL_RAX))) {
                     RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
@@ -5718,7 +5752,7 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                     !orus_jit_code_buffer_emit_u8(&code, 0x48) ||
                     !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
                     !orus_jit_code_buffer_emit_u64(&code,
-                        (uint64_t)(uintptr_t)&orus_jit_native_to_string) ||
+                        orus_jit_function_ptr_bits(&orus_jit_native_to_string)) ||
                     !orus_jit_code_buffer_emit_bytes(&code, CALL_RAX,
                                                      sizeof(CALL_RAX)) ||
                     !orus_jit_code_buffer_emit_bytes(&code,
@@ -5744,7 +5778,7 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                     !orus_jit_code_buffer_emit_u8(&code, 0x48) ||
                     !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
                     !orus_jit_code_buffer_emit_u64(
-                        &code, (uint64_t)(uintptr_t)&orus_jit_native_type_of) ||
+                        &code, orus_jit_function_ptr_bits(&orus_jit_native_type_of)) ||
                     !orus_jit_code_buffer_emit_bytes(&code, CALL_RAX,
                                                      sizeof(CALL_RAX)) ||
                     !orus_jit_code_buffer_emit_bytes(&code,
@@ -5774,7 +5808,7 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                     !orus_jit_code_buffer_emit_u8(&code, 0x48) ||
                     !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
                     !orus_jit_code_buffer_emit_u64(
-                        &code, (uint64_t)(uintptr_t)&orus_jit_native_is_type) ||
+                        &code, orus_jit_function_ptr_bits(&orus_jit_native_is_type)) ||
                     !orus_jit_code_buffer_emit_bytes(&code, CALL_RAX,
                                                      sizeof(CALL_RAX)) ||
                     !orus_jit_code_buffer_emit_bytes(&code,
@@ -5797,7 +5831,7 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                     !orus_jit_code_buffer_emit_u8(&code, 0x48) ||
                     !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
                     !orus_jit_code_buffer_emit_u64(
-                        &code, (uint64_t)(uintptr_t)&orus_jit_native_time_stamp) ||
+                        &code, orus_jit_function_ptr_bits(&orus_jit_native_time_stamp)) ||
                     !orus_jit_code_buffer_emit_bytes(&code, CALL_RAX,
                                                      sizeof(CALL_RAX))) {
                     RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
@@ -5816,7 +5850,7 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                     !orus_jit_code_buffer_emit_u8(&code, 0x48) ||
                     !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
                     !orus_jit_code_buffer_emit_u64(
-                        &code, (uint64_t)(uintptr_t)&orus_jit_native_make_array) ||
+                        &code, orus_jit_function_ptr_bits(&orus_jit_native_make_array)) ||
                     !orus_jit_code_buffer_emit_bytes(&code, CALL_RAX,
                                                      sizeof(CALL_RAX))) {
                     RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
@@ -5837,7 +5871,7 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                     !orus_jit_code_buffer_emit_u8(&code, 0x48) ||
                     !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
                     !orus_jit_code_buffer_emit_u64(
-                        &code, (uint64_t)(uintptr_t)&orus_jit_native_array_push) ||
+                        &code, orus_jit_function_ptr_bits(&orus_jit_native_array_push)) ||
                     !orus_jit_code_buffer_emit_bytes(&code, CALL_RAX,
                                                      sizeof(CALL_RAX))) {
                     RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
@@ -5858,7 +5892,7 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                     !orus_jit_code_buffer_emit_u8(&code, 0x48) ||
                     !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
                     !orus_jit_code_buffer_emit_u64(
-                        &code, (uint64_t)(uintptr_t)&orus_jit_native_array_pop) ||
+                        &code, orus_jit_function_ptr_bits(&orus_jit_native_array_pop)) ||
                     !orus_jit_code_buffer_emit_bytes(&code, CALL_RAX,
                                                      sizeof(CALL_RAX))) {
                     RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
@@ -5877,7 +5911,7 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                     !orus_jit_code_buffer_emit_u8(&code, 0x48) ||
                     !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
                     !orus_jit_code_buffer_emit_u64(
-                        &code, (uint64_t)(uintptr_t)&orus_jit_native_enum_new) ||
+                        &code, orus_jit_function_ptr_bits(&orus_jit_native_enum_new)) ||
                     !orus_jit_code_buffer_emit_bytes(&code, CALL_RAX,
                                                      sizeof(CALL_RAX))) {
                     RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
@@ -5902,7 +5936,7 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                     !orus_jit_code_buffer_emit_u8(&code, 0x48) ||
                     !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
                     !orus_jit_code_buffer_emit_u64(
-                        &code, (uint64_t)(uintptr_t)&orus_jit_native_print) ||
+                        &code, orus_jit_function_ptr_bits(&orus_jit_native_print)) ||
                     !orus_jit_code_buffer_emit_bytes(&code, CALL_RAX,
                                                      sizeof(CALL_RAX))) {
                     RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
@@ -5931,7 +5965,7 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                     !orus_jit_code_buffer_emit_u8(&code, 0x48) ||
                     !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
                     !orus_jit_code_buffer_emit_u64(
-                        &code, (uint64_t)(uintptr_t)&orus_jit_native_assert_eq) ||
+                        &code, orus_jit_function_ptr_bits(&orus_jit_native_assert_eq)) ||
                     !orus_jit_code_buffer_emit_bytes(&code, CALL_RAX,
                                                      sizeof(CALL_RAX))) {
                     RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
@@ -6005,7 +6039,7 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                     !orus_jit_code_buffer_emit_u8(&code, 0x48) ||
                     !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
                     !orus_jit_code_buffer_emit_u64(
-                        &code, (uint64_t)(uintptr_t)&orus_jit_native_get_iter) ||
+                        &code, orus_jit_function_ptr_bits(&orus_jit_native_get_iter)) ||
                     !orus_jit_code_buffer_emit_bytes(&code, CALL_RAX,
                                                      sizeof(CALL_RAX))) {
                     RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
@@ -6030,7 +6064,7 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                     !orus_jit_code_buffer_emit_u8(&code, 0x48) ||
                     !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
                     !orus_jit_code_buffer_emit_u64(
-                        &code, (uint64_t)(uintptr_t)&orus_jit_native_iter_next) ||
+                        &code, orus_jit_function_ptr_bits(&orus_jit_native_iter_next)) ||
                     !orus_jit_code_buffer_emit_bytes(&code, CALL_RAX,
                                                      sizeof(CALL_RAX))) {
                     RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
@@ -6056,7 +6090,7 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                     !orus_jit_code_buffer_emit_u8(&code, 0x48) ||
                     !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
                     !orus_jit_code_buffer_emit_u64(
-                        &code, (uint64_t)(uintptr_t)&orus_jit_native_range) ||
+                        &code, orus_jit_function_ptr_bits(&orus_jit_native_range)) ||
                     !orus_jit_code_buffer_emit_bytes(&code, CALL_RAX,
                                                      sizeof(CALL_RAX))) {
                     RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
@@ -6077,7 +6111,7 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                     !orus_jit_code_buffer_emit_u8(&code, 0x48) ||
                     !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
                     !orus_jit_code_buffer_emit_u64(&code,
-                        (uint64_t)(uintptr_t)&orus_jit_native_convert_i32_to_i64) ||
+                        orus_jit_function_ptr_bits(&orus_jit_native_convert_i32_to_i64)) ||
                     !orus_jit_code_buffer_emit_bytes(&code, CALL_RAX,
                                                      sizeof(CALL_RAX))) {
                     RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
@@ -6098,7 +6132,7 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                     !orus_jit_code_buffer_emit_u8(&code, 0x48) ||
                     !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
                     !orus_jit_code_buffer_emit_u64(&code,
-                        (uint64_t)(uintptr_t)&orus_jit_native_convert_u32_to_u64) ||
+                        orus_jit_function_ptr_bits(&orus_jit_native_convert_u32_to_u64)) ||
                     !orus_jit_code_buffer_emit_bytes(&code, CALL_RAX,
                                                      sizeof(CALL_RAX))) {
                     RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
@@ -6119,7 +6153,7 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                     !orus_jit_code_buffer_emit_u8(&code, 0x48) ||
                     !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
                     !orus_jit_code_buffer_emit_u64(
-                        &code, (uint64_t)(uintptr_t)&orus_jit_native_convert_u32_to_i32) ||
+                        &code, orus_jit_function_ptr_bits(&orus_jit_native_convert_u32_to_i32)) ||
                     !orus_jit_code_buffer_emit_bytes(&code, CALL_RAX,
                                                      sizeof(CALL_RAX))) {
                     RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
@@ -6140,7 +6174,7 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                     !orus_jit_code_buffer_emit_u8(&code, 0x48) ||
                     !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
                     !orus_jit_code_buffer_emit_u64(&code,
-                        (uint64_t)(uintptr_t)&orus_jit_native_convert_i32_to_f64) ||
+                        orus_jit_function_ptr_bits(&orus_jit_native_convert_i32_to_f64)) ||
                     !orus_jit_code_buffer_emit_bytes(&code, CALL_RAX,
                                                      sizeof(CALL_RAX))) {
                     RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
@@ -6161,7 +6195,7 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                     !orus_jit_code_buffer_emit_u8(&code, 0x48) ||
                     !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
                     !orus_jit_code_buffer_emit_u64(&code,
-                        (uint64_t)(uintptr_t)&orus_jit_native_convert_i64_to_f64) ||
+                        orus_jit_function_ptr_bits(&orus_jit_native_convert_i64_to_f64)) ||
                     !orus_jit_code_buffer_emit_bytes(&code, CALL_RAX,
                                                      sizeof(CALL_RAX))) {
                     RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
@@ -6182,7 +6216,7 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                     !orus_jit_code_buffer_emit_u8(&code, 0x48) ||
                     !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
                     !orus_jit_code_buffer_emit_u64(&code,
-                        (uint64_t)(uintptr_t)&orus_jit_native_convert_f64_to_i32) ||
+                        orus_jit_function_ptr_bits(&orus_jit_native_convert_f64_to_i32)) ||
                     !orus_jit_code_buffer_emit_bytes(&code, CALL_RAX,
                                                      sizeof(CALL_RAX))) {
                     RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
@@ -6203,7 +6237,7 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                     !orus_jit_code_buffer_emit_u8(&code, 0x48) ||
                     !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
                     !orus_jit_code_buffer_emit_u64(&code,
-                        (uint64_t)(uintptr_t)&orus_jit_native_convert_f64_to_i64) ||
+                        orus_jit_function_ptr_bits(&orus_jit_native_convert_f64_to_i64)) ||
                     !orus_jit_code_buffer_emit_bytes(&code, CALL_RAX,
                                                      sizeof(CALL_RAX))) {
                     RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
@@ -6224,7 +6258,7 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                     !orus_jit_code_buffer_emit_u8(&code, 0x48) ||
                     !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
                     !orus_jit_code_buffer_emit_u64(&code,
-                        (uint64_t)(uintptr_t)&orus_jit_native_convert_f64_to_u32) ||
+                        orus_jit_function_ptr_bits(&orus_jit_native_convert_f64_to_u32)) ||
                     !orus_jit_code_buffer_emit_bytes(&code, CALL_RAX,
                                                      sizeof(CALL_RAX))) {
                     RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
@@ -6245,7 +6279,7 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                     !orus_jit_code_buffer_emit_u8(&code, 0x48) ||
                     !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
                     !orus_jit_code_buffer_emit_u64(&code,
-                        (uint64_t)(uintptr_t)&orus_jit_native_convert_u32_to_f64) ||
+                        orus_jit_function_ptr_bits(&orus_jit_native_convert_u32_to_f64)) ||
                     !orus_jit_code_buffer_emit_bytes(&code, CALL_RAX,
                                                      sizeof(CALL_RAX))) {
                     RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
@@ -6292,7 +6326,7 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                         !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
                         !orus_jit_code_buffer_emit_u64(
                             &code,
-                            (uint64_t)(uintptr_t)&orus_jit_native_fused_loop_step) ||
+                            orus_jit_function_ptr_bits(&orus_jit_native_fused_loop_step)) ||
                         !orus_jit_code_buffer_emit_bytes(&code, CALL_RAX,
                                                          sizeof(CALL_RAX)) ||
                         !orus_jit_code_buffer_emit_u8(&code, 0x48) ||
@@ -6672,7 +6706,7 @@ finalize_block:;
         !orus_jit_code_buffer_emit_u8(&code, 0x48) ||
         !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
         !orus_jit_code_buffer_emit_u64(
-            &code, (uint64_t)(uintptr_t)&orus_jit_native_type_bailout) ||
+            &code, orus_jit_function_ptr_bits(&orus_jit_native_type_bailout)) ||
         !orus_jit_code_buffer_emit_bytes(&code, (const uint8_t[]){0xFF, 0xD0}, 2u)) {
         RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
     }
@@ -6727,7 +6761,7 @@ finalize_block:;
 
     orus_jit_flush_icache(buffer, code.size);
 
-    entry->entry_point = (JITEntryPoint)buffer;
+    entry->entry_point = orus_jit_make_entry_point(buffer);
     entry->code_ptr = buffer;
     entry->code_size = code.size;
     entry->code_capacity = capacity;
@@ -6962,11 +6996,11 @@ dynasm_emit_helper_call(struct DynAsmActionBuffer* buffer,
     return dynasm_emit_bytes_track(buffer, code_offset, (const uint8_t[]){0x48, 0xB8},
                                    2u) &&
            dynasm_emit_u64_le(buffer, code_offset,
-                              (uint64_t)(uintptr_t)helper) &&
+                              orus_jit_function_ptr_bits(helper)) &&
            dynasm_emit_bytes_track(buffer, code_offset, (const uint8_t[]){0x49, 0xBB},
                                    2u) &&
            dynasm_emit_u64_le(buffer, code_offset,
-                              (uint64_t)(uintptr_t)stub) &&
+                              orus_jit_function_ptr_bits(stub)) &&
            dynasm_emit_bytes_track(buffer, code_offset,
                                    (const uint8_t[]){0x41, 0xFF, 0xD3}, 3u);
 }
@@ -8990,7 +9024,7 @@ orus_jit_backend_compile_ir_x86(struct OrusJitBackend* backend,
     entry->code_ptr = buffer;
     entry->code_size = encoded_size;
     entry->code_capacity = capacity;
-    entry->entry_point = (JITEntryPoint)buffer;
+    entry->entry_point = orus_jit_make_entry_point(buffer);
     entry->debug_name = "orus_jit_ir_stub";
 
     block->code_ptr = buffer;
@@ -9527,7 +9561,7 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                         &code, 4u, inst->operands.load_const.immediate_bits) ||
                     !orus_jit_a64_emit_mov_imm64_buffer(
                         &code, 16u,
-                        (uint64_t)(uintptr_t)&orus_jit_native_linear_load) ||
+                        orus_jit_function_ptr_bits(&orus_jit_native_linear_load)) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
                     !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
@@ -9546,7 +9580,7 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                                                         (uint64_t)inst->value_kind) ||
                     !orus_jit_a64_emit_mov_imm64_buffer(
                         &code, 16u,
-                        (uint64_t)(uintptr_t)&orus_jit_native_load_value_const) ||
+                        orus_jit_function_ptr_bits(&orus_jit_native_load_value_const)) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
                     !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
@@ -9570,7 +9604,7 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                         &code, 4u, (uint64_t)inst->operands.move.src_reg) ||
                     !orus_jit_a64_emit_mov_imm64_buffer(
                         &code, 16u,
-                        (uint64_t)(uintptr_t)&orus_jit_native_linear_move) ||
+                        orus_jit_function_ptr_bits(&orus_jit_native_linear_move)) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
                     !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
@@ -9587,7 +9621,7 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                         &code, 3u, (uint64_t)inst->operands.move.src_reg) ||
                     !orus_jit_a64_emit_mov_imm64_buffer(
                         &code, 16u,
-                        (uint64_t)(uintptr_t)&orus_jit_native_move_string) ||
+                        orus_jit_function_ptr_bits(&orus_jit_native_move_string)) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
                     !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
@@ -9604,7 +9638,7 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                         &code, 3u, (uint64_t)inst->operands.move.src_reg) ||
                     !orus_jit_a64_emit_mov_imm64_buffer(
                         &code, 16u,
-                        (uint64_t)(uintptr_t)&orus_jit_native_move_value) ||
+                        orus_jit_function_ptr_bits(&orus_jit_native_move_value)) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
                     !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
@@ -9641,7 +9675,7 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                         &code, 6u, (uint64_t)inst->operands.arithmetic.rhs_reg) ||
                     !orus_jit_a64_emit_mov_imm64_buffer(
                         &code, 16u,
-                        (uint64_t)(uintptr_t)&orus_jit_native_linear_arithmetic) ||
+                        orus_jit_function_ptr_bits(&orus_jit_native_linear_arithmetic)) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
                     !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
@@ -9693,7 +9727,7 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                         &code, 5u, (uint64_t)inst->operands.arithmetic.rhs_reg) ||
                     !orus_jit_a64_emit_mov_imm64_buffer(
                         &code, 16u,
-                        (uint64_t)(uintptr_t)&orus_jit_native_compare_op) ||
+                        orus_jit_function_ptr_bits(&orus_jit_native_compare_op)) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u)) {
                     A64_RETURN(JIT_BACKEND_OUT_OF_MEMORY);
                 }
@@ -9710,7 +9744,7 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                         &code, 4u, (uint64_t)inst->operands.arithmetic.rhs_reg) ||
                     !orus_jit_a64_emit_mov_imm64_buffer(
                         &code, 16u,
-                        (uint64_t)(uintptr_t)&orus_jit_native_concat_string) ||
+                        orus_jit_function_ptr_bits(&orus_jit_native_concat_string)) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
                     !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
@@ -9817,7 +9851,7 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                                                 : -1)) ||
                     !orus_jit_a64_emit_mov_imm64_buffer(
                         &code, 16u,
-                        (uint64_t)(uintptr_t)&orus_jit_native_fused_loop_step) ||
+                        orus_jit_function_ptr_bits(&orus_jit_native_fused_loop_step)) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, 0x3100041Fu) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, A64_B_COND(0x0u, 0u)) ||
@@ -9854,7 +9888,7 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                         &code, 3u, (uint64_t)inst->operands.unary.src_reg) ||
                     !orus_jit_a64_emit_mov_imm64_buffer(
                         &code, 16u,
-                        (uint64_t)(uintptr_t)&orus_jit_native_to_string) ||
+                        orus_jit_function_ptr_bits(&orus_jit_native_to_string)) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
                     !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
@@ -9871,7 +9905,7 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                         &code, 3u, (uint64_t)inst->operands.type_of.value_reg) ||
                     !orus_jit_a64_emit_mov_imm64_buffer(
                         &code, 16u,
-                        (uint64_t)(uintptr_t)&orus_jit_native_type_of) ||
+                        orus_jit_function_ptr_bits(&orus_jit_native_type_of)) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
                     !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
@@ -9890,7 +9924,7 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                         &code, 4u, (uint64_t)inst->operands.is_type.type_reg) ||
                     !orus_jit_a64_emit_mov_imm64_buffer(
                         &code, 16u,
-                        (uint64_t)(uintptr_t)&orus_jit_native_is_type) ||
+                        orus_jit_function_ptr_bits(&orus_jit_native_is_type)) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
                     !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
@@ -9905,7 +9939,7 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                         &code, 2u, (uint64_t)inst->operands.time_stamp.dst_reg) ||
                     !orus_jit_a64_emit_mov_imm64_buffer(
                         &code, 16u,
-                        (uint64_t)(uintptr_t)&orus_jit_native_time_stamp) ||
+                        orus_jit_function_ptr_bits(&orus_jit_native_time_stamp)) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
                     !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
@@ -9920,7 +9954,7 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                         &code, 2u, (uint64_t)(uintptr_t)inst) ||
                     !orus_jit_a64_emit_mov_imm64_buffer(
                         &code, 16u,
-                        (uint64_t)(uintptr_t)&orus_jit_native_make_array) ||
+                        orus_jit_function_ptr_bits(&orus_jit_native_make_array)) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
                     !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
@@ -9937,7 +9971,7 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                         &code, 3u, (uint64_t)inst->operands.array_push.value_reg) ||
                     !orus_jit_a64_emit_mov_imm64_buffer(
                         &code, 16u,
-                        (uint64_t)(uintptr_t)&orus_jit_native_array_push) ||
+                        orus_jit_function_ptr_bits(&orus_jit_native_array_push)) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
                     !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
@@ -9954,7 +9988,7 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                         &code, 3u, (uint64_t)inst->operands.array_pop.array_reg) ||
                     !orus_jit_a64_emit_mov_imm64_buffer(
                         &code, 16u,
-                        (uint64_t)(uintptr_t)&orus_jit_native_array_pop) ||
+                        orus_jit_function_ptr_bits(&orus_jit_native_array_pop)) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
                     !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
@@ -9969,7 +10003,7 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                         &code, 2u, (uint64_t)(uintptr_t)inst) ||
                     !orus_jit_a64_emit_mov_imm64_buffer(
                         &code, 16u,
-                        (uint64_t)(uintptr_t)&orus_jit_native_enum_new) ||
+                        orus_jit_function_ptr_bits(&orus_jit_native_enum_new)) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
                     !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
@@ -9988,7 +10022,7 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                         &code, 4u, (uint64_t)inst->operands.print.newline) ||
                     !orus_jit_a64_emit_mov_imm64_buffer(
                         &code, 16u,
-                        (uint64_t)(uintptr_t)&orus_jit_native_print) ||
+                        orus_jit_function_ptr_bits(&orus_jit_native_print)) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
                     !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
@@ -10009,7 +10043,7 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                         &code, 5u, (uint64_t)inst->operands.assert_eq.expected_reg) ||
                     !orus_jit_a64_emit_mov_imm64_buffer(
                         &code, 16u,
-                        (uint64_t)(uintptr_t)&orus_jit_native_assert_eq) ||
+                        orus_jit_function_ptr_bits(&orus_jit_native_assert_eq)) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
                     !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
@@ -10027,7 +10061,7 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                                                             (uint64_t)inst->operands.call_native.spill_count) ||
                         !orus_jit_a64_emit_mov_imm64_buffer(
                             &code, 16u,
-                            (uint64_t)(uintptr_t)&orus_jit_native_flush_typed_range) ||
+                            orus_jit_function_ptr_bits(&orus_jit_native_flush_typed_range)) ||
                         !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u)) {
                         A64_RETURN(JIT_BACKEND_OUT_OF_MEMORY);
                     }
@@ -10068,7 +10102,7 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                         (uint64_t)inst->operands.get_iter.iterable_reg) ||
                     !orus_jit_a64_emit_mov_imm64_buffer(
                         &code, 16u,
-                        (uint64_t)(uintptr_t)&orus_jit_native_get_iter) ||
+                        orus_jit_function_ptr_bits(&orus_jit_native_get_iter)) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
                     !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
@@ -10090,7 +10124,7 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                         (uint64_t)inst->operands.iter_next.has_value_reg) ||
                     !orus_jit_a64_emit_mov_imm64_buffer(
                         &code, 16u,
-                        (uint64_t)(uintptr_t)&orus_jit_native_iter_next) ||
+                        orus_jit_function_ptr_bits(&orus_jit_native_iter_next)) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
                     !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
@@ -10112,7 +10146,7 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                         &code, 4u, (uint64_t)(uintptr_t)args) ||
                     !orus_jit_a64_emit_mov_imm64_buffer(
                         &code, 16u,
-                        (uint64_t)(uintptr_t)&orus_jit_native_range) ||
+                        orus_jit_function_ptr_bits(&orus_jit_native_range)) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
                     !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
@@ -10129,7 +10163,7 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                         &code, 3u, (uint64_t)inst->operands.unary.src_reg) ||
                     !orus_jit_a64_emit_mov_imm64_buffer(
                         &code, 16u,
-                        (uint64_t)(uintptr_t)&orus_jit_native_convert_i32_to_i64) ||
+                        orus_jit_function_ptr_bits(&orus_jit_native_convert_i32_to_i64)) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
                     !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
@@ -10146,7 +10180,7 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                         &code, 3u, (uint64_t)inst->operands.unary.src_reg) ||
                     !orus_jit_a64_emit_mov_imm64_buffer(
                         &code, 16u,
-                        (uint64_t)(uintptr_t)&orus_jit_native_convert_u32_to_u64) ||
+                        orus_jit_function_ptr_bits(&orus_jit_native_convert_u32_to_u64)) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
                     !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
@@ -10163,7 +10197,7 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                         &code, 3u, (uint64_t)inst->operands.unary.src_reg) ||
                     !orus_jit_a64_emit_mov_imm64_buffer(
                         &code, 16u,
-                        (uint64_t)(uintptr_t)&orus_jit_native_convert_u32_to_i32) ||
+                        orus_jit_function_ptr_bits(&orus_jit_native_convert_u32_to_i32)) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
                     !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
@@ -10180,7 +10214,7 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                         &code, 3u, (uint64_t)inst->operands.unary.src_reg) ||
                     !orus_jit_a64_emit_mov_imm64_buffer(
                         &code, 16u,
-                        (uint64_t)(uintptr_t)&orus_jit_native_convert_i32_to_f64) ||
+                        orus_jit_function_ptr_bits(&orus_jit_native_convert_i32_to_f64)) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
                     !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
@@ -10197,7 +10231,7 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                         &code, 3u, (uint64_t)inst->operands.unary.src_reg) ||
                     !orus_jit_a64_emit_mov_imm64_buffer(
                         &code, 16u,
-                        (uint64_t)(uintptr_t)&orus_jit_native_convert_i64_to_f64) ||
+                        orus_jit_function_ptr_bits(&orus_jit_native_convert_i64_to_f64)) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
                     !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
@@ -10214,7 +10248,7 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                         &code, 3u, (uint64_t)inst->operands.unary.src_reg) ||
                     !orus_jit_a64_emit_mov_imm64_buffer(
                         &code, 16u,
-                        (uint64_t)(uintptr_t)&orus_jit_native_convert_f64_to_i32) ||
+                        orus_jit_function_ptr_bits(&orus_jit_native_convert_f64_to_i32)) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
                     !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
@@ -10231,7 +10265,7 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                         &code, 3u, (uint64_t)inst->operands.unary.src_reg) ||
                     !orus_jit_a64_emit_mov_imm64_buffer(
                         &code, 16u,
-                        (uint64_t)(uintptr_t)&orus_jit_native_convert_f64_to_i64) ||
+                        orus_jit_function_ptr_bits(&orus_jit_native_convert_f64_to_i64)) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
                     !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
@@ -10248,7 +10282,7 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                         &code, 3u, (uint64_t)inst->operands.unary.src_reg) ||
                     !orus_jit_a64_emit_mov_imm64_buffer(
                         &code, 16u,
-                        (uint64_t)(uintptr_t)&orus_jit_native_convert_f64_to_u32) ||
+                        orus_jit_function_ptr_bits(&orus_jit_native_convert_f64_to_u32)) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
                     !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
@@ -10265,7 +10299,7 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                         &code, 3u, (uint64_t)inst->operands.unary.src_reg) ||
                     !orus_jit_a64_emit_mov_imm64_buffer(
                         &code, 16u,
-                        (uint64_t)(uintptr_t)&orus_jit_native_convert_u32_to_f64) ||
+                        orus_jit_function_ptr_bits(&orus_jit_native_convert_u32_to_f64)) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
                     !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
@@ -10277,7 +10311,7 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                 if (!orus_jit_a64_code_buffer_emit_u32(&code, A64_LDR_X(0u, 31u, 0u)) ||
                     !orus_jit_a64_emit_mov_imm64_buffer(
                         &code, 16u,
-                        (uint64_t)(uintptr_t)&orus_jit_native_linear_safepoint) ||
+                        orus_jit_function_ptr_bits(&orus_jit_native_linear_safepoint)) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u)) {
                     A64_RETURN(JIT_BACKEND_OUT_OF_MEMORY);
                 }
@@ -10421,7 +10455,7 @@ finalize_block:;
     __asm__ __volatile__("isb" ::: "memory");
 #endif
 
-    entry->entry_point = (JITEntryPoint)buffer;
+    entry->entry_point = orus_jit_make_entry_point(buffer);
     entry->code_ptr = buffer;
     entry->code_size = encoded_size;
     entry->code_capacity = capacity;
@@ -10496,7 +10530,7 @@ orus_jit_backend_compile_ir_arm64(struct OrusJitBackend* backend,
                         (uint64_t)inst->operands.arithmetic.rhs_reg) ||
                     !orus_jit_a64_emit_mov_imm64_buffer(
                         &code, 16u,
-                        (uint64_t)(uintptr_t)&orus_jit_native_linear_arithmetic) ||
+                        orus_jit_function_ptr_bits(&orus_jit_native_linear_arithmetic)) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
                     !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
@@ -10536,7 +10570,7 @@ orus_jit_backend_compile_ir_arm64(struct OrusJitBackend* backend,
                         (uint64_t)inst->operands.arithmetic.rhs_reg) ||
                     !orus_jit_a64_emit_mov_imm64_buffer(
                         &code, 16u,
-                        (uint64_t)(uintptr_t)&orus_jit_native_compare_op) ||
+                        orus_jit_function_ptr_bits(&orus_jit_native_compare_op)) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u) ||
                     !orus_jit_a64_code_buffer_emit_u32(&code, A64_CBZ_W(0u, 0u)) ||
                     !orus_jit_a64_patch_list_append(&bail_patches, code.count - 1u)) {
@@ -10560,7 +10594,7 @@ orus_jit_backend_compile_ir_arm64(struct OrusJitBackend* backend,
     if (!orus_jit_a64_code_buffer_emit_u32(&code, 0xAA1F03E1u) ||
         !orus_jit_a64_emit_mov_imm64_buffer(
             &code, 16u,
-            (uint64_t)(uintptr_t)&orus_jit_native_type_bailout) ||
+            orus_jit_function_ptr_bits(&orus_jit_native_type_bailout)) ||
         !orus_jit_a64_code_buffer_emit_u32(&code, 0xD63F0200u)) {
         ARM64_RETURN(JIT_BACKEND_OUT_OF_MEMORY);
     }
@@ -10611,7 +10645,7 @@ orus_jit_backend_compile_ir_arm64(struct OrusJitBackend* backend,
     entry->code_ptr = buffer;
     entry->code_size = encoded_size;
     entry->code_capacity = capacity;
-    entry->entry_point = (JITEntryPoint)buffer;
+    entry->entry_point = orus_jit_make_entry_point(buffer);
     entry->debug_name = "orus_jit_ir_stub_arm64";
 
     orus_jit_a64_code_buffer_release(&code);
