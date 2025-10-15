@@ -5097,7 +5097,9 @@ translation_done:
     typedef struct OrusJitSpecializationDefPatch {
         bool has_constant;
         bool keep;
-        size_t new_index;
+        uint32_t bytecode_offset;
+        OrusJitIROpcode opcode;
+        uint16_t ordinal;
     } OrusJitSpecializationDefPatch;
 
     OrusJitSpecializationDefPatch specialization_patches[REGISTER_COUNT];
@@ -5121,29 +5123,23 @@ translation_done:
             }
 
             patch->keep = true;
+            patch->bytecode_offset = def->bytecode_offset;
+            patch->opcode = def->opcode;
 
             size_t old_index = (size_t)(def - program->instructions);
-            size_t removed_before = 0u;
+            uint16_t ordinal = 0u;
             for (size_t i = 0; i < old_index; ++i) {
-                if (program->instructions[i].bytecode_offset <
-                    canonicalization_plan.body_start) {
-                    ++removed_before;
+                const OrusJitIRInstruction* candidate = &program->instructions[i];
+                if (candidate->bytecode_offset < canonicalization_plan.body_start) {
+                    continue;
+                }
+                if (candidate->bytecode_offset == patch->bytecode_offset &&
+                    candidate->opcode == patch->opcode) {
+                    ++ordinal;
                 }
             }
 
-            size_t compacted_index = old_index - removed_before;
-            size_t new_index = compacted_index;
-
-            if (canonicalization_plan.guard_compacted_index != SIZE_MAX) {
-                if (compacted_index == canonicalization_plan.guard_compacted_index) {
-                    new_index = 0u;
-                } else if (canonicalization_plan.guard_compacted_index > 0u &&
-                           compacted_index < canonicalization_plan.guard_compacted_index) {
-                    new_index = compacted_index + 1u;
-                }
-            }
-
-            patch->new_index = new_index;
+            patch->ordinal = ordinal;
         }
     }
 
@@ -5155,12 +5151,34 @@ translation_done:
                 continue;
             }
 
-            if (!patch->keep || patch->new_index >= program->count) {
+            if (!patch->keep) {
                 specialization_state.defining_instruction[reg] = NULL;
                 continue;
             }
 
-            OrusJitIRInstruction* def = &program->instructions[patch->new_index];
+            size_t match_index = SIZE_MAX;
+            uint16_t seen = 0u;
+            for (size_t i = 0; i < program->count; ++i) {
+                OrusJitIRInstruction* candidate = &program->instructions[i];
+                if (candidate->bytecode_offset != patch->bytecode_offset ||
+                    candidate->opcode != patch->opcode) {
+                    continue;
+                }
+
+                if (seen == patch->ordinal) {
+                    match_index = i;
+                    break;
+                }
+
+                ++seen;
+            }
+
+            if (match_index == SIZE_MAX) {
+                specialization_state.defining_instruction[reg] = NULL;
+                continue;
+            }
+
+            OrusJitIRInstruction* def = &program->instructions[match_index];
             specialization_state.defining_instruction[reg] = def;
             def->optimization_flags |= ORUS_JIT_IR_FLAG_LOOP_INVARIANT;
         }
