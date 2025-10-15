@@ -1642,10 +1642,23 @@ make_translation_result(OrusJitTranslationStatus status,
     return result;
 }
 
-static void
-orus_jit_ir_canonicalize_loop(OrusJitIRProgram* program) {
+typedef struct OrusJitIRLoopCanonicalizationPlan {
+    uint32_t body_start;
+    uint32_t guard_offset;
+    size_t guard_compacted_index;
+    bool guard_found;
+} OrusJitIRLoopCanonicalizationPlan;
+
+static OrusJitIRLoopCanonicalizationPlan
+orus_jit_ir_make_loop_canonicalization_plan(const OrusJitIRProgram* program) {
+    OrusJitIRLoopCanonicalizationPlan plan;
+    plan.body_start = 0u;
+    plan.guard_offset = 0u;
+    plan.guard_compacted_index = SIZE_MAX;
+    plan.guard_found = false;
+
     if (!program || !program->instructions || program->count == 0) {
-        return;
+        return plan;
     }
 
     uint32_t loop_start = program->loop_start_offset;
@@ -1703,10 +1716,42 @@ orus_jit_ir_canonicalize_loop(OrusJitIRProgram* program) {
         body_start = loop_start;
     }
 
+    plan.body_start = body_start;
+    plan.guard_offset = body_start;
+
+    size_t compacted_index = 0u;
+    for (size_t i = 0; i < program->count; ++i) {
+        const OrusJitIRInstruction* inst = &program->instructions[i];
+        if (inst->bytecode_offset < body_start) {
+            continue;
+        }
+        if (!plan.guard_found &&
+            (inst->opcode == ORUS_JIT_IR_OP_INC_CMP_JUMP ||
+             inst->opcode == ORUS_JIT_IR_OP_DEC_CMP_JUMP)) {
+            plan.guard_compacted_index = compacted_index;
+            plan.guard_offset = inst->bytecode_offset;
+            plan.guard_found = true;
+        }
+        ++compacted_index;
+    }
+
+    return plan;
+}
+
+static void
+orus_jit_ir_canonicalize_loop(OrusJitIRProgram* program,
+                              const OrusJitIRLoopCanonicalizationPlan* plan_arg) {
+    if (!program || !program->instructions || program->count == 0) {
+        return;
+    }
+
+    OrusJitIRLoopCanonicalizationPlan plan =
+        plan_arg ? *plan_arg : orus_jit_ir_make_loop_canonicalization_plan(program);
+
     size_t write_index = 0u;
     for (size_t read_index = 0u; read_index < program->count; ++read_index) {
         OrusJitIRInstruction inst = program->instructions[read_index];
-        if (inst.bytecode_offset < body_start) {
+        if (inst.bytecode_offset < plan.body_start) {
             continue;
         }
         if (write_index != read_index) {
@@ -1716,31 +1761,17 @@ orus_jit_ir_canonicalize_loop(OrusJitIRProgram* program) {
     }
     program->count = write_index;
 
-    size_t guard_index = SIZE_MAX;
-    uint32_t guard_offset = loop_start;
-    for (size_t i = 0; i < program->count; ++i) {
-        OrusJitIRInstruction* inst = &program->instructions[i];
-        if (inst->opcode == ORUS_JIT_IR_OP_INC_CMP_JUMP ||
-            inst->opcode == ORUS_JIT_IR_OP_DEC_CMP_JUMP) {
-            guard_index = i;
-            guard_offset = inst->bytecode_offset;
-            break;
-        }
-    }
-
-    if (guard_index != SIZE_MAX && guard_index > 0u) {
-        OrusJitIRInstruction guard_inst = program->instructions[guard_index];
+    if (plan.guard_found && plan.guard_compacted_index < program->count &&
+        plan.guard_compacted_index > 0u) {
+        OrusJitIRInstruction guard_inst =
+            program->instructions[plan.guard_compacted_index];
         memmove(program->instructions + 1,
                 program->instructions,
-                guard_index * sizeof(OrusJitIRInstruction));
+                plan.guard_compacted_index * sizeof(OrusJitIRInstruction));
         program->instructions[0] = guard_inst;
     }
 
-    if (guard_index != SIZE_MAX) {
-        program->loop_start_offset = guard_offset;
-    } else {
-        program->loop_start_offset = body_start;
-    }
+    program->loop_start_offset = plan.guard_found ? plan.guard_offset : plan.body_start;
 }
 
 static OrusJitValueKind
@@ -5060,16 +5091,78 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
 
 translation_done:
     program->loop_end_offset = (uint32_t)offset;
-    orus_jit_ir_canonicalize_loop(program);
+    OrusJitIRLoopCanonicalizationPlan canonicalization_plan =
+        orus_jit_ir_make_loop_canonicalization_plan(program);
+
+    typedef struct OrusJitSpecializationDefPatch {
+        bool has_constant;
+        bool keep;
+        size_t new_index;
+    } OrusJitSpecializationDefPatch;
+
+    OrusJitSpecializationDefPatch specialization_patches[REGISTER_COUNT];
     if (specialization_enabled) {
+        memset(specialization_patches, 0, sizeof(specialization_patches));
         for (uint16_t reg = 0; reg < REGISTER_COUNT; ++reg) {
             if (!orus_jit_specialization_has_constant(&specialization_state, reg)) {
                 continue;
             }
+
             OrusJitIRInstruction* def = specialization_state.defining_instruction[reg];
-            if (def) {
-                def->optimization_flags |= ORUS_JIT_IR_FLAG_LOOP_INVARIANT;
+            if (!def) {
+                continue;
             }
+
+            OrusJitSpecializationDefPatch* patch = &specialization_patches[reg];
+            patch->has_constant = true;
+            if (def->bytecode_offset < canonicalization_plan.body_start) {
+                patch->keep = false;
+                continue;
+            }
+
+            patch->keep = true;
+
+            size_t old_index = (size_t)(def - program->instructions);
+            size_t removed_before = 0u;
+            for (size_t i = 0; i < old_index; ++i) {
+                if (program->instructions[i].bytecode_offset <
+                    canonicalization_plan.body_start) {
+                    ++removed_before;
+                }
+            }
+
+            size_t compacted_index = old_index - removed_before;
+            size_t new_index = compacted_index;
+
+            if (canonicalization_plan.guard_compacted_index != SIZE_MAX) {
+                if (compacted_index == canonicalization_plan.guard_compacted_index) {
+                    new_index = 0u;
+                } else if (canonicalization_plan.guard_compacted_index > 0u &&
+                           compacted_index < canonicalization_plan.guard_compacted_index) {
+                    new_index = compacted_index + 1u;
+                }
+            }
+
+            patch->new_index = new_index;
+        }
+    }
+
+    orus_jit_ir_canonicalize_loop(program, &canonicalization_plan);
+    if (specialization_enabled) {
+        for (uint16_t reg = 0; reg < REGISTER_COUNT; ++reg) {
+            OrusJitSpecializationDefPatch* patch = &specialization_patches[reg];
+            if (!patch->has_constant) {
+                continue;
+            }
+
+            if (!patch->keep || patch->new_index >= program->count) {
+                specialization_state.defining_instruction[reg] = NULL;
+                continue;
+            }
+
+            OrusJitIRInstruction* def = &program->instructions[patch->new_index];
+            specialization_state.defining_instruction[reg] = def;
+            def->optimization_flags |= ORUS_JIT_IR_FLAG_LOOP_INVARIANT;
         }
     }
 #undef INSERT_SAFEPOINT
