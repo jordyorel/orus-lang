@@ -14,6 +14,12 @@
 #define _POSIX_C_SOURCE 200809L
 #endif
 
+#if defined(__APPLE__)
+#ifndef _DARWIN_C_SOURCE
+#define _DARWIN_C_SOURCE 1
+#endif
+#endif
+
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdbool.h>
