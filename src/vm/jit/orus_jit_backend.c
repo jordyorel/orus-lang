@@ -320,7 +320,7 @@ orus_jit_register_region(void* base,
     for (size_t i = 0; i < g_orus_jit_region_count; ++i) {
         if (g_orus_jit_regions[i].base == base) {
             g_orus_jit_regions[i].size = size;
-            g_orus_jit_regions[i].executable = false;
+            g_orus_jit_regions[i].executable = requires_write_protect;
             g_orus_jit_regions[i].uses_mmap = uses_mmap;
             g_orus_jit_regions[i].requires_write_protect = requires_write_protect;
             orus_jit_region_unlock();
@@ -343,7 +343,7 @@ orus_jit_register_region(void* base,
 
     g_orus_jit_regions[g_orus_jit_region_count].base = base;
     g_orus_jit_regions[g_orus_jit_region_count].size = size;
-    g_orus_jit_regions[g_orus_jit_region_count].executable = false;
+    g_orus_jit_regions[g_orus_jit_region_count].executable = requires_write_protect;
     g_orus_jit_regions[g_orus_jit_region_count].uses_mmap = uses_mmap;
     g_orus_jit_regions[g_orus_jit_region_count].requires_write_protect =
         requires_write_protect;
@@ -405,22 +405,22 @@ orus_jit_protect_region(OrusJitExecutableRegion* region, bool executable) {
 #else
     int prot = executable ? (PROT_READ | PROT_EXEC) : (PROT_READ | PROT_WRITE);
     if (mprotect(region->base, region->size, prot) != 0) {
-#if ORUS_JIT_USE_APPLE_JIT
         int protect_errno = errno;
+#if ORUS_JIT_USE_APPLE_JIT
         if (protect_errno == EPERM || protect_errno == ENOTSUP) {
-            LOG_WARN("[JIT] mprotect(PROT_%s) rejected with %s. Ensure the binary carries the com.apple.security.cs.allow-jit entitlement to enable native execution.",
-                     executable ? "EXEC" : "WRITE", strerror(protect_errno));
+            LOG_WARN("[JIT] mprotect(PROT_%s) rejected with %s (errno=%d). Ensure the binary carries the com.apple.security.cs.allow-jit entitlement to enable native execution.",
+                     executable ? "EXEC" : "WRITE",
+                     strerror(protect_errno), protect_errno);
+        } else {
+            LOG_WARN("[JIT] mprotect(PROT_%s) failed with %s (errno=%d).",
+                     executable ? "EXEC" : "WRITE",
+                     strerror(protect_errno), protect_errno);
         }
-        LOG_ERROR("[JIT] mprotect(%p, %zu, %s) failed: %s",
-                  region->base, region->size,
-                  executable ? "RX" : "RW",
-                  strerror(protect_errno));
-#else
-        LOG_ERROR("[JIT] mprotect(%p, %zu, %s) failed: %s",
-                  region->base, region->size,
-                  executable ? "RX" : "RW",
-                  strerror(errno));
 #endif
+        LOG_ERROR("[JIT] mprotect(%p, %zu, %s) failed: %s (errno=%d)",
+                  region->base, region->size,
+                  executable ? "RX" : "RW",
+                  strerror(protect_errno), protect_errno);
         return false;
     }
 #endif
@@ -754,17 +754,24 @@ orus_jit_alloc_executable(size_t size, size_t page_size, size_t* out_capacity) {
 #endif
 #if ORUS_JIT_USE_APPLE_JIT
     flags |= MAP_JIT;
+    prot = PROT_READ | PROT_EXEC;
 #endif
 
     void* buffer = mmap(NULL, capacity, prot, flags, -1, 0);
     if (buffer == MAP_FAILED) {
+        int map_errno = errno;
         buffer = NULL;
 #if ORUS_JIT_USE_APPLE_JIT
-        const int error_code = errno;
-        if (error_code == EPERM || error_code == ENOTSUP) {
-            LOG_WARN("[JIT] mmap(MAP_JIT) failed with %s. macOS requires the com.apple.security.cs.allow-jit entitlement to enable native tier execution. The build tries to sign targets automatically; rerun scripts/macos/sign-with-jit.sh if codesign was unavailable during build.",
-                     strerror(error_code));
+        if (map_errno == EPERM || map_errno == ENOTSUP) {
+            LOG_WARN("[JIT] mmap(MAP_JIT) failed with %s (errno=%d). macOS requires the com.apple.security.cs.allow-jit entitlement to enable native tier execution. The build tries to sign targets automatically; rerun scripts/macos/sign-with-jit.sh if codesign was unavailable during build.",
+                     strerror(map_errno), map_errno);
+        } else {
+            LOG_WARN("[JIT] mmap(MAP_JIT) failed with %s (errno=%d).",
+                     strerror(map_errno), map_errno);
         }
+#else
+        LOG_WARN("[JIT] mmap failed with %s (errno=%d) while allocating executable pages.",
+                 strerror(map_errno), map_errno);
 #endif
         errno = 0;
     }
@@ -773,7 +780,12 @@ orus_jit_alloc_executable(size_t size, size_t page_size, size_t* out_capacity) {
         requires_write_protect = true;
     } else {
         int fallback_flags = flags & ~MAP_JIT;
+#if ORUS_JIT_USE_APPLE_JIT
+        int fallback_prot = PROT_READ | PROT_WRITE | PROT_EXEC;
+        buffer = mmap(NULL, capacity, fallback_prot, fallback_flags, -1, 0);
+#else
         buffer = mmap(NULL, capacity, prot, fallback_flags, -1, 0);
+#endif
         if (buffer == MAP_FAILED) {
             buffer = NULL;
             errno = 0;
@@ -809,15 +821,28 @@ orus_jit_alloc_executable(size_t size, size_t page_size, size_t* out_capacity) {
 static inline bool
 orus_jit_set_write_protection(bool enable) {
 #if ORUS_JIT_USE_APPLE_JIT
-    if (orus_jit_regions_need_write_toggle()) {
-        pthread_jit_write_protect_np(enable);
+    bool needs_toggle = orus_jit_regions_need_write_toggle();
+    if (!enable && needs_toggle) {
+        pthread_jit_write_protect_np(false);
     }
 #endif
+
     if (!orus_jit_apply_region_protection(enable)) {
         LOG_ERROR("[JIT] Failed to transition executable heap to %s mode",
                   enable ? "read/execute" : "read/write");
+#if ORUS_JIT_USE_APPLE_JIT
+        if (!enable && needs_toggle) {
+            pthread_jit_write_protect_np(true);
+        }
+#endif
         return false;
     }
+
+#if ORUS_JIT_USE_APPLE_JIT
+    if (enable && needs_toggle) {
+        pthread_jit_write_protect_np(true);
+    }
+#endif
     return true;
 }
 

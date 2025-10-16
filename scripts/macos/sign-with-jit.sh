@@ -57,7 +57,7 @@ fi
 echo "Signing ${#TARGETS[@]} target(s) with JIT entitlement..."
 for target in "${TARGETS[@]}"; do
     echo "  • $target"
-    codesign --force --sign - --entitlements "$ENTITLEMENTS_FILE" "$target"
+    codesign --force --sign - --options runtime --entitlements "$ENTITLEMENTS_FILE" "$target"
 done
 
 echo "All targets signed. macOS will now permit MAP_JIT allocations for these binaries."

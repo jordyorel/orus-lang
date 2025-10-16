@@ -320,6 +320,7 @@ debug:
 
 release:
 	@$(MAKE) PROFILE=release all
+	$(call sign_with_jit,./orus)
 
 profiling:
 	@$(MAKE) PROFILE=profiling
