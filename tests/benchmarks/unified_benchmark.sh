@@ -3,7 +3,7 @@
 # Unified Fair Benchmark Script for Orus Language
 # Single compilation, fair cross-language comparison, clean results
 
-set -e
+# set -e
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -153,8 +153,9 @@ run_benchmark_category() {
     run_language_benchmark "Orus" "$orus_file" "\"$ORUS_BINARY\" \"$SCRIPT_DIR/$orus_file\""
     
     if [[ -f "$SCRIPT_DIR/${base_name}.py" ]]; then
-        run_language_benchmark "Python" "${base_name}.py" "python3 \"$SCRIPT_DIR/${base_name}.py\""
+        run_language_benchmark "Python" "${base_name}.py" "/opt/homebrew/bin/python3 \"$SCRIPT_DIR/${base_name}.py\""
     fi
+
     
     if [[ -f "$SCRIPT_DIR/${base_name}.js" ]]; then
         run_language_benchmark "JavaScript" "${base_name}.js" "node \"$SCRIPT_DIR/${base_name}.js\""
@@ -391,7 +392,7 @@ while IFS=':' read -r avg_time lang; do
             "Orus")
                 # Get dispatch mode from current build
                 dispatch_mode=$("$ORUS_BINARY" --version 2>/dev/null | grep "Dispatch Mode" | cut -d: -f2 | sed 's/^ *//' || echo "Unknown")
-                description="Advanced register-based VM"
+                description="Register-based VM"
                 ;;
             "Lua")
                 description="Lua classic"

@@ -14,6 +14,7 @@
 #include <stdint.h>
 
 #include "vm/jit_backend.h"
+#include "vm/jit_debug.h"
 #include "vm/jit_translation.h"
 
 #ifdef __cplusplus
@@ -23,6 +24,11 @@ extern "C" {
 // Aggregated counters captured after executing a program with the JIT either
 // disabled (interpreter baseline) or enabled. Timings are recorded in
 // nanoseconds using CLOCK_MONOTONIC to align with other VM benchmarking code.
+typedef struct {
+    OrusJitGuardTraceEvent* events;
+    size_t count;
+} OrusJitGuardTraceLog;
+
 typedef struct OrusJitRunStats {
     double duration_ns;
     uint64_t compilation_count;
@@ -47,6 +53,7 @@ typedef struct OrusJitRunStats {
     JITBackendStatus backend_status;
     const char* backend_message;
     OrusJitTierSkipStats tier_skips;
+    OrusJitGuardTraceLog guard_trace;
 } OrusJitRunStats;
 
 // Execute the provided source buffer under either interpreter or JIT mode and
@@ -66,6 +73,8 @@ bool vm_jit_run_source_benchmark(const char* source,
 bool vm_jit_benchmark_file(const char* path,
                            OrusJitRunStats* interpreter_stats,
                            OrusJitRunStats* jit_stats);
+
+void vm_jit_run_stats_release(OrusJitRunStats* stats);
 
 #ifdef __cplusplus
 } // extern "C"

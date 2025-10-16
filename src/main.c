@@ -141,27 +141,14 @@ jit_backend_status_name(JITBackendStatus status) {
     }
 }
 
-static void print_guard_trace_summary(void) {
-    size_t guard_count = orus_jit_debug_guard_trace_count();
-    if (guard_count == 0) {
+static void print_guard_trace_summary(const OrusJitRunStats* stats) {
+    if (!stats || !stats->guard_trace.events || stats->guard_trace.count == 0u) {
         printf("[JIT Benchmark] guard trace: no guard exits were recorded.\n");
         return;
     }
 
-    OrusJitGuardTraceEvent* events =
-        (OrusJitGuardTraceEvent*)calloc(guard_count, sizeof(*events));
-    if (!events) {
-        printf("[JIT Benchmark] guard trace: failed to allocate buffer for %zu events.\n",
-               guard_count);
-        return;
-    }
-
-    size_t copied = orus_jit_debug_copy_guard_traces(events, guard_count);
-    if (copied == 0) {
-        printf("[JIT Benchmark] guard trace: buffer empty after capture.\n");
-        free(events);
-        return;
-    }
+    const OrusJitGuardTraceEvent* events = stats->guard_trace.events;
+    size_t guard_count = stats->guard_trace.count;
 
     typedef struct {
         uint16_t function_index;
@@ -174,10 +161,10 @@ static void print_guard_trace_summary(void) {
     } OrusGuardTraceSummary;
 
     OrusGuardTraceSummary* summaries = (OrusGuardTraceSummary*)calloc(
-        copied, sizeof(*summaries));
+        guard_count, sizeof(*summaries));
     if (!summaries) {
         printf("[JIT Benchmark] guard trace: insufficient memory for summaries; printing raw events.\n");
-        for (size_t i = 0; i < copied; ++i) {
+        for (size_t i = 0; i < guard_count; ++i) {
             const OrusJitGuardTraceEvent* event = &events[i];
             const char* reason =
                 (event->reason[0] != '\0') ? event->reason : "(no reason)";
@@ -189,12 +176,11 @@ static void print_guard_trace_summary(void) {
                    reason,
                    (uint64_t)event->timestamp);
         }
-        free(events);
         return;
     }
 
     size_t summary_count = 0u;
-    for (size_t i = 0; i < copied; ++i) {
+    for (size_t i = 0; i < guard_count; ++i) {
         const OrusJitGuardTraceEvent* event = &events[i];
         size_t j = 0u;
         for (; j < summary_count; ++j) {
@@ -238,7 +224,7 @@ static void print_guard_trace_summary(void) {
         }
     }
 
-    printf("[JIT Benchmark] guard trace events captured: %zu\n", copied);
+    printf("[JIT Benchmark] guard trace events captured: %zu\n", guard_count);
     if (summary_count > 0u) {
         OrusGuardTraceSummary* dominant = &summaries[dominant_index];
         const char* reason =
@@ -271,7 +257,6 @@ static void print_guard_trace_summary(void) {
     }
 
     free(summaries);
-    free(events);
 }
 
 // Note: showUsage and showVersion functions are now handled by the configuration system
@@ -509,7 +494,10 @@ int main(int argc, const char* argv[]) {
                    "program; execution remained in the interpreter.\n");
         }
 
-        print_guard_trace_summary();
+        print_guard_trace_summary(&jit_stats);
+
+        vm_jit_run_stats_release(&jit_stats);
+        vm_jit_run_stats_release(&interpreter_stats);
 
         config_destroy(config);
         shutdownLogger();

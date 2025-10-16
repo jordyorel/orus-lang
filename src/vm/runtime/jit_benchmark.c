@@ -98,6 +98,11 @@ vm_jit_run_source_benchmark(const char* source,
         return false;
     }
 
+    if (stats) {
+        stats->guard_trace.events = NULL;
+        stats->guard_trace.count = 0u;
+    }
+
     OrusJitDebugConfig previous_debug_config = {0};
     OrusJitDebugConfig benchmark_debug_config = {0};
     bool restore_debug_config = false;
@@ -189,6 +194,31 @@ vm_jit_run_source_benchmark(const char* source,
         stats->backend_status = vm.jit_backend_status;
         stats->backend_message = vm.jit_backend_message;
         stats->tier_skips = vm.jit_tier_skips;
+        size_t guard_count = orus_jit_debug_guard_trace_count();
+        if (guard_count > 0u) {
+            OrusJitGuardTraceEvent* guard_buffer =
+                (OrusJitGuardTraceEvent*)calloc(guard_count,
+                                                sizeof(*guard_buffer));
+            if (guard_buffer) {
+                size_t copied = orus_jit_debug_copy_guard_traces(
+                    guard_buffer, guard_count);
+                if (copied == 0u) {
+                    free(guard_buffer);
+                } else {
+                    if (copied < guard_count) {
+                        OrusJitGuardTraceEvent* resized =
+                            (OrusJitGuardTraceEvent*)realloc(
+                                guard_buffer,
+                                copied * sizeof(*guard_buffer));
+                        if (resized) {
+                            guard_buffer = resized;
+                        }
+                    }
+                    stats->guard_trace.events = guard_buffer;
+                    stats->guard_trace.count = copied;
+                }
+            }
+        }
     }
 
     cleanup_error_reporting();
@@ -253,4 +283,14 @@ vm_jit_benchmark_file(const char* path,
 
     free(source);
     return ok_interpreter && ok_jit;
+}
+
+void
+vm_jit_run_stats_release(OrusJitRunStats* stats) {
+    if (!stats) {
+        return;
+    }
+    free(stats->guard_trace.events);
+    stats->guard_trace.events = NULL;
+    stats->guard_trace.count = 0u;
 }
