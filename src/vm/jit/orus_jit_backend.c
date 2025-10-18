@@ -997,6 +997,10 @@ orus_jit_backend_emit_helper_stub(struct OrusJitBackend* backend,
     entry->code_size = stub_size;
     entry->code_capacity = capacity;
     entry->debug_name = "orus_jit_helper_stub";
+    orus_jit_debug_publish_disassembly(&block->program,
+                                       backend->target,
+                                       buffer,
+                                       stub_size);
     return JIT_BACKEND_OK;
 #elif defined(__aarch64__)
     size_t capacity = 0;
@@ -1093,6 +1097,10 @@ orus_jit_backend_emit_helper_stub(struct OrusJitBackend* backend,
     entry->code_size = stub_size;
     entry->code_capacity = capacity;
     entry->debug_name = "orus_jit_helper_stub";
+    orus_jit_debug_publish_disassembly(&block->program,
+                                       backend->target,
+                                       buffer,
+                                       stub_size);
     return JIT_BACKEND_OK;
 #else
     (void)block;

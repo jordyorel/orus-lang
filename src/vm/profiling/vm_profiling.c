@@ -1382,6 +1382,80 @@ orus_jit_value_kind_is_boxed_like(OrusJitValueKind kind) {
     }
 }
 
+static OrusJitValueKind
+orus_jit_select_widened_integer_kind(OrusJitValueKind opcode_kind,
+                                     OrusJitValueKind lhs_kind,
+                                     OrusJitValueKind rhs_kind,
+                                     OrusJitValueKind dst_kind) {
+    if (opcode_kind == ORUS_JIT_VALUE_I32) {
+        if (lhs_kind == ORUS_JIT_VALUE_I64 || rhs_kind == ORUS_JIT_VALUE_I64 ||
+            dst_kind == ORUS_JIT_VALUE_I64) {
+            return ORUS_JIT_VALUE_I64;
+        }
+    } else if (opcode_kind == ORUS_JIT_VALUE_U32) {
+        if (lhs_kind == ORUS_JIT_VALUE_U64 || rhs_kind == ORUS_JIT_VALUE_U64 ||
+            dst_kind == ORUS_JIT_VALUE_U64) {
+            return ORUS_JIT_VALUE_U64;
+        }
+    }
+    return opcode_kind;
+}
+
+static bool
+orus_jit_try_upgrade_arithmetic_opcode(OrusJitIROpcode* opcode,
+                                       OrusJitValueKind from_kind,
+                                       OrusJitValueKind to_kind) {
+    if (!opcode || from_kind == to_kind) {
+        return true;
+    }
+
+    if (from_kind == ORUS_JIT_VALUE_I32 && to_kind == ORUS_JIT_VALUE_I64) {
+        switch (*opcode) {
+            case ORUS_JIT_IR_OP_ADD_I32:
+                *opcode = ORUS_JIT_IR_OP_ADD_I64;
+                return true;
+            case ORUS_JIT_IR_OP_SUB_I32:
+                *opcode = ORUS_JIT_IR_OP_SUB_I64;
+                return true;
+            case ORUS_JIT_IR_OP_MUL_I32:
+                *opcode = ORUS_JIT_IR_OP_MUL_I64;
+                return true;
+            case ORUS_JIT_IR_OP_DIV_I32:
+                *opcode = ORUS_JIT_IR_OP_DIV_I64;
+                return true;
+            case ORUS_JIT_IR_OP_MOD_I32:
+                *opcode = ORUS_JIT_IR_OP_MOD_I64;
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    if (from_kind == ORUS_JIT_VALUE_U32 && to_kind == ORUS_JIT_VALUE_U64) {
+        switch (*opcode) {
+            case ORUS_JIT_IR_OP_ADD_U32:
+                *opcode = ORUS_JIT_IR_OP_ADD_U64;
+                return true;
+            case ORUS_JIT_IR_OP_SUB_U32:
+                *opcode = ORUS_JIT_IR_OP_SUB_U64;
+                return true;
+            case ORUS_JIT_IR_OP_MUL_U32:
+                *opcode = ORUS_JIT_IR_OP_MUL_U64;
+                return true;
+            case ORUS_JIT_IR_OP_DIV_U32:
+                *opcode = ORUS_JIT_IR_OP_DIV_U64;
+                return true;
+            case ORUS_JIT_IR_OP_MOD_U32:
+                *opcode = ORUS_JIT_IR_OP_MOD_U64;
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    return false;
+}
+
 static bool
 map_arithmetic_opcode(uint8_t opcode,
                       OrusJitIROpcode* ir_opcode,
@@ -2687,11 +2761,6 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
                         ORUS_JIT_VALUE_I32, (uint32_t)offset);
                 }
                 OrusJitValueKind lhs_kind = ORUS_JIT_GET_KIND(lhs);
-                if (lhs_kind == ORUS_JIT_VALUE_STRING) {
-                    return make_translation_result(
-                        ORUS_JIT_TRANSLATE_STATUS_UNSUPPORTED_VALUE_KIND,
-                        ORUS_JIT_IR_OP_LT_I32, lhs_kind, (uint32_t)offset);
-                }
                 if (lhs_kind != ORUS_JIT_VALUE_I32) {
                     if (orus_jit_value_kind_is_boxed_like(lhs_kind) &&
                         lhs < REGISTER_COUNT) {
@@ -2709,11 +2778,6 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
                     }
                 }
                 OrusJitValueKind rhs_kind = ORUS_JIT_GET_KIND(rhs);
-                if (rhs_kind == ORUS_JIT_VALUE_STRING) {
-                    return make_translation_result(
-                        ORUS_JIT_TRANSLATE_STATUS_UNSUPPORTED_VALUE_KIND,
-                        ORUS_JIT_IR_OP_LT_I32, rhs_kind, (uint32_t)offset);
-                }
                 if (rhs_kind != ORUS_JIT_VALUE_I32) {
                     if (orus_jit_value_kind_is_boxed_like(rhs_kind) &&
                         rhs < REGISTER_COUNT) {
@@ -4917,7 +4981,22 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
             uint16_t dst = chunk->code[offset + 1u];
             uint16_t lhs = chunk->code[offset + 2u];
             uint16_t rhs = chunk->code[offset + 3u];
+            OrusJitValueKind dst_kind_tracked = ORUS_JIT_GET_KIND(dst);
             OrusJitValueKind lhs_kind_tracked = ORUS_JIT_GET_KIND(lhs);
+            OrusJitValueKind rhs_kind_tracked = ORUS_JIT_GET_KIND(rhs);
+
+            OrusJitValueKind widened_kind = orus_jit_select_widened_integer_kind(
+                kind, lhs_kind_tracked, rhs_kind_tracked, dst_kind_tracked);
+            if (widened_kind != kind) {
+                if (!orus_jit_try_upgrade_arithmetic_opcode(&ir_opcode, kind,
+                                                            widened_kind)) {
+                    return make_translation_result(
+                        ORUS_JIT_TRANSLATE_STATUS_UNSUPPORTED_VALUE_KIND,
+                        ir_opcode, widened_kind, (uint32_t)offset);
+                }
+                kind = widened_kind;
+            }
+
             if (lhs_kind_tracked != kind) {
                 if (lhs_kind_tracked == ORUS_JIT_VALUE_BOXED && lhs < REGISTER_COUNT &&
                     (register_writers[lhs] == NULL ||
@@ -4933,7 +5012,6 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
                     lhs_kind_tracked = ORUS_JIT_GET_KIND(lhs);
                 }
             }
-            OrusJitValueKind rhs_kind_tracked = ORUS_JIT_GET_KIND(rhs);
             if (rhs_kind_tracked != kind) {
                 if (rhs_kind_tracked == ORUS_JIT_VALUE_BOXED && rhs < REGISTER_COUNT &&
                     (register_writers[rhs] == NULL ||
@@ -5410,6 +5488,18 @@ void queue_tier_up(VMState* vm_state, const HotPathSample* sample) {
     if (program.instructions) {
         orus_jit_ir_program_reset(&program);
     }
+    if (status == JIT_BACKEND_OK && entry.debug_name &&
+        strcmp(entry.debug_name, "orus_jit_helper_stub") == 0) {
+        vm_state->jit_loop_blocklist[sample->loop] = true;
+        vm_jit_record_tier_skip(vm_state, sample,
+                                ORUS_JIT_TIER_SKIP_REASON_BACKEND_UNSUPPORTED,
+                                translation.status, JIT_BACKEND_UNSUPPORTED,
+                                translation.bytecode_offset);
+        orus_jit_backend_release_entry(vm_state->jit_backend, &entry);
+        vm_jit_enter_entry(vm_state, &vm_state->jit_entry_stub);
+        return;
+    }
+
     if (status == JIT_BACKEND_UNSUPPORTED) {
         LOG_VM_DEBUG("JIT",
                      "Skipping tier-up for func=%u loop=%u: backend"
