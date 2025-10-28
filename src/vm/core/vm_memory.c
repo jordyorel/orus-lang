@@ -476,6 +476,12 @@ static void mark_spill_entry(uint16_t register_id, Value* value, void* user_data
     }
 }
 
+static void mark_value_from_pointer(const void* value) {
+    if (value) {
+        markValue(*(const Value*)value);
+    }
+}
+
 static inline uint16_t typed_window_ctz(uint64_t mask) {
 #if defined(__GNUC__) || defined(__clang__)
     return (uint16_t)__builtin_ctzll(mask);
@@ -558,6 +564,8 @@ static void markRoots() {
     if (vm.register_file.spilled_registers) {
         spill_manager_visit_entries(vm.register_file.spilled_registers, mark_spill_entry, NULL);
     }
+
+    orus_jit_gc_visit_native_roots(&vm, mark_value_from_pointer);
 
     if (vm.chunk) {
         for (int i = 0; i < vm.chunk->constants.count; i++) {

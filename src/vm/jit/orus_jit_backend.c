@@ -78,6 +78,12 @@ orus_jit_make_entry_point(void* ptr) {
 #endif
 }
 
+#define ORUS_JIT_ROOT_MAP_WORDS ((REGISTER_COUNT + 63u) / 64u)
+
+typedef struct {
+    uint64_t registers[ORUS_JIT_ROOT_MAP_WORDS];
+} OrusJitGCRootMap;
+
 static size_t orus_jit_detect_page_size(void);
 static void* orus_jit_alloc_executable(size_t size, size_t page_size, size_t* out_capacity);
 static inline bool orus_jit_set_write_protection(bool enable);
@@ -115,6 +121,9 @@ typedef struct {
     JITBackendStatus status;
     const char* message;
 } OrusJitBackendAvailability;
+
+static bool dynasm_instruction_dest_reg(const OrusJitIRInstruction* inst,
+                                        uint16_t* out_reg);
 
 static OrusJitBackendAvailability
 orus_jit_backend_detect_availability(void) {
@@ -174,10 +183,152 @@ typedef struct OrusJitNativeBlock {
     OrusJitIRProgram program;
     void* code_ptr;
     size_t code_capacity;
+    OrusJitGCRootMap gc_root_map;
     struct OrusJitNativeBlock* next;
 } OrusJitNativeBlock;
 
 static OrusJitNativeBlock* g_native_blocks = NULL;
+
+static inline void
+orus_jit_gc_root_map_clear(OrusJitGCRootMap* map) {
+    if (!map) {
+        return;
+    }
+    for (size_t i = 0; i < ORUS_JIT_ROOT_MAP_WORDS; ++i) {
+        map->registers[i] = 0u;
+    }
+}
+
+static inline void
+orus_jit_gc_root_map_mark(OrusJitGCRootMap* map, uint16_t reg) {
+    if (!map || reg >= REGISTER_COUNT) {
+        return;
+    }
+    size_t word = (size_t)reg / 64u;
+    uint16_t bit = (uint16_t)(reg & 63u);
+    map->registers[word] |= UINT64_C(1) << bit;
+}
+
+static inline void
+orus_jit_gc_root_map_mark_range(OrusJitGCRootMap* map,
+                                uint16_t start,
+                                uint16_t count) {
+    if (!map || count == 0u) {
+        return;
+    }
+    uint32_t limit = (uint32_t)start + (uint32_t)count;
+    for (uint32_t index = start; index < limit; ++index) {
+        orus_jit_gc_root_map_mark(map, (uint16_t)index);
+    }
+}
+
+static void
+orus_jit_gc_root_map_build(OrusJitGCRootMap* map,
+                           const OrusJitIRProgram* program) {
+    orus_jit_gc_root_map_clear(map);
+    if (!map || !program || !program->instructions) {
+        return;
+    }
+
+    for (size_t i = 0; i < program->count; ++i) {
+        const OrusJitIRInstruction* inst = &program->instructions[i];
+        if (!inst) {
+            continue;
+        }
+
+        if (inst->value_kind == ORUS_JIT_VALUE_STRING ||
+            inst->value_kind == ORUS_JIT_VALUE_BOXED) {
+            uint16_t dst = 0u;
+            if (dynasm_instruction_dest_reg(inst, &dst)) {
+                orus_jit_gc_root_map_mark(map, dst);
+            }
+        }
+
+        switch (inst->opcode) {
+            case ORUS_JIT_IR_OP_LOAD_STRING_CONST:
+            case ORUS_JIT_IR_OP_LOAD_VALUE_CONST:
+                break;
+            case ORUS_JIT_IR_OP_MOVE_STRING:
+            case ORUS_JIT_IR_OP_MOVE_VALUE:
+                orus_jit_gc_root_map_mark(map, inst->operands.move.src_reg);
+                break;
+            case ORUS_JIT_IR_OP_CONCAT_STRING:
+                orus_jit_gc_root_map_mark(map, inst->operands.arithmetic.lhs_reg);
+                orus_jit_gc_root_map_mark(map, inst->operands.arithmetic.rhs_reg);
+                break;
+            case ORUS_JIT_IR_OP_TO_STRING:
+                orus_jit_gc_root_map_mark(map, inst->operands.unary.src_reg);
+                break;
+            case ORUS_JIT_IR_OP_TYPE_OF:
+                orus_jit_gc_root_map_mark(map, inst->operands.type_of.value_reg);
+                break;
+            case ORUS_JIT_IR_OP_IS_TYPE:
+                orus_jit_gc_root_map_mark(map, inst->operands.is_type.value_reg);
+                orus_jit_gc_root_map_mark(map, inst->operands.is_type.type_reg);
+                break;
+            case ORUS_JIT_IR_OP_MAKE_ARRAY:
+                orus_jit_gc_root_map_mark_range(map,
+                                                inst->operands.make_array.first_reg,
+                                                inst->operands.make_array.count);
+                break;
+            case ORUS_JIT_IR_OP_ARRAY_PUSH:
+                orus_jit_gc_root_map_mark(map, inst->operands.array_push.array_reg);
+                orus_jit_gc_root_map_mark(map, inst->operands.array_push.value_reg);
+                break;
+            case ORUS_JIT_IR_OP_ARRAY_POP:
+                orus_jit_gc_root_map_mark(map, inst->operands.array_pop.array_reg);
+                break;
+            case ORUS_JIT_IR_OP_ENUM_NEW:
+                orus_jit_gc_root_map_mark_range(map,
+                                                inst->operands.enum_new.payload_start,
+                                                inst->operands.enum_new.payload_count);
+                break;
+            case ORUS_JIT_IR_OP_ASSERT_EQ:
+                orus_jit_gc_root_map_mark(map, inst->operands.assert_eq.label_reg);
+                orus_jit_gc_root_map_mark(map, inst->operands.assert_eq.actual_reg);
+                orus_jit_gc_root_map_mark(map, inst->operands.assert_eq.expected_reg);
+                break;
+            case ORUS_JIT_IR_OP_PRINT:
+                orus_jit_gc_root_map_mark_range(map,
+                                                inst->operands.print.first_reg,
+                                                inst->operands.print.arg_count);
+                break;
+            case ORUS_JIT_IR_OP_CALL_NATIVE:
+            case ORUS_JIT_IR_OP_CALL_FOREIGN: {
+                if (inst->value_kind == ORUS_JIT_VALUE_STRING ||
+                    inst->value_kind == ORUS_JIT_VALUE_BOXED) {
+                    orus_jit_gc_root_map_mark(map,
+                                              inst->operands.call_native.dst_reg);
+                }
+                orus_jit_gc_root_map_mark_range(map,
+                                                inst->operands.call_native.first_arg_reg,
+                                                inst->operands.call_native.arg_count);
+                if (inst->operands.call_native.spill_count > 0u) {
+                    orus_jit_gc_root_map_mark_range(
+                        map,
+                        inst->operands.call_native.spill_base,
+                        inst->operands.call_native.spill_count);
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_GET_ITER:
+                orus_jit_gc_root_map_mark(map, inst->operands.get_iter.iterable_reg);
+                break;
+            case ORUS_JIT_IR_OP_ITER_NEXT:
+                orus_jit_gc_root_map_mark(map, inst->operands.iter_next.iterator_reg);
+                orus_jit_gc_root_map_mark(map, inst->operands.iter_next.has_value_reg);
+                break;
+            case ORUS_JIT_IR_OP_RANGE:
+                for (uint16_t arg = 0; arg < inst->operands.range.arg_count && arg < 3u;
+                     ++arg) {
+                    orus_jit_gc_root_map_mark(map, inst->operands.range.arg_regs[arg]);
+                }
+                break;
+            default:
+                break;
+        }
+    }
+}
 
 typedef struct {
     void* base;
@@ -1137,6 +1288,7 @@ orus_jit_native_block_create(const OrusJitIRProgram* program) {
 
     memcpy(block->program.instructions, program->instructions,
            program->count * sizeof(OrusJitIRInstruction));
+    orus_jit_gc_root_map_build(&block->gc_root_map, &block->program);
     return block;
 }
 
@@ -1451,6 +1603,59 @@ orus_jit_helper_safepoint_count(void) {
 void
 orus_jit_helper_safepoint_reset(void) {
     g_orus_jit_helper_safepoint_count = 0u;
+}
+
+static void
+orus_jit_gc_visit_window_roots(TypedRegisterWindow* window,
+                               OrusJitValueVisitor visitor) {
+    if (!window || !visitor || !window->heap_regs) {
+        return;
+    }
+
+    for (uint16_t word = 0; word < TYPED_WINDOW_LIVE_WORDS; ++word) {
+        uint64_t live = window->live_mask[word];
+        while (live) {
+            uint16_t bit = orus_jit_native_select_bit(live);
+            uint16_t index = (uint16_t)(word * 64u + bit);
+            if (index < TYPED_REGISTER_WINDOW_SIZE &&
+                window->reg_types[index] == REG_TYPE_HEAP) {
+                visitor((const void*)&window->heap_regs[index]);
+            }
+            live &= live - 1u;
+        }
+    }
+}
+
+void
+orus_jit_gc_visit_native_roots(struct VM* vm_instance, OrusJitValueVisitor visitor) {
+    if (!vm_instance || !visitor) {
+        return;
+    }
+
+    OrusJitNativeFrame* frame = vm_instance->jit_native_frame_top;
+    while (frame) {
+        if (frame->active_window) {
+            orus_jit_gc_visit_window_roots(frame->active_window, visitor);
+        }
+
+        const OrusJitNativeBlock* block = frame->block;
+        if (block) {
+            for (size_t word = 0; word < ORUS_JIT_ROOT_MAP_WORDS; ++word) {
+                uint64_t mask = block->gc_root_map.registers[word];
+                while (mask) {
+                    uint16_t bit = orus_jit_native_select_bit(mask);
+                    uint16_t reg = (uint16_t)(word * 64u + bit);
+                    if (reg < REGISTER_COUNT) {
+                        Value value = vm_get_register_safe(reg);
+                        visitor((const void*)&value);
+                    }
+                    mask &= mask - 1u;
+                }
+            }
+        }
+
+        frame = frame->prev;
+    }
 }
 
 static void
@@ -5092,6 +5297,17 @@ orus_jit_emit_safepoint_call(OrusJitCodeBuffer* buffer,
     if (!buffer || !bail_patches) {
         return false;
     }
+#if defined(__x86_64__) || defined(_M_X64)
+    if (!orus_jit_code_buffer_emit_bytes(buffer, MOV_RDI_R12,
+                                         sizeof(MOV_RDI_R12)) ||
+        !orus_jit_code_buffer_emit_u8(buffer, 0x48) ||
+        !orus_jit_code_buffer_emit_u8(buffer, 0xB8) ||
+        !orus_jit_code_buffer_emit_u64(buffer,
+                                       orus_jit_function_ptr_bits(&orus_jit_native_linear_safepoint)) ||
+        !orus_jit_code_buffer_emit_bytes(buffer, (const uint8_t[]){0xFF, 0xD0}, 2u)) {
+        return false;
+    }
+#else
     if (!orus_jit_code_buffer_emit_u8(buffer, 0x48) ||
         !orus_jit_code_buffer_emit_u8(buffer, 0xB8) ||
         !orus_jit_code_buffer_emit_u64(buffer,
@@ -5099,6 +5315,7 @@ orus_jit_emit_safepoint_call(OrusJitCodeBuffer* buffer,
         !orus_jit_code_buffer_emit_bytes(buffer, (const uint8_t[]){0xFF, 0xD0}, 2u)) {
         return false;
     }
+#endif
     (void)bail_patches;
     return true;
 }

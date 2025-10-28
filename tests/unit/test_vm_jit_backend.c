@@ -47,6 +47,12 @@ static void test_unset_env(const char* name) {
 #endif
 }
 
+static void debug_log(const char* message) {
+    if (getenv("ORUS_JIT_BACKEND_TEST_DEBUG")) {
+        fprintf(stderr, "%s\n", message);
+    }
+}
+
 static void init_ir_program(OrusJitIRProgram* program,
                             OrusJitIRInstruction* instructions,
                             size_t count) {
@@ -377,6 +383,70 @@ static bool test_backend_call_native_triggers_gc_safepoint(void) {
     freeVM();
 
     return invoked && returned_true && safepoint_hit;
+}
+
+static bool test_backend_gc_root_map_preserves_string_register(void) {
+    initVM();
+    orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
+
+    struct OrusJitBackend* backend = orus_jit_backend_create();
+    ASSERT_TRUE(backend != NULL, "expected backend allocation to succeed");
+
+    const uint16_t src = FRAME_REG_START;
+    const uint16_t dst = (uint16_t)(FRAME_REG_START + 1);
+
+    OrusJitIRInstruction instructions[3];
+    memset(instructions, 0, sizeof(instructions));
+
+    instructions[0].opcode = ORUS_JIT_IR_OP_MOVE_STRING;
+    instructions[0].value_kind = ORUS_JIT_VALUE_STRING;
+    instructions[0].operands.move.src_reg = src;
+    instructions[0].operands.move.dst_reg = dst;
+
+    instructions[1].opcode = ORUS_JIT_IR_OP_SAFEPOINT;
+
+    instructions[2].opcode = ORUS_JIT_IR_OP_RETURN;
+
+    OrusJitIRProgram program;
+    init_ir_program(&program, instructions, 3);
+
+    JITEntry entry;
+    if (!compile_program(backend, &program, &entry)) {
+        orus_jit_backend_destroy(backend);
+        freeVM();
+        return false;
+    }
+
+    ObjString* transient = allocateString("jit-native-root", 15);
+    vm_set_register_safe(src, STRING_VAL(transient));
+    vm_set_register_safe(dst, BOOL_VAL(false));
+
+    size_t previous_threshold = gcThreshold;
+    size_t initial_gc = vm.gcCount;
+    vm.gcPaused = false;
+    gcThreshold = 1u;
+    vm.bytesAllocated = gcThreshold + 4096u;
+
+    entry.entry_point(&vm);
+
+    Value moved = vm_get_register_safe(dst);
+    bool gc_triggered = vm.gcCount > initial_gc;
+    bool preserved = IS_STRING(moved) && AS_STRING(moved) == transient;
+
+    if (!gc_triggered) {
+        fprintf(stderr, "expected safepoint to trigger collection for native root map test\n");
+    }
+    if (!preserved) {
+        fprintf(stderr, "string register lost across native GC safepoint\n");
+    }
+
+    gcThreshold = previous_threshold;
+
+    orus_jit_backend_release_entry(backend, &entry);
+    orus_jit_backend_destroy(backend);
+    freeVM();
+
+    return gc_triggered && preserved;
 }
 
 static bool test_backend_deopt_mid_gc_preserves_frame_alignment(void) {
@@ -2105,6 +2175,9 @@ int main(void) {
     }
 
     bool success = true;
+    if (getenv("ORUS_JIT_BACKEND_TEST_DEBUG")) {
+        fprintf(stderr, "starting jit backend tests\n");
+    }
 
     if (!test_vm_init_surfaces_backend_status()) {
         fprintf(stderr, "vm init status surfacing test failed\n");
@@ -2118,79 +2191,102 @@ int main(void) {
         fprintf(stderr, "jit debug disassembly capture test failed\n");
         success = false;
     }
+    debug_log("running test_jit_debug_guard_trace_and_loop_telemetry");
     if (!test_jit_debug_guard_trace_and_loop_telemetry()) {
         fprintf(stderr,
                 "jit debug guard trace and loop telemetry test failed\n");
         success = false;
     }
+    debug_log("running test_backend_helper_stub_executes");
     if (!test_backend_helper_stub_executes()) {
         fprintf(stderr, "backend helper stub test failed\n");
         success = false;
     }
+    debug_log("running test_backend_foreign_call_slow_path_trampoline");
     if (!test_backend_foreign_call_slow_path_trampoline()) {
         fprintf(stderr,
                 "backend foreign slow-path trampoline test failed\n");
         success = false;
     }
+    debug_log("running test_backend_dynasm_matches_linear_across_value_kinds");
     if (!test_backend_dynasm_matches_linear_across_value_kinds()) {
         fprintf(stderr, "backend DynASM parity test failed\n");
         success = false;
     }
+    debug_log("running test_backend_emits_i64_add");
     if (!test_backend_emits_i64_add()) {
         fprintf(stderr, "backend i64 add test failed\n");
         success = false;
     }
+    debug_log("running test_backend_emits_u32_add");
     if (!test_backend_emits_u32_add()) {
         fprintf(stderr, "backend u32 add test failed\n");
         success = false;
     }
+    debug_log("running test_backend_emits_u64_add");
     if (!test_backend_emits_u64_add()) {
         fprintf(stderr, "backend u64 add test failed\n");
         success = false;
     }
+    debug_log("running test_backend_documents_unhandled_arithmetic_opcodes");
     if (!test_backend_documents_unhandled_arithmetic_opcodes()) {
         fprintf(stderr,
                 "backend unsupported arithmetic opcode fixtures failed\n");
         success = false;
     }
+    debug_log("running test_backend_emits_fused_increment_loops");
     if (!test_backend_emits_fused_increment_loops()) {
         fprintf(stderr, "backend fused increment loop test failed\n");
         success = false;
     }
+    debug_log("running test_backend_emits_fused_decrement_loops");
     if (!test_backend_emits_fused_decrement_loops()) {
         fprintf(stderr, "backend fused decrement loop test failed\n");
         success = false;
     }
+    debug_log("running test_backend_gc_safepoint_handles_heap_growth");
     if (!test_backend_gc_safepoint_handles_heap_growth()) {
         fprintf(stderr, "backend GC safepoint stress test failed\n");
         success = false;
     }
+    debug_log("running test_backend_gc_root_map_preserves_string_register");
+    if (!test_backend_gc_root_map_preserves_string_register()) {
+        fprintf(stderr, "backend GC native root map test failed\n");
+        success = false;
+    }
+    debug_log("running test_backend_deopt_mid_gc_preserves_frame_alignment");
     if (!test_backend_deopt_mid_gc_preserves_frame_alignment()) {
         fprintf(stderr,
                 "backend GC + deopt frame reconciliation test failed\n");
         success = false;
     }
+    debug_log("running test_backend_typed_deopt_landing_pad_reuses_frame");
     if (!test_backend_typed_deopt_landing_pad_reuses_frame()) {
         fprintf(stderr, "backend typed deopt landing pad test failed\n");
         success = false;
     }
+    debug_log("running test_backend_emits_f64_mul");
     if (!test_backend_emits_f64_mul()) {
         fprintf(stderr, "backend f64 mul test failed\n");
         success = false;
     }
+    debug_log("running test_backend_emits_string_concat");
     if (!test_backend_emits_string_concat()) {
         fprintf(stderr, "backend string concat test failed\n");
         success = false;
     }
+    debug_log("running test_backend_emits_i32_to_i64_conversion");
     if (!test_backend_emits_i32_to_i64_conversion()) {
         fprintf(stderr, "backend i32->i64 conversion test failed\n");
         success = false;
     }
+    debug_log("running test_backend_exit_branch_patches_to_bailout");
     if (!test_backend_exit_branch_patches_to_bailout()) {
         fprintf(stderr,
                 "backend exit branch bailout test failed\n");
         success = false;
     }
+    debug_log("running test_backend_emits_iter_next_loop_with_exit_branch");
     if (!test_backend_emits_iter_next_loop_with_exit_branch()) {
         fprintf(stderr,
                 "backend iter-next exit branch test failed\n");
