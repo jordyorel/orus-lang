@@ -1,6 +1,6 @@
+# Orus Programming Language
 [![Version](https://img.shields.io/badge/version-0.1.1-blue.svg)](CHANGELOG.md)
 
-# Orus Programming Language
 
 
 Orus is a register-based VM language that aims to combine performance, readability and safety:
