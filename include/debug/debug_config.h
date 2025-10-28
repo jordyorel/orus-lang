@@ -1,10 +1,4 @@
 //  Orus Language Project
-//  ---------------------------------------------------------------------------
-//  File: include/debug/debug_config.h
-//  Author: Jordy Orel KONDA
-//  Copyright (c) 2025 Jordy Orel KONDA
-//  License: MIT License (see LICENSE file in the project root)
-//  Description: Debug configuration flags and helpers shared across Orus subsystems.
 
 #ifndef DEBUG_CONFIG_H
 #define DEBUG_CONFIG_H

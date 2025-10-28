@@ -1,8 +1,4 @@
 // Orus Language Project
-// ---------------------------------------------------------------------------
-// File: src/vm/runtime/builtin_print.c
-// Author: Jordy Orel KONDA
-// Description: Implements the builtin print routine for formatted output.
 
 
 #include "runtime/builtins.h"

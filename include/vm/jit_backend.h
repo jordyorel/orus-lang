@@ -1,8 +1,4 @@
 // Orus Language Project
-// ---------------------------------------------------------------------------
-// File: include/vm/jit_backend.h
-// Description: DynASM-backed JIT integration layer exposing a minimal
-//              interface for native tier execution.
 
 #ifndef ORUS_VM_JIT_BACKEND_H
 #define ORUS_VM_JIT_BACKEND_H

@@ -525,9 +525,6 @@ static int compile_struct_method_call(CompilerContext* ctx, TypedASTNode* call) 
     return return_reg;
 }
 
-// ===== CODE GENERATION COORDINATOR =====
-// Orchestrates bytecode generation and low-level optimizations
-// Delegates to specific codegen algorithms
 
 // Add or reuse an upvalue for the current function
 static int add_upvalue(CompilerContext* ctx, bool isLocal, uint8_t index) {

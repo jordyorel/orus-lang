@@ -1,9 +1,5 @@
 // Orus Language Project
-//  ---------------------------------------------------------------------------
-//  File: src/vm/runtime/builtin_assert.c
-//  Author: Jordy Orel KONDA
-//  Description: Implements the assert_eq builtin used by the test suite to validate interpreter behaviour at runtime.
- 
+
 
 #include "runtime/builtins.h"
 

@@ -1,8 +1,4 @@
 // Orus Language Project
-// ---------------------------------------------------------------------------
-// File: include/vm/vm_tiering.h
-// Description: Tiering helpers that mediate specialized function dispatch and
-//              deoptimization control flow inside the VM.
 
 #ifndef ORUS_VM_TIERING_H
 #define ORUS_VM_TIERING_H

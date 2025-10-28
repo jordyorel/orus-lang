@@ -1,14 +1,4 @@
 //  Orus Language Project
-//  ---------------------------------------------------------------------------
-//  File: src/type/type_representation.c
-//  Author: Jordy Orel KONDA
-//  Copyright (c) 2025 Jordy Orel KONDA
-//  License: MIT License (see LICENSE file in the project root)
-//  Description: Implements helpers for representing, formatting, and comparing Orus types.
-//  - Caching via arena for primitive types
-//  - Trait bounds and interface support
-//  - Named generic types and specialization
-
 
 #include "vm/vm.h"
 #include "type/type.h"

@@ -1,7 +1,4 @@
 // Orus Language Project
-// ---------------------------------------------------------------------------
-// File: include/vm/jit_ir_debug.h
-// Description: Debugging helpers for inspecting Orus JIT IR programs.
 
 #ifndef ORUS_VM_JIT_IR_DEBUG_H
 #define ORUS_VM_JIT_IR_DEBUG_H

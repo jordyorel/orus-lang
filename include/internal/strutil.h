@@ -1,10 +1,4 @@
 //  Orus Language Project
-//  ---------------------------------------------------------------------------
-//  File: include/internal/strutil.h
-//  Author: Jordy Orel KONDA
-//  Copyright (c) 2025 Jordy Orel KONDA
-//  License: MIT License (see LICENSE file in the project root)
-//  Description: String utility declarations for internal formatting and manipulation helpers.
 
 #ifndef ORUS_STRUTIL_H
 #define ORUS_STRUTIL_H

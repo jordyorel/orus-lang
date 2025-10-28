@@ -1,7 +1,4 @@
 // Orus Language Project
-// ---------------------------------------------------------------------------
-// File: src/vm/runtime/builtin_array_repeat.c
-// Description: Implements array repetition logic used by the `array * count` operator.
 
 #include "runtime/builtins.h"
 #include "runtime/memory.h"

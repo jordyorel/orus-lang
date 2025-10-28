@@ -1,11 +1,4 @@
 //  Orus Language Project
-//  ---------------------------------------------------------------------------
-//  File: src/compiler/backend/typed_ast_visualizer.c
-//  Author: Jordy Orel KONDA
-//  Copyright (c) 2025 Jordy Orel KONDA
-//  License: MIT License (see LICENSE file in the project root)
-//  Description: Provides utilities to print and visualize typed AST nodes for debugging.
-
 
 //  Typed AST Visualization Tool for Orus Compiler
 //  This tool outputs the typed AST in a human-readable, tree-like format

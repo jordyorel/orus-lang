@@ -1,10 +1,4 @@
 // Orus Language Project
-// ---------------------------------------------------------------------------
-// File: include/compiler/register_allocator.h
-// Author: Jordy Orel KONDA
-// Copyright (c) 2023 Jordy Orel KONDA
-// License: MIT License (see LICENSE file in the project root)
-// Description: Declares register allocation routines for mapping compiler temporaries to VM registers.
 
 
 #ifndef REGISTER_ALLOCATOR_H

@@ -1,7 +1,4 @@
 // Orus Language Project
-// ---------------------------------------------------------------------------
-// File: include/vm/jit_translation.h
-// Description: Shared definitions for the baseline JIT bytecode translator.
 
 #ifndef ORUS_VM_JIT_TRANSLATION_H
 #define ORUS_VM_JIT_TRANSLATION_H

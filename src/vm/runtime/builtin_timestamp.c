@@ -1,9 +1,4 @@
 // Orus Language Project
-// ---------------------------------------------------------------------------
-// File: src/vm/runtime/builtin_timestamp.c
-// Author: Jordy Orel KONDA
-// Description: Provides a cross-platform monotonic timestamp builtin.
-
 
 #define _POSIX_C_SOURCE 200809L
 #include "runtime/builtins.h"

@@ -1,10 +1,4 @@
 //  Orus Language Project
-//  ---------------------------------------------------------------------------
-//  File: src/vm/dispatch/vm_dispatch_goto.c
-//  Author: Jordy Orel KONDA
-//  Copyright (c) 2023 Jordy Orel KONDA
-//  License: MIT License (see LICENSE file in the project root)
-//  Description: Provides the goto-threaded dispatch implementation optimized for GCC and Clang.
 
 
 #include "vm/vm_dispatch.h"

@@ -1,11 +1,4 @@
 // Orus Language Project
-// ---------------------------------------------------------------------------
-// File: src/vm/profiling/vm_profiling.c
-// Author: Jordy Orel KONDA
-// Copyright (c) 2025 Jordy Orel KONDA
-// License: MIT License (see LICENSE file in the project root)
-// Description: Implements profiling hooks and metrics collection for the Orus VM.
-
 
 #define _POSIX_C_SOURCE 199309L
 #if !defined(_POSIX_C_SOURCE) || _POSIX_C_SOURCE < 200112L

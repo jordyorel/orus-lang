@@ -1,10 +1,4 @@
 //  Orus Language Project
-//  ---------------------------------------------------------------------------
-//  File: include/public/version.h
-//  Author: Jordy Orel KONDA
-//  Copyright (c) 2025 Jordy Orel KONDA
-//  License: MIT License (see LICENSE file in the project root)
-//  Description: Exposes Orus semantic version metadata and helper routines.
 
 
 #ifndef ORUS_VERSION_H

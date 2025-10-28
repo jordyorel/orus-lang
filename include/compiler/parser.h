@@ -1,10 +1,4 @@
 // Orus Language Project
-// ---------------------------------------------------------------------------
-// File: include/compiler/parser.h
-// Author: Jordy Orel KONDA
-// Copyright (c) 2022 Jordy Orel KONDA
-// License: MIT License (see LICENSE file in the project root)
-// Description: Parsing API and grammar structures that transform token streams into AST nodes.
 
 
 #ifndef ORUS_PARSER_H

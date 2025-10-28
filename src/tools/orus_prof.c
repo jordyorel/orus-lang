@@ -1,8 +1,4 @@
 // Orus Language Project
-// ---------------------------------------------------------------------------
-// File: src/tools/orus_prof.c
-// Description: Offline profiler visualization CLI for interpreting Orus VM
-//              profiling exports and specialization metadata.
 
 #include <ctype.h>
 #include <stdbool.h>

@@ -1,13 +1,6 @@
 // Orus Language Project
-// ---------------------------------------------------------------------------
-// File: src/vm/register_cache.c
-// Author: Jordy Orel KONDA
-// Copyright (c) 2025 Jordy Orel KONDA
-// License: MIT License (see LICENSE file in the project root)
-// Description: Implements the register cache for reusing frequently accessed VM values.
 
 
-// register_cache.c - Phase 4: Advanced Register Optimizations Implementation
 #include "vm/register_cache.h"
 #include "vm/register_file.h"
 #include "runtime/memory.h"

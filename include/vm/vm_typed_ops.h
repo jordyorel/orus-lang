@@ -1,11 +1,4 @@
 // Orus Language Project
-// ---------------------------------------------------------------------------
-// File: include/vm/vm_typed_ops.h
-// Author: Jordy Orel KONDA
-// Copyright (c) 2025 Jordy Orel KONDA
-// License: MIT License (see LICENSE file in the project root)
-// Description: Declares typed operation helpers bridging static and dynamic semantics.
-
 
 #ifndef ORUS_VM_TYPED_OPS_H
 #define ORUS_VM_TYPED_OPS_H

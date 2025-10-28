@@ -1,10 +1,4 @@
 // Orus Language Project
-// ---------------------------------------------------------------------------
-// File: src/vm/runtime/jit_benchmark.c
-// Description: Implements reusable helpers for executing Orus programs under
-//              the JIT benchmark harness. The functions here mirror the test
-//              fixture behaviour so command line tools and automated tests can
-//              share the same lifecycle and telemetry collection logic.
 
 #define _POSIX_C_SOURCE 199309L
 

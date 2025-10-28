@@ -1,8 +1,4 @@
 // Orus Language Project
-// ---------------------------------------------------------------------------
-// File: include/vm/jit_debug.h
-// Description: Debug instrumentation controls for capturing JIT artifacts and
-//              loop telemetry during native execution.
 
 #ifndef ORUS_VM_JIT_DEBUG_H
 #define ORUS_VM_JIT_DEBUG_H

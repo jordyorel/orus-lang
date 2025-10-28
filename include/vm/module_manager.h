@@ -1,13 +1,6 @@
 //  Orus Language Project
-//  ---------------------------------------------------------------------------
-//  File: include/vm/module_manager.h
-//  Author: Jordy Orel KONDA
-//  Copyright (c) 2025 Jordy Orel KONDA
-//  License: MIT License (see LICENSE file in the project root)
-//  Description: Declares the module manager for loading, caching, and linking Orus bytecode modules.
 
 
-// module_manager.h - Phase 3: Module Register System
 #ifndef MODULE_MANAGER_H
 #define MODULE_MANAGER_H
 
@@ -15,7 +8,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-// Phase 3: Register module structure with dedicated registers
+
 typedef struct RegisterModule {
     Value registers[MODULE_REGISTERS];    // Module-local registers
     char* module_name;                    // Module identifier

@@ -1,11 +1,4 @@
 // Orus Language Project
-// ---------------------------------------------------------------------------
-// File: src/vm/handlers/vm_memory_handlers.c
-// Author: Jordy Orel KONDA
-// Copyright (c) 2022 Jordy Orel KONDA
-// License: MIT License (see LICENSE file in the project root)
-// Description: Implements memory opcode handlers for load, store, and allocation operations.
-
 
 #include "vm/vm_opcode_handlers.h"
 #include "vm/vm_dispatch.h"

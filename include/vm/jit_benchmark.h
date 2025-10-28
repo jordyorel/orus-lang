@@ -1,10 +1,4 @@
 // Orus Language Project
-// ---------------------------------------------------------------------------
-// File: include/vm/jit_benchmark.h
-// Description: Shared helpers for executing Orus programs under the JIT
-//              benchmark harness. Provides reusable structures for collecting
-//              JIT telemetry and utility runners that manage VM lifecycle
-//              around benchmark executions.
 
 #ifndef ORUS_VM_JIT_BENCHMARK_H
 #define ORUS_VM_JIT_BENCHMARK_H

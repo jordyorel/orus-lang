@@ -1,9 +1,4 @@
 // Orus Language Project
-// ---------------------------------------------------------------------------
-// File: src/vm/runtime/builtin_range.c
-// Author: Jordy Orel KONDA
-// Description: Implements the range() builtin producing integer iterators.
-
 
 #include "runtime/builtins.h"
 #include "runtime/memory.h"

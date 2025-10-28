@@ -1,8 +1,4 @@
 //  Orus Language Project
-//  ---------------------------------------------------------------------------
-//  File: src/compiler/backend/optimization/loop_type_residency.c
-//  Description: Identifies loop-invariant operands that can remain in typed
-//               registers across loop iterations.
 
 #include "compiler/optimization/loop_type_residency.h"
 

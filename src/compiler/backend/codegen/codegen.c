@@ -1,11 +1,4 @@
 //  Orus Language Project
-//  ---------------------------------------------------------------------------
-//  File: src/compiler/backend/codegen/codegen.c
-//  Author: Jordy Orel KONDA
-//  Copyright (c) 2022 Jordy Orel KONDA
-//  License: MIT License (see LICENSE file in the project root)
-//  Description: Shared code generation utilities coordinating specialized
-//               expression, statement, function, and module compilation units.
 
 #include "compiler/codegen/codegen.h"
 #include "compiler/codegen/expressions.h"

@@ -1,8 +1,4 @@
 // Orus Language Project
-// ---------------------------------------------------------------------------
-// File: include/compiler/specialization_feedback.h
-// Description: Structures and helpers for feeding VM profiling data back into
-//              the compiler to drive specialization and tier-up decisions.
 
 #ifndef ORUS_COMPILER_SPECIALIZATION_FEEDBACK_H
 #define ORUS_COMPILER_SPECIALIZATION_FEEDBACK_H

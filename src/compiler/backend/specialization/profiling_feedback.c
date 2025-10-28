@@ -1,8 +1,4 @@
 // Orus Language Project
-// ---------------------------------------------------------------------------
-// File: src/compiler/backend/specialization/profiling_feedback.c
-// Description: Captures profiling feedback from the VM and prepares
-//              specialization plans for the compiler backend.
 
 #include "compiler/specialization_feedback.h"
 #include "compiler/compiler.h"

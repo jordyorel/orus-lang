@@ -1,8 +1,4 @@
 // Orus Language Project
-// ---------------------------------------------------------------------------
-// File: src/vm/runtime/vm_tiering.c
-// Description: Implements tier selection logic for specialized bytecode and
-//              provides default deoptimization handling.
 
 #include "vm/vm_tiering.h"
 #include "vm/vm.h"

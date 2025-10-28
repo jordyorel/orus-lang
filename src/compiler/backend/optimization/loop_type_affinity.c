@@ -1,8 +1,4 @@
 //  Orus Language Project
-//  ---------------------------------------------------------------------------
-//  File: src/compiler/backend/optimization/loop_type_affinity.c
-//  Description: Analyzes typed loops to plan persistent typed register usage
-//               ahead of bytecode emission.
 
 #include "compiler/optimization/loop_type_affinity.h"
 

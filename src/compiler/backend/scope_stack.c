@@ -1,12 +1,4 @@
 //  Orus Language Project
-//  ---------------------------------------------------------------------------
-//  File: src/compiler/backend/scope_stack.c
-//  Author: Jordy Orel KONDA
-//  Copyright (c) 2024 Jordy Orel KONDA
-//  License: MIT License (see LICENSE file in the project root)
-//  Description: Implements the scope stack data structure used during backend ransformations.
-
-
 
 #include "compiler/scope_stack.h"
 #include <stdlib.h>

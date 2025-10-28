@@ -1,11 +1,4 @@
-//  Orus Language Project
-//  ---------------------------------------------------------------------------
-//  File: src/compiler/frontend/parser.c
-//  Author: Jordy Orel KONDA
-//  Copyright (c) 2022 Jordy Orel KONDA
-//  License: MIT License (see LICENSE file in the project root)
-//  Description: Implements the recursive-descent parser that produces AST structures from tokens.
-//  
+//  Orus Language Project 
 
 // Orus Language Compiler - Parser Implementation
 

@@ -1,9 +1,4 @@
 // Orus Language Project
-//  ---------------------------------------------------------------------------
-//  File: src/vm/runtime/builtin_input.c
-//  Author: Jordy Orel KONDA
-//  Description: Implements the builtin input routine mirroring Python3 semantics.
-//  
 
 #include "runtime/builtins.h"
 #include "runtime/memory.h"

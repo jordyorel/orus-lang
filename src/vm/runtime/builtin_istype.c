@@ -1,8 +1,4 @@
 // Orus Language Project
-//  ---------------------------------------------------------------------------
-//  File: src/vm/runtime/builtin_istype.c
-//  Author: Jordy Orel KONDA
-//  Description: Implements the builtin istype routine that compares a value's runtime type name against a provided string.
 
 #include "runtime/builtins.h"
 

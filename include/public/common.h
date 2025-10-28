@@ -1,10 +1,4 @@
 //  Orus Language Project
-//  ---------------------------------------------------------------------------
-//  File: include/public/common.h
-//  Author: Jordy Orel KONDA
-//  Copyright (c) 2025 Jordy Orel KONDA
-//  License: MIT License (see LICENSE file in the project root)
-//  Description: Public-facing definitions, macros, and shared types exported by the Orus SDK.
 
 // common.h - Common definitions and utilities for Orus Language
 #ifndef COMMON_H
@@ -30,7 +24,6 @@
 // Utility macros
 #define UNUSED(x) ((void)(x))
 
-// AGENTS.md Performance: Branch prediction hints for optimal CPU pipeline usage
 #ifdef __GNUC__
 #define likely(x)   __builtin_expect(!!(x), 1)
 #define unlikely(x) __builtin_expect(!!(x), 0)

@@ -1,10 +1,4 @@
 //  Orus Language Project
-//  ---------------------------------------------------------------------------
-//  File: include/internal/error_reporting.h
-//  Author: Jordy Orel KONDA
-//  Copyright (c) 2025 Jordy Orel KONDA
-//  License: MIT License (see LICENSE file in the project root)
-//  Description: Internal helpers for collecting, formatting, and flushing runtime error reports.
 
 
 #ifndef ERROR_REPORTING_H

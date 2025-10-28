@@ -1,10 +1,4 @@
 // Orus Language Project
-// ---------------------------------------------------------------------------
-// File: src/vm/spill_manager.c
-// Author: Jordy Orel KONDA
-// Copyright (c) 2025 Jordy Orel KONDA
-// License: MIT License (see LICENSE file in the project root)
-// Description: Implements spill management and stack slot assignment when registers overflow.
 
 // spill_manager.c - Register Spilling Implementation
 // HashMap-based register spilling for unlimited variable support

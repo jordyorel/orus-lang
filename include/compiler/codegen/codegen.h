@@ -1,11 +1,4 @@
 // Orus Language Project
-// ---------------------------------------------------------------------------
-// File: include/compiler/codegen/codegen.h
-// Author: Jordy Orel KONDA
-// Copyright (c) 2025 Jordy Orel KONDA
-// License: MIT License (see LICENSE file in the project root)
-// Description: Aggregated code generation interface exposing the specialized compilation helpers for expressions, statements, functions, and module import/export handling.
-
 
 #ifndef CODEGEN_H
 #define CODEGEN_H

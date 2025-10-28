@@ -1,11 +1,5 @@
 //  Orus Language Project
-//  ---------------------------------------------------------------------------
-//  File: src/vm/core/vm_core.c
-//  Author: Jordy Orel KONDA
-//  Copyright (c) 2022 Jordy Orel KONDA
-//  License: MIT License (see LICENSE file in the project root)
-//  Description: Implements the central VM execution loop and core runtime primitives.
-//  
+ 
 
 // vm_core.c - VM initialization and core management
 #include "vm_internal.h"

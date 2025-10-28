@@ -1,11 +1,4 @@
 // Orus Language Project
-// ---------------------------------------------------------------------------
-// File: include/vm/vm_string_ops.h
-// Author: Jordy Orel KONDA
-// Copyright (c) 2025 Jordy Orel KONDA
-// License: MIT License (see LICENSE file in the project root)
-// Description: Declares string operation helpers and opcode integrations for the VM.
-
 
 #ifndef ORUS_VM_STRING_OPS_H
 #define ORUS_VM_STRING_OPS_H

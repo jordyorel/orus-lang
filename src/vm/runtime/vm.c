@@ -1,11 +1,4 @@
 // Orus Language Project
-// ---------------------------------------------------------------------------
-// File: src/vm/runtime/vm.c
-// Author: Jordy Orel KONDA
-// Copyright (c) 2022 Jordy Orel KONDA
-// License: MIT License (see LICENSE file in the project root)
-// Description: Initializes and drives the public VM runtime interface exposed to clients.
-
 
 // register_vm.c - Register-based VM implementation
 #define _POSIX_C_SOURCE 200809L

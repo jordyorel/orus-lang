@@ -1,8 +1,8 @@
-/*
-** DynASM encoding engine prototypes.
-** Copyright (C) 2005-2025 Mike Pall. All rights reserved.
-** Released under the MIT license. See dynasm.lua for full copyright notice.
-*/
+// 
+// DynASM encoding engine prototypes.
+// Copyright (C) 2005-2025 Mike Pall. All rights reserved.
+// Released under the MIT license. See dynasm.lua for full copyright notice.
+
 
 #ifndef _DASM_PROTO_H
 #define _DASM_PROTO_H

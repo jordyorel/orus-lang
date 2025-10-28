@@ -1,20 +1,4 @@
 //  Orus Language Project
-//  ---------------------------------------------------------------------------
-//  File: include/config/config.h
-//  Author: Jordy Orel KONDA
-//  Copyright (c) 2025 Jordy Orel KONDA
-//  License: MIT License (see LICENSE file in the project root)
-//  Description: Configuration API for loading and validating Orus runtime and compiler settings.
-
-//  Orus Language Configuration System
-//  
-//  This system provides centralized configuration management for the Orus interpreter.
-//  Configuration can be set via:
-//  1. Command-line arguments (highest precedence)
-//  2. Environment variables (medium precedence)
-//  3. Configuration file (lowest precedence)
-//  4. Default values (fallback)
-
 
 #ifndef ORUS_CONFIG_H
 #define ORUS_CONFIG_H

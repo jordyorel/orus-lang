@@ -1,8 +1,4 @@
 // Orus Language Project
-// ---------------------------------------------------------------------------
-// File: include/vm/jit_ir.h
-// Description: Minimal OrusJit intermediate representation describing
-//              architecture-neutral operations for DynASM-backed codegen.
 
 #ifndef ORUS_VM_JIT_IR_H
 #define ORUS_VM_JIT_IR_H

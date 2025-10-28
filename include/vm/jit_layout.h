@@ -1,10 +1,4 @@
 // Orus Language Project
-// ---------------------------------------------------------------------------
-// File: include/vm/jit_layout.h
-// Description: Shared layout metadata for VM structs consumed by the JIT
-//              backend. This header encodes offsets and invariants so native
-//              code can assume the same frame/register layout as the
-//              interpreter.
 
 #ifndef ORUS_VM_JIT_LAYOUT_H
 #define ORUS_VM_JIT_LAYOUT_H

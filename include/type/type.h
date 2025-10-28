@@ -1,10 +1,4 @@
 // Orus Language Project
-// ---------------------------------------------------------------------------
-// File: include/type/type.h
-// Author: Jordy Orel KONDA
-// Copyright (c) 2025 Jordy Orel KONDA
-// License: MIT License (see LICENSE file in the project root)
-// Description: Core type system declarations shared by type inference and validation routines.
 
 #ifndef ORUS_TYPE_H
 #define ORUS_TYPE_H
