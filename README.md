@@ -1,13 +1,10 @@
 # Orus Programming Language
 
 [![Version](https://img.shields.io/badge/version-0.1.1-blue.svg)](CHANGELOG.md)
-
-Fast experimental programming language that aims to combine readability and safety.
-
 ## Overview
 
-Orus is a modern register-based VM language that aims to combine performance with safety:
-- **Type Safety**: Static typing with intelligent type inference and runtime safety checks
+Orus is a register-based VM language that aims to combine performance readability and safety:
+- **Type Safety**: Static typing with type inference and runtime safety checks
 - **Developer Experience**: Clean, readable syntax with comprehensive error reporting (Still improving)
 
 
@@ -49,28 +46,6 @@ zig build clean
 # List custom build options
 zig build --help
 ```
-
-### Enable the JIT tier on Apple Silicon
-
-macOS requires binaries that generate executable code at runtime to carry the
-`com.apple.security.cs.allow-jit` entitlement. On Apple Silicon machines the
-`make` targets automatically invoke the signing helper whenever `codesign` is
-available, so freshly built binaries are ready to execute JIT code without any
-manual step. The helper is still available if you need to re-sign specific
-artifacts or run the process explicitly:
-
-```bash
-zig build
-./scripts/macos/sign-with-jit.sh        # optional manual invocation
-```
-
-Pass explicit paths to the script if you only want to sign a subset of
-artifacts (for example `./scripts/macos/sign-with-jit.sh build/release/tests/test_vm_hot_loop_profiling`).
-
-Unsigned binaries (including release builds) still run correctly, but the VM
-detects that macOS denied the JIT buffers and automatically falls back to the
-interpreter tier. Signing with the entitlement is required any time you want to
-exercise native JIT code on Apple Silicon.
 
 ## Installation
 
