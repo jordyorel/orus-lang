@@ -20,6 +20,8 @@ const ProfileConfig = struct {
     extra_defines: []const []const u8,
 };
 
+const StringList = std.ArrayList([]const u8);
+
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -293,7 +295,7 @@ fn makeProfileCFlags(
     git_commit: []const u8,
     git_commit_date: []const u8,
 ) ![]const []const u8 {
-    var cflags = std.ArrayList([]const u8).empty;
+    var cflags = StringList.empty;
     try addBaseCompilerFlags(&cflags, allocator);
     try addProfileFlags(&cflags, allocator, profile_cfg.extra_cflags);
     try addPortableFlags(&cflags, allocator, target, portable);
@@ -309,7 +311,7 @@ fn makeProfileCFlags(
     return cflags.toOwnedSlice(allocator);
 }
 
-fn addBaseCompilerFlags(cflags: *std.ArrayList([]const u8), allocator: std.mem.Allocator) !void {
+fn addBaseCompilerFlags(cflags: *StringList, allocator: std.mem.Allocator) !void {
     try cflags.appendSlice(allocator, &.{
         "-Wall",
         "-Wextra",
@@ -317,19 +319,19 @@ fn addBaseCompilerFlags(cflags: *std.ArrayList([]const u8), allocator: std.mem.A
     });
 }
 
-fn addProfileFlags(cflags: *std.ArrayList([]const u8), allocator: std.mem.Allocator, extra: []const []const u8) !void {
+fn addProfileFlags(cflags: *StringList, allocator: std.mem.Allocator, extra: []const []const u8) !void {
     try cflags.appendSlice(allocator, extra);
 }
 
-fn addDefines(cflags: *std.ArrayList([]const u8), allocator: std.mem.Allocator, defines: []const []const u8) !void {
+fn addDefines(cflags: *StringList, allocator: std.mem.Allocator, defines: []const []const u8) !void {
     try cflags.appendSlice(allocator, defines);
 }
 
-fn addFlag(cflags: *std.ArrayList([]const u8), allocator: std.mem.Allocator, flag: []const u8) !void {
+fn addFlag(cflags: *StringList, allocator: std.mem.Allocator, flag: []const u8) !void {
     try cflags.append(allocator, flag);
 }
 
-fn addPortableFlags(cflags: *std.ArrayList([]const u8), allocator: std.mem.Allocator, target: std.Build.ResolvedTarget, portable: bool) !void {
+fn addPortableFlags(cflags: *StringList, allocator: std.mem.Allocator, target: std.Build.ResolvedTarget, portable: bool) !void {
     const os_tag = target.result.os.tag;
     const arch = target.result.cpu.arch;
     if (portable) {
@@ -357,7 +359,7 @@ fn addPortableFlags(cflags: *std.ArrayList([]const u8), allocator: std.mem.Alloc
     }
 }
 
-fn addDispatchDefine(cflags: *std.ArrayList([]const u8), allocator: std.mem.Allocator, mode: DispatchMode, target: std.Build.ResolvedTarget) !void {
+fn addDispatchDefine(cflags: *StringList, allocator: std.mem.Allocator, mode: DispatchMode, target: std.Build.ResolvedTarget) !void {
     const define = switch (mode) {
         .goto => "-DUSE_COMPUTED_GOTO=1",
         .@"switch" => "-DUSE_COMPUTED_GOTO=0",
@@ -382,7 +384,7 @@ fn addDispatchDefine(cflags: *std.ArrayList([]const u8), allocator: std.mem.Allo
 }
 
 fn addGitDefines(
-    cflags: *std.ArrayList([]const u8),
+    cflags: *StringList,
     allocator: std.mem.Allocator,
     commit: []const u8,
     commit_date: []const u8,
@@ -410,7 +412,7 @@ fn determinePortableDefault(target: std.Build.ResolvedTarget) bool {
 }
 
 fn buildOrusSourceList(allocator: std.mem.Allocator) ![]const []const u8 {
-    var list = std.ArrayList([]const u8).empty;
+    var list = StringList.empty;
     try appendSources(&list, allocator, compilerFrontendSources);
     try appendSources(&list, allocator, compilerBackendSources);
     try appendSources(&list, allocator, compilerExtraSources);
@@ -421,12 +423,12 @@ fn buildOrusSourceList(allocator: std.mem.Allocator) ![]const []const u8 {
 }
 
 fn buildProfSourceList(allocator: std.mem.Allocator) ![]const []const u8 {
-    var list = std.ArrayList([]const u8).empty;
+    var list = StringList.empty;
     try appendSources(&list, allocator, toolsSources);
     return list.toOwnedSlice(allocator);
 }
 
-fn appendSources(list: *std.ArrayList([]const u8), allocator: std.mem.Allocator, sources: []const []const u8) !void {
+fn appendSources(list: *StringList, allocator: std.mem.Allocator, sources: []const []const u8) !void {
     try list.appendSlice(allocator, sources);
 }
 
