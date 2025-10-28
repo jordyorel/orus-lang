@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
+#include <stddef.h>
 #include <limits.h>
 #include <stdio.h>
 #include <ctype.h>
@@ -45,20 +46,41 @@ static void arena_init(Arena* a, size_t initial) {
 static void* parser_arena_alloc(ParserContext* ctx, size_t size) {
     Arena* a = &ctx->arena;
     ArenaBlock* block = a->head;
-    if (block->used + size > block->capacity) {
+    size_t alignment = _Alignof(max_align_t);
+
+    while (true) {
+        size_t used = block->used;
+        uintptr_t start = (uintptr_t)block->buffer + used;
+        size_t padding = (alignment - (start % alignment)) % alignment;
+
+        if (used + padding + size <= block->capacity) {
+            uint8_t* base = (uint8_t*)block->buffer;
+            void* ptr = base + used + padding;
+            block->used = used + padding + size;
+            return ptr;
+        }
+
         size_t newCap = block->capacity * 2;
-        if (newCap < size) newCap = size;
+        size_t required = size + alignment;
+        if (newCap < required) {
+            newCap = required;
+        }
+
         ArenaBlock* newBlock = malloc(sizeof(ArenaBlock));
+        if (!newBlock) {
+            return NULL;
+        }
         newBlock->buffer = malloc(newCap);
+        if (!newBlock->buffer) {
+            free(newBlock);
+            return NULL;
+        }
         newBlock->capacity = newCap;
         newBlock->used = 0;
         newBlock->next = block;
         a->head = newBlock;
         block = newBlock;
     }
-    void* ptr = block->buffer + block->used;
-    block->used += size;
-    return ptr;
 }
 
 static void parser_arena_reset(ParserContext* ctx) {
@@ -4961,5 +4983,4 @@ ASTNode* parseSourceWithContextAndModule(ParserContext* ctx, const char* source,
 ASTNode* parseSourceWithContext(ParserContext* ctx, const char* source) {
     return parseSourceWithContextAndModule(ctx, source, NULL);
 }
-
 
