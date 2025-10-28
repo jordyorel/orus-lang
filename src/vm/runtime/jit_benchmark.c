@@ -19,6 +19,7 @@
 #include "errors/features/type_errors.h"
 #include "errors/features/variable_errors.h"
 #include "internal/error_reporting.h"
+#include "vm/jit_backend.h"
 #include "vm/jit_debug.h"
 #include "vm/vm.h"
 #include "vm/vm_profiling.h"
@@ -106,6 +107,7 @@ vm_jit_run_source_benchmark(const char* source,
     OrusJitDebugConfig previous_debug_config = {0};
     OrusJitDebugConfig benchmark_debug_config = {0};
     bool restore_debug_config = false;
+    bool restore_linear_emitter = false;
 
     if (enable_jit) {
         previous_debug_config = orus_jit_debug_get_config();
@@ -143,6 +145,11 @@ vm_jit_run_source_benchmark(const char* source,
 
     if (enable_jit) {
         orus_jit_debug_set_config(&benchmark_debug_config);
+    }
+
+    if (enable_jit && vm.jit_backend != NULL) {
+        orus_jit_backend_set_linear_emitter_enabled(true);
+        restore_linear_emitter = true;
     }
 
     vm.jit_enabled = enable_jit && vm.jit_backend != NULL;
@@ -237,6 +244,9 @@ vm_jit_run_source_benchmark(const char* source,
         orus_jit_debug_set_config(&previous_debug_config);
     }
 
+    if (restore_linear_emitter) {
+        orus_jit_backend_clear_linear_emitter_override();
+    }
     return true;
 
 cleanup:
@@ -258,6 +268,9 @@ cleanup:
     }
     if (restore_debug_config) {
         orus_jit_debug_set_config(&previous_debug_config);
+    }
+    if (restore_linear_emitter) {
+        orus_jit_backend_clear_linear_emitter_override();
     }
     return false;
 }

@@ -24,9 +24,9 @@ print("Result: ", fibonacci(10))
 ```bash
 git clone https://github.com/jordyorel/orus-lang.git
 cd orus-lang
-make release            # Build optimized release version
-./orus                  # REPL
-./orus program.orus     # Run file
+zig build -Dprofile=release   # Build optimized release binary
+./orus                        # REPL
+./orus program.orus           # Run file
 ```
 
 ### Build Profiles
@@ -35,19 +35,19 @@ Orus supports multiple build configurations:
 
 ```bash
 # Production (optimized, creates 'orus')
-make release
+zig build -Dprofile=release
 
 # Development (debugging, creates 'orus_debug')
-make debug
+zig build
 
 # Performance analysis (creates 'orus_profiling')
-make profiling
+zig build -Dprofile=profiling
 
 # Clean all builds
-make clean
+zig build clean
 
-# View all available build options
-make help
+# List custom build options
+zig build --help
 ```
 
 ### Enable the JIT tier on Apple Silicon
@@ -60,7 +60,7 @@ manual step. The helper is still available if you need to re-sign specific
 artifacts or run the process explicitly:
 
 ```bash
-make
+zig build
 ./scripts/macos/sign-with-jit.sh        # optional manual invocation
 ```
 
@@ -74,17 +74,17 @@ exercise native JIT code on Apple Silicon.
 
 ## Installation
 
-### Using `make install`
+### Using `zig build install`
 
-`make install` builds the optimized release binary and stages the
-interpreter for distribution.
+`zig build install -Dprofile=release` builds the optimized binary and stages it
+for distribution.
 
 ```bash
 # macOS and Linux (run with the privileges required for the destination)
-sudo make install
+sudo zig build install -Dprofile=release
 
-# Windows (from a MinGW/MSYS shell with administrative privileges)
-make install
+# Windows (from a shell with the necessary privileges)
+zig build install -Dprofile=release
 ```
 
 The default installation roots are:
@@ -94,10 +94,10 @@ The default installation roots are:
 - **Windows:** `C:/Program Files/Orus`
 
 The `orus` binary is copied into the `bin/` subdirectory. Override
-`INSTALL_PREFIX` to install elsewhere:
+an alternate prefix with `--prefix`:
 
 ```bash
-INSTALL_PREFIX="$HOME/.local/orus" make install
+zig build install -Dprofile=release --prefix "$HOME/.local/orus"
 ```
 
 
@@ -107,19 +107,19 @@ Every contribution is more than welcome
 ### Development Setup
 ```bash
 # Build for development (with debugging)
-make debug
+zig build
 
 # Run comprehensive test suite
-make test
+zig build test
 
-# Run performance benchmarks  
-make benchmark
+# Run interpreter benchmarks  
+zig build benchmarks -Dprofile=release
 
-# Run static analysis
-make analyze
+# Run JIT performance benchmarks (use -Dstrict-jit=true to enforce thresholds)  
+zig build jit-benchmark -Dprofile=release [-Dstrict-jit=true]
 
-# Build all profiles
-make clean && make debug && make release && make profiling
+# Build all major profiles
+zig build clean && zig build && zig build -Dprofile=release && zig build -Dprofile=profiling
 ```
 
 ## License

@@ -4928,6 +4928,8 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
             case ORUS_JIT_IR_OP_ADD_I32:
             case ORUS_JIT_IR_OP_SUB_I32:
             case ORUS_JIT_IR_OP_MUL_I32:
+            case ORUS_JIT_IR_OP_DIV_I32:
+            case ORUS_JIT_IR_OP_MOD_I32:
                 if (inst->value_kind != ORUS_JIT_VALUE_I32) {
                     return JIT_BACKEND_ASSEMBLY_ERROR;
                 }
@@ -4937,6 +4939,8 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
             case ORUS_JIT_IR_OP_ADD_I64:
             case ORUS_JIT_IR_OP_SUB_I64:
             case ORUS_JIT_IR_OP_MUL_I64:
+            case ORUS_JIT_IR_OP_DIV_I64:
+            case ORUS_JIT_IR_OP_MOD_I64:
                 if (inst->value_kind != ORUS_JIT_VALUE_I64) {
                     return JIT_BACKEND_ASSEMBLY_ERROR;
                 }
@@ -4946,6 +4950,8 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
             case ORUS_JIT_IR_OP_ADD_U32:
             case ORUS_JIT_IR_OP_SUB_U32:
             case ORUS_JIT_IR_OP_MUL_U32:
+            case ORUS_JIT_IR_OP_DIV_U32:
+            case ORUS_JIT_IR_OP_MOD_U32:
                 if (inst->value_kind != ORUS_JIT_VALUE_U32) {
                     return JIT_BACKEND_ASSEMBLY_ERROR;
                 }
@@ -4955,6 +4961,8 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
             case ORUS_JIT_IR_OP_ADD_U64:
             case ORUS_JIT_IR_OP_SUB_U64:
             case ORUS_JIT_IR_OP_MUL_U64:
+            case ORUS_JIT_IR_OP_DIV_U64:
+            case ORUS_JIT_IR_OP_MOD_U64:
                 if (inst->value_kind != ORUS_JIT_VALUE_U64) {
                     return JIT_BACKEND_ASSEMBLY_ERROR;
                 }
@@ -4964,6 +4972,8 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
             case ORUS_JIT_IR_OP_ADD_F64:
             case ORUS_JIT_IR_OP_SUB_F64:
             case ORUS_JIT_IR_OP_MUL_F64:
+            case ORUS_JIT_IR_OP_DIV_F64:
+            case ORUS_JIT_IR_OP_MOD_F64:
                 if (inst->value_kind != ORUS_JIT_VALUE_F64) {
                     return JIT_BACKEND_ASSEMBLY_ERROR;
                 }
@@ -5166,12 +5176,12 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
             case ORUS_JIT_IR_OP_ITER_NEXT:
             case ORUS_JIT_IR_OP_RANGE:
             case ORUS_JIT_IR_OP_ARRAY_PUSH:
-            case ORUS_JIT_IR_OP_PRINT:
-            case ORUS_JIT_IR_OP_CALL_NATIVE:
-            case ORUS_JIT_IR_OP_CALL_FOREIGN:
-                break;
-            default:
-                return JIT_BACKEND_ASSEMBLY_ERROR;
+        case ORUS_JIT_IR_OP_PRINT:
+        case ORUS_JIT_IR_OP_CALL_NATIVE:
+        case ORUS_JIT_IR_OP_CALL_FOREIGN:
+            break;
+        default:
+            return JIT_BACKEND_ASSEMBLY_ERROR;
         }
     }
 
@@ -5848,6 +5858,54 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                         &code, (uint32_t)inst->operands.arithmetic.dst_reg) ||
                     !orus_jit_code_buffer_emit_bytes(&code, MOVSD_STORE_XMM0,
                                                      sizeof(MOVSD_STORE_XMM0))) {
+                    RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_DIV_I32:
+            case ORUS_JIT_IR_OP_DIV_I64:
+            case ORUS_JIT_IR_OP_DIV_U32:
+            case ORUS_JIT_IR_OP_DIV_U64:
+            case ORUS_JIT_IR_OP_DIV_F64:
+            case ORUS_JIT_IR_OP_MOD_I32:
+            case ORUS_JIT_IR_OP_MOD_I64:
+            case ORUS_JIT_IR_OP_MOD_U32:
+            case ORUS_JIT_IR_OP_MOD_U64:
+            case ORUS_JIT_IR_OP_MOD_F64: {
+                if (!orus_jit_code_buffer_emit_bytes(&code, MOV_RDI_R12,
+                                                     sizeof(MOV_RDI_R12)) ||
+                    !orus_jit_code_buffer_emit_bytes(&code, MOV_RSI_RBX_BYTES,
+                                                     sizeof(MOV_RSI_RBX_BYTES)) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xBA) ||
+                    !orus_jit_code_buffer_emit_u32(
+                        &code, (uint32_t)inst->opcode) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xB9) ||
+                    !orus_jit_code_buffer_emit_u32(
+                        &code, (uint32_t)inst->value_kind) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0x41) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
+                    !orus_jit_code_buffer_emit_u32(
+                        &code, (uint32_t)inst->operands.arithmetic.dst_reg) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0x41) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xB9) ||
+                    !orus_jit_code_buffer_emit_u32(
+                        &code, (uint32_t)inst->operands.arithmetic.lhs_reg) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0x68) ||
+                    !orus_jit_code_buffer_emit_u32(
+                        &code, (uint32_t)inst->operands.arithmetic.rhs_reg) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0x48) ||
+                    !orus_jit_code_buffer_emit_u8(&code, 0xB8) ||
+                    !orus_jit_code_buffer_emit_u64(
+                        &code,
+                        orus_jit_function_ptr_bits(&orus_jit_native_linear_arithmetic)) ||
+                    !orus_jit_code_buffer_emit_bytes(&code, CALL_RAX,
+                                                     sizeof(CALL_RAX)) ||
+                    !orus_jit_code_buffer_emit_bytes(
+                        &code, (const uint8_t[]){0x48, 0x83, 0xC4, 0x08}, 4u) ||
+                    !orus_jit_code_buffer_emit_bytes(&code,
+                                                     (const uint8_t[]){0x84, 0xC0}, 2u) ||
+                    !orus_jit_emit_conditional_jump(&code, 0x84u,
+                                                     &bail_patches)) {
                     RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
                 }
                 break;
@@ -8616,18 +8674,28 @@ orus_jit_ir_emit_x86(const OrusJitIRProgram* program,
             case ORUS_JIT_IR_OP_ADD_I32:
             case ORUS_JIT_IR_OP_SUB_I32:
             case ORUS_JIT_IR_OP_MUL_I32:
+            case ORUS_JIT_IR_OP_DIV_I32:
+            case ORUS_JIT_IR_OP_MOD_I32:
             case ORUS_JIT_IR_OP_ADD_I64:
             case ORUS_JIT_IR_OP_SUB_I64:
             case ORUS_JIT_IR_OP_MUL_I64:
+            case ORUS_JIT_IR_OP_DIV_I64:
+            case ORUS_JIT_IR_OP_MOD_I64:
             case ORUS_JIT_IR_OP_ADD_U32:
             case ORUS_JIT_IR_OP_SUB_U32:
             case ORUS_JIT_IR_OP_MUL_U32:
+            case ORUS_JIT_IR_OP_DIV_U32:
+            case ORUS_JIT_IR_OP_MOD_U32:
             case ORUS_JIT_IR_OP_ADD_U64:
             case ORUS_JIT_IR_OP_SUB_U64:
             case ORUS_JIT_IR_OP_MUL_U64:
+            case ORUS_JIT_IR_OP_DIV_U64:
+            case ORUS_JIT_IR_OP_MOD_U64:
             case ORUS_JIT_IR_OP_ADD_F64:
             case ORUS_JIT_IR_OP_SUB_F64:
-            case ORUS_JIT_IR_OP_MUL_F64: {
+            case ORUS_JIT_IR_OP_MUL_F64:
+            case ORUS_JIT_IR_OP_DIV_F64:
+            case ORUS_JIT_IR_OP_MOD_F64: {
                 if (!dynasm_emit_load_vm_block(actions, &code_offset) ||
                     !dynasm_emit_mov_reg_imm32(actions, 0xBA, &code_offset,
                                                (uint32_t)inst->opcode) ||

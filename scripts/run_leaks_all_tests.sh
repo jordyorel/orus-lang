@@ -61,7 +61,7 @@ run_leaks_test() {
 # Ensure both binaries exist
 for binary in "${ORUS_BINARIES[@]}"; do
     if [ ! -f "$binary" ]; then
-        echo "Error: Binary $binary not found. Please run 'make' and 'make release' first."
+        echo "Error: Binary $binary not found. Please run 'zig build -Dprofile=release' first."
         exit 1
     fi
 done

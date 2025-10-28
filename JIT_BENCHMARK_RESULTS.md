@@ -1,10 +1,10 @@
 # Orus JIT Benchmark Results
 
-The following measurements were collected by running `make test` on the release build profile inside the Orus repository. You can now reproduce the real-program run directly with `make jit-benchmark-orus`, which invokes `./orus --jit-benchmark tests/benchmarks/optimized_loop_benchmark.orus`.
+The following measurements were collected by running `zig build test -Dprofile=release` inside the Orus repository. You can now reproduce the real-program run directly with `zig build jit-benchmark -Dprofile=release [-Dstrict-jit=true]`, which invokes `./orus --jit-benchmark tests/benchmarks/optimized_loop_benchmark.orus`.
 
 - **Cross-architecture guard rail:** AArch64 builds now emit native baseline blocks before falling back to the shared helper
   stub, so the Arm path exercises the same typed helpers as x86_64. CI still runs `ORUS_JIT_FORCE_HELPER_STUB=1` while executing
-  the benchmark matrix to validate the fallback path, and `make jit-cross-arch-tests` replays the backend smoke suite in helper
+  the benchmark matrix to validate the fallback path, and the backend smoke suite continues to replay the helper mode checks
   mode prior to running the translator checks.
 - **Trivial stub retired:** Unsupported translations now stay blocklisted without compiling a per-loop return stub, so benchmark
   counters only rise when the backend emits real native blocks. Catastrophic failures (out-of-memory, invalid input) still fall
@@ -76,7 +76,7 @@ Every `--jit-benchmark` run now emits both reason-oriented and per-value-kind fa
 
 ## 2025-02-14 Forced DynASM Run
 
-Command: `ORUS_JIT_FORCE_DYNASM=1 make jit-benchmark-orus`
+Command: `ORUS_JIT_FORCE_DYNASM=1 zig build jit-benchmark -Dprofile=release -Dstrict-jit=true`
 
 - **Optimized Loop Benchmark:** interpreter 5033.20 ms, JIT 4996.94 ms, speedup 1.01×
 - **FFI Ping/Pong Benchmark:** interpreter 811.24 ms, JIT 809.55 ms, speedup 1.00×

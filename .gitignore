@@ -1,6 +1,8 @@
 # Build artifacts
 /artifacts/
 /build/
+/zig-out/
+/.zig-cache/
 *.o
 *.a
 *.so

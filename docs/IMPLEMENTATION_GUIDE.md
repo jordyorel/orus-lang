@@ -13,7 +13,7 @@ executes those instructions using the generic control-flow and arithmetic handle
   baseline interpreter behaviour.
 
 ## Testing
-Use `make test` to exercise the interpreter after any change. The suite now runs without auxiliary
+Use `zig build test` to exercise the interpreter after any change. The suite now runs without auxiliary
 telemetry or benchmark harnesses, so the standard target is sufficient for validation.
 
 ## Native Tier Bootstrap Notes

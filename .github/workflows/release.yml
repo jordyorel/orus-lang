@@ -22,6 +22,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Install Zig
+        uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: 0.15.1
+
       - name: Extract version
         id: version
         run: |
@@ -99,7 +104,7 @@ jobs:
           fi
 
       - name: Run JIT benchmarks
-        run: make jit-benchmark-orus
+        run: zig build -Dprofile=release -Dstrict-jit=true jit-benchmark
 
       - name: Validate tag matches version
         if: steps.release_needed.outputs.should_release == 'true' && steps.trigger.outputs.from_tag == 'true'
@@ -131,9 +136,27 @@ jobs:
 
       - name: Build release artifacts
         if: steps.release_needed.outputs.should_release == 'true'
+        env:
+          VERSION_TAG: ${{ steps.version.outputs.version }}
         run: |
-          make clean
-          make release
+          set -euo pipefail
+          rm -f orus orus-prof orus_debug orus-prof_debug
+          zig build -Dprofile=release
+
+          rm -rf dist
+          mkdir -p dist/package
+          cp orus dist/package/
+          if [ -f orus-prof ]; then
+              cp orus-prof dist/package/
+          fi
+          cp LICENSE dist/package/
+          cp README.md dist/package/
+
+          OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
+          ARCH="$(uname -m)"
+          TAR_NAME="dist/orus-${VERSION_TAG}-${OS}-${ARCH}.tar.gz"
+          tar -C dist/package -czf "$TAR_NAME" .
+          rm -rf dist/package
 
       - name: Check for binary changes
         if: steps.release_needed.outputs.should_release == 'true'

@@ -12,7 +12,7 @@ subtasks as the implementation evolves.
 - [x] Implement the linear tier-up translator that recovers loop bodies, enforces `OP_LOOP_SHORT` invariants, and emits typed IR.
 - [x] Add baseline x86_64 linear emitter for i32 arithmetic plus helper-stub bailouts for unsupported value kinds.
 - [x] Integrate GC safepoints, type guards, and deopt shims so native frames stay coherent with interpreter semantics.
-- [x] Add benchmarking harnesses (`make jit-benchmark-orus`, `tests/unit/test_vm_jit_benchmark.c`) that compare interpreter vs JIT runs.
+- [x] Add benchmarking harnesses (`zig build jit-benchmark -Dprofile=release [-Dstrict-jit=true]`, `tests/unit/test_vm_jit_benchmark.c`) that compare interpreter vs JIT runs.
 
 ## Stage 1 – Baseline Native Coverage Expansion
 
@@ -64,9 +64,9 @@ subtasks as the implementation evolves.
 - [x] Split profiling counters by opcode family, value kind, and bailout reason with CLI/JSON exports.
   - Runtime profiling now aggregates sampled instructions per opcode family, surfaces JIT failure counts by translation status, category, and value kind, and exposes the same breakdown in `dumpProfilingStats` plus the JSON exporter.
   - CLI exports also propagate the new family aggregates so downstream tooling can monitor hot spots without parsing individual opcode samples.
-- [x] Automate `make jit-benchmark-orus` in CI with pass/fail thresholds for uplift (≥3×) and native coverage (≥90%).
+- [x] Automate `zig build jit-benchmark -Dprofile=release -Dstrict-jit=true` in CI with pass/fail thresholds for uplift (≥3×) and native coverage (≥90%).
   - Added a Python harness that runs the benchmark suite, enforces ≥3× speedup and ≥90% native coverage, and prints actionable failures when the thresholds are missed.
-  - Wired the harness into `make jit-benchmark-orus`, taught the CLI to report native coverage, and execute the target inside the release workflow so regressions trip CI immediately.
+  - Wired the harness into `zig build jit-benchmark -Dprofile=release -Dstrict-jit=true`, taught the CLI to report native coverage, and execute the target inside the release workflow so regressions trip CI immediately.
 - [x] Capture disassembly dumps, guard exit traces, and per-loop telemetry toggles for developer debugging.
   - Added `OrusJitDebug` instrumentation hooks that snapshot IR listings, hex-encoded machine code, guard exit ring buffers, and loop-level counters gated by per-loop toggles.
   - Native entry stubs publish loop entries, slow-path requests, and guard exits so developers can target specific loops without drowning in global counters.
@@ -77,7 +77,7 @@ subtasks as the implementation evolves.
 
 - [x] Validate DynASM backend parity on AArch64 and RISC-V, including cross-arch test harnesses and CI coverage.
   - Added a cross-architecture parity harness that classifies IR programs and asserts identical coverage across x86_64, AArch64, and RISC-V targets as part of CI test suites.
-  - Extended make targets so cross-arch parity runs alongside helper-stub and translation smoke tests during `jit-cross-arch-tests`.
+  - Extended the automation so cross-arch parity runs alongside helper-stub and translation smoke tests during the `jit-cross-arch` suite.
 - [x] Stress test JIT execution with long-running workloads, high-concurrency scenarios, and GC-heavy programs.
   - Added `test_vm_jit_stress` harness that drives long-running arithmetic loops, GC-heavy string workloads, and fork-based concurrency stress to exercise native dispatch stability.
 - [x] Finalize security review: guard stack integrity, enforce W^X policies, and audit helper call ABI compliance.

@@ -11,7 +11,7 @@ section explains *why* a feature exists, *how* to use it, and shows runnable Oru
 Orus ships as a command-line toolchain. After cloning the repository you can build a release binary and launch the REPL:
 
 ```bash
-make release
+zig build -Dprofile=release
 ./orus               # start the interactive shell
 ./orus main.orus     # run a file
 ```

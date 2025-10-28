@@ -45,7 +45,7 @@ def run_benchmark(spec: BenchmarkSpec) -> BenchmarkSpec:
 
     if not ORUS_BINARY.exists():
         spec.status = "blocked"
-        spec.notes = "build the release binary with `make release` before running"
+        spec.notes = "build the release binary with `zig build -Dprofile=release` before running"
         return spec
 
     ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)

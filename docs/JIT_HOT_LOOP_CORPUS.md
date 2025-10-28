@@ -8,7 +8,7 @@ interpreter and tiered runtimes.
 
 ## Measurement Protocol
 
-* Build the release configuration once with `make release`.
+* Build the release configuration once with `zig build -Dprofile=release`.
 * Run each benchmark with `./orus --jit-benchmark <program>` so the harness
   executes a warm interpreter pass followed by a tiered run.
 * Record the interpreter-only runtime that the harness prints. When the JIT has
@@ -18,8 +18,8 @@ interpreter and tiered runtimes.
   `scripts/measure_hot_loop_baselines.py` helper does this automatically).
 
 > **Note:** The interpreter timings below were gathered on the reference
-> container image on 2024-07-05 using `make release`. Later runs should be
-> recorded alongside the exact git revision and rollout stage.
+> container image on 2024-07-05 using `zig build -Dprofile=release`. Later runs
+> should be recorded alongside the exact git revision and rollout stage.
 
 ## Baseline Interpreter Timings
 

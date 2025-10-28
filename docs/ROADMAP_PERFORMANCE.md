@@ -346,8 +346,8 @@ TEST_CASE(test_jit_gc_safepoint) {
    - [x] Enable tier-up in the harness so the JIT runs long enough to amortize translation and cache warming costs.
      - The harness now drives warmup + steady-state sampling, recording multiple tiered invocations per loop before comparing against the interpreter averages.
    - [x] Instrument the `JITEntry` cache with cycle counters around `enter()` to capture steady-state throughput and regress if the 3–5× goal is missed.
-     - `make jit-benchmark-orus` surfaces per-entry warmup and steady-state latency along with sample counts, letting us track cache reuse directly in the CLI output.
-   - [x] Capture regression tests under `make jit-benchmark-orus` so the uplift target is automatically enforced in CI.
+     - `zig build jit-benchmark -Dprofile=release [-Dstrict-jit=true]` surfaces per-entry warmup and steady-state latency along with sample counts, letting us track cache reuse directly in the CLI output.
+   - [x] Capture regression tests under `zig build jit-benchmark -Dprofile=release -Dstrict-jit=true` so the uplift target is automatically enforced in CI.
      - The target now executes both optimized-loop and FFI workloads under JIT + interpreter configurations, emitting structured metrics for CI diffing.
 
    - [x] Extend lowering coverage so boxed values no longer trigger `unsupported_value_kind` bailouts during optimized loop tier-up.
@@ -546,7 +546,7 @@ All phases must pass incremental unit tests using a minimal internal test harnes
 Run via:
 
 ```bash
-make test
+zig build test
 ```
 
 ---
@@ -562,4 +562,3 @@ make test
 | SSA Tier           | Constant-folded loops | 90–100% of Go speed |
 
 ---
-

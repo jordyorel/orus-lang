@@ -10,6 +10,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ORUS_BINARY="$SCRIPT_DIR/../../orus"
 ITERATIONS=5
 
+# Resolve Python interpreter lazily; favour python3, then python
+if command -v python3 >/dev/null 2>&1; then
+    PYTHON_BIN=$(command -v python3)
+elif command -v python >/dev/null 2>&1; then
+    PYTHON_BIN=$(command -v python)
+else
+    echo -e "${RED}❌ Neither python3 nor python found in PATH. Install Python 3 to run the benchmark suite.${NC}"
+    exit 1
+fi
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -62,14 +72,20 @@ format_ns_to_ms() {
 # Function to ensure Orus is built once with optimal settings
 ensure_orus_built() {
     echo -e "${CYAN}🔧 Ensuring Orus is built with optimal settings...${NC}"
-    
+
     cd "$SCRIPT_DIR/../.."
-    
+
+    if [[ "${ORUS_SKIP_BUILD:-0}" == "1" && -f "$ORUS_BINARY" ]]; then
+        echo -e "${GREEN}✅ Using existing Orus binary at $ORUS_BINARY${NC}"
+        cd "$SCRIPT_DIR"
+        return
+    fi
+
     # Clean build for consistent results
-    make clean > /dev/null 2>&1
-    
+    zig build clean > /dev/null 2>&1 || true
+
     # Build with optimal settings (release profile for best performance)
-    if make release > /dev/null 2>&1; then
+    if zig build -Dprofile=release > /dev/null 2>&1; then
         echo -e "${GREEN}✅ Orus binary built successfully${NC}"
     else
         echo -e "${RED}❌ Failed to build Orus binary${NC}"
@@ -153,7 +169,7 @@ run_benchmark_category() {
     run_language_benchmark "Orus" "$orus_file" "\"$ORUS_BINARY\" \"$SCRIPT_DIR/$orus_file\""
     
     if [[ -f "$SCRIPT_DIR/${base_name}.py" ]]; then
-        run_language_benchmark "Python" "${base_name}.py" "/opt/homebrew/bin/python3 \"$SCRIPT_DIR/${base_name}.py\""
+        run_language_benchmark "Python" "${base_name}.py" "\"$PYTHON_BIN\" \"$SCRIPT_DIR/${base_name}.py\""
     fi
 
     
