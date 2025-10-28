@@ -228,7 +228,7 @@ static void skip_whitespace() {
 }
 
 /* -------------------------------------------------------------------------- */
-/*                         Perfect‐switch keyword lookup                      */
+/*                         Keyword lookup                      */
 /* -------------------------------------------------------------------------- */
 
 static TokenType identifier_type(const char* start, int length) {
@@ -552,9 +552,7 @@ static Token string() {
 /*                               Public API                                   */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Initialize lexer context for a new source buffer.
- */
+
 void init_scanner_ctx(LexerContext* ctx, const char* source) {
     ctx->lexer.start = source;
     ctx->lexer.current = source;
@@ -569,9 +567,6 @@ void init_scanner_ctx(LexerContext* ctx, const char* source) {
     ctx->lexer.atLineStart = true;
 }
 
-/**
- * Initialize lexer for a new source buffer (backward compatibility).
- */
 void init_scanner(const char* source) {
     lexer.start = source;
     lexer.current = source;
@@ -655,7 +650,7 @@ Token scan_token_ctx(LexerContext* ctx) {
 
     char c = advance_ctx(ctx);
 
-    /* Single‐char or 2‐char tokens */
+// Single‐char or 2‐char tokens
     switch (c) {
         case '\n':
             ctx->lexer.atLineStart = true;
@@ -738,9 +733,8 @@ Token scan_token_ctx(LexerContext* ctx) {
                        ERR_LEN("Unexpected character."));
 }
 
-/**
- * Retrieve the next token (backward compatibility).
- */
+// Retrieve the next token (backward compatibility).
+
 Token scan_token() {
     if (lexer.pendingDedents > 0) {
         lexer.pendingDedents--;
@@ -809,7 +803,7 @@ Token scan_token() {
     char c = advance();
     fflush(stdout);
 
-    /* Single‐char or 2‐char tokens */
+// Single‐char or 2‐char tokens
     switch (c) {
         case '\n':
             lexer.atLineStart = true;
@@ -883,7 +877,7 @@ Token scan_token() {
             return string();
     }
 
-    /* Identifiers and numbers */
+    // Identifiers and numbers
     if (IS_ALPHA(c)) return identifier();
     if (IS_DIGIT(c)) return number();
 
