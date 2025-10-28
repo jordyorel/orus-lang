@@ -7351,28 +7351,51 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                 if (!inst_offsets) {
                     RETURN_WITH(JIT_BACKEND_ASSEMBLY_ERROR);
                 }
-                size_t header_index = orus_jit_program_find_index(
-                    &block->program, block->program.loop_start_offset);
+
+                uint16_t back = inst->operands.loop_back.back_offset;
+                if (inst->bytecode_offset < back) {
+                    RETURN_WITH(JIT_BACKEND_ASSEMBLY_ERROR);
+                }
+
+                uint32_t loop_header = block->program.loop_start_offset;
+                uint32_t target = inst->bytecode_offset - back;
+                size_t header_index = SIZE_MAX;
+                for (size_t j = 0; j < block->program.count; ++j) {
+                    uint32_t candidate =
+                        block->program.instructions[j].bytecode_offset;
+                    if (candidate == target || candidate == loop_header) {
+                        header_index = j;
+                        if (candidate == loop_header) {
+                            break;
+                        }
+                    }
+                }
+
                 if (header_index == SIZE_MAX) {
                     RETURN_WITH(JIT_BACKEND_ASSEMBLY_ERROR);
                 }
+
                 size_t header_offset = inst_offsets[header_index];
                 if (header_offset == SIZE_MAX) {
                     RETURN_WITH(JIT_BACKEND_ASSEMBLY_ERROR);
                 }
+
                 if (!orus_jit_code_buffer_emit_u8(&code, 0xE9)) {
                     RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
                 }
+
                 size_t disp_offset = code.size;
                 int64_t rel = (int64_t)header_offset -
                               ((int64_t)disp_offset + 4);
                 if (rel < INT32_MIN || rel > INT32_MAX) {
                     RETURN_WITH(JIT_BACKEND_ASSEMBLY_ERROR);
                 }
-                uint32_t disp = (uint32_t)(int32_t)rel;
-                if (!orus_jit_code_buffer_emit_u32(&code, disp)) {
+
+                if (!orus_jit_code_buffer_emit_u32(
+                        &code, (uint32_t)(int32_t)rel)) {
                     RETURN_WITH(JIT_BACKEND_OUT_OF_MEMORY);
                 }
+
                 goto finalize_block;
             }
             case ORUS_JIT_IR_OP_RETURN: {
