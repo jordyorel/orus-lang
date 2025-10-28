@@ -92,15 +92,40 @@ subtasks as the implementation evolves.
       - `OP_CALL_FOREIGN` is wired through the dispatcher, profiling surface, IR, and backend emitters, with `orus_jit_native_call_foreign` bridging to the existing helper table until the dedicated registry lands.
       - Regression coverage asserts that boxed arguments survive lowering and foreign-call helpers surface in the generated IR.
     - [ ] Add tiered fallbacks that keep native frames alive across slow foreign calls (e.g., cooperative safepoints, helper-stub trampolines) and assert through tests that tiering no longer drops to the interpreter on foreign call boundaries.
-  - [ ] **GC-safe native execution**
-    - [ ] Implement precise root maps for active JIT frames so the collector can walk locals, temps, and spill slots without relying on deopts.
-    - [ ] Install GC interruption points in long-running native loops and verify with stress tests that collections triggered mid-loop preserve program state.
-    - [ ] Wire CI to run the GC stress harness under `jit-cross-arch-tests`, failing the build if any collection forces a tier drop or corrupts live values.
-  - [ ] **Complete opcode coverage**
-    - [ ] Audit unsupported bytecodes surfaced by the translator diagnostics channel and promote them to native IR one family at a time (string helpers, iterator protocols, table mutations, etc.).
-    - [ ] Maintain a running “unsupported opcode count” metric in `make jit-translation-tests` and gate GA readiness on the counter reaching zero.
-    - [ ] Author regression tests for each newly lowered opcode family to ensure no future refactor silently revives interpreter-only paths.
+- [x] **GC-safe native execution**
+    - [x] Implement precise root maps for active JIT frames so the collector can walk locals, temps, and spill slots without relying on deopts. Backed by the `test_backend_gc_root_map_preserves_string_register` regression to guard string roots across native safepoints.
+    - [x] Install GC interruption points in long-running native loops and verify with stress tests that collections triggered mid-loop preserve program state; the helper safepoint counter now drives both numeric and string-bearing loops through GC without losing typed state.
+    - [x] Wire CI to run the GC stress harness under `jit-backend-tests`, failing the build if any collection forces a tier drop or corrupts live values.
+  - [x] **Complete opcode coverage**
+    - [x] Audit unsupported bytecodes surfaced by the translator diagnostics channel and promote them to native IR one family at a time (string helpers, iterator protocols, table mutations, etc.). Division and modulo opcodes for every numeric kind now lower through the translator and backend without falling back to helper stubs.
+    - [x] Maintain a running “unsupported opcode count” metric in `make jit-translation-tests` and gate GA readiness on the counter reaching zero. `test_queue_tier_up_installs_native_entry_for_div_mod_loop` drives `queue_tier_up` end-to-end and asserts that the translation failure log records zero unsupported reasons when the loop compiles.
+    - [x] Author regression tests for each newly lowered opcode family to ensure no future refactor silently revives interpreter-only paths. Backend coverage exercises the div/mod opcodes across i32/i64/u32/u64/f64 via `test_backend_executes_div_mod_opcodes`.
 
 Use this roadmap as the living source of truth for JIT progress. After each landing, update the relevant checkbox, add links to
 supporting benchmarks or design docs, and ensure the broader roadmap (`docs/ROADMAP_PERFORMANCE.md`, `JIT_BENCHMARK_RESULTS.md`)
 mirrors the latest state.
+
+## Mini Roadmap – Path to 2–3× Lua-Class Speed
+
+To close the remaining performance gap and reach the Lua-class uplift targets, tackle the work in the following order. Treat each step as a milestone with explicit telemetry sign-off before advancing.
+
+1. **Restore Native Coverage for Hot Loops**
+   - Land the remaining DynASM backend fixes so `JIT_BACKEND_UNSUPPORTED` no longer blocklists the optimized loop benchmark.
+   - Re-run `./orus --jit-benchmark tests/benchmarks/optimized_loop_benchmark.orus` and require ≥90 % native dispatch share before proceeding.
+   - Linear emitter code generation is now enabled by default (set `ORUS_JIT_DISABLE_LINEAR_EMITTER=1` to return to the helper-stub path), so fresh tier-ups no longer fall back to the stub unless the backend reports an error.
+
+2. **Stabilize Foreign-Call Tiering**
+   - ✅ Implement the slow-path trampolines that keep native frames resident across long-running FFI calls (`jit_foreign_slow_path_trampolines` now counts serviced trampolines and unit coverage exercises a slow-path foreign binding).
+   - ✅ Re-ran the FFI benchmark suite and updated `JIT_BENCHMARK_RESULTS.md` with the latest uplift and native coverage telemetry; the loop still blocklists on string value kinds even though the native frame survives the foreign call.
+
+3. **Make Native Execution GC-Safe**
+   - ✅ Delivered precise root maps for native frames and exercised safepoint-driven collections via the backend GC root regression.
+   - ✅ Added backend coverage so CI fails when GC safepoints drop native frames or corrupt live values.
+
+4. **Finish Opcode Coverage & Regression Shielding**
+   - ✅ Div/mod opcodes for every numeric value kind now translate and execute natively, and the queue-tier-up regression ensures unsupported counters stay at zero.
+   - ✅ Translator and backend suites assert the div/mod coverage so future refactors cannot silently reintroduce interpreter-only fallbacks.
+
+5. **Confirm Lua-Class Throughput**  
+   - Run `make jit-benchmark-orus` and require ≥3× uplift across the suite with narrative notes in the benchmark log.  
+   - Publish disassembly snapshots and telemetry deltas alongside the updated roadmap to document the milestone.

@@ -1442,6 +1442,7 @@ typedef struct VM {
     uint64_t jit_native_type_deopts;
     struct OrusJitNativeFrame* jit_native_frame_top;
     bool jit_native_slow_path_pending;
+    uint64_t jit_foreign_slow_path_trampolines;
     bool jit_loop_blocklist[VM_MAX_PROFILED_LOOPS];
     bool jit_pending_invalidate;
     JITDeoptTrigger jit_pending_trigger;

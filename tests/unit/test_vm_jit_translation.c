@@ -945,7 +945,7 @@ static bool test_rollout_blocks_f64_before_stage(void) {
     return success;
 }
 
-static bool test_queue_tier_up_skips_stub_install_on_unsupported(void) {
+static bool test_queue_tier_up_installs_native_entry_for_div_mod_loop(void) {
     initVM();
     orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
 
@@ -960,33 +960,70 @@ static bool test_queue_tier_up_skips_stub_install_on_unsupported(void) {
     function->start = 0;
     vm.functionCount = 1;
 
-    const uint16_t dst = FRAME_REG_START;
-    ASSERT_TRUE(write_load_numeric_const(chunk, OP_LOAD_I32_CONST, dst,
-                                         BOOL_VAL(true)),
-                "expected constant emission");
+    const uint16_t dividend = FRAME_REG_START;
+    const uint16_t divisor = FRAME_REG_START + 1u;
+    const uint16_t quotient = FRAME_REG_START + 2u;
+    const uint16_t remainder = FRAME_REG_START + 3u;
+
+    ASSERT_TRUE(write_load_numeric_const(chunk, OP_LOAD_I64_CONST, dividend,
+                                         I64_VAL(96)),
+                "expected dividend constant");
+    ASSERT_TRUE(write_load_numeric_const(chunk, OP_LOAD_I64_CONST, divisor,
+                                         I64_VAL(7)),
+                "expected divisor constant");
+
+    writeChunk(chunk, OP_DIV_I64_TYPED, 1, 0, "jit_translation");
+    writeChunk(chunk, (uint8_t)quotient, 1, 0, "jit_translation");
+    writeChunk(chunk, (uint8_t)dividend, 1, 0, "jit_translation");
+    writeChunk(chunk, (uint8_t)divisor, 1, 0, "jit_translation");
+
+    writeChunk(chunk, OP_MOD_I64_TYPED, 1, 0, "jit_translation");
+    writeChunk(chunk, (uint8_t)remainder, 1, 0, "jit_translation");
+    writeChunk(chunk, (uint8_t)dividend, 1, 0, "jit_translation");
+    writeChunk(chunk, (uint8_t)divisor, 1, 0, "jit_translation");
+
     writeChunk(chunk, OP_RETURN_VOID, 1, 0, "jit_translation");
 
     HotPathSample sample = {0};
     sample.func = 0;
     sample.loop = (uint16_t)function->start;
 
-    queue_tier_up(&vm, &sample);
+    OrusJitIRProgram program;
+    orus_jit_ir_program_init(&program);
+    OrusJitTranslationResult translation =
+        orus_jit_translate_linear_block(&vm, function, function->chunk, &sample,
+                                        &program);
+    ASSERT_TRUE(translation.status == ORUS_JIT_TRANSLATE_STATUS_OK,
+                "expected div/mod block to translate successfully");
+    ASSERT_TRUE(program.instructions != NULL,
+                "expected translated IR buffer to be allocated");
+    ASSERT_TRUE(program.count > 0, "expected translated IR to contain instructions");
 
-    ASSERT_TRUE(vm.jit_loop_blocklist[sample.loop],
-                "expected loop to be blocklisted");
-    ASSERT_TRUE(vm.jit_cache.count == 0,
-                "expected jit cache to stay empty");
-    ASSERT_TRUE(vm_jit_lookup_entry(sample.func, sample.loop) == NULL,
-                "expected no cache entry to be installed");
-    ASSERT_TRUE(vm.jit_compilation_count == 0,
-                "expected compilation count to remain zero");
-    ASSERT_TRUE(vm.jit_translation_failures.total_failures == 1,
-                "expected one translation failure to be recorded");
-    ASSERT_TRUE(
-        vm.jit_translation_failures
-                .reason_counts[ORUS_JIT_TRANSLATE_STATUS_UNSUPPORTED_CONSTANT_KIND] == 1,
-        "expected unsupported constant counter to increment");
+    bool saw_div = false;
+    bool saw_mod = false;
+    for (size_t i = 0; i < program.count; ++i) {
+        const OrusJitIRInstruction* inst = &program.instructions[i];
+        if (inst->opcode == ORUS_JIT_IR_OP_DIV_I64) {
+            saw_div = true;
+            ASSERT_TRUE(inst->operands.arithmetic.dst_reg == quotient,
+                        "expected quotient destination register");
+        } else if (inst->opcode == ORUS_JIT_IR_OP_MOD_I64) {
+            saw_mod = true;
+            ASSERT_TRUE(inst->operands.arithmetic.dst_reg == remainder,
+                        "expected remainder destination register");
+        }
+    }
+    ASSERT_TRUE(saw_div, "expected translated IR to contain div opcode");
+    ASSERT_TRUE(saw_mod, "expected translated IR to contain mod opcode");
 
+    ASSERT_TRUE(vm.jit_translation_failures.total_failures == 0,
+                "expected translation failure log to remain empty");
+
+    orus_jit_ir_program_reset(&program);
+    freeChunk(chunk);
+    free(chunk);
+    function->chunk = NULL;
+    vm.functionCount = 0;
     freeVM();
     return true;
 }
@@ -2854,8 +2891,8 @@ int main(void) {
         {"translator emits u32 to i32 conversion", test_translates_u32_to_i32_conversion},
         {"rollout blocks f64 before float stage",
          test_rollout_blocks_f64_before_stage},
-        {"queue_tier_up skips stub install on unsupported",
-         test_queue_tier_up_skips_stub_install_on_unsupported},
+        {"queue_tier_up installs native div/mod loop",
+         test_queue_tier_up_installs_native_entry_for_div_mod_loop},
         {"queue_tier_up ignores helper-stub-only compilations",
          test_queue_tier_up_counts_only_native_entries},
         {"translator emits i32 comparison and branch",
