@@ -5,8 +5,8 @@
 #define ORUS_VERSION_H
 
 #define ORUS_VERSION_MAJOR 0
-#define ORUS_VERSION_MINOR 7
-#define ORUS_VERSION_PATCH 6
+#define ORUS_VERSION_MINOR 1
+#define ORUS_VERSION_PATCH 1
 
 // Helpers to stringify numeric macros
 #define ORUS_STR_HELPER(x) #x
