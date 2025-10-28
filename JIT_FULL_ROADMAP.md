@@ -113,9 +113,9 @@ To close the remaining performance gap and reach the Lua-class uplift targets, t
    - Land the remaining DynASM backend fixes so `JIT_BACKEND_UNSUPPORTED` no longer blocklists the optimized loop benchmark.  
    - Re-run `./orus --jit-benchmark tests/benchmarks/optimized_loop_benchmark.orus` and require ≥90 % native dispatch share before proceeding.
 
-2. **Stabilize Foreign-Call Tiering**  
-   - Implement the slow-path trampolines that keep native frames resident across long-running FFI calls.  
-   - Re-run the FFI benchmark suite and record uplift plus native coverage in `JIT_BENCHMARK_RESULTS.md`.
+2. **Stabilize Foreign-Call Tiering**
+   - ✅ Implement the slow-path trampolines that keep native frames resident across long-running FFI calls (`jit_foreign_slow_path_trampolines` now counts serviced trampolines and unit coverage exercises a slow-path foreign binding).
+   - ✅ Re-ran the FFI benchmark suite and updated `JIT_BENCHMARK_RESULTS.md` with the latest uplift and native coverage telemetry; the loop still blocklists on string value kinds even though the native frame survives the foreign call.
 
 3. **Make Native Execution GC-Safe**  
    - Deliver precise root maps and in-loop safepoints; validate using the GC stress harness.  

@@ -174,6 +174,7 @@ void initVM(void) {
     vm.jit_native_type_deopts = 0;
     vm.jit_native_frame_top = NULL;
     vm.jit_native_slow_path_pending = false;
+    vm.jit_foreign_slow_path_trampolines = 0;
     vm.jit_enter_cycle_total = 0;
     vm.jit_enter_cycle_samples = 0;
     vm.jit_enter_cycle_warmup_total = 0;

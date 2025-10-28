@@ -1367,6 +1367,82 @@ orus_jit_helper_safepoint(struct VM* vm_instance) {
     (void)orus_jit_native_safepoint(vm_instance);
 }
 
+typedef struct {
+    bool previous_pending;
+    bool previous_frame_slow;
+} OrusJitForeignSlowPathGuard;
+
+static OrusJitForeignSlowPathGuard
+orus_jit_foreign_slow_path_guard_enter(struct VM* vm_instance) {
+    OrusJitForeignSlowPathGuard guard = {0};
+    if (!vm_instance) {
+        return guard;
+    }
+
+    guard.previous_pending = vm_instance->jit_native_slow_path_pending;
+    OrusJitNativeFrame* frame = vm_instance->jit_native_frame_top;
+    guard.previous_frame_slow = frame ? frame->slow_path_requested : false;
+
+    vm_instance->jit_native_slow_path_pending = false;
+    if (frame) {
+        frame->slow_path_requested = false;
+    }
+
+    return guard;
+}
+
+static void
+orus_jit_foreign_slow_path_guard_cancel(
+    struct VM* vm_instance,
+    const OrusJitForeignSlowPathGuard* guard) {
+    if (!vm_instance || !guard) {
+        return;
+    }
+
+    vm_instance->jit_native_slow_path_pending = guard->previous_pending;
+    OrusJitNativeFrame* frame = vm_instance->jit_native_frame_top;
+    if (frame) {
+        frame->slow_path_requested = guard->previous_frame_slow;
+    }
+}
+
+static void
+orus_jit_native_service_foreign_slow_path(struct VM* vm_instance) {
+    if (!vm_instance) {
+        return;
+    }
+
+    OrusJitNativeFrame* frame = vm_instance->jit_native_frame_top;
+    orus_jit_native_flush_active_window(vm_instance);
+    if (frame) {
+        frame->active_window = orus_jit_native_active_window(vm_instance);
+        frame->window_version = vm_instance->typed_regs.window_version;
+        frame->slow_path_requested = false;
+    }
+    vm_instance->jit_native_slow_path_pending = false;
+}
+
+static void
+orus_jit_foreign_slow_path_guard_complete(
+    struct VM* vm_instance,
+    const OrusJitForeignSlowPathGuard* guard,
+    bool slow_path_triggered) {
+    if (!vm_instance || !guard) {
+        return;
+    }
+
+    if (slow_path_triggered) {
+        orus_jit_native_service_foreign_slow_path(vm_instance);
+        vm_instance->jit_foreign_slow_path_trampolines++;
+    }
+
+    OrusJitNativeFrame* frame = vm_instance->jit_native_frame_top;
+    vm_instance->jit_native_slow_path_pending = guard->previous_pending;
+    if (frame) {
+        frame->slow_path_requested = guard->previous_frame_slow;
+    }
+}
+
 size_t
 orus_jit_helper_safepoint_count(void) {
     return g_orus_jit_helper_safepoint_count;
@@ -2675,12 +2751,28 @@ orus_jit_native_call_foreign(struct VM* vm_instance,
                              uint16_t first_arg_reg,
                              uint16_t arg_count,
                              uint16_t foreign_index) {
-    // The runtime currently reuses the native function table for foreign
-    // bindings. This helper mirrors the native call path so the translator and
-    // backends can specialize `OP_CALL_FOREIGN` without forcing the
-    // interpreter to stay resident.
-    return orus_jit_native_call_native(vm_instance, block, dst, first_arg_reg,
-                                       arg_count, foreign_index);
+    OrusJitForeignSlowPathGuard guard =
+        orus_jit_foreign_slow_path_guard_enter(vm_instance);
+
+    bool ok = orus_jit_native_call_native(vm_instance, block, dst,
+                                          first_arg_reg, arg_count,
+                                          foreign_index);
+
+    bool slow_path_triggered = false;
+    if (vm_instance) {
+        OrusJitNativeFrame* frame = vm_instance->jit_native_frame_top;
+        slow_path_triggered = vm_instance->jit_native_slow_path_pending ||
+                              (frame && frame->slow_path_requested);
+    }
+
+    if (!ok) {
+        orus_jit_foreign_slow_path_guard_cancel(vm_instance, &guard);
+        return false;
+    }
+
+    orus_jit_foreign_slow_path_guard_complete(vm_instance, &guard,
+                                               slow_path_triggered);
+    return true;
 }
 
 static bool

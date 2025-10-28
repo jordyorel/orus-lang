@@ -693,6 +693,69 @@ static bool test_backend_helper_stub_executes(void) {
     return success;
 }
 
+static Value slow_path_foreign_call(int arg_count, Value* args) {
+    (void)arg_count;
+    (void)args;
+    vm_mark_native_slow_path(NULL);
+    return BOOL_VAL(true);
+}
+
+static bool test_backend_foreign_call_slow_path_trampoline(void) {
+    initVM();
+    orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
+
+    struct OrusJitBackend* backend = orus_jit_backend_create();
+    if (!backend) {
+        freeVM();
+        return false;
+    }
+
+    OrusJitIRInstruction instructions[2];
+    memset(instructions, 0, sizeof(instructions));
+    instructions[0].opcode = ORUS_JIT_IR_OP_CALL_FOREIGN;
+    instructions[0].value_kind = ORUS_JIT_VALUE_BOOL;
+    instructions[0].operands.call_native.dst_reg = FRAME_REG_START;
+    instructions[0].operands.call_native.first_arg_reg = FRAME_REG_START + 1u;
+    instructions[0].operands.call_native.arg_count = 0u;
+    instructions[0].operands.call_native.native_index = 0u;
+    instructions[0].operands.call_native.spill_base = 0u;
+    instructions[0].operands.call_native.spill_count = 0u;
+
+    instructions[1].opcode = ORUS_JIT_IR_OP_RETURN;
+
+    OrusJitIRProgram program;
+    init_ir_program(&program, instructions, 2);
+
+    JITEntry entry;
+    bool compiled = compile_program(backend, &program, &entry);
+    if (!compiled) {
+        orus_jit_backend_destroy(backend);
+        freeVM();
+        return false;
+    }
+
+    vm.nativeFunctionCount = 1;
+    vm.nativeFunctions[0].function = slow_path_foreign_call;
+    vm.nativeFunctions[0].arity = 0;
+
+    vm_store_bool_typed_hot(FRAME_REG_START, false);
+    vm.jit_foreign_slow_path_trampolines = 0;
+    vm.jit_native_slow_path_pending = false;
+
+    entry.entry_point(&vm);
+
+    Value result = vm_get_register_safe(FRAME_REG_START);
+    bool returned_true = IS_BOOL(result) && AS_BOOL(result);
+    bool slow_path_serviced = (vm.jit_foreign_slow_path_trampolines == 1u);
+    bool success = returned_true && slow_path_serviced;
+
+    orus_jit_backend_release_entry(backend, &entry);
+    orus_jit_backend_destroy(backend);
+    freeVM();
+
+    return success;
+}
+
 static uint64_t bits_from_i32(int32_t value) {
     return (uint64_t)(uint32_t)value;
 }
@@ -2062,6 +2125,11 @@ int main(void) {
     }
     if (!test_backend_helper_stub_executes()) {
         fprintf(stderr, "backend helper stub test failed\n");
+        success = false;
+    }
+    if (!test_backend_foreign_call_slow_path_trampoline()) {
+        fprintf(stderr,
+                "backend foreign slow-path trampoline test failed\n");
         success = false;
     }
     if (!test_backend_dynasm_matches_linear_across_value_kinds()) {

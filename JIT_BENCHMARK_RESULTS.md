@@ -51,16 +51,18 @@ The new tier-skip telemetry shows that the translator can lower all hot loops, b
 
 ## FFI Ping/Pong Benchmark (`tests/benchmarks/ffi_ping_pong_benchmark.orus`)
 
-- **Interpreter runtime (JIT disabled):** 2,096.45 ms
-- **JIT-enabled runtime:** _pending re-run_
-- **Observed speedup:** _pending re-run_
-- **Translations:** 1 succeeded (validated by translation stress harness), 0 failed in unit coverage
-- **Native dispatches:** _pending re-run_
-- **Cache hits:** _pending re-run_, **Cache misses:** _pending re-run_, **Deopts:** _pending re-run_, **Type guard bailouts:** _pending re-run_
-- **Rollout stage:** `strings` (mask `0x7F`); translator now lowers `OP_CALL_FOREIGN`, allowing the benchmark loop to enter native code.
+- **Interpreter runtime (JIT disabled):** 630.29 ms
+- **JIT-enabled runtime:** 663.61 ms
+- **Observed speedup:** 0.95×
+- **Translations:** 0 succeeded, 1 failed (`unsupported_value_kind` for string operands)
+- **Native dispatches:** 1, **Cache hits:** 0, **Cache misses:** 1, **Deopts:** 1, **Type guard bailouts:** 0
+- **Rollout stage:** `strings` (mask `0x7F`); the slow-path trampoline keeps the native frame resident during the foreign call, but the translator still blocklists the loop on string value kinds.
 
-The FFI workload now survives tiering thanks to the new opcode lowering path and regression harness that mirrors the benchmark
-loop. Refresh the benchmark measurements after wiring in the dedicated foreign-call registry to quantify uplift and cache health.
+The refreshed run confirms that foreign calls no longer tear down the native frame—the VM records one native dispatch and the
+`jit_foreign_slow_path_trampolines` counter increments during tiering—but the overall loop still fails to translate because the
+translator rejects the surrounding string operations. As a result the benchmark remains interpreter-bound despite the new
+trampoline support. Future work needs to lift the remaining `unsupported_value_kind` diagnostics so the loop can stay in native
+code long enough to deliver the expected uplift.
 
 ## Per-Type Tier-Up Tracker
 
