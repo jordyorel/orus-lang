@@ -4934,17 +4934,26 @@ orus_jit_linear_emitter_enabled(void) {
         return g_orus_jit_linear_emitter_override == 1;
     }
     if (cached == -1) {
-        const char* enable = getenv("ORUS_JIT_ENABLE_LINEAR_EMITTER");
         const char* force = getenv("ORUS_JIT_FORCE_LINEAR_EMITTER");
-        /*
-         * Support both the new opt-in switch and a legacy-style "force" toggle
-         * so existing automation that mirrored other JIT env variables keeps
-         * working while the linear emitter stays disabled by default.
-         */
-        cached = ((enable && enable[0] != '\0') ||
-                  (force && force[0] != '\0'))
-                     ? 1
-                     : 0;
+        if (force && force[0] != '\0') {
+            cached = 1;
+        } else {
+            const char* disable = getenv("ORUS_JIT_DISABLE_LINEAR_EMITTER");
+            if (disable && disable[0] != '\0') {
+                cached = 0;
+            } else {
+                const char* enable = getenv("ORUS_JIT_ENABLE_LINEAR_EMITTER");
+                (void)enable; /* retained for backward compatibility */
+                /*
+                 * The linear emitter now ships enabled by default. Keeping the
+                 * legacy opt-in variable ensures existing automation that
+                 * explicitly enables the emitter continues to work, while the
+                 * new disable toggle provides an escape hatch for experiments
+                 * that still require the helper stub fallback.
+                 */
+                cached = 1;
+            }
+        }
     }
     return cached == 1;
 }

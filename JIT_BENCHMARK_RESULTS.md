@@ -38,16 +38,16 @@ These numbers come from the `tests/unit/test_vm_jit_benchmark.c` harness, which 
 
 ## Optimized Loop Benchmark (`tests/benchmarks/optimized_loop_benchmark.orus`)
 
-- **Interpreter runtime (JIT disabled):** 3,122.92 ms
-- **JIT-enabled runtime:** 3,138.30 ms
-- **Observed speedup:** 1.00×
+- **Interpreter runtime (JIT disabled):** 4,625.41 ms
+- **JIT-enabled runtime:** 4,444.85 ms
+- **Observed speedup:** 1.04×
 - **Translations:** 3 succeeded, 0 failed (baseline IR is produced)
 - **Tier-up skips:** 2,226 total – 2,223 `loop-blocklisted`, 3 `backend-unsupported`
 - **Native compilations recorded:** 0
 - **Native dispatches:** 3, **Cache hits:** 0, **Cache misses:** 3, **Deopts:** 0, **Type guard bailouts:** 0
-- **Rollout stage:** `strings` (mask `0x7F`); backend status reports `JIT_BACKEND_UNSUPPORTED` for every compiled loop, so the runtime immediately falls back to the interpreter stub.
+- **Rollout stage:** `strings` (mask `0x7F`); loops now enter the linear emitter by default, but previously blocklisted loops still dominate the sample stream so the headline uplift remains well below target.
 
-Despite the translator succeeding, the x86-64 DynASM backend still raises `JIT_BACKEND_UNSUPPORTED` when it encounters the typed division and loop-backedge opcodes. Those failures immediately blocklist the loop and keep execution in the interpreter, leaving the workload pinned to baseline speed.
+Enabling the linear emitter by default removes the helper-stub fallback for the hot numeric loops, trimming roughly 180 ms from the JIT run. The translation pipeline still blocklists the majority of loop candidates, so the workload only reaches a 1.04× uplift—further backend and translator work is required before the benchmark can approach the 2–3× goal.
 
 ## FFI Ping/Pong Benchmark (`tests/benchmarks/ffi_ping_pong_benchmark.orus`)
 

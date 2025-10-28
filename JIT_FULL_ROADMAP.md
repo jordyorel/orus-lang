@@ -109,9 +109,10 @@ mirrors the latest state.
 
 To close the remaining performance gap and reach the Lua-class uplift targets, tackle the work in the following order. Treat each step as a milestone with explicit telemetry sign-off before advancing.
 
-1. **Restore Native Coverage for Hot Loops**  
-   - Land the remaining DynASM backend fixes so `JIT_BACKEND_UNSUPPORTED` no longer blocklists the optimized loop benchmark.  
+1. **Restore Native Coverage for Hot Loops**
+   - Land the remaining DynASM backend fixes so `JIT_BACKEND_UNSUPPORTED` no longer blocklists the optimized loop benchmark.
    - Re-run `./orus --jit-benchmark tests/benchmarks/optimized_loop_benchmark.orus` and require ≥90 % native dispatch share before proceeding.
+   - Linear emitter code generation is now enabled by default (set `ORUS_JIT_DISABLE_LINEAR_EMITTER=1` to return to the helper-stub path), so fresh tier-ups no longer fall back to the stub unless the backend reports an error.
 
 2. **Stabilize Foreign-Call Tiering**
    - ✅ Implement the slow-path trampolines that keep native frames resident across long-running FFI calls (`jit_foreign_slow_path_trampolines` now counts serviced trampolines and unit coverage exercises a slow-path foreign binding).
