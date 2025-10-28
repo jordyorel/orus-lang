@@ -89,7 +89,4 @@ JITBackendStatus orus_jit_backend_collect_parity(const OrusJitIRProgram* program
                                                  OrusJitBackendTarget target,
                                                  OrusJitParityReport* report);
 
-typedef void (*OrusJitValueVisitor)(const void* value);
-void orus_jit_gc_visit_native_roots(struct VM* vm, OrusJitValueVisitor visitor);
-
 #endif // ORUS_VM_JIT_BACKEND_H

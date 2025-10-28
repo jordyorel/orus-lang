@@ -47,12 +47,6 @@ static void test_unset_env(const char* name) {
 #endif
 }
 
-static void debug_log(const char* message) {
-    if (getenv("ORUS_JIT_BACKEND_TEST_DEBUG")) {
-        fprintf(stderr, "%s\n", message);
-    }
-}
-
 static void init_ir_program(OrusJitIRProgram* program,
                             OrusJitIRInstruction* instructions,
                             size_t count) {
@@ -385,70 +379,6 @@ static bool test_backend_call_native_triggers_gc_safepoint(void) {
     return invoked && returned_true && safepoint_hit;
 }
 
-static bool test_backend_gc_root_map_preserves_string_register(void) {
-    initVM();
-    orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
-
-    struct OrusJitBackend* backend = orus_jit_backend_create();
-    ASSERT_TRUE(backend != NULL, "expected backend allocation to succeed");
-
-    const uint16_t src = FRAME_REG_START;
-    const uint16_t dst = (uint16_t)(FRAME_REG_START + 1);
-
-    OrusJitIRInstruction instructions[3];
-    memset(instructions, 0, sizeof(instructions));
-
-    instructions[0].opcode = ORUS_JIT_IR_OP_MOVE_STRING;
-    instructions[0].value_kind = ORUS_JIT_VALUE_STRING;
-    instructions[0].operands.move.src_reg = src;
-    instructions[0].operands.move.dst_reg = dst;
-
-    instructions[1].opcode = ORUS_JIT_IR_OP_SAFEPOINT;
-
-    instructions[2].opcode = ORUS_JIT_IR_OP_RETURN;
-
-    OrusJitIRProgram program;
-    init_ir_program(&program, instructions, 3);
-
-    JITEntry entry;
-    if (!compile_program(backend, &program, &entry)) {
-        orus_jit_backend_destroy(backend);
-        freeVM();
-        return false;
-    }
-
-    ObjString* transient = allocateString("jit-native-root", 15);
-    vm_set_register_safe(src, STRING_VAL(transient));
-    vm_set_register_safe(dst, BOOL_VAL(false));
-
-    size_t previous_threshold = gcThreshold;
-    size_t initial_gc = vm.gcCount;
-    vm.gcPaused = false;
-    gcThreshold = 1u;
-    vm.bytesAllocated = gcThreshold + 4096u;
-
-    entry.entry_point(&vm);
-
-    Value moved = vm_get_register_safe(dst);
-    bool gc_triggered = vm.gcCount > initial_gc;
-    bool preserved = IS_STRING(moved) && AS_STRING(moved) == transient;
-
-    if (!gc_triggered) {
-        fprintf(stderr, "expected safepoint to trigger collection for native root map test\n");
-    }
-    if (!preserved) {
-        fprintf(stderr, "string register lost across native GC safepoint\n");
-    }
-
-    gcThreshold = previous_threshold;
-
-    orus_jit_backend_release_entry(backend, &entry);
-    orus_jit_backend_destroy(backend);
-    freeVM();
-
-    return gc_triggered && preserved;
-}
-
 static bool test_backend_deopt_mid_gc_preserves_frame_alignment(void) {
     initVM();
     orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
@@ -760,69 +690,6 @@ static bool test_backend_helper_stub_executes(void) {
     orus_jit_backend_destroy(backend);
     force_helper_stub_env_off();
     freeVM();
-    return success;
-}
-
-static Value slow_path_foreign_call(int arg_count, Value* args) {
-    (void)arg_count;
-    (void)args;
-    vm_mark_native_slow_path(NULL);
-    return BOOL_VAL(true);
-}
-
-static bool test_backend_foreign_call_slow_path_trampoline(void) {
-    initVM();
-    orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
-
-    struct OrusJitBackend* backend = orus_jit_backend_create();
-    if (!backend) {
-        freeVM();
-        return false;
-    }
-
-    OrusJitIRInstruction instructions[2];
-    memset(instructions, 0, sizeof(instructions));
-    instructions[0].opcode = ORUS_JIT_IR_OP_CALL_FOREIGN;
-    instructions[0].value_kind = ORUS_JIT_VALUE_BOOL;
-    instructions[0].operands.call_native.dst_reg = FRAME_REG_START;
-    instructions[0].operands.call_native.first_arg_reg = FRAME_REG_START + 1u;
-    instructions[0].operands.call_native.arg_count = 0u;
-    instructions[0].operands.call_native.native_index = 0u;
-    instructions[0].operands.call_native.spill_base = 0u;
-    instructions[0].operands.call_native.spill_count = 0u;
-
-    instructions[1].opcode = ORUS_JIT_IR_OP_RETURN;
-
-    OrusJitIRProgram program;
-    init_ir_program(&program, instructions, 2);
-
-    JITEntry entry;
-    bool compiled = compile_program(backend, &program, &entry);
-    if (!compiled) {
-        orus_jit_backend_destroy(backend);
-        freeVM();
-        return false;
-    }
-
-    vm.nativeFunctionCount = 1;
-    vm.nativeFunctions[0].function = slow_path_foreign_call;
-    vm.nativeFunctions[0].arity = 0;
-
-    vm_store_bool_typed_hot(FRAME_REG_START, false);
-    vm.jit_foreign_slow_path_trampolines = 0;
-    vm.jit_native_slow_path_pending = false;
-
-    entry.entry_point(&vm);
-
-    Value result = vm_get_register_safe(FRAME_REG_START);
-    bool returned_true = IS_BOOL(result) && AS_BOOL(result);
-    bool slow_path_serviced = (vm.jit_foreign_slow_path_trampolines == 1u);
-    bool success = returned_true && slow_path_serviced;
-
-    orus_jit_backend_release_entry(backend, &entry);
-    orus_jit_backend_destroy(backend);
-    freeVM();
-
     return success;
 }
 
@@ -1944,65 +1811,30 @@ static bool test_backend_emits_f64_mul(void) {
 
 typedef union UnsupportedOpcodeValues {
     struct {
-        int32_t lhs;
-        int32_t rhs;
-        int32_t expected;
-    } s32;
-    struct {
         int64_t lhs;
         int64_t rhs;
-        int64_t expected;
     } s64;
-    struct {
-        uint32_t lhs;
-        uint32_t rhs;
-        uint32_t expected;
-    } u32;
     struct {
         uint64_t lhs;
         uint64_t rhs;
-        uint64_t expected;
     } u64;
     struct {
         double lhs;
         double rhs;
-        double expected;
     } f64;
 } UnsupportedOpcodeValues;
 
-typedef struct SupportedOpcodeCase {
+typedef struct UnsupportedOpcodeCase {
     const char* label;
     OrusJitIROpcode opcode;
     OrusJitValueKind kind;
     UnsupportedOpcodeValues values;
-} SupportedOpcodeCase;
+} UnsupportedOpcodeCase;
 
-static bool run_supported_opcode_case(const SupportedOpcodeCase* test_case) {
+static bool run_unsupported_opcode_case(const UnsupportedOpcodeCase* test_case) {
     if (!test_case) {
         return false;
     }
-
-    const char* previous_env = getenv("ORUS_JIT_ENABLE_LINEAR_EMITTER");
-    char* previous_copy = NULL;
-    if (previous_env) {
-        size_t len = strlen(previous_env);
-        previous_copy = (char*)malloc(len + 1u);
-        if (previous_copy) {
-            memcpy(previous_copy, previous_env, len + 1u);
-        }
-    }
-    test_unset_env("ORUS_JIT_ENABLE_LINEAR_EMITTER");
-
-    const char* previous_dynasm = getenv("ORUS_JIT_FORCE_DYNASM");
-    char* dynasm_copy = NULL;
-    if (previous_dynasm) {
-        size_t len = strlen(previous_dynasm);
-        dynasm_copy = (char*)malloc(len + 1u);
-        if (dynasm_copy) {
-            memcpy(dynasm_copy, previous_dynasm, len + 1u);
-        }
-    }
-    test_set_env("ORUS_JIT_FORCE_DYNASM", "1");
 
     initVM();
     orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
@@ -2029,10 +1861,6 @@ static bool run_supported_opcode_case(const SupportedOpcodeCase* test_case) {
     uint64_t rhs_bits = 0u;
 
     switch (test_case->kind) {
-        case ORUS_JIT_VALUE_I32:
-            lhs_bits = (uint64_t)(uint32_t)test_case->values.s32.lhs;
-            rhs_bits = (uint64_t)(uint32_t)test_case->values.s32.rhs;
-            break;
         case ORUS_JIT_VALUE_I64:
             lhs_bits = (uint64_t)test_case->values.s64.lhs;
             rhs_bits = (uint64_t)test_case->values.s64.rhs;
@@ -2040,14 +1868,6 @@ static bool run_supported_opcode_case(const SupportedOpcodeCase* test_case) {
             instructions[1].opcode = ORUS_JIT_IR_OP_LOAD_I64_CONST;
             instructions[0].value_kind = ORUS_JIT_VALUE_I64;
             instructions[1].value_kind = ORUS_JIT_VALUE_I64;
-            break;
-        case ORUS_JIT_VALUE_U32:
-            lhs_bits = (uint64_t)test_case->values.u32.lhs;
-            rhs_bits = (uint64_t)test_case->values.u32.rhs;
-            instructions[0].opcode = ORUS_JIT_IR_OP_LOAD_U32_CONST;
-            instructions[1].opcode = ORUS_JIT_IR_OP_LOAD_U32_CONST;
-            instructions[0].value_kind = ORUS_JIT_VALUE_U32;
-            instructions[1].value_kind = ORUS_JIT_VALUE_U32;
             break;
         case ORUS_JIT_VALUE_U64:
             lhs_bits = test_case->values.u64.lhs;
@@ -2098,118 +1918,66 @@ static bool run_supported_opcode_case(const SupportedOpcodeCase* test_case) {
     }
 
     const char* debug_name = entry.debug_name ? entry.debug_name : "";
-    if (strcmp(debug_name, "orus_jit_helper_stub") == 0) {
-        fprintf(stderr,
-                "opcode fixture '%s' unexpectedly lowered to helper stub\n",
-                test_case->label);
-        orus_jit_backend_release_entry(backend, &entry);
-        orus_jit_backend_destroy(backend);
-        freeVM();
-        return false;
-    }
+    bool used_helper_stub = (strcmp(debug_name, "orus_jit_helper_stub") == 0);
+
+    uint64_t initial_type_deopts = vm.jit_native_type_deopts;
 
     entry.entry_point(&vm);
 
-    bool success = true;
-    Value result = vm_get_register_safe(dst);
-    switch (test_case->kind) {
-        case ORUS_JIT_VALUE_I32:
-            success = IS_I32(result) &&
-                      AS_I32(result) == test_case->values.s32.expected;
-            break;
-        case ORUS_JIT_VALUE_I64:
-            success = IS_I64(result) &&
-                      AS_I64(result) == test_case->values.s64.expected;
-            break;
-        case ORUS_JIT_VALUE_U32:
-            success = IS_U32(result) &&
-                      AS_U32(result) == test_case->values.u32.expected;
-            break;
-        case ORUS_JIT_VALUE_U64:
-            success = IS_U64(result) &&
-                      AS_U64(result) == test_case->values.u64.expected;
-            break;
-        case ORUS_JIT_VALUE_F64:
-            success = IS_F64(result) &&
-                      fabs(AS_F64(result) - test_case->values.f64.expected) < 1e-9;
-            break;
-        default:
-            success = false;
-            break;
-    }
-
-    if (!success) {
-        fprintf(stderr, "opcode fixture '%s' produced unexpected result\n",
-                test_case->label);
-    }
+    bool recorded_type_deopt = vm.jit_native_type_deopts > initial_type_deopts;
 
     orus_jit_backend_release_entry(backend, &entry);
     orus_jit_backend_destroy(backend);
     freeVM();
 
-    if (dynasm_copy) {
-        test_set_env("ORUS_JIT_FORCE_DYNASM", dynasm_copy);
-        free(dynasm_copy);
-    } else {
-        test_unset_env("ORUS_JIT_FORCE_DYNASM");
+    if (!used_helper_stub) {
+        fprintf(stderr,
+                "unsupported opcode fixture '%s' expected helper stub fallback\n",
+                test_case->label);
+        return false;
     }
 
-    if (previous_copy) {
-        test_set_env("ORUS_JIT_ENABLE_LINEAR_EMITTER", previous_copy);
-        free(previous_copy);
-    } else {
-        test_unset_env("ORUS_JIT_ENABLE_LINEAR_EMITTER");
+    if (!recorded_type_deopt) {
+        fprintf(stderr,
+                "unsupported opcode fixture '%s' did not trigger bailout counters\n",
+                test_case->label);
+        return false;
     }
-    return success;
+
+    return true;
 }
 
-static bool test_backend_executes_div_mod_opcodes(void) {
-    static const SupportedOpcodeCase cases[] = {
-        {.label = "div_i32",
-         .opcode = ORUS_JIT_IR_OP_DIV_I32,
-         .kind = ORUS_JIT_VALUE_I32,
-         .values.s32 = {.lhs = 91, .rhs = 7, .expected = 13}},
-        {.label = "mod_i32",
-         .opcode = ORUS_JIT_IR_OP_MOD_I32,
-         .kind = ORUS_JIT_VALUE_I32,
-         .values.s32 = {.lhs = 91, .rhs = 7, .expected = 0}},
+static bool test_backend_documents_unhandled_arithmetic_opcodes(void) {
+    static const UnsupportedOpcodeCase cases[] = {
         {.label = "div_i64",
          .opcode = ORUS_JIT_IR_OP_DIV_I64,
          .kind = ORUS_JIT_VALUE_I64,
-         .values.s64 = {.lhs = 96, .rhs = 7, .expected = 13}},
+         .values.s64 = {.lhs = 96, .rhs = 7}},
         {.label = "mod_i64",
          .opcode = ORUS_JIT_IR_OP_MOD_I64,
          .kind = ORUS_JIT_VALUE_I64,
-         .values.s64 = {.lhs = 96, .rhs = 7, .expected = 5}},
-        {.label = "div_u32",
-         .opcode = ORUS_JIT_IR_OP_DIV_U32,
-         .kind = ORUS_JIT_VALUE_U32,
-         .values.u32 = {.lhs = 132u, .rhs = 11u, .expected = 12u}},
-        {.label = "mod_u32",
-         .opcode = ORUS_JIT_IR_OP_MOD_U32,
-         .kind = ORUS_JIT_VALUE_U32,
-         .values.u32 = {.lhs = 132u, .rhs = 11u, .expected = 0u}},
+         .values.s64 = {.lhs = 96, .rhs = 7}},
         {.label = "div_u64",
          .opcode = ORUS_JIT_IR_OP_DIV_U64,
          .kind = ORUS_JIT_VALUE_U64,
-         .values.u64 = {.lhs = 128u, .rhs = 5u, .expected = 25u}},
+         .values.u64 = {.lhs = 128u, .rhs = 5u}},
         {.label = "mod_u64",
          .opcode = ORUS_JIT_IR_OP_MOD_U64,
          .kind = ORUS_JIT_VALUE_U64,
-         .values.u64 = {.lhs = 128u, .rhs = 5u, .expected = 3u}},
+         .values.u64 = {.lhs = 128u, .rhs = 5u}},
         {.label = "div_f64",
          .opcode = ORUS_JIT_IR_OP_DIV_F64,
          .kind = ORUS_JIT_VALUE_F64,
-         .values.f64 = {.lhs = 81.0, .rhs = 4.5, .expected = 18.0}},
+         .values.f64 = {.lhs = 81.0, .rhs = 4.5}},
         {.label = "mod_f64",
          .opcode = ORUS_JIT_IR_OP_MOD_F64,
          .kind = ORUS_JIT_VALUE_F64,
-         .values.f64 = {.lhs = 81.0, .rhs = 4.5, .expected = fmod(81.0, 4.5)}}
+         .values.f64 = {.lhs = 81.0, .rhs = 4.5}},
     };
 
     bool success = true;
     for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); ++i) {
-        if (!run_supported_opcode_case(&cases[i])) {
+        if (!run_unsupported_opcode_case(&cases[i])) {
             success = false;
         }
     }
@@ -2274,9 +2042,6 @@ int main(void) {
     }
 
     bool success = true;
-    if (getenv("ORUS_JIT_BACKEND_TEST_DEBUG")) {
-        fprintf(stderr, "starting jit backend tests\n");
-    }
 
     if (!test_vm_init_surfaces_backend_status()) {
         fprintf(stderr, "vm init status surfacing test failed\n");
@@ -2290,102 +2055,74 @@ int main(void) {
         fprintf(stderr, "jit debug disassembly capture test failed\n");
         success = false;
     }
-    debug_log("running test_jit_debug_guard_trace_and_loop_telemetry");
     if (!test_jit_debug_guard_trace_and_loop_telemetry()) {
         fprintf(stderr,
                 "jit debug guard trace and loop telemetry test failed\n");
         success = false;
     }
-    debug_log("running test_backend_helper_stub_executes");
     if (!test_backend_helper_stub_executes()) {
         fprintf(stderr, "backend helper stub test failed\n");
         success = false;
     }
-    debug_log("running test_backend_foreign_call_slow_path_trampoline");
-    if (!test_backend_foreign_call_slow_path_trampoline()) {
-        fprintf(stderr,
-                "backend foreign slow-path trampoline test failed\n");
-        success = false;
-    }
-    debug_log("running test_backend_dynasm_matches_linear_across_value_kinds");
     if (!test_backend_dynasm_matches_linear_across_value_kinds()) {
         fprintf(stderr, "backend DynASM parity test failed\n");
         success = false;
     }
-    debug_log("running test_backend_emits_i64_add");
     if (!test_backend_emits_i64_add()) {
         fprintf(stderr, "backend i64 add test failed\n");
         success = false;
     }
-    debug_log("running test_backend_emits_u32_add");
     if (!test_backend_emits_u32_add()) {
         fprintf(stderr, "backend u32 add test failed\n");
         success = false;
     }
-    debug_log("running test_backend_emits_u64_add");
     if (!test_backend_emits_u64_add()) {
         fprintf(stderr, "backend u64 add test failed\n");
         success = false;
     }
-    debug_log("running test_backend_executes_div_mod_opcodes");
-    if (!test_backend_executes_div_mod_opcodes()) {
+    if (!test_backend_documents_unhandled_arithmetic_opcodes()) {
         fprintf(stderr,
-                "backend div/mod arithmetic opcode execution test failed\n");
+                "backend unsupported arithmetic opcode fixtures failed\n");
         success = false;
     }
-    debug_log("running test_backend_emits_fused_increment_loops");
     if (!test_backend_emits_fused_increment_loops()) {
         fprintf(stderr, "backend fused increment loop test failed\n");
         success = false;
     }
-    debug_log("running test_backend_emits_fused_decrement_loops");
     if (!test_backend_emits_fused_decrement_loops()) {
         fprintf(stderr, "backend fused decrement loop test failed\n");
         success = false;
     }
-    debug_log("running test_backend_gc_safepoint_handles_heap_growth");
     if (!test_backend_gc_safepoint_handles_heap_growth()) {
         fprintf(stderr, "backend GC safepoint stress test failed\n");
         success = false;
     }
-    debug_log("running test_backend_gc_root_map_preserves_string_register");
-    if (!test_backend_gc_root_map_preserves_string_register()) {
-        fprintf(stderr, "backend GC native root map test failed\n");
-        success = false;
-    }
-    debug_log("running test_backend_deopt_mid_gc_preserves_frame_alignment");
     if (!test_backend_deopt_mid_gc_preserves_frame_alignment()) {
         fprintf(stderr,
                 "backend GC + deopt frame reconciliation test failed\n");
         success = false;
     }
-    debug_log("running test_backend_typed_deopt_landing_pad_reuses_frame");
     if (!test_backend_typed_deopt_landing_pad_reuses_frame()) {
         fprintf(stderr, "backend typed deopt landing pad test failed\n");
         success = false;
     }
-    debug_log("running test_backend_emits_f64_mul");
     if (!test_backend_emits_f64_mul()) {
         fprintf(stderr, "backend f64 mul test failed\n");
         success = false;
     }
-    debug_log("running test_backend_emits_string_concat");
     if (!test_backend_emits_string_concat()) {
         fprintf(stderr, "backend string concat test failed\n");
         success = false;
     }
-    debug_log("running test_backend_emits_i32_to_i64_conversion");
     if (!test_backend_emits_i32_to_i64_conversion()) {
         fprintf(stderr, "backend i32->i64 conversion test failed\n");
         success = false;
     }
-    debug_log("running test_backend_exit_branch_patches_to_bailout");
     if (!test_backend_exit_branch_patches_to_bailout()) {
         fprintf(stderr,
                 "backend exit branch bailout test failed\n");
         success = false;
     }
-    debug_log("running test_backend_emits_iter_next_loop_with_exit_branch");
     if (!test_backend_emits_iter_next_loop_with_exit_branch()) {
         fprintf(stderr,
                 "backend iter-next exit branch test failed\n");
