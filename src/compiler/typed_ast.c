@@ -1533,7 +1533,3 @@ void print_typed_ast(TypedASTNode* node, int indent) {
             break;
     }
 }
-
-// Note: The generate_typed_ast function has been moved to type_inference.c
-// to ensure proper integration with Algorithm W type inference.
-

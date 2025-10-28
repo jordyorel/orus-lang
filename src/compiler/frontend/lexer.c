@@ -11,9 +11,7 @@
 
 #include "compiler/lexer.h"
 
-/* -------------------------------------------------------------------------- */
 /*                        Configuration & fast macros                         */
-/* -------------------------------------------------------------------------- */
 
 #define ERR_LEN(msg) (sizeof(msg) - 1)
 
@@ -25,15 +23,12 @@
 #define IS_HEX_DIGIT(c) \
     (IS_DIGIT(c) || ((c) >= 'a' && (c) <= 'f') || ((c) >= 'A' && (c) <= 'F'))
 
-/* -------------------------------------------------------------------------- */
+
 /*                             Global lexer state                           */
-/* -------------------------------------------------------------------------- */
 
 Lexer lexer;  // Keep for backward compatibility
 
-/* -------------------------------------------------------------------------- */
 /*                         Context lifecycle management                       */
-/* -------------------------------------------------------------------------- */
 
 LexerContext* lexer_context_create(const char* source) {
     LexerContext* ctx = malloc(sizeof(LexerContext));
@@ -49,9 +44,7 @@ void lexer_context_destroy(LexerContext* ctx) {
     }
 }
 
-/* -------------------------------------------------------------------------- */
 /*                         Very hot inline functions                          */
-/* -------------------------------------------------------------------------- */
 
 static inline char advance_ctx(LexerContext* ctx) {
     char c = *ctx->lexer.current++;
@@ -136,9 +129,7 @@ static inline Token error_token(const char* msg, int len) {
     return token;
 }
 
-/* -------------------------------------------------------------------------- */
 /*                       Fast whitespace & comment skipping                   */
-/* -------------------------------------------------------------------------- */
 
 static void skip_whitespace_ctx(LexerContext* ctx) {
     const char* p = ctx->lexer.current;
@@ -227,9 +218,7 @@ static void skip_whitespace() {
     lexer.lineStart = lineStart;
 }
 
-/* -------------------------------------------------------------------------- */
 /*                         Keyword lookup                      */
-/* -------------------------------------------------------------------------- */
 
 static TokenType identifier_type(const char* start, int length) {
     switch (start[0]) {
@@ -330,12 +319,10 @@ static Token identifier() {
 }
 
 
-/* -------------------------------------------------------------------------- */
 /*                          Number literal scanning                           */
-/* -------------------------------------------------------------------------- */
 
 static Token number_ctx(LexerContext* ctx) {
-    /* 0xABC-style hex? */
+    // 0xABC-style hex? 
     if (ctx->lexer.start[0] == '0' && (PEEK(ctx) == 'x' || PEEK(ctx) == 'X')) {
         advance_ctx(ctx); /* consume x/X */
         if (!IS_HEX_DIGIT(PEEK(ctx)))
@@ -356,7 +343,7 @@ static Token number_ctx(LexerContext* ctx) {
         return make_token_ctx(ctx, TOKEN_NUMBER);
     }
 
-    /* Decimal integer + underscores */
+    // Decimal integer + underscores
     while (IS_DIGIT(PEEK(ctx)) || PEEK(ctx) == '_') {
         if (PEEK(ctx) == '_') {
             advance_ctx(ctx);
@@ -369,7 +356,7 @@ static Token number_ctx(LexerContext* ctx) {
         }
     }
 
-    /* Fractional part */
+    // Fractional part 
     if (PEEK(ctx) == '.' && IS_DIGIT(PEEK_NEXT(ctx))) {
         advance_ctx(ctx);
         while (IS_DIGIT(PEEK(ctx)) || PEEK(ctx) == '_') {
@@ -385,7 +372,7 @@ static Token number_ctx(LexerContext* ctx) {
         }
     }
 
-    /* Exponent part */
+    // Exponent part
     if (PEEK(ctx) == 'e' || PEEK(ctx) == 'E') {
         advance_ctx(ctx);
         if (PEEK(ctx) == '+' || PEEK(ctx) == '-') advance_ctx(ctx);
@@ -407,14 +394,14 @@ static Token number_ctx(LexerContext* ctx) {
         }
     }
 
-    /* Suffix annotations removed from Orus language - type inference handles numeric types */
+    // Suffix annotations removed from Orus language - type inference handles numeric types
 
     return make_token_ctx(ctx, TOKEN_NUMBER);
 }
 
 // Backward compatibility version
 static Token number() {
-    /* 0xABC-style hex? */
+    // 0xABC-style hex? 
     if (lexer.start[0] == '0' && (*lexer.current == 'x' || *lexer.current == 'X')) {
         advance(); /* consume x/X */
         if (!IS_HEX_DIGIT(*lexer.current))
@@ -431,7 +418,7 @@ static Token number() {
                 advance();
             }
         }
-        /* Hexadecimal suffix removed - type inference handles numeric types */
+        // Hexadecimal suffix removed - type inference handles numeric types
         return make_token(TOKEN_NUMBER);
     }
 
@@ -448,7 +435,7 @@ static Token number() {
         }
     }
 
-    /* Fractional part */
+    // Fractional part
     if (*lexer.current == '.' && IS_DIGIT(*(lexer.current + 1))) {
         advance();
         while (IS_DIGIT(*lexer.current) || *lexer.current == '_') {
@@ -464,7 +451,7 @@ static Token number() {
         }
     }
 
-    /* Exponent part */
+    // Exponent part
     if (*lexer.current == 'e' || *lexer.current == 'E') {
         advance();
         if (*lexer.current == '+' || *lexer.current == '-') advance();
@@ -486,14 +473,12 @@ static Token number() {
         }
     }
 
-    /* Suffix annotations removed from Orus language - type inference handles numeric types */
+    // Suffix annotations removed from Orus language - type inference handles numeric types
 
     return make_token(TOKEN_NUMBER);
 }
 
-/* -------------------------------------------------------------------------- */
 /*                              String literal scanning                       */
-/* -------------------------------------------------------------------------- */
 
 static Token string_ctx(LexerContext* ctx) {
     while (PEEK(ctx) != '"' && !is_at_end_ctx(ctx)) {
@@ -512,7 +497,7 @@ static Token string_ctx(LexerContext* ctx) {
     }
 
     if (is_at_end_ctx(ctx)) {
-        /* unterminated string */
+        // unterminated string
         return error_token_ctx(ctx, "Unterminated string.",
                            ERR_LEN("Unterminated string."));
     }
@@ -539,7 +524,7 @@ static Token string() {
     }
 
     if (is_at_end()) {
-        /* unterminated string */
+        // unterminated string
         return error_token("Unterminated string.",
                            ERR_LEN("Unterminated string."));
     }
@@ -548,9 +533,8 @@ static Token string() {
     return make_token(TOKEN_STRING);
 }
 
-/* -------------------------------------------------------------------------- */
+
 /*                               Public API                                   */
-/* -------------------------------------------------------------------------- */
 
 
 void init_scanner_ctx(LexerContext* ctx, const char* source) {
@@ -581,9 +565,9 @@ void init_scanner(const char* source) {
     lexer.atLineStart = true;
 }
 
-/**
- * Retrieve the next token using context.
- */
+
+// Retrieve the next token using context.
+
 Token scan_token_ctx(LexerContext* ctx) {
     if (ctx->lexer.pendingDedents > 0) {
         ctx->lexer.pendingDedents--;
@@ -725,7 +709,7 @@ Token scan_token_ctx(LexerContext* ctx) {
             return string_ctx(ctx);
     }
 
-    /* Identifiers and numbers */
+    // Identifiers and numbers
     if (IS_ALPHA(c)) return identifier_ctx(ctx);
     if (IS_DIGIT(c)) return number_ctx(ctx);
 
@@ -885,9 +869,7 @@ Token scan_token() {
                        ERR_LEN("Unexpected character."));
 }
 
-/* -------------------------------------------------------------------------- */
 /*                            Debug Functions                                */
-/* -------------------------------------------------------------------------- */
 
 const char* token_type_to_string(TokenType type) {
     switch (type) {
