@@ -1944,30 +1944,65 @@ static bool test_backend_emits_f64_mul(void) {
 
 typedef union UnsupportedOpcodeValues {
     struct {
+        int32_t lhs;
+        int32_t rhs;
+        int32_t expected;
+    } s32;
+    struct {
         int64_t lhs;
         int64_t rhs;
+        int64_t expected;
     } s64;
+    struct {
+        uint32_t lhs;
+        uint32_t rhs;
+        uint32_t expected;
+    } u32;
     struct {
         uint64_t lhs;
         uint64_t rhs;
+        uint64_t expected;
     } u64;
     struct {
         double lhs;
         double rhs;
+        double expected;
     } f64;
 } UnsupportedOpcodeValues;
 
-typedef struct UnsupportedOpcodeCase {
+typedef struct SupportedOpcodeCase {
     const char* label;
     OrusJitIROpcode opcode;
     OrusJitValueKind kind;
     UnsupportedOpcodeValues values;
-} UnsupportedOpcodeCase;
+} SupportedOpcodeCase;
 
-static bool run_unsupported_opcode_case(const UnsupportedOpcodeCase* test_case) {
+static bool run_supported_opcode_case(const SupportedOpcodeCase* test_case) {
     if (!test_case) {
         return false;
     }
+
+    const char* previous_env = getenv("ORUS_JIT_ENABLE_LINEAR_EMITTER");
+    char* previous_copy = NULL;
+    if (previous_env) {
+        size_t len = strlen(previous_env);
+        previous_copy = (char*)malloc(len + 1u);
+        if (previous_copy) {
+            memcpy(previous_copy, previous_env, len + 1u);
+        }
+    }
+    test_unset_env("ORUS_JIT_ENABLE_LINEAR_EMITTER");
+
+    const char* previous_dynasm = getenv("ORUS_JIT_FORCE_DYNASM");
+    char* dynasm_copy = NULL;
+    if (previous_dynasm) {
+        size_t len = strlen(previous_dynasm);
+        dynasm_copy = (char*)malloc(len + 1u);
+        if (dynasm_copy) {
+            memcpy(dynasm_copy, previous_dynasm, len + 1u);
+        }
+    }
+    test_set_env("ORUS_JIT_FORCE_DYNASM", "1");
 
     initVM();
     orus_jit_rollout_set_stage(&vm, ORUS_JIT_ROLLOUT_STAGE_STRINGS);
@@ -1994,6 +2029,10 @@ static bool run_unsupported_opcode_case(const UnsupportedOpcodeCase* test_case) 
     uint64_t rhs_bits = 0u;
 
     switch (test_case->kind) {
+        case ORUS_JIT_VALUE_I32:
+            lhs_bits = (uint64_t)(uint32_t)test_case->values.s32.lhs;
+            rhs_bits = (uint64_t)(uint32_t)test_case->values.s32.rhs;
+            break;
         case ORUS_JIT_VALUE_I64:
             lhs_bits = (uint64_t)test_case->values.s64.lhs;
             rhs_bits = (uint64_t)test_case->values.s64.rhs;
@@ -2001,6 +2040,14 @@ static bool run_unsupported_opcode_case(const UnsupportedOpcodeCase* test_case) 
             instructions[1].opcode = ORUS_JIT_IR_OP_LOAD_I64_CONST;
             instructions[0].value_kind = ORUS_JIT_VALUE_I64;
             instructions[1].value_kind = ORUS_JIT_VALUE_I64;
+            break;
+        case ORUS_JIT_VALUE_U32:
+            lhs_bits = (uint64_t)test_case->values.u32.lhs;
+            rhs_bits = (uint64_t)test_case->values.u32.rhs;
+            instructions[0].opcode = ORUS_JIT_IR_OP_LOAD_U32_CONST;
+            instructions[1].opcode = ORUS_JIT_IR_OP_LOAD_U32_CONST;
+            instructions[0].value_kind = ORUS_JIT_VALUE_U32;
+            instructions[1].value_kind = ORUS_JIT_VALUE_U32;
             break;
         case ORUS_JIT_VALUE_U64:
             lhs_bits = test_case->values.u64.lhs;
@@ -2051,66 +2098,118 @@ static bool run_unsupported_opcode_case(const UnsupportedOpcodeCase* test_case) 
     }
 
     const char* debug_name = entry.debug_name ? entry.debug_name : "";
-    bool used_helper_stub = (strcmp(debug_name, "orus_jit_helper_stub") == 0);
-
-    uint64_t initial_type_deopts = vm.jit_native_type_deopts;
+    if (strcmp(debug_name, "orus_jit_helper_stub") == 0) {
+        fprintf(stderr,
+                "opcode fixture '%s' unexpectedly lowered to helper stub\n",
+                test_case->label);
+        orus_jit_backend_release_entry(backend, &entry);
+        orus_jit_backend_destroy(backend);
+        freeVM();
+        return false;
+    }
 
     entry.entry_point(&vm);
 
-    bool recorded_type_deopt = vm.jit_native_type_deopts > initial_type_deopts;
+    bool success = true;
+    Value result = vm_get_register_safe(dst);
+    switch (test_case->kind) {
+        case ORUS_JIT_VALUE_I32:
+            success = IS_I32(result) &&
+                      AS_I32(result) == test_case->values.s32.expected;
+            break;
+        case ORUS_JIT_VALUE_I64:
+            success = IS_I64(result) &&
+                      AS_I64(result) == test_case->values.s64.expected;
+            break;
+        case ORUS_JIT_VALUE_U32:
+            success = IS_U32(result) &&
+                      AS_U32(result) == test_case->values.u32.expected;
+            break;
+        case ORUS_JIT_VALUE_U64:
+            success = IS_U64(result) &&
+                      AS_U64(result) == test_case->values.u64.expected;
+            break;
+        case ORUS_JIT_VALUE_F64:
+            success = IS_F64(result) &&
+                      fabs(AS_F64(result) - test_case->values.f64.expected) < 1e-9;
+            break;
+        default:
+            success = false;
+            break;
+    }
+
+    if (!success) {
+        fprintf(stderr, "opcode fixture '%s' produced unexpected result\n",
+                test_case->label);
+    }
 
     orus_jit_backend_release_entry(backend, &entry);
     orus_jit_backend_destroy(backend);
     freeVM();
 
-    if (!used_helper_stub) {
-        fprintf(stderr,
-                "unsupported opcode fixture '%s' expected helper stub fallback\n",
-                test_case->label);
-        return false;
+    if (dynasm_copy) {
+        test_set_env("ORUS_JIT_FORCE_DYNASM", dynasm_copy);
+        free(dynasm_copy);
+    } else {
+        test_unset_env("ORUS_JIT_FORCE_DYNASM");
     }
 
-    if (!recorded_type_deopt) {
-        fprintf(stderr,
-                "unsupported opcode fixture '%s' did not trigger bailout counters\n",
-                test_case->label);
-        return false;
+    if (previous_copy) {
+        test_set_env("ORUS_JIT_ENABLE_LINEAR_EMITTER", previous_copy);
+        free(previous_copy);
+    } else {
+        test_unset_env("ORUS_JIT_ENABLE_LINEAR_EMITTER");
     }
-
-    return true;
+    return success;
 }
 
-static bool test_backend_documents_unhandled_arithmetic_opcodes(void) {
-    static const UnsupportedOpcodeCase cases[] = {
+static bool test_backend_executes_div_mod_opcodes(void) {
+    static const SupportedOpcodeCase cases[] = {
+        {.label = "div_i32",
+         .opcode = ORUS_JIT_IR_OP_DIV_I32,
+         .kind = ORUS_JIT_VALUE_I32,
+         .values.s32 = {.lhs = 91, .rhs = 7, .expected = 13}},
+        {.label = "mod_i32",
+         .opcode = ORUS_JIT_IR_OP_MOD_I32,
+         .kind = ORUS_JIT_VALUE_I32,
+         .values.s32 = {.lhs = 91, .rhs = 7, .expected = 0}},
         {.label = "div_i64",
          .opcode = ORUS_JIT_IR_OP_DIV_I64,
          .kind = ORUS_JIT_VALUE_I64,
-         .values.s64 = {.lhs = 96, .rhs = 7}},
+         .values.s64 = {.lhs = 96, .rhs = 7, .expected = 13}},
         {.label = "mod_i64",
          .opcode = ORUS_JIT_IR_OP_MOD_I64,
          .kind = ORUS_JIT_VALUE_I64,
-         .values.s64 = {.lhs = 96, .rhs = 7}},
+         .values.s64 = {.lhs = 96, .rhs = 7, .expected = 5}},
+        {.label = "div_u32",
+         .opcode = ORUS_JIT_IR_OP_DIV_U32,
+         .kind = ORUS_JIT_VALUE_U32,
+         .values.u32 = {.lhs = 132u, .rhs = 11u, .expected = 12u}},
+        {.label = "mod_u32",
+         .opcode = ORUS_JIT_IR_OP_MOD_U32,
+         .kind = ORUS_JIT_VALUE_U32,
+         .values.u32 = {.lhs = 132u, .rhs = 11u, .expected = 0u}},
         {.label = "div_u64",
          .opcode = ORUS_JIT_IR_OP_DIV_U64,
          .kind = ORUS_JIT_VALUE_U64,
-         .values.u64 = {.lhs = 128u, .rhs = 5u}},
+         .values.u64 = {.lhs = 128u, .rhs = 5u, .expected = 25u}},
         {.label = "mod_u64",
          .opcode = ORUS_JIT_IR_OP_MOD_U64,
          .kind = ORUS_JIT_VALUE_U64,
-         .values.u64 = {.lhs = 128u, .rhs = 5u}},
+         .values.u64 = {.lhs = 128u, .rhs = 5u, .expected = 3u}},
         {.label = "div_f64",
          .opcode = ORUS_JIT_IR_OP_DIV_F64,
          .kind = ORUS_JIT_VALUE_F64,
-         .values.f64 = {.lhs = 81.0, .rhs = 4.5}},
+         .values.f64 = {.lhs = 81.0, .rhs = 4.5, .expected = 18.0}},
         {.label = "mod_f64",
          .opcode = ORUS_JIT_IR_OP_MOD_F64,
          .kind = ORUS_JIT_VALUE_F64,
-         .values.f64 = {.lhs = 81.0, .rhs = 4.5}},
+         .values.f64 = {.lhs = 81.0, .rhs = 4.5, .expected = fmod(81.0, 4.5)}}
     };
 
     bool success = true;
     for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); ++i) {
-        if (!run_unsupported_opcode_case(&cases[i])) {
+        if (!run_supported_opcode_case(&cases[i])) {
             success = false;
         }
     }
@@ -2228,10 +2327,10 @@ int main(void) {
         fprintf(stderr, "backend u64 add test failed\n");
         success = false;
     }
-    debug_log("running test_backend_documents_unhandled_arithmetic_opcodes");
-    if (!test_backend_documents_unhandled_arithmetic_opcodes()) {
+    debug_log("running test_backend_executes_div_mod_opcodes");
+    if (!test_backend_executes_div_mod_opcodes()) {
         fprintf(stderr,
-                "backend unsupported arithmetic opcode fixtures failed\n");
+                "backend div/mod arithmetic opcode execution test failed\n");
         success = false;
     }
     debug_log("running test_backend_emits_fused_increment_loops");

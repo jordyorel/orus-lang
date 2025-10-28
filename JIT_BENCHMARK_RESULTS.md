@@ -38,31 +38,30 @@ These numbers come from the `tests/unit/test_vm_jit_benchmark.c` harness, which 
 
 ## Optimized Loop Benchmark (`tests/benchmarks/optimized_loop_benchmark.orus`)
 
-- **Interpreter runtime (JIT disabled):** 15,400.76 ms
-- **JIT-enabled runtime:** 15,494.52 ms
-- **Observed speedup:** 0.99×
+- **Interpreter runtime (JIT disabled):** 3,122.92 ms
+- **JIT-enabled runtime:** 3,138.30 ms
+- **Observed speedup:** 1.00×
 - **Translations:** 3 succeeded, 0 failed (baseline IR is produced)
 - **Tier-up skips:** 2,226 total – 2,223 `loop-blocklisted`, 3 `backend-unsupported`
 - **Native compilations recorded:** 0
-- **Native dispatches:** 3, **Cache hits:** 0, **Cache misses:** 3, **Deopts:** 3, **Type guard bailouts:** 0
+- **Native dispatches:** 3, **Cache hits:** 0, **Cache misses:** 3, **Deopts:** 0, **Type guard bailouts:** 0
 - **Rollout stage:** `strings` (mask `0x7F`); backend status reports `JIT_BACKEND_UNSUPPORTED` for every compiled loop, so the runtime immediately falls back to the interpreter stub.
 
-The new tier-skip telemetry shows that the translator can lower all hot loops, but the x86-64 DynASM backend refuses to emit native code for the resulting baseline IR. Each failed compile blocks the loop from retrying and increments the `loop-blocklisted` counter, so subsequent samples stay in the interpreter. Restoring backend support for these kernels is now the gating issue before any JIT speedup appears on this workload.
+Despite the translator succeeding, the x86-64 DynASM backend still raises `JIT_BACKEND_UNSUPPORTED` when it encounters the typed division and loop-backedge opcodes. Those failures immediately blocklist the loop and keep execution in the interpreter, leaving the workload pinned to baseline speed.
 
 ## FFI Ping/Pong Benchmark (`tests/benchmarks/ffi_ping_pong_benchmark.orus`)
 
-- **Interpreter runtime (JIT disabled):** 630.29 ms
-- **JIT-enabled runtime:** 663.61 ms
-- **Observed speedup:** 0.95×
+- **Interpreter runtime (JIT disabled):** 545.42 ms
+- **JIT-enabled runtime:** 533.09 ms
+- **Observed speedup:** 1.02×
 - **Translations:** 0 succeeded, 1 failed (`unsupported_value_kind` for string operands)
 - **Native dispatches:** 1, **Cache hits:** 0, **Cache misses:** 1, **Deopts:** 1, **Type guard bailouts:** 0
 - **Rollout stage:** `strings` (mask `0x7F`); the slow-path trampoline keeps the native frame resident during the foreign call, but the translator still blocklists the loop on string value kinds.
 
 The refreshed run confirms that foreign calls no longer tear down the native frame—the VM records one native dispatch and the
-`jit_foreign_slow_path_trampolines` counter increments during tiering—but the overall loop still fails to translate because the
-translator rejects the surrounding string operations. As a result the benchmark remains interpreter-bound despite the new
-trampoline support. Future work needs to lift the remaining `unsupported_value_kind` diagnostics so the loop can stay in native
-code long enough to deliver the expected uplift.
+`jit_foreign_slow_path_trampolines` counter increments during tiering—but the translator still returns `unsupported_value_kind`
+as soon as the loop executes the surrounding string operations. The workload therefore remains interpreter-bound even though the
+FFI trampoline now preserves native frames.
 
 ## Per-Type Tier-Up Tracker
 

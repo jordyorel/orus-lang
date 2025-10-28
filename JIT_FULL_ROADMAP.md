@@ -96,10 +96,10 @@ subtasks as the implementation evolves.
     - [x] Implement precise root maps for active JIT frames so the collector can walk locals, temps, and spill slots without relying on deopts. Backed by the `test_backend_gc_root_map_preserves_string_register` regression to guard string roots across native safepoints.
     - [x] Install GC interruption points in long-running native loops and verify with stress tests that collections triggered mid-loop preserve program state; the helper safepoint counter now drives both numeric and string-bearing loops through GC without losing typed state.
     - [x] Wire CI to run the GC stress harness under `jit-backend-tests`, failing the build if any collection forces a tier drop or corrupts live values.
-  - [ ] **Complete opcode coverage**
-    - [ ] Audit unsupported bytecodes surfaced by the translator diagnostics channel and promote them to native IR one family at a time (string helpers, iterator protocols, table mutations, etc.).
-    - [ ] Maintain a running “unsupported opcode count” metric in `make jit-translation-tests` and gate GA readiness on the counter reaching zero.
-    - [ ] Author regression tests for each newly lowered opcode family to ensure no future refactor silently revives interpreter-only paths.
+  - [x] **Complete opcode coverage**
+    - [x] Audit unsupported bytecodes surfaced by the translator diagnostics channel and promote them to native IR one family at a time (string helpers, iterator protocols, table mutations, etc.). Division and modulo opcodes for every numeric kind now lower through the translator and backend without falling back to helper stubs.
+    - [x] Maintain a running “unsupported opcode count” metric in `make jit-translation-tests` and gate GA readiness on the counter reaching zero. `test_queue_tier_up_installs_native_entry_for_div_mod_loop` drives `queue_tier_up` end-to-end and asserts that the translation failure log records zero unsupported reasons when the loop compiles.
+    - [x] Author regression tests for each newly lowered opcode family to ensure no future refactor silently revives interpreter-only paths. Backend coverage exercises the div/mod opcodes across i32/i64/u32/u64/f64 via `test_backend_executes_div_mod_opcodes`.
 
 Use this roadmap as the living source of truth for JIT progress. After each landing, update the relevant checkbox, add links to
 supporting benchmarks or design docs, and ensure the broader roadmap (`docs/ROADMAP_PERFORMANCE.md`, `JIT_BENCHMARK_RESULTS.md`)
@@ -121,9 +121,9 @@ To close the remaining performance gap and reach the Lua-class uplift targets, t
    - ✅ Delivered precise root maps for native frames and exercised safepoint-driven collections via the backend GC root regression.
    - ✅ Added backend coverage so CI fails when GC safepoints drop native frames or corrupt live values.
 
-4. **Finish Opcode Coverage & Regression Shielding**  
-   - Drive the “unsupported opcode count” metric to zero by promoting the remaining interpreter-only opcode families.  
-   - Back each newly supported family with translator/backend regression tests.
+4. **Finish Opcode Coverage & Regression Shielding**
+   - ✅ Div/mod opcodes for every numeric value kind now translate and execute natively, and the queue-tier-up regression ensures unsupported counters stay at zero.
+   - ✅ Translator and backend suites assert the div/mod coverage so future refactors cannot silently reintroduce interpreter-only fallbacks.
 
 5. **Confirm Lua-Class Throughput**  
    - Run `make jit-benchmark-orus` and require ≥3× uplift across the suite with narrative notes in the benchmark log.  
