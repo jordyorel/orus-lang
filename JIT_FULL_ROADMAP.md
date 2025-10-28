@@ -104,3 +104,27 @@ subtasks as the implementation evolves.
 Use this roadmap as the living source of truth for JIT progress. After each landing, update the relevant checkbox, add links to
 supporting benchmarks or design docs, and ensure the broader roadmap (`docs/ROADMAP_PERFORMANCE.md`, `JIT_BENCHMARK_RESULTS.md`)
 mirrors the latest state.
+
+## Mini Roadmap – Path to 2–3× Lua-Class Speed
+
+To close the remaining performance gap and reach the Lua-class uplift targets, tackle the work in the following order. Treat each step as a milestone with explicit telemetry sign-off before advancing.
+
+1. **Restore Native Coverage for Hot Loops**  
+   - Land the remaining DynASM backend fixes so `JIT_BACKEND_UNSUPPORTED` no longer blocklists the optimized loop benchmark.  
+   - Re-run `./orus --jit-benchmark tests/benchmarks/optimized_loop_benchmark.orus` and require ≥90 % native dispatch share before proceeding.
+
+2. **Stabilize Foreign-Call Tiering**  
+   - Implement the slow-path trampolines that keep native frames resident across long-running FFI calls.  
+   - Re-run the FFI benchmark suite and record uplift plus native coverage in `JIT_BENCHMARK_RESULTS.md`.
+
+3. **Make Native Execution GC-Safe**  
+   - Deliver precise root maps and in-loop safepoints; validate using the GC stress harness.  
+   - Add CI enforcement so any GC-induced tier drop or corruption fails the pipeline.
+
+4. **Finish Opcode Coverage & Regression Shielding**  
+   - Drive the “unsupported opcode count” metric to zero by promoting the remaining interpreter-only opcode families.  
+   - Back each newly supported family with translator/backend regression tests.
+
+5. **Confirm Lua-Class Throughput**  
+   - Run `make jit-benchmark-orus` and require ≥3× uplift across the suite with narrative notes in the benchmark log.  
+   - Publish disassembly snapshots and telemetry deltas alongside the updated roadmap to document the milestone.
