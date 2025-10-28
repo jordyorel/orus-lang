@@ -7444,10 +7444,14 @@ dynasm_emit_helper_call(struct DynAsmActionBuffer* buffer,
                         const void* helper,
                         OrusJitHelperStubKind stub_kind) {
     if (!orus_jit_helper_registry_record(helper, stub_kind, NULL)) {
+        LOG_ERROR("[JIT] Failed to register helper %p for stub kind %d", helper,
+                  (int)stub_kind);
         return false;
     }
     const void* stub = orus_jit_helper_stub_address(stub_kind);
     if (!stub) {
+        LOG_ERROR("[JIT] Missing helper stub for kind %d (helper=%p)",
+                  (int)stub_kind, helper);
         return false;
     }
     return dynasm_emit_bytes_track(buffer, code_offset, (const uint8_t[]){0x48, 0xB8},
@@ -8643,6 +8647,7 @@ orus_jit_ir_emit_x86(const OrusJitIRProgram* program,
     DynAsmPatchList epilogue_patches;
     DynAsmBranchPatchList branch_patches;
     bool result = true;
+    const OrusJitIRInstruction* dynasm_current_inst = NULL;
     dynasm_patch_list_init(&bail_patches);
     dynasm_patch_list_init(&epilogue_patches);
     dynasm_branch_patch_list_init(&branch_patches);
@@ -8665,6 +8670,15 @@ orus_jit_ir_emit_x86(const OrusJitIRProgram* program,
 
 #define DYNASM_EMIT_FAIL()                                                           \
     do {                                                                             \
+        if (dynasm_current_inst) {                                                   \
+            LOG_ERROR("[JIT] DynASM emission failed for opcode %u at bytecode %u "\
+                      "(value_kind=%u)",                                           \
+                      (unsigned)dynasm_current_inst->opcode,                        \
+                      (unsigned)dynasm_current_inst->bytecode_offset,               \
+                      (unsigned)dynasm_current_inst->value_kind);                   \
+        } else {                                                                     \
+            LOG_ERROR("[JIT] DynASM emission failed before instruction selection");\
+        }                                                                            \
         result = false;                                                              \
         goto dynasm_emit_cleanup;                                                    \
     } while (0)
@@ -8688,6 +8702,7 @@ orus_jit_ir_emit_x86(const OrusJitIRProgram* program,
 
     for (size_t i = 0; i < instruction_count; ++i) {
         const OrusJitIRInstruction* inst = &instruction_stream[i];
+        dynasm_current_inst = inst;
         if (inst_offsets) {
             inst_offsets[i] = code_offset;
         }
@@ -9475,6 +9490,111 @@ orus_jit_ir_emit_x86(const OrusJitIRProgram* program,
                                                      (uint32_t)target_bytecode)) {
                     DYNASM_EMIT_FAIL();
                 }
+                break;
+            }
+            case ORUS_JIT_IR_OP_JUMP_SHORT: {
+                size_t branch_action = actions->size;
+                size_t branch_code = code_offset;
+                if (!dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0xE9, 0x00, 0x00, 0x00, 0x00},
+                                             5u)) {
+                    DYNASM_EMIT_FAIL();
+                }
+                uint64_t target_bytecode =
+                    (uint64_t)inst->bytecode_offset +
+                    (uint64_t)inst->operands.jump_short.bytecode_length +
+                    (uint64_t)inst->operands.jump_short.offset;
+                if (!dynasm_branch_patch_list_append(&branch_patches,
+                                                     branch_action + 2u,
+                                                     branch_code + 1u,
+                                                     (uint32_t)target_bytecode)) {
+                    DYNASM_EMIT_FAIL();
+                }
+                break;
+            }
+            case ORUS_JIT_IR_OP_JUMP_BACK_SHORT: {
+                size_t branch_action = actions->size;
+                size_t branch_code = code_offset;
+                if (!dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0xE9, 0x00, 0x00, 0x00, 0x00},
+                                             5u)) {
+                    DYNASM_EMIT_FAIL();
+                }
+                uint32_t fallthrough = inst->bytecode_offset + 2u;
+                uint16_t back = inst->operands.jump_back_short.back_offset;
+                if (fallthrough < back) {
+                    DYNASM_EMIT_FAIL();
+                }
+                uint32_t target = fallthrough - back;
+                size_t target_index = SIZE_MAX;
+                if (inst_offsets) {
+                    for (size_t j = 0; j < instruction_count; ++j) {
+                        if (instruction_stream[j].bytecode_offset == target) {
+                            target_index = j;
+                            break;
+                        }
+                    }
+                }
+                if (!inst_offsets || target_index == SIZE_MAX ||
+                    inst_offsets[target_index] == SIZE_MAX) {
+                    LOG_ERROR("[JIT] DynASM jump_back target resolution failed: inst_offsets=%p target_index=%zu", (void*)inst_offsets, target_index);
+                    if (inst_offsets && target_index != SIZE_MAX) {
+                        LOG_ERROR("[JIT] target_offset entry=%zu", inst_offsets[target_index]);
+                    }
+                    DYNASM_EMIT_FAIL();
+                }
+                int64_t rel = (int64_t)inst_offsets[target_index] -
+                              ((int64_t)branch_code + 5);
+                if (rel < INT32_MIN || rel > INT32_MAX) {
+                    DYNASM_EMIT_FAIL();
+                }
+                dynasm_patch_u32(actions, branch_action + 2u,
+                                 (uint32_t)(int32_t)rel);
+                break;
+            }
+            case ORUS_JIT_IR_OP_LOOP_BACK: {
+                size_t branch_action = actions->size;
+                size_t branch_code = code_offset;
+                if (!dynasm_emit_bytes_track(actions, &code_offset,
+                                             (const uint8_t[]){0xE9, 0x00, 0x00, 0x00, 0x00},
+                                             5u)) {
+                    DYNASM_EMIT_FAIL();
+                }
+                uint16_t back = inst->operands.loop_back.back_offset;
+                if (inst->bytecode_offset < back) {
+                    LOG_ERROR("[JIT] DynASM loop_back encountered invalid back offset %u at bytecode %u",
+                              (unsigned)back, (unsigned)inst->bytecode_offset);
+                    DYNASM_EMIT_FAIL();
+                }
+                uint32_t loop_header = block->program.loop_start_offset;
+                uint32_t target = inst->bytecode_offset - back;
+                size_t header_index = SIZE_MAX;
+                if (inst_offsets) {
+                    for (size_t j = 0; j < instruction_count; ++j) {
+                        uint32_t candidate = instruction_stream[j].bytecode_offset;
+                        if (candidate == target || candidate == loop_header) {
+                            header_index = j;
+                            if (candidate == loop_header) {
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (!inst_offsets || header_index == SIZE_MAX ||
+                    inst_offsets[header_index] == SIZE_MAX) {
+                    LOG_ERROR("[JIT] DynASM loop_back header resolution failed: inst_offsets=%p header_index=%zu", (void*)inst_offsets, header_index);
+                    if (inst_offsets && header_index != SIZE_MAX) {
+                        LOG_ERROR("[JIT] header_offset entry=%zu", inst_offsets[header_index]);
+                    }
+                    DYNASM_EMIT_FAIL();
+                }
+                int64_t rel = (int64_t)inst_offsets[header_index] -
+                              ((int64_t)branch_code + 5);
+                if (rel < INT32_MIN || rel > INT32_MAX) {
+                    DYNASM_EMIT_FAIL();
+                }
+                dynasm_patch_u32(actions, branch_action + 2u,
+                                 (uint32_t)(int32_t)rel);
                 break;
             }
             case ORUS_JIT_IR_OP_SAFEPOINT: {
