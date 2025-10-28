@@ -35,6 +35,7 @@
 #include <stdint.h>
 #include <signal.h>
 #include <setjmp.h>
+#include <math.h>
 #if defined(_MSC_VER)
 #include <intrin.h>
 #endif
@@ -3483,7 +3484,6 @@ orus_jit_native_linear_arithmetic(struct VM* vm_instance,
                 return false;
             }
             double result = left;
-<<<<<<< ours
             switch (opcode) {
                 case ORUS_JIT_IR_OP_ADD_F64:
                     result = left + right;
@@ -3511,17 +3511,6 @@ orus_jit_native_linear_arithmetic(struct VM* vm_instance,
                 default:
                     jit_bailout_and_deopt(vm_instance, block);
                     return false;
-=======
-            if (orus_jit_opcode_is_add(opcode)) {
-                result = left + right;
-            } else if (orus_jit_opcode_is_sub(opcode)) {
-                result = left - right;
-            } else if (orus_jit_opcode_is_mul(opcode)) {
-                result = left * right;
-            } else {
-                jit_bailout_and_deopt(vm_instance, block);
-                return false;
->>>>>>> theirs
             }
             vm_store_f64_typed_hot(dst, result);
             return true;
@@ -4034,7 +4023,6 @@ orus_jit_execute_block(struct VM* vm_instance, const OrusJitNativeBlock* block) 
                             return;
                         }
                         double result = lhs;
-<<<<<<< ours
                         switch (inst->opcode) {
                             case ORUS_JIT_IR_OP_ADD_F64:
                                 result = lhs + rhs;
@@ -4062,17 +4050,6 @@ orus_jit_execute_block(struct VM* vm_instance, const OrusJitNativeBlock* block) 
                             default:
                                 jit_bailout_and_deopt(vm_instance, block);
                                 return;
-=======
-                        if (orus_jit_opcode_is_add(inst->opcode)) {
-                            result = lhs + rhs;
-                        } else if (orus_jit_opcode_is_sub(inst->opcode)) {
-                            result = lhs - rhs;
-                        } else if (orus_jit_opcode_is_mul(inst->opcode)) {
-                            result = lhs * rhs;
-                        } else {
-                            jit_bailout_and_deopt(vm_instance, block);
-                            return;
->>>>>>> theirs
                         }
                         vm_store_f64_typed_hot(dst, result);
                         break;
