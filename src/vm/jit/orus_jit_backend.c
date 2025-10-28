@@ -3878,9 +3878,17 @@ orus_jit_native_linear_arithmetic(struct VM* vm_instance,
                     result = left * right;
                     break;
                 case ORUS_JIT_IR_OP_DIV_F64:
+                    if (right == 0.0) {
+                        jit_bailout_and_deopt(vm_instance, block);
+                        return false;
+                    }
                     result = left / right;
                     break;
                 case ORUS_JIT_IR_OP_MOD_F64:
+                    if (right == 0.0) {
+                        jit_bailout_and_deopt(vm_instance, block);
+                        return false;
+                    }
                     result = fmod(left, right);
                     break;
                 default:
@@ -4491,9 +4499,17 @@ orus_jit_execute_block(struct VM* vm_instance, const OrusJitNativeBlock* block) 
                                 result = lhs * rhs;
                                 break;
                             case ORUS_JIT_IR_OP_DIV_F64:
+                                if (rhs == 0.0) {
+                                    jit_bailout_and_deopt(vm_instance, block);
+                                    return;
+                                }
                                 result = lhs / rhs;
                                 break;
                             case ORUS_JIT_IR_OP_MOD_F64:
+                                if (rhs == 0.0) {
+                                    jit_bailout_and_deopt(vm_instance, block);
+                                    return;
+                                }
                                 result = fmod(lhs, rhs);
                                 break;
                             default:
