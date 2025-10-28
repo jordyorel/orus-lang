@@ -31,9 +31,9 @@ pub fn build(b: *std.Build) void {
     const profile_cfg = getProfileConfig(profile);
 
     const dispatch_mode = b.option(DispatchMode, "dispatch-mode", "Dispatch selection: auto, goto, switch") orelse .auto;
-    const git_commit = tryTrim(b, &.{"git", "rev-parse", "--short", "HEAD"}) orelse "unknown";
-    const git_commit_date_raw = tryTrim(b, &.{"git", "show", "-s", "--format=%cs", "HEAD"});
-    const build_date = tryTrim(b, &.{"date", "-u", "+%Y-%m-%d"}) orelse "unknown";
+    const git_commit = tryTrim(b, &.{ "git", "rev-parse", "--short", "HEAD" }) orelse "unknown";
+    const git_commit_date_raw = tryTrim(b, &.{ "git", "show", "-s", "--format=%cs", "HEAD" });
+    const build_date = tryTrim(b, &.{ "date", "-u", "+%Y-%m-%d" }) orelse "unknown";
     const git_commit_date = git_commit_date_raw orelse build_date;
 
     const portable_default = determinePortableDefault(target);
@@ -54,7 +54,7 @@ pub fn build(b: *std.Build) void {
     ) catch unreachable;
 
     const orus_sources = buildOrusSourceList(allocator) catch unreachable;
-    const orus_name = b.fmt("{s}{s}", .{"orus", profile_cfg.suffix});
+    const orus_name = b.fmt("{s}{s}", .{ "orus", profile_cfg.suffix });
     const orus_module = b.createModule(.{
         .target = target,
         .optimize = optimize,
@@ -83,7 +83,7 @@ pub fn build(b: *std.Build) void {
         null;
 
     const prof_sources = buildProfSourceList(allocator) catch unreachable;
-    const prof_name = b.fmt("{s}{s}", .{"orus-prof", profile_cfg.suffix});
+    const prof_name = b.fmt("{s}{s}", .{ "orus-prof", profile_cfg.suffix });
     const prof_module = b.createModule(.{
         .target = target,
         .optimize = optimize,
@@ -106,8 +106,8 @@ pub fn build(b: *std.Build) void {
     });
     const prof_sign_step = if (should_sign)
         maybeAddSigningStep(b, prof_exe.getEmittedBin(), &prof_exe.step, true) catch unreachable
-        else
-            null;
+    else
+        null;
 
     const default_step = b.step("orus", "Build the Orus interpreter and profiling tool");
     default_step.dependOn(&orus_exe.step);
@@ -199,14 +199,14 @@ pub fn build(b: *std.Build) void {
 
     const clean_step = b.step("clean", "Remove Orus binaries and Zig caches");
     const clean_script =
-        "import pathlib, shutil\n"
-        ++ "paths = ['orus', 'orus_debug', 'orus-prof', 'orus-prof_debug', 'zig-out', '.zig-cache']\n"
-        ++ "for p in paths:\n"
-        ++ "    path = pathlib.Path(p)\n"
-        ++ "    if path.is_dir():\n"
-        ++ "        shutil.rmtree(path, ignore_errors=True)\n"
-        ++ "    else:\n"
-        ++ "        path.unlink(missing_ok=True)\n";
+        "import pathlib, shutil\n" ++
+        "paths = ['orus', 'orus_debug', 'orus-prof', 'orus-prof_debug', 'zig-out', '.zig-cache']\n" ++
+        "for p in paths:\n" ++
+        "    path = pathlib.Path(p)\n" ++
+        "    if path.is_dir():\n" ++
+        "        shutil.rmtree(path, ignore_errors=True)\n" ++
+        "    else:\n" ++
+        "        path.unlink(missing_ok=True)\n";
     const clean_cmd = b.addSystemCommand(&.{ "python3", "-c", clean_script });
     clean_step.dependOn(&clean_cmd.step);
 

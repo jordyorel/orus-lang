@@ -1,6 +1,6 @@
 # Orus Programming Language
 
-[![Version](https://img.shields.io/badge/version-0.6.4-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.1-blue.svg)](CHANGELOG.md)
 
 Fast experimental programming language that aims to combine readability and safety.
 
