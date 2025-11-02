@@ -48,6 +48,14 @@ typedef struct OrusJitRunStats {
     const char* backend_message;
     OrusJitTierSkipStats tier_skips;
     OrusJitGuardTraceLog guard_trace;
+    uint64_t linear_attempts;
+    uint64_t linear_successes;
+    uint64_t linear_failures;
+    JITBackendStatus linear_last_status;
+    uint16_t linear_last_function;
+    uint16_t linear_last_loop;
+    size_t linear_last_instruction_count;
+    size_t linear_last_code_size;
 } OrusJitRunStats;
 
 // Execute the provided source buffer under either interpreter or JIT mode and

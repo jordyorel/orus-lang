@@ -192,6 +192,64 @@ static size_t g_orus_jit_region_count = 0u;
 static size_t g_orus_jit_region_capacity = 0u;
 static int g_orus_jit_linear_emitter_override = -1;
 static sigjmp_buf g_orus_jit_write_probe_env;
+static OrusJitLinearEmitterStats g_orus_jit_linear_stats = {
+    .last_status = JIT_BACKEND_OK,
+};
+
+static void
+orus_jit_linear_stats_record_attempt(const OrusJitNativeBlock* block) {
+    OrusJitLinearEmitterStats* stats = &g_orus_jit_linear_stats;
+    stats->attempts++;
+    if (block) {
+        stats->last_function_index = block->program.function_index;
+        stats->last_loop_index = block->program.loop_index;
+        stats->last_instruction_count = block->program.count;
+    } else {
+        stats->last_function_index = UINT16_MAX;
+        stats->last_loop_index = UINT16_MAX;
+        stats->last_instruction_count = 0u;
+    }
+}
+
+static void
+orus_jit_linear_stats_record_result(JITBackendStatus status, size_t code_size) {
+    OrusJitLinearEmitterStats* stats = &g_orus_jit_linear_stats;
+    stats->last_status = status;
+    stats->last_code_size = code_size;
+    if (status == JIT_BACKEND_OK) {
+        stats->successes++;
+    } else {
+        stats->failures++;
+    }
+}
+
+static bool
+orus_jit_trace_linear_emitter(void) {
+    static int cached = -1;
+    if (cached < 0) {
+        const char* env = getenv("ORUS_JIT_TRACE_LINEAR_EMITTER");
+        cached = (env && env[0] != '\0') ? 1 : 0;
+    }
+    return cached != 0;
+}
+
+static JITBackendStatus
+orus_jit_linear_emit_fail(const OrusJitNativeBlock* block,
+                          const OrusJitIRInstruction* inst,
+                          const char* reason) {
+    if (orus_jit_trace_linear_emitter()) {
+        LOG_INFO(
+            "[VM:JIT] A64 linear emitter rejection: func=%u loop=%u opcode=%u "
+            "kind=%u reason=%s",
+            block ? (unsigned)block->program.function_index : UINT16_MAX,
+            block ? (unsigned)block->program.loop_index : UINT16_MAX,
+            inst ? (unsigned)inst->opcode : UINT32_MAX,
+            inst ? (unsigned)inst->value_kind : UINT32_MAX,
+            reason ? reason : "unknown");
+    }
+    orus_jit_linear_stats_record_result(JIT_BACKEND_ASSEMBLY_ERROR, 0u);
+    return JIT_BACKEND_ASSEMBLY_ERROR;
+}
 
 #if defined(_WIN32)
 static CRITICAL_SECTION g_orus_jit_region_lock;
@@ -4485,17 +4543,23 @@ orus_jit_linear_emitter_enabled(void) {
         return g_orus_jit_linear_emitter_override == 1;
     }
     if (cached == -1) {
+        const char* disable = getenv("ORUS_JIT_DISABLE_LINEAR_EMITTER");
         const char* enable = getenv("ORUS_JIT_ENABLE_LINEAR_EMITTER");
         const char* force = getenv("ORUS_JIT_FORCE_LINEAR_EMITTER");
         /*
-         * Support both the new opt-in switch and a legacy-style "force" toggle
-         * so existing automation that mirrored other JIT env variables keeps
-         * working while the linear emitter stays disabled by default.
+         * Linear emission is now enabled by default so hot loops rely on the
+         * native helpers unless explicitly disabled. Keep the legacy opt-in
+         * toggle for scripts that still export ENABLE/FORCE, but prefer the new
+         * disable switch to opt out.
          */
-        cached = ((enable && enable[0] != '\0') ||
-                  (force && force[0] != '\0'))
-                     ? 1
-                     : 0;
+        if (disable && disable[0] != '\0') {
+            cached = 0;
+        } else if ((enable && enable[0] != '\0') ||
+                   (force && force[0] != '\0')) {
+            cached = 1;
+        } else {
+            cached = 1;
+        }
     }
     return cached == 1;
 }
@@ -5108,27 +5172,32 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
                 break;
             case ORUS_JIT_IR_OP_I32_TO_I64:
                 if (inst->value_kind != ORUS_JIT_VALUE_I64) {
-                    return JIT_BACKEND_ASSEMBLY_ERROR;
+                    return orus_jit_linear_emit_fail(block, inst,
+                                                     "unexpected conversion kind");
                 }
                 break;
             case ORUS_JIT_IR_OP_U32_TO_U64:
                 if (inst->value_kind != ORUS_JIT_VALUE_U64) {
-                    return JIT_BACKEND_ASSEMBLY_ERROR;
+                    return orus_jit_linear_emit_fail(block, inst,
+                                                     "unexpected conversion kind");
                 }
                 break;
             case ORUS_JIT_IR_OP_U32_TO_I32:
                 if (inst->value_kind != ORUS_JIT_VALUE_I32) {
-                    return JIT_BACKEND_ASSEMBLY_ERROR;
+                    return orus_jit_linear_emit_fail(block, inst,
+                                                     "unexpected conversion kind");
                 }
                 break;
             case ORUS_JIT_IR_OP_I32_TO_F64:
                 if (inst->value_kind != ORUS_JIT_VALUE_F64) {
-                    return JIT_BACKEND_ASSEMBLY_ERROR;
+                    return orus_jit_linear_emit_fail(block, inst,
+                                                     "unexpected conversion kind");
                 }
                 break;
             case ORUS_JIT_IR_OP_I64_TO_F64:
                 if (inst->value_kind != ORUS_JIT_VALUE_F64) {
-                    return JIT_BACKEND_ASSEMBLY_ERROR;
+                    return orus_jit_linear_emit_fail(block, inst,
+                                                     "unexpected conversion kind");
                 }
                 break;
             case ORUS_JIT_IR_OP_F64_TO_I32:
@@ -5200,7 +5269,8 @@ orus_jit_backend_emit_linear_x86(struct OrusJitBackend* backend,
             case ORUS_JIT_IR_OP_ARRAY_POP:
             case ORUS_JIT_IR_OP_ENUM_NEW:
                 if (inst->value_kind != ORUS_JIT_VALUE_BOXED) {
-                    return JIT_BACKEND_ASSEMBLY_ERROR;
+                    return orus_jit_linear_emit_fail(block, inst,
+                                                     "unexpected value kind");
                 }
                 break;
             case ORUS_JIT_IR_OP_SAFEPOINT:
@@ -9570,6 +9640,15 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
         return JIT_BACKEND_ASSEMBLY_ERROR;
     }
 
+    orus_jit_linear_stats_record_attempt(block);
+    if (orus_jit_trace_linear_emitter()) {
+        LOG_INFO(
+            "[VM:JIT] A64 linear emitter attempt: func=%u loop=%u ir_count=%zu",
+            (unsigned)block->program.function_index,
+            (unsigned)block->program.loop_index,
+            (size_t)block->program.count);
+    }
+
     for (size_t i = 0; i < block->program.count; ++i) {
         const OrusJitIRInstruction* inst = &block->program.instructions[i];
         switch (inst->opcode) {
@@ -9579,7 +9658,8 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
             case ORUS_JIT_IR_OP_SUB_I32:
             case ORUS_JIT_IR_OP_MUL_I32:
                 if (inst->value_kind != ORUS_JIT_VALUE_I32) {
-                    return JIT_BACKEND_ASSEMBLY_ERROR;
+                    return orus_jit_linear_emit_fail(block, inst,
+                                                     "unexpected value kind");
                 }
                 break;
             case ORUS_JIT_IR_OP_LOAD_I64_CONST:
@@ -9588,7 +9668,8 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
             case ORUS_JIT_IR_OP_SUB_I64:
             case ORUS_JIT_IR_OP_MUL_I64:
                 if (inst->value_kind != ORUS_JIT_VALUE_I64) {
-                    return JIT_BACKEND_ASSEMBLY_ERROR;
+                    return orus_jit_linear_emit_fail(block, inst,
+                                                     "unexpected value kind");
                 }
                 break;
             case ORUS_JIT_IR_OP_LOAD_U32_CONST:
@@ -9597,7 +9678,8 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
             case ORUS_JIT_IR_OP_SUB_U32:
             case ORUS_JIT_IR_OP_MUL_U32:
                 if (inst->value_kind != ORUS_JIT_VALUE_U32) {
-                    return JIT_BACKEND_ASSEMBLY_ERROR;
+                    return orus_jit_linear_emit_fail(block, inst,
+                                                     "unexpected value kind");
                 }
                 break;
             case ORUS_JIT_IR_OP_LOAD_U64_CONST:
@@ -9606,7 +9688,8 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
             case ORUS_JIT_IR_OP_SUB_U64:
             case ORUS_JIT_IR_OP_MUL_U64:
                 if (inst->value_kind != ORUS_JIT_VALUE_U64) {
-                    return JIT_BACKEND_ASSEMBLY_ERROR;
+                    return orus_jit_linear_emit_fail(block, inst,
+                                                     "unexpected value kind");
                 }
                 break;
             case ORUS_JIT_IR_OP_LOAD_F64_CONST:
@@ -9615,12 +9698,14 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
             case ORUS_JIT_IR_OP_SUB_F64:
             case ORUS_JIT_IR_OP_MUL_F64:
                 if (inst->value_kind != ORUS_JIT_VALUE_F64) {
-                    return JIT_BACKEND_ASSEMBLY_ERROR;
+                    return orus_jit_linear_emit_fail(block, inst,
+                                                     "unexpected value kind");
                 }
                 break;
             case ORUS_JIT_IR_OP_MOVE_BOOL:
                 if (inst->value_kind != ORUS_JIT_VALUE_BOOL) {
-                    return JIT_BACKEND_ASSEMBLY_ERROR;
+                    return orus_jit_linear_emit_fail(block, inst,
+                                                     "unexpected value kind");
                 }
                 break;
             case ORUS_JIT_IR_OP_LT_I32:
@@ -9657,7 +9742,8 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
             case ORUS_JIT_IR_OP_NE_BOOL:
             case ORUS_JIT_IR_OP_IS_TYPE:
                 if (inst->value_kind != ORUS_JIT_VALUE_BOOL) {
-                    return JIT_BACKEND_ASSEMBLY_ERROR;
+                    return orus_jit_linear_emit_fail(block, inst,
+                                                     "unexpected value kind");
                 }
                 break;
             case ORUS_JIT_IR_OP_LOAD_STRING_CONST:
@@ -9666,22 +9752,26 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
             case ORUS_JIT_IR_OP_TO_STRING:
             case ORUS_JIT_IR_OP_TYPE_OF:
                 if (inst->value_kind != ORUS_JIT_VALUE_STRING) {
-                    return JIT_BACKEND_ASSEMBLY_ERROR;
+                    return orus_jit_linear_emit_fail(block, inst,
+                                                     "unexpected value kind");
                 }
                 break;
             case ORUS_JIT_IR_OP_LOAD_VALUE_CONST:
                 if (inst->value_kind >= ORUS_JIT_VALUE_KIND_COUNT) {
-                    return JIT_BACKEND_ASSEMBLY_ERROR;
+                    return orus_jit_linear_emit_fail(block, inst,
+                                                     "unexpected value kind");
                 }
                 break;
             case ORUS_JIT_IR_OP_TIME_STAMP:
                 if (inst->value_kind != ORUS_JIT_VALUE_F64) {
-                    return JIT_BACKEND_ASSEMBLY_ERROR;
+                    return orus_jit_linear_emit_fail(block, inst,
+                                                     "unexpected value kind");
                 }
                 break;
             case ORUS_JIT_IR_OP_ASSERT_EQ:
                 if (inst->value_kind != ORUS_JIT_VALUE_BOOL) {
-                    return JIT_BACKEND_ASSEMBLY_ERROR;
+                    return orus_jit_linear_emit_fail(block, inst,
+                                                     "unexpected value kind");
                 }
                 break;
             case ORUS_JIT_IR_OP_I32_TO_I64:
@@ -9793,7 +9883,8 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
             case ORUS_JIT_IR_OP_CALL_FOREIGN:
                 break;
             default:
-                return JIT_BACKEND_ASSEMBLY_ERROR;
+                return orus_jit_linear_emit_fail(block, inst,
+                                                 "unsupported opcode");
         }
     }
 
@@ -9809,6 +9900,13 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
 
 #define A64_RETURN(status)                                                        \
     do {                                                                         \
+        if (orus_jit_trace_linear_emitter()) {                                   \
+            LOG_INFO("[VM:JIT] A64 linear emitter failure: func=%u loop=%u "     \
+                     "status=%d",                                                \
+                     (unsigned)block->program.function_index,                    \
+                     (unsigned)block->program.loop_index, (int)(status));        \
+        }                                                                        \
+        orus_jit_linear_stats_record_result((status), 0u);                       \
         orus_jit_a64_code_buffer_release(&code);                                  \
         orus_jit_a64_patch_list_release(&bail_patches);                           \
         orus_jit_a64_patch_list_release(&return_patches);                         \
@@ -10640,6 +10738,12 @@ orus_jit_backend_emit_linear_a64(struct OrusJitBackend* backend,
                 goto finalize_block;
             }
             default:
+                LOG_VM_DEBUG("JIT",
+                             "A64 linear emitter unsupported opcode %u "
+                             "(kind=%u) at bytecode 0x%X",
+                             (unsigned)inst->opcode,
+                             (unsigned)inst->value_kind,
+                             inst->bytecode_offset);
                 A64_RETURN(JIT_BACKEND_ASSEMBLY_ERROR);
         }
     }
@@ -10778,6 +10882,14 @@ finalize_block:;
                                        ORUS_JIT_BACKEND_TARGET_AARCH64,
                                        buffer,
                                        encoded_size);
+
+    if (orus_jit_trace_linear_emitter()) {
+        LOG_INFO(
+            "[VM:JIT] A64 linear emitter success: func=%u loop=%u size=%zu",
+            (unsigned)block->program.function_index,
+            (unsigned)block->program.loop_index, encoded_size);
+    }
+    orus_jit_linear_stats_record_result(JIT_BACKEND_OK, encoded_size);
 
     orus_jit_a64_code_buffer_release(&code);
     orus_jit_a64_patch_list_release(&bail_patches);
@@ -11029,6 +11141,13 @@ orus_jit_backend_compile_ir(struct OrusJitBackend* backend,
     if (orus_jit_linear_emitter_enabled() && !orus_jit_should_force_helper_stub()) {
         status = orus_jit_backend_emit_linear_x86(backend, block, out_entry);
         if (status == JIT_BACKEND_OK) {
+            LOG_VM_DEBUG("JIT",
+                         "Linear A64 emitter succeeded for func=%u loop=%u "
+                         "(entry=%s size=%zu)",
+                         (unsigned)block->program.function_index,
+                         (unsigned)block->program.loop_index,
+                         out_entry->debug_name ? out_entry->debug_name : "<null>",
+                         (size_t)out_entry->code_size);
             orus_jit_native_block_register(block);
             return JIT_BACKEND_OK;
         }
@@ -11040,8 +11159,24 @@ orus_jit_backend_compile_ir(struct OrusJitBackend* backend,
     }
 #endif
 #if defined(__aarch64__)
+    LOG_VM_DEBUG("JIT",
+                 "A64 linear emitter guard enabled=%d force_stub=%d override=%d",
+                 orus_jit_linear_emitter_enabled() ? 1 : 0,
+                 orus_jit_should_force_helper_stub() ? 1 : 0,
+                 g_orus_jit_linear_emitter_override);
     if (orus_jit_linear_emitter_enabled() && !orus_jit_should_force_helper_stub()) {
+        LOG_VM_DEBUG("JIT",
+                     "Dispatching to A64 linear emitter (override=%d)",
+                     g_orus_jit_linear_emitter_override);
         status = orus_jit_backend_emit_linear_a64(backend, block, out_entry);
+        if (status != JIT_BACKEND_OK) {
+            LOG_VM_DEBUG("JIT",
+                         "Linear A64 emitter failed with status=%d "
+                         "for func=%u loop=%u",
+                         (int)status,
+                         (unsigned)block->program.function_index,
+                         (unsigned)block->program.loop_index);
+        }
         if (status == JIT_BACKEND_OK) {
             orus_jit_native_block_register(block);
             return JIT_BACKEND_OK;
@@ -11345,8 +11480,26 @@ orus_jit_backend_vtable(void) {
 }
 
 void
+orus_jit_backend_linear_stats_reset(void) {
+    memset(&g_orus_jit_linear_stats, 0, sizeof(g_orus_jit_linear_stats));
+    g_orus_jit_linear_stats.last_status = JIT_BACKEND_OK;
+}
+
+bool
+orus_jit_backend_linear_stats(OrusJitLinearEmitterStats* out) {
+    if (!out) {
+        return false;
+    }
+    *out = g_orus_jit_linear_stats;
+    return g_orus_jit_linear_stats.attempts > 0u;
+}
+
+void
 orus_jit_backend_set_linear_emitter_enabled(bool enabled) {
     g_orus_jit_linear_emitter_override = enabled ? 1 : 0;
+    LOG_VM_DEBUG("JIT",
+                 "Linear emitter override set to %d",
+                 g_orus_jit_linear_emitter_override);
 }
 
 void

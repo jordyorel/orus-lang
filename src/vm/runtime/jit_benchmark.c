@@ -137,6 +137,10 @@ vm_jit_run_source_benchmark(const char* source,
     initVM();
     vm_ready = true;
 
+    if (vm.jit_backend != NULL) {
+        orus_jit_backend_linear_stats_reset();
+    }
+
     if (enable_jit) {
         orus_jit_debug_set_config(&benchmark_debug_config);
     }
@@ -195,6 +199,20 @@ vm_jit_run_source_benchmark(const char* source,
         stats->backend_status = vm.jit_backend_status;
         stats->backend_message = vm.jit_backend_message;
         stats->tier_skips = vm.jit_tier_skips;
+        if (vm.jit_backend != NULL) {
+            OrusJitLinearEmitterStats linear_stats = {0};
+            if (orus_jit_backend_linear_stats(&linear_stats)) {
+                stats->linear_attempts = linear_stats.attempts;
+                stats->linear_successes = linear_stats.successes;
+                stats->linear_failures = linear_stats.failures;
+                stats->linear_last_status = linear_stats.last_status;
+                stats->linear_last_function = linear_stats.last_function_index;
+                stats->linear_last_loop = linear_stats.last_loop_index;
+                stats->linear_last_instruction_count =
+                    linear_stats.last_instruction_count;
+                stats->linear_last_code_size = linear_stats.last_code_size;
+            }
+        }
         size_t guard_count = orus_jit_debug_guard_trace_count();
         if (guard_count > 0u) {
             OrusJitGuardTraceEvent* guard_buffer =

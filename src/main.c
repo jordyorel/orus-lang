@@ -467,6 +467,21 @@ int main(int argc, const char* argv[]) {
                jit_stats.native_dispatches,
                jit_stats.invocations);
 
+        printf("[JIT Benchmark] linear emitter attempts: %" PRIu64
+               ", successes: %" PRIu64 ", failures: %" PRIu64 "\n",
+               jit_stats.linear_attempts,
+               jit_stats.linear_successes,
+               jit_stats.linear_failures);
+        if (jit_stats.linear_attempts > 0) {
+            printf("[JIT Benchmark] linear emitter last: status=%s func=%u "
+                   "loop=%u ir_count=%zu code_size=%zu\n",
+                   jit_backend_status_name(jit_stats.linear_last_status),
+                   (unsigned)jit_stats.linear_last_function,
+                   (unsigned)jit_stats.linear_last_loop,
+                   jit_stats.linear_last_instruction_count,
+                   jit_stats.linear_last_code_size);
+        }
+
         const char* backend_message =
             (jit_stats.backend_message && jit_stats.backend_message[0] != '\0')
                 ? jit_stats.backend_message

@@ -89,4 +89,18 @@ JITBackendStatus orus_jit_backend_collect_parity(const OrusJitIRProgram* program
                                                  OrusJitBackendTarget target,
                                                  OrusJitParityReport* report);
 
+typedef struct {
+    uint64_t attempts;
+    uint64_t successes;
+    uint64_t failures;
+    JITBackendStatus last_status;
+    uint16_t last_function_index;
+    uint16_t last_loop_index;
+    size_t last_instruction_count;
+    size_t last_code_size;
+} OrusJitLinearEmitterStats;
+
+void orus_jit_backend_linear_stats_reset(void);
+bool orus_jit_backend_linear_stats(OrusJitLinearEmitterStats* out);
+
 #endif // ORUS_VM_JIT_BACKEND_H

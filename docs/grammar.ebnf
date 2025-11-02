@@ -1,22 +1,31 @@
-(* Orus Language Grammar (EBNF) *)
 (*
-   This document mirrors the constructs supported by the current Orus parser
-   (see src/compiler/frontend/parser.c).  The grammar is indentation-sensitive
-   in the same way as Python: physical newlines that increase indentation yield
-   INDENT tokens, and decreases yield DEDENT tokens.  Blank lines and trailing
-   semicolons are ignored between statements.
+   Orus Language Grammar (EBNF)
+
+   High-level notes:
+   - Indentation-sensitive like Python:
+     NEWLINE that increases indentation => INDENT
+     Decrease => DEDENT
+   - Blank lines and trailing semicolons are ignored between statements.
+   - Blocks in control flow use indentation-based suites.
+   - `{ ... }` is a block *expression* that returns its last expression,
+     similar to Rust.
 *)
 
 (* ------------------------------------------------------------------------- *)
-(* Lexical elements                                                             *)
+(* Lexical elements                                                           *)
 (* ------------------------------------------------------------------------- *)
+
 identifier        ::= letter { letter | digit | "_" }
 letter            ::= "_" | "a".."z" | "A".."Z"
 digit             ::= "0".."9"
 
 number_literal    ::= integer_literal [numeric_suffix]
-integer_literal   ::= digits | "0x" hex_digits | "0b" binary_digits | "0o" octal_digits
-                    | digits "." digits [exponent] | digits exponent
+integer_literal   ::= digits
+                    | "0x" hex_digits
+                    | "0b" binary_digits
+                    | "0o" octal_digits
+                    | digits "." digits [exponent]
+                    | digits exponent
 numeric_suffix    ::= "i32" | "i64" | "u32" | "u64" | "f64"
 digits            ::= digit { digit | "_" }
 hex_digits        ::= hex_digit { hex_digit | "_" }
@@ -30,25 +39,33 @@ exponent          ::= ("e" | "E") ["+" | "-"] digits
 string_literal    ::= '"' { character | escape_sequence } '"'
 character         ::= ? any Unicode scalar value except "\\" , '"' , and newline ?
 escape_sequence   ::= "\\" ( '"' | '\\' | 'n' | 'r' | 't' )
+
 boolean_literal   ::= "true" | "false"
+
 newline           ::= NEWLINE
 indent            ::= INDENT
 dedent            ::= DEDENT
 separator         ::= newline | ";"
+
 qualified_name    ::= identifier { "." identifier }
 
 keyword           ::= "fn" | "struct" | "enum" | "impl" | "pub" | "mut" | "return"
                     | "if" | "elif" | "else" | "for" | "while" | "break" | "continue"
-                    | "match" | "try" | "catch" | "pass" | "use" | "in" | "as"
+                    | "match" | "do" | "catch" | "pass" | "use" | "in" | "as"
                     | "print" | "and" | "or" | "not" | "matches"
-operator          ::= "+" | "-" | "*" | "/" | "%" | "==" | "!=" | "<" | "<=" | ">"
-                    | ">=" | "?" | ".." | "..=" | "=" | ":=" | "+=" | "-=" | "*="
-                    | "/=" | "%=" | "->" | "::" | "~"
-other_symbol      ::= "(" | ")" | "[" | "]" | "{" | "}" | ":" | "," | "'"
+
+operator          ::= "+" | "-" | "*" | "/" | "%"
+                    | "==" | "!=" | "<" | "<=" | ">" | ">="
+                    | "?" | ".." | "..=" | "="
+                    | "+=" | "-=" | "*=" | "/=" | "%="
+                    | "->" | "::" | "~"
+
+other_symbol      ::= "(" | ")" | "[" | "]" | "{" | "}" | ":" | "," | "'" | "<" | ">"
 
 (* ------------------------------------------------------------------------- *)
-(* Program structure                                                            *)
+(* Program structure                                                          *)
 (* ------------------------------------------------------------------------- *)
+
 program           ::= { separator | top_level_statement }
 
 top_level_statement
@@ -56,6 +73,7 @@ top_level_statement
                     | pub_declaration
                     | statement
 
+(* A public declaration at top level *)
 pub_declaration   ::= "pub" ( function_definition
                              | struct_definition
                              | enum_definition
@@ -64,19 +82,20 @@ pub_declaration   ::= "pub" ( function_definition
 
 public_variable_binding
                   ::= immutable_binding
-                    | "mut" identifier [":" type_expression] "=" expression
+                    | mut_binding
+(* i.e. `pub mut x: i32 = 5` is allowed via wrapping `mut_binding` in pub_declaration *)
 
 (* ------------------------------------------------------------------------- *)
-(* Statements                                                                  *)
+(* Statements                                                                 *)
 (* ------------------------------------------------------------------------- *)
+
 statement         ::= labelled_loop
                     | print_statement
                     | pass_statement
-                    | try_statement
+                    | do_statement
                     | if_statement
                     | while_statement
                     | for_statement
-                    | match_statement
                     | mut_binding
                     | immutable_binding
                     | destructuring_assignment
@@ -87,38 +106,56 @@ statement         ::= labelled_loop
                     | function_definition
                     | import_statement
                     | return_statement
+                    | break_statement
+                    | continue_statement
                     | expression_statement
 
 labelled_loop     ::= "'" identifier ":" ( while_statement | for_statement )
 
 print_statement   ::= "print" "(" [ argument_list ] ")"
-argument_list     ::= expression { "," expression }
+
+argument_list     ::= expression { "," expression } [ "," ]
+(* trailing comma allowed *)
 
 pass_statement    ::= "pass"
 
-try_statement     ::= "try" ":" suite "catch" [identifier] ":" suite
+(* Modern explicit error-handling block.
+   `do` is like a try-block, `catch` is the handler.
+   We intentionally *do not* burn `try` here, so `try expr` can exist later. *)
+do_statement      ::= "do" ":" suite "catch" [identifier] ":" suite
 
-if_statement      ::= "if" expression ":" suite { "elif" expression ":" suite } [ "else" ":" suite ]
+if_statement      ::= "if" expression ":" suite
+                      { "elif" expression ":" suite }
+                      [ "else" ":" suite ]
 
 while_statement   ::= "while" expression ":" suite
 
-for_statement     ::= "for" identifier "in" ( range_expression | expression ) ":" suite
+(* for loops support destructuring patterns in the binding position *)
+for_statement     ::= "for" loop_pattern "in" ( range_expression | expression ) ":" suite
+
 range_expression  ::= expression ".." [ "=" ] expression [ ".." expression ]
-(* The third expression after the second ".." is the optional step. *)
+(* First `..` = start..end or start..=end (inclusive if "=" appears).
+   Optional `.. step` at the end gives a stride. *)
 
-match_statement   ::= "match" expression ":" newline indent match_arm+ dedent
+loop_pattern      ::= identifier
+                    | identifier "," identifier { "," identifier }
+                    | "_"                             (* ignore *)
+                    | "(" loop_pattern ")"            (* nested destructure *)
 
-match_arm         ::= match_pattern "->" match_arm_body [separator]
-match_arm_body    ::= suite | expression_statement
+(* `match` is an expression (see expression grammar),
+   but because any expression can be a statement,
+   a bare `match ...` line is valid as a statement via expression_statement. *)
 
-mut_binding       ::= "mut" identifier [":" type_expression] "=" expression
-immutable_binding ::= identifier ":=" expression
-                    | identifier ":" type_expression binding_operator expression
-binding_operator  ::= "=" | ":="
+mut_binding       ::= "mut" identifier [ ":" type_expression ] "=" expression
+immutable_binding ::= identifier [ ":" type_expression ] "=" expression
+(* `x = 5` or `x: i32 = 5` or `mut x: i32 = 5`.
+   Immutability is default unless `mut` is present.
+   Reassignment to an immutable binding is a compile error. *)
 
-(* Destructuring assigns multiple identifiers from a tuple-like value. *)
+(* Destructuring multiple bindings from a tuple-like expression *)
 destructuring_assignment
-                  ::= identifier "," identifier { "," identifier } "=" expression
+                  ::= loop_pattern "=" expression
+(* e.g. `a, b = get_pair()` or `(x, y) = point()` *)
 
 assignment_statement
                   ::= assignable assignment_operator expression
@@ -129,81 +166,156 @@ assignable        ::= identifier
                     | index_expression
 
 return_statement  ::= "return" [ return_values ]
-return_values     ::= expression { "," expression }
+return_values     ::= expression { "," expression } [ "," ]
+
+break_statement   ::= "break"
+continue_statement::= "continue"
 
 expression_statement
                   ::= expression
 
+(* A suite is either an indented block or (for one-liners) an inline block. *)
 suite             ::= newline indent block_statements dedent
                     | inline_block
+
 block_statements  ::= statement { separator statement }
 inline_block      ::= statement { separator statement }
-(* Inline suites are used for single-line forms such as "if cond: statement". *)
+(* Inline suites are used for compact forms like `if cond: statement`.
+   Style guides can restrict inline_block to a single simple statement if desired. *)
 
 (* ------------------------------------------------------------------------- *)
-(* Imports and declarations                                                    *)
+(* Imports and declarations                                                   *)
 (* ------------------------------------------------------------------------- *)
+
 import_statement  ::= "use" qualified_name [ "as" identifier ] [ import_targets ]
+
 import_targets    ::= ":" ( "*" | import_list )
-import_list       ::= import_alias { "," import_alias }
+import_list       ::= import_alias { "," import_alias } [ "," ]
 import_alias      ::= identifier [ "as" identifier ]
 
 function_definition
                   ::= "fn" identifier function_signature ":" suite
+
 function_signature::= parameter_list [ return_arrow ]
-parameter_list    ::= "(" [ parameter { "," parameter } ] ")"
+
+parameter_list    ::= "(" [ parameter { "," parameter } [ "," ] ] ")"
+(* trailing comma allowed *)
+
 parameter         ::= identifier [ ":" type_expression ]
+
 return_arrow      ::= "->" type_expression_or_function
 
-struct_definition ::= "struct" identifier ":" newline indent struct_field+ dedent
-struct_field      ::= identifier ":" type_expression [ "=" expression ] [separator]
+struct_definition ::= "struct" identifier ":" newline
+                      indent struct_field+ dedent
 
-enum_definition   ::= "enum" identifier [ generic_parameter_list ]
-                      ":" newline indent enum_variant+ dedent
+(* `pub` is allowed on individual struct fields *)
+struct_field      ::= [ "pub" ] identifier ":" type_expression
+                      [ "=" expression ]
+                      [ separator ]
+
+enum_definition   ::= "enum" identifier [ generic_parameter_list ] ":" newline
+                      indent enum_variant+ dedent
+
 generic_parameter_list
-                  ::= "[" identifier { "," identifier } "]"
-enum_variant      ::= identifier [ "(" [ enum_payload { "," enum_payload } ] ")" ] [separator]
-enum_payload      ::= [ identifier ":" ] type_expression
+                  ::= "<" identifier { "," identifier } [ "," ] ">"
 
-impl_block        ::= "impl" identifier ":" newline indent method_definition+ dedent
+enum_variant      ::= identifier
+                      [ "(" [ enum_payload { "," enum_payload } [ "," ] ] ")" ]
+                      [ separator ]
+
+enum_payload      ::= [ identifier ":" ] type_expression
+(* e.g. `Some(value: T)` or just `Some(T)` *)
+
+impl_block        ::= "impl" identifier ":" newline
+                      indent method_definition+ dedent
+
 method_definition ::= [ "pub" ] function_definition
 
 (* ------------------------------------------------------------------------- *)
-(* Expressions                                                                 *)
+(* Expressions                                                                *)
 (* ------------------------------------------------------------------------- *)
+
 expression        ::= assignment_expression
+
 assignment_expression
                   ::= conditional_expression
                     | assignable assignment_operator assignment_expression
+(* `a = b = c` is right-associative here, like many languages *)
 
 conditional_expression
                   ::= ternary_expression
-ternary_expression::= inline_if_expression | cast_expression
+
+ternary_expression::= inline_if_expression
+                    | cast_expression
+
+(* inline_if_expression is Python-style ternary,
+   but we intentionally remove chained `elif` here because it's hard to read.
+   Complex branching should use a normal `if` statement or `match`. *)
 inline_if_expression
-                  ::= or_expression "if" expression { "elif" expression } "else" expression
+                  ::= or_expression "if" expression "else" expression
+(* Example: `value if cond else other_value` *)
+
 cast_expression   ::= or_expression { "as" type_expression }
+(* Example: `x as i32 as f64` *)
+
 or_expression     ::= and_expression { "or" and_expression }
 and_expression    ::= equality_expression { "and" equality_expression }
+
 equality_expression
-                  ::= comparison_expression { ("==" | "!=" | "matches") comparison_expression }
+                  ::= comparison_expression
+                      { ( "==" | "!=" | "matches" )
+                        comparison_expression }
+
 comparison_expression
-                  ::= additive_expression { ("<" | "<=" | ">" | ">=") additive_expression }
+                  ::= additive_expression
+                      { ( "<" | "<=" | ">" | ">=" )
+                        additive_expression }
+
 additive_expression
-                  ::= multiplicative_expression { ("+" | "-") multiplicative_expression }
+                  ::= multiplicative_expression
+                      { ( "+" | "-" ) multiplicative_expression }
+
 multiplicative_expression
-                  ::= unary_expression { ("*" | "/" | "%") unary_expression }
-unary_expression  ::= ("-" | "not" | "~") unary_expression
+                  ::= unary_expression
+                      { ( "*" | "/" | "%" ) unary_expression }
+
+unary_expression  ::= ( "-" | "not" | "~" ) unary_expression
                     | postfix_expression
-postfix_expression::= primary_expression { call_suffix | index_suffix | member_suffix | struct_literal_suffix }
+
+postfix_expression::= primary_expression
+                      { call_suffix
+                      | index_suffix
+                      | member_suffix
+                      | struct_literal_suffix }
+
 call_suffix       ::= "(" [ argument_list ] ")"
-index_suffix      ::= "[" [ expression ] [ ".." [ expression ] [ ".." expression ] ] "]"
+
+index_suffix      ::= "[" [ expression ]
+                          [ ".." [ expression ]
+                                [ ".." expression ]
+                          ]
+                      "]"
+(* supports arr[i], arr[i..j], arr[i..j..step] *)
+
 member_suffix     ::= "." identifier
+
+(* Struct literal / inline construction:
+   Foo { x: 1, y: 2 }
+   Also supports multiline with trailing commas/newlines. *)
 struct_literal_suffix
-                  ::= "{" [ struct_literal_field { struct_field_separator struct_literal_field } [struct_field_separator] ] "}"
+                  ::= "{"
+                      [ struct_literal_field
+                        { struct_field_separator struct_literal_field }
+                        [ struct_field_separator ]
+                      ]
+                      "}"
+
 struct_field_separator
                   ::= "," | newline
+
 struct_literal_field
                   ::= identifier ":" expression
+
 member_access     ::= postfix_expression member_suffix
 index_expression  ::= postfix_expression index_suffix
 
@@ -213,44 +325,139 @@ primary_expression::= literal
                     | array_literal
                     | function_expression
                     | match_expression
+                    | block_expression
                     | "timestamp" "(" ")"
-literal           ::= number_literal | string_literal | boolean_literal | array_fill_literal
+(* timestamp() is a special intrinsic builtin expression *)
 
-array_literal     ::= "[" [ expression { "," expression } ["," ] ] "]"
-(* When exactly two expressions are provided with no trailing comma, the form
-   represents an array fill literal: [value, length_or_identifier]. *)
-array_fill_literal::= "[" expression "," (number_literal | identifier) "]"
+literal           ::= number_literal
+                    | string_literal
+                    | boolean_literal
+                    | array_fill_literal
 
+(* Array literals have trailing comma support:
+   [1, 2, 3,]
+*)
+array_literal     ::= "[" [ expression { "," expression } [ "," ] ] "]"
+
+(* Array fill literal shorthand:
+   [value, len] or [value, len_identifier]
+   When exactly 2 expressions and no trailing comma.
+*)
+array_fill_literal::= "[" expression "," ( number_literal | identifier ) "]"
+
+(* Anonymous function expression:
+   `fn(x: i32) -> i32: x + 1`
+   or
+   `fn(x, y): x + y`
+*)
 function_expression
                   ::= "fn" function_signature ":" suite
 
-match_expression  ::= "match" expression ":" newline indent match_expression_arm+ dedent
-match_expression_arm
-                  ::= match_pattern "->" expression_suite [separator]
-expression_suite  ::= suite | expression_statement
+(* Unified `match` expression.
+   Because any expression can appear as a statement, this also
+   serves as a 'match statement' at statement position.
+*)
+match_expression  ::= "match" expression ":" newline
+                      indent match_arm+ dedent
 
+match_arm         ::= match_pattern "->" match_arm_body [ separator ]
+
+(* Arm body can be:
+   - a single expression
+   - a block expression { ... } that returns a value
+   This replaces "match_statement" vs "match_expression" split.
+*)
+match_arm_body    ::= expression
+                    | block_expression
+
+(* Patterns *)
 match_pattern     ::= "_"
-                    | qualified_name [ "(" [ match_payload { "," match_payload } ] ")" ]
+                    | qualified_name
+                      [ "(" [ match_payload { "," match_payload } [ "," ] ] ")" ]
                     | expression
+(* Examples:
+     Some(x)
+     Err(msg)
+     _
+     0
+     "hello"
+*)
+
 match_payload     ::= identifier | "_"
 
 (* ------------------------------------------------------------------------- *)
-(* Types                                                                       *)
+(* Block expressions                                                          *)
 (* ------------------------------------------------------------------------- *)
-type_expression   ::= function_type | postfix_type
-postfix_type      ::= primary_type [ "?" ] [ generic_arguments ]
-primary_type      ::= identifier
+
+(* Block expressions return the value of their last expression.
+   They are expressions, not just statements.
+   This is what lets match arms do multi-step logic.
+*)
+block_expression  ::= "{"
+                      block_statements
+                      "}"
+
+(* Example:
+   result = {
+       mut acc: i32 = 0
+       for x in data:
+           acc += x
+       acc
+   }
+*)
+
+(* ------------------------------------------------------------------------- *)
+(* Types                                                                      *)
+(* ------------------------------------------------------------------------- *)
+
+(* We allow two forms of optionals:
+   - postfix:   T?
+   - prefix:    ?T
+   We also allow references:
+   - &T
+   - &mut T
+*)
+
+type_expression   ::= function_type
+                    | optional_type
+
+optional_type     ::= "?" type_expression
+                    | postfix_type
+
+postfix_type      ::= primary_type_type [ "?" ] [ generic_arguments ]
+(* So `T?`, `Vec<T>?`, etc. *)
+
+primary_type_type ::= identifier
+                    | "&" [ "mut" ] type_expression
                     | array_type
-array_type        ::= "[" type_expression [ "," ( number_literal | identifier ) ] "]"
-generic_arguments ::= "[" type_expression { "," type_expression } "]"
-function_type     ::= "fn" "(" [ type_expression { "," type_expression } ] ")" [ "->" type_expression_or_function ]
+
+array_type        ::= "[" type_expression
+                      [ "," ( number_literal | identifier ) ]
+                      "]"
+(* e.g. [u8, 16] = fixed array of length 16
+       [u8]      = slice / dynamic view *)
+
+generic_arguments ::= "<" type_expression
+                      { "," type_expression } [ "," ]
+                      ">"
+
+function_type     ::= "fn" "("
+                      [ type_expression
+                        { "," type_expression }
+                        [ "," ]
+                      ]
+                      ")"
+                      [ "->" type_expression_or_function ]
 
 type_expression_or_function
-                  ::= function_type | type_expression
+                  ::= function_type
+                    | type_expression
 
 (* ------------------------------------------------------------------------- *)
-(* Helper productions                                                           *)
+(* Helper notes                                                               *)
 (* ------------------------------------------------------------------------- *)
-match_expression_arm+, struct_field+, enum_variant+, method_definition+
-                  denote one-or-more repetitions separated by optional separators
-                  as described in their respective rules.
+
+(* Repetition notes:
+   X+ in comments means "one-or-more repetitions separated by optional separators".
+   We spell them out explicitly in rules above instead of using X+ to keep EBNF strict.
+*)
