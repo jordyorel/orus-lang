@@ -72,9 +72,8 @@ pub fn build(b: *std.Build) void {
     addCommonLibraries(orus_exe, os_tag);
 
     b.installArtifact(orus_exe);
-    const orus_root_install = b.addInstallArtifact(orus_exe, .{
-        .dest_dir = .{ .override = .{ .custom = ".." } },
-    });
+    const orus_workspace_copy = addWorkspaceCopyStep(b, orus_exe, orus_name);
+    maybeAttachSystemInstall(b, orus_exe, os_tag);
 
     const should_sign = target.result.os.tag == .macos and target.result.cpu.arch == .aarch64;
     const orus_sign_step = if (should_sign)
@@ -101,9 +100,8 @@ pub fn build(b: *std.Build) void {
     addCommonLibraries(prof_exe, os_tag);
 
     b.installArtifact(prof_exe);
-    const prof_root_install = b.addInstallArtifact(prof_exe, .{
-        .dest_dir = .{ .override = .{ .custom = ".." } },
-    });
+    const prof_workspace_copy = addWorkspaceCopyStep(b, prof_exe, prof_name);
+    maybeAttachSystemInstall(b, prof_exe, os_tag);
     const prof_sign_step = if (should_sign)
         maybeAddSigningStep(b, prof_exe.getEmittedBin(), &prof_exe.step, true) catch unreachable
     else
@@ -112,14 +110,14 @@ pub fn build(b: *std.Build) void {
     const default_step = b.step("orus", "Build the Orus interpreter and profiling tool");
     default_step.dependOn(&orus_exe.step);
     default_step.dependOn(&prof_exe.step);
-    default_step.dependOn(&orus_root_install.step);
-    default_step.dependOn(&prof_root_install.step);
+    default_step.dependOn(orus_workspace_copy);
+    default_step.dependOn(prof_workspace_copy);
     if (orus_sign_step) |step| default_step.dependOn(step);
     if (prof_sign_step) |step| default_step.dependOn(step);
     b.default_step.dependOn(default_step);
 
     var release_binary_name: []const u8 = orus_name;
-    var release_install_step: *std.Build.Step = &orus_root_install.step;
+    var release_install_step: *std.Build.Step = orus_workspace_copy;
     var release_sign_step: ?*std.Build.Step = orus_sign_step;
 
     if (profile != .release) {
@@ -151,16 +149,15 @@ pub fn build(b: *std.Build) void {
         release_exe.linkLibC();
         addCommonLibraries(release_exe, os_tag);
 
-        const release_root_install = b.addInstallArtifact(release_exe, .{
-            .dest_dir = .{ .override = .{ .custom = ".." } },
-        });
+        const release_workspace_copy = addWorkspaceCopyStep(b, release_exe, release_orus_name);
+        maybeAttachSystemInstall(b, release_exe, os_tag);
         const release_sign_opt = if (should_sign)
             maybeAddSigningStep(b, release_exe.getEmittedBin(), &release_exe.step, false) catch unreachable
         else
             null;
 
         release_binary_name = release_orus_name;
-        release_install_step = &release_root_install.step;
+        release_install_step = release_workspace_copy;
         release_sign_step = release_sign_opt;
     }
 
@@ -221,6 +218,59 @@ pub fn build(b: *std.Build) void {
     unified_cmd.step.dependOn(release_install_step);
     if (release_sign_step) |step| unified_cmd.step.dependOn(step);
     benchmarks_step.dependOn(&unified_cmd.step);
+}
+
+fn addWorkspaceCopyStep(b: *std.Build, artifact: *std.Build.Step.Compile, dest_filename: []const u8) *std.Build.Step {
+    const dest_path = b.build_root.join(b.allocator, &.{dest_filename}) catch unreachable;
+    return addCopyStep(b, artifact, dest_path);
+}
+
+fn addCopyStep(b: *std.Build, artifact: *std.Build.Step.Compile, dest_path: []const u8) *std.Build.Step {
+    const copy_script =
+        "import os, shutil, sys\n" ++
+        "src = sys.argv[1]\n" ++
+        "dst = sys.argv[2]\n" ++
+        "parent = os.path.dirname(dst)\n" ++
+        "if parent:\n" ++
+        "    os.makedirs(parent, exist_ok=True)\n" ++
+        "shutil.copy2(src, dst)\n";
+    const copy_cmd = b.addSystemCommand(&.{ "python3", "-c", copy_script });
+    copy_cmd.addFileArg(artifact.getEmittedBin());
+    copy_cmd.addArg(dest_path);
+    copy_cmd.step.dependOn(&artifact.step);
+    return &copy_cmd.step;
+}
+
+fn maybeAttachSystemInstall(b: *std.Build, artifact: *std.Build.Step.Compile, os_tag: std.Target.Os.Tag) void {
+    if (!shouldMirrorSystemInstall(b, os_tag)) return;
+    const bin_dir = systemInstallBinDir(os_tag) orelse return;
+    const dest_path = b.fmt("{s}/{s}", .{ bin_dir, artifact.out_filename });
+    const system_step = addCopyStep(b, artifact, dest_path);
+    b.getInstallStep().dependOn(system_step);
+}
+
+fn shouldMirrorSystemInstall(b: *std.Build, os_tag: std.Target.Os.Tag) bool {
+    if (b.dest_dir != null) return false;
+    const zig_out_default = b.build_root.join(b.allocator, &.{"zig-out"}) catch unreachable;
+    defer b.allocator.free(zig_out_default);
+    if (!std.mem.eql(u8, b.install_prefix, zig_out_default)) return false;
+    return hasInstallPrivileges(os_tag);
+}
+
+fn hasInstallPrivileges(os_tag: std.Target.Os.Tag) bool {
+    return switch (os_tag) {
+        .windows => false,
+        else => std.posix.geteuid() == 0,
+    };
+}
+
+fn systemInstallBinDir(os_tag: std.Target.Os.Tag) ?[]const u8 {
+    return switch (os_tag) {
+        .macos => "/Library/Orus/bin",
+        .linux => "/usr/local/lib/orus/bin",
+        .windows => "C:/Program Files/Orus/bin",
+        else => null,
+    };
 }
 
 fn getProfileConfig(profile: Profile) ProfileConfig {

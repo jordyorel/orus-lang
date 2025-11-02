@@ -2,13 +2,12 @@
    Orus Language Grammar (EBNF)
 
    High-level notes:
-   - Indentation-sensitive like Python:
+   - Indentation-sensitive:
      NEWLINE that increases indentation => INDENT
      Decrease => DEDENT
    - Blank lines and trailing semicolons are ignored between statements.
    - Blocks in control flow use indentation-based suites.
-   - `{ ... }` is a block *expression* that returns its last expression,
-     similar to Rust.
+   - `{ ... }` is a block *expression* that returns its last expression.
 *)
 
 (* ------------------------------------------------------------------------- *)
