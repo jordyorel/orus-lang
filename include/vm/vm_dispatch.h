@@ -78,6 +78,16 @@ static inline bool vm_handle_pending_error(void) {
 #define READ_SHORT() \
     (vm.ip += 2, (uint16_t)((vm.ip[-2] << 8) | vm.ip[-1]))
 #define READ_CONSTANT(index) (vm.chunk->constants.values[index])
+
+static inline int32_t vm_read_i32_unaligned(uint8_t** ip_ptr) {
+    const uint8_t* cursor = *ip_ptr;
+    uint32_t accum = ((uint32_t)cursor[0]) |
+                     ((uint32_t)cursor[1] << 8) |
+                     ((uint32_t)cursor[2] << 16) |
+                     ((uint32_t)cursor[3] << 24);
+    *ip_ptr = (uint8_t*)(cursor + 4);
+    return (int32_t)accum;
+}
 // Note: RETURN macro is defined in vm.c to handle timing
 
 // Error handling function - implemented in vm.c

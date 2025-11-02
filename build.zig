@@ -1,20 +1,12 @@
 const std = @import("std");
 
-const Profile = enum {
-    debug,
-    release,
-    profiling,
-    ci,
-};
-
 const DispatchMode = enum {
     auto,
     goto,
     @"switch",
 };
 
-const ProfileConfig = struct {
-    suffix: []const u8,
+const BuildConfig = struct {
     description: []const u8,
     extra_cflags: []const []const u8,
     extra_defines: []const []const u8,
@@ -24,11 +16,10 @@ const StringList = std.ArrayList([]const u8);
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
-    const optimize = b.standardOptimizeOption(.{});
+    const optimize = std.builtin.OptimizeMode.ReleaseFast;
 
-    const profile = b.option(Profile, "profile", "Build configuration: debug, release, profiling, ci") orelse .debug;
     const strict_jit = b.option(bool, "strict-jit", "Enforce JIT benchmark uplift/coverage thresholds") orelse false;
-    const profile_cfg = getProfileConfig(profile);
+    const build_cfg = defaultBuildConfig();
 
     const dispatch_mode = b.option(DispatchMode, "dispatch-mode", "Dispatch selection: auto, goto, switch") orelse .auto;
     const git_commit = tryTrim(b, &.{ "git", "rev-parse", "--short", "HEAD" }) orelse "unknown";
@@ -43,18 +34,18 @@ pub fn build(b: *std.Build) void {
 
     const os_tag = target.result.os.tag;
 
-    const cflags_slice = makeProfileCFlags(
+    const cflags_slice = makeCoreCFlags(
         allocator,
         target,
         portable,
         dispatch_mode,
-        profile_cfg,
+        build_cfg,
         git_commit,
         git_commit_date,
     ) catch unreachable;
 
     const orus_sources = buildOrusSourceList(allocator) catch unreachable;
-    const orus_name = b.fmt("{s}{s}", .{ "orus", profile_cfg.suffix });
+    const orus_name: []const u8 = "orus";
     const orus_module = b.createModule(.{
         .target = target,
         .optimize = optimize,
@@ -81,98 +72,26 @@ pub fn build(b: *std.Build) void {
     else
         null;
 
-    const prof_sources = buildProfSourceList(allocator) catch unreachable;
-    const prof_name = b.fmt("{s}{s}", .{ "orus-prof", profile_cfg.suffix });
-    const prof_module = b.createModule(.{
-        .target = target,
-        .optimize = optimize,
-        .link_libc = true,
-    });
-    prof_module.addIncludePath(b.path("include"));
-    prof_module.addIncludePath(b.path("third_party/dynasm"));
-    prof_module.addCSourceFiles(.{ .files = prof_sources, .flags = cflags_slice });
-
-    const prof_exe = b.addExecutable(.{
-        .name = prof_name,
-        .root_module = prof_module,
-    });
-    prof_exe.linkLibC();
-    addCommonLibraries(prof_exe, os_tag);
-
-    b.installArtifact(prof_exe);
-    const prof_workspace_copy = addWorkspaceCopyStep(b, prof_exe, prof_name);
-    maybeAttachSystemInstall(b, prof_exe, os_tag);
-    const prof_sign_step = if (should_sign)
-        maybeAddSigningStep(b, prof_exe.getEmittedBin(), &prof_exe.step, true) catch unreachable
-    else
-        null;
-
-    const default_step = b.step("orus", "Build the Orus interpreter and profiling tool");
+    const default_step = b.step("orus", "Build the Orus interpreter");
     default_step.dependOn(&orus_exe.step);
-    default_step.dependOn(&prof_exe.step);
     default_step.dependOn(orus_workspace_copy);
-    default_step.dependOn(prof_workspace_copy);
     if (orus_sign_step) |step| default_step.dependOn(step);
-    if (prof_sign_step) |step| default_step.dependOn(step);
     b.default_step.dependOn(default_step);
 
-    var release_binary_name: []const u8 = orus_name;
-    var release_install_step: *std.Build.Step = orus_workspace_copy;
-    var release_sign_step: ?*std.Build.Step = orus_sign_step;
-
-    if (profile != .release) {
-        const release_profile_cfg = getProfileConfig(.release);
-        const release_cflags_slice = makeProfileCFlags(
-            allocator,
-            target,
-            portable,
-            dispatch_mode,
-            release_profile_cfg,
-            git_commit,
-            git_commit_date,
-        ) catch unreachable;
-
-        const release_module = b.createModule(.{
-            .target = target,
-            .optimize = std.builtin.OptimizeMode.ReleaseFast,
-            .link_libc = true,
-        });
-        release_module.addIncludePath(b.path("include"));
-        release_module.addIncludePath(b.path("third_party/dynasm"));
-        release_module.addCSourceFiles(.{ .files = orus_sources, .flags = release_cflags_slice });
-
-        const release_orus_name = b.fmt("{s}", .{"orus"});
-        const release_exe = b.addExecutable(.{
-            .name = release_orus_name,
-            .root_module = release_module,
-        });
-        release_exe.linkLibC();
-        addCommonLibraries(release_exe, os_tag);
-
-        const release_workspace_copy = addWorkspaceCopyStep(b, release_exe, release_orus_name);
-        maybeAttachSystemInstall(b, release_exe, os_tag);
-        const release_sign_opt = if (should_sign)
-            maybeAddSigningStep(b, release_exe.getEmittedBin(), &release_exe.step, false) catch unreachable
-        else
-            null;
-
-        release_binary_name = release_orus_name;
-        release_install_step = release_workspace_copy;
-        release_sign_step = release_sign_opt;
-    }
+    const orus_install_step: *std.Build.Step = orus_workspace_copy;
 
     const test_step = b.step("test", "Prepare Orus binaries for downstream test runners");
     test_step.dependOn(default_step);
 
-    const orus_bin_arg = b.fmt("./{s}", .{release_binary_name});
+    const orus_bin_arg = b.fmt("./{s}", .{orus_name});
     const run_orus_tests = b.addSystemCommand(&.{
         "bash",
         "scripts/run_orus_tests.sh",
         orus_bin_arg,
         "tests",
     });
-    run_orus_tests.step.dependOn(release_install_step);
-    if (release_sign_step) |step| run_orus_tests.step.dependOn(step);
+    run_orus_tests.step.dependOn(orus_install_step);
+    if (orus_sign_step) |step| run_orus_tests.step.dependOn(step);
     test_step.dependOn(&run_orus_tests.step);
 
     const benchmark_step = b.step("jit-benchmark", "Run JIT uplift benchmarks");
@@ -190,14 +109,14 @@ pub fn build(b: *std.Build) void {
         "tests/benchmarks/optimized_loop_benchmark.orus",
         "tests/benchmarks/ffi_ping_pong_benchmark.orus",
     });
-    benchmark_cmd.step.dependOn(release_install_step);
-    if (release_sign_step) |step| benchmark_cmd.step.dependOn(step);
+    benchmark_cmd.step.dependOn(orus_install_step);
+    if (orus_sign_step) |step| benchmark_cmd.step.dependOn(step);
     benchmark_step.dependOn(&benchmark_cmd.step);
 
     const clean_step = b.step("clean", "Remove Orus binaries and Zig caches");
     const clean_script =
         "import pathlib, shutil\n" ++
-        "paths = ['orus', 'orus_debug', 'orus-prof', 'orus-prof_debug', 'zig-out', '.zig-cache']\n" ++
+        "paths = ['orus', 'zig-out', '.zig-cache']\n" ++
         "for p in paths:\n" ++
         "    path = pathlib.Path(p)\n" ++
         "    if path.is_dir():\n" ++
@@ -215,8 +134,8 @@ pub fn build(b: *std.Build) void {
         "tests/benchmarks/unified_benchmark.sh",
     });
     unified_cmd.setEnvironmentVariable("ORUS_SKIP_BUILD", "1");
-    unified_cmd.step.dependOn(release_install_step);
-    if (release_sign_step) |step| unified_cmd.step.dependOn(step);
+    unified_cmd.step.dependOn(orus_install_step);
+    if (orus_sign_step) |step| unified_cmd.step.dependOn(step);
     benchmarks_step.dependOn(&unified_cmd.step);
 }
 
@@ -273,81 +192,35 @@ fn systemInstallBinDir(os_tag: std.Target.Os.Tag) ?[]const u8 {
     };
 }
 
-fn getProfileConfig(profile: Profile) ProfileConfig {
-    return switch (profile) {
-        .debug => .{
-            .suffix = "_debug",
-            .description = "Debug (no optimization, full debugging)",
-            .extra_cflags = &.{
-                "-O0",
-                "-g3",
-                "-DDEBUG=1",
-                "-fno-omit-frame-pointer",
-                "-fstack-protector-strong",
-            },
-            .extra_defines = &.{
-                "-DDEBUG_MODE=1",
-                "-DENABLE_ASSERTIONS=1",
-            },
+fn defaultBuildConfig() BuildConfig {
+    return .{
+        .description = "Release (maximum optimization)",
+        .extra_cflags = &.{
+            "-O3",
+            "-g1",
+            "-DNDEBUG=1",
+            "-funroll-loops",
+            "-finline-functions",
         },
-        .release => .{
-            .suffix = "",
-            .description = "Release (maximum optimization)",
-            .extra_cflags = &.{
-                "-O3",
-                "-g1",
-                "-DNDEBUG=1",
-                "-funroll-loops",
-                "-finline-functions",
-            },
-            .extra_defines = &.{
-                "-DRELEASE_MODE=1",
-                "-DENABLE_OPTIMIZATIONS=1",
-            },
-        },
-        .profiling => .{
-            .suffix = "_profiling",
-            .description = "Profiling (optimization + instrumentation)",
-            .extra_cflags = &.{
-                "-O2",
-                "-g2",
-                "-pg",
-                "-fno-omit-frame-pointer",
-            },
-            .extra_defines = &.{
-                "-DPROFILING_MODE=1",
-                "-DENABLE_PROFILING=1",
-            },
-        },
-        .ci => .{
-            .suffix = "_ci",
-            .description = "CI (warnings as errors, optimized)",
-            .extra_cflags = &.{
-                "-O2",
-                "-g1",
-                "-fno-omit-frame-pointer",
-                "-fstack-protector-strong",
-                "-Werror",
-            },
-            .extra_defines = &.{
-                "-DCI_MODE=1",
-            },
+        .extra_defines = &.{
+            "-DRELEASE_MODE=1",
+            "-DENABLE_OPTIMIZATIONS=1",
         },
     };
 }
 
-fn makeProfileCFlags(
+fn makeCoreCFlags(
     allocator: std.mem.Allocator,
     target: std.Build.ResolvedTarget,
     portable: bool,
     dispatch_mode: DispatchMode,
-    profile_cfg: ProfileConfig,
+    build_cfg: BuildConfig,
     git_commit: []const u8,
     git_commit_date: []const u8,
 ) ![]const []const u8 {
     var cflags = StringList.empty;
     try addBaseCompilerFlags(&cflags, allocator);
-    try addProfileFlags(&cflags, allocator, profile_cfg.extra_cflags);
+    try addConfigFlags(&cflags, allocator, build_cfg.extra_cflags);
     try addPortableFlags(&cflags, allocator, target, portable);
     try addDispatchDefine(&cflags, allocator, dispatch_mode, target);
     try addGitDefines(&cflags, allocator, git_commit, git_commit_date);
@@ -357,7 +230,7 @@ fn makeProfileCFlags(
         try addFlag(&cflags, allocator, "-pthread");
     }
 
-    try addDefines(&cflags, allocator, profile_cfg.extra_defines);
+    try addDefines(&cflags, allocator, build_cfg.extra_defines);
     return cflags.toOwnedSlice(allocator);
 }
 
@@ -369,7 +242,7 @@ fn addBaseCompilerFlags(cflags: *StringList, allocator: std.mem.Allocator) !void
     });
 }
 
-fn addProfileFlags(cflags: *StringList, allocator: std.mem.Allocator, extra: []const []const u8) !void {
+fn addConfigFlags(cflags: *StringList, allocator: std.mem.Allocator, extra: []const []const u8) !void {
     try cflags.appendSlice(allocator, extra);
 }
 
@@ -469,12 +342,6 @@ fn buildOrusSourceList(allocator: std.mem.Allocator) ![]const []const u8 {
     try appendSources(&list, allocator, vmSources);
     try appendSources(&list, allocator, replSources);
     try appendSources(&list, allocator, mainSources);
-    return list.toOwnedSlice(allocator);
-}
-
-fn buildProfSourceList(allocator: std.mem.Allocator) ![]const []const u8 {
-    var list = StringList.empty;
-    try appendSources(&list, allocator, toolsSources);
     return list.toOwnedSlice(allocator);
 }
 
@@ -602,8 +469,4 @@ const replSources = &.{
 
 const mainSources = &.{
     "src/main.c",
-};
-
-const toolsSources = &.{
-    "src/tools/orus_prof.c",
 };

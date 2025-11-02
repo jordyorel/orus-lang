@@ -6,7 +6,15 @@ fn srand(seed: i32):
     RNG_SEED = seed
 
 fn rand_u32() -> i32:
-    RNG_SEED = (RNG_SEED * 1664525) + 1013904223
+    mut wide: i64 = RNG_SEED as i64
+    wide = (wide * 1664525) + 1013904223
+    wide = wide % 4294967296
+    if wide < 0:
+        wide = wide + 4294967296
+    if wide >= 2147483648:
+        RNG_SEED = (wide - 4294967296) as i32
+    else:
+        RNG_SEED = wide as i32
     return RNG_SEED
 
 fn rand_range(lo: i32, hi: i32) -> i32:

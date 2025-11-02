@@ -1,31 +1,25 @@
 ZIG ?= zig
-PROFILE ?= debug
 DISPATCH_MODE ?= auto
 PORTABLE ?= 0
 STRICT_JIT ?= 0
 
-ZIG_PORTABLE_BOOL := $(if $(filter 1,$(PORTABLE)),true,false)
-ZIG_STRICT_JIT_BOOL := $(if $(filter 1,$(STRICT_JIT)),true,false)
-ZIG_BUILD_ARGS := -Dprofile=$(PROFILE) -Ddispatch-mode=$(DISPATCH_MODE) -Dportable=$(ZIG_PORTABLE_BOOL) -Dstrict-jit=$(ZIG_STRICT_JIT_BOOL)
+ZIG_BUILD_ARGS :=
+ifneq ($(DISPATCH_MODE),auto)
+ZIG_BUILD_ARGS += -Ddispatch-mode=$(DISPATCH_MODE)
+endif
+ifneq ($(filter 1 true,$(PORTABLE)),)
+ZIG_BUILD_ARGS += -Dportable=true
+endif
+ifneq ($(filter 1 true,$(STRICT_JIT)),)
+ZIG_BUILD_ARGS += -Dstrict-jit=true
+endif
 
 .DEFAULT_GOAL := all
 
-.PHONY: all debug release profiling ci install clean test benchmark help jit-benchmark
+.PHONY: all install clean test benchmark help jit-benchmark
 
 all:
 	@$(ZIG) build $(ZIG_BUILD_ARGS)
-
-debug:
-	@$(MAKE) PROFILE=debug all
-
-release:
-	@$(MAKE) PROFILE=release all
-
-profiling:
-	@$(MAKE) PROFILE=profiling all
-
-ci:
-	@$(MAKE) PROFILE=ci all
 
 install:
 	@$(ZIG) build install $(ZIG_BUILD_ARGS)
@@ -45,10 +39,7 @@ jit-benchmark:
 help:
 	@echo "Orus build is powered by zig build"
 	@echo "Available make shortcuts:"
-	@echo "  make [PROFILE=...]        # build (default profile=debug)"
-	@echo "  make release              # build with release profile"
-	@echo "  make profiling            # build with profiling profile"
-	@echo "  make ci                   # build with CI profile"
+	@echo "  make                      # build optimized interpreter"
 	@echo "  make install              # run 'zig build install'"
 	@echo "  make clean                # remove zig build artifacts"
 	@echo "  make test                 # forward to 'zig build test'"

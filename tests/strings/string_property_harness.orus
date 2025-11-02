@@ -10,7 +10,15 @@ mut RNG_SEED: i32 = 0x13579BDF
 
 fn srand(seed: i32): RNG_SEED = seed
 fn rand_u32() -> i32:
-    RNG_SEED = (RNG_SEED * 1664525) + 1013904223
+    mut wide: i64 = RNG_SEED as i64
+    wide = (wide * 1664525) + 1013904223
+    wide = wide % 4294967296
+    if wide < 0:
+        wide = wide + 4294967296
+    if wide >= 2147483648:
+        RNG_SEED = (wide - 4294967296) as i32
+    else:
+        RNG_SEED = wide as i32
     return RNG_SEED
 
 fn rand_range(lo: i32, hi: i32) -> i32:
@@ -194,20 +202,21 @@ fn flatten_char_parts(segments):
         i = i + 1
     return flat
 
-fn fingerprint_chars(chars) -> i32:
-    mut total: i32 = len(chars) * 131
+fn fingerprint_chars(chars) -> i64:
+    mut total: i64 = (len(chars) as i64) * 131
     mut i: i32 = 0
     while i < len(chars):
         glyph = chars[i]
-        total = total + (ascii_index(glyph) * 17) + i
+        glyph_score: i64 = (ascii_index(glyph) as i64) * 17
+        total = total + glyph_score + (i as i64)
         i = i + 1
     return total
 
-fn bag_fingerprint(segments) -> i32:
-    mut total: i32 = len(segments) * 977
+fn bag_fingerprint(segments) -> i64:
+    mut total: i64 = (len(segments) as i64) * 977
     mut i: i32 = 0
     while i < len(segments):
-        segment_score: i32 = fingerprint_chars(segments[i])
+        segment_score: i64 = fingerprint_chars(segments[i])
         total = total + segment_score
         total = total + (segment_score * segment_score)
         i = i + 1
@@ -304,10 +313,10 @@ fn slice_chars_from_flat(flat_chars, start: i32, length: i32):
     return out
 
 // ---------- Property Phases ----------
-fn phase_multi_concat(seed: i32, trials: i32) -> i32:
+fn phase_multi_concat(seed: i32, trials: i32) -> i64:
     print("-- Phase 1: chained concatenation vs manual joins (seed", seed, ") --")
     srand(seed)
-    mut checksum: i32 = 0
+    mut checksum: i64 = 0
     mut t: i32 = 0
     while t < trials:
         segments = generate_segments(6, 12)
@@ -326,16 +335,16 @@ fn phase_multi_concat(seed: i32, trials: i32) -> i32:
         if left + right != manual:
             print("FAIL phase1 chunk mismatch", left + right, manual)
         flat_chars = flatten_char_parts(segments)
-        checksum = checksum + (len(flat_chars) * 3) + len(segments)
+        checksum = checksum + ((len(flat_chars) as i64) * 3) + (len(segments) as i64)
         checksum = checksum + fingerprint_chars(flat_chars)
         t = t + 1
     print("Phase 1 checksum:", checksum)
     return checksum
 
-fn phase_loop_vs_batch(seed: i32, trials: i32) -> i32:
+fn phase_loop_vs_batch(seed: i32, trials: i32) -> i64:
     print("-- Phase 2: loop accumulation vs batch concatenation (seed", seed, ") --")
     srand(seed)
-    mut checksum: i32 = 0
+    mut checksum: i64 = 0
     mut t: i32 = 0
     while t < trials:
         segments = generate_segments(8, 16)
@@ -348,15 +357,15 @@ fn phase_loop_vs_batch(seed: i32, trials: i32) -> i32:
         if tiered != batch:
             print("FAIL phase2 chunked != batch", tiered, batch)
         flat_chars = flatten_char_parts(segments)
-        checksum = checksum + (len(flat_chars) * 7) + fingerprint_chars(flat_chars)
+        checksum = checksum + ((len(flat_chars) as i64) * 7) + fingerprint_chars(flat_chars)
         t = t + 1
     print("Phase 2 checksum:", checksum)
     return checksum
 
-fn phase_permutation_invariance(seed: i32, trials: i32) -> i32:
+fn phase_permutation_invariance(seed: i32, trials: i32) -> i64:
     print("-- Phase 3: permutation invariants and associativity (seed", seed, ") --")
     srand(seed)
-    mut checksum: i32 = 0
+    mut checksum: i64 = 0
     mut t: i32 = 0
     while t < trials:
         segments = generate_segments(7, 10)
@@ -366,21 +375,21 @@ fn phase_permutation_invariance(seed: i32, trials: i32) -> i32:
         if base != right:
             print("FAIL phase3 assoc inequality", base, right)
         base_chars = flatten_char_parts(segments)
-        base_fingerprint: i32 = fingerprint_chars(base_chars)
+        base_fingerprint: i64 = fingerprint_chars(base_chars)
         perm = copy_nested_array(segments)
         shuffle_segments(perm)
         if bag_fingerprint(segments) != bag_fingerprint(perm):
             print("FAIL phase3 bag mismatch", segment_strings, segments_to_strings(perm))
         checksum = checksum + base_fingerprint + bag_fingerprint(perm)
-        checksum = checksum + len(segments)
+        checksum = checksum + (len(segments) as i64)
         t = t + 1
     print("Phase 3 checksum:", checksum)
     return checksum
 
-fn phase_metamorphic_slicing(seed: i32, trials: i32) -> i32:
+fn phase_metamorphic_slicing(seed: i32, trials: i32) -> i64:
     print("-- Phase 4: concat/slice metamorphic checks (seed", seed, ") --")
     srand(seed)
-    mut checksum: i32 = 0
+    mut checksum: i64 = 0
     mut t: i32 = 0
     while t < trials:
         segments = generate_segments(6, 14)
@@ -411,7 +420,7 @@ fn phase_metamorphic_slicing(seed: i32, trials: i32) -> i32:
         manual = manual_slice_from_segments(segments, start, span)
         if direct != manual:
             print("FAIL phase4 manual != direct", start, span, direct, manual, segment_strings)
-        checksum = checksum + (len(whole_chars) * 11)
+        checksum = checksum + ((len(whole_chars) as i64) * 11)
         checksum = checksum + fingerprint_chars(direct_chars)
         t = t + 1
     print("Phase 4 checksum:", checksum)
@@ -420,7 +429,7 @@ fn phase_metamorphic_slicing(seed: i32, trials: i32) -> i32:
 // ---------- Runner ----------
 TRIALS:i32 := 64
 
-mut total_checksum: i32 = 0
+mut total_checksum: i64 = 0
 total_checksum = total_checksum + phase_multi_concat(0xA5A5, TRIALS)
 total_checksum = total_checksum + phase_loop_vs_batch(0xBEE5, TRIALS)
 total_checksum = total_checksum + phase_permutation_invariance(0xC0DE, TRIALS)

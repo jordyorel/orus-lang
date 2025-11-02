@@ -62,17 +62,93 @@
         store_fn(dst, vm.typed_regs.array[src]); \
     } while (0)
 
-#define VM_TYPED_ADD_I32() VM_TYPED_BIN_OP(i32_regs, +, vm_store_i32_typed_hot)
-#define VM_TYPED_SUB_I32() VM_TYPED_BIN_OP(i32_regs, -, vm_store_i32_typed_hot)
-#define VM_TYPED_MUL_I32() VM_TYPED_BIN_OP(i32_regs, *, vm_store_i32_typed_hot)
+#define VM_TYPED_ADD_I32() \
+    do { \
+        uint8_t dst = READ_BYTE(); \
+        uint8_t left = READ_BYTE(); \
+        uint8_t right = READ_BYTE(); \
+        int32_t lhs = vm.typed_regs.i32_regs[left]; \
+        int32_t rhs = vm.typed_regs.i32_regs[right]; \
+        int32_t result; \
+        if (__builtin_add_overflow(lhs, rhs, &result)) { \
+            VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow"); \
+        } \
+        vm_store_i32_typed_hot(dst, result); \
+    } while (0)
+
+#define VM_TYPED_SUB_I32() \
+    do { \
+        uint8_t dst = READ_BYTE(); \
+        uint8_t left = READ_BYTE(); \
+        uint8_t right = READ_BYTE(); \
+        int32_t lhs = vm.typed_regs.i32_regs[left]; \
+        int32_t rhs = vm.typed_regs.i32_regs[right]; \
+        int32_t result; \
+        if (__builtin_sub_overflow(lhs, rhs, &result)) { \
+            VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow"); \
+        } \
+        vm_store_i32_typed_hot(dst, result); \
+    } while (0)
+
+#define VM_TYPED_MUL_I32() \
+    do { \
+        uint8_t dst = READ_BYTE(); \
+        uint8_t left = READ_BYTE(); \
+        uint8_t right = READ_BYTE(); \
+        int32_t lhs = vm.typed_regs.i32_regs[left]; \
+        int32_t rhs = vm.typed_regs.i32_regs[right]; \
+        int32_t result; \
+        if (__builtin_mul_overflow(lhs, rhs, &result)) { \
+            VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow"); \
+        } \
+        vm_store_i32_typed_hot(dst, result); \
+    } while (0)
 #define VM_TYPED_DIV_I32() VM_TYPED_DIV_OP(i32_regs, 0, vm_store_i32_typed_hot)
 #define VM_TYPED_MOD_I32() \
     VM_TYPED_MOD_OP(i32_regs, 0, vm_store_i32_typed_hot, \
                     vm.typed_regs.i32_regs[left] % vm.typed_regs.i32_regs[right])
 
-#define VM_TYPED_ADD_I64() VM_TYPED_BIN_OP(i64_regs, +, vm_store_i64_typed_hot)
-#define VM_TYPED_SUB_I64() VM_TYPED_BIN_OP(i64_regs, -, vm_store_i64_typed_hot)
-#define VM_TYPED_MUL_I64() VM_TYPED_BIN_OP(i64_regs, *, vm_store_i64_typed_hot)
+#define VM_TYPED_ADD_I64() \
+    do { \
+        uint8_t dst = READ_BYTE(); \
+        uint8_t left = READ_BYTE(); \
+        uint8_t right = READ_BYTE(); \
+        int64_t lhs = vm.typed_regs.i64_regs[left]; \
+        int64_t rhs = vm.typed_regs.i64_regs[right]; \
+        int64_t result; \
+        if (__builtin_add_overflow(lhs, rhs, &result)) { \
+            VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow"); \
+        } \
+        vm_store_i64_typed_hot(dst, result); \
+    } while (0)
+
+#define VM_TYPED_SUB_I64() \
+    do { \
+        uint8_t dst = READ_BYTE(); \
+        uint8_t left = READ_BYTE(); \
+        uint8_t right = READ_BYTE(); \
+        int64_t lhs = vm.typed_regs.i64_regs[left]; \
+        int64_t rhs = vm.typed_regs.i64_regs[right]; \
+        int64_t result; \
+        if (__builtin_sub_overflow(lhs, rhs, &result)) { \
+            VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow"); \
+        } \
+        vm_store_i64_typed_hot(dst, result); \
+    } while (0)
+
+#define VM_TYPED_MUL_I64() \
+    do { \
+        uint8_t dst = READ_BYTE(); \
+        uint8_t left = READ_BYTE(); \
+        uint8_t right = READ_BYTE(); \
+        int64_t lhs = vm.typed_regs.i64_regs[left]; \
+        int64_t rhs = vm.typed_regs.i64_regs[right]; \
+        int64_t result; \
+        if (__builtin_mul_overflow(lhs, rhs, &result)) { \
+            VM_ERROR_RETURN(ERROR_VALUE, CURRENT_LOCATION(), "Integer overflow"); \
+        } \
+        vm_store_i64_typed_hot(dst, result); \
+    } while (0)
 #define VM_TYPED_DIV_I64() VM_TYPED_DIV_OP(i64_regs, 0, vm_store_i64_typed_hot)
 #define VM_TYPED_MOD_I64() \
     VM_TYPED_MOD_OP(i64_regs, 0, vm_store_i64_typed_hot, \

@@ -4489,8 +4489,7 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_ADD_I32_IMM: {
         uint8_t dst = *vm.ip++;
         uint8_t src = *vm.ip++;
-        int32_t imm = *(int32_t*)vm.ip;
-        vm.ip += 4;
+        int32_t imm = vm_read_i32_unaligned(&vm.ip);
 
         int32_t current;
         if (!vm_try_read_i32_typed(src, &current)) {
@@ -4516,8 +4515,7 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_SUB_I32_IMM: {
         uint8_t dst = *vm.ip++;
         uint8_t src = *vm.ip++;
-        int32_t imm = *(int32_t*)vm.ip;
-        vm.ip += 4;
+        int32_t imm = vm_read_i32_unaligned(&vm.ip);
 
         int32_t current;
         if (!vm_try_read_i32_typed(src, &current)) {
@@ -4543,8 +4541,7 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_MUL_I32_IMM: {
         uint8_t dst = *vm.ip++;
         uint8_t src = *vm.ip++;
-        int32_t imm = *(int32_t*)vm.ip;
-        vm.ip += 4;
+        int32_t imm = vm_read_i32_unaligned(&vm.ip);
 
         int32_t current;
         if (!vm_try_read_i32_typed(src, &current)) {
@@ -4570,8 +4567,7 @@ InterpretResult vm_run_dispatch(void) {
     LABEL_OP_CMP_I32_IMM: {
         uint8_t dst = *vm.ip++;
         uint8_t src = *vm.ip++;
-        int32_t imm = *(int32_t*)vm.ip;
-        vm.ip += 4;
+        int32_t imm = vm_read_i32_unaligned(&vm.ip);
 
         int32_t current;
         if (!vm_read_i32_hot(src, &current)) {
