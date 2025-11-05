@@ -2016,6 +2016,18 @@ static bool encode_numeric_constant(Value constant,
                 *out_bits = bits;
             }
             return true;
+        case ORUS_JIT_VALUE_BOOL:
+            if (!IS_BOOL(constant)) {
+                return false;
+            }
+            *out_bits = AS_BOOL(constant) ? 1u : 0u;
+            return true;
+        case ORUS_JIT_VALUE_STRING:
+            if (!IS_STRING(constant)) {
+                return false;
+            }
+            *out_bits = (uint64_t)(uintptr_t)AS_STRING(constant);
+            return true;
         default:
             break;
     }
@@ -3274,20 +3286,30 @@ OrusJitTranslationResult orus_jit_translate_linear_block(
                     ORUS_JIT_TRANSLATE_STATUS_OUT_OF_MEMORY, ir_opcode, kind,
                     (uint32_t)offset);
             }
-            inst->opcode = ir_opcode;
-            inst->value_kind = kind;
             inst->bytecode_offset = (uint32_t)offset;
             inst->operands.load_const.dst_reg = dst;
             inst->operands.load_const.constant_index = constant_index;
             Value constant = chunk->constants.values[constant_index];
             uint64_t bits = 0u;
-            if (!encode_numeric_constant(constant, kind, &bits)) {
-                return make_translation_result(
-                    ORUS_JIT_TRANSLATE_STATUS_UNSUPPORTED_CONSTANT_KIND,
-                    ir_opcode, kind, (uint32_t)offset);
+            if (encode_numeric_constant(constant, kind, &bits)) {
+                inst->opcode = ir_opcode;
+                inst->value_kind = kind;
+                inst->operands.load_const.immediate_bits = bits;
+                ORUS_JIT_SET_KIND(dst, kind, inst);
+                if (specialization_enabled) {
+                    orus_jit_specialization_set_constant(&specialization_state, dst,
+                                                         constant, inst);
+                }
+            } else {
+                inst->opcode = ORUS_JIT_IR_OP_LOAD_VALUE_CONST;
+                inst->value_kind = ORUS_JIT_VALUE_BOXED;
+                inst->operands.load_const.immediate_bits = 0u;
+                ORUS_JIT_SET_KIND(dst, ORUS_JIT_VALUE_BOXED, inst);
+                if (specialization_enabled) {
+                    orus_jit_specialization_set_constant(&specialization_state, dst,
+                                                         constant, inst);
+                }
             }
-            inst->operands.load_const.immediate_bits = bits;
-            ORUS_JIT_SET_KIND(dst, kind, inst);
             offset += 4u;
             if (++instructions_since_safepoint >= safepoint_interval) {
                 INSERT_SAFEPOINT((uint32_t)offset);

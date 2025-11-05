@@ -11136,6 +11136,7 @@ orus_jit_backend_compile_ir(struct OrusJitBackend* backend,
 #endif
 
     JITBackendStatus status = JIT_BACKEND_ASSEMBLY_ERROR;
+    bool attempted_dynasm = false;
 
 #if defined(__x86_64__) || defined(_M_X64)
     if (orus_jit_linear_emitter_enabled() && !orus_jit_should_force_helper_stub()) {
@@ -11188,21 +11189,54 @@ orus_jit_backend_compile_ir(struct OrusJitBackend* backend,
         status = JIT_BACKEND_ASSEMBLY_ERROR;
     }
 #endif
+#if ORUS_JIT_HAS_DYNASM_X86
+#if defined(__x86_64__) || defined(_M_X64)
+    if (!orus_jit_should_force_helper_stub()) {
+        JITBackendStatus dynasm_status =
+            orus_jit_backend_compile_ir_x86(backend, program, out_entry);
+        attempted_dynasm = true;
+        if (dynasm_status == JIT_BACKEND_OK) {
+            orus_jit_native_block_destroy(block);
+            return JIT_BACKEND_OK;
+        }
+        if (dynasm_status == JIT_BACKEND_OUT_OF_MEMORY) {
+            orus_jit_native_block_destroy(block);
+            return dynasm_status;
+        }
+    }
+#endif
+#endif
+#if defined(__aarch64__)
+    if (!orus_jit_should_force_helper_stub()) {
+        JITBackendStatus dynasm_status =
+            orus_jit_backend_compile_ir_arm64(backend, program, out_entry);
+        attempted_dynasm = true;
+        if (dynasm_status == JIT_BACKEND_OK) {
+            orus_jit_native_block_destroy(block);
+            return JIT_BACKEND_OK;
+        }
+        if (dynasm_status == JIT_BACKEND_OUT_OF_MEMORY) {
+            orus_jit_native_block_destroy(block);
+            return dynasm_status;
+        }
+    }
+#endif
 
     status = orus_jit_backend_emit_helper_stub(backend, block, out_entry);
     if (status != JIT_BACKEND_OK) {
         orus_jit_native_block_destroy(block);
+        if (!attempted_dynasm) {
 #if ORUS_JIT_HAS_DYNASM_X86
 #if defined(__x86_64__) || defined(_M_X64)
-        return orus_jit_backend_compile_ir_x86(backend, program, out_entry);
+            return orus_jit_backend_compile_ir_x86(backend, program, out_entry);
 #endif
 #endif
 #if defined(__aarch64__)
-        return orus_jit_backend_compile_ir_arm64(backend, program, out_entry);
-#else
+            return orus_jit_backend_compile_ir_arm64(backend, program, out_entry);
+#endif
+        }
         memset(out_entry, 0, sizeof(*out_entry));
         return status;
-#endif
     }
     orus_jit_native_block_register(block);
     return JIT_BACKEND_OK;
