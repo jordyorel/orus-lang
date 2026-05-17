@@ -1,6 +1,7 @@
 const std = @import("std");
 const Token = @import("lexer.zig").Token;
 const TokenType = @import("lexer.zig").TokenType;
+const diagnostic = @import("../diagnostic.zig");
 
 pub const ParseError = error{
     UnexpectedToken,
@@ -25,7 +26,7 @@ pub const Expr = union(enum) {
 };
 
 pub const Assign = struct {
-    name: [] const u8,
+    name: []const u8,
     op: TokenType,
     value: *Expr,
 };
@@ -39,12 +40,14 @@ pub const Parser = struct {
     tokens: []Token,
     current: usize,
     allocator: std.mem.Allocator,
+    source: []const u8,
 
-    pub fn init(tokens: []Token, allocator: std.mem.Allocator) Parser {
+    pub fn init(tokens: []Token, allocator: std.mem.Allocator, source: []const u8) Parser {
         return .{
             .tokens = tokens,
             .current = 0,
             .allocator = allocator,
+            .source = source,
         };
     }
 
@@ -245,8 +248,8 @@ pub const Parser = struct {
         }
     }
 
-    fn errorAt(_: *Parser, token: Token, comptime msg: []const u8) ParseError {
-        std.debug.print("[Line {d}], Error: {s} (got '{s}')\n", .{ token.line, token.lexeme(), msg });
+    fn errorAt(self: *Parser, token: Token, comptime msg: []const u8) ParseError {
+        diagnostic.report(self.source, token, msg);
         return ParseError.UnexpectedToken;
     }
 

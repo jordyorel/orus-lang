@@ -1,5 +1,5 @@
 0
-1752 184130780 1779032626067723758 3043a8926f8aeb56d4989356f4fb15c8 0 src/main.zig
+1760 184130780 1779048132476416512 4b43600f5ac3ea6940ed99c0576ddf20 0 src/main.zig
 571 184130781 1777215295471163246 4886c110641a6a8deabc8201cbace641 0 src/root.zig
 21780 182655144 1776106215000000000 8372996c7671543c238bcba94bfb7378 1 ubsan_rt.zig
 25527 182634764 1776106215000000000 8a205f0b1c5732c3190e50f042589dec 1 compiler_rt.zig
@@ -814,11 +814,12 @@
 419 182654963 1776106215000000000 ed7dfc04a5d0c4f0853edb5414ce981e 1 std/os/linux/bpf/btf_ext.zig
 24525 182654964 1776106215000000000 52c7fac6ad48da05270f91f073a4af79 1 std/os/linux/bpf/helpers.zig
 2972 182654710 1776106215000000000 8c37c40098d399e3b36a078ce1d4e3a1 1 std/crypto/codecs/asn1/der/ArrayListReverse.zig
-1752 184130780 1779032626067723758 3043a8926f8aeb56d4989356f4fb15c8 0 /Users/hierat/Documents/Development/learning/orus/src/main.zig
+1760 184130780 1779048132476416512 4b43600f5ac3ea6940ed99c0576ddf20 0 /Users/hierat/Documents/Development/learning/orus/src/main.zig
 14350 184136295 1779040481035065820 8101e2b4260d17d9463fed3df3c4328e 0 /Users/hierat/Documents/Development/learning/orus/src/compiler/lexer.zig
-8468 184870099 1779012251483697104 5b5846718bf276fbd173b49c4cc33d15 0 /Users/hierat/Documents/Development/learning/orus/src/compiler/parser.zig
+8542 184870099 1779047844428430293 176f5035877a3a0a778c8a0a86d843b3 0 /Users/hierat/Documents/Development/learning/orus/src/compiler/parser.zig
 5219 185404225 1779032531901049222 ca28c319133606496b8855381046e607 0 /Users/hierat/Documents/Development/learning/orus/src/compiler/compiler.zig
 8451 186628628 1779033514594758993 e20e7e4b51024820bfa7a9b664902732 0 /Users/hierat/Documents/Development/learning/orus/src/vm/vm.zig
+1369 186673278 1779049136713813328 738a7302d918b0531959ce72dce44f81 0 /Users/hierat/Documents/Development/learning/orus/src/diagnostic.zig
 2312 185397446 1779032236820166431 fca2dce396a576d81979b7768a0ecaa9 0 /Users/hierat/Documents/Development/learning/orus/src/compiler/chunk.zig
 2126 184870934 1777894272530122512 2415e40e6770c409d5d8fa4fd93f8e60 0 /Users/hierat/Documents/Development/learning/orus/src/compiler/value.zig
 1746 184871056 1777894292534515219 36a76677360d9187e9a1d6c0520082ec 0 /Users/hierat/Documents/Development/learning/orus/src/compiler/object.zig

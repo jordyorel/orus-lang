@@ -48,7 +48,7 @@ pub fn main(init: std.process.Init) !void {
     //     lexer.printToken(token);
     // }
 
-    var p = parser.init(tokens, arena_allocator);
+    var p = parser.init(tokens, arena_allocator, source);
     const stmts = try p.parse();
 
     var compiler = Compiler.init(arena_allocator);
