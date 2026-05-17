@@ -815,7 +815,7 @@
 24525 182654964 1776106215000000000 52c7fac6ad48da05270f91f073a4af79 1 std/os/linux/bpf/helpers.zig
 2972 182654710 1776106215000000000 8c37c40098d399e3b36a078ce1d4e3a1 1 std/crypto/codecs/asn1/der/ArrayListReverse.zig
 1752 184130780 1779032626067723758 3043a8926f8aeb56d4989356f4fb15c8 0 /Users/hierat/Documents/Development/learning/orus/src/main.zig
-14372 184136295 1779012069062860134 061d467aa5dde596e27b5fbd99fb2cbf 0 /Users/hierat/Documents/Development/learning/orus/src/compiler/lexer.zig
+14350 184136295 1779040481035065820 8101e2b4260d17d9463fed3df3c4328e 0 /Users/hierat/Documents/Development/learning/orus/src/compiler/lexer.zig
 8468 184870099 1779012251483697104 5b5846718bf276fbd173b49c4cc33d15 0 /Users/hierat/Documents/Development/learning/orus/src/compiler/parser.zig
 5219 185404225 1779032531901049222 ca28c319133606496b8855381046e607 0 /Users/hierat/Documents/Development/learning/orus/src/compiler/compiler.zig
 8451 186628628 1779033514594758993 e20e7e4b51024820bfa7a9b664902732 0 /Users/hierat/Documents/Development/learning/orus/src/vm/vm.zig

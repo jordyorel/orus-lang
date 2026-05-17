@@ -288,17 +288,14 @@ pub const Lexer = struct {
                 ' ', '\t', '\r', '\n' => {
                     _ = self.advance();
                 },
-                '-' => {
-                    if (self.peekNext() == '-') {
+                '/' => {
+                    if (self.peekNext() == '/') {
+                        // commentaire ligne //
                         while (!self.isAtEnd() and self.peek() != '\n') {
                             _ = self.advance();
                         }
-                    } else {
-                        return;
-                    }
-                },
-                '/' => {
-                    if (self.peekNext() == '*') {
+                    } else if (self.peekNext() == '*') {
+                        // commentaire bloc /* */
                         _ = self.advance();
                         _ = self.advance();
                         while (!self.isAtEnd()) {
